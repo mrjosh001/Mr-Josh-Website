@@ -1,1 +1,193 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MJ HUB - Authentication</title>
+    <style>
+        :root[data-theme="dark"] {
+            --primary-color: #2563eb;
+            --primary-hover: #1d4ed8;
+            --bg-main: #0b0f19;
+            --card-bg: #121824;
+            --text-main: #ffffff;
+            --text-muted: #93c5fd;
+            --border-color: #1e3a8a;
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+        body { background-color: var(--bg-main); color: var(--text-main); display: flex; justify-content: center; align-items: center; min-height: 100vh; padding: 20px; }
+        
+        .auth-container {
+            width: 100%;
+            max-width: 420px;
+            background: var(--card-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 20px;
+            padding: 35px 30px;
+            box-shadow: 0 10px 25px rgba(37, 99, 235, 0.2);
+        }
+
+        .auth-header { text-align: center; margin-bottom: 25px; }
+        .auth-header h1 { font-size: 24px; font-weight: 800; color: var(--text-main); margin-bottom: 8px; }
+        .auth-header p { font-size: 13px; color: var(--text-muted); }
+
+        .tab-toggle {
+            display: flex;
+            background: rgba(37, 99, 235, 0.1);
+            border-radius: 10px;
+            padding: 4px;
+            margin-bottom: 25px;
+        }
+        .tab-btn {
+            flex: 1;
+            background: transparent;
+            border: none;
+            color: var(--text-muted);
+            padding: 10px;
+            font-size: 13px;
+            font-weight: 700;
+            cursor: pointer;
+            border-radius: 8px;
+            transition: all 0.2s;
+        }
+        .tab-btn.active {
+            background: var(--primary-color);
+            color: #ffffff;
+        }
+
+        .form-group { margin-bottom: 16px; }
+        .form-group label { display: block; font-size: 12px; font-weight: 600; color: var(--text-muted); margin-bottom: 6px; }
+        .form-input {
+            width: 100%;
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid var(--border-color);
+            border-radius: 10px;
+            padding: 12px 14px;
+            color: var(--text-main);
+            font-size: 14px;
+            outline: none;
+            transition: border-color 0.2s;
+        }
+        .form-input:focus { border-color: var(--primary-color); }
+
+        .auth-btn {
+            width: 100%;
+            background: var(--primary-color);
+            color: #ffffff;
+            border: none;
+            border-radius: 10px;
+            padding: 12px;
+            font-size: 14px;
+            font-weight: 700;
+            cursor: pointer;
+            margin-top: 10px;
+            transition: background 0.2s;
+        }
+        .auth-btn:hover { background: var(--primary-hover); }
+
+        .form-section { display: none; }
+        .form-section.active { display: block; }
+        
+        .back-link {
+            display: block;
+            text-align: center;
+            margin-top: 20px;
+            font-size: 12px;
+            color: var(--text-muted);
+            text-decoration: none;
+        }
+        .back-link:hover { text-decoration: underline; }
+    </style>
+</head>
+<body>
+
+    <div class="auth-container">
+        <div class="auth-header">
+            <h1>MJ HUB Portal</h1>
+            <p>Access MJ Logs, MJ SMS & MJ Booster</p>
+        </div>
+
+        <!-- Switch Tabs -->
+        <div class="tab-toggle">
+            <button class="tab-btn active" onclick="switchTab('signin')">Sign In</button>
+            <button class="tab-btn" onclick="switchTab('signup')">Sign Up</button>
+        </div>
+
+        <!-- Sign In Form -->
+        <form id="signin-form" class="form-section active" onsubmit="handleAuth(event, 'signin')">
+            <div class="form-group">
+                <label>Email Address</label>
+                <input type="email" class="form-input" id="signin-email" placeholder="name@example.com" required>
+            </div>
+            <div class="form-group">
+                <label>Password</label>
+                <input type="password" class="form-input" id="signin-password" placeholder="••••••••" required>
+            </div>
+            <button type="submit" class="auth-btn">Sign In to Dashboard</button>
+        </form>
+
+        <!-- Sign Up Form -->
+        <form id="signup-form" class="form-section" onsubmit="handleAuth(event, 'signup')">
+            <div class="form-group">
+                <label>Full Name / Username</label>
+                <input type="text" class="form-input" id="signup-name" placeholder="Enter your username" required>
+            </div>
+            <div class="form-group">
+                <label>Email Address</label>
+                <input type="email" class="form-input" id="signup-email" placeholder="name@example.com" required>
+            </div>
+            <div class="form-group">
+                <label>Create Password</label>
+                <input type="password" class="form-input" id="signup-password" placeholder="••••••••" required>
+            </div>
+            <button type="submit" class="auth-btn">Create Account & Enter</button>
+        </form>
+
+        <a href="landing.html" class="back-link">&larr; Back to Landing Page</a>
+    </div>
+
+    <script>
+        // Toggle between Sign In and Sign Up tabs
+        function switchTab(tab) {
+            const btns = document.querySelectorAll('.tab-btn');
+            const sections = document.querySelectorAll('.form-section');
+            
+            btns.forEach(b => b.classList.remove('active'));
+            sections.forEach(s => s.classList.remove('active'));
+
+            if (tab === 'signin') {
+                btns[0].classList.add('active');
+                document.getElementById('signin-form').classList.add('active');
+            } else {
+                btns[1].classList.add('active');
+                document.getElementById('signup-form').classList.add('active');
+            }
+        }
+
+        // Handle Form Submissions & Redirect to Dashboard
+        function handleAuth(event, type) {
+            event.preventDefault();
+            
+            let userName = "Valued User";
+            let userEmail = "";
+
+            if (type === 'signin') {
+                userEmail = document.getElementById('signin-email').value;
+                userName = userEmail.split('@')[0]; // Extract name mockup from email
+            } else {
+                userName = document.getElementById('signup-name').value;
+                userEmail = document.getElementById('signup-email').value;
+            }
+
+            // Save session tokens in localStorage
+            localStorage.setItem('mj_hub_logged_in', 'true');
+            localStorage.setItem('mj_hub_username', userName);
+            localStorage.setItem('mj_hub_email', userEmail);
+
+            // Redirect smoothly to your main dashboard page
+            window.location.href = 'dashboard.html';
+        }
+    </script>
+</body>
+</html>
 
