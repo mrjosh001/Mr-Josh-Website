@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>MJ HUB</title>
+    <title>MJ HUB - Dashboard</title>
     <link rel="stylesheet" href="styles.css">
 </head>
 <body>
@@ -13,7 +13,7 @@
         <button id="menu-toggle" class="menu-btn" aria-label="Toggle Menu">☰</button>
         <h1 class="brand-title">MJ HUB</h1>
         <div class="wallet-container">
-            <span>Wallet: <strong id="wallet-balance">₦0.00</strong></span>
+            <span>Wallet: <strong id="wallet-balance">₦5,000.00</strong></span>
         </div>
     </header>
 
@@ -27,10 +27,10 @@
             <p>User: <span id="username-display">MJ User</span></p>
         </div>
         <ul class="sidebar-links">
-            <li><a href="#" class="tab-link active" data-tab="sms-tab">MJ SMS</a></li>
-            <li><a href="#" class="tab-link" data-tab="logs-tab">MJ LOGS</a></li>
-            <li><a href="#" class="tab-link" data-tab="boost-tab">MJ booster</a></li>
-            <li><a href="#" class="tab-link" data-tab="deposit-tab">Deposit / Add Funds</a></li>
+            <li><a href="#" class="tab-link active" data-tab="sms-tab">📱 MJ SMS</a></li>
+            <li><a href="#" class="tab-link" data-tab="logs-tab">📂 MJ LOGS</a></li>
+            <li><a href="#" class="tab-link" data-tab="boost-tab">🚀 MJ booster</a></li>
+            <li><a href="#" class="tab-link" data-tab="deposit-tab">💳 Deposit / Add Funds</a></li>
         </ul>
     </nav>
     <div id="sidebar-overlay" class="overlay"></div>
@@ -41,12 +41,13 @@
         <!-- MJ SMS Tab -->
         <section id="sms-tab" class="tab-section active">
             <div class="card">
-                <h2>📱 Virtual Number Generator</h2>
+                <h2>Virtual Number Generator</h2>
                 <p>Select a service to get your instant OTP verification number.</p>
                 <label for="sms-service-select">Select Service</label>
                 <select id="sms-service-select">
-                    <option value="telegram">Telegram (₦300)</option>
-                    <option value="whatsapp">WhatsApp (₦500)</option>
+                    <option value="Telegram" data-price="300">Telegram (₦300)</option>
+                    <option value="WhatsApp" data-price="500">WhatsApp (₦500)</option>
+                    <option value="Twitter" data-price="400">Twitter (₦400)</option>
                 </select>
                 <button id="generate-sms-btn" class="action-btn">Generate Number</button>
             </div>
@@ -54,7 +55,7 @@
             <div class="history-container">
                 <h3>MJ SMS Order History</h3>
                 <ul id="sms-order-history" class="history-list">
-                    <li>No SMS orders yet.</li>
+                    <li class="empty-msg">No SMS orders yet.</li>
                 </ul>
             </div>
         </section>
@@ -62,12 +63,13 @@
         <!-- MJ LOGS Tab -->
         <section id="logs-tab" class="tab-section">
             <div class="card">
-                <h2>📂 Social Logs</h2>
+                <h2>Social Logs</h2>
                 <p>Purchase verified social media profiles and logs securely.</p>
                 <label for="log-type-select">Select Log Type</label>
                 <select id="log-type-select">
-                    <option value="fb-aged">Facebook Aged Log (₦1,500)</option>
-                    <option value="insta-verified">Instagram Verified Log (₦2,500)</option>
+                    <option value="Facebook Aged Log" data-price="1500">Facebook Aged Log (₦1,500)</option>
+                    <option value="Instagram Verified Log" data-price="2500">Instagram Verified Log (₦2,500)</option>
+                    <option value="TikTok Monetized Log" data-price="4000">TikTok Monetized Log (₦4,000)</option>
                 </select>
                 <button id="buy-log-btn" class="action-btn">Purchase Log</button>
             </div>
@@ -75,7 +77,7 @@
             <div class="history-container">
                 <h3>MJ LOGS Order History</h3>
                 <ul id="logs-order-history" class="history-list">
-                    <li>No log purchases yet.</li>
+                    <li class="empty-msg">No log purchases yet.</li>
                 </ul>
             </div>
         </section>
@@ -83,12 +85,13 @@
         <!-- MJ booster Tab -->
         <section id="boost-tab" class="tab-section">
             <div class="card">
-                <h2>🚀 SME Booster</h2>
+                <h2>SME Booster</h2>
                 <p>Boost your social media engagement or data subscription instantly.</p>
                 <label for="boost-service-select">Select Boost Service</label>
                 <select id="boost-service-select">
-                    <option value="ig-followers">1,000 IG Followers (₦1,000)</option>
-                    <option value="tiktok-views">5,000 TikTok Views (₦500)</option>
+                    <option value="1,000 IG Followers" data-price="1000">1,000 IG Followers (₦1,000)</option>
+                    <option value="5,000 TikTok Views" data-price="500">5,000 TikTok Views (₦500)</option>
+                    <option value="1GB SME Data Bundle" data-price="350">1GB SME Data Bundle (₦350)</option>
                 </select>
                 <button id="buy-boost-btn" class="action-btn">Start Boost</button>
             </div>
@@ -96,7 +99,7 @@
             <div class="history-container">
                 <h3>MJ Booster Order History</h3>
                 <ul id="boost-order-history" class="history-list">
-                    <li>No booster orders yet.</li>
+                    <li class="empty-msg">No booster orders yet.</li>
                 </ul>
             </div>
         </section>
@@ -104,17 +107,17 @@
         <!-- Deposit / Add Funds Tab -->
         <section id="deposit-tab" class="tab-section">
             <div class="card">
-                <h2>💳 Add Funds to Wallet</h2>
+                <h2>Add Funds to Wallet</h2>
                 <p>Top up your balance to purchase logs, SMS numbers, and boosts.</p>
                 <label for="deposit-amount">Enter Amount (₦)</label>
-                <input type="number" id="deposit-amount" placeholder="e.g. 1000">
+                <input type="number" id="deposit-amount" placeholder="e.g. 1000" min="100">
                 <button id="deposit-btn" class="action-btn">Fund Wallet</button>
             </div>
 
             <div class="history-container">
                 <h3>Deposit Transaction History</h3>
                 <ul id="deposit-history" class="history-list">
-                    <li>No deposit history yet.</li>
+                    <li class="empty-msg">No deposit history yet.</li>
                 </ul>
             </div>
         </section>
@@ -125,13 +128,16 @@
         <p>&copy; 2026 MJ HUB Platform. All rights reserved.</p>
     </footer>
 
-    <!-- Inline script for full functionality without requiring extra file creation -->
+    <!-- Solid Frontend Script with Local Storage State Management -->
     <script>
+        // DOM Elements
         const menuToggle = document.getElementById('menu-toggle');
         const closeMenu = document.getElementById('close-menu');
         const sidebar = document.getElementById('sidebar');
         const overlay = document.getElementById('sidebar-overlay');
+        const balanceDisplay = document.getElementById('wallet-balance');
 
+        // Sidebar Actions
         menuToggle.addEventListener('click', () => {
             sidebar.classList.add('open');
             overlay.classList.add('active');
@@ -145,6 +151,7 @@
         closeMenu.addEventListener('click', closeSidebarNav);
         overlay.addEventListener('click', closeSidebarNav);
 
+        // Tab Navigation Switching
         document.querySelectorAll('.tab-link').forEach(link => {
             link.addEventListener('click', (e) => {
                 e.preventDefault();
@@ -160,42 +167,100 @@
             });
         });
 
-        let userWallet = 5000;
-        const balanceDisplay = document.getElementById('wallet-balance');
-
+        // App State Initializers with Local Storage
+        let userWallet = parseFloat(localStorage.getItem('mj_wallet')) || 5000;
+        
         function updateWalletUI(newBalance) {
             userWallet = newBalance;
-            balanceDisplay.textContent = `₦${userWallet.toLocaleString()}`;
+            localStorage.setItem('mj_wallet', userWallet);
+            balanceDisplay.textContent = `₦${userWallet.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
         }
         updateWalletUI(userWallet);
 
-        function addHistoryItem(listId, textMessage) {
+        // Persistent History Management
+        function loadHistory(storageKey, listId) {
             const listElement = document.getElementById(listId);
-            if (listElement.children.length === 1 && listElement.children[0].textContent.includes('yet')) {
+            const savedItems = JSON.parse(localStorage.getItem(storageKey)) || [];
+            
+            if (savedItems.length > 0) {
                 listElement.innerHTML = '';
+                savedItems.forEach(item => {
+                    const listItem = document.createElement('li');
+                    listItem.textContent = item;
+                    listElement.appendChild(listItem);
+                });
             }
+        }
+
+        function saveHistoryItem(storageKey, listId, textMessage) {
+            const listElement = document.getElementById(listId);
+            const emptyMsg = listElement.querySelector('.empty-msg');
+            if (emptyMsg) emptyMsg.remove();
+
+            const timestamp = new Date().toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+            const formattedItem = `[${timestamp}] ${textMessage}`;
+
+            // Get existing history array
+            let historyArray = JSON.parse(localStorage.getItem(storageKey)) || [];
+            historyArray.unshift(formattedItem); // Add to top
+            localStorage.setItem(storageKey, JSON.stringify(historyArray));
+
+            // Prepend to DOM list
             const listItem = document.createElement('li');
-            const timestamp = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-            listItem.textContent = `[${timestamp}] ${textMessage}`;
+            listItem.textContent = formattedItem;
             listElement.prepend(listItem);
         }
 
+        // Load all existing histories on start
+        loadHistory('mj_sms_history', 'sms-order-history');
+        loadHistory('mj_logs_history', 'logs-order-history');
+        loadHistory('mj_boost_history', 'boost-order-history');
+        loadHistory('mj_deposit_history', 'deposit-history');
+
+        // Action Handlers with Balance Deduction & History Tracking
         document.getElementById('generate-sms-btn').addEventListener('click', () => {
-            const service = document.getElementById('sms-service-select').value;
-            addHistoryItem('sms-order-history', `Generated OTP Number for ${service.toUpperCase()}`);
-            alert('OTP Number Generated Successfully!');
+            const selectEl = document.getElementById('sms-service-select');
+            const serviceName = selectEl.value;
+            const price = parseFloat(selectEl.selectedOptions[0].getAttribute('data-price'));
+
+            if (userWallet < price) {
+                alert('Insufficient funds! Please deposit funds to continue.');
+                return;
+            }
+
+            updateWalletUI(userWallet - price);
+            saveHistoryItem('mj_sms_history', 'sms-order-history', `Generated ${serviceName} Number (-₦${price})`);
+            alert(`Success! Your ${serviceName} OTP number has been generated.`);
         });
 
         document.getElementById('buy-log-btn').addEventListener('click', () => {
-            const logType = document.getElementById('log-type-select').value;
-            addHistoryItem('logs-order-history', `Purchased log package: ${logType}`);
-            alert('Log credentials unlocked successfully!');
+            const selectEl = document.getElementById('log-type-select');
+            const logName = selectEl.value;
+            const price = parseFloat(selectEl.selectedOptions[0].getAttribute('data-price'));
+
+            if (userWallet < price) {
+                alert('Insufficient funds! Please deposit funds to continue.');
+                return;
+            }
+
+            updateWalletUI(userWallet - price);
+            saveHistoryItem('mj_logs_history', 'logs-order-history', `Purchased ${logName} (-₦${price})`);
+            alert(`Success! Credentials for ${logName} have been unlocked.`);
         });
 
         document.getElementById('buy-boost-btn').addEventListener('click', () => {
-            const boostType = document.getElementById('boost-service-select').value;
-            addHistoryItem('boost-order-history', `Submitted boost task: ${boostType}`);
-            alert('SME Booster order submitted successfully!');
+            const selectEl = document.getElementById('boost-service-select');
+            const boostName = selectEl.value;
+            const price = parseFloat(selectEl.selectedOptions[0].getAttribute('data-price'));
+
+            if (userWallet < price) {
+                alert('Insufficient funds! Please deposit funds to continue.');
+                return;
+            }
+
+            updateWalletUI(userWallet - price);
+            saveHistoryItem('mj_boost_history', 'boost-order-history', `Ordered ${boostName} (-₦${price})`);
+            alert(`Success! Your order for ${boostName} has been queued.`);
         });
 
         document.getElementById('deposit-btn').addEventListener('click', () => {
@@ -203,12 +268,12 @@
             const amount = parseFloat(amountInput.value);
 
             if (isNaN(amount) || amount <= 0) {
-                alert('Please enter a valid funding amount.');
+                alert('Please enter a valid deposit amount.');
                 return;
             }
 
             updateWalletUI(userWallet + amount);
-            addHistoryItem('deposit-history', `Successfully funded ₦${amount.toLocaleString()}`);
+            saveHistoryItem('mj_deposit_history', 'deposit-history', `Deposited ₦${amount.toLocaleString()} (+₦${amount.toLocaleString()})`);
             amountInput.value = '';
             alert('Wallet funded successfully!');
         });
