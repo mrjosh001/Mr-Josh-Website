@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>MJ HUB - Dashboard & Profile</title>
-    <link rel="stylesheet" href="styles.css?v=2.0">
+    <link rel="stylesheet" href="styles.css?v=2.1">
 </head>
 <body>
 
@@ -31,7 +31,7 @@
                         <li><a href="#" onclick="switchSection('dashboard-section')">📊 Dashboard</a></li>
                         <li><a href="#" onclick="switchSection('profile-section')">⚙️ Profile Settings</a></li>
                         <li><a href="#" onclick="switchSection('deposit-section')">💳 Deposit Funds</a></li>
-                        <hr>
+                        <hr style="border:0; border-top:1px solid #e5e7eb; margin:5px 0;">
                         <li><a href="#" onclick="alert('Signed out successfully!')" style="color: #ef4444;">🚪 Sign Out</a></li>
                     </ul>
                 </div>
@@ -70,17 +70,6 @@
                 <li><a href="#" class="nav-item" data-target="my-purchase-section">🛒 Cart / Purchases</a></li>
             </ul>
         </div>
-
-        <!-- Dark Mode Toggle -->
-        <div class="sidebar-footer">
-            <div class="dark-mode-toggle-container">
-                <span>🌙 Dark Mode</span>
-                <label class="switch">
-                    <input type="checkbox" id="dark-mode-checkbox">
-                    <span class="slider round"></span>
-                </label>
-            </div>
-        </div>
     </nav>
     <div id="sidebar-overlay" class="overlay"></div>
 
@@ -90,7 +79,7 @@
         <!-- 1. DASHBOARD SECTION -->
         <section id="dashboard-section" class="app-section active">
             <div class="welcome-box">
-                <h2>Hello Mr</h2>
+                <h2 id="welcome-user-title">Hello Mr</h2>
                 <p>Here's an overview of your account's recent activities.</p>
                 <div class="hero-buttons">
                     <button class="primary-btn" onclick="switchSection('deposit-section')">Fund Account</button>
@@ -150,7 +139,6 @@
 
         <!-- 2. PROFILE SETTINGS SECTION -->
         <section id="profile-section" class="app-section">
-            <!-- Profile Hero Banner -->
             <div class="profile-hero-card">
                 <div class="profile-avatar-large">👤</div>
                 <div class="profile-hero-meta">
@@ -165,7 +153,6 @@
                 <button class="secondary-btn" onclick="switchSection('dashboard-section')">Back to Dashboard</button>
             </div>
 
-            <!-- Profile Sub-navigation Tabs -->
             <div class="profile-tabs">
                 <button class="p-tab-btn active" onclick="switchProfileTab('tab-profile', this)">👤 Profile</button>
                 <button class="p-tab-btn" onclick="switchProfileTab('tab-security', this)">🔒 Security</button>
@@ -189,17 +176,17 @@
                 <div class="content-card">
                     <h3>Basic Information</h3>
                     <label>Full name</label>
-                    <input type="text" id="input-fullname" value="Mr josh">
+                    <input type="text" id="input-fullname" placeholder="Enter full name">
                     
                     <label>Username</label>
-                    <input type="text" id="input-username" value="@Mrjosh">
+                    <input type="text" id="input-username" placeholder="Enter username">
 
                     <h3 style="margin-top:20px;">Contact</h3>
                     <label>Email address</label>
-                    <input type="email" id="input-email" value="agaziejoseph0@gmail.com">
+                    <input type="email" id="input-email" placeholder="Enter email address">
 
                     <label>Phone number</label>
-                    <input type="text" id="input-phone" value="09061607034">
+                    <input type="text" id="input-phone" placeholder="Enter phone number">
 
                     <label>Bio</label>
                     <textarea id="input-bio" placeholder="Tell us about yourself..."></textarea>
@@ -211,19 +198,19 @@
                     <div class="form-row-2">
                         <div>
                             <label>City</label>
-                            <input type="text" id="input-city" value="Lagos">
+                            <input type="text" id="input-city" placeholder="Lagos">
                         </div>
                         <div>
                             <label>Country</label>
-                            <input type="text" id="input-country" value="Nigeria">
+                            <input type="text" id="input-country" placeholder="Nigeria">
                         </div>
                     </div>
 
                     <label>Postal / ZIP code</label>
-                    <input type="text" id="input-zip" value="100001">
+                    <input type="text" id="input-zip" placeholder="100001">
 
                     <h3 style="margin-top:20px;">Identity (Optional)</h3>
-                    <p class="helper-text">Add your NIN or BVN to enable a dedicated bank account for funding your wallet. Optional — these are stored securely and only shared with our payment provider.</p>
+                    <p class="helper-text">Add your NIN or BVN to enable a dedicated bank account for funding your wallet.</p>
                     
                     <label>NIN</label>
                     <input type="text" id="input-nin" placeholder="11-digit National Identity Number">
@@ -307,10 +294,6 @@
         <section id="transactions-section" class="app-section">
             <div class="content-card">
                 <h2>🔄 History & Logs</h2>
-                <div class="table-controls">
-                    <input type="text" id="search-history" placeholder="Search..." onkeyup="filterHistory()">
-                    <span class="pagination-indicator">10 / page</span>
-                </div>
                 <div class="table-responsive">
                     <table class="history-table">
                         <thead>
@@ -378,6 +361,7 @@
         closeMenu.addEventListener('click', closeDrawer);
         overlay.addEventListener('click', closeDrawer);
 
+        // Toggle Profile Dropdown on Click
         profileToggle.addEventListener('click', (e) => {
             e.stopPropagation();
             profileDropdown.classList.toggle('active');
@@ -408,6 +392,60 @@
             document.querySelectorAll('.p-tab-btn').forEach(b => b.classList.remove('active'));
             document.getElementById(tabId).classList.add('active');
             btn.classList.add('active');
+        }
+
+        // Persistent User Profile Storage & Initialization
+        let userProfile = JSON.parse(localStorage.getItem('mj_user_profile')) || {
+            fullname: "Mr. Josh",
+            username: "@mrjosh001",
+            email: "agaziejoseph0@gmail.com",
+            phone: "09061607034",
+            bio: "",
+            street: "",
+            city: "Lagos",
+            country: "Nigeria",
+            zip: "100001",
+            nin: "",
+            bvn: ""
+        };
+
+        function populateProfileForm() {
+            document.getElementById('input-fullname').value = userProfile.fullname;
+            document.getElementById('input-username').value = userProfile.username;
+            document.getElementById('input-email').value = userProfile.email;
+            document.getElementById('input-phone').value = userProfile.phone;
+            document.getElementById('input-bio').value = userProfile.bio;
+            document.getElementById('input-street').value = userProfile.street;
+            document.getElementById('input-city').value = userProfile.city;
+            document.getElementById('input-country').value = userProfile.country;
+            document.getElementById('input-zip').value = userProfile.zip;
+            document.getElementById('input-nin').value = userProfile.nin;
+            document.getElementById('input-bvn').value = userProfile.bvn;
+
+            document.getElementById('hero-name-display').textContent = userProfile.fullname;
+            document.getElementById('hero-email-display').textContent = userProfile.email;
+            document.getElementById('dd-name').textContent = userProfile.fullname;
+            document.getElementById('dd-email').textContent = userProfile.email;
+            document.getElementById('welcome-user-title').textContent = `Hello ${userProfile.fullname.split(' ')[0]}`;
+        }
+        populateProfileForm();
+
+        function saveProfileChanges() {
+            userProfile.fullname = document.getElementById('input-fullname').value;
+            userProfile.username = document.getElementById('input-username').value;
+            userProfile.email = document.getElementById('input-email').value;
+            userProfile.phone = document.getElementById('input-phone').value;
+            userProfile.bio = document.getElementById('input-bio').value;
+            userProfile.street = document.getElementById('input-street').value;
+            userProfile.city = document.getElementById('input-city').value;
+            userProfile.country = document.getElementById('input-country').value;
+            userProfile.zip = document.getElementById('input-zip').value;
+            userProfile.nin = document.getElementById('input-nin').value;
+            userProfile.bvn = document.getElementById('input-bvn').value;
+
+            localStorage.setItem('mj_user_profile', JSON.stringify(userProfile));
+            populateProfileForm();
+            alert('Profile updated and synchronized successfully!');
         }
 
         let walletBalance = parseFloat(localStorage.getItem('mj_wallet')) || 0;
@@ -443,16 +481,6 @@
             }
         }
         renderHistoryTable();
-
-        function saveProfileChanges() {
-            const name = document.getElementById('input-fullname').value;
-            const email = document.getElementById('input-email').value;
-            document.getElementById('hero-name-display').textContent = name;
-            document.getElementById('hero-email-display').textContent = email;
-            document.getElementById('dd-name').textContent = name;
-            document.getElementById('dd-email').textContent = email;
-            alert('Profile updated successfully!');
-        }
 
         function generateNumber() {
             const select = document.getElementById('sms-service');
