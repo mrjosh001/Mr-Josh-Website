@@ -6,7 +6,7 @@
     <title>MJ HUB - Dashboard</title>
     <style>
 /* ==========================================
-   MJ HUB - Theme & Variables (v3.3)
+   MJ HUB - Theme & Variables (v3.4)
    ========================================== */
 
 :root {
@@ -295,7 +295,7 @@ body {
     list-style: none;
     display: flex;
     flex-direction: column;
-    gap: 8px; /* Proper spaced-out layout */
+    gap: 8px;
 }
 
 .sidebar-links li a {
@@ -837,6 +837,195 @@ input:checked + .slider:before {
     font-weight: 700;
 }
 
+/* ==========================================
+   ACTIVITY HISTORY DRAWER (Matching Reference)
+   ========================================== */
+
+.activity-history-drawer {
+    display: none;
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    background: linear-gradient(180deg, #1e1b4b 0%, #0f172a 100%);
+    color: #ffffff;
+    border-top-left-radius: 28px;
+    border-top-right-radius: 28px;
+    padding: 20px;
+    z-index: 1800;
+    max-height: 80vh;
+    overflow-y: auto;
+    box-shadow: 0 -10px 40px rgba(0,0,0,0.5);
+    border-top: 1px solid rgba(255,255,255,0.1);
+    animation: slideUpDrawer 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes slideUpDrawer {
+    from { transform: translateY(100%); }
+    to { transform: translateY(0); }
+}
+
+.activity-history-drawer.active {
+    display: block;
+}
+
+.drawer-drag-handle {
+    width: 40px;
+    height: 4px;
+    background: rgba(255,255,255,0.3);
+    border-radius: 2px;
+    margin: 0 auto 15px auto;
+}
+
+.drawer-header-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 15px;
+}
+
+.drawer-title-area h3 {
+    font-size: 18px;
+    font-weight: 800;
+    color: #ffffff;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.drawer-title-area p {
+    font-size: 12px;
+    color: rgba(255,255,255,0.7);
+    margin-top: 2px;
+}
+
+.drawer-close-btn {
+    background: rgba(255,255,255,0.1);
+    border: none;
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    color: #ffffff;
+    font-size: 16px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+/* Horizontal Scrollable Tabs */
+.drawer-filter-scroll {
+    display: flex;
+    gap: 8px;
+    overflow-x: auto;
+    padding-bottom: 15px;
+    margin-bottom: 15px;
+    scrollbar-width: none;
+}
+
+.drawer-filter-scroll::-webkit-scrollbar {
+    display: none;
+}
+
+.filter-tab {
+    background: rgba(255,255,255,0.08);
+    border: 1px solid rgba(255,255,255,0.15);
+    color: #ffffff;
+    padding: 8px 16px;
+    border-radius: 20px;
+    font-size: 13px;
+    font-weight: 600;
+    white-space: nowrap;
+    cursor: pointer;
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.filter-tab.active {
+    background: #ffffff;
+    color: #0f172a;
+    border-color: #ffffff;
+}
+
+/* Transaction Item List */
+.transaction-list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.transaction-card {
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 16px;
+    padding: 14px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    cursor: pointer;
+    transition: background 0.2s;
+}
+
+.transaction-card:hover {
+    background: rgba(255, 255, 255, 0.08);
+}
+
+.transaction-left {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.transaction-icon-box {
+    width: 40px;
+    height: 40px;
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 18px;
+}
+
+.tx-blue { background: rgba(37, 99, 235, 0.2); color: #60a5fa; }
+.tx-green { background: rgba(34, 197, 94, 0.2); color: #4ade80; }
+.tx-purple { background: rgba(168, 85, 247, 0.2); color: #c084fc; }
+
+.transaction-details h4 {
+    font-size: 14px;
+    font-weight: 700;
+    color: #ffffff;
+    margin-bottom: 2px;
+}
+
+.transaction-details span {
+    font-size: 11px;
+    color: rgba(255, 255, 255, 0.6);
+}
+
+.transaction-right {
+    text-align: right;
+}
+
+.transaction-amount {
+    font-size: 14px;
+    font-weight: 800;
+    color: #ffffff;
+    margin-bottom: 2px;
+}
+
+.transaction-status {
+    font-size: 10px;
+    font-weight: 700;
+    padding: 2px 6px;
+    border-radius: 4px;
+    display: inline-block;
+}
+
+.status-success { background: rgba(34, 197, 94, 0.2); color: #4ade80; }
+.status-pending { background: rgba(234, 179, 8, 0.2); color: #facc15; }
+
 /* Currency Converter Modal */
 .currency-modal {
     display: none;
@@ -844,7 +1033,7 @@ input:checked + .slider:before {
     top: 0; left: 0; width: 100%; height: 100%;
     background: rgba(0, 0, 0, 0.6);
     backdrop-filter: blur(4px);
-    z-index: 1600;
+    z-index: 1900;
     align-items: center;
     justify-content: center;
     padding: 20px;
@@ -926,7 +1115,7 @@ input:checked + .slider:before {
 .notif-title { font-weight: 700; color: var(--text-main); margin-bottom: 2px; }
 .notif-time { font-size: 11px; color: var(--text-muted); }
 
-/* --- Mobile Bottom Nav Bar --- */
+/* --- Mobile Bottom Nav Bar (Updated layout) --- */
 .bottom-nav {
     position: fixed;
     bottom: 0;
@@ -950,6 +1139,7 @@ input:checked + .slider:before {
     font-size: 10px;
     gap: 3px;
     font-weight: 600;
+    cursor: pointer;
 }
 
 .bottom-nav-item span:first-child { font-size: 18px; }
@@ -1008,7 +1198,7 @@ input:checked + .slider:before {
         </div>
     </header>
 
-    <!-- Cleaned Sidebar Drawer (Spacing fixed & clutter removed) -->
+    <!-- Cleaned Sidebar Drawer -->
     <div class="sidebar" id="sidebarDrawer">
         <div class="sidebar-header">
             <div class="sidebar-brand-wrap">
@@ -1067,7 +1257,7 @@ input:checked + .slider:before {
                 <div class="sleek-card">
                     <div>
                         <span class="sleek-label">USD Balance</span>
-                        <span class="sleek-value">$0.00</span>
+                        <span class="sleek-value" id="homeUsdBalance">$0.00</span>
                     </div>
                     <div class="sleek-card-icon icon-yellow">💵</div>
                 </div>
@@ -1090,11 +1280,11 @@ input:checked + .slider:before {
             </div>
         </section>
 
-        <!-- MJ LOGS Section -->
+        <!-- MJ LOGS Section (Social Media Logs) -->
         <section id="logs" class="app-section">
             <div class="content-card">
-                <h2>MJ Logs - Available Accounts</h2>
-                <p class="helper-text">Browse available premium social media accounts.</p>
+                <h2>MJ Logs - Social Media Logs</h2>
+                <p class="helper-text">Browse our verified social media logs and aged accounts.</p>
                 <div class="product-grid">
                     <div class="product-item-card">
                         <div class="product-info-top">
@@ -1106,17 +1296,17 @@ input:checked + .slider:before {
                         </div>
                         <div class="product-actions-row">
                             <button class="btn-sm-primary" onclick="addToCart('Old Gmail Accounts', 1200, 'log')">Add to Cart</button>
-                            <button class="btn-sm-outline" onclick="buyNowItem('Old Gmail Accounts', 1200)">Buy Now</button>
+                            <button class="btn-sm-outline" onclick="buyNowItem('Old Gmail Accounts', 1200, 'log')">Buy Now</button>
                         </div>
                     </div>
                 </div>
             </div>
         </section>
 
-        <!-- MJ SMS Section -->
+        <!-- MJ SMS Section (SMS Verification) -->
         <section id="sms" class="app-section">
             <div class="content-card">
-                <h2>MJ SMS - OTP Verification Numbers</h2>
+                <h2>MJ SMS - SMS Verification Numbers</h2>
                 <p class="helper-text">Get virtual numbers for instant OTP verification.</p>
                 <div class="product-grid">
                     <div class="product-item-card">
@@ -1129,30 +1319,30 @@ input:checked + .slider:before {
                         </div>
                         <div class="product-actions-row">
                             <button class="btn-sm-primary" onclick="addToCart('WhatsApp OTP Number', 800, 'sms')">Add to Cart</button>
-                            <button class="btn-sm-outline" onclick="buyNowItem('WhatsApp OTP Number', 800)">Get Now</button>
+                            <button class="btn-sm-outline" onclick="buyNowItem('WhatsApp OTP Number', 800, 'sms')">Get Now</button>
                         </div>
                     </div>
                 </div>
             </div>
         </section>
 
-        <!-- MJ Booster Section -->
+        <!-- MJ Booster Section (SMM) -->
         <section id="booster" class="app-section">
             <div class="content-card">
-                <h2>MJ Booster - Social Media Growth</h2>
+                <h2>MJ Booster - SMM Services</h2>
                 <p class="helper-text">Boost followers, views, and engagement instantly.</p>
                 <div class="product-grid">
                     <div class="product-item-card">
                         <div class="product-info-top">
                             <div>
                                 <div class="product-title">Instagram Followers (1,000)</div>
-                                <div class="helper-text" style="margin: 2px 0 0 0;">High quality non-drop</div>
+                                <div class="helper-text" style="margin: 2px 0 0 0;">High quality non-drop SMM</div>
                             </div>
                             <div class="product-price">₦2,500</div>
                         </div>
                         <div class="product-actions-row">
                             <button class="btn-sm-primary" onclick="addToCart('Instagram Followers (1k)', 2500, 'booster')">Add to Cart</button>
-                            <button class="btn-sm-outline" onclick="buyNowItem('Instagram Followers (1k)', 2500)">Boost Now</button>
+                            <button class="btn-sm-outline" onclick="buyNowItem('Instagram Followers (1k)', 2500, 'booster')">Boost Now</button>
                         </div>
                     </div>
                 </div>
@@ -1217,7 +1407,7 @@ input:checked + .slider:before {
             </div>
         </section>
 
-        <!-- Profile Settings Section (Set strictly blank for onboarding) -->
+        <!-- Profile Settings Section -->
         <section id="profile" class="app-section">
             <div class="content-card">
                 <h2>Account Settings & Profile</h2>
@@ -1260,7 +1450,7 @@ input:checked + .slider:before {
 
                 <div class="form-group">
                     <label>Postal / ZIP Code</label>
-                    <input type="text" id="settingsPostalInput" placeholder="Enter postal code">
+                    <input type="text" id="settingsPostalInput" placeholder="Postal code">
                 </div>
 
                 <div style="border-top: 1px solid var(--border-color); margin: 20px 0; padding-top: 15px;">
@@ -1284,31 +1474,68 @@ input:checked + .slider:before {
 
     </main>
 
-    <!-- CURRENCY CONVERTER POPUP MODAL -->
+    <!-- CURRENCY CONVERTER MODAL (Toggle NGN <-> USD & Convert Balance) -->
     <div class="currency-modal" id="currencyModal">
         <div class="currency-modal-card">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
-                <div style="font-size: 17px; font-weight: 800; color: var(--text-main);">Convert Currency</div>
+                <div style="font-size: 17px; font-weight: 800; color: var(--text-main);">Convert Balance</div>
                 <button onclick="closeCurrencyModal()" style="background: var(--bg-main); border: 1px solid var(--border-color); width: 30px; height: 30px; border-radius: 50%; cursor: pointer; font-size: 14px; font-weight: bold; color: var(--text-main);">✕</button>
             </div>
             <div style="background: rgba(37, 99, 235, 0.08); border: 1px solid rgba(37, 99, 235, 0.2); border-radius: 12px; padding: 10px; text-align: center; font-size: 12px; font-weight: 700; color: var(--primary-color); margin-bottom: 15px;">
-                Exchange Rate: 1 USD = ₦1,420.00
+                Rate: 1 USD = ₦1,420.00
             </div>
+            
+            <div class="form-group">
+                <label>Direction</label>
+                <select id="convertDirection" onchange="updateConversionDisplay()" style="padding: 10px; border-radius: 10px;">
+                    <option value="usd_to_ngn">USD ➡️ NGN</option>
+                    <option value="ngn_to_usd">NGN ➡️ USD</option>
+                </select>
+            </div>
+
             <div class="currency-input-group">
-                <label>You Send (USD)</label>
+                <label id="convertSourceLabel">Amount to Convert (USD)</label>
                 <div class="currency-input-row">
-                    <input type="number" id="convertUsdInput" placeholder="0.00" oninput="calculateCurrencyConversion()">
-                    <span style="font-weight: 800; color: var(--text-muted);">USD</span>
+                    <input type="number" id="convertInputAmount" placeholder="0.00" oninput="calculateConversionOutput()">
+                    <span id="convertSourceUnit" style="font-weight: 800; color: var(--text-muted);">USD</span>
                 </div>
             </div>
+
             <div class="currency-input-group">
-                <label>You Receive (NGN)</label>
+                <label>You Will Receive</label>
                 <div class="currency-input-row">
-                    <input type="text" id="convertNgnOutput" placeholder="₦0.00" readonly style="color: var(--primary-color);">
-                    <span style="font-weight: 800; color: var(--text-muted);">NGN</span>
+                    <input type="text" id="convertOutputAmount" placeholder="₦0.00" readonly style="color: var(--primary-color);">
+                    <span id="convertTargetUnit" style="font-weight: 800; color: var(--text-muted);">NGN</span>
                 </div>
             </div>
-            <button class="btn-sm-primary" style="width: 100%; padding: 12px; font-size: 14px;" onclick="closeCurrencyModal()">Done</button>
+
+            <button class="btn-sm-primary" style="width: 100%; padding: 12px; font-size: 14px;" onclick="executeCurrencyConversion()">Convert Now</button>
+        </div>
+    </div>
+
+    <!-- ACTIVITY HISTORY DRAWER (All History in One Place with Category Tabs) -->
+    <div class="activity-history-drawer" id="activityHistoryDrawer">
+        <div class="drawer-drag-handle"></div>
+        <div class="drawer-header-row">
+            <div class="drawer-title-area">
+                <h3><span>⏱️</span> Activity History</h3>
+                <p>All your orders, payments & more</p>
+            </div>
+            <button class="drawer-close-btn" onclick="toggleActivityHistory()">✕</button>
+        </div>
+
+        <!-- Scrollable Category Tabs -->
+        <div class="drawer-filter-scroll">
+            <button class="filter-tab active" onclick="filterTransactions('all', this)">🕒 All</button>
+            <button class="filter-tab" onclick="filterTransactions('log', this)">📦 Log Orders</button>
+            <button class="filter-tab" onclick="filterTransactions('sms', this)">📱 SMS Numbers</button>
+            <button class="filter-tab" onclick="filterTransactions('deposit', this)">💳 Deposits</button>
+            <button class="filter-tab" onclick="filterTransactions('booster', this)">⚡ Social Boost</button>
+        </div>
+
+        <!-- Transaction Cards List -->
+        <div class="transaction-list" id="transactionListContainer">
+            <!-- Populated dynamically -->
         </div>
     </div>
 
@@ -1338,40 +1565,47 @@ input:checked + .slider:before {
         </div>
     </div>
 
-    <!-- Mobile Bottom Navigation Bar -->
+    <!-- Mobile Bottom Navigation Bar (Matched to Reference Layout) -->
     <nav class="bottom-nav">
-        <a href="#" class="bottom-nav-item active" data-target="home">
+        <div class="bottom-nav-item active" onclick="switchSection('home')">
             <span>🏠</span>
             <span>Home</span>
-        </a>
-        <a href="#" class="bottom-nav-item" data-target="logs">
-            <span>🔄</span>
-            <span>SMM</span>
-        </a>
+        </div>
+        <div class="bottom-nav-item" onclick="toggleActivityHistory()">
+            <span>⏱️</span>
+            <span>History</span>
+        </div>
         <div class="bottom-nav-center" id="floatingPlusBtn" onclick="toggleFloatingPopup()">
             <span>+</span>
         </div>
-        <a href="#" class="bottom-nav-item" data-target="cart">
-            <span>🛍️</span>
-            <span>Cart</span>
-        </a>
-        <a href="#" class="bottom-nav-item" data-target="profile">
+        <div class="bottom-nav-item" onclick="switchSection('sms')">
+            <span>📱</span>
+            <span>Services</span>
+        </div>
+        <div class="bottom-nav-item" onclick="switchSection('profile')">
             <span>👤</span>
-            <span>More</span>
-        </a>
+            <span>Profile</span>
+        </div>
     </nav>
 
     <script>
 /* ==========================================
-   MJ HUB - Application Logic (v3.3)
+   MJ HUB - Application Logic (v3.4)
    ========================================== */
 
-let currentBalanceNgn = 0.00; // Default zero balance until deposit
+let currentBalanceNgn = 0.00;
+let currentBalanceUsd = 0.00;
 let cartItems = [];
+let transactions = [
+    { id: 1, type: 'log', title: 'Old Gmail Accounts (Aged)', subtitle: 'mail.com - 1 item', amount: '₦1,200', date: 'Jul 24, 2026', status: 'Success' },
+    { id: 2, type: 'deposit', title: 'Card / Bank Transfer', subtitle: 'Wallet funding', amount: '₦4,000', date: 'Jul 24, 2026', status: 'Success' },
+    { id: 3, type: 'sms', title: 'WhatsApp OTP Number', subtitle: 'USA Virtual Line', amount: '₦800', date: 'Jul 23, 2026', status: 'Success' },
+    { id: 4, type: 'booster', title: 'Instagram Followers (1k)', subtitle: 'SMM Boost', amount: '₦2,500', date: 'Jul 22, 2026', status: 'Pending' }
+];
 
 document.addEventListener('DOMContentLoaded', () => {
     const allSections = document.querySelectorAll('.app-section');
-    const sidebarLinks = document.querySelectorAll('.sidebar-link, .bottom-nav-item');
+    const sidebarLinks = document.querySelectorAll('.sidebar-link');
     const sidebar = document.getElementById('sidebarDrawer');
     const overlay = document.getElementById('sidebarOverlay');
     const menuToggle = document.getElementById('menuToggleBtn');
@@ -1429,6 +1663,7 @@ document.addEventListener('DOMContentLoaded', () => {
         notifDropdown.classList.remove('active');
         document.getElementById('floatingPopupModal').classList.remove('active');
         document.getElementById('currencyModal').classList.remove('active');
+        document.getElementById('activityHistoryDrawer').classList.remove('active');
     });
 
     profileToggle.addEventListener('click', (e) => {
@@ -1448,6 +1683,8 @@ document.addEventListener('DOMContentLoaded', () => {
         profileDropdown.classList.remove('active');
         notifDropdown.classList.remove('active');
     });
+
+    renderTransactions('all');
 });
 
 function toggleDarkMode() {
@@ -1457,13 +1694,115 @@ function toggleDarkMode() {
     document.getElementById('sidebarDarkModeToggle').checked = isDark;
 }
 
-function openCurrencyModal() { document.getElementById('currencyModal').classList.add('active'); }
+function openCurrencyModal() { 
+    document.getElementById('currencyModal').classList.add('active'); 
+    updateConversionDisplay();
+}
 function closeCurrencyModal() { document.getElementById('currencyModal').classList.remove('active'); }
 
-function calculateCurrencyConversion() {
-    const usd = parseFloat(document.getElementById('convertUsdInput').value) || 0;
-    const ngn = usd * 1420;
-    document.getElementById('convertNgnOutput').value = ngn > 0 ? '₦' + ngn.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2}) : '';
+function updateConversionDisplay() {
+    const dir = document.getElementById('convertDirection').value;
+    if(dir === 'usd_to_ngn') {
+        document.getElementById('convertSourceLabel').textContent = 'Amount to Convert (USD)';
+        document.getElementById('convertSourceUnit').textContent = 'USD';
+        document.getElementById('convertTargetUnit').textContent = 'NGN';
+    } else {
+        document.getElementById('convertSourceLabel').textContent = 'Amount to Convert (NGN)';
+        document.getElementById('convertSourceUnit').textContent = 'NGN';
+        document.getElementById('convertTargetUnit').textContent = 'USD';
+    }
+    calculateConversionOutput();
+}
+
+function calculateConversionOutput() {
+    const dir = document.getElementById('convertDirection').value;
+    const amt = parseFloat(document.getElementById('convertInputAmount').value) || 0;
+    const rate = 1420;
+
+    if(dir === 'usd_to_ngn') {
+        let res = amt * rate;
+        document.getElementById('convertOutputAmount').value = res > 0 ? '₦' + res.toLocaleString(undefined, {minimumFractionDigits: 2}) : '';
+    } else {
+        let res = amt / rate;
+        document.getElementById('convertOutputAmount').value = res > 0 ? '$' + res.toLocaleString(undefined, {minimumFractionDigits: 2}) : '';
+    }
+}
+
+function executeCurrencyConversion() {
+    const dir = document.getElementById('convertDirection').value;
+    const amt = parseFloat(document.getElementById('convertInputAmount').value) || 0;
+    const rate = 1420;
+
+    if(amt <= 0) { alert('Please enter a valid amount.'); return; }
+
+    if(dir === 'usd_to_ngn') {
+        if(currentBalanceUsd < amt) { alert('Insufficient USD balance.'); return; }
+        currentBalanceUsd -= amt;
+        currentBalanceNgn += (amt * rate);
+        transactions.unshift({ id: Date.now(), type: 'deposit', title: 'Currency Conversion', subtitle: 'USD to NGN', amount: '₦' + (amt*rate).toLocaleString(), date: 'Just now', status: 'Success' });
+    } else {
+        if(currentBalanceNgn < amt) { alert('Insufficient NGN balance.'); return; }
+        currentBalanceNgn -= amt;
+        currentBalanceUsd += (amt / rate);
+        transactions.unshift({ id: Date.now(), type: 'deposit', title: 'Currency Conversion', subtitle: 'NGN to USD', amount: '$' + (amt/rate).toLocaleString(undefined, {minimumFractionDigits:2}), date: 'Just now', status: 'Success' });
+    }
+
+    updateBalanceDisplay();
+    renderTransactions('all');
+    closeCurrencyModal();
+    alert('Currency converted successfully!');
+}
+
+function toggleActivityHistory() {
+    const drawer = document.getElementById('activityHistoryDrawer');
+    const overlay = document.getElementById('sidebarOverlay');
+    drawer.classList.toggle('active');
+    overlay.classList.toggle('active');
+}
+
+function filterTransactions(type, btnElement) {
+    document.querySelectorAll('.filter-tab').forEach(t => t.classList.remove('active'));
+    btnElement.classList.add('active');
+    renderTransactions(type);
+}
+
+function renderTransactions(filterType) {
+    const container = document.getElementById('transactionListContainer');
+    let filtered = transactions;
+    if(filterType !== 'all') {
+        filtered = transactions.filter(tx => tx.type === filterType);
+    }
+
+    if(filtered.length === 0) {
+        container.innerHTML = `<div class="empty-text" style="color:rgba(255,255,255,0.6);">No transaction history found.</div>`;
+        return;
+    }
+
+    container.innerHTML = '';
+    filtered.forEach(tx => {
+        let icon = '📦';
+        let iconClass = 'tx-blue';
+        if(tx.type === 'deposit') { icon = '💳'; iconClass = 'tx-green'; }
+        else if(tx.type === 'sms') { icon = '📱'; iconClass = 'tx-purple'; }
+        else if(tx.type === 'booster') { icon = '⚡'; iconClass = 'tx-blue'; }
+
+        let card = document.createElement('div');
+        card.className = 'transaction-card';
+        card.innerHTML = `
+            <div class="transaction-left">
+                <div class="transaction-icon-box ${iconClass}">${icon}</div>
+                <div class="transaction-details">
+                    <h4>${tx.title}</h4>
+                    <span>${tx.subtitle} • ${tx.date}</span>
+                </div>
+            </div>
+            <div class="transaction-right">
+                <div class="transaction-amount">${tx.amount}</div>
+                <span class="transaction-status status-${tx.status.toLowerCase()}">${tx.status}</span>
+            </div>
+        `;
+        container.appendChild(card);
+    });
 }
 
 function toggleFloatingPopup() {
@@ -1507,14 +1846,16 @@ function updateCartUI() {
     totalDisplay.textContent = '₦' + total.toLocaleString(undefined, {minimumFractionDigits: 2});
 }
 
-function buyNowItem(title, price) {
+function buyNowItem(title, price, type) {
     if(currentBalanceNgn < price) {
-        alert('Insufficient wallet balance. Please fund your wallet first.');
+        alert('Insufficient NGN balance. Please fund your wallet first.');
         switchSection('deposit');
         return;
     }
     currentBalanceNgn -= price;
+    transactions.unshift({ id: Date.now(), type, title, subtitle: 'Instant Purchase', amount: '₦' + price.toLocaleString(), date: 'Just now', status: 'Success' });
     updateBalanceDisplay();
+    renderTransactions('all');
     alert(title + ' purchased successfully!');
     switchSection('home');
 }
@@ -1528,9 +1869,13 @@ function checkoutCart() {
         return;
     }
     currentBalanceNgn -= total;
+    cartItems.forEach(item => {
+        transactions.unshift({ id: Date.now(), type: item.type, title: item.title, subtitle: 'Cart Checkout', amount: '₦' + item.price.toLocaleString(), date: 'Just now', status: 'Success' });
+    });
     cartItems = [];
     updateCartUI();
     updateBalanceDisplay();
+    renderTransactions('all');
     alert('All items successfully purchased!');
     switchSection('home');
 }
@@ -1539,7 +1884,9 @@ function processDeposit() {
     let amt = parseFloat(document.getElementById('depositInput').value) || 0;
     if(amt <= 0) { alert('Please enter a valid amount.'); return; }
     currentBalanceNgn += amt;
+    transactions.unshift({ id: Date.now(), type: 'deposit', title: 'Card / Bank Transfer', subtitle: 'Wallet funding', amount: '₦' + amt.toLocaleString(), date: 'Just now', status: 'Success' });
     updateBalanceDisplay();
+    renderTransactions('all');
     alert('Wallet funded successfully with ₦' + amt.toLocaleString() + '!');
     switchSection('home');
 }
@@ -1547,6 +1894,7 @@ function processDeposit() {
 function updateBalanceDisplay() {
     document.getElementById('navWalletBadge').textContent = 'NGN ₦' + currentBalanceNgn.toLocaleString(undefined, {minimumFractionDigits: 2});
     document.getElementById('homeNgnBalance').textContent = '₦' + currentBalanceNgn.toLocaleString(undefined, {minimumFractionDigits: 2});
+    document.getElementById('homeUsdBalance').textContent = '$' + currentBalanceUsd.toLocaleString(undefined, {minimumFractionDigits: 2});
 }
 
 function saveSettings() {
