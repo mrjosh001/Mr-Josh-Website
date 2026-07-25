@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>MJ HUB - Dashboard</title>
-    <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="styles.css?v=2.0">
 </head>
 <body>
 
@@ -219,7 +219,6 @@
 
     <!-- Script Logic -->
     <script>
-        // Sidebar Control
         const menuToggle = document.getElementById('menu-toggle');
         const closeMenu = document.getElementById('close-menu');
         const sidebar = document.getElementById('sidebar');
@@ -230,7 +229,6 @@
         closeMenu.addEventListener('click', closeDrawer);
         overlay.addEventListener('click', closeDrawer);
 
-        // Navigation Switching
         function switchSection(targetId) {
             document.querySelectorAll('.app-section').forEach(sec => sec.classList.remove('active'));
             document.querySelectorAll('.nav-item').forEach(item => item.classList.remove('active'));
@@ -251,7 +249,6 @@
             });
         });
 
-        // Dark Mode Logic
         const darkModeCheckbox = document.getElementById('dark-mode-checkbox');
         const currentTheme = localStorage.getItem('mj_theme') || 'light';
 
@@ -270,7 +267,6 @@
             }
         });
 
-        // Wallet & Storage State
         let walletBalance = parseFloat(localStorage.getItem('mj_wallet')) || 5000;
         let purchasedNumbersCount = parseInt(localStorage.getItem('mj_num_count')) || 0;
 
@@ -283,7 +279,6 @@
         }
         updateUI();
 
-        // History Logger
         function logRecord(storageKey, listId, text) {
             let list = JSON.parse(localStorage.getItem(storageKey)) || [];
             const timeStr = new Date().toLocaleString([], {month:'short', day:'numeric', hour:'2-digit', minute:'2-digit'});
@@ -310,7 +305,6 @@
         renderHistory('mj_purchases', 'purchases-list');
         renderHistory('mj_numbers', 'purchased-numbers-list');
 
-        // Actions
         function generateNumber() {
             const select = document.getElementById('sms-service');
             const name = select.value;
