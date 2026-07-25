@@ -1,1 +1,231 @@
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+}
+
+body {
+    background-color: #f3f4f6;
+    color: #1f2937;
+    display: flex;
+    flex-direction: column;
+    min-height: 100vh;
+}
+
+.navbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: #4f46e5;
+    color: white;
+    padding: 14px 20px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    position: sticky;
+    top: 0;
+    z-index: 100;
+}
+
+.menu-btn {
+    background: none;
+    border: none;
+    color: white;
+    font-size: 24px;
+    cursor: pointer;
+}
+
+.brand-title {
+    font-size: 1.25rem;
+    font-weight: bold;
+}
+
+.wallet-container {
+    background: rgba(255, 255, 255, 0.15);
+    padding: 6px 12px;
+    border-radius: 20px;
+    font-size: 0.9rem;
+}
+
+.sidebar {
+    position: fixed;
+    top: 0;
+    left: -280px;
+    width: 280px;
+    height: 100%;
+    background: white;
+    box-shadow: 4px 0 10px rgba(0,0,0,0.1);
+    transition: left 0.3s ease;
+    z-index: 1100;
+    display: flex;
+    flex-direction: column;
+}
+
+.sidebar.open {
+    left: 0;
+}
+
+.sidebar-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 20px;
+    background: #4f46e5;
+    color: white;
+}
+
+.close-btn {
+    background: none;
+    border: none;
+    color: white;
+    font-size: 20px;
+    cursor: pointer;
+}
+
+.user-profile-info {
+    padding: 15px 20px;
+    border-bottom: 1px solid #e5e7eb;
+    background: #f9fafb;
+    font-size: 0.95rem;
+}
+
+.sidebar-links {
+    list-style: none;
+    padding: 10px 0;
+}
+
+.sidebar-links li a {
+    display: block;
+    padding: 12px 20px;
+    color: #4b5563;
+    text-decoration: none;
+    font-weight: 500;
+    transition: background 0.2s;
+}
+
+.sidebar-links li a:hover, .sidebar-links li a.active {
+    background: #eef2ff;
+    color: #4f46e5;
+    border-left: 4px solid #4f46e5;
+}
+
+.overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0,0,0,0.4);
+    display: none;
+    z-index: 1050;
+}
+
+.overlay.active {
+    display: block;
+}
+
+.main-content {
+    flex: 1;
+    max-width: 600px;
+    width: 100%;
+    margin: 20px auto;
+    padding: 0 15px;
+}
+
+.tab-section {
+    display: none;
+}
+
+.tab-section.active {
+    display: block;
+}
+
+.card {
+    background: white;
+    padding: 20px;
+    border-radius: 12px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+    margin-bottom: 20px;
+}
+
+.card h2 {
+    font-size: 1.2rem;
+    margin-bottom: 8px;
+    color: #111827;
+}
+
+.card p {
+    font-size: 0.9rem;
+    color: #6b7280;
+    margin-bottom: 15px;
+}
+
+label {
+    display: block;
+    font-size: 0.85rem;
+    font-weight: 600;
+    margin-bottom: 6px;
+    color: #374151;
+}
+
+select, input {
+    width: 100%;
+    padding: 10px;
+    border: 1px solid #d1d5db;
+    border-radius: 8px;
+    margin-bottom: 15px;
+    font-size: 0.95rem;
+}
+
+.action-btn {
+    width: 100%;
+    background: #4f46e5;
+    color: white;
+    border: none;
+    padding: 12px;
+    border-radius: 8px;
+    font-weight: bold;
+    cursor: pointer;
+    font-size: 1rem;
+    transition: background 0.2s;
+}
+
+.action-btn:hover {
+    background: #4338ca;
+}
+
+.history-container {
+    background: white;
+    padding: 15px 20px;
+    border-radius: 12px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+    margin-bottom: 20px;
+}
+
+.history-container h3 {
+    font-size: 1rem;
+    margin-bottom: 10px;
+    color: #374151;
+    border-bottom: 1px solid #e5e7eb;
+    padding-bottom: 8px;
+}
+
+.history-list {
+    list-style: none;
+    max-height: 150px;
+    overflow-y: auto;
+}
+
+.history-list li {
+    font-size: 0.85rem;
+    padding: 8px 0;
+    border-bottom: 1px solid #f3f4f6;
+    color: #4b5563;
+}
+
+.footer {
+    text-align: center;
+    padding: 15px;
+    font-size: 0.8rem;
+    color: #9ca3af;
+}
 
