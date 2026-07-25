@@ -3,109 +3,128 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SME & SMS Platform</title>
-    <!-- Tailwind CSS for clean mobile-friendly design -->
-    <script src="https://cdn.tailwindcss.com"></script>
+    <title>MJ HUB</title>
+    <link rel="stylesheet" href="styles.css">
 </head>
-<body class="bg-gray-100 text-gray-800 min-h-screen flex flex-col justify-between">
+<body>
 
-    <!-- Header / Navbar -->
-    <header class="bg-indigo-600 text-white p-4 shadow-md flex justify-between items-center">
-        <h1 class="text-lg font-bold">🚀 Mr-Josh Hub</h1>
-        <div class="bg-indigo-700 px-3 py-1 rounded-full text-sm font-semibold" id="walletBalance">
-            Wallet: Loading...
+    <!-- Top Navigation Bar -->
+    <header class="navbar">
+        <button id="menu-toggle" class="menu-btn" aria-label="Toggle Menu">☰</button>
+        <h1 class="brand-title">MJ HUB</h1>
+        <div class="wallet-container">
+            <span>Wallet: <strong id="wallet-balance">₦0.00</strong></span>
         </div>
     </header>
 
-    <!-- Main Content Area -->
-    <main class="p-4 max-w-md mx-auto w-full flex-grow">
+    <!-- Toggle Sidebar Menu -->
+    <nav id="sidebar" class="sidebar">
+        <div class="sidebar-header">
+            <h3>Menu</h3>
+            <button id="close-menu" class="close-btn" aria-label="Close Menu">✕</button>
+        </div>
+        <div class="user-profile-info">
+            <p>User: <span id="username-display">MJ User</span></p>
+        </div>
+        <ul class="sidebar-links">
+            <li><a href="#" class="tab-link active" data-tab="sms-tab">MJ SMS</a></li>
+            <li><a href="#" class="tab-link" data-tab="logs-tab">MJ LOGS</a></li>
+            <li><a href="#" class="tab-link" data-tab="boost-tab">MJ booster</a></li>
+            <li><a href="#" class="tab-link" data-tab="deposit-tab">Deposit / Add Funds</a></li>
+        </ul>
+    </nav>
+    <div id="sidebar-overlay" class="overlay"></div>
+
+    <!-- Main Content Tabs -->
+    <main class="main-content">
         
-        <!-- Services Toggles -->
-        <div class="flex bg-white rounded-lg shadow p-1 mb-6 text-center text-sm font-medium">
-            <button onclick="switchTab('sms')" id="btn-sms" class="flex-1 py-2 rounded-lg bg-indigo-600 text-white">SMS Verify</button>
-            <button onclick="switchTab('logs')" id="btn-logs" class="flex-1 py-2 rounded-lg text-gray-600">Social Logs</button>
-            <button onclick="switchTab('sme')" id="btn-sme" class="flex-1 py-2 rounded-lg text-gray-600">SME Boost</button>
-        </div>
-
-        <!-- SMS Verification Module -->
-        <div id="tab-sms" class="bg-white p-4 rounded-xl shadow">
-            <h2 class="font-bold text-lg mb-3 text-indigo-600">📱 Virtual Number Generator</h2>
-            <p class="text-xs text-gray-500 mb-4">Select a service to get your instant OTP verification number.</p>
-            
-            <div class="space-y-3">
-                <div>
-                    <label class="block text-xs font-semibold mb-1">Select Service</label>
-                    <select id="serviceSelect" class="w-full p-2 border rounded-lg text-sm bg-gray-50">
-                        <option value="whatsapp">WhatsApp (₦350)</option>
-                        <option value="telegram">Telegram (₦300)</option>
-                        <option value="google">Google / Gmail (₦250)</option>
-                    </select>
-                </div>
-                <button onclick="buyNumber()" class="w-full bg-indigo-600 text-white py-2.5 rounded-lg font-semibold text-sm hover:bg-indigo-700 transition">
-                    Generate Number
-                </button>
+        <!-- MJ SMS Tab -->
+        <section id="sms-tab" class="tab-section active">
+            <div class="card">
+                <h2>📱 Virtual Number Generator</h2>
+                <p>Select a service to get your instant OTP verification number.</p>
+                <label for="sms-service-select">Select Service</label>
+                <select id="sms-service-select">
+                    <option value="telegram">Telegram (₦300)</option>
+                    <option value="whatsapp">WhatsApp (₦500)</option>
+                </select>
+                <button id="generate-sms-btn" class="action-btn">Generate Number</button>
             </div>
-        </div>
 
-        <!-- Social Logs Module (Hidden by default) -->
-        <div id="tab-logs" class="bg-white p-4 rounded-xl shadow hidden">
-            <h2 class="font-bold text-lg mb-3 text-indigo-600">🛒 Social Media Logs</h2>
-            <p class="text-sm text-gray-500">Aged accounts marketplace coming right up here next.</p>
-        </div>
+            <div class="history-container">
+                <h3>MJ SMS Order History</h3>
+                <ul id="sms-order-history" class="history-list">
+                    <li>No SMS orders yet.</li>
+                </ul>
+            </div>
+        </section>
 
-        <!-- SME Boosting Module (Hidden by default) -->
-        <div id="tab-sme" class="bg-white p-4 rounded-xl shadow hidden">
-            <h2 class="font-bold text-lg mb-3 text-indigo-600">🚀 SME Social Boosting</h2>
-            <p class="text-sm text-gray-500">Followers, views, and likes automation tools.</p>
-        </div>
+        <!-- MJ LOGS Tab -->
+        <section id="logs-tab" class="tab-section">
+            <div class="card">
+                <h2>📂 Social Logs</h2>
+                <p>Purchase verified social media profiles and logs securely.</p>
+                <label for="log-type-select">Select Log Type</label>
+                <select id="log-type-select">
+                    <option value="fb-aged">Facebook Aged Log (₦1,500)</option>
+                    <option value="insta-verified">Instagram Verified Log (₦2,500)</option>
+                </select>
+                <button id="buy-log-btn" class="action-btn">Purchase Log</button>
+            </div>
+
+            <div class="history-container">
+                <h3>MJ LOGS Order History</h3>
+                <ul id="logs-order-history" class="history-list">
+                    <li>No log purchases yet.</li>
+                </ul>
+            </div>
+        </section>
+
+        <!-- MJ booster Tab -->
+        <section id="boost-tab" class="tab-section">
+            <div class="card">
+                <h2>🚀 SME Booster</h2>
+                <p>Boost your social media engagement or data subscription instantly.</p>
+                <label for="boost-service-select">Select Boost Service</label>
+                <select id="boost-service-select">
+                    <option value="ig-followers">1,000 IG Followers (₦1,000)</option>
+                    <option value="tiktok-views">5,000 TikTok Views (₦500)</option>
+                </select>
+                <button id="buy-boost-btn" class="action-btn">Start Boost</button>
+            </div>
+
+            <div class="history-container">
+                <h3>MJ Booster Order History</h3>
+                <ul id="boost-order-history" class="history-list">
+                    <li>No booster orders yet.</li>
+                </ul>
+            </div>
+        </section>
+
+        <!-- Deposit / Add Funds Tab -->
+        <section id="deposit-tab" class="tab-section">
+            <div class="card">
+                <h2>💳 Add Funds to Wallet</h2>
+                <p>Top up your balance to purchase logs, SMS numbers, and boosts.</p>
+                <label for="deposit-amount">Enter Amount (₦)</label>
+                <input type="number" id="deposit-amount" placeholder="e.g. 1000">
+                <button id="deposit-btn" class="action-btn">Fund Wallet</button>
+            </div>
+
+            <div class="history-container">
+                <h3>Deposit Transaction History</h3>
+                <ul id="deposit-history" class="history-list">
+                    <li>No deposit history yet.</li>
+                </ul>
+            </div>
+        </section>
 
     </main>
 
-    <!-- Footer -->
-    <footer class="text-center p-4 text-xs text-gray-400">
-        &copy; 2026 Mr-Josh Platform. All rights reserved.
+    <footer class="footer">
+        <p>&copy; 2026 MJ HUB Platform. All rights reserved.</p>
     </footer>
 
-    <!-- JavaScript Logic -->
-    <script>
-        // Connected directly to your Render backend API
-        const API_URL = "https://mr-josh-website.onrender.com"; 
-        const currentUserId = "user_123"; // Test user ID for now
-
-        // Fetch User Wallet on load
-        async function fetchWallet() {
-            try {
-                const response = await fetch(`${API_URL}/api/user/wallet/${currentUserId}`);
-                const data = await response.json();
-                if (data.success) {
-                    document.getElementById('walletBalance').innerText = `Wallet: ₦${data.balance}`;
-                }
-            } catch (error) {
-                console.error("Error fetching wallet:", error);
-                document.getElementById('walletBalance').innerText = `Wallet: ₦0`;
-            }
-        }
-
-        // Tab Switcher Logic
-        function switchTab(tab) {
-            document.getElementById('tab-sms').classList.add('hidden');
-            document.getElementById('tab-logs').classList.add('hidden');
-            document.getElementById('tab-sme').classList.add('hidden');
-            
-            document.getElementById('btn-sms').className = "flex-1 py-2 rounded-lg text-gray-600";
-            document.getElementById('btn-logs').className = "flex-1 py-2 rounded-lg text-gray-600";
-            document.getElementById('btn-sme').className = "flex-1 py-2 rounded-lg text-gray-600";
-
-            document.getElementById(`tab-${tab}`).classList.remove('hidden');
-            document.getElementById(`btn-${tab}`).className = "flex-1 py-2 rounded-lg bg-indigo-600 text-white";
-        }
-
-        function buyNumber() {
-            alert("Number generation triggered! Connecting to your SMS provider API next.");
-        }
-
-        // Run wallet check when page loads
-        fetchWallet();
-    </script>
+    <script src="script.js"></script>
 </body>
 </html>
