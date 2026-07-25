@@ -16,7 +16,7 @@
         </div>
         <div class="nav-right">
             <div class="wallet-badge">
-                <span>NGN</span> <strong id="top-wallet-balance">₦0.00</strong>
+                <span>NGN</span> <strong id="top-wallet-balance">₦5,000.00</strong>
             </div>
             <div class="profile-icon">MJ</div>
         </div>
@@ -44,7 +44,7 @@
             <div class="sidebar-group-title">WALLET</div>
             <ul class="sidebar-links">
                 <li><a href="#" class="nav-item" data-target="deposit-section">💳 Deposit funds</a></li>
-                <li><a href="#" class="nav-item" data-target="transactions-section">🔄 Transaction</a></li>
+                <li><a href="#" class="nav-item" data-target="transactions-section">🔄 Transactions</a></li>
             </ul>
 
             <div class="sidebar-group-title">ACCOUNT</div>
@@ -52,6 +52,17 @@
                 <li><a href="#" class="nav-item" data-target="my-purchase-section">🛒 My purchase</a></li>
                 <li><a href="#" class="nav-item" data-target="profile-section">👤 My profile</a></li>
             </ul>
+        </div>
+
+        <!-- Dark Mode Toggle at the Bottom of Sidebar -->
+        <div class="sidebar-footer">
+            <div class="dark-mode-toggle-container">
+                <span>🌙 Dark Mode</span>
+                <label class="switch">
+                    <input type="checkbox" id="dark-mode-checkbox">
+                    <span class="slider round"></span>
+                </label>
+            </div>
         </div>
     </nav>
     <div id="sidebar-overlay" class="overlay"></div>
@@ -74,7 +85,7 @@
             <div class="stats-grid">
                 <div class="stat-card">
                     <span class="stat-label">NGN Balance</span>
-                    <strong class="stat-value" id="dash-ngn-balance">₦0.00</strong>
+                    <strong class="stat-value" id="dash-ngn-balance">₦5,000.00</strong>
                 </div>
                 <div class="stat-card">
                     <span class="stat-label">USD Balance</span>
@@ -195,20 +206,16 @@
         <section id="profile-section" class="app-section">
             <div class="content-card profile-card">
                 <h2>👤 My Profile</h2>
-                <div class="profile-info">
-                    <p><strong>Name:</strong> Mr. Josh</p>
-                    <p><strong>Username:</strong> @mrjosh001</p>
-                    <p><strong>Role:</strong> Administrator / Hub Owner</p>
+                <div class="profile-info" style="margin-top: 15px;">
+                    <p style="margin-bottom:8px;"><strong>Name:</strong> Mr. Josh</p>
+                    <p style="margin-bottom:8px;"><strong>Username:</strong> @mrjosh001</p>
+                    <p style="margin-bottom:8px;"><strong>Role:</strong> Administrator / Hub Owner</p>
                     <p><strong>Status:</strong> <span class="badge-active">Active</span></p>
                 </div>
             </div>
         </section>
 
     </main>
-
-    <footer class="footer">
-        <p>&copy; 2026 MJ HUB. All rights reserved.</p>
-    </footer>
 
     <!-- Script Logic -->
     <script>
@@ -242,6 +249,25 @@
                 e.preventDefault();
                 switchSection(link.getAttribute('data-target'));
             });
+        });
+
+        // Dark Mode Logic
+        const darkModeCheckbox = document.getElementById('dark-mode-checkbox');
+        const currentTheme = localStorage.getItem('mj_theme') || 'light';
+
+        if (currentTheme === 'dark') {
+            document.body.classList.add('dark-mode');
+            darkModeCheckbox.checked = true;
+        }
+
+        darkModeCheckbox.addEventListener('change', function () {
+            if (this.checked) {
+                document.body.classList.add('dark-mode');
+                localStorage.setItem('mj_theme', 'dark');
+            } else {
+                document.body.classList.remove('dark-mode');
+                localStorage.setItem('mj_theme', 'light');
+            }
         });
 
         // Wallet & Storage State
@@ -280,7 +306,6 @@
             }
         }
 
-        // Load initial histories
         renderHistory('mj_transactions', 'transactions-list');
         renderHistory('mj_purchases', 'purchases-list');
         renderHistory('mj_numbers', 'purchased-numbers-list');
