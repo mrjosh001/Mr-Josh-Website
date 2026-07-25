@@ -1,0 +1,30 @@
+// Check if user is logged in (using localStorage simulation)
+document.addEventListener('DOMContentLoaded', () => {
+    const isLoggedIn = localStorage.getItem('mj_hub_logged_in');
+    
+    // If not logged in and they are trying to view protected areas without onboarding
+    // You can handle redirection back to landing if required:
+    // if (!isLoggedIn && window.location.pathname.includes('dashboard.html')) {
+    //     window.location.href = 'landing.html';
+    // }
+});
+
+// Call this function when the user successfully signs up or logs in
+function handleSuccessfulLogin(userName, userEmail) {
+    localStorage.setItem('mj_hub_logged_in', 'true');
+    localStorage.setItem('mj_hub_username', userName);
+    localStorage.setItem('mj_hub_email', userEmail);
+    
+    // Redirect straight into the dashboard interface
+    window.location.href = 'dashboard.html';
+}
+
+// Call this function when the user clicks "Log Out"
+function handleLogout() {
+    localStorage.removeItem('mj_hub_logged_in');
+    localStorage.removeItem('mj_hub_username');
+    localStorage.removeItem('mj_hub_email');
+    
+    // Redirect back to the standalone landing page
+    window.location.href = 'landing.html';
+}
