@@ -6,7 +6,7 @@
     <title>MJ HUB - Dashboard</title>
     <style>
 /* ==========================================
-   MJ HUB - Theme & Variables (v3.1)
+   MJ HUB - Theme & Variables (v3.2)
    ========================================== */
 
 :root {
@@ -89,7 +89,7 @@ body {
 .nav-right {
     display: flex;
     align-items: center;
-    gap: 10px;
+    gap: 12px;
 }
 
 .wallet-badge {
@@ -100,35 +100,13 @@ body {
     font-size: 13px;
     color: var(--primary-color);
     font-weight: 600;
-    display: none; /* Cleaned up from top bar to make room */
+    display: none;
 }
 
 @media(min-width: 768px) {
     .wallet-badge {
         display: block;
     }
-}
-
-/* Currency Converter Header Button */
-.header-converter-btn {
-    background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
-    color: #ffffff;
-    border: none;
-    padding: 6px 12px;
-    border-radius: 20px;
-    font-size: 12px;
-    font-weight: 700;
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    gap: 5px;
-    box-shadow: 0 4px 12px rgba(37, 99, 235, 0.25);
-    transition: transform 0.2s, box-shadow 0.2s;
-}
-
-.header-converter-btn:hover {
-    transform: translateY(-1px);
-    box-shadow: 0 6px 15px rgba(37, 99, 235, 0.35);
 }
 
 .notification-icon {
@@ -242,7 +220,7 @@ body {
     margin: 6px 0;
 }
 
-/* --- Sidebar Drawer Menu --- */
+/* --- Sidebar Drawer Menu (Optimized) --- */
 .sidebar {
     position: fixed;
     top: 0;
@@ -464,32 +442,24 @@ input:checked + .slider:before {
     display: flex;
     gap: 10px;
     flex-wrap: wrap;
-    margin-bottom: 16px;
 }
 
 .hero-btn {
     background: rgba(255, 255, 255, 0.2);
     border: 1px solid rgba(255, 255, 255, 0.4);
     color: #ffffff;
-    padding: 8px 16px;
-    border-radius: 10px;
+    padding: 10px 18px;
+    border-radius: 12px;
     font-size: 13px;
-    font-weight: 600;
+    font-weight: 700;
     cursor: pointer;
     backdrop-filter: blur(5px);
-    transition: background 0.2s;
+    transition: background 0.2s, transform 0.2s;
 }
 
 .hero-btn:hover {
     background: rgba(255, 255, 255, 0.3);
-}
-
-.hero-rate {
-    font-size: 12px;
-    background: rgba(0, 0, 0, 0.2);
-    padding: 6px 12px;
-    border-radius: 8px;
-    display: inline-block;
+    transform: translateY(-1px);
 }
 
 /* Dashboard Stats Grid */
@@ -1119,11 +1089,6 @@ input:checked + .slider:before {
         <div class="nav-right">
             <div class="wallet-badge" id="navWalletBadge">NGN ₦4,400.00</div>
             
-            <!-- Currency Converter Header Button ($1 = ₦1420) -->
-            <button class="header-converter-btn" onclick="openCurrencyModal()">
-                <span>💱</span> Convert ($1 = ₦1420)
-            </button>
-
             <!-- Active Notification Bell & Dropdown -->
             <div class="notification-icon" id="notificationBtn" title="Website Updates">
                 🔔
@@ -1167,7 +1132,7 @@ input:checked + .slider:before {
         </div>
     </header>
 
-    <!-- Sidebar Drawer Menu -->
+    <!-- Sidebar Drawer Menu (Optimized) -->
     <div class="sidebar" id="sidebarDrawer">
         <div class="sidebar-header">
             <div class="sidebar-brand-wrap">
@@ -1184,10 +1149,9 @@ input:checked + .slider:before {
                 <li><a href="#" class="sidebar-link" data-target="booster">⚡ <span>MJ Booster (SMM)</span></a></li>
                 <li><a href="#" class="sidebar-link" data-target="deposit">💳 <span>Add Funds</span></a></li>
                 <li><a href="#" class="sidebar-link" data-target="cart">🛍️ <span>Cart</span></a></li>
-                <li><a href="#" class="sidebar-link" data-target="support">💬 <span>Support</span></a></li>
+                <li><a href="#" class="sidebar-link" data-target="support">💬 <span>Support Chat</span></a></li>
                 <li><a href="#" class="sidebar-link" data-target="telegram">✈️ <span>Telegram Community</span></a></li>
-                <li><a href="#" class="sidebar-link" data-target="guidelines">📖 <span>Guidelines</span></a></li>
-                <li><a href="#" class="sidebar-link" data-target="terms">📄 <span>Terms & Conditions</span></a></li>
+                <li><a href="#" class="sidebar-link" data-target="profile">⚙️ <span>Settings & Profile</span></a></li>
                 <li><a href="#" onclick="alert('Logged out successfully'); return false;" style="color: #ef4444;">🚪 <span>Logout</span></a></li>
             </ul>
         </div>
@@ -1211,9 +1175,8 @@ input:checked + .slider:before {
                 <div class="hero-sub">Here's an overview of your account's recent activities.</div>
                 <div class="hero-actions">
                     <button class="hero-btn" onclick="switchSection('deposit')">Fund Account</button>
-                    <button class="hero-btn" onclick="switchSection('sms')">Get SMS</button>
+                    <button class="hero-btn" onclick="openCurrencyModal()">Convert Currency</button>
                 </div>
-                <div class="hero-rate">₦4,400 = $2.93</div>
             </div>
 
             <div class="sleek-stats-grid">
@@ -1512,20 +1475,6 @@ input:checked + .slider:before {
             </div>
         </section>
 
-        <section id="guidelines" class="app-section">
-            <div class="content-card">
-                <h2>Guidelines</h2>
-                <p class="helper-text">1. Ensure you fund your wallet before purchasing items.<br>2. MJ Logs are delivered instantly to your history.<br>3. For any issues contact support via WhatsApp.</p>
-            </div>
-        </section>
-
-        <section id="terms" class="app-section">
-            <div class="content-card">
-                <h2>Terms & Conditions</h2>
-                <p class="helper-text">All purchases on MJ HUB are final. Make sure details are correct before confirming checkout.</p>
-            </div>
-        </section>
-
         <section id="profile" class="app-section">
             <div class="content-card">
                 <h2>Account Settings & Profile</h2>
@@ -1608,7 +1557,7 @@ input:checked + .slider:before {
         </div>
     </div>
 
-    <!-- Mobile Bottom Navigation Bar -->
+    <!-- Mobile Bottom Navigation Bar (Updated with Profile Tab) -->
     <nav class="bottom-nav">
         <a href="#" class="bottom-nav-item active" data-target="home">
             <span>🏠</span>
@@ -1625,15 +1574,15 @@ input:checked + .slider:before {
             <span>🛍️</span>
             <span>Cart</span>
         </a>
-        <a href="#" class="bottom-nav-item" data-target="support">
-            <span>💬</span>
-            <span>Support</span>
+        <a href="#" class="bottom-nav-item" data-target="profile">
+            <span>⚙️</span>
+            <span>Profile</span>
         </a>
     </nav>
 
     <script>
 /* ==========================================
-   MJ HUB - Application Logic (v3.1)
+   MJ HUB - Application Logic (v3.2)
    ========================================== */
 
 let currentBalanceNgn = 4400.00;
@@ -1724,7 +1673,6 @@ document.addEventListener('DOMContentLoaded', () => {
         profileDropdown.classList.remove('active');
         notifDropdown.classList.remove('active');
         
-        // Close support widget if clicked outside
         const supportWidget = document.querySelector('.brand-support-widget');
         if (!supportWidget.contains(e.target)) {
             document.getElementById('supportPopupOptions').classList.remove('active');
