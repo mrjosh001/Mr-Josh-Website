@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>MJ HUB - Dashboard & Profile</title>
-    <link rel="stylesheet" href="styles.css?v=2.1">
+    <link rel="stylesheet" href="styles.css?v=2.2">
 </head>
 <body>
 
@@ -19,13 +19,16 @@
                 <span>NGN</span> <strong id="top-wallet-balance">₦0.00</strong>
             </div>
             <div class="notification-icon" onclick="alert('1 unread notification')">🔔<span class="badge-dot"></span></div>
+            
+            <!-- Clickable Profile Dropdown Toggle -->
             <div class="profile-dropdown-container">
-                <div class="profile-icon" id="profile-menu-toggle">MJ</div>
-                <!-- Profile Dropdown Menu -->
+                <div class="profile-icon" id="profile-menu-toggle" style="cursor: pointer;">MJ</div>
+                
+                <!-- Dropdown Menu -->
                 <div id="profile-dropdown" class="dropdown-menu">
                     <div class="dropdown-header">
-                        <strong id="dd-name">Mr. Josh</strong>
-                        <span id="dd-email">agaziejoseph0@gmail.com</span>
+                        <strong id="dd-name">User Account</strong>
+                        <span id="dd-email">user@email.com</span>
                     </div>
                     <ul class="dropdown-links">
                         <li><a href="#" onclick="switchSection('dashboard-section')">📊 Dashboard</a></li>
@@ -79,7 +82,7 @@
         <!-- 1. DASHBOARD SECTION -->
         <section id="dashboard-section" class="app-section active">
             <div class="welcome-box">
-                <h2 id="welcome-user-title">Hello Mr</h2>
+                <h2 id="welcome-user-title">Hello User</h2>
                 <p>Here's an overview of your account's recent activities.</p>
                 <div class="hero-buttons">
                     <button class="primary-btn" onclick="switchSection('deposit-section')">Fund Account</button>
@@ -143,10 +146,10 @@
                 <div class="profile-avatar-large">👤</div>
                 <div class="profile-hero-meta">
                     <span class="badge-sub">MY PROFILE</span>
-                    <h2 id="hero-name-display">Mr josh</h2>
-                    <p id="hero-email-display">agaziejoseph0@gmail.com</p>
+                    <h2 id="hero-name-display">User Name</h2>
+                    <p id="hero-email-display">user@email.com</p>
                     <div class="badge-row">
-                        <span class="meta-tag">📅 Joined Jun 2026</span>
+                        <span class="meta-tag">📅 Joined Recently</span>
                         <span class="meta-tag verified">✔ Verified</span>
                     </div>
                 </div>
@@ -159,7 +162,7 @@
                 <button class="p-tab-btn" onclick="switchProfileTab('tab-danger', this)">⚠️ Danger Zone</button>
             </div>
 
-            <!-- Tab 1: Personal Info & KYC -->
+            <!-- Tab 1: Personal Info & KYC (Blank by default for onboarding data) -->
             <div id="tab-profile" class="profile-tab-content active">
                 <div class="content-card">
                     <h3>Choose an Avatar</h3>
@@ -168,7 +171,7 @@
                         <div class="avatar-option">👦🏽</div>
                         <div class="avatar-option">🧔</div>
                         <div class="avatar-option">👱‍♂️</div>
-                        <div class="avatar-option active-avatar">👵</div>
+                        <div class="avatar-option">👵</div>
                     </div>
                     <p class="helper-text">Pick one of our default avatars, or upload your photo in the header to upload your own.</p>
                 </div>
@@ -198,16 +201,16 @@
                     <div class="form-row-2">
                         <div>
                             <label>City</label>
-                            <input type="text" id="input-city" placeholder="Lagos">
+                            <input type="text" id="input-city" placeholder="City">
                         </div>
                         <div>
                             <label>Country</label>
-                            <input type="text" id="input-country" placeholder="Nigeria">
+                            <input type="text" id="input-country" placeholder="Country">
                         </div>
                     </div>
 
                     <label>Postal / ZIP code</label>
-                    <input type="text" id="input-zip" placeholder="100001">
+                    <input type="text" id="input-zip" placeholder="Postal code">
 
                     <h3 style="margin-top:20px;">Identity (Optional)</h3>
                     <p class="helper-text">Add your NIN or BVN to enable a dedicated bank account for funding your wallet.</p>
@@ -361,7 +364,7 @@
         closeMenu.addEventListener('click', closeDrawer);
         overlay.addEventListener('click', closeDrawer);
 
-        // Toggle Profile Dropdown on Click
+        // Click-based Dropdown Behavior for Profile Icon
         profileToggle.addEventListener('click', (e) => {
             e.stopPropagation();
             profileDropdown.classList.toggle('active');
@@ -394,17 +397,17 @@
             btn.classList.add('active');
         }
 
-        // Persistent User Profile Storage & Initialization
+        // Onboarding Data Integration: Starts blank unless populated from sign-up/onboarding state
         let userProfile = JSON.parse(localStorage.getItem('mj_user_profile')) || {
-            fullname: "Mr. Josh",
-            username: "@mrjosh001",
-            email: "agaziejoseph0@gmail.com",
-            phone: "09061607034",
+            fullname: "",
+            username: "",
+            email: "",
+            phone: "",
             bio: "",
             street: "",
-            city: "Lagos",
-            country: "Nigeria",
-            zip: "100001",
+            city: "",
+            country: "",
+            zip: "",
             nin: "",
             bvn: ""
         };
@@ -422,11 +425,15 @@
             document.getElementById('input-nin').value = userProfile.nin;
             document.getElementById('input-bvn').value = userProfile.bvn;
 
-            document.getElementById('hero-name-display').textContent = userProfile.fullname;
-            document.getElementById('hero-email-display').textContent = userProfile.email;
-            document.getElementById('dd-name').textContent = userProfile.fullname;
-            document.getElementById('dd-email').textContent = userProfile.email;
-            document.getElementById('welcome-user-title').textContent = `Hello ${userProfile.fullname.split(' ')[0]}`;
+            const displayName = userProfile.fullname ? userProfile.fullname : "User Account";
+            const displayEmail = userProfile.email ? userProfile.email : "user@email.com";
+            const firstName = userProfile.fullname ? userProfile.fullname.split(' ')[0] : "User";
+
+            document.getElementById('hero-name-display').textContent = displayName;
+            document.getElementById('hero-email-display').textContent = displayEmail;
+            document.getElementById('dd-name').textContent = displayName;
+            document.getElementById('dd-email').textContent = displayEmail;
+            document.getElementById('welcome-user-title').textContent = `Hello ${firstName}`;
         }
         populateProfileForm();
 
@@ -445,7 +452,7 @@
 
             localStorage.setItem('mj_user_profile', JSON.stringify(userProfile));
             populateProfileForm();
-            alert('Profile updated and synchronized successfully!');
+            alert('Profile updated and saved successfully!');
         }
 
         let walletBalance = parseFloat(localStorage.getItem('mj_wallet')) || 0;
