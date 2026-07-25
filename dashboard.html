@@ -1,30 +1,59 @@
-// Check if user is logged in (using localStorage simulation)
-document.addEventListener('DOMContentLoaded', () => {
-    const isLoggedIn = localStorage.getItem('mj_hub_logged_in');
-    
-    // If not logged in and they are trying to view protected areas without onboarding
-    // You can handle redirection back to landing if required:
-    // if (!isLoggedIn && window.location.pathname.includes('dashboard.html')) {
-    //     window.location.href = 'landing.html';
-    // }
-});
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MJ HUB - Dashboard</title>
+    <style>
+        :root[data-theme="dark"] {
+            --primary-color: #2563eb;
+            --bg-main: #0b0f19;
+            --card-bg: #121824;
+            --text-main: #ffffff;
+            --text-muted: #93c5fd;
+            --border-color: #1e3a8a;
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+        body { background-color: var(--bg-main); color: var(--text-main); padding: 20px; }
+        .dashboard-header { display: flex; justify-content: space-between; align-items: center; background: var(--card-bg); border: 1px solid var(--border-color); padding: 20px; border-radius: 14px; margin-bottom: 20px; }
+        .logout-btn { background: #dc2626; color: #fff; border: none; padding: 8px 16px; border-radius: 8px; cursor: pointer; font-weight: 600; }
+        .logout-btn:hover { background: #b91c1c; }
+    </style>
+</head>
+<body>
 
-// Call this function when the user successfully signs up or logs in
-function handleSuccessfulLogin(userName, userEmail) {
-    localStorage.setItem('mj_hub_logged_in', 'true');
-    localStorage.setItem('mj_hub_username', userName);
-    localStorage.setItem('mj_hub_email', userEmail);
-    
-    // Redirect straight into the dashboard interface
-    window.location.href = 'dashboard.html';
-}
+    <div class="dashboard-header">
+        <div>
+            <h1>Welcome back, <span id="user-profile-name">User</span>!</h1>
+            <p style="color: var(--text-muted); font-size: 13px;">Manage your MJ Logs, MJ SMS, and MJ Booster services here.</p>
+        </div>
+        <button class="logout-btn" onclick="handleLogout()">Log Out</button>
+    </div>
 
-// Call this function when the user clicks "Log Out"
-function handleLogout() {
-    localStorage.removeItem('mj_hub_logged_in');
-    localStorage.removeItem('mj_hub_username');
-    localStorage.removeItem('mj_hub_email');
-    
-    // Redirect back to the standalone landing page
-    window.location.href = 'landing.html';
-}
+    <script>
+        // 1. Silent Security Guard: Kick unauthenticated users straight back to auth
+        (function() {
+            const isLoggedIn = localStorage.getItem('mj_hub_logged_in');
+            if (!isLoggedIn || isLoggedIn !== 'true') {
+                window.location.replace('auth.html');
+            }
+        })();
+
+        // 2. Load User Profile Name on Startup
+        document.addEventListener('DOMContentLoaded', () => {
+            const savedName = localStorage.getItem('mj_hub_username');
+            if (savedName) {
+                document.getElementById('user-profile-name').textContent = savedName;
+            }
+        });
+
+        // 3. Secure Logout Routine
+        function handleLogout() {
+            localStorage.removeItem('mj_hub_logged_in');
+            localStorage.removeItem('mj_hub_username');
+            localStorage.removeItem('mj_hub_email');
+            window.location.href = 'landing.html';
+        }
+    </script>
+</body>
+</html>
