@@ -107,7 +107,6 @@
             <p>Access MJ Logs, MJ SMS & MJ Booster</p>
         </div>
 
-        <!-- Switch Tabs -->
         <div class="tab-toggle">
             <button class="tab-btn active" onclick="switchTab('signin')">Sign In</button>
             <button class="tab-btn" onclick="switchTab('signup')">Sign Up</button>
@@ -147,7 +146,6 @@
     </div>
 
     <script>
-        // Toggle between Sign In and Sign Up tabs
         function switchTab(tab) {
             const btns = document.querySelectorAll('.tab-btn');
             const sections = document.querySelectorAll('.form-section');
@@ -164,30 +162,18 @@
             }
         }
 
-        // Handle Form Submissions & Redirect to Dashboard
         function handleAuth(event, type) {
             event.preventDefault();
             
-            let userName = "Valued User";
-            let userEmail = "";
+            let userName = type === 'signin' ? document.getElementById('signin-email').value.split('@')[0] : document.getElementById('signup-name').value;
+            let userEmail = type === 'signin' ? document.getElementById('signin-email').value : document.getElementById('signup-email').value;
 
-            if (type === 'signin') {
-                userEmail = document.getElementById('signin-email').value;
-                userName = userEmail.split('@')[0]; // Extract name mockup from email
-            } else {
-                userName = document.getElementById('signup-name').value;
-                userEmail = document.getElementById('signup-email').value;
-            }
-
-            // Save session tokens in localStorage
             localStorage.setItem('mj_hub_logged_in', 'true');
             localStorage.setItem('mj_hub_username', userName);
             localStorage.setItem('mj_hub_email', userEmail);
 
-            // Redirect smoothly to your main dashboard page
             window.location.href = 'dashboard.html';
         }
     </script>
 </body>
 </html>
-
