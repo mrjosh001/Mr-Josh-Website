@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>MJ HUB - Dashboard & Profile</title>
-    <link rel="stylesheet" href="styles.css?v=2.3">
+    <link rel="stylesheet" href="styles.css?v=2.4">
 </head>
 <body>
 
@@ -84,9 +84,12 @@
             <div class="welcome-box">
                 <h2 id="welcome-user-title">Hello User</h2>
                 <p>Here's an overview of your account's recent activities.</p>
-                <div class="hero-buttons">
+                <div class="hero-action-row">
                     <button class="primary-btn" onclick="switchSection('deposit-section')">Fund Account</button>
                     <button class="secondary-btn" onclick="switchSection('sms-section')">Get SMS</button>
+                    <div class="currency-converter-pill" id="live-converter-display">
+                        <span>💱 ₦0.00 = $0.00</span>
+                    </div>
                 </div>
             </div>
 
@@ -98,7 +101,7 @@
                 </div>
                 <div class="stat-card">
                     <span class="stat-label">USD Balance</span>
-                    <strong class="stat-value">$0.00</strong>
+                    <strong class="stat-value" id="dash-usd-balance">$0.00</strong>
                 </div>
                 <div class="stat-card" onclick="switchSection('purchased-numbers-section')" style="cursor:pointer;">
                     <span class="stat-label">Purchased Numbers</span>
@@ -162,7 +165,7 @@
                 <button class="p-tab-btn" onclick="switchProfileTab('tab-danger', this)">⚠️ Danger Zone</button>
             </div>
 
-            <!-- Tab 1: Personal Info & KYC (Blank by default for onboarding data sync) -->
+            <!-- Tab 1: Personal Info & KYC -->
             <div id="tab-profile" class="profile-tab-content active">
                 <div class="content-card">
                     <h3>Choose an Avatar</h3>
@@ -337,7 +340,7 @@
             <span>⚡</span>
             <span>SMM</span>
         </a>
-        <div class="bottom-nav-center" onclick="switchSection('deposit-section')">
+        <div class="bottom-nav-center" onclick="openActionSheet()">
             <span>+</span>
         </div>
         <a href="#" class="bottom-nav-item" onclick="switchSection('my-purchase-section')">
@@ -349,6 +352,29 @@
             <span>More</span>
         </a>
     </nav>
+
+    <!-- Quick Action Bottom Sheet Modal -->
+    <div id="action-modal-overlay" class="action-modal-overlay" onclick="closeActionSheet()"></div>
+    <div id="action-sheet" class="action-sheet">
+        <div class="action-sheet-header">
+            <span>Quick Actions</span>
+            <button onclick="closeActionSheet()" style="background:none; border:none; font-size:18px; cursor:pointer;">✕</button>
+        </div>
+        <div class="action-sheet-grid">
+            <div class="action-sheet-item" onclick="closeActionSheet(); switchSection('deposit-section')">
+                💳 Fund Wallet
+            </div>
+            <div class="action-sheet-item" onclick="closeActionSheet(); switchSection('sms-section')">
+                📱 Get SMS OTP
+            </div>
+            <div class="action-sheet-item" onclick="closeActionSheet(); switchSection('boosters-section')">
+                🚀 SMM Boost
+            </div>
+            <div class="action-sheet-item" onclick="closeActionSheet(); switchSection('transactions-section')">
+                🔄 History Logs
+            </div>
+        </div>
+    </div>
 
     <!-- Script Logic -->
     <script>
@@ -401,7 +427,18 @@
             btn.classList.add('active');
         }
 
-        // Onboarding Data Storage Initialization (Blank by default per user session)
+        // Action Sheet Modal Controls
+        function openActionSheet() {
+            document.getElementById('action-modal-overlay').classList.add('active');
+            document.getElementById('action-sheet').classList.add('active');
+        }
+
+        function closeActionSheet() {
+            document.getElementById('action-modal-overlay').classList.remove('active');
+            document.getElementById('action-sheet').classList.remove('active');
+        }
+
+        // Onboarding Data Storage Initialization
         let userProfile = JSON.parse(localStorage.getItem('mj_user_profile')) || {
             fullname: "",
             username: "",
@@ -461,11 +498,17 @@
 
         let walletBalance = parseFloat(localStorage.getItem('mj_wallet')) || 0;
         let purchasedNumbersCount = parseInt(localStorage.getItem('mj_num_count')) || 0;
+        const exchangeRate = 1500; // Estimated NGN to USD conversion rate
 
         function updateUI() {
             document.getElementById('top-wallet-balance').textContent = `₦${walletBalance.toLocaleString(undefined, {minimumFractionDigits: 2})}`;
             document.getElementById('dash-ngn-balance').textContent = `₦${walletBalance.toLocaleString(undefined, {minimumFractionDigits: 2})}`;
             document.getElementById('stat-num-count').textContent = purchasedNumbersCount;
+            
+            let usdEquivalent = walletBalance / exchangeRate;
+            document.getElementById('dash-usd-balance').textContent = `$${usdEquivalent.toFixed(2)}`;
+            document.getElementById('live-converter-display').innerHTML = `<span>💱 ₦${walletBalance.toLocaleString(undefined, {minimumFractionDigits: 0})} = $${usdEquivalent.toFixed(2)}</span>`;
+
             localStorage.setItem('mj_wallet', walletBalance);
             localStorage.setItem('mj_num_count', purchasedNumbersCount);
         }
