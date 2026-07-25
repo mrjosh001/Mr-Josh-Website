@@ -6,7 +6,7 @@
     <title>MJ HUB - Dashboard</title>
     <style>
 /* ==========================================
-   MJ HUB - Theme & Variables (v3.2)
+   MJ HUB - Theme & Variables (v3.3)
    ========================================== */
 
 :root {
@@ -62,7 +62,6 @@ body {
     align-items: center;
     padding: 0 20px;
     z-index: 1000;
-    transition: background-color 0.3s, border-color 0.3s;
 }
 
 .nav-left {
@@ -133,7 +132,7 @@ body {
     border-radius: 50%;
 }
 
-/* Profile Icon & Dropdown Styles */
+/* Profile Icon & Dropdown */
 .profile-dropdown-container {
     position: relative;
 }
@@ -220,7 +219,7 @@ body {
     margin: 6px 0;
 }
 
-/* --- Sidebar Drawer Menu (Optimized) --- */
+/* --- Cleaned Sidebar Drawer --- */
 .sidebar {
     position: fixed;
     top: 0;
@@ -229,7 +228,7 @@ body {
     height: 100%;
     background: var(--card-bg);
     border-right: 1px solid var(--border-color);
-    transition: left 0.3s ease, background-color 0.3s;
+    transition: left 0.3s ease;
     z-index: 1200;
     display: flex;
     flex-direction: column;
@@ -287,36 +286,35 @@ body {
 }
 
 .sidebar-links-container {
-    padding: 15px 20px;
+    padding: 20px;
     overflow-y: auto;
     flex: 1;
 }
 
 .sidebar-links {
     list-style: none;
+    display: flex;
+    flex-direction: column;
+    gap: 8px; /* Proper spaced-out layout */
 }
 
 .sidebar-links li a {
     display: flex;
     align-items: center;
-    gap: 12px;
-    padding: 12px 10px;
+    gap: 14px;
+    padding: 12px 14px;
     color: var(--text-main);
     text-decoration: none;
-    font-size: 15px;
-    font-weight: 500;
-    border-bottom: 1px solid var(--border-color);
-    transition: color 0.2s, padding-left 0.2s;
-}
-
-.sidebar-links li:last-child a {
-    border-bottom: none;
+    font-size: 14px;
+    font-weight: 600;
+    border-radius: 10px;
+    transition: background 0.2s, color 0.2s;
 }
 
 .sidebar-links li a:hover, 
 .sidebar-links li a.active {
+    background: rgba(37, 99, 235, 0.1);
     color: var(--primary-color);
-    padding-left: 14px;
 }
 
 .sidebar-footer {
@@ -416,7 +414,7 @@ input:checked + .slider:before {
     display: block;
 }
 
-/* --- Sleek Dashboard Hero --- */
+/* Dashboard Hero */
 .dashboard-card-hero {
     background: linear-gradient(135deg, #1e40af 0%, #2563eb 100%);
     border-radius: 20px;
@@ -462,7 +460,7 @@ input:checked + .slider:before {
     transform: translateY(-1px);
 }
 
-/* Dashboard Stats Grid */
+/* Stats Grid */
 .sleek-stats-grid {
     display: grid;
     grid-template-columns: 1fr;
@@ -485,11 +483,6 @@ input:checked + .slider:before {
     justify-content: space-between;
     align-items: center;
     box-shadow: 0 1px 3px rgba(0,0,0,0.05);
-    transition: transform 0.2s, background-color 0.3s;
-}
-
-.sleek-card:hover {
-    transform: translateY(-2px);
 }
 
 .sleek-label {
@@ -521,7 +514,7 @@ input:checked + .slider:before {
 .icon-yellow { background: rgba(234, 179, 8, 0.1); color: #ca8a04; }
 .icon-teal { background: rgba(13, 148, 136, 0.1); color: #0d9488; }
 
-/* Content Cards & Common Styles */
+/* Content Cards & Forms */
 .content-card {
     background: var(--card-bg);
     border: 1px solid var(--border-color);
@@ -545,7 +538,38 @@ input:checked + .slider:before {
     line-height: 1.5;
 }
 
-/* Product Grid */
+.form-group {
+    margin-bottom: 15px;
+}
+
+.form-group label {
+    display: block;
+    font-size: 13px;
+    font-weight: 600;
+    margin-bottom: 6px;
+    color: var(--text-muted);
+}
+
+.form-group input, 
+.form-group textarea, 
+.form-group select {
+    width: 100%;
+    padding: 12px;
+    border: 1px solid var(--border-color);
+    border-radius: 10px;
+    background: var(--bg-main);
+    color: var(--text-main);
+    font-size: 14px;
+    outline: none;
+    transition: border-color 0.2s;
+}
+
+.form-group input:focus, 
+.form-group textarea:focus {
+    border-color: var(--primary-color);
+}
+
+/* Product & Table Grids */
 .product-grid {
     display: grid;
     grid-template-columns: 1fr;
@@ -567,11 +591,6 @@ input:checked + .slider:before {
     display: flex;
     flex-direction: column;
     justify-content: space-between;
-    transition: border-color 0.2s;
-}
-
-.product-item-card:hover {
-    border-color: var(--primary-color);
 }
 
 .product-info-top {
@@ -624,14 +643,8 @@ input:checked + .slider:before {
     font-size: 12px;
     font-weight: 600;
     cursor: pointer;
-    transition: background 0.2s;
 }
 
-.btn-sm-outline:hover {
-    background: var(--border-color);
-}
-
-/* Tables & History */
 .table-responsive {
     overflow-x: auto;
 }
@@ -666,13 +679,7 @@ input:checked + .slider:before {
 
 .badge-success { background: rgba(22, 163, 74, 0.15); color: #16a34a; }
 .badge-pending { background: rgba(234, 179, 8, 0.15); color: #ca8a04; }
-
-.empty-text {
-    text-align: center;
-    color: var(--text-muted);
-    padding: 20px 0;
-    font-size: 13px;
-}
+.empty-text { text-align: center; color: var(--text-muted); padding: 20px 0; font-size: 13px; }
 
 .cart-summary-box {
     background: var(--bg-main);
@@ -691,164 +698,51 @@ input:checked + .slider:before {
     color: var(--primary-color);
 }
 
-.support-options-grid {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 15px;
-    margin-top: 15px;
-}
-
-.support-channel-card {
-    background: var(--bg-main);
-    border: 1px solid var(--border-color);
-    border-radius: 12px;
-    padding: 20px;
-    text-align: center;
-    cursor: pointer;
-    text-decoration: none;
-    color: var(--text-main);
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 8px;
-    transition: transform 0.2s, border-color 0.2s;
-}
-
-.support-channel-card:hover {
-    transform: translateY(-2px);
-    border-color: var(--primary-color);
-}
-
-.support-icon {
-    font-size: 28px;
-}
-
 /* ==========================================
-   NEW & UPGRADED COMPONENTS
+   REDESIGNED FLOATING (+) ACTION MODAL
    ========================================== */
 
-/* 1. Floating Brand Support Widget */
-.brand-support-widget {
-    position: fixed;
-    bottom: 85px;
-    right: 20px;
-    z-index: 1400;
-    display: flex;
-    flex-direction: column;
-    align-items: flex-end;
-}
-
-.support-popup-options {
-    display: none;
-    flex-direction: column;
-    gap: 10px;
-    margin-bottom: 12px;
-    animation: fadeInUp 0.25s ease-out;
-}
-
-.support-popup-options.active {
-    display: flex;
-}
-
-.support-popup-btn {
-    width: 48px;
-    height: 48px;
-    border-radius: 50%;
-    background: var(--card-bg);
-    border: 1px solid var(--border-color);
-    box-shadow: 0 8px 20px rgba(0,0,0,0.15);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    text-decoration: none;
-    font-size: 22px;
-    transition: transform 0.2s;
-}
-
-.support-popup-btn:hover {
-    transform: scale(1.1);
-}
-
-.main-support-trigger {
-    width: 56px;
-    height: 56px;
-    border-radius: 50%;
-    background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
-    color: #ffffff;
-    border: none;
-    box-shadow: 0 10px 25px rgba(37, 99, 235, 0.4);
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 24px;
-    transition: transform 0.2s, box-shadow 0.2s;
-    animation: bounceSlow 3s infinite;
-}
-
-.main-support-trigger:hover {
-    transform: scale(1.08);
-}
-
-@keyframes bounceSlow {
-    0%, 100% { transform: translateY(0); }
-    50% { transform: translateY(-6px); }
-}
-
-@keyframes fadeInUp {
-    from { opacity: 0; transform: translateY(10px); }
-    to { opacity: 1; transform: translateY(0); }
-}
-
-
-/* 2. Upgraded Popping Center (+) Button & Drawer Modal */
 .bottom-nav-center {
-    width: 50px;
-    height: 50px;
+    width: 52px;
+    height: 52px;
     background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
     color: #ffffff;
     border-radius: 50%;
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 28px;
+    font-size: 30px;
     cursor: pointer;
-    box-shadow: 0 6px 20px rgba(37, 99, 235, 0.45);
-    margin-top: -22px;
+    box-shadow: 0 8px 25px rgba(37, 99, 235, 0.45);
+    margin-top: -24px;
     border: 4px solid var(--nav-bg);
-    transition: transform 0.25s, box-shadow 0.25s;
-    animation: pulseGlow 2s infinite;
-}
-
-@keyframes pulseGlow {
-    0% { box-shadow: 0 0 0 0 rgba(37, 99, 235, 0.5); }
-    70% { box-shadow: 0 0 0 12px rgba(37, 99, 235, 0); }
-    100% { box-shadow: 0 0 0 0 rgba(37, 99, 235, 0); }
+    transition: transform 0.25s cubic-bezier(0.175, 0.885, 0.32, 1.275);
 }
 
 .bottom-nav-center:hover {
-    transform: scale(1.12);
+    transform: scale(1.1);
 }
 
+/* Modernized Action Sheet Modal */
 .floating-action-modal {
     display: none;
     position: fixed;
     bottom: 80px;
     left: 50%;
     transform: translateX(-50%);
-    width: 90%;
-    max-width: 420px;
+    width: 92%;
+    max-width: 440px;
     background: var(--card-bg);
     border: 1px solid var(--border-color);
-    border-radius: 24px;
-    box-shadow: 0 20px 40px rgba(0,0,0,0.3);
+    border-radius: 28px;
+    box-shadow: 0 25px 50px rgba(0,0,0,0.35);
     z-index: 1500;
     padding: 24px;
-    animation: popupUp 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    animation: slideUpModal 0.3s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
-@keyframes popupUp {
-    from { opacity: 0; transform: translate(-50%, 30px) scale(0.9); }
+@keyframes slideUpModal {
+    from { opacity: 0; transform: translate(-50%, 40px) scale(0.95); }
     to { opacity: 1; transform: translate(-50%, 0) scale(1); }
 }
 
@@ -860,20 +754,25 @@ input:checked + .slider:before {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    margin-bottom: 18px;
+    margin-bottom: 20px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid var(--border-color);
 }
 
 .popup-title {
-    font-size: 17px;
+    font-size: 18px;
     font-weight: 800;
     color: var(--text-main);
+    display: flex;
+    align-items: center;
+    gap: 8px;
 }
 
 .popup-close {
     background: var(--bg-main);
     border: 1px solid var(--border-color);
-    width: 32px;
-    height: 32px;
+    width: 34px;
+    height: 34px;
     border-radius: 50%;
     cursor: pointer;
     font-size: 16px;
@@ -888,42 +787,57 @@ input:checked + .slider:before {
     background: var(--border-color);
 }
 
+/* Premium Icon Grid Layout */
 .popup-grid {
     display: grid;
     grid-template-columns: repeat(2, 1fr);
-    gap: 12px;
+    gap: 14px;
 }
 
 .popup-item {
     background: var(--bg-main);
     border: 1px solid var(--border-color);
-    border-radius: 16px;
-    padding: 16px;
+    border-radius: 20px;
+    padding: 18px 14px;
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: 8px;
+    text-align: center;
+    gap: 10px;
     text-decoration: none;
     color: var(--text-main);
-    font-size: 13px;
-    font-weight: 700;
     cursor: pointer;
-    transition: transform 0.2s, background 0.2s, border-color 0.2s;
+    transition: all 0.25s ease;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.02);
 }
 
 .popup-item:hover {
-    transform: translateY(-2px);
-    background: rgba(37, 99, 235, 0.08);
+    transform: translateY(-3px);
+    background: rgba(37, 99, 235, 0.06);
     border-color: var(--primary-color);
     color: var(--primary-color);
+    box-shadow: 0 10px 20px rgba(37, 99, 235, 0.1);
 }
 
-.popup-item span:first-child {
-    font-size: 26px;
+.popup-icon-badge {
+    width: 48px;
+    height: 48px;
+    background: var(--card-bg);
+    border: 1px solid var(--border-color);
+    border-radius: 14px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 22px;
+    box-shadow: 0 4px 10px rgba(0,0,0,0.04);
 }
 
+.popup-item span:last-child {
+    font-size: 13px;
+    font-weight: 700;
+}
 
-/* 3. Currency Converter Popup Modal */
+/* Currency Converter Modal */
 .currency-modal {
     display: none;
     position: fixed;
@@ -948,12 +862,6 @@ input:checked + .slider:before {
     padding: 24px;
     box-shadow: 0 25px 50px rgba(0,0,0,0.3);
     border: 1px solid var(--border-color);
-    animation: scaleIn 0.25s ease-out;
-}
-
-@keyframes scaleIn {
-    from { opacity: 0; transform: scale(0.92); }
-    to { opacity: 1; transform: scale(1); }
 }
 
 .currency-input-group {
@@ -989,7 +897,6 @@ input:checked + .slider:before {
     outline: none;
 }
 
-
 /* Notifications Dropdown */
 .notification-dropdown {
     display: none;
@@ -1015,20 +922,9 @@ input:checked + .slider:before {
     font-size: 13px;
 }
 
-.notif-item:last-child {
-    border-bottom: none;
-}
-
-.notif-title {
-    font-weight: 700;
-    color: var(--text-main);
-    margin-bottom: 2px;
-}
-
-.notif-time {
-    font-size: 11px;
-    color: var(--text-muted);
-}
+.notif-item:last-child { border-bottom: none; }
+.notif-title { font-weight: 700; color: var(--text-main); margin-bottom: 2px; }
+.notif-time { font-size: 11px; color: var(--text-muted); }
 
 /* --- Mobile Bottom Nav Bar --- */
 .bottom-nav {
@@ -1043,7 +939,6 @@ input:checked + .slider:before {
     justify-content: space-around;
     align-items: center;
     z-index: 1000;
-    transition: background-color 0.3s, border-color 0.3s;
 }
 
 .bottom-nav-item {
@@ -1057,24 +952,12 @@ input:checked + .slider:before {
     font-weight: 600;
 }
 
-.bottom-nav-item span:first-child {
-    font-size: 18px;
-}
-
-.bottom-nav-item.active {
-    color: var(--primary-color);
-}
+.bottom-nav-item span:first-child { font-size: 18px; }
+.bottom-nav-item.active { color: var(--primary-color); }
 
 @media(min-width: 768px) {
-    .bottom-nav {
-        display: none;
-    }
-    .main-content {
-        padding-bottom: 20px;
-    }
-    .brand-support-widget {
-        bottom: 25px;
-    }
+    .bottom-nav { display: none; }
+    .main-content { padding-bottom: 20px; }
 }
     </style>
 </head>
@@ -1087,9 +970,8 @@ input:checked + .slider:before {
             <h1 class="brand-title">MJ HUB</h1>
         </div>
         <div class="nav-right">
-            <div class="wallet-badge" id="navWalletBadge">NGN ₦4,400.00</div>
+            <div class="wallet-badge" id="navWalletBadge">NGN ₦0.00</div>
             
-            <!-- Active Notification Bell & Dropdown -->
             <div class="notification-icon" id="notificationBtn" title="Website Updates">
                 🔔
                 <span class="badge-dot" id="notifDot"></span>
@@ -1097,25 +979,19 @@ input:checked + .slider:before {
             <div class="notification-dropdown" id="notificationDropdown">
                 <div style="font-weight: 800; font-size: 14px; margin-bottom: 10px; color: var(--text-main);">Website Updates & Alerts</div>
                 <div class="notif-item">
-                    <div class="notif-title">⚡ New SMM Servers Added</div>
-                    <div style="color: var(--text-muted); font-size: 12px;">High-speed Instagram & Telegram boost servers are now active.</div>
+                    <div class="notif-title">⚡ Welcome to MJ HUB</div>
+                    <div style="color: var(--text-muted); font-size: 12px;">Complete your onboarding profile to get started.</div>
                     <div class="notif-time">Just now</div>
-                </div>
-                <div class="notif-item">
-                    <div class="notif-title">🛡️ MJ Logs Price Update</div>
-                    <div style="color: var(--text-muted); font-size: 12px;">Cart prices now auto-sync with live server changes.</div>
-                    <div class="notif-time">2 hours ago</div>
                 </div>
             </div>
 
-            <!-- Profile Icon & Dropdown -->
             <div class="profile-dropdown-container">
                 <div class="profile-icon" id="profileDropdownToggle">
                     <img id="headerAvatarImg" src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150" alt="Avatar">
                 </div>
                 <div class="dropdown-menu" id="profileDropdownMenu">
                     <div class="dropdown-header">
-                        <strong id="dropdownName">User</strong>
+                        <strong id="dropdownName">New User</strong>
                         <span id="dropdownEmail">user@mjhub.com</span>
                     </div>
                     <ul class="dropdown-links">
@@ -1132,7 +1008,7 @@ input:checked + .slider:before {
         </div>
     </header>
 
-    <!-- Sidebar Drawer Menu (Optimized) -->
+    <!-- Cleaned Sidebar Drawer (Spacing fixed & clutter removed) -->
     <div class="sidebar" id="sidebarDrawer">
         <div class="sidebar-header">
             <div class="sidebar-brand-wrap">
@@ -1144,9 +1020,9 @@ input:checked + .slider:before {
         <div class="sidebar-links-container">
             <ul class="sidebar-links">
                 <li><a href="#" class="sidebar-link active" data-target="home">🏠 <span>Dashboard</span></a></li>
-                <li><a href="#" class="sidebar-link" data-target="logs">📦 <span>MJ Logs (Accounts)</span></a></li>
-                <li><a href="#" class="sidebar-link" data-target="sms">📱 <span>MJ SMS (Verify OTP)</span></a></li>
-                <li><a href="#" class="sidebar-link" data-target="booster">⚡ <span>MJ Booster (SMM)</span></a></li>
+                <li><a href="#" class="sidebar-link" data-target="logs">📦 <span>MJ Logs</span></a></li>
+                <li><a href="#" class="sidebar-link" data-target="sms">📱 <span>MJ SMS</span></a></li>
+                <li><a href="#" class="sidebar-link" data-target="booster">⚡ <span>MJ Booster</span></a></li>
                 <li><a href="#" class="sidebar-link" data-target="deposit">💳 <span>Add Funds</span></a></li>
                 <li><a href="#" class="sidebar-link" data-target="cart">🛍️ <span>Cart</span></a></li>
                 <li><a href="#" class="sidebar-link" data-target="support">💬 <span>Support Chat</span></a></li>
@@ -1171,8 +1047,8 @@ input:checked + .slider:before {
         <!-- Home Section -->
         <section id="home" class="app-section active">
             <div class="dashboard-card-hero">
-                <div class="hero-welcome">Hello User</div>
-                <div class="hero-sub">Here's an overview of your account's recent activities.</div>
+                <div class="hero-welcome">Welcome to MJ HUB</div>
+                <div class="hero-sub">Complete your onboarding profile and fund your wallet to get started.</div>
                 <div class="hero-actions">
                     <button class="hero-btn" onclick="switchSection('deposit')">Fund Account</button>
                     <button class="hero-btn" onclick="openCurrencyModal()">Convert Currency</button>
@@ -1183,7 +1059,7 @@ input:checked + .slider:before {
                 <div class="sleek-card">
                     <div>
                         <span class="sleek-label">NGN Balance</span>
-                        <span class="sleek-value" id="homeNgnBalance">₦4,400.00</span>
+                        <span class="sleek-value" id="homeNgnBalance">₦0.00</span>
                     </div>
                     <div class="sleek-card-icon icon-blue">💳</div>
                 </div>
@@ -1191,7 +1067,7 @@ input:checked + .slider:before {
                 <div class="sleek-card">
                     <div>
                         <span class="sleek-label">USD Balance</span>
-                        <span class="sleek-value">$2.93</span>
+                        <span class="sleek-value">$0.00</span>
                     </div>
                     <div class="sleek-card-icon icon-yellow">💵</div>
                 </div>
@@ -1199,7 +1075,7 @@ input:checked + .slider:before {
                 <div class="sleek-card">
                     <div>
                         <span class="sleek-label">Purchased Numbers</span>
-                        <span class="sleek-value" id="homeNumbersCount">2</span>
+                        <span class="sleek-value" id="homeNumbersCount">0</span>
                     </div>
                     <div class="sleek-card-icon icon-green">📱</div>
                 </div>
@@ -1218,8 +1094,7 @@ input:checked + .slider:before {
         <section id="logs" class="app-section">
             <div class="content-card">
                 <h2>MJ Logs - Available Accounts</h2>
-                <p class="helper-text">Browse available premium social media accounts. Prices auto-update in your cart.</p>
-                
+                <p class="helper-text">Browse available premium social media accounts.</p>
                 <div class="product-grid">
                     <div class="product-item-card">
                         <div class="product-info-top">
@@ -1234,41 +1109,6 @@ input:checked + .slider:before {
                             <button class="btn-sm-outline" onclick="buyNowItem('Old Gmail Accounts', 1200)">Buy Now</button>
                         </div>
                     </div>
-
-                    <div class="product-item-card">
-                        <div class="product-info-top">
-                            <div>
-                                <div class="product-title">Verified Twitter (X) Accounts</div>
-                                <div class="helper-text" style="margin: 2px 0 0 0;">Blue badge ready, active history</div>
-                            </div>
-                            <div class="product-price">₦4,500</div>
-                        </div>
-                        <div class="product-actions-row">
-                            <button class="btn-sm-primary" onclick="addToCart('Verified Twitter Account', 4500, 'log')">Add to Cart</button>
-                            <button class="btn-sm-outline" onclick="buyNowItem('Verified Twitter Account', 4500)">Buy Now</button>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <div class="content-card">
-                <h2>MJ Logs History</h2>
-                <div class="table-responsive">
-                    <table class="history-table">
-                        <thead>
-                            <tr>
-                                <th>Item</th>
-                                <th>Details</th>
-                                <th>Price</th>
-                                <th>Status</th>
-                            </tr>
-                        </thead>
-                        <tbody id="logsHistoryBody">
-                            <tr>
-                                <td colspan="4" class="empty-text">No account purchase history yet.</td>
-                            </tr>
-                        </tbody>
-                    </table>
                 </div>
             </div>
         </section>
@@ -1278,7 +1118,6 @@ input:checked + .slider:before {
             <div class="content-card">
                 <h2>MJ SMS - OTP Verification Numbers</h2>
                 <p class="helper-text">Get virtual numbers for instant OTP verification.</p>
-
                 <div class="product-grid">
                     <div class="product-item-card">
                         <div class="product-info-top">
@@ -1293,50 +1132,6 @@ input:checked + .slider:before {
                             <button class="btn-sm-outline" onclick="buyNowItem('WhatsApp OTP Number', 800)">Get Now</button>
                         </div>
                     </div>
-
-                    <div class="product-item-card">
-                        <div class="product-info-top">
-                            <div>
-                                <div class="product-title">Telegram OTP Number</div>
-                                <div class="helper-text" style="margin: 2px 0 0 0;">Fast SMS delivery</div>
-                            </div>
-                            <div class="product-price">₦950</div>
-                        </div>
-                        <div class="product-actions-row">
-                            <button class="btn-sm-primary" onclick="addToCart('Telegram OTP Number', 950, 'sms')">Add to Cart</button>
-                            <button class="btn-sm-outline" onclick="buyNowItem('Telegram OTP Number', 950)">Get Now</button>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <div class="content-card">
-                <h2>MJ SMS History</h2>
-                <div class="table-responsive">
-                    <table class="history-table">
-                        <thead>
-                            <tr>
-                                <th>Service</th>
-                                <th>Number</th>
-                                <th>OTP Code</th>
-                                <th>Status</th>
-                            </tr>
-                        </thead>
-                        <tbody id="smsHistoryBody">
-                            <tr>
-                                <td>WhatsApp</td>
-                                <td>+1 (555) 382-9102</td>
-                                <td>482-910</td>
-                                <td><span class="badge-status badge-success">Completed</span></td>
-                            </tr>
-                            <tr>
-                                <td>Telegram</td>
-                                <td>+44 (79) 4920-112</td>
-                                <td>918-234</td>
-                                <td><span class="badge-status badge-success">Completed</span></td>
-                            </tr>
-                        </tbody>
-                    </table>
                 </div>
             </div>
         </section>
@@ -1346,7 +1141,6 @@ input:checked + .slider:before {
             <div class="content-card">
                 <h2>MJ Booster - Social Media Growth</h2>
                 <p class="helper-text">Boost followers, views, and engagement instantly.</p>
-
                 <div class="product-grid">
                     <div class="product-item-card">
                         <div class="product-info-top">
@@ -1361,41 +1155,6 @@ input:checked + .slider:before {
                             <button class="btn-sm-outline" onclick="buyNowItem('Instagram Followers (1k)', 2500)">Boost Now</button>
                         </div>
                     </div>
-
-                    <div class="product-item-card">
-                        <div class="product-info-top">
-                            <div>
-                                <div class="product-title">Telegram Channel Members (1,000)</div>
-                                <div class="helper-text" style="margin: 2px 0 0 0;">Real active members</div>
-                            </div>
-                            <div class="product-price">₦3,000</div>
-                        </div>
-                        <div class="product-actions-row">
-                            <button class="btn-sm-primary" onclick="addToCart('Telegram Members (1k)', 3000, 'booster')">Add to Cart</button>
-                            <button class="btn-sm-outline" onclick="buyNowItem('Telegram Members (1k)', 3000)">Boost Now</button>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <div class="content-card">
-                <h2>MJ Booster History</h2>
-                <div class="table-responsive">
-                    <table class="history-table">
-                        <thead>
-                            <tr>
-                                <th>Service</th>
-                                <th>Link / Target</th>
-                                <th>Qty</th>
-                                <th>Status</th>
-                            </tr>
-                        </thead>
-                        <tbody id="boosterHistoryBody">
-                            <tr>
-                                <td colspan="4" class="empty-text">No booster orders yet.</td>
-                            </tr>
-                        </tbody>
-                    </table>
                 </div>
             </div>
         </section>
@@ -1404,8 +1163,7 @@ input:checked + .slider:before {
         <section id="cart" class="app-section">
             <div class="content-card">
                 <h2>Shopping Cart</h2>
-                <p class="helper-text">Review your picked items. Prices automatically sync if server rates change.</p>
-                
+                <p class="helper-text">Review your picked items.</p>
                 <div class="table-responsive">
                     <table class="history-table">
                         <thead>
@@ -1417,13 +1175,10 @@ input:checked + .slider:before {
                             </tr>
                         </thead>
                         <tbody id="cartTableBody">
-                            <tr>
-                                <td colspan="4" class="empty-text">Your cart is currently empty.</td>
-                            </tr>
+                            <tr><td colspan="4" class="empty-text">Your cart is currently empty.</td></tr>
                         </tbody>
                     </table>
                 </div>
-
                 <div class="cart-summary-box">
                     <div>
                         <div style="font-size: 12px; color: var(--text-muted);">Total Checkout Sum</div>
@@ -1438,21 +1193,7 @@ input:checked + .slider:before {
         <section id="support" class="app-section">
             <div class="content-card">
                 <h2>Contact Support Chat</h2>
-                <p class="helper-text">Need assistance? Reach out to our 24/7 support team instantly via WhatsApp or Telegram below.</p>
-                
-                <div class="support-options-grid">
-                    <a href="https://wa.me/qr/XM6ORO7UCYTXI1" target="_blank" class="support-channel-card">
-                        <div class="support-icon">💬</div>
-                        <div style="font-weight: 700;">WhatsApp Support</div>
-                        <div class="helper-text" style="margin: 0; font-size: 11px;">Chat instantly on WhatsApp</div>
-                    </a>
-
-                    <a href="https://t.me/mjhubsupport" target="_blank" class="support-channel-card">
-                        <div class="support-icon">✈️</div>
-                        <div style="font-weight: 700;">Telegram Support</div>
-                        <div class="helper-text" style="margin: 0; font-size: 11px;">Connect on Telegram</div>
-                    </a>
-                </div>
+                <p class="helper-text">Need assistance? Reach out to our 24/7 support team.</p>
             </div>
         </section>
 
@@ -1461,8 +1202,10 @@ input:checked + .slider:before {
             <div class="content-card">
                 <h2>Add Funds to Wallet</h2>
                 <p class="helper-text">Fund your wallet instantly to checkout products seamlessly.</p>
-                <label style="display:block; font-size:13px; font-weight:600; margin-bottom:6px; color:var(--text-muted);">Amount (NGN)</label>
-                <input type="number" id="depositInput" value="5000" style="width:100%; padding:12px; border:1px solid var(--border-color); border-radius:10px; background:var(--bg-main); color:var(--text-main); margin-bottom:15px; outline:none;">
+                <div class="form-group">
+                    <label>Amount (NGN)</label>
+                    <input type="number" id="depositInput" placeholder="Enter amount">
+                </div>
                 <button class="btn-sm-primary" style="width:100%; padding:12px;" onclick="processDeposit()">Proceed to Payment</button>
             </div>
         </section>
@@ -1470,47 +1213,87 @@ input:checked + .slider:before {
         <section id="telegram" class="app-section">
             <div class="content-card">
                 <h2>Telegram Community</h2>
-                <p class="helper-text">Join our official community channel for updates, guides, and giveaways.</p>
-                <a href="https://t.me/" target="_blank" class="btn-sm-primary" style="display:block; text-align:center; text-decoration:none; padding:12px;">Open Telegram Channel</a>
+                <p class="helper-text">Join our official community channel for updates.</p>
             </div>
         </section>
 
+        <!-- Profile Settings Section (Set strictly blank for onboarding) -->
         <section id="profile" class="app-section">
             <div class="content-card">
                 <h2>Account Settings & Profile</h2>
-                <label style="display:block; font-size:13px; font-weight:600; margin-bottom:6px; color:var(--text-muted);">Full Name</label>
-                <input type="text" id="settingsNameInput" value="User" style="width:100%; padding:12px; border:1px solid var(--border-color); border-radius:10px; background:var(--bg-main); color:var(--text-main); margin-bottom:15px; outline:none;">
+                <p class="helper-text">Please complete your onboarding information below.</p>
                 
-                <label style="display:block; font-size:13px; font-weight:600; margin-bottom:6px; color:var(--text-muted);">Email Address</label>
-                <input type="email" id="settingsEmailInput" value="user@mjhub.com" style="width:100%; padding:12px; border:1px solid var(--border-color); border-radius:10px; background:var(--bg-main); color:var(--text-main); margin-bottom:15px; outline:none;">
-                
-                <button class="btn-sm-primary" style="width:100%; padding:12px;" onclick="saveSettings()">Save Settings</button>
+                <div class="form-group">
+                    <label>Full Name</label>
+                    <input type="text" id="settingsNameInput" placeholder="Enter your full name">
+                </div>
+
+                <div class="form-group">
+                    <label>Email Address</label>
+                    <input type="email" id="settingsEmailInput" placeholder="Enter your email address">
+                </div>
+
+                <div class="form-group">
+                    <label>Phone Number</label>
+                    <input type="tel" id="settingsPhoneInput" placeholder="Enter your phone number">
+                </div>
+
+                <div class="form-group">
+                    <label>Bio</label>
+                    <textarea id="settingsBioInput" rows="3" placeholder="Tell us about yourself..."></textarea>
+                </div>
+
+                <div class="form-group">
+                    <label>Street Address</label>
+                    <input type="text" id="settingsStreetInput" placeholder="Enter your street address">
+                </div>
+
+                <div class="form-group">
+                    <label>City</label>
+                    <input type="text" id="settingsCityInput" placeholder="Enter your city">
+                </div>
+
+                <div class="form-group">
+                    <label>Country</label>
+                    <input type="text" id="settingsCountryInput" placeholder="Enter your country">
+                </div>
+
+                <div class="form-group">
+                    <label>Postal / ZIP Code</label>
+                    <input type="text" id="settingsPostalInput" placeholder="Enter postal code">
+                </div>
+
+                <div style="border-top: 1px solid var(--border-color); margin: 20px 0; padding-top: 15px;">
+                    <strong style="font-size: 14px; display: block; margin-bottom: 5px;">Identity (Optional)</strong>
+                    <p class="helper-text">Add your NIN or BVN to enable a dedicated bank account for funding your wallet.</p>
+                </div>
+
+                <div class="form-group">
+                    <label>NIN</label>
+                    <input type="text" id="settingsNinInput" placeholder="11-digit National Identity Number">
+                </div>
+
+                <div class="form-group">
+                    <label>BVN</label>
+                    <input type="text" id="settingsBvnInput" placeholder="11-digit Bank Verification Number">
+                </div>
+
+                <button class="btn-sm-primary" style="width:100%; padding:12px; margin-top: 10px;" onclick="saveSettings()">Save changes</button>
             </div>
         </section>
 
     </main>
 
-    <!-- FLOATING SUPPORT WIDGET (Big brand style, pops out support logos) -->
-    <div class="brand-support-widget">
-        <div class="support-popup-options" id="supportPopupOptions">
-            <a href="https://wa.me/qr/XM6ORO7UCYTXI1" target="_blank" class="support-popup-btn" title="WhatsApp Support">💬</a>
-            <a href="https://t.me/mjhubsupport" target="_blank" class="support-popup-btn" title="Telegram Support">✈️</a>
-        </div>
-        <button class="main-support-trigger" onclick="toggleSupportPopup()" id="supportTriggerBtn">🎧</button>
-    </div>
-
-    <!-- CURRENCY CONVERTER POPUP MODAL (1 USD = ₦1420 Fixed Rate) -->
+    <!-- CURRENCY CONVERTER POPUP MODAL -->
     <div class="currency-modal" id="currencyModal">
         <div class="currency-modal-card">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
                 <div style="font-size: 17px; font-weight: 800; color: var(--text-main);">Convert Currency</div>
                 <button onclick="closeCurrencyModal()" style="background: var(--bg-main); border: 1px solid var(--border-color); width: 30px; height: 30px; border-radius: 50%; cursor: pointer; font-size: 14px; font-weight: bold; color: var(--text-main);">✕</button>
             </div>
-
             <div style="background: rgba(37, 99, 235, 0.08); border: 1px solid rgba(37, 99, 235, 0.2); border-radius: 12px; padding: 10px; text-align: center; font-size: 12px; font-weight: 700; color: var(--primary-color); margin-bottom: 15px;">
                 Exchange Rate: 1 USD = ₦1,420.00
             </div>
-
             <div class="currency-input-group">
                 <label>You Send (USD)</label>
                 <div class="currency-input-row">
@@ -1518,7 +1301,6 @@ input:checked + .slider:before {
                     <span style="font-weight: 800; color: var(--text-muted);">USD</span>
                 </div>
             </div>
-
             <div class="currency-input-group">
                 <label>You Receive (NGN)</label>
                 <div class="currency-input-row">
@@ -1526,38 +1308,37 @@ input:checked + .slider:before {
                     <span style="font-weight: 800; color: var(--text-muted);">NGN</span>
                 </div>
             </div>
-
-            <button class="btn-sm-primary" style="width: 100%; padding: 12px; font-size: 14px; margin-top: 5px;" onclick="closeCurrencyModal()">Done</button>
+            <button class="btn-sm-primary" style="width: 100%; padding: 12px; font-size: 14px;" onclick="closeCurrencyModal()">Done</button>
         </div>
     </div>
 
-    <!-- Popping Center (+) Action Drawer Modal -->
+    <!-- REDESIGNED FLOATING (+) ACTION MODAL -->
     <div class="floating-action-modal" id="floatingPopupModal">
         <div class="popup-header-row">
-            <div class="popup-title">Quick Actions</div>
+            <div class="popup-title"><span>⚡</span> Quick Actions</div>
             <button class="popup-close" onclick="toggleFloatingPopup()">✕</button>
         </div>
         <div class="popup-grid">
             <div class="popup-item" onclick="switchSection('deposit'); toggleFloatingPopup();">
-                <span>💳</span>
+                <div class="popup-icon-badge">💳</div>
                 <span>Add Funds</span>
             </div>
             <div class="popup-item" onclick="switchSection('sms'); toggleFloatingPopup();">
-                <span>📱</span>
+                <div class="popup-icon-badge">📱</div>
                 <span>MJ SMS</span>
             </div>
             <div class="popup-item" onclick="switchSection('booster'); toggleFloatingPopup();">
-                <span>⚡</span>
+                <div class="popup-icon-badge">⚡</div>
                 <span>MJ Booster</span>
             </div>
             <div class="popup-item" onclick="switchSection('logs'); toggleFloatingPopup();">
-                <span>🔄</span>
+                <div class="popup-icon-badge">📦</div>
                 <span>MJ Logs</span>
             </div>
         </div>
     </div>
 
-    <!-- Mobile Bottom Navigation Bar (Updated with Profile Tab) -->
+    <!-- Mobile Bottom Navigation Bar -->
     <nav class="bottom-nav">
         <a href="#" class="bottom-nav-item active" data-target="home">
             <span>🏠</span>
@@ -1565,7 +1346,7 @@ input:checked + .slider:before {
         </a>
         <a href="#" class="bottom-nav-item" data-target="logs">
             <span>🔄</span>
-            <span>MJ Logs</span>
+            <span>SMM</span>
         </a>
         <div class="bottom-nav-center" id="floatingPlusBtn" onclick="toggleFloatingPopup()">
             <span>+</span>
@@ -1575,17 +1356,17 @@ input:checked + .slider:before {
             <span>Cart</span>
         </a>
         <a href="#" class="bottom-nav-item" data-target="profile">
-            <span>⚙️</span>
-            <span>Profile</span>
+            <span>👤</span>
+            <span>More</span>
         </a>
     </nav>
 
     <script>
 /* ==========================================
-   MJ HUB - Application Logic (v3.2)
+   MJ HUB - Application Logic (v3.3)
    ========================================== */
 
-let currentBalanceNgn = 4400.00;
+let currentBalanceNgn = 0.00; // Default zero balance until deposit
 let cartItems = [];
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -1606,24 +1387,18 @@ document.addEventListener('DOMContentLoaded', () => {
     function navigateToSection(targetId) {
         allSections.forEach(section => {
             section.classList.remove('active');
-            if(section.id === targetId) {
-                section.classList.add('active');
-            }
+            if(section.id === targetId) { section.classList.add('active'); }
         });
 
         sidebarLinks.forEach(link => {
             link.classList.remove('active');
-            if(link.getAttribute('data-target') === targetId) {
-                link.classList.add('active');
-            }
+            if(link.getAttribute('data-target') === targetId) { link.classList.add('active'); }
         });
 
         window.scrollTo({ top: 0, behavior: 'smooth' });
     }
 
-    window.switchSection = function(sectionId) {
-        navigateToSection(sectionId);
-    };
+    window.switchSection = function(sectionId) { navigateToSection(sectionId); };
 
     sidebarLinks.forEach(link => {
         link.addEventListener('click', (e) => {
@@ -1672,15 +1447,9 @@ document.addEventListener('DOMContentLoaded', () => {
     document.addEventListener('click', (e) => {
         profileDropdown.classList.remove('active');
         notifDropdown.classList.remove('active');
-        
-        const supportWidget = document.querySelector('.brand-support-widget');
-        if (!supportWidget.contains(e.target)) {
-            document.getElementById('supportPopupOptions').classList.remove('active');
-        }
     });
 });
 
-// Dark Mode Toggle
 function toggleDarkMode() {
     const htmlEl = document.documentElement;
     const isDark = htmlEl.getAttribute('data-theme') === 'light';
@@ -1688,35 +1457,19 @@ function toggleDarkMode() {
     document.getElementById('sidebarDarkModeToggle').checked = isDark;
 }
 
-// Floating Support Popup Toggle
-function toggleSupportPopup() {
-    const options = document.getElementById('supportPopupOptions');
-    options.classList.toggle('active');
-}
-
-// Currency Converter Modal Controls
-function openCurrencyModal() {
-    document.getElementById('currencyModal').classList.add('active');
-}
-
-function closeCurrencyModal() {
-    document.getElementById('currencyModal').classList.remove('active');
-}
+function openCurrencyModal() { document.getElementById('currencyModal').classList.add('active'); }
+function closeCurrencyModal() { document.getElementById('currencyModal').classList.remove('active'); }
 
 function calculateCurrencyConversion() {
     const usd = parseFloat(document.getElementById('convertUsdInput').value) || 0;
-    const rate = 1420;
-    const ngn = usd * rate;
+    const ngn = usd * 1420;
     document.getElementById('convertNgnOutput').value = ngn > 0 ? '₦' + ngn.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2}) : '';
 }
 
-// Center (+) Floating Action Modal Toggle
 function toggleFloatingPopup() {
-    const modal = document.getElementById('floatingPopupModal');
-    modal.classList.toggle('active');
+    document.getElementById('floatingPopupModal').classList.toggle('active');
 }
 
-// Cart & Checkout Logic
 function addToCart(title, price, type) {
     cartItems.push({ id: Date.now(), title, price, type });
     updateCartUI();
@@ -1740,7 +1493,6 @@ function updateCartUI() {
 
     tbody.innerHTML = '';
     let total = 0;
-
     cartItems.forEach(item => {
         total += item.price;
         let tr = document.createElement('tr');
@@ -1752,7 +1504,6 @@ function updateCartUI() {
         `;
         tbody.appendChild(tr);
     });
-
     totalDisplay.textContent = '₦' + total.toLocaleString(undefined, {minimumFractionDigits: 2});
 }
 
@@ -1770,12 +1521,9 @@ function buyNowItem(title, price) {
 
 function checkoutCart() {
     let total = cartItems.reduce((sum, item) => sum + item.price, 0);
-    if(total === 0) {
-        alert('Your cart is empty.');
-        return;
-    }
+    if(total === 0) { alert('Your cart is empty.'); return; }
     if(currentBalanceNgn < total) {
-        alert('Insufficient balance to checkout all items. Please add funds.');
+        alert('Insufficient balance to checkout. Please add funds.');
         switchSection('deposit');
         return;
     }
@@ -1783,16 +1531,13 @@ function checkoutCart() {
     cartItems = [];
     updateCartUI();
     updateBalanceDisplay();
-    alert('All items successfully purchased and checked out!');
+    alert('All items successfully purchased!');
     switchSection('home');
 }
 
 function processDeposit() {
     let amt = parseFloat(document.getElementById('depositInput').value) || 0;
-    if(amt <= 0) {
-        alert('Please enter a valid amount.');
-        return;
-    }
+    if(amt <= 0) { alert('Please enter a valid amount.'); return; }
     currentBalanceNgn += amt;
     updateBalanceDisplay();
     alert('Wallet funded successfully with ₦' + amt.toLocaleString() + '!');
@@ -1807,9 +1552,9 @@ function updateBalanceDisplay() {
 function saveSettings() {
     let name = document.getElementById('settingsNameInput').value;
     let email = document.getElementById('settingsEmailInput').value;
-    document.getElementById('dropdownName').textContent = name;
-    document.getElementById('dropdownEmail').textContent = email;
-    alert('Settings updated successfully!');
+    if(name) { document.getElementById('dropdownName').textContent = name; }
+    if(email) { document.getElementById('dropdownEmail').textContent = email; }
+    alert('Onboarding profile details saved successfully!');
     switchSection('home');
 }
     </script>
