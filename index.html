@@ -6,7 +6,7 @@
     <title>MJ HUB - Dashboard</title>
     <style>
 /* ==========================================
-   MJ HUB - Theme & Variables (v3.6)
+   MJ HUB - Theme & Variables (v3.7)
    ========================================== */
 
 :root[data-theme="dark"] {
@@ -479,63 +479,6 @@ body {
     line-height: 1.3;
 }
 
-/* USD Virtual Card Banner Tile */
-.virtual-card-banner {
-    background: var(--card-bg);
-    border: 1px solid var(--border-color);
-    border-radius: 20px;
-    padding: 16px 20px;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    cursor: pointer;
-    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-    transition: border-color 0.2s;
-}
-
-.virtual-card-banner:hover {
-    border-color: var(--primary-color);
-}
-
-.virtual-card-left {
-    display: flex;
-    align-items: center;
-    gap: 16px;
-}
-
-.virtual-card-icon-box {
-    width: 48px;
-    height: 48px;
-    background: #3b82f6;
-    color: #ffffff;
-    border-radius: 14px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 22px;
-}
-
-.virtual-card-info h4 {
-    font-size: 15px;
-    font-weight: 800;
-    color: var(--text-main);
-    display: flex;
-    align-items: center;
-    gap: 6px;
-}
-
-.virtual-card-info p {
-    font-size: 12px;
-    color: var(--text-muted);
-    margin-top: 2px;
-}
-
-.virtual-card-arrow {
-    font-size: 18px;
-    color: var(--text-muted);
-    font-weight: bold;
-}
-
 /* ==========================================
    PROFILE SCREEN 
    ========================================== */
@@ -681,7 +624,7 @@ body {
 
 .product-grid {
     display: grid;
-    grid-template-columns: 1px;
+    grid-template-columns: 1fr;
     gap: 15px;
     margin-top: 15px;
 }
@@ -761,7 +704,7 @@ body {
 .cart-total-amount { font-size: 20px; font-weight: 800; color: var(--primary-color); }
 
 /* ==========================================
-   FLOATING SUPPORT BUTTON 
+   FLOATING SUPPORT BUTTON & MODAL
    ========================================== */
 
 .floating-support-btn {
@@ -788,6 +731,51 @@ body {
 .floating-support-btn:hover {
     transform: scale(1.08);
     background: #2563eb;
+}
+
+.support-modal {
+    display: none;
+    position: fixed;
+    top: 0; left: 0; width: 100%; height: 100%;
+    background: rgba(0, 0, 0, 0.6);
+    backdrop-filter: blur(4px);
+    z-index: 1900;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+}
+.support-modal.active { display: flex; }
+
+.support-modal-card {
+    background: var(--card-bg);
+    width: 100%;
+    max-width: 380px;
+    border-radius: 24px;
+    padding: 24px;
+    box-shadow: 0 25px 50px rgba(0,0,0,0.5);
+    border: 1px solid var(--border-color);
+}
+
+.support-channel-item {
+    background: var(--bg-main);
+    border: 1px solid var(--border-color);
+    border-radius: 14px;
+    padding: 14px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 12px;
+}
+
+.support-channel-left {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    color: var(--text-main);
+    text-decoration: none;
+    font-weight: 700;
+    font-size: 14px;
+    flex: 1;
 }
 
 /* ==========================================
@@ -1120,13 +1108,18 @@ body {
                     </div>
                     <ul class="dropdown-links">
                         <li><a href="#" onclick="switchSection('home'); toggleProfileDropdown(); return false;">Dashboard</a></li>
-                        <li><a href="#" onclick="switchSection('profile'); toggleProfileDropdown(); return false;">Settings & Profile</a></li>
+                        <li><a href="#" onclick="switchSection('profile'); toggleProfileDropdown(); return false;">Settings</a></li>
                         <li><a href="#" onclick="switchSection('cart'); toggleProfileDropdown(); return false;">Cart</a></li>
                     </ul>
                     <div class="dropdown-divider"></div>
                     <ul class="dropdown-links">
                         <li><a href="#" onclick="alert('Logged out successfully'); return false;" style="color: #ef4444;">Logout</a></li>
                     </ul>
+                    <div class="dropdown-divider"></div>
+                    <div style="padding: 10px 15px; display: flex; justify-content: space-between; align-items: center;">
+                        <span style="font-size: 13px; font-weight: 600; color: var(--text-main);">Theme Mode</span>
+                        <button class="btn-sm-outline" id="dropdownThemeToggleBtn" style="padding: 6px 12px;">Dark</button>
+                    </div>
                 </div>
             </div>
         </div>
@@ -1149,8 +1142,7 @@ body {
                 <li><a href="#" class="sidebar-link" data-target="booster">⚡ <span>MJ Booster</span></a></li>
                 <li><a href="#" class="sidebar-link" data-target="deposit">💳 <span>Add Funds</span></a></li>
                 <li><a href="#" class="sidebar-link" data-target="cart">🛍️ <span>Cart</span></a></li>
-                <li><a href="#" class="sidebar-link" data-target="support">💬 <span>Support Chat</span></a></li>
-                <li><a href="#" class="sidebar-link" data-target="profile">👤 <span>Profile & Onboarding</span></a></li>
+                <li id="sidebarOnboardingLink"><a href="#" class="sidebar-link" data-target="profile">👤 <span>Onboarding</span></a></li>
                 <li><a href="#" onclick="alert('Logged out successfully'); return false;" style="color: #ef4444;">🚪 <span>Logout</span></a></li>
             </ul>
         </div>
@@ -1168,10 +1160,10 @@ body {
         <section id="home" class="app-section active">
             <div class="dashboard-card-hero">
                 <div class="hero-welcome" id="heroWelcomeTitle">Welcome to MJ HUB</div>
-                <div class="hero-sub">Complete your onboarding profile and fund your wallet to get started.</div>
-                <div class="hero-actions">
+                <div class="hero-sub" id="heroSubText">Complete your onboarding profile and fund your wallet to get started.</div>
+                <div class="hero-actions" id="heroActionsContainer">
                     <button class="hero-btn" onclick="switchSection('deposit')">Fund Account</button>
-                    <button class="hero-btn" onclick="switchSection('profile')">Complete Onboarding</button>
+                    <button class="hero-btn" id="heroOnboardBtn" onclick="switchSection('profile')">Complete Onboarding</button>
                 </div>
             </div>
 
@@ -1194,7 +1186,7 @@ body {
             </div>
         </section>
 
-        <!-- PROFILE SECTION (Dynamic Onboarding State) -->
+        <!-- PROFILE / SETTINGS SECTION (Dynamic Onboarding State) -->
         <section id="profile" class="app-section">
             <div class="profile-header-card">
                 <div class="profile-avatar-large" id="profileAvatarBox">
@@ -1204,7 +1196,7 @@ body {
                 <p id="profileHeaderEmail">No email provided</p>
             </div>
 
-            <div class="content-card" style="margin-bottom: 16px;">
+            <div class="content-card" id="onboardingCardContainer" style="margin-bottom: 16px;">
                 <h2>Onboarding Details</h2>
                 <p class="helper-text">Fill in your information to personalize your account dashboard.</p>
                 <div class="form-group">
@@ -1364,15 +1356,6 @@ body {
             </div>
         </section>
 
-        <!-- Support Section -->
-        <section id="support" class="app-section">
-            <div class="content-card">
-                <h2>Contact Support Chat</h2>
-                <p class="helper-text">Need assistance? Reach out to our 24/7 support team via Telegram.</p>
-                <a href="https://t.me/" target="_blank" class="btn-sm-primary" style="display: block; text-align: center; text-decoration: none; padding: 12px;">Open Telegram Support</a>
-            </div>
-        </section>
-
         <!-- Fund Wallet Section -->
         <section id="deposit" class="app-section">
             <div class="content-card">
@@ -1389,9 +1372,37 @@ body {
     </main>
 
     <!-- FLOATING SUPPORT BUTTON -->
-    <a href="https://t.me/" target="_blank" class="floating-support-btn" title="Contact Support">
+    <div class="floating-support-btn" id="floatingSupportBtn" title="Contact Support">
         ✈️
-    </a>
+    </div>
+
+    <!-- SUPPORT CHANNELS MODAL -->
+    <div class="support-modal" id="supportModal">
+        <div class="support-modal-card">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+                <div style="font-size: 17px; font-weight: 800; color: var(--text-main);">Customer Support</div>
+                <button onclick="closeSupportModal()" style="background: var(--bg-main); border: 1px solid var(--border-color); width: 30px; height: 30px; border-radius: 50%; cursor: pointer; font-size: 14px; font-weight: bold; color: var(--text-main);">✕</button>
+            </div>
+            <p class="helper-text">Choose your preferred support channel or remove options you don't wish to see.</p>
+            
+            <div id="supportChannelsContainer">
+                <div class="support-channel-item" id="whatsappChannelRow">
+                    <a href="https://whatsapp.com" target="_blank" class="support-channel-left">
+                        <span>💬</span> WhatsApp Support
+                    </a>
+                    <button class="btn-sm-outline" style="color:#ef4444; border-color:#ef4444; padding:4px 8px;" onclick="removeSupportChannel('whatsapp')">Delete</button>
+                </div>
+
+                <div class="support-channel-item" id="telegramChannelRow">
+                    <a href="https://t.me/" target="_blank" class="support-channel-left">
+                        <span>✈️</span> Telegram Support
+                    </a>
+                    <button class="btn-sm-outline" style="color:#ef4444; border-color:#ef4444; padding:4px 8px;" onclick="removeSupportChannel('telegram')">Delete</button>
+                </div>
+            </div>
+            <div id="noSupportText" class="empty-text" style="display: none;">All support channels have been deleted.</div>
+        </div>
+    </div>
 
     <!-- CHANGE PASSWORD MODAL -->
     <div class="currency-modal" id="changePasswordModal">
@@ -1449,9 +1460,9 @@ body {
                 <div class="popup-icon-badge">💳</div>
                 <span>Add Funds</span>
             </div>
-            <div class="popup-item" onclick="switchSection('sms'); toggleFloatingPopup();">
-                <div class="popup-icon-badge">📱</div>
-                <span>MJ SMS</span>
+            <div class="popup-item" onclick="switchSection('profile'); toggleFloatingPopup();">
+                <div class="popup-icon-badge">⚙️</div>
+                <span>Settings</span>
             </div>
             <div class="popup-item" onclick="switchSection('booster'); toggleFloatingPopup();">
                 <div class="popup-icon-badge">⚡</div>
@@ -1478,10 +1489,10 @@ body {
             <span>+</span>
         </div>
         <div class="bottom-nav-item" onclick="switchSection('profile')">
-            <span>👤</span>
-            <span>Profile</span>
+            <span>⚙️</span>
+            <span>Settings</span>
         </div>
-        <div class="bottom-nav-item" onclick="switchSection('support')">
+        <div class="bottom-nav-item" onclick="openSupportModal()">
             <span>💬</span>
             <span>Support</span>
         </div>
@@ -1489,7 +1500,7 @@ body {
 
     <script>
 /* ==========================================
-   MJ HUB - Application Logic (v3.6)
+   MJ HUB - Application Logic (v3.7)
    ========================================== */
 
 let currentBalanceNgn = 0.00;
@@ -1515,21 +1526,31 @@ document.addEventListener('DOMContentLoaded', () => {
     const notifDot = document.getElementById('notifDot');
     
     const themeToggleBtn = document.getElementById('themeToggleBtn');
+    const dropdownThemeToggleBtn = document.getElementById('dropdownThemeToggleBtn');
+    const floatingSupportBtn = document.getElementById('floatingSupportBtn');
 
-    // Theme Toggle Logic
-    themeToggleBtn.addEventListener('click', () => {
+    // Theme Toggle Functionality
+    function toggleAppTheme() {
         const html = document.documentElement;
         const currentTheme = html.getAttribute('data-theme');
         if(currentTheme === 'dark') {
             html.setAttribute('data-theme', 'light');
             themeToggleBtn.textContent = '☀️';
+            dropdownThemeToggleBtn.textContent = 'Light';
             document.getElementById('themeIndicatorText').textContent = 'Light';
         } else {
             html.setAttribute('data-theme', 'dark');
             themeToggleBtn.textContent = '🌙';
+            dropdownThemeToggleBtn.textContent = 'Dark';
             document.getElementById('themeIndicatorText').textContent = 'Dark';
         }
-    });
+    }
+
+    themeToggleBtn.addEventListener('click', toggleAppTheme);
+    dropdownThemeToggleBtn.addEventListener('click', toggleAppTheme);
+
+    // Support Modal Trigger
+    floatingSupportBtn.addEventListener('click', openSupportModal);
 
     function navigateToSection(targetId) {
         allSections.forEach(section => {
@@ -1577,6 +1598,7 @@ document.addEventListener('DOMContentLoaded', () => {
         notifDropdown.classList.remove('active');
         document.getElementById('floatingPopupModal').classList.remove('active');
         document.getElementById('changePasswordModal').classList.remove('active');
+        document.getElementById('supportModal').classList.remove('active');
         document.getElementById('activityHistoryDrawer').classList.remove('active');
     });
 
@@ -1601,6 +1623,29 @@ document.addEventListener('DOMContentLoaded', () => {
     renderTransactions('all');
 });
 
+function openSupportModal() {
+    document.getElementById('supportModal').classList.add('active');
+}
+
+function closeSupportModal() {
+    document.getElementById('supportModal').classList.remove('active');
+}
+
+function removeSupportChannel(channel) {
+    if(channel === 'whatsapp') {
+        let el = document.getElementById('whatsappChannelRow');
+        if(el) el.remove();
+    } else if(channel === 'telegram') {
+        let el = document.getElementById('telegramChannelRow');
+        if(el) el.remove();
+    }
+
+    let remaining = document.querySelectorAll('.support-channel-item');
+    if(remaining.length === 0) {
+        document.getElementById('noSupportText').style.display = 'block';
+    }
+}
+
 function saveOnboardingData() {
     let name = document.getElementById('onboardNameInput').value.trim();
     let email = document.getElementById('onboardEmailInput').value.trim();
@@ -1614,14 +1659,23 @@ function saveOnboardingData() {
     userData.email = email;
     userOnboarded = true;
 
-    // Update UI elements dynamically
+    // Update UI elements dynamically & remove onboarding flows
     document.getElementById('dropdownName').textContent = name;
     document.getElementById('dropdownEmail').textContent = email;
     document.getElementById('profileHeaderName').textContent = name;
     document.getElementById('profileHeaderEmail').textContent = email;
     document.getElementById('heroWelcomeTitle').textContent = 'Welcome back, ' + name + '!';
+    document.getElementById('heroSubText').textContent = 'Manage your account balance and products seamlessly.';
+    document.getElementById('heroOnboardBtn').style.display = 'none';
     document.getElementById('headerAvatarText').textContent = name.charAt(0).toUpperCase();
     document.getElementById('profileAvatarInitial').textContent = name.charAt(0).toUpperCase();
+
+    // Remove onboarding card from profile/settings view & sidebar link
+    let onboardCard = document.getElementById('onboardingCardContainer');
+    if(onboardCard) onboardCard.remove();
+
+    let sidebarOnboard = document.getElementById('sidebarOnboardingLink');
+    if(sidebarOnboard) sidebarOnboard.remove();
 
     alert('Onboarding profile saved successfully!');
     switchSection('home');
