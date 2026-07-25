@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>MJ HUB - Dashboard & Landing Page</title>
+    <title>MJ HUB - Dashboard</title>
     <style>
 /* ==========================================
    MJ HUB - Theme & Variables (v4.0 - Blue & White Theme)
@@ -342,7 +342,7 @@ body {
     margin-top: 70px;
     padding: 20px;
     flex: 1;
-    max-width: 800px;
+    max-width: 500px;
     width: 100%;
     margin-left: auto;
     margin-right: auto;
@@ -351,63 +351,6 @@ body {
 
 .app-section { display: none; }
 .app-section.active { display: block; }
-
-/* ==========================================
-   LANDING PAGE STYLES (Added)
-   ========================================== */
-.landing-hero {
-    text-align: center;
-    padding: 40px 20px;
-    background: linear-gradient(135deg, #1e40af 0%, #2563eb 100%);
-    border-radius: 20px;
-    color: #ffffff;
-    margin-bottom: 30px;
-    box-shadow: 0 10px 25px rgba(37, 99, 235, 0.3);
-}
-
-.landing-hero h1 {
-    font-size: 28px;
-    font-weight: 900;
-    margin-bottom: 12px;
-}
-
-.landing-hero p {
-    font-size: 15px;
-    opacity: 0.9;
-    margin-bottom: 24px;
-    line-height: 1.5;
-}
-
-.landing-features-grid {
-    display: grid;
-    grid-template-columns: 1fr;
-    gap: 15px;
-    margin-bottom: 30px;
-}
-
-@media(min-width: 600px) {
-    .landing-features-grid { grid-template-columns: repeat(3, 1fr); }
-}
-
-.landing-feature-card {
-    background: var(--card-bg);
-    border: 1px solid var(--border-color);
-    border-radius: 16px;
-    padding: 20px;
-    text-align: center;
-}
-
-.landing-feature-card h3 {
-    font-size: 16px;
-    font-weight: 700;
-    margin-bottom: 8px;
-    color: var(--text-main);
-}
-
-.landing-feature-card p {
-    font-size: 13px;
-    color: var(--text-muted);
-}
 
 /* Dashboard Hero */
 .dashboard-card-hero {
@@ -1104,7 +1047,6 @@ body {
                         <span id="dropdownEmail">Complete onboarding</span>
                     </div>
                     <ul class="dropdown-links">
-                        <li><a href="#" onclick="switchSection('landing'); toggleProfileDropdown(); return false;">Home / Landing</a></li>
                         <li><a href="#" onclick="switchSection('home'); toggleProfileDropdown(); return false;">Dashboard</a></li>
                         <li><a href="#" onclick="switchSection('profile'); toggleProfileDropdown(); return false;">Settings</a></li>
                         <li><a href="#" onclick="switchSection('cart'); toggleProfileDropdown(); return false;">Cart</a></li>
@@ -1134,8 +1076,7 @@ body {
         </div>
         <div class="sidebar-links-container">
             <ul class="sidebar-links">
-                <li><a href="#" class="sidebar-link active" data-target="landing">🌐 <span>Welcome / Landing</span></a></li>
-                <li><a href="#" class="sidebar-link" data-target="home">🏠 <span>Dashboard</span></a></li>
+                <li><a href="#" class="sidebar-link active" data-target="home">🏠 <span>Dashboard</span></a></li>
                 <li><a href="#" class="sidebar-link" data-target="logs">📦 <span>MJ Logs</span></a></li>
                 <li><a href="#" class="sidebar-link" data-target="sms">📱 <span>MJ SMS</span></a></li>
                 <li><a href="#" class="sidebar-link" data-target="booster">⚡ <span>MJ Booster</span></a></li>
@@ -1154,35 +1095,8 @@ body {
     <!-- Main Content Area -->
     <main class="main-content">
 
-        <!-- Landing Page Section (Added) -->
-        <section id="landing" class="app-section active">
-            <div class="landing-hero">
-                <h1>Welcome to MJ HUB</h1>
-                <p>Your ultimate destination for verified social media logs, instant SMS verification numbers, and top-tier social media boosting services.</p>
-                <div class="hero-actions" style="justify-content: center;">
-                    <button class="hero-btn" onclick="switchSection('home')">Open Dashboard</button>
-                    <button class="hero-btn" onclick="switchSection('logs')">Explore Services</button>
-                </div>
-            </div>
-
-            <div class="landing-features-grid">
-                <div class="landing-feature-card">
-                    <h3>📦 MJ Logs</h3>
-                    <p>Secure, aged, and phone-verified accounts ready for your business or personal use.</p>
-                </div>
-                <div class="landing-feature-card">
-                    <h3>📱 MJ SMS</h3>
-                    <p>Instant virtual numbers for seamless OTP and account verification worldwide.</p>
-                </div>
-                <div class="landing-feature-card">
-                    <h3>⚡ MJ Booster</h3>
-                    <p>High-quality, non-drop social media growth services to elevate your brand presence.</p>
-                </div>
-            </div>
-        </section>
-
-        <!-- Home / Dashboard Section -->
-        <section id="home" class="app-section">
+        <!-- Home Section -->
+        <section id="home" class="app-section active">
             <div class="dashboard-card-hero">
                 <div class="hero-welcome" id="heroWelcomeTitle">Welcome to MJ HUB</div>
                 <div class="hero-sub" id="heroSubText">Complete your onboarding profile and fund your wallet to get started.</div>
@@ -1511,8 +1425,8 @@ body {
 
     <!-- Mobile Bottom Navigation Bar -->
     <nav class="bottom-nav">
-        <button class="bottom-nav-item" onclick="switchSection('landing')">
-            <span>🌐</span>
+        <button class="bottom-nav-item" onclick="switchSection('home')">
+            <span>🏠</span>
             <span>Home</span>
         </button>
         <button class="bottom-nav-item" onclick="switchSection('cart')">
@@ -1526,9 +1440,9 @@ body {
             <span>⚙️</span>
             <span>Profile</span>
         </button>
-        <button class="bottom-nav-item" onclick="switchSection('home')">
-            <span>🏠</span>
-            <span>Dashboard</span>
+        <button class="bottom-nav-item" onclick="switchSection('cart')">
+            <span>🛍️</span>
+            <span>Cart</span>
         </button>
     </nav>
 
