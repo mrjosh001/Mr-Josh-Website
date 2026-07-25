@@ -1,5 +1,5 @@
 /* ==========================================
-   MJ HUB - Brand Theme: Blue & White (v2.3)
+   MJ HUB - Brand Theme: Blue & White (v2.4)
    ========================================== */
 
 :root {
@@ -309,9 +309,11 @@ body {
     margin-bottom: 15px;
 }
 
-.hero-buttons {
+.hero-action-row {
     display: flex;
+    align-items: center;
     gap: 10px;
+    flex-wrap: wrap;
 }
 
 .primary-btn {
@@ -339,6 +341,19 @@ body {
     font-weight: 600;
     font-size: 14px;
     cursor: pointer;
+}
+
+.currency-converter-pill {
+    background: rgba(255, 255, 255, 0.15);
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    padding: 10px 16px;
+    border-radius: 8px;
+    font-size: 14px;
+    font-weight: 600;
+    color: #ffffff;
+    display: flex;
+    align-items: center;
+    gap: 8px;
 }
 
 .stats-grid {
@@ -732,6 +747,80 @@ body {
     cursor: pointer;
     box-shadow: 0 4px 10px rgba(37, 99, 235, 0.3);
     margin-top: -15px;
+}
+
+/* Quick Action Modal Sheet */
+.action-modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.5);
+    z-index: 1300;
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.3s;
+}
+
+.action-modal-overlay.active {
+    opacity: 1;
+    visibility: visible;
+}
+
+.action-sheet {
+    position: fixed;
+    bottom: -100%;
+    left: 0;
+    right: 0;
+    background: #ffffff;
+    border-top-left-radius: 20px;
+    border-top-right-radius: 20px;
+    padding: 20px;
+    z-index: 1400;
+    transition: bottom 0.3s ease-in-out;
+    max-width: 500px;
+    margin: 0 auto;
+}
+
+.action-sheet.active {
+    bottom: 0;
+}
+
+.action-sheet-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 15px;
+    font-weight: 700;
+    font-size: 16px;
+    color: var(--text-main);
+}
+
+.action-sheet-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 12px;
+    padding-bottom: 20px;
+}
+
+.action-sheet-item {
+    background: #f8fafc;
+    border: 1px solid var(--border-color);
+    padding: 15px;
+    border-radius: 12px;
+    text-align: center;
+    cursor: pointer;
+    font-weight: 600;
+    font-size: 13px;
+    color: var(--text-main);
+    transition: background 0.2s;
+}
+
+.action-sheet-item:hover {
+    background: #eff6ff;
+    border-color: #bfdbfe;
+    color: var(--primary-color);
 }
 
 @media(min-width: 768px) {
