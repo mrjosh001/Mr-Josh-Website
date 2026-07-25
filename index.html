@@ -6,7 +6,7 @@
     <title>MJ HUB - Dashboard</title>
     <style>
 /* ==========================================
-   MJ HUB - Theme & Variables (v3.8)
+   MJ HUB - Theme & Variables (v3.9)
    ========================================== */
 
 :root[data-theme="dark"] {
@@ -1002,6 +1002,8 @@ body {
     gap: 3px;
     font-weight: 600;
     cursor: pointer;
+    background: none;
+    border: none;
 }
 
 .bottom-nav-item span:first-child { font-size: 18px; }
@@ -1111,18 +1113,18 @@ body {
             <div class="sleek-stats-grid">
                 <div class="sleek-card">
                     <div>
-                        <span class="sleek-label">NGN Balance</span>
-                        <span class="sleek-value" id="homeNgnBalance">₦0.00</span>
+                        <span class="sleek-label" id="balanceLabelPrimary">NGN Balance</span>
+                        <span class="sleek-value" id="homePrimaryBalance">₦0.00</span>
                     </div>
-                    <div class="sleek-card-icon icon-blue">💳</div>
+                    <div class="sleek-card-icon icon-blue" id="balanceIconPrimary">💳</div>
                 </div>
 
                 <div class="sleek-card">
                     <div>
-                        <span class="sleek-label">USD Balance</span>
-                        <span class="sleek-value" id="homeUsdBalance">$0.00</span>
+                        <span class="sleek-label" id="balanceLabelSecondary">USD Balance</span>
+                        <span class="sleek-value" id="homeSecondaryBalance">$0.00</span>
                     </div>
-                    <div class="sleek-card-icon icon-yellow">💵</div>
+                    <div class="sleek-card-icon icon-yellow" id="balanceIconSecondary">💵</div>
                 </div>
             </div>
         </section>
@@ -1357,19 +1359,23 @@ body {
                 <div style="font-size: 17px; font-weight: 800; color: var(--text-main);">Convert Currency</div>
                 <button onclick="closeCurrencyModal()" style="background: var(--bg-main); border: 1px solid var(--border-color); width: 30px; height: 30px; border-radius: 50%; cursor: pointer; font-size: 14px; font-weight: bold; color: var(--text-main);">✕</button>
             </div>
+            <div class="form-group" style="margin-bottom: 10px;">
+                <button class="btn-sm-outline" style="width: 100%; padding: 8px; font-weight: 700;" id="toggleDirectionBtn" onclick="toggleConversionDirection()">🔄 Convert from: USD ($) to NGN (₦)</button>
+            </div>
             <div class="currency-input-group">
-                <label>Amount in NGN (₦)</label>
+                <label id="convertInputLabel">Amount in USD ($)</label>
                 <div class="currency-input-row">
-                    <input type="number" id="ngnConvertInput" placeholder="0.00" oninput="convertNgnToUsd()">
+                    <input type="number" id="baseConvertInput" placeholder="0.00" oninput="performCurrencyConversion()">
                 </div>
             </div>
             <div class="currency-input-group">
-                <label>Equivalent in USD ($)</label>
+                <label id="convertOutputLabel">Equivalent in NGN (₦)</label>
                 <div class="currency-input-row">
-                    <input type="text" id="usdConvertOutput" placeholder="$0.00" readonly style="color: var(--primary-color);">
+                    <input type="text" id="targetConvertOutput" placeholder="₦0.00" readonly style="color: var(--primary-color);">
                 </div>
             </div>
-            <div style="font-size: 11px; color: var(--text-muted); text-align: center; margin-top: 5px;">Exchange rate: ₦1,500 = $1.00</div>
+            <div style="font-size: 11px; color: var(--text-muted); text-align: center; margin-bottom: 15px;" id="exchangeRateText">Exchange rate: $1.00 = ₦1,420</div>
+            <button class="btn-sm-primary" style="width: 100%; padding: 12px; font-size: 14px;" onclick="applyCurrencyConversion()">Convert & Update Dashboard</button>
         </div>
     </div>
 
@@ -1423,34 +1429,38 @@ body {
 
     <!-- Mobile Bottom Navigation Bar -->
     <nav class="bottom-nav">
-        <div class="bottom-nav-item" onclick="switchSection('home')">
+        <button class="bottom-nav-item" onclick="switchSection('home')">
             <span>🏠</span>
             <span>Home</span>
-        </div>
-        <div class="bottom-nav-item" onclick="toggleActivityHistory()">
-            <span>⏱️</span>
-            <span>History</span>
-        </div>
+        </button>
+        <button class="bottom-nav-item" onclick="switchSection('cart')">
+            <span>🛒</span>
+            <span>Cart</span>
+        </button>
         <div class="bottom-nav-center" id="floatingPlusBtn" onclick="toggleFloatingPopup()">
             <span>+</span>
         </div>
-        <div class="bottom-nav-item" onclick="switchSection('profile')">
+        <button class="bottom-nav-item" onclick="switchSection('profile')">
             <span>⚙️</span>
             <span>Profile</span>
-        </div>
-        <div class="bottom-nav-item" onclick="switchSection('profile')">
-            <span>💬</span>
-            <span>Support</span>
-        </div>
+        </button>
+        <button class="bottom-nav-item" onclick="switchSection('cart')">
+            <span>🛍️</span>
+            <span>Cart</span>
+        </button>
     </nav>
 
     <script>
 /* ==========================================
-   MJ HUB - Application Logic (v3.8)
+   MJ HUB - Application Logic (v3.9)
    ========================================== */
 
 let currentBalanceNgn = 0.00;
 let currentBalanceUsd = 0.00;
+let dashboardCurrencyMode = 'ngn'; // 'ngn' or 'usd'
+let conversionDirection = 'usdtongn'; // 'usdtongn' or 'ngntousd'
+let exchangeRate = 1420; // Default exchange rate 1420/$
+
 let cartItems = [];
 let transactions = [];
 let userOnboarded = false;
@@ -1580,6 +1590,8 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 function openCurrencyModal() {
+    document.getElementById('baseConvertInput').value = '';
+    document.getElementById('targetConvertOutput').value = '';
     document.getElementById('currencyConverterModal').classList.add('active');
 }
 
@@ -1587,11 +1599,42 @@ function closeCurrencyModal() {
     document.getElementById('currencyConverterModal').classList.remove('active');
 }
 
-function convertNgnToUsd() {
-    let ngn = parseFloat(document.getElementById('ngnConvertInput').value) || 0;
-    let rate = 1500; // ₦1500 = $1
-    let usd = ngn / rate;
-    document.getElementById('usdConvertOutput').value = '$' + usd.toFixed(2);
+function toggleConversionDirection() {
+    if (conversionDirection === 'usdtongn') {
+        conversionDirection = 'ngntousd';
+        document.getElementById('toggleDirectionBtn').textContent = '🔄 Convert from: NGN (₦) to USD ($)';
+        document.getElementById('convertInputLabel').textContent = 'Amount in NGN (₦)';
+        document.getElementById('convertOutputLabel').textContent = 'Equivalent in USD ($)';
+    } else {
+        conversionDirection = 'usdtongn';
+        document.getElementById('toggleDirectionBtn').textContent = '🔄 Convert from: USD ($) to NGN (₦)';
+        document.getElementById('convertInputLabel').textContent = 'Amount in USD ($)';
+        document.getElementById('convertOutputLabel').textContent = 'Equivalent in NGN (₦)';
+    }
+    document.getElementById('baseConvertInput').value = '';
+    document.getElementById('targetConvertOutput').value = '';
+}
+
+function performCurrencyConversion() {
+    let inputVal = parseFloat(document.getElementById('baseConvertInput').value) || 0;
+    if (conversionDirection === 'usdtongn') {
+        let res = inputVal * exchangeRate;
+        document.getElementById('targetConvertOutput').value = '₦' + res.toLocaleString(undefined, {minimumFractionDigits: 2});
+    } else {
+        let res = inputVal / exchangeRate;
+        document.getElementById('targetConvertOutput').value = '$' + res.toLocaleString(undefined, {minimumFractionDigits: 2});
+    }
+}
+
+function applyCurrencyConversion() {
+    if (conversionDirection === 'usdtongn') {
+        dashboardCurrencyMode = 'ngn';
+    } else {
+        dashboardCurrencyMode = 'usd';
+    }
+    updateBalanceDisplay();
+    closeCurrencyModal();
+    alert('Dashboard currency updated successfully!');
 }
 
 function saveOnboardingData() {
@@ -1753,6 +1796,7 @@ function buyNowItem(title, price, type) {
         return;
     }
     currentBalanceNgn -= price;
+    currentBalanceUsd = currentBalanceNgn / exchangeRate;
     transactions.unshift({ id: Date.now(), type, title, subtitle: 'Instant Purchase', amount: '₦' + price.toLocaleString(), date: 'Just now', status: 'Success' });
     updateBalanceDisplay();
     renderTransactions('all');
@@ -1769,6 +1813,7 @@ function checkoutCart() {
         return;
     }
     currentBalanceNgn -= total;
+    currentBalanceUsd = currentBalanceNgn / exchangeRate;
     cartItems.forEach(item => {
         transactions.unshift({ id: Date.now(), type: item.type, title: item.title, subtitle: 'Cart Checkout', amount: '₦' + item.price.toLocaleString(), date: 'Just now', status: 'Success' });
     });
@@ -1784,6 +1829,7 @@ function processDeposit() {
     let amt = parseFloat(document.getElementById('depositInput').value) || 0;
     if(amt <= 0) { alert('Please enter a valid amount.'); return; }
     currentBalanceNgn += amt;
+    currentBalanceUsd = currentBalanceNgn / exchangeRate;
     transactions.unshift({ id: Date.now(), type: 'deposit', title: 'Card / Bank Transfer', subtitle: 'Wallet funding', amount: '₦' + amt.toLocaleString(), date: 'Just now', status: 'Success' });
     updateBalanceDisplay();
     renderTransactions('all');
@@ -1792,9 +1838,32 @@ function processDeposit() {
 }
 
 function updateBalanceDisplay() {
+    currentBalanceUsd = currentBalanceNgn / exchangeRate;
+    
     document.getElementById('navWalletBadge').textContent = 'NGN ₦' + currentBalanceNgn.toLocaleString(undefined, {minimumFractionDigits: 2});
-    document.getElementById('homeNgnBalance').textContent = '₦' + currentBalanceNgn.toLocaleString(undefined, {minimumFractionDigits: 2});
-    document.getElementById('homeUsdBalance').textContent = '$' + currentBalanceUsd.toLocaleString(undefined, {minimumFractionDigits: 2});
+    
+    if (dashboardCurrencyMode === 'usd') {
+        document.getElementById('balanceLabelPrimary').textContent = 'USD Balance';
+        document.getElementById('homePrimaryBalance').textContent = '$' + currentBalanceUsd.toLocaleString(undefined, {minimumFractionDigits: 2});
+        document.getElementById('balanceIconPrimary').className = 'sleek-card-icon icon-yellow';
+        document.getElementById('balanceIconPrimary').textContent = '💵';
+
+        document.getElementById('balanceLabelSecondary').textContent = 'NGN Balance';
+        document.getElementById('homeSecondaryBalance').textContent = '₦' + currentBalanceNgn.toLocaleString(undefined, {minimumFractionDigits: 2});
+        document.getElementById('balanceIconSecondary').className = 'sleek-card-icon icon-blue';
+        document.getElementById('balanceIconSecondary').textContent = '💳';
+    } else {
+        document.getElementById('balanceLabelPrimary').textContent = 'NGN Balance';
+        document.getElementById('homePrimaryBalance').textContent = '₦' + currentBalanceNgn.toLocaleString(undefined, {minimumFractionDigits: 2});
+        document.getElementById('balanceIconPrimary').className = 'sleek-card-icon icon-blue';
+        document.getElementById('balanceIconPrimary').textContent = '💳';
+
+        document.getElementById('balanceLabelSecondary').textContent = 'USD Balance';
+        document.getElementById('homeSecondaryBalance').textContent = '$' + currentBalanceUsd.toLocaleString(undefined, {minimumFractionDigits: 2});
+        document.getElementById('balanceIconSecondary').className = 'sleek-card-icon icon-yellow';
+        document.getElementById('balanceIconSecondary').textContent = '💵';
+    }
+
     document.getElementById('profileBalanceDisplay').textContent = '₦' + currentBalanceNgn.toLocaleString(undefined, {minimumFractionDigits: 2});
 }
     </script>
