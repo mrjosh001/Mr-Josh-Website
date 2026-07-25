@@ -20,11 +20,11 @@
             </div>
             <div class="notification-icon" onclick="alert('1 unread notification')">🔔<span class="badge-dot"></span></div>
             
-            <!-- Clickable Profile Dropdown Toggle -->
+            <!-- Clickable Profile Dropdown Toggle Container -->
             <div class="profile-dropdown-container">
-                <div class="profile-icon" id="profile-menu-toggle" style="cursor: pointer;">MJ</div>
+                <div class="profile-icon" id="profile-menu-toggle">MJ</div>
                 
-                <!-- Dropdown Menu -->
+                <!-- Dropdown Menu (Hidden by default, triggered by JS) -->
                 <div id="profile-dropdown" class="dropdown-menu">
                     <div class="dropdown-header">
                         <strong id="dd-name">User Account</strong>
@@ -34,7 +34,7 @@
                         <li><a href="#" onclick="switchSection('dashboard-section')">📊 Dashboard</a></li>
                         <li><a href="#" onclick="switchSection('profile-section')">⚙️ Profile Settings</a></li>
                         <li><a href="#" onclick="switchSection('deposit-section')">💳 Deposit Funds</a></li>
-                        <hr style="border:0; border-top:1px solid #e5e7eb; margin:5px 0;">
+                        <hr style="border:0; border-top:1px solid #e2e8f0; margin:5px 0;">
                         <li><a href="#" onclick="alert('Signed out successfully!')" style="color: #ef4444;">🚪 Sign Out</a></li>
                     </ul>
                 </div>
@@ -162,7 +162,7 @@
                 <button class="p-tab-btn" onclick="switchProfileTab('tab-danger', this)">⚠️ Danger Zone</button>
             </div>
 
-            <!-- Tab 1: Personal Info & KYC (Blank by default for onboarding data) -->
+            <!-- Tab 1: Personal Info & KYC (Blank by default for onboarding data sync) -->
             <div id="tab-profile" class="profile-tab-content active">
                 <div class="content-card">
                     <h3>Choose an Avatar</h3>
@@ -171,7 +171,7 @@
                         <div class="avatar-option">👦🏽</div>
                         <div class="avatar-option">🧔</div>
                         <div class="avatar-option">👱‍♂️</div>
-                        <div class="avatar-option">👵</div>
+                        <div class="avatar-option active-avatar">👵</div>
                     </div>
                     <p class="helper-text">Pick one of our default avatars, or upload your photo in the header to upload your own.</p>
                 </div>
@@ -364,12 +364,16 @@
         closeMenu.addEventListener('click', closeDrawer);
         overlay.addEventListener('click', closeDrawer);
 
-        // Click-based Dropdown Behavior for Profile Icon
+        // Click-based Toggle for Profile Dropdown Icon
         profileToggle.addEventListener('click', (e) => {
             e.stopPropagation();
             profileDropdown.classList.toggle('active');
         });
-        window.addEventListener('click', () => profileDropdown.classList.remove('active'));
+
+        // Close dropdown when clicking anywhere else on screen
+        window.addEventListener('click', () => {
+            profileDropdown.classList.remove('active');
+        });
 
         function switchSection(targetId) {
             document.querySelectorAll('.app-section').forEach(sec => sec.classList.remove('active'));
@@ -397,7 +401,7 @@
             btn.classList.add('active');
         }
 
-        // Onboarding Data Integration: Starts blank unless populated from sign-up/onboarding state
+        // Onboarding Data Storage Initialization (Blank by default per user session)
         let userProfile = JSON.parse(localStorage.getItem('mj_user_profile')) || {
             fullname: "",
             username: "",
