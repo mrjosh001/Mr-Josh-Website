@@ -3,169 +3,379 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>MJ HUB Dashboard</title>
+    <title>MJ HUB - Dashboard</title>
     <link rel="stylesheet" href="styles.css">
 </head>
 <body>
 
-    <!-- Dashboard Main Wrapper -->
-    <div class="dashboard-container">
-        
-        <!-- Header Section -->
-        <header class="dashboard-header">
-            <div class="header-left">
-                <button class="menu-toggle" onclick="toggleSidebar()">☰</button>
-                <h1 class="brand-title">MJ HUB</h1>
+    <!-- Top Navigation Bar -->
+    <header class="navbar">
+        <div class="nav-left">
+            <button class="menu-btn" id="menuToggleBtn">☰</button>
+            <h1 class="brand-title">MJ HUB</h1>
+        </div>
+        <div class="nav-right">
+            <div class="wallet-badge" id="navWalletBadge">NGN ₦4,400.00</div>
+            <div class="notification-icon" id="notificationBtn">
+                🔔
+                <span class="badge-dot"></span>
             </div>
-            <div class="header-right">
-                <div class="header-balance-pill">NGN ₦4,400.00</div>
-                <div class="notification-bell">🔔</div>
-                <div class="user-avatar">MJ</div>
+            <!-- Profile Icon & Dropdown -->
+            <div class="profile-dropdown-container">
+                <div class="profile-icon" id="profileDropdownToggle">MJ</div>
+                <div class="dropdown-menu" id="profileDropdownMenu">
+                    <div class="dropdown-header">
+                        <strong>MJ User</strong>
+                        <span>mrjosh001@github.io</span>
+                    </div>
+                    <ul class="dropdown-links">
+                        <li><a href="#" onclick="switchSection('profile'); toggleProfileDropdown(); return false;">My Profile</a></li>
+                        <li><a href="#" onclick="switchSection('transactions'); toggleProfileDropdown(); return false;">Transactions</a></li>
+                        <li><a href="#" onclick="switchSection('settings'); toggleProfileDropdown(); return false;">Settings</a></li>
+                        <li><a href="#" onclick="alert('Logged out successfully'); return false;" style="color: #ef4444;">Logout</a></li>
+                    </ul>
+                </div>
             </div>
-        </header>
+        </div>
+    </header>
 
-        <!-- Welcome Banner Section -->
-        <section class="dashboard-section hero-banner">
-            <div class="hero-text-content">
+    <!-- Sidebar Drawer Menu -->
+    <div class="sidebar" id="sidebarDrawer">
+        <div class="sidebar-header">
+            <span class="sidebar-brand">MJ HUB</span>
+            <button class="close-btn" id="sidebarCloseBtn">✕</button>
+        </div>
+        <div class="sidebar-links-container">
+            <div class="sidebar-group-title">MAIN MENU</div>
+            <ul class="sidebar-links">
+                <li><a href="#" class="sidebar-link active" data-target="home">🏠 <span>Dashboard</span></a></li>
+                <li><a href="#" class="sidebar-link" data-target="numbers">📱 <span>SMS Numbers</span></a></li>
+                <li><a href="#" class="sidebar-link" data-target="smm">⚡ <span>SMM Services</span></a></li>
+                <li><a href="#" class="sidebar-link" data-target="deposit">💳 <span>Fund Wallet</span></a></li>
+            </ul>
+            <div class="sidebar-group-title">ACCOUNT & MORE</div>
+            <ul class="sidebar-links">
+                <li><a href="#" class="sidebar-link" data-target="transactions">🔄 <span>History Logs</span></a></li>
+                <li><a href="#" class="sidebar-link" data-target="profile">👤 <span>Profile Settings</span></a></li>
+                <li><a href="#" class="sidebar-link" data-target="cart">🛍️ <span>Cart</span></a></li>
+                <li><a href="#" class="sidebar-link" data-target="more">⚙️ <span>More Options</span></a></li>
+            </ul>
+        </div>
+    </div>
+    <div class="overlay" id="sidebarOverlay"></div>
+
+    <!-- Main Content Area -->
+    <main class="main-content">
+
+        <!-- Home Section -->
+        <section id="home" class="app-section active">
+            <div class="welcome-box">
                 <h2>Hello User</h2>
                 <p>Here's an overview of your account's recent activities.</p>
+                <div class="hero-buttons">
+                    <button class="primary-btn" onclick="switchSection('deposit')">Fund Account</button>
+                    <button class="secondary-btn" onclick="switchSection('numbers')">Get SMS</button>
+                </div>
             </div>
-            <div class="hero-action-row">
-                <button class="primary-btn" onclick="switchSection('deposit-section')">Fund Account</button>
-                <button class="secondary-btn" onclick="switchSection('sms-section')">Get SMS</button>
-                <div class="currency-converter-pill" onclick="openConverterModal()">
-                    <span>💱 Convert Currency</span>
+
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <span class="stat-label">NGN Balance</span>
+                    <span class="stat-value" id="homeNgnBalance">₦4,400.00</span>
+                </div>
+                <div class="stat-card">
+                    <span class="stat-label">USD Balance</span>
+                    <span class="stat-value" id="homeUsdBalance">$0.00</span>
+                </div>
+                <div class="stat-card">
+                    <span class="stat-label">Purchased Numbers</span>
+                    <span class="stat-value">2</span>
+                </div>
+                <div class="stat-card">
+                    <span class="stat-label">Purchased Accounts</span>
+                    <span class="stat-value">0</span>
+                </div>
+            </div>
+
+            <div class="quick-actions-container">
+                <h3>Quick Actions</h3>
+                <div class="quick-actions-grid">
+                    <div class="quick-action-item" onclick="switchSection('numbers')">
+                        <div class="qa-icon">📱</div>
+                        <span>Numbers</span>
+                    </div>
+                    <div class="quick-action-item" onclick="switchSection('smm')">
+                        <div class="qa-icon">⚡</div>
+                        <span>SMM</span>
+                    </div>
+                    <div class="quick-action-item" onclick="switchSection('profile')">
+                        <div class="qa-icon">👤</div>
+                        <span>Profile</span>
+                    </div>
+                    <div class="quick-action-item" onclick="switchSection('deposit')">
+                        <div class="qa-icon">➕</div>
+                        <span>Deposit</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="promo-banner">
+                <h3>Fast, Secure & Reliable</h3>
+                <p>Enjoy instant virtual numbers, seamless wallet funding, and rapid SMM delivery.</p>
+            </div>
+        </section>
+
+        <!-- Numbers / SMS Section -->
+        <section id="numbers" class="app-section">
+            <div class="content-card">
+                <h2>Virtual SMS Numbers</h2>
+                <p class="helper-text">Select a service and country to receive instant OTP verification codes.</p>
+                <label>Select Service</label>
+                <select id="smsServiceSelect">
+                    <option value="whatsapp">WhatsApp</option>
+                    <option value="telegram">Telegram</option>
+                    <option value="openai">OpenAI / ChatGPT</option>
+                    <option value="google">Google / Gmail</option>
+                </select>
+                <label>Select Country</label>
+                <select id="smsCountrySelect">
+                    <option value="usa">United States (+1)</option>
+                    <option value="uk">United Kingdom (+44)</option>
+                    <option value="nigeria">Nigeria (+234)</option>
+                    <option value="canada">Canada (+1)</option>
+                </select>
+                <button class="primary-btn full-width" style="margin-top: 15px;" onclick="orderSmsNumber()">Order Number (₦800)</button>
+            </div>
+            <div class="content-card">
+                <h3>Active SMS Numbers</h3>
+                <div class="table-responsive">
+                    <table class="history-table">
+                        <thead>
+                            <tr>
+                                <th>Service</th>
+                                <th>Number</th>
+                                <th>OTP Code</th>
+                                <th>Status</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>WhatsApp</td>
+                                <td>+1 (555) 382-9102</td>
+                                <td style="font-weight:700; color:var(--primary-color);">482910</td>
+                                <td><span class="badge-credit">Active</span></td>
+                            </tr>
+                            <tr>
+                                <td>Telegram</td>
+                                <td>+44 (79) 4920-1122</td>
+                                <td style="font-weight:700; color:var(--primary-color);">991204</td>
+                                <td><span class="badge-credit">Active</span></td>
+                            </tr>
+                        </tbody>
+                    </table>
                 </div>
             </div>
         </section>
 
-        <!-- Balance overview cards -->
-        <section class="dashboard-section stats-grid">
-            <div class="stat-card">
-                <span class="stat-label">NGN Balance</span>
-                <h3 class="stat-value">₦4,400.00</h3>
-            </div>
-            <div class="stat-card">
-                <span class="stat-label">USD Balance</span>
-                <h3 class="stat-value">$0.00</h3>
-            </div>
-            <div class="stat-card">
-                <span class="stat-label">Purchased Numbers</span>
-                <h3 class="stat-value">2</h3>
-            </div>
-            <div class="stat-card">
-                <span class="stat-label">Purchased Accounts</span>
-                <h3 class="stat-value">0</h3>
+        <!-- SMM Section -->
+        <section id="smm" class="app-section">
+            <div class="content-card">
+                <h2>SMM Panel Boosters</h2>
+                <p class="helper-text">Boost your social media presence quickly and efficiently.</p>
+                <label>Select Category</label>
+                <select id="smmCategory">
+                    <option value="instagram">Instagram Followers / Likes</option>
+                    <option value="telegram">Telegram Members</option>
+                    <option value="tiktok">TikTok Views / Followers</option>
+                    <option value="twitter">X (Twitter) Engagement</option>
+                </select>
+                <label>Target Link / Username</label>
+                <input type="text" id="smmLink" placeholder="https://instagram.com/yourusername">
+                <div class="form-row-2">
+                    <div>
+                        <label>Quantity</label>
+                        <input type="number" id="smmQuantity" value="1000" oninput="calculateSmmTotal()">
+                    </div>
+                    <div>
+                        <label>Total Price (NGN)</label>
+                        <input type="text" id="smmTotalDisplay" value="₦2,500.00" readonly>
+                    </div>
+                </div>
+                <button class="primary-btn full-width" style="margin-top: 15px;" onclick="submitSmmOrder()">Submit Order</button>
             </div>
         </section>
 
-        <!-- Quick Actions Card Section -->
-        <div class="dashboard-card">
-            <h3>Quick Actions</h3>
-            <div class="quick-actions-grid">
-                <div class="quick-action-item" onclick="switchSection('sms-section')">
-                    <span class="quick-action-icon">📱</span>
-                    <span>Numbers</span>
-                </div>
-                <div class="quick-action-item" onclick="switchSection('smm')">
-                    <span class="quick-action-icon">⚡</span>
-                    <span>SMM</span>
-                </div>
-                <div class="quick-action-item" onclick="switchSection('profile')">
-                    <span class="quick-action-icon">👤</span>
-                    <span>Profile</span>
-                </div>
-                <div class="quick-action-item" onclick="switchSection('deposit-section')">
-                    <span class="quick-action-icon">➕</span>
-                    <span>Deposit</span>
+        <!-- Deposit Section -->
+        <section id="deposit" class="app-section">
+            <div class="content-card">
+                <h2>Fund Your Wallet</h2>
+                <p class="helper-text">Add funds instantly using secure bank transfer or automated gateway.</p>
+                <label>Enter Amount (NGN)</label>
+                <input type="number" id="depositAmountInput" placeholder="5000" value="5000">
+                <label>Payment Method</label>
+                <select id="depositMethod">
+                    <option value="paystack">Paystack (Automated)</option>
+                    <option value="bank">Direct Bank Transfer</option>
+                    <option value="crypto">USDT Crypto Deposit</option>
+                </select>
+                <button class="primary-btn full-width" style="margin-top: 15px;" onclick="processDeposit()">Proceed to Payment</button>
+            </div>
+        </section>
+
+        <!-- Transactions Section -->
+        <section id="transactions" class="app-section">
+            <div class="content-card">
+                <h2>Transaction History Logs</h2>
+                <div class="table-responsive">
+                    <table class="history-table">
+                        <thead>
+                            <tr>
+                                <th>Type</th>
+                                <th>Description</th>
+                                <th>Amount</th>
+                                <th>Date</th>
+                            </tr>
+                        </thead>
+                        <tbody id="transactionTableBody">
+                            <tr>
+                                <td><span class="badge-credit">Credit</span></td>
+                                <td>Wallet Funding via Paystack</td>
+                                <td style="font-weight: 700; color: #16a34a;">+₦5,000.00</td>
+                                <td>24 Jul 2026</td>
+                            </tr>
+                            <tr>
+                                <td><span class="badge-debit">Debit</span></td>
+                                <td>Virtual Number Purchase (WhatsApp)</td>
+                                <td style="font-weight: 700; color: #dc2626;">-₦600.00</td>
+                                <td>22 Jul 2026</td>
+                            </tr>
+                        </tbody>
+                    </table>
                 </div>
             </div>
-        </div>
-    </div>
+        </section>
 
-    <!-- Bottom Navigation Bar -->
+        <!-- Profile Section -->
+        <section id="profile" class="app-section">
+            <div class="profile-hero-card">
+                <div class="profile-avatar-large" id="heroAvatarDisplay">MJ</div>
+                <div class="profile-hero-meta">
+                    <h2 id="profileNameHeader">MJ User</h2>
+                    <p>mrjosh001@github.io</p>
+                    <div class="badge-row">
+                        <span class="badge-sub">MEMBER</span>
+                        <span class="meta-tag verified">✓ Verified Account</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="profile-tabs">
+                <button class="p-tab-btn active" onclick="switchProfileTab('general', this)">General Settings</button>
+                <button class="p-tab-btn" onclick="switchProfileTab('security', this)">Security</button>
+                <button class="p-tab-btn" onclick="switchProfileTab('preferences', this)">Preferences</button>
+            </div>
+
+            <!-- Profile Tab 1: General -->
+            <div id="p-tab-general" class="profile-tab-content active">
+                <div class="content-card">
+                    <h3>Personal Information</h3>
+                    <label>Full Name</label>
+                    <input type="text" id="inputFullName" value="MJ User">
+                    <label>Email Address</label>
+                    <input type="email" id="inputEmail" value="mrjosh001@github.io">
+                    <label>Phone Number</label>
+                    <input type="text" id="inputPhone" value="+234 812 345 6789">
+                    
+                    <label style="margin-top: 15px;">Choose Avatar Icon</label>
+                    <div class="avatar-picker-grid">
+                        <div class="avatar-option active-avatar" onclick="selectAvatar('MJ', this)">MJ</div>
+                        <div class="avatar-option" onclick="selectAvatar('⚡', this)">⚡</div>
+                        <div class="avatar-option" onclick="selectAvatar('🚀', this)">🚀</div>
+                        <div class="avatar-option" onclick="selectAvatar('💎', this)">💎</div>
+                    </div>
+
+                    <button class="primary-btn" style="margin-top: 15px;" onclick="saveProfileChanges()">Save Changes</button>
+                </div>
+            </div>
+
+            <!-- Profile Tab 2: Security -->
+            <div id="p-tab-security" class="profile-tab-content">
+                <div class="content-card">
+                    <h3>Change Password</h3>
+                    <label>Current Password</label>
+                    <input type="password" placeholder="••••••••">
+                    <label>New Password</label>
+                    <input type="password" placeholder="••••••••">
+                    <label>Confirm New Password</label>
+                    <input type="password" placeholder="••••••••">
+                    <button class="primary-btn" style="margin-top: 15px;" onclick="alert('Password updated successfully!')">Update Password</button>
+                </div>
+            </div>
+
+            <!-- Profile Tab 3: Preferences -->
+            <div id="p-tab-preferences" class="profile-tab-content">
+                <div class="content-card">
+                    <h3>Notification Preferences</h3>
+                    <label style="display:flex; align-items:center; gap:8px; font-weight:normal; cursor:pointer; margin-top:10px;">
+                        <input type="checkbox" checked style="width:auto;"> Enable Email Notifications for OTP orders
+                    </label>
+                    <label style="display:flex; align-items:center; gap:8px; font-weight:normal; cursor:pointer; margin-top:10px;">
+                        <input type="checkbox" checked style="width:auto;"> SMS Alerts for Wallet Activity
+                    </label>
+                    <button class="primary-btn" style="margin-top: 15px;" onclick="alert('Preferences saved!')">Save Preferences</button>
+                </div>
+                <div class="content-card danger-card">
+                    <h3 style="color: #dc2626;">Danger Zone</h3>
+                    <p class="helper-text">Permanently delete your MJ HUB account and all associated data logs.</p>
+                    <button class="danger-btn" onclick="alert('Account deletion requested.')">Delete Account</button>
+                </div>
+            </div>
+        </section>
+
+        <!-- Cart Section -->
+        <section id="cart" class="app-section">
+            <div class="content-card">
+                <h2>Shopping Cart</h2>
+                <p class="empty-text">Your cart is currently empty.</p>
+            </div>
+        </section>
+
+        <!-- More Section -->
+        <section id="more" class="app-section">
+            <div class="content-card">
+                <h2>More Options & Support</h2>
+                <ul class="sidebar-links" style="margin-top: 10px;">
+                    <li><a href="#" onclick="alert('Opening Help & FAQ Center'); return false;">📖 <span>Help & FAQ Center</span></a></li>
+                    <li><a href="#" onclick="alert('Contacting support@mjhub.com'); return false;">💬 <span>Contact Support Chat</span></a></li>
+                    <li><a href="#" onclick="alert('MJ HUB v2.2 - All systems operational'); return false;">ℹ️ <span>About MJ HUB</span></a></li>
+                </ul>
+            </div>
+        </section>
+
+    </main>
+
+    <!-- Mobile Bottom Navigation Bar -->
     <nav class="bottom-nav">
-        <button class="nav-item active" onclick="switchSection('home')">
-            <span class="nav-icon">🏠</span>
-            <span class="nav-label">Home</span>
-        </button>
-        <button class="nav-item" onclick="switchSection('smm')">
-            <span class="nav-icon">⚡</span>
-            <span class="nav-label">SMM</span>
-        </button>
-        <button class="nav-item center-fab-item" onclick="openActionSheet()">
-            <div class="center-fab">
-                <span>+</span>
-            </div>
-        </button>
-        <button class="nav-item" onclick="switchSection('cart')">
-            <span class="nav-icon">🛍️</span>
-            <span class="nav-label">Cart</span>
-        </button>
-        <button class="nav-item" onclick="switchSection('more')">
-            <span class="nav-icon">👤</span>
-            <span class="nav-label">More</span>
-        </button>
+        <a href="#" class="bottom-nav-item active" data-target="home">
+            <span>🏠</span>
+            <span>Home</span>
+        </a>
+        <a href="#" class="bottom-nav-item" data-target="smm">
+            <span>⚡</span>
+            <span>SMM</span>
+        </a>
+        <div class="bottom-nav-center" onclick="switchSection('deposit')">
+            <span>+</span>
+        </div>
+        <a href="#" class="bottom-nav-item" data-target="cart">
+            <span>🛍️</span>
+            <span>Cart</span>
+        </a>
+        <a href="#" class="bottom-nav-item" data-target="more">
+            <span>👤</span>
+            <span>More</span>
+        </a>
     </nav>
-
-    <!-- Upgraded Bottom Sheet Modal for Action `+` Button -->
-    <div id="action-sheet-overlay" class="action-modal-overlay" onclick="closeActionSheet()"></div>
-    <div id="action-sheet" class="action-sheet">
-        <div class="action-sheet-header">
-            <span>Quick Actions</span>
-            <button onclick="closeActionSheet()" style="background:none; border:none; font-size:18px; cursor:pointer; color:var(--text-muted);">✕</button>
-        </div>
-        <div class="action-sheet-grid">
-            <div class="action-sheet-item" onclick="closeActionSheet(); switchSection('deposit-section')">
-                <div class="action-sheet-icon">💳</div>
-                <span>Fund Wallet</span>
-            </div>
-            <div class="action-sheet-item" onclick="closeActionSheet(); switchSection('sms-section')">
-                <div class="action-sheet-icon">📱</div>
-                <span>Get SMS OTP</span>
-            </div>
-            <div class="action-sheet-item" onclick="closeActionSheet(); switchSection('boosters-section')">
-                <div class="action-sheet-icon">🚀</div>
-                <span>SMM Boost</span>
-            </div>
-            <div class="action-sheet-item" onclick="closeActionSheet(); switchSection('transactions-section')">
-                <div class="action-sheet-icon">🔄</div>
-                <span>History Logs</span>
-            </div>
-        </div>
-    </div>
-
-    <!-- Currency Converter Modal -->
-    <div id="converter-modal-overlay" class="action-modal-overlay" onclick="closeConverterModal()"></div>
-    <div id="converter-modal" class="converter-modal">
-        <div class="action-sheet-header" style="margin-bottom: 12px;">
-            <span>Convert Currency</span>
-            <button onclick="closeConverterModal()" style="background:none; border:none; font-size:18px; cursor:pointer;">✕</button>
-        </div>
-        <div class="converter-rate-badge" id="converter-rate-display">
-            1 USD = ₦1,400.00
-        </div>
-        <div class="converter-tabs">
-            <button class="converter-tab-btn active" id="tab-usd-ngn" onclick="setConversionMode('USD_NGN')">USD → NGN</button>
-            <button class="converter-tab-btn" id="tab-ngn-usd" onclick="setConversionMode('NGN_USD')">NGN → USD</button>
-        </div>
-        <div class="converter-input-box">
-            <label id="label-send">YOU SEND</label>
-            <div class="converter-input-row">
-                <input type="number" id="conv-input-amount" value="0.00" oninput="calculateConversion()">
-                <span id="conv-symbol-send" style="text-align: right; max-width: 60px;">USD</span>
-            </div>
-        </div>
-        <div class="converter-input-box">
-            <label id="label-receive">YOU RECEIVE</label>
-            <div class="converter-input-row">
-                <span id="conv-output-amount">₦ —</span>
-                <span id="conv-symbol-receive" style="text-align: right; max-width: 60px;">NGN</span>
-            </div>
-        </div>
-        <p style="font-size: 11px; color: var(--text-muted); text-align: right; margin-bottom: 15px;" id="conv-available-text">Available: $0.00 USD</p>
-        <button class="primary-btn full-width" onclick="executeConversion()" style="width: 100%; padding: 12px; background: #0052ff; color: #fff; border: none; border-radius: 12px; font-weight: 700; cursor: pointer;">Convert</button>
-    </div>
 
     <script src="script.js"></script>
 </body>
