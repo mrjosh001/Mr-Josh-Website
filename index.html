@@ -1,12 +1,12 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="light">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>MJ HUB - Dashboard</title>
     <style>
 /* ==========================================
-   MJ HUB - Brand Theme: Blue & White (v2.3)
+   MJ HUB - Theme & Variables (v2.4)
    ========================================== */
 
 :root {
@@ -18,6 +18,18 @@
     --text-muted: #64748b;
     --border-color: #e2e8f0;
     --sidebar-width: 260px;
+    --nav-bg: #ffffff;
+}
+
+[data-theme="dark"] {
+    --primary-color: #3b82f6;
+    --primary-hover: #2563eb;
+    --bg-main: #0f172a;
+    --card-bg: #1e293b;
+    --text-main: #f8fafc;
+    --text-muted: #94a3b8;
+    --border-color: #334155;
+    --nav-bg: #1e293b;
 }
 
 * {
@@ -33,6 +45,7 @@ body {
     display: flex;
     flex-direction: column;
     min-height: 100vh;
+    transition: background-color 0.3s, color 0.3s;
 }
 
 /* --- Top Navigation Bar --- */
@@ -42,13 +55,14 @@ body {
     left: 0;
     right: 0;
     height: 70px;
-    background: #ffffff;
+    background: var(--nav-bg);
     border-bottom: 1px solid var(--border-color);
     display: flex;
     justify-content: space-between;
     align-items: center;
     padding: 0 20px;
     z-index: 1000;
+    transition: background-color 0.3s, border-color 0.3s;
 }
 
 .nav-left {
@@ -75,12 +89,32 @@ body {
 .nav-right {
     display: flex;
     align-items: center;
-    gap: 15px;
+    gap: 12px;
+}
+
+/* Theme Toggle Button in Top Nav */
+.theme-toggle-btn {
+    background: none;
+    border: 1px solid var(--border-color);
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 16px;
+    cursor: pointer;
+    color: var(--text-main);
+    transition: background 0.2s;
+}
+
+.theme-toggle-btn:hover {
+    background: var(--border-color);
 }
 
 .wallet-badge {
-    background: #eff6ff;
-    border: 1px solid #bfdbfe;
+    background: var(--card-bg);
+    border: 1px solid var(--border-color);
     padding: 6px 12px;
     border-radius: 20px;
     font-size: 13px;
@@ -92,6 +126,7 @@ body {
     position: relative;
     font-size: 18px;
     cursor: pointer;
+    color: var(--text-main);
 }
 
 .badge-dot {
@@ -112,7 +147,7 @@ body {
 .profile-icon {
     width: 38px;
     height: 38px;
-    background: #e2e8f0;
+    background: var(--border-color);
     color: var(--text-main);
     border-radius: 50%;
     display: flex;
@@ -136,10 +171,10 @@ body {
     position: absolute;
     right: 0;
     top: 50px;
-    background: #ffffff;
+    background: var(--card-bg);
     color: var(--text-main);
     border-radius: 12px;
-    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.15);
+    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
     width: 240px;
     z-index: 1100;
     padding: 10px 0;
@@ -175,14 +210,20 @@ body {
 .dropdown-links li a {
     display: block;
     padding: 10px 15px;
-    color: #334155;
+    color: var(--text-main);
     text-decoration: none;
     font-size: 14px;
     transition: background 0.2s;
 }
 
 .dropdown-links li a:hover {
-    background: #f1f5f9;
+    background: var(--border-color);
+}
+
+.dropdown-divider {
+    height: 1px;
+    background: var(--border-color);
+    margin: 6px 0;
 }
 
 /* --- Sidebar Drawer Menu --- */
@@ -192,9 +233,9 @@ body {
     left: calc(-1 * var(--sidebar-width));
     width: var(--sidebar-width);
     height: 100%;
-    background: #ffffff;
+    background: var(--card-bg);
     border-right: 1px solid var(--border-color);
-    transition: left 0.3s ease;
+    transition: left 0.3s ease, background-color 0.3s;
     z-index: 1200;
     display: flex;
     flex-direction: column;
@@ -251,7 +292,7 @@ body {
     align-items: center;
     gap: 12px;
     padding: 10px 12px;
-    color: #475569;
+    color: var(--text-muted);
     text-decoration: none;
     border-radius: 8px;
     font-size: 14px;
@@ -262,7 +303,7 @@ body {
 
 .sidebar-links li a:hover, 
 .sidebar-links li a.active {
-    background: #eff6ff;
+    background: rgba(37, 99, 235, 0.1);
     color: var(--primary-color);
 }
 
@@ -304,158 +345,121 @@ body {
     display: block;
 }
 
-/* Cards & Widgets */
-.welcome-box {
-    background: linear-gradient(135deg, #2563eb, #1d4ed8);
-    color: #ffffff;
-    padding: 25px;
-    border-radius: 16px;
-    margin-bottom: 20px;
-    box-shadow: 0 4px 12px rgba(37, 99, 235, 0.2);
-}
-
-.welcome-box h2 {
-    font-size: 22px;
-    margin-bottom: 8px;
-}
-
-.welcome-box p {
-    font-size: 14px;
-    opacity: 0.9;
-    margin-bottom: 15px;
-}
-
-.hero-buttons {
+/* --- Sleek Dashboard / Homepage Layout --- */
+.dashboard-header-row {
     display: flex;
-    gap: 10px;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
 }
 
-.primary-btn {
-    background: var(--primary-color);
-    color: #ffffff;
-    border: none;
-    padding: 12px 20px;
+.dashboard-title {
+    font-size: 22px;
+    font-weight: 800;
+    color: var(--text-main);
+}
+
+.quick-action-buttons {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin-bottom: 20px;
+}
+
+.dash-pill-btn {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 10px 16px;
     border-radius: 10px;
+    font-size: 13px;
     font-weight: 600;
-    font-size: 14px;
+    border: none;
     cursor: pointer;
-    transition: background 0.2s;
-}
-
-.primary-btn:hover {
-    background: var(--primary-hover);
-}
-
-.secondary-btn {
-    background: rgba(255, 255, 255, 0.2);
     color: #ffffff;
-    border: 1px solid rgba(255, 255, 255, 0.4);
-    padding: 10px 20px;
-    border-radius: 8px;
-    font-weight: 600;
-    font-size: 14px;
-    cursor: pointer;
+    transition: opacity 0.2s;
 }
 
-.stats-grid {
+.dash-pill-btn:hover {
+    opacity: 0.9;
+}
+
+.pill-blue { background: #2563eb; }
+.pill-green { background: #16a34a; }
+.pill-orange { background: #ea580c; }
+
+/* Dashboard Cards Grid (Inspo Sleek Style) */
+.sleek-stats-grid {
     display: grid;
-    grid-template-columns: repeat(2, 1fr);
+    grid-template-columns: 1fr;
     gap: 15px;
     margin-bottom: 20px;
 }
 
-.stat-card {
-    background: var(--card-bg);
-    border: 1px solid var(--border-color);
-    padding: 18px;
-    border-radius: 12px;
-    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+@media(min-width: 600px) {
+    .sleek-stats-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
 }
 
-.stat-label {
+.sleek-card {
+    background: var(--card-bg);
+    border: 1px solid var(--border-color);
+    border-radius: 16px;
+    padding: 20px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+    transition: transform 0.2s, background-color 0.3s;
+}
+
+.sleek-card:hover {
+    transform: translateY(-2px);
+}
+
+.sleek-card-info span {
     display: block;
-    font-size: 12px;
+}
+
+.sleek-label {
+    font-size: 13px;
     color: var(--text-muted);
+    font-weight: 500;
     margin-bottom: 6px;
 }
 
-.stat-value {
-    font-size: 20px;
-    font-weight: 700;
+.sleek-value {
+    font-size: 22px;
+    font-weight: 800;
     color: var(--text-main);
 }
 
-.quick-actions-container {
-    background: var(--card-bg);
-    border: 1px solid var(--border-color);
+.sleek-card-icon {
+    width: 48px;
+    height: 48px;
     border-radius: 12px;
-    padding: 18px;
-    margin-bottom: 20px;
-}
-
-.quick-actions-container h3 {
-    font-size: 15px;
-    margin-bottom: 15px;
-}
-
-.quick-actions-grid {
-    display: grid;
-    grid-template-columns: repeat(4, 1fr);
-    gap: 10px;
-    text-align: center;
-}
-
-.quick-action-item {
-    background: #f8fafc;
-    border: 1px solid var(--border-color);
-    padding: 12px 8px;
-    border-radius: 10px;
-    cursor: pointer;
-    transition: background 0.2s;
-}
-
-.quick-action-item:hover {
-    background: #eff6ff;
-    border-color: #bfdbfe;
-}
-
-.qa-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
     font-size: 20px;
-    margin-bottom: 6px;
 }
 
-.quick-action-item span {
-    font-size: 12px;
-    font-weight: 500;
-    color: #475569;
-}
+.icon-blue { background: rgba(37, 99, 235, 0.1); color: #2563eb; }
+.icon-green { background: rgba(22, 163, 74, 0.1); color: #16a34a; }
+.icon-yellow { background: rgba(234, 179, 8, 0.1); color: #ca8a04; }
+.icon-teal { background: rgba(13, 148, 136, 0.1); color: #0d9488; }
+.icon-red { background: rgba(239, 68, 68, 0.1); color: #ef4444; }
 
-.promo-banner {
-    background: #eff6ff;
-    border: 1px solid #bfdbfe;
-    padding: 20px;
-    border-radius: 12px;
-    color: #1e40af;
-}
-
-.promo-banner h3 {
-    font-size: 16px;
-    margin-bottom: 6px;
-}
-
-.promo-banner p {
-    font-size: 13px;
-    color: #3b82f6;
-}
-
-/* Content Cards & Profile Form Layout */
+/* Content Cards & Common Styles */
 .content-card {
     background: var(--card-bg);
     border: 1px solid var(--border-color);
-    border-radius: 12px;
+    border-radius: 16px;
     padding: 20px;
     margin-bottom: 20px;
     box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+    transition: background-color 0.3s, border-color 0.3s;
 }
 
 .section-heading-container {
@@ -469,7 +473,7 @@ body {
 .section-heading-icon {
     width: 32px;
     height: 32px;
-    background: #eff6ff;
+    background: rgba(37, 99, 235, 0.1);
     color: var(--primary-color);
     border-radius: 8px;
     display: flex;
@@ -490,7 +494,7 @@ body {
     display: block;
     font-size: 13px;
     font-weight: 600;
-    color: #475569;
+    color: var(--text-muted);
     margin-bottom: 6px;
     margin-top: 12px;
 }
@@ -503,17 +507,16 @@ body {
     border: 1px solid var(--border-color);
     border-radius: 10px;
     font-size: 14px;
-    background: #f8fafc;
+    background: var(--bg-main);
     color: var(--text-main);
     outline: none;
-    transition: border-color 0.2s, box-shadow 0.2s;
+    transition: border-color 0.2s, background-color 0.3s, color 0.3s;
 }
 
 .content-card input:focus, 
 .content-card select:focus, 
 .content-card textarea:focus {
     border-color: var(--primary-color);
-    background: #ffffff;
     box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
 }
 
@@ -535,6 +538,22 @@ body {
     gap: 12px;
 }
 
+.primary-btn {
+    background: var(--primary-color);
+    color: #ffffff;
+    border: none;
+    padding: 12px 20px;
+    border-radius: 10px;
+    font-weight: 600;
+    font-size: 14px;
+    cursor: pointer;
+    transition: background 0.2s;
+}
+
+.primary-btn:hover {
+    background: var(--primary-hover);
+}
+
 /* Avatar Selection Grid */
 .avatar-picker-grid {
     display: grid;
@@ -546,7 +565,7 @@ body {
 .avatar-option {
     width: 100%;
     aspect-ratio: 1;
-    background: #f1f5f9;
+    background: var(--bg-main);
     border-radius: 12px;
     display: flex;
     align-items: center;
@@ -589,7 +608,7 @@ body {
 }
 
 .history-table th {
-    background: #f8fafc;
+    background: var(--bg-main);
     color: var(--text-muted);
     padding: 10px;
     font-weight: 600;
@@ -599,11 +618,11 @@ body {
 .history-table td {
     padding: 12px 10px;
     border-bottom: 1px solid var(--border-color);
-    color: #334155;
+    color: var(--text-main);
 }
 
 .badge-credit {
-    background: #dcfce7;
+    background: rgba(22, 163, 74, 0.15);
     color: #16a34a;
     padding: 3px 8px;
     border-radius: 6px;
@@ -612,8 +631,8 @@ body {
 }
 
 .badge-debit {
-    background: #fee2e2;
-    color: #dc2626;
+    background: rgba(239, 68, 68, 0.15);
+    color: #ef4444;
     padding: 3px 8px;
     border-radius: 6px;
     font-size: 11px;
@@ -634,12 +653,13 @@ body {
     left: 0;
     right: 0;
     height: 65px;
-    background: #ffffff;
+    background: var(--nav-bg);
     border-top: 1px solid var(--border-color);
     display: flex;
     justify-content: space-around;
     align-items: center;
     z-index: 1000;
+    transition: background-color 0.3s, border-color 0.3s;
 }
 
 .bottom-nav-item {
@@ -694,6 +714,8 @@ body {
             <h1 class="brand-title">MJ HUB</h1>
         </div>
         <div class="nav-right">
+            <!-- Theme Toggle Button -->
+            <button class="theme-toggle-btn" id="themeToggleBtn" title="Toggle Dark/Light Mode">☀️</button>
             <div class="wallet-badge" id="navWalletBadge">NGN ₦0.00</div>
             <div class="notification-icon" id="notificationBtn">
                 🔔
@@ -713,6 +735,10 @@ body {
                         <li><a href="#" onclick="switchSection('profile'); toggleProfileDropdown(); return false;">My Profile</a></li>
                         <li><a href="#" onclick="switchSection('transactions'); toggleProfileDropdown(); return false;">Transactions</a></li>
                         <li><a href="#" onclick="switchSection('settings'); toggleProfileDropdown(); return false;">Settings</a></li>
+                    </ul>
+                    <div class="dropdown-divider"></div>
+                    <ul class="dropdown-links">
+                        <li><a href="#" onclick="toggleDarkMode(); toggleProfileDropdown(); return false;" id="dropdownThemeLabel">🌙 Dark Mode</a></li>
                         <li><a href="#" onclick="alert('Logged out successfully'); return false;" style="color: #ef4444;">Logout</a></li>
                     </ul>
                 </div>
@@ -730,13 +756,13 @@ body {
             <div class="sidebar-group-title">MAIN MENU</div>
             <ul class="sidebar-links">
                 <li><a href="#" class="sidebar-link active" data-target="home">🏠 <span>Dashboard</span></a></li>
-                <li><a href="#" class="sidebar-link" data-target="numbers">📱 <span>SMS Numbers</span></a></li>
-                <li><a href="#" class="sidebar-link" data-target="smm">⚡ <span>SMM Services</span></a></li>
+                <li><a href="#" class="sidebar-link" data-target="numbers">📱 <span>MJ SMS</span></a></li>
+                <li><a href="#" class="sidebar-link" data-target="smm">⚡ <span>MJ Booster</span></a></li>
                 <li><a href="#" class="sidebar-link" data-target="deposit">💳 <span>Fund Wallet</span></a></li>
             </ul>
             <div class="sidebar-group-title">ACCOUNT & MORE</div>
             <ul class="sidebar-links">
-                <li><a href="#" class="sidebar-link" data-target="transactions">🔄 <span>History Logs</span></a></li>
+                <li><a href="#" class="sidebar-link" data-target="transactions">🔄 <span>MJ LOGS</span></a></li>
                 <li><a href="#" class="sidebar-link" data-target="profile">👤 <span>Profile Settings</span></a></li>
                 <li><a href="#" class="sidebar-link" data-target="cart">🛍️ <span>Cart</span></a></li>
                 <li><a href="#" class="sidebar-link" data-target="more">⚙️ <span>More Options</span></a></li>
@@ -748,68 +774,71 @@ body {
     <!-- Main Content Area -->
     <main class="main-content">
 
-        <!-- Home Section -->
+        <!-- Home Section (Sleek Dashboard Design inspired by user reference) -->
         <section id="home" class="app-section active">
-            <div class="welcome-box">
-                <h2 id="homeWelcomeName">Hello User</h2>
-                <p>Here's an overview of your account's recent activities.</p>
-                <div class="hero-buttons">
-                    <button class="primary-btn" style="background:#fff; color:var(--primary-color);" onclick="switchSection('deposit')">Fund Account</button>
-                    <button class="secondary-btn" onclick="switchSection('numbers')">Get SMS</button>
-                </div>
+            <div class="dashboard-header-row">
+                <h2 class="dashboard-title">Dashboard</h2>
             </div>
 
-            <div class="stats-grid">
-                <div class="stat-card">
-                    <span class="stat-label">NGN Balance</span>
-                    <span class="stat-value" id="homeNgnBalance">₦0.00</span>
-                </div>
-                <div class="stat-card">
-                    <span class="stat-label">USD Balance</span>
-                    <span class="stat-value" id="homeUsdBalance">$0.00</span>
-                </div>
-                <div class="stat-card">
-                    <span class="stat-label">Purchased Numbers</span>
-                    <span class="stat-value">0</span>
-                </div>
-                <div class="stat-card">
-                    <span class="stat-label">Purchased Accounts</span>
-                    <span class="stat-value">0</span>
-                </div>
+            <div class="quick-action-buttons">
+                <button class="dash-pill-btn pill-blue" onclick="switchSection('deposit')">
+                    <span>💳</span> Deposit
+                </button>
+                <button class="dash-pill-btn pill-green" onclick="switchSection('numbers')">
+                    <span>📱</span> MJ SMS
+                </button>
+                <button class="dash-pill-btn pill-orange" onclick="switchSection('smm')">
+                    <span>⚡</span> MJ Booster
+                </button>
             </div>
 
-            <div class="quick-actions-container">
-                <h3>Quick Actions</h3>
-                <div class="quick-actions-grid">
-                    <div class="quick-action-item" onclick="switchSection('numbers')">
-                        <div class="qa-icon">📱</div>
-                        <span>Numbers</span>
+            <div class="sleek-stats-grid">
+                <div class="sleek-card">
+                    <div class="sleek-card-info">
+                        <span class="sleek-label">Available Balance</span>
+                        <span class="sleek-value" id="homeNgnBalance">₦0.00</span>
                     </div>
-                    <div class="quick-action-item" onclick="switchSection('smm')">
-                        <div class="qa-icon">⚡</div>
-                        <span>SMM</span>
-                    </div>
-                    <div class="quick-action-item" onclick="switchSection('profile')">
-                        <div class="qa-icon">👤</div>
-                        <span>Profile</span>
-                    </div>
-                    <div class="quick-action-item" onclick="switchSection('deposit')">
-                        <div class="qa-icon">➕</div>
-                        <span>Deposit</span>
-                    </div>
+                    <div class="sleek-card-icon icon-blue">💳</div>
                 </div>
-            </div>
 
-            <div class="promo-banner">
-                <h3>Fast, Secure & Reliable</h3>
-                <p>Enjoy instant virtual numbers, seamless wallet funding, and rapid SMM delivery.</p>
+                <div class="sleek-card">
+                    <div class="sleek-card-info">
+                        <span class="sleek-label">MJ LOGS</span>
+                        <span class="sleek-value" id="homeLogsCount">0</span>
+                    </div>
+                    <div class="sleek-card-icon icon-green">📦</div>
+                </div>
+
+                <div class="sleek-card">
+                    <div class="sleek-card-info">
+                        <span class="sleek-label">Total Deposits</span>
+                        <span class="sleek-value" id="homeTotalDeposits">₦0.00</span>
+                    </div>
+                    <div class="sleek-card-icon icon-yellow">💰</div>
+                </div>
+
+                <div class="sleek-card">
+                    <div class="sleek-card-info">
+                        <span class="sleek-label">Referrals</span>
+                        <span class="sleek-value">0</span>
+                    </div>
+                    <div class="sleek-card-icon icon-teal">👥</div>
+                </div>
+
+                <div class="sleek-card" style="grid-column: 1 / -1;">
+                    <div class="sleek-card-info">
+                        <span class="sleek-label">Total Earnings</span>
+                        <span class="sleek-value">$0.00</span>
+                    </div>
+                    <div class="sleek-card-icon icon-red">📈</div>
+                </div>
             </div>
         </section>
 
-        <!-- Numbers / SMS Section -->
+        <!-- Numbers / MJ SMS Section -->
         <section id="numbers" class="app-section">
             <div class="content-card">
-                <h2>Virtual SMS Numbers</h2>
+                <h2>MJ SMS</h2>
                 <p class="helper-text">Select a service and country to receive instant OTP verification codes.</p>
                 <label>Select Service</label>
                 <select id="smsServiceSelect">
@@ -828,7 +857,7 @@ body {
                 <button class="primary-btn full-width" style="margin-top: 15px;" onclick="orderSmsNumber()">Order Number (₦800)</button>
             </div>
             <div class="content-card">
-                <h3>Active SMS Numbers</h3>
+                <h3>Active MJ SMS Numbers</h3>
                 <div class="table-responsive">
                     <table class="history-table">
                         <thead>
@@ -849,10 +878,10 @@ body {
             </div>
         </section>
 
-        <!-- SMM Section -->
+        <!-- SMM / MJ Booster Section -->
         <section id="smm" class="app-section">
             <div class="content-card">
-                <h2>SMM Panel Boosters</h2>
+                <h2>MJ Booster</h2>
                 <p class="helper-text">Boost your social media presence quickly and efficiently.</p>
                 <label>Select Category</label>
                 <select id="smmCategory">
@@ -873,7 +902,7 @@ body {
                         <input type="text" id="smmTotalDisplay" value="₦2,500.00" readonly>
                     </div>
                 </div>
-                <button class="primary-btn full-width" style="margin-top: 15px;" onclick="submitSmmOrder()">Submit Order</button>
+                <button class="primary-btn full-width" style="margin-top: 15px;" onclick="submitSmmOrder()">Submit Booster Order</button>
             </div>
         </section>
 
@@ -894,10 +923,10 @@ body {
             </div>
         </section>
 
-        <!-- Transactions Section -->
+        <!-- Transactions / MJ LOGS Section -->
         <section id="transactions" class="app-section">
             <div class="content-card">
-                <h2>Transaction History Logs</h2>
+                <h2>MJ LOGS History</h2>
                 <div class="table-responsive">
                     <table class="history-table">
                         <thead>
@@ -918,8 +947,8 @@ body {
             </div>
         </section>
 
-        <!-- Profile Section (Onboarding Spiced Up Layout) -->
-        <section id="profile" class="app-section active">
+        <!-- Profile Section -->
+        <section id="profile" class="app-section">
             
             <!-- Choose an Avatar -->
             <div class="content-card">
@@ -1040,7 +1069,7 @@ body {
                 <ul class="sidebar-links" style="margin-top: 10px;">
                     <li><a href="#" onclick="alert('Opening Help & FAQ Center'); return false;">📖 <span>Help & FAQ Center</span></a></li>
                     <li><a href="#" onclick="alert('Contacting support@mjhub.com'); return false;">💬 <span>Contact Support Chat</span></a></li>
-                    <li><a href="#" onclick="alert('MJ HUB v2.3 - All systems operational'); return false;">ℹ️ <span>About MJ HUB</span></a></li>
+                    <li><a href="#" onclick="alert('MJ HUB v2.4 - All systems operational'); return false;">ℹ️ <span>About MJ HUB</span></a></li>
                 </ul>
             </div>
         </section>
@@ -1055,7 +1084,7 @@ body {
         </a>
         <a href="#" class="bottom-nav-item" data-target="smm">
             <span>⚡</span>
-            <span>SMM</span>
+            <span>MJ Booster</span>
         </a>
         <div class="bottom-nav-center" onclick="switchSection('deposit')">
             <span>+</span>
@@ -1076,8 +1105,8 @@ body {
    ========================================== */
 
 let currentBalanceNgn = 0.00;
-let currentBalanceUsd = 0.00;
-const usdRate = 1400.00;
+let totalDepositedNgn = 0.00;
+let logsCount = 0;
 
 document.addEventListener('DOMContentLoaded', () => {
     // Navigation Handling
@@ -1160,7 +1189,27 @@ document.addEventListener('DOMContentLoaded', () => {
     profileDropdown.addEventListener('click', (e) => {
         e.stopPropagation();
     });
+
+    // Theme Toggle Button Event
+    document.getElementById('themeToggleBtn').addEventListener('click', toggleDarkMode);
 });
+
+// Dark Mode Toggle Logic
+function toggleDarkMode() {
+    const htmlEl = document.documentElement;
+    const themeBtn = document.getElementById('themeToggleBtn');
+    const dropdownThemeLabel = document.getElementById('dropdownThemeLabel');
+
+    if(htmlEl.getAttribute('data-theme') === 'light') {
+        htmlEl.setAttribute('data-theme', 'dark');
+        themeBtn.textContent = '🌙';
+        dropdownThemeLabel.textContent = '☀️ Light Mode';
+    } else {
+        htmlEl.setAttribute('data-theme', 'light');
+        themeBtn.textContent = '☀️';
+        dropdownThemeLabel.textContent = '🌙 Dark Mode';
+    }
+}
 
 // Avatar selection
 let selectedAvatarUrl = 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150';
@@ -1174,7 +1223,6 @@ function saveProfileChanges() {
     let name = document.getElementById('inputFullName').value || 'User';
     let email = document.getElementById('inputEmail').value || 'email@example.com';
     
-    document.getElementById('homeWelcomeName').textContent = 'Hello ' + name;
     document.getElementById('dropdownName').textContent = name;
     document.getElementById('dropdownEmail').textContent = email;
     document.getElementById('headerAvatarImg').src = selectedAvatarUrl;
@@ -1197,7 +1245,7 @@ function submitSmmOrder() {
         alert('Please enter a valid target link.');
         return;
     }
-    alert('SMM Order submitted successfully!');
+    alert('MJ Booster Order submitted successfully!');
     document.getElementById('smmLink').value = '';
 }
 
@@ -1209,8 +1257,10 @@ function orderSmsNumber() {
         return;
     }
     currentBalanceNgn -= 800;
+    logsCount += 1;
     updateBalances();
-    alert('Virtual SMS number ordered successfully!');
+    addTransactionRecord('Debit', 'MJ SMS Virtual Number Purchase', '-₦800.00');
+    alert('MJ SMS number ordered successfully!');
 }
 
 // Deposit simulation
@@ -1221,6 +1271,7 @@ function processDeposit() {
         return;
     }
     currentBalanceNgn += amt;
+    totalDepositedNgn += amt;
     updateBalances();
     addTransactionRecord('Credit', 'Wallet Funding via Gateway', '+₦' + amt.toLocaleString());
     alert('Wallet funded successfully with ₦' + amt.toLocaleString() + '!');
@@ -1230,9 +1281,8 @@ function processDeposit() {
 function updateBalances() {
     document.getElementById('navWalletBadge').textContent = 'NGN ₦' + currentBalanceNgn.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
     document.getElementById('homeNgnBalance').textContent = '₦' + currentBalanceNgn.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
-    
-    currentBalanceUsd = currentBalanceNgn / usdRate;
-    document.getElementById('homeUsdBalance').textContent = '$' + currentBalanceUsd.toFixed(2);
+    document.getElementById('homeTotalDeposits').textContent = '₦' + totalDepositedNgn.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
+    document.getElementById('homeLogsCount').textContent = logsCount;
 }
 
 function addTransactionRecord(type, desc, amountStr) {
@@ -1242,7 +1292,7 @@ function addTransactionRecord(type, desc, amountStr) {
     }
     let tr = document.createElement('tr');
     let badgeClass = type === 'Credit' ? 'badge-credit' : 'badge-debit';
-    let colorStyle = type === 'Credit' ? 'color: #16a34a;' : 'color: #dc2626;';
+    let colorStyle = type === 'Credit' ? 'color: #16a34a;' : 'color: #ef4444;';
     
     tr.innerHTML = `
         <td><span class="${badgeClass}">${type}</span></td>
