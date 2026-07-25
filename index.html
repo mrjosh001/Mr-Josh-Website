@@ -6,7 +6,7 @@
     <title>MJ HUB - Dashboard</title>
     <style>
 /* ==========================================
-   MJ HUB - Theme & Variables (v3.9)
+   MJ HUB - Theme & Variables (v4.0 - Blue & White Theme)
    ========================================== */
 
 :root[data-theme="dark"] {
@@ -14,9 +14,9 @@
     --primary-hover: #1d4ed8;
     --bg-main: #0b0f19;
     --card-bg: #121824;
-    --text-main: #f8fafc;
-    --text-muted: #94a3b8;
-    --border-color: #1e293b;
+    --text-main: #ffffff;
+    --text-muted: #93c5fd;
+    --border-color: #1e3a8a;
     --sidebar-width: 280px;
     --nav-bg: #121824;
 }
@@ -24,11 +24,11 @@
 :root[data-theme="light"] {
     --primary-color: #2563eb;
     --primary-hover: #1d4ed8;
-    --bg-main: #f8fafc;
+    --bg-main: #f0f6ff;
     --card-bg: #ffffff;
     --text-main: #0f172a;
-    --text-muted: #64748b;
-    --border-color: #e2e8f0;
+    --text-muted: #1e40af;
+    --border-color: #bfdbfe;
     --sidebar-width: 280px;
     --nav-bg: #ffffff;
 }
@@ -247,7 +247,7 @@ body {
 .sidebar-brand-logo {
     width: 28px;
     height: 28px;
-    background: rgba(37, 99, 235, 0.1);
+    background: rgba(37, 99, 235, 0.15);
     color: var(--primary-color);
     border-radius: 6px;
     display: flex;
@@ -304,7 +304,7 @@ body {
 
 .sidebar-links li a:hover, 
 .sidebar-links li a.active {
-    background: rgba(37, 99, 235, 0.15);
+    background: rgba(37, 99, 235, 0.2);
     color: var(--primary-color);
 }
 
@@ -404,7 +404,7 @@ body {
     box-shadow: 0 1px 3px rgba(0,0,0,0.2);
 }
 
-.sleek-label { font-size: 13px; color: var(--text-muted); font-weight: 500; margin-bottom: 6px; display: block; }
+.sleek-label { font-size: 13px; color: var(--text-muted); font-weight: 600; margin-bottom: 6px; display: block; }
 .sleek-value { font-size: 22px; font-weight: 800; color: var(--text-main); }
 
 .sleek-card-icon {
@@ -417,10 +417,8 @@ body {
     font-size: 20px;
 }
 
-.icon-blue { background: rgba(37, 99, 235, 0.15); color: #2563eb; }
-.icon-green { background: rgba(22, 163, 74, 0.15); color: #16a34a; }
-.icon-yellow { background: rgba(234, 179, 8, 0.15); color: #ca8a04; }
-.icon-teal { background: rgba(13, 148, 136, 0.15); color: #0d9488; }
+.icon-blue { background: rgba(37, 99, 235, 0.2); color: #2563eb; }
+.icon-white { background: rgba(255, 255, 255, 0.2); color: #ffffff; }
 
 /* ==========================================
    PROFILE SCREEN 
@@ -484,7 +482,7 @@ body {
 }
 
 .profile-menu-item:hover {
-    background: rgba(37, 99, 235, 0.05);
+    background: rgba(37, 99, 235, 0.08);
     border-color: var(--primary-color);
 }
 
@@ -629,8 +627,8 @@ body {
 .history-table th { background: var(--bg-main); color: var(--text-muted); padding: 10px; font-weight: 600; border-bottom: 1px solid var(--border-color); }
 .history-table td { padding: 12px 10px; border-bottom: 1px solid var(--border-color); color: var(--text-main); }
 .badge-status { padding: 3px 8px; border-radius: 6px; font-size: 11px; font-weight: 600; }
-.badge-success { background: rgba(22, 163, 74, 0.15); color: #16a34a; }
-.badge-pending { background: rgba(234, 179, 8, 0.15); color: #ca8a04; }
+.badge-success { background: rgba(37, 99, 235, 0.15); color: var(--primary-color); }
+.badge-pending { background: rgba(37, 99, 235, 0.1); color: var(--text-muted); }
 .empty-text { text-align: center; color: var(--text-muted); padding: 20px 0; font-size: 13px; }
 
 .cart-summary-box {
@@ -663,14 +661,14 @@ body {
 .floating-support-btn {
     width: 52px;
     height: 52px;
-    background: #3b82f6;
+    background: #2563eb;
     color: #ffffff;
     border-radius: 50%;
     display: flex;
     align-items: center;
     justify-content: center;
     font-size: 24px;
-    box-shadow: 0 6px 20px rgba(59, 130, 246, 0.5);
+    box-shadow: 0 6px 20px rgba(37, 99, 235, 0.5);
     cursor: pointer;
     border: 2px solid rgba(255, 255, 255, 0.2);
     transition: transform 0.2s, background 0.2s;
@@ -678,7 +676,7 @@ body {
 
 .floating-support-btn:hover {
     transform: scale(1.08);
-    background: #2563eb;
+    background: #1d4ed8;
 }
 
 .support-options-popup {
@@ -715,7 +713,7 @@ body {
 }
 
 .support-option-item:hover {
-    background: rgba(37, 99, 235, 0.1);
+    background: rgba(37, 99, 235, 0.15);
     border-color: var(--primary-color);
     color: var(--primary-color);
 }
@@ -816,7 +814,7 @@ body {
 
 .popup-item:hover {
     transform: translateY(-3px);
-    background: rgba(37, 99, 235, 0.08);
+    background: rgba(37, 99, 235, 0.1);
     border-color: var(--primary-color);
     color: var(--primary-color);
 }
@@ -913,16 +911,14 @@ body {
 }
 .transaction-left { display: flex; align-items: center; gap: 12px; }
 .transaction-icon-box { width: 40px; height: 40px; border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 18px; }
-.tx-blue { background: rgba(37, 99, 235, 0.2); color: #60a5fa; }
-.tx-green { background: rgba(34, 197, 94, 0.2); color: #4ade80; }
-.tx-purple { background: rgba(168, 85, 247, 0.2); color: #c084fc; }
+.tx-blue { background: rgba(37, 99, 235, 0.2); color: #2563eb; }
 .transaction-details h4 { font-size: 14px; font-weight: 700; color: var(--text-main); margin-bottom: 2px; }
 .transaction-details span { font-size: 11px; color: var(--text-muted); }
 .transaction-right { text-align: right; }
 .transaction-amount { font-size: 14px; font-weight: 800; color: var(--text-main); margin-bottom: 2px; }
 .transaction-status { font-size: 10px; font-weight: 700; padding: 2px 6px; border-radius: 4px; display: inline-block; }
-.status-success { background: rgba(34, 197, 94, 0.2); color: #16a34a; }
-.status-pending { background: rgba(234, 179, 8, 0.2); color: #ca8a04; }
+.status-success { background: rgba(37, 99, 235, 0.15); color: var(--primary-color); }
+.status-pending { background: rgba(37, 99, 235, 0.1); color: var(--text-muted); }
 
 /* Currency Converter Modal */
 .currency-modal {
@@ -1057,7 +1053,7 @@ body {
                     </ul>
                     <div class="dropdown-divider"></div>
                     <ul class="dropdown-links">
-                        <li><a href="#" onclick="alert('Logged out successfully'); return false;" style="color: #ef4444;">Logout</a></li>
+                        <li><a href="#" onclick="alert('Logged out successfully'); return false;" style="color: #2563eb;">Logout</a></li>
                     </ul>
                     <div class="dropdown-divider"></div>
                     <div style="padding: 10px 15px; display: flex; justify-content: space-between; align-items: center;">
@@ -1086,7 +1082,7 @@ body {
                 <li><a href="#" class="sidebar-link" data-target="booster">⚡ <span>MJ Booster</span></a></li>
                 <li><a href="#" class="sidebar-link" data-target="deposit">💳 <span>Add Funds</span></a></li>
                 <li><a href="#" class="sidebar-link" data-target="cart">🛍️ <span>Cart</span></a></li>
-                <li><a href="#" onclick="alert('Logged out successfully'); return false;" style="color: #ef4444;">🚪 <span>Logout</span></a></li>
+                <li><a href="#" onclick="alert('Logged out successfully'); return false;">🚪 <span>Logout</span></a></li>
             </ul>
         </div>
         <div class="sidebar-footer">
@@ -1124,7 +1120,7 @@ body {
                         <span class="sleek-label" id="balanceLabelSecondary">USD Balance</span>
                         <span class="sleek-value" id="homeSecondaryBalance">$0.00</span>
                     </div>
-                    <div class="sleek-card-icon icon-yellow" id="balanceIconSecondary">💵</div>
+                    <div class="sleek-card-icon icon-white" id="balanceIconSecondary">💵</div>
                 </div>
             </div>
         </section>
@@ -1167,7 +1163,7 @@ body {
 
                 <div class="profile-menu-item" onclick="openChangePasswordModal()">
                     <div class="profile-menu-left">
-                        <div class="profile-menu-icon icon-green">🛡️</div>
+                        <div class="profile-menu-icon icon-blue">🛡️</div>
                         <div class="profile-menu-info">
                             <h4>Change Password</h4>
                             <p>Click to change your password</p>
@@ -1178,7 +1174,7 @@ body {
 
                 <div class="profile-menu-item" onclick="alert('Withdrawal PIN setup triggered')">
                     <div class="profile-menu-left">
-                        <div class="profile-menu-icon icon-yellow">🔑</div>
+                        <div class="profile-menu-icon icon-blue">🔑</div>
                         <div class="profile-menu-info">
                             <h4>Withdrawal Password</h4>
                             <p>Set a withdrawal PIN</p>
@@ -1189,9 +1185,9 @@ body {
 
                 <div class="profile-menu-item" onclick="alert('Logged out successfully')">
                     <div class="profile-menu-left">
-                        <div class="profile-menu-icon" style="background: rgba(239, 68, 68, 0.15); color: #ef4444;">🚪</div>
+                        <div class="profile-menu-icon icon-blue">🚪</div>
                         <div class="profile-menu-info">
-                            <h4 style="color: #ef4444;">Log Out</h4>
+                            <h4 style="color: var(--primary-color);">Log Out</h4>
                             <p>Click Here to Log Out</p>
                         </div>
                     </div>
@@ -1452,14 +1448,14 @@ body {
 
     <script>
 /* ==========================================
-   MJ HUB - Application Logic (v3.9)
+   MJ HUB - Application Logic (v4.0)
    ========================================== */
 
 let currentBalanceNgn = 0.00;
 let currentBalanceUsd = 0.00;
-let dashboardCurrencyMode = 'ngn'; // 'ngn' or 'usd'
-let conversionDirection = 'usdtongn'; // 'usdtongn' or 'ngntousd'
-let exchangeRate = 1420; // Default exchange rate 1420/$
+let dashboardCurrencyMode = 'ngn'; 
+let conversionDirection = 'usdtongn'; 
+let exchangeRate = 1420; 
 
 let cartItems = [];
 let transactions = [];
@@ -1487,7 +1483,6 @@ document.addEventListener('DOMContentLoaded', () => {
     const floatingSupportBtn = document.getElementById('floatingSupportBtn');
     const supportPopup = document.getElementById('supportOptionsPopup');
 
-    // Theme Toggle Functionality
     function toggleAppTheme() {
         const html = document.documentElement;
         const currentTheme = html.getAttribute('data-theme');
@@ -1507,7 +1502,6 @@ document.addEventListener('DOMContentLoaded', () => {
     themeToggleBtn.addEventListener('click', toggleAppTheme);
     dropdownThemeToggleBtn.addEventListener('click', toggleAppTheme);
 
-    // Floating Support Popup Toggle
     floatingSupportBtn.addEventListener('click', (e) => {
         e.stopPropagation();
         supportPopup.classList.toggle('active');
@@ -1725,8 +1719,8 @@ function renderTransactions(filterType) {
     filtered.forEach(tx => {
         let icon = '📦';
         let iconClass = 'tx-blue';
-        if(tx.type === 'deposit') { icon = '💳'; iconClass = 'tx-green'; }
-        else if(tx.type === 'sms') { icon = '📱'; iconClass = 'tx-purple'; }
+        if(tx.type === 'deposit') { icon = '💳'; iconClass = 'tx-blue'; }
+        else if(tx.type === 'sms') { icon = '📱'; iconClass = 'tx-blue'; }
         else if(tx.type === 'booster') { icon = '⚡'; iconClass = 'tx-blue'; }
 
         let card = document.createElement('div');
@@ -1782,7 +1776,7 @@ function updateCartUI() {
             <td><strong>${item.title}</strong></td>
             <td><span class="badge-status badge-pending" style="text-transform:uppercase;">${item.type}</span></td>
             <td style="font-weight:700; color:var(--primary-color);">₦${item.price.toLocaleString()}</td>
-            <td><button class="btn-sm-outline" style="color:#ef4444; border-color:#ef4444; padding:4px 8px;" onclick="removeFromCart(${item.id})">Remove</button></td>
+            <td><button class="btn-sm-outline" style="color:var(--primary-color); border-color:var(--primary-color); padding:4px 8px;" onclick="removeFromCart(${item.id})">Remove</button></td>
         `;
         tbody.appendChild(tr);
     });
@@ -1845,7 +1839,7 @@ function updateBalanceDisplay() {
     if (dashboardCurrencyMode === 'usd') {
         document.getElementById('balanceLabelPrimary').textContent = 'USD Balance';
         document.getElementById('homePrimaryBalance').textContent = '$' + currentBalanceUsd.toLocaleString(undefined, {minimumFractionDigits: 2});
-        document.getElementById('balanceIconPrimary').className = 'sleek-card-icon icon-yellow';
+        document.getElementById('balanceIconPrimary').className = 'sleek-card-icon icon-white';
         document.getElementById('balanceIconPrimary').textContent = '💵';
 
         document.getElementById('balanceLabelSecondary').textContent = 'NGN Balance';
@@ -1860,7 +1854,7 @@ function updateBalanceDisplay() {
 
         document.getElementById('balanceLabelSecondary').textContent = 'USD Balance';
         document.getElementById('homeSecondaryBalance').textContent = '$' + currentBalanceUsd.toLocaleString(undefined, {minimumFractionDigits: 2});
-        document.getElementById('balanceIconSecondary').className = 'sleek-card-icon icon-yellow';
+        document.getElementById('balanceIconSecondary').className = 'sleek-card-icon icon-white';
         document.getElementById('balanceIconSecondary').textContent = '💵';
     }
 
