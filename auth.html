@@ -4,6 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>MJ HUB - Authentication</title>
+    <!-- Supabase CDN Script -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <style>
         :root {
             --primary-color: #2563eb;
@@ -82,6 +84,11 @@
     </div>
 
     <script>
+        // Initialize Supabase Client
+        const SUPABASE_URL = 'https://atczodlljmlayvldxfmv.supabase.co';
+        const SUPABASE_PUBLISHABLE_KEY = 'sb_publishable_dwbeKLcSG7-nfKzZz8x8Zw_U9FtwJTy';
+        const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY);
+
         window.addEventListener('DOMContentLoaded', () => {
             const urlParams = new URLSearchParams(window.location.search);
             if (urlParams.get('mode') === 'signup') {
@@ -115,36 +122,25 @@
             errorEl.innerText = '';
             successEl.innerText = '';
 
-            try {
-                const response = await fetch('/api/auth/signin', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ email, password })
-                });
+            const { data, error } = await supabaseClient.auth.signInWithPassword({
+                email: email,
+                password: password
+            });
 
-                const data = await response.json();
-
-                if (!response.ok) {
-                    errorEl.innerText = data.error || 'Invalid credentials.';
-                    return;
-                }
-
-                // Save token and user details to localStorage
-                localStorage.setItem('token', data.token);
-                localStorage.setItem('user', JSON.stringify(data.user));
-
-                successEl.innerText = 'Signed in successfully!';
-                setTimeout(() => {
-                    window.location.href = 'index.html';
-                }, 500);
-            } catch (error) {
-                errorEl.innerText = 'Server error during sign in.';
+            if (error) {
+                errorEl.innerText = error.message;
+                return;
             }
+
+            successEl.innerText = 'Signed in successfully!';
+            setTimeout(() => {
+                window.location.href = 'index.html';
+            }, 500);
         }
 
         async function handleSignUp(e) {
             e.preventDefault();
-            const name = document.getElementById('signupName').value.trim();
+            const fullName = document.getElementById('signupName').value.trim();
             const username = document.getElementById('signupUsername').value.trim();
             const phone = document.getElementById('signupPhone').value.trim();
             const email = document.getElementById('signupEmail').value.trim();
@@ -154,27 +150,27 @@
             errorEl.innerText = '';
             successEl.innerText = '';
 
-            try {
-                const response = await fetch('/api/auth/signup', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ name, username, phone, email, password })
-                });
-
-                const data = await response.json();
-
-                if (!response.ok) {
-                    errorEl.innerText = data.error || 'Registration failed.';
-                    return;
+            const { data, error } = await supabaseClient.auth.signUp({
+                email: email,
+                password: password,
+                options: {
+                    data: {
+                        full_name: fullName,
+                        username: username,
+                        phone: phone
+                    }
                 }
+            });
 
-                successEl.innerText = 'Account created successfully! Please sign in.';
-                setTimeout(() => {
-                    switchTab('signin');
-                }, 1000);
-            } catch (error) {
-                errorEl.innerText = 'Server error during registration.';
+            if (error) {
+                errorEl.innerText = error.message;
+                return;
             }
+
+            successEl.innerText = 'Account created successfully! Please sign in.';
+            setTimeout(() => {
+                switchTab('signin');
+            }, 1000);
         }
     </script>
 </body>
