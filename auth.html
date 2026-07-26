@@ -66,12 +66,12 @@
         </div>
     </header>
 
-    <!-- MAIN AUTH SECTION -->
+    <!-- MAIN AUTH & PROFILE DASHBOARD SECTION -->
     <main class="flex-grow flex items-center justify-center px-4 py-12">
         <div class="auth-container bg-[rgba(17,24,39,0.85)] backdrop-blur-md border border-[rgba(59,130,246,0.3)] p-8 rounded-2xl w-full max-w-lg shadow-2xl max-h-[85vh] overflow-y-auto">
             
-            <!-- Tab Switcher Header -->
-            <div class="flex border border-[rgba(59,130,246,0.3)] rounded-lg overflow-hidden bg-[rgba(15,23,42,0.6)] mb-6">
+            <!-- Tab Switcher Header (Visible when logged out or switching auth modes) -->
+            <div id="authTabsHeader" class="flex border border-[rgba(59,130,246,0.3)] rounded-lg overflow-hidden bg-[rgba(15,23,42,0.6)] mb-6">
                 <button id="signinTabBtn" class="flex-1 py-3 bg-blue-600 text-white font-bold cursor-pointer transition text-center text-sm" onclick="switchTab('signin')">Sign In</button>
                 <button id="signupTabBtn" class="flex-1 py-3 bg-transparent text-blue-300 font-bold cursor-pointer transition text-center text-sm" onclick="switchTab('signup')">Sign Up</button>
             </div>
@@ -92,7 +92,7 @@
                 <button type="submit" class="btn-submit">Sign In</button>
             </form>
 
-            <!-- Sign Up Form (Combined Signup & Profile Settings Metadata Entry) -->
+            <!-- Sign Up Form (Basic Information Only) -->
             <form id="signupForm" class="hidden" onsubmit="handleSignUp(event)">
                 <div class="section-title">Basic Information</div>
                 <div class="form-group mb-4">
@@ -115,38 +115,65 @@
                     <label class="block text-xs font-semibold text-blue-300 mb-1.5 uppercase">Password</label>
                     <input type="password" id="signupPassword" required placeholder="••••••••">
                 </div>
+                <button type="submit" class="btn-submit">Create Account</button>
+            </form>
+
+            <!-- Dashboard Profile Settings Form (Appears only after successful login/session active) -->
+            <form id="dashboardProfileForm" class="hidden" onsubmit="handleUpdateProfile(event)">
+                <div class="flex items-center justify-between mb-4">
+                    <h2 class="text-lg font-bold text-white">Dashboard & Profile Settings</h2>
+                    <button type="button" onclick="handleSignOut()" class="text-xs text-red-400 hover:underline">Sign Out</button>
+                </div>
+
+                <div class="section-title">Basic Information</div>
+                <div class="form-group mb-4">
+                    <label class="block text-xs font-semibold text-blue-300 mb-1.5 uppercase">Full Name</label>
+                    <input type="text" id="dashFullName" required placeholder="Mr Josh">
+                </div>
+                <div class="form-group mb-4">
+                    <label class="block text-xs font-semibold text-blue-300 mb-1.5 uppercase">Username</label>
+                    <input type="text" id="dashUsername" required placeholder="Mrjosh">
+                </div>
+                <div class="form-group mb-4">
+                    <label class="block text-xs font-semibold text-blue-300 mb-1.5 uppercase">Email Address</label>
+                    <input type="email" id="dashEmailAddress" disabled class="opacity-60 cursor-not-allowed">
+                </div>
+                <div class="form-group mb-4">
+                    <label class="block text-xs font-semibold text-blue-300 mb-1.5 uppercase">Phone Number</label>
+                    <input type="tel" id="dashPhoneNumber" required placeholder="09061607034">
+                </div>
 
                 <div class="section-title">Additional Profile Data</div>
                 <div class="form-group mb-4">
                     <label class="block text-xs font-semibold text-blue-300 mb-1.5 uppercase">Bio</label>
-                    <textarea id="bio" placeholder="Tell us about yourself..."></textarea>
+                    <textarea id="dashBio" placeholder="Tell us about yourself..."></textarea>
                 </div>
                 <div class="form-group mb-4">
                     <label class="block text-xs font-semibold text-blue-300 mb-1.5 uppercase">Street Address</label>
-                    <input type="text" id="streetAddress" placeholder="123 Main Street">
+                    <input type="text" id="dashStreetAddress" placeholder="123 Main Street">
                 </div>
                 <div class="form-group mb-4">
                     <label class="block text-xs font-semibold text-blue-300 mb-1.5 uppercase">City</label>
-                    <input type="text" id="city" placeholder="Lagos">
+                    <input type="text" id="dashCity" placeholder="Lagos">
                 </div>
                 <div class="form-group mb-4">
                     <label class="block text-xs font-semibold text-blue-300 mb-1.5 uppercase">Country</label>
-                    <input type="text" id="country" placeholder="Nigeria">
+                    <input type="text" id="dashCountry" placeholder="Nigeria">
                 </div>
                 <div class="form-group mb-4">
                     <label class="block text-xs font-semibold text-blue-300 mb-1.5 uppercase">Postal / ZIP Code</label>
-                    <input type="text" id="postalCode" placeholder="100001">
+                    <input type="text" id="dashPostalCode" placeholder="100001">
                 </div>
                 <div class="form-group mb-4">
                     <label class="block text-xs font-semibold text-blue-300 mb-1.5 uppercase">NIN (Optional)</label>
-                    <input type="text" id="nin" placeholder="11-digit National Identity Number">
+                    <input type="text" id="dashNin" placeholder="11-digit National Identity Number">
                 </div>
                 <div class="form-group mb-4">
                     <label class="block text-xs font-semibold text-blue-300 mb-1.5 uppercase">BVN (Optional)</label>
-                    <input type="text" id="bvn" placeholder="11-digit Bank Verification Number">
+                    <input type="text" id="dashBvn" placeholder="11-digit Bank Verification Number">
                 </div>
 
-                <button type="submit" id="saveProfileBtn" class="btn-submit">Create Account & Save Changes</button>
+                <button type="submit" class="btn-submit">Save Profile Changes</button>
             </form>
         </div>
     </main>
@@ -206,27 +233,12 @@
                 switchTab('signup');
             }
 
-            // Check if user session already exists to preload profile settings dynamically
+            // Check active session to display dashboard profile settings instead of sign in / sign up
             const { data: { session } } = await supabaseClient.auth.getSession();
             if (session && session.user) {
-                loadExistingProfile(session.user);
+                showDashboard(session.user);
             }
         });
-
-        function loadExistingProfile(user) {
-            const meta = user.user_metadata || {};
-            document.getElementById('fullName').value = meta.full_name || '';
-            document.getElementById('username').value = meta.username || '';
-            document.getElementById('emailAddress').value = user.email || '';
-            document.getElementById('phoneNumber').value = meta.phone_number || '';
-            document.getElementById('bio').value = meta.bio || '';
-            document.getElementById('streetAddress').value = meta.street_address || '';
-            document.getElementById('city').value = meta.city || '';
-            document.getElementById('country').value = meta.country || '';
-            document.getElementById('postalCode').value = meta.postal_code || '';
-            document.getElementById('nin').value = meta.nin || '';
-            document.getElementById('bvn').value = meta.bvn || '';
-        }
 
         function switchTab(tab) {
             document.getElementById('errorContainer').innerText = '';
@@ -254,6 +266,28 @@
             }
         }
 
+        function showDashboard(user) {
+            // Hide auth tabs and forms, display dashboard profile settings
+            document.getElementById('authTabsHeader').classList.add('hidden');
+            document.getElementById('signinForm').classList.add('hidden');
+            document.getElementById('signupForm').classList.add('hidden');
+            document.getElementById('dashboardProfileForm').classList.remove('hidden');
+
+            const meta = user.user_metadata || {};
+            document.getElementById('dashFullName').value = meta.full_name || '';
+            document.getElementById('dashUsername').value = meta.username || '';
+            document.getElementById('dashEmailAddress').value = user.email || '';
+            document.getElementById('dashPhoneNumber').value = meta.phone_number || '';
+            
+            document.getElementById('dashBio').value = meta.bio || '';
+            document.getElementById('dashStreetAddress').value = meta.street_address || '';
+            document.getElementById('dashCity').value = meta.city || '';
+            document.getElementById('dashCountry').value = meta.country || '';
+            document.getElementById('dashPostalCode').value = meta.postal_code || '';
+            document.getElementById('dashNin').value = meta.nin || '';
+            document.getElementById('dashBvn').value = meta.bvn || '';
+        }
+
         async function handleSignIn(e) {
             e.preventDefault();
             const email = document.getElementById('signinEmail').value.trim();
@@ -275,8 +309,11 @@
 
             successEl.innerText = 'Signed in successfully!';
             setTimeout(() => {
-                window.location.href = 'index.html';
-            }, 500);
+                if (data.session && data.session.user) {
+                    showDashboard(data.session.user);
+                    successEl.innerText = '';
+                }
+            }, 600);
         }
 
         async function handleSignUp(e) {
@@ -287,20 +324,12 @@
             const email = document.getElementById('emailAddress').value.trim();
             const password = document.getElementById('signupPassword').value.trim();
             
-            const bio = document.getElementById('bio').value.trim();
-            const streetAddress = document.getElementById('streetAddress').value.trim();
-            const city = document.getElementById('city').value.trim();
-            const country = document.getElementById('country').value.trim();
-            const postalCode = document.getElementById('postalCode').value.trim();
-            const nin = document.getElementById('nin').value.trim();
-            const bvn = document.getElementById('bvn').value.trim();
-
             const errorEl = document.getElementById('errorContainer');
             const successEl = document.getElementById('successContainer');
             errorEl.innerText = '';
             successEl.innerText = '';
 
-            // Register user with Supabase Auth, embedding all profile fields into options.data metadata
+            // Register user with Supabase Auth using basic information only
             const { data, error } = await supabaseClient.auth.signUp({
                 email: email,
                 password: password,
@@ -308,14 +337,7 @@
                     data: {
                         full_name: fullName,
                         username: username,
-                        phone_number: phone,
-                        bio: bio,
-                        street_address: streetAddress,
-                        city: city,
-                        country: country,
-                        postal_code: postalCode,
-                        nin: nin,
-                        bvn: bvn
+                        phone_number: phone
                     }
                 }
             });
@@ -325,10 +347,61 @@
                 return;
             }
 
-            successEl.innerText = 'Account and profile details saved successfully!';
+            successEl.innerText = 'Account created successfully! Please sign in.';
             setTimeout(() => {
-                window.location.href = 'index.html';
-            }, 1000);
+                switchTab('signin');
+                successEl.innerText = '';
+            }, 1200);
+        }
+
+        async function handleUpdateProfile(e) {
+            e.preventDefault();
+            const errorEl = document.getElementById('errorContainer');
+            const successEl = document.getElementById('successContainer');
+            errorEl.innerText = '';
+            successEl.innerText = '';
+
+            const fullName = document.getElementById('dashFullName').value.trim();
+            const username = document.getElementById('dashUsername').value.trim();
+            const phone = document.getElementById('dashPhoneNumber').value.trim();
+            
+            const bio = document.getElementById('dashBio').value.trim();
+            const streetAddress = document.getElementById('dashStreetAddress').value.trim();
+            const city = document.getElementById('dashCity').value.trim();
+            const country = document.getElementById('dashCountry').value.trim();
+            const postalCode = document.getElementById('dashPostalCode').value.trim();
+            const nin = document.getElementById('dashNin').value.trim();
+            const bvn = document.getElementById('dashBvn').value.trim();
+
+            const { data, error } = await supabaseClient.auth.updateUser({
+                data: {
+                    full_name: fullName,
+                    username: username,
+                    phone_number: phone,
+                    bio: bio,
+                    street_address: streetAddress,
+                    city: city,
+                    country: country,
+                    postal_code: postalCode,
+                    nin: nin,
+                    bvn: bvn
+                }
+            });
+
+            if (error) {
+                errorEl.innerText = error.message;
+                return;
+            }
+
+            successEl.innerText = 'Profile settings updated successfully!';
+            setTimeout(() => {
+                successEl.innerText = '';
+            }, 2000);
+        }
+
+        async function handleSignOut() {
+            await supabaseClient.auth.signOut();
+            window.location.reload();
         }
     </script>
 </body>
