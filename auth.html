@@ -17,16 +17,16 @@
         }
         * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
         body { background: var(--bg-main); color: var(--text-main); display: flex; justify-content: center; align-items: center; min-height: 100vh; padding: 20px; }
-        .auth-container { background: var(--card-bg); backdrop-filter: blur(12px); border: 1px solid var(--border-color); padding: 40px; border-radius: 20px; width: 100%; max-width: 450px; box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5), 0 10px 10px -5px rgba(0, 0, 0, 0.4); }
+        .auth-container { background: var(--card-bg); backdrop-filter: blur(12px); border: 1px solid var(--border-color); padding: 40px; border-radius: 20px; width: 100%; max-width: 450px; box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5); }
         .tab-switcher { display: flex; margin-bottom: 30px; border: 1px solid var(--border-color); border-radius: 10px; overflow: hidden; background: rgba(15, 23, 42, 0.6); }
         .tab-btn { flex: 1; padding: 12px; background: transparent; border: none; color: var(--text-muted); font-weight: bold; cursor: pointer; transition: 0.3s; }
         .tab-btn.active { background: var(--primary-color); color: #fff; box-shadow: 0 4px 14px rgba(37, 99, 235, 0.4); }
         .form-group { margin-bottom: 18px; }
         .form-group label { display: block; font-size: 13px; color: var(--text-muted); margin-bottom: 6px; font-weight: 500; }
-        .form-group input { width: 100%; padding: 12px; background: rgba(15, 23, 42, 0.8); border: 1px solid var(--border-color); color: var(--text-main); border-radius: 8px; outline: none; font-size: 14px; transition: border-color 0.2s, box-shadow 0.2s; }
+        .form-group input { width: 100%; padding: 12px; background: rgba(15, 23, 42, 0.8); border: 1px solid var(--border-color); color: var(--text-main); border-radius: 8px; outline: none; font-size: 14px; }
         .form-group input:focus { border-color: var(--primary-color); box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.25); }
         .btn-submit { width: 100%; padding: 14px; background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%); color: #fff; border: none; border-radius: 8px; font-weight: bold; font-size: 15px; cursor: pointer; margin-top: 10px; transition: all 0.2s ease-in-out; box-shadow: 0 4px 14px rgba(37, 99, 235, 0.4); }
-        .btn-submit:hover { background: linear-gradient(135deg, #1d4ed8 0%, #1e40af 100%); box-shadow: 0 6px 20px rgba(37, 99, 235, 0.6); transform: translateY(-1px); }
+        .btn-submit:hover { opacity: 0.9; }
         .hidden { display: none; }
         .error-msg { color: #f87171; font-size: 13px; margin-bottom: 15px; text-align: center; }
         .success-msg { color: #4ade80; font-size: 13px; margin-bottom: 15px; text-align: center; }
@@ -89,17 +89,10 @@
 
         let codeSent = false;
 
-        window.addEventListener('DOMContentLoaded', async () => {
+        window.addEventListener('DOMContentLoaded', () => {
             const urlParams = new URLSearchParams(window.location.search);
-            const mode = urlParams.get('mode');
-            if (mode === 'signup') {
+            if (urlParams.get('mode') === 'signup') {
                 switchTab('signup');
-            }
-
-            // Check if user is already logged in
-            const { data: { session } } = await supabaseClient.auth.getSession();
-            if (session) {
-                window.location.href = 'index.html';
             }
         });
 
@@ -133,7 +126,6 @@
             successEl.innerText = '';
 
             if (!codeSent) {
-                // Step 1: Request OTP code to be emailed
                 const { error } = await supabaseClient.auth.signInWithOtp({ email: email });
                 if (error) {
                     errorEl.innerText = error.message;
@@ -145,7 +137,6 @@
                 document.getElementById('otpGroup').classList.remove('hidden');
                 document.getElementById('signinBtn').innerText = 'Verify & Sign In';
             } else {
-                // Step 2: Verify the OTP code
                 const token = document.getElementById('signinOtp').value.trim();
                 const { data, error } = await supabaseClient.auth.verifyOtp({
                     email: email,
@@ -176,11 +167,7 @@
                 email: email,
                 password: password,
                 options: {
-                    data: {
-                        full_name: fullName,
-                        username: username,
-                        phone: phone
-                    },
+                    data: { full_name: fullName, username: username, phone: phone },
                     emailRedirectTo: 'https://mrjosh001.github.io/auth.html'
                 }
             });
