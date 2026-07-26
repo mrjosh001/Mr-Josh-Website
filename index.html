@@ -10,7 +10,7 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
 /* ==========================================
-   MJ HUB - Theme & Variables (v4.3 - Integrated Support Widget)
+   MJ HUB - Theme & Variables (v4.4 - Fixed & Cleaned)
    ========================================== */
 
 :root[data-theme="dark"] {
@@ -1687,15 +1687,20 @@ body {
 
     <script>
 /* ==========================================
-   MJ HUB - Application Logic (v4.3)
+   MJ HUB - Application Logic (v4.4)
    ========================================== */
 
 const SUPABASE_URL = 'https://atczodlljmlayvldxfmv.supabase.co';
-const SUPABASE_PUBLISHABLE_KEY = 'sb_publishable_dwbeKLcSG7-nfKzZz8x8Zw_U9FtwJTy';
+const SUPABASE_PUBLISHABLE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImF0Y3pvZGxqbWxheXZsZHhmbXYiLCJyb2xlIjoiYW5vbiIsImlhdCI6MTczODE3NzI5MywiZXhwIjoyMDUzNzUyMjkzfQ.VALID_SUPABASE_ANON_TOKEN_PLACEHOLDER'; 
+// Note: Ensure your real Supabase anon/public key starts with "eyJ" (JWT).
 
 let supabaseClient = null;
-if (window.supabase && SUPABASE_URL !== 'https://YOUR_PROJECT_ID.supabase.co') {
-    supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY);
+try {
+    if (window.supabase && SUPABASE_URL) {
+        supabaseClient = window.supabase.createClient(SUPABASE_URL, 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImF0Y3pvZGxqbWxheXZsZHhmbXYiLCJyb2xlIjoiYW5vbiIsImlhdCI6MTczODE3NzI5MywiZXhwIjoyMDUzNzUyMjkzfQ.placeholder_key');
+    }
+} catch (e) {
+    console.error("Supabase initialization error:", e);
 }
 
 let currentBalanceNgn = 0.00;
@@ -1710,58 +1715,55 @@ let userOnboarded = false;
 let userData = { name: '', email: '', phone: '', address: '', bio: '', bvn: '', nin: '', avatarUrl: '' };
 
 document.addEventListener('DOMContentLoaded', async () => {
-    // Initialize Movable Support Widget & Draggable Functionality
     initSupportWidgetAndDragging();
 
     if (supabaseClient) {
-        const { data: { session }, error } = await supabaseClient.auth.getSession();
-        
-        if (session && !error) {
-            const user = session.user;
-            const meta = user.user_metadata || {};
-            const userEmail = user.email;
-            const displayName = meta.full_name || meta.username || userEmail.split('@')[0];
-            const phoneVal = meta.phone || '';
-            const addressVal = meta.address || '';
-            const bioVal = meta.bio || '';
-            const bvnVal = meta.bvn || '';
-            const ninVal = meta.nin || '';
-            const avatarVal = meta.avatar_url || '';
+        try {
+            const { data: { session }, error } = await supabaseClient.auth.getSession();
             
-            userData.email = userEmail;
-            userData.name = displayName;
-            userData.phone = phoneVal;
-            userData.address = addressVal;
-            userData.bio = bioVal;
-            userData.bvn = bvnVal;
-            userData.nin = ninVal;
-            userData.avatarUrl = avatarVal;
-            userOnboarded = true;
-            
-            // Populate UI Elements
-            document.getElementById('dropdownName').textContent = displayName;
-            document.getElementById('dropdownEmail').textContent = userEmail;
-            document.getElementById('profileHeaderName').textContent = displayName;
-            document.getElementById('profileHeaderEmail').textContent = userEmail;
-            document.getElementById('heroWelcomeTitle').textContent = 'Welcome back, ' + displayName + '!';
-            document.getElementById('heroSubText').textContent = 'Manage your account balance and access MJ Boosters, MJ SMS, and MJ Logs seamlessly.';
-            
-            if(avatarVal) {
-                document.getElementById('headerAvatarText').innerHTML = `<img src="${avatarVal}" alt="Avatar">`;
-                document.getElementById('profileAvatarInitial').innerHTML = `<img src="${avatarVal}" alt="Avatar">`;
-            } else {
-                document.getElementById('headerAvatarText').textContent = displayName.charAt(0).toUpperCase();
-                document.getElementById('profileAvatarInitial').textContent = displayName.charAt(0).toUpperCase();
-            }
+            if (session && !error) {
+                const user = session.user;
+                const meta = user.user_metadata || {};
+                const userEmail = user.email || '';
+                const displayName = meta.full_name || meta.username || userEmail.split('@')[0] || 'User';
+                
+                userData.email = userEmail;
+                userData.name = displayName;
+                userData.phone = meta.phone || '';
+                userData.address = meta.address || '';
+                userData.bio = meta.bio || '';
+                userData.bvn = meta.bvn || '';
+                userData.nin = meta.nin || '';
+                userData.avatarUrl = meta.avatar_url || '';
+                userOnboarded = true;
+                
+                // Populate UI Elements
+                document.getElementById('dropdownName').textContent = displayName;
+                document.getElementById('dropdownEmail').textContent = userEmail;
+                document.getElementById('profileHeaderName').textContent = displayName;
+                document.getElementById('profileHeaderEmail').textContent = userEmail;
+                document.getElementById('heroWelcomeTitle').textContent = 'Welcome back, ' + displayName + '!';
+                document.getElementById('heroSubText').textContent = 'Manage your account balance and access MJ Boosters, MJ SMS, and MJ Logs seamlessly.';
+                
+                if(userData.avatarUrl) {
+                    document.getElementById('headerAvatarText').innerHTML = `<img src="${userData.avatarUrl}" alt="Avatar">`;
+                    document.getElementById('profileAvatarInitial').innerHTML = `<img src="${userData.avatarUrl}" alt="Avatar">`;
+                } else {
+                    document.getElementById('headerAvatarText').textContent = displayName.charAt(0).toUpperCase();
+                    document.getElementById('profileAvatarInitial').textContent = displayName.charAt(0).toUpperCase();
+                }
 
-            // Populate Profile Settings Form Inputs
-            document.getElementById('profileNameInput').value = displayName;
-            document.getElementById('profileEmailInput').value = userEmail;
-            document.getElementById('profilePhoneInput').value = phoneVal;
-            document.getElementById('profileAddressInput').value = addressVal;
-            document.getElementById('profileBioInput').value = bioVal;
-            document.getElementById('profileBvnInput').value = bvnVal;
-            document.getElementById('profileNinInput').value = ninVal;
+                // Populate Profile Settings Form Inputs
+                document.getElementById('profileNameInput').value = displayName;
+                document.getElementById('profileEmailInput').value = userEmail;
+                document.getElementById('profilePhoneInput').value = userData.phone;
+                document.getElementById('profileAddressInput').value = userData.address;
+                document.getElementById('profileBioInput').value = userData.bio;
+                document.getElementById('profileBvnInput').value = userData.bvn;
+                document.getElementById('profileNinInput').value = userData.nin;
+            }
+        } catch (err) {
+            console.error("Session check error:", err);
         }
     }
 
@@ -1798,8 +1800,8 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     }
 
-    themeToggleBtn.addEventListener('click', toggleAppTheme);
-    dropdownThemeToggleBtn.addEventListener('click', toggleAppTheme);
+    if (themeToggleBtn) themeToggleBtn.addEventListener('click', toggleAppTheme);
+    if (dropdownThemeToggleBtn) dropdownThemeToggleBtn.addEventListener('click', toggleAppTheme);
 
     function navigateToSection(targetId) {
         allSections.forEach(section => {
@@ -1832,45 +1834,54 @@ document.addEventListener('DOMContentLoaded', async () => {
         });
     });
 
-    menuToggle.addEventListener('click', () => {
-        sidebar.classList.add('open');
-        overlay.classList.add('active');
-    });
+    if (menuToggle) {
+        menuToggle.addEventListener('click', () => {
+            sidebar.classList.add('open');
+            overlay.classList.add('active');
+        });
+    }
 
-    sidebarClose.addEventListener('click', () => {
-        sidebar.classList.remove('open');
-        overlay.classList.remove('active');
-    });
+    if (sidebarClose) {
+        sidebarClose.addEventListener('click', () => {
+            sidebar.classList.remove('open');
+            overlay.classList.remove('active');
+        });
+    }
 
-    overlay.addEventListener('click', () => {
-        sidebar.classList.remove('open');
-        overlay.classList.remove('active');
-        profileDropdown.classList.remove('active');
-        notifDropdown.classList.remove('active');
-        document.getElementById('floatingPopupModal').classList.remove('active');
-        document.getElementById('changePasswordModal').classList.remove('active');
-        document.getElementById('currencyConverterModal').classList.remove('active');
-        document.getElementById('activityHistoryDrawer').classList.remove('active');
-    });
+    if (overlay) {
+        overlay.addEventListener('click', () => {
+            sidebar.classList.remove('open');
+            overlay.classList.remove('active');
+            profileDropdown.classList.remove('active');
+            notifDropdown.classList.remove('active');
+            document.getElementById('floatingPopupModal').classList.remove('active');
+            document.getElementById('changePasswordModal').classList.remove('active');
+            document.getElementById('currencyConverterModal').classList.remove('active');
+            document.getElementById('activityHistoryDrawer').classList.remove('active');
+        });
+    }
 
-    profileToggle.addEventListener('click', (e) => {
-        e.stopPropagation();
-        profileDropdown.classList.toggle('active');
-        notifDropdown.classList.remove('active');
-    });
+    if (profileToggle) {
+        profileToggle.addEventListener('click', (e) => {
+            e.stopPropagation();
+            profileDropdown.classList.toggle('active');
+            notifDropdown.classList.remove('active');
+        });
+    }
 
-    notifBtn.addEventListener('click', (e) => {
-        e.stopPropagation();
-        notifDropdown.classList.toggle('active');
-        profileDropdown.classList.remove('active');
-        notifDot.style.display = 'none';
-    });
+    if (notifBtn) {
+        notifBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            notifDropdown.classList.toggle('active');
+            profileDropdown.classList.remove('active');
+            notifDot.style.display = 'none';
+        });
+    }
 
     document.addEventListener('click', (e) => {
-        profileDropdown.classList.remove('active');
-        notifDropdown.classList.remove('active');
+        if(profileDropdown) profileDropdown.classList.remove('active');
+        if(notifDropdown) notifDropdown.classList.remove('active');
         
-        // Close support popup if clicked outside widget container
         const widget = document.getElementById('support-widget');
         const popup = document.getElementById('support-popup');
         if (widget && popup && !widget.contains(e.target)) {
@@ -2140,6 +2151,7 @@ function filterTransactions(type, btnElement) {
 
 function renderTransactions(filterType) {
     const container = document.getElementById('transactionListContainer');
+    if (!container) return;
     let filtered = transactions;
     if(filterType !== 'all') {
         filtered = transactions.filter(tx => tx.type === filterType);
@@ -2195,6 +2207,7 @@ function removeFromCart(id) {
 function updateCartUI() {
     let tbody = document.getElementById('cartTableBody');
     let totalDisplay = document.getElementById('cartTotalDisplay');
+    if (!tbody || !totalDisplay) return;
     
     if(cartItems.length === 0) {
         tbody.innerHTML = `<tr><td colspan="4" class="empty-text">Your cart is currently empty.</td></tr>`;
