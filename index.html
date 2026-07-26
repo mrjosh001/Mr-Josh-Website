@@ -6,9 +6,11 @@
     <title>MJ HUB - Dashboard</title>
     <!-- Include Supabase Client SDK -->
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <!-- FontAwesome for Support Widget Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
 /* ==========================================
-   MJ HUB - Theme & Variables (v4.2 - Fixed Icons & Draggable Support Button)
+   MJ HUB - Theme & Variables (v4.3 - Integrated Support Widget)
    ========================================== */
 
 :root[data-theme="dark"] {
@@ -21,6 +23,8 @@
     --border-color: #1e3a8a;
     --sidebar-width: 280px;
     --nav-bg: #121824;
+    --whatsapp-green: #25d366;
+    --support-bg: #121824;
 }
 
 :root[data-theme="light"] {
@@ -33,6 +37,8 @@
     --border-color: #bfdbfe;
     --sidebar-width: 280px;
     --nav-bg: #ffffff;
+    --whatsapp-green: #25d366;
+    --support-bg: #ffffff;
 }
 
 * {
@@ -663,43 +669,183 @@ body {
 .cart-total-amount { font-size: 20px; font-weight: 800; color: var(--primary-color); }
 
 /* ==========================================
-   DRAGGABLE FLOATING SUPPORT BUTTON (v4.2 Update)
+   INTERACTIVE SUPPORT WIDGET STYLES (v4.3 Update)
    ========================================== */
 
-.support-float-btn {
+.support-widget-container {
     position: fixed;
     bottom: 90px;
-    right: 25px;
-    background: var(--primary-color);
-    color: #fff;
-    width: 60px;
-    height: 60px;
+    right: 24px;
+    z-index: 1400;
+    touch-action: none;
+    user-select: none;
+}
+
+/* Support Popup Card */
+.support-card {
+    position: absolute;
+    bottom: 75px;
+    right: 0;
+    width: 340px;
+    background: var(--support-bg);
+    border: 1px solid var(--border-color);
+    border-radius: 20px;
+    box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.3), 0 8px 10px -6px rgba(0, 0, 0, 0.2);
+    overflow: hidden;
+    opacity: 0;
+    transform: translateY(20px) scale(0.95);
+    pointer-events: none;
+    transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.support-card.active {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+    pointer-events: auto;
+}
+
+/* Card Header */
+.support-header {
+    background-color: var(--primary-color);
+    color: white;
+    padding: 24px 20px;
+}
+
+.support-header h3 {
+    margin: 0 0 6px 0;
+    font-size: 20px;
+    font-weight: 700;
+}
+
+.support-header p {
+    margin: 0 0 16px 0;
+    font-size: 13px;
+    color: #e0e7ff;
+}
+
+/* Status Badge */
+.status-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12px;
+    color: #ffffff;
+    background: rgba(255, 255, 255, 0.15);
+    padding: 6px 12px;
+    border-radius: 20px;
+}
+
+.status-dot {
+    width: 8px;
+    height: 8px;
+    background-color: var(--whatsapp-green);
+    border-radius: 50%;
+    box-shadow: 0 0 0 0 rgba(37, 211, 102, 0.5);
+    animation: pulse-green 2s infinite;
+}
+
+@keyframes pulse-green {
+    0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(37, 211, 102, 0.7); }
+    70% { transform: scale(1); box-shadow: 0 0 0 6px rgba(37, 211, 102, 0); }
+    100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(37, 211, 102, 0); }
+}
+
+/* Channel List */
+.support-channels {
+    padding: 12px;
+}
+
+.channel-item {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 14px 12px;
+    border-radius: 12px;
+    text-decoration: none;
+    transition: background-color 0.2s ease;
+}
+
+.channel-item:hover {
+    background-color: var(--border-color);
+}
+
+.channel-icon {
+    width: 44px;
+    height: 44px;
     border-radius: 50%;
     display: flex;
     align-items: center;
     justify-content: center;
-    text-decoration: none;
-    box-shadow: 0 4px 15px rgba(37, 99, 235, 0.4);
-    z-index: 1400;
-    cursor: grab;
-    touch-action: none;
-    user-select: none;
-    transition: transform 0.1s ease, background-color 0.3s ease;
+    font-size: 22px;
+    flex-shrink: 0;
 }
 
-.support-float-btn:active {
+.channel-icon.whatsapp {
+    background-color: #dcfce7;
+    color: var(--whatsapp-green);
+}
+
+.channel-info h4 {
+    margin: 0 0 2px 0;
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--text-main);
+}
+
+.channel-info p {
+    margin: 0;
+    font-size: 12px;
+    color: var(--text-muted);
+}
+
+/* Floating Trigger Button */
+.support-toggle-btn {
+    position: relative;
+    width: 60px;
+    height: 60px;
+    background-color: var(--primary-color);
+    border: none;
+    border-radius: 50%;
+    cursor: grab;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 4px 15px rgba(37, 99, 235, 0.4);
+    transition: transform 0.1s ease, background-color 0.2s ease;
+}
+
+.support-toggle-btn:active {
     cursor: grabbing;
     transform: scale(0.95);
 }
 
-.support-float-btn:hover {
-    background: #1d4ed8;
+.support-toggle-btn:hover {
+    background-color: var(--primary-hover);
 }
 
-.support-float-btn svg {
-    width: 28px;
-    height: 28px;
-    fill: currentColor;
+.support-toggle-btn i {
+    color: white;
+    font-size: 24px;
+    transition: transform 0.3s ease;
+    pointer-events: none;
+}
+
+.support-widget-container.open .support-toggle-btn i {
+    transform: rotate(90deg);
+}
+
+.help-tag {
+    position: absolute;
+    top: -6px;
+    right: -6px;
+    background-color: #f43f5e;
+    color: white;
+    font-size: 10px;
+    font-weight: 700;
+    padding: 3px 8px;
+    border-radius: 10px;
+    letter-spacing: 0.5px;
+    box-shadow: 0 2px 5px rgba(244, 63, 94, 0.3);
     pointer-events: none;
 }
 
@@ -939,7 +1085,7 @@ body {
 .notif-title { font-weight: 700; color: var(--text-main); margin-bottom: 2px; }
 .notif-time { font-size: 11px; color: var(--text-muted); }
 
-/* --- Mobile Bottom Navigation Bar (Inline SVG Icons to Fix Question Mark Bugs) --- */
+/* --- Mobile Bottom Navigation Bar --- */
 .bottom-nav {
     position: fixed;
     bottom: 0;
@@ -1329,15 +1475,37 @@ body {
 
     </main>
 
-    <!-- DRAGGABLE FLOATING SUPPORT BUTTON (v4.2 Fix) -->
-    <a href="support.html" class="support-float-btn" id="draggableSupportBtn" aria-label="Contact Support" title="Drag to move or click to contact support">
-        <svg viewBox="0 0 24 24">
-            <path d="M12 2C6.48 2 2 6.48 2 12c0 1.84.5 3.56 1.37 5.04L2.45 20.45c-.39.39-.39 1.02 0 1.41.39.39 1.02.39 1.41 0l3.41-3.41C8.44 19.5 10.16 20 12 20c5.52 0 10-4.48 10-10S17.52 2 12 2zm0 16c-3.31 0-6-2.69-6-6s2.69-6 6-6 6 2.69 6 6-2.69 6-6 6z"/>
-            <circle cx="8.5" cy="12" r="1.5"/>
-            <circle cx="12" cy="12" r="1.5"/>
-            <circle cx="15.5" cy="12" r="1.5"/>
-        </svg>
-    </a>
+    <!-- INTERACTIVE SUPPORT WIDGET (v4.3 Update with Draggable & Popup Support) -->
+    <div class="support-widget-container" id="supportWidget">
+        <!-- Support Popup Card -->
+        <div class="support-card" id="supportCard">
+            <div class="support-header">
+                <h3>Need help?</h3>
+                <p>We typically reply in minutes</p>
+                <div class="status-badge">
+                    <span class="status-dot"></span>
+                    Support online 24/7
+                </div>
+            </div>
+            <div class="support-channels">
+                <a href="https://wa.me/qr/XM6ORO7UCYTXI1" target="_blank" class="channel-item">
+                    <div class="channel-icon whatsapp">
+                        <i class="fa-brands fa-whatsapp"></i>
+                    </div>
+                    <div class="channel-info">
+                        <h4>WhatsApp</h4>
+                        <p>Chat with us on WhatsApp</p>
+                    </div>
+                </a>
+            </div>
+        </div>
+
+        <!-- Floating Action / Toggle Button -->
+        <button class="support-toggle-btn" id="supportToggle" aria-label="Toggle Support Menu" title="Drag to move or click for help">
+            <span class="help-tag">HELP</span>
+            <i class="fa-solid fa-headset" id="toggleIcon"></i>
+        </button>
+    </div>
 
     <!-- CHANGE PASSWORD MODAL -->
     <div class="currency-modal" id="changePasswordModal">
@@ -1441,7 +1609,7 @@ body {
         </div>
     </div>
 
-    <!-- Mobile Bottom Navigation Bar (Using robust Inline SVG Icons to completely fix missing image/question-mark bugs) -->
+    <!-- Mobile Bottom Navigation Bar -->
     <nav class="bottom-nav">
         <button class="nav-item active" onclick="switchSection('home')">
             <svg viewBox="0 0 24 24"><path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"/></svg>
@@ -1466,7 +1634,7 @@ body {
 
     <script>
 /* ==========================================
-   MJ HUB - Application Logic (v4.2 - Fully Draggable Support & Fixed Bottom Nav)
+   MJ HUB - Application Logic (v4.3 - Support Widget & Dragging)
    ========================================== */
 
 const SUPABASE_URL = 'https://atczodlljmlayvldxfmv.supabase.co';
@@ -1489,8 +1657,8 @@ let userOnboarded = false;
 let userData = { name: '', email: '', phone: '', address: '', bio: '', bvn: '', nin: '', avatarUrl: '' };
 
 document.addEventListener('DOMContentLoaded', async () => {
-    // Initialize Draggable Support Button functionality
-    initDraggableSupportButton();
+    // Initialize Support Widget & Draggable Functionality
+    initSupportWidgetAndDragging();
 
     if (supabaseClient) {
         const { data: { session }, error } = await supabaseClient.auth.getSession();
@@ -1645,20 +1813,30 @@ document.addEventListener('DOMContentLoaded', async () => {
         notifDot.style.display = 'none';
     });
 
-    document.addEventListener('click', () => {
+    document.addEventListener('click', (e) => {
         profileDropdown.classList.remove('active');
         notifDropdown.classList.remove('active');
+        
+        // Close support widget if clicked outside
+        const widget = document.getElementById('supportWidget');
+        const card = document.getElementById('supportCard');
+        if (widget && card && !widget.contains(e.target)) {
+            card.classList.remove('active');
+            widget.classList.remove('open');
+        }
     });
 
     renderTransactions('all');
 });
 
 /* ==========================================
-   DRAGGABLE SUPPORT BUTTON LOGIC (v4.2)
+   SUPPORT WIDGET & DRAGGABLE LOGIC (v4.3)
    ========================================== */
-function initDraggableSupportButton() {
-    const btn = document.getElementById('draggableSupportBtn');
-    if (!btn) return;
+function initSupportWidgetAndDragging() {
+    const widget = document.getElementById('supportWidget');
+    const toggleBtn = document.getElementById('supportToggle');
+    const card = document.getElementById('supportCard');
+    if (!widget || !toggleBtn || !card) return;
 
     let isDragging = false;
     let startX, startY, initialX, initialY;
@@ -1674,15 +1852,15 @@ function initDraggableSupportButton() {
         startX = clientX;
         startY = clientY;
 
-        const rect = btn.getBoundingClientRect();
+        const rect = widget.getBoundingClientRect();
         initialX = rect.left;
         initialY = rect.top;
 
-        btn.style.position = 'fixed';
-        btn.style.bottom = 'auto';
-        btn.style.right = 'auto';
-        btn.style.left = initialX + 'px';
-        btn.style.top = initialY + 'px';
+        widget.style.position = 'fixed';
+        widget.style.bottom = 'auto';
+        widget.style.right = 'auto';
+        widget.style.left = initialX + 'px';
+        widget.style.top = initialY + 'px';
     }
 
     function drag(e) {
@@ -1698,41 +1876,41 @@ function initDraggableSupportButton() {
         let newX = initialX + dx;
         let newY = initialY + dy;
 
-        // Keep within window bounds
-        const maxX = window.innerWidth - btn.offsetWidth;
-        const maxY = window.innerHeight - btn.offsetHeight;
+        const maxX = window.innerWidth - widget.offsetWidth;
+        const maxY = window.innerHeight - widget.offsetHeight;
 
         newX = Math.max(10, Math.min(newX, maxX - 10));
         newY = Math.max(70, Math.min(newY, maxY - 70));
 
-        btn.style.left = newX + 'px';
-        btn.style.top = newY + 'px';
+        widget.style.left = newX + 'px';
+        widget.style.top = newY + 'px';
     }
 
     function dragEnd(e) {
         if (!isDragging) return;
         isDragging = false;
-
         if (hasMoved) {
-            // Prevent accidental click opening link if dragged
             e.preventDefault();
         }
     }
 
-    btn.addEventListener('mousedown', dragStart);
+    toggleBtn.addEventListener('mousedown', dragStart);
     document.addEventListener('mousemove', drag);
     document.addEventListener('mouseup', dragEnd);
 
-    btn.addEventListener('touchstart', dragStart, { passive: false });
+    toggleBtn.addEventListener('touchstart', dragStart, { passive: false });
     document.addEventListener('touchmove', drag, { passive: false });
     document.addEventListener('touchend', dragEnd);
 
-    // Ensure clicking the button works normally when not dragged
-    btn.addEventListener('click', (e) => {
+    // Toggle support popup card on click (if not dragged)
+    toggleBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
         if (hasMoved) {
-            e.preventDefault();
             hasMoved = false;
+            return;
         }
+        const isOpen = card.classList.toggle('active');
+        widget.classList.toggle('open', isOpen);
     });
 }
 
