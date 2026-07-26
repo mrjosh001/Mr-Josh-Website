@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>MJ HUB - Authentication</title>
+    <title>MJ HUB - Authentication & Profile Settings</title>
     <!-- Supabase CDN Script -->
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <style>
@@ -18,19 +18,21 @@
         }
         * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
         body { background: var(--bg-main); color: var(--text-main); display: flex; justify-content: center; align-items: center; min-height: 100vh; padding: 20px; }
-        .auth-container { background: var(--card-bg); backdrop-filter: blur(12px); border: 1px solid var(--border-color); padding: 40px; border-radius: 20px; width: 100%; max-width: 450px; box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5); }
+        .auth-container { background: var(--card-bg); backdrop-filter: blur(12px); border: 1px solid var(--border-color); padding: 40px; border-radius: 20px; width: 100%; max-width: 500px; box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5); max-height: 90vh; overflow-y: auto; }
         .tab-switcher { display: flex; margin-bottom: 30px; border: 1px solid var(--border-color); border-radius: 10px; overflow: hidden; background: rgba(15, 23, 42, 0.6); }
         .tab-btn { flex: 1; padding: 12px; background: transparent; border: none; color: var(--text-muted); font-weight: bold; cursor: pointer; transition: 0.3s; }
         .tab-btn.active { background: var(--primary-color); color: #fff; box-shadow: 0 4px 14px rgba(37, 99, 235, 0.4); }
         .form-group { margin-bottom: 18px; }
         .form-group label { display: block; font-size: 13px; color: var(--text-muted); margin-bottom: 6px; font-weight: 500; }
-        .form-group input { width: 100%; padding: 12px; background: rgba(15, 23, 42, 0.8); border: 1px solid var(--border-color); color: var(--text-main); border-radius: 8px; outline: none; font-size: 14px; }
-        .form-group input:focus { border-color: var(--primary-color); box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.25); }
+        .form-group input, .form-group textarea { width: 100%; padding: 12px; background: rgba(15, 23, 42, 0.8); border: 1px solid var(--border-color); color: var(--text-main); border-radius: 8px; outline: none; font-size: 14px; }
+        .form-group textarea { resize: vertical; min-height: 80px; }
+        .form-group input:focus, .form-group textarea:focus { border-color: var(--primary-color); box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.25); }
         .btn-submit { width: 100%; padding: 14px; background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%); color: #fff; border: none; border-radius: 8px; font-weight: bold; font-size: 15px; cursor: pointer; margin-top: 10px; transition: all 0.2s ease-in-out; box-shadow: 0 4px 14px rgba(37, 99, 235, 0.4); }
         .btn-submit:hover { opacity: 0.9; }
         .hidden { display: none; }
         .error-msg { color: #f87171; font-size: 13px; margin-bottom: 15px; text-align: center; }
         .success-msg { color: #4ade80; font-size: 13px; margin-bottom: 15px; text-align: center; }
+        .section-title { font-size: 14px; color: var(--text-muted); border-bottom: 1px solid var(--border-color); padding-bottom: 6px; margin: 20px 0 15px 0; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; }
     </style>
 </head>
 <body>
@@ -57,29 +59,61 @@
             <button type="submit" class="btn-submit">Sign In</button>
         </form>
 
-        <!-- Sign Up Form -->
+        <!-- Sign Up Form (Combined Signup & Profile Settings Metadata Entry) -->
         <form id="signupForm" class="hidden" onsubmit="handleSignUp(event)">
+            <div class="section-title">Basic Information</div>
             <div class="form-group">
                 <label>Full Name</label>
-                <input type="text" id="signupName" required placeholder="John Doe">
+                <input type="text" id="fullName" required placeholder="Mr Josh">
             </div>
             <div class="form-group">
                 <label>Username</label>
-                <input type="text" id="signupUsername" required placeholder="johndoe123">
-            </div>
-            <div class="form-group">
-                <label>Phone Number</label>
-                <input type="tel" id="signupPhone" required placeholder="+234...">
+                <input type="text" id="username" required placeholder="Mrjosh">
             </div>
             <div class="form-group">
                 <label>Email Address</label>
-                <input type="email" id="signupEmail" required placeholder="name@example.com">
+                <input type="email" id="emailAddress" required placeholder="agaziejoseph0@gmail.com">
+            </div>
+            <div class="form-group">
+                <label>Phone Number</label>
+                <input type="tel" id="phoneNumber" required placeholder="09061607034">
             </div>
             <div class="form-group">
                 <label>Password</label>
                 <input type="password" id="signupPassword" required placeholder="••••••••">
             </div>
-            <button type="submit" class="btn-submit">Create Account</button>
+
+            <div class="section-title">Additional Profile Data</div>
+            <div class="form-group">
+                <label>Bio</label>
+                <textarea id="bio" placeholder="Tell us about yourself..."></textarea>
+            </div>
+            <div class="form-group">
+                <label>Street Address</label>
+                <input type="text" id="streetAddress" placeholder="123 Main Street">
+            </div>
+            <div class="form-group">
+                <label>City</label>
+                <input type="text" id="city" placeholder="Lagos">
+            </div>
+            <div class="form-group">
+                <label>Country</label>
+                <input type="text" id="country" placeholder="Nigeria">
+            </div>
+            <div class="form-group">
+                <label>Postal / ZIP Code</label>
+                <input type="text" id="postalCode" placeholder="100001">
+            </div>
+            <div class="form-group">
+                <label>NIN (Optional)</label>
+                <input type="text" id="nin" placeholder="11-digit National Identity Number">
+            </div>
+            <div class="form-group">
+                <label>BVN (Optional)</label>
+                <input type="text" id="bvn" placeholder="11-digit Bank Verification Number">
+            </div>
+
+            <button type="submit" id="saveProfileBtn" class="btn-submit">Create Account & Save Changes</button>
         </form>
     </div>
 
@@ -89,12 +123,33 @@
         const SUPABASE_PUBLISHABLE_KEY = 'sb_publishable_dwbeKLcSG7-nfKzZz8x8Zw_U9FtwJTy';
         const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY);
 
-        window.addEventListener('DOMContentLoaded', () => {
+        window.addEventListener('DOMContentLoaded', async () => {
             const urlParams = new URLSearchParams(window.location.search);
             if (urlParams.get('mode') === 'signup') {
                 switchTab('signup');
             }
+
+            // Check if user session already exists to preload profile settings dynamically
+            const { data: { session } } = await supabaseClient.auth.getSession();
+            if (session && session.user) {
+                loadExistingProfile(session.user);
+            }
         });
+
+        function loadExistingProfile(user) {
+            const meta = user.user_metadata || {};
+            document.getElementById('fullName').value = meta.full_name || '';
+            document.getElementById('username').value = meta.username || '';
+            document.getElementById('emailAddress').value = user.email || '';
+            document.getElementById('phoneNumber').value = meta.phone_number || '';
+            document.getElementById('bio').value = meta.bio || '';
+            document.getElementById('streetAddress').value = meta.street_address || '';
+            document.getElementById('city').value = meta.city || '';
+            document.getElementById('country').value = meta.country || '';
+            document.getElementById('postalCode').value = meta.postal_code || '';
+            document.getElementById('nin').value = meta.nin || '';
+            document.getElementById('bvn').value = meta.bvn || '';
+        }
 
         function switchTab(tab) {
             document.getElementById('errorContainer').innerText = '';
@@ -140,18 +195,26 @@
 
         async function handleSignUp(e) {
             e.preventDefault();
-            const fullName = document.getElementById('signupName').value.trim();
-            const username = document.getElementById('signupUsername').value.trim();
-            const phone = document.getElementById('signupPhone').value.trim();
-            const email = document.getElementById('signupEmail').value.trim();
+            const fullName = document.getElementById('fullName').value.trim();
+            const username = document.getElementById('username').value.trim();
+            const phone = document.getElementById('phoneNumber').value.trim();
+            const email = document.getElementById('emailAddress').value.trim();
             const password = document.getElementById('signupPassword').value.trim();
+            
+            const bio = document.getElementById('bio').value.trim();
+            const streetAddress = document.getElementById('streetAddress').value.trim();
+            const city = document.getElementById('city').value.trim();
+            const country = document.getElementById('country').value.trim();
+            const postalCode = document.getElementById('postalCode').value.trim();
+            const nin = document.getElementById('nin').value.trim();
+            const bvn = document.getElementById('bvn').value.trim();
+
             const errorEl = document.getElementById('errorContainer');
             const successEl = document.getElementById('successContainer');
             errorEl.innerText = '';
             successEl.innerText = '';
 
-            // Register user with Supabase Auth, embedding the initial fields into options.data metadata 
-            // and setting remaining profile fields as empty strings for new users to fill later.
+            // Register user with Supabase Auth, embedding all profile fields into options.data metadata
             const { data, error } = await supabaseClient.auth.signUp({
                 email: email,
                 password: password,
@@ -160,13 +223,13 @@
                         full_name: fullName,
                         username: username,
                         phone_number: phone,
-                        bio: '',
-                        street_address: '',
-                        city: '',
-                        country: '',
-                        postal_code: '',
-                        nin: '',
-                        bvn: ''
+                        bio: bio,
+                        street_address: streetAddress,
+                        city: city,
+                        country: country,
+                        postal_code: postalCode,
+                        nin: nin,
+                        bvn: bvn
                     }
                 }
             });
@@ -176,9 +239,9 @@
                 return;
             }
 
-            successEl.innerText = 'Account created successfully! Please sign in.';
+            successEl.innerText = 'Account and profile details saved successfully!';
             setTimeout(() => {
-                switchTab('signin');
+                window.location.href = 'index.html';
             }, 1000);
         }
     </script>
