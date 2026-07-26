@@ -1,47 +1,66 @@
-const User = require('./userModel'); // Adjust path to your user model file
-const bcrypt = require('bcrypt');
-const jwt = require('jsonwebtoken');
+import { createClient } from '@supabase/supabase-js';
+import bcrypt from 'bcrypt';
+import jwt from 'jsonwebtoken';
 
-// Secret key for JWT (use an environment variable in production: process.env.JWT_SECRET)
-const JWT_SECRET = 'your_super_secret_key_here';
+// Initialize Supabase client using environment variables
+const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_ANON_KEY);
+
+const JWT_SECRET = process.env.JWT_SECRET || 'your_super_secret_key_here';
 
 // --- SIGN UP ENDPOINT ---
 async function signup(req, res) {
     try {
         const { name, email, phone, password } = req.body;
 
-        // 1. Check if user already exists
-        const existingUser = await User.findOne({ email });
-        if (existingUser) {
-            return res.status(400).json({ error: 'Email is already registered.' });
-        }
-
-        // 2. Hash the password securely
-        const saltRounds = 10;
-        const hashedPassword = await bcrypt.hash(password, saltRounds);
-
-        // 3. Save the new user to the database
-        const newUser = new User({
-            name,
+        // 1. Sign up user with Supabase Auth (triggers email verification)
+        const { data: authData, error: authError } = await supabase.auth.signUp({
             email,
-            phone,
-            password: hashedPassword
+            password,
+            options: {
+                data: { full_name: name, phone }
+            }
         });
 
-        await newUser.save();
+        if (authError) {
+            return res.status(400).json({ error: authError.message });
+        }
 
-        // 4. Generate token immediately upon sign-up so the profile loads right away
-        const token = jwt.sign({ userId: newUser._id }, JWT_SECRET, { expiresIn: '1d' });
+        const userId = authData.user.id;
 
-        // 5. Return success message, token, and user details (including id)
+        // 2. Insert initial signup details into the public 'profiles' table for data persistence
+        const { error: profileError } = await supabase
+            .from('profiles')
+            .upsert([
+                {
+                    id: userId,
+                    full_name: name,
+                    email: email,
+                    phone_number: phone,
+                    bio: '',
+                    street_address: '',
+                    city: '',
+                    country: '',
+                    postal_code: '',
+                    nin: '',
+                    bvn: ''
+                }
+            ]);
+
+        if (profileError) {
+            return res.status(400).json({ error: profileError.message });
+        }
+
+        // 3. Generate internal token if needed for immediate session handling
+        const token = jwt.sign({ userId }, JWT_SECRET, { expiresIn: '1d' });
+
         res.status(201).json({
-            message: 'Account created successfully!',
+            message: 'Account created successfully! Please check your email for verification.',
             token,
             user: {
-                id: newUser._id,
-                name: newUser.name,
-                email: newUser.email,
-                phone: newUser.phone
+                id: userId,
+                name,
+                email,
+                phone
             }
         });
     } catch (error) {
@@ -55,31 +74,31 @@ async function signin(req, res) {
     try {
         const { email, password } = req.body;
 
-        // 1. Find user by email
-        const user = await User.findOne({ email });
-        if (!user) {
+        // 1. Authenticate user via Supabase Auth
+        const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
+            email,
+            password
+        });
+
+        if (authError) {
             return res.status(400).json({ error: 'Invalid email or password.' });
         }
 
-        // 2. Compare submitted password with the stored hashed password
-        const isPasswordValid = await bcrypt.compare(password, user.password);
-        if (!isPasswordValid) {
-            return res.status(400).json({ error: 'Invalid email or password.' });
-        }
+        const userId = authData.user.id;
 
-        // 3. Generate a secure token valid for 1 day
-        const token = jwt.sign({ userId: user._id }, JWT_SECRET, { expiresIn: '1d' });
+        // 2. Fetch extended profile data to load onto dashboard/settings
+        const { data: profileData, error: profileError } = await supabase
+            .from('profiles')
+            .select('*')
+            .eq('id', userId)
+            .single();
 
-        // 4. Return token and user details including the id so the profile UI loads correctly
+        const token = jwt.sign({ userId }, JWT_SECRET, { expiresIn: '1d' });
+
         res.status(200).json({
             message: 'Signed in successfully',
             token,
-            user: {
-                id: user._id,
-                name: user.name,
-                email: user.email,
-                phone: user.phone
-            }
+            user: profileData || authData.user
         });
     } catch (error) {
         console.error('Signin error:', error);
@@ -98,17 +117,79 @@ async function getProfile(req, res) {
         const token = authHeader.split(' ')[1];
         const decoded = jwt.verify(token, JWT_SECRET);
 
-        // Find user by ID stored in token, excluding the password field
-        const user = await User.findById(decoded.userId).select('-password');
-        if (!user) {
-            return res.status(404).json({ error: 'User not found.' });
+        // Fetch user profile data from Supabase
+        const { data: profile, error } = await supabase
+            .from('profiles')
+            .select('*')
+            .eq('id', decoded.userId)
+            .single();
+
+        if (error || !profile) {
+            return res.status(404).json({ error: 'User profile not found.' });
         }
 
-        res.status(200).json(user);
+        res.status(200).json(profile);
     } catch (error) {
         console.error('Profile fetch error:', error);
         res.status(401).json({ error: 'Invalid or expired token.' });
     }
 }
 
-module.exports = { signup, signin, getProfile };
+// --- UPDATE PROFILE ENDPOINT (For saving remaining fields) ---
+async function updateProfile(req, res) {
+    try {
+        const authHeader = req.headers.authorization;
+        if (!authHeader || !authHeader.startsWith('Bearer ')) {
+            return res.status(401).json({ error: 'Access denied. No token provided.' });
+        }
+
+        const token = authHeader.split(' ')[1];
+        const decoded = jwt.verify(token, JWT_SECRET);
+        const userId = decoded.userId;
+
+        const { 
+            fullName, 
+            username, 
+            phoneNumber, 
+            bio, 
+            streetAddress, 
+            city, 
+            country, 
+            postalCode, 
+            nin, 
+            bvn 
+        } = req.body;
+
+        const { data, error } = await supabase
+            .from('profiles')
+            .update({
+                full_name: fullName,
+                username: username,
+                phone_number: phoneNumber,
+                bio,
+                street_address: streetAddress,
+                city,
+                country,
+                postal_code: postalCode,
+                nin,
+                bvn
+            })
+            .eq('id', userId)
+            .select()
+            .single();
+
+        if (error) {
+            return res.status(400).json({ error: error.message });
+        }
+
+        res.status(200).json({
+            message: 'Profile updated successfully',
+            data
+        });
+    } catch (error) {
+        console.error('Profile update error:', error);
+        res.status(500).json({ error: 'Server error during profile update.' });
+    }
+}
+
+module.exports = { signup, signin, getProfile, updateProfile };
