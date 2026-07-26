@@ -30,7 +30,20 @@ async function signup(req, res) {
 
         await newUser.save();
 
-        res.status(201).json({ message: 'Account created successfully! Please sign in.' });
+        // 4. Generate token immediately upon sign-up so the profile loads right away
+        const token = jwt.sign({ userId: newUser._id }, JWT_SECRET, { expiresIn: '1d' });
+
+        // 5. Return success message, token, and user details (including id)
+        res.status(201).json({
+            message: 'Account created successfully!',
+            token,
+            user: {
+                id: newUser._id,
+                name: newUser.name,
+                email: newUser.email,
+                phone: newUser.phone
+            }
+        });
     } catch (error) {
         console.error('Signup error:', error);
         res.status(500).json({ error: 'Server error during registration.' });
@@ -57,11 +70,12 @@ async function signin(req, res) {
         // 3. Generate a secure token valid for 1 day
         const token = jwt.sign({ userId: user._id }, JWT_SECRET, { expiresIn: '1d' });
 
-        // 4. Return token and non-sensitive user details to the frontend
+        // 4. Return token and user details including the id so the profile UI loads correctly
         res.status(200).json({
             message: 'Signed in successfully',
             token,
             user: {
+                id: user._id,
                 name: user.name,
                 email: user.email,
                 phone: user.phone
