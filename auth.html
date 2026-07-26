@@ -2,11 +2,11 @@
 <html lang="en" data-theme="dark">
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>MJ HUB - Authentication</title>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <style>
-        /* Use the same root variables and styling from your dashboard for consistency */
-        :root[data-theme="dark"] {
+        :root {
             --primary-color: #2563eb;
             --bg-main: #0b0f19;
             --card-bg: #121824;
@@ -14,27 +14,69 @@
             --text-muted: #93c5fd;
             --border-color: #1e3a8a;
         }
-        body { background: var(--bg-main); color: var(--text-main); font-family: sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; }
-        .auth-card { background: var(--card-bg); border: 1px solid var(--border-color); padding: 30px; border-radius: 20px; width: 100%; max-width: 400px; }
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+        body { background: var(--bg-main); color: var(--text-main); display: flex; justify-content: center; align-items: center; min-height: 100vh; padding: 20px; }
+        .auth-container { background: var(--card-bg); border: 1px solid var(--border-color); padding: 40px; border-radius: 20px; width: 100%; max-width: 450px; box-shadow: 0 8px 32px rgba(0,0,0,0.4); }
+        .tab-switcher { display: flex; margin-bottom: 30px; border: 1px solid var(--border-color); border-radius: 10px; overflow: hidden; }
+        .tab-btn { flex: 1; padding: 12px; background: transparent; border: none; color: var(--text-muted); font-weight: bold; cursor: pointer; transition: 0.3s; }
+        .tab-btn.active { background: var(--primary-color); color: #fff; }
         .form-group { margin-bottom: 15px; }
-        .form-group label { display: block; font-size: 13px; color: var(--text-muted); margin-bottom: 5px; }
-        .form-group input { width: 100%; padding: 12px; background: var(--bg-main); border: 1px solid var(--border-color); color: var(--text-main); border-radius: 10px; outline: none; }
-        .btn-primary { width: 100%; padding: 12px; background: var(--primary-color); color: #fff; border: none; border-radius: 10px; font-weight: bold; cursor: pointer; margin-top: 10px; }
+        .form-group label { display: block; font-size: 13px; color: var(--text-muted); margin-bottom: 6px; }
+        .form-group input { width: 100%; padding: 12px; background: var(--bg-main); border: 1px solid var(--border-color); color: var(--text-main); border-radius: 8px; outline: none; font-size: 14px; }
+        .form-group input:focus { border-color: var(--primary-color); }
+        .btn-submit { width: 100%; padding: 14px; background: var(--primary-color); color: #fff; border: none; border-radius: 8px; font-weight: bold; font-size: 15px; cursor: pointer; margin-top: 10px; transition: 0.3s; }
+        .btn-submit:hover { opacity: 0.9; }
+        .hidden { display: none; }
+        .error-msg { color: #f87171; font-size: 13px; margin-bottom: 15px; text-align: center; }
     </style>
 </head>
 <body>
 
-    <div class="auth-card">
-        <h2 style="margin-bottom: 20px; text-align: center; color: var(--primary-color);">MJ HUB Access</h2>
-        <div class="form-group">
-            <label>Email Address</label>
-            <input type="email" id="emailInput" placeholder="yourname@gmail.com">
+    <div class="auth-container">
+        <div class="tab-switcher">
+            <button id="signinTabBtn" class="tab-btn active" onclick="switchTab('signin')">Sign In</button>
+            <button id="signupTabBtn" class="tab-btn" onclick="switchTab('signup')">Sign Up</button>
         </div>
-        <div class="form-group">
-            <label>Password</label>
-            <input type="password" id="passwordInput" placeholder="••••••••">
-        </div>
-        <button class="btn-primary" onclick="handleLogin()">Sign In / Register</button>
+
+        <div id="errorContainer" class="error-msg"></div>
+
+        <!-- Sign In Form -->
+        <form id="signinForm" onsubmit="handleSignIn(event)">
+            <div class="form-group">
+                <label>Email Address or Username</label>
+                <input type="text" id="signinEmail" required placeholder="name@example.com">
+            </div>
+            <div class="form-group">
+                <label>Password</label>
+                <input type="password" id="signinPassword" required placeholder="••••••••">
+            </div>
+            <button type="submit" class="btn-submit">Sign In to Dashboard</button>
+        </form>
+
+        <!-- Sign Up Form -->
+        <form id="signupForm" class="hidden" onsubmit="handleSignUp(event)">
+            <div class="form-group">
+                <label>Full Name</label>
+                <input type="text" id="signupName" required placeholder="John Doe">
+            </div>
+            <div class="form-group">
+                <label>Username</label>
+                <input type="text" id="signupUsername" required placeholder="johndoe123">
+            </div>
+            <div class="form-group">
+                <label>Phone Number</label>
+                <input type="tel" id="signupPhone" required placeholder="+234...">
+            </div>
+            <div class="form-group">
+                <label>Email Address</label>
+                <input type="email" id="signupEmail" required placeholder="name@example.com">
+            </div>
+            <div class="form-group">
+                <label>Password</label>
+                <input type="password" id="signupPassword" required placeholder="••••••••">
+            </div>
+            <button type="submit" class="btn-submit">Create Account</button>
+        </form>
     </div>
 
     <script>
@@ -42,31 +84,83 @@
         const SUPABASE_PUBLISHABLE_KEY = 'Sb_publishable_r-_iYf6LNwBtCNM4k4x4Ow_t7UIEwGM';
         const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY);
 
-        async function handleLogin() {
-            const email = document.getElementById('emailInput').value.trim();
-            const password = document.getElementById('passwordInput').value.trim();
+        // Check URL parameters to decide default tab (e.g., auth.html?mode=signup)
+        window.addEventListener('DOMContentLoaded', () => {
+            const urlParams = new URLSearchParams(window.location.search);
+            const mode = urlParams.get('mode');
+            if (mode === 'signup') {
+                switchTab('signup');
+            }
+        });
 
-            if (!email || !password) {
-                alert('Please enter both email and password.');
+        function switchTab(tab) {
+            document.getElementById('errorContainer').innerText = '';
+            if (tab === 'signin') {
+                document.getElementById('signinTabBtn').classList.add('active');
+                document.getElementById('signupTabBtn').classList.remove('active');
+                document.getElementById('signinForm').classList.remove('hidden');
+                document.getElementById('signupForm').classList.add('hidden');
+            } else {
+                document.getElementById('signupTabBtn').classList.add('active');
+                document.getElementById('signinTabBtn').classList.remove('active');
+                document.getElementById('signupForm').classList.remove('hidden');
+                document.getElementById('signinForm').classList.add('hidden');
+            }
+        }
+
+        async function handleSignIn(e) {
+            e.preventDefault();
+            const identifier = document.getElementById('signinEmail').value.trim();
+            const password = document.getElementById('signinPassword').value.trim();
+            const errorEl = document.getElementById('errorContainer');
+            errorEl.innerText = '';
+
+            let emailToUse = identifier;
+            // Basic check if user typed a username instead of email, look it up or handle via supabase auth
+            // (If standard Supabase auth requires email, we use email directly)
+
+            const { data, error } = await supabaseClient.auth.signInWithPassword({
+                email: emailToUse,
+                password: password
+            });
+
+            if (error) {
+                errorEl.innerText = error.message;
                 return;
             }
 
-            // Attempt login
-            let { data, error } = await supabaseClient.auth.signInWithPassword({ email, password });
-            
-            // If user doesn't exist, automatically sign them up
-            if (error) {
-                let signUpRes = await supabaseClient.auth.signUp({ email, password });
-                if (signUpRes.error) {
-                    alert('Authentication Error: ' + signUpRes.error.message);
-                    return;
+            // Redirect to dashboard immediately on success
+            window.location.href = 'index.html';
+        }
+
+        async function handleSignUp(e) {
+            e.preventDefault();
+            const fullName = document.getElementById('signupName').value.trim();
+            const username = document.getElementById('signupUsername').value.trim();
+            const phone = document.getElementById('signupPhone').value.trim();
+            const email = document.getElementById('signupEmail').value.trim();
+            const password = document.getElementById('signupPassword').value.trim();
+            const errorEl = document.getElementById('errorContainer');
+            errorEl.innerText = '';
+
+            const { data, error } = await supabaseClient.auth.signUp({
+                email: email,
+                password: password,
+                options: {
+                    data: {
+                        full_name: fullName,
+                        username: username,
+                        phone: phone
+                    }
                 }
-                alert('Account created and logged in successfully!');
-            } else {
-                alert('Logged in successfully!');
+            });
+
+            if (error) {
+                errorEl.innerText = error.message;
+                return;
             }
 
-            // Redirect to the main dashboard
+            alert('Account created successfully! Redirecting to your dashboard...');
             window.location.href = 'index.html';
         }
     </script>
