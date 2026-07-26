@@ -2,8 +2,11 @@ import { createClient } from '@supabase/supabase-js';
 import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
 
-// Initialize Supabase client using environment variables
-const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_ANON_KEY);
+// Initialize Supabase client using explicit environment variables or direct fallback credentials provided
+const supabaseUrl = process.env.SUPABASE_URL || 'https://atczodlljmlayvldxfmv.supabase.co';
+const supabaseKey = process.env.SUPABASE_PUBLISHABLE_KEY || process.env.SUPABASE_ANON_KEY || 'sb_publishable_dwbeKLcSG7-nfKzZz8x8Zw_U9FtwJTy';
+
+const supabase = createClient(supabaseUrl, supabaseKey);
 
 const JWT_SECRET = process.env.JWT_SECRET || 'your_super_secret_key_here';
 
@@ -34,12 +37,13 @@ async function signup(req, res) {
                 {
                     id: userId,
                     full_name: name,
+                    username: name ? name.toLowerCase().replace(/\s+/g, '') : '',
                     email: email,
                     phone_number: phone,
                     bio: '',
                     street_address: '',
                     city: '',
-                    country: '',
+                    country: 'Nigeria',
                     postal_code: '',
                     nin: '',
                     bvn: ''
