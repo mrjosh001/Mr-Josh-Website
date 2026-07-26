@@ -150,7 +150,8 @@
             errorEl.innerText = '';
             successEl.innerText = '';
 
-            // 1. Register user credentials in Supabase Auth
+            // Register user with Supabase Auth, embedding the initial fields into options.data metadata 
+            // and setting remaining profile fields as empty strings for new users to fill later.
             const { data, error } = await supabaseClient.auth.signUp({
                 email: email,
                 password: password,
@@ -158,7 +159,14 @@
                     data: {
                         full_name: fullName,
                         username: username,
-                        phone: phone
+                        phone_number: phone,
+                        bio: '',
+                        street_address: '',
+                        city: '',
+                        country: '',
+                        postal_code: '',
+                        nin: '',
+                        bvn: ''
                     }
                 }
             });
@@ -166,25 +174,6 @@
             if (error) {
                 errorEl.innerText = error.message;
                 return;
-            }
-
-            // 2. Insert form details into the public profiles table for permanent database storage
-            if (data.user) {
-                const { error: profileError } = await supabaseClient
-                    .from('profiles')
-                    .insert([
-                        {
-                            id: data.user.id,
-                            full_name: fullName,
-                            username: username,
-                            phone: phone,
-                            updated_at: new Date()
-                        }
-                    ]);
-
-                if (profileError) {
-                    console.error('Profile insertion error:', profileError.message);
-                }
             }
 
             successEl.innerText = 'Account created successfully! Please sign in.';
