@@ -150,6 +150,7 @@
             errorEl.innerText = '';
             successEl.innerText = '';
 
+            // 1. Register user credentials in Supabase Auth
             const { data, error } = await supabaseClient.auth.signUp({
                 email: email,
                 password: password,
@@ -165,6 +166,25 @@
             if (error) {
                 errorEl.innerText = error.message;
                 return;
+            }
+
+            // 2. Insert form details into the public profiles table for permanent database storage
+            if (data.user) {
+                const { error: profileError } = await supabaseClient
+                    .from('profiles')
+                    .insert([
+                        {
+                            id: data.user.id,
+                            full_name: fullName,
+                            username: username,
+                            phone: phone,
+                            updated_at: new Date()
+                        }
+                    ]);
+
+                if (profileError) {
+                    console.error('Profile insertion error:', profileError.message);
+                }
             }
 
             successEl.innerText = 'Account created successfully! Please sign in.';
