@@ -11,13 +11,24 @@ const JWT_SECRET = process.env.JWT_SECRET || 'your_super_secret_key_here';
 // --- SIGN UP ENDPOINT ---
 async function signup(req, res) {
     try {
-        const { name, email, phone, password } = req.body;
+        const { name, username, email, phone, password, bio, streetAddress, city, country, postalCode, nin, bvn } = req.body;
 
         const { data: authData, error: authError } = await supabase.auth.signUp({
             email,
             password,
             options: {
-                data: { full_name: name, phone }
+                data: { 
+                    full_name: name, 
+                    username: username || (name ? name.toLowerCase().replace(/\s+/g, '') : ''),
+                    phone_number: phone,
+                    bio: bio || '',
+                    street_address: streetAddress || '',
+                    city: city || '',
+                    country: country || 'Nigeria',
+                    postal_code: postalCode || '',
+                    nin: nin || '',
+                    bvn: bvn || ''
+                }
             }
         });
 
@@ -27,23 +38,23 @@ async function signup(req, res) {
 
         const userId = authData.user.id;
 
-        // Insert initial fields into profiles table with robust fetch/save structure
+        // Insert comprehensive initial profile fields into profiles table with robust persistence structure
         const { error: profileError } = await supabase
             .from('profiles')
             .upsert([
                 {
                     id: userId,
                     full_name: name,
-                    username: name ? name.toLowerCase().replace(/\s+/g, '') : '',
+                    username: username || (name ? name.toLowerCase().replace(/\s+/g, '') : ''),
                     email: email,
                     phone_number: phone,
-                    bio: '',
-                    street_address: '',
-                    city: '',
-                    country: 'Nigeria',
-                    postal_code: '',
-                    nin: '',
-                    bvn: ''
+                    bio: bio || '',
+                    street_address: streetAddress || '',
+                    city: city || '',
+                    country: country || 'Nigeria',
+                    postal_code: postalCode || '',
+                    nin: nin || '',
+                    bvn: bvn || ''
                 }
             ]);
 
@@ -92,7 +103,7 @@ async function signin(req, res) {
             .eq('id', userId)
             .single();
 
-        // If profile doesn't exist yet, fetch & save/initialize it automatically
+        // If profile doesn't exist yet, fetch & save/initialize it automatically from metadata or defaults
         if (profileFetchError || !profileData) {
             const metadata = authData.user.user_metadata || {};
             const fallbackName = metadata.full_name || email.split('@')[0];
@@ -100,16 +111,16 @@ async function signin(req, res) {
             const newProfilePayload = {
                 id: userId,
                 full_name: fallbackName,
-                username: fallbackName.toLowerCase().replace(/\s+/g, ''),
+                username: metadata.username || fallbackName.toLowerCase().replace(/\s+/g, ''),
                 email: email,
-                phone_number: metadata.phone || '',
-                bio: '',
-                street_address: '',
-                city: '',
-                country: 'Nigeria',
-                postal_code: '',
-                nin: '',
-                bvn: ''
+                phone_number: metadata.phone_number || metadata.phone || '',
+                bio: metadata.bio || '',
+                street_address: metadata.street_address || '',
+                city: metadata.city || '',
+                country: metadata.country || 'Nigeria',
+                postal_code: metadata.postal_code || '',
+                nin: metadata.nin || '',
+                bvn: metadata.bvn || ''
             };
 
             const { data: insertedProfile, error: insertError } = await supabase
@@ -165,16 +176,16 @@ async function getProfile(req, res) {
             const defaultProfile = {
                 id: userId,
                 full_name: fallbackName,
-                username: fallbackName.toLowerCase().replace(/\s+/g, ''),
+                username: metadata.username || fallbackName.toLowerCase().replace(/\s+/g, ''),
                 email: email,
-                phone_number: metadata.phone || '',
-                bio: '',
-                street_address: '',
-                city: '',
-                country: 'Nigeria',
-                postal_code: '',
-                nin: '',
-                bvn: ''
+                phone_number: metadata.phone_number || metadata.phone || '',
+                bio: metadata.bio || '',
+                street_address: metadata.street_address || '',
+                city: metadata.city || '',
+                country: metadata.country || 'Nigeria',
+                postal_code: metadata.postal_code || '',
+                nin: metadata.nin || '',
+                bvn: metadata.bvn || ''
             };
 
             // Save default profile row if missing
@@ -237,7 +248,7 @@ async function updateProfile(req, res) {
             bvn 
         } = req.body;
 
-        // Save and update profile record securely using upsert to handle both updates and missing rows
+        // Save and update profile record securely using upsert to handle both updates and persistence across sessions
         const { data, error } = await supabase
             .from('profiles')
             .upsert({
@@ -259,6 +270,22 @@ async function updateProfile(req, res) {
         if (error) {
             return res.status(400).json({ error: error.message });
         }
+
+        // Also update auth user metadata for consistency across sessions
+        await supabase.auth.admin.updateUserById(userId, {
+            user_metadata: {
+                full_name: fullName,
+                username: username,
+                phone_number: phoneNumber,
+                bio,
+                street_address: streetAddress,
+                city,
+                country,
+                postal_code: postalCode,
+                nin,
+                bvn
+            }
+        });
 
         res.status(200).json({
             message: 'Profile updated successfully',
