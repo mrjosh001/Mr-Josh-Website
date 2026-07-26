@@ -297,4 +297,26 @@ async function updateProfile(req, res) {
     }
 }
 
-module.exports = { signup, signin, getProfile, updateProfile };
+// --- TOKEN & SESSION TRIGGER LOGIC ---
+async function verifySession(req, res, next) {
+    try {
+        const authHeader = req.headers.authorization;
+        if (!authHeader || !authHeader.startsWith('Bearer ')) {
+            return res.status(401).json({ error: 'No token provided, authorization denied.' });
+        }
+
+        const token = authHeader.split(' ')[1];
+        const decoded = jwt.verify(token, JWT_SECRET);
+        
+        req.user = decoded;
+        if (typeof next === 'function') {
+            next();
+        } else {
+            return res.status(200).json({ valid: true, userId: decoded.userId });
+        }
+    } catch (error) {
+        return res.status(401).json({ error: 'Token is invalid or expired.' });
+    }
+}
+
+module.exports = { signup, signin, getProfile, updateProfile, verifySession };
