@@ -1474,33 +1474,39 @@ let userOnboarded = false;
 let userData = { name: '', email: '' };
 
 document.addEventListener('DOMContentLoaded', async () => {
-    // Check Supabase Authentication session on load
+    // Check Supabase Authentication session on load and redirect if unauthenticated
     if (supabaseClient) {
         const { data: { session }, error } = await supabaseClient.auth.getSession();
-        if (!session) {
-            // If not authenticated, redirect back to the landing page
+        if (!session || error) {
             window.location.href = 'landing.html';
             return;
         } else {
-            // Populate email from active auth session
-            const userEmail = session.user.email;
+            const user = session.user;
+            const meta = user.user_metadata || {};
+            const userEmail = user.email;
+            const displayName = meta.full_name || meta.username || userEmail.split('@')[0];
+            
             userData.email = userEmail;
-            userData.name = userEmail.split('@')[0];
+            userData.name = displayName;
             userOnboarded = true;
             
-            document.getElementById('dropdownName').textContent = userData.name;
+            document.getElementById('dropdownName').textContent = displayName;
             document.getElementById('dropdownEmail').textContent = userEmail;
-            document.getElementById('profileHeaderName').textContent = userData.name;
+            document.getElementById('profileHeaderName').textContent = displayName;
             document.getElementById('profileHeaderEmail').textContent = userEmail;
-            document.getElementById('heroWelcomeTitle').textContent = 'Welcome back, ' + userData.name + '!';
+            document.getElementById('heroWelcomeTitle').textContent = 'Welcome back, ' + displayName + '!';
             document.getElementById('heroSubText').textContent = 'Manage your account balance and products seamlessly.';
             document.getElementById('heroOnboardBtn').style.display = 'none';
-            document.getElementById('headerAvatarText').textContent = userData.name.charAt(0).toUpperCase();
-            document.getElementById('profileAvatarInitial').textContent = userData.name.charAt(0).toUpperCase();
+            document.getElementById('headerAvatarText').textContent = displayName.charAt(0).toUpperCase();
+            document.getElementById('profileAvatarInitial').textContent = displayName.charAt(0).toUpperCase();
 
             let onboardCard = document.getElementById('onboardingCardContainer');
             if(onboardCard) onboardCard.remove();
         }
+    } else {
+        // Fallback if client isn't configured correctly
+        window.location.href = 'landing.html';
+        return;
     }
 
     const allSections = document.querySelectorAll('.app-section');
@@ -1627,7 +1633,6 @@ async function handleLogout() {
     if (supabaseClient) {
         await supabaseClient.auth.signOut();
     }
-    alert('Logged out successfully');
     window.location.href = 'landing.html';
 }
 
@@ -1718,7 +1723,6 @@ function closeChangePasswordModal() {
 }
 
 async function submitNewPassword() {
-    let cur = document.getElementById('currentPasswordInput').value;
     let nxt = document.getElementById('newPasswordInput').value;
     let cfm = document.getElementById('confirmPasswordInput').value;
 
