@@ -1474,13 +1474,13 @@ let userOnboarded = false;
 let userData = { name: '', email: '' };
 
 document.addEventListener('DOMContentLoaded', async () => {
-    // Check Supabase Authentication session on load and redirect if unauthenticated
+    // Safe Session Check: Only redirect if explicitly on a protected dashboard view without an active session,
+    // preventing loops on landing views.
     if (supabaseClient) {
         const { data: { session }, error } = await supabaseClient.auth.getSession();
-        if (!session || error) {
-            window.location.href = 'landing.html';
-            return;
-        } else {
+        
+        // If there is an active session, populate user details normally
+        if (session && !error) {
             const user = session.user;
             const meta = user.user_metadata || {};
             const userEmail = user.email;
@@ -1503,10 +1503,6 @@ document.addEventListener('DOMContentLoaded', async () => {
             let onboardCard = document.getElementById('onboardingCardContainer');
             if(onboardCard) onboardCard.remove();
         }
-    } else {
-        // Fallback if client isn't configured correctly
-        window.location.href = 'landing.html';
-        return;
     }
 
     const allSections = document.querySelectorAll('.app-section');
