@@ -1138,18 +1138,22 @@ body {
                 <p id="profileHeaderEmail">No email provided</p>
             </div>
 
-            <div class="content-card" id="onboardingCardContainer" style="margin-bottom: 16px;">
-                <h2>Onboarding Details</h2>
-                <p class="helper-text">Fill in your information to personalize your account dashboard.</p>
+            <div class="content-card" id="profileSettingsCard" style="margin-bottom: 16px;">
+                <h2>Profile & Account Settings</h2>
+                <p class="helper-text">Update your account profile details and metadata stored securely in Supabase.</p>
                 <div class="form-group">
                     <label>Full Name / Username</label>
-                    <input type="text" id="onboardNameInput" placeholder="e.g. Josh">
+                    <input type="text" id="profileNameInput" placeholder="e.g. Josh">
                 </div>
                 <div class="form-group">
                     <label>Email Address</label>
-                    <input type="email" id="onboardEmailInput" placeholder="yourname@gmail.com">
+                    <input type="email" id="profileEmailInput" placeholder="yourname@gmail.com" readonly>
                 </div>
-                <button class="btn-sm-primary" style="width:100%; padding:10px;" onclick="saveOnboardingData()">Save Profile Details</button>
+                <div class="form-group">
+                    <label>Phone Number</label>
+                    <input type="text" id="profilePhoneInput" placeholder="e.g. +2348012345678">
+                </div>
+                <button class="btn-sm-primary" style="width:100%; padding:10px;" onclick="saveProfileSettingsData()">Save Profile Changes</button>
             </div>
 
             <div class="profile-menu-list">
@@ -1502,7 +1506,7 @@ let exchangeRate = 1420;
 let cartItems = [];
 let transactions = [];
 let userOnboarded = false;
-let userData = { name: '', email: '' };
+let userData = { name: '', email: '', phone: '' };
 
 document.addEventListener('DOMContentLoaded', async () => {
     if (supabaseClient) {
@@ -1513,23 +1517,27 @@ document.addEventListener('DOMContentLoaded', async () => {
             const meta = user.user_metadata || {};
             const userEmail = user.email;
             const displayName = meta.full_name || meta.username || userEmail.split('@')[0];
+            const phoneVal = meta.phone || '';
             
             userData.email = userEmail;
             userData.name = displayName;
+            userData.phone = phoneVal;
             userOnboarded = true;
             
+            // Populate UI Elements
             document.getElementById('dropdownName').textContent = displayName;
             document.getElementById('dropdownEmail').textContent = userEmail;
             document.getElementById('profileHeaderName').textContent = displayName;
             document.getElementById('profileHeaderEmail').textContent = userEmail;
             document.getElementById('heroWelcomeTitle').textContent = 'Welcome back, ' + displayName + '!';
             document.getElementById('heroSubText').textContent = 'Manage your account balance and access MJ Boosters, MJ SMS, MJ Logs, and Mr Josh Exchange seamlessly.';
-            document.getElementById('heroOnboardBtn').style.display = 'none';
             document.getElementById('headerAvatarText').textContent = displayName.charAt(0).toUpperCase();
             document.getElementById('profileAvatarInitial').textContent = displayName.charAt(0).toUpperCase();
 
-            let onboardCard = document.getElementById('onboardingCardContainer');
-            if(onboardCard) onboardCard.remove();
+            // Populate Profile Settings Form Inputs
+            document.getElementById('profileNameInput').value = displayName;
+            document.getElementById('profileEmailInput').value = userEmail;
+            document.getElementById('profilePhoneInput').value = phoneVal;
         }
     }
 
@@ -1708,34 +1716,36 @@ function applyCurrencyConversion() {
     alert('Dashboard currency updated successfully!');
 }
 
-function saveOnboardingData() {
-    let name = document.getElementById('onboardNameInput').value.trim();
-    let email = document.getElementById('onboardEmailInput').value.trim();
+async function saveProfileSettingsData() {
+    let name = document.getElementById('profileNameInput').value.trim();
+    let phone = document.getElementById('profilePhoneInput').value.trim();
 
-    if(!name || !email) {
-        alert('Please fill in both your name and email to complete onboarding.');
+    if(!name) {
+        alert('Please enter your full name or username.');
         return;
     }
 
+    if (supabaseClient) {
+        const { error } = await supabaseClient.auth.updateUser({
+            data: { full_name: name, phone: phone }
+        });
+        if (error) {
+            alert('Error updating profile: ' + error.message);
+            return;
+        }
+    }
+
     userData.name = name;
-    userData.email = email;
+    userData.phone = phone;
     userOnboarded = true;
 
     document.getElementById('dropdownName').textContent = name;
-    document.getElementById('dropdownEmail').textContent = email;
     document.getElementById('profileHeaderName').textContent = name;
-    document.getElementById('profileHeaderEmail').textContent = email;
     document.getElementById('heroWelcomeTitle').textContent = 'Welcome back, ' + name + '!';
-    document.getElementById('heroSubText').textContent = 'Manage your account balance and access MJ Boosters, MJ SMS, MJ Logs, and Mr Josh Exchange seamlessly.';
-    document.getElementById('heroOnboardBtn').style.display = 'none';
     document.getElementById('headerAvatarText').textContent = name.charAt(0).toUpperCase();
     document.getElementById('profileAvatarInitial').textContent = name.charAt(0).toUpperCase();
 
-    let onboardCard = document.getElementById('onboardingCardContainer');
-    if(onboardCard) onboardCard.remove();
-
-    alert('Onboarding profile saved successfully!');
-    switchSection('home');
+    alert('Profile settings saved successfully to Supabase!');
 }
 
 function openChangePasswordModal() {
