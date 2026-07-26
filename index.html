@@ -1716,53 +1716,57 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (supabaseClient) {
         const { data: { session }, error } = await supabaseClient.auth.getSession();
         
-        if (session && !error) {
-            const user = session.user;
-            const meta = user.user_metadata || {};
-            const userEmail = user.email;
-            const displayName = meta.full_name || meta.username || userEmail.split('@')[0];
-            const phoneVal = meta.phone || '';
-            const addressVal = meta.address || '';
-            const bioVal = meta.bio || '';
-            const bvnVal = meta.bvn || '';
-            const ninVal = meta.nin || '';
-            const avatarVal = meta.avatar_url || '';
-            
-            userData.email = userEmail;
-            userData.name = displayName;
-            userData.phone = phoneVal;
-            userData.address = addressVal;
-            userData.bio = bioVal;
-            userData.bvn = bvnVal;
-            userData.nin = ninVal;
-            userData.avatarUrl = avatarVal;
-            userOnboarded = true;
-            
-            // Populate UI Elements
-            document.getElementById('dropdownName').textContent = displayName;
-            document.getElementById('dropdownEmail').textContent = userEmail;
-            document.getElementById('profileHeaderName').textContent = displayName;
-            document.getElementById('profileHeaderEmail').textContent = userEmail;
-            document.getElementById('heroWelcomeTitle').textContent = 'Welcome back, ' + displayName + '!';
-            document.getElementById('heroSubText').textContent = 'Manage your account balance and access MJ Boosters, MJ SMS, and MJ Logs seamlessly.';
-            
-            if(avatarVal) {
-                document.getElementById('headerAvatarText').innerHTML = `<img src="${avatarVal}" alt="Avatar">`;
-                document.getElementById('profileAvatarInitial').innerHTML = `<img src="${avatarVal}" alt="Avatar">`;
-            } else {
-                document.getElementById('headerAvatarText').textContent = displayName.charAt(0).toUpperCase();
-                document.getElementById('profileAvatarInitial').textContent = displayName.charAt(0).toUpperCase();
-            }
-
-            // Populate Profile Settings Form Inputs
-            document.getElementById('profileNameInput').value = displayName;
-            document.getElementById('profileEmailInput').value = userEmail;
-            document.getElementById('profilePhoneInput').value = phoneVal;
-            document.getElementById('profileAddressInput').value = addressVal;
-            document.getElementById('profileBioInput').value = bioVal;
-            document.getElementById('profileBvnInput').value = bvnVal;
-            document.getElementById('profileNinInput').value = ninVal;
+        // --- Redirection Update Integrated Here ---
+        if (!session || error) {
+            window.location.href = 'landing.html';
+            return;
         }
+
+        const user = session.user;
+        const meta = user.user_metadata || {};
+        const userEmail = user.email;
+        const displayName = meta.full_name || meta.username || userEmail.split('@')[0];
+        const phoneVal = meta.phone || '';
+        const addressVal = meta.address || '';
+        const bioVal = meta.bio || '';
+        const bvnVal = meta.bvn || '';
+        const ninVal = meta.nin || '';
+        const avatarVal = meta.avatar_url || '';
+        
+        userData.email = userEmail;
+        userData.name = displayName;
+        userData.phone = phoneVal;
+        userData.address = addressVal;
+        userData.bio = bioVal;
+        userData.bvn = bvnVal;
+        userData.nin = ninVal;
+        userData.avatarUrl = avatarVal;
+        userOnboarded = true;
+        
+        // Populate UI Elements
+        document.getElementById('dropdownName').textContent = displayName;
+        document.getElementById('dropdownEmail').textContent = userEmail;
+        document.getElementById('profileHeaderName').textContent = displayName;
+        document.getElementById('profileHeaderEmail').textContent = userEmail;
+        document.getElementById('heroWelcomeTitle').textContent = 'Welcome back, ' + displayName + '!';
+        document.getElementById('heroSubText').textContent = 'Manage your account balance and access MJ Boosters, MJ SMS, and MJ Logs seamlessly.';
+        
+        if(avatarVal) {
+            document.getElementById('headerAvatarText').innerHTML = `<img src="${avatarVal}" alt="Avatar">`;
+            document.getElementById('profileAvatarInitial').innerHTML = `<img src="${avatarVal}" alt="Avatar">`;
+        } else {
+            document.getElementById('headerAvatarText').textContent = displayName.charAt(0).toUpperCase();
+            document.getElementById('profileAvatarInitial').textContent = displayName.charAt(0).toUpperCase();
+        }
+
+        // Populate Profile Settings Form Inputs
+        document.getElementById('profileNameInput').value = displayName;
+        document.getElementById('profileEmailInput').value = userEmail;
+        document.getElementById('profilePhoneInput').value = phoneVal;
+        document.getElementById('profileAddressInput').value = addressVal;
+        document.getElementById('profileBioInput').value = bioVal;
+        document.getElementById('profileBvnInput').value = bvnVal;
+        document.getElementById('profileNinInput').value = ninVal;
     }
 
     const allSections = document.querySelectorAll('.app-section');
