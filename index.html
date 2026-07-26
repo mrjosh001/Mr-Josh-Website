@@ -8,7 +8,7 @@
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <style>
 /* ==========================================
-   MJ HUB - Theme & Variables (v4.0 - Blue & White Theme)
+   MJ HUB - Theme & Variables (v4.1 - Complete Profile Settings)
    ========================================== */
 
 :root[data-theme="dark"] {
@@ -432,10 +432,10 @@ body {
 }
 
 .profile-avatar-large {
-    width: 80px;
-    height: 80px;
+    width: 88px;
+    height: 88px;
     background: var(--border-color);
-    border: 2px solid var(--border-color);
+    border: 3px solid var(--primary-color);
     border-radius: 50%;
     margin: 0 auto 12px auto;
     display: flex;
@@ -444,12 +444,27 @@ body {
     font-size: 36px;
     overflow: hidden;
     color: var(--text-muted);
+    position: relative;
+    cursor: pointer;
 }
 
 .profile-avatar-large img {
     width: 100%;
     height: 100%;
     object-fit: cover;
+}
+
+.profile-avatar-overlay {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    background: rgba(0, 0, 0, 0.6);
+    color: #fff;
+    font-size: 10px;
+    font-weight: 700;
+    padding: 3px 0;
+    text-align: center;
 }
 
 .profile-header-card h3 {
@@ -1131,16 +1146,19 @@ body {
         <!-- PROFILE / SETTINGS SECTION -->
         <section id="profile" class="app-section">
             <div class="profile-header-card">
-                <div class="profile-avatar-large" id="profileAvatarBox">
+                <div class="profile-avatar-large" id="profileAvatarBox" onclick="document.getElementById('profileAvatarInput').click()">
                     <span id="profileAvatarInitial">👤</span>
+                    <div class="profile-avatar-overlay">Edit</div>
                 </div>
+                <input type="file" id="profileAvatarInput" accept="image/*" style="display: none;" onchange="handleAvatarUpload(event)">
                 <h3 id="profileHeaderName">Not Set (Complete Onboarding)</h3>
                 <p id="profileHeaderEmail">No email provided</p>
             </div>
 
             <div class="content-card" id="profileSettingsCard" style="margin-bottom: 16px;">
                 <h2>Profile & Account Settings</h2>
-                <p class="helper-text">Update your account profile details and metadata stored securely in Supabase.</p>
+                <p class="helper-text">Update your account profile details, bio, address, verification numbers (BVN & NIN), and avatar stored securely in Supabase.</p>
+                
                 <div class="form-group">
                     <label>Full Name / Username</label>
                     <input type="text" id="profileNameInput" placeholder="e.g. Josh">
@@ -1153,7 +1171,24 @@ body {
                     <label>Phone Number</label>
                     <input type="text" id="profilePhoneInput" placeholder="e.g. +2348012345678">
                 </div>
-                <button class="btn-sm-primary" style="width:100%; padding:10px;" onclick="saveProfileSettingsData()">Save Profile Changes</button>
+                <div class="form-group">
+                    <label>Home Address</label>
+                    <input type="text" id="profileAddressInput" placeholder="Enter your residential address">
+                </div>
+                <div class="form-group">
+                    <label>Bio / About Me</label>
+                    <textarea id="profileBioInput" rows="3" placeholder="Tell us a little bit about yourself"></textarea>
+                </div>
+                <div class="form-group">
+                    <label>BVN (Bank Verification Number)</label>
+                    <input type="text" id="profileBvnInput" placeholder="Enter 11-digit BVN" maxlength="11">
+                </div>
+                <div class="form-group">
+                    <label>NIN (National Identification Number)</label>
+                    <input type="text" id="profileNinInput" placeholder="Enter 11-digit NIN" maxlength="11">
+                </div>
+
+                <button class="btn-sm-primary" style="width:100%; padding:12px; font-size: 14px;" onclick="saveProfileSettingsData()">Save Profile Changes</button>
             </div>
 
             <div class="profile-menu-list">
@@ -1486,7 +1521,7 @@ body {
 
     <script>
 /* ==========================================
-   MJ HUB - Application Logic with Supabase Auth Integration (v4.0)
+   MJ HUB - Application Logic with Supabase Auth & Full Profile Settings (v4.1)
    ========================================== */
 
 const SUPABASE_URL = 'https://atczodlljmlayvldxfmv.supabase.co';
@@ -1506,7 +1541,7 @@ let exchangeRate = 1420;
 let cartItems = [];
 let transactions = [];
 let userOnboarded = false;
-let userData = { name: '', email: '', phone: '' };
+let userData = { name: '', email: '', phone: '', address: '', bio: '', bvn: '', nin: '', avatarUrl: '' };
 
 document.addEventListener('DOMContentLoaded', async () => {
     if (supabaseClient) {
@@ -1518,10 +1553,20 @@ document.addEventListener('DOMContentLoaded', async () => {
             const userEmail = user.email;
             const displayName = meta.full_name || meta.username || userEmail.split('@')[0];
             const phoneVal = meta.phone || '';
+            const addressVal = meta.address || '';
+            const bioVal = meta.bio || '';
+            const bvnVal = meta.bvn || '';
+            const ninVal = meta.nin || '';
+            const avatarVal = meta.avatar_url || '';
             
             userData.email = userEmail;
             userData.name = displayName;
             userData.phone = phoneVal;
+            userData.address = addressVal;
+            userData.bio = bioVal;
+            userData.bvn = bvnVal;
+            userData.nin = ninVal;
+            userData.avatarUrl = avatarVal;
             userOnboarded = true;
             
             // Populate UI Elements
@@ -1531,13 +1576,23 @@ document.addEventListener('DOMContentLoaded', async () => {
             document.getElementById('profileHeaderEmail').textContent = userEmail;
             document.getElementById('heroWelcomeTitle').textContent = 'Welcome back, ' + displayName + '!';
             document.getElementById('heroSubText').textContent = 'Manage your account balance and access MJ Boosters, MJ SMS, MJ Logs, and Mr Josh Exchange seamlessly.';
-            document.getElementById('headerAvatarText').textContent = displayName.charAt(0).toUpperCase();
-            document.getElementById('profileAvatarInitial').textContent = displayName.charAt(0).toUpperCase();
+            
+            if(avatarVal) {
+                document.getElementById('headerAvatarText').innerHTML = `<img src="${avatarVal}" alt="Avatar">`;
+                document.getElementById('profileAvatarInitial').innerHTML = `<img src="${avatarVal}" alt="Avatar">`;
+            } else {
+                document.getElementById('headerAvatarText').textContent = displayName.charAt(0).toUpperCase();
+                document.getElementById('profileAvatarInitial').textContent = displayName.charAt(0).toUpperCase();
+            }
 
             // Populate Profile Settings Form Inputs
             document.getElementById('profileNameInput').value = displayName;
             document.getElementById('profileEmailInput').value = userEmail;
             document.getElementById('profilePhoneInput').value = phoneVal;
+            document.getElementById('profileAddressInput').value = addressVal;
+            document.getElementById('profileBioInput').value = bioVal;
+            document.getElementById('profileBvnInput').value = bvnVal;
+            document.getElementById('profileNinInput').value = ninVal;
         }
     }
 
@@ -1668,6 +1723,66 @@ async function handleLogout() {
     window.location.href = 'landing.html';
 }
 
+function handleAvatarUpload(event) {
+    const file = event.target.files[0];
+    if(file) {
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            const base64Img = e.target.result;
+            userData.avatarUrl = base64Img;
+            document.getElementById('profileAvatarInitial').innerHTML = `<img src="${base64Img}" alt="Avatar">`;
+            document.getElementById('headerAvatarText').innerHTML = `<img src="${base64Img}" alt="Avatar">`;
+        };
+        reader.readAsDataURL(file);
+    }
+}
+
+async function saveProfileSettingsData() {
+    let name = document.getElementById('profileNameInput').value.trim();
+    let phone = document.getElementById('profilePhoneInput').value.trim();
+    let address = document.getElementById('profileAddressInput').value.trim();
+    let bio = document.getElementById('profileBioInput').value.trim();
+    let bvn = document.getElementById('profileBvnInput').value.trim();
+    let nin = document.getElementById('profileNinInput').value.trim();
+
+    if(!name) {
+        alert('Please enter your full name or username.');
+        return;
+    }
+
+    if (supabaseClient) {
+        const { error } = await supabaseClient.auth.updateUser({
+            data: { 
+                full_name: name, 
+                phone: phone, 
+                address: address, 
+                bio: bio, 
+                bvn: bvn, 
+                nin: nin, 
+                avatar_url: userData.avatarUrl 
+            }
+        });
+        if (error) {
+            alert('Error updating profile: ' + error.message);
+            return;
+        }
+    }
+
+    userData.name = name;
+    userData.phone = phone;
+    userData.address = address;
+    userData.bio = bio;
+    userData.bvn = bvn;
+    userData.nin = nin;
+    userOnboarded = true;
+
+    document.getElementById('dropdownName').textContent = name;
+    document.getElementById('profileHeaderName').textContent = name;
+    document.getElementById('heroWelcomeTitle').textContent = 'Welcome back, ' + name + '!';
+
+    alert('Complete profile settings, BVN, NIN, and bio saved successfully to Supabase!');
+}
+
 function openCurrencyModal() {
     document.getElementById('baseConvertInput').value = '';
     document.getElementById('targetConvertOutput').value = '';
@@ -1714,38 +1829,6 @@ function applyCurrencyConversion() {
     updateBalanceDisplay();
     closeCurrencyModal();
     alert('Dashboard currency updated successfully!');
-}
-
-async function saveProfileSettingsData() {
-    let name = document.getElementById('profileNameInput').value.trim();
-    let phone = document.getElementById('profilePhoneInput').value.trim();
-
-    if(!name) {
-        alert('Please enter your full name or username.');
-        return;
-    }
-
-    if (supabaseClient) {
-        const { error } = await supabaseClient.auth.updateUser({
-            data: { full_name: name, phone: phone }
-        });
-        if (error) {
-            alert('Error updating profile: ' + error.message);
-            return;
-        }
-    }
-
-    userData.name = name;
-    userData.phone = phone;
-    userOnboarded = true;
-
-    document.getElementById('dropdownName').textContent = name;
-    document.getElementById('profileHeaderName').textContent = name;
-    document.getElementById('heroWelcomeTitle').textContent = 'Welcome back, ' + name + '!';
-    document.getElementById('headerAvatarText').textContent = name.charAt(0).toUpperCase();
-    document.getElementById('profileAvatarInitial').textContent = name.charAt(0).toUpperCase();
-
-    alert('Profile settings saved successfully to Supabase!');
 }
 
 function openChangePasswordModal() {
