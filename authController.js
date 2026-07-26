@@ -2,12 +2,10 @@ import { createClient } from '@supabase/supabase-js';
 import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
 
-// Initialize Supabase client using explicit environment variables or direct fallback credentials provided
 const supabaseUrl = process.env.SUPABASE_URL || 'https://atczodlljmlayvldxfmv.supabase.co';
 const supabaseKey = process.env.SUPABASE_PUBLISHABLE_KEY || process.env.SUPABASE_ANON_KEY || 'sb_publishable_dwbeKLcSG7-nfKzZz8x8Zw_U9FtwJTy';
 
 const supabase = createClient(supabaseUrl, supabaseKey);
-
 const JWT_SECRET = process.env.JWT_SECRET || 'your_super_secret_key_here';
 
 // --- SIGN UP ENDPOINT ---
@@ -15,7 +13,6 @@ async function signup(req, res) {
     try {
         const { name, email, phone, password } = req.body;
 
-        // 1. Sign up user with Supabase Auth (triggers email verification)
         const { data: authData, error: authError } = await supabase.auth.signUp({
             email,
             password,
@@ -30,7 +27,7 @@ async function signup(req, res) {
 
         const userId = authData.user.id;
 
-        // 2. Insert initial signup details into the public 'profiles' table for data persistence
+        // Insert initial fields into profiles table
         const { error: profileError } = await supabase
             .from('profiles')
             .upsert([
@@ -54,7 +51,6 @@ async function signup(req, res) {
             return res.status(400).json({ error: profileError.message });
         }
 
-        // 3. Generate internal token if needed for immediate session handling
         const token = jwt.sign({ userId }, JWT_SECRET, { expiresIn: '1d' });
 
         res.status(201).json({
@@ -78,7 +74,6 @@ async function signin(req, res) {
     try {
         const { email, password } = req.body;
 
-        // 1. Authenticate user via Supabase Auth
         const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
             email,
             password
@@ -90,8 +85,7 @@ async function signin(req, res) {
 
         const userId = authData.user.id;
 
-        // 2. Fetch extended profile data to load onto dashboard/settings
-        const { data: profileData, error: profileError } = await supabase
+        const { data: profileData } = await supabase
             .from('profiles')
             .select('*')
             .eq('id', userId)
@@ -121,7 +115,6 @@ async function getProfile(req, res) {
         const token = authHeader.split(' ')[1];
         const decoded = jwt.verify(token, JWT_SECRET);
 
-        // Fetch user profile data from Supabase
         const { data: profile, error } = await supabase
             .from('profiles')
             .select('*')
@@ -132,14 +125,28 @@ async function getProfile(req, res) {
             return res.status(404).json({ error: 'User profile not found.' });
         }
 
-        res.status(200).json(profile);
+        // Return complete data object matching all required fields
+        res.status(200).json({
+            id: profile.id,
+            fullName: profile.full_name || '',
+            username: profile.username || '',
+            email: profile.email || '',
+            phoneNumber: profile.phone_number || '',
+            bio: profile.bio || '',
+            streetAddress: profile.street_address || '',
+            city: profile.city || '',
+            country: profile.country || '',
+            postalCode: profile.postal_code || '',
+            nin: profile.nin || '',
+            bvn: profile.bvn || ''
+        });
     } catch (error) {
         console.error('Profile fetch error:', error);
         res.status(401).json({ error: 'Invalid or expired token.' });
     }
 }
 
-// --- UPDATE PROFILE ENDPOINT (For saving remaining fields) ---
+// --- UPDATE PROFILE ENDPOINT ---
 async function updateProfile(req, res) {
     try {
         const authHeader = req.headers.authorization;
