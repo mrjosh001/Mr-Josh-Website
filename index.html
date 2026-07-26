@@ -4,6 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>MJ HUB - Dashboard</title>
+    <!-- Include Supabase Client SDK -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <style>
 /* ==========================================
    MJ HUB - Theme & Variables (v4.0 - Blue & White Theme)
@@ -1053,7 +1055,7 @@ body {
                     </ul>
                     <div class="dropdown-divider"></div>
                     <ul class="dropdown-links">
-                        <li><a href="#" onclick="alert('Logged out successfully'); return false;" style="color: #2563eb;">Logout</a></li>
+                        <li><a href="#" onclick="handleLogout(); return false;" style="color: #2563eb;">Logout</a></li>
                     </ul>
                     <div class="dropdown-divider"></div>
                     <div style="padding: 10px 15px; display: flex; justify-content: space-between; align-items: center;">
@@ -1082,7 +1084,7 @@ body {
                 <li><a href="#" class="sidebar-link" data-target="booster">⚡ <span>MJ Booster</span></a></li>
                 <li><a href="#" class="sidebar-link" data-target="deposit">💳 <span>Add Funds</span></a></li>
                 <li><a href="#" class="sidebar-link" data-target="cart">🛍️ <span>Cart</span></a></li>
-                <li><a href="#" onclick="alert('Logged out successfully'); return false;">🚪 <span>Logout</span></a></li>
+                <li><a href="#" onclick="handleLogout(); return false;">🚪 <span>Logout</span></a></li>
             </ul>
         </div>
         <div class="sidebar-footer">
@@ -1183,7 +1185,7 @@ body {
                     <div class="profile-menu-arrow">›</div>
                 </div>
 
-                <div class="profile-menu-item" onclick="alert('Logged out successfully')">
+                <div class="profile-menu-item" onclick="handleLogout()">
                     <div class="profile-menu-left">
                         <div class="profile-menu-icon icon-blue">🚪</div>
                         <div class="profile-menu-info">
@@ -1448,8 +1450,17 @@ body {
 
     <script>
 /* ==========================================
-   MJ HUB - Application Logic (v4.0)
+   MJ HUB - Application Logic with Supabase Auth Integration (v4.0)
    ========================================== */
+
+// Insert your Supabase Project URL and Publishable key here
+const SUPABASE_URL = 'https://YOUR_PROJECT_ID.supabase.co';
+const SUPABASE_PUBLISHABLE_KEY = 'Sb_publishable_r-_iYf6LNwBtCNM4k4x4Ow_t7UIEwGM';
+
+let supabaseClient = null;
+if (window.supabase && SUPABASE_URL !== 'https://YOUR_PROJECT_ID.supabase.co') {
+    supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY);
+}
 
 let currentBalanceNgn = 0.00;
 let currentBalanceUsd = 0.00;
@@ -1462,7 +1473,36 @@ let transactions = [];
 let userOnboarded = false;
 let userData = { name: '', email: '' };
 
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', async () => {
+    // Check Supabase Authentication session on load
+    if (supabaseClient) {
+        const { data: { session }, error } = await supabaseClient.auth.getSession();
+        if (!session) {
+            // If not authenticated, redirect back to the landing page
+            window.location.href = 'landing.html';
+            return;
+        } else {
+            // Populate email from active auth session
+            const userEmail = session.user.email;
+            userData.email = userEmail;
+            userData.name = userEmail.split('@')[0];
+            userOnboarded = true;
+            
+            document.getElementById('dropdownName').textContent = userData.name;
+            document.getElementById('dropdownEmail').textContent = userEmail;
+            document.getElementById('profileHeaderName').textContent = userData.name;
+            document.getElementById('profileHeaderEmail').textContent = userEmail;
+            document.getElementById('heroWelcomeTitle').textContent = 'Welcome back, ' + userData.name + '!';
+            document.getElementById('heroSubText').textContent = 'Manage your account balance and products seamlessly.';
+            document.getElementById('heroOnboardBtn').style.display = 'none';
+            document.getElementById('headerAvatarText').textContent = userData.name.charAt(0).toUpperCase();
+            document.getElementById('profileAvatarInitial').textContent = userData.name.charAt(0).toUpperCase();
+
+            let onboardCard = document.getElementById('onboardingCardContainer');
+            if(onboardCard) onboardCard.remove();
+        }
+    }
+
     const allSections = document.querySelectorAll('.app-section');
     const sidebarLinks = document.querySelectorAll('.sidebar-link');
     const sidebar = document.getElementById('sidebarDrawer');
@@ -1583,6 +1623,14 @@ document.addEventListener('DOMContentLoaded', () => {
     renderTransactions('all');
 });
 
+async function handleLogout() {
+    if (supabaseClient) {
+        await supabaseClient.auth.signOut();
+    }
+    alert('Logged out successfully');
+    window.location.href = 'landing.html';
+}
+
 function openCurrencyModal() {
     document.getElementById('baseConvertInput').value = '';
     document.getElementById('targetConvertOutput').value = '';
@@ -1669,18 +1717,26 @@ function closeChangePasswordModal() {
     document.getElementById('changePasswordModal').classList.remove('active');
 }
 
-function submitNewPassword() {
+async function submitNewPassword() {
     let cur = document.getElementById('currentPasswordInput').value;
     let nxt = document.getElementById('newPasswordInput').value;
     let cfm = document.getElementById('confirmPasswordInput').value;
 
-    if(!cur || !nxt || !cfm) {
-        alert('Please fill out all password fields.');
+    if(!nxt || !cfm) {
+        alert('Please fill out the new password fields.');
         return;
     }
     if(nxt !== cfm) {
         alert('New passwords do not match.');
         return;
+    }
+
+    if (supabaseClient) {
+        const { error } = await supabaseClient.auth.updateUser({ password: nxt });
+        if (error) {
+            alert('Error updating password: ' + error.message);
+            return;
+        }
     }
 
     alert('Password updated successfully!');
