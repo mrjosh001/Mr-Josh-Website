@@ -30,47 +30,139 @@
         .feature-card h3 { color: var(--primary-color); margin-bottom: 10px; }
         .feature-card p { color: var(--text-muted); font-size: 14px; }
 
-        /* Floating Animated Support Button Styles */
-        .support-float-btn {
+        /* Support Widget Styles (Matching Dashboard) */
+        .support-widget-container {
             position: fixed;
-            bottom: 30px;
-            right: 30px;
-            background: var(--primary-color);
-            color: #fff;
+            bottom: 25px;
+            right: 25px;
+            z-index: 9999;
+            font-family: inherit;
+        }
+
+        .support-toggle-btn {
             width: 60px;
             height: 60px;
             border-radius: 50%;
+            background: linear-gradient(135deg, #0066ff, #004dc6);
+            color: #ffffff;
+            border: none;
+            outline: none;
+            cursor: pointer;
+            box-shadow: 0 4px 15px rgba(0, 102, 255, 0.4);
             display: flex;
             align-items: center;
             justify-content: center;
-            text-decoration: none;
-            box-shadow: 0 4px 15px rgba(37, 99, 235, 0.4);
-            z-index: 1000;
-            transition: transform 0.3s ease, background-color 0.3s ease;
-            animation: pulse-animation 2s infinite;
+            position: relative;
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
         }
 
-        .support-float-btn:hover {
-            transform: scale(1.1);
-            background: #1d4ed8;
+        .support-toggle-btn:hover {
+            transform: scale(1.08);
+            box-shadow: 0 6px 20px rgba(0, 102, 255, 0.6);
         }
 
-        .support-float-btn svg {
-            width: 28px;
-            height: 28px;
-            fill: currentColor;
+        .support-icon {
+            font-size: 26px;
+            line-height: 1;
         }
 
-        @keyframes pulse-animation {
+        .support-pulse {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            border-radius: 50%;
+            background: rgba(0, 102, 255, 0.4);
+            animation: supportPulseAnim 2s infinite;
+            z-index: -1;
+        }
+
+        @keyframes supportPulseAnim {
             0% {
-                box-shadow: 0 0 0 0 rgba(37, 99, 235, 0.6);
-            }
-            70% {
-                box-shadow: 0 0 0 15px rgba(37, 99, 235, 0);
+                transform: scale(1);
+                opacity: 0.8;
             }
             100% {
-                box-shadow: 0 0 0 0 rgba(37, 99, 235, 0);
+                transform: scale(1.5);
+                opacity: 0;
             }
+        }
+
+        .support-popup-card {
+            position: absolute;
+            bottom: 75px;
+            right: 0;
+            width: 300px;
+            background: var(--card-bg);
+            color: var(--text-main);
+            border-radius: 14px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+            border: 1px solid var(--border-color);
+            display: none;
+            flex-direction: column;
+            overflow: hidden;
+            animation: popupFadeIn 0.25s ease forwards;
+        }
+
+        .support-popup-card.active {
+            display: flex;
+        }
+
+        @keyframes popupFadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .support-popup-header {
+            padding: 14px 16px;
+            background: rgba(255, 255, 255, 0.03);
+            border-bottom: 1px solid var(--border-color);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .support-popup-header h4 {
+            margin: 0;
+            font-size: 16px;
+            font-weight: 600;
+        }
+
+        .support-close-btn {
+            background: transparent;
+            border: none;
+            font-size: 20px;
+            cursor: pointer;
+            color: var(--text-muted);
+        }
+
+        .support-popup-body {
+            padding: 16px;
+            font-size: 14px;
+            text-align: left;
+        }
+
+        .support-whatsapp-btn {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-top: 12px;
+            padding: 10px 14px;
+            background-color: #25d366;
+            color: #ffffff;
+            border-radius: 8px;
+            text-decoration: none;
+            font-weight: 600;
+            transition: background 0.2s ease;
+        }
+
+        .support-whatsapp-btn:hover {
+            background-color: #20ba5a;
         }
     </style>
 </head>
@@ -112,15 +204,55 @@
         </div>
     </section>
 
-    <!-- Floating Animated Support Button -->
-    <a href="support.html" class="support-float-btn" aria-label="Contact Support" title="Chat with Support">
-        <svg viewBox="0 0 24 24">
-            <path d="M12 2C6.48 2 2 6.48 2 12c0 1.84.5 3.56 1.37 5.04L2.45 20.45c-.39.39-.39 1.02 0 1.41.39.39 1.02.39 1.41 0l3.41-3.41C8.44 19.5 10.16 20 12 20c5.52 0 10-4.48 10-10S17.52 2 12 2zm0 16c-3.31 0-6-2.69-6-6s2.69-6 6-6 6 2.69 6 6-2.69 6-6 6z"/>
-            <circle cx="8.5" cy="12" r="1.5"/>
-            <circle cx="12" cy="12" r="1.5"/>
-            <circle cx="15.5" cy="12" r="1.5"/>
-        </svg>
-    </a>
+    <!-- Support Widget (Matching Dashboard) -->
+    <div id="support-widget" class="support-widget-container">
+        <button id="support-toggle-btn" class="support-toggle-btn" aria-label="Support">
+            <span class="support-icon">💬</span>
+            <span class="support-pulse"></span>
+        </button>
+        
+        <div id="support-popup" class="support-popup-card">
+            <div class="support-popup-header">
+                <h4>Customer Support</h4>
+                <button id="support-close-btn" class="support-close-btn">&times;</button>
+            </div>
+            <div class="support-popup-body">
+                <p>Need help or have questions? Chat with us directly on WhatsApp!</p>
+                <a href="https://wa.me/234XXXXXXXXXX" target="_blank" class="support-whatsapp-btn">
+                    <span>💬 Chat on WhatsApp</span>
+                </a>
+            </div>
+        </div>
+    </div>
 
+    <!-- Script to toggle the popup on the landing page -->
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const toggleBtn = document.getElementById('support-toggle-btn');
+            const popup = document.getElementById('support-popup');
+            const closeBtn = document.getElementById('support-close-btn');
+
+            if (toggleBtn && popup) {
+                toggleBtn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    popup.classList.toggle('active');
+                });
+            }
+
+            if (closeBtn && popup) {
+                closeBtn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    popup.classList.remove('active');
+                });
+            }
+
+            document.addEventListener('click', (e) => {
+                const widget = document.getElementById('support-widget');
+                if (widget && popup && !widget.contains(e.target)) {
+                    popup.classList.remove('active');
+                }
+            });
+        });
+    </script>
 </body>
 </html>
