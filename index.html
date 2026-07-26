@@ -669,7 +669,7 @@ body {
 .cart-total-amount { font-size: 20px; font-weight: 800; color: var(--primary-color); }
 
 /* ==========================================
-   INTERACTIVE SUPPORT WIDGET STYLES (v4.3 Update)
+   INTERACTIVE SUPPORT WIDGET STYLES (Integrated)
    ========================================== */
 
 .support-widget-container {
@@ -682,7 +682,7 @@ body {
 }
 
 /* Support Popup Card */
-.support-card {
+.support-popup {
     position: absolute;
     bottom: 75px;
     right: 0;
@@ -698,104 +698,68 @@ body {
     transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
-.support-card.active {
+.support-popup.active {
     opacity: 1;
     transform: translateY(0) scale(1);
     pointer-events: auto;
 }
 
-/* Card Header */
-.support-header {
+.support-popup-header {
     background-color: var(--primary-color);
     color: white;
-    padding: 24px 20px;
+    padding: 16px 20px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
 }
 
-.support-header h3 {
-    margin: 0 0 6px 0;
-    font-size: 20px;
+.support-popup-header h3 {
+    margin: 0;
+    font-size: 18px;
     font-weight: 700;
 }
 
-.support-header p {
-    margin: 0 0 16px 0;
+.support-close-btn {
+    background: transparent;
+    border: none;
+    color: white;
+    font-size: 20px;
+    cursor: pointer;
+}
+
+.support-popup-body {
+    padding: 16px;
+}
+
+.support-popup-body p {
+    margin: 0 0 12px 0;
     font-size: 13px;
-    color: #e0e7ff;
-}
-
-/* Status Badge */
-.status-badge {
-    display: inline-flex;
-    align-items: center;
-    gap: 8px;
-    font-size: 12px;
-    color: #ffffff;
-    background: rgba(255, 255, 255, 0.15);
-    padding: 6px 12px;
-    border-radius: 20px;
-}
-
-.status-dot {
-    width: 8px;
-    height: 8px;
-    background-color: var(--whatsapp-green);
-    border-radius: 50%;
-    box-shadow: 0 0 0 0 rgba(37, 211, 102, 0.5);
-    animation: pulse-green 2s infinite;
-}
-
-@keyframes pulse-green {
-    0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(37, 211, 102, 0.7); }
-    70% { transform: scale(1); box-shadow: 0 0 0 6px rgba(37, 211, 102, 0); }
-    100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(37, 211, 102, 0); }
-}
-
-/* Channel List */
-.support-channels {
-    padding: 12px;
-}
-
-.channel-item {
-    display: flex;
-    align-items: center;
-    gap: 16px;
-    padding: 14px 12px;
-    border-radius: 12px;
-    text-decoration: none;
-    transition: background-color 0.2s ease;
-}
-
-.channel-item:hover {
-    background-color: var(--border-color);
-}
-
-.channel-icon {
-    width: 44px;
-    height: 44px;
-    border-radius: 50%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 22px;
-    flex-shrink: 0;
-}
-
-.channel-icon.whatsapp {
-    background-color: #dcfce7;
-    color: var(--whatsapp-green);
-}
-
-.channel-info h4 {
-    margin: 0 0 2px 0;
-    font-size: 15px;
-    font-weight: 600;
-    color: var(--text-main);
-}
-
-.channel-info p {
-    margin: 0;
-    font-size: 12px;
     color: var(--text-muted);
+}
+
+.support-channel-link {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px;
+    margin-bottom: 8px;
+    border-radius: 12px;
+    background: var(--bg-main);
+    border: 1px solid var(--border-color);
+    text-decoration: none;
+    color: var(--text-main);
+    font-size: 14px;
+    font-weight: 600;
+    transition: background-color 0.2s ease, border-color 0.2s ease;
+}
+
+.support-channel-link:hover {
+    background-color: rgba(37, 99, 235, 0.1);
+    border-color: var(--primary-color);
+}
+
+.support-channel-link .channel-icon {
+    font-size: 18px;
 }
 
 /* Floating Trigger Button */
@@ -808,10 +772,12 @@ body {
     border-radius: 50%;
     cursor: grab;
     display: flex;
+    flex-direction: column;
     align-items: center;
     justify-content: center;
     box-shadow: 0 4px 15px rgba(37, 99, 235, 0.4);
     transition: transform 0.1s ease, background-color 0.2s ease;
+    color: white;
 }
 
 .support-toggle-btn:active {
@@ -823,30 +789,21 @@ body {
     background-color: var(--primary-hover);
 }
 
-.support-toggle-btn i {
-    color: white;
-    font-size: 24px;
+.support-toggle-btn svg {
+    stroke: currentColor;
     transition: transform 0.3s ease;
     pointer-events: none;
 }
 
-.support-widget-container.open .support-toggle-btn i {
-    transform: rotate(90deg);
+.support-toggle-btn span {
+    font-size: 9px;
+    font-weight: 700;
+    margin-top: 2px;
+    pointer-events: none;
 }
 
-.help-tag {
-    position: absolute;
-    top: -6px;
-    right: -6px;
-    background-color: #f43f5e;
-    color: white;
-    font-size: 10px;
-    font-weight: 700;
-    padding: 3px 8px;
-    border-radius: 10px;
-    letter-spacing: 0.5px;
-    box-shadow: 0 2px 5px rgba(244, 63, 94, 0.3);
-    pointer-events: none;
+.support-widget-container.open .support-toggle-btn svg {
+    transform: scale(1.1);
 }
 
 /* ==========================================
@@ -1475,36 +1432,32 @@ body {
 
     </main>
 
-    <!-- INTERACTIVE SUPPORT WIDGET (v4.3 Update with Draggable & Popup Support) -->
-    <div class="support-widget-container" id="supportWidget">
+    <!-- INTERACTIVE SUPPORT WIDGET -->
+    <div id="support-widget" class="support-widget-container">
+        <!-- Floating Trigger Button -->
+        <button id="support-toggle-btn" class="support-toggle-btn" aria-label="Open Support">
+            <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M21 15a2 2 0 0 1-2 7H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+            </svg>
+            <span>Support</span>
+        </button>
+
         <!-- Support Popup Card -->
-        <div class="support-card" id="supportCard">
-            <div class="support-header">
-                <h3>Need help?</h3>
-                <p>We typically reply in minutes</p>
-                <div class="status-badge">
-                    <span class="status-dot"></span>
-                    Support online 24/7
-                </div>
+        <div id="support-popup" class="support-popup">
+            <div class="support-popup-header">
+                <h3>Need Help?</h3>
+                <button id="support-close-btn" class="support-close-btn" aria-label="Close Support">&times;</button>
             </div>
-            <div class="support-channels">
-                <a href="https://wa.me/qr/XM6ORO7UCYTXI1" target="_blank" class="channel-item">
-                    <div class="channel-icon whatsapp">
-                        <i class="fa-brands fa-whatsapp"></i>
-                    </div>
-                    <div class="channel-info">
-                        <h4>WhatsApp</h4>
-                        <p>Chat with us on WhatsApp</p>
-                    </div>
+            <div class="support-popup-body">
+                <p>We're here to help! Reach out to us through any of the channels below:</p>
+                <a href="mailto:support@mjhub.com" class="support-channel-link">
+                    <span class="channel-icon">✉️</span> Email Support
+                </a>
+                <a href="https://t.me/mjhub_support" target="_blank" rel="noopener noreferrer" class="support-channel-link">
+                    <span class="channel-icon">💬</span> Telegram Community
                 </a>
             </div>
         </div>
-
-        <!-- Floating Action / Toggle Button -->
-        <button class="support-toggle-btn" id="supportToggle" aria-label="Toggle Support Menu" title="Drag to move or click for help">
-            <span class="help-tag">HELP</span>
-            <i class="fa-solid fa-headset" id="toggleIcon"></i>
-        </button>
     </div>
 
     <!-- CHANGE PASSWORD MODAL -->
@@ -1634,7 +1587,7 @@ body {
 
     <script>
 /* ==========================================
-   MJ HUB - Application Logic (v4.3 - Support Widget & Dragging)
+   MJ HUB - Application Logic (v4.3)
    ========================================== */
 
 const SUPABASE_URL = 'https://atczodlljmlayvldxfmv.supabase.co';
@@ -1817,11 +1770,11 @@ document.addEventListener('DOMContentLoaded', async () => {
         profileDropdown.classList.remove('active');
         notifDropdown.classList.remove('active');
         
-        // Close support widget if clicked outside
-        const widget = document.getElementById('supportWidget');
-        const card = document.getElementById('supportCard');
-        if (widget && card && !widget.contains(e.target)) {
-            card.classList.remove('active');
+        // Close support popup if clicked outside widget container
+        const widget = document.getElementById('support-widget');
+        const popup = document.getElementById('support-popup');
+        if (widget && popup && !widget.contains(e.target)) {
+            popup.classList.remove('active');
             widget.classList.remove('open');
         }
     });
@@ -1830,13 +1783,14 @@ document.addEventListener('DOMContentLoaded', async () => {
 });
 
 /* ==========================================
-   SUPPORT WIDGET & DRAGGABLE LOGIC (v4.3)
+   SUPPORT WIDGET & DRAGGABLE LOGIC
    ========================================== */
 function initSupportWidgetAndDragging() {
-    const widget = document.getElementById('supportWidget');
-    const toggleBtn = document.getElementById('supportToggle');
-    const card = document.getElementById('supportCard');
-    if (!widget || !toggleBtn || !card) return;
+    const widget = document.getElementById('support-widget');
+    const toggleBtn = document.getElementById('support-toggle-btn');
+    const popup = document.getElementById('support-popup');
+    const closeBtn = document.getElementById('support-close-btn');
+    if (!widget || !toggleBtn || !popup) return;
 
     let isDragging = false;
     let startX, startY, initialX, initialY;
@@ -1909,9 +1863,17 @@ function initSupportWidgetAndDragging() {
             hasMoved = false;
             return;
         }
-        const isOpen = card.classList.toggle('active');
+        const isOpen = popup.classList.toggle('active');
         widget.classList.toggle('open', isOpen);
     });
+
+    if (closeBtn) {
+        closeBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            popup.classList.remove('active');
+            widget.classList.remove('open');
+        });
+    }
 }
 
 async function handleLogout() {
