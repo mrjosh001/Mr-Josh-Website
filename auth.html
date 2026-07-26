@@ -29,6 +29,7 @@
         .btn-submit:hover { background: linear-gradient(135deg, #1d4ed8 0%, #1e40af 100%); box-shadow: 0 6px 20px rgba(37, 99, 235, 0.6); transform: translateY(-1px); }
         .hidden { display: none; }
         .error-msg { color: #f87171; font-size: 13px; margin-bottom: 15px; text-align: center; }
+        .success-msg { color: #4ade80; font-size: 13px; margin-bottom: 15px; text-align: center; }
     </style>
 </head>
 <body>
@@ -40,18 +41,19 @@
         </div>
 
         <div id="errorContainer" class="error-msg"></div>
+        <div id="successContainer" class="success-msg"></div>
 
-        <!-- Sign In Form -->
+        <!-- Sign In Form (OTP Code Flow) -->
         <form id="signinForm" onsubmit="handleSignIn(event)">
-            <div class="form-group">
-                <label>Email Address or Username</label>
-                <input type="text" id="signinEmail" required placeholder="name@example.com">
+            <div class="form-group" id="emailGroup">
+                <label>Email Address</label>
+                <input type="email" id="signinEmail" required placeholder="name@example.com">
             </div>
-            <div class="form-group">
-                <label>Password</label>
-                <input type="password" id="signinPassword" required placeholder="••••••••">
+            <div class="form-group hidden" id="otpGroup">
+                <label>Enter 6-Digit Code Sent to Email</label>
+                <input type="text" id="signinOtp" placeholder="123456">
             </div>
-            <button type="submit" class="btn-submit">Sign In</button>
+            <button type="submit" id="signinBtn" class="btn-submit">Send Verification Code</button>
         </form>
 
         <!-- Sign Up Form -->
@@ -85,16 +87,30 @@
         const SUPABASE_PUBLISHABLE_KEY = 'sb_publishable_dwbeKLcSG7-nfKzZz8x8Zw_U9FtwJTy';
         const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY);
 
-        window.addEventListener('DOMContentLoaded', () => {
+        let codeSent = false;
+
+        window.addEventListener('DOMContentLoaded', async () => {
             const urlParams = new URLSearchParams(window.location.search);
             const mode = urlParams.get('mode');
             if (mode === 'signup') {
                 switchTab('signup');
             }
+
+            // Check if user is already logged in
+            const { data: { session } } = await supabaseClient.auth.getSession();
+            if (session) {
+                window.location.href = 'index.html';
+            }
         });
 
         function switchTab(tab) {
             document.getElementById('errorContainer').innerText = '';
+            document.getElementById('successContainer').innerText = '';
+            codeSent = false;
+            document.getElementById('emailGroup').classList.remove('hidden');
+            document.getElementById('otpGroup').classList.add('hidden');
+            document.getElementById('signinBtn').innerText = 'Send Verification Code';
+
             if (tab === 'signin') {
                 document.getElementById('signinTabBtn').classList.add('active');
                 document.getElementById('signupTabBtn').classList.remove('active');
@@ -110,22 +126,40 @@
 
         async function handleSignIn(e) {
             e.preventDefault();
-            const identifier = document.getElementById('signinEmail').value.trim();
-            const password = document.getElementById('signinPassword').value.trim();
+            const email = document.getElementById('signinEmail').value.trim();
             const errorEl = document.getElementById('errorContainer');
+            const successEl = document.getElementById('successContainer');
             errorEl.innerText = '';
+            successEl.innerText = '';
 
-            const { data, error } = await supabaseClient.auth.signInWithPassword({
-                email: identifier,
-                password: password
-            });
+            if (!codeSent) {
+                // Step 1: Request OTP code to be emailed
+                const { error } = await supabaseClient.auth.signInWithOtp({ email: email });
+                if (error) {
+                    errorEl.innerText = error.message;
+                    return;
+                }
+                codeSent = true;
+                successEl.innerText = 'Verification code sent to your email!';
+                document.getElementById('emailGroup').classList.add('hidden');
+                document.getElementById('otpGroup').classList.remove('hidden');
+                document.getElementById('signinBtn').innerText = 'Verify & Sign In';
+            } else {
+                // Step 2: Verify the OTP code
+                const token = document.getElementById('signinOtp').value.trim();
+                const { data, error } = await supabaseClient.auth.verifyOtp({
+                    email: email,
+                    token: token,
+                    type: 'email'
+                });
 
-            if (error) {
-                errorEl.innerText = error.message;
-                return;
+                if (error) {
+                    errorEl.innerText = error.message;
+                    return;
+                }
+
+                window.location.href = 'index.html';
             }
-
-            window.location.href = 'index.html';
         }
 
         async function handleSignUp(e) {
@@ -146,7 +180,8 @@
                         full_name: fullName,
                         username: username,
                         phone: phone
-                    }
+                    },
+                    emailRedirectTo: 'https://mrjosh001.github.io/auth.html'
                 }
             });
 
@@ -155,8 +190,8 @@
                 return;
             }
 
-            alert('Account created successfully! Redirecting to your dashboard...');
-            window.location.href = 'index.html';
+            alert('Account created successfully! Please check your email to confirm your account.');
+            switchTab('signin');
         }
     </script>
 </body>
