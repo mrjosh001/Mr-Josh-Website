@@ -27,7 +27,7 @@ async function signup(req, res) {
 
         const userId = authData.user.id;
 
-        // Insert initial fields into profiles table
+        // Insert initial fields into profiles table with robust fetch/save structure
         const { error: profileError } = await supabase
             .from('profiles')
             .upsert([
@@ -85,11 +85,43 @@ async function signin(req, res) {
 
         const userId = authData.user.id;
 
-        const { data: profileData } = await supabase
+        // Fetch user profile from Supabase with fallback check
+        let { data: profileData, error: profileFetchError } = await supabase
             .from('profiles')
             .select('*')
             .eq('id', userId)
             .single();
+
+        // If profile doesn't exist yet, fetch & save/initialize it automatically
+        if (profileFetchError || !profileData) {
+            const metadata = authData.user.user_metadata || {};
+            const fallbackName = metadata.full_name || email.split('@')[0];
+            
+            const newProfilePayload = {
+                id: userId,
+                full_name: fallbackName,
+                username: fallbackName.toLowerCase().replace(/\s+/g, ''),
+                email: email,
+                phone_number: metadata.phone || '',
+                bio: '',
+                street_address: '',
+                city: '',
+                country: 'Nigeria',
+                postal_code: '',
+                nin: '',
+                bvn: ''
+            };
+
+            const { data: insertedProfile, error: insertError } = await supabase
+                .from('profiles')
+                .upsert([newProfilePayload])
+                .select()
+                .single();
+
+            if (!insertError && insertedProfile) {
+                profileData = insertedProfile;
+            }
+        }
 
         const token = jwt.sign({ userId }, JWT_SECRET, { expiresIn: '1d' });
 
@@ -114,15 +146,49 @@ async function getProfile(req, res) {
 
         const token = authHeader.split(' ')[1];
         const decoded = jwt.verify(token, JWT_SECRET);
+        const userId = decoded.userId;
 
-        const { data: profile, error } = await supabase
+        // Fetch user profile record
+        let { data: profile, error } = await supabase
             .from('profiles')
             .select('*')
-            .eq('id', decoded.userId)
+            .eq('id', userId)
             .single();
 
+        // If fetch fails or record doesn't exist, generate a safe default saved entry
         if (error || !profile) {
-            return res.status(404).json({ error: 'User profile not found.' });
+            const { data: authUser } = await supabase.auth.admin.getUserById(userId);
+            const email = authUser?.user?.email || '';
+            const metadata = authUser?.user?.user_metadata || {};
+            const fallbackName = metadata.full_name || email.split('@')[0] || 'User';
+
+            const defaultProfile = {
+                id: userId,
+                full_name: fallbackName,
+                username: fallbackName.toLowerCase().replace(/\s+/g, ''),
+                email: email,
+                phone_number: metadata.phone || '',
+                bio: '',
+                street_address: '',
+                city: '',
+                country: 'Nigeria',
+                postal_code: '',
+                nin: '',
+                bvn: ''
+            };
+
+            // Save default profile row if missing
+            const { data: savedProfile, error: saveError } = await supabase
+                .from('profiles')
+                .upsert([defaultProfile])
+                .select()
+                .single();
+
+            if (!saveError && savedProfile) {
+                profile = savedProfile;
+            } else {
+                profile = defaultProfile;
+            }
         }
 
         // Return complete data object matching all required fields
@@ -171,9 +237,11 @@ async function updateProfile(req, res) {
             bvn 
         } = req.body;
 
+        // Save and update profile record securely using upsert to handle both updates and missing rows
         const { data, error } = await supabase
             .from('profiles')
-            .update({
+            .upsert({
+                id: userId,
                 full_name: fullName,
                 username: username,
                 phone_number: phoneNumber,
@@ -185,7 +253,6 @@ async function updateProfile(req, res) {
                 nin,
                 bvn
             })
-            .eq('id', userId)
             .select()
             .single();
 
