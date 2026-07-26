@@ -1097,7 +1097,6 @@ body {
                 <li><a href="#" class="sidebar-link" data-target="logs">📦 <span>MJ Logs</span></a></li>
                 <li><a href="#" class="sidebar-link" data-target="sms">📱 <span>MJ SMS</span></a></li>
                 <li><a href="#" class="sidebar-link" data-target="booster">⚡ <span>MJ Boosters</span></a></li>
-                <li><a href="#" class="sidebar-link" data-target="exchange">💱 <span>Mr Josh Exchange</span></a></li>
                 <li><a href="#" class="sidebar-link" data-target="deposit">💳 <span>Add Funds</span></a></li>
                 <li><a href="#" class="sidebar-link" data-target="cart">🛍️ <span>Cart</span></a></li>
                 <li><a href="#" onclick="handleLogout(); return false;">🚪 <span>Logout</span></a></li>
@@ -1117,7 +1116,7 @@ body {
         <section id="home" class="app-section active">
             <div class="dashboard-card-hero">
                 <div class="hero-welcome" id="heroWelcomeTitle">Welcome to MJ HUB</div>
-                <div class="hero-sub" id="heroSubText">Complete your onboarding profile and fund your wallet to get started with MJ Boosters, MJ SMS, MJ Logs, and Mr Josh Exchange.</div>
+                <div class="hero-sub" id="heroSubText">Complete your onboarding profile and fund your wallet to get started with MJ Boosters, MJ SMS, and MJ Logs.</div>
                 <div class="hero-actions" id="heroActionsContainer">
                     <button class="hero-btn" onclick="switchSection('deposit')">Fund Account</button>
                     <button class="hero-btn" id="heroOnboardBtn" onclick="openCurrencyModal()">Convert Currency</button>
@@ -1307,28 +1306,6 @@ body {
             </div>
         </section>
 
-        <!-- Mr Josh Exchange Section -->
-        <section id="exchange" class="app-section">
-            <div class="content-card">
-                <h2>Mr Josh Exchange - Crypto & Gift Card Swapping</h2>
-                <p class="helper-text">Trade your crypto and gift cards instantly at best market rates with Mr Josh Exchange.</p>
-                <div class="form-group">
-                    <label>Select Asset to Exchange</label>
-                    <select id="exchangeAssetSelect">
-                        <option value="usdt">USDT (Tether)</option>
-                        <option value="btc">Bitcoin (BTC)</option>
-                        <option value="eth">Ethereum (ETH)</option>
-                        <option value="giftcard">Gift Cards (Amazon / Apple / Steam)</option>
-                    </select>
-                </div>
-                <div class="form-group">
-                    <label>Amount (USD Value)</label>
-                    <input type="number" id="exchangeAmountInput" placeholder="Enter USD value">
-                </div>
-                <button class="btn-sm-primary" style="width:100%; padding:12px;" onclick="processExchangeTrade()">Submit Trade to Mr Josh Exchange</button>
-            </div>
-        </section>
-
         <!-- Cart Section -->
         <section id="cart" class="app-section">
             <div class="content-card">
@@ -1456,7 +1433,6 @@ body {
             <button class="filter-tab" onclick="filterTransactions('sms', this)">📱 SMS Numbers</button>
             <button class="filter-tab" onclick="filterTransactions('deposit', this)">💳 Deposits</button>
             <button class="filter-tab" onclick="filterTransactions('booster', this)">⚡ Social Boost</button>
-            <button class="filter-tab" onclick="filterTransactions('exchange', this)">💱 Exchange</button>
         </div>
 
         <div class="transaction-list" id="transactionListContainer"></div>
@@ -1472,10 +1448,6 @@ body {
             <div class="popup-item" onclick="switchSection('deposit'); toggleFloatingPopup();">
                 <div class="popup-icon-badge">💳</div>
                 <span>Add Funds</span>
-            </div>
-            <div class="popup-item" onclick="switchSection('exchange'); toggleFloatingPopup();">
-                <div class="popup-icon-badge">💱</div>
-                <span>Mr Josh Exchange</span>
             </div>
             <div class="popup-item" onclick="switchSection('booster'); toggleFloatingPopup();">
                 <div class="popup-icon-badge">⚡</div>
@@ -1513,9 +1485,9 @@ body {
             <span>⚙️</span>
             <span>Profile</span>
         </button>
-        <button class="bottom-nav-item" onclick="switchSection('exchange')">
-            <span>💱</span>
-            <span>Exchange</span>
+        <button class="bottom-nav-item" onclick="switchSection('deposit')">
+            <span>💳</span>
+            <span>Funds</span>
         </button>
     </nav>
 
@@ -1575,7 +1547,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             document.getElementById('profileHeaderName').textContent = displayName;
             document.getElementById('profileHeaderEmail').textContent = userEmail;
             document.getElementById('heroWelcomeTitle').textContent = 'Welcome back, ' + displayName + '!';
-            document.getElementById('heroSubText').textContent = 'Manage your account balance and access MJ Boosters, MJ SMS, MJ Logs, and Mr Josh Exchange seamlessly.';
+            document.getElementById('heroSubText').textContent = 'Manage your account balance and access MJ Boosters, MJ SMS, and MJ Logs seamlessly.';
             
             if(avatarVal) {
                 document.getElementById('headerAvatarText').innerHTML = `<img src="${avatarVal}" alt="Avatar">`;
@@ -1899,7 +1871,6 @@ function renderTransactions(filterType) {
         if(tx.type === 'deposit') { icon = '💳'; iconClass = 'tx-blue'; }
         else if(tx.type === 'sms') { icon = '📱'; iconClass = 'tx-blue'; }
         else if(tx.type === 'booster') { icon = '⚡'; iconClass = 'tx-blue'; }
-        else if(tx.type === 'exchange') { icon = '💱'; iconClass = 'tx-blue'; }
 
         let card = document.createElement('div');
         card.className = 'transaction-card';
@@ -2006,22 +1977,6 @@ function processDeposit() {
     updateBalanceDisplay();
     renderTransactions('all');
     alert('Wallet funded successfully with ₦' + amt.toLocaleString() + '!');
-    switchSection('home');
-}
-
-function processExchangeTrade() {
-    let asset = document.getElementById('exchangeAssetSelect').value.toUpperCase();
-    let amtUsd = parseFloat(document.getElementById('exchangeAmountInput').value) || 0;
-    if(amtUsd <= 0) { alert('Please enter a valid USD value.'); return; }
-    let ngnEquivalent = amtUsd * exchangeRate;
-    
-    currentBalanceNgn += ngnEquivalent;
-    currentBalanceUsd = currentBalanceNgn / exchangeRate;
-    transactions.unshift({ id: Date.now(), type: 'exchange', title: `Mr Josh Exchange (${asset})`, subtitle: `Swapped $${amtUsd.toLocaleString()} USD`, amount: '+₦' + ngnEquivalent.toLocaleString(), date: 'Just now', status: 'Success' });
-    
-    updateBalanceDisplay();
-    renderTransactions('all');
-    alert(`Successfully swapped $${amtUsd} worth of ${asset} for ₦${ngnEquivalent.toLocaleString()} via Mr Josh Exchange!`);
     switchSection('home');
 }
 
