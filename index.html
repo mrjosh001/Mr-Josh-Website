@@ -1785,6 +1785,10 @@ document.addEventListener('DOMContentLoaded', async () => {
         document.getElementById('profileBioInput').value = bioVal;
         document.getElementById('profileBvnInput').value = bvnVal;
         document.getElementById('profileNinInput').value = ninVal;
+
+        // Fetch user balance and subscribe to realtime updates from the database
+        await fetchUserBalance(user.id);
+        setupRealtimeBalanceSubscription(user.id);
     }
 
     // Initialize Movable Support Widget & Draggable Functionality
@@ -1909,6 +1913,55 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     renderTransactions('all');
 });
+
+/* ==========================================
+   FETCH & REALTIME BALANCE SYNCHRONIZATION
+   ========================================== */
+async function fetchUserBalance(userId) {
+    if (!supabaseClient) return;
+    try {
+        // Assuming your balance is stored in a 'profiles' table with columns 'id' and 'balance' (or 'balance_ngn')
+        const { data, error } = await supabaseClient
+            .from('profiles')
+            .select('balance') // Change 'balance' to match your column name if different (e.g. balance_ngn)
+            .eq('id', userId)
+            .single();
+
+        if (data && !error) {
+            currentBalanceNgn = parseFloat(data.balance) || 0.00;
+            updateBalanceDisplay();
+        }
+    } catch (err) {
+        console.error("Error fetching user balance:", err);
+    }
+}
+
+function setupRealtimeBalanceSubscription(userId) {
+    if (!supabaseClient) return;
+
+    supabaseClient
+        .channel('public:profiles')
+        .on(
+            'postgres_changes',
+            {
+                event: 'UPDATE',
+                schema: 'public',
+                table: 'profiles',
+                filter: `id=eq.${userId}`
+            },
+            (payload) => {
+                console.log('Balance updated by admin in real time:', payload);
+                if (payload.new && payload.new.balance !== undefined) {
+                    currentBalanceNgn = parseFloat(payload.new.balance) || 0.00;
+                    updateBalanceDisplay();
+                    
+                    // Optional notification to user that balance was updated
+                    alert('Your account balance has been updated by an admin!');
+                }
+            }
+        )
+        .subscribe();
+}
 
 /* ==========================================
    SUPPORT WIDGET & DRAGGABLE LOGIC
