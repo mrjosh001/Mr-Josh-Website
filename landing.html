@@ -4,8 +4,6 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>MJ HUB - Welcome</title>
-    <!-- Supabase CDN -->
-    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <style>
         :root {
             --primary-color: #2563eb;
@@ -20,53 +18,18 @@
         body { background-color: var(--bg-main); color: var(--text-main); line-height: 1.6; position: relative; min-height: 100vh; overflow-x: hidden; }
         header { display: flex; justify-content: space-between; align-items: center; padding: 20px 8%; border-bottom: 1px solid var(--border-color); background: var(--card-bg); }
         .logo { font-size: 24px; font-weight: bold; color: var(--primary-color); letter-spacing: 1px; }
-        .nav-btns a { padding: 10px 20px; border-radius: 8px; text-decoration: none; font-weight: 600; font-size: 14px; margin-left: 10px; transition: 0.3s; cursor: pointer; }
-        .btn-signin { color: var(--text-main); border: 1px solid var(--border-color); background: transparent; }
-        .btn-signup { background: var(--primary-color); color: #fff; border: none; }
+        .nav-btns a { padding: 10px 20px; border-radius: 8px; text-decoration: none; font-weight: 600; font-size: 14px; margin-left: 10px; transition: 0.3s; }
+        .btn-signin { color: var(--text-main); border: 1px solid var(--border-color); }
+        .btn-signup { background: var(--primary-color); color: #fff; }
         .hero { text-align: center; padding: 100px 20px; max-width: 800px; margin: 0 auto; }
         .hero h1 { font-size: 42px; margin-bottom: 20px; color: #fff; }
         .hero p { font-size: 18px; color: var(--text-muted); margin-bottom: 40px; }
         .hero-cta { display: flex; justify-content: center; gap: 15px; }
-        .hero-cta a, .hero-cta button { padding: 14px 30px; border-radius: 10px; font-weight: bold; text-decoration: none; font-size: 16px; cursor: pointer; }
+        .hero-cta a { padding: 14px 30px; border-radius: 10px; font-weight: bold; text-decoration: none; font-size: 16px; }
         .features { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 20px; padding: 50px 8%; }
         .feature-card { background: var(--card-bg); border: 1px solid var(--border-color); padding: 30px; border-radius: 15px; text-align: center; }
         .feature-card h3 { color: var(--primary-color); margin-bottom: 10px; }
         .feature-card p { color: var(--text-muted); font-size: 14px; }
-
-        /* --- Auth Modal Overlay --- */
-        .auth-modal-overlay {
-            position: fixed;
-            top: 0; left: 0; width: 100%; height: 100%;
-            background: rgba(11, 15, 25, 0.85);
-            backdrop-filter: blur(5px);
-            display: none;
-            align-items: center;
-            justify-content: center;
-            z-index: 100000;
-        }
-        .auth-modal-overlay.active { display: flex; }
-        .auth-modal-card {
-            background: var(--card-bg);
-            border: 1px solid var(--border-color);
-            padding: 40px;
-            border-radius: 20px;
-            width: 100%;
-            max-width: 420px;
-            position: relative;
-            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.7);
-        }
-        .auth-modal-card h2 { margin-bottom: 20px; font-size: 24px; color: #fff; text-align: center; }
-        .auth-form-group { margin-bottom: 20px; }
-        .auth-form-group label { display: block; font-size: 13px; font-weight: 600; color: var(--text-muted); margin-bottom: 8px; text-transform: uppercase; }
-        .auth-form-group input { width: 100%; padding: 12px 16px; background: #0b0f19; border: 1px solid var(--border-color); border-radius: 10px; color: #fff; font-size: 15px; outline: none; transition: border-color 0.2s; }
-        .auth-form-group input:focus { border-color: var(--primary-color); }
-        .auth-submit-btn { width: 100%; padding: 14px; background: var(--primary-color); color: #fff; border: none; border-radius: 10px; font-weight: bold; font-size: 16px; cursor: pointer; transition: background 0.2s; margin-top: 10px; }
-        .auth-submit-btn:hover { background: var(--primary-hover); }
-        .auth-close-btn { position: absolute; top: 20px; right: 20px; background: transparent; border: none; color: var(--text-muted); font-size: 22px; cursor: pointer; }
-        .auth-close-btn:hover { color: #fff; }
-        .auth-toggle-mode { text-align: center; margin-top: 20px; font-size: 14px; color: var(--text-muted); }
-        .auth-toggle-mode span { color: var(--primary-color); cursor: pointer; font-weight: 600; }
-        .auth-toggle-mode span:hover { text-decoration: underline; }
 
         /* --- Movable & Top-Notch Support Widget Styles --- */
         .support-widget-container {
@@ -95,10 +58,22 @@
             transition: box-shadow 0.2s ease, transform 0.2s ease;
         }
 
-        .support-toggle-btn:active { cursor: grabbing; }
-        .support-toggle-btn:hover { transform: scale(1.05); box-shadow: 0 12px 30px rgba(0, 0, 0, 0.6), 0 0 20px rgba(37, 99, 235, 0.5); }
-        .support-icon { font-size: 28px; line-height: 1; filter: drop-shadow(0 2px 4px rgba(0,0,0,0.3)); }
+        .support-toggle-btn:active {
+            cursor: grabbing;
+        }
 
+        .support-toggle-btn:hover {
+            transform: scale(1.05);
+            box-shadow: 0 12px 30px rgba(0, 0, 0, 0.6), 0 0 20px rgba(37, 99, 235, 0.5);
+        }
+
+        .support-icon {
+            font-size: 28px;
+            line-height: 1;
+            filter: drop-shadow(0 2px 4px rgba(0,0,0,0.3));
+        }
+
+        /* Help Badge Tag */
         .support-badge-tag {
             position: absolute;
             top: -6px;
@@ -114,6 +89,7 @@
             text-transform: uppercase;
         }
 
+        /* Top-Notch Popup Window */
         .support-popup-card {
             position: absolute;
             bottom: 80px;
@@ -131,13 +107,22 @@
             transform-origin: bottom right;
         }
 
-        .support-popup-card.active { display: flex; }
-
-        @keyframes popupScaleIn {
-            from { opacity: 0; transform: scale(0.9) translateY(15px); }
-            to { opacity: 1; transform: scale(1) translateY(0); }
+        .support-popup-card.active {
+            display: flex;
         }
 
+        @keyframes popupScaleIn {
+            from {
+                opacity: 0;
+                transform: scale(0.9) translateY(15px);
+            }
+            to {
+                opacity: 1;
+                transform: scale(1) translateY(0);
+            }
+        }
+
+        /* Header Section matching reference design */
         .support-popup-header {
             padding: 24px 20px 20px 20px;
             background: linear-gradient(180deg, #1f2937 0%, #111827 100%);
@@ -145,36 +130,122 @@
             position: relative;
         }
 
-        .support-popup-header h3 { margin: 0 0 6px 0; font-size: 22px; font-weight: 700; color: #ffffff; }
-        .support-popup-header p { margin: 0 0 14px 0; font-size: 14px; color: #9ca3af; }
-        .support-status-indicator { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; color: #d1d5db; font-weight: 500; }
-        .status-dot { width: 8px; height: 8px; background-color: #10b981; border-radius: 50%; box-shadow: 0 0 8px #10b981; }
+        .support-popup-header h3 {
+            margin: 0 0 6px 0;
+            font-size: 22px;
+            font-weight: 700;
+            color: #ffffff;
+        }
 
+        .support-popup-header p {
+            margin: 0 0 14px 0;
+            font-size: 14px;
+            color: #9ca3af;
+        }
+
+        .support-status-indicator {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 13px;
+            color: #d1d5db;
+            font-weight: 500;
+        }
+
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            background-color: #10b981;
+            border-radius: 50%;
+            box-shadow: 0 0 8px #10b981;
+        }
+
+        /* Close Button inside card */
         .support-close-inner {
             position: absolute;
-            top: 16px; right: 16px;
+            top: 16px;
+            right: 16px;
             background: rgba(255, 255, 255, 0.05);
-            border: none; width: 30px; height: 30px;
-            border-radius: 50%; font-size: 16px; color: #9ca3af;
-            cursor: pointer; display: flex; align-items: center; justify-content: center;
+            border: none;
+            width: 30px;
+            height: 30px;
+            border-radius: 50%;
+            font-size: 16px;
+            color: #9ca3af;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
             transition: background 0.2s, color 0.2s;
         }
-        .support-close-inner:hover { background: rgba(255, 255, 255, 0.1); color: #ffffff; }
 
-        .support-popup-body { padding: 16px; display: flex; flex-direction: column; gap: 12px; background: #111827; }
+        .support-close-inner:hover {
+            background: rgba(255, 255, 255, 0.1);
+            color: #ffffff;
+        }
+
+        /* Body Channels List */
+        .support-popup-body {
+            padding: 16px;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            background: #111827;
+        }
+
         .support-channel-item {
-            display: flex; align-items: center; gap: 14px;
-            padding: 14px 16px; background: #1f2937;
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            padding: 14px 16px;
+            background: #1f2937;
             border: 1px solid rgba(255, 255, 255, 0.04);
-            border-radius: 14px; text-decoration: none; color: #ffffff;
+            border-radius: 14px;
+            text-decoration: none;
+            color: #ffffff;
             transition: all 0.2s ease;
         }
-        .support-channel-item:hover { background: #374151; border-color: rgba(37, 99, 235, 0.4); transform: translateY(-2px); box-shadow: 0 4px 12px rgba(0,0,0,0.2); }
-        .channel-icon-wrap { width: 40px; height: 40px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 22px; flex-shrink: 0; }
-        .channel-icon-wrap.whatsapp { background: rgba(37, 211, 102, 0.15); color: #25d366; }
-        .channel-icon-wrap.telegram { background: rgba(0, 136, 204, 0.15); color: #0088cc; }
-        .channel-info h4 { margin: 0 0 2px 0; font-size: 15px; font-weight: 600; color: #ffffff; }
-        .channel-info p { margin: 0; font-size: 12px; color: #9ca3af; }
+
+        .support-channel-item:hover {
+            background: #374151;
+            border-color: rgba(37, 99, 235, 0.4);
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+        }
+
+        .channel-icon-wrap {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 22px;
+            flex-shrink: 0;
+        }
+
+        .channel-icon-wrap.whatsapp {
+            background: rgba(37, 211, 102, 0.15);
+            color: #25d366;
+        }
+
+        .channel-icon-wrap.telegram {
+            background: rgba(0, 136, 204, 0.15);
+            color: #0088cc;
+        }
+
+        .channel-info h4 {
+            margin: 0 0 2px 0;
+            font-size: 15px;
+            font-weight: 600;
+            color: #ffffff;
+        }
+
+        .channel-info p {
+            margin: 0;
+            font-size: 12px;
+            color: #9ca3af;
+        }
     </style>
 </head>
 <body>
@@ -182,8 +253,8 @@
     <header>
         <div class="logo">MJ HUB</div>
         <div class="nav-btns">
-            <button id="nav-signin-btn" class="btn-signin">Sign In</button>
-            <button id="nav-signup-btn" class="btn-signup">Get Started</button>
+            <a href="auth.html?mode=signin" class="btn-signin">Sign In</a>
+            <a href="auth.html?mode=signup" class="btn-signup">Get Started</a>
         </div>
     </header>
 
@@ -191,8 +262,8 @@
         <h1>Your Ultimate Digital Service & Business Suite</h1>
         <p>Manage your logs, automate SMS campaigns, boost social engagement, and handle digital exchanges seamlessly all in one secure platform.</p>
         <div class="hero-cta">
-            <button id="hero-signup-btn" class="btn-signup" style="background: var(--primary-color); color: #fff;">Create Free Account</button>
-            <button id="hero-signin-btn" class="btn-signin">Access Dashboard</button>
+            <a href="auth.html?mode=signup" class="btn-signup" style="background: var(--primary-color); color: #fff;">Create Free Account</a>
+            <a href="auth.html?mode=signin" class="btn-signin">Access Dashboard</a>
         </div>
     </section>
 
@@ -214,28 +285,6 @@
             <p>Fast, transparent, and secure digital asset exchanges.</p>
         </div>
     </section>
-
-    <!-- Interactive Auth Modal Form -->
-    <div id="auth-modal" class="auth-modal-overlay">
-        <div class="auth-modal-card">
-            <button id="auth-close-modal" class="auth-close-btn">&times;</button>
-            <h2 id="auth-modal-title">Sign In to MJ HUB</h2>
-            <form id="auth-form">
-                <div class="auth-form-group">
-                    <label for="auth-email">Email Address</label>
-                    <input type="email" id="auth-email" required placeholder="name@example.com">
-                </div>
-                <div class="auth-form-group">
-                    <label for="auth-password">Password</label>
-                    <input type="password" id="auth-password" required placeholder="••••••••">
-                </div>
-                <button type="submit" id="auth-submit-btn" class="auth-submit-btn">Sign In</button>
-            </form>
-            <div class="auth-toggle-mode">
-                <p id="auth-toggle-text">Don't have an account? <span id="auth-switch-mode-btn">Sign Up</span></p>
-            </div>
-        </div>
-    </div>
 
     <!-- Movable Top-Notch Support Widget -->
     <div id="support-widget" class="support-widget-container">
@@ -277,100 +326,9 @@
         </div>
     </div>
 
-    <!-- Script for Movable Support Widget & Supabase Auth Modal Logic -->
+    <!-- Script for Movable (Drag & Touch) and Popup Interactivity -->
     <script>
-        // Initialize Supabase Client (Replace with your actual Supabase URL and Anon Key)
-        const SUPABASE_URL = 'YOUR_SUPABASE_URL';
-        const SUPABASE_ANON_KEY = 'YOUR_SUPABASE_ANON_KEY';
-        const supabaseClient = window.supabase ? window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY) : null;
-
-        // Auth Modal Controller & Supabase Handler
         document.addEventListener('DOMContentLoaded', () => {
-            const authModal = document.getElementById('auth-modal');
-            const authCloseModal = document.getElementById('auth-close-modal');
-            const authModalTitle = document.getElementById('auth-modal-title');
-            const authSubmitBtn = document.getElementById('auth-submit-btn');
-            const authForm = document.getElementById('auth-form');
-            const authEmailInput = document.getElementById('auth-email');
-            const authPasswordInput = document.getElementById('auth-password');
-            const authToggleText = document.getElementById('auth-toggle-text');
-            const authSwitchModeBtn = document.getElementById('auth-switch-mode-btn');
-
-            let isSignUpMode = false;
-
-            function openAuthModal(signUp = false) {
-                isSignUpMode = signUp;
-                if (isSignUpMode) {
-                    authModalTitle.textContent = 'Create MJ HUB Account';
-                    authSubmitBtn.textContent = 'Sign Up';
-                    authToggleText.innerHTML = 'Already have an account? <span id="auth-switch-mode-btn">Sign In</span>';
-                } else {
-                    authModalTitle.textContent = 'Sign In to MJ HUB';
-                    authSubmitBtn.textContent = 'Sign In';
-                    authToggleText.innerHTML = "Don't have an account? <span id="auth-switch-mode-btn">Sign Up</span>";
-                }
-                // Re-bind click listener for the dynamically updated switch button
-                document.getElementById('auth-switch-mode-btn').addEventListener('click', () => {
-                    openAuthModal(!isSignUpMode);
-                });
-                authModal.classList.add('active');
-            }
-
-            function closeAuthModal() {
-                authModal.classList.remove('active');
-            }
-
-            // Button Triggers
-            document.getElementById('nav-signin-btn').addEventListener('click', () => openAuthModal(false));
-            document.getElementById('hero-signin-btn').addEventListener('click', () => openAuthModal(false));
-            document.getElementById('nav-signup-btn').addEventListener('click', () => openAuthModal(true));
-            document.getElementById('hero-signup-btn').addEventListener('click', () => openAuthModal(true));
-            authCloseModal.addEventListener('click', closeAuthModal);
-
-            authModal.addEventListener('click', (e) => {
-                if (e.target === authModal) closeAuthModal();
-            });
-
-            // Supabase Authentication Submission Handler
-            async function handleSignIn(email, password) {
-                if (!supabaseClient) {
-                    alert('Supabase client is not initialized. Please add your credentials.');
-                    return;
-                }
-
-                if (isSignUpMode) {
-                    const { data, error } = await supabaseClient.auth.signUp({
-                        email: email,
-                        password: password,
-                    });
-                    if (error) {
-                        alert('Error signing up: ' + error.message);
-                        return;
-                    }
-                    alert('Sign up successful! Please check your email for confirmation or log in.');
-                    openAuthModal(false);
-                } else {
-                    const { data, error } = await supabaseClient.auth.signInWithPassword({
-                        email: email,
-                        password: password,
-                    });
-                    
-                    if (error) {
-                        alert('Error signing in: ' + error.message);
-                        return;
-                    }
-                    
-                    // Successful login -> Now redirect to dashboard
-                    window.location.href = 'index.html'; 
-                }
-            }
-
-            authForm.addEventListener('submit', (e) => {
-                e.preventDefault();
-                handleSignIn(authEmailInput.value, authPasswordInput.value);
-            });
-
-            // --- Movable Support Widget Logic ---
             const widget = document.getElementById('support-widget');
             const toggleBtn = document.getElementById('support-toggle-btn');
             const popup = document.getElementById('support-popup');
@@ -380,6 +338,7 @@
             let hasMoved = false;
             let startX, startY, initialX, initialY;
 
+            // Dragging Event Handlers (Mouse & Touch support for whole screen movement)
             const dragStart = (e) => {
                 isDragging = true;
                 hasMoved = false;
@@ -393,6 +352,7 @@
                 initialX = rect.left;
                 initialY = rect.top;
 
+                // Switch from fixed bottom/right positioning to absolute screen positioning
                 widget.style.bottom = 'auto';
                 widget.style.right = 'auto';
                 widget.style.left = initialX + 'px';
@@ -419,6 +379,7 @@
                 let newX = initialX + dx;
                 let newY = initialY + dy;
 
+                // Keep widget within viewport limits
                 const maxX = window.innerWidth - widget.offsetWidth;
                 const maxY = window.innerHeight - widget.offsetHeight;
 
@@ -429,7 +390,7 @@
                 widget.style.top = newY + 'px';
             };
 
-            const dragEnd = () => {
+            const dragEnd = (e) => {
                 if (!isDragging) return;
                 isDragging = false;
 
@@ -442,6 +403,7 @@
             toggleBtn.addEventListener('mousedown', dragStart);
             toggleBtn.addEventListener('touchstart', dragStart);
 
+            // Toggle Popup behavior (prevent opening if user was dragging)
             toggleBtn.addEventListener('click', (e) => {
                 if (hasMoved) return;
                 e.stopPropagation();
@@ -455,6 +417,7 @@
                 });
             }
 
+            // Close popup when clicking outside
             document.addEventListener('click', (e) => {
                 if (widget && popup && !widget.contains(e.target)) {
                     popup.classList.remove('active');
