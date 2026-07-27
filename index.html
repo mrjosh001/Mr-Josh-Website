@@ -1323,6 +1323,16 @@ body {
                 <p id="profileHeaderEmail">No email provided</p>
             </div>
 
+            <!-- Customer ID Identification Card Added Here -->
+            <div class="account-settings-card" style="background: rgba(17, 24, 39, 0.95); border: 1px solid rgba(59, 130, 246, 0.2); padding: 20px; border-radius: 14px; max-width: 400px; color: #fff; margin: 0 auto 20px auto;">
+                <h3 style="font-size: 16px; margin-bottom: 8px;">Account Identification</h3>
+                <p style="font-size: 13px; color: #93c5fd; margin-bottom: 12px;">Provide this Customer ID to support if you encounter deposit delays or disputes:</p>
+                <div style="display: flex; gap: 10px; align-items: center;">
+                    <input type="text" id="myCustomerId" readonly style="background: #07090e; border: 1px solid #3b82f6; padding: 10px; border-radius: 8px; color: #38bdf8; font-family: monospace; font-weight: bold; width: 100%;" placeholder="Loading...">
+                    <button class="action-btn primary-btn" onclick="copyIdToClipboard()" style="background: #2563eb; color: #fff; border: none; padding: 10px 16px; border-radius: 8px; cursor: pointer; font-weight: 600;">Copy</button>
+                </div>
+            </div>
+
             <div class="content-card" id="profileSettingsCard" style="margin-bottom: 16px;">
                 <h2>Profile & Account Settings</h2>
                 <p class="helper-text">Update your account profile details, bio, address, verification numbers (BVN & NIN), and avatar stored securely in Supabase.</p>
@@ -1780,6 +1790,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Initialize Movable Support Widget & Draggable Functionality
     initSupportWidgetAndDragging();
 
+    // Load Customer Profile Badge Identification Code
+    loadCustomerProfileBadge();
+
     const allSections = document.querySelectorAll('.app-section');
     const sidebarLinks = document.querySelectorAll('.sidebar-link');
     const sidebar = document.getElementById('sidebarDrawer');
@@ -1987,6 +2000,30 @@ function initSupportWidgetAndDragging() {
             widget.classList.remove('open');
         });
     }
+}
+
+/* ==========================================
+   CUSTOMER PROFILE BADGE LOADER FUNCTION
+   ========================================== */
+async function loadCustomerProfileBadge() {
+    if (!supabaseClient) return;
+    const { data: { session } } = await supabaseClient.auth.getSession();
+    if (!session) return;
+
+    const { data } = await supabaseClient.from('profiles').select('customer_id').eq('id', session.user.id).single();
+    if (data && data.customer_id) {
+        document.getElementById('myCustomerId').value = data.customer_id;
+    } else {
+        // Fallback option using user id substring if customer_id column isn't populated
+        document.getElementById('myCustomerId').value = session.user.id;
+    }
+}
+
+function copyIdToClipboard() {
+    const copyText = document.getElementById('myCustomerId');
+    copyText.select();
+    navigator.clipboard.writeText(copyText.value);
+    alert('Customer ID copied to clipboard!');
 }
 
 async function handleLogout() {
