@@ -1,5 +1,5 @@
 /* ==========================================
-   MJ HUB - Application Logic & Support Widget (v4.5)
+   MJ HUB - Application Logic & Support Widget (v4.6)
    ========================================== */
 
 const SUPABASE_URL = 'https://atczodlljmlayvldxfmv.supabase.co';
@@ -115,8 +115,14 @@ document.addEventListener('DOMContentLoaded', async () => {
             document.getElementById('profileBvnInput').value = bvnVal;
             document.getElementById('profileNinInput').value = ninVal;
 
+            // Fetch live user balance from profiles table
+            await fetchUserProfileAndBalance(user.id);
+
             // Fetch live user transactions from Supabase database
             await fetchUserTransactions(user.id);
+
+            // Enable real-time balance sync listener
+            listenToBalanceChanges(user.id);
         }
     }
 
@@ -523,6 +529,47 @@ function toggleActivityHistory() {
 }
 
 /* ==========================================
+   SUPABASE PROFILE & BALANCE FETCHING & REAL-TIME SYNC
+   ========================================== */
+async function fetchUserProfileAndBalance(userId) {
+    if (!supabaseClient) return;
+    try {
+        const { data, error } = await supabaseClient
+            .from('profiles')
+            .select('balance, balance_usd')
+            .eq('id', userId)
+            .single();
+
+        if (data && !error) {
+            currentBalanceNgn = parseFloat(data.balance) || 0.00;
+            currentBalanceUsd = parseFloat(data.balance_usd) || (currentBalanceNgn / exchangeRate);
+            updateBalanceDisplay();
+        }
+    } catch (err) {
+        console.error("Error fetching user profile balance:", err);
+    }
+}
+
+function listenToBalanceChanges(userId) {
+    if (!supabaseClient) return;
+    supabaseClient
+        .channel('public:profiles')
+        .on('postgres_changes', { 
+            event: 'UPDATE', 
+            schema: 'public', 
+            table: 'profiles', 
+            filter: `id=eq.${userId}` 
+        }, payload => {
+            if (payload.new) {
+                currentBalanceNgn = parseFloat(payload.new.balance) || 0.00;
+                currentBalanceUsd = parseFloat(payload.new.balance_usd) || (currentBalanceNgn / exchangeRate);
+                updateBalanceDisplay();
+            }
+        })
+        .subscribe();
+}
+
+/* ==========================================
    DYNAMIC SUPABASE TRANSACTION FETCH & FILTER
    ========================================== */
 async function fetchUserTransactions(userId) {
@@ -537,7 +584,7 @@ async function fetchUserTransactions(userId) {
         if (data && !error) {
             transactions = data.map(tx => ({
                 id: tx.id,
-                category: tx.category || 'deposit',
+                category: tx.category || tx.type || 'deposit',
                 title: tx.title,
                 subtitle: tx.subtitle || '',
                 amount: tx.amount,
@@ -554,7 +601,6 @@ async function fetchUserTransactions(userId) {
 function filterTransactions(category, btnElement) {
     currentActiveFilter = category;
     
-    // Update active tab styles across UI filter buttons
     document.querySelectorAll('.filter-tab, .filter-tab-btn').forEach(btn => {
         btn.classList.remove('active');
     });
@@ -670,7 +716,7 @@ async function buyNowItem(title, price, type) {
             await supabaseClient.from('profiles').update({ balance: currentBalanceNgn, balance_usd: currentBalanceUsd }).eq('id', session.user.id);
             await supabaseClient.from('transactions').insert({
                 user_id: session.user.id,
-                category: type, // 'sms', 'log', or 'booster'
+                category: type, 
                 title: title,
                 subtitle: 'Instant Purchase',
                 amount: '₦' + price.toLocaleString(),
