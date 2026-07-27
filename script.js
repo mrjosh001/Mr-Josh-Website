@@ -1,5 +1,5 @@
 /* ==========================================
-   MJ HUB - Application Logic & Support Widget (v4.9 - Mobile Debug Enabled)
+   MJ HUB - Application Logic & Support Widget (v5.0 - Transaction Insertion & RLS Hardened)
    ========================================== */
 
 const SUPABASE_URL = 'https://atczodlljmlayvldxfmv.supabase.co';
