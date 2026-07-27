@@ -247,7 +247,7 @@
                 <a href="#rent-number">Rent Number</a>
                 <a href="#how-it-works">How Does It Work</a>
                 <a href="#faq">FAQ</a>
-                <a href="#help">Help</a>
+                <a href="#help" id="helpLink">Help</a>
                 <a href="#" id="apiLink">API <span class="badge-soon">Coming Soon</span></a>
             </div>
             <div class="dropdown-auth-actions">
@@ -390,10 +390,21 @@
                 });
             }
 
+            // Help link in menu triggers the support popup
+            const helpLink = document.getElementById('helpLink');
+            const popup = document.getElementById('support-popup');
+
+            if (helpLink && popup) {
+                helpLink.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    dropdownMenu.classList.remove('active');
+                    popup.classList.add('active');
+                });
+            }
+
             // Movable Support Widget Controls
             const widget = document.getElementById('support-widget');
             const toggleBtn = document.getElementById('support-toggle-btn');
-            const popup = document.getElementById('support-popup');
             const closeBtn = document.getElementById('support-close-btn');
 
             let isDragging = false;
@@ -476,7 +487,7 @@
             }
 
             document.addEventListener('click', (e) => {
-                if (widget && popup && !widget.contains(e.target)) {
+                if (widget && popup && !widget.contains(e.target) && !helpLink.contains(e.target)) {
                     popup.classList.remove('active');
                 }
             });
