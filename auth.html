@@ -49,6 +49,9 @@
         .btn-submit { width: 100%; padding: 14px; background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%); color: #fff; border: none; border-radius: 10px; font-weight: bold; font-size: 15px; cursor: pointer; margin-top: 10px; transition: all 0.2s ease-in-out; box-shadow: 0 4px 14px rgba(37, 99, 235, 0.4); }
         .btn-submit:hover { opacity: 0.9; transform: translateY(-1px); }
         
+        .forgot-password-link { display: block; text-align: right; margin-top: -10px; margin-bottom: 15px; font-size: 13px; color: var(--text-muted); text-decoration: none; transition: color 0.2s; }
+        .forgot-password-link:hover { color: #fff; text-decoration: underline; }
+
         .divider { display: flex; align-items: center; text-align: center; margin: 25px 0; color: #64748b; font-size: 12px; text-transform: uppercase; letter-spacing: 1px; }
         .divider::before, .divider::after { content: ''; flex: 1; border-bottom: 1px solid var(--border-color); }
         .divider::before { margin-right: 15px; }
@@ -57,6 +60,9 @@
         .hidden { display: none; }
         .error-msg { color: #f87171; font-size: 13px; margin-bottom: 15px; text-align: center; background: rgba(248, 113, 113, 0.1); padding: 10px; border-radius: 8px; border: 1px solid rgba(248, 113, 113, 0.2); }
         .success-msg { color: #4ade80; font-size: 13px; margin-bottom: 15px; text-align: center; background: rgba(74, 222, 128, 0.1); padding: 10px; border-radius: 8px; border: 1px solid rgba(74, 222, 128, 0.2); }
+
+        .back-to-signin { display: block; text-align: center; margin-top: 15px; font-size: 13px; color: var(--text-muted); text-decoration: none; }
+        .back-to-signin:hover { text-decoration: underline; color: #fff; }
 
         /* Professional Dark Footer */
         .site-footer { background-color: var(--footer-bg); border-top: 1px solid var(--border-color); padding: 50px 20px 30px; font-size: 13px; color: #94a3b8; }
@@ -89,7 +95,7 @@
                 <p id="formSubheading">Sign in to access your dashboard and manage tasks.</p>
             </div>
 
-            <div class="tab-switcher">
+            <div class="tab-switcher" id="tabSwitcherContainer">
                 <button id="signinTabBtn" class="tab-btn active" onclick="switchTab('signin')">Sign In</button>
                 <button id="signupTabBtn" class="tab-btn" onclick="switchTab('signup')">Register Account</button>
             </div>
@@ -107,7 +113,27 @@
                     <label>Password</label>
                     <input type="password" id="signinPassword" required placeholder="••••••••">
                 </div>
+                <a href="#" class="forgot-password-link" onclick="switchTab('forgot'); return false;">Forgot Password?</a>
                 <button type="submit" class="btn-submit">Sign In to Dashboard</button>
+            </form>
+
+            <!-- Forgot Password Request Form -->
+            <form id="forgotForm" class="hidden" onsubmit="handleForgotPassword(event)">
+                <div class="form-group">
+                    <label>Enter Your Email Address</label>
+                    <input type="email" id="forgotEmail" required placeholder="name@example.com">
+                </div>
+                <button type="submit" class="btn-submit">Send Reset Instructions</button>
+                <a href="#" class="back-to-signin" onclick="switchTab('signin'); return false;">&larr; Back to Sign In</a>
+            </form>
+
+            <!-- Update New Password Form (Appears when redirected with recovery token) -->
+            <form id="updatePasswordForm" class="hidden" onsubmit="handleUpdatePassword(event)">
+                <div class="form-group">
+                    <label>New Password</label>
+                    <input type="password" id="newPassword" required placeholder="••••••••">
+                </div>
+                <button type="submit" class="btn-submit">Update Password</button>
             </form>
 
             <!-- Sign Up Form (Cleaned Up Credentials Only) -->
@@ -187,8 +213,25 @@
         const SUPABASE_PUBLISHABLE_KEY = 'sb_publishable_dwbeKLcSG7-nfKzZz8x8Zw_U9FtwJTy';
         const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY);
 
-        window.addEventListener('DOMContentLoaded', () => {
+        window.addEventListener('DOMContentLoaded', async () => {
             const urlParams = new URLSearchParams(window.location.search);
+            
+            // Check if Supabase triggered a recovery session via hash or query params
+            const hashParams = new URLSearchParams(window.location.hash.substring(1));
+            const type = urlParams.get('type') || hashParams.get('type');
+
+            if (type === 'recovery') {
+                switchTab('updatePassword');
+                return;
+            }
+
+            // Also listen to auth state changes for password recovery event
+            supabaseClient.auth.onAuthStateChange(async (event, session) => {
+                if (event === 'PASSWORD_RECOVERY') {
+                    switchTab('updatePassword');
+                }
+            });
+
             if (urlParams.get('mode') === 'signup') {
                 switchTab('signup');
             }
@@ -207,29 +250,53 @@
             const formIcon = document.getElementById('formIcon');
             const formHeading = document.getElementById('formHeading');
             const formSubheading = document.getElementById('formSubheading');
+            const tabSwitcherContainer = document.getElementById('tabSwitcherContainer');
+
+            // Hide all forms first
+            document.getElementById('signinForm').classList.add('hidden');
+            document.getElementById('signupForm').classList.add('hidden');
+            document.getElementById('forgotForm').classList.add('hidden');
+            document.getElementById('updatePasswordForm').classList.add('hidden');
+            tabSwitcherContainer.style.display = 'flex';
 
             if (tab === 'signin') {
                 document.getElementById('signinTabBtn').classList.add('active');
                 document.getElementById('signupTabBtn').classList.remove('active');
                 document.getElementById('signinForm').classList.remove('hidden');
-                document.getElementById('signupForm').classList.add('hidden');
 
                 pageTitle.innerText = 'Sign In to your Account';
                 breadcrumbSub.innerText = 'Sign In';
                 formIcon.innerText = '🔒';
                 formHeading.innerText = 'Welcome Back';
                 formSubheading.innerText = 'Sign in to access your dashboard and manage tasks.';
-            } else {
+            } else if (tab === 'signup') {
                 document.getElementById('signupTabBtn').classList.add('active');
                 document.getElementById('signinTabBtn').classList.remove('active');
                 document.getElementById('signupForm').classList.remove('hidden');
-                document.getElementById('signinForm').classList.add('hidden');
 
                 pageTitle.innerText = 'Register for an Account';
                 breadcrumbSub.innerText = 'Sign Up';
                 formIcon.innerText = '👤';
                 formHeading.innerText = 'Create your account';
                 formSubheading.innerText = 'New here? It only takes a few seconds.';
+            } else if (tab === 'forgot') {
+                tabSwitcherContainer.style.display = 'none';
+                document.getElementById('forgotForm').classList.remove('hidden');
+
+                pageTitle.innerText = 'Reset Password';
+                breadcrumbSub.innerText = 'Forgot Password';
+                formIcon.innerText = '🔑';
+                formHeading.innerText = 'Recover Account';
+                formSubheading.innerText = 'Enter your email to receive password reset instructions.';
+            } else if (tab === 'updatePassword') {
+                tabSwitcherContainer.style.display = 'none';
+                document.getElementById('updatePasswordForm').classList.remove('hidden');
+
+                pageTitle.innerText = 'Change Password';
+                breadcrumbSub.innerText = 'Update Password';
+                formIcon.innerText = '🛡️';
+                formHeading.innerText = 'Set New Password';
+                formSubheading.innerText = 'Please enter your new secure password below.';
             }
         }
 
@@ -295,6 +362,43 @@
             setTimeout(() => {
                 window.location.href = 'index.html';
             }, 1000);
+        }
+
+        async function handleForgotPassword(e) {
+            e.preventDefault();
+            const email = document.getElementById('forgotEmail').value.trim();
+
+            // Send password reset email with redirection back to this page
+            const { data, error } = await supabaseClient.auth.resetPasswordForEmail(email, {
+                redirectTo: window.location.origin + window.location.pathname
+            });
+
+            if (error) {
+                showError(error.message);
+                return;
+            }
+
+            showSuccess('Password reset link sent! Check your email inbox.');
+        }
+
+        async function handleUpdatePassword(e) {
+            e.preventDefault();
+            const newPassword = document.getElementById('newPassword').value.trim();
+
+            // Updates the current user's password on the server securely via Supabase Auth
+            const { data, error } = await supabaseClient.auth.updateUser({
+                password: newPassword
+            });
+
+            if (error) {
+                showError(error.message);
+                return;
+            }
+
+            showSuccess('Password successfully updated on the server!');
+            setTimeout(() => {
+                window.location.href = 'index.html';
+            }, 1500);
         }
     </script>
 </body>
