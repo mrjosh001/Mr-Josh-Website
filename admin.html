@@ -65,7 +65,6 @@
         .revenue-dropdown-wrapper { display: flex; align-items: center; gap: 10px; }
         .revenue-select { background: #07090e; border: 1px solid var(--border-color); color: var(--text-main); padding: 8px 14px; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer; outline: none; transition: 0.2s; }
         .revenue-select:hover { border-color: var(--primary-color); }
-        .rate-ticker { font-size: 12px; color: #38bdf8; font-weight: 600; }
 
         /* Data Section */
         .data-section { background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 14px; padding: 25px; box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.5); margin-bottom: 25px; }
@@ -149,7 +148,6 @@
                             <option value="12months">Last 12 Months</option>
                         </select>
                     </div>
-                    <div class="rate-ticker" id="rateTicker">Live Bit P2P Rate: Fetching...</div>
                 </div>
 
                 <div class="metrics-grid">
@@ -347,7 +345,7 @@
         let allProfiles = [];
         let currentFilter = 'all';
         let currentRevenueTimeframe = 'month';
-        let liveP2PRate = 1364.48;
+        let liveP2PRate = 1364.48; // Stored in memory based on P2P rate conversion
         let lookedUpUser = null;
 
         window.addEventListener('DOMContentLoaded', async () => {
@@ -373,9 +371,8 @@
                     liveP2PRate = data.rates.NGN;
                 }
             } catch (err) {
-                console.warn('Using fallback P2P exchange rate.');
+                console.warn('Using fallback P2P exchange rate in memory.');
             }
-            document.getElementById('rateTicker').innerText = `Live Bit P2P Rate: ₦${liveP2PRate.toLocaleString(undefined, {minimumFractionDigits: 2})} / $1 USD`;
             updateRevenueDisplay();
         }
 
@@ -521,9 +518,6 @@
         }
 
         function updateRevenueDisplay() {
-            // Site not launched yet: Default revenue, sales, deposits, and profit metrics are ₦0.00.
-            // Once live API transactions populate your database tables (e.g., total sales, total deposits, purchase costs), 
-            // plug those real-time sums here.
             let totalSales = 0;
             let totalDeposits = 0;
             let purchaseCosts = 0;
@@ -616,14 +610,21 @@
             const balance = parseFloat(document.getElementById('editBalance').value) || 0;
             const is_admin = document.getElementById('editIsAdmin').value === 'true';
             const errorBox = document.getElementById('modalError');
+            errorBox.innerText = '';
 
-            const { error } = await supabaseClient
+            const { data, error } = await supabaseClient
                 .from('profiles')
                 .update({ full_name, username, phone_number, balance, is_admin })
-                .eq('id', userId);
+                .eq('id', userId)
+                .select();
 
             if (error) {
                 errorBox.innerText = error.message;
+                return;
+            }
+
+            if (!data || data.length === 0) {
+                errorBox.innerText = 'Update failed: Check Supabase RLS policies for admin updates.';
                 return;
             }
 
