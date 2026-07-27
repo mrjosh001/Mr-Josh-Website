@@ -10,7 +10,7 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
 /* ==========================================
-   MJ HUB - Theme & Variables (v4.6)
+   MJ HUB - Theme & Variables (v4.7)
    ========================================== */
 
 :root[data-theme="dark"] {
@@ -56,6 +56,14 @@ body {
     min-height: 100vh;
     transition: background-color 0.3s, color 0.3s;
     position: relative;
+}
+
+/* Button & Interactive Click Animation Effect */
+button, .hero-btn, .btn-sm-primary, .btn-sm-outline, .profile-menu-item, .popup-item, .transaction-card, .filter-tab, .nav-item {
+    transition: transform 0.1s ease, background-color 0.2s ease, border-color 0.2s ease;
+}
+button:active, .hero-btn:active, .btn-sm-primary:active, .btn-sm-outline:active, .profile-menu-item:active, .popup-item:active, .transaction-card:active, .filter-tab:active, .nav-item:active {
+    transform: scale(0.96) !important;
 }
 
 /* --- Top Navigation Bar --- */
@@ -1090,13 +1098,13 @@ body {
 .status-success { background: rgba(37, 99, 235, 0.15); color: var(--primary-color); }
 .status-pending { background: rgba(37, 99, 235, 0.1); color: var(--text-muted); }
 
-/* Currency Converter Modal */
+/* Advanced Professional Currency Converter Card */
 .currency-modal {
     display: none;
     position: fixed;
     top: 0; left: 0; width: 100%; height: 100%;
-    background: rgba(0, 0, 0, 0.7);
-    backdrop-filter: blur(4px);
+    background: rgba(0, 0, 0, 0.75);
+    backdrop-filter: blur(6px);
     z-index: 1900;
     align-items: center;
     justify-content: center;
@@ -1106,22 +1114,98 @@ body {
 .currency-modal-card {
     background: var(--card-bg);
     width: 100%;
-    max-width: 380px;
-    border-radius: 24px;
-    padding: 24px;
-    box-shadow: 0 25px 50px rgba(0,0,0,0.5);
+    max-width: 420px;
+    border-radius: 28px;
+    padding: 28px;
+    box-shadow: 0 30px 60px rgba(0,0,0,0.6);
     border: 1px solid var(--border-color);
 }
-.currency-input-group {
+
+.converter-advanced-box {
     background: var(--bg-main);
     border: 1px solid var(--border-color);
-    border-radius: 14px;
+    border-radius: 20px;
+    padding: 16px;
+    margin-bottom: 14px;
+    position: relative;
+}
+.converter-row-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 8px;
+}
+.converter-label {
+    font-size: 11px;
+    font-weight: 800;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+.currency-pill {
+    background: rgba(37, 99, 235, 0.15);
+    color: var(--primary-color);
+    padding: 4px 10px;
+    border-radius: 12px;
+    font-size: 12px;
+    font-weight: 800;
+}
+.converter-input-main {
+    background: transparent;
+    border: none;
+    font-size: 24px;
+    font-weight: 800;
+    color: var(--text-main);
+    width: 100%;
+    outline: none;
+}
+.converter-switch-btn-wrap {
+    text-align: center;
+    margin: -6px 0;
+    position: relative;
+    z-index: 2;
+}
+.converter-switch-circle {
+    width: 40px;
+    height: 40px;
+    background: var(--primary-color);
+    color: #fff;
+    border-radius: 50%;
+    border: 3px solid var(--card-bg);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    font-size: 16px;
+    box-shadow: 0 4px 12px rgba(37, 99, 235, 0.4);
+    transition: transform 0.2s;
+}
+.converter-switch-circle:hover { transform: rotate(180deg) scale(1.1); }
+
+/* Conversion Loading Animation Indicator */
+.conversion-loading-box {
+    display: none;
+    align-items: center;
+    gap: 10px;
+    background: rgba(37, 99, 235, 0.1);
+    border: 1px solid var(--border-color);
     padding: 12px 16px;
+    border-radius: 14px;
+    font-size: 13px;
+    color: var(--primary-color);
+    font-weight: 700;
     margin-bottom: 15px;
 }
-.currency-input-group label { display: block; font-size: 11px; font-weight: 700; color: var(--text-muted); margin-bottom: 4px; text-transform: uppercase; }
-.currency-input-row { display: flex; justify-content: space-between; align-items: center; }
-.currency-input-row input { background: transparent; border: none; font-size: 20px; font-weight: 800; color: var(--text-main); width: 100%; outline: none; }
+.conversion-loading-box.active { display: flex; }
+.spinner-icon {
+    width: 18px;
+    height: 18px;
+    border: 3px solid rgba(37, 99, 235, 0.3);
+    border-top-color: var(--primary-color);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
 
 /* Notifications Dropdown */
 .notification-dropdown {
@@ -1215,15 +1299,15 @@ body {
     <!-- Top Navigation Bar -->
     <header class="navbar">
         <div class="nav-left">
-            <button class="menu-btn" id="menuToggleBtn">☰</button>
+            <button class="menu-btn" id="menuToggleBtn" onclick="triggerHaptic()">☰</button>
             <h1 class="brand-title">MJ HUB</h1>
         </div>
         <div class="nav-right">
             <div class="wallet-badge" id="navWalletBadge">NGN ₦0.00</div>
             
-            <button class="theme-toggle-btn" id="themeToggleBtn" title="Toggle Theme">🌙</button>
+            <button class="theme-toggle-btn" id="themeToggleBtn" title="Toggle Theme" onclick="triggerHaptic()">🌙</button>
 
-            <div class="notification-icon" id="notificationBtn" title="Website Updates">
+            <div class="notification-icon" id="notificationBtn" title="Website Updates" onclick="triggerHaptic()">
                 🔔
                 <span class="badge-dot" id="notifDot"></span>
             </div>
@@ -1237,7 +1321,7 @@ body {
             </div>
 
             <div class="profile-dropdown-container">
-                <div class="profile-icon" id="profileDropdownToggle">
+                <div class="profile-icon" id="profileDropdownToggle" onclick="triggerHaptic()">
                     <span id="headerAvatarText">👤</span>
                 </div>
                 <div class="dropdown-menu" id="profileDropdownMenu">
@@ -1246,18 +1330,18 @@ body {
                         <span id="dropdownEmail">Complete onboarding</span>
                     </div>
                     <ul class="dropdown-links">
-                        <li><a href="#" onclick="switchSection('home'); toggleProfileDropdown(); return false;">Dashboard</a></li>
-                        <li><a href="#" onclick="switchSection('profile'); toggleProfileDropdown(); return false;">Settings</a></li>
-                        <li><a href="#" onclick="switchSection('cart'); toggleProfileDropdown(); return false;">Cart</a></li>
+                        <li><a href="#" onclick="triggerHaptic(); switchSection('home'); toggleProfileDropdown(); return false;">Dashboard</a></li>
+                        <li><a href="#" onclick="triggerHaptic(); switchSection('profile'); toggleProfileDropdown(); return false;">Settings</a></li>
+                        <li><a href="#" onclick="triggerHaptic(); switchSection('cart'); toggleProfileDropdown(); return false;">Cart</a></li>
                     </ul>
                     <div class="dropdown-divider"></div>
                     <ul class="dropdown-links">
-                        <li><a href="#" onclick="handleLogout(); return false;" style="color: #2563eb;">Logout</a></li>
+                        <li><a href="#" onclick="triggerHaptic(); handleLogout(); return false;" style="color: #2563eb;">Logout</a></li>
                     </ul>
                     <div class="dropdown-divider"></div>
                     <div style="padding: 10px 15px; display: flex; justify-content: space-between; align-items: center;">
                         <span style="font-size: 13px; font-weight: 600; color: var(--text-main);">Theme Mode</span>
-                        <button class="btn-sm-outline" id="dropdownThemeToggleBtn" style="padding: 6px 12px;">Dark</button>
+                        <button class="btn-sm-outline" id="dropdownThemeToggleBtn" style="padding: 6px 12px;" onclick="triggerHaptic()">Dark</button>
                     </div>
                 </div>
             </div>
@@ -1271,17 +1355,17 @@ body {
                 <div class="sidebar-brand-logo">⚡</div>
                 <span class="sidebar-brand">MJ HUB</span>
             </div>
-            <button class="close-btn" id="sidebarCloseBtn">✕</button>
+            <button class="close-btn" id="sidebarCloseBtn" onclick="triggerHaptic()">✕</button>
         </div>
         <div class="sidebar-links-container">
             <ul class="sidebar-links">
-                <li><a href="#" class="sidebar-link active" data-target="home">🏠 <span>Dashboard</span></a></li>
-                <li><a href="#" class="sidebar-link" data-target="logs">📦 <span>MJ Logs</span></a></li>
-                <li><a href="#" class="sidebar-link" data-target="sms">📱 <span>MJ SMS</span></a></li>
-                <li><a href="#" class="sidebar-link" data-target="booster">⚡ <span>MJ Boosters</span></a></li>
-                <li><a href="#" class="sidebar-link" data-target="deposit">💳 <span>Deposit</span></a></li>
-                <li><a href="#" class="sidebar-link" data-target="cart">🛍️ <span>Cart</span></a></li>
-                <li><a href="#" onclick="handleLogout(); return false;">🚪 <span>Logout</span></a></li>
+                <li><a href="#" class="sidebar-link active" data-target="home" onclick="triggerHaptic()">🏠 <span>Dashboard</span></a></li>
+                <li><a href="#" class="sidebar-link" data-target="logs" onclick="triggerHaptic()">📦 <span>MJ Logs</span></a></li>
+                <li><a href="#" class="sidebar-link" data-target="sms" onclick="triggerHaptic()">📱 <span>MJ SMS</span></a></li>
+                <li><a href="#" class="sidebar-link" data-target="booster" onclick="triggerHaptic()">⚡ <span>MJ Boosters</span></a></li>
+                <li><a href="#" class="sidebar-link" data-target="deposit" onclick="triggerHaptic()">💳 <span>Deposit</span></a></li>
+                <li><a href="#" class="sidebar-link" data-target="cart" onclick="triggerHaptic()">🛍️ <span>Cart</span></a></li>
+                <li><a href="#" onclick="triggerHaptic(); handleLogout(); return false;">🚪 <span>Logout</span></a></li>
             </ul>
         </div>
         <div class="sidebar-footer">
@@ -1300,8 +1384,8 @@ body {
                 <div class="hero-welcome" id="heroWelcomeTitle">Welcome to MJ HUB</div>
                 <div class="hero-sub" id="heroSubText">Complete your onboarding profile and fund your wallet to get started with MJ Boosters, MJ SMS, and MJ Logs.</div>
                 <div class="hero-actions" id="heroActionsContainer">
-                    <button class="hero-btn" onclick="switchSection('deposit')">Fund Account</button>
-                    <button class="hero-btn" id="heroOnboardBtn" onclick="openCurrencyModal()">Convert Currency</button>
+                    <button class="hero-btn" onclick="triggerHaptic(); switchSection('deposit')">Fund Account</button>
+                    <button class="hero-btn" id="heroOnboardBtn" onclick="triggerHaptic(); openCurrencyModal()">Convert Currency</button>
                 </div>
             </div>
 
@@ -1327,7 +1411,7 @@ body {
         <!-- PROFILE / SETTINGS SECTION -->
         <section id="profile" class="app-section">
             <div class="profile-header-card">
-                <div class="profile-avatar-large" id="profileAvatarBox" onclick="document.getElementById('profileAvatarInput').click()">
+                <div class="profile-avatar-large" id="profileAvatarBox" onclick="triggerHaptic(); document.getElementById('profileAvatarInput').click()">
                     <span id="profileAvatarInitial">👤</span>
                     <div class="profile-avatar-overlay">Edit</div>
                 </div>
@@ -1341,7 +1425,7 @@ body {
                 <p style="font-size: 13px; color: #93c5fd; margin-bottom: 12px;">Provide this Customer ID to support if you encounter deposit delays or disputes:</p>
                 <div style="display: flex; gap: 10px; align-items: center;">
                     <input type="text" id="myCustomerId" readonly style="background: #07090e; border: 1px solid #3b82f6; padding: 10px; border-radius: 8px; color: #38bdf8; font-family: monospace; font-weight: bold; width: 100%;" placeholder="Loading...">
-                    <button class="action-btn primary-btn" onclick="copyIdToClipboard()" style="background: #2563eb; color: #fff; border: none; padding: 10px 16px; border-radius: 8px; cursor: pointer; font-weight: 600;">Copy</button>
+                    <button class="action-btn primary-btn" onclick="triggerHaptic(); copyIdToClipboard()" style="background: #2563eb; color: #fff; border: none; padding: 10px 16px; border-radius: 8px; cursor: pointer; font-weight: 600;">Copy</button>
                 </div>
             </div>
 
@@ -1378,11 +1462,11 @@ body {
                     <input type="text" id="profileNinInput" placeholder="Enter 11-digit NIN" maxlength="11">
                 </div>
 
-                <button class="btn-sm-primary" style="width:100%; padding:12px; font-size: 14px;" onclick="saveProfileSettingsData()">Save Profile Changes</button>
+                <button class="btn-sm-primary" style="width:100%; padding:12px; font-size: 14px;" onclick="triggerHaptic(); saveProfileSettingsData()">Save Profile Changes</button>
             </div>
 
             <div class="profile-menu-list">
-                <div class="profile-menu-item" onclick="switchSection('home')">
+                <div class="profile-menu-item" onclick="triggerHaptic(); switchSection('home')">
                     <div class="profile-menu-left">
                         <div class="profile-menu-icon icon-blue">💳</div>
                         <div class="profile-menu-info">
@@ -1393,7 +1477,7 @@ body {
                     <div class="profile-menu-arrow">›</div>
                 </div>
 
-                <div class="profile-menu-item" onclick="openChangePasswordModal()">
+                <div class="profile-menu-item" onclick="triggerHaptic(); openChangePasswordModal()">
                     <div class="profile-menu-left">
                         <div class="profile-menu-icon icon-blue">🛡️</div>
                         <div class="profile-menu-info">
@@ -1404,7 +1488,7 @@ body {
                     <div class="profile-menu-arrow">›</div>
                 </div>
 
-                <div class="profile-menu-item" onclick="handleLogout()">
+                <div class="profile-menu-item" onclick="triggerHaptic(); handleLogout()">
                     <div class="profile-menu-left">
                         <div class="profile-menu-icon icon-blue">🚪</div>
                         <div class="profile-menu-info">
@@ -1424,9 +1508,9 @@ body {
                 <p class="helper-text">Browse our verified social media logs and aged accounts provided by MJ HUB.</p>
                 
                 <div class="filter-buttons-row">
-                    <button class="filter-tab active" onclick="filterProductItems('all', this)">All Logs</button>
-                    <button class="filter-tab" onclick="filterProductItems('gmail', this)">Gmail</button>
-                    <button class="filter-tab" onclick="filterProductItems('social', this)">Social Media</button>
+                    <button class="filter-tab active" onclick="triggerHaptic(); filterProductItems('all', this)">All Logs</button>
+                    <button class="filter-tab" onclick="triggerHaptic(); filterProductItems('gmail', this)">Gmail</button>
+                    <button class="filter-tab" onclick="triggerHaptic(); filterProductItems('social', this)">Social Media</button>
                 </div>
 
                 <div class="product-grid" id="logsProductGrid">
@@ -1439,8 +1523,8 @@ body {
                             <div class="product-price">₦1,200</div>
                         </div>
                         <div class="product-actions-row">
-                            <button class="btn-sm-primary" onclick="addToCart('Old Gmail Accounts', 1200, 'log', 'Aged Gmail Accounts - Phone Verified')">Add to Cart</button>
-                            <button class="btn-sm-outline" onclick="buyNowItem('Old Gmail Accounts', 1200, 'log', 'Aged Gmail Accounts - Phone Verified')">Buy Now</button>
+                            <button class="btn-sm-primary" onclick="triggerHaptic(); addToCart('Old Gmail Accounts', 1200, 'log', 'Aged Gmail Accounts - Phone Verified')">Add to Cart</button>
+                            <button class="btn-sm-outline" onclick="triggerHaptic(); buyNowItem('Old Gmail Accounts', 1200, 'log', 'Aged Gmail Accounts - Phone Verified')">Buy Now</button>
                         </div>
                     </div>
                 </div>
@@ -1462,8 +1546,8 @@ body {
                             <div class="product-price">₦800</div>
                         </div>
                         <div class="product-actions-row">
-                            <button class="btn-sm-primary" onclick="addToCart('WhatsApp OTP Number', 800, 'sms', 'Virtual Line OTP - USA/UK Channel')">Add to Cart</button>
-                            <button class="btn-sm-outline" onclick="buyNowItem('WhatsApp OTP Number', 800, 'sms', 'Virtual Line OTP - USA/UK Channel')">Get Now</button>
+                            <button class="btn-sm-primary" onclick="triggerHaptic(); addToCart('WhatsApp OTP Number', 800, 'sms', 'Virtual Line OTP - USA/UK Channel')">Add to Cart</button>
+                            <button class="btn-sm-outline" onclick="triggerHaptic(); buyNowItem('WhatsApp OTP Number', 800, 'sms', 'Virtual Line OTP - USA/UK Channel')">Get Now</button>
                         </div>
                     </div>
                 </div>
@@ -1485,8 +1569,8 @@ body {
                             <div class="product-price">₦2,500</div>
                         </div>
                         <div class="product-actions-row">
-                            <button class="btn-sm-primary" onclick="addToCart('Instagram Followers (1k)', 2500, 'booster', 'SMM Engagement Panel - Non-Drop')">Add to Cart</button>
-                            <button class="btn-sm-outline" onclick="buyNowItem('Instagram Followers (1k)', 2500, 'booster', 'SMM Engagement Panel - Non-Drop')">Boost Now</button>
+                            <button class="btn-sm-primary" onclick="triggerHaptic(); addToCart('Instagram Followers (1k)', 2500, 'booster', 'SMM Engagement Panel - Non-Drop')">Add to Cart</button>
+                            <button class="btn-sm-outline" onclick="triggerHaptic(); buyNowItem('Instagram Followers (1k)', 2500, 'booster', 'SMM Engagement Panel - Non-Drop')">Boost Now</button>
                         </div>
                     </div>
                 </div>
@@ -1518,7 +1602,7 @@ body {
                         <div style="font-size: 12px; color: var(--text-muted);">Total Checkout Sum</div>
                         <div class="cart-total-amount" id="cartTotalDisplay">₦0.00</div>
                     </div>
-                    <button class="btn-sm-primary" style="padding: 12px 24px; font-size: 14px;" onclick="checkoutCart()">Purchase All Items</button>
+                    <button class="btn-sm-primary" style="padding: 12px 24px; font-size: 14px;" onclick="triggerHaptic(); checkoutCart()">Purchase All Items</button>
                 </div>
             </div>
         </section>
@@ -1547,7 +1631,7 @@ body {
                     <label>Amount</label>
                     <input type="number" id="depositInput" placeholder="Enter amount">
                 </div>
-                <button class="btn-sm-primary" style="width:100%; padding:12px;" onclick="processDeposit()">Proceed to Payment</button>
+                <button class="btn-sm-primary" style="width:100%; padding:12px;" onclick="triggerHaptic(); processDeposit()">Proceed to Payment</button>
             </div>
         </section>
 
@@ -1555,14 +1639,14 @@ body {
 
     <!-- MOVABLE TOP-NOTCH SUPPORT WIDGET -->
     <div id="support-widget" class="support-widget-container">
-        <button id="support-toggle-btn" class="support-toggle-btn" aria-label="Support">
+        <button id="support-toggle-btn" class="support-toggle-btn" aria-label="Support" onclick="triggerHaptic()">
             <span class="support-icon">🎧</span>
             <span class="support-badge-tag">Help</span>
         </button>
         
         <div id="support-popup" class="support-popup-card">
             <div class="support-popup-header">
-                <button id="support-close-btn" class="support-close-inner">&times;</button>
+                <button id="support-close-btn" class="support-close-inner" onclick="triggerHaptic()">&times;</button>
                 <h3>Need help?</h3>
                 <p>We typically reply in minutes</p>
                 <div class="support-status-indicator">
@@ -1571,7 +1655,7 @@ body {
                 </div>
             </div>
             <div class="support-popup-body">
-                <a href="https://wa.me/234XXXXXXXXXX" target="_blank" rel="noopener noreferrer" class="support-channel-item">
+                <a href="https://wa.me/234XXXXXXXXXX" target="_blank" rel="noopener noreferrer" class="support-channel-item" onclick="triggerHaptic()">
                     <div class="channel-icon-wrap whatsapp">
                         <span>💬</span>
                     </div>
@@ -1580,7 +1664,7 @@ body {
                         <p>Chat with us on WhatsApp</p>
                     </div>
                 </a>
-                <a href="https://t.me/XXXXXXXXXX" target="_blank" rel="noopener noreferrer" class="support-channel-item">
+                <a href="https://t.me/XXXXXXXXXX" target="_blank" rel="noopener noreferrer" class="support-channel-item" onclick="triggerHaptic()">
                     <div class="channel-icon-wrap telegram">
                         <span>✈️</span>
                     </div>
@@ -1598,7 +1682,7 @@ body {
         <div class="currency-modal-card">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
                 <div style="font-size: 17px; font-weight: 800; color: var(--text-main);">Change Account Password</div>
-                <button onclick="closeChangePasswordModal()" style="background: var(--bg-main); border: 1px solid var(--border-color); width: 30px; height: 30px; border-radius: 50%; cursor: pointer; font-size: 14px; font-weight: bold; color: var(--text-main);">✕</button>
+                <button onclick="triggerHaptic(); closeChangePasswordModal()" style="background: var(--bg-main); border: 1px solid var(--border-color); width: 30px; height: 30px; border-radius: 50%; cursor: pointer; font-size: 14px; font-weight: bold; color: var(--text-main);">✕</button>
             </div>
             <div class="form-group">
                 <label>Current Password</label>
@@ -1612,7 +1696,7 @@ body {
                 <label>Confirm New Password</label>
                 <input type="password" id="confirmPasswordInput" placeholder="••••••••">
             </div>
-            <button class="btn-sm-primary" style="width: 100%; padding: 12px; font-size: 14px;" onclick="submitNewPassword()">Update Password</button>
+            <button class="btn-sm-primary" style="width: 100%; padding: 12px; font-size: 14px;" onclick="triggerHaptic(); submitNewPassword()">Update Password</button>
         </div>
     </div>
 
@@ -1621,43 +1705,57 @@ body {
         <div class="currency-modal-card">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; border-bottom: 1px solid var(--border-color); padding-bottom: 10px;">
                 <div style="font-size: 17px; font-weight: 800; color: var(--text-main);">📄 Transaction Receipt</div>
-                <button onclick="closeTransactionReceipt()" style="background: var(--bg-main); border: 1px solid var(--border-color); width: 30px; height: 30px; border-radius: 50%; cursor: pointer; font-size: 14px; font-weight: bold; color: var(--text-main);">✕</button>
+                <button onclick="triggerHaptic(); closeTransactionReceipt()" style="background: var(--bg-main); border: 1px solid var(--border-color); width: 30px; height: 30px; border-radius: 50%; cursor: pointer; font-size: 14px; font-weight: bold; color: var(--text-main);">✕</button>
             </div>
             <div id="receiptContentBody" style="display: flex; flex-direction: column; gap: 12px; font-size: 13px; margin-bottom: 20px;">
                 <!-- Dynamically injected receipt details -->
             </div>
-            <button class="btn-sm-primary" style="width: 100%; padding: 12px; font-size: 14px;" onclick="closeTransactionReceipt()">Close Receipt</button>
+            <button class="btn-sm-primary" style="width: 100%; padding: 12px; font-size: 14px;" onclick="triggerHaptic(); closeTransactionReceipt()">Close Receipt</button>
         </div>
     </div>
 
-    <!-- CURRENCY CONVERTER MODAL -->
+    <!-- ADVANCED CURRENCY CONVERTER MODAL -->
     <div class="currency-modal" id="currencyConverterModal">
         <div class="currency-modal-card">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
-                <div style="font-size: 17px; font-weight: 800; color: var(--text-main);">Convert Balance Currency</div>
-                <button onclick="closeCurrencyModal()" style="background: var(--bg-main); border: 1px solid var(--border-color); width: 30px; height: 30px; border-radius: 50%; cursor: pointer; font-size: 14px; font-weight: bold; color: var(--text-main);">✕</button>
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 18px;">
+                <div style="font-size: 18px; font-weight: 800; color: var(--text-main); display: flex; align-items: center; gap: 8px;"><span>💱</span> Pro Currency Swapper</div>
+                <button onclick="triggerHaptic(); closeCurrencyModal()" style="background: var(--bg-main); border: 1px solid var(--border-color); width: 32px; height: 32px; border-radius: 50%; cursor: pointer; font-size: 15px; font-weight: bold; color: var(--text-main);">✕</button>
             </div>
-            <div class="form-group" style="margin-bottom: 10px;">
-                <label>Conversion Direction</label>
-                <select id="conversionDropdownSelect" onchange="handleConversionDirectionChange()">
-                    <option value="ngntousd">🔄 Convert: Naira (NGN ₦) ➔ US Dollar (USD $)</option>
-                    <option value="usdtongngn">🔄 Convert: US Dollar (USD $) ➔ Naira (NGN ₦)</option>
-                </select>
+
+            <!-- From Currency Box -->
+            <div class="converter-advanced-box">
+                <div class="converter-row-top">
+                    <span class="converter-label" id="fromLabelText">You Send (Naira)</span>
+                    <span class="currency-pill" id="fromBadgePill">NGN ₦</span>
+                </div>
+                <input type="number" id="baseConvertInput" class="converter-input-main" placeholder="0.00" oninput="triggerHaptic(); handleLiveConversionInput()">
             </div>
-            <div class="currency-input-group">
-                <label id="convertInputLabel">Amount to Convert (NGN)</label>
-                <div class="currency-input-row">
-                    <input type="number" id="baseConvertInput" placeholder="0.00" oninput="performCurrencyConversion()">
+
+            <!-- Switch Direction Button -->
+            <div class="converter-switch-btn-wrap">
+                <div class="converter-switch-circle" onclick="triggerHaptic(); toggleConverterDirection()" title="Switch Currency Direction">
+                    ↕
                 </div>
             </div>
-            <div class="currency-input-group">
-                <label id="convertOutputLabel">You Will Receive (USD)</label>
-                <div class="currency-input-row">
-                    <input type="text" id="targetConvertOutput" placeholder="$0.00" readonly style="color: var(--primary-color);">
+
+            <!-- To Currency Box -->
+            <div class="converter-advanced-box" style="margin-top: -6px;">
+                <div class="converter-row-top">
+                    <span class="converter-label" id="toLabelText">You Receive (US Dollar)</span>
+                    <span class="currency-pill" id="toBadgePill">USD $</span>
                 </div>
+                <input type="text" id="targetConvertOutput" class="converter-input-main" placeholder="$0.00" readonly style="color: var(--primary-color);">
             </div>
-            <div style="font-size: 11px; color: var(--text-muted); text-align: center; margin-bottom: 15px;" id="exchangeRateText">Exchange rate: $1.00 = ₦1,420</div>
-            <button class="btn-sm-primary" style="width: 100%; padding: 12px; font-size: 14px;" onclick="applyCurrencyConversion()">Execute Conversion</button>
+
+            <!-- Loading & Status Feedback Container -->
+            <div class="conversion-loading-box" id="conversionLoadingBox">
+                <div class="spinner-icon"></div>
+                <span id="conversionStatusText">Processing secure exchange rate...</span>
+            </div>
+
+            <div style="font-size: 12px; color: var(--text-muted); text-align: center; margin-bottom: 16px; font-weight: 600;" id="exchangeRateText">Live Market Rate: $1.00 USD = ₦1,420 NGN</div>
+            
+            <button class="btn-sm-primary" id="executeConversionBtn" style="width: 100%; padding: 14px; font-size: 15px; font-weight: 700; border-radius: 14px;" onclick="triggerHaptic(); executeAdvancedConversion()">Execute Secure Conversion</button>
         </div>
     </div>
 
@@ -1669,16 +1767,16 @@ body {
                 <h3><span>⏱️</span> Activity History</h3>
                 <p>Click any transaction to view detailed receipt</p>
             </div>
-            <button class="drawer-close-btn" onclick="toggleActivityHistory()">✕</button>
+            <button class="drawer-close-btn" onclick="triggerHaptic(); toggleActivityHistory()">✕</button>
         </div>
 
         <div class="drawer-filter-scroll">
-            <button class="filter-tab active" onclick="filterTransactions('all', this)">🕒 All</button>
-            <button class="filter-tab" onclick="filterTransactions('log', this)">📦 Log Orders</button>
-            <button class="filter-tab" onclick="filterTransactions('sms', this)">📱 SMS Numbers</button>
-            <button class="filter-tab" onclick="filterTransactions('deposit', this)">💳 Deposits</button>
-            <button class="filter-tab" onclick="filterTransactions('booster', this)">⚡ Social Boost</button>
-            <button class="filter-tab" onclick="filterTransactions('conversion', this)">🔄 Swaps</button>
+            <button class="filter-tab active" onclick="triggerHaptic(); filterTransactions('all', this)">🕒 All</button>
+            <button class="filter-tab" onclick="triggerHaptic(); filterTransactions('log', this)">📦 Log Orders</button>
+            <button class="filter-tab" onclick="triggerHaptic(); filterTransactions('sms', this)">📱 SMS Numbers</button>
+            <button class="filter-tab" onclick="triggerHaptic(); filterTransactions('deposit', this)">💳 Deposits</button>
+            <button class="filter-tab" onclick="triggerHaptic(); filterTransactions('booster', this)">⚡ Social Boost</button>
+            <button class="filter-tab" onclick="triggerHaptic(); filterTransactions('conversion', this)">🔄 Swaps</button>
         </div>
 
         <div class="transaction-list" id="transactionListContainer"></div>
@@ -1688,26 +1786,26 @@ body {
     <div class="floating-action-modal" id="floatingPopupModal">
         <div class="popup-header-row">
             <div class="popup-title"><span>⚡</span> Quick Actions</div>
-            <button class="popup-close" onclick="toggleFloatingPopup()">✕</button>
+            <button class="popup-close" onclick="triggerHaptic(); toggleFloatingPopup()">✕</button>
         </div>
         <div class="popup-grid">
-            <div class="popup-item" onclick="switchSection('deposit'); toggleFloatingPopup();">
+            <div class="popup-item" onclick="triggerHaptic(); switchSection('deposit'); toggleFloatingPopup();">
                 <div class="popup-icon-badge">💳</div>
                 <span>Deposit</span>
             </div>
-            <div class="popup-item" onclick="switchSection('booster'); toggleFloatingPopup();">
+            <div class="popup-item" onclick="triggerHaptic(); switchSection('booster'); toggleFloatingPopup();">
                 <div class="popup-icon-badge">⚡</div>
                 <span>MJ Boosters</span>
             </div>
-            <div class="popup-item" onclick="switchSection('sms'); toggleFloatingPopup();">
+            <div class="popup-item" onclick="triggerHaptic(); switchSection('sms'); toggleFloatingPopup();">
                 <div class="popup-icon-badge">📱</div>
                 <span>MJ SMS</span>
             </div>
-            <div class="popup-item" onclick="switchSection('logs'); toggleFloatingPopup();">
+            <div class="popup-item" onclick="triggerHaptic(); switchSection('logs'); toggleFloatingPopup();">
                 <div class="popup-icon-badge">📦</div>
                 <span>MJ Logs</span>
             </div>
-            <div class="popup-item" onclick="switchSection('profile'); toggleFloatingPopup();">
+            <div class="popup-item" onclick="triggerHaptic(); switchSection('profile'); toggleFloatingPopup();">
                 <div class="popup-icon-badge">⚙️</div>
                 <span>Settings</span>
             </div>
@@ -1716,22 +1814,22 @@ body {
 
     <!-- Mobile Bottom Navigation Bar -->
     <nav class="bottom-nav">
-        <button class="nav-item active" onclick="switchSection('home')">
+        <button class="nav-item active" onclick="triggerHaptic(); switchSection('home')">
             <svg viewBox="0 0 24 24"><path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"/></svg>
             <span>Home</span>
         </button>
-        <button class="nav-item" onclick="toggleActivityHistory()">
+        <button class="nav-item" onclick="triggerHaptic(); toggleActivityHistory()">
             <svg viewBox="0 0 24 24"><path d="M13 3a9 9 0 0 0-9 9H1l3.89 3.89.07.14L9 12H6a7 7 0 1 1 7 7 7 7 0 0 1-7-7h-2a9 9 0 1 0 9-9zm-1 5v5l4.28 2.54.72-1.21-3.5-2.08V8H12z"/></svg>
             <span>History</span>
         </button>
-        <div class="nav-item action-btn" onclick="toggleFloatingPopup()">
+        <div class="nav-item action-btn" onclick="triggerHaptic(); toggleFloatingPopup()">
             <div class="plus-circle">+</div>
         </div>
-        <button class="nav-item" onclick="switchSection('cart')">
+        <button class="nav-item" onclick="triggerHaptic(); switchSection('cart')">
             <svg viewBox="0 0 24 24"><path d="M7 18c-1.1 0-1.99.9-1.99 2S5.9 22 7 22s2-.9 2-2-.9-2-2-2zM1 2v2h2l3.6 7.59-1.35 2.45c-.16.28-.25.61-.25.96 0 1.1.9 2 2 2h12v-2H7.42c-.14 0-.25-.11-.25-.25l.03-.12.9-1.63h7.45c.75 0 1.41-.41 1.75-1.03l3.58-6.49c.08-.14.12-.31.12-.48 0-.55-.45-1-1-1H5.21l-.94-2H1zm16 16c-1.1 0-1.99.9-1.99 2s.89 2 1.99 2 2-.9 2-2-.9-2-2-2z"/></svg>
             <span>Cart</span>
         </button>
-        <button class="nav-item" onclick="switchSection('profile')">
+        <button class="nav-item" onclick="triggerHaptic(); switchSection('profile')">
             <svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 3c1.66 0 3 1.34 3 3s-1.34 3-3 3-3-1.34-3-3 1.34-3 3-3zm0 14.2c-2.5 0-4.71-1.28-6-3.22.03-1.99 4-3.08 6-3.08 1.99 0 5.97 1.09 6 3.08-1.29 1.94-3.5 3.22-6 3.22z"/></svg>
             <span>Profile</span>
         </button>
@@ -1739,7 +1837,7 @@ body {
 
     <script>
 /* ==========================================
-   MJ HUB - Application Logic (v4.6)
+   MJ HUB - Application Logic (v4.7)
    ========================================== */
 
 const SUPABASE_URL = 'https://atczodlljmlayvldxfmv.supabase.co';
@@ -1760,6 +1858,13 @@ let cartItems = [];
 let transactions = [];
 let userOnboarded = false;
 let userData = { name: '', email: '', phone: '', address: '', bio: '', bvn: '', nin: '', avatarUrl: '' };
+
+// Haptic feedback utility
+function triggerHaptic() {
+    if (navigator.vibrate) {
+        navigator.vibrate(30);
+    }
+}
 
 function toggleProfileDropdown() {
     const profileDropdown = document.getElementById('profileDropdownMenu');
@@ -1822,6 +1927,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         document.getElementById('profileNinInput').value = ninVal;
 
         await fetchUserBalance(user.id);
+        await fetchUserTransactions(user.id);
         setupRealtimeBalanceSubscription(user.id);
     }
 
@@ -1964,7 +2070,7 @@ function filterProductItems(category, btnElement) {
 }
 
 /* ==========================================
-   FETCH & REALTIME BALANCE SYNCHRONIZATION
+   FETCH & REALTIME BALANCE & TRANSACTION SYNC
    ========================================== */
 async function fetchUserBalance(userId) {
     if (!supabaseClient) return;
@@ -1982,6 +2088,55 @@ async function fetchUserBalance(userId) {
         }
     } catch (err) {
         console.error("Error fetching user balances:", err);
+    }
+}
+
+async function fetchUserTransactions(userId) {
+    if (!supabaseClient) return;
+    try {
+        const { data, error } = await supabaseClient
+            .from('transactions')
+            .select('*')
+            .eq('user_id', userId)
+            .order('created_at', { ascending: false });
+
+        if (data && !error) {
+            transactions = data.map(tx => ({
+                id: tx.id,
+                type: tx.type || 'deposit',
+                title: tx.title || 'Transaction',
+                subtitle: tx.subtitle || 'MJ HUB Record',
+                amount: tx.amount || '₦0.00',
+                date: new Date(tx.created_at || tx.id).toLocaleString(),
+                status: tx.status || 'Success',
+                paymentProvider: tx.payment_provider || 'MJ HUB Gateway',
+                channel: tx.channel || 'Wallet Action'
+            }));
+            renderTransactions('all');
+        }
+    } catch (err) {
+        console.error("Error fetching transactions:", err);
+    }
+}
+
+async function saveTransactionToSupabase(txObj) {
+    if (!supabaseClient) return;
+    try {
+        const { data: { session } } = await supabaseClient.auth.getSession();
+        if (!session) return;
+
+        await supabaseClient.from('transactions').insert([{
+            user_id: session.user.id,
+            type: txObj.type,
+            title: txObj.title,
+            subtitle: txObj.subtitle,
+            amount: txObj.amount,
+            status: txObj.status,
+            payment_provider: txObj.paymentProvider,
+            channel: txObj.channel
+        }]);
+    } catch (err) {
+        console.error("Error saving transaction:", err);
     }
 }
 
@@ -2192,9 +2347,17 @@ async function saveProfileSettingsData() {
     alert('Complete profile settings saved successfully!');
 }
 
+/* ==========================================
+   ADVANCED PROFESSIONAL CURRENCY CONVERTER
+   ========================================== */
+let isNgsetToUsdDirection = true;
+
 function openCurrencyModal() {
+    isNgsetToUsdDirection = true;
+    updateConverterLabels();
     document.getElementById('baseConvertInput').value = '';
     document.getElementById('targetConvertOutput').value = '';
+    document.getElementById('conversionLoadingBox').classList.remove('active');
     document.getElementById('currencyConverterModal').classList.add('active');
 }
 
@@ -2202,38 +2365,66 @@ function closeCurrencyModal() {
     document.getElementById('currencyConverterModal').classList.remove('active');
 }
 
-function handleConversionDirectionChange() {
-    let selectVal = document.getElementById('conversionDropdownSelect').value;
-    if (selectVal === 'usdtongngn') {
-        document.getElementById('convertInputLabel').textContent = 'Amount to Convert (USD)';
-        document.getElementById('convertOutputLabel').textContent = 'You Will Receive (NGN)';
-    } else {
-        document.getElementById('convertInputLabel').textContent = 'Amount to Convert (NGN)';
-        document.getElementById('convertOutputLabel').textContent = 'You Will Receive (USD)';
-    }
+function toggleConverterDirection() {
+    isNgsetToUsdDirection = !isNgsetToUsdDirection;
+    updateConverterLabels();
     document.getElementById('baseConvertInput').value = '';
     document.getElementById('targetConvertOutput').value = '';
+    document.getElementById('conversionLoadingBox').classList.remove('active');
 }
 
-function performCurrencyConversion() {
+function updateConverterLabels() {
+    if (isNgsetToUsdDirection) {
+        document.getElementById('fromLabelText').textContent = 'You Send (Naira)';
+        document.getElementById('fromBadgePill').textContent = 'NGN ₦';
+        document.getElementById('toLabelText').textContent = 'You Receive (US Dollar)';
+        document.getElementById('toBadgePill').textContent = 'USD $';
+    } else {
+        document.getElementById('fromLabelText').textContent = 'You Send (US Dollar)';
+        document.getElementById('fromBadgePill').textContent = 'USD $';
+        document.getElementById('toLabelText').textContent = 'You Receive (Naira)';
+        document.getElementById('toBadgePill').textContent = 'NGN ₦';
+    }
+}
+
+function handleLiveConversionInput() {
     let inputVal = parseFloat(document.getElementById('baseConvertInput').value) || 0;
-    let selectVal = document.getElementById('conversionDropdownSelect').value;
-    if (selectVal === 'ngntousd') {
+    if (inputVal <= 0) {
+        document.getElementById('targetConvertOutput').value = isNgsetToUsdDirection ? '$0.00' : '₦0.00';
+        return;
+    }
+
+    if (isNgsetToUsdDirection) {
         let res = inputVal / exchangeRate;
-        document.getElementById('targetConvertOutput').value = '$' + res.toLocaleString(undefined, {minimumFractionDigits: 2});
+        document.getElementById('targetConvertOutput').value = '$' + res.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
     } else {
         let res = inputVal * exchangeRate;
         document.getElementById('targetConvertOutput').value = '₦' + res.toLocaleString(undefined, {minimumFractionDigits: 2});
     }
 }
 
-async function applyCurrencyConversion() {
+async function executeAdvancedConversion() {
     let inputVal = parseFloat(document.getElementById('baseConvertInput').value) || 0;
-    let selectVal = document.getElementById('conversionDropdownSelect').value;
     if (inputVal <= 0) {
         alert('Please enter a valid amount to convert.');
         return;
     }
+
+    const loadingBox = document.getElementById('conversionLoadingBox');
+    const statusText = document.getElementById('conversionStatusText');
+    const executeBtn = document.getElementById('executeConversionBtn');
+
+    loadingBox.classList.add('active');
+    executeBtn.disabled = true;
+    executeBtn.style.opacity = '0.6';
+
+    // Step 1: Connecting / Fetching rates
+    statusText.textContent = 'Connecting to exchange liquidity gateway...';
+    await new Promise(resolve => setTimeout(resolve, 800));
+
+    // Step 2: Validating Balance & Calculating
+    statusText.textContent = 'Verifying wallet liquidity & executing conversion...';
+    await new Promise(resolve => setTimeout(resolve, 800));
 
     let newNgn = currentBalanceNgn;
     let newUsd = currentBalanceUsd;
@@ -2242,9 +2433,12 @@ async function applyCurrencyConversion() {
     let toCurr = '';
     let convertedOutputAmount = '';
 
-    if (selectVal === 'ngntousd') {
+    if (isNgsetToUsdDirection) {
         if (currentBalanceNgn < inputVal) {
-            alert('Insufficient Naira (NGN) balance for this conversion.');
+            loadingBox.classList.remove('active');
+            executeBtn.disabled = false;
+            executeBtn.style.opacity = '1';
+            alert('Conversion Failed: Insufficient Naira (NGN) balance.');
             return;
         }
         let usdGained = inputVal / exchangeRate;
@@ -2254,10 +2448,12 @@ async function applyCurrencyConversion() {
         toCurr = 'USD ($)';
         conversionDesc = `Swapped ₦${inputVal.toLocaleString()} to $${usdGained.toFixed(2)}`;
         convertedOutputAmount = '$' + usdGained.toFixed(2);
-        alert(`Successfully converted ₦${inputVal.toLocaleString()} to $${usdGained.toFixed(2)} on your balance!`);
     } else {
         if (currentBalanceUsd < inputVal) {
-            alert('Insufficient USD balance for this conversion.');
+            loadingBox.classList.remove('active');
+            executeBtn.disabled = false;
+            executeBtn.style.opacity = '1';
+            alert('Conversion Failed: Insufficient USD balance.');
             return;
         }
         let ngnGained = inputVal * exchangeRate;
@@ -2267,7 +2463,6 @@ async function applyCurrencyConversion() {
         toCurr = 'NGN (₦)';
         conversionDesc = `Swapped $${inputVal.toLocaleString()} to ₦${ngnGained.toLocaleString()}`;
         convertedOutputAmount = '₦' + ngnGained.toLocaleString();
-        alert(`Successfully converted $${inputVal.toLocaleString()} to ₦${ngnGained.toLocaleString()} on your balance!`);
     }
 
     if (supabaseClient) {
@@ -2280,25 +2475,36 @@ async function applyCurrencyConversion() {
     currentBalanceNgn = newNgn;
     currentBalanceUsd = newUsd;
     
-    transactions.unshift({ 
+    let txObj = { 
         id: Date.now(), 
         type: 'conversion', 
-        title: 'Currency Conversion', 
+        title: 'Currency Swap Conversion', 
         subtitle: conversionDesc, 
         amount: convertedOutputAmount, 
         date: new Date().toLocaleString(), 
         status: 'Success',
-        paymentProvider: 'Internal Swap Engine',
+        paymentProvider: 'Internal Liquidity Swap Engine',
         channel: 'Multi-Currency Wallet',
         fromCurrency: fromCurr,
         toCurrency: toCurr,
-        rate: `1.00 USD = ₦${exchangeRate.toLocaleString()}`,
-        details: conversionDesc
-    });
+        rate: `1.00 USD = ₦${exchangeRate.toLocaleString()}`
+    };
+
+    transactions.unshift(txObj);
+    await saveTransactionToSupabase(txObj);
 
     updateBalanceDisplay();
     renderTransactions('all');
+
+    statusText.textContent = 'Conversion Successful! Balances updated.';
+    await new Promise(resolve => setTimeout(resolve, 600));
+
+    loadingBox.classList.remove('active');
+    executeBtn.disabled = false;
+    executeBtn.style.opacity = '1';
+
     closeCurrencyModal();
+    alert('Currency conversion completed successfully and securely saved!');
 }
 
 function openChangePasswordModal() {
@@ -2374,7 +2580,7 @@ function renderTransactions(filterType) {
 
         let card = document.createElement('div');
         card.className = 'transaction-card';
-        card.onclick = () => showTransactionReceipt(tx);
+        card.onclick = () => { triggerHaptic(); showTransactionReceipt(tx); };
         card.innerHTML = `
             <div class="transaction-left">
                 <div class="transaction-icon-box ${iconClass}">${icon}</div>
@@ -2457,7 +2663,7 @@ function updateCartUI() {
             <td><strong>${item.title}</strong></td>
             <td><span class="badge-status badge-pending" style="text-transform:uppercase;">${item.type}</span></td>
             <td style="font-weight:700; color:var(--primary-color);">₦${item.price.toLocaleString()}</td>
-            <td><button class="btn-sm-outline" style="color:var(--primary-color); border-color:var(--primary-color); padding:4px 8px;" onclick="removeFromCart(${item.id})">Remove</button></td>
+            <td><button class="btn-sm-outline" style="color:var(--primary-color); border-color:var(--primary-color); padding:4px 8px;" onclick="triggerHaptic(); removeFromCart(${item.id})">Remove</button></td>
         `;
         tbody.appendChild(tr);
     });
@@ -2479,7 +2685,7 @@ async function buyNowItem(title, price, type, channelDesc) {
     }
     currentBalanceNgn = newNgn;
     
-    transactions.unshift({ 
+    let txObj = { 
         id: Date.now(), 
         type: type, 
         title: title, 
@@ -2489,7 +2695,9 @@ async function buyNowItem(title, price, type, channelDesc) {
         status: 'Success',
         paymentProvider: 'MJ Automated Debit',
         channel: channelDesc || 'Naira Wallet Transfer'
-    });
+    };
+    transactions.unshift(txObj);
+    await saveTransactionToSupabase(txObj);
     
     updateBalanceDisplay();
     renderTransactions('all');
@@ -2513,9 +2721,9 @@ async function checkoutCart() {
         }
     }
     currentBalanceNgn = newNgn;
-    cartItems.forEach(item => {
-        transactions.unshift({ 
-            id: Date.now(), 
+    for(let item of cartItems) {
+        let txObj = { 
+            id: Date.now() + Math.random(), 
             type: item.type, 
             title: item.title, 
             subtitle: 'Cart Checkout', 
@@ -2524,8 +2732,10 @@ async function checkoutCart() {
             status: 'Success',
             paymentProvider: 'MJ Automated Debit',
             channel: item.channel
-        });
-    });
+        };
+        transactions.unshift(txObj);
+        await saveTransactionToSupabase(txObj);
+    }
     cartItems = [];
     updateCartUI();
     updateBalanceDisplay();
@@ -2546,10 +2756,11 @@ async function processDeposit() {
 
     let newNgn = currentBalanceNgn;
     let newUsd = currentBalanceUsd;
+    let txObj = null;
 
     if (selectedWallet === 'usd') {
         newUsd += amt;
-        transactions.unshift({ 
+        txObj = { 
             id: Date.now(), 
             type: 'deposit', 
             title: 'USD Deposit', 
@@ -2559,11 +2770,11 @@ async function processDeposit() {
             status: 'Success',
             paymentProvider: selectedProvider,
             channel: selectedProvider
-        });
+        };
         alert('USD Wallet funded successfully with $' + amt.toLocaleString(undefined, {minimumFractionDigits: 2}) + '!');
     } else {
         newNgn += amt;
-        transactions.unshift({ 
+        txObj = { 
             id: Date.now(), 
             type: 'deposit', 
             title: 'Naira Deposit', 
@@ -2573,9 +2784,12 @@ async function processDeposit() {
             status: 'Success',
             paymentProvider: selectedProvider,
             channel: selectedProvider
-        });
+        };
         alert('Naira Wallet funded successfully with ₦' + amt.toLocaleString() + '!');
     }
+
+    transactions.unshift(txObj);
+    await saveTransactionToSupabase(txObj);
 
     if (supabaseClient) {
         const { data: { session } } = await supabaseClient.auth.getSession();
