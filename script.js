@@ -1,5 +1,5 @@
 /* ==========================================
-   MJ HUB - Application Logic & Support Widget (v4.4)
+   MJ HUB - Application Logic & Support Widget (v4.5)
    ========================================== */
 
 const SUPABASE_URL = 'https://atczodlljmlayvldxfmv.supabase.co';
@@ -21,8 +21,10 @@ let transactions = [];
 let userOnboarded = false;
 let userData = { name: '', email: '', phone: '', address: '', bio: '', bvn: '', nin: '', avatarUrl: '' };
 
+let currentActiveFilter = 'all';
+
 document.addEventListener('DOMContentLoaded', async () => {
-    // Initialize Support Widget & Draggable Functionality (incorporating user snippet)
+    // Initialize Support Widget & Draggable Functionality
     initSupportWidgetAndDragging();
 
     // Wire up Customer Lookup Logic
@@ -112,6 +114,9 @@ document.addEventListener('DOMContentLoaded', async () => {
             document.getElementById('profileBioInput').value = bioVal;
             document.getElementById('profileBvnInput').value = bvnVal;
             document.getElementById('profileNinInput').value = ninVal;
+
+            // Fetch live user transactions from Supabase database
+            await fetchUserTransactions(user.id);
         }
     }
 
@@ -220,7 +225,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         profileDropdown.classList.remove('active');
         notifDropdown.classList.remove('active');
         
-        // Close support popup if clicked outside widget container
         const widget = document.getElementById('support-widget');
         const popup = document.getElementById('support-popup');
         if (widget && popup && !widget.contains(e.target)) {
@@ -229,11 +233,11 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     });
 
-    renderTransactions('all');
+    renderTransactionsList();
 });
 
 /* ==========================================
-   SUPPORT WIDGET & DRAGGABLE LOGIC (Updated)
+   SUPPORT WIDGET & DRAGGABLE LOGIC
    ========================================== */
 function initSupportWidgetAndDragging() {
     const widget = document.getElementById('support-widget');
@@ -246,7 +250,6 @@ function initSupportWidgetAndDragging() {
     let hasMoved = false;
     let startX, startY, initialX, initialY;
 
-    // Toggle Popup Visibility (only if user wasn't dragging)
     toggleBtn.addEventListener('click', (e) => {
         e.stopPropagation();
         if (hasMoved) return;
@@ -262,7 +265,6 @@ function initSupportWidgetAndDragging() {
         });
     }
 
-    // Dragging Logic
     toggleBtn.addEventListener('mousedown', (e) => {
         isDragging = true;
         hasMoved = false;
@@ -273,7 +275,6 @@ function initSupportWidgetAndDragging() {
         initialX = rect.left;
         initialY = rect.top;
 
-        // Switch from bottom/right layout to fixed coordinate layout for dragging
         widget.style.bottom = 'auto';
         widget.style.right = 'auto';
         widget.style.left = `${initialX}px`;
@@ -285,21 +286,17 @@ function initSupportWidgetAndDragging() {
 
     function onMouseMove(e) {
         if (!isDragging) return;
-        
         const dx = e.clientX - startX;
         const dy = e.clientY - startY;
 
         if (Math.abs(dx) > 3 || Math.abs(dy) > 3) {
             hasMoved = true;
-            // Close popup if dragged to prevent weird offsets
             popup.classList.remove('active');
             widget.classList.remove('open');
         }
 
         let newX = initialX + dx;
         let newY = initialY + dy;
-
-        // Boundary constraints to keep widget within viewport
         const maxX = window.innerWidth - widget.offsetWidth;
         const maxY = window.innerHeight - widget.offsetHeight;
 
@@ -314,11 +311,7 @@ function initSupportWidgetAndDragging() {
         isDragging = false;
         document.removeEventListener('mousemove', onMouseMove);
         document.removeEventListener('mouseup', onMouseUp);
-        
-        // Reset hasMoved flag shortly after click release
-        setTimeout(() => {
-            hasMoved = false;
-        }, 50);
+        setTimeout(() => { hasMoved = false; }, 50);
     }
 }
 
@@ -426,15 +419,64 @@ function performCurrencyConversion() {
     }
 }
 
-function applyCurrencyConversion() {
-    if (conversionDirection === 'usdtongn') {
-        dashboardCurrencyMode = 'ngn';
-    } else {
-        dashboardCurrencyMode = 'usd';
+async function applyCurrencyConversion() {
+    let inputVal = parseFloat(document.getElementById('baseConvertInput').value) || 0;
+    if (inputVal <= 0) {
+        dashboardCurrencyMode = (conversionDirection === 'usdtongn') ? 'usd' : 'ngn';
+        updateBalanceDisplay();
+        closeCurrencyModal();
+        alert('Dashboard currency updated successfully!');
+        return;
     }
+
+    let newNgn = currentBalanceNgn;
+    let newUsd = currentBalanceUsd;
+    let conversionDesc = '';
+    let convertedAmountStr = '';
+
+    if (conversionDirection === 'ngntousd') {
+        if (currentBalanceNgn < inputVal) {
+            alert('Insufficient Naira (NGN) balance for this conversion.');
+            return;
+        }
+        let usdGained = inputVal / exchangeRate;
+        newNgn -= inputVal;
+        newUsd += usdGained;
+        conversionDesc = `Converted ₦${inputVal.toLocaleString()} to $${usdGained.toFixed(2)}`;
+        convertedAmountStr = '$' + usdGained.toFixed(2);
+    } else {
+        if (currentBalanceUsd < inputVal) {
+            alert('Insufficient USD balance for this conversion.');
+            return;
+        }
+        let ngnGained = inputVal * exchangeRate;
+        newUsd -= inputVal;
+        newNgn += ngnGained;
+        conversionDesc = `Converted $${inputVal.toLocaleString()} to ₦${ngnGained.toLocaleString()}`;
+        convertedAmountStr = '₦' + ngnGained.toLocaleString();
+    }
+
+    if (supabaseClient) {
+        const { data: { session } } = await supabaseClient.auth.getSession();
+        if (session) {
+            await supabaseClient.from('profiles').update({ balance: newNgn, balance_usd: newUsd }).eq('id', session.user.id);
+            await supabaseClient.from('transactions').insert({
+                user_id: session.user.id,
+                category: 'deposit',
+                title: 'Currency Conversion',
+                subtitle: conversionDesc,
+                amount: convertedAmountStr,
+                status: 'Success'
+            });
+            await fetchUserTransactions(session.user.id);
+        }
+    }
+
+    currentBalanceNgn = newNgn;
+    currentBalanceUsd = newUsd;
     updateBalanceDisplay();
     closeCurrencyModal();
-    alert('Dashboard currency updated successfully!');
+    alert('Currency converted and logged successfully!');
 }
 
 function openChangePasswordModal() {
@@ -480,45 +522,88 @@ function toggleActivityHistory() {
     overlay.classList.toggle('active');
 }
 
-function filterTransactions(type, btnElement) {
-    document.querySelectorAll('.filter-tab').forEach(t => t.classList.remove('active'));
-    btnElement.classList.add('active');
-    renderTransactions(type);
+/* ==========================================
+   DYNAMIC SUPABASE TRANSACTION FETCH & FILTER
+   ========================================== */
+async function fetchUserTransactions(userId) {
+    if (!supabaseClient) return;
+    try {
+        const { data, error } = await supabaseClient
+            .from('transactions')
+            .select('*')
+            .eq('user_id', userId)
+            .order('created_at', { ascending: false });
+
+        if (data && !error) {
+            transactions = data.map(tx => ({
+                id: tx.id,
+                category: tx.category || 'deposit',
+                title: tx.title,
+                subtitle: tx.subtitle || '',
+                amount: tx.amount,
+                date: new Date(tx.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+                status: tx.status || 'Success'
+            }));
+            renderTransactionsList();
+        }
+    } catch (err) {
+        console.error("Error fetching transactions:", err);
+    }
 }
 
-function renderTransactions(filterType) {
-    const container = document.getElementById('transactionListContainer');
-    let filtered = transactions;
-    if(filterType !== 'all') {
-        filtered = transactions.filter(tx => tx.type === filterType);
+function filterTransactions(category, btnElement) {
+    currentActiveFilter = category;
+    
+    // Update active tab styles across UI filter buttons
+    document.querySelectorAll('.filter-tab, .filter-tab-btn').forEach(btn => {
+        btn.classList.remove('active');
+    });
+    if (btnElement) {
+        btnElement.classList.add('active');
     }
 
-    if(filtered.length === 0) {
-        container.innerHTML = `<div class="empty-text">No transaction history found.</div>`;
+    renderTransactionsList();
+}
+
+function renderTransactionsList() {
+    const container = document.getElementById('transactionListContainer') || document.getElementById('transactionsContainer');
+    if (!container) return;
+
+    let filtered = transactions;
+    if (currentActiveFilter !== 'all') {
+        filtered = transactions.filter(tx => tx.category === currentActiveFilter);
+    }
+
+    if (filtered.length === 0) {
+        container.innerHTML = `<div class="empty-text text-center text-slate-400 py-8 text-sm">No transaction history found.</div>`;
         return;
     }
 
     container.innerHTML = '';
     filtered.forEach(tx => {
-        let icon = '📦';
-        let iconClass = 'tx-blue';
-        if(tx.type === 'deposit') { icon = '💳'; iconClass = 'tx-blue'; }
-        else if(tx.type === 'sms') { icon = '📱'; iconClass = 'tx-blue'; }
-        else if(tx.type === 'booster') { icon = '⚡'; iconClass = 'tx-blue'; }
+        let icon = '💳';
+        if (tx.category === 'sms') icon = '📱';
+        else if (tx.category === 'log') icon = '📦';
+        else if (tx.category === 'booster') icon = '⚡';
+
+        let statusLower = (tx.status || '').toLowerCase();
+        let statusClass = 'status-success';
+        if (statusLower.includes('cancel')) statusClass = 'status-canceled';
+        else if (statusLower.includes('pending') || statusLower.includes('code')) statusClass = 'status-pending';
 
         let card = document.createElement('div');
-        card.className = 'transaction-card';
+        card.className = 'transaction-card flex items-center justify-between p-3 mb-2 rounded-xl bg-slate-800/60 border border-slate-700/50';
         card.innerHTML = `
-            <div class="transaction-left">
-                <div class="transaction-icon-box ${iconClass}">${icon}</div>
+            <div class="transaction-left flex items-center space-x-3">
+                <div class="transaction-icon-box p-2 rounded-lg bg-slate-700/50 text-blue-400">${icon}</div>
                 <div class="transaction-details">
-                    <h4>${tx.title}</h4>
-                    <span>${tx.subtitle} • ${tx.date}</span>
+                    <h4 class="text-sm font-semibold text-white">${tx.title}</h4>
+                    <span class="text-xs text-slate-400">${tx.subtitle} • ${tx.date}</span>
                 </div>
             </div>
-            <div class="transaction-right">
-                <div class="transaction-amount">${tx.amount}</div>
-                <span class="transaction-status status-${tx.status.toLowerCase()}">${tx.status}</span>
+            <div class="transaction-right text-right">
+                <div class="transaction-amount text-sm font-bold text-white">${tx.amount}</div>
+                <span class="transaction-status ${statusClass} text-[10px] px-2 py-0.5 rounded-full font-medium">${tx.status}</span>
             </div>
         `;
         container.appendChild(card);
@@ -544,6 +629,8 @@ function updateCartUI() {
     let tbody = document.getElementById('cartTableBody');
     let totalDisplay = document.getElementById('cartTotalDisplay');
     
+    if(!tbody || !totalDisplay) return;
+
     if(cartItems.length === 0) {
         tbody.innerHTML = `<tr><td colspan="4" class="empty-text">Your cart is currently empty.</td></tr>`;
         totalDisplay.textContent = '₦0.00';
@@ -566,7 +653,7 @@ function updateCartUI() {
     totalDisplay.textContent = '₦' + total.toLocaleString(undefined, {minimumFractionDigits: 2});
 }
 
-function buyNowItem(title, price, type) {
+async function buyNowItem(title, price, type) {
     if(currentBalanceNgn < price) {
         alert('Insufficient NGN balance. Please fund your wallet first.');
         switchSection('deposit');
@@ -574,14 +661,30 @@ function buyNowItem(title, price, type) {
     }
     currentBalanceNgn -= price;
     currentBalanceUsd = currentBalanceNgn / exchangeRate;
-    transactions.unshift({ id: Date.now(), type, title, subtitle: 'Instant Purchase', amount: '₦' + price.toLocaleString(), date: 'Just now', status: 'Success' });
+    
     updateBalanceDisplay();
-    renderTransactions('all');
+
+    if (supabaseClient) {
+        const { data: { session } } = await supabaseClient.auth.getSession();
+        if (session) {
+            await supabaseClient.from('profiles').update({ balance: currentBalanceNgn, balance_usd: currentBalanceUsd }).eq('id', session.user.id);
+            await supabaseClient.from('transactions').insert({
+                user_id: session.user.id,
+                category: type, // 'sms', 'log', or 'booster'
+                title: title,
+                subtitle: 'Instant Purchase',
+                amount: '₦' + price.toLocaleString(),
+                status: 'Success'
+            });
+            await fetchUserTransactions(session.user.id);
+        }
+    }
+
     alert(title + ' purchased successfully!');
     switchSection('home');
 }
 
-function checkoutCart() {
+async function checkoutCart() {
     let total = cartItems.reduce((sum, item) => sum + item.price, 0);
     if(total === 0) { alert('Your cart is empty.'); return; }
     if(currentBalanceNgn < total) {
@@ -591,25 +694,56 @@ function checkoutCart() {
     }
     currentBalanceNgn -= total;
     currentBalanceUsd = currentBalanceNgn / exchangeRate;
-    cartItems.forEach(item => {
-        transactions.unshift({ id: Date.now(), type: item.type, title: item.title, subtitle: 'Cart Checkout', amount: '₦' + item.price.toLocaleString(), date: 'Just now', status: 'Success' });
-    });
+
+    if (supabaseClient) {
+        const { data: { session } } = await supabaseClient.auth.getSession();
+        if (session) {
+            await supabaseClient.from('profiles').update({ balance: currentBalanceNgn, balance_usd: currentBalanceUsd }).eq('id', session.user.id);
+            for (let item of cartItems) {
+                await supabaseClient.from('transactions').insert({
+                    user_id: session.user.id,
+                    category: item.type,
+                    title: item.title,
+                    subtitle: 'Cart Checkout',
+                    amount: '₦' + item.price.toLocaleString(),
+                    status: 'Success'
+                });
+            }
+            await fetchUserTransactions(session.user.id);
+        }
+    }
+
     cartItems = [];
     updateCartUI();
     updateBalanceDisplay();
-    renderTransactions('all');
     alert('All items successfully purchased!');
     switchSection('home');
 }
 
-function processDeposit() {
+async function processDeposit() {
     let amt = parseFloat(document.getElementById('depositInput').value) || 0;
     if(amt <= 0) { alert('Please enter a valid amount.'); return; }
     currentBalanceNgn += amt;
     currentBalanceUsd = currentBalanceNgn / exchangeRate;
-    transactions.unshift({ id: Date.now(), type: 'deposit', title: 'Card / Bank Transfer', subtitle: 'Wallet funding', amount: '₦' + amt.toLocaleString(), date: 'Just now', status: 'Success' });
+    
     updateBalanceDisplay();
-    renderTransactions('all');
+
+    if (supabaseClient) {
+        const { data: { session } } = await supabaseClient.auth.getSession();
+        if (session) {
+            await supabaseClient.from('profiles').update({ balance: currentBalanceNgn, balance_usd: currentBalanceUsd }).eq('id', session.user.id);
+            await supabaseClient.from('transactions').insert({
+                user_id: session.user.id,
+                category: 'deposit',
+                title: 'Card / Bank Transfer',
+                subtitle: 'Wallet funding',
+                amount: '₦' + amt.toLocaleString(),
+                status: 'Success'
+            });
+            await fetchUserTransactions(session.user.id);
+        }
+    }
+
     alert('Wallet funded successfully with ₦' + amt.toLocaleString() + '!');
     switchSection('home');
 }
@@ -617,29 +751,26 @@ function processDeposit() {
 function updateBalanceDisplay() {
     currentBalanceUsd = currentBalanceNgn / exchangeRate;
     
-    document.getElementById('navWalletBadge').textContent = 'NGN ₦' + currentBalanceNgn.toLocaleString(undefined, {minimumFractionDigits: 2});
+    const navBadge = document.getElementById('navWalletBadge');
+    if (navBadge) navBadge.textContent = 'NGN ₦' + currentBalanceNgn.toLocaleString(undefined, {minimumFractionDigits: 2});
     
+    const primaryLabel = document.getElementById('balanceLabelPrimary');
+    const primaryBal = document.getElementById('homePrimaryBalance');
+    const secLabel = document.getElementById('balanceLabelSecondary');
+    const secBal = document.getElementById('homeSecondaryBalance');
+    const profBal = document.getElementById('profileBalanceDisplay');
+
     if (dashboardCurrencyMode === 'usd') {
-        document.getElementById('balanceLabelPrimary').textContent = 'USD Balance';
-        document.getElementById('homePrimaryBalance').textContent = '$' + currentBalanceUsd.toLocaleString(undefined, {minimumFractionDigits: 2});
-        document.getElementById('balanceIconPrimary').className = 'sleek-card-icon icon-white';
-        document.getElementById('balanceIconPrimary').textContent = '💵';
-
-        document.getElementById('balanceLabelSecondary').textContent = 'NGN Balance';
-        document.getElementById('homeSecondaryBalance').textContent = '₦' + currentBalanceNgn.toLocaleString(undefined, {minimumFractionDigits: 2});
-        document.getElementById('balanceIconSecondary').className = 'sleek-card-icon icon-blue';
-        document.getElementById('balanceIconSecondary').textContent = '💳';
+        if (primaryLabel) primaryLabel.textContent = 'USD Balance';
+        if (primaryBal) primaryBal.textContent = '$' + currentBalanceUsd.toLocaleString(undefined, {minimumFractionDigits: 2});
+        if (secLabel) secLabel.textContent = 'NGN Balance';
+        if (secBal) secBal.textContent = '₦' + currentBalanceNgn.toLocaleString(undefined, {minimumFractionDigits: 2});
     } else {
-        document.getElementById('balanceLabelPrimary').textContent = 'NGN Balance';
-        document.getElementById('homePrimaryBalance').textContent = '₦' + currentBalanceNgn.toLocaleString(undefined, {minimumFractionDigits: 2});
-        document.getElementById('balanceIconPrimary').className = 'sleek-card-icon icon-blue';
-        document.getElementById('balanceIconPrimary').textContent = '💳';
-
-        document.getElementById('balanceLabelSecondary').textContent = 'USD Balance';
-        document.getElementById('homeSecondaryBalance').textContent = '$' + currentBalanceUsd.toLocaleString(undefined, {minimumFractionDigits: 2});
-        document.getElementById('balanceIconSecondary').className = 'sleek-card-icon icon-white';
-        document.getElementById('balanceIconSecondary').textContent = '💵';
+        if (primaryLabel) primaryLabel.textContent = 'NGN Balance';
+        if (primaryBal) primaryBal.textContent = '₦' + currentBalanceNgn.toLocaleString(undefined, {minimumFractionDigits: 2});
+        if (secLabel) secLabel.textContent = 'USD Balance';
+        if (secBal) secBal.textContent = '$' + currentBalanceUsd.toLocaleString(undefined, {minimumFractionDigits: 2});
     }
 
-    document.getElementById('profileBalanceDisplay').textContent = '₦' + currentBalanceNgn.toLocaleString(undefined, {minimumFractionDigits: 2});
+    if (profBal) profBal.textContent = '₦' + currentBalanceNgn.toLocaleString(undefined, {minimumFractionDigits: 2});
 }
