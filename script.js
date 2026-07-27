@@ -25,6 +25,44 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Initialize Support Widget & Draggable Functionality (incorporating user snippet)
     initSupportWidgetAndDragging();
 
+    // Wire up Customer Lookup Logic
+    const lookupBtn = document.getElementById('lookupBtn');
+    const searchInput = document.getElementById('searchCustomerId');
+    const userResultCard = document.getElementById('userResultCard');
+    const resCustomerId = document.getElementById('resCustomerId');
+    const resEmail = document.getElementById('resEmail');
+    const errorMessage = document.getElementById('errorMessage');
+
+    if (lookupBtn) {
+      lookupBtn.addEventListener('click', async () => {
+        const customerId = searchInput.value.trim();
+        errorMessage.textContent = '';
+        userResultCard.style.display = 'none';
+
+        if (!customerId) {
+          errorMessage.textContent = 'Please enter a valid Customer ID.';
+          return;
+        }
+
+        try {
+          const response = await fetch(`/api/admin/users/lookup?customerId=${customerId}`);
+          const data = await response.json();
+
+          if (!response.ok) {
+            throw new Error(data.message || 'User not found.');
+          }
+
+          // Populate and display the user info
+          resCustomerId.textContent = data.customerId;
+          resEmail.textContent = data.email;
+          userResultCard.style.display = 'block';
+
+        } catch (err) {
+          errorMessage.textContent = err.message;
+        }
+      });
+    }
+
     if (supabaseClient) {
         const { data: { session }, error } = await supabaseClient.auth.getSession();
         
