@@ -15,11 +15,11 @@
             --border-color: #1e3a8a;
         }
         * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
-        body { background-color: var(--bg-main); color: var(--text-main); line-height: 1.6; position: relative; min-height: 100vh; overflow-x: hidden; }
+        body { background-color: var(--bg-main); color: var(--text-main); line-height: 1.6; min-height: 100vh; display: flex; flex-direction: column; }
         
         /* Header & Navigation */
         header { display: flex; justify-content: space-between; align-items: center; padding: 20px 8%; border-bottom: 1px solid var(--border-color); background: var(--card-bg); position: relative; }
-        .logo { font-size: 24px; font-weight: bold; color: var(--primary-color); letter-spacing: 1px; }
+        .logo { font-size: 24px; font-weight: bold; color: var(--primary-color); letter-spacing: 1px; text-decoration: none; }
         
         .nav-desktop { display: flex; align-items: center; }
         .nav-desktop a { padding: 10px 20px; border-radius: 8px; text-decoration: none; font-weight: 600; font-size: 14px; margin-left: 10px; transition: 0.3s; }
@@ -142,66 +142,63 @@
             .menu-toggle-btn { display: flex; }
         }
 
-        /* Support Page Layout */
+        /* Support Page Specific Styles matching reference layout */
         .support-container {
-            max-width: 800px;
-            margin: 50px auto;
-            padding: 0 20px;
+            max-width: 700px;
+            width: 90%;
+            margin: 40px auto;
+            flex: 1;
         }
-        .support-header-title {
-            font-size: 36px;
+
+        .support-page-title {
+            font-size: 32px;
             font-weight: 800;
-            margin-bottom: 8px;
-            color: #fff;
+            margin-bottom: 6px;
+            letter-spacing: -0.5px;
         }
-        .support-header-subtitle {
+
+        .support-page-subtitle {
             font-size: 16px;
             color: var(--text-muted);
-            margin-bottom: 24px;
+            margin-bottom: 12px;
         }
-        .breadcrumb {
+
+        .breadcrumbs {
             font-size: 14px;
-            color: #9ca3af;
-            margin-bottom: 40px;
+            color: #94a3b8;
+            margin-bottom: 30px;
         }
-        .breadcrumb a {
+        .breadcrumbs a {
             color: var(--text-muted);
             text-decoration: none;
         }
-        .breadcrumb a:hover { text-decoration: underline; }
+        .breadcrumbs a:hover { text-decoration: underline; }
 
-        .support-cards-grid {
-            display: flex;
-            flex-direction: column;
-            gap: 20px;
-        }
-
-        /* Support Card Styles Matching Reference */
         .support-card {
             background: var(--card-bg);
             border: 1px solid var(--border-color);
             border-radius: 16px;
+            margin-bottom: 24px;
             overflow: hidden;
-            box-shadow: 0 10px 25px rgba(0,0,0,0.3);
+            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.3);
+            transition: transform 0.2s ease, border-color 0.2s ease;
         }
-        .support-card-top {
+        .support-card:hover {
+            border-color: rgba(37, 99, 235, 0.6);
+        }
+
+        .support-card-header {
             padding: 20px 24px;
             display: flex;
             align-items: center;
             gap: 12px;
             font-size: 20px;
             font-weight: 700;
+            color: #fff;
         }
-        .support-card-top.whatsapp-theme {
-            background: rgba(37, 211, 102, 0.12);
-            color: #25d366;
-            border-bottom: 1px solid rgba(37, 211, 102, 0.2);
-        }
-        .support-card-top.telegram-theme {
-            background: rgba(0, 136, 204, 0.12);
-            color: #0088cc;
-            border-bottom: 1px solid rgba(0, 136, 204, 0.2);
-        }
+        .support-card-header.whatsapp-theme { background: rgba(37, 211, 102, 0.12); border-bottom: 1px solid rgba(37, 211, 102, 0.2); }
+        .support-card-header.telegram-theme { background: rgba(0, 136, 204, 0.12); border-bottom: 1px solid rgba(0, 136, 204, 0.2); }
+
         .support-card-body {
             padding: 24px;
         }
@@ -212,29 +209,24 @@
         }
         .support-card-body p {
             font-size: 14px;
-            color: #9ca3af;
+            color: #94a3b8;
             margin-bottom: 20px;
         }
+
         .support-action-btn {
             display: inline-block;
             padding: 12px 24px;
-            border-radius: 8px;
-            font-weight: bold;
+            border-radius: 10px;
+            font-weight: 700;
             font-size: 14px;
             text-decoration: none;
-            transition: opacity 0.2s;
+            transition: opacity 0.2s, transform 0.2s;
         }
-        .support-action-btn:hover { opacity: 0.9; }
-        .btn-whatsapp {
-            background: #25d366;
-            color: #fff;
-        }
-        .btn-telegram {
-            background: #0088cc;
-            color: #fff;
-        }
+        .support-action-btn:hover { opacity: 0.9; transform: translateY(-1px); }
+        .btn-whatsapp { background: #25d366; color: #fff; }
+        .btn-telegram { background: #0088cc; color: #fff; }
 
-        /* Coming Soon Modal Dialog */
+        /* Coming Soon Modal Styles */
         .modal-overlay {
             position: fixed;
             top: 0; left: 0; width: 100%; height: 100%;
@@ -279,7 +271,7 @@
 <body>
 
     <header>
-        <div class="logo">MJ HUB</div>
+        <a href="index.html" class="logo">MJ HUB</a>
         
         <!-- Desktop Nav Buttons -->
         <div class="nav-desktop">
@@ -288,7 +280,6 @@
         </div>
 
         <!-- Top Right Hamburger Menu Button -->
-        <div class="nav-desktop" style="display: none;"></div>
         <button id="menuToggleBtn" class="menu-toggle-btn" aria-label="Toggle Menu">
             ☰
         </button>
@@ -301,9 +292,9 @@
             </div>
             <div class="dropdown-nav-links">
                 <a href="index.html">Home</a>
-                <a href="#rent-number">Rent Number</a>
-                <a href="#how-it-works">How Does It Work</a>
-                <a href="#faq">FAQ</a>
+                <a href="index.html#rent-number">Rent Number</a>
+                <a href="index.html#how-it-works">How Does It Work</a>
+                <a href="index.html#faq">FAQ</a>
                 <a href="support.html" class="active-link">Help</a>
                 <a href="#" id="apiLink">API <span class="badge-soon">Coming Soon</span></a>
             </div>
@@ -323,42 +314,40 @@
         </div>
     </div>
 
-    <!-- Main Support Content Section -->
+    <!-- Support Page Content -->
     <main class="support-container">
-        <h1 class="support-header-title">SUPPORT</h1>
-        <p class="support-header-subtitle">We're here to help!</p>
-        <div class="breadcrumb">
+        <h1 class="support-page-title">SUPPORT</h1>
+        <p class="support-page-subtitle">We're here to help!</p>
+        <div class="breadcrumbs">
             <a href="index.html">Home</a> / <span>Support</span>
         </div>
 
-        <div class="support-cards-grid">
-            <!-- WhatsApp Support Card -->
-            <div class="support-card">
-                <div class="support-card-top whatsapp-theme">
-                    <span>💬</span> WhatsApp Support
-                </div>
-                <div class="support-card-body">
-                    <h4>Chat with us on WhatsApp!</h4>
-                    <p>We're ready for anything. If you have a problem or a question, click below to start chatting with us.</p>
-                    <a href="https://wa.me/234XXXXXXXXXX" target="_blank" class="support-action-btn btn-whatsapp">Chat on WhatsApp</a>
-                </div>
+        <!-- WhatsApp Support Card -->
+        <div class="support-card">
+            <div class="support-card-header whatsapp-theme">
+                <span>💬</span> WhatsApp Support
             </div>
+            <div class="support-card-body">
+                <h4>Chat with us on WhatsApp!</h4>
+                <p>We're ready for anything. If you have a problem or a question, click below to start chatting with our support team instantly.</p>
+                <a href="https://wa.me/234XXXXXXXXXX" target="_blank" class="support-action-btn btn-whatsapp">Chat on WhatsApp</a>
+            </div>
+        </div>
 
-            <!-- Telegram Support Card -->
-            <div class="support-card">
-                <div class="support-card-top telegram-theme">
-                    <span>✈️</span> Telegram Support
-                </div>
-                <div class="support-card-body">
-                    <h4>Join or message us on Telegram!</h4>
-                    <p>Have questions or need fast assistance? Reach out directly to our support team via Telegram.</p>
-                    <a href="https://t.me/XXXXXXXXXX" target="_blank" class="support-action-btn btn-telegram">Chat on Telegram</a>
-                </div>
+        <!-- Telegram Support Card -->
+        <div class="support-card">
+            <div class="support-card-header telegram-theme">
+                <span>✈️</span> Telegram Support
+            </div>
+            <div class="support-card-body">
+                <h4>Join or message us on Telegram!</h4>
+                <p>Have questions, tips, or need fast assistance? Reach out to our official Telegram support channel right away.</p>
+                <a href="https://t.me/XXXXXXXXXX" target="_blank" class="support-action-btn btn-telegram">Chat on Telegram</a>
             </div>
         </div>
     </main>
 
-    <!-- Script for Dropdown Menu & Coming Soon Modal -->
+    <!-- Script for Navigation, Dropdown, and Modal -->
     <script>
         document.addEventListener('DOMContentLoaded', () => {
             const menuToggleBtn = document.getElementById('menuToggleBtn');
@@ -385,6 +374,7 @@
                 }
             });
 
+            // Coming Soon Modal Controls for API Link
             const apiLink = document.getElementById('apiLink');
             const comingSoonModal = document.getElementById('comingSoonModal');
             const modalCloseBtn = document.getElementById('modalCloseBtn');
