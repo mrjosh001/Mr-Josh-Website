@@ -345,12 +345,12 @@
         let allProfiles = [];
         let currentFilter = 'all';
         let currentRevenueTimeframe = 'month';
-        let liveP2PRate = 1364.48;
+        let liveP2PRate = 1420;
         let lookedUpUser = null;
 
         window.addEventListener('DOMContentLoaded', async () => {
             fetchLiveP2PRate();
-            checkAuth();
+            await checkAuth();
             
             window.addEventListener('click', (e) => {
                 if (!e.target.closest('.menu-container')) {
@@ -404,7 +404,8 @@
 
             document.getElementById('loginScreen').classList.add('hidden');
             document.getElementById('adminDashboard').classList.remove('hidden');
-            loadAdminData();
+            await loadAdminData();
+            setupRealtimeSubscription();
         }
 
         async function handleLogin() {
@@ -438,6 +439,31 @@
 
             allProfiles = profiles || [];
             calculateMetricsAndRender();
+        }
+
+        function setupRealtimeSubscription() {
+            supabaseClient
+                .channel('public:profiles_admin_realtime')
+                .on('postgres_changes', { 
+                    event: '*', 
+                    schema: 'public', 
+                    table: 'profiles' 
+                }, payload => {
+                    if (payload.eventType === 'UPDATE' && payload.new) {
+                        const index = allProfiles.findIndex(p => p.id === payload.new.id);
+                        if (index !== -1) {
+                            allProfiles[index] = { ...allProfiles[index], ...payload.new };
+                        } else {
+                            allProfiles.push(payload.new);
+                        }
+                    } else if (payload.eventType === 'INSERT' && payload.new) {
+                        allProfiles.push(payload.new);
+                    } else if (payload.eventType === 'DELETE' && payload.old) {
+                        allProfiles = allProfiles.filter(p => p.id !== payload.old.id);
+                    }
+                    calculateMetricsAndRender();
+                })
+                .subscribe();
         }
 
         async function lookupCustomer() {
@@ -563,12 +589,12 @@
                     const statusBadge = profile.isActive ? `<span class="badge badge-active">Active</span>` : `<span class="badge badge-inactive">Inactive</span>`;
                     const adminBadge = profile.is_admin ? `<span style="color: #4ade80; font-weight: 600;">Admin</span>` : `<span style="color: #93c5fd;">Standard</span>`;
                     
-                    const formattedNgn = `₦${Number(profile.balance_ngn || 0).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
-                    const formattedUsd = `$${Number(profile.balance_usd || 0).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+                    const formattedNgn = `₦${Number(profile.balance || 0).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+                    const formattedUsd = `$${Number(profile.balance_usd || (profile.balance / liveP2PRate) || 0).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
 
                     rowsHTML += `
                         <tr>
-                            <td>${profile.full_name || 'N/A'}</td>
+                            <td>${profile.full_name || profile.username || 'N/A'}</td>
                             <td>${profile.username || 'N/A'}</td>
                             <td>${profile.email || 'N/A'}</td>
                             <td style="font-weight: 600; color: #34d399;">${formattedNgn}</td>
@@ -593,9 +619,9 @@
             document.getElementById('editFullName').value = profile.full_name || '';
             document.getElementById('editUsername').value = profile.username || '';
             document.getElementById('editEmail').value = profile.email || '';
-            document.getElementById('editPhone').value = profile.phone_number || '';
-            document.getElementById('editBalanceNgn').value = profile.balance_ngn !== undefined ? profile.balance_ngn : 0;
-            document.getElementById('editBalanceUsd').value = profile.balance_usd !== undefined ? profile.balance_usd : 0;
+            document.getElementById('editPhone').value = profile.phone || profile.phone_number || '';
+            document.getElementById('editBalanceNgn').value = profile.balance !== undefined ? profile.balance : 0;
+            document.getElementById('editBalanceUsd').value = profile.balance_usd !== undefined ? profile.balance_usd : (profile.balance / liveP2PRate);
             document.getElementById('editIsAdmin').value = profile.is_admin ? 'true' : 'false';
             document.getElementById('modalError').innerText = '';
 
@@ -610,16 +636,16 @@
             const userId = document.getElementById('editUserId').value;
             const full_name = document.getElementById('editFullName').value.trim();
             const username = document.getElementById('editUsername').value.trim();
-            const phone_number = document.getElementById('editPhone').value.trim();
-            const balance_ngn = parseFloat(document.getElementById('editBalanceNgn').value) || 0;
-            const balance_usd = parseFloat(document.getElementById('editBalanceUsd').value) || 0;
+            const phone = document.getElementById('editPhone').value.trim();
+            const balance = parseFloat(document.getElementById('editBalanceNgn').value) || 0;
+            const balance_usd = parseFloat(document.getElementById('editBalanceUsd').value) || (balance / liveP2PRate);
             const is_admin = document.getElementById('editIsAdmin').value === 'true';
             const errorBox = document.getElementById('modalError');
             errorBox.innerText = '';
 
             const { data, error } = await supabaseClient
                 .from('profiles')
-                .update({ full_name, username, phone_number, balance_ngn, balance_usd, is_admin })
+                .update({ full_name, username, phone, balance, balance_usd, is_admin })
                 .eq('id', userId)
                 .select();
 
@@ -634,7 +660,7 @@
             }
 
             closeEditModal();
-            loadAdminData();
+            await loadAdminData();
         }
 
         async function handleLogout() {
