@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en" data-theme="dark">
+<html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -8,24 +8,59 @@
         :root {
             --primary-color: #2563eb;
             --primary-hover: #1d4ed8;
+            --bg-main: #f8fafc;
+            --card-bg: #ffffff;
+            --text-main: #0f172a;
+            --text-muted: #64748b;
+            --border-color: #cbd5e1;
+        }
+
+        [data-theme="dark"] {
+            --primary-color: #2563eb;
+            --primary-hover: #1d4ed8;
             --bg-main: #0b0f19;
             --card-bg: #121824;
             --text-main: #ffffff;
             --text-muted: #93c5fd;
             --border-color: #1e3a8a;
         }
+
         * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
-        body { background-color: var(--bg-main); color: var(--text-main); line-height: 1.6; position: relative; min-height: 100vh; overflow-x: hidden; }
+        body { background-color: var(--bg-main); color: var(--text-main); line-height: 1.6; position: relative; min-height: 100vh; overflow-x: hidden; transition: background-color 0.3s, color 0.3s; }
         
         /* Header & Navigation */
-        header { display: flex; justify-content: space-between; align-items: center; padding: 20px 8%; border-bottom: 1px solid var(--border-color); background: var(--card-bg); position: relative; }
+        header { display: flex; justify-content: space-between; align-items: center; padding: 20px 8%; border-bottom: 1px solid var(--border-color); background: var(--card-bg); position: relative; transition: background-color 0.3s, border-color 0.3s; }
         .logo { font-size: 24px; font-weight: bold; color: var(--primary-color); letter-spacing: 1px; }
         
+        .header-right-group {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            position: relative;
+        }
+
         .nav-desktop { display: flex; align-items: center; }
         .nav-desktop a { padding: 10px 20px; border-radius: 8px; text-decoration: none; font-weight: 600; font-size: 14px; margin-left: 10px; transition: 0.3s; }
         .btn-signin { color: var(--text-main); border: 1px solid var(--border-color); }
         .btn-signup { background: var(--primary-color); color: #fff; }
         
+        /* Light/Dark Mode Toggle Button */
+        .theme-toggle-btn {
+            background: transparent;
+            border: 1px solid var(--border-color);
+            color: var(--text-main);
+            width: 44px;
+            height: 44px;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 20px;
+            cursor: pointer;
+            transition: 0.2s;
+        }
+        .theme-toggle-btn:hover { background: rgba(37, 99, 235, 0.1); }
+
         /* Hamburger Menu Toggle Button */
         .menu-toggle-btn {
             background: transparent;
@@ -49,14 +84,15 @@
             top: 100%;
             left: 0;
             width: 100%;
-            background: #111827;
+            background: var(--card-bg);
             border-bottom: 1px solid var(--border-color);
-            box-shadow: 0 20px 30px rgba(0,0,0,0.5);
+            box-shadow: 0 20px 30px rgba(0,0,0,0.3);
             display: none;
             flex-direction: column;
             padding: 20px 24px;
             z-index: 1000;
             animation: slideDown 0.25s ease forwards;
+            transition: background-color 0.3s, border-color 0.3s;
         }
         .dropdown-menu.active { display: flex; }
 
@@ -71,11 +107,11 @@
             align-items: center;
             margin-bottom: 15px;
             padding-bottom: 10px;
-            border-bottom: 1px solid rgba(255,255,255,0.08);
+            border-bottom: 1px solid var(--border-color);
         }
         .dropdown-header-row span { font-weight: bold; color: var(--primary-color); font-size: 18px; }
         .dropdown-close-btn {
-            background: rgba(255,255,255,0.05);
+            background: rgba(128, 128, 128, 0.1);
             border: none;
             color: var(--text-muted);
             width: 32px;
@@ -87,7 +123,7 @@
             align-items: center;
             justify-content: center;
         }
-        .dropdown-close-btn:hover { background: rgba(255,255,255,0.1); color: #fff; }
+        .dropdown-close-btn:hover { background: rgba(128, 128, 128, 0.2); color: var(--text-main); }
 
         .dropdown-nav-links {
             display: flex;
@@ -108,7 +144,7 @@
         }
         .dropdown-nav-links a:hover, .dropdown-nav-links a.active-link {
             background: rgba(37, 99, 235, 0.15);
-            color: var(--text-muted);
+            color: var(--primary-color);
         }
         .badge-soon {
             background: #f59e0b;
@@ -126,7 +162,7 @@
             gap: 12px;
             margin-top: 20px;
             padding-top: 15px;
-            border-top: 1px solid rgba(255,255,255,0.08);
+            border-top: 1px solid var(--border-color);
         }
         .dropdown-auth-actions a {
             text-align: center;
@@ -144,13 +180,13 @@
         }
 
         .hero { text-align: center; padding: 100px 20px; max-width: 800px; margin: 0 auto; }
-        .hero h1 { font-size: 42px; margin-bottom: 20px; color: #fff; }
+        .hero h1 { font-size: 42px; margin-bottom: 20px; color: var(--text-main); }
         .hero p { font-size: 18px; color: var(--text-muted); margin-bottom: 40px; }
         .hero-cta { display: flex; justify-content: center; gap: 15px; }
         .hero-cta a { padding: 14px 30px; border-radius: 10px; font-weight: bold; text-decoration: none; font-size: 16px; }
         
         .features { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 20px; padding: 50px 8%; }
-        .feature-card { background: var(--card-bg); border: 1px solid var(--border-color); padding: 30px; border-radius: 15px; text-align: center; }
+        .feature-card { background: var(--card-bg); border: 1px solid var(--border-color); padding: 30px; border-radius: 15px; text-align: center; transition: background-color 0.3s, border-color 0.3s; }
         .feature-card h3 { color: var(--primary-color); margin-bottom: 10px; }
         .feature-card p { color: var(--text-muted); font-size: 14px; }
 
@@ -161,22 +197,22 @@
         .support-toggle-btn:hover { transform: scale(1.05); }
         .support-icon { font-size: 28px; line-height: 1; }
         .support-badge-tag { position: absolute; top: -6px; right: -6px; background: #ef4444; color: #ffffff; font-size: 10px; font-weight: 700; padding: 3px 8px; border-radius: 12px; text-transform: uppercase; }
-        .support-popup-card { position: absolute; bottom: 80px; right: 0; width: 340px; background: #111827; color: #ffffff; border-radius: 20px; box-shadow: 0 20px 40px rgba(0, 0, 0, 0.6); border: 1px solid rgba(255, 255, 255, 0.08); display: none; flex-direction: column; overflow: hidden; }
+        .support-popup-card { position: absolute; bottom: 80px; right: 0; width: 340px; background: var(--card-bg); color: var(--text-main); border-radius: 20px; box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4); border: 1px solid var(--border-color); display: none; flex-direction: column; overflow: hidden; }
         .support-popup-card.active { display: flex; }
-        .support-popup-header { padding: 24px 20px 20px 20px; background: linear-gradient(180deg, #1f2937 0%, #111827 100%); border-bottom: 1px solid rgba(255, 255, 255, 0.06); position: relative; }
-        .support-popup-header h3 { margin: 0 0 6px 0; font-size: 22px; font-weight: 700; }
-        .support-popup-header p { margin: 0 0 14px 0; font-size: 14px; color: #9ca3af; }
-        .support-status-indicator { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; color: #d1d5db; font-weight: 500; }
+        .support-popup-header { padding: 24px 20px 20px 20px; background: var(--card-bg); border-bottom: 1px solid var(--border-color); position: relative; }
+        .support-popup-header h3 { margin: 0 0 6px 0; font-size: 22px; font-weight: 700; color: var(--text-main); }
+        .support-popup-header p { margin: 0 0 14px 0; font-size: 14px; color: var(--text-muted); }
+        .support-status-indicator { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; color: var(--text-muted); font-weight: 500; }
         .status-dot { width: 8px; height: 8px; background-color: #10b981; border-radius: 50%; box-shadow: 0 0 8px #10b981; }
-        .support-close-inner { position: absolute; top: 16px; right: 16px; background: rgba(255, 255, 255, 0.05); border: none; width: 30px; height: 30px; border-radius: 50%; color: #9ca3af; cursor: pointer; display: flex; align-items: center; justify-content: center; }
-        .support-popup-body { padding: 16px; display: flex; flex-direction: column; gap: 12px; background: #111827; }
-        .support-channel-item { display: flex; align-items: center; gap: 14px; padding: 14px 16px; background: #1f2937; border: 1px solid rgba(255, 255, 255, 0.04); border-radius: 14px; text-decoration: none; color: #ffffff; transition: all 0.2s ease; }
-        .support-channel-item:hover { background: #374151; border-color: rgba(37, 99, 235, 0.4); }
+        .support-close-inner { position: absolute; top: 16px; right: 16px; background: rgba(128, 128, 128, 0.1); border: none; width: 30px; height: 30px; border-radius: 50%; color: var(--text-muted); cursor: pointer; display: flex; align-items: center; justify-content: center; }
+        .support-popup-body { padding: 16px; display: flex; flex-direction: column; gap: 12px; background: var(--card-bg); }
+        .support-channel-item { display: flex; align-items: center; gap: 14px; padding: 14px 16px; background: rgba(128, 128, 128, 0.05); border: 1px solid var(--border-color); border-radius: 14px; text-decoration: none; color: var(--text-main); transition: all 0.2s ease; }
+        .support-channel-item:hover { background: rgba(37, 99, 235, 0.1); border-color: rgba(37, 99, 235, 0.4); }
         .channel-icon-wrap { width: 40px; height: 40px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 22px; flex-shrink: 0; }
         .channel-icon-wrap.whatsapp { background: rgba(37, 211, 102, 0.15); color: #25d366; }
         .channel-icon-wrap.telegram { background: rgba(0, 136, 204, 0.15); color: #0088cc; }
-        .channel-info h4 { margin: 0 0 2px 0; font-size: 15px; font-weight: 600; }
-        .channel-info p { margin: 0; font-size: 12px; color: #9ca3af; }
+        .channel-info h4 { margin: 0 0 2px 0; font-size: 15px; font-weight: 600; color: var(--text-main); }
+        .channel-info p { margin: 0; font-size: 12px; color: var(--text-muted); }
 
         /* Coming Soon Notification Modal Styles */
         .modal-overlay {
@@ -192,7 +228,7 @@
         }
         .modal-overlay.active { display: flex; }
         .modal-card {
-            background: #111827;
+            background: var(--card-bg);
             border: 1px solid var(--border-color);
             padding: 30px;
             border-radius: 16px;
@@ -202,7 +238,7 @@
             box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5);
             animation: scaleUp 0.25s cubic-bezier(0.16, 1, 0.3, 1) forwards;
         }
-        .modal-card h3 { color: #fff; margin-bottom: 10px; font-size: 20px; }
+        .modal-card h3 { color: var(--text-main); margin-bottom: 10px; font-size: 20px; }
         .modal-card p { color: var(--text-muted); font-size: 14px; margin-bottom: 20px; }
         .modal-btn {
             background: var(--primary-color);
@@ -220,23 +256,30 @@
         @keyframes scaleUp { from { transform: scale(0.9); } to { transform: scale(1); } }
     </style>
 </head>
-<body>
+<body data-theme="light">
 
     <header>
         <div class="logo">MJ HUB</div>
         
-        <!-- Desktop Nav Buttons -->
-        <div class="nav-desktop">
-            <a href="auth.html?mode=signin" class="btn-signin">Sign In</a>
-            <a href="auth.html?mode=signup" class="btn-signup">Get Started</a>
+        <div class="header-right-group">
+            <!-- Desktop Nav Buttons -->
+            <div class="nav-desktop">
+                <a href="auth.html?mode=signin" class="btn-signin">Sign In</a>
+                <a href="auth.html?mode=signup" class="btn-signup">Get Started</a>
+            </div>
+
+            <!-- Light/Dark Mode Toggle Button -->
+            <button id="themeToggleBtn" class="theme-toggle-btn" aria-label="Toggle Theme">
+                🌙
+            </button>
+
+            <!-- Top Right Hamburger Menu Button -->
+            <button id="menuToggleBtn" class="menu-toggle-btn" aria-label="Toggle Menu">
+                ☰
+            </button>
         </div>
 
-        <!-- Top Right Hamburger Menu Button -->
-        <button id="menuToggleBtn" class="menu-toggle-btn" aria-label="Toggle Menu">
-            ☰
-        </button>
-
-        <!-- Dropdown Menu updated to point to separate support.html and faq.html pages -->
+        <!-- Dropdown Menu -->
         <div id="dropdownMenu" class="dropdown-menu">
             <div class="dropdown-header-row">
                 <span>MJ HUB Menu</span>
@@ -334,9 +377,26 @@
         </div>
     </div>
 
-    <!-- Script for Top Right Dropdown Menu, Coming Soon Modal, & Movable Support Widget -->
+    <!-- Script for Theme Toggle, Dropdown Menu, Coming Soon Modal, & Support Widget -->
     <script>
         document.addEventListener('DOMContentLoaded', () => {
+            // Theme Toggle Controls (Default is light mode)
+            const bodyEl = document.body;
+            const themeToggleBtn = document.getElementById('themeToggleBtn');
+
+            if (themeToggleBtn) {
+                themeToggleBtn.addEventListener('click', () => {
+                    const currentTheme = bodyEl.getAttribute('data-theme');
+                    if (currentTheme === 'dark') {
+                        bodyEl.setAttribute('data-theme', 'light');
+                        themeToggleBtn.textContent = '🌙';
+                    } else {
+                        bodyEl.setAttribute('data-theme', 'dark');
+                        themeToggleBtn.textContent = '☀️';
+                    }
+                });
+            }
+
             // Dropdown Menu Controls
             const menuToggleBtn = document.getElementById('menuToggleBtn');
             const menuCloseBtn = document.getElementById('menuCloseBtn');
