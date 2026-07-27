@@ -21,13 +21,20 @@
         
         .container { width: 100%; max-width: 1300px; }
         
-        /* Top Header & Navigation Tabs */
-        .page-header { background: rgba(15, 23, 42, 0.7); border: 1px solid var(--border-color); border-radius: 14px; padding: 20px 25px; margin-bottom: 25px; display: flex; justify-content: space-between; align-items: center; width: 100%; flex-wrap: wrap; gap: 15px; }
+        /* Top Header & Dropdown Menu Bar */
+        .page-header { background: rgba(15, 23, 42, 0.8); border: 1px solid var(--border-color); border-radius: 14px; padding: 15px 25px; margin-bottom: 25px; display: flex; justify-content: space-between; align-items: center; width: 100%; position: relative; }
         .page-header h1 { font-size: 20px; font-weight: 700; color: #fff; }
         
-        .nav-tabs { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 25px; border-bottom: 1px solid var(--border-color); padding-bottom: 15px; }
-        .tab-btn { background: rgba(17, 24, 39, 0.8); color: var(--text-muted); border: 1px solid var(--border-color); padding: 8px 16px; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer; transition: 0.2s; }
-        .tab-btn:hover, .tab-btn.active { background: var(--primary-color); color: #fff; border-color: var(--primary-color); }
+        .menu-container { position: relative; display: inline-block; }
+        .menu-toggle-btn { background: var(--primary-color); color: #fff; border: none; padding: 8px 16px; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 8px; transition: 0.2s; }
+        .menu-toggle-btn:hover { background: #1d4ed8; }
+        
+        .dropdown-menu { display: none; position: absolute; right: 0; top: 45px; background: #111827; border: 1px solid var(--border-color); border-radius: 10px; box-shadow: 0 10px 25px rgba(0,0,0,0.6); min-width: 220px; z-index: 99; overflow: hidden; }
+        .dropdown-menu.show { display: block; }
+        .dropdown-item { padding: 12px 18px; font-size: 13px; color: var(--text-muted); cursor: pointer; border-bottom: 1px solid rgba(255,255,255,0.05); transition: 0.2s; display: block; width: 100%; text-align: left; background: none; border-left: none; border-right: none; border-top: none; }
+        .dropdown-item:hover { background: var(--hover-bg); color: #fff; }
+        .dropdown-item.danger { color: #f87171; }
+        .dropdown-item.danger:hover { background: rgba(248, 113, 113, 0.1); }
 
         .action-btn { background: #dc2626; color: #fff; border: none; padding: 8px 16px; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer; transition: 0.2s; }
         .action-btn:hover { background: #b91c1c; }
@@ -53,7 +60,7 @@
         .metric-card .sub-value { font-size: 13px; color: #34d399; font-weight: 600; }
         .metric-card .hint { font-size: 11px; color: #94a3b8; margin-top: 5px; display: block; }
 
-        /* Revenue Header & Controls */
+        /* Revenue Toolbar & Controls */
         .revenue-toolbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; flex-wrap: wrap; gap: 10px; background: rgba(15, 23, 42, 0.6); padding: 12px 16px; border-radius: 10px; border: 1px solid var(--border-color); }
         .time-toggles { display: flex; gap: 6px; }
         .time-btn { background: #07090e; border: 1px solid var(--border-color); color: var(--text-muted); padding: 6px 12px; border-radius: 6px; font-size: 12px; cursor: pointer; font-weight: 600; }
@@ -106,29 +113,33 @@
 
         <!-- Protected Admin Dashboard Wrapper -->
         <div id="adminDashboard" class="hidden">
-            <!-- Admin Header -->
+            <!-- Admin Header with Dropdown Menu Bar -->
             <div class="page-header">
                 <h1>MJ HUB Enterprise Portal</h1>
-                <button class="action-btn" onclick="handleLogout()">Sign Out</button>
+                <div class="menu-container">
+                    <button class="menu-toggle-btn" onclick="toggleDropdown()">
+                        Menu 
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
+                    </button>
+                    <div id="dropdownMenu" class="dropdown-menu">
+                        <button class="dropdown-item" onclick="switchTab('overview')">1. Overview & KPIs</button>
+                        <button class="dropdown-item" onclick="switchTab('orders')">2. Order Management</button>
+                        <button class="dropdown-item" onclick="switchTab('inventory')">3. Product Catalog & Stock</button>
+                        <button class="dropdown-item" onclick="switchTab('crm')">4. Customer CRM & Users</button>
+                        <button class="dropdown-item" onclick="switchTab('marketing')">5. Marketing & Promos</button>
+                        <button class="dropdown-item" onclick="switchTab('reports')">6. Reports & Export</button>
+                        <button class="dropdown-item" onclick="switchTab('settings')">7. Roles & Settings</button>
+                        <button class="dropdown-item danger" onclick="handleLogout()">Sign Out</button>
+                    </div>
+                </div>
             </div>
 
-            <!-- Navigation Tabs -->
-            <div class="nav-tabs">
-                <button class="tab-btn active" onclick="switchTab('overview')">1. Overview & KPIs</button>
-                <button class="tab-btn" onclick="switchTab('orders')">2. Order Management</button>
-                <button class="tab-btn" onclick="switchTab('inventory')">3. Product Catalog & Stock</button>
-                <button class="tab-btn" onclick="switchTab('crm')">4. Customer CRM & Users</button>
-                <button class="tab-btn" onclick="switchTab('marketing')">5. Marketing & Promos</button>
-                <button class="tab-btn" onclick="switchTab('reports')">6. Reports & Export</button>
-                <button class="tab-btn" onclick="switchTab('settings')">7. Roles & Settings</button>
-            </div>
-            
-            <!-- TAB 1: OVERVIEW -->
+            <!-- TAB 1: OVERVIEW (Combined Users & Revenue Dashboard) -->
             <div id="tab-overview" class="tab-content">
                 <!-- Revenue Toolbar with Toggles and Live P2P Ticker -->
                 <div class="revenue-toolbar">
                     <div class="time-toggles">
-                        <span style="font-size: 12px; color: var(--text-muted); align-self: center; margin-right: 5px;">View Range:</span>
+                        <span style="font-size: 12px; color: var(--text-muted); align-self: center; margin-right: 5px;">Revenue Range:</span>
                         <button class="time-btn active" onclick="setRevenueTimeframe('days', this)">Days</button>
                         <button class="time-btn" onclick="setRevenueTimeframe('months', this)">Months</button>
                         <button class="time-btn" onclick="setRevenueTimeframe('years', this)">Years</button>
@@ -160,10 +171,10 @@
                     </div>
                 </div>
 
-                <!-- Quick Preview CRM Table inside Overview -->
+                <!-- Integrated User CRM Table Preview -->
                 <div class="data-section">
                     <div class="section-title">
-                        <span id="tableTitle">User Directory (Showing All Users)</span>
+                        <span id="tableTitle">User Directory (Showing All Registered Users)</span>
                     </div>
                     <div class="table-responsive">
                         <table>
@@ -202,7 +213,7 @@
                 </div>
             </div>
 
-            <!-- TAB 4: CRM (User Directory) -->
+            <!-- TAB 4: CRM (Full User Directory) -->
             <div id="tab-crm" class="tab-content hidden">
                 <div class="data-section">
                     <div class="section-title">
@@ -296,16 +307,26 @@
         let allProfiles = [];
         let currentFilter = 'all';
         let currentRevenueTimeframe = 'days';
-        let liveP2PRate = 1364.48; // Fallback rate matching current P2P benchmarks
+        let liveP2PRate = 1364.48;
 
         window.addEventListener('DOMContentLoaded', async () => {
             fetchLiveP2PRate();
             checkAuth();
+            
+            // Close dropdown when clicking outside
+            window.addEventListener('click', (e) => {
+                if (!e.target.closest('.menu-container')) {
+                    document.getElementById('dropdownMenu').classList.remove('show');
+                }
+            });
         });
+
+        function toggleDropdown() {
+            document.getElementById('dropdownMenu').classList.toggle('show');
+        }
 
         async function fetchLiveP2PRate() {
             try {
-                // Fetching USD to NGN exchange rate from public currency API feed
                 const response = await fetch('https://open.er-api.com/v6/latest/USD');
                 const data = await response.json();
                 if (data && data.rates && data.rates.NGN) {
@@ -320,10 +341,9 @@
 
         function switchTab(tabName) {
             document.querySelectorAll('.tab-content').forEach(el => el.classList.add('hidden'));
-            document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active'));
+            document.getElementById('dropdownMenu').classList.remove('show');
             
             document.getElementById('tab-' + tabName).classList.remove('hidden');
-            event.currentTarget.classList.add('active');
         }
 
         async function checkAuth() {
@@ -420,7 +440,6 @@
         }
 
         function updateRevenueDisplay() {
-            // Simulated revenue calculation scaled by timeframe and user counts for testing
             let baseMultiplier = allProfiles.length * 5250; 
             let factor = currentRevenueTimeframe === 'days' ? 0.08 : (currentRevenueTimeframe === 'months' ? 1.0 : 11.5);
             
@@ -518,7 +537,7 @@
             }
 
             closeEditModal();
-            loadAdminData(); // Refresh list
+            loadAdminData();
         }
 
         async function handleLogout() {
