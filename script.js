@@ -1,5 +1,5 @@
 /* ==========================================
-   MJ HUB - Application Logic & Support Widget (v4.6)
+   MJ HUB - Application Logic & Support Widget (v4.7)
    ========================================== */
 
 const SUPABASE_URL = 'https://atczodlljmlayvldxfmv.supabase.co';
@@ -19,7 +19,7 @@ let exchangeRate = 1420;
 let cartItems = [];
 let transactions = [];
 let userOnboarded = false;
-let userData = { name: '', email: '', phone: '', address: '', bio: '', bvn: '', nin: '', avatarUrl: '' };
+let userData = { name: '', email: '', phone: '', address: '', bio: '', bvn: '', nin: '', avatarUrl: '', customerId: '' };
 
 let currentActiveFilter = 'all';
 
@@ -115,7 +115,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             document.getElementById('profileBvnInput').value = bvnVal;
             document.getElementById('profileNinInput').value = ninVal;
 
-            // Fetch live user balance from profiles table
+            // Fetch live user balance and customer_id from profiles table
             await fetchUserProfileAndBalance(user.id);
 
             // Fetch live user transactions from Supabase database
@@ -439,6 +439,8 @@ async function applyCurrencyConversion() {
     let newUsd = currentBalanceUsd;
     let conversionDesc = '';
     let convertedAmountStr = '';
+    let amountUsdVal = 0;
+    let amountNgnVal = 0;
 
     if (conversionDirection === 'ngntousd') {
         if (currentBalanceNgn < inputVal) {
@@ -450,6 +452,8 @@ async function applyCurrencyConversion() {
         newUsd += usdGained;
         conversionDesc = `Converted ₦${inputVal.toLocaleString()} to $${usdGained.toFixed(2)}`;
         convertedAmountStr = '$' + usdGained.toFixed(2);
+        amountNgnVal = inputVal;
+        amountUsdVal = usdGained;
     } else {
         if (currentBalanceUsd < inputVal) {
             alert('Insufficient USD balance for this conversion.');
@@ -460,18 +464,26 @@ async function applyCurrencyConversion() {
         newNgn += ngnGained;
         conversionDesc = `Converted $${inputVal.toLocaleString()} to ₦${ngnGained.toLocaleString()}`;
         convertedAmountStr = '₦' + ngnGained.toLocaleString();
+        amountUsdVal = inputVal;
+        amountNgnVal = ngnGained;
     }
 
     if (supabaseClient) {
         const { data: { session } } = await supabaseClient.auth.getSession();
         if (session) {
             await supabaseClient.from('profiles').update({ balance: newNgn, balance_usd: newUsd }).eq('id', session.user.id);
+            
+            // Insert securely into persistent 'transactions' table with columns matching the database schema
             await supabaseClient.from('transactions').insert({
                 user_id: session.user.id,
+                customer_id: userData.customerId || null,
+                type: 'conversion',
                 category: 'deposit',
                 title: 'Currency Conversion',
                 subtitle: conversionDesc,
                 amount: convertedAmountStr,
+                amount_ngn: amountNgnVal,
+                amount_usd: amountUsdVal,
                 status: 'Success'
             });
             await fetchUserTransactions(session.user.id);
@@ -536,13 +548,16 @@ async function fetchUserProfileAndBalance(userId) {
     try {
         const { data, error } = await supabaseClient
             .from('profiles')
-            .select('balance, balance_usd')
+            .select('balance, balance_usd, customer_id')
             .eq('id', userId)
             .single();
 
         if (data && !error) {
             currentBalanceNgn = parseFloat(data.balance) || 0.00;
             currentBalanceUsd = parseFloat(data.balance_usd) || (currentBalanceNgn / exchangeRate);
+            if (data.customer_id) {
+                userData.customerId = data.customer_id;
+            }
             updateBalanceDisplay();
         }
     } catch (err) {
@@ -563,6 +578,9 @@ function listenToBalanceChanges(userId) {
             if (payload.new) {
                 currentBalanceNgn = parseFloat(payload.new.balance) || 0.00;
                 currentBalanceUsd = parseFloat(payload.new.balance_usd) || (currentBalanceNgn / exchangeRate);
+                if (payload.new.customer_id) {
+                    userData.customerId = payload.new.customer_id;
+                }
                 updateBalanceDisplay();
             }
         })
@@ -585,9 +603,9 @@ async function fetchUserTransactions(userId) {
             transactions = data.map(tx => ({
                 id: tx.id,
                 category: tx.category || tx.type || 'deposit',
-                title: tx.title,
+                title: tx.title || (tx.type === 'deposit' ? 'Wallet Deposit' : 'Currency Conversion'),
                 subtitle: tx.subtitle || '',
-                amount: tx.amount,
+                amount: tx.amount || (tx.amount_ngn ? '₦' + Number(tx.amount_ngn).toLocaleString() : '₦0.00'),
                 date: new Date(tx.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
                 status: tx.status || 'Success'
             }));
@@ -617,7 +635,7 @@ function renderTransactionsList() {
 
     let filtered = transactions;
     if (currentActiveFilter !== 'all') {
-        filtered = transactions.filter(tx => tx.category === currentActiveFilter);
+        filtered = transactions.filter(tx => tx.category === currentActiveFilter || tx.type === currentActiveFilter);
     }
 
     if (filtered.length === 0) {
@@ -628,9 +646,9 @@ function renderTransactionsList() {
     container.innerHTML = '';
     filtered.forEach(tx => {
         let icon = '💳';
-        if (tx.category === 'sms') icon = '📱';
-        else if (tx.category === 'log') icon = '📦';
-        else if (tx.category === 'booster') icon = '⚡';
+        if (tx.category === 'sms' || tx.type === 'sms') icon = '📱';
+        else if (tx.category === 'log' || tx.type === 'log') icon = '📦';
+        else if (tx.category === 'booster' || tx.type === 'booster') icon = '⚡';
 
         let statusLower = (tx.status || '').toLowerCase();
         let statusClass = 'status-success';
@@ -714,12 +732,18 @@ async function buyNowItem(title, price, type) {
         const { data: { session } } = await supabaseClient.auth.getSession();
         if (session) {
             await supabaseClient.from('profiles').update({ balance: currentBalanceNgn, balance_usd: currentBalanceUsd }).eq('id', session.user.id);
+            
+            // Insert securely into persistent 'transactions' table
             await supabaseClient.from('transactions').insert({
                 user_id: session.user.id,
-                category: type, 
+                customer_id: userData.customerId || null,
+                type: type,
+                category: type,
                 title: title,
                 subtitle: 'Instant Purchase',
                 amount: '₦' + price.toLocaleString(),
+                amount_ngn: price,
+                amount_usd: price / exchangeRate,
                 status: 'Success'
             });
             await fetchUserTransactions(session.user.id);
@@ -748,10 +772,14 @@ async function checkoutCart() {
             for (let item of cartItems) {
                 await supabaseClient.from('transactions').insert({
                     user_id: session.user.id,
+                    customer_id: userData.customerId || null,
+                    type: item.type,
                     category: item.type,
                     title: item.title,
                     subtitle: 'Cart Checkout',
                     amount: '₦' + item.price.toLocaleString(),
+                    amount_ngn: item.price,
+                    amount_usd: item.price / exchangeRate,
                     status: 'Success'
                 });
             }
@@ -778,12 +806,18 @@ async function processDeposit() {
         const { data: { session } } = await supabaseClient.auth.getSession();
         if (session) {
             await supabaseClient.from('profiles').update({ balance: currentBalanceNgn, balance_usd: currentBalanceUsd }).eq('id', session.user.id);
+            
+            // Insert securely into persistent 'transactions' table
             await supabaseClient.from('transactions').insert({
                 user_id: session.user.id,
+                customer_id: userData.customerId || null,
+                type: 'deposit',
                 category: 'deposit',
                 title: 'Card / Bank Transfer',
                 subtitle: 'Wallet funding',
                 amount: '₦' + amt.toLocaleString(),
+                amount_ngn: amt,
+                amount_usd: amt / exchangeRate,
                 status: 'Success'
             });
             await fetchUserTransactions(session.user.id);
