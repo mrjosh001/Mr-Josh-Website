@@ -619,7 +619,7 @@
             document.getElementById('editFullName').value = profile.full_name || '';
             document.getElementById('editUsername').value = profile.username || '';
             document.getElementById('editEmail').value = profile.email || '';
-            document.getElementById('editPhone').value = profile.phone || profile.phone_number || '';
+            document.getElementById('editPhone').value = profile.phone_number || profile.phone || '';
             document.getElementById('editBalanceNgn').value = profile.balance !== undefined ? profile.balance : 0;
             document.getElementById('editBalanceUsd').value = profile.balance_usd !== undefined ? profile.balance_usd : (profile.balance / liveP2PRate);
             document.getElementById('editIsAdmin').value = profile.is_admin ? 'true' : 'false';
@@ -636,7 +636,7 @@
             const userId = document.getElementById('editUserId').value;
             const full_name = document.getElementById('editFullName').value.trim();
             const username = document.getElementById('editUsername').value.trim();
-            const phone = document.getElementById('editPhone').value.trim();
+            const phone_number = document.getElementById('editPhone').value.trim();
             const balance = parseFloat(document.getElementById('editBalanceNgn').value) || 0;
             const balance_usd = parseFloat(document.getElementById('editBalanceUsd').value) || (balance / liveP2PRate);
             const is_admin = document.getElementById('editIsAdmin').value === 'true';
@@ -645,7 +645,14 @@
 
             const { data, error } = await supabaseClient
                 .from('profiles')
-                .update({ full_name, username, phone, balance, balance_usd, is_admin })
+                .update({ 
+                    full_name, 
+                    username, 
+                    phone_number, 
+                    balance, 
+                    balance_usd, 
+                    is_admin 
+                })
                 .eq('id', userId)
                 .select();
 
