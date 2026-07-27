@@ -3,292 +3,66 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>MJ HUB - Authentication & Profile Settings</title>
+    <title>MJ HUB - Sign In & Sign Up</title>
     <!-- Supabase CDN Script -->
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <style>
         :root {
             --primary-color: #2563eb;
             --primary-hover: #1d4ed8;
-            --bg-main: #07090e;
-            --bg-card: #0f172a;
-            --card-bg: rgba(15, 23, 42, 0.85);
-            --text-main: #f8fafc;
-            --text-muted: #94a3b8;
-            --border-color: rgba(56, 189, 248, 0.15);
-            --border-focus: rgba(37, 99, 235, 0.5);
-            --footer-bg: #0b0f19;
+            --bg-main: #0b0f19;
+            --card-bg: rgba(17, 24, 39, 0.9);
+            --text-main: #ffffff;
+            --text-muted: #93c5fd;
+            --border-color: rgba(59, 130, 246, 0.25);
+            --footer-bg: #07090e;
         }
-
-        * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+        body { background: var(--bg-main); color: var(--text-main); display: flex; flex-direction: column; min-height: 100vh; }
         
-        body { 
-            background: var(--bg-main); 
-            color: var(--text-main); 
-            min-height: 100vh; 
-            display: flex;
-            flex-direction: column;
-            justify-content: space-between;
-        }
+        /* Main Layout Wrapper */
+        .main-wrapper { flex: 1; display: flex; justify-content: center; align-items: center; padding: 40px 20px; }
+        
+        .auth-container { background: var(--card-bg); backdrop-filter: blur(16px); border: 1px solid var(--border-color); padding: 40px; border-radius: 20px; width: 100%; max-width: 480px; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.7); }
+        
+        .brand-header { text-align: center; margin-bottom: 25px; }
+        .brand-header h2 { font-size: 24px; font-weight: 700; color: #fff; margin-bottom: 6px; }
+        .brand-header p { font-size: 14px; color: var(--text-muted); }
 
-        /* Top Brand Header bar */
-        .brand-header {
-            width: 100%;
-            padding: 20px 40px;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
-            background: rgba(11, 15, 25, 0.7);
-            backdrop-filter: blur(10px);
-        }
-
-        .brand-logo {
-            font-size: 20px;
-            font-weight: 800;
-            color: #fff;
-            letter-spacing: 0.5px;
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            text-decoration: none;
-        }
-
-        .brand-logo span {
-            color: var(--primary-color);
-        }
-
-        /* Main Page Wrapper */
-        .page-wrapper {
-            flex: 1;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            padding: 40px 20px;
-            width: 100%;
-        }
-
-        .auth-container { 
-            background: var(--card-bg); 
-            backdrop-filter: blur(16px); 
-            border: 1px solid var(--border-color); 
-            padding: 40px; 
-            border-radius: 24px; 
-            width: 100%; 
-            max-width: 480px; 
-            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.7); 
-            max-height: 85vh; 
-            overflow-y: auto; 
-        }
-
-        .auth-container::-webkit-scrollbar {
-            width: 6px;
-        }
-        .auth-container::-webkit-scrollbar-thumb {
-            background: rgba(255, 255, 255, 0.1);
-            border-radius: 4px;
-        }
-
-        .auth-header {
-            text-align: center;
-            margin-bottom: 30px;
-        }
-
-        .auth-icon {
-            width: 50px;
-            height: 50px;
-            background: rgba(37, 99, 235, 0.1);
-            border: 1px solid rgba(37, 99, 235, 0.3);
-            border-radius: 14px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            margin: 0 auto 16px auto;
-            color: var(--primary-color);
-            font-size: 20px;
-        }
-
-        .auth-header h1 {
-            font-size: 24px;
-            font-weight: 700;
-            color: #fff;
-            margin-bottom: 6px;
-        }
-
-        .auth-header p {
-            font-size: 14px;
-            color: var(--text-muted);
-        }
-
-        .tab-switcher { 
-            display: flex; 
-            margin-bottom: 25px; 
-            border: 1px solid rgba(255, 255, 255, 0.05); 
-            border-radius: 12px; 
-            overflow: hidden; 
-            background: rgba(2, 6, 23, 0.6); 
-            padding: 4px;
-        }
-
-        .tab-btn { 
-            flex: 1; 
-            padding: 10px; 
-            background: transparent; 
-            border: none; 
-            color: var(--text-muted); 
-            font-weight: 600; 
-            font-size: 13px;
-            cursor: pointer; 
-            transition: all 0.3s ease; 
-            border-radius: 8px;
-        }
-
-        .tab-btn.active { 
-            background: var(--primary-color); 
-            color: #fff; 
-            box-shadow: 0 4px 12px rgba(37, 99, 235, 0.4); 
-        }
-
+        .tab-switcher { display: flex; margin-bottom: 25px; border: 1px solid var(--border-color); border-radius: 12px; overflow: hidden; background: rgba(15, 23, 42, 0.8); }
+        .tab-btn { flex: 1; padding: 12px; background: transparent; border: none; color: var(--text-muted); font-weight: 600; cursor: pointer; transition: 0.3s; font-size: 14px; }
+        .tab-btn.active { background: var(--primary-color); color: #fff; box-shadow: 0 4px 14px rgba(37, 99, 235, 0.4); }
+        
         .form-group { margin-bottom: 16px; }
-        .form-group label { display: block; font-size: 12px; color: var(--text-muted); margin-bottom: 6px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; }
+        .form-group label { display: block; font-size: 13px; color: var(--text-muted); margin-bottom: 6px; font-weight: 500; text-transform: uppercase; letter-spacing: 0.5px; }
+        .form-group input { width: 100%; padding: 12px 14px; background: rgba(15, 23, 42, 0.9); border: 1px solid var(--border-color); color: var(--text-main); border-radius: 10px; outline: none; font-size: 14px; transition: all 0.3s ease; }
+        .form-group input:focus { border-color: var(--primary-color); box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.25); }
         
-        .form-group input, .form-group textarea { 
-            width: 100%; 
-            padding: 12px 16px; 
-            background: rgba(2, 6, 23, 0.6); 
-            border: 1px solid rgba(255, 255, 255, 0.08); 
-            color: var(--text-main); 
-            border-radius: 10px; 
-            outline: none; 
-            font-size: 14px; 
-            transition: all 0.2s ease;
-        }
-
-        .form-group textarea { resize: vertical; min-height: 80px; }
+        .btn-submit { width: 100%; padding: 14px; background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%); color: #fff; border: none; border-radius: 10px; font-weight: bold; font-size: 15px; cursor: pointer; margin-top: 10px; transition: all 0.2s ease-in-out; box-shadow: 0 4px 14px rgba(37, 99, 235, 0.4); }
+        .btn-submit:hover { opacity: 0.9; transform: translateY(-1px); }
         
-        .form-group input:focus, .form-group textarea:focus { 
-            border-color: var(--primary-color); 
-            box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.15); 
-            background: rgba(2, 6, 23, 0.9);
-        }
-
-        .btn-submit { 
-            width: 100%; 
-            padding: 14px; 
-            background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%); 
-            color: #fff; 
-            border: none; 
-            border-radius: 10px; 
-            font-weight: 600; 
-            font-size: 14px; 
-            cursor: pointer; 
-            margin-top: 10px; 
-            transition: all 0.2s ease-in-out; 
-            box-shadow: 0 4px 14px rgba(37, 99, 235, 0.3); 
-        }
-
-        .btn-submit:hover { 
-            opacity: 0.95;
-            transform: translateY(-1px);
-            box-shadow: 0 6px 20px rgba(37, 99, 235, 0.4);
-        }
-
         .hidden { display: none; }
-        .error-msg { color: #f87171; font-size: 13px; margin-bottom: 15px; text-align: center; background: rgba(248, 113, 113, 0.1); padding: 10px; border-radius: 8px; border: 1px solid rgba(248, 113, 113, 0.2); }
-        .success-msg { color: #4ade80; font-size: 13px; margin-bottom: 15px; text-align: center; background: rgba(74, 222, 128, 0.1); padding: 10px; border-radius: 8px; border: 1px solid rgba(74, 222, 128, 0.2); }
-        
-        .section-title { 
-            font-size: 11px; 
-            color: var(--text-muted); 
-            border-bottom: 1px solid rgba(255, 255, 255, 0.05); 
-            padding-bottom: 6px; 
-            margin: 24px 0 16px 0; 
-            font-weight: 700; 
-            text-transform: uppercase; 
-            letter-spacing: 1px; 
-        }
+        .error-msg { color: #f87171; font-size: 13px; margin-bottom: 15px; text-align: center; background: rgba(248, 113, 113, 0.1); padding: 8px; border-radius: 6px; border: 1px solid rgba(248, 113, 113, 0.2); }
+        .success-msg { color: #4ade80; font-size: 13px; margin-bottom: 15px; text-align: center; background: rgba(74, 222, 128, 0.1); padding: 8px; border-radius: 6px; border: 1px solid rgba(74, 222, 128, 0.2); }
 
-        /* Professional Brand Footer section matching your screenshot dark aesthetic */
-        .site-footer {
-            background-color: var(--footer-bg);
-            border-top: 1px solid rgba(255, 255, 255, 0.05);
-            padding: 50px 20px 30px 20px;
-            color: var(--text-muted);
-            font-size: 13px;
-        }
-
-        .footer-content {
-            max-width: 1100px;
-            margin: 0 auto;
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-            gap: 30px;
-            margin-bottom: 40px;
-        }
-
-        .footer-column h4 {
-            color: #fff;
-            font-size: 12px;
-            font-weight: 700;
-            text-transform: uppercase;
-            letter-spacing: 1px;
-            margin-bottom: 16px;
-        }
-
-        .footer-column ul {
-            list-style: none;
-        }
-
-        .footer-column ul li {
-            margin-bottom: 10px;
-        }
-
-        .footer-column ul li a {
-            color: var(--text-muted);
-            text-decoration: none;
-            transition: color 0.2s ease;
-        }
-
-        .footer-column ul li a:hover {
-            color: var(--primary-color);
-        }
-
-        .footer-bottom {
-            max-width: 1100px;
-            margin: 0 auto;
-            padding-top: 20px;
-            border-top: 1px solid rgba(255, 255, 255, 0.05);
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            gap: 10px;
-            text-align: center;
-        }
-
-        @media (min-width: 768px) {
-            .footer-bottom {
-                flex-direction: row;
-                justify-content: space-between;
-            }
-        }
+        /* Professional Dark Footer */
+        .site-footer { background-color: var(--footer-bg); border-top: 1px solid var(--border-color); padding: 50px 20px 30px; font-size: 13px; color: #94a3b8; }
+        .footer-content { max-width: 1100px; margin: 0 auto; display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 30px; margin-bottom: 40px; }
+        .footer-col h4 { color: #fff; font-size: 14px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.8px; margin-bottom: 16px; }
+        .footer-col ul { list-style: none; }
+        .footer-col ul li { margin-bottom: 10px; }
+        .footer-col ul li a { color: #94a3b8; text-decoration: none; transition: color 0.2s; }
+        .footer-col ul li a:hover { color: var(--text-muted); }
+        .footer-bottom { max-width: 1100px; margin: 0 auto; padding-top: 20px; border-top: 1px solid rgba(255, 255, 255, 0.05); text-align: center; color: #64748b; }
     </style>
 </head>
 <body>
 
-    <!-- Top Brand Navbar Header -->
-    <header class="brand-header">
-        <a href="index.html" class="brand-logo">
-            💬 MJ <span>HUB</span>
-        </a>
-    </header>
-
-    <!-- Main Authentication Content Area -->
-    <div class="page-wrapper">
+    <div class="main-wrapper">
         <div class="auth-container">
-            <div class="auth-header">
-                <div class="auth-icon" id="authHeaderIcon">🔒</div>
-                <h1 id="authHeaderTitle">Welcome Back</h1>
-                <p id="authHeaderSubtitle">Sign in to securely access your MJ Hub account.</p>
+            <div class="brand-header">
+                <h2>MJ HUB</h2>
+                <p>Secure Access & Account Management</p>
             </div>
 
             <div class="tab-switcher">
@@ -309,23 +83,22 @@
                     <label>Password</label>
                     <input type="password" id="signinPassword" required placeholder="••••••••">
                 </div>
-                <button type="submit" class="btn-submit">Sign In to Account</button>
+                <button type="submit" class="btn-submit">Sign In</button>
             </form>
 
-            <!-- Sign Up Form (Combined Signup & Profile Settings Metadata Entry) -->
+            <!-- Sign Up Form (Cleaned Up: Essential Credentials Only) -->
             <form id="signupForm" class="hidden" onsubmit="handleSignUp(event)">
-                <div class="section-title">Basic Information</div>
                 <div class="form-group">
                     <label>Full Name</label>
                     <input type="text" id="fullName" required placeholder="Mr Josh">
                 </div>
                 <div class="form-group">
                     <label>Username</label>
-                    <input type="text" id="username" required placeholder="Mrjosh">
+                    <input type="text" id="username" required placeholder="mrjosh">
                 </div>
                 <div class="form-group">
                     <label>Email Address</label>
-                    <input type="email" id="emailAddress" required placeholder="agaziejoseph0@gmail.com">
+                    <input type="email" id="emailAddress" required placeholder="name@example.com">
                 </div>
                 <div class="form-group">
                     <label>Phone Number</label>
@@ -335,46 +108,15 @@
                     <label>Password</label>
                     <input type="password" id="signupPassword" required placeholder="••••••••">
                 </div>
-
-                <div class="section-title">Additional Profile Data</div>
-                <div class="form-group">
-                    <label>Bio</label>
-                    <textarea id="bio" placeholder="Tell us about yourself..."></textarea>
-                </div>
-                <div class="form-group">
-                    <label>Street Address</label>
-                    <input type="text" id="streetAddress" placeholder="123 Main Street">
-                </div>
-                <div class="form-group">
-                    <label>City</label>
-                    <input type="text" id="city" placeholder="Lagos">
-                </div>
-                <div class="form-group">
-                    <label>Country</label>
-                    <input type="text" id="country" placeholder="Nigeria">
-                </div>
-                <div class="form-group">
-                    <label>Postal / ZIP Code</label>
-                    <input type="text" id="postalCode" placeholder="100001">
-                </div>
-                <div class="form-group">
-                    <label>NIN (Optional)</label>
-                    <input type="text" id="nin" placeholder="11-digit National Identity Number">
-                </div>
-                <div class="form-group">
-                    <label>BVN (Optional)</label>
-                    <input type="text" id="bvn" placeholder="11-digit Bank Verification Number">
-                </div>
-
-                <button type="submit" id="saveProfileBtn" class="btn-submit">Create Account & Save Profile</button>
+                <button type="submit" class="btn-submit">Create Account</button>
             </form>
         </div>
     </div>
 
-    <!-- Professional Bottom Footer (Dark Brand Theme matching your layout style) -->
+    <!-- Dark Side Footer Section -->
     <footer class="site-footer">
         <div class="footer-content">
-            <div class="footer-column">
+            <div class="footer-col">
                 <h4>Company</h4>
                 <ul>
                     <li><a href="#">Blog</a></li>
@@ -383,7 +125,7 @@
                     <li><a href="#">Discord</a></li>
                 </ul>
             </div>
-            <div class="footer-column">
+            <div class="footer-col">
                 <h4>Legal</h4>
                 <ul>
                     <li><a href="#">Terms of Service</a></li>
@@ -391,7 +133,7 @@
                     <li><a href="#">Sitemap</a></li>
                 </ul>
             </div>
-            <div class="footer-column">
+            <div class="footer-col">
                 <h4>Resources</h4>
                 <ul>
                     <li><a href="#">FAQ</a></li>
@@ -399,7 +141,7 @@
                     <li><a href="#">API Documentation</a></li>
                 </ul>
             </div>
-            <div class="footer-column">
+            <div class="footer-col">
                 <h4>Services</h4>
                 <ul>
                     <li><a href="#">Verification</a></li>
@@ -409,8 +151,7 @@
             </div>
         </div>
         <div class="footer-bottom">
-            <p>Copyright © 2026 MJ Hub. All rights reserved.</p>
-            <p style="color: #4ade80; font-weight: 500;">Secure SSL Verified</p>
+            <p>&copy; 2026 MJ HUB. All rights reserved.</p>
         </div>
     </footer>
 
@@ -420,33 +161,12 @@
         const SUPABASE_PUBLISHABLE_KEY = 'sb_publishable_dwbeKLcSG7-nfKzZz8x8Zw_U9FtwJTy';
         const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY);
 
-        window.addEventListener('DOMContentLoaded', async () => {
+        window.addEventListener('DOMContentLoaded', () => {
             const urlParams = new URLSearchParams(window.location.search);
             if (urlParams.get('mode') === 'signup') {
                 switchTab('signup');
             }
-
-            // Check if user session already exists to preload profile settings dynamically
-            const { data: { session } } = await supabaseClient.auth.getSession();
-            if (session && session.user) {
-                loadExistingProfile(session.user);
-            }
         });
-
-        function loadExistingProfile(user) {
-            const meta = user.user_metadata || {};
-            document.getElementById('fullName').value = meta.full_name || '';
-            document.getElementById('username').value = meta.username || '';
-            document.getElementById('emailAddress').value = user.email || '';
-            document.getElementById('phoneNumber').value = meta.phone_number || '';
-            document.getElementById('bio').value = meta.bio || '';
-            document.getElementById('streetAddress').value = meta.street_address || '';
-            document.getElementById('city').value = meta.city || '';
-            document.getElementById('country').value = meta.country || '';
-            document.getElementById('postalCode').value = meta.postal_code || '';
-            document.getElementById('nin').value = meta.nin || '';
-            document.getElementById('bvn').value = meta.bvn || '';
-        }
 
         function switchTab(tab) {
             const errorEl = document.getElementById('errorContainer');
@@ -456,44 +176,29 @@
             successEl.innerText = '';
             successEl.classList.add('hidden');
 
-            const headerIcon = document.getElementById('authHeaderIcon');
-            const headerTitle = document.getElementById('authHeaderTitle');
-            const headerSubtitle = document.getElementById('authHeaderSubtitle');
-
             if (tab === 'signin') {
                 document.getElementById('signinTabBtn').classList.add('active');
                 document.getElementById('signupTabBtn').classList.remove('active');
                 document.getElementById('signinForm').classList.remove('hidden');
                 document.getElementById('signupForm').classList.add('hidden');
-                
-                headerIcon.innerText = '🔒';
-                headerTitle.innerText = 'Welcome Back';
-                headerSubtitle.innerText = 'Sign in to securely access your MJ Hub account.';
             } else {
                 document.getElementById('signupTabBtn').classList.add('active');
                 document.getElementById('signinTabBtn').classList.remove('active');
                 document.getElementById('signupForm').classList.remove('hidden');
                 document.getElementById('signinForm').classList.add('hidden');
-
-                headerIcon.innerText = '👤';
-                headerTitle.innerText = 'Create Account';
-                headerSubtitle.innerText = 'New here? Set up your profile in just a few seconds.';
             }
         }
 
-        function showMessage(type, text) {
+        function showError(message) {
             const errorEl = document.getElementById('errorContainer');
+            errorEl.innerText = message;
+            errorEl.classList.remove('hidden');
+        }
+
+        function showSuccess(message) {
             const successEl = document.getElementById('successContainer');
-            
-            if (type === 'error') {
-                successEl.classList.add('hidden');
-                errorEl.innerText = text;
-                errorEl.classList.remove('hidden');
-            } else {
-                errorEl.classList.add('hidden');
-                successEl.innerText = text;
-                successEl.classList.remove('hidden');
-            }
+            successEl.innerText = message;
+            successEl.classList.remove('hidden');
         }
 
         async function handleSignIn(e) {
@@ -507,11 +212,11 @@
             });
 
             if (error) {
-                showMessage('error', error.message);
+                showError(error.message);
                 return;
             }
 
-            showMessage('success', 'Signed in successfully! Redirecting...');
+            showSuccess('Signed in successfully!');
             setTimeout(() => {
                 window.location.href = 'index.html';
             }, 500);
@@ -524,16 +229,8 @@
             const phone = document.getElementById('phoneNumber').value.trim();
             const email = document.getElementById('emailAddress').value.trim();
             const password = document.getElementById('signupPassword').value.trim();
-            
-            const bio = document.getElementById('bio').value.trim();
-            const streetAddress = document.getElementById('streetAddress').value.trim();
-            const city = document.getElementById('city').value.trim();
-            const country = document.getElementById('country').value.trim();
-            const postalCode = document.getElementById('postalCode').value.trim();
-            const nin = document.getElementById('nin').value.trim();
-            const bvn = document.getElementById('bvn').value.trim();
 
-            // Register user with Supabase Auth, embedding all profile fields into options.data metadata
+            // Register user with Supabase Auth with minimal required core metadata
             const { data, error } = await supabaseClient.auth.signUp({
                 email: email,
                 password: password,
@@ -541,24 +238,17 @@
                     data: {
                         full_name: fullName,
                         username: username,
-                        phone_number: phone,
-                        bio: bio,
-                        street_address: streetAddress,
-                        city: city,
-                        country: country,
-                        postal_code: postalCode,
-                        nin: nin,
-                        bvn: bvn
+                        phone_number: phone
                     }
                 }
             });
 
             if (error) {
-                showMessage('error', error.message);
+                showError(error.message);
                 return;
             }
 
-            showMessage('success', 'Account and profile details saved successfully!');
+            showSuccess('Account created successfully!');
             setTimeout(() => {
                 window.location.href = 'index.html';
             }, 1000);
