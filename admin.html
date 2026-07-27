@@ -83,7 +83,7 @@
 
         /* Modal Overlay */
         .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.7); display: flex; justify-content: center; align-items: center; z-index: 1000; }
-        .modal-card { background: #111827; border: 1px solid var(--border-color); padding: 30px; border-radius: 14px; width: 100%; max-width: 450px; box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.7); }
+        .modal-card { background: #111827; border: 1px solid var(--border-color); padding: 30px; border-radius: 14px; width: 100%; max-width: 450px; box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.7); max-height: 90vh; overflow-y: auto; }
         .modal-card h3 { margin-bottom: 20px; font-size: 18px; color: #fff; }
         .modal-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 20px; }
 
@@ -184,7 +184,8 @@
                                     <th>Full Name</th>
                                     <th>Username</th>
                                     <th>Email Address</th>
-                                    <th>Wallet Balance</th>
+                                    <th>NGN Balance</th>
+                                    <th>USD Balance</th>
                                     <th>Activity Status</th>
                                     <th>Admin Status</th>
                                     <th>Action</th>
@@ -250,7 +251,8 @@
                                     <th>Full Name</th>
                                     <th>Username</th>
                                     <th>Email Address</th>
-                                    <th>Wallet Balance</th>
+                                    <th>NGN Balance</th>
+                                    <th>USD Balance</th>
                                     <th>Activity Status</th>
                                     <th>Admin Status</th>
                                     <th>Action</th>
@@ -292,7 +294,7 @@
     <!-- Edit User & Balance Modal -->
     <div id="editUserModal" class="modal-overlay hidden">
         <div class="modal-card">
-            <h3>Edit Customer & Balance</h3>
+            <h3>Edit Customer & Balances</h3>
             <input type="hidden" id="editUserId">
             <div class="input-group">
                 <label>Full Name</label>
@@ -312,9 +314,13 @@
                 <input type="text" id="editPhone">
             </div>
             <div class="input-group">
-                <label>Wallet Balance (₦)</label>
-                <input type="number" step="0.01" id="editBalance" placeholder="0.00">
-                <span style="font-size: 10px; color: #38bdf8; margin-top: 4px; display: block;">Update this field to rectify manual balance adjustments.</span>
+                <label>Wallet Balance (₦ NGN)</label>
+                <input type="number" step="0.01" id="editBalanceNgn" placeholder="0.00">
+            </div>
+            <div class="input-group">
+                <label>Wallet Balance ($ USD)</label>
+                <input type="number" step="0.01" id="editBalanceUsd" placeholder="0.00">
+                <span style="font-size: 10px; color: #38bdf8; margin-top: 4px; display: block;">Update these fields to rectify manual balance adjustments.</span>
             </div>
             <div class="input-group">
                 <label>Admin Privileges</label>
@@ -551,19 +557,22 @@
 
             let rowsHTML = '';
             if (filtered.length === 0) {
-                rowsHTML = `<tr><td colspan="7" style="text-align: center; color: var(--text-muted); padding: 30px;">No users found in this category.</td></tr>`;
+                rowsHTML = `<tr><td colspan="8" style="text-align: center; color: var(--text-muted); padding: 30px;">No users found in this category.</td></tr>`;
             } else {
                 filtered.forEach(profile => {
                     const statusBadge = profile.isActive ? `<span class="badge badge-active">Active</span>` : `<span class="badge badge-inactive">Inactive</span>`;
                     const adminBadge = profile.is_admin ? `<span style="color: #4ade80; font-weight: 600;">Admin</span>` : `<span style="color: #93c5fd;">Standard</span>`;
-                    const formattedBalance = `₦${Number(profile.balance || 0).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+                    
+                    const formattedNgn = `₦${Number(profile.balance_ngn || 0).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+                    const formattedUsd = `$${Number(profile.balance_usd || 0).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
 
                     rowsHTML += `
                         <tr>
                             <td>${profile.full_name || 'N/A'}</td>
                             <td>${profile.username || 'N/A'}</td>
                             <td>${profile.email || 'N/A'}</td>
-                            <td style="font-weight: 600; color: #34d399;">${formattedBalance}</td>
+                            <td style="font-weight: 600; color: #34d399;">${formattedNgn}</td>
+                            <td style="font-weight: 600; color: #38bdf8;">${formattedUsd}</td>
                             <td>${statusBadge}</td>
                             <td>${adminBadge}</td>
                             <td><button class="action-btn edit-btn" onclick="openEditModal('${profile.id}')">Edit Profile</button></td>
@@ -585,7 +594,8 @@
             document.getElementById('editUsername').value = profile.username || '';
             document.getElementById('editEmail').value = profile.email || '';
             document.getElementById('editPhone').value = profile.phone_number || '';
-            document.getElementById('editBalance').value = profile.balance !== undefined ? profile.balance : 0;
+            document.getElementById('editBalanceNgn').value = profile.balance_ngn !== undefined ? profile.balance_ngn : 0;
+            document.getElementById('editBalanceUsd').value = profile.balance_usd !== undefined ? profile.balance_usd : 0;
             document.getElementById('editIsAdmin').value = profile.is_admin ? 'true' : 'false';
             document.getElementById('modalError').innerText = '';
 
@@ -601,14 +611,15 @@
             const full_name = document.getElementById('editFullName').value.trim();
             const username = document.getElementById('editUsername').value.trim();
             const phone_number = document.getElementById('editPhone').value.trim();
-            const balance = parseFloat(document.getElementById('editBalance').value) || 0;
+            const balance_ngn = parseFloat(document.getElementById('editBalanceNgn').value) || 0;
+            const balance_usd = parseFloat(document.getElementById('editBalanceUsd').value) || 0;
             const is_admin = document.getElementById('editIsAdmin').value === 'true';
             const errorBox = document.getElementById('modalError');
             errorBox.innerText = '';
 
             const { data, error } = await supabaseClient
                 .from('profiles')
-                .update({ full_name, username, phone_number, balance, is_admin })
+                .update({ full_name, username, phone_number, balance_ngn, balance_usd, is_admin })
                 .eq('id', userId)
                 .select();
 
