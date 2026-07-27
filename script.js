@@ -473,7 +473,7 @@ async function applyCurrencyConversion() {
         if (session) {
             await supabaseClient.from('profiles').update({ balance: newNgn, balance_usd: newUsd }).eq('id', session.user.id);
             
-            // Insert securely into persistent 'transactions' table with columns matching the database schema
+            // Insert securely into persistent 'transactions' table with columns matching database schema
             await supabaseClient.from('transactions').insert({
                 user_id: session.user.id,
                 customer_id: userData.customerId || null,
