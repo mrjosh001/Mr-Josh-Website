@@ -1,5 +1,5 @@
 /* ==========================================
-   MJ HUB - Application Logic & Support Widget (v4.8)
+   MJ HUB - Application Logic & Support Widget (v4.9 - Mobile Debug Enabled)
    ========================================== */
 
 const SUPABASE_URL = 'https://atczodlljmlayvldxfmv.supabase.co';
@@ -471,9 +471,12 @@ async function applyCurrencyConversion() {
     if (supabaseClient) {
         const { data: { session } } = await supabaseClient.auth.getSession();
         if (session) {
-            await supabaseClient.from('profiles').update({ balance: newNgn, balance_usd: newUsd }).eq('id', session.user.id);
+            const { error: profileError } = await supabaseClient.from('profiles').update({ balance: newNgn, balance_usd: newUsd }).eq('id', session.user.id);
+            if (profileError) {
+                alert("Profile Update Error: " + profileError.message);
+                return;
+            }
             
-            // Insert securely into persistent 'transactions' table with explicit error checking
             const { error: txError } = await supabaseClient.from('transactions').insert({
                 user_id: session.user.id,
                 customer_id: userData.customerId || null,
@@ -489,7 +492,6 @@ async function applyCurrencyConversion() {
 
             if (txError) {
                 alert("Database Insert Error: " + txError.message);
-                console.error("Full conversion transaction error:", txError);
                 return;
             }
 
@@ -730,17 +732,18 @@ async function buyNowItem(title, price, type) {
         switchSection('deposit');
         return;
     }
-    currentBalanceNgn -= price;
-    currentBalanceUsd = currentBalanceNgn / exchangeRate;
-    
-    updateBalanceDisplay();
+    let newNgn = currentBalanceNgn - price;
+    let newUsd = newNgn / exchangeRate;
 
     if (supabaseClient) {
         const { data: { session } } = await supabaseClient.auth.getSession();
         if (session) {
-            await supabaseClient.from('profiles').update({ balance: currentBalanceNgn, balance_usd: currentBalanceUsd }).eq('id', session.user.id);
+            const { error: profileError } = await supabaseClient.from('profiles').update({ balance: newNgn, balance_usd: newUsd }).eq('id', session.user.id);
+            if (profileError) {
+                alert("Profile Update Error: " + profileError.message);
+                return;
+            }
             
-            // Insert securely into persistent 'transactions' table with explicit error handling
             const { error: txError } = await supabaseClient.from('transactions').insert({
                 user_id: session.user.id,
                 customer_id: userData.customerId || null,
@@ -756,7 +759,6 @@ async function buyNowItem(title, price, type) {
 
             if (txError) {
                 alert("Database Insert Error: " + txError.message);
-                console.error("Full buyNow transaction error:", txError);
                 return;
             }
 
@@ -764,7 +766,10 @@ async function buyNowItem(title, price, type) {
         }
     }
 
-    alert(title + ' purchased successfully!');
+    currentBalanceNgn = newNgn;
+    currentBalanceUsd = newUsd;
+    updateBalanceDisplay();
+    alert(title + ' purchased and logged successfully!');
     switchSection('home');
 }
 
@@ -776,13 +781,18 @@ async function checkoutCart() {
         switchSection('deposit');
         return;
     }
-    currentBalanceNgn -= total;
-    currentBalanceUsd = currentBalanceNgn / exchangeRate;
+    let newNgn = currentBalanceNgn - total;
+    let newUsd = newNgn / exchangeRate;
 
     if (supabaseClient) {
         const { data: { session } } = await supabaseClient.auth.getSession();
         if (session) {
-            await supabaseClient.from('profiles').update({ balance: currentBalanceNgn, balance_usd: currentBalanceUsd }).eq('id', session.user.id);
+            const { error: profileError } = await supabaseClient.from('profiles').update({ balance: newNgn, balance_usd: newUsd }).eq('id', session.user.id);
+            if (profileError) {
+                alert("Profile Update Error: " + profileError.message);
+                return;
+            }
+
             for (let item of cartItems) {
                 const { error: txError } = await supabaseClient.from('transactions').insert({
                     user_id: session.user.id,
@@ -798,8 +808,7 @@ async function checkoutCart() {
                 });
 
                 if (txError) {
-                    alert("Database Insert Error: " + txError.message);
-                    console.error("Full cart checkout transaction error:", txError);
+                    alert("Database Insert Error on Cart Item: " + txError.message);
                     return;
                 }
             }
@@ -807,27 +816,30 @@ async function checkoutCart() {
         }
     }
 
+    currentBalanceNgn = newNgn;
+    currentBalanceUsd = newUsd;
     cartItems = [];
     updateCartUI();
     updateBalanceDisplay();
-    alert('All items successfully purchased!');
+    alert('All items successfully purchased and logged!');
     switchSection('home');
 }
 
 async function processDeposit() {
     let amt = parseFloat(document.getElementById('depositInput').value) || 0;
     if(amt <= 0) { alert('Please enter a valid amount.'); return; }
-    currentBalanceNgn += amt;
-    currentBalanceUsd = currentBalanceNgn / exchangeRate;
-    
-    updateBalanceDisplay();
+    let newNgn = currentBalanceNgn + amt;
+    let newUsd = newNgn / exchangeRate;
 
     if (supabaseClient) {
         const { data: { session } } = await supabaseClient.auth.getSession();
         if (session) {
-            await supabaseClient.from('profiles').update({ balance: currentBalanceNgn, balance_usd: currentBalanceUsd }).eq('id', session.user.id);
+            const { error: profileError } = await supabaseClient.from('profiles').update({ balance: newNgn, balance_usd: newUsd }).eq('id', session.user.id);
+            if (profileError) {
+                alert("Profile Update Error: " + profileError.message);
+                return;
+            }
             
-            // Insert securely into persistent 'transactions' table with explicit error handling
             const { error: txError } = await supabaseClient.from('transactions').insert({
                 user_id: session.user.id,
                 customer_id: userData.customerId || null,
@@ -843,7 +855,6 @@ async function processDeposit() {
 
             if (txError) {
                 alert("Database Insert Error: " + txError.message);
-                console.error("Full deposit transaction error:", txError);
                 return;
             }
 
@@ -851,7 +862,10 @@ async function processDeposit() {
         }
     }
 
-    alert('Wallet funded successfully with ₦' + amt.toLocaleString() + '!');
+    currentBalanceNgn = newNgn;
+    currentBalanceUsd = newUsd;
+    updateBalanceDisplay();
+    alert('Wallet funded with ₦' + amt.toLocaleString() + ' and saved to database successfully!');
     switchSection('home');
 }
 
