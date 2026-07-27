@@ -1,5 +1,5 @@
 /* ==========================================
-   MJ HUB - Application Logic & Support Widget (v4.7)
+   MJ HUB - Application Logic & Support Widget (v4.8)
    ========================================== */
 
 const SUPABASE_URL = 'https://atczodlljmlayvldxfmv.supabase.co';
@@ -473,8 +473,8 @@ async function applyCurrencyConversion() {
         if (session) {
             await supabaseClient.from('profiles').update({ balance: newNgn, balance_usd: newUsd }).eq('id', session.user.id);
             
-            // Insert securely into persistent 'transactions' table with columns matching database schema
-            await supabaseClient.from('transactions').insert({
+            // Insert securely into persistent 'transactions' table with explicit error checking
+            const { error: txError } = await supabaseClient.from('transactions').insert({
                 user_id: session.user.id,
                 customer_id: userData.customerId || null,
                 type: 'conversion',
@@ -486,6 +486,13 @@ async function applyCurrencyConversion() {
                 amount_usd: amountUsdVal,
                 status: 'Success'
             });
+
+            if (txError) {
+                alert("Database Insert Error: " + txError.message);
+                console.error("Full conversion transaction error:", txError);
+                return;
+            }
+
             await fetchUserTransactions(session.user.id);
         }
     }
@@ -733,8 +740,8 @@ async function buyNowItem(title, price, type) {
         if (session) {
             await supabaseClient.from('profiles').update({ balance: currentBalanceNgn, balance_usd: currentBalanceUsd }).eq('id', session.user.id);
             
-            // Insert securely into persistent 'transactions' table
-            await supabaseClient.from('transactions').insert({
+            // Insert securely into persistent 'transactions' table with explicit error handling
+            const { error: txError } = await supabaseClient.from('transactions').insert({
                 user_id: session.user.id,
                 customer_id: userData.customerId || null,
                 type: type,
@@ -746,6 +753,13 @@ async function buyNowItem(title, price, type) {
                 amount_usd: price / exchangeRate,
                 status: 'Success'
             });
+
+            if (txError) {
+                alert("Database Insert Error: " + txError.message);
+                console.error("Full buyNow transaction error:", txError);
+                return;
+            }
+
             await fetchUserTransactions(session.user.id);
         }
     }
@@ -770,7 +784,7 @@ async function checkoutCart() {
         if (session) {
             await supabaseClient.from('profiles').update({ balance: currentBalanceNgn, balance_usd: currentBalanceUsd }).eq('id', session.user.id);
             for (let item of cartItems) {
-                await supabaseClient.from('transactions').insert({
+                const { error: txError } = await supabaseClient.from('transactions').insert({
                     user_id: session.user.id,
                     customer_id: userData.customerId || null,
                     type: item.type,
@@ -782,6 +796,12 @@ async function checkoutCart() {
                     amount_usd: item.price / exchangeRate,
                     status: 'Success'
                 });
+
+                if (txError) {
+                    alert("Database Insert Error: " + txError.message);
+                    console.error("Full cart checkout transaction error:", txError);
+                    return;
+                }
             }
             await fetchUserTransactions(session.user.id);
         }
@@ -807,8 +827,8 @@ async function processDeposit() {
         if (session) {
             await supabaseClient.from('profiles').update({ balance: currentBalanceNgn, balance_usd: currentBalanceUsd }).eq('id', session.user.id);
             
-            // Insert securely into persistent 'transactions' table
-            await supabaseClient.from('transactions').insert({
+            // Insert securely into persistent 'transactions' table with explicit error handling
+            const { error: txError } = await supabaseClient.from('transactions').insert({
                 user_id: session.user.id,
                 customer_id: userData.customerId || null,
                 type: 'deposit',
@@ -820,6 +840,13 @@ async function processDeposit() {
                 amount_usd: amt / exchangeRate,
                 status: 'Success'
             });
+
+            if (txError) {
+                alert("Database Insert Error: " + txError.message);
+                console.error("Full deposit transaction error:", txError);
+                return;
+            }
+
             await fetchUserTransactions(session.user.id);
         }
     }
