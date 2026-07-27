@@ -133,9 +133,8 @@
                 </div>
             </div>
 
-            <!-- TAB 1: OVERVIEW (Combined Users & Revenue Dashboard) -->
+            <!-- TAB 1: OVERVIEW -->
             <div id="tab-overview" class="tab-content">
-                <!-- Revenue Toolbar -->
                 <div class="revenue-toolbar">
                     <div class="revenue-dropdown-wrapper">
                         <span style="font-size: 12px; color: var(--text-muted); font-weight: 600;">Revenue Period:</span>
@@ -174,7 +173,6 @@
                     </div>
                 </div>
 
-                <!-- Integrated User CRM Table Preview -->
                 <div class="data-section">
                     <div class="section-title">
                         <span id="tableTitle">User Directory & Balances (Showing All Registered Users)</span>
@@ -192,9 +190,7 @@
                                     <th>Action</th>
                                 </tr>
                             </thead>
-                            <tbody id="usersTableBody">
-                                <!-- Populated dynamically -->
-                            </tbody>
+                            <tbody id="usersTableBody"></tbody>
                         </table>
                     </div>
                 </div>
@@ -260,9 +256,7 @@
                                     <th>Action</th>
                                 </tr>
                             </thead>
-                            <tbody id="crmTableBody">
-                                <!-- Populated dynamically -->
-                            </tbody>
+                            <tbody id="crmTableBody"></tbody>
                         </table>
                     </div>
                 </div>
@@ -345,7 +339,7 @@
         let allProfiles = [];
         let currentFilter = 'all';
         let currentRevenueTimeframe = 'month';
-        let liveP2PRate = 1364.48; // Stored in memory based on P2P rate conversion
+        let liveP2PRate = 1364.48;
         let lookedUpUser = null;
 
         window.addEventListener('DOMContentLoaded', async () => {
