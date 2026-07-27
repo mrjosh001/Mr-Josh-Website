@@ -213,8 +213,28 @@
                 </div>
             </div>
 
-            <!-- TAB 4: CRM (Full User Directory) -->
+            <!-- TAB 4: CRM (Full User Directory & Customer ID Lookup) -->
             <div id="tab-crm" class="tab-content hidden">
+                <div class="data-section">
+                    <div class="section-title"><span>Customer Support Lookup & Resolution</span></div>
+                    
+                    <div class="input-group" style="display: flex; gap: 10px; align-items: flex-end; margin-bottom: 20px;">
+                        <div style="flex: 1;">
+                            <label>Lookup User by Customer ID</label>
+                            <input type="text" id="searchCustomerId" placeholder="Enter Customer ID..." />
+                        </div>
+                        <button class="action-btn primary-btn" onclick="lookupCustomer()" style="height: 42px;">Search User</button>
+                    </div>
+
+                    <div id="userResultCard" class="hidden" style="margin-top: 20px; padding: 20px; border: 1px solid var(--border-color); border-radius: 10px; background: rgba(15, 23, 42, 0.5);">
+                        <h3 style="margin-bottom: 15px; font-size: 16px; color: #fff;">User Details</h3>
+                        <p style="margin-bottom: 8px;"><strong>Customer ID:</strong> <span id="resCustomerId"></span></p>
+                        <p style="margin-bottom: 15px;"><strong>Registered Email:</strong> <span id="resEmail"></span></p>
+                        <button id="resolveBtn" class="action-btn" style="background: #10b981;" onclick="openEditFromLookup()">Resolve / Edit Profile</button>
+                    </div>
+                    <p id="lookupErrorMessage" class="message-box"></p>
+                </div>
+
                 <div class="data-section">
                     <div class="section-title">
                         <span>Full Customer Directory & Balance Manager</span>
@@ -313,6 +333,7 @@
         let currentFilter = 'all';
         let currentRevenueTimeframe = 'days';
         let liveP2PRate = 1364.48;
+        let lookedUpUser = null;
 
         window.addEventListener('DOMContentLoaded', async () => {
             fetchLiveP2PRate();
@@ -409,6 +430,44 @@
             calculateMetricsAndRender();
         }
 
+        async function lookupCustomer() {
+            const customerId = document.getElementById('searchCustomerId').value.trim();
+            const errorBox = document.getElementById('lookupErrorMessage');
+            const resultCard = document.getElementById('userResultCard');
+            
+            errorBox.innerText = '';
+            resultCard.classList.add('hidden');
+            lookedUpUser = null;
+
+            if (!customerId) {
+                errorBox.innerText = 'Please enter a valid Customer ID.';
+                return;
+            }
+
+            // Query profile directly by customer_id column in Supabase
+            const { data, error } = await supabaseClient
+                .from('profiles')
+                .select('*')
+                .eq('customer_id', customerId)
+                .single();
+
+            if (error || !data) {
+                errorBox.innerText = 'User not found with this Customer ID.';
+                return;
+            }
+
+            lookedUpUser = data;
+            document.getElementById('resCustomerId').innerText = data.customer_id || customerId;
+            document.getElementById('resEmail').innerText = data.email || 'N/A';
+            resultCard.classList.remove('hidden');
+        }
+
+        function openEditFromLookup() {
+            if (lookedUpUser) {
+                openEditModal(lookedUpUser.id);
+            }
+        }
+
         function calculateMetricsAndRender() {
             const now = new Date();
             const thirtyDaysAgo = new Date(now.getTime() - (30 * 24 * 60 * 60 * 1000));
@@ -502,7 +561,7 @@
                 });
             }
 
-            tbody.innerHTML = rowsHTML;
+            if (tbody) tbody.innerHTML = rowsHTML;
             if (crmTbody) crmTbody.innerHTML = rowsHTML;
         }
 
