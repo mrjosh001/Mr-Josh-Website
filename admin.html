@@ -43,9 +43,12 @@
         
         /* Metrics Grid */
         .metrics-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 20px; margin-bottom: 30px; }
-        .metric-card { background: var(--card-bg); border: 1px solid var(--border-color); padding: 20px; border-radius: 14px; box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.5); }
+        .metric-card { background: var(--card-bg); border: 1px solid var(--border-color); padding: 20px; border-radius: 14px; box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.5); cursor: pointer; transition: all 0.2s ease; position: relative; }
+        .metric-card:hover { border-color: var(--primary-color); transform: translateY(-2px); }
+        .metric-card.active-card { border-color: var(--primary-color); background: rgba(37, 99, 235, 0.1); }
         .metric-card h3 { font-size: 12px; text-transform: uppercase; color: var(--text-muted); letter-spacing: 0.5px; margin-bottom: 8px; }
         .metric-card .value { font-size: 24px; font-weight: 700; color: #fff; }
+        .metric-card .hint { font-size: 11px; color: #94a3b8; margin-top: 5px; display: block; }
 
         /* Data Section */
         .data-section { background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 14px; padding: 25px; box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.5); margin-bottom: 25px; }
@@ -57,6 +60,10 @@
         th { background: rgba(15, 23, 42, 0.9); color: var(--text-muted); padding: 12px 16px; font-weight: 600; border-bottom: 1px solid var(--border-color); }
         td { padding: 14px 16px; border-bottom: 1px solid rgba(255, 255, 255, 0.05); color: #cbd5e1; }
         tr:hover td { background: var(--hover-bg); }
+
+        .badge { padding: 4px 8px; border-radius: 6px; font-size: 11px; font-weight: 600; text-transform: uppercase; }
+        .badge-active { background: rgba(74, 222, 128, 0.15); color: #4ade80; }
+        .badge-inactive { background: rgba(248, 113, 113, 0.15); color: #f87171; }
 
         .message-box { margin-top: 15px; font-size: 13px; color: #f87171; }
         .hidden { display: none !important; }
@@ -94,7 +101,7 @@
                 <button class="tab-btn active" onclick="switchTab('overview')">1. Overview & KPIs</button>
                 <button class="tab-btn" onclick="switchTab('orders')">2. Order Management</button>
                 <button class="tab-btn" onclick="switchTab('inventory')">3. Product Catalog & Stock</button>
-                <button class="tab-btn" onclick="switchTab('crm')">4. Customer CRM</button>
+                <button class="tab-btn" onclick="switchTab('crm')">4. Customer CRM & Users</button>
                 <button class="tab-btn" onclick="switchTab('marketing')">5. Marketing & Promos</button>
                 <button class="tab-btn" onclick="switchTab('reports')">6. Reports & Export</button>
                 <button class="tab-btn" onclick="switchTab('settings')">7. Roles & Settings</button>
@@ -103,21 +110,49 @@
             <!-- TAB 1: OVERVIEW -->
             <div id="tab-overview" class="tab-content">
                 <div class="metrics-grid">
-                    <div class="metric-card">
+                    <div class="metric-card active-card" id="card-all" onclick="filterTable('all')">
                         <h3>Total Registered Users</h3>
                         <div class="value" id="totalUsersCount">0</div>
+                        <span class="hint">Click to view all</span>
+                    </div>
+                    <div class="metric-card" id="card-active" onclick="filterTable('active')">
+                        <h3>Active Users</h3>
+                        <div class="value" id="activeUsersCount">0</div>
+                        <span class="hint">Logged in past 30 days</span>
+                    </div>
+                    <div class="metric-card" id="card-inactive" onclick="filterTable('inactive')">
+                        <h3>Inactive Users</h3>
+                        <div class="value" id="inactiveUsersCount">0</div>
+                        <span class="hint">> 30 days inactive</span>
                     </div>
                     <div class="metric-card">
-                        <h3>Total Revenue (Est.)</h3>
-                        <div class="value">$0.00</div>
+                        <h3>System Security</h3>
+                        <div class="value" style="color: #4ade80; font-size: 18px; margin-top: 5px;">Active & Live</div>
+                        <span class="hint">Supabase RLS Protected</span>
                     </div>
-                    <div class="metric-card">
-                        <h3>Order Volume</h3>
-                        <div class="value">0 Orders</div>
+                </div>
+
+                <!-- Quick Preview CRM Table inside Overview -->
+                <div class="data-section">
+                    <div class="section-title">
+                        <span id="tableTitle">User Directory (Showing All Users)</span>
                     </div>
-                    <div class="metric-card">
-                        <h3>System Status</h3>
-                        <div class="value" style="color: #4ade80; font-size: 18px; margin-top: 5px;">Secure & Live</div>
+                    <div class="table-responsive">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Full Name</th>
+                                    <th>Username</th>
+                                    <th>Email Address</th>
+                                    <th>Phone Number</th>
+                                    <th>Activity Status (30d)</th>
+                                    <th>Admin Status</th>
+                                </tr>
+                            </thead>
+                            <tbody id="usersTableBody">
+                                <!-- Populated dynamically via JavaScript -->
+                            </tbody>
+                        </table>
                     </div>
                 </div>
             </div>
@@ -142,7 +177,7 @@
             <div id="tab-crm" class="tab-content hidden">
                 <div class="data-section">
                     <div class="section-title">
-                        <span>Customer Directory & User Accounts</span>
+                        <span>Full Customer Directory & Account Manager</span>
                     </div>
                     <div class="table-responsive">
                         <table>
@@ -152,10 +187,11 @@
                                     <th>Username</th>
                                     <th>Email Address</th>
                                     <th>Phone Number</th>
+                                    <th>Activity Status (30d)</th>
                                     <th>Admin Status</th>
                                 </tr>
                             </thead>
-                            <tbody id="usersTableBody">
+                            <tbody id="crmTableBody">
                                 <!-- Populated dynamically via JavaScript -->
                             </tbody>
                         </table>
@@ -195,16 +231,17 @@
         const SUPABASE_PUBLISHABLE_KEY = 'sb_publishable_dwbeKLcSG7-nfKzZz8x8Zw_U9FtwJTy';
         const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY);
 
+        let allProfiles = [];
+        let currentFilter = 'all';
+
         window.addEventListener('DOMContentLoaded', async () => {
             checkAuth();
         });
 
         function switchTab(tabName) {
-            // Hide all tabs
             document.querySelectorAll('.tab-content').forEach(el => el.classList.add('hidden'));
             document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active'));
             
-            // Show selected tab
             document.getElementById('tab-' + tabName).classList.remove('hidden');
             event.currentTarget.classList.add('active');
         }
@@ -217,7 +254,6 @@
                 return;
             }
 
-            // Verify admin status in profiles table
             const { data: profileData, error } = await supabaseClient
                 .from('profiles')
                 .select('*')
@@ -231,7 +267,6 @@
                 return;
             }
 
-            // Authorized! Show Dashboard
             document.getElementById('loginScreen').classList.add('hidden');
             document.getElementById('adminDashboard').classList.remove('hidden');
             loadAdminData();
@@ -268,22 +303,104 @@
                 return;
             }
 
-            document.getElementById('totalUsersCount').innerText = profiles.length;
+            allProfiles = profiles || [];
+            calculateMetricsAndRender();
+        }
 
-            const tbody = document.getElementById('usersTableBody');
-            tbody.innerHTML = '';
+        function calculateMetricsAndRender() {
+            const now = new Date();
+            const thirtyDaysAgo = new Date(now.getTime() - (30 * 24 * 60 * 60 * 1000));
 
-            profiles.forEach(profile => {
-                const tr = document.createElement('tr');
-                tr.innerHTML = `
-                    <td>${profile.full_name || 'N/A'}</td>
-                    <td>${profile.username || 'N/A'}</td>
-                    <td>${profile.email || 'Registered User'}</td>
-                    <td>${profile.phone_number || 'N/A'}</td>
-                    <td><span style="color: ${profile.is_admin ? '#4ade80' : '#93c5fd'}">${profile.is_admin ? 'Admin' : 'Standard'}</span></td>
-                `;
-                tbody.appendChild(tr);
+            let activeCount = 0;
+            let inactiveCount = 0;
+
+            allProfiles.forEach(profile => {
+                // Check if user has an updated_at or last_sign_in timestamp within 30 days
+                const lastActivity = profile.updated_at ? new Date(profile.updated_at) : null;
+                
+                if (lastActivity && lastActivity >= thirtyDaysAgo) {
+                    profile.isActive = true;
+                    activeCount++;
+                } else {
+                    // If no timestamp or older than 30 days, count as inactive (or active by default if newly registered without timestamp)
+                    // For precise tracking, if updated_at is null, we can treat them as active on creation or inactive. Let's treat null as active if created recently, else inactive.
+                    if (!lastActivity) {
+                        profile.isActive = true; // Fallback for accounts missing timestamp
+                        activeCount++;
+                    } else {
+                        profile.isActive = false;
+                        inactiveCount++;
+                    }
+                }
             });
+
+            // Update KPI metric numbers
+            document.getElementById('totalUsersCount').innerText = allProfiles.length;
+            document.getElementById('activeUsersCount').innerText = activeCount;
+            document.getElementById('inactiveUsersCount').innerText = inactiveCount;
+
+            renderTable();
+        }
+
+        function filterTable(filterType) {
+            currentFilter = filterType;
+            
+            // Update UI card highlights
+            document.querySelectorAll('.metric-card').forEach(card => card.classList.remove('active-card'));
+            if (filterType === 'all') document.getElementById('card-all').classList.add('active-card');
+            if (filterType === 'active') document.getElementById('card-active').classList.add('active-card');
+            if (filterType === 'inactive') document.getElementById('card-inactive').classList.add('active-card');
+
+            // Update section title hint
+            const titles = {
+                'all': 'User Directory (Showing All Registered Users)',
+                'active': 'User Directory (Showing Active Users - Logged in past 30 days)',
+                'inactive': 'User Directory (Showing Inactive Users - No login in 30+ days)'
+            };
+            document.getElementById('tableTitle').innerText = titles[filterType];
+
+            renderTable();
+        }
+
+        function renderTable() {
+            const tbody = document.getElementById('usersTableBody');
+            const crmTbody = document.getElementById('crmTableBody');
+            
+            let filtered = allProfiles;
+            if (currentFilter === 'active') {
+                filtered = allProfiles.filter(p => p.isActive);
+            } else if (currentFilter === 'inactive') {
+                filtered = allProfiles.filter(p => !p.isActive);
+            }
+
+            let rowsHTML = '';
+            if (filtered.length === 0) {
+                rowsHTML = `<tr><td colspan="6" style="text-align: center; color: var(--text-muted); padding: 30px;">No users found in this category.</td></tr>`;
+            } else {
+                filtered.forEach(profile => {
+                    const statusBadge = profile.isActive 
+                        ? `<span class="badge badge-active">Active</span>` 
+                        : `<span class="badge badge-inactive">Inactive</span>`;
+                    
+                    const adminBadge = profile.is_admin 
+                        ? `<span style="color: #4ade80; font-weight: 600;">Admin</span>` 
+                        : `<span style="color: #93c5fd;">Standard</span>`;
+
+                    rowsHTML += `
+                        <tr>
+                            <td>${profile.full_name || 'N/A'}</td>
+                            <td>${profile.username || 'N/A'}</td>
+                            <td>${profile.email || 'Registered User'}</td>
+                            <td>${profile.phone_number || 'N/A'}</td>
+                            <td>${statusBadge}</td>
+                            <td>${adminBadge}</td>
+                        </tr>
+                    `;
+                });
+            }
+
+            tbody.innerHTML = rowsHTML;
+            if (crmTbody) crmTbody.innerHTML = rowsHTML;
         }
 
         async function handleLogout() {
