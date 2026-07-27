@@ -136,7 +136,7 @@
                 <button type="submit" class="btn-submit">Update Password</button>
             </form>
 
-            <!-- Sign Up Form (Cleaned Up Credentials Only) -->
+            <!-- Sign Up Form (Updated to save info to public profiles table) -->
             <form id="signupForm" class="hidden" onsubmit="handleSignUp(event)">
                 <div class="form-group">
                     <label>Full Name</label>
@@ -341,6 +341,7 @@
             const email = document.getElementById('emailAddress').value.trim();
             const password = document.getElementById('signupPassword').value.trim();
 
+            // 1. Sign up user via Supabase Auth
             const { data, error } = await supabaseClient.auth.signUp({
                 email: email,
                 password: password,
@@ -358,6 +359,23 @@
                 return;
             }
 
+            // 2. Explicitly write data to the public 'profiles' table so it appears in your Supabase Table Editor
+            if (data.user) {
+                const { error: profileError } = await supabaseClient.from('profiles').insert([
+                    { 
+                        id: data.user.id, 
+                        full_name: fullName, 
+                        username: username, 
+                        phone_number: phone 
+                    }
+                ]);
+
+                if (profileError) {
+                    showError(profileError.message);
+                    return;
+                }
+            }
+
             showSuccess('Account created successfully!');
             setTimeout(() => {
                 window.location.href = 'index.html';
@@ -368,7 +386,6 @@
             e.preventDefault();
             const email = document.getElementById('forgotEmail').value.trim();
 
-            // Send password reset email with redirection back to this page
             const { data, error } = await supabaseClient.auth.resetPasswordForEmail(email, {
                 redirectTo: window.location.origin + window.location.pathname
             });
@@ -385,7 +402,6 @@
             e.preventDefault();
             const newPassword = document.getElementById('newPassword').value.trim();
 
-            // Updates the current user's password on the server securely via Supabase Auth
             const { data, error } = await supabaseClient.auth.updateUser({
                 password: newPassword
             });
