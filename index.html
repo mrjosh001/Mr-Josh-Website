@@ -10,7 +10,7 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
 /* ==========================================
-   MJ HUB - Theme & Variables (v4.5)
+   MJ HUB - Theme & Variables (v4.6)
    ========================================== */
 
 :root[data-theme="dark"] {
@@ -1075,7 +1075,10 @@ body {
     display: flex;
     justify-content: space-between;
     align-items: center;
+    cursor: pointer;
+    transition: border-color 0.2s;
 }
+.transaction-card:hover { border-color: var(--primary-color); }
 .transaction-left { display: flex; align-items: center; gap: 12px; }
 .transaction-icon-box { width: 40px; height: 40px; border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 18px; }
 .tx-blue { background: rgba(37, 99, 235, 0.2); color: #2563eb; }
@@ -1420,7 +1423,6 @@ body {
                 <h2>MJ Logs - Social Media Logs</h2>
                 <p class="helper-text">Browse our verified social media logs and aged accounts provided by MJ HUB.</p>
                 
-                <!-- HTML Filter Buttons Added Here -->
                 <div class="filter-buttons-row">
                     <button class="filter-tab active" onclick="filterProductItems('all', this)">All Logs</button>
                     <button class="filter-tab" onclick="filterProductItems('gmail', this)">Gmail</button>
@@ -1437,8 +1439,8 @@ body {
                             <div class="product-price">₦1,200</div>
                         </div>
                         <div class="product-actions-row">
-                            <button class="btn-sm-primary" onclick="addToCart('Old Gmail Accounts', 1200, 'log')">Add to Cart</button>
-                            <button class="btn-sm-outline" onclick="buyNowItem('Old Gmail Accounts', 1200, 'log')">Buy Now</button>
+                            <button class="btn-sm-primary" onclick="addToCart('Old Gmail Accounts', 1200, 'log', 'Aged Gmail Accounts - Phone Verified')">Add to Cart</button>
+                            <button class="btn-sm-outline" onclick="buyNowItem('Old Gmail Accounts', 1200, 'log', 'Aged Gmail Accounts - Phone Verified')">Buy Now</button>
                         </div>
                     </div>
                 </div>
@@ -1460,8 +1462,8 @@ body {
                             <div class="product-price">₦800</div>
                         </div>
                         <div class="product-actions-row">
-                            <button class="btn-sm-primary" onclick="addToCart('WhatsApp OTP Number', 800, 'sms')">Add to Cart</button>
-                            <button class="btn-sm-outline" onclick="buyNowItem('WhatsApp OTP Number', 800, 'sms')">Get Now</button>
+                            <button class="btn-sm-primary" onclick="addToCart('WhatsApp OTP Number', 800, 'sms', 'Virtual Line OTP - USA/UK Channel')">Add to Cart</button>
+                            <button class="btn-sm-outline" onclick="buyNowItem('WhatsApp OTP Number', 800, 'sms', 'Virtual Line OTP - USA/UK Channel')">Get Now</button>
                         </div>
                     </div>
                 </div>
@@ -1483,8 +1485,8 @@ body {
                             <div class="product-price">₦2,500</div>
                         </div>
                         <div class="product-actions-row">
-                            <button class="btn-sm-primary" onclick="addToCart('Instagram Followers (1k)', 2500, 'booster')">Add to Cart</button>
-                            <button class="btn-sm-outline" onclick="buyNowItem('Instagram Followers (1k)', 2500, 'booster')">Boost Now</button>
+                            <button class="btn-sm-primary" onclick="addToCart('Instagram Followers (1k)', 2500, 'booster', 'SMM Engagement Panel - Non-Drop')">Add to Cart</button>
+                            <button class="btn-sm-outline" onclick="buyNowItem('Instagram Followers (1k)', 2500, 'booster', 'SMM Engagement Panel - Non-Drop')">Boost Now</button>
                         </div>
                     </div>
                 </div>
@@ -1526,6 +1528,14 @@ body {
             <div class="content-card">
                 <h2>Deposit</h2>
                 <p class="helper-text">Choose your preferred wallet to fund and enter the amount.</p>
+                <div class="form-group">
+                    <label>Select Payment Provider / Channel</label>
+                    <select id="depositProviderSelect">
+                        <option value="Bank Transfer">Bank Transfer (Automated NUBAN)</option>
+                        <option value="Card Payment">Card Payment (Flutterwave / Paystack)</option>
+                        <option value="Crypto Deposit">Crypto Deposit (USDT / BTC Gateway)</option>
+                    </select>
+                </div>
                 <div class="form-group">
                     <label>Select Wallet to Fund</label>
                     <select id="depositWalletSelect">
@@ -1606,6 +1616,20 @@ body {
         </div>
     </div>
 
+    <!-- TRANSACTION RECEIPT MODAL -->
+    <div class="currency-modal" id="transactionReceiptModal">
+        <div class="currency-modal-card">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; border-bottom: 1px solid var(--border-color); padding-bottom: 10px;">
+                <div style="font-size: 17px; font-weight: 800; color: var(--text-main);">📄 Transaction Receipt</div>
+                <button onclick="closeTransactionReceipt()" style="background: var(--bg-main); border: 1px solid var(--border-color); width: 30px; height: 30px; border-radius: 50%; cursor: pointer; font-size: 14px; font-weight: bold; color: var(--text-main);">✕</button>
+            </div>
+            <div id="receiptContentBody" style="display: flex; flex-direction: column; gap: 12px; font-size: 13px; margin-bottom: 20px;">
+                <!-- Dynamically injected receipt details -->
+            </div>
+            <button class="btn-sm-primary" style="width: 100%; padding: 12px; font-size: 14px;" onclick="closeTransactionReceipt()">Close Receipt</button>
+        </div>
+    </div>
+
     <!-- CURRENCY CONVERTER MODAL -->
     <div class="currency-modal" id="currencyConverterModal">
         <div class="currency-modal-card">
@@ -1614,7 +1638,11 @@ body {
                 <button onclick="closeCurrencyModal()" style="background: var(--bg-main); border: 1px solid var(--border-color); width: 30px; height: 30px; border-radius: 50%; cursor: pointer; font-size: 14px; font-weight: bold; color: var(--text-main);">✕</button>
             </div>
             <div class="form-group" style="margin-bottom: 10px;">
-                <button class="btn-sm-outline" style="width: 100%; padding: 8px; font-weight: 700;" id="toggleDirectionBtn" onclick="toggleConversionDirection()">🔄 Convert: NGN (₦) ➔ USD ($)</button>
+                <label>Conversion Direction</label>
+                <select id="conversionDropdownSelect" onchange="handleConversionDirectionChange()">
+                    <option value="ngntousd">🔄 Convert: Naira (NGN ₦) ➔ US Dollar (USD $)</option>
+                    <option value="usdtongngn">🔄 Convert: US Dollar (USD $) ➔ Naira (NGN ₦)</option>
+                </select>
             </div>
             <div class="currency-input-group">
                 <label id="convertInputLabel">Amount to Convert (NGN)</label>
@@ -1639,7 +1667,7 @@ body {
         <div class="drawer-header-row">
             <div class="drawer-title-area">
                 <h3><span>⏱️</span> Activity History</h3>
-                <p>All your orders, deposits & conversions</p>
+                <p>Click any transaction to view detailed receipt</p>
             </div>
             <button class="drawer-close-btn" onclick="toggleActivityHistory()">✕</button>
         </div>
@@ -1650,6 +1678,7 @@ body {
             <button class="filter-tab" onclick="filterTransactions('sms', this)">📱 SMS Numbers</button>
             <button class="filter-tab" onclick="filterTransactions('deposit', this)">💳 Deposits</button>
             <button class="filter-tab" onclick="filterTransactions('booster', this)">⚡ Social Boost</button>
+            <button class="filter-tab" onclick="filterTransactions('conversion', this)">🔄 Swaps</button>
         </div>
 
         <div class="transaction-list" id="transactionListContainer"></div>
@@ -1710,7 +1739,7 @@ body {
 
     <script>
 /* ==========================================
-   MJ HUB - Application Logic (v4.5)
+   MJ HUB - Application Logic (v4.6)
    ========================================== */
 
 const SUPABASE_URL = 'https://atczodlljmlayvldxfmv.supabase.co';
@@ -1725,7 +1754,6 @@ if (window.supabase && SUPABASE_URL !== 'https://YOUR_PROJECT_ID.supabase.co') {
 let currentBalanceNgn = 0.00;
 let currentBalanceUsd = 0.00;
 
-let conversionDirection = 'ngntousd'; // Default conversion: Naira to USD
 let exchangeRate = 1420; 
 
 let cartItems = [];
@@ -1885,6 +1913,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         document.getElementById('floatingPopupModal').classList.remove('active');
         document.getElementById('changePasswordModal').classList.remove('active');
         document.getElementById('currencyConverterModal').classList.remove('active');
+        document.getElementById('transactionReceiptModal').classList.remove('active');
         document.getElementById('activityHistoryDrawer').classList.remove('active');
     });
 
@@ -2173,15 +2202,12 @@ function closeCurrencyModal() {
     document.getElementById('currencyConverterModal').classList.remove('active');
 }
 
-function toggleConversionDirection() {
-    if (conversionDirection === 'ngntousd') {
-        conversionDirection = 'usdtongngn';
-        document.getElementById('toggleDirectionBtn').textContent = '🔄 Convert: USD ($) ➔ NGN (₦)';
+function handleConversionDirectionChange() {
+    let selectVal = document.getElementById('conversionDropdownSelect').value;
+    if (selectVal === 'usdtongngn') {
         document.getElementById('convertInputLabel').textContent = 'Amount to Convert (USD)';
         document.getElementById('convertOutputLabel').textContent = 'You Will Receive (NGN)';
     } else {
-        conversionDirection = 'ngntousd';
-        document.getElementById('toggleDirectionBtn').textContent = '🔄 Convert: NGN (₦) ➔ USD ($)';
         document.getElementById('convertInputLabel').textContent = 'Amount to Convert (NGN)';
         document.getElementById('convertOutputLabel').textContent = 'You Will Receive (USD)';
     }
@@ -2191,7 +2217,8 @@ function toggleConversionDirection() {
 
 function performCurrencyConversion() {
     let inputVal = parseFloat(document.getElementById('baseConvertInput').value) || 0;
-    if (conversionDirection === 'ngntousd') {
+    let selectVal = document.getElementById('conversionDropdownSelect').value;
+    if (selectVal === 'ngntousd') {
         let res = inputVal / exchangeRate;
         document.getElementById('targetConvertOutput').value = '$' + res.toLocaleString(undefined, {minimumFractionDigits: 2});
     } else {
@@ -2202,6 +2229,7 @@ function performCurrencyConversion() {
 
 async function applyCurrencyConversion() {
     let inputVal = parseFloat(document.getElementById('baseConvertInput').value) || 0;
+    let selectVal = document.getElementById('conversionDropdownSelect').value;
     if (inputVal <= 0) {
         alert('Please enter a valid amount to convert.');
         return;
@@ -2210,8 +2238,11 @@ async function applyCurrencyConversion() {
     let newNgn = currentBalanceNgn;
     let newUsd = currentBalanceUsd;
     let conversionDesc = '';
+    let fromCurr = '';
+    let toCurr = '';
+    let convertedOutputAmount = '';
 
-    if (conversionDirection === 'ngntousd') {
+    if (selectVal === 'ngntousd') {
         if (currentBalanceNgn < inputVal) {
             alert('Insufficient Naira (NGN) balance for this conversion.');
             return;
@@ -2219,7 +2250,10 @@ async function applyCurrencyConversion() {
         let usdGained = inputVal / exchangeRate;
         newNgn -= inputVal;
         newUsd += usdGained;
-        conversionDesc = `Converted ₦${inputVal.toLocaleString()} to $${usdGained.toFixed(2)}`;
+        fromCurr = 'NGN (₦)';
+        toCurr = 'USD ($)';
+        conversionDesc = `Swapped ₦${inputVal.toLocaleString()} to $${usdGained.toFixed(2)}`;
+        convertedOutputAmount = '$' + usdGained.toFixed(2);
         alert(`Successfully converted ₦${inputVal.toLocaleString()} to $${usdGained.toFixed(2)} on your balance!`);
     } else {
         if (currentBalanceUsd < inputVal) {
@@ -2229,7 +2263,10 @@ async function applyCurrencyConversion() {
         let ngnGained = inputVal * exchangeRate;
         newUsd -= inputVal;
         newNgn += ngnGained;
-        conversionDesc = `Converted $${inputVal.toLocaleString()} to ₦${ngnGained.toLocaleString()}`;
+        fromCurr = 'USD ($)';
+        toCurr = 'NGN (₦)';
+        conversionDesc = `Swapped $${inputVal.toLocaleString()} to ₦${ngnGained.toLocaleString()}`;
+        convertedOutputAmount = '₦' + ngnGained.toLocaleString();
         alert(`Successfully converted $${inputVal.toLocaleString()} to ₦${ngnGained.toLocaleString()} on your balance!`);
     }
 
@@ -2245,12 +2282,18 @@ async function applyCurrencyConversion() {
     
     transactions.unshift({ 
         id: Date.now(), 
-        type: 'deposit', 
+        type: 'conversion', 
         title: 'Currency Conversion', 
         subtitle: conversionDesc, 
-        amount: conversionDirection === 'ngntousd' ? '$' + (inputVal / exchangeRate).toFixed(2) : '₦' + (inputVal * exchangeRate).toLocaleString(), 
-        date: 'Just now', 
-        status: 'Success' 
+        amount: convertedOutputAmount, 
+        date: new Date().toLocaleString(), 
+        status: 'Success',
+        paymentProvider: 'Internal Swap Engine',
+        channel: 'Multi-Currency Wallet',
+        fromCurrency: fromCurr,
+        toCurrency: toCurr,
+        rate: `1.00 USD = ₦${exchangeRate.toLocaleString()}`,
+        details: conversionDesc
     });
 
     updateBalanceDisplay();
@@ -2327,9 +2370,11 @@ function renderTransactions(filterType) {
         else if(tx.type === 'sms') { icon = '📱'; iconClass = 'tx-blue'; }
         else if(tx.type === 'booster') { icon = '⚡'; iconClass = 'tx-blue'; }
         else if(tx.type === 'log') { icon = '📦'; iconClass = 'tx-blue'; }
+        else if(tx.type === 'conversion') { icon = '🔄'; iconClass = 'tx-blue'; }
 
         let card = document.createElement('div');
         card.className = 'transaction-card';
+        card.onclick = () => showTransactionReceipt(tx);
         card.innerHTML = `
             <div class="transaction-left">
                 <div class="transaction-icon-box ${iconClass}">${icon}</div>
@@ -2347,12 +2392,43 @@ function renderTransactions(filterType) {
     });
 }
 
+function showTransactionReceipt(tx) {
+    let body = document.getElementById('receiptContentBody');
+    let html = `
+        <div style="display:flex; justify-content:space-between;"><span style="color:var(--text-muted)">Transaction Type:</span> <strong style="text-transform:uppercase;">${tx.type}</strong></div>
+        <div style="display:flex; justify-content:space-between;"><span style="color:var(--text-muted)">Description:</span> <strong>${tx.title}</strong></div>
+        <div style="display:flex; justify-content:space-between;"><span style="color:var(--text-muted)">Amount:</span> <strong style="color:var(--primary-color);">${tx.amount}</strong></div>
+        <div style="display:flex; justify-content:space-between;"><span style="color:var(--text-muted)">Payment Provider:</span> <strong>${tx.paymentProvider || 'MJ HUB Gateway'}</strong></div>
+        <div style="display:flex; justify-content:space-between;"><span style="color:var(--text-muted)">Channel Used:</span> <strong>${tx.channel || 'Direct Wallet Debit'}</strong></div>
+    `;
+
+    if (tx.type === 'conversion') {
+        html += `
+            <div style="display:flex; justify-content:space-between;"><span style="color:var(--text-muted)">Swapped From:</span> <strong>${tx.fromCurrency}</strong></div>
+            <div style="display:flex; justify-content:space-between;"><span style="color:var(--text-muted)">Swapped To:</span> <strong>${tx.toCurrency}</strong></div>
+            <div style="display:flex; justify-content:space-between;"><span style="color:var(--text-muted)">Conversion Rate:</span> <strong>${tx.rate}</strong></div>
+        `;
+    }
+
+    html += `
+        <div style="display:flex; justify-content:space-between;"><span style="color:var(--text-muted)">Date & Time:</span> <strong>${tx.date}</strong></div>
+        <div style="display:flex; justify-content:space-between;"><span style="color:var(--text-muted)">Status:</span> <span class="badge-status status-${tx.status.toLowerCase()}">${tx.status}</span></div>
+    `;
+
+    body.innerHTML = html;
+    document.getElementById('transactionReceiptModal').classList.add('active');
+}
+
+function closeTransactionReceipt() {
+    document.getElementById('transactionReceiptModal').classList.remove('active');
+}
+
 function toggleFloatingPopup() {
     document.getElementById('floatingPopupModal').classList.toggle('active');
 }
 
-function addToCart(title, price, type) {
-    cartItems.push({ id: Date.now(), title, price, type });
+function addToCart(title, price, type, channelDesc) {
+    cartItems.push({ id: Date.now(), title, price, type, channel: channelDesc || 'Digital Asset Store' });
     updateCartUI();
     alert(title + ' added to your cart!');
 }
@@ -2388,7 +2464,7 @@ function updateCartUI() {
     totalDisplay.textContent = '₦' + total.toLocaleString(undefined, {minimumFractionDigits: 2});
 }
 
-async function buyNowItem(title, price, type) {
+async function buyNowItem(title, price, type, channelDesc) {
     if(currentBalanceNgn < price) {
         alert('Insufficient NGN balance. Please fund your Naira wallet first.');
         switchSection('deposit');
@@ -2403,7 +2479,17 @@ async function buyNowItem(title, price, type) {
     }
     currentBalanceNgn = newNgn;
     
-    transactions.unshift({ id: Date.now(), type: type, title: title, subtitle: 'Instant Purchase', amount: '₦' + price.toLocaleString(), date: 'Just now', status: 'Success' });
+    transactions.unshift({ 
+        id: Date.now(), 
+        type: type, 
+        title: title, 
+        subtitle: 'Instant Purchase', 
+        amount: '₦' + price.toLocaleString(), 
+        date: new Date().toLocaleString(), 
+        status: 'Success',
+        paymentProvider: 'MJ Automated Debit',
+        channel: channelDesc || 'Naira Wallet Transfer'
+    });
     
     updateBalanceDisplay();
     renderTransactions('all');
@@ -2428,7 +2514,17 @@ async function checkoutCart() {
     }
     currentBalanceNgn = newNgn;
     cartItems.forEach(item => {
-        transactions.unshift({ id: Date.now(), type: item.type, title: item.title, subtitle: 'Cart Checkout', amount: '₦' + item.price.toLocaleString(), date: 'Just now', status: 'Success' });
+        transactions.unshift({ 
+            id: Date.now(), 
+            type: item.type, 
+            title: item.title, 
+            subtitle: 'Cart Checkout', 
+            amount: '₦' + item.price.toLocaleString(), 
+            date: new Date().toLocaleString(), 
+            status: 'Success',
+            paymentProvider: 'MJ Automated Debit',
+            channel: item.channel
+        });
     });
     cartItems = [];
     updateCartUI();
@@ -2441,6 +2537,7 @@ async function checkoutCart() {
 async function processDeposit() {
     let amt = parseFloat(document.getElementById('depositInput').value) || 0;
     let selectedWallet = document.getElementById('depositWalletSelect').value;
+    let selectedProvider = document.getElementById('depositProviderSelect').value;
 
     if(amt <= 0) { 
         alert('Please enter a valid amount.'); 
@@ -2452,11 +2549,31 @@ async function processDeposit() {
 
     if (selectedWallet === 'usd') {
         newUsd += amt;
-        transactions.unshift({ id: Date.now(), type: 'deposit', title: 'USD Deposit', subtitle: 'Wallet funding (USD)', amount: '$' + amt.toLocaleString(undefined, {minimumFractionDigits: 2}), date: 'Just now', status: 'Success' });
+        transactions.unshift({ 
+            id: Date.now(), 
+            type: 'deposit', 
+            title: 'USD Deposit', 
+            subtitle: `Funded via ${selectedProvider}`, 
+            amount: '$' + amt.toLocaleString(undefined, {minimumFractionDigits: 2}), 
+            date: new Date().toLocaleString(), 
+            status: 'Success',
+            paymentProvider: selectedProvider,
+            channel: selectedProvider
+        });
         alert('USD Wallet funded successfully with $' + amt.toLocaleString(undefined, {minimumFractionDigits: 2}) + '!');
     } else {
         newNgn += amt;
-        transactions.unshift({ id: Date.now(), type: 'deposit', title: 'Naira Deposit', subtitle: 'Wallet funding (NGN)', amount: '₦' + amt.toLocaleString(), date: 'Just now', status: 'Success' });
+        transactions.unshift({ 
+            id: Date.now(), 
+            type: 'deposit', 
+            title: 'Naira Deposit', 
+            subtitle: `Funded via ${selectedProvider}`, 
+            amount: '₦' + amt.toLocaleString(), 
+            date: new Date().toLocaleString(), 
+            status: 'Success',
+            paymentProvider: selectedProvider,
+            channel: selectedProvider
+        });
         alert('Naira Wallet funded successfully with ₦' + amt.toLocaleString() + '!');
     }
 
