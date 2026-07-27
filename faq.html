@@ -4,6 +4,10 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>MJ HUB - Frequently Asked Questions</title>
+    <!-- Importing a sleek, modern font: Plus Jakarta Sans -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <style>
         :root {
             --primary-color: #2563eb;
@@ -14,12 +18,12 @@
             --text-muted: #93c5fd;
             --border-color: #1e3a8a;
         }
-        * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Plus Jakarta Sans', sans-serif; }
         body { background-color: var(--bg-main); color: var(--text-main); line-height: 1.6; position: relative; min-height: 100vh; overflow-x: hidden; }
         
         /* Header & Navigation */
         header { display: flex; justify-content: space-between; align-items: center; padding: 20px 8%; border-bottom: 1px solid var(--border-color); background: var(--card-bg); position: relative; }
-        .logo { font-size: 24px; font-weight: bold; color: var(--primary-color); letter-spacing: 1px; text-decoration: none; }
+        .logo { font-size: 24px; font-weight: 700; color: var(--primary-color); letter-spacing: 0.5px; text-decoration: none; }
         
         .nav-desktop { display: flex; align-items: center; }
         .nav-desktop a { padding: 10px 20px; border-radius: 8px; text-decoration: none; font-weight: 600; font-size: 14px; margin-left: 10px; transition: 0.3s; }
@@ -65,7 +69,7 @@
             padding-bottom: 10px;
             border-bottom: 1px solid rgba(255,255,255,0.08);
         }
-        .dropdown-header-row span { font-weight: bold; color: var(--primary-color); font-size: 18px; }
+        .dropdown-header-row span { font-weight: 700; color: var(--primary-color); font-size: 18px; }
         .dropdown-close-btn {
             background: rgba(255,255,255,0.05);
             border: none;
@@ -107,7 +111,7 @@
             text-align: center;
             padding: 12px;
             border-radius: 8px;
-            font-weight: bold;
+            font-weight: 700;
             font-size: 14px;
             text-decoration: none;
         }
@@ -117,31 +121,89 @@
             .menu-toggle-btn { display: flex; }
         }
 
-        /* FAQ Page Banner Header */
+        /* FAQ Page Banner Header with Dynamic Theme Support & Integrated Image */
         .faq-hero {
-            padding: 60px 8% 30px 8%;
-            background: linear-gradient(180deg, #121824 0%, var(--bg-main) 100%);
-            border-bottom: 1px solid rgba(255,255,255,0.05);
+            position: relative;
+            padding: 50px 8%;
+            min-height: 280px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            overflow: hidden;
+            border-bottom: 1px solid var(--border-color);
+            background: var(--card-bg);
         }
-        .faq-hero h1 { font-size: 36px; margin-bottom: 10px; color: #fff; }
-        .faq-hero p { font-size: 16px; color: var(--text-muted); max-width: 600px; margin-bottom: 25px; }
+
+        /* Dynamic Background Image container with theme adaptation overlay */
+        .faq-hero-bg {
+            position: absolute;
+            inset: 0;
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            z-index: 1;
+            opacity: 0.35;
+            transition: opacity 0.3s ease;
+        }
+        
+        /* Dynamic Theme Overlays */
+        [data-theme="dark"] .faq-hero::after {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background: linear-gradient(90deg, rgba(11, 15, 25, 0.95) 0%, rgba(18, 24, 36, 0.85) 100%);
+            z-index: 2;
+        }
+        [data-theme="light"] .faq-hero::after {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background: linear-gradient(90deg, rgba(255, 255, 255, 0.92) 0%, rgba(240, 244, 255, 0.85) 100%);
+            z-index: 2;
+        }
+
+        .faq-hero-content {
+            position: relative;
+            z-index: 3;
+            max-width: 700px;
+        }
+
+        /* Breadcrumb navigation right on top of the banner image */
+        .faq-breadcrumb {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 14px;
+            font-weight: 500;
+            margin-bottom: 14px;
+        }
+        .faq-breadcrumb a {
+            color: var(--primary-color);
+            text-decoration: none;
+            transition: opacity 0.2s;
+        }
+        .faq-breadcrumb a:hover { opacity: 0.8; text-decoration: underline; }
+        .faq-breadcrumb span { color: var(--text-muted); }
+
+        .faq-hero h1 { font-size: 38px; font-weight: 800; margin-bottom: 8px; color: var(--text-main); letter-spacing: -0.5px; }
+        .faq-hero p { font-size: 15px; color: var(--text-muted); margin-bottom: 20px; font-weight: 500; }
         
         /* Real Social Media SVGs Row */
-        .social-icons-row { display: flex; gap: 12px; margin-bottom: 15px; align-items: center; }
+        .social-icons-row { display: flex; gap: 12px; align-items: center; }
         .social-icon-box {
-            width: 42px; height: 42px;
-            background: #1f2937;
-            border: 1px solid rgba(255,255,255,0.08);
+            width: 40px; height: 40px;
+            background: var(--card-bg);
+            border: 1px solid var(--border-color);
             border-radius: 10px;
             display: flex;
             align-items: center;
             justify-content: center;
-            color: #fff;
+            color: var(--text-main);
             text-decoration: none;
             transition: 0.2s;
         }
-        .social-icon-box svg { width: 20px; height: 20px; fill: currentColor; }
-        .social-icon-box:hover { background: var(--primary-color); border-color: var(--primary-color); }
+        .social-icon-box svg { width: 18px; height: 18px; fill: currentColor; }
+        .social-icon-box:hover { background: var(--primary-color); border-color: var(--primary-color); color: #fff; }
 
         /* Accordion FAQ Container */
         .faq-container {
@@ -169,8 +231,8 @@
             align-items: center;
             cursor: pointer;
             font-weight: 600;
-            font-size: 17px;
-            color: #fff;
+            font-size: 16px;
+            color: var(--text-main);
             background: transparent;
             user-select: none;
         }
@@ -179,7 +241,7 @@
             font-size: 14px;
             transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
             color: var(--text-muted);
-            background: rgba(255,255,255,0.05);
+            background: rgba(37, 99, 235, 0.1);
             width: 32px;
             height: 32px;
             border-radius: 50%;
@@ -209,8 +271,9 @@
             padding: 0 24px 24px 24px;
             color: var(--text-muted);
             font-size: 15px;
-            border-top: 1px solid rgba(255,255,255,0.05);
+            border-top: 1px solid var(--border-color);
             padding-top: 18px;
+            font-weight: 400;
         }
 
         /* Footer Layout Columns */
@@ -221,19 +284,19 @@
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
             gap: 40px;
-            border-top: 1px solid rgba(255,255,255,0.08);
+            border-top: 1px solid var(--border-color);
             padding-top: 50px;
         }
-        .footer-col h3 { font-size: 18px; color: #fff; margin-bottom: 20px; position: relative; padding-bottom: 8px; }
+        .footer-col h3 { font-size: 18px; font-weight: 700; color: var(--text-main); margin-bottom: 20px; position: relative; padding-bottom: 8px; }
         .footer-col h3::after { content: ''; position: absolute; left: 0; bottom: 0; width: 35px; height: 2px; background: var(--primary-color); }
         .footer-col ul { list-style: none; display: flex; flex-direction: column; gap: 10px; }
-        .footer-col ul li a { color: var(--text-muted); text-decoration: none; font-size: 14px; transition: color 0.2s; }
-        .footer-col ul li a:hover { color: #fff; }
+        .footer-col ul li a { color: var(--text-muted); text-decoration: none; font-size: 14px; font-weight: 500; transition: color 0.2s; }
+        .footer-col ul li a:hover { color: var(--text-main); }
 
         /* Stay Updated / Newsletter Form */
-        .newsletter-box p { color: var(--text-muted); font-size: 14px; margin-bottom: 15px; }
-        .newsletter-form { display: flex; background: #121824; border: 1px solid var(--border-color); border-radius: 8px; overflow: hidden; }
-        .newsletter-form input { flex: 1; background: transparent; border: none; padding: 12px 15px; color: #fff; font-size: 14px; outline: none; }
+        .newsletter-box p { color: var(--text-muted); font-size: 14px; margin-bottom: 15px; font-weight: 500; }
+        .newsletter-form { display: flex; background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 8px; overflow: hidden; }
+        .newsletter-form input { flex: 1; background: transparent; border: none; padding: 12px 15px; color: var(--text-main); font-size: 14px; outline: none; }
         .newsletter-form button { background: #22c55e; border: none; padding: 0 16px; color: #fff; cursor: pointer; font-size: 16px; transition: opacity 0.2s; }
         .newsletter-form button:hover { opacity: 0.9; }
 
@@ -245,13 +308,14 @@
             display: flex;
             justify-content: space-between;
             align-items: center;
-            border-top: 1px solid rgba(255,255,255,0.05);
+            border-top: 1px solid var(--border-color);
             font-size: 13px;
+            font-weight: 500;
             color: var(--text-muted);
         }
         .footer-bottom-links { display: flex; gap: 20px; }
         .footer-bottom-links a { color: var(--text-muted); text-decoration: none; }
-        .footer-bottom-links a:hover { color: #fff; }
+        .footer-bottom-links a:hover { color: var(--text-main); }
 
         @media (max-width: 768px) {
             .footer-bottom { flex-direction: column; gap: 15px; text-align: center; }
@@ -290,28 +354,38 @@
         </div>
     </header>
 
-    <!-- FAQ Banner Section with Configured WhatsApp Link -->
+    <!-- FAQ Hero Banner Section with Dynamic Theme Background Image & Home Breadcrumb -->
     <section class="faq-hero">
-        <h1>MJ HUB</h1>
-        <p>Find answers to frequently asked questions about our platform, services, and digital opportunities.</p>
-        
-        <div class="social-icons-row">
-            <!-- Facebook Logo -->
-            <a href="#" class="social-icon-box" title="Facebook" aria-label="Facebook">
-                <svg viewBox="0 0 24 24"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg>
-            </a>
-            <!-- Twitter/X Logo -->
-            <a href="#" class="social-icon-box" title="X" aria-label="X">
-                <svg viewBox="0 0 24 24"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>
-            </a>
-            <!-- Instagram Logo -->
-            <a href="#" class="social-icon-box" title="Instagram" aria-label="Instagram">
-                <svg viewBox="0 0 24 24"><path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zm0-2.163c-3.259 0-3.667.014-4.947.072-4.358.2-6.78 2.618-6.98 6.98-.059 1.281-.073 1.689-.073 4.948 0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98 1.281.058 1.689.072 4.948.072 3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98-1.281-.059-1.69-.073-4.949-.073zm0 5.838c-3.403 0-6.162 2.759-6.162 6.162s2.759 6.163 6.162 6.163 6.162-2.759 6.162-6.163c0-3.403-2.759-6.162-6.162-6.162zm0 10.162c-2.209 0-4-1.79-4-4 0-2.209 1.791-4 4-4s4 1.791 4 4c0 2.21-1.791 4-4 4zm6.406-11.845c-.796 0-1.441.645-1.441 1.44s.645 1.44 1.441 1.44c.795 0 1.439-.645 1.439-1.44s-.644-1.44-1.439-1.44z"/></svg>
-            </a>
-            <!-- WhatsApp Logo with Link -->
-            <a href="https://chat.whatsapp.com/DxgYNbkV0fjLpWbP2aODRj" target="_blank" rel="noopener noreferrer" class="social-icon-box" title="WhatsApp" aria-label="WhatsApp">
-                <svg viewBox="0 0 24 24"><path d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946.003-6.556 5.338-11.891 11.893-11.891 3.181.001 6.167 1.24 8.413 3.488 2.245 2.248 3.481 5.236 3.48 8.414-.003 6.557-5.338 11.892-11.893 11.892-1.99-.001-3.951-.5-5.688-1.448l-6.305 1.654zm6.597-3.807c1.676.995 3.276 1.591 5.392 1.592 5.448 0 9.886-4.434 9.889-9.885.002-5.462-4.415-9.89-9.881-9.892-5.452 0-9.887 4.434-9.889 9.884-.001 2.225.651 3.891 1.746 5.634l-.999 3.648 3.742-.981zm11.387-5.464c-.074-.124-.272-.198-.57-.347-.297-.149-1.758-.868-2.031-.967-.272-.099-.47-.149-.669.149-.198.297-.768.967-.941 1.165-.173.198-.347.223-.644.074-.297-.149-1.255-.462-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.297-.347.446-.521.151-.172.2-.296.3-.495.099-.198.05-.372-.025-.521-.075-.148-.669-1.611-.916-2.206-.242-.579-.487-.501-.669-.51l-.57-.01c-.198 0-.52.074-.792.372s-1.04 1.016-1.04 2.479 1.065 2.876 1.213 3.074c.149.198 2.096 3.2 5.076 4.487.709.306 1.263.489 1.694.626.712.226 1.36.194 1.872.118.571-.085 1.758-.719 2.006-1.413.248-.695.248-1.29.173-1.414z"/></svg>
-            </a>
+        <img src="faq-banner.jpg" alt="FAQ Background" class="faq-hero-bg">
+        <div class="faq-hero-content">
+            <!-- Home redirect right on top of the image -->
+            <div class="faq-breadcrumb">
+                <a href="index.html">Home</a>
+                <span>/</span>
+                <span>FAQs</span>
+            </div>
+            
+            <h1>Frequently Asked Questions</h1>
+            <p>Find answers to frequently asked questions about our platform, services, and digital opportunities.</p>
+            
+            <div class="social-icons-row">
+                <!-- Facebook Logo -->
+                <a href="#" class="social-icon-box" title="Facebook" aria-label="Facebook">
+                    <svg viewBox="0 0 24 24"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg>
+                </a>
+                <!-- Twitter/X Logo -->
+                <a href="#" class="social-icon-box" title="X" aria-label="X">
+                    <svg viewBox="0 0 24 24"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>
+                </a>
+                <!-- Instagram Logo -->
+                <a href="#" class="social-icon-box" title="Instagram" aria-label="Instagram">
+                    <svg viewBox="0 0 24 24"><path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zm0-2.163c-3.259 0-3.667.014-4.947.072-4.358.2-6.78 2.618-6.98 6.98-.059 1.281-.073 1.689-.073 4.948 0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98 1.281.058 1.689.072 4.948.072 3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98-1.281-.059-1.69-.073-4.949-.073zm0 5.838c-3.403 0-6.162 2.759-6.162 6.162s2.759 6.163 6.162 6.163 6.162-2.759 6.162-6.163c0-3.403-2.759-6.162-6.162-6.162zm0 10.162c-2.209 0-4-1.79-4-4 0-2.209 1.791-4 4-4s4 1.791 4 4c0 2.21-1.791 4-4 4zm6.406-11.845c-.796 0-1.441.645-1.441 1.44s.645 1.44 1.441 1.44c.795 0 1.439-.645 1.439-1.44s-.644-1.44-1.439-1.44z"/></svg>
+                </a>
+                <!-- WhatsApp Logo with Configured Link -->
+                <a href="https://chat.whatsapp.com/DxgYNbkV0fjLpWbP2aODRj" target="_blank" rel="noopener noreferrer" class="social-icon-box" title="WhatsApp" aria-label="WhatsApp">
+                    <svg viewBox="0 0 24 24"><path d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946.003-6.556 5.338-11.891 11.893-11.891 3.181.001 6.167 1.24 8.413 3.488 2.245 2.248 3.481 5.236 3.48 8.414-.003 6.557-5.338 11.892-11.893 11.892-1.99-.001-3.951-.5-5.688-1.448l-6.305 1.654zm6.597-3.807c1.676.995 3.276 1.591 5.392 1.592 5.448 0 9.886-4.434 9.889-9.885.002-5.462-4.415-9.89-9.881-9.892-5.452 0-9.887 4.434-9.889 9.884-.001 2.225.651 3.891 1.746 5.634l-.999 3.648 3.742-.981zm11.387-5.464c-.074-.124-.272-.198-.57-.347-.297-.149-1.758-.868-2.031-.967-.272-.099-.47-.149-.669.149-.198.297-.768.967-.941 1.165-.173.198-.347.223-.644.074-.297-.149-1.255-.462-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.297-.347.446-.521.151-.172.2-.296.3-.495.099-.198.05-.372-.025-.521-.075-.148-.669-1.611-.916-2.206-.242-.579-.487-.501-.669-.51l-.57-.01c-.198 0-.52.074-.792.372s-1.04 1.016-1.04 2.479 1.065 2.876 1.213 3.074c.149.198 2.096 3.2 5.076 4.487.709.306 1.263.489 1.694.626.712.226 1.36.194 1.872.118.571-.085 1.758-.719 2.006-1.413.248-.695.248-1.29.173-1.414z"/></svg>
+                </a>
+            </div>
         </div>
     </section>
 
@@ -469,7 +543,7 @@
                 <li><a href="index.html#about">About Us</a></li>
                 <li><a href="support.html">Contact Us</a></li>
                 <li><a href="#">Privacy</a></li>
-                <li><a href="#">Terms & Conditions</a></li>
+                <li><a href="terms.html">Terms & Conditions</a></li>
                 <li><a href="faq.html">FAQs</a></li>
             </ul>
         </div>
