@@ -22,10 +22,14 @@
         
         /* Top Page Header Banner */
         .page-header { background: rgba(15, 23, 42, 0.7); border-bottom: 1px solid var(--border-color); padding: 30px 20px; text-align: left; }
-        .page-header-inner { max-width: 1100px; margin: 0 auto; }
+        .page-header-inner { max-width: 1100px; margin: 0 auto; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 15px; }
         .page-header h1 { font-size: 26px; font-weight: 700; color: #fff; margin-bottom: 6px; }
         .breadcrumb { font-size: 13px; color: #94a3b8; }
         .breadcrumb span { color: var(--text-muted); }
+
+        /* Home Button Style */
+        .home-btn { background: rgba(37, 99, 235, 0.15); border: 1px solid rgba(59, 130, 246, 0.4); color: var(--text-muted); padding: 8px 16px; border-radius: 8px; font-size: 13px; font-weight: 600; text-decoration: none; display: inline-flex; align-items: center; gap: 6px; transition: all 0.2s ease; }
+        .home-btn:hover { background: var(--primary-color); color: #fff; border-color: var(--primary-color); }
 
         /* Main Wrapper */
         .main-wrapper { flex: 1; display: flex; justify-content: center; align-items: center; padding: 40px 20px; }
@@ -83,8 +87,12 @@
     <!-- Top Page Header Breadcrumb Section -->
     <div class="page-header">
         <div class="page-header-inner">
-            <h1 id="pageTitle">Sign In to your Account</h1>
-            <div class="breadcrumb">Home / <span id="breadcrumbSub">Sign In</span></div>
+            <div>
+                <h1 id="pageTitle">Sign In to your Account</h1>
+                <div class="breadcrumb">Home / <span id="breadcrumbSub">Sign In</span></div>
+            </div>
+            <!-- Accessible Home Button added here -->
+            <a href="index.html" class="home-btn">&#8962; Home</a>
         </div>
     </div>
 
