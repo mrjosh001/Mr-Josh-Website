@@ -2165,35 +2165,45 @@ function performCurrencyConversion() {
     }
 }
 
-function applyCurrencyConversion() {
+async function applyCurrencyConversion() {
     let inputVal = parseFloat(document.getElementById('baseConvertInput').value) || 0;
     if (inputVal <= 0) {
         alert('Please enter a valid amount to convert.');
         return;
     }
 
+    let newNgn = currentBalanceNgn;
+    let newUsd = currentBalanceUsd;
+
     if (conversionDirection === 'ngntousd') {
-        // Convert from user's NGN balance into USD balance automatically
         if (currentBalanceNgn < inputVal) {
             alert('Insufficient Naira (NGN) balance for this conversion.');
             return;
         }
         let usdGained = inputVal / exchangeRate;
-        currentBalanceNgn -= inputVal;
-        currentBalanceUsd += usdGained;
+        newNgn -= inputVal;
+        newUsd += usdGained;
         alert(`Successfully converted ₦${inputVal.toLocaleString()} to $${usdGained.toFixed(2)} on your balance!`);
     } else {
-        // Convert from user's USD balance into NGN balance automatically
         if (currentBalanceUsd < inputVal) {
             alert('Insufficient USD balance for this conversion.');
             return;
         }
         let ngnGained = inputVal * exchangeRate;
-        currentBalanceUsd -= inputVal;
-        currentBalanceNgn += ngnGained;
+        newUsd -= inputVal;
+        newNgn += ngnGained;
         alert(`Successfully converted $${inputVal.toLocaleString()} to ₦${ngnGained.toLocaleString()} on your balance!`);
     }
 
+    if (supabaseClient) {
+        const { data: { session } } = await supabaseClient.auth.getSession();
+        if (session) {
+            await supabaseClient.from('profiles').update({ balance: newNgn, balance_usd: newUsd }).eq('id', session.user.id);
+        }
+    }
+
+    currentBalanceNgn = newNgn;
+    currentBalanceUsd = newUsd;
     updateBalanceDisplay();
     closeCurrencyModal();
 }
@@ -2327,13 +2337,20 @@ function updateCartUI() {
     totalDisplay.textContent = '₦' + total.toLocaleString(undefined, {minimumFractionDigits: 2});
 }
 
-function buyNowItem(title, price, type) {
+async function buyNowItem(title, price, type) {
     if(currentBalanceNgn < price) {
         alert('Insufficient NGN balance. Please fund your Naira wallet first.');
         switchSection('deposit');
         return;
     }
-    currentBalanceNgn -= price;
+    let newNgn = currentBalanceNgn - price;
+    if (supabaseClient) {
+        const { data: { session } } = await supabaseClient.auth.getSession();
+        if (session) {
+            await supabaseClient.from('profiles').update({ balance: newNgn }).eq('id', session.user.id);
+        }
+    }
+    currentBalanceNgn = newNgn;
     transactions.unshift({ id: Date.now(), type, title, subtitle: 'Instant Purchase', amount: '₦' + price.toLocaleString(), date: 'Just now', status: 'Success' });
     updateBalanceDisplay();
     renderTransactions('all');
@@ -2341,7 +2358,7 @@ function buyNowItem(title, price, type) {
     switchSection('home');
 }
 
-function checkoutCart() {
+async function checkoutCart() {
     let total = cartItems.reduce((sum, item) => sum + item.price, 0);
     if(total === 0) { alert('Your cart is empty.'); return; }
     if(currentBalanceNgn < total) {
@@ -2349,7 +2366,14 @@ function checkoutCart() {
         switchSection('deposit');
         return;
     }
-    currentBalanceNgn -= total;
+    let newNgn = currentBalanceNgn - total;
+    if (supabaseClient) {
+        const { data: { session } } = await supabaseClient.auth.getSession();
+        if (session) {
+            await supabaseClient.from('profiles').update({ balance: newNgn }).eq('id', session.user.id);
+        }
+    }
+    currentBalanceNgn = newNgn;
     cartItems.forEach(item => {
         transactions.unshift({ id: Date.now(), type: item.type, title: item.title, subtitle: 'Cart Checkout', amount: '₦' + item.price.toLocaleString(), date: 'Just now', status: 'Success' });
     });
@@ -2361,7 +2385,7 @@ function checkoutCart() {
     switchSection('home');
 }
 
-function processDeposit() {
+async function processDeposit() {
     let amt = parseFloat(document.getElementById('depositInput').value) || 0;
     let selectedWallet = document.getElementById('depositWalletSelect').value;
 
@@ -2370,16 +2394,28 @@ function processDeposit() {
         return; 
     }
 
+    let newNgn = currentBalanceNgn;
+    let newUsd = currentBalanceUsd;
+
     if (selectedWallet === 'usd') {
-        currentBalanceUsd += amt;
+        newUsd += amt;
         transactions.unshift({ id: Date.now(), type: 'deposit', title: 'USD Deposit', subtitle: 'Wallet funding (USD)', amount: '$' + amt.toLocaleString(undefined, {minimumFractionDigits: 2}), date: 'Just now', status: 'Success' });
         alert('USD Wallet funded successfully with $' + amt.toLocaleString(undefined, {minimumFractionDigits: 2}) + '!');
     } else {
-        currentBalanceNgn += amt;
+        newNgn += amt;
         transactions.unshift({ id: Date.now(), type: 'deposit', title: 'Naira Deposit', subtitle: 'Wallet funding (NGN)', amount: '₦' + amt.toLocaleString(), date: 'Just now', status: 'Success' });
         alert('Naira Wallet funded successfully with ₦' + amt.toLocaleString() + '!');
     }
 
+    if (supabaseClient) {
+        const { data: { session } } = await supabaseClient.auth.getSession();
+        if (session) {
+            await supabaseClient.from('profiles').update({ balance: newNgn, balance_usd: newUsd }).eq('id', session.user.id);
+        }
+    }
+
+    currentBalanceNgn = newNgn;
+    currentBalanceUsd = newUsd;
     updateBalanceDisplay();
     renderTransactions('all');
     switchSection('home');
