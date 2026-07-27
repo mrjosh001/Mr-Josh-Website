@@ -1709,6 +1709,14 @@ let transactions = [];
 let userOnboarded = false;
 let userData = { name: '', email: '', phone: '', address: '', bio: '', bvn: '', nin: '', avatarUrl: '' };
 
+// Global helper for profile dropdown toggle referenced in HTML inline handlers
+function toggleProfileDropdown() {
+    const profileDropdown = document.getElementById('profileDropdownMenu');
+    if (profileDropdown) {
+        profileDropdown.classList.toggle('active');
+    }
+}
+
 document.addEventListener('DOMContentLoaded', async () => {
     if (supabaseClient) {
         const { data: { session }, error } = await supabaseClient.auth.getSession();
