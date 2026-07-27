@@ -227,10 +227,16 @@
                     </div>
 
                     <div id="userResultCard" class="hidden" style="margin-top: 20px; padding: 20px; border: 1px solid var(--border-color); border-radius: 10px; background: rgba(15, 23, 42, 0.5);">
-                        <h3 style="margin-bottom: 15px; font-size: 16px; color: #fff;">User Details</h3>
+                        <h3 style="margin-bottom: 15px; font-size: 16px; color: #fff;">User Details Found</h3>
                         <p style="margin-bottom: 8px;"><strong>Customer ID:</strong> <span id="resCustomerId"></span></p>
+                        <p style="margin-bottom: 8px;"><strong>Full Name:</strong> <span id="resFullName"></span></p>
                         <p style="margin-bottom: 15px;"><strong>Registered Email:</strong> <span id="resEmail"></span></p>
-                        <button id="resolveBtn" class="action-btn" style="background: #10b981;" onclick="openEditFromLookup()">Resolve / Edit Profile</button>
+                        
+                        <!-- Quick Action Buttons -->
+                        <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+                            <button class="action-btn primary-btn" onclick="openEditFromLookup()">Edit Profile & Balance</button>
+                            <button class="action-btn" style="background: #374151;" onclick="viewUserActivity()">View Activity Log</button>
+                        </div>
                     </div>
                     <p id="lookupErrorMessage" class="message-box"></p>
                 </div>
@@ -458,6 +464,7 @@
 
             lookedUpUser = data;
             document.getElementById('resCustomerId').innerText = data.customer_id || customerId;
+            document.getElementById('resFullName').innerText = data.full_name || 'N/A';
             document.getElementById('resEmail').innerText = data.email || 'N/A';
             resultCard.classList.remove('hidden');
         }
@@ -465,6 +472,13 @@
         function openEditFromLookup() {
             if (lookedUpUser) {
                 openEditModal(lookedUpUser.id);
+            }
+        }
+
+        function viewUserActivity() {
+            if (lookedUpUser) {
+                alert(`Viewing activity logs for: ${lookedUpUser.full_name || lookedUpUser.email}`);
+                // Add custom redirection or drawer toggle logic here if desired
             }
         }
 
