@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MJ HUB - Support</title>
+    <style>
+        :root {
+            --primary-color: #2563eb;
+            --primary-hover: #1d4ed8;
+            --bg-main: #0b0f19;
+            --card-bg: #121824;
+            --text-main: #ffffff;
+            --text-muted: #93c5fd;
+            --border-color: #1e3a8a;
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+        body { background-color: var(--bg-main); color: var(--text-main); line-height: 1.6; min-height: 100vh; display: flex; flex-direction: column; }
+        
+        header { display: flex; justify-content: space-between; align-items: center; padding: 20px 8%; border-bottom: 1px solid var(--border-color); background: var(--card-bg); position: relative; }
+        .logo { font-size: 24px; font-weight: bold; color: var(--primary-color); letter-spacing: 1px; text-decoration: none; }
+        
+        .nav-desktop { display: flex; align-items: center; }
+        .nav-desktop a { padding: 10px 20px; border-radius: 8px; text-decoration: none; font-weight: 600; font-size: 14px; margin-left: 10px; transition: 0.3s; }
+        .btn-signin { color: var(--text-main); border: 1px solid var(--border-color); }
+        .btn-signup { background: var(--primary-color); color: #fff; }
+        
+        .menu-toggle-btn {
+            background: transparent;
+            border: 1px solid var(--border-color);
+            color: var(--text-main);
+            width: 44px;
+            height: 44px;
+            border-radius: 8px;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+            cursor: pointer;
+        }
+
+        .dropdown-menu {
+            position: absolute;
+            top: 100%;
+            left: 0;
+            width: 100%;
+            background: #111827;
+            border-bottom: 1px solid var(--border-color);
+            box-shadow: 0 20px 30px rgba(0,0,0,0.5);
+            display: none;
+            flex-direction: column;
+            padding: 20px 24px;
+            z-index: 1000;
+        }
+        .dropdown-menu.active { display: flex; }
+
+        .dropdown-header-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid rgba(255,255,255,0.08);
+        }
+        .dropdown-header-row span { font-weight: bold; color: var(--primary-color); font-size: 18px; }
+        .dropdown-close-btn { background: rgba(255,255,255,0.05); border: none; color: var(--text-muted); width: 32px; height: 32px; border-radius: 50%; font-size: 18px; cursor: pointer; display: flex; align-items: center; justify-content: center; }
+
+        .dropdown-nav-links { display: flex; flex-direction: column; gap: 4px; }
+        .dropdown-nav-links a { padding: 12px 16px; color: var(--text-main); text-decoration: none; font-weight: 500; font-size: 15px; border-radius: 8px; display: flex; justify-content: space-between; align-items: center; }
+        .dropdown-nav-links a:hover, .dropdown-nav-links a.active-link { background: rgba(37, 99, 235, 0.15); color: var(--text-muted); }
+
+        .dropdown-auth-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 20px; padding-top: 15px; border-top: 1px solid rgba(255,255,255,0.08); }
+        .dropdown-auth-actions a { text-align: center; padding: 12px; border-radius: 8px; font-weight: bold; font-size: 14px; text-decoration: none; }
+
+        @media (max-width: 768px) {
+            .nav-desktop { display: none; }
+            .menu-toggle-btn { display: flex; }
+        }
+
+        .support-container { max-width: 700px; width: 90%; margin: 40px auto; flex: 1; }
+        .support-page-title { font-size: 32px; font-weight: 800; margin-bottom: 6px; }
+        .support-page-subtitle { font-size: 16px; color: var(--text-muted); margin-bottom: 12px; }
+        .breadcrumbs { font-size: 14px; color: #94a3b8; margin-bottom: 30px; }
+        .breadcrumbs a { color: var(--text-muted); text-decoration: none; }
+        .breadcrumbs a:hover { text-decoration: underline; }
+
+        .support-card { background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 16px; margin-bottom: 24px; overflow: hidden; box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.3); }
+        .support-card-header { padding: 20px 24px; display: flex; align-items: center; gap: 12px; font-size: 20px; font-weight: 700; color: #fff; }
+        .support-card-header.whatsapp-theme { background: rgba(37, 211, 102, 0.12); border-bottom: 1px solid rgba(37, 211, 102, 0.2); }
+        .support-card-header.telegram-theme { background: rgba(0, 136, 204, 0.12); border-bottom: 1px solid rgba(0, 136, 204, 0.2); }
+
+        .support-card-body { padding: 24px; }
+        .support-card-body h4 { font-size: 18px; margin-bottom: 8px; color: #fff; }
+        .support-card-body p { font-size: 14px; color: #94a3b8; margin-bottom: 20px; }
+
+        .support-action-btn { display: inline-block; padding: 12px 24px; border-radius: 10px; font-weight: 700; font-size: 14px; text-decoration: none; transition: opacity 0.2s; }
+        .btn-whatsapp { background: #25d366; color: #fff; }
+        .btn-telegram { background: #0088cc; color: #fff; }
+    </style>
+</head>
+<body>
+
+    <header>
+        <a href="index.html" class="logo">MJ HUB</a>
+        
+        <div class="nav-desktop">
+            <a href="auth.html?mode=signin" class="btn-signin">Sign In</a>
+            <a href="auth.html?mode=signup" class="btn-signup">Get Started</a>
+        </div>
+
+        <button id="menuToggleBtn" class="menu-toggle-btn" aria-label="Toggle Menu">☰</button>
+
+        <div id="dropdownMenu" class="dropdown-menu">
+            <div class="dropdown-header-row">
+                <span>MJ HUB Menu</span>
+                <button id="menuCloseBtn" class="dropdown-close-btn">&times;</button>
+            </div>
+            <div class="dropdown-nav-links">
+                <a href="index.html">Home</a>
+                <a href="index.html#rent-number">Rent Number</a>
+                <a href="index.html#how-it-works">How Does It Work</a>
+                <a href="faq.html">FAQ</a>
+                <a href="support.html" class="active-link">Help</a>
+            </div>
+            <div class="dropdown-auth-actions">
+                <a href="auth.html?mode=signin" class="btn-signin">Login</a>
+                <a href="auth.html?mode=signup" class="btn-signup">Register</a>
+            </div>
+        </div>
+    </header>
+
+    <main class="support-container">
+        <h1 class="support-page-title">SUPPORT</h1>
+        <p class="support-page-subtitle">We're here to help!</p>
+        <div class="breadcrumbs">
+            <a href="index.html">Home</a> / <span>Support</span>
+        </div>
+
+        <div class="support-card">
+            <div class="support-card-header whatsapp-theme">
+                <span>💬</span> WhatsApp Support
+            </div>
+            <div class="support-card-body">
+                <h4>Chat with us on WhatsApp!</h4>
+                <p>We're ready for anything. If you have a problem or a question, click below to start chatting with our support team instantly.</p>
+                <a href="https://wa.me/234XXXXXXXXXX" target="_blank" class="support-action-btn btn-whatsapp">Chat on WhatsApp</a>
+            </div>
+        </div>
+
+        <div class="support-card">
+            <div class="support-card-header telegram-theme">
+                <span>✈️</span> Telegram Support
+            </div>
+            <div class="support-card-body">
+                <h4>Join or message us on Telegram!</h4>
+                <p>Have questions, tips, or need fast assistance? Reach out to our official Telegram support channel right away.</p>
+                <a href="https://t.me/XXXXXXXXXX" target="_blank" class="support-action-btn btn-telegram">Chat on Telegram</a>
+            </div>
+        </div>
+    </main>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const menuToggleBtn = document.getElementById('menuToggleBtn');
+            const menuCloseBtn = document.getElementById('menuCloseBtn');
+            const dropdownMenu = document.getElementById('dropdownMenu');
+
+            if (menuToggleBtn && dropdownMenu) {
+                menuToggleBtn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    dropdownMenu.classList.toggle('active');
+                });
+            }
+
+            if (menuCloseBtn && dropdownMenu) {
+                menuCloseBtn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    dropdownMenu.classList.remove('active');
+                });
+            }
+
+            document.addEventListener('click', (e) => {
+                if (dropdownMenu && !dropdownMenu.contains(e.target) && !menuToggleBtn.contains(e.target)) {
+                    dropdownMenu.classList.remove('active');
+                }
+            });
+        });
+    </script>
+</body>
+</html>
