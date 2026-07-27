@@ -9,7 +9,7 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <style>
-        :root {
+        :root[data-theme="dark"] {
             --primary-color: #2563eb;
             --primary-hover: #1d4ed8;
             --bg-main: #0b0f19;
@@ -18,17 +18,43 @@
             --text-muted: #93c5fd;
             --border-color: #1e3a8a;
         }
+        :root[data-theme="light"] {
+            --primary-color: #2563eb;
+            --primary-hover: #1d4ed8;
+            --bg-main: #f8fafc;
+            --card-bg: #ffffff;
+            --text-main: #0f172a;
+            --text-muted: #64748b;
+            --border-color: #cbd5e1;
+        }
         * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Plus Jakarta Sans', sans-serif; }
-        body { background-color: var(--bg-main); color: var(--text-main); line-height: 1.6; position: relative; min-height: 100vh; overflow-x: hidden; }
+        body { background-color: var(--bg-main); color: var(--text-main); line-height: 1.6; position: relative; min-height: 100vh; overflow-x: hidden; transition: background-color 0.3s, color 0.3s; }
         
         /* Header & Navigation */
-        header { display: flex; justify-content: space-between; align-items: center; padding: 20px 8%; border-bottom: 1px solid var(--border-color); background: var(--card-bg); position: relative; }
+        header { display: flex; justify-content: space-between; align-items: center; padding: 20px 8%; border-bottom: 1px solid var(--border-color); background: var(--card-bg); position: relative; transition: background-color 0.3s, border-color 0.3s; }
         .logo { font-size: 24px; font-weight: 700; color: var(--primary-color); letter-spacing: 0.5px; text-decoration: none; }
         
-        .nav-desktop { display: flex; align-items: center; }
-        .nav-desktop a { padding: 10px 20px; border-radius: 8px; text-decoration: none; font-weight: 600; font-size: 14px; margin-left: 10px; transition: 0.3s; }
+        .nav-desktop { display: flex; align-items: center; gap: 10px; }
+        .nav-desktop a { padding: 10px 20px; border-radius: 8px; text-decoration: none; font-weight: 600; font-size: 14px; transition: 0.3s; }
         .btn-signin { color: var(--text-main); border: 1px solid var(--border-color); }
         .btn-signup { background: var(--primary-color); color: #fff; }
+
+        /* Theme Toggle Button Style */
+        .theme-toggle-btn {
+            background: transparent;
+            border: 1px solid var(--border-color);
+            color: var(--text-main);
+            width: 40px;
+            height: 40px;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: 0.2s;
+        }
+        .theme-toggle-btn:hover { background: rgba(37, 99, 235, 0.1); }
+        .theme-toggle-btn svg { width: 18px; height: 18px; fill: currentColor; }
         
         .menu-toggle-btn {
             background: transparent;
@@ -51,9 +77,9 @@
             top: 100%;
             left: 0;
             width: 100%;
-            background: #111827;
+            background: var(--card-bg);
             border-bottom: 1px solid var(--border-color);
-            box-shadow: 0 20px 30px rgba(0,0,0,0.5);
+            box-shadow: 0 20px 30px rgba(0,0,0,0.15);
             display: none;
             flex-direction: column;
             padding: 20px 24px;
@@ -67,11 +93,11 @@
             align-items: center;
             margin-bottom: 15px;
             padding-bottom: 10px;
-            border-bottom: 1px solid rgba(255,255,255,0.08);
+            border-bottom: 1px solid var(--border-color);
         }
         .dropdown-header-row span { font-weight: 700; color: var(--primary-color); font-size: 18px; }
         .dropdown-close-btn {
-            background: rgba(255,255,255,0.05);
+            background: rgba(128,128,128,0.1);
             border: none;
             color: var(--text-muted);
             width: 32px;
@@ -96,7 +122,7 @@
             justify-content: space-between;
             align-items: center;
         }
-        .dropdown-nav-links a:hover { background: rgba(37, 99, 235, 0.15); color: var(--text-muted); }
+        .dropdown-nav-links a:hover { background: rgba(37, 99, 235, 0.15); color: var(--primary-color); }
         .badge-soon { background: #f59e0b; color: #fff; font-size: 10px; font-weight: 700; padding: 2px 6px; border-radius: 4px; text-transform: uppercase; }
 
         .dropdown-auth-actions {
@@ -105,7 +131,7 @@
             gap: 12px;
             margin-top: 20px;
             padding-top: 15px;
-            border-top: 1px solid rgba(255,255,255,0.08);
+            border-top: 1px solid var(--border-color);
         }
         .dropdown-auth-actions a {
             text-align: center;
@@ -117,7 +143,7 @@
         }
 
         @media (max-width: 768px) {
-            .nav-desktop { display: none; }
+            .nav-desktop .btn-signin, .nav-desktop .btn-signup { display: none; }
             .menu-toggle-btn { display: flex; }
         }
 
@@ -125,7 +151,7 @@
         .faq-hero {
             position: relative;
             padding: 50px 8%;
-            min-height: 280px;
+            min-height: 300px;
             display: flex;
             flex-direction: column;
             justify-content: center;
@@ -134,7 +160,7 @@
             background: var(--card-bg);
         }
 
-        /* Dynamic Background Image container with theme adaptation overlay */
+        /* Fixed Banner Image Display */
         .faq-hero-bg {
             position: absolute;
             inset: 0;
@@ -142,11 +168,10 @@
             height: 100%;
             object-fit: cover;
             z-index: 1;
-            opacity: 0.35;
-            transition: opacity 0.3s ease;
+            opacity: 0.45;
         }
         
-        /* Dynamic Theme Overlays */
+        /* Dynamic Theme Overlays for Contrast */
         [data-theme="dark"] .faq-hero::after {
             content: '';
             position: absolute;
@@ -158,7 +183,7 @@
             content: '';
             position: absolute;
             inset: 0;
-            background: linear-gradient(90deg, rgba(255, 255, 255, 0.92) 0%, rgba(240, 244, 255, 0.85) 100%);
+            background: linear-gradient(90deg, rgba(248, 250, 252, 0.95) 0%, rgba(255, 255, 255, 0.85) 100%);
             z-index: 2;
         }
 
@@ -217,7 +242,7 @@
             border-radius: 12px;
             margin-bottom: 12px;
             overflow: hidden;
-            transition: border-color 0.2s, box-shadow 0.2s;
+            transition: border-color 0.2s, box-shadow 0.2s, background-color 0.3s;
         }
         .faq-accordion.active { 
             border-color: var(--primary-color);
@@ -328,6 +353,11 @@
         <a href="index.html" class="logo">MJ HUB</a>
         
         <div class="nav-desktop">
+            <!-- Theme Toggle Button -->
+            <button id="themeToggleBtn" class="theme-toggle-btn" aria-label="Toggle Theme">
+                <svg class="sun-icon" viewBox="0 0 24 24" style="display:none;"><path d="M12 18c-3.31 0-6-2.69-6-6s2.69-6 6-6 6 2.69 6 6-2.69 6-6 6zm0-14c-4.41 0-8 3.59-8 8s3.59 8 8 8 8-3.59 8-8-3.59-8-8-8zM11 1h2v3h-2V1zm0 19h2v3h-2v-3zM3.51 4.93l1.42 1.42 2.12-2.12-1.42-1.42L3.51 4.93zm14.85 14.85l1.42 1.42 2.12-2.12-1.42-1.42-2.12 2.12zM1 11h3v2H1v-2zm19 0h3v2h-3v-2zM4.93 20.49l1.42-1.42 2.12 2.12-1.42 1.42-2.12-2.12zm14.85-14.85l1.42-1.42 2.12 2.12-1.42 1.42-2.12-2.12z"/></svg>
+                <svg class="moon-icon" viewBox="0 0 24 24"><path d="M12.3 2c-5.52 0-10 4.48-10 10 0 4.84 3.44 8.87 8 9.8V19.8c-3.41-.89-6-3.97-6-7.8 0-4.41 3.59-8 8-8 1.93 0 3.69.69 5.05 1.83.31.27.79.16.98-.22.56-1.12.87-2.39.87-3.71 0-4.41-3.59-8-8-8zm-2.8 15.15v2.75c-1.28-.46-2.43-1.2-3.38-2.15-.95-.95-1.69-2.1-2.15-3.38h2.75c.42 1.01 1.05 1.91 1.85 2.65.34.32.78.69 1.15.93z"/></svg>
+            </button>
             <a href="auth.html?mode=signin" class="btn-signin">Sign In</a>
             <a href="auth.html?mode=signup" class="btn-signup">Get Started</a>
         </div>
@@ -343,7 +373,7 @@
                 <a href="index.html">Home</a>
                 <a href="index.html#rent-number">Rent Number</a>
                 <a href="index.html#how-it-works">How Does It Work</a>
-                <a href="faq.html" style="background: rgba(37,99,235,0.15); color: var(--text-muted);">FAQ</a>
+                <a href="faq.html" style="background: rgba(37,99,235,0.15); color: var(--primary-color);">FAQ</a>
                 <a href="support.html">Help</a>
                 <a href="#" id="apiLink">API <span class="badge-soon">Coming Soon</span></a>
             </div>
@@ -354,11 +384,10 @@
         </div>
     </header>
 
-    <!-- FAQ Hero Banner Section with Dynamic Theme Background Image & Home Breadcrumb -->
+    <!-- FAQ Hero Banner Section with Fixed Image Display -->
     <section class="faq-hero">
         <img src="faq-banner.jpg" alt="FAQ Background" class="faq-hero-bg">
         <div class="faq-hero-content">
-            <!-- Home redirect right on top of the image -->
             <div class="faq-breadcrumb">
                 <a href="index.html">Home</a>
                 <span>/</span>
@@ -369,19 +398,15 @@
             <p>Find answers to frequently asked questions about our platform, services, and digital opportunities.</p>
             
             <div class="social-icons-row">
-                <!-- Facebook Logo -->
                 <a href="#" class="social-icon-box" title="Facebook" aria-label="Facebook">
                     <svg viewBox="0 0 24 24"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg>
                 </a>
-                <!-- Twitter/X Logo -->
                 <a href="#" class="social-icon-box" title="X" aria-label="X">
                     <svg viewBox="0 0 24 24"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>
                 </a>
-                <!-- Instagram Logo -->
                 <a href="#" class="social-icon-box" title="Instagram" aria-label="Instagram">
                     <svg viewBox="0 0 24 24"><path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zm0-2.163c-3.259 0-3.667.014-4.947.072-4.358.2-6.78 2.618-6.98 6.98-.059 1.281-.073 1.689-.073 4.948 0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98 1.281.058 1.689.072 4.948.072 3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98-1.281-.059-1.69-.073-4.949-.073zm0 5.838c-3.403 0-6.162 2.759-6.162 6.162s2.759 6.163 6.162 6.163 6.162-2.759 6.162-6.163c0-3.403-2.759-6.162-6.162-6.162zm0 10.162c-2.209 0-4-1.79-4-4 0-2.209 1.791-4 4-4s4 1.791 4 4c0 2.21-1.791 4-4 4zm6.406-11.845c-.796 0-1.441.645-1.441 1.44s.645 1.44 1.441 1.44c.795 0 1.439-.645 1.439-1.44s-.644-1.44-1.439-1.44z"/></svg>
                 </a>
-                <!-- WhatsApp Logo with Configured Link -->
                 <a href="https://chat.whatsapp.com/DxgYNbkV0fjLpWbP2aODRj" target="_blank" rel="noopener noreferrer" class="social-icon-box" title="WhatsApp" aria-label="WhatsApp">
                     <svg viewBox="0 0 24 24"><path d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946.003-6.556 5.338-11.891 11.893-11.891 3.181.001 6.167 1.24 8.413 3.488 2.245 2.248 3.481 5.236 3.48 8.414-.003 6.557-5.338 11.892-11.893 11.892-1.99-.001-3.951-.5-5.688-1.448l-6.305 1.654zm6.597-3.807c1.676.995 3.276 1.591 5.392 1.592 5.448 0 9.886-4.434 9.889-9.885.002-5.462-4.415-9.89-9.881-9.892-5.452 0-9.887 4.434-9.889 9.884-.001 2.225.651 3.891 1.746 5.634l-.999 3.648 3.742-.981zm11.387-5.464c-.074-.124-.272-.198-.57-.347-.297-.149-1.758-.868-2.031-.967-.272-.099-.47-.149-.669.149-.198.297-.768.967-.941 1.165-.173.198-.347.223-.644.074-.297-.149-1.255-.462-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.297-.347.446-.521.151-.172.2-.296.3-.495.099-.198.05-.372-.025-.521-.075-.148-.669-1.611-.916-2.206-.242-.579-.487-.501-.669-.51l-.57-.01c-.198 0-.52.074-.792.372s-1.04 1.016-1.04 2.479 1.065 2.876 1.213 3.074c.149.198 2.096 3.2 5.076 4.487.709.306 1.263.489 1.694.626.712.226 1.36.194 1.872.118.571-.085 1.758-.719 2.006-1.413.248-.695.248-1.29.173-1.414z"/></svg>
                 </a>
@@ -389,9 +414,8 @@
         </div>
     </section>
 
-    <!-- Interactive FAQ Accordion List with Exclusive Sliding & Auto-closing Behavior -->
+    <!-- Interactive FAQ Accordion List -->
     <div class="faq-container">
-        
         <div class="faq-accordion active">
             <div class="faq-question">
                 <span>What is MJ HUB?</span>
@@ -433,108 +457,8 @@
                 </div>
             </div>
         </div>
-
-        <div class="faq-accordion">
-            <div class="faq-question">
-                <span>What SMM services do you sell here?</span>
-                <span class="faq-arrow">↓</span>
-            </div>
-            <div class="faq-answer-wrapper">
-                <div class="faq-answer-inner">
-                    <div class="faq-answer-content">
-                        With MJ HUB SMM panel services, you get the best of both worlds. Not only do we provide you with an amazing platform to easily manage your social media campaigns, but our services also help you optimize your campaigns for maximum results, target the right audience, and drive conversions.
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <div class="faq-accordion">
-            <div class="faq-question">
-                <span>Why do people use MJ HUB?</span>
-                <span class="faq-arrow">↓</span>
-            </div>
-            <div class="faq-answer-wrapper">
-                <div class="faq-answer-inner">
-                    <div class="faq-answer-content">
-                        Users trust MJ HUB for unbeatable service reliability, lightning-fast automated delivery, absolute privacy, and an extensive catalog covering logs, numbers, and social growth.
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <div class="faq-accordion">
-            <div class="faq-question">
-                <span>How can I resell your services?</span>
-                <span class="faq-arrow">↓</span>
-            </div>
-            <div class="faq-answer-wrapper">
-                <div class="faq-answer-inner">
-                    <div class="faq-answer-content">
-                        You can contact our team to purchase a dedicated reseller panel. Connect via our API and start reselling our services directly to your own clients.
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <div class="faq-accordion">
-            <div class="faq-question">
-                <span>What steps should I take if additional information is needed for my account?</span>
-                <span class="faq-arrow">↓</span>
-            </div>
-            <div class="faq-answer-wrapper">
-                <div class="faq-answer-inner">
-                    <div class="faq-answer-content">
-                        Normally, extra information is provided directly in the form of pre-configured account credentials for sale. If a service requires deeper verification details outside our scope, our support team will guide you accordingly.
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <div class="faq-accordion">
-            <div class="faq-question">
-                <span>Are you spamming from your accounts?</span>
-                <span class="faq-arrow">↓</span>
-            </div>
-            <div class="faq-answer-wrapper">
-                <div class="faq-answer-inner">
-                    <div class="faq-answer-content">
-                        No, we do not spam from our accounts. We only use our accounts to grow them organically and ensure they are clean before listing them for sale.
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <div class="faq-accordion">
-            <div class="faq-question">
-                <span>For purchase of numbers, what country and service numbers are available?</span>
-                <span class="faq-arrow">↓</span>
-            </div>
-            <div class="faq-answer-wrapper">
-                <div class="faq-answer-inner">
-                    <div class="faq-answer-content">
-                        We provide active digital numbers spanning over 200 countries and supporting 300 unique web services.
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <div class="faq-accordion">
-            <div class="faq-question">
-                <span>What is the Drip-feed feature for?</span>
-                <span class="faq-arrow">↓</span>
-            </div>
-            <div class="faq-answer-wrapper">
-                <div class="faq-answer-inner">
-                    <div class="faq-answer-content">
-                        You can build engagement on your chosen account at whatever speed you prefer. For example, if you want 1,000 likes on a post, you can choose to receive 100 likes per day over 10 days instead of getting them all instantly.
-                    </div>
-                </div>
-            </div>
-        </div>
-
     </div>
 
-    <!-- Footer Replica Matching Reference Layout -->
     <div class="footer-section">
         <div class="footer-col">
             <h3>Quick Links</h3>
@@ -542,7 +466,6 @@
                 <li><a href="index.html">Home</a></li>
                 <li><a href="index.html#about">About Us</a></li>
                 <li><a href="support.html">Contact Us</a></li>
-                <li><a href="#">Privacy</a></li>
                 <li><a href="terms.html">Terms & Conditions</a></li>
                 <li><a href="faq.html">FAQs</a></li>
             </ul>
@@ -553,17 +476,6 @@
                 <li><a href="#">Social Media Boost</a></li>
                 <li><a href="#">Buy Accounts</a></li>
                 <li><a href="#">Phone Numbers</a></li>
-                <li><a href="#">Logs API Docs</a></li>
-                <li><a href="#">Numbers API Docs</a></li>
-                <li><a href="#">Boosting API Docs</a></li>
-            </ul>
-        </div>
-        <div class="footer-col">
-            <h3>Prices</h3>
-            <ul>
-                <li><a href="#">Accounts</a></li>
-                <li><a href="#">Numbers</a></li>
-                <li><a href="#">Boosting</a></li>
             </ul>
         </div>
         <div class="footer-col newsletter-box">
@@ -584,9 +496,38 @@
         <div>&copy; 2026 MJ HUB. All Rights Reserved.</div>
     </div>
 
-    <!-- Script for Upward Slide Effect and Exclusive Auto-Close Behavior -->
+    <!-- Script Handling Theme Toggle, Mobile Menu, and Accordions -->
     <script>
         document.addEventListener('DOMContentLoaded', () => {
+            const themeToggleBtn = document.getElementById('themeToggleBtn');
+            const sunIcon = themeToggleBtn.querySelector('.sun-icon');
+            const moonIcon = themeToggleBtn.querySelector('.moon-icon');
+            const htmlElement = document.documentElement;
+
+            // Load saved theme preference
+            const savedTheme = localStorage.getItem('mj_theme') || 'dark';
+            htmlElement.setAttribute('data-theme', savedTheme);
+            updateThemeIcons(savedTheme);
+
+            themeToggleBtn.addEventListener('click', () => {
+                const currentTheme = htmlElement.getAttribute('data-theme');
+                const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
+                
+                htmlElement.setAttribute('data-theme', newTheme);
+                localStorage.setItem('mj_theme', newTheme);
+                updateThemeIcons(newTheme);
+            });
+
+            function updateThemeIcons(theme) {
+                if (theme === 'light') {
+                    sunIcon.style.display = 'block';
+                    moonIcon.style.display = 'none';
+                } else {
+                    sunIcon.style.display = 'none';
+                    moonIcon.style.display = 'block';
+                }
+            }
+
             const menuToggleBtn = document.getElementById('menuToggleBtn');
             const menuCloseBtn = document.getElementById('menuCloseBtn');
             const dropdownMenu = document.getElementById('dropdownMenu');
@@ -604,22 +545,13 @@
                 });
             }
 
-            // Accordion Exclusive Slide Up/Down Control
             const accordions = document.querySelectorAll('.faq-accordion');
             accordions.forEach(acc => {
                 const question = acc.querySelector('.faq-question');
                 question.addEventListener('click', () => {
                     const isOpen = acc.classList.contains('active');
-
-                    // Close all other accordions immediately for clean exclusive sliding
-                    accordions.forEach(item => {
-                        item.classList.remove('active');
-                    });
-
-                    // If the clicked one wasn't open, open it up smoothly
-                    if (!isOpen) {
-                        acc.classList.add('active');
-                    }
+                    accordions.forEach(item => item.classList.remove('active'));
+                    if (!isOpen) acc.classList.add('active');
                 });
             });
         });
