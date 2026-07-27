@@ -1,5 +1,5 @@
 /* ==========================================
-   MJ HUB - Application Logic & Support Widget (v5.0 - Transaction Insertion & RLS Hardened)
+   MJ HUB - Application Logic & Support Widget (v5.1 - Transaction Insertion & RLS Hardened)
    ========================================== */
 
 const SUPABASE_URL = 'https://atczodlljmlayvldxfmv.supabase.co';
@@ -828,43 +828,59 @@ async function checkoutCart() {
 async function processDeposit() {
     let amt = parseFloat(document.getElementById('depositInput').value) || 0;
     if(amt <= 0) { alert('Please enter a valid amount.'); return; }
+    
     let newNgn = currentBalanceNgn + amt;
     let newUsd = newNgn / exchangeRate;
 
-    if (supabaseClient) {
-        const { data: { session } } = await supabaseClient.auth.getSession();
-        if (session) {
-            const { error: profileError } = await supabaseClient.from('profiles').update({ balance: newNgn, balance_usd: newUsd }).eq('id', session.user.id);
-            if (profileError) {
-                alert("Profile Update Error: " + profileError.message);
-                return;
-            }
-            
-            const { error: txError } = await supabaseClient.from('transactions').insert({
-                user_id: session.user.id,
-                customer_id: userData.customerId || null,
-                type: 'deposit',
-                category: 'deposit',
-                title: 'Card / Bank Transfer',
-                subtitle: 'Wallet funding',
-                amount: '₦' + amt.toLocaleString(),
-                amount_ngn: amt,
-                amount_usd: amt / exchangeRate,
-                status: 'Success'
-            });
+    if (!supabaseClient) {
+        alert('Error: Supabase client is not initialized!');
+        return;
+    }
 
-            if (txError) {
-                alert("Database Insert Error: " + txError.message);
-                return;
-            }
+    const { data: { session }, error: sessionError } = await supabaseClient.auth.getSession();
+    if (sessionError || !session) {
+        alert('Authentication Error: No active session found. Please log in again.');
+        return;
+    }
 
-            await fetchUserTransactions(session.user.id);
-        }
+    // 1. Update Profile Balance
+    const { error: profileError } = await supabaseClient
+        .from('profiles')
+        .update({ balance: newNgn, balance_usd: newUsd })
+        .eq('id', session.user.id);
+
+    if (profileError) {
+        alert("Profile Update Error: " + profileError.message);
+        return;
+    }
+    
+    // 2. Insert Transaction Record
+    const { error: txError } = await supabaseClient
+        .from('transactions')
+        .insert({
+            user_id: session.user.id,
+            customer_id: userData.customerId || null,
+            type: 'deposit',
+            category: 'deposit',
+            title: 'Card / Bank Transfer',
+            subtitle: 'Wallet funding',
+            amount: '₦' + amt.toLocaleString(),
+            amount_ngn: amt,
+            amount_usd: amt / exchangeRate,
+            status: 'Success'
+        });
+
+    if (txError) {
+        alert("Database Insert Error: " + txError.message);
+        return;
     }
 
     currentBalanceNgn = newNgn;
     currentBalanceUsd = newUsd;
     updateBalanceDisplay();
+    
+    await fetchUserTransactions(session.user.id);
+    
     alert('Wallet funded with ₦' + amt.toLocaleString() + ' and saved to database successfully!');
     switchSection('home');
 }
