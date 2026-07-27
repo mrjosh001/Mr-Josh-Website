@@ -1,93 +1,133 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="dark">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>MJ HUB - Authentication & Profile Settings</title>
     <!-- Supabase CDN Script -->
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <!-- Google Fonts & FontAwesome for icons -->
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
         :root {
-            --primary-color: #4f46e5;
-            --primary-hover: #4338ca;
-            --bg-main: #f8fafc;
-            --card-bg: #ffffff;
-            --text-main: #0f172a;
-            --text-muted: #64748b;
-            --border-color: #cbd5e1;
-            --input-bg: #ffffff;
+            --primary-color: #2563eb;
+            --primary-hover: #1d4ed8;
+            --bg-main: #07090e;
+            --bg-card: #0f172a;
+            --card-bg: rgba(15, 23, 42, 0.85);
+            --text-main: #f8fafc;
+            --text-muted: #94a3b8;
+            --border-color: rgba(56, 189, 248, 0.15);
+            --border-focus: rgba(37, 99, 235, 0.5);
+            --footer-bg: #0b0f19;
         }
 
-        * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Inter', sans-serif; }
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }
         
         body { 
             background: var(--bg-main); 
             color: var(--text-main); 
-            display: flex; 
-            flex-direction: column; 
-            justify-content: center; 
-            align-items: center; 
             min-height: 100vh; 
-            padding: 20px; 
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
         }
 
-        .auth-wrapper {
-            width: 100%;
-            max-width: 480px;
-        }
-
+        /* Top Brand Header bar */
         .brand-header {
-            text-align: center;
-            margin-bottom: 24px;
+            width: 100%;
+            padding: 20px 40px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+            background: rgba(11, 15, 25, 0.7);
+            backdrop-filter: blur(10px);
         }
 
-        .brand-header h1 {
-            font-size: 24px;
-            font-weight: 700;
-            color: var(--text-main);
-            margin-bottom: 6px;
+        .brand-logo {
+            font-size: 20px;
+            font-weight: 800;
+            color: #fff;
+            letter-spacing: 0.5px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            text-decoration: none;
         }
 
-        .brand-header p {
-            font-size: 14px;
-            color: var(--text-muted);
+        .brand-logo span {
+            color: var(--primary-color);
+        }
+
+        /* Main Page Wrapper */
+        .page-wrapper {
+            flex: 1;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 40px 20px;
+            width: 100%;
         }
 
         .auth-container { 
             background: var(--card-bg); 
-            border: 1px solid #e2e8f0;
-            padding: 32px; 
-            border-radius: 16px; 
+            backdrop-filter: blur(16px); 
+            border: 1px solid var(--border-color); 
+            padding: 40px; 
+            border-radius: 24px; 
             width: 100%; 
-            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03); 
+            max-width: 480px; 
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.7); 
             max-height: 85vh; 
             overflow-y: auto; 
         }
 
-        .avatar-icon {
-            width: 54px;
-            height: 54px;
-            background: #eef2ff;
-            color: var(--primary-color);
-            border-radius: 50%;
+        .auth-container::-webkit-scrollbar {
+            width: 6px;
+        }
+        .auth-container::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 4px;
+        }
+
+        .auth-header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+
+        .auth-icon {
+            width: 50px;
+            height: 50px;
+            background: rgba(37, 99, 235, 0.1);
+            border: 1px solid rgba(37, 99, 235, 0.3);
+            border-radius: 14px;
             display: flex;
             align-items: center;
             justify-content: center;
-            font-size: 22px;
             margin: 0 auto 16px auto;
+            color: var(--primary-color);
+            font-size: 20px;
+        }
+
+        .auth-header h1 {
+            font-size: 24px;
+            font-weight: 700;
+            color: #fff;
+            margin-bottom: 6px;
+        }
+
+        .auth-header p {
+            font-size: 14px;
+            color: var(--text-muted);
         }
 
         .tab-switcher { 
             display: flex; 
-            margin-bottom: 24px; 
-            border: 1px solid #e2e8f0; 
-            border-radius: 10px; 
+            margin-bottom: 25px; 
+            border: 1px solid rgba(255, 255, 255, 0.05); 
+            border-radius: 12px; 
             overflow: hidden; 
-            background: #f1f5f9; 
-            padding: 3px;
+            background: rgba(2, 6, 23, 0.6); 
+            padding: 4px;
         }
 
         .tab-btn { 
@@ -99,90 +139,165 @@
             font-weight: 600; 
             font-size: 13px;
             cursor: pointer; 
+            transition: all 0.3s ease; 
             border-radius: 8px;
-            transition: all 0.2s ease; 
         }
 
         .tab-btn.active { 
-            background: #ffffff; 
-            color: var(--primary-color); 
-            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1); 
+            background: var(--primary-color); 
+            color: #fff; 
+            box-shadow: 0 4px 12px rgba(37, 99, 235, 0.4); 
         }
 
         .form-group { margin-bottom: 16px; }
-        .form-group label { display: block; font-size: 12px; color: var(--text-main); margin-bottom: 6px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.4px; }
+        .form-group label { display: block; font-size: 12px; color: var(--text-muted); margin-bottom: 6px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; }
         
         .form-group input, .form-group textarea { 
             width: 100%; 
-            padding: 11px 14px; 
-            background: var(--input-bg); 
-            border: 1px solid var(--border-color); 
+            padding: 12px 16px; 
+            background: rgba(2, 6, 23, 0.6); 
+            border: 1px solid rgba(255, 255, 255, 0.08); 
             color: var(--text-main); 
-            border-radius: 8px; 
+            border-radius: 10px; 
             outline: none; 
             font-size: 14px; 
-            transition: border-color 0.2s, box-shadow 0.2s;
+            transition: all 0.2s ease;
         }
 
         .form-group textarea { resize: vertical; min-height: 80px; }
         
         .form-group input:focus, .form-group textarea:focus { 
             border-color: var(--primary-color); 
-            box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.15); 
+            box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.15); 
+            background: rgba(2, 6, 23, 0.9);
         }
 
         .btn-submit { 
             width: 100%; 
-            padding: 13px; 
-            background: var(--primary-color); 
+            padding: 14px; 
+            background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%); 
             color: #fff; 
             border: none; 
-            border-radius: 8px; 
+            border-radius: 10px; 
             font-weight: 600; 
             font-size: 14px; 
             cursor: pointer; 
-            margin-top: 8px; 
-            transition: background 0.2s; 
+            margin-top: 10px; 
+            transition: all 0.2s ease-in-out; 
+            box-shadow: 0 4px 14px rgba(37, 99, 235, 0.3); 
         }
 
-        .btn-submit:hover { background: var(--primary-hover); }
-        
+        .btn-submit:hover { 
+            opacity: 0.95;
+            transform: translateY(-1px);
+            box-shadow: 0 6px 20px rgba(37, 99, 235, 0.4);
+        }
+
         .hidden { display: none; }
-        .error-msg { color: #dc2626; font-size: 13px; margin-bottom: 15px; text-align: center; font-weight: 500; }
-        .success-msg { color: #16a34a; font-size: 13px; margin-bottom: 15px; text-align: center; font-weight: 500; }
+        .error-msg { color: #f87171; font-size: 13px; margin-bottom: 15px; text-align: center; background: rgba(248, 113, 113, 0.1); padding: 10px; border-radius: 8px; border: 1px solid rgba(248, 113, 113, 0.2); }
+        .success-msg { color: #4ade80; font-size: 13px; margin-bottom: 15px; text-align: center; background: rgba(74, 222, 128, 0.1); padding: 10px; border-radius: 8px; border: 1px solid rgba(74, 222, 128, 0.2); }
         
         .section-title { 
-            font-size: 13px; 
-            color: var(--primary-color); 
-            border-bottom: 1px solid #e2e8f0; 
+            font-size: 11px; 
+            color: var(--text-muted); 
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05); 
             padding-bottom: 6px; 
             margin: 24px 0 16px 0; 
             font-weight: 700; 
             text-transform: uppercase; 
-            letter-spacing: 0.5px; 
+            letter-spacing: 1px; 
+        }
+
+        /* Professional Brand Footer section matching your screenshot dark aesthetic */
+        .site-footer {
+            background-color: var(--footer-bg);
+            border-top: 1px solid rgba(255, 255, 255, 0.05);
+            padding: 50px 20px 30px 20px;
+            color: var(--text-muted);
+            font-size: 13px;
+        }
+
+        .footer-content {
+            max-width: 1100px;
+            margin: 0 auto;
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 30px;
+            margin-bottom: 40px;
+        }
+
+        .footer-column h4 {
+            color: #fff;
+            font-size: 12px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 16px;
+        }
+
+        .footer-column ul {
+            list-style: none;
+        }
+
+        .footer-column ul li {
+            margin-bottom: 10px;
+        }
+
+        .footer-column ul li a {
+            color: var(--text-muted);
+            text-decoration: none;
+            transition: color 0.2s ease;
+        }
+
+        .footer-column ul li a:hover {
+            color: var(--primary-color);
+        }
+
+        .footer-bottom {
+            max-width: 1100px;
+            margin: 0 auto;
+            padding-top: 20px;
+            border-top: 1px solid rgba(255, 255, 255, 0.05);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 10px;
+            text-align: center;
+        }
+
+        @media (min-width: 768px) {
+            .footer-bottom {
+                flex-direction: row;
+                justify-content: space-between;
+            }
         }
     </style>
 </head>
 <body>
 
-    <div class="auth-wrapper">
-        <div class="brand-header">
-            <h1>MJ HUB</h1>
-            <p>Manage your account settings & profile</p>
-        </div>
+    <!-- Top Brand Navbar Header -->
+    <header class="brand-header">
+        <a href="index.html" class="brand-logo">
+            💬 MJ <span>HUB</span>
+        </a>
+    </header>
 
+    <!-- Main Authentication Content Area -->
+    <div class="page-wrapper">
         <div class="auth-container">
-            <div class="avatar-icon">
-                <i class="fa-solid fa-user-shield" id="authIcon"></i>
+            <div class="auth-header">
+                <div class="auth-icon" id="authHeaderIcon">🔒</div>
+                <h1 id="authHeaderTitle">Welcome Back</h1>
+                <p id="authHeaderSubtitle">Sign in to securely access your MJ Hub account.</p>
             </div>
 
             <div class="tab-switcher">
                 <button id="signinTabBtn" class="tab-btn active" onclick="switchTab('signin')">Sign In</button>
-                <button id="signupTabBtn" class="tab-btn" onclick="switchTab('signup')">Register Account</button>
+                <button id="signupTabBtn" class="tab-btn" onclick="switchTab('signup')">Sign Up</button>
             </div>
 
-            <div id="errorContainer" class="error-msg"></div>
-            <div id="successContainer" class="success-msg"></div>
+            <div id="errorContainer" class="error-msg hidden"></div>
+            <div id="successContainer" class="success-msg hidden"></div>
 
             <!-- Sign In Form -->
             <form id="signinForm" onsubmit="handleSignIn(event)">
@@ -194,7 +309,7 @@
                     <label>Password</label>
                     <input type="password" id="signinPassword" required placeholder="••••••••">
                 </div>
-                <button type="submit" class="btn-submit">Sign In</button>
+                <button type="submit" class="btn-submit">Sign In to Account</button>
             </form>
 
             <!-- Sign Up Form (Combined Signup & Profile Settings Metadata Entry) -->
@@ -251,10 +366,53 @@
                     <input type="text" id="bvn" placeholder="11-digit Bank Verification Number">
                 </div>
 
-                <button type="submit" id="saveProfileBtn" class="btn-submit">Create Account & Save Changes</button>
+                <button type="submit" id="saveProfileBtn" class="btn-submit">Create Account & Save Profile</button>
             </form>
         </div>
     </div>
+
+    <!-- Professional Bottom Footer (Dark Brand Theme matching your layout style) -->
+    <footer class="site-footer">
+        <div class="footer-content">
+            <div class="footer-column">
+                <h4>Company</h4>
+                <ul>
+                    <li><a href="#">Blog</a></li>
+                    <li><a href="#">Support</a></li>
+                    <li><a href="#">Referrals</a></li>
+                    <li><a href="#">Discord</a></li>
+                </ul>
+            </div>
+            <div class="footer-column">
+                <h4>Legal</h4>
+                <ul>
+                    <li><a href="#">Terms of Service</a></li>
+                    <li><a href="#">Privacy Policy</a></li>
+                    <li><a href="#">Sitemap</a></li>
+                </ul>
+            </div>
+            <div class="footer-column">
+                <h4>Resources</h4>
+                <ul>
+                    <li><a href="#">FAQ</a></li>
+                    <li><a href="#">How It Works</a></li>
+                    <li><a href="#">API Documentation</a></li>
+                </ul>
+            </div>
+            <div class="footer-column">
+                <h4>Services</h4>
+                <ul>
+                    <li><a href="#">Verification</a></li>
+                    <li><a href="#">Number Rental</a></li>
+                    <li><a href="#">Mobile Proxies</a></li>
+                </ul>
+            </div>
+        </div>
+        <div class="footer-bottom">
+            <p>Copyright © 2026 MJ Hub. All rights reserved.</p>
+            <p style="color: #4ade80; font-weight: 500;">Secure SSL Verified</p>
+        </div>
+    </footer>
 
     <script>
         // Initialize Supabase Client
@@ -291,22 +449,50 @@
         }
 
         function switchTab(tab) {
-            document.getElementById('errorContainer').innerText = '';
-            document.getElementById('successContainer').innerText = '';
-            const iconEl = document.getElementById('authIcon');
+            const errorEl = document.getElementById('errorContainer');
+            const successEl = document.getElementById('successContainer');
+            errorEl.innerText = '';
+            errorEl.classList.add('hidden');
+            successEl.innerText = '';
+            successEl.classList.add('hidden');
+
+            const headerIcon = document.getElementById('authHeaderIcon');
+            const headerTitle = document.getElementById('authHeaderTitle');
+            const headerSubtitle = document.getElementById('authHeaderSubtitle');
 
             if (tab === 'signin') {
                 document.getElementById('signinTabBtn').classList.add('active');
                 document.getElementById('signupTabBtn').classList.remove('active');
                 document.getElementById('signinForm').classList.remove('hidden');
                 document.getElementById('signupForm').classList.add('hidden');
-                iconEl.className = "fa-solid fa-user-shield";
+                
+                headerIcon.innerText = '🔒';
+                headerTitle.innerText = 'Welcome Back';
+                headerSubtitle.innerText = 'Sign in to securely access your MJ Hub account.';
             } else {
                 document.getElementById('signupTabBtn').classList.add('active');
                 document.getElementById('signinTabBtn').classList.remove('active');
                 document.getElementById('signupForm').classList.remove('hidden');
                 document.getElementById('signinForm').classList.add('hidden');
-                iconEl.className = "fa-solid fa-user-plus";
+
+                headerIcon.innerText = '👤';
+                headerTitle.innerText = 'Create Account';
+                headerSubtitle.innerText = 'New here? Set up your profile in just a few seconds.';
+            }
+        }
+
+        function showMessage(type, text) {
+            const errorEl = document.getElementById('errorContainer');
+            const successEl = document.getElementById('successContainer');
+            
+            if (type === 'error') {
+                successEl.classList.add('hidden');
+                errorEl.innerText = text;
+                errorEl.classList.remove('hidden');
+            } else {
+                errorEl.classList.add('hidden');
+                successEl.innerText = text;
+                successEl.classList.remove('hidden');
             }
         }
 
@@ -314,10 +500,6 @@
             e.preventDefault();
             const email = document.getElementById('signinEmail').value.trim();
             const password = document.getElementById('signinPassword').value.trim();
-            const errorEl = document.getElementById('errorContainer');
-            const successEl = document.getElementById('successContainer');
-            errorEl.innerText = '';
-            successEl.innerText = '';
 
             const { data, error } = await supabaseClient.auth.signInWithPassword({
                 email: email,
@@ -325,11 +507,11 @@
             });
 
             if (error) {
-                errorEl.innerText = error.message;
+                showMessage('error', error.message);
                 return;
             }
 
-            successEl.innerText = 'Signed in successfully!';
+            showMessage('success', 'Signed in successfully! Redirecting...');
             setTimeout(() => {
                 window.location.href = 'index.html';
             }, 500);
@@ -351,11 +533,7 @@
             const nin = document.getElementById('nin').value.trim();
             const bvn = document.getElementById('bvn').value.trim();
 
-            const errorEl = document.getElementById('errorContainer');
-            const successEl = document.getElementById('successContainer');
-            errorEl.innerText = '';
-            successEl.innerText = '';
-
+            // Register user with Supabase Auth, embedding all profile fields into options.data metadata
             const { data, error } = await supabaseClient.auth.signUp({
                 email: email,
                 password: password,
@@ -376,11 +554,11 @@
             });
 
             if (error) {
-                errorEl.innerText = error.message;
+                showMessage('error', error.message);
                 return;
             }
 
-            successEl.innerText = 'Account and profile details saved successfully!';
+            showMessage('success', 'Account and profile details saved successfully!');
             setTimeout(() => {
                 window.location.href = 'index.html';
             }, 1000);
