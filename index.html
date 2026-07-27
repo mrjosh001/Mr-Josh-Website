@@ -3,49 +3,63 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>MJ HUB - Dashboard</title>
+    <title>MJ HUB - Advanced Dashboard</title>
     <!-- Include Supabase Client SDK -->
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <!-- FontAwesome for Support Widget Icons -->
+    <!-- FontAwesome for Pro Icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Google Fonts Inter -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <style>
 /* ==========================================
-   MJ HUB - Theme & Variables (v4.7)
+   MJ HUB - Pro Theme & Variables (v5.0)
    ========================================== */
 
 :root[data-theme="dark"] {
-    --primary-color: #2563eb;
-    --primary-hover: #1d4ed8;
-    --bg-main: #0b0f19;
-    --card-bg: #121824;
-    --text-main: #ffffff;
-    --text-muted: #93c5fd;
-    --border-color: #1e3a8a;
+    --primary-color: #3b82f6;
+    --primary-glow: rgba(59, 130, 246, 0.4);
+    --primary-hover: #2563eb;
+    --bg-main: #07090e;
+    --card-bg: #0d1322;
+    --card-hover: #131d35;
+    --text-main: #f8fafc;
+    --text-muted: #94a3b8;
+    --border-color: #1e293b;
+    --border-glow: rgba(59, 130, 246, 0.3);
     --sidebar-width: 280px;
-    --nav-bg: #121824;
+    --nav-bg: rgba(13, 19, 34, 0.85);
     --whatsapp-green: #25d366;
-    --support-bg: #121824;
+    --success-color: #10b981;
+    --warning-color: #f59e0b;
+    --danger-color: #ef4444;
 }
 
 :root[data-theme="light"] {
     --primary-color: #2563eb;
+    --primary-glow: rgba(37, 99, 235, 0.25);
     --primary-hover: #1d4ed8;
-    --bg-main: #f0f6ff;
+    --bg-main: #f8fafc;
     --card-bg: #ffffff;
+    --card-hover: #f1f5f9;
     --text-main: #0f172a;
-    --text-muted: #1e40af;
-    --border-color: #bfdbfe;
+    --text-muted: #64748b;
+    --border-color: #e2e8f0;
+    --border-glow: rgba(37, 99, 235, 0.2);
     --sidebar-width: 280px;
-    --nav-bg: #ffffff;
+    --nav-bg: rgba(255, 255, 255, 0.9);
     --whatsapp-green: #25d366;
-    --support-bg: #ffffff;
+    --success-color: #059669;
+    --warning-color: #d97706;
+    --danger-color: #dc2626;
 }
 
 * {
     box-sizing: border-box;
     margin: 0;
     padding: 0;
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
 }
 
 body {
@@ -54,16 +68,17 @@ body {
     display: flex;
     flex-direction: column;
     min-height: 100vh;
-    transition: background-color 0.3s, color 0.3s;
+    transition: background-color 0.3s ease, color 0.3s ease;
     position: relative;
+    overflow-x: hidden;
 }
 
 /* Button & Interactive Click Animation Effect */
 button, .hero-btn, .btn-sm-primary, .btn-sm-outline, .profile-menu-item, .popup-item, .transaction-card, .filter-tab, .nav-item {
-    transition: transform 0.1s ease, background-color 0.2s ease, border-color 0.2s ease;
+    transition: transform 0.15s cubic-bezier(0.4, 0, 0.2, 1), background-color 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
 }
 button:active, .hero-btn:active, .btn-sm-primary:active, .btn-sm-outline:active, .profile-menu-item:active, .popup-item:active, .transaction-card:active, .filter-tab:active, .nav-item:active {
-    transform: scale(0.96) !important;
+    transform: scale(0.97) !important;
 }
 
 /* --- Top Navigation Bar --- */
@@ -72,51 +87,63 @@ button:active, .hero-btn:active, .btn-sm-primary:active, .btn-sm-outline:active,
     top: 0;
     left: 0;
     right: 0;
-    height: 70px;
+    height: 72px;
     background: var(--nav-bg);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
     border-bottom: 1px solid var(--border-color);
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding: 0 20px;
+    padding: 0 24px;
     z-index: 1000;
 }
 
 .nav-left {
     display: flex;
     align-items: center;
-    gap: 15px;
+    gap: 16px;
 }
 
 .menu-btn {
-    background: none;
-    border: none;
-    font-size: 22px;
+    background: var(--card-bg);
+    border: 1px solid var(--border-color);
+    width: 40px;
+    height: 40px;
+    border-radius: 12px;
+    font-size: 18px;
     cursor: pointer;
     color: var(--text-main);
+    display: flex;
+    align-items: center;
+    justify-content: center;
 }
+.menu-btn:hover { border-color: var(--primary-color); color: var(--primary-color); }
 
 .brand-title {
     font-size: 20px;
     font-weight: 800;
-    color: var(--primary-color);
-    letter-spacing: 0.5px;
+    background: linear-gradient(135deg, var(--primary-color), #8b5cf6);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    letter-spacing: -0.5px;
 }
 
 .nav-right {
     display: flex;
     align-items: center;
-    gap: 12px;
+    gap: 14px;
 }
 
 .wallet-badge {
     background: var(--card-bg);
     border: 1px solid var(--border-color);
-    padding: 6px 12px;
-    border-radius: 20px;
+    padding: 8px 16px;
+    border-radius: 30px;
     font-size: 13px;
     color: var(--primary-color);
-    font-weight: 600;
+    font-weight: 700;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.05);
     display: none;
 }
 
@@ -126,29 +153,30 @@ button:active, .hero-btn:active, .btn-sm-primary:active, .btn-sm-outline:active,
 
 .theme-toggle-btn, .notification-icon {
     position: relative;
-    font-size: 18px;
+    width: 40px;
+    height: 40px;
+    border-radius: 12px;
+    background: var(--card-bg);
+    border: 1px solid var(--border-color);
+    font-size: 16px;
     cursor: pointer;
     color: var(--text-main);
-    padding: 8px;
-    border-radius: 50%;
-    background: none;
-    border: none;
-    transition: background 0.2s;
     display: flex;
     align-items: center;
     justify-content: center;
 }
 
-.theme-toggle-btn:hover, .notification-icon:hover { background: var(--border-color); }
+.theme-toggle-btn:hover, .notification-icon:hover { border-color: var(--primary-color); color: var(--primary-color); }
 
 .badge-dot {
     position: absolute;
-    top: 4px;
-    right: 4px;
+    top: 8px;
+    right: 8px;
     width: 8px;
     height: 8px;
-    background: #ef4444;
+    background: var(--danger-color);
     border-radius: 50%;
+    box-shadow: 0 0 8px var(--danger-color);
 }
 
 /* Profile Icon & Dropdown */
@@ -157,19 +185,20 @@ button:active, .hero-btn:active, .btn-sm-primary:active, .btn-sm-outline:active,
 }
 
 .profile-icon {
-    width: 36px;
-    height: 36px;
-    background: var(--primary-color);
+    width: 40px;
+    height: 40px;
+    background: linear-gradient(135deg, var(--primary-color), #6366f1);
     color: #ffffff;
-    border-radius: 50%;
+    border-radius: 12px;
     display: flex;
     align-items: center;
     justify-content: center;
-    font-weight: bold;
-    font-size: 13px;
+    font-weight: 700;
+    font-size: 14px;
     cursor: pointer;
     overflow: hidden;
     border: 2px solid var(--border-color);
+    box-shadow: 0 4px 12px var(--primary-glow);
 }
 
 .profile-icon img {
@@ -182,27 +211,35 @@ button:active, .hero-btn:active, .btn-sm-primary:active, .btn-sm-outline:active,
     display: none;
     position: absolute;
     right: 0;
-    top: 48px;
+    top: 52px;
     background: var(--card-bg);
     color: var(--text-main);
-    border-radius: 12px;
-    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.4);
-    width: 240px;
+    border-radius: 18px;
+    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4);
+    width: 260px;
     z-index: 1100;
-    padding: 10px 0;
+    padding: 12px 0;
     border: 1px solid var(--border-color);
+    animation: dropdownPop 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+    transform-origin: top right;
+}
+
+@keyframes dropdownPop {
+    from { opacity: 0; transform: scale(0.95) translateY(-8px); }
+    to { opacity: 1; transform: scale(1) translateY(0); }
 }
 
 .dropdown-menu.active { display: block; }
 
 .dropdown-header {
-    padding: 10px 15px;
+    padding: 12px 20px;
     border-bottom: 1px solid var(--border-color);
 }
 
 .dropdown-header strong {
     display: block;
     font-size: 14px;
+    font-weight: 700;
     color: var(--text-main);
 }
 
@@ -213,20 +250,24 @@ button:active, .hero-btn:active, .btn-sm-primary:active, .btn-sm-outline:active,
 
 .dropdown-links {
     list-style: none;
-    padding: 0;
-    margin: 5px 0 0 0;
+    padding: 6px 10px;
+    margin: 0;
 }
 
 .dropdown-links li a {
-    display: block;
-    padding: 10px 15px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 14px;
     color: var(--text-main);
     text-decoration: none;
-    font-size: 14px;
-    transition: background 0.2s;
+    font-size: 13px;
+    font-weight: 600;
+    border-radius: 10px;
+    transition: background 0.2s, color 0.2s;
 }
 
-.dropdown-links li a:hover { background: var(--border-color); }
+.dropdown-links li a:hover { background: var(--card-hover); color: var(--primary-color); }
 .dropdown-divider { height: 1px; background: var(--border-color); margin: 6px 0; }
 
 /* --- Sidebar Drawer --- */
@@ -238,43 +279,45 @@ button:active, .hero-btn:active, .btn-sm-primary:active, .btn-sm-outline:active,
     height: 100%;
     background: var(--card-bg);
     border-right: 1px solid var(--border-color);
-    transition: left 0.3s ease;
+    transition: left 0.3s cubic-bezier(0.16, 1, 0.3, 1);
     z-index: 1200;
     display: flex;
     flex-direction: column;
+    box-shadow: 10px 0 30px rgba(0,0,0,0.3);
 }
 
 .sidebar.open { left: 0; }
 
 .sidebar-header {
-    height: 70px;
+    height: 72px;
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 0 20px;
+    padding: 0 24px;
     border-bottom: 1px solid var(--border-color);
 }
 
 .sidebar-brand-wrap {
     display: flex;
     align-items: center;
-    gap: 10px;
+    gap: 12px;
 }
 
 .sidebar-brand-logo {
-    width: 28px;
-    height: 28px;
-    background: rgba(37, 99, 235, 0.15);
-    color: var(--primary-color);
-    border-radius: 6px;
+    width: 32px;
+    height: 32px;
+    background: linear-gradient(135deg, var(--primary-color), #8b5cf6);
+    color: #ffffff;
+    border-radius: 8px;
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 14px;
+    font-size: 15px;
+    font-weight: 800;
 }
 
 .sidebar-brand {
-    font-size: 16px;
+    font-size: 17px;
     font-weight: 800;
     color: var(--text-main);
 }
@@ -282,10 +325,10 @@ button:active, .hero-btn:active, .btn-sm-primary:active, .btn-sm-outline:active,
 .close-btn {
     background: var(--bg-main);
     border: 1px solid var(--border-color);
-    width: 32px;
-    height: 32px;
+    width: 34px;
+    height: 34px;
     border-radius: 50%;
-    font-size: 16px;
+    font-size: 15px;
     cursor: pointer;
     color: var(--text-main);
     display: flex;
@@ -303,49 +346,52 @@ button:active, .hero-btn:active, .btn-sm-primary:active, .btn-sm-outline:active,
     list-style: none;
     display: flex;
     flex-direction: column;
-    gap: 8px;
+    gap: 6px;
 }
 
 .sidebar-links li a {
     display: flex;
     align-items: center;
     gap: 14px;
-    padding: 12px 14px;
-    color: var(--text-main);
+    padding: 14px 16px;
+    color: var(--text-muted);
     text-decoration: none;
     font-size: 14px;
     font-weight: 600;
-    border-radius: 10px;
-    transition: background 0.2s, color 0.2s;
+    border-radius: 14px;
+    transition: all 0.2s ease;
 }
 
 .sidebar-links li a:hover, 
 .sidebar-links li a.active {
-    background: rgba(37, 99, 235, 0.2);
+    background: var(--primary-glow);
     color: var(--primary-color);
+    border: 1px solid var(--border-glow);
 }
 
 .sidebar-footer {
-    padding: 15px 20px;
+    padding: 18px 24px;
     border-top: 1px solid var(--border-color);
     display: flex;
     align-items: center;
     justify-content: space-between;
+    background: var(--bg-main);
 }
 
 .sidebar-footer span {
-    font-size: 14px;
+    font-size: 13px;
     font-weight: 600;
-    color: var(--text-main);
+    color: var(--text-muted);
 }
 
 .overlay {
     position: fixed;
     top: 0; left: 0; width: 100%; height: 100%;
-    background: rgba(0, 0, 0, 0.6);
+    background: rgba(0, 0, 0, 0.65);
+    backdrop-filter: blur(4px);
     opacity: 0;
     visibility: hidden;
-    transition: opacity 0.3s, visibility 0.3s;
+    transition: opacity 0.3s ease, visibility 0.3s ease;
     z-index: 1150;
 }
 
@@ -356,53 +402,70 @@ button:active, .hero-btn:active, .btn-sm-primary:active, .btn-sm-outline:active,
 
 /* --- Main Content Area --- */
 .main-content {
-    margin-top: 70px;
-    padding: 20px;
+    margin-top: 72px;
+    padding: 24px;
     flex: 1;
-    max-width: 500px;
+    max-width: 540px;
     width: 100%;
     margin-left: auto;
     margin-right: auto;
-    padding-bottom: 100px;
+    padding-bottom: 110px;
 }
 
 .app-section { display: none; }
-.app-section.active { display: block; }
+.app-section.active { display: block; animation: fadeInSec 0.3s ease; }
+
+@keyframes fadeInSec {
+    from { opacity: 0; transform: translateY(6px); }
+    to { opacity: 1; transform: translateY(0); }
+}
 
 /* Dashboard Hero */
 .dashboard-card-hero {
-    background: linear-gradient(135deg, #1e40af 0%, #2563eb 100%);
-    border-radius: 20px;
-    padding: 24px;
+    background: linear-gradient(135deg, #1e3a8a 0%, #2563eb 50%, #7c3aed 100%);
+    border-radius: 24px;
+    padding: 28px;
     color: #ffffff;
     margin-bottom: 20px;
-    box-shadow: 0 10px 25px rgba(37, 99, 235, 0.3);
+    box-shadow: 0 15px 35px rgba(37, 99, 235, 0.35);
+    position: relative;
+    overflow: hidden;
+    border: 1px solid rgba(255,255,255,0.15);
 }
 
-.hero-welcome { font-size: 20px; font-weight: 800; margin-bottom: 6px; }
-.hero-sub { font-size: 13px; opacity: 0.9; margin-bottom: 18px; }
+.dashboard-card-hero::before {
+    content: '';
+    position: absolute;
+    top: -50px; right: -50px;
+    width: 180px; height: 180px;
+    background: rgba(255,255,255,0.1);
+    border-radius: 50%;
+    pointer-events: none;
+}
+
+.hero-welcome { font-size: 22px; font-weight: 800; margin-bottom: 6px; letter-spacing: -0.5px; }
+.hero-sub { font-size: 13px; opacity: 0.9; margin-bottom: 20px; line-height: 1.5; }
 .hero-actions { display: flex; gap: 10px; flex-wrap: wrap; }
 
 .hero-btn {
     background: rgba(255, 255, 255, 0.2);
-    border: 1px solid rgba(255, 255, 255, 0.4);
+    border: 1px solid rgba(255, 255, 255, 0.35);
     color: #ffffff;
     padding: 10px 18px;
     border-radius: 12px;
     font-size: 13px;
     font-weight: 700;
     cursor: pointer;
-    backdrop-filter: blur(5px);
-    transition: background 0.2s, transform 0.2s;
+    backdrop-filter: blur(6px);
 }
 
-.hero-btn:hover { background: rgba(255, 255, 255, 0.3); transform: translateY(-1px); }
+.hero-btn:hover { background: rgba(255, 255, 255, 0.3); transform: translateY(-2px); }
 
 /* Stats Grid */
 .sleek-stats-grid {
     display: grid;
     grid-template-columns: 1fr;
-    gap: 15px;
+    gap: 16px;
     margin-bottom: 20px;
 }
 
@@ -413,29 +476,29 @@ button:active, .hero-btn:active, .btn-sm-primary:active, .btn-sm-outline:active,
 .sleek-card {
     background: var(--card-bg);
     border: 1px solid var(--border-color);
-    border-radius: 16px;
+    border-radius: 20px;
     padding: 20px;
     display: flex;
     justify-content: space-between;
     align-items: center;
-    box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+    box-shadow: 0 4px 20px rgba(0,0,0,0.04);
 }
 
-.sleek-label { font-size: 13px; color: var(--text-muted); font-weight: 600; margin-bottom: 6px; display: block; }
-.sleek-value { font-size: 22px; font-weight: 800; color: var(--text-main); }
+.sleek-label { font-size: 12px; color: var(--text-muted); font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px; display: block; }
+.sleek-value { font-size: 22px; font-weight: 800; color: var(--text-main); letter-spacing: -0.5px; }
 
 .sleek-card-icon {
     width: 48px;
     height: 48px;
-    border-radius: 12px;
+    border-radius: 14px;
     display: flex;
     align-items: center;
     justify-content: center;
     font-size: 20px;
 }
 
-.icon-blue { background: rgba(37, 99, 235, 0.2); color: #2563eb; }
-.icon-white { background: rgba(255, 255, 255, 0.2); color: #ffffff; }
+.icon-blue { background: rgba(59, 130, 246, 0.15); color: var(--primary-color); border: 1px solid rgba(59, 130, 246, 0.2); }
+.icon-purple { background: rgba(139, 92, 246, 0.15); color: #8b5cf6; border: 1px solid rgba(139, 92, 246, 0.2); }
 
 /* ==========================================
    PROFILE SCREEN 
@@ -444,23 +507,28 @@ button:active, .hero-btn:active, .btn-sm-primary:active, .btn-sm-outline:active,
 .profile-header-card {
     text-align: center;
     margin-bottom: 24px;
+    background: var(--card-bg);
+    border: 1px solid var(--border-color);
+    padding: 24px;
+    border-radius: 24px;
 }
 
 .profile-avatar-large {
-    width: 88px;
-    height: 88px;
-    background: var(--border-color);
+    width: 90px;
+    height: 90px;
+    background: var(--bg-main);
     border: 3px solid var(--primary-color);
     border-radius: 50%;
-    margin: 0 auto 12px auto;
+    margin: 0 auto 14px auto;
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 36px;
+    font-size: 38px;
     overflow: hidden;
     color: var(--text-muted);
     position: relative;
     cursor: pointer;
+    box-shadow: 0 8px 25px var(--primary-glow);
 }
 
 .profile-avatar-large img {
@@ -471,19 +539,18 @@ button:active, .hero-btn:active, .btn-sm-primary:active, .btn-sm-outline:active,
 
 .profile-avatar-overlay {
     position: absolute;
-    bottom: 0;
-    left: 0;
-    right: 0;
-    background: rgba(0, 0, 0, 0.6);
+    bottom: 0; left: 0; right: 0;
+    background: rgba(0, 0, 0, 0.7);
     color: #fff;
     font-size: 10px;
     font-weight: 700;
-    padding: 3px 0;
+    padding: 4px 0;
     text-align: center;
+    backdrop-filter: blur(2px);
 }
 
 .profile-header-card h3 {
-    font-size: 20px;
+    font-size: 18px;
     font-weight: 800;
     color: var(--text-main);
     margin-bottom: 4px;
@@ -503,18 +570,17 @@ button:active, .hero-btn:active, .btn-sm-primary:active, .btn-sm-outline:active,
 .profile-menu-item {
     background: var(--card-bg);
     border: 1px solid var(--border-color);
-    border-radius: 20px;
+    border-radius: 18px;
     padding: 16px 20px;
     display: flex;
     align-items: center;
     justify-content: space-between;
     cursor: pointer;
-    transition: background 0.2s, border-color 0.2s;
     text-decoration: none;
 }
 
 .profile-menu-item:hover {
-    background: rgba(37, 99, 235, 0.08);
+    background: var(--card-hover);
     border-color: var(--primary-color);
 }
 
@@ -531,7 +597,7 @@ button:active, .hero-btn:active, .btn-sm-primary:active, .btn-sm-outline:active,
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 20px;
+    font-size: 18px;
 }
 
 .profile-menu-info h4 {
@@ -552,63 +618,69 @@ button:active, .hero-btn:active, .btn-sm-primary:active, .btn-sm-outline:active,
     font-weight: bold;
 }
 
-/* Standard Content Cards & Tables */
+/* Standard Content Cards & Forms */
 .content-card {
     background: var(--card-bg);
     border: 1px solid var(--border-color);
-    border-radius: 16px;
-    padding: 20px;
+    border-radius: 24px;
+    padding: 24px;
     margin-bottom: 20px;
-    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+    box-shadow: 0 4px 20px rgba(0,0,0,0.04);
 }
 
 .content-card h2 {
     font-size: 18px;
-    font-weight: 700;
+    font-weight: 800;
     color: var(--text-main);
-    margin-bottom: 10px;
+    margin-bottom: 8px;
+    letter-spacing: -0.3px;
 }
 
 .helper-text {
     font-size: 13px;
     color: var(--text-muted);
-    margin-bottom: 15px;
+    margin-bottom: 18px;
     line-height: 1.5;
 }
 
-.form-group { margin-bottom: 15px; }
-.form-group label { display: block; font-size: 13px; font-weight: 600; margin-bottom: 6px; color: var(--text-muted); }
+.form-group { margin-bottom: 16px; }
+.form-group label { display: block; font-size: 12px; font-weight: 700; margin-bottom: 6px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; }
 .form-group input, 
 .form-group textarea, 
 .form-group select {
     width: 100%;
-    padding: 12px;
+    padding: 13px 16px;
     border: 1px solid var(--border-color);
-    border-radius: 10px;
+    border-radius: 14px;
     background: var(--bg-main);
     color: var(--text-main);
     font-size: 14px;
     outline: none;
-    transition: border-color 0.2s;
+    transition: all 0.2s;
 }
 
 .form-group input:focus, 
 .form-group textarea:focus,
-.form-group select:focus { border-color: var(--primary-color); }
+.form-group select:focus { 
+    border-color: var(--primary-color); 
+    box-shadow: 0 0 0 3px var(--primary-glow);
+}
 
 /* Filter Buttons Container Style */
 .filter-buttons-row {
     display: flex;
     gap: 8px;
     overflow-x: auto;
-    margin-bottom: 15px;
-    padding-bottom: 5px;
+    margin-bottom: 18px;
+    padding-bottom: 4px;
+    scrollbar-width: none;
 }
+.filter-buttons-row::-webkit-scrollbar { display: none; }
 
 .product-grid {
     display: grid;
     grid-template-columns: 1fr;
-    gap: 15px;
+    gap: 16px;
     margin-top: 15px;
 }
 
@@ -619,8 +691,8 @@ button:active, .hero-btn:active, .btn-sm-primary:active, .btn-sm-outline:active,
 .product-item-card {
     background: var(--bg-main);
     border: 1px solid var(--border-color);
-    border-radius: 12px;
-    padding: 16px;
+    border-radius: 18px;
+    padding: 18px;
     display: flex;
     flex-direction: column;
     justify-content: space-between;
@@ -630,11 +702,11 @@ button:active, .hero-btn:active, .btn-sm-primary:active, .btn-sm-outline:active,
     display: flex;
     justify-content: space-between;
     align-items: flex-start;
-    margin-bottom: 12px;
+    margin-bottom: 14px;
 }
 
 .product-title { font-size: 15px; font-weight: 700; color: var(--text-main); }
-.product-price { font-size: 15px; font-weight: 800; color: var(--primary-color); }
+.product-price { font-size: 16px; font-weight: 800; color: var(--primary-color); }
 
 .product-actions-row { display: flex; gap: 8px; }
 
@@ -642,43 +714,43 @@ button:active, .hero-btn:active, .btn-sm-primary:active, .btn-sm-outline:active,
     background: var(--primary-color);
     color: #ffffff;
     border: none;
-    padding: 8px 12px;
-    border-radius: 8px;
-    font-size: 12px;
-    font-weight: 600;
+    padding: 10px 14px;
+    border-radius: 12px;
+    font-size: 13px;
+    font-weight: 700;
     cursor: pointer;
     flex: 1;
-    transition: background 0.2s;
+    box-shadow: 0 4px 15px var(--primary-glow);
 }
-
 .btn-sm-primary:hover { background: var(--primary-hover); }
 
 .btn-sm-outline {
     background: transparent;
     color: var(--text-main);
     border: 1px solid var(--border-color);
-    padding: 8px 12px;
-    border-radius: 8px;
-    font-size: 12px;
-    font-weight: 600;
+    padding: 10px 14px;
+    border-radius: 12px;
+    font-size: 13px;
+    font-weight: 700;
     cursor: pointer;
 }
+.btn-sm-outline:hover { border-color: var(--primary-color); color: var(--primary-color); }
 
 .table-responsive { overflow-x: auto; }
 .history-table { width: 100%; border-collapse: collapse; font-size: 13px; text-align: left; }
-.history-table th { background: var(--bg-main); color: var(--text-muted); padding: 10px; font-weight: 600; border-bottom: 1px solid var(--border-color); }
-.history-table td { padding: 12px 10px; border-bottom: 1px solid var(--border-color); color: var(--text-main); }
-.badge-status { padding: 3px 8px; border-radius: 6px; font-size: 11px; font-weight: 600; }
-.badge-success { background: rgba(37, 99, 235, 0.15); color: var(--primary-color); }
-.badge-pending { background: rgba(37, 99, 235, 0.1); color: var(--text-muted); }
-.empty-text { text-align: center; color: var(--text-muted); padding: 20px 0; font-size: 13px; }
+.history-table th { background: var(--bg-main); color: var(--text-muted); padding: 12px 10px; font-weight: 700; border-bottom: 1px solid var(--border-color); }
+.history-table td { padding: 14px 10px; border-bottom: 1px solid var(--border-color); color: var(--text-main); }
+.badge-status { padding: 4px 10px; border-radius: 8px; font-size: 11px; font-weight: 700; }
+.badge-success { background: rgba(16, 185, 129, 0.15); color: var(--success-color); }
+.badge-pending { background: rgba(245, 158, 11, 0.15); color: var(--warning-color); }
+.empty-text { text-align: center; color: var(--text-muted); padding: 30px 0; font-size: 13px; }
 
 .cart-summary-box {
     background: var(--bg-main);
     border: 1px solid var(--border-color);
-    border-radius: 12px;
-    padding: 16px;
-    margin-top: 15px;
+    border-radius: 18px;
+    padding: 18px;
+    margin-top: 18px;
     display: flex;
     justify-content: space-between;
     align-items: center;
@@ -687,7 +759,7 @@ button:active, .hero-btn:active, .btn-sm-primary:active, .btn-sm-outline:active,
 .cart-total-amount { font-size: 20px; font-weight: 800; color: var(--primary-color); }
 
 /* ==========================================
-   INTERACTIVE SUPPORT WIDGET STYLES (Integrated & Movable)
+   INTERACTIVE SUPPORT WIDGET STYLES (Movable)
    ========================================== */
 
 .support-widget-container {
@@ -701,66 +773,48 @@ button:active, .hero-btn:active, .btn-sm-primary:active, .btn-sm-outline:active,
 }
 
 .support-toggle-btn {
-    width: 64px;
-    height: 64px;
+    width: 60px;
+    height: 60px;
     border-radius: 50%;
-    background: linear-gradient(135deg, #111827, #1f2937);
-    color: #ffffff;
-    border: 2px solid rgba(255, 255, 255, 0.1);
+    background: linear-gradient(135deg, var(--card-bg), var(--bg-main));
+    color: var(--text-main);
+    border: 2px solid var(--border-color);
     outline: none;
     cursor: grab;
-    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.5), 0 0 15px rgba(37, 99, 235, 0.3);
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4), 0 0 20px var(--primary-glow);
     display: flex;
     flex-direction: column;
     align-items: center;
     justify-content: center;
     position: relative;
-    transition: box-shadow 0.2s ease, transform 0.2s ease;
 }
 
-.support-toggle-btn:active {
-    cursor: grabbing;
-}
+.support-toggle-btn:active { cursor: grabbing; }
 
-.support-toggle-btn:hover {
-    transform: scale(1.05);
-    box-shadow: 0 12px 30px rgba(0, 0, 0, 0.6), 0 0 20px rgba(37, 99, 235, 0.5);
-}
+.support-icon { font-size: 26px; line-height: 1; }
 
-.support-icon {
-    font-size: 28px;
-    line-height: 1;
-    filter: drop-shadow(0 2px 4px rgba(0,0,0,0.3));
-}
-
-/* Help Badge Tag */
 .support-badge-tag {
     position: absolute;
-    top: -6px;
-    right: -6px;
-    background: #ef4444;
+    top: -6px; right: -6px;
+    background: var(--danger-color);
     color: #ffffff;
-    font-size: 10px;
-    font-weight: 700;
-    padding: 3px 8px;
-    border-radius: 12px;
-    letter-spacing: 0.5px;
-    box-shadow: 0 2px 6px rgba(239, 68, 68, 0.4);
+    font-size: 9px;
+    font-weight: 800;
+    padding: 3px 7px;
+    border-radius: 10px;
     text-transform: uppercase;
-    pointer-events: none;
+    box-shadow: 0 2px 6px rgba(239, 68, 68, 0.4);
 }
 
-/* Top-Notch Popup Window */
-.support-popup-card, .support-popup {
+.support-popup-card {
     position: absolute;
-    bottom: 80px;
-    right: 0;
-    width: 340px;
-    background: #111827;
-    color: #ffffff;
-    border-radius: 20px;
-    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.6), 0 0 1px 1px rgba(255, 255, 255, 0.1);
-    border: 1px solid rgba(255, 255, 255, 0.08);
+    bottom: 75px; right: 0;
+    width: 320px;
+    background: var(--card-bg);
+    color: var(--text-main);
+    border-radius: 24px;
+    box-shadow: 0 25px 50px rgba(0, 0, 0, 0.5);
+    border: 1px solid var(--border-color);
     display: none;
     flex-direction: column;
     overflow: hidden;
@@ -769,148 +823,86 @@ button:active, .hero-btn:active, .btn-sm-primary:active, .btn-sm-outline:active,
     z-index: 1400;
 }
 
-.support-popup-card.active, .support-popup.active {
-    display: flex;
-}
+.support-popup-card.active { display: flex; }
 
 @keyframes popupScaleIn {
-    from {
-        opacity: 0;
-        transform: scale(0.9) translateY(15px);
-    }
-    to {
-        opacity: 1;
-        transform: scale(1) translateY(0);
-    }
+    from { opacity: 0; transform: scale(0.9) translateY(15px); }
+    to { opacity: 1; transform: scale(1) translateY(0); }
 }
 
-/* Header Section matching reference design */
 .support-popup-header {
-    padding: 24px 20px 20px 20px;
-    background: linear-gradient(180deg, #1f2937 0%, #111827 100%);
-    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+    padding: 22px 20px 18px 20px;
+    background: var(--bg-main);
+    border-bottom: 1px solid var(--border-color);
     position: relative;
     display: flex;
     flex-direction: column;
     align-items: flex-start;
 }
 
-.support-popup-header h3 {
-    margin: 0 0 6px 0;
-    font-size: 22px;
-    font-weight: 700;
-    color: #ffffff;
-}
-
-.support-popup-header p {
-    margin: 0 0 14px 0;
-    font-size: 14px;
-    color: #9ca3af;
-}
+.support-popup-header h3 { margin: 0 0 4px 0; font-size: 18px; font-weight: 800; }
+.support-popup-header p { margin: 0 0 10px 0; font-size: 13px; color: var(--text-muted); }
 
 .support-status-indicator {
     display: inline-flex;
     align-items: center;
     gap: 8px;
-    font-size: 13px;
-    color: #d1d5db;
-    font-weight: 500;
+    font-size: 12px;
+    color: var(--text-main);
+    font-weight: 600;
 }
 
 .status-dot {
-    width: 8px;
-    height: 8px;
-    background-color: #10b981;
+    width: 8px; height: 8px;
+    background-color: var(--success-color);
     border-radius: 50%;
-    box-shadow: 0 0 8px #10b981;
+    box-shadow: 0 0 8px var(--success-color);
 }
 
-/* Close Button inside card */
-.support-close-inner, .support-close-btn {
+.support-close-inner {
     position: absolute;
-    top: 16px;
-    right: 16px;
-    background: rgba(255, 255, 255, 0.05);
-    border: none;
-    width: 30px;
-    height: 30px;
+    top: 16px; right: 16px;
+    background: var(--card-bg);
+    border: 1px solid var(--border-color);
+    width: 30px; height: 30px;
     border-radius: 50%;
-    font-size: 18px;
-    color: #9ca3af;
+    font-size: 16px;
+    color: var(--text-muted);
     cursor: pointer;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    transition: background 0.2s, color 0.2s;
+    display: flex; align-items: center; justify-content: center;
 }
 
-.support-close-inner:hover, .support-close-btn:hover {
-    background: rgba(255, 255, 255, 0.1);
-    color: #ffffff;
-}
-
-/* Body Channels List */
 .support-popup-body {
     padding: 16px;
     display: flex;
     flex-direction: column;
-    gap: 12px;
-    background: #111827;
+    gap: 10px;
 }
 
-.support-channel-item, .support-channel-link {
+.support-channel-item {
     display: flex;
     align-items: center;
     gap: 14px;
-    padding: 14px 16px;
-    background: #1f2937;
-    border: 1px solid rgba(255, 255, 255, 0.04);
+    padding: 12px 16px;
+    background: var(--bg-main);
+    border: 1px solid var(--border-color);
     border-radius: 14px;
     text-decoration: none;
-    color: #ffffff;
-    transition: all 0.2s ease;
+    color: var(--text-main);
 }
+.support-channel-item:hover { border-color: var(--primary-color); background: var(--card-hover); }
 
-.support-channel-item:hover, .support-channel-link:hover {
-    background: #374151;
-    border-color: rgba(37, 99, 235, 0.4);
-    transform: translateY(-2px);
-    box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+.channel-icon-wrap {
+    width: 38px; height: 38px;
+    border-radius: 12px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 18px; flex-shrink: 0;
 }
+.channel-icon-wrap.whatsapp { background: rgba(37, 211, 102, 0.15); color: var(--whatsapp-green); }
+.channel-icon-wrap.telegram { background: rgba(0, 136, 204, 0.15); color: #0088cc; }
 
-.channel-icon-wrap, .channel-icon {
-    width: 40px;
-    height: 40px;
-    border-radius: 50%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 20px;
-    flex-shrink: 0;
-}
-
-.channel-icon-wrap.whatsapp {
-    background: rgba(37, 211, 102, 0.15);
-    color: #25d366;
-}
-
-.channel-icon-wrap.telegram {
-    background: rgba(0, 136, 204, 0.15);
-    color: #0088cc;
-}
-
-.channel-info h4 {
-    margin: 0 0 2px 0;
-    font-size: 15px;
-    font-weight: 600;
-    color: #ffffff;
-}
-
-.channel-info p {
-    margin: 0;
-    font-size: 12px;
-    color: #9ca3af;
-}
+.channel-info h4 { margin: 0 0 2px 0; font-size: 14px; font-weight: 700; }
+.channel-info p { margin: 0; font-size: 11px; color: var(--text-muted); }
 
 /* ==========================================
    FLOATING (+) ACTION MODAL
@@ -919,91 +911,66 @@ button:active, .hero-btn:active, .btn-sm-primary:active, .btn-sm-outline:active,
 .floating-action-modal {
     display: none;
     position: fixed;
-    bottom: 80px;
-    left: 50%;
+    bottom: 80px; left: 50%;
     transform: translateX(-50%);
-    width: 92%;
-    max-width: 440px;
+    width: 92%; max-width: 440px;
     background: var(--card-bg);
     border: 1px solid var(--border-color);
     border-radius: 28px;
-    box-shadow: 0 25px 50px rgba(0,0,0,0.5);
+    box-shadow: 0 30px 60px rgba(0,0,0,0.5);
     z-index: 1500;
     padding: 24px;
-    animation: slideUpModal 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+    animation: slideUpModal 0.25s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 @keyframes slideUpModal {
-    from { opacity: 0; transform: translate(-50%, 40px) scale(0.95); }
+    from { opacity: 0; transform: translate(-50%, 30px) scale(0.95); }
     to { opacity: 1; transform: translate(-50%, 0) scale(1); }
 }
 
 .floating-action-modal.active { display: block; }
 
 .popup-header-row {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 20px;
-    padding-bottom: 10px;
+    display: flex; justify-content: space-between; align-items: center;
+    margin-bottom: 18px; padding-bottom: 10px;
     border-bottom: 1px solid var(--border-color);
 }
 
-.popup-title { font-size: 18px; font-weight: 800; color: var(--text-main); display: flex; align-items: center; gap: 8px; }
+.popup-title { font-size: 17px; font-weight: 800; color: var(--text-main); display: flex; align-items: center; gap: 8px; }
 
 .popup-close {
     background: var(--bg-main);
     border: 1px solid var(--border-color);
-    width: 34px;
-    height: 34px;
+    width: 32px; height: 32px;
     border-radius: 50%;
     cursor: pointer;
-    font-size: 16px;
-    color: var(--text-main);
-    display: flex;
-    align-items: center;
-    justify-content: center;
+    font-size: 15px; color: var(--text-main);
+    display: flex; align-items: center; justify-content: center;
 }
 
 .popup-grid {
     display: grid;
     grid-template-columns: repeat(2, 1fr);
-    gap: 14px;
+    gap: 12px;
 }
 
 .popup-item {
     background: var(--bg-main);
     border: 1px solid var(--border-color);
-    border-radius: 20px;
-    padding: 18px 14px;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    text-align: center;
-    gap: 10px;
-    text-decoration: none;
-    color: var(--text-main);
-    cursor: pointer;
-    transition: all 0.25s ease;
+    border-radius: 18px;
+    padding: 16px 12px;
+    display: flex; flex-direction: column; align-items: center; text-align: center; gap: 8px;
+    text-decoration: none; color: var(--text-main); cursor: pointer;
 }
-
-.popup-item:hover {
-    transform: translateY(-3px);
-    background: rgba(37, 99, 235, 0.1);
-    border-color: var(--primary-color);
-    color: var(--primary-color);
-}
+.popup-item:hover { background: var(--primary-glow); border-color: var(--primary-color); color: var(--primary-color); }
 
 .popup-icon-badge {
-    width: 48px;
-    height: 48px;
+    width: 46px; height: 46px;
     background: var(--card-bg);
     border: 1px solid var(--border-color);
     border-radius: 14px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 22px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 20px;
 }
 
 /* ==========================================
@@ -1013,48 +980,38 @@ button:active, .hero-btn:active, .btn-sm-primary:active, .btn-sm-outline:active,
 .activity-history-drawer {
     display: none;
     position: fixed;
-    bottom: 0;
-    left: 0;
-    right: 0;
+    bottom: 0; left: 0; right: 0;
     background: var(--card-bg);
     color: var(--text-main);
-    border-top-left-radius: 28px;
-    border-top-right-radius: 28px;
-    padding: 20px;
+    border-top-left-radius: 30px;
+    border-top-right-radius: 30px;
+    padding: 24px;
     z-index: 1800;
-    max-height: 80vh;
+    max-height: 85vh;
     overflow-y: auto;
-    box-shadow: 0 -10px 40px rgba(0,0,0,0.6);
+    box-shadow: 0 -20px 50px rgba(0,0,0,0.6);
     border-top: 1px solid var(--border-color);
 }
 
 .activity-history-drawer.active { display: block; }
 
-.drawer-drag-handle { width: 40px; height: 4px; background: var(--text-muted); border-radius: 2px; margin: 0 auto 15px auto; }
-.drawer-header-row { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 15px; }
+.drawer-drag-handle { width: 40px; height: 4px; background: var(--text-muted); border-radius: 2px; margin: 0 auto 16px auto; }
+.drawer-header-row { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 16px; }
 .drawer-title-area h3 { font-size: 18px; font-weight: 800; color: var(--text-main); display: flex; align-items: center; gap: 8px; }
 .drawer-title-area p { font-size: 12px; color: var(--text-muted); margin-top: 2px; }
 
 .drawer-close-btn {
     background: var(--bg-main);
     border: 1px solid var(--border-color);
-    width: 32px;
-    height: 32px;
+    width: 32px; height: 32px;
     border-radius: 50%;
     color: var(--text-main);
-    font-size: 16px;
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    justify-content: center;
+    font-size: 15px; cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
 }
 
 .drawer-filter-scroll {
-    display: flex;
-    gap: 8px;
-    overflow-x: auto;
-    padding-bottom: 15px;
-    margin-bottom: 15px;
+    display: flex; gap: 8px; overflow-x: auto; padding-bottom: 15px; margin-bottom: 15px;
     scrollbar-width: none;
 }
 .drawer-filter-scroll::-webkit-scrollbar { display: none; }
@@ -1065,142 +1022,155 @@ button:active, .hero-btn:active, .btn-sm-primary:active, .btn-sm-outline:active,
     color: var(--text-main);
     padding: 8px 16px;
     border-radius: 20px;
-    font-size: 13px;
-    font-weight: 600;
-    white-space: nowrap;
-    cursor: pointer;
-    transition: all 0.2s;
+    font-size: 12px; font-weight: 700;
+    white-space: nowrap; cursor: pointer;
 }
-
-.filter-tab.active { background: var(--primary-color); color: #ffffff; border-color: var(--primary-color); }
+.filter-tab.active { background: var(--primary-color); color: #ffffff; border-color: var(--primary-color); box-shadow: 0 4px 12px var(--primary-glow); }
 
 .transaction-list { display: flex; flex-direction: column; gap: 10px; }
 .transaction-card {
     background: var(--bg-main);
     border: 1px solid var(--border-color);
     border-radius: 16px;
-    padding: 14px;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    cursor: pointer;
-    transition: border-color 0.2s;
+    padding: 14px 16px;
+    display: flex; justify-content: space-between; align-items: center; cursor: pointer;
 }
 .transaction-card:hover { border-color: var(--primary-color); }
-.transaction-left { display: flex; align-items: center; gap: 12px; }
-.transaction-icon-box { width: 40px; height: 40px; border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 18px; }
-.tx-blue { background: rgba(37, 99, 235, 0.2); color: #2563eb; }
+.transaction-left { display: flex; align-items: center; gap: 14px; }
+.transaction-icon-box { width: 42px; height: 42px; border-radius: 14px; display: flex; align-items: center; justify-content: center; font-size: 18px; }
+.tx-blue { background: rgba(59, 130, 246, 0.15); color: var(--primary-color); border: 1px solid rgba(59, 130, 246, 0.2); }
 .transaction-details h4 { font-size: 14px; font-weight: 700; color: var(--text-main); margin-bottom: 2px; }
 .transaction-details span { font-size: 11px; color: var(--text-muted); }
 .transaction-right { text-align: right; }
 .transaction-amount { font-size: 14px; font-weight: 800; color: var(--text-main); margin-bottom: 2px; }
-.transaction-status { font-size: 10px; font-weight: 700; padding: 2px 6px; border-radius: 4px; display: inline-block; }
-.status-success { background: rgba(37, 99, 235, 0.15); color: var(--primary-color); }
-.status-pending { background: rgba(37, 99, 235, 0.1); color: var(--text-muted); }
 
-/* Advanced Professional Currency Converter Card */
+/* ==========================================
+   ELITE PRO CURRENCY CONVERTER MODAL (Redesigned)
+   ========================================== */
 .currency-modal {
     display: none;
     position: fixed;
     top: 0; left: 0; width: 100%; height: 100%;
     background: rgba(0, 0, 0, 0.75);
-    backdrop-filter: blur(6px);
+    backdrop-filter: blur(8px);
     z-index: 1900;
     align-items: center;
     justify-content: center;
     padding: 20px;
 }
-.currency-modal.active { display: flex; }
+.currency-modal.active { display: flex; animation: modalFadeIn 0.2s ease; }
+
+@keyframes modalFadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
 .currency-modal-card {
     background: var(--card-bg);
-    width: 100%;
-    max-width: 420px;
-    border-radius: 28px;
-    padding: 28px;
-    box-shadow: 0 30px 60px rgba(0,0,0,0.6);
-    border: 1px solid var(--border-color);
+    width: 100%; max-width: 440px;
+    border-radius: 32px;
+    padding: 30px;
+    box-shadow: 0 30px 80px rgba(0,0,0,0.6), 0 0 0 1px var(--border-color);
+    position: relative;
+    overflow: hidden;
+}
+
+.converter-pro-header {
+    display: flex; justify-content: space-between; align-items: center;
+    margin-bottom: 22px;
+}
+.converter-pro-title {
+    font-size: 18px; font-weight: 800; color: var(--text-main);
+    display: flex; align-items: center; gap: 10px;
+    letter-spacing: -0.5px;
+}
+.converter-pro-title span {
+    width: 34px; height: 34px; background: var(--primary-glow);
+    color: var(--primary-color); border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 16px;
 }
 
 .converter-advanced-box {
     background: var(--bg-main);
     border: 1px solid var(--border-color);
-    border-radius: 20px;
-    padding: 16px;
-    margin-bottom: 14px;
+    border-radius: 22px;
+    padding: 18px;
     position: relative;
+    transition: border-color 0.2s;
 }
+.converter-advanced-box:focus-within {
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 3px var(--primary-glow);
+}
+
 .converter-row-top {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
+    display: flex; justify-content: space-between; align-items: center;
     margin-bottom: 8px;
 }
 .converter-label {
-    font-size: 11px;
-    font-weight: 800;
-    color: var(--text-muted);
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
+    font-size: 11px; font-weight: 800; color: var(--text-muted);
+    text-transform: uppercase; letter-spacing: 0.8px;
 }
 .currency-pill {
-    background: rgba(37, 99, 235, 0.15);
+    background: var(--primary-glow);
     color: var(--primary-color);
-    padding: 4px 10px;
-    border-radius: 12px;
-    font-size: 12px;
-    font-weight: 800;
+    padding: 4px 12px;
+    border-radius: 20px;
+    font-size: 12px; font-weight: 800;
+    border: 1px solid var(--border-glow);
 }
 .converter-input-main {
-    background: transparent;
-    border: none;
-    font-size: 24px;
-    font-weight: 800;
-    color: var(--text-main);
-    width: 100%;
-    outline: none;
+    background: transparent; border: none;
+    font-size: 26px; font-weight: 800; color: var(--text-main);
+    width: 100%; outline: none;
+    letter-spacing: -0.5px;
 }
+
 .converter-switch-btn-wrap {
     text-align: center;
-    margin: -6px 0;
+    margin: -10px 0;
     position: relative;
-    z-index: 2;
+    z-index: 5;
 }
 .converter-switch-circle {
-    width: 40px;
-    height: 40px;
-    background: var(--primary-color);
+    width: 44px; height: 44px;
+    background: linear-gradient(135deg, var(--primary-color), #7c3aed);
     color: #fff;
     border-radius: 50%;
-    border: 3px solid var(--card-bg);
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    cursor: pointer;
-    font-size: 16px;
-    box-shadow: 0 4px 12px rgba(37, 99, 235, 0.4);
-    transition: transform 0.2s;
+    border: 4px solid var(--card-bg);
+    display: inline-flex; align-items: center; justify-content: center;
+    cursor: pointer; font-size: 16px;
+    box-shadow: 0 6px 20px rgba(59, 130, 246, 0.4);
+    transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 .converter-switch-circle:hover { transform: rotate(180deg) scale(1.1); }
+
+.converter-live-badge {
+    background: var(--bg-main);
+    border: 1px solid var(--border-color);
+    border-radius: 14px;
+    padding: 12px 16px;
+    margin: 16px 0;
+    display: flex; justify-content: space-between; align-items: center;
+    font-size: 12px; font-weight: 700; color: var(--text-muted);
+}
+.converter-live-badge span strong { color: var(--text-main); }
 
 /* Conversion Loading Animation Indicator */
 .conversion-loading-box {
     display: none;
-    align-items: center;
-    gap: 10px;
-    background: rgba(37, 99, 235, 0.1);
-    border: 1px solid var(--border-color);
-    padding: 12px 16px;
-    border-radius: 14px;
-    font-size: 13px;
-    color: var(--primary-color);
+    align-items: center; gap: 12px;
+    background: var(--primary-glow);
+    border: 1px solid var(--border-glow);
+    padding: 14px 18px;
+    border-radius: 16px;
+    font-size: 13px; color: var(--primary-color);
     font-weight: 700;
-    margin-bottom: 15px;
+    margin-bottom: 16px;
 }
 .conversion-loading-box.active { display: flex; }
 .spinner-icon {
-    width: 18px;
-    height: 18px;
-    border: 3px solid rgba(37, 99, 235, 0.3);
+    width: 20px; height: 20px;
+    border: 3px solid rgba(59, 130, 246, 0.3);
     border-top-color: var(--primary-color);
     border-radius: 50%;
     animation: spin 0.8s linear infinite;
@@ -1211,86 +1181,62 @@ button:active, .hero-btn:active, .btn-sm-primary:active, .btn-sm-outline:active,
 .notification-dropdown {
     display: none;
     position: absolute;
-    right: 10px;
-    top: 60px;
-    width: 300px;
+    right: 10px; top: 62px;
+    width: 320px;
     background: var(--card-bg);
     border: 1px solid var(--border-color);
-    border-radius: 14px;
-    box-shadow: 0 10px 25px rgba(0,0,0,0.4);
+    border-radius: 20px;
+    box-shadow: 0 20px 40px rgba(0,0,0,0.4);
     z-index: 1250;
-    padding: 15px;
+    padding: 18px;
 }
-.notification-dropdown.active { display: block; }
-.notif-item { padding: 10px 0; border-bottom: 1px solid var(--border-color); font-size: 13px; }
+.notification-dropdown.active { display: block; animation: dropdownPop 0.2s ease; }
+.notif-item { padding: 12px 0; border-bottom: 1px solid var(--border-color); font-size: 13px; }
 .notif-item:last-child { border-bottom: none; }
-.notif-title { font-weight: 700; color: var(--text-main); margin-bottom: 2px; }
-.notif-time { font-size: 11px; color: var(--text-muted); }
+.notif-title { font-weight: 700; color: var(--text-main); margin-bottom: 3px; }
+.notif-time { font-size: 11px; color: var(--text-muted); margin-top: 4px; }
 
 /* --- Mobile Bottom Navigation Bar --- */
 .bottom-nav {
     position: fixed;
-    bottom: 0;
-    left: 0;
-    right: 0;
-    height: 65px;
+    bottom: 0; left: 0; right: 0;
+    height: 70px;
     background: var(--nav-bg);
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
     border-top: 1px solid var(--border-color);
-    display: flex;
-    justify-content: space-around;
-    align-items: center;
+    display: flex; justify-content: space-around; align-items: center;
     z-index: 1300;
 }
 
 .nav-item {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    text-decoration: none;
-    color: var(--text-muted);
-    font-size: 10px;
-    gap: 4px;
-    font-weight: 600;
-    cursor: pointer;
-    background: none;
-    border: none;
-    padding: 4px;
+    display: flex; flex-direction: column; align-items: center;
+    text-decoration: none; color: var(--text-muted);
+    font-size: 10px; gap: 4px; font-weight: 700;
+    cursor: pointer; background: none; border: none; padding: 4px;
 }
 
-.nav-item svg {
-    width: 22px;
-    height: 22px;
-    fill: currentColor;
-    transition: fill 0.2s;
-}
-
+.nav-item svg { width: 22px; height: 22px; fill: currentColor; transition: fill 0.2s; }
 .nav-item.active { color: var(--primary-color); }
 
-.action-btn {
-    position: relative;
-}
+.action-btn { position: relative; }
 
 .plus-circle {
-    width: 42px;
-    height: 42px;
-    background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
+    width: 46px; height: 46px;
+    background: linear-gradient(135deg, var(--primary-color), #7c3aed);
     color: #ffffff;
     border-radius: 50%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
+    display: flex; align-items: center; justify-content: center;
     font-size: 24px;
-    box-shadow: 0 8px 25px rgba(37, 99, 235, 0.45);
-    margin-top: -18px;
-    border: 4px solid var(--nav-bg);
-    transition: transform 0.25s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    box-shadow: 0 8px 25px var(--primary-glow);
+    margin-top: -20px;
+    border: 4px solid var(--bg-main);
 }
-
 .plus-circle:hover { transform: scale(1.1); }
 
 @media(min-width: 768px) {
     .bottom-nav { display: none; }
-    .main-content { padding-bottom: 20px; }
+    .main-content { padding-bottom: 24px; }
 }
     </style>
 </head>
@@ -1299,7 +1245,7 @@ button:active, .hero-btn:active, .btn-sm-primary:active, .btn-sm-outline:active,
     <!-- Top Navigation Bar -->
     <header class="navbar">
         <div class="nav-left">
-            <button class="menu-btn" id="menuToggleBtn" onclick="triggerHaptic()">☰</button>
+            <button class="menu-btn" id="menuToggleBtn" onclick="triggerHaptic()"><i class="fa-solid fa-bars"></i></button>
             <h1 class="brand-title">MJ HUB</h1>
         </div>
         <div class="nav-right">
@@ -1308,14 +1254,14 @@ button:active, .hero-btn:active, .btn-sm-primary:active, .btn-sm-outline:active,
             <button class="theme-toggle-btn" id="themeToggleBtn" title="Toggle Theme" onclick="triggerHaptic()">🌙</button>
 
             <div class="notification-icon" id="notificationBtn" title="Website Updates" onclick="triggerHaptic()">
-                🔔
+                <i class="fa-solid fa-bell"></i>
                 <span class="badge-dot" id="notifDot"></span>
             </div>
             <div class="notification-dropdown" id="notificationDropdown">
-                <div style="font-weight: 800; font-size: 14px; margin-bottom: 10px; color: var(--text-main);">Website Updates & Alerts</div>
+                <div style="font-weight: 800; font-size: 14px; margin-bottom: 12px; color: var(--text-main);">Website Updates & Alerts</div>
                 <div class="notif-item">
-                    <div class="notif-title">⚡ Welcome to MJ HUB</div>
-                    <div style="color: var(--text-muted); font-size: 12px;">Complete your onboarding profile to unlock all features.</div>
+                    <div class="notif-title">⚡ Welcome to MJ HUB v5.0 Pro</div>
+                    <div style="color: var(--text-muted); font-size: 12px;">Persistent cloud sync & elite multi-currency engine activated.</div>
                     <div class="notif-time">Just now</div>
                 </div>
             </div>
@@ -1327,20 +1273,20 @@ button:active, .hero-btn:active, .btn-sm-primary:active, .btn-sm-outline:active,
                 <div class="dropdown-menu" id="profileDropdownMenu">
                     <div class="dropdown-header">
                         <strong id="dropdownName">Guest User</strong>
-                        <span id="dropdownEmail">Complete onboarding</span>
+                        <span id="dropdownEmail">Syncing cloud profile...</span>
                     </div>
                     <ul class="dropdown-links">
-                        <li><a href="#" onclick="triggerHaptic(); switchSection('home'); toggleProfileDropdown(); return false;">Dashboard</a></li>
-                        <li><a href="#" onclick="triggerHaptic(); switchSection('profile'); toggleProfileDropdown(); return false;">Settings</a></li>
-                        <li><a href="#" onclick="triggerHaptic(); switchSection('cart'); toggleProfileDropdown(); return false;">Cart</a></li>
+                        <li><a href="#" onclick="triggerHaptic(); switchSection('home'); toggleProfileDropdown(); return false;"><i class="fa-solid fa-house"></i> Dashboard</a></li>
+                        <li><a href="#" onclick="triggerHaptic(); switchSection('profile'); toggleProfileDropdown(); return false;"><i class="fa-solid fa-gear"></i> Settings</a></li>
+                        <li><a href="#" onclick="triggerHaptic(); switchSection('cart'); toggleProfileDropdown(); return false;"><i class="fa-solid fa-cart-shopping"></i> Cart</a></li>
                     </ul>
                     <div class="dropdown-divider"></div>
                     <ul class="dropdown-links">
-                        <li><a href="#" onclick="triggerHaptic(); handleLogout(); return false;" style="color: #2563eb;">Logout</a></li>
+                        <li><a href="#" onclick="triggerHaptic(); handleLogout(); return false;" style="color: var(--danger-color);"><i class="fa-solid fa-right-from-bracket"></i> Logout</a></li>
                     </ul>
                     <div class="dropdown-divider"></div>
-                    <div style="padding: 10px 15px; display: flex; justify-content: space-between; align-items: center;">
-                        <span style="font-size: 13px; font-weight: 600; color: var(--text-main);">Theme Mode</span>
+                    <div style="padding: 10px 16px; display: flex; justify-content: space-between; align-items: center;">
+                        <span style="font-size: 13px; font-weight: 700; color: var(--text-muted);">Theme Mode</span>
                         <button class="btn-sm-outline" id="dropdownThemeToggleBtn" style="padding: 6px 12px;" onclick="triggerHaptic()">Dark</button>
                     </div>
                 </div>
@@ -1355,17 +1301,17 @@ button:active, .hero-btn:active, .btn-sm-primary:active, .btn-sm-outline:active,
                 <div class="sidebar-brand-logo">⚡</div>
                 <span class="sidebar-brand">MJ HUB</span>
             </div>
-            <button class="close-btn" id="sidebarCloseBtn" onclick="triggerHaptic()">✕</button>
+            <button class="close-btn" id="sidebarCloseBtn" onclick="triggerHaptic()"><i class="fa-solid fa-xmark"></i></button>
         </div>
         <div class="sidebar-links-container">
             <ul class="sidebar-links">
-                <li><a href="#" class="sidebar-link active" data-target="home" onclick="triggerHaptic()">🏠 <span>Dashboard</span></a></li>
-                <li><a href="#" class="sidebar-link" data-target="logs" onclick="triggerHaptic()">📦 <span>MJ Logs</span></a></li>
-                <li><a href="#" class="sidebar-link" data-target="sms" onclick="triggerHaptic()">📱 <span>MJ SMS</span></a></li>
-                <li><a href="#" class="sidebar-link" data-target="booster" onclick="triggerHaptic()">⚡ <span>MJ Boosters</span></a></li>
-                <li><a href="#" class="sidebar-link" data-target="deposit" onclick="triggerHaptic()">💳 <span>Deposit</span></a></li>
-                <li><a href="#" class="sidebar-link" data-target="cart" onclick="triggerHaptic()">🛍️ <span>Cart</span></a></li>
-                <li><a href="#" onclick="triggerHaptic(); handleLogout(); return false;">🚪 <span>Logout</span></a></li>
+                <li><a href="#" class="sidebar-link active" data-target="home" onclick="triggerHaptic()"><i class="fa-solid fa-house"></i> <span>Dashboard</span></a></li>
+                <li><a href="#" class="sidebar-link" data-target="logs" onclick="triggerHaptic()"><i class="fa-solid fa-box-archive"></i> <span>MJ Logs</span></a></li>
+                <li><a href="#" class="sidebar-link" data-target="sms" onclick="triggerHaptic()"><i class="fa-solid fa-mobile-screen"></i> <span>MJ SMS</span></a></li>
+                <li><a href="#" class="sidebar-link" data-target="booster" onclick="triggerHaptic()"><i class="fa-solid fa-bolt"></i> <span>MJ Boosters</span></a></li>
+                <li><a href="#" class="sidebar-link" data-target="deposit" onclick="triggerHaptic()"><i class="fa-solid fa-credit-card"></i> <span>Deposit</span></a></li>
+                <li><a href="#" class="sidebar-link" data-target="cart" onclick="triggerHaptic()"><i class="fa-solid fa-bag-shopping"></i> <span>Cart</span></a></li>
+                <li><a href="#" onclick="triggerHaptic(); handleLogout(); return false;" style="color: var(--danger-color);"><i class="fa-solid fa-right-from-bracket"></i> <span>Logout</span></a></li>
             </ul>
         </div>
         <div class="sidebar-footer">
@@ -1382,10 +1328,10 @@ button:active, .hero-btn:active, .btn-sm-primary:active, .btn-sm-outline:active,
         <section id="home" class="app-section active">
             <div class="dashboard-card-hero">
                 <div class="hero-welcome" id="heroWelcomeTitle">Welcome to MJ HUB</div>
-                <div class="hero-sub" id="heroSubText">Complete your onboarding profile and fund your wallet to get started with MJ Boosters, MJ SMS, and MJ Logs.</div>
+                <div class="hero-sub" id="heroSubText">Fund your account and enjoy instant execution across MJ Boosters, MJ SMS, MJ Logs, and our Pro Currency Swapper.</div>
                 <div class="hero-actions" id="heroActionsContainer">
-                    <button class="hero-btn" onclick="triggerHaptic(); switchSection('deposit')">Fund Account</button>
-                    <button class="hero-btn" id="heroOnboardBtn" onclick="triggerHaptic(); openCurrencyModal()">Convert Currency</button>
+                    <button class="hero-btn" onclick="triggerHaptic(); switchSection('deposit')"><i class="fa-solid fa-wallet"></i> Fund Account</button>
+                    <button class="hero-btn" onclick="triggerHaptic(); openCurrencyModal()"><i class="fa-solid fa-right-left"></i> Pro Currency Swapper</button>
                 </div>
             </div>
 
@@ -1395,7 +1341,7 @@ button:active, .hero-btn:active, .btn-sm-primary:active, .btn-sm-outline:active,
                         <span class="sleek-label">NGN Wallet Balance</span>
                         <span class="sleek-value" id="homeNgnBalance">₦0.00</span>
                     </div>
-                    <div class="sleek-card-icon icon-blue">💳</div>
+                    <div class="sleek-card-icon icon-blue"><i class="fa-solid fa-naira-sign"></i></div>
                 </div>
 
                 <div class="sleek-card">
@@ -1403,7 +1349,7 @@ button:active, .hero-btn:active, .btn-sm-primary:active, .btn-sm-outline:active,
                         <span class="sleek-label">USD Wallet Balance</span>
                         <span class="sleek-value" id="homeUsdBalance">$0.00</span>
                     </div>
-                    <div class="sleek-card-icon icon-white">💵</div>
+                    <div class="sleek-card-icon icon-purple"><i class="fa-solid fa-dollar-sign"></i></div>
                 </div>
             </div>
         </section>
@@ -1416,22 +1362,22 @@ button:active, .hero-btn:active, .btn-sm-primary:active, .btn-sm-outline:active,
                     <div class="profile-avatar-overlay">Edit</div>
                 </div>
                 <input type="file" id="profileAvatarInput" accept="image/*" style="display: none;" onchange="handleAvatarUpload(event)">
-                <h3 id="profileHeaderName">Not Set (Complete Onboarding)</h3>
-                <p id="profileHeaderEmail">No email provided</p>
+                <h3 id="profileHeaderName">Loading profile...</h3>
+                <p id="profileHeaderEmail">Connecting...</p>
             </div>
 
-            <div class="account-settings-card" style="background: rgba(17, 24, 39, 0.95); border: 1px solid rgba(59, 130, 246, 0.2); padding: 20px; border-radius: 14px; max-width: 400px; color: #fff; margin: 0 auto 20px auto;">
-                <h3 style="font-size: 16px; margin-bottom: 8px;">Account Identification</h3>
-                <p style="font-size: 13px; color: #93c5fd; margin-bottom: 12px;">Provide this Customer ID to support if you encounter deposit delays or disputes:</p>
+            <div class="content-card" style="margin-bottom: 20px;">
+                <h2>Customer Identification</h2>
+                <p class="helper-text">Provide this unique Customer ID to support if you encounter deposit inquiries or disputes:</p>
                 <div style="display: flex; gap: 10px; align-items: center;">
-                    <input type="text" id="myCustomerId" readonly style="background: #07090e; border: 1px solid #3b82f6; padding: 10px; border-radius: 8px; color: #38bdf8; font-family: monospace; font-weight: bold; width: 100%;" placeholder="Loading...">
-                    <button class="action-btn primary-btn" onclick="triggerHaptic(); copyIdToClipboard()" style="background: #2563eb; color: #fff; border: none; padding: 10px 16px; border-radius: 8px; cursor: pointer; font-weight: 600;">Copy</button>
+                    <input type="text" id="myCustomerId" readonly style="font-family: monospace; font-weight: bold; color: var(--primary-color);" placeholder="Loading...">
+                    <button class="btn-sm-primary" style="flex: unset; padding: 13px 20px;" onclick="triggerHaptic(); copyIdToClipboard()">Copy ID</button>
                 </div>
             </div>
 
-            <div class="content-card" id="profileSettingsCard" style="margin-bottom: 16px;">
+            <div class="content-card" style="margin-bottom: 20px;">
                 <h2>Profile & Account Settings</h2>
-                <p class="helper-text">Update your account profile details, bio, address, verification numbers (BVN & NIN), and avatar stored securely in Supabase.</p>
+                <p class="helper-text">Update your account credentials and security details stored securely in Supabase.</p>
                 
                 <div class="form-group">
                     <label>Full Name / Username</label>
@@ -1453,36 +1399,17 @@ button:active, .hero-btn:active, .btn-sm-primary:active, .btn-sm-outline:active,
                     <label>Bio / About Me</label>
                     <textarea id="profileBioInput" rows="3" placeholder="Tell us a little bit about yourself"></textarea>
                 </div>
-                <div class="form-group">
-                    <label>BVN (Bank Verification Number)</label>
-                    <input type="text" id="profileBvnInput" placeholder="Enter 11-digit BVN" maxlength="11">
-                </div>
-                <div class="form-group">
-                    <label>NIN (National Identification Number)</label>
-                    <input type="text" id="profileNinInput" placeholder="Enter 11-digit NIN" maxlength="11">
-                </div>
 
-                <button class="btn-sm-primary" style="width:100%; padding:12px; font-size: 14px;" onclick="triggerHaptic(); saveProfileSettingsData()">Save Profile Changes</button>
+                <button class="btn-sm-primary" style="width:100%; padding:14px; font-size: 14px;" onclick="triggerHaptic(); saveProfileSettingsData()">Save Profile Changes</button>
             </div>
 
             <div class="profile-menu-list">
-                <div class="profile-menu-item" onclick="triggerHaptic(); switchSection('home')">
-                    <div class="profile-menu-left">
-                        <div class="profile-menu-icon icon-blue">💳</div>
-                        <div class="profile-menu-info">
-                            <h4>Wallet Balances</h4>
-                            <p id="profileBalanceDisplay">NGN: ₦0.00 | USD: $0.00</p>
-                        </div>
-                    </div>
-                    <div class="profile-menu-arrow">›</div>
-                </div>
-
                 <div class="profile-menu-item" onclick="triggerHaptic(); openChangePasswordModal()">
                     <div class="profile-menu-left">
-                        <div class="profile-menu-icon icon-blue">🛡️</div>
+                        <div class="profile-menu-icon icon-blue"><i class="fa-solid fa-shield-halved"></i></div>
                         <div class="profile-menu-info">
                             <h4>Change Password</h4>
-                            <p>Click to change your password</p>
+                            <p>Update your account security password</p>
                         </div>
                     </div>
                     <div class="profile-menu-arrow">›</div>
@@ -1490,10 +1417,10 @@ button:active, .hero-btn:active, .btn-sm-primary:active, .btn-sm-outline:active,
 
                 <div class="profile-menu-item" onclick="triggerHaptic(); handleLogout()">
                     <div class="profile-menu-left">
-                        <div class="profile-menu-icon icon-blue">🚪</div>
+                        <div class="profile-menu-icon icon-blue" style="background: rgba(239, 68, 68, 0.15); color: var(--danger-color);"><i class="fa-solid fa-right-from-bracket"></i></div>
                         <div class="profile-menu-info">
-                            <h4 style="color: var(--primary-color);">Log Out</h4>
-                            <p>Click Here to Log Out</p>
+                            <h4 style="color: var(--danger-color);">Log Out</h4>
+                            <p>Sign out of your active session</p>
                         </div>
                     </div>
                     <div class="profile-menu-arrow">›</div>
@@ -1518,7 +1445,7 @@ button:active, .hero-btn:active, .btn-sm-primary:active, .btn-sm-outline:active,
                         <div class="product-info-top">
                             <div>
                                 <div class="product-title">Old Gmail Accounts (Aged)</div>
-                                <div class="helper-text" style="margin: 2px 0 0 0;">Phone verified, 2021-2023 batch</div>
+                                <div class="helper-text" style="margin: 4px 0 0 0;">Phone verified, 2021-2023 batch</div>
                             </div>
                             <div class="product-price">₦1,200</div>
                         </div>
@@ -1541,7 +1468,7 @@ button:active, .hero-btn:active, .btn-sm-primary:active, .btn-sm-outline:active,
                         <div class="product-info-top">
                             <div>
                                 <div class="product-title">WhatsApp OTP Number</div>
-                                <div class="helper-text" style="margin: 2px 0 0 0;">USA / UK Virtual Line</div>
+                                <div class="helper-text" style="margin: 4px 0 0 0;">USA / UK Virtual Line</div>
                             </div>
                             <div class="product-price">₦800</div>
                         </div>
@@ -1564,7 +1491,7 @@ button:active, .hero-btn:active, .btn-sm-primary:active, .btn-sm-outline:active,
                         <div class="product-info-top">
                             <div>
                                 <div class="product-title">Instagram Followers (1,000)</div>
-                                <div class="helper-text" style="margin: 2px 0 0 0;">High quality non-drop SMM</div>
+                                <div class="helper-text" style="margin: 4px 0 0 0;">High quality non-drop SMM</div>
                             </div>
                             <div class="product-price">₦2,500</div>
                         </div>
@@ -1586,7 +1513,7 @@ button:active, .hero-btn:active, .btn-sm-primary:active, .btn-sm-outline:active,
                     <table class="history-table">
                         <thead>
                             <tr>
-                                <th>Item Description</th>
+                                <th>Item</th>
                                 <th>Type</th>
                                 <th>Price</th>
                                 <th>Action</th>
@@ -1599,10 +1526,10 @@ button:active, .hero-btn:active, .btn-sm-primary:active, .btn-sm-outline:active,
                 </div>
                 <div class="cart-summary-box">
                     <div>
-                        <div style="font-size: 12px; color: var(--text-muted);">Total Checkout Sum</div>
+                        <div style="font-size: 11px; font-weight: 700; color: var(--text-muted); text-transform: uppercase;">Total Checkout Sum</div>
                         <div class="cart-total-amount" id="cartTotalDisplay">₦0.00</div>
                     </div>
-                    <button class="btn-sm-primary" style="padding: 12px 24px; font-size: 14px;" onclick="triggerHaptic(); checkoutCart()">Purchase All Items</button>
+                    <button class="btn-sm-primary" style="padding: 12px 24px; font-size: 14px; flex: unset;" onclick="triggerHaptic(); checkoutCart()">Purchase All Items</button>
                 </div>
             </div>
         </section>
@@ -1631,22 +1558,22 @@ button:active, .hero-btn:active, .btn-sm-primary:active, .btn-sm-outline:active,
                     <label>Amount</label>
                     <input type="number" id="depositInput" placeholder="Enter amount">
                 </div>
-                <button class="btn-sm-primary" style="width:100%; padding:12px;" onclick="triggerHaptic(); processDeposit()">Proceed to Payment</button>
+                <button class="btn-sm-primary" style="width:100%; padding:14px; font-size: 14px;" onclick="triggerHaptic(); processDeposit()">Proceed to Payment</button>
             </div>
         </section>
 
     </main>
 
-    <!-- MOVABLE TOP-NOTCH SUPPORT WIDGET -->
+    <!-- SUPPORT WIDGET -->
     <div id="support-widget" class="support-widget-container">
-        <button id="support-toggle-btn" class="support-toggle-btn" aria-label="Support" onclick="triggerHaptic()">
-            <span class="support-icon">🎧</span>
+        <button id="support-toggle-btn" class="support-toggle-btn" aria-label="Support">
+            <span class="support-icon"><i class="fa-solid fa-headset"></i></span>
             <span class="support-badge-tag">Help</span>
         </button>
         
         <div id="support-popup" class="support-popup-card">
             <div class="support-popup-header">
-                <button id="support-close-btn" class="support-close-inner" onclick="triggerHaptic()">&times;</button>
+                <button id="support-close-btn" class="support-close-inner">&times;</button>
                 <h3>Need help?</h3>
                 <p>We typically reply in minutes</p>
                 <div class="support-status-indicator">
@@ -1657,7 +1584,7 @@ button:active, .hero-btn:active, .btn-sm-primary:active, .btn-sm-outline:active,
             <div class="support-popup-body">
                 <a href="https://wa.me/234XXXXXXXXXX" target="_blank" rel="noopener noreferrer" class="support-channel-item" onclick="triggerHaptic()">
                     <div class="channel-icon-wrap whatsapp">
-                        <span>💬</span>
+                        <i class="fa-brands fa-whatsapp"></i>
                     </div>
                     <div class="channel-info">
                         <h4>WhatsApp</h4>
@@ -1666,7 +1593,7 @@ button:active, .hero-btn:active, .btn-sm-primary:active, .btn-sm-outline:active,
                 </a>
                 <a href="https://t.me/XXXXXXXXXX" target="_blank" rel="noopener noreferrer" class="support-channel-item" onclick="triggerHaptic()">
                     <div class="channel-icon-wrap telegram">
-                        <span>✈️</span>
+                        <i class="fa-brands fa-telegram"></i>
                     </div>
                     <div class="channel-info">
                         <h4>Telegram</h4>
@@ -1680,9 +1607,9 @@ button:active, .hero-btn:active, .btn-sm-primary:active, .btn-sm-outline:active,
     <!-- CHANGE PASSWORD MODAL -->
     <div class="currency-modal" id="changePasswordModal">
         <div class="currency-modal-card">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
-                <div style="font-size: 17px; font-weight: 800; color: var(--text-main);">Change Account Password</div>
-                <button onclick="triggerHaptic(); closeChangePasswordModal()" style="background: var(--bg-main); border: 1px solid var(--border-color); width: 30px; height: 30px; border-radius: 50%; cursor: pointer; font-size: 14px; font-weight: bold; color: var(--text-main);">✕</button>
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                <div style="font-size: 18px; font-weight: 800; color: var(--text-main);">Change Account Password</div>
+                <button onclick="triggerHaptic(); closeChangePasswordModal()" style="background: var(--bg-main); border: 1px solid var(--border-color); width: 32px; height: 32px; border-radius: 50%; cursor: pointer; font-size: 14px; color: var(--text-main);">✕</button>
             </div>
             <div class="form-group">
                 <label>Current Password</label>
@@ -1696,30 +1623,32 @@ button:active, .hero-btn:active, .btn-sm-primary:active, .btn-sm-outline:active,
                 <label>Confirm New Password</label>
                 <input type="password" id="confirmPasswordInput" placeholder="••••••••">
             </div>
-            <button class="btn-sm-primary" style="width: 100%; padding: 12px; font-size: 14px;" onclick="triggerHaptic(); submitNewPassword()">Update Password</button>
+            <button class="btn-sm-primary" style="width: 100%; padding: 14px; font-size: 14px;" onclick="triggerHaptic(); submitNewPassword()">Update Password</button>
         </div>
     </div>
 
     <!-- TRANSACTION RECEIPT MODAL -->
     <div class="currency-modal" id="transactionReceiptModal">
         <div class="currency-modal-card">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; border-bottom: 1px solid var(--border-color); padding-bottom: 10px;">
-                <div style="font-size: 17px; font-weight: 800; color: var(--text-main);">📄 Transaction Receipt</div>
-                <button onclick="triggerHaptic(); closeTransactionReceipt()" style="background: var(--bg-main); border: 1px solid var(--border-color); width: 30px; height: 30px; border-radius: 50%; cursor: pointer; font-size: 14px; font-weight: bold; color: var(--text-main);">✕</button>
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 18px; border-bottom: 1px solid var(--border-color); padding-bottom: 12px;">
+                <div style="font-size: 18px; font-weight: 800; color: var(--text-main); display: flex; align-items: center; gap: 8px;"><i class="fa-solid fa-receipt"></i> Transaction Receipt</div>
+                <button onclick="triggerHaptic(); closeTransactionReceipt()" style="background: var(--bg-main); border: 1px solid var(--border-color); width: 32px; height: 32px; border-radius: 50%; cursor: pointer; font-size: 14px; color: var(--text-main);">✕</button>
             </div>
-            <div id="receiptContentBody" style="display: flex; flex-direction: column; gap: 12px; font-size: 13px; margin-bottom: 20px;">
+            <div id="receiptContentBody" style="display: flex; flex-direction: column; gap: 12px; font-size: 13px; margin-bottom: 22px;">
                 <!-- Dynamically injected receipt details -->
             </div>
-            <button class="btn-sm-primary" style="width: 100%; padding: 12px; font-size: 14px;" onclick="triggerHaptic(); closeTransactionReceipt()">Close Receipt</button>
+            <button class="btn-sm-primary" style="width: 100%; padding: 14px; font-size: 14px;" onclick="triggerHaptic(); closeTransactionReceipt()">Close Receipt</button>
         </div>
     </div>
 
-    <!-- ADVANCED CURRENCY CONVERTER MODAL -->
+    <!-- ELITE PRO CURRENCY SWAPPER MODAL -->
     <div class="currency-modal" id="currencyConverterModal">
         <div class="currency-modal-card">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 18px;">
-                <div style="font-size: 18px; font-weight: 800; color: var(--text-main); display: flex; align-items: center; gap: 8px;"><span>💱</span> Pro Currency Swapper</div>
-                <button onclick="triggerHaptic(); closeCurrencyModal()" style="background: var(--bg-main); border: 1px solid var(--border-color); width: 32px; height: 32px; border-radius: 50%; cursor: pointer; font-size: 15px; font-weight: bold; color: var(--text-main);">✕</button>
+            <div class="converter-pro-header">
+                <div class="converter-pro-title">
+                    <span><i class="fa-solid fa-right-left"></i></span> Pro Currency Swapper
+                </div>
+                <button onclick="triggerHaptic(); closeCurrencyModal()" style="background: var(--bg-main); border: 1px solid var(--border-color); width: 34px; height: 34px; border-radius: 50%; cursor: pointer; font-size: 15px; color: var(--text-main);">✕</button>
             </div>
 
             <!-- From Currency Box -->
@@ -1734,12 +1663,12 @@ button:active, .hero-btn:active, .btn-sm-primary:active, .btn-sm-outline:active,
             <!-- Switch Direction Button -->
             <div class="converter-switch-btn-wrap">
                 <div class="converter-switch-circle" onclick="triggerHaptic(); toggleConverterDirection()" title="Switch Currency Direction">
-                    ↕
+                    <i class="fa-solid fa-arrow-down-up"></i>
                 </div>
             </div>
 
             <!-- To Currency Box -->
-            <div class="converter-advanced-box" style="margin-top: -6px;">
+            <div class="converter-advanced-box">
                 <div class="converter-row-top">
                     <span class="converter-label" id="toLabelText">You Receive (US Dollar)</span>
                     <span class="currency-pill" id="toBadgePill">USD $</span>
@@ -1747,15 +1676,18 @@ button:active, .hero-btn:active, .btn-sm-primary:active, .btn-sm-outline:active,
                 <input type="text" id="targetConvertOutput" class="converter-input-main" placeholder="$0.00" readonly style="color: var(--primary-color);">
             </div>
 
-            <!-- Loading & Status Feedback Container -->
+            <!-- Conversion Loading Animation Indicator -->
             <div class="conversion-loading-box" id="conversionLoadingBox">
                 <div class="spinner-icon"></div>
-                <span id="conversionStatusText">Processing secure exchange rate...</span>
+                <span id="conversionStatusText">Executing secure multi-currency swap...</span>
             </div>
 
-            <div style="font-size: 12px; color: var(--text-muted); text-align: center; margin-bottom: 16px; font-weight: 600;" id="exchangeRateText">Live Market Rate: $1.00 USD = ₦1,420 NGN</div>
+            <div class="converter-live-badge">
+                <span>Live Market Rate</span>
+                <span id="exchangeRateText"><strong>1 USD</strong> = ₦1,420</span>
+            </div>
             
-            <button class="btn-sm-primary" id="executeConversionBtn" style="width: 100%; padding: 14px; font-size: 15px; font-weight: 700; border-radius: 14px;" onclick="triggerHaptic(); executeAdvancedConversion()">Execute Secure Conversion</button>
+            <button class="btn-sm-primary" id="executeConversionBtn" style="width: 100%; padding: 15px; font-size: 15px; font-weight: 700; border-radius: 16px;" onclick="triggerHaptic(); executeAdvancedConversion()">Execute Secure Swap</button>
         </div>
     </div>
 
@@ -1764,10 +1696,10 @@ button:active, .hero-btn:active, .btn-sm-primary:active, .btn-sm-outline:active,
         <div class="drawer-drag-handle"></div>
         <div class="drawer-header-row">
             <div class="drawer-title-area">
-                <h3><span>⏱️</span> Activity History</h3>
+                <h3><span><i class="fa-solid fa-clock-rotate-left"></i></span> Activity History</h3>
                 <p>Click any transaction to view detailed receipt</p>
             </div>
-            <button class="drawer-close-btn" onclick="triggerHaptic(); toggleActivityHistory()">✕</button>
+            <button class="drawer-close-btn" onclick="triggerHaptic(); toggleActivityHistory()"><i class="fa-solid fa-xmark"></i></button>
         </div>
 
         <div class="drawer-filter-scroll">
@@ -1785,28 +1717,28 @@ button:active, .hero-btn:active, .btn-sm-primary:active, .btn-sm-outline:active,
     <!-- FLOATING (+) ACTION MODAL -->
     <div class="floating-action-modal" id="floatingPopupModal">
         <div class="popup-header-row">
-            <div class="popup-title"><span>⚡</span> Quick Actions</div>
-            <button class="popup-close" onclick="triggerHaptic(); toggleFloatingPopup()">✕</button>
+            <div class="popup-title"><span><i class="fa-solid fa-bolt"></i></span> Quick Actions</div>
+            <button class="popup-close" onclick="triggerHaptic(); toggleFloatingPopup()"><i class="fa-solid fa-xmark"></i></button>
         </div>
         <div class="popup-grid">
             <div class="popup-item" onclick="triggerHaptic(); switchSection('deposit'); toggleFloatingPopup();">
-                <div class="popup-icon-badge">💳</div>
+                <div class="popup-icon-badge"><i class="fa-solid fa-credit-card"></i></div>
                 <span>Deposit</span>
             </div>
             <div class="popup-item" onclick="triggerHaptic(); switchSection('booster'); toggleFloatingPopup();">
-                <div class="popup-icon-badge">⚡</div>
+                <div class="popup-icon-badge"><i class="fa-solid fa-bolt"></i></div>
                 <span>MJ Boosters</span>
             </div>
             <div class="popup-item" onclick="triggerHaptic(); switchSection('sms'); toggleFloatingPopup();">
-                <div class="popup-icon-badge">📱</div>
+                <div class="popup-icon-badge"><i class="fa-solid fa-mobile-screen"></i></div>
                 <span>MJ SMS</span>
             </div>
             <div class="popup-item" onclick="triggerHaptic(); switchSection('logs'); toggleFloatingPopup();">
-                <div class="popup-icon-badge">📦</div>
+                <div class="popup-icon-badge"><i class="fa-solid fa-box-archive"></i></div>
                 <span>MJ Logs</span>
             </div>
             <div class="popup-item" onclick="triggerHaptic(); switchSection('profile'); toggleFloatingPopup();">
-                <div class="popup-icon-badge">⚙️</div>
+                <div class="popup-icon-badge"><i class="fa-solid fa-gear"></i></div>
                 <span>Settings</span>
             </div>
         </div>
@@ -1837,7 +1769,7 @@ button:active, .hero-btn:active, .btn-sm-primary:active, .btn-sm-outline:active,
 
     <script>
 /* ==========================================
-   MJ HUB - Application Logic (v4.7)
+   MJ HUB - Application Logic (v5.0 Pro)
    ========================================== */
 
 const SUPABASE_URL = 'https://atczodlljmlayvldxfmv.supabase.co';
@@ -1848,29 +1780,21 @@ if (window.supabase && SUPABASE_URL !== 'https://YOUR_PROJECT_ID.supabase.co') {
     supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY);
 }
 
-// Independent separate balances for NGN and USD
 let currentBalanceNgn = 0.00;
 let currentBalanceUsd = 0.00;
-
 let exchangeRate = 1420; 
 
 let cartItems = [];
 let transactions = [];
-let userOnboarded = false;
-let userData = { name: '', email: '', phone: '', address: '', bio: '', bvn: '', nin: '', avatarUrl: '' };
+let userData = { name: '', email: '', phone: '', address: '', bio: '', avatarUrl: '' };
 
-// Haptic feedback utility
 function triggerHaptic() {
-    if (navigator.vibrate) {
-        navigator.vibrate(30);
-    }
+    if (navigator.vibrate) { navigator.vibrate(30); }
 }
 
 function toggleProfileDropdown() {
     const profileDropdown = document.getElementById('profileDropdownMenu');
-    if (profileDropdown) {
-        profileDropdown.classList.toggle('active');
-    }
+    if (profileDropdown) { profileDropdown.classList.toggle('active'); }
 }
 
 document.addEventListener('DOMContentLoaded', async () => {
@@ -1889,8 +1813,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         const phoneVal = meta.phone || '';
         const addressVal = meta.address || '';
         const bioVal = meta.bio || '';
-        const bvnVal = meta.bvn || '';
-        const ninVal = meta.nin || '';
         const avatarVal = meta.avatar_url || '';
         
         userData.email = userEmail;
@@ -1898,17 +1820,13 @@ document.addEventListener('DOMContentLoaded', async () => {
         userData.phone = phoneVal;
         userData.address = addressVal;
         userData.bio = bioVal;
-        userData.bvn = bvnVal;
-        userData.nin = ninVal;
         userData.avatarUrl = avatarVal;
-        userOnboarded = true;
         
         document.getElementById('dropdownName').textContent = displayName;
         document.getElementById('dropdownEmail').textContent = userEmail;
         document.getElementById('profileHeaderName').textContent = displayName;
         document.getElementById('profileHeaderEmail').textContent = userEmail;
         document.getElementById('heroWelcomeTitle').textContent = 'Welcome back, ' + displayName + '!';
-        document.getElementById('heroSubText').textContent = 'Manage your multi-currency balances and access MJ Boosters, MJ SMS, and MJ Logs seamlessly.';
         
         if(avatarVal) {
             document.getElementById('headerAvatarText').innerHTML = `<img src="${avatarVal}" alt="Avatar">`;
@@ -1923,8 +1841,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         document.getElementById('profilePhoneInput').value = phoneVal;
         document.getElementById('profileAddressInput').value = addressVal;
         document.getElementById('profileBioInput').value = bioVal;
-        document.getElementById('profileBvnInput').value = bvnVal;
-        document.getElementById('profileNinInput').value = ninVal;
 
         await fetchUserBalance(user.id);
         await fetchUserTransactions(user.id);
@@ -1940,14 +1856,11 @@ document.addEventListener('DOMContentLoaded', async () => {
     const overlay = document.getElementById('sidebarOverlay');
     const menuToggle = document.getElementById('menuToggleBtn');
     const sidebarClose = document.getElementById('sidebarCloseBtn');
-    
     const profileToggle = document.getElementById('profileDropdownToggle');
     const profileDropdown = document.getElementById('profileDropdownMenu');
-
     const notifBtn = document.getElementById('notificationBtn');
     const notifDropdown = document.getElementById('notificationDropdown');
     const notifDot = document.getElementById('notifDot');
-    
     const themeToggleBtn = document.getElementById('themeToggleBtn');
     const dropdownThemeToggleBtn = document.getElementById('dropdownThemeToggleBtn');
 
@@ -1975,19 +1888,14 @@ document.addEventListener('DOMContentLoaded', async () => {
             section.classList.remove('active');
             if(section.id === targetId) { section.classList.add('active'); }
         });
-
         sidebarLinks.forEach(link => {
             link.classList.remove('active');
             if(link.getAttribute('data-target') === targetId) { link.classList.add('active'); }
         });
-
-        document.querySelectorAll('.bottom-nav .nav-item').forEach(item => item.classList.remove('active'));
         window.scrollTo({ top: 0, behavior: 'smooth' });
     }
 
-    window.switchSection = function(sectionId) { 
-        navigateToSection(sectionId); 
-    };
+    window.switchSection = function(sectionId) { navigateToSection(sectionId); };
 
     sidebarLinks.forEach(link => {
         link.addEventListener('click', (e) => {
@@ -2001,15 +1909,8 @@ document.addEventListener('DOMContentLoaded', async () => {
         });
     });
 
-    menuToggle.addEventListener('click', () => {
-        sidebar.classList.add('open');
-        overlay.classList.add('active');
-    });
-
-    sidebarClose.addEventListener('click', () => {
-        sidebar.classList.remove('open');
-        overlay.classList.remove('active');
-    });
+    menuToggle.addEventListener('click', () => { sidebar.classList.add('open'); overlay.classList.add('active'); });
+    sidebarClose.addEventListener('click', () => { sidebar.classList.remove('open'); overlay.classList.remove('active'); });
 
     overlay.addEventListener('click', () => {
         sidebar.classList.remove('open');
@@ -2039,7 +1940,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     document.addEventListener('click', (e) => {
         profileDropdown.classList.remove('active');
         notifDropdown.classList.remove('active');
-        
         const widget = document.getElementById('support-widget');
         const popup = document.getElementById('support-popup');
         if (widget && popup && !widget.contains(e.target)) {
@@ -2047,8 +1947,6 @@ document.addEventListener('DOMContentLoaded', async () => {
             widget.classList.remove('open');
         }
     });
-
-    renderTransactions('all');
 });
 
 /* ==========================================
@@ -2058,7 +1956,6 @@ function filterProductItems(category, btnElement) {
     const parentSection = btnElement.closest('.content-card');
     parentSection.querySelectorAll('.filter-tab').forEach(tab => tab.classList.remove('active'));
     btnElement.classList.add('active');
-
     const items = parentSection.querySelectorAll('.product-item-card');
     items.forEach(item => {
         if (category === 'all' || item.getAttribute('data-category') === category) {
@@ -2070,7 +1967,7 @@ function filterProductItems(category, btnElement) {
 }
 
 /* ==========================================
-   FETCH & REALTIME BALANCE & TRANSACTION SYNC
+   FETCH & PERSISTENT TRANSACTIONS & BALANCES
    ========================================== */
 async function fetchUserBalance(userId) {
     if (!supabaseClient) return;
@@ -2110,7 +2007,10 @@ async function fetchUserTransactions(userId) {
                 date: new Date(tx.created_at || tx.id).toLocaleString(),
                 status: tx.status || 'Success',
                 paymentProvider: tx.payment_provider || 'MJ HUB Gateway',
-                channel: tx.channel || 'Wallet Action'
+                channel: tx.channel || 'Wallet Action',
+                fromCurrency: tx.from_currency,
+                toCurrency: tx.to_currency,
+                rate: tx.rate
             }));
             renderTransactions('all');
         }
@@ -2133,38 +2033,33 @@ async function saveTransactionToSupabase(txObj) {
             amount: txObj.amount,
             status: txObj.status,
             payment_provider: txObj.paymentProvider,
-            channel: txObj.channel
+            channel: txObj.channel,
+            from_currency: txObj.fromCurrency,
+            to_currency: txObj.toCurrency,
+            rate: txObj.rate
         }]);
     } catch (err) {
-        console.error("Error saving transaction:", err);
+        console.error("Error saving transaction to Supabase:", err);
     }
+}
+
+function updateBalanceDisplay() {
+    document.getElementById('homeNgnBalance').textContent = '₦' + currentBalanceNgn.toLocaleString(undefined, {minimumFractionDigits: 2});
+    document.getElementById('homeUsdBalance').textContent = '$' + currentBalanceUsd.toLocaleString(undefined, {minimumFractionDigits: 2});
+    document.getElementById('navWalletBadge').textContent = 'NGN ₦' + currentBalanceNgn.toLocaleString(undefined, {minimumFractionDigits: 2});
 }
 
 function setupRealtimeBalanceSubscription(userId) {
     if (!supabaseClient) return;
-
     supabaseClient
         .channel('public:profiles')
-        .on(
-            'postgres_changes',
-            {
-                event: 'UPDATE',
-                schema: 'public',
-                table: 'profiles',
-                filter: `id=eq.${userId}`
-            },
-            (payload) => {
-                if (payload.new) {
-                    if (payload.new.balance !== undefined) {
-                        currentBalanceNgn = parseFloat(payload.new.balance) || 0.00;
-                    }
-                    if (payload.new.balance_usd !== undefined) {
-                        currentBalanceUsd = parseFloat(payload.new.balance_usd) || 0.00;
-                    }
-                    updateBalanceDisplay();
-                }
+        .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'profiles', filter: `id=eq.${userId}` }, (payload) => {
+            if (payload.new) {
+                if (payload.new.balance !== undefined) { currentBalanceNgn = parseFloat(payload.new.balance) || 0.00; }
+                if (payload.new.balance_usd !== undefined) { currentBalanceUsd = parseFloat(payload.new.balance_usd) || 0.00; }
+                updateBalanceDisplay();
             }
-        )
+        })
         .subscribe();
 }
 
@@ -2187,18 +2082,11 @@ function initSupportWidgetAndDragging() {
         hasMoved = false;
         const clientX = e.type === 'touchstart' ? e.touches[0].clientX : e.clientX;
         const clientY = e.type === 'touchstart' ? e.touches[0].clientY : e.clientY;
-
-        startX = clientX;
-        startY = clientY;
-
+        startX = clientX; startY = clientY;
         const rect = widget.getBoundingClientRect();
-        initialX = rect.left;
-        initialY = rect.top;
-
-        widget.style.bottom = 'auto';
-        widget.style.right = 'auto';
-        widget.style.left = initialX + 'px';
-        widget.style.top = initialY + 'px';
+        initialX = rect.left; initialY = rect.top;
+        widget.style.bottom = 'auto'; widget.style.right = 'auto';
+        widget.style.left = initialX + 'px'; widget.style.top = initialY + 'px';
 
         document.addEventListener('mousemove', dragMove);
         document.addEventListener('mouseup', dragEnd);
@@ -2210,31 +2098,19 @@ function initSupportWidgetAndDragging() {
         if (!isDragging) return;
         const clientX = e.type === 'touchmove' ? e.touches[0].clientX : e.clientX;
         const clientY = e.type === 'touchmove' ? e.touches[0].clientY : e.clientY;
-
-        const dx = clientX - startX;
-        const dy = clientY - startY;
-
-        if (Math.abs(dx) > 3 || Math.abs(dy) > 3) {
-            hasMoved = true;
-        }
-
-        let newX = initialX + dx;
-        let newY = initialY + dy;
-
+        const dx = clientX - startX; const dy = clientY - startY;
+        if (Math.abs(dx) > 3 || Math.abs(dy) > 3) { hasMoved = true; }
+        let newX = initialX + dx; let newY = initialY + dy;
         const maxX = window.innerWidth - widget.offsetWidth;
         const maxY = window.innerHeight - widget.offsetHeight;
-
         newX = Math.max(10, Math.min(newX, maxX - 10));
         newY = Math.max(10, Math.min(newY, maxY - 10));
-
-        widget.style.left = newX + 'px';
-        widget.style.top = newY + 'px';
+        widget.style.left = newX + 'px'; widget.style.top = newY + 'px';
     };
 
-    const dragEnd = (e) => {
+    const dragEnd = () => {
         if (!isDragging) return;
         isDragging = false;
-
         document.removeEventListener('mousemove', dragMove);
         document.removeEventListener('mouseup', dragEnd);
         document.removeEventListener('touchmove', dragMove);
@@ -2243,7 +2119,6 @@ function initSupportWidgetAndDragging() {
 
     toggleBtn.addEventListener('mousedown', dragStart);
     toggleBtn.addEventListener('touchstart', dragStart);
-
     toggleBtn.addEventListener('click', (e) => {
         if (hasMoved) return;
         e.stopPropagation();
@@ -2264,7 +2139,6 @@ async function loadCustomerProfileBadge() {
     if (!supabaseClient) return;
     const { data: { session } } = await supabaseClient.auth.getSession();
     if (!session) return;
-
     const { data } = await supabaseClient.from('profiles').select('customer_id').eq('id', session.user.id).single();
     if (data && data.customer_id) {
         document.getElementById('myCustomerId').value = data.customer_id;
@@ -2281,9 +2155,7 @@ function copyIdToClipboard() {
 }
 
 async function handleLogout() {
-    if (supabaseClient) {
-        await supabaseClient.auth.signOut();
-    }
+    if (supabaseClient) { await supabaseClient.auth.signOut(); }
     window.location.href = 'landing.html';
 }
 
@@ -2306,49 +2178,25 @@ async function saveProfileSettingsData() {
     let phone = document.getElementById('profilePhoneInput').value.trim();
     let address = document.getElementById('profileAddressInput').value.trim();
     let bio = document.getElementById('profileBioInput').value.trim();
-    let bvn = document.getElementById('profileBvnInput').value.trim();
-    let nin = document.getElementById('profileNinInput').value.trim();
 
-    if(!name) {
-        alert('Please enter your full name or username.');
-        return;
-    }
+    if(!name) { alert('Please enter your full name or username.'); return; }
 
     if (supabaseClient) {
         const { error } = await supabaseClient.auth.updateUser({
-            data: { 
-                full_name: name, 
-                phone: phone, 
-                address: address, 
-                bio: bio, 
-                bvn: bvn, 
-                nin: nin, 
-                avatar_url: userData.avatarUrl 
-            }
+            data: { full_name: name, phone: phone, address: address, bio: bio, avatar_url: userData.avatarUrl }
         });
-        if (error) {
-            alert('Error updating profile: ' + error.message);
-            return;
-        }
+        if (error) { alert('Error updating profile: ' + error.message); return; }
     }
 
     userData.name = name;
-    userData.phone = phone;
-    userData.address = address;
-    userData.bio = bio;
-    userData.bvn = bvn;
-    userData.nin = nin;
-    userOnboarded = true;
-
     document.getElementById('dropdownName').textContent = name;
     document.getElementById('profileHeaderName').textContent = name;
     document.getElementById('heroWelcomeTitle').textContent = 'Welcome back, ' + name + '!';
-
-    alert('Complete profile settings saved successfully!');
+    alert('Profile settings saved successfully!');
 }
 
 /* ==========================================
-   ADVANCED PROFESSIONAL CURRENCY CONVERTER
+   PRO CURRENCY SWAPPER LOGIC
    ========================================== */
 let isNgsetToUsdDirection = true;
 
@@ -2393,7 +2241,6 @@ function handleLiveConversionInput() {
         document.getElementById('targetConvertOutput').value = isNgsetToUsdDirection ? '$0.00' : '₦0.00';
         return;
     }
-
     if (isNgsetToUsdDirection) {
         let res = inputVal / exchangeRate;
         document.getElementById('targetConvertOutput').value = '$' + res.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
@@ -2405,10 +2252,7 @@ function handleLiveConversionInput() {
 
 async function executeAdvancedConversion() {
     let inputVal = parseFloat(document.getElementById('baseConvertInput').value) || 0;
-    if (inputVal <= 0) {
-        alert('Please enter a valid amount to convert.');
-        return;
-    }
+    if (inputVal <= 0) { alert('Please enter a valid amount to swap.'); return; }
 
     const loadingBox = document.getElementById('conversionLoadingBox');
     const statusText = document.getElementById('conversionStatusText');
@@ -2418,13 +2262,10 @@ async function executeAdvancedConversion() {
     executeBtn.disabled = true;
     executeBtn.style.opacity = '0.6';
 
-    // Step 1: Connecting / Fetching rates
-    statusText.textContent = 'Connecting to exchange liquidity gateway...';
-    await new Promise(resolve => setTimeout(resolve, 800));
-
-    // Step 2: Validating Balance & Calculating
-    statusText.textContent = 'Verifying wallet liquidity & executing conversion...';
-    await new Promise(resolve => setTimeout(resolve, 800));
+    statusText.textContent = 'Connecting to liquidity gateway...';
+    await new Promise(resolve => setTimeout(resolve, 700));
+    statusText.textContent = 'Executing secure currency swap...';
+    await new Promise(resolve => setTimeout(resolve, 700));
 
     let newNgn = currentBalanceNgn;
     let newUsd = currentBalanceUsd;
@@ -2436,31 +2277,27 @@ async function executeAdvancedConversion() {
     if (isNgsetToUsdDirection) {
         if (currentBalanceNgn < inputVal) {
             loadingBox.classList.remove('active');
-            executeBtn.disabled = false;
-            executeBtn.style.opacity = '1';
-            alert('Conversion Failed: Insufficient Naira (NGN) balance.');
+            executeBtn.disabled = false; executeBtn.style.opacity = '1';
+            alert('Swap Failed: Insufficient Naira (NGN) balance.');
             return;
         }
         let usdGained = inputVal / exchangeRate;
         newNgn -= inputVal;
         newUsd += usdGained;
-        fromCurr = 'NGN (₦)';
-        toCurr = 'USD ($)';
+        fromCurr = 'NGN (₦)'; toCurr = 'USD ($)';
         conversionDesc = `Swapped ₦${inputVal.toLocaleString()} to $${usdGained.toFixed(2)}`;
         convertedOutputAmount = '$' + usdGained.toFixed(2);
     } else {
         if (currentBalanceUsd < inputVal) {
             loadingBox.classList.remove('active');
-            executeBtn.disabled = false;
-            executeBtn.style.opacity = '1';
-            alert('Conversion Failed: Insufficient USD balance.');
+            executeBtn.disabled = false; executeBtn.style.opacity = '1';
+            alert('Swap Failed: Insufficient USD balance.');
             return;
         }
         let ngnGained = inputVal * exchangeRate;
         newUsd -= inputVal;
         newNgn += ngnGained;
-        fromCurr = 'USD ($)';
-        toCurr = 'NGN (₦)';
+        fromCurr = 'USD ($)'; toCurr = 'NGN (₦)';
         conversionDesc = `Swapped $${inputVal.toLocaleString()} to ₦${ngnGained.toLocaleString()}`;
         convertedOutputAmount = '₦' + ngnGained.toLocaleString();
     }
@@ -2487,7 +2324,7 @@ async function executeAdvancedConversion() {
         channel: 'Multi-Currency Wallet',
         fromCurrency: fromCurr,
         toCurrency: toCurr,
-        rate: `1.00 USD = ₦${exchangeRate.toLocaleString()}`
+        rate: `1 USD = ₦${exchangeRate.toLocaleString()}`
     };
 
     transactions.unshift(txObj);
@@ -2496,51 +2333,32 @@ async function executeAdvancedConversion() {
     updateBalanceDisplay();
     renderTransactions('all');
 
-    statusText.textContent = 'Conversion Successful! Balances updated.';
-    await new Promise(resolve => setTimeout(resolve, 600));
+    statusText.textContent = 'Swap Successful!';
+    await new Promise(resolve => setTimeout(resolve, 500));
 
     loadingBox.classList.remove('active');
     executeBtn.disabled = false;
     executeBtn.style.opacity = '1';
 
     closeCurrencyModal();
-    alert('Currency conversion completed successfully and securely saved!');
+    alert('Currency swap completed successfully and saved to cloud history!');
 }
 
-function openChangePasswordModal() {
-    document.getElementById('changePasswordModal').classList.add('active');
-}
-
-function closeChangePasswordModal() {
-    document.getElementById('changePasswordModal').classList.remove('active');
-}
+function openChangePasswordModal() { document.getElementById('changePasswordModal').classList.add('active'); }
+function closeChangePasswordModal() { document.getElementById('changePasswordModal').classList.remove('active'); }
 
 async function submitNewPassword() {
     let nxt = document.getElementById('newPasswordInput').value;
     let cfm = document.getElementById('confirmPasswordInput').value;
-
-    if(!nxt || !cfm) {
-        alert('Please fill out the new password fields.');
-        return;
-    }
-    if(nxt !== cfm) {
-        alert('New passwords do not match.');
-        return;
-    }
+    if(!nxt || !cfm) { alert('Please fill out the new password fields.'); return; }
+    if(nxt !== cfm) { alert('New passwords do not match.'); return; }
 
     if (supabaseClient) {
         const { error } = await supabaseClient.auth.updateUser({ password: nxt });
-        if (error) {
-            alert('Error updating password: ' + error.message);
-            return;
-        }
+        if (error) { alert('Error updating password: ' + error.message); return; }
     }
-
     alert('Password updated successfully!');
     closeChangePasswordModal();
-    document.getElementById('currentPasswordInput').value = '';
-    document.getElementById('newPasswordInput').value = '';
-    document.getElementById('confirmPasswordInput').value = '';
 }
 
 function toggleActivityHistory() {
@@ -2559,9 +2377,7 @@ function filterTransactions(type, btnElement) {
 function renderTransactions(filterType) {
     const container = document.getElementById('transactionListContainer');
     let filtered = transactions;
-    if(filterType !== 'all') {
-        filtered = transactions.filter(tx => tx.type === filterType);
-    }
+    if(filterType !== 'all') { filtered = transactions.filter(tx => tx.type === filterType); }
 
     if(filtered.length === 0) {
         container.innerHTML = `<div class="empty-text">No transaction history found.</div>`;
@@ -2571,19 +2387,18 @@ function renderTransactions(filterType) {
     container.innerHTML = '';
     filtered.forEach(tx => {
         let icon = '📦';
-        let iconClass = 'tx-blue';
-        if(tx.type === 'deposit') { icon = '💳'; iconClass = 'tx-blue'; }
-        else if(tx.type === 'sms') { icon = '📱'; iconClass = 'tx-blue'; }
-        else if(tx.type === 'booster') { icon = '⚡'; iconClass = 'tx-blue'; }
-        else if(tx.type === 'log') { icon = '📦'; iconClass = 'tx-blue'; }
-        else if(tx.type === 'conversion') { icon = '🔄'; iconClass = 'tx-blue'; }
+        if(tx.type === 'deposit') { icon = '💳'; }
+        else if(tx.type === 'sms') { icon = '📱'; }
+        else if(tx.type === 'booster') { icon = '⚡'; }
+        else if(tx.type === 'log') { icon = '📦'; }
+        else if(tx.type === 'conversion') { icon = '🔄'; }
 
         let card = document.createElement('div');
         card.className = 'transaction-card';
         card.onclick = () => { triggerHaptic(); showTransactionReceipt(tx); };
         card.innerHTML = `
             <div class="transaction-left">
-                <div class="transaction-icon-box ${iconClass}">${icon}</div>
+                <div class="transaction-icon-box tx-blue">${icon}</div>
                 <div class="transaction-details">
                     <h4>${tx.title}</h4>
                     <span>${tx.subtitle} • ${tx.date}</span>
@@ -2591,7 +2406,7 @@ function renderTransactions(filterType) {
             </div>
             <div class="transaction-right">
                 <div class="transaction-amount">${tx.amount}</div>
-                <span class="transaction-status status-${tx.status.toLowerCase()}">${tx.status}</span>
+                <span class="badge-status badge-success">${tx.status}</span>
             </div>
         `;
         container.appendChild(card);
@@ -2601,42 +2416,36 @@ function renderTransactions(filterType) {
 function showTransactionReceipt(tx) {
     let body = document.getElementById('receiptContentBody');
     let html = `
-        <div style="display:flex; justify-content:space-between;"><span style="color:var(--text-muted)">Transaction Type:</span> <strong style="text-transform:uppercase;">${tx.type}</strong></div>
-        <div style="display:flex; justify-content:space-between;"><span style="color:var(--text-muted)">Description:</span> <strong>${tx.title}</strong></div>
+        <div style="display:flex; justify-content:space-between;"><span style="color:var(--text-muted)">Type:</span> <strong style="text-transform:uppercase;">${tx.type}</strong></div>
+        <div style="display:flex; justify-content:space-between;"><span style="color:var(--text-muted)">Title:</span> <strong>${tx.title}</strong></div>
         <div style="display:flex; justify-content:space-between;"><span style="color:var(--text-muted)">Amount:</span> <strong style="color:var(--primary-color);">${tx.amount}</strong></div>
-        <div style="display:flex; justify-content:space-between;"><span style="color:var(--text-muted)">Payment Provider:</span> <strong>${tx.paymentProvider || 'MJ HUB Gateway'}</strong></div>
-        <div style="display:flex; justify-content:space-between;"><span style="color:var(--text-muted)">Channel Used:</span> <strong>${tx.channel || 'Direct Wallet Debit'}</strong></div>
+        <div style="display:flex; justify-content:space-between;"><span style="color:var(--text-muted)">Provider:</span> <strong>${tx.paymentProvider || 'MJ HUB Gateway'}</strong></div>
+        <div style="display:flex; justify-content:space-between;"><span style="color:var(--text-muted)">Channel:</span> <strong>${tx.channel || 'Wallet Debit'}</strong></div>
     `;
 
     if (tx.type === 'conversion') {
         html += `
-            <div style="display:flex; justify-content:space-between;"><span style="color:var(--text-muted)">Swapped From:</span> <strong>${tx.fromCurrency}</strong></div>
-            <div style="display:flex; justify-content:space-between;"><span style="color:var(--text-muted)">Swapped To:</span> <strong>${tx.toCurrency}</strong></div>
-            <div style="display:flex; justify-content:space-between;"><span style="color:var(--text-muted)">Conversion Rate:</span> <strong>${tx.rate}</strong></div>
+            <div style="display:flex; justify-content:space-between;"><span style="color:var(--text-muted)">From:</span> <strong>${tx.fromCurrency}</strong></div>
+            <div style="display:flex; justify-content:space-between;"><span style="color:var(--text-muted)">To:</span> <strong>${tx.toCurrency}</strong></div>
+            <div style="display:flex; justify-content:space-between;"><span style="color:var(--text-muted)">Rate:</span> <strong>${tx.rate}</strong></div>
         `;
     }
 
     html += `
-        <div style="display:flex; justify-content:space-between;"><span style="color:var(--text-muted)">Date & Time:</span> <strong>${tx.date}</strong></div>
-        <div style="display:flex; justify-content:space-between;"><span style="color:var(--text-muted)">Status:</span> <span class="badge-status status-${tx.status.toLowerCase()}">${tx.status}</span></div>
+        <div style="display:flex; justify-content:space-between;"><span style="color:var(--text-muted)">Date:</span> <strong>${tx.date}</strong></div>
+        <div style="display:flex; justify-content:space-between;"><span style="color:var(--text-muted)">Status:</span> <span class="badge-status badge-success">${tx.status}</span></div>
     `;
-
     body.innerHTML = html;
     document.getElementById('transactionReceiptModal').classList.add('active');
 }
 
-function closeTransactionReceipt() {
-    document.getElementById('transactionReceiptModal').classList.remove('active');
-}
-
-function toggleFloatingPopup() {
-    document.getElementById('floatingPopupModal').classList.toggle('active');
-}
+function closeTransactionReceipt() { document.getElementById('transactionReceiptModal').classList.remove('active'); }
+function toggleFloatingPopup() { document.getElementById('floatingPopupModal').classList.toggle('active'); }
 
 function addToCart(title, price, type, channelDesc) {
     cartItems.push({ id: Date.now(), title, price, type, channel: channelDesc || 'Digital Asset Store' });
     updateCartUI();
-    alert(title + ' added to your cart!');
+    alert(title + ' added to cart!');
 }
 
 function removeFromCart(id) {
@@ -2647,13 +2456,11 @@ function removeFromCart(id) {
 function updateCartUI() {
     let tbody = document.getElementById('cartTableBody');
     let totalDisplay = document.getElementById('cartTotalDisplay');
-    
     if(cartItems.length === 0) {
         tbody.innerHTML = `<tr><td colspan="4" class="empty-text">Your cart is currently empty.</td></tr>`;
         totalDisplay.textContent = '₦0.00';
         return;
     }
-
     tbody.innerHTML = '';
     let total = 0;
     cartItems.forEach(item => {
@@ -2663,7 +2470,7 @@ function updateCartUI() {
             <td><strong>${item.title}</strong></td>
             <td><span class="badge-status badge-pending" style="text-transform:uppercase;">${item.type}</span></td>
             <td style="font-weight:700; color:var(--primary-color);">₦${item.price.toLocaleString()}</td>
-            <td><button class="btn-sm-outline" style="color:var(--primary-color); border-color:var(--primary-color); padding:4px 8px;" onclick="triggerHaptic(); removeFromCart(${item.id})">Remove</button></td>
+            <td><button class="btn-sm-outline" style="padding:4px 8px; color:var(--danger-color); border-color:var(--danger-color);" onclick="triggerHaptic(); removeFromCart(${item.id})">Remove</button></td>
         `;
         tbody.appendChild(tr);
     });
@@ -2679,9 +2486,7 @@ async function buyNowItem(title, price, type, channelDesc) {
     let newNgn = currentBalanceNgn - price;
     if (supabaseClient) {
         const { data: { session } } = await supabaseClient.auth.getSession();
-        if (session) {
-            await supabaseClient.from('profiles').update({ balance: newNgn }).eq('id', session.user.id);
-        }
+        if (session) { await supabaseClient.from('profiles').update({ balance: newNgn }).eq('id', session.user.id); }
     }
     currentBalanceNgn = newNgn;
     
@@ -2698,7 +2503,6 @@ async function buyNowItem(title, price, type, channelDesc) {
     };
     transactions.unshift(txObj);
     await saveTransactionToSupabase(txObj);
-    
     updateBalanceDisplay();
     renderTransactions('all');
     alert(title + ' purchased successfully!');
@@ -2709,16 +2513,14 @@ async function checkoutCart() {
     let total = cartItems.reduce((sum, item) => sum + item.price, 0);
     if(total === 0) { alert('Your cart is empty.'); return; }
     if(currentBalanceNgn < total) {
-        alert('Insufficient Naira balance to checkout. Please add funds.');
+        alert('Insufficient Naira balance to checkout.');
         switchSection('deposit');
         return;
     }
     let newNgn = currentBalanceNgn - total;
     if (supabaseClient) {
         const { data: { session } } = await supabaseClient.auth.getSession();
-        if (session) {
-            await supabaseClient.from('profiles').update({ balance: newNgn }).eq('id', session.user.id);
-        }
+        if (session) { await supabaseClient.from('profiles').update({ balance: newNgn }).eq('id', session.user.id); }
     }
     currentBalanceNgn = newNgn;
     for(let item of cartItems) {
@@ -2749,10 +2551,7 @@ async function processDeposit() {
     let selectedWallet = document.getElementById('depositWalletSelect').value;
     let selectedProvider = document.getElementById('depositProviderSelect').value;
 
-    if(amt <= 0) { 
-        alert('Please enter a valid amount.'); 
-        return; 
-    }
+    if(amt <= 0) { alert('Please enter a valid amount.'); return; }
 
     let newNgn = currentBalanceNgn;
     let newUsd = currentBalanceUsd;
@@ -2802,16 +2601,8 @@ async function processDeposit() {
     currentBalanceUsd = newUsd;
     updateBalanceDisplay();
     renderTransactions('all');
+    document.getElementById('depositInput').value = '';
     switchSection('home');
-}
-
-function updateBalanceDisplay() {
-    document.getElementById('navWalletBadge').textContent = 'NGN ₦' + currentBalanceNgn.toLocaleString(undefined, {minimumFractionDigits: 2});
-    
-    document.getElementById('homeNgnBalance').textContent = '₦' + currentBalanceNgn.toLocaleString(undefined, {minimumFractionDigits: 2});
-    document.getElementById('homeUsdBalance').textContent = '$' + currentBalanceUsd.toLocaleString(undefined, {minimumFractionDigits: 2});
-
-    document.getElementById('profileBalanceDisplay').textContent = `NGN: ₦${currentBalanceNgn.toLocaleString(undefined, {minimumFractionDigits: 2})} | USD: $${currentBalanceUsd.toLocaleString(undefined, {minimumFractionDigits: 2})}`;
 }
     </script>
 </body>
