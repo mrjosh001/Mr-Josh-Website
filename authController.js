@@ -297,6 +297,33 @@ async function updateProfile(req, res) {
     }
 }
 
+// --- ADMIN LOOKUP ENDPOINT ---
+async function lookupUserByCustomerId(req, res) {
+    try {
+        const { customerId } = req.query;
+
+        if (!customerId) {
+            return res.status(400).json({ error: 'Customer ID is required.' });
+        }
+
+        // Query Supabase profiles table using the customer ID field (adjust column name if it differs, e.g., 'customer_id')
+        const { data: user, error } = await supabase
+            .from('profiles')
+            .select('id, email, full_name, phone_number, customer_id')
+            .eq('customer_id', customerId)
+            .single();
+
+        if (error || !user) {
+            return res.status(404).json({ message: 'User not found with this Customer ID.' });
+        }
+
+        res.status(200).json(user);
+    } catch (error) {
+        console.error('Lookup error:', error);
+        res.status(500).json({ error: 'Server error during lookup.' });
+    }
+}
+
 // --- TOKEN & SESSION TRIGGER LOGIC ---
 async function verifySession(req, res, next) {
     try {
@@ -319,4 +346,4 @@ async function verifySession(req, res, next) {
     }
 }
 
-module.exports = { signup, signin, getProfile, updateProfile, verifySession };
+module.exports = { signup, signin, getProfile, updateProfile, lookupUserByCustomerId, verifySession };
