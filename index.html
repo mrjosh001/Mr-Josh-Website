@@ -1710,19 +1710,19 @@ let userOnboarded = false;
 let userData = { name: '', email: '', phone: '', address: '', bio: '', bvn: '', nin: '', avatarUrl: '' };
 
 document.addEventListener('DOMContentLoaded', async () => {
-    // Initialize Movable Support Widget & Draggable Functionality
-    initSupportWidgetAndDragging();
-
     if (supabaseClient) {
         const { data: { session }, error } = await supabaseClient.auth.getSession();
         
-        // --- Redirection Update Integrated Here ---
+        // If no active session exists, redirect them back to the landing page
         if (!session || error) {
             window.location.href = 'landing.html';
             return;
         }
 
+        // If session exists, load dashboard user metadata...
         const user = session.user;
+        console.log("Logged in user:", user.email);
+
         const meta = user.user_metadata || {};
         const userEmail = user.email;
         const displayName = meta.full_name || meta.username || userEmail.split('@')[0];
@@ -1768,6 +1768,9 @@ document.addEventListener('DOMContentLoaded', async () => {
         document.getElementById('profileBvnInput').value = bvnVal;
         document.getElementById('profileNinInput').value = ninVal;
     }
+
+    // Initialize Movable Support Widget & Draggable Functionality
+    initSupportWidgetAndDragging();
 
     const allSections = document.querySelectorAll('.app-section');
     const sidebarLinks = document.querySelectorAll('.sidebar-link');
