@@ -174,7 +174,7 @@
                 <!-- Integrated User CRM Table Preview -->
                 <div class="data-section">
                     <div class="section-title">
-                        <span id="tableTitle">User Directory (Showing All Registered Users)</span>
+                        <span id="tableTitle">User Directory & Balances (Showing All Registered Users)</span>
                     </div>
                     <div class="table-responsive">
                         <table>
@@ -183,7 +183,7 @@
                                     <th>Full Name</th>
                                     <th>Username</th>
                                     <th>Email Address</th>
-                                    <th>Phone Number</th>
+                                    <th>Wallet Balance</th>
                                     <th>Activity Status</th>
                                     <th>Admin Status</th>
                                     <th>Action</th>
@@ -217,7 +217,7 @@
             <div id="tab-crm" class="tab-content hidden">
                 <div class="data-section">
                     <div class="section-title">
-                        <span>Full Customer Directory & Account Manager</span>
+                        <span>Full Customer Directory & Balance Manager</span>
                     </div>
                     <div class="table-responsive">
                         <table>
@@ -226,7 +226,7 @@
                                     <th>Full Name</th>
                                     <th>Username</th>
                                     <th>Email Address</th>
-                                    <th>Phone Number</th>
+                                    <th>Wallet Balance</th>
                                     <th>Activity Status</th>
                                     <th>Admin Status</th>
                                     <th>Action</th>
@@ -267,10 +267,10 @@
         </div>
     </div>
 
-    <!-- Edit User Modal -->
+    <!-- Edit User & Balance Modal -->
     <div id="editUserModal" class="modal-overlay hidden">
         <div class="modal-card">
-            <h3>Edit User Details</h3>
+            <h3>Edit Customer & Balance</h3>
             <input type="hidden" id="editUserId">
             <div class="input-group">
                 <label>Full Name</label>
@@ -283,6 +283,11 @@
             <div class="input-group">
                 <label>Phone Number</label>
                 <input type="text" id="editPhone">
+            </div>
+            <div class="input-group">
+                <label>Wallet Balance (₦)</label>
+                <input type="number" step="0.01" id="editBalance" placeholder="0.00">
+                <span style="font-size: 10px; color: #38bdf8; margin-top: 4px; display: block;">Update this field to rectify missing deposits or manual adjustments.</span>
             </div>
             <div class="input-group">
                 <label>Admin Privileges</label>
@@ -458,9 +463,9 @@
             if (filterType === 'inactive') document.getElementById('card-inactive').classList.add('active-card');
 
             const titles = {
-                'all': 'User Directory (Showing All Registered Users)',
-                'active': 'User Directory (Showing Active Users - Logged in past 30 days)',
-                'inactive': 'User Directory (Showing Inactive Users - No login in 30+ days)'
+                'all': 'User Directory & Balances (Showing All Registered Users)',
+                'active': 'User Directory & Balances (Showing Active Users - Logged in past 30 days)',
+                'inactive': 'User Directory & Balances (Showing Inactive Users - No login in 30+ days)'
             };
             document.getElementById('tableTitle').innerText = titles[filterType];
             renderTable();
@@ -481,16 +486,17 @@
                 filtered.forEach(profile => {
                     const statusBadge = profile.isActive ? `<span class="badge badge-active">Active</span>` : `<span class="badge badge-inactive">Inactive</span>`;
                     const adminBadge = profile.is_admin ? `<span style="color: #4ade80; font-weight: 600;">Admin</span>` : `<span style="color: #93c5fd;">Standard</span>`;
+                    const formattedBalance = `₦${Number(profile.balance || 0).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
 
                     rowsHTML += `
                         <tr>
                             <td>${profile.full_name || 'N/A'}</td>
                             <td>${profile.username || 'N/A'}</td>
                             <td>${profile.email || 'Registered User'}</td>
-                            <td>${profile.phone_number || 'N/A'}</td>
+                            <td style="font-weight: 600; color: #34d399;">${formattedBalance}</td>
                             <td>${statusBadge}</td>
                             <td>${adminBadge}</td>
-                            <td><button class="action-btn edit-btn" onclick="openEditModal('${profile.id}')">Edit User</button></td>
+                            <td><button class="action-btn edit-btn" onclick="openEditModal('${profile.id}')">Edit Profile</button></td>
                         </tr>
                     `;
                 });
@@ -508,6 +514,7 @@
             document.getElementById('editFullName').value = profile.full_name || '';
             document.getElementById('editUsername').value = profile.username || '';
             document.getElementById('editPhone').value = profile.phone_number || '';
+            document.getElementById('editBalance').value = profile.balance !== undefined ? profile.balance : 0;
             document.getElementById('editIsAdmin').value = profile.is_admin ? 'true' : 'false';
             document.getElementById('modalError').innerText = '';
 
@@ -523,12 +530,13 @@
             const full_name = document.getElementById('editFullName').value.trim();
             const username = document.getElementById('editUsername').value.trim();
             const phone_number = document.getElementById('editPhone').value.trim();
+            const balance = parseFloat(document.getElementById('editBalance').value) || 0;
             const is_admin = document.getElementById('editIsAdmin').value === 'true';
             const errorBox = document.getElementById('modalError');
 
             const { error } = await supabaseClient
                 .from('profiles')
-                .update({ full_name, username, phone_number, is_admin })
+                .update({ full_name, username, phone_number, balance, is_admin })
                 .eq('id', userId);
 
             if (error) {
