@@ -10,7 +10,7 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
 /* ==========================================
-   MJ HUB - Theme & Variables (v4.3 - Integrated Support Widget)
+   MJ HUB - Theme & Variables (v4.4)
    ========================================== */
 
 :root[data-theme="dark"] {
@@ -585,7 +585,8 @@ body {
 }
 
 .form-group input:focus, 
-.form-group textarea:focus { border-color: var(--primary-color); }
+.form-group textarea:focus,
+.form-group select:focus { border-color: var(--primary-color); }
 
 .product-grid {
     display: grid;
@@ -1295,18 +1296,18 @@ body {
             <div class="sleek-stats-grid">
                 <div class="sleek-card">
                     <div>
-                        <span class="sleek-label" id="balanceLabelPrimary">NGN Balance</span>
-                        <span class="sleek-value" id="homePrimaryBalance">₦0.00</span>
+                        <span class="sleek-label">NGN Wallet Balance</span>
+                        <span class="sleek-value" id="homeNgnBalance">₦0.00</span>
                     </div>
-                    <div class="sleek-card-icon icon-blue" id="balanceIconPrimary">💳</div>
+                    <div class="sleek-card-icon icon-blue">💳</div>
                 </div>
 
                 <div class="sleek-card">
                     <div>
-                        <span class="sleek-label" id="balanceLabelSecondary">USD Balance</span>
-                        <span class="sleek-value" id="homeSecondaryBalance">$0.00</span>
+                        <span class="sleek-label">USD Wallet Balance</span>
+                        <span class="sleek-value" id="homeUsdBalance">$0.00</span>
                     </div>
-                    <div class="sleek-card-icon icon-white" id="balanceIconSecondary">💵</div>
+                    <div class="sleek-card-icon icon-white">💵</div>
                 </div>
             </div>
         </section>
@@ -1323,7 +1324,6 @@ body {
                 <p id="profileHeaderEmail">No email provided</p>
             </div>
 
-            <!-- Customer ID Identification Card Added Here -->
             <div class="account-settings-card" style="background: rgba(17, 24, 39, 0.95); border: 1px solid rgba(59, 130, 246, 0.2); padding: 20px; border-radius: 14px; max-width: 400px; color: #fff; margin: 0 auto 20px auto;">
                 <h3 style="font-size: 16px; margin-bottom: 8px;">Account Identification</h3>
                 <p style="font-size: 13px; color: #93c5fd; margin-bottom: 12px;">Provide this Customer ID to support if you encounter deposit delays or disputes:</p>
@@ -1374,8 +1374,8 @@ body {
                     <div class="profile-menu-left">
                         <div class="profile-menu-icon icon-blue">💳</div>
                         <div class="profile-menu-info">
-                            <h4>Account Balance</h4>
-                            <p id="profileBalanceDisplay">₦0.00</p>
+                            <h4>Wallet Balances</h4>
+                            <p id="profileBalanceDisplay">NGN: ₦0.00 | USD: $0.00</p>
                         </div>
                     </div>
                     <div class="profile-menu-arrow">›</div>
@@ -1387,17 +1387,6 @@ body {
                         <div class="profile-menu-info">
                             <h4>Change Password</h4>
                             <p>Click to change your password</p>
-                        </div>
-                    </div>
-                    <div class="profile-menu-arrow">›</div>
-                </div>
-
-                <div class="profile-menu-item" onclick="alert('Withdrawal PIN setup triggered')">
-                    <div class="profile-menu-left">
-                        <div class="profile-menu-icon icon-blue">🔑</div>
-                        <div class="profile-menu-info">
-                            <h4>Withdrawal Password</h4>
-                            <p>Set a withdrawal PIN</p>
                         </div>
                     </div>
                     <div class="profile-menu-arrow">›</div>
@@ -1519,9 +1508,16 @@ body {
         <section id="deposit" class="app-section">
             <div class="content-card">
                 <h2>Add Funds to Wallet</h2>
-                <p class="helper-text">Fund your wallet instantly to checkout products seamlessly.</p>
+                <p class="helper-text">Choose your preferred wallet to fund and enter the amount.</p>
                 <div class="form-group">
-                    <label>Amount (NGN)</label>
+                    <label>Select Wallet to Fund</label>
+                    <select id="depositWalletSelect">
+                        <option value="ngn">Naira Wallet (NGN ₦)</option>
+                        <option value="usd">USD Wallet ($)</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Amount</label>
                     <input type="number" id="depositInput" placeholder="Enter amount">
                 </div>
                 <button class="btn-sm-primary" style="width:100%; padding:12px;" onclick="processDeposit()">Proceed to Payment</button>
@@ -1597,26 +1593,26 @@ body {
     <div class="currency-modal" id="currencyConverterModal">
         <div class="currency-modal-card">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
-                <div style="font-size: 17px; font-weight: 800; color: var(--text-main);">Convert Currency</div>
+                <div style="font-size: 17px; font-weight: 800; color: var(--text-main);">Convert Balance Currency</div>
                 <button onclick="closeCurrencyModal()" style="background: var(--bg-main); border: 1px solid var(--border-color); width: 30px; height: 30px; border-radius: 50%; cursor: pointer; font-size: 14px; font-weight: bold; color: var(--text-main);">✕</button>
             </div>
             <div class="form-group" style="margin-bottom: 10px;">
-                <button class="btn-sm-outline" style="width: 100%; padding: 8px; font-weight: 700;" id="toggleDirectionBtn" onclick="toggleConversionDirection()">🔄 Convert from: USD ($) to NGN (₦)</button>
+                <button class="btn-sm-outline" style="width: 100%; padding: 8px; font-weight: 700;" id="toggleDirectionBtn" onclick="toggleConversionDirection()">🔄 Convert: NGN (₦) ➔ USD ($)</button>
             </div>
             <div class="currency-input-group">
-                <label id="convertInputLabel">Amount in USD ($)</label>
+                <label id="convertInputLabel">Amount to Convert (NGN)</label>
                 <div class="currency-input-row">
                     <input type="number" id="baseConvertInput" placeholder="0.00" oninput="performCurrencyConversion()">
                 </div>
             </div>
             <div class="currency-input-group">
-                <label id="convertOutputLabel">Equivalent in NGN (₦)</label>
+                <label id="convertOutputLabel">You Will Receive (USD)</label>
                 <div class="currency-input-row">
-                    <input type="text" id="targetConvertOutput" placeholder="₦0.00" readonly style="color: var(--primary-color);">
+                    <input type="text" id="targetConvertOutput" placeholder="$0.00" readonly style="color: var(--primary-color);">
                 </div>
             </div>
             <div style="font-size: 11px; color: var(--text-muted); text-align: center; margin-bottom: 15px;" id="exchangeRateText">Exchange rate: $1.00 = ₦1,420</div>
-            <button class="btn-sm-primary" style="width: 100%; padding: 12px; font-size: 14px;" onclick="applyCurrencyConversion()">Convert & Update Dashboard</button>
+            <button class="btn-sm-primary" style="width: 100%; padding: 12px; font-size: 14px;" onclick="applyCurrencyConversion()">Execute Conversion</button>
         </div>
     </div>
 
@@ -1697,7 +1693,7 @@ body {
 
     <script>
 /* ==========================================
-   MJ HUB - Application Logic (v4.3)
+   MJ HUB - Application Logic (v4.4)
    ========================================== */
 
 const SUPABASE_URL = 'https://atczodlljmlayvldxfmv.supabase.co';
@@ -1708,10 +1704,11 @@ if (window.supabase && SUPABASE_URL !== 'https://YOUR_PROJECT_ID.supabase.co') {
     supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY);
 }
 
+// Independent separate balances for NGN and USD
 let currentBalanceNgn = 0.00;
 let currentBalanceUsd = 0.00;
-let dashboardCurrencyMode = 'ngn'; 
-let conversionDirection = 'usdtongn'; 
+
+let conversionDirection = 'ngntousd'; // Default conversion: Naira to USD
 let exchangeRate = 1420; 
 
 let cartItems = [];
@@ -1719,7 +1716,6 @@ let transactions = [];
 let userOnboarded = false;
 let userData = { name: '', email: '', phone: '', address: '', bio: '', bvn: '', nin: '', avatarUrl: '' };
 
-// Global helper for profile dropdown toggle referenced in HTML inline handlers
 function toggleProfileDropdown() {
     const profileDropdown = document.getElementById('profileDropdownMenu');
     if (profileDropdown) {
@@ -1731,16 +1727,12 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (supabaseClient) {
         const { data: { session }, error } = await supabaseClient.auth.getSession();
         
-        // If no active session exists, redirect them back to the landing page
         if (!session || error) {
             window.location.href = 'landing.html';
             return;
         }
 
-        // If session exists, load dashboard user metadata...
         const user = session.user;
-        console.log("Logged in user:", user.email);
-
         const meta = user.user_metadata || {};
         const userEmail = user.email;
         const displayName = meta.full_name || meta.username || userEmail.split('@')[0];
@@ -1761,13 +1753,12 @@ document.addEventListener('DOMContentLoaded', async () => {
         userData.avatarUrl = avatarVal;
         userOnboarded = true;
         
-        // Populate UI Elements
         document.getElementById('dropdownName').textContent = displayName;
         document.getElementById('dropdownEmail').textContent = userEmail;
         document.getElementById('profileHeaderName').textContent = displayName;
         document.getElementById('profileHeaderEmail').textContent = userEmail;
         document.getElementById('heroWelcomeTitle').textContent = 'Welcome back, ' + displayName + '!';
-        document.getElementById('heroSubText').textContent = 'Manage your account balance and access MJ Boosters, MJ SMS, and MJ Logs seamlessly.';
+        document.getElementById('heroSubText').textContent = 'Manage your multi-currency balances and access MJ Boosters, MJ SMS, and MJ Logs seamlessly.';
         
         if(avatarVal) {
             document.getElementById('headerAvatarText').innerHTML = `<img src="${avatarVal}" alt="Avatar">`;
@@ -1777,7 +1768,6 @@ document.addEventListener('DOMContentLoaded', async () => {
             document.getElementById('profileAvatarInitial').textContent = displayName.charAt(0).toUpperCase();
         }
 
-        // Populate Profile Settings Form Inputs
         document.getElementById('profileNameInput').value = displayName;
         document.getElementById('profileEmailInput').value = userEmail;
         document.getElementById('profilePhoneInput').value = phoneVal;
@@ -1786,15 +1776,11 @@ document.addEventListener('DOMContentLoaded', async () => {
         document.getElementById('profileBvnInput').value = bvnVal;
         document.getElementById('profileNinInput').value = ninVal;
 
-        // Fetch user balance and subscribe to realtime updates from the database
         await fetchUserBalance(user.id);
         setupRealtimeBalanceSubscription(user.id);
     }
 
-    // Initialize Movable Support Widget & Draggable Functionality
     initSupportWidgetAndDragging();
-
-    // Load Customer Profile Badge Identification Code
     loadCustomerProfileBadge();
 
     const allSections = document.querySelectorAll('.app-section');
@@ -1902,7 +1888,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         profileDropdown.classList.remove('active');
         notifDropdown.classList.remove('active');
         
-        // Close support popup if clicked outside widget container
         const widget = document.getElementById('support-widget');
         const popup = document.getElementById('support-popup');
         if (widget && popup && !widget.contains(e.target)) {
@@ -1920,19 +1905,19 @@ document.addEventListener('DOMContentLoaded', async () => {
 async function fetchUserBalance(userId) {
     if (!supabaseClient) return;
     try {
-        // Assuming your balance is stored in a 'profiles' table with columns 'id' and 'balance' (or 'balance_ngn')
         const { data, error } = await supabaseClient
             .from('profiles')
-            .select('balance') // Change 'balance' to match your column name if different (e.g. balance_ngn)
+            .select('balance, balance_usd') 
             .eq('id', userId)
             .single();
 
         if (data && !error) {
             currentBalanceNgn = parseFloat(data.balance) || 0.00;
+            currentBalanceUsd = parseFloat(data.balance_usd) || 0.00;
             updateBalanceDisplay();
         }
     } catch (err) {
-        console.error("Error fetching user balance:", err);
+        console.error("Error fetching user balances:", err);
     }
 }
 
@@ -1950,13 +1935,14 @@ function setupRealtimeBalanceSubscription(userId) {
                 filter: `id=eq.${userId}`
             },
             (payload) => {
-                console.log('Balance updated by admin in real time:', payload);
-                if (payload.new && payload.new.balance !== undefined) {
-                    currentBalanceNgn = parseFloat(payload.new.balance) || 0.00;
+                if (payload.new) {
+                    if (payload.new.balance !== undefined) {
+                        currentBalanceNgn = parseFloat(payload.new.balance) || 0.00;
+                    }
+                    if (payload.new.balance_usd !== undefined) {
+                        currentBalanceUsd = parseFloat(payload.new.balance_usd) || 0.00;
+                    }
                     updateBalanceDisplay();
-                    
-                    // Optional notification to user that balance was updated
-                    alert('Your account balance has been updated by an admin!');
                 }
             }
         )
@@ -2055,9 +2041,6 @@ function initSupportWidgetAndDragging() {
     }
 }
 
-/* ==========================================
-   CUSTOMER PROFILE BADGE LOADER FUNCTION
-   ========================================== */
 async function loadCustomerProfileBadge() {
     if (!supabaseClient) return;
     const { data: { session } } = await supabaseClient.auth.getSession();
@@ -2067,7 +2050,6 @@ async function loadCustomerProfileBadge() {
     if (data && data.customer_id) {
         document.getElementById('myCustomerId').value = data.customer_id;
     } else {
-        // Fallback option using user id substring if customer_id column isn't populated
         document.getElementById('myCustomerId').value = session.user.id;
     }
 }
@@ -2143,7 +2125,7 @@ async function saveProfileSettingsData() {
     document.getElementById('profileHeaderName').textContent = name;
     document.getElementById('heroWelcomeTitle').textContent = 'Welcome back, ' + name + '!';
 
-    alert('Complete profile settings, BVN, NIN, and bio saved successfully to Supabase!');
+    alert('Complete profile settings saved successfully!');
 }
 
 function openCurrencyModal() {
@@ -2157,16 +2139,16 @@ function closeCurrencyModal() {
 }
 
 function toggleConversionDirection() {
-    if (conversionDirection === 'usdtongn') {
-        conversionDirection = 'ngntousd';
-        document.getElementById('toggleDirectionBtn').textContent = '🔄 Convert from: NGN (₦) to USD ($)';
-        document.getElementById('convertInputLabel').textContent = 'Amount in NGN (₦)';
-        document.getElementById('convertOutputLabel').textContent = 'Equivalent in USD ($)';
+    if (conversionDirection === 'ngntousd') {
+        conversionDirection = 'usdtongngn';
+        document.getElementById('toggleDirectionBtn').textContent = '🔄 Convert: USD ($) ➔ NGN (₦)';
+        document.getElementById('convertInputLabel').textContent = 'Amount to Convert (USD)';
+        document.getElementById('convertOutputLabel').textContent = 'You Will Receive (NGN)';
     } else {
-        conversionDirection = 'usdtongn';
-        document.getElementById('toggleDirectionBtn').textContent = '🔄 Convert from: USD ($) to NGN (₦)';
-        document.getElementById('convertInputLabel').textContent = 'Amount in USD ($)';
-        document.getElementById('convertOutputLabel').textContent = 'Equivalent in NGN (₦)';
+        conversionDirection = 'ngntousd';
+        document.getElementById('toggleDirectionBtn').textContent = '🔄 Convert: NGN (₦) ➔ USD ($)';
+        document.getElementById('convertInputLabel').textContent = 'Amount to Convert (NGN)';
+        document.getElementById('convertOutputLabel').textContent = 'You Will Receive (USD)';
     }
     document.getElementById('baseConvertInput').value = '';
     document.getElementById('targetConvertOutput').value = '';
@@ -2174,24 +2156,46 @@ function toggleConversionDirection() {
 
 function performCurrencyConversion() {
     let inputVal = parseFloat(document.getElementById('baseConvertInput').value) || 0;
-    if (conversionDirection === 'usdtongn') {
-        let res = inputVal * exchangeRate;
-        document.getElementById('targetConvertOutput').value = '₦' + res.toLocaleString(undefined, {minimumFractionDigits: 2});
-    } else {
+    if (conversionDirection === 'ngntousd') {
         let res = inputVal / exchangeRate;
         document.getElementById('targetConvertOutput').value = '$' + res.toLocaleString(undefined, {minimumFractionDigits: 2});
+    } else {
+        let res = inputVal * exchangeRate;
+        document.getElementById('targetConvertOutput').value = '₦' + res.toLocaleString(undefined, {minimumFractionDigits: 2});
     }
 }
 
 function applyCurrencyConversion() {
-    if (conversionDirection === 'usdtongn') {
-        dashboardCurrencyMode = 'ngn';
-    } else {
-        dashboardCurrencyMode = 'usd';
+    let inputVal = parseFloat(document.getElementById('baseConvertInput').value) || 0;
+    if (inputVal <= 0) {
+        alert('Please enter a valid amount to convert.');
+        return;
     }
+
+    if (conversionDirection === 'ngntousd') {
+        // Convert from user's NGN balance into USD balance automatically
+        if (currentBalanceNgn < inputVal) {
+            alert('Insufficient Naira (NGN) balance for this conversion.');
+            return;
+        }
+        let usdGained = inputVal / exchangeRate;
+        currentBalanceNgn -= inputVal;
+        currentBalanceUsd += usdGained;
+        alert(`Successfully converted ₦${inputVal.toLocaleString()} to $${usdGained.toFixed(2)} on your balance!`);
+    } else {
+        // Convert from user's USD balance into NGN balance automatically
+        if (currentBalanceUsd < inputVal) {
+            alert('Insufficient USD balance for this conversion.');
+            return;
+        }
+        let ngnGained = inputVal * exchangeRate;
+        currentBalanceUsd -= inputVal;
+        currentBalanceNgn += ngnGained;
+        alert(`Successfully converted $${inputVal.toLocaleString()} to ₦${ngnGained.toLocaleString()} on your balance!`);
+    }
+
     updateBalanceDisplay();
     closeCurrencyModal();
-    alert('Dashboard currency updated successfully!');
 }
 
 function openChangePasswordModal() {
@@ -2325,12 +2329,11 @@ function updateCartUI() {
 
 function buyNowItem(title, price, type) {
     if(currentBalanceNgn < price) {
-        alert('Insufficient NGN balance. Please fund your wallet first.');
+        alert('Insufficient NGN balance. Please fund your Naira wallet first.');
         switchSection('deposit');
         return;
     }
     currentBalanceNgn -= price;
-    currentBalanceUsd = currentBalanceNgn / exchangeRate;
     transactions.unshift({ id: Date.now(), type, title, subtitle: 'Instant Purchase', amount: '₦' + price.toLocaleString(), date: 'Just now', status: 'Success' });
     updateBalanceDisplay();
     renderTransactions('all');
@@ -2342,12 +2345,11 @@ function checkoutCart() {
     let total = cartItems.reduce((sum, item) => sum + item.price, 0);
     if(total === 0) { alert('Your cart is empty.'); return; }
     if(currentBalanceNgn < total) {
-        alert('Insufficient balance to checkout. Please add funds.');
+        alert('Insufficient Naira balance to checkout. Please add funds.');
         switchSection('deposit');
         return;
     }
     currentBalanceNgn -= total;
-    currentBalanceUsd = currentBalanceNgn / exchangeRate;
     cartItems.forEach(item => {
         transactions.unshift({ id: Date.now(), type: item.type, title: item.title, subtitle: 'Cart Checkout', amount: '₦' + item.price.toLocaleString(), date: 'Just now', status: 'Success' });
     });
@@ -2361,44 +2363,35 @@ function checkoutCart() {
 
 function processDeposit() {
     let amt = parseFloat(document.getElementById('depositInput').value) || 0;
-    if(amt <= 0) { alert('Please enter a valid amount.'); return; }
-    currentBalanceNgn += amt;
-    currentBalanceUsd = currentBalanceNgn / exchangeRate;
-    transactions.unshift({ id: Date.now(), type: 'deposit', title: 'Card / Bank Transfer', subtitle: 'Wallet funding', amount: '₦' + amt.toLocaleString(), date: 'Just now', status: 'Success' });
+    let selectedWallet = document.getElementById('depositWalletSelect').value;
+
+    if(amt <= 0) { 
+        alert('Please enter a valid amount.'); 
+        return; 
+    }
+
+    if (selectedWallet === 'usd') {
+        currentBalanceUsd += amt;
+        transactions.unshift({ id: Date.now(), type: 'deposit', title: 'USD Deposit', subtitle: 'Wallet funding (USD)', amount: '$' + amt.toLocaleString(undefined, {minimumFractionDigits: 2}), date: 'Just now', status: 'Success' });
+        alert('USD Wallet funded successfully with $' + amt.toLocaleString(undefined, {minimumFractionDigits: 2}) + '!');
+    } else {
+        currentBalanceNgn += amt;
+        transactions.unshift({ id: Date.now(), type: 'deposit', title: 'Naira Deposit', subtitle: 'Wallet funding (NGN)', amount: '₦' + amt.toLocaleString(), date: 'Just now', status: 'Success' });
+        alert('Naira Wallet funded successfully with ₦' + amt.toLocaleString() + '!');
+    }
+
     updateBalanceDisplay();
     renderTransactions('all');
-    alert('Wallet funded successfully with ₦' + amt.toLocaleString() + '!');
     switchSection('home');
 }
 
 function updateBalanceDisplay() {
-    currentBalanceUsd = currentBalanceNgn / exchangeRate;
-    
     document.getElementById('navWalletBadge').textContent = 'NGN ₦' + currentBalanceNgn.toLocaleString(undefined, {minimumFractionDigits: 2});
     
-    if (dashboardCurrencyMode === 'usd') {
-        document.getElementById('balanceLabelPrimary').textContent = 'USD Balance';
-        document.getElementById('homePrimaryBalance').textContent = '$' + currentBalanceUsd.toLocaleString(undefined, {minimumFractionDigits: 2});
-        document.getElementById('balanceIconPrimary').className = 'sleek-card-icon icon-white';
-        document.getElementById('balanceIconPrimary').textContent = '💵';
+    document.getElementById('homeNgnBalance').textContent = '₦' + currentBalanceNgn.toLocaleString(undefined, {minimumFractionDigits: 2});
+    document.getElementById('homeUsdBalance').textContent = '$' + currentBalanceUsd.toLocaleString(undefined, {minimumFractionDigits: 2});
 
-        document.getElementById('balanceLabelSecondary').textContent = 'NGN Balance';
-        document.getElementById('homeSecondaryBalance').textContent = '₦' + currentBalanceNgn.toLocaleString(undefined, {minimumFractionDigits: 2});
-        document.getElementById('balanceIconSecondary').className = 'sleek-card-icon icon-blue';
-        document.getElementById('balanceIconSecondary').textContent = '💳';
-    } else {
-        document.getElementById('balanceLabelPrimary').textContent = 'NGN Balance';
-        document.getElementById('homePrimaryBalance').textContent = '₦' + currentBalanceNgn.toLocaleString(undefined, {minimumFractionDigits: 2});
-        document.getElementById('balanceIconPrimary').className = 'sleek-card-icon icon-blue';
-        document.getElementById('balanceIconPrimary').textContent = '💳';
-
-        document.getElementById('balanceLabelSecondary').textContent = 'USD Balance';
-        document.getElementById('homeSecondaryBalance').textContent = '$' + currentBalanceUsd.toLocaleString(undefined, {minimumFractionDigits: 2});
-        document.getElementById('balanceIconSecondary').className = 'sleek-card-icon icon-white';
-        document.getElementById('balanceIconSecondary').textContent = '💵';
-    }
-
-    document.getElementById('profileBalanceDisplay').textContent = '₦' + currentBalanceNgn.toLocaleString(undefined, {minimumFractionDigits: 2});
+    document.getElementById('profileBalanceDisplay').textContent = `NGN: ₦${currentBalanceNgn.toLocaleString(undefined, {minimumFractionDigits: 2})} | USD: $${currentBalanceUsd.toLocaleString(undefined, {minimumFractionDigits: 2})}`;
 }
     </script>
 </body>
