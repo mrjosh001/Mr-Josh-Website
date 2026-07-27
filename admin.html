@@ -60,11 +60,11 @@
         .metric-card .sub-value { font-size: 13px; color: #34d399; font-weight: 600; }
         .metric-card .hint { font-size: 11px; color: #94a3b8; margin-top: 5px; display: block; }
 
-        /* Revenue Toolbar & Controls */
+        /* Revenue Toolbar & Arranged Dropdown Controls */
         .revenue-toolbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; flex-wrap: wrap; gap: 10px; background: rgba(15, 23, 42, 0.6); padding: 12px 16px; border-radius: 10px; border: 1px solid var(--border-color); }
-        .time-toggles { display: flex; gap: 6px; }
-        .time-btn { background: #07090e; border: 1px solid var(--border-color); color: var(--text-muted); padding: 6px 12px; border-radius: 6px; font-size: 12px; cursor: pointer; font-weight: 600; }
-        .time-btn.active { background: var(--primary-color); color: #fff; border-color: var(--primary-color); }
+        .revenue-dropdown-wrapper { display: flex; align-items: center; gap: 10px; }
+        .revenue-select { background: #07090e; border: 1px solid var(--border-color); color: var(--text-main); padding: 8px 14px; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer; outline: none; transition: 0.2s; }
+        .revenue-select:hover { border-color: var(--primary-color); }
         .rate-ticker { font-size: 12px; color: #38bdf8; font-weight: 600; }
 
         /* Data Section */
@@ -136,13 +136,18 @@
 
             <!-- TAB 1: OVERVIEW (Combined Users & Revenue Dashboard) -->
             <div id="tab-overview" class="tab-content">
-                <!-- Revenue Toolbar with Toggles and Live P2P Ticker -->
+                <!-- Revenue Toolbar with Arranged Dropdown & Live P2P Ticker -->
                 <div class="revenue-toolbar">
-                    <div class="time-toggles">
-                        <span style="font-size: 12px; color: var(--text-muted); align-self: center; margin-right: 5px;">Revenue Range:</span>
-                        <button class="time-btn active" onclick="setRevenueTimeframe('days', this)">Days</button>
-                        <button class="time-btn" onclick="setRevenueTimeframe('months', this)">Months</button>
-                        <button class="time-btn" onclick="setRevenueTimeframe('years', this)">Years</button>
+                    <div class="revenue-dropdown-wrapper">
+                        <span style="font-size: 12px; color: var(--text-muted); font-weight: 600;">Revenue Period:</span>
+                        <select id="revenueTimeframeSelect" class="revenue-select" onchange="handleRevenueTimeframeChange(this)">
+                            <option value="today">Today</option>
+                            <option value="7days">Last 7 Days</option>
+                            <option value="month" selected>This Month</option>
+                            <option value="3months">Last 3 Months</option>
+                            <option value="6months">Last 6 Months</option>
+                            <option value="12months">Last 12 Months</option>
+                        </select>
                     </div>
                     <div class="rate-ticker" id="rateTicker">Live Bit P2P Rate: Fetching...</div>
                 </div>
@@ -164,7 +169,7 @@
                         <span class="hint">> 30 days inactive</span>
                     </div>
                     <div class="metric-card">
-                        <h3 id="revenueTitle">Revenue (Days)</h3>
+                        <h3 id="revenueTitle">Revenue (This Month)</h3>
                         <div class="value" id="revenueNgn">₦0.00</div>
                         <div class="sub-value" id="revenueUsd">$0.00 USD</div>
                         <span class="hint">Auto-converted via P2P</span>
@@ -307,6 +312,10 @@
                 <input type="text" id="editUsername">
             </div>
             <div class="input-group">
+                <label>Email Address</label>
+                <input type="email" id="editEmail">
+            </div>
+            <div class="input-group">
                 <label>Phone Number</label>
                 <input type="text" id="editPhone">
             </div>
@@ -337,7 +346,7 @@
 
         let allProfiles = [];
         let currentFilter = 'all';
-        let currentRevenueTimeframe = 'days';
+        let currentRevenueTimeframe = 'month';
         let liveP2PRate = 1364.48;
         let lookedUpUser = null;
 
@@ -450,7 +459,6 @@
                 return;
             }
 
-            // Query profile directly by customer_id column in Supabase
             const { data, error } = await supabaseClient
                 .from('profiles')
                 .select('*')
@@ -478,7 +486,6 @@
         function viewUserActivity() {
             if (lookedUpUser) {
                 alert(`Viewing activity logs for: ${lookedUpUser.full_name || lookedUpUser.email}`);
-                // Add custom redirection or drawer toggle logic here if desired
             }
         }
 
@@ -508,18 +515,24 @@
             renderTable();
         }
 
-        function setRevenueTimeframe(timeframe, btnElement) {
-            currentRevenueTimeframe = timeframe;
-            document.querySelectorAll('.time-btn').forEach(b => b.classList.remove('active'));
-            btnElement.classList.add('active');
-
-            document.getElementById('revenueTitle').innerText = `Revenue (${timeframe.charAt(0).toUpperCase() + timeframe.slice(1)})`;
+        function handleRevenueTimeframeChange(selectElement) {
+            currentRevenueTimeframe = selectElement.value;
+            const selectedText = selectElement.options[selectElement.selectedIndex].text;
+            document.getElementById('revenueTitle').innerText = `Revenue (${selectedText})`;
             updateRevenueDisplay();
         }
 
         function updateRevenueDisplay() {
             let baseMultiplier = allProfiles.length * 5250; 
-            let factor = currentRevenueTimeframe === 'days' ? 0.08 : (currentRevenueTimeframe === 'months' ? 1.0 : 11.5);
+            let factors = {
+                'today': 0.03,
+                '7days': 0.2,
+                'month': 1.0,
+                '3months': 3.2,
+                '6months': 6.8,
+                '12months': 14.5
+            };
+            let factor = factors[currentRevenueTimeframe] || 1.0;
             
             let revenueNgn = baseMultiplier * factor;
             let revenueUsd = revenueNgn / liveP2PRate;
@@ -565,7 +578,7 @@
                         <tr>
                             <td>${profile.full_name || 'N/A'}</td>
                             <td>${profile.username || 'N/A'}</td>
-                            <td>${profile.email || 'Registered User'}</td>
+                            <td>${profile.email || 'N/A'}</td>
                             <td style="font-weight: 600; color: #34d399;">${formattedBalance}</td>
                             <td>${statusBadge}</td>
                             <td>${adminBadge}</td>
@@ -586,6 +599,7 @@
             document.getElementById('editUserId').value = profile.id;
             document.getElementById('editFullName').value = profile.full_name || '';
             document.getElementById('editUsername').value = profile.username || '';
+            document.getElementById('editEmail').value = profile.email || '';
             document.getElementById('editPhone').value = profile.phone_number || '';
             document.getElementById('editBalance').value = profile.balance !== undefined ? profile.balance : 0;
             document.getElementById('editIsAdmin').value = profile.is_admin ? 'true' : 'false';
@@ -602,6 +616,7 @@
             const userId = document.getElementById('editUserId').value;
             const full_name = document.getElementById('editFullName').value.trim();
             const username = document.getElementById('editUsername').value.trim();
+            const email = document.getElementById('editEmail').value.trim();
             const phone_number = document.getElementById('editPhone').value.trim();
             const balance = parseFloat(document.getElementById('editBalance').value) || 0;
             const is_admin = document.getElementById('editIsAdmin').value === 'true';
@@ -609,7 +624,7 @@
 
             const { error } = await supabaseClient
                 .from('profiles')
-                .update({ full_name, username, phone_number, balance, is_admin })
+                .update({ full_name, username, email, phone_number, balance, is_admin })
                 .eq('id', userId);
 
             if (error) {
