@@ -588,6 +588,15 @@ body {
 .form-group textarea:focus,
 .form-group select:focus { border-color: var(--primary-color); }
 
+/* Filter Buttons Container Style */
+.filter-buttons-row {
+    display: flex;
+    gap: 8px;
+    overflow-x: auto;
+    margin-bottom: 15px;
+    padding-bottom: 5px;
+}
+
 .product-grid {
     display: grid;
     grid-template-columns: 1fr;
@@ -1410,8 +1419,16 @@ body {
             <div class="content-card">
                 <h2>MJ Logs - Social Media Logs</h2>
                 <p class="helper-text">Browse our verified social media logs and aged accounts provided by MJ HUB.</p>
-                <div class="product-grid">
-                    <div class="product-item-card">
+                
+                <!-- HTML Filter Buttons Added Here -->
+                <div class="filter-buttons-row">
+                    <button class="filter-tab active" onclick="filterProductItems('all', this)">All Logs</button>
+                    <button class="filter-tab" onclick="filterProductItems('gmail', this)">Gmail</button>
+                    <button class="filter-tab" onclick="filterProductItems('social', this)">Social Media</button>
+                </div>
+
+                <div class="product-grid" id="logsProductGrid">
+                    <div class="product-item-card" data-category="gmail">
                         <div class="product-info-top">
                             <div>
                                 <div class="product-title">Old Gmail Accounts (Aged)</div>
@@ -1900,6 +1917,24 @@ document.addEventListener('DOMContentLoaded', async () => {
 });
 
 /* ==========================================
+   PRODUCT FILTER FUNCTION
+   ========================================== */
+function filterProductItems(category, btnElement) {
+    const parentSection = btnElement.closest('.content-card');
+    parentSection.querySelectorAll('.filter-tab').forEach(tab => tab.classList.remove('active'));
+    btnElement.classList.add('active');
+
+    const items = parentSection.querySelectorAll('.product-item-card');
+    items.forEach(item => {
+        if (category === 'all' || item.getAttribute('data-category') === category) {
+            item.style.display = 'flex';
+        } else {
+            item.style.display = 'none';
+        }
+    });
+}
+
+/* ==========================================
    FETCH & REALTIME BALANCE SYNCHRONIZATION
    ========================================== */
 async function fetchUserBalance(userId) {
@@ -2208,7 +2243,6 @@ async function applyCurrencyConversion() {
     currentBalanceNgn = newNgn;
     currentBalanceUsd = newUsd;
     
-    // Log conversion under the deposit history tab as requested
     transactions.unshift({ 
         id: Date.now(), 
         type: 'deposit', 
@@ -2369,7 +2403,6 @@ async function buyNowItem(title, price, type) {
     }
     currentBalanceNgn = newNgn;
     
-    // Log under respective transaction history type (log, sms, or booster)
     transactions.unshift({ id: Date.now(), type: type, title: title, subtitle: 'Instant Purchase', amount: '₦' + price.toLocaleString(), date: 'Just now', status: 'Success' });
     
     updateBalanceDisplay();
@@ -2395,7 +2428,6 @@ async function checkoutCart() {
     }
     currentBalanceNgn = newNgn;
     cartItems.forEach(item => {
-        // Log each item under its respective type history log
         transactions.unshift({ id: Date.now(), type: item.type, title: item.title, subtitle: 'Cart Checkout', amount: '₦' + item.price.toLocaleString(), date: 'Just now', status: 'Success' });
     });
     cartItems = [];
