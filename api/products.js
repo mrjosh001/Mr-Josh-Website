@@ -1,4 +1,4 @@
-module.exports = async (req, res) => {
+module.exports = async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Content-Type', 'application/json');
 
@@ -14,8 +14,8 @@ module.exports = async (req, res) => {
     });
 
     const data = await apiRes.json();
-    return res.status(200).send(JSON.stringify(data));
+    return res.status(200).json(data);
   } catch (error) {
-    return res.status(500).send(JSON.stringify({ success: false, message: error.message }));
+    return res.status(500).json({ success: false, message: error.message });
   }
 };
