@@ -1,4 +1,4 @@
-export default async function handler(request, response) {
+module.exports = async function (req, res) {
   const apiKey = 'rsk_live_s5ATWd0yskBvEagViPwQd6HxwfdLrkkpGyZIZFXDnhPEj8W6';
   
   try {
@@ -12,10 +12,10 @@ export default async function handler(request, response) {
 
     const data = await apiRes.json();
     
-    response.setHeader('Access-Control-Allow-Origin', '*');
-    return response.status(200).json(data);
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    return res.status(200).json(data);
   } catch (error) {
-    response.setHeader('Access-Control-Allow-Origin', '*');
-    return response.status(500).json({ success: false, message: error.message });
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    return res.status(500).json({ success: false, message: error.message });
   }
-}
+};
