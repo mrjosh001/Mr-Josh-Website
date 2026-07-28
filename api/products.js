@@ -13,9 +13,11 @@ module.exports = async function (req, res) {
     const data = await apiRes.json();
     
     res.setHeader('Access-Control-Allow-Origin', '*');
-    return res.status(200).json(data);
+    res.setHeader('Content-Type', 'application/json');
+    return res.status(200).send(JSON.stringify(data));
   } catch (error) {
     res.setHeader('Access-Control-Allow-Origin', '*');
-    return res.status(500).json({ success: false, message: error.message });
+    res.setHeader('Content-Type', 'application/json');
+    return res.status(500).send(JSON.stringify({ success: false, message: error.message }));
   }
 };
