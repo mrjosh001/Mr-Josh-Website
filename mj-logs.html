@@ -5,6 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>MJ Hub - MJ Logs</title>
     <link rel="stylesheet" href="styles.css">
+    <!-- Include Supabase Client CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
 <body>
 
@@ -17,60 +19,60 @@
     <main class="main-content">
         <div class="content-card">
             <h2>MJ Logs – Live Supplier Products</h2>
-            <p class="helper-text" style="margin-bottom: 15px;">Browsing verified logs dynamically synced via API.</p>
+            <p class="helper-text" style="margin-bottom: 15px;">Browsing verified logs dynamically synced via database.</p>
             
-            <div id="loading" class="loading">Fetching products from supplier...</div>
+            <div id="loading" class="loading">Loading available logs...</div>
             <div id="products-container" class="products-grid"></div>
         </div>
     </main>
 
     <script>
+        // Initialize Supabase Public Client using your public keys
+        const SUPABASE_URL = 'YOUR_SUPABASE_URL'; // Replace with your project URL or environment variable
+        const SUPABASE_ANON_KEY = 'YOUR_SUPABASE_ANON_KEY'; // Replace with your public anon key
+        const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
         async function fetchApiProducts() {
             const container = document.getElementById('products-container');
             const loading = document.getElementById('loading');
 
-            const apiKey = 'rsk_live_s5ATWd0yskBvEagViPwQd6HxwfdLrkkpGyZIZFXDnhPEj8W6';
-            // Using a public CORS proxy to bypass browser restrictions when calling from GitHub Pages
-            const proxyUrl = 'https://api.allorigins.win/raw?url=';
-            const targetUrl = 'https://fadded.net/api/v1/reseller/products';
-
             try {
-                const response = await fetch(proxyUrl + encodeURIComponent(targetUrl), {
-                    method: 'GET',
-                    headers: {
-                        'X-Api-Key': apiKey,
-                        'Accept': 'application/json'
-                    }
-                });
+                // Fetch directly and safely from your Supabase database table
+                const { data: products, error } = await supabaseClient
+                    .from('products')
+                    .select('*')
+                    .eq('source', 'api')
+                    .eq('is_available', true);
 
-                const result = await response.json();
                 loading.style.display = 'none';
 
-                if (!result.success || !result.data || result.data.length === 0) {
+                if (error) throw error;
+
+                if (!products || products.length === 0) {
                     container.innerHTML = '<p class="empty-text">No products available at the moment.</p>';
                     return;
                 }
 
-                // Loop through the API products and build the cards dynamically
-                result.data.forEach(product => {
+                // Loop through the database products and build the cards dynamically
+                products.forEach(product => {
                     const card = document.createElement('div');
                     card.className = 'product-card';
                     card.innerHTML = `
                         <div>
                             <h3 style="font-size: 16px; margin-bottom: 6px;">${product.name}</h3>
-                            <p style="font-size: 13px; color: var(--text-muted); margin-bottom: 10px;">${product.description}</p>
+                            <p style="font-size: 13px; color: var(--text-muted); margin-bottom: 10px;">${product.description || ''}</p>
                         </div>
                         <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 10px; border-top: 1px solid var(--border-color); padding-top: 10px;">
-                            <span style="font-weight: 700; color: var(--primary-color);">₦${product.unit_price.toLocaleString()}</span>
-                            <span style="font-size: 12px; color: var(--text-muted);">Stock: ${product.in_stock}</span>
+                            <span style="font-weight: 700; color: var(--primary-color);">₦${Number(product.price).toLocaleString()}</span>
+                            <span style="font-size: 12px; color: var(--text-muted);">Stock: ${product.stock_quantity}</span>
                         </div>
                     `;
                     container.appendChild(card);
                 });
 
             } catch (error) {
-                loading.textContent = 'Error connecting to the supplier API.';
-                console.error('API Fetch error:', error);
+                loading.textContent = 'Error loading logs from database.';
+                console.error('Database Fetch error:', error);
             }
         }
 
