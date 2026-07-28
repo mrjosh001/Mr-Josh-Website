@@ -3,50 +3,32 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>MJ Logs - Products</title>
-    <style>
-        body {
-            font-family: Arial, sans-serif;
-            margin: 0;
-            padding: 20px;
-            background-color: #f4f4f9;
-            color: #333;
-        }
-        .container {
-            max-width: 1000px;
-            margin: 0 auto;
-        }
-        h1 {
-            text-align: center;
-            color: #2c3e50;
-        }
-        .products-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
-            gap: 20px;
-            margin-top: 20px;
-        }
-        .product-card {
-            background: #fff;
-            padding: 15px;
-            border-radius: 8px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-        }
-        .loading {
-            text-align: center;
-            font-size: 1.2em;
-            color: #7f8c8d;
-            margin-top: 40px;
-        }
-    </style>
+    <title>MJ Hub - MJ Logs</title>
+    <!-- Link to your shared stylesheet -->
+    <link rel="stylesheet" href="styles.css">
 </head>
 <body>
 
-    <div class="container">
-        <h1>MJ Logs</h1>
-        <div id="loading" class="loading">Loading products from suppliers page...</div>
-        <div id="products-container" class="products-grid"></div>
-    </div>
+    <!-- Top Navbar Match -->
+    <nav class="navbar">
+        <div class="nav-left">
+            <span class="brand-title">MJ HUB</span>
+        </div>
+    </nav>
+
+    <!-- Main Content -->
+    <main class="main-content">
+        <div class="content-card">
+            <h2>MJ Logs – Social Media & Account Logs</h2>
+            <p class="helper-text" style="margin-bottom: 15px;">Browse our verified social media logs and aged accounts automatically synced from suppliers.</p>
+            
+            <!-- Loading Indicator -->
+            <div id="loading" class="loading">Loading products from suppliers page...</div>
+
+            <!-- Products Grid where items will appear -->
+            <div id="products-container" class="products-grid"></div>
+        </div>
+    </main>
 
     <script>
         async function fetchSupplierProducts() {
@@ -54,7 +36,7 @@
             const loading = document.getElementById('loading');
 
             try {
-                // Adjust 'suppliers.html' if your file name is different (e.g., suppliers.html or supplier.html)
+                // Change 'suppliers.html' if your supplier page filename is different
                 const response = await fetch('suppliers.html');
                 const htmlText = await response.text();
                 
@@ -62,17 +44,18 @@
                 const parser = new DOMParser();
                 const doc = parser.parseFromString(htmlText, 'text/html');
 
-                // CHANGE THIS SELECTOR to match the CSS class or ID of the product elements on your suppliers page
-                const productElements = doc.querySelectorAll('.product-item');
+                // MAKE SURE THIS SELECTOR MATCHES your product wrapper class on suppliers.html
+                // (e.g., if each product on suppliers.html has class "product-card" or "log-item")
+                const productElements = doc.querySelectorAll('.product-card');
 
                 loading.style.display = 'none';
 
                 if (productElements.length === 0) {
-                    container.innerHTML = '<p>No products found on the suppliers page, or the selector needs adjustment.</p>';
+                    container.innerHTML = '<p class="empty-text">No products found on the suppliers page yet. Check your CSS selector.</p>';
                     return;
                 }
 
-                // Loop through each product found and append it to the logs grid
+                // Loop through each product found and append it to the grid
                 productElements.forEach(product => {
                     const card = document.createElement('div');
                     card.className = 'product-card';
@@ -81,7 +64,7 @@
                 });
 
             } catch (error) {
-                loading.textContent = 'Error loading products. Make sure your suppliers page is in the same repository.';
+                loading.textContent = 'Error loading products. Ensure suppliers.html is in the same repository.';
                 console.error('Fetch error:', error);
             }
         }
