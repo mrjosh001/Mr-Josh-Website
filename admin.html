@@ -68,7 +68,7 @@
 
         /* Data Section */
         .data-section { background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 14px; padding: 25px; box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.5); margin-bottom: 25px; }
-        .section-title { font-size: 18px; font-weight: 600; color: #fff; margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center; }
+        .section-title { font-size: 18px; font-weight: 600; color: #fff; margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; }
         
         /* Table Design */
         .table-responsive { width: 100%; overflow-x: auto; }
@@ -80,6 +80,7 @@
         .badge { padding: 4px 8px; border-radius: 6px; font-size: 11px; font-weight: 600; text-transform: uppercase; }
         .badge-active { background: rgba(74, 222, 128, 0.15); color: #4ade80; }
         .badge-inactive { background: rgba(248, 113, 113, 0.15); color: #f87171; }
+        .badge-pending { background: rgba(234, 179, 8, 0.15); color: #facc15; }
 
         /* Modal Overlay */
         .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.7); display: flex; justify-content: center; align-items: center; z-index: 1000; }
@@ -200,16 +201,55 @@
             <!-- TAB 2: ORDERS -->
             <div id="tab-orders" class="tab-content hidden">
                 <div class="data-section">
-                    <div class="section-title"><span>Order Queue & Fulfillment</span></div>
-                    <div class="placeholder-content">No active orders in queue. Order processing tools ready.</div>
+                    <div class="section-title">
+                        <span>Order Queue & Fulfillment</span>
+                        <button class="action-btn primary-btn" onclick="openNewOrderModal()">+ Add New Order</button>
+                    </div>
+                    <div class="table-responsive">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Order ID</th>
+                                    <th>Customer</th>
+                                    <th>Item / Service</th>
+                                    <th>Amount (₦)</th>
+                                    <th>Status</th>
+                                    <th>Date</th>
+                                    <th>Action</th>
+                                </tr>
+                            </thead>
+                            <tbody id="ordersTableBody">
+                                <!-- Populated dynamically -->
+                            </tbody>
+                        </table>
+                    </div>
                 </div>
             </div>
 
             <!-- TAB 3: INVENTORY -->
             <div id="tab-inventory" class="tab-content hidden">
                 <div class="data-section">
-                    <div class="section-title"><span>Product Catalog & Stock Management</span></div>
-                    <div class="placeholder-content">Inventory database syncing... No items added yet.</div>
+                    <div class="section-title">
+                        <span>Product Catalog & Stock Management</span>
+                        <button class="action-btn primary-btn" onclick="openNewProductModal()">+ Add Product</button>
+                    </div>
+                    <div class="table-responsive">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Product Name</th>
+                                    <th>Category</th>
+                                    <th>Price (₦)</th>
+                                    <th>Stock Qty</th>
+                                    <th>Status</th>
+                                    <th>Action</th>
+                                </tr>
+                            </thead>
+                            <tbody id="inventoryTableBody">
+                                <!-- Populated dynamically -->
+                            </tbody>
+                        </table>
+                    </div>
                 </div>
             </div>
 
@@ -267,8 +307,26 @@
             <!-- TAB 5: MARKETING -->
             <div id="tab-marketing" class="tab-content hidden">
                 <div class="data-section">
-                    <div class="section-title"><span>Coupons, Loyalty & Promotions</span></div>
-                    <div class="placeholder-content">Marketing automation workflows idle.</div>
+                    <div class="section-title">
+                        <span>Coupons, Loyalty & Promotions</span>
+                        <button class="action-btn primary-btn" onclick="openNewCouponModal()">+ Create Coupon</button>
+                    </div>
+                    <div class="table-responsive">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Coupon Code</th>
+                                    <th>Discount Value</th>
+                                    <th>Usage Limit</th>
+                                    <th>Status</th>
+                                    <th>Action</th>
+                                </tr>
+                            </thead>
+                            <tbody id="marketingTableBody">
+                                <!-- Populated dynamically -->
+                            </tbody>
+                        </table>
+                    </div>
                 </div>
             </div>
 
@@ -276,7 +334,11 @@
             <div id="tab-reports" class="tab-content hidden">
                 <div class="data-section">
                     <div class="section-title"><span>Financial Reports & Data Export</span></div>
-                    <div class="placeholder-content">Export options available.</div>
+                    <p style="color: var(--text-muted); margin-bottom: 20px; font-size: 14px;">Generate structured comma-separated values (CSV) reports for accounting, auditing, and platform metrics.</p>
+                    <div style="display: flex; gap: 15px; flex-wrap: wrap;">
+                        <button class="action-btn primary-btn" onclick="exportReport('users')">Export User Directory (CSV)</button>
+                        <button class="action-btn primary-btn" style="background: #059669;" onclick="exportReport('orders')">Export Order History (CSV)</button>
+                    </div>
                 </div>
             </div>
 
@@ -284,7 +346,18 @@
             <div id="tab-settings" class="tab-content hidden">
                 <div class="data-section">
                     <div class="section-title"><span>Staff Permissions & Gateway Integration</span></div>
-                    <div class="placeholder-content">Role-based access control (RBAC) active. Secure Supabase environment connected.</div>
+                    <div class="input-group">
+                        <label>Platform Maintenance Mode</label>
+                        <select id="settingMaintenanceMode" onchange="saveSystemSetting(this.value)">
+                            <option value="false">Inactive (Platform Live)</option>
+                            <option value="true">Active (Under Maintenance)</option>
+                        </select>
+                    </div>
+                    <div class="input-group" style="margin-top: 15px;">
+                        <label>Live P2P Exchange Rate Override (₦ / $)</label>
+                        <input type="number" id="settingP2PRate" placeholder="1420" onchange="updateCustomRate(this.value)">
+                    </div>
+                    <p style="font-size: 12px; color: var(--text-muted); margin-top: 15px;">Role-based access control (RBAC) active. Secure Supabase environment connected.</p>
                 </div>
             </div>
 
@@ -343,6 +416,19 @@
         const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY);
 
         let allProfiles = [];
+        let mockOrders = [
+            { id: 'ORD-9021', customer: 'Joseph Josh', item: 'Verification API Access', amount: 5000, status: 'Completed', date: '2026-07-28' },
+            { id: 'ORD-9022', customer: 'Client Alpha', item: 'Bulk SMS Credits', amount: 12500, status: 'Pending', date: '2026-07-28' }
+        ];
+        let mockInventory = [
+            { id: 1, name: 'Standard Verification Bundle', category: 'API Keys', price: 5000, stock: 150, status: 'Active' },
+            { id: 2, name: 'Enterprise Premium Pass', category: 'Subscriptions', price: 25000, stock: 45, status: 'Active' }
+        ];
+        let mockCoupons = [
+            { code: 'WELCOME10', discount: '10%', limit: 50, status: 'Active' },
+            { code: 'MJLAUNCH', discount: '₦2,500', limit: 100, status: 'Active' }
+        ];
+
         let currentFilter = 'all';
         let currentRevenueTimeframe = 'month';
         let liveP2PRate = 1420;
@@ -351,6 +437,9 @@
         window.addEventListener('DOMContentLoaded', async () => {
             fetchLiveP2PRate();
             await checkAuth();
+            renderOrders();
+            renderInventory();
+            renderCoupons();
             
             window.addEventListener('click', (e) => {
                 if (!e.target.closest('.menu-container')) {
@@ -369,11 +458,21 @@
                 const data = await response.json();
                 if (data && data.rates && data.rates.NGN) {
                     liveP2PRate = data.rates.NGN;
+                    document.getElementById('settingP2PRate').value = liveP2PRate;
                 }
             } catch (err) {
                 console.warn('Using fallback P2P exchange rate in memory.');
             }
             updateRevenueDisplay();
+        }
+
+        function updateCustomRate(val) {
+            const parsed = parseFloat(val);
+            if (parsed > 0) {
+                liveP2PRate = parsed;
+                updateRevenueDisplay();
+                renderTable();
+            }
         }
 
         function switchTab(tabName) {
@@ -544,17 +643,17 @@
         }
 
         function updateRevenueDisplay() {
-            let totalSales = 0;
-            let totalDeposits = 0;
-            let purchaseCosts = 0;
-            let profitMargin = 0;
+            let totalSales = mockOrders.reduce((acc, order) => acc + (order.status === 'Completed' ? order.amount : 0), 0);
+            let totalDeposits = allProfiles.reduce((acc, p) => acc + (p.balance || 0), 0);
+            let purchaseCosts = totalSales * 0.3;
+            let profitMargin = totalSales - purchaseCosts;
 
             let revenueNgn = totalSales; 
             let revenueUsd = revenueNgn / liveP2PRate;
 
             document.getElementById('revenueNgn').innerText = `₦${revenueNgn.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
             document.getElementById('revenueUsd').innerText = `$${revenueUsd.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})} USD`;
-            document.getElementById('revenueBreakdownHint').innerText = `Deposits: ₦${totalDeposits} | API Purchases: ₦${purchaseCosts} | Profit: ₦${profitMargin}`;
+            document.getElementById('revenueBreakdownHint').innerText = `Sales Volume: ₦${totalSales} | User Balances: ₦${totalDeposits.toLocaleString()} | Est. Profit: ₦${profitMargin}`;
         }
 
         function filterTable(filterType) {
@@ -609,6 +708,132 @@
 
             if (tbody) tbody.innerHTML = rowsHTML;
             if (crmTbody) crmTbody.innerHTML = rowsHTML;
+        }
+
+        function renderOrders() {
+            const tbody = document.getElementById('ordersTableBody');
+            let html = '';
+            mockOrders.forEach((o, index) => {
+                const statusBadge = o.status === 'Completed' ? `<span class="badge badge-active">Completed</span>` : `<span class="badge badge-pending">Pending</span>`;
+                html += `
+                    <tr>
+                        <td style="font-weight: 600;">${o.id}</td>
+                        <td>${o.customer}</td>
+                        <td>${o.item}</td>
+                        <td style="color: #34d399;">₦${o.amount.toLocaleString()}</td>
+                        <td>${statusBadge}</td>
+                        <td>${o.date}</td>
+                        <td><button class="action-btn edit-btn" onclick="toggleOrderStatus(${index})">Toggle Status</button></td>
+                    </tr>
+                `;
+            });
+            tbody.innerHTML = html;
+        }
+
+        function toggleOrderStatus(index) {
+            mockOrders[index].status = mockOrders[index].status === 'Completed' ? 'Pending' : 'Completed';
+            renderOrders();
+            updateRevenueDisplay();
+        }
+
+        function openNewOrderModal() {
+            const customer = prompt("Enter Customer Name:");
+            const item = prompt("Enter Item / Service Name:");
+            const amount = parseFloat(prompt("Enter Amount in NGN:"));
+            if (customer && item && !isNaN(amount)) {
+                mockOrders.unshift({ id: 'ORD-' + Math.floor(1000 + Math.random() * 9000), customer, item, amount, status: 'Pending', date: new Date().toISOString().split('T')[0] });
+                renderOrders();
+                updateRevenueDisplay();
+            }
+        }
+
+        function renderInventory() {
+            const tbody = document.getElementById('inventoryTableBody');
+            let html = '';
+            mockInventory.forEach((item, index) => {
+                html += `
+                    <tr>
+                        <td style="font-weight: 600;">${item.name}</td>
+                        <td>${item.category}</td>
+                        <td style="color: #34d399;">₦${item.price.toLocaleString()}</td>
+                        <td>${item.stock} units</td>
+                        <td><span class="badge badge-active">${item.status}</span></td>
+                        <td><button class="action-btn edit-btn" onclick="adjustStock(${index})">Update Stock</button></td>
+                    </tr>
+                `;
+            });
+            tbody.innerHTML = html;
+        }
+
+        function adjustStock(index) {
+            const newStock = prompt(`Update stock count for ${mockInventory[index].name}:`, mockInventory[index].stock);
+            if (newStock !== null && !isNaN(newStock)) {
+                mockInventory[index].stock = parseInt(newStock);
+                renderInventory();
+            }
+        }
+
+        function openNewProductModal() {
+            const name = prompt("Enter Product Name:");
+            const category = prompt("Enter Category:");
+            const price = parseFloat(prompt("Enter Price (₦):"));
+            const stock = parseInt(prompt("Enter Initial Stock Qty:"));
+            if (name && category && !isNaN(price)) {
+                mockInventory.push({ id: mockInventory.length + 1, name, category, price, stock: stock || 100, status: 'Active' });
+                renderInventory();
+            }
+        }
+
+        function renderCoupons() {
+            const tbody = document.getElementById('marketingTableBody');
+            let html = '';
+            mockCoupons.forEach((c) => {
+                html += `
+                    <tr>
+                        <td style="font-weight: 600; color: #38bdf8;">${c.code}</td>
+                        <td>${c.discount}</td>
+                        <td>${c.limit} uses</td>
+                        <td><span class="badge badge-active">${c.status}</span></td>
+                        <td><button class="action-btn edit-btn" style="background: #dc2626;" onclick="alert('Coupon deactivated.')">Disable</button></td>
+                    </tr>
+                `;
+            });
+            tbody.innerHTML = html;
+        }
+
+        function openNewCouponModal() {
+            const code = prompt("Enter Coupon Code (e.g., SUMMER20):");
+            const discount = prompt("Enter Discount Value (e.g., 15% or ₦1000):");
+            if (code && discount) {
+                mockCoupons.push({ code: code.toUpperCase(), discount, limit: 50, status: 'Active' });
+                renderCoupons();
+            }
+        }
+
+        function exportReport(type) {
+            let csvContent = "data:text/csv;charset=utf-8,";
+            if (type === 'users') {
+                csvContent += "Full Name,Username,Email,Balance NGN,Admin Status\n";
+                allProfiles.forEach(p => {
+                    csvContent += `"${p.full_name || ''}","${p.username || ''}","${p.email || ''}",${p.balance || 0},${p.is_admin}\n`;
+                });
+            } else {
+                csvContent += "Order ID,Customer,Item,Amount,Status,Date\n";
+                mockOrders.forEach(o => {
+                    csvContent += `"${o.id}","${o.customer}","${o.item}",${o.amount},"${o.status}","${o.date}"\n`;
+                });
+            }
+            const encodedUri = encodeURI(csvContent);
+            const link = document.createElement("a");
+            link.setAttribute("href", encodedUri);
+            link.setAttribute("download", `mjhub_${type}_report.csv`);
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        }
+
+        function saveSystemSetting(val) {
+            alert(`Platform maintenance mode set to: ${val}`);
         }
 
         function openEditModal(userId) {
