@@ -4,73 +4,75 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>MJ Hub - MJ Logs</title>
-    <!-- Link to your shared stylesheet -->
     <link rel="stylesheet" href="styles.css">
 </head>
 <body>
 
-    <!-- Top Navbar Match -->
     <nav class="navbar">
         <div class="nav-left">
             <span class="brand-title">MJ HUB</span>
         </div>
     </nav>
 
-    <!-- Main Content -->
     <main class="main-content">
         <div class="content-card">
-            <h2>MJ Logs – Social Media & Account Logs</h2>
-            <p class="helper-text" style="margin-bottom: 15px;">Browse our verified social media logs and aged accounts automatically synced from suppliers.</p>
+            <h2>MJ Logs – Live Supplier Products</h2>
+            <p class="helper-text" style="margin-bottom: 15px;">Browsing verified logs dynamically synced via API.</p>
             
-            <!-- Loading Indicator -->
-            <div id="loading" class="loading">Loading products from suppliers page...</div>
-
-            <!-- Products Grid where items will appear -->
+            <div id="loading" class="loading">Fetching products from supplier...</div>
             <div id="products-container" class="products-grid"></div>
         </div>
     </main>
 
     <script>
-        async function fetchSupplierProducts() {
+        async function fetchApiProducts() {
             const container = document.getElementById('products-container');
             const loading = document.getElementById('loading');
 
+            const baseUrl = 'https://fadded.net/api/v1/reseller';
+            const apiKey = 'rsk_live_s5ATWd0yskBvEagViPwQd6HxwfdLrkkpGyZIZFXDnhPEj8W6'; // Note: For true production safety, this should go through a backend server proxy, but you can plug your key here for testing.
+
             try {
-                // Change 'suppliers.html' if your supplier page filename is different
-                const response = await fetch('suppliers.html');
-                const htmlText = await response.text();
-                
-                // Parse the fetched HTML text
-                const parser = new DOMParser();
-                const doc = parser.parseFromString(htmlText, 'text/html');
+                const response = await fetch(`${baseUrl}/products`, {
+                    method: 'GET',
+                    headers: {
+                        'X-Api-Key': apiKey,
+                        'Accept': 'application/json'
+                    }
+                });
 
-                // MAKE SURE THIS SELECTOR MATCHES your product wrapper class on suppliers.html
-                // (e.g., if each product on suppliers.html has class "product-card" or "log-item")
-                const productElements = doc.querySelectorAll('.product-card');
-
+                const result = await response.json();
                 loading.style.display = 'none';
 
-                if (productElements.length === 0) {
-                    container.innerHTML = '<p class="empty-text">No products found on the suppliers page yet. Check your CSS selector.</p>';
+                if (!result.success || !result.data || result.data.length === 0) {
+                    container.innerHTML = '<p class="empty-text">No products available at the moment.</p>';
                     return;
                 }
 
-                // Loop through each product found and append it to the grid
-                productElements.forEach(product => {
+                // Loop through the API products and build the cards dynamically
+                result.data.forEach(product => {
                     const card = document.createElement('div');
                     card.className = 'product-card';
-                    card.innerHTML = product.innerHTML;
+                    card.innerHTML = `
+                        <div>
+                            <h3 style="font-size: 16px; margin-bottom: 6px;">${product.name}</h3>
+                            <p style="font-size: 13px; color: var(--text-muted); margin-bottom: 10px;">${product.description}</p>
+                        </div>
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 10px; border-top: 1px solid var(--border-color); pt-10px;">
+                            <span style="font-weight: 700; color: var(--primary-color);">₦${product.unit_price.toLocaleString()}</span>
+                            <span style="font-size: 12px; color: var(--text-muted);">Stock: ${product.in_stock}</span>
+                        </div>
+                    `;
                     container.appendChild(card);
                 });
 
             } catch (error) {
-                loading.textContent = 'Error loading products. Ensure suppliers.html is in the same repository.';
-                console.error('Fetch error:', error);
+                loading.textContent = 'Error connecting to the supplier API.';
+                console.error('API Fetch error:', error);
             }
         }
 
-        // Run the function when the page loads
-        window.addEventListener('DOMContentLoaded', fetchSupplierProducts);
+        window.addEventListener('DOMContentLoaded', fetchApiProducts);
     </script>
 
 </body>
