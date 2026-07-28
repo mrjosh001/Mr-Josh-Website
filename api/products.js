@@ -1,4 +1,7 @@
-module.exports = async function (req, res) {
+module.exports = async (req, res) => {
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Content-Type', 'application/json');
+
   const apiKey = 'rsk_live_s5ATWd0yskBvEagViPwQd6HxwfdLrkkpGyZIZFXDnhPEj8W6';
   
   try {
@@ -11,13 +14,8 @@ module.exports = async function (req, res) {
     });
 
     const data = await apiRes.json();
-    
-    res.setHeader('Access-Control-Allow-Origin', '*');
-    res.setHeader('Content-Type', 'application/json');
     return res.status(200).send(JSON.stringify(data));
   } catch (error) {
-    res.setHeader('Access-Control-Allow-Origin', '*');
-    res.setHeader('Content-Type', 'application/json');
     return res.status(500).send(JSON.stringify({ success: false, message: error.message }));
   }
 };
