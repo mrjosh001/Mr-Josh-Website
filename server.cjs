@@ -7,13 +7,18 @@ const app = express();
 // Middleware to parse JSON request bodies from the frontend
 app.use(express.json());
 
-// Initialize Supabase Admin Client
-const SUPABASE_URL = process.env.SUPABASE_URL;
-const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
+// Initialize Supabase Admin Client safely with fallbacks to prevent startup crashes
+const SUPABASE_URL = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || '';
+const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY || '';
+
+if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
+    console.warn("WARNING: Supabase URL or Key is missing from environment variables.");
+}
+
 const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
 // Supplier API Config
-const FADDED_API_KEY = process.env.FADDED_API_KEY;
+const FADDED_API_KEY = process.env.FADDED_API_KEY || 'rsk_live_s5ATWd0yskBvEagViPwQd6HxwfdLrkkpGyZIZFXDnhPEj8W6';
 const FADDED_BASE_URL = 'https://fadded.net/api/v1/reseller';
 
 // Common Headers for Supplier API
@@ -51,14 +56,13 @@ app.get('/api/sync-products', async (req, res) => {
                 product_key: item.product_key,
                 name: item.name,
                 description: item.description,
-                price: item.unit_price, // You can apply a price markup formula here if desired
+                price: item.unit_price, 
                 stock_quantity: item.in_stock,
                 is_available: item.in_stock > 0,
-                source: 'api', // Flags this product as an automated API product
+                source: 'api',
                 updated_at: new Date().toISOString()
             };
 
-            // Upsert into Supabase (Inserts new products, updates existing ones matching 'product_key')
             const { error } = await supabase
                 .from('products')
                 .upsert(productRecord, { onConflict: 'product_key' });
@@ -90,7 +94,6 @@ app.post('/api/place-order', async (req, res) => {
             return res.status(400).json({ success: false, message: 'product_key and quantity are required.' });
         }
 
-        // Call fadded.net order endpoint
         const supplierRes = await fetch(`${FADDED_BASE_URL}/order`, {
             method: 'POST',
             headers: supplierHeaders,
@@ -112,7 +115,6 @@ app.post('/api/place-order', async (req, res) => {
             });
         }
 
-        // Return supplier items/credentials to your checkout handler securely
         return res.json({
             success: true,
             message: 'Order fulfilled successfully',
