@@ -146,8 +146,8 @@ app.get('/api/supplier-balance', async (req, res) => {
 // Serving Static Frontend Files
 app.use(express.static(path.join(__dirname)));
 
-// Catch-all route to serve index.html for frontend routing
-app.get('*', (req, res) => {
+// Corrected Catch-all route: excludes /api/ requests so frontend scripts and assets load properly
+app.get(/^(?!\/api\/).*/, (req, res) => {
     res.sendFile(path.join(__dirname, 'index.html'));
 });
 
