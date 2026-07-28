@@ -686,6 +686,38 @@ body {
     list-style: none;
 }
 
+/* --- Products / Supplier Log Grid Updates --- */
+.products-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+    gap: 20px;
+    margin-top: 15px;
+}
+
+.product-card {
+    background: var(--card-bg);
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    padding: 18px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.product-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+}
+
+.loading {
+    text-align: center;
+    font-size: 14px;
+    color: var(--text-muted);
+    padding: 40px 0;
+}
+
 /* --- Mobile Bottom Nav Bar --- */
 .bottom-nav {
     position: fixed;
