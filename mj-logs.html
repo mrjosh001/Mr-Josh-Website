@@ -2,53 +2,93 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>MJ Logs</title>
-    <link rel="stylesheet" href="style.css"> <!-- Your site styles -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MJ Logs - Products</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #f4f4f9;
+            color: #333;
+        }
+        .container {
+            max-width: 1000px;
+            margin: 0 auto;
+        }
+        h1 {
+            text-align: center;
+            color: #2c3e50;
+        }
+        .products-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+            gap: 20px;
+            margin-top: 20px;
+        }
+        .product-card {
+            background: #fff;
+            padding: 15px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .loading {
+            text-align: center;
+            font-size: 1.2em;
+            color: #7f8c8d;
+            margin-top: 40px;
+        }
+    </style>
 </head>
 <body>
-    <h1>Available MJ Logs</h1>
-    <div id="logs-container">Loading logs from supplier...</div>
+
+    <div class="container">
+        <h1>MJ Logs</h1>
+        <div id="loading" class="loading">Loading products from suppliers page...</div>
+        <div id="products-container" class="products-grid"></div>
+    </div>
 
     <script>
-        async function loadMjLogs() {
-            const container = document.getElementById('logs-container');
+        async function fetchSupplierProducts() {
+            const container = document.getElementById('products-container');
+            const loading = document.getElementById('loading');
+
             try {
-                // Fetch products from your Supabase database (filtering for API products)
-                // Note: Ensure your frontend is configured with your Supabase public anon key
-                const { data: products, error } = await window.supabaseClient
-                    .from('products')
-                    .select('*')
-                    .eq('source', 'api') // Only pull automated API products
-                    .eq('is_available', true); // Only show items in stock
+                // Adjust 'suppliers.html' if your file name is different (e.g., suppliers.html or supplier.html)
+                const response = await fetch('suppliers.html');
+                const htmlText = await response.text();
+                
+                // Parse the fetched HTML text
+                const parser = new DOMParser();
+                const doc = parser.parseFromString(htmlText, 'text/html');
 
-                if (error) throw error;
+                // CHANGE THIS SELECTOR to match the CSS class or ID of the product elements on your suppliers page
+                const productElements = doc.querySelectorAll('.product-item');
 
-                if (!products || products.length === 0) {
-                    container.innerHTML = '<p>No logs available at the moment. Please check back later.</p>';
+                loading.style.display = 'none';
+
+                if (productElements.length === 0) {
+                    container.innerHTML = '<p>No products found on the suppliers page, or the selector needs adjustment.</p>';
                     return;
                 }
 
-                // Render the products on the page
-                container.innerHTML = products.map(product => `
-                    <div class="product-card" style="border: 1px solid #ccc; padding: 15px; margin-bottom: 10px; border-radius: 8px;">
-                        <h3>${product.name}</h3>
-                        <p>${product.description}</p>
-                        <p><strong>Price:</strong> ₦${product.price.toLocaleString()}</p>
-                        <p><strong>In Stock:</strong> ${product.stock_quantity}</p>
-                        <button onclick="buyLog('${product.product_key}')" style="background: green; color: white; padding: 8px 15px; border: none; border-radius: 4px; cursor: pointer;">
-                            Buy Now
-                        </button>
-                    </div>
-                `).join('');
+                // Loop through each product found and append it to the logs grid
+                productElements.forEach(product => {
+                    const card = document.createElement('div');
+                    card.className = 'product-card';
+                    card.innerHTML = product.innerHTML;
+                    container.appendChild(card);
+                });
 
-            } catch (err) {
-                console.error('Error loading logs:', err);
-                container.innerHTML = '<p>Failed to load logs. Please refresh the page.</p>';
+            } catch (error) {
+                loading.textContent = 'Error loading products. Make sure your suppliers page is in the same repository.';
+                console.error('Fetch error:', error);
             }
         }
 
         // Run the function when the page loads
-        window.addEventListener('DOMContentLoaded', loadMjLogs);
+        window.addEventListener('DOMContentLoaded', fetchSupplierProducts);
     </script>
+
 </body>
 </html>
