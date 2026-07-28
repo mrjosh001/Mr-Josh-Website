@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>MJ Logs</title>
+    <link rel="stylesheet" href="style.css"> <!-- Your site styles -->
+</head>
+<body>
+    <h1>Available MJ Logs</h1>
+    <div id="logs-container">Loading logs from supplier...</div>
+
+    <script>
+        async function loadMjLogs() {
+            const container = document.getElementById('logs-container');
+            try {
+                // Fetch products from your Supabase database (filtering for API products)
+                // Note: Ensure your frontend is configured with your Supabase public anon key
+                const { data: products, error } = await window.supabaseClient
+                    .from('products')
+                    .select('*')
+                    .eq('source', 'api') // Only pull automated API products
+                    .eq('is_available', true); // Only show items in stock
+
+                if (error) throw error;
+
+                if (!products || products.length === 0) {
+                    container.innerHTML = '<p>No logs available at the moment. Please check back later.</p>';
+                    return;
+                }
+
+                // Render the products on the page
+                container.innerHTML = products.map(product => `
+                    <div class="product-card" style="border: 1px solid #ccc; padding: 15px; margin-bottom: 10px; border-radius: 8px;">
+                        <h3>${product.name}</h3>
+                        <p>${product.description}</p>
+                        <p><strong>Price:</strong> ₦${product.price.toLocaleString()}</p>
+                        <p><strong>In Stock:</strong> ${product.stock_quantity}</p>
+                        <button onclick="buyLog('${product.product_key}')" style="background: green; color: white; padding: 8px 15px; border: none; border-radius: 4px; cursor: pointer;">
+                            Buy Now
+                        </button>
+                    </div>
+                `).join('');
+
+            } catch (err) {
+                console.error('Error loading logs:', err);
+                container.innerHTML = '<p>Failed to load logs. Please refresh the page.</p>';
+            }
+        }
+
+        // Run the function when the page loads
+        window.addEventListener('DOMContentLoaded', loadMjLogs);
+    </script>
+</body>
+</html>
