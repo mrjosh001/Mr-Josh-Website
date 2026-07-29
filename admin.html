@@ -470,7 +470,7 @@
         </header>
 
         <div class="content">
-            <!-- OVERVIEW — clean: revenue + user counts only -->
+            <!-- OVERVIEW -->
             <div id="tab-overview" class="tab-content active">
 
                 <!-- Revenue period -->
@@ -532,7 +532,7 @@
 
             </div>
 
-            <!-- CUSTOMER LOOKUP (moved from overview) -->
+            <!-- CUSTOMER LOOKUP -->
             <div id="tab-lookup" class="tab-content">
                 <div class="panel">
                     <div class="panel-header">
@@ -844,7 +844,7 @@ const THIRTY_DAYS_MS = 30 * 24 * 60 * 60 * 1000;
 
 function isUserActive(profile) {
     const last = profile.updated_at || profile.last_sign_in_at || profile.created_at;
-    if (!last) return true; // treat missing as active
+    if (!last) return true;
     return (Date.now() - new Date(last).getTime()) < THIRTY_DAYS_MS;
 }
 
@@ -933,7 +933,6 @@ async function loadProducts() {
 function populateCategoryFilter() {
     const select = document.getElementById('categoryFilter');
     if (!select) return;
-    // Fixed product categories + any extras found in data
     const fixed = ['Facebook', 'Instagram', 'Twitter/X', 'Others'];
     const fromData = [...new Set(allProducts.map(p => getProductCategoryLabel(p)).filter(Boolean))];
     const cats = [...new Set([...fixed, ...fromData])];
@@ -991,11 +990,7 @@ function updateMetrics() {
     set('uActiveCount', activeCount);
     set('uInactiveCount', inactiveCount);
 
-    set('mTotalProducts', allProducts.length);
-    const activeProd = allProducts.filter(p => p.is_available !== false && (p.stock_quantity == null || p.stock_quantity > 0)).length;
-    set('mActiveProducts', activeProd);
-
-    const totalBal = allProfiles.reduce((s, p) => s + (Number(p.balance) || 0), 0);
+    const totalBal = allProfiles.reduce((s, p) => s + (Number(p.balance || p.ngn_balance || 0)), 0);
     set('mTotalBalance', '₦' + totalBal.toLocaleString(undefined, { maximumFractionDigits: 0 }));
 
     updateRevenueDisplay();
@@ -1006,7 +1001,6 @@ function updateRevenueDisplay() {
     const labelEl = document.getElementById('revenuePeriodLabel');
     if (labelEl) labelEl.textContent = revenueLabels[period] || period;
 
-    // Try to sum from orders table if available; otherwise show 0 until orders exist
     let sales = 0;
     if (window._cachedOrders && window._cachedOrders.length) {
         const now = Date.now();
@@ -1071,7 +1065,6 @@ function renderProducts(list) {
     }).join('');
 }
 
-/** Business: MJ Logs | MJ SMS | MJ Boosters */
 function getBusinessLabel(p) {
     const b = (p.business || '').trim();
     if (b) {
@@ -1080,18 +1073,14 @@ function getBusinessLabel(p) {
         if (bl.includes('boost') || bl.includes('smm')) return 'MJ Boosters';
         if (bl.includes('log')) return 'MJ Logs';
     }
-    // All current products belong to MJ Logs until SMS/Boosters are added
     return 'MJ Logs';
 }
 
-/** Product category: Facebook | Instagram | Twitter/X | Others */
 function getProductCategoryLabel(p) {
     const businessNames = ['mj logs', 'mj sms', 'mj boosters', 'logs', 'sms', 'boosters'];
-    // Prefer dedicated fields
     let raw = (p.product_category || p.sub_category || p.type || '').trim();
     if (!raw) {
         const c = (p.category || '').trim();
-        // Ignore if category was set to a business name (old SQL mistake)
         if (c && !businessNames.includes(c.toLowerCase())) raw = c;
     }
     const n = ((p.name || '') + ' ' + raw).toLowerCase();
@@ -1100,10 +1089,8 @@ function getProductCategoryLabel(p) {
         if (r.includes('face') || r === 'fb') return 'Facebook';
         if (r.includes('insta') || r === 'ig') return 'Instagram';
         if (r.includes('twitter') || r === 'x' || r.includes('tweet')) return 'Twitter/X';
-        // Keep custom category name if it's a real product category
         if (!businessNames.includes(r)) return raw;
     }
-    // Infer from product name
     if (n.includes('facebook') || n.includes(' fb ')) return 'Facebook';
     if (n.includes('instagram') || n.includes(' ig ') || n.includes('insta')) return 'Instagram';
     if (n.includes('twitter') || /\bx\b/.test(n) || n.includes('tweet')) return 'Twitter/X';
@@ -1116,12 +1103,8 @@ function filterProducts() {
     const cat = (document.getElementById('categoryFilter')?.value || '').trim();
     let filtered = allProducts;
 
-    if (business) {
-        filtered = filtered.filter(p => getBusinessLabel(p) === business);
-    }
-    if (cat) {
-        filtered = filtered.filter(p => getProductCategoryLabel(p) === cat);
-    }
+    if (business) filtered = filtered.filter(p => getBusinessLabel(p) === business);
+    if (cat) filtered = filtered.filter(p => getProductCategoryLabel(p) === cat);
     if (q) {
         filtered = filtered.filter(p => {
             const plain = stripHtml(p.description || '').toLowerCase();
@@ -1174,7 +1157,6 @@ function editProduct(id) {
 async function saveProduct() {
     const id = document.getElementById('editProductId').value;
     const name = document.getElementById('pName').value.trim();
-    const business = document.getElementById('pBusiness').value.trim() || 'MJ Logs';
     const category = document.getElementById('pCategory').value.trim() || 'Others';
     const description = stripHtml(document.getElementById('pDesc').value);
     const price = parseFloat(document.getElementById('pPrice').value);
@@ -1192,8 +1174,6 @@ async function saveProduct() {
         return;
     }
 
-    // category = product category (Facebook / Instagram / Twitter/X / Others)
-    // Business stays MJ Logs for all current products (no separate business column required yet)
     const payload = {
         name,
         category,
@@ -1231,7 +1211,7 @@ function renderUsers(list) {
     }
 
     tbody.innerHTML = items.map(u => {
-        const ngn = Number(u.balance || 0);
+        const ngn = Number(u.balance || u.ngn_balance || 0);
         const usd = u.balance_usd != null ? Number(u.balance_usd) : (ngn / liveRate);
         const active = isUserActive(u);
         const phone = u.phone_number || u.phone || '—';
@@ -1305,7 +1285,7 @@ function lookupByCustomerId() {
         return;
     }
 
-    const ngn = Number(u.balance || 0);
+    const ngn = Number(u.balance || u.ngn_balance || 0);
     const usd = u.balance_usd != null ? Number(u.balance_usd) : (ngn / liveRate);
     const phone = u.phone_number || u.phone || '—';
 
@@ -1328,7 +1308,7 @@ function editUser(id) {
     document.getElementById('uEmail').value = u.email || '';
     document.getElementById('uPhone').value = u.phone_number || u.phone || '';
     document.getElementById('uCustomerId').value = u.customer_id || '';
-    document.getElementById('uBalance').value = u.balance ?? 0;
+    document.getElementById('uBalance').value = u.balance ?? u.ngn_balance ?? 0;
     document.getElementById('uBalanceUsd').value = u.balance_usd != null ? u.balance_usd : '';
     document.getElementById('uIsAdmin').value = u.is_admin ? 'true' : 'false';
     document.getElementById('userModal').classList.remove('hidden');
@@ -1356,22 +1336,32 @@ async function saveUser() {
         return;
     }
 
-    const payload = {
+    // Prepare resilient update payload
+    let payload = {
         full_name,
         username,
-        email: email || null,
-        phone_number: phone_number || null,
         balance: balance || 0,
         is_admin
     };
+
+    if (email) payload.email = email;
+    if (phone_number) payload.phone_number = phone_number;
     if (balance_usd !== null && !isNaN(balance_usd)) {
         payload.balance_usd = balance_usd;
     }
 
-    const { error } = await sb
+    let { error } = await sb
         .from('profiles')
         .update(payload)
         .eq('id', id);
+
+    // Fallback: If specific columns like email or phone_number don't exist in public.profiles
+    if (error && (error.message.includes('column') || error.code === '42703')) {
+        delete payload.email;
+        delete payload.phone_number;
+        delete payload.balance_usd;
+        ({ error } = await sb.from('profiles').update(payload).eq('id', id));
+    }
 
     if (error) {
         errEl.textContent = error.message + ' (Check RLS policies)';
@@ -1430,7 +1420,6 @@ function escapeHtml(str) {
         .replace(/"/g, '&quot;');
 }
 
-/** Strip HTML tags → plain text for descriptions */
 function stripHtml(html) {
     if (!html) return '';
     let text = String(html);
@@ -1448,7 +1437,6 @@ function stripHtml(html) {
 
 /* ---------- Init ---------- */
 window.addEventListener('DOMContentLoaded', async () => {
-    // Live rate (optional)
     try {
         const res = await fetch('https://open.er-api.com/v6/latest/USD');
         const data = await res.json();
@@ -1461,7 +1449,6 @@ window.addEventListener('DOMContentLoaded', async () => {
 
     await checkAuth();
 
-    // Enter key on login
     document.getElementById('adminPassword')?.addEventListener('keydown', e => {
         if (e.key === 'Enter') handleLogin();
     });
