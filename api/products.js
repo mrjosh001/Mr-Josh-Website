@@ -4,6 +4,9 @@ const supabase = createClient(
   process.env.SUPABASE_URL,
   process.env.SUPABASE_SERVICE_ROLE_KEY
 );
+
+const EXCLUDED_KEYS = ['prod_119', 'prod_189', 'prod_187', 'prod_214'];
+
 function categorize(name) {
   const n = name.toUpperCase();
   if (n.includes('PROXY')) return '9PROXY (IPS)';
@@ -17,6 +20,7 @@ function categorize(name) {
   if (n.includes('RANDOM') && n.includes('FACEBOOK')) return 'RANDOM COUNTRY FACEBOOK';
   if (n.includes('FACEBOOK') && (n.includes('0-5') || n.includes('0-30'))) return 'COUNTRIES FACEBOOK (0-5 FRIENDS)';
   if (n.includes('FACEBOOK')) return 'COUNTRIES FACEBOOK (30+ FRIENDS)';
+  if (n.includes('TWITTER') || n.includes(' X ') || n.startsWith('X ')) return 'X / TWITTER';
   if (n.includes('REDDIT')) return 'REDDIT';
   if (n.includes('SNAPCHAT')) return 'SNAPCHAT';
   if (n.includes('LINKEDIN')) return 'LINKEDIN';
