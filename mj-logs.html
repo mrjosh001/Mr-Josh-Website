@@ -7,28 +7,34 @@
     <link rel="stylesheet" href="styles.css">
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <style>
-        .category-dropdown {
-            width: 100%;
-            padding: 14px 16px;
-            border-radius: 30px;
-            border: 1px solid var(--border-color);
-            background: var(--bg-main);
-            color: var(--text-main);
-            font-size: 14px;
-            font-weight: 600;
+        .filter-container {
+            display: flex;
+            gap: 10px;
+            overflow-x: auto;
+            padding-bottom: 10px;
             margin-bottom: 20px;
-            appearance: none;
-            -webkit-appearance: none;
+            scrollbar-width: none;
         }
-        .category-heading {
+        .filter-container::-webkit-scrollbar {
+            display: none;
+        }
+        .filter-btn {
+            padding: 8px 18px;
+            border-radius: 20px;
+            border: 1px solid var(--border-color, #333);
+            background: #1a1d24;
+            color: #8a8d93;
             font-size: 13px;
-            font-weight: 700;
-            color: var(--text-muted);
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-            margin: 20px 0 10px;
+            font-weight: 600;
+            cursor: pointer;
+            white-space: nowrap;
+            transition: all 0.2s ease;
         }
-        .category-heading:first-child { margin-top: 0; }
+        .filter-btn.active {
+            background: #2563eb;
+            color: #ffffff;
+            border-color: #2563eb;
+        }
     </style>
 </head>
 <body>
@@ -39,12 +45,13 @@
     </nav>
     <main class="main-content">
         <div class="content-card">
-            <h2>MJ Logs – Live Supplier Products</h2>
-            <p class="helper-text" style="margin-bottom: 15px;">Browsing verified logs dynamically synced via database.</p>
+            <h2>MJ Logs – Social Media Logs</h2>
+            <p class="helper-text" style="margin-bottom: 15px;">Browse our verified social media logs and aged accounts provided by MJ HUB.</p>
 
-            <select id="categoryFilter" class="category-dropdown">
-                <option value="">Shop by Categories</option>
-            </select>
+            <!-- Dynamic Category Filter Buttons -->
+            <div id="filterPills" class="filter-container">
+                <button class="filter-btn active" data-category="ALL">All Logs</button>
+            </div>
 
             <div id="loading" class="loading">Loading available logs...</div>
             <div id="products-container"></div>
@@ -56,108 +63,101 @@
         const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
         let allProducts = [];
+        let currentFilter = 'ALL';
 
         function renderCard(product) {
-            const inStock = product.is_available && product.stock_quantity > 0;
             const card = document.createElement('div');
             card.className = 'product-card';
             card.innerHTML = `
                 <div>
                     <h3 style="font-size: 16px; margin-bottom: 6px;">${product.name}</h3>
-                    <p style="font-size: 13px; color: var(--text-muted); margin-bottom: 10px;">${product.description || ''}</p>
+                    <p style="font-size: 13px; color: #8a8d93; margin-bottom: 10px;">${product.description || ''}</p>
                 </div>
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 10px; border-top: 1px solid var(--border-color); padding-top: 10px;">
-                    <span style="font-weight: 700; color: var(--primary-color);">₦${Number(product.price).toLocaleString()}</span>
-                    <span style="font-size: 12px; ${inStock ? 'color: var(--text-muted);' : 'color: #e8685d; font-weight:700;'}">${inStock ? 'Stock: ' + product.stock_quantity : 'No stock'}</span>
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 10px; border-top: 1px solid #282c34; padding-top: 10px;">
+                    <span style="font-weight: 700; color: #2563eb; font-size: 16px;">₦${Number(product.price).toLocaleString()}</span>
+                    <div style="display: flex; gap: 8px;">
+                        <button class="btn-cart" style="padding: 8px 16px; background: #2563eb; border: none; border-radius: 8px; color: white; cursor: pointer;">Add to Cart</button>
+                        <button class="btn-buy" style="padding: 8px 16px; background: #111; border: 1px solid #333; border-radius: 8px; color: white; cursor: pointer;">Buy Now</button>
+                    </div>
                 </div>
             `;
             return card;
         }
 
-        function renderProducts(filterCategory) {
+        function displayFilteredProducts() {
             const container = document.getElementById('products-container');
             container.innerHTML = '';
 
-            if (allProducts.length === 0) {
-                container.innerHTML = '<p class="empty-text">No products available at the moment.</p>';
+            const filtered = currentFilter === 'ALL' 
+                ? allProducts 
+                : allProducts.filter(p => p.category === currentFilter);
+
+            if (filtered.length === 0) {
+                container.innerHTML = '<p class="empty-text">No products available in this category.</p>';
                 return;
             }
 
-            if (filterCategory) {
-                const grid = document.createElement('div');
-                grid.className = 'products-grid';
-                allProducts
-                    .filter(p => p.category === filterCategory)
-                    .forEach(p => grid.appendChild(renderCard(p)));
-                container.appendChild(grid);
-                return;
-            }
+            const grid = document.createElement('div');
+            grid.className = 'products-grid';
+            filtered.forEach(p => grid.appendChild(renderCard(p)));
+            container.appendChild(grid);
+        }
 
-            // Group products under category headings
-            const categories = [...new Set(allProducts.map(p => p.category).filter(Boolean))];
+        function setupFilterButtons() {
+            const pillsContainer = document.getElementById('filterPills');
+            
+            // Extract unique categories from Supabase data
+            const categories = [...new Set(allProducts.map(p => p.category).filter(Boolean))].sort();
+
+            // Clear old dynamic buttons keeping "All Logs"
+            pillsContainer.innerHTML = '<button class="filter-btn active" data-category="ALL">All Logs</button>';
+
+            // Create pill button for each unique database category (e.g. Mails, VPN, Facebook)
             categories.forEach(cat => {
-                const heading = document.createElement('div');
-                heading.className = 'category-heading';
-                heading.textContent = cat;
-                container.appendChild(heading);
+                const btn = document.createElement('button');
+                btn.className = 'filter-btn';
+                btn.dataset.category = cat;
+                btn.textContent = cat;
+                pillsContainer.appendChild(btn);
+            });
 
-                const grid = document.createElement('div');
-                grid.className = 'products-grid';
-                allProducts
-                    .filter(p => p.category === cat)
-                    .forEach(p => grid.appendChild(renderCard(p)));
-                container.appendChild(grid);
+            // Handle button clicks
+            pillsContainer.addEventListener('click', (e) => {
+                if (!e.target.classList.contains('filter-btn')) return;
+
+                // Toggle active state styling
+                document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+                e.target.classList.add('active');
+
+                // Update filter and re-render
+                currentFilter = e.target.dataset.category;
+                displayFilteredProducts();
             });
         }
 
-        async function fetchApiProducts() {
+        async function fetchProducts() {
             const loading = document.getElementById('loading');
             try {
-                // Fetch directly from table without strict DB-side filtering
                 const { data: products, error } = await supabaseClient
                     .from('products')
                     .select('*')
                     .order('category', { ascending: true })
                     .order('name', { ascending: true });
 
-                console.log('Database raw response:', { products, error });
-
                 if (error) throw error;
 
                 loading.style.display = 'none';
+                allProducts = products || [];
 
-                // Filter client-side: match source = 'api' or items with categories
-                const rawList = products || [];
-                allProducts = rawList.filter(item => {
-                    const isApiSource = item.source && String(item.source).toLowerCase().trim() === 'api';
-                    const hasCategory = item.category && item.category.trim() !== '';
-                    return isApiSource || hasCategory;
-                });
-
-                console.log('Filtered logs to display:', allProducts);
-
-                const select = document.getElementById('categoryFilter');
-                select.innerHTML = '<option value="">Shop by Categories</option>';
-                
-                const categories = [...new Set(allProducts.map(p => p.category).filter(Boolean))].sort();
-                categories.forEach(cat => {
-                    const opt = document.createElement('option');
-                    opt.value = cat;
-                    opt.textContent = cat;
-                    select.appendChild(opt);
-                });
-                
-                // Avoid duplicate listeners
-                select.onchange = () => renderProducts(select.value);
-
-                renderProducts('');
+                setupFilterButtons();
+                displayFilteredProducts();
             } catch (error) {
                 loading.textContent = 'Error loading logs from database.';
                 console.error('Database Fetch error:', error);
             }
         }
 
-        window.addEventListener('DOMContentLoaded', fetchApiProducts);
+        window.addEventListener('DOMContentLoaded', fetchProducts);
     </script>
 </body>
 </html>
