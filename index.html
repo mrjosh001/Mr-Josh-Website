@@ -1238,7 +1238,7 @@ button:active, .hero-btn:active, .btn-sm-primary:active, .btn-sm-outline:active,
     backdrop-filter: blur(14px);
     -webkit-backdrop-filter: blur(14px);
     border-top: 1px solid var(--border-color);
-    display: flex; justify-content: space-around; align-items: center;
+    display: flex; justify-style: space-around; align-items: center;
     z-index: 1300;
 }
 
@@ -2619,8 +2619,12 @@ function openTransactionReceipt(tx) {
             <strong style="color:var(--primary-color);">${tx.amount}</strong>
         </div>
         <div style="display:flex; justify-content:space-between; padding:8px 0; border-bottom:1px solid var(--border-color);">
-            <span style="color:var(--text-muted);">Payment Channel</span>
-            <span>${tx.paymentProvider} (${tx.channel})</span>
+            <span style="color:var(--text-muted);">Provider</span>
+            <span>${tx.paymentProvider}</span>
+        </div>
+        <div style="display:flex; justify-content:space-between; padding:8px 0; border-bottom:1px solid var(--border-color);">
+            <span style="color:var(--text-muted);">Channel</span>
+            <span>${tx.channel}</span>
         </div>
         <div style="display:flex; justify-content:space-between; padding:8px 0; border-bottom:1px solid var(--border-color);">
             <span style="color:var(--text-muted);">Date & Time</span>
