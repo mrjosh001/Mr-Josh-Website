@@ -86,13 +86,15 @@
             if (filterCategory) {
                 const grid = document.createElement('div');
                 grid.className = 'products-grid';
-                allProducts.filter(p => p.category === filterCategory).forEach(p => grid.appendChild(renderCard(p)));
+                allProducts
+                    .filter(p => p.category === filterCategory)
+                    .forEach(p => grid.appendChild(renderCard(p)));
                 container.appendChild(grid);
                 return;
             }
 
-            // No filter: group all products under category headings
-            const categories = [...new Set(allProducts.map(p => p.category))];
+            // Group filtered products under category headings
+            const categories = [...new Set(allProducts.map(p => p.category).filter(Boolean))];
             categories.forEach(cat => {
                 const heading = document.createElement('div');
                 heading.className = 'category-heading';
@@ -101,7 +103,9 @@
 
                 const grid = document.createElement('div');
                 grid.className = 'products-grid';
-                allProducts.filter(p => p.category === cat).forEach(p => grid.appendChild(renderCard(p)));
+                allProducts
+                    .filter(p => p.category === cat)
+                    .forEach(p => grid.appendChild(renderCard(p)));
                 container.appendChild(grid);
             });
         }
@@ -109,9 +113,11 @@
         async function fetchApiProducts() {
             const loading = document.getElementById('loading');
             try {
+                // Filter specifically for items where source = 'api'
                 const { data: products, error } = await supabaseClient
                     .from('products')
                     .select('*')
+                    .eq('source', 'api')
                     .order('category', { ascending: true })
                     .order('name', { ascending: true });
 
@@ -121,13 +127,16 @@
                 allProducts = products || [];
 
                 const select = document.getElementById('categoryFilter');
-                const categories = [...new Set(allProducts.map(p => p.category))].sort();
+                select.innerHTML = '<option value="">Shop by Categories</option>';
+                
+                const categories = [...new Set(allProducts.map(p => p.category).filter(Boolean))].sort();
                 categories.forEach(cat => {
                     const opt = document.createElement('option');
                     opt.value = cat;
                     opt.textContent = cat;
                     select.appendChild(opt);
                 });
+                
                 select.addEventListener('change', () => renderProducts(select.value));
 
                 renderProducts('');
