@@ -543,7 +543,7 @@
                     </p>
                     <div class="search-row">
                         <input type="text" id="lookupCustomerId" placeholder="Enter Customer ID...">
-                        <button class="btn btn-primary btn-sm" onclick="lookupByCustomerId()">Search</button>
+                        <button class="btn btn-primary btn-sm" style="width: auto;" onclick="lookupByCustomerId()">Search</button>
                     </div>
                     <div id="lookupResult" class="hidden" style="margin-top:16px;padding:20px;background:#07090e;border:1px solid var(--border);border-radius:12px;">
                         <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:12px;">
@@ -558,7 +558,7 @@
                                     <span style="color:#38bdf8;font-weight:600;font-size:16px;" id="lookupUsd"></span>
                                 </div>
                             </div>
-                            <button class="btn btn-primary btn-sm" id="lookupEditBtn" onclick="">
+                            <button class="btn btn-primary btn-sm" style="width: auto;" id="lookupEditBtn" onclick="">
                                 <i class="fas fa-edit"></i> Edit Account
                             </button>
                         </div>
@@ -572,7 +572,7 @@
                 <div class="panel">
                     <div class="panel-header">
                         <div class="panel-title">Product Catalog & Stock</div>
-                        <button class="btn btn-primary btn-sm" onclick="openProductModal()">
+                        <button class="btn btn-primary btn-sm" style="width: auto;" onclick="openProductModal()">
                             <i class="fas fa-plus"></i> Add Product
                         </button>
                     </div>
@@ -759,7 +759,7 @@
         <div id="productModalError" class="error-msg"></div>
         <div class="modal-actions">
             <button class="btn btn-ghost" onclick="closeProductModal()">Cancel</button>
-            <button class="btn btn-primary" onclick="saveProduct()">Save Product</button>
+            <button class="btn btn-primary" style="width: auto;" onclick="saveProduct()">Save Product</button>
         </div>
     </div>
 </div>
@@ -807,7 +807,7 @@
         <div id="userModalError" class="error-msg"></div>
         <div class="modal-actions">
             <button class="btn btn-ghost" onclick="closeUserModal()">Cancel</button>
-            <button class="btn btn-primary" onclick="saveUser()">Save Changes</button>
+            <button class="btn btn-primary" style="width: auto;" onclick="saveUser()">Save Changes</button>
         </div>
     </div>
 </div>
@@ -848,47 +848,30 @@ function isUserActive(profile) {
     return (Date.now() - new Date(last).getTime()) < THIRTY_DAYS_MS;
 }
 
-/* ---------- Auth & Session Management ---------- */
+/* ---------- Auth ---------- */
 async function checkAuth() {
-    try {
-        const { data: { session }, error: sessionError } = await sb.auth.getSession();
-        
-        if (sessionError || !session) {
-            showLogin();
-            return;
-        }
-
-        // Set email label immediately from active session
-        document.getElementById('adminEmailLabel').textContent = session.user.email || '';
-
-        // Safely check profiles without kicking user out on RLS failure
-        try {
-            const { data: profile } = await sb
-                .from('profiles')
-                .select('*')
-                .eq('id', session.user.id)
-                .maybeSingle();
-
-            if (profile && profile.is_admin === false) {
-                await sb.auth.signOut();
-                document.getElementById('loginError').textContent = 'Access denied. Admin privileges required.';
-                showLogin();
-                return;
-            }
-        } catch(e) {
-            console.warn('Profile fetch warning:', e);
-        }
-
-        // Preserve active tab state across refreshes
-        const savedTab = localStorage.getItem('mj_admin_active_tab') || 'overview';
-        showDashboard(savedTab);
-        
-        // Load data safely
-        loadAllData();
-    } catch(err) {
-        console.error('Auth Check Error:', err);
+    const { data: { session } } = await sb.auth.getSession();
+    if (!session) {
         showLogin();
+        return;
     }
+
+    const { data: profile, error } = await sb
+        .from('profiles')
+        .select('*')
+        .eq('id', session.user.id)
+        .single();
+
+    if (error || !profile || !profile.is_admin) {
+        await sb.auth.signOut();
+        document.getElementById('loginError').textContent = 'Access denied. Admin privileges required.';
+        showLogin();
+        return;
+    }
+
+    document.getElementById('adminEmailLabel').textContent = session.user.email || '';
+    showDashboard();
+    await loadAllData();
 }
 
 function showLogin() {
@@ -896,10 +879,9 @@ function showLogin() {
     document.getElementById('adminShell').classList.add('hidden');
 }
 
-function showDashboard(activeTab = 'overview') {
+function showDashboard() {
     document.getElementById('loginScreen').classList.add('hidden');
     document.getElementById('adminShell').classList.remove('hidden');
-    switchTab(activeTab);
 }
 
 async function handleLogin() {
@@ -922,29 +904,27 @@ async function handleLogin() {
 }
 
 async function handleLogout() {
-    localStorage.removeItem('mj_admin_active_tab');
     await sb.auth.signOut();
-    showLogin();
+    location.reload();
 }
 
 /* ---------- Data loading ---------- */
 async function loadAllData() {
-    await Promise.allSettled([loadProducts(), loadProfiles(), tryLoadOrders()]);
+    await Promise.all([loadProducts(), loadProfiles(), tryLoadOrders()]);
     updateMetrics();
 }
 
 async function loadProducts() {
-    try {
-        const { data, error } = await sb
-            .from('products')
-            .select('*')
-            .order('name');
+    const { data, error } = await sb
+        .from('products')
+        .select('*')
+        .order('name');
 
-        if (error) throw error;
-        allProducts = data || [];
-    } catch (err) {
-        console.error('Products error:', err.message);
+    if (error) {
+        console.error('Products error:', error.message);
         allProducts = [];
+    } else {
+        allProducts = data || [];
     }
     populateCategoryFilter();
     renderProducts();
@@ -963,36 +943,33 @@ function populateCategoryFilter() {
 }
 
 async function loadProfiles() {
-    try {
-        const { data, error } = await sb
-            .from('profiles')
-            .select('*')
-            .order('created_at', { ascending: false });
+    const { data, error } = await sb
+        .from('profiles')
+        .select('*')
+        .order('created_at', { ascending: false });
 
-        if (error) throw error;
-        allProfiles = data || [];
-    } catch (err) {
-        console.error('Profiles load error:', err.message);
+    if (error) {
+        console.error('Profiles error:', error.message);
         allProfiles = [];
+    } else {
+        allProfiles = data || [];
     }
     renderUsers();
 }
 
 async function tryLoadOrders() {
-    try {
-        const { data, error } = await sb.from('orders').select('*').order('created_at', { ascending: false }).limit(200);
-        if (!error && data) {
-            window._cachedOrders = data;
-            const empty = document.getElementById('ordersEmpty');
-            const wrap = document.getElementById('ordersTableWrap');
-            if (empty) empty.classList.add('hidden');
-            if (wrap) wrap.classList.remove('hidden');
-            renderOrders(data);
-            updateRevenueDisplay();
-            return;
-        }
-    } catch(e) {}
-    window._cachedOrders = [];
+    const { data, error } = await sb.from('orders').select('*').order('created_at', { ascending: false }).limit(200);
+    if (!error && data) {
+        window._cachedOrders = data;
+        const empty = document.getElementById('ordersEmpty');
+        const wrap = document.getElementById('ordersTableWrap');
+        if (empty) empty.classList.add('hidden');
+        if (wrap) wrap.classList.remove('hidden');
+        renderOrders(data);
+        updateRevenueDisplay();
+    } else {
+        window._cachedOrders = [];
+    }
 }
 
 function updateMetrics() {
@@ -1013,7 +990,7 @@ function updateMetrics() {
     set('uActiveCount', activeCount);
     set('uInactiveCount', inactiveCount);
 
-    const totalBal = allProfiles.reduce((s, p) => s + (Number(p.balance || p.ngn_balance || 0)), 0);
+    const totalBal = allProfiles.reduce((s, p) => s + (Number(p.balance) || 0), 0);
     set('mTotalBalance', '₦' + totalBal.toLocaleString(undefined, { maximumFractionDigits: 0 }));
 
     updateRevenueDisplay();
@@ -1057,7 +1034,7 @@ function renderProducts(list) {
     const tbody = document.getElementById('productsTableBody');
 
     if (!items.length) {
-        tbody.innerHTML = `<tr><td colspan="7" class="empty-state">No products found.</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="7" class="empty-state">No products found in this category.</td></tr>`;
         return;
     }
 
@@ -1126,8 +1103,12 @@ function filterProducts() {
     const cat = (document.getElementById('categoryFilter')?.value || '').trim();
     let filtered = allProducts;
 
-    if (business) filtered = filtered.filter(p => getBusinessLabel(p) === business);
-    if (cat) filtered = filtered.filter(p => getProductCategoryLabel(p) === cat);
+    if (business) {
+        filtered = filtered.filter(p => getBusinessLabel(p) === business);
+    }
+    if (cat) {
+        filtered = filtered.filter(p => getProductCategoryLabel(p) === cat);
+    }
     if (q) {
         filtered = filtered.filter(p => {
             const plain = stripHtml(p.description || '').toLowerCase();
@@ -1214,7 +1195,7 @@ async function saveProduct() {
     }
 
     if (error) {
-        errEl.textContent = error.message;
+        errEl.textContent = error.message + ' (Check RLS policies if this fails)';
         return;
     }
 
@@ -1223,18 +1204,18 @@ async function saveProduct() {
     updateMetrics();
 }
 
-/* ---------- Users Directory ---------- */
+/* ---------- Users ---------- */
 function renderUsers(list) {
     const items = list || allProfiles;
     const tbody = document.getElementById('usersTableBody');
 
     if (!items.length) {
-        tbody.innerHTML = `<tr><td colspan="9" class="empty-state">No customers found in database. Check Supabase SQL RLS settings if expecting users.</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="9" class="empty-state">No customers found.</td></tr>`;
         return;
     }
 
     tbody.innerHTML = items.map(u => {
-        const ngn = Number(u.balance || u.ngn_balance || 0);
+        const ngn = Number(u.balance || 0);
         const usd = u.balance_usd != null ? Number(u.balance_usd) : (ngn / liveRate);
         const active = isUserActive(u);
         const phone = u.phone_number || u.phone || '—';
@@ -1250,7 +1231,7 @@ function renderUsers(list) {
                 <td>${u.is_admin ? '<span class="badge badge-admin">Admin</span>' : '<span style="color:var(--muted);font-size:12px;">User</span>'}</td>
                 <td>
                     <button class="btn btn-ghost btn-sm" onclick="editUser('${u.id}')">
-                        <i class="fas fa-edit"></i> Edit
+                        <i class="fas fa-edit"></i>
                     </button>
                 </td>
             </tr>`;
@@ -1308,7 +1289,7 @@ function lookupByCustomerId() {
         return;
     }
 
-    const ngn = Number(u.balance || u.ngn_balance || 0);
+    const ngn = Number(u.balance || 0);
     const usd = u.balance_usd != null ? Number(u.balance_usd) : (ngn / liveRate);
     const phone = u.phone_number || u.phone || '—';
 
@@ -1331,7 +1312,7 @@ function editUser(id) {
     document.getElementById('uEmail').value = u.email || '';
     document.getElementById('uPhone').value = u.phone_number || u.phone || '';
     document.getElementById('uCustomerId').value = u.customer_id || '';
-    document.getElementById('uBalance').value = u.balance ?? u.ngn_balance ?? 0;
+    document.getElementById('uBalance').value = u.balance ?? 0;
     document.getElementById('uBalanceUsd').value = u.balance_usd != null ? u.balance_usd : '';
     document.getElementById('uIsAdmin').value = u.is_admin ? 'true' : 'false';
     document.getElementById('userModal').classList.remove('hidden');
@@ -1359,33 +1340,25 @@ async function saveUser() {
         return;
     }
 
-    let payload = {
+    const payload = {
         full_name,
         username,
+        email: email || null,
+        phone_number: phone_number || null,
         balance: balance || 0,
         is_admin
     };
-
-    if (email) payload.email = email;
-    if (phone_number) payload.phone_number = phone_number;
     if (balance_usd !== null && !isNaN(balance_usd)) {
         payload.balance_usd = balance_usd;
     }
 
-    let { error } = await sb
+    const { error } = await sb
         .from('profiles')
         .update(payload)
         .eq('id', id);
 
-    if (error && (error.message.includes('column') || error.code === '42703')) {
-        delete payload.email;
-        delete payload.phone_number;
-        delete payload.balance_usd;
-        ({ error } = await sb.from('profiles').update(payload).eq('id', id));
-    }
-
     if (error) {
-        errEl.textContent = error.message;
+        errEl.textContent = error.message + ' (Check RLS policies)';
         return;
     }
 
@@ -1413,20 +1386,13 @@ function renderOrders(orders) {
     `).join('');
 }
 
-/* ---------- Navigation Tabs & UI ---------- */
+/* ---------- Tabs & UI ---------- */
 function switchTab(name) {
     document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
     document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
-    
-    const targetTab = document.getElementById('tab-' + name);
-    const targetNav = document.querySelector(`.nav-item[data-tab="${name}"]`);
-
-    if (targetTab && targetNav) {
-        targetTab.classList.add('active');
-        targetNav.classList.add('active');
-        document.getElementById('pageTitle').textContent = tabTitles[name] || name;
-        localStorage.setItem('mj_admin_active_tab', name);
-    }
+    document.getElementById('tab-' + name).classList.add('active');
+    document.querySelector(`.nav-item[data-tab="${name}"]`).classList.add('active');
+    document.getElementById('pageTitle').textContent = tabTitles[name] || name;
     closeSidebar();
 }
 
@@ -1473,7 +1439,7 @@ window.addEventListener('DOMContentLoaded', async () => {
             const rateInput = document.getElementById('settingRate');
             if (rateInput) rateInput.value = Math.round(liveRate);
         }
-    } catch (e) { /* fallback */ }
+    } catch (e) { /* keep default */ }
 
     await checkAuth();
 
