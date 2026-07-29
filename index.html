@@ -1473,21 +1473,7 @@ button:active, .hero-btn:active, .btn-sm-primary:active, .btn-sm-outline:active,
                     <button class="filter-tab" onclick="triggerHaptic(); filterProductItems('social', this)">Social Media</button>
                 </div>
 
-                <div class="product-grid" id="logsProductGrid">
-                    <div class="product-item-card" data-category="gmail">
-                        <div class="product-info-top">
-                            <div>
-                                <div class="product-title">Old Gmail Accounts (Aged)</div>
-                                <div class="helper-text" style="margin: 4px 0 0 0;">Phone verified, 2021-2023 batch</div>
-                            </div>
-                            <div class="product-price">₦1,200</div>
-                        </div>
-                        <div class="product-actions-row">
-                            <button class="btn-sm-primary" onclick="triggerHaptic(); addToCart('Old Gmail Accounts', 1200, 'log', 'Aged Gmail Accounts - Phone Verified')">Add to Cart</button>
-                            <button class="btn-sm-outline" onclick="triggerHaptic(); buyNowItem('Old Gmail Accounts', 1200, 'log', 'Aged Gmail Accounts - Phone Verified')">Buy Now</button>
-                        </div>
-                    </div>
-                </div>
+                <div class="product-grid" id="logsProductGrid"></div>
             </div>
         </section>
 
@@ -2652,5 +2638,29 @@ function toggleFloatingPopup() {
     document.getElementById('sidebarOverlay').classList.toggle('active');
 }
     </script>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script>
+const sb=supabase.createClient('https://atczodlljmlayvldxfmv.supabase.co','sb_publishable_dwbeKLcSG7-nfKzZz8x8Zw_U9FtwJTy');
+async function loadLogs(){
+ const grid=document.getElementById('logsProductGrid'); if(!grid)return;
+ grid.innerHTML='<p>Loading products...</p>';
+ const {data,error}=await sb.from('products').select('*').order('name');
+ if(error){grid.innerHTML='<p>'+error.message+'</p>';return;}
+ grid.innerHTML='';
+ data.forEach(p=>{
+ const price=Number(p.price||0);
+ const card=document.createElement('div');
+ card.className='product-item-card';
+ card.setAttribute('data-category','gmail');
+ card.innerHTML=`<div class="product-info-top"><div><div class="product-title">${p.name}</div><div class="helper-text" style="margin:4px 0 0 0;">${p.description||''}</div></div><div class="product-price">₦${price.toLocaleString()}</div></div><div class="product-actions-row"><button class="btn-sm-primary">Add to Cart</button><button class="btn-sm-outline">Buy Now</button></div>`;
+ card.querySelectorAll('button')[0].setAttribute('onclick',`triggerHaptic();addToCart(${JSON.stringify(p.name)},${price},'log',${JSON.stringify(p.description||'')})`);
+ card.querySelectorAll('button')[1].setAttribute('onclick',`triggerHaptic();buyNowItem(${JSON.stringify(p.name)},${price},'log',${JSON.stringify(p.description||'')})`);
+ grid.appendChild(card);
+ });
+}
+document.addEventListener('DOMContentLoaded',loadLogs);
+</script>
+
 </body>
 </html>
