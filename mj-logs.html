@@ -7,33 +7,43 @@
     <link rel="stylesheet" href="styles.css">
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <style>
+        /* Mobile-optimized category filter scroll */
         .filter-container {
             display: flex;
             gap: 10px;
             overflow-x: auto;
-            padding-bottom: 10px;
-            margin-bottom: 20px;
+            padding: 5px 0 15px 0;
+            margin-bottom: 15px;
+            -webkit-overflow-scrolling: touch;
             scrollbar-width: none;
         }
         .filter-container::-webkit-scrollbar {
             display: none;
         }
         .filter-btn {
-            padding: 8px 18px;
-            border-radius: 20px;
-            border: 1px solid var(--border-color, #333);
-            background: #1a1d24;
+            padding: 10px 20px;
+            border-radius: 25px;
+            border: 1px solid #282c34;
+            background: #121621;
             color: #8a8d93;
             font-size: 13px;
             font-weight: 600;
             cursor: pointer;
             white-space: nowrap;
             transition: all 0.2s ease;
+            flex-shrink: 0;
         }
         .filter-btn.active {
             background: #2563eb;
             color: #ffffff;
             border-color: #2563eb;
+        }
+        .product-card {
+            background: #121621;
+            border: 1px solid #1e2433;
+            border-radius: 12px;
+            padding: 16px;
+            margin-bottom: 15px;
         }
     </style>
 </head>
@@ -48,7 +58,7 @@
             <h2>MJ Logs – Social Media Logs</h2>
             <p class="helper-text" style="margin-bottom: 15px;">Browse our verified social media logs and aged accounts provided by MJ HUB.</p>
 
-            <!-- Dynamic Category Filter Buttons -->
+            <!-- Dynamic Category Filter Pills -->
             <div id="filterPills" class="filter-container">
                 <button class="filter-btn active" data-category="ALL">All Logs</button>
             </div>
@@ -65,54 +75,62 @@
         let allProducts = [];
         let currentFilter = 'ALL';
 
+        // Helper to handle categories even if blank in Supabase
+        function getCategory(product) {
+            if (product.category && product.category.trim() !== '') {
+                return product.category.trim();
+            }
+            const name = (product.name || '').toLowerCase();
+            if (name.includes('mail') || name.includes('hotmail') || name.includes('yahoo') || name.includes('gmail')) return 'Mails';
+            if (name.includes('facebook') || name.includes('instagram') || name.includes('tiktok') || name.includes('celeb') || name.includes('update')) return 'Social Media';
+            if (name.includes('vpn') || name.includes('proxy')) return 'VPN';
+            return 'General';
+        }
+
         function renderCard(product) {
             const card = document.createElement('div');
             card.className = 'product-card';
             card.innerHTML = `
                 <div>
-                    <h3 style="font-size: 16px; margin-bottom: 6px;">${product.name}</h3>
-                    <p style="font-size: 13px; color: #8a8d93; margin-bottom: 10px;">${product.description || ''}</p>
+                    <h3 style="font-size: 15px; font-weight: 700; color: #fff; margin-bottom: 6px;">${product.name}</h3>
+                    <p style="font-size: 12px; color: #8a8d93; margin-bottom: 12px; line-height: 1.4;">${product.description || ''}</p>
                 </div>
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 10px; border-top: 1px solid #282c34; padding-top: 10px;">
+                <div style="display: flex; justify-content: space-between; align-items: center; border-top: 1px solid #1e2433; padding-top: 12px;">
                     <span style="font-weight: 700; color: #2563eb; font-size: 16px;">₦${Number(product.price).toLocaleString()}</span>
                     <div style="display: flex; gap: 8px;">
-                        <button class="btn-cart" style="padding: 8px 16px; background: #2563eb; border: none; border-radius: 8px; color: white; cursor: pointer;">Add to Cart</button>
-                        <button class="btn-buy" style="padding: 8px 16px; background: #111; border: 1px solid #333; border-radius: 8px; color: white; cursor: pointer;">Buy Now</button>
+                        <button style="padding: 8px 14px; background: #2563eb; border: none; border-radius: 8px; color: white; font-weight: 600; font-size: 12px;">Add to Cart</button>
+                        <button style="padding: 8px 14px; background: #000; border: 1px solid #333; border-radius: 8px; color: white; font-weight: 600; font-size: 12px;">Buy Now</button>
                     </div>
                 </div>
             `;
             return card;
         }
 
-        function displayFilteredProducts() {
+        function displayProducts() {
             const container = document.getElementById('products-container');
             container.innerHTML = '';
 
             const filtered = currentFilter === 'ALL' 
                 ? allProducts 
-                : allProducts.filter(p => p.category === currentFilter);
+                : allProducts.filter(p => getCategory(p) === currentFilter);
 
             if (filtered.length === 0) {
-                container.innerHTML = '<p class="empty-text">No products available in this category.</p>';
+                container.innerHTML = '<p style="color: #8a8d93; text-align: center; padding: 20px 0;">No items found in this category.</p>';
                 return;
             }
 
-            const grid = document.createElement('div');
-            grid.className = 'products-grid';
-            filtered.forEach(p => grid.appendChild(renderCard(p)));
-            container.appendChild(grid);
+            filtered.forEach(p => container.appendChild(renderCard(p)));
         }
 
-        function setupFilterButtons() {
+        function setupCategories() {
             const pillsContainer = document.getElementById('filterPills');
             
-            // Extract unique categories from Supabase data
-            const categories = [...new Set(allProducts.map(p => p.category).filter(Boolean))].sort();
+            // Get all unique categories present in the database
+            const categories = [...new Set(allProducts.map(p => getCategory(p)))].sort();
 
-            // Clear old dynamic buttons keeping "All Logs"
             pillsContainer.innerHTML = '<button class="filter-btn active" data-category="ALL">All Logs</button>';
 
-            // Create pill button for each unique database category (e.g. Mails, VPN, Facebook)
+            // Generate buttons for Mails, VPN, Social Media, etc.
             categories.forEach(cat => {
                 const btn = document.createElement('button');
                 btn.className = 'filter-btn';
@@ -121,18 +139,16 @@
                 pillsContainer.appendChild(btn);
             });
 
-            // Handle button clicks
-            pillsContainer.addEventListener('click', (e) => {
+            // Tap handling for mobile
+            pillsContainer.onclick = (e) => {
                 if (!e.target.classList.contains('filter-btn')) return;
 
-                // Toggle active state styling
                 document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
                 e.target.classList.add('active');
 
-                // Update filter and re-render
                 currentFilter = e.target.dataset.category;
-                displayFilteredProducts();
-            });
+                displayProducts();
+            };
         }
 
         async function fetchProducts() {
@@ -140,20 +156,18 @@
             try {
                 const { data: products, error } = await supabaseClient
                     .from('products')
-                    .select('*')
-                    .order('category', { ascending: true })
-                    .order('name', { ascending: true });
+                    .select('*');
 
                 if (error) throw error;
 
-                loading.style.display = 'none';
+                if (loading) loading.style.display = 'none';
                 allProducts = products || [];
 
-                setupFilterButtons();
-                displayFilteredProducts();
+                setupCategories();
+                displayProducts();
             } catch (error) {
-                loading.textContent = 'Error loading logs from database.';
-                console.error('Database Fetch error:', error);
+                if (loading) loading.textContent = 'Error loading items from database.';
+                console.error(error);
             }
         }
 
