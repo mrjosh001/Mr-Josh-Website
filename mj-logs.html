@@ -276,11 +276,10 @@
             <h2>MJ Logs – Social Media Logs</h2>
             <p>Browse our verified social media logs and aged accounts provided by MJ HUB.</p>
 
-            <!-- SELECT DROPDOWN (Replaces static buttons) -->
+            <!-- SELECT DROPDOWN -->
             <div class="category-filter-container">
                 <select id="categorySelect" class="category-dropdown" onchange="handleCategoryChange(this.value)">
                     <option value="ALL">All Categories</option>
-                    <!-- Strict Supabase product categories will be loaded dynamically here -->
                 </select>
             </div>
         </div>
@@ -321,11 +320,11 @@
             return text;
         }
 
-        /* ---------- POPULATE DROPDOWN STRICTLY FROM SUPABASE 'category' COLUMN ---------- */
+        /* ---------- FETCH & POPULATE CATEGORIES DIRECTLY FROM SUPABASE ---------- */
         function setupCategories() {
             const dropdown = document.getElementById('categorySelect');
             
-            // Extract categories strictly matching the 'category' field in Supabase products table
+            // Extract raw 'category' field directly from Supabase items
             const rawCategories = allProducts
                 .map(p => (p.category || p.product_category || '').trim())
                 .filter(Boolean);
