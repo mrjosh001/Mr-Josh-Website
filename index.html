@@ -647,8 +647,7 @@ button:active, .hero-btn:active, .btn-sm-primary:active, .btn-sm-outline:active,
 .form-group label { display: block; font-size: 12px; font-weight: 700; margin-bottom: 6px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; }
 .form-group input, 
 .form-group textarea, 
-.form-group select,
-.category-dropdown {
+.form-group select {
     width: 100%;
     padding: 13px 16px;
     border: 1px solid var(--border-color);
@@ -662,28 +661,9 @@ button:active, .hero-btn:active, .btn-sm-primary:active, .btn-sm-outline:active,
 
 .form-group input:focus, 
 .form-group textarea:focus,
-.form-group select:focus,
-.category-dropdown:focus { 
+.form-group select:focus { 
     border-color: var(--primary-color); 
     box-shadow: 0 0 0 3px var(--primary-glow);
-}
-
-.category-dropdown {
-    margin-bottom: 18px;
-    cursor: pointer;
-}
-
-.category-heading {
-    font-size: 16px;
-    font-weight: 800;
-    color: var(--primary-color);
-    margin: 20px 0 10px 0;
-    padding-bottom: 4px;
-    border-bottom: 1px solid var(--border-color);
-}
-
-.category-heading:first-child {
-    margin-top: 0;
 }
 
 /* Filter Buttons Container Style */
@@ -1486,13 +1466,14 @@ button:active, .hero-btn:active, .btn-sm-primary:active, .btn-sm-outline:active,
             <div class="content-card">
                 <h2>MJ Logs - Social Media Logs</h2>
                 <p class="helper-text">Browse our verified social media logs and aged accounts provided by MJ HUB.</p>
+                
+                <div class="filter-buttons-row">
+                    <button class="filter-tab active" onclick="triggerHaptic(); filterProductItems('all', this)">All Logs</button>
+                    <button class="filter-tab" onclick="triggerHaptic(); filterProductItems('gmail', this)">Gmail</button>
+                    <button class="filter-tab" onclick="triggerHaptic(); filterProductItems('social', this)">Social Media</button>
+                </div>
 
-                <select id="logsCategoryFilter" class="category-dropdown">
-                    <option value="">Shop by Categories</option>
-                </select>
-
-                <div id="logsLoading" class="helper-text">Loading available logs...</div>
-                <div id="logsProductGrid"></div>
+                <div class="product-grid" id="logsProductGrid"></div>
             </div>
         </section>
 
@@ -1821,101 +1802,865 @@ button:active, .hero-btn:active, .btn-sm-primary:active, .btn-sm-outline:active,
         </button>
     </nav>
 
-    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script>
-    const SUPABASE_URL = 'https://atczodlljmlayvldxfmv.supabase.co';
-    const SUPABASE_PUBLISHABLE_KEY = 'sb_publishable_dwbeKLcSG7-nfKzZz8x8Zw_U9FtwJTy';
+/* ==========================================
+   MJ HUB - Application Logic
+   ========================================== */
 
-    let supabaseClient = null;
-    if (window.supabase && SUPABASE_URL !== 'https://YOUR_PROJECT_ID.supabase.co') {
-        supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY);
-    }
-    </script>
+const SUPABASE_URL = 'https://atczodlljmlayvldxfmv.supabase.co';
+const SUPABASE_PUBLISHABLE_KEY = 'sb_publishable_dwbeKLcSG7-nfKzZz8x8Zw_U9FtwJTy';
 
-<script>
-let allLogProducts = [];
-
-function renderLogCard(product) {
-    const inStock = product.is_available && product.stock_quantity > 0;
-    const card = document.createElement('div');
-    card.className = 'product-item-card';
-    card.innerHTML = `
-        <div class="product-info-top">
-            <div>
-                <div class="product-title">${product.name}</div>
-                <div class="helper-text" style="margin: 4px 0 0 0;">${product.description || ''}</div>
-            </div>
-            <div class="product-price">₦${Number(product.price).toLocaleString()}</div>
-        </div>
-        <div style="font-size:12px; margin-bottom:10px; ${inStock ? 'color: var(--text-muted);' : 'color: var(--danger-color); font-weight:700;'}">${inStock ? 'Stock: ' + product.stock_quantity : 'No stock'}</div>
-        <div class="product-actions-row">
-            <button class="btn-sm-primary" ${inStock ? '' : 'disabled style="opacity:0.5;"'}>Add to Cart</button>
-            <button class="btn-sm-outline" ${inStock ? '' : 'disabled style="opacity:0.5;"'}>Buy Now</button>
-        </div>
-    `;
-    const [addBtn, buyBtn] = card.querySelectorAll('button');
-    if (inStock) {
-        addBtn.onclick = () => { triggerHaptic(); addToCart(product.name, Number(product.price), 'log', product.category); };
-        buyBtn.onclick = () => { triggerHaptic(); buyNowItem(product.name, Number(product.price), 'log', product.category); };
-    }
-    return card;
+let supabaseClient = null;
+if (window.supabase && SUPABASE_URL !== 'https://YOUR_PROJECT_ID.supabase.co') {
+    supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY);
 }
 
-function renderLogProducts(filterCategory) {
-    const container = document.getElementById('logsProductGrid');
-    container.innerHTML = '';
-    if (allLogProducts.length === 0) {
-        container.innerHTML = '<p class="empty-text">No products available at the moment.</p>';
-        return;
+let currentBalanceNgn = 0.00;
+let currentBalanceUsd = 0.00;
+
+// Exchange rate: 1 USD = 1420 NGN
+const exchangeRateUsdToNgn = 1420.0;
+let currentFromCurrency = 'NGN'; // 'NGN' or 'USD'
+
+let cartItems = [];
+let transactions = [];
+let userData = { name: '', email: '', phone: '', address: '', bio: '', avatarUrl: '' };
+
+function triggerHaptic() {
+    if (navigator.vibrate) { navigator.vibrate(30); }
+}
+
+function toggleProfileDropdown() {
+    const profileDropdown = document.getElementById('profileDropdownMenu');
+    if (profileDropdown) { profileDropdown.classList.toggle('active'); }
+}
+
+document.addEventListener('DOMContentLoaded', async () => {
+    if (supabaseClient) {
+        const { data: { session }, error } = await supabaseClient.auth.getSession();
+        
+        if (!session || error) {
+            window.location.href = 'landing.html';
+            return;
+        }
+
+        const user = session.user;
+        const meta = user.user_metadata || {};
+        const userEmail = user.email;
+        const displayName = meta.full_name || meta.username || userEmail.split('@')[0];
+        const phoneVal = meta.phone || '';
+        const addressVal = meta.address || '';
+        const bioVal = meta.bio || '';
+        const avatarVal = meta.avatar_url || '';
+        
+        userData.email = userEmail;
+        userData.name = displayName;
+        userData.phone = phoneVal;
+        userData.address = addressVal;
+        userData.bio = bioVal;
+        userData.avatarUrl = avatarVal;
+        
+        document.getElementById('dropdownName').textContent = displayName;
+        document.getElementById('dropdownEmail').textContent = userEmail;
+        document.getElementById('profileHeaderName').textContent = displayName;
+        document.getElementById('profileHeaderEmail').textContent = userEmail;
+        document.getElementById('heroWelcomeTitle').textContent = 'Welcome back, ' + displayName + '!';
+        
+        if(avatarVal) {
+            document.getElementById('headerAvatarText').innerHTML = `<img src="${avatarVal}" alt="Avatar">`;
+            document.getElementById('profileAvatarInitial').innerHTML = `<img src="${avatarVal}" alt="Avatar">`;
+        } else {
+            document.getElementById('headerAvatarText').textContent = displayName.charAt(0).toUpperCase();
+            document.getElementById('profileAvatarInitial').textContent = displayName.charAt(0).toUpperCase();
+        }
+
+        document.getElementById('profileNameInput').value = displayName;
+        document.getElementById('profileEmailInput').value = userEmail;
+        document.getElementById('profilePhoneInput').value = phoneVal;
+        document.getElementById('profileAddressInput').value = addressVal;
+        document.getElementById('profileBioInput').value = bioVal;
+
+        await fetchUserBalance(user.id);
+        await fetchUserTransactions(user.id);
+        setupRealtimeBalanceSubscription(user.id);
     }
-    if (filterCategory) {
-        const grid = document.createElement('div');
-        grid.className = 'product-grid';
-        allLogProducts.filter(p => p.category === filterCategory).forEach(p => grid.appendChild(renderLogCard(p)));
-        container.appendChild(grid);
-        return;
+
+    initSupportWidgetAndDragging();
+    loadCustomerProfileBadge();
+
+    const allSections = document.querySelectorAll('.app-section');
+    const sidebarLinks = document.querySelectorAll('.sidebar-link');
+    const sidebar = document.getElementById('sidebarDrawer');
+    const overlay = document.getElementById('sidebarOverlay');
+    const menuToggle = document.getElementById('menuToggleBtn');
+    const sidebarClose = document.getElementById('sidebarCloseBtn');
+    const profileToggle = document.getElementById('profileDropdownToggle');
+    const profileDropdown = document.getElementById('profileDropdownMenu');
+    const notifBtn = document.getElementById('notificationBtn');
+    const notifDropdown = document.getElementById('notificationDropdown');
+    const notifDot = document.getElementById('notifDot');
+    const themeToggleBtn = document.getElementById('themeToggleBtn');
+    const dropdownThemeToggleBtn = document.getElementById('dropdownThemeToggleBtn');
+
+    function toggleAppTheme() {
+        const html = document.documentElement;
+        const currentTheme = html.getAttribute('data-theme');
+        if(currentTheme === 'dark') {
+            html.setAttribute('data-theme', 'light');
+            themeToggleBtn.textContent = '☀️';
+            dropdownThemeToggleBtn.textContent = 'Light';
+            document.getElementById('themeIndicatorText').textContent = 'Light';
+        } else {
+            html.setAttribute('data-theme', 'dark');
+            themeToggleBtn.textContent = '🌙';
+            dropdownThemeToggleBtn.textContent = 'Dark';
+            document.getElementById('themeIndicatorText').textContent = 'Dark';
+        }
     }
-    const categories = [...new Set(allLogProducts.map(p => p.category))];
-    categories.forEach(cat => {
-        const heading = document.createElement('div');
-        heading.className = 'category-heading';
-        heading.textContent = cat;
-        container.appendChild(heading);
-        const grid = document.createElement('div');
-        grid.className = 'product-grid';
-        allLogProducts.filter(p => p.category === cat).forEach(p => grid.appendChild(renderLogCard(p)));
-        container.appendChild(grid);
+
+    themeToggleBtn.addEventListener('click', toggleAppTheme);
+    dropdownThemeToggleBtn.addEventListener('click', toggleAppTheme);
+
+    function navigateToSection(targetId) {
+        allSections.forEach(section => {
+            section.classList.remove('active');
+            if(section.id === targetId) { section.classList.add('active'); }
+        });
+        sidebarLinks.forEach(link => {
+            link.classList.remove('active');
+            if(link.getAttribute('data-target') === targetId) { link.classList.add('active'); }
+        });
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+
+    window.switchSection = function(sectionId) { navigateToSection(sectionId); };
+
+    sidebarLinks.forEach(link => {
+        link.addEventListener('click', (e) => {
+            const target = link.getAttribute('data-target');
+            if(target) {
+                e.preventDefault();
+                navigateToSection(target);
+                sidebar.classList.remove('open');
+                overlay.classList.remove('active');
+            }
+        });
+    });
+
+    menuToggle.addEventListener('click', () => { sidebar.classList.add('open'); overlay.classList.add('active'); });
+    sidebarClose.addEventListener('click', () => { sidebar.classList.remove('open'); overlay.classList.remove('active'); });
+
+    overlay.addEventListener('click', () => {
+        sidebar.classList.remove('open');
+        overlay.classList.remove('active');
+        profileDropdown.classList.remove('active');
+        notifDropdown.classList.remove('active');
+        document.getElementById('floatingPopupModal').classList.remove('active');
+        document.getElementById('changePasswordModal').classList.remove('active');
+        document.getElementById('currencyConverterModal').classList.remove('active');
+        document.getElementById('transactionReceiptModal').classList.remove('active');
+        document.getElementById('activityHistoryDrawer').classList.remove('active');
+    });
+
+    profileToggle.addEventListener('click', (e) => {
+        e.stopPropagation();
+        profileDropdown.classList.toggle('active');
+        notifDropdown.classList.remove('active');
+    });
+
+    notifBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        notifDropdown.classList.toggle('active');
+        profileDropdown.classList.remove('active');
+        notifDot.style.display = 'none';
+    });
+
+    document.addEventListener('click', (e) => {
+        profileDropdown.classList.remove('active');
+        notifDropdown.classList.remove('active');
+        const widget = document.getElementById('support-widget');
+        const popup = document.getElementById('support-popup');
+        if (widget && popup && !widget.contains(e.target)) {
+            popup.classList.remove('active');
+            widget.classList.remove('open');
+        }
+    });
+});
+
+/* ==========================================
+   PRODUCT FILTER FUNCTION
+   ========================================== */
+function filterProductItems(category, btnElement) {
+    const parentSection = btnElement.closest('.content-card');
+    parentSection.querySelectorAll('.filter-tab').forEach(tab => tab.classList.remove('active'));
+    btnElement.classList.add('active');
+    const items = parentSection.querySelectorAll('.product-item-card');
+    items.forEach(item => {
+        if (category === 'all' || item.getAttribute('data-category') === category) {
+            item.style.display = 'flex';
+        } else {
+            item.style.display = 'none';
+        }
     });
 }
 
-async function loadLogs() {
-    const loading = document.getElementById('logsLoading');
+/* ==========================================
+   FETCH & PERSISTENT TRANSACTIONS
+   ========================================== */
+async function fetchUserBalance(userId) {
     if (!supabaseClient) return;
     try {
-        const { data, error } = await supabaseClient.from('products').select('*').order('category').order('name');
-        if (loading) loading.style.display = 'none';
-        if (error) throw error;
-        allLogProducts = data || [];
-        const select = document.getElementById('logsCategoryFilter');
-        [...new Set(allLogProducts.map(p => p.category))].sort().forEach(cat => {
-            const opt = document.createElement('option');
-            opt.value = cat;
-            opt.textContent = cat;
-            select.appendChild(opt);
-        });
-        select.addEventListener('change', () => renderLogProducts(select.value));
-        renderLogProducts('');
+        const { data, error } = await supabaseClient
+            .from('profiles')
+            .select('balance, balance_usd') 
+            .eq('id', userId)
+            .single();
+
+        if (data && !error) {
+            currentBalanceNgn = parseFloat(data.balance) || 0.00;
+            currentBalanceUsd = parseFloat(data.balance_usd) || 0.00;
+            updateBalanceDisplay();
+        }
     } catch (err) {
-        if (loading) loading.textContent = 'Error loading logs.';
-        console.error('Error loading logs:', err);
+        console.error("Error fetching user balances:", err);
     }
 }
 
-document.addEventListener('DOMContentLoaded', () => {
-    const checkClient = setInterval(() => {
-        if (supabaseClient) { clearInterval(checkClient); loadLogs(); }
-    }, 100);
-});
+async function fetchUserTransactions(userId) {
+    if (!supabaseClient) return;
+    try {
+        const { data, error } = await supabaseClient
+            .from('transactions')
+            .select('*')
+            .eq('user_id', userId)
+            .order('created_at', { ascending: false });
+
+        if (data && !error) {
+            transactions = data.map(tx => ({
+                id: tx.id,
+                type: tx.type || 'deposit',
+                title: tx.title || 'Transaction',
+                subtitle: tx.subtitle || 'MJ HUB Record',
+                amount: tx.amount || '₦0.00',
+                date: new Date(tx.created_at || tx.id).toLocaleString(),
+                status: tx.status || 'Success',
+                paymentProvider: tx.payment_provider || 'MJ HUB Gateway',
+                channel: tx.channel || 'Wallet Action'
+            }));
+            renderTransactions('all');
+        }
+    } catch (err) {
+        console.error("Error fetching transactions:", err);
+    }
+}
+
+async function saveTransactionToSupabase(txObj) {
+    if (!supabaseClient) return;
+    try {
+        const { data: { session } } = await supabaseClient.auth.getSession();
+        if (!session) return;
+
+        await supabaseClient.from('transactions').insert([{
+            user_id: session.user.id,
+            type: txObj.type,
+            title: txObj.title,
+            subtitle: txObj.subtitle,
+            amount: txObj.amount,
+            status: txObj.status,
+            payment_provider: txObj.paymentProvider,
+            channel: txObj.channel
+        }]);
+    } catch (err) {
+        console.error("Error saving transaction:", err);
+    }
+}
+
+function updateBalanceDisplay() {
+    document.getElementById('homeNgnBalance').textContent = '₦' + currentBalanceNgn.toLocaleString(undefined, {minimumFractionDigits: 2});
+    document.getElementById('homeUsdBalance').textContent = '$' + currentBalanceUsd.toLocaleString(undefined, {minimumFractionDigits: 2});
+    document.getElementById('navWalletBadge').textContent = 'NGN ₦' + currentBalanceNgn.toLocaleString(undefined, {minimumFractionDigits: 2});
+}
+
+function setupRealtimeBalanceSubscription(userId) {
+    if (!supabaseClient) return;
+    supabaseClient
+        .channel('public:profiles')
+        .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'profiles', filter: `id=eq.${userId}` }, (payload) => {
+            if (payload.new) {
+                if (payload.new.balance !== undefined) { currentBalanceNgn = parseFloat(payload.new.balance) || 0.00; }
+                if (payload.new.balance_usd !== undefined) { currentBalanceUsd = parseFloat(payload.new.balance_usd) || 0.00; }
+                updateBalanceDisplay();
+            }
+        })
+        .subscribe();
+}
+
+/* ==========================================
+   SUPPORT WIDGET & DRAGGABLE LOGIC
+   ========================================== */
+function initSupportWidgetAndDragging() {
+    const widget = document.getElementById('support-widget');
+    const toggleBtn = document.getElementById('support-toggle-btn');
+    const popup = document.getElementById('support-popup');
+    const closeBtn = document.getElementById('support-close-btn');
+    if (!widget || !toggleBtn || !popup) return;
+
+    let isDragging = false;
+    let startX, startY, initialX, initialY;
+    let hasMoved = false;
+
+    const dragStart = (e) => {
+        isDragging = true;
+        hasMoved = false;
+        const clientX = e.type === 'touchstart' ? e.touches[0].clientX : e.clientX;
+        const clientY = e.type === 'touchstart' ? e.touches[0].clientY : e.clientY;
+        startX = clientX; startY = clientY;
+        const rect = widget.getBoundingClientRect();
+        initialX = rect.left; initialY = rect.top;
+        widget.style.bottom = 'auto'; widget.style.right = 'auto';
+        widget.style.left = initialX + 'px'; widget.style.top = initialY + 'px';
+
+        document.addEventListener('mousemove', dragMove);
+        document.addEventListener('mouseup', dragEnd);
+        document.addEventListener('touchmove', dragMove, { passive: false });
+        document.addEventListener('touchend', dragEnd);
+    };
+
+    const dragMove = (e) => {
+        if (!isDragging) return;
+        const clientX = e.type === 'touchmove' ? e.touches[0].clientX : e.clientX;
+        const clientY = e.type === 'touchmove' ? e.touches[0].clientY : e.clientY;
+        const dx = clientX - startX; const dy = clientY - startY;
+        if (Math.abs(dx) > 3 || Math.abs(dy) > 3) { hasMoved = true; }
+        let newX = initialX + dx; let newY = initialY + dy;
+        const maxX = window.innerWidth - widget.offsetWidth;
+        const maxY = window.innerHeight - widget.offsetHeight;
+        newX = Math.max(10, Math.min(newX, maxX - 10));
+        newY = Math.max(10, Math.min(newY, maxY - 10));
+        widget.style.left = newX + 'px'; widget.style.top = newY + 'px';
+    };
+
+    const dragEnd = () => {
+        if (!isDragging) return;
+        isDragging = false;
+        document.removeEventListener('mousemove', dragMove);
+        document.removeEventListener('mouseup', dragEnd);
+        document.removeEventListener('touchmove', dragMove);
+        document.removeEventListener('touchend', dragEnd);
+    };
+
+    toggleBtn.addEventListener('mousedown', dragStart);
+    toggleBtn.addEventListener('touchstart', dragStart);
+    toggleBtn.addEventListener('click', (e) => {
+        if (hasMoved) return;
+        e.stopPropagation();
+        const isOpen = popup.classList.toggle('active');
+        widget.classList.toggle('open', isOpen);
+    });
+
+    if (closeBtn && popup) {
+        closeBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            popup.classList.remove('active');
+            widget.classList.remove('open');
+        });
+    }
+}
+
+async function loadCustomerProfileBadge() {
+    if (!supabaseClient) return;
+    const { data: { session } } = await supabaseClient.auth.getSession();
+    if (!session) return;
+    const { data } = await supabaseClient.from('profiles').select('customer_id').eq('id', session.user.id).single();
+    if (data && data.customer_id) {
+        document.getElementById('myCustomerId').value = data.customer_id;
+    } else {
+        document.getElementById('myCustomerId').value = session.user.id;
+    }
+}
+
+async function handleLogout() {
+    if (supabaseClient) { await supabaseClient.auth.signOut(); }
+    window.location.href = 'landing.html';
+}
+
+function handleAvatarUpload(event) {
+    const file = event.target.files[0];
+    if(file) {
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            const base64Img = e.target.result;
+            userData.avatarUrl = base64Img;
+            document.getElementById('profileAvatarInitial').innerHTML = `<img src="${base64Img}" alt="Avatar">`;
+            document.getElementById('headerAvatarText').innerHTML = `<img src="${base64Img}" alt="Avatar">`;
+        };
+        reader.readAsDataURL(file);
+    }
+}
+
+async function saveProfileSettingsData() {
+    let name = document.getElementById('profileNameInput').value.trim();
+    let phone = document.getElementById('profilePhoneInput').value.trim();
+    let address = document.getElementById('profileAddressInput').value.trim();
+    let bio = document.getElementById('profileBioInput').value.trim();
+
+    if(!name) { alert('Please enter your full name or username.'); return; }
+
+    if (supabaseClient) {
+        const { error } = await supabaseClient.auth.updateUser({
+            data: { full_name: name, phone: phone, address: address, bio: bio, avatar_url: userData.avatarUrl }
+        });
+        if (error) { alert('Error updating profile: ' + error.message); return; }
+    }
+
+    userData.name = name;
+    document.getElementById('dropdownName').textContent = name;
+    document.getElementById('profileHeaderName').textContent = name;
+    document.getElementById('heroWelcomeTitle').textContent = 'Welcome back, ' + name + '!';
+    alert('Profile settings saved successfully!');
+}
+
+/* ==========================================
+   NORMAL CURRENCY CONVERTER ENGINE (USD <-> NGN)
+   ========================================== */
+function openCurrencyModal() {
+    currentFromCurrency = 'NGN';
+    updateConverterUI();
+    document.getElementById('baseConvertInput').value = '';
+    document.getElementById('targetConvertOutput').value = '';
+    document.getElementById('conversionLoadingBox').classList.remove('active');
+    document.getElementById('currencyConverterModal').classList.add('active');
+}
+
+function closeCurrencyModal() {
+    document.getElementById('currencyConverterModal').classList.remove('active');
+}
+
+function invertCurrencies() {
+    if (currentFromCurrency === 'NGN') {
+        currentFromCurrency = 'USD';
+    } else {
+        currentFromCurrency = 'NGN';
+    }
+    updateConverterUI();
+    document.getElementById('baseConvertInput').value = '';
+    document.getElementById('targetConvertOutput').value = '';
+    document.getElementById('conversionLoadingBox').classList.remove('active');
+}
+
+function updateConverterUI() {
+    if (currentFromCurrency === 'NGN') {
+        document.getElementById('fromCurrencySymbol').textContent = '₦';
+        document.getElementById('fromCurrencyCode').textContent = 'NGN';
+        document.getElementById('toCurrencySymbol').textContent = '$';
+        document.getElementById('toCurrencyCode').textContent = 'USD';
+        document.getElementById('rateDisplay').textContent = '1 USD = ₦' + exchangeRateUsdToNgn.toLocaleString();
+    } else {
+        document.getElementById('fromCurrencySymbol').textContent = '$';
+        document.getElementById('fromCurrencyCode').textContent = 'USD';
+        document.getElementById('toCurrencySymbol').textContent = '₦';
+        document.getElementById('toCurrencyCode').textContent = 'NGN';
+        document.getElementById('rateDisplay').textContent = '1 USD = ₦' + exchangeRateUsdToNgn.toLocaleString();
+    }
+}
+
+function executeConversion() {
+    let inputVal = parseFloat(document.getElementById('baseConvertInput').value) || 0;
+    if (inputVal <= 0) {
+        document.getElementById('targetConvertOutput').value = '0.00';
+        return;
+    }
+    let convertedVal = 0;
+    if (currentFromCurrency === 'NGN') {
+        convertedVal = inputVal / exchangeRateUsdToNgn;
+    } else {
+        convertedVal = inputVal * exchangeRateUsdToNgn;
+    }
+    document.getElementById('targetConvertOutput').value = convertedVal.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 4});
+}
+
+async function commitSwapTransaction() {
+    let inputVal = parseFloat(document.getElementById('baseConvertInput').value) || 0;
+    if (inputVal <= 0) { alert('Please enter a valid amount to convert.'); return; }
+
+    let convertedVal = 0;
+    if (currentFromCurrency === 'NGN') {
+        if (currentBalanceNgn < inputVal) {
+            alert('Conversion Failed: Insufficient Naira (NGN) balance.');
+            return;
+        }
+        convertedVal = inputVal / exchangeRateUsdToNgn;
+    } else {
+        if (currentBalanceUsd < inputVal) {
+            alert('Conversion Failed: Insufficient USD balance.');
+            return;
+        }
+        convertedVal = inputVal * exchangeRateUsdToNgn;
+    }
+
+    const loadingBox = document.getElementById('conversionLoadingBox');
+    const statusText = document.getElementById('conversionStatusText');
+    const executeBtn = document.getElementById('executeConversionBtn');
+
+    loadingBox.classList.add('active');
+    executeBtn.disabled = true;
+    executeBtn.style.opacity = '0.6';
+
+    statusText.textContent = 'Processing conversion...';
+    await new Promise(resolve => setTimeout(resolve, 800));
+
+    let newNgn = currentBalanceNgn;
+    let newUsd = currentBalanceUsd;
+
+    if (currentFromCurrency === 'NGN') {
+        newNgn -= inputVal;
+        newUsd += convertedVal;
+    } else {
+        newUsd -= inputVal;
+        newNgn += convertedVal;
+    }
+
+    if (supabaseClient) {
+        const { data: { session } } = await supabaseClient.auth.getSession();
+        if (session) {
+            await supabaseClient.from('profiles').update({ balance: newNgn, balance_usd: newUsd }).eq('id', session.user.id);
+        }
+    }
+
+    currentBalanceNgn = newNgn;
+    currentBalanceUsd = newUsd;
+    
+    let fromSymbol = currentFromCurrency === 'NGN' ? '₦' : '$';
+    let toSymbol = currentFromCurrency === 'NGN' ? '$' : '₦';
+    
+    let txObj = { 
+        id: Date.now(), 
+        type: 'conversion', 
+        title: 'Currency Conversion', 
+        subtitle: `Converted ${fromSymbol}${inputVal.toLocaleString()} to ${toSymbol}${convertedVal.toLocaleString(undefined, {minimumFractionDigits: 2})}`, 
+        amount: `${toSymbol}${convertedVal.toLocaleString(undefined, {minimumFractionDigits: 2})}`, 
+        date: new Date().toLocaleString(), 
+        status: 'Success',
+        paymentProvider: 'MJ HUB Converter',
+        channel: 'Direct Wallet Swap'
+    };
+
+    transactions.unshift(txObj);
+    await saveTransactionToSupabase(txObj);
+
+    updateBalanceDisplay();
+    renderTransactions('all');
+
+    statusText.textContent = 'Conversion Successful!';
+    await new Promise(resolve => setTimeout(resolve, 500));
+
+    loadingBox.classList.remove('active');
+    executeBtn.disabled = false;
+    executeBtn.style.opacity = '1';
+
+    closeCurrencyModal();
+    alert('Currency converted successfully and dashboard balance updated!');
+}
+
+function openChangePasswordModal() { document.getElementById('changePasswordModal').classList.add('active'); }
+function closeChangePasswordModal() { document.getElementById('changePasswordModal').classList.remove('active'); }
+
+async function submitNewPassword() {
+    let currentPass = document.getElementById('currentPasswordInput').value;
+    let newPass = document.getElementById('newPasswordInput').value;
+    let confirmPass = document.getElementById('confirmPasswordInput').value;
+
+    if (!newPass || !confirmPass) { alert('Please fill in all password fields.'); return; }
+    if (newPass !== confirmPass) { alert('New passwords do not match.'); return; }
+    if (newPass.length < 6) { alert('Password must be at least 6 characters.'); return; }
+
+    if (supabaseClient) {
+        const { error } = await supabaseClient.auth.updateUser({ password: newPass });
+        if (error) { alert('Error updating password: ' + error.message); return; }
+    }
+
+    alert('Password updated successfully!');
+    closeChangePasswordModal();
+    document.getElementById('currentPasswordInput').value = '';
+    document.getElementById('newPasswordInput').value = '';
+    document.getElementById('confirmPasswordInput').value = '';
+}
+
+function copyIdToClipboard() {
+    const input = document.getElementById('myCustomerId');
+    input.select();
+    navigator.clipboard.writeText(input.value);
+    alert('Customer ID copied to clipboard!');
+}
+
+/* ==========================================
+   CART & CHECKOUT SYSTEM
+   ========================================== */
+function addToCart(title, price, type, subtitle) {
+    cartItems.push({ title, price, type, subtitle });
+    updateCartDisplay();
+    alert(`Added "${title}" to your cart!`);
+}
+
+function buyNowItem(title, price, type, subtitle) {
+    cartItems = [{ title, price, type, subtitle }];
+    updateCartDisplay();
+    switchSection('cart');
+}
+
+function removeFromCart(index) {
+    cartItems.splice(index, 1);
+    updateCartDisplay();
+}
+
+function updateCartDisplay() {
+    const tbody = document.getElementById('cartTableBody');
+    const totalDisplay = document.getElementById('cartTotalDisplay');
+    tbody.innerHTML = '';
+
+    if (cartItems.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="4" class="empty-text">Your cart is currently empty.</td></tr>`;
+        totalDisplay.textContent = '₦0.00';
+        return;
+    }
+
+    let totalSum = 0;
+    cartItems.forEach((item, index) => {
+        totalSum += item.price;
+        let tr = document.createElement('tr');
+        tr.innerHTML = `
+            <td><strong>${item.title}</strong><br><span style="font-size:11px;color:var(--text-muted);">${item.subtitle}</span></td>
+            <td><span class="badge-status badge-pending">${item.type.toUpperCase()}</span></td>
+            <td>₦${item.price.toLocaleString()}</td>
+            <td><button class="btn-sm-outline" style="padding:4px 8px;font-size:11px;color:var(--danger-color);border-color:var(--danger-color);" onclick="triggerHaptic(); removeFromCart(${index})">Remove</button></td>
+        `;
+        tbody.appendChild(tr);
+    });
+
+    totalDisplay.textContent = '₦' + totalSum.toLocaleString(undefined, {minimumFractionDigits: 2});
+}
+
+async function checkoutCart() {
+    if (cartItems.length === 0) { alert('Your cart is empty.'); return; }
+    let totalSum = cartItems.reduce((acc, item) => acc + item.price, 0);
+
+    if (currentBalanceNgn < totalSum) {
+        alert('Insufficient NGN balance to complete purchase. Please fund your wallet.');
+        switchSection('deposit');
+        return;
+    }
+
+    currentBalanceNgn -= totalSum;
+    if (supabaseClient) {
+        const { data: { session } } = await supabaseClient.auth.getSession();
+        if (session) {
+            await supabaseClient.from('profiles').update({ balance: currentBalanceNgn }).eq('id', session.user.id);
+        }
+    }
+
+    updateBalanceDisplay();
+
+    for (let item of cartItems) {
+        let txObj = {
+            id: Date.now() + Math.random(),
+            type: item.type,
+            title: item.title,
+            subtitle: item.subtitle,
+            amount: '₦' + item.price.toLocaleString(),
+            date: new Date().toLocaleString(),
+            status: 'Success',
+            paymentProvider: 'MJ HUB Checkout',
+            channel: 'Naira Wallet Deduction'
+        };
+        transactions.unshift(txObj);
+        await saveTransactionToSupabase(txObj);
+    }
+
+    cartItems = [];
+    updateCartDisplay();
+    renderTransactions('all');
+    alert('Purchase completed successfully! Items delivered to your account.');
+}
+
+/* ==========================================
+   DEPOSIT SYSTEM
+   ========================================== */
+async function processDeposit() {
+    let provider = document.getElementById('depositProviderSelect').value;
+    let walletType = document.getElementById('depositWalletSelect').value;
+    let amount = parseFloat(document.getElementById('depositInput').value);
+
+    if (!amount || amount <= 0) { alert('Please enter a valid deposit amount.'); return; }
+
+    let newNgn = currentBalanceNgn;
+    let newUsd = currentBalanceUsd;
+
+    if (walletType === 'ngn') {
+        newNgn += amount;
+    } else {
+        newUsd += amount;
+    }
+
+    if (supabaseClient) {
+        const { data: { session } } = await supabaseClient.auth.getSession();
+        if (session) {
+            await supabaseClient.from('profiles').update({ balance: newNgn, balance_usd: newUsd }).eq('id', session.user.id);
+        }
+    }
+
+    currentBalanceNgn = newNgn;
+    currentBalanceUsd = newUsd;
+    updateBalanceDisplay();
+
+    let formattedAmount = walletType === 'ngn' ? '₦' + amount.toLocaleString() : '$' + amount.toLocaleString();
+    let txObj = {
+        id: Date.now(),
+        type: 'deposit',
+        title: 'Wallet Funding (' + walletType.toUpperCase() + ')',
+        subtitle: 'Funded via ' + provider,
+        amount: formattedAmount,
+        date: new Date().toLocaleString(),
+        status: 'Success',
+        paymentProvider: provider,
+        channel: walletType.toUpperCase() + ' Gateway'
+    };
+
+    transactions.unshift(txObj);
+    await saveTransactionToSupabase(txObj);
+    renderTransactions('all');
+
+    document.getElementById('depositInput').value = '';
+    alert('Deposit successful! Your ' + walletType.toUpperCase() + ' wallet has been credited.');
+    switchSection('home');
+}
+
+/* ==========================================
+   ACTIVITY HISTORY DRAWER & RECEIPT SYSTEM
+   ========================================== */
+function toggleActivityHistory() {
+    const drawer = document.getElementById('activityHistoryDrawer');
+    const overlay = document.getElementById('sidebarOverlay');
+    const isOpen = drawer.classList.toggle('active');
+    if (isOpen) {
+        overlay.classList.add('active');
+        renderTransactions('all');
+    } else {
+        overlay.classList.remove('active');
+    }
+}
+
+function filterTransactions(type, btnElement) {
+    const parentDrawer = btnElement.closest('.activity-history-drawer');
+    parentDrawer.querySelectorAll('.filter-tab').forEach(tab => tab.classList.remove('active'));
+    btnElement.classList.add('active');
+    renderTransactions(type);
+}
+
+function renderTransactions(filterType) {
+    const container = document.getElementById('transactionListContainer');
+    container.innerHTML = '';
+
+    let filtered = transactions;
+    if (filterType !== 'all') {
+        filtered = transactions.filter(tx => tx.type === filterType);
+    }
+
+    if (filtered.length === 0) {
+        container.innerHTML = `<div class="empty-text">No activity records found.</div>`;
+        return;
+    }
+
+    filtered.forEach(tx => {
+        let card = document.createElement('div');
+        card.className = 'transaction-card';
+        card.onclick = () => { triggerHaptic(); openTransactionReceipt(tx); };
+        
+        let iconClass = 'fa-solid fa-arrow-right-arrow-left';
+        if (tx.type === 'deposit') iconClass = 'fa-solid fa-wallet';
+        else if (tx.type === 'log') iconClass = 'fa-solid fa-box-archive';
+        else if (tx.type === 'sms') iconClass = 'fa-solid fa-mobile-screen';
+        else if (tx.type === 'booster') iconClass = 'fa-solid fa-bolt';
+
+        card.innerHTML = `
+            <div class="transaction-left">
+                <div class="transaction-icon-box tx-blue"><i class="${iconClass}"></i></div>
+                <div class="transaction-details">
+                    <h4>${tx.title}</h4>
+                    <span>${tx.date}</span>
+                </div>
+            </div>
+            <div class="transaction-right">
+                <div class="transaction-amount">${tx.amount}</div>
+                <span class="badge-status badge-success">${tx.status}</span>
+            </div>
+        `;
+        container.appendChild(card);
+    });
+}
+
+function openTransactionReceipt(tx) {
+    const body = document.getElementById('receiptContentBody');
+    body.innerHTML = `
+        <div style="display:flex; justify-content:space-between; padding:8px 0; border-bottom:1px solid var(--border-color);">
+            <span style="color:var(--text-muted);">Transaction Type</span>
+            <strong>${tx.title}</strong>
+        </div>
+        <div style="display:flex; justify-content:space-between; padding:8px 0; border-bottom:1px solid var(--border-color);">
+            <span style="color:var(--text-muted);">Description</span>
+            <span>${tx.subtitle}</span>
+        </div>
+        <div style="display:flex; justify-content:space-between; padding:8px 0; border-bottom:1px solid var(--border-color);">
+            <span style="color:var(--text-muted);">Amount</span>
+            <strong style="color:var(--primary-color);">${tx.amount}</strong>
+        </div>
+        <div style="display:flex; justify-content:space-between; padding:8px 0; border-bottom:1px solid var(--border-color);">
+            <span style="color:var(--text-muted);">Gateway / Channel</span>
+            <span>${tx.paymentProvider || 'MJ HUB'}</span>
+        </div>
+        <div style="display:flex; justify-content:space-between; padding:8px 0; border-bottom:1px solid var(--border-color);">
+            <span style="color:var(--text-muted);">Timestamp</span>
+            <span>${tx.date}</span>
+        </div>
+        <div style="display:flex; justify-content:space-between; padding:8px 0;">
+            <span style="color:var(--text-muted);">Status</span>
+            <span class="badge-status badge-success">${tx.status}</span>
+        </div>
+    `;
+    document.getElementById('transactionReceiptModal').classList.add('active');
+}
+
+function closeTransactionReceipt() {
+    document.getElementById('transactionReceiptModal').classList.remove('active');
+}
+
+function toggleFloatingPopup() {
+    document.getElementById('floatingPopupModal').classList.toggle('active');
+    document.getElementById('sidebarOverlay').classList.toggle('active');
+}
+    </script>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script>
+const sb=supabase.createClient('https://atczodlljmlayvldxfmv.supabase.co','sb_publishable_dwbeKLcSG7-nfKzZz8x8Zw_U9FtwJTy');
+async function loadLogs(){
+ const grid=document.getElementById('logsProductGrid'); if(!grid)return;
+ grid.innerHTML='<p>Loading products...</p>';
+ const {data,error}=await sb.from('products').select('*').order('name');
+ if(error){grid.innerHTML='<p>'+error.message+'</p>';return;}
+ grid.innerHTML='';
+ data.forEach(p=>{
+ const price=Number(p.price||0);
+ const card=document.createElement('div');
+ card.className='product-item-card';
+ card.setAttribute('data-category','gmail');
+ card.innerHTML=`<div class="product-info-top"><div><div class="product-title">${p.name}</div><div class="helper-text" style="margin:4px 0 0 0;">${p.description||''}</div></div><div class="product-price">₦${price.toLocaleString()}</div></div><div class="product-actions-row"><button class="btn-sm-primary">Add to Cart</button><button class="btn-sm-outline">Buy Now</button></div>`;
+ card.querySelectorAll('button')[0].setAttribute('onclick',`triggerHaptic();addToCart(${JSON.stringify(p.name)},${price},'log',${JSON.stringify(p.description||'')})`);
+ card.querySelectorAll('button')[1].setAttribute('onclick',`triggerHaptic();buyNowItem(${JSON.stringify(p.name)},${price},'log',${JSON.stringify(p.description||'')})`);
+ grid.appendChild(card);
+ });
+}
+document.addEventListener('DOMContentLoaded',loadLogs);
 </script>
+
 </body>
 </html>
