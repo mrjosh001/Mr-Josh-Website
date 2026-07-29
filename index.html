@@ -1835,6 +1835,11 @@ function toggleProfileDropdown() {
     if (profileDropdown) { profileDropdown.classList.toggle('active'); }
 }
 
+function toggleFloatingPopup() {
+    const floatingModal = document.getElementById('floatingPopupModal');
+    if (floatingModal) { floatingModal.classList.toggle('active'); }
+}
+
 document.addEventListener('DOMContentLoaded', async () => {
     if (supabaseClient) {
         const { data: { session }, error } = await supabaseClient.auth.getSession();
@@ -2614,11 +2619,11 @@ function openTransactionReceipt(tx) {
             <strong style="color:var(--primary-color);">${tx.amount}</strong>
         </div>
         <div style="display:flex; justify-content:space-between; padding:8px 0; border-bottom:1px solid var(--border-color);">
-            <span style="color:var(--text-muted);">Gateway / Channel</span>
-            <span>${tx.paymentProvider || 'MJ HUB'}</span>
+            <span style="color:var(--text-muted);">Payment Channel</span>
+            <span>${tx.paymentProvider} (${tx.channel})</span>
         </div>
         <div style="display:flex; justify-content:space-between; padding:8px 0; border-bottom:1px solid var(--border-color);">
-            <span style="color:var(--text-muted);">Timestamp</span>
+            <span style="color:var(--text-muted);">Date & Time</span>
             <span>${tx.date}</span>
         </div>
         <div style="display:flex; justify-content:space-between; padding:8px 0;">
@@ -2632,35 +2637,6 @@ function openTransactionReceipt(tx) {
 function closeTransactionReceipt() {
     document.getElementById('transactionReceiptModal').classList.remove('active');
 }
-
-function toggleFloatingPopup() {
-    document.getElementById('floatingPopupModal').classList.toggle('active');
-    document.getElementById('sidebarOverlay').classList.toggle('active');
-}
     </script>
-
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script>
-const sb=supabase.createClient('https://atczodlljmlayvldxfmv.supabase.co','sb_publishable_dwbeKLcSG7-nfKzZz8x8Zw_U9FtwJTy');
-async function loadLogs(){
- const grid=document.getElementById('logsProductGrid'); if(!grid)return;
- grid.innerHTML='<p>Loading products...</p>';
- const {data,error}=await sb.from('products').select('*').order('name');
- if(error){grid.innerHTML='<p>'+error.message+'</p>';return;}
- grid.innerHTML='';
- data.forEach(p=>{
- const price=Number(p.price||0);
- const card=document.createElement('div');
- card.className='product-item-card';
- card.setAttribute('data-category','gmail');
- card.innerHTML=`<div class="product-info-top"><div><div class="product-title">${p.name}</div><div class="helper-text" style="margin:4px 0 0 0;">${p.description||''}</div></div><div class="product-price">₦${price.toLocaleString()}</div></div><div class="product-actions-row"><button class="btn-sm-primary">Add to Cart</button><button class="btn-sm-outline">Buy Now</button></div>`;
- card.querySelectorAll('button')[0].setAttribute('onclick',`triggerHaptic();addToCart(${JSON.stringify(p.name)},${price},'log',${JSON.stringify(p.description||'')})`);
- card.querySelectorAll('button')[1].setAttribute('onclick',`triggerHaptic();buyNowItem(${JSON.stringify(p.name)},${price},'log',${JSON.stringify(p.description||'')})`);
- grid.appendChild(card);
- });
-}
-document.addEventListener('DOMContentLoaded',loadLogs);
-</script>
-
 </body>
 </html>
