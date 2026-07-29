@@ -3,29 +3,62 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>MJ Hub - MJ Logs</title>
-    <link rel="stylesheet" href="styles.css">
+    <title>MJ HUB — User Dashboard</title>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <style>
-        /* Mobile-optimized category filter scroll */
-        .filter-container {
+        :root {
+            --primary: #3b82f6;
+            --primary-hover: #2563eb;
+            --bg: #07090e;
+            --card: #0d1322;
+            --text: #f8fafc;
+            --muted: #94a3b8;
+            --border: #1e293b;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+
+        body {
+            font-family: 'Plus Jakarta Sans', -apple-system, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            min-height: 100vh;
+            padding: 16px;
+        }
+
+        .header-title {
+            font-size: 20px;
+            font-weight: 800;
+            margin-bottom: 4px;
+        }
+
+        .header-sub {
+            font-size: 13px;
+            color: var(--muted);
+            margin-bottom: 20px;
+        }
+
+        /* Category Filter Buttons Horizontal Scroll */
+        .category-scroll {
             display: flex;
             gap: 10px;
             overflow-x: auto;
-            padding: 5px 0 15px 0;
-            margin-bottom: 15px;
+            padding-bottom: 12px;
+            margin-bottom: 20px;
             -webkit-overflow-scrolling: touch;
             scrollbar-width: none;
         }
-        .filter-container::-webkit-scrollbar {
-            display: none;
-        }
-        .filter-btn {
-            padding: 10px 20px;
-            border-radius: 25px;
-            border: 1px solid #282c34;
-            background: #121621;
-            color: #8a8d93;
+        .category-scroll::-webkit-scrollbar { display: none; }
+
+        .cat-btn {
+            padding: 8px 18px;
+            border-radius: 20px;
+            border: 1px solid var(--border);
+            background: var(--card);
+            color: var(--muted);
             font-size: 13px;
             font-weight: 600;
             cursor: pointer;
@@ -33,145 +66,244 @@
             transition: all 0.2s ease;
             flex-shrink: 0;
         }
-        .filter-btn.active {
-            background: #2563eb;
-            color: #ffffff;
-            border-color: #2563eb;
+
+        .cat-btn.active {
+            background: var(--primary);
+            color: #fff;
+            border-color: var(--primary);
         }
+
+        /* Product Cards */
+        .products-grid {
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+
         .product-card {
-            background: #121621;
-            border: 1px solid #1e2433;
-            border-radius: 12px;
-            padding: 16px;
-            margin-bottom: 15px;
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .product-title {
+            font-size: 16px;
+            font-weight: 800;
+            color: #fff;
+            margin-bottom: 4px;
+        }
+
+        .product-desc {
+            font-size: 13px;
+            color: var(--muted);
+            line-height: 1.5;
+            word-break: break-word;
+        }
+
+        .product-footer {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            border-top: 1px solid var(--border);
+            padding-top: 14px;
+            margin-top: 4px;
+        }
+
+        .product-price {
+            font-size: 18px;
+            font-weight: 800;
+            color: #34d399;
+        }
+
+        .action-btns {
+            display: flex;
+            gap: 8px;
+        }
+
+        .btn-cart {
+            padding: 8px 14px;
+            background: var(--primary);
+            border: none;
+            border-radius: 10px;
+            color: #fff;
+            font-weight: 700;
+            font-size: 12px;
+            cursor: pointer;
+        }
+
+        .btn-buy {
+            padding: 8px 14px;
+            background: #000;
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            color: #fff;
+            font-weight: 700;
+            font-size: 12px;
+            cursor: pointer;
+        }
+
+        .empty-msg {
+            text-align: center;
+            color: var(--muted);
+            padding: 40px 0;
+            font-size: 14px;
         }
     </style>
 </head>
 <body>
-    <nav class="navbar">
-        <div class="nav-left">
-            <span class="brand-title">MJ HUB</span>
-        </div>
-    </nav>
-    <main class="main-content">
-        <div class="content-card">
-            <h2>MJ Logs – Social Media Logs</h2>
-            <p class="helper-text" style="margin-bottom: 15px;">Browse our verified social media logs and aged accounts provided by MJ HUB.</p>
 
-            <!-- Dynamic Category Filter Pills -->
-            <div id="filterPills" class="filter-container">
-                <button class="filter-btn active" data-category="ALL">All Logs</button>
-            </div>
+    <h1 class="header-title">MJ Logs – Verified Accounts & Updates</h1>
+    <p class="header-sub">Browse available logs dynamically categorized in real-time.</p>
 
-            <div id="loading" class="loading">Loading available logs...</div>
-            <div id="products-container"></div>
-        </div>
-    </main>
+    <!-- Dynamic Category Filter Buttons -->
+    <div id="categoryFilterContainer" class="category-scroll">
+        <button class="cat-btn active" onclick="setCategory('ALL', this)">All Logs</button>
+    </div>
+
+    <div id="loading" style="color: var(--muted); text-align: center; padding: 30px;">Loading logs...</div>
+    <div id="productsContainer" class="products-grid"></div>
+
     <script>
         const SUPABASE_URL = 'https://atczodlljmlayvldxfmv.supabase.co';
-        const SUPABASE_ANON_KEY = 'sb_publishable_dwbeKLcSG7-nfKzZz8x8Zw_U9FtwJTy';
-        const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+        const SUPABASE_KEY = 'sb_publishable_dwbeKLcSG7-nfKzZz8x8Zw_U9FtwJTy';
+        const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
         let allProducts = [];
-        let currentFilter = 'ALL';
+        let currentSelectedCategory = 'ALL';
 
-        // Helper to handle categories even if blank in Supabase
-        function getCategory(product) {
-            if (product.category && product.category.trim() !== '') {
-                return product.category.trim();
+        /* ---------- EXACT ADMIN LOGIC FOR CATEGORY PARSING ---------- */
+        function getBusinessLabel(p) {
+            const b = (p.business || '').trim();
+            if (b) {
+                const bl = b.toLowerCase();
+                if (bl.includes('sms')) return 'MJ SMS';
+                if (bl.includes('boost') || bl.includes('smm')) return 'MJ Boosters';
+                if (bl.includes('log')) return 'MJ Logs';
             }
-            const name = (product.name || '').toLowerCase();
-            if (name.includes('mail') || name.includes('hotmail') || name.includes('yahoo') || name.includes('gmail')) return 'Mails';
-            if (name.includes('facebook') || name.includes('instagram') || name.includes('tiktok') || name.includes('celeb') || name.includes('update')) return 'Social Media';
-            if (name.includes('vpn') || name.includes('proxy')) return 'VPN';
-            return 'General';
+            return 'MJ Logs';
         }
 
-        function renderCard(product) {
-            const card = document.createElement('div');
-            card.className = 'product-card';
-            card.innerHTML = `
-                <div>
-                    <h3 style="font-size: 15px; font-weight: 700; color: #fff; margin-bottom: 6px;">${product.name}</h3>
-                    <p style="font-size: 12px; color: #8a8d93; margin-bottom: 12px; line-height: 1.4;">${product.description || ''}</p>
-                </div>
-                <div style="display: flex; justify-content: space-between; align-items: center; border-top: 1px solid #1e2433; padding-top: 12px;">
-                    <span style="font-weight: 700; color: #2563eb; font-size: 16px;">₦${Number(product.price).toLocaleString()}</span>
-                    <div style="display: flex; gap: 8px;">
-                        <button style="padding: 8px 14px; background: #2563eb; border: none; border-radius: 8px; color: white; font-weight: 600; font-size: 12px;">Add to Cart</button>
-                        <button style="padding: 8px 14px; background: #000; border: 1px solid #333; border-radius: 8px; color: white; font-weight: 600; font-size: 12px;">Buy Now</button>
-                    </div>
-                </div>
-            `;
-            return card;
+        function getProductCategoryLabel(p) {
+            const businessNames = ['mj logs', 'mj sms', 'mj boosters', 'logs', 'sms', 'boosters'];
+            let raw = (p.product_category || p.sub_category || p.type || '').trim();
+            if (!raw) {
+                const c = (p.category || '').trim();
+                if (c && !businessNames.includes(c.toLowerCase())) raw = c;
+            }
+            const n = ((p.name || '') + ' ' + raw).toLowerCase();
+            if (raw) {
+                const r = raw.toLowerCase();
+                if (r.includes('face') || r === 'fb') return 'Facebook';
+                if (r.includes('insta') || r === 'ig') return 'Instagram';
+                if (r.includes('twitter') || r === 'x' || r.includes('tweet')) return 'Twitter/X';
+                if (!businessNames.includes(r)) return raw;
+            }
+            if (n.includes('facebook') || n.includes(' fb ')) return 'Facebook';
+            if (n.includes('instagram') || n.includes(' ig ') || n.includes('insta')) return 'Instagram';
+            if (n.includes('twitter') || /\bx\b/.test(n) || n.includes('tweet')) return 'Twitter/X';
+            return 'Others';
         }
 
-        function displayProducts() {
-            const container = document.getElementById('products-container');
+        function stripHtml(html) {
+            if (!html) return '';
+            let text = String(html);
+            text = text
+                .replace(/&nbsp;/gi, ' ')
+                .replace(/&amp;/gi, '&')
+                .replace(/&lt;/gi, '<')
+                .replace(/&gt;/gi, '>')
+                .replace(/&quot;/gi, '"')
+                .replace(/&#39;/gi, "'");
+            text = text.replace(/<[^>]*>/g, ' ');
+            text = text.replace(/\s+/g, ' ').trim();
+            return text;
+        }
+
+        /* ---------- RENDER LOGIC ---------- */
+        function setupCategories() {
+            const container = document.getElementById('categoryFilterContainer');
+            
+            // Collect all unique categories matching Admin logic
+            const categories = [...new Set(allProducts.map(p => getProductCategoryLabel(p)))].sort();
+
+            container.innerHTML = '<button class="cat-btn active" onclick="setCategory(\'ALL\', this)">All Logs</button>';
+
+            categories.forEach(cat => {
+                const btn = document.createElement('button');
+                btn.className = 'cat-btn';
+                btn.textContent = cat;
+                btn.onclick = () => setCategory(cat, btn);
+                container.appendChild(btn);
+            });
+        }
+
+        function setCategory(cat, btnElement) {
+            currentSelectedCategory = cat;
+            document.querySelectorAll('.cat-btn').forEach(b => b.classList.remove('active'));
+            if (btnElement) btnElement.classList.add('active');
+            renderProducts();
+        }
+
+        function renderProducts() {
+            const container = document.getElementById('productsContainer');
             container.innerHTML = '';
 
-            const filtered = currentFilter === 'ALL' 
-                ? allProducts 
-                : allProducts.filter(p => getCategory(p) === currentFilter);
+            const filtered = currentSelectedCategory === 'ALL'
+                ? allProducts
+                : allProducts.filter(p => getProductCategoryLabel(p) === currentSelectedCategory);
 
             if (filtered.length === 0) {
-                container.innerHTML = '<p style="color: #8a8d93; text-align: center; padding: 20px 0;">No items found in this category.</p>';
+                container.innerHTML = '<div class="empty-msg">No available products in this category.</div>';
                 return;
             }
 
-            filtered.forEach(p => container.appendChild(renderCard(p)));
-        }
-
-        function setupCategories() {
-            const pillsContainer = document.getElementById('filterPills');
-            
-            // Get all unique categories present in the database
-            const categories = [...new Set(allProducts.map(p => getCategory(p)))].sort();
-
-            pillsContainer.innerHTML = '<button class="filter-btn active" data-category="ALL">All Logs</button>';
-
-            // Generate buttons for Mails, VPN, Social Media, etc.
-            categories.forEach(cat => {
-                const btn = document.createElement('button');
-                btn.className = 'filter-btn';
-                btn.dataset.category = cat;
-                btn.textContent = cat;
-                pillsContainer.appendChild(btn);
+            filtered.forEach(p => {
+                const plainDesc = stripHtml(p.description || '');
+                const card = document.createElement('div');
+                card.className = 'product-card';
+                card.innerHTML = `
+                    <div>
+                        <div class="product-title">${p.name || 'Unnamed Product'}</div>
+                        <div class="product-desc">${plainDesc || 'No description provided.'}</div>
+                    </div>
+                    <div class="product-footer">
+                        <div class="product-price">₦${Number(p.price || 0).toLocaleString()}</div>
+                        <div class="action-btns">
+                            <button class="btn-cart">Add to Cart</button>
+                            <button class="btn-buy">Buy Now</button>
+                        </div>
+                    </div>
+                `;
+                container.appendChild(card);
             });
-
-            // Tap handling for mobile
-            pillsContainer.onclick = (e) => {
-                if (!e.target.classList.contains('filter-btn')) return;
-
-                document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
-                e.target.classList.add('active');
-
-                currentFilter = e.target.dataset.category;
-                displayProducts();
-            };
         }
 
-        async function fetchProducts() {
+        async function loadData() {
             const loading = document.getElementById('loading');
             try {
-                const { data: products, error } = await supabaseClient
+                const { data, error } = await sb
                     .from('products')
-                    .select('*');
+                    .select('*')
+                    .order('name');
 
                 if (error) throw error;
 
-                if (loading) loading.style.display = 'none';
-                allProducts = products || [];
+                allProducts = (data || []).filter(p => p.is_available !== false);
+                loading.style.display = 'none';
 
                 setupCategories();
-                displayProducts();
-            } catch (error) {
-                if (loading) loading.textContent = 'Error loading items from database.';
-                console.error(error);
+                renderProducts();
+            } catch (err) {
+                loading.textContent = 'Failed to load products.';
+                console.error('Error fetching products:', err);
             }
         }
 
-        window.addEventListener('DOMContentLoaded', fetchProducts);
+        window.addEventListener('DOMContentLoaded', loadData);
     </script>
 </body>
 </html>
