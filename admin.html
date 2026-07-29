@@ -850,41 +850,45 @@ function isUserActive(profile) {
 
 /* ---------- Auth & Session Management ---------- */
 async function checkAuth() {
-    const { data: { session }, error: sessionError } = await sb.auth.getSession();
-    
-    if (sessionError || !session) {
+    try {
+        const { data: { session }, error: sessionError } = await sb.auth.getSession();
+        
+        if (sessionError || !session) {
+            showLogin();
+            return;
+        }
+
+        // Set email label immediately from active session
+        document.getElementById('adminEmailLabel').textContent = session.user.email || '';
+
+        // Safely check profiles without kicking user out on RLS failure
+        try {
+            const { data: profile } = await sb
+                .from('profiles')
+                .select('*')
+                .eq('id', session.user.id)
+                .maybeSingle();
+
+            if (profile && profile.is_admin === false) {
+                await sb.auth.signOut();
+                document.getElementById('loginError').textContent = 'Access denied. Admin privileges required.';
+                showLogin();
+                return;
+            }
+        } catch(e) {
+            console.warn('Profile fetch warning:', e);
+        }
+
+        // Preserve active tab state across refreshes
+        const savedTab = localStorage.getItem('mj_admin_active_tab') || 'overview';
+        showDashboard(savedTab);
+        
+        // Load data safely
+        loadAllData();
+    } catch(err) {
+        console.error('Auth Check Error:', err);
         showLogin();
-        return;
     }
-
-    // Set email label immediately from active session
-    document.getElementById('adminEmailLabel').textContent = session.user.email || '';
-
-    // Fetch profile to verify admin status
-    const { data: profile, error: profileError } = await sb
-        .from('profiles')
-        .select('*')
-        .eq('id', session.user.id)
-        .maybeSingle();
-
-    if (profileError) {
-        console.error('Profile fetch error during auth check:', profileError.message);
-    }
-
-    // Only reject if profile was retrieved explicitly with is_admin set to false
-    if (profile && profile.is_admin === false) {
-        await sb.auth.signOut();
-        document.getElementById('loginError').textContent = 'Access denied. Admin privileges required.';
-        showLogin();
-        return;
-    }
-
-    // Preserve active tab state across refreshes
-    const savedTab = localStorage.getItem('mj_admin_active_tab') || 'overview';
-    showDashboard(savedTab);
-    
-    // Load dashboard data in background
-    await loadAllData();
 }
 
 function showLogin() {
@@ -925,21 +929,22 @@ async function handleLogout() {
 
 /* ---------- Data loading ---------- */
 async function loadAllData() {
-    await Promise.all([loadProducts(), loadProfiles(), tryLoadOrders()]);
+    await Promise.allSettled([loadProducts(), loadProfiles(), tryLoadOrders()]);
     updateMetrics();
 }
 
 async function loadProducts() {
-    const { data, error } = await sb
-        .from('products')
-        .select('*')
-        .order('name');
+    try {
+        const { data, error } = await sb
+            .from('products')
+            .select('*')
+            .order('name');
 
-    if (error) {
-        console.error('Products error:', error.message);
-        allProducts = [];
-    } else {
+        if (error) throw error;
         allProducts = data || [];
+    } catch (err) {
+        console.error('Products error:', err.message);
+        allProducts = [];
     }
     populateCategoryFilter();
     renderProducts();
@@ -958,33 +963,36 @@ function populateCategoryFilter() {
 }
 
 async function loadProfiles() {
-    const { data, error } = await sb
-        .from('profiles')
-        .select('*')
-        .order('created_at', { ascending: false });
+    try {
+        const { data, error } = await sb
+            .from('profiles')
+            .select('*')
+            .order('created_at', { ascending: false });
 
-    if (error) {
-        console.error('Profiles load error:', error.message);
-        allProfiles = [];
-    } else {
+        if (error) throw error;
         allProfiles = data || [];
+    } catch (err) {
+        console.error('Profiles load error:', err.message);
+        allProfiles = [];
     }
     renderUsers();
 }
 
 async function tryLoadOrders() {
-    const { data, error } = await sb.from('orders').select('*').order('created_at', { ascending: false }).limit(200);
-    if (!error && data) {
-        window._cachedOrders = data;
-        const empty = document.getElementById('ordersEmpty');
-        const wrap = document.getElementById('ordersTableWrap');
-        if (empty) empty.classList.add('hidden');
-        if (wrap) wrap.classList.remove('hidden');
-        renderOrders(data);
-        updateRevenueDisplay();
-    } else {
-        window._cachedOrders = [];
-    }
+    try {
+        const { data, error } = await sb.from('orders').select('*').order('created_at', { ascending: false }).limit(200);
+        if (!error && data) {
+            window._cachedOrders = data;
+            const empty = document.getElementById('ordersEmpty');
+            const wrap = document.getElementById('ordersTableWrap');
+            if (empty) empty.classList.add('hidden');
+            if (wrap) wrap.classList.remove('hidden');
+            renderOrders(data);
+            updateRevenueDisplay();
+            return;
+        }
+    } catch(e) {}
+    window._cachedOrders = [];
 }
 
 function updateMetrics() {
@@ -1049,7 +1057,7 @@ function renderProducts(list) {
     const tbody = document.getElementById('productsTableBody');
 
     if (!items.length) {
-        tbody.innerHTML = `<tr><td colspan="7" class="empty-state">No products found in this category.</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="7" class="empty-state">No products found.</td></tr>`;
         return;
     }
 
@@ -1206,7 +1214,7 @@ async function saveProduct() {
     }
 
     if (error) {
-        errEl.textContent = error.message + ' (Check RLS policies if this fails)';
+        errEl.textContent = error.message;
         return;
     }
 
@@ -1221,7 +1229,7 @@ function renderUsers(list) {
     const tbody = document.getElementById('usersTableBody');
 
     if (!items.length) {
-        tbody.innerHTML = `<tr><td colspan="9" class="empty-state">No customers found.</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="9" class="empty-state">No customers found in database. Check Supabase SQL RLS settings if expecting users.</td></tr>`;
         return;
     }
 
@@ -1242,7 +1250,7 @@ function renderUsers(list) {
                 <td>${u.is_admin ? '<span class="badge badge-admin">Admin</span>' : '<span style="color:var(--muted);font-size:12px;">User</span>'}</td>
                 <td>
                     <button class="btn btn-ghost btn-sm" onclick="editUser('${u.id}')">
-                        <i class="fas fa-edit"></i>
+                        <i class="fas fa-edit"></i> Edit
                     </button>
                 </td>
             </tr>`;
@@ -1377,7 +1385,7 @@ async function saveUser() {
     }
 
     if (error) {
-        errEl.textContent = error.message + ' (Check RLS policies)';
+        errEl.textContent = error.message;
         return;
     }
 
@@ -1457,13 +1465,6 @@ function stripHtml(html) {
 
 /* ---------- Init ---------- */
 window.addEventListener('DOMContentLoaded', async () => {
-    // Listen for sign outs automatically
-    sb.auth.onAuthStateChange((event, session) => {
-        if (event === 'SIGNED_OUT') {
-            showLogin();
-        }
-    });
-
     try {
         const res = await fetch('https://open.er-api.com/v6/latest/USD');
         const data = await res.json();
@@ -1472,7 +1473,7 @@ window.addEventListener('DOMContentLoaded', async () => {
             const rateInput = document.getElementById('settingRate');
             if (rateInput) rateInput.value = Math.round(liveRate);
         }
-    } catch (e) { /* fallback to default rate */ }
+    } catch (e) { /* fallback */ }
 
     await checkAuth();
 
