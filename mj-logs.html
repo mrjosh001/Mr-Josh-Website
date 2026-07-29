@@ -10,65 +10,115 @@
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <style>
         :root {
-            --primary: #3b82f6;
-            --primary-hover: #2563eb;
-            --bg: #07090e;
-            --card: #0d1322;
-            --text: #f8fafc;
-            --muted: #94a3b8;
-            --border: #1e293b;
+            --primary-color: #2563eb;
+            --primary-hover: #1d4ed8;
+            --bg-main: #07090e;
+            --card-bg: #0d1322;
+            --text-main: #f8fafc;
+            --text-muted: #94a3b8;
+            --border-color: #1e293b;
         }
 
         * { box-sizing: border-box; margin: 0; padding: 0; }
 
         body {
             font-family: 'Plus Jakarta Sans', -apple-system, sans-serif;
-            background: var(--bg);
-            color: var(--text);
+            background-color: var(--bg-main);
+            color: var(--text-main);
             min-height: 100vh;
-            padding: 16px;
+            display: flex;
+            flex-direction: column;
         }
 
-        .header-title {
-            font-size: 20px;
-            font-weight: 800;
-            margin-bottom: 4px;
+        /* --- Top Navigation Bar --- */
+        .navbar {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 70px;
+            background: var(--card-bg);
+            border-bottom: 1px solid var(--border-color);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0 20px;
+            z-index: 1000;
         }
 
-        .header-sub {
-            font-size: 13px;
-            color: var(--muted);
+        .nav-left { display: flex; align-items: center; gap: 15px; }
+        .menu-btn { background: none; border: none; font-size: 22px; cursor: pointer; color: var(--text-main); }
+        .brand-title { font-size: 20px; font-weight: 800; color: #3b82f6; letter-spacing: 0.5px; }
+        .nav-right { display: flex; align-items: center; gap: 15px; }
+        .notification-icon { position: relative; font-size: 18px; cursor: pointer; color: var(--text-main); }
+        .badge-dot { position: absolute; top: 0; right: 0; width: 8px; height: 8px; background: #ef4444; border-radius: 50%; }
+        
+        .profile-icon {
+            width: 38px;
+            height: 38px;
+            background: var(--primary-color);
+            color: #ffffff;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            font-size: 14px;
+        }
+
+        /* --- Main Content Area --- */
+        .main-content {
+            margin-top: 70px;
+            padding: 20px;
+            flex: 1;
+            max-width: 900px;
+            width: 100%;
+            margin-left: auto;
+            margin-right: auto;
+            padding-bottom: 90px;
+        }
+
+        /* Hero Welcome Box */
+        .welcome-box {
+            background: var(--card-bg);
+            color: #ffffff;
+            padding: 25px;
+            border-radius: 16px;
             margin-bottom: 20px;
+            border: 1px solid var(--border-color);
         }
 
-        /* Category Filter Dropdown Container */
+        .welcome-box h2 {
+            font-size: 22px;
+            margin-bottom: 8px;
+            font-weight: 800;
+        }
+
+        .welcome-box p {
+            font-size: 14px;
+            color: var(--text-muted);
+            margin-bottom: 18px;
+            line-height: 1.5;
+        }
+
+        /* Category Filter Select Dropdown */
         .category-filter-container {
             display: flex;
             flex-direction: column;
             gap: 8px;
-            margin-bottom: 20px;
-        }
-
-        .category-filter-container label {
-            font-size: 12px;
-            font-weight: 600;
-            color: var(--muted);
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
         }
 
         .category-dropdown {
             width: 100%;
             padding: 12px 16px;
-            border-radius: 10px;
-            border: 1px solid var(--border);
-            background: #1f2937;
+            border-radius: 12px;
+            border: 1px solid var(--border-color);
+            background: #192238;
             color: #ffffff;
             font-size: 14px;
             font-weight: 600;
             outline: none;
             cursor: pointer;
-            transition: border-color 0.2s ease, box-shadow 0.2s ease;
             appearance: none;
             -webkit-appearance: none;
             background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2394a3b8' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6 9 12 15 18 9'%3e%3c/polyline%3e%3c/svg%3e");
@@ -78,16 +128,15 @@
         }
 
         .category-dropdown:focus {
-            border-color: var(--primary);
-            box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
+            border-color: var(--primary-color);
         }
 
         .category-dropdown option {
-            background-color: var(--card);
+            background-color: var(--card-bg);
             color: #ffffff;
         }
 
-        /* Product Cards */
+        /* Products Grid */
         .products-grid {
             display: flex;
             flex-direction: column;
@@ -95,8 +144,8 @@
         }
 
         .product-card {
-            background: var(--card);
-            border: 1px solid var(--border);
+            background: var(--card-bg);
+            border: 1px solid var(--border-color);
             border-radius: 16px;
             padding: 20px;
             display: flex;
@@ -108,12 +157,11 @@
             font-size: 16px;
             font-weight: 800;
             color: #fff;
-            margin-bottom: 4px;
         }
 
         .product-desc {
             font-size: 13px;
-            color: var(--muted);
+            color: var(--text-muted);
             line-height: 1.5;
             word-break: break-word;
         }
@@ -122,7 +170,7 @@
             display: flex;
             align-items: center;
             justify-content: space-between;
-            border-top: 1px solid var(--border);
+            border-top: 1px solid var(--border-color);
             padding-top: 14px;
             margin-top: 4px;
         }
@@ -140,7 +188,7 @@
 
         .btn-cart {
             padding: 8px 14px;
-            background: var(--primary);
+            background: var(--primary-color);
             border: none;
             border-radius: 10px;
             color: #fff;
@@ -152,7 +200,7 @@
         .btn-buy {
             padding: 8px 14px;
             background: #000;
-            border: 1px solid var(--border);
+            border: 1px solid var(--border-color);
             border-radius: 10px;
             color: #fff;
             font-weight: 700;
@@ -162,28 +210,93 @@
 
         .empty-msg {
             text-align: center;
-            color: var(--muted);
+            color: var(--text-muted);
             padding: 40px 0;
             font-size: 14px;
+        }
+
+        /* --- Mobile Bottom Nav Bar --- */
+        .bottom-nav {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            height: 65px;
+            background: var(--card-bg);
+            border-top: 1px solid var(--border-color);
+            display: flex;
+            justify-content: space-around;
+            align-items: center;
+            z-index: 1000;
+        }
+
+        .bottom-nav-item {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            text-decoration: none;
+            color: var(--text-muted);
+            font-size: 10px;
+            gap: 3px;
+        }
+
+        .bottom-nav-center {
+            width: 44px;
+            height: 44px;
+            background: var(--primary-color);
+            color: #ffffff;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+            cursor: pointer;
+            box-shadow: 0 4px 10px rgba(37, 99, 235, 0.3);
+            margin-top: -15px;
         }
     </style>
 </head>
 <body>
 
-    <h1 class="header-title">MJ Logs – Verified Accounts & Updates</h1>
-    <p class="header-sub">Browse available logs dynamically categorized in real-time.</p>
+    <!-- Top Navbar -->
+    <header class="navbar">
+        <div class="nav-left">
+            <button class="menu-btn">☰</button>
+            <span class="brand-title">MJ HUB</span>
+        </div>
+        <div class="nav-right">
+            <div class="notification-icon">🔔<span class="badge-dot"></span></div>
+            <div class="profile-icon">M</div>
+        </div>
+    </header>
 
-    <!-- Dynamic Category Dropdown Filter -->
-    <div class="category-filter-container">
-        <label for="categorySelect">Select Category</label>
-        <select id="categorySelect" class="category-dropdown" onchange="handleCategoryChange(this.value)">
-            <option value="ALL">All Categories</option>
-            <!-- Categories will populate dynamically from Supabase -->
-        </select>
-    </div>
+    <!-- Main Content -->
+    <main class="main-content">
+        <div class="welcome-box">
+            <h2>MJ Logs – Social Media Logs</h2>
+            <p>Browse our verified social media logs and aged accounts provided by MJ HUB.</p>
 
-    <div id="loading" style="color: var(--muted); text-align: center; padding: 30px;">Loading logs...</div>
-    <div id="productsContainer" class="products-grid"></div>
+            <!-- SELECT DROPDOWN (Replaces static buttons) -->
+            <div class="category-filter-container">
+                <select id="categorySelect" class="category-dropdown" onchange="handleCategoryChange(this.value)">
+                    <option value="ALL">All Categories</option>
+                    <!-- Strict Supabase product categories will be loaded dynamically here -->
+                </select>
+            </div>
+        </div>
+
+        <div id="loading" style="color: var(--text-muted); text-align: center; padding: 30px;">Loading accounts...</div>
+        <div id="productsContainer" class="products-grid"></div>
+    </main>
+
+    <!-- Bottom Navigation -->
+    <nav class="bottom-nav">
+        <a href="#" class="bottom-nav-item"><span>🏠</span><span>Home</span></a>
+        <a href="#" class="bottom-nav-item"><span>🕒</span><span>History</span></a>
+        <div class="bottom-nav-center">+</div>
+        <a href="#" class="bottom-nav-item"><span>🛒</span><span>Cart</span></a>
+        <a href="#" class="bottom-nav-item"><span>👤</span><span>Profile</span></a>
+    </nav>
 
     <script>
         const SUPABASE_URL = 'https://atczodlljmlayvldxfmv.supabase.co';
@@ -192,39 +305,6 @@
 
         let allProducts = [];
         let currentSelectedCategory = 'ALL';
-
-        /* ---------- EXACT ADMIN LOGIC FOR CATEGORY PARSING ---------- */
-        function getBusinessLabel(p) {
-            const b = (p.business || '').trim();
-            if (b) {
-                const bl = b.toLowerCase();
-                if (bl.includes('sms')) return 'MJ SMS';
-                if (bl.includes('boost') || bl.includes('smm')) return 'MJ Boosters';
-                if (bl.includes('log')) return 'MJ Logs';
-            }
-            return 'MJ Logs';
-        }
-
-        function getProductCategoryLabel(p) {
-            const businessNames = ['mj logs', 'mj sms', 'mj boosters', 'logs', 'sms', 'boosters'];
-            let raw = (p.product_category || p.sub_category || p.type || '').trim();
-            if (!raw) {
-                const c = (p.category || '').trim();
-                if (c && !businessNames.includes(c.toLowerCase())) raw = c;
-            }
-            const n = ((p.name || '') + ' ' + raw).toLowerCase();
-            if (raw) {
-                const r = raw.toLowerCase();
-                if (r.includes('face') || r === 'fb') return 'Facebook';
-                if (r.includes('insta') || r === 'ig') return 'Instagram';
-                if (r.includes('twitter') || r === 'x' || r.includes('tweet')) return 'Twitter/X';
-                if (!businessNames.includes(r)) return raw;
-            }
-            if (n.includes('facebook') || n.includes(' fb ')) return 'Facebook';
-            if (n.includes('instagram') || n.includes(' ig ') || n.includes('insta')) return 'Instagram';
-            if (n.includes('twitter') || /\bx\b/.test(n) || n.includes('tweet')) return 'Twitter/X';
-            return 'Others';
-        }
 
         function stripHtml(html) {
             if (!html) return '';
@@ -241,16 +321,20 @@
             return text;
         }
 
-        /* ---------- DROPDOWN SETUP LOGIC ---------- */
+        /* ---------- POPULATE DROPDOWN STRICTLY FROM SUPABASE 'category' COLUMN ---------- */
         function setupCategories() {
             const dropdown = document.getElementById('categorySelect');
             
-            // Collect unique categories matching Admin logic
-            const categories = [...new Set(allProducts.map(p => getProductCategoryLabel(p)))].sort();
+            // Extract categories strictly matching the 'category' field in Supabase products table
+            const rawCategories = allProducts
+                .map(p => (p.category || p.product_category || '').trim())
+                .filter(Boolean);
+
+            const uniqueCategories = [...new Set(rawCategories)].sort();
 
             dropdown.innerHTML = '<option value="ALL">All Categories</option>';
 
-            categories.forEach(cat => {
+            uniqueCategories.forEach(cat => {
                 const option = document.createElement('option');
                 option.value = cat;
                 option.textContent = cat;
@@ -269,10 +353,13 @@
 
             const filtered = currentSelectedCategory === 'ALL'
                 ? allProducts
-                : allProducts.filter(p => getProductCategoryLabel(p) === currentSelectedCategory);
+                : allProducts.filter(p => {
+                    const itemCat = (p.category || p.product_category || '').trim();
+                    return itemCat === currentSelectedCategory;
+                });
 
             if (filtered.length === 0) {
-                container.innerHTML = '<div class="empty-msg">No available products in this category.</div>';
+                container.innerHTML = '<div class="empty-msg">No accounts available for this category.</div>';
                 return;
             }
 
@@ -282,7 +369,7 @@
                 card.className = 'product-card';
                 card.innerHTML = `
                     <div>
-                        <div class="product-title">${p.name || 'Unnamed Product'}</div>
+                        <div class="product-title">${p.name || 'Unnamed Account'}</div>
                         <div class="product-desc">${plainDesc || 'No description provided.'}</div>
                     </div>
                     <div class="product-footer">
@@ -313,7 +400,7 @@
                 setupCategories();
                 renderProducts();
             } catch (err) {
-                loading.textContent = 'Failed to load products.';
+                loading.textContent = 'Failed to load accounts.';
                 console.error('Error fetching products:', err);
             }
         }
