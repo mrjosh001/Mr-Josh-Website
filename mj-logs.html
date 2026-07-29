@@ -93,7 +93,7 @@
                 return;
             }
 
-            // Group filtered products under category headings
+            // Group products under category headings
             const categories = [...new Set(allProducts.map(p => p.category).filter(Boolean))];
             categories.forEach(cat => {
                 const heading = document.createElement('div');
@@ -113,18 +113,28 @@
         async function fetchApiProducts() {
             const loading = document.getElementById('loading');
             try {
-                // Filter specifically for items where source = 'api'
+                // Fetch directly from table without strict DB-side filtering
                 const { data: products, error } = await supabaseClient
                     .from('products')
                     .select('*')
-                    .eq('source', 'api')
                     .order('category', { ascending: true })
                     .order('name', { ascending: true });
 
-                loading.style.display = 'none';
+                console.log('Database raw response:', { products, error });
+
                 if (error) throw error;
 
-                allProducts = products || [];
+                loading.style.display = 'none';
+
+                // Filter client-side: match source = 'api' or items with categories
+                const rawList = products || [];
+                allProducts = rawList.filter(item => {
+                    const isApiSource = item.source && String(item.source).toLowerCase().trim() === 'api';
+                    const hasCategory = item.category && item.category.trim() !== '';
+                    return isApiSource || hasCategory;
+                });
+
+                console.log('Filtered logs to display:', allProducts);
 
                 const select = document.getElementById('categoryFilter');
                 select.innerHTML = '<option value="">Shop by Categories</option>';
@@ -137,7 +147,8 @@
                     select.appendChild(opt);
                 });
                 
-                select.addEventListener('change', () => renderProducts(select.value));
+                // Avoid duplicate listeners
+                select.onchange = () => renderProducts(select.value);
 
                 renderProducts('');
             } catch (error) {
