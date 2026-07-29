@@ -5,47 +5,38 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>MJ Hub - MJ Logs</title>
     <link rel="stylesheet" href="styles.css">
-    <!-- Include Supabase Client CDN -->
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
 <body>
-
     <nav class="navbar">
         <div class="nav-left">
             <span class="brand-title">MJ HUB</span>
         </div>
     </nav>
-
     <main class="main-content">
         <div class="content-card">
             <h2>MJ Logs – Live Supplier Products</h2>
             <p class="helper-text" style="margin-bottom: 15px;">Browsing verified logs dynamically synced via database.</p>
-            
+
             <div id="loading" class="loading">Loading available logs...</div>
             <div id="products-container" class="products-grid"></div>
         </div>
     </main>
-
     <script>
-        // Initialize Supabase Public Client using your public keys
-        const SUPABASE_URL = 'YOUR_SUPABASE_URL'; // Replace with your project URL or environment variable
-        const SUPABASE_ANON_KEY = 'YOUR_SUPABASE_ANON_KEY'; // Replace with your public anon key
+        const SUPABASE_URL = 'https://atczodlljmlayvldxfmv.supabase.co';
+        const SUPABASE_ANON_KEY = 'sb_publishable_dwbeKLcSG7-nfKzZz8x8Zw_U9FtwJTy';
         const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
         async function fetchApiProducts() {
             const container = document.getElementById('products-container');
             const loading = document.getElementById('loading');
-
             try {
-                // Fetch directly and safely from your Supabase database table
                 const { data: products, error } = await supabaseClient
                     .from('products')
                     .select('*')
-                    .eq('source', 'api')
-                    .eq('is_available', true);
+                    .order('name', { ascending: true });
 
                 loading.style.display = 'none';
-
                 if (error) throw error;
 
                 if (!products || products.length === 0) {
@@ -53,8 +44,8 @@
                     return;
                 }
 
-                // Loop through the database products and build the cards dynamically
                 products.forEach(product => {
+                    const inStock = product.is_available && product.stock_quantity > 0;
                     const card = document.createElement('div');
                     card.className = 'product-card';
                     card.innerHTML = `
@@ -64,12 +55,11 @@
                         </div>
                         <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 10px; border-top: 1px solid var(--border-color); padding-top: 10px;">
                             <span style="font-weight: 700; color: var(--primary-color);">₦${Number(product.price).toLocaleString()}</span>
-                            <span style="font-size: 12px; color: var(--text-muted);">Stock: ${product.stock_quantity}</span>
+                            <span style="font-size: 12px; ${inStock ? 'color: var(--text-muted);' : 'color: #e8685d; font-weight:700;'}">${inStock ? 'Stock: ' + product.stock_quantity : 'No stock'}</span>
                         </div>
                     `;
                     container.appendChild(card);
                 });
-
             } catch (error) {
                 loading.textContent = 'Error loading logs from database.';
                 console.error('Database Fetch error:', error);
@@ -78,6 +68,5 @@
 
         window.addEventListener('DOMContentLoaded', fetchApiProducts);
     </script>
-
 </body>
 </html>
