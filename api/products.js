@@ -4,9 +4,6 @@ const supabase = createClient(
   process.env.SUPABASE_URL,
   process.env.SUPABASE_SERVICE_ROLE_KEY
 );
-
-const EXCLUDED_KEYS = [];
-
 function categorize(name) {
   const n = name.toUpperCase();
   if (n.includes('PROXY')) return '9PROXY (IPS)';
