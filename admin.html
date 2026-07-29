@@ -848,29 +848,42 @@ function isUserActive(profile) {
     return (Date.now() - new Date(last).getTime()) < THIRTY_DAYS_MS;
 }
 
-/* ---------- Auth ---------- */
+/* ---------- Auth & Session Management ---------- */
 async function checkAuth() {
-    const { data: { session } } = await sb.auth.getSession();
-    if (!session) {
+    const { data: { session }, error: sessionError } = await sb.auth.getSession();
+    
+    if (sessionError || !session) {
         showLogin();
         return;
     }
 
-    const { data: profile, error } = await sb
+    // Set email label immediately from active session
+    document.getElementById('adminEmailLabel').textContent = session.user.email || '';
+
+    // Fetch profile to verify admin status
+    const { data: profile, error: profileError } = await sb
         .from('profiles')
         .select('*')
         .eq('id', session.user.id)
-        .single();
+        .maybeSingle();
 
-    if (error || !profile || !profile.is_admin) {
+    if (profileError) {
+        console.error('Profile fetch error during auth check:', profileError.message);
+    }
+
+    // Only reject if profile was retrieved explicitly with is_admin set to false
+    if (profile && profile.is_admin === false) {
         await sb.auth.signOut();
         document.getElementById('loginError').textContent = 'Access denied. Admin privileges required.';
         showLogin();
         return;
     }
 
-    document.getElementById('adminEmailLabel').textContent = session.user.email || '';
-    showDashboard();
+    // Preserve active tab state across refreshes
+    const savedTab = localStorage.getItem('mj_admin_active_tab') || 'overview';
+    showDashboard(savedTab);
+    
+    // Load dashboard data in background
     await loadAllData();
 }
 
@@ -879,9 +892,10 @@ function showLogin() {
     document.getElementById('adminShell').classList.add('hidden');
 }
 
-function showDashboard() {
+function showDashboard(activeTab = 'overview') {
     document.getElementById('loginScreen').classList.add('hidden');
     document.getElementById('adminShell').classList.remove('hidden');
+    switchTab(activeTab);
 }
 
 async function handleLogin() {
@@ -904,8 +918,9 @@ async function handleLogin() {
 }
 
 async function handleLogout() {
+    localStorage.removeItem('mj_admin_active_tab');
     await sb.auth.signOut();
-    location.reload();
+    showLogin();
 }
 
 /* ---------- Data loading ---------- */
@@ -949,7 +964,7 @@ async function loadProfiles() {
         .order('created_at', { ascending: false });
 
     if (error) {
-        console.error('Profiles error:', error.message);
+        console.error('Profiles load error:', error.message);
         allProfiles = [];
     } else {
         allProfiles = data || [];
@@ -1200,7 +1215,7 @@ async function saveProduct() {
     updateMetrics();
 }
 
-/* ---------- Users ---------- */
+/* ---------- Users Directory ---------- */
 function renderUsers(list) {
     const items = list || allProfiles;
     const tbody = document.getElementById('usersTableBody');
@@ -1336,7 +1351,6 @@ async function saveUser() {
         return;
     }
 
-    // Prepare resilient update payload
     let payload = {
         full_name,
         username,
@@ -1355,7 +1369,6 @@ async function saveUser() {
         .update(payload)
         .eq('id', id);
 
-    // Fallback: If specific columns like email or phone_number don't exist in public.profiles
     if (error && (error.message.includes('column') || error.code === '42703')) {
         delete payload.email;
         delete payload.phone_number;
@@ -1392,13 +1405,20 @@ function renderOrders(orders) {
     `).join('');
 }
 
-/* ---------- Tabs & UI ---------- */
+/* ---------- Navigation Tabs & UI ---------- */
 function switchTab(name) {
     document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
     document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
-    document.getElementById('tab-' + name).classList.add('active');
-    document.querySelector(`.nav-item[data-tab="${name}"]`).classList.add('active');
-    document.getElementById('pageTitle').textContent = tabTitles[name] || name;
+    
+    const targetTab = document.getElementById('tab-' + name);
+    const targetNav = document.querySelector(`.nav-item[data-tab="${name}"]`);
+
+    if (targetTab && targetNav) {
+        targetTab.classList.add('active');
+        targetNav.classList.add('active');
+        document.getElementById('pageTitle').textContent = tabTitles[name] || name;
+        localStorage.setItem('mj_admin_active_tab', name);
+    }
     closeSidebar();
 }
 
@@ -1437,6 +1457,13 @@ function stripHtml(html) {
 
 /* ---------- Init ---------- */
 window.addEventListener('DOMContentLoaded', async () => {
+    // Listen for sign outs automatically
+    sb.auth.onAuthStateChange((event, session) => {
+        if (event === 'SIGNED_OUT') {
+            showLogin();
+        }
+    });
+
     try {
         const res = await fetch('https://open.er-api.com/v6/latest/USD');
         const data = await res.json();
@@ -1445,7 +1472,7 @@ window.addEventListener('DOMContentLoaded', async () => {
             const rateInput = document.getElementById('settingRate');
             if (rateInput) rateInput.value = Math.round(liveRate);
         }
-    } catch (e) { /* keep default */ }
+    } catch (e) { /* fallback to default rate */ }
 
     await checkAuth();
 
