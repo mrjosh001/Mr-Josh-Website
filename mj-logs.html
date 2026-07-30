@@ -121,7 +121,6 @@
             line-height: 1.4;
         }
 
-        /* Filter Dropdown (Native Select) */
         .filter-dropdown {
             width: 100%;
             padding: 14px 16px;
@@ -166,7 +165,6 @@
             margin-bottom: 14px;
         }
 
-        /* Product Grid - Single Column on Mobile */
         .product-grid {
             display: grid;
             grid-template-columns: 1fr;
@@ -220,15 +218,36 @@
             flex-shrink: 0;
         }
 
-        .product-description {
+        .product-description-toggle {
+            font-size: 12px;
+            font-weight: 700;
+            color: var(--primary-color);
+            cursor: pointer;
+            list-style: none;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            user-select: none;
+            padding: 2px 0;
+        }
+        .product-description-toggle::-webkit-details-marker { display: none; }
+        .product-description-toggle::before {
+            content: '▸';
+            font-size: 10px;
+            transition: transform 0.15s;
+        }
+        details[open] .product-description-toggle::before {
+            transform: rotate(90deg);
+        }
+
+        .product-description-body {
             font-size: 12px;
             color: var(--text-muted);
-            line-height: 1.5;
-            display: -webkit-box;
-            -webkit-line-clamp: 3;
-            -webkit-box-orient: vertical;
-            overflow: hidden;
+            line-height: 1.6;
             word-wrap: break-word;
+            padding-top: 8px;
+            border-top: 1px solid var(--border-color);
+            margin-top: 4px;
         }
 
         .product-badges {
@@ -298,7 +317,6 @@
             color: var(--primary-color);
         }
 
-        /* Loading */
         .loading-spinner {
             display: flex;
             flex-direction: column;
@@ -324,7 +342,6 @@
             font-weight: 600;
         }
 
-        /* Empty State */
         .empty-state {
             text-align: center;
             padding: 40px 20px;
@@ -348,7 +365,6 @@
             margin-bottom: 16px;
         }
 
-        /* Toast */
         .toast-container {
             position: fixed;
             top: 80px;
@@ -382,7 +398,6 @@
             to { opacity: 1; transform: translateX(0); }
         }
 
-        /* Bottom Nav */
         .bottom-nav {
             position: fixed;
             bottom: 0;
@@ -491,29 +506,23 @@
         const SUPABASE_URL = 'https://atczodlljmlayvldxfmv.supabase.co';
         const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImF0Y3pvZGxsam1sYXl2bGR4Zm12Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODUwNzUyMzgsImV4cCI6MjEwMDY1MTIzOH0.ufthD-p7BmeD_B7xyuMM6PNPL8DmcL4AtRYgg-MuoLI';
 
-        const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-
         const productGrid = document.getElementById('productGrid');
         const categoryFilter = document.getElementById('categoryFilter');
         const productCountBadge = document.getElementById('productCountBadge');
         const toastContainer = document.getElementById('toastContainer');
 
         let allProducts = [];
+        let supabase = null;
 
-        // ✅ CLEAN HTML - Strip all HTML tags and decode entities
         function cleanText(str) {
             if (!str) return '';
-            // Create a temporary DOM element to decode HTML entities and strip tags
             const temp = document.createElement('div');
             temp.innerHTML = str;
-            // Get only the text content (strips ALL HTML tags)
             let text = temp.textContent || temp.innerText || '';
-            // Remove extra whitespace and normalize
             text = text.replace(/\s+/g, ' ').trim();
             return text;
         }
 
-        // Escape HTML for safe display
         function escapeHtml(str) {
             if (!str) return '';
             return String(str)
@@ -530,6 +539,13 @@
             toast.innerHTML = '<span>✅</span><span>' + message + '</span>';
             toastContainer.appendChild(toast);
             setTimeout(() => toast.remove(), 3000);
+        }
+
+        function showLoadFailure(reason) {
+            productGrid.innerHTML =
+                '<div class="empty-state"><div class="empty-state-icon">⚠️</div><h4>Failed to Load</h4><p>' +
+                escapeHtml(reason || 'Something went wrong') +
+                '</p><button class="btn btn-primary" style="max-width:200px;margin:0 auto;" onclick="location.reload()">Retry</button></div>';
         }
 
         async function loadProducts() {
@@ -552,7 +568,6 @@
 
                 allProducts = products;
 
-                // Build dropdown with categories
                 const categories = [...new Set(products.map(p => p.category).filter(Boolean))].sort();
                 categoryFilter.innerHTML = '<option value="all">📋 All Categories (' + products.length + ')</option>';
                 categories.forEach(cat => {
@@ -567,7 +582,7 @@
 
             } catch (err) {
                 console.error('Error:', err);
-                productGrid.innerHTML = '<div class="empty-state"><div class="empty-state-icon">⚠️</div><h4>Failed to Load</h4><p>' + (err.message || 'Try again') + '</p><button class="btn btn-primary" style="max-width:200px;margin-top:14px;" onclick="loadProducts()">Retry</button></div>';
+                showLoadFailure(err.message);
             }
         }
 
@@ -596,7 +611,7 @@
                 gridHtml += '</div>';
 
                 if (desc) {
-                    gridHtml += '<div class="product-description">' + desc + '</div>';
+                    gridHtml += '<details><summary class="product-description-toggle">Description</summary><div class="product-description-body">' + desc + '</div></details>';
                 }
 
                 gridHtml += '<div class="product-badges">';
@@ -622,7 +637,6 @@
             gridHtml += '</div>';
             productGrid.innerHTML = gridHtml;
 
-            // Attach event listeners to buttons (safer than inline onclick)
             document.querySelectorAll('.btn[data-action]').forEach(btn => {
                 btn.addEventListener('click', function() {
                     const name = this.dataset.name;
@@ -639,7 +653,6 @@
             });
         }
 
-        // Filter change
         categoryFilter.addEventListener('change', () => {
             const cat = categoryFilter.value;
             if (cat === 'all') {
@@ -668,7 +681,41 @@
             }, 600);
         }
 
-        document.addEventListener('DOMContentLoaded', loadProducts);
+        function initSupabaseAndLoad() {
+            if (!window.supabase) {
+                showLoadFailure('Could not reach Supabase library. Check your connection and retry.');
+                return;
+            }
+            supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+            loadProducts();
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            let started = false;
+            const start = () => { if (!started) { started = true; initSupabaseAndLoad(); } };
+
+            if (window.supabase) {
+                start();
+            } else {
+                let attempts = 0;
+                const waitForSupabase = setInterval(() => {
+                    attempts++;
+                    if (window.supabase) {
+                        clearInterval(waitForSupabase);
+                        start();
+                    } else if (attempts > 40) {
+                        clearInterval(waitForSupabase);
+                        showLoadFailure('Supabase library failed to load (network issue). Tap Retry.');
+                    }
+                }, 100);
+            }
+
+            setTimeout(() => {
+                if (!started) {
+                    start();
+                }
+            }, 6000);
+        });
     </script>
 </body>
 </html>
