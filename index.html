@@ -10,663 +10,311 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <style>
-/* ==========================================
-   MJ HUB - Pro Theme & Variables
-   ========================================== */
 :root[data-theme="dark"] {
-    --primary-color: #3b82f6;
-    --primary-glow: rgba(59, 130, 246, 0.4);
-    --primary-hover: #2563eb;
-    --bg-main: #07090e;
-    --card-bg: #0d1322;
-    --card-hover: #131d35;
-    --text-main: #f8fafc;
-    --text-muted: #94a3b8;
-    --border-color: #1e293b;
-    --border-glow: rgba(59, 130, 246, 0.3);
-    --sidebar-width: 280px;
-    --nav-bg: rgba(13, 19, 34, 0.85);
-    --whatsapp-green: #25d366;
-    --success-color: #10b981;
-    --warning-color: #f59e0b;
-    --danger-color: #ef4444;
+    --primary-color: #3b82f6; --primary-glow: rgba(59, 130, 246, 0.4); --primary-hover: #2563eb;
+    --bg-main: #07090e; --card-bg: #0d1322; --card-hover: #131d35;
+    --text-main: #f8fafc; --text-muted: #94a3b8;
+    --border-color: #1e293b; --border-glow: rgba(59, 130, 246, 0.3);
+    --sidebar-width: 280px; --nav-bg: rgba(13, 19, 34, 0.85);
+    --whatsapp-green: #25d366; --success-color: #10b981;
+    --warning-color: #f59e0b; --danger-color: #ef4444;
 }
-
 :root[data-theme="light"] {
-    --primary-color: #2563eb;
-    --primary-glow: rgba(37, 99, 235, 0.25);
-    --primary-hover: #1d4ed8;
-    --bg-main: #f8fafc;
-    --card-bg: #ffffff;
-    --card-hover: #f1f5f9;
-    --text-main: #0f172a;
-    --text-muted: #64748b;
-    --border-color: #e2e8f0;
-    --border-glow: rgba(37, 99, 235, 0.2);
-    --sidebar-width: 280px;
-    --nav-bg: rgba(255, 255, 255, 0.9);
-    --whatsapp-green: #25d366;
-    --success-color: #059669;
-    --warning-color: #d97706;
-    --danger-color: #dc2626;
+    --primary-color: #2563eb; --primary-glow: rgba(37, 99, 235, 0.25); --primary-hover: #1d4ed8;
+    --bg-main: #f8fafc; --card-bg: #ffffff; --card-hover: #f1f5f9;
+    --text-main: #0f172a; --text-muted: #64748b;
+    --border-color: #e2e8f0; --border-glow: rgba(37, 99, 235, 0.2);
+    --nav-bg: rgba(255, 255, 255, 0.9); --success-color: #059669;
+    --warning-color: #d97706; --danger-color: #dc2626;
 }
-
-* { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
-
-body {
-    background-color: var(--bg-main);
-    color: var(--text-main);
-    display: flex;
-    flex-direction: column;
-    min-height: 100vh;
-    transition: background-color 0.3s ease, color 0.3s ease;
-    position: relative;
-    overflow-x: hidden;
-}
-
-button, .hero-btn, .btn-sm-primary, .btn-sm-outline, .profile-menu-item, .popup-item, .transaction-card, .filter-tab, .nav-item {
-    transition: transform 0.15s cubic-bezier(0.4, 0, 0.2, 1), background-color 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
-}
-button:active, .hero-btn:active, .btn-sm-primary:active, .btn-sm-outline:active, .profile-menu-item:active, .popup-item:active, .transaction-card:active, .filter-tab:active, .nav-item:active {
-    transform: scale(0.97) !important;
-}
-
-/* --- Top Navigation Bar --- */
-.navbar {
-    position: fixed; top: 0; left: 0; right: 0; height: 72px;
-    background: var(--nav-bg);
-    backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
-    border-bottom: 1px solid var(--border-color);
-    display: flex; justify-content: space-between; align-items: center;
-    padding: 0 24px; z-index: 1000;
-}
+* { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Plus Jakarta Sans', sans-serif; }
+body { background-color: var(--bg-main); color: var(--text-main); display: flex; flex-direction: column; min-height: 100vh; overflow-x: hidden; }
+.navbar { position: fixed; top: 0; left: 0; right: 0; height: 72px; background: var(--nav-bg); backdrop-filter: blur(12px); border-bottom: 1px solid var(--border-color); display: flex; justify-content: space-between; align-items: center; padding: 0 24px; z-index: 1000; }
 .nav-left { display: flex; align-items: center; gap: 16px; }
-.menu-btn {
-    background: var(--card-bg); border: 1px solid var(--border-color);
-    width: 40px; height: 40px; border-radius: 12px; font-size: 18px;
-    cursor: pointer; color: var(--text-main);
-    display: flex; align-items: center; justify-content: center;
-}
-.menu-btn:hover { border-color: var(--primary-color); color: var(--primary-color); }
-.brand-title {
-    font-size: 20px; font-weight: 800;
-    background: linear-gradient(135deg, var(--primary-color), #8b5cf6);
-    -webkit-background-clip: text; -webkit-text-fill-color: transparent; letter-spacing: -0.5px;
-}
+.menu-btn { background: var(--card-bg); border: 1px solid var(--border-color); width: 40px; height: 40px; border-radius: 12px; font-size: 18px; cursor: pointer; color: var(--text-main); display: flex; align-items: center; justify-content: center; }
+.brand-title { font-size: 20px; font-weight: 800; background: linear-gradient(135deg, var(--primary-color), #8b5cf6); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
 .nav-right { display: flex; align-items: center; gap: 14px; }
-.wallet-badge {
-    background: var(--card-bg); border: 1px solid var(--border-color);
-    padding: 8px 16px; border-radius: 30px; font-size: 13px;
-    color: var(--primary-color); font-weight: 700;
-    box-shadow: 0 2px 10px rgba(0,0,0,0.05); display: none;
-}
+.wallet-badge { background: var(--card-bg); border: 1px solid var(--border-color); padding: 8px 16px; border-radius: 30px; font-size: 13px; color: var(--primary-color); font-weight: 700; display: none; }
 @media(min-width: 768px) { .wallet-badge { display: block; } }
-.theme-toggle-btn, .notification-icon {
-    position: relative; width: 40px; height: 40px; border-radius: 12px;
-    background: var(--card-bg); border: 1px solid var(--border-color);
-    font-size: 16px; cursor: pointer; color: var(--text-main);
-    display: flex; align-items: center; justify-content: center;
-}
-.theme-toggle-btn:hover, .notification-icon:hover { border-color: var(--primary-color); color: var(--primary-color); }
-.badge-dot {
-    position: absolute; top: 8px; right: 8px; width: 8px; height: 8px;
-    background: var(--danger-color); border-radius: 50%; box-shadow: 0 0 8px var(--danger-color);
-}
+.theme-toggle-btn, .notification-icon { position: relative; width: 40px; height: 40px; border-radius: 12px; background: var(--card-bg); border: 1px solid var(--border-color); font-size: 16px; cursor: pointer; color: var(--text-main); display: flex; align-items: center; justify-content: center; }
+.badge-dot { position: absolute; top: 8px; right: 8px; width: 8px; height: 8px; background: var(--danger-color); border-radius: 50%; }
 .profile-dropdown-container { position: relative; }
-.profile-icon {
-    width: 40px; height: 40px;
-    background: linear-gradient(135deg, var(--primary-color), #6366f1);
-    color: #ffffff; border-radius: 12px;
-    display: flex; align-items: center; justify-content: center;
-    font-weight: 700; font-size: 14px; cursor: pointer; overflow: hidden;
-    border: 2px solid var(--border-color); box-shadow: 0 4px 12px var(--primary-glow);
-}
+.profile-icon { width: 40px; height: 40px; background: linear-gradient(135deg, var(--primary-color), #6366f1); color: #fff; border-radius: 12px; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 14px; cursor: pointer; overflow: hidden; border: 2px solid var(--border-color); }
 .profile-icon img { width: 100%; height: 100%; object-fit: cover; }
-.dropdown-menu {
-    display: none; position: absolute; right: 0; top: 52px;
-    background: var(--card-bg); color: var(--text-main);
-    border-radius: 18px; box-shadow: 0 20px 40px rgba(0,0,0,0.4);
-    width: 260px; z-index: 1100; padding: 12px 0;
-    border: 1px solid var(--border-color);
-    animation: dropdownPop 0.2s cubic-bezier(0.16, 1, 0.3, 1); transform-origin: top right;
-}
-@keyframes dropdownPop {
-    from { opacity: 0; transform: scale(0.95) translateY(-8px); }
-    to { opacity: 1; transform: scale(1) translateY(0); }
-}
+.dropdown-menu { display: none; position: absolute; right: 0; top: 52px; background: var(--card-bg); color: var(--text-main); border-radius: 18px; box-shadow: 0 20px 40px rgba(0,0,0,0.4); width: 260px; z-index: 1100; padding: 12px 0; border: 1px solid var(--border-color); }
 .dropdown-menu.active { display: block; }
 .dropdown-header { padding: 12px 20px; border-bottom: 1px solid var(--border-color); }
-.dropdown-header strong { display: block; font-size: 14px; font-weight: 700; color: var(--text-main); }
+.dropdown-header strong { display: block; font-size: 14px; font-weight: 700; }
 .dropdown-header span { font-size: 12px; color: var(--text-muted); }
-.dropdown-links { list-style: none; padding: 6px 10px; margin: 0; }
-.dropdown-links li a {
-    display: flex; align-items: center; gap: 10px; padding: 10px 14px;
-    color: var(--text-main); text-decoration: none; font-size: 13px;
-    font-weight: 600; border-radius: 10px; transition: background 0.2s, color 0.2s;
-}
+.dropdown-links { list-style: none; padding: 6px 10px; }
+.dropdown-links li a { display: flex; align-items: center; gap: 10px; padding: 10px 14px; color: var(--text-main); text-decoration: none; font-size: 13px; font-weight: 600; border-radius: 10px; }
 .dropdown-links li a:hover { background: var(--card-hover); color: var(--primary-color); }
 .dropdown-divider { height: 1px; background: var(--border-color); margin: 6px 0; }
-
-/* --- Sidebar --- */
-.sidebar {
-    position: fixed; top: 0; left: calc(-1 * var(--sidebar-width));
-    width: var(--sidebar-width); height: 100%;
-    background: var(--card-bg); border-right: 1px solid var(--border-color);
-    transition: left 0.3s cubic-bezier(0.16, 1, 0.3, 1); z-index: 1200;
-    display: flex; flex-direction: column; box-shadow: 10px 0 30px rgba(0,0,0,0.3);
-}
+.sidebar { position: fixed; top: 0; left: calc(-1 * var(--sidebar-width)); width: var(--sidebar-width); height: 100%; background: var(--card-bg); border-right: 1px solid var(--border-color); transition: left 0.3s; z-index: 1200; display: flex; flex-direction: column; }
 .sidebar.open { left: 0; }
-.sidebar-header {
-    height: 72px; display: flex; align-items: center; justify-content: space-between;
-    padding: 0 24px; border-bottom: 1px solid var(--border-color);
-}
+.sidebar-header { height: 72px; display: flex; align-items: center; justify-content: space-between; padding: 0 24px; border-bottom: 1px solid var(--border-color); }
 .sidebar-brand-wrap { display: flex; align-items: center; gap: 12px; }
-.sidebar-brand-logo {
-    width: 32px; height: 32px;
-    background: linear-gradient(135deg, var(--primary-color), #8b5cf6);
-    color: #fff; border-radius: 8px; display: flex; align-items: center;
-    justify-content: center; font-size: 15px; font-weight: 800;
-}
-.sidebar-brand { font-size: 17px; font-weight: 800; color: var(--text-main); }
-.close-btn {
-    background: var(--bg-main); border: 1px solid var(--border-color);
-    width: 34px; height: 34px; border-radius: 50%; font-size: 15px;
-    cursor: pointer; color: var(--text-main); display: flex; align-items: center; justify-content: center;
-}
+.sidebar-brand-logo { width: 32px; height: 32px; background: linear-gradient(135deg, var(--primary-color), #8b5cf6); color: #fff; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-weight: 800; }
+.sidebar-brand { font-size: 17px; font-weight: 800; }
+.close-btn { background: var(--bg-main); border: 1px solid var(--border-color); width: 34px; height: 34px; border-radius: 50%; cursor: pointer; color: var(--text-main); display: flex; align-items: center; justify-content: center; }
 .sidebar-links-container { padding: 20px; overflow-y: auto; flex: 1; }
 .sidebar-links { list-style: none; display: flex; flex-direction: column; gap: 6px; }
-.sidebar-links li a {
-    display: flex; align-items: center; gap: 14px; padding: 14px 16px;
-    color: var(--text-muted); text-decoration: none; font-size: 14px;
-    font-weight: 600; border-radius: 14px; transition: all 0.2s ease;
-}
-.sidebar-links li a:hover, .sidebar-links li a.active {
-    background: var(--primary-glow); color: var(--primary-color); border: 1px solid var(--border-glow);
-}
-.sidebar-footer {
-    padding: 18px 24px; border-top: 1px solid var(--border-color);
-    display: flex; align-items: center; justify-content: space-between; background: var(--bg-main);
-}
+.sidebar-links li a { display: flex; align-items: center; gap: 14px; padding: 14px 16px; color: var(--text-muted); text-decoration: none; font-size: 14px; font-weight: 600; border-radius: 14px; }
+.sidebar-links li a:hover, .sidebar-links li a.active { background: var(--primary-glow); color: var(--primary-color); }
+.sidebar-footer { padding: 18px 24px; border-top: 1px solid var(--border-color); display: flex; justify-content: space-between; }
 .sidebar-footer span { font-size: 13px; font-weight: 600; color: var(--text-muted); }
-.overlay {
-    position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-    background: rgba(0,0,0,0.65); backdrop-filter: blur(4px);
-    opacity: 0; visibility: hidden;
-    transition: opacity 0.3s ease, visibility 0.3s ease; z-index: 1150;
-}
+.overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.65); backdrop-filter: blur(4px); opacity: 0; visibility: hidden; transition: all 0.3s; z-index: 1150; }
 .overlay.active { opacity: 1; visibility: visible; }
-
-/* --- Main Content --- */
-.main-content {
-    margin-top: 72px; padding: 24px; flex: 1;
-    max-width: 580px; width: 100%;
-    margin-left: auto; margin-right: auto; padding-bottom: 110px;
-}
+.main-content { margin-top: 72px; padding: 24px; flex: 1; max-width: 580px; width: 100%; margin-left: auto; margin-right: auto; padding-bottom: 110px; }
 .app-section { display: none; }
-.app-section.active { display: block; animation: fadeInSec 0.3s ease; }
-@keyframes fadeInSec {
-    from { opacity: 0; transform: translateY(6px); }
-    to { opacity: 1; transform: translateY(0); }
-}
-
-/* Dashboard Hero */
-.dashboard-card-hero {
-    background: linear-gradient(135deg, #1e3a8a 0%, #2563eb 50%, #7c3aed 100%);
-    border-radius: 24px; padding: 28px; color: #fff; margin-bottom: 20px;
-    box-shadow: 0 15px 35px rgba(37,99,235,0.35);
-    position: relative; overflow: hidden; border: 1px solid rgba(255,255,255,0.15);
-}
-.dashboard-card-hero::before {
-    content: ''; position: absolute; top: -50px; right: -50px;
-    width: 180px; height: 180px; background: rgba(255,255,255,0.1);
-    border-radius: 50%; pointer-events: none;
-}
-.hero-welcome { font-size: 22px; font-weight: 800; margin-bottom: 6px; letter-spacing: -0.5px; }
-.hero-sub { font-size: 13px; opacity: 0.9; margin-bottom: 20px; line-height: 1.5; }
+.app-section.active { display: block; }
+.dashboard-card-hero { background: linear-gradient(135deg, #1e3a8a 0%, #2563eb 50%, #7c3aed 100%); border-radius: 24px; padding: 28px; color: #fff; margin-bottom: 20px; box-shadow: 0 15px 35px rgba(37,99,235,0.35); }
+.hero-welcome { font-size: 22px; font-weight: 800; margin-bottom: 6px; }
+.hero-sub { font-size: 13px; opacity: 0.9; margin-bottom: 20px; }
 .hero-actions { display: flex; gap: 10px; flex-wrap: wrap; }
-.hero-btn {
-    background: rgba(255,255,255,0.2); border: 1px solid rgba(255,255,255,0.35);
-    color: #fff; padding: 10px 18px; border-radius: 12px;
-    font-size: 13px; font-weight: 700; cursor: pointer; backdrop-filter: blur(6px);
-}
-.hero-btn:hover { background: rgba(255,255,255,0.3); transform: translateY(-2px); }
-
-/* Stats Grid */
+.hero-btn { background: rgba(255,255,255,0.2); border: 1px solid rgba(255,255,255,0.35); color: #fff; padding: 10px 18px; border-radius: 12px; font-size: 13px; font-weight: 700; cursor: pointer; }
 .sleek-stats-grid { display: grid; grid-template-columns: 1fr; gap: 16px; margin-bottom: 20px; }
 @media(min-width: 600px) { .sleek-stats-grid { grid-template-columns: repeat(2, 1fr); } }
-.sleek-card {
-    background: var(--card-bg); border: 1px solid var(--border-color);
-    border-radius: 20px; padding: 20px;
-    display: flex; justify-content: space-between; align-items: center;
-    box-shadow: 0 4px 20px rgba(0,0,0,0.04);
-}
-.sleek-label { font-size: 12px; color: var(--text-muted); font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px; display: block; }
-.sleek-value { font-size: 22px; font-weight: 800; color: var(--text-main); letter-spacing: -0.5px; }
+.sleek-card { background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 20px; padding: 20px; display: flex; justify-content: space-between; align-items: center; }
+.sleek-label { font-size: 12px; color: var(--text-muted); font-weight: 700; text-transform: uppercase; margin-bottom: 6px; display: block; }
+.sleek-value { font-size: 22px; font-weight: 800; color: var(--text-main); }
 .sleek-card-icon { width: 48px; height: 48px; border-radius: 14px; display: flex; align-items: center; justify-content: center; font-size: 20px; }
-.icon-blue { background: rgba(59,130,246,0.15); color: var(--primary-color); border: 1px solid rgba(59,130,246,0.2); }
-.icon-purple { background: rgba(139,92,246,0.15); color: #8b5cf6; border: 1px solid rgba(139,92,246,0.2); }
-.icon-green { background: rgba(16,185,129,0.15); color: var(--success-color); border: 1px solid rgba(16,185,129,0.2); }
-
-/* Quick Action Shortcuts on Dashboard */
-.quick-actions-grid {
-    display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 20px;
-}
-.quick-action-item {
-    background: var(--card-bg); border: 1px solid var(--border-color);
-    border-radius: 16px; padding: 14px 8px;
-    display: flex; flex-direction: column; align-items: center;
-    gap: 8px; cursor: pointer; text-decoration: none;
-    transition: all 0.2s ease;
-}
-.quick-action-item:hover { background: var(--card-hover); border-color: var(--primary-color); transform: translateY(-2px); }
+.icon-blue { background: rgba(59,130,246,0.15); color: var(--primary-color); }
+.icon-purple { background: rgba(139,92,246,0.15); color: #8b5cf6; }
+.icon-green { background: rgba(16,185,129,0.15); color: var(--success-color); }
+.quick-actions-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 20px; }
+.quick-action-item { background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 16px; padding: 14px 8px; display: flex; flex-direction: column; align-items: center; gap: 8px; cursor: pointer; text-decoration: none; color: var(--text-main); }
+.quick-action-item:hover { border-color: var(--primary-color); }
 .quick-action-icon { width: 40px; height: 40px; border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 17px; }
 .quick-action-label { font-size: 11px; font-weight: 700; color: var(--text-muted); text-align: center; }
-
-/* Recent Activity on Dashboard */
 .section-title-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; }
-.section-title { font-size: 15px; font-weight: 800; color: var(--text-main); }
-.see-all-link { font-size: 12px; font-weight: 700; color: var(--primary-color); cursor: pointer; text-decoration: none; }
-
-/* Profile Screen */
-.profile-header-card {
-    text-align: center; margin-bottom: 24px; background: var(--card-bg);
-    border: 1px solid var(--border-color); padding: 24px; border-radius: 24px;
-}
-.profile-avatar-large {
-    width: 90px; height: 90px; background: var(--bg-main);
-    border: 3px solid var(--primary-color); border-radius: 50%;
-    margin: 0 auto 14px auto; display: flex; align-items: center; justify-content: center;
-    font-size: 38px; overflow: hidden; color: var(--text-muted);
-    position: relative; cursor: pointer; box-shadow: 0 8px 25px var(--primary-glow);
-}
-.profile-avatar-large img { width: 100%; height: 100%; object-fit: cover; }
-.profile-avatar-overlay {
-    position: absolute; bottom: 0; left: 0; right: 0;
-    background: rgba(0,0,0,0.7); color: #fff; font-size: 10px;
-    font-weight: 700; padding: 4px 0; text-align: center; backdrop-filter: blur(2px);
-}
-.profile-header-card h3 { font-size: 18px; font-weight: 800; color: var(--text-main); margin-bottom: 4px; }
-.profile-header-card p { font-size: 13px; color: var(--text-muted); }
-.profile-menu-list { display: flex; flex-direction: column; gap: 12px; }
-.profile-menu-item {
-    background: var(--card-bg); border: 1px solid var(--border-color);
-    border-radius: 18px; padding: 16px 20px;
-    display: flex; align-items: center; justify-content: space-between;
-    cursor: pointer; text-decoration: none;
-}
-.profile-menu-item:hover { background: var(--card-hover); border-color: var(--primary-color); }
-.profile-menu-left { display: flex; align-items: center; gap: 16px; }
-.profile-menu-icon { width: 44px; height: 44px; border-radius: 14px; display: flex; align-items: center; justify-content: center; font-size: 18px; }
-.profile-menu-info h4 { font-size: 15px; font-weight: 700; color: var(--text-main); }
-.profile-menu-info p { font-size: 12px; color: var(--text-muted); margin-top: 2px; }
-.profile-menu-arrow { font-size: 16px; color: var(--text-muted); font-weight: bold; }
-
-/* Content Cards */
-.content-card {
-    background: var(--card-bg); border: 1px solid var(--border-color);
-    border-radius: 24px; padding: 24px; margin-bottom: 20px;
-    box-shadow: 0 4px 20px rgba(0,0,0,0.04);
-}
-.content-card h2 { font-size: 18px; font-weight: 800; color: var(--text-main); margin-bottom: 8px; letter-spacing: -0.3px; }
+.section-title { font-size: 15px; font-weight: 800; }
+.see-all-link { font-size: 12px; font-weight: 700; color: var(--primary-color); cursor: pointer; }
+.content-card { background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 24px; padding: 24px; margin-bottom: 20px; }
+.content-card h2 { font-size: 18px; font-weight: 800; margin-bottom: 8px; }
 .helper-text { font-size: 13px; color: var(--text-muted); margin-bottom: 18px; line-height: 1.5; }
 .form-group { margin-bottom: 16px; }
-.form-group label { display: block; font-size: 12px; font-weight: 700; margin-bottom: 6px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; }
-.form-group input, .form-group textarea, .form-group select {
-    width: 100%; padding: 13px 16px; border: 1px solid var(--border-color);
-    border-radius: 14px; background: var(--bg-main); color: var(--text-main);
-    font-size: 14px; outline: none; transition: all 0.2s;
-}
-.form-group input:focus, .form-group textarea:focus, .form-group select:focus {
-    border-color: var(--primary-color); box-shadow: 0 0 0 3px var(--primary-glow);
-}
-
-/* Filter Buttons */
-.filter-buttons-row {
-    display: flex; gap: 8px; overflow-x: auto; margin-bottom: 18px;
-    padding-bottom: 4px; scrollbar-width: none;
-}
-.filter-buttons-row::-webkit-scrollbar { display: none; }
-
-/* Product Grid */
+.form-group label { display: block; font-size: 12px; font-weight: 700; margin-bottom: 6px; color: var(--text-muted); text-transform: uppercase; }
+.form-group input, .form-group textarea, .form-group select { width: 100%; padding: 13px 16px; border: 1px solid var(--border-color); border-radius: 14px; background: var(--bg-main); color: var(--text-main); font-size: 14px; outline: none; }
+.form-group input:focus { border-color: var(--primary-color); }
+.profile-header-card { text-align: center; margin-bottom: 24px; background: var(--card-bg); border: 1px solid var(--border-color); padding: 24px; border-radius: 24px; }
+.profile-avatar-large { width: 90px; height: 90px; background: var(--bg-main); border: 3px solid var(--primary-color); border-radius: 50%; margin: 0 auto 14px; display: flex; align-items: center; justify-content: center; font-size: 38px; overflow: hidden; position: relative; cursor: pointer; }
+.profile-avatar-large img { width: 100%; height: 100%; object-fit: cover; }
+.profile-avatar-overlay { position: absolute; bottom: 0; left: 0; right: 0; background: rgba(0,0,0,0.7); color: #fff; font-size: 10px; font-weight: 700; padding: 4px 0; text-align: center; }
+.profile-header-card h3 { font-size: 18px; font-weight: 800; margin-bottom: 4px; }
+.profile-header-card p { font-size: 13px; color: var(--text-muted); }
+.profile-menu-list { display: flex; flex-direction: column; gap: 12px; }
+.profile-menu-item { background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 18px; padding: 16px 20px; display: flex; align-items: center; justify-content: space-between; cursor: pointer; }
+.profile-menu-item:hover { border-color: var(--primary-color); }
+.profile-menu-left { display: flex; align-items: center; gap: 16px; }
+.profile-menu-icon { width: 44px; height: 44px; border-radius: 14px; display: flex; align-items: center; justify-content: center; font-size: 18px; }
+.profile-menu-info h4 { font-size: 15px; font-weight: 700; }
+.profile-menu-info p { font-size: 12px; color: var(--text-muted); margin-top: 2px; }
+.profile-menu-arrow { font-size: 16px; color: var(--text-muted); }
 .product-grid { display: grid; grid-template-columns: 1fr; gap: 16px; margin-top: 15px; }
 @media(min-width: 600px) { .product-grid { grid-template-columns: repeat(2, 1fr); } }
-.product-item-card {
-    background: var(--bg-main); border: 1px solid var(--border-color);
-    border-radius: 18px; padding: 18px;
-    display: flex; flex-direction: column; justify-content: space-between;
-    transition: border-color 0.2s ease, transform 0.2s ease;
-}
-.product-item-card:hover { border-color: var(--primary-color); transform: translateY(-2px); }
+.product-item-card { background: var(--bg-main); border: 1px solid var(--border-color); border-radius: 18px; padding: 18px; }
 .product-info-top { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 14px; }
-.product-title { font-size: 15px; font-weight: 700; color: var(--text-main); }
+.product-title { font-size: 15px; font-weight: 700; }
 .product-price { font-size: 16px; font-weight: 800; color: var(--primary-color); }
-.product-badge {
-    display: inline-block; padding: 3px 8px; border-radius: 6px;
-    font-size: 10px; font-weight: 700; margin-top: 4px;
-    background: rgba(16,185,129,0.15); color: var(--success-color);
-}
+.product-badge { display: inline-block; padding: 3px 8px; border-radius: 6px; font-size: 10px; font-weight: 700; margin-top: 4px; background: rgba(16,185,129,0.15); color: var(--success-color); }
 .product-actions-row { display: flex; gap: 8px; }
-
-/* Buttons */
-.btn-sm-primary {
-    background: var(--primary-color); color: #fff; border: none;
-    padding: 10px 14px; border-radius: 12px; font-size: 13px;
-    font-weight: 700; cursor: pointer; flex: 1;
-    box-shadow: 0 4px 15px var(--primary-glow);
-}
+.btn-sm-primary { background: var(--primary-color); color: #fff; border: none; padding: 10px 14px; border-radius: 12px; font-size: 13px; font-weight: 700; cursor: pointer; flex: 1; }
 .btn-sm-primary:hover { background: var(--primary-hover); }
-.btn-sm-outline {
-    background: transparent; color: var(--text-main);
-    border: 1px solid var(--border-color);
-    padding: 10px 14px; border-radius: 12px; font-size: 13px; font-weight: 700; cursor: pointer;
-}
-.btn-sm-outline:hover { border-color: var(--primary-color); color: var(--primary-color); }
+.btn-sm-outline { background: transparent; color: var(--text-main); border: 1px solid var(--border-color); padding: 10px 14px; border-radius: 12px; font-size: 13px; font-weight: 700; cursor: pointer; }
 .btn-danger { background: rgba(239,68,68,0.15); color: var(--danger-color); border: 1px solid rgba(239,68,68,0.3); padding: 10px 14px; border-radius: 12px; font-size: 13px; font-weight: 700; cursor: pointer; }
-.btn-danger:hover { background: rgba(239,68,68,0.25); }
-
-/* Table */
 .table-responsive { overflow-x: auto; }
 .history-table { width: 100%; border-collapse: collapse; font-size: 13px; text-align: left; }
 .history-table th { background: var(--bg-main); color: var(--text-muted); padding: 12px 10px; font-weight: 700; border-bottom: 1px solid var(--border-color); }
-.history-table td { padding: 14px 10px; border-bottom: 1px solid var(--border-color); color: var(--text-main); }
+.history-table td { padding: 14px 10px; border-bottom: 1px solid var(--border-color); }
 .badge-status { padding: 4px 10px; border-radius: 8px; font-size: 11px; font-weight: 700; }
 .badge-success { background: rgba(16,185,129,0.15); color: var(--success-color); }
 .badge-pending { background: rgba(245,158,11,0.15); color: var(--warning-color); }
-.badge-danger { background: rgba(239,68,68,0.15); color: var(--danger-color); }
 .empty-text { text-align: center; color: var(--text-muted); padding: 30px 0; font-size: 13px; }
-
-/* Cart Summary */
-.cart-summary-box {
-    background: var(--bg-main); border: 1px solid var(--border-color);
-    border-radius: 18px; padding: 18px; margin-top: 18px;
-    display: flex; justify-content: space-between; align-items: center;
-}
+.cart-summary-box { background: var(--bg-main); border: 1px solid var(--border-color); border-radius: 18px; padding: 18px; margin-top: 18px; display: flex; justify-content: space-between; align-items: center; }
 .cart-total-amount { font-size: 20px; font-weight: 800; color: var(--primary-color); }
-
-/* Loading Spinner */
-.loading-spinner {
-    display: flex; flex-direction: column; align-items: center;
-    justify-content: center; padding: 40px 20px; gap: 14px;
-}
-.spinner { width: 36px; height: 36px; border: 3px solid var(--border-color); border-top-color: var(--primary-color); border-radius: 50%; animation: spin 0.8s linear infinite; }
-@keyframes spin { to { transform: rotate(360deg); } }
-.loading-text { font-size: 13px; color: var(--text-muted); font-weight: 600; }
-
-/* Empty State */
 .empty-state { text-align: center; padding: 40px 20px; }
 .empty-state-icon { font-size: 40px; margin-bottom: 12px; opacity: 0.5; }
-.empty-state h4 { font-size: 15px; font-weight: 700; color: var(--text-main); margin-bottom: 6px; }
+.empty-state h4 { font-size: 15px; font-weight: 700; margin-bottom: 6px; }
 .empty-state p { font-size: 13px; color: var(--text-muted); }
-
-/* Toast Notification */
 .toast-container { position: fixed; top: 84px; right: 16px; z-index: 9999; display: flex; flex-direction: column; gap: 8px; pointer-events: none; }
-.toast {
-    background: var(--card-bg); border: 1px solid var(--border-color);
-    border-radius: 14px; padding: 12px 16px;
-    display: flex; align-items: center; gap: 10px;
-    font-size: 13px; font-weight: 600; color: var(--text-main);
-    box-shadow: 0 10px 30px rgba(0,0,0,0.3);
-    animation: toastSlideIn 0.3s cubic-bezier(0.16,1,0.3,1);
-    pointer-events: all; max-width: 300px;
-}
-.toast.toast-success { border-color: var(--success-color); }
-.toast.toast-error { border-color: var(--danger-color); }
-.toast.toast-info { border-color: var(--primary-color); }
-.toast-icon { font-size: 16px; }
-.toast-out { animation: toastSlideOut 0.3s ease forwards; }
-@keyframes toastSlideIn { from { opacity: 0; transform: translateX(60px); } to { opacity: 1; transform: translateX(0); } }
-@keyframes toastSlideOut { from { opacity: 1; transform: translateX(0); } to { opacity: 0; transform: translateX(60px); } }
-
-/* Support Widget */
-.support-widget-container { position: fixed; bottom: 30px; right: 30px; z-index: 99999; font-family: inherit; touch-action: none; user-select: none; }
-.support-toggle-btn {
-    width: 60px; height: 60px; border-radius: 50%;
-    background: linear-gradient(135deg, var(--primary-color), #7c3aed);
-    color: #fff; border: none; outline: none; cursor: grab;
-    box-shadow: 0 10px 30px rgba(0,0,0,0.4), 0 0 20px var(--primary-glow);
-    display: flex; flex-direction: column; align-items: center; justify-content: center; position: relative;
-}
-.support-toggle-btn:active { cursor: grabbing; }
-.support-icon { font-size: 22px; line-height: 1; }
-.support-badge-tag {
-    position: absolute; top: -6px; right: -6px;
-    background: var(--danger-color); color: #fff;
-    font-size: 9px; font-weight: 800; padding: 3px 7px; border-radius: 10px;
-    text-transform: uppercase; box-shadow: 0 2px 6px rgba(239,68,68,0.4);
-}
-.support-popup-card {
-    position: absolute; bottom: 75px; right: 0; width: 320px;
-    background: var(--card-bg); color: var(--text-main);
-    border-radius: 24px; box-shadow: 0 25px 50px rgba(0,0,0,0.5);
-    border: 1px solid var(--border-color);
-    display: none; flex-direction: column; overflow: hidden;
-    animation: popupScaleIn 0.25s cubic-bezier(0.16,1,0.3,1) forwards;
-    transform-origin: bottom right; z-index: 1400;
-}
+.toast { background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 14px; padding: 12px 16px; display: flex; align-items: center; gap: 10px; font-size: 13px; font-weight: 600; color: var(--text-main); box-shadow: 0 10px 30px rgba(0,0,0,0.3); animation: toastIn 0.3s; pointer-events: all; max-width: 300px; }
+.toast.success { border-color: var(--success-color); }
+.toast.error { border-color: var(--danger-color); }
+@keyframes toastIn { from { opacity: 0; transform: translateX(60px); } to { opacity: 1; transform: translateX(0); } }
+.support-widget-container { position: fixed; bottom: 30px; right: 30px; z-index: 99999; user-select: none; }
+.support-toggle-btn { width: 60px; height: 60px; border-radius: 50%; background: linear-gradient(135deg, var(--primary-color), #7c3aed); color: #fff; border: none; cursor: grab; box-shadow: 0 10px 30px rgba(0,0,0,0.4); display: flex; align-items: center; justify-content: center; position: relative; }
+.support-icon { font-size: 22px; }
+.support-badge-tag { position: absolute; top: -6px; right: -6px; background: var(--danger-color); color: #fff; font-size: 9px; font-weight: 800; padding: 3px 7px; border-radius: 10px; }
+.support-popup-card { position: absolute; bottom: 75px; right: 0; width: 320px; background: var(--card-bg); color: var(--text-main); border-radius: 24px; box-shadow: 0 25px 50px rgba(0,0,0,0.5); border: 1px solid var(--border-color); display: none; flex-direction: column; overflow: hidden; z-index: 1400; }
 .support-popup-card.active { display: flex; }
-@keyframes popupScaleIn { from { opacity: 0; transform: scale(0.9) translateY(15px); } to { opacity: 1; transform: scale(1) translateY(0); } }
-.support-popup-header { padding: 22px 20px 18px; background: var(--bg-main); border-bottom: 1px solid var(--border-color); position: relative; display: flex; flex-direction: column; align-items: flex-start; }
-.support-popup-header h3 { margin: 0 0 4px; font-size: 18px; font-weight: 800; }
-.support-popup-header p { margin: 0 0 10px; font-size: 13px; color: var(--text-muted); }
-.support-status-indicator { display: inline-flex; align-items: center; gap: 8px; font-size: 12px; color: var(--text-main); font-weight: 600; }
-.status-dot { width: 8px; height: 8px; background-color: var(--success-color); border-radius: 50%; box-shadow: 0 0 8px var(--success-color); animation: pulse 2s infinite; }
-@keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
-.support-close-inner { position: absolute; top: 16px; right: 16px; background: var(--card-bg); border: 1px solid var(--border-color); width: 30px; height: 30px; border-radius: 50%; font-size: 16px; color: var(--text-muted); cursor: pointer; display: flex; align-items: center; justify-content: center; }
+.support-popup-header { padding: 22px 20px 18px; background: var(--bg-main); border-bottom: 1px solid var(--border-color); position: relative; }
+.support-popup-header h3 { font-size: 18px; font-weight: 800; margin-bottom: 4px; }
+.support-popup-header p { font-size: 13px; color: var(--text-muted); margin-bottom: 10px; }
+.support-status-indicator { display: inline-flex; align-items: center; gap: 8px; font-size: 12px; font-weight: 600; }
+.status-dot { width: 8px; height: 8px; background: var(--success-color); border-radius: 50%; }
+.support-close-inner { position: absolute; top: 16px; right: 16px; background: var(--card-bg); border: 1px solid var(--border-color); width: 30px; height: 30px; border-radius: 50%; cursor: pointer; display: flex; align-items: center; justify-content: center; color: var(--text-muted); }
 .support-popup-body { padding: 16px; display: flex; flex-direction: column; gap: 10px; }
 .support-channel-item { display: flex; align-items: center; gap: 14px; padding: 12px 16px; background: var(--bg-main); border: 1px solid var(--border-color); border-radius: 14px; text-decoration: none; color: var(--text-main); }
-.support-channel-item:hover { border-color: var(--primary-color); background: var(--card-hover); }
-.channel-icon-wrap { width: 38px; height: 38px; border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 18px; flex-shrink: 0; }
+.channel-icon-wrap { width: 38px; height: 38px; border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 18px; }
 .channel-icon-wrap.whatsapp { background: rgba(37,211,102,0.15); color: var(--whatsapp-green); }
 .channel-icon-wrap.telegram { background: rgba(0,136,204,0.15); color: #0088cc; }
-.channel-info h4 { margin: 0 0 2px; font-size: 14px; font-weight: 700; }
-.channel-info p { margin: 0; font-size: 11px; color: var(--text-muted); }
-
-/* Floating Action Modal */
-.floating-action-modal {
-    display: none; position: fixed; bottom: 80px; left: 50%;
-    transform: translateX(-50%); width: 92%; max-width: 440px;
-    background: var(--card-bg); border: 1px solid var(--border-color);
-    border-radius: 28px; box-shadow: 0 30px 60px rgba(0,0,0,0.5);
-    z-index: 1500; padding: 24px;
-    animation: slideUpModal 0.25s cubic-bezier(0.16,1,0.3,1);
-}
-@keyframes slideUpModal { from { opacity: 0; transform: translate(-50%,30px) scale(0.95); } to { opacity: 1; transform: translate(-50%,0) scale(1); } }
+.channel-info h4 { font-size: 14px; font-weight: 700; margin-bottom: 2px; }
+.channel-info p { font-size: 11px; color: var(--text-muted); }
+.floating-action-modal { display: none; position: fixed; bottom: 80px; left: 50%; transform: translateX(-50%); width: 92%; max-width: 440px; background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 28px; z-index: 1500; padding: 24px; }
 .floating-action-modal.active { display: block; }
 .popup-header-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 18px; padding-bottom: 10px; border-bottom: 1px solid var(--border-color); }
-.popup-title { font-size: 17px; font-weight: 800; color: var(--text-main); display: flex; align-items: center; gap: 8px; }
-.popup-close { background: var(--bg-main); border: 1px solid var(--border-color); width: 32px; height: 32px; border-radius: 50%; cursor: pointer; font-size: 15px; color: var(--text-main); display: flex; align-items: center; justify-content: center; }
+.popup-title { font-size: 17px; font-weight: 800; display: flex; align-items: center; gap: 8px; }
+.popup-close { background: var(--bg-main); border: 1px solid var(--border-color); width: 32px; height: 32px; border-radius: 50%; cursor: pointer; color: var(--text-main); display: flex; align-items: center; justify-content: center; }
 .popup-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; }
-.popup-item { background: var(--bg-main); border: 1px solid var(--border-color); border-radius: 18px; padding: 16px 12px; display: flex; flex-direction: column; align-items: center; text-align: center; gap: 8px; text-decoration: none; color: var(--text-main); cursor: pointer; }
-.popup-item:hover { background: var(--primary-glow); border-color: var(--primary-color); color: var(--primary-color); }
+.popup-item { background: var(--bg-main); border: 1px solid var(--border-color); border-radius: 18px; padding: 16px 12px; display: flex; flex-direction: column; align-items: center; gap: 8px; text-decoration: none; color: var(--text-main); cursor: pointer; text-align: center; }
+.popup-item:hover { border-color: var(--primary-color); }
 .popup-icon-badge { width: 46px; height: 46px; background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 14px; display: flex; align-items: center; justify-content: center; font-size: 20px; }
-
-/* Activity History Drawer */
-.activity-history-drawer {
-    display: none; position: fixed; bottom: 0; left: 0; right: 0;
-    background: var(--card-bg); color: var(--text-main);
-    border-top-left-radius: 30px; border-top-right-radius: 30px;
-    padding: 24px; z-index: 1800; max-height: 85vh; overflow-y: auto;
-    box-shadow: 0 -20px 50px rgba(0,0,0,0.6); border-top: 1px solid var(--border-color);
-}
+.activity-history-drawer { display: none; position: fixed; bottom: 0; left: 0; right: 0; background: var(--card-bg); border-top-left-radius: 30px; border-top-right-radius: 30px; padding: 24px; z-index: 1800; max-height: 85vh; overflow-y: auto; border-top: 1px solid var(--border-color); }
 .activity-history-drawer.active { display: block; }
 .drawer-drag-handle { width: 40px; height: 4px; background: var(--text-muted); border-radius: 2px; margin: 0 auto 16px; }
 .drawer-header-row { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 16px; }
-.drawer-title-area h3 { font-size: 18px; font-weight: 800; color: var(--text-main); display: flex; align-items: center; gap: 8px; }
+.drawer-title-area h3 { font-size: 18px; font-weight: 800; display: flex; align-items: center; gap: 8px; }
 .drawer-title-area p { font-size: 12px; color: var(--text-muted); margin-top: 2px; }
-.drawer-close-btn { background: var(--bg-main); border: 1px solid var(--border-color); width: 32px; height: 32px; border-radius: 50%; color: var(--text-main); font-size: 15px; cursor: pointer; display: flex; align-items: center; justify-content: center; }
+.drawer-close-btn { background: var(--bg-main); border: 1px solid var(--border-color); width: 32px; height: 32px; border-radius: 50%; color: var(--text-main); cursor: pointer; display: flex; align-items: center; justify-content: center; }
 .drawer-filter-scroll { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 15px; margin-bottom: 15px; scrollbar-width: none; }
 .drawer-filter-scroll::-webkit-scrollbar { display: none; }
 .filter-tab { background: var(--bg-main); border: 1px solid var(--border-color); color: var(--text-main); padding: 8px 16px; border-radius: 20px; font-size: 12px; font-weight: 700; white-space: nowrap; cursor: pointer; }
-.filter-tab.active { background: var(--primary-color); color: #fff; border-color: var(--primary-color); box-shadow: 0 4px 12px var(--primary-glow); }
+.filter-tab.active { background: var(--primary-color); color: #fff; border-color: var(--primary-color); }
 .transaction-list { display: flex; flex-direction: column; gap: 10px; }
 .transaction-card { background: var(--bg-main); border: 1px solid var(--border-color); border-radius: 16px; padding: 14px 16px; display: flex; justify-content: space-between; align-items: center; cursor: pointer; }
-.transaction-card:hover { border-color: var(--primary-color); }
 .transaction-left { display: flex; align-items: center; gap: 14px; }
 .transaction-icon-box { width: 42px; height: 42px; border-radius: 14px; display: flex; align-items: center; justify-content: center; font-size: 18px; }
-.tx-blue { background: rgba(59,130,246,0.15); color: var(--primary-color); border: 1px solid rgba(59,130,246,0.2); }
-.tx-green { background: rgba(16,185,129,0.15); color: var(--success-color); border: 1px solid rgba(16,185,129,0.2); }
-.tx-orange { background: rgba(245,158,11,0.15); color: var(--warning-color); border: 1px solid rgba(245,158,11,0.2); }
-.transaction-details h4 { font-size: 14px; font-weight: 700; color: var(--text-main); margin-bottom: 2px; }
+.tx-blue { background: rgba(59,130,246,0.15); color: var(--primary-color); }
+.tx-green { background: rgba(16,185,129,0.15); color: var(--success-color); }
+.tx-orange { background: rgba(245,158,11,0.15); color: var(--warning-color); }
+.transaction-details h4 { font-size: 14px; font-weight: 700; margin-bottom: 2px; }
 .transaction-details span { font-size: 11px; color: var(--text-muted); }
 .transaction-right { text-align: right; }
-.transaction-amount { font-size: 14px; font-weight: 800; color: var(--text-main); margin-bottom: 2px; }
-
-/* Currency Converter Modal */
+.transaction-amount { font-size: 14px; font-weight: 800; margin-bottom: 2px; }
 .currency-modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); backdrop-filter: blur(12px); z-index: 1900; align-items: center; justify-content: center; padding: 16px; }
-.currency-modal.active { display: flex; animation: modalFadeIn 0.25s cubic-bezier(0.16,1,0.3,1); }
-@keyframes modalFadeIn { from { opacity: 0; transform: scale(0.96); } to { opacity: 1; transform: scale(1); } }
-.currency-modal-card { background: var(--card-bg); width: 100%; max-width: 480px; border-radius: 32px; padding: 28px; box-shadow: 0 35px 90px rgba(0,0,0,0.65), 0 0 0 1px var(--border-color); position: relative; overflow: hidden; }
+.currency-modal.active { display: flex; }
+.currency-modal-card { background: var(--card-bg); width: 100%; max-width: 480px; border-radius: 32px; padding: 28px; border: 1px solid var(--border-color); }
 .converter-pro-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
-.converter-pro-title { font-size: 18px; font-weight: 800; color: var(--text-main); display: flex; align-items: center; gap: 10px; letter-spacing: -0.5px; }
-.converter-pro-title span { width: 36px; height: 36px; background: var(--primary-glow); color: var(--primary-color); border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 16px; }
+.converter-pro-title { font-size: 18px; font-weight: 800; display: flex; align-items: center; gap: 10px; }
+.converter-pro-title span { width: 36px; height: 36px; background: var(--primary-glow); color: var(--primary-color); border-radius: 12px; display: flex; align-items: center; justify-content: center; }
 .converter-grid-layout { display: flex; flex-direction: column; gap: 8px; position: relative; }
-.converter-panel-card { background: var(--bg-main); border: 1px solid var(--border-color); border-radius: 22px; padding: 18px; transition: all 0.2s ease; }
-.converter-panel-card:focus-within { border-color: var(--primary-color); box-shadow: 0 0 0 3px var(--primary-glow); }
+.converter-panel-card { background: var(--bg-main); border: 1px solid var(--border-color); border-radius: 22px; padding: 18px; }
 .converter-panel-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
-.converter-field-label { font-size: 11px; font-weight: 800; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.8px; }
-.currency-selector-badge { display: flex; align-items: center; gap: 6px; background: var(--card-bg); border: 1px solid var(--border-color); padding: 6px 12px; border-radius: 20px; font-size: 13px; font-weight: 700; color: var(--text-main); }
-.converter-input-field { background: transparent; border: none; font-size: 28px; font-weight: 800; color: var(--text-main); width: 100%; outline: none; letter-spacing: -0.5px; }
+.converter-field-label { font-size: 11px; font-weight: 800; color: var(--text-muted); text-transform: uppercase; }
+.currency-selector-badge { display: flex; align-items: center; gap: 6px; background: var(--card-bg); border: 1px solid var(--border-color); padding: 6px 12px; border-radius: 20px; font-size: 13px; font-weight: 700; }
+.converter-input-field { background: transparent; border: none; font-size: 28px; font-weight: 800; color: var(--text-main); width: 100%; outline: none; }
 .converter-swap-vector-wrap { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); z-index: 10; }
-.converter-swap-vector-btn { width: 44px; height: 44px; background: linear-gradient(135deg, var(--primary-color), #7c3aed); color: #fff; border-radius: 50%; border: 4px solid var(--card-bg); display: flex; align-items: center; justify-content: center; cursor: pointer; font-size: 15px; box-shadow: 0 6px 20px rgba(59,130,246,0.4); transition: transform 0.3s cubic-bezier(0.4,0,0.2,1); }
-.converter-swap-vector-btn:hover { transform: rotate(180deg) scale(1.1); }
+.converter-swap-vector-btn { width: 44px; height: 44px; background: linear-gradient(135deg, var(--primary-color), #7c3aed); color: #fff; border-radius: 50%; border: 4px solid var(--card-bg); display: flex; align-items: center; justify-content: center; cursor: pointer; }
 .quantum-metrics-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin: 16px 0; }
 .metric-pill-box { background: var(--bg-main); border: 1px solid var(--border-color); border-radius: 14px; padding: 10px; text-align: center; }
 .metric-pill-box span { display: block; font-size: 10px; font-weight: 700; color: var(--text-muted); text-transform: uppercase; margin-bottom: 2px; }
-.metric-pill-box strong { font-size: 12px; font-weight: 800; color: var(--text-main); }
-.conversion-loading-box { display: none; align-items: center; gap: 12px; background: var(--primary-glow); border: 1px solid var(--border-glow); padding: 14px 18px; border-radius: 16px; font-size: 13px; color: var(--primary-color); font-weight: 700; margin-bottom: 16px; }
+.metric-pill-box strong { font-size: 12px; font-weight: 800; }
+.conversion-loading-box { display: none; align-items: center; gap: 12px; background: var(--primary-glow); padding: 14px 18px; border-radius: 16px; font-size: 13px; color: var(--primary-color); font-weight: 700; margin-bottom: 16px; }
 .conversion-loading-box.active { display: flex; }
 .spinner-icon { width: 20px; height: 20px; border: 3px solid rgba(59,130,246,0.3); border-top-color: var(--primary-color); border-radius: 50%; animation: spin 0.8s linear infinite; }
-
-/* Notifications Dropdown */
-.notification-dropdown { display: none; position: absolute; right: 10px; top: 62px; width: 320px; background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 20px; box-shadow: 0 20px 40px rgba(0,0,0,0.4); z-index: 1250; padding: 18px; }
-.notification-dropdown.active { display: block; animation: dropdownPop 0.2s ease; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.notification-dropdown { display: none; position: absolute; right: 10px; top: 62px; width: 320px; background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 20px; z-index: 1250; padding: 18px; }
+.notification-dropdown.active { display: block; }
 .notif-item { padding: 12px 0; border-bottom: 1px solid var(--border-color); font-size: 13px; }
 .notif-item:last-child { border-bottom: none; }
-.notif-title { font-weight: 700; color: var(--text-main); margin-bottom: 3px; }
+.notif-title { font-weight: 700; margin-bottom: 3px; }
 .notif-time { font-size: 11px; color: var(--text-muted); margin-top: 4px; }
-
-/* Bottom Navigation */
-.bottom-nav { position: fixed; bottom: 0; left: 0; right: 0; height: 70px; background: var(--nav-bg); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); border-top: 1px solid var(--border-color); display: flex; justify-content: space-around; align-items: center; z-index: 1300; }
+.bottom-nav { position: fixed; bottom: 0; left: 0; right: 0; height: 70px; background: var(--nav-bg); backdrop-filter: blur(14px); border-top: 1px solid var(--border-color); display: flex; justify-content: space-around; align-items: center; z-index: 1300; }
 .nav-item { display: flex; flex-direction: column; align-items: center; text-decoration: none; color: var(--text-muted); font-size: 10px; gap: 4px; font-weight: 700; cursor: pointer; background: none; border: none; padding: 4px; }
-.nav-item svg { width: 22px; height: 22px; fill: currentColor; transition: fill 0.2s; }
+.nav-item svg { width: 22px; height: 22px; fill: currentColor; }
 .nav-item.active { color: var(--primary-color); }
-.action-btn { position: relative; }
-.plus-circle { width: 46px; height: 46px; background: linear-gradient(135deg, var(--primary-color), #7c3aed); color: #fff; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 24px; box-shadow: 0 8px 25px var(--primary-glow); margin-top: -20px; border: 4px solid var(--bg-main); }
-.plus-circle:hover { transform: scale(1.1); }
+.plus-circle { width: 46px; height: 46px; background: linear-gradient(135deg, var(--primary-color), #7c3aed); color: #fff; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 24px; margin-top: -20px; border: 4px solid var(--bg-main); }
 @media(min-width: 768px) { .bottom-nav { display: none; } .main-content { padding-bottom: 24px; } }
-
-/* MJ Logs Category Header */
-.category-section { margin-bottom: 24px; }
-.category-header { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; padding-bottom: 10px; border-bottom: 1px solid var(--border-color); }
-.category-icon { width: 32px; height: 32px; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 14px; }
-.category-title { font-size: 14px; font-weight: 800; color: var(--text-main); }
-.category-count { font-size: 11px; font-weight: 700; background: var(--primary-glow); color: var(--primary-color); padding: 3px 8px; border-radius: 8px; margin-left: auto; }
     </style>
 </head>
 <body>
 
-<!-- Toast Container -->
 <div class="toast-container" id="toastContainer"></div>
 
-<!-- Top Navigation Bar -->
 <header class="navbar">
     <div class="nav-left">
-        <button class="menu-btn" id="menuToggleBtn" onclick="triggerHaptic()"><i class="fa-solid fa-bars"></i></button>
+        <button class="menu-btn" id="menuToggleBtn"><i class="fa-solid fa-bars"></i></button>
         <h1 class="brand-title">MJ HUB</h1>
     </div>
     <div class="nav-right">
         <div class="wallet-badge" id="navWalletBadge">NGN ₦0.00</div>
-        <button class="theme-toggle-btn" id="themeToggleBtn" title="Toggle Theme" onclick="triggerHaptic()">🌙</button>
+        <button class="theme-toggle-btn" id="themeToggleBtn">🌙</button>
         <div style="position:relative;">
-            <div class="notification-icon" id="notificationBtn" title="Website Updates" onclick="triggerHaptic()">
+            <div class="notification-icon" id="notificationBtn">
                 <i class="fa-solid fa-bell"></i>
                 <span class="badge-dot" id="notifDot"></span>
             </div>
             <div class="notification-dropdown" id="notificationDropdown">
-                <div style="font-weight:800;font-size:14px;margin-bottom:12px;color:var(--text-main);">Website Updates & Alerts</div>
+                <div style="font-weight:800;font-size:14px;margin-bottom:12px;">Website Updates</div>
                 <div class="notif-item">
-                    <div class="notif-title">🔒 MJ HUB v6.0 Standard Edition</div>
-                    <div style="color:var(--text-muted);font-size:12px;">Standard USD and NGN currency converter active.</div>
-                    <div class="notif-time">Just now</div>
-                </div>
-                <div class="notif-item">
-                    <div class="notif-title">✅ Products Synced Successfully</div>
-                    <div style="color:var(--text-muted);font-size:12px;">106 products loaded from MJ HUB database.</div>
+                    <div class="notif-title">✅ Products Synced Automatically</div>
+                    <div style="color:var(--text-muted);font-size:12px;">Products sync from supplier twice daily.</div>
                     <div class="notif-time">Today</div>
                 </div>
             </div>
         </div>
         <div class="profile-dropdown-container">
-            <div class="profile-icon" id="profileDropdownToggle" onclick="triggerHaptic()">
+            <div class="profile-icon" id="profileDropdownToggle">
                 <span id="headerAvatarText">👤</span>
             </div>
             <div class="dropdown-menu" id="profileDropdownMenu">
                 <div class="dropdown-header">
                     <strong id="dropdownName">Guest User</strong>
-                    <span id="dropdownEmail">Syncing cloud profile...</span>
+                    <span id="dropdownEmail">Loading...</span>
                 </div>
                 <ul class="dropdown-links">
-                    <li><a href="#" onclick="triggerHaptic();switchSection('home');toggleProfileDropdown();return false;"><i class="fa-solid fa-house"></i> Dashboard</a></li>
-                    <li><a href="#" onclick="triggerHaptic();switchSection('profile');toggleProfileDropdown();return false;"><i class="fa-solid fa-gear"></i> Settings</a></li>
-                    <li><a href="#" onclick="triggerHaptic();switchSection('cart');toggleProfileDropdown();return false;"><i class="fa-solid fa-cart-shopping"></i> Cart</a></li>
+                    <li><a href="#" onclick="switchSection('home');return false;"><i class="fa-solid fa-house"></i> Dashboard</a></li>
+                    <li><a href="#" onclick="switchSection('profile');return false;"><i class="fa-solid fa-gear"></i> Settings</a></li>
+                    <li><a href="#" onclick="switchSection('cart');return false;"><i class="fa-solid fa-cart-shopping"></i> Cart</a></li>
                 </ul>
                 <div class="dropdown-divider"></div>
                 <ul class="dropdown-links">
-                    <li><a href="#" onclick="triggerHaptic();handleLogout();return false;" style="color:var(--danger-color);"><i class="fa-solid fa-right-from-bracket"></i> Logout</a></li>
+                    <li><a href="#" onclick="handleLogout();return false;" style="color:var(--danger-color);"><i class="fa-solid fa-right-from-bracket"></i> Logout</a></li>
                 </ul>
-                <div class="dropdown-divider"></div>
-                <div style="padding:10px 16px;display:flex;justify-content:space-between;align-items:center;">
-                    <span style="font-size:13px;font-weight:700;color:var(--text-muted);">Theme Mode</span>
-                    <button class="btn-sm-outline" id="dropdownThemeToggleBtn" style="padding:6px 12px;" onclick="triggerHaptic()">Dark</button>
-                </div>
             </div>
         </div>
     </div>
 </header>
 
-<!-- Sidebar Drawer -->
 <div class="sidebar" id="sidebarDrawer">
     <div class="sidebar-header">
         <div class="sidebar-brand-wrap">
             <div class="sidebar-brand-logo">⚡</div>
             <span class="sidebar-brand">MJ HUB</span>
         </div>
-        <button class="close-btn" id="sidebarCloseBtn" onclick="triggerHaptic()"><i class="fa-solid fa-xmark"></i></button>
+        <button class="close-btn" id="sidebarCloseBtn"><i class="fa-solid fa-xmark"></i></button>
     </div>
     <div class="sidebar-links-container">
         <ul class="sidebar-links">
-            <li><a href="#" class="sidebar-link active" data-target="home" onclick="triggerHaptic()"><i class="fa-solid fa-house"></i> <span>Dashboard</span></a></li>
-            <li><a href="#" class="sidebar-link" data-target="logs" onclick="triggerHaptic()"><i class="fa-solid fa-box-archive"></i> <span>MJ Logs</span></a></li>
-            <li><a href="#" class="sidebar-link" data-target="sms" onclick="triggerHaptic()"><i class="fa-solid fa-mobile-screen"></i> <span>MJ SMS</span></a></li>
-            <li><a href="#" class="sidebar-link" data-target="booster" onclick="triggerHaptic()"><i class="fa-solid fa-bolt"></i> <span>MJ Boosters</span></a></li>
-            <li><a href="#" class="sidebar-link" data-target="deposit" onclick="triggerHaptic()"><i class="fa-solid fa-credit-card"></i> <span>Deposit</span></a></li>
-            <li><a href="#" class="sidebar-link" data-target="cart" onclick="triggerHaptic()"><i class="fa-solid fa-bag-shopping"></i> <span>Cart</span></a></li>
-            <li><a href="#" onclick="triggerHaptic();handleLogout();return false;" style="color:var(--danger-color);display:flex;align-items:center;gap:14px;padding:14px 16px;font-size:14px;font-weight:600;border-radius:14px;"><i class="fa-solid fa-right-from-bracket"></i> <span>Logout</span></a></li>
+            <li><a href="#" class="sidebar-link active" data-target="home"><i class="fa-solid fa-house"></i> <span>Dashboard</span></a></li>
+            <li><a href="mj-logs.html"><i class="fa-solid fa-box-archive"></i> <span>MJ Logs</span></a></li>
+            <li><a href="#" class="sidebar-link" data-target="sms"><i class="fa-solid fa-mobile-screen"></i> <span>MJ SMS</span></a></li>
+            <li><a href="#" class="sidebar-link" data-target="booster"><i class="fa-solid fa-bolt"></i> <span>MJ Boosters</span></a></li>
+            <li><a href="#" class="sidebar-link" data-target="deposit"><i class="fa-solid fa-credit-card"></i> <span>Deposit</span></a></li>
+            <li><a href="#" class="sidebar-link" data-target="cart"><i class="fa-solid fa-bag-shopping"></i> <span>Cart</span></a></li>
+            <li><a href="#" onclick="handleLogout();return false;" style="color:var(--danger-color);"><i class="fa-solid fa-right-from-bracket"></i> <span>Logout</span></a></li>
         </ul>
     </div>
     <div class="sidebar-footer">
-        <span>Theme Mode</span>
+        <span>Theme</span>
         <span id="themeIndicatorText" style="font-size:13px;color:var(--primary-color);font-weight:700;">Dark</span>
     </div>
 </div>
 <div class="overlay" id="sidebarOverlay"></div>
 
-<!-- Main Content -->
 <main class="main-content">
 
-    <!-- HOME SECTION -->
     <section id="home" class="app-section active">
         <div class="dashboard-card-hero">
             <div class="hero-welcome" id="heroWelcomeTitle">Welcome to MJ HUB</div>
-            <div class="hero-sub" id="heroSubText">Your all-in-one platform for logs, SMS, boosters, and currency conversion.</div>
-            <div class="hero-actions" id="heroActionsContainer">
-                <button class="hero-btn" onclick="triggerHaptic();switchSection('deposit')"><i class="fa-solid fa-wallet"></i> Fund Account</button>
-                <button class="hero-btn" onclick="triggerHaptic();openCurrencyModal()"><i class="fa-solid fa-right-left"></i> Currency Swapper</button>
-                <button class="hero-btn" onclick="triggerHaptic();toggleActivityHistory()"><i class="fa-solid fa-clock-rotate-left"></i> History</button>
+            <div class="hero-sub" id="heroSubText">Your platform for logs, SMS, boosters, and currency conversion.</div>
+            <div class="hero-actions">
+                <button class="hero-btn" onclick="switchSection('deposit')"><i class="fa-solid fa-wallet"></i> Fund Account</button>
+                <button class="hero-btn" onclick="openCurrencyModal()"><i class="fa-solid fa-right-left"></i> Converter</button>
             </div>
         </div>
 
-        <!-- Balance Cards -->
         <div class="sleek-stats-grid">
             <div class="sleek-card">
                 <div>
@@ -684,116 +332,102 @@ button:active, .hero-btn:active, .btn-sm-primary:active, .btn-sm-outline:active,
             </div>
         </div>
 
-        <!-- Quick Actions -->
         <div class="quick-actions-grid">
-            <div class="quick-action-item" onclick="triggerHaptic();switchSection('logs')">
+            <a href="mj-logs.html" class="quick-action-item">
                 <div class="quick-action-icon icon-blue"><i class="fa-solid fa-box-archive"></i></div>
                 <span class="quick-action-label">MJ Logs</span>
-            </div>
-            <div class="quick-action-item" onclick="triggerHaptic();switchSection('sms')">
+            </a>
+            <div class="quick-action-item" onclick="switchSection('sms')">
                 <div class="quick-action-icon icon-purple"><i class="fa-solid fa-mobile-screen"></i></div>
                 <span class="quick-action-label">MJ SMS</span>
             </div>
-            <div class="quick-action-item" onclick="triggerHaptic();switchSection('booster')">
+            <div class="quick-action-item" onclick="switchSection('booster')">
                 <div class="quick-action-icon icon-green"><i class="fa-solid fa-bolt"></i></div>
                 <span class="quick-action-label">Boosters</span>
             </div>
-            <div class="quick-action-item" onclick="triggerHaptic();switchSection('deposit')">
-                <div class="quick-action-icon" style="background:rgba(245,158,11,0.15);color:var(--warning-color);border:1px solid rgba(245,158,11,0.2);"><i class="fa-solid fa-credit-card"></i></div>
+            <div class="quick-action-item" onclick="switchSection('deposit')">
+                <div class="quick-action-icon" style="background:rgba(245,158,11,0.15);color:var(--warning-color);"><i class="fa-solid fa-credit-card"></i></div>
                 <span class="quick-action-label">Deposit</span>
             </div>
         </div>
 
-        <!-- Recent Activity Preview -->
         <div class="content-card">
             <div class="section-title-row">
-                <span class="section-title"><i class="fa-solid fa-clock-rotate-left" style="color:var(--primary-color);margin-right:6px;"></i>Recent Activity</span>
-                <span class="see-all-link" onclick="triggerHaptic();toggleActivityHistory()">See All →</span>
+                <span class="section-title">Recent Activity</span>
+                <span class="see-all-link" onclick="toggleActivityHistory()">See All →</span>
             </div>
             <div id="recentActivityPreview">
                 <div class="empty-state">
                     <div class="empty-state-icon">📋</div>
                     <h4>No Activity Yet</h4>
-                    <p>Your recent transactions will appear here</p>
+                    <p>Your transactions will appear here</p>
                 </div>
             </div>
         </div>
     </section>
 
-    <!-- PROFILE SECTION -->
     <section id="profile" class="app-section">
         <div class="profile-header-card">
-            <div class="profile-avatar-large" id="profileAvatarBox" onclick="triggerHaptic();document.getElementById('profileAvatarInput').click()">
+            <div class="profile-avatar-large" onclick="document.getElementById('profileAvatarInput').click()">
                 <span id="profileAvatarInitial">👤</span>
                 <div class="profile-avatar-overlay">Edit</div>
             </div>
             <input type="file" id="profileAvatarInput" accept="image/*" style="display:none;" onchange="handleAvatarUpload(event)">
-            <h3 id="profileHeaderName">Loading profile...</h3>
+            <h3 id="profileHeaderName">Loading...</h3>
             <p id="profileHeaderEmail">Connecting...</p>
         </div>
 
-        <div class="content-card" style="margin-bottom:20px;">
-            <h2>Customer Identification</h2>
-            <p class="helper-text">Provide this unique Customer ID to support for deposit inquiries or disputes:</p>
+        <div class="content-card">
+            <h2>Customer ID</h2>
+            <p class="helper-text">Provide this ID to support for inquiries:</p>
             <div style="display:flex;gap:10px;align-items:center;">
                 <input type="text" id="myCustomerId" readonly style="font-family:monospace;font-weight:bold;color:var(--primary-color);" placeholder="Loading...">
-                <button class="btn-sm-primary" style="flex:unset;padding:13px 20px;" onclick="triggerHaptic();copyIdToClipboard()">Copy ID</button>
+                <button class="btn-sm-primary" style="flex:unset;padding:13px 20px;" onclick="copyIdToClipboard()">Copy</button>
             </div>
         </div>
 
-        <div class="content-card" style="margin-bottom:20px;">
-            <h2>Profile & Account Settings</h2>
-            <p class="helper-text">Update your account credentials and security details stored securely in Supabase.</p>
+        <div class="content-card">
+            <h2>Profile Settings</h2>
             <div class="form-group">
-                <label>Full Name / Username</label>
+                <label>Full Name</label>
                 <input type="text" id="profileNameInput" placeholder="e.g. Josh">
             </div>
             <div class="form-group">
-                <label>Email Address</label>
-                <input type="email" id="profileEmailInput" placeholder="yourname@gmail.com" readonly>
+                <label>Email</label>
+                <input type="email" id="profileEmailInput" readonly>
             </div>
             <div class="form-group">
-                <label>Phone Number</label>
-                <input type="text" id="profilePhoneInput" placeholder="e.g. +2348012345678">
+                <label>Phone</label>
+                <input type="text" id="profilePhoneInput" placeholder="+234...">
             </div>
             <div class="form-group">
-                <label>Home Address</label>
-                <input type="text" id="profileAddressInput" placeholder="Enter your residential address">
+                <label>Address</label>
+                <input type="text" id="profileAddressInput" placeholder="Your address">
             </div>
             <div class="form-group">
-                <label>Bio / About Me</label>
-                <textarea id="profileBioInput" rows="3" placeholder="Tell us a little bit about yourself"></textarea>
+                <label>Bio</label>
+                <textarea id="profileBioInput" rows="3" placeholder="About you"></textarea>
             </div>
-            <button class="btn-sm-primary" style="width:100%;padding:14px;font-size:14px;" onclick="triggerHaptic();saveProfileSettingsData()">Save Profile Changes</button>
+            <button class="btn-sm-primary" style="width:100%;padding:14px;" onclick="saveProfileSettingsData()">Save Changes</button>
         </div>
 
         <div class="profile-menu-list">
-            <div class="profile-menu-item" onclick="triggerHaptic();openChangePasswordModal()">
+            <div class="profile-menu-item" onclick="openChangePasswordModal()">
                 <div class="profile-menu-left">
                     <div class="profile-menu-icon icon-blue"><i class="fa-solid fa-shield-halved"></i></div>
                     <div class="profile-menu-info">
                         <h4>Change Password</h4>
-                        <p>Update your account security password</p>
+                        <p>Update your security password</p>
                     </div>
                 </div>
                 <div class="profile-menu-arrow">›</div>
             </div>
-            <div class="profile-menu-item" onclick="triggerHaptic();openCurrencyModal()">
+            <div class="profile-menu-item" onclick="handleLogout()">
                 <div class="profile-menu-left">
-                    <div class="profile-menu-icon icon-purple"><i class="fa-solid fa-right-left"></i></div>
-                    <div class="profile-menu-info">
-                        <h4>Currency Converter</h4>
-                        <p>Swap between NGN and USD wallets</p>
-                    </div>
-                </div>
-                <div class="profile-menu-arrow">›</div>
-            </div>
-            <div class="profile-menu-item" onclick="triggerHaptic();handleLogout()">
-                <div class="profile-menu-left">
-                    <div class="profile-menu-icon" style="background:rgba(239,68,68,0.15);color:var(--danger-color);border-radius:14px;width:44px;height:44px;display:flex;align-items:center;justify-content:center;font-size:18px;"><i class="fa-solid fa-right-from-bracket"></i></div>
+                    <div class="profile-menu-icon" style="background:rgba(239,68,68,0.15);color:var(--danger-color);"><i class="fa-solid fa-right-from-bracket"></i></div>
                     <div class="profile-menu-info">
                         <h4 style="color:var(--danger-color);">Log Out</h4>
-                        <p>Sign out of your active session</p>
+                        <p>Sign out of your session</p>
                     </div>
                 </div>
                 <div class="profile-menu-arrow">›</div>
@@ -801,178 +435,105 @@ button:active, .hero-btn:active, .btn-sm-primary:active, .btn-sm-outline:active,
         </div>
     </section>
 
-    <!-- MJ LOGS SECTION -->
-    <section id="logs" class="app-section">
-        <div class="content-card">
-            <h2><i class="fa-solid fa-box-archive" style="color:var(--primary-color);margin-right:8px;"></i>MJ Logs</h2>
-            <p class="helper-text">Browse our verified social media logs and aged accounts. All accounts are quality-checked.</p>
-
-            <div class="filter-buttons-row" id="logsFilterRow">
-                <button class="filter-tab active" onclick="triggerHaptic();filterLogsByCategory('all',this)">All Products</button>
-            </div>
-
-            <div id="logsProductGrid">
-                <div class="loading-spinner">
-                    <div class="spinner"></div>
-                    <span class="loading-text">Loading products from MJ HUB...</span>
-                </div>
-            </div>
-        </div>
-    </section>
-
-    <!-- MJ SMS SECTION -->
     <section id="sms" class="app-section">
         <div class="content-card">
-            <h2><i class="fa-solid fa-mobile-screen" style="color:var(--primary-color);margin-right:8px;"></i>MJ SMS</h2>
-            <p class="helper-text">Get virtual numbers for instant OTP verification through MJ SMS.</p>
+            <h2>MJ SMS</h2>
+            <p class="helper-text">Get virtual numbers for OTP verification.</p>
             <div class="product-grid">
                 <div class="product-item-card">
                     <div class="product-info-top">
                         <div>
-                            <div class="product-title">WhatsApp OTP Number</div>
+                            <div class="product-title">WhatsApp OTP</div>
                             <div class="helper-text" style="margin:4px 0 0;">USA / UK Virtual Line</div>
                             <span class="product-badge">Available</span>
                         </div>
                         <div class="product-price">₦800</div>
                     </div>
                     <div class="product-actions-row">
-                        <button class="btn-sm-primary" onclick="triggerHaptic();addToCart('WhatsApp OTP Number',800,'sms','Virtual Line OTP - USA/UK Channel')">Add to Cart</button>
-                        <button class="btn-sm-outline" onclick="triggerHaptic();buyNowItem('WhatsApp OTP Number',800,'sms','Virtual Line OTP - USA/UK Channel')">Get Now</button>
-                    </div>
-                </div>
-                <div class="product-item-card">
-                    <div class="product-info-top">
-                        <div>
-                            <div class="product-title">Telegram OTP Number</div>
-                            <div class="helper-text" style="margin:4px 0 0;">USA / UK Virtual Line</div>
-                            <span class="product-badge">Available</span>
-                        </div>
-                        <div class="product-price">₦1,000</div>
-                    </div>
-                    <div class="product-actions-row">
-                        <button class="btn-sm-primary" onclick="triggerHaptic();addToCart('Telegram OTP Number',1000,'sms','Virtual Line OTP - USA/UK Channel')">Add to Cart</button>
-                        <button class="btn-sm-outline" onclick="triggerHaptic();buyNowItem('Telegram OTP Number',1000,'sms','Virtual Line OTP - USA/UK Channel')">Get Now</button>
+                        <button class="btn-sm-primary" onclick="addToCart('WhatsApp OTP',800,'sms','Virtual Line OTP')">Add to Cart</button>
                     </div>
                 </div>
             </div>
         </div>
     </section>
 
-    <!-- MJ BOOSTERS SECTION -->
     <section id="booster" class="app-section">
         <div class="content-card">
-            <h2><i class="fa-solid fa-bolt" style="color:var(--primary-color);margin-right:8px;"></i>MJ Boosters</h2>
-            <p class="helper-text">Boost followers, views, and engagement instantly using MJ Boosters.</p>
+            <h2>MJ Boosters</h2>
+            <p class="helper-text">Boost followers, views, engagement instantly.</p>
             <div class="product-grid">
                 <div class="product-item-card">
                     <div class="product-info-top">
                         <div>
-                            <div class="product-title">Instagram Followers (1,000)</div>
-                            <div class="helper-text" style="margin:4px 0 0;">High quality non-drop SMM</div>
+                            <div class="product-title">Instagram Followers (1k)</div>
+                            <div class="helper-text" style="margin:4px 0 0;">Non-drop SMM</div>
                             <span class="product-badge">Non-Drop</span>
                         </div>
                         <div class="product-price">₦2,500</div>
                     </div>
                     <div class="product-actions-row">
-                        <button class="btn-sm-primary" onclick="triggerHaptic();addToCart('Instagram Followers (1k)',2500,'booster','SMM Engagement Panel - Non-Drop')">Add to Cart</button>
-                        <button class="btn-sm-outline" onclick="triggerHaptic();buyNowItem('Instagram Followers (1k)',2500,'booster','SMM Engagement Panel - Non-Drop')">Boost Now</button>
-                    </div>
-                </div>
-                <div class="product-item-card">
-                    <div class="product-info-top">
-                        <div>
-                            <div class="product-title">TikTok Views (10,000)</div>
-                            <div class="helper-text" style="margin:4px 0 0;">Instant delivery SMM panel</div>
-                            <span class="product-badge">Instant</span>
-                        </div>
-                        <div class="product-price">₦1,500</div>
-                    </div>
-                    <div class="product-actions-row">
-                        <button class="btn-sm-primary" onclick="triggerHaptic();addToCart('TikTok Views (10k)',1500,'booster','SMM Views Panel - Instant Delivery')">Add to Cart</button>
-                        <button class="btn-sm-outline" onclick="triggerHaptic();buyNowItem('TikTok Views (10k)',1500,'booster','SMM Views Panel - Instant Delivery')">Boost Now</button>
-                    </div>
-                </div>
-                <div class="product-item-card">
-                    <div class="product-info-top">
-                        <div>
-                            <div class="product-title">YouTube Subscribers (500)</div>
-                            <div class="helper-text" style="margin:4px 0 0;">Real looking subscriber boost</div>
-                            <span class="product-badge">Quality</span>
-                        </div>
-                        <div class="product-price">₦3,500</div>
-                    </div>
-                    <div class="product-actions-row">
-                        <button class="btn-sm-primary" onclick="triggerHaptic();addToCart('YouTube Subscribers (500)',3500,'booster','SMM Subscriber Panel')">Add to Cart</button>
-                        <button class="btn-sm-outline" onclick="triggerHaptic();buyNowItem('YouTube Subscribers (500)',3500,'booster','SMM Subscriber Panel')">Boost Now</button>
+                        <button class="btn-sm-primary" onclick="addToCart('Instagram Followers 1k',2500,'booster','SMM Panel')">Add to Cart</button>
                     </div>
                 </div>
             </div>
         </div>
     </section>
 
-    <!-- CART SECTION -->
     <section id="cart" class="app-section">
         <div class="content-card">
-            <h2><i class="fa-solid fa-bag-shopping" style="color:var(--primary-color);margin-right:8px;"></i>Shopping Cart</h2>
-            <p class="helper-text">Review your selected items before checkout.</p>
+            <h2>Shopping Cart</h2>
+            <p class="helper-text">Review your items before checkout.</p>
             <div class="table-responsive">
                 <table class="history-table">
                     <thead>
-                        <tr>
-                            <th>Item</th>
-                            <th>Type</th>
-                            <th>Price</th>
-                            <th>Action</th>
-                        </tr>
+                        <tr><th>Item</th><th>Type</th><th>Price</th><th>Action</th></tr>
                     </thead>
                     <tbody id="cartTableBody">
-                        <tr><td colspan="4" class="empty-text">Your cart is currently empty.</td></tr>
+                        <tr><td colspan="4" class="empty-text">Cart is empty.</td></tr>
                     </tbody>
                 </table>
             </div>
             <div class="cart-summary-box">
                 <div>
-                    <div style="font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;">Total Checkout Sum</div>
+                    <div style="font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;">Total</div>
                     <div class="cart-total-amount" id="cartTotalDisplay">₦0.00</div>
                 </div>
-                <button class="btn-sm-primary" style="padding:12px 24px;font-size:14px;flex:unset;" onclick="triggerHaptic();checkoutCart()">Purchase All Items</button>
+                <button class="btn-sm-primary" style="padding:12px 24px;flex:unset;" onclick="checkoutCart()">Checkout</button>
             </div>
         </div>
     </section>
 
-    <!-- DEPOSIT SECTION -->
     <section id="deposit" class="app-section">
         <div class="content-card">
-            <h2><i class="fa-solid fa-credit-card" style="color:var(--primary-color);margin-right:8px;"></i>Deposit</h2>
-            <p class="helper-text">Fund your NGN or USD wallet through your preferred payment channel.</p>
+            <h2>Deposit</h2>
+            <p class="helper-text">Fund your wallet through preferred channel.</p>
             <div class="form-group">
-                <label>Payment Provider / Channel</label>
+                <label>Payment Provider</label>
                 <select id="depositProviderSelect">
-                    <option value="Bank Transfer">Bank Transfer (Automated NUBAN)</option>
-                    <option value="Card Payment">Card Payment (Flutterwave / Paystack)</option>
-                    <option value="Crypto Deposit">Crypto Deposit (USDT / BTC Gateway)</option>
+                    <option value="Bank Transfer">Bank Transfer</option>
+                    <option value="Card Payment">Card Payment</option>
+                    <option value="Crypto">Crypto</option>
                 </select>
             </div>
             <div class="form-group">
-                <label>Select Wallet to Fund</label>
+                <label>Wallet to Fund</label>
                 <select id="depositWalletSelect">
-                    <option value="ngn">Naira Wallet (NGN ₦)</option>
-                    <option value="usd">USD Wallet ($)</option>
+                    <option value="ngn">NGN Wallet</option>
+                    <option value="usd">USD Wallet</option>
                 </select>
             </div>
             <div class="form-group">
                 <label>Amount</label>
-                <input type="number" id="depositInput" placeholder="Enter amount (e.g. 5000)">
+                <input type="number" id="depositInput" placeholder="Enter amount">
             </div>
-            <button class="btn-sm-primary" style="width:100%;padding:14px;font-size:14px;" onclick="triggerHaptic();processDeposit()">Proceed to Payment</button>
+            <button class="btn-sm-primary" style="width:100%;padding:14px;" onclick="processDeposit()">Proceed to Payment</button>
         </div>
     </section>
 
 </main>
 
-<!-- SUPPORT WIDGET -->
 <div id="support-widget" class="support-widget-container">
-    <button id="support-toggle-btn" class="support-toggle-btn" aria-label="Support">
+    <button id="support-toggle-btn" class="support-toggle-btn">
         <span class="support-icon"><i class="fa-solid fa-headset"></i></span>
         <span class="support-badge-tag">Help</span>
     </button>
@@ -980,333 +541,285 @@ button:active, .hero-btn:active, .btn-sm-primary:active, .btn-sm-outline:active,
         <div class="support-popup-header">
             <button id="support-close-btn" class="support-close-inner">&times;</button>
             <h3>Need help?</h3>
-            <p>We typically reply in minutes</p>
+            <p>We reply in minutes</p>
             <div class="support-status-indicator">
                 <span class="status-dot"></span>
                 <span>Support online 24/7</span>
             </div>
         </div>
         <div class="support-popup-body">
-            <a href="https://wa.me/2348XXXXXXXXX" target="_blank" rel="noopener noreferrer" class="support-channel-item" onclick="triggerHaptic()">
+            <a href="https://wa.me/2348XXXXXXXXX" target="_blank" class="support-channel-item">
                 <div class="channel-icon-wrap whatsapp"><i class="fa-brands fa-whatsapp"></i></div>
-                <div class="channel-info"><h4>WhatsApp</h4><p>Chat with MJ Support on WhatsApp</p></div>
+                <div class="channel-info"><h4>WhatsApp</h4><p>Chat with support</p></div>
             </a>
-            <a href="https://t.me/XXXXXXXXX" target="_blank" rel="noopener noreferrer" class="support-channel-item" onclick="triggerHaptic()">
+            <a href="https://t.me/XXXXX" target="_blank" class="support-channel-item">
                 <div class="channel-icon-wrap telegram"><i class="fa-brands fa-telegram"></i></div>
-                <div class="channel-info"><h4>Telegram</h4><p>Chat with MJ Support on Telegram</p></div>
+                <div class="channel-info"><h4>Telegram</h4><p>Chat with support</p></div>
             </a>
         </div>
     </div>
 </div>
 
-<!-- CHANGE PASSWORD MODAL -->
 <div class="currency-modal" id="changePasswordModal">
     <div class="currency-modal-card">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;">
-            <div style="font-size:18px;font-weight:800;color:var(--text-main);display:flex;align-items:center;gap:10px;"><i class="fa-solid fa-shield-halved" style="color:var(--primary-color);"></i> Change Password</div>
-            <button onclick="triggerHaptic();closeChangePasswordModal()" style="background:var(--bg-main);border:1px solid var(--border-color);width:32px;height:32px;border-radius:50%;cursor:pointer;font-size:14px;color:var(--text-main);">✕</button>
+            <div style="font-size:18px;font-weight:800;">Change Password</div>
+            <button onclick="closeChangePasswordModal()" style="background:var(--bg-main);border:1px solid var(--border-color);width:32px;height:32px;border-radius:50%;cursor:pointer;color:var(--text-main);">✕</button>
         </div>
         <div class="form-group">
             <label>New Password</label>
             <input type="password" id="newPasswordInput" placeholder="••••••••">
         </div>
         <div class="form-group">
-            <label>Confirm New Password</label>
+            <label>Confirm Password</label>
             <input type="password" id="confirmPasswordInput" placeholder="••••••••">
         </div>
-        <button class="btn-sm-primary" style="width:100%;padding:14px;font-size:14px;" onclick="triggerHaptic();submitNewPassword()">Update Password</button>
+        <button class="btn-sm-primary" style="width:100%;padding:14px;" onclick="submitNewPassword()">Update Password</button>
     </div>
 </div>
 
-<!-- TRANSACTION RECEIPT MODAL -->
-<div class="currency-modal" id="transactionReceiptModal">
-    <div class="currency-modal-card">
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:18px;border-bottom:1px solid var(--border-color);padding-bottom:12px;">
-            <div style="font-size:18px;font-weight:800;color:var(--text-main);display:flex;align-items:center;gap:8px;"><i class="fa-solid fa-shield-check" style="color:var(--success-color);"></i> Transaction Receipt</div>
-            <button onclick="triggerHaptic();closeTransactionReceipt()" style="background:var(--bg-main);border:1px solid var(--border-color);width:32px;height:32px;border-radius:50%;cursor:pointer;font-size:14px;color:var(--text-main);">✕</button>
-        </div>
-        <div id="receiptContentBody" style="display:flex;flex-direction:column;gap:10px;font-size:13px;margin-bottom:20px;"></div>
-        <button class="btn-sm-primary" style="width:100%;padding:14px;font-size:14px;" onclick="triggerHaptic();closeTransactionReceipt()">Close Receipt</button>
-    </div>
-</div>
-
-<!-- CURRENCY CONVERTER MODAL -->
 <div class="currency-modal" id="currencyConverterModal">
     <div class="currency-modal-card">
         <div class="converter-pro-header">
-            <div class="converter-pro-title">
-                <span><i class="fa-solid fa-right-left"></i></span> Currency Converter
-            </div>
-            <button onclick="triggerHaptic();closeCurrencyModal()" style="background:var(--bg-main);border:1px solid var(--border-color);width:34px;height:34px;border-radius:50%;cursor:pointer;font-size:15px;color:var(--text-main);">✕</button>
+            <div class="converter-pro-title"><span><i class="fa-solid fa-right-left"></i></span> Converter</div>
+            <button onclick="closeCurrencyModal()" style="background:var(--bg-main);border:1px solid var(--border-color);width:34px;height:34px;border-radius:50%;cursor:pointer;color:var(--text-main);">✕</button>
         </div>
         <div class="converter-grid-layout">
             <div class="converter-panel-card">
                 <div class="converter-panel-top">
                     <span class="converter-field-label">You Send</span>
-                    <div class="currency-selector-badge">
-                        <span id="fromCurrencySymbol">₦</span> <strong id="fromCurrencyCode">NGN</strong>
-                    </div>
+                    <div class="currency-selector-badge"><span id="fromCurrencySymbol">₦</span> <strong id="fromCurrencyCode">NGN</strong></div>
                 </div>
-                <input type="number" id="baseConvertInput" class="converter-input-field" placeholder="0.00" oninput="triggerHaptic();executeConversion()">
+                <input type="number" id="baseConvertInput" class="converter-input-field" placeholder="0.00" oninput="executeConversion()">
             </div>
             <div class="converter-swap-vector-wrap">
-                <div class="converter-swap-vector-btn" onclick="triggerHaptic();invertCurrencies()" title="Invert Currency">
-                    <i class="fa-solid fa-arrow-down-up"></i>
-                </div>
+                <div class="converter-swap-vector-btn" onclick="invertCurrencies()"><i class="fa-solid fa-arrow-down-up"></i></div>
             </div>
             <div class="converter-panel-card">
                 <div class="converter-panel-top">
-                    <span class="converter-field-label">You Receive (Estimated)</span>
-                    <div class="currency-selector-badge">
-                        <span id="toCurrencySymbol">$</span> <strong id="toCurrencyCode">USD</strong>
-                    </div>
+                    <span class="converter-field-label">You Receive</span>
+                    <div class="currency-selector-badge"><span id="toCurrencySymbol">$</span> <strong id="toCurrencyCode">USD</strong></div>
                 </div>
                 <input type="text" id="targetConvertOutput" class="converter-input-field" placeholder="0.00" readonly style="color:var(--primary-color);">
             </div>
         </div>
         <div class="quantum-metrics-grid">
-            <div class="metric-pill-box"><span>Exchange Rate</span><strong id="rateDisplay">1 USD = ₦1,420</strong></div>
-            <div class="metric-pill-box"><span>Processing</span><strong>Instant</strong></div>
+            <div class="metric-pill-box"><span>Rate</span><strong id="rateDisplay">1 USD = ₦1,420</strong></div>
+            <div class="metric-pill-box"><span>Speed</span><strong>Instant</strong></div>
             <div class="metric-pill-box"><span>Fee</span><strong style="color:var(--success-color);">Free</strong></div>
         </div>
         <div class="conversion-loading-box" id="conversionLoadingBox">
             <div class="spinner-icon"></div>
-            <span id="conversionStatusText">Converting currency...</span>
+            <span id="conversionStatusText">Converting...</span>
         </div>
-        <button class="btn-sm-primary" id="executeConversionBtn" style="width:100%;padding:15px;font-size:15px;font-weight:700;border-radius:16px;" onclick="triggerHaptic();commitSwapTransaction()">Convert Currency</button>
+        <button class="btn-sm-primary" id="executeConversionBtn" style="width:100%;padding:15px;" onclick="commitSwapTransaction()">Convert</button>
     </div>
 </div>
 
-<!-- ACTIVITY HISTORY DRAWER -->
 <div class="activity-history-drawer" id="activityHistoryDrawer">
     <div class="drawer-drag-handle"></div>
     <div class="drawer-header-row">
         <div class="drawer-title-area">
             <h3><i class="fa-solid fa-clock-rotate-left"></i> Activity History</h3>
-            <p>Your recent transactions and orders</p>
+            <p>Your recent transactions</p>
         </div>
-        <button class="drawer-close-btn" onclick="triggerHaptic();toggleActivityHistory()"><i class="fa-solid fa-xmark"></i></button>
+        <button class="drawer-close-btn" onclick="toggleActivityHistory()"><i class="fa-solid fa-xmark"></i></button>
     </div>
     <div class="drawer-filter-scroll">
-        <button class="filter-tab active" onclick="triggerHaptic();filterTransactions('all',this)">🕒 All</button>
-        <button class="filter-tab" onclick="triggerHaptic();filterTransactions('log',this)">📦 Log Orders</button>
-        <button class="filter-tab" onclick="triggerHaptic();filterTransactions('sms',this)">📱 SMS Numbers</button>
-        <button class="filter-tab" onclick="triggerHaptic();filterTransactions('deposit',this)">💳 Deposits</button>
-        <button class="filter-tab" onclick="triggerHaptic();filterTransactions('booster',this)">⚡ Boosters</button>
-        <button class="filter-tab" onclick="triggerHaptic();filterTransactions('conversion',this)">🔄 Conversions</button>
+        <button class="filter-tab active" onclick="filterTransactions('all',this)">All</button>
+        <button class="filter-tab" onclick="filterTransactions('log',this)">Logs</button>
+        <button class="filter-tab" onclick="filterTransactions('sms',this)">SMS</button>
+        <button class="filter-tab" onclick="filterTransactions('deposit',this)">Deposits</button>
+        <button class="filter-tab" onclick="filterTransactions('booster',this)">Boosters</button>
+        <button class="filter-tab" onclick="filterTransactions('conversion',this)">Conversions</button>
     </div>
     <div class="transaction-list" id="transactionListContainer"></div>
 </div>
 
-<!-- FLOATING ACTION MODAL -->
 <div class="floating-action-modal" id="floatingPopupModal">
     <div class="popup-header-row">
         <div class="popup-title"><i class="fa-solid fa-bolt"></i> Quick Actions</div>
-        <button class="popup-close" onclick="triggerHaptic();toggleFloatingPopup()"><i class="fa-solid fa-xmark"></i></button>
+        <button class="popup-close" onclick="toggleFloatingPopup()"><i class="fa-solid fa-xmark"></i></button>
     </div>
     <div class="popup-grid">
-        <div class="popup-item" onclick="triggerHaptic();switchSection('deposit');toggleFloatingPopup();">
+        <div class="popup-item" onclick="switchSection('deposit');toggleFloatingPopup();">
             <div class="popup-icon-badge"><i class="fa-solid fa-credit-card"></i></div>
             <span>Deposit</span>
         </div>
-        <div class="popup-item" onclick="triggerHaptic();switchSection('booster');toggleFloatingPopup();">
+        <div class="popup-item" onclick="switchSection('booster');toggleFloatingPopup();">
             <div class="popup-icon-badge"><i class="fa-solid fa-bolt"></i></div>
-            <span>MJ Boosters</span>
+            <span>Boosters</span>
         </div>
-        <div class="popup-item" onclick="triggerHaptic();switchSection('sms');toggleFloatingPopup();">
+        <div class="popup-item" onclick="switchSection('sms');toggleFloatingPopup();">
             <div class="popup-icon-badge"><i class="fa-solid fa-mobile-screen"></i></div>
-            <span>MJ SMS</span>
+            <span>SMS</span>
         </div>
-        <div class="popup-item" onclick="triggerHaptic();switchSection('logs');toggleFloatingPopup();">
+        <a href="mj-logs.html" class="popup-item">
             <div class="popup-icon-badge"><i class="fa-solid fa-box-archive"></i></div>
             <span>MJ Logs</span>
-        </div>
-        <div class="popup-item" onclick="triggerHaptic();openCurrencyModal();toggleFloatingPopup();">
+        </a>
+        <div class="popup-item" onclick="openCurrencyModal();toggleFloatingPopup();">
             <div class="popup-icon-badge"><i class="fa-solid fa-right-left"></i></div>
             <span>Converter</span>
         </div>
-        <div class="popup-item" onclick="triggerHaptic();switchSection('profile');toggleFloatingPopup();">
+        <div class="popup-item" onclick="switchSection('profile');toggleFloatingPopup();">
             <div class="popup-icon-badge"><i class="fa-solid fa-gear"></i></div>
             <span>Settings</span>
         </div>
     </div>
 </div>
 
-<!-- Mobile Bottom Nav -->
 <nav class="bottom-nav">
-    <button class="nav-item active" id="navHome" onclick="triggerHaptic();switchSection('home')">
+    <button class="nav-item active" id="navHome" onclick="switchSection('home')">
         <svg viewBox="0 0 24 24"><path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"/></svg>
         <span>Home</span>
     </button>
-    <button class="nav-item" id="navHistory" onclick="triggerHaptic();toggleActivityHistory()">
+    <button class="nav-item" onclick="toggleActivityHistory()">
         <svg viewBox="0 0 24 24"><path d="M13 3a9 9 0 0 0-9 9H1l3.89 3.89.07.14L9 12H6a7 7 0 1 1 7 7 7 7 0 0 1-7-7h-2a9 9 0 1 0 9-9zm-1 5v5l4.28 2.54.72-1.21-3.5-2.08V8H12z"/></svg>
         <span>History</span>
     </button>
-    <div class="nav-item action-btn" onclick="triggerHaptic();toggleFloatingPopup()">
+    <div class="nav-item" onclick="toggleFloatingPopup()">
         <div class="plus-circle">+</div>
     </div>
-    <button class="nav-item" id="navCart" onclick="triggerHaptic();switchSection('cart')">
+    <button class="nav-item" id="navCart" onclick="switchSection('cart')">
         <svg viewBox="0 0 24 24"><path d="M7 18c-1.1 0-1.99.9-1.99 2S5.9 22 7 22s2-.9 2-2-.9-2-2-2zM1 2v2h2l3.6 7.59-1.35 2.45c-.16.28-.25.61-.25.96 0 1.1.9 2 2 2h12v-2H7.42c-.14 0-.25-.11-.25-.25l.03-.12.9-1.63h7.45c.75 0 1.41-.41 1.75-1.03l3.58-6.49c.08-.14.12-.31.12-.48 0-.55-.45-1-1-1H5.21l-.94-2H1zm16 16c-1.1 0-1.99.9-1.99 2s.89 2 1.99 2 2-.9 2-2-.9-2-2-2z"/></svg>
         <span>Cart</span>
     </button>
-    <button class="nav-item" id="navProfile" onclick="triggerHaptic();switchSection('profile')">
+    <button class="nav-item" id="navProfile" onclick="switchSection('profile')">
         <svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 3c1.66 0 3 1.34 3 3s-1.34 3-3 3-3-1.34-3-3 1.34-3 3-3zm0 14.2c-2.5 0-4.71-1.28-6-3.22.03-1.99 4-3.08 6-3.08 1.99 0 5.97 1.09 6 3.08-1.29 1.94-3.5 3.22-6 3.22z"/></svg>
         <span>Profile</span>
     </button>
 </nav>
 
 <script>
-/* ==========================================
-   MJ HUB v6.0 - Application Logic
-   ========================================== */
-
 const SUPABASE_URL = 'https://atczodlljmlayvldxfmv.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImF0Y3pvZGxsam1sYXl2bGR4Zm12Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODUwNzUyMzgsImV4cCI6MjEwMDY1MTIzOH0.ufthD-p7BmeD_B7xyuMM6PNPL8DmcL4AtRYgg-MuoLI';
 
-// ⚠️ IMPORTANT: Replace SUPABASE_ANON_KEY above with your actual anon key from:
-// Supabase Dashboard → Settings → API → anon public key
-// The publishable key in your original code is not a valid JWT anon key
-
 let supabaseClient = null;
-try {
-    if (window.supabase) {
-        supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-    }
-} catch(e) {
-    console.error('Supabase init error:', e);
+if (window.supabase) {
+    supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 }
 
-// ==========================================
-// STATE MANAGEMENT
-// ==========================================
-let currentBalanceNgn = 0.00;
-let currentBalanceUsd = 0.00;
+let currentBalanceNgn = 0.00, currentBalanceUsd = 0.00;
 const exchangeRateUsdToNgn = 1420.0;
 let currentFromCurrency = 'NGN';
 let cartItems = [];
 let transactions = [];
-let allProducts = [];
-let userData = { name: '', email: '', phone: '', address: '', bio: '', avatarUrl: '' };
+let userData = { name: '', email: '', avatarUrl: '' };
 let currentUserId = null;
 
-// ==========================================
-// TOAST NOTIFICATION SYSTEM
-// ==========================================
-function showToast(message, type = 'info', duration = 3500) {
-    const container = document.getElementById('toastContainer');
-    const icons = { success: '✅', error: '❌', info: 'ℹ️', warning: '⚠️' };
-    const toast = document.createElement('div');
-    toast.className = `toast toast-${type}`;
-    toast.innerHTML = `<span class="toast-icon">${icons[type] || 'ℹ️'}</span><span>${message}</span>`;
-    container.appendChild(toast);
-    setTimeout(() => {
-        toast.classList.add('toast-out');
-        setTimeout(() => toast.remove(), 300);
-    }, duration);
-}
+// Restore cart from localStorage (syncs with mj-logs.html)
+try {
+    const stored = JSON.parse(localStorage.getItem('mjhub_cart') || '[]');
+    if (Array.isArray(stored)) cartItems = stored;
+} catch(e) {}
 
-// ==========================================
-// HAPTIC FEEDBACK
-// ==========================================
-function triggerHaptic() {
-    if (navigator.vibrate) { navigator.vibrate(25); }
-}
-
-// ==========================================
-// DOM READY
-// ==========================================
-document.addEventListener('DOMContentLoaded', async () => {
-    // Auth Check
-    if (supabaseClient) {
-        const { data: { session }, error } = await supabaseClient.auth.getSession();
-        if (!session || error) {
-            window.location.href = 'landing.html';
-            return;
-        }
-        currentUserId = session.user.id;
-        await initUserData(session.user);
-        await fetchUserBalance(currentUserId);
-        await fetchUserTransactions(currentUserId);
-        setupRealtimeBalanceSubscription(currentUserId);
-    }
-
-    initSupportWidgetAndDragging();
-    loadCustomerProfileBadge();
-    loadMJLogsProducts();
-    initNavigation();
-    initTheme();
-    initDropdowns();
-});
-
-// ==========================================
-// USER DATA INITIALIZATION
-// ==========================================
-async function initUserData(user) {
-    const meta = user.user_metadata || {};
-    const userEmail = user.email || '';
-    const displayName = meta.full_name || meta.username || userEmail.split('@')[0] || 'User';
-
-    userData = {
-        email: userEmail,
-        name: displayName,
-        phone: meta.phone || '',
-        address: meta.address || '',
-        bio: meta.bio || '',
-        avatarUrl: meta.avatar_url || ''
-    };
-
-    // Update UI elements
-    safeSet('dropdownName', displayName);
-    safeSet('dropdownEmail', userEmail);
-    safeSet('profileHeaderName', displayName);
-    safeSet('profileHeaderEmail', userEmail);
-    safeSet('heroWelcomeTitle', `Welcome back, ${displayName}! 👋`);
-    safeSet('heroSubText', 'Your MJ HUB dashboard is ready. Browse logs, SMS numbers, and boosters.');
-
-    if (userData.avatarUrl) {
-        safeSetHTML('headerAvatarText', `<img src="${userData.avatarUrl}" alt="Avatar" style="width:100%;height:100%;object-fit:cover;border-radius:12px;">`);
-        safeSetHTML('profileAvatarInitial', `<img src="${userData.avatarUrl}" alt="Avatar" style="width:100%;height:100%;object-fit:cover;">`);
-    } else {
-        const initial = displayName.charAt(0).toUpperCase();
-        safeSet('headerAvatarText', initial);
-        safeSet('profileAvatarInitial', initial);
-    }
-
-    const fields = ['profileNameInput', 'profileEmailInput', 'profilePhoneInput', 'profileAddressInput', 'profileBioInput'];
-    const values = [userData.name, userData.email, userData.phone, userData.address, userData.bio];
-    fields.forEach((id, i) => { const el = document.getElementById(id); if(el) el.value = values[i]; });
-}
-
+function saveCart() { localStorage.setItem('mjhub_cart', JSON.stringify(cartItems)); }
 function safeSet(id, text) { const el = document.getElementById(id); if(el) el.textContent = text; }
 function safeSetHTML(id, html) { const el = document.getElementById(id); if(el) el.innerHTML = html; }
 
-// ==========================================
-// NAVIGATION SYSTEM
-// ==========================================
+function showToast(message, type = 'info', duration = 3000) {
+    const container = document.getElementById('toastContainer');
+    const icons = { success: '✅', error: '❌', info: 'ℹ️', warning: '⚠️' };
+    const toast = document.createElement('div');
+    toast.className = `toast ${type}`;
+    toast.innerHTML = `<span>${icons[type] || 'ℹ️'}</span><span>${message}</span>`;
+    container.appendChild(toast);
+    setTimeout(() => toast.remove(), duration);
+}
+
+function escapeHtml(str) {
+    if (!str) return '';
+    return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+}
+
+function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+document.addEventListener('DOMContentLoaded', async () => {
+    if (supabaseClient) {
+        try {
+            const { data: { session } } = await supabaseClient.auth.getSession();
+            if (session) {
+                currentUserId = session.user.id;
+                await initUserData(session.user);
+                await fetchUserBalance(currentUserId);
+                await fetchUserTransactions(currentUserId);
+            }
+        } catch(e) { console.log('No session'); }
+    }
+
+    initNavigation();
+    initTheme();
+    initDropdowns();
+    initSupportWidget();
+    updateCartDisplay();
+    initHashRouting();
+});
+
+// ✅ HASH ROUTING - remembers section on refresh
+function initHashRouting() {
+    const validSections = ['home', 'profile', 'sms', 'booster', 'cart', 'deposit'];
+    const hash = window.location.hash.replace('#', '');
+    if (hash && validSections.includes(hash)) {
+        switchSection(hash);
+    }
+    window.addEventListener('hashchange', () => {
+        const newHash = window.location.hash.replace('#', '') || 'home';
+        if (validSections.includes(newHash)) switchSection(newHash, true);
+    });
+}
+
+async function initUserData(user) {
+    const meta = user.user_metadata || {};
+    const email = user.email || '';
+    const name = meta.full_name || email.split('@')[0] || 'User';
+    userData = { name, email, avatarUrl: meta.avatar_url || '' };
+    safeSet('dropdownName', name);
+    safeSet('dropdownEmail', email);
+    safeSet('profileHeaderName', name);
+    safeSet('profileHeaderEmail', email);
+    safeSet('heroWelcomeTitle', `Welcome back, ${name}!`);
+    if (userData.avatarUrl) {
+        safeSetHTML('headerAvatarText', `<img src="${userData.avatarUrl}">`);
+        safeSetHTML('profileAvatarInitial', `<img src="${userData.avatarUrl}">`);
+    } else {
+        safeSet('headerAvatarText', name.charAt(0).toUpperCase());
+        safeSet('profileAvatarInitial', name.charAt(0).toUpperCase());
+    }
+    const nameInput = document.getElementById('profileNameInput');
+    const emailInput = document.getElementById('profileEmailInput');
+    if (nameInput) nameInput.value = name;
+    if (emailInput) emailInput.value = email;
+    const idInput = document.getElementById('myCustomerId');
+    if (idInput) idInput.value = user.id;
+}
+
 function initNavigation() {
-    const allSections = document.querySelectorAll('.app-section');
+    const sections = document.querySelectorAll('.app-section');
     const sidebarLinks = document.querySelectorAll('.sidebar-link');
     const sidebar = document.getElementById('sidebarDrawer');
     const overlay = document.getElementById('sidebarOverlay');
-    const menuToggle = document.getElementById('menuToggleBtn');
-    const sidebarClose = document.getElementById('sidebarCloseBtn');
 
-    window.switchSection = function(sectionId) {
-        allSections.forEach(s => s.classList.remove('active'));
-        const target = document.getElementById(sectionId);
+    window.switchSection = function(id, skipHash) {
+        sections.forEach(s => s.classList.remove('active'));
+        const target = document.getElementById(id);
         if (target) target.classList.add('active');
 
-        sidebarLinks.forEach(link => {
-            link.classList.remove('active');
-            if (link.getAttribute('data-target') === sectionId) link.classList.add('active');
+        sidebarLinks.forEach(l => {
+            l.classList.remove('active');
+            if (l.getAttribute('data-target') === id) l.classList.add('active');
         });
 
-        // Update bottom nav active state
-        const navMap = { home: 'navHome', cart: 'navCart', profile: 'navProfile' };
         document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
-        if (navMap[sectionId]) {
-            const navEl = document.getElementById(navMap[sectionId]);
-            if (navEl) navEl.classList.add('active');
+        const navMap = { home: 'navHome', cart: 'navCart', profile: 'navProfile' };
+        if (navMap[id]) {
+            const el = document.getElementById(navMap[id]);
+            if (el) el.classList.add('active');
+        }
+
+        // ✅ Update URL hash so refresh remembers where you are
+        if (!skipHash) {
+            history.replaceState(null, '', '#' + id);
         }
 
         window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -1321,56 +834,38 @@ function initNavigation() {
         });
     });
 
-    menuToggle.addEventListener('click', () => { sidebar.classList.add('open'); overlay.classList.add('active'); });
-    sidebarClose.addEventListener('click', () => { sidebar.classList.remove('open'); overlay.classList.remove('active'); });
-
+    document.getElementById('menuToggleBtn').addEventListener('click', () => {
+        sidebar.classList.add('open');
+        overlay.classList.add('active');
+    });
+    document.getElementById('sidebarCloseBtn').addEventListener('click', () => {
+        sidebar.classList.remove('open');
+        overlay.classList.remove('active');
+    });
     overlay.addEventListener('click', () => {
         sidebar.classList.remove('open');
         overlay.classList.remove('active');
-        closeAllModals();
+        document.getElementById('activityHistoryDrawer').classList.remove('active');
     });
 }
 
-function closeAllModals() {
-    ['profileDropdownMenu','notificationDropdown','floatingPopupModal',
-     'changePasswordModal','currencyConverterModal','transactionReceiptModal',
-     'activityHistoryDrawer'].forEach(id => {
-        const el = document.getElementById(id);
-        if (el) el.classList.remove('active');
-    });
-}
-
-// ==========================================
-// THEME SYSTEM
-// ==========================================
 function initTheme() {
-    const themeToggleBtn = document.getElementById('themeToggleBtn');
-    const dropdownThemeToggleBtn = document.getElementById('dropdownThemeToggleBtn');
-
-    function toggleAppTheme() {
+    const btn = document.getElementById('themeToggleBtn');
+    function toggle() {
         const html = document.documentElement;
         const isDark = html.getAttribute('data-theme') === 'dark';
         html.setAttribute('data-theme', isDark ? 'light' : 'dark');
-        if (themeToggleBtn) themeToggleBtn.textContent = isDark ? '☀️' : '🌙';
-        if (dropdownThemeToggleBtn) dropdownThemeToggleBtn.textContent = isDark ? 'Light' : 'Dark';
-        const indicator = document.getElementById('themeIndicatorText');
-        if (indicator) indicator.textContent = isDark ? 'Light' : 'Dark';
+        btn.textContent = isDark ? '☀️' : '🌙';
+        const ind = document.getElementById('themeIndicatorText');
+        if (ind) ind.textContent = isDark ? 'Light' : 'Dark';
         localStorage.setItem('mjhub-theme', isDark ? 'light' : 'dark');
     }
-
-    // Load saved theme
-    const savedTheme = localStorage.getItem('mjhub-theme') || 'dark';
-    document.documentElement.setAttribute('data-theme', savedTheme);
-    if (themeToggleBtn) themeToggleBtn.textContent = savedTheme === 'dark' ? '🌙' : '☀️';
-    if (dropdownThemeToggleBtn) dropdownThemeToggleBtn.textContent = savedTheme === 'dark' ? 'Dark' : 'Light';
-
-    if (themeToggleBtn) themeToggleBtn.addEventListener('click', toggleAppTheme);
-    if (dropdownThemeToggleBtn) dropdownThemeToggleBtn.addEventListener('click', toggleAppTheme);
+    const saved = localStorage.getItem('mjhub-theme') || 'dark';
+    document.documentElement.setAttribute('data-theme', saved);
+    btn.textContent = saved === 'dark' ? '🌙' : '☀️';
+    btn.addEventListener('click', toggle);
 }
 
-// ==========================================
-// DROPDOWN SYSTEM
-// ==========================================
 function initDropdowns() {
     const profileToggle = document.getElementById('profileDropdownToggle');
     const profileDropdown = document.getElementById('profileDropdownMenu');
@@ -1378,813 +873,93 @@ function initDropdowns() {
     const notifDropdown = document.getElementById('notificationDropdown');
     const notifDot = document.getElementById('notifDot');
 
-    if (profileToggle) {
-        profileToggle.addEventListener('click', (e) => {
-            e.stopPropagation();
-            profileDropdown.classList.toggle('active');
-            if (notifDropdown) notifDropdown.classList.remove('active');
-        });
-    }
-
-    if (notifBtn) {
-        notifBtn.addEventListener('click', (e) => {
-            e.stopPropagation();
-            notifDropdown.classList.toggle('active');
-            if (profileDropdown) profileDropdown.classList.remove('active');
-            if (notifDot) notifDot.style.display = 'none';
-        });
-    }
-
-    document.addEventListener('click', (e) => {
-        if (profileDropdown && !profileDropdown.contains(e.target) && e.target !== profileToggle) {
-            profileDropdown.classList.remove('active');
-        }
-        if (notifDropdown && !notifDropdown.contains(e.target) && e.target !== notifBtn) {
-            notifDropdown.classList.remove('active');
-        }
-        const widget = document.getElementById('support-widget');
-        const popup = document.getElementById('support-popup');
-        if (widget && popup && !widget.contains(e.target)) {
-            popup.classList.remove('active');
-        }
+    profileToggle.addEventListener('click', (e) => {
+        e.stopPropagation();
+        profileDropdown.classList.toggle('active');
+        notifDropdown.classList.remove('active');
+    });
+    notifBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        notifDropdown.classList.toggle('active');
+        profileDropdown.classList.remove('active');
+        notifDot.style.display = 'none';
+    });
+    document.addEventListener('click', () => {
+        profileDropdown.classList.remove('active');
+        notifDropdown.classList.remove('active');
     });
 }
-
-window.toggleProfileDropdown = function() {
-    const profileDropdown = document.getElementById('profileDropdownMenu');
-    if (profileDropdown) profileDropdown.classList.toggle('active');
-};
 
 window.toggleFloatingPopup = function() {
-    const modal = document.getElementById('floatingPopupModal');
-    if (modal) modal.classList.toggle('active');
+    document.getElementById('floatingPopupModal').classList.toggle('active');
 };
 
-// ==========================================
-// MJ LOGS - PRODUCT LOADING
-// ==========================================
-async function loadMJLogsProducts() {
-    const grid = document.getElementById('logsProductGrid');
-    const filterRow = document.getElementById('logsFilterRow');
-    if (!grid) return;
-
-    try {
-        // Fetch from your API endpoint
-        const response = await fetch('/api/products');
-        if (!response.ok) throw new Error(`API error: ${response.status}`);
-        const data = await response.json();
-
-        if (data && data.products && data.products.length > 0) {
-            allProducts = data.products;
-        } else if (data && Array.isArray(data)) {
-            allProducts = data;
-        } else {
-            // Fallback: fetch directly from Supabase
-            if (supabaseClient) {
-                const { data: dbProducts, error } = await supabaseClient
-                    .from('products')
-                    .select('*')
-                    .order('category', { ascending: true });
-                if (dbProducts && !error) {
-                    allProducts = dbProducts;
-                }
-            }
-        }
-
-        if (allProducts.length === 0) {
-            grid.innerHTML = `
-                <div class="empty-state">
-                    <div class="empty-state-icon">📦</div>
-                    <h4>No Products Found</h4>
-                    <p>Products will appear here once synced</p>
-                </div>`;
-            return;
-        }
-
-        renderLogsProducts(allProducts, grid, filterRow);
-
-    } catch (err) {
-        console.error('Error loading products:', err);
-
-        // Try direct Supabase fallback
-        if (supabaseClient) {
-            try {
-                const { data: dbProducts, error } = await supabaseClient
-                    .from('products')
-                    .select('*')
-                    .order('category', { ascending: true });
-
-                if (dbProducts && !error && dbProducts.length > 0) {
-                    allProducts = dbProducts;
-                    renderLogsProducts(allProducts, grid, filterRow);
-                    return;
-                }
-            } catch(e2) {
-                console.error('Supabase fallback also failed:', e2);
-            }
-        }
-
-        grid.innerHTML = `
-            <div class="empty-state">
-                <div class="empty-state-icon">⚠️</div>
-                <h4>Failed to Load Products</h4>
-                <p>Check your connection and try refreshing the page</p>
-                <button class="btn-sm-primary" style="margin-top:14px;" onclick="loadMJLogsProducts()">Retry</button>
-            </div>`;
-    }
+function initSupportWidget() {
+    const btn = document.getElementById('support-toggle-btn');
+    const popup = document.getElementById('support-popup');
+    const close = document.getElementById('support-close-btn');
+    btn.addEventListener('click', (e) => { e.stopPropagation(); popup.classList.toggle('active'); });
+    close.addEventListener('click', () => popup.classList.remove('active'));
 }
 
-function renderLogsProducts(products, grid, filterRow) {
-    // Group products by category
-    const grouped = {};
-    products.forEach(p => {
-        const cat = (p.category || 'Other').trim();
-        if (!grouped[cat]) grouped[cat] = [];
-        grouped[cat].push(p);
-    });
-
-    const categories = Object.keys(grouped).sort();
-
-    // Build filter buttons
-    if (filterRow) {
-        filterRow.innerHTML = `<button class="filter-tab active" onclick="triggerHaptic();filterLogsByCategory('all',this)">All (${products.length})</button>`;
-        categories.forEach(cat => {
-            const btn = document.createElement('button');
-            btn.className = 'filter-tab';
-            btn.onclick = function() { triggerHaptic(); filterLogsByCategory(cat, this); };
-            btn.textContent = `${cat} (${grouped[cat].length})`;
-            filterRow.appendChild(btn);
-        });
-    }
-
-    // Render grouped products
-    let html = '';
-    categories.forEach(cat => {
-        const items = grouped[cat];
-        const catIcons = {
-            'Gmail': '📧', 'Facebook': '📘', 'Instagram': '📸', 'Twitter': '🐦',
-            'TikTok': '🎵', 'Snapchat': '👻', 'LinkedIn': '💼', 'YouTube': '🎬',
-            'Reddit': '🔴', 'Pinterest': '📌', 'Discord': '💬', 'Other': '📦'
-        };
-        const icon = catIcons[cat] || '📦';
-
-        html += `<div class="category-section" data-category="${cat}">
-            <div class="category-header">
-                <div class="category-icon" style="background:var(--primary-glow);">${icon}</div>
-                <span class="category-title">${cat}</span>
-                <span class="category-count">${items.length} items</span>
-            </div>
-            <div class="product-grid">`;
-
-        items.forEach(product => {
-            const price = parseFloat(product.price) || 0;
-            const title = product.name || product.title || 'Product';
-            const desc = product.description || product.subtitle || '';
-            const catSlug = (product.category || '').toLowerCase().replace(/\s+/g, '-');
-
-            html += `
-            <div class="product-item-card" data-category="${catSlug}">
-                <div class="product-info-top">
-                    <div>
-                        <div class="product-title">${escapeHtml(title)}</div>
-                        ${desc ? `<div class="helper-text" style="margin:4px 0 0;font-size:12px;">${escapeHtml(desc)}</div>` : ''}
-                        <span class="product-badge">In Stock</span>
-                    </div>
-                    <div class="product-price">₦${price.toLocaleString()}</div>
-                </div>
-                <div class="product-actions-row">
-                    <button class="btn-sm-primary" onclick="triggerHaptic();addToCart(${JSON.stringify(title)},${price},'log',${JSON.stringify(desc || title)})">Add to Cart</button>
-                    <button class="btn-sm-outline" onclick="triggerHaptic();buyNowItem(${JSON.stringify(title)},${price},'log',${JSON.stringify(desc || title)})">Buy Now</button>
-                </div>
-            </div>`;
-        });
-
-        html += `</div></div>`;
-    });
-
-    if (grid) grid.innerHTML = html;
-    showToast(`${products.length} products loaded successfully`, 'success');
-}
-
-function filterLogsByCategory(category, btnElement) {
-    const filterRow = document.getElementById('logsFilterRow');
-    if (filterRow) {
-        filterRow.querySelectorAll('.filter-tab').forEach(t => t.classList.remove('active'));
-    }
-    btnElement.classList.add('active');
-
-    const grid = document.getElementById('logsProductGrid');
-    if (!grid) return;
-
-    if (category === 'all') {
-        renderLogsProducts(allProducts, grid, null);
-        return;
-    }
-
-    const filtered = allProducts.filter(p => {
-        const cat = (p.category || '').trim();
-        return cat === category;
-    });
-
-    // Render filtered without category headers
-    let html = '<div class="product-grid">';
-    if (filtered.length === 0) {
-        html = `<div class="empty-state"><div class="empty-state-icon">🔍</div><h4>No Products in This Category</h4><p>Try another category filter</p></div>`;
-    } else {
-        filtered.forEach(product => {
-            const price = parseFloat(product.price) || 0;
-            const title = product.name || product.title || 'Product';
-            const desc = product.description || product.subtitle || '';
-            html += `
-            <div class="product-item-card">
-                <div class="product-info-top">
-                    <div>
-                        <div class="product-title">${escapeHtml(title)}</div>
-                        ${desc ? `<div class="helper-text" style="margin:4px 0 0;font-size:12px;">${escapeHtml(desc)}</div>` : ''}
-                        <span class="product-badge">In Stock</span>
-                    </div>
-                    <div class="product-price">₦${price.toLocaleString()}</div>
-                </div>
-                <div class="product-actions-row">
-                    <button class="btn-sm-primary" onclick="triggerHaptic();addToCart(${JSON.stringify(title)},${price},'log',${JSON.stringify(desc||title)})">Add to Cart</button>
-                    <button class="btn-sm-outline" onclick="triggerHaptic();buyNowItem(${JSON.stringify(title)},${price},'log',${JSON.stringify(desc||title)})">Buy Now</button>
-                </div>
-            </div>`;
-        });
-        html += '</div>';
-    }
-    grid.innerHTML = html;
-}
-
-function escapeHtml(str) {
-    if (!str) return '';
-    return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
-}
-
-// ==========================================
-// BALANCE & REALTIME
-// ==========================================
 async function fetchUserBalance(userId) {
     if (!supabaseClient) return;
     try {
-        const { data, error } = await supabaseClient
-            .from('profiles')
-            .select('balance, balance_usd')
-            .eq('id', userId)
-            .single();
-        if (data && !error) {
+        const { data } = await supabaseClient.from('profiles').select('balance, balance_usd').eq('id', userId).single();
+        if (data) {
             currentBalanceNgn = parseFloat(data.balance) || 0;
             currentBalanceUsd = parseFloat(data.balance_usd) || 0;
             updateBalanceDisplay();
         }
-    } catch(err) { console.error('Balance fetch error:', err); }
+    } catch(e) {}
 }
 
 async function fetchUserTransactions(userId) {
     if (!supabaseClient) return;
     try {
-        const { data, error } = await supabaseClient
-            .from('transactions')
-            .select('*')
-            .eq('user_id', userId)
-            .order('created_at', { ascending: false })
-            .limit(50);
-
-        if (data && !error) {
+        const { data } = await supabaseClient.from('transactions').select('*').eq('user_id', userId).order('created_at', {ascending: false}).limit(50);
+        if (data) {
             transactions = data.map(tx => ({
-                id: tx.id,
-                type: tx.type || 'deposit',
-                title: tx.title || 'Transaction',
-                subtitle: tx.subtitle || 'MJ HUB Record',
-                amount: tx.amount || '₦0.00',
+                id: tx.id, type: tx.type || 'deposit', title: tx.title || 'Transaction',
+                subtitle: tx.subtitle || '', amount: tx.amount || '₦0.00',
                 date: new Date(tx.created_at).toLocaleString(),
                 status: tx.status || 'Success',
-                paymentProvider: tx.payment_provider || 'MJ HUB Gateway',
-                channel: tx.channel || 'Wallet Action'
+                paymentProvider: tx.payment_provider || 'MJ HUB', channel: tx.channel || 'Wallet'
             }));
-            renderTransactions('all');
-            renderRecentActivityPreview();
+            renderRecentActivity();
         }
-    } catch(err) { console.error('Transactions fetch error:', err); }
+    } catch(e) {}
 }
 
-async function saveTransactionToSupabase(txObj) {
+async function saveTransaction(tx) {
     if (!supabaseClient || !currentUserId) return;
     try {
         await supabaseClient.from('transactions').insert([{
-            user_id: currentUserId,
-            type: txObj.type,
-            title: txObj.title,
-            subtitle: txObj.subtitle,
-            amount: txObj.amount,
-            status: txObj.status,
-            payment_provider: txObj.paymentProvider,
-            channel: txObj.channel
+            user_id: currentUserId, type: tx.type, title: tx.title,
+            subtitle: tx.subtitle, amount: tx.amount, status: tx.status,
+            payment_provider: tx.paymentProvider, channel: tx.channel
         }]);
-    } catch(err) { console.error('Save transaction error:', err); }
+    } catch(e) {}
 }
 
 function updateBalanceDisplay() {
-    const ngnStr = '₦' + currentBalanceNgn.toLocaleString(undefined, {minimumFractionDigits:2,maximumFractionDigits:2});
-    const usdStr = '$' + currentBalanceUsd.toLocaleString(undefined, {minimumFractionDigits:2,maximumFractionDigits:2});
-    safeSet('homeNgnBalance', ngnStr);
-    safeSet('homeUsdBalance', usdStr);
-    safeSet('navWalletBadge', 'NGN ' + ngnStr);
+    safeSet('homeNgnBalance', '₦' + currentBalanceNgn.toLocaleString(undefined, {minimumFractionDigits:2}));
+    safeSet('homeUsdBalance', '$' + currentBalanceUsd.toLocaleString(undefined, {minimumFractionDigits:2}));
+    safeSet('navWalletBadge', 'NGN ₦' + currentBalanceNgn.toLocaleString(undefined, {minimumFractionDigits:2}));
 }
 
-function setupRealtimeBalanceSubscription(userId) {
-    if (!supabaseClient) return;
-    supabaseClient
-        .channel('profiles-balance-' + userId)
-        .on('postgres_changes', {
-            event: 'UPDATE', schema: 'public', table: 'profiles', filter: `id=eq.${userId}`
-        }, (payload) => {
-            if (payload.new) {
-                if (payload.new.balance !== undefined) currentBalanceNgn = parseFloat(payload.new.balance) || 0;
-                if (payload.new.balance_usd !== undefined) currentBalanceUsd = parseFloat(payload.new.balance_usd) || 0;
-                updateBalanceDisplay();
-                showToast('Balance updated!', 'info', 2000);
-            }
-        })
-        .subscribe();
-}
-
-// ==========================================
-// RECENT ACTIVITY PREVIEW (Dashboard)
-// ==========================================
-function renderRecentActivityPreview() {
+function renderRecentActivity() {
     const container = document.getElementById('recentActivityPreview');
     if (!container) return;
-
     const recent = transactions.slice(0, 3);
     if (recent.length === 0) {
-        container.innerHTML = `<div class="empty-state"><div class="empty-state-icon">📋</div><h4>No Activity Yet</h4><p>Your recent transactions will appear here</p></div>`;
+        container.innerHTML = `<div class="empty-state"><div class="empty-state-icon">📋</div><h4>No Activity Yet</h4><p>Your transactions will appear here</p></div>`;
         return;
     }
-
-    container.innerHTML = recent.map(tx => {
-        const icons = { deposit: 'fa-wallet tx-green', log: 'fa-box-archive tx-blue', sms: 'fa-mobile-screen tx-blue', booster: 'fa-bolt tx-orange', conversion: 'fa-right-left tx-blue' };
-        const iconClass = icons[tx.type] || 'fa-circle-dot tx-blue';
-        const [iconName, colorClass] = iconClass.split(' ');
-        return `
-        <div class="transaction-card" onclick="triggerHaptic();openTransactionReceipt(${JSON.stringify(tx).replace(/'/g,'&#39;')})">
+    container.innerHTML = recent.map(tx => `
+        <div class="transaction-card">
             <div class="transaction-left">
-                <div class="transaction-icon-box ${colorClass}"><i class="fa-solid ${iconName}"></i></div>
-                <div class="transaction-details">
-                    <h4>${tx.title}</h4>
-                    <span>${tx.date}</span>
-                </div>
-            </div>
-            <div class="transaction-right">
-                <div class="transaction-amount">${tx.amount}</div>
-                <span class="badge-status badge-success">${tx.status}</span>
-            </div>
-        </div>`;
-    }).join('');
-}
-
-// ==========================================
-// SUPPORT WIDGET (Draggable)
-// ==========================================
-function initSupportWidgetAndDragging() {
-    const widget = document.getElementById('support-widget');
-    const toggleBtn = document.getElementById('support-toggle-btn');
-    const popup = document.getElementById('support-popup');
-    const closeBtn = document.getElementById('support-close-btn');
-    if (!widget || !toggleBtn || !popup) return;
-
-    let isDragging = false, hasMoved = false;
-    let startX, startY, initialX, initialY;
-
-    const dragStart = (e) => {
-        isDragging = true; hasMoved = false;
-        const cx = e.type === 'touchstart' ? e.touches[0].clientX : e.clientX;
-        const cy = e.type === 'touchstart' ? e.touches[0].clientY : e.clientY;
-        startX = cx; startY = cy;
-        const rect = widget.getBoundingClientRect();
-        initialX = rect.left; initialY = rect.top;
-        widget.style.bottom = 'auto'; widget.style.right = 'auto';
-        widget.style.left = initialX + 'px'; widget.style.top = initialY + 'px';
-        document.addEventListener('mousemove', dragMove);
-        document.addEventListener('mouseup', dragEnd);
-        document.addEventListener('touchmove', dragMove, { passive: false });
-        document.addEventListener('touchend', dragEnd);
-    };
-
-    const dragMove = (e) => {
-        if (!isDragging) return;
-        if (e.cancelable) e.preventDefault();
-        const cx = e.type === 'touchmove' ? e.touches[0].clientX : e.clientX;
-        const cy = e.type === 'touchmove' ? e.touches[0].clientY : e.clientY;
-        if (Math.abs(cx - startX) > 5 || Math.abs(cy - startY) > 5) hasMoved = true;
-        let nx = initialX + (cx - startX);
-        let ny = initialY + (cy - startY);
-        nx = Math.max(10, Math.min(nx, window.innerWidth - widget.offsetWidth - 10));
-        ny = Math.max(10, Math.min(ny, window.innerHeight - widget.offsetHeight - 10));
-        widget.style.left = nx + 'px'; widget.style.top = ny + 'px';
-    };
-
-    const dragEnd = () => {
-        isDragging = false;
-        document.removeEventListener('mousemove', dragMove);
-        document.removeEventListener('mouseup', dragEnd);
-        document.removeEventListener('touchmove', dragMove);
-        document.removeEventListener('touchend', dragEnd);
-    };
-
-    toggleBtn.addEventListener('mousedown', dragStart);
-    toggleBtn.addEventListener('touchstart', dragStart, { passive: true });
-    toggleBtn.addEventListener('click', (e) => {
-        if (hasMoved) return;
-        e.stopPropagation();
-        popup.classList.toggle('active');
-    });
-    if (closeBtn) {
-        closeBtn.addEventListener('click', (e) => {
-            e.stopPropagation();
-            popup.classList.remove('active');
-        });
-    }
-}
-
-// ==========================================
-// CUSTOMER PROFILE BADGE
-// ==========================================
-async function loadCustomerProfileBadge() {
-    const input = document.getElementById('myCustomerId');
-    if (!input) return;
-    if (!supabaseClient) { input.value = 'Offline'; return; }
-    try {
-        const { data: { session } } = await supabaseClient.auth.getSession();
-        if (!session) return;
-        const { data } = await supabaseClient.from('profiles').select('customer_id').eq('id', session.user.id).single();
-        input.value = (data && data.customer_id) ? data.customer_id : session.user.id;
-    } catch(e) {
-        if (currentUserId) { const el = document.getElementById('myCustomerId'); if(el) el.value = currentUserId; }
-    }
-}
-
-// ==========================================
-// AUTH
-// ==========================================
-window.handleLogout = async function() {
-    if (supabaseClient) {
-        await supabaseClient.auth.signOut();
-    }
-    localStorage.removeItem('mjhub-theme');
-    window.location.href = 'landing.html';
-};
-
-// ==========================================
-// AVATAR UPLOAD
-// ==========================================
-window.handleAvatarUpload = function(event) {
-    const file = event.target.files[0];
-    if (!file) return;
-    if (file.size > 2 * 1024 * 1024) { showToast('Image must be under 2MB', 'error'); return; }
-    const reader = new FileReader();
-    reader.onload = (e) => {
-        const b64 = e.target.result;
-        userData.avatarUrl = b64;
-        safeSetHTML('profileAvatarInitial', `<img src="${b64}" alt="Avatar" style="width:100%;height:100%;object-fit:cover;">`);
-        safeSetHTML('headerAvatarText', `<img src="${b64}" alt="Avatar" style="width:100%;height:100%;object-fit:cover;border-radius:12px;">`);
-        showToast('Avatar updated! Save profile to keep changes.', 'info');
-    };
-    reader.readAsDataURL(file);
-};
-
-// ==========================================
-// PROFILE SAVE
-// ==========================================
-window.saveProfileSettingsData = async function() {
-    const name = document.getElementById('profileNameInput')?.value.trim();
-    const phone = document.getElementById('profilePhoneInput')?.value.trim();
-    const address = document.getElementById('profileAddressInput')?.value.trim();
-    const bio = document.getElementById('profileBioInput')?.value.trim();
-    if (!name) { showToast('Please enter your full name', 'error'); return; }
-
-    if (supabaseClient) {
-        const { error } = await supabaseClient.auth.updateUser({
-            data: { full_name: name, phone, address, bio, avatar_url: userData.avatarUrl }
-        });
-        if (error) { showToast('Error: ' + error.message, 'error'); return; }
-    }
-    userData.name = name;
-    safeSet('dropdownName', name);
-    safeSet('profileHeaderName', name);
-    safeSet('heroWelcomeTitle', `Welcome back, ${name}! 👋`);
-    showToast('Profile saved successfully!', 'success');
-};
-
-// ==========================================
-// CURRENCY CONVERTER
-// ==========================================
-window.openCurrencyModal = function() {
-    currentFromCurrency = 'NGN';
-    updateConverterUI();
-    const bi = document.getElementById('baseConvertInput');
-    const to = document.getElementById('targetConvertOutput');
-    const lb = document.getElementById('conversionLoadingBox');
-    if (bi) bi.value = '';
-    if (to) to.value = '';
-    if (lb) lb.classList.remove('active');
-    document.getElementById('currencyConverterModal').classList.add('active');
-};
-
-window.closeCurrencyModal = function() {
-    document.getElementById('currencyConverterModal').classList.remove('active');
-};
-
-window.invertCurrencies = function() {
-    currentFromCurrency = currentFromCurrency === 'NGN' ? 'USD' : 'NGN';
-    updateConverterUI();
-    const bi = document.getElementById('baseConvertInput');
-    const to = document.getElementById('targetConvertOutput');
-    if (bi) bi.value = '';
-    if (to) to.value = '';
-};
-
-function updateConverterUI() {
-    const isNGN = currentFromCurrency === 'NGN';
-    safeSet('fromCurrencySymbol', isNGN ? '₦' : '$');
-    safeSet('fromCurrencyCode', isNGN ? 'NGN' : 'USD');
-    safeSet('toCurrencySymbol', isNGN ? '$' : '₦');
-    safeSet('toCurrencyCode', isNGN ? 'USD' : 'NGN');
-    safeSet('rateDisplay', `1 USD = ₦${exchangeRateUsdToNgn.toLocaleString()}`);
-}
-
-window.executeConversion = function() {
-    const inputVal = parseFloat(document.getElementById('baseConvertInput')?.value) || 0;
-    const output = document.getElementById('targetConvertOutput');
-    if (!output) return;
-    if (inputVal <= 0) { output.value = '0.00'; return; }
-    const converted = currentFromCurrency === 'NGN' ? inputVal / exchangeRateUsdToNgn : inputVal * exchangeRateUsdToNgn;
-    output.value = converted.toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:4});
-};
-
-window.commitSwapTransaction = async function() {
-    const inputVal = parseFloat(document.getElementById('baseConvertInput')?.value) || 0;
-    if (inputVal <= 0) { showToast('Please enter a valid amount', 'error'); return; }
-
-    if (currentFromCurrency === 'NGN' && currentBalanceNgn < inputVal) {
-        showToast('Insufficient NGN balance', 'error'); return;
-    }
-    if (currentFromCurrency === 'USD' && currentBalanceUsd < inputVal) {
-        showToast('Insufficient USD balance', 'error'); return;
-    }
-
-    const loadingBox = document.getElementById('conversionLoadingBox');
-    const statusText = document.getElementById('conversionStatusText');
-    const btn = document.getElementById('executeConversionBtn');
-    if (loadingBox) loadingBox.classList.add('active');
-    if (btn) { btn.disabled = true; btn.style.opacity = '0.6'; }
-    if (statusText) statusText.textContent = 'Processing conversion...';
-    await sleep(900);
-
-    const converted = currentFromCurrency === 'NGN' ? inputVal / exchangeRateUsdToNgn : inputVal * exchangeRateUsdToNgn;
-    let newNgn = currentBalanceNgn;
-    let newUsd = currentBalanceUsd;
-
-    if (currentFromCurrency === 'NGN') { newNgn -= inputVal; newUsd += converted; }
-    else { newUsd -= inputVal; newNgn += converted; }
-
-    if (supabaseClient && currentUserId) {
-        await supabaseClient.from('profiles').update({ balance: newNgn, balance_usd: newUsd }).eq('id', currentUserId);
-    }
-
-    currentBalanceNgn = newNgn;
-    currentBalanceUsd = newUsd;
-    updateBalanceDisplay();
-
-    const fromSym = currentFromCurrency === 'NGN' ? '₦' : '$';
-    const toSym = currentFromCurrency === 'NGN' ? '$' : '₦';
-    const txObj = {
-        id: Date.now(), type: 'conversion',
-        title: 'Currency Conversion',
-        subtitle: `${fromSym}${inputVal.toLocaleString()} → ${toSym}${converted.toLocaleString(undefined,{minimumFractionDigits:2})}`,
-        amount: `${toSym}${converted.toLocaleString(undefined,{minimumFractionDigits:2})}`,
-        date: new Date().toLocaleString(),
-        status: 'Success', paymentProvider: 'MJ HUB Converter', channel: 'Direct Wallet Swap'
-    };
-    transactions.unshift(txObj);
-    await saveTransactionToSupabase(txObj);
-    renderTransactions('all');
-    renderRecentActivityPreview();
-
-    if (statusText) statusText.textContent = 'Conversion Successful! ✅';
-    await sleep(600);
-    if (loadingBox) loadingBox.classList.remove('active');
-    if (btn) { btn.disabled = false; btn.style.opacity = '1'; }
-    closeCurrencyModal();
-    showToast('Currency converted successfully!', 'success');
-};
-
-// ==========================================
-// PASSWORD CHANGE
-// ==========================================
-window.openChangePasswordModal = function() { document.getElementById('changePasswordModal').classList.add('active'); };
-window.closeChangePasswordModal = function() { document.getElementById('changePasswordModal').classList.remove('active'); };
-
-window.submitNewPassword = async function() {
-    const newPass = document.getElementById('newPasswordInput')?.value;
-    const confirmPass = document.getElementById('confirmPasswordInput')?.value;
-    if (!newPass || !confirmPass) { showToast('Please fill in all fields', 'error'); return; }
-    if (newPass !== confirmPass) { showToast('Passwords do not match', 'error'); return; }
-    if (newPass.length < 6) { showToast('Password must be at least 6 characters', 'error'); return; }
-    if (supabaseClient) {
-        const { error } = await supabaseClient.auth.updateUser({ password: newPass });
-        if (error) { showToast('Error: ' + error.message, 'error'); return; }
-    }
-    showToast('Password updated successfully!', 'success');
-    closeChangePasswordModal();
-    document.getElementById('newPasswordInput').value = '';
-    document.getElementById('confirmPasswordInput').value = '';
-};
-
-// ==========================================
-// COPY CUSTOMER ID
-// ==========================================
-window.copyIdToClipboard = function() {
-    const input = document.getElementById('myCustomerId');
-    if (!input) return;
-    navigator.clipboard.writeText(input.value).then(() => {
-        showToast('Customer ID copied!', 'success', 2000);
-    }).catch(() => {
-        input.select(); document.execCommand('copy');
-        showToast('Customer ID copied!', 'success', 2000);
-    });
-};
-
-// ==========================================
-// CART SYSTEM
-// ==========================================
-window.addToCart = function(title, price, type, subtitle) {
-    const existing = cartItems.find(i => i.title === title);
-    if (existing) { showToast(`"${title}" is already in cart`, 'warning'); return; }
-    cartItems.push({ title, price, type, subtitle });
-    updateCartDisplay();
-    showToast(`"${title}" added to cart! 🛒`, 'success');
-};
-
-window.buyNowItem = function(title, price, type, subtitle) {
-    cartItems = [{ title, price, type, subtitle }];
-    updateCartDisplay();
-    window.switchSection('cart');
-};
-
-window.removeFromCart = function(index) {
-    const removed = cartItems[index];
-    cartItems.splice(index, 1);
-    updateCartDisplay();
-    showToast(`"${removed.title}" removed from cart`, 'info', 2000);
-};
-
-function updateCartDisplay() {
-    const tbody = document.getElementById('cartTableBody');
-    const totalDisplay = document.getElementById('cartTotalDisplay');
-    if (!tbody) return;
-
-    if (cartItems.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="4" class="empty-text">Your cart is currently empty.</td></tr>`;
-        if (totalDisplay) totalDisplay.textContent = '₦0.00';
-        return;
-    }
-
-    let total = 0;
-    tbody.innerHTML = cartItems.map((item, i) => {
-        total += item.price;
-        return `<tr>
-            <td><strong>${escapeHtml(item.title)}</strong><br><span style="font-size:11px;color:var(--text-muted);">${escapeHtml(item.subtitle)}</span></td>
-            <td><span class="badge-status badge-pending">${item.type.toUpperCase()}</span></td>
-            <td>₦${item.price.toLocaleString()}</td>
-            <td><button class="btn-danger" style="padding:4px 8px;font-size:11px;" onclick="triggerHaptic();removeFromCart(${i})">Remove</button></td>
-        </tr>`;
-    }).join('');
-
-    if (totalDisplay) totalDisplay.textContent = '₦' + total.toLocaleString(undefined, {minimumFractionDigits:2});
-}
-
-window.checkoutCart = async function() {
-    if (cartItems.length === 0) { showToast('Your cart is empty', 'warning'); return; }
-    const total = cartItems.reduce((acc, item) => acc + item.price, 0);
-    if (currentBalanceNgn < total) {
-        showToast('Insufficient NGN balance. Please fund your wallet.', 'error');
-        window.switchSection('deposit');
-        return;
-    }
-
-    const newNgn = currentBalanceNgn - total;
-    if (supabaseClient && currentUserId) {
-        await supabaseClient.from('profiles').update({ balance: newNgn }).eq('id', currentUserId);
-    }
-    currentBalanceNgn = newNgn;
-    updateBalanceDisplay();
-
-    for (const item of cartItems) {
-        const txObj = {
-            id: Date.now() + Math.random(), type: item.type,
-            title: item.title, subtitle: item.subtitle,
-            amount: '₦' + item.price.toLocaleString(),
-            date: new Date().toLocaleString(), status: 'Success',
-            paymentProvider: 'MJ HUB Checkout', channel: 'Naira Wallet'
-        };
-        transactions.unshift(txObj);
-        await saveTransactionToSupabase(txObj);
-    }
-
-    cartItems = [];
-    updateCartDisplay();
-    renderTransactions('all');
-    renderRecentActivityPreview();
-    showToast(`Purchase complete! ${transactions.slice(0,3).length} item(s) delivered.`, 'success', 4000);
-};
-
-// ==========================================
-// DEPOSIT SYSTEM
-// ==========================================
-window.processDeposit = async function() {
-    const provider = document.getElementById('depositProviderSelect')?.value;
-    const walletType = document.getElementById('depositWalletSelect')?.value;
-    const amount = parseFloat(document.getElementById('depositInput')?.value);
-    if (!amount || amount <= 0) { showToast('Please enter a valid deposit amount', 'error'); return; }
-
-    let newNgn = currentBalanceNgn;
-    let newUsd = currentBalanceUsd;
-    if (walletType === 'ngn') newNgn += amount;
-    else newUsd += amount;
-
-    if (supabaseClient && currentUserId) {
-        await supabaseClient.from('profiles').update({ balance: newNgn, balance_usd: newUsd }).eq('id', currentUserId);
-    }
-    currentBalanceNgn = newNgn;
-    currentBalanceUsd = newUsd;
-    updateBalanceDisplay();
-
-    const sym = walletType === 'ngn' ? '₦' : '$';
-    const txObj = {
-        id: Date.now(), type: 'deposit',
-        title: `Wallet Funding (${walletType.toUpperCase()})`,
-        subtitle: `Funded via ${provider}`,
-        amount: `${sym}${amount.toLocaleString()}`,
-        date: new Date().toLocaleString(), status: 'Success',
-        paymentProvider: provider, channel: `${walletType.toUpperCase()} Gateway`
-    };
-    transactions.unshift(txObj);
-    await saveTransactionToSupabase(txObj);
-    renderTransactions('all');
-    renderRecentActivityPreview();
-
-    const depositInput = document.getElementById('depositInput');
-    if (depositInput) depositInput.value = '';
-    showToast(`${walletType.toUpperCase()} wallet credited with ${sym}${amount.toLocaleString()}!`, 'success');
-    window.switchSection('home');
-};
-
-// ==========================================
-// ACTIVITY HISTORY DRAWER
-// ==========================================
-window.toggleActivityHistory = function() {
-    const drawer = document.getElementById('activityHistoryDrawer');
-    const overlay = document.getElementById('sidebarOverlay');
-    if (!drawer) return;
-    const isOpen = drawer.classList.toggle('active');
-    if (overlay) overlay.classList.toggle('active', isOpen);
-    if (isOpen) renderTransactions('all');
-};
-
-window.filterTransactions = function(type, btnElement) {
-    const drawer = btnElement.closest('.activity-history-drawer');
-    if (drawer) drawer.querySelectorAll('.filter-tab').forEach(t => t.classList.remove('active'));
-    btnElement.classList.add('active');
-    renderTransactions(type);
-};
-
-function renderTransactions(filterType) {
-    const container = document.getElementById('transactionListContainer');
-    if (!container) return;
-
-    const filtered = filterType === 'all' ? transactions : transactions.filter(tx => tx.type === filterType);
-
-    if (filtered.length === 0) {
-        container.innerHTML = `<div class="empty-state"><div class="empty-state-icon">🕒</div><h4>No Records Found</h4><p>No ${filterType === 'all' ? '' : filterType + ' '}activity to display</p></div>`;
-        return;
-    }
-
-    const iconMap = {
-        deposit: ['fa-wallet', 'tx-green'],
-        log: ['fa-box-archive', 'tx-blue'],
-        sms: ['fa-mobile-screen', 'tx-blue'],
-        booster: ['fa-bolt', 'tx-orange'],
-        conversion: ['fa-right-left', 'tx-blue']
-    };
-
-    container.innerHTML = filtered.map(tx => {
-        const [icon, color] = iconMap[tx.type] || ['fa-circle-dot', 'tx-blue'];
-        const txData = JSON.stringify(tx).replace(/"/g, '&quot;');
-        return `
-        <div class="transaction-card" onclick="triggerHaptic();openTransactionReceipt(JSON.parse(this.dataset.tx))" data-tx="${txData}">
-            <div class="transaction-left">
-                <div class="transaction-icon-box ${color}"><i class="fa-solid ${icon}"></i></div>
+                <div class="transaction-icon-box tx-blue"><i class="fa-solid fa-circle-dot"></i></div>
                 <div class="transaction-details">
                     <h4>${escapeHtml(tx.title)}</h4>
                     <span>${tx.date}</span>
@@ -2194,56 +969,253 @@ function renderTransactions(filterType) {
                 <div class="transaction-amount">${escapeHtml(tx.amount)}</div>
                 <span class="badge-status badge-success">${tx.status}</span>
             </div>
-        </div>`;
-    }).join('');
+        </div>`).join('');
 }
 
-window.openTransactionReceipt = function(tx) {
-    const body = document.getElementById('receiptContentBody');
-    if (!body) return;
-    const row = (label, value, valueStyle='') =>
-        `<div style="display:flex;justify-content:space-between;padding:10px 0;border-bottom:1px solid var(--border-color);">
-            <span style="color:var(--text-muted);font-size:12px;">${label}</span>
-            <strong style="font-size:13px;${valueStyle}">${value}</strong>
-        </div>`;
-    body.innerHTML = `
-        ${row('Transaction Type', escapeHtml(tx.title))}
-        ${row('Description', escapeHtml(tx.subtitle))}
-        ${row('Amount', escapeHtml(tx.amount), 'color:var(--primary-color);')}
-        ${row('Payment Channel', `${escapeHtml(tx.paymentProvider)} (${escapeHtml(tx.channel)})`)}
-        ${row('Date & Time', tx.date)}
-        <div style="display:flex;justify-content:space-between;padding:10px 0;">
-            <span style="color:var(--text-muted);font-size:12px;">Status</span>
-            <span class="badge-status badge-success">${tx.status}</span>
-        </div>`;
-    document.getElementById('transactionReceiptModal').classList.add('active');
+window.handleLogout = async function() {
+    if (supabaseClient) await supabaseClient.auth.signOut();
+    localStorage.clear();
+    window.location.href = 'landing.html';
 };
 
-window.closeTransactionReceipt = function() {
-    document.getElementById('transactionReceiptModal').classList.remove('active');
+window.handleAvatarUpload = function(e) {
+    const file = e.target.files[0];
+    if (!file || file.size > 2 * 1024 * 1024) return showToast('Image must be under 2MB', 'error');
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+        userData.avatarUrl = ev.target.result;
+        safeSetHTML('profileAvatarInitial', `<img src="${ev.target.result}">`);
+        safeSetHTML('headerAvatarText', `<img src="${ev.target.result}">`);
+        showToast('Avatar updated. Save to keep changes.', 'info');
+    };
+    reader.readAsDataURL(file);
 };
 
-// ==========================================
-// FILTER PRODUCTS (Generic)
-// ==========================================
-window.filterProductItems = function(category, btnElement) {
-    const card = btnElement.closest('.content-card');
-    if (card) card.querySelectorAll('.filter-tab').forEach(t => t.classList.remove('active'));
-    btnElement.classList.add('active');
-    document.querySelectorAll('.product-item-card').forEach(item => {
-        if (category === 'all' || item.dataset.category === category) {
-            item.style.display = 'flex';
-        } else {
-            item.style.display = 'none';
-        }
-    });
+window.saveProfileSettingsData = async function() {
+    const name = document.getElementById('profileNameInput').value.trim();
+    if (!name) return showToast('Enter your name', 'error');
+    if (supabaseClient) {
+        const { error } = await supabaseClient.auth.updateUser({
+            data: { full_name: name, avatar_url: userData.avatarUrl }
+        });
+        if (error) return showToast('Error: ' + error.message, 'error');
+    }
+    safeSet('dropdownName', name);
+    safeSet('profileHeaderName', name);
+    showToast('Profile saved!', 'success');
 };
 
-// ==========================================
-// UTILITIES
-// ==========================================
-function sleep(ms) { return new Promise(resolve => setTimeout(resolve, ms)); }
+window.openChangePasswordModal = function() { document.getElementById('changePasswordModal').classList.add('active'); };
+window.closeChangePasswordModal = function() { document.getElementById('changePasswordModal').classList.remove('active'); };
 
+window.submitNewPassword = async function() {
+    const p1 = document.getElementById('newPasswordInput').value;
+    const p2 = document.getElementById('confirmPasswordInput').value;
+    if (!p1 || p1 !== p2) return showToast('Passwords do not match', 'error');
+    if (p1.length < 6) return showToast('Password must be 6+ characters', 'error');
+    if (supabaseClient) {
+        const { error } = await supabaseClient.auth.updateUser({ password: p1 });
+        if (error) return showToast(error.message, 'error');
+    }
+    showToast('Password updated!', 'success');
+    closeChangePasswordModal();
+};
+
+window.copyIdToClipboard = function() {
+    const input = document.getElementById('myCustomerId');
+    navigator.clipboard.writeText(input.value);
+    showToast('ID copied!', 'success');
+};
+
+window.openCurrencyModal = function() {
+    currentFromCurrency = 'NGN';
+    updateConverterUI();
+    document.getElementById('baseConvertInput').value = '';
+    document.getElementById('targetConvertOutput').value = '';
+    document.getElementById('currencyConverterModal').classList.add('active');
+};
+window.closeCurrencyModal = function() { document.getElementById('currencyConverterModal').classList.remove('active'); };
+window.invertCurrencies = function() {
+    currentFromCurrency = currentFromCurrency === 'NGN' ? 'USD' : 'NGN';
+    updateConverterUI();
+    document.getElementById('baseConvertInput').value = '';
+    document.getElementById('targetConvertOutput').value = '';
+};
+function updateConverterUI() {
+    const isNGN = currentFromCurrency === 'NGN';
+    safeSet('fromCurrencySymbol', isNGN ? '₦' : '$');
+    safeSet('fromCurrencyCode', isNGN ? 'NGN' : 'USD');
+    safeSet('toCurrencySymbol', isNGN ? '$' : '₦');
+    safeSet('toCurrencyCode', isNGN ? 'USD' : 'NGN');
+    safeSet('rateDisplay', `1 USD = ₦${exchangeRateUsdToNgn.toLocaleString()}`);
+}
+window.executeConversion = function() {
+    const val = parseFloat(document.getElementById('baseConvertInput').value) || 0;
+    const converted = currentFromCurrency === 'NGN' ? val / exchangeRateUsdToNgn : val * exchangeRateUsdToNgn;
+    document.getElementById('targetConvertOutput').value = converted.toLocaleString(undefined, {minimumFractionDigits:2});
+};
+window.commitSwapTransaction = async function() {
+    const val = parseFloat(document.getElementById('baseConvertInput').value) || 0;
+    if (val <= 0) return showToast('Enter valid amount', 'error');
+    if (currentFromCurrency === 'NGN' && currentBalanceNgn < val) return showToast('Insufficient NGN', 'error');
+    if (currentFromCurrency === 'USD' && currentBalanceUsd < val) return showToast('Insufficient USD', 'error');
+
+    const box = document.getElementById('conversionLoadingBox');
+    box.classList.add('active');
+    await sleep(800);
+
+    const converted = currentFromCurrency === 'NGN' ? val / exchangeRateUsdToNgn : val * exchangeRateUsdToNgn;
+    if (currentFromCurrency === 'NGN') { currentBalanceNgn -= val; currentBalanceUsd += converted; }
+    else { currentBalanceUsd -= val; currentBalanceNgn += converted; }
+
+    if (supabaseClient && currentUserId) {
+        await supabaseClient.from('profiles').update({ balance: currentBalanceNgn, balance_usd: currentBalanceUsd }).eq('id', currentUserId);
+    }
+    updateBalanceDisplay();
+
+    const tx = { id: Date.now(), type: 'conversion', title: 'Currency Conversion',
+        subtitle: `Converted ${val}`, amount: `${currentFromCurrency === 'NGN' ? '$' : '₦'}${converted.toFixed(2)}`,
+        date: new Date().toLocaleString(), status: 'Success',
+        paymentProvider: 'MJ HUB', channel: 'Converter' };
+    transactions.unshift(tx);
+    await saveTransaction(tx);
+    renderRecentActivity();
+
+    box.classList.remove('active');
+    closeCurrencyModal();
+    showToast('Converted successfully!', 'success');
+};
+
+window.addToCart = function(title, price, type, subtitle) {
+    if (cartItems.find(i => i.title === title)) return showToast(`Already in cart`, 'warning');
+    cartItems.push({ title, price, type, subtitle });
+    saveCart();
+    updateCartDisplay();
+    showToast(`Added to cart!`, 'success');
+};
+
+window.removeFromCart = function(i) {
+    cartItems.splice(i, 1);
+    saveCart();
+    updateCartDisplay();
+    showToast('Removed', 'info');
+};
+
+function updateCartDisplay() {
+    const tbody = document.getElementById('cartTableBody');
+    const total = document.getElementById('cartTotalDisplay');
+    if (!tbody) return;
+    if (cartItems.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="4" class="empty-text">Cart is empty.</td></tr>`;
+        if (total) total.textContent = '₦0.00';
+        return;
+    }
+    let sum = 0;
+    tbody.innerHTML = cartItems.map((item, i) => {
+        sum += item.price;
+        return `<tr>
+            <td><strong>${escapeHtml(item.title)}</strong><br><span style="font-size:11px;color:var(--text-muted);">${escapeHtml(item.subtitle || '')}</span></td>
+            <td><span class="badge-status badge-pending">${item.type.toUpperCase()}</span></td>
+            <td>₦${item.price.toLocaleString()}</td>
+            <td><button class="btn-danger" style="padding:4px 8px;font-size:11px;" onclick="removeFromCart(${i})">Remove</button></td>
+        </tr>`;
+    }).join('');
+    if (total) total.textContent = '₦' + sum.toLocaleString(undefined, {minimumFractionDigits:2});
+}
+
+window.checkoutCart = async function() {
+    if (cartItems.length === 0) return showToast('Cart is empty', 'warning');
+    const total = cartItems.reduce((a,i) => a + i.price, 0);
+    if (currentBalanceNgn < total) {
+        showToast('Insufficient balance. Please fund wallet.', 'error');
+        return switchSection('deposit');
+    }
+    currentBalanceNgn -= total;
+    if (supabaseClient && currentUserId) {
+        await supabaseClient.from('profiles').update({ balance: currentBalanceNgn }).eq('id', currentUserId);
+    }
+    updateBalanceDisplay();
+
+    for (const item of cartItems) {
+        const tx = { id: Date.now() + Math.random(), type: item.type,
+            title: item.title, subtitle: item.subtitle,
+            amount: '₦' + item.price.toLocaleString(),
+            date: new Date().toLocaleString(), status: 'Success',
+            paymentProvider: 'MJ HUB Checkout', channel: 'NGN Wallet' };
+        transactions.unshift(tx);
+        await saveTransaction(tx);
+    }
+    cartItems = [];
+    saveCart();
+    updateCartDisplay();
+    renderRecentActivity();
+    showToast('Purchase complete!', 'success');
+};
+
+window.processDeposit = async function() {
+    const provider = document.getElementById('depositProviderSelect').value;
+    const wallet = document.getElementById('depositWalletSelect').value;
+    const amount = parseFloat(document.getElementById('depositInput').value);
+    if (!amount || amount <= 0) return showToast('Enter valid amount', 'error');
+
+    if (wallet === 'ngn') currentBalanceNgn += amount;
+    else currentBalanceUsd += amount;
+
+    if (supabaseClient && currentUserId) {
+        await supabaseClient.from('profiles').update({ balance: currentBalanceNgn, balance_usd: currentBalanceUsd }).eq('id', currentUserId);
+    }
+    updateBalanceDisplay();
+
+    const sym = wallet === 'ngn' ? '₦' : '$';
+    const tx = { id: Date.now(), type: 'deposit',
+        title: `Deposit (${wallet.toUpperCase()})`, subtitle: `Via ${provider}`,
+        amount: sym + amount.toLocaleString(),
+        date: new Date().toLocaleString(), status: 'Success',
+        paymentProvider: provider, channel: `${wallet.toUpperCase()} Gateway` };
+    transactions.unshift(tx);
+    await saveTransaction(tx);
+    renderRecentActivity();
+
+    document.getElementById('depositInput').value = '';
+    showToast(`${wallet.toUpperCase()} funded with ${sym}${amount.toLocaleString()}!`, 'success');
+    switchSection('home');
+};
+
+window.toggleActivityHistory = function() {
+    const drawer = document.getElementById('activityHistoryDrawer');
+    const overlay = document.getElementById('sidebarOverlay');
+    const open = drawer.classList.toggle('active');
+    overlay.classList.toggle('active', open);
+    if (open) renderTransactions('all');
+};
+window.filterTransactions = function(type, btn) {
+    const drawer = btn.closest('.activity-history-drawer');
+    drawer.querySelectorAll('.filter-tab').forEach(t => t.classList.remove('active'));
+    btn.classList.add('active');
+    renderTransactions(type);
+};
+function renderTransactions(filter) {
+    const container = document.getElementById('transactionListContainer');
+    const list = filter === 'all' ? transactions : transactions.filter(t => t.type === filter);
+    if (list.length === 0) {
+        container.innerHTML = `<div class="empty-state"><div class="empty-state-icon">📋</div><h4>No Records</h4></div>`;
+        return;
+    }
+    container.innerHTML = list.map(tx => `
+        <div class="transaction-card">
+            <div class="transaction-left">
+                <div class="transaction-icon-box tx-blue"><i class="fa-solid fa-circle-dot"></i></div>
+                <div class="transaction-details">
+                    <h4>${escapeHtml(tx.title)}</h4>
+                    <span>${tx.date}</span>
+                </div>
+            </div>
+            <div class="transaction-right">
+                <div class="transaction-amount">${escapeHtml(tx.amount)}</div>
+                <span class="badge-status badge-success">${tx.status}</span>
+            </div>
+        </div>`).join('');
+}
 </script>
 </body>
 </html>
