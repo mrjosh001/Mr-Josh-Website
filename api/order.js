@@ -1,4 +1,3 @@
-// api/order.js
 import { createClient } from '@supabase/supabase-js';
 
 const supabase = createClient(
@@ -34,11 +33,11 @@ export default async function handler(req, res) {
 
   try {
     // -------------------------------------------------
-    // 1. Get product
+    // 1. Get product from your database
     // -------------------------------------------------
     const { data: product, error: prodErr } = await supabase
       .from('products')
-      .select('price, name, stock_quantity')
+      .select('id, product_key, name, price, stock_quantity')
       .eq('product_key', product_key)
       .single();
 
@@ -53,7 +52,7 @@ export default async function handler(req, res) {
     // 2. Get user profile + balance
     // -------------------------------------------------
     const { data: profile, error: profileErr } = await supabase
-      .from('profiles')                     // change if your table name is different
+      .from('profiles')
       .select('balance_ngn, customer_id')
       .eq('id', user_id)
       .single();
@@ -62,7 +61,7 @@ export default async function handler(req, res) {
       return res.status(400).json({ success: false, message: 'User profile not found' });
     }
 
-    originalBalance = Number(profile.balance_ngn);
+    originalBalance = Number(profile.balance_ngn || 0);
     customerId = profile.customer_id;
 
     if (originalBalance < total) {
@@ -94,8 +93,10 @@ export default async function handler(req, res) {
     deducted = true;
 
     // -------------------------------------------------
-    // 4. Call supplier
+    // 4. Call supplier (Faded)
     // -------------------------------------------------
+    const orderRef = external_order_id || `MJ-${user_id.slice(0, 8)}-${Date.now()}`;
+
     const supplierRes = await fetch(`${FADDED_BASE}/order`, {
       method: 'POST',
       headers: {
@@ -106,7 +107,7 @@ export default async function handler(req, res) {
       body: JSON.stringify({
         product_key,
         quantity,
-        external_order_id: external_order_id || `MJ-${user_id}-${Date.now()}`,
+        external_order_id: orderRef,
         customer_info: customer_info || {}
       })
     });
@@ -123,31 +124,32 @@ export default async function handler(req, res) {
         .update({ balance_ngn: originalBalance })
         .eq('id', user_id);
 
-      // Record failed purchase + refund
-      await supabase.from('transactions').insert([
-        {
-          user_id,
-          customer_id: customerId,
-          type: 'purchase_failed',
-          category: productName,
-          title: productName,
-          subtitle: `Failed: ${orderData.message || orderData.code || 'Supplier error'}`,
-          amount: `₦${total.toLocaleString()}`,
-          amount_ngn: total,
-          status: 'failed'
-        },
-        {
-          user_id,
-          customer_id: customerId,
-          type: 'refund',
-          category: productName,
-          title: 'Automatic Refund',
-          subtitle: 'Order failed at supplier – balance restored',
-          amount: `₦${total.toLocaleString()}`,
-          amount_ngn: total,
-          status: 'refunded'
-        }
-      ]);
+      // Record failed purchase
+      await supabase.from('transactions').insert({
+        user_id,
+        customer_id: customerId,
+        type: 'purchase_failed',
+        category: productName,
+        title: productName,
+        subtitle: `Failed: ${orderData.message || orderData.code || 'Supplier error'}`,
+        amount: `₦${total.toLocaleString()}`,
+        amount_ngn: total,
+        status: 'failed',
+        notes: JSON.stringify(orderData)
+      });
+
+      // Record refund
+      await supabase.from('transactions').insert({
+        user_id,
+        customer_id: customerId,
+        type: 'refund',
+        category: productName,
+        title: 'Automatic Refund',
+        subtitle: 'Order failed at supplier – balance restored',
+        amount: `₦${total.toLocaleString()}`,
+        amount_ngn: total,
+        status: 'refunded'
+      });
 
       return res.status(400).json({
         success: false,
@@ -157,11 +159,42 @@ export default async function handler(req, res) {
     }
 
     // -------------------------------------------------
-    // 6. Supplier succeeded → save product + transaction
+    // 6. Supplier succeeded → save everything
     // -------------------------------------------------
-    const items = orderData.data.items || [];
+    const items = orderData.data?.items || [];
     const detailsText = items.map(i => i.details).join('\n\n');
 
+    // Save into orders table (one row per item is cleaner)
+    for (const item of items) {
+      // Try to split "Username: xxx | Password: yyy" if possible
+      let credId = null;
+      let credPass = null;
+      if (item.details) {
+        const userMatch = item.details.match(/Username:\s*([^|]+)/i);
+        const passMatch = item.details.match(/Password:\s*(.+)/i);
+        if (userMatch) credId = userMatch[1].trim();
+        if (passMatch) credPass = passMatch[1].trim();
+      }
+
+      await supabase.from('orders').insert({
+        order_id: orderRef,
+        user_id,
+        product_id: product.id,
+        product_code: product_key,
+        product_name: productName,
+        product_type: 'log',
+        description: item.details,
+        quantity: 1,
+        amount: product.price,
+        status: 'completed',
+        credentials_id: credId,
+        credentials_pass: credPass,
+        supplier_ref: String(item.product_detail_id || ''),
+        guide_url: 'https://t.me/faddedsocialsgroup/1030'
+      });
+    }
+
+    // Save money movement in transactions
     await supabase.from('transactions').insert({
       user_id,
       customer_id: customerId,
@@ -176,7 +209,7 @@ export default async function handler(req, res) {
       supplier_order: orderData.data
     });
 
-    // Optional: reduce local stock
+    // Reduce local stock
     await supabase
       .from('products')
       .update({
@@ -194,14 +227,15 @@ export default async function handler(req, res) {
       data: {
         items: orderData.data.items,
         total_amount: total,
-        new_balance: newBalance
+        new_balance: newBalance,
+        order_id: orderRef
       }
     });
 
   } catch (err) {
     console.error('Order handler error:', err);
 
-    // Safety net: if we already debited, refund
+    // Safety net: refund if we already debited
     if (deducted) {
       try {
         await supabase
@@ -218,7 +252,8 @@ export default async function handler(req, res) {
           subtitle: `System error – ${err.message}`,
           amount: `₦${total.toLocaleString()}`,
           amount_ngn: total,
-          status: 'refunded'
+          status: 'refunded',
+          notes: err.message
         });
       } catch (refundErr) {
         console.error('CRITICAL: Auto-refund failed', refundErr);
