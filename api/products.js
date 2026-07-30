@@ -5,7 +5,9 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY
 );
 
-const EXCLUDED_KEYS = ['prod_119', 'prod_189', 'prod_187', 'prod_214'];
+// Your channels
+const MY_WHATSAPP = 'https://whatsapp.com/channel/0029VbBdXJ2KQuJSJcqcck3o';
+const MY_TELEGRAM = 'https://t.me/mj_hub_tg';
 
 function stripHtml(html) {
   if (!html) return '';
@@ -20,6 +22,24 @@ function stripHtml(html) {
   text = text.replace(/<br\s*\/?>/gi, ' ').replace(/<\/(div|p|li)>/gi, ' ');
   text = text.replace(/<[^>]*>/g, '');
   text = text.replace(/\s+/g, ' ').trim();
+  return text;
+}
+
+function replaceChannelLinks(text) {
+  if (!text) return text;
+
+  // Replace WhatsApp links (wa.me, api.whatsapp.com, whatsapp.com/channel, chat.whatsapp.com, etc.)
+  text = text.replace(
+    /https?:\/\/(wa\.me\/[^\s]+|api\.whatsapp\.com\/[^\s]+|whatsapp\.com\/[^\s]+|chat\.whatsapp\.com\/[^\s]+)/gi,
+    MY_WHATSAPP
+  );
+
+  // Replace Telegram links (t.me, telegram.me, telegram.dog)
+  text = text.replace(
+    /https?:\/\/(t\.me\/[^\s]+|telegram\.me\/[^\s]+|telegram\.dog\/[^\s]+)/gi,
+    MY_TELEGRAM
+  );
+
   return text;
 }
 
@@ -55,37 +75,65 @@ export default async function handler(req, res) {
   try {
     const apiRes = await fetch('https://fadded.net/api/v1/reseller/products', {
       method: 'GET',
-      headers: { 'X-Api-Key': process.env.FADDED_API_KEY, 'Accept': 'application/json' }
+      headers: {
+        'X-Api-Key': process.env.FADDED_API_KEY,
+        'Accept': 'application/json'
+      }
     });
 
     if (!apiRes.ok) {
       const errorText = await apiRes.text();
-      return res.status(apiRes.status).json({ success: false, message: `Supplier API error: ${apiRes.status}`, details: errorText });
+      return res.status(apiRes.status).json({
+        success: false,
+        message: `Supplier API error: ${apiRes.status}`,
+        details: errorText
+      });
     }
 
     const supplierData = await apiRes.json();
     if (!supplierData.success) {
-      return res.status(400).json({ success: false, message: 'Supplier reported failure', error: supplierData });
+      return res.status(400).json({
+        success: false,
+        message: 'Supplier reported failure',
+        error: supplierData
+      });
     }
 
-    const products = supplierData.data.filter(item => !EXCLUDED_KEYS.includes(item.product_key));
+    // ALL products are kept (no exclusions)
+    const products = supplierData.data;
 
     for (const item of products) {
-      const { error } = await supabase.from('products').upsert({
-        product_key: item.product_key,
-        name: item.name,
-        description: stripHtml(item.description),
-        price: item.unit_price,
-        stock_quantity: item.in_stock,
-        is_available: item.in_stock > 0,
-        category: categorize(item.name),
-        updated_at: new Date().toISOString()
-      }, { onConflict: 'product_key' });
-      if (error) console.error(`Error updating ${item.product_key}:`, error);
+      const cleanDescription = stripHtml(item.description);
+      const displayDescription = replaceChannelLinks(cleanDescription);
+
+      const { error } = await supabase.from('products').upsert(
+        {
+          product_key: item.product_key,
+          name: item.name,
+          description: cleanDescription,          // original from supplier
+          display_description: displayDescription, // with YOUR channels
+          price: item.unit_price,
+          stock_quantity: item.in_stock,
+          is_available: item.in_stock > 0,
+          category: categorize(item.name),
+          updated_at: new Date().toISOString()
+        },
+        { onConflict: 'product_key' }
+      );
+
+      if (error) {
+        console.error(`Error updating ${item.product_key}:`, error);
+      }
     }
 
-    return res.status(200).json({ success: true, synced: products.length });
+    return res.status(200).json({
+      success: true,
+      synced: products.length
+    });
   } catch (error) {
-    return res.status(500).json({ success: false, message: error.message });
+    return res.status(500).json({
+      success: false,
+      message: error.message
+    });
   }
 }
