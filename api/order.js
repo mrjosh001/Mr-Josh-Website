@@ -26,10 +26,11 @@ export default async function handler(req, res) {
     return res.status(400).json({ success: false, message: 'product_key and user_id are required' });
   }
 
-  let deducted = false;          // tracks whether we already took money
   let originalBalance = 0;
   let total = 0;
   let productName = '';
+  let customerId = null;
+  let deducted = false;
 
   try {
     // -------------------------------------------------
@@ -52,7 +53,7 @@ export default async function handler(req, res) {
     // 2. Get user profile + balance
     // -------------------------------------------------
     const { data: profile, error: profileErr } = await supabase
-      .from('profiles')                     // change if your table is named differently
+      .from('profiles')                     // change if your table name is different
       .select('balance_ngn, customer_id')
       .eq('id', user_id)
       .single();
@@ -62,6 +63,7 @@ export default async function handler(req, res) {
     }
 
     originalBalance = Number(profile.balance_ngn);
+    customerId = profile.customer_id;
 
     if (originalBalance < total) {
       return res.status(402).json({
@@ -73,7 +75,26 @@ export default async function handler(req, res) {
     }
 
     // -------------------------------------------------
-    // 3. Call supplier FIRST (balance still untouched)
+    // 3. Debit user immediately
+    // -------------------------------------------------
+    const newBalance = originalBalance - total;
+
+    const { error: deductErr } = await supabase
+      .from('profiles')
+      .update({ balance_ngn: newBalance })
+      .eq('id', user_id);
+
+    if (deductErr) {
+      return res.status(500).json({
+        success: false,
+        message: 'Could not debit your balance. Please try again.'
+      });
+    }
+
+    deducted = true;
+
+    // -------------------------------------------------
+    // 4. Call supplier
     // -------------------------------------------------
     const supplierRes = await fetch(`${FADDED_BASE}/order`, {
       method: 'POST',
@@ -92,80 +113,58 @@ export default async function handler(req, res) {
 
     const orderData = await supplierRes.json();
 
-    // Supplier failed → user keeps their money
+    // -------------------------------------------------
+    // 5. Supplier failed → automatic refund
+    // -------------------------------------------------
     if (!orderData.success) {
-      // Record the failed attempt (optional but useful)
-      await supabase.from('transactions').insert({
-        user_id,
-        customer_id: profile.customer_id,
-        type: 'purchase_failed',
-        category: productName,
-        title: productName,
-        subtitle: `Failed: ${orderData.message || orderData.code || 'Supplier error'}`,
-        amount: `₦${total.toLocaleString()}`,
-        amount_ngn: total,
-        status: 'failed',
-        notes: JSON.stringify(orderData)
-      });
+      // Refund user
+      await supabase
+        .from('profiles')
+        .update({ balance_ngn: originalBalance })
+        .eq('id', user_id);
+
+      // Record failed purchase + refund
+      await supabase.from('transactions').insert([
+        {
+          user_id,
+          customer_id: customerId,
+          type: 'purchase_failed',
+          category: productName,
+          title: productName,
+          subtitle: `Failed: ${orderData.message || orderData.code || 'Supplier error'}`,
+          amount: `₦${total.toLocaleString()}`,
+          amount_ngn: total,
+          status: 'failed'
+        },
+        {
+          user_id,
+          customer_id: customerId,
+          type: 'refund',
+          category: productName,
+          title: 'Automatic Refund',
+          subtitle: 'Order failed at supplier – balance restored',
+          amount: `₦${total.toLocaleString()}`,
+          amount_ngn: total,
+          status: 'refunded'
+        }
+      ]);
 
       return res.status(400).json({
         success: false,
         code: orderData.code || 'SUPPLIER_ERROR',
-        message: orderData.message || 'Order failed at supplier. Your balance was not charged.'
+        message: orderData.message || 'Order failed at supplier. Your balance has been refunded.'
       });
     }
 
     // -------------------------------------------------
-    // 4. Supplier succeeded → now deduct balance
-    // -------------------------------------------------
-    const newBalance = originalBalance - total;
-
-    const { error: deductErr } = await supabase
-      .from('profiles')
-      .update({ balance_ngn: newBalance })
-      .eq('id', user_id);
-
-    if (deductErr) {
-      // Extremely rare: supplier gave us the product but we couldn't deduct.
-      // In this case we still return the product (user got it) and log the issue.
-      console.error('CRITICAL: Could not deduct balance after successful supplier order', deductErr);
-
-      await supabase.from('transactions').insert({
-        user_id,
-        customer_id: profile.customer_id,
-        type: 'purchase',
-        category: productName,
-        title: productName,
-        subtitle: 'Balance deduction failed – manual review needed',
-        amount: `₦${total.toLocaleString()}`,
-        amount_ngn: total,
-        status: 'completed_but_balance_error',
-        product_details: (orderData.data.items || []).map(i => i.details).join('\n\n'),
-        supplier_order: orderData.data
-      });
-
-      return res.status(200).json({
-        success: true,
-        warning: 'Order fulfilled but balance update failed. Support has been notified.',
-        data: {
-          items: orderData.data.items,
-          total_amount: total,
-          new_balance: originalBalance   // still show old balance
-        }
-      });
-    }
-
-    deducted = true;
-
-    // -------------------------------------------------
-    // 5. Save successful transaction + product details
+    // 6. Supplier succeeded → save product + transaction
     // -------------------------------------------------
     const items = orderData.data.items || [];
     const detailsText = items.map(i => i.details).join('\n\n');
 
     await supabase.from('transactions').insert({
       user_id,
-      customer_id: profile.customer_id,
+      customer_id: customerId,
       type: 'purchase',
       category: productName,
       title: productName,
@@ -186,6 +185,9 @@ export default async function handler(req, res) {
       })
       .eq('product_key', product_key);
 
+    // -------------------------------------------------
+    // 7. Return product to customer
+    // -------------------------------------------------
     return res.status(200).json({
       success: true,
       message: 'Order fulfilled successfully',
@@ -199,9 +201,7 @@ export default async function handler(req, res) {
   } catch (err) {
     console.error('Order handler error:', err);
 
-    // -------------------------------------------------
-    // Automatic refund if we already deducted
-    // -------------------------------------------------
+    // Safety net: if we already debited, refund
     if (deducted) {
       try {
         await supabase
@@ -211,27 +211,25 @@ export default async function handler(req, res) {
 
         await supabase.from('transactions').insert({
           user_id,
+          customer_id: customerId,
           type: 'refund',
           category: productName || 'Unknown',
           title: 'Automatic Refund',
-          subtitle: `Refund for failed order – ${err.message}`,
+          subtitle: `System error – ${err.message}`,
           amount: `₦${total.toLocaleString()}`,
           amount_ngn: total,
           status: 'refunded'
         });
-
-        console.log(`Auto-refunded ₦${total} to user ${user_id}`);
       } catch (refundErr) {
-        console.error('CRITICAL: Auto-refund also failed', refundErr);
-        // You should also send yourself an alert here (email / Discord / etc.)
+        console.error('CRITICAL: Auto-refund failed', refundErr);
       }
     }
 
     return res.status(500).json({
       success: false,
       message: deducted
-        ? 'Something went wrong after payment. Your balance has been refunded.'
-        : 'Something went wrong. Your balance was not charged.'
+        ? 'Something went wrong. Your balance has been refunded.'
+        : 'Something went wrong. Please try again.'
     });
   }
 }
