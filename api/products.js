@@ -28,19 +28,25 @@ function stripHtml(html) {
 function replaceChannelLinks(text) {
   if (!text) return text;
 
-  // Replace WhatsApp links (wa.me, api.whatsapp.com, whatsapp.com/channel, chat.whatsapp.com, etc.)
   text = text.replace(
     /https?:\/\/(wa\.me\/[^\s]+|api\.whatsapp\.com\/[^\s]+|whatsapp\.com\/[^\s]+|chat\.whatsapp\.com\/[^\s]+)/gi,
     MY_WHATSAPP
   );
 
-  // Replace Telegram links (t.me, telegram.me, telegram.dog)
   text = text.replace(
     /https?:\/\/(t\.me\/[^\s]+|telegram\.me\/[^\s]+|telegram\.dog\/[^\s]+)/gi,
     MY_TELEGRAM
   );
 
   return text;
+}
+
+/** Random markup between 35% and 50% */
+function applyRandomMarkup(supplierPrice) {
+  const percent = 35 + Math.random() * 15; // 35 → 50
+  const finalPrice = Math.ceil(supplierPrice * (1 + percent / 100));
+  // Round up to nearest 50 for cleaner prices (optional)
+  return Math.ceil(finalPrice / 50) * 50;
 }
 
 function categorize(name) {
@@ -99,27 +105,46 @@ export default async function handler(req, res) {
       });
     }
 
-    // ALL products are kept (no exclusions)
     const products = supplierData.data;
+    let newCount = 0;
+    let updatedCount = 0;
 
     for (const item of products) {
       const cleanDescription = stripHtml(item.description);
       const displayDescription = replaceChannelLinks(cleanDescription);
+      const supplierPrice = Number(item.unit_price) || 0;
 
-      const { error } = await supabase.from('products').upsert(
-        {
-          product_key: item.product_key,
-          name: item.name,
-          description: cleanDescription,          // original from supplier
-          display_description: displayDescription, // with YOUR channels
-          price: item.unit_price,
-          stock_quantity: item.in_stock,
-          is_available: item.in_stock > 0,
-          category: categorize(item.name),
-          updated_at: new Date().toISOString()
-        },
-        { onConflict: 'product_key' }
-      );
+      // Check if product already exists
+      const { data: existing } = await supabase
+        .from('products')
+        .select('product_key, price')
+        .eq('product_key', item.product_key)
+        .maybeSingle();
+
+      const baseData = {
+        product_key: item.product_key,
+        name: item.name,
+        description: cleanDescription,
+        display_description: displayDescription,
+        supplier_price: supplierPrice,
+        stock_quantity: item.in_stock,
+        is_available: item.in_stock > 0,
+        category: categorize(item.name),
+        updated_at: new Date().toISOString()
+      };
+
+      if (!existing) {
+        // NEW product → apply random 35–50% markup
+        baseData.price = applyRandomMarkup(supplierPrice);
+        newCount++;
+      } else {
+        // EXISTING product → do NOT touch price (you can edit it anytime)
+        updatedCount++;
+      }
+
+      const { error } = await supabase
+        .from('products')
+        .upsert(baseData, { onConflict: 'product_key' });
 
       if (error) {
         console.error(`Error updating ${item.product_key}:`, error);
@@ -128,7 +153,9 @@ export default async function handler(req, res) {
 
     return res.status(200).json({
       success: true,
-      synced: products.length
+      synced: products.length,
+      new_products: newCount,
+      updated_products: updatedCount
     });
   } catch (error) {
     return res.status(500).json({
