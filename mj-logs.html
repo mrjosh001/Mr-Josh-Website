@@ -58,7 +58,7 @@ details[open] .product-description-toggle::before{transform:rotate(90deg);displa
 .toast{background:var(--card);border:1px solid var(--success);border-radius:12px;padding:12px 14px;display:flex;align-items:center;gap:10px;font-size:12px;font-weight:600;max-width:280px;pointer-events:all;box-shadow:var(--shadow);color:var(--text)}
 .toast.error{border-color:var(--danger)}
 
-/* PURCHASE MODAL - matches reference UI */
+/* PURCHASE MODAL */
 .purchase-modal{display:none;position:fixed;inset:0;z-index:2000;align-items:flex-end;justify-content:center;background:rgba(0,0,0,.55);backdrop-filter:blur(8px);padding:12px}
 .purchase-modal.active{display:flex}
 .purchase-sheet{background:#fff;color:#0f172a;width:100%;max-width:420px;border-radius:24px;max-height:92vh;overflow-y:auto;box-shadow:0 24px 60px rgba(0,0,0,.35);animation:sheetUp .28s ease}
@@ -172,20 +172,27 @@ function showError(reason){productGrid.innerHTML='<div class="empty-state"><div 
 function getCart(){try{return JSON.parse(localStorage.getItem('mjhub_cart')||'[]')}catch(e){return[]}}
 function saveCart(c){localStorage.setItem('mjhub_cart',JSON.stringify(c))}
 function money(n){return '₦'+Number(n||0).toLocaleString()}
+
+/* Always prefer display_description for customers */
+function getDisplayDescription(p){
+  return cleanText(p.display_description || p.description || '');
+}
+
 function getAccountFormat(p){
-  // Read only if column exists on the product row — no schema change
   return p.account_format || p.accountFormat || p.format || p.delivery_format || p.product_format || '';
 }
+
 function buildCartItem(p, qty){
   qty = Math.max(1, parseInt(qty,10)||1);
   return {
     product_id: p.id || null,
-    product_code: p.product_code || p.code || p.sku || null,
+    product_key: p.product_key || null,
+    product_code: p.product_code || p.code || p.sku || p.product_key || null,
     title: cleanText(p.name || 'Product'),
     price: (parseFloat(p.price)||0) * qty,
     unit_price: parseFloat(p.price)||0,
     type: 'log',
-    subtitle: cleanText(p.description||'').slice(0,120),
+    subtitle: getDisplayDescription(p).slice(0,120),
     category: p.category || 'Others',
     quantity: qty,
     account_format: getAccountFormat(p) || null
@@ -226,7 +233,7 @@ function renderProducts(products){
   let html='<div class="product-grid">';
   products.forEach((p,index)=>{
     const name=escapeHtml(cleanText(p.name||'Product'));
-    const desc=escapeHtml(cleanText(p.description||''));
+    const desc=escapeHtml(getDisplayDescription(p));
     const price=parseFloat(p.price)||0;
     const stock=parseInt(p.stock_quantity,10);
     const hasStock=!Number.isNaN(stock);
@@ -275,7 +282,7 @@ function openPurchaseModal(p){
   activeProduct=p;
   activeQty=1;
   const name=cleanText(p.name||'Product');
-  const desc=cleanText(p.description||'No description');
+  const desc=getDisplayDescription(p) || 'No description';
   const price=parseFloat(p.price)||0;
   const stock=parseInt(p.stock_quantity,10);
   const hasStock=!Number.isNaN(stock);
@@ -333,7 +340,6 @@ document.getElementById('psQtyPlus').addEventListener('click', function(){
 document.getElementById('psBuyBtn').addEventListener('click', function(){
   if(!activeProduct) return;
   const item=buildCartItem(activeProduct, activeQty);
-  // Single-item checkout path → cart confirm on dashboard
   saveCart([item]);
   showToast('Opening checkout...');
   closePurchaseModal();
