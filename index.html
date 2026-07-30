@@ -1366,6 +1366,7 @@ function initHashRouting() {
         } catch (e) {}
     }
     if (target && validSections.includes(target)) {
+        // Restore without wiping hash; set hash if missing
         if (!window.location.hash || window.location.hash === '#') {
             history.replaceState(null, '', '#' + target);
         }
@@ -1402,27 +1403,8 @@ async function initUserData(user) {
     const emailInput = document.getElementById('profileEmailInput');
     if (nameInput) nameInput.value = name;
     if (emailInput) emailInput.value = email;
-
-    // Fetch customer_id directly from the profiles table
     const idInput = document.getElementById('myCustomerId');
-    if (supabaseClient && user.id) {
-        try {
-            const { data, error } = await supabaseClient
-                .from('profiles')
-                .select('customer_id')
-                .eq('id', user.id)
-                .single();
-            if (!error && data && data.customer_id) {
-                if (idInput) idInput.value = data.customer_id;
-            } else {
-                if (idInput) idInput.value = user.id; // Fallback if profiles record is empty
-            }
-        } catch(e) {
-            if (idInput) idInput.value = user.id;
-        }
-    } else {
-        if (idInput) idInput.value = user.id;
-    }
+    if (idInput) idInput.value = user.id;
 }
 
 function initNavigation() {
@@ -1645,6 +1627,7 @@ function initSupportWidget() {
 
     btn.addEventListener('touchend', endDrag);
 
+    // Auto-collapse after 4 seconds on load
     scheduleCollapse();
 }
 
@@ -1906,6 +1889,7 @@ window.checkoutCart = async function() {
 
     const delivered = [];
     for (const item of cartItems) {
+        // Placeholder credentials until real delivery is connected
         const credId = item.credentials_id || ('pending-' + Date.now().toString(36));
         const credPass = item.credentials_pass || 'Will be delivered shortly';
         const order = {
@@ -1944,6 +1928,7 @@ window.checkoutCart = async function() {
 
 async function saveOrderToDb(order) {
     if (!supabaseClient || !currentUserId) {
+        // persist locally as fallback
         try {
             const key = 'mjhub_orders_' + (currentUserId || 'guest');
             const existing = JSON.parse(localStorage.getItem(key) || '[]');
@@ -1967,6 +1952,7 @@ async function saveOrderToDb(order) {
             quantity: order.quantity || 1
         }]);
     } catch(e) {
+        // table may not exist yet — keep local
         try {
             const key = 'mjhub_orders_' + currentUserId;
             const existing = JSON.parse(localStorage.getItem(key) || '[]');
@@ -2047,23 +2033,254 @@ function renderOrders() {
                 <div class="order-icon">${escapeHtml(initial)}</div>
                 <div class="order-card-main">
                     <div class="order-card-title-row">
-                        <div class="order-card-title">${escapeHtml(o.product_name)}</div>
+                        <div class="order-card-title">${escapeHtml(o.product_name || 'Product')}</div>
                         <span class="order-status-pill">${escapeHtml(status)}</span>
                     </div>
                     ${desc ? `<div class="order-card-desc">${escapeHtml(desc)}</div>` : ''}
-                    <div class="order-card-qty">Qty: ${qty}</div>
+                    <div class="order-card-qty"><i class="fa-solid fa-cube"></i> ${qty} log${qty > 1 ? 's' : ''} purchased</div>
                     <div class="order-card-bottom">
                         <div>
-                            <div class="order-card-price">₦${o.amount ? o.amount.toLocaleString() : '0'}</div>
-                            <div class="order-card-date">${date}</div>
+                            <div class="order-card-price">₦${Number(o.amount || 0).toLocaleString()}</div>
+                            <div class="order-card-date">${escapeHtml(date)}</div>
                         </div>
-                        <button class="order-view-btn" onclick="openSingleOrderReceipt(${i})">View Details</button>
+                        <button class="order-view-btn" onclick="openOrderReceiptFromIndex(${i})"><i class="fa-regular fa-eye"></i> View Log</button>
                     </div>
                 </div>
             </div>
         </div>`;
     }).join('');
 }
+
+window.openOrderReceiptFromIndex = function(idx) {
+    const item = userOrders[idx];
+    if (!item) return;
+    showOrderReceipt([item], true);
+};
+
+function showOrderReceipt(items, isViewOnly = false) {
+    lastReceiptItems = Array.isArray(items) ? items : [items];
+    const modal = document.getElementById('orderReceiptModal');
+    const successBlock = document.getElementById('receiptSuccessBlock');
+    const credBox = document.getElementById('receiptCredBox');
+    const guideLink = document.getElementById('receiptGuideLink');
+    const titleEl = document.getElementById('receiptHeaderTitle');
+    const subEl = document.getElementById('receiptHeaderSub');
+    const footerBtn = document.getElementById('receiptFooterBtn');
+
+    if (!modal || !lastReceiptItems.length) return;
+
+    const first = lastReceiptItems[0];
+    const totalQty = lastReceiptItems.reduce((acc, it) => acc + (it.quantity || 1), 0);
+
+    if (isViewOnly) {
+        if (successBlock) successBlock.style.display = 'none';
+        if (titleEl) titleEl.textContent = first.product_name || 'Order Details';
+        if (subEl) subEl.textContent = `Order #${formatOrderId(first)}`;
+        if (footerBtn) footerBtn.textContent = 'Close';
+    } else {
+        if (successBlock) successBlock.style.display = 'block';
+        if (titleEl) titleEl.textContent = 'Order Complete';
+        if (subEl) subEl.textContent = `${totalQty} log${totalQty > 1 ? 's' : ''}`;
+        safeSet('receiptSubText', `You purchased ${totalQty} item${totalQty > 1 ? 's' : ''}.`);
+        if (footerBtn) footerBtn.textContent = 'View My Orders';
+    }
+
+    if (guideLink) {
+        guideLink.href = first.guide_url || 'https://t.me/faddedsocialsgroup/1030';
+    }
+
+    credBox.innerHTML = lastReceiptItems.map((it, idx) => {
+        const idVal = it.credentials_id || 'N/A';
+        const passVal = it.credentials_pass || 'N/A';
+        const label = it.product_name ? escapeHtml(it.product_name) : `Item #${idx+1}`;
+        return `
+            <div style="font-weight:800;font-size:12px;color:#0f172a;margin-bottom:8px;padding-bottom:4px;border-bottom:1px dashed #e2e8f0;">
+                ${label}
+            </div>
+            <div class="receipt-cred-row">
+                <span class="receipt-cred-label">USERNAME</span>
+                <span class="receipt-cred-val">${escapeHtml(idVal)}</span>
+                <button class="receipt-cred-copy" onclick="copyText('${escapeHtml(idVal)}')"><i class="fa-regular fa-copy"></i></button>
+            </div>
+            <div class="receipt-cred-row">
+                <span class="receipt-cred-label pass">PASSWORD</span>
+                <span class="receipt-cred-val">${escapeHtml(passVal)}</span>
+                <button class="receipt-cred-copy" onclick="copyText('${escapeHtml(passVal)}')"><i class="fa-regular fa-copy"></i></button>
+            </div>`;
+    }).join('<div style="height:12px;"></div>');
+
+    modal.classList.add('active');
+}
+
+window.closeOrderReceipt = function() {
+    document.getElementById('orderReceiptModal').classList.remove('active');
+};
+
+window.copyText = function(str) {
+    navigator.clipboard.writeText(str);
+    showToast('Copied to clipboard!', 'success');
+};
+
+window.copyAllCredentials = function() {
+    if (!lastReceiptItems.length) return;
+    const block = lastReceiptItems.map(it => {
+        return `Product: ${it.product_name || 'Log'}\nUsername: ${it.credentials_id || ''}\nPassword: ${it.credentials_pass || ''}`;
+    }).join('\n\n---\n\n');
+    navigator.clipboard.writeText(block);
+    showToast('All credentials copied!', 'success');
+};
+
+window.downloadCredentialsTxt = function() {
+    if (!lastReceiptItems.length) return;
+    const content = lastReceiptItems.map((it, i) => {
+        return `[Item ${i+1}]\nProduct: ${it.product_name || ''}\nOrder ID: ${formatOrderId(it)}\nUsername: ${it.credentials_id || ''}\nPassword: ${it.credentials_pass || ''}\nGuide: ${it.guide_url || ''}\nDate: ${it.created_at || new Date().toISOString()}`;
+    }).join('\n\n====================\n\n');
+
+    const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `MJHUB-Order-${Date.now()}.txt`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    showToast('Downloaded credentials text file', 'success');
+};
+
+/* HISTORY DRAWER */
+window.toggleActivityHistory = function() {
+    const drawer = document.getElementById('activityHistoryDrawer');
+    const overlay = document.getElementById('sidebarOverlay');
+    const isOpen = drawer.classList.contains('active');
+    if (isOpen) {
+        drawer.classList.remove('active');
+        overlay.classList.remove('active');
+    } else {
+        drawer.classList.add('active');
+        overlay.classList.add('active');
+        renderHistoryList('all');
+    }
+};
+
+window.filterTransactions = function(type, btn) {
+    document.querySelectorAll('.drawer-filter-scroll .filter-tab').forEach(t => t.classList.remove('active'));
+    if (btn) btn.classList.add('active');
+    renderHistoryList(type);
+};
+
+function renderHistoryList(filterType = 'all') {
+    const container = document.getElementById('transactionListContainer');
+    if (!container) return;
+
+    let items = transactions;
+    if (filterType !== 'all') {
+        items = transactions.filter(t => t.type === filterType || (filterType === 'log' && t.type === 'logs'));
+    }
+
+    if (!items.length) {
+        container.innerHTML = `<div class="empty-state"><div class="empty-state-icon">📜</div><h4>No ${filterType === 'all' ? '' : filterType} activity</h4><p>Your transactions will appear here when you perform actions</p></div>`;
+        return;
+    }
+
+    container.innerHTML = items.map(t => {
+        let iconClass = 'fa-cube';
+        let boxClass = 'tx-blue';
+        if (t.type === 'deposit') { iconClass = 'fa-arrow-down'; boxClass = 'tx-green'; }
+        else if (t.type === 'sms') { iconClass = 'fa-phone'; boxClass = 'tx-orange'; }
+        else if (t.type === 'booster') { iconClass = 'fa-bolt'; boxClass = 'tx-blue'; }
+        else if (t.type === 'conversion') { iconClass = 'fa-right-left'; boxClass = 'tx-purple'; }
+
+        return `
+        <div class="transaction-card">
+            <div class="transaction-left">
+                <div class="transaction-icon-box ${boxClass}"><i class="fa-solid ${iconClass}"></i></div>
+                <div class="transaction-details">
+                    <h4>${escapeHtml(t.title)}</h4>
+                    <span>${escapeHtml(t.date || '')} • ${escapeHtml(t.channel || 'Wallet')}</span>
+                </div>
+            </div>
+            <div class="transaction-right">
+                <div class="transaction-amount">${escapeHtml(t.amount)}</div>
+                <span class="badge-status badge-success">${escapeHtml(t.status || 'Success')}</span>
+            </div>
+        </div>`;
+    }).join('');
+}
+
+/* NOTIFICATIONS */
+function buildNotificationsFromActivity() {
+    userNotifications = [];
+    if (transactions.length > 0) {
+        transactions.slice(0, 5).forEach(tx => {
+            userNotifications.push({
+                title: tx.title,
+                time: tx.date,
+                text: `${tx.subtitle || tx.title} - ${tx.amount}`
+            });
+        });
+    }
+}
+
+function renderNotifications() {
+    const list = document.getElementById('notifList');
+    const dot = document.getElementById('notifDot');
+    if (!list) return;
+
+    if (!userNotifications.length) {
+        list.innerHTML = `<div class="notif-empty">No activity yet</div>`;
+        if (dot) dot.style.display = 'none';
+        return;
+    }
+
+    if (dot) dot.style.display = 'block';
+    list.innerHTML = userNotifications.map(n => `
+        <div class="notif-item">
+            <div class="notif-title">${escapeHtml(n.title)}</div>
+            <div style="color:var(--muted);font-size:12px;">${escapeHtml(n.text || '')}</div>
+            <div class="notif-time">${escapeHtml(n.time || '')}</div>
+        </div>`).join('');
+}
+
+window.markAllNotifsRead = function() {
+    const dot = document.getElementById('notifDot');
+    if (dot) dot.style.display = 'none';
+    showToast('Notifications marked as read', 'info');
+};
+
+window.processDeposit = async function() {
+    const provider = document.getElementById('depositProviderSelect').value;
+    const wallet = document.getElementById('depositWalletSelect').value;
+    const amount = parseFloat(document.getElementById('depositInput').value) || 0;
+    if (amount <= 0) return showToast('Enter valid deposit amount', 'error');
+
+    showToast('Processing deposit request...', 'info');
+    await sleep(1000);
+
+    if (wallet === 'usd') currentBalanceUsd += amount;
+    else currentBalanceNgn += amount;
+
+    if (supabaseClient && currentUserId) {
+        await supabaseClient.from('profiles').update({ balance: currentBalanceNgn, balance_usd: currentBalanceUsd }).eq('id', currentUserId);
+    }
+    updateBalanceDisplay();
+
+    const tx = {
+        id: Date.now(), type: 'deposit', title: `Deposit via ${provider}`,
+        subtitle: `Funded ${wallet.toUpperCase()} Wallet`,
+        amount: `${wallet === 'usd' ? '$' : '₦'}${amount.toLocaleString()}`,
+        date: new Date().toLocaleString(), status: 'Success',
+        paymentProvider: provider, channel: 'Deposit'
+    };
+    transactions.unshift(tx);
+    await saveTransaction(tx);
+    renderRecentActivity();
+    buildNotificationsFromActivity();
+    renderNotifications();
+
+    document.getElementById('depositInput').value = '';
+    showToast(`Deposit of ${wallet === 'usd' ? '$' : '₦'}${amount} complete!`, 'success');
+};
 </script>
 </body>
 </html>
