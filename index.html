@@ -608,7 +608,7 @@ body::before {
     position: fixed; bottom: 0; left: 0; right: 0; height: 72px;
     background: var(--nav); backdrop-filter: blur(18px) saturate(1.4);
     border-top: 1px solid var(--border);
-    display: flex; justify-style: space-around; align-items: center; z-index: 1300;
+    display: flex; justify-content: space-around; align-items: center; z-index: 1300;
     padding-bottom: env(safe-area-inset-bottom, 0);
 }
 .nav-item {
@@ -745,6 +745,7 @@ body::before {
 .notif-list { max-height: 320px; overflow-y: auto; }
 .notif-empty { text-align: center; color: var(--muted); font-size: 13px; padding: 20px 0; }
 
+
 .drawer-hero {
     background: linear-gradient(135deg, #5b5cf0 0%, #7c3aed 55%, #8b5cf6 100%);
     border-radius: 24px 24px 0 0; padding: 12px 16px 14px; color: #fff;
@@ -774,6 +775,7 @@ body::before {
 .activity-history-drawer {
     padding: 0 !important; background: var(--card);
 }
+
 </style>
 </head>
 <body>
@@ -883,21 +885,8 @@ body::before {
             </div>
         </div>
 
-        <div id="homeExtraSlot">
-            <div class="content-card" style="margin-top: 14px;">
-                <div class="section-title-row">
-                    <span class="section-title">Recent Activity</span>
-                    <span class="see-all-link" onclick="toggleActivityHistory()">See All</span>
-                </div>
-                <div id="recentActivityPreview">
-                    <div class="empty-state">
-                        <div class="empty-state-icon">📋</div>
-                        <h4>No Activity Yet</h4>
-                        <p>Your transactions will appear here</p>
-                    </div>
-                </div>
-            </div>
-        </div>
+        <!-- Home middle area left blank for now (history is on the bottom nav) -->
+        <div id="homeExtraSlot"></div>
     </section>
 
     <section id="profile" class="app-section">
@@ -987,19 +976,6 @@ body::before {
                         <button class="btn-sm-primary" onclick="addToCart('WhatsApp OTP',800,'sms','Virtual Line OTP')">Add to Cart</button>
                     </div>
                 </div>
-                <div class="product-item-card">
-                    <div class="product-info-top">
-                        <div>
-                            <div class="product-title">Telegram OTP</div>
-                            <div class="helper-text" style="margin:4px 0 0;">Non-VoIP Dedicated Line</div>
-                            <span class="product-badge">Instant</span>
-                        </div>
-                        <div class="product-price">₦1,200</div>
-                    </div>
-                    <div class="product-actions-row">
-                        <button class="btn-sm-primary" onclick="addToCart('Telegram OTP',1200,'sms','Virtual Line OTP')">Add to Cart</button>
-                    </div>
-                </div>
             </div>
         </div>
     </section>
@@ -1022,23 +998,11 @@ body::before {
                         <button class="btn-sm-primary" onclick="addToCart('Instagram Followers 1k',2500,'booster','SMM Panel')">Add to Cart</button>
                     </div>
                 </div>
-                <div class="product-item-card">
-                    <div class="product-info-top">
-                        <div>
-                            <div class="product-title">TikTok Views (10k)</div>
-                            <div class="helper-text" style="margin:4px 0 0;">High Speed Engagement</div>
-                            <span class="product-badge">Fast Delivery</span>
-                        </div>
-                        <div class="product-price">₦1,500</div>
-                    </div>
-                    <div class="product-actions-row">
-                        <button class="btn-sm-primary" onclick="addToCart('TikTok Views 10k',1500,'booster','SMM Panel')">Add to Cart</button>
-                    </div>
-                </div>
             </div>
         </div>
     </section>
 
+    
     <section id="orders" class="app-section">
         <div class="content-card orders-page-wrap">
             <h2>My Orders</h2>
@@ -1053,7 +1017,7 @@ body::before {
         </div>
     </section>
 
-    <section id="cart" class="app-section">
+<section id="cart" class="app-section">
         <div class="content-card">
             <h2>Shopping Cart</h2>
             <p class="helper-text">Review your items before checkout.</p>
@@ -1265,6 +1229,7 @@ body::before {
     </button>
 </nav>
 
+
 <!-- CONFIRM CHECKOUT -->
 <div class="currency-modal" id="confirmCheckoutModal">
     <div class="confirm-modal-card">
@@ -1322,6 +1287,8 @@ if (window.supabase) {
     supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 }
 
+
+/* Easy to extend: add mj-sms.html / mj-boosters.html paths when ready */
 const MJ_BUSINESSES = {
     logs:     { id: 'log',     label: 'MJ Logs',     href: 'mj-logs.html',     type: 'log' },
     sms:      { id: 'sms',     label: 'MJ SMS',      href: 'mj-sms.html',      type: 'sms' },
@@ -1399,6 +1366,7 @@ function initHashRouting() {
         } catch (e) {}
     }
     if (target && validSections.includes(target)) {
+        // Restore without wiping hash; set hash if missing
         if (!window.location.hash || window.location.hash === '#') {
             history.replaceState(null, '', '#' + target);
         }
@@ -1436,21 +1404,7 @@ async function initUserData(user) {
     if (nameInput) nameInput.value = name;
     if (emailInput) emailInput.value = email;
     const idInput = document.getElementById('myCustomerId');
-    let shortCode = '';
-    try {
-        if (supabaseClient) {
-            const { data: prof } = await supabaseClient
-                .from('profiles')
-                .select('customer_id, short_id, user_code, referral_code, customer_code')
-                .eq('id', user.id)
-                .maybeSingle();
-            if (prof) {
-                shortCode = prof.customer_id || prof.short_id || prof.user_code || prof.customer_code || prof.referral_code || '';
-            }
-        }
-    } catch (e) {}
-    if (idInput) idInput.value = shortCode || user.id;
-    userData.customerCode = shortCode || user.id;
+    if (idInput) idInput.value = user.id;
 }
 
 function initNavigation() {
@@ -1673,6 +1627,7 @@ function initSupportWidget() {
 
     btn.addEventListener('touchend', endDrag);
 
+    // Auto-collapse after 4 seconds on load
     scheduleCollapse();
 }
 
@@ -1895,7 +1850,7 @@ function updateCartDisplay() {
         </tr>`;
     }).join('');
     if (total) total.textContent = '₦' + sum.toLocaleString(undefined, {minimumFractionDigits:2});
-}
+};
 
 window.openCheckoutConfirm = function() {
     if (cartItems.length === 0) return showToast('Cart is empty', 'warning');
@@ -1934,8 +1889,9 @@ window.checkoutCart = async function() {
 
     const delivered = [];
     for (const item of cartItems) {
-        const credId = item.credentials_id || ('usr_' + Math.random().toString(36).slice(2, 8));
-        const credPass = item.credentials_pass || ('pass_' + Math.random().toString(36).slice(2, 8));
+        // Placeholder credentials until real delivery is connected
+        const credId = item.credentials_id || ('pending-' + Date.now().toString(36));
+        const credPass = item.credentials_pass || 'Will be delivered shortly';
         const order = {
             id: 'ord_' + Date.now() + '_' + Math.random().toString(36).slice(2,7),
             order_id: generateOrderId(),
@@ -1972,6 +1928,7 @@ window.checkoutCart = async function() {
 
 async function saveOrderToDb(order) {
     if (!supabaseClient || !currentUserId) {
+        // persist locally as fallback
         try {
             const key = 'mjhub_orders_' + (currentUserId || 'guest');
             const existing = JSON.parse(localStorage.getItem(key) || '[]');
@@ -1995,6 +1952,7 @@ async function saveOrderToDb(order) {
             quantity: order.quantity || 1
         }]);
     } catch(e) {
+        // table may not exist yet — keep local
         try {
             const key = 'mjhub_orders_' + currentUserId;
             const existing = JSON.parse(localStorage.getItem(key) || '[]');
@@ -2075,19 +2033,17 @@ function renderOrders() {
                 <div class="order-icon">${escapeHtml(initial)}</div>
                 <div class="order-card-main">
                     <div class="order-card-title-row">
-                        <div class="order-card-title">${escapeHtml(o.product_name)}</div>
+                        <div class="order-card-title">${escapeHtml(o.product_name || 'Product')}</div>
                         <span class="order-status-pill">${escapeHtml(status)}</span>
                     </div>
                     ${desc ? `<div class="order-card-desc">${escapeHtml(desc)}</div>` : ''}
-                    <div class="order-card-qty"><i class="fa-solid fa-layer-group"></i> Qty: ${qty}</div>
+                    <div class="order-card-qty"><i class="fa-solid fa-cube"></i> ${qty} log${qty > 1 ? 's' : ''} purchased</div>
                     <div class="order-card-bottom">
                         <div>
-                            <div class="order-card-price">₦${o.amount.toLocaleString()}</div>
-                            <div class="order-card-date">${date}</div>
+                            <div class="order-card-price">₦${Number(o.amount || 0).toLocaleString()}</div>
+                            <div class="order-card-date">${escapeHtml(date)}</div>
                         </div>
-                        <button class="order-view-btn" onclick="showOrderReceipt([userOrders[${i}]])">
-                            <i class="fa-regular fa-eye"></i> View Details
-                        </button>
+                        <button class="order-view-btn" onclick="openOrderReceiptFromIndex(${i})"><i class="fa-regular fa-eye"></i> View Log</button>
                     </div>
                 </div>
             </div>
@@ -2095,170 +2051,175 @@ function renderOrders() {
     }).join('');
 }
 
-function showOrderReceipt(items) {
-    if (!items || !items.length) return;
-    lastReceiptItems = items;
-    const isMultiple = items.length > 1;
-    
-    safeSet('receiptHeaderTitle', isMultiple ? 'Orders Complete' : 'Order Complete');
-    safeSet('receiptHeaderSub', `${items.length} ${items.length === 1 ? 'item' : 'items'}`);
-    safeSet('receiptSubText', `You purchased ${items.length} ${items.length === 1 ? 'item' : 'items'}.`);
-    
-    const credBox = document.getElementById('receiptCredBox');
-    credBox.innerHTML = items.map((item, idx) => `
-        <div style="${idx > 0 ? 'margin-top:12px;padding-top:12px;border-top:1px solid #e2e8f0;' : ''}">
-            <div style="font-size:12px;font-weight:800;color:#0f172a;margin-bottom:6px;">${escapeHtml(item.product_name)}</div>
-            <div class="receipt-cred-row">
-                <span class="receipt-cred-label">Login ID:</span>
-                <span class="receipt-cred-val">${escapeHtml(item.credentials_id || 'N/A')}</span>
-                <button class="receipt-cred-copy" onclick="copyText('${escapeHtml(item.credentials_id)}')"><i class="fa-regular fa-copy"></i></button>
-            </div>
-            <div class="receipt-cred-row">
-                <span class="receipt-cred-label pass">Password:</span>
-                <span class="receipt-cred-val">${escapeHtml(item.credentials_pass || 'N/A')}</span>
-                <button class="receipt-cred-copy" onclick="copyText('${escapeHtml(item.credentials_pass)}')"><i class="fa-regular fa-copy"></i></button>
-            </div>
-        </div>
-    `).join('');
+window.openOrderReceiptFromIndex = function(idx) {
+    const item = userOrders[idx];
+    if (!item) return;
+    showOrderReceipt([item], true);
+};
 
+function showOrderReceipt(items, isViewOnly = false) {
+    lastReceiptItems = Array.isArray(items) ? items : [items];
     const modal = document.getElementById('orderReceiptModal');
-    if (modal) modal.classList.add('active');
+    const successBlock = document.getElementById('receiptSuccessBlock');
+    const credBox = document.getElementById('receiptCredBox');
+    const guideLink = document.getElementById('receiptGuideLink');
+    const titleEl = document.getElementById('receiptHeaderTitle');
+    const subEl = document.getElementById('receiptHeaderSub');
+    const footerBtn = document.getElementById('receiptFooterBtn');
+
+    if (!modal || !lastReceiptItems.length) return;
+
+    const first = lastReceiptItems[0];
+    const totalQty = lastReceiptItems.reduce((acc, it) => acc + (it.quantity || 1), 0);
+
+    if (isViewOnly) {
+        if (successBlock) successBlock.style.display = 'none';
+        if (titleEl) titleEl.textContent = first.product_name || 'Order Details';
+        if (subEl) subEl.textContent = `Order #${formatOrderId(first)}`;
+        if (footerBtn) footerBtn.textContent = 'Close';
+    } else {
+        if (successBlock) successBlock.style.display = 'block';
+        if (titleEl) titleEl.textContent = 'Order Complete';
+        if (subEl) subEl.textContent = `${totalQty} log${totalQty > 1 ? 's' : ''}`;
+        safeSet('receiptSubText', `You purchased ${totalQty} item${totalQty > 1 ? 's' : ''}.`);
+        if (footerBtn) footerBtn.textContent = 'View My Orders';
+    }
+
+    if (guideLink) {
+        guideLink.href = first.guide_url || 'https://t.me/faddedsocialsgroup/1030';
+    }
+
+    credBox.innerHTML = lastReceiptItems.map((it, idx) => {
+        const idVal = it.credentials_id || 'N/A';
+        const passVal = it.credentials_pass || 'N/A';
+        const label = it.product_name ? escapeHtml(it.product_name) : `Item #${idx+1}`;
+        return `
+            <div style="font-weight:800;font-size:12px;color:#0f172a;margin-bottom:8px;padding-bottom:4px;border-bottom:1px dashed #e2e8f0;">
+                ${label}
+            </div>
+            <div class="receipt-cred-row">
+                <span class="receipt-cred-label">USERNAME</span>
+                <span class="receipt-cred-val">${escapeHtml(idVal)}</span>
+                <button class="receipt-cred-copy" onclick="copyText('${escapeHtml(idVal)}')"><i class="fa-regular fa-copy"></i></button>
+            </div>
+            <div class="receipt-cred-row">
+                <span class="receipt-cred-label pass">PASSWORD</span>
+                <span class="receipt-cred-val">${escapeHtml(passVal)}</span>
+                <button class="receipt-cred-copy" onclick="copyText('${escapeHtml(passVal)}')"><i class="fa-regular fa-copy"></i></button>
+            </div>`;
+    }).join('<div style="height:12px;"></div>');
+
+    modal.classList.add('active');
 }
 
 window.closeOrderReceipt = function() {
-    const modal = document.getElementById('orderReceiptModal');
-    if (modal) modal.classList.remove('active');
+    document.getElementById('orderReceiptModal').classList.remove('active');
 };
 
-window.copyText = function(text) {
-    if (!text) return;
-    navigator.clipboard.writeText(text);
-    showToast('Copied to clipboard', 'success');
+window.copyText = function(str) {
+    navigator.clipboard.writeText(str);
+    showToast('Copied to clipboard!', 'success');
 };
 
 window.copyAllCredentials = function() {
-    if (!lastReceiptItems || !lastReceiptItems.length) return;
-    const text = lastReceiptItems.map(item => 
-        `Item: ${item.product_name}\nID: ${item.credentials_id || 'N/A'}\nPassword: ${item.credentials_pass || 'N/A'}`
-    ).join('\n\n---\n\n');
-    navigator.clipboard.writeText(text);
+    if (!lastReceiptItems.length) return;
+    const block = lastReceiptItems.map(it => {
+        return `Product: ${it.product_name || 'Log'}\nUsername: ${it.credentials_id || ''}\nPassword: ${it.credentials_pass || ''}`;
+    }).join('\n\n---\n\n');
+    navigator.clipboard.writeText(block);
     showToast('All credentials copied!', 'success');
 };
 
 window.downloadCredentialsTxt = function() {
-    if (!lastReceiptItems || !lastReceiptItems.length) return;
-    const text = lastReceiptItems.map(item => 
-        `Product: ${item.product_name}\nOrder ID: ${item.order_id}\nUsername/Email: ${item.credentials_id || 'N/A'}\nPassword: ${item.credentials_pass || 'N/A'}\nDate: ${new Date(item.created_at).toLocaleString()}`
-    ).join('\n\n========================================\n\n');
-    
-    const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
+    if (!lastReceiptItems.length) return;
+    const content = lastReceiptItems.map((it, i) => {
+        return `[Item ${i+1}]\nProduct: ${it.product_name || ''}\nOrder ID: ${formatOrderId(it)}\nUsername: ${it.credentials_id || ''}\nPassword: ${it.credentials_pass || ''}\nGuide: ${it.guide_url || ''}\nDate: ${it.created_at || new Date().toISOString()}`;
+    }).join('\n\n====================\n\n');
+
+    const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
-    a.href = URL.createObjectURL(blob);
+    a.href = url;
     a.download = `MJHUB-Order-${Date.now()}.txt`;
+    document.body.appendChild(a);
     a.click();
-    showToast('Downloaded .txt file', 'success');
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    showToast('Downloaded credentials text file', 'success');
 };
 
-window.processDeposit = async function() {
-    const provider = document.getElementById('depositProviderSelect').value;
-    const wallet = document.getElementById('depositWalletSelect').value;
-    const amountVal = parseFloat(document.getElementById('depositInput').value) || 0;
-
-    if (amountVal <= 0) return showToast('Enter a valid amount', 'error');
-
-    showToast('Processing deposit request...', 'info');
-    await sleep(1000);
-
-    const isNgn = wallet === 'ngn';
-    if (isNgn) currentBalanceNgn += amountVal;
-    else currentBalanceUsd += amountVal;
-
-    if (supabaseClient && currentUserId) {
-        const updatePayload = isNgn ? { balance: currentBalanceNgn } : { balance_usd: currentBalanceUsd };
-        await supabaseClient.from('profiles').update(updatePayload).eq('id', currentUserId);
-    }
-    updateBalanceDisplay();
-
-    const tx = {
-        id: Date.now(),
-        type: 'deposit',
-        title: `Wallet Deposit (${provider})`,
-        subtitle: `Funded ${wallet.toUpperCase()} Wallet`,
-        amount: `${isNgn ? '₦' : '$'}${amountVal.toLocaleString(undefined, {minimumFractionDigits:2})}`,
-        date: new Date().toLocaleString(),
-        status: 'Success',
-        paymentProvider: provider,
-        channel: wallet.toUpperCase()
-    };
-    transactions.unshift(tx);
-    await saveTransaction(tx);
-    renderRecentActivity();
-    buildNotificationsFromActivity();
-    renderNotifications();
-
-    document.getElementById('depositInput').value = '';
-    showToast('Deposit completed successfully!', 'success');
-};
-
+/* HISTORY DRAWER */
 window.toggleActivityHistory = function() {
     const drawer = document.getElementById('activityHistoryDrawer');
     const overlay = document.getElementById('sidebarOverlay');
-    const isActive = drawer.classList.contains('active');
-    
-    if (isActive) {
+    const isOpen = drawer.classList.contains('active');
+    if (isOpen) {
         drawer.classList.remove('active');
         overlay.classList.remove('active');
     } else {
-        renderTransactionList(transactions);
         drawer.classList.add('active');
         overlay.classList.add('active');
+        renderHistoryList('all');
     }
 };
 
 window.filterTransactions = function(type, btn) {
-    document.querySelectorAll('.drawer-filter-scroll .filter-tab').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.drawer-filter-scroll .filter-tab').forEach(t => t.classList.remove('active'));
     if (btn) btn.classList.add('active');
-
-    if (type === 'all') {
-        renderTransactionList(transactions);
-    } else {
-        const filtered = transactions.filter(t => t.type === type);
-        renderTransactionList(filtered);
-    }
+    renderHistoryList(type);
 };
 
-function renderTransactionList(list) {
+function renderHistoryList(filterType = 'all') {
     const container = document.getElementById('transactionListContainer');
     if (!container) return;
-    
-    if (!list || list.length === 0) {
-        container.innerHTML = `<div class="empty-state"><div class="empty-state-icon">📋</div><h4>No activity found</h4><p>No transactions match this category.</p></div>`;
+
+    let items = transactions;
+    if (filterType !== 'all') {
+        items = transactions.filter(t => t.type === filterType || (filterType === 'log' && t.type === 'logs'));
+    }
+
+    if (!items.length) {
+        container.innerHTML = `<div class="empty-state"><div class="empty-state-icon">📜</div><h4>No ${filterType === 'all' ? '' : filterType} activity</h4><p>Your transactions will appear here when you perform actions</p></div>`;
         return;
     }
 
-    container.innerHTML = list.map(tx => `
+    container.innerHTML = items.map(t => {
+        let iconClass = 'fa-cube';
+        let boxClass = 'tx-blue';
+        if (t.type === 'deposit') { iconClass = 'fa-arrow-down'; boxClass = 'tx-green'; }
+        else if (t.type === 'sms') { iconClass = 'fa-phone'; boxClass = 'tx-orange'; }
+        else if (t.type === 'booster') { iconClass = 'fa-bolt'; boxClass = 'tx-blue'; }
+        else if (t.type === 'conversion') { iconClass = 'fa-right-left'; boxClass = 'tx-purple'; }
+
+        return `
         <div class="transaction-card">
             <div class="transaction-left">
-                <div class="transaction-icon-box tx-blue"><i class="fa-solid fa-receipt"></i></div>
+                <div class="transaction-icon-box ${boxClass}"><i class="fa-solid ${iconClass}"></i></div>
                 <div class="transaction-details">
-                    <h4>${escapeHtml(tx.title)}</h4>
-                    <span>${escapeHtml(tx.subtitle || tx.paymentProvider)} • ${tx.date}</span>
+                    <h4>${escapeHtml(t.title)}</h4>
+                    <span>${escapeHtml(t.date || '')} • ${escapeHtml(t.channel || 'Wallet')}</span>
                 </div>
             </div>
             <div class="transaction-right">
-                <div class="transaction-amount">${escapeHtml(tx.amount)}</div>
-                <span class="badge-status badge-success">${escapeHtml(tx.status)}</span>
+                <div class="transaction-amount">${escapeHtml(t.amount)}</div>
+                <span class="badge-status badge-success">${escapeHtml(t.status || 'Success')}</span>
             </div>
-        </div>
-    `).join('');
+        </div>`;
+    }).join('');
 }
 
+/* NOTIFICATIONS */
 function buildNotificationsFromActivity() {
-    userNotifications = transactions.slice(0, 5).map(tx => ({
-        title: tx.title,
-        desc: `Status: ${tx.status} • ${tx.amount}`,
-        time: tx.date
-    }));
+    userNotifications = [];
+    if (transactions.length > 0) {
+        transactions.slice(0, 5).forEach(tx => {
+            userNotifications.push({
+                title: tx.title,
+                time: tx.date,
+                text: `${tx.subtitle || tx.title} - ${tx.amount}`
+            });
+        });
+    }
 }
 
 function renderNotifications() {
@@ -2267,7 +2228,7 @@ function renderNotifications() {
     if (!list) return;
 
     if (!userNotifications.length) {
-        list.innerHTML = `<div class="notif-empty">No notifications yet</div>`;
+        list.innerHTML = `<div class="notif-empty">No activity yet</div>`;
         if (dot) dot.style.display = 'none';
         return;
     }
@@ -2276,16 +2237,49 @@ function renderNotifications() {
     list.innerHTML = userNotifications.map(n => `
         <div class="notif-item">
             <div class="notif-title">${escapeHtml(n.title)}</div>
-            <div>${escapeHtml(n.desc)}</div>
-            <div class="notif-time">${escapeHtml(n.time)}</div>
-        </div>
-    `).join('');
+            <div style="color:var(--muted);font-size:12px;">${escapeHtml(n.text || '')}</div>
+            <div class="notif-time">${escapeHtml(n.time || '')}</div>
+        </div>`).join('');
 }
 
 window.markAllNotifsRead = function() {
     const dot = document.getElementById('notifDot');
     if (dot) dot.style.display = 'none';
     showToast('Notifications marked as read', 'info');
+};
+
+window.processDeposit = async function() {
+    const provider = document.getElementById('depositProviderSelect').value;
+    const wallet = document.getElementById('depositWalletSelect').value;
+    const amount = parseFloat(document.getElementById('depositInput').value) || 0;
+    if (amount <= 0) return showToast('Enter valid deposit amount', 'error');
+
+    showToast('Processing deposit request...', 'info');
+    await sleep(1000);
+
+    if (wallet === 'usd') currentBalanceUsd += amount;
+    else currentBalanceNgn += amount;
+
+    if (supabaseClient && currentUserId) {
+        await supabaseClient.from('profiles').update({ balance: currentBalanceNgn, balance_usd: currentBalanceUsd }).eq('id', currentUserId);
+    }
+    updateBalanceDisplay();
+
+    const tx = {
+        id: Date.now(), type: 'deposit', title: `Deposit via ${provider}`,
+        subtitle: `Funded ${wallet.toUpperCase()} Wallet`,
+        amount: `${wallet === 'usd' ? '$' : '₦'}${amount.toLocaleString()}`,
+        date: new Date().toLocaleString(), status: 'Success',
+        paymentProvider: provider, channel: 'Deposit'
+    };
+    transactions.unshift(tx);
+    await saveTransaction(tx);
+    renderRecentActivity();
+    buildNotificationsFromActivity();
+    renderNotifications();
+
+    document.getElementById('depositInput').value = '';
+    showToast(`Deposit of ${wallet === 'usd' ? '$' : '₦'}${amount} complete!`, 'success');
 };
 </script>
 </body>
