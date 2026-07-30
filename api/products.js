@@ -7,6 +7,22 @@ const supabase = createClient(
 
 const EXCLUDED_KEYS = ['prod_119', 'prod_189', 'prod_187', 'prod_214'];
 
+function stripHtml(html) {
+  if (!html) return '';
+  let text = String(html);
+  text = text
+    .replace(/&nbsp;/gi, ' ')
+    .replace(/&amp;/gi, '&')
+    .replace(/&lt;/gi, '<')
+    .replace(/&gt;/gi, '>')
+    .replace(/&quot;/gi, '"')
+    .replace(/&#39;/gi, "'");
+  text = text.replace(/<br\s*\/?>/gi, ' ').replace(/<\/(div|p|li)>/gi, ' ');
+  text = text.replace(/<[^>]*>/g, '');
+  text = text.replace(/\s+/g, ' ').trim();
+  return text;
+}
+
 function categorize(name) {
   const n = name.toUpperCase();
   if (n.includes('PROXY')) return '9PROXY (IPS)';
@@ -58,7 +74,7 @@ export default async function handler(req, res) {
       const { error } = await supabase.from('products').upsert({
         product_key: item.product_key,
         name: item.name,
-        description: item.description,
+        description: stripHtml(item.description),
         price: item.unit_price,
         stock_quantity: item.in_stock,
         is_available: item.in_stock > 0,
