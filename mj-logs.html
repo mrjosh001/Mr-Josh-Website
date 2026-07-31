@@ -397,7 +397,15 @@ async function confirmBuyNow(){
     return;
   }
 
-  const price = parseFloat(activeProduct.price)||0;
+  // Capture the product now, while activeProduct is still set. closePurchaseModal()
+  // (called below, after a successful order) resets the global activeProduct to
+  // null — reading activeProduct again after that point was throwing
+  // "null is not an object (evaluating 'p.name')" on every successful purchase,
+  // which then got caught and shown to the customer as a false "Network error"
+  // even though the order had already gone through and been paid for.
+  const purchasedProduct = activeProduct;
+
+  const price = parseFloat(purchasedProduct.price)||0;
   const total = price * activeQty;
   if(currentBalanceNgn < total){
     showToast('Insufficient balance. Redirecting to deposit...','error');
@@ -416,7 +424,7 @@ async function confirmBuyNow(){
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        product_key: activeProduct.product_key,
+        product_key: purchasedProduct.product_key,
         quantity: activeQty,
         user_id: currentUserId,
         external_order_id: 'MJ-' + Date.now() + '-' + Math.random().toString(36).slice(2, 7)
@@ -435,15 +443,16 @@ async function confirmBuyNow(){
 
     const items = (data.data && data.data.items) ? data.data.items : [];
     const creds = items.map(function(it){ return it.details; }).filter(Boolean).join('\n\n') || 'Delivered — see My Orders for details';
-    const desc = getDisplayDescription(activeProduct);
+    const desc = getDisplayDescription(purchasedProduct);
+    const purchasedQty = activeQty;
 
     closePurchaseModal();
-    openReceiptModal(activeProduct, desc, creds);
+    openReceiptModal(purchasedProduct, desc, creds);
     showToast('Purchase successful!','success');
 
     // Reflect reduced stock locally so the grid doesn't show stale numbers
-    const stock = parseInt(activeProduct.stock_quantity,10);
-    if(!Number.isNaN(stock)) activeProduct.stock_quantity = Math.max(0, stock - activeQty);
+    const stock = parseInt(purchasedProduct.stock_quantity,10);
+    if(!Number.isNaN(stock)) purchasedProduct.stock_quantity = Math.max(0, stock - purchasedQty);
     const c=categoryFilter.value; renderProducts(c==='all'?allProducts:allProducts.filter(pr=>(pr.category||'').trim()===c));
 
   }catch(err){
