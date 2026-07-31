@@ -56,15 +56,6 @@
     .field input:focus, .field select:focus, .field textarea:focus { border-color:var(--primary); }
     .field input:disabled { opacity:.65; cursor:not-allowed; }
     .price-note { font-size:11px; color:var(--muted); margin-top:4px; }
-    .password-wrap { position:relative; }
-    .password-wrap input { padding-right:46px; }
-    .password-toggle {
-      position:absolute; right:10px; top:50%; transform:translateY(-50%);
-      background:none; border:none; color:var(--muted); cursor:pointer;
-      width:32px; height:32px; display:flex; align-items:center; justify-content:center;
-      font-size:14px; border-radius:8px;
-    }
-    .password-toggle:hover { color:var(--primary); }
     .btn {
       display:inline-flex; align-items:center; justify-content:center; gap:8px;
       padding:12px 18px; border-radius:12px; font-size:14px; font-weight:700;
@@ -72,14 +63,10 @@
     }
     .btn-primary { background:var(--primary); color:#fff; width:100%; }
     .btn-primary:hover { background:var(--primary-hover); }
-    .btn-primary:disabled { opacity:.7; cursor:not-allowed; }
     .btn-ghost { background:transparent; color:var(--muted); border:1px solid var(--border); }
     .btn-ghost:hover { border-color:var(--primary); color:var(--primary); }
     .btn-sm { padding:7px 12px; font-size:12px; border-radius:8px; width:auto; }
-    .btn .fa-spinner { animation: spin .8s linear infinite; }
-    @keyframes spin { to { transform: rotate(360deg); } }
     .error-msg { color:var(--danger); font-size:13px; margin-top:12px; text-align:center; min-height:20px; }
-    .success-msg { color:var(--success); font-size:13px; margin-top:12px; text-align:center; min-height:20px; }
     .hidden { display:none !important; }
     .shell { display:flex; min-height:100vh; }
     .sidebar {
@@ -196,19 +183,10 @@
     <div class="login-card">
       <h1>MJ HUB</h1>
       <p>Admin portal — sign in with an admin account</p>
-      <div class="field"><label>Email</label><input type="email" id="adminEmail" placeholder="admin@example.com" autocomplete="username" /></div>
-      <div class="field">
-        <label>Password</label>
-        <div class="password-wrap">
-          <input type="password" id="adminPassword" placeholder="••••••••" autocomplete="current-password" />
-          <button type="button" class="password-toggle" id="togglePasswordBtn" onclick="togglePasswordVisibility()" title="Show password" aria-label="Show password">
-            <i class="fas fa-eye" id="togglePasswordIcon"></i>
-          </button>
-        </div>
-      </div>
-      <button class="btn btn-primary" id="loginBtn" onclick="handleLogin()"><i class="fas fa-lock"></i> Sign In</button>
+      <div class="field"><label>Email</label><input type="email" id="adminEmail" placeholder="admin@example.com" /></div>
+      <div class="field"><label>Password</label><input type="password" id="adminPassword" placeholder="••••••••" /></div>
+      <button class="btn btn-primary" onclick="handleLogin()"><i class="fas fa-lock"></i> Sign In</button>
       <div id="loginError" class="error-msg"></div>
-      <div id="loginSuccess" class="success-msg hidden"></div>
     </div>
   </div>
 
@@ -257,7 +235,6 @@
             </div>
             <div class="metrics" style="margin-bottom:0;">
               <div class="metric-card"><div class="metric-label" id="revenuePeriodLabel">This Month</div><div class="metric-value" id="mRevenueNgn">₦0</div><div class="metric-sub" id="mRevenueUsd">$0.00 USD</div></div>
-              <div class="metric-card"><div class="metric-label">Profit</div><div class="metric-value" id="mProfitNgn" style="color:#38bdf8;">₦0</div><div class="metric-sub" id="mProfitUsd">$0.00 USD</div></div>
               <div class="metric-card"><div class="metric-label">Sales</div><div class="metric-value" id="mSalesNgn">₦0</div><div class="metric-sub">Completed orders</div></div>
               <div class="metric-card"><div class="metric-label">Wallet Balances</div><div class="metric-value" id="mTotalBalance">₦0</div><div class="metric-sub">All user wallets</div></div>
             </div>
@@ -429,13 +406,8 @@
 
 <script>
 const SUPABASE_URL = 'https://atczodlljmlayvldxfmv.supabase.co';
-const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImF0Y3pvZGxsam1sYXl2bGR4Zm12Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODUwNzUyMzgsImV4cCI6MjEwMDY1MTIzOH0.ufthD-p7BmeD_B7xyuMM6PNPL8DmcL4AtRYgg-MuoLI';
-let sb = null;
-try {
-  if (window.supabase && window.supabase.createClient) {
-    sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
-  }
-} catch (e) { console.error(e); }
+const SUPABASE_KEY = 'sb_publishable_dwbeKLcSG7-nfKzZz8x8Zw_U9FtwJTy';
+const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
 let allProducts = [];
 let allProfiles = [];
@@ -494,96 +466,26 @@ async function checkAuth() {
   document.getElementById('adminEmailLabel').textContent = session.user.email || profile.email || '';
   showDashboard();
   await loadAllData();
-  restoreTab();
 }
 
 function showLogin() {
   document.getElementById('loginScreen').classList.remove('hidden');
   document.getElementById('adminShell').classList.add('hidden');
-  setLoginLoading(false);
-  const successEl = document.getElementById('loginSuccess');
-  if (successEl) { successEl.textContent = ''; successEl.classList.add('hidden'); }
 }
 function showDashboard() {
   document.getElementById('loginScreen').classList.add('hidden');
   document.getElementById('adminShell').classList.remove('hidden');
-  setLoginLoading(false);
-}
-
-function togglePasswordVisibility() {
-  const input = document.getElementById('adminPassword');
-  const icon = document.getElementById('togglePasswordIcon');
-  const btn = document.getElementById('togglePasswordBtn');
-  if (!input || !icon) return;
-  if (input.type === 'password') {
-    input.type = 'text';
-    icon.classList.remove('fa-eye');
-    icon.classList.add('fa-eye-slash');
-    if (btn) btn.title = 'Hide password';
-  } else {
-    input.type = 'password';
-    icon.classList.remove('fa-eye-slash');
-    icon.classList.add('fa-eye');
-    if (btn) btn.title = 'Show password';
-  }
-}
-
-function setLoginLoading(loading) {
-  const btn = document.getElementById('loginBtn');
-  const emailInput = document.getElementById('adminEmail');
-  const passInput = document.getElementById('adminPassword');
-  if (!btn) return;
-  if (loading) {
-    btn.disabled = true;
-    btn.innerHTML = '<i class="fas fa-spinner"></i> Signing in...';
-    if (emailInput) emailInput.disabled = true;
-    if (passInput) passInput.disabled = true;
-  } else {
-    btn.disabled = false;
-    btn.innerHTML = '<i class="fas fa-lock"></i> Sign In';
-    if (emailInput) emailInput.disabled = false;
-    if (passInput) passInput.disabled = false;
-  }
 }
 
 async function handleLogin() {
   const email = document.getElementById('adminEmail').value.trim();
   const password = document.getElementById('adminPassword').value;
   const errEl = document.getElementById('loginError');
-  const successEl = document.getElementById('loginSuccess');
   errEl.textContent = '';
-  if (successEl) { successEl.textContent = ''; successEl.classList.add('hidden'); }
-
-  if (!email || !password) {
-    errEl.textContent = 'Enter email and password.';
-    return;
-  }
-
-  setLoginLoading(true);
-  try {
-    const { data, error } = await sb.auth.signInWithPassword({ email, password });
-    if (error) {
-      const msg = (error.message || '').toLowerCase();
-      if (msg.includes('invalid') || msg.includes('credentials') || msg.includes('password')) {
-        errEl.textContent = 'Incorrect email or password. Please try again.';
-      } else {
-        errEl.textContent = error.message || 'Login failed.';
-      }
-      setLoginLoading(false);
-      return;
-    }
-    if (successEl) {
-      successEl.textContent = 'Signed in — loading dashboard...';
-      successEl.classList.remove('hidden');
-    }
-    await checkAuth();
-    if (document.getElementById('adminShell').classList.contains('hidden')) {
-      setLoginLoading(false);
-    }
-  } catch (e) {
-    errEl.textContent = 'Network error: ' + (e.message || 'Please try again.');
-    setLoginLoading(false);
-  }
+  if (!email || !password) { errEl.textContent = 'Enter email and password.'; return; }
+  const { error } = await sb.auth.signInWithPassword({ email, password });
+  if (error) { errEl.textContent = error.message; return; }
+  await checkAuth();
 }
 async function handleLogout() {
   await sb.auth.signOut();
@@ -613,6 +515,7 @@ function populateCategoryFilter() {
 }
 
 async function loadProfiles() {
+  // IMPORTANT: no created_at (column does not exist on your table)
   const { data, error } = await sb.from('profiles').select('*').order('full_name', { ascending: true });
   if (error) {
     console.error('Profiles error:', error.message);
@@ -624,7 +527,7 @@ async function loadProfiles() {
 }
 
 async function tryLoadOrders() {
-  const { data, error } = await sb.from('orders').select('*').order('created_at', { ascending: false }).limit(2000);
+  const { data, error } = await sb.from('orders').select('*').order('created_at', { ascending: false }).limit(200);
   if (!error && data) {
     window._cachedOrders = data;
     document.getElementById('ordersEmpty').classList.add('hidden');
@@ -642,7 +545,7 @@ function updateMetrics() {
   const set = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
   set('mTotalUsers', total); set('mActiveUsers', activeCount); set('mInactiveUsers', inactiveCount);
   set('uTotalCount', total); set('uActiveCount', activeCount); set('uInactiveCount', inactiveCount);
-  const totalBal = allProfiles.reduce((s, p) => s + (Number(p.balance ?? p.balance_ngn) || 0), 0);
+  const totalBal = allProfiles.reduce((s, p) => s + (Number(p.balance) || 0), 0);
   set('mTotalBalance', '₦' + totalBal.toLocaleString(undefined, { maximumFractionDigits: 0 }));
   updateRevenueDisplay();
 }
@@ -651,48 +554,20 @@ function updateRevenueDisplay() {
   const period = document.getElementById('revenuePeriod')?.value || 'month';
   const labelEl = document.getElementById('revenuePeriodLabel');
   if (labelEl) labelEl.textContent = revenueLabels[period] || period;
-
-  const costMap = {};
-  (allProducts || []).forEach(p => {
-    const cost = Number(p.supplier_price || 0);
-    if (p.product_key) costMap[String(p.product_key)] = cost;
-    if (p.id) costMap[String(p.id)] = cost;
-    if (p.name) costMap['name:' + String(p.name).toLowerCase()] = cost;
-  });
-
   let sales = 0;
-  let profit = 0;
   if (window._cachedOrders?.length) {
     const ranges = { today:1, '7days':7, month:30, '3months':90, '6months':180, '12months':365 };
     const cutoff = Date.now() - ((ranges[period] || 30) * 86400000);
-    const completed = window._cachedOrders.filter(o => {
+    sales = window._cachedOrders.filter(o => {
       const d = o.created_at ? new Date(o.created_at).getTime() : 0;
       const st = String(o.status || '').toLowerCase();
-      return d >= cutoff && ['completed', 'paid', 'success', 'delivered'].includes(st);
-    });
-    completed.forEach(o => {
-      const amount = Number(o.amount || o.total || 0);
-      sales += amount;
-      let cost = 0;
-      if (o.product_code && costMap[String(o.product_code)] != null) cost = costMap[String(o.product_code)];
-      else if (o.product_key && costMap[String(o.product_key)] != null) cost = costMap[String(o.product_key)];
-      else if (o.product_id && costMap[String(o.product_id)] != null) cost = costMap[String(o.product_id)];
-      else if (o.product_name && costMap['name:' + String(o.product_name).toLowerCase()] != null) {
-        cost = costMap['name:' + String(o.product_name).toLowerCase()];
-      }
-      if (o.supplier_price != null) cost = Number(o.supplier_price);
-      if (o.cost != null) cost = Number(o.cost);
-      const qty = Number(o.quantity || 1);
-      profit += amount - (cost * qty);
-    });
+      return d >= cutoff && ['completed', 'paid', 'success'].includes(st);
+    }).reduce((s, o) => s + Number(o.amount || o.total || 0), 0);
   }
-
   const set = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
   set('mRevenueNgn', '₦' + sales.toLocaleString(undefined, { maximumFractionDigits: 0 }));
   set('mSalesNgn', '₦' + sales.toLocaleString(undefined, { maximumFractionDigits: 0 }));
   set('mRevenueUsd', '$' + (sales / liveRate).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' USD');
-  set('mProfitNgn', '₦' + profit.toLocaleString(undefined, { maximumFractionDigits: 0 }));
-  set('mProfitUsd', '$' + (profit / liveRate).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' USD');
 }
 
 function renderProducts(list) {
@@ -779,339 +654,4 @@ function openProductModal(product) {
     document.getElementById('productModalTitle').textContent = 'Edit Product';
     document.getElementById('editProductId').value = product.id || product.product_key || '';
     document.getElementById('pName').value = product.name || '';
-    document.getElementById('pCategory').value = product.category || '';
-    document.getElementById('pDesc').value = stripHtml(product.display_description || product.description || '');
-    document.getElementById('pSupplierPrice').value = product.supplier_price ?? 0;
-    document.getElementById('pPrice').value = product.price ?? '';
-    document.getElementById('pStock').value = product.stock_quantity ?? '';
-    document.getElementById('pAvailable').value = product.is_available === false ? 'false' : 'true';
-  } else {
-    document.getElementById('productModalTitle').textContent = 'Add Product';
-    document.getElementById('editProductId').value = '';
-    document.getElementById('pName').value = '';
-    document.getElementById('pCategory').value = 'OTHER';
-    document.getElementById('pDesc').value = '';
-    document.getElementById('pSupplierPrice').value = 0;
-    document.getElementById('pPrice').value = '';
-    document.getElementById('pStock').value = '';
-    document.getElementById('pAvailable').value = 'true';
-  }
-  document.getElementById('productModal').classList.remove('hidden');
-}
-function closeProductModal() { document.getElementById('productModal').classList.add('hidden'); }
-function editProduct(id) {
-  const p = allProducts.find(x => String(x.id) === String(id) || String(x.product_key) === String(id));
-  if (p) openProductModal(p);
-}
-
-async function getAuthHeaders() {
-  const headers = { 'Content-Type': 'application/json' };
-  try {
-    const { data: { session } } = await sb.auth.getSession();
-    if (session?.access_token) headers['Authorization'] = 'Bearer ' + session.access_token;
-  } catch (e) {}
-  return headers;
-}
-
-async function saveProduct() {
-  const id = document.getElementById('editProductId').value;
-  const name = document.getElementById('pName').value.trim();
-  const category = document.getElementById('pCategory').value.trim() || 'OTHER';
-  const description = stripHtml(document.getElementById('pDesc').value);
-  const price = parseFloat(document.getElementById('pPrice').value);
-  const stock_quantity = parseInt(document.getElementById('pStock').value, 10);
-  const is_available = document.getElementById('pAvailable').value === 'true';
-  const errEl = document.getElementById('productModalError');
-  errEl.textContent = '';
-  if (!name) { errEl.textContent = 'Product name is required.'; return; }
-  if (isNaN(price) || price < 0) { errEl.textContent = 'Enter a valid selling price.'; return; }
-
-  const existing = id ? allProducts.find(x => String(x.id) === String(id) || String(x.product_key) === String(id)) : null;
-  const body = {
-    action: id ? 'update' : 'insert',
-    id: existing?.id || (id || undefined),
-    product_key: existing?.product_key || undefined,
-    name,
-    category,
-    description: description || null,
-    display_description: description || null,
-    price,
-    stock_quantity: isNaN(stock_quantity) ? 0 : stock_quantity,
-    is_available,
-    supplier_price: existing ? Number(existing.supplier_price || 0) : 0
-  };
-
-  try {
-    const headers = await getAuthHeaders();
-    const res = await fetch('/api/admin-product', {
-      method: 'POST',
-      headers,
-      body: JSON.stringify(body)
-    });
-    const data = await res.json();
-    if (!res.ok || !data.success) {
-      errEl.textContent = (data.message || 'Save failed') + ' — check Vercel env (SUPABASE_SERVICE_ROLE_KEY)';
-      return;
-    }
-    closeProductModal();
-    await loadProducts();
-    updateMetrics();
-  } catch (e) {
-    errEl.textContent = 'Network error: ' + e.message;
-  }
-}
-
-async function syncProductsNow() {
-  try {
-    const res = await fetch('/api/products');
-    const data = await res.json();
-    alert(data.success ? `Sync complete\nSynced: ${data.synced}\nNew: ${data.new_products}\nUpdated: ${data.updated_products}` : ('Sync failed: ' + (data.message || 'Unknown error')));
-    await loadProducts();
-  } catch (e) {
-    alert('Sync failed: ' + e.message);
-  }
-}
-
-function renderUsers(list) {
-  const items = list || allProfiles;
-  const tbody = document.getElementById('usersTableBody');
-  const cards = document.getElementById('usersMobileCards');
-
-  if (!items.length) {
-    tbody.innerHTML = `<tr><td colspan="9" class="empty-state">No customers found.</td></tr>`;
-    if (cards) cards.innerHTML = `<div class="empty-state">No customers found.</div>`;
-    return;
-  }
-
-  tbody.innerHTML = items.map(u => {
-    const ngn = Number(u.balance ?? u.balance_ngn || 0);
-    const usd = u.balance_usd != null ? Number(u.balance_usd) : (ngn / liveRate);
-    const active = isUserActive(u);
-    const phone = u.phone_number || u.phone || '—';
-    return `
-      <tr>
-        <td style="font-weight:600;">${escapeHtml(u.full_name || u.username || '—')}</td>
-        <td>${escapeHtml(u.email || '—')}</td>
-        <td>${escapeHtml(phone)}</td>
-        <td>${escapeHtml(u.customer_id || '—')}</td>
-        <td class="price">₦${ngn.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}</td>
-        <td style="color:#38bdf8;font-weight:600;">$${usd.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}</td>
-        <td><span class="badge ${active ? 'badge-on' : 'badge-off'}">${active ? 'Active' : 'Inactive'}</span></td>
-        <td>${isAdminValue(u.is_admin) ? '<span class="badge badge-admin">Admin</span>' : 'User'}</td>
-        <td><button class="btn btn-ghost btn-sm" onclick="editUser('${u.id}')"><i class="fas fa-edit"></i></button></td>
-      </tr>`;
-  }).join('');
-
-  if (cards) {
-    cards.innerHTML = items.map(u => {
-      const ngn = Number(u.balance ?? u.balance_ngn || 0);
-      const usd = u.balance_usd != null ? Number(u.balance_usd) : (ngn / liveRate);
-      const active = isUserActive(u);
-      return `
-        <div class="user-card">
-          <h4>${escapeHtml(u.full_name || u.username || '—')}</h4>
-          <div class="meta">${escapeHtml(u.email || '—')}</div>
-          <div class="meta">ID: ${escapeHtml(u.customer_id || '—')}</div>
-          <div class="row-line"><span>NGN</span><strong class="price">₦${ngn.toLocaleString()}</strong></div>
-          <div class="row-line"><span>USD</span><span style="color:#38bdf8;">$${usd.toFixed(2)}</span></div>
-          <div class="row-line"><span>Status</span><span class="badge ${active ? 'badge-on' : 'badge-off'}">${active ? 'Active' : 'Inactive'}</span></div>
-          <div style="margin-top:10px;"><button class="btn btn-ghost btn-sm" onclick="editUser('${u.id}')"><i class="fas fa-edit"></i> Edit</button></div>
-        </div>`;
-    }).join('');
-  }
-}
-
-function filterUsers() {
-  const q = (document.getElementById('userSearch').value || '').toLowerCase().trim();
-  const status = document.getElementById('userStatusFilter')?.value || currentUserStatusFilter;
-  let filtered = allProfiles;
-  if (status === 'active') filtered = filtered.filter(isUserActive);
-  if (status === 'inactive') filtered = filtered.filter(u => !isUserActive(u));
-  if (q) {
-    filtered = filtered.filter(u =>
-      (u.full_name || '').toLowerCase().includes(q) ||
-      (u.email || '').toLowerCase().includes(q) ||
-      (u.username || '').toLowerCase().includes(q) ||
-      (u.customer_id || '').toLowerCase().includes(q) ||
-      (u.phone_number || u.phone || '').toLowerCase().includes(q)
-    );
-  }
-  renderUsers(filtered);
-}
-
-function filterUsersByStatus(status) {
-  currentUserStatusFilter = status;
-  const sel = document.getElementById('userStatusFilter');
-  if (sel) sel.value = status;
-  const search = document.getElementById('userSearch');
-  if (search) search.value = '';
-  filterUsers();
-}
-
-function lookupByCustomerId() {
-  const cid = (document.getElementById('lookupCustomerId').value || '').trim();
-  const errEl = document.getElementById('lookupError');
-  const resultEl = document.getElementById('lookupResult');
-  errEl.textContent = '';
-  resultEl.classList.add('hidden');
-  if (!cid) { errEl.textContent = 'Enter a Customer ID.'; return; }
-  const u = allProfiles.find(p => String(p.customer_id || '').toLowerCase() === cid.toLowerCase());
-  if (!u) { errEl.textContent = 'No customer found with that Customer ID.'; return; }
-  const ngn = Number(u.balance ?? u.balance_ngn || 0);
-  const usd = u.balance_usd != null ? Number(u.balance_usd) : (ngn / liveRate);
-  document.getElementById('lookupName').textContent = u.full_name || u.username || '—';
-  document.getElementById('lookupEmail').textContent = u.email || '—';
-  document.getElementById('lookupPhone').textContent = u.phone_number || u.phone || '—';
-  document.getElementById('lookupNgn').textContent = '₦' + ngn.toLocaleString(undefined, { minimumFractionDigits: 2 });
-  document.getElementById('lookupUsd').textContent = '$' + usd.toLocaleString(undefined, { minimumFractionDigits: 2 });
-  document.getElementById('lookupEditBtn').onclick = () => editUser(u.id);
-  resultEl.classList.remove('hidden');
-}
-
-function editUser(id) {
-  const u = allProfiles.find(x => String(x.id) === String(id));
-  if (!u) return;
-  document.getElementById('userModalError').textContent = '';
-  document.getElementById('editUserId').value = u.id;
-  document.getElementById('uName').value = u.full_name || '';
-  document.getElementById('uUsername').value = u.username || '';
-  document.getElementById('uEmail').value = u.email || '';
-  document.getElementById('uPhone').value = u.phone_number || u.phone || '';
-  document.getElementById('uCustomerId').value = u.customer_id || '';
-  document.getElementById('uBalance').value = u.balance ?? u.balance_ngn ?? 0;
-  document.getElementById('uBalanceUsd').value = u.balance_usd != null ? u.balance_usd : '';
-  document.getElementById('uIsAdmin').value = isAdminValue(u.is_admin) ? 'true' : 'false';
-  document.getElementById('userModal').classList.remove('hidden');
-}
-function closeUserModal() { document.getElementById('userModal').classList.add('hidden'); }
-
-async function saveUser() {
-  const id = document.getElementById('editUserId').value;
-  const full_name = document.getElementById('uName').value.trim();
-  const username = document.getElementById('uUsername').value.trim();
-  const email = document.getElementById('uEmail').value.trim();
-  const phone_number = document.getElementById('uPhone').value.trim();
-  const balance = parseFloat(document.getElementById('uBalance').value);
-  const balance_usd_raw = document.getElementById('uBalanceUsd').value;
-  const balance_usd = balance_usd_raw === '' ? null : parseFloat(balance_usd_raw);
-  const is_admin = document.getElementById('uIsAdmin').value === 'true';
-  const errEl = document.getElementById('userModalError');
-  errEl.textContent = '';
-  if (isNaN(balance)) { errEl.textContent = 'Enter a valid NGN balance.'; return; }
-
-  const body = {
-    id,
-    full_name,
-    username,
-    email: email || null,
-    phone_number: phone_number || null,
-    balance: balance || 0,
-    is_admin
-  };
-  if (balance_usd !== null && !isNaN(balance_usd)) body.balance_usd = balance_usd;
-
-  try {
-    const headers = await getAuthHeaders();
-    const res = await fetch('/api/admin-user', {
-      method: 'POST',
-      headers,
-      body: JSON.stringify(body)
-    });
-    const data = await res.json();
-    if (!res.ok || !data.success) {
-      errEl.textContent = (data.message || 'Save failed') + ' — check Vercel env (SUPABASE_SERVICE_ROLE_KEY)';
-      return;
-    }
-    closeUserModal();
-    await loadProfiles();
-    updateMetrics();
-  } catch (e) {
-    errEl.textContent = 'Network error: ' + e.message;
-  }
-}
-
-function renderOrders(orders) {
-  const tbody = document.getElementById('ordersTableBody');
-  if (!orders?.length) {
-    tbody.innerHTML = `<tr><td colspan="6" class="empty-state">No orders yet.</td></tr>`;
-    return;
-  }
-  tbody.innerHTML = orders.map(o => `
-    <tr>
-      <td>${escapeHtml(o.id || o.order_id || '—')}</td>
-      <td>${escapeHtml(o.customer_name || o.customer || o.email || '—')}</td>
-      <td>${escapeHtml(o.item || o.product_name || o.service || '—')}</td>
-      <td class="price">₦${Number(o.amount || o.total || 0).toLocaleString()}</td>
-      <td>${escapeHtml(o.status || '—')}</td>
-      <td>${o.created_at ? new Date(o.created_at).toLocaleDateString() : '—'}</td>
-    </tr>
-  `).join('');
-}
-
-function switchTab(name) {
-  if (!tabTitles[name]) name = 'overview';
-  document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
-  document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
-  const tabEl = document.getElementById('tab-' + name);
-  if (tabEl) tabEl.classList.add('active');
-  const navEl = document.querySelector(`.nav-item[data-tab="${name}"]`);
-  if (navEl) navEl.classList.add('active');
-  document.getElementById('pageTitle').textContent = tabTitles[name] || name;
-  try {
-    localStorage.setItem('mjhub-admin-tab', name);
-    if (history.replaceState) {
-      history.replaceState(null, '', '#' + name);
-    } else {
-      location.hash = name;
-    }
-  } catch (e) {}
-  closeSidebar();
-}
-
-function restoreTab() {
-  let name = 'overview';
-  try {
-    const hash = (location.hash || '').replace(/^#/, '');
-    const stored = localStorage.getItem('mjhub-admin-tab');
-    if (hash && tabTitles[hash]) name = hash;
-    else if (stored && tabTitles[stored]) name = stored;
-  } catch (e) {}
-  switchTab(name);
-}
-function openSidebar() {
-  document.getElementById('sidebar').classList.add('open');
-  document.getElementById('mobileOverlay').classList.add('show');
-}
-function closeSidebar() {
-  document.getElementById('sidebar').classList.remove('open');
-  document.getElementById('mobileOverlay').classList.remove('show');
-}
-function escapeHtml(str) {
-  if (!str) return '';
-  return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-}
-function stripHtml(html) {
-  if (!html) return '';
-  return String(html).replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
-}
-
-window.addEventListener('DOMContentLoaded', async () => {
-  try {
-    const res = await fetch('https://open.er-api.com/v6/latest/USD');
-    const data = await res.json();
-    if (data?.rates?.NGN) {
-      liveRate = data.rates.NGN;
-      const rateInput = document.getElementById('settingRate');
-      if (rateInput) rateInput.value = Math.round(liveRate);
-    }
-  } catch (e) {}
-  await checkAuth();
-  if (!document.getElementById('adminShell').classList.contains('hidden')) {
-    restoreTab();
-  }
-  document.getElementById('adminPassword')?.addEventListener('keydown', e => { if (e.key === 'Enter') handleLogin(); });
-  document.getElementById('lookupCustomerId')?.addEventListener('keydown', e => { if (e.key === 'Enter') lookupByCustomerId(); });
-});
-</script>
-</body>
-</html>
+    document.getElementById('pCategory').
