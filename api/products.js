@@ -216,8 +216,6 @@ export default async function handler(req, res) {
         0
       ) || 0;
 
-      const sellingPrice = applyRandomMarkup(supplierPrice);
-
       // NOTE: select '*' (not a fixed column list) so this never breaks if
       // your products table has extra/optional columns.
       const { data: existing } = await supabase
@@ -238,13 +236,23 @@ export default async function handler(req, res) {
       const existingCategory = existing && existing.category ? String(existing.category).trim() : '';
       const finalCategory = existingCategory || categorize(item.name);
 
+      // IMPORTANT: same reasoning as category above, applied to price. Only
+      // auto-generate a markup price for brand-new products. Once a product
+      // exists, its price is the admin's to control from the dashboard —
+      // a sync (auto or manual) must never silently overwrite a reselling
+      // price the admin has already set, otherwise every sync forces the
+      // admin to re-price everything from scratch.
+      const finalPrice = existing && existing.price != null && Number(existing.price) > 0
+        ? Number(existing.price)
+        : applyRandomMarkup(supplierPrice);
+
       const baseData = {
         product_key: item.product_key,
         name: item.name,
         description: cleanDescription,
         display_description: displayDescription,
         supplier_price: supplierPrice,
-        price: sellingPrice,
+        price: finalPrice,
         stock_quantity: item.in_stock ?? 0,
         is_available: (item.in_stock ?? 0) > 0,
         category: finalCategory,
