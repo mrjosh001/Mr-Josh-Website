@@ -47,7 +47,7 @@ export default async function handler(req, res) {
 
       const payload = {};
       if (fields.name !== undefined) payload.name = fields.name;
-      if (fields.category !== undefined) payload.category = fields.category;
+      if (fields.category !== undefined) payload.category = String(fields.category).trim();
       if (fields.description !== undefined) payload.description = fields.description;
       if (fields.display_description !== undefined) payload.display_description = fields.display_description;
       if (fields.price !== undefined) payload.price = Number(fields.price);
@@ -84,7 +84,7 @@ export default async function handler(req, res) {
     if (action === 'insert') {
       const payload = {
         name: fields.name,
-        category: fields.category || 'OTHER',
+        category: fields.category ? String(fields.category).trim() : 'OTHER',
         description: fields.description || null,
         display_description: fields.display_description || fields.description || null,
         price: Number(fields.price) || 0,
