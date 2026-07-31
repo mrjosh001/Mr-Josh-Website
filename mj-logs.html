@@ -148,7 +148,38 @@ details[open] .product-description-toggle::before{transform:rotate(90deg);displa
         <span class="ps-total-label">Total</span>
         <span class="ps-total-price" id="psTotal">₦0</span>
       </div>
-      <button type="button" class="ps-buy" id="psBuyBtn"><i class="fa-solid fa-cart-shopping"></i> Buy Now</button>
+      <button type="button" class="ps-buy" id="psBuyBtn"><i class="fa-solid fa-cart-shopping"></i> Confirm Purchase</button>
+    </div>
+  </div>
+</div>
+
+<!-- Receipt modal (shown immediately after a successful Buy Now purchase) -->
+<div class="purchase-modal" id="receiptModal">
+  <div class="purchase-sheet">
+    <div class="ps-header">
+      <span>Purchase Complete</span>
+      <button class="ps-close" id="receiptCloseBtn" type="button">✕</button>
+    </div>
+    <div class="ps-body">
+      <div class="ps-title-row">
+        <div class="ps-icon" id="rcIcon" style="background:#10b981;">✓</div>
+        <div style="flex:1;min-width:0">
+          <div class="ps-name" id="rcName">Product</div>
+          <div class="ps-meta"><span class="ps-pill ps-pill-stock">Delivered</span></div>
+        </div>
+      </div>
+      <div class="ps-block" id="rcDescWrap">
+        <div class="ps-block-label">Description</div>
+        <div class="ps-block-text" id="rcDesc">—</div>
+      </div>
+      <div class="ps-format">
+        <div class="ps-format-title"><i class="fa-solid fa-key"></i> Login Credentials</div>
+        <div class="ps-format-box" id="rcCreds" style="white-space:pre-wrap;">—</div>
+      </div>
+      <div class="product-actions">
+        <button type="button" class="btn btn-outline" id="rcCopyBtn">Copy</button>
+        <a class="btn btn-primary" href="index.html#orders" style="text-align:center;text-decoration:none;">View My Orders</a>
+      </div>
     </div>
   </div>
 </div>
@@ -163,6 +194,10 @@ const toastContainer = document.getElementById('toastContainer');
 let allProducts = [];
 let activeProduct = null;
 let activeQty = 1;
+let sbClient = null;
+let currentUserId = null;
+let currentBalanceNgn = 0;
+let isBuying = false;
 
 function setStatus(m){const s=document.getElementById('statusText');if(s)s.textContent=m}
 function cleanText(str){if(!str)return'';const t=document.createElement('div');t.innerHTML=str;return(t.textContent||t.innerText||'').replace(/\s+/g,' ').trim()}
@@ -203,7 +238,8 @@ async function loadProducts(){
   try{
     setStatus('Connecting to database...');
     if(!window.supabase){showError('Supabase library did not load.');return}
-    const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+    if(!sbClient) sbClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+    const sb = sbClient;
     setStatus('Fetching products...');
     const {data:products,error} = await sb.from('products').select('*').eq('is_available',true).order('category',{ascending:true});
     if(error){showError('Database error: '+error.message);return}
@@ -213,14 +249,27 @@ async function loadProducts(){
       return;
     }
     allProducts = products;
-    const categories = [...new Set(products.map(p=>p.category).filter(Boolean))].sort();
+    const categories = [...new Set(products.map(p=>(p.category||'').trim()).filter(Boolean))].sort();
     categoryFilter.innerHTML='<option value="all">All Categories ('+products.length+')</option>';
     categories.forEach(cat=>{
-      const count=products.filter(p=>p.category===cat).length;
+      const count=products.filter(p=>(p.category||'').trim()===cat).length;
       const opt=document.createElement('option');opt.value=cat;opt.textContent=cat+' ('+count+')';categoryFilter.appendChild(opt);
     });
     renderProducts(products);
   }catch(err){showError('Unexpected error: '+(err.message||err))}
+}
+
+async function initSession(){
+  try{
+    if(!window.supabase) return;
+    if(!sbClient) sbClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+    const { data: { session } } = await sbClient.auth.getSession();
+    if(session && session.user){
+      currentUserId = session.user.id;
+      const { data } = await sbClient.from('profiles').select('balance').eq('id', currentUserId).single();
+      if(data) currentBalanceNgn = parseFloat(data.balance) || 0;
+    }
+  }catch(e){}
 }
 
 function renderProducts(products){
@@ -267,7 +316,7 @@ function renderProducts(products){
 
 categoryFilter.addEventListener('change',()=>{
   const c=categoryFilter.value;
-  renderProducts(c==='all'?allProducts:allProducts.filter(p=>p.category===c));
+  renderProducts(c==='all'?allProducts:allProducts.filter(p=>(p.category||'').trim()===c));
 });
 
 function addToCart(p){
@@ -275,7 +324,7 @@ function addToCart(p){
   const cart=getCart();
   if(cart.find(i=>(item.product_id&&i.product_id===item.product_id)||i.title===item.title)){showToast('"'+item.title+'" already in cart');return}
   cart.push(item);saveCart(cart);showToast('"'+item.title+'" added to cart!');
-  const c=categoryFilter.value;renderProducts(c==='all'?allProducts:allProducts.filter(pr=>pr.category===c));
+  const c=categoryFilter.value;renderProducts(c==='all'?allProducts:allProducts.filter(pr=>(pr.category||'').trim()===c));
 }
 
 function openPurchaseModal(p){
@@ -337,15 +386,96 @@ document.getElementById('psQtyPlus').addEventListener('click', function(){
   if(!Number.isNaN(stock) && activeQty>=stock){showToast('Only '+stock+' in stock','error');return}
   activeQty++;updatePurchaseTotal();
 });
-document.getElementById('psBuyBtn').addEventListener('click', function(){
-  if(!activeProduct) return;
-  const item=buildCartItem(activeProduct, activeQty);
-  saveCart([item]);
-  showToast('Opening checkout...');
-  closePurchaseModal();
-  setTimeout(function(){ window.location.href='index.html#cart'; }, 350);
+document.getElementById('psBuyBtn').addEventListener('click', confirmBuyNow);
+
+async function confirmBuyNow(){
+  if(!activeProduct || isBuying) return;
+
+  if(!currentUserId){
+    showToast('Please sign in to buy','error');
+    setTimeout(function(){ window.location.href='auth.html'; }, 900);
+    return;
+  }
+
+  const price = parseFloat(activeProduct.price)||0;
+  const total = price * activeQty;
+  if(currentBalanceNgn < total){
+    showToast('Insufficient balance. Redirecting to deposit...','error');
+    setTimeout(function(){ window.location.href='index.html#deposit'; }, 900);
+    return;
+  }
+
+  const buyBtn = document.getElementById('psBuyBtn');
+  isBuying = true;
+  buyBtn.disabled = true;
+  const originalLabel = buyBtn.innerHTML;
+  buyBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Processing...';
+
+  try{
+    const res = await fetch('/api/order', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        product_key: activeProduct.product_key,
+        quantity: activeQty,
+        user_id: currentUserId,
+        external_order_id: 'MJ-' + Date.now() + '-' + Math.random().toString(36).slice(2, 7)
+      })
+    });
+    const data = await res.json();
+
+    if(!res.ok || !data.success){
+      showToast(data.message || 'Order failed. Please try again.', 'error');
+      return;
+    }
+
+    if(data.data && data.data.new_balance != null){
+      currentBalanceNgn = Number(data.data.new_balance);
+    }
+
+    const items = (data.data && data.data.items) ? data.data.items : [];
+    const creds = items.map(function(it){ return it.details; }).filter(Boolean).join('\n\n') || 'Delivered — see My Orders for details';
+    const desc = getDisplayDescription(activeProduct);
+
+    closePurchaseModal();
+    openReceiptModal(activeProduct, desc, creds);
+    showToast('Purchase successful!','success');
+
+    // Reflect reduced stock locally so the grid doesn't show stale numbers
+    const stock = parseInt(activeProduct.stock_quantity,10);
+    if(!Number.isNaN(stock)) activeProduct.stock_quantity = Math.max(0, stock - activeQty);
+    const c=categoryFilter.value; renderProducts(c==='all'?allProducts:allProducts.filter(pr=>(pr.category||'').trim()===c));
+
+  }catch(err){
+    showToast('Network error: '+(err.message||err), 'error');
+  }finally{
+    isBuying = false;
+    buyBtn.disabled = false;
+    buyBtn.innerHTML = originalLabel;
+  }
+}
+
+function openReceiptModal(p, desc, creds){
+  document.getElementById('rcName').textContent = cleanText(p.name||'Product');
+  document.getElementById('rcIcon').textContent = (cleanText(p.name||'M').charAt(0)||'M').toUpperCase();
+  const descWrap = document.getElementById('rcDescWrap');
+  if(desc){ descWrap.style.display='block'; document.getElementById('rcDesc').textContent = desc; }
+  else { descWrap.style.display='none'; }
+  document.getElementById('rcCreds').textContent = creds;
+  document.getElementById('rcCopyBtn').onclick = function(){
+    navigator.clipboard.writeText(creds);
+    showToast('Copied to clipboard!','success');
+  };
+  document.getElementById('receiptModal').classList.add('active');
+}
+document.getElementById('receiptCloseBtn').addEventListener('click', function(){
+  document.getElementById('receiptModal').classList.remove('active');
+});
+document.getElementById('receiptModal').addEventListener('click', function(e){
+  if(e.target===this) this.classList.remove('active');
 });
 
+initSession();
 loadProducts();
 </script>
 </body>
