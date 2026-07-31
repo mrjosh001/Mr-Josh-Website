@@ -53,7 +53,7 @@ export default async function handler(req, res) {
     // -------------------------------------------------
     const { data: profile, error: profileErr } = await supabase
       .from('profiles')
-      .select('balance_ngn, customer_id')
+      .select('balance, customer_id')
       .eq('id', user_id)
       .single();
 
@@ -61,7 +61,7 @@ export default async function handler(req, res) {
       return res.status(400).json({ success: false, message: 'User profile not found' });
     }
 
-    originalBalance = Number(profile.balance_ngn || 0);
+    originalBalance = Number(profile.balance || 0);
     customerId = profile.customer_id;
 
     if (originalBalance < total) {
@@ -80,7 +80,7 @@ export default async function handler(req, res) {
 
     const { error: deductErr } = await supabase
       .from('profiles')
-      .update({ balance_ngn: newBalance })
+      .update({ balance: newBalance })
       .eq('id', user_id);
 
     if (deductErr) {
@@ -115,13 +115,13 @@ export default async function handler(req, res) {
     const orderData = await supplierRes.json();
 
     // -------------------------------------------------
-    // 5. Supplier failed → automatic refund
+    // 5. Supplier failed â automatic refund
     // -------------------------------------------------
     if (!orderData.success) {
       // Refund user
       await supabase
         .from('profiles')
-        .update({ balance_ngn: originalBalance })
+        .update({ balance: originalBalance })
         .eq('id', user_id);
 
       // Record failed purchase
@@ -132,7 +132,7 @@ export default async function handler(req, res) {
         category: productName,
         title: productName,
         subtitle: `Failed: ${orderData.message || orderData.code || 'Supplier error'}`,
-        amount: `₦${total.toLocaleString()}`,
+        amount: `â¦${total.toLocaleString()}`,
         amount_ngn: total,
         status: 'failed',
         notes: JSON.stringify(orderData)
@@ -145,8 +145,8 @@ export default async function handler(req, res) {
         type: 'refund',
         category: productName,
         title: 'Automatic Refund',
-        subtitle: 'Order failed at supplier – balance restored',
-        amount: `₦${total.toLocaleString()}`,
+        subtitle: 'Order failed at supplier â balance restored',
+        amount: `â¦${total.toLocaleString()}`,
         amount_ngn: total,
         status: 'refunded'
       });
@@ -159,7 +159,7 @@ export default async function handler(req, res) {
     }
 
     // -------------------------------------------------
-    // 6. Supplier succeeded → save everything
+    // 6. Supplier succeeded â save everything
     // -------------------------------------------------
     const items = orderData.data?.items || [];
     const detailsText = items.map(i => i.details).join('\n\n');
@@ -202,7 +202,7 @@ export default async function handler(req, res) {
       category: productName,
       title: productName,
       subtitle: `Qty: ${quantity}`,
-      amount: `₦${total.toLocaleString()}`,
+      amount: `â¦${total.toLocaleString()}`,
       amount_ngn: total,
       status: 'completed',
       product_details: detailsText,
@@ -240,7 +240,7 @@ export default async function handler(req, res) {
       try {
         await supabase
           .from('profiles')
-          .update({ balance_ngn: originalBalance })
+          .update({ balance: originalBalance })
           .eq('id', user_id);
 
         await supabase.from('transactions').insert({
@@ -249,8 +249,8 @@ export default async function handler(req, res) {
           type: 'refund',
           category: productName || 'Unknown',
           title: 'Automatic Refund',
-          subtitle: `System error – ${err.message}`,
-          amount: `₦${total.toLocaleString()}`,
+          subtitle: `System error â ${err.message}`,
+          amount: `â¦${total.toLocaleString()}`,
           amount_ngn: total,
           status: 'refunded',
           notes: err.message
