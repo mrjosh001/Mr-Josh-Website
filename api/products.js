@@ -45,17 +45,21 @@ function replaceChannelLinks(text) {
 function applyRandomMarkup(supplierPrice) {
   const percent = 50 + Math.random() * 50; // 50 → 100
   const finalPrice = Math.ceil(supplierPrice * (1 + percent / 100));
+  // Round up to nearest 50 for cleaner prices
   return Math.ceil(finalPrice / 50) * 50;
-}
 }
 
 function categorize(name) {
   const n = name.toUpperCase();
 
+  // PROXY
   if (n.includes('PROXY')) return '9PROXY (IPS)';
+
+  // VPN
   if (n.includes('VPN') && n.includes('PHONE')) return 'PREMIUM VPN FOR PHONE';
   if (n.includes('VPN')) return 'PREMIUM VPN FOR PC';
 
+  // AI
   if (
     n.includes('CHATGPT') ||
     n.includes('CHAT GPT') ||
@@ -66,21 +70,25 @@ function categorize(name) {
     return 'AI';
   }
 
+  // ONLYFANS
   if (n.includes('ONLYFANS') || n.includes('ONLY FANS')) {
     return 'SOCIAL NETWORKS ACCOUNTS';
   }
 
+  // INSTAGRAM
   if (n.includes('INSTAGRAM') && n.includes('FOLLOWER')) return 'INSTAGRAM / HIGH FOLLOWERS';
   if (n.includes('INSTAGRAM')) return 'ALL COUNTRIES INSTAGRAM';
 
+  // TIKTOK
   if (n.includes('TIKTOK') || n.includes('TITKOK') || n.includes('TIK TOK')) {
     if (n.includes('FOLLOWER')) return 'TIKTOK/HIGH FOLLOWERS';
     return 'ALL COUNTRIES TIKTOK';
   }
 
+  // DATING
   if (n.includes('DATING')) return 'DATING SITES';
 
-  // Facebook detection
+  // FACEBOOK
   const isFacebookStyle =
     n.includes('FACEBOOK') ||
     n.includes('MARKETPLACE') ||
@@ -104,11 +112,13 @@ function categorize(name) {
     return 'COUNTRIES FACEBOOK (30+ FRIENDS)';
   }
 
+  // OTHER SOCIALS
   if (n.includes('TWITTER') || n.includes(' X ') || n.startsWith('X ')) return 'X / TWITTER';
   if (n.includes('REDDIT')) return 'REDDIT';
   if (n.includes('SNAPCHAT')) return 'SNAPCHAT';
   if (n.includes('LINKEDIN')) return 'LINKEDIN';
 
+  // MAILS
   if (
     n.includes('GMAIL') ||
     n.includes('HOTMAIL') ||
@@ -119,6 +129,7 @@ function categorize(name) {
     return 'MAILS';
   }
 
+  // STREAMING
   if (
     n.includes('NETFLIX') ||
     n.includes('DISNEY') ||
@@ -128,8 +139,10 @@ function categorize(name) {
     return 'STREAMING SITE';
   }
 
+  // GAMES
   if (n.includes('STEAM')) return 'GAME ACCOUNTS';
 
+  // TEXTING
   if (
     n.includes('GOOGLE VOICE') ||
     n.includes('TEXT FREE') ||
@@ -138,6 +151,7 @@ function categorize(name) {
     return 'TEXTING APP';
   }
 
+  // SOCIAL NETWORKS
   if (
     n.includes('TWITCH') ||
     n.includes('DISCORD') ||
@@ -203,7 +217,7 @@ export default async function handler(req, res) {
         0
       ) || 0;
 
-      // Always apply 35-50% markup for the selling price
+      // Always apply 50-100% markup
       const sellingPrice = applyRandomMarkup(supplierPrice);
 
       const { data: existing } = await supabase
@@ -221,7 +235,7 @@ export default async function handler(req, res) {
         description: cleanDescription,
         display_description: displayDescription,
         supplier_price: supplierPrice,   // raw supplier price
-        price: sellingPrice,             // your reselling price (with markup)
+        price: sellingPrice,             // your selling price (50-100% markup)
         stock_quantity: item.in_stock ?? 0,
         is_available: (item.in_stock ?? 0) > 0,
         category: categorize(item.name),
