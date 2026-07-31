@@ -9,6 +9,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
 :root {
   --primary: #3b82f6;
@@ -71,6 +72,7 @@ body {
 .logo {
   font-size: 22px; font-weight: 800; letter-spacing: -.5px;
   display: flex; align-items: center; gap: 5px; position: relative; z-index: 2;
+  text-decoration: none; color: var(--text);
 }
 .logo span {
   background: linear-gradient(135deg, var(--primary), #a855f7);
@@ -80,6 +82,7 @@ body {
 .nav-desktop a {
   padding: 8px 14px; font-size: 14px; font-weight: 500;
   color: var(--text2); border-radius: 9px; transition: .2s;
+  text-decoration: none;
 }
 .nav-desktop a:hover { color: var(--text); background: color-mix(in srgb, var(--primary) 12%, transparent); }
 .header-actions { display: flex; align-items: center; gap: 10px; }
@@ -88,6 +91,7 @@ body {
   padding: 11px 20px; font-size: 14px; font-weight: 600;
   border-radius: 12px; border: none; cursor: pointer;
   transition: all .3s cubic-bezier(.34,1.56,.64,1);
+  text-decoration: none;
 }
 .btn-ghost {
   background: color-mix(in srgb, var(--card) 80%, transparent);
@@ -120,15 +124,51 @@ body {
   background: var(--elevated);
 }
 .mobile-menu.active { display: flex; }
-.mobile-menu a { padding: 13px 12px; font-weight: 500; color: var(--text2); border-radius: 9px; }
+.mobile-menu a { padding: 13px 12px; font-weight: 500; color: var(--text2); border-radius: 9px; text-decoration: none; }
 .mobile-menu a:hover { background: color-mix(in srgb, var(--primary) 10%, transparent); color: var(--text); }
 .mobile-auth { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--border); }
+
+/* ===== LIVE STOCK TICKER ===== */
+.ticker-strip {
+  position: relative; z-index: 2;
+  background: color-mix(in srgb, var(--elevated) 60%, transparent);
+  backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--border);
+  padding: 10px 0;
+  overflow: hidden;
+}
+.ticker-track {
+  display: flex;
+  gap: 48px;
+  white-space: nowrap;
+  animation: tickerScroll 40s linear infinite;
+  padding-left: 100%;
+}
+.ticker-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text2);
+}
+.ticker-dot {
+  width: 8px; height: 8px;
+  background: var(--success);
+  border-radius: 50%;
+  box-shadow: 0 0 8px var(--success);
+}
+@keyframes tickerScroll {
+  from { transform: translateX(0); }
+  to { transform: translateX(-100%); }
+}
+.ticker-strip:hover .ticker-track { animation-play-state: paused; }
 
 /* ===== HERO + 3D STAGE ===== */
 .hero {
   position: relative; z-index: 2;
-  padding: 100px 24px 80px;
-  min-height: 92vh;
+  padding: 80px 24px 80px;
+  min-height: 88vh;
   display: flex; align-items: center;
 }
 .hero-grid {
@@ -267,6 +307,45 @@ body {
 .feature-card h3 { font-size: 19px; font-weight: 700; margin-bottom: 8px; }
 .feature-card p { font-size: 14px; color: var(--text2); line-height: 1.6; }
 
+/* ===== DEMO PREVIEW ===== */
+.demo-wrap {
+  position: relative;
+  max-width: 780px;
+  margin: 0 auto;
+  border-radius: var(--radius);
+  overflow: hidden;
+  background: var(--card);
+  backdrop-filter: blur(16px);
+  border: 1px solid var(--border);
+  box-shadow: 0 20px 60px rgba(0,0,0,.25), 0 0 40px var(--glow);
+  aspect-ratio: 16 / 9;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.demo-wrap img, .demo-wrap video {
+  width: 100%; height: 100%; object-fit: cover; display: block;
+}
+.demo-placeholder {
+  text-align: center;
+  color: var(--text2);
+  padding: 30px;
+}
+.demo-placeholder-icon {
+  width: 72px; height: 72px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--primary), #a855f7);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 30px;
+  color: #fff;
+  margin-bottom: 16px;
+  box-shadow: 0 10px 30px var(--glow);
+}
+.demo-placeholder h4 { font-size: 16px; font-weight: 700; margin-bottom: 6px; color: var(--text); }
+.demo-placeholder p { font-size: 13px; }
+
 /* Steps */
 .steps {
   display: grid; grid-template-columns: repeat(3, 1fr); gap: 24px;
@@ -294,6 +373,85 @@ body {
 }
 .step h3 { font-size: 16px; font-weight: 700; margin: 12px 0 6px; }
 .step p { font-size: 13.5px; color: var(--text2); }
+
+/* ===== TRUST STRIP ===== */
+.trust-strip {
+  position: relative; z-index: 2;
+  max-width: 1100px;
+  margin: 0 auto 20px;
+  padding: 0 24px;
+}
+.trust-inner {
+  background: var(--card);
+  backdrop-filter: blur(16px);
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  padding: 20px 24px;
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 16px;
+  box-shadow: 0 8px 24px rgba(0,0,0,.1);
+}
+.trust-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text2);
+  justify-content: center;
+  text-align: center;
+}
+.trust-item .ico { font-size: 18px; }
+@media (max-width: 900px) {
+  .trust-inner { grid-template-columns: repeat(2, 1fr); gap: 14px; padding: 18px; }
+  .trust-item { justify-content: flex-start; text-align: left; }
+}
+@media (max-width: 480px) {
+  .trust-inner { grid-template-columns: 1fr; }
+}
+
+/* ===== WHY CHOOSE US COMPARISON ===== */
+.compare-wrap {
+  max-width: 720px;
+  margin: 0 auto;
+  background: var(--card);
+  backdrop-filter: blur(16px);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+  box-shadow: 0 12px 40px rgba(0,0,0,.15);
+}
+.compare-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+.compare-table th, .compare-table td {
+  padding: 16px 20px;
+  text-align: center;
+  font-size: 14px;
+  border-bottom: 1px solid var(--border);
+}
+.compare-table th {
+  font-weight: 700;
+  color: var(--text);
+  background: color-mix(in srgb, var(--primary) 8%, transparent);
+  font-size: 14px;
+}
+.compare-table th:first-child, .compare-table td:first-child {
+  text-align: left;
+  font-weight: 600;
+  color: var(--text);
+}
+.compare-table tbody tr:last-child td { border-bottom: none; }
+.compare-table tbody tr:hover { background: color-mix(in srgb, var(--primary) 5%, transparent); }
+.compare-check { color: var(--success); font-size: 18px; font-weight: 700; }
+.compare-x { color: #ef4444; font-size: 18px; font-weight: 700; opacity: .7; }
+.compare-mj {
+  background: color-mix(in srgb, var(--primary) 6%, transparent) !important;
+  color: var(--primary) !important;
+  font-weight: 800;
+}
 
 /* CTA */
 .cta {
@@ -324,7 +482,7 @@ footer {
   padding: 36px 24px; border-top: 1px solid var(--border);
   text-align: center; color: var(--muted); font-size: 13px;
 }
-footer a { color: var(--text2); }
+footer a { color: var(--text2); text-decoration: none; }
 footer a:hover { color: var(--primary); }
 
 /* Support widget */
@@ -375,6 +533,7 @@ footer a:hover { color: var(--primary); }
   display: flex; align-items: center; gap: 12px; padding: 13px 14px;
   background: color-mix(in srgb, var(--text) 4%, transparent);
   border: 1px solid var(--border); border-radius: 14px; transition: .25s;
+  text-decoration: none; color: var(--text);
 }
 .channel:hover {
   background: color-mix(in srgb, var(--primary) 12%, transparent);
@@ -414,11 +573,13 @@ footer a:hover { color: var(--primary); }
 @media (max-width: 768px) {
   .nav-desktop { display: none; }
   .menu-btn { display: flex; }
-  .hero { padding: 80px 20px 60px; min-height: auto; }
+  .hero { padding: 60px 20px 60px; min-height: auto; }
   .cta { padding: 48px 28px; margin: 10px 16px 90px; }
   .support-widget { bottom: 80px; right: 18px; }
   .support-popup { width: 300px; }
   .mobile-cta { display: block; }
+  .section { padding: 60px 24px; }
+  .compare-table th, .compare-table td { padding: 12px 10px; font-size: 13px; }
 }
 </style>
 </head>
@@ -428,10 +589,11 @@ footer a:hover { color: var(--primary); }
 
 <header class="header">
   <div class="header-inner">
-    <a href="index.html" class="logo">MJ <span>HUB</span></a>
+    <a href="landing.html" class="logo">MJ <span>HUB</span></a>
     <nav class="nav-desktop">
       <a href="#features">Services</a>
       <a href="#how-it-works">How it works</a>
+      <a href="#why-us">Why us</a>
       <a href="faq.html">FAQ</a>
       <a href="support.html">Support</a>
       <a href="#" id="apiLink">API <span style="font-size:10px;background:#f59e0b;color:#000;padding:2px 6px;border-radius:4px;margin-left:4px;font-weight:700">Soon</span></a>
@@ -445,6 +607,7 @@ footer a:hover { color: var(--primary); }
   <div class="mobile-menu" id="mobileMenu">
     <a href="#features">Services</a>
     <a href="#how-it-works">How it works</a>
+    <a href="#why-us">Why us</a>
     <a href="faq.html">FAQ</a>
     <a href="support.html">Support</a>
     <a href="#" id="apiLinkMobile">API <span style="font-size:10px;background:#f59e0b;color:#000;padding:2px 6px;border-radius:4px;font-weight:700">Soon</span></a>
@@ -454,6 +617,13 @@ footer a:hover { color: var(--primary); }
     </div>
   </div>
 </header>
+
+<!-- LIVE STOCK TICKER -->
+<div class="ticker-strip" id="tickerStrip">
+  <div class="ticker-track" id="tickerTrack">
+    <span class="ticker-item"><span class="ticker-dot"></span> Loading live inventory...</span>
+  </div>
+</div>
 
 <section class="hero">
   <div class="hero-grid">
@@ -472,7 +642,6 @@ footer a:hover { color: var(--primary); }
       </div>
     </div>
 
-    <!-- Interactive glass service list -->
     <div class="service-list" id="serviceList">
       <div class="service-item active" data-service="0">
         <div class="service-icon">📋</div>
@@ -523,6 +692,24 @@ footer a:hover { color: var(--primary); }
   </div>
 </section>
 
+<!-- DEMO PREVIEW -->
+<section class="section" id="demo" style="padding-top: 20px;">
+  <div class="section-head">
+    <h2>See it in action</h2>
+    <p>Watch how easy it is to browse, order, and receive from your dashboard.</p>
+  </div>
+  <div class="demo-wrap">
+    <!-- Replace the placeholder below with your GIF or video when ready -->
+    <!-- Example GIF: <img src="dashboard-demo.gif" alt="MJ Hub dashboard demo"> -->
+    <!-- Example video: <video src="demo.mp4" autoplay loop muted playsinline></video> -->
+    <div class="demo-placeholder">
+      <div class="demo-placeholder-icon">▶</div>
+      <h4>Dashboard walkthrough coming soon</h4>
+      <p>A short preview showing browse, cart, and checkout in under 30 seconds</p>
+    </div>
+  </div>
+</section>
+
 <section class="section" id="how-it-works">
   <div class="section-head">
     <h2>Start ordering in under two minutes</h2>
@@ -544,6 +731,68 @@ footer a:hover { color: var(--primary); }
       <h3>Order and receive</h3>
       <p>Pick your product, place the order, and receive delivery within minutes right on your dashboard.</p>
     </div>
+  </div>
+</section>
+
+<!-- TRUST STRIP -->
+<div class="trust-strip">
+  <div class="trust-inner">
+    <div class="trust-item"><span class="ico">🔒</span> Secure Payments</div>
+    <div class="trust-item"><span class="ico">⚡</span> Instant Delivery</div>
+    <div class="trust-item"><span class="ico">🛡️</span> Money-Back Guarantee</div>
+    <div class="trust-item"><span class="ico">💬</span> 24/7 Support</div>
+    <div class="trust-item"><span class="ico">🌍</span> Serving 200+ Countries</div>
+  </div>
+</div>
+
+<!-- WHY CHOOSE US -->
+<section class="section" id="why-us" style="padding-top: 60px;">
+  <div class="section-head">
+    <h2>Why choose MJ Hub?</h2>
+    <p>See how we compare to typical providers in the market.</p>
+  </div>
+  <div class="compare-wrap">
+    <table class="compare-table">
+      <thead>
+        <tr>
+          <th>Feature</th>
+          <th class="compare-mj">MJ Hub</th>
+          <th>Others</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Instant order delivery</td>
+          <td><span class="compare-check">✓</span></td>
+          <td><span class="compare-x">✗</span></td>
+        </tr>
+        <tr>
+          <td>Real non-VOIP numbers</td>
+          <td><span class="compare-check">✓</span></td>
+          <td><span class="compare-x">✗</span></td>
+        </tr>
+        <tr>
+          <td>24/7 human support</td>
+          <td><span class="compare-check">✓</span></td>
+          <td><span class="compare-x">✗</span></td>
+        </tr>
+        <tr>
+          <td>Unified wallet system</td>
+          <td><span class="compare-check">✓</span></td>
+          <td><span class="compare-x">✗</span></td>
+        </tr>
+        <tr>
+          <td>NGN and USD payments</td>
+          <td><span class="compare-check">✓</span></td>
+          <td><span class="compare-x">✗</span></td>
+        </tr>
+        <tr>
+          <td>Daily fresh restocks</td>
+          <td><span class="compare-check">✓</span></td>
+          <td><span class="compare-x">✗</span></td>
+        </tr>
+      </tbody>
+    </table>
   </div>
 </section>
 
@@ -600,6 +849,50 @@ footer a:hover { color: var(--primary); }
   document.body.setAttribute('data-theme', savedTheme);
 })();
 
+/* ========== LIVE STOCK TICKER ========== */
+(async function() {
+  const SUPABASE_URL = 'https://atczodlljmlayvldxfmv.supabase.co';
+  const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImF0Y3pvZGxsam1sYXl2bGR4Zm12Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODUwNzUyMzgsImV4cCI6MjEwMDY1MTIzOH0.ufthD-p7BmeD_B7xyuMM6PNPL8DmcL4AtRYgg-MuoLI';
+  const track = document.getElementById('tickerTrack');
+  if (!track || !window.supabase) return;
+
+  try {
+    const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+    const { data, error } = await sb
+      .from('products')
+      .select('name, stock_quantity')
+      .eq('is_available', true)
+      .gt('stock_quantity', 0)
+      .order('stock_quantity', { ascending: false })
+      .limit(12);
+
+    if (error || !data || data.length === 0) {
+      track.innerHTML = '<span class="ticker-item"><span class="ticker-dot"></span> Fresh inventory restocked daily across all services</span>';
+      return;
+    }
+
+    // Clean product names (remove emojis and long details)
+    const cleanName = (str) => {
+      return String(str)
+        .replace(/[^\w\s.+-]/g, '')
+        .replace(/\s+/g, ' ')
+        .trim()
+        .substring(0, 40);
+    };
+
+    const items = data.map(p => {
+      const name = cleanName(p.name);
+      return `<span class="ticker-item"><span class="ticker-dot"></span> ${p.stock_quantity} ${name} in stock</span>`;
+    });
+
+    // Duplicate items for smooth infinite scroll
+    track.innerHTML = items.join('') + items.join('');
+    track.style.paddingLeft = '0';
+  } catch (err) {
+    track.innerHTML = '<span class="ticker-item"><span class="ticker-dot"></span> Fresh inventory restocked daily across all services</span>';
+  }
+})();
+
 /* ========== THREE.JS BACKGROUND ========== */
 (function() {
   const canvas = document.getElementById('webgl-bg');
@@ -633,11 +926,8 @@ footer a:hover { color: var(--primary); }
 
   function createBlob(geo, color, x, y, z, scale) {
     const mat = new THREE.MeshStandardMaterial({
-      color,
-      roughness: 0.35,
-      metalness: 0.15,
-      transparent: true,
-      opacity: 0.85
+      color, roughness: 0.35, metalness: 0.15,
+      transparent: true, opacity: 0.85
     });
     const mesh = new THREE.Mesh(geo, mat);
     mesh.position.set(x, y, z);
@@ -708,7 +998,6 @@ document.addEventListener('DOMContentLoaded', () => {
   const menuBtn = document.getElementById('menuToggle');
   const mobileMenu = document.getElementById('mobileMenu');
 
-  // Set correct icon on load based on saved theme
   const currentTheme = body.getAttribute('data-theme');
   themeBtn.textContent = currentTheme === 'dark' ? '☀️' : '🌙';
 
