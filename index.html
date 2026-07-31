@@ -1852,6 +1852,41 @@ function updateCartDisplay() {
     if (total) total.textContent = '₦' + sum.toLocaleString(undefined, {minimumFractionDigits:2});
 };
 
+window.openCheckoutConfirm = function() {
+    if (cartItems.length === 0) return showToast('Cart is empty', 'warning');
+    if (!currentUserId) return showToast('Please sign in to checkout', 'error');
+
+    const total = cartItems.reduce((a, i) => a + Number(i.price || 0), 0);
+    if (currentBalanceNgn < total) {
+        showToast('Insufficient balance. Please fund wallet.', 'error');
+        return switchSection('deposit');
+    }
+
+    const itemsEl = document.getElementById('confirmCheckoutItems');
+    if (itemsEl) {
+        itemsEl.innerHTML = cartItems.map(i => `
+            <div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border);font-size:13px;">
+                <span>${escapeHtml(i.title)}${i.quantity > 1 ? ' × ' + i.quantity : ''}</span>
+                <span style="font-weight:700;">₦${Number(i.price).toLocaleString()}</span>
+            </div>`).join('');
+    }
+    const totalEl = document.getElementById('confirmCheckoutTotal');
+    if (totalEl) totalEl.textContent = '₦' + total.toLocaleString(undefined, {minimumFractionDigits: 2});
+
+    const modal = document.getElementById('confirmCheckoutModal');
+    if (modal) modal.classList.add('active');
+};
+
+window.closeCheckoutConfirm = function() {
+    const modal = document.getElementById('confirmCheckoutModal');
+    if (modal) modal.classList.remove('active');
+};
+
+window.confirmAndCheckout = async function() {
+    window.closeCheckoutConfirm();
+    await window.checkoutCart();
+};
+
 window.checkoutCart = async function() {
   if (cartItems.length === 0) return showToast('Cart is empty', 'warning');
 
