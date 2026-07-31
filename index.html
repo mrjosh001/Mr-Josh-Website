@@ -382,6 +382,10 @@ body::before {
 .empty-state-icon { font-size: 36px; margin-bottom: 10px; opacity: 0.45; }
 .empty-state h4 { font-size: 14px; font-weight: 700; margin-bottom: 4px; }
 .empty-state p { font-size: 13px; color: var(--muted); }
+.coming-soon-box { text-align: center; padding: 48px 16px; }
+.coming-soon-box .coming-soon-icon { font-size: 40px; margin-bottom: 14px; width: 76px; height: 76px; border-radius: 50%; background: var(--primary-glow, rgba(59,130,246,.12)); color: var(--primary-color, #3b82f6); display: flex; align-items: center; justify-content: center; margin-left: auto; margin-right: auto; }
+.coming-soon-box h4 { font-size: 16px; font-weight: 800; margin-bottom: 8px; }
+.coming-soon-box p { font-size: 13px; color: var(--muted); max-width: 320px; margin: 0 auto; line-height: 1.5; }
 
 /* TOAST */
 .toast-container {
@@ -962,20 +966,10 @@ body::before {
         <div class="content-card">
             <h2>MJ SMS</h2>
             <p class="helper-text">Get virtual numbers for OTP verification.</p>
-            <div class="product-grid">
-                <div class="product-item-card">
-                    <div class="product-info-top">
-                        <div>
-                            <div class="product-title">WhatsApp OTP</div>
-                            <div class="helper-text" style="margin:4px 0 0;">USA / UK Virtual Line</div>
-                            <span class="product-badge">Available</span>
-                        </div>
-                        <div class="product-price">₦800</div>
-                    </div>
-                    <div class="product-actions-row">
-                        <button class="btn-sm-primary" onclick="addToCart('WhatsApp OTP',800,'sms','Virtual Line OTP')">Add to Cart</button>
-                    </div>
-                </div>
+            <div class="coming-soon-box">
+                <div class="coming-soon-icon"><i class="fa-solid fa-mobile-screen"></i></div>
+                <h4>Coming Soon</h4>
+                <p>Our tech team is working on MJ SMS. This service will be launching soon — check back shortly!</p>
             </div>
         </div>
     </section>
@@ -984,20 +978,10 @@ body::before {
         <div class="content-card">
             <h2>MJ Boosters</h2>
             <p class="helper-text">Boost followers, views, engagement instantly.</p>
-            <div class="product-grid">
-                <div class="product-item-card">
-                    <div class="product-info-top">
-                        <div>
-                            <div class="product-title">Instagram Followers (1k)</div>
-                            <div class="helper-text" style="margin:4px 0 0;">Non-drop SMM</div>
-                            <span class="product-badge">Non-Drop</span>
-                        </div>
-                        <div class="product-price">₦2,500</div>
-                    </div>
-                    <div class="product-actions-row">
-                        <button class="btn-sm-primary" onclick="addToCart('Instagram Followers 1k',2500,'booster','SMM Panel')">Add to Cart</button>
-                    </div>
-                </div>
+            <div class="coming-soon-box">
+                <div class="coming-soon-icon"><i class="fa-solid fa-bolt"></i></div>
+                <h4>Coming Soon</h4>
+                <p>Our tech team is working on MJ Boosters. This service will be launching soon — check back shortly!</p>
             </div>
         </div>
     </section>
@@ -1949,7 +1933,7 @@ window.checkoutCart = async function() {
           quantity: qty,
           status: 'completed',
           login_credentials: 'Delivered — see order for details',
-          description: null,
+          description: item.subtitle || item.description || '',
           guide_url: 'https://t.me/mj_hub_tg',
           created_at: new Date().toISOString()
         });
@@ -1963,7 +1947,7 @@ window.checkoutCart = async function() {
             quantity: 1,
             status: 'completed',
             login_credentials: row.details || 'Delivered',
-            description: null,
+            description: item.subtitle || item.description || '',
             guide_url: 'https://t.me/mj_hub_tg',
             created_at: new Date().toISOString()
           });
@@ -2025,7 +2009,7 @@ async function saveOrderToDb(order) {
             status: order.status,
             login_credentials: order.login_credentials,
             guide_url: order.guide_url || 'https://t.me/mj_hub_tg',
-            description: null,
+            description: order.description || null,
             quantity: order.quantity || 1
         }]);
     } catch(e) {
@@ -2059,8 +2043,10 @@ async function fetchUserOrders(userId) {
                     // fall back to the old split columns only for historical rows.
                     login_credentials: o.login_credentials
                         || [o.credentials_id, o.credentials_pass].filter(Boolean).join(':')
-                        || o.description
                         || '',
+                    // Description is shown on every order. If the product this
+                    // order was for has no description, this stays blank.
+                    description: o.description || '',
                     guide_url: o.guide_url || 'https://t.me/mj_hub_tg',
                     created_at: o.created_at
                 }));
@@ -2171,10 +2157,15 @@ function showOrderReceipt(items, isViewOnly = false) {
 
     credBox.innerHTML = lastReceiptItems.map((it, idx) => {
         const credVal = it.login_credentials || 'N/A';
+        const descVal = it.description || '';
         const label = it.product_name ? escapeHtml(it.product_name) : `Item #${idx+1}`;
         return `
             <div style="font-weight:800;font-size:12px;color:#0f172a;margin-bottom:8px;padding-bottom:4px;border-bottom:1px dashed #e2e8f0;">
                 ${label}
+            </div>
+            <div class="receipt-cred-row" style="margin-bottom:8px;">
+                <span class="receipt-cred-label">DESCRIPTION</span>
+                <span class="receipt-cred-val" style="white-space:pre-wrap;">${descVal ? escapeHtml(descVal) : ''}</span>
             </div>
             <div class="receipt-cred-row">
                 <span class="receipt-cred-label">LOGIN CREDENTIALS</span>
