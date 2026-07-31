@@ -41,12 +41,12 @@ function replaceChannelLinks(text) {
   return text;
 }
 
-/** Random markup between 35% and 50% */
+/** Random markup between 50% and 100% */
 function applyRandomMarkup(supplierPrice) {
-  const percent = 35 + Math.random() * 15; // 35 → 50
+  const percent = 50 + Math.random() * 50; // 50 → 100
   const finalPrice = Math.ceil(supplierPrice * (1 + percent / 100));
-  // Round up to nearest 50 for cleaner prices
   return Math.ceil(finalPrice / 50) * 50;
+}
 }
 
 function categorize(name) {
