@@ -52,14 +52,10 @@ function applyRandomMarkup(supplierPrice) {
 function categorize(name) {
   const n = name.toUpperCase();
 
-  // === PROXY ===
   if (n.includes('PROXY')) return '9PROXY (IPS)';
-
-  // === VPN ===
   if (n.includes('VPN') && n.includes('PHONE')) return 'PREMIUM VPN FOR PHONE';
   if (n.includes('VPN')) return 'PREMIUM VPN FOR PC';
 
-  // === AI ===
   if (
     n.includes('CHATGPT') ||
     n.includes('CHAT GPT') ||
@@ -70,26 +66,21 @@ function categorize(name) {
     return 'AI';
   }
 
-  // === ONLYFANS ===
   if (n.includes('ONLYFANS') || n.includes('ONLY FANS')) {
     return 'SOCIAL NETWORKS ACCOUNTS';
   }
 
-  // === INSTAGRAM ===
   if (n.includes('INSTAGRAM') && n.includes('FOLLOWER')) return 'INSTAGRAM / HIGH FOLLOWERS';
   if (n.includes('INSTAGRAM')) return 'ALL COUNTRIES INSTAGRAM';
 
-  // === TIKTOK ===
   if (n.includes('TIKTOK') || n.includes('TITKOK') || n.includes('TIK TOK')) {
     if (n.includes('FOLLOWER')) return 'TIKTOK/HIGH FOLLOWERS';
     return 'ALL COUNTRIES TIKTOK';
   }
 
-  // === DATING ===
   if (n.includes('DATING')) return 'DATING SITES';
 
-  // === FACEBOOK (main fix) ===
-  // Detect Facebook-style accounts even when the word "FACEBOOK" is missing
+  // Facebook detection
   const isFacebookStyle =
     n.includes('FACEBOOK') ||
     n.includes('MARKETPLACE') ||
@@ -99,10 +90,8 @@ function categorize(name) {
     n.includes('REGISTERED FROM');
 
   if (isFacebookStyle) {
-    // Random country Facebook
     if (n.includes('RANDOM')) return 'RANDOM COUNTRY FACEBOOK';
 
-    // 0-5 friends style
     if (
       n.includes('0-5') ||
       n.includes('0-30') ||
@@ -112,17 +101,14 @@ function categorize(name) {
       return 'COUNTRIES FACEBOOK (0-5 FRIENDS)';
     }
 
-    // Default to 30+ friends
     return 'COUNTRIES FACEBOOK (30+ FRIENDS)';
   }
 
-  // === OTHER SOCIALS ===
   if (n.includes('TWITTER') || n.includes(' X ') || n.startsWith('X ')) return 'X / TWITTER';
   if (n.includes('REDDIT')) return 'REDDIT';
   if (n.includes('SNAPCHAT')) return 'SNAPCHAT';
   if (n.includes('LINKEDIN')) return 'LINKEDIN';
 
-  // === MAILS ===
   if (
     n.includes('GMAIL') ||
     n.includes('HOTMAIL') ||
@@ -133,7 +119,6 @@ function categorize(name) {
     return 'MAILS';
   }
 
-  // === STREAMING ===
   if (
     n.includes('NETFLIX') ||
     n.includes('DISNEY') ||
@@ -143,10 +128,8 @@ function categorize(name) {
     return 'STREAMING SITE';
   }
 
-  // === GAMES ===
   if (n.includes('STEAM')) return 'GAME ACCOUNTS';
 
-  // === TEXTING ===
   if (
     n.includes('GOOGLE VOICE') ||
     n.includes('TEXT FREE') ||
@@ -155,7 +138,6 @@ function categorize(name) {
     return 'TEXTING APP';
   }
 
-  // === SOCIAL NETWORKS (fallback) ===
   if (
     n.includes('TWITCH') ||
     n.includes('DISCORD') ||
@@ -192,6 +174,7 @@ export default async function handler(req, res) {
     }
 
     const supplierData = await apiRes.json();
+
     if (!supplierData.success) {
       return res.status(400).json({
         success: false,
@@ -200,42 +183,50 @@ export default async function handler(req, res) {
       });
     }
 
-    const products = supplierData.data;
+    const products = supplierData.data || [];
     let newCount = 0;
     let updatedCount = 0;
 
     for (const item of products) {
       const cleanDescription = stripHtml(item.description);
       const displayDescription = replaceChannelLinks(cleanDescription);
-      const supplierPrice = Number(item.unit_price) || 0;
 
-      // Check if product already exists
+      // Get supplier price from any possible field
+      const supplierPrice = Number(
+        item.unit_price ??
+        item.price ??
+        item.cost ??
+        item.amount ??
+        item.reseller_price ??
+        item.buy_price ??
+        item.original_price ??
+        0
+      ) || 0;
+
+      // Always apply 35-50% markup for the selling price
+      const sellingPrice = applyRandomMarkup(supplierPrice);
+
       const { data: existing } = await supabase
         .from('products')
-        .select('product_key, price')
+        .select('product_key')
         .eq('product_key', item.product_key)
         .maybeSingle();
+
+      if (!existing) newCount++;
+      else updatedCount++;
 
       const baseData = {
         product_key: item.product_key,
         name: item.name,
         description: cleanDescription,
         display_description: displayDescription,
-        supplier_price: supplierPrice,
-        stock_quantity: item.in_stock,
-        is_available: item.in_stock > 0,
+        supplier_price: supplierPrice,   // raw supplier price
+        price: sellingPrice,             // your reselling price (with markup)
+        stock_quantity: item.in_stock ?? 0,
+        is_available: (item.in_stock ?? 0) > 0,
         category: categorize(item.name),
         updated_at: new Date().toISOString()
       };
-
-      if (!existing) {
-        // NEW product → apply random 35–50% markup
-        baseData.price = applyRandomMarkup(supplierPrice);
-        newCount++;
-      } else {
-        // EXISTING product → do NOT touch price
-        updatedCount++;
-      }
 
       const { error } = await supabase
         .from('products')
