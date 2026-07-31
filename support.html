@@ -1,190 +1,486 @@
 <!DOCTYPE html>
-<html lang="en" data-theme="dark">
+<html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>MJ HUB - Support</title>
-    <style>
-        :root {
-            --primary-color: #2563eb;
-            --primary-hover: #1d4ed8;
-            --bg-main: #0b0f19;
-            --card-bg: #121824;
-            --text-main: #ffffff;
-            --text-muted: #93c5fd;
-            --border-color: #1e3a8a;
-        }
-        * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
-        body { background-color: var(--bg-main); color: var(--text-main); line-height: 1.6; min-height: 100vh; display: flex; flex-direction: column; }
-        
-        header { display: flex; justify-content: space-between; align-items: center; padding: 20px 8%; border-bottom: 1px solid var(--border-color); background: var(--card-bg); position: relative; }
-        .logo { font-size: 24px; font-weight: bold; color: var(--primary-color); letter-spacing: 1px; text-decoration: none; }
-        
-        .nav-desktop { display: flex; align-items: center; }
-        .nav-desktop a { padding: 10px 20px; border-radius: 8px; text-decoration: none; font-weight: 600; font-size: 14px; margin-left: 10px; transition: 0.3s; }
-        .btn-signin { color: var(--text-main); border: 1px solid var(--border-color); }
-        .btn-signup { background: var(--primary-color); color: #fff; }
-        
-        .menu-toggle-btn {
-            background: transparent;
-            border: 1px solid var(--border-color);
-            color: var(--text-main);
-            width: 44px;
-            height: 44px;
-            border-radius: 8px;
-            display: none;
-            align-items: center;
-            justify-content: center;
-            font-size: 24px;
-            cursor: pointer;
-        }
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MJ HUB — Support</title>
+<meta name="description" content="Get help from the MJ Hub team via WhatsApp or Telegram. We reply in minutes, 24/7.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<style>
+:root {
+  --primary: #3b82f6;
+  --primary-hover: #2563eb;
+  --glow: rgba(59,130,246,.4);
+  --bg: #f1f5f9;
+  --elevated: #ffffff;
+  --card: rgba(255,255,255,.55);
+  --text: #0f172a;
+  --text2: #475569;
+  --muted: #64748b;
+  --border: rgba(255,255,255,.35);
+  --success: #10b981;
+  --radius: 22px;
+}
+[data-theme="dark"] {
+  --primary: #60a5fa;
+  --primary-hover: #3b82f6;
+  --glow: rgba(96,165,250,.35);
+  --bg: #030712;
+  --elevated: #0b0f19;
+  --card: rgba(17,24,39,.55);
+  --text: #f1f5f9;
+  --text2: #94a3b8;
+  --muted: #64748b;
+  --border: rgba(255,255,255,.12);
+}
 
-        .dropdown-menu {
-            position: absolute;
-            top: 100%;
-            left: 0;
-            width: 100%;
-            background: #111827;
-            border-bottom: 1px solid var(--border-color);
-            box-shadow: 0 20px 30px rgba(0,0,0,0.5);
-            display: none;
-            flex-direction: column;
-            padding: 20px 24px;
-            z-index: 1000;
-        }
-        .dropdown-menu.active { display: flex; }
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html { scroll-behavior: smooth; }
+body {
+  font-family: 'Inter', system-ui, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  line-height: 1.6;
+  overflow-x: hidden;
+  transition: background .35s, color .35s;
+  min-height: 100vh;
+}
 
-        .dropdown-header-row {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 15px;
-            padding-bottom: 10px;
-            border-bottom: 1px solid rgba(255,255,255,0.08);
-        }
-        .dropdown-header-row span { font-weight: bold; color: var(--primary-color); font-size: 18px; }
-        .dropdown-close-btn { background: rgba(255,255,255,0.05); border: none; color: var(--text-muted); width: 32px; height: 32px; border-radius: 50%; font-size: 18px; cursor: pointer; display: flex; align-items: center; justify-content: center; }
+#webgl-bg {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+}
 
-        .dropdown-nav-links { display: flex; flex-direction: column; gap: 4px; }
-        .dropdown-nav-links a { padding: 12px 16px; color: var(--text-main); text-decoration: none; font-weight: 500; font-size: 15px; border-radius: 8px; display: flex; justify-content: space-between; align-items: center; }
-        .dropdown-nav-links a:hover, .dropdown-nav-links a.active-link { background: rgba(37, 99, 235, 0.15); color: var(--text-muted); }
+/* ===== HEADER ===== */
+.header {
+  position: sticky; top: 0; z-index: 100;
+  background: color-mix(in srgb, var(--elevated) 75%, transparent);
+  backdrop-filter: blur(20px);
+  border-bottom: 1px solid var(--border);
+}
+.header-inner {
+  max-width: 1120px; margin: 0 auto;
+  padding: 14px 24px;
+  display: flex; align-items: center; justify-content: space-between; gap: 16px;
+}
+.logo {
+  font-size: 22px; font-weight: 800; letter-spacing: -.5px;
+  display: flex; align-items: center; gap: 5px;
+  text-decoration: none; color: var(--text);
+}
+.logo span {
+  background: linear-gradient(135deg, var(--primary), #a855f7);
+  -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+}
+.nav-desktop { display: flex; gap: 4px; }
+.nav-desktop a {
+  padding: 8px 14px; font-size: 14px; font-weight: 500;
+  color: var(--text2); border-radius: 9px; transition: .2s;
+  text-decoration: none;
+}
+.nav-desktop a:hover { color: var(--text); background: color-mix(in srgb, var(--primary) 12%, transparent); }
+.nav-desktop a.active { color: var(--primary); background: color-mix(in srgb, var(--primary) 15%, transparent); }
+.header-actions { display: flex; align-items: center; gap: 10px; }
+.btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  padding: 11px 20px; font-size: 14px; font-weight: 600;
+  border-radius: 12px; border: none; cursor: pointer;
+  transition: all .3s cubic-bezier(.34,1.56,.64,1);
+  text-decoration: none;
+}
+.btn-ghost {
+  background: color-mix(in srgb, var(--card) 80%, transparent);
+  color: var(--text); border: 1px solid var(--border);
+  backdrop-filter: blur(12px);
+}
+.btn-ghost:hover { border-color: var(--primary); transform: translateY(-2px); }
+.btn-primary {
+  background: var(--primary); color: #fff;
+  box-shadow: 0 4px 24px var(--glow);
+}
+.btn-primary:hover {
+  background: var(--primary-hover);
+  transform: translateY(-3px) scale(1.04);
+  box-shadow: 0 10px 36px var(--glow);
+}
+.icon-btn {
+  width: 42px; height: 42px; border-radius: 11px;
+  border: 1px solid var(--border); background: color-mix(in srgb, var(--card) 70%, transparent);
+  backdrop-filter: blur(10px); color: var(--text); font-size: 18px;
+  display: flex; align-items: center; justify-content: center;
+  cursor: pointer; transition: .2s;
+}
+.icon-btn:hover { background: color-mix(in srgb, var(--primary) 15%, transparent); transform: scale(1.08); }
+.menu-btn { display: none; }
 
-        .dropdown-auth-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 20px; padding-top: 15px; border-top: 1px solid rgba(255,255,255,0.08); }
-        .dropdown-auth-actions a { text-align: center; padding: 12px; border-radius: 8px; font-weight: bold; font-size: 14px; text-decoration: none; }
+.mobile-menu {
+  display: none; flex-direction: column;
+  padding: 12px 24px 24px; border-top: 1px solid var(--border);
+  background: var(--elevated);
+}
+.mobile-menu.active { display: flex; }
+.mobile-menu a { padding: 13px 12px; font-weight: 500; color: var(--text2); border-radius: 9px; text-decoration: none; }
+.mobile-menu a:hover { background: color-mix(in srgb, var(--primary) 10%, transparent); color: var(--text); }
+.mobile-menu a.active { color: var(--primary); background: color-mix(in srgb, var(--primary) 12%, transparent); }
+.mobile-auth { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--border); }
 
-        @media (max-width: 768px) {
-            .nav-desktop { display: none; }
-            .menu-toggle-btn { display: flex; }
-        }
+/* ===== HERO ===== */
+.support-hero {
+  position: relative; z-index: 2;
+  padding: 80px 24px 30px;
+  text-align: center;
+}
+.support-hero-inner {
+  max-width: 800px; margin: 0 auto;
+}
+.breadcrumb {
+  display: inline-flex; align-items: center; gap: 8px;
+  font-size: 13px; font-weight: 500; margin-bottom: 22px;
+  padding: 6px 14px;
+  background: color-mix(in srgb, var(--primary) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--primary) 30%, transparent);
+  border-radius: 999px;
+}
+.breadcrumb a { color: var(--primary); text-decoration: none; }
+.breadcrumb span { color: var(--text2); }
+.support-hero h1 {
+  font-size: clamp(32px, 5vw, 48px); font-weight: 800;
+  letter-spacing: -1.5px; line-height: 1.15; margin-bottom: 14px;
+}
+.support-hero h1 .grad {
+  background: linear-gradient(135deg, var(--primary), #a855f7 55%, #ec4899);
+  -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+}
+.support-hero p {
+  font-size: 16px; color: var(--text2);
+  max-width: 520px; margin: 0 auto 20px;
+}
+.support-status {
+  display: inline-flex; align-items: center; gap: 8px;
+  font-size: 13px; font-weight: 600; color: var(--text2);
+}
+.status-dot {
+  width: 8px; height: 8px; background: var(--success); border-radius: 50%;
+  box-shadow: 0 0 10px var(--success); animation: pulse 2s infinite;
+}
+@keyframes pulse { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:.5;transform:scale(.8)} }
 
-        .support-container { max-width: 700px; width: 90%; margin: 40px auto; flex: 1; }
-        .support-page-title { font-size: 32px; font-weight: 800; margin-bottom: 6px; }
-        .support-page-subtitle { font-size: 16px; color: var(--text-muted); margin-bottom: 12px; }
-        .breadcrumbs { font-size: 14px; color: #94a3b8; margin-bottom: 30px; }
-        .breadcrumbs a { color: var(--text-muted); text-decoration: none; }
-        .breadcrumbs a:hover { text-decoration: underline; }
+/* ===== SUPPORT CARDS ===== */
+.support-container {
+  position: relative; z-index: 2;
+  max-width: 780px;
+  margin: 20px auto 60px;
+  padding: 0 24px;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px;
+}
+@media (max-width: 700px) {
+  .support-container { grid-template-columns: 1fr; }
+}
 
-        .support-card { background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 16px; margin-bottom: 24px; overflow: hidden; box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.3); }
-        .support-card-header { padding: 20px 24px; display: flex; align-items: center; gap: 12px; font-size: 20px; font-weight: 700; color: #fff; }
-        .support-card-header.whatsapp-theme { background: rgba(37, 211, 102, 0.12); border-bottom: 1px solid rgba(37, 211, 102, 0.2); }
-        .support-card-header.telegram-theme { background: rgba(0, 136, 204, 0.12); border-bottom: 1px solid rgba(0, 136, 204, 0.2); }
+.support-card {
+  background: var(--card);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+  transition: all .4s cubic-bezier(.34,1.56,.64,1);
+  box-shadow: 0 10px 32px rgba(0,0,0,.12);
+}
+.support-card:hover {
+  transform: translateY(-8px);
+  box-shadow: 0 24px 50px rgba(0,0,0,.2), 0 0 40px var(--glow);
+  border-color: color-mix(in srgb, var(--primary) 45%, transparent);
+}
+.support-card-top {
+  padding: 28px 24px 20px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 14px;
+}
+.support-icon {
+  width: 64px; height: 64px;
+  border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 30px;
+  box-shadow: 0 8px 24px rgba(0,0,0,.15);
+}
+.support-icon.wa { background: linear-gradient(135deg, #25d366, #128c7e); color: #fff; }
+.support-icon.tg { background: linear-gradient(135deg, #0088cc, #005580); color: #fff; }
 
-        .support-card-body { padding: 24px; }
-        .support-card-body h4 { font-size: 18px; margin-bottom: 8px; color: #fff; }
-        .support-card-body p { font-size: 14px; color: #94a3b8; margin-bottom: 20px; }
+.support-card h3 { font-size: 20px; font-weight: 700; color: var(--text); }
+.support-card-body {
+  padding: 0 24px 26px;
+  text-align: center;
+}
+.support-card-body p {
+  font-size: 14px; color: var(--text2);
+  line-height: 1.6; margin-bottom: 22px;
+}
+.support-action-btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  padding: 12px 24px; border-radius: 12px;
+  font-weight: 700; font-size: 14px;
+  text-decoration: none;
+  transition: all .3s cubic-bezier(.34,1.56,.64,1);
+  width: 100%;
+}
+.btn-whatsapp {
+  background: #25d366; color: #fff;
+  box-shadow: 0 6px 20px rgba(37,211,102,.35);
+}
+.btn-whatsapp:hover { background: #128c7e; transform: translateY(-3px) scale(1.02); box-shadow: 0 12px 28px rgba(37,211,102,.5); }
+.btn-telegram {
+  background: #0088cc; color: #fff;
+  box-shadow: 0 6px 20px rgba(0,136,204,.35);
+}
+.btn-telegram:hover { background: #006699; transform: translateY(-3px) scale(1.02); box-shadow: 0 12px 28px rgba(0,136,204,.5); }
 
-        .support-action-btn { display: inline-block; padding: 12px 24px; border-radius: 10px; font-weight: 700; font-size: 14px; text-decoration: none; transition: opacity 0.2s; }
-        .btn-whatsapp { background: #25d366; color: #fff; }
-        .btn-telegram { background: #0088cc; color: #fff; }
-    </style>
+/* ===== FAQ LINK CARD ===== */
+.info-card {
+  position: relative; z-index: 2;
+  max-width: 780px;
+  margin: 0 auto 40px;
+  padding: 0 24px;
+}
+.info-card-inner {
+  background: var(--card);
+  backdrop-filter: blur(16px);
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  padding: 24px 26px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  flex-wrap: wrap;
+  box-shadow: 0 8px 24px rgba(0,0,0,.08);
+}
+.info-card-text h4 { font-size: 16px; font-weight: 700; color: var(--text); margin-bottom: 4px; }
+.info-card-text p { font-size: 13px; color: var(--text2); }
+
+footer {
+  position: relative; z-index: 2;
+  padding: 36px 24px; border-top: 1px solid var(--border);
+  text-align: center; color: var(--muted); font-size: 13px;
+}
+footer a { color: var(--text2); text-decoration: none; }
+footer a:hover { color: var(--primary); }
+
+@media (max-width: 768px) {
+  .nav-desktop { display: none; }
+  .menu-btn { display: flex; }
+  .support-hero { padding: 60px 20px 20px; }
+  .info-card-inner { flex-direction: column; align-items: flex-start; text-align: left; }
+}
+</style>
 </head>
 <body>
 
-    <header>
-        <a href="landing.html" class="logo">MJ HUB</a>
-        
-        <div class="nav-desktop">
-            <a href="auth.html?mode=signin" class="btn-signin">Sign In</a>
-            <a href="auth.html?mode=signup" class="btn-signup">Get Started</a>
-        </div>
+<canvas id="webgl-bg"></canvas>
 
-        <button id="menuToggleBtn" class="menu-toggle-btn" aria-label="Toggle Menu">☰</button>
+<header class="header">
+  <div class="header-inner">
+    <a href="landing.html" class="logo">MJ <span>HUB</span></a>
+    <nav class="nav-desktop">
+      <a href="landing.html">Home</a>
+      <a href="landing.html#features">Services</a>
+      <a href="landing.html#how-it-works">How it works</a>
+      <a href="faq.html">FAQ</a>
+      <a href="support.html" class="active">Support</a>
+    </nav>
+    <div class="header-actions">
+      <a href="auth.html?mode=signup" class="btn btn-primary">Get Started</a>
+      <button class="icon-btn" id="themeToggle" aria-label="Toggle theme">☀️</button>
+      <button class="icon-btn menu-btn" id="menuToggle" aria-label="Menu">☰</button>
+    </div>
+  </div>
+  <div class="mobile-menu" id="mobileMenu">
+    <a href="landing.html">Home</a>
+    <a href="landing.html#features">Services</a>
+    <a href="landing.html#how-it-works">How it works</a>
+    <a href="faq.html">FAQ</a>
+    <a href="support.html" class="active">Support</a>
+    <div class="mobile-auth">
+      <a href="auth.html?mode=signin" class="btn btn-ghost">Sign In</a>
+      <a href="auth.html?mode=signup" class="btn btn-primary">Get Started</a>
+    </div>
+  </div>
+</header>
 
-        <div id="dropdownMenu" class="dropdown-menu">
-            <div class="dropdown-header-row">
-                <span>MJ HUB Menu</span>
-                <button id="menuCloseBtn" class="dropdown-close-btn">&times;</button>
-            </div>
-            <div class="dropdown-nav-links">
-                <a href="landing.html">Home</a>
-                <a href="landing.html#features">Services</a>
-                <a href="landing.html#how-it-works">How Does It Work</a>
-                <a href="faq.html">FAQ</a>
-                <a href="support.html" class="active-link">Help</a>
-            </div>
-            <div class="dropdown-auth-actions">
-                <a href="auth.html?mode=signin" class="btn-signin">Login</a>
-                <a href="auth.html?mode=signup" class="btn-signup">Register</a>
-            </div>
-        </div>
-    </header>
+<section class="support-hero">
+  <div class="support-hero-inner">
+    <div class="breadcrumb">
+      <a href="landing.html">Home</a>
+      <span>/</span>
+      <span>Support</span>
+    </div>
+    <h1>We're here<br><span class="grad">whenever you need us.</span></h1>
+    <p>Reach out through WhatsApp or Telegram. Our team is online 24/7 and typically replies within minutes.</p>
+    <div class="support-status"><span class="status-dot"></span> Support online now</div>
+  </div>
+</section>
 
-    <main class="support-container">
-        <h1 class="support-page-title">SUPPORT</h1>
-        <p class="support-page-subtitle">We're here to help!</p>
-        <div class="breadcrumbs">
-            <a href="landing.html">Home</a> / <span>Support</span>
-        </div>
+<div class="support-container">
 
-        <div class="support-card">
-            <div class="support-card-header whatsapp-theme">
-                <span>💬</span> WhatsApp Support
-            </div>
-            <div class="support-card-body">
-                <h4>Chat with us on WhatsApp!</h4>
-                <p>We're ready for anything. If you have a problem or a question, click below to start chatting with our support team instantly.</p>
-                <a href="https://wa.me/234XXXXXXXXXX" target="_blank" class="support-action-btn btn-whatsapp">Chat on WhatsApp</a>
-            </div>
-        </div>
+  <div class="support-card">
+    <div class="support-card-top">
+      <div class="support-icon wa">💬</div>
+      <h3>WhatsApp Support</h3>
+    </div>
+    <div class="support-card-body">
+      <p>Chat directly with our support team on WhatsApp. Perfect for quick questions, order help, and instant replies.</p>
+      <a href="https://wa.me/234XXXXXXXXXX" target="_blank" class="support-action-btn btn-whatsapp">
+        Chat on WhatsApp →
+      </a>
+    </div>
+  </div>
 
-        <div class="support-card">
-            <div class="support-card-header telegram-theme">
-                <span>✈️</span> Telegram Support
-            </div>
-            <div class="support-card-body">
-                <h4>Join or message us on Telegram!</h4>
-                <p>Have questions, tips, or need fast assistance? Reach out to our official Telegram support channel right away.</p>
-                <a href="https://t.me/XXXXXXXXXX" target="_blank" class="support-action-btn btn-telegram">Chat on Telegram</a>
-            </div>
-        </div>
-    </main>
+  <div class="support-card">
+    <div class="support-card-top">
+      <div class="support-icon tg">✈️</div>
+      <h3>Telegram Support</h3>
+    </div>
+    <div class="support-card-body">
+      <p>Join our Telegram channel or send us a direct message. Great for updates, announcements, and community support.</p>
+      <a href="https://t.me/XXXXXXXXXX" target="_blank" class="support-action-btn btn-telegram">
+        Chat on Telegram →
+      </a>
+    </div>
+  </div>
 
-    <script>
-        document.addEventListener('DOMContentLoaded', () => {
-            const menuToggleBtn = document.getElementById('menuToggleBtn');
-            const menuCloseBtn = document.getElementById('menuCloseBtn');
-            const dropdownMenu = document.getElementById('dropdownMenu');
+</div>
 
-            if (menuToggleBtn && dropdownMenu) {
-                menuToggleBtn.addEventListener('click', (e) => {
-                    e.stopPropagation();
-                    dropdownMenu.classList.toggle('active');
-                });
-            }
+<div class="info-card">
+  <div class="info-card-inner">
+    <div class="info-card-text">
+      <h4>Looking for quick answers?</h4>
+      <p>Check our FAQ for common questions about accounts, SMS, boosters, and more.</p>
+    </div>
+    <a href="faq.html" class="btn btn-primary">Browse FAQ</a>
+  </div>
+</div>
 
-            if (menuCloseBtn && dropdownMenu) {
-                menuCloseBtn.addEventListener('click', (e) => {
-                    e.stopPropagation();
-                    dropdownMenu.classList.remove('active');
-                });
-            }
+<footer>
+  <p>© 2026 MJ Hub. All rights reserved. · <a href="landing.html">Home</a> · <a href="faq.html">FAQ</a></p>
+</footer>
 
-            document.addEventListener('click', (e) => {
-                if (dropdownMenu && !dropdownMenu.contains(e.target) && !menuToggleBtn.contains(e.target)) {
-                    dropdownMenu.classList.remove('active');
-                }
-            });
-        });
-    </script>
+<script>
+/* ========== THEME PERSISTENCE ========== */
+(function() {
+  const savedTheme = localStorage.getItem('mjhub_theme') || 'dark';
+  document.body.setAttribute('data-theme', savedTheme);
+})();
+
+/* ========== THREE.JS BACKGROUND ========== */
+(function() {
+  const canvas = document.getElementById('webgl-bg');
+  const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  renderer.setSize(window.innerWidth, window.innerHeight);
+  renderer.setClearColor(0x000000, 0);
+
+  const scene = new THREE.Scene();
+  const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 100);
+  camera.position.z = 8;
+
+  const ambient = new THREE.AmbientLight(0x6688cc, 0.6);
+  scene.add(ambient);
+  const dir = new THREE.DirectionalLight(0xffffff, 0.8);
+  dir.position.set(4, 6, 5);
+  scene.add(dir);
+
+  const blobs = [];
+  const geometries = [
+    new THREE.IcosahedronGeometry(1.1, 1),
+    new THREE.SphereGeometry(0.9, 32, 32),
+    new THREE.TorusKnotGeometry(0.7, 0.25, 100, 16)
+  ];
+  const colors = [0x3b82f6, 0x60a5fa, 0x93c5fd, 0xa855f7, 0xc084fc];
+
+  function createBlob(geo, color, x, y, z, scale) {
+    const mat = new THREE.MeshStandardMaterial({
+      color, roughness: 0.35, metalness: 0.15,
+      transparent: true, opacity: 0.75
+    });
+    const mesh = new THREE.Mesh(geo, mat);
+    mesh.position.set(x, y, z);
+    mesh.scale.setScalar(scale);
+    mesh.userData = {
+      baseY: y,
+      speed: 0.3 + Math.random() * 0.5,
+      rotSpeed: 0.002 + Math.random() * 0.006,
+      phase: Math.random() * Math.PI * 2
+    };
+    scene.add(mesh);
+    blobs.push(mesh);
+  }
+
+  createBlob(geometries[0], colors[0], -3, 1, -2, 1.2);
+  createBlob(geometries[1], colors[3], 3, -0.5, -3, 1.0);
+  createBlob(geometries[2], colors[2], 0.5, 1.8, -4, 0.85);
+  createBlob(geometries[1], colors[1], -1.8, -1.5, -3, 0.7);
+
+  const clock = new THREE.Clock();
+  function animate() {
+    requestAnimationFrame(animate);
+    const t = clock.getElapsedTime();
+    blobs.forEach(b => {
+      b.position.y = b.userData.baseY + Math.sin(t * b.userData.speed + b.userData.phase) * 0.3;
+      b.rotation.x += b.userData.rotSpeed;
+      b.rotation.y += b.userData.rotSpeed * 1.3;
+    });
+    camera.position.x = Math.sin(t * 0.15) * 0.3;
+    camera.position.y = Math.cos(t * 0.12) * 0.2;
+    camera.lookAt(0, 0, 0);
+    renderer.render(scene, camera);
+  }
+  animate();
+
+  window.addEventListener('resize', () => {
+    camera.aspect = window.innerWidth / window.innerHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(window.innerWidth, window.innerHeight);
+  });
+})();
+
+/* ========== UI LOGIC ========== */
+document.addEventListener('DOMContentLoaded', () => {
+  const body = document.body;
+  const themeBtn = document.getElementById('themeToggle');
+  const menuBtn = document.getElementById('menuToggle');
+  const mobileMenu = document.getElementById('mobileMenu');
+
+  const currentTheme = body.getAttribute('data-theme');
+  themeBtn.textContent = currentTheme === 'dark' ? '☀️' : '🌙';
+
+  themeBtn.addEventListener('click', () => {
+    const isDark = body.getAttribute('data-theme') === 'dark';
+    const newTheme = isDark ? 'light' : 'dark';
+    body.setAttribute('data-theme', newTheme);
+    themeBtn.textContent = newTheme === 'dark' ? '☀️' : '🌙';
+    localStorage.setItem('mjhub_theme', newTheme);
+  });
+
+  menuBtn.addEventListener('click', e => {
+    e.stopPropagation();
+    mobileMenu.classList.toggle('active');
+  });
+  document.addEventListener('click', e => {
+    if (!mobileMenu.contains(e.target) && !menuBtn.contains(e.target)) {
+      mobileMenu.classList.remove('active');
+    }
+  });
+});
+</script>
 </body>
 </html>
