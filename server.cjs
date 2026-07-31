@@ -52,16 +52,28 @@ app.get('/api/sync-products', async (req, res) => {
 
         // Step B: Loop through and update/insert products in Supabase
         for (const item of products) {
+            // Preserve any admin-set price/category on existing products —
+            // a sync should never silently reset what the admin configured.
+            const { data: existing } = await supabase
+                .from('products')
+                .select('price, category')
+                .eq('product_key', item.product_key)
+                .maybeSingle();
+
             const productRecord = {
                 product_key: item.product_key,
                 name: item.name,
                 description: item.description,
-                price: item.unit_price, 
+                price: (existing && existing.price != null && Number(existing.price) > 0)
+                    ? Number(existing.price)
+                    : item.unit_price,
+                category: (existing && existing.category) ? existing.category : undefined,
                 stock_quantity: item.in_stock,
                 is_available: item.in_stock > 0,
                 source: 'api',
                 updated_at: new Date().toISOString()
             };
+            if (productRecord.category === undefined) delete productRecord.category;
 
             const { error } = await supabase
                 .from('products')
