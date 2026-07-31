@@ -165,17 +165,10 @@ export default async function handler(req, res) {
     const detailsText = items.map(i => i.details).join('\n\n');
 
     // Save into orders table (one row per item is cleaner)
+    // Whatever format the supplier sends (Username/Password labels, email:pass,
+    // JSON, etc.) is stored as-is in a single login_credentials column so
+    // nothing gets silently dropped or misrouted into "description".
     for (const item of items) {
-      // Try to split "Username: xxx | Password: yyy" if possible
-      let credId = null;
-      let credPass = null;
-      if (item.details) {
-        const userMatch = item.details.match(/Username:\s*([^|]+)/i);
-        const passMatch = item.details.match(/Password:\s*(.+)/i);
-        if (userMatch) credId = userMatch[1].trim();
-        if (passMatch) credPass = passMatch[1].trim();
-      }
-
       await supabase.from('orders').insert({
         order_id: orderRef,
         user_id,
@@ -183,14 +176,13 @@ export default async function handler(req, res) {
         product_code: product_key,
         product_name: productName,
         product_type: 'log',
-        description: item.details,
+        description: null,
         quantity: 1,
         amount: product.price,
         status: 'completed',
-        credentials_id: credId,
-        credentials_pass: credPass,
+        login_credentials: item.details || null,
         supplier_ref: String(item.product_detail_id || ''),
-        guide_url: 'https://t.me/faddedsocialsgroup/1030'
+        guide_url: 'https://t.me/mj_hub_tg'
       });
     }
 
