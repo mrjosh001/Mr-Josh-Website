@@ -1,816 +1,408 @@
 <!DOCTYPE html>
 <html lang="en" data-theme="dark">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>MJ HUB — Admin</title>
-    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <style>
-        :root {
-            --primary: #3b82f6;
-            --primary-hover: #2563eb;
-            --primary-glow: rgba(59, 130, 246, 0.35);
-            --bg: #07090e;
-            --card: #0d1322;
-            --card-hover: #131d35;
-            --text: #f8fafc;
-            --muted: #94a3b8;
-            --border: #1e293b;
-            --success: #10b981;
-            --warning: #f59e0b;
-            --danger: #ef4444;
-            --radius: 16px;
-        }
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>MJ HUB — Admin</title>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
+  <style>
+    :root {
+      --primary: #3b82f6;
+      --primary-hover: #2563eb;
+      --primary-glow: rgba(59, 130, 246, 0.35);
+      --bg: #07090e;
+      --card: #0d1322;
+      --text: #f8fafc;
+      --muted: #94a3b8;
+      --border: #1e293b;
+      --success: #10b981;
+      --danger: #ef4444;
+      --warning: #f59e0b;
+      --radius: 16px;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { width: 100%; max-width: 100%; overflow-x: hidden; }
+    body {
+      font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      line-height: 1.5;
+    }
+    .login-wrap { min-height: 100vh; display:flex; align-items:center; justify-content:center; padding:24px; }
+    .login-card {
+      width:100%; max-width:400px; background:var(--card); border:1px solid var(--border);
+      border-radius:20px; padding:36px 28px; box-shadow:0 20px 50px rgba(0,0,0,.45);
+    }
+    .login-card h1 {
+      font-size:22px; font-weight:800; margin-bottom:6px;
+      background:linear-gradient(135deg,var(--primary),#8b5cf6);
+      -webkit-background-clip:text; -webkit-text-fill-color:transparent;
+    }
+    .login-card p { color:var(--muted); font-size:13px; margin-bottom:28px; }
+    .field { margin-bottom:16px; }
+    .field label {
+      display:block; font-size:11px; font-weight:700; text-transform:uppercase;
+      letter-spacing:.6px; color:var(--muted); margin-bottom:6px;
+    }
+    .field input, .field select, .field textarea {
+      width:100%; padding:12px 14px; background:#07090e; border:1px solid var(--border);
+      border-radius:12px; color:var(--text); font-size:14px; font-family:inherit; outline:none;
+    }
+    .field input:focus, .field select:focus, .field textarea:focus { border-color:var(--primary); }
+    .field input:disabled { opacity:.65; cursor:not-allowed; }
+    .price-note { font-size:11px; color:var(--muted); margin-top:4px; }
+    .btn {
+      display:inline-flex; align-items:center; justify-content:center; gap:8px;
+      padding:12px 18px; border-radius:12px; font-size:14px; font-weight:700;
+      font-family:inherit; border:none; cursor:pointer;
+    }
+    .btn-primary { background:var(--primary); color:#fff; width:100%; }
+    .btn-primary:hover { background:var(--primary-hover); }
+    .btn-ghost { background:transparent; color:var(--muted); border:1px solid var(--border); }
+    .btn-ghost:hover { border-color:var(--primary); color:var(--primary); }
+    .btn-sm { padding:7px 12px; font-size:12px; border-radius:8px; width:auto; }
+    .error-msg { color:var(--danger); font-size:13px; margin-top:12px; text-align:center; min-height:20px; }
+    .hidden { display:none !important; }
+    .shell { display:flex; min-height:100vh; }
+    .sidebar {
+      width:260px; background:var(--card); border-right:1px solid var(--border);
+      display:flex; flex-direction:column; position:fixed; top:0; left:0; bottom:0; z-index:50;
+      transition:transform .25s ease;
+    }
+    .sidebar-brand {
+      height:72px; display:flex; align-items:center; gap:12px; padding:0 22px;
+      border-bottom:1px solid var(--border);
+    }
+    .brand-logo {
+      width:36px; height:36px; border-radius:10px; display:flex; align-items:center; justify-content:center;
+      background:linear-gradient(135deg,var(--primary),#8b5cf6); font-weight:800; color:#fff;
+    }
+    .brand-text { font-size:17px; font-weight:800; }
+    .brand-text span { display:block; color:var(--muted); font-size:12px; font-weight:600; margin-top:-2px; }
+    .nav-list { padding:18px 14px; flex:1; overflow-y:auto; }
+    .nav-item {
+      display:flex; align-items:center; gap:12px; width:100%; padding:12px 14px; margin-bottom:4px;
+      border-radius:12px; border:1px solid transparent; background:none; color:var(--muted);
+      font-size:13.5px; font-weight:600; font-family:inherit; text-align:left; cursor:pointer;
+    }
+    .nav-item:hover { background:rgba(59,130,246,.08); color:var(--text); }
+    .nav-item.active { background:var(--primary-glow); color:var(--primary); border-color:rgba(59,130,246,.25); }
+    .nav-item i { width:18px; text-align:center; }
+    .sidebar-footer { padding:16px 18px; border-top:1px solid var(--border); }
+    .main { flex:1; margin-left:260px; min-height:100vh; display:flex; flex-direction:column; width:calc(100% - 260px); }
+    .topbar {
+      height:72px; display:flex; align-items:center; justify-content:space-between; padding:0 16px;
+      border-bottom:1px solid var(--border); background:rgba(13,19,34,.85); backdrop-filter:blur(12px);
+      position:sticky; top:0; z-index:40;
+    }
+    .topbar h2 { font-size:18px; font-weight:800; }
+    .mobile-menu-btn {
+      display:none; background:var(--card); border:1px solid var(--border); width:40px; height:40px;
+      border-radius:12px; color:var(--text); font-size:16px; cursor:pointer;
+    }
+    .content { padding:12px; flex:1; width:100%; max-width:100%; overflow-x:hidden; }
+    .metrics { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px; margin-bottom:16px; }
+    .metric-card { background:var(--card); border:1px solid var(--border); border-radius:var(--radius); padding:14px; }
+    .metric-label { font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.5px; color:var(--muted); margin-bottom:8px; }
+    .metric-value { font-size:20px; font-weight:800; }
+    .metric-sub { font-size:12px; color:var(--muted); margin-top:4px; }
+    .panel { background:var(--card); border:1px solid var(--border); border-radius:var(--radius); padding:14px; margin-bottom:16px; overflow:hidden; }
+    .panel-header { display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:8px; margin-bottom:14px; }
+    .panel-title { font-size:16px; font-weight:700; }
+    .search-row { display:grid; grid-template-columns:1fr; gap:8px; margin-bottom:12px; }
+    .search-row input, .search-row select {
+      width:100%; min-width:0; padding:10px 14px; background:#07090e; border:1px solid var(--border);
+      border-radius:10px; color:var(--text); font-size:13px; font-family:inherit; outline:none;
+    }
+    .table-wrap, .desktop-table { width:100%; overflow-x:auto; -webkit-overflow-scrolling:touch; }
+    table { width:100%; min-width:900px; border-collapse:collapse; font-size:13px; }
+    th {
+      text-align:left; padding:10px 12px; font-size:11px; font-weight:700; text-transform:uppercase;
+      letter-spacing:.5px; color:var(--muted); border-bottom:1px solid var(--border); background:rgba(7,9,14,.5); white-space:nowrap;
+    }
+    td { padding:10px 12px; border-bottom:1px solid rgba(255,255,255,.04); color:#cbd5e1; vertical-align:middle; white-space:nowrap; }
+    td:first-child { white-space:normal; min-width:150px; max-width:220px; }
+    .badge { display:inline-block; padding:4px 10px; border-radius:20px; font-size:11px; font-weight:700; text-transform:uppercase; }
+    .badge-on { background:rgba(16,185,129,.15); color:#34d399; }
+    .badge-off { background:rgba(239,68,68,.15); color:#f87171; }
+    .badge-admin { background:rgba(59,130,246,.15); color:#60a5fa; }
+    .price { color:#34d399; font-weight:700; }
+    .supplier-price { color:#f59e0b; font-weight:600; }
+    .profit { color:#38bdf8; font-weight:600; }
+    .empty-state { text-align:center; padding:40px 16px; color:var(--muted); font-size:14px; }
+    .desc-cell { max-width:160px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; color:var(--muted); font-size:12px; }
+    .mobile-cards { display:grid; gap:10px; }
+    .product-card, .user-card {
+      background:#07090e; border:1px solid var(--border); border-radius:12px; padding:12px;
+    }
+    .product-card h4, .user-card h4 { font-size:14px; margin-bottom:6px; }
+    .meta { font-size:12px; color:var(--muted); margin-bottom:6px; }
+    .row-line { display:flex; justify-content:space-between; gap:8px; font-size:12px; margin-top:4px; }
+    .modal-backdrop {
+      position:fixed; inset:0; background:rgba(0,0,0,.7); backdrop-filter:blur(4px);
+      display:flex; align-items:center; justify-content:center; z-index:100; padding:16px;
+    }
+    .modal {
+      background:var(--card); border:1px solid var(--border); border-radius:18px; width:100%;
+      max-width:520px; max-height:90vh; overflow-y:auto; padding:22px;
+    }
+    .modal h3 { font-size:18px; font-weight:800; margin-bottom:18px; }
+    .modal-actions { display:flex; justify-content:flex-end; gap:10px; margin-top:18px; }
+    .overlay-mobile { display:none; position:fixed; inset:0; background:rgba(0,0,0,.6); z-index:45; }
+    .overlay-mobile.show { display:block; }
+    .tab-content { display:none; }
+    .tab-content.active { display:block; }
+    .desktop-only { display:none; }
+    .mobile-only { display:grid; }
 
-        * { box-sizing: border-box; margin: 0; padding: 0; }
-
-        body {
-            font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
-            background: var(--bg);
-            color: var(--text);
-            min-height: 100vh;
-            line-height: 1.5;
-        }
-
-        /* Login */
-        .login-wrap {
-            min-height: 100vh;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            padding: 24px;
-        }
-        .login-card {
-            width: 100%;
-            max-width: 400px;
-            background: var(--card);
-            border: 1px solid var(--border);
-            border-radius: 20px;
-            padding: 36px 28px;
-            box-shadow: 0 20px 50px rgba(0,0,0,0.45);
-        }
-        .login-card h1 {
-            font-size: 22px;
-            font-weight: 800;
-            margin-bottom: 6px;
-            background: linear-gradient(135deg, var(--primary), #8b5cf6);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-        }
-        .login-card p { color: var(--muted); font-size: 13px; margin-bottom: 28px; }
-        .field { margin-bottom: 16px; }
-        .field label {
-            display: block;
-            font-size: 11px;
-            font-weight: 700;
-            text-transform: uppercase;
-            letter-spacing: 0.6px;
-            color: var(--muted);
-            margin-bottom: 6px;
-        }
-        .field input, .field select, .field textarea {
-            width: 100%;
-            padding: 12px 14px;
-            background: #07090e;
-            border: 1px solid var(--border);
-            border-radius: 12px;
-            color: var(--text);
-            font-size: 14px;
-            font-family: inherit;
-            outline: none;
-            transition: border-color 0.2s;
-        }
-        .field input:focus, .field select:focus, .field textarea:focus {
-            border-color: var(--primary);
-        }
-        .btn {
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            gap: 8px;
-            padding: 12px 18px;
-            border-radius: 12px;
-            font-size: 14px;
-            font-weight: 700;
-            font-family: inherit;
-            border: none;
-            cursor: pointer;
-            transition: all 0.15s ease;
-        }
-        .btn:active { transform: scale(0.97); }
-        .btn-primary {
-            background: var(--primary);
-            color: #fff;
-            width: 100%;
-        }
-        .btn-primary:hover { background: var(--primary-hover); }
-        .btn-ghost {
-            background: transparent;
-            color: var(--muted);
-            border: 1px solid var(--border);
-        }
-        .btn-ghost:hover { border-color: var(--primary); color: var(--primary); }
-        .btn-sm {
-            padding: 7px 12px;
-            font-size: 12px;
-            border-radius: 8px;
-        }
-        .btn-danger { background: var(--danger); color: #fff; }
-        .btn-danger:hover { background: #dc2626; }
-        .btn-success { background: var(--success); color: #fff; }
-        .error-msg { color: var(--danger); font-size: 13px; margin-top: 12px; text-align: center; min-height: 20px; }
-
-        /* Layout */
-        .hidden { display: none !important; }
-        .shell { display: flex; min-height: 100vh; }
-        .sidebar {
-            width: 260px;
-            background: var(--card);
-            border-right: 1px solid var(--border);
-            display: flex;
-            flex-direction: column;
-            position: fixed;
-            top: 0; left: 0; bottom: 0;
-            z-index: 50;
-            transition: transform 0.25s ease;
-        }
-        .sidebar-brand {
-            height: 72px;
-            display: flex;
-            align-items: center;
-            gap: 12px;
-            padding: 0 22px;
-            border-bottom: 1px solid var(--border);
-        }
-        .brand-logo {
-            width: 36px; height: 36px;
-            background: linear-gradient(135deg, var(--primary), #8b5cf6);
-            border-radius: 10px;
-            display: flex; align-items: center; justify-content: center;
-            font-weight: 800; font-size: 14px; color: #fff;
-        }
-        .brand-text { font-size: 17px; font-weight: 800; }
-        .brand-text span { color: var(--muted); font-weight: 600; font-size: 12px; display: block; margin-top: -2px; }
-
-        .nav-list { padding: 18px 14px; flex: 1; overflow-y: auto; }
-        .nav-item {
-            display: flex;
-            align-items: center;
-            gap: 12px;
-            padding: 12px 14px;
-            border-radius: 12px;
-            color: var(--muted);
-            font-size: 13.5px;
-            font-weight: 600;
-            cursor: pointer;
-            border: 1px solid transparent;
-            margin-bottom: 4px;
-            transition: all 0.15s;
-            background: none;
-            width: 100%;
-            text-align: left;
-            font-family: inherit;
-        }
-        .nav-item:hover { background: rgba(59,130,246,0.08); color: var(--text); }
-        .nav-item.active {
-            background: var(--primary-glow);
-            color: var(--primary);
-            border-color: rgba(59,130,246,0.25);
-        }
-        .nav-item i { width: 18px; text-align: center; font-size: 14px; }
-
-        .sidebar-footer {
-            padding: 16px 18px;
-            border-top: 1px solid var(--border);
-        }
-
-        .main {
-            flex: 1;
-            margin-left: 260px;
-            min-height: 100vh;
-            display: flex;
-            flex-direction: column;
-        }
-        .topbar {
-            height: 72px;
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            padding: 0 28px;
-            border-bottom: 1px solid var(--border);
-            background: rgba(13,19,34,0.85);
-            backdrop-filter: blur(12px);
-            position: sticky;
-            top: 0;
-            z-index: 40;
-        }
-        .topbar h2 { font-size: 18px; font-weight: 800; }
-        .topbar-actions { display: flex; align-items: center; gap: 12px; }
-        .mobile-menu-btn {
-            display: none;
-            background: var(--card);
-            border: 1px solid var(--border);
-            width: 40px; height: 40px;
-            border-radius: 12px;
-            color: var(--text);
-            font-size: 16px;
-            cursor: pointer;
-        }
-
-        .content { padding: 28px; flex: 1; }
-
-        /* Metrics */
-        .metrics {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            gap: 16px;
-            margin-bottom: 28px;
-        }
-        .metric-card {
-            background: var(--card);
-            border: 1px solid var(--border);
-            border-radius: var(--radius);
-            padding: 20px;
-            transition: border-color 0.2s, transform 0.15s;
-        }
-        .metric-card:hover { border-color: var(--primary); transform: translateY(-2px); }
-        .metric-label {
-            font-size: 11px;
-            font-weight: 700;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-            color: var(--muted);
-            margin-bottom: 8px;
-        }
-        .metric-value { font-size: 24px; font-weight: 800; }
-        .metric-sub { font-size: 12px; color: var(--muted); margin-top: 4px; }
-
-        /* Section card */
-        .panel {
-            background: var(--card);
-            border: 1px solid var(--border);
-            border-radius: var(--radius);
-            padding: 22px;
-            margin-bottom: 24px;
-        }
-        .panel-header {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            flex-wrap: wrap;
-            gap: 12px;
-            margin-bottom: 18px;
-        }
-        .panel-title { font-size: 16px; font-weight: 700; }
-
-        /* Table */
-        .table-wrap { overflow-x: auto; }
-        table {
-            width: 100%;
-            border-collapse: collapse;
-            font-size: 13.5px;
-        }
-        th {
-            text-align: left;
-            padding: 12px 14px;
-            font-size: 11px;
-            font-weight: 700;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-            color: var(--muted);
-            border-bottom: 1px solid var(--border);
-            background: rgba(7,9,14,0.5);
-            white-space: nowrap;
-        }
-        td {
-            padding: 14px;
-            border-bottom: 1px solid rgba(255,255,255,0.04);
-            color: #cbd5e1;
-            vertical-align: middle;
-        }
-        tr:hover td { background: rgba(59,130,246,0.04); }
-
-        .badge {
-            display: inline-block;
-            padding: 4px 10px;
-            border-radius: 20px;
-            font-size: 11px;
-            font-weight: 700;
-            text-transform: uppercase;
-        }
-        .badge-on { background: rgba(16,185,129,0.15); color: #34d399; }
-        .badge-off { background: rgba(239,68,68,0.15); color: #f87171; }
-        .badge-admin { background: rgba(59,130,246,0.15); color: #60a5fa; }
-
-        .price { color: #34d399; font-weight: 700; }
-        .empty-state {
-            text-align: center;
-            padding: 48px 20px;
-            color: var(--muted);
-            font-size: 14px;
-        }
-
-        /* Modal */
-        .modal-backdrop {
-            position: fixed;
-            inset: 0;
-            background: rgba(0,0,0,0.7);
-            backdrop-filter: blur(4px);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            z-index: 100;
-            padding: 20px;
-        }
-        .modal {
-            background: var(--card);
-            border: 1px solid var(--border);
-            border-radius: 18px;
-            width: 100%;
-            max-width: 480px;
-            max-height: 90vh;
-            overflow-y: auto;
-            padding: 28px;
-            box-shadow: 0 25px 60px rgba(0,0,0,0.5);
-        }
-        .modal h3 { font-size: 18px; font-weight: 800; margin-bottom: 20px; }
-        .modal-actions {
-            display: flex;
-            justify-content: flex-end;
-            gap: 10px;
-            margin-top: 22px;
-        }
-
-        .overlay-mobile {
-            display: none;
-            position: fixed;
-            inset: 0;
-            background: rgba(0,0,0,0.6);
-            z-index: 45;
-        }
-        .overlay-mobile.show { display: block; }
-
-        @media (max-width: 900px) {
-            .sidebar { transform: translateX(-100%); }
-            .sidebar.open { transform: translateX(0); }
-            .main { margin-left: 0; }
-            .mobile-menu-btn { display: flex; align-items: center; justify-content: center; }
-            .content { padding: 18px; }
-            .topbar { padding: 0 16px; }
-        }
-
-        .tab-content { display: none; }
-        .tab-content.active { display: block; animation: fadeIn 0.25s ease; }
-        @keyframes fadeIn {
-            from { opacity: 0; transform: translateY(6px); }
-            to { opacity: 1; transform: translateY(0); }
-        }
-
-        .search-row {
-            display: flex;
-            gap: 10px;
-            margin-bottom: 16px;
-            flex-wrap: wrap;
-        }
-        .search-row input {
-            flex: 1;
-            min-width: 180px;
-            padding: 10px 14px;
-            background: #07090e;
-            border: 1px solid var(--border);
-            border-radius: 10px;
-            color: var(--text);
-            font-size: 13px;
-            font-family: inherit;
-            outline: none;
-        }
-        .search-row input:focus { border-color: var(--primary); }
-
-        .desc-cell {
-            max-width: 220px;
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
-            color: var(--muted);
-            font-size: 12.5px;
-        }
-    </style>
+    @media (min-width:901px) {
+      .metrics { grid-template-columns:repeat(auto-fit,minmax(180px,1fr)); }
+      .search-row { display:flex; flex-wrap:wrap; }
+      .search-row input, .search-row select { flex:1; min-width:160px; width:auto; }
+      .content { padding:24px; }
+      .panel { padding:20px; }
+      .desktop-only { display:block; }
+      .mobile-only { display:none; }
+      .mobile-menu-btn { display:none; }
+    }
+    @media (max-width:900px) {
+      .sidebar { transform:translateX(-100%); width:240px; }
+      .sidebar.open { transform:translateX(0); }
+      .main { margin-left:0; width:100%; }
+      .mobile-menu-btn { display:flex; align-items:center; justify-content:center; }
+    }
+  </style>
 </head>
 <body>
-
-<!-- LOGIN -->
-<div id="loginScreen" class="login-wrap">
+  <div id="loginScreen" class="login-wrap">
     <div class="login-card">
-        <h1>MJ HUB</h1>
-        <p>Admin portal — sign in with an admin account</p>
-        <div class="field">
-            <label>Email</label>
-            <input type="email" id="adminEmail" placeholder="admin@example.com" autocomplete="username">
-        </div>
-        <div class="field">
-            <label>Password</label>
-            <input type="password" id="adminPassword" placeholder="••••••••" autocomplete="current-password">
-        </div>
-        <button class="btn btn-primary" onclick="handleLogin()">
-            <i class="fas fa-lock"></i> Sign In
-        </button>
-        <div id="loginError" class="error-msg"></div>
+      <h1>MJ HUB</h1>
+      <p>Admin portal — sign in with an admin account</p>
+      <div class="field"><label>Email</label><input type="email" id="adminEmail" placeholder="admin@example.com" /></div>
+      <div class="field"><label>Password</label><input type="password" id="adminPassword" placeholder="••••••••" /></div>
+      <button class="btn btn-primary" onclick="handleLogin()"><i class="fas fa-lock"></i> Sign In</button>
+      <div id="loginError" class="error-msg"></div>
     </div>
-</div>
+  </div>
 
-<!-- DASHBOARD -->
-<div id="adminShell" class="shell hidden">
+  <div id="adminShell" class="shell hidden">
     <div id="mobileOverlay" class="overlay-mobile" onclick="closeSidebar()"></div>
-
     <aside class="sidebar" id="sidebar">
-        <div class="sidebar-brand">
-            <div class="brand-logo">MJ</div>
-            <div class="brand-text">MJ HUB<span>Admin</span></div>
-        </div>
-        <nav class="nav-list">
-            <button class="nav-item active" data-tab="overview" onclick="switchTab('overview')">
-                <i class="fas fa-chart-pie"></i> Overview
-            </button>
-            <button class="nav-item" data-tab="users" onclick="switchTab('users')">
-                <i class="fas fa-users"></i> Customers
-            </button>
-            <button class="nav-item" data-tab="lookup" onclick="switchTab('lookup')">
-                <i class="fas fa-search"></i> Customer Lookup
-            </button>
-            <button class="nav-item" data-tab="products" onclick="switchTab('products')">
-                <i class="fas fa-box"></i> Products & Stock
-            </button>
-            <button class="nav-item" data-tab="orders" onclick="switchTab('orders')">
-                <i class="fas fa-receipt"></i> Orders
-            </button>
-            <button class="nav-item" data-tab="settings" onclick="switchTab('settings')">
-                <i class="fas fa-cog"></i> Settings
-            </button>
-        </nav>
-        <div class="sidebar-footer">
-            <button class="btn btn-ghost" style="width:100%" onclick="handleLogout()">
-                <i class="fas fa-sign-out-alt"></i> Sign Out
-            </button>
-        </div>
+      <div class="sidebar-brand">
+        <div class="brand-logo">MJ</div>
+        <div class="brand-text">MJ HUB<span>Admin</span></div>
+      </div>
+      <nav class="nav-list">
+        <button class="nav-item active" data-tab="overview" onclick="switchTab('overview')"><i class="fas fa-chart-pie"></i> Overview</button>
+        <button class="nav-item" data-tab="users" onclick="switchTab('users')"><i class="fas fa-users"></i> Customers</button>
+        <button class="nav-item" data-tab="lookup" onclick="switchTab('lookup')"><i class="fas fa-search"></i> Customer Lookup</button>
+        <button class="nav-item" data-tab="products" onclick="switchTab('products')"><i class="fas fa-box"></i> Products & Stock</button>
+        <button class="nav-item" data-tab="orders" onclick="switchTab('orders')"><i class="fas fa-receipt"></i> Orders</button>
+        <button class="nav-item" data-tab="settings" onclick="switchTab('settings')"><i class="fas fa-cog"></i> Settings</button>
+      </nav>
+      <div class="sidebar-footer">
+        <button class="btn btn-ghost" style="width:100%" onclick="handleLogout()"><i class="fas fa-sign-out-alt"></i> Sign Out</button>
+      </div>
     </aside>
 
     <div class="main">
-        <header class="topbar">
-            <div style="display:flex;align-items:center;gap:12px;">
-                <button class="mobile-menu-btn" onclick="openSidebar()"><i class="fas fa-bars"></i></button>
-                <h2 id="pageTitle">Overview</h2>
-            </div>
-            <div class="topbar-actions">
-                <span id="adminEmailLabel" style="font-size:13px;color:var(--muted);"></span>
-            </div>
-        </header>
-
-        <div class="content">
-            <!-- OVERVIEW -->
-            <div id="tab-overview" class="tab-content active">
-
-                <!-- Revenue period -->
-                <div class="panel" style="margin-bottom:20px;">
-                    <div class="panel-header" style="margin-bottom:16px;">
-                        <div class="panel-title">Revenue</div>
-                        <select id="revenuePeriod" onchange="updateRevenueDisplay()" style="padding:8px 14px;background:#07090e;border:1px solid var(--border);border-radius:10px;color:var(--text);font-size:13px;font-weight:600;font-family:inherit;outline:none;cursor:pointer;">
-                            <option value="today">Today</option>
-                            <option value="7days">Last 7 Days</option>
-                            <option value="month" selected>This Month</option>
-                            <option value="3months">Last 3 Months</option>
-                            <option value="6months">Last 6 Months</option>
-                            <option value="12months">Last 12 Months</option>
-                        </select>
-                    </div>
-                    <div class="metrics" style="margin-bottom:0;">
-                        <div class="metric-card">
-                            <div class="metric-label" id="revenuePeriodLabel">This Month</div>
-                            <div class="metric-value" id="mRevenueNgn">₦0</div>
-                            <div class="metric-sub" id="mRevenueUsd">$0.00 USD</div>
-                        </div>
-                        <div class="metric-card">
-                            <div class="metric-label">Sales</div>
-                            <div class="metric-value" id="mSalesNgn" style="font-size:20px;">₦0</div>
-                            <div class="metric-sub">Completed orders</div>
-                        </div>
-                        <div class="metric-card">
-                            <div class="metric-label">Wallet Balances</div>
-                            <div class="metric-value" id="mTotalBalance" style="font-size:20px;">₦0</div>
-                            <div class="metric-sub">All user wallets</div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Users summary -->
-                <div class="panel">
-                    <div class="panel-header">
-                        <div class="panel-title">Customers</div>
-                        <button class="btn btn-ghost btn-sm" onclick="switchTab('users')">View all →</button>
-                    </div>
-                    <div class="metrics" style="margin-bottom:0;">
-                        <div class="metric-card" style="cursor:pointer;" onclick="switchTab('users'); filterUsersByStatus('all')">
-                            <div class="metric-label">Total Users</div>
-                            <div class="metric-value" id="mTotalUsers">0</div>
-                            <div class="metric-sub">All registered</div>
-                        </div>
-                        <div class="metric-card" style="cursor:pointer;" onclick="switchTab('users'); filterUsersByStatus('active')">
-                            <div class="metric-label">Active</div>
-                            <div class="metric-value" id="mActiveUsers" style="color:#34d399;">0</div>
-                            <div class="metric-sub">Last 30 days</div>
-                        </div>
-                        <div class="metric-card" style="cursor:pointer;" onclick="switchTab('users'); filterUsersByStatus('inactive')">
-                            <div class="metric-label">Inactive</div>
-                            <div class="metric-value" id="mInactiveUsers" style="color:#f87171;">0</div>
-                            <div class="metric-sub">30+ days no activity</div>
-                        </div>
-                    </div>
-                </div>
-
-            </div>
-
-            <!-- CUSTOMER LOOKUP -->
-            <div id="tab-lookup" class="tab-content">
-                <div class="panel">
-                    <div class="panel-header">
-                        <div class="panel-title">Customer Lookup by ID</div>
-                    </div>
-                    <p style="font-size:13px;color:var(--muted);margin-bottom:16px;">
-                        Search a customer by their Customer ID to view details and correct account info (name, email, phone, balances).
-                    </p>
-                    <div class="search-row">
-                        <input type="text" id="lookupCustomerId" placeholder="Enter Customer ID...">
-                        <button class="btn btn-primary btn-sm" style="width: auto;" onclick="lookupByCustomerId()">Search</button>
-                    </div>
-                    <div id="lookupResult" class="hidden" style="margin-top:16px;padding:20px;background:#07090e;border:1px solid var(--border);border-radius:12px;">
-                        <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:12px;">
-                            <div>
-                                <div style="font-size:11px;color:var(--muted);text-transform:uppercase;font-weight:700;margin-bottom:6px;">Customer Found</div>
-                                <div id="lookupName" style="font-weight:700;font-size:18px;"></div>
-                                <div id="lookupEmail" style="font-size:13px;color:var(--muted);margin-top:4px;"></div>
-                                <div id="lookupPhone" style="font-size:13px;color:var(--muted);margin-top:2px;"></div>
-                                <div style="margin-top:12px;">
-                                    <span class="price" id="lookupNgn" style="font-size:16px;"></span>
-                                    &nbsp;·&nbsp;
-                                    <span style="color:#38bdf8;font-weight:600;font-size:16px;" id="lookupUsd"></span>
-                                </div>
-                            </div>
-                            <button class="btn btn-primary btn-sm" style="width: auto;" id="lookupEditBtn" onclick="">
-                                <i class="fas fa-edit"></i> Edit Account
-                            </button>
-                        </div>
-                    </div>
-                    <div id="lookupError" class="error-msg" style="text-align:left;"></div>
-                </div>
-            </div>
-
-            <!-- PRODUCTS -->
-            <div id="tab-products" class="tab-content">
-                <div class="panel">
-                    <div class="panel-header">
-                        <div class="panel-title">Product Catalog & Stock</div>
-                        <button class="btn btn-primary btn-sm" style="width: auto;" onclick="openProductModal()">
-                            <i class="fas fa-plus"></i> Add Product
-                        </button>
-                    </div>
-                    <div class="search-row">
-                        <input type="text" id="productSearch" placeholder="Search products..." oninput="filterProducts()">
-                        <select id="businessFilter" onchange="filterProducts()" style="padding:10px 14px;background:#07090e;border:1px solid var(--border);border-radius:10px;color:var(--text);font-size:13px;font-weight:600;font-family:inherit;outline:none;min-width:140px;">
-                            <option value="">All Businesses</option>
-                            <option value="MJ Logs">MJ Logs</option>
-                            <option value="MJ SMS">MJ SMS</option>
-                            <option value="MJ Boosters">MJ Boosters</option>
-                        </select>
-                        <select id="categoryFilter" onchange="filterProducts()" style="padding:10px 14px;background:#07090e;border:1px solid var(--border);border-radius:10px;color:var(--text);font-size:13px;font-weight:600;font-family:inherit;outline:none;min-width:140px;">
-                            <option value="">All Categories</option>
-                        </select>
-                    </div>
-                    <div class="table-wrap">
-                        <table>
-                            <thead>
-                                <tr>
-                                    <th>Product</th>
-                                    <th>Category</th>
-                                    <th>Description</th>
-                                    <th>Price (₦)</th>
-                                    <th>Stock</th>
-                                    <th>Status</th>
-                                    <th>Action</th>
-                                </tr>
-                            </thead>
-                            <tbody id="productsTableBody"></tbody>
-                        </table>
-                    </div>
-                </div>
-            </div>
-
-            <!-- USERS -->
-            <div id="tab-users" class="tab-content">
-                <div class="metrics" style="margin-bottom:20px;">
-                    <div class="metric-card" style="cursor:pointer;" onclick="filterUsersByStatus('all')">
-                        <div class="metric-label">Total</div>
-                        <div class="metric-value" id="uTotalCount">0</div>
-                    </div>
-                    <div class="metric-card" style="cursor:pointer;" onclick="filterUsersByStatus('active')">
-                        <div class="metric-label">Active</div>
-                        <div class="metric-value" id="uActiveCount" style="color:#34d399;">0</div>
-                    </div>
-                    <div class="metric-card" style="cursor:pointer;" onclick="filterUsersByStatus('inactive')">
-                        <div class="metric-label">Inactive</div>
-                        <div class="metric-value" id="uInactiveCount" style="color:#f87171;">0</div>
-                    </div>
-                </div>
-                <div class="panel">
-                    <div class="panel-header">
-                        <div class="panel-title">Customer Directory</div>
-                    </div>
-                    <div class="search-row">
-                        <input type="text" id="userSearch" placeholder="Search by name, email, phone, or Customer ID..." oninput="filterUsers()">
-                        <select id="userStatusFilter" onchange="filterUsers()" style="padding:10px 14px;background:#07090e;border:1px solid var(--border);border-radius:10px;color:var(--text);font-size:13px;font-family:inherit;outline:none;">
-                            <option value="all">All Status</option>
-                            <option value="active">Active only</option>
-                            <option value="inactive">Inactive only</option>
-                        </select>
-                    </div>
-                    <div class="table-wrap">
-                        <table>
-                            <thead>
-                                <tr>
-                                    <th>Name</th>
-                                    <th>Email</th>
-                                    <th>Phone</th>
-                                    <th>Customer ID</th>
-                                    <th>NGN</th>
-                                    <th>USD</th>
-                                    <th>Status</th>
-                                    <th>Role</th>
-                                    <th>Action</th>
-                                </tr>
-                            </thead>
-                            <tbody id="usersTableBody"></tbody>
-                        </table>
-                    </div>
-                </div>
-            </div>
-
-            <!-- ORDERS -->
-            <div id="tab-orders" class="tab-content">
-                <div class="panel">
-                    <div class="panel-header">
-                        <div class="panel-title">Orders</div>
-                    </div>
-                    <div class="empty-state" id="ordersEmpty">
-                        <i class="fas fa-receipt" style="font-size:32px;margin-bottom:12px;opacity:0.4;"></i><br>
-                        No orders table connected yet.<br>
-                        <span style="font-size:12px;">When you create an <code>orders</code> table in Supabase, it will appear here automatically.</span>
-                    </div>
-                    <div class="table-wrap hidden" id="ordersTableWrap">
-                        <table>
-                            <thead>
-                                <tr>
-                                    <th>Order ID</th>
-                                    <th>Customer</th>
-                                    <th>Item</th>
-                                    <th>Amount</th>
-                                    <th>Status</th>
-                                    <th>Date</th>
-                                </tr>
-                            </thead>
-                            <tbody id="ordersTableBody"></tbody>
-                        </table>
-                    </div>
-                </div>
-            </div>
-
-            <!-- SETTINGS -->
-            <div id="tab-settings" class="tab-content">
-                <div class="panel">
-                    <div class="panel-header">
-                        <div class="panel-title">Platform Settings</div>
-                    </div>
-                    <div class="field" style="max-width:320px;">
-                        <label>P2P Exchange Rate (1 USD = ₦)</label>
-                        <input type="number" id="settingRate" value="1420" step="1" min="1">
-                    </div>
-                    <p style="font-size:13px;color:var(--muted);margin-top:8px;">
-                        This rate is used for display conversion in the admin. Live rate is fetched automatically on load.
-                    </p>
-                    <div style="margin-top:24px;padding-top:20px;border-top:1px solid var(--border);">
-                        <p style="font-size:13px;color:var(--muted);">
-                            <strong style="color:var(--text);">MJ HUB Admin</strong><br>
-                            Connected to Supabase · Real-time product & customer data<br>
-                            Branding: MJ HUB only
-                        </p>
-                    </div>
-                </div>
-            </div>
+      <header class="topbar">
+        <div style="display:flex;align-items:center;gap:12px;">
+          <button class="mobile-menu-btn" onclick="openSidebar()"><i class="fas fa-bars"></i></button>
+          <h2 id="pageTitle">Overview</h2>
         </div>
-    </div>
-</div>
+        <span id="adminEmailLabel" style="font-size:12px;color:var(--muted);"></span>
+      </header>
 
-<!-- PRODUCT MODAL -->
-<div id="productModal" class="modal-backdrop hidden">
+      <div class="content">
+        <div id="tab-overview" class="tab-content active">
+          <div class="panel">
+            <div class="panel-header">
+              <div class="panel-title">Revenue</div>
+              <select id="revenuePeriod" onchange="updateRevenueDisplay()" style="padding:8px 12px;background:#07090e;border:1px solid var(--border);border-radius:10px;color:var(--text);">
+                <option value="today">Today</option>
+                <option value="7days">Last 7 Days</option>
+                <option value="month" selected>This Month</option>
+                <option value="3months">Last 3 Months</option>
+                <option value="6months">Last 6 Months</option>
+                <option value="12months">Last 12 Months</option>
+              </select>
+            </div>
+            <div class="metrics" style="margin-bottom:0;">
+              <div class="metric-card"><div class="metric-label" id="revenuePeriodLabel">This Month</div><div class="metric-value" id="mRevenueNgn">₦0</div><div class="metric-sub" id="mRevenueUsd">$0.00 USD</div></div>
+              <div class="metric-card"><div class="metric-label">Sales</div><div class="metric-value" id="mSalesNgn">₦0</div><div class="metric-sub">Completed orders</div></div>
+              <div class="metric-card"><div class="metric-label">Wallet Balances</div><div class="metric-value" id="mTotalBalance">₦0</div><div class="metric-sub">All user wallets</div></div>
+            </div>
+          </div>
+          <div class="panel">
+            <div class="panel-header"><div class="panel-title">Customers</div><button class="btn btn-ghost btn-sm" onclick="switchTab('users')">View all →</button></div>
+            <div class="metrics" style="margin-bottom:0;">
+              <div class="metric-card" style="cursor:pointer;" onclick="switchTab('users');filterUsersByStatus('all')"><div class="metric-label">Total Users</div><div class="metric-value" id="mTotalUsers">0</div></div>
+              <div class="metric-card" style="cursor:pointer;" onclick="switchTab('users');filterUsersByStatus('active')"><div class="metric-label">Active</div><div class="metric-value" id="mActiveUsers" style="color:#34d399;">0</div></div>
+              <div class="metric-card" style="cursor:pointer;" onclick="switchTab('users');filterUsersByStatus('inactive')"><div class="metric-label">Inactive</div><div class="metric-value" id="mInactiveUsers" style="color:#f87171;">0</div></div>
+            </div>
+          </div>
+        </div>
+
+        <div id="tab-lookup" class="tab-content">
+          <div class="panel">
+            <div class="panel-title" style="margin-bottom:10px;">Customer Lookup by ID</div>
+            <div class="search-row">
+              <input type="text" id="lookupCustomerId" placeholder="Enter Customer ID..." />
+              <button class="btn btn-primary btn-sm" onclick="lookupByCustomerId()">Search</button>
+            </div>
+            <div id="lookupResult" class="hidden" style="margin-top:12px;padding:14px;background:#07090e;border:1px solid var(--border);border-radius:12px;">
+              <div id="lookupName" style="font-weight:700;font-size:16px;"></div>
+              <div id="lookupEmail" class="meta"></div>
+              <div id="lookupPhone" class="meta"></div>
+              <div style="margin-top:8px;"><span class="price" id="lookupNgn"></span> · <span style="color:#38bdf8;" id="lookupUsd"></span></div>
+              <button class="btn btn-primary btn-sm" style="margin-top:10px;" id="lookupEditBtn">Edit Account</button>
+            </div>
+            <div id="lookupError" class="error-msg" style="text-align:left;"></div>
+          </div>
+        </div>
+
+        <div id="tab-products" class="tab-content">
+          <div class="panel">
+            <div class="panel-header">
+              <div class="panel-title">Product Catalog & Stock</div>
+              <div style="display:flex;gap:8px;flex-wrap:wrap;">
+                <button class="btn btn-ghost btn-sm" onclick="syncProductsNow()"><i class="fas fa-sync"></i> Sync</button>
+                <button class="btn btn-primary btn-sm" onclick="openProductModal()"><i class="fas fa-plus"></i> Add</button>
+              </div>
+            </div>
+            <div class="search-row">
+              <input type="text" id="productSearch" placeholder="Search products..." oninput="filterProducts()" />
+              <select id="categoryFilter" onchange="filterProducts()"><option value="">All Categories</option></select>
+            </div>
+
+            <div class="desktop-only desktop-table table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Product</th><th>Category</th><th>Supplier</th><th>Your Price</th><th>Profit</th><th>Stock</th><th>Status</th><th>Action</th>
+                  </tr>
+                </thead>
+                <tbody id="productsTableBody"></tbody>
+              </table>
+            </div>
+            <div id="productsMobileCards" class="mobile-only mobile-cards"></div>
+          </div>
+        </div>
+
+        <div id="tab-users" class="tab-content">
+          <div class="metrics">
+            <div class="metric-card" style="cursor:pointer;" onclick="filterUsersByStatus('all')"><div class="metric-label">Total</div><div class="metric-value" id="uTotalCount">0</div></div>
+            <div class="metric-card" style="cursor:pointer;" onclick="filterUsersByStatus('active')"><div class="metric-label">Active</div><div class="metric-value" id="uActiveCount" style="color:#34d399;">0</div></div>
+            <div class="metric-card" style="cursor:pointer;" onclick="filterUsersByStatus('inactive')"><div class="metric-label">Inactive</div><div class="metric-value" id="uInactiveCount" style="color:#f87171;">0</div></div>
+          </div>
+          <div class="panel">
+            <div class="panel-title" style="margin-bottom:10px;">Customer Directory</div>
+            <div class="search-row">
+              <input type="text" id="userSearch" placeholder="Search name, email, phone, Customer ID..." oninput="filterUsers()" />
+              <select id="userStatusFilter" onchange="filterUsers()">
+                <option value="all">All Status</option>
+                <option value="active">Active only</option>
+                <option value="inactive">Inactive only</option>
+              </select>
+            </div>
+            <div class="desktop-only table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Name</th><th>Email</th><th>Phone</th><th>Customer ID</th><th>NGN</th><th>USD</th><th>Status</th><th>Role</th><th>Action</th>
+                  </tr>
+                </thead>
+                <tbody id="usersTableBody"></tbody>
+              </table>
+            </div>
+            <div id="usersMobileCards" class="mobile-only mobile-cards"></div>
+          </div>
+        </div>
+
+        <div id="tab-orders" class="tab-content">
+          <div class="panel">
+            <div class="panel-title" style="margin-bottom:10px;">Orders</div>
+            <div class="empty-state" id="ordersEmpty">No orders table connected yet.</div>
+            <div class="table-wrap hidden" id="ordersTableWrap">
+              <table>
+                <thead><tr><th>Order ID</th><th>Customer</th><th>Item</th><th>Amount</th><th>Status</th><th>Date</th></tr></thead>
+                <tbody id="ordersTableBody"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <div id="tab-settings" class="tab-content">
+          <div class="panel">
+            <div class="panel-title" style="margin-bottom:10px;">Platform Settings</div>
+            <div class="field" style="max-width:320px;">
+              <label>P2P Exchange Rate (1 USD = ₦)</label>
+              <input type="number" id="settingRate" value="1420" step="1" min="1" />
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="productModal" class="modal-backdrop hidden">
     <div class="modal">
-        <h3 id="productModalTitle">Add Product</h3>
-        <input type="hidden" id="editProductId">
-        <div class="field">
-            <label>Product Name</label>
-            <input type="text" id="pName" placeholder="e.g. 2026 AMIRA FULL UPDATE">
-        </div>
-        <div class="field">
-            <label>Business</label>
-            <select id="pBusiness">
-                <option value="MJ Logs">MJ Logs</option>
-                <option value="MJ SMS">MJ SMS</option>
-                <option value="MJ Boosters">MJ Boosters</option>
-            </select>
-        </div>
-        <div class="field">
-            <label>Product Category</label>
-            <select id="pCategory">
-                <option value="Facebook">Facebook</option>
-                <option value="Instagram">Instagram</option>
-                <option value="Twitter/X">Twitter/X</option>
-                <option value="Others">Others</option>
-            </select>
-        </div>
-        <div class="field">
-            <label>Description</label>
-            <textarea id="pDesc" rows="3" placeholder="Short description shown to customers"></textarea>
-        </div>
-        <div class="field">
-            <label>Price (₦)</label>
-            <input type="number" id="pPrice" placeholder="20000" min="0" step="1">
-        </div>
-        <div class="field">
-            <label>Stock Quantity</label>
-            <input type="number" id="pStock" placeholder="10" min="0" step="1">
-        </div>
-        <div class="field">
-            <label>Available</label>
-            <select id="pAvailable">
-                <option value="true">Yes — Active</option>
-                <option value="false">No — Hidden</option>
-            </select>
-        </div>
-        <div id="productModalError" class="error-msg"></div>
-        <div class="modal-actions">
-            <button class="btn btn-ghost" onclick="closeProductModal()">Cancel</button>
-            <button class="btn btn-primary" style="width: auto;" onclick="saveProduct()">Save Product</button>
-        </div>
+      <h3 id="productModalTitle">Add Product</h3>
+      <input type="hidden" id="editProductId" />
+      <div class="field"><label>Product Name</label><input type="text" id="pName" /></div>
+      <div class="field"><label>Category</label><input type="text" id="pCategory" /></div>
+      <div class="field"><label>Description</label><textarea id="pDesc" rows="3"></textarea></div>
+      <div class="field">
+        <label>Supplier Price (₦) — Read Only</label>
+        <input type="number" id="pSupplierPrice" disabled />
+        <div class="price-note">From supplier sync. Not editable.</div>
+      </div>
+      <div class="field">
+        <label>Your Selling Price (₦)</label>
+        <input type="number" id="pPrice" min="0" step="1" />
+        <div class="price-note">This is what customers see.</div>
+      </div>
+      <div class="field"><label>Stock Quantity</label><input type="number" id="pStock" min="0" step="1" /></div>
+      <div class="field">
+        <label>Available</label>
+        <select id="pAvailable"><option value="true">Yes — Active</option><option value="false">No — Hidden</option></select>
+      </div>
+      <div id="productModalError" class="error-msg"></div>
+      <div class="modal-actions">
+        <button class="btn btn-ghost" onclick="closeProductModal()">Cancel</button>
+        <button class="btn btn-primary btn-sm" onclick="saveProduct()">Save</button>
+      </div>
     </div>
-</div>
+  </div>
 
-<!-- USER EDIT MODAL -->
-<div id="userModal" class="modal-backdrop hidden">
+  <div id="userModal" class="modal-backdrop hidden">
     <div class="modal">
-        <h3>Edit Customer Account</h3>
-        <input type="hidden" id="editUserId">
-        <div class="field">
-            <label>Full Name</label>
-            <input type="text" id="uName" placeholder="Customer full name">
-        </div>
-        <div class="field">
-            <label>Username</label>
-            <input type="text" id="uUsername" placeholder="Username">
-        </div>
-        <div class="field">
-            <label>Email</label>
-            <input type="email" id="uEmail" placeholder="email@example.com">
-        </div>
-        <div class="field">
-            <label>Phone Number</label>
-            <input type="text" id="uPhone" placeholder="+234...">
-        </div>
-        <div class="field">
-            <label>Customer ID</label>
-            <input type="text" id="uCustomerId" readonly style="opacity:0.7;">
-        </div>
-        <div class="field">
-            <label>NGN Balance (₦)</label>
-            <input type="number" id="uBalance" step="0.01" placeholder="0.00">
-        </div>
-        <div class="field">
-            <label>USD Balance ($)</label>
-            <input type="number" id="uBalanceUsd" step="0.01" placeholder="0.00">
-        </div>
-        <div class="field">
-            <label>Admin Privileges</label>
-            <select id="uIsAdmin">
-                <option value="false">Standard User</option>
-                <option value="true">Administrator</option>
-            </select>
-        </div>
-        <div id="userModalError" class="error-msg"></div>
-        <div class="modal-actions">
-            <button class="btn btn-ghost" onclick="closeUserModal()">Cancel</button>
-            <button class="btn btn-primary" style="width: auto;" onclick="saveUser()">Save Changes</button>
-        </div>
+      <h3>Edit Customer Account</h3>
+      <input type="hidden" id="editUserId" />
+      <div class="field"><label>Full Name</label><input type="text" id="uName" /></div>
+      <div class="field"><label>Username</label><input type="text" id="uUsername" /></div>
+      <div class="field"><label>Email</label><input type="email" id="uEmail" /></div>
+      <div class="field"><label>Phone Number</label><input type="text" id="uPhone" /></div>
+      <div class="field"><label>Customer ID</label><input type="text" id="uCustomerId" readonly style="opacity:.7;" /></div>
+      <div class="field"><label>NGN Balance (₦)</label><input type="number" id="uBalance" step="0.01" /></div>
+      <div class="field"><label>USD Balance ($)</label><input type="number" id="uBalanceUsd" step="0.01" /></div>
+      <div class="field">
+        <label>Admin Privileges</label>
+        <select id="uIsAdmin"><option value="false">Standard User</option><option value="true">Administrator</option></select>
+      </div>
+      <div id="userModalError" class="error-msg"></div>
+      <div class="modal-actions">
+        <button class="btn btn-ghost" onclick="closeUserModal()">Cancel</button>
+        <button class="btn btn-primary btn-sm" onclick="saveUser()">Save</button>
+      </div>
     </div>
-</div>
+  </div>
 
 <script>
 const SUPABASE_URL = 'https://atczodlljmlayvldxfmv.supabase.co';
@@ -823,633 +415,243 @@ let liveRate = 1420;
 let currentUserStatusFilter = 'all';
 
 const tabTitles = {
-    overview: 'Overview',
-    users: 'Customers',
-    lookup: 'Customer Lookup',
-    products: 'Products & Stock',
-    orders: 'Orders',
-    settings: 'Settings'
+  overview: 'Overview',
+  users: 'Customers',
+  lookup: 'Customer Lookup',
+  products: 'Products & Stock',
+  orders: 'Orders',
+  settings: 'Settings'
 };
 
 const revenueLabels = {
-    today: 'Today',
-    '7days': 'Last 7 Days',
-    month: 'This Month',
-    '3months': 'Last 3 Months',
-    '6months': 'Last 6 Months',
-    '12months': 'Last 12 Months'
+  today: 'Today',
+  '7days': 'Last 7 Days',
+  month: 'This Month',
+  '3months': 'Last 3 Months',
+  '6months': 'Last 6 Months',
+  '12months': 'Last 12 Months'
 };
 
-const THIRTY_DAYS_MS = 30 * 24 * 60 * 60 * 1000;
-
-function isUserActive(profile) {
-    const last = profile.updated_at || profile.last_sign_in_at || profile.created_at;
-    if (!last) return true;
-    return (Date.now() - new Date(last).getTime()) < THIRTY_DAYS_MS;
+function isAdminValue(v) {
+  return v === true || v === 'true' || v === 1 || v === '1';
 }
 
-/* ---------- Auth ---------- */
+function isUserActive(profile) {
+  const last = profile.updated_at || profile.last_sign_in_at;
+  if (!last) return true;
+  return (Date.now() - new Date(last).getTime()) < (30 * 24 * 60 * 60 * 1000);
+}
+
 async function checkAuth() {
-    const { data: { session } } = await sb.auth.getSession();
-    if (!session) {
-        showLogin();
-        return;
-    }
+  const { data: { session } } = await sb.auth.getSession();
+  if (!session) return showLogin();
 
-    const { data: profile, error } = await sb
-        .from('profiles')
-        .select('*')
-        .eq('id', session.user.id)
-        .single();
+  const { data: profile, error } = await sb
+    .from('profiles')
+    .select('*')
+    .eq('id', session.user.id)
+    .maybeSingle();
 
-    if (error || !profile || !profile.is_admin) {
-        await sb.auth.signOut();
-        document.getElementById('loginError').textContent = 'Access denied. Admin privileges required.';
-        showLogin();
-        return;
-    }
+  if (error) {
+    await sb.auth.signOut();
+    document.getElementById('loginError').textContent = 'Profile read failed: ' + error.message;
+    return showLogin();
+  }
+  if (!profile || !isAdminValue(profile.is_admin)) {
+    await sb.auth.signOut();
+    document.getElementById('loginError').textContent = 'Access denied. Admin privileges required.';
+    return showLogin();
+  }
 
-    document.getElementById('adminEmailLabel').textContent = session.user.email || '';
-    showDashboard();
-    await loadAllData();
+  document.getElementById('adminEmailLabel').textContent = session.user.email || profile.email || '';
+  showDashboard();
+  await loadAllData();
 }
 
 function showLogin() {
-    document.getElementById('loginScreen').classList.remove('hidden');
-    document.getElementById('adminShell').classList.add('hidden');
+  document.getElementById('loginScreen').classList.remove('hidden');
+  document.getElementById('adminShell').classList.add('hidden');
 }
-
 function showDashboard() {
-    document.getElementById('loginScreen').classList.add('hidden');
-    document.getElementById('adminShell').classList.remove('hidden');
+  document.getElementById('loginScreen').classList.add('hidden');
+  document.getElementById('adminShell').classList.remove('hidden');
 }
 
 async function handleLogin() {
-    const email = document.getElementById('adminEmail').value.trim();
-    const password = document.getElementById('adminPassword').value;
-    const errEl = document.getElementById('loginError');
-    errEl.textContent = '';
-
-    if (!email || !password) {
-        errEl.textContent = 'Enter email and password.';
-        return;
-    }
-
-    const { error } = await sb.auth.signInWithPassword({ email, password });
-    if (error) {
-        errEl.textContent = error.message;
-        return;
-    }
-    await checkAuth();
+  const email = document.getElementById('adminEmail').value.trim();
+  const password = document.getElementById('adminPassword').value;
+  const errEl = document.getElementById('loginError');
+  errEl.textContent = '';
+  if (!email || !password) { errEl.textContent = 'Enter email and password.'; return; }
+  const { error } = await sb.auth.signInWithPassword({ email, password });
+  if (error) { errEl.textContent = error.message; return; }
+  await checkAuth();
 }
-
 async function handleLogout() {
-    await sb.auth.signOut();
-    location.reload();
+  await sb.auth.signOut();
+  location.reload();
 }
 
-/* ---------- Data loading ---------- */
 async function loadAllData() {
-    await Promise.all([loadProducts(), loadProfiles(), tryLoadOrders()]);
-    updateMetrics();
+  await Promise.all([loadProducts(), loadProfiles(), tryLoadOrders()]);
+  updateMetrics();
 }
 
 async function loadProducts() {
-    const { data, error } = await sb
-        .from('products')
-        .select('*')
-        .order('name');
-
-    if (error) {
-        console.error('Products error:', error.message);
-        allProducts = [];
-    } else {
-        allProducts = data || [];
-    }
-    populateCategoryFilter();
-    renderProducts();
+  const { data, error } = await sb.from('products').select('*').order('name');
+  allProducts = error ? [] : (data || []);
+  if (error) console.error('Products error:', error.message);
+  populateCategoryFilter();
+  renderProducts();
 }
 
 function populateCategoryFilter() {
-    const select = document.getElementById('categoryFilter');
-    if (!select) return;
-    const fixed = ['Facebook', 'Instagram', 'Twitter/X', 'Others'];
-    const fromData = [...new Set(allProducts.map(p => getProductCategoryLabel(p)).filter(Boolean))];
-    const cats = [...new Set([...fixed, ...fromData])];
-    const current = select.value;
-    select.innerHTML = '<option value="">All Categories</option>' +
-        cats.map(c => `<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join('');
-    if (cats.includes(current)) select.value = current;
+  const select = document.getElementById('categoryFilter');
+  if (!select) return;
+  const cats = [...new Set(allProducts.map(p => p.category || 'OTHER').filter(Boolean))].sort();
+  const current = select.value;
+  select.innerHTML = '<option value="">All Categories</option>' + cats.map(c => `<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join('');
+  if (cats.includes(current)) select.value = current;
 }
 
 async function loadProfiles() {
-    const { data, error } = await sb
-        .from('profiles')
-        .select('*')
-        .order('created_at', { ascending: false });
-
-    if (error) {
-        console.error('Profiles error:', error.message);
-        allProfiles = [];
-    } else {
-        allProfiles = data || [];
-    }
-    renderUsers();
+  // IMPORTANT: no created_at (column does not exist on your table)
+  const { data, error } = await sb.from('profiles').select('*').order('full_name', { ascending: true });
+  if (error) {
+    console.error('Profiles error:', error.message);
+    allProfiles = [];
+  } else {
+    allProfiles = data || [];
+  }
+  renderUsers();
 }
 
 async function tryLoadOrders() {
-    const { data, error } = await sb.from('orders').select('*').order('created_at', { ascending: false }).limit(200);
-    if (!error && data) {
-        window._cachedOrders = data;
-        const empty = document.getElementById('ordersEmpty');
-        const wrap = document.getElementById('ordersTableWrap');
-        if (empty) empty.classList.add('hidden');
-        if (wrap) wrap.classList.remove('hidden');
-        renderOrders(data);
-        updateRevenueDisplay();
-    } else {
-        window._cachedOrders = [];
-    }
+  const { data, error } = await sb.from('orders').select('*').order('created_at', { ascending: false }).limit(200);
+  if (!error && data) {
+    window._cachedOrders = data;
+    document.getElementById('ordersEmpty').classList.add('hidden');
+    document.getElementById('ordersTableWrap').classList.remove('hidden');
+    renderOrders(data);
+  } else {
+    window._cachedOrders = [];
+  }
 }
 
 function updateMetrics() {
-    const total = allProfiles.length;
-    let activeCount = 0;
-    let inactiveCount = 0;
-    allProfiles.forEach(p => {
-        if (isUserActive(p)) activeCount++;
-        else inactiveCount++;
-    });
-
-    const set = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
-
-    set('mTotalUsers', total);
-    set('mActiveUsers', activeCount);
-    set('mInactiveUsers', inactiveCount);
-    set('uTotalCount', total);
-    set('uActiveCount', activeCount);
-    set('uInactiveCount', inactiveCount);
-
-    const totalBal = allProfiles.reduce((s, p) => s + (Number(p.balance) || 0), 0);
-    set('mTotalBalance', '₦' + totalBal.toLocaleString(undefined, { maximumFractionDigits: 0 }));
-
-    updateRevenueDisplay();
+  const total = allProfiles.length;
+  let activeCount = 0, inactiveCount = 0;
+  allProfiles.forEach(p => isUserActive(p) ? activeCount++ : inactiveCount++);
+  const set = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
+  set('mTotalUsers', total); set('mActiveUsers', activeCount); set('mInactiveUsers', inactiveCount);
+  set('uTotalCount', total); set('uActiveCount', activeCount); set('uInactiveCount', inactiveCount);
+  const totalBal = allProfiles.reduce((s, p) => s + (Number(p.balance) || 0), 0);
+  set('mTotalBalance', '₦' + totalBal.toLocaleString(undefined, { maximumFractionDigits: 0 }));
+  updateRevenueDisplay();
 }
 
 function updateRevenueDisplay() {
-    const period = document.getElementById('revenuePeriod')?.value || 'month';
-    const labelEl = document.getElementById('revenuePeriodLabel');
-    if (labelEl) labelEl.textContent = revenueLabels[period] || period;
-
-    let sales = 0;
-    if (window._cachedOrders && window._cachedOrders.length) {
-        const now = Date.now();
-        const ranges = {
-            today: 1 * 24 * 60 * 60 * 1000,
-            '7days': 7 * 24 * 60 * 60 * 1000,
-            month: 30 * 24 * 60 * 60 * 1000,
-            '3months': 90 * 24 * 60 * 60 * 1000,
-            '6months': 180 * 24 * 60 * 60 * 1000,
-            '12months': 365 * 24 * 60 * 60 * 1000
-        };
-        const cutoff = now - (ranges[period] || ranges.month);
-        sales = window._cachedOrders
-            .filter(o => {
-                const d = o.created_at ? new Date(o.created_at).getTime() : 0;
-                const st = String(o.status || '').toLowerCase();
-                return d >= cutoff && (st === 'completed' || st === 'paid' || st === 'success');
-            })
-            .reduce((s, o) => s + (Number(o.amount || o.total || 0)), 0);
-    }
-
-    const set = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
-    set('mRevenueNgn', '₦' + sales.toLocaleString(undefined, { maximumFractionDigits: 0 }));
-    set('mSalesNgn', '₦' + sales.toLocaleString(undefined, { maximumFractionDigits: 0 }));
-    set('mRevenueUsd', '$' + (sales / liveRate).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' USD');
+  const period = document.getElementById('revenuePeriod')?.value || 'month';
+  const labelEl = document.getElementById('revenuePeriodLabel');
+  if (labelEl) labelEl.textContent = revenueLabels[period] || period;
+  let sales = 0;
+  if (window._cachedOrders?.length) {
+    const ranges = { today:1, '7days':7, month:30, '3months':90, '6months':180, '12months':365 };
+    const cutoff = Date.now() - ((ranges[period] || 30) * 86400000);
+    sales = window._cachedOrders.filter(o => {
+      const d = o.created_at ? new Date(o.created_at).getTime() : 0;
+      const st = String(o.status || '').toLowerCase();
+      return d >= cutoff && ['completed', 'paid', 'success'].includes(st);
+    }).reduce((s, o) => s + Number(o.amount || o.total || 0), 0);
+  }
+  const set = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
+  set('mRevenueNgn', '₦' + sales.toLocaleString(undefined, { maximumFractionDigits: 0 }));
+  set('mSalesNgn', '₦' + sales.toLocaleString(undefined, { maximumFractionDigits: 0 }));
+  set('mRevenueUsd', '$' + (sales / liveRate).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' USD');
 }
 
-/* ---------- Render Products ---------- */
 function renderProducts(list) {
-    const items = list || allProducts;
-    const tbody = document.getElementById('productsTableBody');
+  const items = list || allProducts;
+  const tbody = document.getElementById('productsTableBody');
 
-    if (!items.length) {
-        tbody.innerHTML = `<tr><td colspan="7" class="empty-state">No products found in this category.</td></tr>`;
-        return;
-    }
+  if (!items.length) {
+    tbody.innerHTML = `<tr><td colspan="8" class="empty-state">No products found.</td></tr>`;
+    renderProductCards([]);
+    return;
+  }
 
-    tbody.innerHTML = items.map(p => {
-        const price = Number(p.price || 0);
-        const stock = p.stock_quantity != null ? p.stock_quantity : '—';
-        const available = p.is_available !== false;
-        const business = getBusinessLabel(p);
-        const prodCat = getProductCategoryLabel(p);
-        const plainDesc = stripHtml(p.description || '');
-        return `
-            <tr>
-                <td style="font-weight:700;color:var(--text);">${escapeHtml(p.name || p.product_key || 'Unnamed')}</td>
-                <td>
-                    <span class="badge badge-admin">${escapeHtml(business)}</span>
-                    <div style="font-size:11px;color:var(--muted);margin-top:4px;">${escapeHtml(prodCat)}</div>
-                </td>
-                <td><div class="desc-cell" title="${escapeHtml(plainDesc)}">${escapeHtml(plainDesc) || '—'}</div></td>
-                <td class="price">₦${price.toLocaleString()}</td>
-                <td>${stock}</td>
-                <td><span class="badge ${available ? 'badge-on' : 'badge-off'}">${available ? 'Active' : 'Hidden'}</span></td>
-                <td>
-                    <button class="btn btn-ghost btn-sm" onclick="editProduct('${p.id}')">
-                        <i class="fas fa-edit"></i> Edit
-                    </button>
-                </td>
-            </tr>`;
-    }).join('');
+  tbody.innerHTML = items.map(p => {
+    const supplier = Number(p.supplier_price || 0);
+    const price = Number(p.price || 0);
+    const profit = price - supplier;
+    const stock = p.stock_quantity != null ? p.stock_quantity : '—';
+    const available = p.is_available !== false;
+    const category = p.category || 'OTHER';
+    const rowId = p.id || p.product_key;
+    return `
+      <tr>
+        <td style="font-weight:700;color:var(--text);">${escapeHtml(p.name || 'Unnamed')}</td>
+        <td>${escapeHtml(category)}</td>
+        <td class="supplier-price">₦${supplier.toLocaleString()}</td>
+        <td class="price">₦${price.toLocaleString()}</td>
+        <td class="profit">₦${profit.toLocaleString()}</td>
+        <td>${stock}</td>
+        <td><span class="badge ${available ? 'badge-on' : 'badge-off'}">${available ? 'Active' : 'Hidden'}</span></td>
+        <td><button class="btn btn-ghost btn-sm" onclick="editProduct('${escapeHtml(String(rowId))}')"><i class="fas fa-edit"></i></button></td>
+      </tr>`;
+  }).join('');
+
+  renderProductCards(items);
 }
 
-function getBusinessLabel(p) {
-    const b = (p.business || '').trim();
-    if (b) {
-        const bl = b.toLowerCase();
-        if (bl.includes('sms')) return 'MJ SMS';
-        if (bl.includes('boost') || bl.includes('smm')) return 'MJ Boosters';
-        if (bl.includes('log')) return 'MJ Logs';
-    }
-    return 'MJ Logs';
-}
-
-function getProductCategoryLabel(p) {
-    const businessNames = ['mj logs', 'mj sms', 'mj boosters', 'logs', 'sms', 'boosters'];
-    let raw = (p.product_category || p.sub_category || p.type || '').trim();
-    if (!raw) {
-        const c = (p.category || '').trim();
-        if (c && !businessNames.includes(c.toLowerCase())) raw = c;
-    }
-    const n = ((p.name || '') + ' ' + raw).toLowerCase();
-    if (raw) {
-        const r = raw.toLowerCase();
-        if (r.includes('face') || r === 'fb') return 'Facebook';
-        if (r.includes('insta') || r === 'ig') return 'Instagram';
-        if (r.includes('twitter') || r === 'x' || r.includes('tweet')) return 'Twitter/X';
-        if (!businessNames.includes(r)) return raw;
-    }
-    if (n.includes('facebook') || n.includes(' fb ')) return 'Facebook';
-    if (n.includes('instagram') || n.includes(' ig ') || n.includes('insta')) return 'Instagram';
-    if (n.includes('twitter') || /\bx\b/.test(n) || n.includes('tweet')) return 'Twitter/X';
-    return 'Others';
+function renderProductCards(items) {
+  const wrap = document.getElementById('productsMobileCards');
+  if (!wrap) return;
+  if (!items.length) {
+    wrap.innerHTML = `<div class="empty-state">No products found.</div>`;
+    return;
+  }
+  wrap.innerHTML = items.map(p => {
+    const supplier = Number(p.supplier_price || 0);
+    const price = Number(p.price || 0);
+    const profit = price - supplier;
+    const stock = p.stock_quantity != null ? p.stock_quantity : '—';
+    const available = p.is_available !== false;
+    const rowId = p.id || p.product_key;
+    return `
+      <div class="product-card">
+        <h4>${escapeHtml(p.name || 'Unnamed')}</h4>
+        <div class="meta">${escapeHtml(p.category || 'OTHER')}</div>
+        <div class="row-line"><span>Your Price</span><strong class="price">₦${price.toLocaleString()}</strong></div>
+        <div class="row-line"><span>Supplier</span><span class="supplier-price">₦${supplier.toLocaleString()}</span></div>
+        <div class="row-line"><span>Profit</span><span class="profit">₦${profit.toLocaleString()}</span></div>
+        <div class="row-line"><span>Stock</span><span>${stock}</span></div>
+        <div class="row-line"><span>Status</span><span class="badge ${available ? 'badge-on' : 'badge-off'}">${available ? 'Active' : 'Hidden'}</span></div>
+        <div style="margin-top:10px;"><button class="btn btn-ghost btn-sm" onclick="editProduct('${escapeHtml(String(rowId))}')"><i class="fas fa-edit"></i> Edit</button></div>
+      </div>`;
+  }).join('');
 }
 
 function filterProducts() {
-    const q = (document.getElementById('productSearch').value || '').toLowerCase().trim();
-    const business = (document.getElementById('businessFilter')?.value || '').trim();
-    const cat = (document.getElementById('categoryFilter')?.value || '').trim();
-    let filtered = allProducts;
-
-    if (business) {
-        filtered = filtered.filter(p => getBusinessLabel(p) === business);
-    }
-    if (cat) {
-        filtered = filtered.filter(p => getProductCategoryLabel(p) === cat);
-    }
-    if (q) {
-        filtered = filtered.filter(p => {
-            const plain = stripHtml(p.description || '').toLowerCase();
-            return (p.name || '').toLowerCase().includes(q) ||
-                plain.includes(q) ||
-                (p.product_key || '').toLowerCase().includes(q) ||
-                getBusinessLabel(p).toLowerCase().includes(q) ||
-                getProductCategoryLabel(p).toLowerCase().includes(q);
-        });
-    }
-    renderProducts(filtered);
-}
-
-/* ---------- Product Modal ---------- */
-function openProductModal(product) {
-    document.getElementById('productModalError').textContent = '';
-    if (product) {
-        document.getElementById('productModalTitle').textContent = 'Edit Product';
-        document.getElementById('editProductId').value = product.id;
-        document.getElementById('pName').value = product.name || '';
-        document.getElementById('pBusiness').value = getBusinessLabel(product);
-        document.getElementById('pCategory').value = getProductCategoryLabel(product);
-        document.getElementById('pDesc').value = stripHtml(product.description || '');
-        document.getElementById('pPrice').value = product.price ?? '';
-        document.getElementById('pStock').value = product.stock_quantity ?? '';
-        document.getElementById('pAvailable').value = product.is_available === false ? 'false' : 'true';
-    } else {
-        document.getElementById('productModalTitle').textContent = 'Add Product';
-        document.getElementById('editProductId').value = '';
-        document.getElementById('pName').value = '';
-        document.getElementById('pBusiness').value = 'MJ Logs';
-        document.getElementById('pCategory').value = 'Others';
-        document.getElementById('pDesc').value = '';
-        document.getElementById('pPrice').value = '';
-        document.getElementById('pStock').value = '';
-        document.getElementById('pAvailable').value = 'true';
-    }
-    document.getElementById('productModal').classList.remove('hidden');
-}
-
-function closeProductModal() {
-    document.getElementById('productModal').classList.add('hidden');
-}
-
-function editProduct(id) {
-    const p = allProducts.find(x => String(x.id) === String(id));
-    if (p) openProductModal(p);
-}
-
-async function saveProduct() {
-    const id = document.getElementById('editProductId').value;
-    const name = document.getElementById('pName').value.trim();
-    const category = document.getElementById('pCategory').value.trim() || 'Others';
-    const description = stripHtml(document.getElementById('pDesc').value);
-    const price = parseFloat(document.getElementById('pPrice').value);
-    const stock_quantity = parseInt(document.getElementById('pStock').value, 10);
-    const is_available = document.getElementById('pAvailable').value === 'true';
-    const errEl = document.getElementById('productModalError');
-    errEl.textContent = '';
-
-    if (!name) {
-        errEl.textContent = 'Product name is required.';
-        return;
-    }
-    if (isNaN(price) || price < 0) {
-        errEl.textContent = 'Enter a valid price.';
-        return;
-    }
-
-    const payload = {
-        name,
-        category,
-        description: description || null,
-        price,
-        stock_quantity: isNaN(stock_quantity) ? 0 : stock_quantity,
-        is_available
-    };
-
-    let error;
-    if (id) {
-        ({ error } = await sb.from('products').update(payload).eq('id', id));
-    } else {
-        ({ error } = await sb.from('products').insert([payload]));
-    }
-
-    if (error) {
-        errEl.textContent = error.message + ' (Check RLS policies if this fails)';
-        return;
-    }
-
-    closeProductModal();
-    await loadProducts();
-    updateMetrics();
-}
-
-/* ---------- Users ---------- */
-function renderUsers(list) {
-    const items = list || allProfiles;
-    const tbody = document.getElementById('usersTableBody');
-
-    if (!items.length) {
-        tbody.innerHTML = `<tr><td colspan="9" class="empty-state">No customers found.</td></tr>`;
-        return;
-    }
-
-    tbody.innerHTML = items.map(u => {
-        const ngn = Number(u.balance || 0);
-        const usd = u.balance_usd != null ? Number(u.balance_usd) : (ngn / liveRate);
-        const active = isUserActive(u);
-        const phone = u.phone_number || u.phone || '—';
-        return `
-            <tr>
-                <td style="font-weight:600;color:var(--text);">${escapeHtml(u.full_name || u.username || '—')}</td>
-                <td>${escapeHtml(u.email || '—')}</td>
-                <td style="font-size:12px;">${escapeHtml(phone)}</td>
-                <td style="font-size:12px;color:var(--muted);">${escapeHtml(u.customer_id || '—')}</td>
-                <td class="price">₦${ngn.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}</td>
-                <td style="color:#38bdf8;font-weight:600;">$${usd.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}</td>
-                <td><span class="badge ${active ? 'badge-on' : 'badge-off'}">${active ? 'Active' : 'Inactive'}</span></td>
-                <td>${u.is_admin ? '<span class="badge badge-admin">Admin</span>' : '<span style="color:var(--muted);font-size:12px;">User</span>'}</td>
-                <td>
-                    <button class="btn btn-ghost btn-sm" onclick="editUser('${u.id}')">
-                        <i class="fas fa-edit"></i>
-                    </button>
-                </td>
-            </tr>`;
-    }).join('');
-}
-
-function filterUsers() {
-    const q = (document.getElementById('userSearch').value || '').toLowerCase().trim();
-    const statusSel = document.getElementById('userStatusFilter');
-    const status = statusSel ? statusSel.value : currentUserStatusFilter;
-
-    let filtered = allProfiles;
-    if (status === 'active') filtered = filtered.filter(isUserActive);
-    else if (status === 'inactive') filtered = filtered.filter(u => !isUserActive(u));
-
-    if (q) {
-        filtered = filtered.filter(u =>
-            (u.full_name || '').toLowerCase().includes(q) ||
-            (u.email || '').toLowerCase().includes(q) ||
-            (u.username || '').toLowerCase().includes(q) ||
-            (u.customer_id || '').toLowerCase().includes(q) ||
-            (u.phone_number || u.phone || '').toLowerCase().includes(q)
-        );
-    }
-    renderUsers(filtered);
-}
-
-function filterUsersByStatus(status) {
-    currentUserStatusFilter = status;
-    const sel = document.getElementById('userStatusFilter');
-    if (sel) sel.value = status;
-    const search = document.getElementById('userSearch');
-    if (search) search.value = '';
-    filterUsers();
-}
-
-function lookupByCustomerId() {
-    const cid = (document.getElementById('lookupCustomerId').value || '').trim();
-    const errEl = document.getElementById('lookupError');
-    const resultEl = document.getElementById('lookupResult');
-    errEl.textContent = '';
-    resultEl.classList.add('hidden');
-
-    if (!cid) {
-        errEl.textContent = 'Enter a Customer ID.';
-        return;
-    }
-
-    const u = allProfiles.find(p =>
-        String(p.customer_id || '').toLowerCase() === cid.toLowerCase()
+  const q = (document.getElementById('productSearch').value || '').toLowerCase().trim();
+  const cat = (document.getElementById('categoryFilter')?.value || '').trim();
+  let filtered = allProducts;
+  if (cat) filtered = filtered.filter(p => (p.category || '') === cat);
+  if (q) {
+    filtered = filtered.filter(p =>
+      (p.name || '').toLowerCase().includes(q) ||
+      (p.category || '').toLowerCase().includes(q) ||
+      (p.product_key || '').toLowerCase().includes(q) ||
+      (p.description || '').toLowerCase().includes(q)
     );
-
-    if (!u) {
-        errEl.textContent = 'No customer found with that Customer ID.';
-        return;
-    }
-
-    const ngn = Number(u.balance || 0);
-    const usd = u.balance_usd != null ? Number(u.balance_usd) : (ngn / liveRate);
-    const phone = u.phone_number || u.phone || '—';
-
-    document.getElementById('lookupName').textContent = u.full_name || u.username || '—';
-    document.getElementById('lookupEmail').textContent = u.email || '—';
-    document.getElementById('lookupPhone').textContent = phone;
-    document.getElementById('lookupNgn').textContent = '₦' + ngn.toLocaleString(undefined, { minimumFractionDigits: 2 });
-    document.getElementById('lookupUsd').textContent = '$' + usd.toLocaleString(undefined, { minimumFractionDigits: 2 });
-    document.getElementById('lookupEditBtn').onclick = () => editUser(u.id);
-    resultEl.classList.remove('hidden');
+  }
+  renderProducts(filtered);
 }
 
-function editUser(id) {
-    const u = allProfiles.find(x => String(x.id) === String(id));
-    if (!u) return;
-    document.getElementById('userModalError').textContent = '';
-    document.getElementById('editUserId').value = u.id;
-    document.getElementById('uName').value = u.full_name || '';
-    document.getElementById('uUsername').value = u.username || '';
-    document.getElementById('uEmail').value = u.email || '';
-    document.getElementById('uPhone').value = u.phone_number || u.phone || '';
-    document.getElementById('uCustomerId').value = u.customer_id || '';
-    document.getElementById('uBalance').value = u.balance ?? 0;
-    document.getElementById('uBalanceUsd').value = u.balance_usd != null ? u.balance_usd : '';
-    document.getElementById('uIsAdmin').value = u.is_admin ? 'true' : 'false';
-    document.getElementById('userModal').classList.remove('hidden');
-}
-
-function closeUserModal() {
-    document.getElementById('userModal').classList.add('hidden');
-}
-
-async function saveUser() {
-    const id = document.getElementById('editUserId').value;
-    const full_name = document.getElementById('uName').value.trim();
-    const username = document.getElementById('uUsername').value.trim();
-    const email = document.getElementById('uEmail').value.trim();
-    const phone_number = document.getElementById('uPhone').value.trim();
-    const balance = parseFloat(document.getElementById('uBalance').value);
-    const balance_usd_raw = document.getElementById('uBalanceUsd').value;
-    const balance_usd = balance_usd_raw === '' ? null : parseFloat(balance_usd_raw);
-    const is_admin = document.getElementById('uIsAdmin').value === 'true';
-    const errEl = document.getElementById('userModalError');
-    errEl.textContent = '';
-
-    if (isNaN(balance)) {
-        errEl.textContent = 'Enter a valid NGN balance.';
-        return;
-    }
-
-    const payload = {
-        full_name,
-        username,
-        email: email || null,
-        phone_number: phone_number || null,
-        balance: balance || 0,
-        is_admin
-    };
-    if (balance_usd !== null && !isNaN(balance_usd)) {
-        payload.balance_usd = balance_usd;
-    }
-
-    const { error } = await sb
-        .from('profiles')
-        .update(payload)
-        .eq('id', id);
-
-    if (error) {
-        errEl.textContent = error.message + ' (Check RLS policies)';
-        return;
-    }
-
-    closeUserModal();
-    await loadProfiles();
-    updateMetrics();
-}
-
-/* ---------- Orders ---------- */
-function renderOrders(orders) {
-    const tbody = document.getElementById('ordersTableBody');
-    if (!orders || !orders.length) {
-        tbody.innerHTML = `<tr><td colspan="6" class="empty-state">No orders yet.</td></tr>`;
-        return;
-    }
-    tbody.innerHTML = orders.map(o => `
-        <tr>
-            <td style="font-weight:600;">${escapeHtml(o.id || o.order_id || '—')}</td>
-            <td>${escapeHtml(o.customer_name || o.customer || o.email || '—')}</td>
-            <td>${escapeHtml(o.item || o.product_name || o.service || '—')}</td>
-            <td class="price">₦${Number(o.amount || o.total || 0).toLocaleString()}</td>
-            <td><span class="badge ${String(o.status).toLowerCase()==='completed'||String(o.status).toLowerCase()==='paid' ? 'badge-on' : 'badge-off'}">${escapeHtml(o.status || '—')}</span></td>
-            <td style="font-size:12px;color:var(--muted);">${o.created_at ? new Date(o.created_at).toLocaleDateString() : (o.date || '—')}</td>
-        </tr>
-    `).join('');
-}
-
-/* ---------- Tabs & UI ---------- */
-function switchTab(name) {
-    document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
-    document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
-    document.getElementById('tab-' + name).classList.add('active');
-    document.querySelector(`.nav-item[data-tab="${name}"]`).classList.add('active');
-    document.getElementById('pageTitle').textContent = tabTitles[name] || name;
-    closeSidebar();
-}
-
-function openSidebar() {
-    document.getElementById('sidebar').classList.add('open');
-    document.getElementById('mobileOverlay').classList.add('show');
-}
-function closeSidebar() {
-    document.getElementById('sidebar').classList.remove('open');
-    document.getElementById('mobileOverlay').classList.remove('show');
-}
-
-function escapeHtml(str) {
-    if (!str) return '';
-    return String(str)
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;')
-        .replace(/"/g, '&quot;');
-}
-
-function stripHtml(html) {
-    if (!html) return '';
-    let text = String(html);
-    text = text
-        .replace(/&nbsp;/gi, ' ')
-        .replace(/&amp;/gi, '&')
-        .replace(/&lt;/gi, '<')
-        .replace(/&gt;/gi, '>')
-        .replace(/&quot;/gi, '"')
-        .replace(/&#39;/gi, "'");
-    text = text.replace(/<[^>]*>/g, ' ');
-    text = text.replace(/\s+/g, ' ').trim();
-    return text;
-}
-
-/* ---------- Init ---------- */
-window.addEventListener('DOMContentLoaded', async () => {
-    try {
-        const res = await fetch('https://open.er-api.com/v6/latest/USD');
-        const data = await res.json();
-        if (data?.rates?.NGN) {
-            liveRate = data.rates.NGN;
-            const rateInput = document.getElementById('settingRate');
-            if (rateInput) rateInput.value = Math.round(liveRate);
-        }
-    } catch (e) { /* keep default */ }
-
-    await checkAuth();
-
-    document.getElementById('adminPassword')?.addEventListener('keydown', e => {
-        if (e.key === 'Enter') handleLogin();
-    });
-    document.getElementById('lookupCustomerId')?.addEventListener('keydown', e => {
-        if (e.key === 'Enter') lookupByCustomerId();
-    });
-});
-</script>
-</body>
-</html>
+function openProductModal(product) {
+  document.getElementById('productModalError').textContent = '';
+  if (product) {
+    document.getElementById('productModalTitle').textContent = 'Edit Product';
+    document.getElementById('editProductId').value = product.id || product.product_key || '';
+    document.getElementById('pName').value = product.name || '';
+    document.getElementById('pCategory').
