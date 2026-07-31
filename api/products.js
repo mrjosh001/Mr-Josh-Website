@@ -1,10 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
 
-const supabase = createClient(
-  process.env.SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_ROLE_KEY
-);
-
 // Your channels
 const MY_WHATSAPP = 'https://whatsapp.com/channel/0029VbBdXJ2KQuJSJcqcck3o';
 const MY_TELEGRAM = 'https://t.me/mj_hub_tg';
@@ -45,21 +40,16 @@ function replaceChannelLinks(text) {
 function applyRandomMarkup(supplierPrice) {
   const percent = 50 + Math.random() * 50; // 50 → 100
   const finalPrice = Math.ceil(supplierPrice * (1 + percent / 100));
-  // Round up to nearest 50 for cleaner prices
   return Math.ceil(finalPrice / 50) * 50;
 }
 
 function categorize(name) {
-  const n = name.toUpperCase();
+  const n = (name || '').toUpperCase();
 
-  // PROXY
   if (n.includes('PROXY')) return '9PROXY (IPS)';
-
-  // VPN
   if (n.includes('VPN') && n.includes('PHONE')) return 'PREMIUM VPN FOR PHONE';
   if (n.includes('VPN')) return 'PREMIUM VPN FOR PC';
 
-  // AI
   if (
     n.includes('CHATGPT') ||
     n.includes('CHAT GPT') ||
@@ -70,25 +60,20 @@ function categorize(name) {
     return 'AI';
   }
 
-  // ONLYFANS
   if (n.includes('ONLYFANS') || n.includes('ONLY FANS')) {
     return 'SOCIAL NETWORKS ACCOUNTS';
   }
 
-  // INSTAGRAM
   if (n.includes('INSTAGRAM') && n.includes('FOLLOWER')) return 'INSTAGRAM / HIGH FOLLOWERS';
   if (n.includes('INSTAGRAM')) return 'ALL COUNTRIES INSTAGRAM';
 
-  // TIKTOK
   if (n.includes('TIKTOK') || n.includes('TITKOK') || n.includes('TIK TOK')) {
     if (n.includes('FOLLOWER')) return 'TIKTOK/HIGH FOLLOWERS';
     return 'ALL COUNTRIES TIKTOK';
   }
 
-  // DATING
   if (n.includes('DATING')) return 'DATING SITES';
 
-  // FACEBOOK
   const isFacebookStyle =
     n.includes('FACEBOOK') ||
     n.includes('MARKETPLACE') ||
@@ -112,13 +97,11 @@ function categorize(name) {
     return 'COUNTRIES FACEBOOK (30+ FRIENDS)';
   }
 
-  // OTHER SOCIALS
   if (n.includes('TWITTER') || n.includes(' X ') || n.startsWith('X ')) return 'X / TWITTER';
   if (n.includes('REDDIT')) return 'REDDIT';
   if (n.includes('SNAPCHAT')) return 'SNAPCHAT';
   if (n.includes('LINKEDIN')) return 'LINKEDIN';
 
-  // MAILS
   if (
     n.includes('GMAIL') ||
     n.includes('HOTMAIL') ||
@@ -129,7 +112,6 @@ function categorize(name) {
     return 'MAILS';
   }
 
-  // STREAMING
   if (
     n.includes('NETFLIX') ||
     n.includes('DISNEY') ||
@@ -139,10 +121,8 @@ function categorize(name) {
     return 'STREAMING SITE';
   }
 
-  // GAMES
   if (n.includes('STEAM')) return 'GAME ACCOUNTS';
 
-  // TEXTING
   if (
     n.includes('GOOGLE VOICE') ||
     n.includes('TEXT FREE') ||
@@ -151,7 +131,6 @@ function categorize(name) {
     return 'TEXTING APP';
   }
 
-  // SOCIAL NETWORKS
   if (
     n.includes('TWITCH') ||
     n.includes('DISCORD') ||
@@ -170,6 +149,27 @@ export default async function handler(req, res) {
   res.setHeader('Content-Type', 'application/json');
 
   try {
+    // Check environment variables first
+    if (!process.env.SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
+      return res.status(500).json({
+        success: false,
+        message: 'Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY'
+      });
+    }
+
+    if (!process.env.FADDED_API_KEY) {
+      return res.status(500).json({
+        success: false,
+        message: 'Missing FADDED_API_KEY'
+      });
+    }
+
+    // Create client inside the handler (safer for serverless)
+    const supabase = createClient(
+      process.env.SUPABASE_URL,
+      process.env.SUPABASE_SERVICE_ROLE_KEY
+    );
+
     const apiRes = await fetch('https://fadded.net/api/v1/reseller/products', {
       method: 'GET',
       headers: {
@@ -205,7 +205,6 @@ export default async function handler(req, res) {
       const cleanDescription = stripHtml(item.description);
       const displayDescription = replaceChannelLinks(cleanDescription);
 
-      // Get supplier price from any possible field
       const supplierPrice = Number(
         item.unit_price ??
         item.price ??
@@ -217,7 +216,6 @@ export default async function handler(req, res) {
         0
       ) || 0;
 
-      // Always apply 50-100% markup
       const sellingPrice = applyRandomMarkup(supplierPrice);
 
       const { data: existing } = await supabase
@@ -234,8 +232,8 @@ export default async function handler(req, res) {
         name: item.name,
         description: cleanDescription,
         display_description: displayDescription,
-        supplier_price: supplierPrice,   // raw supplier price
-        price: sellingPrice,             // your selling price (50-100% markup)
+        supplier_price: supplierPrice,
+        price: sellingPrice,
         stock_quantity: item.in_stock ?? 0,
         is_available: (item.in_stock ?? 0) > 0,
         category: categorize(item.name),
@@ -247,7 +245,7 @@ export default async function handler(req, res) {
         .upsert(baseData, { onConflict: 'product_key' });
 
       if (error) {
-        console.error(`Error updating ${item.product_key}:`, error);
+        console.error(`Error updating ${item.product_key}:`, error.message);
       }
     }
 
@@ -258,9 +256,10 @@ export default async function handler(req, res) {
       updated_products: updatedCount
     });
   } catch (error) {
+    console.error('Handler error:', error);
     return res.status(500).json({
       success: false,
-      message: error.message
+      message: error.message || 'Internal server error'
     });
   }
 }
