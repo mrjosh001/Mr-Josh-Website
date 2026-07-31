@@ -654,4 +654,260 @@ function openProductModal(product) {
     document.getElementById('productModalTitle').textContent = 'Edit Product';
     document.getElementById('editProductId').value = product.id || product.product_key || '';
     document.getElementById('pName').value = product.name || '';
-    document.getElementById('pCategory').
+    document.getElementById('pCategory').value = product.category || '';
+    document.getElementById('pDesc').value = stripHtml(product.display_description || product.description || '');
+    document.getElementById('pSupplierPrice').value = product.supplier_price ?? 0;
+    document.getElementById('pPrice').value = product.price ?? '';
+    document.getElementById('pStock').value = product.stock_quantity ?? '';
+    document.getElementById('pAvailable').value = product.is_available === false ? 'false' : 'true';
+  } else {
+    document.getElementById('productModalTitle').textContent = 'Add Product';
+    document.getElementById('editProductId').value = '';
+    document.getElementById('pName').value = '';
+    document.getElementById('pCategory').value = 'OTHER';
+    document.getElementById('pDesc').value = '';
+    document.getElementById('pSupplierPrice').value = 0;
+    document.getElementById('pPrice').value = '';
+    document.getElementById('pStock').value = '';
+    document.getElementById('pAvailable').value = 'true';
+  }
+  document.getElementById('productModal').classList.remove('hidden');
+}
+function closeProductModal() { document.getElementById('productModal').classList.add('hidden'); }
+function editProduct(id) {
+  const p = allProducts.find(x => String(x.id) === String(id) || String(x.product_key) === String(id));
+  if (p) openProductModal(p);
+}
+
+async function saveProduct() {
+  const id = document.getElementById('editProductId').value;
+  const name = document.getElementById('pName').value.trim();
+  const category = document.getElementById('pCategory').value.trim() || 'OTHER';
+  const description = stripHtml(document.getElementById('pDesc').value);
+  const price = parseFloat(document.getElementById('pPrice').value);
+  const stock_quantity = parseInt(document.getElementById('pStock').value, 10);
+  const is_available = document.getElementById('pAvailable').value === 'true';
+  const errEl = document.getElementById('productModalError');
+  errEl.textContent = '';
+  if (!name) { errEl.textContent = 'Product name is required.'; return; }
+  if (isNaN(price) || price < 0) { errEl.textContent = 'Enter a valid selling price.'; return; }
+
+  const payload = { name, category, description: description || null, price, stock_quantity: isNaN(stock_quantity) ? 0 : stock_quantity, is_available };
+  let error;
+  if (id) {
+    ({ error } = await sb.from('products').update(payload).eq('id', id));
+    if (error) ({ error } = await sb.from('products').update(payload).eq('product_key', id));
+  } else {
+    ({ error } = await sb.from('products').insert([payload]));
+  }
+  if (error) { errEl.textContent = error.message + ' (Check RLS policies)'; return; }
+  closeProductModal();
+  await loadProducts();
+}
+
+async function syncProductsNow() {
+  try {
+    const res = await fetch('/api/products');
+    const data = await res.json();
+    alert(data.success ? `Sync complete\nSynced: ${data.synced}\nNew: ${data.new_products}\nUpdated: ${data.updated_products}` : ('Sync failed: ' + (data.message || 'Unknown error')));
+    await loadProducts();
+  } catch (e) {
+    alert('Sync failed: ' + e.message);
+  }
+}
+
+function renderUsers(list) {
+  const items = list || allProfiles;
+  const tbody = document.getElementById('usersTableBody');
+  const cards = document.getElementById('usersMobileCards');
+
+  if (!items.length) {
+    tbody.innerHTML = `<tr><td colspan="9" class="empty-state">No customers found.</td></tr>`;
+    if (cards) cards.innerHTML = `<div class="empty-state">No customers found.</div>`;
+    return;
+  }
+
+  tbody.innerHTML = items.map(u => {
+    const ngn = Number(u.balance || 0);
+    const usd = u.balance_usd != null ? Number(u.balance_usd) : (ngn / liveRate);
+    const active = isUserActive(u);
+    const phone = u.phone_number || u.phone || '—';
+    return `
+      <tr>
+        <td style="font-weight:600;">${escapeHtml(u.full_name || u.username || '—')}</td>
+        <td>${escapeHtml(u.email || '—')}</td>
+        <td>${escapeHtml(phone)}</td>
+        <td>${escapeHtml(u.customer_id || '—')}</td>
+        <td class="price">₦${ngn.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}</td>
+        <td style="color:#38bdf8;font-weight:600;">$${usd.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}</td>
+        <td><span class="badge ${active ? 'badge-on' : 'badge-off'}">${active ? 'Active' : 'Inactive'}</span></td>
+        <td>${isAdminValue(u.is_admin) ? '<span class="badge badge-admin">Admin</span>' : 'User'}</td>
+        <td><button class="btn btn-ghost btn-sm" onclick="editUser('${u.id}')"><i class="fas fa-edit"></i></button></td>
+      </tr>`;
+  }).join('');
+
+  if (cards) {
+    cards.innerHTML = items.map(u => {
+      const ngn = Number(u.balance || 0);
+      const usd = u.balance_usd != null ? Number(u.balance_usd) : (ngn / liveRate);
+      const active = isUserActive(u);
+      return `
+        <div class="user-card">
+          <h4>${escapeHtml(u.full_name || u.username || '—')}</h4>
+          <div class="meta">${escapeHtml(u.email || '—')}</div>
+          <div class="meta">ID: ${escapeHtml(u.customer_id || '—')}</div>
+          <div class="row-line"><span>NGN</span><strong class="price">₦${ngn.toLocaleString()}</strong></div>
+          <div class="row-line"><span>USD</span><span style="color:#38bdf8;">$${usd.toFixed(2)}</span></div>
+          <div class="row-line"><span>Status</span><span class="badge ${active ? 'badge-on' : 'badge-off'}">${active ? 'Active' : 'Inactive'}</span></div>
+          <div style="margin-top:10px;"><button class="btn btn-ghost btn-sm" onclick="editUser('${u.id}')"><i class="fas fa-edit"></i> Edit</button></div>
+        </div>`;
+    }).join('');
+  }
+}
+
+function filterUsers() {
+  const q = (document.getElementById('userSearch').value || '').toLowerCase().trim();
+  const status = document.getElementById('userStatusFilter')?.value || currentUserStatusFilter;
+  let filtered = allProfiles;
+  if (status === 'active') filtered = filtered.filter(isUserActive);
+  if (status === 'inactive') filtered = filtered.filter(u => !isUserActive(u));
+  if (q) {
+    filtered = filtered.filter(u =>
+      (u.full_name || '').toLowerCase().includes(q) ||
+      (u.email || '').toLowerCase().includes(q) ||
+      (u.username || '').toLowerCase().includes(q) ||
+      (u.customer_id || '').toLowerCase().includes(q) ||
+      (u.phone_number || u.phone || '').toLowerCase().includes(q)
+    );
+  }
+  renderUsers(filtered);
+}
+
+function filterUsersByStatus(status) {
+  currentUserStatusFilter = status;
+  const sel = document.getElementById('userStatusFilter');
+  if (sel) sel.value = status;
+  const search = document.getElementById('userSearch');
+  if (search) search.value = '';
+  filterUsers();
+}
+
+function lookupByCustomerId() {
+  const cid = (document.getElementById('lookupCustomerId').value || '').trim();
+  const errEl = document.getElementById('lookupError');
+  const resultEl = document.getElementById('lookupResult');
+  errEl.textContent = '';
+  resultEl.classList.add('hidden');
+  if (!cid) { errEl.textContent = 'Enter a Customer ID.'; return; }
+  const u = allProfiles.find(p => String(p.customer_id || '').toLowerCase() === cid.toLowerCase());
+  if (!u) { errEl.textContent = 'No customer found with that Customer ID.'; return; }
+  const ngn = Number(u.balance || 0);
+  const usd = u.balance_usd != null ? Number(u.balance_usd) : (ngn / liveRate);
+  document.getElementById('lookupName').textContent = u.full_name || u.username || '—';
+  document.getElementById('lookupEmail').textContent = u.email || '—';
+  document.getElementById('lookupPhone').textContent = u.phone_number || u.phone || '—';
+  document.getElementById('lookupNgn').textContent = '₦' + ngn.toLocaleString(undefined, { minimumFractionDigits: 2 });
+  document.getElementById('lookupUsd').textContent = '$' + usd.toLocaleString(undefined, { minimumFractionDigits: 2 });
+  document.getElementById('lookupEditBtn').onclick = () => editUser(u.id);
+  resultEl.classList.remove('hidden');
+}
+
+function editUser(id) {
+  const u = allProfiles.find(x => String(x.id) === String(id));
+  if (!u) return;
+  document.getElementById('userModalError').textContent = '';
+  document.getElementById('editUserId').value = u.id;
+  document.getElementById('uName').value = u.full_name || '';
+  document.getElementById('uUsername').value = u.username || '';
+  document.getElementById('uEmail').value = u.email || '';
+  document.getElementById('uPhone').value = u.phone_number || u.phone || '';
+  document.getElementById('uCustomerId').value = u.customer_id || '';
+  document.getElementById('uBalance').value = u.balance ?? 0;
+  document.getElementById('uBalanceUsd').value = u.balance_usd != null ? u.balance_usd : '';
+  document.getElementById('uIsAdmin').value = isAdminValue(u.is_admin) ? 'true' : 'false';
+  document.getElementById('userModal').classList.remove('hidden');
+}
+function closeUserModal() { document.getElementById('userModal').classList.add('hidden'); }
+
+async function saveUser() {
+  const id = document.getElementById('editUserId').value;
+  const full_name = document.getElementById('uName').value.trim();
+  const username = document.getElementById('uUsername').value.trim();
+  const email = document.getElementById('uEmail').value.trim();
+  const phone_number = document.getElementById('uPhone').value.trim();
+  const balance = parseFloat(document.getElementById('uBalance').value);
+  const balance_usd_raw = document.getElementById('uBalanceUsd').value;
+  const balance_usd = balance_usd_raw === '' ? null : parseFloat(balance_usd_raw);
+  const is_admin = document.getElementById('uIsAdmin').value === 'true';
+  const errEl = document.getElementById('userModalError');
+  errEl.textContent = '';
+  if (isNaN(balance)) { errEl.textContent = 'Enter a valid NGN balance.'; return; }
+  const payload = { full_name, username, email: email || null, phone_number: phone_number || null, balance: balance || 0, is_admin };
+  if (balance_usd !== null && !isNaN(balance_usd)) payload.balance_usd = balance_usd;
+  const { error } = await sb.from('profiles').update(payload).eq('id', id);
+  if (error) { errEl.textContent = error.message + ' (Check RLS policies)'; return; }
+  closeUserModal();
+  await loadProfiles();
+  updateMetrics();
+}
+
+function renderOrders(orders) {
+  const tbody = document.getElementById('ordersTableBody');
+  if (!orders?.length) {
+    tbody.innerHTML = `<tr><td colspan="6" class="empty-state">No orders yet.</td></tr>`;
+    return;
+  }
+  tbody.innerHTML = orders.map(o => `
+    <tr>
+      <td>${escapeHtml(o.id || o.order_id || '—')}</td>
+      <td>${escapeHtml(o.customer_name || o.customer || o.email || '—')}</td>
+      <td>${escapeHtml(o.item || o.product_name || o.service || '—')}</td>
+      <td class="price">₦${Number(o.amount || o.total || 0).toLocaleString()}</td>
+      <td>${escapeHtml(o.status || '—')}</td>
+      <td>${o.created_at ? new Date(o.created_at).toLocaleDateString() : '—'}</td>
+    </tr>
+  `).join('');
+}
+
+function switchTab(name) {
+  document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
+  document.getElementById('tab-' + name).classList.add('active');
+  document.querySelector(`.nav-item[data-tab="${name}"]`).classList.add('active');
+  document.getElementById('pageTitle').textContent = tabTitles[name] || name;
+  closeSidebar();
+}
+function openSidebar() {
+  document.getElementById('sidebar').classList.add('open');
+  document.getElementById('mobileOverlay').classList.add('show');
+}
+function closeSidebar() {
+  document.getElementById('sidebar').classList.remove('open');
+  document.getElementById('mobileOverlay').classList.remove('show');
+}
+function escapeHtml(str) {
+  if (!str) return '';
+  return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+function stripHtml(html) {
+  if (!html) return '';
+  return String(html).replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
+}
+
+window.addEventListener('DOMContentLoaded', async () => {
+  try {
+    const res = await fetch('https://open.er-api.com/v6/latest/USD');
+    const data = await res.json();
+    if (data?.rates?.NGN) {
+      liveRate = data.rates.NGN;
+      const rateInput = document.getElementById('settingRate');
+      if (rateInput) rateInput.value = Math.round(liveRate);
+    }
+  } catch (e) {}
+  await checkAuth();
+  document.getElementById('adminPassword')?.addEventListener('keydown', e => { if (e.key === 'Enter') handleLogin(); });
+  document.getElementById('lookupCustomerId')?.addEventListener('keydown', e => { if (e.key === 'Enter') lookupByCustomerId(); });
+});
+</script>
+</body>
+</html>
