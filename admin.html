@@ -476,18 +476,26 @@ async function checkAuth() {
   const { data: { session } } = await sb.auth.getSession();
   if (!session) return showLogin();
 
-  const { data: profile, error } = await sb
-    .from('profiles')
-    .select('*')
-    .eq('id', session.user.id)
-    .maybeSingle();
+  // On a hard refresh, Supabase may still be rehydrating/refreshing the
+  // session token in the background. Querying "profiles" in that split
+  // second can fail with a transient/expired-JWT error even though the
+  // admin IS still logged in. Retrying briefly avoids that false logout —
+  // we only treat it as "not authorized" once we've actually gotten a
+  // successful read back from the database.
+  const { profile, error } = await fetchAdminProfileWithRetry(session.user.id);
 
   if (error) {
-    await sb.auth.signOut();
-    document.getElementById('loginError').textContent = 'Profile read failed: ' + error.message;
+    // Transient failure (network hiccup, token still refreshing, etc.) —
+    // do NOT sign the admin out or destroy their session. Just let them
+    // retry; the session itself is still valid and intact.
+    document.getElementById('loginError').textContent =
+      'Could not verify admin access (connection issue). Please try refreshing again.';
     return showLogin();
   }
   if (!profile || !isAdminValue(profile.is_admin)) {
+    // We successfully read the profile and confirmed this account is not
+    // an admin — this is a real authorization decision, so signing out
+    // here is correct.
     await sb.auth.signOut();
     document.getElementById('loginError').textContent = 'Access denied. Admin privileges required.';
     return showLogin();
@@ -496,6 +504,23 @@ async function checkAuth() {
   document.getElementById('adminEmailLabel').textContent = session.user.email || profile.email || '';
   showDashboard();
   await loadAllData();
+}
+
+async function fetchAdminProfileWithRetry(userId, attempts = 3) {
+  let lastError = null;
+  for (let i = 0; i < attempts; i++) {
+    const { data: profile, error } = await sb
+      .from('profiles')
+      .select('*')
+      .eq('id', userId)
+      .maybeSingle();
+    if (!error) return { profile, error: null };
+    lastError = error;
+    // Small backoff — gives Supabase's auto token refresh time to finish
+    // before we try again.
+    await new Promise(r => setTimeout(r, 350 * (i + 1)));
+  }
+  return { profile: null, error: lastError };
 }
 
 function showLogin() {
