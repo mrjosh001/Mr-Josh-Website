@@ -1852,71 +1852,120 @@ function updateCartDisplay() {
     if (total) total.textContent = '₦' + sum.toLocaleString(undefined, {minimumFractionDigits:2});
 };
 
-window.openCheckoutConfirm = function() {
-    if (cartItems.length === 0) return showToast('Cart is empty', 'warning');
-    const total = cartItems.reduce((a,i) => a + i.price, 0);
-    const box = document.getElementById('confirmCheckoutItems');
-    box.innerHTML = cartItems.map(item => `
-        <div class="confirm-item-row">
-            <span>${escapeHtml(item.title)}</span>
-            <strong>₦${item.price.toLocaleString()}</strong>
-        </div>`).join('');
-    document.getElementById('confirmCheckoutTotal').textContent = '₦' + total.toLocaleString();
-    document.getElementById('confirmCheckoutModal').classList.add('active');
-};
-
-window.closeCheckoutConfirm = function() {
-    document.getElementById('confirmCheckoutModal').classList.remove('active');
-};
-
-window.confirmAndCheckout = async function() {
-    closeCheckoutConfirm();
-    await checkoutCart();
-};
-
 window.checkoutCart = async function() {
-    if (cartItems.length === 0) return showToast('Cart is empty', 'warning');
-    const total = cartItems.reduce((a,i) => a + i.price, 0);
-    if (currentBalanceNgn < total) {
-        showToast('Insufficient balance. Please fund wallet.', 'error');
-        return switchSection('deposit');
-    }
-    currentBalanceNgn -= total;
-    if (supabaseClient && currentUserId) {
-        await supabaseClient.from('profiles').update({ balance: currentBalanceNgn }).eq('id', currentUserId);
-    }
-    updateBalanceDisplay();
+  if (cartItems.length === 0) return showToast('Cart is empty', 'warning');
 
-    const delivered = [];
-    for (const item of cartItems) {
-        // Placeholder credentials until real delivery is connected
-        const credId = item.credentials_id || ('pending-' + Date.now().toString(36));
-        const credPass = item.credentials_pass || 'Will be delivered shortly';
-        const order = {
-            id: 'ord_' + Date.now() + '_' + Math.random().toString(36).slice(2,7),
-            order_id: generateOrderId(),
+  if (!currentUserId) {
+    showToast('Please sign in to checkout', 'error');
+    return;
+  }
+
+  const total = cartItems.reduce((a, i) => a + Number(i.price || 0), 0);
+  if (currentBalanceNgn < total) {
+    showToast('Insufficient balance. Please fund wallet.', 'error');
+    return switchSection('deposit');
+  }
+
+  // Only items that can be ordered from Fadded
+  const supplierItems = cartItems.filter(i => i.product_key);
+  const localOnlyItems = cartItems.filter(i => !i.product_key);
+
+  if (supplierItems.length === 0 && localOnlyItems.length > 0) {
+    showToast('These items are not linked to the supplier yet.', 'error');
+    return;
+  }
+
+  const delivered = [];
+  let anyError = null;
+
+  for (const item of supplierItems) {
+    try {
+      const qty = Math.max(1, parseInt(item.quantity, 10) || 1);
+
+      const res = await fetch('/api/order', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          product_key: item.product_key,
+          quantity: qty,
+          user_id: currentUserId,
+          external_order_id: 'MJ-' + Date.now() + '-' + Math.random().toString(36).slice(2, 7)
+        })
+      });
+
+      const data = await res.json();
+
+      if (!res.ok || !data.success) {
+        anyError = data.message || 'Order failed at supplier';
+        showToast(anyError, 'error');
+        // stop on first failure (balance already refunded by API if it debited)
+        break;
+      }
+
+      // Real delivery from Fadded
+      const items = (data.data && data.data.items) ? data.data.items : [];
+      if (items.length === 0) {
+        // still mark success with whatever the API returned
+        delivered.push({
+          order_id: data.data?.order_id || generateOrderId(),
+          product_name: item.title,
+          product_type: item.type || 'log',
+          amount: item.price,
+          quantity: qty,
+          status: 'completed',
+          credentials_id: 'See details',
+          credentials_pass: 'Delivered',
+          description: JSON.stringify(data.data || {}),
+          guide_url: 'https://t.me/faddedsocialsgroup/1030',
+          created_at: new Date().toISOString()
+        });
+      } else {
+        for (const row of items) {
+          let credId = null;
+          let credPass = null;
+          if (row.details) {
+            const userMatch = String(row.details).match(/Username:\s*([^|]+)/i);
+            const passMatch = String(row.details).match(/Password:\s*(.+)/i);
+            if (userMatch) credId = userMatch[1].trim();
+            if (passMatch) credPass = passMatch[1].trim();
+          }
+          delivered.push({
+            order_id: data.data?.order_id || generateOrderId(),
             product_name: item.title,
             product_type: item.type || 'log',
-            amount: item.price,
-            status: 'delivered',
-            credentials_id: credId,
-            credentials_pass: credPass,
-            guide_url: item.guide_url || 'https://t.me/faddedsocialsgroup/1030',
+            amount: item.unit_price || (item.price / qty),
+            quantity: 1,
+            status: 'completed',
+            credentials_id: credId || row.details || 'Delivered',
+            credentials_pass: credPass || '',
+            description: row.details || '',
+            guide_url: 'https://t.me/faddedsocialsgroup/1030',
             created_at: new Date().toISOString()
-        };
-        delivered.push(order);
-        userOrders.unshift(order);
-        await saveOrderToDb(order);
+          });
+        }
+      }
 
-        const tx = { id: Date.now() + Math.random(), type: item.type || 'log',
-            title: item.title, subtitle: 'Order delivered',
-            amount: '₦' + item.price.toLocaleString(),
-            date: new Date().toLocaleString(), status: 'Success',
-            paymentProvider: 'MJ HUB Checkout', channel: 'NGN Wallet' };
-        transactions.unshift(tx);
-        await saveTransaction(tx);
+      // Refresh wallet from server response if provided
+      if (data.data && data.data.new_balance != null) {
+        currentBalanceNgn = Number(data.data.new_balance);
+        updateBalanceDisplay();
+      }
+
+    } catch (e) {
+      anyError = e.message || 'Network error during order';
+      showToast(anyError, 'error');
+      break;
     }
+  }
 
+  // Refresh balance + orders from Supabase (source of truth after API)
+  if (supabaseClient && currentUserId) {
+    await fetchUserBalance(currentUserId);
+    await fetchUserOrders(currentUserId);
+    await fetchUserTransactions(currentUserId);
+  }
+
+  if (delivered.length > 0) {
     cartItems = [];
     saveCart();
     updateCartDisplay();
@@ -1924,6 +1973,10 @@ window.checkoutCart = async function() {
     buildNotificationsFromActivity();
     renderNotifications();
     showOrderReceipt(delivered);
+    showToast('Order completed successfully', 'success');
+  } else if (!anyError) {
+    showToast('No items were ordered', 'warning');
+  }
 };
 
 async function saveOrderToDb(order) {
