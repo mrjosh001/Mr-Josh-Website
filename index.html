@@ -1284,6 +1284,7 @@ const exchangeRateUsdToNgn = 1420.0;
 let currentFromCurrency = 'NGN';
 let cartItems = [];
 let userOrders = [];
+let userOrderGroups = []; // orders grouped by order_id so a multi-quantity purchase shows as ONE order with the full quantity + all credentials
 let userNotifications = [];
 let lastReceiptItems = [];
 let transactions = [];
@@ -1328,8 +1329,25 @@ document.addEventListener('DOMContentLoaded', async () => {
                 await fetchUserOrders(currentUserId);
                 buildNotificationsFromActivity();
                 renderNotifications();
+            } else {
+                // No active session — this page is the signed-in dashboard,
+                // so a visitor who isn't logged in must never see it. Send
+                // them to the public landing page to sign up / log in first.
+                window.location.href = 'landing.html';
+                return;
             }
-        } catch(e) { console.log('No session'); }
+        } catch(e) {
+            // If we can't even determine session state, fail safe and send
+            // the visitor to the landing page rather than risk showing the
+            // dashboard to someone who isn't signed in.
+            console.log('No session', e);
+            window.location.href = 'landing.html';
+            return;
+        }
+    } else {
+        // Supabase client failed to initialize — same fail-safe rule applies.
+        window.location.href = 'landing.html';
+        return;
     }
 
     initNavigation();
@@ -1618,11 +1636,15 @@ function initSupportWidget() {
 async function fetchUserBalance(userId) {
     if (!supabaseClient) return;
     try {
-        const { data } = await supabaseClient.from('profiles').select('balance, balance_usd').eq('id', userId).single();
+        const { data } = await supabaseClient.from('profiles').select('balance, balance_usd, customer_id').eq('id', userId).single();
         if (data) {
             currentBalanceNgn = parseFloat(data.balance) || 0;
             currentBalanceUsd = parseFloat(data.balance_usd) || 0;
             updateBalanceDisplay();
+            // Show the short customer_id (not the long Supabase UUID) anywhere
+            // the user's account id is displayed, e.g. profile settings.
+            const idInput = document.getElementById('myCustomerId');
+            if (idInput && data.customer_id) idInput.value = data.customer_id;
         }
     } catch(e) {}
 }
@@ -2059,7 +2081,39 @@ async function fetchUserOrders(userId) {
             userOrders = JSON.parse(localStorage.getItem(key) || '[]');
         } catch(e) { userOrders = []; }
     }
+    userOrderGroups = groupOrdersById(userOrders);
     renderOrders();
+}
+
+// The backend saves ONE row per unit purchased (so quantity 2 = 2 rows) all
+// sharing the same order_id. This groups those rows back into a single
+// logical order so "My Orders" shows one card with the FULL quantity, and
+// "View Log" shows every credential from that purchase — not just one.
+function groupOrdersById(rows) {
+    const map = new Map();
+    const orderedKeys = [];
+    rows.forEach(o => {
+        const key = o.order_id || `single-${o.id || Math.random()}`;
+        if (!map.has(key)) {
+            map.set(key, []);
+            orderedKeys.push(key);
+        }
+        map.get(key).push(o);
+    });
+    return orderedKeys.map(key => {
+        const items = map.get(key);
+        const first = items[0];
+        return {
+            order_id: first.order_id || key,
+            product_name: first.product_name,
+            product_type: first.product_type,
+            status: first.status,
+            created_at: first.created_at,
+            quantity: items.reduce((sum, it) => sum + (Number(it.quantity) || 1), 0),
+            amount: items.reduce((sum, it) => sum + (Number(it.amount) || 0), 0),
+            items // every individual credential row that belongs to this order
+        };
+    });
 }
 
 function formatOrderId(o) {
@@ -2084,11 +2138,11 @@ function generateOrderId() {
 function renderOrders() {
     const list = document.getElementById('ordersList');
     if (!list) return;
-    if (!userOrders.length) {
+    if (!userOrderGroups.length) {
         list.innerHTML = '<div class="empty-state"><div class="empty-state-icon">📦</div><h4>No orders yet</h4><p>When customers buy from MJ Logs, orders will show here</p></div>';
         return;
     }
-    list.innerHTML = userOrders.map((o, i) => {
+    list.innerHTML = userOrderGroups.map((o, i) => {
         const date = o.created_at ? new Date(o.created_at).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' }) : '';
         const qty = o.quantity || 1;
         const status = (o.status === 'delivered' || o.status === 'completed' || !o.status) ? 'Completed' : o.status;
@@ -2118,9 +2172,11 @@ function renderOrders() {
 }
 
 window.openOrderReceiptFromIndex = function(idx) {
-    const item = userOrders[idx];
-    if (!item) return;
-    showOrderReceipt([item], true);
+    const group = userOrderGroups[idx];
+    if (!group) return;
+    // Pass every item in this order (all units bought together), not just one,
+    // so quantity and credentials shown match what was actually purchased.
+    showOrderReceipt(group.items, true);
 };
 
 function showOrderReceipt(items, isViewOnly = false) {
