@@ -218,14 +218,25 @@ export default async function handler(req, res) {
 
       const sellingPrice = applyRandomMarkup(supplierPrice);
 
+      // NOTE: select '*' (not a fixed column list) so this never breaks if
+      // your products table has extra/optional columns.
       const { data: existing } = await supabase
         .from('products')
-        .select('product_key')
+        .select('*')
         .eq('product_key', item.product_key)
         .maybeSingle();
 
       if (!existing) newCount++;
       else updatedCount++;
+
+      // IMPORTANT: only auto-categorize brand-new products, or existing
+      // products that have never been given a category. If an admin has
+      // already set/edited a category for this product, we keep it as-is —
+      // otherwise every nightly sync would silently overwrite the admin's
+      // manual category choice and products would appear to "jump" between
+      // categories on the storefront (the scattering bug).
+      const existingCategory = existing && existing.category ? String(existing.category).trim() : '';
+      const finalCategory = existingCategory || categorize(item.name);
 
       const baseData = {
         product_key: item.product_key,
@@ -236,7 +247,7 @@ export default async function handler(req, res) {
         price: sellingPrice,
         stock_quantity: item.in_stock ?? 0,
         is_available: (item.in_stock ?? 0) > 0,
-        category: categorize(item.name),
+        category: finalCategory,
         updated_at: new Date().toISOString()
       };
 
