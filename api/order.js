@@ -5,8 +5,36 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY
 );
 
-const FADDED_BASE = 'https://fadded.net/api/v1/reseller';
-const FADDED_KEY  = process.env.FADDED_API_KEY;
+// -------------------------------------------------------------------------
+// SUPPLIER ROUTING
+// -------------------------------------------------------------------------
+// Every product is tagged with product.supplier (defaults to "faded" when
+// the column doesn't exist or is empty, so this is 100% backward-compatible
+// with the current single-supplier setup).
+//
+// To add a new supplier later:
+//   1. In Supabase, add a text column "supplier" to "products" (default 'faded').
+//   2. Add an entry below with that supplier's base URL + API key env var.
+//   3. Create a new /api/products-<name>.js sync file (copy api/products.js)
+//      that upserts products with supplier: '<name>'.
+//   4. That's it — this file already knows how to route orders to whichever
+//      supplier a product belongs to.
+const SUPPLIERS = {
+  faded: {
+    baseUrl: 'https://fadded.net/api/v1/reseller',
+    apiKey: process.env.FADDED_API_KEY
+  }
+  // example second supplier:
+  // newsupplier: {
+  //   baseUrl: 'https://newsupplier.example.com/api/v1/reseller',
+  //   apiKey: process.env.NEWSUPPLIER_API_KEY
+  // }
+};
+
+function getSupplierConfig(product) {
+  const key = (product && product.supplier) ? String(product.supplier).trim().toLowerCase() : 'faded';
+  return SUPPLIERS[key] || SUPPLIERS.faded;
+}
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
@@ -37,7 +65,7 @@ export default async function handler(req, res) {
     // -------------------------------------------------
     const { data: product, error: prodErr } = await supabase
       .from('products')
-      .select('id, product_key, name, price, stock_quantity')
+      .select('*')
       .eq('product_key', product_key)
       .single();
 
@@ -96,11 +124,12 @@ export default async function handler(req, res) {
     // 4. Call supplier (Faded)
     // -------------------------------------------------
     const orderRef = external_order_id || `MJ-${user_id.slice(0, 8)}-${Date.now()}`;
+    const supplierConfig = getSupplierConfig(product);
 
-    const supplierRes = await fetch(`${FADDED_BASE}/order`, {
+    const supplierRes = await fetch(`${supplierConfig.baseUrl}/order`, {
       method: 'POST',
       headers: {
-        'X-Api-Key': FADDED_KEY,
+        'X-Api-Key': supplierConfig.apiKey,
         'Content-Type': 'application/json',
         'Accept': 'application/json'
       },
@@ -164,6 +193,11 @@ export default async function handler(req, res) {
     const items = orderData.data?.items || [];
     const detailsText = items.map(i => i.details).join('\n\n');
 
+    // Whatever the product's own description is (if it has one) is stored on
+    // every order for that product. If the product has no description, this
+    // is left blank rather than guessing/filling in something else.
+    const orderDescription = (product.display_description || product.description || '').trim() || null;
+
     // Save into orders table (one row per item is cleaner)
     // Whatever format the supplier sends (Username/Password labels, email:pass,
     // JSON, etc.) is stored as-is in a single login_credentials column so
@@ -176,7 +210,7 @@ export default async function handler(req, res) {
         product_code: product_key,
         product_name: productName,
         product_type: 'log',
-        description: null,
+        description: orderDescription,
         quantity: 1,
         amount: product.price,
         status: 'completed',
