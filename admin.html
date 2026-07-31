@@ -689,20 +689,53 @@ async function saveProduct() {
   const is_available = document.getElementById('pAvailable').value === 'true';
   const errEl = document.getElementById('productModalError');
   errEl.textContent = '';
+
   if (!name) { errEl.textContent = 'Product name is required.'; return; }
   if (isNaN(price) || price < 0) { errEl.textContent = 'Enter a valid selling price.'; return; }
 
-  const payload = { name, category, description: description || null, price, stock_quantity: isNaN(stock_quantity) ? 0 : stock_quantity, is_available };
-  let error;
-  if (id) {
-    ({ error } = await sb.from('products').update(payload).eq('id', id));
-    if (error) ({ error } = await sb.from('products').update(payload).eq('product_key', id));
-  } else {
-    ({ error } = await sb.from('products').insert([payload]));
+  const existing = id
+    ? allProducts.find(x => String(x.id) === String(id) || String(x.product_key) === String(id))
+    : null;
+
+  const body = {
+    action: id ? 'update' : 'insert',
+    id: existing?.id || (id || undefined),
+    product_key: existing?.product_key || undefined,
+    name,
+    category,
+    description: description || null,
+    display_description: description || null,
+    price,
+    stock_quantity: isNaN(stock_quantity) ? 0 : stock_quantity,
+    is_available,
+    supplier_price: existing ? Number(existing.supplier_price || 0) : 0
+  };
+
+  try {
+    const headers = { 'Content-Type': 'application/json' };
+    const { data: { session } } = await sb.auth.getSession();
+    if (session?.access_token) {
+      headers['Authorization'] = 'Bearer ' + session.access_token;
+    }
+
+    const res = await fetch('/api/admin-product', {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(body)
+    });
+    const data = await res.json();
+
+    if (!res.ok || !data.success) {
+      errEl.textContent = (data.message || 'Save failed') + ' — check Vercel env (SUPABASE_SERVICE_ROLE_KEY)';
+      return;
+    }
+
+    closeProductModal();
+    await loadProducts();
+    updateMetrics();
+  } catch (e) {
+    errEl.textContent = 'Network error: ' + e.message;
   }
-  if (error) { errEl.textContent = error.message + ' (Check RLS policies)'; return; }
-  closeProductModal();
-  await loadProducts();
 }
 
 async function syncProductsNow() {
