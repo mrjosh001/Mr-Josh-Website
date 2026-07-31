@@ -472,22 +472,52 @@ function isUserActive(profile) {
   return (Date.now() - new Date(last).getTime()) < (30 * 24 * 60 * 60 * 1000);
 }
 
+let authFlowStarted = false;
+
+// Root cause of the refresh flash-logout: right after a hard reload, the
+// Supabase client may still be restoring/refreshing the saved session in
+// the background. Calling getSession() immediately can catch it mid-flight
+// and briefly report "no session" even though the admin IS still logged
+// in — which is exactly what looked like "logs out, then auto logs back
+// in". INITIAL_SESSION is fired once by the client after it has finished
+// restoring (and refreshing, if needed) the session from storage, so
+// driving the auth check off that event instead removes the race.
+sb.auth.onAuthStateChange((event, session) => {
+  if (event === 'INITIAL_SESSION') {
+    authFlowStarted = true;
+    evaluateSession(session);
+  } else if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
+    if (authFlowStarted) evaluateSession(session);
+  } else if (event === 'SIGNED_OUT') {
+    showLogin();
+  }
+});
+
+// Safety net: if for any reason INITIAL_SESSION never fires (older library
+// versions, unexpected environment), fall back to a direct check so the
+// admin isn't stuck on a blank/loading state forever.
+setTimeout(() => {
+  if (!authFlowStarted) checkAuth();
+}, 2500);
+
 async function checkAuth() {
+  authFlowStarted = true;
   const { data: { session } } = await sb.auth.getSession();
+  await evaluateSession(session);
+}
+
+async function evaluateSession(session) {
   if (!session) return showLogin();
 
-  // On a hard refresh, Supabase may still be rehydrating/refreshing the
-  // session token in the background. Querying "profiles" in that split
-  // second can fail with a transient/expired-JWT error even though the
-  // admin IS still logged in. Retrying briefly avoids that false logout —
-  // we only treat it as "not authorized" once we've actually gotten a
-  // successful read back from the database.
+  // Even once we have a session, querying "profiles" can still fail on a
+  // one-off transient/network error. Retry briefly rather than treating a
+  // single failed request as "not authorized".
   const { profile, error } = await fetchAdminProfileWithRetry(session.user.id);
 
   if (error) {
-    // Transient failure (network hiccup, token still refreshing, etc.) —
-    // do NOT sign the admin out or destroy their session. Just let them
-    // retry; the session itself is still valid and intact.
+    // Transient failure (network hiccup, etc.) — do NOT sign the admin out
+    // or destroy their session. Just let them retry; the session itself is
+    // still valid and intact.
     document.getElementById('loginError').textContent =
       'Could not verify admin access (connection issue). Please try refreshing again.';
     return showLogin();
@@ -1109,7 +1139,6 @@ window.addEventListener('DOMContentLoaded', async () => {
       if (rateInput) rateInput.value = Math.round(liveRate);
     }
   } catch (e) {}
-  await checkAuth();
   document.getElementById('adminPassword')?.addEventListener('keydown', e => { if (e.key === 'Enter') handleLogin(); });
   document.getElementById('lookupCustomerId')?.addEventListener('keydown', e => { if (e.key === 'Enter') lookupByCustomerId(); });
 });
