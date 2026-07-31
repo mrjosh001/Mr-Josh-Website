@@ -184,7 +184,16 @@
       <h1>MJ HUB</h1>
       <p>Admin portal — sign in with an admin account</p>
       <div class="field"><label>Email</label><input type="email" id="adminEmail" placeholder="admin@example.com" /></div>
-      <div class="field"><label>Password</label><input type="password" id="adminPassword" placeholder="••••••••" /></div>
+      <div class="field">
+        <label>Password</label>
+        <div style="position:relative;">
+          <input type="password" id="adminPassword" placeholder="••••••••" style="padding-right:44px;" />
+          <button type="button" id="togglePasswordBtn" onclick="toggleAdminPasswordVisibility()" aria-label="Show password"
+            style="position:absolute;right:6px;top:50%;transform:translateY(-50%);background:none;border:none;color:var(--muted);cursor:pointer;width:32px;height:32px;">
+            <i class="fas fa-eye" id="togglePasswordIcon"></i>
+          </button>
+        </div>
+      </div>
       <button class="btn btn-primary" onclick="handleLogin()"><i class="fas fa-lock"></i> Sign In</button>
       <div id="loginError" class="error-msg"></div>
     </div>
@@ -216,7 +225,12 @@
           <button class="mobile-menu-btn" onclick="openSidebar()"><i class="fas fa-bars"></i></button>
           <h2 id="pageTitle">Overview</h2>
         </div>
-        <span id="adminEmailLabel" style="font-size:12px;color:var(--muted);"></span>
+        <span style="display:flex;align-items:center;gap:8px;">
+          <span id="onlineIndicator" style="display:flex;align-items:center;gap:6px;font-size:11px;font-weight:700;color:#34d399;background:rgba(52,211,153,.12);padding:5px 10px;border-radius:20px;">
+            <span style="width:7px;height:7px;border-radius:50%;background:#34d399;display:inline-block;"></span> Signed in
+          </span>
+          <span id="adminEmailLabel" style="font-size:12px;color:var(--muted);"></span>
+        </span>
       </header>
 
       <div class="content">
@@ -236,6 +250,7 @@
             <div class="metrics" style="margin-bottom:0;">
               <div class="metric-card"><div class="metric-label" id="revenuePeriodLabel">This Month</div><div class="metric-value" id="mRevenueNgn">₦0</div><div class="metric-sub" id="mRevenueUsd">$0.00 USD</div></div>
               <div class="metric-card"><div class="metric-label">Sales</div><div class="metric-value" id="mSalesNgn">₦0</div><div class="metric-sub">Completed orders</div></div>
+              <div class="metric-card"><div class="metric-label">Profit Margin</div><div class="metric-value" id="mProfitNgn" style="color:#34d399;">₦0</div><div class="metric-sub" id="mProfitPct">0% margin</div></div>
               <div class="metric-card"><div class="metric-label">Wallet Balances</div><div class="metric-value" id="mTotalBalance">₦0</div><div class="metric-sub">All user wallets</div></div>
             </div>
           </div>
@@ -331,7 +346,7 @@
             <div class="empty-state" id="ordersEmpty">No orders table connected yet.</div>
             <div class="table-wrap hidden" id="ordersTableWrap">
               <table>
-                <thead><tr><th>Order ID</th><th>Customer</th><th>Item</th><th>Amount</th><th>Status</th><th>Date</th></tr></thead>
+                <thead><tr><th>Order ID</th><th>Customer</th><th>Item</th><th>Amount</th><th>Status</th><th>Date</th><th>Action</th></tr></thead>
                 <tbody id="ordersTableBody"></tbody>
               </table>
             </div>
@@ -356,7 +371,11 @@
       <h3 id="productModalTitle">Add Product</h3>
       <input type="hidden" id="editProductId" />
       <div class="field"><label>Product Name</label><input type="text" id="pName" /></div>
-      <div class="field"><label>Category</label><input type="text" id="pCategory" /></div>
+      <div class="field">
+        <label>Category</label>
+        <select id="pCategory" onchange="handleCategorySelectChange()"></select>
+        <input type="text" id="pCategoryNew" placeholder="New category name" class="hidden" style="margin-top:8px;" />
+      </div>
       <div class="field"><label>Description</label><textarea id="pDesc" rows="3"></textarea></div>
       <div class="field">
         <label>Supplier Price (₦) — Read Only</label>
@@ -377,6 +396,16 @@
       <div class="modal-actions">
         <button class="btn btn-ghost" onclick="closeProductModal()">Cancel</button>
         <button class="btn btn-primary btn-sm" onclick="saveProduct()">Save</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="orderModal" class="modal-backdrop hidden">
+    <div class="modal">
+      <h3>Order Details</h3>
+      <div id="orderModalBody" style="display:flex;flex-direction:column;gap:12px;"></div>
+      <div class="modal-actions">
+        <button class="btn btn-ghost" onclick="closeOrderModal()">Close</button>
       </div>
     </div>
   </div>
@@ -403,6 +432,7 @@
       </div>
     </div>
   </div>
+
 
 <script>
 const SUPABASE_URL = 'https://atczodlljmlayvldxfmv.supabase.co';
@@ -471,10 +501,47 @@ async function checkAuth() {
 function showLogin() {
   document.getElementById('loginScreen').classList.remove('hidden');
   document.getElementById('adminShell').classList.add('hidden');
+  stopInactivityTimer();
 }
 function showDashboard() {
   document.getElementById('loginScreen').classList.add('hidden');
   document.getElementById('adminShell').classList.remove('hidden');
+  startInactivityTimer();
+}
+
+// -------------------------------------------------------------------------
+// AUTO SIGN-OUT AFTER 10 MINUTES OF INACTIVITY
+// -------------------------------------------------------------------------
+const INACTIVITY_LIMIT_MS = 10 * 60 * 1000; // 10 minutes
+let inactivityTimer = null;
+const INACTIVITY_EVENTS = ['mousemove', 'mousedown', 'keydown', 'scroll', 'touchstart', 'click'];
+
+function resetInactivityTimer() {
+  if (inactivityTimer) clearTimeout(inactivityTimer);
+  inactivityTimer = setTimeout(async () => {
+    await sb.auth.signOut();
+    document.getElementById('loginError').textContent = 'You were signed out after 10 minutes of inactivity.';
+    showLogin();
+  }, INACTIVITY_LIMIT_MS);
+}
+function startInactivityTimer() {
+  INACTIVITY_EVENTS.forEach(evt => document.addEventListener(evt, resetInactivityTimer));
+  resetInactivityTimer();
+}
+function stopInactivityTimer() {
+  if (inactivityTimer) clearTimeout(inactivityTimer);
+  inactivityTimer = null;
+  INACTIVITY_EVENTS.forEach(evt => document.removeEventListener(evt, resetInactivityTimer));
+}
+
+function toggleAdminPasswordVisibility() {
+  const input = document.getElementById('adminPassword');
+  const icon = document.getElementById('togglePasswordIcon');
+  if (!input || !icon) return;
+  const isHidden = input.type === 'password';
+  input.type = isHidden ? 'text' : 'password';
+  icon.classList.toggle('fa-eye', !isHidden);
+  icon.classList.toggle('fa-eye-slash', isHidden);
 }
 
 async function handleLogin() {
@@ -508,7 +575,7 @@ async function loadProducts() {
 function populateCategoryFilter() {
   const select = document.getElementById('categoryFilter');
   if (!select) return;
-  const cats = [...new Set(allProducts.map(p => p.category || 'OTHER').filter(Boolean))].sort();
+  const cats = [...new Set(allProducts.map(p => (p.category || 'OTHER').trim()).filter(Boolean))].sort();
   const current = select.value;
   select.innerHTML = '<option value="">All Categories</option>' + cats.map(c => `<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join('');
   if (cats.includes(current)) select.value = current;
@@ -555,19 +622,40 @@ function updateRevenueDisplay() {
   const labelEl = document.getElementById('revenuePeriodLabel');
   if (labelEl) labelEl.textContent = revenueLabels[period] || period;
   let sales = 0;
+  let profit = 0;
   if (window._cachedOrders?.length) {
     const ranges = { today:1, '7days':7, month:30, '3months':90, '6months':180, '12months':365 };
     const cutoff = Date.now() - ((ranges[period] || 30) * 86400000);
-    sales = window._cachedOrders.filter(o => {
+    const periodOrders = window._cachedOrders.filter(o => {
       const d = o.created_at ? new Date(o.created_at).getTime() : 0;
       const st = String(o.status || '').toLowerCase();
       return d >= cutoff && ['completed', 'paid', 'success'].includes(st);
-    }).reduce((s, o) => s + Number(o.amount || o.total || 0), 0);
+    });
+    sales = periodOrders.reduce((s, o) => s + Number(o.amount || o.total || 0), 0);
+
+    // Profit = revenue minus supplier cost. Orders don't store the cost at
+    // the time of sale, so this looks up each order's product by code/id/name
+    // in the current product catalog and uses today's supplier_price as the
+    // best available estimate of cost.
+    profit = periodOrders.reduce((s, o) => {
+      const qty = Number(o.quantity) || 1;
+      const revenue = Number(o.amount || o.total || 0);
+      const product = allProducts.find(p =>
+        (o.product_code && p.product_key === o.product_code) ||
+        (o.product_id && p.id === o.product_id) ||
+        (o.product_name && p.name === o.product_name)
+      );
+      const cost = product ? Number(product.supplier_price || 0) * qty : 0;
+      return s + (revenue - cost);
+    }, 0);
   }
   const set = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
   set('mRevenueNgn', '₦' + sales.toLocaleString(undefined, { maximumFractionDigits: 0 }));
   set('mSalesNgn', '₦' + sales.toLocaleString(undefined, { maximumFractionDigits: 0 }));
   set('mRevenueUsd', '$' + (sales / liveRate).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' USD');
+  set('mProfitNgn', '₦' + profit.toLocaleString(undefined, { maximumFractionDigits: 0 }));
+  const marginPct = sales > 0 ? (profit / sales * 100) : 0;
+  set('mProfitPct', marginPct.toLocaleString(undefined, { maximumFractionDigits: 1 }) + '% margin');
 }
 
 function renderProducts(list) {
@@ -636,7 +724,7 @@ function filterProducts() {
   const q = (document.getElementById('productSearch').value || '').toLowerCase().trim();
   const cat = (document.getElementById('categoryFilter')?.value || '').trim();
   let filtered = allProducts;
-  if (cat) filtered = filtered.filter(p => (p.category || '') === cat);
+  if (cat) filtered = filtered.filter(p => String(p.category || '').trim() === cat);
   if (q) {
     filtered = filtered.filter(p =>
       (p.name || '').toLowerCase().includes(q) ||
@@ -648,13 +736,41 @@ function filterProducts() {
   renderProducts(filtered);
 }
 
+function getKnownCategories() {
+  return [...new Set(allProducts.map(p => (p.category || '').trim()).filter(Boolean))].sort();
+}
+
+function populateProductCategoryDropdown(selected) {
+  const select = document.getElementById('pCategory');
+  if (!select) return;
+  const cats = getKnownCategories();
+  if (selected && !cats.includes(selected)) cats.push(selected);
+  select.innerHTML = cats.map(c => `<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join('')
+    + `<option value="__new__">+ Add new category…</option>`;
+  select.value = selected && cats.includes(selected) ? selected : (cats[0] || '__new__');
+  handleCategorySelectChange();
+}
+
+function handleCategorySelectChange() {
+  const select = document.getElementById('pCategory');
+  const newInput = document.getElementById('pCategoryNew');
+  if (!select || !newInput) return;
+  if (select.value === '__new__') {
+    newInput.classList.remove('hidden');
+    newInput.focus();
+  } else {
+    newInput.classList.add('hidden');
+  }
+}
+
 function openProductModal(product) {
   document.getElementById('productModalError').textContent = '';
+  document.getElementById('pCategoryNew').value = '';
   if (product) {
     document.getElementById('productModalTitle').textContent = 'Edit Product';
     document.getElementById('editProductId').value = product.id || product.product_key || '';
     document.getElementById('pName').value = product.name || '';
-    document.getElementById('pCategory').value = product.category || '';
+    populateProductCategoryDropdown(product.category || '');
     document.getElementById('pDesc').value = stripHtml(product.display_description || product.description || '');
     document.getElementById('pSupplierPrice').value = product.supplier_price ?? 0;
     document.getElementById('pPrice').value = product.price ?? '';
@@ -664,7 +780,7 @@ function openProductModal(product) {
     document.getElementById('productModalTitle').textContent = 'Add Product';
     document.getElementById('editProductId').value = '';
     document.getElementById('pName').value = '';
-    document.getElementById('pCategory').value = 'OTHER';
+    populateProductCategoryDropdown('OTHER');
     document.getElementById('pDesc').value = '';
     document.getElementById('pSupplierPrice').value = 0;
     document.getElementById('pPrice').value = '';
@@ -682,7 +798,10 @@ function editProduct(id) {
 async function saveProduct() {
   const id = document.getElementById('editProductId').value;
   const name = document.getElementById('pName').value.trim();
-  const category = document.getElementById('pCategory').value.trim() || 'OTHER';
+  const categorySelectVal = document.getElementById('pCategory').value;
+  const category = (categorySelectVal === '__new__'
+    ? document.getElementById('pCategoryNew').value.trim()
+    : categorySelectVal.trim()) || 'OTHER';
   const description = stripHtml(document.getElementById('pDesc').value);
   const price = parseFloat(document.getElementById('pPrice').value);
   const stock_quantity = parseInt(document.getElementById('pStock').value, 10);
@@ -691,6 +810,9 @@ async function saveProduct() {
   errEl.textContent = '';
 
   if (!name) { errEl.textContent = 'Product name is required.'; return; }
+  if (categorySelectVal === '__new__' && !document.getElementById('pCategoryNew').value.trim()) {
+    errEl.textContent = 'Enter a name for the new category.'; return;
+  }
   if (isNaN(price) || price < 0) { errEl.textContent = 'Enter a valid selling price.'; return; }
 
   const existing = id
@@ -887,20 +1009,45 @@ async function saveUser() {
 function renderOrders(orders) {
   const tbody = document.getElementById('ordersTableBody');
   if (!orders?.length) {
-    tbody.innerHTML = `<tr><td colspan="6" class="empty-state">No orders yet.</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="7" class="empty-state">No orders yet.</td></tr>`;
     return;
   }
-  tbody.innerHTML = orders.map(o => `
+  tbody.innerHTML = orders.map((o, i) => `
     <tr>
-      <td>${escapeHtml(o.id || o.order_id || '—')}</td>
+      <td>${escapeHtml(o.order_id || o.id || '—')}</td>
       <td>${escapeHtml(o.customer_name || o.customer || o.email || '—')}</td>
-      <td>${escapeHtml(o.item || o.product_name || o.service || '—')}</td>
+      <td>${escapeHtml(o.product_name || o.item || o.service || '—')}</td>
       <td class="price">₦${Number(o.amount || o.total || 0).toLocaleString()}</td>
       <td>${escapeHtml(o.status || '—')}</td>
       <td>${o.created_at ? new Date(o.created_at).toLocaleDateString() : '—'}</td>
+      <td><button class="btn btn-ghost btn-sm" onclick="openOrderModal(${i})"><i class="fas fa-eye"></i> View</button></td>
     </tr>
   `).join('');
 }
+
+function openOrderModal(index) {
+  const o = (window._cachedOrders || [])[index];
+  if (!o) return;
+  const body = document.getElementById('orderModalBody');
+  const row = (label, value, mono) => `
+    <div>
+      <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);margin-bottom:4px;">${escapeHtml(label)}</div>
+      <div style="font-size:14px;${mono ? 'font-family:monospace;white-space:pre-wrap;word-break:break-word;' : ''}background:#07090e;border:1px solid var(--border);border-radius:10px;padding:10px 12px;">${value ? escapeHtml(value) : '<span style=\'color:var(--muted)\'>—</span>'}</div>
+    </div>`;
+  body.innerHTML = [
+    row('Order ID', o.order_id || o.id || ''),
+    row('Product', o.product_name || o.item || ''),
+    row('Amount', '₦' + Number(o.amount || o.total || 0).toLocaleString()),
+    row('Status', o.status || ''),
+    row('Date', o.created_at ? new Date(o.created_at).toLocaleString() : ''),
+    // Description: shown for every order — blank when the product has none.
+    row('Description', o.description || ''),
+    // Login credentials kept here for admin record-keeping purposes.
+    row('Login Credentials', o.login_credentials || '', true)
+  ].join('');
+  document.getElementById('orderModal').classList.remove('hidden');
+}
+function closeOrderModal() { document.getElementById('orderModal').classList.add('hidden'); }
 
 function switchTab(name) {
   document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
