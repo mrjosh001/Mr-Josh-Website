@@ -1334,7 +1334,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 await fetchUserBalance(currentUserId);
                 await fetchUserTransactions(currentUserId);
                 await fetchUserOrders(currentUserId);
-                buildNotificationsFromActivity();
+                await fetchUserNotifications();
                 renderNotifications();
             } else {
                 // No active session — this page is the signed-in dashboard,
@@ -1507,7 +1507,9 @@ function initDropdowns() {
         e.stopPropagation();
         notifDropdown.classList.toggle('active');
         profileDropdown.classList.remove('active');
-        notifDot.style.display = 'none';
+        if (notifDropdown.classList.contains('active')) {
+            markVisibleNotificationsRead();
+        }
     });
     document.addEventListener('click', () => {
         profileDropdown.classList.remove('active');
@@ -2067,7 +2069,7 @@ window.checkoutCart = async function() {
     saveCart();
     updateCartDisplay();
     renderOrders();
-    buildNotificationsFromActivity();
+    await fetchUserNotifications();
     renderNotifications();
     showOrderReceipt(delivered);
     showToast('Order completed successfully', 'success');
@@ -2412,17 +2414,48 @@ function renderHistoryList(filterType = 'all') {
 }
 
 /* NOTIFICATIONS */
-function buildNotificationsFromActivity() {
+// Notifications come from the shared `notifications` table (targeted via
+// user_id, or broadcast when user_id is null). Each user's own "viewed"
+// state lives in `notification_reads` so one person opening a broadcast
+// notification doesn't mark it read for everyone else. A notification
+// stays visible for 24h after the user views it, then drops off the list.
+const NOTIF_HIDE_AFTER_MS = 24 * 60 * 60 * 1000;
+
+async function fetchUserNotifications() {
     userNotifications = [];
-    if (transactions.length > 0) {
-        transactions.slice(0, 5).forEach(tx => {
-            userNotifications.push({
-                title: tx.title,
-                time: tx.date,
-                text: `${tx.subtitle || tx.title} - ${tx.amount}`
-            });
-        });
-    }
+    if (!supabaseClient || !currentUserId) return;
+
+    const { data: notifs, error: notifErr } = await supabaseClient
+        .from('notifications')
+        .select('id, title, body, type, created_at')
+        .or(`user_id.eq.${currentUserId},user_id.is.null`)
+        .order('created_at', { ascending: false })
+        .limit(50);
+
+    if (notifErr || !notifs) return;
+
+    const { data: reads } = await supabaseClient
+        .from('notification_reads')
+        .select('notification_id, read_at')
+        .eq('user_id', currentUserId);
+
+    const readMap = new Map((reads || []).map(r => [r.notification_id, r.read_at]));
+    const now = Date.now();
+
+    userNotifications = notifs
+        .map(n => {
+            const readAt = readMap.get(n.id) || null;
+            return {
+                id: n.id,
+                title: n.title,
+                text: n.body || '',
+                time: n.created_at,
+                read: !!readAt,
+                readAt
+            };
+        })
+        // Drop anything the user viewed more than 24h ago.
+        .filter(n => !n.readAt || (now - new Date(n.readAt).getTime()) < NOTIF_HIDE_AFTER_MS);
 }
 
 function renderNotifications() {
@@ -2436,18 +2469,41 @@ function renderNotifications() {
         return;
     }
 
-    if (dot) dot.style.display = 'block';
+    const hasUnread = userNotifications.some(n => !n.read);
+    if (dot) dot.style.display = hasUnread ? 'block' : 'none';
+
     list.innerHTML = userNotifications.map(n => `
-        <div class="notif-item">
+        <div class="notif-item"${n.read ? '' : ' style="font-weight:700;"'}>
             <div class="notif-title">${escapeHtml(n.title)}</div>
             <div style="color:var(--muted);font-size:12px;">${escapeHtml(n.text || '')}</div>
-            <div class="notif-time">${escapeHtml(n.time || '')}</div>
+            <div class="notif-time">${escapeHtml(formatNotifTime(n.time))}</div>
         </div>`).join('');
 }
 
-window.markAllNotifsRead = function() {
-    const dot = document.getElementById('notifDot');
-    if (dot) dot.style.display = 'none';
+function formatNotifTime(iso) {
+    if (!iso) return '';
+    try { return new Date(iso).toLocaleString(); } catch (e) { return ''; }
+}
+
+async function markVisibleNotificationsRead() {
+    if (!supabaseClient || !currentUserId) return;
+    const unread = userNotifications.filter(n => !n.read);
+    if (!unread.length) return;
+
+    const rows = unread.map(n => ({ notification_id: n.id, user_id: currentUserId }));
+    const { error } = await supabaseClient
+        .from('notification_reads')
+        .upsert(rows, { onConflict: 'notification_id,user_id' });
+
+    if (!error) {
+        const now = new Date().toISOString();
+        unread.forEach(n => { n.read = true; n.readAt = now; });
+        renderNotifications();
+    }
+}
+
+window.markAllNotifsRead = async function() {
+    await markVisibleNotificationsRead();
     showToast('Notifications marked as read', 'info');
 };
 
