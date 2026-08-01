@@ -551,6 +551,13 @@
                 return;
             }
 
+            if (urlParams.get('verified') === '1') {
+                switchTab('signin');
+                showSuccess('✅ Your email has been verified! Please sign in below.');
+                // Clean the query param off the visible URL without reloading.
+                window.history.replaceState({}, document.title, window.location.pathname);
+            }
+
             supabaseClient.auth.onAuthStateChange(async (event, session) => {
                 if (event === 'PASSWORD_RECOVERY') {
                     switchTab('updatePassword');
@@ -690,7 +697,11 @@
                             full_name: fullName,
                             username: username,
                             phone_number: phone
-                        }
+                        },
+                        // Where Supabase sends the user after they click the
+                        // confirm-email link — back to the sign-in page here,
+                        // with ?verified=1 so auth.html can greet them.
+                        emailRedirectTo: window.location.origin + window.location.pathname + '?verified=1'
                     }
                 }));
             } catch (e) {
@@ -711,10 +722,18 @@
             // unlike inserting from here, which used to fail with an RLS
             // error whenever the user isn't signed in yet post-signup.
 
-            showSuccess('Account created successfully!');
-            setTimeout(() => {
-                window.location.href = 'index.html';
-            }, 1000);
+            if (data.session) {
+                // Email confirmation is off — user is already signed in.
+                showSuccess('Account created successfully!');
+                setTimeout(() => {
+                    window.location.href = 'index.html';
+                }, 1000);
+            } else {
+                // Email confirmation is required — send them to the
+                // dedicated "check your email" page with their address,
+                // instead of redirecting into a session that doesn't exist yet.
+                window.location.href = 'check-email.html?email=' + encodeURIComponent(email);
+            }
         }
 
         async function handleForgotPassword(e) {
