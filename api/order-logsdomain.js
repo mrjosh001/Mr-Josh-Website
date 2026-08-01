@@ -99,25 +99,21 @@ export default async function handler(req, res) {
     total = Number(product.price) * qty;
     productName = product.name;
 
-    // 2. User balance (support balance_ngn or balance)
+    // 2. User balance
     let profile = null;
     {
       const r1 = await supabase
         .from('profiles')
-        .select('balance_ngn, balance, customer_id')
+        .select('balance, customer_id')
         .eq('id', user_id)
         .single();
       if (r1.error || !r1.data) {
+        console.error('[order-logsdomain] profile lookup failed:', r1.error);
         return res.status(400).json({ success: false, message: 'User profile not found' });
       }
       profile = r1.data;
-      if (profile.balance_ngn != null) {
-        balanceColumn = 'balance_ngn';
-        originalBalance = Number(profile.balance_ngn || 0);
-      } else {
-        balanceColumn = 'balance';
-        originalBalance = Number(profile.balance || 0);
-      }
+      balanceColumn = 'balance';
+      originalBalance = Number(profile.balance || 0);
       customerId = profile.customer_id;
     }
 
