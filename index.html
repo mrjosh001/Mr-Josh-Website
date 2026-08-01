@@ -1027,22 +1027,35 @@ body::before {
 
     <section id="deposit" class="app-section">
         <div class="content-card">
-            <h2>Deposit (Manual NGN)</h2>
-            <p class="helper-text">Message admin on WhatsApp with your Customer ID and amount. Your wallet is credited after payment is confirmed. Min ₦2,000 · Max ₦200,000 per deposit.</p>
+            <h2>Deposit</h2>
+            <p class="helper-text">Choose a funding method. Only <strong>Manual Deposit</strong> is active for now.</p>
+
             <div class="form-group">
-                <label>Your Customer ID</label>
-                <input type="text" id="depositCustomerId" readonly placeholder="Loading..." style="font-family:monospace;font-weight:700;color:var(--primary);">
+                <label>Payment Method</label>
+                <select id="depositProviderSelect" onchange="onDepositMethodChange()">
+                    <option value="manual" selected>Manual Deposit (Active)</option>
+                    <option value="bank" disabled>Bank Transfer — Coming soon</option>
+                    <option value="card" disabled>Card Payment — Coming soon</option>
+                    <option value="crypto" disabled>Crypto — Coming soon</option>
+                </select>
             </div>
-            <div class="form-group">
-                <label>Amount (₦)</label>
-                <input type="number" id="depositInput" min="2000" max="200000" step="100" placeholder="e.g. 5000">
+
+            <div id="manualDepositBox">
+                <div class="form-group">
+                    <label>Your Customer ID</label>
+                    <input type="text" id="depositCustomerId" readonly placeholder="Loading..." style="font-family:monospace;font-weight:700;color:var(--primary);">
+                </div>
+                <div class="form-group">
+                    <label>Amount (₦)</label>
+                    <input type="number" id="depositInput" min="2000" max="200000" step="100" placeholder="e.g. 5000">
+                </div>
+                <button class="btn-sm-primary" style="width:100%;padding:14px;" onclick="messageAdminForDeposit()">
+                    <i class="fa-brands fa-whatsapp"></i> Message Admin to Deposit
+                </button>
+                <p style="font-size:12px;color:var(--muted);margin-top:12px;line-height:1.45;text-align:center;">
+                    WhatsApp opens with your details. Pay as admin instructs, then wait for credit. Min ₦2,000 · Max ₦200,000.
+                </p>
             </div>
-            <button class="btn-sm-primary" style="width:100%;padding:14px;" onclick="messageAdminForDeposit()">
-                <i class="fa-brands fa-whatsapp"></i> Message Admin to Deposit
-            </button>
-            <p style="font-size:12px;color:var(--muted);margin-top:12px;line-height:1.45;text-align:center;">
-                WhatsApp will open with your details filled in. Send the message, complete payment as instructed by admin, then wait for your balance to update.
-            </p>
         </div>
     </section>
 
@@ -1645,6 +1658,21 @@ async function fetchUserBalance(userId) {
     } catch(e) {}
 }
 
+
+/* Fix mojibake ₦ (â¦ / â‚¦) from older transaction rows */
+function formatTxAmount(amount, amountNgn) {
+    if (amountNgn != null && amountNgn !== '' && !isNaN(Number(amountNgn))) {
+        return '₦' + Number(amountNgn).toLocaleString();
+    }
+    let s = String(amount || '₦0.00');
+    s = s.replace(/â‚¦/g, '₦').replace(/â¦/g, '₦').replace(/Ã¢Â‚Â¦/g, '₦');
+    if (s.indexOf('₦') === -1 && s.indexOf('$') === -1) {
+        const n = Number(String(s).replace(/[^0-9.]/g, ''));
+        if (!isNaN(n) && n > 0) s = '₦' + n.toLocaleString();
+    }
+    return s;
+}
+
 async function fetchUserTransactions(userId) {
     if (!supabaseClient) return;
     try {
@@ -1683,7 +1711,7 @@ async function fetchUserTransactions(userId) {
                     category: tx.category || type,
                     title: tx.title || 'Transaction',
                     subtitle: tx.subtitle || '',
-                    amount: tx.amount || (tx.amount_ngn != null ? '₦' + Number(tx.amount_ngn).toLocaleString() : '₦0.00'),
+                    amount: formatTxAmount(tx.amount, tx.amount_ngn),
                     date: new Date(tx.created_at).toLocaleString(),
                     status: tx.status || 'Success',
                     paymentProvider: tx.payment_provider || 'MJ HUB',
