@@ -130,7 +130,7 @@ export default async function handler(req, res) {
   let productName = '';
   let customerId = null;
   let deducted = false;
-  let balanceColumn = 'balance_ngn';
+  let balanceColumn = 'balance';
   let claimedRows = [];
 
   try {
@@ -154,10 +154,15 @@ export default async function handler(req, res) {
     total = Number(product.price) * qty;
     productName = product.name;
 
-    // 2. User balance (support balance_ngn or balance, whichever this project uses)
+    // 2. User balance — this project's balance of record is `profiles.balance`
+    // (same column api/order.js and the frontend use everywhere). A previous
+    // version of this file preferred a `balance_ngn` column when present,
+    // which silently read 0 for every user if that column existed but was
+    // unused, causing false "Insufficient balance" errors regardless of the
+    // customer's real, funded balance.
     const { data: profile, error: profileErr } = await supabase
       .from('profiles')
-      .select('balance_ngn, balance, customer_id')
+      .select('balance, customer_id')
       .eq('id', user_id)
       .single();
 
@@ -165,13 +170,8 @@ export default async function handler(req, res) {
       return res.status(400).json({ success: false, message: 'User profile not found' });
     }
 
-    if (profile.balance_ngn != null) {
-      balanceColumn = 'balance_ngn';
-      originalBalance = Number(profile.balance_ngn || 0);
-    } else {
-      balanceColumn = 'balance';
-      originalBalance = Number(profile.balance || 0);
-    }
+    balanceColumn = 'balance';
+    originalBalance = Number(profile.balance || 0);
     customerId = profile.customer_id;
 
     if (originalBalance < total) {
