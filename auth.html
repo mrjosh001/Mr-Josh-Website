@@ -610,6 +610,18 @@
             }
         }
 
+        function formatAuthError(error) {
+            if (!error) return 'Something went wrong. Please try again.';
+            const tag = [];
+            if (error.status) tag.push('[' + error.status + ']');
+            if (error.code) tag.push('(' + error.code + ')');
+            let msg = error.message;
+            if (!msg || msg === '{}' || msg === '[object Object]') {
+                msg = error.error_description || error.msg || error.error || 'Registration failed — no details were returned by the server. Please try again in a moment.';
+            }
+            return (tag.length ? tag.join(' ') + ' ' : '') + msg;
+        }
+
         function showError(message) {
             const errorEl = document.getElementById('errorContainer');
             errorEl.innerText = message;
@@ -628,13 +640,16 @@
             const password = document.getElementById('signinPassword').value.trim();
             const rememberMe = document.getElementById('rememberMe').checked;
 
-            const { data, error } = await supabaseClient.auth.signInWithPassword({
-                email: email,
-                password: password
-            });
+            let data, error;
+            try {
+                ({ data, error } = await supabaseClient.auth.signInWithPassword({ email, password }));
+            } catch (e) {
+                showError(formatAuthError(e));
+                return;
+            }
 
             if (error) {
-                showError(error.message);
+                showError(formatAuthError(error));
                 return;
             }
 
@@ -665,38 +680,36 @@
             const email = document.getElementById('emailAddress').value.trim();
             const password = document.getElementById('signupPassword').value.trim();
 
-            const { data, error } = await supabaseClient.auth.signUp({
-                email: email,
-                password: password,
-                options: {
-                    data: {
-                        full_name: fullName,
-                        username: username,
-                        phone_number: phone
+            let data, error;
+            try {
+                ({ data, error } = await supabaseClient.auth.signUp({
+                    email: email,
+                    password: password,
+                    options: {
+                        data: {
+                            full_name: fullName,
+                            username: username,
+                            phone_number: phone
+                        }
                     }
-                }
-            });
-
-            if (error) {
-                showError(error.message);
+                }));
+            } catch (e) {
+                console.error('signUp threw:', e);
+                showError(formatAuthError(e));
                 return;
             }
 
-            if (data.user) {
-                const { error: profileError } = await supabaseClient.from('profiles').insert([
-                    {
-                        id: data.user.id,
-                        full_name: fullName,
-                        username: username,
-                        phone_number: phone
-                    }
-                ]);
-
-                if (profileError) {
-                    showError(profileError.message);
-                    return;
-                }
+            if (error) {
+                console.error('signUp error:', error);
+                showError(formatAuthError(error));
+                return;
             }
+
+            // Profile row creation is handled server-side by a database
+            // trigger (on_auth_user_created) the moment the auth user is
+            // created — this works whether or not "Confirm email" is on,
+            // unlike inserting from here, which used to fail with an RLS
+            // error whenever the user isn't signed in yet post-signup.
 
             showSuccess('Account created successfully!');
             setTimeout(() => {
