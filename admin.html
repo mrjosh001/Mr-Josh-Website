@@ -1394,17 +1394,54 @@ function renderOrders(orders) {
     tbody.innerHTML = `<tr><td colspan="7" class="empty-state">No orders yet.</td></tr>`;
     return;
   }
-  tbody.innerHTML = orders.map((o, i) => `
+
+  // Group by calendar day (using created_at; orders with no date fall into
+  // their own "Unknown date" bucket so nothing gets silently dropped).
+  // window._cachedOrders is already sorted newest-first by tryLoadOrders(),
+  // and Map preserves insertion order, so groups come out newest-day-first.
+  const groups = new Map();
+  orders.forEach(o => {
+    const d = o.created_at ? new Date(o.created_at) : null;
+    const key = d && !isNaN(d) ? d.toDateString() : 'Unknown date';
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(o);
+  });
+
+  const today = new Date().toDateString();
+  const yesterday = new Date(Date.now() - 86400000).toDateString();
+  const dayLabel = (key) => {
+    if (key === today) return 'Today';
+    if (key === yesterday) return 'Yesterday';
+    if (key === 'Unknown date') return 'Unknown date';
+    return new Date(key).toLocaleDateString(undefined, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+  };
+
+  let html = '';
+  // Global index (matches the flat "orders" array / window._cachedOrders)
+  // so openOrderModal(i) still points at the right row after grouping.
+  let globalIndex = 0;
+  for (const [key, dayOrders] of groups) {
+    html += `
+      <tr>
+        <td colspan="7" style="background:rgba(59,130,246,.06);border-bottom:1px solid var(--border);padding:10px 12px;font-size:12px;font-weight:800;color:var(--primary);text-transform:uppercase;letter-spacing:.4px;white-space:nowrap;">
+          ${escapeHtml(dayLabel(key))} <span style="color:var(--muted);font-weight:600;text-transform:none;letter-spacing:0;">— ${dayOrders.length} order${dayOrders.length !== 1 ? 's' : ''}</span>
+        </td>
+      </tr>`;
+    dayOrders.forEach(o => {
+      const i = globalIndex++;
+      html += `
     <tr>
       <td>${escapeHtml(o.order_id || o.id || '—')}</td>
       <td>${escapeHtml(o.customer_name || o.customer || o.email || '—')}</td>
       <td>${escapeHtml(o.product_name || o.item || o.service || '—')}</td>
       <td class="price">₦${Number(o.amount || o.total || 0).toLocaleString()}</td>
       <td>${escapeHtml(o.status || '—')}</td>
-      <td>${o.created_at ? new Date(o.created_at).toLocaleDateString() : '—'}</td>
+      <td>${o.created_at ? new Date(o.created_at).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' }) : '—'}</td>
       <td><button class="btn btn-ghost btn-sm" onclick="openOrderModal(${i})"><i class="fas fa-eye"></i> View</button></td>
-    </tr>
-  `).join('');
+    </tr>`;
+    });
+  }
+  tbody.innerHTML = html;
 }
 
 function openOrderModal(index) {
