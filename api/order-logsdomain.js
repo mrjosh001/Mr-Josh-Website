@@ -25,20 +25,24 @@ function categoryIdFromKey(productKey) {
   return Number.isFinite(n) ? n : null;
 }
 
-function parseCredentials(details) {
-  let credId = null;
-  let credPass = null;
-  if (!details) return { credId, credPass, raw: '' };
+// NOTE: the "orders" table only has a single "login_credentials" text column —
+// that's what api/order.js (Fadded) and api/order-manual.js (Manual) both write
+// to, and it's the only column index.html and admin.html actually read from.
+// This file used to insert into "credentials_id" / "credentials_pass" instead,
+// which are not real columns on "orders". Supabase silently rejected those
+// inserts (and the error was never checked), so every Logs Domain order was
+// fulfilled and charged, but never actually saved — which is why it never
+// showed up in "My Orders" or the admin Orders tab. Keeping this function
+// around only to build one clean login_credentials string.
+function formatCredentials(details) {
+  if (!details) return '';
   const text = String(details);
   const userMatch = text.match(/(?:Username|User|ID|Email|Login)\s*[:=]\s*([^\s|]+)/i);
   const passMatch = text.match(/(?:Password|Pass)\s*[:=]\s*([^\s|]+)/i);
-  if (userMatch) credId = userMatch[1].trim();
-  if (passMatch) credPass = passMatch[1].trim();
-  if (!credId && !credPass) {
-    // whole string is the deliverable
-    credId = text.slice(0, 200);
-  }
-  return { credId, credPass, raw: text };
+  const credId = userMatch ? userMatch[1].trim() : null;
+  const credPass = passMatch ? passMatch[1].trim() : null;
+  if (credId && credPass) return `${credId}:${credPass}`;
+  return text;
 }
 
 export default async function handler(req, res) {
@@ -203,29 +207,44 @@ export default async function handler(req, res) {
     const supplierOrderId = orderData.data?.order_id || orderRef;
     const detailsText = items.map((i) => i.details).filter(Boolean).join('\n\n');
 
+    // Traceability for the "wrong product delivered" class of bug: log exactly
+    // which category_id we asked Logs Domain for, against which local product
+    // name/key it was supposed to be, plus whatever raw item data they sent
+    // back. If a customer ever again reports getting the wrong log for what
+    // they bought, this line in the Vercel logs (search by order_id) shows
+    // whether we asked the supplier for the right category_id or not.
+    console.log('[order-logsdomain] fulfilling', {
+      order_id: supplierOrderId,
+      product_key,
+      category_id: categoryId,
+      product_name: productName,
+      supplier_items_raw: items
+    });
+
     if (items.length) {
       for (const item of items) {
-        const { credId, credPass, raw } = parseCredentials(item.details);
-        await supabase.from('orders').insert({
+        const { error: insertErr } = await supabase.from('orders').insert({
           order_id: supplierOrderId,
           user_id,
           product_id: product.id,
           product_code: product_key,
           product_name: productName,
           product_type: 'log',
-          description: raw || item.details || null,
+          description: (product.display_description || product.description || '').trim() || null,
           quantity: 1,
           amount: product.price,
           status: 'completed',
-          credentials_id: credId,
-          credentials_pass: credPass,
+          login_credentials: formatCredentials(item.details),
           supplier_ref: String(item.serial || ''),
           guide_url: 'https://t.me/mj_hub_tg'
         });
+        if (insertErr) {
+          console.error('[order-logsdomain] FAILED to save order row — customer was charged and delivered credentials, but this will not appear in My Orders / admin Orders:', insertErr.message, { order_id: supplierOrderId, user_id, product_key });
+        }
       }
     } else {
       // fallback single row if API returns no items array
-      await supabase.from('orders').insert({
+      const { error: insertErr } = await supabase.from('orders').insert({
         order_id: supplierOrderId,
         user_id,
         product_id: product.id,
@@ -236,8 +255,12 @@ export default async function handler(req, res) {
         quantity: qty,
         amount: total,
         status: 'completed',
+        login_credentials: detailsText || 'Delivered — see order for details',
         guide_url: 'https://t.me/mj_hub_tg'
       });
+      if (insertErr) {
+        console.error('[order-logsdomain] FAILED to save order row (fallback branch):', insertErr.message, { order_id: supplierOrderId, user_id, product_key });
+      }
     }
 
     await supabase.from('transactions').insert({
