@@ -144,7 +144,7 @@ export default async function handler(req, res) {
     const orderData = await supplierRes.json();
 
     // -------------------------------------------------
-    // 5. Supplier failed â automatic refund
+    // 5. Supplier failed → automatic refund
     // -------------------------------------------------
     if (!orderData.success) {
       // Refund user
@@ -153,29 +153,29 @@ export default async function handler(req, res) {
         .update({ balance: originalBalance })
         .eq('id', user_id);
 
-      // Record failed purchase
+      // Record failed purchase → Log Orders tab
       await supabase.from('transactions').insert({
         user_id,
         customer_id: customerId,
-        type: 'purchase_failed',
-        category: productName,
+        type: 'log',
+        category: 'log',
         title: productName,
         subtitle: `Failed: ${orderData.message || orderData.code || 'Supplier error'}`,
-        amount: `â¦${total.toLocaleString()}`,
+        amount: `₦${total.toLocaleString()}`,
         amount_ngn: total,
         status: 'failed',
         notes: JSON.stringify(orderData)
       });
 
-      // Record refund
+      // Record refund → Deposits tab
       await supabase.from('transactions').insert({
         user_id,
         customer_id: customerId,
-        type: 'refund',
-        category: productName,
+        type: 'deposit',
+        category: 'deposit',
         title: 'Automatic Refund',
-        subtitle: 'Order failed at supplier â balance restored',
-        amount: `â¦${total.toLocaleString()}`,
+        subtitle: 'Order failed at supplier – balance restored',
+        amount: `₦${total.toLocaleString()}`,
         amount_ngn: total,
         status: 'refunded'
       });
@@ -188,7 +188,7 @@ export default async function handler(req, res) {
     }
 
     // -------------------------------------------------
-    // 6. Supplier succeeded â save everything
+    // 6. Supplier succeeded → save everything
     // -------------------------------------------------
     const items = orderData.data?.items || [];
     const detailsText = items.map(i => i.details).join('\n\n');
@@ -220,15 +220,15 @@ export default async function handler(req, res) {
       });
     }
 
-    // Save money movement in transactions
+    // Save money movement in transactions → Log Orders tab
     await supabase.from('transactions').insert({
       user_id,
       customer_id: customerId,
-      type: 'purchase',
-      category: productName,
+      type: 'log',
+      category: 'log',
       title: productName,
       subtitle: `Qty: ${quantity}`,
-      amount: `â¦${total.toLocaleString()}`,
+      amount: `₦${total.toLocaleString()}`,
       amount_ngn: total,
       status: 'completed',
       product_details: detailsText,
@@ -272,11 +272,11 @@ export default async function handler(req, res) {
         await supabase.from('transactions').insert({
           user_id,
           customer_id: customerId,
-          type: 'refund',
-          category: productName || 'Unknown',
+          type: 'deposit',
+          category: 'deposit',
           title: 'Automatic Refund',
-          subtitle: `System error â ${err.message}`,
-          amount: `â¦${total.toLocaleString()}`,
+          subtitle: `System error – ${err.message}`,
+          amount: `₦${total.toLocaleString()}`,
           amount_ngn: total,
           status: 'refunded',
           notes: err.message
