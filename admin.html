@@ -1130,10 +1130,46 @@ async function saveUser() {
   const errEl = document.getElementById('userModalError');
   errEl.textContent = '';
   if (isNaN(balance)) { errEl.textContent = 'Enter a valid NGN balance.'; return; }
-  const payload = { full_name, username, email: email || null, phone_number: phone_number || null, balance: balance || 0, is_admin };
+
+  // Previous balance — used to detect Manual Deposit amount
+  const prev = allProfiles.find(x => String(x.id) === String(id));
+  const prevBalance = Number(prev?.balance || 0);
+  const amountAdded = balance - prevBalance;
+
+  const payload = {
+    full_name,
+    username,
+    email: email || null,
+    phone_number: phone_number || null,
+    balance: balance || 0,
+    is_admin
+  };
   if (balance_usd !== null && !isNaN(balance_usd)) payload.balance_usd = balance_usd;
+
   const { error } = await sb.from('profiles').update(payload).eq('id', id);
-  if (error) { errEl.textContent = error.message + ' (Check RLS policies)'; return; }
+  if (error) {
+    errEl.textContent = error.message + ' (Check RLS policies)';
+    return;
+  }
+
+  // If admin increased NGN balance → record Manual Deposit under Deposits tab
+  if (amountAdded > 0) {
+    const { error: txErr } = await sb.from('transactions').insert({
+      user_id: id,
+      customer_id: prev?.customer_id || null,
+      type: 'deposit',
+      category: 'deposit',
+      title: 'Manual Deposit',
+      subtitle: 'Funded by admin',
+      amount: '₦' + amountAdded.toLocaleString(),
+      amount_ngn: amountAdded,
+      status: 'completed',
+      channel: 'Manual Deposit',
+      payment_provider: 'Admin'
+    });
+    if (txErr) console.error('Manual Deposit transaction failed:', txErr.message);
+  }
+
   closeUserModal();
   await loadProfiles();
   updateMetrics();
