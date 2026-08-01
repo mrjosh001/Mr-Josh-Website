@@ -150,34 +150,44 @@ export default async function handler(req, res) {
         .eq('product_key', productKey)
         .maybeSingle();
 
-      if (!existing) newCount += 1;
-      else updatedCount += 1;
+      if (existing) {
+        // EXISTING: only supplier price + stock
+        updatedCount += 1;
+        const { error } = await supabase
+          .from('products')
+          .update({
+            supplier_price: supplierPrice,
+            stock_quantity: stock,
+            is_available: stock > 0,
+            updated_at: new Date().toISOString()
+          })
+          .eq('product_key', productKey);
 
-      // Keep existing selling price if already set; only markup on first insert
-      const sellingPrice = existing?.price
-        ? Number(existing.price)
-        : applyRandomMarkup(supplierPrice);
+        if (error) {
+          console.error(`Logs Domain update ${productKey}:`, error.message);
+        }
+      } else {
+        // NEW: full insert with markup + category
+        newCount += 1;
+        const { error } = await supabase
+          .from('products')
+          .insert({
+            product_key: productKey,
+            name,
+            description: cleanDescription,
+            display_description: cleanDescription,
+            supplier_price: supplierPrice,
+            price: applyRandomMarkup(supplierPrice),
+            stock_quantity: stock,
+            is_available: stock > 0,
+            category: categorize(name, parentName),
+            source: 'logsdomain',
+            updated_at: new Date().toISOString()
+          });
 
-      const row = {
-        product_key: productKey,
-        name,
-        description: cleanDescription,
-        display_description: cleanDescription,
-        supplier_price: supplierPrice,
-        price: sellingPrice,
-        stock_quantity: stock,
-        is_available: stock > 0,
-        category: categorize(name, parentName),
-        source: 'logsdomain',
-        updated_at: new Date().toISOString()
-      };
-
-      const { error } = await supabase
-        .from('products')
-        .upsert(row, { onConflict: 'product_key' });
-
-      if (error) {
-        console.error(`Logs Domain upsert ${productKey}:`, error.message);
+        if (error) {
+          console.error(`Logs Domain insert ${productKey}:`, error.message);
+        }
       }
     }
 
