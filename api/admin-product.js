@@ -104,7 +104,54 @@ export default async function handler(req, res) {
       return res.status(200).json({ success: true, data });
     }
 
-    return res.status(400).json({ success: false, message: 'Unknown action. Use "update" or "insert".' });
+    if (action === 'delete') {
+      if (!id && !product_key) {
+        return res.status(400).json({ success: false, message: 'id or product_key required' });
+      }
+
+      // Resolve the real product_key even if only "id" was passed, so the
+      // inventory cleanup below always targets the right rows.
+      let resolvedKey = product_key || null;
+      if (!resolvedKey && id) {
+        const { data: lookup } = await supabase.from('products').select('product_key').eq('id', id).maybeSingle();
+        resolvedKey = lookup?.product_key || null;
+      }
+
+      // If this was a manual product, clear out its unsold credentials too —
+      // otherwise they'd sit in product_inventory forever with no product
+      // to belong to. Sold rows are left alone; they're the delivery record
+      // for a real customer order and should never be removed here.
+      if (resolvedKey) {
+        await supabase
+          .from('product_inventory')
+          .delete()
+          .eq('product_key', resolvedKey)
+          .eq('status', 'available');
+      }
+
+      let query = supabase.from('products').delete();
+      query = id ? query.eq('id', id) : query.eq('product_key', product_key);
+      const { error, count } = await query.select();
+
+      if (error) {
+        // Most likely cause: this product has rows in "orders" referencing
+        // it via a foreign key, so the database is refusing to delete it —
+        // that's actually the correct, safe behavior (it protects existing
+        // customer order history from breaking). Give a clear message
+        // instead of a raw DB error.
+        const isFkError = /foreign key|violates|constraint/i.test(error.message || '');
+        return res.status(400).json({
+          success: false,
+          message: isFkError
+            ? 'This product has past orders attached to it, so it can\'t be deleted (that would break customer order history). Set it to "Hidden" instead to stop selling it.'
+            : error.message
+        });
+      }
+
+      return res.status(200).json({ success: true, deleted: Array.isArray(count) ? count.length : 1 });
+    }
+
+    return res.status(400).json({ success: false, message: 'Unknown action. Use "update", "insert", or "delete".' });
   } catch (err) {
     console.error('admin-product error:', err);
     return res.status(500).json({ success: false, message: err.message || 'Server error' });
