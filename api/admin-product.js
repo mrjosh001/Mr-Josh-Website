@@ -82,6 +82,7 @@ export default async function handler(req, res) {
     }
 
     if (action === 'insert') {
+      const productKey = fields.product_key || `manual_${Date.now()}`;
       const payload = {
         name: fields.name,
         category: fields.category ? String(fields.category).trim() : 'OTHER',
@@ -91,7 +92,8 @@ export default async function handler(req, res) {
         supplier_price: Number(fields.supplier_price) || 0,
         stock_quantity: Number(fields.stock_quantity) || 0,
         is_available: fields.is_available !== false,
-        product_key: fields.product_key || `manual-${Date.now()}`,
+        product_key: productKey,
+        source: String(productKey).startsWith('manual_') ? 'manual' : (fields.source || null),
         updated_at: new Date().toISOString()
       };
 
