@@ -36,9 +36,9 @@ function replaceChannelLinks(text) {
   return text;
 }
 
-/** Random markup between 50% and 100% */
+/** Random markup between 50% and 100% — only used for NEW products */
 function applyRandomMarkup(supplierPrice) {
-  const percent = 50 + Math.random() * 50; // 50 → 100
+  const percent = 50 + Math.random() * 50;
   const finalPrice = Math.ceil(supplierPrice * (1 + percent / 100));
   return Math.ceil(finalPrice / 50) * 50;
 }
@@ -149,7 +149,6 @@ export default async function handler(req, res) {
   res.setHeader('Content-Type', 'application/json');
 
   try {
-    // Check environment variables first
     if (!process.env.SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
       return res.status(500).json({
         success: false,
@@ -164,7 +163,6 @@ export default async function handler(req, res) {
       });
     }
 
-    // Create client inside the handler (safer for serverless)
     const supabase = createClient(
       process.env.SUPABASE_URL,
       process.env.SUPABASE_SERVICE_ROLE_KEY
@@ -216,55 +214,53 @@ export default async function handler(req, res) {
         0
       ) || 0;
 
-      // NOTE: select '*' (not a fixed column list) so this never breaks if
-      // your products table has extra/optional columns.
+      const stock = item.in_stock ?? 0;
+
       const { data: existing } = await supabase
         .from('products')
         .select('*')
         .eq('product_key', item.product_key)
         .maybeSingle();
 
-      if (!existing) newCount++;
-      else updatedCount++;
+      if (existing) {
+        // EXISTING: only refresh supplier cost + stock (and availability).
+        // Never touch customer selling price, category, name, or description.
+        updatedCount++;
+        const { error } = await supabase
+          .from('products')
+          .update({
+            supplier_price: supplierPrice,
+            stock_quantity: stock,
+            is_available: stock > 0,
+            updated_at: new Date().toISOString()
+          })
+          .eq('product_key', item.product_key);
 
-      // IMPORTANT: only auto-categorize brand-new products, or existing
-      // products that have never been given a category. If an admin has
-      // already set/edited a category for this product, we keep it as-is —
-      // otherwise every nightly sync would silently overwrite the admin's
-      // manual category choice and products would appear to "jump" between
-      // categories on the storefront (the scattering bug).
-      const existingCategory = existing && existing.category ? String(existing.category).trim() : '';
-      const finalCategory = existingCategory || categorize(item.name);
+        if (error) {
+          console.error(`Error updating ${item.product_key}:`, error.message);
+        }
+      } else {
+        // NEW product: set full row including auto markup + category
+        newCount++;
+        const { error } = await supabase
+          .from('products')
+          .insert({
+            product_key: item.product_key,
+            name: item.name,
+            description: cleanDescription,
+            display_description: displayDescription,
+            supplier_price: supplierPrice,
+            price: applyRandomMarkup(supplierPrice),
+            stock_quantity: stock,
+            is_available: stock > 0,
+            category: categorize(item.name),
+            source: 'fadded',
+            updated_at: new Date().toISOString()
+          });
 
-      // IMPORTANT: same reasoning as category above, applied to price. Only
-      // auto-generate a markup price for brand-new products. Once a product
-      // exists, its price is the admin's to control from the dashboard —
-      // a sync (auto or manual) must never silently overwrite a reselling
-      // price the admin has already set, otherwise every sync forces the
-      // admin to re-price everything from scratch.
-      const finalPrice = existing && existing.price != null && Number(existing.price) > 0
-        ? Number(existing.price)
-        : applyRandomMarkup(supplierPrice);
-
-      const baseData = {
-        product_key: item.product_key,
-        name: item.name,
-        description: cleanDescription,
-        display_description: displayDescription,
-        supplier_price: supplierPrice,
-        price: finalPrice,
-        stock_quantity: item.in_stock ?? 0,
-        is_available: (item.in_stock ?? 0) > 0,
-        category: finalCategory,
-        updated_at: new Date().toISOString()
-      };
-
-      const { error } = await supabase
-        .from('products')
-        .upsert(baseData, { onConflict: 'product_key' });
-
-      if (error) {
-        console.error(`Error updating ${item.product_key}:`, error.message);
+        if (error) {
+          console.error(`Error inserting ${item.product_key}:`, error.message);
+        }
       }
     }
 
