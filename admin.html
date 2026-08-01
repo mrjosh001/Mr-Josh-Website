@@ -775,7 +775,10 @@ function renderProducts(list) {
         <td class="profit">₦${profit.toLocaleString()}</td>
         <td>${stock}</td>
         <td><span class="badge ${available ? 'badge-on' : 'badge-off'}">${available ? 'Active' : 'Hidden'}</span></td>
-        <td><button class="btn btn-ghost btn-sm" onclick="editProduct('${escapeHtml(String(rowId))}')"><i class="fas fa-edit"></i></button></td>
+        <td>
+          <button class="btn btn-ghost btn-sm" onclick="editProduct('${escapeHtml(String(rowId))}')"><i class="fas fa-edit"></i></button>
+          <button class="btn btn-ghost btn-sm" style="color:#f87171;" onclick="deleteProduct('${escapeHtml(String(rowId))}')"><i class="fas fa-trash"></i></button>
+        </td>
       </tr>`;
   }).join('');
 
@@ -805,7 +808,10 @@ function renderProductCards(items) {
         <div class="row-line"><span>Profit</span><span class="profit">₦${profit.toLocaleString()}</span></div>
         <div class="row-line"><span>Stock</span><span>${stock}</span></div>
         <div class="row-line"><span>Status</span><span class="badge ${available ? 'badge-on' : 'badge-off'}">${available ? 'Active' : 'Hidden'}</span></div>
-        <div style="margin-top:10px;"><button class="btn btn-ghost btn-sm" onclick="editProduct('${escapeHtml(String(rowId))}')"><i class="fas fa-edit"></i> Edit</button></div>
+        <div style="margin-top:10px;display:flex;gap:8px;">
+          <button class="btn btn-ghost btn-sm" onclick="editProduct('${escapeHtml(String(rowId))}')"><i class="fas fa-edit"></i> Edit</button>
+          <button class="btn btn-ghost btn-sm" style="color:#f87171;" onclick="deleteProduct('${escapeHtml(String(rowId))}')"><i class="fas fa-trash"></i> Delete</button>
+        </div>
       </div>`;
   }).join('');
 }
@@ -887,6 +893,37 @@ function closeProductModal() { document.getElementById('productModal').classList
 function editProduct(id) {
   const p = allProducts.find(x => String(x.id) === String(id) || String(x.product_key) === String(id));
   if (p) openProductModal(p);
+}
+
+async function deleteProduct(id) {
+  const p = allProducts.find(x => String(x.id) === String(id) || String(x.product_key) === String(id));
+  if (!p) return;
+
+  const confirmed = confirm(`Delete "${p.name}"? This can't be undone.\n\nIf it has past orders, deletion will be blocked automatically to protect order history — use "Hidden" instead in that case.`);
+  if (!confirmed) return;
+
+  try {
+    const headers = { 'Content-Type': 'application/json' };
+    const { data: { session } } = await sb.auth.getSession();
+    if (session?.access_token) headers['Authorization'] = 'Bearer ' + session.access_token;
+
+    const res = await fetch('/api/admin-product', {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ action: 'delete', id: p.id, product_key: p.product_key })
+    });
+    const data = await res.json();
+
+    if (!res.ok || !data.success) {
+      alert(data.message || 'Delete failed.');
+      return;
+    }
+
+    await loadProducts();
+    updateMetrics();
+  } catch (e) {
+    alert('Network error: ' + e.message);
+  }
 }
 
 async function saveProduct() {
