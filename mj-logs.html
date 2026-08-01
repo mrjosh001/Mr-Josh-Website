@@ -262,6 +262,16 @@ async function loadProducts(){
   }catch(err){showError('Unexpected error: '+(err.message||err))}
 }
 
+async function refreshBalance(){
+  if(!currentUserId || !sbClient) return currentBalanceNgn;
+  try{
+    const { data, error } = await sbClient.from('profiles').select('balance').eq('id', currentUserId).single();
+    if(error){ console.error('Balance refresh failed:', error.message); return currentBalanceNgn; }
+    if(data) currentBalanceNgn = parseFloat(data.balance) || 0;
+  }catch(e){ console.error('Balance refresh failed:', e.message || e); }
+  return currentBalanceNgn;
+}
+
 async function initSession(){
   try{
     if(!window.supabase) return;
@@ -269,8 +279,7 @@ async function initSession(){
     const { data: { session } } = await sbClient.auth.getSession();
     if(session && session.user){
       currentUserId = session.user.id;
-      const { data } = await sbClient.from('profiles').select('balance').eq('id', currentUserId).single();
-      if(data) currentBalanceNgn = parseFloat(data.balance) || 0;
+      await refreshBalance();
     }
   }catch(e){}
 }
@@ -410,6 +419,7 @@ async function confirmBuyNow(){
 
   const price = parseFloat(purchasedProduct.price)||0;
   const total = price * activeQty;
+  await refreshBalance();
   if(currentBalanceNgn < total){
     showToast('Insufficient balance. Redirecting to deposit...','error');
     setTimeout(function(){ window.location.href='index.html#deposit'; }, 900);

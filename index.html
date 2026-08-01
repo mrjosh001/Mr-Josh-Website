@@ -1915,11 +1915,12 @@ function updateCartDisplay() {
     if (total) total.textContent = '₦' + sum.toLocaleString(undefined, {minimumFractionDigits:2});
 };
 
-window.openCheckoutConfirm = function() {
+window.openCheckoutConfirm = async function() {
     if (cartItems.length === 0) return showToast('Cart is empty', 'warning');
     if (!currentUserId) return showToast('Please sign in to checkout', 'error');
 
     const total = cartItems.reduce((a, i) => a + Number(i.price || 0), 0);
+    await fetchUserBalance(currentUserId);
     if (currentBalanceNgn < total) {
         showToast('Insufficient balance. Please fund wallet.', 'error');
         return switchSection('deposit');
@@ -1959,6 +1960,7 @@ window.checkoutCart = async function() {
   }
 
   const total = cartItems.reduce((a, i) => a + Number(i.price || 0), 0);
+  await fetchUserBalance(currentUserId);
   if (currentBalanceNgn < total) {
     showToast('Insufficient balance. Please fund wallet.', 'error');
     return switchSection('deposit');
