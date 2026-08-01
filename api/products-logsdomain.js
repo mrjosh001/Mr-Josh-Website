@@ -146,16 +146,34 @@ export default async function handler(req, res) {
 
       const { data: existing } = await supabase
         .from('products')
-        .select('product_key, price')
+        .select('product_key, price, name')
         .eq('product_key', productKey)
         .maybeSingle();
 
       if (existing) {
-        // EXISTING: only supplier price + stock
+        // Logs Domain's numeric category id is what actually gets ordered
+        // (see api/order-logsdomain.js), so if they ever reassign/recycle an
+        // id to a different category, the ONLY way to stay correct is to keep
+        // this product's name/description in lockstep with whatever that id
+        // currently means to them — otherwise the storefront shows one thing
+        // while orders fulfill as another. This log line is kept so a rename
+        // is still visible in the sync output, even though it's now applied
+        // automatically instead of silently going stale.
+        if (existing.name && name && existing.name.trim() !== String(name).trim()) {
+          console.warn(
+            `[products-logsdomain] ${productKey} renamed by supplier: "${existing.name}" → "${name}". Catalog updated to match.`
+          );
+        }
+        // EXISTING: refresh name/description + supplier cost + stock.
+        // Your resale price and category are still never touched here — those
+        // stay exactly as you set them in the admin panel.
         updatedCount += 1;
         const { error } = await supabase
           .from('products')
           .update({
+            name,
+            description: cleanDescription,
+            display_description: cleanDescription,
             supplier_price: supplierPrice,
             stock_quantity: stock,
             is_available: stock > 0,
