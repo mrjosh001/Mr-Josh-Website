@@ -219,10 +219,12 @@ function getAccountFormat(p){
 
 function buildCartItem(p, qty){
   qty = Math.max(1, parseInt(qty,10)||1);
+  const key = p.product_key || null;
+  const source = p.source || (String(key || '').startsWith('ld_') ? 'logsdomain' : 'fadded');
   return {
     product_id: p.id || null,
-    product_key: p.product_key || null,
-    product_code: p.product_code || p.code || p.sku || p.product_key || null,
+    product_key: key,
+    product_code: p.product_code || p.code || p.sku || key || null,
     title: cleanText(p.name || 'Product'),
     price: (parseFloat(p.price)||0) * qty,
     unit_price: parseFloat(p.price)||0,
@@ -230,7 +232,8 @@ function buildCartItem(p, qty){
     subtitle: getDisplayDescription(p).slice(0,120),
     category: p.category || 'Others',
     quantity: qty,
-    account_format: getAccountFormat(p) || null
+    account_format: getAccountFormat(p) || null,
+    source: source
   };
 }
 
@@ -420,7 +423,11 @@ async function confirmBuyNow(){
   buyBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Processing...';
 
   try{
-    const res = await fetch('/api/order', {
+    const productSource = purchasedProduct.source
+      || (String(purchasedProduct.product_key || '').startsWith('ld_') ? 'logsdomain' : 'fadded');
+    const orderEndpoint = productSource === 'logsdomain' ? '/api/order-logsdomain' : '/api/order';
+
+    const res = await fetch(orderEndpoint, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
