@@ -1027,28 +1027,22 @@ body::before {
 
     <section id="deposit" class="app-section">
         <div class="content-card">
-            <h2>Deposit</h2>
-            <p class="helper-text">Fund your wallet through preferred channel.</p>
+            <h2>Deposit (Manual NGN)</h2>
+            <p class="helper-text">Message admin on WhatsApp with your Customer ID and amount. Your wallet is credited after payment is confirmed. Min ₦2,000 · Max ₦200,000 per deposit.</p>
             <div class="form-group">
-                <label>Payment Provider</label>
-                <select id="depositProviderSelect">
-                    <option value="Bank Transfer">Bank Transfer</option>
-                    <option value="Card Payment">Card Payment</option>
-                    <option value="Crypto">Crypto</option>
-                </select>
+                <label>Your Customer ID</label>
+                <input type="text" id="depositCustomerId" readonly placeholder="Loading..." style="font-family:monospace;font-weight:700;color:var(--primary);">
             </div>
             <div class="form-group">
-                <label>Wallet to Fund</label>
-                <select id="depositWalletSelect">
-                    <option value="ngn">NGN Wallet</option>
-                    <option value="usd">USD Wallet</option>
-                </select>
+                <label>Amount (₦)</label>
+                <input type="number" id="depositInput" min="2000" max="200000" step="100" placeholder="e.g. 5000">
             </div>
-            <div class="form-group">
-                <label>Amount</label>
-                <input type="number" id="depositInput" placeholder="Enter amount">
-            </div>
-            <button class="btn-sm-primary" style="width:100%;padding:14px;" onclick="processDeposit()">Proceed to Payment</button>
+            <button class="btn-sm-primary" style="width:100%;padding:14px;" onclick="messageAdminForDeposit()">
+                <i class="fa-brands fa-whatsapp"></i> Message Admin to Deposit
+            </button>
+            <p style="font-size:12px;color:var(--muted);margin-top:12px;line-height:1.45;text-align:center;">
+                WhatsApp will open with your details filled in. Send the message, complete payment as instructed by admin, then wait for your balance to update.
+            </p>
         </div>
     </section>
 
@@ -1645,6 +1639,8 @@ async function fetchUserBalance(userId) {
             // the user's account id is displayed, e.g. profile settings.
             const idInput = document.getElementById('myCustomerId');
             if (idInput && data.customer_id) idInput.value = data.customer_id;
+            const depId = document.getElementById('depositCustomerId');
+            if (depId && data.customer_id) depId.value = data.customer_id;
         }
     } catch(e) {}
 }
@@ -2372,38 +2368,37 @@ window.markAllNotifsRead = function() {
     showToast('Notifications marked as read', 'info');
 };
 
-window.processDeposit = async function() {
-    const provider = document.getElementById('depositProviderSelect').value;
-    const wallet = document.getElementById('depositWalletSelect').value;
-    const amount = parseFloat(document.getElementById('depositInput').value) || 0;
-    if (amount <= 0) return showToast('Enter valid deposit amount', 'error');
+window.messageAdminForDeposit = function() {
+    const ADMIN_WA = '14305583021';
+    const MIN = 2000;
+    const MAX = 200000;
 
-    showToast('Processing deposit request...', 'info');
-    await sleep(1000);
+    const amount = parseFloat(document.getElementById('depositInput')?.value) || 0;
+    if (amount < MIN) return showToast('Minimum deposit is ₦' + MIN.toLocaleString(), 'error');
+    if (amount > MAX) return showToast('Maximum deposit is ₦' + MAX.toLocaleString(), 'error');
 
-    if (wallet === 'usd') currentBalanceUsd += amount;
-    else currentBalanceNgn += amount;
-
-    if (supabaseClient && currentUserId) {
-        await supabaseClient.from('profiles').update({ balance: currentBalanceNgn, balance_usd: currentBalanceUsd }).eq('id', currentUserId);
+    let customerId = (document.getElementById('depositCustomerId')?.value || '').trim();
+    if (!customerId) {
+        customerId = (document.getElementById('myCustomerId')?.value || '').trim();
     }
-    updateBalanceDisplay();
+    if (!customerId || customerId === 'Loading...') {
+        return showToast('Customer ID not loaded yet. Open Profile once, then try again.', 'error');
+    }
 
-    const tx = {
-        id: Date.now(), type: 'deposit', title: `Deposit via ${provider}`,
-        subtitle: `Funded ${wallet.toUpperCase()} Wallet`,
-        amount: `${wallet === 'usd' ? '$' : '₦'}${amount.toLocaleString()}`,
-        date: new Date().toLocaleString(), status: 'Success',
-        paymentProvider: provider, channel: 'Deposit'
-    };
-    transactions.unshift(tx);
-    await saveTransaction(tx);
-    renderRecentActivity();
-    buildNotificationsFromActivity();
-    renderNotifications();
+    const msg =
+        'Good day Admin, I want to fund my Wallet.\n\n' +
+        'Here are my details:\n\n' +
+        'Customer ID: ' + customerId + '\n' +
+        'Amount: ₦' + amount.toLocaleString();
 
-    document.getElementById('depositInput').value = '';
-    showToast(`Deposit of ${wallet === 'usd' ? '$' : '₦'}${amount} complete!`, 'success');
+    const url = 'https://wa.me/' + ADMIN_WA + '?text=' + encodeURIComponent(msg);
+    window.open(url, '_blank');
+    showToast('Opening WhatsApp… Send the message to admin.', 'success');
+};
+
+window.processDeposit = function() {
+    // Legacy alias — manual deposit only
+    window.messageAdminForDeposit();
 };
 </script>
 </body>
