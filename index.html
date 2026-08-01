@@ -1648,18 +1648,51 @@ async function fetchUserBalance(userId) {
 async function fetchUserTransactions(userId) {
     if (!supabaseClient) return;
     try {
-        const { data } = await supabaseClient.from('transactions').select('*').eq('user_id', userId).order('created_at', {ascending: false}).limit(50);
+        const { data } = await supabaseClient
+            .from('transactions')
+            .select('*')
+            .eq('user_id', userId)
+            .order('created_at', { ascending: false })
+            .limit(100);
         if (data) {
-            transactions = data.map(tx => ({
-                id: tx.id, type: tx.type || 'deposit', title: tx.title || 'Transaction',
-                subtitle: tx.subtitle || '', amount: tx.amount || '₦0.00',
-                date: new Date(tx.created_at).toLocaleString(),
-                status: tx.status || 'Success',
-                paymentProvider: tx.payment_provider || 'MJ HUB', channel: tx.channel || 'Wallet'
-            }));
+            transactions = data.map(tx => {
+                const rawType = String(tx.type || '').toLowerCase();
+                const rawCat = String(tx.category || '').toLowerCase();
+                let type = rawType || 'deposit';
+
+                // Normalize so tabs work for old + new rows
+                if (['purchase', 'purchase_failed', 'logs'].includes(rawType) || rawCat === 'log') {
+                    type = 'log';
+                } else if (rawType === 'refund' || rawType === 'manual_deposit') {
+                    type = 'deposit';
+                } else if (rawType === 'sms' || rawCat === 'sms') {
+                    type = 'sms';
+                } else if (rawType === 'booster' || rawCat === 'booster') {
+                    type = 'booster';
+                } else if (rawType === 'conversion' || rawCat === 'conversion') {
+                    type = 'conversion';
+                } else if (rawType === 'deposit' || rawCat === 'deposit') {
+                    type = 'deposit';
+                } else if (rawType === 'log') {
+                    type = 'log';
+                }
+
+                return {
+                    id: tx.id,
+                    type,
+                    category: tx.category || type,
+                    title: tx.title || 'Transaction',
+                    subtitle: tx.subtitle || '',
+                    amount: tx.amount || (tx.amount_ngn != null ? '₦' + Number(tx.amount_ngn).toLocaleString() : '₦0.00'),
+                    date: new Date(tx.created_at).toLocaleString(),
+                    status: tx.status || 'Success',
+                    paymentProvider: tx.payment_provider || 'MJ HUB',
+                    channel: tx.channel || 'Wallet'
+                };
+            });
             renderRecentActivity();
         }
-    } catch(e) {}
+    } catch (e) {}
 }
 
 async function saveTransaction(tx) {
@@ -2295,7 +2328,16 @@ function renderHistoryList(filterType = 'all') {
 
     let items = transactions;
     if (filterType !== 'all') {
-        items = transactions.filter(t => t.type === filterType || (filterType === 'log' && t.type === 'logs'));
+        items = transactions.filter(t => {
+            const tType = String(t.type || '').toLowerCase();
+            if (filterType === 'log') {
+                return tType === 'log' || tType === 'logs' || tType === 'purchase' || tType === 'purchase_failed';
+            }
+            if (filterType === 'deposit') {
+                return tType === 'deposit' || tType === 'refund' || tType === 'manual_deposit';
+            }
+            return tType === filterType;
+        });
     }
 
     if (!items.length) {
@@ -2306,10 +2348,17 @@ function renderHistoryList(filterType = 'all') {
     container.innerHTML = items.map(t => {
         let iconClass = 'fa-cube';
         let boxClass = 'tx-blue';
-        if (t.type === 'deposit') { iconClass = 'fa-arrow-down'; boxClass = 'tx-green'; }
-        else if (t.type === 'sms') { iconClass = 'fa-phone'; boxClass = 'tx-orange'; }
-        else if (t.type === 'booster') { iconClass = 'fa-bolt'; boxClass = 'tx-blue'; }
-        else if (t.type === 'conversion') { iconClass = 'fa-right-left'; boxClass = 'tx-purple'; }
+        const tType = String(t.type || '').toLowerCase();
+        if (tType === 'deposit' || tType === 'refund') { iconClass = 'fa-arrow-down'; boxClass = 'tx-green'; }
+        else if (tType === 'sms') { iconClass = 'fa-phone'; boxClass = 'tx-orange'; }
+        else if (tType === 'booster') { iconClass = 'fa-bolt'; boxClass = 'tx-blue'; }
+        else if (tType === 'conversion') { iconClass = 'fa-right-left'; boxClass = 'tx-purple'; }
+        else if (tType === 'log' || tType === 'purchase') { iconClass = 'fa-cube'; boxClass = 'tx-blue'; }
+
+        const statusLower = String(t.status || '').toLowerCase();
+        let statusClass = 'badge-success';
+        if (statusLower.includes('fail')) statusClass = 'badge-pending';
+        else if (statusLower.includes('refund')) statusClass = 'badge-pending';
 
         return `
         <div class="transaction-card">
@@ -2322,7 +2371,7 @@ function renderHistoryList(filterType = 'all') {
             </div>
             <div class="transaction-right">
                 <div class="transaction-amount">${escapeHtml(t.amount)}</div>
-                <span class="badge-status badge-success">${escapeHtml(t.status || 'Success')}</span>
+                <span class="badge-status ${statusClass}">${escapeHtml(t.status || 'Success')}</span>
             </div>
         </div>`;
     }).join('');
