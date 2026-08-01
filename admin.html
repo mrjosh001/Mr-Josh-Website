@@ -287,8 +287,9 @@
             <div class="panel-header">
               <div class="panel-title">Product Catalog & Stock</div>
               <div style="display:flex;gap:8px;flex-wrap:wrap;">
-                <button class="btn btn-ghost btn-sm" onclick="syncProductsNow()"><i class="fas fa-sync"></i> Sync Fadded</button>
-                <button class="btn btn-ghost btn-sm" onclick="syncLogsDomainNow()"><i class="fas fa-sync"></i> Sync Logs Domain</button>
+                <button class="btn btn-ghost btn-sm" id="btnSyncFadded" onclick="syncProductsNow()"><i class="fas fa-sync"></i> Sync Fadded</button>
+                <button class="btn btn-ghost btn-sm" id="btnSyncLogsDomain" onclick="syncLogsDomainNow()"><i class="fas fa-sync"></i> Sync Logs Domain</button>
+                <button class="btn btn-primary btn-sm" id="btnSyncAll" onclick="syncAllSuppliersNow()"><i class="fas fa-sync"></i> Sync All</button>
                 <button class="btn btn-primary btn-sm" onclick="openProductModal()"><i class="fas fa-plus"></i> Add</button>
               </div>
             </div>
@@ -916,7 +917,24 @@ async function saveProduct() {
   }
 }
 
+function setSyncButtonLoading(btn, loading, idleHtml) {
+  if (!btn) return;
+  if (loading) {
+    btn.disabled = true;
+    btn.dataset.idleHtml = idleHtml || btn.innerHTML;
+    btn.innerHTML = '<i class="fas fa-sync fa-spin"></i> Syncing...';
+    btn.style.opacity = '0.85';
+  } else {
+    btn.disabled = false;
+    btn.innerHTML = btn.dataset.idleHtml || idleHtml || btn.innerHTML;
+    btn.style.opacity = '';
+  }
+}
+
 async function syncProductsNow() {
+  const btn = document.getElementById('btnSyncFadded');
+  const idle = '<i class="fas fa-sync"></i> Sync Fadded';
+  setSyncButtonLoading(btn, true, idle);
   try {
     const res = await fetch('/api/products');
     const data = await res.json();
@@ -924,10 +942,15 @@ async function syncProductsNow() {
     await loadProducts();
   } catch (e) {
     alert('Sync failed: ' + e.message);
+  } finally {
+    setSyncButtonLoading(btn, false, idle);
   }
 }
 
 async function syncLogsDomainNow() {
+  const btn = document.getElementById('btnSyncLogsDomain');
+  const idle = '<i class="fas fa-sync"></i> Sync Logs Domain';
+  setSyncButtonLoading(btn, true, idle);
   try {
     const res = await fetch('/api/products-logsdomain');
     const data = await res.json();
@@ -939,6 +962,45 @@ async function syncLogsDomainNow() {
     await loadProducts();
   } catch (e) {
     alert('Logs Domain sync failed: ' + e.message);
+  } finally {
+    setSyncButtonLoading(btn, false, idle);
+  }
+}
+
+async function syncAllSuppliersNow() {
+  const btn = document.getElementById('btnSyncAll');
+  const idle = '<i class="fas fa-sync"></i> Sync All';
+  setSyncButtonLoading(btn, true, idle);
+  const fBtn = document.getElementById('btnSyncFadded');
+  const lBtn = document.getElementById('btnSyncLogsDomain');
+  setSyncButtonLoading(fBtn, true, '<i class="fas fa-sync"></i> Sync Fadded');
+  setSyncButtonLoading(lBtn, true, '<i class="fas fa-sync"></i> Sync Logs Domain');
+  try {
+    const [fRes, lRes] = await Promise.all([
+      fetch('/api/products'),
+      fetch('/api/products-logsdomain')
+    ]);
+    const fadded = await fRes.json();
+    const ld = await lRes.json();
+    const lines = [];
+    if (fadded.success) {
+      lines.push(`Fadded: ${fadded.synced} (new ${fadded.new_products || 0}, updated ${fadded.updated_products || 0})`);
+    } else {
+      lines.push('Fadded failed: ' + (fadded.message || 'error'));
+    }
+    if (ld.success) {
+      lines.push(`Logs Domain: ${ld.synced} (new ${ld.new_products || 0}, updated ${ld.updated_products || 0})`);
+    } else {
+      lines.push('Logs Domain failed: ' + (ld.message || 'error'));
+    }
+    alert(lines.join('\n'));
+    await loadProducts();
+  } catch (e) {
+    alert('Sync All failed: ' + e.message);
+  } finally {
+    setSyncButtonLoading(btn, false, idle);
+    setSyncButtonLoading(fBtn, false, '<i class="fas fa-sync"></i> Sync Fadded');
+    setSyncButtonLoading(lBtn, false, '<i class="fas fa-sync"></i> Sync Logs Domain');
   }
 }
 
