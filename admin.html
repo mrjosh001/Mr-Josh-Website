@@ -472,7 +472,21 @@
 <script>
 const SUPABASE_URL = 'https://atczodlljmlayvldxfmv.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_dwbeKLcSG7-nfKzZz8x8Zw_U9FtwJTy';
-const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY, {
+  auth: {
+    persistSession: false,   // never save the session to browser storage —
+    autoRefreshToken: false, // admin must click "Sign In" every visit, full stop.
+    detectSessionInUrl: false
+  }
+});
+
+// One-time cleanup: if an admin was already logged in before this change
+// shipped, their session is still sitting in browser storage from the old
+// persistSession:true behavior. Clear it out so this device doesn't stay
+// silently authenticated as admin.
+(async () => {
+  try { await sb.auth.signOut({ scope: 'local' }); } catch (e) {}
+})();
 
 let allProducts = [];
 let allProfiles = [];
