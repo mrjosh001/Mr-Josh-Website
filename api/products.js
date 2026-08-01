@@ -223,12 +223,18 @@ export default async function handler(req, res) {
         .maybeSingle();
 
       if (existing) {
-        // EXISTING: only refresh supplier cost + stock (and availability).
-        // Never touch customer selling price, category, name, or description.
+        // EXISTING: refresh name/description + supplier cost + stock so the
+        // catalog always reflects what the supplier currently calls this
+        // product (protects against them renaming/reusing a listing).
+        // Your resale price and category are business decisions — those are
+        // still never touched here, only ever changed by you in the admin panel.
         updatedCount++;
         const { error } = await supabase
           .from('products')
           .update({
+            name: item.name,
+            description: cleanDescription,
+            display_description: displayDescription,
             supplier_price: supplierPrice,
             stock_quantity: stock,
             is_available: stock > 0,
