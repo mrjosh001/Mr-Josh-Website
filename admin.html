@@ -287,7 +287,8 @@
             <div class="panel-header">
               <div class="panel-title">Product Catalog & Stock</div>
               <div style="display:flex;gap:8px;flex-wrap:wrap;">
-                <button class="btn btn-ghost btn-sm" onclick="syncProductsNow()"><i class="fas fa-sync"></i> Sync</button>
+                <button class="btn btn-ghost btn-sm" onclick="syncProductsNow()"><i class="fas fa-sync"></i> Sync Fadded</button>
+                <button class="btn btn-ghost btn-sm" onclick="syncLogsDomainNow()"><i class="fas fa-sync"></i> Sync Logs Domain</button>
                 <button class="btn btn-primary btn-sm" onclick="openProductModal()"><i class="fas fa-plus"></i> Add</button>
               </div>
             </div>
@@ -919,10 +920,25 @@ async function syncProductsNow() {
   try {
     const res = await fetch('/api/products');
     const data = await res.json();
-    alert(data.success ? `Sync complete\nSynced: ${data.synced}\nNew: ${data.new_products}\nUpdated: ${data.updated_products}` : ('Sync failed: ' + (data.message || 'Unknown error')));
+    alert(data.success ? `Fadded sync complete\nSynced: ${data.synced}\nNew: ${data.new_products}\nUpdated: ${data.updated_products}` : ('Sync failed: ' + (data.message || 'Unknown error')));
     await loadProducts();
   } catch (e) {
     alert('Sync failed: ' + e.message);
+  }
+}
+
+async function syncLogsDomainNow() {
+  try {
+    const res = await fetch('/api/products-logsdomain');
+    const data = await res.json();
+    alert(
+      data.success
+        ? `Logs Domain sync complete\nSynced: ${data.synced}\nNew: ${data.new_products || 0}\nUpdated: ${data.updated_products || 0}`
+        : ('Logs Domain sync failed: ' + (data.message || 'Unknown error'))
+    );
+    await loadProducts();
+  } catch (e) {
+    alert('Logs Domain sync failed: ' + e.message);
   }
 }
 
