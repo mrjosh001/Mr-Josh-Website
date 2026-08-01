@@ -290,6 +290,7 @@
                 <button class="btn btn-ghost btn-sm" id="btnSyncFadded" onclick="syncProductsNow()"><i class="fas fa-sync"></i> Sync Fadded</button>
                 <button class="btn btn-ghost btn-sm" id="btnSyncLogsDomain" onclick="syncLogsDomainNow()"><i class="fas fa-sync"></i> Sync Logs Domain</button>
                 <button class="btn btn-primary btn-sm" id="btnSyncAll" onclick="syncAllSuppliersNow()"><i class="fas fa-sync"></i> Sync All</button>
+                <button class="btn btn-ghost btn-sm" onclick="openRestockModal()"><i class="fas fa-upload"></i> Restock Manual</button>
                 <button class="btn btn-primary btn-sm" onclick="openProductModal()"><i class="fas fa-plus"></i> Add</button>
               </div>
             </div>
@@ -374,6 +375,11 @@
       <input type="hidden" id="editProductId" />
       <div class="field"><label>Product Name</label><input type="text" id="pName" /></div>
       <div class="field">
+        <label>Product Key</label>
+        <input type="text" id="pProductKey" placeholder="e.g. manual_mail_com" />
+        <div class="price-note">For a manually-stocked product, start this with "manual_" — that's how the site knows to pull logs from your Supabase inventory instead of a supplier. Leave blank to auto-generate. Stays fixed once a product is saved.</div>
+      </div>
+      <div class="field">
         <label>Category</label>
         <select id="pCategory" onchange="handleCategorySelectChange()"></select>
         <input type="text" id="pCategoryNew" placeholder="New category name" class="hidden" style="margin-top:8px;" />
@@ -401,6 +407,33 @@
       </div>
     </div>
   </div>
+
+  <div id="restockModal" class="modal-backdrop hidden">
+    <div class="modal">
+      <h3>Restock Manual Product</h3>
+      <div class="field">
+        <label>Product</label>
+        <select id="rsProductKey"></select>
+        <div class="price-note">Only products with source "manual" or a product_key starting with "manual_" are listed here. Create the product first (Add button) if it's not showing up.</div>
+      </div>
+      <div class="field">
+        <label>Current stock</label>
+        <input type="text" id="rsCurrentStock" disabled />
+      </div>
+      <div class="field">
+        <label>Paste logs — one per line (e.g. user1@mail.com:pass1)</label>
+        <textarea id="rsPasteBox" rows="10" placeholder="user1@mail.com:pass1&#10;user2@mail.com:pass2&#10;user3@mail.com:pass3"></textarea>
+        <div class="price-note" id="rsLineCount">0 lines</div>
+      </div>
+      <div id="restockModalError" class="error-msg"></div>
+      <div id="restockModalResult" style="font-size:13px;color:var(--success,#34d399);"></div>
+      <div class="modal-actions">
+        <button class="btn btn-ghost" onclick="closeRestockModal()">Close</button>
+        <button class="btn btn-primary btn-sm" id="rsUploadBtn" onclick="uploadManualStock()"><i class="fas fa-upload"></i> Upload logs</button>
+      </div>
+    </div>
+  </div>
+
 
   <div id="orderModal" class="modal-backdrop hidden">
     <div class="modal">
@@ -827,6 +860,8 @@ function openProductModal(product) {
     document.getElementById('productModalTitle').textContent = 'Edit Product';
     document.getElementById('editProductId').value = product.id || product.product_key || '';
     document.getElementById('pName').value = product.name || '';
+    document.getElementById('pProductKey').value = product.product_key || '';
+    document.getElementById('pProductKey').disabled = true; // stays fixed once created (Stage 2)
     populateProductCategoryDropdown(product.category || '');
     document.getElementById('pDesc').value = stripHtml(product.display_description || product.description || '');
     document.getElementById('pSupplierPrice').value = product.supplier_price ?? 0;
@@ -837,6 +872,8 @@ function openProductModal(product) {
     document.getElementById('productModalTitle').textContent = 'Add Product';
     document.getElementById('editProductId').value = '';
     document.getElementById('pName').value = '';
+    document.getElementById('pProductKey').value = '';
+    document.getElementById('pProductKey').disabled = false;
     populateProductCategoryDropdown('OTHER');
     document.getElementById('pDesc').value = '';
     document.getElementById('pSupplierPrice').value = 0;
@@ -855,6 +892,7 @@ function editProduct(id) {
 async function saveProduct() {
   const id = document.getElementById('editProductId').value;
   const name = document.getElementById('pName').value.trim();
+  const enteredProductKey = document.getElementById('pProductKey').value.trim();
   const categorySelectVal = document.getElementById('pCategory').value;
   const category = (categorySelectVal === '__new__'
     ? document.getElementById('pCategoryNew').value.trim()
@@ -871,6 +909,9 @@ async function saveProduct() {
     errEl.textContent = 'Enter a name for the new category.'; return;
   }
   if (isNaN(price) || price < 0) { errEl.textContent = 'Enter a valid selling price.'; return; }
+  if (enteredProductKey && /\s/.test(enteredProductKey)) {
+    errEl.textContent = 'Product Key cannot contain spaces — use underscores instead.'; return;
+  }
 
   const existing = id
     ? allProducts.find(x => String(x.id) === String(id) || String(x.product_key) === String(id))
@@ -879,7 +920,7 @@ async function saveProduct() {
   const body = {
     action: id ? 'update' : 'insert',
     id: existing?.id || (id || undefined),
-    product_key: existing?.product_key || undefined,
+    product_key: existing?.product_key || enteredProductKey || undefined,
     name,
     category,
     description: description || null,
@@ -1001,6 +1042,100 @@ async function syncAllSuppliersNow() {
     setSyncButtonLoading(btn, false, idle);
     setSyncButtonLoading(fBtn, false, '<i class="fas fa-sync"></i> Sync Fadded');
     setSyncButtonLoading(lBtn, false, '<i class="fas fa-sync"></i> Sync Logs Domain');
+  }
+}
+
+// -------------------------------------------------------------------------
+// STAGE 6 — RESTOCK MANUAL PRODUCTS (bulk-paste credentials)
+// -------------------------------------------------------------------------
+function isManualProductRow(p) {
+  if (!p) return false;
+  if (p.source && String(p.source).trim().toLowerCase() === 'manual') return true;
+  return String(p.product_key || '').startsWith('manual_');
+}
+
+function openRestockModal() {
+  const select = document.getElementById('rsProductKey');
+  const manualProducts = allProducts.filter(isManualProductRow);
+
+  if (!manualProducts.length) {
+    select.innerHTML = '<option value="">No manual products yet — add one first (Stage 2)</option>';
+  } else {
+    select.innerHTML = manualProducts
+      .map(p => `<option value="${p.product_key}">${p.name} (${p.product_key})</option>`)
+      .join('');
+  }
+
+  document.getElementById('rsPasteBox').value = '';
+  document.getElementById('rsLineCount').textContent = '0 lines';
+  document.getElementById('restockModalError').textContent = '';
+  document.getElementById('restockModalResult').textContent = '';
+  updateRestockCurrentStock();
+  select.onchange = updateRestockCurrentStock;
+  document.getElementById('rsPasteBox').oninput = function () {
+    const n = this.value.split(/\r?\n/).map(l => l.trim()).filter(Boolean).length;
+    document.getElementById('rsLineCount').textContent = n + ' line' + (n === 1 ? '' : 's');
+  };
+
+  document.getElementById('restockModal').classList.remove('hidden');
+}
+
+function updateRestockCurrentStock() {
+  const key = document.getElementById('rsProductKey').value;
+  const p = allProducts.find(x => x.product_key === key);
+  document.getElementById('rsCurrentStock').value = p ? `${p.stock_quantity || 0} available` : '—';
+}
+
+function closeRestockModal() {
+  document.getElementById('restockModal').classList.add('hidden');
+}
+
+async function uploadManualStock() {
+  const errEl = document.getElementById('restockModalError');
+  const resultEl = document.getElementById('restockModalResult');
+  errEl.textContent = '';
+  resultEl.textContent = '';
+
+  const product_key = document.getElementById('rsProductKey').value;
+  const text = document.getElementById('rsPasteBox').value;
+
+  if (!product_key) { errEl.textContent = 'Choose a manual product first.'; return; }
+  if (!text.trim()) { errEl.textContent = 'Paste at least one credential line.'; return; }
+
+  const btn = document.getElementById('rsUploadBtn');
+  const idleHtml = btn.innerHTML;
+  btn.disabled = true;
+  btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Uploading...';
+
+  try {
+    const headers = { 'Content-Type': 'application/json' };
+    const { data: { session } } = await sb.auth.getSession();
+    if (session?.access_token) headers['Authorization'] = 'Bearer ' + session.access_token;
+
+    const res = await fetch('/api/admin-inventory', {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ action: 'bulk_upload', product_key, text })
+    });
+    const data = await res.json();
+
+    if (!res.ok || !data.success) {
+      errEl.textContent = data.message || 'Upload failed.';
+      return;
+    }
+
+    resultEl.textContent = `Uploaded ${data.data.inserted} new log${data.data.inserted === 1 ? '' : 's'}`
+      + (data.data.skipped_duplicates ? ` (skipped ${data.data.skipped_duplicates} duplicate${data.data.skipped_duplicates === 1 ? '' : 's'})` : '')
+      + `. Stock now: ${data.data.available_stock}.`;
+    document.getElementById('rsPasteBox').value = '';
+    document.getElementById('rsLineCount').textContent = '0 lines';
+    await loadProducts();
+    updateRestockCurrentStock();
+  } catch (e) {
+    errEl.textContent = 'Network error: ' + e.message;
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = idleHtml;
   }
 }
 
