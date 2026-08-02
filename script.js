@@ -328,18 +328,26 @@ async function handleLogout() {
     window.location.href = 'landing.html';
 }
 
+let pendingAvatarFile = null;
+
 function handleAvatarUpload(event) {
     const file = event.target.files[0];
-    if(file) {
-        const reader = new FileReader();
-        reader.onload = function(e) {
-            const base64Img = e.target.result;
-            userData.avatarUrl = base64Img;
-            document.getElementById('profileAvatarInitial').innerHTML = `<img src="${base64Img}" alt="Avatar">`;
-            document.getElementById('headerAvatarText').innerHTML = `<img src="${base64Img}" alt="Avatar">`;
-        };
-        reader.readAsDataURL(file);
+    if (!file) return;
+    if (file.size > 2 * 1024 * 1024) {
+        alert('Image must be under 2MB.');
+        event.target.value = '';
+        return;
     }
+    // Keep the actual file for upload on save; only use a local preview
+    // (never sent anywhere) for instant visual feedback.
+    pendingAvatarFile = file;
+    const reader = new FileReader();
+    reader.onload = function(e) {
+        const previewSrc = e.target.result;
+        document.getElementById('profileAvatarInitial').innerHTML = `<img src="${previewSrc}" alt="Avatar">`;
+        document.getElementById('headerAvatarText').innerHTML = `<img src="${previewSrc}" alt="Avatar">`;
+    };
+    reader.readAsDataURL(file);
 }
 
 async function saveProfileSettingsData() {
@@ -356,6 +364,30 @@ async function saveProfileSettingsData() {
     }
 
     if (supabaseClient) {
+        // If a new photo was picked, upload it to Storage first and use
+        // the resulting public URL — never store raw image data in
+        // user_metadata, since that gets embedded in the auth token.
+        if (pendingAvatarFile) {
+            const { data: { session } } = await supabaseClient.auth.getSession();
+            if (session) {
+                const ext = (pendingAvatarFile.name.split('.').pop() || 'jpg').toLowerCase();
+                const path = `${session.user.id}/avatar.${ext}`;
+                const { error: uploadError } = await supabaseClient.storage
+                    .from('avatars')
+                    .upload(path, pendingAvatarFile, { upsert: true, cacheControl: '3600' });
+                if (uploadError) {
+                    alert('Error uploading photo: ' + uploadError.message);
+                    return;
+                }
+                const { data: publicUrlData } = supabaseClient.storage
+                    .from('avatars')
+                    .getPublicUrl(path);
+                // Cache-bust so the new photo shows immediately everywhere.
+                userData.avatarUrl = `${publicUrlData.publicUrl}?v=${Date.now()}`;
+                pendingAvatarFile = null;
+            }
+        }
+
         const { error } = await supabaseClient.auth.updateUser({
             data: { 
                 full_name: name, 
