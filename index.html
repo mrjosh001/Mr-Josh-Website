@@ -1253,6 +1253,7 @@ body::before {
 
 <!-- ORDER RECEIPT / VIEW DETAILS -->
 <div class="currency-modal" id="orderReceiptModal">
+
     <div class="receipt-modal-card">
         <div class="rm-header">
             <div style="text-align:left;">
@@ -1279,6 +1280,17 @@ body::before {
             <div class="receipt-cred-box" id="receiptCredBox"></div>
             <button class="btn-view-orders" id="receiptFooterBtn" onclick="closeOrderReceipt(); switchSection('orders');">View My Orders</button>
         </div>
+    </div>
+</div>
+
+<!-- NEW NOTIFICATION POPUP (shown automatically on login if there are unread notifications) -->
+<div class="currency-modal" id="notifPopupModal">
+    <div class="currency-modal-card" style="max-width:380px;">
+        <div class="converter-pro-header">
+            <div class="converter-pro-title"><span><i class="fa-solid fa-bell"></i></span> <span id="notifPopupTitle">New Notification</span></div>
+        </div>
+        <div id="notifPopupList" style="display:flex;flex-direction:column;gap:12px;max-height:50vh;overflow-y:auto;margin-bottom:16px;"></div>
+        <button class="btn-sm-primary" style="width:100%;padding:14px;" onclick="dismissNotifPopup()">Got it</button>
     </div>
 </div>
 
@@ -1349,6 +1361,8 @@ document.addEventListener('DOMContentLoaded', async () => {
                 await fetchUserOrders(currentUserId);
                 await fetchUserNotifications();
                 renderNotifications();
+                showNotificationPopupIfUnread();
+                startInactivityWatcher();
             } else {
                 // No active session — this page is the signed-in dashboard,
                 // so a visitor who isn't logged in must never see it. Send
@@ -1780,17 +1794,47 @@ function renderRecentActivity() {
 }
 
 window.handleLogout = async function() {
+    stopInactivityWatcher();
     if (supabaseClient) await supabaseClient.auth.signOut();
     localStorage.clear();
     window.location.href = 'landing.html';
 };
 
+// Auto sign-out after 10 minutes of no activity on the dashboard — same
+// policy as the admin panel. A page reload doesn't lose the session
+// (Supabase's default localStorage persistence still applies), only real
+// inactivity does.
+const USER_INACTIVITY_LIMIT_MS = 10 * 60 * 1000;
+let userInactivityTimer = null;
+function startInactivityWatcher() {
+    const resetTimer = () => {
+        if (userInactivityTimer) clearTimeout(userInactivityTimer);
+        userInactivityTimer = setTimeout(async () => {
+            showToast('Signed out due to inactivity', 'info');
+            if (supabaseClient) await supabaseClient.auth.signOut();
+            window.location.href = 'landing.html';
+        }, USER_INACTIVITY_LIMIT_MS);
+    };
+    ['mousemove', 'mousedown', 'keydown', 'scroll', 'touchstart', 'click'].forEach(evt => {
+        document.addEventListener(evt, resetTimer, { passive: true });
+    });
+    resetTimer();
+}
+function stopInactivityWatcher() {
+    if (userInactivityTimer) clearTimeout(userInactivityTimer);
+    userInactivityTimer = null;
+}
+
+let pendingAvatarFile = null;
+
 window.handleAvatarUpload = function(e) {
     const file = e.target.files[0];
     if (!file || file.size > 2 * 1024 * 1024) return showToast('Image must be under 2MB', 'error');
+    // Keep the actual file for upload on save; only use a local preview
+    // (never sent anywhere) for instant visual feedback.
+    pendingAvatarFile = file;
     const reader = new FileReader();
     reader.onload = (ev) => {
-        userData.avatarUrl = ev.target.result;
         safeSetHTML('profileAvatarInitial', `<img src="${ev.target.result}">`);
         safeSetHTML('headerAvatarText', `<img src="${ev.target.result}">`);
         showToast('Avatar updated. Save to keep changes.', 'info');
@@ -1802,6 +1846,26 @@ window.saveProfileSettingsData = async function() {
     const name = document.getElementById('profileNameInput').value.trim();
     if (!name) return showToast('Enter your name', 'error');
     if (supabaseClient) {
+        // If a new photo was picked, upload it to Storage first and use
+        // the resulting public URL — never store raw image data in
+        // user_metadata, since that gets embedded in the auth token.
+        if (pendingAvatarFile) {
+            const { data: { session } } = await supabaseClient.auth.getSession();
+            if (session) {
+                const ext = (pendingAvatarFile.name.split('.').pop() || 'jpg').toLowerCase();
+                const path = `${session.user.id}/avatar.${ext}`;
+                const { error: uploadError } = await supabaseClient.storage
+                    .from('avatars')
+                    .upload(path, pendingAvatarFile, { upsert: true, cacheControl: '3600' });
+                if (uploadError) return showToast('Error uploading photo: ' + uploadError.message, 'error');
+                const { data: publicUrlData } = supabaseClient.storage
+                    .from('avatars')
+                    .getPublicUrl(path);
+                // Cache-bust so the new photo shows immediately everywhere.
+                userData.avatarUrl = `${publicUrlData.publicUrl}?v=${Date.now()}`;
+                pendingAvatarFile = null;
+            }
+        }
         const { error } = await supabaseClient.auth.updateUser({
             data: { full_name: name, avatar_url: userData.avatarUrl }
         });
@@ -2518,6 +2582,29 @@ async function markVisibleNotificationsRead() {
 window.markAllNotifsRead = async function() {
     await markVisibleNotificationsRead();
     showToast('Notifications marked as read', 'info');
+};
+
+// Pops up automatically right after login if there's anything unread — this
+// is separate from the bell dropdown (which only marks things read once the
+// user opens it). Once dismissed here, those notifications are marked read,
+// so the popup won't show them again on the next sign-in.
+function showNotificationPopupIfUnread() {
+    const unread = userNotifications.filter(n => !n.read);
+    if (!unread.length) return;
+
+    document.getElementById('notifPopupTitle').textContent = unread.length === 1 ? 'New Notification' : `${unread.length} New Notifications`;
+    document.getElementById('notifPopupList').innerHTML = unread.map(n => `
+        <div style="background:var(--bg);border:1px solid var(--border);border-radius:14px;padding:14px;">
+            <div style="font-weight:800;font-size:14px;margin-bottom:4px;">${escapeHtml(n.title)}</div>
+            <div style="color:var(--muted);font-size:13px;line-height:1.5;">${escapeHtml(n.text || '')}</div>
+            <div style="color:var(--muted);font-size:11px;margin-top:6px;">${escapeHtml(formatNotifTime(n.time))}</div>
+        </div>`).join('');
+    document.getElementById('notifPopupModal').classList.add('active');
+}
+
+window.dismissNotifPopup = async function() {
+    document.getElementById('notifPopupModal').classList.remove('active');
+    await markVisibleNotificationsRead();
 };
 
 // Paystack PUBLIC key — safe to expose in frontend code (this is how
