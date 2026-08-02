@@ -767,7 +767,7 @@ footer a:hover { color: var(--primary); }
       <div class="support-status"><span class="status-dot"></span> Support online 24/7</div>
     </div>
     <div class="support-body">
-      <a href="https://wa.me/234XXXXXXXXXX" target="_blank" class="channel">
+      <a href="#" id="landingWaLink" target="_blank" class="channel">
         <div class="channel-icon wa">💬</div>
         <div><h4>WhatsApp</h4><p>Chat with us on WhatsApp</p></div>
       </a>
@@ -795,6 +795,36 @@ footer a:hover { color: var(--primary); }
 })();
 
 /* ========== LIVE STOCK TICKER ========== */
+(async function() {
+  // Fills in the WhatsApp support link with the new complaint number and
+  // template. If this visitor happens to already be signed in (e.g. they
+  // bookmarked the landing page), their Customer ID is pre-filled the same
+  // way it is on the dashboard; otherwise the link still works, just
+  // without a Customer ID line, since we don't know one for an anonymous visitor.
+  const SUPPORT_WA_NUMBER = '14305583021';
+  const link = document.getElementById('landingWaLink');
+  if (!link) return;
+
+  function buildAndSetLink(customerId) {
+    const idPart = customerId ? customerId : 'Not signed in';
+    const message = `Hello Admin, I've a complaint.\n\nCustomer ID: ${idPart}\nComplaint: `;
+    link.href = `https://wa.me/${SUPPORT_WA_NUMBER}?text=${encodeURIComponent(message)}`;
+  }
+
+  buildAndSetLink(null); // safe default immediately, upgraded below if signed in
+
+  try {
+    const SUPABASE_URL = 'https://atczodlljmlayvldxfmv.supabase.co';
+    const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImF0Y3pvZGxsam1sYXl2bGR4Zm12Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODUwNzUyMzgsImV4cCI6MjEwMDY1MTIzOH0.ufthD-p7BmeD_B7xyuMM6PNPL8DmcL4AtRYgg-MuoLI';
+    const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+    const { data: { session } } = await sb.auth.getSession();
+    if (session) {
+      const { data: profile } = await sb.from('profiles').select('customer_id').eq('id', session.user.id).maybeSingle();
+      if (profile?.customer_id) buildAndSetLink(profile.customer_id);
+    }
+  } catch (e) { /* anonymous visitor — the safe default link above still works */ }
+})();
+
 (async function() {
   const SUPABASE_URL = 'https://atczodlljmlayvldxfmv.supabase.co';
   const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImF0Y3pvZGxsam1sYXl2bGR4Zm12Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODUwNzUyMzgsImV4cCI6MjEwMDY1MTIzOH0.ufthD-p7BmeD_B7xyuMM6PNPL8DmcL4AtRYgg-MuoLI';
