@@ -558,6 +558,12 @@
                 window.history.replaceState({}, document.title, window.location.pathname);
             }
 
+            if (urlParams.get('banned') === '1') {
+                switchTab('signin');
+                showBannedError();
+                window.history.replaceState({}, document.title, window.location.pathname);
+            }
+
             supabaseClient.auth.onAuthStateChange(async (event, session) => {
                 if (event === 'PASSWORD_RECOVERY') {
                     switchTab('updatePassword');
@@ -635,6 +641,22 @@
             errorEl.classList.remove('hidden');
         }
 
+        // Supabase returns a 403 with a message containing "banned" when a
+        // banned user tries to sign in via password grant. Give those users
+        // a clear explanation instead of a generic auth error, with a way
+        // to reach support.
+        function isBannedError(error) {
+            if (!error) return false;
+            const msg = (error.message || error.error_description || '').toLowerCase();
+            return msg.includes('banned');
+        }
+
+        function showBannedError() {
+            const errorEl = document.getElementById('errorContainer');
+            errorEl.innerHTML = 'You have been banned from MJ HUB. If you believe this is a mistake, please <a href="support.html" style="color:inherit;font-weight:700;text-decoration:underline;">contact support</a>.';
+            errorEl.classList.remove('hidden');
+        }
+
         function showSuccess(message) {
             const successEl = document.getElementById('successContainer');
             successEl.innerText = message;
@@ -656,8 +678,33 @@
             }
 
             if (error) {
-                showError(formatAuthError(error));
+                if (isBannedError(error)) {
+                    showBannedError();
+                } else {
+                    showError(formatAuthError(error));
+                }
                 return;
+            }
+
+            // Belt-and-suspenders: even if the auth-level ban somehow let a
+            // session through (e.g. an existing token that hasn't refreshed
+            // yet), check the profile flag we mirror on ban/unban and block
+            // access here too.
+            try {
+                const { data: profile } = await supabaseClient
+                    .from('profiles')
+                    .select('is_banned')
+                    .eq('id', data.user.id)
+                    .maybeSingle();
+                if (profile && profile.is_banned) {
+                    await supabaseClient.auth.signOut();
+                    showBannedError();
+                    return;
+                }
+            } catch (e) {
+                // If this check fails for any reason, don't block a
+                // legitimate sign-in over it — the auth-level ban above is
+                // the real enforcement.
             }
 
             if (rememberMe) {
