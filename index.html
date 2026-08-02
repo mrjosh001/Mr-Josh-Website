@@ -960,6 +960,16 @@ body::before {
                 </div>
                 <div class="profile-menu-arrow">›</div>
             </div>
+            <div class="profile-menu-item" onclick="openDeleteAccountModal()">
+                <div class="profile-menu-left">
+                    <div class="profile-menu-icon" style="background:rgba(239,68,68,0.15);color:var(--danger-color);"><i class="fa-solid fa-trash"></i></div>
+                    <div class="profile-menu-info">
+                        <h4 style="color:var(--danger-color);">Delete Account</h4>
+                        <p>Permanently remove your account and data</p>
+                    </div>
+                </div>
+                <div class="profile-menu-arrow">›</div>
+            </div>
         </div>
     </section>
 
@@ -1117,6 +1127,24 @@ body::before {
             <input type="password" id="confirmPasswordInput" placeholder="••••••••">
         </div>
         <button class="btn-sm-primary" style="width:100%;padding:14px;" onclick="submitNewPassword()">Update Password</button>
+    </div>
+</div>
+
+<div class="currency-modal" id="deleteAccountModal">
+    <div class="currency-modal-card">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;">
+            <div style="font-size:18px;font-weight:800;color:var(--danger-color);">Delete Account</div>
+            <button onclick="closeDeleteAccountModal()" style="background:var(--bg-main);border:1px solid var(--border-color);width:32px;height:32px;border-radius:50%;cursor:pointer;color:var(--text-main);">✕</button>
+        </div>
+        <p class="helper-text" style="margin-bottom:14px;">
+            This permanently deletes your account, profile, and login — your order history stays on record for support purposes, but you'll lose access to it. This cannot be undone.
+        </p>
+        <div class="form-group">
+            <label>Type <strong>DELETE</strong> to confirm</label>
+            <input type="text" id="deleteAccountConfirmInput" placeholder="DELETE" autocomplete="off">
+        </div>
+        <div id="deleteAccountError" style="display:none;margin-bottom:10px;color:var(--danger-color);font-size:14px;"></div>
+        <button class="btn-sm-primary" style="width:100%;padding:14px;background:var(--danger-color);" onclick="confirmDeleteAccount(event)">Permanently Delete My Account</button>
     </div>
 </div>
 
@@ -1354,6 +1382,26 @@ document.addEventListener('DOMContentLoaded', async () => {
         try {
             const { data: { session } } = await supabaseClient.auth.getSession();
             if (session) {
+                // Belt-and-suspenders: Supabase's own auth-level ban already
+                // blocks sign-in and gets enforced on token refresh, but a
+                // still-valid cached session could otherwise slip through
+                // for a short window right after an admin bans someone.
+                // Check the mirrored profile flag here too and kick them out
+                // immediately if it's set.
+                try {
+                    const { data: banCheck } = await supabaseClient
+                        .from('profiles')
+                        .select('is_banned')
+                        .eq('id', session.user.id)
+                        .maybeSingle();
+                    if (banCheck && banCheck.is_banned) {
+                        await supabaseClient.auth.signOut();
+                        localStorage.clear();
+                        window.location.href = 'auth.html?banned=1';
+                        return;
+                    }
+                } catch (e) {}
+
                 currentUserId = session.user.id;
                 await initUserData(session.user);
                 await fetchUserBalance(currentUserId);
@@ -1825,16 +1873,12 @@ function stopInactivityWatcher() {
     userInactivityTimer = null;
 }
 
-let pendingAvatarFile = null;
-
 window.handleAvatarUpload = function(e) {
     const file = e.target.files[0];
     if (!file || file.size > 2 * 1024 * 1024) return showToast('Image must be under 2MB', 'error');
-    // Keep the actual file for upload on save; only use a local preview
-    // (never sent anywhere) for instant visual feedback.
-    pendingAvatarFile = file;
     const reader = new FileReader();
     reader.onload = (ev) => {
+        userData.avatarUrl = ev.target.result;
         safeSetHTML('profileAvatarInitial', `<img src="${ev.target.result}">`);
         safeSetHTML('headerAvatarText', `<img src="${ev.target.result}">`);
         showToast('Avatar updated. Save to keep changes.', 'info');
@@ -1846,26 +1890,6 @@ window.saveProfileSettingsData = async function() {
     const name = document.getElementById('profileNameInput').value.trim();
     if (!name) return showToast('Enter your name', 'error');
     if (supabaseClient) {
-        // If a new photo was picked, upload it to Storage first and use
-        // the resulting public URL — never store raw image data in
-        // user_metadata, since that gets embedded in the auth token.
-        if (pendingAvatarFile) {
-            const { data: { session } } = await supabaseClient.auth.getSession();
-            if (session) {
-                const ext = (pendingAvatarFile.name.split('.').pop() || 'jpg').toLowerCase();
-                const path = `${session.user.id}/avatar.${ext}`;
-                const { error: uploadError } = await supabaseClient.storage
-                    .from('avatars')
-                    .upload(path, pendingAvatarFile, { upsert: true, cacheControl: '3600' });
-                if (uploadError) return showToast('Error uploading photo: ' + uploadError.message, 'error');
-                const { data: publicUrlData } = supabaseClient.storage
-                    .from('avatars')
-                    .getPublicUrl(path);
-                // Cache-bust so the new photo shows immediately everywhere.
-                userData.avatarUrl = `${publicUrlData.publicUrl}?v=${Date.now()}`;
-                pendingAvatarFile = null;
-            }
-        }
         const { error } = await supabaseClient.auth.updateUser({
             data: { full_name: name, avatar_url: userData.avatarUrl }
         });
@@ -1890,6 +1914,71 @@ window.submitNewPassword = async function() {
     }
     showToast('Password updated!', 'success');
     closeChangePasswordModal();
+};
+
+window.openDeleteAccountModal = function() {
+    const input = document.getElementById('deleteAccountConfirmInput');
+    const errEl = document.getElementById('deleteAccountError');
+    if (input) input.value = '';
+    if (errEl) { errEl.style.display = 'none'; errEl.innerText = ''; }
+    document.getElementById('deleteAccountModal').classList.add('active');
+};
+window.closeDeleteAccountModal = function() { document.getElementById('deleteAccountModal').classList.remove('active'); };
+
+window.confirmDeleteAccount = async function(evt) {
+    const errEl = document.getElementById('deleteAccountError');
+    const typed = (document.getElementById('deleteAccountConfirmInput').value || '').trim();
+    errEl.style.display = 'none';
+    errEl.innerText = '';
+
+    if (typed !== 'DELETE') {
+        errEl.innerText = 'Type DELETE (all caps) to confirm.';
+        errEl.style.display = 'block';
+        return;
+    }
+    if (!supabaseClient || !currentUserId) {
+        errEl.innerText = 'You must be signed in to delete your account.';
+        errEl.style.display = 'block';
+        return;
+    }
+
+    const btn = evt?.target;
+    if (btn) { btn.disabled = true; btn.textContent = 'Deleting…'; }
+
+    try {
+        const { data: { session } } = await supabaseClient.auth.getSession();
+        if (!session?.access_token) {
+            errEl.innerText = 'Your session has expired. Please sign in again and retry.';
+            errEl.style.display = 'block';
+            if (btn) { btn.disabled = false; btn.textContent = 'Permanently Delete My Account'; }
+            return;
+        }
+
+        const res = await fetch('/api/delete-account', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': 'Bearer ' + session.access_token
+            }
+        });
+        const data = await res.json();
+
+        if (!res.ok || !data.success) {
+            errEl.innerText = data.message || 'Could not delete your account. Please try again or contact support.';
+            errEl.style.display = 'block';
+            if (btn) { btn.disabled = false; btn.textContent = 'Permanently Delete My Account'; }
+            return;
+        }
+
+        stopInactivityWatcher();
+        await supabaseClient.auth.signOut();
+        localStorage.clear();
+        window.location.href = 'landing.html';
+    } catch (e) {
+        errEl.innerText = 'Network error: ' + e.message;
+        errEl.style.display = 'block';
+        if (btn) { btn.disabled = false; btn.textContent = 'Permanently Delete My Account'; }
+    }
 };
 
 window.copyIdToClipboard = function() {
