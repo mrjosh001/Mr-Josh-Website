@@ -1140,7 +1140,7 @@ function openRestockModal() {
     select.innerHTML = '<option value="">No manual products yet — add one first (Stage 2)</option>';
   } else {
     select.innerHTML = manualProducts
-      .map(p => `<option value="${p.product_key}">${p.name} (${p.product_key})</option>`)
+      .map(p => `<option value="${escapeHtml(p.product_key)}">${escapeHtml(p.name)} (${escapeHtml(p.product_key)})</option>`)
       .join('');
   }
 
@@ -1185,16 +1185,35 @@ async function uploadManualStock() {
   btn.disabled = true;
   btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Uploading...';
 
+  let step = 'reading session';
   try {
     const headers = { 'Content-Type': 'application/json' };
-    const { data: { session } } = await sb.auth.getSession();
-    if (session?.access_token) headers['Authorization'] = 'Bearer ' + session.access_token;
+    let token = null;
+    try {
+      const { data } = await sb.auth.getSession();
+      token = data?.session?.access_token || null;
+    } catch (sessErr) {
+      token = null; // fall through without a token rather than blocking the whole upload
+    }
+    // Safari's fetch() strictly validates header values and throws an opaque
+    // "The string did not match the expected pattern" TypeError on anything
+    // it doesn't like (e.g. mid-refresh session weirdness) — Chrome doesn't
+    // enforce this as strictly, which is why this only shows up on iPhone.
+    // Only attach the token if it actually looks like a real JWT (three
+    // dot-separated segments, no stray whitespace) so a bad value never
+    // reaches fetch() in the first place.
+    if (token && /^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/.test(token.trim())) {
+      headers['Authorization'] = 'Bearer ' + token.trim();
+    }
 
+    step = 'uploading';
     const res = await fetch('/api/admin-inventory', {
       method: 'POST',
       headers,
       body: JSON.stringify({ action: 'bulk_upload', product_key, text })
     });
+
+    step = 'reading response';
     const data = await res.json();
 
     if (!res.ok || !data.success) {
@@ -1210,7 +1229,7 @@ async function uploadManualStock() {
     await loadProducts();
     updateRestockCurrentStock();
   } catch (e) {
-    errEl.textContent = 'Network error: ' + e.message;
+    errEl.textContent = `Error while ${step}: ` + (e.message || e);
   } finally {
     btn.disabled = false;
     btn.innerHTML = idleHtml;
@@ -1344,43 +1363,38 @@ async function saveUser() {
   errEl.textContent = '';
   if (isNaN(balance)) { errEl.textContent = 'Enter a valid NGN balance.'; return; }
 
-  // Previous balance — used to detect Manual Deposit amount
-  const prev = allProfiles.find(x => String(x.id) === String(id));
-  const prevBalance = Number(prev?.balance || 0);
-  const amountAdded = balance - prevBalance;
+  try {
+    const headers = { 'Content-Type': 'application/json' };
+    const { data: { session } } = await sb.auth.getSession();
+    if (session?.access_token) headers['Authorization'] = 'Bearer ' + session.access_token;
 
-  const payload = {
-    full_name,
-    username,
-    email: email || null,
-    phone_number: phone_number || null,
-    balance: balance || 0,
-    is_admin
-  };
-  if (balance_usd !== null && !isNaN(balance_usd)) payload.balance_usd = balance_usd;
-
-  const { error } = await sb.from('profiles').update(payload).eq('id', id);
-  if (error) {
-    errEl.textContent = error.message + ' (Check RLS policies)';
-    return;
-  }
-
-  // If admin increased NGN balance → record Manual Deposit under Deposits tab
-  if (amountAdded > 0) {
-    const { error: txErr } = await sb.from('transactions').insert({
-      user_id: id,
-      customer_id: prev?.customer_id || null,
-      type: 'deposit',
-      category: 'deposit',
-      title: 'Manual Deposit',
-      subtitle: 'Funded by admin',
-      amount: '₦' + amountAdded.toLocaleString(),
-      amount_ngn: amountAdded,
-      status: 'completed',
-      channel: 'Manual Deposit',
-      payment_provider: 'Admin'
+    const res = await fetch('/api/admin-update-user', {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({
+        user_id: id,
+        full_name, username,
+        email: email || null,
+        phone_number: phone_number || null,
+        balance,
+        balance_usd,
+        is_admin
+      })
     });
-    if (txErr) console.error('Manual Deposit transaction failed:', txErr.message);
+    const data = await res.json();
+
+    if (!res.ok || !data.success) {
+      errEl.textContent = data.message || 'Save failed.';
+      return;
+    }
+    if (data.warning) {
+      // Balance saved, but the deposit history record failed — this must
+      // be visible to the admin, not just logged quietly like before.
+      alert(data.warning);
+    }
+  } catch (e) {
+    errEl.textContent = 'Network error: ' + e.message;
+    return;
   }
 
   closeUserModal();
