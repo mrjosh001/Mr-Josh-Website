@@ -88,12 +88,18 @@ async function callGrizzly(apiKey, params) {
 }
 
 async function getJob() {
-  const { data } = await supabase.from('sync_jobs').select('*').eq('source', JOB_SOURCE).maybeSingle();
+  const { data, error } = await supabase.from('sync_jobs').select('*').eq('source', JOB_SOURCE).maybeSingle();
+  if (error) {
+    throw new Error(`sync_jobs table error: ${error.message}. If this says the relation/table doesn't exist, run the "create table sync_jobs" SQL from the top of this file in your Supabase SQL editor first.`);
+  }
   return data;
 }
 
 async function upsertJob(fields) {
-  await supabase.from('sync_jobs').upsert({ source: JOB_SOURCE, updated_at: new Date().toISOString(), ...fields });
+  const { error } = await supabase.from('sync_jobs').upsert({ source: JOB_SOURCE, updated_at: new Date().toISOString(), ...fields });
+  if (error) {
+    throw new Error(`sync_jobs write failed: ${error.message}. If this says the relation/table doesn't exist, run the "create table sync_jobs" SQL from the top of this file in your Supabase SQL editor first.`);
+  }
 }
 
 export default async function handler(req, res) {
