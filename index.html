@@ -1452,7 +1452,70 @@ document.addEventListener('DOMContentLoaded', async () => {
     initSupportWidget();
     updateCartDisplay();
     initHashRouting();
+    handlePocketFiReturn();
 });
+
+// PocketFi's hosted checkout redirects the browser back to
+// `${APP_URL}/?deposit=pocketfi&uid=...` once the user finishes paying —
+// in theory. In practice PocketFi doesn't reliably preserve that query
+// string, so a returning user can land on a bare URL with nothing to
+// detect. Rather than depend on that, `payWithPocketFi()` drops a
+// `mjhub_pending_pocketfi` marker in localStorage right before leaving the
+// site; this checks for that marker (falling back to the URL param if
+// present) so the return is detected either way, and polls the balance
+// for a few seconds so the page reflects the credit as soon as the
+// webhook lands, instead of just sitting on the old balance with no
+// explanation.
+async function handlePocketFiReturn() {
+    const params = new URLSearchParams(window.location.search);
+    const hasUrlFlag = params.get('deposit') === 'pocketfi';
+
+    let pending = null;
+    try {
+        const raw = localStorage.getItem('mjhub_pending_pocketfi');
+        if (raw) pending = JSON.parse(raw);
+    } catch (e) {}
+
+    // Ignore stale markers — a payment abandoned an hour ago shouldn't
+    // trigger this on some unrelated later visit.
+    const isFresh = pending && (Date.now() - Number(pending.ts || 0)) < 30 * 60 * 1000;
+
+    if (!hasUrlFlag && !isFresh) return;
+
+    try { localStorage.removeItem('mjhub_pending_pocketfi'); } catch (e) {}
+
+    if (hasUrlFlag) {
+        const cleanUrl = window.location.pathname + (window.location.hash || '');
+        history.replaceState(null, '', cleanUrl);
+    }
+
+    switchSection('deposit', true);
+    showToast('Confirming your PocketFi payment...', 'info', 6000);
+
+    const balanceBefore = currentBalanceNgn;
+    let confirmed = false;
+
+    for (let attempt = 0; attempt < 8; attempt++) {
+        await sleep(2000);
+        if (!currentUserId) break;
+        await fetchUserBalance(currentUserId);
+        if (currentBalanceNgn > balanceBefore) {
+            confirmed = true;
+            break;
+        }
+    }
+
+    if (confirmed) {
+        await fetchUserTransactions(currentUserId);
+        showToast('Payment confirmed — your wallet has been funded!', 'success', 5000);
+    } else {
+        showToast(
+            "We couldn't confirm your payment yet. If you were charged, it can take a minute to reflect — check back shortly, or contact support with your payment reference if it doesn't update.",
+            'warning',
+            9000
+        );
+    }
+}
 
 function initHashRouting() {
     const validSections = ['home', 'profile', 'sms', 'booster', 'cart', 'deposit', 'orders'];
@@ -2774,7 +2837,16 @@ window.payWithPocketFi = async function() {
             return;
         }
 
-        // Hosted checkout — leave the site; webhook credits balance on success
+        // Hosted checkout — leave the site; webhook credits balance on success.
+        // PocketFi's redirect back doesn't reliably preserve the query
+        // string we sent, so don't rely on the URL alone to notice the
+        // user has returned — remember it locally instead.
+        try {
+            localStorage.setItem('mjhub_pending_pocketfi', JSON.stringify({
+                amount, payment_id: data.payment_id || null, ts: Date.now()
+            }));
+        } catch (e) {}
+
         window.location.href = data.payment_link;
     } catch (e) {
         showToast('PocketFi checkout failed: ' + (e.message || 'network error'), 'error');
