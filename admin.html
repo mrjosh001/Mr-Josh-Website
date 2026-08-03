@@ -950,10 +950,10 @@ async function deleteProduct(id) {
     const { data: { session } } = await sb.auth.getSession();
     if (session?.access_token) headers['Authorization'] = 'Bearer ' + session.access_token;
 
-    const res = await fetch('/api/admin-product', {
+    const res = await fetch('/api/admin', {
       method: 'POST',
       headers,
-      body: JSON.stringify({ action: 'delete', id: p.id, product_key: p.product_key })
+      body: JSON.stringify({ resource: 'product', action: 'delete', id: p.id, product_key: p.product_key })
     });
     const data = await res.json();
 
@@ -998,6 +998,7 @@ async function saveProduct() {
     : null;
 
   const body = {
+    resource: 'product',
     action: id ? 'update' : 'insert',
     id: existing?.id || (id || undefined),
     product_key: existing?.product_key || enteredProductKey || undefined,
@@ -1018,7 +1019,7 @@ async function saveProduct() {
       headers['Authorization'] = 'Bearer ' + session.access_token;
     }
 
-    const res = await fetch('/api/admin-product', {
+    const res = await fetch('/api/admin', {
       method: 'POST',
       headers,
       body: JSON.stringify(body)
@@ -1209,10 +1210,10 @@ async function uploadManualStock() {
     }
 
     step = 'uploading';
-    const res = await fetch('/api/admin-inventory', {
+    const res = await fetch('/api/admin', {
       method: 'POST',
       headers,
-      body: JSON.stringify({ action: 'bulk_upload', product_key, text })
+      body: JSON.stringify({ resource: 'inventory', action: 'bulk_upload', product_key, text })
     });
 
     step = 'reading response';
@@ -1387,10 +1388,12 @@ async function saveUser() {
     const { data: { session } } = await sb.auth.getSession();
     if (session?.access_token) headers['Authorization'] = 'Bearer ' + session.access_token;
 
-    const res = await fetch('/api/admin-update-user', {
+    const res = await fetch('/api/admin', {
       method: 'POST',
       headers,
       body: JSON.stringify({
+        resource: 'user',
+        action: 'update',
         user_id: id,
         full_name, username,
         email: email || null,
@@ -1446,10 +1449,10 @@ async function toggleBanUser(id) {
   if (!confirm(confirmMsg)) return;
 
   try {
-    const res = await fetch('/api/admin-ban-user', {
+    const res = await fetch('/api/admin', {
       method: 'POST',
       headers,
-      body: JSON.stringify({ user_id: id, banned: banning })
+      body: JSON.stringify({ resource: 'user', action: 'ban', user_id: id, banned: banning })
     });
     const data = await res.json();
     if (!res.ok || !data.success) {
@@ -1481,10 +1484,10 @@ async function deleteUserPermanently(id) {
   if (typed !== 'DELETE') return;
 
   try {
-    const res = await fetch('/api/admin-delete-user', {
+    const res = await fetch('/api/admin', {
       method: 'POST',
       headers,
-      body: JSON.stringify({ user_id: id })
+      body: JSON.stringify({ resource: 'user', action: 'delete', user_id: id })
     });
     const data = await res.json();
     if (!res.ok || !data.success) {
