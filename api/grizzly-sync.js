@@ -3,19 +3,51 @@ import { createClient } from '@supabase/supabase-js';
 /**
  * GET /api/grizzly-sync
  * Admin-only. Pulls the country + price/stock catalog from GrizzlySMS
- * (sms-activate-compatible protocol: query-string GET, api_key as a query
- * param — NOT the JSON/Bearer style used by LogsDomain) and upserts into
- * number_services with source='grizzlysms'.
+ * (sms-activate-compatible protocol) and upserts into number_services with
+ * source='grizzlysms'.
  *
- * This file is intentionally self-contained — it does not import or share
- * any code with numbers-sync.js (LogsDomain) or any future
- * smspva-sync.js / smsman-sync.js, so a bug or API change in one supplier
- * integration can never break another.
+ * WHY THIS FILE IS SHAPED THE WAY IT IS:
+ * GrizzlySMS has ~150-200 countries, each with its own service list. The
+ * original version of this file looped over every country and did the DB
+ * upsert for every service sequentially, inside one request. That's
+ * thousands of sequential steps in a single invocation — it always blew
+ * past Vercel's function execution limit, got killed mid-flight, and the
+ * browser reported that as a generic "Load failed". You'd also see it as
+ * repeated 500s in the Vercel function logs.
+ *
+ * Fix: this now does ONE CHUNK OF WORK per call, time-boxed to stay safely
+ * under any Vercel plan's limit, and saves its cursor position in the
+ * "sync_jobs" table between calls. Calling it again resumes from where it
+ * left off — it does not restart from country 0. That also means a sync
+ * survives the admin dashboard being refreshed or closed: progress lives in
+ * the database, not in the browser tab. admin.html calls this in a loop
+ * (?action=start once, then repeated plain calls) while the tab is open,
+ * and on page load it checks for an already-"running" job and resumes
+ * polling it automatically instead of losing progress.
+ *
+ * Requires this table (run once in the Supabase SQL editor):
+ *
+ *   create table if not exists sync_jobs (
+ *     source text primary key,
+ *     status text not null default 'idle',
+ *     cursor_index int not null default 0,
+ *     total_countries int,
+ *     new_count int not null default 0,
+ *     updated_count int not null default 0,
+ *     services_seen int not null default 0,
+ *     errors jsonb default '[]'::jsonb,
+ *     started_at timestamptz,
+ *     updated_at timestamptz default now()
+ *   );
  *
  * Env: GRIZZLYSMS_API_KEY, SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY
  */
 
 const BASE = 'https://api.grizzlysms.com/stubs/handler_api.php';
+const JOB_SOURCE = 'grizzlysms';
+// Stay well under even the smallest realistic Vercel timeout — leaves
+// headroom for the final DB write + response after the loop exits.
+const TIME_BUDGET_MS = 8000;
 
 const supabase = createClient(
   process.env.SUPABASE_URL,
@@ -41,8 +73,6 @@ async function requireAdmin(req) {
   return { ok: true };
 }
 
-/** Kept as its own copy on purpose — see numbers-sync.js / products-logsdomain.js
- *  for why markup logic is never shared across supplier integrations. */
 function applyMarkup(supplierPriceUsd, usdToNgn) {
   const percent = 50 + Math.random() * 50;
   const ngn = Number(supplierPriceUsd) * usdToNgn;
@@ -55,6 +85,15 @@ async function callGrizzly(apiKey, params) {
   const res = await fetch(`${BASE}?${qs.toString()}`, { method: 'GET' });
   const text = await res.text();
   return { status: res.status, text };
+}
+
+async function getJob() {
+  const { data } = await supabase.from('sync_jobs').select('*').eq('source', JOB_SOURCE).maybeSingle();
+  return data;
+}
+
+async function upsertJob(fields) {
+  await supabase.from('sync_jobs').upsert({ source: JOB_SOURCE, updated_at: new Date().toISOString(), ...fields });
 }
 
 export default async function handler(req, res) {
@@ -76,64 +115,95 @@ export default async function handler(req, res) {
   if (!admin.ok) return res.status(admin.status).json({ success: false, message: admin.message });
 
   const apiKey = process.env.GRIZZLYSMS_API_KEY;
-  // Query-param override lets you sync a manageable slice first
-  // (?country_id=1) instead of every country in one call while you're
-  // still validating the response shape against your real key.
-  const onlyCountryId = req.query?.country_id ? parseInt(req.query.country_id, 10) : null;
   const usdToNgn = Number(process.env.USD_TO_NGN_RATE) || 1420;
+  const action = req.query?.action || null; // 'start' | 'status' | (default: continue/step)
 
   try {
-    // 1. Countries: GrizzlySMS's own tooling exposes a getCountries action
-    //    (see their MCP server docs). If your key returns a different shape
-    //    than expected here, this will show up as `countries_error` below
-    //    instead of silently corrupting number_services — check that field
-    //    first if sync comes back with 0 countries.
+    // --- status check only, no work done ---
+    if (action === 'status') {
+      const job = await getJob();
+      return res.status(200).json({ success: true, job: job || { source: JOB_SOURCE, status: 'idle' } });
+    }
+
+    // --- (re)start: fetch the country list fresh, reset the cursor ---
+    if (action === 'start') {
+      const countriesRes = await callGrizzly(apiKey, { action: 'getCountries' });
+      if (countriesRes.text === 'BAD_KEY') {
+        return res.status(401).json({ success: false, message: 'GrizzlySMS rejected the API key (BAD_KEY)' });
+      }
+      let countries;
+      try {
+        countries = JSON.parse(countriesRes.text);
+      } catch {
+        return res.status(502).json({
+          success: false,
+          message: 'getCountries did not return JSON — check GRIZZLYSMS_API_KEY and raw response',
+          raw: countriesRes.text.slice(0, 500)
+        });
+      }
+      const countryList = Array.isArray(countries)
+        ? countries
+        : Object.entries(countries || {}).map(([id, c]) => ({ id, ...(typeof c === 'object' ? c : { name: c }) }));
+
+      await upsertJob({
+        status: 'running',
+        cursor_index: 0,
+        total_countries: countryList.length,
+        new_count: 0,
+        updated_count: 0,
+        services_seen: 0,
+        errors: [],
+        started_at: new Date().toISOString()
+      });
+
+      return res.status(200).json({
+        success: true,
+        started: true,
+        total_countries: countryList.length,
+        message: `Sync started — ${countryList.length} countries queued. Keep calling without ?action=start to advance it, or just leave the dashboard open.`
+      });
+    }
+
+    // --- default: process one time-boxed chunk of whatever job is running ---
+    const job = await getJob();
+    if (!job || job.status !== 'running') {
+      return res.status(200).json({ success: true, done: true, idle: true, message: 'No sync is currently running. Call ?action=start to begin one.' });
+    }
+
+    // Re-fetch the country list each chunk (cheap single call) and slice by
+    // the saved cursor — simpler and safer than persisting the whole list.
     const countriesRes = await callGrizzly(apiKey, { action: 'getCountries' });
     let countries;
     try {
       countries = JSON.parse(countriesRes.text);
     } catch {
-      return res.status(502).json({
-        success: false,
-        message: 'getCountries did not return JSON — check GRIZZLYSMS_API_KEY and raw response',
-        raw: countriesRes.text.slice(0, 500)
-      });
+      await upsertJob({ status: 'failed', errors: [...(job.errors || []), 'getCountries failed mid-sync'] });
+      return res.status(502).json({ success: false, message: 'getCountries did not return JSON mid-sync' });
     }
-
-    if (countriesRes.text === 'BAD_KEY') {
-      return res.status(401).json({ success: false, message: 'GrizzlySMS rejected the API key (BAD_KEY)' });
-    }
-
-    // Response is expected as an array or {id: {id, eng/name, ...}} map —
-    // handle both defensively rather than assuming one shape.
     const countryList = Array.isArray(countries)
       ? countries
       : Object.entries(countries || {}).map(([id, c]) => ({ id, ...(typeof c === 'object' ? c : { name: c }) }));
 
-    const targetCountries = onlyCountryId
-      ? countryList.filter((c) => parseInt(c.id, 10) === onlyCountryId)
-      : countryList;
+    const startedAt = Date.now();
+    let cursor = job.cursor_index || 0;
+    let newCount = job.new_count || 0;
+    let updatedCount = job.updated_count || 0;
+    let servicesSeen = job.services_seen || 0;
+    const errors = Array.isArray(job.errors) ? [...job.errors] : [];
 
-    let newCount = 0;
-    let updatedCount = 0;
-    let servicesSeen = 0;
-    const errors = [];
-
-    for (const country of targetCountries) {
+    while (cursor < countryList.length && (Date.now() - startedAt) < TIME_BUDGET_MS) {
+      const country = countryList[cursor];
+      cursor += 1;
       const countryId = parseInt(country.id, 10);
       if (!Number.isFinite(countryId)) continue;
       const countryName = country.eng || country.name || country.rus || `Country ${countryId}`;
 
-      // 2. Prices for this country, v3: gives per-provider price+stock
-      //    breakdown, not just one aggregate number. Shape:
-      //    { "<country>": { "<service>": { price, count, providers: {
-      //        "<providerId>": { price: [p1,p2,...], count, provider_id } } } } }
       const pricesRes = await callGrizzly(apiKey, { action: 'getPricesV3', country: String(countryId) });
       let priceData;
       try {
         priceData = JSON.parse(pricesRes.text);
       } catch {
-        errors.push(`country ${countryId}: getPricesV3 did not return JSON (${pricesRes.text.slice(0, 100)})`);
+        errors.push(`country ${countryId}: getPricesV3 did not return JSON`);
         continue;
       }
 
@@ -143,11 +213,6 @@ export default async function handler(req, res) {
         servicesSeen += 1;
         if (!serviceCode) continue;
 
-        // Top-level price/count on v3 is Grizzly's own aggregate (effectively
-        // their best/cheapest pick across providers) — use that as our
-        // supplier cost, and keep the full per-provider breakdown alongside
-        // it so admin can see exactly which providers are behind that number
-        // and at what price/stock each one sits.
         const supplierPriceUsd = Number(info?.price ?? 0);
         const availableQty = Number(info?.count ?? 0);
         const providersRaw = info?.providers && typeof info.providers === 'object' ? info.providers : null;
@@ -166,7 +231,7 @@ export default async function handler(req, res) {
             .from('number_services')
             .update({
               country_name: countryName,
-              service_name: serviceCode, // display-friendly name mapping can be layered on later via getServicesList
+              service_name: serviceCode,
               supplier_price: supplierPriceUsd,
               available_quantity: availableQty,
               providers_raw: providersRaw,
@@ -198,17 +263,30 @@ export default async function handler(req, res) {
       }
     }
 
+    const done = cursor >= countryList.length;
+    await upsertJob({
+      status: done ? 'completed' : 'running',
+      cursor_index: cursor,
+      total_countries: countryList.length,
+      new_count: newCount,
+      updated_count: updatedCount,
+      services_seen: servicesSeen,
+      errors: errors.slice(-20)
+    });
+
     return res.status(200).json({
       success: true,
-      source: 'grizzlysms',
-      countries_scanned: targetCountries.length,
-      services_seen: servicesSeen,
+      done,
+      cursor_index: cursor,
+      total_countries: countryList.length,
       new_services: newCount,
       updated_services: updatedCount,
-      errors: errors.slice(0, 20)
+      services_seen: servicesSeen,
+      errors: errors.slice(-20)
     });
   } catch (err) {
     console.error('grizzly-sync error:', err);
+    await upsertJob({ status: 'failed', errors: [String(err.message || err)] }).catch(() => {});
     return res.status(500).json({ success: false, message: err.message || 'Internal server error' });
   }
 }
