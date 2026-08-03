@@ -74,7 +74,13 @@ async function handleWebhook(req, res, raw, secret) {
   const signature = getSignature(req);
   const hashkey = crypto.createHmac('sha512', secret).update(raw).digest('hex');
   if (!signature || signature !== hashkey) {
-    console.warn('PocketFi webhook bad signature');
+    console.warn('PocketFi webhook bad signature', {
+      received_signature: signature ? signature.slice(0, 16) + '...' : '(none)',
+      computed_sha512: hashkey.slice(0, 16) + '...',
+      all_header_keys: Object.keys(req.headers),
+      raw_body_length: raw.length,
+      raw_body_preview: raw.slice(0, 200)
+    });
     return res.status(400).json({ message: 'Invalid signature' });
   }
 
