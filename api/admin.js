@@ -23,6 +23,11 @@ import { createClient } from '@supabase/supabase-js';
  *   resource: 'inventory'
  *     action: 'bulk_upload' | 'stock_count' — same fields as the old admin-inventory.js
  *
+ *   resource: 'sms'
+ *     action: 'update' — { id, price, is_available } — GrizzlySMS number_services
+ *     pricing only. Supplier fields (country/service/supplier_price/stock)
+ *     are read-only here and only ever change via /api/grizzly-sync.
+ *
  * Env: SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY
  */
 
@@ -149,6 +154,31 @@ async function userUpdate(body) {
   }
 
   return { status: 200, body: { success: true, data: { amount_added: amountAdded, deposit_recorded: depositRecorded } } };
+}
+
+// ---------- resource: sms (number_services / GrizzlySMS) ----------
+// Deliberately narrow: this is the ONLY write path for number_services
+// besides grizzly-sync.js. It only ever touches `price` and `is_available`
+// — the two fields the admin controls. Every other column (country_name,
+// service_name, supplier_price, available_quantity, providers_raw) is
+// supplier-owned and only changes via a sync, never through this endpoint,
+// so an admin's pricing decision can never be silently overwritten and a
+// sync can never accidentally touch pricing.
+async function smsUpdate(body) {
+  const { id, price, is_available } = body;
+  if (!id) return { status: 400, body: { success: false, message: 'id is required' } };
+  if (price == null || isNaN(Number(price)) || Number(price) < 0) {
+    return { status: 400, body: { success: false, message: 'A valid selling price is required' } };
+  }
+
+  const payload = { price: Number(price) };
+  if (is_available !== undefined) payload.is_available = !!is_available;
+
+  const { data, error } = await supabase.from('number_services').update(payload).eq('id', id).select().maybeSingle();
+  if (error) return { status: 500, body: { success: false, message: 'Update failed: ' + error.message } };
+  if (!data) return { status: 404, body: { success: false, message: 'SMS number listing not found' } };
+
+  return { status: 200, body: { success: true, data } };
 }
 
 // ---------- resource: product ----------
@@ -335,8 +365,11 @@ export default async function handler(req, res) {
       else result = { status: 400, body: { success: false, message: 'Unknown product action. Use "update", "insert", or "delete".' } };
     } else if (resource === 'inventory') {
       result = await inventoryHandle(body);
+    } else if (resource === 'sms') {
+      if (action === 'update') result = await smsUpdate(body);
+      else result = { status: 400, body: { success: false, message: 'Unknown sms action. Use "update".' } };
     } else {
-      result = { status: 400, body: { success: false, message: 'Unknown resource. Use "user", "product", or "inventory".' } };
+      result = { status: 400, body: { success: false, message: 'Unknown resource. Use "user", "product", "inventory", or "sms".' } };
     }
 
     return res.status(result.status).json(result.body);
