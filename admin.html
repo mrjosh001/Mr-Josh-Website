@@ -177,9 +177,28 @@
       .main { margin-left:0; width:100%; }
       .mobile-menu-btn { display:flex; align-items:center; justify-content:center; }
     }
+    .toast-stack {
+      position: fixed; top: 16px; right: 16px; z-index: 9999;
+      display: flex; flex-direction: column; gap: 8px;
+      max-width: calc(100vw - 32px);
+    }
+    .toast {
+      padding: 12px 16px; border-radius: 10px; font-size: 14px; font-weight: 600;
+      box-shadow: 0 8px 24px rgba(0,0,0,.35);
+      animation: toast-in .18s ease-out;
+      display: flex; align-items: center; gap: 8px;
+      color: #fff;
+    }
+    .toast-success { background: #15803d; }
+    .toast-error { background: #b91c1c; }
+    .toast-info { background: #1d4ed8; }
+    .toast.leaving { animation: toast-out .18s ease-in forwards; }
+    @keyframes toast-in { from { opacity: 0; transform: translateY(-8px); } to { opacity: 1; transform: translateY(0); } }
+    @keyframes toast-out { from { opacity: 1; } to { opacity: 0; transform: translateY(-8px); } }
   </style>
 </head>
 <body>
+  <div id="toastStack" class="toast-stack"></div>
   <div id="loginScreen" class="login-wrap">
     <div class="login-card">
       <h1>MJ HUB</h1>
@@ -435,7 +454,7 @@
       <div id="productModalError" class="error-msg"></div>
       <div class="modal-actions">
         <button class="btn btn-ghost" onclick="closeProductModal()">Cancel</button>
-        <button class="btn btn-primary btn-sm" onclick="saveProduct()">Save</button>
+        <button class="btn btn-primary btn-sm" id="saveProductBtn" onclick="saveProduct()">Save</button>
       </div>
     </div>
   </div>
@@ -495,7 +514,7 @@
       <div id="userModalError" class="error-msg"></div>
       <div class="modal-actions">
         <button class="btn btn-ghost" onclick="closeUserModal()">Cancel</button>
-        <button class="btn btn-primary btn-sm" onclick="saveUser()">Save</button>
+        <button class="btn btn-primary btn-sm" id="saveUserBtn" onclick="saveUser()">Save</button>
       </div>
     </div>
   </div>
@@ -702,7 +721,10 @@ async function loadProducts() {
   allProducts = error ? [] : (data || []);
   if (error) console.error('Products error:', error.message);
   populateCategoryFilter();
-  renderProducts();
+  // Reapply whatever category/search filter the admin currently has
+  // selected, instead of always snapping back to "All Categories" — that
+  // was the cause of the product list appearing to "scatter" after an edit.
+  filterProducts();
 }
 
 function populateCategoryFilter() {
@@ -723,7 +745,8 @@ async function loadProfiles() {
   } else {
     allProfiles = data || [];
   }
-  renderUsers();
+  // Reapply the current search/status filter instead of resetting the view.
+  filterUsers();
 }
 
 async function tryLoadOrders() {
@@ -820,7 +843,7 @@ function renderProducts(list) {
         <td><span class="badge ${available ? 'badge-on' : 'badge-off'}">${available ? 'Active' : 'Hidden'}</span></td>
         <td>
           <button class="btn btn-ghost btn-sm" onclick="editProduct('${escapeHtml(String(rowId))}')"><i class="fas fa-edit"></i></button>
-          <button class="btn btn-ghost btn-sm" style="color:#f87171;" onclick="deleteProduct('${escapeHtml(String(rowId))}')"><i class="fas fa-trash"></i></button>
+          <button class="btn btn-ghost btn-sm" style="color:#f87171;" onclick="deleteProduct('${escapeHtml(String(rowId))}', event)"><i class="fas fa-trash"></i></button>
         </td>
       </tr>`;
   }).join('');
@@ -853,7 +876,7 @@ function renderProductCards(items) {
         <div class="row-line"><span>Status</span><span class="badge ${available ? 'badge-on' : 'badge-off'}">${available ? 'Active' : 'Hidden'}</span></div>
         <div style="margin-top:10px;display:flex;gap:8px;">
           <button class="btn btn-ghost btn-sm" onclick="editProduct('${escapeHtml(String(rowId))}')"><i class="fas fa-edit"></i> Edit</button>
-          <button class="btn btn-ghost btn-sm" style="color:#f87171;" onclick="deleteProduct('${escapeHtml(String(rowId))}')"><i class="fas fa-trash"></i> Delete</button>
+          <button class="btn btn-ghost btn-sm" style="color:#f87171;" onclick="deleteProduct('${escapeHtml(String(rowId))}', event)"><i class="fas fa-trash"></i> Delete</button>
         </div>
       </div>`;
   }).join('');
@@ -938,13 +961,15 @@ function editProduct(id) {
   if (p) openProductModal(p);
 }
 
-async function deleteProduct(id) {
+async function deleteProduct(id, evt) {
   const p = allProducts.find(x => String(x.id) === String(id) || String(x.product_key) === String(id));
   if (!p) return;
 
   const confirmed = confirm(`Delete "${p.name}"? This can't be undone.\n\nIf it has past orders, deletion will be blocked automatically to protect order history — use "Hidden" instead in that case.`);
   if (!confirmed) return;
 
+  const btn = evt?.currentTarget;
+  setBtnBusy(btn, true, '');
   try {
     const headers = { 'Content-Type': 'application/json' };
     const { data: { session } } = await sb.auth.getSession();
@@ -958,14 +983,17 @@ async function deleteProduct(id) {
     const data = await res.json();
 
     if (!res.ok || !data.success) {
-      alert(data.message || 'Delete failed.');
+      showAdminToast(data.message || 'Delete failed.', 'error');
       return;
     }
 
     await loadProducts();
     updateMetrics();
+    showAdminToast(`"${p.name}" deleted`, 'success');
   } catch (e) {
-    alert('Network error: ' + e.message);
+    showAdminToast('Network error: ' + e.message, 'error');
+  } finally {
+    setBtnBusy(btn, false);
   }
 }
 
@@ -1012,6 +1040,8 @@ async function saveProduct() {
     supplier_price: existing ? Number(existing.supplier_price || 0) : 0
   };
 
+  const btn = document.getElementById('saveProductBtn');
+  setBtnBusy(btn, true, 'Saving...');
   try {
     const headers = { 'Content-Type': 'application/json' };
     const { data: { session } } = await sb.auth.getSession();
@@ -1028,14 +1058,19 @@ async function saveProduct() {
 
     if (!res.ok || !data.success) {
       errEl.textContent = (data.message || 'Save failed') + ' — check Vercel env (SUPABASE_SERVICE_ROLE_KEY)';
+      showAdminToast(data.message || 'Product save failed', 'error');
       return;
     }
 
     closeProductModal();
     await loadProducts();
     updateMetrics();
+    showAdminToast(id ? 'Product updated successfully' : 'Product added successfully', 'success');
   } catch (e) {
     errEl.textContent = 'Network error: ' + e.message;
+    showAdminToast('Network error: ' + e.message, 'error');
+  } finally {
+    setBtnBusy(btn, false);
   }
 }
 
@@ -1271,8 +1306,8 @@ function renderUsers(list) {
         <td>${isAdminValue(u.is_admin) ? '<span class="badge badge-admin">Admin</span>' : 'User'}</td>
         <td style="white-space:nowrap;">
           <button class="btn btn-ghost btn-sm" onclick="editUser('${u.id}')" title="Edit"><i class="fas fa-edit"></i></button>
-          <button class="btn btn-ghost btn-sm" onclick="toggleBanUser('${u.id}')" title="${banned ? 'Unban' : 'Ban'}"><i class="fas fa-${banned ? 'unlock' : 'ban'}"></i></button>
-          <button class="btn btn-ghost btn-sm" style="color:#f87171;" onclick="deleteUserPermanently('${u.id}')" title="Delete"><i class="fas fa-trash"></i></button>
+          <button class="btn btn-ghost btn-sm" onclick="toggleBanUser('${u.id}', event)" title="${banned ? 'Unban' : 'Ban'}"><i class="fas fa-${banned ? 'unlock' : 'ban'}"></i></button>
+          <button class="btn btn-ghost btn-sm" style="color:#f87171;" onclick="deleteUserPermanently('${u.id}', event)" title="Delete"><i class="fas fa-trash"></i></button>
         </td>
       </tr>`;
   }).join('');
@@ -1296,8 +1331,8 @@ function renderUsers(list) {
           <div class="row-line"><span>Status</span>${statusBadge}</div>
           <div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap;">
             <button class="btn btn-ghost btn-sm" onclick="editUser('${u.id}')"><i class="fas fa-edit"></i> Edit</button>
-            <button class="btn btn-ghost btn-sm" onclick="toggleBanUser('${u.id}')"><i class="fas fa-${banned ? 'unlock' : 'ban'}"></i> ${banned ? 'Unban' : 'Ban'}</button>
-            <button class="btn btn-ghost btn-sm" style="color:#f87171;" onclick="deleteUserPermanently('${u.id}')"><i class="fas fa-trash"></i> Delete</button>
+            <button class="btn btn-ghost btn-sm" onclick="toggleBanUser('${u.id}', event)"><i class="fas fa-${banned ? 'unlock' : 'ban'}"></i> ${banned ? 'Unban' : 'Ban'}</button>
+            <button class="btn btn-ghost btn-sm" style="color:#f87171;" onclick="deleteUserPermanently('${u.id}', event)"><i class="fas fa-trash"></i> Delete</button>
           </div>
         </div>`;
     }).join('');
@@ -1383,6 +1418,8 @@ async function saveUser() {
   errEl.textContent = '';
   if (isNaN(balance)) { errEl.textContent = 'Enter a valid NGN balance.'; return; }
 
+  const btn = document.getElementById('saveUserBtn');
+  setBtnBusy(btn, true, 'Saving...');
   try {
     const headers = { 'Content-Type': 'application/json' };
     const { data: { session } } = await sb.auth.getSession();
@@ -1407,6 +1444,7 @@ async function saveUser() {
 
     if (!res.ok || !data.success) {
       errEl.textContent = data.message || 'Save failed.';
+      showAdminToast(data.message || 'Save failed', 'error');
       return;
     }
     if (data.warning) {
@@ -1416,12 +1454,16 @@ async function saveUser() {
     }
   } catch (e) {
     errEl.textContent = 'Network error: ' + e.message;
+    showAdminToast('Network error: ' + e.message, 'error');
     return;
+  } finally {
+    setBtnBusy(btn, false);
   }
 
   closeUserModal();
   await loadProfiles();
   updateMetrics();
+  showAdminToast('Customer updated successfully', 'success');
 }
 
 async function getAdminAuthHeaders() {
@@ -1431,7 +1473,7 @@ async function getAdminAuthHeaders() {
   return { headers, session };
 }
 
-async function toggleBanUser(id) {
+async function toggleBanUser(id, evt) {
   const u = allProfiles.find(x => String(x.id) === String(id));
   if (!u) return;
 
@@ -1448,6 +1490,8 @@ async function toggleBanUser(id) {
     : `Unban ${label}? They'll be able to sign in again.`;
   if (!confirm(confirmMsg)) return;
 
+  const btn = evt?.currentTarget;
+  setBtnBusy(btn, true, '');
   try {
     const res = await fetch('/api/admin', {
       method: 'POST',
@@ -1456,20 +1500,23 @@ async function toggleBanUser(id) {
     });
     const data = await res.json();
     if (!res.ok || !data.success) {
-      alert(data.message || 'Action failed.');
+      showAdminToast(data.message || 'Action failed.', 'error');
       return;
     }
     if (data.warning) alert(data.warning);
   } catch (e) {
-    alert('Network error: ' + e.message);
+    showAdminToast('Network error: ' + e.message, 'error');
     return;
+  } finally {
+    setBtnBusy(btn, false);
   }
 
   await loadProfiles();
   updateMetrics();
+  showAdminToast(banning ? `${label} has been banned` : `${label} has been unbanned`, 'success');
 }
 
-async function deleteUserPermanently(id) {
+async function deleteUserPermanently(id, evt) {
   const u = allProfiles.find(x => String(x.id) === String(id));
   if (!u) return;
 
@@ -1483,6 +1530,8 @@ async function deleteUserPermanently(id) {
   const typed = prompt(`This permanently deletes ${label}'s account, login, and profile — useful for removing duplicate accounts, but it cannot be undone. Type DELETE to confirm.`);
   if (typed !== 'DELETE') return;
 
+  const btn = evt?.currentTarget;
+  setBtnBusy(btn, true, '');
   try {
     const res = await fetch('/api/admin', {
       method: 'POST',
@@ -1491,17 +1540,20 @@ async function deleteUserPermanently(id) {
     });
     const data = await res.json();
     if (!res.ok || !data.success) {
-      alert(data.message || 'Delete failed.');
+      showAdminToast(data.message || 'Delete failed.', 'error');
       return;
     }
     if (data.warning) alert(data.warning);
   } catch (e) {
-    alert('Network error: ' + e.message);
+    showAdminToast('Network error: ' + e.message, 'error');
     return;
+  } finally {
+    setBtnBusy(btn, false);
   }
 
   await loadProfiles();
   updateMetrics();
+  showAdminToast(`${label}'s account was deleted`, 'success');
 }
 
 function renderOrders(orders) {
@@ -1657,6 +1709,37 @@ function closeSidebar() {
   document.getElementById('sidebar').classList.remove('open');
   document.getElementById('mobileOverlay').classList.remove('show');
 }
+// Lets the admin know an action actually went through (or failed) instead
+// of the page just silently updating with no feedback.
+function showAdminToast(message, type) {
+  const stack = document.getElementById('toastStack');
+  if (!stack) return;
+  const el = document.createElement('div');
+  el.className = `toast toast-${type || 'success'}`;
+  const icon = type === 'error' ? 'fa-circle-exclamation' : type === 'info' ? 'fa-circle-info' : 'fa-circle-check';
+  el.innerHTML = `<i class="fas ${icon}"></i><span>${escapeHtml(message)}</span>`;
+  stack.appendChild(el);
+  setTimeout(() => {
+    el.classList.add('leaving');
+    setTimeout(() => el.remove(), 200);
+  }, 3200);
+}
+
+// Disables a button and swaps its label to a spinner while an action is in
+// flight, so admins get immediate visual confirmation their click landed —
+// then restores it afterward.
+function setBtnBusy(btn, busy, busyLabel) {
+  if (!btn) return;
+  if (busy) {
+    btn.dataset.idleHtml = btn.innerHTML;
+    btn.disabled = true;
+    btn.innerHTML = `<i class="fas fa-spinner fa-spin"></i> ${busyLabel || 'Working...'}`;
+  } else {
+    btn.disabled = false;
+    if (btn.dataset.idleHtml) btn.innerHTML = btn.dataset.idleHtml;
+  }
+}
+
 function escapeHtml(str) {
   if (!str) return '';
   return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
