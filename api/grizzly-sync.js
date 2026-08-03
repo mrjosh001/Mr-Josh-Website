@@ -40,14 +40,35 @@ import { createClient } from '@supabase/supabase-js';
  *     updated_at timestamptz default now()
  *   );
  *
- * Env: GRIZZLYSMS_API_KEY, SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY
+ * DAILY CRON:
+ * Vercel invokes crons with an `Authorization: Bearer <CRON_SECRET>` header.
+ * Requests carrying that header skip the admin-session check below and are
+ * treated as a trusted, unattended run. On a cron hit, if no sync is already
+ * "running" this function auto-starts a fresh one and immediately begins
+ * processing — it doesn't just return the "call ?action=start" message like
+ * a stray unauthenticated request would. It also uses a much bigger time
+ * budget than the browser-driven chunk size (see CRON_TIME_BUDGET_MS below),
+ * since Vercel Hobby functions now get 300s instead of ~10s, which is enough
+ * to get through most or all countries in one invocation. If it ever doesn't
+ * finish in one run, the cursor is saved as usual and next day's cron just
+ * picks up where it left off.
+ *
+ * Setup: add an environment variable named CRON_SECRET (any random 16+ char
+ * string) in your Vercel project settings — Vercel does not create this for
+ * you automatically, but once it exists Vercel sends it on every cron call.
+ *
+ * Env: GRIZZLYSMS_API_KEY, SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, CRON_SECRET
  */
 
 const BASE = 'https://api.grizzlysms.com/stubs/handler_api.php';
 const JOB_SOURCE = 'grizzlysms';
-// Stay well under even the smallest realistic Vercel timeout — leaves
-// headroom for the final DB write + response after the loop exits.
-const TIME_BUDGET_MS = 8000;
+// Manual/browser-driven chunk size — small on purpose so the admin dashboard
+// stays responsive while polling in a loop (see admin.html pollGrizzlySync).
+const MANUAL_TIME_BUDGET_MS = 8000;
+// Cron-driven chunk size — cron has no UI waiting on it, so let one
+// invocation do as much as it safely can within Hobby's 300s ceiling.
+// Leaves ~20s of headroom for the in-flight request + final DB write.
+const CRON_TIME_BUDGET_MS = 280000;
 
 const supabase = createClient(
   process.env.SUPABASE_URL,
@@ -117,8 +138,13 @@ export default async function handler(req, res) {
     return res.status(500).json({ success: false, message: 'Missing GRIZZLYSMS_API_KEY' });
   }
 
-  const admin = await requireAdmin(req);
-  if (!admin.ok) return res.status(admin.status).json({ success: false, message: admin.message });
+  const authHeader = req.headers.authorization || '';
+  const isCronRequest = !!process.env.CRON_SECRET && authHeader === `Bearer ${process.env.CRON_SECRET}`;
+
+  if (!isCronRequest) {
+    const admin = await requireAdmin(req);
+    if (!admin.ok) return res.status(admin.status).json({ success: false, message: admin.message });
+  }
 
   const apiKey = process.env.GRIZZLYSMS_API_KEY;
   const usdToNgn = Number(process.env.USD_TO_NGN_RATE) || 1420;
@@ -170,8 +196,44 @@ export default async function handler(req, res) {
       });
     }
 
-    // --- default: process one time-boxed chunk of whatever job is running ---
-    const job = await getJob();
+    // --- default: process a time-boxed chunk of whatever job is running ---
+    let job = await getJob();
+
+    // A cron hit is unattended — nobody is going to call ?action=start for
+    // it. If nothing is currently running, start a fresh job right here and
+    // fall through into processing it in this same invocation.
+    if (isCronRequest && (!job || job.status !== 'running')) {
+      const startCountriesRes = await callGrizzly(apiKey, { action: 'getCountries' });
+      if (startCountriesRes.text === 'BAD_KEY') {
+        return res.status(401).json({ success: false, message: 'GrizzlySMS rejected the API key (BAD_KEY)' });
+      }
+      let startCountries;
+      try {
+        startCountries = JSON.parse(startCountriesRes.text);
+      } catch {
+        return res.status(502).json({
+          success: false,
+          message: 'getCountries did not return JSON — check GRIZZLYSMS_API_KEY and raw response',
+          raw: startCountriesRes.text.slice(0, 500)
+        });
+      }
+      const startCountryList = Array.isArray(startCountries)
+        ? startCountries
+        : Object.entries(startCountries || {}).map(([id, c]) => ({ id, ...(typeof c === 'object' ? c : { name: c }) }));
+
+      await upsertJob({
+        status: 'running',
+        cursor_index: 0,
+        total_countries: startCountryList.length,
+        new_count: 0,
+        updated_count: 0,
+        services_seen: 0,
+        errors: [],
+        started_at: new Date().toISOString()
+      });
+      job = await getJob();
+    }
+
     if (!job || job.status !== 'running') {
       return res.status(200).json({ success: true, done: true, idle: true, message: 'No sync is currently running. Call ?action=start to begin one.' });
     }
@@ -190,6 +252,7 @@ export default async function handler(req, res) {
       ? countries
       : Object.entries(countries || {}).map(([id, c]) => ({ id, ...(typeof c === 'object' ? c : { name: c }) }));
 
+    const TIME_BUDGET_MS = isCronRequest ? CRON_TIME_BUDGET_MS : MANUAL_TIME_BUDGET_MS;
     const startedAt = Date.now();
     let cursor = job.cursor_index || 0;
     let newCount = job.new_count || 0;
