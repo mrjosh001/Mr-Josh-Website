@@ -54,30 +54,45 @@ async function readRawBody(req) {
   return Buffer.concat(chunks).toString('utf8');
 }
 
-function getSignature(req) {
-  return (
-    req.headers['http_pocketfi_signature'] ||
-    req.headers['x-pocketfi-signature'] ||
-    req.headers['pocketfi-signature'] ||
-    ''
-  );
+const SIGNATURE_HEADER_KEYS = [
+  'http_pocketfi_signature',
+  'x-pocketfi-signature',
+  'pocketfi-signature',
+  'pocketfi_signature'
+];
+
+function getSignatureCandidates(req) {
+  const found = [];
+  for (const key of SIGNATURE_HEADER_KEYS) {
+    const value = req.headers[key];
+    if (value) found.push({ header: key, value });
+  }
+  return found;
 }
 
-function isWebhookRequest(req, signature) {
-  if (signature) return true;
+function isWebhookRequest(req, hasAnySignature) {
+  if (hasAnySignature) return true;
   const url = req.url || '';
   if (url.includes('mode=webhook') || url.includes('pocketfi-webhook')) return true;
   return false;
 }
 
 async function handleWebhook(req, res, raw, secret) {
-  const signature = getSignature(req);
-  const hashkey = crypto.createHmac('sha512', secret).update(raw).digest('hex');
-  if (!signature || signature !== hashkey) {
+  const candidates = getSignatureCandidates(req);
+  // PocketFi's docs don't spell out the digest algorithm anywhere we could
+  // find, and the consistent mismatch in production logs could be either a
+  // wrong secret OR a wrong algorithm (SHA-512 vs the more common SHA-256
+  // used by most Nigerian gateways). Try both so an algorithm mismatch
+  // isn't silently indistinguishable from a wrong-secret mismatch.
+  const sha512Hash = crypto.createHmac('sha512', secret).update(raw).digest('hex');
+  const sha256Hash = crypto.createHmac('sha256', secret).update(raw).digest('hex');
+  const matched = candidates.find((c) => c.value === sha512Hash || c.value === sha256Hash);
+
+  if (!matched) {
     console.warn('PocketFi webhook bad signature', {
-      received_signature: signature ? signature.slice(0, 16) + '...' : '(none)',
-      computed_sha512: hashkey.slice(0, 16) + '...',
-      all_header_keys: Object.keys(req.headers),
+      candidates: candidates.map((c) => `${c.header}=${c.value}`),
+      computed_sha512: sha512Hash,
+      computed_sha256: sha256Hash,
       raw_body_length: raw.length,
       raw_body_preview: raw.slice(0, 200)
     });
@@ -378,9 +393,9 @@ export default async function handler(req, res) {
   }
 
   const raw = await readRawBody(req);
-  const signature = getSignature(req);
+  const hasAnySignature = getSignatureCandidates(req).length > 0;
 
-  if (isWebhookRequest(req, signature)) {
+  if (isWebhookRequest(req, hasAnySignature)) {
     return handleWebhook(req, res, raw, secret);
   }
 
