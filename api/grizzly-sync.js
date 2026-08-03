@@ -67,55 +67,116 @@ async function callGrizzly(apiKey, params) {
   return { status: res.status, text };
 }
 
+
+const GRIZZLY_SERVICE_NAMES = {
+  'aaw': 'Signal',
+  'aax': 'Haraj',
+  'acz': 'Claude / AI',
+  'am': 'Amazon',
+  'bx': 'Dodo Pizza',
+  'ds': 'Discord',
+  'ex': 'Lanet',
+  'fb': 'Facebook',
+  'fd': 'PrimaGame',
+  'fu': 'Snapchat',
+  'go': 'Google',
+  'gr_fw': 'Grizzly service fw',
+  'gr_sg': 'Grizzly service sg',
+  'gr_ta': 'Grizzly service ta',
+  'hw': 'Alipay/Huawei',
+  'ig': 'Instagram',
+  'im': 'Imo',
+  'kc': 'X / Twitter (alt)',
+  'kt': 'KakaoTalk',
+  'lc': 'Mailru Group',
+  'lf': 'TikTok / Douyin',
+  'ly': 'Olacabs',
+  'ma': 'Mail.ru',
+  'mb': 'Yahoo',
+  'me': 'Line',
+  'mm': 'Microsoft',
+  'mo': 'Bumble',
+  'nf': 'Netflix',
+  'nv': 'Naver',
+  'nz': 'Foodpanda',
+  'oi': 'Tinder',
+  'ok': 'OK.ru',
+  'ot': 'Any other',
+  'pm': 'AOL',
+  'pr': 'Trendyol',
+  'qq': 'QQ',
+  'sg': 'OZON',
+  'tg': 'Telegram',
+  'tk': 'TikTok',
+  'tl': 'Truecaller',
+  'tn': 'LinkedIn',
+  'ts': 'PayPal',
+  'tw': 'Twitter',
+  'uk': 'Airbnb',
+  'uu': 'Wildberries',
+  'vi': 'Viber',
+  'vk': 'VK',
+  'wa': 'WhatsApp',
+  'wb': 'Weibo',
+  'we': 'WeChat',
+  'wx': 'Apple',
+  'ya': 'Yandex',
+  'yi': 'Yalla',
+  'yy': 'Hily',
+  'zr': 'Tobit',
+};
+
 /**
- * Build map: service_code -> human name (e.g. wa -> WhatsApp).
- * Grizzly/sms-activate getServices returns several possible shapes.
+ * service_id (code) -> display name.
+ * Prefer Grizzly docs table / static map; merge any getServices payload.
  */
 async function getServiceNameMap(apiKey) {
-  const map = Object.create(null);
-  const res = await callGrizzly(apiKey, { action: 'getServices' });
-  if (!res.text || res.text === 'BAD_KEY') return map;
+  const map = Object.assign(Object.create(null), GRIZZLY_SERVICE_NAMES);
 
-  let data;
   try {
-    data = JSON.parse(res.text);
-  } catch {
-    return map;
-  }
-
-  const add = (code, name) => {
-    if (!code) return;
-    const c = String(code).trim();
-    const n = name != null ? String(name).trim() : '';
-    if (!c) return;
-    if (n) map[c] = n;
-    else if (!map[c]) map[c] = c;
-  };
-
-  if (Array.isArray(data)) {
-    for (const item of data) {
-      if (!item || typeof item !== 'object') continue;
-      add(item.code || item.service || item.id || item.slug, item.name || item.title || item.eng || item.rus);
-    }
-  } else if (data && typeof data === 'object') {
-    for (const [key, val] of Object.entries(data)) {
-      if (val == null) continue;
-      if (typeof val === 'string') {
-        // { "wa": "WhatsApp" } or { "0": "WhatsApp" } — prefer code keys
-        add(key, val);
-      } else if (typeof val === 'object') {
-        // { "0": { code: "wa", name: "WhatsApp" } } or { "wa": { name: "WhatsApp" } }
-        const code = val.code || val.service || val.id || key;
-        const name = val.name || val.title || val.eng || val.rus || val.service_name;
-        add(code, name);
-        // if key looks like a code and differs, also map key
-        if (key && !/^\d+$/.test(key) && key !== String(code)) add(key, name || code);
+    const res = await callGrizzly(apiKey, { action: 'getServices' });
+    if (res.text && res.text !== 'BAD_KEY') {
+      let data;
+      try {
+        data = JSON.parse(res.text);
+      } catch {
+        data = null;
+      }
+      if (data) {
+        const add = (code, name) => {
+          if (!code) return;
+          const c = String(code).trim();
+          const n = name != null ? String(name).trim() : '';
+          if (!c) return;
+          // Only fill gaps or upgrade code-looking names
+          if (n && n.toLowerCase() !== c.toLowerCase()) map[c] = n;
+          else if (!map[c]) map[c] = c;
+        };
+        if (Array.isArray(data)) {
+          for (const item of data) {
+            if (!item || typeof item !== 'object') continue;
+            add(item.code || item.service || item.id, item.name || item.title || item.eng);
+          }
+        } else if (typeof data === 'object') {
+          for (const [key, val] of Object.entries(data)) {
+            if (val == null) continue;
+            if (typeof val === 'string') add(key, val);
+            else if (typeof val === 'object') {
+              const code = val.code || val.service || val.id || key;
+              const name = val.name || val.title || val.eng || val.rus;
+              add(code, name);
+              if (key && !/^\d+$/.test(key)) add(key, name || code);
+            }
+          }
+        }
       }
     }
+  } catch (e) {
+    console.warn('getServices name enrich failed', e.message);
   }
+
   return map;
 }
-
 
 async function getJob() {
   const { data, error } = await supabase
