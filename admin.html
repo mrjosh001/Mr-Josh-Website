@@ -343,9 +343,10 @@
                 <button class="btn btn-primary btn-sm" id="btnSyncGrizzly" onclick="syncGrizzlyNow()"><i class="fas fa-sync"></i> Sync Grizzly</button>
               </div>
             </div>
-            <p style="color:#94a3b8;font-size:13px;margin:-4px 0 14px;">
+            <p style="color:#94a3b8;font-size:13px;margin:-4px 0 4px;">
               Syncing pulls the latest country, service, supplier price, and stock from GrizzlySMS. Your own selling price is never overwritten by a sync — edit it manually below.
             </p>
+            <p id="grizzlySyncProgress" style="color:var(--primary,#3b82f6);font-size:12px;font-weight:700;margin:0 0 14px;min-height:16px;"></p>
             <div class="search-row">
               <input type="text" id="smsSearch" placeholder="Search country or service..." oninput="filterNumberServices()" />
               <select id="smsCountryFilter" onchange="filterNumberServices()"><option value="">All Countries</option></select>
@@ -778,6 +779,7 @@ async function handleLogout() {
 
 async function loadAllData() {
   await Promise.all([loadProducts(), loadProfiles(), tryLoadOrders(), loadNotificationHistory(), loadNumberServices()]);
+  resumeGrizzlySyncIfRunning();
   updateMetrics();
 }
 
@@ -948,29 +950,99 @@ async function saveNumberService() {
   showAdminToast('Price updated successfully', 'success');
 }
 
-async function syncGrizzlyNow() {
+// Grizzly sync now runs as a chunked, resumable job tracked server-side in
+// "sync_jobs" (see api/grizzly-sync.js for why). This function just drives
+// the loop from the browser: call once with ?action=start, then keep
+// calling the plain endpoint — each call advances the job by one small,
+// time-boxed chunk and reports progress. If the dashboard is refreshed or
+// closed mid-sync, nothing is lost: reopening the SMS tab calls
+// resumeGrizzlySyncIfRunning() below, which finds the still-"running" job
+// in the database and picks the polling loop back up right where it left
+// off, instead of starting over from country 0.
+let grizzlySyncPolling = false;
+
+function setGrizzlySyncProgress(text) {
+  const el = document.getElementById('grizzlySyncProgress');
+  if (el) el.textContent = text || '';
+}
+
+async function authHeaders() {
+  const headers = {};
+  const { data: { session } } = await sb.auth.getSession();
+  if (session?.access_token) headers['Authorization'] = 'Bearer ' + session.access_token;
+  return headers;
+}
+
+async function pollGrizzlySync() {
+  if (grizzlySyncPolling) return; // already looping — don't start a second one
+  grizzlySyncPolling = true;
   const btn = document.getElementById('btnSyncGrizzly');
   const idle = '<i class="fas fa-sync"></i> Sync Grizzly';
   setBtnBusy(btn, true, 'Syncing...');
   try {
-    const headers = {};
-    const { data: { session } } = await sb.auth.getSession();
-    if (session?.access_token) headers['Authorization'] = 'Bearer ' + session.access_token;
-
-    const res = await fetch('/api/grizzly-sync', { headers });
-    const data = await res.json();
-    if (!data.success) {
-      showAdminToast(data.message || 'Grizzly sync failed', 'error');
-      return;
+    const headers = await authHeaders();
+    while (true) {
+      const res = await fetch('/api/grizzly-sync', { headers });
+      const data = await res.json();
+      if (!data.success) {
+        showAdminToast(data.message || 'Grizzly sync failed', 'error');
+        setGrizzlySyncProgress('Sync failed: ' + (data.message || 'unknown error'));
+        break;
+      }
+      if (data.idle) {
+        setGrizzlySyncProgress('');
+        break;
+      }
+      setGrizzlySyncProgress(`Syncing ${data.cursor_index}/${data.total_countries} countries — ${data.new_services} new, ${data.updated_services} updated`);
+      if (data.done) {
+        await loadNumberServices();
+        showAdminToast(`Grizzly synced — ${data.new_services} new, ${data.updated_services} updated`, 'success');
+        setGrizzlySyncProgress('');
+        break;
+      }
+      // Refresh the table as it goes, not just at the end, and pace the
+      // chunk calls slightly so we don't hammer GrizzlySMS/Supabase.
+      await loadNumberServices();
+      await new Promise(r => setTimeout(r, 400));
     }
-    await loadNumberServices();
-    showAdminToast(`Grizzly synced — ${data.new_services} new, ${data.updated_services} updated`, 'success');
   } catch (e) {
     showAdminToast('Sync failed: ' + e.message, 'error');
+    setGrizzlySyncProgress('');
   } finally {
+    grizzlySyncPolling = false;
     setBtnBusy(btn, false, idle);
     if (btn) btn.innerHTML = idle;
   }
+}
+
+async function syncGrizzlyNow() {
+  try {
+    const headers = await authHeaders();
+    const res = await fetch('/api/grizzly-sync?action=start', { headers });
+    const data = await res.json();
+    if (!data.success) {
+      showAdminToast(data.message || 'Could not start Grizzly sync', 'error');
+      return;
+    }
+  } catch (e) {
+    showAdminToast('Sync failed: ' + e.message, 'error');
+    return;
+  }
+  pollGrizzlySync();
+}
+
+// Called on admin dashboard load — if a sync was already running when the
+// page was refreshed/reopened, pick the progress loop back up instead of
+// requiring the admin to notice and click Sync again.
+async function resumeGrizzlySyncIfRunning() {
+  try {
+    const headers = await authHeaders();
+    const res = await fetch('/api/grizzly-sync?action=status', { headers });
+    const data = await res.json();
+    if (data.success && data.job && data.job.status === 'running') {
+      pollGrizzlySync();
+    }
+  } catch (e) { /* silent — this is a background convenience check */ }
 }
 
 async function loadProfiles() {
