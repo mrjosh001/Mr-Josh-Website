@@ -816,9 +816,36 @@ function populateCategoryFilter() {
 let allNumberServices = [];
 
 async function loadNumberServices() {
-  const { data, error } = await sb.from('number_services').select('*').order('country_name').order('service_name');
-  allNumberServices = error ? [] : (data || []);
-  if (error) console.error('number_services error:', error.message);
+  // Supabase caps each request at 1000 rows by default. A full Grizzly
+  // catalog is ~8k–40k rows, so we page until every row is loaded —
+  // otherwise the country dropdown only shows the first few countries
+  // (Afghanistan, Albania, Algeria…) and looks "incomplete".
+  const pageSize = 1000;
+  let from = 0;
+  const all = [];
+  try {
+    while (true) {
+      const { data, error } = await sb
+        .from('number_services')
+        .select('*')
+        .order('country_name', { ascending: true })
+        .order('service_name', { ascending: true })
+        .range(from, from + pageSize - 1);
+      if (error) {
+        console.error('number_services error:', error.message);
+        break;
+      }
+      const batch = data || [];
+      all.push(...batch);
+      if (batch.length < pageSize) break;
+      from += pageSize;
+      // safety: avoid infinite loop
+      if (from > 200000) break;
+    }
+  } catch (e) {
+    console.error('number_services load failed', e);
+  }
+  allNumberServices = all;
   populateSmsCountryFilter();
   filterNumberServices();
 }
