@@ -2751,7 +2751,7 @@ window.payWithPocketFi = async function() {
             return;
         }
 
-        const res = await fetch('/api/pocketfi-checkout', {
+        const res = await fetch('/api/pocketfi', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -2759,10 +2759,18 @@ window.payWithPocketFi = async function() {
             },
             body: JSON.stringify({ amount })
         });
-        const data = await res.json().catch(() => ({}));
 
+        let data = {};
+        const rawText = await res.text();
+        try { data = rawText ? JSON.parse(rawText) : {}; } catch (_) { data = {}; }
+
+        if (res.status === 404) {
+            showToast('PocketFi API not deployed (404). Add api/pocketfi.js only (delete the two pocketfi-*.js), redeploy.', 'error');
+            return;
+        }
         if (!res.ok || !data.success || !data.payment_link) {
-            showToast(data.message || 'Could not start PocketFi checkout. Try again or contact support.', 'error');
+            const detail = data.message || data.error || (rawText && rawText.slice(0, 120)) || ('HTTP ' + res.status);
+            showToast('PocketFi: ' + detail, 'error');
             return;
         }
 
