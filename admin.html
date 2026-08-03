@@ -816,47 +816,105 @@ function populateCategoryFilter() {
 let allNumberServices = [];
 
 async function loadNumberServices() {
-  // Supabase caps each request at 1000 rows by default. A full Grizzly
-  // catalog is ~8k–40k rows, so we page until every row is loaded —
-  // otherwise the country dropdown only shows the first few countries
-  // (Afghanistan, Albania, Algeria…) and looks "incomplete".
+  await loadSmsCountryOptions();
+  await loadSmsRowsForCurrentFilter();
+}
+
+async function loadSmsCountryOptions() {
+  const select = document.getElementById('smsCountryFilter');
+  if (!select) return;
+  const current = select.value;
+  const names = new Set();
   const pageSize = 1000;
   let from = 0;
-  const all = [];
+  let lastError = null;
+
+  // Lightweight column only — full-row select was timing out on mobile.
+  while (from < 100000) {
+    const { data, error } = await sb
+      .from('number_services')
+      .select('country_name')
+      .order('country_name', { ascending: true })
+      .range(from, from + pageSize - 1);
+    if (error) {
+      lastError = error.message;
+      console.error('SMS country list error:', error);
+      break;
+    }
+    const batch = data || [];
+    for (const r of batch) {
+      if (r.country_name) names.add(r.country_name);
+    }
+    if (batch.length < pageSize) break;
+    from += pageSize;
+  }
+
+  const countries = [...names].sort((a, b) => a.localeCompare(b));
+  select.innerHTML =
+    '<option value="">All Countries</option>' +
+    countries.map(c => `<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join('');
+  if (current && countries.includes(current)) select.value = current;
+
+  if (lastError) {
+    showAdminToast('Could not load countries: ' + lastError, 'error');
+  } else if (countries.length === 0) {
+    showAdminToast('No SMS rows in database (or blocked by RLS). Check number_services.', 'error');
+  }
+}
+
+async function loadSmsRowsForCurrentFilter() {
+  const country = document.getElementById('smsCountryFilter')?.value || '';
+  const q = (document.getElementById('smsSearch')?.value || '').trim();
+  const cols = 'id,source,country_id,country_name,service_id,service_name,supplier_price,price,available_quantity,is_available,currency,updated_at';
+
+  allNumberServices = [];
+
+  // Prefer a country selection so we never try to render 20k cards on a phone.
+  if (!country && !q) {
+    renderNumberServices([]);
+    const cards = document.getElementById('smsMobileCards');
+    const tbody = document.getElementById('smsTableBody');
+    const hint =
+      '<div class="empty-state">Select a <strong>country</strong> above (or search WhatsApp / Google) to load numbers.<br><span style="opacity:.7;font-size:12px;">Catalog is large — loading one country at a time keeps admin fast.</span></div>';
+    if (cards) cards.innerHTML = hint;
+    if (tbody) tbody.innerHTML = `<tr><td colspan="7">${hint}</td></tr>`;
+    return;
+  }
+
   try {
-    while (true) {
-      const { data, error } = await sb
-        .from('number_services')
-        .select('*')
-        .order('country_name', { ascending: true })
-        .order('service_name', { ascending: true })
-        .range(from, from + pageSize - 1);
-      if (error) {
-        console.error('number_services error:', error.message);
-        break;
-      }
-      const batch = data || [];
-      all.push(...batch);
-      if (batch.length < pageSize) break;
-      from += pageSize;
-      // safety: avoid infinite loop
-      if (from > 200000) break;
+    let query = sb.from('number_services').select(cols);
+    if (country) query = query.eq('country_name', country);
+    if (q) {
+      query = query.or(
+        `service_name.ilike.%${q}%,service_id.ilike.%${q}%,country_name.ilike.%${q}%`
+      );
+    }
+    query = query
+      .order('service_name', { ascending: true })
+      .limit(country ? 3000 : 800);
+
+    const { data, error } = await query;
+    if (error) {
+      console.error('SMS rows error:', error);
+      showAdminToast('SMS load error: ' + error.message, 'error');
+      allNumberServices = [];
+    } else {
+      allNumberServices = data || [];
     }
   } catch (e) {
-    console.error('number_services load failed', e);
+    console.error(e);
+    showAdminToast('SMS load failed: ' + (e.message || e), 'error');
+    allNumberServices = [];
   }
-  allNumberServices = all;
-  populateSmsCountryFilter();
-  filterNumberServices();
+  renderNumberServices(allNumberServices);
 }
 
 function populateSmsCountryFilter() {
-  const select = document.getElementById('smsCountryFilter');
-  if (!select) return;
-  const countries = [...new Set(allNumberServices.map(s => s.country_name).filter(Boolean))].sort();
-  const current = select.value;
-  select.innerHTML = '<option value="">All Countries</option>' + countries.map(c => `<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join('');
-  if (countries.includes(current)) select.value = current;
+  loadSmsCountryOptions();
+}
+
+function filterNumberServices() {
+  loadSmsRowsForCurrentFilter();
 }
 
 function usdFmt(n) { return '$' + Number(n || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
@@ -909,21 +967,6 @@ function renderNumberServices(list) {
         </div>`;
     }).join('');
   }
-}
-
-function filterNumberServices() {
-  const q = (document.getElementById('smsSearch')?.value || '').toLowerCase().trim();
-  const country = document.getElementById('smsCountryFilter')?.value || '';
-  let filtered = allNumberServices;
-  if (country) filtered = filtered.filter(s => s.country_name === country);
-  if (q) {
-    filtered = filtered.filter(s =>
-      (s.country_name || '').toLowerCase().includes(q) ||
-      (s.service_name || '').toLowerCase().includes(q) ||
-      (s.service_id || '').toLowerCase().includes(q)
-    );
-  }
-  renderNumberServices(filtered);
 }
 
 function editNumberService(id) {
