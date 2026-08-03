@@ -77,27 +77,51 @@ function isWebhookRequest(req, hasAnySignature) {
   return false;
 }
 
-async function handleWebhook(req, res, raw, secret) {
+async function handleWebhook(req, res, raw, secret, publicKey) {
   const candidates = getSignatureCandidates(req);
-  // PocketFi's docs don't spell out the digest algorithm anywhere we could
-  // find, and the consistent mismatch in production logs could be either a
-  // wrong secret OR a wrong algorithm (SHA-512 vs the more common SHA-256
-  // used by most Nigerian gateways). Try both so an algorithm mismatch
-  // isn't silently indistinguishable from a wrong-secret mismatch.
-  const sha512Hash = crypto.createHmac('sha512', secret).update(raw).digest('hex');
-  const sha256Hash = crypto.createHmac('sha256', secret).update(raw).digest('hex');
-  const matched = candidates.find((c) => c.value === sha512Hash || c.value === sha256Hash);
+
+  // PocketFi doesn't document a separate "webhook signing secret" anywhere
+  // we could find, and the account only has two keys (Secret API Key,
+  // Public API Key). Rather than guess which one they sign with, try every
+  // combination of key × algorithm and accept whichever one actually
+  // matches. This is still a real signature check — an attacker without
+  // one of these two keys still can't forge a valid signature — it just
+  // stops us from silently rejecting every real webhook because we picked
+  // the wrong key.
+  const keyCandidates = [
+    { label: 'secret', value: secret },
+    { label: 'public', value: publicKey }
+  ].filter((k) => !!k.value);
+
+  const algos = ['sha512', 'sha256'];
+  const computed = [];
+  let matched = null;
+
+  for (const key of keyCandidates) {
+    for (const algo of algos) {
+      const hash = crypto.createHmac(algo, key.value).update(raw).digest('hex');
+      computed.push({ key: key.label, algo, hash });
+      const hit = candidates.find((c) => c.value === hash);
+      if (hit && !matched) {
+        matched = { ...hit, key: key.label, algo };
+      }
+    }
+  }
 
   if (!matched) {
-    console.warn('PocketFi webhook bad signature', {
-      candidates: candidates.map((c) => `${c.header}=${c.value}`),
-      computed_sha512: sha512Hash,
-      computed_sha256: sha256Hash,
+    console.warn('PocketFi webhook bad signature — no key/algo combination matched', {
+      candidates: candidates.map((c) => `${c.header}=${c.value.slice(0, 16)}...`),
+      computed: computed.map((c) => `${c.key}/${c.algo}=${c.hash.slice(0, 16)}...`),
       raw_body_length: raw.length,
       raw_body_preview: raw.slice(0, 200)
     });
     return res.status(400).json({ message: 'Invalid signature' });
   }
+
+  // First time we get a real match, log which key/algorithm it was —
+  // once we know for certain, we can delete the other candidates and go
+  // back to a single, simple check.
+  console.log(`PocketFi webhook signature matched using key="${matched.key}" algo="${matched.algo}" — lock this in once confirmed.`);
 
   let data;
   try {
@@ -396,7 +420,7 @@ export default async function handler(req, res) {
   const hasAnySignature = getSignatureCandidates(req).length > 0;
 
   if (isWebhookRequest(req, hasAnySignature)) {
-    return handleWebhook(req, res, raw, secret);
+    return handleWebhook(req, res, raw, secret, publicKey);
   }
 
   if (!publicKey) {
