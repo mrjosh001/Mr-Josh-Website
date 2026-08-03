@@ -67,6 +67,56 @@ async function callGrizzly(apiKey, params) {
   return { status: res.status, text };
 }
 
+/**
+ * Build map: service_code -> human name (e.g. wa -> WhatsApp).
+ * Grizzly/sms-activate getServices returns several possible shapes.
+ */
+async function getServiceNameMap(apiKey) {
+  const map = Object.create(null);
+  const res = await callGrizzly(apiKey, { action: 'getServices' });
+  if (!res.text || res.text === 'BAD_KEY') return map;
+
+  let data;
+  try {
+    data = JSON.parse(res.text);
+  } catch {
+    return map;
+  }
+
+  const add = (code, name) => {
+    if (!code) return;
+    const c = String(code).trim();
+    const n = name != null ? String(name).trim() : '';
+    if (!c) return;
+    if (n) map[c] = n;
+    else if (!map[c]) map[c] = c;
+  };
+
+  if (Array.isArray(data)) {
+    for (const item of data) {
+      if (!item || typeof item !== 'object') continue;
+      add(item.code || item.service || item.id || item.slug, item.name || item.title || item.eng || item.rus);
+    }
+  } else if (data && typeof data === 'object') {
+    for (const [key, val] of Object.entries(data)) {
+      if (val == null) continue;
+      if (typeof val === 'string') {
+        // { "wa": "WhatsApp" } or { "0": "WhatsApp" } — prefer code keys
+        add(key, val);
+      } else if (typeof val === 'object') {
+        // { "0": { code: "wa", name: "WhatsApp" } } or { "wa": { name: "WhatsApp" } }
+        const code = val.code || val.service || val.id || key;
+        const name = val.name || val.title || val.eng || val.rus || val.service_name;
+        add(code, name);
+        // if key looks like a code and differs, also map key
+        if (key && !/^\d+$/.test(key) && key !== String(code)) add(key, name || code);
+      }
+    }
+  }
+  return map;
+}
+
+
 async function getJob() {
   const { data, error } = await supabase
     .from('sync_jobs')
@@ -112,7 +162,7 @@ async function runInBatches(items, size, fn) {
 /**
  * Sync one country: 1 Grizzly price call + 1 existing SELECT + batched writes.
  */
-async function syncOneCountry(apiKey, country, usdToNgn, counters) {
+async function syncOneCountry(apiKey, country, usdToNgn, counters, serviceNames) {
   const countryId = parseInt(country.id, 10);
   if (!Number.isFinite(countryId)) return;
 
@@ -166,13 +216,17 @@ async function syncOneCountry(apiKey, country, usdToNgn, counters) {
     const providersRaw =
       info?.providers && typeof info.providers === 'object' ? info.providers : null;
 
+    const friendlyName =
+      (serviceNames && (serviceNames[serviceCode] || serviceNames[String(serviceCode).toLowerCase()])) ||
+      serviceCode;
+
     const existingId = existingMap.get(String(serviceCode));
     if (existingId) {
       counters.updatedCount += 1;
       toUpdate.push({
         id: existingId,
         country_name: countryName,
-        service_name: serviceCode,
+        service_name: friendlyName,
         supplier_price: supplierPriceUsd,
         available_quantity: availableQty,
         providers_raw: providersRaw,
@@ -186,7 +240,7 @@ async function syncOneCountry(apiKey, country, usdToNgn, counters) {
         country_id: countryId,
         country_name: countryName,
         service_id: serviceCode,
-        service_name: serviceCode,
+        service_name: friendlyName,
         supplier_price: supplierPriceUsd,
         price: applyMarkup(supplierPriceUsd, usdToNgn),
         currency: 'NGN',
@@ -361,10 +415,13 @@ export default async function handler(req, res) {
       errors: Array.isArray(job.errors) ? [...job.errors] : []
     };
 
+    // One getServices call per chunk — maps aaw/wa/… → readable names
+    const serviceNames = await getServiceNameMap(apiKey);
+
     while (cursor < countryList.length && Date.now() - startedAt < TIME_BUDGET_MS) {
       const country = countryList[cursor];
       cursor += 1;
-      await syncOneCountry(apiKey, country, usdToNgn, counters);
+      await syncOneCountry(apiKey, country, usdToNgn, counters, serviceNames);
     }
 
     const done = cursor >= countryList.length;
