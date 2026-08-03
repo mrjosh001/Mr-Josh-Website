@@ -1003,10 +1003,9 @@ async function pollGrizzlySync() {
         setGrizzlySyncProgress('');
         break;
       }
-      // Refresh the table as it goes, not just at the end, and pace the
-      // chunk calls slightly so we don't hammer GrizzlySMS/Supabase.
-      await loadNumberServices();
-      await new Promise(r => setTimeout(r, 400));
+      // Do not reload the full table every chunk (that was a major slowdown).
+      // Tiny pause only so we don't hammer the API between large chunks.
+      await new Promise(r => setTimeout(r, 50));
     }
   } catch (e) {
     showAdminToast('Sync failed: ' + e.message, 'error');
