@@ -9,9 +9,14 @@
  *   /api/pocketfi-checkout  → /api/pocketfi
  *   /api/pocketfi-webhook   → /api/pocketfi
  *
- * Env: POCKETFI_SECRET_KEY, POCKETFI_BUSINESS_ID, SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY
+ * Env: POCKETFI_SECRET_KEY, POCKETFI_PUBLIC_KEY, POCKETFI_BUSINESS_ID, SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY
  * Optional: POCKETFI_API_BASE (default https://api.pocketfi.ng/api/v1)
  *           APP_URL (default https://app.mjhub.store)
+ *
+ * POCKETFI_SECRET_KEY  → used only to verify the webhook signature (HMAC).
+ * POCKETFI_PUBLIC_KEY  → sent as the Bearer token on checkout requests.
+ *                        (PocketFi's Public API Key, shown on their
+ *                        dashboard — looks like "12345|randomChars...")
  *
  * PocketFi dashboard webhook URL: https://app.mjhub.store/api/pocketfi
  *   (or /api/pocketfi-webhook if rewrite is configured)
@@ -187,7 +192,7 @@ async function handleWebhook(req, res, raw, secret) {
   return res.status(200).json({ message: 'success' });
 }
 
-async function handleCheckout(req, res, raw, secret, businessId) {
+async function handleCheckout(req, res, raw, publicKey, businessId) {
   const authHeader = req.headers.authorization || '';
   const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : null;
   if (!token) {
@@ -260,7 +265,7 @@ async function handleCheckout(req, res, raw, secret, businessId) {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        Authorization: `Bearer ${secret}`
+        Authorization: `Bearer ${publicKey}`
       },
       body: JSON.stringify(payload)
     });
@@ -353,6 +358,7 @@ export default async function handler(req, res) {
   }
 
   const secret = process.env.POCKETFI_SECRET_KEY;
+  const publicKey = process.env.POCKETFI_PUBLIC_KEY;
   const businessId = process.env.POCKETFI_BUSINESS_ID;
 
   if (!process.env.SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
@@ -372,6 +378,13 @@ export default async function handler(req, res) {
     return handleWebhook(req, res, raw, secret);
   }
 
+  if (!publicKey) {
+    return res.status(500).json({
+      success: false,
+      message: 'Missing POCKETFI_PUBLIC_KEY'
+    });
+  }
+
   if (!businessId) {
     return res.status(500).json({
       success: false,
@@ -379,5 +392,5 @@ export default async function handler(req, res) {
     });
   }
 
-  return handleCheckout(req, res, raw, secret, businessId);
+  return handleCheckout(req, res, raw, publicKey, businessId);
 }
