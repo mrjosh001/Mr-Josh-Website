@@ -80,6 +80,15 @@ function isWebhookRequest(req, hasAnySignature) {
 }
 
 async function handleWebhook(req, res, raw, secret, publicKey) {
+  // Log everything about the incoming request unconditionally, before the
+  // signature check runs — this is the only way to see PocketFi's actual
+  // header names and full payload shape, since there's no public API doc
+  // for pocketfi.ng and the dashboard has no separate webhook secret.
+  console.log('PocketFi webhook RAW request', {
+    headers: req.headers,
+    raw_body: raw
+  });
+
   const candidates = getSignatureCandidates(req);
 
   // PocketFi doesn't document a separate "webhook signing secret" anywhere
@@ -141,13 +150,6 @@ async function handleWebhook(req, res, raw, secret, publicKey) {
   } catch {
     return res.status(400).json({ message: 'Invalid JSON' });
   }
-
-  // Always log the raw payload once the signature is verified. PocketFi's
-  // exact webhook shape isn't documented anywhere we could find, so this is
-  // the fastest way to confirm (via Vercel → project → Logs) whether the
-  // amount/reference below are actually being read from the right fields
-  // for a real transaction, instead of guessing blind.
-  console.log('PocketFi webhook payload (verified):', raw.slice(0, 1000));
 
   const amount = Number(
     data?.order?.amount ??
