@@ -115,9 +115,8 @@ function isPaidStatus(data) {
       ''
   ).toLowerCase();
 
-  // Explicit non-success — never credit wallet
+  // Explicit failures — never credit
   if (
-    !status ||
     status.includes('fail') ||
     status.includes('cancel') ||
     status.includes('expire') ||
@@ -129,7 +128,7 @@ function isPaidStatus(data) {
     return false;
   }
 
-  return (
+  if (
     status === 'success' ||
     status === 'successful' ||
     status === 'paid' ||
@@ -137,8 +136,30 @@ function isPaidStatus(data) {
     status === 'complete' ||
     status === 'payment.success' ||
     status === 'charge.success' ||
-    status.includes('success')
+    (status && status.includes('success'))
+  ) {
+    return true;
+  }
+
+  // PocketFi real webhook has NO status field — only:
+  // { order: { amount, settlement_amount }, transaction: { reference }, account_number }
+  // They only POST this after a successful payment. Empty status + amount + ref = paid.
+  const amount = Number(
+    data?.order?.amount ??
+      data?.order?.settlement_amount ??
+      data?.amount ??
+      0
   );
+  const ref =
+    data?.transaction?.reference ||
+    data?.payment_id ||
+    data?.reference ||
+    null;
+  if (!status && ref && amount > 0) {
+    return true;
+  }
+
+  return false;
 }
 
 async function creditUser(userId, amount, reference) {
