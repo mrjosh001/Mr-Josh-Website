@@ -83,6 +83,7 @@ let checkingNow = false;
 const EXPIRY_SECONDS = 20 * 60;
 
 function escapeHtml(str){if(!str)return'';return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;')}
+function money(n){return '₦'+Number(n||0).toLocaleString()}
 function showToast(msg,type){const t=document.createElement('div');t.className='toast'+(type==='error'?' error':'');t.innerHTML='<span>'+(type==='error'?'❌':'✅')+'</span><span>'+escapeHtml(msg)+'</span>';toastContainer.appendChild(t);setTimeout(()=>t.remove(),3500)}
 
 function formatCountdown(seconds){
@@ -117,13 +118,22 @@ function stopCountdown(){
 }
 
 function renderWaiting(data){
+  const serviceLabel = (data.service_name || '').replace(/_/g,' ');
   statusCard.innerHTML = `
     <div class="status-icon waiting"><i class="fa-solid fa-mobile-screen"></i></div>
     <div class="status-title">Waiting for code</div>
     <div class="status-sub"><span class="pulse-dot"></span>We'll show the code here the moment it arrives — usually within a minute or two.</div>
+    <div class="number-display" style="text-transform:capitalize;">
+      <div class="label">Service</div>
+      <div class="value" style="font-size:16px;">${escapeHtml(serviceLabel || '—')}${data.country_name ? ' · ' + escapeHtml(data.country_name) : ''}</div>
+    </div>
     <div class="number-display">
       <div class="label">Your Number</div>
       <div class="value">${escapeHtml(data.number || '—')}</div>
+    </div>
+    <div class="number-display">
+      <div class="label">Price</div>
+      <div class="value" style="font-size:16px;color:var(--primary);">${money(data.price)}</div>
     </div>
     <div class="number-display" style="margin-bottom:14px;">
       <div class="label">Time Remaining</div>
@@ -142,13 +152,22 @@ function renderWaiting(data){
 function renderCompleted(data){
   stopPolling();
   stopCountdown();
+  const serviceLabel = (data.service_name || '').replace(/_/g,' ');
   statusCard.innerHTML = `
     <div class="status-icon success"><i class="fa-solid fa-circle-check"></i></div>
     <div class="status-title">Code Received!</div>
     <div class="status-sub">Copy the code below and use it to complete verification.</div>
+    <div class="number-display" style="text-transform:capitalize;">
+      <div class="label">Service</div>
+      <div class="value" style="font-size:16px;">${escapeHtml(serviceLabel || '—')}${data.country_name ? ' · ' + escapeHtml(data.country_name) : ''}</div>
+    </div>
     <div class="number-display">
       <div class="label">Number</div>
       <div class="value">${escapeHtml(data.number || '—')}</div>
+    </div>
+    <div class="number-display">
+      <div class="label">Price</div>
+      <div class="value" style="font-size:16px;color:var(--primary);">${money(data.price)}</div>
     </div>
     <div class="code-display">
       <div class="label">Verification Code</div>

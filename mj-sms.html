@@ -36,6 +36,22 @@ body::before{content:'';position:fixed;inset:0;pointer-events:none;z-index:0;bac
 .country-row .name{font-weight:700;font-size:14px;}
 .country-row .count{font-size:11px;color:var(--muted);background:var(--primary-glow);color:var(--primary);padding:3px 9px;border-radius:20px;font-weight:700;}
 .selected-country-bar{display:flex;align-items:center;justify-content:space-between;background:var(--primary-glow);border-radius:12px;padding:12px 14px;margin-bottom:14px;}
+.pending-banner{background:linear-gradient(135deg,rgba(251,191,36,.15),rgba(251,191,36,.05));border:1px solid rgba(251,191,36,.35);border-radius:16px;padding:14px 16px;margin-bottom:14px;display:flex;align-items:center;gap:12px;text-decoration:none;color:inherit;}
+.pending-banner .pb-icon{width:38px;height:38px;border-radius:50%;background:rgba(251,191,36,.2);color:#fbbf24;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:16px;}
+.pending-banner .pb-text{flex:1;min-width:0;}
+.pending-banner .pb-title{font-weight:800;font-size:13px;margin-bottom:2px;}
+.pending-banner .pb-sub{font-size:11px;color:var(--muted);}
+.recent-strip{margin-bottom:14px;}
+.recent-strip-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;}
+.recent-strip-head h3{font-size:13px;font-weight:800;color:var(--muted);text-transform:uppercase;letter-spacing:.03em;}
+.recent-strip-head a{font-size:12px;font-weight:700;color:var(--primary);text-decoration:none;}
+.recent-item{display:flex;justify-content:space-between;align-items:center;gap:10px;background:var(--card);border:1px solid var(--border);border-radius:12px;padding:10px 14px;margin-bottom:8px;text-decoration:none;color:inherit;}
+.recent-item .ri-name{font-size:13px;font-weight:700;text-transform:capitalize;}
+.recent-item .ri-sub{font-size:11px;color:var(--muted);margin-top:2px;}
+.recent-item .ri-status{font-size:10px;font-weight:700;padding:3px 9px;border-radius:20px;white-space:nowrap;}
+.ri-status-completed{background:rgba(52,211,153,.15);color:var(--success);}
+.ri-status-waiting_for_code{background:rgba(251,191,36,.15);color:#fbbf24;}
+.ri-status-refunded,.ri-status-failed{background:rgba(248,113,113,.15);color:var(--danger);}
 .selected-country-bar .name{font-weight:800;font-size:14px;color:var(--primary);}
 .selected-country-bar button{background:none;border:1px solid var(--primary);color:var(--primary);font-size:11px;font-weight:700;padding:6px 12px;border-radius:8px;cursor:pointer;font-family:inherit;}
 .product-count-badge{display:inline-block;background:var(--primary-glow);color:var(--primary);padding:5px 12px;border-radius:20px;font-size:11px;font-weight:700;margin-bottom:14px}
@@ -95,6 +111,8 @@ body::before{content:'';position:fixed;inset:0;pointer-events:none;z-index:0;bac
 <div class="header-right"><a href="mj-sms-history.html" class="hist-link"><i class="fa-solid fa-clock-rotate-left"></i> History</a></div>
 </header>
 <main class="main-content">
+
+<div id="recentActivityArea"></div>
 
 <div class="content-card" id="countryStep">
 <h2><i class="fa-solid fa-earth-americas" style="color:var(--primary)"></i> Choose a Country</h2>
@@ -251,8 +269,70 @@ async function initSession(){
     if(session && session.user){
       currentUserId = session.user.id;
       await refreshBalance();
+      await loadRecentActivity();
     }
   }catch(e){}
+}
+
+const STATUS_LABELS_MINI = {
+  waiting_for_code: 'Waiting for code',
+  completed: 'Code received',
+  refunded: 'Cancelled & refunded',
+  failed: 'Failed'
+};
+
+// Surfaces pending/recent numbers directly on this page instead of making
+// the customer dig into a separate History page to find an in-progress
+// order or see what they've bought before.
+async function loadRecentActivity(){
+  const area = document.getElementById('recentActivityArea');
+  if(!area || !sbClient || !currentUserId) return;
+  try{
+    const { data, error } = await sbClient
+      .from('number_orders')
+      .select('order_id, service_name, country_name, phone_number, price, status, code, created_at')
+      .eq('source', 'grizzlysms')
+      .eq('user_id', currentUserId)
+      .order('created_at', { ascending: false })
+      .limit(5);
+    if(error || !data || !data.length){ return; }
+
+    let html = '';
+
+    const pending = data.find(o => o.status === 'waiting_for_code');
+    if(pending){
+      const name = (pending.service_name || 'a service').replace(/_/g,' ');
+      html += `<a class="pending-banner" href="mj-sms-number.html?order_id=${encodeURIComponent(pending.order_id)}">
+        <div class="pb-icon"><i class="fa-solid fa-hourglass-half"></i></div>
+        <div class="pb-text">
+          <div class="pb-title">You have a number waiting for a code</div>
+          <div class="pb-sub" style="text-transform:capitalize;">${escapeHtml(name)} · ${escapeHtml(pending.phone_number||'')} — tap to view</div>
+        </div>
+        <i class="fa-solid fa-chevron-right" style="color:var(--muted);"></i>
+      </a>`;
+    }
+
+    html += `<div class="recent-strip">
+      <div class="recent-strip-head"><h3>Recent Numbers</h3><a href="mj-sms-history.html">View all →</a></div>
+      ${data.map(o => {
+        const name = (o.service_name || 'Service').replace(/_/g,' ');
+        const statusClass = 'ri-status-' + (o.status || 'waiting_for_code');
+        const statusLabel = STATUS_LABELS_MINI[o.status] || o.status;
+        const href = o.status === 'waiting_for_code'
+          ? `mj-sms-number.html?order_id=${encodeURIComponent(o.order_id)}`
+          : 'mj-sms-history.html';
+        return `<a class="recent-item" href="${href}">
+          <div>
+            <div class="ri-name">${escapeHtml(name)}</div>
+            <div class="ri-sub">${escapeHtml(o.country_name||'')} · ${money(o.price)}${o.code ? ' · Code: ' + escapeHtml(o.code) : ''}</div>
+          </div>
+          <span class="ri-status ${statusClass}">${escapeHtml(statusLabel)}</span>
+        </a>`;
+      }).join('')}
+    </div>`;
+
+    area.innerHTML = html;
+  }catch(e){ /* non-critical — the main order flow below still works fine without this */ }
 }
 
 async function refreshBalance(){

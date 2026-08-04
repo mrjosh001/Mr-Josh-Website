@@ -235,6 +235,7 @@
         <button class="nav-item" data-tab="lookup" onclick="switchTab('lookup')"><i class="fas fa-search"></i> Customer Lookup</button>
         <button class="nav-item" data-tab="products" onclick="switchTab('products')"><i class="fas fa-box"></i> Products & Stock</button>
         <button class="nav-item" data-tab="sms" onclick="switchTab('sms')"><i class="fas fa-sim-card"></i> SMS Numbers</button>
+        <button class="nav-item" data-tab="sms-orders" onclick="switchTab('sms-orders')"><i class="fas fa-comment-sms"></i> SMS Orders</button>
         <button class="nav-item" data-tab="orders" onclick="switchTab('orders')"><i class="fas fa-receipt"></i> Orders</button>
         <button class="nav-item" data-tab="notify" onclick="switchTab('notify')"><i class="fas fa-bullhorn"></i> Notifications</button>
         <button class="nav-item" data-tab="settings" onclick="switchTab('settings')"><i class="fas fa-cog"></i> Settings</button>
@@ -371,6 +372,39 @@
               </table>
             </div>
             <div id="smsMobileCards" class="mobile-only mobile-cards"></div>
+          </div>
+        </div>
+
+        <div id="tab-sms-orders" class="tab-content">
+          <div class="panel">
+            <div class="panel-header">
+              <div class="panel-title">SMS Orders — Customer Purchases</div>
+            </div>
+            <p style="color:#94a3b8;font-size:13px;margin:-4px 0 4px;">
+              Every number a customer has bought, the code they got (if any), and whether it's still waiting, completed, or was cancelled &amp; refunded.
+            </p>
+            <div class="search-row" style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;">
+              <input type="text" id="smsOrdersSearch" placeholder="Search by Customer ID, service, or number…" oninput="filterSmsOrders()" style="flex:1;min-width:200px;" />
+              <select id="smsOrdersStatusFilter" onchange="filterSmsOrders()" style="min-width:160px;">
+                <option value="">All Statuses</option>
+                <option value="waiting_for_code">Waiting for code</option>
+                <option value="completed">Completed</option>
+                <option value="refunded">Cancelled &amp; refunded</option>
+                <option value="failed">Failed</option>
+              </select>
+            </div>
+
+            <div class="desktop-only desktop-table table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Customer ID</th><th>Service</th><th>Country</th><th>Number</th><th>Price</th><th>Code</th><th>Status</th><th>Date</th>
+                  </tr>
+                </thead>
+                <tbody id="smsOrdersTableBody"></tbody>
+              </table>
+            </div>
+            <div id="smsOrdersMobileCards" class="mobile-only mobile-cards"></div>
           </div>
         </div>
 
@@ -620,6 +654,8 @@ const tabTitles = {
   users: 'Customers',
   lookup: 'Customer Lookup',
   products: 'Products & Stock',
+  sms: 'SMS Numbers',
+  'sms-orders': 'SMS Orders',
   orders: 'Orders',
   settings: 'Settings'
 };
@@ -786,7 +822,7 @@ async function handleLogout() {
 }
 
 async function loadAllData() {
-  await Promise.all([loadProducts(), loadProfiles(), tryLoadOrders(), loadNotificationHistory(), loadNumberServices()]);
+  await Promise.all([loadProducts(), loadProfiles(), tryLoadOrders(), tryLoadSmsOrders(), loadNotificationHistory(), loadNumberServices()]);
   resumeGrizzlySyncIfRunning();
   updateMetrics();
 }
@@ -1188,6 +1224,95 @@ async function tryLoadOrders() {
   } else {
     window._cachedOrders = [];
   }
+}
+
+const SMS_ORDER_STATUS_LABELS = {
+  waiting_for_code: 'Waiting for code',
+  completed: 'Completed',
+  refunded: 'Cancelled & refunded',
+  failed: 'Failed'
+};
+
+async function tryLoadSmsOrders() {
+  const { data, error } = await sb
+    .from('number_orders')
+    .select('*')
+    .eq('source', 'grizzlysms')
+    .order('created_at', { ascending: false })
+    .limit(300);
+  if (error) {
+    console.error('SMS orders load error:', error.message);
+    window._cachedSmsOrders = [];
+    return;
+  }
+  window._cachedSmsOrders = data || [];
+  filterSmsOrders();
+}
+
+function filterSmsOrders() {
+  const q = (document.getElementById('smsOrdersSearch')?.value || '').trim().toLowerCase();
+  const status = document.getElementById('smsOrdersStatusFilter')?.value || '';
+  const all = window._cachedSmsOrders || [];
+  const filtered = all.filter(o => {
+    if (status && o.status !== status) return false;
+    if (!q) return true;
+    return String(o.customer_id || '').toLowerCase().includes(q)
+      || String(o.service_name || '').toLowerCase().includes(q)
+      || String(o.phone_number || '').toLowerCase().includes(q)
+      || String(o.order_id || '').toLowerCase().includes(q);
+  });
+  renderSmsOrders(filtered);
+}
+
+function renderSmsOrders(orders) {
+  const tbody = document.getElementById('smsOrdersTableBody');
+  const cards = document.getElementById('smsOrdersMobileCards');
+  if (!tbody || !cards) return;
+
+  if (!orders?.length) {
+    tbody.innerHTML = `<tr><td colspan="8" class="empty-state">No SMS orders found.</td></tr>`;
+    cards.innerHTML = `<div class="empty-state">No SMS orders found.</div>`;
+    return;
+  }
+
+  // Reuses the same badge-on/badge-off convention as the rest of the admin
+  // dashboard (green for a good outcome, red for cancelled/failed); waiting
+  // gets its own inline color since neither on/off fits "still pending".
+  const statusBadge = (s) => {
+    if (s === 'completed') return '<span class="badge badge-on">Completed</span>';
+    if (s === 'waiting_for_code') return '<span class="badge" style="background:rgba(251,191,36,.15);color:#fbbf24;">Waiting</span>';
+    return `<span class="badge badge-off">${escapeHtml(SMS_ORDER_STATUS_LABELS[s] || s || '—')}</span>`;
+  };
+
+  tbody.innerHTML = orders.map(o => {
+    const name = (o.service_name || o.service_id || '—').replace(/_/g, ' ');
+    const date = o.created_at ? new Date(o.created_at).toLocaleString() : '—';
+    return `<tr>
+      <td style="font-family:monospace;font-weight:700;">${escapeHtml(o.customer_id || '—')}</td>
+      <td style="text-transform:capitalize;">${escapeHtml(name)}</td>
+      <td>${escapeHtml(o.country_name || '—')}</td>
+      <td style="font-family:monospace;">${escapeHtml(o.phone_number || '—')}</td>
+      <td>₦${Number(o.price || 0).toLocaleString()}</td>
+      <td style="font-family:monospace;">${o.code ? escapeHtml(o.code) : '—'}</td>
+      <td>${statusBadge(o.status)}</td>
+      <td style="white-space:nowrap;font-size:12px;color:#94a3b8;">${escapeHtml(date)}</td>
+    </tr>`;
+  }).join('');
+
+  cards.innerHTML = orders.map(o => {
+    const name = (o.service_name || o.service_id || '—').replace(/_/g, ' ');
+    const date = o.created_at ? new Date(o.created_at).toLocaleString() : '—';
+    return `<div class="product-card">
+      <h4 style="text-transform:capitalize;">${escapeHtml(name)}</h4>
+      <div class="meta" style="font-family:monospace;">Customer: ${escapeHtml(o.customer_id || '—')}</div>
+      <div class="row-line"><span>Country</span><span>${escapeHtml(o.country_name || '—')}</span></div>
+      <div class="row-line"><span>Number</span><span style="font-family:monospace;">${escapeHtml(o.phone_number || '—')}</span></div>
+      <div class="row-line"><span>Price</span><strong class="price">₦${Number(o.price || 0).toLocaleString()}</strong></div>
+      ${o.code ? `<div class="row-line"><span>Code</span><span style="font-family:monospace;">${escapeHtml(o.code)}</span></div>` : ''}
+      <div class="row-line"><span>Status</span>${statusBadge(o.status)}</div>
+      <div class="row-line"><span>Date</span><span>${escapeHtml(date)}</span></div>
+    </div>`;
+  }).join('');
 }
 
 function updateMetrics() {
