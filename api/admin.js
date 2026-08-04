@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
+import { applyMarkup } from '../lib/pricing.js';
 
 /**
  * POST /api/admin
@@ -27,6 +28,9 @@ import { createClient } from '@supabase/supabase-js';
  *     action: 'update' — { id, price, is_available } — GrizzlySMS number_services
  *     pricing only. Supplier fields (country/service/supplier_price/stock)
  *     are read-only here and only ever change via /api/grizzly-sync.
+ *     action: 'bulk_reprice' — { mode: 'unpriced_only' | 'all' } — applies
+ *     the standard markup (lib/pricing.js) across many rows at once instead
+ *     of editing them one at a time in the table.
  *
  * Env: SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY
  */
@@ -179,6 +183,48 @@ async function smsUpdate(body) {
   if (!data) return { status: 404, body: { success: false, message: 'SMS number listing not found' } };
 
   return { status: 200, body: { success: true, data } };
+}
+
+/**
+ * Bulk-apply the standard markup to number_services rows in one pass —
+ * for when there are too many country/service combos to reprice by hand.
+ *
+ * mode: 'unpriced_only' (default, safe) — only rows with price 0 or null.
+ *       Never touches a price you've already set, manually or otherwise.
+ * mode: 'all' — reprices every row, including ones already priced. Use
+ *       this if you want to reroll margins across the board; it will
+ *       overwrite any manual price customizations you've made.
+ */
+async function smsBulkReprice(body) {
+  const mode = body.mode === 'all' ? 'all' : 'unpriced_only';
+  const usdToNgn = Number(process.env.USD_TO_NGN_RATE) || 1420;
+
+  let query = supabase.from('number_services').select('id, supplier_price, price');
+  if (mode === 'unpriced_only') query = query.or('price.is.null,price.eq.0');
+
+  const { data: rows, error } = await query;
+  if (error) return { status: 500, body: { success: false, message: 'Fetch failed: ' + error.message } };
+  if (!rows || !rows.length) {
+    return {
+      status: 200,
+      body: { success: true, updated: 0, total: 0, message: mode === 'unpriced_only' ? 'Nothing to do — every row already has a price.' : 'No number listings found.' }
+    };
+  }
+
+  const CONCURRENCY = 20;
+  let updated = 0;
+  const errors = [];
+  for (let i = 0; i < rows.length; i += CONCURRENCY) {
+    const batch = rows.slice(i, i + CONCURRENCY);
+    await Promise.all(batch.map(async (row) => {
+      const newPrice = applyMarkup(Number(row.supplier_price || 0), usdToNgn);
+      const { error: updErr } = await supabase.from('number_services').update({ price: newPrice }).eq('id', row.id);
+      if (updErr) errors.push(`${row.id}: ${updErr.message}`);
+      else updated += 1;
+    }));
+  }
+
+  return { status: 200, body: { success: true, updated, total: rows.length, errors: errors.slice(0, 10) } };
 }
 
 // ---------- resource: product ----------
@@ -484,7 +530,8 @@ export default async function handler(req, res) {
       result = await inventoryHandle(body);
     } else if (resource === 'sms') {
       if (action === 'update') result = await smsUpdate(body);
-      else result = { status: 400, body: { success: false, message: 'Unknown sms action. Use "update".' } };
+      else if (action === 'bulk_reprice') result = await smsBulkReprice(body);
+      else result = { status: 400, body: { success: false, message: 'Unknown sms action. Use "update" or "bulk_reprice".' } };
     } else if (resource === 'supplier_balances') {
       result = await supplierBalancesFetch();
     } else {
