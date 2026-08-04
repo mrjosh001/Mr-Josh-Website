@@ -846,7 +846,16 @@ body::before {
         <ul class="sidebar-links">
             <li><a href="#" class="sidebar-link active" data-target="home"><i class="fa-solid fa-house"></i> <span>Dashboard</span></a></li>
             <li><a href="mj-logs.html"><i class="fa-solid fa-box-archive"></i> <span>MJ Logs</span></a></li>
-            <li><a href="#" class="sidebar-link" data-target="sms"><i class="fa-solid fa-mobile-screen"></i> <span>MJ SMS</span></a></li>
+            <li>
+                <a href="#" class="sidebar-link" onclick="toggleSmsMenu(event)" style="display:flex;align-items:center;justify-content:space-between;">
+                    <span style="display:flex;align-items:center;gap:12px;"><i class="fa-solid fa-mobile-screen"></i> <span>MJ SMS</span></span>
+                    <i class="fa-solid fa-chevron-down" id="smsMenuChevron" style="font-size:11px;transition:transform .2s;"></i>
+                </a>
+                <ul id="smsSubmenu" style="list-style:none;max-height:0;overflow:hidden;transition:max-height .25s ease;">
+                    <li><a href="mj-sms.html" style="padding-left:34px;"><i class="fa-solid fa-plus"></i> <span>Get Number</span></a></li>
+                    <li><a href="mj-sms-history.html" style="padding-left:34px;"><i class="fa-solid fa-clock-rotate-left"></i> <span>Number History</span></a></li>
+                </ul>
+            </li>
             <li><a href="#" class="sidebar-link" data-target="booster"><i class="fa-solid fa-bolt"></i> <span>MJ Boosters</span></a></li>
             <li><a href="#" class="sidebar-link" data-target="deposit"><i class="fa-solid fa-credit-card"></i> <span>Deposit</span></a></li>
             <li><a href="#" class="sidebar-link" data-target="cart"><i class="fa-solid fa-bag-shopping"></i> <span>Cart</span></a></li>
@@ -969,18 +978,6 @@ body::before {
                     </div>
                 </div>
                 <div class="profile-menu-arrow">›</div>
-            </div>
-        </div>
-    </section>
-
-    <section id="sms" class="app-section">
-        <div class="content-card">
-            <h2>MJ SMS</h2>
-            <p class="helper-text">Get virtual numbers for OTP verification.</p>
-            <div class="coming-soon-box">
-                <div class="coming-soon-icon"><i class="fa-solid fa-mobile-screen"></i></div>
-                <h4>Coming Soon</h4>
-                <p>Our tech team is working on MJ SMS. This service will be launching soon — check back shortly!</p>
             </div>
         </div>
     </section>
@@ -1425,6 +1422,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 renderNotifications();
                 showNotificationPopupIfUnread();
                 startInactivityWatcher();
+                handlePocketFiReturn();
             } else {
                 // No active session — this page is the signed-in dashboard,
                 // so a visitor who isn't logged in must never see it. Send
@@ -1452,70 +1450,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     initSupportWidget();
     updateCartDisplay();
     initHashRouting();
-    handlePocketFiReturn();
 });
-
-// PocketFi's hosted checkout redirects the browser back to
-// `${APP_URL}/?deposit=pocketfi&uid=...` once the user finishes paying —
-// in theory. In practice PocketFi doesn't reliably preserve that query
-// string, so a returning user can land on a bare URL with nothing to
-// detect. Rather than depend on that, `payWithPocketFi()` drops a
-// `mjhub_pending_pocketfi` marker in localStorage right before leaving the
-// site; this checks for that marker (falling back to the URL param if
-// present) so the return is detected either way, and polls the balance
-// for a few seconds so the page reflects the credit as soon as the
-// webhook lands, instead of just sitting on the old balance with no
-// explanation.
-async function handlePocketFiReturn() {
-    const params = new URLSearchParams(window.location.search);
-    const hasUrlFlag = params.get('deposit') === 'pocketfi';
-
-    let pending = null;
-    try {
-        const raw = localStorage.getItem('mjhub_pending_pocketfi');
-        if (raw) pending = JSON.parse(raw);
-    } catch (e) {}
-
-    // Ignore stale markers — a payment abandoned an hour ago shouldn't
-    // trigger this on some unrelated later visit.
-    const isFresh = pending && (Date.now() - Number(pending.ts || 0)) < 30 * 60 * 1000;
-
-    if (!hasUrlFlag && !isFresh) return;
-
-    try { localStorage.removeItem('mjhub_pending_pocketfi'); } catch (e) {}
-
-    if (hasUrlFlag) {
-        const cleanUrl = window.location.pathname + (window.location.hash || '');
-        history.replaceState(null, '', cleanUrl);
-    }
-
-    switchSection('deposit', true);
-    showToast('Confirming your PocketFi payment...', 'info', 6000);
-
-    const balanceBefore = currentBalanceNgn;
-    let confirmed = false;
-
-    for (let attempt = 0; attempt < 8; attempt++) {
-        await sleep(2000);
-        if (!currentUserId) break;
-        await fetchUserBalance(currentUserId);
-        if (currentBalanceNgn > balanceBefore) {
-            confirmed = true;
-            break;
-        }
-    }
-
-    if (confirmed) {
-        await fetchUserTransactions(currentUserId);
-        showToast('Payment confirmed — your wallet has been funded!', 'success', 5000);
-    } else {
-        showToast(
-            "We couldn't confirm your payment yet. If you were charged, it can take a minute to reflect — check back shortly, or contact support with your payment reference if it doesn't update.",
-            'warning',
-            9000
-        );
-    }
-}
 
 function initHashRouting() {
     const validSections = ['home', 'profile', 'sms', 'booster', 'cart', 'deposit', 'orders'];
@@ -1566,6 +1501,15 @@ async function initUserData(user) {
     if (emailInput) emailInput.value = email;
     const idInput = document.getElementById('myCustomerId');
     if (idInput) idInput.value = user.id;
+}
+
+function toggleSmsMenu(e) {
+    e.preventDefault();
+    const submenu = document.getElementById('smsSubmenu');
+    const chevron = document.getElementById('smsMenuChevron');
+    const isOpen = submenu.style.maxHeight && submenu.style.maxHeight !== '0px';
+    submenu.style.maxHeight = isOpen ? '0px' : submenu.scrollHeight + 'px';
+    chevron.style.transform = isOpen ? 'rotate(0deg)' : 'rotate(180deg)';
 }
 
 function initNavigation() {
@@ -2790,6 +2734,48 @@ window.onDepositMethodChange = function() {
     if (manualBox) manualBox.style.display = (method === 'manual') ? '' : 'none';
 };
 
+// When PocketFi's hosted checkout finishes, it sends the browser back to
+// redirect_link = `${APP_URL}/?deposit=pocketfi&uid=...`. That lands right
+// back on this same dashboard page (index.html), which is correct — but
+// nothing here used to react to it: the balance shown was whatever was
+// fetched on the earlier page load, before the webhook (which is what
+// actually credits the balance) had a chance to run. So the user would see
+// no change and assume the deposit "didn't reflect", even after a
+// successful payment. This watches for that return trip and actively
+// polls for the balance to update instead of leaving the user guessing.
+function handlePocketFiReturn() {
+    try {
+        const params = new URLSearchParams(window.location.search);
+        if (params.get('deposit') !== 'pocketfi') return;
+
+        // Strip the query string so a refresh/re-visit doesn't re-trigger this.
+        history.replaceState(null, '', window.location.pathname + window.location.hash);
+
+        switchSection('home');
+        showToast('Confirming your PocketFi payment…', 'info', 4000);
+
+        const startingBalance = currentBalanceNgn;
+        let attempts = 0;
+        const maxAttempts = 12; // ~36s of polling — the webhook is usually near-instant, this just covers normal delay
+
+        const poll = setInterval(async () => {
+            attempts++;
+            await fetchUserBalance(currentUserId);
+            await fetchUserTransactions(currentUserId);
+
+            if (currentBalanceNgn > startingBalance) {
+                clearInterval(poll);
+                showToast('Payment confirmed — your wallet has been funded!', 'success', 5000);
+            } else if (attempts >= maxAttempts) {
+                clearInterval(poll);
+                showToast("Still waiting on confirmation from PocketFi. If your balance doesn't update in a few minutes, contact support with your payment reference.", 'warning', 8000);
+            }
+        }, 3000);
+    } catch (e) {
+        console.warn('handlePocketFiReturn error', e);
+    }
+}
+
 window.payWithPocketFi = async function() {
     const MIN = 1500;
     const MAX = 500000;
@@ -2837,16 +2823,7 @@ window.payWithPocketFi = async function() {
             return;
         }
 
-        // Hosted checkout — leave the site; webhook credits balance on success.
-        // PocketFi's redirect back doesn't reliably preserve the query
-        // string we sent, so don't rely on the URL alone to notice the
-        // user has returned — remember it locally instead.
-        try {
-            localStorage.setItem('mjhub_pending_pocketfi', JSON.stringify({
-                amount, payment_id: data.payment_id || null, ts: Date.now()
-            }));
-        } catch (e) {}
-
+        // Hosted checkout — leave the site; webhook credits balance on success
         window.location.href = data.payment_link;
     } catch (e) {
         showToast('PocketFi checkout failed: ' + (e.message || 'network error'), 'error');

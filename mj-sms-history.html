@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<title>MJ SMS History - MJ HUB</title>
+<script>
+(function(){try{var t=localStorage.getItem('mjhub-theme');document.documentElement.setAttribute('data-theme',(t==='light'||t==='dark')?t:'dark');}catch(e){document.documentElement.setAttribute('data-theme','dark');}})();
+</script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+:root[data-theme="dark"]{--primary:#5b8af5;--primary-strong:#3b6ef5;--primary-glow:rgba(91,138,245,.28);--accent:#a78bfa;--bg:#06080f;--card:#0f1524;--text:#f1f5f9;--muted:#8b9bb4;--border:rgba(148,163,184,.12);--success:#34d399;--danger:#f87171;--warn:#fbbf24;--shadow:0 18px 50px rgba(0,0,0,.45);}
+:root[data-theme="light"]{--primary:#3b6ef5;--primary-strong:#2554e8;--primary-glow:rgba(59,110,245,.18);--accent:#7c5cfc;--bg:#f4f6fb;--card:#fff;--text:#0f172a;--muted:#64748b;--border:rgba(15,23,42,.08);--success:#059669;--danger:#dc2626;--warn:#d97706;--shadow:0 16px 40px rgba(15,23,42,.08);}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Plus Jakarta Sans',system-ui,sans-serif;background:var(--bg);color:var(--text);min-height:100vh;padding-bottom:90px}
+body::before{content:'';position:fixed;inset:0;pointer-events:none;z-index:0;background:radial-gradient(ellipse 80% 50% at 10% -10%,rgba(91,138,245,.12),transparent 50%),radial-gradient(ellipse 60% 40% at 100% 0%,rgba(167,139,250,.08),transparent 45%)}
+.header,.main-content{position:relative;z-index:1}
+.header{padding:14px 16px;display:flex;align-items:center;gap:12px;position:sticky;top:0;z-index:100;background:color-mix(in srgb,var(--bg) 88%,transparent);backdrop-filter:blur(16px);border-bottom:1px solid var(--border)}
+.back-button{width:40px;height:40px;border-radius:12px;background:var(--card);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;color:var(--text);text-decoration:none}
+.page-title{font-size:18px;font-weight:800;background:linear-gradient(135deg,var(--primary),var(--accent));-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+.main-content{padding:16px;max-width:700px;margin:0 auto}
+.order-card{background:var(--card);border:1px solid var(--border);border-radius:16px;padding:14px;margin-bottom:10px;display:flex;flex-direction:column;gap:8px;}
+.order-top{display:flex;justify-content:space-between;align-items:flex-start;gap:10px;}
+.order-name{font-size:14px;font-weight:800;text-transform:capitalize;}
+.order-sub{font-size:12px;color:var(--muted);margin-top:2px;}
+.order-price{font-size:14px;font-weight:800;color:var(--primary);white-space:nowrap;}
+.status-pill{display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:700;padding:4px 10px;border-radius:20px;width:fit-content;}
+.status-waiting_for_code{background:rgba(251,191,36,.15);color:var(--warn);}
+.status-completed{background:rgba(52,211,153,.15);color:var(--success);}
+.status-refunded{background:rgba(248,113,113,.15);color:var(--danger);}
+.status-failed{background:rgba(248,113,113,.15);color:var(--danger);}
+.order-code{font-family:monospace;font-size:13px;font-weight:700;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:6px 10px;display:inline-block;width:fit-content;}
+.order-actions a{font-size:12px;font-weight:700;color:var(--primary);text-decoration:none;display:inline-flex;align-items:center;gap:6px;}
+.loading-spinner{display:flex;flex-direction:column;align-items:center;padding:60px 20px;gap:14px}
+.spinner{width:40px;height:40px;border:3px solid var(--border);border-top-color:var(--primary);border-radius:50%;animation:spin .8s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.empty-state{text-align:center;padding:50px 20px}
+.empty-state-icon{font-size:44px;margin-bottom:12px;opacity:.5}
+.empty-state h4{margin-bottom:6px;}
+.empty-state p{color:var(--muted);font-size:13px;margin-bottom:18px;}
+.empty-state a{display:inline-block;background:linear-gradient(135deg,var(--primary),var(--primary-strong));color:#fff;text-decoration:none;padding:12px 22px;border-radius:12px;font-size:13px;font-weight:700;}
+</style>
+</head>
+<body>
+<header class="header">
+<a href="mj-sms.html" class="back-button"><i class="fa-solid fa-arrow-left"></i></a>
+<h1 class="page-title">MJ SMS History</h1>
+</header>
+<main class="main-content">
+<div id="historyList">
+<div class="loading-spinner"><div class="spinner"></div><span style="font-size:13px;color:var(--muted);font-weight:600;">Loading your number history...</span></div>
+</div>
+</main>
+
+<script>
+const SUPABASE_URL = 'https://atczodlljmlayvldxfmv.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImF0Y3pvZGxsam1sYXl2bGR4Zm12Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODUwNzUyMzgsImV4cCI6MjEwMDY1MTIzOH0.ufthD-p7BmeD_B7xyuMM6PNPL8DmcL4AtRYgg-MuoLI';
+
+const historyList = document.getElementById('historyList');
+function escapeHtml(str){if(!str)return'';return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;')}
+function money(n){return '₦'+Number(n||0).toLocaleString()}
+
+const STATUS_LABELS = {
+  waiting_for_code: 'Waiting for code',
+  completed: 'Code received',
+  refunded: 'Cancelled & refunded',
+  failed: 'Failed'
+};
+
+function renderOrders(orders){
+  if(!orders.length){
+    historyList.innerHTML = `<div class="empty-state">
+      <div class="empty-state-icon">📱</div>
+      <h4>No numbers purchased yet</h4>
+      <p>Get a virtual number for OTP verification.</p>
+      <a href="mj-sms.html">Get a Number</a>
+    </div>`;
+    return;
+  }
+  historyList.innerHTML = orders.map(o => {
+    const name = (o.service_name || o.service_id || 'Service').replace(/_/g,' ');
+    const statusClass = 'status-' + (o.status || 'waiting_for_code');
+    const statusLabel = STATUS_LABELS[o.status] || o.status;
+    const date = o.created_at ? new Date(o.created_at).toLocaleString() : '';
+    let actionHtml = '';
+    if(o.status === 'waiting_for_code'){
+      actionHtml = `<div class="order-actions"><a href="mj-sms-number.html?order_id=${encodeURIComponent(o.order_id)}"><i class="fa-solid fa-arrow-right"></i> View & Check Status</a></div>`;
+    }
+    return `<div class="order-card">
+      <div class="order-top">
+        <div>
+          <div class="order-name">${escapeHtml(name)}</div>
+          <div class="order-sub">${escapeHtml(o.country_name || '')} · ${escapeHtml(o.phone_number || '—')}</div>
+          <div class="order-sub">${escapeHtml(date)}</div>
+        </div>
+        <div class="order-price">${money(o.price)}</div>
+      </div>
+      <span class="status-pill ${statusClass}">${escapeHtml(statusLabel)}</span>
+      ${o.code ? `<div class="order-code">Code: ${escapeHtml(o.code)}</div>` : ''}
+      ${actionHtml}
+    </div>`;
+  }).join('');
+}
+
+async function init(){
+  if(!window.supabase){ historyList.innerHTML = '<div class="empty-state"><h4>Failed to load</h4></div>'; return; }
+  const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+  const { data: { session } } = await sb.auth.getSession();
+  if(!session || !session.user){
+    window.location.href = 'auth.html';
+    return;
+  }
+  const { data, error } = await sb
+    .from('number_orders')
+    .select('*')
+    .eq('source', 'grizzlysms')
+    .eq('user_id', session.user.id)
+    .order('created_at', { ascending: false });
+
+  if(error){
+    historyList.innerHTML = `<div class="empty-state"><div class="empty-state-icon">⚠️</div><h4>Failed to load</h4><p>${escapeHtml(error.message)}</p></div>`;
+    return;
+  }
+  renderOrders(data || []);
+}
+
+init();
+</script>
+</body>
+</html>

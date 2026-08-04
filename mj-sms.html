@@ -1,0 +1,363 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<title>MJ SMS - Get Number - MJ HUB</title>
+<script>
+(function(){try{var t=localStorage.getItem('mjhub-theme');document.documentElement.setAttribute('data-theme',(t==='light'||t==='dark')?t:'dark');}catch(e){document.documentElement.setAttribute('data-theme','dark');}})();
+</script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+:root[data-theme="dark"]{--primary:#5b8af5;--primary-strong:#3b6ef5;--primary-glow:rgba(91,138,245,.28);--accent:#a78bfa;--bg:#06080f;--card:#0f1524;--text:#f1f5f9;--muted:#8b9bb4;--border:rgba(148,163,184,.12);--success:#34d399;--danger:#f87171;--shadow:0 18px 50px rgba(0,0,0,.45);}
+:root[data-theme="light"]{--primary:#3b6ef5;--primary-strong:#2554e8;--primary-glow:rgba(59,110,245,.18);--accent:#7c5cfc;--bg:#f4f6fb;--card:#fff;--text:#0f172a;--muted:#64748b;--border:rgba(15,23,42,.08);--success:#059669;--danger:#dc2626;--shadow:0 16px 40px rgba(15,23,42,.08);}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Plus Jakarta Sans',system-ui,sans-serif;background:var(--bg);color:var(--text);min-height:100vh;padding-bottom:90px}
+body::before{content:'';position:fixed;inset:0;pointer-events:none;z-index:0;background:radial-gradient(ellipse 80% 50% at 10% -10%,rgba(91,138,245,.12),transparent 50%),radial-gradient(ellipse 60% 40% at 100% 0%,rgba(167,139,250,.08),transparent 45%)}
+.header,.main-content,.toast-container,.purchase-modal{position:relative;z-index:1}
+.header{padding:14px 16px;display:flex;align-items:center;gap:12px;position:sticky;top:0;z-index:100;background:color-mix(in srgb,var(--bg) 88%,transparent);backdrop-filter:blur(16px);border-bottom:1px solid var(--border)}
+.back-button{width:40px;height:40px;border-radius:12px;background:var(--card);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;color:var(--text);text-decoration:none}
+.page-title{font-size:18px;font-weight:800;background:linear-gradient(135deg,var(--primary),var(--accent));-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+.header-right{margin-left:auto;}
+.hist-link{font-size:12px;font-weight:700;color:var(--primary);text-decoration:none;display:flex;align-items:center;gap:6px;padding:8px 12px;border:1px solid var(--border);border-radius:10px;}
+.main-content{padding:16px;max-width:700px;margin:0 auto}
+.content-card{background:var(--card);border:1px solid var(--border);border-radius:20px;padding:18px;margin-bottom:16px}
+.content-card h2{font-size:16px;font-weight:800;margin-bottom:6px;display:flex;align-items:center;gap:8px}
+.helper-text{font-size:12px;color:var(--muted);margin-bottom:14px;line-height:1.45}
+.search-bar{position:relative;margin-bottom:10px;}
+.search-bar i{position:absolute;left:14px;top:50%;transform:translateY(-50%);color:var(--muted);pointer-events:none;}
+.search-bar input{width:100%;padding:13px 14px 13px 40px;border-radius:12px;border:1px solid var(--border);background:var(--bg);color:inherit;font-size:14px;box-sizing:border-box;font-family:inherit;}
+.country-list{display:flex;flex-direction:column;gap:8px;max-height:60vh;overflow-y:auto;}
+.country-row{display:flex;align-items:center;justify-content:space-between;padding:13px 14px;border-radius:12px;background:var(--bg);border:1px solid var(--border);cursor:pointer;}
+.country-row:active{background:var(--primary-glow);}
+.country-row .name{font-weight:700;font-size:14px;}
+.country-row .count{font-size:11px;color:var(--muted);background:var(--primary-glow);color:var(--primary);padding:3px 9px;border-radius:20px;font-weight:700;}
+.selected-country-bar{display:flex;align-items:center;justify-content:space-between;background:var(--primary-glow);border-radius:12px;padding:12px 14px;margin-bottom:14px;}
+.selected-country-bar .name{font-weight:800;font-size:14px;color:var(--primary);}
+.selected-country-bar button{background:none;border:1px solid var(--primary);color:var(--primary);font-size:11px;font-weight:700;padding:6px 12px;border-radius:8px;cursor:pointer;font-family:inherit;}
+.product-count-badge{display:inline-block;background:var(--primary-glow);color:var(--primary);padding:5px 12px;border-radius:20px;font-size:11px;font-weight:700;margin-bottom:14px}
+.product-grid{display:grid;grid-template-columns:1fr;gap:12px}
+@media(min-width:600px){.product-grid{grid-template-columns:repeat(2,1fr)}}
+.product-card{background:var(--bg);border:1px solid var(--border);border-radius:16px;padding:14px;display:flex;flex-direction:column;gap:10px}
+.product-header{display:flex;justify-content:space-between;align-items:flex-start;gap:10px}
+.product-name{font-size:14px;font-weight:700;line-height:1.35;flex:1;min-width:0;word-wrap:break-word;text-transform:capitalize;}
+.product-price{font-size:15px;font-weight:800;color:var(--primary);white-space:nowrap}
+.product-badges{display:flex;gap:6px;flex-wrap:wrap}
+.badge{display:inline-block;padding:4px 10px;border-radius:6px;font-size:10px;font-weight:700}
+.badge-stock{background:rgba(52,211,153,.15);color:var(--success)}
+.btn{flex:1;padding:11px 12px;border-radius:11px;font-size:12px;font-weight:700;cursor:pointer;border:none;font-family:inherit}
+.btn-primary{background:linear-gradient(135deg,var(--primary),var(--primary-strong));color:#fff;width:100%;}
+.btn-primary:disabled{opacity:.5;cursor:not-allowed}
+.loading-spinner{display:flex;flex-direction:column;align-items:center;padding:60px 20px;gap:14px}
+.spinner{width:40px;height:40px;border:3px solid var(--border);border-top-color:var(--primary);border-radius:50%;animation:spin .8s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.loading-text{font-size:13px;color:var(--muted);font-weight:600}
+.empty-state{text-align:center;padding:40px 20px}
+.empty-state-icon{font-size:44px;margin-bottom:12px;opacity:.5}
+.toast-container{position:fixed;top:76px;right:12px;z-index:9999;display:flex;flex-direction:column;gap:8px;pointer-events:none}
+.toast{background:var(--card);border:1px solid var(--success);border-radius:12px;padding:12px 14px;display:flex;align-items:center;gap:10px;font-size:12px;font-weight:600;max-width:280px;pointer-events:all;box-shadow:var(--shadow);color:var(--text)}
+.toast.error{border-color:var(--danger)}
+.purchase-modal{display:none;position:fixed;inset:0;z-index:2000;align-items:flex-end;justify-content:center;background:rgba(0,0,0,.55);backdrop-filter:blur(8px);padding:12px}
+.purchase-modal.active{display:flex}
+.purchase-sheet{background:#fff;color:#0f172a;width:100%;max-width:420px;border-radius:24px;max-height:92vh;overflow-y:auto;box-shadow:0 24px 60px rgba(0,0,0,.35);animation:sheetUp .28s ease}
+@keyframes sheetUp{from{transform:translateY(40px);opacity:0}to{transform:none;opacity:1}}
+.ps-header{display:flex;justify-content:space-between;align-items:center;padding:16px 18px;border-bottom:1px solid #eef2f7;font-weight:800;font-size:17px}
+.ps-close{background:none;border:none;font-size:18px;cursor:pointer;color:#64748b;width:32px;height:32px}
+.ps-body{padding:16px 18px 20px}
+.ps-title-row{display:flex;gap:12px;align-items:flex-start;margin-bottom:12px}
+.ps-icon{width:48px;height:48px;border-radius:14px;background:#1877f2;color:#fff;display:flex;align-items:center;justify-content:center;font-size:20px;font-weight:800;flex-shrink:0}
+.ps-name{font-size:16px;font-weight:800;margin-bottom:6px;text-transform:capitalize;}
+.ps-meta{display:flex;gap:8px;flex-wrap:wrap}
+.ps-pill{font-size:11px;font-weight:700;padding:4px 10px;border-radius:20px}
+.ps-pill-stock{background:#d1fae5;color:#059669}
+.ps-pill-price{background:#fef3c7;color:#b45309}
+.ps-block{background:#f8fafc;border-radius:14px;padding:12px 14px;margin-bottom:12px}
+.ps-block-label{font-size:11px;font-weight:700;color:#64748b;margin-bottom:6px;text-transform:uppercase;letter-spacing:.03em}
+.ps-block-text{font-size:13px;color:#334155;line-height:1.55}
+.ps-total-row{display:flex;justify-content:space-between;align-items:center;background:linear-gradient(135deg,#eef2ff,#e0e7ff);border-radius:14px;padding:14px 16px;margin-bottom:14px}
+.ps-total-label{font-size:14px;font-weight:700;color:#4338ca}
+.ps-total-price{font-size:18px;font-weight:800;color:#312e81}
+.ps-buy{width:100%;border:none;border-radius:14px;padding:15px;font-size:15px;font-weight:800;color:#fff;cursor:pointer;font-family:inherit;background:linear-gradient(135deg,#4f46e5,#2563eb);display:flex;align-items:center;justify-content:center;gap:8px}
+.ps-buy:disabled{opacity:.5;cursor:not-allowed}
+</style>
+</head>
+<body>
+<div class="toast-container" id="toastContainer"></div>
+<header class="header">
+<a href="index.html" class="back-button"><i class="fa-solid fa-arrow-left"></i></a>
+<h1 class="page-title">MJ SMS</h1>
+<div class="header-right"><a href="mj-sms-history.html" class="hist-link"><i class="fa-solid fa-clock-rotate-left"></i> History</a></div>
+</header>
+<main class="main-content">
+
+<div class="content-card" id="countryStep">
+<h2><i class="fa-solid fa-earth-americas" style="color:var(--primary)"></i> Choose a Country</h2>
+<p class="helper-text">Pick the country your number should come from. Prices vary by country and service.</p>
+<div class="search-bar"><i class="fa-solid fa-magnifying-glass"></i><input type="text" id="countrySearch" placeholder="Search countries..."></div>
+<div id="countryList" class="country-list">
+<div class="loading-spinner"><div class="spinner"></div><span class="loading-text">Loading countries...</span></div>
+</div>
+</div>
+
+<div class="content-card" id="serviceStep" style="display:none;">
+<h2><i class="fa-solid fa-mobile-screen" style="color:var(--primary)"></i> Choose a Service</h2>
+<div class="selected-country-bar">
+<span class="name" id="selectedCountryName"></span>
+<button type="button" onclick="backToCountries()">Change</button>
+</div>
+<div class="search-bar"><i class="fa-solid fa-magnifying-glass"></i><input type="text" id="serviceSearch" placeholder="Search services (Telegram, WhatsApp...)"></div>
+<div id="serviceCountBadge"></div>
+<div id="serviceGrid">
+<div class="loading-spinner"><div class="spinner"></div><span class="loading-text">Loading services...</span></div>
+</div>
+</div>
+
+</main>
+
+<!-- Purchase modal -->
+<div class="purchase-modal" id="purchaseModal">
+<div class="purchase-sheet">
+<div class="ps-header">
+<span>Buy Number</span>
+<button class="ps-close" id="purchaseCloseBtn" type="button">✕</button>
+</div>
+<div class="ps-body">
+<div class="ps-title-row">
+<div class="ps-icon" id="psIcon">M</div>
+<div style="flex:1;min-width:0">
+<div class="ps-name" id="psName">Service</div>
+<div class="ps-meta">
+<span class="ps-pill ps-pill-stock" id="psStock">—</span>
+<span class="ps-pill ps-pill-price" id="psUnitPrice">₦0</span>
+</div>
+</div>
+</div>
+<div class="ps-block">
+<div class="ps-block-label">Country</div>
+<div class="ps-block-text" id="psCountry">—</div>
+</div>
+<div class="ps-total-row">
+<span class="ps-total-label">Total</span>
+<span class="ps-total-price" id="psTotal">₦0</span>
+</div>
+<button type="button" class="ps-buy" id="psBuyBtn"><i class="fa-solid fa-mobile-screen"></i> Confirm Purchase</button>
+</div>
+</div>
+</div>
+
+<script>
+const SUPABASE_URL = 'https://atczodlljmlayvldxfmv.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImF0Y3pvZGxsam1sYXl2bGR4Zm12Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODUwNzUyMzgsImV4cCI6MjEwMDY1MTIzOH0.ufthD-p7BmeD_B7xyuMM6PNPL8DmcL4AtRYgg-MuoLI';
+
+const countryList = document.getElementById('countryList');
+const countryStep = document.getElementById('countryStep');
+const serviceStep = document.getElementById('serviceStep');
+const serviceGrid = document.getElementById('serviceGrid');
+const serviceCountBadge = document.getElementById('serviceCountBadge');
+const countrySearch = document.getElementById('countrySearch');
+const serviceSearch = document.getElementById('serviceSearch');
+const toastContainer = document.getElementById('toastContainer');
+
+let sbClient = null;
+let currentUserId = null;
+let currentBalanceNgn = 0;
+let allCountries = [];
+let currentCountry = null;
+let allServices = [];
+let activeService = null;
+let isBuying = false;
+
+function escapeHtml(str){if(!str)return'';return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;')}
+function money(n){return '₦'+Number(n||0).toLocaleString()}
+function showToast(msg,type){const t=document.createElement('div');t.className='toast'+(type==='error'?' error':'');t.innerHTML='<span>'+(type==='error'?'❌':'✅')+'</span><span>'+escapeHtml(msg)+'</span>';toastContainer.appendChild(t);setTimeout(()=>t.remove(),3500)}
+
+async function initSession(){
+  try{
+    if(!window.supabase) return;
+    sbClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+    const { data: { session } } = await sbClient.auth.getSession();
+    if(session && session.user){
+      currentUserId = session.user.id;
+      await refreshBalance();
+    }
+  }catch(e){}
+}
+
+async function refreshBalance(){
+  if(!currentUserId || !sbClient) return { ok:false, reason:'not signed in' };
+  try{
+    const { data, error } = await sbClient.from('profiles').select('balance').eq('id', currentUserId).single();
+    if(error) return { ok:false, reason: error.message };
+    if(data) currentBalanceNgn = parseFloat(data.balance) || 0;
+    return { ok:true };
+  }catch(e){ return { ok:false, reason: e.message || String(e) }; }
+}
+
+async function loadCountries(){
+  try{
+    const { data, error } = await sbClient.rpc('grizzly_countries');
+    if(error){ countryList.innerHTML = '<div class="empty-state"><div class="empty-state-icon">⚠️</div><h4>Failed to load</h4><p>'+escapeHtml(error.message)+'</p></div>'; return; }
+    allCountries = data || [];
+    renderCountries(allCountries);
+  }catch(err){
+    countryList.innerHTML = '<div class="empty-state"><div class="empty-state-icon">⚠️</div><h4>Failed to load</h4><p>'+escapeHtml(err.message||String(err))+'</p></div>';
+  }
+}
+
+function renderCountries(list){
+  if(!list.length){ countryList.innerHTML = '<div class="empty-state"><div class="empty-state-icon">🔍</div><h4>No countries found</h4></div>'; return; }
+  countryList.innerHTML = list.map(c => `
+    <div class="country-row" data-id="${c.country_id}">
+      <span class="name">${escapeHtml(c.country_name)}</span>
+      <span class="count">${c.service_count} services</span>
+    </div>`).join('');
+  countryList.querySelectorAll('.country-row').forEach(row => {
+    row.addEventListener('click', () => selectCountry(Number(row.dataset.id)));
+  });
+}
+
+countrySearch.addEventListener('input', () => {
+  const q = countrySearch.value.trim().toLowerCase();
+  renderCountries(q ? allCountries.filter(c => c.country_name.toLowerCase().includes(q)) : allCountries);
+});
+
+async function selectCountry(countryId){
+  currentCountry = allCountries.find(c => c.country_id === countryId);
+  if(!currentCountry) return;
+  countryStep.style.display = 'none';
+  serviceStep.style.display = 'block';
+  document.getElementById('selectedCountryName').textContent = currentCountry.country_name;
+  serviceGrid.innerHTML = '<div class="loading-spinner"><div class="spinner"></div><span class="loading-text">Loading services...</span></div>';
+  serviceSearch.value = '';
+
+  const { data, error } = await sbClient
+    .from('number_services')
+    .select('service_id, service_name, category, price, available_quantity')
+    .eq('source', 'grizzlysms')
+    .eq('is_available', true)
+    .eq('country_id', countryId)
+    .gt('price', 0)
+    .order('service_name', { ascending: true });
+
+  if(error){ serviceGrid.innerHTML = '<div class="empty-state"><div class="empty-state-icon">⚠️</div><h4>Failed to load</h4><p>'+escapeHtml(error.message)+'</p></div>'; return; }
+  allServices = data || [];
+  renderServices(allServices);
+}
+
+function backToCountries(){
+  serviceStep.style.display = 'none';
+  countryStep.style.display = 'block';
+  currentCountry = null;
+  allServices = [];
+}
+
+function renderServices(list){
+  if(!list.length){
+    serviceGrid.innerHTML = '<div class="empty-state"><div class="empty-state-icon">📵</div><h4>No Services Found</h4><p>Try a different search or country</p></div>';
+    serviceCountBadge.innerHTML = '';
+    return;
+  }
+  serviceCountBadge.innerHTML = '<span class="product-count-badge">'+list.length+' service'+(list.length!==1?'s':'')+' available</span>';
+  let html = '<div class="product-grid">';
+  list.forEach((s, index) => {
+    const name = escapeHtml((s.service_name || s.service_id || 'Service').replace(/_/g,' '));
+    html += `<div class="product-card">
+      <div class="product-header"><div class="product-name">${name}</div><div class="product-price">${money(s.price)}</div></div>
+      <div class="product-badges"><span class="badge badge-stock">${s.available_quantity ?? '—'} available</span></div>
+      <div class="product-actions" style="display:flex;">
+        <button class="btn btn-primary" data-index="${index}">Buy Number</button>
+      </div>
+    </div>`;
+  });
+  html += '</div>';
+  serviceGrid.innerHTML = html;
+  serviceGrid.querySelectorAll('.btn-primary[data-index]').forEach(btn => {
+    btn.addEventListener('click', () => openPurchaseModal(list[Number(btn.dataset.index)]));
+  });
+}
+
+serviceSearch.addEventListener('input', () => {
+  const q = serviceSearch.value.trim().toLowerCase();
+  renderServices(q ? allServices.filter(s => (s.service_name||s.service_id||'').toLowerCase().includes(q)) : allServices);
+});
+
+function openPurchaseModal(s){
+  activeService = s;
+  const name = (s.service_name || s.service_id || 'Service').replace(/_/g,' ');
+  document.getElementById('psName').textContent = name;
+  document.getElementById('psIcon').textContent = (name.charAt(0)||'M').toUpperCase();
+  document.getElementById('psUnitPrice').textContent = money(s.price);
+  document.getElementById('psStock').textContent = (s.available_quantity ?? '—') + ' available';
+  document.getElementById('psCountry').textContent = currentCountry.country_name;
+  document.getElementById('psTotal').textContent = money(s.price);
+  document.getElementById('purchaseModal').classList.add('active');
+}
+function closePurchaseModal(){
+  document.getElementById('purchaseModal').classList.remove('active');
+  activeService = null;
+}
+document.getElementById('purchaseCloseBtn').addEventListener('click', closePurchaseModal);
+document.getElementById('purchaseModal').addEventListener('click', function(e){ if(e.target===this) closePurchaseModal(); });
+
+document.getElementById('psBuyBtn').addEventListener('click', async function(){
+  if(!activeService || !currentCountry || isBuying) return;
+  if(!currentUserId){
+    showToast('Please sign in to buy a number','error');
+    setTimeout(() => window.location.href = 'auth.html', 900);
+    return;
+  }
+  const price = parseFloat(activeService.price) || 0;
+  const balCheck = await refreshBalance();
+  if(!balCheck.ok){
+    showToast('Could not verify your balance: ' + balCheck.reason, 'error');
+    return;
+  }
+  if(currentBalanceNgn < price){
+    showToast('Insufficient balance. Redirecting to deposit...', 'error');
+    setTimeout(() => window.location.href = 'index.html#deposit', 900);
+    return;
+  }
+
+  const btn = this;
+  isBuying = true;
+  btn.disabled = true;
+  const originalLabel = btn.innerHTML;
+  btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Purchasing...';
+
+  try{
+    const res = await fetch('/api/grizzly-order', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        country_id: currentCountry.country_id,
+        service_id: activeService.service_id,
+        user_id: currentUserId,
+        external_order_id: 'MJ-GZ-' + Date.now() + '-' + Math.random().toString(36).slice(2,7)
+      })
+    });
+    const data = await res.json();
+    if(!res.ok || !data.success){
+      showToast(data.message || 'Purchase failed. Please try again.', 'error');
+      return;
+    }
+    showToast('Number purchased! Redirecting...', 'success');
+    setTimeout(() => {
+      window.location.href = 'mj-sms-number.html?order_id=' + encodeURIComponent(data.data.order_id);
+    }, 600);
+  }catch(err){
+    showToast('Network error: ' + (err.message || err), 'error');
+  }finally{
+    isBuying = false;
+    btn.disabled = false;
+    btn.innerHTML = originalLabel;
+  }
+});
+
+initSession();
+loadCountries();
+</script>
+</body>
+</html>
