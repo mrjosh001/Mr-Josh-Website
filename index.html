@@ -1495,13 +1495,31 @@ async function initUserData(user) {
     // Prefer profiles table (persistent app data)
     if (supabaseClient && user.id) {
         try {
-            const { data: profile } = await supabaseClient
+            // Select only columns that commonly exist; optional fields loaded if present
+            let profile = null;
+            let { data, error: selErr } = await supabaseClient
                 .from('profiles')
-                .select('full_name, phone, address, bio, avatar_url, customer_id, email')
+                .select('full_name, phone, avatar_url, customer_id, email, address, bio')
                 .eq('id', user.id)
                 .maybeSingle();
+            if (selErr && /column|schema cache/i.test(selErr.message || '')) {
+                ({ data, error: selErr } = await supabaseClient
+                    .from('profiles')
+                    .select('full_name, phone, avatar_url, customer_id, email')
+                    .eq('id', user.id)
+                    .maybeSingle());
+            }
+            if (selErr && /full_name/i.test(selErr.message || '')) {
+                ({ data } = await supabaseClient
+                    .from('profiles')
+                    .select('name, phone, avatar_url, customer_id, email')
+                    .eq('id', user.id)
+                    .maybeSingle());
+            }
+            profile = data;
             if (profile) {
                 if (profile.full_name) name = profile.full_name;
+                else if (profile.name) name = profile.name;
                 if (profile.phone) phone = profile.phone;
                 if (profile.address) address = profile.address;
                 if (profile.bio) bio = profile.bio;
@@ -2074,32 +2092,34 @@ window.saveProfileSettingsData = async function() {
             console.warn('auth.updateUser', authErr);
         }
 
-        // 2) profiles table (source of truth for the app)
-        const patch = {
-            full_name: name,
-            phone: phone || null,
-            address: address || null,
-            bio: bio || null
-        };
-        if (userData.avatarUrl) patch.avatar_url = userData.avatarUrl;
+        // 2) profiles table — core fields first (address/bio may not exist yet)
+        async function tryProfileUpdate(patch) {
+            return supabaseClient.from('profiles').update(patch).eq('id', currentUserId);
+        }
 
-        const { error: profileErr } = await supabaseClient
-            .from('profiles')
-            .update(patch)
-            .eq('id', currentUserId);
+        let core = { phone: phone || null };
+        if (userData.avatarUrl) core.avatar_url = userData.avatarUrl;
 
-        if (profileErr) {
-            // Some projects use "name" instead of full_name
-            if (/full_name|column/i.test(profileErr.message || '')) {
-                const alt = { name, phone: phone || null, address: address || null, bio: bio || null };
-                if (userData.avatarUrl) alt.avatar_url = userData.avatarUrl;
-                const { error: altErr } = await supabaseClient
-                    .from('profiles')
-                    .update(alt)
-                    .eq('id', currentUserId);
-                if (altErr) throw altErr;
-            } else {
-                throw profileErr;
+        let { error: profileErr } = await tryProfileUpdate({ ...core, full_name: name });
+        if (profileErr && /full_name/i.test(profileErr.message || '')) {
+            ({ error: profileErr } = await tryProfileUpdate({ ...core, name }));
+        }
+        if (profileErr && /column|schema cache/i.test(profileErr.message || '')) {
+            ({ error: profileErr } = await tryProfileUpdate({ full_name: name, phone: phone || null }));
+            if (profileErr && /full_name/i.test(profileErr.message || '')) {
+                ({ error: profileErr } = await tryProfileUpdate({ name, phone: phone || null }));
+            }
+        }
+        if (profileErr) throw profileErr;
+
+        // Optional columns — skip quietly if missing in schema
+        if (address || bio) {
+            const optional = {};
+            if (address) optional.address = address;
+            if (bio) optional.bio = bio;
+            const { error: optErr } = await tryProfileUpdate(optional);
+            if (optErr && !/column|schema cache/i.test(optErr.message || '')) {
+                console.warn('optional profile fields', optErr);
             }
         }
 
