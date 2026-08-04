@@ -2,10 +2,11 @@ import { createClient } from '@supabase/supabase-js';
 
 /**
  * POST /api/grizzly-order
- * Buys one phone number from GrizzlySMS (getNumberV2) after charging the
- * customer wallet. Separate pipeline from order-numbers.js (LogsDomain) —
- * different protocol, different response shapes, own refund handling.
- * Never writes to "orders" or "products".
+ * Buys one phone number from GrizzlySMS after charging the customer wallet.
+ *
+ * Purchase transaction is stored as status=pending until a code arrives
+ * (grizzly-check flips it to completed). Failed buys restore balance without
+ * inserting a separate "refund" history row.
  *
  * Body: { country_id, service_id, user_id, external_order_id? }
  * Env: GRIZZLYSMS_API_KEY, SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY
@@ -19,7 +20,27 @@ const supabase = createClient(
 const BASE = 'https://api.grizzlysms.com/stubs/handler_api.php';
 const GRIZZLY_KEY = process.env.GRIZZLYSMS_API_KEY;
 
-const KNOWN_ERRORS = new Set(['BAD_KEY', 'NO_BALANCE', 'NO_NUMBERS', 'SERVICE_UNAVAILABLE_REGION', 'BAD_SERVICE']);
+const KNOWN_ERRORS = new Set([
+  'BAD_KEY',
+  'NO_BALANCE',
+  'NO_NUMBERS',
+  'SERVICE_UNAVAILABLE_REGION',
+  'BAD_SERVICE'
+]);
+
+function humanizeGrizzlyError(code) {
+  const map = {
+    BAD_KEY: 'This service is temporarily unavailable. Please try again shortly.',
+    NO_BALANCE:
+      'This service is temporarily unavailable. Please try again later or contact support.',
+    NO_NUMBERS:
+      'No numbers available for this service/country right now. Try another country or service.',
+    SERVICE_UNAVAILABLE_REGION:
+      'This service is temporarily restricted right now. Please try another service.',
+    BAD_SERVICE: 'This service is temporarily unavailable. Please try again shortly.'
+  };
+  return map[code] || null;
+}
 
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -39,7 +60,10 @@ export default async function handler(req, res) {
   const serviceId = service_id != null ? String(service_id) : null;
 
   if (!Number.isFinite(countryId) || !serviceId || !user_id) {
-    return res.status(400).json({ success: false, message: 'country_id, service_id and user_id are required' });
+    return res.status(400).json({
+      success: false,
+      message: 'country_id, service_id and user_id are required'
+    });
   }
   if (!GRIZZLY_KEY) {
     return res.status(500).json({ success: false, message: 'GRIZZLYSMS_API_KEY not configured' });
@@ -53,7 +77,6 @@ export default async function handler(req, res) {
   let deducted = false;
 
   try {
-    // 1. Our cached resale price (what the customer actually gets charged)
     const { data: svc, error: svcErr } = await supabase
       .from('number_services')
       .select('service_name, country_name, price, is_available')
@@ -63,17 +86,22 @@ export default async function handler(req, res) {
       .single();
 
     if (svcErr || !svc) {
-      return res.status(404).json({ success: false, message: 'This service is no longer available. Please refresh and try another.' });
+      return res.status(404).json({
+        success: false,
+        message: 'This service is no longer available. Please refresh and try another.'
+      });
     }
     if (!svc.is_available) {
-      return res.status(409).json({ success: false, message: 'This number service is currently out of stock.' });
+      return res.status(409).json({
+        success: false,
+        message: 'This number service is currently out of stock.'
+      });
     }
 
     price = Number(svc.price) || 0;
     serviceName = svc.service_name;
     countryName = svc.country_name;
 
-    // 2. Customer balance
     const { data: profile, error: profErr } = await supabase
       .from('profiles')
       .select('balance, customer_id')
@@ -87,19 +115,29 @@ export default async function handler(req, res) {
     customerId = profile.customer_id;
 
     if (originalBalance < price) {
-      return res.status(402).json({ success: false, message: 'Insufficient balance', required: price, available: originalBalance });
+      return res.status(402).json({
+        success: false,
+        message: 'Insufficient balance',
+        required: price,
+        available: originalBalance
+      });
     }
 
-    // 3. Debit customer wallet up front
     const newBalance = originalBalance - price;
-    const { error: deductErr } = await supabase.from('profiles').update({ balance: newBalance }).eq('id', user_id);
+    const { error: deductErr } = await supabase
+      .from('profiles')
+      .update({ balance: newBalance })
+      .eq('id', user_id);
     if (deductErr) {
-      return res.status(500).json({ success: false, message: 'Could not debit your balance. Please try again.' });
+      return res.status(500).json({
+        success: false,
+        message: 'Could not debit your balance. Please try again.'
+      });
     }
     deducted = true;
 
-    // 4. Call GrizzlySMS getNumberV2 (JSON response, unlike v1's colon-delimited string)
-    const idempotencyKey = external_order_id || `MJ-GZ-${String(user_id).slice(0, 8)}-${Date.now()}`;
+    const idempotencyKey =
+      external_order_id || `MJ-GZ-${String(user_id).slice(0, 8)}-${Date.now()}`;
     const qs = new URLSearchParams({
       api_key: GRIZZLY_KEY,
       action: 'getNumberV2',
@@ -122,43 +160,35 @@ export default async function handler(req, res) {
       }
     }
 
-    // 5. Supplier failed → refund customer, log both entries
+    // Supplier failed → restore balance only (no refund transaction row)
     if (!supplierRes.ok || failureReason || !orderData?.activationId) {
       await supabase.from('profiles').update({ balance: originalBalance }).eq('id', user_id);
 
-      await supabase.from('transactions').insert({
-        user_id,
-        customer_id: customerId,
-        type: 'purchase_failed',
-        category: 'MJ SMS',
-        title: serviceName,
-        subtitle: `Failed: ${humanizeGrizzlyError(failureReason) || 'Unknown error'}`,
-        amount: `₦${price.toLocaleString()}`,
-        amount_ngn: price,
-        status: 'failed',
-        notes: rawText.slice(0, 500)
-      });
-
-      await supabase.from('transactions').insert({
-        user_id,
-        customer_id: customerId,
-        type: 'refund',
-        category: 'MJ SMS',
-        title: 'Automatic Refund',
-        subtitle: 'Purchase failed – balance restored',
-        amount: `₦${price.toLocaleString()}`,
-        amount_ngn: price,
-        status: 'refunded'
-      });
+      // Optional single failed purchase marker (not a refund row)
+      try {
+        await supabase.from('transactions').insert({
+          user_id,
+          customer_id: customerId,
+          type: 'purchase',
+          category: 'MJ SMS',
+          title: serviceName,
+          subtitle: `Failed: ${humanizeGrizzlyError(failureReason) || 'Unavailable'}`,
+          amount: `₦${price.toLocaleString()}`,
+          amount_ngn: price,
+          status: 'failed',
+          notes: rawText.slice(0, 500)
+        });
+      } catch (_) {}
 
       return res.status(400).json({
         success: false,
         code: failureReason || 'SUPPLIER_ERROR',
-        message: humanizeGrizzlyError(failureReason) || 'Purchase failed. Your balance has been refunded.'
+        message:
+          humanizeGrizzlyError(failureReason) ||
+          'Purchase failed. Your balance has been restored.'
       });
     }
 
-    // 6. Success → save to number_orders
     const { error: insertErr } = await supabase.from('number_orders').insert({
       source: 'grizzlysms',
       user_id,
@@ -179,20 +209,29 @@ export default async function handler(req, res) {
     });
 
     if (insertErr) {
-      console.error('[grizzly-order] FAILED to save number_orders row — customer charged and number reserved:',
-        insertErr.message, { activationId: orderData.activationId, user_id, country_id: countryId, service_id: serviceId });
+      console.error(
+        '[grizzly-order] FAILED to save number_orders row — customer charged and number reserved:',
+        insertErr.message,
+        {
+          activationId: orderData.activationId,
+          user_id,
+          country_id: countryId,
+          service_id: serviceId
+        }
+      );
     }
 
+    // Pending until code arrives — history should not show "completed" early
     await supabase.from('transactions').insert({
       user_id,
       customer_id: customerId,
       type: 'purchase',
       category: 'MJ SMS',
       title: serviceName,
-      subtitle: `${countryName} · MJ SMS`,
+      subtitle: `${countryName} · waiting for SMS`,
       amount: `₦${price.toLocaleString()}`,
       amount_ngn: price,
-      status: 'completed',
+      status: 'pending',
       supplier_order: orderData
     });
 
@@ -206,7 +245,8 @@ export default async function handler(req, res) {
         service_name: serviceName,
         country_name: countryName,
         price,
-        new_balance: newBalance
+        new_balance: newBalance,
+        created_at: new Date().toISOString()
       }
     });
   } catch (err) {
@@ -215,37 +255,17 @@ export default async function handler(req, res) {
     if (deducted) {
       try {
         await supabase.from('profiles').update({ balance: originalBalance }).eq('id', user_id);
-        await supabase.from('transactions').insert({
-          user_id,
-          customer_id: customerId,
-          type: 'refund',
-          category: 'MJ SMS',
-          title: 'Automatic Refund',
-          subtitle: `System error – ${err.message}`,
-          amount: `₦${price.toLocaleString()}`,
-          amount_ngn: price,
-          status: 'refunded',
-          notes: err.message
-        });
+        // no refund transaction row
       } catch (refundErr) {
-        console.error('CRITICAL: Auto-refund failed (grizzly-order)', refundErr);
+        console.error('CRITICAL: Auto-restore failed (grizzly-order)', refundErr);
       }
     }
 
     return res.status(500).json({
       success: false,
-      message: deducted ? 'Something went wrong. Your balance has been refunded.' : 'Something went wrong. Please try again.'
+      message: deducted
+        ? 'Something went wrong. Your balance has been restored.'
+        : 'Something went wrong. Please try again.'
     });
   }
-}
-
-function humanizeGrizzlyError(code) {
-  const map = {
-    BAD_KEY: 'This service is temporarily unavailable. Please try again shortly.',
-    NO_BALANCE: 'This service is temporarily unavailable. Please try again later or contact support.',
-    NO_NUMBERS: 'No numbers available for this service/country right now. Try another country or service.',
-    SERVICE_UNAVAILABLE_REGION: 'This service is temporarily restricted right now. Please try another service.',
-    BAD_SERVICE: 'This service is temporarily unavailable. Please try again shortly.'
-  };
-  return map[code] || null;
 }
