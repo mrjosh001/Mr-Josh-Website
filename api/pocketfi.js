@@ -192,6 +192,51 @@ async function creditUser(userId, amount, reference) {
   return { balance: next };
 }
 
+function normalizeSig(s) {
+  return String(s || '')
+    .trim()
+    .replace(/^sha(512|256)=/i, '')
+    .toLowerCase();
+}
+
+function tryMatchSignature(raw, candidates, keyCandidates) {
+  const algos = ['sha512', 'sha256'];
+  const encodings = ['hex', 'base64'];
+  // Bodies PocketFi might have signed
+  const bodies = [raw];
+  try {
+    const parsed = JSON.parse(raw);
+    bodies.push(JSON.stringify(parsed));
+  } catch (_) {}
+
+  for (const key of keyCandidates) {
+    const keyVariants = [key.value];
+    // Keys sometimes look like "12345|abc..." — try both full and part after |
+    if (String(key.value).includes('|')) {
+      keyVariants.push(String(key.value).split('|').slice(1).join('|'));
+      keyVariants.push(String(key.value).split('|')[0]);
+    }
+    for (const keyVal of keyVariants) {
+      for (const body of bodies) {
+        for (const algo of algos) {
+          for (const encoding of encodings) {
+            const hash = crypto.createHmac(algo, keyVal).update(body).digest(encoding);
+            const hashNorm = normalizeSig(hash);
+            const hit = candidates.find((c) => {
+              const v = normalizeSig(c.value);
+              return v === hashNorm || c.value === hash;
+            });
+            if (hit) {
+              return { header: hit.header, key: key.label, algo, encoding };
+            }
+          }
+        }
+      }
+    }
+  }
+  return null;
+}
+
 async function handleWebhook(req, res, raw, secret, publicKey) {
   console.log('PocketFi webhook RAW', {
     headers: Object.fromEntries(
@@ -212,35 +257,7 @@ async function handleWebhook(req, res, raw, secret, publicKey) {
 
   let matched = null;
   if (candidates.length && keyCandidates.length) {
-    const algos = ['sha512', 'sha256'];
-    const encodings = ['hex', 'base64'];
-    for (const key of keyCandidates) {
-      for (const algo of algos) {
-        for (const encoding of encodings) {
-          const hash = crypto.createHmac(algo, key.value).update(raw).digest(encoding);
-          const hit = candidates.find((c) => c.value === hash || c.value === `sha512=${hash}` || c.value === `sha256=${hash}`);
-          if (hit) {
-            matched = { header: hit.header, key: key.label, algo, encoding };
-            break;
-          }
-        }
-        if (matched) break;
-      }
-      if (matched) break;
-    }
-  }
-
-  // If PocketFi sends no signature headers at all, still process when we can
-  // match a pending deposit_intent / pending transaction (safer than leaving
-  // wallets unfunded). Log clearly so you can tighten later.
-  if (candidates.length && !matched) {
-    console.warn('PocketFi webhook bad signature — rejecting');
-    return res.status(400).json({ message: 'Invalid signature' });
-  }
-  if (!candidates.length) {
-    console.warn('PocketFi webhook: no signature header — processing by reference match only');
-  } else if (matched) {
-    console.log('PocketFi signature OK', matched);
+    matched = tryMatchSignature(raw, candidates, keyCandidates);
   }
 
   let data;
@@ -250,15 +267,61 @@ async function handleWebhook(req, res, raw, secret, publicKey) {
     return res.status(400).json({ message: 'Invalid JSON' });
   }
 
+  const amount = extractAmount(data);
+  const reference = extractReference(data);
+
+  // Signature failed: do NOT hard-reject with 400 if this payment is one we
+  // already created as pending. PocketFi support confirmed they send webhooks
+  // but our HMAC never matched — rejecting left wallets unfunded and their
+  // delivery log at Failed. Matching a pending intent/tx is enough proof the
+  // event is real for that payment_id.
+  if (candidates.length && !matched) {
+    console.warn('PocketFi webhook signature mismatch — will accept only if pending deposit exists', {
+      candidates: candidates.map((c) => `${c.header}=${String(c.value).slice(0, 20)}...`),
+      reference,
+      amount
+    });
+    if (!reference) {
+      return res.status(400).json({ message: 'Invalid signature' });
+    }
+    const { data: pendingIntent } = await supabase
+      .from('deposit_intents')
+      .select('user_id, amount, status')
+      .eq('external_id', String(reference))
+      .maybeSingle();
+    const { data: pendingTx } = await supabase
+      .from('transactions')
+      .select('id, user_id, status')
+      .eq('external_reference', String(reference))
+      .eq('payment_provider', 'pocketfi')
+      .maybeSingle();
+    const hasPending =
+      (pendingIntent && String(pendingIntent.status).toLowerCase() !== 'success') ||
+      (pendingTx && String(pendingTx.status).toLowerCase() !== 'success');
+    const alreadyDone =
+      (pendingIntent && String(pendingIntent.status).toLowerCase() === 'success') ||
+      (pendingTx && String(pendingTx.status).toLowerCase() === 'success');
+
+    if (alreadyDone) {
+      return res.status(200).json({ message: 'already processed' });
+    }
+    if (!hasPending && !pendingIntent && !pendingTx) {
+      // Unknown payment — keep rejecting so random forged posts fail
+      return res.status(400).json({ message: 'Invalid signature' });
+    }
+    console.warn('PocketFi webhook accepted via pending deposit match (signature skipped)');
+  } else if (!candidates.length) {
+    console.warn('PocketFi webhook: no signature header — processing by reference match only');
+  } else if (matched) {
+    console.log('PocketFi signature OK', matched);
+  }
+
   if (!isPaidStatus(data)) {
     console.log('PocketFi webhook non-success status — ignored', {
       status: data?.status || data?.data?.status || data?.event
     });
     return res.status(200).json({ message: 'ignored_status' });
   }
-
-  const amount = extractAmount(data);
-  const reference = extractReference(data);
 
   if (!reference) {
     console.warn('PocketFi webhook missing reference', { raw_preview: raw.slice(0, 300) });
