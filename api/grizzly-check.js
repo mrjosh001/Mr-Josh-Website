@@ -42,7 +42,7 @@ export default async function handler(req, res) {
   try {
     const { data: existing, error: findErr } = await supabase
       .from('number_orders')
-      .select('id, status, phone_number, created_at')
+      .select('id, status, phone_number, created_at, service_name, country_name, price, order_id')
       .eq('source', 'grizzlysms')
       .eq('order_id', String(order_id))
       .eq('user_id', user_id)
@@ -135,6 +135,9 @@ export default async function handler(req, res) {
         number: existing.phone_number,
         code,
         created_at: existing.created_at,
+        service_name: existing.service_name,
+        country_name: existing.country_name,
+        price: existing.price,
         raw
       }
     });
