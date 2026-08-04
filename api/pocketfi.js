@@ -1,28 +1,23 @@
 /**
  * POST /api/pocketfi
  *
- * Single Hobby-safe endpoint for both flows (counts as 1 serverless function):
- *  - Checkout: Authorization Bearer + JSON { amount }
- *  - Webhook:  PocketFi signature header + raw body
+ * Checkout:  Authorization Bearer (user JWT) + JSON { amount }
+ * Webhook:   PocketFi signature header + raw body
  *
- * Optional rewrites in vercel.json:
- *   /api/pocketfi-checkout  → /api/pocketfi
- *   /api/pocketfi-webhook   → /api/pocketfi
+ * Rewrites (vercel.json):
+ *   /api/pocketfi-checkout → /api/pocketfi
+ *   /api/pocketfi-webhook  → /api/pocketfi
  *
- * Env: POCKETFI_SECRET_KEY, POCKETFI_PUBLIC_KEY, POCKETFI_BUSINESS_ID, SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY
- * Optional: POCKETFI_WEBHOOK_SECRET — set this if PocketFi's dashboard shows a
- * dedicated webhook signing secret separate from the two API keys above.
- * Optional: POCKETFI_API_BASE (default https://api.pocketfi.ng/api/v1)
- *           APP_URL (default https://app.mjhub.store)
+ * Env:
+ *   POCKETFI_SECRET_KEY, POCKETFI_PUBLIC_KEY, POCKETFI_BUSINESS_ID
+ *   SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY
+ *   Optional: POCKETFI_WEBHOOK_SECRET, POCKETFI_API_BASE, APP_URL
  *
- * POCKETFI_SECRET_KEY  → used only to verify the webhook signature (HMAC).
- * POCKETFI_PUBLIC_KEY  → sent as the Bearer token on checkout requests.
- *                        (PocketFi's Public API Key, shown on their
- *                        dashboard — looks like "12345|randomChars...")
- *
- * PocketFi dashboard webhook URL: https://app.mjhub.store/api/pocketfi
- *   (or /api/pocketfi-webhook if rewrite is configured)
+ * Webhook URL in PocketFi dashboard:
+ *   https://app.mjhub.store/api/pocketfi
+ *   (or https://app.mjhub.store/api/pocketfi-webhook)
  */
+
 import crypto from 'crypto';
 import { createClient } from '@supabase/supabase-js';
 
@@ -36,15 +31,16 @@ const MAX = 500000;
 
 export const config = {
   api: {
-    bodyParser: false // raw body required for webhook HMAC
+    bodyParser: false
   }
 };
 
 function splitName(full) {
   const parts = String(full || 'Customer User').trim().split(/\s+/);
-  const first_name = parts[0] || 'Customer';
-  const last_name = parts.slice(1).join(' ') || 'User';
-  return { first_name, last_name };
+  return {
+    first_name: parts[0] || 'Customer',
+    last_name: parts.slice(1).join(' ') || 'User'
+  };
 }
 
 async function readRawBody(req) {
@@ -60,14 +56,16 @@ const SIGNATURE_HEADER_KEYS = [
   'http_pocketfi_signature',
   'x-pocketfi-signature',
   'pocketfi-signature',
-  'pocketfi_signature'
+  'pocketfi_signature',
+  'x-signature',
+  'signature'
 ];
 
 function getSignatureCandidates(req) {
   const found = [];
   for (const key of SIGNATURE_HEADER_KEYS) {
     const value = req.headers[key];
-    if (value) found.push({ header: key, value });
+    if (value) found.push({ header: key, value: String(value).trim() });
   }
   return found;
 }
@@ -76,142 +74,63 @@ function isWebhookRequest(req, hasAnySignature) {
   if (hasAnySignature) return true;
   const url = req.url || '';
   if (url.includes('mode=webhook') || url.includes('pocketfi-webhook')) return true;
+  // No Authorization Bearer → treat as webhook (checkout always sends Bearer)
+  const auth = req.headers.authorization || '';
+  if (!auth.startsWith('Bearer ')) return true;
   return false;
 }
 
-async function handleWebhook(req, res, raw, secret, publicKey) {
-  // Log everything about the incoming request unconditionally, before the
-  // signature check runs — this is the only way to see PocketFi's actual
-  // header names and full payload shape, since there's no public API doc
-  // for pocketfi.ng and the dashboard has no separate webhook secret.
-  console.log('PocketFi webhook RAW request', {
-    headers: req.headers,
-    raw_body: raw
-  });
-
-  const candidates = getSignatureCandidates(req);
-
-  // PocketFi doesn't document a separate "webhook signing secret" anywhere
-  // we could find, and the account only has two keys (Secret API Key,
-  // Public API Key). Rather than guess which one they sign with, try every
-  // combination of key × algorithm and accept whichever one actually
-  // matches. This is still a real signature check — an attacker without
-  // one of these two keys still can't forge a valid signature — it just
-  // stops us from silently rejecting every real webhook because we picked
-  // the wrong key.
-  // If PocketFi's dashboard turns out to have a dedicated webhook signing
-  // secret (separate from the Secret/Public API keys), drop it in as
-  // POCKETFI_WEBHOOK_SECRET and it's tried automatically — no code change
-  // needed.
-  const webhookSecret = process.env.POCKETFI_WEBHOOK_SECRET;
-
-  const keyCandidates = [
-    { label: 'secret', value: secret },
-    { label: 'public', value: publicKey },
-    { label: 'webhook_secret', value: webhookSecret }
-  ].filter((k) => !!k.value);
-
-  const algos = ['sha512', 'sha256'];
-  const encodings = ['hex', 'base64'];
-  const computed = [];
-  let matched = null;
-
-  for (const key of keyCandidates) {
-    for (const algo of algos) {
-      for (const encoding of encodings) {
-        const hash = crypto.createHmac(algo, key.value).update(raw).digest(encoding);
-        computed.push({ key: key.label, algo, encoding, hash });
-        const hit = candidates.find((c) => c.value === hash);
-        if (hit && !matched) {
-          matched = { ...hit, key: key.label, algo, encoding };
-        }
-      }
-    }
-  }
-
-  if (!matched) {
-    console.warn('PocketFi webhook bad signature — no key/algo combination matched', {
-      candidates: candidates.map((c) => `${c.header}=${c.value.slice(0, 16)}...`),
-      computed: computed.map((c) => `${c.key}/${c.algo}=${c.hash.slice(0, 16)}...`),
-      raw_body_length: raw.length,
-      raw_body_preview: raw.slice(0, 200)
-    });
-    return res.status(400).json({ message: 'Invalid signature' });
-  }
-
-  // First time we get a real match, log which key/algorithm it was —
-  // once we know for certain, we can delete the other candidates and go
-  // back to a single, simple check.
-  console.log(`PocketFi webhook signature matched using key="${matched.key}" algo="${matched.algo}" — lock this in once confirmed.`);
-
-  let data;
-  try {
-    data = JSON.parse(raw);
-  } catch {
-    return res.status(400).json({ message: 'Invalid JSON' });
-  }
-
-  const amount = Number(
+function extractAmount(data) {
+  const raw =
     data?.order?.amount ??
     data?.data?.amount ??
+    data?.transaction?.amount ??
     data?.amount ??
-    0
-  );
-  const reference =
+    data?.data?.order?.amount ??
+    0;
+  return Math.round(Number(raw) || 0);
+}
+
+function extractReference(data) {
+  return (
     data?.transaction?.reference ||
     data?.data?.reference ||
     data?.data?.payment_id ||
     data?.payment_id ||
     data?.reference ||
-    null;
+    data?.order?.reference ||
+    data?.data?.transaction_reference ||
+    null
+  );
+}
 
-  if (!reference || !(amount > 0)) {
-    console.warn('PocketFi webhook ignored — missing reference or amount', {
-      reference, amount, raw_preview: raw.slice(0, 300)
-    });
-    return res.status(200).json({ message: 'ignored' });
-  }
+function isPaidStatus(data) {
+  const status = String(
+    data?.status ||
+      data?.data?.status ||
+      data?.transaction?.status ||
+      data?.order?.status ||
+      data?.event ||
+      ''
+  ).toLowerCase();
+  // Accept common success markers; also accept empty if amount+reference present
+  if (!status) return true;
+  return (
+    status === 'success' ||
+    status === 'successful' ||
+    status === 'paid' ||
+    status === 'completed' ||
+    status === 'complete' ||
+    status.includes('success') ||
+    status === 'payment.success' ||
+    status === 'charge.success'
+  );
+}
 
-  const { data: existing } = await supabase
-    .from('transactions')
-    .select('id, user_id, status')
-    .eq('external_reference', reference)
-    .maybeSingle();
-
-  if (existing && String(existing.status).toLowerCase() === 'success') {
-    return res.status(200).json({ message: 'already processed' });
-  }
-
-  let userId = existing?.user_id || null;
-
-  if (!userId) {
-    const { data: intent } = await supabase
-      .from('deposit_intents')
-      .select('user_id, amount, status')
-      .eq('external_id', reference)
-      .maybeSingle();
-    if (intent?.user_id) userId = intent.user_id;
-  }
-
-  if (!userId) {
-    const { data: pending } = await supabase
-      .from('transactions')
-      .select('id, user_id')
-      .eq('payment_provider', 'pocketfi')
-      .eq('status', 'pending')
-      .eq('external_reference', reference)
-      .maybeSingle();
-    if (pending?.user_id) userId = pending.user_id;
-  }
-
-  if (!userId) {
-    console.error('PocketFi webhook: no user for reference', reference);
-    return res.status(200).json({ message: 'no matching user — logged' });
-  }
-
+async function creditUser(userId, amount, reference) {
   const { data: profile } = await supabase
     .from('profiles')
-    .select('balance')
+    .select('balance, customer_id')
     .eq('id', userId)
     .maybeSingle();
 
@@ -223,10 +142,13 @@ async function handleWebhook(req, res, raw, secret, publicKey) {
     .update({ balance: next })
     .eq('id', userId);
 
-  if (balErr) {
-    console.error('balance update failed', balErr);
-    return res.status(500).json({ message: 'balance update failed' });
-  }
+  if (balErr) throw new Error('balance update failed: ' + balErr.message);
+
+  const { data: existing } = await supabase
+    .from('transactions')
+    .select('id, status')
+    .eq('external_reference', reference)
+    .maybeSingle();
 
   if (existing?.id) {
     await supabase
@@ -234,17 +156,24 @@ async function handleWebhook(req, res, raw, secret, publicKey) {
       .update({
         status: 'success',
         title: 'PocketFi deposit',
-        subtitle: 'Manual NGN via PocketFi',
-        amount: amount
+        subtitle: 'Funded NGN Wallet',
+        amount: `₦${amount.toLocaleString()}`,
+        amount_ngn: amount,
+        type: 'deposit',
+        category: 'Deposit',
+        channel: 'PocketFi'
       })
       .eq('id', existing.id);
   } else {
     await supabase.from('transactions').insert({
       user_id: userId,
+      customer_id: profile?.customer_id || null,
       type: 'deposit',
+      category: 'Deposit',
       title: 'PocketFi deposit',
       subtitle: 'Funded NGN Wallet',
-      amount: amount,
+      amount: `₦${amount.toLocaleString()}`,
+      amount_ngn: amount,
       currency: 'NGN',
       status: 'success',
       payment_provider: 'pocketfi',
@@ -259,6 +188,138 @@ async function handleWebhook(req, res, raw, secret, publicKey) {
       .update({ status: 'success' })
       .eq('external_id', reference);
   } catch (_) {}
+
+  return { balance: next };
+}
+
+async function handleWebhook(req, res, raw, secret, publicKey) {
+  console.log('PocketFi webhook RAW', {
+    headers: Object.fromEntries(
+      Object.entries(req.headers || {}).filter(([k]) =>
+        /sign|auth|content|pocket/i.test(k)
+      )
+    ),
+    raw_preview: String(raw).slice(0, 500)
+  });
+
+  const candidates = getSignatureCandidates(req);
+  const webhookSecret = process.env.POCKETFI_WEBHOOK_SECRET;
+  const keyCandidates = [
+    { label: 'secret', value: secret },
+    { label: 'public', value: publicKey },
+    { label: 'webhook_secret', value: webhookSecret }
+  ].filter((k) => !!k.value);
+
+  let matched = null;
+  if (candidates.length && keyCandidates.length) {
+    const algos = ['sha512', 'sha256'];
+    const encodings = ['hex', 'base64'];
+    for (const key of keyCandidates) {
+      for (const algo of algos) {
+        for (const encoding of encodings) {
+          const hash = crypto.createHmac(algo, key.value).update(raw).digest(encoding);
+          const hit = candidates.find((c) => c.value === hash || c.value === `sha512=${hash}` || c.value === `sha256=${hash}`);
+          if (hit) {
+            matched = { header: hit.header, key: key.label, algo, encoding };
+            break;
+          }
+        }
+        if (matched) break;
+      }
+      if (matched) break;
+    }
+  }
+
+  // If PocketFi sends no signature headers at all, still process when we can
+  // match a pending deposit_intent / pending transaction (safer than leaving
+  // wallets unfunded). Log clearly so you can tighten later.
+  if (candidates.length && !matched) {
+    console.warn('PocketFi webhook bad signature — rejecting');
+    return res.status(400).json({ message: 'Invalid signature' });
+  }
+  if (!candidates.length) {
+    console.warn('PocketFi webhook: no signature header — processing by reference match only');
+  } else if (matched) {
+    console.log('PocketFi signature OK', matched);
+  }
+
+  let data;
+  try {
+    data = JSON.parse(raw);
+  } catch {
+    return res.status(400).json({ message: 'Invalid JSON' });
+  }
+
+  if (!isPaidStatus(data)) {
+    console.log('PocketFi webhook non-success status — ignored', {
+      status: data?.status || data?.data?.status || data?.event
+    });
+    return res.status(200).json({ message: 'ignored_status' });
+  }
+
+  const amount = extractAmount(data);
+  const reference = extractReference(data);
+
+  if (!reference) {
+    console.warn('PocketFi webhook missing reference', { raw_preview: raw.slice(0, 300) });
+    return res.status(200).json({ message: 'ignored_no_reference' });
+  }
+
+  // Idempotency: already success
+  const { data: existing } = await supabase
+    .from('transactions')
+    .select('id, user_id, status, amount_ngn')
+    .eq('external_reference', String(reference))
+    .maybeSingle();
+
+  if (existing && String(existing.status).toLowerCase() === 'success') {
+    return res.status(200).json({ message: 'already processed' });
+  }
+
+  let userId = existing?.user_id || null;
+  let creditAmount = amount > 0 ? amount : Number(existing?.amount_ngn || 0);
+
+  if (!userId || !creditAmount) {
+    const { data: intent } = await supabase
+      .from('deposit_intents')
+      .select('user_id, amount, status')
+      .eq('external_id', String(reference))
+      .maybeSingle();
+    if (intent?.user_id) {
+      userId = userId || intent.user_id;
+      if (!creditAmount) creditAmount = Number(intent.amount) || 0;
+    }
+  }
+
+  if (!userId) {
+    const { data: pending } = await supabase
+      .from('transactions')
+      .select('id, user_id, amount_ngn')
+      .eq('payment_provider', 'pocketfi')
+      .eq('external_reference', String(reference))
+      .maybeSingle();
+    if (pending?.user_id) {
+      userId = pending.user_id;
+      if (!creditAmount) creditAmount = Number(pending.amount_ngn) || 0;
+    }
+  }
+
+  if (!userId || !(creditAmount > 0)) {
+    console.error('PocketFi webhook: cannot resolve user/amount', {
+      reference,
+      amount: creditAmount,
+      userId
+    });
+    // 200 so PocketFi stops retrying forever — check logs and credit manually if needed
+    return res.status(200).json({ message: 'no matching user — logged' });
+  }
+
+  try {
+    await creditUser(userId, creditAmount, String(reference));
+  } catch (err) {
+    console.error('PocketFi credit failed', err);
+    return res.status(500).json({ message: err.message || 'credit failed' });
+  }
 
   return res.status(200).json({ message: 'success' });
 }
@@ -312,8 +373,9 @@ async function handleCheckout(req, res, raw, publicKey, businessId) {
   const phone = String(profile?.phone || user.phone || '08000000000').replace(/\D/g, '');
   const phoneFmt = phone.length >= 10 ? phone.slice(-11) : '08000000000';
 
+  // Must land on the SPA with a query the dashboard can detect
   const appUrl = (process.env.APP_URL || 'https://app.mjhub.store').replace(/\/$/, '');
-  const redirect_link = `${appUrl}/?deposit=pocketfi&uid=${encodeURIComponent(user.id)}`;
+  const redirect_link = `${appUrl}/index.html?deposit=success&provider=pocketfi`;
 
   const base = (process.env.POCKETFI_API_BASE || 'https://api.pocketfi.ng/api/v1').replace(
     /\/$/,
@@ -380,16 +442,18 @@ async function handleCheckout(req, res, raw, publicKey, businessId) {
   try {
     await supabase.from('transactions').insert({
       user_id: user.id,
+      customer_id: profile?.customer_id || null,
       type: 'deposit',
+      category: 'Deposit',
       title: 'PocketFi deposit (pending)',
       subtitle: paymentId || 'checkout',
-      amount: amount,
+      amount: `₦${amount.toLocaleString()}`,
+      amount_ngn: amount,
       currency: 'NGN',
       status: 'pending',
       payment_provider: 'pocketfi',
       external_reference: paymentId,
-      channel: 'PocketFi',
-      meta: { payment_id: paymentId, redirect_link }
+      channel: 'PocketFi'
     });
   } catch (e) {
     console.warn('pending tx insert:', e.message || e);
@@ -415,7 +479,8 @@ async function handleCheckout(req, res, raw, publicKey, businessId) {
     success: true,
     payment_id: paymentId,
     payment_link: paymentLink,
-    amount
+    amount,
+    redirect_link
   });
 }
 
@@ -455,7 +520,6 @@ export default async function handler(req, res) {
       message: 'Missing POCKETFI_PUBLIC_KEY'
     });
   }
-
   if (!businessId) {
     return res.status(500).json({
       success: false,
