@@ -298,6 +298,7 @@ async function syncOneCountry(apiKey, country, usdToNgn, counters, serviceNames)
         service_name: friendlyName,
         supplier_price: supplierPriceUsd,
         price: applyMarkup(supplierPriceUsd, usdToNgn),
+        price_source: 'system',
         currency: 'NGN',
         available_quantity: availableQty,
         providers_raw: providersRaw,

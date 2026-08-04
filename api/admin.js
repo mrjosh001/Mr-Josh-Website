@@ -175,7 +175,9 @@ async function smsUpdate(body) {
     return { status: 400, body: { success: false, message: 'A valid selling price is required' } };
   }
 
-  const payload = { price: Number(price) };
+  // Editing a price by hand here means "keep this exact price" — tag it so
+  // Reprice All (and the daily sync) never overwrites it again.
+  const payload = { price: Number(price), price_source: 'manual' };
   if (is_available !== undefined) payload.is_available = !!is_available;
 
   const { data, error } = await supabase.from('number_services').update(payload).eq('id', id).select().maybeSingle();
@@ -189,17 +191,23 @@ async function smsUpdate(body) {
  * Bulk-apply the standard markup to number_services rows in one pass —
  * for when there are too many country/service combos to reprice by hand.
  *
- * mode: 'unpriced_only' (default, safe) — only rows with price 0 or null.
- *       Never touches a price you've already set, manually or otherwise.
- * mode: 'all' — reprices every row, including ones already priced. Use
- *       this if you want to reroll margins across the board; it will
- *       overwrite any manual price customizations you've made.
+ * Both modes now behave the same way the daily sync already does: a price
+ * set by hand via smsUpdate (price_source = 'manual') is never touched,
+ * no matter which mode is used.
+ *
+ * mode: 'unpriced_only' (default) — only rows with price 0 or null.
+ * mode: 'all' — reprices every system-priced row (price_source = 'system'),
+ *       i.e. every row that hasn't been manually overridden. Use this to
+ *       reroll margins across the board without disturbing manual edits.
  */
 async function smsBulkReprice(body) {
   const mode = body.mode === 'all' ? 'all' : 'unpriced_only';
   const usdToNgn = Number(process.env.USD_TO_NGN_RATE) || 1500;
 
-  let query = supabase.from('number_services').select('id, supplier_price, price');
+  // Manual overrides are off-limits in every mode — this is what makes
+  // bulk reprice behave like the daily sync, which already never touches
+  // customer selling price on existing rows.
+  let query = supabase.from('number_services').select('id, supplier_price, price').neq('price_source', 'manual');
   if (mode === 'unpriced_only') query = query.or('price.is.null,price.eq.0');
 
   const { data: rows, error } = await query;
@@ -207,7 +215,7 @@ async function smsBulkReprice(body) {
   if (!rows || !rows.length) {
     return {
       status: 200,
-      body: { success: true, updated: 0, total: 0, message: mode === 'unpriced_only' ? 'Nothing to do — every row already has a price.' : 'No number listings found.' }
+      body: { success: true, updated: 0, total: 0, message: mode === 'unpriced_only' ? 'Nothing to do — every row already has a price.' : 'No system-priced listings to reprice (everything left is manually priced).' }
     };
   }
 
@@ -218,7 +226,7 @@ async function smsBulkReprice(body) {
     const batch = rows.slice(i, i + CONCURRENCY);
     await Promise.all(batch.map(async (row) => {
       const newPrice = applyMarkup(Number(row.supplier_price || 0), usdToNgn);
-      const { error: updErr } = await supabase.from('number_services').update({ price: newPrice }).eq('id', row.id);
+      const { error: updErr } = await supabase.from('number_services').update({ price: newPrice, price_source: 'system' }).eq('id', row.id);
       if (updErr) errors.push(`${row.id}: ${updErr.message}`);
       else updated += 1;
     }));
