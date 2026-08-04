@@ -1056,36 +1056,26 @@ body::before {
             <div class="form-group">
                 <label>Payment Method</label>
                 <select id="depositProviderSelect" onchange="onDepositMethodChange()">
-                    <option value="paystack" selected>Deposit with Paystack (Card / Bank Transfer)</option>
-                    <option value="pocketfi">Deposit with PocketFi</option>
+                    <option value="pocketfi" selected>Bank Transfer / Card</option>
                     <option value="manual">Deposit Manually (via WhatsApp)</option>
                     <option value="crypto" disabled>Deposit with Crypto — Coming soon</option>
                 </select>
             </div>
 
-            <div id="paystackDepositBox">
-                <div class="form-group">
-                    <label>Amount (₦)</label>
-                    <input type="number" id="paystackDepositInput" min="100" max="1000000" step="100" placeholder="e.g. 5000">
-                </div>
-                <button class="btn-sm-primary" style="width:100%;padding:14px;" id="paystackPayBtn" onclick="payWithPaystack()">
-                    <i class="fa-solid fa-lock"></i> Pay with Paystack
-                </button>
-                <p style="font-size:12px;color:var(--muted);margin-top:12px;line-height:1.45;text-align:center;">
-                    Secure card / bank transfer checkout. Balance updates after payment is confirmed.
-                </p>
-            </div>
+            <!-- Paystack hidden until approved
+            <div id="paystackDepositBox" style="display:none;">...</div>
+            -->
 
-            <div id="pocketfiDepositBox" style="display:none;">
+            <div id="pocketfiDepositBox">
                 <div class="form-group">
                     <label>Amount (₦)</label>
                     <input type="number" id="pocketfiDepositInput" min="1000" max="500000" step="100" placeholder="e.g. 5000">
                 </div>
                 <button class="btn-sm-primary" style="width:100%;padding:14px;" id="pocketfiPayBtn" onclick="payWithPocketFi()">
-                    <i class="fa-solid fa-lock"></i> Pay with PocketFi
+                    <i class="fa-solid fa-lock"></i> Pay securely
                 </button>
                 <p style="font-size:12px;color:var(--muted);margin-top:12px;line-height:1.45;text-align:center;">
-                    PocketFi checkout. Min ₦1,000 · Max ₦500,000. After paying you should return to MJ HUB and balance updates automatically.
+                    Secure bank transfer / card. Min ₦1,000 · Max ₦500,000. Balance updates after payment is confirmed.
                 </p>
             </div>
 
@@ -1637,11 +1627,9 @@ window.toggleSmsMenu = function(e) {
 };
 
 window.onDepositMethodChange = function() {
-    const v = document.getElementById('depositProviderSelect')?.value || 'paystack';
-    const pay = document.getElementById('paystackDepositBox');
+    const v = document.getElementById('depositProviderSelect')?.value || 'pocketfi';
     const pfi = document.getElementById('pocketfiDepositBox');
     const man = document.getElementById('manualDepositBox');
-    if (pay) pay.style.display = v === 'paystack' ? '' : 'none';
     if (pfi) pfi.style.display = v === 'pocketfi' ? '' : 'none';
     if (man) man.style.display = v === 'manual' ? '' : 'none';
 };
@@ -1678,8 +1666,8 @@ window.payWithPaystack = async function() {
 
 window.payWithPocketFi = async function() {
     const amount = parseFloat(document.getElementById('pocketfiDepositInput')?.value) || 0;
-    if (amount < 1000) return showToast('Minimum PocketFi deposit is ₦1,000', 'error');
-    if (amount > 500000) return showToast('Maximum PocketFi deposit is ₦500,000', 'error');
+    if (amount < 1000) return showToast('Minimum deposit is ₦1,000', 'error');
+    if (amount > 500000) return showToast('Maximum deposit is ₦500,000', 'error');
     if (!supabaseClient) return showToast('Please sign in first', 'error');
     const btn = document.getElementById('pocketfiPayBtn');
     if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Starting…'; }
@@ -1715,15 +1703,15 @@ window.payWithPocketFi = async function() {
         try { data = await res.json(); } catch (_) {}
         if (!res.ok || !data.success || !data.payment_link) {
             if (res.status === 401) {
-                throw new Error('Session expired. Log out, sign in again, then retry PocketFi.');
+                throw new Error('Session expired. Log out, sign in again, then retry.');
             }
-            throw new Error(data.message || 'Could not start PocketFi payment');
+            throw new Error(data.message || 'Could not start payment');
         }
         window.location.href = data.payment_link;
     } catch (err) {
-        showToast(err.message || 'PocketFi error', 'error');
+        showToast(err.message || 'Payment error', 'error');
     } finally {
-        if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fa-solid fa-lock"></i> Pay with PocketFi'; }
+        if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fa-solid fa-lock"></i> Pay securely'; }
     }
 };
 
@@ -1889,13 +1877,14 @@ async function expireStalePocketFiDeposits(rows) {
             .from('transactions')
             .update({
                 status: 'failed',
-                title: 'PocketFi deposit (expired)',
-                subtitle: 'Payment not completed in time'
+                title: 'Deposit (expired)',
+                subtitle: 'Payment not completed in time',
+                channel: 'Bank Transfer'
             })
             .in('id', updates);
         return rows.map((tx) =>
             updates.includes(tx.id)
-                ? { ...tx, status: 'failed', title: 'PocketFi deposit (expired)', subtitle: 'Payment not completed in time' }
+                ? { ...tx, status: 'failed', title: 'Deposit (expired)', subtitle: 'Payment not completed in time', channel: 'Bank Transfer' }
                 : tx
         );
     } catch (e) {
@@ -1929,18 +1918,36 @@ async function fetchUserTransactions(userId) {
             .limit(80);
         if (!data) return;
         data = await expireStalePocketFiDeposits(data);
-        transactions = data.map(tx => ({
-            id: tx.id,
-            type: normalizeTxType(tx),
-            category: tx.category || '',
-            title: tx.title || 'Transaction',
-            subtitle: tx.subtitle || '',
-            amount: tx.amount || '₦0.00',
-            date: new Date(tx.created_at).toLocaleString(),
-            status: tx.status || 'Success',
-            paymentProvider: tx.payment_provider || 'MJ HUB',
-            channel: tx.channel || 'Wallet'
-        }));
+        transactions = data.map(tx => {
+            let title = tx.title || 'Transaction';
+            let channel = tx.channel || 'Wallet';
+            // Hide processor brand names in history
+            if (String(tx.payment_provider || '').toLowerCase() === 'pocketfi' ||
+                /pocketfi/i.test(title) || /pocketfi/i.test(channel)) {
+                title = title
+                    .replace(/PocketFi deposit \(pending\)/gi, 'Deposit (pending)')
+                    .replace(/PocketFi deposit \(expired\)/gi, 'Deposit (expired)')
+                    .replace(/PocketFi deposit/gi, 'Deposit')
+                    .replace(/PocketFi/gi, 'Deposit');
+                channel = 'Bank Transfer';
+            }
+            if (/paystack/i.test(title) || /paystack/i.test(channel)) {
+                title = title.replace(/Paystack/gi, 'Deposit');
+                channel = 'Bank Transfer';
+            }
+            return {
+                id: tx.id,
+                type: normalizeTxType(tx),
+                category: tx.category || '',
+                title,
+                subtitle: tx.subtitle || '',
+                amount: tx.amount || '₦0.00',
+                date: new Date(tx.created_at).toLocaleString(),
+                status: tx.status || 'Success',
+                paymentProvider: tx.payment_provider || 'MJ HUB',
+                channel
+            };
+        });
         renderRecentActivity();
     } catch (e) {
         console.warn('fetchUserTransactions', e);
