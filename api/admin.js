@@ -407,6 +407,27 @@ function findBalance(obj, depth = 0) {
   return null;
 }
 
+/**
+ * String.prototype.slice() cuts by UTF-16 code unit, not by character. If a
+ * multi-byte character (emoji, unusual symbol, whatever a third-party
+ * supplier's raw response happens to contain right at that boundary) sits
+ * across the cut point, slice() can chop it in half, leaving an orphaned
+ * surrogate half in the string. That's invalid Unicode on its own, and
+ * while Node happily JSON.stringifies it anyway, Safari's strict native
+ * JSON/body parser throws an opaque "The string did not match the expected
+ * pattern" TypeError when the browser hits one — Chrome is more lenient,
+ * which is why this only ever showed up on iPhone. This never surfaces
+ * from our own data, only from raw text we're echoing back from Fadded /
+ * LogsDomain / GrizzlySMS for debugging, so strip any orphaned surrogate
+ * left over from truncation before it ever reaches the response body.
+ */
+function safeSlice(str, max) {
+  if (typeof str !== 'string') return str;
+  return str
+    .slice(0, max)
+    .replace(/[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?:[^\uD800-\uDBFF]|^)[\uDC00-\uDFFF]/g, '');
+}
+
 async function tryJsonEndpoints(urls, headers, currencyGuess) {
   let lastRaw = null;
   let lastStatus = null;
@@ -414,7 +435,7 @@ async function tryJsonEndpoints(urls, headers, currencyGuess) {
     try {
       const res = await fetch(url, { method: 'GET', headers });
       const text = await res.text();
-      lastRaw = text.slice(0, 300);
+      lastRaw = safeSlice(text, 300);
       lastStatus = res.status;
       if (!res.ok) continue;
       let json;
@@ -422,7 +443,7 @@ async function tryJsonEndpoints(urls, headers, currencyGuess) {
       const balance = findBalance(json);
       if (balance !== null) return { ok: true, balance, currency: currencyGuess, source_url: url };
     } catch (err) {
-      lastRaw = String(err.message || err).slice(0, 300);
+      lastRaw = safeSlice(String(err.message || err), 300);
     }
   }
   return { ok: false, error: `No balance field found (last status ${lastStatus})`, raw: lastRaw };
@@ -477,9 +498,9 @@ async function getGrizzlyBalance() {
       const balance = Number(text.split(':')[1]);
       if (!Number.isNaN(balance)) return { ok: true, balance, currency: 'USD', source_url: 'getBalance' };
     }
-    return { ok: false, error: text || `HTTP ${res.status}`, raw: text.slice(0, 300) };
+    return { ok: false, error: text || `HTTP ${res.status}`, raw: safeSlice(text, 300) };
   } catch (err) {
-    return { ok: false, error: String(err.message || err) };
+    return { ok: false, error: safeSlice(String(err.message || err), 500) };
   }
 }
 
