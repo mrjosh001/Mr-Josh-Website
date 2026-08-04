@@ -63,7 +63,7 @@ export default async function handler(req, res) {
       .single();
 
     if (svcErr || !svc) {
-      return res.status(404).json({ success: false, message: 'Service not found. Try re-syncing the GrizzlySMS catalog.' });
+      return res.status(404).json({ success: false, message: 'This service is no longer available. Please refresh and try another.' });
     }
     if (!svc.is_available) {
       return res.status(409).json({ success: false, message: 'This number service is currently out of stock.' });
@@ -132,7 +132,7 @@ export default async function handler(req, res) {
         type: 'purchase_failed',
         category: 'MJ SMS',
         title: serviceName,
-        subtitle: `Failed (GrizzlySMS): ${failureReason || 'Unknown error'}`,
+        subtitle: `Failed: ${humanizeGrizzlyError(failureReason) || 'Unknown error'}`,
         amount: `₦${price.toLocaleString()}`,
         amount_ngn: price,
         status: 'failed',
@@ -145,7 +145,7 @@ export default async function handler(req, res) {
         type: 'refund',
         category: 'MJ SMS',
         title: 'Automatic Refund',
-        subtitle: 'GrizzlySMS purchase failed – balance restored',
+        subtitle: 'Purchase failed – balance restored',
         amount: `₦${price.toLocaleString()}`,
         amount_ngn: price,
         status: 'refunded'
@@ -154,7 +154,7 @@ export default async function handler(req, res) {
       return res.status(400).json({
         success: false,
         code: failureReason || 'SUPPLIER_ERROR',
-        message: humanizeGrizzlyError(failureReason) || 'Purchase failed at GrizzlySMS. Your balance has been refunded.'
+        message: humanizeGrizzlyError(failureReason) || 'Purchase failed. Your balance has been refunded.'
       });
     }
 
@@ -189,7 +189,7 @@ export default async function handler(req, res) {
       type: 'purchase',
       category: 'MJ SMS',
       title: serviceName,
-      subtitle: `${countryName} · GrizzlySMS`,
+      subtitle: `${countryName} · MJ SMS`,
       amount: `₦${price.toLocaleString()}`,
       amount_ngn: price,
       status: 'completed',
@@ -241,11 +241,11 @@ export default async function handler(req, res) {
 
 function humanizeGrizzlyError(code) {
   const map = {
-    BAD_KEY: 'Supplier rejected our API key.',
-    NO_BALANCE: 'Supplier account is out of funds — contact admin to top up GrizzlySMS.',
-    NO_NUMBERS: 'No numbers available for this service/country right now.',
-    SERVICE_UNAVAILABLE_REGION: 'This service is temporarily restricted from our server region.',
-    BAD_SERVICE: 'Unknown service code — try re-syncing the catalog.'
+    BAD_KEY: 'This service is temporarily unavailable. Please try again shortly.',
+    NO_BALANCE: 'This service is temporarily unavailable. Please try again later or contact support.',
+    NO_NUMBERS: 'No numbers available for this service/country right now. Try another country or service.',
+    SERVICE_UNAVAILABLE_REGION: 'This service is temporarily restricted right now. Please try another service.',
+    BAD_SERVICE: 'This service is temporarily unavailable. Please try again shortly.'
   };
   return map[code] || null;
 }

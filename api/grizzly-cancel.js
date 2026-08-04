@@ -60,7 +60,7 @@ export default async function handler(req, res) {
       return res.status(409).json({
         success: false,
         code: 'NUMBER_CODE_ALREADY_RECEIVED',
-        message: 'A code was already received — this order cannot be cancelled (per GrizzlySMS policy, funds are not refunded once a code arrives).'
+        message: 'A code was already received — this order cannot be cancelled once a code has arrived.'
       });
     }
 
@@ -99,7 +99,7 @@ export default async function handler(req, res) {
       type: 'refund',
       category: 'MJ SMS',
       title: 'Number Cancelled & Refunded',
-      subtitle: `${order.service_name || 'Number order'} · GrizzlySMS`,
+      subtitle: `${order.service_name || 'Number order'} · MJ SMS`,
       amount: `₦${Number(order.price || 0).toLocaleString()}`,
       amount_ngn: Number(order.price || 0),
       status: 'refunded'
