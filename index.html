@@ -1786,13 +1786,18 @@ async function fetchUserTransactions(userId) {
                 const rawCat = String(tx.category || '').toLowerCase();
                 let type = rawType || 'deposit';
 
-                // Normalize so tabs work for old + new rows
-                if (['purchase', 'purchase_failed', 'logs'].includes(rawType) || rawCat === 'log') {
+                // Normalize so tabs work for old + new rows. Category is
+                // checked FIRST because it's the more specific signal —
+                // e.g. MJ SMS purchases are saved with type:'purchase'
+                // (same as log orders) but category:'MJ SMS', so category
+                // has to win or every SMS purchase silently gets bucketed
+                // under Log Orders and never shows under SMS Numbers.
+                if (rawCat === 'mj sms' || rawType === 'sms') {
+                    type = 'sms';
+                } else if (['purchase', 'purchase_failed', 'logs'].includes(rawType) || rawCat === 'log') {
                     type = 'log';
                 } else if (rawType === 'refund' || rawType === 'manual_deposit') {
                     type = 'deposit';
-                } else if (rawType === 'sms' || rawCat === 'sms') {
-                    type = 'sms';
                 } else if (rawType === 'booster' || rawCat === 'booster') {
                     type = 'booster';
                 } else if (rawType === 'conversion' || rawCat === 'conversion') {

@@ -43,6 +43,9 @@ body::before{content:'';position:fixed;inset:0;pointer-events:none;z-index:0;bac
 @media(min-width:600px){.product-grid{grid-template-columns:repeat(2,1fr)}}
 .product-card{background:var(--bg);border:1px solid var(--border);border-radius:16px;padding:14px;display:flex;flex-direction:column;gap:10px}
 .product-header{display:flex;justify-content:space-between;align-items:flex-start;gap:10px}
+.svc-icon{width:36px;height:36px;border-radius:10px;display:flex;align-items:center;justify-content:center;color:#fff;font-size:15px;flex-shrink:0}
+.svc-icon-fallback{background:var(--primary-glow);color:var(--primary);}
+.country-row .flag{margin-right:8px;font-size:16px;}
 .product-name{font-size:14px;font-weight:700;line-height:1.35;flex:1;min-width:0;word-wrap:break-word;text-transform:capitalize;}
 .product-price{font-size:15px;font-weight:800;color:var(--primary);white-space:nowrap}
 .product-badges{display:flex;gap:6px;flex-wrap:wrap}
@@ -174,6 +177,72 @@ function escapeHtml(str){if(!str)return'';return String(str).replace(/&/g,'&amp;
 function money(n){return '₦'+Number(n||0).toLocaleString()}
 function showToast(msg,type){const t=document.createElement('div');t.className='toast'+(type==='error'?' error':'');t.innerHTML='<span>'+(type==='error'?'❌':'✅')+'</span><span>'+escapeHtml(msg)+'</span>';toastContainer.appendChild(t);setTimeout(()=>t.remove(),3500)}
 
+// --- Service icons (Grizzly's own site shows brand logos; their reseller
+// API doesn't return icon URLs, so this maps common service names to
+// Font Awesome brand icons client-side. Anything unmatched falls back to a
+// generic phone icon rather than showing nothing. ---
+const SERVICE_ICON_MAP = [
+  ['whatsapp','fa-brands fa-whatsapp','#25D366'],['telegram','fa-brands fa-telegram','#26A5E4'],
+  ['facebook','fa-brands fa-facebook-f','#1877F2'],['instagram','fa-brands fa-instagram','#E1306C'],
+  ['tiktok','fa-brands fa-tiktok','#000000'],['twitter','fa-brands fa-x-twitter','#000000'],
+  ['google','fa-brands fa-google','#4285F4'],['gmail','fa-brands fa-google','#4285F4'],
+  ['discord','fa-brands fa-discord','#5865F2'],['snapchat','fa-brands fa-snapchat','#FFFC00'],
+  ['linkedin','fa-brands fa-linkedin-in','#0A66C2'],['pinterest','fa-brands fa-pinterest-p','#E60023'],
+  ['reddit','fa-brands fa-reddit-alien','#FF4500'],['spotify','fa-brands fa-spotify','#1DB954'],
+  ['uber','fa-brands fa-uber','#000000'],['airbnb','fa-brands fa-airbnb','#FF5A5F'],
+  ['amazon','fa-brands fa-amazon','#FF9900'],['apple','fa-brands fa-apple','#000000'],
+  ['microsoft','fa-brands fa-microsoft','#00A4EF'],['paypal','fa-brands fa-paypal','#00457C'],
+  ['steam','fa-brands fa-steam','#1B2838'],['twitch','fa-brands fa-twitch','#9146FF'],
+  ['youtube','fa-brands fa-youtube','#FF0000'],['github','fa-brands fa-github','#181717'],
+  ['wechat','fa-brands fa-weixin','#07C160'],['skype','fa-brands fa-skype','#00AFF0'],
+  ['viber','fa-brands fa-viber','#7360F2'],['tumblr','fa-brands fa-tumblr','#36465D'],
+  ['yahoo','fa-brands fa-yahoo','#6001D2'],['tinder','fa-solid fa-heart','#FD5068']
+];
+const SERVICE_ICON_EXACT = { line:['fa-brands fa-line','#00C300'], vk:['fa-brands fa-vk','#0077FF'], x:['fa-brands fa-x-twitter','#000000'] };
+function serviceIcon(name){
+  const n = (name||'').toLowerCase().trim();
+  if(SERVICE_ICON_EXACT[n]) return { cls: SERVICE_ICON_EXACT[n][0], color: SERVICE_ICON_EXACT[n][1] };
+  for(const [key, cls, color] of SERVICE_ICON_MAP){ if(n.includes(key)) return { cls, color }; }
+  return null;
+}
+
+// --- Country flags. Grizzly's site shows flags too — same story as above,
+// the reseller API only returns country names, not flag images, so this
+// renders a Unicode flag emoji from a name→ISO lookup. Unmatched names
+// (spelling variants we haven't seen) fall back to a globe icon instead of
+// showing a broken/wrong flag. ---
+const COUNTRY_ISO = {
+  russia:'ru',ukraine:'ua',kazakhstan:'kz',china:'cn',philippines:'ph',myanmar:'mm',indonesia:'id',
+  malaysia:'my',kenya:'ke',tanzania:'tz',vietnam:'vn',kyrgyzstan:'kg',usa:'us','usa (virtual)':'us',
+  israel:'il','hong kong':'hk',poland:'pl',england:'gb','united kingdom':'gb',madagascar:'mg',congo:'cd',
+  nigeria:'ng',macau:'mo',egypt:'eg',india:'in',ireland:'ie',cambodia:'kh',laos:'la',haiti:'ht','ivory coast':'ci',
+  gambia:'gm',serbia:'rs',yemen:'ye','south africa':'za',romania:'ro',turkmenistan:'tm',chile:'cl','sri lanka':'lk',
+  peru:'pe',pakistan:'pk',thailand:'th','saudi arabia':'sa',mexico:'mx',taiwan:'tw',spain:'es',
+  iran:'ir',algeria:'dz',slovenia:'si',bangladesh:'bd',senegal:'sn',turkey:'tr','czech republic':'cz',
+  mongolia:'mn',brazil:'br',afghanistan:'af',canada:'ca',morocco:'ma','united arab emirates':'ae',uae:'ae',
+  uzbekistan:'uz',cameroon:'cm',chad:'td',germany:'de',lithuania:'lt',croatia:'hr',sweden:'se',iraq:'iq',
+  netherlands:'nl','the netherlands':'nl',latvia:'lv',austria:'at',belarus:'by',mali:'ml',armenia:'am',
+  'east timor':'tl',ghana:'gh',argentina:'ar',uganda:'ug',ecuador:'ec',libya:'ly',hungary:'hu',australia:'au',
+  belize:'bz',angola:'ao',cyprus:'cy',france:'fr',georgia:'ge',denmark:'dk',panama:'pa',
+  bulgaria:'bg',slovakia:'sk',norway:'no',finland:'fi',ethiopia:'et',moldova:'md',portugal:'pt',greece:'gr',switzerland:'ch',
+  gabon:'ga',belgium:'be','bosnia and herzegovina':'ba',zambia:'zm',albania:'al','south korea':'kr',
+  japan:'jp',italy:'it',qatar:'qa','dominican republic':'do','el salvador':'sv',jamaica:'jm',
+  bahamas:'bs',botswana:'bw',bolivia:'bo','south sudan':'ss',jordan:'jo',tunisia:'tn',kuwait:'kw',
+  'new zealand':'nz',paraguay:'py','sierra leone':'sl',luxembourg:'lu',maldives:'mv',malawi:'mw',mauritania:'mr',
+  oman:'om',tajikistan:'tj',nicaragua:'ni',nepal:'np',brunei:'bn',bahrain:'bh',uruguay:'uy',mozambique:'mz',
+  guatemala:'gt',honduras:'hn',estonia:'ee','costa rica':'cr','trinidad and tobago':'tt','puerto rico':'pr',
+  venezuela:'ve',colombia:'co','papua new guinea':'pg',fiji:'fj',singapore:'sg',zimbabwe:'zw',rwanda:'rw',
+  syria:'sy',lebanon:'lb',montenegro:'me',macedonia:'mk',kosovo:'xk',malta:'mt',iceland:'is'
+};
+function isoToFlagEmoji(iso2){
+  if(!iso2 || iso2.length!==2) return '';
+  return String.fromCodePoint(...[...iso2.toUpperCase()].map(c => 127397 + c.charCodeAt(0)));
+}
+function countryFlag(name){
+  const iso = COUNTRY_ISO[(name||'').toLowerCase().trim()];
+  return iso ? isoToFlagEmoji(iso) : '🌍';
+}
+
 async function initSession(){
   try{
     if(!window.supabase) return;
@@ -211,7 +280,7 @@ function renderCountries(list){
   if(!list.length){ countryList.innerHTML = '<div class="empty-state"><div class="empty-state-icon">🔍</div><h4>No countries found</h4></div>'; return; }
   countryList.innerHTML = list.map(c => `
     <div class="country-row" data-id="${c.country_id}">
-      <span class="name">${escapeHtml(c.country_name)}</span>
+      <span class="name"><span class="flag">${countryFlag(c.country_name)}</span>${escapeHtml(c.country_name)}</span>
       <span class="count">${c.service_count} services</span>
     </div>`).join('');
   countryList.querySelectorAll('.country-row').forEach(row => {
@@ -229,7 +298,7 @@ async function selectCountry(countryId){
   if(!currentCountry) return;
   countryStep.style.display = 'none';
   serviceStep.style.display = 'block';
-  document.getElementById('selectedCountryName').textContent = currentCountry.country_name;
+  document.getElementById('selectedCountryName').innerHTML = `<span class="flag">${countryFlag(currentCountry.country_name)}</span>${escapeHtml(currentCountry.country_name)}`;
   serviceGrid.innerHTML = '<div class="loading-spinner"><div class="spinner"></div><span class="loading-text">Loading services...</span></div>';
   serviceSearch.value = '';
 
@@ -263,9 +332,18 @@ function renderServices(list){
   serviceCountBadge.innerHTML = '<span class="product-count-badge">'+list.length+' service'+(list.length!==1?'s':'')+' available</span>';
   let html = '<div class="product-grid">';
   list.forEach((s, index) => {
-    const name = escapeHtml((s.service_name || s.service_id || 'Service').replace(/_/g,' '));
+    const rawName = (s.service_name || s.service_id || 'Service').replace(/_/g,' ');
+    const name = escapeHtml(rawName);
+    const icon = serviceIcon(rawName);
+    const iconHtml = icon
+      ? `<div class="svc-icon" style="background:${icon.color}"><i class="${icon.cls}"></i></div>`
+      : `<div class="svc-icon svc-icon-fallback"><i class="fa-solid fa-mobile-screen"></i></div>`;
     html += `<div class="product-card">
-      <div class="product-header"><div class="product-name">${name}</div><div class="product-price">${money(s.price)}</div></div>
+      <div class="product-header">
+        ${iconHtml}
+        <div class="product-name" style="flex:1;">${name}</div>
+        <div class="product-price">${money(s.price)}</div>
+      </div>
       <div class="product-badges"><span class="badge badge-stock">${s.available_quantity ?? '—'} available</span></div>
       <div class="product-actions" style="display:flex;">
         <button class="btn btn-primary" data-index="${index}">Buy Number</button>
@@ -287,11 +365,19 @@ serviceSearch.addEventListener('input', () => {
 function openPurchaseModal(s){
   activeService = s;
   const name = (s.service_name || s.service_id || 'Service').replace(/_/g,' ');
+  const icon = serviceIcon(name);
+  const iconEl = document.getElementById('psIcon');
+  if(icon){
+    iconEl.innerHTML = `<i class="${icon.cls}"></i>`;
+    iconEl.style.background = icon.color;
+  } else {
+    iconEl.textContent = (name.charAt(0)||'M').toUpperCase();
+    iconEl.style.background = '#1877f2';
+  }
   document.getElementById('psName').textContent = name;
-  document.getElementById('psIcon').textContent = (name.charAt(0)||'M').toUpperCase();
   document.getElementById('psUnitPrice').textContent = money(s.price);
   document.getElementById('psStock').textContent = (s.available_quantity ?? '—') + ' available';
-  document.getElementById('psCountry').textContent = currentCountry.country_name;
+  document.getElementById('psCountry').innerHTML = `<span class="flag">${countryFlag(currentCountry.country_name)}</span>${escapeHtml(currentCountry.country_name)}`;
   document.getElementById('psTotal').textContent = money(s.price);
   document.getElementById('purchaseModal').classList.add('active');
 }

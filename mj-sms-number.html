@@ -74,10 +74,47 @@ const orderId = params.get('order_id');
 let sbClient = null;
 let currentUserId = null;
 let pollTimer = null;
+let countdownTimer = null;
 let cancelling = false;
+let checkingNow = false;
+// GrizzlySMS (sms-activate-compatible) numbers are reserved for 20 minutes
+// before the supplier auto-releases them if no code arrives. Adjust this if
+// your supplier account's actual reservation window differs.
+const EXPIRY_SECONDS = 20 * 60;
 
 function escapeHtml(str){if(!str)return'';return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;')}
 function showToast(msg,type){const t=document.createElement('div');t.className='toast'+(type==='error'?' error':'');t.innerHTML='<span>'+(type==='error'?'❌':'✅')+'</span><span>'+escapeHtml(msg)+'</span>';toastContainer.appendChild(t);setTimeout(()=>t.remove(),3500)}
+
+function formatCountdown(seconds){
+  if(seconds <= 0) return '0:00';
+  const m = Math.floor(seconds/60);
+  const s = seconds%60;
+  return m+':'+String(s).padStart(2,'0');
+}
+
+function startCountdown(createdAt){
+  stopCountdown();
+  const startMs = createdAt ? new Date(createdAt).getTime() : Date.now();
+  const el = document.getElementById('countdownValue');
+  if(!el) return;
+  function tick(){
+    const elapsed = Math.floor((Date.now() - startMs) / 1000);
+    const remaining = EXPIRY_SECONDS - elapsed;
+    const label = document.getElementById('countdownValue');
+    if(!label) { stopCountdown(); return; }
+    if(remaining <= 0){
+      label.textContent = 'Expired — still checking…';
+      return;
+    }
+    label.textContent = formatCountdown(remaining);
+  }
+  tick();
+  countdownTimer = setInterval(tick, 1000);
+}
+function stopCountdown(){
+  if(countdownTimer) clearInterval(countdownTimer);
+  countdownTimer = null;
+}
 
 function renderWaiting(data){
   statusCard.innerHTML = `
@@ -88,15 +125,23 @@ function renderWaiting(data){
       <div class="label">Your Number</div>
       <div class="value">${escapeHtml(data.number || '—')}</div>
     </div>
-    <button type="button" class="btn btn-danger" id="cancelBtn">Cancel & Refund</button>
+    <div class="number-display" style="margin-bottom:14px;">
+      <div class="label">Time Remaining</div>
+      <div class="value" id="countdownValue" style="color:var(--primary);">--:--</div>
+    </div>
+    <button type="button" class="btn btn-outline" id="checkNowBtn"><i class="fa-solid fa-rotate"></i> Check for SMS Now</button>
+    <button type="button" class="btn btn-danger" id="cancelBtn">Cancel</button>
     <a href="mj-sms.html" class="btn btn-outline">Back to MJ SMS</a>
     <a href="index.html" class="btn btn-outline">Back to Home</a>
   `;
   document.getElementById('cancelBtn').addEventListener('click', cancelOrder);
+  document.getElementById('checkNowBtn').addEventListener('click', checkNow);
+  startCountdown(data.created_at);
 }
 
 function renderCompleted(data){
   stopPolling();
+  stopCountdown();
   statusCard.innerHTML = `
     <div class="status-icon success"><i class="fa-solid fa-circle-check"></i></div>
     <div class="status-title">Code Received!</div>
@@ -121,6 +166,7 @@ function renderCompleted(data){
 
 function renderCancelled(){
   stopPolling();
+  stopCountdown();
   statusCard.innerHTML = `
     <div class="status-icon cancelled"><i class="fa-solid fa-circle-xmark"></i></div>
     <div class="status-title">Order Cancelled</div>
@@ -132,6 +178,7 @@ function renderCancelled(){
 
 function renderError(msg){
   stopPolling();
+  stopCountdown();
   statusCard.innerHTML = `
     <div class="status-icon cancelled"><i class="fa-solid fa-triangle-exclamation"></i></div>
     <div class="status-title">Something went wrong</div>
@@ -172,6 +219,16 @@ async function checkStatus(){
     // Network hiccup — keep trying rather than dead-ending the page.
     pollTimer = setTimeout(checkStatus, 6000);
   }
+}
+
+async function checkNow(){
+  if(checkingNow) return;
+  checkingNow = true;
+  stopPolling();
+  const btn = document.getElementById('checkNowBtn');
+  if(btn){ btn.disabled = true; btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Checking...'; }
+  await checkStatus();
+  checkingNow = false;
 }
 
 async function cancelOrder(){
