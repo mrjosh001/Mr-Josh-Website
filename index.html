@@ -1866,21 +1866,85 @@ async function fetchUserBalance(userId) {
     } catch(e) {}
 }
 
+/** Unpaid PocketFi checkouts older than this show as failed (never credited). */
+const POCKETFI_PENDING_TIMEOUT_MS = 30 * 60 * 1000; // 30 minutes
+
+async function expireStalePocketFiDeposits(rows) {
+    if (!supabaseClient || !rows?.length) return rows;
+    const now = Date.now();
+    const updates = [];
+    for (const tx of rows) {
+        const isPendingPocket =
+            String(tx.payment_provider || '').toLowerCase() === 'pocketfi' &&
+            String(tx.status || '').toLowerCase() === 'pending' &&
+            String(tx.type || '').toLowerCase() === 'deposit';
+        if (!isPendingPocket) continue;
+        const created = new Date(tx.created_at).getTime();
+        if (!created || now - created < POCKETFI_PENDING_TIMEOUT_MS) continue;
+        updates.push(tx.id);
+    }
+    if (!updates.length) return rows;
+    try {
+        await supabaseClient
+            .from('transactions')
+            .update({
+                status: 'failed',
+                title: 'PocketFi deposit (expired)',
+                subtitle: 'Payment not completed in time'
+            })
+            .in('id', updates);
+        return rows.map((tx) =>
+            updates.includes(tx.id)
+                ? { ...tx, status: 'failed', title: 'PocketFi deposit (expired)', subtitle: 'Payment not completed in time' }
+                : tx
+        );
+    } catch (e) {
+        console.warn('expireStalePocketFiDeposits', e);
+        return rows;
+    }
+}
+
+function normalizeTxType(tx) {
+    const type = String(tx.type || '').toLowerCase();
+    const cat = String(tx.category || '').toLowerCase();
+    const channel = String(tx.channel || '').toLowerCase();
+    // Grizzly SMS rows: type=purchase, category=MJ SMS
+    if (type === 'sms' || cat.includes('sms') || channel.includes('sms')) return 'sms';
+    if (type === 'deposit' || cat.includes('deposit') || channel.includes('pocketfi') || channel.includes('paystack')) return 'deposit';
+    if (type === 'log' || type === 'logs' || cat.includes('log')) return 'log';
+    if (type === 'booster' || cat.includes('boost')) return 'booster';
+    if (type === 'conversion') return 'conversion';
+    if (type === 'purchase' && (cat.includes('log') || cat.includes('mj logs'))) return 'log';
+    return type || 'deposit';
+}
+
 async function fetchUserTransactions(userId) {
     if (!supabaseClient) return;
     try {
-        const { data } = await supabaseClient.from('transactions').select('*').eq('user_id', userId).order('created_at', {ascending: false}).limit(50);
-        if (data) {
-            transactions = data.map(tx => ({
-                id: tx.id, type: tx.type || 'deposit', title: tx.title || 'Transaction',
-                subtitle: tx.subtitle || '', amount: tx.amount || '₦0.00',
-                date: new Date(tx.created_at).toLocaleString(),
-                status: tx.status || 'Success',
-                paymentProvider: tx.payment_provider || 'MJ HUB', channel: tx.channel || 'Wallet'
-            }));
-            renderRecentActivity();
-        }
-    } catch(e) {}
+        let { data } = await supabaseClient
+            .from('transactions')
+            .select('*')
+            .eq('user_id', userId)
+            .order('created_at', { ascending: false })
+            .limit(80);
+        if (!data) return;
+        data = await expireStalePocketFiDeposits(data);
+        transactions = data.map(tx => ({
+            id: tx.id,
+            type: normalizeTxType(tx),
+            category: tx.category || '',
+            title: tx.title || 'Transaction',
+            subtitle: tx.subtitle || '',
+            amount: tx.amount || '₦0.00',
+            date: new Date(tx.created_at).toLocaleString(),
+            status: tx.status || 'Success',
+            paymentProvider: tx.payment_provider || 'MJ HUB',
+            channel: tx.channel || 'Wallet'
+        }));
+        renderRecentActivity();
+    } catch (e) {
+        console.warn('fetchUserTransactions', e);
+    }
 }
 
 async function saveTransaction(tx) {
@@ -2516,7 +2580,13 @@ function renderHistoryList(filterType = 'all') {
 
     let items = transactions;
     if (filterType !== 'all') {
-        items = transactions.filter(t => t.type === filterType || (filterType === 'log' && t.type === 'logs'));
+        items = transactions.filter((t) => {
+            if (filterType === 'log') return t.type === 'log' || t.type === 'logs';
+            if (filterType === 'sms') return t.type === 'sms';
+            if (filterType === 'deposit') return t.type === 'deposit';
+            if (filterType === 'booster') return t.type === 'booster';
+            return t.type === filterType;
+        });
     }
 
     if (!items.length) {
@@ -2532,6 +2602,11 @@ function renderHistoryList(filterType = 'all') {
         else if (t.type === 'booster') { iconClass = 'fa-bolt'; boxClass = 'tx-blue'; }
         else if (t.type === 'conversion') { iconClass = 'fa-right-left'; boxClass = 'tx-purple'; }
 
+        const st = String(t.status || 'Success').toLowerCase();
+        let badgeClass = 'badge-success';
+        if (st === 'pending' || st === 'waiting') badgeClass = 'badge-pending';
+        else if (st === 'failed' || st === 'expired' || st === 'cancelled') badgeClass = 'badge-danger';
+
         return `
         <div class="transaction-card">
             <div class="transaction-left">
@@ -2543,7 +2618,7 @@ function renderHistoryList(filterType = 'all') {
             </div>
             <div class="transaction-right">
                 <div class="transaction-amount">${escapeHtml(t.amount)}</div>
-                <span class="badge-status badge-success">${escapeHtml(t.status || 'Success')}</span>
+                <span class="badge-status ${badgeClass}">${escapeHtml(t.status || 'Success')}</span>
             </div>
         </div>`;
     }).join('');
