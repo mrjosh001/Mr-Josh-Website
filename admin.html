@@ -877,14 +877,19 @@ async function bulkRepriceNumbers(mode) {
   setBtnBusy(btn, true, 'Pricing...');
 
   let repriceSucceeded = false;
+  let step = 'building auth headers';
   try {
     const headers = await authHeaders();
     headers['Content-Type'] = 'application/json';
+
+    step = 'requesting bulk reprice';
     const res = await fetch('/api/admin', {
       method: 'POST',
       headers,
       body: JSON.stringify({ resource: 'sms', action: 'bulk_reprice', mode })
     });
+
+    step = 'reading response';
     const data = await res.json();
     if (!data.success) {
       showAdminToast(data.message || 'Bulk repricing failed', 'error');
@@ -900,8 +905,8 @@ async function bulkRepriceNumbers(mode) {
       }
     }
   } catch (err) {
-    console.error('Bulk reprice request error:', err.name, err.message, err.stack);
-    showAdminToast('Bulk repricing failed: ' + (err.message || 'network error'), 'error');
+    console.error('Bulk reprice error at step:', step, err.name, err.message, err.stack);
+    showAdminToast(`Bulk repricing failed while ${step}: ` + (err.message || 'network error'), 'error');
   } finally {
     setBtnBusy(btn, false, idleLabel);
   }
@@ -927,15 +932,25 @@ async function loadSupplierBalances() {
     const sub = document.getElementById('bal' + p + 'Sub');
     if (sub) sub.textContent = 'Loading…';
   });
+  // Step-tracked the same way uploadManualStock() already does, so a
+  // failure reports exactly which operation broke (building headers vs.
+  // the network request vs. parsing the response) instead of one generic
+  // message that could mean any of those three very different things.
+  let step = 'building auth headers';
   try {
     const headers = await authHeaders();
     headers['Content-Type'] = 'application/json';
+
+    step = 'requesting supplier balances';
     const res = await fetch('/api/admin', {
       method: 'POST',
       headers,
       body: JSON.stringify({ resource: 'supplier_balances' })
     });
+
+    step = 'reading response';
     const data = await res.json();
+
     if (!data.success) {
       showAdminToast(data.message || 'Could not load supplier balances', 'error');
       return;
@@ -944,7 +959,8 @@ async function loadSupplierBalances() {
     renderSupplierBalance('Logsdomain', data.suppliers.logsdomain);
     renderSupplierBalance('Grizzly', data.suppliers.grizzly);
   } catch (err) {
-    showAdminToast('Supplier balance check failed: ' + (err.message || 'network error'), 'error');
+    console.error('Supplier balance error at step:', step, err.name, err.message, err.stack);
+    showAdminToast(`Supplier balance check failed while ${step}: ` + (err.message || 'network error'), 'error');
   } finally {
     setBtnBusy(btn, false, '<i class="fas fa-sync"></i> Refresh');
   }
@@ -1199,16 +1215,29 @@ function setGrizzlySyncProgress(text) {
 
 async function authHeaders() {
   const headers = {};
-  const { data: { session } } = await sb.auth.getSession();
-  const token = session?.access_token;
-  // Safari's fetch() strictly validates header values and throws an opaque
-  // "The string did not match the expected pattern" TypeError on anything
-  // it doesn't like (e.g. a token mid-refresh, or with stray whitespace) —
-  // Chrome doesn't enforce this as strictly, which is why this only shows
-  // up on iPhone. Only attach the token if it actually looks like a real
-  // JWT (three dot-separated segments, no stray whitespace) so a bad value
-  // never reaches fetch() in the first place. Every caller of authHeaders()
-  // gets this protection automatically.
+  let token = null;
+  try {
+    // On Safari specifically, a corrupted/malformed stored session can
+    // cause the SDK's internal base64 decode to throw here — not just
+    // return a bad value, but actually throw — with the exact same opaque
+    // "The string did not match the expected pattern" message. Guarding
+    // the token format below isn't enough on its own if retrieval itself
+    // blows up before we ever get to check it, so the whole thing is
+    // wrapped: any failure here just means "proceed without auth" (which
+    // the server safely rejects with a normal error) instead of crashing
+    // whatever feature called authHeaders().
+    const { data } = await sb.auth.getSession();
+    token = data?.session?.access_token || null;
+  } catch (e) {
+    token = null;
+  }
+  // Safari's fetch() also strictly validates header values and throws the
+  // same opaque TypeError on anything it doesn't like — Chrome doesn't
+  // enforce this as strictly, which is why this only shows up on iPhone.
+  // Only attach the token if it actually looks like a real JWT (three
+  // dot-separated segments, no stray whitespace) so a bad value never
+  // reaches fetch() in the first place. Every caller of authHeaders() gets
+  // both protections automatically.
   if (token && /^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/.test(token.trim())) {
     headers['Authorization'] = 'Bearer ' + token.trim();
   }
