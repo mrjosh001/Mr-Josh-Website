@@ -1432,7 +1432,40 @@ document.addEventListener('DOMContentLoaded', async () => {
     initSupportWidget();
     updateCartDisplay();
     initHashRouting();
+    await handleDepositReturn();
 });
+
+/** After PocketFi (or other) checkout, user lands on index.html?deposit=success */
+async function handleDepositReturn() {
+    try {
+        const params = new URLSearchParams(window.location.search);
+        const deposit = params.get('deposit');
+        if (!deposit) return;
+
+        // Clean URL without losing hash section
+        const hash = window.location.hash || '#home';
+        history.replaceState(null, '', window.location.pathname + hash);
+
+        if (deposit === 'success' || deposit === 'pocketfi') {
+            showToast('Payment received — updating your balance…', 'success', 4000);
+            if (typeof switchSection === 'function') switchSection('home');
+
+            // Webhook may lag a few seconds — poll balance a few times
+            if (currentUserId) {
+                for (let i = 0; i < 6; i++) {
+                    await sleep(1500);
+                    await fetchUserBalance(currentUserId);
+                    try { await fetchUserTransactions(currentUserId); } catch (_) {}
+                }
+                showToast('Wallet refreshed. If balance is still old, wait ~30s then pull to refresh.', 'info', 4500);
+            }
+        } else if (deposit === 'failed' || deposit === 'cancelled') {
+            showToast('Payment was not completed.', 'error');
+        }
+    } catch (e) {
+        console.warn('handleDepositReturn', e);
+    }
+}
 
 function initHashRouting() {
     const validSections = ['home', 'profile', 'sms', 'booster', 'cart', 'deposit', 'orders'];
@@ -1653,7 +1686,8 @@ window.payWithPocketFi = async function() {
     try {
         const { data: { session } } = await supabaseClient.auth.getSession();
         if (!session?.access_token) throw new Error('Session expired — sign in again');
-        const res = await fetch('/api/pocketfi-checkout', {
+        // Prefer /api/pocketfi; rewrite also maps /api/pocketfi-checkout → same handler
+        const res = await fetch('/api/pocketfi', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -1665,6 +1699,7 @@ window.payWithPocketFi = async function() {
         if (!res.ok || !data.success || !data.payment_link) {
             throw new Error(data.message || 'Could not start PocketFi payment');
         }
+        // Leave site for PocketFi hosted checkout; redirect_link brings user back to index.html?deposit=success
         window.location.href = data.payment_link;
     } catch (err) {
         showToast(err.message || 'PocketFi error', 'error');

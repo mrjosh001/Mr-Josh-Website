@@ -1,6 +1,10 @@
 {
   "cleanUrls": true,
   "trailingSlash": false,
+  "rewrites": [
+    { "source": "/api/pocketfi-checkout", "destination": "/api/pocketfi" },
+    { "source": "/api/pocketfi-webhook", "destination": "/api/pocketfi" }
+  ],
   "crons": [
     {
       "path": "/api/products",
@@ -15,9 +19,5 @@
     "api/grizzly-sync.js": {
       "maxDuration": 300
     }
-  },
-  "rewrites": [
-    { "source": "/api/pocketfi-checkout", "destination": "/api/pocketfi" },
-    { "source": "/api/pocketfi-webhook", "destination": "/api/pocketfi" }
-  ]
+  }
 }
