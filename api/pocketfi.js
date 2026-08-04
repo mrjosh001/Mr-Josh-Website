@@ -111,19 +111,33 @@ function isPaidStatus(data) {
       data?.transaction?.status ||
       data?.order?.status ||
       data?.event ||
+      data?.data?.event ||
       ''
   ).toLowerCase();
-  // Accept common success markers; also accept empty if amount+reference present
-  if (!status) return true;
+
+  // Explicit non-success — never credit wallet
+  if (
+    !status ||
+    status.includes('fail') ||
+    status.includes('cancel') ||
+    status.includes('expire') ||
+    status.includes('abandon') ||
+    status === 'pending' ||
+    status === 'initiated' ||
+    status === 'processing'
+  ) {
+    return false;
+  }
+
   return (
     status === 'success' ||
     status === 'successful' ||
     status === 'paid' ||
     status === 'completed' ||
     status === 'complete' ||
-    status.includes('success') ||
     status === 'payment.success' ||
-    status === 'charge.success'
+    status === 'charge.success' ||
+    status.includes('success')
   );
 }
 
@@ -286,27 +300,30 @@ async function handleWebhook(req, res, raw, secret, publicKey) {
     }
     const { data: pendingIntent } = await supabase
       .from('deposit_intents')
-      .select('user_id, amount, status')
+      .select('user_id, amount, status, created_at')
       .eq('external_id', String(reference))
       .maybeSingle();
     const { data: pendingTx } = await supabase
       .from('transactions')
-      .select('id, user_id, status')
+      .select('id, user_id, status, created_at')
       .eq('external_reference', String(reference))
       .eq('payment_provider', 'pocketfi')
       .maybeSingle();
-    const hasPending =
-      (pendingIntent && String(pendingIntent.status).toLowerCase() !== 'success') ||
-      (pendingTx && String(pendingTx.status).toLowerCase() !== 'success');
-    const alreadyDone =
-      (pendingIntent && String(pendingIntent.status).toLowerCase() === 'success') ||
-      (pendingTx && String(pendingTx.status).toLowerCase() === 'success');
+
+    const intentStatus = String(pendingIntent?.status || '').toLowerCase();
+    const txStatus = String(pendingTx?.status || '').toLowerCase();
+    const alreadyDone = intentStatus === 'success' || txStatus === 'success';
+    // Only *pending* checkouts can be credited — failed/expired never get money
+    const hasOpenPending =
+      intentStatus === 'pending' || txStatus === 'pending';
 
     if (alreadyDone) {
       return res.status(200).json({ message: 'already processed' });
     }
-    if (!hasPending && !pendingIntent && !pendingTx) {
-      // Unknown payment — keep rejecting so random forged posts fail
+    if (txStatus === 'failed' || intentStatus === 'failed' || intentStatus === 'expired') {
+      return res.status(200).json({ message: 'checkout expired or failed — not credited' });
+    }
+    if (!hasOpenPending) {
       return res.status(400).json({ message: 'Invalid signature' });
     }
     console.warn('PocketFi webhook accepted via pending deposit match (signature skipped)');
