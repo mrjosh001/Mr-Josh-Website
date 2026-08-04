@@ -332,6 +332,123 @@ async function inventoryHandle(body) {
   return { status: 400, body: { success: false, message: 'Unknown action. Use "bulk_upload" or "stock_count".' } };
 }
 
+// ---------- resource: supplier_balances ----------
+// Fetches your account balance from each supplier so you can see who needs
+// a top-up without logging into each one separately. Folded into this file
+// (rather than its own api/*.js) because Vercel's Hobby plan caps a
+// deployment at 12 Serverless Functions and this project is already there.
+
+/** Recursively hunt a parsed JSON object for a plausible balance field. */
+function findBalance(obj, depth = 0) {
+  if (obj == null || depth > 4) return null;
+  if (typeof obj === 'number') return obj;
+  if (typeof obj === 'string' && /^-?\d+(\.\d+)?$/.test(obj.trim())) return Number(obj);
+  if (typeof obj !== 'object') return null;
+
+  const keys = ['balance', 'wallet_balance', 'walletBalance', 'account_balance', 'credit', 'credits', 'funds', 'amount'];
+  for (const k of keys) {
+    if (obj[k] !== undefined && obj[k] !== null && typeof obj[k] !== 'object') {
+      const n = Number(obj[k]);
+      if (!Number.isNaN(n)) return n;
+    }
+  }
+  for (const k of ['data', 'account', 'wallet', 'profile', 'result', 'user']) {
+    if (obj[k] && typeof obj[k] === 'object') {
+      const found = findBalance(obj[k], depth + 1);
+      if (found !== null) return found;
+    }
+  }
+  return null;
+}
+
+async function tryJsonEndpoints(urls, headers, currencyGuess) {
+  let lastRaw = null;
+  let lastStatus = null;
+  for (const url of urls) {
+    try {
+      const res = await fetch(url, { method: 'GET', headers });
+      const text = await res.text();
+      lastRaw = text.slice(0, 300);
+      lastStatus = res.status;
+      if (!res.ok) continue;
+      let json;
+      try { json = JSON.parse(text); } catch { continue; }
+      const balance = findBalance(json);
+      if (balance !== null) return { ok: true, balance, currency: currencyGuess, source_url: url };
+    } catch (err) {
+      lastRaw = String(err.message || err).slice(0, 300);
+    }
+  }
+  return { ok: false, error: `No balance field found (last status ${lastStatus})`, raw: lastRaw };
+}
+
+async function getFaddedBalance() {
+  const apiKey = process.env.FADDED_API_KEY;
+  if (!apiKey) return { ok: false, error: 'Missing FADDED_API_KEY' };
+  const base = 'https://fadded.net/api/v1/reseller';
+  return tryJsonEndpoints(
+    [`${base}/balance`, `${base}/profile`, `${base}/me`, `${base}/account`],
+    { 'X-Api-Key': apiKey, Accept: 'application/json' },
+    'NGN'
+  );
+}
+
+async function getLogsDomainBalance() {
+  const apiKey = process.env.LOGSDOMAIN_API_KEY;
+  if (!apiKey) return { ok: false, error: 'Missing LOGSDOMAIN_API_KEY' };
+  const base = 'https://logsdomain.com/api/v1';
+  return tryJsonEndpoints(
+    [`${base}/balance`, `${base}/profile`, `${base}/me`, `${base}/account`],
+    { Authorization: `Bearer ${apiKey}`, Accept: 'application/json' },
+    'USD'
+  );
+}
+
+async function getGrizzlyBalance() {
+  const apiKey = process.env.GRIZZLYSMS_API_KEY;
+  if (!apiKey) return { ok: false, error: 'Missing GRIZZLYSMS_API_KEY' };
+  const base = 'https://api.grizzlysms.com/stubs/handler_api.php';
+
+  try {
+    const qs = new URLSearchParams({ api_key: apiKey, action: 'getBalanceV2' });
+    const res = await fetch(`${base}?${qs.toString()}`, { method: 'GET' });
+    const text = await res.text();
+    let json;
+    try { json = JSON.parse(text); } catch { json = null; }
+    if (json) {
+      const balance = findBalance(json);
+      if (balance !== null) return { ok: true, balance, currency: 'USD', source_url: 'getBalanceV2' };
+    }
+  } catch (err) {
+    // fall through to legacy
+  }
+
+  try {
+    const qs = new URLSearchParams({ api_key: apiKey, action: 'getBalance' });
+    const res = await fetch(`${base}?${qs.toString()}`, { method: 'GET' });
+    const text = (await res.text()).trim();
+    if (text.startsWith('ACCESS_BALANCE:')) {
+      const balance = Number(text.split(':')[1]);
+      if (!Number.isNaN(balance)) return { ok: true, balance, currency: 'USD', source_url: 'getBalance' };
+    }
+    return { ok: false, error: text || `HTTP ${res.status}`, raw: text.slice(0, 300) };
+  } catch (err) {
+    return { ok: false, error: String(err.message || err) };
+  }
+}
+
+async function supplierBalancesFetch() {
+  const [fadded, logsdomain, grizzly] = await Promise.all([
+    getFaddedBalance(),
+    getLogsDomainBalance(),
+    getGrizzlyBalance()
+  ]);
+  return {
+    status: 200,
+    body: { success: true, suppliers: { fadded, logsdomain, grizzly }, fetched_at: new Date().toISOString() }
+  };
+}
+
 // ---------- router ----------
 
 export default async function handler(req, res) {
@@ -368,8 +485,10 @@ export default async function handler(req, res) {
     } else if (resource === 'sms') {
       if (action === 'update') result = await smsUpdate(body);
       else result = { status: 400, body: { success: false, message: 'Unknown sms action. Use "update".' } };
+    } else if (resource === 'supplier_balances') {
+      result = await supplierBalancesFetch();
     } else {
-      result = { status: 400, body: { success: false, message: 'Unknown resource. Use "user", "product", "inventory", or "sms".' } };
+      result = { status: 400, body: { success: false, message: 'Unknown resource. Use "user", "product", "inventory", "sms", or "supplier_balances".' } };
     }
 
     return res.status(result.status).json(result.body);
