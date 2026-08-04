@@ -357,7 +357,7 @@
               <div style="display:flex;gap:8px;flex-wrap:wrap;">
                 <button class="btn btn-primary btn-sm" id="btnSyncGrizzly" onclick="syncGrizzlyNow()"><i class="fas fa-sync"></i> Sync Grizzly</button>
                 <button class="btn btn-secondary btn-sm" id="btnBulkRepriceUnpriced" onclick="bulkRepriceNumbers('unpriced_only')"><i class="fas fa-tags"></i> Price Unpriced Numbers</button>
-                <button class="btn btn-ghost btn-sm" id="btnBulkRepriceAll" onclick="bulkRepriceNumbers('all')" title="Rerolls markup on EVERY row, including ones you've already priced manually"><i class="fas fa-dice"></i> Reprice All (overwrites manual edits)</button>
+                <button class="btn btn-ghost btn-sm" id="btnBulkRepriceAll" onclick="bulkRepriceNumbers('all')" title="Rerolls markup on every system-priced row. Prices you've set manually are never touched."><i class="fas fa-dice"></i> Reprice All (skips manual prices)</button>
               </div>
             </div>
             <p style="color:#94a3b8;font-size:13px;margin:-4px 0 4px;">
@@ -871,7 +871,7 @@ async function bulkRepriceNumbers(mode) {
 
   const btnId = mode === 'all' ? 'btnBulkRepriceAll' : 'btnBulkRepriceUnpriced';
   const idleLabel = mode === 'all'
-    ? '<i class="fas fa-dice"></i> Reprice All (overwrites manual edits)'
+    ? '<i class="fas fa-dice"></i> Reprice All (skips manual prices)'
     : '<i class="fas fa-tags"></i> Price Unpriced Numbers';
   const btn = document.getElementById(btnId);
   setBtnBusy(btn, true, 'Pricing...');
