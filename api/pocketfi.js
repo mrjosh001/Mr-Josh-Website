@@ -10,6 +10,8 @@
  *   /api/pocketfi-webhook   → /api/pocketfi
  *
  * Env: POCKETFI_SECRET_KEY, POCKETFI_PUBLIC_KEY, POCKETFI_BUSINESS_ID, SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY
+ * Optional: POCKETFI_WEBHOOK_SECRET — set this if PocketFi's dashboard shows a
+ * dedicated webhook signing secret separate from the two API keys above.
  * Optional: POCKETFI_API_BASE (default https://api.pocketfi.ng/api/v1)
  *           APP_URL (default https://app.mjhub.store)
  *
@@ -88,22 +90,32 @@ async function handleWebhook(req, res, raw, secret, publicKey) {
   // one of these two keys still can't forge a valid signature — it just
   // stops us from silently rejecting every real webhook because we picked
   // the wrong key.
+  // If PocketFi's dashboard turns out to have a dedicated webhook signing
+  // secret (separate from the Secret/Public API keys), drop it in as
+  // POCKETFI_WEBHOOK_SECRET and it's tried automatically — no code change
+  // needed.
+  const webhookSecret = process.env.POCKETFI_WEBHOOK_SECRET;
+
   const keyCandidates = [
     { label: 'secret', value: secret },
-    { label: 'public', value: publicKey }
+    { label: 'public', value: publicKey },
+    { label: 'webhook_secret', value: webhookSecret }
   ].filter((k) => !!k.value);
 
   const algos = ['sha512', 'sha256'];
+  const encodings = ['hex', 'base64'];
   const computed = [];
   let matched = null;
 
   for (const key of keyCandidates) {
     for (const algo of algos) {
-      const hash = crypto.createHmac(algo, key.value).update(raw).digest('hex');
-      computed.push({ key: key.label, algo, hash });
-      const hit = candidates.find((c) => c.value === hash);
-      if (hit && !matched) {
-        matched = { ...hit, key: key.label, algo };
+      for (const encoding of encodings) {
+        const hash = crypto.createHmac(algo, key.value).update(raw).digest(encoding);
+        computed.push({ key: key.label, algo, encoding, hash });
+        const hit = candidates.find((c) => c.value === hash);
+        if (hit && !matched) {
+          matched = { ...hit, key: key.label, algo, encoding };
+        }
       }
     }
   }
@@ -130,14 +142,31 @@ async function handleWebhook(req, res, raw, secret, publicKey) {
     return res.status(400).json({ message: 'Invalid JSON' });
   }
 
-  const amount = Number(data?.order?.amount || data?.amount || 0);
+  // Always log the raw payload once the signature is verified. PocketFi's
+  // exact webhook shape isn't documented anywhere we could find, so this is
+  // the fastest way to confirm (via Vercel → project → Logs) whether the
+  // amount/reference below are actually being read from the right fields
+  // for a real transaction, instead of guessing blind.
+  console.log('PocketFi webhook payload (verified):', raw.slice(0, 1000));
+
+  const amount = Number(
+    data?.order?.amount ??
+    data?.data?.amount ??
+    data?.amount ??
+    0
+  );
   const reference =
     data?.transaction?.reference ||
+    data?.data?.reference ||
+    data?.data?.payment_id ||
     data?.payment_id ||
     data?.reference ||
     null;
 
   if (!reference || !(amount > 0)) {
+    console.warn('PocketFi webhook ignored — missing reference or amount', {
+      reference, amount, raw_preview: raw.slice(0, 300)
+    });
     return res.status(200).json({ message: 'ignored' });
   }
 
@@ -180,21 +209,16 @@ async function handleWebhook(req, res, raw, secret, publicKey) {
 
   const { data: profile } = await supabase
     .from('profiles')
-    .select('balance, balance_ngn')
+    .select('balance')
     .eq('id', userId)
     .maybeSingle();
 
-  const current = Number(profile?.balance_ngn ?? profile?.balance ?? 0) || 0;
+  const current = Number(profile?.balance ?? 0) || 0;
   const next = current + amount;
-
-  const updatePayload = { balance: next };
-  if (profile && Object.prototype.hasOwnProperty.call(profile, 'balance_ngn')) {
-    updatePayload.balance_ngn = next;
-  }
 
   const { error: balErr } = await supabase
     .from('profiles')
-    .update(updatePayload)
+    .update({ balance: next })
     .eq('id', userId);
 
   if (balErr) {
