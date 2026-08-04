@@ -366,8 +366,7 @@
             <p id="grizzlySyncProgress" style="color:var(--primary,#3b82f6);font-size:12px;font-weight:700;margin:0 0 14px;min-height:16px;"></p>
             <div class="search-row" style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;">
               <input type="text" id="smsSearch" placeholder="Search service (WhatsApp, Google, tg…)" oninput="filterNumberServices()" style="flex:1;min-width:160px;" />
-              <input type="text" id="smsCountrySearch" placeholder="Filter countries…" oninput="filterSmsCountryOptions()" style="flex:1;min-width:140px;" />
-              <select id="smsCountryFilter" onchange="filterNumberServices()" style="min-width:160px;"><option value="">All Countries</option></select>
+              <input type="text" id="smsCountryFilter" placeholder="Country (Nigeria, USA…)" oninput="filterNumberServices()" style="flex:1;min-width:160px;" />
               <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:#94a3b8;white-space:nowrap;">
                 <input type="checkbox" id="smsHideZeroStock" checked onchange="filterNumberServices()" />
                 Hide 0 stock
@@ -835,7 +834,7 @@ async function handleLogout() {
 }
 
 async function loadAllData() {
-  await Promise.all([loadProducts(), loadProfiles(), tryLoadOrders(), tryLoadSmsOrders(), loadNotificationHistory(), loadNumberServices()]);
+  await Promise.all([loadProducts(), loadProfiles(), tryLoadOrders(), tryLoadSmsOrders(), loadNotificationHistory()]);
   resumeGrizzlySyncIfRunning();
   updateMetrics();
   loadSupplierBalances();
@@ -980,65 +979,16 @@ function populateCategoryFilter() {
 // sync never touches either of them (see grizzly-sync.js).
 let allNumberServices = [];
 
+let smsTabLoaded = false;
+
+// Lazy — only called when the SMS tab is actually opened (see switchTab),
+// not on every dashboard load. There's no country list to preload anymore:
+// the country field is a plain text filter matched server-side, same as
+// the service search box, so opening this tab is now a single cheap query
+// (or no query at all until you type something) instead of scanning the
+// whole table just to build a dropdown.
 async function loadNumberServices() {
-  await loadSmsCountryOptions();
   await loadSmsRowsForCurrentFilter();
-}
-
-async function loadSmsCountryOptions() {
-  const select = document.getElementById('smsCountryFilter');
-  if (!select) return;
-  const current = select.value;
-  const names = new Set();
-  const pageSize = 1000;
-  let from = 0;
-  let lastError = null;
-
-  // Lightweight column only — full-row select was timing out on mobile.
-  while (from < 100000) {
-    const { data, error } = await sb
-      .from('number_services')
-      .select('country_name')
-      .order('country_name', { ascending: true })
-      .range(from, from + pageSize - 1);
-    if (error) {
-      lastError = error.message;
-      console.error('SMS country list error:', error);
-      break;
-    }
-    const batch = data || [];
-    for (const r of batch) {
-      if (r.country_name) names.add(r.country_name);
-    }
-    if (batch.length < pageSize) break;
-    from += pageSize;
-  }
-
-  const countries = [...names].sort((a, b) => a.localeCompare(b));
-  window._smsAllCountries = countries;
-  select.innerHTML =
-    '<option value="">All Countries</option>' +
-    countries.map(c => `<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join('');
-  if (current && countries.includes(current)) select.value = current;
-
-  if (lastError) {
-    showAdminToast('Could not load countries: ' + lastError, 'error');
-  } else if (countries.length === 0) {
-    showAdminToast('No SMS rows in database (or blocked by RLS). Check number_services.', 'error');
-  }
-}
-
-function filterSmsCountryOptions() {
-  const select = document.getElementById('smsCountryFilter');
-  if (!select) return;
-  const q = (document.getElementById('smsCountrySearch')?.value || '').toLowerCase().trim();
-  const current = select.value;
-  const all = window._smsAllCountries || [];
-  const list = q ? all.filter(c => c.toLowerCase().includes(q)) : all;
-  select.innerHTML =
-    '<option value="">All Countries</option>' +
-    list.map(c => `<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join('');
-  if (current && list.includes(current)) select.value = current;
 }
 
 async function loadSmsRowsForCurrentFilter() {
@@ -1062,7 +1012,7 @@ async function loadSmsRowsForCurrentFilter() {
 
   try {
     let query = sb.from('number_services').select(cols);
-    if (country) query = query.eq('country_name', country);
+    if (country) query = query.ilike('country_name', `%${country}%`);
     if (q) {
       query = query.or(
         `service_name.ilike.%${q}%,service_id.ilike.%${q}%,country_name.ilike.%${q}%`
@@ -2378,6 +2328,10 @@ function switchTab(name) {
   document.querySelector(`.nav-item[data-tab="${name}"]`).classList.add('active');
   document.getElementById('pageTitle').textContent = tabTitles[name] || name;
   closeSidebar();
+  if (name === 'sms' && !smsTabLoaded) {
+    smsTabLoaded = true;
+    loadNumberServices();
+  }
 }
 function openSidebar() {
   document.getElementById('sidebar').classList.add('open');
