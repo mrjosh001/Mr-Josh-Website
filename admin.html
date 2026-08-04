@@ -356,10 +356,12 @@
               <div class="panel-title">SMS Numbers — Supplier Catalog</div>
               <div style="display:flex;gap:8px;flex-wrap:wrap;">
                 <button class="btn btn-primary btn-sm" id="btnSyncGrizzly" onclick="syncGrizzlyNow()"><i class="fas fa-sync"></i> Sync Grizzly</button>
+                <button class="btn btn-secondary btn-sm" id="btnBulkRepriceUnpriced" onclick="bulkRepriceNumbers('unpriced_only')"><i class="fas fa-tags"></i> Price Unpriced Numbers</button>
+                <button class="btn btn-ghost btn-sm" id="btnBulkRepriceAll" onclick="bulkRepriceNumbers('all')" title="Rerolls markup on EVERY row, including ones you've already priced manually"><i class="fas fa-dice"></i> Reprice All (overwrites manual edits)</button>
               </div>
             </div>
             <p style="color:#94a3b8;font-size:13px;margin:-4px 0 4px;">
-              Syncing pulls the latest country, service, supplier price, and stock from GrizzlySMS. Your own selling price is never overwritten by a sync — edit it manually below.
+              Syncing pulls the latest country, service, supplier price, and stock from GrizzlySMS. Your own selling price is never overwritten by a sync — edit it manually below, or use "Price Unpriced Numbers" to bulk-apply the standard markup to anything still sitting at ₦0.
             </p>
             <p id="grizzlySyncProgress" style="color:var(--primary,#3b82f6);font-size:12px;font-weight:700;margin:0 0 14px;min-height:16px;"></p>
             <div class="search-row" style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;">
@@ -858,6 +860,50 @@ function renderSupplierBalance(prefix, result) {
   const isNgn = result.currency === 'NGN';
   valueEl.textContent = isNgn ? ngnFmt(result.balance) : usdFmt(result.balance);
   subEl.textContent = 'Updated just now';
+}
+
+async function bulkRepriceNumbers(mode) {
+  if (mode === 'all') {
+    const confirmed = confirm(
+      'This overwrites the selling price on EVERY SMS number listing — including any you\'ve already priced manually — with a fresh random 50–100% markup. This cannot be undone. Continue?'
+    );
+    if (!confirmed) return;
+  }
+
+  const btnId = mode === 'all' ? 'btnBulkRepriceAll' : 'btnBulkRepriceUnpriced';
+  const idleLabel = mode === 'all'
+    ? '<i class="fas fa-dice"></i> Reprice All (overwrites manual edits)'
+    : '<i class="fas fa-tags"></i> Price Unpriced Numbers';
+  const btn = document.getElementById(btnId);
+  setBtnBusy(btn, true, 'Pricing...');
+
+  try {
+    const headers = await authHeaders();
+    headers['Content-Type'] = 'application/json';
+    const res = await fetch('/api/admin', {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ resource: 'sms', action: 'bulk_reprice', mode })
+    });
+    const data = await res.json();
+    if (!data.success) {
+      showAdminToast(data.message || 'Bulk repricing failed', 'error');
+      return;
+    }
+    if (data.updated === 0) {
+      showAdminToast(data.message || 'Nothing to price.', 'info');
+    } else {
+      showAdminToast(`Priced ${data.updated} of ${data.total} number listings.`, 'success');
+    }
+    if (data.errors && data.errors.length) {
+      console.warn('Bulk reprice partial errors:', data.errors);
+    }
+    await loadNumberServices();
+  } catch (err) {
+    showAdminToast('Bulk repricing failed: ' + (err.message || 'network error'), 'error');
+  } finally {
+    setBtnBusy(btn, false, idleLabel);
+  }
 }
 
 async function loadSupplierBalances() {
