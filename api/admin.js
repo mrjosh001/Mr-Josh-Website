@@ -197,7 +197,7 @@ async function smsUpdate(body) {
  */
 async function smsBulkReprice(body) {
   const mode = body.mode === 'all' ? 'all' : 'unpriced_only';
-  const usdToNgn = Number(process.env.USD_TO_NGN_RATE) || 1420;
+  const usdToNgn = Number(process.env.USD_TO_NGN_RATE) || 1500;
 
   let query = supabase.from('number_services').select('id, supplier_price, price');
   if (mode === 'unpriced_only') query = query.or('price.is.null,price.eq.0');

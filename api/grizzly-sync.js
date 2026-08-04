@@ -15,7 +15,7 @@ import { applyMarkup } from '../lib/pricing.js';
  * the cursor. Reopen admin or wait for cron to continue.
  *
  * Env: GRIZZLYSMS_API_KEY, SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, CRON_SECRET?
- * Optional: USD_TO_NGN_RATE (default 1420)
+ * Optional: USD_TO_NGN_RATE (default 1500)
  */
 
 const BASE = 'https://api.grizzlysms.com/stubs/handler_api.php';
@@ -354,7 +354,7 @@ export default async function handler(req, res) {
   }
 
   const apiKey = process.env.GRIZZLYSMS_API_KEY;
-  const usdToNgn = Number(process.env.USD_TO_NGN_RATE) || 1420;
+  const usdToNgn = Number(process.env.USD_TO_NGN_RATE) || 1500;
   const action = req.query?.action || null;
 
   try {
