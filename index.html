@@ -969,6 +969,16 @@ body::before {
                 </div>
                 <div class="profile-menu-arrow">›</div>
             </div>
+            <div class="profile-menu-item" onclick="openDeleteAccountModal()">
+                <div class="profile-menu-left">
+                    <div class="profile-menu-icon" style="background:rgba(239,68,68,0.15);color:var(--danger-color);"><i class="fa-solid fa-trash"></i></div>
+                    <div class="profile-menu-info">
+                        <h4 style="color:var(--danger-color);">Delete Account</h4>
+                        <p>Permanently remove your account and data</p>
+                    </div>
+                </div>
+                <div class="profile-menu-arrow">›</div>
+            </div>
         </div>
     </section>
 
@@ -1099,6 +1109,26 @@ body::before {
     </section>
 
 </main>
+
+<!-- DELETE ACCOUNT -->
+<div class="currency-modal" id="deleteAccountModal">
+    <div class="currency-modal-card" style="max-width:400px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+            <div style="font-size:18px;font-weight:800;color:var(--danger-color,#f87171);">Delete Account</div>
+            <button onclick="closeDeleteAccountModal()" style="background:var(--bg);border:1px solid var(--border);width:32px;height:32px;border-radius:50%;cursor:pointer;color:var(--text);">✕</button>
+        </div>
+        <p style="font-size:13px;color:var(--muted);line-height:1.5;margin-bottom:14px;">
+            This permanently removes your account, wallet data, and order history. This cannot be undone.
+        </p>
+        <div class="form-group">
+            <label>Type DELETE to confirm</label>
+            <input type="text" id="deleteAccountConfirmInput" placeholder="DELETE" autocomplete="off">
+        </div>
+        <button class="btn-sm-primary" style="width:100%;padding:14px;background:#dc2626;border:none;" onclick="confirmDeleteAccount()">
+            <i class="fa-solid fa-trash"></i> Permanently Delete Account
+        </button>
+    </div>
+</div>
 
 <div id="support-widget" class="support-widget-container">
     <button id="support-toggle-btn" class="support-toggle-btn">
@@ -2503,6 +2533,60 @@ window.markAllNotifsRead = function() {
     const dot = document.getElementById('notifDot');
     if (dot) dot.style.display = 'none';
     showToast('Notifications marked as read', 'info');
+};
+
+window.openDeleteAccountModal = function() {
+    const modal = document.getElementById('deleteAccountModal');
+    const input = document.getElementById('deleteAccountConfirmInput');
+    if (input) input.value = '';
+    if (modal) modal.classList.add('active');
+};
+
+window.closeDeleteAccountModal = function() {
+    const modal = document.getElementById('deleteAccountModal');
+    if (modal) modal.classList.remove('active');
+};
+
+window.confirmDeleteAccount = async function() {
+    const typed = (document.getElementById('deleteAccountConfirmInput')?.value || '').trim();
+    if (typed !== 'DELETE') {
+        return showToast('Type DELETE in capital letters to confirm', 'error');
+    }
+    if (!supabaseClient || !currentUserId) {
+        return showToast('Not signed in', 'error');
+    }
+    try {
+        const { data: { session } } = await supabaseClient.auth.getSession();
+        if (!session?.access_token) {
+            return showToast('Session expired. Sign in again.', 'error');
+        }
+        const res = await fetch('/api/delete-account', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': 'Bearer ' + session.access_token
+            },
+            body: JSON.stringify({ confirm: 'DELETE' })
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok || data.success === false) {
+            // Fallback: sign out locally if API not available
+            if (res.status === 404) {
+                await supabaseClient.auth.signOut();
+                localStorage.clear();
+                showToast('Account sign-out complete. Contact support if data remains.', 'info');
+                setTimeout(() => { window.location.href = 'landing.html'; }, 1200);
+                return;
+            }
+            throw new Error(data.message || 'Could not delete account');
+        }
+        await supabaseClient.auth.signOut();
+        localStorage.clear();
+        showToast('Account deleted', 'success');
+        setTimeout(() => { window.location.href = 'landing.html'; }, 1000);
+    } catch (err) {
+        showToast(err.message || 'Delete failed', 'error');
+    }
 };
 
 window.messageAdminForDeposit = function() {
