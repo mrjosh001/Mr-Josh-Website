@@ -1200,7 +1200,18 @@ function setGrizzlySyncProgress(text) {
 async function authHeaders() {
   const headers = {};
   const { data: { session } } = await sb.auth.getSession();
-  if (session?.access_token) headers['Authorization'] = 'Bearer ' + session.access_token;
+  const token = session?.access_token;
+  // Safari's fetch() strictly validates header values and throws an opaque
+  // "The string did not match the expected pattern" TypeError on anything
+  // it doesn't like (e.g. a token mid-refresh, or with stray whitespace) —
+  // Chrome doesn't enforce this as strictly, which is why this only shows
+  // up on iPhone. Only attach the token if it actually looks like a real
+  // JWT (three dot-separated segments, no stray whitespace) so a bad value
+  // never reaches fetch() in the first place. Every caller of authHeaders()
+  // gets this protection automatically.
+  if (token && /^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/.test(token.trim())) {
+    headers['Authorization'] = 'Bearer ' + token.trim();
+  }
   return headers;
 }
 
