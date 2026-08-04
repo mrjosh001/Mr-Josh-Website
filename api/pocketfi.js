@@ -190,13 +190,13 @@ async function creditUser(userId, amount, reference) {
       .from('transactions')
       .update({
         status: 'success',
-        title: 'PocketFi deposit',
+        title: 'Deposit',
         subtitle: 'Funded NGN Wallet',
         amount: `₦${amount.toLocaleString()}`,
         amount_ngn: amount,
         type: 'deposit',
         category: 'Deposit',
-        channel: 'PocketFi'
+        channel: 'Bank Transfer'
       })
       .eq('id', existing.id);
   } else {
@@ -205,7 +205,7 @@ async function creditUser(userId, amount, reference) {
       customer_id: profile?.customer_id || null,
       type: 'deposit',
       category: 'Deposit',
-      title: 'PocketFi deposit',
+      title: 'Deposit',
       subtitle: 'Funded NGN Wallet',
       amount: `₦${amount.toLocaleString()}`,
       amount_ngn: amount,
@@ -213,7 +213,7 @@ async function creditUser(userId, amount, reference) {
       status: 'success',
       payment_provider: 'pocketfi',
       external_reference: reference,
-      channel: 'PocketFi'
+      channel: 'Bank Transfer'
     });
   }
 
@@ -590,15 +590,15 @@ async function handleCheckout(req, res, raw, publicKey, businessId) {
       customer_id: profile?.customer_id || null,
       type: 'deposit',
       category: 'Deposit',
-      title: 'PocketFi deposit (pending)',
-      subtitle: paymentId || 'checkout',
+      title: 'Deposit (pending)',
+      subtitle: 'Awaiting payment confirmation',
       amount: `₦${amount.toLocaleString()}`,
       amount_ngn: amount,
       currency: 'NGN',
       status: 'pending',
       payment_provider: 'pocketfi',
       external_reference: paymentId,
-      channel: 'PocketFi'
+      channel: 'Bank Transfer'
     });
   } catch (e) {
     console.warn('pending tx insert:', e.message || e);
