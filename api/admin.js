@@ -398,9 +398,9 @@ async function getLogsDomainBalance() {
   if (!apiKey) return { ok: false, error: 'Missing LOGSDOMAIN_API_KEY' };
   const base = 'https://logsdomain.com/api/v1';
   return tryJsonEndpoints(
-    [`${base}/balance`, `${base}/profile`, `${base}/me`, `${base}/account`],
+    [`${base}/wallet`],
     { Authorization: `Bearer ${apiKey}`, Accept: 'application/json' },
-    'USD'
+    'NGN'
   );
 }
 
