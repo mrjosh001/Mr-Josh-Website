@@ -1041,10 +1041,10 @@ body::before {
             <div class="form-group">
                 <label>Payment Method</label>
                 <select id="depositProviderSelect" onchange="onDepositMethodChange()">
-                    <option value="paystack" selected>Card / Bank Transfer (Paystack)</option>
-                    <option value="pocketfi">PocketFi</option>
-                    <option value="manual">Manual Deposit</option>
-                    <option value="crypto" disabled>Crypto — Coming soon</option>
+                    <option value="paystack" selected>Deposit with Paystack (Card / Bank Transfer)</option>
+                    <option value="pocketfi">Deposit with PocketFi</option>
+                    <option value="manual">Deposit Manually (via WhatsApp)</option>
+                    <option value="crypto" disabled>Deposit with Crypto — Coming soon</option>
                 </select>
             </div>
 
@@ -1389,67 +1389,76 @@ function escapeHtml(str) {
 function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
 
 document.addEventListener('DOMContentLoaded', async () => {
-    if (supabaseClient) {
-        try {
-            const { data: { session } } = await supabaseClient.auth.getSession();
-            if (session) {
-                // Belt-and-suspenders: Supabase's own auth-level ban already
-                // blocks sign-in and gets enforced on token refresh, but a
-                // still-valid cached session could otherwise slip through
-                // for a short window right after an admin bans someone.
-                // Check the mirrored profile flag here too and kick them out
-                // immediately if it's set.
-                try {
-                    const { data: banCheck } = await supabaseClient
-                        .from('profiles')
-                        .select('is_banned')
-                        .eq('id', session.user.id)
-                        .maybeSingle();
-                    if (banCheck && banCheck.is_banned) {
-                        await supabaseClient.auth.signOut();
-                        localStorage.clear();
-                        window.location.href = 'auth.html?banned=1';
-                        return;
-                    }
-                } catch (e) {}
-
-                currentUserId = session.user.id;
-                await initUserData(session.user);
-                await fetchUserBalance(currentUserId);
-                await fetchUserTransactions(currentUserId);
-                await fetchUserOrders(currentUserId);
-                await fetchUserNotifications();
-                renderNotifications();
-                showNotificationPopupIfUnread();
-                startInactivityWatcher();
-                handlePocketFiReturn();
-            } else {
-                // No active session — this page is the signed-in dashboard,
-                // so a visitor who isn't logged in must never see it. Send
-                // them to the public landing page to sign up / log in first.
-                window.location.href = 'landing.html';
-                return;
-            }
-        } catch(e) {
-            // If we can't even determine session state, fail safe and send
-            // the visitor to the landing page rather than risk showing the
-            // dashboard to someone who isn't signed in.
-            console.log('No session', e);
-            window.location.href = 'landing.html';
-            return;
-        }
-    } else {
-        // Supabase client failed to initialize — same fail-safe rule applies.
-        window.location.href = 'landing.html';
-        return;
-    }
-
+    // UI wiring must ALWAYS run, no matter what happens with the user's
+    // account data below. Previously all of this was called only after a
+    // chain of Supabase data-fetches succeeded, so a single hiccup in any
+    // one of them (network blip, slow token refresh, etc.) hit the catch
+    // block and bounced to landing.html — but if that navigation didn't
+    // take effect instantly, the page was left fully rendered with NO
+    // click handlers attached anywhere. It also meant handlePocketFiReturn()
+    // (which detects the PocketFi redirect-back and polls for the balance
+    // update) would never run at all if an earlier fetch in the chain
+    // threw — looking exactly like "doesn't redirect back / balance
+    // doesn't update" even when PocketFi's side worked fine.
     initNavigation();
     initTheme();
     initDropdowns();
     initSupportWidget();
     updateCartDisplay();
     initHashRouting();
+
+    if (!supabaseClient) {
+        window.location.href = 'landing.html';
+        return;
+    }
+
+    let session = null;
+    try {
+        const { data } = await supabaseClient.auth.getSession();
+        session = data && data.session;
+    } catch (e) {
+        console.log('Could not read session', e);
+    }
+
+    if (!session) {
+        window.location.href = 'landing.html';
+        return;
+    }
+
+    // Belt-and-suspenders: Supabase's own auth-level ban already blocks
+    // sign-in and gets enforced on token refresh, but a still-valid cached
+    // session could otherwise slip through for a short window right after
+    // an admin bans someone. Check the mirrored profile flag here too and
+    // kick them out immediately if it's set.
+    try {
+        const { data: banCheck } = await supabaseClient
+            .from('profiles')
+            .select('is_banned')
+            .eq('id', session.user.id)
+            .maybeSingle();
+        if (banCheck && banCheck.is_banned) {
+            await supabaseClient.auth.signOut();
+            localStorage.clear();
+            window.location.href = 'auth.html?banned=1';
+            return;
+        }
+    } catch (e) {}
+
+    currentUserId = session.user.id;
+
+    // Each of these is isolated so one failing never blocks the others, or
+    // blocks handlePocketFiReturn() from running below.
+    try { await initUserData(session.user); } catch (e) { console.log('initUserData failed', e); }
+    try { await fetchUserBalance(currentUserId); } catch (e) { console.log('fetchUserBalance failed', e); }
+    try { await fetchUserTransactions(currentUserId); } catch (e) { console.log('fetchUserTransactions failed', e); }
+    try { await fetchUserOrders(currentUserId); } catch (e) { console.log('fetchUserOrders failed', e); }
+    try {
+        await fetchUserNotifications();
+        renderNotifications();
+        showNotificationPopupIfUnread();
+    } catch (e) { console.log('fetchUserNotifications failed', e); }
+    startInactivityWatcher();
+    handlePocketFiReturn();
 });
 
 function initHashRouting() {
