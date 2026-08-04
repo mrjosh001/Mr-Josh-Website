@@ -1485,27 +1485,62 @@ function initHashRouting() {
 async function initUserData(user) {
     const meta = user.user_metadata || {};
     const email = user.email || '';
-    const name = meta.full_name || email.split('@')[0] || 'User';
-    userData = { name, email, avatarUrl: meta.avatar_url || '' };
+    let name = meta.full_name || email.split('@')[0] || 'User';
+    let phone = meta.phone || '';
+    let address = meta.address || '';
+    let bio = meta.bio || '';
+    let avatarUrl = meta.avatar_url || '';
+    let customerId = '';
+
+    // Prefer profiles table (persistent app data)
+    if (supabaseClient && user.id) {
+        try {
+            const { data: profile } = await supabaseClient
+                .from('profiles')
+                .select('full_name, phone, address, bio, avatar_url, customer_id, email')
+                .eq('id', user.id)
+                .maybeSingle();
+            if (profile) {
+                if (profile.full_name) name = profile.full_name;
+                if (profile.phone) phone = profile.phone;
+                if (profile.address) address = profile.address;
+                if (profile.bio) bio = profile.bio;
+                if (profile.avatar_url) avatarUrl = profile.avatar_url;
+                if (profile.customer_id) customerId = String(profile.customer_id);
+            }
+        } catch (e) {
+            console.warn('initUserData profiles', e);
+        }
+    }
+
+    userData = { name, email, phone, address, bio, avatarUrl };
     safeSet('dropdownName', name);
     safeSet('dropdownEmail', email);
     safeSet('profileHeaderName', name);
     safeSet('profileHeaderEmail', email);
     safeSet('heroWelcomeTitle', `Welcome back, ${name}!`);
     safeSet('heroSubText', 'Fund your wallet to get started with logs, SMS verification, and boosters.');
-    if (userData.avatarUrl) {
-        safeSetHTML('headerAvatarText', `<img src="${userData.avatarUrl}">`);
-        safeSetHTML('profileAvatarInitial', `<img src="${userData.avatarUrl}">`);
+    if (avatarUrl) {
+        safeSetHTML('headerAvatarText', `<img src="${avatarUrl}">`);
+        safeSetHTML('profileAvatarInitial', `<img src="${avatarUrl}">`);
     } else {
         safeSet('headerAvatarText', name.charAt(0).toUpperCase());
         safeSet('profileAvatarInitial', name.charAt(0).toUpperCase());
     }
     const nameInput = document.getElementById('profileNameInput');
     const emailInput = document.getElementById('profileEmailInput');
+    const phoneInput = document.getElementById('profilePhoneInput');
+    const addressInput = document.getElementById('profileAddressInput');
+    const bioInput = document.getElementById('profileBioInput');
     if (nameInput) nameInput.value = name;
     if (emailInput) emailInput.value = email;
+    if (phoneInput) phoneInput.value = phone;
+    if (addressInput) addressInput.value = address;
+    if (bioInput) bioInput.value = bio;
     const idInput = document.getElementById('myCustomerId');
-    if (idInput) idInput.value = user.id;
+    if (idInput) idInput.value = customerId || user.id;
+    const depId = document.getElementById('depositCustomerId');
+    if (depId) depId.value = customerId || user.id;
 }
 
 function initNavigation() {
@@ -2015,17 +2050,71 @@ window.handleAvatarUpload = function(e) {
 };
 
 window.saveProfileSettingsData = async function() {
-    const name = document.getElementById('profileNameInput').value.trim();
+    const name = (document.getElementById('profileNameInput')?.value || '').trim();
+    const phone = (document.getElementById('profilePhoneInput')?.value || '').trim();
+    const address = (document.getElementById('profileAddressInput')?.value || '').trim();
+    const bio = (document.getElementById('profileBioInput')?.value || '').trim();
     if (!name) return showToast('Enter your name', 'error');
-    if (supabaseClient) {
-        const { error } = await supabaseClient.auth.updateUser({
-            data: { full_name: name, avatar_url: userData.avatarUrl }
-        });
-        if (error) return showToast('Error: ' + error.message, 'error');
+    if (!supabaseClient || !currentUserId) {
+        return showToast('Please sign in again', 'error');
     }
-    safeSet('dropdownName', name);
-    safeSet('profileHeaderName', name);
-    showToast('Profile saved!', 'success');
+
+    try {
+        // 1) Auth metadata (for display on next login)
+        const { error: authErr } = await supabaseClient.auth.updateUser({
+            data: {
+                full_name: name,
+                phone,
+                address,
+                bio,
+                avatar_url: userData.avatarUrl || null
+            }
+        });
+        if (authErr) {
+            console.warn('auth.updateUser', authErr);
+        }
+
+        // 2) profiles table (source of truth for the app)
+        const patch = {
+            full_name: name,
+            phone: phone || null,
+            address: address || null,
+            bio: bio || null
+        };
+        if (userData.avatarUrl) patch.avatar_url = userData.avatarUrl;
+
+        const { error: profileErr } = await supabaseClient
+            .from('profiles')
+            .update(patch)
+            .eq('id', currentUserId);
+
+        if (profileErr) {
+            // Some projects use "name" instead of full_name
+            if (/full_name|column/i.test(profileErr.message || '')) {
+                const alt = { name, phone: phone || null, address: address || null, bio: bio || null };
+                if (userData.avatarUrl) alt.avatar_url = userData.avatarUrl;
+                const { error: altErr } = await supabaseClient
+                    .from('profiles')
+                    .update(alt)
+                    .eq('id', currentUserId);
+                if (altErr) throw altErr;
+            } else {
+                throw profileErr;
+            }
+        }
+
+        userData.name = name;
+        userData.phone = phone;
+        userData.address = address;
+        userData.bio = bio;
+        safeSet('dropdownName', name);
+        safeSet('profileHeaderName', name);
+        safeSet('heroWelcomeTitle', `Welcome back, ${name}!`);
+        showToast('Profile saved!', 'success');
+    } catch (err) {
+        console.error('saveProfileSettingsData', err);
+        showToast(err.message || 'Could not save profile', 'error');
+    }
 };
 
 window.openChangePasswordModal = function() { document.getElementById('changePasswordModal').classList.add('active'); };
