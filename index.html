@@ -1079,13 +1079,13 @@ body::before {
             <div id="pocketfiDepositBox" style="display:none;">
                 <div class="form-group">
                     <label>Amount (₦)</label>
-                    <input type="number" id="pocketfiDepositInput" min="1500" max="500000" step="100" placeholder="e.g. 5000">
+                    <input type="number" id="pocketfiDepositInput" min="1000" max="500000" step="100" placeholder="e.g. 5000">
                 </div>
                 <button class="btn-sm-primary" style="width:100%;padding:14px;" id="pocketfiPayBtn" onclick="payWithPocketFi()">
                     <i class="fa-solid fa-lock"></i> Pay with PocketFi
                 </button>
                 <p style="font-size:12px;color:var(--muted);margin-top:12px;line-height:1.45;text-align:center;">
-                    PocketFi checkout. Min ₦1,500 · Max ₦500,000. Balance updates after confirmation.
+                    PocketFi checkout. Min ₦1,000 · Max ₦500,000. After paying you should return to MJ HUB and balance updates automatically.
                 </p>
             </div>
 
@@ -1096,13 +1096,13 @@ body::before {
                 </div>
                 <div class="form-group">
                     <label>Amount (₦)</label>
-                    <input type="number" id="depositInput" min="1500" max="500000" step="100" placeholder="e.g. 5000">
+                    <input type="number" id="depositInput" min="1000" max="500000" step="100" placeholder="e.g. 5000">
                 </div>
                 <button class="btn-sm-primary" style="width:100%;padding:14px;" onclick="messageAdminForDeposit()">
                     <i class="fa-brands fa-whatsapp"></i> Message Admin to Deposit
                 </button>
                 <p style="font-size:12px;color:var(--muted);margin-top:12px;line-height:1.45;text-align:center;">
-                    WhatsApp opens with your Customer ID and amount. Min ₦1,500 · Max ₦500,000.
+                    WhatsApp opens with your Customer ID and amount. Min ₦1,000 · Max ₦500,000.
                 </p>
             </div>
         </div>
@@ -1678,28 +1678,47 @@ window.payWithPaystack = async function() {
 
 window.payWithPocketFi = async function() {
     const amount = parseFloat(document.getElementById('pocketfiDepositInput')?.value) || 0;
-    if (amount < 1500) return showToast('Minimum PocketFi deposit is ₦1,500', 'error');
+    if (amount < 1000) return showToast('Minimum PocketFi deposit is ₦1,000', 'error');
     if (amount > 500000) return showToast('Maximum PocketFi deposit is ₦500,000', 'error');
-    if (!currentUserId || !supabaseClient) return showToast('Please sign in first', 'error');
+    if (!supabaseClient) return showToast('Please sign in first', 'error');
     const btn = document.getElementById('pocketfiPayBtn');
     if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Starting…'; }
     try {
-        const { data: { session } } = await supabaseClient.auth.getSession();
-        if (!session?.access_token) throw new Error('Session expired — sign in again');
-        // Prefer /api/pocketfi; rewrite also maps /api/pocketfi-checkout → same handler
+        // Refresh JWT so /api/pocketfi does not get a stale token → "Invalid session"
+        let accessToken = null;
+        let userId = currentUserId;
+        const { data: refreshed, error: refreshErr } = await supabaseClient.auth.refreshSession();
+        if (!refreshErr && refreshed?.session?.access_token) {
+            accessToken = refreshed.session.access_token;
+            userId = refreshed.session.user?.id || userId;
+        } else {
+            const { data: { session } } = await supabaseClient.auth.getSession();
+            accessToken = session?.access_token || null;
+            userId = session?.user?.id || userId;
+        }
+        if (!accessToken || !userId) {
+            showToast('Session expired. Please sign in again.', 'error');
+            setTimeout(() => { window.location.href = 'auth.html'; }, 1200);
+            return;
+        }
+        currentUserId = userId;
+
         const res = await fetch('/api/pocketfi', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
-                'Authorization': 'Bearer ' + session.access_token
+                'Authorization': 'Bearer ' + accessToken
             },
             body: JSON.stringify({ amount: amount })
         });
-        const data = await res.json();
+        let data = {};
+        try { data = await res.json(); } catch (_) {}
         if (!res.ok || !data.success || !data.payment_link) {
+            if (res.status === 401) {
+                throw new Error('Session expired. Log out, sign in again, then retry PocketFi.');
+            }
             throw new Error(data.message || 'Could not start PocketFi payment');
         }
-        // Leave site for PocketFi hosted checkout; redirect_link brings user back to index.html?deposit=success
         window.location.href = data.payment_link;
     } catch (err) {
         showToast(err.message || 'PocketFi error', 'error');
@@ -2626,7 +2645,7 @@ window.confirmDeleteAccount = async function() {
 
 window.messageAdminForDeposit = function() {
     const ADMIN_WA = '14305583021';
-    const MIN = 1500;
+    const MIN = 1000;
     const MAX = 500000;
 
     const amount = parseFloat(document.getElementById('depositInput')?.value) || 0;
