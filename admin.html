@@ -281,6 +281,17 @@
             </div>
           </div>
           <div class="panel">
+            <div class="panel-header">
+              <div class="panel-title">Supplier Balances</div>
+              <button class="btn btn-ghost btn-sm" id="btnRefreshSupplierBalances" onclick="loadSupplierBalances()"><i class="fas fa-sync"></i> Refresh</button>
+            </div>
+            <div class="metrics" style="margin-bottom:0;" id="supplierBalanceGrid">
+              <div class="metric-card"><div class="metric-label">FADDED</div><div class="metric-value" id="balFadded">—</div><div class="metric-sub" id="balFaddedSub">Loading…</div></div>
+              <div class="metric-card"><div class="metric-label">Logs Domain</div><div class="metric-value" id="balLogsdomain">—</div><div class="metric-sub" id="balLogsdomainSub">Loading…</div></div>
+              <div class="metric-card"><div class="metric-label">GrizzlySMS</div><div class="metric-value" id="balGrizzly">—</div><div class="metric-sub" id="balGrizzlySub">Loading…</div></div>
+            </div>
+          </div>
+          <div class="panel">
             <div class="panel-header"><div class="panel-title">Customers</div><button class="btn btn-ghost btn-sm" onclick="switchTab('users')">View all →</button></div>
             <div class="metrics" style="margin-bottom:0;">
               <div class="metric-card" style="cursor:pointer;" onclick="switchTab('users');filterUsersByStatus('all')"><div class="metric-label">Total Users</div><div class="metric-value" id="mTotalUsers">0</div></div>
@@ -825,6 +836,58 @@ async function loadAllData() {
   await Promise.all([loadProducts(), loadProfiles(), tryLoadOrders(), tryLoadSmsOrders(), loadNotificationHistory(), loadNumberServices()]);
   resumeGrizzlySyncIfRunning();
   updateMetrics();
+  loadSupplierBalances();
+}
+
+function ngnFmt(n) { return '₦' + Number(n || 0).toLocaleString(undefined, { maximumFractionDigits: 2 }); }
+
+function renderSupplierBalance(prefix, result) {
+  const valueEl = document.getElementById('bal' + prefix);
+  const subEl = document.getElementById('bal' + prefix + 'Sub');
+  if (!valueEl || !subEl) return;
+
+  if (!result || result.ok === false) {
+    valueEl.textContent = '—';
+    valueEl.style.color = '#f87171';
+    subEl.textContent = result?.error ? ('Error: ' + result.error) : 'Could not fetch';
+    subEl.title = result?.raw || '';
+    return;
+  }
+
+  valueEl.style.color = '';
+  const isNgn = result.currency === 'NGN';
+  valueEl.textContent = isNgn ? ngnFmt(result.balance) : usdFmt(result.balance);
+  subEl.textContent = 'Updated just now';
+}
+
+async function loadSupplierBalances() {
+  const btn = document.getElementById('btnRefreshSupplierBalances');
+  setBtnBusy(btn, true, 'Refreshing...');
+  ['Fadded', 'Logsdomain', 'Grizzly'].forEach(p => {
+    const sub = document.getElementById('bal' + p + 'Sub');
+    if (sub) sub.textContent = 'Loading…';
+  });
+  try {
+    const headers = await authHeaders();
+    headers['Content-Type'] = 'application/json';
+    const res = await fetch('/api/admin', {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ resource: 'supplier_balances' })
+    });
+    const data = await res.json();
+    if (!data.success) {
+      showAdminToast(data.message || 'Could not load supplier balances', 'error');
+      return;
+    }
+    renderSupplierBalance('Fadded', data.suppliers.fadded);
+    renderSupplierBalance('Logsdomain', data.suppliers.logsdomain);
+    renderSupplierBalance('Grizzly', data.suppliers.grizzly);
+  } catch (err) {
+    showAdminToast('Supplier balance check failed: ' + (err.message || 'network error'), 'error');
+  } finally {
+    setBtnBusy(btn, false, '<i class="fas fa-sync"></i> Refresh');
+  }
 }
 
 async function loadProducts() {
