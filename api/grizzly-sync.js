@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
+import { applyMarkup } from '../lib/pricing.js';
 
 /**
  * GET /api/grizzly-sync
@@ -51,13 +52,6 @@ async function requireAdmin(req) {
     (profile.is_admin === true || profile.is_admin === 'true' || profile.is_admin === 1);
   if (!isAdmin) return { ok: false, status: 403, message: 'Admin privileges required' };
   return { ok: true };
-}
-
-function applyMarkup(supplierPriceUsd, usdToNgn) {
-  const percent = 50 + Math.random() * 50;
-  const ngn = Number(supplierPriceUsd) * usdToNgn;
-  const finalPrice = Math.ceil(ngn * (1 + percent / 100));
-  return Math.ceil(finalPrice / 50) * 50;
 }
 
 async function callGrizzly(apiKey, params) {
