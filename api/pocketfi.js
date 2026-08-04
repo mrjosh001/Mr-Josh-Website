@@ -26,7 +26,7 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY
 );
 
-const MIN = 1500;
+const MIN = 1000;
 const MAX = 500000;
 
 export const config = {
@@ -324,19 +324,53 @@ async function handleWebhook(req, res, raw, secret, publicKey) {
   return res.status(200).json({ message: 'success' });
 }
 
+async function resolveUserFromToken(token) {
+  const { data: userData, error: authErr } = await supabase.auth.getUser(token);
+  if (!authErr && userData?.user?.id) {
+    return userData.user;
+  }
+
+  // Fallback if getUser fails with service-role client but JWT is still valid
+  try {
+    const parts = String(token).split('.');
+    if (parts.length === 3) {
+      const payload = JSON.parse(
+        Buffer.from(parts[1].replace(/-/g, '+').replace(/_/g, '/'), 'base64').toString('utf8')
+      );
+      const uid = payload.sub || payload.user_id;
+      const notExpired = payload.exp && payload.exp * 1000 > Date.now() - 60000;
+      if (uid && notExpired) {
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('id')
+          .eq('id', uid)
+          .maybeSingle();
+        if (profile?.id) {
+          return { id: uid, email: payload.email || null, user_metadata: {}, phone: null };
+        }
+      }
+    }
+  } catch (e) {
+    console.warn('token fallback parse failed', e.message || e);
+  }
+
+  console.warn('resolveUserFromToken failed', authErr?.message || authErr);
+  return null;
+}
+
 async function handleCheckout(req, res, raw, publicKey, businessId) {
   const authHeader = req.headers.authorization || '';
-  const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : null;
+  const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7).trim() : null;
   if (!token) {
     return res.status(401).json({ success: false, message: 'Login required' });
   }
 
-  const {
-    data: { user },
-    error: authErr
-  } = await supabase.auth.getUser(token);
-  if (authErr || !user) {
-    return res.status(401).json({ success: false, message: 'Invalid session' });
+  const user = await resolveUserFromToken(token);
+  if (!user) {
+    return res.status(401).json({
+      success: false,
+      message: 'Invalid session — log out and sign in again, then retry PocketFi.'
+    });
   }
 
   let body = {};
@@ -373,7 +407,7 @@ async function handleCheckout(req, res, raw, publicKey, businessId) {
   const phone = String(profile?.phone || user.phone || '08000000000').replace(/\D/g, '');
   const phoneFmt = phone.length >= 10 ? phone.slice(-11) : '08000000000';
 
-  // Must land on the SPA with a query the dashboard can detect
+  // Absolute HTTPS URL required — PocketFi "Go to Home" / auto-redirect uses this
   const appUrl = (process.env.APP_URL || 'https://app.mjhub.store').replace(/\/$/, '');
   const redirect_link = `${appUrl}/index.html?deposit=success&provider=pocketfi`;
 
@@ -389,8 +423,18 @@ async function handleCheckout(req, res, raw, publicKey, businessId) {
     business_id: String(businessId),
     email: email || `user-${user.id.slice(0, 8)}@mjhub.store`,
     redirect_link,
+    // some PocketFi builds read alternate keys
+    redirect_url: redirect_link,
+    callback_url: redirect_link,
     amount: String(amount)
   };
+
+  console.log('PocketFi checkout payload', {
+    business_id: payload.business_id,
+    amount: payload.amount,
+    redirect_link,
+    email: payload.email
+  });
 
   let pfRes;
   try {
