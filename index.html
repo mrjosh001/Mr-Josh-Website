@@ -820,7 +820,7 @@ body::before {
                     <span id="dropdownEmail">Loading...</span>
                 </div>
                 <ul class="dropdown-links">
-                    <li><a href="#" onclick="switchSection('home');return false;"><i class="fa-solid fa-house"></i> Dashboard</a></li>
+                    <li><a href="#" onclick="goHome();return false;"><i class="fa-solid fa-house"></i> Dashboard</a></li>
                     <li><a href="#" onclick="switchSection('profile');return false;"><i class="fa-solid fa-gear"></i> Settings</a></li>
                     <li><a href="#" onclick="switchSection('cart');return false;"><i class="fa-solid fa-cart-shopping"></i> Cart</a></li>
                     <li><a href="#" onclick="switchSection('orders');return false;"><i class="fa-solid fa-receipt"></i> My Orders</a></li>
@@ -1258,7 +1258,7 @@ body::before {
 </div>
 
 <nav class="bottom-nav">
-    <button class="nav-item active" id="navHome" onclick="switchSection('home')">
+    <button class="nav-item active" id="navHome" onclick="goHome()">
         <svg viewBox="0 0 24 24"><path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"/></svg>
         <span>Home</span>
     </button>
@@ -1888,6 +1888,26 @@ function initSupportWidget() {
     // Auto-collapse after 4 seconds on load
     scheduleCollapse();
 }
+
+/** Bottom nav Home = pull-to-refresh alternative (balance, history, orders) */
+window.goHome = async function() {
+    if (typeof switchSection === 'function') switchSection('home');
+    if (!currentUserId) return;
+    try {
+        if (typeof showToast === 'function') showToast('Refreshing…', 'info', 1000);
+        await Promise.all([
+            typeof fetchUserBalance === 'function' ? fetchUserBalance(currentUserId) : null,
+            typeof fetchUserTransactions === 'function' ? fetchUserTransactions(currentUserId) : null,
+            typeof fetchUserOrders === 'function' ? fetchUserOrders(currentUserId) : null
+        ]);
+        if (typeof buildNotificationsFromActivity === 'function') buildNotificationsFromActivity();
+        if (typeof renderNotifications === 'function') renderNotifications();
+        if (typeof showToast === 'function') showToast('Updated', 'success', 1500);
+    } catch (e) {
+        console.warn('goHome refresh', e);
+        if (typeof showToast === 'function') showToast('Could not refresh', 'error');
+    }
+};
 
 async function fetchUserBalance(userId) {
     if (!supabaseClient) return;
