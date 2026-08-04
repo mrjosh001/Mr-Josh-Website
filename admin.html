@@ -877,6 +877,7 @@ async function bulkRepriceNumbers(mode) {
   const btn = document.getElementById(btnId);
   setBtnBusy(btn, true, 'Pricing...');
 
+  let repriceSucceeded = false;
   try {
     const headers = await authHeaders();
     headers['Content-Type'] = 'application/json';
@@ -888,21 +889,35 @@ async function bulkRepriceNumbers(mode) {
     const data = await res.json();
     if (!data.success) {
       showAdminToast(data.message || 'Bulk repricing failed', 'error');
-      return;
-    }
-    if (data.updated === 0) {
-      showAdminToast(data.message || 'Nothing to price.', 'info');
     } else {
-      showAdminToast(`Priced ${data.updated} of ${data.total} number listings.`, 'success');
+      repriceSucceeded = true;
+      if (data.updated === 0) {
+        showAdminToast(data.message || 'Nothing to price.', 'info');
+      } else {
+        showAdminToast(`Priced ${data.updated} of ${data.total} number listings.`, 'success');
+      }
+      if (data.errors && data.errors.length) {
+        console.warn('Bulk reprice partial errors:', data.errors);
+      }
     }
-    if (data.errors && data.errors.length) {
-      console.warn('Bulk reprice partial errors:', data.errors);
-    }
-    await loadNumberServices();
   } catch (err) {
+    console.error('Bulk reprice request error:', err.name, err.message, err.stack);
     showAdminToast('Bulk repricing failed: ' + (err.message || 'network error'), 'error');
   } finally {
     setBtnBusy(btn, false, idleLabel);
+  }
+
+  // Separate from the block above on purpose: if repricing actually
+  // succeeded server-side, a hiccup while refreshing the table should
+  // never be reported back to you as "repricing failed" — that's a
+  // different problem and would be misleading.
+  if (repriceSucceeded) {
+    try {
+      await loadNumberServices();
+    } catch (err) {
+      console.error('Table refresh after reprice error:', err.name, err.message, err.stack);
+      showAdminToast('Prices were updated, but the table didn\'t auto-refresh — pull to refresh or reopen this tab to see them.', 'info');
+    }
   }
 }
 
