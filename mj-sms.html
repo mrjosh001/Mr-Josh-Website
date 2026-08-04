@@ -41,17 +41,6 @@ body::before{content:'';position:fixed;inset:0;pointer-events:none;z-index:0;bac
 .pending-banner .pb-text{flex:1;min-width:0;}
 .pending-banner .pb-title{font-weight:800;font-size:13px;margin-bottom:2px;}
 .pending-banner .pb-sub{font-size:11px;color:var(--muted);}
-.recent-strip{margin-bottom:14px;}
-.recent-strip-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;}
-.recent-strip-head h3{font-size:13px;font-weight:800;color:var(--muted);text-transform:uppercase;letter-spacing:.03em;}
-.recent-strip-head a{font-size:12px;font-weight:700;color:var(--primary);text-decoration:none;}
-.recent-item{display:flex;justify-content:space-between;align-items:center;gap:10px;background:var(--card);border:1px solid var(--border);border-radius:12px;padding:10px 14px;margin-bottom:8px;text-decoration:none;color:inherit;}
-.recent-item .ri-name{font-size:13px;font-weight:700;text-transform:capitalize;}
-.recent-item .ri-sub{font-size:11px;color:var(--muted);margin-top:2px;}
-.recent-item .ri-status{font-size:10px;font-weight:700;padding:3px 9px;border-radius:20px;white-space:nowrap;}
-.ri-status-completed{background:rgba(52,211,153,.15);color:var(--success);}
-.ri-status-waiting_for_code{background:rgba(251,191,36,.15);color:#fbbf24;}
-.ri-status-refunded,.ri-status-failed{background:rgba(248,113,113,.15);color:var(--danger);}
 .selected-country-bar .name{font-weight:800;font-size:14px;color:var(--primary);}
 .selected-country-bar button{background:none;border:1px solid var(--primary);color:var(--primary);font-size:11px;font-weight:700;padding:6px 12px;border-radius:8px;cursor:pointer;font-family:inherit;}
 .product-count-badge{display:inline-block;background:var(--primary-glow);color:var(--primary);padding:5px 12px;border-radius:20px;font-size:11px;font-weight:700;margin-bottom:14px}
@@ -274,64 +263,35 @@ async function initSession(){
   }catch(e){}
 }
 
-const STATUS_LABELS_MINI = {
-  waiting_for_code: 'Waiting for code',
-  completed: 'Code received',
-  refunded: 'Cancelled & refunded',
-  failed: 'Failed'
-};
-
-// Surfaces pending/recent numbers directly on this page instead of making
-// the customer dig into a separate History page to find an in-progress
-// order or see what they've bought before.
+// Surfaces an in-progress order right on this page (so a customer who
+// already has a number waiting for a code doesn't accidentally buy a
+// second one, and can easily get back to it). Deliberately does NOT show
+// a general history/recent-numbers list here — this page is for buying a
+// new number, not browsing past ones; that's what mj-sms-history.html is for.
 async function loadRecentActivity(){
   const area = document.getElementById('recentActivityArea');
   if(!area || !sbClient || !currentUserId) return;
   try{
     const { data, error } = await sbClient
       .from('number_orders')
-      .select('order_id, service_name, country_name, phone_number, price, status, code, created_at')
+      .select('order_id, service_name, phone_number, status')
       .eq('source', 'grizzlysms')
       .eq('user_id', currentUserId)
+      .eq('status', 'waiting_for_code')
       .order('created_at', { ascending: false })
-      .limit(5);
+      .limit(1);
     if(error || !data || !data.length){ return; }
 
-    let html = '';
-
-    const pending = data.find(o => o.status === 'waiting_for_code');
-    if(pending){
-      const name = (pending.service_name || 'a service').replace(/_/g,' ');
-      html += `<a class="pending-banner" href="mj-sms-number.html?order_id=${encodeURIComponent(pending.order_id)}">
-        <div class="pb-icon"><i class="fa-solid fa-hourglass-half"></i></div>
-        <div class="pb-text">
-          <div class="pb-title">You have a number waiting for a code</div>
-          <div class="pb-sub" style="text-transform:capitalize;">${escapeHtml(name)} · ${escapeHtml(pending.phone_number||'')} — tap to view</div>
-        </div>
-        <i class="fa-solid fa-chevron-right" style="color:var(--muted);"></i>
-      </a>`;
-    }
-
-    html += `<div class="recent-strip">
-      <div class="recent-strip-head"><h3>Recent Numbers</h3><a href="mj-sms-history.html">View all →</a></div>
-      ${data.map(o => {
-        const name = (o.service_name || 'Service').replace(/_/g,' ');
-        const statusClass = 'ri-status-' + (o.status || 'waiting_for_code');
-        const statusLabel = STATUS_LABELS_MINI[o.status] || o.status;
-        const href = o.status === 'waiting_for_code'
-          ? `mj-sms-number.html?order_id=${encodeURIComponent(o.order_id)}`
-          : 'mj-sms-history.html';
-        return `<a class="recent-item" href="${href}">
-          <div>
-            <div class="ri-name">${escapeHtml(name)}</div>
-            <div class="ri-sub">${escapeHtml(o.country_name||'')} · ${money(o.price)}${o.code ? ' · Code: ' + escapeHtml(o.code) : ''}</div>
-          </div>
-          <span class="ri-status ${statusClass}">${escapeHtml(statusLabel)}</span>
-        </a>`;
-      }).join('')}
-    </div>`;
-
-    area.innerHTML = html;
+    const pending = data[0];
+    const name = (pending.service_name || 'a service').replace(/_/g,' ');
+    area.innerHTML = `<a class="pending-banner" href="mj-sms-number.html?order_id=${encodeURIComponent(pending.order_id)}">
+      <div class="pb-icon"><i class="fa-solid fa-hourglass-half"></i></div>
+      <div class="pb-text">
+        <div class="pb-title">You have a number waiting for a code</div>
+        <div class="pb-sub" style="text-transform:capitalize;">${escapeHtml(name)} · ${escapeHtml(pending.phone_number||'')} — tap to view</div>
+      </div>
+      <i class="fa-solid fa-chevron-right" style="color:var(--muted);"></i>
+    </a>`;
   }catch(e){ /* non-critical — the main order flow below still works fine without this */ }
 }
 
