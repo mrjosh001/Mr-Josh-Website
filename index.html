@@ -20,7 +20,6 @@
     </script>
 
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <script src="https://js.paystack.co/v1/inline.js"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -846,16 +845,7 @@ body::before {
         <ul class="sidebar-links">
             <li><a href="#" class="sidebar-link active" data-target="home"><i class="fa-solid fa-house"></i> <span>Dashboard</span></a></li>
             <li><a href="mj-logs.html"><i class="fa-solid fa-box-archive"></i> <span>MJ Logs</span></a></li>
-            <li>
-                <a href="#" class="sidebar-link" onclick="toggleSmsMenu(event)" style="display:flex;align-items:center;justify-content:space-between;">
-                    <span style="display:flex;align-items:center;gap:12px;"><i class="fa-solid fa-mobile-screen"></i> <span>MJ SMS</span></span>
-                    <i class="fa-solid fa-chevron-down" id="smsMenuChevron" style="font-size:11px;transition:transform .2s;"></i>
-                </a>
-                <ul id="smsSubmenu" style="list-style:none;max-height:0;overflow:hidden;transition:max-height .25s ease;">
-                    <li><a href="mj-sms.html" style="padding-left:34px;"><i class="fa-solid fa-plus"></i> <span>Get Number</span></a></li>
-                    <li><a href="mj-sms-history.html" style="padding-left:34px;"><i class="fa-solid fa-clock-rotate-left"></i> <span>Number History</span></a></li>
-                </ul>
-            </li>
+            <li><a href="mj-sms.html"><i class="fa-solid fa-mobile-screen"></i> <span>MJ SMS</span></a></li>
             <li><a href="#" class="sidebar-link" data-target="booster"><i class="fa-solid fa-bolt"></i> <span>MJ Boosters</span></a></li>
             <li><a href="#" class="sidebar-link" data-target="deposit"><i class="fa-solid fa-credit-card"></i> <span>Deposit</span></a></li>
             <li><a href="#" class="sidebar-link" data-target="cart"><i class="fa-solid fa-bag-shopping"></i> <span>Cart</span></a></li>
@@ -969,15 +959,20 @@ body::before {
                 </div>
                 <div class="profile-menu-arrow">›</div>
             </div>
-            <div class="profile-menu-item" onclick="openDeleteAccountModal()">
-                <div class="profile-menu-left">
-                    <div class="profile-menu-icon" style="background:rgba(239,68,68,0.15);color:var(--danger-color);"><i class="fa-solid fa-trash"></i></div>
-                    <div class="profile-menu-info">
-                        <h4 style="color:var(--danger-color);">Delete Account</h4>
-                        <p>Permanently remove your account and data</p>
-                    </div>
-                </div>
-                <div class="profile-menu-arrow">›</div>
+        </div>
+    </section>
+
+    <section id="sms" class="app-section">
+        <div class="content-card">
+            <h2>MJ SMS</h2>
+            <p class="helper-text">Get virtual numbers for OTP verification.</p>
+            <div style="display:flex;flex-direction:column;gap:12px;margin-top:8px;">
+                <a href="mj-sms.html" class="btn-sm-primary" style="display:flex;align-items:center;justify-content:center;gap:8px;padding:14px;text-decoration:none;">
+                    <i class="fa-solid fa-mobile-screen"></i> Get Number
+                </a>
+                <a href="mj-sms-history.html" class="btn-sm-primary" style="display:flex;align-items:center;justify-content:center;gap:8px;padding:14px;text-decoration:none;background:transparent;border:1px solid var(--border);color:var(--text);">
+                    <i class="fa-solid fa-clock-rotate-left"></i> Number History
+                </a>
             </div>
         </div>
     </section>
@@ -1035,61 +1030,22 @@ body::before {
 
     <section id="deposit" class="app-section">
         <div class="content-card">
-            <h2>Deposit</h2>
-            <p class="helper-text">Choose a funding method.</p>
-
+            <h2>Deposit (Manual NGN)</h2>
+            <p class="helper-text">Message admin on WhatsApp with your Customer ID and amount. Your wallet is credited after payment is confirmed. Min ₦2,000 · Max ₦200,000 per deposit.</p>
             <div class="form-group">
-                <label>Payment Method</label>
-                <select id="depositProviderSelect" onchange="onDepositMethodChange()">
-                    <option value="paystack" selected>Deposit with Paystack (Card / Bank Transfer)</option>
-                    <option value="pocketfi">Deposit with PocketFi</option>
-                    <option value="manual">Deposit Manually (via WhatsApp)</option>
-                    <option value="crypto" disabled>Deposit with Crypto — Coming soon</option>
-                </select>
+                <label>Your Customer ID</label>
+                <input type="text" id="depositCustomerId" readonly placeholder="Loading..." style="font-family:monospace;font-weight:700;color:var(--primary);">
             </div>
-
-            <div id="paystackDepositBox">
-                <div class="form-group">
-                    <label>Amount (₦)</label>
-                    <input type="number" id="paystackDepositInput" min="100" max="1000000" step="100" placeholder="e.g. 5000">
-                </div>
-                <button class="btn-sm-primary" style="width:100%;padding:14px;" id="paystackPayBtn" onclick="payWithPaystack()">
-                    <i class="fa-solid fa-lock"></i> Pay with Paystack
-                </button>
-                <p style="font-size:12px;color:var(--muted);margin-top:12px;line-height:1.45;text-align:center;">
-                    Secure card / bank transfer checkout. Your balance updates automatically once payment is confirmed.
-                </p>
+            <div class="form-group">
+                <label>Amount (₦)</label>
+                <input type="number" id="depositInput" min="2000" max="200000" step="100" placeholder="e.g. 5000">
             </div>
-
-            <div id="pocketfiDepositBox" style="display:none;">
-                <div class="form-group">
-                    <label>Amount (₦)</label>
-                    <input type="number" id="pocketfiDepositInput" min="1500" max="500000" step="100" placeholder="e.g. 5000">
-                </div>
-                <button class="btn-sm-primary" style="width:100%;padding:14px;" id="pocketfiPayBtn" onclick="payWithPocketFi()">
-                    <i class="fa-solid fa-lock"></i> Pay with PocketFi
-                </button>
-                <p style="font-size:12px;color:var(--muted);margin-top:12px;line-height:1.45;text-align:center;">
-                    Secure PocketFi checkout. Your balance updates automatically once payment is confirmed. Min ₦1,500 · Max ₦500,000.
-                </p>
-            </div>
-
-            <div id="manualDepositBox" style="display:none;">
-                <div class="form-group">
-                    <label>Your Customer ID</label>
-                    <input type="text" id="depositCustomerId" readonly placeholder="Loading..." style="font-family:monospace;font-weight:700;color:var(--primary);">
-                </div>
-                <div class="form-group">
-                    <label>Amount (₦)</label>
-                    <input type="number" id="depositInput" min="2000" max="200000" step="100" placeholder="e.g. 5000">
-                </div>
-                <button class="btn-sm-primary" style="width:100%;padding:14px;" onclick="messageAdminForDeposit()">
-                    <i class="fa-brands fa-whatsapp"></i> Message Admin to Deposit
-                </button>
-                <p style="font-size:12px;color:var(--muted);margin-top:12px;line-height:1.45;text-align:center;">
-                    WhatsApp opens with your details. Pay as admin instructs, then wait for credit. Min ₦2,000 · Max ₦200,000.
-                </p>
-            </div>
+            <button class="btn-sm-primary" style="width:100%;padding:14px;" onclick="messageAdminForDeposit()">
+                <i class="fa-brands fa-whatsapp"></i> Message Admin to Deposit
+            </button>
+            <p style="font-size:12px;color:var(--muted);margin-top:12px;line-height:1.45;text-align:center;">
+                WhatsApp will open with your details filled in. Send the message, complete payment as instructed by admin, then wait for your balance to update.
+            </p>
         </div>
     </section>
 
@@ -1111,7 +1067,7 @@ body::before {
             </div>
         </div>
         <div class="support-popup-body">
-            <a href="#" onclick="openWhatsAppComplaint(); return false;" class="support-channel-item">
+            <a href="https://wa.me/2348XXXXXXXXX" target="_blank" class="support-channel-item">
                 <div class="channel-icon-wrap whatsapp"><i class="fa-brands fa-whatsapp"></i></div>
                 <div class="channel-info"><h4>WhatsApp</h4><p>Chat with support</p></div>
             </a>
@@ -1138,24 +1094,6 @@ body::before {
             <input type="password" id="confirmPasswordInput" placeholder="••••••••">
         </div>
         <button class="btn-sm-primary" style="width:100%;padding:14px;" onclick="submitNewPassword()">Update Password</button>
-    </div>
-</div>
-
-<div class="currency-modal" id="deleteAccountModal">
-    <div class="currency-modal-card">
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;">
-            <div style="font-size:18px;font-weight:800;color:var(--danger-color);">Delete Account</div>
-            <button onclick="closeDeleteAccountModal()" style="background:var(--bg-main);border:1px solid var(--border-color);width:32px;height:32px;border-radius:50%;cursor:pointer;color:var(--text-main);">✕</button>
-        </div>
-        <p class="helper-text" style="margin-bottom:14px;">
-            This permanently deletes your account, profile, and login — your order history stays on record for support purposes, but you'll lose access to it. This cannot be undone.
-        </p>
-        <div class="form-group">
-            <label>Type <strong>DELETE</strong> to confirm</label>
-            <input type="text" id="deleteAccountConfirmInput" placeholder="DELETE" autocomplete="off">
-        </div>
-        <div id="deleteAccountError" style="display:none;margin-bottom:10px;color:var(--danger-color);font-size:14px;"></div>
-        <button class="btn-sm-primary" style="width:100%;padding:14px;background:var(--danger-color);" onclick="confirmDeleteAccount(event)">Permanently Delete My Account</button>
     </div>
 </div>
 
@@ -1239,10 +1177,10 @@ body::before {
             <div class="popup-icon-badge"><i class="fa-solid fa-bolt"></i></div>
             <span>Boosters</span>
         </div>
-        <div class="popup-item" onclick="switchSection('sms');toggleFloatingPopup();">
+        <a href="mj-sms.html" class="popup-item">
             <div class="popup-icon-badge"><i class="fa-solid fa-mobile-screen"></i></div>
-            <span>SMS</span>
-        </div>
+            <span>MJ SMS</span>
+        </a>
         <a href="mj-logs.html" class="popup-item">
             <div class="popup-icon-badge"><i class="fa-solid fa-box-archive"></i></div>
             <span>MJ Logs</span>
@@ -1292,7 +1230,6 @@ body::before {
 
 <!-- ORDER RECEIPT / VIEW DETAILS -->
 <div class="currency-modal" id="orderReceiptModal">
-
     <div class="receipt-modal-card">
         <div class="rm-header">
             <div style="text-align:left;">
@@ -1319,17 +1256,6 @@ body::before {
             <div class="receipt-cred-box" id="receiptCredBox"></div>
             <button class="btn-view-orders" id="receiptFooterBtn" onclick="closeOrderReceipt(); switchSection('orders');">View My Orders</button>
         </div>
-    </div>
-</div>
-
-<!-- NEW NOTIFICATION POPUP (shown automatically on login if there are unread notifications) -->
-<div class="currency-modal" id="notifPopupModal">
-    <div class="currency-modal-card" style="max-width:380px;">
-        <div class="converter-pro-header">
-            <div class="converter-pro-title"><span><i class="fa-solid fa-bell"></i></span> <span id="notifPopupTitle">New Notification</span></div>
-        </div>
-        <div id="notifPopupList" style="display:flex;flex-direction:column;gap:12px;max-height:50vh;overflow-y:auto;margin-bottom:16px;"></div>
-        <button class="btn-sm-primary" style="width:100%;padding:14px;" onclick="dismissNotifPopup()">Got it</button>
     </div>
 </div>
 
@@ -1389,76 +1315,44 @@ function escapeHtml(str) {
 function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
 
 document.addEventListener('DOMContentLoaded', async () => {
-    // UI wiring must ALWAYS run, no matter what happens with the user's
-    // account data below. Previously all of this was called only after a
-    // chain of Supabase data-fetches succeeded, so a single hiccup in any
-    // one of them (network blip, slow token refresh, etc.) hit the catch
-    // block and bounced to landing.html — but if that navigation didn't
-    // take effect instantly, the page was left fully rendered with NO
-    // click handlers attached anywhere. It also meant handlePocketFiReturn()
-    // (which detects the PocketFi redirect-back and polls for the balance
-    // update) would never run at all if an earlier fetch in the chain
-    // threw — looking exactly like "doesn't redirect back / balance
-    // doesn't update" even when PocketFi's side worked fine.
+    if (supabaseClient) {
+        try {
+            const { data: { session } } = await supabaseClient.auth.getSession();
+            if (session) {
+                currentUserId = session.user.id;
+                await initUserData(session.user);
+                await fetchUserBalance(currentUserId);
+                await fetchUserTransactions(currentUserId);
+                await fetchUserOrders(currentUserId);
+                buildNotificationsFromActivity();
+                renderNotifications();
+            } else {
+                // No active session — this page is the signed-in dashboard,
+                // so a visitor who isn't logged in must never see it. Send
+                // them to the public landing page to sign up / log in first.
+                window.location.href = 'landing.html';
+                return;
+            }
+        } catch(e) {
+            // If we can't even determine session state, fail safe and send
+            // the visitor to the landing page rather than risk showing the
+            // dashboard to someone who isn't signed in.
+            console.log('No session', e);
+            window.location.href = 'landing.html';
+            return;
+        }
+    } else {
+        // Supabase client failed to initialize — same fail-safe rule applies.
+        window.location.href = 'landing.html';
+        return;
+    }
+
     initNavigation();
     initTheme();
     initDropdowns();
     initSupportWidget();
     updateCartDisplay();
     initHashRouting();
-
-    if (!supabaseClient) {
-        window.location.href = 'landing.html';
-        return;
-    }
-
-    let session = null;
-    try {
-        const { data } = await supabaseClient.auth.getSession();
-        session = data && data.session;
-    } catch (e) {
-        console.log('Could not read session', e);
-    }
-
-    if (!session) {
-        window.location.href = 'landing.html';
-        return;
-    }
-
-    // Belt-and-suspenders: Supabase's own auth-level ban already blocks
-    // sign-in and gets enforced on token refresh, but a still-valid cached
-    // session could otherwise slip through for a short window right after
-    // an admin bans someone. Check the mirrored profile flag here too and
-    // kick them out immediately if it's set.
-    try {
-        const { data: banCheck } = await supabaseClient
-            .from('profiles')
-            .select('is_banned')
-            .eq('id', session.user.id)
-            .maybeSingle();
-        if (banCheck && banCheck.is_banned) {
-            await supabaseClient.auth.signOut();
-            localStorage.clear();
-            window.location.href = 'auth.html?banned=1';
-            return;
-        }
-    } catch (e) {}
-
-    currentUserId = session.user.id;
-
-    // Each of these is isolated so one failing never blocks the others, or
-    // blocks handlePocketFiReturn() from running below.
-    try { await initUserData(session.user); } catch (e) { console.log('initUserData failed', e); }
-    try { await fetchUserBalance(currentUserId); } catch (e) { console.log('fetchUserBalance failed', e); }
-    try { await fetchUserTransactions(currentUserId); } catch (e) { console.log('fetchUserTransactions failed', e); }
-    try { await fetchUserOrders(currentUserId); } catch (e) { console.log('fetchUserOrders failed', e); }
-    try {
-        await fetchUserNotifications();
-        renderNotifications();
-        showNotificationPopupIfUnread();
-    } catch (e) { console.log('fetchUserNotifications failed', e); }
-    startInactivityWatcher();
-    handlePocketFiReturn();
 });
 
 function initHashRouting() {
@@ -1510,15 +1404,6 @@ async function initUserData(user) {
     if (emailInput) emailInput.value = email;
     const idInput = document.getElementById('myCustomerId');
     if (idInput) idInput.value = user.id;
-}
-
-function toggleSmsMenu(e) {
-    e.preventDefault();
-    const submenu = document.getElementById('smsSubmenu');
-    const chevron = document.getElementById('smsMenuChevron');
-    const isOpen = submenu.style.maxHeight && submenu.style.maxHeight !== '0px';
-    submenu.style.maxHeight = isOpen ? '0px' : submenu.scrollHeight + 'px';
-    chevron.style.transform = isOpen ? 'rotate(0deg)' : 'rotate(180deg)';
 }
 
 function initNavigation() {
@@ -1612,9 +1497,7 @@ function initDropdowns() {
         e.stopPropagation();
         notifDropdown.classList.toggle('active');
         profileDropdown.classList.remove('active');
-        if (notifDropdown.classList.contains('active')) {
-            markVisibleNotificationsRead();
-        }
+        notifDot.style.display = 'none';
     });
     document.addEventListener('click', () => {
         profileDropdown.classList.remove('active');
@@ -1765,74 +1648,21 @@ async function fetchUserBalance(userId) {
     } catch(e) {}
 }
 
-
-/* Fix mojibake ₦ (â¦ / â‚¦) from older transaction rows */
-function formatTxAmount(amount, amountNgn) {
-    if (amountNgn != null && amountNgn !== '' && !isNaN(Number(amountNgn))) {
-        return '₦' + Number(amountNgn).toLocaleString();
-    }
-    let s = String(amount || '₦0.00');
-    s = s.replace(/â‚¦/g, '₦').replace(/â¦/g, '₦').replace(/Ã¢Â‚Â¦/g, '₦');
-    if (s.indexOf('₦') === -1 && s.indexOf('$') === -1) {
-        const n = Number(String(s).replace(/[^0-9.]/g, ''));
-        if (!isNaN(n) && n > 0) s = '₦' + n.toLocaleString();
-    }
-    return s;
-}
-
 async function fetchUserTransactions(userId) {
     if (!supabaseClient) return;
     try {
-        const { data } = await supabaseClient
-            .from('transactions')
-            .select('*')
-            .eq('user_id', userId)
-            .order('created_at', { ascending: false })
-            .limit(100);
+        const { data } = await supabaseClient.from('transactions').select('*').eq('user_id', userId).order('created_at', {ascending: false}).limit(50);
         if (data) {
-            transactions = data.map(tx => {
-                const rawType = String(tx.type || '').toLowerCase();
-                const rawCat = String(tx.category || '').toLowerCase();
-                let type = rawType || 'deposit';
-
-                // Normalize so tabs work for old + new rows. Category is
-                // checked FIRST because it's the more specific signal —
-                // e.g. MJ SMS purchases are saved with type:'purchase'
-                // (same as log orders) but category:'MJ SMS', so category
-                // has to win or every SMS purchase silently gets bucketed
-                // under Log Orders and never shows under SMS Numbers.
-                if (rawCat === 'mj sms' || rawType === 'sms') {
-                    type = 'sms';
-                } else if (['purchase', 'purchase_failed', 'logs'].includes(rawType) || rawCat === 'log') {
-                    type = 'log';
-                } else if (rawType === 'refund' || rawType === 'manual_deposit') {
-                    type = 'deposit';
-                } else if (rawType === 'booster' || rawCat === 'booster') {
-                    type = 'booster';
-                } else if (rawType === 'conversion' || rawCat === 'conversion') {
-                    type = 'conversion';
-                } else if (rawType === 'deposit' || rawCat === 'deposit') {
-                    type = 'deposit';
-                } else if (rawType === 'log') {
-                    type = 'log';
-                }
-
-                return {
-                    id: tx.id,
-                    type,
-                    category: tx.category || type,
-                    title: tx.title || 'Transaction',
-                    subtitle: tx.subtitle || '',
-                    amount: formatTxAmount(tx.amount, tx.amount_ngn),
-                    date: new Date(tx.created_at).toLocaleString(),
-                    status: tx.status || 'Success',
-                    paymentProvider: tx.payment_provider || 'MJ HUB',
-                    channel: tx.channel || 'Wallet'
-                };
-            });
+            transactions = data.map(tx => ({
+                id: tx.id, type: tx.type || 'deposit', title: tx.title || 'Transaction',
+                subtitle: tx.subtitle || '', amount: tx.amount || '₦0.00',
+                date: new Date(tx.created_at).toLocaleString(),
+                status: tx.status || 'Success',
+                paymentProvider: tx.payment_provider || 'MJ HUB', channel: tx.channel || 'Wallet'
+            }));
             renderRecentActivity();
         }
-    } catch (e) {}
+    } catch(e) {}
 }
 
 async function saveTransaction(tx) {
@@ -1877,36 +1707,10 @@ function renderRecentActivity() {
 }
 
 window.handleLogout = async function() {
-    stopInactivityWatcher();
     if (supabaseClient) await supabaseClient.auth.signOut();
     localStorage.clear();
     window.location.href = 'landing.html';
 };
-
-// Auto sign-out after 10 minutes of no activity on the dashboard — same
-// policy as the admin panel. A page reload doesn't lose the session
-// (Supabase's default localStorage persistence still applies), only real
-// inactivity does.
-const USER_INACTIVITY_LIMIT_MS = 10 * 60 * 1000;
-let userInactivityTimer = null;
-function startInactivityWatcher() {
-    const resetTimer = () => {
-        if (userInactivityTimer) clearTimeout(userInactivityTimer);
-        userInactivityTimer = setTimeout(async () => {
-            showToast('Signed out due to inactivity', 'info');
-            if (supabaseClient) await supabaseClient.auth.signOut();
-            window.location.href = 'landing.html';
-        }, USER_INACTIVITY_LIMIT_MS);
-    };
-    ['mousemove', 'mousedown', 'keydown', 'scroll', 'touchstart', 'click'].forEach(evt => {
-        document.addEventListener(evt, resetTimer, { passive: true });
-    });
-    resetTimer();
-}
-function stopInactivityWatcher() {
-    if (userInactivityTimer) clearTimeout(userInactivityTimer);
-    userInactivityTimer = null;
-}
 
 window.handleAvatarUpload = function(e) {
     const file = e.target.files[0];
@@ -1949,71 +1753,6 @@ window.submitNewPassword = async function() {
     }
     showToast('Password updated!', 'success');
     closeChangePasswordModal();
-};
-
-window.openDeleteAccountModal = function() {
-    const input = document.getElementById('deleteAccountConfirmInput');
-    const errEl = document.getElementById('deleteAccountError');
-    if (input) input.value = '';
-    if (errEl) { errEl.style.display = 'none'; errEl.innerText = ''; }
-    document.getElementById('deleteAccountModal').classList.add('active');
-};
-window.closeDeleteAccountModal = function() { document.getElementById('deleteAccountModal').classList.remove('active'); };
-
-window.confirmDeleteAccount = async function(evt) {
-    const errEl = document.getElementById('deleteAccountError');
-    const typed = (document.getElementById('deleteAccountConfirmInput').value || '').trim();
-    errEl.style.display = 'none';
-    errEl.innerText = '';
-
-    if (typed !== 'DELETE') {
-        errEl.innerText = 'Type DELETE (all caps) to confirm.';
-        errEl.style.display = 'block';
-        return;
-    }
-    if (!supabaseClient || !currentUserId) {
-        errEl.innerText = 'You must be signed in to delete your account.';
-        errEl.style.display = 'block';
-        return;
-    }
-
-    const btn = evt?.target;
-    if (btn) { btn.disabled = true; btn.textContent = 'Deleting…'; }
-
-    try {
-        const { data: { session } } = await supabaseClient.auth.getSession();
-        if (!session?.access_token) {
-            errEl.innerText = 'Your session has expired. Please sign in again and retry.';
-            errEl.style.display = 'block';
-            if (btn) { btn.disabled = false; btn.textContent = 'Permanently Delete My Account'; }
-            return;
-        }
-
-        const res = await fetch('/api/delete-account', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': 'Bearer ' + session.access_token
-            }
-        });
-        const data = await res.json();
-
-        if (!res.ok || !data.success) {
-            errEl.innerText = data.message || 'Could not delete your account. Please try again or contact support.';
-            errEl.style.display = 'block';
-            if (btn) { btn.disabled = false; btn.textContent = 'Permanently Delete My Account'; }
-            return;
-        }
-
-        stopInactivityWatcher();
-        await supabaseClient.auth.signOut();
-        localStorage.clear();
-        window.location.href = 'landing.html';
-    } catch (e) {
-        errEl.innerText = 'Network error: ' + e.message;
-        errEl.style.display = 'block';
-        if (btn) { btn.disabled = false; btn.textContent = 'Permanently Delete My Account'; }
-    }
 };
 
 window.copyIdToClipboard = function() {
@@ -2118,12 +1857,11 @@ function updateCartDisplay() {
     if (total) total.textContent = '₦' + sum.toLocaleString(undefined, {minimumFractionDigits:2});
 };
 
-window.openCheckoutConfirm = async function() {
+window.openCheckoutConfirm = function() {
     if (cartItems.length === 0) return showToast('Cart is empty', 'warning');
     if (!currentUserId) return showToast('Please sign in to checkout', 'error');
 
     const total = cartItems.reduce((a, i) => a + Number(i.price || 0), 0);
-    await fetchUserBalance(currentUserId);
     if (currentBalanceNgn < total) {
         showToast('Insufficient balance. Please fund wallet.', 'error');
         return switchSection('deposit');
@@ -2163,7 +1901,6 @@ window.checkoutCart = async function() {
   }
 
   const total = cartItems.reduce((a, i) => a + Number(i.price || 0), 0);
-  await fetchUserBalance(currentUserId);
   if (currentBalanceNgn < total) {
     showToast('Insufficient balance. Please fund wallet.', 'error');
     return switchSection('deposit');
@@ -2185,12 +1922,8 @@ window.checkoutCart = async function() {
     try {
       const qty = Math.max(1, parseInt(item.quantity, 10) || 1);
       const productSource = item.source
-        || (String(item.product_key || '').startsWith('ld_') ? 'logsdomain'
-          : String(item.product_key || '').startsWith('manual_') ? 'manual'
-          : 'fadded');
-      const orderEndpoint = productSource === 'manual' ? '/api/order-manual'
-        : productSource === 'logsdomain' ? '/api/order-logsdomain'
-        : '/api/order';
+        || (String(item.product_key || '').startsWith('ld_') ? 'logsdomain' : 'fadded');
+      const orderEndpoint = productSource === 'logsdomain' ? '/api/order-logsdomain' : '/api/order';
 
       const res = await fetch(orderEndpoint, {
         method: 'POST',
@@ -2270,7 +2003,7 @@ window.checkoutCart = async function() {
     saveCart();
     updateCartDisplay();
     renderOrders();
-    await fetchUserNotifications();
+    buildNotificationsFromActivity();
     renderNotifications();
     showOrderReceipt(delivered);
     showToast('Order completed successfully', 'success');
@@ -2565,16 +2298,7 @@ function renderHistoryList(filterType = 'all') {
 
     let items = transactions;
     if (filterType !== 'all') {
-        items = transactions.filter(t => {
-            const tType = String(t.type || '').toLowerCase();
-            if (filterType === 'log') {
-                return tType === 'log' || tType === 'logs' || tType === 'purchase' || tType === 'purchase_failed';
-            }
-            if (filterType === 'deposit') {
-                return tType === 'deposit' || tType === 'refund' || tType === 'manual_deposit';
-            }
-            return tType === filterType;
-        });
+        items = transactions.filter(t => t.type === filterType || (filterType === 'log' && t.type === 'logs'));
     }
 
     if (!items.length) {
@@ -2585,17 +2309,10 @@ function renderHistoryList(filterType = 'all') {
     container.innerHTML = items.map(t => {
         let iconClass = 'fa-cube';
         let boxClass = 'tx-blue';
-        const tType = String(t.type || '').toLowerCase();
-        if (tType === 'deposit' || tType === 'refund') { iconClass = 'fa-arrow-down'; boxClass = 'tx-green'; }
-        else if (tType === 'sms') { iconClass = 'fa-phone'; boxClass = 'tx-orange'; }
-        else if (tType === 'booster') { iconClass = 'fa-bolt'; boxClass = 'tx-blue'; }
-        else if (tType === 'conversion') { iconClass = 'fa-right-left'; boxClass = 'tx-purple'; }
-        else if (tType === 'log' || tType === 'purchase') { iconClass = 'fa-cube'; boxClass = 'tx-blue'; }
-
-        const statusLower = String(t.status || '').toLowerCase();
-        let statusClass = 'badge-success';
-        if (statusLower.includes('fail')) statusClass = 'badge-pending';
-        else if (statusLower.includes('refund')) statusClass = 'badge-pending';
+        if (t.type === 'deposit') { iconClass = 'fa-arrow-down'; boxClass = 'tx-green'; }
+        else if (t.type === 'sms') { iconClass = 'fa-phone'; boxClass = 'tx-orange'; }
+        else if (t.type === 'booster') { iconClass = 'fa-bolt'; boxClass = 'tx-blue'; }
+        else if (t.type === 'conversion') { iconClass = 'fa-right-left'; boxClass = 'tx-purple'; }
 
         return `
         <div class="transaction-card">
@@ -2608,55 +2325,24 @@ function renderHistoryList(filterType = 'all') {
             </div>
             <div class="transaction-right">
                 <div class="transaction-amount">${escapeHtml(t.amount)}</div>
-                <span class="badge-status ${statusClass}">${escapeHtml(t.status || 'Success')}</span>
+                <span class="badge-status badge-success">${escapeHtml(t.status || 'Success')}</span>
             </div>
         </div>`;
     }).join('');
 }
 
 /* NOTIFICATIONS */
-// Notifications come from the shared `notifications` table (targeted via
-// user_id, or broadcast when user_id is null). Each user's own "viewed"
-// state lives in `notification_reads` so one person opening a broadcast
-// notification doesn't mark it read for everyone else. A notification
-// stays visible for 24h after the user views it, then drops off the list.
-const NOTIF_HIDE_AFTER_MS = 24 * 60 * 60 * 1000;
-
-async function fetchUserNotifications() {
+function buildNotificationsFromActivity() {
     userNotifications = [];
-    if (!supabaseClient || !currentUserId) return;
-
-    const { data: notifs, error: notifErr } = await supabaseClient
-        .from('notifications')
-        .select('id, title, body, type, created_at')
-        .or(`user_id.eq.${currentUserId},user_id.is.null`)
-        .order('created_at', { ascending: false })
-        .limit(50);
-
-    if (notifErr || !notifs) return;
-
-    const { data: reads } = await supabaseClient
-        .from('notification_reads')
-        .select('notification_id, read_at')
-        .eq('user_id', currentUserId);
-
-    const readMap = new Map((reads || []).map(r => [r.notification_id, r.read_at]));
-    const now = Date.now();
-
-    userNotifications = notifs
-        .map(n => {
-            const readAt = readMap.get(n.id) || null;
-            return {
-                id: n.id,
-                title: n.title,
-                text: n.body || '',
-                time: n.created_at,
-                read: !!readAt,
-                readAt
-            };
-        })
-        // Drop anything the user viewed more than 24h ago.
-        .filter(n => !n.readAt || (now - new Date(n.readAt).getTime()) < NOTIF_HIDE_AFTER_MS);
+    if (transactions.length > 0) {
+        transactions.slice(0, 5).forEach(tx => {
+            userNotifications.push({
+                title: tx.title,
+                time: tx.date,
+                text: `${tx.subtitle || tx.title} - ${tx.amount}`
+            });
+        });
+    }
 }
 
 function renderNotifications() {
@@ -2670,267 +2356,19 @@ function renderNotifications() {
         return;
     }
 
-    const hasUnread = userNotifications.some(n => !n.read);
-    if (dot) dot.style.display = hasUnread ? 'block' : 'none';
-
+    if (dot) dot.style.display = 'block';
     list.innerHTML = userNotifications.map(n => `
-        <div class="notif-item"${n.read ? '' : ' style="font-weight:700;"'}>
+        <div class="notif-item">
             <div class="notif-title">${escapeHtml(n.title)}</div>
             <div style="color:var(--muted);font-size:12px;">${escapeHtml(n.text || '')}</div>
-            <div class="notif-time">${escapeHtml(formatNotifTime(n.time))}</div>
+            <div class="notif-time">${escapeHtml(n.time || '')}</div>
         </div>`).join('');
 }
 
-function formatNotifTime(iso) {
-    if (!iso) return '';
-    try { return new Date(iso).toLocaleString(); } catch (e) { return ''; }
-}
-
-async function markVisibleNotificationsRead() {
-    if (!supabaseClient || !currentUserId) return;
-    const unread = userNotifications.filter(n => !n.read);
-    if (!unread.length) return;
-
-    const rows = unread.map(n => ({ notification_id: n.id, user_id: currentUserId }));
-    const { error } = await supabaseClient
-        .from('notification_reads')
-        .upsert(rows, { onConflict: 'notification_id,user_id' });
-
-    if (!error) {
-        const now = new Date().toISOString();
-        unread.forEach(n => { n.read = true; n.readAt = now; });
-        renderNotifications();
-    }
-}
-
-window.markAllNotifsRead = async function() {
-    await markVisibleNotificationsRead();
+window.markAllNotifsRead = function() {
+    const dot = document.getElementById('notifDot');
+    if (dot) dot.style.display = 'none';
     showToast('Notifications marked as read', 'info');
-};
-
-// Pops up automatically right after login if there's anything unread — this
-// is separate from the bell dropdown (which only marks things read once the
-// user opens it). Once dismissed here, those notifications are marked read,
-// so the popup won't show them again on the next sign-in.
-function showNotificationPopupIfUnread() {
-    const unread = userNotifications.filter(n => !n.read);
-    if (!unread.length) return;
-
-    document.getElementById('notifPopupTitle').textContent = unread.length === 1 ? 'New Notification' : `${unread.length} New Notifications`;
-    document.getElementById('notifPopupList').innerHTML = unread.map(n => `
-        <div style="background:var(--bg);border:1px solid var(--border);border-radius:14px;padding:14px;">
-            <div style="font-weight:800;font-size:14px;margin-bottom:4px;">${escapeHtml(n.title)}</div>
-            <div style="color:var(--muted);font-size:13px;line-height:1.5;">${escapeHtml(n.text || '')}</div>
-            <div style="color:var(--muted);font-size:11px;margin-top:6px;">${escapeHtml(formatNotifTime(n.time))}</div>
-        </div>`).join('');
-    document.getElementById('notifPopupModal').classList.add('active');
-}
-
-window.dismissNotifPopup = async function() {
-    document.getElementById('notifPopupModal').classList.remove('active');
-    await markVisibleNotificationsRead();
-};
-
-// Paystack PUBLIC key — safe to expose in frontend code (this is how
-// Paystack is designed to work; the SECRET key never goes anywhere near
-// the browser, it only lives in your Vercel environment variables and is
-// used by api/paystack-verify.js / api/paystack-webhook.js).
-// Replace this with your real public key from Paystack → Settings → API Keys & Webhooks.
-const PAYSTACK_PUBLIC_KEY = 'pk_live_REPLACE_WITH_YOUR_PAYSTACK_PUBLIC_KEY';
-
-window.onDepositMethodChange = function() {
-    const method = document.getElementById('depositProviderSelect')?.value;
-    const paystackBox = document.getElementById('paystackDepositBox');
-    const pocketfiBox = document.getElementById('pocketfiDepositBox');
-    const manualBox = document.getElementById('manualDepositBox');
-    if (paystackBox) paystackBox.style.display = (method === 'paystack') ? '' : 'none';
-    if (pocketfiBox) pocketfiBox.style.display = (method === 'pocketfi') ? '' : 'none';
-    if (manualBox) manualBox.style.display = (method === 'manual') ? '' : 'none';
-};
-
-// When PocketFi's hosted checkout finishes, it sends the browser back to
-// redirect_link = `${APP_URL}/?deposit=pocketfi&uid=...`. That lands right
-// back on this same dashboard page (index.html), which is correct — but
-// nothing here used to react to it: the balance shown was whatever was
-// fetched on the earlier page load, before the webhook (which is what
-// actually credits the balance) had a chance to run. So the user would see
-// no change and assume the deposit "didn't reflect", even after a
-// successful payment. This watches for that return trip and actively
-// polls for the balance to update instead of leaving the user guessing.
-function handlePocketFiReturn() {
-    try {
-        const params = new URLSearchParams(window.location.search);
-        if (params.get('deposit') !== 'pocketfi') return;
-
-        // Strip the query string so a refresh/re-visit doesn't re-trigger this.
-        history.replaceState(null, '', window.location.pathname + window.location.hash);
-
-        switchSection('home');
-        showToast('Confirming your PocketFi payment…', 'info', 4000);
-
-        const startingBalance = currentBalanceNgn;
-        let attempts = 0;
-        const maxAttempts = 12; // ~36s of polling — the webhook is usually near-instant, this just covers normal delay
-
-        const poll = setInterval(async () => {
-            attempts++;
-            await fetchUserBalance(currentUserId);
-            await fetchUserTransactions(currentUserId);
-
-            if (currentBalanceNgn > startingBalance) {
-                clearInterval(poll);
-                showToast('Payment confirmed — your wallet has been funded!', 'success', 5000);
-            } else if (attempts >= maxAttempts) {
-                clearInterval(poll);
-                showToast("Still waiting on confirmation from PocketFi. If your balance doesn't update in a few minutes, contact support with your payment reference.", 'warning', 8000);
-            }
-        }, 3000);
-    } catch (e) {
-        console.warn('handlePocketFiReturn error', e);
-    }
-}
-
-window.payWithPocketFi = async function() {
-    const MIN = 1500;
-    const MAX = 500000;
-    const amount = Math.round(parseFloat(document.getElementById('pocketfiDepositInput')?.value) || 0);
-
-    if (amount < MIN) return showToast('Minimum deposit is ₦' + MIN.toLocaleString(), 'error');
-    if (amount > MAX) return showToast('Maximum deposit is ₦' + MAX.toLocaleString(), 'error');
-    if (!currentUserId) return showToast('Please sign in to deposit', 'error');
-    if (!supabaseClient) return showToast('App is still loading. Try again in a moment.', 'error');
-
-    const btn = document.getElementById('pocketfiPayBtn');
-    const idleHtml = btn ? btn.innerHTML : '';
-    if (btn) {
-        btn.disabled = true;
-        btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Opening secure checkout...';
-    }
-
-    try {
-        const { data: { session } } = await supabaseClient.auth.getSession();
-        if (!session?.access_token) {
-            showToast('Your session has expired. Please sign in again.', 'error');
-            return;
-        }
-
-        const res = await fetch('/api/pocketfi', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': 'Bearer ' + session.access_token
-            },
-            body: JSON.stringify({ amount })
-        });
-
-        let data = {};
-        const rawText = await res.text();
-        try { data = rawText ? JSON.parse(rawText) : {}; } catch (_) { data = {}; }
-
-        if (res.status === 404) {
-            showToast('PocketFi API not deployed (404). Add api/pocketfi.js only (delete the two pocketfi-*.js), redeploy.', 'error');
-            return;
-        }
-        if (!res.ok || !data.success || !data.payment_link) {
-            const detail = data.message || data.error || (rawText && rawText.slice(0, 120)) || ('HTTP ' + res.status);
-            showToast('PocketFi: ' + detail, 'error');
-            return;
-        }
-
-        // Hosted checkout — leave the site; webhook credits balance on success
-        window.location.href = data.payment_link;
-    } catch (e) {
-        showToast('PocketFi checkout failed: ' + (e.message || 'network error'), 'error');
-    } finally {
-        if (btn) {
-            btn.disabled = false;
-            btn.innerHTML = idleHtml || '<i class="fa-solid fa-lock"></i> Pay with PocketFi';
-        }
-    }
-};
-
-window.payWithPaystack = function() {
-    const MIN = 100;
-    const MAX = 1000000;
-    const amount = parseFloat(document.getElementById('paystackDepositInput')?.value) || 0;
-
-    if (amount < MIN) return showToast('Minimum deposit is ₦' + MIN.toLocaleString(), 'error');
-    if (amount > MAX) return showToast('Maximum deposit is ₦' + MAX.toLocaleString(), 'error');
-    if (!currentUserId) return showToast('Please sign in to deposit', 'error');
-    if (!PAYSTACK_PUBLIC_KEY || PAYSTACK_PUBLIC_KEY.includes('REPLACE_WITH')) {
-        return showToast('Paystack is not configured yet — contact the site owner.', 'error');
-    }
-    if (typeof PaystackPop === 'undefined') {
-        return showToast('Payment library failed to load. Check your connection and try again.', 'error');
-    }
-
-    const btn = document.getElementById('paystackPayBtn');
-    const idleHtml = btn.innerHTML;
-    btn.disabled = true;
-    btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Opening secure checkout...';
-
-    const reference = 'MJ-PSK-' + Date.now() + '-' + Math.random().toString(36).slice(2, 8);
-    const customerId = (document.getElementById('myCustomerId')?.value || '').trim();
-
-    const handler = PaystackPop.setup({
-        key: PAYSTACK_PUBLIC_KEY,
-        email: (userData?.email || ''),
-        amount: Math.round(amount * 100), // Paystack expects kobo
-        currency: 'NGN',
-        ref: reference,
-        metadata: { user_id: currentUserId, customer_id: customerId },
-        callback: function(response) {
-            verifyPaystackPayment(response.reference);
-        },
-        onClose: function() {
-            btn.disabled = false;
-            btn.innerHTML = idleHtml;
-        }
-    });
-
-    handler.openIframe();
-};
-
-async function verifyPaystackPayment(reference) {
-    const btn = document.getElementById('paystackPayBtn');
-    if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Confirming payment...'; }
-
-    try {
-        const res = await fetch('/api/paystack-verify', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ reference, user_id: currentUserId })
-        });
-        const data = await res.json();
-
-        if (!res.ok || !data.success) {
-            showToast(data.message || 'We could not confirm this payment automatically. If you were charged, contact support with reference ' + reference, 'error');
-            return;
-        }
-
-        showToast('Deposit successful! Balance updated.', 'success');
-        await fetchUserBalance(currentUserId);
-        await fetchUserTransactions(currentUserId);
-        document.getElementById('paystackDepositInput').value = '';
-    } catch (e) {
-        showToast('Payment made, but confirming it failed: ' + e.message + '. Contact support with reference ' + reference, 'error');
-    } finally {
-        if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fa-solid fa-lock"></i> Pay with Paystack'; }
-    }
-}
-
-// General "Report a complaint" WhatsApp link — used by the support widget
-// only. Deliberately separate from messageAdminForDeposit() below (its own
-// number constant, its own message template) so this can never be confused
-// with, or accidentally change, the manual deposit flow.
-const SUPPORT_WA_NUMBER = '14305583021';
-
-window.openWhatsAppComplaint = function() {
-    const customerId = (document.getElementById('myCustomerId')?.value || '').trim();
-    const idPart = (customerId && customerId !== 'Loading...') ? customerId : 'Not loaded — please open Profile once, then retry';
-    const message = `Hello Admin, I've a complaint.\n\nCustomer ID: ${idPart}\nComplaint: `;
-    const url = `https://wa.me/${SUPPORT_WA_NUMBER}?text=${encodeURIComponent(message)}`;
-    window.open(url, '_blank');
 };
 
 window.messageAdminForDeposit = function() {
