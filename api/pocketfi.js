@@ -28,6 +28,8 @@ const supabase = createClient(
 
 const MIN = 1000;
 const MAX = 500000;
+/** NGN per 1 USD when user funds USD wallet via bank transfer */
+const USD_RATE = Number(process.env.DEPOSIT_USD_RATE) || 1450;
 
 export const config = {
   api: {
@@ -162,69 +164,120 @@ function isPaidStatus(data) {
   return false;
 }
 
-async function creditUser(userId, amount, reference) {
+async function creditUser(userId, amountNgn, reference) {
+  // Wallet target was stored on the pending transaction / intent at checkout
+  let wallet = 'ngn';
+  let existing = null;
+  try {
+    const { data: tx } = await supabase
+      .from('transactions')
+      .select('id, status, currency, subtitle')
+      .eq('external_reference', reference)
+      .maybeSingle();
+    existing = tx;
+    const cur = String(tx?.currency || '').toUpperCase();
+    if (cur === 'USD' || /usd wallet/i.test(String(tx?.subtitle || ''))) wallet = 'usd';
+  } catch (_) {}
+
+  if (wallet === 'ngn') {
+    try {
+      const { data: intent } = await supabase
+        .from('deposit_intents')
+        .select('wallet, currency')
+        .eq('external_id', reference)
+        .maybeSingle();
+      const w = String(intent?.wallet || intent?.currency || '').toLowerCase();
+      if (w === 'usd' || w === 'dollar') wallet = 'usd';
+    } catch (_) {}
+  }
+
   const { data: profile } = await supabase
     .from('profiles')
-    .select('balance, customer_id')
+    .select('balance, balance_usd, customer_id')
     .eq('id', userId)
     .maybeSingle();
 
-  const current = Number(profile?.balance ?? 0) || 0;
-  const next = current + amount;
+  const amountUsd = Math.round((amountNgn / USD_RATE) * 10000) / 10000;
 
+  if (wallet === 'usd') {
+    const currentUsd = Number(profile?.balance_usd ?? 0) || 0;
+    const nextUsd = currentUsd + amountUsd;
+    const { error: balErr } = await supabase
+      .from('profiles')
+      .update({ balance_usd: nextUsd })
+      .eq('id', userId);
+    if (balErr) throw new Error('USD balance update failed: ' + balErr.message);
+
+    const patch = {
+      status: 'success',
+      title: 'Deposit',
+      subtitle: `Funded USD Wallet · ₦${USD_RATE.toLocaleString()}/$1`,
+      amount: `$${amountUsd.toFixed(2)}`,
+      amount_ngn: amountNgn,
+      currency: 'USD',
+      type: 'deposit',
+      category: 'Deposit',
+      channel: 'Bank Transfer'
+    };
+    if (existing?.id) {
+      await supabase.from('transactions').update(patch).eq('id', existing.id);
+    } else {
+      await supabase.from('transactions').insert({
+        user_id: userId,
+        customer_id: profile?.customer_id || null,
+        ...patch,
+        payment_provider: 'pocketfi',
+        external_reference: reference
+      });
+    }
+    try {
+      await supabase
+        .from('deposit_intents')
+        .update({ status: 'success', wallet: 'usd' })
+        .eq('external_id', reference);
+    } catch (_) {}
+    return { balance_usd: nextUsd, wallet: 'usd', amount_usd: amountUsd };
+  }
+
+  const current = Number(profile?.balance ?? 0) || 0;
+  const next = current + amountNgn;
   const { error: balErr } = await supabase
     .from('profiles')
     .update({ balance: next })
     .eq('id', userId);
-
   if (balErr) throw new Error('balance update failed: ' + balErr.message);
 
-  const { data: existing } = await supabase
-    .from('transactions')
-    .select('id, status')
-    .eq('external_reference', reference)
-    .maybeSingle();
-
+  const patchNgn = {
+    status: 'success',
+    title: 'Deposit',
+    subtitle: 'Funded NGN Wallet',
+    amount: `₦${amountNgn.toLocaleString()}`,
+    amount_ngn: amountNgn,
+    currency: 'NGN',
+    type: 'deposit',
+    category: 'Deposit',
+    channel: 'Bank Transfer'
+  };
   if (existing?.id) {
-    await supabase
-      .from('transactions')
-      .update({
-        status: 'success',
-        title: 'Deposit',
-        subtitle: 'Funded NGN Wallet',
-        amount: `₦${amount.toLocaleString()}`,
-        amount_ngn: amount,
-        type: 'deposit',
-        category: 'Deposit',
-        channel: 'Bank Transfer'
-      })
-      .eq('id', existing.id);
+    await supabase.from('transactions').update(patchNgn).eq('id', existing.id);
   } else {
     await supabase.from('transactions').insert({
       user_id: userId,
       customer_id: profile?.customer_id || null,
-      type: 'deposit',
-      category: 'Deposit',
-      title: 'Deposit',
-      subtitle: 'Funded NGN Wallet',
-      amount: `₦${amount.toLocaleString()}`,
-      amount_ngn: amount,
-      currency: 'NGN',
-      status: 'success',
+      ...patchNgn,
       payment_provider: 'pocketfi',
-      external_reference: reference,
-      channel: 'Bank Transfer'
+      external_reference: reference
     });
   }
 
   try {
     await supabase
       .from('deposit_intents')
-      .update({ status: 'success' })
+      .update({ status: 'success', wallet: 'ngn' })
       .eq('external_id', reference);
   } catch (_) {}
 
-  return { balance: next };
+  return { balance: next, wallet: 'ngn' };
 }
 
 function normalizeSig(s) {
@@ -482,6 +535,8 @@ async function handleCheckout(req, res, raw, publicKey, businessId) {
   }
 
   const amount = Math.round(Number(body?.amount) || 0);
+  const walletRaw = String(body?.wallet || body?.currency || 'ngn').toLowerCase();
+  const wallet = walletRaw === 'usd' || walletRaw === 'dollar' ? 'usd' : 'ngn';
   if (amount < MIN) {
     return res.status(400).json({
       success: false,
@@ -584,17 +639,27 @@ async function handleCheckout(req, res, raw, publicKey, businessId) {
     });
   }
 
+  const amountUsd = Math.round((amount / USD_RATE) * 10000) / 10000;
+  const pendingTitle = 'Deposit (pending)';
+  const pendingSubtitle =
+    wallet === 'usd'
+      ? `USD wallet · ~$${amountUsd.toFixed(2)} at ₦${USD_RATE.toLocaleString()}/$1`
+      : 'NGN wallet · Awaiting payment confirmation';
+
   try {
     await supabase.from('transactions').insert({
       user_id: user.id,
       customer_id: profile?.customer_id || null,
       type: 'deposit',
       category: 'Deposit',
-      title: 'Deposit (pending)',
-      subtitle: 'Awaiting payment confirmation',
-      amount: `₦${amount.toLocaleString()}`,
+      title: pendingTitle,
+      subtitle: pendingSubtitle,
+      amount:
+        wallet === 'usd'
+          ? `~$${amountUsd.toFixed(2)}`
+          : `₦${amount.toLocaleString()}`,
       amount_ngn: amount,
-      currency: 'NGN',
+      currency: wallet === 'usd' ? 'USD' : 'NGN',
       status: 'pending',
       payment_provider: 'pocketfi',
       external_reference: paymentId,
@@ -610,6 +675,8 @@ async function handleCheckout(req, res, raw, publicKey, businessId) {
         user_id: user.id,
         provider: 'pocketfi',
         amount,
+        wallet,
+        currency: wallet === 'usd' ? 'USD' : 'NGN',
         external_id: paymentId,
         status: 'pending',
         created_at: new Date().toISOString()
@@ -617,7 +684,7 @@ async function handleCheckout(req, res, raw, publicKey, businessId) {
       { onConflict: 'external_id' }
     );
   } catch (_) {
-    /* optional table */
+    /* optional table — currency on transactions is enough */
   }
 
   return res.status(200).json({
@@ -625,6 +692,9 @@ async function handleCheckout(req, res, raw, publicKey, businessId) {
     payment_id: paymentId,
     payment_link: paymentLink,
     amount,
+    wallet,
+    amount_usd: wallet === 'usd' ? amountUsd : null,
+    rate: USD_RATE,
     redirect_link
   });
 }
