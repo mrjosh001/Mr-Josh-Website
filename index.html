@@ -1061,20 +1061,47 @@ body::before {
     <section id="deposit" class="app-section">
         <div class="content-card">
             <h2>Deposit</h2>
-            <p class="helper-text">Choose a funding method. No method is preferred — pick what works for you.</p>
+            <p class="helper-text">More than one way to fund — pick any option below.</p>
 
-            <div class="form-group">
-                <label>Payment Method</label>
-                <select id="depositProviderSelect" onchange="onDepositMethodChange()">
-                    <option value="pocketfi" selected>Bank Transfer / Card</option>
-                    <option value="manual">Deposit Manually (via WhatsApp)</option>
-                    <option value="crypto" disabled>Deposit with Crypto — Coming soon</option>
-                </select>
+            <div style="font-size:12px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:0.04em;margin-bottom:10px;">Payment methods</div>
+            <div id="depositMethodCards" style="display:flex;flex-direction:column;gap:10px;margin-bottom:18px;">
+                <button type="button" class="deposit-method-card active" data-method="pocketfi" onclick="selectDepositMethod('pocketfi')" style="text-align:left;width:100%;cursor:pointer;padding:14px 16px;border-radius:16px;border:1.5px solid var(--primary);background:rgba(91,138,245,0.1);color:var(--text);font-family:inherit;">
+                    <div style="display:flex;align-items:center;gap:12px;">
+                        <div style="width:40px;height:40px;border-radius:12px;background:var(--primary);color:#fff;display:flex;align-items:center;justify-content:center;flex-shrink:0;"><i class="fa-solid fa-building-columns"></i></div>
+                        <div style="flex:1;min-width:0;">
+                            <div style="font-weight:800;font-size:14px;">Bank Transfer</div>
+                            <div style="font-size:12px;color:var(--muted);margin-top:2px;">Pay from your bank app · Instant after confirm</div>
+                        </div>
+                        <i class="fa-solid fa-circle-check" style="color:var(--primary);font-size:18px;"></i>
+                    </div>
+                </button>
+                <button type="button" class="deposit-method-card" data-method="manual" onclick="selectDepositMethod('manual')" style="text-align:left;width:100%;cursor:pointer;padding:14px 16px;border-radius:16px;border:1.5px solid var(--border);background:var(--card);color:var(--text);font-family:inherit;">
+                    <div style="display:flex;align-items:center;gap:12px;">
+                        <div style="width:40px;height:40px;border-radius:12px;background:#25d366;color:#fff;display:flex;align-items:center;justify-content:center;flex-shrink:0;"><i class="fa-brands fa-whatsapp"></i></div>
+                        <div style="flex:1;min-width:0;">
+                            <div style="font-weight:800;font-size:14px;">Manual · WhatsApp</div>
+                            <div style="font-size:12px;color:var(--muted);margin-top:2px;">Message admin with your Customer ID · Good for OPay</div>
+                        </div>
+                        <i class="fa-regular fa-circle" style="color:var(--muted);font-size:18px;"></i>
+                    </div>
+                </button>
+                <div class="deposit-method-card" data-method="crypto" style="opacity:0.55;padding:14px 16px;border-radius:16px;border:1.5px dashed var(--border);background:var(--card);">
+                    <div style="display:flex;align-items:center;gap:12px;">
+                        <div style="width:40px;height:40px;border-radius:12px;background:var(--card-hover);color:var(--muted);display:flex;align-items:center;justify-content:center;flex-shrink:0;"><i class="fa-brands fa-bitcoin"></i></div>
+                        <div style="flex:1;min-width:0;">
+                            <div style="font-weight:800;font-size:14px;">Crypto</div>
+                            <div style="font-size:12px;color:var(--muted);margin-top:2px;">Coming soon</div>
+                        </div>
+                        <span style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;">Soon</span>
+                    </div>
+                </div>
             </div>
+            <select id="depositProviderSelect" style="display:none;" aria-hidden="true">
+                <option value="pocketfi" selected>Bank Transfer</option>
+                <option value="manual">Manual</option>
+            </select>
 
-            <!-- Paystack hidden until approved
-            <div id="paystackDepositBox" style="display:none;">...</div>
-            -->
+            <!-- Paystack hidden until approved -->
 
             <div id="pocketfiDepositBox">
                 <div class="form-group">
@@ -1086,14 +1113,14 @@ body::before {
                     <div style="font-size:12px;line-height:1.5;color:var(--text);">
                         <strong style="color:var(--danger);">Do not pay with OPay.</strong>
                         OPay often blocks these transfers as “suspicious” and the payment fails.
-                        Use <strong>Kuda, Palmpay, bank app, or card</strong> instead. If you only have OPay, use <strong>Manual deposit (WhatsApp)</strong>.
+                        Use <strong>Kuda, Palmpay, or your bank app</strong> instead. If you only have OPay, choose <strong>Manual · WhatsApp</strong> above.
                     </div>
                 </div>
                 <button class="btn-sm-primary" style="width:100%;padding:14px;" id="pocketfiPayBtn" onclick="payWithPocketFi()">
-                    <i class="fa-solid fa-lock"></i> Pay securely
+                    <i class="fa-solid fa-lock"></i> Continue to bank transfer
                 </button>
                 <p style="font-size:12px;color:var(--muted);margin-top:12px;line-height:1.45;text-align:center;">
-                    Secure bank transfer / card. Min ₦1,000 · Max ₦500,000. Balance updates after payment is confirmed.
+                    Bank transfer only. Min ₦1,000 · Max ₦500,000. Balance updates after payment is confirmed.
                 </p>
             </div>
 
@@ -1703,6 +1730,30 @@ window.toggleSmsMenu = function(e) {
     }
 };
 
+window.selectDepositMethod = function(method) {
+    const sel = document.getElementById('depositProviderSelect');
+    if (sel) sel.value = method;
+    document.querySelectorAll('#depositMethodCards .deposit-method-card[data-method="pocketfi"], #depositMethodCards .deposit-method-card[data-method="manual"]').forEach((card) => {
+        const active = card.getAttribute('data-method') === method;
+        card.classList.toggle('active', active);
+        card.style.borderColor = active ? 'var(--primary)' : 'var(--border)';
+        card.style.background = active ? 'rgba(91,138,245,0.1)' : 'var(--card)';
+        const icon = card.querySelector('.fa-circle-check, .fa-circle, .fa-regular.fa-circle');
+        // swap trailing icon
+        const trail = card.querySelector(':scope > div > i:last-child, :scope > div > .fa-circle-check, :scope > div > .fa-regular');
+        const icons = card.querySelectorAll('i');
+        if (icons.length) {
+            const last = icons[icons.length - 1];
+            if (last.classList.contains('fa-circle-check') || last.classList.contains('fa-circle') || last.classList.contains('fa-regular')) {
+                last.className = active ? 'fa-solid fa-circle-check' : 'fa-regular fa-circle';
+                last.style.color = active ? 'var(--primary)' : 'var(--muted)';
+                last.style.fontSize = '18px';
+            }
+        }
+    });
+    window.onDepositMethodChange();
+};
+
 window.onDepositMethodChange = function() {
     const v = document.getElementById('depositProviderSelect')?.value || 'pocketfi';
     const pfi = document.getElementById('pocketfiDepositBox');
@@ -1788,7 +1839,7 @@ window.payWithPocketFi = async function() {
     } catch (err) {
         showToast(err.message || 'Payment error', 'error');
     } finally {
-        if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fa-solid fa-lock"></i> Pay securely'; }
+        if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fa-solid fa-lock"></i> Continue to bank transfer'; }
     }
 };
 
