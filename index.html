@@ -251,12 +251,16 @@ body::before {
 }
 .hero-welcome { font-size: 22px; font-weight: 800; letter-spacing: -0.03em; margin-bottom: 6px; position: relative; z-index: 1; }
 .hero-sub { font-size: 13px; opacity: 0.88; margin-bottom: 18px; line-height: 1.5; max-width: 320px; position: relative; z-index: 1; }
-.hero-actions { display: flex; gap: 10px; flex-wrap: wrap; position: relative; z-index: 1; }
+.hero-actions {
+    display: flex; gap: 8px; flex-wrap: nowrap; position: relative; z-index: 1;
+    width: 100%; align-items: stretch;
+}
 .hero-btn {
     background: rgba(255,255,255,0.16); border: 1px solid rgba(255,255,255,0.28);
-    color: #fff; padding: 11px 16px; border-radius: 12px; font-size: 13px; font-weight: 700;
-    cursor: pointer; text-decoration: none; display: inline-flex; align-items: center; gap: 8px;
-    backdrop-filter: blur(8px); transition: background .2s, transform .15s;
+    color: #fff; padding: 10px 8px; border-radius: 12px; font-size: 12px; font-weight: 700;
+    cursor: pointer; text-decoration: none; display: inline-flex; align-items: center; justify-content: center;
+    gap: 6px; backdrop-filter: blur(8px); transition: background .2s, transform .15s;
+    flex: 1 1 0; min-width: 0; white-space: nowrap; text-align: center;
 }
 .hero-btn:hover { background: rgba(255,255,255,0.24); }
 .hero-btn:active { transform: scale(0.98); }
@@ -889,6 +893,7 @@ body::before {
             <div class="hero-actions">
                 <button class="hero-btn" onclick="switchSection('deposit')"><i class="fa-solid fa-wallet"></i> Fund Account</button>
                 <button class="hero-btn" onclick="openCurrencyModal()"><i class="fa-solid fa-right-left"></i> Convert</button>
+                <a class="hero-btn" href="mj-sms.html"><i class="fa-solid fa-comment-sms"></i> Get SMS</a>
             </div>
         </div>
 
