@@ -6,7 +6,7 @@
     <title>MJ HUB — Dashboard</title>
     <meta name="application-name" content="MJ HUB">
     <meta name="apple-mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
     <meta name="apple-mobile-web-app-title" content="MJ HUB">
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="theme-color" content="#06080f">
@@ -108,11 +108,14 @@ body::before {
 
 /* NAV */
 .navbar {
-    position: fixed; top: 0; left: 0; right: 0; height: 64px;
+    position: fixed; top: 0; left: 0; right: 0;
+    height: calc(64px + env(safe-area-inset-top, 0px));
+    padding: env(safe-area-inset-top, 0px) 16px 0 14px;
     background: var(--nav); backdrop-filter: blur(18px) saturate(1.4);
     border-bottom: 1px solid var(--border);
     display: flex; justify-content: space-between; align-items: center;
-    padding: 0 16px 0 14px; z-index: 1000;
+    z-index: 1000;
+    box-sizing: border-box;
 }
 .nav-left { display: flex; align-items: center; gap: 12px; }
 .menu-btn {
@@ -233,7 +236,8 @@ body::before {
 
 /* MAIN */
 .main-content {
-    margin-top: 64px; padding: 20px 16px 110px;
+    margin-top: calc(64px + env(safe-area-inset-top, 0px));
+    padding: 20px 16px calc(110px + env(safe-area-inset-bottom, 0px));
     max-width: 560px; width: 100%; margin-left: auto; margin-right: auto;
 }
 .app-section { display: none; animation: fadeUp .3s ease; }
@@ -635,11 +639,14 @@ body::before {
 
 /* BOTTOM NAV */
 .bottom-nav {
-    position: fixed; bottom: 0; left: 0; right: 0; height: 72px;
+    position: fixed; bottom: 0; left: 0; right: 0;
+    height: calc(72px + env(safe-area-inset-bottom, 0px));
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+    box-sizing: border-box;
     background: var(--nav); backdrop-filter: blur(18px) saturate(1.4);
     border-top: 1px solid var(--border);
-    display: flex; justify-content: space-around; align-items: center; z-index: 1300;
-    padding-bottom: env(safe-area-inset-bottom, 0);
+    display: flex; align-items: center; justify-content: space-around;
+    z-index: 1000;
 }
 .nav-item {
     display: flex; flex-direction: column; align-items: center; text-decoration: none;
