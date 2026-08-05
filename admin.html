@@ -2,11 +2,18 @@
 <html lang="en" data-theme="dark">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
   <meta http-equiv="Pragma" content="no-cache" />
   <meta http-equiv="Expires" content="0" />
   <title>MJ HUB — Admin</title>
+  <meta name="application-name" content="MJ HUB Admin">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="MJ HUB Admin">
+  <meta name="theme-color" content="#07090e">
+  <link rel="icon" type="image/jpeg" href="https://atczodlljmlayvldxfmv.supabase.co/storage/v1/object/public/avatars/dark%20background%20log">
+  <link rel="apple-touch-icon" href="https://atczodlljmlayvldxfmv.supabase.co/storage/v1/object/public/avatars/dark%20background%20log">
+  <link rel="manifest" href="manifest.json">
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -82,8 +89,15 @@
       border-bottom:1px solid var(--border);
     }
     .brand-logo {
-      width:36px; height:36px; border-radius:10px; display:flex; align-items:center; justify-content:center;
-      background:linear-gradient(135deg,var(--primary),#8b5cf6); font-weight:800; color:#fff;
+      width:42px; height:42px; border-radius:10px; display:flex; align-items:center; justify-content:center;
+      overflow:hidden; background:transparent; flex-shrink:0;
+    }
+    .brand-logo img {
+      width:100%; height:100%; object-fit:contain; display:block;
+    }
+    .login-logo {
+      width:72px; height:72px; object-fit:contain; display:block; margin:0 auto 14px;
+      border-radius:14px;
     }
     .brand-text { font-size:17px; font-weight:800; }
     .brand-text span { display:block; color:var(--muted); font-size:12px; font-weight:600; margin-top:-2px; }
@@ -204,6 +218,7 @@
   <div id="toastStack" class="toast-stack"></div>
   <div id="loginScreen" class="login-wrap">
     <div class="login-card">
+      <img class="login-logo" src="https://atczodlljmlayvldxfmv.supabase.co/storage/v1/object/public/avatars/dark%20background%20log" alt="MJ HUB">
       <h1>MJ HUB</h1>
       <p>Admin portal — sign in with an admin account</p>
       <div class="field"><label>Email</label><input type="email" id="adminEmail" placeholder="admin@example.com" /></div>
@@ -226,7 +241,7 @@
     <div id="mobileOverlay" class="overlay-mobile" onclick="closeSidebar()"></div>
     <aside class="sidebar" id="sidebar">
       <div class="sidebar-brand">
-        <div class="brand-logo">MJ</div>
+        <div class="brand-logo"><img src="https://atczodlljmlayvldxfmv.supabase.co/storage/v1/object/public/avatars/dark%20background%20log" alt="MJ HUB"></div>
         <div class="brand-text">MJ HUB<span>Admin</span></div>
       </div>
       <nav class="nav-list">
@@ -235,7 +250,6 @@
         <button class="nav-item" data-tab="lookup" onclick="switchTab('lookup')"><i class="fas fa-search"></i> Customer Lookup</button>
         <button class="nav-item" data-tab="products" onclick="switchTab('products')"><i class="fas fa-box"></i> Products & Stock</button>
         <button class="nav-item" data-tab="sms" onclick="switchTab('sms')"><i class="fas fa-sim-card"></i> SMS Numbers</button>
-        <button class="nav-item" data-tab="sms-orders" onclick="switchTab('sms-orders')"><i class="fas fa-comment-sms"></i> SMS Orders</button>
         <button class="nav-item" data-tab="orders" onclick="switchTab('orders')"><i class="fas fa-receipt"></i> Orders</button>
         <button class="nav-item" data-tab="notify" onclick="switchTab('notify')"><i class="fas fa-bullhorn"></i> Notifications</button>
         <button class="nav-item" data-tab="settings" onclick="switchTab('settings')"><i class="fas fa-cog"></i> Settings</button>
@@ -278,17 +292,6 @@
               <div class="metric-card"><div class="metric-label">Sales</div><div class="metric-value" id="mSalesNgn">₦0</div><div class="metric-sub">Completed orders</div></div>
               <div class="metric-card"><div class="metric-label">Profit Margin</div><div class="metric-value" id="mProfitNgn" style="color:#34d399;">₦0</div><div class="metric-sub" id="mProfitPct">0% margin</div></div>
               <div class="metric-card"><div class="metric-label">Wallet Balances</div><div class="metric-value" id="mTotalBalance">₦0</div><div class="metric-sub">All user wallets</div></div>
-            </div>
-          </div>
-          <div class="panel">
-            <div class="panel-header">
-              <div class="panel-title">Supplier Balances</div>
-              <button class="btn btn-ghost btn-sm" id="btnRefreshSupplierBalances" onclick="loadSupplierBalances()"><i class="fas fa-sync"></i> Refresh</button>
-            </div>
-            <div class="metrics" style="margin-bottom:0;" id="supplierBalanceGrid">
-              <div class="metric-card"><div class="metric-label">FADDED</div><div class="metric-value" id="balFadded">—</div><div class="metric-sub" id="balFaddedSub">Loading…</div></div>
-              <div class="metric-card"><div class="metric-label">Logs Domain</div><div class="metric-value" id="balLogsdomain">—</div><div class="metric-sub" id="balLogsdomainSub">Loading…</div></div>
-              <div class="metric-card"><div class="metric-label">GrizzlySMS</div><div class="metric-value" id="balGrizzly">—</div><div class="metric-sub" id="balGrizzlySub">Loading…</div></div>
             </div>
           </div>
           <div class="panel">
@@ -356,17 +359,16 @@
               <div class="panel-title">SMS Numbers — Supplier Catalog</div>
               <div style="display:flex;gap:8px;flex-wrap:wrap;">
                 <button class="btn btn-primary btn-sm" id="btnSyncGrizzly" onclick="syncGrizzlyNow()"><i class="fas fa-sync"></i> Sync Grizzly</button>
-                <button class="btn btn-secondary btn-sm" id="btnBulkRepriceUnpriced" onclick="bulkRepriceNumbers('unpriced_only')"><i class="fas fa-tags"></i> Price Unpriced Numbers</button>
-                <button class="btn btn-ghost btn-sm" id="btnBulkRepriceAll" onclick="bulkRepriceNumbers('all')" title="Rerolls markup on every system-priced row. Prices you've set manually are never touched."><i class="fas fa-dice"></i> Reprice All (skips manual prices)</button>
               </div>
             </div>
             <p style="color:#94a3b8;font-size:13px;margin:-4px 0 4px;">
-              Syncing pulls the latest country, service, supplier price, and stock from GrizzlySMS. Your own selling price is never overwritten by a sync — edit it manually below, or use "Price Unpriced Numbers" to bulk-apply the standard markup to anything still sitting at ₦0.
+              Syncing pulls the latest country, service, supplier price, and stock from GrizzlySMS. Your own selling price is never overwritten by a sync — edit it manually below.
             </p>
             <p id="grizzlySyncProgress" style="color:var(--primary,#3b82f6);font-size:12px;font-weight:700;margin:0 0 14px;min-height:16px;"></p>
             <div class="search-row" style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;">
               <input type="text" id="smsSearch" placeholder="Search service (WhatsApp, Google, tg…)" oninput="filterNumberServices()" style="flex:1;min-width:160px;" />
-              <input type="text" id="smsCountryFilter" placeholder="Country (Nigeria, USA…)" oninput="filterNumberServices()" style="flex:1;min-width:160px;" />
+              <input type="text" id="smsCountrySearch" placeholder="Filter countries…" oninput="filterSmsCountryOptions()" style="flex:1;min-width:140px;" />
+              <select id="smsCountryFilter" onchange="filterNumberServices()" style="min-width:160px;"><option value="">All Countries</option></select>
               <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:#94a3b8;white-space:nowrap;">
                 <input type="checkbox" id="smsHideZeroStock" checked onchange="filterNumberServices()" />
                 Hide 0 stock
@@ -384,39 +386,6 @@
               </table>
             </div>
             <div id="smsMobileCards" class="mobile-only mobile-cards"></div>
-          </div>
-        </div>
-
-        <div id="tab-sms-orders" class="tab-content">
-          <div class="panel">
-            <div class="panel-header">
-              <div class="panel-title">SMS Orders — Customer Purchases</div>
-            </div>
-            <p style="color:#94a3b8;font-size:13px;margin:-4px 0 4px;">
-              Every number a customer has bought, the code they got (if any), and whether it's still waiting, completed, or was cancelled &amp; refunded.
-            </p>
-            <div class="search-row" style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;">
-              <input type="text" id="smsOrdersSearch" placeholder="Search by Customer ID, service, or number…" oninput="filterSmsOrders()" style="flex:1;min-width:200px;" />
-              <select id="smsOrdersStatusFilter" onchange="filterSmsOrders()" style="min-width:160px;">
-                <option value="">All Statuses</option>
-                <option value="waiting_for_code">Waiting for code</option>
-                <option value="completed">Completed</option>
-                <option value="refunded">Cancelled &amp; refunded</option>
-                <option value="failed">Failed</option>
-              </select>
-            </div>
-
-            <div class="desktop-only desktop-table table-wrap">
-              <table>
-                <thead>
-                  <tr>
-                    <th>Customer ID</th><th>Service</th><th>Country</th><th>Number</th><th>Price</th><th>Code</th><th>Status</th><th>Date</th>
-                  </tr>
-                </thead>
-                <tbody id="smsOrdersTableBody"></tbody>
-              </table>
-            </div>
-            <div id="smsOrdersMobileCards" class="mobile-only mobile-cards"></div>
           </div>
         </div>
 
@@ -666,8 +635,6 @@ const tabTitles = {
   users: 'Customers',
   lookup: 'Customer Lookup',
   products: 'Products & Stock',
-  sms: 'SMS Numbers',
-  'sms-orders': 'SMS Orders',
   orders: 'Orders',
   settings: 'Settings'
 };
@@ -834,136 +801,9 @@ async function handleLogout() {
 }
 
 async function loadAllData() {
-  await Promise.all([loadProducts(), loadProfiles(), tryLoadOrders(), tryLoadSmsOrders(), loadNotificationHistory()]);
+  await Promise.all([loadProducts(), loadProfiles(), tryLoadOrders(), loadNotificationHistory(), loadNumberServices()]);
   resumeGrizzlySyncIfRunning();
   updateMetrics();
-  loadSupplierBalances();
-}
-
-function ngnFmt(n) { return '₦' + Number(n || 0).toLocaleString(undefined, { maximumFractionDigits: 2 }); }
-
-function renderSupplierBalance(prefix, result) {
-  const valueEl = document.getElementById('bal' + prefix);
-  const subEl = document.getElementById('bal' + prefix + 'Sub');
-  if (!valueEl || !subEl) return;
-
-  if (!result || result.ok === false) {
-    valueEl.textContent = '—';
-    valueEl.style.color = '#f87171';
-    subEl.textContent = result?.error ? ('Error: ' + result.error) : 'Could not fetch';
-    subEl.title = result?.raw || '';
-    return;
-  }
-
-  valueEl.style.color = '';
-  const isNgn = result.currency === 'NGN';
-  valueEl.textContent = isNgn ? ngnFmt(result.balance) : usdFmt(result.balance);
-  subEl.textContent = 'Updated just now';
-}
-
-async function bulkRepriceNumbers(mode) {
-  if (mode === 'all') {
-    const confirmed = confirm(
-      'This overwrites the selling price on EVERY SMS number listing — including any you\'ve already priced manually — with a fresh random 40–85% markup. This cannot be undone. Continue?'
-    );
-    if (!confirmed) return;
-  }
-
-  const btnId = mode === 'all' ? 'btnBulkRepriceAll' : 'btnBulkRepriceUnpriced';
-  const idleLabel = mode === 'all'
-    ? '<i class="fas fa-dice"></i> Reprice All (skips manual prices)'
-    : '<i class="fas fa-tags"></i> Price Unpriced Numbers';
-  const btn = document.getElementById(btnId);
-  setBtnBusy(btn, true, 'Pricing...');
-
-  let repriceSucceeded = false;
-  let step = 'building auth headers';
-  try {
-    const headers = await authHeaders();
-    headers['Content-Type'] = 'application/json';
-
-    step = 'requesting bulk reprice';
-    const res = await fetch('/api/admin', {
-      method: 'POST',
-      headers,
-      body: JSON.stringify({ resource: 'sms', action: 'bulk_reprice', mode })
-    });
-
-    step = 'reading response';
-    const data = await res.json();
-    if (!data.success) {
-      showAdminToast(data.message || 'Bulk repricing failed', 'error');
-    } else {
-      repriceSucceeded = true;
-      if (data.updated === 0) {
-        showAdminToast(data.message || 'Nothing to price.', 'info');
-      } else {
-        showAdminToast(`Priced ${data.updated} of ${data.total} number listings.`, 'success');
-      }
-      if (data.errors && data.errors.length) {
-        console.warn('Bulk reprice partial errors:', data.errors);
-      }
-    }
-  } catch (err) {
-    console.error('Bulk reprice error at step:', step, err.name, err.message, err.stack);
-    showAdminToast(`Bulk repricing failed while ${step}: ` + (err.message || 'network error'), 'error');
-  } finally {
-    setBtnBusy(btn, false, idleLabel);
-  }
-
-  // Separate from the block above on purpose: if repricing actually
-  // succeeded server-side, a hiccup while refreshing the table should
-  // never be reported back to you as "repricing failed" — that's a
-  // different problem and would be misleading.
-  if (repriceSucceeded) {
-    try {
-      await loadNumberServices();
-    } catch (err) {
-      console.error('Table refresh after reprice error:', err.name, err.message, err.stack);
-      showAdminToast('Prices were updated, but the table didn\'t auto-refresh — pull to refresh or reopen this tab to see them.', 'info');
-    }
-  }
-}
-
-async function loadSupplierBalances() {
-  const btn = document.getElementById('btnRefreshSupplierBalances');
-  setBtnBusy(btn, true, 'Refreshing...');
-  ['Fadded', 'Logsdomain', 'Grizzly'].forEach(p => {
-    const sub = document.getElementById('bal' + p + 'Sub');
-    if (sub) sub.textContent = 'Loading…';
-  });
-  // Step-tracked the same way uploadManualStock() already does, so a
-  // failure reports exactly which operation broke (building headers vs.
-  // the network request vs. parsing the response) instead of one generic
-  // message that could mean any of those three very different things.
-  let step = 'building auth headers';
-  try {
-    const headers = await authHeaders();
-    headers['Content-Type'] = 'application/json';
-
-    step = 'requesting supplier balances';
-    const res = await fetch('/api/admin', {
-      method: 'POST',
-      headers,
-      body: JSON.stringify({ resource: 'supplier_balances' })
-    });
-
-    step = 'reading response';
-    const data = await res.json();
-
-    if (!data.success) {
-      showAdminToast(data.message || 'Could not load supplier balances', 'error');
-      return;
-    }
-    renderSupplierBalance('Fadded', data.suppliers.fadded);
-    renderSupplierBalance('Logsdomain', data.suppliers.logsdomain);
-    renderSupplierBalance('Grizzly', data.suppliers.grizzly);
-  } catch (err) {
-    console.error('Supplier balance error at step:', step, err.name, err.message, err.stack);
-    showAdminToast(`Supplier balance check failed while ${step}: ` + (err.message || 'network error'), 'error');
-  } finally {
-    setBtnBusy(btn, false, '<i class="fas fa-sync"></i> Refresh');
-  }
 }
 
 async function loadProducts() {
@@ -995,16 +835,65 @@ function populateCategoryFilter() {
 // sync never touches either of them (see grizzly-sync.js).
 let allNumberServices = [];
 
-let smsTabLoaded = false;
-
-// Lazy — only called when the SMS tab is actually opened (see switchTab),
-// not on every dashboard load. There's no country list to preload anymore:
-// the country field is a plain text filter matched server-side, same as
-// the service search box, so opening this tab is now a single cheap query
-// (or no query at all until you type something) instead of scanning the
-// whole table just to build a dropdown.
 async function loadNumberServices() {
+  await loadSmsCountryOptions();
   await loadSmsRowsForCurrentFilter();
+}
+
+async function loadSmsCountryOptions() {
+  const select = document.getElementById('smsCountryFilter');
+  if (!select) return;
+  const current = select.value;
+  const names = new Set();
+  const pageSize = 1000;
+  let from = 0;
+  let lastError = null;
+
+  // Lightweight column only — full-row select was timing out on mobile.
+  while (from < 100000) {
+    const { data, error } = await sb
+      .from('number_services')
+      .select('country_name')
+      .order('country_name', { ascending: true })
+      .range(from, from + pageSize - 1);
+    if (error) {
+      lastError = error.message;
+      console.error('SMS country list error:', error);
+      break;
+    }
+    const batch = data || [];
+    for (const r of batch) {
+      if (r.country_name) names.add(r.country_name);
+    }
+    if (batch.length < pageSize) break;
+    from += pageSize;
+  }
+
+  const countries = [...names].sort((a, b) => a.localeCompare(b));
+  window._smsAllCountries = countries;
+  select.innerHTML =
+    '<option value="">All Countries</option>' +
+    countries.map(c => `<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join('');
+  if (current && countries.includes(current)) select.value = current;
+
+  if (lastError) {
+    showAdminToast('Could not load countries: ' + lastError, 'error');
+  } else if (countries.length === 0) {
+    showAdminToast('No SMS rows in database (or blocked by RLS). Check number_services.', 'error');
+  }
+}
+
+function filterSmsCountryOptions() {
+  const select = document.getElementById('smsCountryFilter');
+  if (!select) return;
+  const q = (document.getElementById('smsCountrySearch')?.value || '').toLowerCase().trim();
+  const current = select.value;
+  const all = window._smsAllCountries || [];
+  const list = q ? all.filter(c => c.toLowerCase().includes(q)) : all;
+  select.innerHTML =
+    '<option value="">All Countries</option>' +
+    list.map(c => `<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join('');
+  if (current && list.includes(current)) select.value = current;
 }
 
 async function loadSmsRowsForCurrentFilter() {
@@ -1028,7 +917,7 @@ async function loadSmsRowsForCurrentFilter() {
 
   try {
     let query = sb.from('number_services').select(cols);
-    if (country) query = query.ilike('country_name', `%${country}%`);
+    if (country) query = query.eq('country_name', country);
     if (q) {
       query = query.or(
         `service_name.ilike.%${q}%,service_id.ilike.%${q}%,country_name.ilike.%${q}%`
@@ -1215,32 +1104,8 @@ function setGrizzlySyncProgress(text) {
 
 async function authHeaders() {
   const headers = {};
-  let token = null;
-  try {
-    // On Safari specifically, a corrupted/malformed stored session can
-    // cause the SDK's internal base64 decode to throw here — not just
-    // return a bad value, but actually throw — with the exact same opaque
-    // "The string did not match the expected pattern" message. Guarding
-    // the token format below isn't enough on its own if retrieval itself
-    // blows up before we ever get to check it, so the whole thing is
-    // wrapped: any failure here just means "proceed without auth" (which
-    // the server safely rejects with a normal error) instead of crashing
-    // whatever feature called authHeaders().
-    const { data } = await sb.auth.getSession();
-    token = data?.session?.access_token || null;
-  } catch (e) {
-    token = null;
-  }
-  // Safari's fetch() also strictly validates header values and throws the
-  // same opaque TypeError on anything it doesn't like — Chrome doesn't
-  // enforce this as strictly, which is why this only shows up on iPhone.
-  // Only attach the token if it actually looks like a real JWT (three
-  // dot-separated segments, no stray whitespace) so a bad value never
-  // reaches fetch() in the first place. Every caller of authHeaders() gets
-  // both protections automatically.
-  if (token && /^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/.test(token.trim())) {
-    headers['Authorization'] = 'Bearer ' + token.trim();
-  }
+  const { data: { session } } = await sb.auth.getSession();
+  if (session?.access_token) headers['Authorization'] = 'Bearer ' + session.access_token;
   return headers;
 }
 
@@ -1338,95 +1203,6 @@ async function tryLoadOrders() {
   } else {
     window._cachedOrders = [];
   }
-}
-
-const SMS_ORDER_STATUS_LABELS = {
-  waiting_for_code: 'Waiting for code',
-  completed: 'Completed',
-  refunded: 'Cancelled & refunded',
-  failed: 'Failed'
-};
-
-async function tryLoadSmsOrders() {
-  const { data, error } = await sb
-    .from('number_orders')
-    .select('*')
-    .eq('source', 'grizzlysms')
-    .order('created_at', { ascending: false })
-    .limit(300);
-  if (error) {
-    console.error('SMS orders load error:', error.message);
-    window._cachedSmsOrders = [];
-    return;
-  }
-  window._cachedSmsOrders = data || [];
-  filterSmsOrders();
-}
-
-function filterSmsOrders() {
-  const q = (document.getElementById('smsOrdersSearch')?.value || '').trim().toLowerCase();
-  const status = document.getElementById('smsOrdersStatusFilter')?.value || '';
-  const all = window._cachedSmsOrders || [];
-  const filtered = all.filter(o => {
-    if (status && o.status !== status) return false;
-    if (!q) return true;
-    return String(o.customer_id || '').toLowerCase().includes(q)
-      || String(o.service_name || '').toLowerCase().includes(q)
-      || String(o.phone_number || '').toLowerCase().includes(q)
-      || String(o.order_id || '').toLowerCase().includes(q);
-  });
-  renderSmsOrders(filtered);
-}
-
-function renderSmsOrders(orders) {
-  const tbody = document.getElementById('smsOrdersTableBody');
-  const cards = document.getElementById('smsOrdersMobileCards');
-  if (!tbody || !cards) return;
-
-  if (!orders?.length) {
-    tbody.innerHTML = `<tr><td colspan="8" class="empty-state">No SMS orders found.</td></tr>`;
-    cards.innerHTML = `<div class="empty-state">No SMS orders found.</div>`;
-    return;
-  }
-
-  // Reuses the same badge-on/badge-off convention as the rest of the admin
-  // dashboard (green for a good outcome, red for cancelled/failed); waiting
-  // gets its own inline color since neither on/off fits "still pending".
-  const statusBadge = (s) => {
-    if (s === 'completed') return '<span class="badge badge-on">Completed</span>';
-    if (s === 'waiting_for_code') return '<span class="badge" style="background:rgba(251,191,36,.15);color:#fbbf24;">Waiting</span>';
-    return `<span class="badge badge-off">${escapeHtml(SMS_ORDER_STATUS_LABELS[s] || s || '—')}</span>`;
-  };
-
-  tbody.innerHTML = orders.map(o => {
-    const name = (o.service_name || o.service_id || '—').replace(/_/g, ' ');
-    const date = o.created_at ? new Date(o.created_at).toLocaleString() : '—';
-    return `<tr>
-      <td style="font-family:monospace;font-weight:700;">${escapeHtml(o.customer_id || '—')}</td>
-      <td style="text-transform:capitalize;">${escapeHtml(name)}</td>
-      <td>${escapeHtml(o.country_name || '—')}</td>
-      <td style="font-family:monospace;">${escapeHtml(o.phone_number || '—')}</td>
-      <td>₦${Number(o.price || 0).toLocaleString()}</td>
-      <td style="font-family:monospace;">${o.code ? escapeHtml(o.code) : '—'}</td>
-      <td>${statusBadge(o.status)}</td>
-      <td style="white-space:nowrap;font-size:12px;color:#94a3b8;">${escapeHtml(date)}</td>
-    </tr>`;
-  }).join('');
-
-  cards.innerHTML = orders.map(o => {
-    const name = (o.service_name || o.service_id || '—').replace(/_/g, ' ');
-    const date = o.created_at ? new Date(o.created_at).toLocaleString() : '—';
-    return `<div class="product-card">
-      <h4 style="text-transform:capitalize;">${escapeHtml(name)}</h4>
-      <div class="meta" style="font-family:monospace;">Customer: ${escapeHtml(o.customer_id || '—')}</div>
-      <div class="row-line"><span>Country</span><span>${escapeHtml(o.country_name || '—')}</span></div>
-      <div class="row-line"><span>Number</span><span style="font-family:monospace;">${escapeHtml(o.phone_number || '—')}</span></div>
-      <div class="row-line"><span>Price</span><strong class="price">₦${Number(o.price || 0).toLocaleString()}</strong></div>
-      ${o.code ? `<div class="row-line"><span>Code</span><span style="font-family:monospace;">${escapeHtml(o.code)}</span></div>` : ''}
-      <div class="row-line"><span>Status</span>${statusBadge(o.status)}</div>
-      <div class="row-line"><span>Date</span><span>${escapeHtml(date)}</span></div>
-    </div>`;
-  }).join('');
 }
 
 function updateMetrics() {
@@ -2368,10 +2144,6 @@ function switchTab(name) {
   document.querySelector(`.nav-item[data-tab="${name}"]`).classList.add('active');
   document.getElementById('pageTitle').textContent = tabTitles[name] || name;
   closeSidebar();
-  if (name === 'sms' && !smsTabLoaded) {
-    smsTabLoaded = true;
-    loadNumberServices();
-  }
 }
 function openSidebar() {
   document.getElementById('sidebar').classList.add('open');
