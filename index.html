@@ -1104,9 +1104,27 @@ body::before {
             <!-- Paystack hidden until approved -->
 
             <div id="pocketfiDepositBox">
+                <div style="font-size:12px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:0.04em;margin-bottom:10px;">Fund which wallet?</div>
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px;">
+                    <button type="button" id="walletChoiceNgn" onclick="selectDepositWallet('ngn')" style="padding:14px 12px;border-radius:16px;border:1.5px solid var(--primary);background:rgba(91,138,245,0.12);color:var(--text);font-family:inherit;cursor:pointer;text-align:center;">
+                        <div style="font-size:18px;font-weight:800;">₦</div>
+                        <div style="font-weight:800;font-size:13px;margin-top:4px;">NGN Wallet</div>
+                        <div style="font-size:11px;color:var(--muted);margin-top:2px;">Default</div>
+                    </button>
+                    <button type="button" id="walletChoiceUsd" onclick="selectDepositWallet('usd')" style="padding:14px 12px;border-radius:16px;border:1.5px solid var(--border);background:var(--card);color:var(--text);font-family:inherit;cursor:pointer;text-align:center;">
+                        <div style="font-size:18px;font-weight:800;">$</div>
+                        <div style="font-weight:800;font-size:13px;margin-top:4px;">USD Wallet</div>
+                        <div style="font-size:11px;color:var(--muted);margin-top:2px;">Pay in ₦</div>
+                    </button>
+                </div>
                 <div class="form-group">
                     <label>Amount (₦)</label>
-                    <input type="number" id="pocketfiDepositInput" min="1000" max="500000" step="100" placeholder="e.g. 5000">
+                    <input type="number" id="pocketfiDepositInput" min="1000" max="500000" step="100" placeholder="e.g. 5000" oninput="updateDepositUsdPreview()">
+                </div>
+                <div id="depositUsdPreview" style="display:none;padding:12px 14px;margin-bottom:12px;border-radius:14px;background:rgba(52,211,153,0.1);border:1px solid rgba(52,211,153,0.28);">
+                    <div style="font-size:12px;color:var(--muted);font-weight:600;">You will receive</div>
+                    <div id="depositUsdAmountText" style="font-size:22px;font-weight:800;color:var(--success);margin-top:4px;">$0.00</div>
+                    <div id="depositUsdRateText" style="font-size:11px;color:var(--muted);margin-top:6px;">Rate: ₦1,450 = $1</div>
                 </div>
                 <div style="display:flex;gap:10px;align-items:flex-start;padding:12px 14px;margin:4px 0 14px;border-radius:14px;background:rgba(248,113,113,0.12);border:1px solid rgba(248,113,113,0.35);">
                     <i class="fa-solid fa-triangle-exclamation" style="color:var(--danger);margin-top:2px;flex-shrink:0;"></i>
@@ -1120,7 +1138,7 @@ body::before {
                     <i class="fa-solid fa-lock"></i> Continue to bank transfer
                 </button>
                 <p style="font-size:12px;color:var(--muted);margin-top:12px;line-height:1.45;text-align:center;">
-                    Bank transfer only. Min ₦1,000 · Max ₦500,000. Balance updates after payment is confirmed.
+                    You always pay in Naira via bank transfer. The wallet you selected above is credited after confirmation. Min ₦1,000 · Max ₦500,000.
                 </p>
             </div>
 
@@ -1391,7 +1409,10 @@ const MJ_BUSINESSES = {
 };
 
 let currentBalanceNgn = 0.00, currentBalanceUsd = 0.00;
-const exchangeRateUsdToNgn = 1420.0;
+const exchangeRateUsdToNgn = 1450.0;
+/** Deposit conversion when funding USD wallet (pay ₦, credit $) */
+const DEPOSIT_USD_RATE = 1450;
+let depositWallet = 'ngn';
 let currentFromCurrency = 'NGN';
 let cartItems = [];
 let userOrders = [];
@@ -1762,6 +1783,39 @@ window.onDepositMethodChange = function() {
     if (man) man.style.display = v === 'manual' ? '' : 'none';
 };
 
+window.selectDepositWallet = function(wallet) {
+    depositWallet = wallet === 'usd' ? 'usd' : 'ngn';
+    const ngnBtn = document.getElementById('walletChoiceNgn');
+    const usdBtn = document.getElementById('walletChoiceUsd');
+    if (ngnBtn) {
+        const on = depositWallet === 'ngn';
+        ngnBtn.style.borderColor = on ? 'var(--primary)' : 'var(--border)';
+        ngnBtn.style.background = on ? 'rgba(91,138,245,0.12)' : 'var(--card)';
+    }
+    if (usdBtn) {
+        const on = depositWallet === 'usd';
+        usdBtn.style.borderColor = on ? 'var(--primary)' : 'var(--border)';
+        usdBtn.style.background = on ? 'rgba(91,138,245,0.12)' : 'var(--card)';
+    }
+    updateDepositUsdPreview();
+};
+
+window.updateDepositUsdPreview = function() {
+    const box = document.getElementById('depositUsdPreview');
+    const amtEl = document.getElementById('depositUsdAmountText');
+    const rateEl = document.getElementById('depositUsdRateText');
+    const ngn = parseFloat(document.getElementById('pocketfiDepositInput')?.value) || 0;
+    if (rateEl) rateEl.textContent = 'Rate: ₦' + DEPOSIT_USD_RATE.toLocaleString() + ' = $1';
+    if (!box) return;
+    if (depositWallet !== 'usd') {
+        box.style.display = 'none';
+        return;
+    }
+    box.style.display = '';
+    const usd = ngn > 0 ? ngn / DEPOSIT_USD_RATE : 0;
+    if (amtEl) amtEl.textContent = '$' + usd.toFixed(2);
+};
+
 window.payWithPaystack = async function() {
     const amount = parseFloat(document.getElementById('paystackDepositInput')?.value) || 0;
     if (amount < 100) return showToast('Minimum Paystack deposit is ₦100', 'error');
@@ -1825,7 +1879,7 @@ window.payWithPocketFi = async function() {
                 'Content-Type': 'application/json',
                 'Authorization': 'Bearer ' + accessToken
             },
-            body: JSON.stringify({ amount: amount })
+            body: JSON.stringify({ amount: amount, wallet: depositWallet || 'ngn' })
         });
         let data = {};
         try { data = await res.json(); } catch (_) {}
@@ -1835,6 +1889,9 @@ window.payWithPocketFi = async function() {
             }
             throw new Error(data.message || 'Could not start payment');
         }
+        try {
+            sessionStorage.setItem('mjhub_last_deposit_wallet', depositWallet || 'ngn');
+        } catch (_) {}
         window.location.href = data.payment_link;
     } catch (err) {
         showToast(err.message || 'Payment error', 'error');
