@@ -116,6 +116,15 @@ body::before {
     background: linear-gradient(135deg, var(--primary), var(--accent));
     -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
 }
+.brand-logo {
+    height: 36px; width: auto; max-width: 140px;
+    object-fit: contain; display: block;
+}
+.sidebar-brand-logo-img {
+    height: 40px; width: auto; max-width: 150px;
+    object-fit: contain; display: block;
+}
+.sidebar-brand-wrap { gap: 0; }
 .nav-right { display: flex; align-items: center; gap: 8px; }
 .wallet-badge {
     display: none; background: var(--card); border: 1px solid var(--border);
@@ -790,7 +799,9 @@ body::before {
 <header class="navbar">
     <div class="nav-left">
         <button class="menu-btn" id="menuToggleBtn"><i class="fa-solid fa-bars"></i></button>
-        <h1 class="brand-title">MJ HUB</h1>
+        <a href="#" onclick="goHome();return false;" class="brand-logo-link" title="MJ HUB" style="display:flex;align-items:center;">
+            <img id="navBrandLogo" class="brand-logo" src="assets/logo-dark.jpg" alt="MJ HUB">
+        </a>
     </div>
     <div class="nav-right">
         <div class="wallet-badge" id="navWalletBadge">NGN ₦0.00</div>
@@ -837,8 +848,7 @@ body::before {
 <div class="sidebar" id="sidebarDrawer">
     <div class="sidebar-header">
         <div class="sidebar-brand-wrap">
-            <div class="sidebar-brand-logo">⚡</div>
-            <span class="sidebar-brand">MJ HUB</span>
+            <img id="sidebarBrandLogo" class="sidebar-brand-logo-img" src="assets/logo-dark.jpg" alt="MJ HUB">
         </div>
         <button class="close-btn" id="sidebarCloseBtn"><i class="fa-solid fa-xmark"></i></button>
     </div>
@@ -1070,6 +1080,14 @@ body::before {
                 <div class="form-group">
                     <label>Amount (₦)</label>
                     <input type="number" id="pocketfiDepositInput" min="1000" max="500000" step="100" placeholder="e.g. 5000">
+                </div>
+                <div style="display:flex;gap:10px;align-items:flex-start;padding:12px 14px;margin:4px 0 14px;border-radius:14px;background:rgba(248,113,113,0.12);border:1px solid rgba(248,113,113,0.35);">
+                    <i class="fa-solid fa-triangle-exclamation" style="color:var(--danger);margin-top:2px;flex-shrink:0;"></i>
+                    <div style="font-size:12px;line-height:1.5;color:var(--text);">
+                        <strong style="color:var(--danger);">Do not pay with OPay.</strong>
+                        OPay often blocks these transfers as “suspicious” and the payment fails.
+                        Use <strong>Kuda, Palmpay, bank app, or card</strong> instead. If you only have OPay, use <strong>Manual deposit (WhatsApp)</strong>.
+                    </div>
                 </div>
                 <button class="btn-sm-primary" style="width:100%;padding:14px;" id="pocketfiPayBtn" onclick="payWithPocketFi()">
                     <i class="fa-solid fa-lock"></i> Pay securely
@@ -1625,6 +1643,12 @@ function initTheme() {
         if (btn) btn.textContent = mode === 'dark' ? '🌙' : '☀️';
         const ind = document.getElementById('themeIndicatorText');
         if (ind) ind.textContent = mode === 'dark' ? 'Dark' : 'Light';
+        // Logo: dark-bg artwork for dark theme, light-bg for light theme
+        const logoSrc = mode === 'light' ? 'assets/logo-light.jpg' : 'assets/logo-dark.jpg';
+        const navLogo = document.getElementById('navBrandLogo');
+        const sideLogo = document.getElementById('sidebarBrandLogo');
+        if (navLogo) navLogo.src = logoSrc;
+        if (sideLogo) sideLogo.src = logoSrc;
     }
     function toggle() {
         const cur = document.documentElement.getAttribute('data-theme') === 'light' ? 'light' : 'dark';
