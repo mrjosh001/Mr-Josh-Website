@@ -46,6 +46,7 @@
       background:linear-gradient(135deg,var(--primary),#8b5cf6);
       -webkit-background-clip:text; -webkit-text-fill-color:transparent;
     }
+    .login-logo-img { height:40px; width:auto; max-width:200px; object-fit:contain; display:block; margin-bottom:10px; }
     .login-card p { color:var(--muted); font-size:13px; margin-bottom:28px; }
     .field { margin-bottom:16px; }
     .field label {
@@ -85,6 +86,7 @@
       width:36px; height:36px; border-radius:10px; display:flex; align-items:center; justify-content:center;
       background:linear-gradient(135deg,var(--primary),#8b5cf6); font-weight:800; color:#fff;
     }
+    .brand-logo-img { height:38px; width:auto; max-width:160px; object-fit:contain; display:block; }
     .brand-text { font-size:17px; font-weight:800; }
     .brand-text span { display:block; color:var(--muted); font-size:12px; font-weight:600; margin-top:-2px; }
     .nav-list { padding:18px 14px; flex:1; overflow-y:auto; }
@@ -204,7 +206,7 @@
   <div id="toastStack" class="toast-stack"></div>
   <div id="loginScreen" class="login-wrap">
     <div class="login-card">
-      <h1>MJ HUB</h1>
+      <img class="login-logo-img" src="https://atczodlljmlayvldxfmv.supabase.co/storage/v1/object/public/avatars/dark%20background%20log" alt="MJ HUB">
       <p>Admin portal — sign in with an admin account</p>
       <div class="field"><label>Email</label><input type="email" id="adminEmail" placeholder="admin@example.com" /></div>
       <div class="field">
@@ -226,8 +228,8 @@
     <div id="mobileOverlay" class="overlay-mobile" onclick="closeSidebar()"></div>
     <aside class="sidebar" id="sidebar">
       <div class="sidebar-brand">
-        <div class="brand-logo">MJ</div>
-        <div class="brand-text">MJ HUB<span>Admin</span></div>
+        <img class="brand-logo-img" src="https://atczodlljmlayvldxfmv.supabase.co/storage/v1/object/public/avatars/dark%20background%20log" alt="MJ HUB">
+        <div class="brand-text"><span>Admin</span></div>
       </div>
       <nav class="nav-list">
         <button class="nav-item active" data-tab="overview" onclick="switchTab('overview')"><i class="fas fa-chart-pie"></i> Overview</button>
@@ -276,8 +278,17 @@
             <div class="metrics" style="margin-bottom:0;">
               <div class="metric-card"><div class="metric-label" id="revenuePeriodLabel">This Month</div><div class="metric-value" id="mRevenueNgn">₦0</div><div class="metric-sub" id="mRevenueUsd">$0.00 USD</div></div>
               <div class="metric-card"><div class="metric-label">Sales</div><div class="metric-value" id="mSalesNgn">₦0</div><div class="metric-sub">Completed orders</div></div>
+              <div class="metric-card"><div class="metric-label">Logs Sold</div><div class="metric-value" id="mLogsSoldCount">0</div><div class="metric-sub">Completed log orders</div></div>
               <div class="metric-card"><div class="metric-label">Profit Margin</div><div class="metric-value" id="mProfitNgn" style="color:#34d399;">₦0</div><div class="metric-sub" id="mProfitPct">0% margin</div></div>
               <div class="metric-card"><div class="metric-label">Wallet Balances</div><div class="metric-value" id="mTotalBalance">₦0</div><div class="metric-sub">All user wallets</div></div>
+            </div>
+          </div>
+          <div class="panel">
+            <div class="panel-header"><div class="panel-title">SMS Numbers</div></div>
+            <div class="metrics" style="margin-bottom:0;">
+              <div class="metric-card"><div class="metric-label">Orders</div><div class="metric-value" id="mSmsOrderCount">0</div><div class="metric-sub" id="mSmsOrderPeriodLabel">This Month · Completed</div></div>
+              <div class="metric-card"><div class="metric-label">Amount Spent</div><div class="metric-value" id="mSmsAmountSpent">₦0</div><div class="metric-sub">By customers on numbers</div></div>
+              <div class="metric-card"><div class="metric-label">Profit Made</div><div class="metric-value" id="mSmsProfit" style="color:#34d399;">₦0</div><div class="metric-sub">Revenue minus supplier cost</div></div>
             </div>
           </div>
           <div class="panel">
@@ -1480,6 +1491,42 @@ function updateRevenueDisplay() {
   set('mProfitNgn', '₦' + profit.toLocaleString(undefined, { maximumFractionDigits: 0 }));
   const marginPct = sales > 0 ? (profit / sales * 100) : 0;
   set('mProfitPct', marginPct.toLocaleString(undefined, { maximumFractionDigits: 1 }) + '% margin');
+
+  loadOverviewStats(period);
+}
+
+/**
+ * Logs Sold count + SMS order count/amount spent/profit — computed
+ * server-side (accurate for any volume, unlike the client-side calc above
+ * which only ever looks at the 200 most-recently-cached log orders).
+ */
+async function loadOverviewStats(period) {
+  const set = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
+  try {
+    const headers = { 'Content-Type': 'application/json' };
+    const { data: { session } } = await sb.auth.getSession();
+    if (session?.access_token) headers['Authorization'] = 'Bearer ' + session.access_token;
+
+    const res = await fetch('/api/admin', {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ resource: 'overview', period })
+    });
+    const data = await res.json();
+    if (!res.ok || !data.success) {
+      console.error('Overview stats failed:', data.message);
+      return;
+    }
+
+    set('mLogsSoldCount', data.logs_sold_count.toLocaleString());
+    set('mSmsOrderCount', data.sms_order_count.toLocaleString());
+    set('mSmsAmountSpent', '₦' + data.sms_amount_spent.toLocaleString());
+    set('mSmsProfit', '₦' + data.sms_profit.toLocaleString());
+    const periodLabelEl = document.getElementById('mSmsOrderPeriodLabel');
+    if (periodLabelEl) periodLabelEl.textContent = (revenueLabels[period] || period) + ' · Completed';
+  } catch (e) {
+    console.error('Overview stats error:', e);
+  }
 }
 
 function renderProducts(list) {
