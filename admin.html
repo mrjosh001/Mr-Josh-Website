@@ -1327,7 +1327,10 @@ async function resumeGrizzlySyncIfRunning() {
 }
 
 async function loadProfiles() {
-  // IMPORTANT: no created_at (column does not exist on your table)
+  // profiles table has no created_at column — join dates are fetched
+  // separately from Supabase Auth itself (see loadUserJoinDates), which
+  // always has the real signup date for every account regardless of what
+  // columns exist on profiles.
   const { data, error } = await sb.from('profiles').select('*').order('full_name', { ascending: true });
   if (error) {
     console.error('Profiles error:', error.message);
@@ -1335,8 +1338,32 @@ async function loadProfiles() {
   } else {
     allProfiles = data || [];
   }
+  loadUserJoinDates(); // fire-and-forget — re-renders once it resolves, doesn't block the rest of the dashboard
   // Reapply the current search/status filter instead of resetting the view.
   filterUsers();
+}
+
+async function loadUserJoinDates() {
+  try {
+    const headers = await authHeaders();
+    headers['Content-Type'] = 'application/json';
+    const res = await fetch('/api/admin', {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ resource: 'user_join_dates' })
+    });
+    const rawText = await res.text();
+    let data;
+    try { data = JSON.parse(rawText); } catch { return; }
+    if (!data.success || !data.join_dates) return;
+
+    allProfiles.forEach(u => {
+      if (data.join_dates[u.id]) u.created_at = data.join_dates[u.id];
+    });
+    filterUsers(); // re-render now that dates are in
+  } catch (e) {
+    console.warn('loadUserJoinDates failed (Joined column will show "—"):', e);
+  }
 }
 
 async function tryLoadOrders() {
