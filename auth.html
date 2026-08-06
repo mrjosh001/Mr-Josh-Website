@@ -533,7 +533,6 @@
                     const now = new Date().getTime();
                     if (now < rememberedData.expiry) {
                         document.getElementById('signinEmail').value = rememberedData.email;
-                        document.getElementById('signinPassword').value = rememberedData.password;
                         document.getElementById('rememberMe').checked = true;
                     } else {
                         localStorage.removeItem('mjhub_remember_user');
@@ -711,9 +710,16 @@
             if (rememberMe) {
                 const twentyFourHoursMs = 24 * 60 * 60 * 1000;
                 const expiryTime = new Date().getTime() + twentyFourHoursMs;
+                // Only ever remember the email, never the password — storing
+                // a real account password in localStorage in plain text is a
+                // security risk on its own (readable by any script/extension,
+                // or anyone else who later uses the device), and it was also
+                // what made sign-in feel "automatic": the password field
+                // arrived pre-filled and ready to submit the instant the page
+                // loaded. This still saves the retyping of the email without
+                // either problem.
                 const rememberData = {
                     email: email,
-                    password: password,
                     expiry: expiryTime
                 };
                 localStorage.setItem('mjhub_remember_user', JSON.stringify(rememberData));

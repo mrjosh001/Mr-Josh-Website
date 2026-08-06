@@ -933,8 +933,23 @@ body::before {
             </div>
         </div>
 
-        <!-- Home middle area left blank for now (history is on the bottom nav) -->
-        <div id="homeExtraSlot"></div>
+        <!-- Home middle area: user's own lifetime order count + spend -->
+        <div class="sleek-stats-grid" id="homeExtraSlot">
+            <div class="sleek-card">
+                <div>
+                    <span class="sleek-label">Total Orders</span>
+                    <span class="sleek-value" id="homeTotalOrders">0</span>
+                </div>
+                <div class="sleek-card-icon icon-blue"><i class="fa-solid fa-receipt"></i></div>
+            </div>
+            <div class="sleek-card">
+                <div>
+                    <span class="sleek-label">Total Spent</span>
+                    <span class="sleek-value" id="homeTotalSpent">₦0.00</span>
+                </div>
+                <div class="sleek-card-icon icon-purple"><i class="fa-solid fa-naira-sign"></i></div>
+            </div>
+        </div>
     </section>
 
     <section id="profile" class="app-section">
@@ -1448,6 +1463,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 await fetchUserBalance(currentUserId);
                 await fetchUserTransactions(currentUserId);
                 await fetchUserOrders(currentUserId);
+                fetchUserSpendingSummary(currentUserId);
                 buildNotificationsFromActivity();
                 renderNotifications();
             } else {
@@ -2590,6 +2606,43 @@ async function fetchUserOrders(userId) {
     }
     userOrderGroups = groupOrdersById(userOrders);
     renderOrders();
+}
+
+// Total Orders / Total Spent cards on Home. Deliberately a separate,
+// dedicated count+sum query rather than reusing `userOrders` above:
+// fetchUserOrders() only pulls the 50 most-recent rows (fine for the "My
+// Orders" list) and includes pending/failed rows (fine for that list too,
+// but wrong for a lifetime total). This counts every completed order
+// across BOTH log purchases (orders table) and SMS numbers (number_orders
+// table) with accurate SQL aggregation, the same approach the admin
+// dashboard's overview stats use.
+async function fetchUserSpendingSummary(userId) {
+    if (!supabaseClient || !userId) return;
+    try {
+        const [logsRes, smsRes] = await Promise.all([
+            supabaseClient.from('orders')
+                .select('amount', { count: 'exact' })
+                .eq('user_id', userId)
+                .in('status', ['completed', 'paid', 'success', 'delivered']),
+            supabaseClient.from('number_orders')
+                .select('price', { count: 'exact' })
+                .eq('user_id', userId)
+                .eq('status', 'completed')
+        ]);
+
+        const logRows = logsRes.data || [];
+        const smsRows = smsRes.data || [];
+        const totalOrders = (logsRes.count ?? logRows.length) + (smsRes.count ?? smsRows.length);
+        const totalSpent =
+            logRows.reduce((s, o) => s + (Number(o.amount) || 0), 0) +
+            smsRows.reduce((s, o) => s + (Number(o.price) || 0), 0);
+
+        safeSet('homeTotalOrders', totalOrders.toLocaleString());
+        safeSet('homeTotalSpent', '₦' + totalSpent.toLocaleString(undefined, { minimumFractionDigits: 2 }));
+    } catch (e) {
+        // Non-critical — leave the cards at their default 0 rather than
+        // showing an error on the home screen for a stat, not a balance.
+    }
 }
 
 // The backend saves ONE row per unit purchased (so quantity 2 = 2 rows) all
