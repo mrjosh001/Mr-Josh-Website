@@ -961,6 +961,7 @@ body::before {
             <input type="file" id="profileAvatarInput" accept="image/*" style="display:none;" onchange="handleAvatarUpload(event)">
             <h3 id="profileHeaderName">Loading...</h3>
             <p id="profileHeaderEmail">Connecting...</p>
+            <p id="profileHeaderJoined" style="font-size:12px;color:var(--text-muted);margin-top:4px;"></p>
         </div>
 
         <div class="content-card">
@@ -1494,6 +1495,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     updateCartDisplay();
     initHashRouting();
     await handleDepositReturn();
+    checkPendingPocketFiPayment();
 });
 
 /** After PocketFi (or other) checkout, user lands on index.html?deposit=success */
@@ -1525,6 +1527,60 @@ async function handleDepositReturn() {
         }
     } catch (e) {
         console.warn('handleDepositReturn', e);
+    }
+}
+
+// Covers the case handleDepositReturn() can't: on iOS, MJ HUB runs as an
+// installed standalone PWA, and a standalone PWA can't navigate to an
+// external domain (PocketFi's checkout) within itself — iOS opens it in a
+// separate Safari window on top instead, and this PWA page just keeps
+// running underneath, untouched, the whole time. Dismissing that window
+// never triggers a page load/URL change here, only a visibilitychange —
+// so that's what this listens for instead.
+let checkingPocketFiReturn = false;
+document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') checkPendingPocketFiPayment();
+});
+
+async function checkPendingPocketFiPayment() {
+    if (checkingPocketFiReturn) return;
+    let pending = null;
+    try {
+        const raw = localStorage.getItem('mjhub_pending_pocketfi');
+        if (raw) pending = JSON.parse(raw);
+    } catch (_) {}
+    if (!pending) return;
+
+    // Ignore stale markers — don't re-trigger this on some unrelated later
+    // visit just because an old payment was abandoned or never followed
+    // through on.
+    const isFresh = (Date.now() - Number(pending.ts || 0)) < 30 * 60 * 1000;
+    try { localStorage.removeItem('mjhub_pending_pocketfi'); } catch (_) {}
+    if (!isFresh || !currentUserId) return;
+
+    checkingPocketFiReturn = true;
+    try {
+        showToast('Welcome back — confirming your PocketFi payment...', 'info', 5000);
+        if (typeof switchSection === 'function') switchSection('home', true);
+        const balanceBefore = currentBalanceNgn;
+        let confirmed = false;
+        for (let i = 0; i < 8; i++) {
+            await sleep(2000);
+            await fetchUserBalance(currentUserId);
+            if (currentBalanceNgn > balanceBefore) { confirmed = true; break; }
+        }
+        if (confirmed) {
+            await fetchUserTransactions(currentUserId);
+            showToast('Payment confirmed — your wallet has been funded!', 'success', 5000);
+        } else {
+            showToast(
+                "Couldn't confirm that payment yet. If you were charged, give it a minute and pull to refresh — contact support with your payment reference if it still hasn't landed.",
+                'warning',
+                9000
+            );
+        }
+    } finally {
+        checkingPocketFiReturn = false;
     }
 }
 
@@ -1607,6 +1663,10 @@ async function initUserData(user) {
     safeSet('dropdownEmail', email);
     safeSet('profileHeaderName', name);
     safeSet('profileHeaderEmail', email);
+    if (user.created_at) {
+        const joined = new Date(user.created_at).toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' });
+        safeSet('profileHeaderJoined', 'Member since ' + joined);
+    }
     safeSet('heroWelcomeTitle', `Welcome back, ${name}!`);
     safeSet('heroSubText', 'Fund your wallet to get started with logs, SMS verification, and boosters.');
     if (avatarUrl) {
@@ -1862,6 +1922,17 @@ window.payWithPocketFi = async function() {
         }
         try {
             sessionStorage.setItem('mjhub_last_deposit_wallet', depositWallet || 'ngn');
+            // The URL-param return handler (handleDepositReturn) only fires on
+            // a fresh page load. On iOS, MJ HUB runs as an installed PWA
+            // (manifest.json: display=standalone), and a standalone PWA
+            // cannot navigate to an external domain within itself — iOS
+            // kicks the navigation out to a separate Safari window that
+            // opens on top, while this PWA instance keeps running underneath
+            // and never reloads. So the page-load-based check never fires.
+            // This localStorage marker + the visibilitychange listener below
+            // catch that case: when the user dismisses that Safari window
+            // and control returns to this still-running PWA, we notice.
+            localStorage.setItem('mjhub_pending_pocketfi', JSON.stringify({ amount, ts: Date.now() }));
         } catch (_) {}
         window.location.href = data.payment_link;
     } catch (err) {
