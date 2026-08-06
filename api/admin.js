@@ -527,6 +527,36 @@ async function supplierBalancesFetch() {
 const PERIOD_DAYS = { today: 1, '7days': 7, month: 30, '3months': 90, '6months': 180, '12months': 365 };
 
 /**
+ * Real account signup dates, for the admin Customers table's "Joined"
+ * column. Deliberately NOT reading profiles.created_at — that column is
+ * either missing or unpopulated for existing accounts (confirmed: showed
+ * "—" for every user in the dashboard). Supabase Auth's own created_at is
+ * the authoritative signup timestamp for every account regardless of
+ * whether/when anything was added to the profiles table, so this reads
+ * from there instead via the admin API (requires the service-role client,
+ * which is why this can't just be a client-side query against `profiles`).
+ */
+async function getUserJoinDates() {
+  const joinDates = {};
+  let page = 1;
+  const perPage = 1000;
+  // Paginate defensively — listUsers defaults to 50/page; loop until a page
+  // comes back short of a full page, so this keeps working correctly as
+  // the user base grows past 1000 without silently truncating.
+  for (let i = 0; i < 20; i++) {
+    const { data, error } = await supabase.auth.admin.listUsers({ page, perPage });
+    if (error) return { status: 500, body: { success: false, message: 'listUsers failed: ' + error.message } };
+    const users = data?.users || [];
+    for (const u of users) {
+      if (u.id && u.created_at) joinDates[u.id] = u.created_at;
+    }
+    if (users.length < perPage) break;
+    page += 1;
+  }
+  return { status: 200, body: { success: true, join_dates: joinDates } };
+}
+
+/**
  * Overview stats for the admin dashboard. Computed with SQL aggregation
  * (count/sum) rather than pulling raw rows to the client, so it's accurate
  * regardless of how many orders exist — the existing client-side "Revenue"
@@ -612,8 +642,10 @@ export default async function handler(req, res) {
       result = await supplierBalancesFetch();
     } else if (resource === 'overview') {
       result = await getOverviewStats(body);
+    } else if (resource === 'user_join_dates') {
+      result = await getUserJoinDates();
     } else {
-      result = { status: 400, body: { success: false, message: 'Unknown resource. Use "user", "product", "inventory", "sms", "supplier_balances", or "overview".' } };
+      result = { status: 400, body: { success: false, message: 'Unknown resource. Use "user", "product", "inventory", "sms", "supplier_balances", "overview", or "user_join_dates".' } };
     }
 
     return res.status(result.status).json(result.body);
