@@ -524,6 +524,53 @@ async function supplierBalancesFetch() {
   };
 }
 
+const PERIOD_DAYS = { today: 1, '7days': 7, month: 30, '3months': 90, '6months': 180, '12months': 365 };
+
+/**
+ * Overview stats for the admin dashboard. Computed with SQL aggregation
+ * (count/sum) rather than pulling raw rows to the client, so it's accurate
+ * regardless of how many orders exist — the existing client-side "Revenue"
+ * panel for logs only looks at the 200 most-recently-cached orders, which
+ * quietly under-counts once there are more than 200 in the selected period.
+ *
+ * Adds what wasn't tracked here before: how many logs have been sold, and
+ * SMS number order count / amount spent / profit — SMS numbers previously
+ * weren't reflected in the overview at all.
+ */
+async function getOverviewStats(body) {
+  const period = PERIOD_DAYS[body.period] ? body.period : 'month';
+  const cutoff = new Date(Date.now() - PERIOD_DAYS[period] * 86400000).toISOString();
+  const usdToNgn = Number(process.env.USD_TO_NGN_RATE) || 1500;
+
+  const [logsRes, smsRes] = await Promise.all([
+    supabase.from('orders').select('status', { count: 'exact', head: false }).in('status', ['completed', 'paid', 'success']).gte('created_at', cutoff),
+    supabase.from('number_orders').select('price, supplier_price').eq('status', 'completed').gte('created_at', cutoff)
+  ]);
+
+  if (logsRes.error) return { status: 500, body: { success: false, message: 'Logs stats failed: ' + logsRes.error.message } };
+  if (smsRes.error) return { status: 500, body: { success: false, message: 'SMS stats failed: ' + smsRes.error.message } };
+
+  const smsRows = smsRes.data || [];
+  const smsAmountSpent = smsRows.reduce((s, r) => s + Number(r.price || 0), 0);
+  // supplier_price is only populated for orders placed after this field was
+  // added — older completed orders fall back to 0 cost (so profit for them
+  // reads as 100% of the price, i.e. the number is a slight over-estimate
+  // for any order placed before this tracking existed, never an under-estimate).
+  const smsProfit = smsRows.reduce((s, r) => s + (Number(r.price || 0) - (Number(r.supplier_price || 0) * usdToNgn)), 0);
+
+  return {
+    status: 200,
+    body: {
+      success: true,
+      period,
+      logs_sold_count: logsRes.count || 0,
+      sms_order_count: smsRows.length,
+      sms_amount_spent: Math.round(smsAmountSpent),
+      sms_profit: Math.round(smsProfit)
+    }
+  };
+}
+
 // ---------- router ----------
 
 export default async function handler(req, res) {
@@ -563,8 +610,10 @@ export default async function handler(req, res) {
       else result = { status: 400, body: { success: false, message: 'Unknown sms action. Use "update" or "bulk_reprice".' } };
     } else if (resource === 'supplier_balances') {
       result = await supplierBalancesFetch();
+    } else if (resource === 'overview') {
+      result = await getOverviewStats(body);
     } else {
-      result = { status: 400, body: { success: false, message: 'Unknown resource. Use "user", "product", "inventory", "sms", or "supplier_balances".' } };
+      result = { status: 400, body: { success: false, message: 'Unknown resource. Use "user", "product", "inventory", "sms", "supplier_balances", or "overview".' } };
     }
 
     return res.status(result.status).json(result.body);

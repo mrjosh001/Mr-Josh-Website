@@ -79,7 +79,7 @@ export default async function handler(req, res) {
   try {
     const { data: svc, error: svcErr } = await supabase
       .from('number_services')
-      .select('service_name, country_name, price, is_available')
+      .select('service_name, country_name, price, supplier_price, is_available')
       .eq('source', 'grizzlysms')
       .eq('country_id', countryId)
       .eq('service_id', serviceId)
@@ -99,6 +99,7 @@ export default async function handler(req, res) {
     }
 
     price = Number(svc.price) || 0;
+    const supplierPriceUsd = Number(svc.supplier_price) || null;
     serviceName = svc.service_name;
     countryName = svc.country_name;
 
@@ -189,7 +190,7 @@ export default async function handler(req, res) {
       });
     }
 
-    const { error: insertErr } = await supabase.from('number_orders').insert({
+    const numberOrderRow = {
       source: 'grizzlysms',
       user_id,
       customer_id: customerId,
@@ -201,16 +202,27 @@ export default async function handler(req, res) {
       service_name: serviceName,
       phone_number: orderData.phoneNumber || null,
       price,
+      supplier_price: supplierPriceUsd,
       currency: 'NGN',
       status: 'waiting_for_code',
       code: null,
       time_left: null,
       refunded: false
-    });
+    };
+
+    let { error: insertErr } = await supabase.from('number_orders').insert(numberOrderRow);
+    if (insertErr) {
+      // One retry — this is the row every SMS stat on the admin dashboard
+      // is counted from, and the customer has already been charged and
+      // already has a working number at this point, so it's worth a
+      // second attempt before giving up rather than silently dropping it.
+      await new Promise(r => setTimeout(r, 400));
+      ({ error: insertErr } = await supabase.from('number_orders').insert(numberOrderRow));
+    }
 
     if (insertErr) {
       console.error(
-        '[grizzly-order] FAILED to save number_orders row — customer charged and number reserved:',
+        '[grizzly-order] FAILED to save number_orders row after retry — customer charged and number reserved:',
         insertErr.message,
         {
           activationId: orderData.activationId,
