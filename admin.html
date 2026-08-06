@@ -452,7 +452,7 @@
               <table>
                 <thead>
                   <tr>
-                    <th>Name</th><th>Email</th><th>Phone</th><th>Customer ID</th><th>NGN</th><th>USD</th><th>Status</th><th>Role</th><th>Action</th>
+                    <th>Name</th><th>Email</th><th>Phone</th><th>Customer ID</th><th>NGN</th><th>USD</th><th>Status</th><th>Role</th><th>Joined</th><th>Action</th>
                   </tr>
                 </thead>
                 <tbody id="usersTableBody"></tbody>
@@ -1995,7 +1995,7 @@ function renderUsers(list) {
   const cards = document.getElementById('usersMobileCards');
 
   if (!items.length) {
-    tbody.innerHTML = `<tr><td colspan="9" class="empty-state">No customers found.</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="10" class="empty-state">No customers found.</td></tr>`;
     if (cards) cards.innerHTML = `<div class="empty-state">No customers found.</div>`;
     return;
   }
@@ -2006,6 +2006,9 @@ function renderUsers(list) {
     const active = isUserActive(u);
     const banned = !!u.is_banned;
     const phone = u.phone_number || u.phone || '—';
+    const joinedDate = u.created_at
+      ? new Date(u.created_at).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })
+      : '—';
     const statusBadge = banned
       ? '<span class="badge badge-banned">Banned</span>'
       : `<span class="badge ${active ? 'badge-on' : 'badge-off'}">${active ? 'Active' : 'Inactive'}</span>`;
@@ -2019,6 +2022,7 @@ function renderUsers(list) {
         <td style="color:#38bdf8;font-weight:600;">$${usd.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}</td>
         <td>${statusBadge}</td>
         <td>${isAdminValue(u.is_admin) ? '<span class="badge badge-admin">Admin</span>' : 'User'}</td>
+        <td style="white-space:nowrap;color:var(--text-muted);">${escapeHtml(joinedDate)}</td>
         <td style="white-space:nowrap;">
           <button class="btn btn-ghost btn-sm" onclick="editUser('${u.id}')" title="Edit"><i class="fas fa-edit"></i></button>
           <button class="btn btn-ghost btn-sm" onclick="toggleBanUser('${u.id}', event)" title="${banned ? 'Unban' : 'Ban'}"><i class="fas fa-${banned ? 'unlock' : 'ban'}"></i></button>
@@ -2033,6 +2037,9 @@ function renderUsers(list) {
       const usd = u.balance_usd != null ? Number(u.balance_usd) : (ngn / liveRate);
       const active = isUserActive(u);
       const banned = !!u.is_banned;
+      const joinedDate = u.created_at
+        ? new Date(u.created_at).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })
+        : '—';
       const statusBadge = banned
         ? '<span class="badge badge-banned">Banned</span>'
         : `<span class="badge ${active ? 'badge-on' : 'badge-off'}">${active ? 'Active' : 'Inactive'}</span>`;
@@ -2044,6 +2051,7 @@ function renderUsers(list) {
           <div class="row-line"><span>NGN</span><strong class="price">₦${ngn.toLocaleString()}</strong></div>
           <div class="row-line"><span>USD</span><span style="color:#38bdf8;">$${usd.toFixed(2)}</span></div>
           <div class="row-line"><span>Status</span>${statusBadge}</div>
+          <div class="row-line"><span>Joined</span><span>${escapeHtml(joinedDate)}</span></div>
           <div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap;">
             <button class="btn btn-ghost btn-sm" onclick="editUser('${u.id}')"><i class="fas fa-edit"></i> Edit</button>
             <button class="btn btn-ghost btn-sm" onclick="toggleBanUser('${u.id}', event)"><i class="fas fa-${banned ? 'unlock' : 'ban'}"></i> ${banned ? 'Unban' : 'Ban'}</button>
