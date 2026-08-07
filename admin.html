@@ -238,6 +238,7 @@
         <button class="nav-item" data-tab="products" onclick="switchTab('products')"><i class="fas fa-box"></i> Products & Stock</button>
         <button class="nav-item" data-tab="sms" onclick="switchTab('sms')"><i class="fas fa-sim-card"></i> SMS Numbers</button>
         <button class="nav-item" data-tab="sms-orders" onclick="switchTab('sms-orders')"><i class="fas fa-comment-sms"></i> SMS Orders</button>
+        <button class="nav-item" data-tab="sms-server2" onclick="switchTab('sms-server2')"><i class="fas fa-server"></i> SMS Server 2 <span style="font-size:9px;background:var(--warning,#fbbf24);color:#000;padding:2px 6px;border-radius:6px;margin-left:4px;font-weight:800;">TEST</span></button>
         <button class="nav-item" data-tab="orders" onclick="switchTab('orders')"><i class="fas fa-receipt"></i> Orders</button>
         <button class="nav-item" data-tab="notify" onclick="switchTab('notify')"><i class="fas fa-bullhorn"></i> Notifications</button>
         <button class="nav-item" data-tab="settings" onclick="switchTab('settings')"><i class="fas fa-cog"></i> Settings</button>
@@ -464,6 +465,42 @@
           </div>
         </div>
 
+        <div id="tab-sms-server2" class="tab-content">
+          <div class="panel">
+            <div class="panel-title" style="margin-bottom:10px;display:flex;align-items:center;justify-content:space-between;">
+              <span>SMS Numbers — Server 2 (LogsDomain)</span>
+              <span style="font-size:11px;color:var(--muted);">Admin-only test console. Not visible to users yet.</span>
+            </div>
+            <p style="font-size:13px;color:var(--muted);margin-bottom:14px;">
+              This talks to LogsDomain's real Numbers API using your own admin wallet — purchases here are real and will debit your balance (with automatic refund if no code arrives or you cancel). Use this to check catalog coverage, pricing, and delivery before this becomes a second server option for customers.
+            </p>
+
+            <div style="display:flex;gap:16px;align-items:center;flex-wrap:wrap;margin-bottom:16px;">
+              <div style="font-size:13px;">LogsDomain wallet: <strong id="ldNumWallet">—</strong></div>
+              <button class="btn btn-outline btn-sm" onclick="loadLdWallet()"><i class="fas fa-sync"></i> Refresh</button>
+              <div style="font-size:13px;">Your MJ balance: <strong id="ldNumMyBalance">—</strong></div>
+            </div>
+
+            <div style="display:flex;gap:16px;flex-wrap:wrap;">
+              <div class="field" style="max-width:260px;">
+                <label>Country</label>
+                <select id="ldNumCountry" onchange="loadLdServices()"><option value="">Loading countries…</option></select>
+              </div>
+              <div class="field" style="max-width:320px;">
+                <label>Service</label>
+                <select id="ldNumService"><option value="">Select a country first</option></select>
+              </div>
+            </div>
+            <button class="btn btn-primary btn-sm" onclick="buyLdNumber()" id="ldNumBuyBtn">Buy Number (Test)</button>
+            <div id="ldNumError" class="error-msg"></div>
+
+            <div id="ldNumActiveOrder" style="display:none;margin-top:18px;padding:16px;border:1px solid var(--border,#22232b);border-radius:12px;"></div>
+
+            <div class="panel-title" style="margin:24px 0 10px;">Recent Test Orders</div>
+            <div id="ldNumHistory" style="font-size:13px;color:var(--muted);">Loading…</div>
+          </div>
+        </div>
+
         <div id="tab-orders" class="tab-content">
           <div class="panel">
             <div class="panel-title" style="margin-bottom:10px;">Orders</div>
@@ -681,6 +718,7 @@ const tabTitles = {
   products: 'Products & Stock',
   sms: 'SMS Numbers',
   'sms-orders': 'SMS Orders',
+  'sms-server2': 'SMS Server 2 (LogsDomain — Test)',
   orders: 'Orders',
   settings: 'Settings'
 };
@@ -1010,6 +1048,7 @@ function populateCategoryFilter() {
 let allNumberServices = [];
 
 let smsTabLoaded = false;
+let ldNumTabLoaded = false;
 
 // Lazy — only called when the SMS tab is actually opened (see switchTab),
 // not on every dashboard load. There's no country list to preload anymore:
@@ -2511,6 +2550,190 @@ async function loadNotificationHistory() {
   `).join('');
 }
 
+/* ===========================================================================
+   SMS SERVER 2 (LogsDomain Numbers) — admin-only test console.
+   Talks to /api/logsdomain-numbers, which itself re-checks admin status
+   server-side on every call (this client-side gating is just UX; the real
+   enforcement is in the API).
+=========================================================================== */
+let ldNumCountriesCache = [];
+let ldNumServicesCache = [];
+let ldNumPollTimer = null;
+
+async function ldNumFetch(action, opts = {}) {
+  const headers = await authHeaders();
+  const method = opts.method || 'GET';
+  const qs = opts.query ? '&' + new URLSearchParams(opts.query).toString() : '';
+  const res = await fetch(`/api/logsdomain-numbers?action=${action}${qs}`, {
+    method,
+    headers: method === 'POST' ? { ...headers, 'Content-Type': 'application/json' } : headers,
+    body: opts.body ? JSON.stringify(opts.body) : undefined
+  });
+  const data = await res.json();
+  if (!data.success) throw new Error(data.message || 'Request failed');
+  return data;
+}
+
+async function initLdNumTab() {
+  loadLdWallet();
+  loadLdMyBalance();
+  loadLdCountries();
+  loadLdHistory();
+}
+
+async function loadLdWallet() {
+  const el = document.getElementById('ldNumWallet');
+  try {
+    const data = await ldNumFetch('wallet');
+    el.textContent = '₦' + Number(data.data.balance).toLocaleString();
+  } catch (e) {
+    el.textContent = 'Error: ' + e.message;
+  }
+}
+
+async function loadLdMyBalance() {
+  const el = document.getElementById('ldNumMyBalance');
+  const { data: { session } } = await sb.auth.getSession();
+  if (!session) return;
+  const { data } = await sb.from('profiles').select('balance').eq('id', session.user.id).single();
+  if (data) el.textContent = '₦' + Number(data.balance || 0).toLocaleString();
+}
+
+async function loadLdCountries() {
+  const sel = document.getElementById('ldNumCountry');
+  try {
+    const data = await ldNumFetch('countries');
+    ldNumCountriesCache = data.data || [];
+    sel.innerHTML = '<option value="">Select a country</option>' +
+      ldNumCountriesCache.map(c => `<option value="${c.id}">${escapeHtml(c.name)}</option>`).join('');
+  } catch (e) {
+    sel.innerHTML = '<option value="">Failed to load</option>';
+    showAdminToast('LogsDomain countries: ' + e.message, 'error');
+  }
+}
+
+async function loadLdServices() {
+  const countryId = document.getElementById('ldNumCountry').value;
+  const sel = document.getElementById('ldNumService');
+  if (!countryId) { sel.innerHTML = '<option value="">Select a country first</option>'; return; }
+  sel.innerHTML = '<option value="">Loading…</option>';
+  try {
+    const data = await ldNumFetch('services', { query: { country_id: countryId } });
+    ldNumServicesCache = data.data || [];
+    if (!ldNumServicesCache.length) {
+      sel.innerHTML = '<option value="">No services for this country</option>';
+      return;
+    }
+    sel.innerHTML = ldNumServicesCache.map(s =>
+      `<option value="${escapeHtml(String(s.service_id))}">${escapeHtml(s.service_name)} — ₦${Number(s.price).toLocaleString()} (${s.available_quantity} in stock, ${s.success_rate ?? '—'}% success)</option>`
+    ).join('');
+  } catch (e) {
+    sel.innerHTML = '<option value="">Failed to load</option>';
+    showAdminToast('LogsDomain services: ' + e.message, 'error');
+  }
+}
+
+async function buyLdNumber() {
+  const errEl = document.getElementById('ldNumError');
+  errEl.textContent = '';
+  const countryId = document.getElementById('ldNumCountry').value;
+  const serviceId = document.getElementById('ldNumService').value;
+  if (!countryId || !serviceId) { errEl.textContent = 'Pick a country and a service first.'; return; }
+
+  const btn = document.getElementById('ldNumBuyBtn');
+  setBtnBusy(btn, true, 'Purchasing...');
+  try {
+    const data = await ldNumFetch('order', { method: 'POST', body: { country_id: Number(countryId), service_id: serviceId } });
+    showAdminToast('Number purchased — waiting for code', 'success');
+    loadLdMyBalance();
+    loadLdHistory();
+    renderLdActiveOrder(data.data);
+    startLdPolling(data.data.order_id);
+  } catch (e) {
+    errEl.textContent = e.message;
+  } finally {
+    setBtnBusy(btn, false, 'Buy Number (Test)');
+  }
+}
+
+function renderLdActiveOrder(order) {
+  const box = document.getElementById('ldNumActiveOrder');
+  box.style.display = 'block';
+  const statusLabel = order.status === 'completed' ? 'Code received' : order.status === 'refunded' ? 'Refunded' : 'Waiting for code';
+  box.innerHTML = `
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+      <strong>${escapeHtml(order.service_name || '')} · ${escapeHtml(order.country_name || '')}</strong>
+      <span style="font-size:11px;color:var(--muted);">${escapeHtml(statusLabel)}</span>
+    </div>
+    <div style="font-family:monospace;font-size:15px;margin-bottom:4px;">${escapeHtml(order.number || order.phone_number || '—')}</div>
+    <div style="font-size:12px;color:var(--muted);margin-bottom:10px;">₦${Number(order.price || 0).toLocaleString()} · Order #${escapeHtml(String(order.order_id))}</div>
+    ${order.code ? `<div style="font-size:20px;font-weight:800;color:var(--success,#34d399);margin-bottom:10px;">Code: ${escapeHtml(order.code)}</div>` : ''}
+    ${order.status !== 'completed' && order.status !== 'refunded' ? `
+      <button class="btn btn-outline btn-sm" onclick="checkLdOrder('${escapeHtml(String(order.order_id))}')">Check Now</button>
+      <button class="btn btn-sm" style="background:var(--danger,#f87171);color:#fff;" onclick="cancelLdOrder('${escapeHtml(String(order.order_id))}')">Cancel & Refund</button>
+    ` : ''}
+  `;
+}
+
+async function checkLdOrder(orderId) {
+  try {
+    const data = await ldNumFetch('check', { method: 'POST', body: { order_id: orderId } });
+    renderLdActiveOrder(data.data);
+    if (data.data.status === 'completed') {
+      stopLdPolling();
+      showAdminToast('Code received!', 'success');
+      loadLdHistory();
+    }
+  } catch (e) {
+    showAdminToast('Check failed: ' + e.message, 'error');
+  }
+}
+
+async function cancelLdOrder(orderId) {
+  if (!confirm('Cancel this number and refund your balance?')) return;
+  try {
+    await ldNumFetch('cancel', { method: 'POST', body: { order_id: orderId } });
+    showAdminToast('Cancelled and refunded', 'success');
+    stopLdPolling();
+    document.getElementById('ldNumActiveOrder').style.display = 'none';
+    loadLdMyBalance();
+    loadLdHistory();
+  } catch (e) {
+    showAdminToast('Cancel failed: ' + e.message, 'error');
+  }
+}
+
+function startLdPolling(orderId) {
+  stopLdPolling();
+  ldNumPollTimer = setInterval(() => checkLdOrder(orderId), 8000);
+}
+function stopLdPolling() {
+  if (ldNumPollTimer) { clearInterval(ldNumPollTimer); ldNumPollTimer = null; }
+}
+
+async function loadLdHistory() {
+  const list = document.getElementById('ldNumHistory');
+  try {
+    const data = await ldNumFetch('orders');
+    if (!data.data || !data.data.length) { list.innerHTML = 'No test orders yet.'; return; }
+    list.innerHTML = data.data.map(o => `
+      <div style="padding:10px 0;border-bottom:1px solid var(--border,#22232b);display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;">
+        <div>
+          <div style="font-weight:700;color:var(--text,#fff);">${escapeHtml(o.service_name || '')} · ${escapeHtml(o.country_name || '')}</div>
+          <div style="font-family:monospace;font-size:12px;">${escapeHtml(o.phone_number || '—')}</div>
+          <div style="font-size:11px;">${new Date(o.created_at).toLocaleString()}</div>
+        </div>
+        <div style="text-align:right;">
+          <div>₦${Number(o.price || 0).toLocaleString()}</div>
+          <div style="font-size:11px;color:${o.status === 'completed' ? 'var(--success,#34d399)' : o.status === 'refunded' ? 'var(--danger,#f87171)' : 'var(--muted)'};">${escapeHtml(o.status)}</div>
+        </div>
+      </div>
+    `).join('');
+  } catch (e) {
+    list.innerHTML = `<span style="color:var(--danger,#f87171)">${escapeHtml(e.message)}</span>`;
+  }
+}
+
 function switchTab(name) {
   document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
   document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
@@ -2521,6 +2744,10 @@ function switchTab(name) {
   if (name === 'sms' && !smsTabLoaded) {
     smsTabLoaded = true;
     loadNumberServices();
+  }
+  if (name === 'sms-server2' && !ldNumTabLoaded) {
+    ldNumTabLoaded = true;
+    initLdNumTab();
   }
 }
 function openSidebar() {
