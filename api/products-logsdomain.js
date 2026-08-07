@@ -177,7 +177,12 @@ export default async function handler(req, res) {
         }
         // EXISTING: refresh name/description + supplier cost + stock.
         // Your resale price and category are still never touched here — those
-        // stay exactly as you set them in the admin panel.
+        // stay exactly as you set them in the admin panel. `source` IS
+        // re-set here (even though it never changes) specifically to
+        // backfill it on rows synced before this field existed — without
+        // this, only brand-new products ever got tagged and the admin
+        // dashboard's supplier badge silently stayed blank for the rest of
+        // an existing catalog forever.
         updatedCount += 1;
         const { error } = await supabase
           .from('products')
@@ -188,6 +193,7 @@ export default async function handler(req, res) {
             supplier_price: supplierPrice,
             stock_quantity: stock,
             is_available: stock > 0,
+            source: 'logsdomain',
             updated_at: new Date().toISOString()
           })
           .eq('product_key', productKey);

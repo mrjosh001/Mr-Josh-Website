@@ -228,6 +228,10 @@ export default async function handler(req, res) {
         // product (protects against them renaming/reusing a listing).
         // Your resale price and category are business decisions — those are
         // still never touched here, only ever changed by you in the admin panel.
+        // `source` IS re-set here to backfill rows synced before this field
+        // existed — otherwise only brand-new products ever got tagged, and
+        // the rest of an existing catalog stayed permanently blank on the
+        // admin dashboard's supplier badge.
         updatedCount++;
         const { error } = await supabase
           .from('products')
@@ -238,6 +242,7 @@ export default async function handler(req, res) {
             supplier_price: supplierPrice,
             stock_quantity: stock,
             is_available: stock > 0,
+            source: 'fadded',
             updated_at: new Date().toISOString()
           })
           .eq('product_key', item.product_key);

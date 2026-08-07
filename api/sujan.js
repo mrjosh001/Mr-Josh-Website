@@ -158,6 +158,8 @@ async function handleSync(req, res) {
       // here — only ever changed in the admin panel. is_available is
       // force-set false regardless of real stock (see file header) — this
       // line intentionally never lets a Sujan product go live on its own.
+      // `source` IS re-set here (same fix applied to Fadded/Logs Domain) so
+      // it stays tagged correctly on every sync, not just the first insert.
       updatedCount++;
       const { error } = await supabase
         .from('products')
@@ -168,6 +170,7 @@ async function handleSync(req, res) {
           supplier_price: supplierPrice,
           stock_quantity: stock,
           is_available: false,
+          source: 'sujandepartment',
           updated_at: new Date().toISOString()
         })
         .eq('product_key', productKey);
