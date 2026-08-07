@@ -6,14 +6,11 @@ import { createClient } from '@supabase/supabase-js';
  * GET  /api/sujan   → sync catalog into Supabase products (was products-sujan.js, admin button)
  * POST /api/sujan   → buy a product / deliver credentials (was order-sujan.js)
  *
- * ADMIN/BACKEND ONLY FOR NOW: every product the GET side syncs is forced to
- * is_available: false regardless of real stock, so nothing from Sujan
- * Department can appear on the customer storefront (index.html / mj-logs.html
- * only ever query is_available = true). To launch a specific product later,
- * switch "Available" on for it in the admin product editor — that's the
- * whole launch mechanism, nothing else needs to change. The POST/order side
- * below is fully wired and correct, just unreachable from the storefront
- * until that flag flips.
+ * LIVE ON THE STOREFRONT: is_available now follows real stock (stock > 0),
+ * the same convention as Fadded and Logs Domain — Sujan products can appear
+ * on index.html / mj-logs.html as soon as they sync in with stock. (Earlier
+ * versions of this file force-hid every Sujan product regardless of stock;
+ * that gate has been removed.)
  *
  * Docs only say:
  *  - GET /reseller/v1/products → "list all active catalog products" (exact
@@ -173,9 +170,9 @@ async function handleSync(req, res) {
     if (existing) {
       // EXISTING: refresh name/description + supplier cost + stock, same as
       // Fadded/Logs Domain sync. Resale price and category are never touched
-      // here — only ever changed in the admin panel. is_available is
-      // force-set false regardless of real stock (see file header) — this
-      // line intentionally never lets a Sujan product go live on its own.
+      // here — only ever changed in the admin panel. is_available now
+      // follows real stock (matches Fadded/Logs Domain) — Sujan products
+      // are live on the storefront as of this sync, no longer force-hidden.
       // `source` IS re-set here (same fix applied to Fadded/Logs Domain) so
       // it stays tagged correctly on every sync, not just the first insert.
       updatedCount++;
@@ -187,7 +184,7 @@ async function handleSync(req, res) {
           display_description: cleanDescription,
           supplier_price: supplierPrice,
           stock_quantity: stock,
-          is_available: false,
+          is_available: stock > 0,
           source: 'sujandepartment',
           updated_at: new Date().toISOString()
         })
@@ -197,7 +194,8 @@ async function handleSync(req, res) {
         console.error(`Sujan Department update ${productKey}:`, error.message);
       }
     } else {
-      // NEW: full insert with markup + category, is_available forced false.
+      // NEW: full insert with markup + category. is_available follows real
+      // stock, same as the update branch above.
       newCount++;
       const { error } = await supabase
         .from('products')
@@ -209,7 +207,7 @@ async function handleSync(req, res) {
           supplier_price: supplierPrice,
           price: applyRandomMarkup(supplierPrice),
           stock_quantity: stock,
-          is_available: false,
+          is_available: stock > 0,
           category: categorize(name),
           source: 'sujandepartment',
           updated_at: new Date().toISOString()
