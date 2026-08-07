@@ -181,7 +181,7 @@ async function autoRefundOnExpiry(){
     btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Refunding…';
   }
   try{
-    const res = await fetch('/api/grizzly-cancel', {
+    const res = await fetch('/api/grizzly-sync?action=cancel', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ order_id: orderId, user_id: currentUserId })
@@ -193,7 +193,7 @@ async function autoRefundOnExpiry(){
       return;
     }
     // If supplier already cancelled / check can refund
-    const check = await fetch('/api/grizzly-check', {
+    const check = await fetch('/api/grizzly-sync?action=check', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ order_id: orderId, user_id: currentUserId })
@@ -324,7 +324,7 @@ function stopPolling(){
 async function checkStatus(){
   if(!orderId || !currentUserId) return;
   try{
-    const res = await fetch('/api/grizzly-check', {
+    const res = await fetch('/api/grizzly-sync?action=check', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ order_id: orderId, user_id: currentUserId })
@@ -363,7 +363,7 @@ async function checkNow(){
   const btn = document.getElementById('checkNowBtn');
   if(btn){ btn.disabled = true; btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Checking...'; }
   // Force full refresh path
-  const res = await fetch('/api/grizzly-check', {
+  const res = await fetch('/api/grizzly-sync?action=check', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ order_id: orderId, user_id: currentUserId })
@@ -408,7 +408,7 @@ async function cancelOrder(){
   const btn = document.getElementById('cancelBtn');
   if(btn){ btn.disabled = true; btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Cancelling...'; }
   try{
-    const res = await fetch('/api/grizzly-cancel', {
+    const res = await fetch('/api/grizzly-sync?action=cancel', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ order_id: orderId, user_id: currentUserId })

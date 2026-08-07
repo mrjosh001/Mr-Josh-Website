@@ -454,7 +454,7 @@ document.getElementById('psBuyBtn').addEventListener('click', async function(){
   btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Purchasing...';
 
   try{
-    const res = await fetch('/api/grizzly-order', {
+    const res = await fetch('/api/grizzly-sync?action=order', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
