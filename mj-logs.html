@@ -38,6 +38,7 @@ body::before{content:'';position:fixed;inset:0;pointer-events:none;z-index:0;bac
 @media(min-width:600px){.product-grid{grid-template-columns:repeat(2,1fr)}}
 .product-card{background:var(--bg);border:1px solid var(--border);border-radius:16px;padding:14px;display:flex;flex-direction:column;gap:10px}
 .log-icon{width:38px;height:38px;border-radius:11px;display:flex;align-items:center;justify-content:center;color:#fff;font-size:16px;flex-shrink:0;box-shadow:0 4px 10px rgba(0,0,0,.18)}
+.log-icon img,.ps-icon img{width:55%;height:55%;object-fit:contain;display:block}
 .log-icon-fallback{background:var(--primary-glow);color:var(--primary);box-shadow:none}
 .log-icon-instagram{background:radial-gradient(circle at 30% 107%,#fdf497 0%,#fdf497 5%,#fd5949 45%,#d6249f 60%,#285AEB 90%)}
 .log-icon-dual{display:flex;align-items:center;justify-content:center;gap:1px;background:linear-gradient(135deg,#f59e0b,#0ea5e9)}
@@ -230,49 +231,55 @@ function money(n){return '₦'+Number(n||0).toLocaleString()}
 
 // --- Product/category logos. Suppliers don't provide logo images for logs,
 // so — same approach as the SMS page's serviceIcon() — this maps known
-// categories (and, as a fallback, product names) to Font Awesome brand
-// icons irrespective of which supplier the item comes from. Unmatched
-// items fall back to a neutral generic icon rather than showing nothing.
+// categories (and, as a fallback, product names) to a real brand identity.
+// Actual companies (Facebook, Instagram, TikTok, X, etc.) render their real
+// official SVG mark via Simple Icons' CDN (simpleicons.org) — this is more
+// accurate than an icon-font glyph and doesn't depend on the specific
+// Font Awesome build having that icon (which is why X was rendering blank:
+// fa-x-twitter isn't present in the FA 6.4.0 build this page loads).
+// Generic, non-branded categories (VPN, Mail, Dating, etc.) keep a plain
+// Font Awesome glyph since there's no single real company logo for those.
 const LOG_ICON_EXACT = {
-  '9proxy (ips)': {cls:'fa-solid fa-shield-halved', color:'#0ea5e9'},
-  'ai': {cls:'fa-solid fa-robot', color:'#8b5cf6'},
-  'all countries instagram': {cls:'fa-brands fa-instagram', key:'instagram'},
-  'all countries tiktok': {cls:'fa-brands fa-tiktok', color:'#000000'},
-  'apple': {cls:'fa-brands fa-apple', color:'#000000'},
-  'countries facebook (0-5 friends)': {cls:'fa-brands fa-facebook-f', color:'#1877F2'},
-  'countries facebook (30+ friends)': {cls:'fa-brands fa-facebook-f', color:'#1877F2'},
-  'create page facebook': {cls:'fa-brands fa-facebook-f', color:'#1877F2'},
-  'dating sites': {cls:'fa-solid fa-heart', color:'#fb7185'},
-  'discord': {cls:'fa-brands fa-discord', color:'#5865F2'},
-  'game accounts': {cls:'fa-solid fa-gamepad', color:'#f59e0b'},
-  'instagram / high followers': {cls:'fa-brands fa-instagram', key:'instagram'},
-  'linkedin': {cls:'fa-brands fa-linkedin-in', color:'#0A66C2'},
-  'mails': {cls:'fa-solid fa-envelope', color:'#64748b'},
-  'premium vpn for pc': {cls:'fa-solid fa-shield-halved', color:'#0ea5e9'},
-  'premium vpn for phone': {cls:'fa-solid fa-shield-halved', color:'#0ea5e9'},
-  'random country facebook': {cls:'fa-brands fa-facebook-f', color:'#1877F2'},
-  'reddit': {cls:'fa-brands fa-reddit-alien', color:'#FF4500'},
-  'snapchat': {cls:'fa-brands fa-snapchat', color:'#FFFC00'},
-  'social networks accounts': {cls:'fa-solid fa-users', color:'#6366f1'},
-  'streaming site': {cls:'fa-solid fa-play', color:'#8b5cf6'},
-  'texting app': {cls:'fa-solid fa-comment-dots', color:'#22c55e'},
-  'tiktok/high followers': {cls:'fa-brands fa-tiktok', color:'#000000'},
+  '9proxy (ips)': {solid:'fa-solid fa-shield-halved', color:'#0ea5e9'},
+  'ai': {solid:'fa-solid fa-robot', color:'#8b5cf6'},
+  'all countries instagram': {brand:'instagram', color:'#E1306C', gradient:true},
+  'all countries tiktok': {brand:'tiktok', color:'#000000'},
+  'apple': {brand:'apple', color:'#000000'},
+  'countries facebook (0-5 friends)': {brand:'facebook', color:'#1877F2'},
+  'countries facebook (30+ friends)': {brand:'facebook', color:'#1877F2'},
+  'create page facebook': {brand:'facebook', color:'#1877F2'},
+  'dating sites': {solid:'fa-solid fa-heart', color:'#fb7185'},
+  'discord': {brand:'discord', color:'#5865F2'},
+  'game accounts': {solid:'fa-solid fa-gamepad', color:'#f59e0b'},
+  'instagram / high followers': {brand:'instagram', color:'#E1306C', gradient:true},
+  'linkedin': {brand:'linkedin', color:'#0A66C2'},
+  'mails': {solid:'fa-solid fa-envelope', color:'#64748b'},
+  'premium vpn for pc': {solid:'fa-solid fa-shield-halved', color:'#0ea5e9'},
+  'premium vpn for phone': {solid:'fa-solid fa-shield-halved', color:'#0ea5e9'},
+  'random country facebook': {brand:'facebook', color:'#1877F2'},
+  'reddit': {brand:'reddit', color:'#FF4500'},
+  'snapchat': {brand:'snapchat', color:'#FFFC00', darkGlyph:true},
+  'social networks accounts': {solid:'fa-solid fa-users', color:'#6366f1'},
+  'streaming site': {solid:'fa-solid fa-play', color:'#8b5cf6'},
+  'texting app': {solid:'fa-solid fa-comment-dots', color:'#22c55e'},
+  'tiktok/high followers': {brand:'tiktok', color:'#000000'},
   'tutorial/update': {dual:true},
-  'x / twitter': {cls:'fa-brands fa-x-twitter', color:'#000000'}
+  'x / twitter': {brand:'x', color:'#000000'}
 };
-// Substring fallback for categories not in the exact list above (new
-// suppliers, renamed categories, etc.) — also checked against the
-// product name itself if the category gives no match.
+// Substring fallback (category, then product name) for anything not in the
+// exact list above — new suppliers, renamed categories, future products.
 const LOG_ICON_KEYWORDS = [
-  ['facebook','fa-brands fa-facebook-f','#1877F2'],['instagram','fa-brands fa-instagram',null],
-  ['tiktok','fa-brands fa-tiktok','#000000'],['twitter','fa-brands fa-x-twitter','#000000'],
-  ['discord','fa-brands fa-discord','#5865F2'],['linkedin','fa-brands fa-linkedin-in','#0A66C2'],
-  ['reddit','fa-brands fa-reddit-alien','#FF4500'],['snapchat','fa-brands fa-snapchat','#FFFC00'],
-  ['whatsapp','fa-brands fa-whatsapp','#25D366'],['telegram','fa-brands fa-telegram','#26A5E4'],
-  ['google','fa-brands fa-google','#4285F4'],['gmail','fa-brands fa-google','#4285F4'],
-  ['apple','fa-brands fa-apple','#000000'],['spotify','fa-brands fa-spotify','#1DB954'],
-  ['steam','fa-brands fa-steam','#1B2838'],['twitch','fa-brands fa-twitch','#9146FF'],
-  ['youtube','fa-brands fa-youtube','#FF0000'],['paypal','fa-brands fa-paypal','#00457C'],
+  ['facebook','facebook','#1877F2'],['instagram','instagram','#E1306C'],
+  ['tiktok','tiktok','#000000'],['twitter','x','#000000'],[' x ','x','#000000'],
+  ['discord','discord','#5865F2'],['linkedin','linkedin','#0A66C2'],
+  ['reddit','reddit','#FF4500'],['snapchat','snapchat','#FFFC00'],
+  ['whatsapp','whatsapp','#25D366'],['telegram','telegram','#26A5E4'],
+  ['google','google','#4285F4'],['gmail','google','#4285F4'],
+  ['apple','apple','#000000'],['spotify','spotify','#1DB954'],
+  ['steam','steam','#1B2838'],['twitch','twitch','#9146FF'],
+  ['youtube','youtube','#FF0000'],['paypal','paypal','#00457C']
+];
+const GENERIC_KEYWORDS = [
   ['proxy','fa-solid fa-shield-halved','#0ea5e9'],['vpn','fa-solid fa-shield-halved','#0ea5e9'],
   ['mail','fa-solid fa-envelope','#64748b'],['dating','fa-solid fa-heart','#fb7185'],
   ['game','fa-solid fa-gamepad','#f59e0b'],['stream','fa-solid fa-play','#8b5cf6'],
@@ -282,22 +289,32 @@ function logIcon(category, name){
   const cat = (category||'').toLowerCase().trim();
   if(LOG_ICON_EXACT[cat]) return LOG_ICON_EXACT[cat];
   const n = (name||'').toLowerCase();
-  for(const [key, cls, color] of LOG_ICON_KEYWORDS){
-    if(cat.includes(key) || n.includes(key)){
-      if(cls==='__dual__') return {dual:true};
-      return {cls, color: color || null, key: cls.includes('instagram')?'instagram':undefined};
-    }
+  for(const [key, slug, color] of LOG_ICON_KEYWORDS){
+    if(cat.includes(key) || n.includes(key)) return {brand:slug, color, gradient: slug==='instagram'};
+  }
+  for(const [key, cls, color] of GENERIC_KEYWORDS){
+    if(cat.includes(key) || n.includes(key)) return cls==='__dual__' ? {dual:true} : {solid:cls, color};
   }
   return null; // unmatched -> generic fallback icon rendered by caller
+}
+function logIconInnerHtml(icon){
+  if(icon.dual) return '<i class="fa-solid fa-screwdriver-wrench"></i><i class="fa-solid fa-arrows-rotate"></i>';
+  if(icon.brand){
+    const glyphColor = icon.darkGlyph ? '000000' : 'ffffff';
+    const fallbackCls = icon.brand==='x' ? 'fa-brands fa-x-twitter' : ('fa-brands fa-'+icon.brand);
+    return '<img src="https://cdn.simpleicons.org/'+icon.brand+'/'+glyphColor+'" alt="" '
+      + 'onerror="this.replaceWith(Object.assign(document.createElement(\'i\'),{className:\''+fallbackCls+'\'}))" />';
+  }
+  return '<i class="'+icon.solid+'"></i>';
 }
 function renderLogIconHtml(category, name, sizeClass){
   const icon = logIcon(category, name);
   const cls = sizeClass || 'log-icon';
-  if(!icon) return `<div class="${cls} log-icon-fallback"><i class="fa-solid fa-layer-group"></i></div>`;
-  if(icon.dual) return `<div class="${cls} log-icon-dual"><i class="fa-solid fa-screwdriver-wrench"></i><i class="fa-solid fa-arrows-rotate"></i></div>`;
-  if(icon.key==='instagram') return `<div class="${cls} log-icon-instagram"><i class="${icon.cls}"></i></div>`;
-  const bg = icon.color ? `background:${icon.color}` : '';
-  return `<div class="${cls}" style="${bg}"><i class="${icon.cls}"></i></div>`;
+  if(!icon) return '<div class="'+cls+' log-icon-fallback"><i class="fa-solid fa-layer-group"></i></div>';
+  if(icon.dual) return '<div class="'+cls+' log-icon-dual">'+logIconInnerHtml(icon)+'</div>';
+  if(icon.gradient) return '<div class="'+cls+' log-icon-instagram">'+logIconInnerHtml(icon)+'</div>';
+  const bg = icon.color ? 'background:'+icon.color : '';
+  return '<div class="'+cls+'" style="'+bg+'">'+logIconInnerHtml(icon)+'</div>';
 }
 
 /* Always prefer display_description for customers */
@@ -478,15 +495,15 @@ psIconEl.innerHTML='<i class="fa-solid fa-layer-group"></i>';
 } else if(psIconInfo.dual){
 psIconEl.className='ps-icon log-icon-dual';
 psIconEl.style.background='';
-psIconEl.innerHTML='<i class="fa-solid fa-screwdriver-wrench"></i><i class="fa-solid fa-arrows-rotate"></i>';
-} else if(psIconInfo.key==='instagram'){
+psIconEl.innerHTML=logIconInnerHtml(psIconInfo);
+} else if(psIconInfo.gradient){
 psIconEl.className='ps-icon log-icon-instagram';
 psIconEl.style.background='';
-psIconEl.innerHTML='<i class="'+psIconInfo.cls+'"></i>';
+psIconEl.innerHTML=logIconInnerHtml(psIconInfo);
 } else {
 psIconEl.className='ps-icon';
 psIconEl.style.background=psIconInfo.color||'#1877f2';
-psIconEl.innerHTML='<i class="'+psIconInfo.cls+'"></i>';
+psIconEl.innerHTML=logIconInnerHtml(psIconInfo);
 }
 document.getElementById('psDesc').textContent=desc||'—';
 document.getElementById('psUnitPrice').textContent=money(price);
