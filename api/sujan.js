@@ -128,8 +128,19 @@ async function handleSync(req, res) {
   const json = await apiRes.json();
   const products = Array.isArray(json) ? json : (json.data || json.products || []);
 
+  // Sujan's docs don't list exact field names (see file header). Log the
+  // very first raw product object once per sync so the real field names
+  // are visible in Vercel logs — if `price`/`unit_price`/`cost` below are
+  // all wrong guesses, every product silently prices at ₦0 with no error
+  // anywhere, which is exactly the kind of thing that's otherwise
+  // invisible until someone notices the storefront numbers looking wrong.
+  if (products.length > 0) {
+    console.log('[sujan sync] raw first product (for field-name verification):', JSON.stringify(products[0]));
+  }
+
   let newCount = 0;
   let updatedCount = 0;
+  let zeroPriceCount = 0;
 
   for (const item of products) {
     const id = item.id ?? item.product_id ?? item.productId;
@@ -141,6 +152,7 @@ async function handleSync(req, res) {
     const supplierPrice = Number(
       item.price ?? item.unit_price ?? item.cost ?? 0
     ) || 0;
+    if (supplierPrice === 0) zeroPriceCount++;
     // Stock may or may not be on the list item — see file header comment.
     const stock = Number(
       item.stock ?? item.in_stock ?? item.available_quantity ?? item.quantity ?? 0
@@ -208,6 +220,7 @@ async function handleSync(req, res) {
     synced: products.length,
     new_products: newCount,
     updated_products: updatedCount,
+    zero_price_count: zeroPriceCount,
     source: 'sujandepartment'
   });
 }
