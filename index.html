@@ -2509,8 +2509,14 @@ window.checkoutCart = async function() {
     try {
       const qty = Math.max(1, parseInt(item.quantity, 10) || 1);
       const productSource = item.source
-        || (String(item.product_key || '').startsWith('ld_') ? 'logsdomain' : 'fadded');
-      const orderEndpoint = productSource === 'logsdomain' ? '/api/order-logsdomain' : '/api/order';
+        || (String(item.product_key || '').startsWith('ld_') ? 'logsdomain'
+        : String(item.product_key || '').startsWith('sj_') ? 'sujandepartment'
+        : String(item.product_key || '').startsWith('manual_') ? 'manual'
+        : 'fadded');
+      const orderEndpoint = productSource === 'logsdomain' ? '/api/order-logsdomain'
+        : productSource === 'sujandepartment' ? '/api/sujan'
+        : productSource === 'manual' ? '/api/order-manual'
+        : '/api/order';
 
       const res = await fetch(orderEndpoint, {
         method: 'POST',

@@ -468,9 +468,11 @@ try{
 const productSource = purchasedProduct.source
 || (String(purchasedProduct.product_key || '').startsWith('ld_') ? 'logsdomain'
 : String(purchasedProduct.product_key || '').startsWith('manual_') ? 'manual'
+: String(purchasedProduct.product_key || '').startsWith('sj_') ? 'sujandepartment'
 : 'fadded');
 const orderEndpoint = productSource === 'manual' ? '/api/order-manual'
 : productSource === 'logsdomain' ? '/api/order-logsdomain'
+: productSource === 'sujandepartment' ? '/api/sujan'
 : '/api/order';
 const res = await fetch(orderEndpoint, {
 method: 'POST',
