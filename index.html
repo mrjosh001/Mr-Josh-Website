@@ -2923,7 +2923,12 @@ function renderHistoryList(filterType = 'all') {
     let items = transactions;
     if (filterType !== 'all') {
         items = transactions.filter((t) => {
-            if (filterType === 'log') return t.type === 'log' || t.type === 'logs';
+            // 'log' historically meant Fadded only (type: 'log'/'logs').
+            // Logs Domain and Sujan Department both use type: 'purchase'
+            // for the exact same kind of order, so both are included here
+            // too — otherwise their purchases silently never show up under
+            // this specific filter tab (they'd still appear under "All").
+            if (filterType === 'log') return t.type === 'log' || t.type === 'logs' || t.type === 'purchase';
             if (filterType === 'sms') return t.type === 'sms';
             if (filterType === 'deposit') return t.type === 'deposit';
             if (filterType === 'booster') return t.type === 'booster';
