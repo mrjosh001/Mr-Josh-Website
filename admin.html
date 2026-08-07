@@ -1898,11 +1898,13 @@ async function syncSujanNow() {
   try {
     const res = await fetch('/api/sujan');
     const data = await res.json();
-    alert(
-      data.success
-        ? `Sujan Department sync complete (admin-only, not visible to customers yet)\nSynced: ${data.synced}\nNew: ${data.new_products || 0}\nUpdated: ${data.updated_products || 0}`
-        : ('Sujan Department sync failed: ' + (data.message || 'Unknown error'))
-    );
+    let msg = data.success
+      ? `Sujan Department sync complete (admin-only, not visible to customers yet)\nSynced: ${data.synced}\nNew: ${data.new_products || 0}\nUpdated: ${data.updated_products || 0}`
+      : ('Sujan Department sync failed: ' + (data.message || 'Unknown error'));
+    if (data.success && data.zero_price_count > 0) {
+      msg += `\n\n⚠️ ${data.zero_price_count} of ${data.synced} products came back with a ₦0 supplier price — Sujan's API likely uses a different field name than expected. Check the Vercel logs for "[sujan sync] raw first product" to see the real field names.`;
+    }
+    alert(msg);
     await loadProducts();
   } catch (e) {
     alert('Sujan Department sync failed: ' + e.message);
