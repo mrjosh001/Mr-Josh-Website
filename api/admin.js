@@ -512,15 +512,31 @@ async function getGrizzlyBalance() {
   }
 }
 
+async function getSujanBalance() {
+  const apiKey = process.env.SUJAN_API_KEY;
+  if (!apiKey) return { ok: false, error: 'Missing SUJAN_API_KEY' };
+  const base = 'https://api.sujandepartment.com/reseller/v1';
+  // Same situation as Fadded: Sujan's docs don't spell out a balance
+  // endpoint (see api/sujan.js's header comment), so this tries the same
+  // handful of conventional paths and lets findBalance() pull whatever
+  // numeric field looks like a balance out of whichever one responds.
+  return tryJsonEndpoints(
+    [`${base}/balance`, `${base}/profile`, `${base}/me`, `${base}/account`, `${base}/wallet`],
+    { Authorization: `Bearer ${apiKey}`, Accept: 'application/json' },
+    'NGN'
+  );
+}
+
 async function supplierBalancesFetch() {
-  const [fadded, logsdomain, grizzly] = await Promise.all([
+  const [fadded, logsdomain, grizzly, sujan] = await Promise.all([
     getFaddedBalance(),
     getLogsDomainBalance(),
-    getGrizzlyBalance()
+    getGrizzlyBalance(),
+    getSujanBalance()
   ]);
   return {
     status: 200,
-    body: { success: true, suppliers: { fadded, logsdomain, grizzly }, fetched_at: new Date().toISOString() }
+    body: { success: true, suppliers: { fadded, logsdomain, grizzly, sujan }, fetched_at: new Date().toISOString() }
   };
 }
 

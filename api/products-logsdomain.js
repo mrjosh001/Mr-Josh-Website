@@ -32,31 +32,42 @@ function applyRandomMarkup(supplierPrice) {
   return Math.ceil(finalPrice / 50) * 50;
 }
 
+// Kept in sync with api/products.js (Fadded) and api/sujan.js — all three
+// suppliers must sort a given kind of product into the SAME category name.
+// If you add a rule here, add it to the other two as well. The parentName
+// fallback below is LogsDomain-specific (their own category hierarchy) and
+// only applies after every shared rule has already had a chance to match.
 function categorize(name, parentName) {
   const n = `${name || ''} ${parentName || ''}`.toUpperCase();
   if (n.includes('PROXY')) return '9PROXY (IPS)';
   if (n.includes('VPN') && n.includes('PHONE')) return 'PREMIUM VPN FOR PHONE';
   if (n.includes('VPN')) return 'PREMIUM VPN FOR PC';
-  if (n.includes('CHATGPT') || n.includes('DEEPSEEK') || n.includes('AI ')) return 'AI';
+  if (n.includes('CHATGPT') || n.includes('CHAT GPT') || n.includes('DEEPSEEK') || n.includes('DEEP SEEK') || n.includes('AI ACCOUNT')) return 'AI';
+  if (n.includes('ONLYFANS') || n.includes('ONLY FANS')) return 'SOCIAL NETWORKS ACCOUNTS';
   if (n.includes('INSTAGRAM') && n.includes('FOLLOWER')) return 'INSTAGRAM / HIGH FOLLOWERS';
   if (n.includes('INSTAGRAM')) return 'ALL COUNTRIES INSTAGRAM';
-  if (n.includes('TIKTOK') || n.includes('TIK TOK')) {
+  if (n.includes('TIKTOK') || n.includes('TITKOK') || n.includes('TIK TOK')) {
     if (n.includes('FOLLOWER')) return 'TIKTOK/HIGH FOLLOWERS';
     return 'ALL COUNTRIES TIKTOK';
   }
   if (n.includes('DATING')) return 'DATING SITES';
-  if (n.includes('FACEBOOK') || n.includes('MARKETPLACE')) {
+  const isFacebookStyle = n.includes('FACEBOOK') || n.includes('MARKETPLACE') || n.includes('2FA') || n.includes('FRIENDS') || n.includes('PROFILE & COVER') || n.includes('REGISTERED FROM');
+  if (isFacebookStyle) {
     if (n.includes('RANDOM')) return 'RANDOM COUNTRY FACEBOOK';
-    if (n.includes('0-5') || n.includes('0-30')) return 'COUNTRIES FACEBOOK (0-5 FRIENDS)';
+    if (n.includes('0-5') || n.includes('0-30') || n.includes('MARKETPLACE + 2FA') || (n.includes('MARKETPLACE') && !n.includes('30+'))) {
+      return 'COUNTRIES FACEBOOK (0-5 FRIENDS)';
+    }
     return 'COUNTRIES FACEBOOK (30+ FRIENDS)';
   }
-  if (n.includes('TWITTER') || n.includes(' X ')) return 'X / TWITTER';
+  if (n.includes('TWITTER') || n.includes(' X ') || n.startsWith('X ')) return 'X / TWITTER';
   if (n.includes('REDDIT')) return 'REDDIT';
   if (n.includes('SNAPCHAT')) return 'SNAPCHAT';
   if (n.includes('LINKEDIN')) return 'LINKEDIN';
-  if (n.includes('GMAIL') || n.includes('HOTMAIL') || n.includes('MAIL')) return 'MAILS';
-  if (n.includes('NETFLIX') || n.includes('DISNEY') || n.includes('PRIME')) return 'STREAMING SITE';
+  if (n.includes('GMAIL') || n.includes('HOTMAIL') || n.includes('GMX') || n.includes('MAIL.RU') || n.includes('TEXPLUS')) return 'MAILS';
+  if (n.includes('NETFLIX') || n.includes('DISNEY') || n.includes('PRIME VIDEO') || n.includes('APPLE MUSIC')) return 'STREAMING SITE';
   if (n.includes('STEAM')) return 'GAME ACCOUNTS';
+  if (n.includes('GOOGLE VOICE') || n.includes('TEXT FREE') || n.includes('TALKATONE')) return 'TEXTING APP';
+  if (n.includes('TWITCH') || n.includes('DISCORD') || n.includes('PINTEREST') || n.includes('QUORA') || n.includes('CANVA')) return 'SOCIAL NETWORKS ACCOUNTS';
   if (parentName) return String(parentName).toUpperCase();
   return 'OTHER';
 }
