@@ -149,13 +149,19 @@ async function handleSync(req, res) {
     const productKey = `sj_${id}`;
     const name = item.name || item.title || `Product ${id}`;
     const cleanDescription = stripHtml(item.description || '');
+    // Confirmed via the debug log below: Sujan's real field is price_minor,
+    // in minor currency units (kobo) — e.g. "120000" = ₦1,200.00. The
+    // earlier price/unit_price/cost guesses never matched, so every
+    // product synced at ₦0. Guesses kept as a fallback only in case some
+    // product lacks price_minor.
     const supplierPrice = Number(
-      item.price ?? item.unit_price ?? item.cost ?? 0
+      item.price_minor != null ? Number(item.price_minor) / 100 : (item.price ?? item.unit_price ?? item.cost ?? 0)
     ) || 0;
     if (supplierPrice === 0) zeroPriceCount++;
-    // Stock may or may not be on the list item — see file header comment.
+    // Confirmed via the debug log below: Sujan's real field is
+    // available_stock, not stock/in_stock/available_quantity/quantity.
     const stock = Number(
-      item.stock ?? item.in_stock ?? item.available_quantity ?? item.quantity ?? 0
+      item.available_stock ?? item.stock ?? item.in_stock ?? item.available_quantity ?? item.quantity ?? 0
     ) || 0;
 
     const { data: existing } = await supabase
