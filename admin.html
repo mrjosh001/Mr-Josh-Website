@@ -338,7 +338,7 @@
               <div style="display:flex;gap:8px;flex-wrap:wrap;">
                 <button class="btn btn-ghost btn-sm" id="btnSyncFadded" onclick="syncProductsNow()"><i class="fas fa-sync"></i> Sync Fadded</button>
                 <button class="btn btn-ghost btn-sm" id="btnSyncLogsDomain" onclick="syncLogsDomainNow()"><i class="fas fa-sync"></i> Sync Logs Domain</button>
-                <button class="btn btn-ghost btn-sm" id="btnSyncSujan" onclick="syncSujanNow()" title="Admin-only — synced products stay hidden from customers until switched Available"><i class="fas fa-sync"></i> Sync Sujan Dept.</button>
+                <button class="btn btn-ghost btn-sm" id="btnSyncSujan" onclick="syncSujanNow()"><i class="fas fa-sync"></i> Sync Sujan Dept.</button>
                 <button class="btn btn-primary btn-sm" id="btnSyncAll" onclick="syncAllSuppliersNow()"><i class="fas fa-sync"></i> Sync All</button>
                 <button class="btn btn-ghost btn-sm" onclick="openRestockModal()"><i class="fas fa-upload"></i> Restock Manual</button>
                 <button class="btn btn-primary btn-sm" onclick="openProductModal()"><i class="fas fa-plus"></i> Add</button>
@@ -1888,9 +1888,6 @@ async function syncLogsDomainNow() {
   }
 }
 
-// Sujan Department is admin/backend-only for now — every product it syncs
-// comes in with is_available forced false (see api/sujan.js), so
-// it's intentionally left out of "Sync All" below until it's ready to launch.
 async function syncSujanNow() {
   const btn = document.getElementById('btnSyncSujan');
   const idle = '<i class="fas fa-sync"></i> Sync Sujan Dept.';
@@ -1899,10 +1896,10 @@ async function syncSujanNow() {
     const res = await fetch('/api/sujan');
     const data = await res.json();
     let msg = data.success
-      ? `Sujan Department sync complete (admin-only, not visible to customers yet)\nSynced: ${data.synced}\nNew: ${data.new_products || 0}\nUpdated: ${data.updated_products || 0}`
+      ? `Sujan Department sync complete\nSynced: ${data.synced}\nNew: ${data.new_products || 0}\nUpdated: ${data.updated_products || 0}`
       : ('Sujan Department sync failed: ' + (data.message || 'Unknown error'));
     if (data.success && data.zero_price_count > 0) {
-      msg += `\n\n⚠️ ${data.zero_price_count} of ${data.synced} products came back with a ₦0 supplier price — Sujan's API likely uses a different field name than expected. Check the Vercel logs for "[sujan sync] raw first product" to see the real field names.`;
+      msg += `\n\n⚠️ ${data.zero_price_count} of ${data.synced} products came back with a ₦0 supplier price — check the Vercel logs for "[sujan sync] raw first product" to see the raw response.`;
     }
     alert(msg);
     await loadProducts();
@@ -1919,15 +1916,19 @@ async function syncAllSuppliersNow() {
   setSyncButtonLoading(btn, true, idle);
   const fBtn = document.getElementById('btnSyncFadded');
   const lBtn = document.getElementById('btnSyncLogsDomain');
+  const sBtn = document.getElementById('btnSyncSujan');
   setSyncButtonLoading(fBtn, true, '<i class="fas fa-sync"></i> Sync Fadded');
   setSyncButtonLoading(lBtn, true, '<i class="fas fa-sync"></i> Sync Logs Domain');
+  setSyncButtonLoading(sBtn, true, '<i class="fas fa-sync"></i> Sync Sujan Dept.');
   try {
-    const [fRes, lRes] = await Promise.all([
+    const [fRes, lRes, sRes] = await Promise.all([
       fetch('/api/products'),
-      fetch('/api/products-logsdomain')
+      fetch('/api/products-logsdomain'),
+      fetch('/api/sujan')
     ]);
     const fadded = await fRes.json();
     const ld = await lRes.json();
+    const sujan = await sRes.json();
     const lines = [];
     if (fadded.success) {
       lines.push(`Fadded: ${fadded.synced} (new ${fadded.new_products || 0}, updated ${fadded.updated_products || 0})`);
@@ -1939,6 +1940,12 @@ async function syncAllSuppliersNow() {
     } else {
       lines.push('Logs Domain failed: ' + (ld.message || 'error'));
     }
+    if (sujan.success) {
+      lines.push(`Sujan Dept.: ${sujan.synced} (new ${sujan.new_products || 0}, updated ${sujan.updated_products || 0})`);
+      if (sujan.zero_price_count > 0) lines.push(`  ⚠️ ${sujan.zero_price_count} came back at ₦0 — check Vercel logs`);
+    } else {
+      lines.push('Sujan Dept. failed: ' + (sujan.message || 'error'));
+    }
     alert(lines.join('\n'));
     await loadProducts();
   } catch (e) {
@@ -1947,6 +1954,7 @@ async function syncAllSuppliersNow() {
     setSyncButtonLoading(btn, false, idle);
     setSyncButtonLoading(fBtn, false, '<i class="fas fa-sync"></i> Sync Fadded');
     setSyncButtonLoading(lBtn, false, '<i class="fas fa-sync"></i> Sync Logs Domain');
+    setSyncButtonLoading(sBtn, false, '<i class="fas fa-sync"></i> Sync Sujan Dept.');
   }
 }
 
