@@ -1659,6 +1659,19 @@ function filterProducts() {
       (p.description || '').toLowerCase().includes(q)
     );
   }
+  // Available products first within each category, so admins see what's
+  // actually live before scrolling past hidden ones. Sorting by category
+  // first keeps same-category products grouped together even though the
+  // table itself has no visual section headers.
+  filtered = [...filtered].sort((a, b) => {
+    const catA = (a.category || 'OTHER').trim();
+    const catB = (b.category || 'OTHER').trim();
+    if (catA !== catB) return catA.localeCompare(catB);
+    const availA = a.is_available !== false;
+    const availB = b.is_available !== false;
+    if (availA !== availB) return availA ? -1 : 1;
+    return (a.name || '').localeCompare(b.name || '');
+  });
   renderProducts(filtered);
 }
 
