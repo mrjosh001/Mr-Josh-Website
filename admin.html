@@ -300,6 +300,7 @@
               <div class="metric-card"><div class="metric-label">FADDED</div><div class="metric-value" id="balFadded">—</div><div class="metric-sub" id="balFaddedSub">Loading…</div></div>
               <div class="metric-card"><div class="metric-label">Logs Domain</div><div class="metric-value" id="balLogsdomain">—</div><div class="metric-sub" id="balLogsdomainSub">Loading…</div></div>
               <div class="metric-card"><div class="metric-label">GrizzlySMS</div><div class="metric-value" id="balGrizzly">—</div><div class="metric-sub" id="balGrizzlySub">Loading…</div></div>
+              <div class="metric-card"><div class="metric-label">Sujan Dept.</div><div class="metric-value" id="balSujan">—</div><div class="metric-sub" id="balSujanSub">Loading…</div></div>
             </div>
           </div>
           <div class="panel">
@@ -352,7 +353,7 @@
               <table>
                 <thead>
                   <tr>
-                    <th>Product</th><th>Category</th><th>Supplier</th><th>Your Price</th><th>Profit</th><th>Stock</th><th>Status</th><th>Action</th>
+                    <th>Product</th><th>Category</th><th>Cost</th><th>Your Price</th><th>Profit</th><th>Stock</th><th>Status</th><th>Action</th>
                   </tr>
                 </thead>
                 <tbody id="productsTableBody"></tbody>
@@ -940,7 +941,7 @@ async function bulkRepriceNumbers(mode) {
 async function loadSupplierBalances() {
   const btn = document.getElementById('btnRefreshSupplierBalances');
   setBtnBusy(btn, true, 'Refreshing...');
-  ['Fadded', 'Logsdomain', 'Grizzly'].forEach(p => {
+  ['Fadded', 'Logsdomain', 'Grizzly', 'Sujan'].forEach(p => {
     const sub = document.getElementById('bal' + p + 'Sub');
     if (sub) sub.textContent = 'Loading…';
   });
@@ -970,6 +971,7 @@ async function loadSupplierBalances() {
     renderSupplierBalance('Fadded', data.suppliers.fadded);
     renderSupplierBalance('Logsdomain', data.suppliers.logsdomain);
     renderSupplierBalance('Grizzly', data.suppliers.grizzly);
+    renderSupplierBalance('Sujan', data.suppliers.sujan);
   } catch (err) {
     console.error('Supplier balance error at step:', step, err.name, err.message, err.stack);
     showAdminToast(`Supplier balance check failed while ${step}: ` + (err.message || 'network error'), 'error');
@@ -1557,6 +1559,22 @@ async function loadOverviewStats(period) {
   }
 }
 
+// Maps the raw `source` column on a product row to a short readable label +
+// a distinct color, so it's a quick visual scan instead of reading text.
+// Add a new entry here whenever a new supplier is wired in.
+const SUPPLIER_BADGES = {
+  fadded:          { label: 'FADDED',      color: '#38bdf8' },
+  logsdomain:      { label: 'LOGS DOMAIN', color: '#a78bfa' },
+  sujandepartment: { label: 'SUJAN DEPT.', color: '#fb923c' },
+  manual:          { label: 'MANUAL',      color: '#94a3b8' }
+};
+
+function supplierBadgeHtml(source) {
+  const key = String(source || '').trim().toLowerCase();
+  const info = SUPPLIER_BADGES[key] || { label: key ? key.toUpperCase() : 'UNKNOWN', color: '#64748b' };
+  return `<span style="display:inline-block;font-size:10px;font-weight:700;letter-spacing:0.03em;padding:2px 7px;border-radius:6px;background:${info.color}22;color:${info.color};white-space:nowrap;">${escapeHtml(info.label)}</span>`;
+}
+
 function renderProducts(list) {
   const items = list || allProducts;
   const tbody = document.getElementById('productsTableBody');
@@ -1577,7 +1595,10 @@ function renderProducts(list) {
     const rowId = p.id || p.product_key;
     return `
       <tr>
-        <td style="font-weight:700;color:var(--text);">${escapeHtml(p.name || 'Unnamed')}</td>
+        <td style="font-weight:700;color:var(--text);">
+          ${escapeHtml(p.name || 'Unnamed')}
+          <div style="margin-top:4px;">${supplierBadgeHtml(p.source)}</div>
+        </td>
         <td>${escapeHtml(category)}</td>
         <td class="supplier-price">₦${supplier.toLocaleString()}</td>
         <td class="price">₦${price.toLocaleString()}</td>
@@ -1610,7 +1631,7 @@ function renderProductCards(items) {
     const rowId = p.id || p.product_key;
     return `
       <div class="product-card">
-        <h4>${escapeHtml(p.name || 'Unnamed')}</h4>
+        <h4>${escapeHtml(p.name || 'Unnamed')} ${supplierBadgeHtml(p.source)}</h4>
         <div class="meta">${escapeHtml(p.category || 'OTHER')}</div>
         <div class="row-line"><span>Your Price</span><strong class="price">₦${price.toLocaleString()}</strong></div>
         <div class="row-line"><span>Supplier</span><span class="supplier-price">₦${supplier.toLocaleString()}</span></div>
