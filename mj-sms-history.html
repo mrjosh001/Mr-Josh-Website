@@ -50,7 +50,7 @@ body::before{content:'';position:fixed;inset:0;pointer-events:none;z-index:0;bac
 </head>
 <body>
 <header class="header">
-<a href="mj-sms.html" class="back-button"><i class="fa-solid fa-arrow-left"></i></a>
+<a href="mj-sms-choose-server.html" class="back-button"><i class="fa-solid fa-arrow-left"></i></a>
 <h1 class="page-title">MJ SMS History</h1>
 </header>
 <main class="main-content">
@@ -80,7 +80,7 @@ function renderOrders(orders){
       <div class="empty-state-icon">📱</div>
       <h4>No numbers purchased yet</h4>
       <p>Get a virtual number for OTP verification.</p>
-      <a href="mj-sms.html">Get a Number</a>
+      <a href="mj-sms-choose-server.html">Get a Number</a>
     </div>`;
     return;
   }
@@ -89,16 +89,21 @@ function renderOrders(orders){
     const statusClass = 'status-' + (o.status || 'waiting_for_code');
     const statusLabel = STATUS_LABELS[o.status] || o.status;
     const date = o.created_at ? new Date(o.created_at).toLocaleString() : '—';
+    const isServer2 = o.source === 'logsdomain';
+    const numberPage = isServer2 ? 'mj-sms2-number.html' : 'mj-sms-number.html';
+    const serverTag = isServer2
+      ? '<span class="status-pill" style="background:rgba(167,139,250,.15);color:#a78bfa;">Server 2</span>'
+      : '<span class="status-pill" style="background:var(--primary-glow);color:var(--primary);">Server 1</span>';
     let actionHtml = '';
     if(o.status === 'waiting_for_code'){
-      actionHtml = `<div class="order-actions"><a href="mj-sms-number.html?order_id=${encodeURIComponent(o.order_id)}"><i class="fa-solid fa-arrow-right"></i> View & Check Status</a></div>`;
+      actionHtml = `<div class="order-actions"><a href="${numberPage}?order_id=${encodeURIComponent(o.order_id)}"><i class="fa-solid fa-arrow-right"></i> View & Check Status</a></div>`;
     }
     return `<div class="order-card">
       <div class="order-top">
         <div class="order-name" style="text-transform:capitalize;">${escapeHtml(name)}</div>
         <div class="order-price">${money(o.price)}</div>
       </div>
-      <span class="status-pill ${statusClass}">${escapeHtml(statusLabel)}</span>
+      <span class="status-pill ${statusClass}">${escapeHtml(statusLabel)}</span> ${serverTag}
       <div class="detail-grid">
         <div class="detail-row"><span class="detail-label">Country</span><span class="detail-value">${escapeHtml(o.country_name || '—')}</span></div>
         <div class="detail-row"><span class="detail-label">Number</span><span class="detail-value" style="font-family:monospace;">${escapeHtml(o.phone_number || '—')}</span></div>
@@ -122,7 +127,6 @@ async function init(){
   const { data, error } = await sb
     .from('number_orders')
     .select('*')
-    .eq('source', 'grizzlysms')
     .eq('user_id', session.user.id)
     .order('created_at', { ascending: false });
 

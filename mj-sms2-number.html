@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
-<title>Get Number - MJ HUB</title>
+<title>Get Number · Server 2 - MJ HUB</title>
 <script>
 (function(){try{var t=localStorage.getItem('mjhub-theme');document.documentElement.setAttribute('data-theme',(t==='light'||t==='dark')?t:'dark');}catch(e){document.documentElement.setAttribute('data-theme','dark');}})();
 </script>
@@ -48,11 +48,6 @@ body::before{content:'';position:fixed;inset:0;pointer-events:none;z-index:0;bac
 .btn-outline{background:transparent;color:var(--text);border:1px solid var(--border);}
 .btn-danger{background:transparent;color:var(--danger);border:1px solid rgba(248,113,113,.4);}
 .btn:disabled{opacity:.55;cursor:not-allowed;}
-.cancel-row{display:flex;align-items:center;justify-content:center;gap:12px;margin-top:10px;flex-wrap:wrap;}
-.cancel-row .btn{width:auto;min-width:120px;margin-top:0;flex:1;}
-.cancel-available{font-size:13px;font-weight:600;color:var(--muted);white-space:nowrap;}
-.cancel-available strong{color:var(--primary);font-variant-numeric:tabular-nums;}
-.cancel-hint{font-size:11px;color:var(--muted);margin-top:6px;text-align:center;}
 .toast-container{position:fixed;top:76px;right:12px;z-index:9999;display:flex;flex-direction:column;gap:8px;pointer-events:none}
 .toast{background:var(--card);border:1px solid var(--success);border-radius:12px;padding:12px 14px;display:flex;align-items:center;gap:10px;font-size:12px;font-weight:600;max-width:280px;pointer-events:all;box-shadow:var(--shadow);color:var(--text)}
 .toast.error{border-color:var(--danger)}
@@ -61,8 +56,8 @@ body::before{content:'';position:fixed;inset:0;pointer-events:none;z-index:0;bac
 <body>
 <div class="toast-container" id="toastContainer"></div>
 <header class="header">
-<a href="mj-sms.html" class="back-button"><i class="fa-solid fa-arrow-left"></i></a>
-<h1 class="page-title">Get Number</h1>
+<a href="mj-sms2.html" class="back-button"><i class="fa-solid fa-arrow-left"></i></a>
+<h1 class="page-title">Get Number · Server 2</h1>
 </header>
 <main class="main-content">
 <div class="status-card" id="statusCard">
@@ -82,18 +77,13 @@ const orderId = params.get('order_id');
 
 let sbClient = null;
 let currentUserId = null;
+let accessToken = null;
 let pollTimer = null;
 let countdownTimer = null;
-let cancelCooldownTimer = null;
 let cancelling = false;
 let checkingNow = false;
 let autoRefundStarted = false;
-let orderCreatedAt = null;
-
-// Grizzly reservation window (~20 min). After this with no code → auto refund.
-const EXPIRY_SECONDS = 20 * 60;
-// Cancel lock — "Available in" countdown beside Cancel (5 minutes).
-const CANCEL_COOLDOWN_SECONDS = 5 * 60;
+let remainingSeconds = null;
 
 function escapeHtml(str){if(!str)return'';return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;')}
 function money(n){return '₦'+Number(n||0).toLocaleString()}
@@ -102,7 +92,7 @@ function showToast(msg,type){const t=document.createElement('div');t.className='
 function formatCountdown(seconds){
   if(seconds <= 0) return '0:00';
   const m = Math.floor(seconds/60);
-  const s = seconds%60;
+  const s = Math.floor(seconds%60);
   return m+':'+String(s).padStart(2,'0');
 }
 
@@ -110,106 +100,66 @@ function stopCountdown(){
   if(countdownTimer) clearInterval(countdownTimer);
   countdownTimer = null;
 }
-function stopCancelCooldown(){
-  if(cancelCooldownTimer) clearInterval(cancelCooldownTimer);
-  cancelCooldownTimer = null;
-}
 
-function updateCancelButtonState(){
-  const btn = document.getElementById('cancelBtn');
-  const avail = document.getElementById('cancelAvailable');
-  const hint = document.getElementById('cancelHint');
-  if(!btn) return;
-  if(cancelling) return;
-
-  const startMs = orderCreatedAt ? new Date(orderCreatedAt).getTime() : Date.now();
-  const elapsed = Math.floor((Date.now() - startMs) / 1000);
-  const waitLeft = CANCEL_COOLDOWN_SECONDS - elapsed;
-
-  // Grizzly-style: Cancel button stays labeled "Cancel"; countdown sits beside it
-  btn.innerHTML = 'Cancel';
-  if(waitLeft > 0){
-    btn.disabled = true;
-    if(avail){
-      avail.style.display = '';
-      avail.innerHTML = 'Available in : <strong>' + formatCountdown(waitLeft) + '</strong>';
-    }
-    if(hint) hint.textContent = '';
-  } else {
-    btn.disabled = false;
-    if(avail){
-      avail.style.display = 'none';
-      avail.innerHTML = '';
-    }
-    if(hint) hint.textContent = 'No code yet? Cancel to restore your balance.';
-  }
-}
-
-function startCancelCooldown(){
-  stopCancelCooldown();
-  updateCancelButtonState();
-  cancelCooldownTimer = setInterval(updateCancelButtonState, 1000);
-}
-
-function startCountdown(createdAt){
+// LogsDomain's own API reports time_left on order + check responses — used
+// directly here as the source of truth instead of a locally hardcoded
+// expiry window (which is what mj-sms-number.html does for Grizzly, since
+// Grizzly's API doesn't return a live remaining-time value).
+function startCountdown(timeLeftSeconds){
   stopCountdown();
-  orderCreatedAt = createdAt || orderCreatedAt || new Date().toISOString();
-  const startMs = new Date(orderCreatedAt).getTime();
+  if(timeLeftSeconds === null || timeLeftSeconds === undefined) return;
+  remainingSeconds = Number(timeLeftSeconds);
   function tick(){
-    const elapsed = Math.floor((Date.now() - startMs) / 1000);
-    const remaining = EXPIRY_SECONDS - elapsed;
     const label = document.getElementById('countdownValue');
-    if(!label) { stopCountdown(); return; }
-    if(remaining <= 0){
+    if(!label){ stopCountdown(); return; }
+    if(remainingSeconds <= 0){
       label.textContent = 'Expired — refunding…';
-      // Auto-refund once when countdown ends and still no code
       if(!autoRefundStarted && !cancelling){
         autoRefundStarted = true;
         autoRefundOnExpiry();
       }
       return;
     }
-    label.textContent = formatCountdown(remaining);
+    label.textContent = formatCountdown(remainingSeconds);
+    remainingSeconds -= 1;
   }
   tick();
   countdownTimer = setInterval(tick, 1000);
-  startCancelCooldown();
+}
+
+async function ldFetch(action, opts = {}){
+  const method = opts.method || 'GET';
+  const headers = { Authorization: 'Bearer ' + accessToken };
+  if(opts.body) headers['Content-Type'] = 'application/json';
+  const res = await fetch(`/api/logsdomain-numbers?action=${action}`, {
+    method,
+    headers,
+    body: opts.body ? JSON.stringify(opts.body) : undefined
+  });
+  const data = await res.json();
+  return { ok: res.ok, data };
 }
 
 async function autoRefundOnExpiry(){
-  if(!orderId || !currentUserId) return;
+  if(!orderId) return;
   stopPolling();
   const btn = document.getElementById('cancelBtn');
-  if(btn){
-    btn.disabled = true;
-    btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Refunding…';
-  }
+  if(btn){ btn.disabled = true; btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Refunding…'; }
   try{
-    const res = await fetch('/api/grizzly-sync?action=cancel', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ order_id: orderId, user_id: currentUserId })
-    });
-    const data = await res.json();
-    if(res.ok && data.success){
+    const { ok, data } = await ldFetch('cancel', { method: 'POST', body: { order_id: orderId } });
+    if(ok && data.success){
       showToast('Time expired — balance restored', 'success');
       renderCancelled('Time ran out with no SMS. Your balance has been restored.');
       return;
     }
-    // If supplier already cancelled / check can refund
-    const check = await fetch('/api/grizzly-sync?action=check', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ order_id: orderId, user_id: currentUserId })
-    });
-    const checkData = await check.json();
-    if(check.ok && checkData.success && checkData.data?.status === 'refunded'){
+    const check = await ldFetch('check', { method: 'POST', body: { order_id: orderId } });
+    if(check.ok && check.data.success && check.data.data?.status === 'refunded'){
       showToast('Balance restored', 'success');
       renderCancelled('No SMS received. Your balance has been restored.');
       return;
     }
-    if(check.ok && checkData.success && checkData.data?.status === 'completed' && checkData.data?.code){
-      renderCompleted(checkData.data);
+    if(check.ok && check.data.success && check.data.data?.status === 'completed' && check.data.data?.code){
+      renderCompleted(check.data.data);
       return;
     }
     showToast(data.message || 'Could not auto-refund yet. Try Cancel or Check again.', 'error');
@@ -223,7 +173,6 @@ async function autoRefundOnExpiry(){
 }
 
 function renderWaiting(data){
-  if(data.created_at) orderCreatedAt = data.created_at;
   const serviceLabel = (data.service_name || '').replace(/_/g,' ');
   statusCard.innerHTML = `
     <div class="status-icon waiting"><i class="fa-solid fa-mobile-screen"></i></div>
@@ -253,23 +202,19 @@ function renderWaiting(data){
       <div class="value" id="countdownValue" style="color:var(--primary);">--:--</div>
     </div>
     <button type="button" class="btn btn-outline" id="checkNowBtn"><i class="fa-solid fa-rotate"></i> Check for SMS Now</button>
-    <div class="cancel-row">
-      <button type="button" class="btn btn-danger" id="cancelBtn" disabled>Cancel</button>
-      <span class="cancel-available" id="cancelAvailable">Available in : <strong>--:--</strong></span>
-    </div>
-    <div class="cancel-hint" id="cancelHint"></div>
-    <a href="mj-sms.html" class="btn btn-outline">Back to MJ SMS</a>
+    <button type="button" class="btn btn-danger" id="cancelBtn">Cancel & Refund</button>
+    <div style="font-size:11px;color:var(--muted);margin-top:6px;">No code yet? Cancel any time to restore your balance.</div>
+    <a href="mj-sms2.html" class="btn btn-outline">Back to MJ SMS</a>
     <a href="index.html" class="btn btn-outline">Back to Home</a>
   `;
   document.getElementById('cancelBtn').addEventListener('click', cancelOrder);
   document.getElementById('checkNowBtn').addEventListener('click', checkNow);
-  startCountdown(data.created_at || orderCreatedAt);
+  startCountdown(data.time_left);
 }
 
 function renderCompleted(data){
   stopPolling();
   stopCountdown();
-  stopCancelCooldown();
   const serviceLabel = (data.service_name || '').replace(/_/g,' ');
   statusCard.innerHTML = `
     <div class="status-icon success"><i class="fa-solid fa-circle-check"></i></div>
@@ -292,7 +237,7 @@ function renderCompleted(data){
       <div class="value" id="codeValue">${escapeHtml(data.code || '—')}</div>
     </div>
     <button type="button" class="btn btn-primary" id="copyCodeBtn"><i class="fa-solid fa-copy"></i> Copy Code</button>
-    <a href="mj-sms.html" class="btn btn-outline">Buy Another Number</a>
+    <a href="mj-sms2.html" class="btn btn-outline">Buy Another Number</a>
     <a href="index.html" class="btn btn-outline">Back to Home</a>
   `;
   document.getElementById('copyCodeBtn').addEventListener('click', () => {
@@ -304,12 +249,11 @@ function renderCompleted(data){
 function renderCancelled(msg){
   stopPolling();
   stopCountdown();
-  stopCancelCooldown();
   statusCard.innerHTML = `
     <div class="status-icon cancelled"><i class="fa-solid fa-circle-xmark"></i></div>
     <div class="status-title">Balance Restored</div>
     <div class="status-sub">${escapeHtml(msg || 'This number was cancelled and your wallet balance has been restored.')}</div>
-    <a href="mj-sms.html" class="btn btn-primary">Buy Another Number</a>
+    <a href="mj-sms2.html" class="btn btn-primary">Buy Another Number</a>
     <a href="index.html" class="btn btn-outline">Back to Home</a>
   `;
 }
@@ -317,12 +261,11 @@ function renderCancelled(msg){
 function renderError(msg){
   stopPolling();
   stopCountdown();
-  stopCancelCooldown();
   statusCard.innerHTML = `
     <div class="status-icon cancelled"><i class="fa-solid fa-triangle-exclamation"></i></div>
     <div class="status-title">Something went wrong</div>
     <div class="status-sub">${escapeHtml(msg)}</div>
-    <a href="mj-sms.html" class="btn btn-primary">Back to MJ SMS</a>
+    <a href="mj-sms2.html" class="btn btn-primary">Back to MJ SMS</a>
     <a href="index.html" class="btn btn-outline">Back to Home</a>
   `;
 }
@@ -333,32 +276,22 @@ function stopPolling(){
 }
 
 async function checkStatus(){
-  if(!orderId || !currentUserId) return;
+  if(!orderId) return;
   try{
-    const res = await fetch('/api/grizzly-sync?action=check', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ order_id: orderId, user_id: currentUserId })
-    });
-    const data = await res.json();
-    if(!res.ok || !data.success){
+    const { ok, data } = await ldFetch('check', { method: 'POST', body: { order_id: orderId } });
+    if(!ok || !data.success){
       renderError(data.message || 'Could not check this order.');
       return;
     }
     const status = data.data.status;
-    if(data.data.created_at) orderCreatedAt = data.data.created_at;
-
     if(status === 'completed' && data.data.code){
       renderCompleted(data.data);
     } else if(status === 'refunded' || data.data.refunded){
       renderCancelled('No SMS received. Your balance has been restored.');
     } else {
-      // Avoid full re-render every poll (keeps countdown smooth) if already waiting
       const existingCountdown = document.getElementById('countdownValue');
       if(!existingCountdown){
         renderWaiting(data.data);
-      } else {
-        // keep polling only
       }
       pollTimer = setTimeout(checkStatus, 5000);
     }
@@ -373,20 +306,14 @@ async function checkNow(){
   stopPolling();
   const btn = document.getElementById('checkNowBtn');
   if(btn){ btn.disabled = true; btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Checking...'; }
-  // Force full refresh path
-  const res = await fetch('/api/grizzly-sync?action=check', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ order_id: orderId, user_id: currentUserId })
-  }).catch(() => null);
+  const { ok, data } = await ldFetch('check', { method: 'POST', body: { order_id: orderId } }).catch(() => ({ ok:false, data:null }));
   checkingNow = false;
-  if(!res){
+  if(!data){
     showToast('Network error', 'error');
     pollTimer = setTimeout(checkStatus, 5000);
     return;
   }
-  const data = await res.json();
-  if(!res.ok || !data.success){
+  if(!ok || !data.success){
     showToast(data.message || 'Check failed', 'error');
     pollTimer = setTimeout(checkStatus, 5000);
     if(btn){ btn.disabled = false; btn.innerHTML = '<i class="fa-solid fa-rotate"></i> Check for SMS Now'; }
@@ -404,40 +331,17 @@ async function checkNow(){
 }
 
 async function cancelOrder(){
-  if(cancelling || !orderId || !currentUserId) return;
-
-  const startMs = orderCreatedAt ? new Date(orderCreatedAt).getTime() : 0;
-  const elapsed = startMs ? Math.floor((Date.now() - startMs) / 1000) : CANCEL_COOLDOWN_SECONDS;
-  if(elapsed < CANCEL_COOLDOWN_SECONDS){
-    const left = CANCEL_COOLDOWN_SECONDS - elapsed;
-    showToast('Cancel available in ' + formatCountdown(left), 'error');
-    return;
-  }
-
+  if(cancelling || !orderId) return;
   cancelling = true;
   stopPolling();
   const btn = document.getElementById('cancelBtn');
   if(btn){ btn.disabled = true; btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Cancelling...'; }
   try{
-    const res = await fetch('/api/grizzly-sync?action=cancel', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ order_id: orderId, user_id: currentUserId })
-    });
-    const data = await res.json();
-    if(!res.ok || !data.success){
-      if(data.code === 'EARLY_CANCEL_DENIED'){
-        showToast(data.message || 'Cancel not available yet — wait a bit longer.', 'error');
-      } else if(data.code === 'NUMBER_CODE_ALREADY_RECEIVED'){
-        showToast('Code already received — cannot cancel.', 'error');
-        await checkStatus();
-        cancelling = false;
-        return;
-      } else {
-        showToast(data.message || 'Could not cancel this order.', 'error');
-      }
+    const { ok, data } = await ldFetch('cancel', { method: 'POST', body: { order_id: orderId } });
+    if(!ok || !data.success){
+      showToast(data.message || 'Could not cancel this order.', 'error');
       cancelling = false;
-      updateCancelButtonState();
+      if(btn){ btn.disabled = false; btn.innerHTML = 'Cancel & Refund'; }
       pollTimer = setTimeout(checkStatus, 5000);
       return;
     }
@@ -461,6 +365,7 @@ async function init(){
     return;
   }
   currentUserId = session.user.id;
+  accessToken = session.access_token;
   checkStatus();
 }
 

@@ -379,6 +379,10 @@
             </p>
             <p id="grizzlySyncProgress" style="color:var(--primary,#3b82f6);font-size:12px;font-weight:700;margin:0 0 14px;min-height:16px;"></p>
             <div class="search-row" style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;">
+              <select id="smsSourceFilter" onchange="filterNumberServices()" style="min-width:180px;">
+                <option value="grizzlysms">Grizzly (Server 1)</option>
+                <option value="logsdomain">LogsDomain (Server 2)</option>
+              </select>
               <input type="text" id="smsSearch" placeholder="Search service (WhatsApp, Google, tg…)" oninput="filterNumberServices()" style="flex:1;min-width:160px;" />
               <input type="text" id="smsCountryFilter" placeholder="Country (Nigeria, USA…)" oninput="filterNumberServices()" style="flex:1;min-width:160px;" />
               <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:#94a3b8;white-space:nowrap;">
@@ -386,6 +390,7 @@
                 Hide 0 stock
               </label>
             </div>
+            <p style="font-size:11px;color:#94a3b8;margin:6px 0 0;">Each server's catalog is shown separately — this list never blends Grizzly and LogsDomain services together. LogsDomain's catalog isn't synced into this table yet (still admin-only in the <strong>SMS Server 2</strong> tab); once it is, switch the dropdown above to view it here too.</p>
 
             <div class="desktop-only desktop-table table-wrap">
               <table>
@@ -1080,7 +1085,8 @@ async function loadSmsRowsForCurrentFilter() {
   }
 
   try {
-    let query = sb.from('number_services').select(cols);
+    const source = document.getElementById('smsSourceFilter')?.value || 'grizzlysms';
+    let query = sb.from('number_services').select(cols).eq('source', source);
     if (country) query = query.ilike('country_name', `%${country}%`);
     if (q) {
       query = query.or(
@@ -2624,9 +2630,11 @@ async function loadLdServices() {
       sel.innerHTML = '<option value="">No services for this country</option>';
       return;
     }
-    sel.innerHTML = ldNumServicesCache.map(s =>
-      `<option value="${escapeHtml(String(s.service_id))}">${escapeHtml(s.service_name)} — ₦${Number(s.price).toLocaleString()} (${s.available_quantity} in stock, ${s.success_rate ?? '—'}% success)</option>`
-    ).join('');
+    sel.innerHTML = ldNumServicesCache.map(s => {
+      const stockLabel = (s.available_quantity === null || s.available_quantity === undefined) ? 'stock unknown' : `${s.available_quantity} in stock`;
+      const successLabel = (s.success_rate === null || s.success_rate === undefined) ? '' : `, ${s.success_rate}% success`;
+      return `<option value="${escapeHtml(String(s.service_id))}">${escapeHtml(s.service_name)} — ₦${Number(s.price).toLocaleString()} (${stockLabel}${successLabel})</option>`;
+    }).join('');
   } catch (e) {
     sel.innerHTML = '<option value="">Failed to load</option>';
     showAdminToast('LogsDomain services: ' + e.message, 'error');
