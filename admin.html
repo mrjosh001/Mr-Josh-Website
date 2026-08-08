@@ -483,8 +483,6 @@
             </div>
 
             <div style="display:flex;gap:16px;align-items:center;flex-wrap:wrap;margin-bottom:16px;">
-              <div style="font-size:13px;">LogsDomain wallet: <strong id="ldNumWallet">—</strong></div>
-              <button class="btn btn-outline btn-sm" onclick="loadLdWallet()"><i class="fas fa-sync"></i> Refresh</button>
               <button class="btn btn-primary btn-sm" id="btnSyncLogsDomainNumbers2" onclick="syncLogsDomainNumbersNow()"><i class="fas fa-sync"></i> Sync LogsDomain</button>
             </div>
             <p style="color:#94a3b8;font-size:13px;margin:-4px 0 4px;">
@@ -2780,18 +2778,7 @@ async function ldNumFetch(action, opts = {}) {
 }
 
 async function initLdNumTab() {
-  loadLdWallet();
   loadSmsServer2RowsForCurrentFilter();
-}
-
-async function loadLdWallet() {
-  const el = document.getElementById('ldNumWallet');
-  try {
-    const data = await ldNumFetch('wallet');
-    el.textContent = '₦' + Number(data.data.balance).toLocaleString();
-  } catch (e) {
-    el.textContent = 'Error: ' + e.message;
-  }
 }
 
 function switchTab(name) {
