@@ -370,19 +370,17 @@
               <div class="panel-title">SMS Numbers — Supplier Catalog</div>
               <div style="display:flex;gap:8px;flex-wrap:wrap;">
                 <button class="btn btn-primary btn-sm" id="btnSyncGrizzly" onclick="syncGrizzlyNow()"><i class="fas fa-sync"></i> Sync Grizzly</button>
+                <button class="btn btn-primary btn-sm" id="btnSyncLogsDomain" onclick="syncLogsDomainNow()"><i class="fas fa-sync"></i> Sync LogsDomain</button>
                 <button class="btn btn-secondary btn-sm" id="btnBulkRepriceUnpriced" onclick="bulkRepriceNumbers('unpriced_only')"><i class="fas fa-tags"></i> Price Unpriced Numbers</button>
                 <button class="btn btn-ghost btn-sm" id="btnBulkRepriceAll" onclick="bulkRepriceNumbers('all')" title="Rerolls markup on every system-priced row. Prices you've set manually are never touched."><i class="fas fa-dice"></i> Reprice All (skips manual prices)</button>
               </div>
             </div>
             <p style="color:#94a3b8;font-size:13px;margin:-4px 0 4px;">
-              Syncing pulls the latest country, service, supplier price, and stock from GrizzlySMS. Your own selling price is never overwritten by a sync — edit it manually below, or use "Price Unpriced Numbers" to bulk-apply the standard markup to anything still sitting at ₦0.
+              Syncing pulls the latest country, service, supplier price, and stock from GrizzlySMS or LogsDomain. Your own selling price is never overwritten by a sync — edit it manually below, or use "Price Unpriced Numbers" to bulk-apply the standard markup to anything still sitting at ₦0.
             </p>
-            <p id="grizzlySyncProgress" style="color:var(--primary,#3b82f6);font-size:12px;font-weight:700;margin:0 0 14px;min-height:16px;"></p>
+            <p id="grizzlySyncProgress" style="color:var(--primary,#3b82f6);font-size:12px;font-weight:700;margin:0 0 4px;min-height:16px;"></p>
+            <p id="logsdomainSyncProgress" style="color:var(--primary,#3b82f6);font-size:12px;font-weight:700;margin:0 0 14px;min-height:16px;"></p>
             <div class="search-row" style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;">
-              <select id="smsSourceFilter" onchange="filterNumberServices()" style="min-width:180px;">
-                <option value="grizzlysms">Grizzly (Server 1)</option>
-                <option value="logsdomain">LogsDomain (Server 2)</option>
-              </select>
               <input type="text" id="smsSearch" placeholder="Search service (WhatsApp, Google, tg…)" oninput="filterNumberServices()" style="flex:1;min-width:160px;" />
               <input type="text" id="smsCountryFilter" placeholder="Country (Nigeria, USA…)" oninput="filterNumberServices()" style="flex:1;min-width:160px;" />
               <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:#94a3b8;white-space:nowrap;">
@@ -390,13 +388,12 @@
                 Hide 0 stock
               </label>
             </div>
-            <p style="font-size:11px;color:#94a3b8;margin:6px 0 0;">Each server's catalog is shown separately — this list never blends Grizzly and LogsDomain services together. LogsDomain's catalog isn't synced into this table yet (still admin-only in the <strong>SMS Server 2</strong> tab); once it is, switch the dropdown above to view it here too.</p>
 
             <div class="desktop-only desktop-table table-wrap">
               <table>
                 <thead>
                   <tr>
-                    <th>Country</th><th>Service</th><th>Supplier Price</th><th>Your Price</th><th>Stock</th><th>Status</th><th>Action</th>
+                    <th>Country</th><th>Service</th><th>Source</th><th>Supplier Price</th><th>Your Price</th><th>Stock</th><th>Status</th><th>Action</th>
                   </tr>
                 </thead>
                 <tbody id="smsTableBody"></tbody>
@@ -1080,13 +1077,12 @@ async function loadSmsRowsForCurrentFilter() {
     const hint =
       '<div class="empty-state">Select a <strong>country</strong> or search a <strong>service</strong> (WhatsApp, Google…).<br><span style="opacity:.7;font-size:12px;">Use country filter box to find Nigeria, USA, etc. quickly.</span></div>';
     if (cards) cards.innerHTML = hint;
-    if (tbody) tbody.innerHTML = `<tr><td colspan="7">${hint}</td></tr>`;
+    if (tbody) tbody.innerHTML = `<tr><td colspan="8">${hint}</td></tr>`;
     return;
   }
 
   try {
-    const source = document.getElementById('smsSourceFilter')?.value || 'grizzlysms';
-    let query = sb.from('number_services').select(cols).eq('source', source);
+    let query = sb.from('number_services').select(cols);
     if (country) query = query.ilike('country_name', `%${country}%`);
     if (q) {
       query = query.or(
@@ -1132,23 +1128,27 @@ function renderNumberServices(list) {
   const cards = document.getElementById('smsMobileCards');
 
   if (!items.length) {
-    if (tbody) tbody.innerHTML = `<tr><td colspan="7" class="empty-state">No SMS numbers yet — run "Sync Grizzly" to pull the supplier catalog.</td></tr>`;
-    if (cards) cards.innerHTML = `<div class="empty-state">No SMS numbers yet — run "Sync Grizzly" to pull the supplier catalog.</div>`;
+    if (tbody) tbody.innerHTML = `<tr><td colspan="8" class="empty-state">No SMS numbers yet — run "Sync Grizzly" or "Sync LogsDomain" to pull a supplier catalog.</td></tr>`;
+    if (cards) cards.innerHTML = `<div class="empty-state">No SMS numbers yet — run "Sync Grizzly" or "Sync LogsDomain" to pull a supplier catalog.</div>`;
     return;
   }
 
+  const sourceLabel = (src) => src === 'logsdomain' ? 'LogsDomain' : (src === 'grizzlysms' ? 'Grizzly' : (src || '—'));
+
   if (tbody) {
     tbody.innerHTML = items.map(s => {
-      const stock = s.available_quantity ?? 0;
-      const available = s.is_available !== false && stock > 0;
-      const statusLabel = s.is_available === false ? 'Hidden' : (stock > 0 ? 'Active' : 'Out of stock');
+      const stock = s.available_quantity;
+      const stockDisplay = stock == null ? '—' : stock;
+      const available = s.is_available !== false && (stock == null || stock > 0);
+      const statusLabel = s.is_available === false ? 'Hidden' : (stock == null ? 'Unknown' : (stock > 0 ? 'Active' : 'Out of stock'));
       return `
         <tr>
           <td style="font-weight:600;">${escapeHtml(s.country_name || '—')}</td>
           <td>${escapeHtml(s.service_name || s.service_id || '—')}</td>
-          <td class="supplier-price">${usdFmt(s.supplier_price)}</td>
+          <td><span class="badge">${sourceLabel(s.source)}</span></td>
+          <td class="supplier-price">${s.currency === 'NGN' ? '₦' + Number(s.supplier_price || 0).toLocaleString() : usdFmt(s.supplier_price)}</td>
           <td class="price">₦${Number(s.price || 0).toLocaleString()}</td>
-          <td>${stock}</td>
+          <td>${stockDisplay}</td>
           <td><span class="badge ${available ? 'badge-on' : 'badge-off'}">${statusLabel}</span></td>
           <td style="white-space:nowrap;">
             <button class="btn btn-ghost btn-sm" onclick="editNumberService('${s.id}')" title="Edit price"><i class="fas fa-edit"></i></button>
@@ -1160,16 +1160,17 @@ function renderNumberServices(list) {
 
   if (cards) {
     cards.innerHTML = items.map(s => {
-      const stock = s.available_quantity ?? 0;
-      const available = s.is_available !== false && stock > 0;
-      const statusLabel = s.is_available === false ? 'Hidden' : (stock > 0 ? 'Active' : 'Out of stock');
+      const stock = s.available_quantity;
+      const stockDisplay = stock == null ? '—' : stock;
+      const available = s.is_available !== false && (stock == null || stock > 0);
+      const statusLabel = s.is_available === false ? 'Hidden' : (stock == null ? 'Unknown' : (stock > 0 ? 'Active' : 'Out of stock'));
       return `
         <div class="product-card">
           <h4>${escapeHtml(s.country_name || '—')}</h4>
-          <div class="meta">${escapeHtml(s.service_name || s.service_id || '—')}</div>
-          <div class="row-line"><span>Supplier Price</span><span class="supplier-price">${usdFmt(s.supplier_price)}</span></div>
+          <div class="meta">${escapeHtml(s.service_name || s.service_id || '—')} · <span class="badge">${sourceLabel(s.source)}</span></div>
+          <div class="row-line"><span>Supplier Price</span><span class="supplier-price">${s.currency === 'NGN' ? '₦' + Number(s.supplier_price || 0).toLocaleString() : usdFmt(s.supplier_price)}</span></div>
           <div class="row-line"><span>Your Price</span><strong class="price">₦${Number(s.price || 0).toLocaleString()}</strong></div>
-          <div class="row-line"><span>Stock</span><span>${stock}</span></div>
+          <div class="row-line"><span>Stock</span><span>${stockDisplay}</span></div>
           <div class="row-line"><span>Status</span><span class="badge ${available ? 'badge-on' : 'badge-off'}">${statusLabel}</span></div>
           <div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap;">
             <button class="btn btn-ghost btn-sm" onclick="editNumberService('${s.id}')"><i class="fas fa-edit"></i> Edit Price</button>
@@ -1360,6 +1361,44 @@ async function syncGrizzlyNow() {
   pollGrizzlySync();
 }
 
+// LogsDomain's catalog is expected to be far smaller than Grizzly's, so
+// this sync runs to completion in one request rather than needing the
+// resumable job/polling setup Grizzly's does. If it ever does run out of
+// time budget server-side, it returns partial progress with a message
+// telling you to just click the button again — safe to re-run, each
+// service is upserted by its own ID so nothing gets duplicated.
+async function syncLogsDomainNow() {
+  const btn = document.getElementById('btnSyncLogsDomain');
+  const progress = document.getElementById('logsdomainSyncProgress');
+  setBtnBusy(btn, true, 'Syncing...');
+  if (progress) progress.textContent = 'Pulling countries and services from LogsDomain — this can take a minute...';
+  try {
+    const headers = await authHeaders();
+    const res = await fetch('/api/logsdomain-numbers?action=sync', { headers });
+    const data = await res.json();
+    if (!data.success) {
+      showAdminToast(data.message || 'Could not sync LogsDomain', 'error');
+      if (progress) progress.textContent = '';
+      return;
+    }
+    if (progress) {
+      progress.textContent = `Synced ${data.countries_seen}/${data.total_countries} countries, ${data.services_seen} services (${data.new_services} new, ${data.updated_services} updated).`;
+    }
+    if (data.errors && data.errors.length) {
+      console.warn('LogsDomain sync partial errors:', data.errors);
+      showAdminToast(data.errors[0], 'info');
+    } else {
+      showAdminToast('LogsDomain catalog synced.', 'success');
+    }
+    await loadSmsRowsForCurrentFilter();
+  } catch (e) {
+    showAdminToast('Sync failed: ' + e.message, 'error');
+    if (progress) progress.textContent = '';
+  } finally {
+    setBtnBusy(btn, false, '<i class="fas fa-sync"></i> Sync LogsDomain');
+  }
+}
+
 // Called on admin dashboard load — if a sync was already running when the
 // page was refreshed/reopened, pick the progress loop back up instead of
 // requiring the admin to notice and click Sync again.
@@ -1434,10 +1473,12 @@ const SMS_ORDER_STATUS_LABELS = {
 };
 
 async function tryLoadSmsOrders() {
+  // No source filter — same reasoning as mj-sms-history.html: Server 1
+  // (grizzlysms) and Server 2 (logsdomain) both write into number_orders,
+  // and admin needs to see every customer's orders from both.
   const { data, error } = await sb
     .from('number_orders')
     .select('*')
-    .eq('source', 'grizzlysms')
     .order('created_at', { ascending: false })
     .limit(300);
   if (error) {
@@ -1915,7 +1956,7 @@ async function syncProductsNow() {
   const idle = '<i class="fas fa-sync"></i> Sync Fadded';
   setSyncButtonLoading(btn, true, idle);
   try {
-    const res = await fetch('/api/products');
+    const res = await fetch('/api/order');
     const data = await res.json();
     alert(data.success ? `Fadded sync complete\nSynced: ${data.synced}\nNew: ${data.new_products}\nUpdated: ${data.updated_products}` : ('Sync failed: ' + (data.message || 'Unknown error')));
     await loadProducts();
@@ -1980,7 +2021,7 @@ async function syncAllSuppliersNow() {
   setSyncButtonLoading(sBtn, true, '<i class="fas fa-sync"></i> Sync Sujan Dept.');
   try {
     const [fRes, lRes, sRes] = await Promise.all([
-      fetch('/api/products'),
+      fetch('/api/order'),
       fetch('/api/products-logsdomain'),
       fetch('/api/sujan')
     ]);
@@ -2630,11 +2671,9 @@ async function loadLdServices() {
       sel.innerHTML = '<option value="">No services for this country</option>';
       return;
     }
-    sel.innerHTML = ldNumServicesCache.map(s => {
-      const stockLabel = (s.available_quantity === null || s.available_quantity === undefined) ? 'stock unknown' : `${s.available_quantity} in stock`;
-      const successLabel = (s.success_rate === null || s.success_rate === undefined) ? '' : `, ${s.success_rate}% success`;
-      return `<option value="${escapeHtml(String(s.service_id))}">${escapeHtml(s.service_name)} — ₦${Number(s.price).toLocaleString()} (${stockLabel}${successLabel})</option>`;
-    }).join('');
+    sel.innerHTML = ldNumServicesCache.map(s =>
+      `<option value="${escapeHtml(String(s.service_id))}">${escapeHtml(s.service_name)} — ₦${Number(s.price).toLocaleString()} (${s.available_quantity != null ? s.available_quantity + ' in stock' : 'stock unknown'}, ${s.success_rate ?? '—'}% success)</option>`
+    ).join('');
   } catch (e) {
     sel.innerHTML = '<option value="">Failed to load</option>';
     showAdminToast('LogsDomain services: ' + e.message, 'error');
