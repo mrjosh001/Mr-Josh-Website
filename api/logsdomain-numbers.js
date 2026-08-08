@@ -281,6 +281,23 @@ async function handleOrder(req, res, userId) {
       // supplier message so this is diagnosable if it keeps happening.
       console.error('[logsdomain-numbers order] failed after retry:', orderRes.status, orderRes.json);
       await supabase.from('profiles').update({ balance: originalBalance }).eq('id', userId);
+
+      const failMsg = (orderRes.json?.message || '').toLowerCase();
+      if (failMsg.includes('out of stock')) {
+        // This is the one moment we ever get a real, trustworthy signal that
+        // this exact country/service is actually out of stock — LogsDomain's
+        // catalog data itself returns null for available_quantity almost
+        // always, so this real failure is the only accurate source we have.
+        // Hide it immediately rather than waiting for the next sync.
+        await supabase
+          .from('number_services')
+          .update({ available_quantity: 0, is_available: false, updated_at: new Date().toISOString() })
+          .eq('source', 'logsdomain')
+          .eq('country_id', countryId)
+          .eq('service_id', serviceId)
+          .catch(() => {});
+      }
+
       return res.status(orderRes.status === 402 ? 402 : 400).json({
         success: false,
         code: orderRes.json?.code || 'SUPPLIER_ERROR',
