@@ -493,7 +493,7 @@ async function handleCancel(req, res, userId) {
 // ===========================================================================
 
 const SYNC_JOB_SOURCE = 'logsdomain_numbers';
-const SYNC_TIME_BUDGET_MS = 270000; // leaves headroom under the 300s maxDuration set for this file in vercel.json
+const SYNC_TIME_BUDGET_MS = 250000; // leaves ~50s headroom under the 300s maxDuration set for this file in vercel.json
 
 async function getSyncJob() {
   const { data, error } = await supabase.from('sync_jobs').select('*').eq('source', SYNC_JOB_SOURCE).maybeSingle();
@@ -544,11 +544,12 @@ async function handleSync(req, res) {
 
   while (cursor < countryList.length && (Date.now() - startedAt) < SYNC_TIME_BUDGET_MS) {
     const country = countryList[cursor];
-    cursor += 1;
+    let ranOutOfTime = false;
     try {
       const svcRes = await callLogsDomain(`/numbers/services?country_id=${country.id}`);
       if (!svcRes.ok || !svcRes.json?.success) {
         errors.push(`country ${country.id} (${country.name}): ${svcRes.json?.message || 'fetch failed'}`);
+        cursor += 1;
         continue;
       }
       const services = svcRes.json.data || [];
@@ -561,20 +562,28 @@ async function handleSync(req, res) {
         loggedFirstSyncService = true;
       }
 
+      // Look up every existing row for this country in ONE query instead of
+      // one per service — this was the real reason a single large country
+      // could blow the entire time budget by itself (hundreds of services ×
+      // 2 sequential round-trips each). Same batching approach as the other
+      // supplier syncs use.
+      const { data: existingRows, error: existErr } = await supabase
+        .from('number_services')
+        .select('id, service_id')
+        .eq('source', 'logsdomain')
+        .eq('country_id', country.id);
+      if (existErr) {
+        errors.push(`country ${country.id} lookup: ${existErr.message}`);
+      }
+      const existingMap = new Map((existingRows || []).map((r) => [String(r.service_id), r.id]));
+
+      const toInsert = [];
       for (const s of services) {
         servicesSeen += 1;
         const serviceId = String(s.service_id ?? s.id ?? '');
         if (!serviceId) continue;
         const supplierPriceNgn = Number(s.price) || 0;
         const qty = (s.available_quantity === null || s.available_quantity === undefined) ? null : Number(s.available_quantity);
-
-        const { data: existing } = await supabase
-          .from('number_services')
-          .select('id')
-          .eq('source', 'logsdomain')
-          .eq('country_id', country.id)
-          .eq('service_id', serviceId)
-          .maybeSingle();
 
         const sharedFields = {
           country_name: country.name,
@@ -592,28 +601,51 @@ async function handleSync(req, res) {
           updated_at: new Date().toISOString()
         };
 
-        if (existing) {
+        const existingId = existingMap.get(serviceId);
+        if (existingId) {
           updatedCount += 1;
           // price is deliberately excluded from the update — a sync never
           // overwrites the selling price, same rule as every other
           // supplier catalog (Grizzly, Fadded, Logs Domain products, Sujan).
-          const { error } = await supabase.from('number_services').update(sharedFields).eq('id', existing.id);
+          const { error } = await supabase.from('number_services').update(sharedFields).eq('id', existingId);
           if (error) errors.push(`update ${country.id}/${serviceId}: ${error.message}`);
         } else {
           newCount += 1;
-          const { error } = await supabase.from('number_services').insert({
+          toInsert.push({
             source: 'logsdomain',
             country_id: country.id,
             service_id: serviceId,
             price: priceForCustomer(supplierPriceNgn),
             ...sharedFields
           });
-          if (error) errors.push(`insert ${country.id}/${serviceId}: ${error.message}`);
+        }
+
+        // Safety net even with batching — if a country somehow still runs
+        // long (e.g. Supabase itself is slow right now), stop mid-country
+        // rather than risk the whole function getting hard-killed by
+        // Vercel's 300s ceiling with a 504 the browser can't parse. The
+        // country cursor only advances below once every service in this
+        // country has been handled, so an early exit here just means this
+        // same country gets retried (cheaply, thanks to batching) next run.
+        if (Date.now() - startedAt > SYNC_TIME_BUDGET_MS) {
+          ranOutOfTime = true;
+          break;
         }
       }
+
+      for (let i = 0; i < toInsert.length; i += 200) {
+        const batch = toInsert.slice(i, i + 200);
+        const { error } = await supabase.from('number_services').insert(batch);
+        if (error) errors.push(`insert batch country ${country.id}: ${error.message}`);
+      }
+
+      if (ranOutOfTime) break;
+      cursor += 1;
     } catch (e) {
       errors.push(`country ${country.id} (${country.name}): ${e.message}`);
+      cursor += 1;
     }
+    if (ranOutOfTime) break;
   }
 
   const done = cursor >= countryList.length;
