@@ -27,7 +27,7 @@ import { applyMarkup } from '../lib/pricing.js';
  * POST /api/logsdomain-numbers?action=check   {order_id}             → poll for SMS code
  * POST /api/logsdomain-numbers?action=cancel  {order_id}             → cancel + refund
  *
- * Env: LOGSDOMAIN_API_KEY, SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY
+ * Env: LOGSDOMAIN_API_KEY, SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, CRON_SECRET?
  * Optional: MIN_NUMBER_PRICE_NGN (default 1000, shared with Grizzly's floor)
  */
 
@@ -483,14 +483,17 @@ async function handleCancel(req, res, userId) {
 // parity with Server 1 — that panel already queries number_services
 // generically by whatever's in it, no per-supplier UI code needed.
 //
-// Admin-only (never called by customers). Time-boxed per call and resumable
+// Admin-only when called from the dashboard button (never by customers),
+// plus a cron-secret bypass so Vercel's daily scheduled trigger can call
+// it unattended (see the CRON_SECRET check at the top of handleSync,
+// same pattern as grizzly-sync.js). Time-boxed per call and resumable
 // via sync_jobs (cursor persisted between calls) so a large catalog can't
 // time out a single Vercel invocation — click "Sync LogsDomain Numbers"
 // again if a run finishes partial, same as it would for Grizzly.
 // ===========================================================================
 
 const SYNC_JOB_SOURCE = 'logsdomain_numbers';
-const SYNC_TIME_BUDGET_MS = 50000; // leaves headroom under the 60s maxDuration set for this file in vercel.json
+const SYNC_TIME_BUDGET_MS = 270000; // leaves headroom under the 300s maxDuration set for this file in vercel.json
 
 async function getSyncJob() {
   const { data, error } = await supabase.from('sync_jobs').select('*').eq('source', SYNC_JOB_SOURCE).maybeSingle();
@@ -506,8 +509,14 @@ async function upsertSyncJob(fields) {
 let loggedFirstSyncService = false;
 
 async function handleSync(req, res) {
-  const admin = await requireAdmin(req);
-  if (!admin.ok) return res.status(admin.status).json({ success: false, message: admin.message });
+  const authHeader = req.headers.authorization || '';
+  const isCronRequest = !!process.env.CRON_SECRET && authHeader === `Bearer ${process.env.CRON_SECRET}`;
+
+  if (!isCronRequest) {
+    const admin = await requireAdmin(req);
+    if (!admin.ok) return res.status(admin.status).json({ success: false, message: admin.message });
+  }
+
   if (!LOGSDOMAIN_KEY) return res.status(500).json({ success: false, message: 'LOGSDOMAIN_API_KEY not configured' });
 
   const startedAt = Date.now();
