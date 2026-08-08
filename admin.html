@@ -236,9 +236,9 @@
         <button class="nav-item" data-tab="users" onclick="switchTab('users')"><i class="fas fa-users"></i> Customers</button>
         <button class="nav-item" data-tab="lookup" onclick="switchTab('lookup')"><i class="fas fa-search"></i> Customer Lookup</button>
         <button class="nav-item" data-tab="products" onclick="switchTab('products')"><i class="fas fa-box"></i> Products & Stock</button>
-        <button class="nav-item" data-tab="sms" onclick="switchTab('sms')"><i class="fas fa-sim-card"></i> SMS Numbers</button>
+        <button class="nav-item" data-tab="sms" onclick="switchTab('sms')"><i class="fas fa-sim-card"></i> SMS — Server 1 (GrizzlySMS)</button>
         <button class="nav-item" data-tab="sms-orders" onclick="switchTab('sms-orders')"><i class="fas fa-comment-sms"></i> SMS Orders</button>
-        <button class="nav-item" data-tab="sms-server2" onclick="switchTab('sms-server2')"><i class="fas fa-server"></i> SMS Server 2 <span style="font-size:9px;background:var(--warning,#fbbf24);color:#000;padding:2px 6px;border-radius:6px;margin-left:4px;font-weight:800;">TEST</span></button>
+        <button class="nav-item" data-tab="sms-server2" onclick="switchTab('sms-server2')"><i class="fas fa-server"></i> SMS — Server 2 (LogsDomain)</button>
         <button class="nav-item" data-tab="orders" onclick="switchTab('orders')"><i class="fas fa-receipt"></i> Orders</button>
         <button class="nav-item" data-tab="notify" onclick="switchTab('notify')"><i class="fas fa-bullhorn"></i> Notifications</button>
         <button class="nav-item" data-tab="settings" onclick="switchTab('settings')"><i class="fas fa-cog"></i> Settings</button>
@@ -470,11 +470,11 @@
         <div id="tab-sms-server2" class="tab-content">
           <div class="panel">
             <div class="panel-title" style="margin-bottom:10px;display:flex;align-items:center;justify-content:space-between;">
-              <span>SMS Numbers — Server 2 (LogsDomain)</span>
-              <span style="font-size:11px;color:var(--muted);">Admin-only test console. Not visible to users yet.</span>
+              <span>SMS — Server 2 (LogsDomain)</span>
+              <span style="font-size:11px;color:var(--muted);">Live — reachable by customers via Choose Server → Server 2.</span>
             </div>
             <p style="font-size:13px;color:var(--muted);margin-bottom:14px;">
-              This talks to LogsDomain's real Numbers API using your own admin wallet — purchases here are real and will debit your balance (with automatic refund if no code arrives or you cancel). Use this to check catalog coverage, pricing, and delivery before this becomes a second server option for customers.
+              This talks to LogsDomain's real Numbers API using your own admin wallet — purchases here are real and will debit your balance (with automatic refund if no code arrives or you cancel). Use this panel to spot-check catalog coverage, pricing, and delivery.
             </p>
 
             <div style="display:flex;gap:16px;align-items:center;flex-wrap:wrap;margin-bottom:16px;">
@@ -493,12 +493,12 @@
                 <select id="ldNumService"><option value="">Select a country first</option></select>
               </div>
             </div>
-            <button class="btn btn-primary btn-sm" onclick="buyLdNumber()" id="ldNumBuyBtn">Buy Number (Test)</button>
+            <button class="btn btn-primary btn-sm" onclick="buyLdNumber()" id="ldNumBuyBtn">Buy Number</button>
             <div id="ldNumError" class="error-msg"></div>
 
             <div id="ldNumActiveOrder" style="display:none;margin-top:18px;padding:16px;border:1px solid var(--border,#22232b);border-radius:12px;"></div>
 
-            <div class="panel-title" style="margin:24px 0 10px;">Recent Test Orders</div>
+            <div class="panel-title" style="margin:24px 0 10px;">Recent Orders (Admin Purchases)</div>
             <div id="ldNumHistory" style="font-size:13px;color:var(--muted);">Loading…</div>
           </div>
         </div>
@@ -718,9 +718,9 @@ const tabTitles = {
   users: 'Customers',
   lookup: 'Customer Lookup',
   products: 'Products & Stock',
-  sms: 'SMS Numbers',
+  sms: 'SMS — Server 1 (GrizzlySMS)',
   'sms-orders': 'SMS Orders',
-  'sms-server2': 'SMS Server 2 (LogsDomain — Test)',
+  'sms-server2': 'SMS — Server 2 (LogsDomain)',
   orders: 'Orders',
   settings: 'Settings'
 };
@@ -2699,7 +2699,7 @@ async function buyLdNumber() {
   } catch (e) {
     errEl.textContent = e.message;
   } finally {
-    setBtnBusy(btn, false, 'Buy Number (Test)');
+    setBtnBusy(btn, false, 'Buy Number');
   }
 }
 
