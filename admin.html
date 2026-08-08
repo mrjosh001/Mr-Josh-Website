@@ -1115,7 +1115,13 @@ async function loadSmsRowsForCurrentFilter() {
       );
     }
     if (hideZero) {
-      query = query.gt('available_quantity', 0);
+      // available_quantity is null for suppliers that don't report live
+      // stock (LogsDomain always returns null here) — null isn't "zero",
+      // it's "unknown", so treat it as available. Only exclude rows that
+      // explicitly report 0 or less. A plain .gt('available_quantity', 0)
+      // would silently exclude every null row, which is what was hiding
+      // the entire LogsDomain catalog after a successful sync.
+      query = query.or('available_quantity.is.null,available_quantity.gt.0');
     }
     query = query
       .order('service_name', { ascending: true })
@@ -1255,7 +1261,7 @@ async function loadSmsServer2RowsForCurrentFilter() {
         `service_name.ilike.%${q}%,service_id.ilike.%${q}%,country_name.ilike.%${q}%`
       );
     }
-    if (hideZero) query = query.gt('available_quantity', 0);
+    if (hideZero) query = query.or('available_quantity.is.null,available_quantity.gt.0');
     query = query.order('service_name', { ascending: true }).limit(country ? 3000 : 1000);
 
     const { data, error } = await query;
