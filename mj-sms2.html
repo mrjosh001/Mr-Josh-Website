@@ -321,8 +321,20 @@ async function refreshBalance(){
 
 async function loadCountries(){
   try{
-    const data = await ldFetch('countries');
-    allCountries = (data.data || []).map(c => ({ country_id: Number(c.id), country_name: c.name }));
+    if(!sbClient) throw new Error('Not ready yet — please retry');
+    // Reading the local synced catalog instead of calling LogsDomain live —
+    // this is what made country/service browsing slow before. Run "Sync
+    // LogsDomain" in admin first if this list looks empty/stale.
+    const { data, error } = await sbClient
+      .from('number_services')
+      .select('country_id, country_name')
+      .eq('source', 'logsdomain')
+      .eq('is_available', true);
+    if(error) throw error;
+    const seen = new Map();
+    (data || []).forEach(r => { if(!seen.has(r.country_id)) seen.set(r.country_id, r.country_name); });
+    allCountries = Array.from(seen, ([country_id, country_name]) => ({ country_id, country_name }))
+      .sort((a, b) => a.country_name.localeCompare(b.country_name));
     renderCountries(allCountries);
   }catch(err){
     countryList.innerHTML = '<div class="empty-state"><div class="empty-state-icon">⚠️</div><h4>Failed to load</h4><p>'+escapeHtml(err.message||String(err))+'</p></div>';
@@ -355,13 +367,15 @@ async function selectCountry(countryId){
   serviceSearch.value = '';
 
   try{
-    const data = await ldFetch('services', { query: { country_id: countryId } });
-    allServices = (data.data || []).map(s => ({
-      service_id: s.service_id,
-      service_name: s.service_name,
-      price: s.price,
-      available_quantity: s.available_quantity
-    }));
+    const { data, error } = await sbClient
+      .from('number_services')
+      .select('service_id, service_name, price, available_quantity')
+      .eq('source', 'logsdomain')
+      .eq('country_id', countryId)
+      .eq('is_available', true)
+      .order('service_name', { ascending: true });
+    if(error) throw error;
+    allServices = data || [];
     renderServices(allServices);
   }catch(err){
     serviceGrid.innerHTML = '<div class="empty-state"><div class="empty-state-icon">⚠️</div><h4>Failed to load</h4><p>'+escapeHtml(err.message||String(err))+'</p></div>';
@@ -376,7 +390,7 @@ function backToCountries(){
 }
 
 function stockLabel(q){
-  if(q === null || q === undefined) return { text: 'In stock', cls: 'badge-unknown' };
+  if(q === null || q === undefined) return { text: 'Availability unknown', cls: 'badge-unknown' };
   return { text: q + ' available', cls: 'badge-stock' };
 }
 

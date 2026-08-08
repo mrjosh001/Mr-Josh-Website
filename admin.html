@@ -64,7 +64,15 @@
       display:inline-flex; align-items:center; justify-content:center; gap:8px;
       padding:12px 18px; border-radius:12px; font-size:14px; font-weight:700;
       font-family:inherit; border:none; cursor:pointer;
+      transition:transform .1s ease, opacity .1s ease, background .15s ease, border-color .15s ease;
     }
+    /* Universal "this was clicked" feedback — applies to every .btn the
+       instant it's pressed, independent of whether that specific button
+       also has its own async spinner/busy-state logic layered on top. */
+    .btn:active { transform:scale(0.96); opacity:0.8; }
+    .btn:disabled { opacity:0.6; cursor:not-allowed; transform:none; }
+    @keyframes btnPulse { 0%{ transform:scale(1); } 40%{ transform:scale(0.94); } 100%{ transform:scale(1); } }
+    .btn-pulse { animation: btnPulse .35s ease; }
     .btn-primary { background:var(--primary); color:#fff; width:100%; }
     .btn-primary:hover { background:var(--primary-hover); }
     .btn-ghost { background:transparent; color:var(--muted); border:1px solid var(--border); }
@@ -236,10 +244,10 @@
         <button class="nav-item" data-tab="users" onclick="switchTab('users')"><i class="fas fa-users"></i> Customers</button>
         <button class="nav-item" data-tab="lookup" onclick="switchTab('lookup')"><i class="fas fa-search"></i> Customer Lookup</button>
         <button class="nav-item" data-tab="products" onclick="switchTab('products')"><i class="fas fa-box"></i> Products & Stock</button>
+        <button class="nav-item" data-tab="orders" onclick="switchTab('orders')"><i class="fas fa-receipt"></i> LOGS Orders</button>
         <button class="nav-item" data-tab="sms" onclick="switchTab('sms')"><i class="fas fa-sim-card"></i> SMS — Server 1 (GrizzlySMS)</button>
         <button class="nav-item" data-tab="sms-orders" onclick="switchTab('sms-orders')"><i class="fas fa-comment-sms"></i> SMS Orders</button>
         <button class="nav-item" data-tab="sms-server2" onclick="switchTab('sms-server2')"><i class="fas fa-server"></i> SMS — Server 2 (LogsDomain)</button>
-        <button class="nav-item" data-tab="orders" onclick="switchTab('orders')"><i class="fas fa-receipt"></i> Orders</button>
         <button class="nav-item" data-tab="notify" onclick="switchTab('notify')"><i class="fas fa-bullhorn"></i> Notifications</button>
         <button class="nav-item" data-tab="settings" onclick="switchTab('settings')"><i class="fas fa-cog"></i> Settings</button>
       </nav>
@@ -370,7 +378,7 @@
               <div class="panel-title">SMS Numbers — Supplier Catalog</div>
               <div style="display:flex;gap:8px;flex-wrap:wrap;">
                 <button class="btn btn-primary btn-sm" id="btnSyncGrizzly" onclick="syncGrizzlyNow()"><i class="fas fa-sync"></i> Sync Grizzly</button>
-                <button class="btn btn-primary btn-sm" id="btnSyncLogsDomain" onclick="syncLogsDomainNow()"><i class="fas fa-sync"></i> Sync LogsDomain</button>
+                <button class="btn btn-primary btn-sm" id="btnSyncLogsDomainNumbers" onclick="syncLogsDomainNumbersNow()"><i class="fas fa-sync"></i> Sync LogsDomain</button>
                 <button class="btn btn-secondary btn-sm" id="btnBulkRepriceUnpriced" onclick="bulkRepriceNumbers('unpriced_only')"><i class="fas fa-tags"></i> Price Unpriced Numbers</button>
                 <button class="btn btn-ghost btn-sm" id="btnBulkRepriceAll" onclick="bulkRepriceNumbers('all')" title="Rerolls markup on every system-priced row. Prices you've set manually are never touched."><i class="fas fa-dice"></i> Reprice All (skips manual prices)</button>
               </div>
@@ -505,7 +513,7 @@
 
         <div id="tab-orders" class="tab-content">
           <div class="panel">
-            <div class="panel-title" style="margin-bottom:10px;">Orders</div>
+            <div class="panel-title" style="margin-bottom:10px;">LOGS Orders</div>
             <div class="empty-state" id="ordersEmpty">No orders table connected yet.</div>
             <div class="table-wrap hidden" id="ordersTableWrap">
               <table>
@@ -693,6 +701,21 @@
 
 
 <script>
+// Every button click gets a brief visual "bounce" so it's always obvious a
+// tap registered, even for buttons with no async logic behind them (tab
+// switches, modal opens) and independent of any button's own busy-state
+// spinner logic elsewhere in this file — purely additive, never touches or
+// interferes with an existing onclick handler.
+document.addEventListener('click', function(e) {
+  const btn = e.target.closest('.btn');
+  if (!btn || btn.disabled) return;
+  btn.classList.remove('btn-pulse');
+  // Force reflow so the animation restarts on rapid repeat clicks.
+  void btn.offsetWidth;
+  btn.classList.add('btn-pulse');
+  setTimeout(() => btn.classList.remove('btn-pulse'), 350);
+}, true);
+
 const SUPABASE_URL = 'https://atczodlljmlayvldxfmv.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_dwbeKLcSG7-nfKzZz8x8Zw_U9FtwJTy';
 const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY, {
@@ -721,7 +744,7 @@ const tabTitles = {
   sms: 'SMS — Server 1 (GrizzlySMS)',
   'sms-orders': 'SMS Orders',
   'sms-server2': 'SMS — Server 2 (LogsDomain)',
-  orders: 'Orders',
+  orders: 'LOGS Orders',
   settings: 'Settings'
 };
 
@@ -1367,8 +1390,8 @@ async function syncGrizzlyNow() {
 // time budget server-side, it returns partial progress with a message
 // telling you to just click the button again — safe to re-run, each
 // service is upserted by its own ID so nothing gets duplicated.
-async function syncLogsDomainNow() {
-  const btn = document.getElementById('btnSyncLogsDomain');
+async function syncLogsDomainNumbersNow() {
+  const btn = document.getElementById('btnSyncLogsDomainNumbers');
   const progress = document.getElementById('logsdomainSyncProgress');
   setBtnBusy(btn, true, 'Syncing...');
   if (progress) progress.textContent = 'Pulling countries and services from LogsDomain — this can take a minute...';
@@ -1382,13 +1405,15 @@ async function syncLogsDomainNow() {
       return;
     }
     if (progress) {
-      progress.textContent = `Synced ${data.countries_seen}/${data.total_countries} countries, ${data.services_seen} services (${data.new_services} new, ${data.updated_services} updated).`;
+      progress.textContent = data.done
+        ? `Synced ${data.countries_seen}/${data.total_countries} countries, ${data.services_seen} services (${data.new_services} new, ${data.updated_services} updated).`
+        : `${data.message} (${data.countries_seen}/${data.total_countries} countries so far)`;
     }
     if (data.errors && data.errors.length) {
-      console.warn('LogsDomain sync partial errors:', data.errors);
+      console.warn('LogsDomain numbers sync partial errors:', data.errors);
       showAdminToast(data.errors[0], 'info');
     } else {
-      showAdminToast('LogsDomain catalog synced.', 'success');
+      showAdminToast(data.done ? 'LogsDomain numbers catalog synced.' : 'Partial sync complete — click Sync LogsDomain again to continue.', 'success');
     }
     await loadSmsRowsForCurrentFilter();
   } catch (e) {
