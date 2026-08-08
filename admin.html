@@ -513,31 +513,6 @@
             </div>
             <div id="smsServer2MobileCards" class="mobile-only mobile-cards"></div>
           </div>
-
-          <div class="panel">
-            <div class="panel-title" style="margin-bottom:6px;">Live Test Purchase</div>
-            <p style="font-size:13px;color:var(--muted);margin-bottom:14px;">
-              This talks to LogsDomain's real Numbers API using your own admin wallet — purchases here are real and will debit your balance (with automatic refund if no code arrives or you cancel). Use this to spot-check that a listing above actually delivers, separate from just browsing the catalog.
-            </p>
-            <div style="display:flex;gap:16px;align-items:center;flex-wrap:wrap;margin-bottom:16px;">
-              <div style="font-size:13px;">Your MJ balance: <strong id="ldNumMyBalance">—</strong></div>
-            </div>
-
-            <div style="display:flex;gap:16px;flex-wrap:wrap;">
-              <div class="field" style="max-width:260px;">
-                <label>Country</label>
-                <select id="ldNumCountry" onchange="loadLdServices()"><option value="">Loading countries…</option></select>
-              </div>
-              <div class="field" style="max-width:320px;">
-                <label>Service</label>
-                <select id="ldNumService"><option value="">Select a country first</option></select>
-              </div>
-            </div>
-            <button class="btn btn-primary btn-sm" onclick="buyLdNumber()" id="ldNumBuyBtn">Buy Number</button>
-            <div id="ldNumError" class="error-msg"></div>
-
-            <div id="ldNumActiveOrder" style="display:none;margin-top:18px;padding:16px;border:1px solid var(--border,#22232b);border-radius:12px;"></div>
-          </div>
         </div>
 
         <div id="tab-orders" class="tab-content">
@@ -2790,10 +2765,6 @@ async function loadNotificationHistory() {
    server-side on every call (this client-side gating is just UX; the real
    enforcement is in the API).
 =========================================================================== */
-let ldNumCountriesCache = [];
-let ldNumServicesCache = [];
-let ldNumPollTimer = null;
-
 async function ldNumFetch(action, opts = {}) {
   const headers = await authHeaders();
   const method = opts.method || 'GET';
@@ -2810,8 +2781,6 @@ async function ldNumFetch(action, opts = {}) {
 
 async function initLdNumTab() {
   loadLdWallet();
-  loadLdMyBalance();
-  loadLdCountries();
   loadSmsServer2RowsForCurrentFilter();
 }
 
@@ -2823,123 +2792,6 @@ async function loadLdWallet() {
   } catch (e) {
     el.textContent = 'Error: ' + e.message;
   }
-}
-
-async function loadLdMyBalance() {
-  const el = document.getElementById('ldNumMyBalance');
-  const { data: { session } } = await sb.auth.getSession();
-  if (!session) return;
-  const { data } = await sb.from('profiles').select('balance').eq('id', session.user.id).single();
-  if (data) el.textContent = '₦' + Number(data.balance || 0).toLocaleString();
-}
-
-async function loadLdCountries() {
-  const sel = document.getElementById('ldNumCountry');
-  try {
-    const data = await ldNumFetch('countries');
-    ldNumCountriesCache = data.data || [];
-    sel.innerHTML = '<option value="">Select a country</option>' +
-      ldNumCountriesCache.map(c => `<option value="${c.id}">${escapeHtml(c.name)}</option>`).join('');
-  } catch (e) {
-    sel.innerHTML = '<option value="">Failed to load</option>';
-    showAdminToast('LogsDomain countries: ' + e.message, 'error');
-  }
-}
-
-async function loadLdServices() {
-  const countryId = document.getElementById('ldNumCountry').value;
-  const sel = document.getElementById('ldNumService');
-  if (!countryId) { sel.innerHTML = '<option value="">Select a country first</option>'; return; }
-  sel.innerHTML = '<option value="">Loading…</option>';
-  try {
-    const data = await ldNumFetch('services', { query: { country_id: countryId } });
-    ldNumServicesCache = data.data || [];
-    if (!ldNumServicesCache.length) {
-      sel.innerHTML = '<option value="">No services for this country</option>';
-      return;
-    }
-    sel.innerHTML = ldNumServicesCache.map(s =>
-      `<option value="${escapeHtml(String(s.service_id))}">${escapeHtml(s.service_name)} — ₦${Number(s.price).toLocaleString()} (${s.available_quantity != null ? s.available_quantity + ' in stock' : 'stock unknown'}, ${s.success_rate ?? '—'}% success)</option>`
-    ).join('');
-  } catch (e) {
-    sel.innerHTML = '<option value="">Failed to load</option>';
-    showAdminToast('LogsDomain services: ' + e.message, 'error');
-  }
-}
-
-async function buyLdNumber() {
-  const errEl = document.getElementById('ldNumError');
-  errEl.textContent = '';
-  const countryId = document.getElementById('ldNumCountry').value;
-  const serviceId = document.getElementById('ldNumService').value;
-  if (!countryId || !serviceId) { errEl.textContent = 'Pick a country and a service first.'; return; }
-
-  const btn = document.getElementById('ldNumBuyBtn');
-  setBtnBusy(btn, true, 'Purchasing...');
-  try {
-    const data = await ldNumFetch('order', { method: 'POST', body: { country_id: Number(countryId), service_id: serviceId } });
-    showAdminToast('Number purchased — waiting for code', 'success');
-    loadLdMyBalance();
-    renderLdActiveOrder(data.data);
-    startLdPolling(data.data.order_id);
-  } catch (e) {
-    errEl.textContent = e.message;
-  } finally {
-    setBtnBusy(btn, false, 'Buy Number');
-  }
-}
-
-function renderLdActiveOrder(order) {
-  const box = document.getElementById('ldNumActiveOrder');
-  box.style.display = 'block';
-  const statusLabel = order.status === 'completed' ? 'Code received' : order.status === 'refunded' ? 'Refunded' : 'Waiting for code';
-  box.innerHTML = `
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
-      <strong>${escapeHtml(order.service_name || '')} · ${escapeHtml(order.country_name || '')}</strong>
-      <span style="font-size:11px;color:var(--muted);">${escapeHtml(statusLabel)}</span>
-    </div>
-    <div style="font-family:monospace;font-size:15px;margin-bottom:4px;">${escapeHtml(order.number || order.phone_number || '—')}</div>
-    <div style="font-size:12px;color:var(--muted);margin-bottom:10px;">₦${Number(order.price || 0).toLocaleString()} · Order #${escapeHtml(String(order.order_id))}</div>
-    ${order.code ? `<div style="font-size:20px;font-weight:800;color:var(--success,#34d399);margin-bottom:10px;">Code: ${escapeHtml(order.code)}</div>` : ''}
-    ${order.status !== 'completed' && order.status !== 'refunded' ? `
-      <button class="btn btn-outline btn-sm" onclick="checkLdOrder('${escapeHtml(String(order.order_id))}')">Check Now</button>
-      <button class="btn btn-sm" style="background:var(--danger,#f87171);color:#fff;" onclick="cancelLdOrder('${escapeHtml(String(order.order_id))}')">Cancel & Refund</button>
-    ` : ''}
-  `;
-}
-
-async function checkLdOrder(orderId) {
-  try {
-    const data = await ldNumFetch('check', { method: 'POST', body: { order_id: orderId } });
-    renderLdActiveOrder(data.data);
-    if (data.data.status === 'completed') {
-      stopLdPolling();
-      showAdminToast('Code received!', 'success');
-    }
-  } catch (e) {
-    showAdminToast('Check failed: ' + e.message, 'error');
-  }
-}
-
-async function cancelLdOrder(orderId) {
-  if (!confirm('Cancel this number and refund your balance?')) return;
-  try {
-    await ldNumFetch('cancel', { method: 'POST', body: { order_id: orderId } });
-    showAdminToast('Cancelled and refunded', 'success');
-    stopLdPolling();
-    document.getElementById('ldNumActiveOrder').style.display = 'none';
-    loadLdMyBalance();
-  } catch (e) {
-    showAdminToast('Cancel failed: ' + e.message, 'error');
-  }
-}
-
-function startLdPolling(orderId) {
-  stopLdPolling();
-  ldNumPollTimer = setInterval(() => checkLdOrder(orderId), 8000);
-}
-function stopLdPolling() {
-  if (ldNumPollTimer) { clearInterval(ldNumPollTimer); ldNumPollTimer = null; }
 }
 
 function switchTab(name) {
