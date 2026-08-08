@@ -50,6 +50,25 @@ async function requireAuth(req) {
   return { ok: true, userId: user.id };
 }
 
+async function requireAdmin(req) {
+  const authHeader = req.headers.authorization || '';
+  const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : null;
+  if (!token) return { ok: false, status: 401, message: 'Missing admin session' };
+
+  const { data: { user }, error: authErr } = await supabase.auth.getUser(token);
+  if (authErr || !user) return { ok: false, status: 401, message: 'Invalid session' };
+
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('is_admin')
+    .eq('id', user.id)
+    .maybeSingle();
+
+  const isAdmin = profile && (profile.is_admin === true || profile.is_admin === 'true' || profile.is_admin === 1);
+  if (!isAdmin) return { ok: false, status: 403, message: 'Admin privileges required' };
+  return { ok: true, userId: user.id };
+}
+
 async function callLogsDomain(path, { method = 'GET', body = null } = {}) {
   const headers = {
     Accept: 'application/json',
@@ -441,6 +460,161 @@ async function handleCancel(req, res, userId) {
 }
 
 // ===========================================================================
+// SYNC — pulls the LogsDomain numbers catalog into number_services, the
+// same table GrizzlySMS uses. This is what makes Server 2 show up in the
+// admin "SMS Numbers — Supplier Catalog" panel with full search/edit/delete
+// parity with Server 1 — that panel already queries number_services
+// generically by whatever's in it, no per-supplier UI code needed.
+//
+// Admin-only (never called by customers). Time-boxed per call and resumable
+// via sync_jobs (cursor persisted between calls) so a large catalog can't
+// time out a single Vercel invocation — click "Sync LogsDomain Numbers"
+// again if a run finishes partial, same as it would for Grizzly.
+// ===========================================================================
+
+const SYNC_JOB_SOURCE = 'logsdomain_numbers';
+const SYNC_TIME_BUDGET_MS = 50000; // leaves headroom under the 60s maxDuration set for this file in vercel.json
+
+async function getSyncJob() {
+  const { data, error } = await supabase.from('sync_jobs').select('*').eq('source', SYNC_JOB_SOURCE).maybeSingle();
+  if (error) throw new Error(`sync_jobs table error: ${error.message}`);
+  return data;
+}
+
+async function upsertSyncJob(fields) {
+  const { error } = await supabase.from('sync_jobs').upsert({ source: SYNC_JOB_SOURCE, updated_at: new Date().toISOString(), ...fields });
+  if (error) throw new Error(`sync_jobs write failed: ${error.message}`);
+}
+
+let loggedFirstSyncService = false;
+
+async function handleSync(req, res) {
+  const admin = await requireAdmin(req);
+  if (!admin.ok) return res.status(admin.status).json({ success: false, message: admin.message });
+  if (!LOGSDOMAIN_KEY) return res.status(500).json({ success: false, message: 'LOGSDOMAIN_API_KEY not configured' });
+
+  const startedAt = Date.now();
+
+  // Country list is re-fetched every call rather than persisted in the job
+  // row (sync_jobs has no column for it) — one cheap extra request per
+  // resume, and country ordering from a supplier is stable, so cursor_index
+  // still lines up correctly against a freshly-fetched list.
+  const countriesRes = await callLogsDomain('/numbers/countries');
+  if (!countriesRes.ok || !countriesRes.json?.success) {
+    return res.status(countriesRes.status || 502).json({ success: false, message: countriesRes.json?.message || 'Could not reach LogsDomain' });
+  }
+  const countryList = (countriesRes.json.data || []).map(c => ({ id: Number(c.id), name: c.name }));
+
+  let job = await getSyncJob();
+  if (!job || job.status !== 'running') {
+    job = { status: 'running', cursor_index: 0, new_count: 0, updated_count: 0, services_seen: 0, errors: [] };
+  }
+
+  let cursor = job.cursor_index || 0;
+  let newCount = job.new_count || 0;
+  let updatedCount = job.updated_count || 0;
+  let servicesSeen = job.services_seen || 0;
+  const errors = Array.isArray(job.errors) ? [...job.errors] : [];
+
+  while (cursor < countryList.length && (Date.now() - startedAt) < SYNC_TIME_BUDGET_MS) {
+    const country = countryList[cursor];
+    cursor += 1;
+    try {
+      const svcRes = await callLogsDomain(`/numbers/services?country_id=${country.id}`);
+      if (!svcRes.ok || !svcRes.json?.success) {
+        errors.push(`country ${country.id} (${country.name}): ${svcRes.json?.message || 'fetch failed'}`);
+        continue;
+      }
+      const services = svcRes.json.data || [];
+
+      // Same lesson as the Sujan ₦0-price bug: log the raw first row once
+      // so field names can be verified against what LogsDomain actually
+      // sends, not just what the docs/existing code assumed.
+      if (!loggedFirstSyncService && services.length) {
+        console.log('[logsdomain-numbers sync] raw first service (for field-name verification):', JSON.stringify(services[0]));
+        loggedFirstSyncService = true;
+      }
+
+      for (const s of services) {
+        servicesSeen += 1;
+        const serviceId = String(s.service_id ?? s.id ?? '');
+        if (!serviceId) continue;
+        const supplierPriceNgn = Number(s.price) || 0;
+        const qty = (s.available_quantity === null || s.available_quantity === undefined) ? null : Number(s.available_quantity);
+
+        const { data: existing } = await supabase
+          .from('number_services')
+          .select('id')
+          .eq('source', 'logsdomain')
+          .eq('country_id', country.id)
+          .eq('service_id', serviceId)
+          .maybeSingle();
+
+        const sharedFields = {
+          country_name: country.name,
+          service_name: s.service_name || serviceId,
+          supplier_price: supplierPriceNgn,
+          available_quantity: qty,
+          // LogsDomain frequently returns null here regardless of real
+          // stock (see handleOrder above) — when it's null, LogsDomain
+          // listing the service at all is the only signal available, so it
+          // stays visible rather than being hidden on a number we don't
+          // actually have. When LogsDomain DOES return a real number,
+          // that's authoritative and gates visibility normally.
+          is_available: qty === null ? true : qty > 0,
+          currency: 'NGN',
+          updated_at: new Date().toISOString()
+        };
+
+        if (existing) {
+          updatedCount += 1;
+          // price is deliberately excluded from the update — a sync never
+          // overwrites the selling price, same rule as every other
+          // supplier catalog (Grizzly, Fadded, Logs Domain products, Sujan).
+          const { error } = await supabase.from('number_services').update(sharedFields).eq('id', existing.id);
+          if (error) errors.push(`update ${country.id}/${serviceId}: ${error.message}`);
+        } else {
+          newCount += 1;
+          const { error } = await supabase.from('number_services').insert({
+            source: 'logsdomain',
+            country_id: country.id,
+            service_id: serviceId,
+            price: priceForCustomer(supplierPriceNgn),
+            ...sharedFields
+          });
+          if (error) errors.push(`insert ${country.id}/${serviceId}: ${error.message}`);
+        }
+      }
+    } catch (e) {
+      errors.push(`country ${country.id} (${country.name}): ${e.message}`);
+    }
+  }
+
+  const done = cursor >= countryList.length;
+  await upsertSyncJob({
+    status: done ? 'completed' : 'running',
+    cursor_index: done ? 0 : cursor,
+    total_countries: countryList.length,
+    new_count: done ? 0 : newCount,
+    updated_count: done ? 0 : updatedCount,
+    services_seen: done ? 0 : servicesSeen,
+    errors: errors.slice(-20)
+  });
+
+  return res.status(200).json({
+    success: true,
+    done,
+    countries_seen: cursor,
+    total_countries: countryList.length,
+    services_seen: servicesSeen,
+    new_services: newCount,
+    updated_services: updatedCount,
+    errors: errors.slice(-5),
+    message: done ? undefined : `Partial sync — ${cursor}/${countryList.length} countries done this run. Click "Sync LogsDomain Numbers" again to continue.`
+  });
+}
+
+// ===========================================================================
 // ENTRYPOINT
 // ===========================================================================
 
@@ -459,12 +633,19 @@ export default async function handler(req, res) {
     return res.status(500).json({ success: false, message: 'LOGSDOMAIN_API_KEY not configured' });
   }
 
+  const action = req.query?.action || null;
+
+  // sync is admin-only and checks that itself (requireAdmin, not
+  // requireAuth) — handled before the general auth check below, which
+  // would otherwise let any signed-in customer trigger a full catalog sync.
+  if (req.method === 'GET' && action === 'sync') {
+    return handleSync(req, res);
+  }
+
   const auth = await requireAuth(req);
   if (!auth.ok) {
     return res.status(auth.status).json({ success: false, message: auth.message });
   }
-
-  const action = req.query?.action || null;
 
   if (req.method === 'GET') {
     if (action === 'wallet') return handleWallet(req, res);
