@@ -7,23 +7,23 @@ import { applyMarkup } from '../lib/pricing.js';
  * LOGSDOMAIN_API_KEY / wallet already wired up for the Logs product
  * (api/order-logsdomain.js) — one supplier account, two product lines.
  *
- * ADMIN-ONLY for now. Every action requires an admin session (same
- * requireAdmin() check grizzly-sync.js uses). Nothing here is reachable
- * from the user-facing SMS pages yet — mj-sms.html / mj-sms-number.html
- * are hardcoded to source='grizzlysms' and never touch this file or rows
- * with source='logsdomain'. This is deliberate: it lets admin browse the
- * real catalog and test real purchases/refunds before this becomes
- * visible to customers as an alternate SMS server.
+ * LIVE for all signed-in users (requireAuth — any valid session, not just
+ * admins). Was admin-only during pricing/catalog testing; opened up once
+ * verified. Reachable from mj-sms-choose-server.html → mj-sms2.html →
+ * mj-sms2-number.html, the LogsDomain counterpart to the existing
+ * mj-sms.html → mj-sms-number.html Grizzly flow. The admin "SMS Server 2"
+ * tab in admin.html still works the same way — it's just this same API,
+ * called by an admin instead of a customer.
  *
  * One file, not five, per instruction — everything routed by ?action=,
  * same shape as grizzly-sync.js's action-based routing.
  *
- * GET  /api/logsdomain-numbers?action=wallet                        → LogsDomain wallet balance
+ * GET  /api/logsdomain-numbers?action=wallet                        → LogsDomain wallet balance (admin visibility)
  * GET  /api/logsdomain-numbers?action=countries                     → live country list
  * GET  /api/logsdomain-numbers?action=services&country_id=1         → live services + marked-up NGN price
  * GET  /api/logsdomain-numbers?action=area-codes&country_id=&service_id= → live area codes
- * GET  /api/logsdomain-numbers?action=orders                        → admin's own test-order history
- * POST /api/logsdomain-numbers?action=order   {country_id, service_id, selected_area_codes?} → real test purchase
+ * GET  /api/logsdomain-numbers?action=orders                        → caller's own order history
+ * POST /api/logsdomain-numbers?action=order   {country_id, service_id, selected_area_codes?} → real purchase
  * POST /api/logsdomain-numbers?action=check   {order_id}             → poll for SMS code
  * POST /api/logsdomain-numbers?action=cancel  {order_id}             → cancel + refund
  *
@@ -39,24 +39,14 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY
 );
 
-async function requireAdmin(req) {
+async function requireAuth(req) {
   const authHeader = req.headers.authorization || '';
   const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : null;
-  if (!token) return { ok: false, status: 401, message: 'Missing admin session' };
+  if (!token) return { ok: false, status: 401, message: 'Please sign in to continue' };
 
   const { data: { user }, error: authErr } = await supabase.auth.getUser(token);
-  if (authErr || !user) return { ok: false, status: 401, message: 'Invalid session' };
+  if (authErr || !user) return { ok: false, status: 401, message: 'Your session has expired. Please sign in again.' };
 
-  const { data: profile } = await supabase
-    .from('profiles')
-    .select('is_admin')
-    .eq('id', user.id)
-    .maybeSingle();
-
-  const isAdmin =
-    profile &&
-    (profile.is_admin === true || profile.is_admin === 'true' || profile.is_admin === 1);
-  if (!isAdmin) return { ok: false, status: 403, message: 'Admin privileges required' };
   return { ok: true, userId: user.id };
 }
 
@@ -139,12 +129,12 @@ async function handleAreaCodes(req, res) {
   return res.status(200).json({ success: true, data: json.data });
 }
 
-async function handleOrderHistory(req, res, adminUserId) {
+async function handleOrderHistory(req, res, userId) {
   const { data, error } = await supabase
     .from('number_orders')
     .select('*')
     .eq('source', 'logsdomain')
-    .eq('user_id', adminUserId)
+    .eq('user_id', userId)
     .order('created_at', { ascending: false })
     .limit(50);
   if (error) return res.status(500).json({ success: false, message: error.message });
@@ -152,10 +142,10 @@ async function handleOrderHistory(req, res, adminUserId) {
 }
 
 // ===========================================================================
-// ORDER — a real test purchase, debited from the admin's own wallet
+// ORDER — debited from the calling user's own wallet
 // ===========================================================================
 
-async function handleOrder(req, res, adminUserId) {
+async function handleOrder(req, res, userId) {
   const body = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : (req.body || {});
   const countryId = parseInt(body.country_id, 10);
   const serviceId = body.service_id != null ? String(body.service_id) : null;
@@ -178,9 +168,12 @@ async function handleOrder(req, res, adminUserId) {
   if (!svc) {
     return res.status(404).json({ success: false, message: 'This service is no longer available for that country.' });
   }
-  if (Number(svc.available_quantity) <= 0) {
-    return res.status(409).json({ success: false, message: 'Out of stock for this country/service right now.' });
-  }
+  // Not pre-checking svc.available_quantity here: LogsDomain's live catalog
+  // has been returning null for this field regardless of real availability,
+  // which was blocking every purchase with a false "out of stock" before it
+  // ever reached the supplier. The actual /numbers/orders call below is the
+  // authoritative check — LogsDomain returns NUMBER_OUT_OF_STOCK itself if a
+  // number genuinely isn't available, which we handle below.
 
   const price = priceForCustomer(svc.price);
   let originalBalance = 0;
@@ -191,11 +184,11 @@ async function handleOrder(req, res, adminUserId) {
     const { data: profile, error: profErr } = await supabase
       .from('profiles')
       .select('balance, customer_id')
-      .eq('id', adminUserId)
+      .eq('id', userId)
       .single();
 
     if (profErr || !profile) {
-      return res.status(400).json({ success: false, message: 'Admin profile not found' });
+      return res.status(400).json({ success: false, message: 'User profile not found' });
     }
     originalBalance = Number(profile.balance || 0);
     customerId = profile.customer_id;
@@ -205,13 +198,13 @@ async function handleOrder(req, res, adminUserId) {
     }
 
     const newBalance = originalBalance - price;
-    const { error: deductErr } = await supabase.from('profiles').update({ balance: newBalance }).eq('id', adminUserId);
+    const { error: deductErr } = await supabase.from('profiles').update({ balance: newBalance }).eq('id', userId);
     if (deductErr) {
       return res.status(500).json({ success: false, message: 'Could not debit balance. Please try again.' });
     }
     deducted = true;
 
-    const idempotencyKey = `MJ-LD-NUM-${String(adminUserId).slice(0, 8)}-${Date.now()}`;
+    const idempotencyKey = `MJ-LD-NUM-${String(userId).slice(0, 8)}-${Date.now()}`;
     const orderRes = await callLogsDomain('/numbers/orders', {
       method: 'POST',
       body: {
@@ -224,7 +217,7 @@ async function handleOrder(req, res, adminUserId) {
 
     if (!orderRes.ok || !orderRes.json?.success) {
       // Supplier failed — restore balance, no refund transaction row needed
-      await supabase.from('profiles').update({ balance: originalBalance }).eq('id', adminUserId);
+      await supabase.from('profiles').update({ balance: originalBalance }).eq('id', userId);
       return res.status(orderRes.status === 402 ? 402 : 400).json({
         success: false,
         code: orderRes.json?.code || 'SUPPLIER_ERROR',
@@ -235,7 +228,7 @@ async function handleOrder(req, res, adminUserId) {
     const d = orderRes.json.data;
     const numberOrderRow = {
       source: 'logsdomain',
-      user_id: adminUserId,
+      user_id: userId,
       customer_id: customerId,
       order_id: String(d.order_id),
       idempotency_key: idempotencyKey,
@@ -255,10 +248,10 @@ async function handleOrder(req, res, adminUserId) {
     await supabase.from('number_orders').insert(numberOrderRow);
 
     await supabase.from('transactions').insert({
-      user_id: adminUserId,
+      user_id: userId,
       customer_id: customerId,
       type: 'purchase',
-      category: 'MJ SMS (Server 2 test)',
+      category: 'MJ SMS - Server 2 (LogsDomain)',
       title: d.service_name || svc.service_name,
       subtitle: `${d.country_name || svc.country_name} · waiting for SMS`,
       amount: `₦${price.toLocaleString()}`,
@@ -285,7 +278,7 @@ async function handleOrder(req, res, adminUserId) {
     console.error('[logsdomain-numbers order] error:', err);
     if (deducted) {
       try {
-        await supabase.from('profiles').update({ balance: originalBalance }).eq('id', adminUserId);
+        await supabase.from('profiles').update({ balance: originalBalance }).eq('id', userId);
       } catch (e) {
         console.error('CRITICAL: auto-restore failed (logsdomain-numbers order)', e);
       }
@@ -301,7 +294,7 @@ async function handleOrder(req, res, adminUserId) {
 // CHECK — poll for the SMS code
 // ===========================================================================
 
-async function handleCheck(req, res, adminUserId) {
+async function handleCheck(req, res, userId) {
   const body = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : (req.body || {});
   const orderId = body.order_id;
   if (!orderId) return res.status(400).json({ success: false, message: 'order_id is required' });
@@ -311,7 +304,7 @@ async function handleCheck(req, res, adminUserId) {
     .select('*')
     .eq('source', 'logsdomain')
     .eq('order_id', String(orderId))
-    .eq('user_id', adminUserId)
+    .eq('user_id', userId)
     .single();
 
   if (fetchErr || !order) return res.status(404).json({ success: false, message: 'Order not found' });
@@ -337,8 +330,8 @@ async function handleCheck(req, res, adminUserId) {
     await supabase
       .from('transactions')
       .update({ status: 'completed', subtitle: `Code received: ${d.code}` })
-      .eq('user_id', adminUserId)
-      .eq('category', 'MJ SMS (Server 2 test)')
+      .eq('user_id', userId)
+      .eq('category', 'MJ SMS - Server 2 (LogsDomain)')
       .eq('amount_ngn', order.price)
       .eq('status', 'pending');
   }
@@ -350,7 +343,7 @@ async function handleCheck(req, res, adminUserId) {
 // CANCEL — cancel + refund an eligible order
 // ===========================================================================
 
-async function handleCancel(req, res, adminUserId) {
+async function handleCancel(req, res, userId) {
   const body = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : (req.body || {});
   const orderId = body.order_id;
   if (!orderId) return res.status(400).json({ success: false, message: 'order_id is required' });
@@ -360,7 +353,7 @@ async function handleCancel(req, res, adminUserId) {
     .select('*')
     .eq('source', 'logsdomain')
     .eq('order_id', String(orderId))
-    .eq('user_id', adminUserId)
+    .eq('user_id', userId)
     .single();
 
   if (fetchErr || !order) return res.status(404).json({ success: false, message: 'Order not found' });
@@ -377,10 +370,10 @@ async function handleCancel(req, res, adminUserId) {
   }
 
   const refundAmount = Number(order.price || 0);
-  const { data: profile } = await supabase.from('profiles').select('balance').eq('id', adminUserId).single();
+  const { data: profile } = await supabase.from('profiles').select('balance').eq('id', userId).single();
   if (profile && refundAmount > 0) {
     const restored = Number(profile.balance || 0) + refundAmount;
-    await supabase.from('profiles').update({ balance: restored }).eq('id', adminUserId);
+    await supabase.from('profiles').update({ balance: restored }).eq('id', userId);
   }
 
   await supabase
@@ -391,8 +384,8 @@ async function handleCancel(req, res, adminUserId) {
   await supabase
     .from('transactions')
     .update({ status: 'cancelled', subtitle: 'No SMS — balance restored' })
-    .eq('user_id', adminUserId)
-    .eq('category', 'MJ SMS (Server 2 test)')
+    .eq('user_id', userId)
+    .eq('category', 'MJ SMS - Server 2 (LogsDomain)')
     .eq('amount_ngn', refundAmount)
     .eq('status', 'pending');
 
@@ -422,9 +415,9 @@ export default async function handler(req, res) {
     return res.status(500).json({ success: false, message: 'LOGSDOMAIN_API_KEY not configured' });
   }
 
-  const admin = await requireAdmin(req);
-  if (!admin.ok) {
-    return res.status(admin.status).json({ success: false, message: admin.message });
+  const auth = await requireAuth(req);
+  if (!auth.ok) {
+    return res.status(auth.status).json({ success: false, message: auth.message });
   }
 
   const action = req.query?.action || null;
@@ -434,7 +427,7 @@ export default async function handler(req, res) {
     if (action === 'countries') return handleCountries(req, res);
     if (action === 'services') return handleServices(req, res);
     if (action === 'area-codes') return handleAreaCodes(req, res);
-    if (action === 'orders') return handleOrderHistory(req, res, admin.userId);
+    if (action === 'orders') return handleOrderHistory(req, res, auth.userId);
     return res.status(400).json({
       success: false,
       message: 'GET requires ?action=wallet, countries, services, area-codes, or orders'
@@ -442,9 +435,9 @@ export default async function handler(req, res) {
   }
 
   if (req.method === 'POST') {
-    if (action === 'order') return handleOrder(req, res, admin.userId);
-    if (action === 'check') return handleCheck(req, res, admin.userId);
-    if (action === 'cancel') return handleCancel(req, res, admin.userId);
+    if (action === 'order') return handleOrder(req, res, auth.userId);
+    if (action === 'check') return handleCheck(req, res, auth.userId);
+    if (action === 'cancel') return handleCancel(req, res, auth.userId);
     return res.status(400).json({
       success: false,
       message: 'POST requires ?action=order, check, or cancel'
