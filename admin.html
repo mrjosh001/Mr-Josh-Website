@@ -481,13 +481,45 @@
               <span>SMS — Server 2 (LogsDomain)</span>
               <span style="font-size:11px;color:var(--muted);">Live — reachable by customers via Choose Server → Server 2.</span>
             </div>
-            <p style="font-size:13px;color:var(--muted);margin-bottom:14px;">
-              This talks to LogsDomain's real Numbers API using your own admin wallet — purchases here are real and will debit your balance (with automatic refund if no code arrives or you cancel). Use this panel to spot-check catalog coverage, pricing, and delivery.
-            </p>
 
             <div style="display:flex;gap:16px;align-items:center;flex-wrap:wrap;margin-bottom:16px;">
               <div style="font-size:13px;">LogsDomain wallet: <strong id="ldNumWallet">—</strong></div>
               <button class="btn btn-outline btn-sm" onclick="loadLdWallet()"><i class="fas fa-sync"></i> Refresh</button>
+              <button class="btn btn-primary btn-sm" id="btnSyncLogsDomainNumbers2" onclick="syncLogsDomainNumbersNow()"><i class="fas fa-sync"></i> Sync LogsDomain</button>
+            </div>
+            <p style="color:#94a3b8;font-size:13px;margin:-4px 0 4px;">
+              Same catalog as the "SMS — Server 1" tab, filtered to LogsDomain only — search, edit price, or delete a listing here without wading through Grizzly's rows too.
+            </p>
+            <p id="logsdomainSyncProgress2" style="color:var(--primary,#3b82f6);font-size:12px;font-weight:700;margin:0 0 14px;min-height:16px;"></p>
+
+            <div class="search-row" style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;">
+              <input type="text" id="smsServer2Search" placeholder="Search service (WhatsApp, Google, tg…)" oninput="filterNumberServicesServer2()" style="flex:1;min-width:160px;" />
+              <input type="text" id="smsServer2CountryFilter" placeholder="Country (Nigeria, USA…)" oninput="filterNumberServicesServer2()" style="flex:1;min-width:160px;" />
+              <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:#94a3b8;white-space:nowrap;">
+                <input type="checkbox" id="smsServer2HideZeroStock" checked onchange="filterNumberServicesServer2()" />
+                Hide 0 stock
+              </label>
+            </div>
+
+            <div class="desktop-only desktop-table table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Country</th><th>Service</th><th>Supplier Price</th><th>Your Price</th><th>Stock</th><th>Status</th><th>Action</th>
+                  </tr>
+                </thead>
+                <tbody id="smsServer2TableBody"></tbody>
+              </table>
+            </div>
+            <div id="smsServer2MobileCards" class="mobile-only mobile-cards"></div>
+          </div>
+
+          <div class="panel">
+            <div class="panel-title" style="margin-bottom:6px;">Live Test Purchase</div>
+            <p style="font-size:13px;color:var(--muted);margin-bottom:14px;">
+              This talks to LogsDomain's real Numbers API using your own admin wallet — purchases here are real and will debit your balance (with automatic refund if no code arrives or you cancel). Use this to spot-check that a listing above actually delivers, separate from just browsing the catalog.
+            </p>
+            <div style="display:flex;gap:16px;align-items:center;flex-wrap:wrap;margin-bottom:16px;">
               <div style="font-size:13px;">Your MJ balance: <strong id="ldNumMyBalance">—</strong></div>
             </div>
 
@@ -505,9 +537,6 @@
             <div id="ldNumError" class="error-msg"></div>
 
             <div id="ldNumActiveOrder" style="display:none;margin-top:18px;padding:16px;border:1px solid var(--border,#22232b);border-radius:12px;"></div>
-
-            <div class="panel-title" style="margin:24px 0 10px;">Recent Orders (Admin Purchases)</div>
-            <div id="ldNumHistory" style="font-size:13px;color:var(--muted);">Loading…</div>
           </div>
         </div>
 
@@ -1219,13 +1248,145 @@ function editNumberService(id) {
 }
 function closeSmsModal() { document.getElementById('smsModal').classList.add('hidden'); }
 
+// ---------- SMS Numbers — Server 2 (LogsDomain only) ----------
+// Same table (number_services), same modal, same edit/save/delete backend
+// call as Server 1 above — just a separate array + separate DOM targets, so
+// browsing one tab can never stomp on data loaded in the other, and always
+// filtered to source='logsdomain' so this view never shows Grizzly rows.
+let allNumberServicesServer2 = [];
+
+async function loadSmsServer2RowsForCurrentFilter() {
+  const country = document.getElementById('smsServer2CountryFilter')?.value || '';
+  const q = (document.getElementById('smsServer2Search')?.value || '').trim();
+  const hideZero = document.getElementById('smsServer2HideZeroStock')?.checked !== false;
+  const cols = 'id,source,country_id,country_name,service_id,service_name,supplier_price,price,available_quantity,is_available,currency,updated_at';
+
+  allNumberServicesServer2 = [];
+
+  if (!country && !q) {
+    renderNumberServicesServer2([]);
+    const cards = document.getElementById('smsServer2MobileCards');
+    const tbody = document.getElementById('smsServer2TableBody');
+    const hint =
+      '<div class="empty-state">Select a <strong>country</strong> or search a <strong>service</strong> (WhatsApp, Google…).<br><span style="opacity:.7;font-size:12px;">Use country filter box to find Nigeria, USA, etc. quickly.</span></div>';
+    if (cards) cards.innerHTML = hint;
+    if (tbody) tbody.innerHTML = `<tr><td colspan="7">${hint}</td></tr>`;
+    return;
+  }
+
+  try {
+    let query = sb.from('number_services').select(cols).eq('source', 'logsdomain');
+    if (country) query = query.ilike('country_name', `%${country}%`);
+    if (q) {
+      query = query.or(
+        `service_name.ilike.%${q}%,service_id.ilike.%${q}%,country_name.ilike.%${q}%`
+      );
+    }
+    if (hideZero) query = query.gt('available_quantity', 0);
+    query = query.order('service_name', { ascending: true }).limit(country ? 3000 : 1000);
+
+    const { data, error } = await query;
+    if (error) {
+      console.error('SMS Server2 rows error:', error);
+      showAdminToast('SMS load error: ' + error.message, 'error');
+      allNumberServicesServer2 = [];
+    } else {
+      allNumberServicesServer2 = data || [];
+    }
+  } catch (e) {
+    console.error(e);
+    showAdminToast('SMS load failed: ' + (e.message || e), 'error');
+    allNumberServicesServer2 = [];
+  }
+  renderNumberServicesServer2(allNumberServicesServer2);
+}
+
+function filterNumberServicesServer2() {
+  loadSmsServer2RowsForCurrentFilter();
+}
+
+function renderNumberServicesServer2(list) {
+  const items = list || allNumberServicesServer2;
+  const tbody = document.getElementById('smsServer2TableBody');
+  const cards = document.getElementById('smsServer2MobileCards');
+
+  if (!items.length) {
+    if (tbody) tbody.innerHTML = `<tr><td colspan="7" class="empty-state">No LogsDomain numbers yet — click "Sync LogsDomain" above to pull the catalog.</td></tr>`;
+    if (cards) cards.innerHTML = `<div class="empty-state">No LogsDomain numbers yet — click "Sync LogsDomain" above to pull the catalog.</div>`;
+    return;
+  }
+
+  const rowStatus = (s) => {
+    const stock = s.available_quantity;
+    const stockDisplay = stock == null ? '—' : stock;
+    const available = s.is_available !== false && (stock == null || stock > 0);
+    const statusLabel = s.is_available === false ? 'Hidden' : (stock == null ? 'Unknown' : (stock > 0 ? 'Active' : 'Out of stock'));
+    return { stockDisplay, available, statusLabel };
+  };
+
+  if (tbody) {
+    tbody.innerHTML = items.map(s => {
+      const { stockDisplay, available, statusLabel } = rowStatus(s);
+      return `
+        <tr>
+          <td style="font-weight:600;">${escapeHtml(s.country_name || '—')}</td>
+          <td>${escapeHtml(s.service_name || s.service_id || '—')}</td>
+          <td class="supplier-price">₦${Number(s.supplier_price || 0).toLocaleString()}</td>
+          <td class="price">₦${Number(s.price || 0).toLocaleString()}</td>
+          <td>${stockDisplay}</td>
+          <td><span class="badge ${available ? 'badge-on' : 'badge-off'}">${statusLabel}</span></td>
+          <td style="white-space:nowrap;">
+            <button class="btn btn-ghost btn-sm" onclick="editNumberServiceServer2('${s.id}')" title="Edit price"><i class="fas fa-edit"></i></button>
+            <button class="btn btn-ghost btn-sm" onclick="deleteNumberService('${s.id}')" title="Delete" style="color:#f87171;"><i class="fas fa-trash"></i></button>
+          </td>
+        </tr>`;
+    }).join('');
+  }
+
+  if (cards) {
+    cards.innerHTML = items.map(s => {
+      const { stockDisplay, available, statusLabel } = rowStatus(s);
+      return `
+        <div class="product-card">
+          <h4>${escapeHtml(s.country_name || '—')}</h4>
+          <div class="meta">${escapeHtml(s.service_name || s.service_id || '—')}</div>
+          <div class="row-line"><span>Supplier Price</span><span class="supplier-price">₦${Number(s.supplier_price || 0).toLocaleString()}</span></div>
+          <div class="row-line"><span>Your Price</span><strong class="price">₦${Number(s.price || 0).toLocaleString()}</strong></div>
+          <div class="row-line"><span>Stock</span><span>${stockDisplay}</span></div>
+          <div class="row-line"><span>Status</span><span class="badge ${available ? 'badge-on' : 'badge-off'}">${statusLabel}</span></div>
+          <div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap;">
+            <button class="btn btn-ghost btn-sm" onclick="editNumberServiceServer2('${s.id}')"><i class="fas fa-edit"></i> Edit Price</button>
+            <button class="btn btn-ghost btn-sm" onclick="deleteNumberService('${s.id}')" style="color:#f87171;"><i class="fas fa-trash"></i> Delete</button>
+          </div>
+        </div>`;
+    }).join('');
+  }
+}
+
+function editNumberServiceServer2(id) {
+  const s = allNumberServicesServer2.find(x => String(x.id) === String(id));
+  if (!s) return;
+  document.getElementById('smsModalError').textContent = '';
+  document.getElementById('editSmsId').value = s.id;
+  document.getElementById('smsCountryDisplay').value = s.country_name || '—';
+  document.getElementById('smsServiceDisplay').value = s.service_name || s.service_id || '—';
+  // LogsDomain's supplier_price is already NGN (unlike Grizzly's, which is
+  // USD) — shown in NGN here rather than reusing usdFmt().
+  document.getElementById('smsSupplierPriceDisplay').value = '₦' + Number(s.supplier_price || 0).toLocaleString();
+  document.getElementById('smsStockDisplay').value = s.available_quantity ?? 0;
+  document.getElementById('smsPrice').value = s.price ?? 0;
+  document.getElementById('smsAvailable').value = s.is_available === false ? 'false' : 'true';
+  document.getElementById('smsModal').classList.remove('hidden');
+}
+
 
 async function deleteNumberService(id) {
-  const s = allNumberServices.find(x => String(x.id) === String(id));
+  const s = allNumberServices.find(x => String(x.id) === String(id))
+    || allNumberServicesServer2.find(x => String(x.id) === String(id));
   const label = s
     ? `${s.country_name || ''} — ${s.service_name || s.service_id || id}`
     : id;
-  if (!confirm('Delete this SMS listing from your catalog?\n\n' + label + '\n\nThis does not affect Grizzly. You can sync again later to restore it.')) {
+  if (!confirm('Delete this SMS listing from your catalog?\n\n' + label + '\n\nThis does not affect the supplier. You can sync again later to restore it.')) {
     return;
   }
   try {
@@ -1235,7 +1396,8 @@ async function deleteNumberService(id) {
       return;
     }
     showAdminToast('Deleted from catalog', 'success');
-    await loadSmsRowsForCurrentFilter();
+    // Refresh both — the row could have come from either tab's table.
+    await Promise.all([loadSmsRowsForCurrentFilter(), loadSmsServer2RowsForCurrentFilter()]);
   } catch (e) {
     showAdminToast('Delete failed: ' + (e.message || e), 'error');
   }
@@ -1276,7 +1438,7 @@ async function saveNumberService() {
   }
 
   closeSmsModal();
-  await loadNumberServices();
+  await Promise.all([loadNumberServices(), loadSmsServer2RowsForCurrentFilter()]);
   showAdminToast('Price updated successfully', 'success');
 }
 
@@ -1391,36 +1553,36 @@ async function syncGrizzlyNow() {
 // telling you to just click the button again — safe to re-run, each
 // service is upserted by its own ID so nothing gets duplicated.
 async function syncLogsDomainNumbersNow() {
-  const btn = document.getElementById('btnSyncLogsDomainNumbers');
-  const progress = document.getElementById('logsdomainSyncProgress');
-  setBtnBusy(btn, true, 'Syncing...');
-  if (progress) progress.textContent = 'Pulling countries and services from LogsDomain — this can take a minute...';
+  const btns = [document.getElementById('btnSyncLogsDomainNumbers'), document.getElementById('btnSyncLogsDomainNumbers2')].filter(Boolean);
+  const progresses = [document.getElementById('logsdomainSyncProgress'), document.getElementById('logsdomainSyncProgress2')].filter(Boolean);
+  const idleLabel = '<i class="fas fa-sync"></i> Sync LogsDomain';
+  btns.forEach(btn => setBtnBusy(btn, true, 'Syncing...'));
+  progresses.forEach(p => p.textContent = 'Pulling countries and services from LogsDomain — this can take a minute...');
   try {
     const headers = await authHeaders();
     const res = await fetch('/api/logsdomain-numbers?action=sync', { headers });
     const data = await res.json();
     if (!data.success) {
       showAdminToast(data.message || 'Could not sync LogsDomain', 'error');
-      if (progress) progress.textContent = '';
+      progresses.forEach(p => p.textContent = '');
       return;
     }
-    if (progress) {
-      progress.textContent = data.done
-        ? `Synced ${data.countries_seen}/${data.total_countries} countries, ${data.services_seen} services (${data.new_services} new, ${data.updated_services} updated).`
-        : `${data.message} (${data.countries_seen}/${data.total_countries} countries so far)`;
-    }
+    const text = data.done
+      ? `Synced ${data.countries_seen}/${data.total_countries} countries, ${data.services_seen} services (${data.new_services} new, ${data.updated_services} updated).`
+      : `${data.message} (${data.countries_seen}/${data.total_countries} countries so far)`;
+    progresses.forEach(p => p.textContent = text);
     if (data.errors && data.errors.length) {
       console.warn('LogsDomain numbers sync partial errors:', data.errors);
       showAdminToast(data.errors[0], 'info');
     } else {
       showAdminToast(data.done ? 'LogsDomain numbers catalog synced.' : 'Partial sync complete — click Sync LogsDomain again to continue.', 'success');
     }
-    await loadSmsRowsForCurrentFilter();
+    await Promise.all([loadSmsRowsForCurrentFilter(), loadSmsServer2RowsForCurrentFilter()]);
   } catch (e) {
     showAdminToast('Sync failed: ' + e.message, 'error');
-    if (progress) progress.textContent = '';
+    progresses.forEach(p => p.textContent = '');
   } finally {
-    setBtnBusy(btn, false, '<i class="fas fa-sync"></i> Sync LogsDomain');
+    btns.forEach(btn => setBtnBusy(btn, false, idleLabel));
   }
 }
 
@@ -2650,7 +2812,7 @@ async function initLdNumTab() {
   loadLdWallet();
   loadLdMyBalance();
   loadLdCountries();
-  loadLdHistory();
+  loadSmsServer2RowsForCurrentFilter();
 }
 
 async function loadLdWallet() {
@@ -2718,7 +2880,6 @@ async function buyLdNumber() {
     const data = await ldNumFetch('order', { method: 'POST', body: { country_id: Number(countryId), service_id: serviceId } });
     showAdminToast('Number purchased — waiting for code', 'success');
     loadLdMyBalance();
-    loadLdHistory();
     renderLdActiveOrder(data.data);
     startLdPolling(data.data.order_id);
   } catch (e) {
@@ -2754,7 +2915,6 @@ async function checkLdOrder(orderId) {
     if (data.data.status === 'completed') {
       stopLdPolling();
       showAdminToast('Code received!', 'success');
-      loadLdHistory();
     }
   } catch (e) {
     showAdminToast('Check failed: ' + e.message, 'error');
@@ -2769,7 +2929,6 @@ async function cancelLdOrder(orderId) {
     stopLdPolling();
     document.getElementById('ldNumActiveOrder').style.display = 'none';
     loadLdMyBalance();
-    loadLdHistory();
   } catch (e) {
     showAdminToast('Cancel failed: ' + e.message, 'error');
   }
@@ -2781,29 +2940,6 @@ function startLdPolling(orderId) {
 }
 function stopLdPolling() {
   if (ldNumPollTimer) { clearInterval(ldNumPollTimer); ldNumPollTimer = null; }
-}
-
-async function loadLdHistory() {
-  const list = document.getElementById('ldNumHistory');
-  try {
-    const data = await ldNumFetch('orders');
-    if (!data.data || !data.data.length) { list.innerHTML = 'No test orders yet.'; return; }
-    list.innerHTML = data.data.map(o => `
-      <div style="padding:10px 0;border-bottom:1px solid var(--border,#22232b);display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;">
-        <div>
-          <div style="font-weight:700;color:var(--text,#fff);">${escapeHtml(o.service_name || '')} · ${escapeHtml(o.country_name || '')}</div>
-          <div style="font-family:monospace;font-size:12px;">${escapeHtml(o.phone_number || '—')}</div>
-          <div style="font-size:11px;">${new Date(o.created_at).toLocaleString()}</div>
-        </div>
-        <div style="text-align:right;">
-          <div>₦${Number(o.price || 0).toLocaleString()}</div>
-          <div style="font-size:11px;color:${o.status === 'completed' ? 'var(--success,#34d399)' : o.status === 'refunded' ? 'var(--danger,#f87171)' : 'var(--muted)'};">${escapeHtml(o.status)}</div>
-        </div>
-      </div>
-    `).join('');
-  } catch (e) {
-    list.innerHTML = `<span style="color:var(--danger,#f87171)">${escapeHtml(e.message)}</span>`;
-  }
 }
 
 function switchTab(name) {
