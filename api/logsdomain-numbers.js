@@ -110,12 +110,56 @@ async function handleWallet(req, res) {
   return res.status(200).json({ success: true, data: json.data });
 }
 
-async function handleCountries(req, res) {
-  const { status, ok, json } = await callLogsDomain('/numbers/countries');
-  if (!ok || !json?.success) {
-    return res.status(status || 502).json({ success: false, message: json?.message || 'Could not reach LogsDomain' });
+// LogsDomain's own FAQ says 200+ countries — a single unparameterized call
+// to /numbers/countries was silently returning only the first page, which
+// is why both the admin catalog sync and the live customer picker were
+// only showing a handful of countries. This walks pages until the
+// response stops giving back anything new, so it works correctly whether
+// the API pages by ?page=, by meta.total, or isn't actually paginated at
+// all (in which case it naturally stops after one page, since a second
+// identical page adds no new countries).
+async function fetchAllLogsDomainCountries() {
+  const seen = new Map();
+  let page = 1;
+  const MAX_PAGES = 25; // safety cap — 200+ countries at 20-50/page fits well within this
+  let lastError = null;
+
+  while (page <= MAX_PAGES) {
+    const { status, ok, json } = await callLogsDomain(`/numbers/countries?page=${page}&per_page=100`);
+    if (!ok || !json?.success) {
+      if (page === 1) return { ok: false, status: status || 502, message: json?.message || 'Could not reach LogsDomain', data: [] };
+      lastError = json?.message || `page ${page} failed`;
+      break; // later page failed — just return what we already have
+    }
+
+    const batch = json.data || [];
+    let addedNew = false;
+    for (const c of batch) {
+      const key = String(c.id ?? c.country_id ?? c.name);
+      if (!seen.has(key)) {
+        seen.set(key, c);
+        addedNew = true;
+      }
+    }
+
+    const meta = json.meta;
+    const knownTotalPages = meta?.total && meta?.per_page ? Math.ceil(meta.total / meta.per_page) : null;
+
+    if (!batch.length || !addedNew) break; // exhausted, or API ignores paging and repeats page 1
+    if (knownTotalPages && page >= knownTotalPages) break;
+
+    page += 1;
   }
-  return res.status(200).json({ success: true, data: json.data });
+
+  return { ok: true, status: 200, message: lastError, data: Array.from(seen.values()) };
+}
+
+async function handleCountries(req, res) {
+  const result = await fetchAllLogsDomainCountries();
+  if (!result.ok) {
+    return res.status(result.status).json({ success: false, message: result.message });
+  }
+  return res.status(200).json({ success: true, data: result.data });
 }
 
 async function handleServices(req, res) {
@@ -525,11 +569,11 @@ async function handleSync(req, res) {
   // row (sync_jobs has no column for it) — one cheap extra request per
   // resume, and country ordering from a supplier is stable, so cursor_index
   // still lines up correctly against a freshly-fetched list.
-  const countriesRes = await callLogsDomain('/numbers/countries');
-  if (!countriesRes.ok || !countriesRes.json?.success) {
-    return res.status(countriesRes.status || 502).json({ success: false, message: countriesRes.json?.message || 'Could not reach LogsDomain' });
+  const countriesRes = await fetchAllLogsDomainCountries();
+  if (!countriesRes.ok) {
+    return res.status(countriesRes.status || 502).json({ success: false, message: countriesRes.message || 'Could not reach LogsDomain' });
   }
-  const countryList = (countriesRes.json.data || []).map(c => ({ id: Number(c.id), name: c.name }));
+  const countryList = countriesRes.data.map(c => ({ id: Number(c.id), name: c.name }));
 
   let job = await getSyncJob();
   if (!job || job.status !== 'running') {
