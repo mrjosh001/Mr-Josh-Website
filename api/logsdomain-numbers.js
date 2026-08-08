@@ -145,6 +145,21 @@ async function handleOrderHistory(req, res, userId) {
 // ORDER — debited from the calling user's own wallet
 // ===========================================================================
 
+async function placeOrder(countryId, serviceId, selectedAreaCodes, userId) {
+  const idempotencyKey = `MJ-LD-NUM-${String(userId).slice(0, 8)}-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+  const res = await callLogsDomain('/numbers/orders', {
+    method: 'POST',
+    body: {
+      country_id: countryId,
+      service_id: Number(serviceId) || serviceId,
+      ...(selectedAreaCodes ? { selected_area_codes: selectedAreaCodes } : {}),
+      idempotency_key: idempotencyKey
+    }
+  });
+  res.idempotencyKey = idempotencyKey;
+  return res;
+}
+
 async function handleOrder(req, res, userId) {
   const body = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : (req.body || {});
   const countryId = parseInt(body.country_id, 10);
@@ -160,11 +175,13 @@ async function handleOrder(req, res, userId) {
 
   // Re-fetch the live service to get current supplier price and name —
   // never trust a price the client sent us.
-  const svcRes = await callLogsDomain(`/numbers/services?country_id=${countryId}`);
-  if (!svcRes.ok || !svcRes.json?.success) {
-    return res.status(502).json({ success: false, message: 'Could not verify this service right now.' });
+  async function fetchLiveService() {
+    const svcRes = await callLogsDomain(`/numbers/services?country_id=${countryId}`);
+    if (!svcRes.ok || !svcRes.json?.success) return null;
+    return (svcRes.json.data || []).find(s => String(s.service_id) === serviceId) || null;
   }
-  const svc = (svcRes.json.data || []).find(s => String(s.service_id) === serviceId);
+
+  let svc = await fetchLiveService();
   if (!svc) {
     return res.status(404).json({ success: false, message: 'This service is no longer available for that country.' });
   }
@@ -175,7 +192,7 @@ async function handleOrder(req, res, userId) {
   // authoritative check — LogsDomain returns NUMBER_OUT_OF_STOCK itself if a
   // number genuinely isn't available, which we handle below.
 
-  const price = priceForCustomer(svc.price);
+  let price = priceForCustomer(svc.price);
   let originalBalance = 0;
   let customerId = null;
   let deducted = false;
@@ -194,29 +211,56 @@ async function handleOrder(req, res, userId) {
     customerId = profile.customer_id;
 
     if (originalBalance < price) {
-      return res.status(402).json({ success: false, message: 'Insufficient balance for this test purchase', required: price, available: originalBalance });
+      return res.status(402).json({ success: false, message: 'Insufficient balance for this purchase', required: price, available: originalBalance });
     }
 
-    const newBalance = originalBalance - price;
+    let newBalance = originalBalance - price;
     const { error: deductErr } = await supabase.from('profiles').update({ balance: newBalance }).eq('id', userId);
     if (deductErr) {
       return res.status(500).json({ success: false, message: 'Could not debit balance. Please try again.' });
     }
     deducted = true;
 
-    const idempotencyKey = `MJ-LD-NUM-${String(userId).slice(0, 8)}-${Date.now()}`;
-    const orderRes = await callLogsDomain('/numbers/orders', {
-      method: 'POST',
-      body: {
-        country_id: countryId,
-        service_id: Number(serviceId) || serviceId,
-        ...(selectedAreaCodes ? { selected_area_codes: selectedAreaCodes } : {}),
-        idempotency_key: idempotencyKey
-      }
-    });
+    // LogsDomain's catalog prices/stock shift quickly (same as Grizzly), so
+    // the order call can transiently reject a quote that was fresh a moment
+    // ago. Try once, and if it fails for a price/availability reason,
+    // re-fetch the live price and retry a single time before giving up —
+    // this is invisible to the customer instead of surfacing a raw
+    // "price changed, try again" error for something that usually resolves
+    // itself within a second or two.
+    let orderRes = await placeOrder(countryId, serviceId, selectedAreaCodes, userId);
 
     if (!orderRes.ok || !orderRes.json?.success) {
-      // Supplier failed — restore balance, no refund transaction row needed
+      const msg = (orderRes.json?.message || '').toLowerCase();
+      const transient = msg.includes('price changed') || msg.includes('temporarily unavailable') || msg.includes('out of stock');
+      console.warn('[logsdomain-numbers order] first attempt failed:', orderRes.status, orderRes.json);
+
+      if (transient) {
+        const freshSvc = await fetchLiveService();
+        if (freshSvc) {
+          svc = freshSvc;
+          const freshPrice = priceForCustomer(freshSvc.price);
+          if (freshPrice !== price) {
+            // Price moved — true up the wallet debit before retrying so we
+            // never charge the stale amount.
+            const adjustedBalance = originalBalance - freshPrice;
+            if (adjustedBalance < 0) {
+              await supabase.from('profiles').update({ balance: originalBalance }).eq('id', userId);
+              return res.status(402).json({ success: false, message: 'Price changed and your balance no longer covers it. Please try again.' });
+            }
+            await supabase.from('profiles').update({ balance: adjustedBalance }).eq('id', userId);
+            price = freshPrice;
+            newBalance = adjustedBalance;
+          }
+          orderRes = await placeOrder(countryId, serviceId, selectedAreaCodes, userId);
+        }
+      }
+    }
+
+    if (!orderRes.ok || !orderRes.json?.success) {
+      // Still failing after retry — restore balance and surface the real
+      // supplier message so this is diagnosable if it keeps happening.
+      console.error('[logsdomain-numbers order] failed after retry:', orderRes.status, orderRes.json);
       await supabase.from('profiles').update({ balance: originalBalance }).eq('id', userId);
       return res.status(orderRes.status === 402 ? 402 : 400).json({
         success: false,
@@ -231,7 +275,7 @@ async function handleOrder(req, res, userId) {
       user_id: userId,
       customer_id: customerId,
       order_id: String(d.order_id),
-      idempotency_key: idempotencyKey,
+      idempotency_key: orderRes.idempotencyKey,
       country_id: countryId,
       country_name: d.country_name || svc.country_name,
       service_id: serviceId,
