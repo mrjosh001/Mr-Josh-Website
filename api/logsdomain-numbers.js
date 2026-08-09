@@ -737,6 +737,24 @@ async function handleSync(req, res) {
 // ENTRYPOINT
 // ===========================================================================
 
+/** Robust query parse — Vercel usually fills req.query, but some runtimes
+ *  (and cron paths with ?action= in the path string) leave it empty. Always
+ *  fall back to parsing req.url so action=sync / countries never disappear. */
+function getQuery(req) {
+  if (req.query && typeof req.query === 'object' && Object.keys(req.query).length > 0) {
+    return req.query;
+  }
+  try {
+    const raw = req.url || '';
+    const u = new URL(raw, 'http://localhost');
+    const q = {};
+    u.searchParams.forEach((v, k) => { q[k] = v; });
+    return q;
+  } catch {
+    return {};
+  }
+}
+
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
@@ -752,12 +770,15 @@ export default async function handler(req, res) {
     return res.status(500).json({ success: false, message: 'LOGSDOMAIN_API_KEY not configured' });
   }
 
-  const action = req.query?.action || null;
+  const urlQuery = getQuery(req);
+  const action = (req.query?.action || urlQuery.action || null);
+  if (!req.query || typeof req.query !== 'object') req.query = {};
+  for (const [k, v] of Object.entries(urlQuery)) {
+    if (req.query[k] == null) req.query[k] = v;
+  }
 
-  // sync is admin-only and checks that itself (requireAdmin, not
-  // requireAuth) — handled before the general auth check below, which
-  // would otherwise let any signed-in customer trigger a full catalog sync.
-  if (req.method === 'GET' && action === 'sync') {
+  // Accept GET + POST so admin button and Vercel cron both work.
+  if (action === 'sync' && (req.method === 'GET' || req.method === 'POST')) {
     return handleSync(req, res);
   }
 
@@ -774,7 +795,7 @@ export default async function handler(req, res) {
     if (action === 'orders') return handleOrderHistory(req, res, auth.userId);
     return res.status(400).json({
       success: false,
-      message: 'GET requires ?action=wallet, countries, services, area-codes, or orders'
+      message: 'GET requires ?action=wallet, countries, services, area-codes, orders, or sync'
     });
   }
 
@@ -784,7 +805,7 @@ export default async function handler(req, res) {
     if (action === 'cancel') return handleCancel(req, res, auth.userId);
     return res.status(400).json({
       success: false,
-      message: 'POST requires ?action=order, check, or cancel'
+      message: 'POST requires ?action=order, check, cancel, or sync'
     });
   }
 
