@@ -338,9 +338,7 @@ async function refreshBalance(){
 async function loadCountries(){
   try{
     if(!sbClient) throw new Error('Not ready yet — please retry');
-    // Reading the local synced catalog instead of calling LogsDomain live —
-    // this is what made country/service browsing slow before. Run "Sync
-    // LogsDomain" in admin first if this list looks empty/stale.
+    // Prefer local synced catalog. If empty, fall back to live LogsDomain API.
     const { data, error } = await sbClient
       .from('number_services')
       .select('country_id, country_name')
@@ -348,9 +346,23 @@ async function loadCountries(){
       .eq('is_available', true);
     if(error) throw error;
     const seen = new Map();
-    (data || []).forEach(r => { if(!seen.has(r.country_id)) seen.set(r.country_id, r.country_name); });
+    (data || []).forEach(r => { if(r.country_id != null && !seen.has(r.country_id)) seen.set(r.country_id, r.country_name); });
     allCountries = Array.from(seen, ([country_id, country_name]) => ({ country_id, country_name }))
-      .sort((a, b) => a.country_name.localeCompare(b.country_name));
+      .sort((a, b) => String(a.country_name||'').localeCompare(String(b.country_name||'')));
+
+    if(!allCountries.length && accessToken){
+      try{
+        const live = await ldFetch('countries');
+        const rows = live.data || live.countries || [];
+        allCountries = rows.map(c => ({
+          country_id: Number(c.id ?? c.country_id),
+          country_name: c.name || c.country_name || String(c.id)
+        })).filter(c => Number.isFinite(c.country_id))
+          .sort((a, b) => a.country_name.localeCompare(b.country_name));
+      }catch(liveErr){
+        console.warn('Live LogsDomain countries fallback failed:', liveErr);
+      }
+    }
     renderCountries(allCountries);
   }catch(err){
     countryList.innerHTML = '<div class="empty-state"><div class="empty-state-icon">⚠️</div><h4>Failed to load</h4><p>'+escapeHtml(err.message||String(err))+'</p></div>';
@@ -392,6 +404,19 @@ async function selectCountry(countryId){
       .order('service_name', { ascending: true });
     if(error) throw error;
     allServices = data || [];
+    if(!allServices.length && accessToken){
+      try{
+        const live = await ldFetch('services', { query: { country_id: countryId } });
+        allServices = (live.data || []).map(s => ({
+          service_id: String(s.service_id ?? s.id),
+          service_name: s.service_name || s.name || String(s.service_id),
+          price: s.price,
+          available_quantity: s.available_quantity
+        }));
+      }catch(liveErr){
+        console.warn('Live LogsDomain services fallback failed:', liveErr);
+      }
+    }
     renderServices(allServices);
   }catch(err){
     serviceGrid.innerHTML = '<div class="empty-state"><div class="empty-state-icon">⚠️</div><h4>Failed to load</h4><p>'+escapeHtml(err.message||String(err))+'</p></div>';
