@@ -356,6 +356,13 @@ getDisplayDescription(p).toLowerCase().includes(q) ||
 (p.category||'').toLowerCase().includes(q)
 );
 }
+// Within a specific category, show cheapest first — makes it easy to
+// compare options at a glance instead of a random/insertion order.
+// "All Categories" stays grouped by category (unsorted by price) since
+// interleaving every category by price would break that grouping.
+if(c!=='all'){
+list = [...list].sort((a,b) => (parseFloat(a.price)||0) - (parseFloat(b.price)||0));
+}
 return list;
 }
 
