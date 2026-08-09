@@ -1115,9 +1115,12 @@ async function loadSmsRowsForCurrentFilter() {
       );
     }
     if (hideZero) {
-      // Null stock means "unknown" (LogsDomain doesn't always report a
-      // live count), not "zero" — a plain .gt() was silently excluding
-      // every null row, hiding most of the catalog by default.
+      // available_quantity is null for suppliers that don't report live
+      // stock (LogsDomain always returns null here) — null isn't "zero",
+      // it's "unknown", so treat it as available. Only exclude rows that
+      // explicitly report 0 or less. A plain .gt('available_quantity', 0)
+      // would silently exclude every null row, which is what was hiding
+      // the entire LogsDomain catalog after a successful sync.
       query = query.or('available_quantity.is.null,available_quantity.gt.0');
     }
     query = query
@@ -1168,7 +1171,7 @@ function renderNumberServices(list) {
       const stock = s.available_quantity;
       const stockDisplay = stock == null ? '—' : stock;
       const available = s.is_available !== false && (stock == null || stock > 0);
-      const statusLabel = s.is_available === false ? 'Hidden' : (stock == null ? 'Unknown' : (stock > 0 ? 'Active' : 'Out of stock'));
+      const statusLabel = s.is_available === false ? 'Hidden' : (available ? 'Active' : 'Out of stock');
       return `
         <tr>
           <td style="font-weight:600;">${escapeHtml(s.country_name || '—')}</td>
@@ -1191,7 +1194,7 @@ function renderNumberServices(list) {
       const stock = s.available_quantity;
       const stockDisplay = stock == null ? '—' : stock;
       const available = s.is_available !== false && (stock == null || stock > 0);
-      const statusLabel = s.is_available === false ? 'Hidden' : (stock == null ? 'Unknown' : (stock > 0 ? 'Active' : 'Out of stock'));
+      const statusLabel = s.is_available === false ? 'Hidden' : (available ? 'Active' : 'Out of stock');
       return `
         <div class="product-card">
           <h4>${escapeHtml(s.country_name || '—')}</h4>
@@ -1258,10 +1261,6 @@ async function loadSmsServer2RowsForCurrentFilter() {
         `service_name.ilike.%${q}%,service_id.ilike.%${q}%,country_name.ilike.%${q}%`
       );
     }
-    // Same fix as the customer-facing catalog: null stock means "unknown",
-    // not "zero" — LogsDomain doesn't always report a live count. A plain
-    // .gt() excludes every null row, which is why this view looked mostly
-    // empty even right after a successful sync.
     if (hideZero) query = query.or('available_quantity.is.null,available_quantity.gt.0');
     query = query.order('service_name', { ascending: true }).limit(country ? 3000 : 1000);
 
@@ -1300,7 +1299,7 @@ function renderNumberServicesServer2(list) {
     const stock = s.available_quantity;
     const stockDisplay = stock == null ? '—' : stock;
     const available = s.is_available !== false && (stock == null || stock > 0);
-    const statusLabel = s.is_available === false ? 'Hidden' : (stock == null ? 'Unknown' : (stock > 0 ? 'Active' : 'Out of stock'));
+    const statusLabel = s.is_available === false ? 'Hidden' : (available ? 'Active' : 'Out of stock');
     return { stockDisplay, available, statusLabel };
   };
 
@@ -2188,7 +2187,7 @@ async function syncAllSuppliersNow() {
   setSyncButtonLoading(sBtn, true, '<i class="fas fa-sync"></i> Sync Sujan Dept.');
   try {
     const [fRes, lRes, sRes] = await Promise.all([
-      fetch('/api/order'),
+      fetch('/api/products'),
       fetch('/api/products-logsdomain'),
       fetch('/api/sujan')
     ]);
