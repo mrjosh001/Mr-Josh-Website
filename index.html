@@ -32,6 +32,22 @@
     </script>
 
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script>
+// Force all date/time displays to Nigeria time (WAT, Africa/Lagos),
+// regardless of the viewer's device timezone — keeps order timestamps
+// consistent for admins and users everywhere, so orders sort/display
+// the same way no matter where someone is looking from.
+(function () {
+  var _toLocaleString = Date.prototype.toLocaleString;
+  var _toLocaleDateString = Date.prototype.toLocaleDateString;
+  var _toLocaleTimeString = Date.prototype.toLocaleTimeString;
+  function withLagos(opts) { return Object.assign({ timeZone: 'Africa/Lagos' }, opts || {}); }
+  Date.prototype.toLocaleString = function (locales, opts) { return _toLocaleString.call(this, locales || 'en-NG', withLagos(opts)); };
+  Date.prototype.toLocaleDateString = function (locales, opts) { return _toLocaleDateString.call(this, locales || 'en-NG', withLagos(opts)); };
+  Date.prototype.toLocaleTimeString = function (locales, opts) { return _toLocaleTimeString.call(this, locales || 'en-NG', withLagos(opts)); };
+})();
+</script>
+
     <script src="https://js.paystack.co/v1/inline.js"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -1487,11 +1503,60 @@ function initCommunityBanner() {
     });
 }
 
+// --- Idle auto-logout ---------------------------------------------------
+// After 10 minutes with no interaction, the session is signed out and the
+// user is sent back to auth.html. The last-activity timestamp lives in
+// localStorage (not just an in-memory timer), so this also catches the
+// case where someone closes the tab/app while idle and reopens it later —
+// on the very next load, if more than 10 minutes have passed since the
+// last recorded activity, they're signed out immediately before any
+// dashboard content renders, rather than only timing out during a single
+// continuously-open session. This is a safety measure so a lost/shared
+// device can't be used to reach a signed-in wallet indefinitely.
+const IDLE_LIMIT_MS = 10 * 60 * 1000;
+const IDLE_KEY = 'mjhub-last-activity';
+
+function markActivity() {
+    try { localStorage.setItem(IDLE_KEY, String(Date.now())); } catch (e) { /* ignore */ }
+}
+
+// Returns true if the session was idle-timed-out (caller should stop
+// further dashboard init in that case).
+async function enforceIdleTimeout() {
+    let last = null;
+    try { last = parseInt(localStorage.getItem(IDLE_KEY) || '0', 10); } catch (e) { /* ignore */ }
+
+    if (last && (Date.now() - last > IDLE_LIMIT_MS)) {
+        try { await supabaseClient.auth.signOut(); } catch (e) { /* ignore */ }
+        try { localStorage.removeItem(IDLE_KEY); } catch (e) { /* ignore */ }
+        window.location.href = 'auth.html?reason=idle';
+        return true;
+    }
+
+    markActivity();
+    ['mousemove', 'keydown', 'touchstart', 'click', 'scroll'].forEach(evt => {
+        document.addEventListener(evt, markActivity, { passive: true });
+    });
+    setInterval(() => {
+        let l = null;
+        try { l = parseInt(localStorage.getItem(IDLE_KEY) || '0', 10); } catch (e) { /* ignore */ }
+        if (l && (Date.now() - l > IDLE_LIMIT_MS)) {
+            supabaseClient.auth.signOut().finally(() => {
+                try { localStorage.removeItem(IDLE_KEY); } catch (e) { /* ignore */ }
+                window.location.href = 'auth.html?reason=idle';
+            });
+        }
+    }, 30000);
+    return false;
+}
+
 document.addEventListener('DOMContentLoaded', async () => {
     if (supabaseClient) {
         try {
             const { data: { session } } = await supabaseClient.auth.getSession();
             if (session) {
+                const idleTimedOut = await enforceIdleTimeout();
+                if (idleTimedOut) return;
                 currentUserId = session.user.id;
                 await initUserData(session.user);
                 await fetchUserBalance(currentUserId);

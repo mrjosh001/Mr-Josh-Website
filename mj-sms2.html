@@ -9,6 +9,22 @@
 (function(){try{var t=localStorage.getItem('mjhub-theme');document.documentElement.setAttribute('data-theme',(t==='light'||t==='dark')?t:'dark');}catch(e){document.documentElement.setAttribute('data-theme','dark');}})();
 </script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script>
+// Force all date/time displays to Nigeria time (WAT, Africa/Lagos),
+// regardless of the viewer's device timezone — keeps order timestamps
+// consistent for admins and users everywhere, so orders sort/display
+// the same way no matter where someone is looking from.
+(function () {
+  var _toLocaleString = Date.prototype.toLocaleString;
+  var _toLocaleDateString = Date.prototype.toLocaleDateString;
+  var _toLocaleTimeString = Date.prototype.toLocaleTimeString;
+  function withLagos(opts) { return Object.assign({ timeZone: 'Africa/Lagos' }, opts || {}); }
+  Date.prototype.toLocaleString = function (locales, opts) { return _toLocaleString.call(this, locales || 'en-NG', withLagos(opts)); };
+  Date.prototype.toLocaleDateString = function (locales, opts) { return _toLocaleDateString.call(this, locales || 'en-NG', withLagos(opts)); };
+  Date.prototype.toLocaleTimeString = function (locales, opts) { return _toLocaleTimeString.call(this, locales || 'en-NG', withLagos(opts)); };
+})();
+</script>
+
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <style>
