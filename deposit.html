@@ -1,0 +1,345 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Fund Wallet — MJ HUB</title>
+<meta name="theme-color" content="#06080f">
+<link rel="icon" href="https://atczodlljmlayvldxfmv.supabase.co/storage/v1/object/public/avatars/dark%20background%20log">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script>
+(function(){try{var t=localStorage.getItem('mjhub-theme');document.documentElement.setAttribute('data-theme',(t==='light'||t==='dark')?t:'dark');}catch(e){document.documentElement.setAttribute('data-theme','dark');}})();
+</script>
+<style>
+:root[data-theme="dark"]{
+  --bg:#06080f;--card:#0f1524;--border:rgba(148,163,184,.12);--text:#f1f5f9;--muted:#8b9bb4;
+  --primary:#5b8af5;--primary2:#a78bfa;--success:#34d399;--danger:#f87171;
+  --header-bg:rgba(6,8,15,.92);--input-bg:#0a0e18;
+}
+:root[data-theme="light"]{
+  --bg:#f4f6fb;--card:#fff;--border:rgba(15,23,42,.08);--text:#0f172a;--muted:#64748b;
+  --primary:#3b6ef5;--primary2:#7c5cfc;--success:#059669;--danger:#dc2626;
+  --header-bg:rgba(255,255,255,.92);--input-bg:#f8fafc;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html{-webkit-tap-highlight-color:transparent}
+body{font-family:Inter,system-ui,-apple-system,sans-serif;background:var(--bg);color:var(--text);min-height:100vh;}
+a{color:inherit;text-decoration:none}
+.header{position:sticky;top:0;z-index:20;display:flex;align-items:center;gap:12px;padding:14px 16px;background:var(--header-bg);backdrop-filter:blur(14px);border-bottom:1px solid var(--border)}
+.back,.theme-btn{width:40px;height:40px;border-radius:12px;border:1px solid var(--border);background:var(--card);display:flex;align-items:center;justify-content:center;cursor:pointer;color:var(--text);font-size:16px}
+.header h1{font-size:17px;font-weight:800;flex:1}
+.wrap{max-width:480px;margin:0 auto;padding:16px 16px 40px}
+.wallets{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px}
+.wcard{background:var(--card);border:1px solid var(--border);border-radius:16px;padding:14px}
+.wcard .lbl{font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.06em;color:var(--muted)}
+.wcard .val{font-size:18px;font-weight:900;margin-top:4px}
+.card{background:var(--card);border:1px solid var(--border);border-radius:20px;padding:18px 16px}
+.card h2{font-size:18px;font-weight:900;margin-bottom:4px}
+.card .sub{font-size:13px;color:var(--muted);margin-bottom:16px;line-height:1.4}
+.form-group{margin-bottom:14px}
+.form-group label{display:block;font-size:11px;font-weight:800;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;margin-bottom:6px}
+.form-group select,.form-group input{
+  width:100%;padding:13px 14px;border-radius:12px;border:1px solid var(--border);
+  background:var(--input-bg);color:var(--text);font-size:15px;font-weight:600;outline:none;
+}
+.form-group input:focus,.form-group select:focus{border-color:var(--primary)}
+.btn{width:100%;border:0;cursor:pointer;border-radius:14px;padding:14px 16px;font-weight:800;font-size:14px;
+  display:inline-flex;align-items:center;justify-content:center;gap:8px;
+  background:linear-gradient(135deg,var(--primary),var(--primary2));color:#fff;
+  box-shadow:0 10px 28px rgba(91,138,245,.28)}
+.btn:disabled{opacity:.65;cursor:not-allowed}
+.hint{font-size:12px;color:var(--muted);margin-top:12px;line-height:1.45;text-align:center}
+.usd-preview{display:none;padding:12px 14px;margin-bottom:12px;border-radius:14px;background:rgba(52,211,153,.1);border:1px solid rgba(52,211,153,.28)}
+.usd-preview .t{font-size:12px;color:var(--muted);font-weight:600}
+.usd-preview .a{font-size:20px;font-weight:800;color:var(--success);margin-top:4px}
+.usd-preview .r{font-size:11px;color:var(--muted);margin-top:6px}
+.toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:#111827;color:#fff;padding:12px 16px;border-radius:12px;font-size:13px;font-weight:700;z-index:100;opacity:0;pointer-events:none;transition:.2s;max-width:90%}
+:root[data-theme="light"] .toast{background:#0f172a}
+.toast.show{opacity:1}
+.success-box{display:none;padding:14px;border-radius:14px;margin-bottom:14px;background:rgba(52,211,153,.12);border:1px solid rgba(52,211,153,.3);font-size:13px;font-weight:700;line-height:1.4}
+.success-box.show{display:block}
+</style>
+</head>
+<body>
+<header class="header">
+  <a class="back" href="index.html#home" aria-label="Back"><i class="fa-solid fa-arrow-left"></i></a>
+  <h1>Fund Wallet</h1>
+  <button type="button" class="theme-btn" id="themeBtn" onclick="toggleTheme()">🌙</button>
+</header>
+
+<div class="wrap">
+  <div class="wallets">
+    <div class="wcard">
+      <div class="lbl">NGN Wallet</div>
+      <div class="val" id="balNgn">₦—</div>
+    </div>
+    <div class="wcard">
+      <div class="lbl">USD Wallet</div>
+      <div class="val" id="balUsd">$—</div>
+    </div>
+  </div>
+
+  <div class="success-box" id="successBox">Payment received — refreshing your balance…</div>
+
+  <div class="card">
+    <h2>Add funds</h2>
+    <p class="sub">Choose method, wallet, and amount. Min ₦1,000 · Max ₦500,000.</p>
+
+    <div class="form-group">
+      <label>Payment method</label>
+      <select id="depositProviderSelect" onchange="onDepositMethodChange()">
+        <option value="pocketfi" selected>Pay with PocketFi</option>
+        <option value="manual">Manual (WhatsApp)</option>
+        <option value="crypto" disabled>Crypto — Coming soon</option>
+      </select>
+    </div>
+
+    <div id="pocketfiDepositBox">
+      <div class="form-group">
+        <label>Wallet to fund</label>
+        <select id="depositWalletSelect" onchange="selectDepositWallet(this.value)">
+          <option value="ngn" selected>NGN Wallet (₦)</option>
+          <option value="usd">USD Wallet ($)</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Amount (₦)</label>
+        <input type="number" id="pocketfiDepositInput" min="1000" max="500000" step="100" placeholder="e.g. 5000" oninput="updateDepositUsdPreview()">
+      </div>
+      <div class="usd-preview" id="depositUsdPreview">
+        <div class="t">You will receive</div>
+        <div class="a" id="depositUsdAmountText">$0.00</div>
+        <div class="r" id="depositUsdRateText">Rate: ₦1,450 = $1</div>
+      </div>
+      <button type="button" class="btn" id="pocketfiPayBtn" onclick="payWithPocketFi()">
+        <i class="fa-solid fa-lock"></i> Continue to bank transfer
+      </button>
+      <p class="hint">Pay in Naira. Selected wallet is credited after confirmation.</p>
+    </div>
+
+    <div id="manualDepositBox" style="display:none;">
+      <div class="form-group">
+        <label>Your Customer ID</label>
+        <input type="text" id="depositCustomerId" readonly placeholder="Loading…" style="font-family:monospace;font-weight:700;color:var(--primary)">
+      </div>
+      <div class="form-group">
+        <label>Amount (₦)</label>
+        <input type="number" id="depositInput" min="1000" max="500000" step="100" placeholder="e.g. 5000">
+      </div>
+      <button type="button" class="btn" onclick="messageAdminForDeposit()">
+        <i class="fa-brands fa-whatsapp"></i> Message Admin to Deposit
+      </button>
+      <p class="hint">WhatsApp opens with your Customer ID and amount pre-filled.</p>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const SUPABASE_URL = 'https://atczodlljmlayvldxfmv.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImF0Y3pvZGxsam1sYXl2bGR4Zm12Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODUwNzUyMzgsImV4cCI6MjEwMDY1MTIzOH0.ufthD-p7BmeD_B7xyuMM6PNPL8DmcL4AtRYgg-MuoLI';
+const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+const DEPOSIT_USD_RATE = 1450;
+const MIN = 1000;
+const MAX = 500000;
+const ADMIN_WA = '14305583021';
+
+let depositWallet = 'ngn';
+let currentUserId = null;
+let customerId = '';
+
+function toast(msg, ms) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), ms || 3200);
+}
+function fmtNgn(n) { return '₦' + Number(n || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
+function fmtUsd(n) { return '$' + Number(n || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
+
+function syncThemeUi() {
+  const dark = document.documentElement.getAttribute('data-theme') !== 'light';
+  const btn = document.getElementById('themeBtn');
+  if (btn) btn.textContent = dark ? '🌙' : '☀️';
+  const meta = document.querySelector('meta[name="theme-color"]');
+  if (meta) meta.setAttribute('content', dark ? '#06080f' : '#f4f6fb');
+}
+function toggleTheme() {
+  const cur = document.documentElement.getAttribute('data-theme') === 'light' ? 'light' : 'dark';
+  const next = cur === 'dark' ? 'light' : 'dark';
+  document.documentElement.setAttribute('data-theme', next);
+  try { localStorage.setItem('mjhub-theme', next); } catch (e) {}
+  syncThemeUi();
+}
+
+function onDepositMethodChange() {
+  const v = document.getElementById('depositProviderSelect')?.value || 'pocketfi';
+  document.getElementById('pocketfiDepositBox').style.display = v === 'pocketfi' ? '' : 'none';
+  document.getElementById('manualDepositBox').style.display = v === 'manual' ? '' : 'none';
+}
+function selectDepositWallet(wallet) {
+  depositWallet = wallet === 'usd' ? 'usd' : 'ngn';
+  const sel = document.getElementById('depositWalletSelect');
+  if (sel && sel.value !== depositWallet) sel.value = depositWallet;
+  updateDepositUsdPreview();
+}
+function updateDepositUsdPreview() {
+  const box = document.getElementById('depositUsdPreview');
+  const amtEl = document.getElementById('depositUsdAmountText');
+  const rateEl = document.getElementById('depositUsdRateText');
+  const ngn = parseFloat(document.getElementById('pocketfiDepositInput')?.value) || 0;
+  if (rateEl) rateEl.textContent = 'Rate: ₦' + DEPOSIT_USD_RATE.toLocaleString() + ' = $1';
+  if (!box) return;
+  if (depositWallet !== 'usd') { box.style.display = 'none'; return; }
+  box.style.display = 'block';
+  const usd = ngn > 0 ? ngn / DEPOSIT_USD_RATE : 0;
+  if (amtEl) amtEl.textContent = '$' + usd.toFixed(2);
+}
+
+async function ensureAuth() {
+  const { data } = await sb.auth.getSession();
+  if (!data?.session) {
+    location.href = 'auth.html?next=' + encodeURIComponent('deposit.html');
+    return false;
+  }
+  currentUserId = data.session.user.id;
+  await loadProfile();
+  return true;
+}
+
+async function loadProfile() {
+  if (!currentUserId) return;
+  const { data: prof } = await sb.from('profiles')
+    .select('balance, balance_usd, customer_id')
+    .eq('id', currentUserId)
+    .maybeSingle();
+  const ngn = Number(prof?.balance) || 0;
+  const usd = Number(prof?.balance_usd) || 0;
+  document.getElementById('balNgn').textContent = fmtNgn(ngn);
+  document.getElementById('balUsd').textContent = fmtUsd(usd);
+  customerId = (prof?.customer_id || '').toString();
+  const cidEl = document.getElementById('depositCustomerId');
+  if (cidEl) cidEl.value = customerId || '—';
+}
+
+async function payWithPocketFi() {
+  const amount = parseFloat(document.getElementById('pocketfiDepositInput')?.value) || 0;
+  if (amount < MIN) return toast('Minimum deposit is ₦' + MIN.toLocaleString());
+  if (amount > MAX) return toast('Maximum deposit is ₦' + MAX.toLocaleString());
+  const btn = document.getElementById('pocketfiPayBtn');
+  if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Starting…'; }
+  try {
+    let accessToken = null;
+    let userId = currentUserId;
+    const { data: refreshed, error: refreshErr } = await sb.auth.refreshSession();
+    if (!refreshErr && refreshed?.session?.access_token) {
+      accessToken = refreshed.session.access_token;
+      userId = refreshed.session.user?.id || userId;
+    } else {
+      const { data: { session } } = await sb.auth.getSession();
+      accessToken = session?.access_token || null;
+      userId = session?.user?.id || userId;
+    }
+    if (!accessToken || !userId) {
+      toast('Session expired. Please sign in again.');
+      setTimeout(() => { location.href = 'auth.html?next=deposit.html'; }, 1200);
+      return;
+    }
+    currentUserId = userId;
+
+    const res = await fetch('/api/pocketfi', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer ' + accessToken
+      },
+      body: JSON.stringify({ amount: amount, wallet: depositWallet || 'ngn' })
+    });
+    let data = {};
+    try { data = await res.json(); } catch (_) {}
+    if (!res.ok || !data.success || !data.payment_link) {
+      if (res.status === 401) throw new Error('Session expired. Log out, sign in again, then retry.');
+      throw new Error(data.message || 'Could not start payment');
+    }
+    try {
+      sessionStorage.setItem('mjhub_last_deposit_wallet', depositWallet || 'ngn');
+      localStorage.setItem('mjhub_pending_pocketfi', JSON.stringify({ amount, ts: Date.now() }));
+    } catch (_) {}
+    window.location.href = data.payment_link;
+  } catch (err) {
+    toast(err.message || 'Payment error');
+  } finally {
+    if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fa-solid fa-lock"></i> Continue to bank transfer'; }
+  }
+}
+
+function messageAdminForDeposit() {
+  const amount = parseFloat(document.getElementById('depositInput')?.value) || 0;
+  if (amount < MIN) return toast('Minimum deposit is ₦' + MIN.toLocaleString());
+  if (amount > MAX) return toast('Maximum deposit is ₦' + MAX.toLocaleString());
+  let cid = (document.getElementById('depositCustomerId')?.value || '').trim();
+  if (!cid || cid === '—' || cid === 'Loading…') {
+    return toast('Customer ID not loaded yet. Wait a moment and try again.');
+  }
+  const msg =
+    'Good day Admin, I want to fund my Wallet.\n\n' +
+    'Here are my details:\n\n' +
+    'Customer ID: ' + cid + '\n' +
+    'Amount: ₦' + amount.toLocaleString();
+  window.open('https://wa.me/' + ADMIN_WA + '?text=' + encodeURIComponent(msg), '_blank');
+  toast('Opening WhatsApp…');
+}
+
+async function handleDepositReturn() {
+  try {
+    const params = new URLSearchParams(window.location.search);
+    const deposit = params.get('deposit');
+    if (!deposit) return;
+    history.replaceState(null, '', window.location.pathname);
+    if (deposit === 'success' || deposit === 'pocketfi') {
+      document.getElementById('successBox').classList.add('show');
+      toast('Payment received — updating balance…');
+      for (let i = 0; i < 6; i++) {
+        await new Promise(r => setTimeout(r, 1500));
+        await loadProfile();
+      }
+      toast('Wallet refreshed. If balance is still old, wait ~30s then refresh.');
+    } else if (deposit === 'failed' || deposit === 'cancelled') {
+      toast('Payment was not completed.');
+    }
+  } catch (e) {
+    console.warn(e);
+  }
+}
+
+// iOS PWA: returning from Safari checkout without full reload
+document.addEventListener('visibilitychange', async () => {
+  if (document.visibilityState !== 'visible') return;
+  try {
+    const raw = localStorage.getItem('mjhub_pending_pocketfi');
+    if (!raw) return;
+    const pending = JSON.parse(raw);
+    if (!pending?.ts || Date.now() - pending.ts > 30 * 60 * 1000) {
+      localStorage.removeItem('mjhub_pending_pocketfi');
+      return;
+    }
+    // Poll balance a few times when user returns
+    for (let i = 0; i < 4; i++) {
+      await new Promise(r => setTimeout(r, 1200));
+      await loadProfile();
+    }
+    localStorage.removeItem('mjhub_pending_pocketfi');
+  } catch (_) {}
+});
+
+(async () => {
+  syncThemeUi();
+  if (!(await ensureAuth())) return;
+  await handleDepositReturn();
+})();
+</script>
+</body>
+</html>

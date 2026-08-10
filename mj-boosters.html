@@ -156,7 +156,7 @@ a{color:inherit;text-decoration:none}
   <a href="index.html#home"><i class="fa-solid fa-house"></i><br>Home</a>
   <button class="main" onclick="selectPlatform('all')"><i class="fa-solid fa-bolt"></i><br>Boost</button>
   <a href="mj-boosters-history.html"><i class="fa-solid fa-receipt"></i><br>Orders</a>
-  <a href="index.html#deposit"><i class="fa-solid fa-wallet"></i><br>Fund</a>
+  <a href="deposit.html"><i class="fa-solid fa-wallet"></i><br>Fund</a>
 </div>
 <div class="toast" id="toast"></div>
 
@@ -514,7 +514,7 @@ async function placeOrder(){
     const data=await res.json();
     if(!data.success){
       toast(data.message||'Order failed');
-      if(/insufficient/i.test(data.message||'')) setTimeout(()=>location.href='index.html#deposit',1200);
+      if(/insufficient/i.test(data.message||'')) setTimeout(()=>location.href='deposit.html',1200);
       return;
     }
     if(data.new_balance!=null){ balance=Number(data.new_balance); document.getElementById('walletBal').textContent=fmt(balance); }

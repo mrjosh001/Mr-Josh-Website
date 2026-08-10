@@ -984,7 +984,7 @@ body::before {
                     <li><a href="mj-boosters-history.html" style="padding-left:34px;display:flex;align-items:center;gap:10px;"><i class="fa-solid fa-clock-rotate-left"></i> <span>Booster History</span></a></li>
                 </ul>
             </li>
-            <li><a href="#" class="sidebar-link" data-target="deposit"><i class="fa-solid fa-credit-card"></i> <span>Deposit</span></a></li>
+            <li><a href="deposit.html"><i class="fa-solid fa-credit-card"></i> <span>Deposit</span></a></li>
             <li><a href="#" class="sidebar-link" data-target="cart"><i class="fa-solid fa-bag-shopping"></i> <span>Cart</span></a></li>
             <li><a href="#" class="sidebar-link" data-target="orders"><i class="fa-solid fa-receipt"></i> <span>My Orders</span></a></li>
             <li><a href="#" onclick="handleLogout();return false;" style="color:var(--danger-color);"><i class="fa-solid fa-right-from-bracket"></i> <span>Logout</span></a></li>
@@ -1004,7 +1004,7 @@ body::before {
             <div class="hero-welcome" id="heroWelcomeTitle">Welcome to MJ HUB</div>
             <div class="hero-sub" id="heroSubText">Fund your wallet to get started with logs, SMS verification, and boosters.</div>
             <div class="hero-actions">
-                <button class="hero-btn" onclick="switchSection('deposit')"><i class="fa-solid fa-wallet"></i> Fund Account</button>
+                <a class="hero-btn" href="deposit.html" style="text-decoration:none;display:inline-flex;align-items:center;gap:8px;"><i class="fa-solid fa-wallet"></i> Fund Account</a>
                 <button class="hero-btn" onclick="openCurrencyModal()"><i class="fa-solid fa-right-left"></i> Convert</button>
                 <a class="hero-btn" href="mj-sms-choose-server.html"><i class="fa-solid fa-comment-sms"></i> Get SMS</a>
             </div>
@@ -1444,7 +1444,7 @@ body::before {
         <button class="popup-close" onclick="toggleFloatingPopup()"><i class="fa-solid fa-xmark"></i></button>
     </div>
     <div class="popup-grid">
-        <div class="popup-item" onclick="switchSection('deposit');toggleFloatingPopup();">
+        <div class="popup-item" onclick="location.href='deposit.html';toggleFloatingPopup();">
             <div class="popup-icon-badge"><i class="fa-solid fa-credit-card"></i></div>
             <span>Deposit</span>
         </div>
@@ -2658,7 +2658,7 @@ window.openCheckoutConfirm = function() {
     const total = cartItems.reduce((a, i) => a + Number(i.price || 0), 0);
     if (currentBalanceNgn < total) {
         showToast('Insufficient balance. Please fund wallet.', 'error');
-        return switchSection('deposit');
+        return location.href='deposit.html';
     }
 
     const itemsEl = document.getElementById('confirmCheckoutItems');
@@ -2697,7 +2697,7 @@ window.checkoutCart = async function() {
   const total = cartItems.reduce((a, i) => a + Number(i.price || 0), 0);
   if (currentBalanceNgn < total) {
     showToast('Insufficient balance. Please fund wallet.', 'error');
-    return switchSection('deposit');
+    return location.href='deposit.html';
   }
 
   // Only items that can be ordered from Fadded
