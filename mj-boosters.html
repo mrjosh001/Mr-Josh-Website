@@ -103,6 +103,13 @@ a{color:inherit;text-decoration:none}
 .qty-chip:hover,.qty-chip:active{border-color:rgba(91,138,245,.5);background:rgba(91,138,245,.1)}
 .qty-chip.clear{color:var(--muted)}
 .hint-text{font-size:12px;color:var(--muted);margin-top:6px;line-height:1.4}
+.desc-box{background:var(--bg);border:1px solid var(--border);border-radius:14px;padding:14px;margin-bottom:16px}
+.desc-box .desc-title{font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);margin-bottom:10px}
+.desc-box ul{list-style:none;margin:0;padding:0}
+.desc-box li{font-size:12.5px;line-height:1.5;color:var(--text);padding:4px 0;display:flex;gap:8px;align-items:flex-start}
+.desc-box li .ico{flex:0 0 16px;text-align:center;opacity:.9}
+.desc-box .warn{color:var(--warn)}
+.desc-box .ok{color:var(--success)}
 .total-box{padding:14px 16px;border-radius:14px;background:rgba(59,130,246,.1);border:1px solid rgba(59,130,246,.25);display:flex;justify-content:space-between;align-items:center;margin:4px 0 18px}
 .total-box span{font-size:13px;font-weight:700;color:var(--muted)}
 .total-box strong{font-size:20px;font-weight:900}
@@ -183,13 +190,18 @@ a{color:inherit;text-decoration:none}
       <span class="badge" id="mRefill" style="display:none">Refill</span>
     </div>
 
+    <div class="desc-box" id="mDesc">
+      <div class="desc-title">Description & Notes</div>
+      <ul id="mDescList"></ul>
+    </div>
+
     <div class="field">
       <label>Link</label>
       <div class="field-row">
         <input id="mLink" placeholder="Paste profile, post, reel or video link" autocomplete="off">
         <button type="button" class="paste-btn" onclick="pasteLink()">Paste</button>
       </div>
-      <div class="hint-text">Use the exact link. Private accounts are not supported.</div>
+      <div class="hint-text">Use the exact public link. Private accounts are not supported.</div>
     </div>
 
     <div class="field">
@@ -508,6 +520,26 @@ function openOrder(s){
 
   const refillEl = document.getElementById('mRefill');
   refillEl.style.display = s.refill ? 'inline-flex' : 'none';
+
+  // Build description / notes (matches style of supplier panels)
+  const list = document.getElementById('mDescList');
+  const items = [];
+  items.push({ ico: '⏱️', text: 'Start time: usually within 0–60 minutes', cls: '' });
+  items.push({ ico: '🌍', text: 'Worldwide delivery · High quality profiles', cls: '' });
+  items.push({ ico: '✅', text: 'Safe & gradual delivery for better retention', cls: 'ok' });
+  items.push({ ico: '📦', text: 'Minimum: ' + min.toLocaleString() + (max < 2000000000 ? ' · Maximum: ' + max.toLocaleString() : ''), cls: '' });
+  if (s.refill) {
+    items.push({ ico: '🔄', text: 'Refill available on this service', cls: 'ok' });
+  } else {
+    items.push({ ico: '⚠️', text: 'Refills are not available for this service', cls: 'warn' });
+  }
+  items.push({ ico: '⚠️', text: 'Do not place another order on the same link while one is still active', cls: 'warn' });
+  items.push({ ico: '⚠️', text: 'Make sure the account is public and the link is correct', cls: 'warn' });
+  items.push({ ico: 'ℹ️', text: 'Use the exact profile, post, reel, video or channel link', cls: '' });
+
+  list.innerHTML = items.map(it =>
+    '<li class="' + (it.cls || '') + '"><span class="ico">' + it.ico + '</span><span>' + it.text + '</span></li>'
+  ).join('');
 
   document.getElementById('mQty').value = min;
   document.getElementById('mQty').min = min;
