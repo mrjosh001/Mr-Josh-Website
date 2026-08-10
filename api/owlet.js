@@ -14,7 +14,7 @@ import { createClient } from '@supabase/supabase-js';
  *   status   — order status { order }
  *
  * Configured Exchange Rate: $1 = ₦1450 NGN
- * Configured Selling Markup: Random percentage between 25% and 50%
+ * Configured Selling Markup: fixed 35% (OWLET_MARKUP_PERCENT). Rate from API is USD.
  */
 
 const OWLET_URL = 'https://theowlet.com/api/v2';
@@ -26,11 +26,39 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY
 );
 
-// Helper to generate a random markup percentage between 25% and 50%
-function getRandomMarkup() {
-  return Math.floor(Math.random() * (50 - 25 + 1)) + 25; // Random integer between 25 and 50
+// Markup: fixed default 35% (override with OWLET_MARKUP_PERCENT env)
+// Owlet API rate is USD (balance/status currency is USD per docs).
+function getMarkupPercent() {
+  const env = Number(process.env.OWLET_MARKUP_PERCENT);
+  if (Number.isFinite(env) && env >= 0 && env <= 200) return env;
+  return 35;
 }
 
+/** Sell NGN = rate_usd * USD_TO_NGN * (1 + markup/100) */
+function sellPriceNgnFromUsd(rateUsd, markupPercent) {
+  const usd = Number(rateUsd) || 0;
+  const markup = markupPercent ?? getMarkupPercent();
+  return Math.ceil(usd * USD_TO_NGN * (1 + markup / 100));
+}
+
+function supplierUsdFromRate(rateUsd) {
+  return Math.round((Number(rateUsd) || 0) * 10000) / 10000;
+}
+
+// Back-compat aliases (old names still used in a few places)
+function getRandomMarkup() { return getMarkupPercent(); }
+function sellPriceNgn(rate, markupPercent) {
+  // treat as USD rate
+  return sellPriceNgnFromUsd(rate, markupPercent);
+}
+function supplierUsd(rate) {
+  return supplierUsdFromRate(rate);
+}
+function sellPriceUsd(rate, markupPercent) {
+  const usd = Number(rate) || 0;
+  const markup = markupPercent ?? getMarkupPercent();
+  return Math.round(usd * (1 + markup / 100) * 10000) / 10000;
+}
 
 async function requireUser(req) {
   const authHeader = req.headers.authorization || '';
@@ -111,7 +139,7 @@ async function handleBalance(req, res) {
   return res.status(200).json({
     success: true,
     balance: json.balance,
-    currency: json.currency || 'NGN',
+    currency: json.currency || 'USD',
     raw: json
   });
 }
@@ -215,12 +243,10 @@ async function handleSync(req, res) {
     const now = new Date().toISOString();
     const rows = slice.map(s => {
       const serviceId = String(s.service);
-      const rawNgn = Number(s.rate) || 0;
-      const supplierUsdVal = supplierUsd(rawNgn); // Converts NGN to USD at ₦1450/$ rate
-      
-      // Picks a unique random markup between 25% and 50% for this service
-      const randomMarkup = getRandomMarkup(); 
-      const defaultNgn = sellPriceNgn(rawNgn, randomMarkup);
+      // Owlet rate is USD per 1k
+      const rateUsd = Number(s.rate) || 0;
+      const supplierUsdVal = supplierUsdFromRate(rateUsd);
+      const defaultNgn = sellPriceNgnFromUsd(rateUsd);
 
       const prev = map.get(serviceId);
       const manual = prev && prev.price_source === 'manual';
@@ -754,6 +780,7 @@ async function handleAdminOrders(req, res) {
 
 
 export default async function handler(req, res) {
+  try {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
@@ -815,4 +842,8 @@ export default async function handler(req, res) {
     success: false,
     message: 'action required: catalog | order | my_orders | balance | services | sync | list | status | admin_orders'
   });
+  } catch (err) {
+    console.error('[owlet] handler error', err);
+    return res.status(500).json({ success: false, message: err?.message || String(err) });
+  }
 }
