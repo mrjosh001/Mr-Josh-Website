@@ -264,6 +264,7 @@
         <button class="nav-item" data-tab="sms" onclick="switchTab('sms')"><i class="fas fa-sim-card"></i> SMS — Server 1 (GrizzlySMS)</button>
         <button class="nav-item" data-tab="sms-orders" onclick="switchTab('sms-orders')"><i class="fas fa-comment-sms"></i> SMS Orders</button>
         <button class="nav-item" data-tab="sms-server2" onclick="switchTab('sms-server2')"><i class="fas fa-server"></i> SMS — Server 2 (LogsDomain)</button>
+        <button class="nav-item" data-tab="boosters" onclick="switchTab('boosters')"><i class="fas fa-bolt"></i> MJ Boosters (Owlet)</button>
         <button class="nav-item" data-tab="notify" onclick="switchTab('notify')"><i class="fas fa-bullhorn"></i> Notifications</button>
         <button class="nav-item" data-tab="settings" onclick="switchTab('settings')"><i class="fas fa-cog"></i> Settings</button>
       </nav>
@@ -542,6 +543,59 @@
           </div>
         </div>
 
+        
+        <div id="tab-boosters" class="tab-content">
+          <div class="card" style="margin-bottom:16px;">
+            <div style="display:flex;flex-wrap:wrap;gap:12px;align-items:center;justify-content:space-between;">
+              <div>
+                <h3 style="margin:0 0 4px;">MJ Boosters — The Owlet</h3>
+                <p style="margin:0;font-size:13px;color:var(--muted);">Admin only. Services sync to <code>booster_services</code>. Not shown on user dashboard yet.</p>
+              </div>
+              <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;">
+                <button class="btn btn-secondary btn-sm" id="btnOwletBalance" onclick="loadOwletBalance()"><i class="fas fa-wallet"></i> Refresh Balance</button>
+                <button class="btn btn-primary btn-sm" id="btnOwletSync" onclick="syncOwletServices()"><i class="fas fa-sync"></i> Sync Services</button>
+              </div>
+            </div>
+            <div id="owletBalanceBox" style="margin-top:14px;padding:12px 14px;border-radius:12px;background:rgba(59,130,246,.08);border:1px solid rgba(59,130,246,.2);font-size:14px;">
+              Owlet balance: <strong id="owletBalanceText">—</strong>
+            </div>
+            <div id="owletSyncProgress" style="margin-top:8px;font-size:12px;color:var(--muted);"></div>
+          </div>
+
+          <div class="card">
+            <div style="display:flex;flex-wrap:wrap;gap:10px;margin-bottom:12px;align-items:center;">
+              <input type="search" id="owletSearch" placeholder="Search service name or category…" style="flex:1;min-width:180px;" oninput="renderOwletServices()">
+              <select id="owletCategoryFilter" onchange="renderOwletServices()">
+                <option value="">All categories</option>
+              </select>
+              <label style="font-size:12px;display:flex;align-items:center;gap:6px;">
+                <input type="checkbox" id="owletHideUnavailable" checked onchange="renderOwletServices()"> Hide unavailable
+              </label>
+            </div>
+            <div class="table-wrap desktop-only">
+              <table>
+                <thead>
+                  <tr>
+                    <th>ID</th>
+                    <th>Name</th>
+                    <th>Category</th>
+                    <th>Supplier USD</th>
+                    <th>Sell ₦</th>
+                    <th>Min–Max</th>
+                    <th>Refill</th>
+                    <th>Status</th>
+                    <th></th>
+                  </tr>
+                </thead>
+                <tbody id="owletTableBody">
+                  <tr><td colspan="9" class="empty-state">Click <strong>Sync Services</strong> to pull Owlet catalog.</td></tr>
+                </tbody>
+              </table>
+            </div>
+            <div id="owletMobileCards" class="mobile-only"></div>
+          </div>
+        </div>
+
         <div id="tab-notify" class="tab-content">
           <div class="panel">
             <div class="panel-title" style="margin-bottom:10px;">Send Notification to All Users</div>
@@ -762,6 +816,7 @@ const tabTitles = {
   sms: 'SMS — Server 1 (GrizzlySMS)',
   'sms-orders': 'SMS Orders',
   'sms-server2': 'SMS — Server 2 (LogsDomain)',
+      'boosters': 'MJ Boosters (Owlet)',
   orders: 'LOGS Orders',
   settings: 'Settings'
 };
@@ -1053,6 +1108,7 @@ async function loadSupplierBalances() {
     renderSupplierBalance('Logsdomain', data.suppliers.logsdomain);
     renderSupplierBalance('Grizzly', data.suppliers.grizzly);
     renderSupplierBalance('Sujan', data.suppliers.sujan);
+    renderSupplierBalance('Owlet', data.suppliers.owlet);
   } catch (err) {
     console.error('Supplier balance error at step:', step, err.name, err.message, err.stack);
     showAdminToast(`Supplier balance check failed while ${step}: ` + (err.message || 'network error'), 'error');
@@ -2898,8 +2954,176 @@ window.addEventListener('DOMContentLoaded', async () => {
     }
   } catch (e) {}
   document.getElementById('adminPassword')?.addEventListener('keydown', e => { if (e.key === 'Enter') handleLogin(); });
-  document.getElementById('lookupCustomerId')?.addEventListener('keydown', e => { if (e.key === 'Enter') lookupByCustomerId(); });
+  document.getElementById('lookupCustomerId')?.addEventListener('keydown', e => { if (e.key === 'Enter') loo
+
+(function patchBoostersTab(){
+  const _st = window.switchTab;
+  if (typeof _st !== 'function') return;
+  window.switchTab = function(tab) {
+    _st(tab);
+    if (tab === 'boosters') {
+      const t = document.getElementById('pageTitle');
+      if (t) t.textContent = 'MJ Boosters (Owlet)';
+      loadOwletServicesFromDb();
+      loadOwletBalance();
+    }
+  };
+})();
+
+kupByCustomerId(); });
 });
+
+
+// ---------- MJ Boosters (The Owlet) — admin only ----------
+let allOwletServices = [];
+
+async function loadOwletBalance() {
+  const el = document.getElementById('owletBalanceText');
+  if (el) el.textContent = 'Loading…';
+  try {
+    const headers = await authHeaders();
+    const res = await fetch('/api/owlet?action=balance', { headers });
+    const data = await res.json();
+    if (!data.success) {
+      if (el) el.textContent = data.message || 'Error';
+      showAdminToast(data.message || 'Owlet balance failed', 'error');
+      return;
+    }
+    if (el) el.textContent = `${data.currency || 'USD'} ${data.balance}`;
+  } catch (e) {
+    if (el) el.textContent = 'Error';
+    showAdminToast('Owlet balance: ' + e.message, 'error');
+  }
+}
+
+async function syncOwletServices() {
+  const btn = document.getElementById('btnOwletSync');
+  const prog = document.getElementById('owletSyncProgress');
+  setBtnBusy(btn, true, 'Syncing…');
+  if (prog) prog.textContent = 'Pulling services from The Owlet…';
+  try {
+    const headers = await authHeaders();
+    const res = await fetch('/api/owlet?action=sync', { method: 'POST', headers });
+    const data = await res.json();
+    if (!data.success) {
+      showAdminToast(data.message || 'Sync failed', 'error');
+      if (prog) prog.textContent = data.message || '';
+      return;
+    }
+    if (prog) prog.textContent = data.message || 'Done';
+    showAdminToast(data.message || 'Owlet services synced', 'success');
+    await loadOwletServicesFromDb();
+    await loadOwletBalance();
+  } catch (e) {
+    showAdminToast('Sync failed: ' + e.message, 'error');
+    if (prog) prog.textContent = '';
+  } finally {
+    setBtnBusy(btn, false, '<i class="fas fa-sync"></i> Sync Services');
+  }
+}
+
+async function loadOwletServicesFromDb() {
+  try {
+    const { data, error } = await sb.from('booster_services')
+      .select('id,source,service_id,name,category,service_type,supplier_rate_usd,price_ngn,price_source,min_quantity,max_quantity,refill,cancel,is_available,updated_at')
+      .eq('source', 'owlet')
+      .order('category', { ascending: true });
+    if (error) throw error;
+    allOwletServices = data || [];
+    const cats = [...new Set(allOwletServices.map(s => s.category).filter(Boolean))].sort();
+    const sel = document.getElementById('owletCategoryFilter');
+    if (sel) {
+      const cur = sel.value;
+      sel.innerHTML = '<option value="">All categories</option>' + cats.map(c => `<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join('');
+      sel.value = cur;
+    }
+    renderOwletServices();
+  } catch (e) {
+    const tbody = document.getElementById('owletTableBody');
+    if (tbody) tbody.innerHTML = `<tr><td colspan="9" class="empty-state">${escapeHtml(e.message || String(e))}<br><span style="opacity:.7">Run booster_services.sql in Supabase if the table is missing.</span></td></tr>`;
+  }
+}
+
+function renderOwletServices() {
+  const q = (document.getElementById('owletSearch')?.value || '').trim().toLowerCase();
+  const cat = document.getElementById('owletCategoryFilter')?.value || '';
+  const hide = document.getElementById('owletHideUnavailable')?.checked !== false;
+  let list = allOwletServices.slice();
+  if (cat) list = list.filter(s => s.category === cat);
+  if (hide) list = list.filter(s => s.is_available !== false);
+  if (q) list = list.filter(s =>
+    (s.name || '').toLowerCase().includes(q) ||
+    (s.category || '').toLowerCase().includes(q) ||
+    String(s.service_id).includes(q)
+  );
+
+  const tbody = document.getElementById('owletTableBody');
+  const cards = document.getElementById('owletMobileCards');
+  if (!list.length) {
+    if (tbody) tbody.innerHTML = '<tr><td colspan="9" class="empty-state">No services match. Sync or clear filters.</td></tr>';
+    if (cards) cards.innerHTML = '<div class="empty-state">No services match.</div>';
+    return;
+  }
+  if (tbody) {
+    tbody.innerHTML = list.map(s => `
+      <tr>
+        <td>${escapeHtml(String(s.service_id))}</td>
+        <td style="font-weight:600;">${escapeHtml(s.name || '—')}</td>
+        <td>${escapeHtml(s.category || '—')}</td>
+        <td class="supplier-price">$${Number(s.supplier_rate_usd || 0).toFixed(4)}</td>
+        <td class="price">₦${Number(s.price_ngn || 0).toLocaleString()}</td>
+        <td>${s.min_quantity ?? '—'} – ${s.max_quantity ?? '—'}</td>
+        <td>${s.refill ? 'Yes' : 'No'}</td>
+        <td><span class="badge ${s.is_available !== false ? 'badge-on' : 'badge-off'}">${s.is_available !== false ? 'Active' : 'Hidden'}</span></td>
+        <td><button class="btn btn-ghost btn-sm" onclick="editOwletService('${s.id}')" title="Edit sell price"><i class="fas fa-edit"></i></button></td>
+      </tr>`).join('');
+  }
+  if (cards) {
+    cards.innerHTML = list.map(s => `
+      <div class="mobile-card">
+        <div style="font-weight:700;">${escapeHtml(s.name || '—')}</div>
+        <div class="row-line"><span>Category</span><span>${escapeHtml(s.category || '—')}</span></div>
+        <div class="row-line"><span>Supplier</span><span class="supplier-price">$${Number(s.supplier_rate_usd || 0).toFixed(4)}</span></div>
+        <div class="row-line"><span>Sell</span><span class="price">₦${Number(s.price_ngn || 0).toLocaleString()}</span></div>
+        <button class="btn btn-ghost btn-sm" style="margin-top:8px;" onclick="editOwletService('${s.id}')"><i class="fas fa-edit"></i> Edit Price</button>
+      </div>`).join('');
+  }
+}
+
+async function editOwletService(id) {
+  const s = allOwletServices.find(x => String(x.id) === String(id));
+  if (!s) return;
+  const next = prompt(`Selling price (₦) for:\n${s.name}\n\nSupplier: $${Number(s.supplier_rate_usd || 0).toFixed(4)} USD`, String(s.price_ngn ?? ''));
+  if (next === null) return;
+  const price = parseFloat(next);
+  if (isNaN(price) || price < 0) {
+    showAdminToast('Enter a valid price', 'error');
+    return;
+  }
+  const { error } = await sb.from('booster_services').update({
+    price_ngn: price,
+    price_source: 'manual',
+    updated_at: new Date().toISOString()
+  }).eq('id', id);
+  if (error) {
+    // retry without price_source if column missing
+    if (/price_source/i.test(error.message || '')) {
+      const r2 = await sb.from('booster_services').update({ price_ngn: price, updated_at: new Date().toISOString() }).eq('id', id);
+      if (r2.error) {
+        showAdminToast(r2.error.message, 'error');
+        return;
+      }
+    } else {
+      showAdminToast(error.message, 'error');
+      return;
+    }
+  }
+  s.price_ngn = price;
+  s.price_source = 'manual';
+  renderOwletServices();
+  showAdminToast('Booster price updated', 'success');
+}
+
 </script>
 </body>
 </html>
