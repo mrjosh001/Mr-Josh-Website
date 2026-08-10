@@ -7,11 +7,14 @@
 <link rel="icon" href="https://atczodlljmlayvldxfmv.supabase.co/storage/v1/object/public/avatars/dark%20background%20log">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script>(function(){try{var th=localStorage.getItem('mjhub-theme');document.documentElement.setAttribute('data-theme',(th==='light'||th==='dark')?th:'dark');}catch(e){document.documentElement.setAttribute('data-theme','dark');}})();</script>
+<meta name="theme-color" content="#06080f">
 <style>
-:root{--bg:#070b14;--card:#0f1623;--border:rgba(255,255,255,.08);--text:#f4f7ff;--muted:#93a0b8;--primary:#3b82f6;--success:#34d399;--warn:#fbbf24;--danger:#f87171}
+:root[data-theme="dark"]{--bg:#06080f;--card:#0f1524;--border:rgba(148,163,184,.12);--text:#f1f5f9;--muted:#8b9bb4;--primary:#5b8af5;--success:#34d399;--warn:#fbbf24;--danger:#f87171;--header-bg:rgba(6,8,15,.92)}
+:root[data-theme="light"]{--bg:#f4f6fb;--card:#fff;--border:rgba(15,23,42,.08);--text:#0f172a;--muted:#64748b;--primary:#3b6ef5;--success:#059669;--warn:#d97706;--danger:#dc2626;--header-bg:rgba(255,255,255,.92)}
 *{box-sizing:border-box;margin:0;padding:0}
 body{font-family:Inter,system-ui,sans-serif;background:var(--bg);color:var(--text);min-height:100vh}
-.header{display:flex;align-items:center;gap:12px;padding:14px 16px;border-bottom:1px solid var(--border);position:sticky;top:0;background:rgba(7,11,20,.9);backdrop-filter:blur(12px);z-index:10}
+.header{display:flex;align-items:center;gap:12px;padding:14px 16px;border-bottom:1px solid var(--border);position:sticky;top:0;background:var(--header-bg);backdrop-filter:blur(12px);z-index:10}
 .back{width:40px;height:40px;border-radius:12px;border:1px solid var(--border);background:var(--card);display:flex;align-items:center;justify-content:center;color:var(--text);text-decoration:none}
 h1{font-size:17px;font-weight:800}
 .list{padding:14px 16px 40px;display:flex;flex-direction:column;gap:12px}
@@ -38,6 +41,7 @@ h1{font-size:17px;font-weight:800}
 <header class="header">
   <a class="back" href="mj-boosters.html"><i class="fa-solid fa-arrow-left"></i></a>
   <h1>Booster Orders</h1>
+  <button type="button" id="themeBtn" onclick="toggleTheme()" style="margin-left:auto;width:40px;height:40px;border-radius:12px;border:1px solid var(--border);background:var(--card);cursor:pointer;font-size:16px;">🌙</button>
 </header>
 <div class="list" id="list"><div class="spinner"></div></div>
 <script>
@@ -46,6 +50,9 @@ const SUPABASE_URL = 'https://atczodlljmlayvldxfmv.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImF0Y3pvZGxsam1sYXl2bGR4Zm12Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODUwNzUyMzgsImV4cCI6MjEwMDY1MTIzOH0.ufthD-p7BmeD_B7xyuMM6PNPL8DmcL4AtRYgg-MuoLI';
 const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
+function syncThemeUi(){const dark=document.documentElement.getAttribute('data-theme')!=='light';const b=document.getElementById('themeBtn');if(b)b.textContent=dark?'🌙':'☀️';const m=document.querySelector('meta[name="theme-color"]');if(m)m.setAttribute('content',dark?'#06080f':'#f4f6fb');}
+function toggleTheme(){const cur=document.documentElement.getAttribute('data-theme')==='light'?'light':'dark';const next=cur==='dark'?'light':'dark';document.documentElement.setAttribute('data-theme',next);try{localStorage.setItem('mjhub-theme',next);}catch(e){}syncThemeUi();}
+syncThemeUi();
 function esc(s){return String(s||'').replace(/[&<>"']/g,c=>({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]))}
 function fmt(n){return '₦'+Number(n||0).toLocaleString()}
 function progressHtml(o){
