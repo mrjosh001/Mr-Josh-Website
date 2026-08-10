@@ -726,6 +726,49 @@ body::before {
     backdrop-filter: blur(10px); z-index: 1900; align-items: center; justify-content: center; padding: 16px;
 }
 .currency-modal.active { display: flex; }
+.logout-confirm-overlay {
+  position: fixed; inset: 0; z-index: 9999;
+  background: rgba(0,0,0,0.55);
+  display: none; align-items: center; justify-content: center;
+  padding: 20px;
+  backdrop-filter: blur(4px);
+}
+.logout-confirm-overlay.open { display: flex; }
+.logout-confirm-card {
+  background: var(--card-bg, #141418);
+  border: 1px solid var(--border-color, rgba(255,255,255,0.08));
+  border-radius: 18px;
+  padding: 22px 20px 16px;
+  width: min(340px, 100%);
+  box-shadow: 0 20px 50px rgba(0,0,0,0.45);
+  text-align: center;
+}
+.logout-confirm-card h3 {
+  font-size: 17px; font-weight: 700; margin: 0 0 6px;
+  color: var(--text-color, #f1f5f9);
+}
+.logout-confirm-card p {
+  font-size: 13px; color: var(--text-muted, #94a3b8);
+  margin: 0 0 18px; line-height: 1.45;
+}
+.logout-confirm-actions { display: flex; gap: 10px; }
+.logout-confirm-actions button {
+  flex: 1; padding: 12px 14px; border-radius: 12px;
+  font-weight: 700; font-size: 14px; border: none; cursor: pointer;
+  font-family: inherit;
+}
+.logout-btn-cancel {
+  background: rgba(255,255,255,0.06);
+  color: var(--text-color, #e2e8f0);
+  border: 1px solid var(--border-color, rgba(255,255,255,0.1)) !important;
+}
+.logout-btn-confirm {
+  background: rgba(239, 68, 68, 0.15);
+  color: #f87171;
+  border: 1px solid rgba(239, 68, 68, 0.35) !important;
+}
+.logout-btn-confirm:disabled { opacity: 0.7; cursor: wait; }
+
 .currency-modal-card {
     background: var(--card); width: 100%; max-width: 420px; border-radius: 24px;
     padding: 24px; border: 1px solid var(--border); box-shadow: var(--shadow);
@@ -2564,9 +2607,27 @@ function renderRecentActivity() {
         </div>`).join('');
 }
 
-window.handleLogout = async function() {
-    if (supabaseClient) await supabaseClient.auth.signOut();
-    localStorage.clear();
+window.closeLogoutConfirm = function() {
+    const m = document.getElementById('logoutConfirmModal');
+    if (m) m.classList.remove('open');
+};
+
+window.handleLogout = function() {
+    const m = document.getElementById('logoutConfirmModal');
+    if (m) m.classList.add('open');
+    else if (window.confirm('Log out of your account?')) window.confirmLogout();
+};
+
+window.confirmLogout = async function() {
+    const btn = document.getElementById('logoutConfirmBtn');
+    if (btn) {
+        btn.disabled = true;
+        btn.textContent = 'Signing out…';
+    }
+    try {
+        if (supabaseClient) await supabaseClient.auth.signOut();
+    } catch (e) { /* ignore */ }
+    try { localStorage.clear(); } catch (e) { /* ignore */ }
     window.location.href = 'landing.html';
 };
 
@@ -3646,5 +3707,17 @@ function toggleBoosterMenu(e) {
   if (chev) chev.style.transform = open ? '' : 'rotate(180deg)';
 }
 </script>
+
+<div class="logout-confirm-overlay" id="logoutConfirmModal" onclick="if(event.target===this)closeLogoutConfirm()">
+  <div class="logout-confirm-card" role="dialog" aria-labelledby="logoutConfirmTitle">
+    <h3 id="logoutConfirmTitle">Log out?</h3>
+    <p>You will need to sign in again to access your account.</p>
+    <div class="logout-confirm-actions">
+      <button type="button" class="logout-btn-cancel" onclick="closeLogoutConfirm()">Cancel</button>
+      <button type="button" class="logout-btn-confirm" id="logoutConfirmBtn" onclick="confirmLogout()">Log out</button>
+    </div>
+  </div>
+</div>
+
 </body>
 </html>
