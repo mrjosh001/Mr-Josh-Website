@@ -527,16 +527,36 @@ async function getSujanBalance() {
   );
 }
 
+
+async function fetchOwletBalance() {
+  const key = process.env.OWLET_API_KEY;
+  if (!key) return { ok: false, message: 'OWLET_API_KEY not set', balance: null };
+  try {
+    const body = new URLSearchParams({ key, action: 'balance' });
+    const res = await fetch('https://theowlet.com/api/v2', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded', Accept: 'application/json' },
+      body: body.toString()
+    });
+    const json = await res.json();
+    if (json?.error) return { ok: false, message: String(json.error), balance: null, currency: 'USD' };
+    return { ok: true, balance: json.balance, currency: json.currency || 'USD', raw: json };
+  } catch (e) {
+    return { ok: false, message: e.message || String(e), balance: null };
+  }
+}
+
 async function supplierBalancesFetch() {
-  const [fadded, logsdomain, grizzly, sujan] = await Promise.all([
+  const [fadded, logsdomain, grizzly, sujan, owlet] = await Promise.all([
     getFaddedBalance(),
     getLogsDomainBalance(),
     getGrizzlyBalance(),
-    getSujanBalance()
+    getSujanBalance(),
+    fetchOwletBalance()
   ]);
   return {
     status: 200,
-    body: { success: true, suppliers: { fadded, logsdomain, grizzly, sujan }, fetched_at: new Date().toISOString() }
+    body: { success: true, suppliers: { fadded, logsdomain, grizzly, sujan, owlet }, fetched_at: new Date().toISOString() }
   };
 }
 
