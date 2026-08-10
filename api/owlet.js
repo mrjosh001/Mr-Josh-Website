@@ -111,22 +111,6 @@ async function owletCall(params) {
   return { ok: res.ok, status: res.status, json };
 }
 
-// Calculate selling price in NGN with dynamic/random markup
-function sellPriceNgn(rateNgn, markupPercent) {
-  const r = Number(rateNgn) || 0;
-  const markup = markupPercent ?? getRandomMarkup();
-  return Math.ceil(r * (1 + markup / 100));
-}
-
-// Calculate USD supplier rate equivalent using 1450 exchange rate
-function supplierUsd(rateNgn) {
-  const r = Number(rateNgn) || 0;
-  return Math.round((r / USD_TO_NGN) * 10000) / 10000;
-}
-
-function sellPriceUsd(rateNgn, markupPercent) {
-  return supplierUsd(sellPriceNgn(rateNgn, markupPercent));
-}
 
 async function handleBalance(req, res) {
   const { ok, status, json } = await owletCall({ action: 'balance' });
