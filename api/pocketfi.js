@@ -437,14 +437,18 @@ async function creditUser(userId, amountNgn, reference) {
         .eq('external_id', reference);
     } catch (_) {}
 
-    // Non-blocking email
-    sendDepositEmail({
-      to: email,
-      name: displayName,
-      amountLabel: `$${amountUsd.toFixed(2)}`,
-      walletLabel: 'USD Wallet',
-      reference
-    }).catch(() => {});
+    // Await email so Vercel does not freeze before Resend is called
+    try {
+      await sendDepositEmail({
+        to: email,
+        name: displayName,
+        amountLabel: `$${amountUsd.toFixed(2)}`,
+        walletLabel: 'USD Wallet',
+        reference
+      });
+    } catch (e) {
+      console.error('[deposit-email] unexpected', e?.message || e);
+    }
 
     return { balance_usd: nextUsd, wallet: 'usd', amount_usd: amountUsd };
   }
@@ -487,14 +491,18 @@ async function creditUser(userId, amountNgn, reference) {
       .eq('external_id', reference);
   } catch (_) {}
 
-  // Non-blocking email
-  sendDepositEmail({
-    to: email,
-    name: displayName,
-    amountLabel: `₦${amountNgn.toLocaleString()}`,
-    walletLabel: 'NGN Wallet',
-    reference
-  }).catch(() => {});
+  // Await email so Vercel does not freeze before Resend is called
+  try {
+    await sendDepositEmail({
+      to: email,
+      name: displayName,
+      amountLabel: `₦${amountNgn.toLocaleString()}`,
+      walletLabel: 'NGN Wallet',
+      reference
+    });
+  } catch (e) {
+    console.error('[deposit-email] unexpected', e?.message || e);
+  }
 
   return { balance: next, wallet: 'ngn' };
 }
