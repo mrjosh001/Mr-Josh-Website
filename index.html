@@ -916,7 +916,16 @@ body::before {
                     <li><a href="mj-sms-history.html" style="padding-left:34px;display:flex;align-items:center;gap:10px;"><i class="fa-solid fa-clock-rotate-left"></i> <span>Number History</span></a></li>
                 </ul>
             </li>
-            <li><a href="#" class="sidebar-link" data-target="booster"><i class="fa-solid fa-bolt"></i> <span>MJ Boosters</span></a></li>
+            <li>
+                <a href="#" class="sidebar-link" onclick="toggleBoosterMenu(event)" style="display:flex;align-items:center;justify-content:space-between;">
+                    <span style="display:flex;align-items:center;gap:12px;"><i class="fa-solid fa-bolt"></i> <span>MJ Boosters</span></span>
+                    <i class="fa-solid fa-chevron-down" id="boosterMenuChevron" style="font-size:11px;transition:transform .2s;"></i>
+                </a>
+                <ul id="boosterSubmenu" style="list-style:none;max-height:0;overflow:hidden;transition:max-height .25s ease;padding:0;">
+                    <li><a href="mj-boosters.html" style="padding-left:34px;display:flex;align-items:center;gap:10px;"><i class="fa-solid fa-bolt"></i> <span>Browse Services</span></a></li>
+                    <li><a href="mj-boosters-history.html" style="padding-left:34px;display:flex;align-items:center;gap:10px;"><i class="fa-solid fa-clock-rotate-left"></i> <span>Booster History</span></a></li>
+                </ul>
+            </li>
             <li><a href="#" class="sidebar-link" data-target="deposit"><i class="fa-solid fa-credit-card"></i> <span>Deposit</span></a></li>
             <li><a href="#" class="sidebar-link" data-target="cart"><i class="fa-solid fa-bag-shopping"></i> <span>Cart</span></a></li>
             <li><a href="#" class="sidebar-link" data-target="orders"><i class="fa-solid fa-receipt"></i> <span>My Orders</span></a></li>
@@ -1087,22 +1096,30 @@ body::before {
         </div>
     </section>
 
-    <section id="booster" class="app-section">
-        <div class="content-card">
-            <h2>MJ Boosters</h2>
-            <p class="helper-text">Boost followers, views, engagement instantly.</p>
-            <div class="coming-soon-box">
-                <div class="coming-soon-icon"><i class="fa-solid fa-bolt"></i></div>
-                <h4>Coming Soon</h4>
-                <p>Our tech team is working on MJ Boosters. This service will be launching soon — check back shortly!</p>
-                <div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap;margin-top:16px;">
-                    <span style="width:34px;height:34px;border-radius:10px;display:flex;align-items:center;justify-content:center;background:radial-gradient(circle at 30% 107%,#fdf497 0%,#fdf497 5%,#fd5949 45%,#d6249f 60%,#285AEB 90%);"><img src="https://cdn.simpleicons.org/instagram/ffffff" alt="Instagram" style="width:55%;height:55%;object-fit:contain;"></span>
-                    <span style="width:34px;height:34px;border-radius:10px;display:flex;align-items:center;justify-content:center;background:#000000;"><img src="https://cdn.simpleicons.org/tiktok/ffffff" alt="TikTok" style="width:55%;height:55%;object-fit:contain;"></span>
-                    <span style="width:34px;height:34px;border-radius:10px;display:flex;align-items:center;justify-content:center;background:#FF0000;"><img src="https://cdn.simpleicons.org/youtube/ffffff" alt="YouTube" style="width:55%;height:55%;object-fit:contain;"></span>
-                    <span style="width:34px;height:34px;border-radius:10px;display:flex;align-items:center;justify-content:center;background:#26A5E4;"><img src="https://cdn.simpleicons.org/telegram/ffffff" alt="Telegram" style="width:55%;height:55%;object-fit:contain;"></span>
-                    <span style="width:34px;height:34px;border-radius:10px;display:flex;align-items:center;justify-content:center;background:#000000;"><img src="https://cdn.simpleicons.org/x/ffffff" alt="X" style="width:55%;height:55%;object-fit:contain;"></span>
-                    <span style="width:34px;height:34px;border-radius:10px;display:flex;align-items:center;justify-content:center;background:#1877F2;"><img src="https://cdn.simpleicons.org/facebook/ffffff" alt="Facebook" style="width:55%;height:55%;object-fit:contain;"></span>
+        <section id="booster" class="app-section">
+        <div class="content-card" style="padding:0;overflow:hidden;border:1px solid rgba(59,130,246,.25);background:radial-gradient(120% 90% at 0% 0%,rgba(59,130,246,.22),transparent 55%),radial-gradient(90% 80% at 100% 0%,rgba(139,92,246,.18),transparent 50%),var(--card-bg, var(--card));">
+            <div style="padding:22px 18px 8px;">
+                <div style="font-size:11px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:#93c5fd;margin-bottom:8px;">⚡ LIVE NOW</div>
+                <h2 style="margin:0 0 8px;font-size:22px;line-height:1.2;">MJ Boosters</h2>
+                <p class="helper-text" style="margin:0 0 14px;max-width:420px;">Instagram · TikTok · YouTube · Telegram · Facebook · X — followers, views, likes &amp; more. Pay from your wallet. Track every order.</p>
+                <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px;">
+                    <span style="width:32px;height:32px;border-radius:10px;display:flex;align-items:center;justify-content:center;background:radial-gradient(circle at 30% 107%,#fdf497 0%,#fd5949 45%,#d6249f 60%,#285AEB 90%);"><img src="https://cdn.simpleicons.org/instagram/ffffff" alt="" style="width:55%;height:55%;object-fit:contain;"></span>
+                    <span style="width:32px;height:32px;border-radius:10px;display:flex;align-items:center;justify-content:center;background:#000;"><img src="https://cdn.simpleicons.org/tiktok/ffffff" alt="" style="width:55%;height:55%;object-fit:contain;"></span>
+                    <span style="width:32px;height:32px;border-radius:10px;display:flex;align-items:center;justify-content:center;background:#FF0000;"><img src="https://cdn.simpleicons.org/youtube/ffffff" alt="" style="width:55%;height:55%;object-fit:contain;"></span>
+                    <span style="width:32px;height:32px;border-radius:10px;display:flex;align-items:center;justify-content:center;background:#26A5E4;"><img src="https://cdn.simpleicons.org/telegram/ffffff" alt="" style="width:55%;height:55%;object-fit:contain;"></span>
+                    <span style="width:32px;height:32px;border-radius:10px;display:flex;align-items:center;justify-content:center;background:#000;"><img src="https://cdn.simpleicons.org/x/ffffff" alt="" style="width:55%;height:55%;object-fit:contain;"></span>
+                    <span style="width:32px;height:32px;border-radius:10px;display:flex;align-items:center;justify-content:center;background:#1877F2;"><img src="https://cdn.simpleicons.org/facebook/ffffff" alt="" style="width:55%;height:55%;object-fit:contain;"></span>
                 </div>
+                <div style="display:flex;gap:10px;flex-wrap:wrap;">
+                    <a href="mj-boosters.html" class="hero-btn" style="text-decoration:none;display:inline-flex;align-items:center;gap:8px;"><i class="fa-solid fa-bolt"></i> Start Boosting</a>
+                    <a href="mj-boosters-history.html" style="text-decoration:none;display:inline-flex;align-items:center;gap:8px;padding:12px 16px;border-radius:12px;border:1px solid var(--border-color, rgba(255,255,255,.12));font-weight:700;font-size:13px;color:var(--text-color, inherit);"><i class="fa-solid fa-clock-rotate-left"></i> Order History</a>
+                </div>
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:1px;background:rgba(255,255,255,.06);margin-top:18px;">
+                <div style="padding:14px;background:rgba(0,0,0,.15);"><div style="font-size:11px;color:var(--muted-color,#93a0b8);font-weight:700;">Delivery</div><div style="font-weight:800;margin-top:4px;">Fast start</div></div>
+                <div style="padding:14px;background:rgba(0,0,0,.15);"><div style="font-size:11px;color:var(--muted-color,#93a0b8);font-weight:700;">Payment</div><div style="font-weight:800;margin-top:4px;">Wallet balance</div></div>
+                <div style="padding:14px;background:rgba(0,0,0,.15);"><div style="font-size:11px;color:var(--muted-color,#93a0b8);font-weight:700;">Tracking</div><div style="font-weight:800;margin-top:4px;">Live status</div></div>
+                <div style="padding:14px;background:rgba(0,0,0,.15);"><div style="font-size:11px;color:var(--muted-color,#93a0b8);font-weight:700;">Support</div><div style="font-weight:800;margin-top:4px;">Refill where available</div></div>
             </div>
         </div>
     </section>
@@ -1353,7 +1370,7 @@ body::before {
             <div class="popup-icon-badge"><i class="fa-solid fa-credit-card"></i></div>
             <span>Deposit</span>
         </div>
-        <div class="popup-item" onclick="switchSection('booster');toggleFloatingPopup();">
+        <div class="popup-item" onclick="location.href='mj-boosters.html';">
             <div class="popup-icon-badge"><i class="fa-solid fa-bolt"></i></div>
             <span>Boosters</span>
         </div>
@@ -3215,6 +3232,16 @@ window.processDeposit = function() {
     // Legacy alias — manual deposit only
     window.messageAdminForDeposit();
 };
+
+function toggleBoosterMenu(e) {
+  if (e) e.preventDefault();
+  const menu = document.getElementById('boosterSubmenu');
+  const chev = document.getElementById('boosterMenuChevron');
+  if (!menu) return;
+  const open = menu.style.maxHeight && menu.style.maxHeight !== '0px';
+  menu.style.maxHeight = open ? '0' : '120px';
+  if (chev) chev.style.transform = open ? '' : 'rotate(180deg)';
+}
 </script>
 </body>
 </html>

@@ -265,6 +265,7 @@
         <button class="nav-item" data-tab="sms-orders" onclick="switchTab('sms-orders')"><i class="fas fa-comment-sms"></i> SMS Orders</button>
         <button class="nav-item" data-tab="sms-server2" onclick="switchTab('sms-server2')"><i class="fas fa-server"></i> SMS — Server 2 (LogsDomain)</button>
         <button class="nav-item" data-tab="boosters" onclick="switchTab('boosters')"><i class="fas fa-bolt"></i> MJ Boosters (Owlet)</button>
+        <button class="nav-item" data-tab="booster-orders" onclick="switchTab('booster-orders')"><i class="fas fa-receipt"></i> Booster Orders</button>
         <button class="nav-item" data-tab="notify" onclick="switchTab('notify')"><i class="fas fa-bullhorn"></i> Notifications</button>
         <button class="nav-item" data-tab="settings" onclick="switchTab('settings')"><i class="fas fa-cog"></i> Settings</button>
       </nav>
@@ -593,6 +594,46 @@
           </div>
         </div>
 
+        
+        <div id="tab-booster-orders" class="tab-content">
+          <div class="card" style="margin-bottom:16px;">
+            <div style="display:flex;flex-wrap:wrap;gap:12px;align-items:center;justify-content:space-between;">
+              <div>
+                <h3 style="margin:0 0 4px;">MJ Booster Orders</h3>
+                <p style="margin:0;font-size:13px;color:var(--muted);">Customer boost orders from The Owlet. Search by order ID, service, customer ID or link.</p>
+              </div>
+              <button class="btn btn-secondary btn-sm" onclick="loadBoosterOrders()"><i class="fas fa-sync"></i> Refresh</button>
+            </div>
+            <div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap;">
+              <input type="search" id="boosterOrderSearch" placeholder="Search orders…" style="flex:1;min-width:180px;" onkeydown="if(event.key==='Enter'){boosterOrderPage=1;loadBoosterOrders()}">
+              <button class="btn btn-primary btn-sm" onclick="boosterOrderPage=1;loadBoosterOrders()">Search</button>
+            </div>
+          </div>
+          <div class="card">
+            <div class="table-wrap desktop-only">
+              <table>
+                <thead>
+                  <tr>
+                    <th>When</th>
+                    <th>Customer</th>
+                    <th>Service</th>
+                    <th>Link</th>
+                    <th>Qty</th>
+                    <th>Paid ₦</th>
+                    <th>Status</th>
+                    <th>Supplier #</th>
+                  </tr>
+                </thead>
+                <tbody id="boosterOrdersBody">
+                  <tr><td colspan="8" class="empty-state">Loading…</td></tr>
+                </tbody>
+              </table>
+            </div>
+            <div id="boosterOrdersCards" class="mobile-only"></div>
+            <div id="boosterOrdersPager" style="display:flex;gap:8px;justify-content:center;align-items:center;margin-top:12px;font-size:12px;color:var(--muted);"></div>
+          </div>
+        </div>
+
         <div id="tab-notify" class="tab-content">
           <div class="panel">
             <div class="panel-title" style="margin-bottom:10px;">Send Notification to All Users</div>
@@ -814,6 +855,7 @@ const tabTitles = {
   'sms-orders': 'SMS Orders',
   'sms-server2': 'SMS — Server 2 (LogsDomain)',
       'boosters': 'MJ Boosters (Owlet)',
+      'booster-orders': 'Booster Orders',
   orders: 'LOGS Orders',
   settings: 'Settings'
 };
@@ -3198,6 +3240,74 @@ async function editOwletService(id) {
   showAdminToast('Booster price updated', 'success');
 }
 
+
+
+let boosterOrderPage = 1;
+async function loadBoosterOrders() {
+  const tbody = document.getElementById('boosterOrdersBody');
+  const cards = document.getElementById('boosterOrdersCards');
+  const pager = document.getElementById('boosterOrdersPager');
+  try {
+    const headers = await authHeaders();
+    const q = (document.getElementById('boosterOrderSearch')?.value || '').trim();
+    const params = new URLSearchParams({ action: 'admin_orders', page: String(boosterOrderPage), page_size: '50' });
+    if (q) params.set('q', q);
+    const res = await fetch('/api/owlet?' + params.toString(), { headers });
+    const data = await res.json();
+    if (!data.success) {
+      if (tbody) tbody.innerHTML = `<tr><td colspan="8" class="empty-state">${escapeHtml(data.message || 'Failed')}</td></tr>`;
+      if (cards) cards.innerHTML = `<div class="empty-state">${escapeHtml(data.message || 'Failed')}</div>`;
+      return;
+    }
+    const rows = data.data || [];
+    if (!rows.length) {
+      if (tbody) tbody.innerHTML = '<tr><td colspan="8" class="empty-state">No booster orders yet.</td></tr>';
+      if (cards) cards.innerHTML = '<div class="empty-state">No booster orders yet.</div>';
+    } else {
+      if (tbody) tbody.innerHTML = rows.map(o => `
+        <tr>
+          <td>${o.created_at ? new Date(o.created_at).toLocaleString() : '—'}</td>
+          <td>${escapeHtml(o.customer_id || (o.user_id || '').slice(0,8) || '—')}</td>
+          <td style="font-weight:600;">${escapeHtml(o.service_name || o.service_id || '—')}</td>
+          <td style="max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${escapeHtml(o.link || '')}">${escapeHtml(o.link || '—')}</td>
+          <td>${Number(o.quantity || 0).toLocaleString()}</td>
+          <td class="price">₦${Number(o.price_ngn || 0).toLocaleString()}</td>
+          <td><span class="badge badge-on">${escapeHtml(o.status || 'Pending')}</span></td>
+          <td>${escapeHtml(o.supplier_order_id || '—')}</td>
+        </tr>`).join('');
+      if (cards) cards.innerHTML = rows.map(o => `
+        <div class="mobile-card">
+          <div style="font-weight:700;">${escapeHtml(o.service_name || 'Boost')}</div>
+          <div class="row-line"><span>Status</span><span>${escapeHtml(o.status || 'Pending')}</span></div>
+          <div class="row-line"><span>Paid</span><span class="price">₦${Number(o.price_ngn || 0).toLocaleString()}</span></div>
+          <div class="row-line"><span>Qty</span><span>${Number(o.quantity || 0).toLocaleString()}</span></div>
+          <div class="row-line"><span>Customer</span><span>${escapeHtml(o.customer_id || '—')}</span></div>
+          <div style="font-size:11px;color:var(--muted);margin-top:6px;word-break:break-all;">${escapeHtml(o.link || '')}</div>
+        </div>`).join('');
+    }
+    const maxPage = Math.max(1, Math.ceil((data.total || 0) / 50));
+    if (pager) pager.innerHTML = `
+      <button class="btn btn-ghost btn-sm" ${boosterOrderPage<=1?'disabled':''} onclick="boosterOrderPage=Math.max(1,boosterOrderPage-1);loadBoosterOrders()">Prev</button>
+      <span>Page ${boosterOrderPage}/${maxPage} · ${data.total||0} orders</span>
+      <button class="btn btn-ghost btn-sm" ${boosterOrderPage>=maxPage?'disabled':''} onclick="boosterOrderPage++;loadBoosterOrders()">Next</button>`;
+  } catch (e) {
+    if (tbody) tbody.innerHTML = `<tr><td colspan="8" class="empty-state">${escapeHtml(e.message || String(e))}</td></tr>`;
+  }
+}
+
+
+(function(){
+  const _st = window.switchTab;
+  if (typeof _st !== 'function') return;
+  window.switchTab = function(tab) {
+    _st(tab);
+    if (tab === 'booster-orders') {
+      const t = document.getElementById('pageTitle');
+      if (t) t.textContent = 'Booster Orders';
+      if (typeof loadBoosterOrders === 'function') loadBoosterOrders();
+    }
+  };
+})();
 </script>
 </body>
 </html>

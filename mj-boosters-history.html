@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MJ Boosters Orders | MJ HUB</title>
+<link rel="icon" href="https://atczodlljmlayvldxfmv.supabase.co/storage/v1/object/public/avatars/dark%20background%20log">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+:root{--bg:#070b14;--card:#0f1623;--border:rgba(255,255,255,.08);--text:#f4f7ff;--muted:#93a0b8;--primary:#3b82f6;--success:#34d399;--warn:#fbbf24;--danger:#f87171}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:Inter,system-ui,sans-serif;background:var(--bg);color:var(--text);min-height:100vh}
+.header{display:flex;align-items:center;gap:12px;padding:14px 16px;border-bottom:1px solid var(--border);position:sticky;top:0;background:rgba(7,11,20,.9);backdrop-filter:blur(12px);z-index:10}
+.back{width:40px;height:40px;border-radius:12px;border:1px solid var(--border);background:var(--card);display:flex;align-items:center;justify-content:center;color:var(--text);text-decoration:none}
+h1{font-size:17px;font-weight:800}
+.list{padding:14px 16px 40px;display:flex;flex-direction:column;gap:12px}
+.card{background:var(--card);border:1px solid var(--border);border-radius:16px;padding:14px}
+.top{display:flex;justify-content:space-between;gap:10px;align-items:flex-start}
+.title{font-size:14px;font-weight:800;line-height:1.3}
+.status{font-size:11px;font-weight:800;padding:4px 8px;border-radius:999px;background:rgba(59,130,246,.15);color:#93c5fd;white-space:nowrap}
+.status.Completed,.status.completed{background:rgba(52,211,153,.15);color:var(--success)}
+.status.Partial,.status.partial{background:rgba(251,191,36,.15);color:var(--warn)}
+.status.Canceled,.status.Cancelled,.status.canceled{background:rgba(248,113,113,.15);color:var(--danger)}
+.meta{font-size:12px;color:var(--muted);margin-top:8px;line-height:1.45;word-break:break-all}
+.row{display:flex;justify-content:space-between;gap:8px;margin-top:8px;font-size:12px;font-weight:700}
+.empty{text-align:center;padding:60px 20px;color:var(--muted)}
+.empty a{display:inline-block;margin-top:14px;background:linear-gradient(135deg,#3b82f6,#8b5cf6);color:#fff;padding:12px 18px;border-radius:12px;font-weight:800;text-decoration:none}
+.spinner{width:36px;height:36px;border:3px solid var(--border);border-top-color:#3b82f6;border-radius:50%;animation:spin .8s linear infinite;margin:40px auto}
+@keyframes spin{to{transform:rotate(360deg)}}
+</style>
+</head>
+<body>
+<header class="header">
+  <a class="back" href="mj-boosters.html"><i class="fa-solid fa-arrow-left"></i></a>
+  <h1>Booster Orders</h1>
+</header>
+<div class="list" id="list"><div class="spinner"></div></div>
+<script>
+
+const SUPABASE_URL = 'https://atczodlljmlayvldxfmv.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImF0Y3pvZGxsam1sYXl2bGR4Zm12Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODUwNzUyMzgsImV4cCI6MjEwMDY1MTIzOH0.ufthD-p7BmeD_B7xyuMM6PNPL8DmcL4AtRYgg-MuoLI';
+const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+function esc(s){return String(s||'').replace(/[&<>"']/g,c=>({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]))}
+function fmt(n){return '₦'+Number(n||0).toLocaleString()}
+(async()=>{
+  const {data}=await sb.auth.getSession();
+  if(!data?.session){ location.href='auth.html?next=mj-boosters-history.html'; return; }
+  const headers={Authorization:'Bearer '+data.session.access_token};
+  const res=await fetch('/api/owlet?action=my_orders&page_size=50',{headers});
+  const json=await res.json();
+  const el=document.getElementById('list');
+  if(!json.success){ el.innerHTML=`<div class="empty">${esc(json.message)}</div>`; return; }
+  const rows=json.data||[];
+  if(!rows.length){
+    el.innerHTML=`<div class="empty"><div style="font-size:40px;margin-bottom:8px">⚡</div><h3>No boost orders yet</h3><p>Your growth orders will show here.</p><a href="mj-boosters.html">Place first boost</a></div>`;
+    return;
+  }
+  el.innerHTML=rows.map(o=>`
+    <div class="card">
+      <div class="top">
+        <div class="title">${esc(o.service_name||'Boost')}</div>
+        <span class="status ${esc(o.status||'')}">${esc(o.status||'Pending')}</span>
+      </div>
+      <div class="meta">${esc(o.link||'')}</div>
+      <div class="row"><span>Qty ${Number(o.quantity||0).toLocaleString()}</span><span>${fmt(o.price_ngn)}</span></div>
+      <div class="row"><span>Order #${esc(o.supplier_order_id||o.id||'')}</span><span>${o.created_at?new Date(o.created_at).toLocaleString():''}</span></div>
+      ${o.start_count!=null||o.remains!=null?`<div class="row"><span>Start ${esc(o.start_count)}</span><span>Left ${esc(o.remains)}</span></div>`:''}
+    </div>`).join('');
+})();
+</script>
+</body>
+</html>

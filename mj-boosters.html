@@ -1,0 +1,345 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>MJ Boosters — Grow Faster | MJ HUB</title>
+<meta name="description" content="Boost Instagram, TikTok, YouTube, Telegram, Facebook and X with MJ Boosters. Instant orders from your MJ Hub wallet.">
+<link rel="icon" href="https://atczodlljmlayvldxfmv.supabase.co/storage/v1/object/public/avatars/dark%20background%20log">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+:root {
+  --bg:#070b14; --card:#0f1623; --border:rgba(255,255,255,.08);
+  --text:#f4f7ff; --muted:#93a0b8; --primary:#3b82f6; --primary2:#8b5cf6;
+  --success:#34d399; --warn:#fbbf24; --danger:#f87171;
+  --glow:rgba(59,130,246,.35);
+}
+[data-theme="light"] {
+  --bg:#f4f7fb; --card:#fff; --border:rgba(15,23,42,.1);
+  --text:#0f172a; --muted:#64748b; --glow:rgba(59,130,246,.2);
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:Inter,system-ui,-apple-system,sans-serif;background:var(--bg);color:var(--text);min-height:100vh;}
+a{color:inherit;text-decoration:none}
+.header{position:sticky;top:0;z-index:50;display:flex;align-items:center;gap:12px;padding:14px 16px;background:rgba(7,11,20,.85);backdrop-filter:blur(14px);border-bottom:1px solid var(--border)}
+[data-theme="light"] .header{background:rgba(255,255,255,.9)}
+.back{width:40px;height:40px;border-radius:12px;border:1px solid var(--border);background:var(--card);display:flex;align-items:center;justify-content:center}
+.header h1{font-size:17px;font-weight:800;letter-spacing:-.02em}
+.header .bal{margin-left:auto;font-size:12px;font-weight:800;padding:7px 11px;border-radius:999px;background:linear-gradient(135deg,rgba(59,130,246,.2),rgba(139,92,246,.2));border:1px solid rgba(59,130,246,.35)}
+.hero{
+  margin:16px;padding:22px 18px;border-radius:22px;position:relative;overflow:hidden;
+  background:radial-gradient(120% 120% at 0% 0%,rgba(59,130,246,.35),transparent 50%),
+             radial-gradient(100% 100% at 100% 0%,rgba(139,92,246,.28),transparent 45%),
+             linear-gradient(160deg,#10182a,#0b1220 60%);
+  border:1px solid rgba(255,255,255,.1);box-shadow:0 20px 50px rgba(0,0,0,.35);
+}
+[data-theme="light"] .hero{background:linear-gradient(160deg,#eef4ff,#f8fafc);box-shadow:0 12px 30px rgba(15,23,42,.08)}
+.hero .eyebrow{font-size:11px;font-weight:800;letter-spacing:.12em;text-transform:uppercase;color:#93c5fd;margin-bottom:8px}
+.hero h2{font-size:24px;line-height:1.15;font-weight:900;margin-bottom:8px}
+.hero p{color:var(--muted);font-size:13.5px;line-height:1.55;max-width:420px}
+.platforms{display:flex;gap:8px;flex-wrap:wrap;margin-top:16px}
+.platforms span{width:34px;height:34px;border-radius:10px;display:flex;align-items:center;justify-content:center}
+.cta-row{display:flex;gap:10px;flex-wrap:wrap;margin-top:16px}
+.btn{border:0;cursor:pointer;border-radius:14px;padding:12px 16px;font-weight:800;font-size:13px;display:inline-flex;align-items:center;gap:8px}
+.btn-primary{background:linear-gradient(135deg,var(--primary),var(--primary2));color:#fff;box-shadow:0 10px 28px var(--glow)}
+.btn-ghost{background:rgba(255,255,255,.06);color:var(--text);border:1px solid var(--border)}
+.tabs{display:flex;gap:8px;padding:0 16px 8px;overflow:auto;scrollbar-width:none}
+.tabs::-webkit-scrollbar{display:none}
+.tab{flex:0 0 auto;padding:10px 14px;border-radius:999px;border:1px solid var(--border);background:var(--card);font-size:12px;font-weight:700;color:var(--muted);cursor:pointer}
+.tab.active{color:#fff;background:linear-gradient(135deg,var(--primary),var(--primary2));border-color:transparent}
+.search-wrap{padding:8px 16px 12px}
+.search{width:100%;padding:13px 14px 13px 40px;border-radius:14px;border:1px solid var(--border);background:var(--card);color:var(--text);font-size:14px;outline:none}
+.search-box{position:relative}
+.search-box i{position:absolute;left:14px;top:50%;transform:translateY(-50%);color:var(--muted)}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;padding:0 16px 110px}
+@media(min-width:720px){.grid{grid-template-columns:repeat(3,1fr);max-width:980px;margin:0 auto}}
+.card{background:var(--card);border:1px solid var(--border);border-radius:18px;padding:14px;cursor:pointer;transition:transform .15s,border-color .15s,box-shadow .15s}
+.card:hover{transform:translateY(-2px);border-color:rgba(59,130,246,.45);box-shadow:0 12px 30px rgba(59,130,246,.12)}
+.card .icon{width:42px;height:42px;border-radius:14px;display:flex;align-items:center;justify-content:center;background:linear-gradient(135deg,rgba(59,130,246,.2),rgba(139,92,246,.2));margin-bottom:10px;font-size:18px}
+.card h3{font-size:13.5px;font-weight:800;line-height:1.3;margin-bottom:6px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.card .meta{font-size:11px;color:var(--muted);font-weight:600}
+.card .price{margin-top:10px;font-size:15px;font-weight:900;color:#60a5fa}
+.badge{display:inline-flex;align-items:center;gap:4px;font-size:10px;font-weight:800;padding:3px 8px;border-radius:999px;background:rgba(52,211,153,.12);color:var(--success)}
+.empty{text-align:center;padding:50px 20px;color:var(--muted)}
+.toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:#111827;color:#fff;padding:12px 16px;border-radius:12px;font-size:13px;font-weight:700;z-index:100;opacity:0;pointer-events:none;transition:.2s}
+.toast.show{opacity:1}
+.modal-bg{position:fixed;inset:0;background:rgba(0,0,0,.6);backdrop-filter:blur(6px);z-index:80;display:none;align-items:flex-end;justify-content:center}
+.modal-bg.open{display:flex}
+.modal{width:100%;max-width:520px;background:var(--card);border-radius:22px 22px 0 0;border:1px solid var(--border);padding:18px 16px 28px;max-height:92vh;overflow:auto}
+.modal h3{font-size:17px;font-weight:900;margin-bottom:6px}
+.modal .sub{color:var(--muted);font-size:12.5px;margin-bottom:14px;line-height:1.4}
+.field{margin-bottom:12px}
+.field label{display:block;font-size:11px;font-weight:800;color:var(--muted);margin-bottom:6px;text-transform:uppercase;letter-spacing:.04em}
+.field input{width:100%;padding:12px 13px;border-radius:12px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:14px;outline:none}
+.total-box{padding:12px 14px;border-radius:14px;background:rgba(59,130,246,.1);border:1px solid rgba(59,130,246,.25);display:flex;justify-content:space-between;align-items:center;margin:12px 0 16px}
+.total-box strong{font-size:18px;font-weight:900}
+.bottom-nav{position:fixed;bottom:0;left:0;right:0;display:flex;gap:8px;padding:10px 12px calc(10px + env(safe-area-inset-bottom));background:rgba(7,11,20,.92);backdrop-filter:blur(12px);border-top:1px solid var(--border)}
+.bottom-nav a,.bottom-nav button{flex:1;border:0;border-radius:14px;padding:12px 8px;font-weight:800;font-size:12px;background:var(--card);color:var(--text);border:1px solid var(--border);cursor:pointer;text-align:center}
+.bottom-nav .main{background:linear-gradient(135deg,var(--primary),var(--primary2));color:#fff;border:0}
+.loading{padding:40px;text-align:center;color:var(--muted)}
+.spinner{width:36px;height:36px;border:3px solid var(--border);border-top-color:var(--primary);border-radius:50%;animation:spin .8s linear infinite;margin:0 auto 12px}
+@keyframes spin{to{transform:rotate(360deg)}}
+.pager{display:flex;justify-content:center;gap:10px;align-items:center;padding:8px 16px 20px;font-size:12px;color:var(--muted);font-weight:700}
+</style>
+</head>
+<body>
+<header class="header">
+  <a class="back" href="index.html#booster"><i class="fa-solid fa-arrow-left"></i></a>
+  <h1>⚡ MJ Boosters</h1>
+  <div class="bal" id="walletBal">₦—</div>
+</header>
+
+<section class="hero" id="heroHome">
+  <div class="eyebrow">MJ Boosters · Live</div>
+  <h2>Grow your socials.<br>Orders start in minutes.</h2>
+  <p>Instagram, TikTok, YouTube, Telegram, Facebook, X and more — pay from your MJ Hub wallet. Fast delivery. Real tracking.</p>
+  <div class="platforms">
+    <span style="background:radial-gradient(circle at 30% 107%,#fdf497 0%,#fd5949 45%,#d6249f 60%,#285AEB 90%)"><img src="https://cdn.simpleicons.org/instagram/ffffff" width="18" height="18" alt=""></span>
+    <span style="background:#000"><img src="https://cdn.simpleicons.org/tiktok/ffffff" width="18" height="18" alt=""></span>
+    <span style="background:#FF0000"><img src="https://cdn.simpleicons.org/youtube/ffffff" width="18" height="18" alt=""></span>
+    <span style="background:#26A5E4"><img src="https://cdn.simpleicons.org/telegram/ffffff" width="18" height="18" alt=""></span>
+    <span style="background:#000"><img src="https://cdn.simpleicons.org/x/ffffff" width="18" height="18" alt=""></span>
+    <span style="background:#1877F2"><img src="https://cdn.simpleicons.org/facebook/ffffff" width="18" height="18" alt=""></span>
+  </div>
+  <div class="cta-row">
+    <button class="btn btn-primary" onclick="document.getElementById('cats').scrollIntoView({behavior:'smooth'})"><i class="fa-solid fa-bolt"></i> Start Boosting</button>
+    <a class="btn btn-ghost" href="mj-boosters-history.html"><i class="fa-solid fa-clock-rotate-left"></i> My Orders</a>
+  </div>
+</section>
+
+<div class="tabs" id="cats"><button class="tab active" data-cat="">All platforms</button></div>
+<div class="search-wrap">
+  <div class="search-box">
+    <i class="fa-solid fa-magnifying-glass"></i>
+    <input class="search" id="search" placeholder="Search followers, views, likes, platform…" onkeydown="if(event.key==='Enter'){page=1;loadServices()}">
+  </div>
+</div>
+<div id="content" class="grid"><div class="loading" style="grid-column:1/-1"><div class="spinner"></div>Loading hot services…</div></div>
+<div class="pager" id="pager"></div>
+
+<div class="bottom-nav">
+  <a href="index.html#home"><i class="fa-solid fa-house"></i> Home</a>
+  <button class="main" onclick="page=1;loadServices()"><i class="fa-solid fa-bolt"></i> Boost</button>
+  <a href="mj-boosters-history.html"><i class="fa-solid fa-receipt"></i> Orders</a>
+  <a href="index.html#deposit"><i class="fa-solid fa-wallet"></i> Fund</a>
+</div>
+<div class="toast" id="toast"></div>
+
+<div class="modal-bg" id="modalBg" onclick="if(event.target===this)closeModal()">
+  <div class="modal" id="modal">
+    <h3 id="mTitle">Service</h3>
+    <div class="sub" id="mSub"></div>
+    <div class="field"><label>Link / Username</label><input id="mLink" placeholder="https://instagram.com/yourpage or @username"></div>
+    <div class="field"><label>Quantity</label><input id="mQty" type="number" min="1" value="1000"></div>
+    <div class="total-box"><span>You pay</span><strong id="mTotal">₦0</strong></div>
+    <button class="btn btn-primary" style="width:100%;justify-content:center" id="mBuy" onclick="placeOrder()"><i class="fa-solid fa-bolt"></i> Boost Now</button>
+    <button class="btn btn-ghost" style="width:100%;justify-content:center;margin-top:8px" onclick="closeModal()">Cancel</button>
+  </div>
+</div>
+
+<script>
+
+const SUPABASE_URL = 'https://atczodlljmlayvldxfmv.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImF0Y3pvZGxsam1sYXl2bGR4Zm12Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODUwNzUyMzgsImV4cCI6MjEwMDY1MTIzOH0.ufthD-p7BmeD_B7xyuMM6PNPL8DmcL4AtRYgg-MuoLI';
+const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+let session=null, balance=0, page=1, selected=null, categories=[];
+
+function toast(msg, ms=3200){const t=document.getElementById('toast');t.textContent=msg;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),ms)}
+function esc(s){return String(s||'').replace(/[&<>"']/g,c=>({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]))}
+function fmt(n){return '₦'+Number(n||0).toLocaleString()}
+
+async function authHeaders(){
+  const h={'Content-Type':'application/json'};
+  const {data}=await sb.auth.getSession();
+  session=data?.session||null;
+  if(session?.access_token) h.Authorization='Bearer '+session.access_token;
+  return h;
+}
+
+async function ensureAuth(){
+  const {data}=await sb.auth.getSession();
+  session=data?.session||null;
+  if(!session){ location.href='auth.html?next='+encodeURIComponent('mj-boosters.html'); return false; }
+  const {data:prof}=await sb.from('profiles').select('balance').eq('id', session.user.id).maybeSingle();
+  balance=Number(prof?.balance)||0;
+  document.getElementById('walletBal').textContent=fmt(balance);
+  return true;
+}
+
+function iconFor(cat,name){
+  const s=((cat||'')+' '+(name||'')).toLowerCase();
+  if(s.includes('instagram')) return '📸';
+  if(s.includes('tiktok')) return '🎵';
+  if(s.includes('youtube')) return '▶️';
+  if(s.includes('telegram')) return '✈️';
+  if(s.includes('facebook')) return '👤';
+  if(s.includes('twitter')||s.includes(' x ')) return '𝕏';
+  if(s.includes('spotify')) return '🎧';
+  if(s.includes('linkedin')) return '💼';
+  return '⚡';
+}
+
+async function loadCategories(){
+  const headers=await authHeaders();
+  const res=await fetch('/api/owlet?action=catalog',{headers});
+  const data=await res.json();
+  if(!data.success){ toast(data.message||'Could not load catalog'); return; }
+  categories=data.categories||[];
+  const el=document.getElementById('cats');
+  el.innerHTML='<button class="tab active" data-cat="">🔥 Popular</button>'+
+    categories.slice(0,24).map(c=>`<button class="tab" data-cat="${esc(c.name)}">${esc(c.name)} · ${c.count}</button>`).join('');
+  el.querySelectorAll('.tab').forEach(btn=>{
+    btn.onclick=()=>{
+      el.querySelectorAll('.tab').forEach(b=>b.classList.remove('active'));
+      btn.classList.add('active');
+      page=1;
+      loadServices();
+    };
+  });
+  // default load first services page without category filter uses price sort via services mode
+  await loadServices();
+}
+
+async function loadServices(){
+  const headers=await authHeaders();
+  const cat=document.querySelector('.tab.active')?.dataset.cat||'';
+  const q=document.getElementById('search').value.trim();
+  const params=new URLSearchParams({action:'catalog', page:String(page), page_size:'48'});
+  // Always request services mode
+  if(cat) params.set('category', cat);
+  else params.set('category', categories[0]?.name || ''); // popular = top category by count
+  if(!cat && categories[0]) params.set('category', categories[0].name);
+  if(q){ params.set('q', q); if(!cat) params.set('category', categories[0]?.name||'Instagram'); }
+  // If user wants "Popular" without cat, pick top 3 categories and merge — simplified: use first category or search all via first cat
+  if(!document.querySelector('.tab.active')?.dataset.cat && !q){
+    // load highest count category as popular entry
+    if(categories[0]) params.set('category', categories[0].name);
+  }
+
+  document.getElementById('content').innerHTML='<div class="loading" style="grid-column:1/-1"><div class="spinner"></div>Fetching services…</div>';
+  const res=await fetch('/api/owlet?'+params.toString(),{headers});
+  const data=await res.json();
+  if(!data.success){
+    document.getElementById('content').innerHTML=`<div class="empty">${esc(data.message||'Failed')}</div>`;
+    return;
+  }
+  if(data.mode==='categories'){
+    // show category cards
+    document.getElementById('content').innerHTML=(data.categories||[]).map(c=>`
+      <div class="card" onclick="document.querySelectorAll('.tab').forEach(t=>t.classList.toggle('active', t.dataset.cat===${JSON.stringify(c.name)}));page=1;loadServices()">
+        <div class="icon">${iconFor(c.name,'')}</div>
+        <h3>${esc(c.name)}</h3>
+        <div class="meta">${c.count} services</div>
+        <div class="price">Explore →</div>
+      </div>`).join('') || '<div class="empty">No categories yet. Ask admin to sync Owlet.</div>';
+    document.getElementById('pager').innerHTML='';
+    return;
+  }
+  const rows=data.data||[];
+  if(!rows.length){
+    document.getElementById('content').innerHTML='<div class="empty" style="grid-column:1/-1">No services here. Try another category.</div>';
+  } else {
+    document.getElementById('content').innerHTML=rows.map(s=>`
+      <div class="card" onclick='openOrder(${JSON.stringify(s).replace(/'/g,"&#39;")})'>
+        <div class="icon">${iconFor(s.category,s.name)}</div>
+        <h3>${esc(s.name)}</h3>
+        <div class="meta">${esc(s.category||'')} · Min ${Number(s.min_quantity||0).toLocaleString()}</div>
+        ${s.refill?'<div style="margin-top:6px"><span class="badge">Refill</span></div>':''}
+        <div class="price">${fmt(s.price_ngn)} <span style="font-size:11px;color:var(--muted);font-weight:700">/ 1k</span></div>
+      </div>`).join('');
+  }
+  const maxPage=Math.max(1, Math.ceil((data.total||0)/48));
+  document.getElementById('pager').innerHTML=`
+    <button class="btn btn-ghost" ${page<=1?'disabled':''} onclick="page=Math.max(1,page-1);loadServices()">Prev</button>
+    <span>Page ${page}/${maxPage}</span>
+    <button class="btn btn-ghost" ${page>=maxPage?'disabled':''} onclick="page=page+1;loadServices()">Next</button>`;
+}
+
+function openOrder(s){
+  selected=s;
+  document.getElementById('mTitle').textContent=s.name||'Service';
+  document.getElementById('mSub').textContent=`${s.category||''} · ${fmt(s.price_ngn)} per 1,000 · Min ${s.min_quantity} · Max ${Number(s.max_quantity||0).toLocaleString()}`;
+  const min=Number(s.min_quantity)||1;
+  document.getElementById('mQty').value=min;
+  document.getElementById('mQty').min=min;
+  document.getElementById('mQty').max=Number(s.max_quantity)||1000000;
+  document.getElementById('mLink').value='';
+  updateTotal();
+  document.getElementById('modalBg').classList.add('open');
+}
+function closeModal(){document.getElementById('modalBg').classList.remove('open');selected=null}
+function updateTotal(){
+  if(!selected) return;
+  const qty=Math.max(1, parseInt(document.getElementById('mQty').value,10)||0);
+  const total=Math.ceil((Number(selected.price_ngn)||0)/1000*qty);
+  document.getElementById('mTotal').textContent=fmt(total);
+}
+document.getElementById('mQty').addEventListener('input', updateTotal);
+
+async function placeOrder(){
+  if(!selected) return;
+  const link=document.getElementById('mLink').value.trim();
+  const quantity=parseInt(document.getElementById('mQty').value,10)||0;
+  if(!link){ toast('Enter the link or username to boost'); return; }
+  const btn=document.getElementById('mBuy');
+  btn.disabled=true; btn.innerHTML='<i class="fa-solid fa-spinner fa-spin"></i> Placing order…';
+  try{
+    const headers=await authHeaders();
+    const res=await fetch('/api/owlet?action=order',{method:'POST',headers,body:JSON.stringify({
+      service_id:selected.service_id, link, quantity
+    })});
+    const data=await res.json();
+    if(!data.success){
+      toast(data.message||'Order failed');
+      if(/insufficient/i.test(data.message||'')) setTimeout(()=>location.href='index.html#deposit',1200);
+      return;
+    }
+    if(data.new_balance!=null){ balance=Number(data.new_balance); document.getElementById('walletBal').textContent=fmt(balance); }
+    toast('🔥 Boost ordered! Track it in Orders');
+    closeModal();
+    setTimeout(()=>location.href='mj-boosters-history.html',900);
+  }catch(e){ toast(e.message||'Network error'); }
+  finally{ btn.disabled=false; btn.innerHTML='<i class="fa-solid fa-bolt"></i> Boost Now'; }
+}
+
+(async()=>{
+  if(!await ensureAuth()) return;
+  // Popular: show category grid first
+  const headers=await authHeaders();
+  const res=await fetch('/api/owlet?action=catalog',{headers});
+  const data=await res.json();
+  if(data.success && data.mode==='categories'){
+    categories=data.categories||[];
+    const el=document.getElementById('cats');
+    el.innerHTML='<button class="tab active" data-cat="">🔥 Categories</button>'+
+      categories.slice(0,30).map(c=>`<button class="tab" data-cat="${esc(c.name)}">${esc(c.name)}</button>`).join('');
+    el.querySelectorAll('.tab').forEach(btn=>{
+      btn.onclick=()=>{
+        el.querySelectorAll('.tab').forEach(b=>b.classList.remove('active'));
+        btn.classList.add('active');
+        page=1;
+        if(!btn.dataset.cat){ showCategories(data.categories); return; }
+        loadServices();
+      };
+    });
+    showCategories(data.categories);
+  } else {
+    await loadCategories();
+  }
+})();
+
+function showCategories(list){
+  document.getElementById('content').innerHTML=(list||[]).map(c=>`
+    <div class="card" onclick="(function(){const t=[...document.querySelectorAll('.tab')].find(x=>x.dataset.cat===${JSON.stringify(c.name)}); if(t){t.click();}})()">
+      <div class="icon">${iconFor(c.name,'')}</div>
+      <h3>${esc(c.name)}</h3>
+      <div class="meta">${c.count} services ready</div>
+      <div class="price">Boost now →</div>
+    </div>`).join('') || '<div class="empty" style="grid-column:1/-1">Catalog empty — admin must Sync Owlet services.</div>';
+  document.getElementById('pager').innerHTML=`<span>${(list||[]).length} categories · ${(list||[]).reduce((a,c)=>a+c.count,0)} services</span>`;
+}
+</script>
+</body>
+</html>
