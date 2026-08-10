@@ -122,6 +122,40 @@ async function handleServices(req, res) {
 }
 
 async function handleSync(req, res) {
+  // Time-boxed, resumable sync — Owlet catalogs are large enough that a
+  // single Vercel invocation (even at 300s) can time out if we upsert
+  // everything in one go. Cursor is stored in sync_jobs (source=owlet).
+  const SYNC_SOURCE = 'owlet';
+  const TIME_BUDGET_MS = 250000; // leave headroom under 300s maxDuration
+  const BATCH = 80;
+  const startedAt = Date.now();
+
+  const body = typeof req.body === 'string' ? (() => { try { return JSON.parse(req.body || '{}'); } catch { return {}; } })() : (req.body || {});
+  const forceRestart = !!(body.restart || req.query?.restart === '1');
+
+  let job = null;
+  {
+    const { data, error } = await supabase.from('sync_jobs').select('*').eq('source', SYNC_SOURCE).maybeSingle();
+    if (error && !/does not exist|relation/i.test(error.message || '')) {
+      console.warn('[owlet sync] sync_jobs read:', error.message);
+    }
+    job = data;
+  }
+
+  if (forceRestart || !job || job.status === 'completed') {
+    job = {
+      source: SYNC_SOURCE,
+      status: 'running',
+      cursor_index: 0,
+      items_seen: 0,
+      new_count: 0,
+      updated_count: 0,
+      errors: [],
+      updated_at: new Date().toISOString()
+    };
+  }
+
+  // Fetch full service list from Owlet (one API call — the bottleneck is DB writes)
   const { ok, status, json } = await owletCall({ action: 'services' });
   if (!ok || json?.error || !Array.isArray(json)) {
     return res.status(status || 502).json({
@@ -130,78 +164,108 @@ async function handleSync(req, res) {
     });
   }
 
-  let inserted = 0;
-  let updated = 0;
-  let errors = [];
+  const services = json;
+  let cursor = Number(job.cursor_index) || 0;
+  if (cursor >= services.length) cursor = 0;
 
-  // Load existing by service_id
+  // Existing rows for manual-price preservation (one query)
   const { data: existing, error: exErr } = await supabase
     .from('booster_services')
-    .select('id, service_id, price_ngn, price_source')
+    .select('service_id, price_ngn, price_source')
     .eq('source', 'owlet');
 
   if (exErr) {
     return res.status(500).json({
       success: false,
-      message: 'booster_services table error: ' + exErr.message + ' — run the SQL setup first'
+      message: 'booster_services table error: ' + exErr.message + ' — run booster_services.sql in Supabase first'
     });
   }
-
   const map = new Map((existing || []).map(r => [String(r.service_id), r]));
 
-  for (const s of json) {
-    const serviceId = String(s.service);
-    const supplierUsd = Number(s.rate) || 0;
-    const defaultNgn = sellPriceNgn(supplierUsd);
-    const row = map.get(serviceId);
+  let upserted = 0;
+  let errors = Array.isArray(job.errors) ? job.errors.slice(0, 20) : [];
+  let ranOutOfTime = false;
 
-    const shared = {
-      source: 'owlet',
-      service_id: serviceId,
-      name: s.name || serviceId,
-      category: s.category || 'Other',
-      service_type: s.type || 'Default',
-      supplier_rate_usd: supplierUsd,
-      min_quantity: Number(s.min) || 0,
-      max_quantity: Number(s.max) || 0,
-      refill: !!s.refill,
-      cancel: !!s.cancel,
-      is_available: true,
-      updated_at: new Date().toISOString()
-    };
-
-    try {
-      if (row) {
-        // Never overwrite manual selling price
-        const patch = { ...shared };
-        if (row.price_source !== 'manual') {
-          patch.price_ngn = defaultNgn;
-          patch.price_source = 'system';
-        }
-        const { error } = await supabase.from('booster_services').update(patch).eq('id', row.id);
-        if (error) errors.push(`${serviceId}: ${error.message}`);
-        else updated += 1;
-      } else {
-        const { error } = await supabase.from('booster_services').insert({
-          ...shared,
-          price_ngn: defaultNgn,
-          price_source: 'system'
-        });
-        if (error) errors.push(`${serviceId}: ${error.message}`);
-        else inserted += 1;
-      }
-    } catch (e) {
-      errors.push(`${serviceId}: ${e.message || e}`);
+  while (cursor < services.length) {
+    if (Date.now() - startedAt > TIME_BUDGET_MS) {
+      ranOutOfTime = true;
+      break;
     }
+
+    const slice = services.slice(cursor, cursor + BATCH);
+    const now = new Date().toISOString();
+    const rows = slice.map(s => {
+      const serviceId = String(s.service);
+      const supplierUsd = Number(s.rate) || 0;
+      const defaultNgn = sellPriceNgn(supplierUsd);
+      const prev = map.get(serviceId);
+      const manual = prev && prev.price_source === 'manual';
+      return {
+        source: 'owlet',
+        service_id: serviceId,
+        name: s.name || serviceId,
+        category: s.category || 'Other',
+        service_type: s.type || 'Default',
+        supplier_rate_usd: supplierUsd,
+        price_ngn: manual ? Number(prev.price_ngn) : defaultNgn,
+        price_source: manual ? 'manual' : 'system',
+        min_quantity: Number(s.min) || 0,
+        max_quantity: Number(s.max) || 0,
+        refill: !!s.refill,
+        cancel: !!s.cancel,
+        is_available: true,
+        updated_at: now
+      };
+    });
+
+    let { error } = await supabase
+      .from('booster_services')
+      .upsert(rows, { onConflict: 'source,service_id' });
+
+    if (error && /price_source/i.test(error.message || '')) {
+      const slim = rows.map(({ price_source, ...rest }) => rest);
+      ({ error } = await supabase.from('booster_services').upsert(slim, { onConflict: 'source,service_id' }));
+    }
+
+    if (error) {
+      errors.push(`batch@${cursor}: ${error.message}`);
+      // skip this batch rather than abort entire job
+    } else {
+      upserted += rows.length;
+    }
+
+    cursor += slice.length;
+  }
+
+  const done = cursor >= services.length && !ranOutOfTime;
+  const jobFields = {
+    source: SYNC_SOURCE,
+    status: done ? 'completed' : 'running',
+    cursor_index: done ? 0 : cursor,
+    items_seen: services.length,
+    new_count: (Number(job.new_count) || 0) + upserted,
+    updated_count: upserted,
+    errors: errors.slice(0, 20),
+    updated_at: new Date().toISOString()
+  };
+
+  // Best-effort job persist (table may not exist yet — sync still works)
+  try {
+    await supabase.from('sync_jobs').upsert(jobFields, { onConflict: 'source' });
+  } catch (e) {
+    console.warn('[owlet sync] sync_jobs write failed', e?.message || e);
   }
 
   return res.status(200).json({
     success: true,
-    message: `Synced ${json.length} Owlet services (${inserted} new, ${updated} updated)`,
-    total: json.length,
-    inserted,
-    updated,
-    errors: errors.slice(0, 10)
+    done,
+    message: done
+      ? `Owlet sync complete — ${services.length} services`
+      : `Owlet sync progress ${cursor}/${services.length} — run Sync again to continue`,
+    total: services.length,
+    cursor,
+    upserted_this_run: upserted,
+    errors: errors.slice(0, 5)
   });
 }
 
