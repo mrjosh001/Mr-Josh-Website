@@ -530,7 +530,7 @@ async function getSujanBalance() {
 
 async function fetchOwletBalance() {
   const key = process.env.OWLET_API_KEY;
-  if (!key) return { ok: false, message: 'OWLET_API_KEY not set', balance: null };
+  if (!key) return { ok: false, error: 'OWLET_API_KEY not set', balance: null };
   try {
     const body = new URLSearchParams({ key, action: 'balance' });
     const res = await fetch('https://theowlet.com/api/v2', {
@@ -539,10 +539,10 @@ async function fetchOwletBalance() {
       body: body.toString()
     });
     const json = await res.json();
-    if (json?.error) return { ok: false, message: String(json.error), balance: null, currency: 'USD' };
+    if (json?.error) return { ok: false, error: String(json.error), balance: null, currency: 'USD' };
     return { ok: true, balance: json.balance, currency: json.currency || 'USD', raw: json };
   } catch (e) {
-    return { ok: false, message: e.message || String(e), balance: null };
+    return { ok: false, error: e.message || String(e), balance: null };
   }
 }
 
