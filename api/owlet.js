@@ -26,78 +26,27 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY
 );
 
-// Helper to generate a random markup percentage between 25% and 50%
-function getRandomMarkup() {
-  return Math.floor(Math.random() * (50 - 25 + 1)) + 25; // Random integer between 25 and 50
+// Fixed markup so every order has predictable profit (override via OWLET_MARKUP_PERCENT)
+// Example: 35 = sell at supplier_cost_ngn * 1.35
+function getMarkupPercent() {
+  const env = Number(process.env.OWLET_MARKUP_PERCENT);
+  if (Number.isFinite(env) && env >= 0 && env <= 200) return env;
+  return 35; // default +35% profit on cost
 }
 
-
-async function requireUser(req) {
-  const authHeader = req.headers.authorization || '';
-  const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : null;
-  if (!token) return { ok: false, status: 401, message: 'Please sign in' };
-  const { data: { user }, error: authErr } = await supabase.auth.getUser(token);
-  if (authErr || !user) return { ok: false, status: 401, message: 'Session expired — sign in again' };
-  return { ok: true, user };
+/**
+ * Owlet API rate is in USD (balance/status currency is USD per their docs).
+ * Sell price (NGN) = rate_usd * USD_TO_NGN * (1 + markup/100)
+ */
+function sellPriceNgnFromUsd(rateUsd, markupPercent) {
+  const usd = Number(rateUsd) || 0;
+  const markup = markupPercent ?? getMarkupPercent();
+  const costNgn = usd * USD_TO_NGN;
+  return Math.ceil(costNgn * (1 + markup / 100));
 }
 
-async function requireAdmin(req) {
-  const authHeader = req.headers.authorization || '';
-  const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : null;
-  if (!token) return { ok: false, status: 401, message: 'Missing admin session' };
-
-  const { data: { user }, error: authErr } = await supabase.auth.getUser(token);
-  if (authErr || !user) return { ok: false, status: 401, message: 'Invalid session' };
-
-  const { data: profile } = await supabase
-    .from('profiles')
-    .select('is_admin')
-    .eq('id', user.id)
-    .maybeSingle();
-
-  const isAdmin = profile && (profile.is_admin === true || profile.is_admin === 'true' || profile.is_admin === 1);
-  if (!isAdmin) return { ok: false, status: 403, message: 'Admin privileges required' };
-  return { ok: true, adminId: user.id };
-}
-
-async function owletCall(params) {
-  if (!OWLET_KEY) {
-    return { ok: false, status: 500, json: { error: 'OWLET_API_KEY not configured' } };
-  }
-  const body = new URLSearchParams({ key: OWLET_KEY, ...params });
-  const res = await fetch(OWLET_URL, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/x-www-form-urlencoded',
-      Accept: 'application/json'
-    },
-    body: body.toString()
-  });
-  const text = await res.text();
-  let json;
-  try {
-    json = JSON.parse(text);
-  } catch {
-    return { ok: false, status: res.status || 502, json: { error: 'Invalid JSON from Owlet', raw: text.slice(0, 300) } };
-  }
-  return { ok: res.ok, status: res.status, json };
-}
-
-// Calculate selling price in NGN with dynamic/random markup
-function sellPriceNgn(rateNgn, markupPercent) {
-  const r = Number(rateNgn) || 0;
-  const markup = markupPercent ?? getRandomMarkup();
-  return Math.ceil(r * (1 + markup / 100));
-}
-
-// Calculate USD supplier rate equivalent using 1450 exchange rate
-function supplierUsd(rateNgn) {
-  const r = Number(rateNgn) || 0;
-  return Math.round((r / USD_TO_NGN) * 10000) / 10000;
-}
-
-function sellPriceUsd(rateNgn, markupPercent) {
-  return supplierUsd(sellPriceNgn(rateNgn, markupPercent));
+function supplierUsdFromRate(rateUsd) {
+  return Math.round((Number(rateUsd) || 0) * 10000) / 10000;
 }
 
 async function handleBalance(req, res) {
@@ -126,16 +75,16 @@ async function handleServices(req, res) {
     });
   }
   const data = json.map(s => {
-    const randomMarkup = getRandomMarkup();
+    const randomMarkup = getMarkupPercent();
     return {
       service_id: String(s.service),
       name: s.name,
       type: s.type,
       category: s.category,
       supplier_rate_ngn: Number(s.rate) || 0,
-      supplier_rate_usd: supplierUsd(s.rate),
+      supplier_rate_usd: supplierUsdFromRate(s.rate),
       rate_usd: sellPriceUsd(s.rate, randomMarkup),
-      rate_ngn: sellPriceNgn(s.rate, randomMarkup),
+      rate_ngn: sellPriceNgnFromUsd(s.rate, randomMarkup),
       min: Number(s.min) || 0,
       max: Number(s.max) || 0,
       refill: !!s.refill,
@@ -215,12 +164,10 @@ async function handleSync(req, res) {
     const now = new Date().toISOString();
     const rows = slice.map(s => {
       const serviceId = String(s.service);
-      const rawNgn = Number(s.rate) || 0;
-      const supplierUsdVal = supplierUsd(rawNgn); // Converts NGN to USD at ₦1450/$ rate
-      
-      // Picks a unique random markup between 25% and 50% for this service
-      const randomMarkup = getRandomMarkup(); 
-      const defaultNgn = sellPriceNgn(rawNgn, randomMarkup);
+      // Owlet rate is USD per 1000 units
+      const rateUsd = Number(s.rate) || 0;
+      const supplierUsdVal = supplierUsdFromRate(rateUsd);
+      const defaultNgn = sellPriceNgnFromUsd(rateUsd);
 
       const prev = map.get(serviceId);
       const manual = prev && prev.price_source === 'manual';
@@ -233,8 +180,8 @@ async function handleSync(req, res) {
         supplier_rate_usd: supplierUsdVal,
         price_ngn: manual ? Number(prev.price_ngn) : defaultNgn,
         price_source: manual ? 'manual' : 'system',
-        min_quantity: Number(s.min) || 0,
-        max_quantity: Number(s.max) || 0,
+        min_quantity: Math.max(1, Number(s.min) || 1),
+        max_quantity: Math.max(1, Number(s.max) || 1000000),
         refill: !!s.refill,
         cancel: !!s.cancel,
         is_available: true,
@@ -381,7 +328,7 @@ async function handleCatalog(req, res) {
     .select('category')
     .eq('source', 'owlet')
     .eq('is_available', true)
-    .limit(8000);
+    .limit(15000);
   const categories = [...new Set((catRows || []).map(r => r.category).filter(Boolean))].sort();
 
   if (!category && !q) {
