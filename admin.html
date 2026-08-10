@@ -549,15 +549,11 @@
             <div style="display:flex;flex-wrap:wrap;gap:12px;align-items:center;justify-content:space-between;">
               <div>
                 <h3 style="margin:0 0 4px;">MJ Boosters — The Owlet</h3>
-                <p style="margin:0;font-size:13px;color:var(--muted);">Admin only. Services sync to <code>booster_services</code>. Not shown on user dashboard yet.</p>
+                <p style="margin:0;font-size:13px;color:var(--muted);">Admin only. Catalog syncs into <code>booster_services</code>. Wallet balance is on <strong>Overview</strong> with the other suppliers. Not on user dashboard yet.</p>
               </div>
               <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;">
-                <button class="btn btn-secondary btn-sm" id="btnOwletBalance" onclick="loadOwletBalance()"><i class="fas fa-wallet"></i> Refresh Balance</button>
                 <button class="btn btn-primary btn-sm" id="btnOwletSync" onclick="syncOwletServices()"><i class="fas fa-sync"></i> Sync Services</button>
               </div>
-            </div>
-            <div id="owletBalanceBox" style="margin-top:14px;padding:12px 14px;border-radius:12px;background:rgba(59,130,246,.08);border:1px solid rgba(59,130,246,.2);font-size:14px;">
-              Owlet balance: <strong id="owletBalanceText">—</strong>
             </div>
             <div id="owletSyncProgress" style="margin-top:8px;font-size:12px;color:var(--muted);"></div>
           </div>
@@ -2965,7 +2961,6 @@ window.addEventListener('DOMContentLoaded', async () => {
       const t = document.getElementById('pageTitle');
       if (t) t.textContent = 'MJ Boosters (Owlet)';
       loadOwletServicesFromDb();
-      loadOwletBalance();
     }
   };
 })();
@@ -3013,7 +3008,6 @@ async function syncOwletServices() {
     if (prog) prog.textContent = data.message || 'Done';
     showAdminToast(data.message || 'Owlet services synced', 'success');
     await loadOwletServicesFromDb();
-    await loadOwletBalance();
   } catch (e) {
     showAdminToast('Sync failed: ' + e.message, 'error');
     if (prog) prog.textContent = '';
