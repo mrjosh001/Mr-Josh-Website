@@ -9,14 +9,14 @@ import { createClient } from '@supabase/supabase-js';
  * Not wired to the user dashboard yet.
  *
  * Actions:
- *   balance  — Owlet wallet USD balance
+ *   balance  — Owlet wallet NGN balance
  *   services — live service list from Owlet
  *   sync     — pull services into booster_services (Supabase)
  *   status   — order status { order }
  *
  * Env: OWLET_API_KEY, SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY
  * Optional: OWLET_MARKUP_PERCENT (default 50 → sell at 1.5× rate)
- * Optional: USD_TO_NGN_RATE (default 1500) for display prices in NGN
+ * Optional: USD_TO_NGN_RATE (default 1500) for internal USD conversion display
  */
 
 const OWLET_URL = 'https://theowlet.com/api/v2';
@@ -71,13 +71,19 @@ async function owletCall(params) {
   return { ok: res.ok, status: res.status, json };
 }
 
-function sellPriceUsd(rateUsd) {
-  const r = Number(rateUsd) || 0;
-  return Math.round(r * (1 + MARKUP / 100) * 10000) / 10000;
+// Owlet returns rates in NGN directly
+function sellPriceNgn(rateNgn) {
+  const r = Number(rateNgn) || 0;
+  return Math.ceil(r * (1 + MARKUP / 100));
 }
 
-function sellPriceNgn(rateUsd) {
-  return Math.ceil(sellPriceUsd(rateUsd) * USD_TO_NGN);
+function supplierUsd(rateNgn) {
+  const r = Number(rateNgn) || 0;
+  return Math.round((r / USD_TO_NGN) * 10000) / 10000;
+}
+
+function sellPriceUsd(rateNgn) {
+  return supplierUsd(sellPriceNgn(rateNgn));
 }
 
 async function handleBalance(req, res) {
@@ -91,7 +97,7 @@ async function handleBalance(req, res) {
   return res.status(200).json({
     success: true,
     balance: json.balance,
-    currency: json.currency || 'USD',
+    currency: json.currency || 'NGN',
     raw: json
   });
 }
@@ -110,7 +116,8 @@ async function handleServices(req, res) {
     name: s.name,
     type: s.type,
     category: s.category,
-    supplier_rate_usd: Number(s.rate) || 0,
+    supplier_rate_ngn: Number(s.rate) || 0,
+    supplier_rate_usd: supplierUsd(s.rate),
     rate_usd: sellPriceUsd(s.rate),
     rate_ngn: sellPriceNgn(s.rate),
     min: Number(s.min) || 0,
@@ -122,11 +129,8 @@ async function handleServices(req, res) {
 }
 
 async function handleSync(req, res) {
-  // Time-boxed, resumable sync — Owlet catalogs are large enough that a
-  // single Vercel invocation (even at 300s) can time out if we upsert
-  // everything in one go. Cursor is stored in sync_jobs (source=owlet).
   const SYNC_SOURCE = 'owlet';
-  const TIME_BUDGET_MS = 250000; // leave headroom under 300s maxDuration
+  const TIME_BUDGET_MS = 250000;
   const BATCH = 80;
   const startedAt = Date.now();
 
@@ -155,7 +159,6 @@ async function handleSync(req, res) {
     };
   }
 
-  // Fetch full service list from Owlet (one API call — the bottleneck is DB writes)
   const { ok, status, json } = await owletCall({ action: 'services' });
   if (!ok || json?.error || !Array.isArray(json)) {
     return res.status(status || 502).json({
@@ -168,7 +171,6 @@ async function handleSync(req, res) {
   let cursor = Number(job.cursor_index) || 0;
   if (cursor >= services.length) cursor = 0;
 
-  // Existing rows for manual-price preservation (one query)
   const { data: existing, error: exErr } = await supabase
     .from('booster_services')
     .select('service_id, price_ngn, price_source')
@@ -196,8 +198,9 @@ async function handleSync(req, res) {
     const now = new Date().toISOString();
     const rows = slice.map(s => {
       const serviceId = String(s.service);
-      const supplierUsd = Number(s.rate) || 0;
-      const defaultNgn = sellPriceNgn(supplierUsd);
+      const rawNgn = Number(s.rate) || 0;
+      const supplierUsdVal = supplierUsd(rawNgn); // Calculates actual USD equivalent (~$7.11)
+      const defaultNgn = sellPriceNgn(rawNgn);     // Applies markup directly to NGN rate
       const prev = map.get(serviceId);
       const manual = prev && prev.price_source === 'manual';
       return {
@@ -206,7 +209,7 @@ async function handleSync(req, res) {
         name: s.name || serviceId,
         category: s.category || 'Other',
         service_type: s.type || 'Default',
-        supplier_rate_usd: supplierUsd,
+        supplier_rate_usd: supplierUsdVal,
         price_ngn: manual ? Number(prev.price_ngn) : defaultNgn,
         price_source: manual ? 'manual' : 'system',
         min_quantity: Number(s.min) || 0,
@@ -229,7 +232,6 @@ async function handleSync(req, res) {
 
     if (error) {
       errors.push(`batch@${cursor}: ${error.message}`);
-      // skip this batch rather than abort entire job
     } else {
       upserted += rows.length;
     }
@@ -249,7 +251,6 @@ async function handleSync(req, res) {
     updated_at: new Date().toISOString()
   };
 
-  // Best-effort job persist (table may not exist yet — sync still works)
   try {
     await supabase.from('sync_jobs').upsert(jobFields, { onConflict: 'source' });
   } catch (e) {
@@ -268,7 +269,6 @@ async function handleSync(req, res) {
     errors: errors.slice(0, 5)
   });
 }
-
 
 async function handleList(req, res) {
   const q = (req.query?.q || '').toString().trim().toLowerCase();
@@ -312,7 +312,6 @@ async function handleList(req, res) {
     );
   }
 
-  // Categories for filter dropdown (light query)
   const { data: catRows } = await supabase
     .from('booster_services')
     .select('category')
@@ -370,7 +369,6 @@ export default async function handler(req, res) {
     } catch { /* ignore */ }
   }
 
-  // Vercel Cron can hit sync without an admin session (same pattern as Grizzly / LogsDomain).
   const authHeader = req.headers.authorization || '';
   const isCron =
     !!process.env.CRON_SECRET &&
