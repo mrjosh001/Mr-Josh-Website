@@ -235,6 +235,32 @@ function toggleTheme(){
   syncThemeUi();
 }
 
+
+async function authHeaders() {
+  const h = { 'Content-Type': 'application/json' };
+  const { data } = await sb.auth.getSession();
+  session = data?.session || null;
+  if (session?.access_token) h.Authorization = 'Bearer ' + session.access_token;
+  return h;
+}
+async function ensureAuth() {
+  const { data } = await sb.auth.getSession();
+  session = data?.session || null;
+  if (!session) {
+    location.href = 'auth.html?next=' + encodeURIComponent('mj-boosters.html');
+    return false;
+  }
+  try {
+    const { data: prof } = await sb.from('profiles').select('balance').eq('id', session.user.id).maybeSingle();
+    balance = Number(prof?.balance) || 0;
+    const el = document.getElementById('walletBal');
+    if (el) el.textContent = fmt(balance);
+  } catch (e) {
+    console.warn('balance load', e);
+  }
+  return true;
+}
+
 let allCategories=[]; // {name,count}
 let activePlatform='all';
 let activeCategory='';
@@ -500,6 +526,7 @@ async function placeOrder(){
 }
 
 (async()=>{
+  syncThemeUi();
   if(!await ensureAuth()) return;
   await loadCatalog();
 })();
