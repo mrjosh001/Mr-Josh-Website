@@ -467,12 +467,14 @@ async function handleOrder(req, res) {
     return res.status(400).json({ success: false, message: 'This service is temporarily unavailable' });
   }
 
-  const minQ = Number(service.min_quantity) || 1;
+  // Site rule: never sell below 500 units. Supplier min wins if higher.
+  const supplierMin = Number(service.min_quantity) || 1;
+  const minQ = Math.max(500, supplierMin);
   const maxQ = Number(service.max_quantity) || 1000000;
   if (quantity < minQ || quantity > maxQ) {
     return res.status(400).json({
       success: false,
-      message: `Quantity must be between ${minQ} and ${maxQ.toLocaleString()}`
+      message: `Quantity must be between ${minQ.toLocaleString()} and ${maxQ.toLocaleString()}`
     });
   }
 
