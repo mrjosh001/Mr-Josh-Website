@@ -565,7 +565,7 @@ async function handleCheckout(req, res, raw, publicKey, businessId) {
 
   // Absolute HTTPS URL required — PocketFi "Go to Home" / auto-redirect uses this
   const appUrl = (process.env.APP_URL || 'https://app.mjhub.store').replace(/\/$/, '');
-  const redirect_link = `${appUrl}/index.html?deposit=success&provider=pocketfi`;
+  const redirect_link = `${appUrl}/deposit.html?deposit=success&provider=pocketfi`;
 
   const base = (process.env.POCKETFI_API_BASE || 'https://api.pocketfi.ng/api/v1').replace(
     /\/$/,
