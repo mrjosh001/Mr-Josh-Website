@@ -269,6 +269,67 @@ async function handleSync(req, res) {
   });
 }
 
+
+async function handleList(req, res) {
+  const q = (req.query?.q || '').toString().trim().toLowerCase();
+  const category = (req.query?.category || '').toString().trim();
+  const hideUnavailable = String(req.query?.hide_unavailable || '1') !== '0';
+  const page = Math.max(1, parseInt(req.query?.page || '1', 10) || 1);
+  const pageSize = Math.min(200, Math.max(20, parseInt(req.query?.page_size || '100', 10) || 100));
+  const from = (page - 1) * pageSize;
+  const to = from + pageSize - 1;
+
+  let query = supabase
+    .from('booster_services')
+    .select(
+      'id,source,service_id,name,category,service_type,supplier_rate_usd,price_ngn,price_source,min_quantity,max_quantity,refill,cancel,is_available,updated_at',
+      { count: 'exact' }
+    )
+    .eq('source', 'owlet')
+    .order('category', { ascending: true })
+    .order('name', { ascending: true })
+    .range(from, to);
+
+  if (hideUnavailable) query = query.neq('is_available', false);
+  if (category) query = query.eq('category', category);
+
+  const { data, error, count } = await query;
+  if (error) {
+    return res.status(500).json({
+      success: false,
+      message: error.message + ( /permission|rls|policy/i.test(error.message)
+        ? ' — run the RLS SQL for booster_services'
+        : '')
+    });
+  }
+
+  let rows = data || [];
+  if (q) {
+    rows = rows.filter(s =>
+      (s.name || '').toLowerCase().includes(q) ||
+      (s.category || '').toLowerCase().includes(q) ||
+      String(s.service_id).includes(q)
+    );
+  }
+
+  // Categories for filter dropdown (light query)
+  const { data: catRows } = await supabase
+    .from('booster_services')
+    .select('category')
+    .eq('source', 'owlet')
+    .limit(5000);
+  const categories = [...new Set((catRows || []).map(r => r.category).filter(Boolean))].sort();
+
+  return res.status(200).json({
+    success: true,
+    data: rows,
+    page,
+    page_size: pageSize,
+    total: count ?? rows.length,
+    categories
+  });
+}
+
 async function handleStatus(req, res) {
   const body = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : (req.body || {});
   const order = body.order || req.query?.order;
@@ -325,10 +386,11 @@ export default async function handler(req, res) {
   if (action === 'balance') return handleBalance(req, res);
   if (action === 'services') return handleServices(req, res);
   if (action === 'sync') return handleSync(req, res);
+  if (action === 'list') return handleList(req, res);
   if (action === 'status') return handleStatus(req, res);
 
   return res.status(400).json({
     success: false,
-    message: 'action required: balance | services | sync | status'
+    message: 'action required: balance | services | sync | list | status'
   });
 }
