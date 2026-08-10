@@ -12,6 +12,7 @@
  *   POCKETFI_SECRET_KEY, POCKETFI_PUBLIC_KEY, POCKETFI_BUSINESS_ID
  *   SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY
  *   Optional: POCKETFI_WEBHOOK_SECRET, POCKETFI_API_BASE, APP_URL
+ *   RESEND_API_KEY, RESEND_FROM_EMAIL (e.g. "MJ Hub <noreply@yourdomain.com>")
  *
  * Webhook URL in PocketFi dashboard:
  *   https://app.mjhub.store/api/pocketfi
@@ -164,6 +165,87 @@ function isPaidStatus(data) {
   return false;
 }
 
+/**
+ * Send deposit success email via Resend (best-effort, never blocks credit).
+ * Env: RESEND_API_KEY, RESEND_FROM_EMAIL (e.g. "MJ Hub <noreply@mjhub.store>")
+ */
+async function sendDepositEmail({ to, name, amountLabel, walletLabel, reference, newBalanceLabel }) {
+  const apiKey = process.env.RESEND_API_KEY;
+  const from = process.env.RESEND_FROM_EMAIL || process.env.RESEND_FROM || 'MJ Hub <onboarding@resend.dev>';
+  if (!apiKey || !to) {
+    console.warn('[deposit-email] skipped — missing RESEND_API_KEY or recipient');
+    return { ok: false, skipped: true };
+  }
+
+  const safeName = String(name || 'there').trim() || 'there';
+  const subject = `Deposit successful — ${amountLabel}`;
+  const html = `
+<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
+<body style="margin:0;padding:0;background:#0b0f1a;font-family:Inter,system-ui,-apple-system,sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#0b0f1a;padding:32px 16px;">
+    <tr><td align="center">
+      <table width="100%" style="max-width:480px;background:#121826;border-radius:16px;border:1px solid #1e293b;overflow:hidden;">
+        <tr><td style="padding:28px 24px 8px;text-align:center;">
+          <div style="font-size:22px;font-weight:800;color:#f1f5f9;">⚡ MJ Hub</div>
+          <div style="margin-top:6px;font-size:12px;color:#64748b;letter-spacing:.06em;text-transform:uppercase;">Deposit confirmation</div>
+        </td></tr>
+        <tr><td style="padding:8px 24px 24px;">
+          <p style="margin:0 0 16px;font-size:15px;color:#cbd5e1;line-height:1.5;">Hi ${safeName},</p>
+          <p style="margin:0 0 20px;font-size:15px;color:#cbd5e1;line-height:1.5;">Your deposit was successful and has been credited to your wallet.</p>
+          <table width="100%" style="background:#0b0f1a;border-radius:12px;border:1px solid #1e293b;">
+            <tr><td style="padding:16px 18px;">
+              <div style="font-size:12px;color:#64748b;margin-bottom:4px;">Amount</div>
+              <div style="font-size:22px;font-weight:800;color:#60a5fa;margin-bottom:14px;">${amountLabel}</div>
+              <div style="font-size:13px;color:#94a3b8;line-height:1.6;">
+                <div><strong style="color:#e2e8f0;">Wallet:</strong> ${walletLabel}</div>
+                ${newBalanceLabel ? `<div><strong style="color:#e2e8f0;">New balance:</strong> ${newBalanceLabel}</div>` : ''}
+                ${reference ? `<div><strong style="color:#e2e8f0;">Reference:</strong> ${reference}</div>` : ''}
+              </div>
+            </td></tr>
+          </table>
+          <p style="margin:20px 0 0;font-size:13px;color:#64748b;line-height:1.5;">If you did not make this deposit, contact support immediately.</p>
+          <div style="margin-top:24px;text-align:center;">
+            <a href="${process.env.APP_URL || 'https://app.mjhub.store'}" style="display:inline-block;background:linear-gradient(135deg,#5b8af5,#7c5cfc);color:#fff;text-decoration:none;font-weight:700;font-size:14px;padding:12px 22px;border-radius:10px;">Open MJ Hub</a>
+          </div>
+        </td></tr>
+        <tr><td style="padding:16px 24px 24px;text-align:center;font-size:11px;color:#475569;">
+          © ${new Date().getFullYear()} MJ Hub · Secure payments
+        </td></tr>
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>`.trim();
+
+  try {
+    const res = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        from,
+        to: [to],
+        subject,
+        html
+      })
+    });
+    const json = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      console.error('[deposit-email] Resend error', res.status, json);
+      return { ok: false, error: json };
+    }
+    console.log('[deposit-email] sent', json?.id || '');
+    return { ok: true, id: json?.id };
+  } catch (e) {
+    console.error('[deposit-email] failed', e?.message || e);
+    return { ok: false, error: e?.message || String(e) };
+  }
+}
+
 async function creditUser(userId, amountNgn, reference) {
   // Wallet target was stored on the pending transaction / intent at checkout
   let wallet = 'ngn';
@@ -193,9 +275,22 @@ async function creditUser(userId, amountNgn, reference) {
 
   const { data: profile } = await supabase
     .from('profiles')
-    .select('balance, balance_usd, customer_id')
+    .select('balance, balance_usd, customer_id, email, full_name')
     .eq('id', userId)
     .maybeSingle();
+
+  // Resolve email (profile first, then auth user)
+  let email = profile?.email || null;
+  let displayName = profile?.full_name || null;
+  if (!email) {
+    try {
+      const { data: authUser } = await supabase.auth.admin.getUserById(userId);
+      email = authUser?.user?.email || null;
+      if (!displayName) {
+        displayName = authUser?.user?.user_metadata?.full_name || authUser?.user?.user_metadata?.name || null;
+      }
+    } catch (_) {}
+  }
 
   const amountUsd = Math.round((amountNgn / USD_RATE) * 10000) / 10000;
 
@@ -236,6 +331,17 @@ async function creditUser(userId, amountNgn, reference) {
         .update({ status: 'success', wallet: 'usd' })
         .eq('external_id', reference);
     } catch (_) {}
+
+    // Non-blocking email
+    sendDepositEmail({
+      to: email,
+      name: displayName,
+      amountLabel: `$${amountUsd.toFixed(2)}`,
+      walletLabel: 'USD Wallet',
+      reference,
+      newBalanceLabel: `$${nextUsd.toFixed(2)}`
+    }).catch(() => {});
+
     return { balance_usd: nextUsd, wallet: 'usd', amount_usd: amountUsd };
   }
 
@@ -276,6 +382,16 @@ async function creditUser(userId, amountNgn, reference) {
       .update({ status: 'success', wallet: 'ngn' })
       .eq('external_id', reference);
   } catch (_) {}
+
+  // Non-blocking email
+  sendDepositEmail({
+    to: email,
+    name: displayName,
+    amountLabel: `₦${amountNgn.toLocaleString()}`,
+    walletLabel: 'NGN Wallet',
+    reference,
+    newBalanceLabel: `₦${next.toLocaleString()}`
+  }).catch(() => {});
 
   return { balance: next, wallet: 'ngn' };
 }
