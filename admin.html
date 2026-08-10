@@ -106,6 +106,13 @@
       box-shadow: 0 4px 16px rgba(99,102,241,0.35);
     }
     .btn-primary:hover { background: linear-gradient(135deg, #4f46e5, #6d28d9); }
+    .btn-primary:disabled { opacity: 0.75; cursor: wait; pointer-events: none; transform: none; }
+    .btn-primary .btn-spinner {
+      display: inline-block; width: 14px; height: 14px;
+      border: 2px solid rgba(255,255,255,0.35); border-top-color: #fff;
+      border-radius: 50%; animation: authSpin 0.7s linear infinite; vertical-align: -2px;
+    }
+    @keyframes authSpin { to { transform: rotate(360deg); } }
     .btn-ghost { background:transparent; color:var(--muted); border:1px solid var(--border); }
     .btn-ghost:hover { border-color:var(--primary); color:#c7d2fe; background: var(--primary-soft); }
     .btn-sm { padding:7px 12px; font-size:12px; border-radius:8px; width:auto; }
@@ -338,7 +345,7 @@
           </button>
         </div>
       </div>
-      <button class="btn btn-primary" onclick="handleLogin()"><i class="fas fa-lock"></i> Sign In</button>
+      <button class="btn btn-primary" id="adminSignInBtn" onclick="handleLogin()"><i class="fas fa-lock"></i> Sign In</button>
       <div id="loginError" class="error-msg"></div>
     </div>
   </div>
@@ -1106,11 +1113,26 @@ async function handleLogin() {
   const email = document.getElementById('adminEmail').value.trim();
   const password = document.getElementById('adminPassword').value;
   const errEl = document.getElementById('loginError');
+  const btn = document.getElementById('adminSignInBtn');
   errEl.textContent = '';
   if (!email || !password) { errEl.textContent = 'Enter email and password.'; return; }
-  const { error } = await sb.auth.signInWithPassword({ email, password });
-  if (error) { errEl.textContent = error.message; return; }
-  await checkAuth();
+  if (btn) {
+    if (!btn.dataset.idleHtml) btn.dataset.idleHtml = btn.innerHTML;
+    btn.disabled = true;
+    btn.innerHTML = '<span class="btn-spinner"></span> Signing in…';
+  }
+  try {
+    const { error } = await sb.auth.signInWithPassword({ email, password });
+    if (error) {
+      errEl.textContent = error.message;
+      if (btn) { btn.disabled = false; btn.innerHTML = btn.dataset.idleHtml || '<i class="fas fa-lock"></i> Sign In'; }
+      return;
+    }
+    await checkAuth();
+  } catch (e) {
+    errEl.textContent = e.message || 'Sign in failed';
+    if (btn) { btn.disabled = false; btn.innerHTML = btn.dataset.idleHtml || '<i class="fas fa-lock"></i> Sign In'; }
+  }
 }
 async function handleLogout() {
   await sb.auth.signOut();

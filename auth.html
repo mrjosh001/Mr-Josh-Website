@@ -292,6 +292,30 @@
         .btn-submit:active {
             transform: translateY(0);
         }
+        .btn-submit:disabled {
+            opacity: 0.75;
+            cursor: wait;
+            transform: none;
+            pointer-events: none;
+        }
+        .btn-submit.is-loading {
+            position: relative;
+            letter-spacing: 0.2px;
+        }
+        .btn-submit.is-loading .btn-spinner {
+            display: inline-block;
+            width: 16px;
+            height: 16px;
+            border: 2px solid rgba(255,255,255,0.35);
+            border-top-color: #fff;
+            border-radius: 50%;
+            animation: authSpin 0.7s linear infinite;
+            vertical-align: -3px;
+            margin-right: 8px;
+        }
+        @keyframes authSpin {
+            to { transform: rotate(360deg); }
+        }
 
         .forgot-password-link {
             display: block;
@@ -462,7 +486,7 @@
                     <input type="checkbox" id="rememberMe"> Remember me for 24 hours
                 </label>
                 <a href="#" class="forgot-password-link" onclick="switchTab('forgot'); return false;">Forgot Password?</a>
-                <button type="submit" class="btn-submit">Sign In to Dashboard</button>
+                <button type="submit" class="btn-submit" id="signinSubmitBtn">Sign In to Dashboard</button>
             </form>
 
             <!-- Sign Up Form -->
@@ -487,7 +511,7 @@
                     <label>Choose Password</label>
                     <input type="password" id="signupPassword" required autocomplete="new-password" placeholder="••••••••">
                 </div>
-                <button type="submit" class="btn-submit">Register Account</button>
+                <button type="submit" class="btn-submit" id="signupSubmitBtn">Register Account</button>
             </form>
 
             <!-- Forgot Password Form -->
@@ -496,7 +520,7 @@
                     <label>Enter Your Email Address</label>
                     <input type="email" id="forgotEmail" required autocomplete="off" placeholder="name@example.com">
                 </div>
-                <button type="submit" class="btn-submit">Send Reset Instructions</button>
+                <button type="submit" class="btn-submit" id="forgotSubmitBtn">Send Reset Instructions</button>
                 <a href="#" class="back-to-signin" onclick="switchTab('signin'); return false;">← Back to Sign In</a>
             </form>
 
@@ -506,7 +530,7 @@
                     <label>New Password</label>
                     <input type="password" id="newPassword" required autocomplete="new-password" placeholder="••••••••">
                 </div>
-                <button type="submit" class="btn-submit">Update Password</button>
+                <button type="submit" class="btn-submit" id="updatePassSubmitBtn">Update Password</button>
             </form>
 
             <div class="divider">Secure Access</div>
@@ -663,21 +687,40 @@
             successEl.classList.remove('hidden');
         }
 
+
+        function setAuthButtonLoading(btn, loading, loadingText) {
+            if (!btn) return;
+            if (loading) {
+                if (!btn.dataset.idleHtml) btn.dataset.idleHtml = btn.innerHTML;
+                btn.disabled = true;
+                btn.classList.add('is-loading');
+                btn.innerHTML = '<span class="btn-spinner"></span>' + (loadingText || 'Please wait…');
+            } else {
+                btn.disabled = false;
+                btn.classList.remove('is-loading');
+                if (btn.dataset.idleHtml) btn.innerHTML = btn.dataset.idleHtml;
+            }
+        }
+
         async function handleSignIn(e) {
             e.preventDefault();
             const email = document.getElementById('signinEmail').value.trim();
             const password = document.getElementById('signinPassword').value.trim();
             const rememberMe = document.getElementById('rememberMe').checked;
+            const btn = document.getElementById('signinSubmitBtn') || (e.submitter) || e.target.querySelector('.btn-submit');
+            setAuthButtonLoading(btn, true, 'Signing in…');
 
             let data, error;
             try {
                 ({ data, error } = await supabaseClient.auth.signInWithPassword({ email, password }));
             } catch (e) {
+                setAuthButtonLoading(btn, false);
                 showError(formatAuthError(e));
                 return;
             }
 
             if (error) {
+                setAuthButtonLoading(btn, false);
                 if (isBannedError(error)) {
                     showBannedError();
                 } else {
@@ -698,6 +741,7 @@
                     .maybeSingle();
                 if (profile && profile.is_banned) {
                     await supabaseClient.auth.signOut();
+                    setAuthButtonLoading(btn, false);
                     showBannedError();
                     return;
                 }
@@ -740,6 +784,8 @@
             const phone = document.getElementById('phoneNumber').value.trim();
             const email = document.getElementById('emailAddress').value.trim();
             const password = document.getElementById('signupPassword').value.trim();
+            const btn = document.getElementById('signupSubmitBtn') || e.target.querySelector('.btn-submit');
+            setAuthButtonLoading(btn, true, 'Creating account…');
 
             let data, error;
             try {
@@ -760,12 +806,14 @@
                 }));
             } catch (e) {
                 console.error('signUp threw:', e);
+                setAuthButtonLoading(btn, false);
                 showError(formatAuthError(e));
                 return;
             }
 
             if (error) {
                 console.error('signUp error:', error);
+                setAuthButtonLoading(btn, false);
                 showError(formatAuthError(error));
                 return;
             }
@@ -793,28 +841,35 @@
         async function handleForgotPassword(e) {
             e.preventDefault();
             const email = document.getElementById('forgotEmail').value.trim();
+            const btn = document.getElementById('forgotSubmitBtn') || e.target.querySelector('.btn-submit');
+            setAuthButtonLoading(btn, true, 'Sending…');
 
             const { data, error } = await supabaseClient.auth.resetPasswordForEmail(email, {
                 redirectTo: window.location.origin + window.location.pathname
             });
 
             if (error) {
+                setAuthButtonLoading(btn, false);
                 showError(error.message);
                 return;
             }
 
+            setAuthButtonLoading(btn, false);
             showSuccess('Password reset instructions sent! Check your email inbox.');
         }
 
         async function handleUpdatePassword(e) {
             e.preventDefault();
             const newPassword = document.getElementById('newPassword').value.trim();
+            const btn = document.getElementById('updatePassSubmitBtn') || e.target.querySelector('.btn-submit');
+            setAuthButtonLoading(btn, true, 'Updating…');
 
             const { data, error } = await supabaseClient.auth.updateUser({
                 password: newPassword
             });
 
             if (error) {
+                setAuthButtonLoading(btn, false);
                 showError(error.message);
                 return;
             }
