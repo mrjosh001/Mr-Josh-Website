@@ -469,8 +469,10 @@ async function handleOrder(req, res) {
 
   // Site rule: never sell below 500 units. Supplier min wins if higher.
   const supplierMin = Number(service.min_quantity) || 1;
-  const minQ = Math.max(500, supplierMin);
-  const maxQ = Number(service.max_quantity) || 1000000;
+  let maxQ = Number(service.max_quantity) || 1000000;
+  if (maxQ < 1) maxQ = 1000000;
+  let minQ = Math.max(500, supplierMin);
+  if (minQ > maxQ) minQ = maxQ;
   if (quantity < minQ || quantity > maxQ) {
     return res.status(400).json({
       success: false,
