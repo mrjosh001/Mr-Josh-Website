@@ -327,6 +327,7 @@
               <div class="metric-card"><div class="metric-label">Logs Domain</div><div class="metric-value" id="balLogsdomain">—</div><div class="metric-sub" id="balLogsdomainSub">Loading…</div></div>
               <div class="metric-card"><div class="metric-label">GrizzlySMS</div><div class="metric-value" id="balGrizzly">—</div><div class="metric-sub" id="balGrizzlySub">Loading…</div></div>
               <div class="metric-card"><div class="metric-label">Sujan Dept.</div><div class="metric-value" id="balSujan">—</div><div class="metric-sub" id="balSujanSub">Loading…</div></div>
+              <div class="metric-card"><div class="metric-label">Owlet (Boosters)</div><div class="metric-value" id="balOwlet">—</div><div class="metric-sub" id="balOwletSub">Loading…</div></div>
             </div>
           </div>
           <div class="panel">
@@ -1073,7 +1074,7 @@ async function bulkRepriceNumbers(mode) {
 async function loadSupplierBalances() {
   const btn = document.getElementById('btnRefreshSupplierBalances');
   setBtnBusy(btn, true, 'Refreshing...');
-  ['Fadded', 'Logsdomain', 'Grizzly', 'Sujan'].forEach(p => {
+  ['Fadded', 'Logsdomain', 'Grizzly', 'Sujan', 'Owlet'].forEach(p => {
     const sub = document.getElementById('bal' + p + 'Sub');
     if (sub) sub.textContent = 'Loading…';
   });
