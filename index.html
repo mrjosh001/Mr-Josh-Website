@@ -1074,7 +1074,7 @@ body::before {
                 </div>
                 <ul class="dropdown-links">
                     <li><a href="#" onclick="goHome();return false;"><i class="fa-solid fa-house"></i> Dashboard</a></li>
-                    <li><a href="#" onclick="switchSection('profile');return false;"><i class="fa-solid fa-gear"></i> Settings</a></li>
+                    <li><a href="#" onclick="switchSection('profile'); openProfileSettings(); return false;"><i class="fa-solid fa-gear"></i> Settings</a></li>
                     <li><a href="#" onclick="switchSection('cart');return false;"><i class="fa-solid fa-cart-shopping"></i> Cart</a></li>
                     <li><a href="#" onclick="switchSection('orders');return false;"><i class="fa-solid fa-receipt"></i> My Orders</a></li>
                 </ul>
@@ -1242,7 +1242,37 @@ body::before {
                         <div class="profile-menu-icon icon-blue"><i class="fa-solid fa-gear"></i></div>
                         <div class="profile-menu-info">
                             <h4>Profile Settings</h4>
-                            <p>Name, phone, address and security</p>
+                            <p>Name, phone, address and bio</p>
+                        </div>
+                    </div>
+                    <div class="profile-menu-arrow">›</div>
+                </div>
+                <div class="profile-menu-item" onclick="openChangePasswordModal()">
+                    <div class="profile-menu-left">
+                        <div class="profile-menu-icon icon-blue"><i class="fa-solid fa-shield-halved"></i></div>
+                        <div class="profile-menu-info">
+                            <h4>Change Password</h4>
+                            <p>Update your security password</p>
+                        </div>
+                    </div>
+                    <div class="profile-menu-arrow">›</div>
+                </div>
+                <div class="profile-menu-item" onclick="handleLogout()">
+                    <div class="profile-menu-left">
+                        <div class="profile-menu-icon" style="background:rgba(239,68,68,0.15);color:var(--danger-color);"><i class="fa-solid fa-right-from-bracket"></i></div>
+                        <div class="profile-menu-info">
+                            <h4 style="color:var(--danger-color);">Log Out</h4>
+                            <p>Sign out of your session</p>
+                        </div>
+                    </div>
+                    <div class="profile-menu-arrow">›</div>
+                </div>
+                <div class="profile-menu-item" onclick="openDeleteAccountModal()">
+                    <div class="profile-menu-left">
+                        <div class="profile-menu-icon" style="background:rgba(239,68,68,0.15);color:var(--danger-color);"><i class="fa-solid fa-trash"></i></div>
+                        <div class="profile-menu-info">
+                            <h4 style="color:var(--danger-color);">Delete Account</h4>
+                            <p>Permanently remove your account and data</p>
                         </div>
                     </div>
                     <div class="profile-menu-arrow">›</div>
