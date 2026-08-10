@@ -2,8 +2,14 @@
   "cleanUrls": true,
   "trailingSlash": false,
   "rewrites": [
-    { "source": "/api/pocketfi-checkout", "destination": "/api/pocketfi" },
-    { "source": "/api/pocketfi-webhook", "destination": "/api/pocketfi" }
+    {
+      "source": "/api/pocketfi-checkout",
+      "destination": "/api/pocketfi"
+    },
+    {
+      "source": "/api/pocketfi-webhook",
+      "destination": "/api/pocketfi"
+    }
   ],
   "crons": [
     {
@@ -21,6 +27,10 @@
     {
       "path": "/api/products-logsdomain",
       "schedule": "0 5 * * *"
+    },
+    {
+      "path": "/api/owlet?action=sync",
+      "schedule": "0 7 * * *"
     }
   ],
   "functions": {
@@ -28,6 +38,9 @@
       "maxDuration": 300
     },
     "api/logsdomain-numbers.js": {
+      "maxDuration": 300
+    },
+    "api/owlet.js": {
       "maxDuration": 300
     }
   }
