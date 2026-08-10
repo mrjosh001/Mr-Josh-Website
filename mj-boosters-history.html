@@ -51,7 +51,7 @@ function fmt(n){return '₦'+Number(n||0).toLocaleString()}
   const res=await fetch('/api/owlet?action=my_orders&page_size=50',{headers});
   const json=await res.json();
   const el=document.getElementById('list');
-  if(!json.success){ el.innerHTML=`<div class="empty">${esc(json.message)}</div>`; return; }
+  if(!json.success){ el.innerHTML=`<div class="empty"><h3>Could not load orders</h3><p>${esc(json.message)}</p><p style="margin-top:10px;font-size:12px;">If you see “booster_orders”, run the SQL in Supabase then refresh.</p><a href="mj-boosters.html">Back to Boosters</a></div>`; return; }
   const rows=json.data||[];
   if(!rows.length){
     el.innerHTML=`<div class="empty"><div style="font-size:40px;margin-bottom:8px">⚡</div><h3>No boost orders yet</h3><p>Your growth orders will show here.</p><a href="mj-boosters.html">Place first boost</a></div>`;

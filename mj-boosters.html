@@ -297,7 +297,11 @@ async function placeOrder(){
       return;
     }
     if(data.new_balance!=null){ balance=Number(data.new_balance); document.getElementById('walletBal').textContent=fmt(balance); }
-    toast('🔥 Boost ordered! Track it in Orders');
+    if(data.history_saved===false){
+      toast(data.message||'Ordered, but history not saved — run SQL', 5000);
+    } else {
+      toast('🔥 Boost ordered! Track it in Orders');
+    }
     closeModal();
     setTimeout(()=>location.href='mj-boosters-history.html',900);
   }catch(e){ toast(e.message||'Network error'); }
