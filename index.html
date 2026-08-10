@@ -933,6 +933,30 @@ body::before {
 }
 .notif-list { max-height: 320px; overflow-y: auto; }
 .notif-empty { text-align: center; color: var(--muted); font-size: 13px; padding: 20px 0; }
+.notif-item.admin-broadcast .notif-title { color: var(--primary); }
+.notif-popup-overlay {
+  position: fixed; inset: 0; background: rgba(0,0,0,.55); backdrop-filter: blur(6px);
+  z-index: 200; display: none; align-items: center; justify-content: center; padding: 20px;
+}
+.notif-popup-overlay.open { display: flex; }
+.notif-popup-card {
+  width: 100%; max-width: 380px; background: var(--card); border: 1px solid var(--border);
+  border-radius: 20px; padding: 22px 20px 18px; box-shadow: 0 24px 60px rgba(0,0,0,.35);
+  animation: notifPopIn .22s ease;
+}
+@keyframes notifPopIn { from { opacity: 0; transform: scale(.94) translateY(8px); } to { opacity: 1; transform: none; } }
+.notif-popup-card .np-badge {
+  display: inline-flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 800;
+  text-transform: uppercase; letter-spacing: .04em; color: var(--primary);
+  background: rgba(91,138,245,.12); padding: 5px 10px; border-radius: 999px; margin-bottom: 12px;
+}
+.notif-popup-card h3 { font-size: 18px; font-weight: 900; margin: 0 0 8px; line-height: 1.3; }
+.notif-popup-card .np-body { font-size: 14px; color: var(--muted); line-height: 1.5; margin-bottom: 18px; white-space: pre-wrap; }
+.notif-popup-card .np-actions { display: flex; gap: 8px; }
+.notif-popup-card .np-actions button {
+  flex: 1; border: 0; border-radius: 12px; padding: 12px; font-weight: 800; font-size: 13px; cursor: pointer; font-family: inherit;
+}
+.notif-popup-card .np-ok { background: linear-gradient(135deg, var(--primary), #7c5cfc); color: #fff; }
 
 
 .drawer-hero {
@@ -1407,6 +1431,18 @@ body::before {
     </div>
 </div>
 
+<!-- Admin broadcast popup (shown once per notification) -->
+<div class="notif-popup-overlay" id="notifPopupOverlay">
+  <div class="notif-popup-card">
+    <div class="np-badge" id="npBadge"><i class="fa-solid fa-bullhorn"></i> <span id="npType">Announcement</span></div>
+    <h3 id="npTitle">Notification</h3>
+    <div class="np-body" id="npBody"></div>
+    <div class="np-actions">
+      <button type="button" class="np-ok" id="npOkBtn" onclick="dismissNotifPopup()">Got it</button>
+    </div>
+  </div>
+</div>
+
 <div id="support-widget" class="support-widget-container">
     <button id="support-toggle-btn" class="support-toggle-btn">
         <span class="support-icon"><i class="fa-solid fa-headset"></i></span>
@@ -1749,6 +1785,9 @@ document.addEventListener('DOMContentLoaded', async () => {
                 fetchUserSpendingSummary(currentUserId);
                 buildNotificationsFromActivity();
                 renderNotifications();
+                // Admin broadcasts → bell + one-time popup + realtime
+                await loadAdminNotifications();
+                subscribeNotifRealtime();
                 initCommunityBanner();
             } else {
                 // No active session — this page is the signed-in dashboard,
@@ -3301,45 +3340,193 @@ function renderHistoryList(filterType = 'all') {
     }).join('');
 }
 
-/* NOTIFICATIONS */
+/* NOTIFICATIONS — activity + admin broadcasts (realtime) */
+const SEEN_NOTIFS_KEY = 'mjhub_seen_notif_ids';
+let adminBroadcasts = [];
+let notifPopupQueue = [];
+let notifPopupShowing = false;
+let notifRealtimeChannel = null;
+
+function getSeenNotifIds() {
+  try {
+    const raw = localStorage.getItem(SEEN_NOTIFS_KEY);
+    const arr = raw ? JSON.parse(raw) : [];
+    return Array.isArray(arr) ? arr.map(String) : [];
+  } catch (_) { return []; }
+}
+function markNotifSeen(id) {
+  if (!id) return;
+  const seen = getSeenNotifIds();
+  const sid = String(id);
+  if (!seen.includes(sid)) {
+    seen.push(sid);
+    // keep last 100 only
+    const trimmed = seen.slice(-100);
+    try { localStorage.setItem(SEEN_NOTIFS_KEY, JSON.stringify(trimmed)); } catch (_) {}
+  }
+}
+function isNotifSeen(id) {
+  return getSeenNotifIds().includes(String(id));
+}
+
+function formatNotifTime(iso) {
+  if (!iso) return '';
+  try {
+    const d = new Date(iso);
+    if (isNaN(d.getTime())) return String(iso);
+    return d.toLocaleString();
+  } catch (_) { return String(iso); }
+}
+
 function buildNotificationsFromActivity() {
-    userNotifications = [];
-    if (transactions.length > 0) {
-        transactions.slice(0, 5).forEach(tx => {
-            userNotifications.push({
-                title: tx.title,
-                time: tx.date,
-                text: `${tx.subtitle || tx.title} - ${tx.amount}`
-            });
-        });
-    }
+  // Rebuild combined list: admin broadcasts first, then recent activity
+  const activity = [];
+  if (transactions && transactions.length > 0) {
+    transactions.slice(0, 5).forEach(tx => {
+      activity.push({
+        id: null,
+        source: 'activity',
+        title: tx.title,
+        time: tx.date,
+        text: `${tx.subtitle || tx.title} - ${tx.amount}`,
+        type: 'activity'
+      });
+    });
+  }
+  const adminItems = (adminBroadcasts || []).map(n => ({
+    id: n.id,
+    source: 'admin',
+    title: n.title,
+    time: formatNotifTime(n.created_at),
+    text: n.body || '',
+    type: n.type || 'announcement'
+  }));
+  userNotifications = [...adminItems, ...activity];
 }
 
 function renderNotifications() {
-    const list = document.getElementById('notifList');
-    const dot = document.getElementById('notifDot');
-    if (!list) return;
+  const list = document.getElementById('notifList');
+  const dot = document.getElementById('notifDot');
+  if (!list) return;
 
-    if (!userNotifications.length) {
-        list.innerHTML = `<div class="notif-empty">No activity yet</div>`;
-        if (dot) dot.style.display = 'none';
-        return;
-    }
+  if (!userNotifications.length) {
+    list.innerHTML = `<div class="notif-empty">No activity yet</div>`;
+    if (dot) dot.style.display = 'none';
+    return;
+  }
 
-    if (dot) dot.style.display = 'block';
-    list.innerHTML = userNotifications.map(n => `
-        <div class="notif-item">
-            <div class="notif-title">${escapeHtml(n.title)}</div>
-            <div style="color:var(--muted);font-size:12px;">${escapeHtml(n.text || '')}</div>
-            <div class="notif-time">${escapeHtml(n.time || '')}</div>
-        </div>`).join('');
+  // Dot only for unseen admin broadcasts
+  const hasUnseen = (adminBroadcasts || []).some(n => n.id && !isNotifSeen(n.id));
+  if (dot) dot.style.display = hasUnseen ? 'block' : 'none';
+
+  list.innerHTML = userNotifications.map(n => `
+    <div class="notif-item ${n.source === 'admin' ? 'admin-broadcast' : ''}">
+      <div class="notif-title">${escapeHtml(n.title)}${n.source === 'admin' ? ' · Admin' : ''}</div>
+      <div style="color:var(--muted);font-size:12px;">${escapeHtml(n.text || '')}</div>
+      <div class="notif-time">${escapeHtml(n.time || '')}</div>
+    </div>`).join('');
 }
 
 window.markAllNotifsRead = function() {
-    const dot = document.getElementById('notifDot');
-    if (dot) dot.style.display = 'none';
-    showToast('Notifications marked as read', 'info');
+  (adminBroadcasts || []).forEach(n => { if (n.id) markNotifSeen(n.id); });
+  const dot = document.getElementById('notifDot');
+  if (dot) dot.style.display = 'none';
+  showToast('Notifications marked as read', 'info');
 };
+
+async function loadAdminNotifications() {
+  if (!supabaseClient) return;
+  try {
+    const { data, error } = await supabaseClient
+      .from('notifications')
+      .select('id, title, body, type, created_at')
+      .is('user_id', null)
+      .order('created_at', { ascending: false })
+      .limit(30);
+    if (error) {
+      console.warn('loadAdminNotifications', error.message);
+      return;
+    }
+    adminBroadcasts = data || [];
+    buildNotificationsFromActivity();
+    renderNotifications();
+    queueUnseenPopups();
+  } catch (e) {
+    console.warn('loadAdminNotifications', e);
+  }
+}
+
+function queueUnseenPopups() {
+  const unseen = (adminBroadcasts || []).filter(n => n.id && !isNotifSeen(n.id));
+  // Newest first for popup queue
+  notifPopupQueue = unseen.slice().sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+  if (!notifPopupShowing) showNextNotifPopup();
+}
+
+function showNextNotifPopup() {
+  if (!notifPopupQueue.length) {
+    notifPopupShowing = false;
+    return;
+  }
+  notifPopupShowing = true;
+  const n = notifPopupQueue.shift();
+  const overlay = document.getElementById('notifPopupOverlay');
+  if (!overlay) { notifPopupShowing = false; return; }
+
+  document.getElementById('npTitle').textContent = n.title || 'Notification';
+  document.getElementById('npBody').textContent = n.body || '';
+  document.getElementById('npType').textContent = (n.type || 'announcement').replace(/_/g, ' ');
+  overlay.dataset.notifId = String(n.id);
+  overlay.classList.add('open');
+}
+
+window.dismissNotifPopup = function() {
+  const overlay = document.getElementById('notifPopupOverlay');
+  if (!overlay) return;
+  const id = overlay.dataset.notifId;
+  if (id) markNotifSeen(id);
+  overlay.classList.remove('open');
+  overlay.dataset.notifId = '';
+  // Brief pause then next
+  setTimeout(() => {
+    notifPopupShowing = false;
+    showNextNotifPopup();
+    buildNotificationsFromActivity();
+    renderNotifications();
+  }, 180);
+};
+
+function subscribeNotifRealtime() {
+  if (!supabaseClient || notifRealtimeChannel) return;
+  try {
+    notifRealtimeChannel = supabaseClient
+      .channel('admin-broadcasts')
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'notifications' },
+        (payload) => {
+          const row = payload?.new;
+          if (!row || row.user_id != null) return; // only global broadcasts
+          // Prepend if not already present
+          if (!adminBroadcasts.some(n => String(n.id) === String(row.id))) {
+            adminBroadcasts.unshift(row);
+          }
+          buildNotificationsFromActivity();
+          renderNotifications();
+          // Popup immediately if not seen
+          if (row.id && !isNotifSeen(row.id)) {
+            notifPopupQueue.unshift(row);
+            if (!notifPopupShowing) showNextNotifPopup();
+          }
+        }
+      )
+      .subscribe((status) => {
+        if (status === 'SUBSCRIBED') console.log('[notif] realtime connected');
+      });
+  } catch (e) {
+    console.warn('subscribeNotifRealtime', e);
+  }
+}
 
 window.openDeleteAccountModal = function() {
     const modal = document.getElementById('deleteAccountModal');
