@@ -310,22 +310,21 @@ function selectPlatform(p){
 }
 
 function renderCategoryTabs(){
-  const list=filteredCategories();
-  const el=document.getElementById('cats');
-  el.innerHTML = '<button class="tab'+(activeCategory?'':' active')+'" data-cat="">All in platform</button>' +
-    list.slice(0,40).map(c =>
-      `<button class="tab${activeCategory===c.name?' active':''}" data-cat="${esc(c.name)}">${esc(c.name)}</button>`
+  const list = filteredCategories();
+  const el = document.getElementById('cats');
+  el.innerHTML =
+    '<button type="button" class="tab' + (activeCategory ? '' : ' active') + '" data-idx="-1">All in platform</button>' +
+    list.slice(0, 50).map((c, i) =>
+      '<button type="button" class="tab' + (activeCategory === c.name ? ' active' : '') + '" data-idx="' + i + '">' + esc(c.name) + '</button>'
     ).join('');
-  el.querySelectorAll('.tab').forEach(btn=>{
-    btn.onclick=()=>{
-      activeCategory=btn.dataset.cat||'';
-      page=1;
+  el.querySelectorAll('.tab').forEach(btn => {
+    btn.onclick = () => {
+      const idx = parseInt(btn.getAttribute('data-idx'), 10);
+      activeCategory = (idx < 0 || Number.isNaN(idx)) ? '' : (list[idx] ? list[idx].name : '');
+      page = 1;
       renderCategoryTabs();
-      if(!activeCategory){
-        showCategoryCards(filteredCategories());
-      } else {
-        loadServices();
-      }
+      if (!activeCategory) showCategoryCards(filteredCategories());
+      else loadServices();
     };
   });
 }
@@ -337,14 +336,31 @@ function showCategoryCards(list){
     document.getElementById('pager').innerHTML='';
     return;
   }
-  content.innerHTML=list.map(c=>`
-    <div class="card" onclick="activeCategory=${JSON.stringify(c.name)};page=1;renderCategoryTabs();loadServices()">
-      <div class="icon">${iconFor(c.name,'')}</div>
-      <h3>${esc(c.name)}</h3>
-      <div class="meta">${c.count} services</div>
-      <div class="price">Open →</div>
-    </div>`).join('');
-  document.getElementById('pager').innerHTML=`<span>${list.length} categories</span>`;
+  // Do NOT put category names in inline onclick — names contain |, emojis, quotes and break HTML.
+  content.innerHTML = list.map((c, i) =>
+    '<div class="card cat-card" data-idx="' + i + '" role="button" tabindex="0">' +
+      '<div class="icon">' + iconFor(c.name, '') + '</div>' +
+      '<h3>' + esc(c.name) + '</h3>' +
+      '<div class="meta">' + c.count + ' services</div>' +
+      '<div class="price">Open →</div>' +
+    '</div>'
+  ).join('');
+  content.querySelectorAll('.cat-card').forEach(card => {
+    const idx = parseInt(card.getAttribute('data-idx'), 10);
+    const cat = list[idx];
+    if (!cat) return;
+    const open = () => {
+      activeCategory = cat.name;
+      page = 1;
+      renderCategoryTabs();
+      loadServices();
+    };
+    card.onclick = open;
+    card.onkeydown = (e) => {
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); open(); }
+    };
+  });
+  document.getElementById('pager').innerHTML = '<span>' + list.length + ' categories</span>';
 }
 
 async function loadCatalog(){
