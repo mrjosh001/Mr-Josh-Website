@@ -14,7 +14,7 @@ import { createClient } from '@supabase/supabase-js';
  *   status   — order status { order }
  *
  * Configured Exchange Rate: $1 = ₦1450 NGN
- * Markup 35% (OWLET_MARKUP_PERCENT). Rate currency AUTO/USD/NGN via OWLET_RATE_CURRENCY.
+ * Markup random 35%–70% (or fixed via OWLET_MARKUP_PERCENT). Rate currency AUTO/USD/NGN via OWLET_RATE_CURRENCY.
  */
 
 const OWLET_URL = 'https://theowlet.com/api/v2';
@@ -26,14 +26,15 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY
 );
 
-// Markup: fixed default 35% (override with OWLET_MARKUP_PERCENT env)
+// Markup: random 35%–70% per service (override with OWLET_MARKUP_PERCENT env for fixed)
 // Owlet rate currency depends on the panel wallet.
 // Docs examples use USD, but Naira accounts often return rate already in NGN.
 // Force with env OWLET_RATE_CURRENCY=USD or NGN.
 function getMarkupPercent() {
   const env = Number(process.env.OWLET_MARKUP_PERCENT);
   if (Number.isFinite(env) && env >= 0 && env <= 200) return env;
-  return 35;
+  // Random profit margin between 35% and 70%
+  return Math.floor(Math.random() * (70 - 35 + 1)) + 35;
 }
 
 function getRateCurrency() {
@@ -321,7 +322,7 @@ async function handleSync(req, res) {
     cursor,
     upserted_this_run: upserted,
     rate_currency_mode: getRateCurrency(),
-    markup_percent: getMarkupPercent(),
+    markup_range: '35%–70% (random per service)',
     usd_to_ngn: USD_TO_NGN,
     errors: errors.slice(0, 5)
   });
