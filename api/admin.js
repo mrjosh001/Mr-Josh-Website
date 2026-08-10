@@ -608,9 +608,10 @@ async function getOverviewStats(body) {
   const cutoff = new Date(Date.now() - PERIOD_DAYS[period] * 86400000).toISOString();
   const usdToNgn = Number(process.env.USD_TO_NGN_RATE) || 1500;
 
-  const [logsRes, smsRes] = await Promise.all([
+  const [logsRes, smsRes, boostRes] = await Promise.all([
     supabase.from('orders').select('status', { count: 'exact', head: false }).in('status', ['completed', 'paid', 'success']).gte('created_at', cutoff),
-    supabase.from('number_orders').select('price, supplier_price').eq('status', 'completed').gte('created_at', cutoff)
+    supabase.from('number_orders').select('price, supplier_price').eq('status', 'completed').gte('created_at', cutoff),
+    supabase.from('booster_orders').select('price_ngn, charge_usd, quantity, status, created_at').gte('created_at', cutoff)
   ]);
 
   if (logsRes.error) return { status: 500, body: { success: false, message: 'Logs stats failed: ' + logsRes.error.message } };
@@ -618,11 +619,32 @@ async function getOverviewStats(body) {
 
   const smsRows = smsRes.data || [];
   const smsAmountSpent = smsRows.reduce((s, r) => s + Number(r.price || 0), 0);
-  // supplier_price is only populated for orders placed after this field was
-  // added — older completed orders fall back to 0 cost (so profit for them
-  // reads as 100% of the price, i.e. the number is a slight over-estimate
-  // for any order placed before this tracking existed, never an under-estimate).
   const smsProfit = smsRows.reduce((s, r) => s + (Number(r.price || 0) - (Number(r.supplier_price || 0) * usdToNgn)), 0);
+
+  // Boosters: never fail the whole overview if this table is missing/empty
+  let boostRows = [];
+  if (boostRes.error) {
+    console.warn('[overview] booster_orders:', boostRes.error.message);
+    // Retry with minimal columns
+    const retry = await supabase.from('booster_orders').select('price_ngn, status, created_at').gte('created_at', cutoff);
+    if (!retry.error) boostRows = retry.data || [];
+  } else {
+    boostRows = boostRes.data || [];
+  }
+  boostRows = boostRows.filter(r => {
+    const st = String(r.status || '').toLowerCase();
+    return !['failed', 'cancelled', 'canceled', 'refunded'].includes(st);
+  });
+  const boostOrderCount = boostRows.length;
+  const boostAmountSpent = boostRows.reduce((s, r) => s + Number(r.price_ngn || 0), 0);
+  const boostProfit = boostRows.reduce((s, r) => {
+    const paid = Number(r.price_ngn || 0);
+    let cost = 0;
+    if (r.charge_usd != null && Number(r.charge_usd) > 0) {
+      cost = Number(r.charge_usd) * usdToNgn;
+    }
+    return s + (paid - cost);
+  }, 0);
 
   return {
     status: 200,
@@ -632,7 +654,10 @@ async function getOverviewStats(body) {
       logs_sold_count: logsRes.count || 0,
       sms_order_count: smsRows.length,
       sms_amount_spent: Math.round(smsAmountSpent),
-      sms_profit: Math.round(smsProfit)
+      sms_profit: Math.round(smsProfit),
+      boost_order_count: boostOrderCount,
+      boost_amount_spent: Math.round(boostAmountSpent),
+      boost_profit: Math.round(boostProfit)
     }
   };
 }
