@@ -6,7 +6,6 @@ import { createClient } from '@supabase/supabase-js';
  * Base: POST https://theowlet.com/api/v2
  *
  * Admin-only for interactive use. Cron may call ?action=sync with CRON_SECRET.
- * Not wired to the user dashboard yet.
  *
  * Actions:
  *   balance  — Owlet wallet NGN balance
@@ -14,20 +13,23 @@ import { createClient } from '@supabase/supabase-js';
  *   sync     — pull services into booster_services (Supabase)
  *   status   — order status { order }
  *
- * Env: OWLET_API_KEY, SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY
- * Optional: OWLET_MARKUP_PERCENT (default 50 → sell at 1.5× rate)
- * Optional: USD_TO_NGN_RATE (default 1500) for internal USD conversion display
+ * Configured Exchange Rate: $1 = ₦1450 NGN
+ * Configured Selling Markup: Random percentage between 25% and 50%
  */
 
 const OWLET_URL = 'https://theowlet.com/api/v2';
 const OWLET_KEY = process.env.OWLET_API_KEY;
-const MARKUP = Number(process.env.OWLET_MARKUP_PERCENT ?? 50); // 50% → 1.5×
-const USD_TO_NGN = Number(process.env.USD_TO_NGN_RATE) || 1500;
+const USD_TO_NGN = Number(process.env.USD_TO_NGN_RATE) || 1450;
 
 const supabase = createClient(
   process.env.SUPABASE_URL,
   process.env.SUPABASE_SERVICE_ROLE_KEY
 );
+
+// Helper to generate a random markup percentage between 25% and 50%
+function getRandomMarkup() {
+  return Math.floor(Math.random() * (50 - 25 + 1)) + 25; // Random integer between 25 and 50
+}
 
 async function requireAdmin(req) {
   const authHeader = req.headers.authorization || '';
@@ -71,19 +73,21 @@ async function owletCall(params) {
   return { ok: res.ok, status: res.status, json };
 }
 
-// Owlet returns rates in NGN directly
-function sellPriceNgn(rateNgn) {
+// Calculate selling price in NGN with dynamic/random markup
+function sellPriceNgn(rateNgn, markupPercent) {
   const r = Number(rateNgn) || 0;
-  return Math.ceil(r * (1 + MARKUP / 100));
+  const markup = markupPercent ?? getRandomMarkup();
+  return Math.ceil(r * (1 + markup / 100));
 }
 
+// Calculate USD supplier rate equivalent using 1450 exchange rate
 function supplierUsd(rateNgn) {
   const r = Number(rateNgn) || 0;
   return Math.round((r / USD_TO_NGN) * 10000) / 10000;
 }
 
-function sellPriceUsd(rateNgn) {
-  return supplierUsd(sellPriceNgn(rateNgn));
+function sellPriceUsd(rateNgn, markupPercent) {
+  return supplierUsd(sellPriceNgn(rateNgn, markupPercent));
 }
 
 async function handleBalance(req, res) {
@@ -111,20 +115,23 @@ async function handleServices(req, res) {
       raw: json
     });
   }
-  const data = json.map(s => ({
-    service_id: String(s.service),
-    name: s.name,
-    type: s.type,
-    category: s.category,
-    supplier_rate_ngn: Number(s.rate) || 0,
-    supplier_rate_usd: supplierUsd(s.rate),
-    rate_usd: sellPriceUsd(s.rate),
-    rate_ngn: sellPriceNgn(s.rate),
-    min: Number(s.min) || 0,
-    max: Number(s.max) || 0,
-    refill: !!s.refill,
-    cancel: !!s.cancel
-  }));
+  const data = json.map(s => {
+    const randomMarkup = getRandomMarkup();
+    return {
+      service_id: String(s.service),
+      name: s.name,
+      type: s.type,
+      category: s.category,
+      supplier_rate_ngn: Number(s.rate) || 0,
+      supplier_rate_usd: supplierUsd(s.rate),
+      rate_usd: sellPriceUsd(s.rate, randomMarkup),
+      rate_ngn: sellPriceNgn(s.rate, randomMarkup),
+      min: Number(s.min) || 0,
+      max: Number(s.max) || 0,
+      refill: !!s.refill,
+      cancel: !!s.cancel
+    };
+  });
   return res.status(200).json({ success: true, count: data.length, data });
 }
 
@@ -199,8 +206,12 @@ async function handleSync(req, res) {
     const rows = slice.map(s => {
       const serviceId = String(s.service);
       const rawNgn = Number(s.rate) || 0;
-      const supplierUsdVal = supplierUsd(rawNgn); // Calculates actual USD equivalent (~$7.11)
-      const defaultNgn = sellPriceNgn(rawNgn);     // Applies markup directly to NGN rate
+      const supplierUsdVal = supplierUsd(rawNgn); // Converts NGN to USD at ₦1450/$ rate
+      
+      // Picks a unique random markup between 25% and 50% for this service
+      const randomMarkup = getRandomMarkup(); 
+      const defaultNgn = sellPriceNgn(rawNgn, randomMarkup);
+
       const prev = map.get(serviceId);
       const manual = prev && prev.price_source === 'manual';
       return {
