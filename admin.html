@@ -561,12 +561,12 @@
 
           <div class="card">
             <div style="display:flex;flex-wrap:wrap;gap:10px;margin-bottom:12px;align-items:center;">
-              <input type="search" id="owletSearch" placeholder="Search service name or category…" style="flex:1;min-width:180px;" oninput="renderOwletServices()">
-              <select id="owletCategoryFilter" onchange="renderOwletServices()">
+              <input type="search" id="owletSearch" placeholder="Search service name or category…" style="flex:1;min-width:180px;" onkeydown="if(event.key==='Enter'){owletPage=1;loadOwletServicesFromDb()}">
+              <select id="owletCategoryFilter" onchange="owletPage=1;loadOwletServicesFromDb()">
                 <option value="">All categories</option>
               </select>
               <label style="font-size:12px;display:flex;align-items:center;gap:6px;">
-                <input type="checkbox" id="owletHideUnavailable" checked onchange="renderOwletServices()"> Hide unavailable
+                <input type="checkbox" id="owletHideUnavailable" checked onchange="owletPage=1;loadOwletServicesFromDb()"> Hide unavailable
               </label>
             </div>
             <div class="table-wrap desktop-only">
@@ -3057,46 +3057,82 @@ async function syncOwletServices() {
   }
 }
 
+
+let owletPage = 1;
+let owletTotal = 0;
+
 async function loadOwletServicesFromDb() {
+  const tbody = document.getElementById('owletTableBody');
+  const cards = document.getElementById('owletMobileCards');
   try {
-    const { data, error } = await sb.from('booster_services')
-      .select('id,source,service_id,name,category,service_type,supplier_rate_usd,price_ngn,price_source,min_quantity,max_quantity,refill,cancel,is_available,updated_at')
-      .eq('source', 'owlet')
-      .order('category', { ascending: true });
-    if (error) throw error;
-    allOwletServices = data || [];
-    const cats = [...new Set(allOwletServices.map(s => s.category).filter(Boolean))].sort();
+    const headers = await authHeaders();
+    if (!headers.Authorization) {
+      if (tbody) tbody.innerHTML = '<tr><td colspan="9" class="empty-state">Sign in again to load services.</td></tr>';
+      return;
+    }
+    const q = (document.getElementById('owletSearch')?.value || '').trim();
+    const cat = document.getElementById('owletCategoryFilter')?.value || '';
+    const hide = document.getElementById('owletHideUnavailable')?.checked !== false ? '1' : '0';
+    const params = new URLSearchParams({
+      action: 'list',
+      page: String(owletPage),
+      page_size: '100',
+      hide_unavailable: hide
+    });
+    if (q) params.set('q', q);
+    if (cat) params.set('category', cat);
+
+    const res = await fetch('/api/owlet?' + params.toString(), { headers });
+    const data = await res.json();
+    if (!data.success) {
+      const msg = data.message || 'Could not load services';
+      if (tbody) tbody.innerHTML = `<tr><td colspan="9" class="empty-state">${escapeHtml(msg)}</td></tr>`;
+      if (cards) cards.innerHTML = `<div class="empty-state">${escapeHtml(msg)}</div>`;
+      showAdminToast(msg, 'error');
+      return;
+    }
+    allOwletServices = data.data || [];
+    owletTotal = data.total || 0;
+    const cats = data.categories || [];
     const sel = document.getElementById('owletCategoryFilter');
     if (sel) {
       const cur = sel.value;
       sel.innerHTML = '<option value="">All categories</option>' + cats.map(c => `<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join('');
-      sel.value = cur;
+      if ([...sel.options].some(o => o.value === cur)) sel.value = cur;
     }
     renderOwletServices();
   } catch (e) {
-    const tbody = document.getElementById('owletTableBody');
-    if (tbody) tbody.innerHTML = `<tr><td colspan="9" class="empty-state">${escapeHtml(e.message || String(e))}<br><span style="opacity:.7">Run booster_services.sql in Supabase if the table is missing.</span></td></tr>`;
+    if (tbody) tbody.innerHTML = `<tr><td colspan="9" class="empty-state">${escapeHtml(e.message || String(e))}</td></tr>`;
   }
 }
 
 function renderOwletServices() {
-  const q = (document.getElementById('owletSearch')?.value || '').trim().toLowerCase();
-  const cat = document.getElementById('owletCategoryFilter')?.value || '';
-  const hide = document.getElementById('owletHideUnavailable')?.checked !== false;
-  let list = allOwletServices.slice();
-  if (cat) list = list.filter(s => s.category === cat);
-  if (hide) list = list.filter(s => s.is_available !== false);
-  if (q) list = list.filter(s =>
-    (s.name || '').toLowerCase().includes(q) ||
-    (s.category || '').toLowerCase().includes(q) ||
-    String(s.service_id).includes(q)
-  );
-
+  const list = allOwletServices || [];
   const tbody = document.getElementById('owletTableBody');
   const cards = document.getElementById('owletMobileCards');
+  const maxPage = Math.max(1, Math.ceil((owletTotal || 0) / 100));
+
+  // Ensure pager exists
+  let pager = document.getElementById('owletPager');
+  if (!pager) {
+    const wrap = document.getElementById('owletTableBody')?.closest('.card') || document.getElementById('tab-boosters');
+    if (wrap) {
+      pager = document.createElement('div');
+      pager.id = 'owletPager';
+      pager.style.cssText = 'display:flex;gap:8px;align-items:center;justify-content:center;margin-top:12px;flex-wrap:wrap;';
+      wrap.appendChild(pager);
+    }
+  }
+  if (pager) {
+    pager.innerHTML = `
+      <button class="btn btn-ghost btn-sm" ${owletPage <= 1 ? 'disabled' : ''} onclick="owletPage=Math.max(1,owletPage-1);loadOwletServicesFromDb()">Prev</button>
+      <span style="font-size:12px;color:var(--muted);">Page ${owletPage} / ${maxPage} · ${owletTotal} services</span>
+      <button class="btn btn-ghost btn-sm" ${owletPage >= maxPage ? 'disabled' : ''} onclick="owletPage=owletPage+1;loadOwletServicesFromDb()">Next</button>`;
+  }
+
   if (!list.length) {
-    if (tbody) tbody.innerHTML = '<tr><td colspan="9" class="empty-state">No services match. Sync or clear filters.</td></tr>';
-    if (cards) cards.innerHTML = '<div class="empty-state">No services match.</div>';
+    if (tbody) tbody.innerHTML = '<tr><td colspan="9" class="empty-state">No services on this page. Try another page or clear filters.</td></tr>';
+    if (cards) cards.innerHTML = '<div class="empty-state">No services on this page.</div>';
     return;
   }
   if (tbody) {
@@ -3124,6 +3160,9 @@ function renderOwletServices() {
       </div>`).join('');
   }
 }
+
+
+
 
 async function editOwletService(id) {
   const s = allOwletServices.find(x => String(x.id) === String(id));
