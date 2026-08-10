@@ -98,7 +98,8 @@
     .hidden { display:none !important; }
     .shell { display:flex; min-height:100vh; }
     .sidebar {
-      width:260px; background:var(--card); border-right:1px solid var(--border);
+      width:260px; background: linear-gradient(180deg, #0d1322 0%, #0a0f1a 100%);
+      border-right:1px solid var(--border);
       display:flex; flex-direction:column; position:fixed; top:0; left:0; bottom:0; z-index:50;
       transition:transform .25s ease;
     }
@@ -120,13 +121,18 @@
       font-size:13.5px; font-weight:600; font-family:inherit; text-align:left; cursor:pointer;
     }
     .nav-item:hover { background:rgba(59,130,246,.08); color:var(--text); }
-    .nav-item.active { background:var(--primary-glow); color:var(--primary); border-color:rgba(59,130,246,.25); }
+    .nav-item.active {
+      background: linear-gradient(135deg, rgba(59,130,246,.18), rgba(139,92,246,.12));
+      color:#93c5fd; border-color:rgba(59,130,246,.35);
+      box-shadow: 0 0 0 1px rgba(59,130,246,.08);
+    }
     .nav-item i { width:18px; text-align:center; }
     .sidebar-footer { padding:16px 18px; border-top:1px solid var(--border); }
     .main { flex:1; margin-left:260px; min-height:100vh; display:flex; flex-direction:column; width:calc(100% - 260px); }
     .topbar {
       height:72px; display:flex; align-items:center; justify-content:space-between; padding:0 16px;
-      border-bottom:1px solid var(--border); background:rgba(13,19,34,.85); backdrop-filter:blur(12px);
+      border-bottom:1px solid var(--border);
+      background:rgba(7,9,14,.72); backdrop-filter:blur(16px) saturate(1.2);
       position:sticky; top:0; z-index:40;
     }
     .topbar h2 { font-size:18px; font-weight:800; }
@@ -136,11 +142,20 @@
     }
     .content { padding:12px; flex:1; width:100%; max-width:100%; overflow-x:hidden; }
     .metrics { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px; margin-bottom:16px; }
-    .metric-card { background:var(--card); border:1px solid var(--border); border-radius:var(--radius); padding:14px; }
-    .metric-label { font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.5px; color:var(--muted); margin-bottom:8px; }
-    .metric-value { font-size:20px; font-weight:800; }
-    .metric-sub { font-size:12px; color:var(--muted); margin-top:4px; }
-    .panel { background:var(--card); border:1px solid var(--border); border-radius:var(--radius); padding:14px; margin-bottom:16px; overflow:hidden; }
+    .metric-card {
+      background: linear-gradient(165deg, rgba(59,130,246,.06) 0%, var(--card) 42%);
+      border:1px solid var(--border); border-radius:var(--radius); padding:16px 14px;
+      transition: border-color .2s ease, box-shadow .2s ease;
+    }
+    .metric-card:hover { border-color: rgba(59,130,246,.35); box-shadow: 0 8px 28px rgba(0,0,0,.25); }
+    .metric-label { font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.55px; color:var(--muted); margin-bottom:8px; }
+    .metric-value { font-size:22px; font-weight:800; letter-spacing: -0.02em; }
+    .metric-sub { font-size:12px; color:var(--muted); margin-top:5px; }
+    .panel {
+      background:var(--card); border:1px solid var(--border); border-radius:18px;
+      padding:16px; margin-bottom:18px; overflow:hidden;
+      box-shadow: 0 1px 0 rgba(255,255,255,.03) inset, 0 12px 40px rgba(0,0,0,.18);
+    }
     .panel-header { display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:8px; margin-bottom:14px; }
     .panel-title { font-size:16px; font-weight:700; }
     .search-row { display:grid; grid-template-columns:1fr; gap:8px; margin-bottom:12px; }
@@ -231,7 +246,7 @@
   <div id="loginScreen" class="login-wrap">
     <div class="login-card">
       <img class="login-logo-img" src="https://atczodlljmlayvldxfmv.supabase.co/storage/v1/object/public/avatars/dark%20background%20log" alt="MJ HUB">
-      <p>Admin portal — sign in with an admin account</p>
+      <p>Sign in with an admin account</p>
       <div class="field"><label>Email</label><input type="email" id="adminEmail" placeholder="admin@example.com" /></div>
       <div class="field">
         <label>Password</label>
@@ -313,9 +328,17 @@
           <div class="panel">
             <div class="panel-header"><div class="panel-title">SMS Numbers</div></div>
             <div class="metrics" style="margin-bottom:0;">
-              <div class="metric-card"><div class="metric-label">Orders</div><div class="metric-value" id="mSmsOrderCount">0</div><div class="metric-sub" id="mSmsOrderPeriodLabel">This Month · Completed</div></div>
-              <div class="metric-card"><div class="metric-label">Amount Spent</div><div class="metric-value" id="mSmsAmountSpent">₦0</div><div class="metric-sub">By customers on numbers</div></div>
-              <div class="metric-card"><div class="metric-label">Profit Made</div><div class="metric-value" id="mSmsProfit" style="color:#34d399;">₦0</div><div class="metric-sub">Revenue minus supplier cost</div></div>
+              <div class="metric-card"><div class="metric-label">Orders</div><div class="metric-value" id="mSmsOrderCount">0</div><div class="metric-sub" id="mSmsOrderPeriodLabel">This Month</div></div>
+              <div class="metric-card"><div class="metric-label">Amount Spent</div><div class="metric-value" id="mSmsAmountSpent">₦0</div><div class="metric-sub">Customer spend</div></div>
+              <div class="metric-card"><div class="metric-label">Profit Made</div><div class="metric-value" id="mSmsProfit" style="color:#34d399;">₦0</div><div class="metric-sub">After supplier cost</div></div>
+            </div>
+          </div>
+          <div class="panel">
+            <div class="panel-header"><div class="panel-title">MJ Boosters</div></div>
+            <div class="metrics" style="margin-bottom:0;">
+              <div class="metric-card"><div class="metric-label">Total Orders</div><div class="metric-value" id="mBoostOrderCount">0</div><div class="metric-sub" id="mBoostOrderPeriodLabel">This Month</div></div>
+              <div class="metric-card"><div class="metric-label">Amount Spent</div><div class="metric-value" id="mBoostAmountSpent">₦0</div><div class="metric-sub">Customer spend</div></div>
+              <div class="metric-card"><div class="metric-label">Profit Made</div><div class="metric-value" id="mBoostProfit" style="color:#34d399;">₦0</div><div class="metric-sub">After supplier cost</div></div>
             </div>
           </div>
           <div class="panel">
@@ -403,7 +426,7 @@
               </div>
             </div>
             <p style="color:#94a3b8;font-size:13px;margin:-4px 0 4px;">
-              Syncing pulls the latest country, service, supplier price, and stock from GrizzlySMS or LogsDomain. Your own selling price is never overwritten by a sync — edit it manually below, or use "Price Unpriced Numbers" to bulk-apply the standard markup to anything still sitting at ₦0.
+              Sync updates country, service, supplier price and stock. Your selling price is never overwritten.
             </p>
             <p id="grizzlySyncProgress" style="color:var(--primary,#3b82f6);font-size:12px;font-weight:700;margin:0 0 4px;min-height:16px;"></p>
             <p id="logsdomainSyncProgress" style="color:var(--primary,#3b82f6);font-size:12px;font-weight:700;margin:0 0 14px;min-height:16px;"></p>
@@ -436,7 +459,7 @@
               <div class="panel-title">SMS Orders — Customer Purchases</div>
             </div>
             <p style="color:#94a3b8;font-size:13px;margin:-4px 0 4px;">
-              Every number a customer has bought, the code they got (if any), and whether it's still waiting, completed, or was cancelled &amp; refunded.
+              Customer number purchases, codes, and order status.
             </p>
             <div class="search-row" style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;">
               <input type="text" id="smsOrdersSearch" placeholder="Search by Customer ID, service, or number…" oninput="filterSmsOrders()" style="flex:1;min-width:200px;" />
@@ -550,8 +573,8 @@
           <div class="card" style="margin-bottom:16px;">
             <div style="display:flex;flex-wrap:wrap;gap:12px;align-items:center;justify-content:space-between;">
               <div>
-                <h3 style="margin:0 0 4px;">MJ Boosters — The Owlet</h3>
-                <p style="margin:0;font-size:13px;color:var(--muted);">Admin only. Catalog syncs into <code>booster_services</code>. Wallet balance is on <strong>Overview</strong> with the other suppliers. Not on user dashboard yet.</p>
+                <h3 style="margin:0 0 4px;">MJ Boosters</h3>
+                <p style="margin:0;font-size:13px;color:var(--muted);">Owlet catalog and pricing. Supplier balance is on Overview.</p>
               </div>
               <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;">
                 <button class="btn btn-primary btn-sm" id="btnOwletSync" onclick="syncOwletServices()"><i class="fas fa-sync"></i> Sync Services</button>
@@ -599,8 +622,8 @@
           <div class="card" style="margin-bottom:16px;">
             <div style="display:flex;flex-wrap:wrap;gap:12px;align-items:center;justify-content:space-between;">
               <div>
-                <h3 style="margin:0 0 4px;">MJ Booster Orders</h3>
-                <p style="margin:0;font-size:13px;color:var(--muted);">Customer boost orders from The Owlet. Search by order ID, service, customer ID or link.</p>
+                <h3 style="margin:0 0 4px;">Booster Orders</h3>
+                <p style="margin:0;font-size:13px;color:var(--muted);">Search by order ID, service, customer ID or link.</p>
               </div>
               <button class="btn btn-secondary btn-sm" onclick="loadBoosterOrders()"><i class="fas fa-sync"></i> Refresh</button>
             </div>
@@ -1931,12 +1954,17 @@ async function loadOverviewStats(period) {
       return;
     }
 
-    set('mLogsSoldCount', data.logs_sold_count.toLocaleString());
-    set('mSmsOrderCount', data.sms_order_count.toLocaleString());
-    set('mSmsAmountSpent', '₦' + data.sms_amount_spent.toLocaleString());
-    set('mSmsProfit', '₦' + data.sms_profit.toLocaleString());
+    set('mLogsSoldCount', (data.logs_sold_count || 0).toLocaleString());
+    set('mSmsOrderCount', (data.sms_order_count || 0).toLocaleString());
+    set('mSmsAmountSpent', '₦' + Number(data.sms_amount_spent || 0).toLocaleString());
+    set('mSmsProfit', '₦' + Number(data.sms_profit || 0).toLocaleString());
     const periodLabelEl = document.getElementById('mSmsOrderPeriodLabel');
-    if (periodLabelEl) periodLabelEl.textContent = (revenueLabels[period] || period) + ' · Completed';
+    if (periodLabelEl) periodLabelEl.textContent = (revenueLabels[period] || period);
+    set('mBoostOrderCount', (data.boost_order_count || 0).toLocaleString());
+    set('mBoostAmountSpent', '₦' + Number(data.boost_amount_spent || 0).toLocaleString());
+    set('mBoostProfit', '₦' + Number(data.boost_profit || 0).toLocaleString());
+    const boostPeriodEl = document.getElementById('mBoostOrderPeriodLabel');
+    if (boostPeriodEl) boostPeriodEl.textContent = (revenueLabels[period] || period);
   } catch (e) {
     console.error('Overview stats error:', e);
   }
