@@ -310,6 +310,64 @@ body::before {
 .community-banner-actions a.tg { background: #26A5E4; }
 .community-banner-close { position: absolute; top: 6px; right: 6px; background: none; border: none; color: var(--muted); opacity: .6; font-size: 14px; cursor: pointer; padding: 4px; }
 .community-banner.hidden { display: none; }
+
+.boosters-promo {
+    display: block;
+    text-decoration: none;
+    color: inherit;
+    margin: 12px 0;
+    border-radius: 18px;
+    padding: 16px 16px 16px 14px;
+    border: 1px solid rgba(139, 92, 246, 0.28);
+    background:
+      radial-gradient(120% 120% at 100% 0%, rgba(251, 113, 133, 0.18), transparent 45%),
+      radial-gradient(100% 120% at 0% 100%, rgba(59, 130, 246, 0.22), transparent 50%),
+      linear-gradient(135deg, rgba(91, 138, 245, 0.16), rgba(167, 139, 250, 0.18));
+    box-shadow: 0 10px 28px rgba(91, 138, 245, 0.12);
+    position: relative;
+    overflow: hidden;
+}
+.boosters-promo:active { transform: scale(0.985); }
+.boosters-promo-inner { display: flex; align-items: center; gap: 12px; position: relative; z-index: 1; }
+.boosters-promo-icon {
+    width: 48px; height: 48px; border-radius: 16px; flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 22px;
+    background: linear-gradient(135deg, #3b82f6, #8b5cf6);
+    color: #fff;
+    box-shadow: 0 8px 20px rgba(59, 130, 246, 0.35);
+}
+.boosters-promo-text { flex: 1; min-width: 0; }
+.boosters-promo-text strong {
+    display: block; font-size: 14.5px; font-weight: 900; color: var(--text);
+    margin-bottom: 3px; letter-spacing: -0.01em;
+}
+.boosters-promo-text span {
+    display: block; font-size: 12px; color: var(--muted); line-height: 1.35; font-weight: 600;
+}
+.boosters-promo-cta {
+    flex-shrink: 0;
+    font-size: 11px; font-weight: 800;
+    padding: 8px 12px; border-radius: 999px;
+    background: linear-gradient(135deg, #3b82f6, #8b5cf6);
+    color: #fff;
+    white-space: nowrap;
+    box-shadow: 0 6px 16px rgba(91, 138, 245, 0.35);
+}
+.boosters-promo-platforms {
+    display: flex; gap: 6px; margin-top: 10px; flex-wrap: wrap; position: relative; z-index: 1;
+}
+.boosters-promo-platforms span {
+    font-size: 10px; font-weight: 800;
+    padding: 4px 8px; border-radius: 999px;
+    background: rgba(255,255,255,0.55);
+    border: 1px solid var(--border);
+    color: var(--text);
+}
+:root[data-theme="dark"] .boosters-promo-platforms span {
+    background: rgba(15, 23, 42, 0.45);
+}
+
 .sleek-card {
     background: var(--card); border: 1px solid var(--border); border-radius: var(--radius);
     padding: 16px; display: flex; justify-content: space-between; align-items: center;
@@ -999,6 +1057,26 @@ body::before {
                 <div class="sleek-card-icon icon-purple"><i class="fa-solid fa-naira-sign"></i></div>
             </div>
         </div>
+        <!-- MJ Boosters promo -->
+        <a class="boosters-promo" href="mj-boosters.html" id="boostersPromoBanner">
+            <div class="boosters-promo-inner">
+                <div class="boosters-promo-icon"><i class="fa-solid fa-bolt"></i></div>
+                <div class="boosters-promo-text">
+                    <strong>Boost your social media</strong>
+                    <span>Followers, likes, views & more — IG, TikTok, YouTube, X…</span>
+                </div>
+                <div class="boosters-promo-cta">Open →</div>
+            </div>
+            <div class="boosters-promo-platforms">
+                <span>Instagram</span>
+                <span>TikTok</span>
+                <span>YouTube</span>
+                <span>X</span>
+                <span>Telegram</span>
+            </div>
+        </a>
+
+
     </section>
 
     <section id="profile" class="app-section">
