@@ -401,16 +401,10 @@ async function selectCountry(countryId){
   serviceSearch.value = '';
 
   try{
-    const { data, error } = await sbClient
-      .from('number_services')
-      .select('service_id, service_name, price, available_quantity')
-      .eq('source', 'logsdomain')
-      .eq('country_id', countryId)
-      .eq('is_available', true)
-      .order('service_name', { ascending: true });
-    if(error) throw error;
-    allServices = data || [];
-    if(!allServices.length && accessToken){
+    // Always prefer LIVE services for this country (same idea as countries).
+    // Local catalog is only a fallback if the live call fails.
+    let loaded = false;
+    if(accessToken){
       try{
         const live = await ldFetch('services', { query: { country_id: countryId } });
         allServices = (live.data || []).map(s => ({
@@ -418,10 +412,22 @@ async function selectCountry(countryId){
           service_name: s.service_name || s.name || String(s.service_id),
           price: s.price,
           available_quantity: s.available_quantity
-        }));
+        })).filter(s => s.service_id);
+        if(allServices.length) loaded = true;
       }catch(liveErr){
-        console.warn('Live LogsDomain services fallback failed:', liveErr);
+        console.warn('Live LogsDomain services failed, trying local catalog:', liveErr);
       }
+    }
+    if(!loaded){
+      const { data, error } = await sbClient
+        .from('number_services')
+        .select('service_id, service_name, price, available_quantity')
+        .eq('source', 'logsdomain')
+        .eq('country_id', countryId)
+        .eq('is_available', true)
+        .order('service_name', { ascending: true });
+      if(error) throw error;
+      allServices = data || [];
     }
     renderServices(allServices);
   }catch(err){
