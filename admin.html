@@ -400,9 +400,15 @@
             <div class="metrics" style="margin-bottom:0;">
               <div class="metric-card"><div class="metric-label" id="revenuePeriodLabel">This Month</div><div class="metric-value" id="mRevenueNgn">₦0</div><div class="metric-sub" id="mRevenueUsd">$0.00 USD</div></div>
               <div class="metric-card"><div class="metric-label">Sales</div><div class="metric-value" id="mSalesNgn">₦0</div><div class="metric-sub">Completed orders</div></div>
-              <div class="metric-card"><div class="metric-label">Logs Sold</div><div class="metric-value" id="mLogsSoldCount">0</div><div class="metric-sub">Completed log orders</div></div>
-              <div class="metric-card"><div class="metric-label">Profit Margin</div><div class="metric-value" id="mProfitNgn" style="color:#34d399;">₦0</div><div class="metric-sub" id="mProfitPct">0% margin</div></div>
               <div class="metric-card"><div class="metric-label">Wallet Balances</div><div class="metric-value" id="mTotalBalance">₦0</div><div class="metric-sub">All user wallets</div></div>
+            </div>
+          </div>
+          <div class="panel">
+            <div class="panel-header"><div class="panel-title">MJ Logs</div></div>
+            <div class="metrics" style="margin-bottom:0;">
+              <div class="metric-card"><div class="metric-label">Total Orders</div><div class="metric-value" id="mLogsSoldCount">0</div><div class="metric-sub" id="mLogsOrderPeriodLabel">This Month</div></div>
+              <div class="metric-card"><div class="metric-label">Amount Spent</div><div class="metric-value" id="mLogsAmountSpent">₦0</div><div class="metric-sub">Customer spend</div></div>
+              <div class="metric-card"><div class="metric-label">Profit Made</div><div class="metric-value" id="mLogsProfit" style="color:#34d399;">₦0</div><div class="metric-sub">After supplier cost</div></div>
             </div>
           </div>
           <div class="panel">
@@ -1991,9 +1997,7 @@ function updateRevenueDisplay() {
   set('mRevenueNgn', '₦' + sales.toLocaleString(undefined, { maximumFractionDigits: 0 }));
   set('mSalesNgn', '₦' + sales.toLocaleString(undefined, { maximumFractionDigits: 0 }));
   set('mRevenueUsd', '$' + (sales / liveRate).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' USD');
-  set('mProfitNgn', '₦' + profit.toLocaleString(undefined, { maximumFractionDigits: 0 }));
-  const marginPct = sales > 0 ? (profit / sales * 100) : 0;
-  set('mProfitPct', marginPct.toLocaleString(undefined, { maximumFractionDigits: 1 }) + '% margin');
+  // Logs profit is shown on the MJ Logs panel via loadOverviewStats (server-side).
 
   loadOverviewStats(period);
 }
@@ -2022,6 +2026,10 @@ async function loadOverviewStats(period) {
     }
 
     set('mLogsSoldCount', (data.logs_sold_count || 0).toLocaleString());
+    set('mLogsAmountSpent', '₦' + Number(data.logs_amount_spent || 0).toLocaleString());
+    set('mLogsProfit', '₦' + Number(data.logs_profit || 0).toLocaleString());
+    const logsPeriodEl = document.getElementById('mLogsOrderPeriodLabel');
+    if (logsPeriodEl) logsPeriodEl.textContent = (revenueLabels[period] || period);
     set('mSmsOrderCount', (data.sms_order_count || 0).toLocaleString());
     set('mSmsAmountSpent', '₦' + Number(data.sms_amount_spent || 0).toLocaleString());
     set('mSmsProfit', '₦' + Number(data.sms_profit || 0).toLocaleString());
