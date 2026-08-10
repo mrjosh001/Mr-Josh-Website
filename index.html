@@ -75,12 +75,6 @@
     --shadow: 0 18px 50px rgba(0,0,0,0.45);
     --radius: 20px;
     --radius-sm: 14px;
-    --fluid-bar: #ffffff;
-    --fluid-bar-shadow: 0 -4px 24px rgba(0,0,0,0.35);
-    --fluid-blob: #c026d3;
-    --fluid-blob-glow: rgba(192, 38, 211, 0.45);
-    --fluid-icon: #64748b;
-    --fluid-icon-active: #ffffff;
 }
 :root[data-theme="light"] {
     --primary: #3b6ef5;
@@ -103,12 +97,6 @@
     --shadow: 0 16px 40px rgba(15,23,42,0.08);
     --radius: 20px;
     --radius-sm: 14px;
-    --fluid-bar: #ffffff;
-    --fluid-bar-shadow: 0 -4px 24px rgba(15,23,42,0.12);
-    --fluid-blob: #c026d3;
-    --fluid-blob-glow: rgba(192, 38, 211, 0.35);
-    --fluid-icon: #64748b;
-    --fluid-icon-active: #ffffff;
 }
 * { box-sizing: border-box; margin: 0; padding: 0; }
 html { -webkit-tap-highlight-color: transparent; }
@@ -274,7 +262,7 @@ body::before {
 /* MAIN */
 .main-content {
     margin-top: calc(64px + env(safe-area-inset-top, 0px));
-    padding: 20px 16px calc(120px + env(safe-area-inset-bottom, 0px));
+    padding: 20px 16px calc(110px + env(safe-area-inset-bottom, 0px));
     max-width: 560px; width: 100%; margin-left: auto; margin-right: auto;
 }
 .app-section { display: none; animation: fadeUp .3s ease; }
@@ -801,140 +789,33 @@ body::before {
 .notif-title { font-weight: 700; margin-bottom: 2px; }
 .notif-time { font-size: 11px; color: var(--muted); margin-top: 3px; }
 
-/* FLUID BOTTOM NAV */
+/* BOTTOM NAV */
 .bottom-nav {
-    position: fixed;
-    bottom: 0;
-    left: 0;
-    right: 0;
-    height: calc(78px + env(safe-area-inset-bottom, 0px));
-    padding: 0 10px env(safe-area-inset-bottom, 0px);
+    position: fixed; bottom: 0; left: 0; right: 0;
+    height: calc(72px + env(safe-area-inset-bottom, 0px));
+    padding-bottom: env(safe-area-inset-bottom, 0px);
     box-sizing: border-box;
-    display: flex;
-    align-items: flex-end;
-    justify-content: center;
+    background: var(--nav); backdrop-filter: blur(18px) saturate(1.4);
+    border-top: 1px solid var(--border);
+    display: flex; align-items: center; justify-content: space-around;
     z-index: 1000;
-    background: transparent;
-    border: none;
-    pointer-events: none;
-}
-.fluid-nav-shell {
-    position: relative;
-    width: 100%;
-    max-width: 420px;
-    height: 64px;
-    margin-bottom: 8px;
-    pointer-events: auto;
-}
-.fluid-nav-bar {
-    position: absolute;
-    inset: 0;
-    background: var(--fluid-bar);
-    border-radius: 28px;
-    box-shadow: var(--fluid-bar-shadow);
-    overflow: visible;
-}
-.fluid-nav-bar::before {
-    content: '';
-    position: absolute;
-    left: 0; right: 0; top: -18px;
-    height: 36px;
-    background: transparent;
-    pointer-events: none;
-}
-/* Sliding blob + notch */
-.fluid-blob {
-    position: absolute;
-    top: -22px;
-    left: 0;
-    width: 56px;
-    height: 56px;
-    margin-left: -28px;
-    border-radius: 50%;
-    background: var(--fluid-blob);
-    box-shadow:
-        0 8px 24px var(--fluid-blob-glow),
-        0 0 0 6px var(--fluid-bar);
-    z-index: 2;
-    transition: left 0.38s cubic-bezier(0.34, 1.3, 0.64, 1);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    color: var(--fluid-icon-active);
-    font-size: 20px;
-    pointer-events: none;
-}
-.fluid-blob i { line-height: 1; }
-/* Soft wave under the blob (extra white halo for depth) */
-.fluid-blob::after {
-    content: '';
-    position: absolute;
-    bottom: -10px;
-    left: 50%;
-    transform: translateX(-50%);
-    width: 70px;
-    height: 22px;
-    background: radial-gradient(ellipse at center, var(--fluid-bar) 0%, var(--fluid-bar) 55%, transparent 70%);
-    z-index: -1;
-}
-.fluid-nav-items {
-    position: absolute;
-    inset: 0;
-    display: flex;
-    align-items: center;
-    justify-content: space-around;
-    z-index: 3;
-    padding: 0 4px;
 }
 .nav-item {
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    gap: 2px;
-    text-decoration: none;
-    color: var(--fluid-icon);
-    font-size: 10px;
-    font-weight: 700;
-    cursor: pointer;
-    background: none;
-    border: none;
-    padding: 8px 4px;
-    font-family: inherit;
-    transition: color 0.2s ease, transform 0.2s ease;
-    position: relative;
-    min-width: 0;
+    display: flex; flex-direction: column; align-items: center; text-decoration: none;
+    color: var(--muted); font-size: 10px; gap: 3px; font-weight: 700;
+    cursor: pointer; background: none; border: none; padding: 4px 8px; font-family: inherit;
+    transition: color .15s;
 }
-.nav-item i {
-    font-size: 18px;
-    line-height: 1;
-    transition: transform 0.25s ease, opacity 0.2s ease;
+.nav-item svg { width: 22px; height: 22px; fill: currentColor; }
+.nav-item.active { color: var(--primary); }
+.plus-circle {
+    width: 48px; height: 48px;
+    background: linear-gradient(135deg, var(--primary), var(--accent));
+    color: #fff; border-radius: 50%; display: flex; align-items: center; justify-content: center;
+    font-size: 24px; margin-top: -22px; border: 4px solid var(--bg);
+    box-shadow: 0 8px 20px var(--primary-glow);
 }
-.nav-item span.label {
-    font-size: 9px;
-    letter-spacing: 0.02em;
-    opacity: 0.85;
-    transition: opacity 0.2s ease;
-}
-.nav-item.active {
-    color: var(--fluid-blob);
-}
-.nav-item.active i {
-    opacity: 0;
-    transform: translateY(-8px) scale(0.5);
-}
-.nav-item.active span.label {
-    opacity: 0;
-}
-.nav-item:active {
-    transform: scale(0.94);
-}
-/* Center quick-action keeps a subtle emphasis when not active */
-.nav-item.nav-center:not(.active) i {
-    color: var(--fluid-blob);
-}
-@media (min-width: 768px) {
+@media(min-width: 768px) {
     .bottom-nav { display: none; }
     .main-content { padding-bottom: 32px; padding-top: 28px; }
 }
@@ -1699,34 +1580,26 @@ body::before {
     </div>
 </div>
 
-<nav class="bottom-nav" aria-label="Main">
-    <div class="fluid-nav-shell" id="fluidNavShell">
-        <div class="fluid-nav-bar">
-            <div class="fluid-blob" id="fluidBlob"><i class="fa-solid fa-house"></i></div>
-        </div>
-        <div class="fluid-nav-items">
-            <button type="button" class="nav-item active" id="navHome" data-icon="fa-house" onclick="goHome(); moveFluidNav(this);">
-                <i class="fa-solid fa-house"></i>
-                <span class="label">Home</span>
-            </button>
-            <button type="button" class="nav-item" id="navHistory" data-icon="fa-clock-rotate-left" onclick="toggleActivityHistory(); moveFluidNav(this);">
-                <i class="fa-solid fa-clock-rotate-left"></i>
-                <span class="label">History</span>
-            </button>
-            <button type="button" class="nav-item nav-center" id="navQuick" data-icon="fa-bolt" onclick="toggleFloatingPopup(); moveFluidNav(this);">
-                <i class="fa-solid fa-bolt"></i>
-                <span class="label">Quick</span>
-            </button>
-            <button type="button" class="nav-item" id="navCart" data-icon="fa-bag-shopping" onclick="switchSection('cart'); moveFluidNav(this);">
-                <i class="fa-solid fa-bag-shopping"></i>
-                <span class="label">Cart</span>
-            </button>
-            <button type="button" class="nav-item" id="navProfile" data-icon="fa-user" onclick="switchSection('profile'); moveFluidNav(this);">
-                <i class="fa-solid fa-user"></i>
-                <span class="label">Profile</span>
-            </button>
-        </div>
+<nav class="bottom-nav">
+    <button class="nav-item active" id="navHome" onclick="goHome()">
+        <svg viewBox="0 0 24 24"><path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"/></svg>
+        <span>Home</span>
+    </button>
+    <button class="nav-item" id="navHistory" onclick="toggleActivityHistory()">
+        <svg viewBox="0 0 24 24"><path d="M13 3a9 9 0 0 0-9 9H1l3.89 3.89.07.14L9 12H6a7 7 0 1 1 7 7 7 7 0 0 1-7-7h-2a9 9 0 1 0 9-9zm-1 5v5l4.28 2.54.72-1.21-3.5-2.08V8H12z"/></svg>
+        <span>History</span>
+    </button>
+    <div class="nav-item" onclick="toggleFloatingPopup()">
+        <div class="plus-circle">+</div>
     </div>
+    <button class="nav-item" id="navCart" onclick="switchSection('cart')">
+        <svg viewBox="0 0 24 24"><path d="M7 18c-1.1 0-1.99.9-1.99 2S5.9 22 7 22s2-.9 2-2-.9-2-2-2zM1 2v2h2l3.6 7.59-1.35 2.45c-.16.28-.25.61-.25.96 0 1.1.9 2 2 2h12v-2H7.42c-.14 0-.25-.11-.25-.25l.03-.12.9-1.63h7.45c.75 0 1.41-.41 1.75-1.03l3.58-6.49c.08-.14.12-.31.12-.48 0-.55-.45-1-1-1H5.21l-.94-2H1zm16 16c-1.1 0-1.99.9-1.99 2s.89 2 1.99 2 2-.9 2-2-.9-2-2-2z"/></svg>
+        <span>Cart</span>
+    </button>
+    <button class="nav-item" id="navProfile" onclick="switchSection('profile')">
+        <svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 3c1.66 0 3 1.34 3 3s-1.34 3-3 3-3-1.34-3-3 1.34-3 3-3zm0 14.2c-2.5 0-4.71-1.28-6-3.22.03-1.99 4-3.08 6-3.08 1.99 0 5.97 1.09 6 3.08-1.29 1.94-3.5 3.22-6 3.22z"/></svg>
+        <span>Profile</span>
+    </button>
 </nav>
 
 
@@ -1943,7 +1816,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     initSupportWidget();
     updateCartDisplay();
     initHashRouting();
-    initFluidNav();
     await handleDepositReturn();
     checkPendingPocketFiPayment();
 });
@@ -2162,10 +2034,7 @@ function initNavigation() {
         const navMap = { home: 'navHome', cart: 'navCart', profile: 'navProfile' };
         if (navMap[id]) {
             const el = document.getElementById(navMap[id]);
-            if (el) {
-                el.classList.add('active');
-                if (typeof moveFluidNav === 'function') moveFluidNav(el);
-            }
+            if (el) el.classList.add('active');
         }
 
         if (!skipHash) {
@@ -2514,34 +2383,6 @@ function initSupportWidget() {
 
     // Auto-collapse after 4 seconds on load
     scheduleCollapse();
-}
-
-
-function moveFluidNav(btn) {
-    if (!btn) return;
-    const shell = document.getElementById('fluidNavShell');
-    const blob = document.getElementById('fluidBlob');
-    if (!shell || !blob) return;
-    document.querySelectorAll('.fluid-nav-items .nav-item').forEach(n => n.classList.remove('active'));
-    btn.classList.add('active');
-    const shellRect = shell.getBoundingClientRect();
-    const btnRect = btn.getBoundingClientRect();
-    const centerX = btnRect.left + btnRect.width / 2 - shellRect.left;
-    blob.style.left = centerX + 'px';
-    const icon = btn.getAttribute('data-icon') || 'fa-house';
-    blob.innerHTML = '<i class="fa-solid ' + icon + '"></i>';
-}
-
-function initFluidNav() {
-    const home = document.getElementById('navHome');
-    if (home) {
-        // Wait a frame so layout is ready
-        requestAnimationFrame(() => moveFluidNav(home));
-    }
-    window.addEventListener('resize', () => {
-        const active = document.querySelector('.fluid-nav-items .nav-item.active');
-        if (active) moveFluidNav(active);
-    });
 }
 
 /** Bottom nav Home = pull-to-refresh alternative (balance, history, orders) */
