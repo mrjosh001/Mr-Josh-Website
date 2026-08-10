@@ -1214,81 +1214,107 @@ body::before {
     </section>
 
     <section id="profile" class="app-section">
-        <div class="profile-header-card">
-            <div class="profile-avatar-large" onclick="openAvatarViewer()" title="View profile photo">
-                <span id="profileAvatarInitial">👤</span>
-                <div class="profile-avatar-overlay">View</div>
+        <!-- Main profile: avatar + customer ID only -->
+        <div id="profileMainView">
+            <div class="profile-header-card">
+                <div class="profile-avatar-large" onclick="openAvatarViewer()" title="View profile photo">
+                    <span id="profileAvatarInitial">👤</span>
+                    <div class="profile-avatar-overlay">View</div>
+                </div>
+                <input type="file" id="profileAvatarInput" accept="image/*" style="display:none;" onchange="handleAvatarUpload(event)">
+                <h3 id="profileHeaderName">Loading...</h3>
+                <p id="profileHeaderEmail">Connecting...</p>
+                <p id="profileHeaderJoined" style="font-size:12px;color:var(--text-muted);margin-top:4px;"></p>
             </div>
-            <input type="file" id="profileAvatarInput" accept="image/*" style="display:none;" onchange="handleAvatarUpload(event)">
-            <h3 id="profileHeaderName">Loading...</h3>
-            <p id="profileHeaderEmail">Connecting...</p>
-            <p id="profileHeaderJoined" style="font-size:12px;color:var(--text-muted);margin-top:4px;"></p>
+
+            <div class="content-card">
+                <h2>Customer ID</h2>
+                <p class="helper-text">Provide this ID to support for inquiries:</p>
+                <div style="display:flex;gap:10px;align-items:center;">
+                    <input type="text" id="myCustomerId" readonly style="font-family:monospace;font-weight:bold;color:var(--primary-color);" placeholder="Loading...">
+                    <button class="btn-sm-primary" style="flex:unset;padding:13px 20px;" onclick="copyIdToClipboard()">Copy</button>
+                </div>
+            </div>
+
+            <div class="profile-menu-list">
+                <div class="profile-menu-item" onclick="openProfileSettings()">
+                    <div class="profile-menu-left">
+                        <div class="profile-menu-icon icon-blue"><i class="fa-solid fa-gear"></i></div>
+                        <div class="profile-menu-info">
+                            <h4>Profile Settings</h4>
+                            <p>Name, phone, address and security</p>
+                        </div>
+                    </div>
+                    <div class="profile-menu-arrow">›</div>
+                </div>
+            </div>
         </div>
 
-        <div class="content-card">
-            <h2>Customer ID</h2>
-            <p class="helper-text">Provide this ID to support for inquiries:</p>
-            <div style="display:flex;gap:10px;align-items:center;">
-                <input type="text" id="myCustomerId" readonly style="font-family:monospace;font-weight:bold;color:var(--primary-color);" placeholder="Loading...">
-                <button class="btn-sm-primary" style="flex:unset;padding:13px 20px;" onclick="copyIdToClipboard()">Copy</button>
+        <!-- Settings: full edit form + security actions -->
+        <div id="profileSettingsView" style="display:none;">
+            <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px;">
+                <button type="button" onclick="closeProfileSettings()" aria-label="Back"
+                    style="width:40px;height:40px;border-radius:12px;border:1px solid var(--border-color,rgba(255,255,255,0.08));background:var(--card-bg,rgba(255,255,255,0.04));color:var(--text-color,#fff);cursor:pointer;display:flex;align-items:center;justify-content:center;">
+                    <i class="fa-solid fa-arrow-left"></i>
+                </button>
+                <h2 style="margin:0;font-size:18px;font-weight:800;">Profile Settings</h2>
             </div>
-        </div>
 
-        <div class="content-card">
-            <h2>Profile Settings</h2>
-            <div class="form-group">
-                <label>Full Name</label>
-                <input type="text" id="profileNameInput" placeholder="e.g. Josh">
+            <div class="content-card">
+                <div class="form-group">
+                    <label>Full Name</label>
+                    <input type="text" id="profileNameInput" placeholder="e.g. Josh">
+                </div>
+                <div class="form-group">
+                    <label>Email</label>
+                    <input type="email" id="profileEmailInput" readonly>
+                </div>
+                <div class="form-group">
+                    <label>Phone</label>
+                    <input type="text" id="profilePhoneInput" placeholder="+234...">
+                </div>
+                <div class="form-group">
+                    <label>Address</label>
+                    <input type="text" id="profileAddressInput" placeholder="Your address">
+                </div>
+                <div class="form-group">
+                    <label>Bio</label>
+                    <textarea id="profileBioInput" rows="3" placeholder="About you"></textarea>
+                </div>
+                <button class="btn-sm-primary" style="width:100%;padding:14px;" onclick="saveProfileSettingsData()">Save Changes</button>
             </div>
-            <div class="form-group">
-                <label>Email</label>
-                <input type="email" id="profileEmailInput" readonly>
-            </div>
-            <div class="form-group">
-                <label>Phone</label>
-                <input type="text" id="profilePhoneInput" placeholder="+234...">
-            </div>
-            <div class="form-group">
-                <label>Address</label>
-                <input type="text" id="profileAddressInput" placeholder="Your address">
-            </div>
-            <div class="form-group">
-                <label>Bio</label>
-                <textarea id="profileBioInput" rows="3" placeholder="About you"></textarea>
-            </div>
-            <button class="btn-sm-primary" style="width:100%;padding:14px;" onclick="saveProfileSettingsData()">Save Changes</button>
-        </div>
 
-        <div class="profile-menu-list">
-            <div class="profile-menu-item" onclick="openChangePasswordModal()">
-                <div class="profile-menu-left">
-                    <div class="profile-menu-icon icon-blue"><i class="fa-solid fa-shield-halved"></i></div>
-                    <div class="profile-menu-info">
-                        <h4>Change Password</h4>
-                        <p>Update your security password</p>
+            <div class="profile-menu-list">
+                <div class="profile-menu-item" onclick="openChangePasswordModal()">
+                    <div class="profile-menu-left">
+                        <div class="profile-menu-icon icon-blue"><i class="fa-solid fa-shield-halved"></i></div>
+                        <div class="profile-menu-info">
+                            <h4>Change Password</h4>
+                            <p>Update your security password</p>
+                        </div>
                     </div>
+                    <div class="profile-menu-arrow">›</div>
                 </div>
-                <div class="profile-menu-arrow">›</div>
-            </div>
-            <div class="profile-menu-item" onclick="handleLogout()">
-                <div class="profile-menu-left">
-                    <div class="profile-menu-icon" style="background:rgba(239,68,68,0.15);color:var(--danger-color);"><i class="fa-solid fa-right-from-bracket"></i></div>
-                    <div class="profile-menu-info">
-                        <h4 style="color:var(--danger-color);">Log Out</h4>
-                        <p>Sign out of your session</p>
+                <div class="profile-menu-item" onclick="handleLogout()">
+                    <div class="profile-menu-left">
+                        <div class="profile-menu-icon" style="background:rgba(239,68,68,0.15);color:var(--danger-color);"><i class="fa-solid fa-right-from-bracket"></i></div>
+                        <div class="profile-menu-info">
+                            <h4 style="color:var(--danger-color);">Log Out</h4>
+                            <p>Sign out of your session</p>
+                        </div>
                     </div>
+                    <div class="profile-menu-arrow">›</div>
                 </div>
-                <div class="profile-menu-arrow">›</div>
-            </div>
-            <div class="profile-menu-item" onclick="openDeleteAccountModal()">
-                <div class="profile-menu-left">
-                    <div class="profile-menu-icon" style="background:rgba(239,68,68,0.15);color:var(--danger-color);"><i class="fa-solid fa-trash"></i></div>
-                    <div class="profile-menu-info">
-                        <h4 style="color:var(--danger-color);">Delete Account</h4>
-                        <p>Permanently remove your account and data</p>
+                <div class="profile-menu-item" onclick="openDeleteAccountModal()">
+                    <div class="profile-menu-left">
+                        <div class="profile-menu-icon" style="background:rgba(239,68,68,0.15);color:var(--danger-color);"><i class="fa-solid fa-trash"></i></div>
+                        <div class="profile-menu-info">
+                            <h4 style="color:var(--danger-color);">Delete Account</h4>
+                            <p>Permanently remove your account and data</p>
+                        </div>
                     </div>
+                    <div class="profile-menu-arrow">›</div>
                 </div>
-                <div class="profile-menu-arrow">›</div>
             </div>
         </div>
     </section>
@@ -2080,6 +2106,11 @@ function initNavigation() {
             if (el) el.classList.add('active');
         }
 
+        // Profile tab always opens on identity + Customer ID, not settings
+        if (id === 'profile' && typeof window.closeProfileSettings === 'function') {
+            window.closeProfileSettings();
+        }
+
         if (!skipHash) {
             history.replaceState(null, '', '#' + id);
         }
@@ -2610,6 +2641,21 @@ function renderRecentActivity() {
 window.closeLogoutConfirm = function() {
     const m = document.getElementById('logoutConfirmModal');
     if (m) m.classList.remove('open');
+};
+
+
+window.openProfileSettings = function() {
+    const main = document.getElementById('profileMainView');
+    const settings = document.getElementById('profileSettingsView');
+    if (main) main.style.display = 'none';
+    if (settings) settings.style.display = 'block';
+    try { window.scrollTo({ top: 0, behavior: 'smooth' }); } catch (e) {}
+};
+window.closeProfileSettings = function() {
+    const main = document.getElementById('profileMainView');
+    const settings = document.getElementById('profileSettingsView');
+    if (settings) settings.style.display = 'none';
+    if (main) main.style.display = 'block';
 };
 
 window.handleLogout = function() {
