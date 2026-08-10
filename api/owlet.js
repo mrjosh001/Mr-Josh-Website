@@ -14,7 +14,7 @@ import { createClient } from '@supabase/supabase-js';
  *   status   — order status { order }
  *
  * Configured Exchange Rate: $1 = ₦1450 NGN
- * Configured Selling Markup: fixed 35% (OWLET_MARKUP_PERCENT). Rate from API is USD.
+ * Markup 35% (OWLET_MARKUP_PERCENT). Rate currency AUTO/USD/NGN via OWLET_RATE_CURRENCY.
  */
 
 const OWLET_URL = 'https://theowlet.com/api/v2';
@@ -27,37 +27,61 @@ const supabase = createClient(
 );
 
 // Markup: fixed default 35% (override with OWLET_MARKUP_PERCENT env)
-// Owlet API rate is USD (balance/status currency is USD per docs).
+// Owlet rate currency depends on the panel wallet.
+// Docs examples use USD, but Naira accounts often return rate already in NGN.
+// Force with env OWLET_RATE_CURRENCY=USD or NGN.
 function getMarkupPercent() {
   const env = Number(process.env.OWLET_MARKUP_PERCENT);
   if (Number.isFinite(env) && env >= 0 && env <= 200) return env;
   return 35;
 }
 
-/** Sell NGN = rate_usd * USD_TO_NGN * (1 + markup/100) */
-function sellPriceNgnFromUsd(rateUsd, markupPercent) {
-  const usd = Number(rateUsd) || 0;
+function getRateCurrency() {
+  const env = String(process.env.OWLET_RATE_CURRENCY || '').trim().toUpperCase();
+  if (env === 'USD' || env === 'NGN') return env;
+  return 'AUTO';
+}
+
+/**
+ * Resolve supplier cost in NGN from Owlet `rate`.
+ * AUTO: rate < 100 → treat as USD; rate >= 100 → already NGN
+ * (avoids ₦millions when NGN rates were wrongly × 1450)
+ */
+function costNgnFromRate(rate) {
+  const r = Number(rate) || 0;
+  if (r <= 0) return 0;
+  const mode = getRateCurrency();
+  if (mode === 'USD') return r * USD_TO_NGN;
+  if (mode === 'NGN') return r;
+  // AUTO
+  if (r < 100) return r * USD_TO_NGN; // typical USD SMM rates
+  return r; // already NGN-scale
+}
+
+function sellPriceNgnFromRate(rate, markupPercent) {
+  const cost = costNgnFromRate(rate);
   const markup = markupPercent ?? getMarkupPercent();
-  return Math.ceil(usd * USD_TO_NGN * (1 + markup / 100));
+  return Math.ceil(cost * (1 + markup / 100));
 }
 
-function supplierUsdFromRate(rateUsd) {
-  return Math.round((Number(rateUsd) || 0) * 10000) / 10000;
+function supplierUsdFromRate(rate) {
+  const r = Number(rate) || 0;
+  const mode = getRateCurrency();
+  if (mode === 'USD' || (mode === 'AUTO' && r > 0 && r < 100)) {
+    return Math.round(r * 10000) / 10000;
+  }
+  // NGN → approximate USD
+  return Math.round((r / USD_TO_NGN) * 10000) / 10000;
 }
 
-// Back-compat aliases (old names still used in a few places)
+// Back-compat names used across handlers
 function getRandomMarkup() { return getMarkupPercent(); }
-function sellPriceNgn(rate, markupPercent) {
-  // treat as USD rate
-  return sellPriceNgnFromUsd(rate, markupPercent);
-}
-function supplierUsd(rate) {
-  return supplierUsdFromRate(rate);
-}
+function sellPriceNgn(rate, markupPercent) { return sellPriceNgnFromRate(rate, markupPercent); }
+function sellPriceNgnFromUsd(rate, markupPercent) { return sellPriceNgnFromRate(rate, markupPercent); }
+function supplierUsd(rate) { return supplierUsdFromRate(rate); }
 function sellPriceUsd(rate, markupPercent) {
-  const usd = Number(rate) || 0;
-  const markup = markupPercent ?? getMarkupPercent();
-  return Math.round(usd * (1 + markup / 100) * 10000) / 10000;
+  const sellNgn = sellPriceNgnFromRate(rate, markupPercent);
+  return Math.round((sellNgn / USD_TO_NGN) * 10000) / 10000;
 }
 
 async function requireUser(req) {
@@ -227,10 +251,9 @@ async function handleSync(req, res) {
     const now = new Date().toISOString();
     const rows = slice.map(s => {
       const serviceId = String(s.service);
-      // Owlet rate is USD per 1k
-      const rateUsd = Number(s.rate) || 0;
-      const supplierUsdVal = supplierUsdFromRate(rateUsd);
-      const defaultNgn = sellPriceNgnFromUsd(rateUsd);
+      const rateRaw = Number(s.rate) || 0;
+      const supplierUsdVal = supplierUsdFromRate(rateRaw);
+      const defaultNgn = sellPriceNgnFromRate(rateRaw);
 
       const prev = map.get(serviceId);
       const manual = prev && prev.price_source === 'manual';
@@ -297,6 +320,9 @@ async function handleSync(req, res) {
     total: services.length,
     cursor,
     upserted_this_run: upserted,
+    rate_currency_mode: getRateCurrency(),
+    markup_percent: getMarkupPercent(),
+    usd_to_ngn: USD_TO_NGN,
     errors: errors.slice(0, 5)
   });
 }
