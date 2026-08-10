@@ -2999,19 +2999,59 @@ async function syncOwletServices() {
   if (prog) prog.textContent = 'Pulling services from The Owlet…';
   try {
     const headers = await authHeaders();
-    const res = await fetch('/api/owlet?action=sync', { method: 'POST', headers });
-    const data = await res.json();
-    if (!data.success) {
-      showAdminToast(data.message || 'Sync failed', 'error');
-      if (prog) prog.textContent = data.message || '';
+    if (!headers.Authorization) {
+      showAdminToast('Not signed in — refresh admin and sign in again', 'error');
+      if (prog) prog.textContent = 'Missing session';
       return;
     }
-    if (prog) prog.textContent = data.message || 'Done';
-    showAdminToast(data.message || 'Owlet services synced', 'success');
+
+    let done = false;
+    let rounds = 0;
+    const maxRounds = 40; // safety cap
+
+    while (!done && rounds < maxRounds) {
+      rounds += 1;
+      if (prog) prog.textContent = rounds === 1
+        ? 'Syncing Owlet catalog…'
+        : `Continuing sync (round ${rounds})…`;
+
+      const res = await fetch('/api/owlet?action=sync', { method: 'GET', headers });
+      let data = null;
+      try {
+        data = await res.json();
+      } catch (parseErr) {
+        showAdminToast('Sync failed: bad response (' + res.status + ')', 'error');
+        if (prog) prog.textContent = 'HTTP ' + res.status;
+        return;
+      }
+
+      if (!res.ok || data.success === false) {
+        const msg = data.message || ('HTTP ' + res.status);
+        showAdminToast(msg, 'error');
+        if (prog) prog.textContent = msg;
+        return;
+      }
+
+      done = !!data.done;
+      if (prog) {
+        prog.textContent = data.message || (done ? 'Done' : `Progress ${data.cursor}/${data.total}`);
+      }
+      if (!done) {
+        // brief pause so UI can paint; next chunk continues from cursor
+        await new Promise(r => setTimeout(r, 400));
+      } else {
+        showAdminToast(data.message || 'Owlet services synced', 'success');
+      }
+    }
+
+    if (!done) {
+      showAdminToast('Sync still running — click Sync again to continue', 'info');
+    }
     await loadOwletServicesFromDb();
   } catch (e) {
-    showAdminToast('Sync failed: ' + e.message, 'error');
-    if (prog) prog.textContent = '';
+    const msg = e.message || String(e);
+    showAdminToast('Sync failed: ' + msg, 'error');
+    if (prog) prog.textContent = msg + ' — check OWLET_API_KEY and booster_services SQL';
   } finally {
     setBtnBusy(btn, false, '<i class="fas fa-sync"></i> Sync Services');
   }
