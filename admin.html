@@ -2061,9 +2061,16 @@ async function loadBoosterOverviewFallback(period) {
       return t >= cutoff && !['failed','cancelled','canceled','refunded'].includes(st);
     });
     const spent = rows.reduce((s, o) => s + Number(o.price_ngn || 0), 0);
+    const rate = liveRate || 1450;
     const profit = rows.reduce((s, o) => {
       const paid = Number(o.price_ngn || 0);
-      const cost = (o.charge_usd != null && Number(o.charge_usd) > 0) ? Number(o.charge_usd) * (liveRate || 1450) : 0;
+      const charge = Number(o.charge_usd);
+      let cost = 0;
+      if (Number.isFinite(charge) && charge > 0) {
+        const asUsd = charge * rate;
+        if (charge < 100 && asUsd <= paid * 1.5) cost = asUsd;
+        else cost = charge;
+      }
       return s + (paid - cost);
     }, 0);
     set('mBoostOrderCount', rows.length.toLocaleString());
