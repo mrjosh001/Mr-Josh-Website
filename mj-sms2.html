@@ -429,6 +429,12 @@ async function selectCountry(countryId){
       if(error) throw error;
       allServices = data || [];
     }
+    allServices = (allServices || []).filter(s => {
+      const q = s.available_quantity;
+      if(q === 0 || q === '0') return false;
+      if(s.is_available === false || s.is_available === 'false') return false;
+      return true;
+    });
     renderServices(allServices);
   }catch(err){
     serviceGrid.innerHTML = '<div class="empty-state"><div class="empty-state-icon">⚠️</div><h4>Failed to load</h4><p>'+escapeHtml(err.message||String(err))+'</p></div>';
@@ -552,7 +558,26 @@ document.getElementById('psBuyBtn').addEventListener('click', async function(){
       window.location.href = 'mj-sms2-number.html?order_id=' + encodeURIComponent(data.data.order_id);
     }, 600);
   }catch(err){
-    showToast(err.message || 'Purchase failed. Please try again.', 'error');
+    const msg = (err && err.message) ? String(err.message) : 'Purchase failed. Please try again.';
+    showToast(msg, 'error');
+    // If supplier says unavailable / out of stock, hide this service so the
+    // customer does not keep retrying a dead listing.
+    const lower = msg.toLowerCase();
+    if(
+      lower.includes('temporarily unavailable') ||
+      lower.includes('out of stock') ||
+      lower.includes('not available') ||
+      lower.includes('no number')
+    ){
+      const sid = String(activeService && activeService.service_id);
+      allServices = (allServices || []).filter(s => String(s.service_id) !== sid);
+      renderServices(
+        (document.getElementById('serviceSearch')?.value || '').trim()
+          ? allServices.filter(s => (s.service_name||s.service_id||'').toLowerCase().includes((document.getElementById('serviceSearch')?.value || '').trim().toLowerCase()))
+          : allServices
+      );
+      try{ closePurchaseModal(); }catch(e){}
+    }
   }finally{
     isBuying = false;
     btn.disabled = false;
