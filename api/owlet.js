@@ -31,6 +31,16 @@ function getRandomMarkup() {
   return Math.floor(Math.random() * (50 - 25 + 1)) + 25; // Random integer between 25 and 50
 }
 
+
+async function requireUser(req) {
+  const authHeader = req.headers.authorization || '';
+  const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : null;
+  if (!token) return { ok: false, status: 401, message: 'Please sign in' };
+  const { data: { user }, error: authErr } = await supabase.auth.getUser(token);
+  if (authErr || !user) return { ok: false, status: 401, message: 'Session expired — sign in again' };
+  return { ok: true, user };
+}
+
 async function requireAdmin(req) {
   const authHeader = req.headers.authorization || '';
   const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : null;
@@ -355,6 +365,332 @@ async function handleStatus(req, res) {
   return res.status(200).json({ success: true, data: json });
 }
 
+
+async function handleCatalog(req, res) {
+  // Public to signed-in users — categories + optional services
+  const category = (req.query?.category || '').toString().trim();
+  const q = (req.query?.q || '').toString().trim().toLowerCase();
+  const page = Math.max(1, parseInt(req.query?.page || '1', 10) || 1);
+  const pageSize = Math.min(100, Math.max(12, parseInt(req.query?.page_size || '48', 10) || 48));
+  const from = (page - 1) * pageSize;
+  const to = from + pageSize - 1;
+
+  // Distinct categories
+  const { data: catRows } = await supabase
+    .from('booster_services')
+    .select('category')
+    .eq('source', 'owlet')
+    .eq('is_available', true)
+    .limit(8000);
+  const categories = [...new Set((catRows || []).map(r => r.category).filter(Boolean))].sort();
+
+  if (!category && !q) {
+    // Overview: return category cards with counts only (fast)
+    const counts = {};
+    for (const c of (catRows || [])) {
+      const k = c.category || 'Other';
+      counts[k] = (counts[k] || 0) + 1;
+    }
+    const cards = Object.entries(counts)
+      .map(([name, count]) => ({ name, count }))
+      .sort((a, b) => b.count - a.count);
+    return res.status(200).json({ success: true, mode: 'categories', categories: cards, total_services: (catRows || []).length });
+  }
+
+  let query = supabase
+    .from('booster_services')
+    .select(
+      'id,service_id,name,category,service_type,supplier_rate_usd,price_ngn,min_quantity,max_quantity,refill,cancel,is_available',
+      { count: 'exact' }
+    )
+    .eq('source', 'owlet')
+    .eq('is_available', true)
+    .order('price_ngn', { ascending: true })
+    .range(from, to);
+
+  if (category) query = query.eq('category', category);
+
+  const { data, error, count } = await query;
+  if (error) {
+    return res.status(500).json({ success: false, message: error.message });
+  }
+
+  let rows = data || [];
+  if (q) {
+    rows = rows.filter(s =>
+      (s.name || '').toLowerCase().includes(q) ||
+      (s.category || '').toLowerCase().includes(q) ||
+      String(s.service_id).includes(q)
+    );
+  }
+
+  return res.status(200).json({
+    success: true,
+    mode: 'services',
+    category: category || null,
+    categories,
+    data: rows,
+    page,
+    page_size: pageSize,
+    total: count ?? rows.length
+  });
+}
+
+async function handleOrder(req, res) {
+  const body = typeof req.body === 'string' ? (() => { try { return JSON.parse(req.body || '{}'); } catch { return {}; } })() : (req.body || {});
+  const serviceId = String(body.service_id || body.service || '').trim();
+  const link = String(body.link || '').trim();
+  const quantity = Math.max(1, parseInt(body.quantity, 10) || 0);
+
+  if (!serviceId || !link || !quantity) {
+    return res.status(400).json({ success: false, message: 'service_id, link, and quantity are required' });
+  }
+  if (!/^https?:\/\//i.test(link) && !link.includes('.') && !link.startsWith('@')) {
+    // allow @handles and bare domains/usernames common for SMM
+  }
+
+  const userGate = await requireUser(req);
+  if (!userGate.ok) return res.status(userGate.status).json({ success: false, message: userGate.message });
+  const user = userGate.user;
+
+  const { data: service, error: sErr } = await supabase
+    .from('booster_services')
+    .select('*')
+    .eq('source', 'owlet')
+    .eq('service_id', serviceId)
+    .maybeSingle();
+
+  if (sErr || !service) {
+    return res.status(404).json({ success: false, message: 'Service not found or unavailable' });
+  }
+  if (service.is_available === false) {
+    return res.status(400).json({ success: false, message: 'This service is temporarily unavailable' });
+  }
+
+  const minQ = Number(service.min_quantity) || 1;
+  const maxQ = Number(service.max_quantity) || 1000000;
+  if (quantity < minQ || quantity > maxQ) {
+    return res.status(400).json({
+      success: false,
+      message: `Quantity must be between ${minQ} and ${maxQ.toLocaleString()}`
+    });
+  }
+
+  // price_ngn is selling rate per 1000 units (SMM standard)
+  const ratePer1k = Number(service.price_ngn) || 0;
+  if (ratePer1k <= 0) {
+    return res.status(400).json({ success: false, message: 'Service price not configured' });
+  }
+  const totalNgn = Math.ceil((ratePer1k / 1000) * quantity);
+  if (totalNgn < 1) {
+    return res.status(400).json({ success: false, message: 'Order total too low' });
+  }
+
+  const { data: profile, error: pErr } = await supabase
+    .from('profiles')
+    .select('id, balance, customer_id, email, full_name')
+    .eq('id', user.id)
+    .maybeSingle();
+
+  if (pErr || !profile) {
+    return res.status(400).json({ success: false, message: 'Could not load your profile' });
+  }
+
+  const originalBalance = Number(profile.balance) || 0;
+  if (originalBalance < totalNgn) {
+    return res.status(400).json({
+      success: false,
+      message: `Insufficient balance. Need ₦${totalNgn.toLocaleString()}, you have ₦${originalBalance.toLocaleString()}`,
+      required: totalNgn,
+      available: originalBalance
+    });
+  }
+
+  const newBalance = originalBalance - totalNgn;
+  const { error: deductErr } = await supabase
+    .from('profiles')
+    .update({ balance: newBalance })
+    .eq('id', user.id)
+    .eq('balance', originalBalance); // optimistic lock
+
+  if (deductErr) {
+    // retry without eq balance
+    const { error: d2 } = await supabase.from('profiles').update({ balance: newBalance }).eq('id', user.id);
+    if (d2) {
+      return res.status(500).json({ success: false, message: 'Could not debit wallet. Try again.' });
+    }
+  }
+
+  // Place order with Owlet
+  const { ok, status, json } = await owletCall({
+    action: 'add',
+    service: serviceId,
+    link,
+    quantity: String(quantity)
+  });
+
+  if (!ok || json?.error || !json?.order) {
+    // refund
+    await supabase.from('profiles').update({ balance: originalBalance }).eq('id', user.id);
+    const errMsg = json?.error || json?.message || 'Supplier rejected the order';
+    try {
+      await supabase.from('transactions').insert({
+        user_id: user.id,
+        customer_id: profile.customer_id || null,
+        type: 'booster',
+        category: 'booster',
+        title: service.name || 'MJ Booster',
+        subtitle: `Failed: ${errMsg}`,
+        amount: totalNgn,
+        status: 'failed',
+        created_at: new Date().toISOString()
+      });
+    } catch (_) {}
+    return res.status(502).json({ success: false, message: errMsg });
+  }
+
+  const supplierOrderId = String(json.order);
+  const orderRow = {
+    user_id: user.id,
+    customer_id: profile.customer_id || null,
+    source: 'owlet',
+    supplier_order_id: supplierOrderId,
+    service_id: serviceId,
+    service_name: service.name,
+    category: service.category,
+    link,
+    quantity,
+    charge_usd: null,
+    price_ngn: totalNgn,
+    rate_per_1k: ratePer1k,
+    status: 'Pending',
+    start_count: null,
+    remains: null,
+    raw: json,
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString()
+  };
+
+  const { data: saved, error: saveErr } = await supabase
+    .from('booster_orders')
+    .insert(orderRow)
+    .select('id, supplier_order_id, service_name, quantity, price_ngn, status, link, created_at')
+    .maybeSingle();
+
+  try {
+    await supabase.from('transactions').insert({
+      user_id: user.id,
+      customer_id: profile.customer_id || null,
+      type: 'booster',
+      category: 'booster',
+      title: service.name || 'MJ Booster',
+      subtitle: `${quantity.toLocaleString()} · ${link.slice(0, 60)}`,
+      amount: totalNgn,
+      status: 'completed',
+      created_at: new Date().toISOString()
+    });
+  } catch (_) {}
+
+  // Best-effort status pull
+  let statusData = null;
+  try {
+    const st = await owletCall({ action: 'status', order: supplierOrderId });
+    if (st.ok && st.json && !st.json.error) {
+      statusData = st.json;
+      await supabase.from('booster_orders').update({
+        status: st.json.status || 'Pending',
+        start_count: st.json.start_count || null,
+        remains: st.json.remains || null,
+        charge_usd: st.json.charge ? Number(st.json.charge) : null,
+        updated_at: new Date().toISOString()
+      }).eq('supplier_order_id', supplierOrderId);
+    }
+  } catch (_) {}
+
+  return res.status(200).json({
+    success: true,
+    message: 'Boost order placed successfully',
+    order: saved || orderRow,
+    supplier_order_id: supplierOrderId,
+    new_balance: newBalance,
+    status: statusData
+  });
+}
+
+async function handleMyOrders(req, res) {
+  const userGate = await requireUser(req);
+  if (!userGate.ok) return res.status(userGate.status).json({ success: false, message: userGate.message });
+
+  const page = Math.max(1, parseInt(req.query?.page || '1', 10) || 1);
+  const pageSize = Math.min(50, Math.max(10, parseInt(req.query?.page_size || '20', 10) || 20));
+  const from = (page - 1) * pageSize;
+  const to = from + pageSize - 1;
+
+  const { data, error, count } = await supabase
+    .from('booster_orders')
+    .select('*', { count: 'exact' })
+    .eq('user_id', userGate.user.id)
+    .order('created_at', { ascending: false })
+    .range(from, to);
+
+  if (error) {
+    return res.status(500).json({
+      success: false,
+      message: error.message + (/relation|does not exist/i.test(error.message) ? ' — run booster_orders SQL' : '')
+    });
+  }
+
+  // Refresh a few pending statuses
+  const pending = (data || []).filter(o => /pending|progress|processing|in progress/i.test(String(o.status || ''))).slice(0, 5);
+  for (const o of pending) {
+    if (!o.supplier_order_id) continue;
+    try {
+      const st = await owletCall({ action: 'status', order: String(o.supplier_order_id) });
+      if (st.ok && st.json && !st.json.error) {
+        o.status = st.json.status || o.status;
+        o.start_count = st.json.start_count ?? o.start_count;
+        o.remains = st.json.remains ?? o.remains;
+        await supabase.from('booster_orders').update({
+          status: o.status,
+          start_count: o.start_count,
+          remains: o.remains,
+          updated_at: new Date().toISOString()
+        }).eq('id', o.id);
+      }
+    } catch (_) {}
+  }
+
+  return res.status(200).json({ success: true, data: data || [], page, page_size: pageSize, total: count || 0 });
+}
+
+async function handleAdminOrders(req, res) {
+  const admin = await requireAdmin(req);
+  if (!admin.ok) return res.status(admin.status).json({ success: false, message: admin.message });
+
+  const page = Math.max(1, parseInt(req.query?.page || '1', 10) || 1);
+  const pageSize = Math.min(100, Math.max(10, parseInt(req.query?.page_size || '50', 10) || 50));
+  const from = (page - 1) * pageSize;
+  const to = from + pageSize - 1;
+  const q = (req.query?.q || '').toString().trim();
+
+  let query = supabase
+    .from('booster_orders')
+    .select('*', { count: 'exact' })
+    .order('created_at', { ascending: false })
+    .range(from, to);
+
+  if (q) {
+    query = query.or(`supplier_order_id.ilike.%${q}%,service_name.ilike.%${q}%,customer_id.ilike.%${q}%,link.ilike.%${q}%`);
+  }
+
+  const { data, error, count } = await query;
+  if (error) {
+    return res.status(500).json({ success: false, message: error.message });
+  }
+  return res.status(200).json({ success: true, data: data || [], total: count || 0, page, page_size: pageSize });
+}
+
+
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
@@ -389,6 +725,20 @@ export default async function handler(req, res) {
     return handleSync(req, res);
   }
 
+  // User-facing (any signed-in user)
+  if (action === 'catalog') {
+    const u = await requireUser(req);
+    if (!u.ok) return res.status(u.status).json({ success: false, message: u.message });
+    return handleCatalog(req, res);
+  }
+  if (action === 'order') {
+    return handleOrder(req, res);
+  }
+  if (action === 'my_orders') {
+    return handleMyOrders(req, res);
+  }
+
+  // Admin-only
   const admin = await requireAdmin(req);
   if (!admin.ok) return res.status(admin.status).json({ success: false, message: admin.message });
 
@@ -397,9 +747,10 @@ export default async function handler(req, res) {
   if (action === 'sync') return handleSync(req, res);
   if (action === 'list') return handleList(req, res);
   if (action === 'status') return handleStatus(req, res);
+  if (action === 'admin_orders') return handleAdminOrders(req, res);
 
   return res.status(400).json({
     success: false,
-    message: 'action required: balance | services | sync | list | status'
+    message: 'action required: catalog | order | my_orders | balance | services | sync | list | status | admin_orders'
   });
 }
