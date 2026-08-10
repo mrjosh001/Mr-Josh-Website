@@ -44,6 +44,13 @@ a{color:inherit;text-decoration:none}
 .plat{flex:0 0 auto;width:52px;height:52px;border-radius:16px;border:1.5px solid var(--border);background:var(--card);display:flex;align-items:center;justify-content:center;cursor:pointer;transition:.15s;position:relative}
 .plat img{width:26px;height:26px;object-fit:contain}
 .plat.active{border-color:transparent;transform:translateY(-2px);box-shadow:0 8px 20px rgba(0,0,0,.25)}
+
+/* Keep platform logos visible on colored active pills */
+.plat img{width:26px;height:26px;object-fit:contain;transition:.15s}
+.plat.active img{filter:brightness(0) invert(1)}
+.plat[data-p="snapchat"].active img{filter:brightness(0)}
+.plat[data-p="google"].active img{filter:none}
+
 .plat.active::after{content:'';position:absolute;bottom:-6px;width:6px;height:6px;border-radius:50%;background:var(--primary)}
 .plat[data-p="instagram"].active{background:radial-gradient(circle at 30% 107%,#fdf497 0%,#fd5949 45%,#d6249f 60%,#285AEB 90%)}
 .plat[data-p="tiktok"].active{background:#000}
@@ -181,7 +188,7 @@ const PLATFORM_KEYS = {
   telegram: ['telegram'],
   spotify: ['spotify'],
   whatsapp: ['whatsapp', 'whats app'],
-  snapchat: ['snapchat', 'snap chat', 'snap-', ' snap', 'spotlight'],
+  snapchat: ['snapchat', 'snap chat', 'snapchat services', 'spotlight', 'snap'],
   google: ['google'],
   twitch: ['twitch'],
   discord: ['discord'],
@@ -247,27 +254,14 @@ function effectiveMin(s){
 function matchesPlatform(text, platform){
   if(!platform || platform==='all') return true;
   const keys = PLATFORM_KEYS[platform] || [platform];
+  // Strip emojis/symbols so "Snapchat Services | 🌍 Worldwide" still matches
   const raw = String(text || '').toLowerCase();
-  const t = ' ' + raw.replace(/[_/|]+/g, ' ') + ' ';
-  return keys.some(k => t.includes(k) || raw.includes(k.trim()));
-}
-
-async function authHeaders(){
-  const h={'Content-Type':'application/json'};
-  const {data}=await sb.auth.getSession();
-  session=data?.session||null;
-  if(session?.access_token) h.Authorization='Bearer '+session.access_token;
-  return h;
-}
-
-async function ensureAuth(){
-  const {data}=await sb.auth.getSession();
-  session=data?.session||null;
-  if(!session){ location.href='auth.html?next='+encodeURIComponent('mj-boosters.html'); return false; }
-  const {data:prof}=await sb.from('profiles').select('balance').eq('id', session.user.id).maybeSingle();
-  balance=Number(prof?.balance)||0;
-  document.getElementById('walletBal').textContent=fmt(balance);
-  return true;
+  const cleaned = raw.replace(/[^a-z0-9\s+.-]/g, ' ').replace(/\s+/g, ' ');
+  return keys.some(k => {
+    const kk = String(k).toLowerCase().trim();
+    if (!kk) return false;
+    return cleaned.includes(kk) || raw.includes(kk);
+  });
 }
 
 function iconFor(cat,name){
