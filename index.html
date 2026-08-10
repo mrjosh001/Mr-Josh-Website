@@ -184,7 +184,16 @@ body::before {
     border: 2px solid var(--border); transition: transform .15s;
 }
 .profile-icon:active { transform: scale(0.96); }
-.profile-icon img { width: 100%; height: 100%; object-fit: cover; }
+.profile-icon img {
+    width: 100%; height: 100%;
+    object-fit: cover; object-position: center center;
+    border-radius: 50%; display: block;
+}
+.profile-icon span {
+    width: 100%; height: 100%;
+    display: flex; align-items: center; justify-content: center;
+    overflow: hidden; border-radius: inherit;
+}
 .dropdown-menu {
     display: none; position: absolute; right: 0; top: 50px;
     width: 260px; background: var(--card); border: 1px solid var(--border);
@@ -417,11 +426,28 @@ body::before {
     width: 88px; height: 88px; background: var(--bg); border: 3px solid var(--primary);
     border-radius: 50%; margin: 0 auto 14px; display: flex; align-items: center;
     justify-content: center; font-size: 36px; overflow: hidden; position: relative; cursor: pointer;
+    flex-shrink: 0;
 }
-.profile-avatar-large img { width: 100%; height: 100%; object-fit: cover; }
+/* Inner label/image must fill the circle so photos crop correctly */
+.profile-avatar-large > span,
+.profile-avatar-large #profileAvatarInitial {
+    position: absolute; inset: 0;
+    width: 100%; height: 100%;
+    display: flex; align-items: center; justify-content: center;
+    border-radius: 50%; overflow: hidden;
+    line-height: 1;
+}
+.profile-avatar-large img {
+    width: 100%; height: 100%;
+    object-fit: cover;
+    object-position: center center;
+    border-radius: 50%;
+    display: block;
+}
 .profile-avatar-overlay {
     position: absolute; bottom: 0; left: 0; right: 0; background: rgba(0,0,0,0.65);
     color: #fff; font-size: 10px; font-weight: 700; padding: 5px 0; text-align: center;
+    z-index: 2; pointer-events: none;
 }
 .profile-header-card h3 { font-size: 18px; font-weight: 800; margin-bottom: 4px; }
 .profile-header-card p { font-size: 13px; color: var(--muted); }
@@ -1872,8 +1898,8 @@ async function initUserData(user) {
     safeSet('heroWelcomeTitle', `Welcome back, ${name}!`);
     safeSet('heroSubText', 'Fund your wallet to get started with logs, SMS verification, and boosters.');
     if (avatarUrl) {
-        safeSetHTML('headerAvatarText', `<img src="${avatarUrl}">`);
-        safeSetHTML('profileAvatarInitial', `<img src="${avatarUrl}">`);
+        safeSetHTML('headerAvatarText', `<img src="${avatarUrl}" alt="" style="width:100%;height:100%;object-fit:cover;object-position:center;display:block;">`);
+        safeSetHTML('profileAvatarInitial', `<img src="${avatarUrl}" alt="Avatar" style="width:100%;height:100%;object-fit:cover;object-position:center;border-radius:50%;display:block;">`);
     } else {
         safeSet('headerAvatarText', name.charAt(0).toUpperCase());
         safeSet('profileAvatarInitial', name.charAt(0).toUpperCase());
@@ -2456,8 +2482,8 @@ window.handleAvatarUpload = function(e) {
     const reader = new FileReader();
     reader.onload = (ev) => {
         userData.avatarUrl = ev.target.result;
-        safeSetHTML('profileAvatarInitial', `<img src="${ev.target.result}">`);
-        safeSetHTML('headerAvatarText', `<img src="${ev.target.result}">`);
+        safeSetHTML('profileAvatarInitial', `<img src="${ev.target.result}" alt="Avatar" style="width:100%;height:100%;object-fit:cover;object-position:center;border-radius:50%;display:block;">`);
+        safeSetHTML('headerAvatarText', `<img src="${ev.target.result}" alt="" style="width:100%;height:100%;object-fit:cover;object-position:center;display:block;">`);
         showToast('Avatar updated. Save to keep changes.', 'info');
     };
     reader.readAsDataURL(file);
