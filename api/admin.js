@@ -608,18 +608,82 @@ async function getOverviewStats(body) {
   const cutoff = new Date(Date.now() - PERIOD_DAYS[period] * 86400000).toISOString();
   const usdToNgn = Number(process.env.USD_TO_NGN_RATE) || 1500;
 
-  const [logsRes, smsRes, boostRes] = await Promise.all([
-    supabase.from('orders').select('status', { count: 'exact', head: false }).in('status', ['completed', 'paid', 'success']).gte('created_at', cutoff),
-    supabase.from('number_orders').select('price, supplier_price').eq('status', 'completed').gte('created_at', cutoff),
-    supabase.from('booster_orders').select('price_ngn, charge_usd, quantity, status, created_at').gte('created_at', cutoff)
+  let logsRes = await supabase.from('orders')
+    .select('amount, quantity, product_key, product_code, product_name, product_id, status')
+    .in('status', ['completed', 'paid', 'success', 'delivered'])
+    .gte('created_at', cutoff);
+  if (logsRes.error && /column|schema cache/i.test(logsRes.error.message || '')) {
+    logsRes = await supabase.from('orders')
+      .select('amount, quantity, product_name, status')
+      .in('status', ['completed', 'paid', 'success', 'delivered'])
+      .gte('created_at', cutoff);
+  }
+
+  const [smsRes, boostRes, productsRes] = await Promise.all([
+    supabase.from('number_orders')
+      .select('price, supplier_price, source, status')
+      .eq('status', 'completed')
+      .gte('created_at', cutoff),
+    supabase.from('booster_orders')
+      .select('price_ngn, charge_usd, quantity, status, created_at')
+      .gte('created_at', cutoff),
+    supabase.from('products')
+      .select('id, product_key, name, supplier_price')
   ]);
 
   if (logsRes.error) return { status: 500, body: { success: false, message: 'Logs stats failed: ' + logsRes.error.message } };
   if (smsRes.error) return { status: 500, body: { success: false, message: 'SMS stats failed: ' + smsRes.error.message } };
 
+  // ----- SMS: customer paid (price) minus supplier cost -----
+  // Grizzly stores supplier_price in USD; LogsDomain stores it in NGN.
   const smsRows = smsRes.data || [];
   const smsAmountSpent = smsRows.reduce((s, r) => s + Number(r.price || 0), 0);
-  const smsProfit = smsRows.reduce((s, r) => s + (Number(r.price || 0) - (Number(r.supplier_price || 0) * usdToNgn)), 0);
+  const smsProfit = smsRows.reduce((s, r) => {
+    const paid = Number(r.price || 0);
+    const sp = Number(r.supplier_price || 0);
+    if (!(sp > 0)) return s + paid;
+    const source = String(r.source || '').toLowerCase();
+    let cost = 0;
+    if (source.includes('grizzly')) {
+      cost = sp * usdToNgn; // USD → NGN
+    } else if (source.includes('logsdomain') || source.includes('logdomain') || source.includes('ld')) {
+      cost = sp; // already NGN
+    } else {
+      // Unknown source: small values that convert cleanly → USD, else NGN
+      const asUsd = sp * usdToNgn;
+      cost = (sp < 50 && asUsd <= paid * 1.5) ? asUsd : sp;
+    }
+    return s + (paid - cost);
+  }, 0);
+
+  // ----- LOGS (product orders): customer paid (amount) minus product supplier_price -----
+  const logRows = logsRes.data || [];
+  const productList = productsRes.error ? [] : (productsRes.data || []);
+  const productByKey = new Map();
+  const productById = new Map();
+  const productByName = new Map();
+  for (const p of productList) {
+    if (p.product_key) productByKey.set(String(p.product_key), p);
+    if (p.id != null) productById.set(String(p.id), p);
+    if (p.name) productByName.set(String(p.name).toLowerCase(), p);
+  }
+  const logsSoldCount = logRows.length;
+  const logsAmountSpent = logRows.reduce((s, r) => s + Number(r.amount || 0), 0);
+  const logsProfit = logRows.reduce((s, r) => {
+    const paid = Number(r.amount || 0);
+    const qty = Math.max(1, Number(r.quantity) || 1);
+    const key = r.product_key || r.product_code;
+    let product = null;
+    if (key) product = productByKey.get(String(key));
+    if (!product && r.product_id != null) product = productById.get(String(r.product_id));
+    if (!product && r.product_name) product = productByName.get(String(r.product_name).toLowerCase());
+    // products.supplier_price is NGN (Fadded / LogsDomain / Sujan catalog)
+    const unitCost = product ? Number(product.supplier_price || 0) : 0;
+    // amount on order rows is usually the line total (or unit price for qty=1)
+    // Prefer unit cost × qty; if amount looks like a multi-qty total, cost scales with qty
+    const cost = unitCost * qty;
+    return s + (paid - cost);
+  }, 0);
 
   // Boosters: never fail the whole overview if this table is missing/empty
   let boostRows = [];
@@ -664,7 +728,9 @@ async function getOverviewStats(body) {
     body: {
       success: true,
       period,
-      logs_sold_count: logsRes.count || 0,
+      logs_sold_count: logsSoldCount,
+      logs_amount_spent: Math.round(logsAmountSpent),
+      logs_profit: Math.round(logsProfit),
       sms_order_count: smsRows.length,
       sms_amount_spent: Math.round(smsAmountSpent),
       sms_profit: Math.round(smsProfit),
