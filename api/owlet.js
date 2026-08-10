@@ -488,7 +488,7 @@ async function handleOrder(req, res) {
 
   const { data: profile, error: pErr } = await supabase
     .from('profiles')
-    .select('id, balance, customer_id, email, full_name')
+    .select('id, balance, customer_id')
     .eq('id', user.id)
     .maybeSingle();
 
@@ -550,6 +550,7 @@ async function handleOrder(req, res) {
   }
 
   const supplierOrderId = String(json.order);
+  const nowIso = new Date().toISOString();
   const orderRow = {
     user_id: user.id,
     customer_id: profile.customer_id || null,
@@ -557,7 +558,7 @@ async function handleOrder(req, res) {
     supplier_order_id: supplierOrderId,
     service_id: serviceId,
     service_name: service.name,
-    category: service.category,
+    category: service.category || null,
     link,
     quantity,
     charge_usd: null,
@@ -567,16 +568,54 @@ async function handleOrder(req, res) {
     start_count: null,
     remains: null,
     raw: json,
-    created_at: new Date().toISOString(),
-    updated_at: new Date().toISOString()
+    created_at: nowIso,
+    updated_at: nowIso
   };
 
-  const { data: saved, error: saveErr } = await supabase
-    .from('booster_orders')
-    .insert(orderRow)
-    .select('id, supplier_order_id, service_name, quantity, price_ngn, status, link, created_at')
-    .maybeSingle();
+  // MUST persist — history depends on this. Retry with fewer columns if schema is thin.
+  let saved = null;
+  let saveErrMsg = null;
+  {
+    let ins = await supabase
+      .from('booster_orders')
+      .insert(orderRow)
+      .select('id, supplier_order_id, service_name, quantity, price_ngn, status, link, created_at, user_id, customer_id')
+      .maybeSingle();
 
+    if (ins.error) {
+      console.error('[owlet order] booster_orders insert failed:', ins.error.message);
+      // Minimal fallback (table may lack optional columns)
+      const minimal = {
+        user_id: user.id,
+        customer_id: profile.customer_id || null,
+        source: 'owlet',
+        supplier_order_id: supplierOrderId,
+        service_id: serviceId,
+        service_name: service.name,
+        link,
+        quantity,
+        price_ngn: totalNgn,
+        status: 'Pending',
+        created_at: nowIso
+      };
+      ins = await supabase
+        .from('booster_orders')
+        .insert(minimal)
+        .select('id, supplier_order_id, service_name, quantity, price_ngn, status, link, created_at, user_id, customer_id')
+        .maybeSingle();
+      if (ins.error) {
+        saveErrMsg = ins.error.message;
+        console.error('[owlet order] minimal insert also failed:', ins.error.message);
+      } else {
+        saved = ins.data;
+      }
+    } else {
+      saved = ins.data;
+    }
+  }
+
+  // If DB save failed after supplier accepted, still return success but flag it —
+  // do NOT refund (supplier already charged). Admin can reconcile via supplier_order_id.
   try {
     await supabase.from('transactions').insert({
       user_id: user.id,
@@ -585,11 +624,14 @@ async function handleOrder(req, res) {
       category: 'booster',
       title: service.name || 'MJ Booster',
       subtitle: `${quantity.toLocaleString()} · ${link.slice(0, 60)}`,
-      amount: totalNgn,
+      amount: `₦${totalNgn.toLocaleString()}`,
+      amount_ngn: totalNgn,
       status: 'completed',
-      created_at: new Date().toISOString()
+      created_at: nowIso
     });
-  } catch (_) {}
+  } catch (e) {
+    console.warn('[owlet order] transactions insert:', e?.message || e);
+  }
 
   // Best-effort status pull
   let statusData = null;
@@ -597,15 +639,30 @@ async function handleOrder(req, res) {
     const st = await owletCall({ action: 'status', order: supplierOrderId });
     if (st.ok && st.json && !st.json.error) {
       statusData = st.json;
-      await supabase.from('booster_orders').update({
-        status: st.json.status || 'Pending',
-        start_count: st.json.start_count || null,
-        remains: st.json.remains || null,
-        charge_usd: st.json.charge ? Number(st.json.charge) : null,
-        updated_at: new Date().toISOString()
-      }).eq('supplier_order_id', supplierOrderId);
+      if (saved?.id || supplierOrderId) {
+        await supabase.from('booster_orders').update({
+          status: st.json.status || 'Pending',
+          start_count: st.json.start_count != null ? String(st.json.start_count) : null,
+          remains: st.json.remains != null ? String(st.json.remains) : null,
+          charge_usd: st.json.charge ? Number(st.json.charge) : null,
+          updated_at: new Date().toISOString()
+        }).eq('supplier_order_id', supplierOrderId);
+      }
     }
   } catch (_) {}
+
+  if (saveErrMsg) {
+    return res.status(200).json({
+      success: true,
+      message: 'Boost sent to supplier, but history save failed — run booster_orders SQL in Supabase',
+      warning: saveErrMsg,
+      order: { supplier_order_id: supplierOrderId, service_name: service.name, quantity, price_ngn: totalNgn, status: 'Pending', link },
+      supplier_order_id: supplierOrderId,
+      new_balance: newBalance,
+      status: statusData,
+      history_saved: false
+    });
+  }
 
   return res.status(200).json({
     success: true,
@@ -613,7 +670,8 @@ async function handleOrder(req, res) {
     order: saved || orderRow,
     supplier_order_id: supplierOrderId,
     new_balance: newBalance,
-    status: statusData
+    status: statusData,
+    history_saved: true
   });
 }
 
