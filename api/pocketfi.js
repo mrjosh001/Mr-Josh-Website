@@ -169,7 +169,7 @@ function isPaidStatus(data) {
  * Send deposit success email via Resend (best-effort, never blocks credit).
  * Env: RESEND_API_KEY, RESEND_FROM_EMAIL (e.g. "MJ Hub <noreply@mjhub.store>")
  */
-async function sendDepositEmail({ to, name, amountLabel, walletLabel, reference, newBalanceLabel }) {
+async function sendDepositEmail({ to, name, amountLabel, walletLabel, reference }) {
   const apiKey = process.env.RESEND_API_KEY;
   const from = process.env.RESEND_FROM_EMAIL || process.env.RESEND_FROM || 'MJ Hub <onboarding@resend.dev>';
   if (!apiKey || !to) {
@@ -178,43 +178,148 @@ async function sendDepositEmail({ to, name, amountLabel, walletLabel, reference,
   }
 
   const safeName = String(name || 'there').trim() || 'there';
-  const subject = `Deposit successful — ${amountLabel}`;
+  const appUrl = process.env.APP_URL || 'https://app.mjhub.store';
+  const year = new Date().getFullYear();
+  const subject = "Deposit Notification";
+
+  // Hosted brand logos (same assets as the live site)
+  const LOGO_DARK = 'https://atczodlljmlayvldxfmv.supabase.co/storage/v1/object/public/avatars/dark%20background%20log';
+  const LOGO_LIGHT = 'https://atczodlljmlayvldxfmv.supabase.co/storage/v1/object/public/avatars/light%20background%20logo';
+
   const html = `
 <!DOCTYPE html>
-<html>
-<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
-<body style="margin:0;padding:0;background:#0b0f1a;font-family:Inter,system-ui,-apple-system,sans-serif;">
-  <table width="100%" cellpadding="0" cellspacing="0" style="background:#0b0f1a;padding:32px 16px;">
-    <tr><td align="center">
-      <table width="100%" style="max-width:480px;background:#121826;border-radius:16px;border:1px solid #1e293b;overflow:hidden;">
-        <tr><td style="padding:28px 24px 8px;text-align:center;">
-          <div style="font-size:22px;font-weight:800;color:#f1f5f9;">⚡ MJ Hub</div>
-          <div style="margin-top:6px;font-size:12px;color:#64748b;letter-spacing:.06em;text-transform:uppercase;">Deposit confirmation</div>
-        </td></tr>
-        <tr><td style="padding:8px 24px 24px;">
-          <p style="margin:0 0 16px;font-size:15px;color:#cbd5e1;line-height:1.5;">Hi ${safeName},</p>
-          <p style="margin:0 0 20px;font-size:15px;color:#cbd5e1;line-height:1.5;">Your deposit was successful and has been credited to your wallet.</p>
-          <table width="100%" style="background:#0b0f1a;border-radius:12px;border:1px solid #1e293b;">
-            <tr><td style="padding:16px 18px;">
-              <div style="font-size:12px;color:#64748b;margin-bottom:4px;">Amount</div>
-              <div style="font-size:22px;font-weight:800;color:#60a5fa;margin-bottom:14px;">${amountLabel}</div>
-              <div style="font-size:13px;color:#94a3b8;line-height:1.6;">
-                <div><strong style="color:#e2e8f0;">Wallet:</strong> ${walletLabel}</div>
-                ${newBalanceLabel ? `<div><strong style="color:#e2e8f0;">New balance:</strong> ${newBalanceLabel}</div>` : ''}
-                ${reference ? `<div><strong style="color:#e2e8f0;">Reference:</strong> ${reference}</div>` : ''}
+<html lang="en" xmlns="http://www.w3.org/1999/xhtml">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="color-scheme" content="light dark">
+  <meta name="supported-color-schemes" content="light dark">
+  <title>Deposit Notification</title>
+  <style>
+    :root { color-scheme: light dark; }
+    @media (prefers-color-scheme: light) {
+      .body-bg { background-color: #f4f5f7 !important; }
+      .card-bg { background-color: #ffffff !important; border-color: #e5e7eb !important; }
+      .inner-bg { background-color: #f8f9fb !important; border-color: #e5e7eb !important; }
+      .text-primary { color: #111827 !important; }
+      .text-secondary { color: #6b7280 !important; }
+      .text-muted { color: #9ca3af !important; }
+      .divider { border-color: #e5e7eb !important; background-color: #e5e7eb !important; }
+      .badge { background-color: rgba(91,138,245,0.10) !important; border-color: rgba(91,138,245,0.22) !important; color: #3b6fd4 !important; }
+      .amount { color: #5b8af5 !important; }
+      .logo-dark { display: none !important; max-height: 0 !important; overflow: hidden !important; width: 0 !important; height: 0 !important; }
+      .logo-light { display: block !important; max-height: none !important; }
+    }
+    @media (prefers-color-scheme: dark) {
+      .body-bg { background-color: #0a0a0f !important; }
+      .card-bg { background-color: #111118 !important; border-color: #1c1c28 !important; }
+      .inner-bg { background-color: #0a0a0f !important; border-color: #1c1c28 !important; }
+      .text-primary { color: #f4f4f8 !important; }
+      .text-secondary { color: #9ca3af !important; }
+      .text-muted { color: #6b7280 !important; }
+      .divider { border-color: #1c1c28 !important; background-color: #1c1c28 !important; }
+      .badge { background-color: rgba(91,138,245,0.12) !important; border-color: rgba(91,138,245,0.25) !important; color: #8badea !important; }
+      .amount { color: #5b8af5 !important; }
+      .logo-light { display: none !important; max-height: 0 !important; overflow: hidden !important; width: 0 !important; height: 0 !important; }
+      .logo-dark { display: block !important; max-height: none !important; }
+    }
+  </style>
+</head>
+<body class="body-bg" style="margin:0;padding:0;background:#0a0a0f;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" class="body-bg" style="background:#0a0a0f;padding:40px 16px;">
+    <tr>
+      <td align="center">
+        <table role="presentation" width="100%" class="card-bg" style="max-width:440px;background:#111118;border-radius:20px;border:1px solid #1c1c28;overflow:hidden;">
+
+          <!-- Brand logo (swaps for light / dark) -->
+          <tr>
+            <td style="padding:28px 28px 0;text-align:center;">
+              <img class="logo-dark" src="${LOGO_DARK}" width="140" alt="MJ Hub" style="display:block;margin:0 auto;width:140px;max-width:140px;height:auto;border:0;">
+              <img class="logo-light" src="${LOGO_LIGHT}" width="140" alt="MJ Hub" style="display:none;margin:0 auto;width:140px;max-width:140px;height:auto;border:0;">
+            </td>
+          </tr>
+
+          <!-- Status badge -->
+          <tr>
+            <td style="padding:22px 28px 0;text-align:center;">
+              <div class="badge" style="display:inline-block;background:rgba(91,138,245,0.12);border:1px solid rgba(91,138,245,0.25);color:#8badea;font-size:11px;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;padding:6px 14px;border-radius:999px;">
+                Deposit Notification
               </div>
-            </td></tr>
-          </table>
-          <p style="margin:20px 0 0;font-size:13px;color:#64748b;line-height:1.5;">If you did not make this deposit, contact support immediately.</p>
-          <div style="margin-top:24px;text-align:center;">
-            <a href="${process.env.APP_URL || 'https://app.mjhub.store'}" style="display:inline-block;background:linear-gradient(135deg,#5b8af5,#7c5cfc);color:#fff;text-decoration:none;font-weight:700;font-size:14px;padding:12px 22px;border-radius:10px;">Open MJ Hub</a>
-          </div>
-        </td></tr>
-        <tr><td style="padding:16px 24px 24px;text-align:center;font-size:11px;color:#475569;">
-          © ${new Date().getFullYear()} MJ Hub · Secure payments
-        </td></tr>
-      </table>
-    </td></tr>
+            </td>
+          </tr>
+
+          <!-- Greeting -->
+          <tr>
+            <td style="padding:22px 28px 0;">
+              <p class="text-primary" style="margin:0;font-size:16px;font-weight:600;color:#f4f4f8;line-height:1.4;">Hello ${safeName},</p>
+              <p class="text-secondary" style="margin:10px 0 0;font-size:14px;color:#9ca3af;line-height:1.6;">
+                Your payment has been received and credited to your ${walletLabel}.
+              </p>
+            </td>
+          </tr>
+
+          <!-- Amount card -->
+          <tr>
+            <td style="padding:22px 28px 0;">
+              <table role="presentation" width="100%" cellpadding="0" cellspacing="0" class="inner-bg" style="background:#0a0a0f;border-radius:14px;border:1px solid #1c1c28;">
+                <tr>
+                  <td style="padding:20px 22px;text-align:center;">
+                    <div class="text-muted" style="font-size:12px;font-weight:600;color:#6b7280;letter-spacing:0.04em;text-transform:uppercase;margin-bottom:8px;">Amount Credited</div>
+                    <div class="amount" style="font-size:32px;font-weight:800;color:#5b8af5;letter-spacing:-0.03em;line-height:1.1;">${amountLabel}</div>
+                  </td>
+                </tr>
+                <tr>
+                  <td style="padding:0 22px 18px;">
+                    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" class="divider" style="border-top:1px solid #1c1c28;">
+                      <tr>
+                        <td class="text-muted" style="padding-top:14px;font-size:13px;color:#6b7280;">Wallet</td>
+                        <td class="text-primary" style="padding-top:14px;font-size:13px;font-weight:600;color:#e5e7eb;text-align:right;">${walletLabel}</td>
+                      </tr>
+                      ${reference ? `
+                      <tr>
+                        <td class="text-muted" style="padding-top:8px;font-size:13px;color:#6b7280;">Reference</td>
+                        <td class="text-secondary" style="padding-top:8px;font-size:12px;font-weight:500;color:#9ca3af;text-align:right;word-break:break-all;">${reference}</td>
+                      </tr>` : ''}
+                    </table>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+
+          <!-- CTA -->
+          <tr>
+            <td style="padding:28px 28px 0;text-align:center;">
+              <a href="${appUrl}" style="display:inline-block;background:linear-gradient(135deg,#5b8af5 0%,#7c5cfc 100%);color:#ffffff;text-decoration:none;font-weight:700;font-size:14px;padding:14px 32px;border-radius:12px;letter-spacing:0.01em;">
+                Open Dashboard
+              </a>
+            </td>
+          </tr>
+
+          <!-- Security note -->
+          <tr>
+            <td style="padding:20px 28px 0;">
+              <p class="text-muted" style="margin:0;font-size:12px;color:#6b7280;line-height:1.55;text-align:center;">
+                If you did not authorize this payment, contact support immediately at
+                <a href="mailto:support@app.mjhub.store" style="color:#5b8af5;text-decoration:none;">support@app.mjhub.store</a>
+              </p>
+            </td>
+          </tr>
+
+          <!-- Footer -->
+          <tr>
+            <td style="padding:28px 28px 28px;text-align:center;">
+              <div class="divider" style="height:1px;background:#1c1c28;margin-bottom:18px;"></div>
+              <p class="text-muted" style="margin:0;font-size:11px;color:#4b5563;line-height:1.5;">
+                © ${year} MJ Hub. All rights reserved.<br>
+                Secure payments · Instant wallet credit
+              </p>
+            </td>
+          </tr>
+
+        </table>
+      </td>
+    </tr>
   </table>
 </body>
 </html>`.trim();
@@ -338,8 +443,7 @@ async function creditUser(userId, amountNgn, reference) {
       name: displayName,
       amountLabel: `$${amountUsd.toFixed(2)}`,
       walletLabel: 'USD Wallet',
-      reference,
-      newBalanceLabel: `$${nextUsd.toFixed(2)}`
+      reference
     }).catch(() => {});
 
     return { balance_usd: nextUsd, wallet: 'usd', amount_usd: amountUsd };
@@ -389,8 +493,7 @@ async function creditUser(userId, amountNgn, reference) {
     name: displayName,
     amountLabel: `₦${amountNgn.toLocaleString()}`,
     walletLabel: 'NGN Wallet',
-    reference,
-    newBalanceLabel: `₦${next.toLocaleString()}`
+    reference
   }).catch(() => {});
 
   return { balance: next, wallet: 'ngn' };
