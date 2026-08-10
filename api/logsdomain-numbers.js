@@ -94,8 +94,12 @@ async function callLogsDomain(path, { method = 'GET', body = null } = {}) {
 // Applies the same shared markup + ₦1000 absolute floor used for Grizzly.
 // LogsDomain's service price already comes back in NGN (not USD), so we
 // pass usdToNgn=1 — applyMarkup just treats the input as already-NGN cost.
+// Server 2 rule: selling price = supplier price + half supplier price
+// (i.e. 1.5 × supplier cost) on every country and service.
 function priceForCustomer(supplierPriceNgn) {
-  return applyMarkup(Number(supplierPriceNgn) || 0, 1);
+  const cost = Number(supplierPriceNgn) || 0;
+  if (cost <= 0) return 0;
+  return Math.ceil(cost * 1.5);
 }
 
 // ===========================================================================
