@@ -3448,6 +3448,14 @@ async function loadAdminNotifications() {
       return;
     }
     adminBroadcasts = data || [];
+
+    // First visit: mark every EXISTING broadcast as already seen so only
+    // brand-new ones (sent after this) open a popup.
+    const seen = getSeenNotifIds();
+    if (seen.length === 0 && adminBroadcasts.length > 0) {
+      adminBroadcasts.forEach(n => { if (n.id) markNotifSeen(n.id); });
+    }
+
     buildNotificationsFromActivity();
     renderNotifications();
     queueUnseenPopups();
@@ -3457,8 +3465,21 @@ async function loadAdminNotifications() {
 }
 
 function queueUnseenPopups() {
-  const unseen = (adminBroadcasts || []).filter(n => n.id && !isNotifSeen(n.id));
-  // Newest first for popup queue
+  const now = Date.now();
+  const MAX_AGE_MS = 24 * 60 * 60 * 1000; // popup only if created within last 24h
+
+  const unseen = (adminBroadcasts || []).filter(n => {
+    if (!n.id || isNotifSeen(n.id)) return false;
+    const created = new Date(n.created_at).getTime();
+    if (isNaN(created)) return false;
+    // Old broadcasts stay in the bell, never popup
+    if (now - created > MAX_AGE_MS) {
+      markNotifSeen(n.id);
+      return false;
+    }
+    return true;
+  });
+
   notifPopupQueue = unseen.slice().sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
   if (!notifPopupShowing) showNextNotifPopup();
 }
