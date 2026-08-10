@@ -637,12 +637,25 @@ async function getOverviewStats(body) {
   });
   const boostOrderCount = boostRows.length;
   const boostAmountSpent = boostRows.reduce((s, r) => s + Number(r.price_ngn || 0), 0);
+  // Profit = customer paid (price_ngn) minus supplier charge.
+  // Owlet status "charge" is stored in charge_usd but is often already NGN
+  // (Naira panel). Only convert when the value clearly looks like USD.
   const boostProfit = boostRows.reduce((s, r) => {
     const paid = Number(r.price_ngn || 0);
+    const charge = Number(r.charge_usd);
     let cost = 0;
-    if (r.charge_usd != null && Number(r.charge_usd) > 0) {
-      cost = Number(r.charge_usd) * usdToNgn;
+    if (Number.isFinite(charge) && charge > 0) {
+      const asUsd = charge * usdToNgn;
+      // Small values that stay within revenue when converted → USD
+      if (charge < 100 && asUsd <= paid * 1.5) {
+        cost = asUsd;
+      } else {
+        // Already NGN (or would explode if treated as USD)
+        cost = charge;
+      }
     }
+    // No invented markup. If supplier charge is unknown yet, cost stays 0
+    // until Owlet status fills charge_usd.
     return s + (paid - cost);
   }, 0);
 
