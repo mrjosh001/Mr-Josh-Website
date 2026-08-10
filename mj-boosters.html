@@ -42,15 +42,11 @@ a{color:inherit;text-decoration:none}
 .platforms{display:flex;gap:10px;padding:0 16px 12px;overflow-x:auto;scrollbar-width:none;-webkit-overflow-scrolling:touch}
 .platforms::-webkit-scrollbar{display:none}
 .plat{flex:0 0 auto;width:52px;height:52px;border-radius:16px;border:1.5px solid var(--border);background:var(--card);display:flex;align-items:center;justify-content:center;cursor:pointer;transition:.15s;position:relative}
-.plat img{width:26px;height:26px;object-fit:contain}
-.plat.active{border-color:transparent;transform:translateY(-2px);box-shadow:0 8px 20px rgba(0,0,0,.25)}
-
-/* Keep platform logos visible on colored active pills */
 .plat img{width:26px;height:26px;object-fit:contain;transition:.15s}
+.plat.active{border-color:transparent;transform:translateY(-2px);box-shadow:0 8px 20px rgba(0,0,0,.25)}
 .plat.active img{filter:brightness(0) invert(1)}
 .plat[data-p="snapchat"].active img{filter:brightness(0)}
 .plat[data-p="google"].active img{filter:none}
-
 .plat.active::after{content:'';position:absolute;bottom:-6px;width:6px;height:6px;border-radius:50%;background:var(--primary)}
 .plat[data-p="instagram"].active{background:radial-gradient(circle at 30% 107%,#fdf497 0%,#fd5949 45%,#d6249f 60%,#285AEB 90%)}
 .plat[data-p="tiktok"].active{background:#000}
@@ -88,17 +84,31 @@ a{color:inherit;text-decoration:none}
 .toast.show{opacity:1}
 .modal-bg{position:fixed;inset:0;background:rgba(0,0,0,.6);backdrop-filter:blur(6px);z-index:80;display:none;align-items:flex-end;justify-content:center}
 .modal-bg.open{display:flex}
-.modal{width:100%;max-width:520px;background:var(--card);border-radius:22px 22px 0 0;border:1px solid var(--border);padding:18px 16px 28px;max-height:92vh;overflow:auto}
-.modal h3{font-size:17px;font-weight:900;margin-bottom:6px}
-.modal .sub{color:var(--muted);font-size:12.5px;margin-bottom:14px;line-height:1.4}
-.field{margin-bottom:12px}
-.field label{display:block;font-size:11px;font-weight:800;color:var(--muted);margin-bottom:6px;text-transform:uppercase;letter-spacing:.04em}
-.field input{width:100%;padding:12px 13px;border-radius:12px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:14px;outline:none}
-.total-box{padding:12px 14px;border-radius:14px;background:rgba(59,130,246,.1);border:1px solid rgba(59,130,246,.25);display:flex;justify-content:space-between;align-items:center;margin:12px 0 16px}
-.total-box strong{font-size:18px;font-weight:900}
-.btn{border:0;cursor:pointer;border-radius:14px;padding:12px 16px;font-weight:800;font-size:13px;display:inline-flex;align-items:center;gap:8px}
-.btn-primary{background:linear-gradient(135deg,var(--primary),var(--primary2));color:#fff;box-shadow:0 10px 28px var(--glow)}
-.btn-ghost{background:rgba(255,255,255,.06);color:var(--text);border:1px solid var(--border)}
+.modal{width:100%;max-width:520px;background:var(--card);border-radius:22px 22px 0 0;border:1px solid var(--border);padding:20px 18px 32px;max-height:92vh;overflow:auto}
+.modal-handle{width:40px;height:4px;border-radius:99px;background:var(--border);margin:0 auto 16px}
+.modal h3{font-size:17px;font-weight:900;margin-bottom:4px;line-height:1.3}
+.modal .sub{color:var(--muted);font-size:12.5px;margin-bottom:14px;line-height:1.45}
+.modal .price-row{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:16px}
+.modal .price-pill{font-size:14px;font-weight:900;color:#60a5fa;background:rgba(59,130,246,.12);padding:6px 12px;border-radius:10px}
+.modal .meta-pill{font-size:11px;font-weight:700;color:var(--muted);background:var(--bg);padding:5px 10px;border-radius:8px;border:1px solid var(--border)}
+.field{margin-bottom:14px}
+.field label{display:block;font-size:11px;font-weight:800;color:var(--muted);margin-bottom:7px;text-transform:uppercase;letter-spacing:.04em}
+.field-row{display:flex;gap:8px;align-items:stretch}
+.field input{width:100%;padding:13px 14px;border-radius:12px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:14px;outline:none}
+.field input:focus{border-color:rgba(91,138,245,.55)}
+.paste-btn{flex:0 0 auto;padding:0 16px;border-radius:12px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:13px;font-weight:800;cursor:pointer;white-space:nowrap}
+.paste-btn:active{opacity:.8}
+.qty-chips{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
+.qty-chip{padding:8px 12px;border-radius:10px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:12px;font-weight:800;cursor:pointer;transition:.12s}
+.qty-chip:hover,.qty-chip:active{border-color:rgba(91,138,245,.5);background:rgba(91,138,245,.1)}
+.qty-chip.clear{color:var(--muted)}
+.hint-text{font-size:12px;color:var(--muted);margin-top:6px;line-height:1.4}
+.total-box{padding:14px 16px;border-radius:14px;background:rgba(59,130,246,.1);border:1px solid rgba(59,130,246,.25);display:flex;justify-content:space-between;align-items:center;margin:4px 0 18px}
+.total-box span{font-size:13px;font-weight:700;color:var(--muted)}
+.total-box strong{font-size:20px;font-weight:900}
+.btn{border:0;cursor:pointer;border-radius:14px;padding:14px 16px;font-weight:800;font-size:14px;display:inline-flex;align-items:center;justify-content:center;gap:8px}
+.btn-primary{background:linear-gradient(135deg,var(--primary),var(--primary2));color:#fff;box-shadow:0 10px 28px var(--glow);width:100%}
+.btn-ghost{background:rgba(255,255,255,.06);color:var(--text);border:1px solid var(--border);width:100%;margin-top:8px}
 .bottom-nav{position:fixed;bottom:0;left:0;right:0;display:flex;gap:8px;padding:10px 12px calc(10px + env(safe-area-inset-bottom));background:var(--bottom-bg);backdrop-filter:blur(12px);border-top:1px solid var(--border)}
 .bottom-nav a,.bottom-nav button{flex:1;border:0;border-radius:14px;padding:12px 8px;font-weight:800;font-size:12px;background:var(--card);color:var(--text);border:1px solid var(--border);cursor:pointer;text-align:center}
 .bottom-nav .main{background:linear-gradient(135deg,var(--primary),var(--primary2));color:#fff;border:0}
@@ -160,20 +170,53 @@ a{color:inherit;text-decoration:none}
 </div>
 <div class="toast" id="toast"></div>
 
+<!-- ORDER MODAL -->
 <div class="modal-bg" id="modalBg" onclick="if(event.target===this)closeModal()">
   <div class="modal">
+    <div class="modal-handle"></div>
     <h3 id="mTitle">Service</h3>
     <div class="sub" id="mSub"></div>
-    <div class="field"><label>Link / Username</label><input id="mLink" placeholder="Paste profile, post, video or channel link"></div>
-    <div class="field"><label>Quantity (min 500)</label><input id="mQty" type="number" min="500" value="500"></div>
-    <div class="total-box"><span>You pay</span><strong id="mTotal">₦0</strong></div>
-    <button class="btn btn-primary" style="width:100%;justify-content:center" id="mBuy" onclick="placeOrder()"><i class="fa-solid fa-bolt"></i> Boost Now</button>
-    <button class="btn btn-ghost" style="width:100%;justify-content:center;margin-top:8px" onclick="closeModal()">Cancel</button>
+
+    <div class="price-row">
+      <span class="price-pill" id="mPrice">₦0 / 1k</span>
+      <span class="meta-pill" id="mMinMax">Min 500</span>
+      <span class="badge" id="mRefill" style="display:none">Refill</span>
+    </div>
+
+    <div class="field">
+      <label>Link</label>
+      <div class="field-row">
+        <input id="mLink" placeholder="Paste profile, post, reel or video link" autocomplete="off">
+        <button type="button" class="paste-btn" onclick="pasteLink()">Paste</button>
+      </div>
+      <div class="hint-text">Use the exact link. Private accounts are not supported.</div>
+    </div>
+
+    <div class="field">
+      <label>Quantity</label>
+      <input id="mQty" type="number" min="500" value="500" inputmode="numeric">
+      <div class="qty-chips">
+        <button type="button" class="qty-chip" onclick="qtyChip(100)">+100</button>
+        <button type="button" class="qty-chip" onclick="qtyChip(1000)">+1,000</button>
+        <button type="button" class="qty-chip" onclick="qtyChip(5000)">+5,000</button>
+        <button type="button" class="qty-chip" onclick="qtyChip(10000)">+10,000</button>
+        <button type="button" class="qty-chip clear" onclick="qtyClear()">Clear</button>
+      </div>
+    </div>
+
+    <div class="total-box">
+      <span>You pay</span>
+      <strong id="mTotal">₦0</strong>
+    </div>
+
+    <button class="btn btn-primary" id="mBuy" onclick="placeOrder()">
+      <i class="fa-solid fa-bolt"></i> Boost Now
+    </button>
+    <button class="btn btn-ghost" onclick="closeModal()">Cancel</button>
   </div>
 </div>
 
 <script>
-
 const SUPABASE_URL = 'https://atczodlljmlayvldxfmv.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImF0Y3pvZGxsam1sYXl2bGR4Zm12Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODUwNzUyMzgsImV4cCI6MjEwMDY1MTIzOH0.ufthD-p7BmeD_B7xyuMM6PNPL8DmcL4AtRYgg-MuoLI';
 const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
@@ -197,33 +240,27 @@ const PLATFORM_KEYS = {
 
 let session=null, balance=0, page=1, selected=null;
 const serviceMap = new Map();
+
 function syncThemeUi(){
   const dark = document.documentElement.getAttribute('data-theme') !== 'light';
   const btn = document.getElementById('themeBtn');
   if (btn) btn.textContent = dark ? '🌙' : '☀️';
   const meta = document.querySelector('meta[name="theme-color"]');
   if (meta) meta.setAttribute('content', dark ? '#06080f' : '#f4f6fb');
-  // TikTok + X are mono logos — must flip color with theme / active state
   document.querySelectorAll('img.theme-mono-icon').forEach(img => {
     const plat = img.closest('.plat');
     const active = plat && plat.classList.contains('active');
     const name = img.getAttribute('data-icon');
-    // Active TikTok/X sit on black pills → always white logo
     if (active && (name === 'tiktok' || name === 'x')) {
       img.src = name === 'tiktok'
         ? 'https://cdn.simpleicons.org/tiktok/ffffff'
         : 'https://cdn.simpleicons.org/x/ffffff';
       return;
     }
-    // Idle: black on light theme, white on dark theme
     if (name === 'tiktok') {
-      img.src = dark
-        ? 'https://cdn.simpleicons.org/tiktok/ffffff'
-        : 'https://cdn.simpleicons.org/tiktok/000000';
+      img.src = dark ? 'https://cdn.simpleicons.org/tiktok/ffffff' : 'https://cdn.simpleicons.org/tiktok/000000';
     } else if (name === 'x') {
-      img.src = dark
-        ? 'https://cdn.simpleicons.org/x/ffffff'
-        : 'https://cdn.simpleicons.org/x/000000';
+      img.src = dark ? 'https://cdn.simpleicons.org/x/ffffff' : 'https://cdn.simpleicons.org/x/000000';
     }
   });
 }
@@ -234,7 +271,6 @@ function toggleTheme(){
   try { localStorage.setItem('mjhub-theme', next); } catch (e) {}
   syncThemeUi();
 }
-
 
 async function authHeaders() {
   const h = { 'Content-Type': 'application/json' };
@@ -261,7 +297,7 @@ async function ensureAuth() {
   return true;
 }
 
-let allCategories=[]; // {name,count}
+let allCategories=[];
 let activePlatform='all';
 let activeCategory='';
 
@@ -280,7 +316,6 @@ function effectiveMin(s){
 function matchesPlatform(text, platform){
   if(!platform || platform==='all') return true;
   const keys = PLATFORM_KEYS[platform] || [platform];
-  // Strip emojis/symbols so "Snapchat Services | 🌍 Worldwide" still matches
   const raw = String(text || '').toLowerCase();
   const cleaned = raw.replace(/[^a-z0-9\s+.-]/g, ' ').replace(/\s+/g, ' ');
   return keys.some(k => {
@@ -356,7 +391,6 @@ function showCategoryCards(list){
     document.getElementById('pager').innerHTML='';
     return;
   }
-  // Do NOT put category names in inline onclick — names contain |, emojis, quotes and break HTML.
   content.innerHTML = list.map((c, i) =>
     '<div class="card cat-card" data-idx="' + i + '" role="button" tabindex="0">' +
       '<div class="icon">' + iconFor(c.name, '') + '</div>' +
@@ -400,8 +434,6 @@ async function loadServices(){
   const q=document.getElementById('search').value.trim();
   let category = activeCategory;
 
-  // If platform selected but no category, pick first matching category for services feed
-  // Better: if search with platform, try each - for simplicity require category OR search across first matching cats
   if(!category && activePlatform!=='all'){
     const list=filteredCategories();
     if(list[0]) category = list[0].name;
@@ -414,7 +446,6 @@ async function loadServices(){
   const params=new URLSearchParams({action:'catalog', page:String(page), page_size:'48'});
   if(category) params.set('category', category);
   if(q) params.set('q', q);
-  // if only platform + no category + search: still need a category for API services mode
   if(!category && q && allCategories[0]) params.set('category', allCategories[0].name);
 
   document.getElementById('content').innerHTML='<div class="empty"><div class="spinner"></div>Loading services…</div>';
@@ -431,7 +462,6 @@ async function loadServices(){
   }
 
   let rows=data.data||[];
-  // Client filter by platform when browsing a category that might mix (rare)
   if(activePlatform!=='all'){
     rows = rows.filter(s => matchesPlatform((s.category||'')+' '+(s.name||''), activePlatform));
   }
@@ -440,24 +470,23 @@ async function loadServices(){
     document.getElementById('content').innerHTML='<div class="empty">No services here. Try another category.</div>';
   } else {
     serviceMap.clear();
-  rows.forEach(s => serviceMap.set(String(s.service_id), s));
-  document.getElementById('content').innerHTML=rows.map(s=>{
+    rows.forEach(s => serviceMap.set(String(s.service_id), s));
+    document.getElementById('content').innerHTML=rows.map(s=>{
       const min=effectiveMin(s);
       return `
       <div class="card" data-sid="${esc(String(s.service_id))}" onclick="openOrderFromEl(this)">
         <div class="icon">${iconFor(s.category,s.name)}</div>
         <h3>${esc(s.name)}</h3>
-        <div class="meta">${esc(s.category||'')} · Min ${min.toLocaleString()}</div>
-        ${s.refill?'<div style="margin-top:6px"><span class="badge">Refill</span></div>':''}
+        <div class="meta">Min ${min.toLocaleString()}${s.refill ? ' · Refill' : ''}</div>
         <div class="price">${fmt(s.price_ngn)} <span style="font-size:11px;color:var(--muted);font-weight:700">/ 1k</span></div>
       </div>`;
     }).join('');
   }
   const maxPage=Math.max(1, Math.ceil((data.total||0)/48));
   document.getElementById('pager').innerHTML=`
-    <button class="btn btn-ghost" ${page<=1?'disabled':''} onclick="page=Math.max(1,page-1);loadServices()">Prev</button>
+    <button class="btn btn-ghost" style="width:auto;margin:0" ${page<=1?'disabled':''} onclick="page=Math.max(1,page-1);loadServices()">Prev</button>
     <span>Page ${page}/${maxPage}</span>
-    <button class="btn btn-ghost" ${page>=maxPage?'disabled':''} onclick="page=page+1;loadServices()">Next</button>`;
+    <button class="btn btn-ghost" style="width:auto;margin:0" ${page>=maxPage?'disabled':''} onclick="page=page+1;loadServices()">Next</button>`;
 }
 
 function openOrderFromEl(el){
@@ -468,66 +497,130 @@ function openOrderFromEl(el){
 }
 
 function openOrder(s){
-  selected=s;
-  const min=effectiveMin(s);
-  document.getElementById('mTitle').textContent=s.name||'Service';
-  document.getElementById('mSub').textContent=`${s.category||''} · ${fmt(s.price_ngn)} per 1,000 · Min ${min.toLocaleString()} · Max ${Number(s.max_quantity||0).toLocaleString()}`;
-  document.getElementById('mQty').value=min;
-  document.getElementById('mQty').min=min;
-  document.getElementById('mQty').max=Number(s.max_quantity)||1000000;
-  document.getElementById('mLink').value='';
+  selected = s;
+  const min = effectiveMin(s);
+  const max = Number(s.max_quantity) || 1000000;
+
+  document.getElementById('mTitle').textContent = s.name || 'Service';
+  document.getElementById('mSub').textContent = s.category || '';
+  document.getElementById('mPrice').textContent = fmt(s.price_ngn) + ' / 1k';
+  document.getElementById('mMinMax').textContent = 'Min ' + min.toLocaleString() + (max < 2000000000 ? ' · Max ' + max.toLocaleString() : '');
+
+  const refillEl = document.getElementById('mRefill');
+  refillEl.style.display = s.refill ? 'inline-flex' : 'none';
+
+  document.getElementById('mQty').value = min;
+  document.getElementById('mQty').min = min;
+  document.getElementById('mQty').max = max;
+  document.getElementById('mLink').value = '';
   updateTotal();
   document.getElementById('modalBg').classList.add('open');
+  setTimeout(() => document.getElementById('mLink').focus(), 180);
 }
-function closeModal(){document.getElementById('modalBg').classList.remove('open');selected=null}
+
+function closeModal(){
+  document.getElementById('modalBg').classList.remove('open');
+  selected = null;
+}
+
 function updateTotal(){
-  if(!selected) return;
-  let qty=Math.max(1, parseInt(document.getElementById('mQty').value,10)||0);
-  const min=effectiveMin(selected);
-  if(qty<min) qty=min;
-  const total=Math.ceil((Number(selected.price_ngn)||0)/1000*qty);
-  document.getElementById('mTotal').textContent=fmt(total);
+  if (!selected) return;
+  let qty = Math.max(1, parseInt(document.getElementById('mQty').value, 10) || 0);
+  const min = effectiveMin(selected);
+  if (qty < min) qty = min;
+  const total = Math.ceil((Number(selected.price_ngn) || 0) / 1000 * qty);
+  document.getElementById('mTotal').textContent = fmt(total);
 }
+
+function qtyChip(add){
+  if (!selected) return;
+  const input = document.getElementById('mQty');
+  let qty = parseInt(input.value, 10) || 0;
+  const min = effectiveMin(selected);
+  const max = Number(selected.max_quantity) || 1000000;
+  qty = Math.min(max, Math.max(min, qty + add));
+  input.value = qty;
+  updateTotal();
+}
+
+function qtyClear(){
+  if (!selected) return;
+  document.getElementById('mQty').value = effectiveMin(selected);
+  updateTotal();
+}
+
+async function pasteLink(){
+  try {
+    const text = await navigator.clipboard.readText();
+    if (text) {
+      document.getElementById('mLink').value = text.trim();
+      toast('Link pasted');
+    }
+  } catch (e) {
+    toast('Allow clipboard access or paste manually');
+  }
+}
+
 document.getElementById('mQty').addEventListener('input', updateTotal);
-document.getElementById('mQty').addEventListener('change', ()=>{
-  if(!selected) return;
-  const min=effectiveMin(selected);
-  let qty=parseInt(document.getElementById('mQty').value,10)||0;
-  if(qty<min){ document.getElementById('mQty').value=min; toast('Minimum order is '+min.toLocaleString()); }
+document.getElementById('mQty').addEventListener('change', () => {
+  if (!selected) return;
+  const min = effectiveMin(selected);
+  let qty = parseInt(document.getElementById('mQty').value, 10) || 0;
+  if (qty < min) {
+    document.getElementById('mQty').value = min;
+    toast('Minimum is ' + min.toLocaleString());
+  }
   updateTotal();
 });
 
 async function placeOrder(){
-  if(!selected) return;
-  const link=document.getElementById('mLink').value.trim();
-  let quantity=parseInt(document.getElementById('mQty').value,10)||0;
-  const min=effectiveMin(selected);
-  if(quantity<min){ quantity=min; document.getElementById('mQty').value=min; }
-  if(!link){ toast('Enter the link or username to boost'); return; }
-  const btn=document.getElementById('mBuy');
-  btn.disabled=true; btn.innerHTML='<i class="fa-solid fa-spinner fa-spin"></i> Placing order…';
-  try{
-    const headers=await authHeaders();
-    const res=await fetch('/api/owlet?action=order',{method:'POST',headers,body:JSON.stringify({
-      service_id:selected.service_id, link, quantity
-    })});
-    const data=await res.json();
-    if(!data.success){
-      toast(data.message||'Order failed');
-      if(/insufficient/i.test(data.message||'')) setTimeout(()=>location.href='deposit.html',1200);
+  if (!selected) return;
+  const link = document.getElementById('mLink').value.trim();
+  let quantity = parseInt(document.getElementById('mQty').value, 10) || 0;
+  const min = effectiveMin(selected);
+  if (quantity < min) {
+    quantity = min;
+    document.getElementById('mQty').value = min;
+  }
+  if (!link) {
+    toast('Paste the link first');
+    document.getElementById('mLink').focus();
+    return;
+  }
+  const btn = document.getElementById('mBuy');
+  btn.disabled = true;
+  btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Placing order…';
+  try {
+    const headers = await authHeaders();
+    const res = await fetch('/api/owlet?action=order', {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ service_id: selected.service_id, link, quantity })
+    });
+    const data = await res.json();
+    if (!data.success) {
+      toast(data.message || 'Order failed');
+      if (/insufficient/i.test(data.message || '')) setTimeout(() => location.href = 'deposit.html', 1200);
       return;
     }
-    if(data.new_balance!=null){ balance=Number(data.new_balance); document.getElementById('walletBal').textContent=fmt(balance); }
-    toast(data.history_saved===false ? (data.message||'Ordered — history save issue') : '🔥 Boost ordered! Track progress in Orders');
+    if (data.new_balance != null) {
+      balance = Number(data.new_balance);
+      document.getElementById('walletBal').textContent = fmt(balance);
+    }
+    toast(data.history_saved === false ? (data.message || 'Ordered — history save issue') : '🔥 Boost ordered! Track in Orders');
     closeModal();
-    setTimeout(()=>location.href='mj-boosters-history.html',900);
-  }catch(e){ toast(e.message||'Network error'); }
-  finally{ btn.disabled=false; btn.innerHTML='<i class="fa-solid fa-bolt"></i> Boost Now'; }
+    setTimeout(() => location.href = 'mj-boosters-history.html', 900);
+  } catch (e) {
+    toast(e.message || 'Network error');
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = '<i class="fa-solid fa-bolt"></i> Boost Now';
+  }
 }
 
-(async()=>{
+(async () => {
   syncThemeUi();
-  if(!await ensureAuth()) return;
+  if (!await ensureAuth()) return;
   await loadCatalog();
 })();
 </script>
