@@ -1,20 +1,13 @@
 import { createClient } from '@supabase/supabase-js';
 
 /**
- * /api/owlet — MJ Boosters supplier (The Owlet SMM panel v2 API)
+ * /api/owlet — MJ Boosters (The Owlet SMM panel v2)
  * Docs: https://theowlet.com/api
- * Base: POST https://theowlet.com/api/v2
+ * POST https://theowlet.com/api/v2
  *
- * Admin-only for interactive use. Cron may call ?action=sync with CRON_SECRET.
- *
- * Actions:
- *   balance  — Owlet wallet NGN balance
- *   services — live service list from Owlet
- *   sync     — pull services into booster_services (Supabase)
- *   status   — order status { order }
- *
- * Configured Exchange Rate: $1 = ₦1450 NGN
- * Configured Selling Markup: Random percentage between 25% and 50%
+ * Rate from API is USD. Sell NGN = rate_usd * USD_TO_NGN * (1 + markup%).
+ * Env: OWLET_API_KEY, SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY
+ * Optional: USD_TO_NGN_RATE (default 1450), OWLET_MARKUP_PERCENT (default 35), CRON_SECRET
  */
 
 const OWLET_URL = 'https://theowlet.com/api/v2';
@@ -26,18 +19,13 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY
 );
 
-// Fixed markup so every order has predictable profit (override via OWLET_MARKUP_PERCENT)
-// Example: 35 = sell at supplier_cost_ngn * 1.35
 function getMarkupPercent() {
   const env = Number(process.env.OWLET_MARKUP_PERCENT);
   if (Number.isFinite(env) && env >= 0 && env <= 200) return env;
-  return 35; // default +35% profit on cost
+  return 35;
 }
 
-/**
- * Owlet API rate is in USD (balance/status currency is USD per their docs).
- * Sell price (NGN) = rate_usd * USD_TO_NGN * (1 + markup/100)
- */
+/** Owlet rate is USD per 1000 units → sell price in NGN with markup */
 function sellPriceNgnFromUsd(rateUsd, markupPercent) {
   const usd = Number(rateUsd) || 0;
   const markup = markupPercent ?? getMarkupPercent();
@@ -47,6 +35,60 @@ function sellPriceNgnFromUsd(rateUsd, markupPercent) {
 
 function supplierUsdFromRate(rateUsd) {
   return Math.round((Number(rateUsd) || 0) * 10000) / 10000;
+}
+
+async function owletCall(params = {}) {
+  if (!OWLET_KEY) {
+    return { ok: false, status: 500, json: { error: 'OWLET_API_KEY not set on server' }, text: '' };
+  }
+  const body = new URLSearchParams();
+  body.set('key', OWLET_KEY);
+  for (const [k, v] of Object.entries(params)) {
+    if (v === undefined || v === null) continue;
+    body.set(k, String(v));
+  }
+  try {
+    const res = await fetch(OWLET_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: body.toString()
+    });
+    const text = await res.text();
+    let json;
+    try {
+      json = JSON.parse(text);
+    } catch {
+      json = { error: text || 'Invalid JSON from Owlet' };
+    }
+    const hasError = !!(json && typeof json === 'object' && !Array.isArray(json) && json.error);
+    return { ok: res.ok && !hasError, status: res.status, json, text };
+  } catch (e) {
+    return { ok: false, status: 502, json: { error: e.message || 'Owlet network error' }, text: '' };
+  }
+}
+
+async function requireUser(req) {
+  const authHeader = req.headers.authorization || '';
+  const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : null;
+  if (!token) return { ok: false, status: 401, message: 'Sign in required' };
+  const { data: { user }, error } = await supabase.auth.getUser(token);
+  if (error || !user) return { ok: false, status: 401, message: 'Invalid session' };
+  return { ok: true, user, token };
+}
+
+async function requireAdmin(req) {
+  const u = await requireUser(req);
+  if (!u.ok) return u;
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('is_admin')
+    .eq('id', u.user.id)
+    .maybeSingle();
+  const isAdmin =
+    profile &&
+    (profile.is_admin === true || profile.is_admin === 'true' || profile.is_admin === 1);
+  if (!isAdmin) return { ok: false, status: 403, message: 'Admin privileges required' };
+  return { ok: true, user: u.user, token: u.token };
 }
 
 async function handleBalance(req, res) {
@@ -60,7 +102,7 @@ async function handleBalance(req, res) {
   return res.status(200).json({
     success: true,
     balance: json.balance,
-    currency: json.currency || 'NGN',
+    currency: json.currency || 'USD',
     raw: json
   });
 }
@@ -74,17 +116,17 @@ async function handleServices(req, res) {
       raw: json
     });
   }
-  const data = json.map(s => {
-    const randomMarkup = getMarkupPercent();
+  const markup = getMarkupPercent();
+  const data = json.map((s) => {
+    const rateUsd = Number(s.rate) || 0;
     return {
       service_id: String(s.service),
       name: s.name,
       type: s.type,
       category: s.category,
-      supplier_rate_ngn: Number(s.rate) || 0,
-      supplier_rate_usd: supplierUsdFromRate(s.rate),
-      rate_usd: sellPriceUsd(s.rate, randomMarkup),
-      rate_ngn: sellPriceNgnFromUsd(s.rate, randomMarkup),
+      supplier_rate_usd: supplierUsdFromRate(rateUsd),
+      rate_usd: Math.round(rateUsd * (1 + markup / 100) * 10000) / 10000,
+      rate_ngn: sellPriceNgnFromUsd(rateUsd, markup),
       min: Number(s.min) || 0,
       max: Number(s.max) || 0,
       refill: !!s.refill,
@@ -100,7 +142,12 @@ async function handleSync(req, res) {
   const BATCH = 80;
   const startedAt = Date.now();
 
-  const body = typeof req.body === 'string' ? (() => { try { return JSON.parse(req.body || '{}'); } catch { return {}; } })() : (req.body || {});
+  let body = {};
+  try {
+    body = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : (req.body || {});
+  } catch {
+    body = {};
+  }
   const forceRestart = !!(body.restart || req.query?.restart === '1');
 
   let job = null;
@@ -129,7 +176,8 @@ async function handleSync(req, res) {
   if (!ok || json?.error || !Array.isArray(json)) {
     return res.status(status || 502).json({
       success: false,
-      message: json?.error || json?.message || 'Could not fetch Owlet services for sync'
+      message: json?.error || json?.message || 'Could not fetch Owlet services for sync',
+      raw: json
     });
   }
 
@@ -148,7 +196,7 @@ async function handleSync(req, res) {
       message: 'booster_services table error: ' + exErr.message + ' — run booster_services.sql in Supabase first'
     });
   }
-  const map = new Map((existing || []).map(r => [String(r.service_id), r]));
+  const map = new Map((existing || []).map((r) => [String(r.service_id), r]));
 
   let upserted = 0;
   let errors = Array.isArray(job.errors) ? job.errors.slice(0, 20) : [];
@@ -162,13 +210,11 @@ async function handleSync(req, res) {
 
     const slice = services.slice(cursor, cursor + BATCH);
     const now = new Date().toISOString();
-    const rows = slice.map(s => {
+    const rows = slice.map((s) => {
       const serviceId = String(s.service);
-      // Owlet rate is USD per 1000 units
       const rateUsd = Number(s.rate) || 0;
       const supplierUsdVal = supplierUsdFromRate(rateUsd);
       const defaultNgn = sellPriceNgnFromUsd(rateUsd);
-
       const prev = map.get(serviceId);
       const manual = prev && prev.price_source === 'manual';
       return {
@@ -189,21 +235,16 @@ async function handleSync(req, res) {
       };
     });
 
-    let { error } = await supabase
-      .from('booster_services')
-      .upsert(rows, { onConflict: 'source,service_id' });
-
+    let { error } = await supabase.from('booster_services').upsert(rows, { onConflict: 'source,service_id' });
     if (error && /price_source/i.test(error.message || '')) {
       const slim = rows.map(({ price_source, ...rest }) => rest);
       ({ error } = await supabase.from('booster_services').upsert(slim, { onConflict: 'source,service_id' }));
     }
-
     if (error) {
       errors.push(`batch@${cursor}: ${error.message}`);
     } else {
       upserted += rows.length;
     }
-
     cursor += slice.length;
   }
 
@@ -218,7 +259,6 @@ async function handleSync(req, res) {
     errors: errors.slice(0, 20),
     updated_at: new Date().toISOString()
   };
-
   try {
     await supabase.from('sync_jobs').upsert(jobFields, { onConflict: 'source' });
   } catch (e) {
@@ -234,6 +274,8 @@ async function handleSync(req, res) {
     total: services.length,
     cursor,
     upserted_this_run: upserted,
+    markup_percent: getMarkupPercent(),
+    usd_to_ngn: USD_TO_NGN,
     errors: errors.slice(0, 5)
   });
 }
@@ -263,45 +305,28 @@ async function handleList(req, res) {
 
   const { data, error, count } = await query;
   if (error) {
-    return res.status(500).json({
-      success: false,
-      message: error.message + ( /permission|rls|policy/i.test(error.message)
-        ? ' — run the RLS SQL for booster_services'
-        : '')
-    });
+    return res.status(500).json({ success: false, message: error.message });
   }
-
   let rows = data || [];
   if (q) {
-    rows = rows.filter(s =>
-      (s.name || '').toLowerCase().includes(q) ||
-      (s.category || '').toLowerCase().includes(q) ||
-      String(s.service_id).includes(q)
+    rows = rows.filter(
+      (r) =>
+        String(r.name || '').toLowerCase().includes(q) ||
+        String(r.category || '').toLowerCase().includes(q)
     );
   }
-
-  const { data: catRows } = await supabase
-    .from('booster_services')
-    .select('category')
-    .eq('source', 'owlet')
-    .limit(5000);
-  const categories = [...new Set((catRows || []).map(r => r.category).filter(Boolean))].sort();
-
-  return res.status(200).json({
-    success: true,
-    data: rows,
-    page,
-    page_size: pageSize,
-    total: count ?? rows.length,
-    categories
-  });
+  return res.status(200).json({ success: true, data: rows, total: count || rows.length, page, page_size: pageSize });
 }
 
 async function handleStatus(req, res) {
-  const body = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : (req.body || {});
+  let body = {};
+  try {
+    body = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : (req.body || {});
+  } catch {
+    body = {};
+  }
   const order = body.order || req.query?.order;
   if (!order) return res.status(400).json({ success: false, message: 'order is required' });
-
   const { ok, status, json } = await owletCall({ action: 'status', order: String(order) });
   if (!ok || json?.error) {
     return res.status(status || 502).json({
@@ -312,9 +337,7 @@ async function handleStatus(req, res) {
   return res.status(200).json({ success: true, data: json });
 }
 
-
 async function handleCatalog(req, res) {
-  // Public to signed-in users — categories + optional services
   const category = (req.query?.category || '').toString().trim();
   const q = (req.query?.q || '').toString().trim().toLowerCase();
   const page = Math.max(1, parseInt(req.query?.page || '1', 10) || 1);
@@ -322,26 +345,33 @@ async function handleCatalog(req, res) {
   const from = (page - 1) * pageSize;
   const to = from + pageSize - 1;
 
-  // Distinct categories
-  const { data: catRows } = await supabase
+  const { data: catRows, error: catErr } = await supabase
     .from('booster_services')
     .select('category')
     .eq('source', 'owlet')
     .eq('is_available', true)
     .limit(15000);
-  const categories = [...new Set((catRows || []).map(r => r.category).filter(Boolean))].sort();
+
+  if (catErr) {
+    return res.status(500).json({ success: false, message: catErr.message });
+  }
+
+  const counts = {};
+  for (const c of catRows || []) {
+    const k = c.category || 'Other';
+    counts[k] = (counts[k] || 0) + 1;
+  }
+  const cards = Object.entries(counts)
+    .map(([name, count]) => ({ name, count }))
+    .sort((a, b) => b.count - a.count);
 
   if (!category && !q) {
-    // Overview: return category cards with counts only (fast)
-    const counts = {};
-    for (const c of (catRows || [])) {
-      const k = c.category || 'Other';
-      counts[k] = (counts[k] || 0) + 1;
-    }
-    const cards = Object.entries(counts)
-      .map(([name, count]) => ({ name, count }))
-      .sort((a, b) => b.count - a.count);
-    return res.status(200).json({ success: true, mode: 'categories', categories: cards, total_services: (catRows || []).length });
+    return res.status(200).json({
+      success: true,
+      mode: 'categories',
+      categories: cards,
+      total_services: (catRows || []).length
+    });
   }
 
   let query = supabase
@@ -361,44 +391,40 @@ async function handleCatalog(req, res) {
   if (error) {
     return res.status(500).json({ success: false, message: error.message });
   }
-
   let rows = data || [];
   if (q) {
-    rows = rows.filter(s =>
-      (s.name || '').toLowerCase().includes(q) ||
-      (s.category || '').toLowerCase().includes(q) ||
-      String(s.service_id).includes(q)
+    rows = rows.filter(
+      (r) =>
+        String(r.name || '').toLowerCase().includes(q) ||
+        String(r.category || '').toLowerCase().includes(q)
     );
   }
-
   return res.status(200).json({
     success: true,
     mode: 'services',
-    category: category || null,
-    categories,
     data: rows,
+    total: count || rows.length,
     page,
     page_size: pageSize,
-    total: count ?? rows.length
+    categories: cards
   });
 }
 
 async function handleOrder(req, res) {
-  const body = typeof req.body === 'string' ? (() => { try { return JSON.parse(req.body || '{}'); } catch { return {}; } })() : (req.body || {});
+  const u = await requireUser(req);
+  if (!u.ok) return res.status(u.status).json({ success: false, message: u.message });
+
+  let body = {};
+  try {
+    body = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : (req.body || {});
+  } catch {
+    body = {};
+  }
   const serviceId = String(body.service_id || body.service || '').trim();
   const link = String(body.link || '').trim();
-  const quantity = Math.max(1, parseInt(body.quantity, 10) || 0);
-
-  if (!serviceId || !link || !quantity) {
-    return res.status(400).json({ success: false, message: 'service_id, link, and quantity are required' });
-  }
-  if (!/^https?:\/\//i.test(link) && !link.includes('.') && !link.startsWith('@')) {
-    // allow @handles and bare domains/usernames common for SMM
-  }
-
-  const userGate = await requireUser(req);
-  if (!userGate.ok) return res.status(userGate.status).json({ success: false, message: userGate.message });
-  const user = userGate.user;
+  const quantity = parseInt(body.quantity, 10) || 0;
+  if (!serviceId) return res.status(400).json({ success: false, message: 'service_id required' });
+  if (!link) return res.status(400).json({ success: false, message: 'link required' });
 
   const { data: service, error: sErr } = await supabase
     .from('booster_services')
@@ -408,13 +434,9 @@ async function handleOrder(req, res) {
     .maybeSingle();
 
   if (sErr || !service) {
-    return res.status(404).json({ success: false, message: 'Service not found or unavailable' });
-  }
-  if (service.is_available === false) {
-    return res.status(400).json({ success: false, message: 'This service is temporarily unavailable' });
+    return res.status(404).json({ success: false, message: 'Service not found' });
   }
 
-  // Site rule: never sell below 500 units. Supplier min wins if higher.
   const supplierMin = Number(service.min_quantity) || 1;
   let maxQ = Number(service.max_quantity) || 1000000;
   if (maxQ < 1) maxQ = 1000000;
@@ -427,260 +449,161 @@ async function handleOrder(req, res) {
     });
   }
 
-  // price_ngn is selling rate per 1000 units (SMM standard)
   const ratePer1k = Number(service.price_ngn) || 0;
   if (ratePer1k <= 0) {
-    return res.status(400).json({ success: false, message: 'Service price not configured' });
+    return res.status(400).json({ success: false, message: 'Service has invalid price' });
   }
   const totalNgn = Math.ceil((ratePer1k / 1000) * quantity);
-  if (totalNgn < 1) {
-    return res.status(400).json({ success: false, message: 'Order total too low' });
-  }
 
   const { data: profile, error: pErr } = await supabase
     .from('profiles')
-    .select('id, balance, customer_id')
-    .eq('id', user.id)
+    .select('id, balance')
+    .eq('id', u.user.id)
     .maybeSingle();
 
   if (pErr || !profile) {
-    return res.status(400).json({ success: false, message: 'Could not load your profile' });
+    return res.status(400).json({ success: false, message: 'Profile not found' });
   }
-
-  const originalBalance = Number(profile.balance) || 0;
-  if (originalBalance < totalNgn) {
+  const bal = Number(profile.balance) || 0;
+  if (bal < totalNgn) {
     return res.status(400).json({
       success: false,
-      message: `Insufficient balance. Need ₦${totalNgn.toLocaleString()}, you have ₦${originalBalance.toLocaleString()}`,
-      required: totalNgn,
-      available: originalBalance
+      message: `Insufficient balance. Need ₦${totalNgn.toLocaleString()}, have ₦${bal.toLocaleString()}`
     });
   }
 
-  const newBalance = originalBalance - totalNgn;
-  const { error: deductErr } = await supabase
+  const newBal = bal - totalNgn;
+  const { error: debitErr } = await supabase
     .from('profiles')
-    .update({ balance: newBalance })
-    .eq('id', user.id)
-    .eq('balance', originalBalance); // optimistic lock
+    .update({ balance: newBal })
+    .eq('id', u.user.id)
+    .eq('balance', bal);
 
-  if (deductErr) {
-    // retry without eq balance
-    const { error: d2 } = await supabase.from('profiles').update({ balance: newBalance }).eq('id', user.id);
-    if (d2) {
-      return res.status(500).json({ success: false, message: 'Could not debit wallet. Try again.' });
-    }
+  if (debitErr) {
+    return res.status(409).json({ success: false, message: 'Could not debit wallet — try again' });
   }
 
-  // Place order with Owlet
   const { ok, status, json } = await owletCall({
     action: 'add',
     service: serviceId,
     link,
-    quantity: String(quantity)
+    quantity
   });
 
   if (!ok || json?.error || !json?.order) {
     // refund
-    await supabase.from('profiles').update({ balance: originalBalance }).eq('id', user.id);
-    const errMsg = json?.error || json?.message || 'Supplier rejected the order';
-    try {
-      await supabase.from('transactions').insert({
-        user_id: user.id,
-        customer_id: profile.customer_id || null,
-        type: 'booster',
-        category: 'booster',
-        title: service.name || 'MJ Booster',
-        subtitle: `Failed: ${errMsg}`,
-        amount: totalNgn,
-        status: 'failed',
-        created_at: new Date().toISOString()
-      });
-    } catch (_) {}
-    return res.status(502).json({ success: false, message: errMsg });
+    await supabase.from('profiles').update({ balance: bal }).eq('id', u.user.id);
+    return res.status(status || 502).json({
+      success: false,
+      message: json?.error || json?.message || 'Supplier rejected the order — balance refunded'
+    });
   }
 
   const supplierOrderId = String(json.order);
-  const nowIso = new Date().toISOString();
-  const orderRow = {
-    user_id: user.id,
-    customer_id: profile.customer_id || null,
-    source: 'owlet',
-    supplier_order_id: supplierOrderId,
-    service_id: serviceId,
-    service_name: service.name,
-    category: service.category || null,
-    link,
-    quantity,
-    charge_usd: null,
-    price_ngn: totalNgn,
-    rate_per_1k: ratePer1k,
-    status: 'Pending',
-    start_count: null,
-    remains: null,
-    raw: json,
-    created_at: nowIso,
-    updated_at: nowIso
-  };
-
-  // MUST persist — history depends on this. Retry with fewer columns if schema is thin.
-  let saved = null;
-  let saveErrMsg = null;
-  {
-    let ins = await supabase
-      .from('booster_orders')
-      .insert(orderRow)
-      .select('id, supplier_order_id, service_name, quantity, price_ngn, status, link, created_at, user_id, customer_id')
-      .maybeSingle();
-
-    if (ins.error) {
-      console.error('[owlet order] booster_orders insert failed:', ins.error.message);
-      // Minimal fallback (table may lack optional columns)
-      const minimal = {
-        user_id: user.id,
-        customer_id: profile.customer_id || null,
-        source: 'owlet',
-        supplier_order_id: supplierOrderId,
-        service_id: serviceId,
-        service_name: service.name,
-        link,
-        quantity,
-        price_ngn: totalNgn,
-        status: 'Pending',
-        created_at: nowIso
-      };
-      ins = await supabase
-        .from('booster_orders')
-        .insert(minimal)
-        .select('id, supplier_order_id, service_name, quantity, price_ngn, status, link, created_at, user_id, customer_id')
-        .maybeSingle();
-      if (ins.error) {
-        saveErrMsg = ins.error.message;
-        console.error('[owlet order] minimal insert also failed:', ins.error.message);
-      } else {
-        saved = ins.data;
-      }
-    } else {
-      saved = ins.data;
+  let history_saved = true;
+  let history_error = null;
+  try {
+    const { error: insErr } = await supabase.from('booster_orders').insert({
+      user_id: u.user.id,
+      service_id: serviceId,
+      service_name: service.name,
+      category: service.category,
+      link,
+      quantity,
+      price_ngn: totalNgn,
+      rate_per_1k: ratePer1k,
+      status: 'Pending',
+      supplier_order_id: supplierOrderId,
+      source: 'owlet'
+    });
+    if (insErr) {
+      history_saved = false;
+      history_error = insErr.message;
+      console.error('[owlet order] history insert', insErr.message);
     }
+  } catch (e) {
+    history_saved = false;
+    history_error = e.message;
   }
 
-  // If DB save failed after supplier accepted, still return success but flag it —
-  // do NOT refund (supplier already charged). Admin can reconcile via supplier_order_id.
   try {
     await supabase.from('transactions').insert({
-      user_id: user.id,
-      customer_id: profile.customer_id || null,
-      type: 'booster',
-      category: 'booster',
-      title: service.name || 'MJ Booster',
-      subtitle: `${quantity.toLocaleString()} · ${link.slice(0, 60)}`,
-      amount: `₦${totalNgn.toLocaleString()}`,
-      amount_ngn: totalNgn,
-      status: 'completed',
-      created_at: nowIso
+      user_id: u.user.id,
+      type: 'debit',
+      amount: totalNgn,
+      description: `MJ Boosters: ${service.name} × ${quantity}`,
+      category: 'mj_boosters',
+      meta: { supplier_order_id: supplierOrderId, service_id: serviceId }
     });
   } catch (e) {
-    console.warn('[owlet order] transactions insert:', e?.message || e);
-  }
-
-  // Best-effort status pull
-  let statusData = null;
-  try {
-    const st = await owletCall({ action: 'status', order: supplierOrderId });
-    if (st.ok && st.json && !st.json.error) {
-      statusData = st.json;
-      if (saved?.id || supplierOrderId) {
-        await supabase.from('booster_orders').update({
-          status: st.json.status || 'Pending',
-          start_count: st.json.start_count != null ? String(st.json.start_count) : null,
-          remains: st.json.remains != null ? String(st.json.remains) : null,
-          charge_usd: st.json.charge ? Number(st.json.charge) : null,
-          updated_at: new Date().toISOString()
-        }).eq('supplier_order_id', supplierOrderId);
-      }
-    }
-  } catch (_) {}
-
-  if (saveErrMsg) {
-    return res.status(200).json({
-      success: true,
-      message: 'Boost sent to supplier, but history save failed — run booster_orders SQL in Supabase',
-      warning: saveErrMsg,
-      order: { supplier_order_id: supplierOrderId, service_name: service.name, quantity, price_ngn: totalNgn, status: 'Pending', link },
-      supplier_order_id: supplierOrderId,
-      new_balance: newBalance,
-      status: statusData,
-      history_saved: false
-    });
+    console.warn('[owlet order] tx log', e?.message || e);
   }
 
   return res.status(200).json({
     success: true,
-    message: 'Boost order placed successfully',
-    order: saved || orderRow,
-    supplier_order_id: supplierOrderId,
-    new_balance: newBalance,
-    status: statusData,
-    history_saved: true
+    order_id: supplierOrderId,
+    charge_ngn: totalNgn,
+    new_balance: newBal,
+    history_saved,
+    history_error,
+    message: history_saved ? 'Order placed' : 'Order placed but history save failed'
   });
 }
 
 async function handleMyOrders(req, res) {
-  const userGate = await requireUser(req);
-  if (!userGate.ok) return res.status(userGate.status).json({ success: false, message: userGate.message });
+  const u = await requireUser(req);
+  if (!u.ok) return res.status(u.status).json({ success: false, message: u.message });
 
   const page = Math.max(1, parseInt(req.query?.page || '1', 10) || 1);
-  const pageSize = Math.min(50, Math.max(10, parseInt(req.query?.page_size || '20', 10) || 20));
+  const pageSize = Math.min(100, Math.max(10, parseInt(req.query?.page_size || '50', 10) || 50));
   const from = (page - 1) * pageSize;
   const to = from + pageSize - 1;
 
   const { data, error, count } = await supabase
     .from('booster_orders')
     .select('*', { count: 'exact' })
-    .eq('user_id', userGate.user.id)
+    .eq('user_id', u.user.id)
     .order('created_at', { ascending: false })
     .range(from, to);
 
   if (error) {
     return res.status(500).json({
       success: false,
-      message: error.message + (/relation|does not exist/i.test(error.message) ? ' — run booster_orders SQL' : '')
+      message: error.message + ( /booster_orders/i.test(error.message) ? ' — create booster_orders table' : '')
     });
   }
 
-  // Refresh a few pending statuses
-  const pending = (data || []).filter(o => /pending|progress|processing|in progress/i.test(String(o.status || ''))).slice(0, 5);
-  for (const o of pending) {
+  const rows = data || [];
+  // Refresh status from Owlet for pending rows (best-effort, max 10)
+  let updated = 0;
+  for (const o of rows.slice(0, 10)) {
     if (!o.supplier_order_id) continue;
+    const stName = String(o.status || '').toLowerCase();
+    if (stName === 'completed' || stName === 'canceled' || stName === 'cancelled') continue;
     try {
       const st = await owletCall({ action: 'status', order: String(o.supplier_order_id) });
       if (st.ok && st.json && !st.json.error) {
-        o.status = st.json.status || o.status;
-        o.start_count = st.json.start_count ?? o.start_count;
-        o.remains = st.json.remains ?? o.remains;
-        await supabase.from('booster_orders').update({
-          status: o.status,
-          start_count: o.start_count,
-          remains: o.remains,
-          updated_at: new Date().toISOString()
-        }).eq('id', o.id);
+        const patch = {
+          status: st.json.status || o.status,
+          remains: st.json.remains != null ? Number(st.json.remains) : o.remains,
+          start_count: st.json.start_count != null ? Number(st.json.start_count) : o.start_count
+        };
+        await supabase.from('booster_orders').update(patch).eq('id', o.id);
+        Object.assign(o, patch);
+        updated++;
       }
-    } catch (_) {}
+    } catch (_) { /* ignore */ }
   }
 
-  return res.status(200).json({ success: true, data: data || [], page, page_size: pageSize, total: count || 0 });
+  return res.status(200).json({ success: true, data: rows, total: count || rows.length, refreshed: updated });
 }
 
 async function handleAdminOrders(req, res) {
-  const admin = await requireAdmin(req);
-  if (!admin.ok) return res.status(admin.status).json({ success: false, message: admin.message });
-
   const page = Math.max(1, parseInt(req.query?.page || '1', 10) || 1);
   const pageSize = Math.min(100, Math.max(10, parseInt(req.query?.page_size || '50', 10) || 50));
   const from = (page - 1) * pageSize;
   const to = from + pageSize - 1;
-  const q = (req.query?.q || '').toString().trim();
+  const q = (req.query?.q || '').toString().trim().toLowerCase();
 
   let query = supabase
     .from('booster_orders')
@@ -688,17 +611,22 @@ async function handleAdminOrders(req, res) {
     .order('created_at', { ascending: false })
     .range(from, to);
 
-  if (q) {
-    query = query.or(`supplier_order_id.ilike.%${q}%,service_name.ilike.%${q}%,customer_id.ilike.%${q}%,link.ilike.%${q}%`);
-  }
-
   const { data, error, count } = await query;
   if (error) {
     return res.status(500).json({ success: false, message: error.message });
   }
-  return res.status(200).json({ success: true, data: data || [], total: count || 0, page, page_size: pageSize });
+  let rows = data || [];
+  if (q) {
+    rows = rows.filter(
+      (r) =>
+        String(r.service_name || '').toLowerCase().includes(q) ||
+        String(r.link || '').toLowerCase().includes(q) ||
+        String(r.supplier_order_id || '').includes(q) ||
+        String(r.user_id || '').includes(q)
+    );
+  }
+  return res.status(200).json({ success: true, data: rows, total: count || rows.length });
 }
-
 
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -708,58 +636,67 @@ export default async function handler(req, res) {
 
   if (req.method === 'OPTIONS') return res.status(200).end();
 
-  if (!process.env.SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
-    return res.status(500).json({ success: false, message: 'Missing Supabase env' });
-  }
+  try {
+    if (!process.env.SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
+      return res.status(500).json({ success: false, message: 'Missing Supabase env' });
+    }
+    if (!process.env.OWLET_API_KEY) {
+      return res.status(500).json({ success: false, message: 'Missing OWLET_API_KEY env on Vercel' });
+    }
 
-  let action = req.query?.action;
-  if (!action && req.url) {
-    try {
-      action = new URL(req.url, 'http://localhost').searchParams.get('action');
-    } catch { /* ignore */ }
-  }
-  if (!action && req.body) {
-    try {
-      const body = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : req.body;
-      action = body?.action;
-    } catch { /* ignore */ }
-  }
+    let action = req.query?.action;
+    if (!action && req.url) {
+      try {
+        action = new URL(req.url, 'http://localhost').searchParams.get('action');
+      } catch { /* ignore */ }
+    }
+    if (!action && req.body) {
+      try {
+        const body = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : req.body;
+        action = body?.action;
+      } catch { /* ignore */ }
+    }
 
-  const authHeader = req.headers.authorization || '';
-  const isCron =
-    !!process.env.CRON_SECRET &&
-    authHeader === `Bearer ${process.env.CRON_SECRET}`;
+    const authHeader = req.headers.authorization || '';
+    const isCron =
+      !!process.env.CRON_SECRET && authHeader === `Bearer ${process.env.CRON_SECRET}`;
 
-  if (action === 'sync' && isCron) {
-    return handleSync(req, res);
+    if (action === 'sync' && isCron) {
+      return await handleSync(req, res);
+    }
+
+    if (action === 'catalog') {
+      const u = await requireUser(req);
+      if (!u.ok) return res.status(u.status).json({ success: false, message: u.message });
+      return await handleCatalog(req, res);
+    }
+    if (action === 'order') {
+      return await handleOrder(req, res);
+    }
+    if (action === 'my_orders') {
+      return await handleMyOrders(req, res);
+    }
+
+    const admin = await requireAdmin(req);
+    if (!admin.ok) return res.status(admin.status).json({ success: false, message: admin.message });
+
+    if (action === 'balance') return await handleBalance(req, res);
+    if (action === 'services') return await handleServices(req, res);
+    if (action === 'sync') return await handleSync(req, res);
+    if (action === 'list') return await handleList(req, res);
+    if (action === 'status') return await handleStatus(req, res);
+    if (action === 'admin_orders') return await handleAdminOrders(req, res);
+
+    return res.status(400).json({
+      success: false,
+      message:
+        'action required: catalog | order | my_orders | balance | services | sync | list | status | admin_orders'
+    });
+  } catch (err) {
+    console.error('[owlet] handler error', err);
+    return res.status(500).json({
+      success: false,
+      message: err?.message || String(err) || 'Internal error'
+    });
   }
-
-  // User-facing (any signed-in user)
-  if (action === 'catalog') {
-    const u = await requireUser(req);
-    if (!u.ok) return res.status(u.status).json({ success: false, message: u.message });
-    return handleCatalog(req, res);
-  }
-  if (action === 'order') {
-    return handleOrder(req, res);
-  }
-  if (action === 'my_orders') {
-    return handleMyOrders(req, res);
-  }
-
-  // Admin-only
-  const admin = await requireAdmin(req);
-  if (!admin.ok) return res.status(admin.status).json({ success: false, message: admin.message });
-
-  if (action === 'balance') return handleBalance(req, res);
-  if (action === 'services') return handleServices(req, res);
-  if (action === 'sync') return handleSync(req, res);
-  if (action === 'list') return handleList(req, res);
-  if (action === 'status') return handleStatus(req, res);
-  if (action === 'admin_orders') return handleAdminOrders(req, res);
-
-  return res.status(400).json({
-    success: false,
-    message: 'action required: catalog | order | my_orders | balance | services | sync | list | status | admin_orders'
-  });
 }
