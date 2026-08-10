@@ -5,7 +5,8 @@ import { createClient } from '@supabase/supabase-js';
  * Docs: https://theowlet.com/api
  * Base: POST https://theowlet.com/api/v2
  *
- * ADMIN ONLY for now — not wired to the user dashboard.
+ * Admin-only for interactive use. Cron may call ?action=sync with CRON_SECRET.
+ * Not wired to the user dashboard yet.
  *
  * Actions:
  *   balance  — Owlet wallet USD balance
@@ -231,9 +232,6 @@ export default async function handler(req, res) {
     return res.status(500).json({ success: false, message: 'Missing Supabase env' });
   }
 
-  const admin = await requireAdmin(req);
-  if (!admin.ok) return res.status(admin.status).json({ success: false, message: admin.message });
-
   let action = req.query?.action;
   if (!action && req.url) {
     try {
@@ -241,9 +239,24 @@ export default async function handler(req, res) {
     } catch { /* ignore */ }
   }
   if (!action && req.body) {
-    const body = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : req.body;
-    action = body.action;
+    try {
+      const body = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : req.body;
+      action = body?.action;
+    } catch { /* ignore */ }
   }
+
+  // Vercel Cron can hit sync without an admin session (same pattern as Grizzly / LogsDomain).
+  const authHeader = req.headers.authorization || '';
+  const isCron =
+    !!process.env.CRON_SECRET &&
+    authHeader === `Bearer ${process.env.CRON_SECRET}`;
+
+  if (action === 'sync' && isCron) {
+    return handleSync(req, res);
+  }
+
+  const admin = await requireAdmin(req);
+  if (!admin.ok) return res.status(admin.status).json({ success: false, message: admin.message });
 
   if (action === 'balance') return handleBalance(req, res);
   if (action === 'services') return handleServices(req, res);
