@@ -175,7 +175,12 @@ async function handleServices(req, res) {
     ...s,
     supplier_price: s.price,
     price: priceForCustomer(s.price)
-  }));
+  })).filter(s => {
+    const q = s.available_quantity;
+    if (q === 0 || q === '0') return false;
+    if (s.is_available === false || s.is_available === 'false') return false;
+    return true;
+  });
   return res.status(200).json({ success: true, data: withPricing });
 }
 
@@ -441,16 +446,53 @@ async function handleCheck(req, res, userId) {
     return res.status(502).json({ success: false, message: checkRes.json?.message || 'Could not check for code right now.' });
   }
 
-  const d = checkRes.json.data;
+  const d = checkRes.json.data || {};
+  const remoteStatus = String(d.status || '').toLowerCase();
   const updates = {
-    status: d.status,
+    status: d.status || order.status,
     code: d.code || null,
     time_left: d.time_left ?? order.time_left,
     updated_at: new Date().toISOString()
   };
+
+  // Supplier ended the order without a code (expired / cancelled) → refund
+  // the customer. Previously only explicit Cancel did this, so many Server 2
+  // orders "ended" with no balance restore.
+  const endedNoCode = ['cancelled', 'canceled', 'expired', 'refunded', 'failed'].includes(remoteStatus)
+    && !d.code
+    && !order.refunded
+    && order.status !== 'completed';
+
+  if (endedNoCode) {
+    const refundAmount = Number(order.price || 0);
+    if (refundAmount > 0) {
+      const { data: profile } = await supabase.from('profiles').select('balance').eq('id', userId).single();
+      if (profile) {
+        const restored = Number(profile.balance || 0) + refundAmount;
+        const { error: balErr } = await supabase.from('profiles').update({ balance: restored }).eq('id', userId);
+        if (balErr) console.error('[logsdomain-numbers check] refund balance failed', balErr);
+        updates.new_balance = restored;
+      }
+    }
+    updates.status = 'refunded';
+    updates.refunded = true;
+    await supabase.from('number_orders').update(updates).eq('id', order.id);
+    await supabase
+      .from('transactions')
+      .update({ status: 'cancelled', subtitle: 'No SMS — balance restored' })
+      .eq('user_id', userId)
+      .eq('category', 'MJ SMS - Server 2 (LogsDomain)')
+      .eq('amount_ngn', Number(order.price || 0))
+      .eq('status', 'pending');
+    return res.status(200).json({
+      success: true,
+      data: { ...order, ...updates, refunded: true, refunded_amount: Number(order.price || 0) }
+    });
+  }
+
   await supabase.from('number_orders').update(updates).eq('id', order.id);
 
-  if (d.status === 'completed' && d.code) {
+  if (remoteStatus === 'completed' && d.code) {
     await supabase
       .from('transactions')
       .update({ status: 'completed', subtitle: `Code received: ${d.code}` })
@@ -488,16 +530,44 @@ async function handleCancel(req, res, userId) {
     return res.status(409).json({ success: false, message: 'This number already received a code and cannot be cancelled.' });
   }
 
+  // Ask LogsDomain to cancel. If they reject because the order already
+  // expired/cancelled on their side, we still refund the customer locally —
+  // that was the main bug (cancel API fail → no wallet restore).
   const cancelRes = await callLogsDomain(`/numbers/orders/${encodeURIComponent(orderId)}/cancel`, { method: 'POST' });
-  if (!cancelRes.ok || !cancelRes.json?.success) {
-    return res.status(502).json({ success: false, message: cancelRes.json?.message || 'Could not cancel this order right now.' });
+  const supplierOk = !!(cancelRes.ok && cancelRes.json?.success);
+  const supplierMsg = String(cancelRes.json?.message || cancelRes.json?.code || '').toLowerCase();
+  const supplierAlreadyGone = (
+    supplierMsg.includes('already') ||
+    supplierMsg.includes('expired') ||
+    supplierMsg.includes('cancel') ||
+    supplierMsg.includes('not found') ||
+    supplierMsg.includes('refund') ||
+    cancelRes.status === 404 ||
+    cancelRes.status === 409
+  );
+
+  if (!supplierOk && !supplierAlreadyGone) {
+    // Still waiting / countdown not ready — do not refund yet.
+    return res.status(502).json({
+      success: false,
+      message: cancelRes.json?.message || 'Could not cancel this order right now. Wait for the cancel timer, then try again.'
+    });
   }
 
   const refundAmount = Number(order.price || 0);
-  const { data: profile } = await supabase.from('profiles').select('balance').eq('id', userId).single();
-  if (profile && refundAmount > 0) {
-    const restored = Number(profile.balance || 0) + refundAmount;
-    await supabase.from('profiles').update({ balance: restored }).eq('id', userId);
+  let newBalance = null;
+  if (refundAmount > 0) {
+    const { data: profile, error: profErr } = await supabase.from('profiles').select('balance').eq('id', userId).single();
+    if (profErr || !profile) {
+      console.error('[logsdomain-numbers cancel] profile read failed', profErr);
+      return res.status(500).json({ success: false, message: 'Could not refund — profile not found. Contact support with your order ID.' });
+    }
+    newBalance = Number(profile.balance || 0) + refundAmount;
+    const { error: balErr } = await supabase.from('profiles').update({ balance: newBalance }).eq('id', userId);
+    if (balErr) {
+      console.error('[logsdomain-numbers cancel] balance update failed', balErr);
+      return res.status(500).json({ success: false, message: 'Could not restore balance. Contact support with your order ID.' });
+    }
   }
 
   await supabase
@@ -516,7 +586,7 @@ async function handleCancel(req, res, userId) {
   return res.status(200).json({
     success: true,
     message: 'Order cancelled and refunded',
-    data: { refunded_amount: refundAmount, new_balance: profile ? Number(profile.balance || 0) + refundAmount : null }
+    data: { refunded_amount: refundAmount, new_balance: newBalance }
   });
 }
 
