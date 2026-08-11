@@ -884,13 +884,25 @@
         <div class="price-note">Only products with source "manual" or a product_key starting with "manual_" are listed here. Create the product first (Add button) if it's not showing up.</div>
       </div>
       <div class="field">
+        <label>Stock mode</label>
+        <select id="rsMode" onchange="onRestockModeChange()">
+          <option value="unique">Unique lines — each buyer gets a different log</option>
+          <option value="shared">Shared — every buyer gets the same content</option>
+        </select>
+      </div>
+      <div class="field">
         <label>Current stock</label>
         <input type="text" id="rsCurrentStock" disabled />
       </div>
-      <div class="field">
+      <div class="field" id="rsUniqueWrap">
         <label>Paste logs — one per line (e.g. user1@mail.com:pass1)</label>
         <textarea id="rsPasteBox" rows="10" placeholder="user1@mail.com:pass1&#10;user2@mail.com:pass2&#10;user3@mail.com:pass3"></textarea>
         <div class="price-note" id="rsLineCount">0 lines</div>
+      </div>
+      <div class="field hidden" id="rsSharedWrap">
+        <label>Shared content (delivered to every buyer of this product)</label>
+        <textarea id="rsSharedBox" rows="8" placeholder="Paste the single VPN log / config / details here"></textarea>
+        <div class="price-note">This replaces unique stock for this product. Sales will never run out.</div>
       </div>
       <div id="restockModalError" class="error-msg"></div>
       <div id="restockModalResult" style="font-size:13px;color:var(--success,#34d399);"></div>
@@ -2176,7 +2188,7 @@ function renderProducts(list) {
     const supplier = Number(p.supplier_price || 0);
     const price = Number(p.price || 0);
     const profit = price - supplier;
-    const stock = p.stock_quantity != null ? p.stock_quantity : '—';
+    const stock = p.is_shared ? 'Shared ∞' : (p.stock_quantity != null ? p.stock_quantity : '—');
     const available = p.is_available !== false;
     const category = p.category || 'OTHER';
     const rowId = p.id || p.product_key;
@@ -2213,7 +2225,7 @@ function renderProductCards(items) {
     const supplier = Number(p.supplier_price || 0);
     const price = Number(p.price || 0);
     const profit = price - supplier;
-    const stock = p.stock_quantity != null ? p.stock_quantity : '—';
+    const stock = p.is_shared ? 'Shared ∞' : (p.stock_quantity != null ? p.stock_quantity : '—');
     const available = p.is_available !== false;
     const rowId = p.id || p.product_key;
     return `
@@ -2304,6 +2316,10 @@ function openProductModal(product) {
     document.getElementById('pPrice').value = product.price ?? '';
     document.getElementById('pStock').value = product.stock_quantity ?? '';
     document.getElementById('pAvailable').value = product.is_available === false ? 'false' : 'true';
+    const shared = !!(product.is_shared);
+    document.getElementById('pIsShared').checked = shared;
+    document.getElementById('pSharedCredential').value = product.shared_credential || '';
+    toggleSharedFields();
   } else {
     document.getElementById('productModalTitle').textContent = 'Add Product';
     document.getElementById('editProductId').value = '';
@@ -2316,6 +2332,9 @@ function openProductModal(product) {
     document.getElementById('pPrice').value = '';
     document.getElementById('pStock').value = '';
     document.getElementById('pAvailable').value = 'true';
+    document.getElementById('pIsShared').checked = false;
+    document.getElementById('pSharedCredential').value = '';
+    toggleSharedFields();
   }
   document.getElementById('productModal').classList.remove('hidden');
 }
@@ -2401,8 +2420,18 @@ async function saveProduct() {
     price,
     stock_quantity: isNaN(stock_quantity) ? 0 : stock_quantity,
     is_available,
+    is_shared: document.getElementById('pIsShared')?.checked === true,
+    shared_credential: (document.getElementById('pSharedCredential')?.value || '').trim() || null,
     supplier_price: existing ? Number(existing.supplier_price || 0) : 0
   };
+  if (body.is_shared && !body.shared_credential) {
+    errEl.textContent = 'Shared products need the content every buyer will receive.';
+    return;
+  }
+  if (body.is_shared) {
+    body.stock_quantity = 99999;
+    body.is_available = true;
+  }
 
   const btn = document.getElementById('saveProductBtn');
   setBtnBusy(btn, true, 'Saving...');
@@ -2567,6 +2596,21 @@ function isManualProductRow(p) {
   return String(p.product_key || '').startsWith('manual_');
 }
 
+
+function toggleSharedFields() {
+  const on = document.getElementById('pIsShared')?.checked === true;
+  const wrap = document.getElementById('sharedCredentialWrap');
+  if (wrap) wrap.classList.toggle('hidden', !on);
+  const stock = document.getElementById('pStock');
+  if (stock) stock.disabled = on;
+}
+
+function onRestockModeChange() {
+  const mode = document.getElementById('rsMode')?.value || 'unique';
+  document.getElementById('rsUniqueWrap')?.classList.toggle('hidden', mode === 'shared');
+  document.getElementById('rsSharedWrap')?.classList.toggle('hidden', mode !== 'shared');
+}
+
 function openRestockModal() {
   const select = document.getElementById('rsProductKey');
   const manualProducts = allProducts.filter(isManualProductRow);
@@ -2596,7 +2640,18 @@ function openRestockModal() {
 function updateRestockCurrentStock() {
   const key = document.getElementById('rsProductKey').value;
   const p = allProducts.find(x => x.product_key === key);
-  document.getElementById('rsCurrentStock').value = p ? `${p.stock_quantity || 0} available` : '—';
+  const el = document.getElementById('rsCurrentStock');
+  if (!p) { el.value = '—'; return; }
+  if (p.is_shared) {
+    el.value = 'Shared (same content for every buyer)';
+    const mode = document.getElementById('rsMode');
+    if (mode) mode.value = 'shared';
+    onRestockModeChange();
+    const box = document.getElementById('rsSharedBox');
+    if (box && p.shared_credential) box.value = p.shared_credential;
+  } else {
+    el.value = `${p.stock_quantity || 0} available`;
+  }
 }
 
 function closeRestockModal() {
@@ -2610,15 +2665,25 @@ async function uploadManualStock() {
   resultEl.textContent = '';
 
   const product_key = document.getElementById('rsProductKey').value;
-  const text = document.getElementById('rsPasteBox').value;
+  const mode = document.getElementById('rsMode')?.value || 'unique';
+  const text = mode === 'shared'
+    ? (document.getElementById('rsSharedBox')?.value || '')
+    : document.getElementById('rsPasteBox').value;
 
   if (!product_key) { errEl.textContent = 'Choose a manual product first.'; return; }
-  if (!text.trim()) { errEl.textContent = 'Paste at least one credential line.'; return; }
+  if (!text.trim()) {
+    errEl.textContent = mode === 'shared'
+      ? 'Paste the shared content every buyer should receive.'
+      : 'Paste at least one credential line.';
+    return;
+  }
 
   const btn = document.getElementById('rsUploadBtn');
   const idleHtml = btn.innerHTML;
   btn.disabled = true;
-  btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Uploading...';
+  btn.innerHTML = mode === 'shared'
+    ? '<i class="fas fa-spinner fa-spin"></i> Saving...'
+    : '<i class="fas fa-spinner fa-spin"></i> Uploading...';
 
   let step = 'reading session';
   try {
@@ -2628,24 +2693,20 @@ async function uploadManualStock() {
       const { data } = await sb.auth.getSession();
       token = data?.session?.access_token || null;
     } catch (sessErr) {
-      token = null; // fall through without a token rather than blocking the whole upload
+      token = null;
     }
-    // Safari's fetch() strictly validates header values and throws an opaque
-    // "The string did not match the expected pattern" TypeError on anything
-    // it doesn't like (e.g. mid-refresh session weirdness) — Chrome doesn't
-    // enforce this as strictly, which is why this only shows up on iPhone.
-    // Only attach the token if it actually looks like a real JWT (three
-    // dot-separated segments, no stray whitespace) so a bad value never
-    // reaches fetch() in the first place.
     if (token && /^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/.test(token.trim())) {
       headers['Authorization'] = 'Bearer ' + token.trim();
     }
 
     step = 'uploading';
+    const payload = mode === 'shared'
+      ? { resource: 'inventory', action: 'set_shared', product_key, credential: text.trim() }
+      : { resource: 'inventory', action: 'bulk_upload', product_key, text };
     const res = await fetch('/api/admin', {
       method: 'POST',
       headers,
-      body: JSON.stringify({ resource: 'inventory', action: 'bulk_upload', product_key, text })
+      body: JSON.stringify(payload)
     });
 
     step = 'reading response';
@@ -2656,11 +2717,16 @@ async function uploadManualStock() {
       return;
     }
 
-    resultEl.textContent = `Uploaded ${data.data.inserted} new log${data.data.inserted === 1 ? '' : 's'}`
-      + (data.data.skipped_duplicates ? ` (skipped ${data.data.skipped_duplicates} duplicate${data.data.skipped_duplicates === 1 ? '' : 's'})` : '')
-      + `. Stock now: ${data.data.available_stock}.`;
-    document.getElementById('rsPasteBox').value = '';
-    document.getElementById('rsLineCount').textContent = '0 lines';
+    if (mode === 'shared') {
+      resultEl.textContent = data.data?.message || 'Shared content saved. Every buyer gets the same details.';
+      document.getElementById('rsSharedBox').value = text.trim();
+    } else {
+      resultEl.textContent = `Uploaded ${data.data.inserted} new log${data.data.inserted === 1 ? '' : 's'}`
+        + (data.data.skipped_duplicates ? ` (skipped ${data.data.skipped_duplicates} duplicate${data.data.skipped_duplicates === 1 ? '' : 's'})` : '')
+        + `. Stock now: ${data.data.available_stock}.`;
+      document.getElementById('rsPasteBox').value = '';
+      document.getElementById('rsLineCount').textContent = '0 lines';
+    }
     await loadProducts();
     updateRestockCurrentStock();
   } catch (e) {
