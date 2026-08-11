@@ -349,6 +349,151 @@
       font-size:13px; margin-bottom:10px;
       background: var(--primary-soft); color: #a5b4fc;
     }
+  
+    /* ===== Professional overview polish (UI only) ===== */
+    body {
+      background:
+        radial-gradient(1200px 600px at 10% -10%, rgba(99,102,241,0.16), transparent 55%),
+        radial-gradient(900px 500px at 100% 0%, rgba(168,85,247,0.10), transparent 50%),
+        var(--bg);
+    }
+    .sidebar {
+      background: linear-gradient(180deg, #0e0e14 0%, #0a0a0e 100%) !important;
+      border-right: 1px solid rgba(255,255,255,0.06) !important;
+    }
+    .nav-item {
+      border-radius: 12px !important;
+      margin: 3px 8px !important;
+      transition: background .15s ease, color .15s ease, transform .12s ease !important;
+    }
+    .nav-item:hover { background: rgba(99,102,241,0.10) !important; }
+    .nav-item.active {
+      background: linear-gradient(135deg, rgba(99,102,241,0.28), rgba(139,92,246,0.18)) !important;
+      color: #fff !important;
+      box-shadow: 0 0 0 1px rgba(99,102,241,0.25);
+    }
+    .topbar {
+      backdrop-filter: blur(14px);
+      background: rgba(9,9,11,0.75) !important;
+      border-bottom: 1px solid rgba(255,255,255,0.06) !important;
+    }
+    .panel {
+      background: linear-gradient(180deg, rgba(24,24,30,0.95), rgba(16,16,20,0.98)) !important;
+      border: 1px solid rgba(255,255,255,0.07) !important;
+      border-radius: 18px !important;
+      box-shadow: 0 10px 40px rgba(0,0,0,0.25), inset 0 1px 0 rgba(255,255,255,0.04) !important;
+    }
+    .panel-title {
+      font-size: 15px !important;
+      font-weight: 800 !important;
+      letter-spacing: -0.02em !important;
+    }
+    .metrics {
+      display: grid !important;
+      grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)) !important;
+      gap: 12px !important;
+    }
+    .metric-card {
+      background: linear-gradient(165deg, rgba(30,30,38,0.9), rgba(18,18,24,0.95)) !important;
+      border: 1px solid rgba(255,255,255,0.07) !important;
+      border-radius: 16px !important;
+      padding: 18px 16px !important;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.2) !important;
+      min-height: 108px;
+    }
+    .metric-card::before {
+      height: 3px !important;
+      opacity: 0.9 !important;
+      background: linear-gradient(90deg, #6366f1, #a78bfa, #22d3ee) !important;
+    }
+    .metric-card:hover {
+      transform: translateY(-2px);
+      border-color: rgba(99,102,241,0.45) !important;
+      box-shadow: 0 14px 32px rgba(0,0,0,0.3), 0 0 0 1px rgba(99,102,241,0.15) !important;
+    }
+    .metric-label {
+      font-size: 11px !important;
+      font-weight: 700 !important;
+      letter-spacing: 0.06em !important;
+      text-transform: uppercase !important;
+      color: #a1a1aa !important;
+      margin-bottom: 8px !important;
+    }
+    .metric-value {
+      font-size: 24px !important;
+      font-weight: 800 !important;
+      letter-spacing: -0.03em !important;
+      line-height: 1.15 !important;
+      color: #fafafa !important;
+    }
+    .metric-sub {
+      margin-top: 6px !important;
+      font-size: 12px !important;
+      color: #71717a !important;
+    }
+    /* Accent metric variants via nth for overview hero row */
+    .panel .metrics .metric-card:first-child {
+      background: linear-gradient(145deg, #4f46e5 0%, #7c3aed 55%, #6366f1 100%) !important;
+      border-color: transparent !important;
+    }
+    .panel .metrics .metric-card:first-child .metric-label,
+    .panel .metrics .metric-card:first-child .metric-sub {
+      color: rgba(255,255,255,0.78) !important;
+    }
+    .panel .metrics .metric-card:first-child .metric-value {
+      color: #fff !important;
+    }
+    .panel .metrics .metric-card:first-child::before { display: none; }
+    table {
+      border-collapse: separate !important;
+      border-spacing: 0 !important;
+    }
+    thead th {
+      font-size: 11px !important;
+      letter-spacing: 0.05em !important;
+      text-transform: uppercase !important;
+      color: #a1a1aa !important;
+      background: rgba(255,255,255,0.02) !important;
+      border-bottom: 1px solid rgba(255,255,255,0.06) !important;
+      padding: 12px 14px !important;
+    }
+    tbody td {
+      padding: 13px 14px !important;
+      border-bottom: 1px solid rgba(255,255,255,0.04) !important;
+      font-size: 13px !important;
+    }
+    tbody tr:hover td {
+      background: rgba(99,102,241,0.06) !important;
+    }
+    .badge, .badge-on, .badge-off, .badge-status {
+      border-radius: 999px !important;
+      font-weight: 700 !important;
+      font-size: 11px !important;
+      padding: 4px 10px !important;
+    }
+    .btn-primary {
+      background: linear-gradient(135deg, #6366f1, #7c3aed) !important;
+      border: none !important;
+      box-shadow: 0 8px 20px rgba(99,102,241,0.35) !important;
+      border-radius: 12px !important;
+    }
+    .btn-primary:hover {
+      filter: brightness(1.08);
+      transform: translateY(-1px);
+    }
+    .content { padding: 22px 20px 40px !important; }
+    .page-title, h1.page-title, .topbar h1 {
+      font-weight: 800 !important;
+      letter-spacing: -0.03em !important;
+    }
+    select, input, textarea {
+      border-radius: 12px !important;
+    }
+    @media (max-width: 768px) {
+      .metric-value { font-size: 20px !important; }
+      .metrics { grid-template-columns: 1fr 1fr !important; }
+    }
+
   </style>
 </head>
 <body>
@@ -415,6 +560,10 @@
 
       <div class="content">
         <div id="tab-overview" class="tab-content active">
+          <div style="margin-bottom:18px;">
+            <div style="font-size:22px;font-weight:800;letter-spacing:-0.03em;color:var(--text);">Overview</div>
+            <div style="font-size:13px;color:var(--muted);margin-top:4px;">Live store performance for the selected period.</div>
+          </div>
           <div class="panel">
             <div class="panel-header">
               <div class="panel-title">Revenue</div>
