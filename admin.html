@@ -578,7 +578,8 @@
             </div>
             <div class="metrics" style="margin-bottom:0;">
               <div class="metric-card"><div class="metric-label" id="revenuePeriodLabel">This Month</div><div class="metric-value" id="mRevenueNgn">₦0</div><div class="metric-sub" id="mRevenueUsd">$0.00 USD</div></div>
-              <div class="metric-card"><div class="metric-label">Sales</div><div class="metric-value" id="mSalesNgn">₦0</div><div class="metric-sub">Completed orders</div></div>
+              <div class="metric-card"><div class="metric-label">Sales</div><div class="metric-value" id="mSalesNgn">₦0</div><div class="metric-sub">Completed orders — Logs + SMS + Boosters</div></div>
+              <div class="metric-card"><div class="metric-label">Profit</div><div class="metric-value" id="mProfitNgn" style="color:#34d399;">₦0</div><div class="metric-sub">After all supplier costs</div></div>
               <div class="metric-card"><div class="metric-label">Wallet Balances</div><div class="metric-value" id="mTotalBalance">₦0</div><div class="metric-sub">All user wallets</div></div>
             </div>
           </div>
@@ -2267,6 +2268,20 @@ async function loadOverviewStats(period) {
     set('mBoostProfit', '₦' + Number(data.boost_profit || 0).toLocaleString());
     const boostPeriodEl = document.getElementById('mBoostOrderPeriodLabel');
     if (boostPeriodEl) boostPeriodEl.textContent = (revenueLabels[period] || period);
+
+    // The headline "Sales" card above was previously computed client-side
+    // from window._cachedOrders — which only ever holds LOG orders, so
+    // "Sales" silently excluded SMS and Booster revenue entirely, even
+    // though this same response has accurate combined numbers for all
+    // three. Overwrite it here with the true combined total once this
+    // (more complete, server-computed) data arrives.
+    const combinedSales = Number(data.logs_amount_spent || 0) + Number(data.sms_amount_spent || 0) + Number(data.boost_amount_spent || 0);
+    const combinedProfit = Number(data.logs_profit || 0) + Number(data.sms_profit || 0) + Number(data.boost_profit || 0);
+    set('mSalesNgn', '₦' + combinedSales.toLocaleString(undefined, { maximumFractionDigits: 0 }));
+    set('mRevenueNgn', '₦' + combinedSales.toLocaleString(undefined, { maximumFractionDigits: 0 }));
+    set('mRevenueUsd', '$' + (combinedSales / liveRate).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' USD');
+    const profitEl = document.getElementById('mProfitNgn');
+    if (profitEl) profitEl.textContent = '₦' + combinedProfit.toLocaleString(undefined, { maximumFractionDigits: 0 });
 
     // Fallback when api/admin.js has not been redeployed yet (no boost_* fields)
     if (data.boost_order_count == null) {
