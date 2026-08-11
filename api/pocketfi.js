@@ -445,14 +445,15 @@ async function payReferralCommission(refereeUserId, depositAmountNgn, depositRef
     await supabase.from('transactions').insert({
       user_id: referrerId,
       customer_id: refProf.customer_id || null,
-      type: 'referral',
-      category: 'Deposit',
+      type: 'deposit',
+      category: 'deposit',
       title: 'Referral bonus',
       subtitle: `2% of friend's deposit · ₦${amount.toLocaleString()}`,
-      amount: `₦${commission.toLocaleString()}`,
+      amount: '₦' + commission.toLocaleString(),
       amount_ngn: commission,
       status: 'completed',
       channel: 'Referral',
+      payment_provider: 'Referral',
       created_at: new Date().toISOString()
     });
   } catch (e) {

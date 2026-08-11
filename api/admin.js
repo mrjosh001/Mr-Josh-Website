@@ -40,6 +40,85 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY
 );
 
+/** 2% lifetime referral on deposits — shared logic (kept here so no extra serverless file) */
+async function payReferralCommission(refereeUserId, depositAmountNgn, depositReference) {
+  const COMMISSION_RATE = 0.02;
+  const amount = Number(depositAmountNgn) || 0;
+  if (amount < 1 || !refereeUserId) return { paid: false, reason: 'skip' };
+
+  const { data: referee } = await supabase
+    .from('profiles')
+    .select('id, referred_by, customer_id')
+    .eq('id', refereeUserId)
+    .maybeSingle();
+  if (!referee?.referred_by) return { paid: false, reason: 'no_referrer' };
+
+  const commission = Math.floor(amount * COMMISSION_RATE * 100) / 100;
+  if (commission < 0.01) return { paid: false, reason: 'too_small' };
+
+  if (depositReference) {
+    const { data: existing } = await supabase
+      .from('referral_earnings')
+      .select('id')
+      .eq('deposit_reference', String(depositReference))
+      .maybeSingle();
+    if (existing) return { paid: false, reason: 'already_paid' };
+  }
+
+  const referrerId = referee.referred_by;
+  const { data: refProf } = await supabase
+    .from('profiles')
+    .select('id, balance, customer_id')
+    .eq('id', referrerId)
+    .maybeSingle();
+  if (!refProf) return { paid: false, reason: 'referrer_missing' };
+
+  const nextBal = (Number(refProf.balance) || 0) + commission;
+  const { error: balErr } = await supabase
+    .from('profiles')
+    .update({ balance: nextBal })
+    .eq('id', referrerId);
+  if (balErr) {
+    console.error('[referral] balance update', balErr.message);
+    return { paid: false, reason: balErr.message };
+  }
+
+  try {
+    await supabase.from('referral_earnings').insert({
+      referrer_id: referrerId,
+      referee_id: refereeUserId,
+      deposit_reference: depositReference ? String(depositReference) : null,
+      deposit_amount_ngn: amount,
+      commission_ngn: commission
+    });
+  } catch (e) {
+    console.warn('[referral] earnings insert', e?.message || e);
+  }
+
+  // Must appear under Deposit in user transaction history
+  try {
+    await supabase.from('transactions').insert({
+      user_id: referrerId,
+      customer_id: refProf.customer_id || null,
+      type: 'deposit',
+      category: 'deposit',
+      title: 'Referral bonus',
+      subtitle: `2% of friend's deposit · ₦${amount.toLocaleString()}`,
+      amount: '₦' + commission.toLocaleString(),
+      amount_ngn: commission,
+      status: 'completed',
+      channel: 'Referral',
+      payment_provider: 'Referral',
+      created_at: new Date().toISOString()
+    });
+  } catch (e) {
+    console.warn('[referral] tx insert', e?.message || e);
+  }
+
+  return { paid: true, commission, referrer_id: referrerId, new_balance: nextBal };
+}
+
+
 const PERMANENT_BAN_DURATION = '876000h';
 
 async function requireAdmin(req) {
@@ -155,6 +234,14 @@ async function userUpdate(body) {
       };
     }
     depositRecorded = true;
+    // Lifetime 2% to referrer when admin manually funds a referred user
+    try {
+      const refKey = 'manual_' + user_id + '_' + Date.now();
+      const r = await payReferralCommission(user_id, amountAdded, refKey);
+      if (r?.paid) console.log('[referral] manual deposit commission', r.commission);
+    } catch (e) {
+      console.warn('[referral] manual deposit', e?.message || e);
+    }
   }
 
   return { status: 200, body: { success: true, data: { amount_added: amountAdded, deposit_recorded: depositRecorded } } };
