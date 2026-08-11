@@ -147,7 +147,7 @@ async function load(){
 
   const refs=j.referrals||[];
   document.getElementById('refs').innerHTML = refs.length
-    ? refs.map(r=>`<div class="row"><span>${(r.full_name||r.customer_id||'Friend').toString().slice(0,28)}</span><span class="m">${r.created_at?new Date(r.created_at).toLocaleDateString():''}</span></div>`).join('')
+    ? refs.map(r=>`<div class="row"><span>${(r.full_name||r.customer_id||'Friend').toString().slice(0,28)}</span><span class="m">${(r.updated_at||r.created_at)?new Date(r.updated_at||r.created_at).toLocaleDateString():''}</span></div>`).join('')
     : '<div class="empty">No referrals yet.</div>';
 }
 
