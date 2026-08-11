@@ -35,6 +35,13 @@ h1{font-size:17px;font-weight:800}
 .empty a{display:inline-block;margin-top:14px;background:linear-gradient(135deg,#3b82f6,#8b5cf6);color:#fff;padding:12px 18px;border-radius:12px;font-weight:800;text-decoration:none}
 .spinner{width:36px;height:36px;border:3px solid var(--border);border-top-color:#3b82f6;border-radius:50%;animation:spin .8s linear infinite;margin:40px auto}
 @keyframes spin{to{transform:rotate(360deg)}}
+.btn-row{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}
+.btn-mini{border:1px solid var(--border);background:var(--bg);color:var(--text);border-radius:10px;padding:8px 12px;font-size:11px;font-weight:800;cursor:pointer}
+.btn-mini:disabled{opacity:.5;cursor:not-allowed}
+.btn-mini.danger{border-color:rgba(248,113,113,.4);color:var(--danger)}
+.btn-mini.primary{border-color:rgba(91,138,245,.4);color:var(--primary)}
+.toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:#111827;color:#fff;padding:12px 16px;border-radius:12px;font-size:13px;font-weight:700;z-index:50;opacity:0;pointer-events:none;transition:.2s;max-width:90%}
+.toast.show{opacity:1}
 </style>
 </head>
 <body>
@@ -44,6 +51,7 @@ h1{font-size:17px;font-weight:800}
   <button type="button" id="themeBtn" onclick="toggleTheme()" style="margin-left:auto;width:40px;height:40px;border-radius:12px;border:1px solid var(--border);background:var(--card);cursor:pointer;font-size:16px;">🌙</button>
 </header>
 <div class="list" id="list"><div class="spinner"></div></div>
+<div class="toast" id="toast"></div>
 <script>
 
 const SUPABASE_URL = 'https://atczodlljmlayvldxfmv.supabase.co';
@@ -91,7 +99,41 @@ function progressHtml(o){
     el.innerHTML=`<div class="empty"><div style="font-size:40px;margin-bottom:8px">⚡</div><h3>No boost orders yet</h3><p>Your growth orders will show here with live progress.</p><a href="mj-boosters.html">Place first boost</a></div>`;
     return;
   }
-  el.innerHTML=rows.map(o=>`
+  function toast(msg,ms){const t=document.getElementById('toast');if(!t)return;t.textContent=msg;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),ms||3200)}
+  function canCancel(o){
+    const s=String(o.status||'').toLowerCase();
+    return /pending|in progress|processing|awaiting|waiting/.test(s);
+  }
+  function canRefill(o){
+    const s=String(o.status||'').toLowerCase();
+    // Refill typically after completed/partial when service supports it
+    return /completed|partial|partial/.test(s) || /completed|partial/.test(s);
+  }
+  window.cancelOrder = async function(orderId){
+    if(!orderId) return;
+    if(!confirm('Cancel this boost order? If still pending, wallet may be refunded.')) return;
+    try{
+      const res=await fetch('/api/owlet?action=cancel',{method:'POST',headers:{...headers,'Content-Type':'application/json'},body:JSON.stringify({order:orderId})});
+      const j=await res.json();
+      toast(j.message||(j.success?'Cancelled':'Cancel failed'));
+      if(j.success) setTimeout(()=>location.reload(),900);
+    }catch(e){toast(e.message||'Network error')}
+  };
+  window.refillOrder = async function(orderId){
+    if(!orderId) return;
+    try{
+      const res=await fetch('/api/owlet?action=refill',{method:'POST',headers:{...headers,'Content-Type':'application/json'},body:JSON.stringify({order:orderId})});
+      const j=await res.json();
+      toast(j.message||(j.success?'Refill requested':'Refill failed'));
+      if(j.success) setTimeout(()=>location.reload(),900);
+    }catch(e){toast(e.message||'Network error')}
+  };
+  el.innerHTML=rows.map(o=>{
+    const oid=o.supplier_order_id||'';
+    const actions=[];
+    if(canCancel(o)&&oid) actions.push(`<button type="button" class="btn-mini danger" onclick="cancelOrder('${esc(oid)}')">Cancel</button>`);
+    if(canRefill(o)&&oid) actions.push(`<button type="button" class="btn-mini primary" onclick="refillOrder('${esc(oid)}')">Request refill</button>`);
+    return `
     <div class="card">
       <div class="top">
         <div class="title">${esc(o.service_name||'Boost')}</div>
@@ -100,8 +142,10 @@ function progressHtml(o){
       <div class="meta">${esc(o.link||'')}</div>
       <div class="row"><span>Ordered ${Number(o.quantity||0).toLocaleString()}</span><span>${fmt(o.price_ngn)}</span></div>
       ${progressHtml(o)}
-      <div class="row"><span>Order #${esc(o.supplier_order_id||o.id||'')}</span><span>${o.created_at?new Date(o.created_at).toLocaleString():''}</span></div>
-    </div>`).join('');
+      <div class="row"><span>Order #${esc(oid||o.id||'')}</span><span>${o.created_at?new Date(o.created_at).toLocaleString():''}</span></div>
+      ${actions.length?`<div class="btn-row">${actions.join('')}</div>`:''}
+    </div>`;
+  }).join('');
 })();
 </script>
 </body>
