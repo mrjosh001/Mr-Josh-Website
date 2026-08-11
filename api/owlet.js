@@ -750,6 +750,43 @@ async function handleOrder(req, res) {
   });
 }
 
+// If Owlet's own status for an order flips to Canceled/Refunded/Failed
+// *after* it was already accepted (discovered here, during a later status
+// poll — not via the customer manually cancelling, which is handled
+// separately in handleCancel), the customer's wallet was never being
+// credited back — only the status text updated. This is the fix: refund
+// automatically the first time we observe that transition, and never
+// again for the same order (guarded by only firing when the OLD status
+// wasn't already terminal, so re-polling an already-refunded order is a
+// no-op instead of a double-refund).
+async function refundIfSupplierFailed(order, oldStatus, newStatus) {
+  const wasTerminal = /completed|canceled|cancelled|refunded|failed/i.test(String(oldStatus || ''));
+  const isNowFailed = /canceled|cancelled|refunded|failed/i.test(String(newStatus || ''));
+  if (wasTerminal || !isNowFailed) return 0;
+  if (!order.user_id || !(Number(order.price_ngn) > 0)) return 0;
+
+  const { data: prof } = await supabase.from('profiles').select('balance').eq('id', order.user_id).maybeSingle();
+  if (!prof) return 0;
+  const bal = Number(prof.balance) || 0;
+  const refunded = Number(order.price_ngn) || 0;
+  await supabase.from('profiles').update({ balance: bal + refunded }).eq('id', order.user_id);
+  try {
+    await supabase.from('transactions').insert({
+      user_id: order.user_id,
+      customer_id: order.customer_id || null,
+      type: 'booster',
+      category: 'booster',
+      title: 'Booster auto-refund (supplier failed)',
+      subtitle: `Order #${order.supplier_order_id} — ${newStatus}`,
+      amount: refunded,
+      amount_ngn: refunded,
+      status: 'completed',
+      created_at: new Date().toISOString()
+    });
+  } catch (_) {}
+  return refunded;
+}
+
 async function handleMyOrders(req, res) {
   const userGate = await requireUser(req);
   if (!userGate.ok) return res.status(userGate.status).json({ success: false, message: userGate.message });
@@ -780,15 +817,18 @@ async function handleMyOrders(req, res) {
     try {
       const st = await owletCall({ action: 'status', order: String(o.supplier_order_id) });
       if (st.ok && st.json && !st.json.error) {
+        const oldStatus = o.status;
         o.status = st.json.status || o.status;
         o.start_count = st.json.start_count ?? o.start_count;
         o.remains = st.json.remains ?? o.remains;
+        const refunded = await refundIfSupplierFailed(o, oldStatus, o.status);
         await supabase.from('booster_orders').update({
           status: o.status,
           start_count: o.start_count,
           remains: o.remains,
           updated_at: new Date().toISOString()
         }).eq('id', o.id);
+        if (refunded) o.auto_refunded = refunded;
       }
     } catch (_) {}
   }
@@ -834,15 +874,18 @@ async function handleAdminOrders(req, res) {
     try {
       const st = await owletCall({ action: 'status', order: String(o.supplier_order_id) });
       if (st.ok && st.json && !st.json.error) {
+        const oldStatus = o.status;
         o.status = st.json.status || o.status;
         o.start_count = st.json.start_count ?? o.start_count;
         o.remains = st.json.remains ?? o.remains;
+        const refunded = await refundIfSupplierFailed(o, oldStatus, o.status);
         await supabase.from('booster_orders').update({
           status: o.status,
           start_count: o.start_count,
           remains: o.remains,
           updated_at: new Date().toISOString()
         }).eq('id', o.id);
+        if (refunded) o.auto_refunded = refunded;
       }
     } catch (_) {}
   }
