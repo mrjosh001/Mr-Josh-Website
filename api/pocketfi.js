@@ -22,6 +22,8 @@
 import crypto from 'crypto';
 import { createClient } from '@supabase/supabase-js';
 
+
+
 const supabase = createClient(
   process.env.SUPABASE_URL,
   process.env.SUPABASE_SERVICE_ROLE_KEY
@@ -351,6 +353,216 @@ async function sendDepositEmail({ to, name, amountLabel, walletLabel, reference 
   }
 }
 
+
+/* ========== Referral (merged — no extra serverless file) ========== */
+const REFERRAL_COMMISSION_RATE = 0.02; // 2% lifetime on deposits
+
+function genReferralCode() {
+  const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  let s = 'MJ';
+  for (let i = 0; i < 6; i++) s += alphabet[Math.floor(Math.random() * alphabet.length)];
+  return s;
+}
+
+async function ensureReferralCode(userId) {
+  const { data: prof } = await supabase
+    .from('profiles')
+    .select('id, referral_code, customer_id, full_name, balance')
+    .eq('id', userId)
+    .maybeSingle();
+  if (!prof) return null;
+  if (prof.referral_code) return prof;
+  for (let i = 0; i < 8; i++) {
+    const code = genReferralCode();
+    const { data, error } = await supabase
+      .from('profiles')
+      .update({ referral_code: code })
+      .eq('id', userId)
+      .is('referral_code', null)
+      .select('id, referral_code, customer_id, full_name, balance')
+      .maybeSingle();
+    if (!error && data?.referral_code) return data;
+  }
+  const fallback = ('MJ' + String(prof.customer_id || userId).replace(/[^a-zA-Z0-9]/g, '').slice(-6)).toUpperCase();
+  await supabase.from('profiles').update({ referral_code: fallback }).eq('id', userId);
+  return { ...prof, referral_code: fallback };
+}
+
+async function payReferralCommission(refereeUserId, depositAmountNgn, depositReference) {
+  const amount = Number(depositAmountNgn) || 0;
+  if (amount < 1 || !refereeUserId) return { paid: false, reason: 'skip' };
+
+  const { data: referee } = await supabase
+    .from('profiles')
+    .select('id, referred_by, customer_id')
+    .eq('id', refereeUserId)
+    .maybeSingle();
+  if (!referee?.referred_by) return { paid: false, reason: 'no_referrer' };
+
+  const commission = Math.floor(amount * REFERRAL_COMMISSION_RATE * 100) / 100;
+  if (commission < 0.01) return { paid: false, reason: 'too_small' };
+
+  if (depositReference) {
+    const { data: existing } = await supabase
+      .from('referral_earnings')
+      .select('id')
+      .eq('deposit_reference', String(depositReference))
+      .maybeSingle();
+    if (existing) return { paid: false, reason: 'already_paid' };
+  }
+
+  const referrerId = referee.referred_by;
+  const { data: refProf } = await supabase
+    .from('profiles')
+    .select('id, balance, customer_id')
+    .eq('id', referrerId)
+    .maybeSingle();
+  if (!refProf) return { paid: false, reason: 'referrer_missing' };
+
+  const nextBal = (Number(refProf.balance) || 0) + commission;
+  const { error: balErr } = await supabase
+    .from('profiles')
+    .update({ balance: nextBal })
+    .eq('id', referrerId);
+  if (balErr) {
+    console.error('[referral] balance update', balErr.message);
+    return { paid: false, reason: balErr.message };
+  }
+
+  try {
+    await supabase.from('referral_earnings').insert({
+      referrer_id: referrerId,
+      referee_id: refereeUserId,
+      deposit_reference: depositReference ? String(depositReference) : null,
+      deposit_amount_ngn: amount,
+      commission_ngn: commission
+    });
+  } catch (e) {
+    console.warn('[referral] earnings insert', e?.message || e);
+  }
+
+  try {
+    await supabase.from('transactions').insert({
+      user_id: referrerId,
+      customer_id: refProf.customer_id || null,
+      type: 'referral',
+      category: 'Deposit',
+      title: 'Referral bonus',
+      subtitle: `2% of friend's deposit · ₦${amount.toLocaleString()}`,
+      amount: `₦${commission.toLocaleString()}`,
+      amount_ngn: commission,
+      status: 'completed',
+      channel: 'Referral',
+      created_at: new Date().toISOString()
+    });
+  } catch (e) {
+    console.warn('[referral] tx insert', e?.message || e);
+  }
+
+  return { paid: true, commission, referrer_id: referrerId, new_balance: nextBal };
+}
+
+async function tryPayReferral(userId, amountNgn, reference) {
+  try {
+    const r = await payReferralCommission(userId, amountNgn, reference);
+    if (r?.paid) console.log('[referral] paid', r.commission, 'to', r.referrer_id);
+  } catch (e) {
+    console.warn('[referral] commission skip', e?.message || e);
+  }
+}
+
+async function requireUserToken(req) {
+  const authHeader = req.headers.authorization || '';
+  const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : null;
+  if (!token) return { ok: false, status: 401, message: 'Please sign in' };
+  const { data: { user }, error } = await supabase.auth.getUser(token);
+  if (error || !user) return { ok: false, status: 401, message: 'Session expired' };
+  return { ok: true, user };
+}
+
+async function handleReferralMe(req, res, user) {
+  const prof = await ensureReferralCode(user.id);
+  if (!prof) return res.status(400).json({ success: false, message: 'Profile not found' });
+
+  const host = req.headers['x-forwarded-host'] || req.headers.host || 'app.mjhub.store';
+  const origin = process.env.SITE_URL || (`https://${host}`);
+  const link = `${String(origin).replace(/\/$/, '')}/auth.html?ref=${encodeURIComponent(prof.referral_code)}`;
+
+  const { data: refs } = await supabase
+    .from('profiles')
+    .select('id, full_name, customer_id, created_at')
+    .eq('referred_by', user.id)
+    .order('created_at', { ascending: false })
+    .limit(100);
+
+  const { data: earnings } = await supabase
+    .from('referral_earnings')
+    .select('commission_ngn, deposit_amount_ngn, created_at, referee_id')
+    .eq('referrer_id', user.id)
+    .order('created_at', { ascending: false })
+    .limit(100);
+
+  const totalEarned = (earnings || []).reduce((s, r) => s + (Number(r.commission_ngn) || 0), 0);
+
+  return res.status(200).json({
+    success: true,
+    referral_code: prof.referral_code,
+    link,
+    rate: REFERRAL_COMMISSION_RATE,
+    rate_label: '2%',
+    referred_count: (refs || []).length,
+    total_earned_ngn: Math.round(totalEarned * 100) / 100,
+    referrals: refs || [],
+    recent_earnings: earnings || []
+  });
+}
+
+async function handleReferralAttach(req, res, user) {
+  const body = typeof req.body === 'string'
+    ? (() => { try { return JSON.parse(req.body || '{}'); } catch { return {}; } })()
+    : (req.body || {});
+  const code = String(body.code || body.ref || req.query?.code || '').trim().toUpperCase();
+  if (!code) return res.status(400).json({ success: false, message: 'Referral code required' });
+
+  const { data: me } = await supabase
+    .from('profiles')
+    .select('id, referred_by, referral_code')
+    .eq('id', user.id)
+    .maybeSingle();
+  if (!me) return res.status(400).json({ success: false, message: 'Profile not found' });
+  if (me.referred_by) {
+    return res.status(200).json({ success: true, message: 'Already linked to a referrer', already: true });
+  }
+  if (me.referral_code && me.referral_code.toUpperCase() === code) {
+    return res.status(400).json({ success: false, message: 'You cannot use your own referral code' });
+  }
+
+  const { data: referrer } = await supabase
+    .from('profiles')
+    .select('id, referral_code')
+    .eq('referral_code', code)
+    .maybeSingle();
+  if (!referrer) return res.status(404).json({ success: false, message: 'Invalid referral code' });
+  if (referrer.id === user.id) {
+    return res.status(400).json({ success: false, message: 'You cannot refer yourself' });
+  }
+
+  const { error } = await supabase
+    .from('profiles')
+    .update({ referred_by: referrer.id })
+    .eq('id', user.id)
+    .is('referred_by', null);
+  if (error) return res.status(500).json({ success: false, message: error.message });
+
+  return res.status(200).json({
+    success: true,
+    message: 'Referral linked — your future deposits earn them 2% for life',
+    referrer_id: referrer.id
+  });
+}
+/* ========== /Referral ========== */
+
+
 async function creditUser(userId, amountNgn, reference) {
   // Wallet target was stored on the pending transaction / intent at checkout
   let wallet = 'ngn';
@@ -450,6 +662,7 @@ async function creditUser(userId, amountNgn, reference) {
       console.error('[deposit-email] unexpected', e?.message || e);
     }
 
+    await tryPayReferral(userId, amountNgn, reference);
     return { balance_usd: nextUsd, wallet: 'usd', amount_usd: amountUsd };
   }
 
@@ -504,6 +717,7 @@ async function creditUser(userId, amountNgn, reference) {
     console.error('[deposit-email] unexpected', e?.message || e);
   }
 
+  await tryPayReferral(userId, amountNgn, reference);
   return { balance: next, wallet: 'ngn' };
 }
 
@@ -927,6 +1141,32 @@ async function handleCheckout(req, res, raw, publicKey, businessId) {
 }
 
 export default async function handler(req, res) {
+  // --- Referral (no extra serverless file) ---
+  {
+    let _act = (req.query && req.query.action) || '';
+    if (!_act && req.url) {
+      try { _act = new URL(req.url, 'http://x').searchParams.get('action') || ''; } catch (_) {}
+    }
+    if (!_act && req.body) {
+      try {
+        const b = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : req.body;
+        _act = (b && b.action) || '';
+      } catch (_) {}
+    }
+    _act = String(_act || '').toLowerCase();
+    if (_act === 'referral_me' || _act === 'referral_stats') {
+      const gate = await requireUserToken(req);
+      if (!gate.ok) return res.status(gate.status).json({ success: false, message: gate.message });
+      return handleReferralMe(req, res, gate.user);
+    }
+    if (_act === 'referral_attach') {
+      const gate = await requireUserToken(req);
+      if (!gate.ok) return res.status(gate.status).json({ success: false, message: gate.message });
+      return handleReferralAttach(req, res, gate.user);
+    }
+  }
+  // --- /Referral ---
+
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
