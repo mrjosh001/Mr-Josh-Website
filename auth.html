@@ -547,12 +547,16 @@
         const SUPABASE_URL = 'https://atczodlljmlayvldxfmv.supabase.co';
         const SUPABASE_PUBLISHABLE_KEY = 'sb_publishable_dwbeKLcSG7-nfKzZz8x8Zw_U9FtwJTy';
         
-        // Referral: persist ?ref=CODE for signup linking
+        // Referral: persist ?ref=CODE and open Register (create account)
         (function(){
           try {
             var p = new URLSearchParams(window.location.search);
             var ref = (p.get('ref') || p.get('referral') || '').trim();
             if (ref) localStorage.setItem('mjhub_ref_code', ref.toUpperCase());
+            var tab = (p.get('tab') || p.get('mode') || '').toLowerCase();
+            if (ref || tab === 'signup' || tab === 'register') {
+              window.__mjhub_open_signup = true;
+            }
           } catch (e) {}
         })();
 
@@ -601,17 +605,34 @@
             async function attachReferralIfNeeded(session) {
             try {
               var refCode = localStorage.getItem('mjhub_ref_code');
-              if (!refCode || !session?.access_token) return;
-              await fetch('/api/pocketfi?action=referral_attach', {
-                method: 'POST',
-                headers: {
-                  'Content-Type': 'application/json',
-                  Authorization: 'Bearer ' + session.access_token
-                },
-                body: JSON.stringify({ code: refCode })
-              });
-              localStorage.removeItem('mjhub_ref_code');
-            } catch (e) {}
+              if (!refCode || !session || !session.access_token) return;
+              // Profile row may lag signup trigger — retry a few times
+              for (var attempt = 0; attempt < 5; attempt++) {
+                if (attempt > 0) await new Promise(function(r){ setTimeout(r, 800 * attempt); });
+                var res = await fetch('/api/pocketfi?action=referral_attach', {
+                  method: 'POST',
+                  headers: {
+                    'Content-Type': 'application/json',
+                    Authorization: 'Bearer ' + session.access_token
+                  },
+                  body: JSON.stringify({ code: refCode })
+                });
+                var j = {};
+                try { j = await res.json(); } catch (e) {}
+                if (j && j.success) {
+                  localStorage.removeItem('mjhub_ref_code');
+                  console.log('[referral] linked', j);
+                  return;
+                }
+                // invalid code — stop
+                if (res.status === 404 || res.status === 400) {
+                  console.warn('[referral] attach failed', j);
+                  return;
+                }
+              }
+            } catch (e) {
+              console.warn('[referral] attach error', e);
+            }
           }
         supabaseClient.auth.onAuthStateChange(async (event, session) => {
             if ((event === 'SIGNED_IN' || event === 'INITIAL_SESSION') && session) {
@@ -856,22 +877,11 @@
                 // Email confirmation is off — user is already signed in.
                 showSuccess('Account created successfully!');
                 try {
-                  var refCode = localStorage.getItem('mjhub_ref_code');
-                  if (refCode && data.session.access_token) {
-                    fetch('/api/pocketfi?action=referral_attach', {
-                      method: 'POST',
-                      headers: {
-                        'Content-Type': 'application/json',
-                        'Authorization': 'Bearer ' + data.session.access_token
-                      },
-                      body: JSON.stringify({ code: refCode })
-                    }).catch(function(){});
-                    localStorage.removeItem('mjhub_ref_code');
-                  }
+                  if (data.session) await attachReferralIfNeeded(data.session);
                 } catch (e) {}
                 setTimeout(() => {
                     window.location.href = 'index.html';
-                }, 1000);
+                }, 1200);
             } else {
                 // Email confirmation is required — send them to the
                 // dedicated "check your email" page with their address,
