@@ -308,18 +308,6 @@ body::before {
 
 /* WALLETS */
 .sleek-stats-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 8px; }
-.community-banner { display: flex; align-items: center; gap: 12px; background: linear-gradient(135deg, var(--primary-glow), rgba(167,139,250,.15)); border: 1px solid var(--border); border-radius: 16px; padding: 14px 16px; margin: 12px 0; position: relative; }
-.community-banner-icon { width: 40px; height: 40px; border-radius: 12px; background: var(--primary); color: #fff; display: flex; align-items: center; justify-content: center; font-size: 17px; flex-shrink: 0; }
-.community-banner-text { flex: 1; min-width: 0; }
-.community-banner-text strong { display: block; font-size: 13.5px; font-weight: 800; margin-bottom: 2px; color: var(--text); }
-.community-banner-text span { font-size: 11.5px; color: var(--muted); }
-.community-banner-actions { display: flex; gap: 8px; flex-shrink: 0; }
-.community-banner-actions a { width: 34px; height: 34px; border-radius: 10px; display: flex; align-items: center; justify-content: center; color: #fff; font-size: 14px; text-decoration: none; }
-.community-banner-actions a.wa { background: var(--whatsapp, #25D366); }
-.community-banner-actions a.tg { background: #26A5E4; }
-.community-banner-close { position: absolute; top: 6px; right: 6px; background: none; border: none; color: var(--muted); opacity: .6; font-size: 14px; cursor: pointer; padding: 4px; }
-.community-banner.hidden { display: none; }
-
 /* Quick-promo grid: Buy Logs + Boost Social Media, side by side */
 .promo-grid {
     display: grid;
@@ -834,58 +822,104 @@ body::before {
 /* WELCOME MODAL — shown once per fresh login */
 .welcome-modal-overlay {
     position: fixed; inset: 0; z-index: 2100;
-    background: rgba(0,0,0,0.6); backdrop-filter: blur(6px);
+    background:
+      radial-gradient(120% 90% at 50% 0%, rgba(91,138,245,0.22), transparent 60%),
+      rgba(2, 4, 10, 0.72);
+    backdrop-filter: blur(10px);
     display: none; align-items: center; justify-content: center; padding: 20px;
 }
 .welcome-modal-overlay.active { display: flex; }
 .welcome-modal-card {
     width: 100%; max-width: 380px;
-    background: var(--card); border: 1px solid var(--border);
-    border-radius: 26px; overflow: hidden; box-shadow: var(--shadow);
-    animation: welcomeModalPop .32s cubic-bezier(.34,1.56,.64,1);
+    background: var(--card); border: 1px solid var(--border-strong);
+    border-radius: 28px; overflow: hidden;
+    box-shadow: 0 30px 70px rgba(0,0,0,0.5), 0 0 0 1px rgba(255,255,255,0.04) inset;
+    animation: welcomeModalPop .34s cubic-bezier(.34,1.56,.64,1);
 }
 @keyframes welcomeModalPop {
-    from { opacity: 0; transform: scale(0.92) translateY(10px); }
+    from { opacity: 0; transform: scale(0.92) translateY(14px); }
     to { opacity: 1; transform: scale(1) translateY(0); }
 }
 .welcome-modal-hero {
-    position: relative; padding: 34px 24px 26px; text-align: center;
+    position: relative; padding: 38px 24px 30px; text-align: center; overflow: hidden;
     background:
-      radial-gradient(120% 140% at 10% -20%, rgba(167,139,250,.45), transparent 55%),
-      radial-gradient(120% 140% at 100% 0%, rgba(91,138,245,.5), transparent 50%),
-      linear-gradient(160deg, var(--primary-strong), var(--accent));
+      radial-gradient(130% 140% at 12% -25%, rgba(167,139,250,.55), transparent 55%),
+      radial-gradient(130% 140% at 105% -10%, rgba(91,138,245,.6), transparent 50%),
+      linear-gradient(165deg, var(--primary-strong), var(--accent) 120%);
+}
+.welcome-modal-hero::before {
+    content: ''; position: absolute; inset: 0; z-index: 0;
+    background-image:
+      linear-gradient(rgba(255,255,255,.07) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255,255,255,.07) 1px, transparent 1px);
+    background-size: 24px 24px;
+    -webkit-mask-image: radial-gradient(120% 100% at 50% 0%, #000 35%, transparent 85%);
+    mask-image: radial-gradient(120% 100% at 50% 0%, #000 35%, transparent 85%);
+}
+.welcome-modal-close {
+    position: absolute; top: 14px; right: 14px; z-index: 2;
+    width: 28px; height: 28px; border-radius: 50%;
+    background: rgba(255,255,255,0.14); border: 1px solid rgba(255,255,255,0.22);
+    color: #fff; font-size: 11px; display: flex; align-items: center; justify-content: center;
+    cursor: pointer;
+}
+.welcome-modal-logo-glow {
+    position: absolute; top: 4px; left: 50%; transform: translateX(-50%);
+    width: 150px; height: 150px; border-radius: 50%; z-index: 0;
+    background: radial-gradient(circle, rgba(255,255,255,.4), transparent 70%);
+    filter: blur(2px);
+}
+.welcome-modal-logo-wrap {
+    position: relative; z-index: 1;
+    width: 84px; height: 84px; border-radius: 50%;
+    margin: 0 auto 16px;
+    background: var(--card);
+    padding: 4px;
+    box-shadow: 0 14px 30px rgba(0,0,0,.35), 0 0 0 1px rgba(255,255,255,.4) inset;
 }
 .welcome-modal-logo {
-    width: 60px; height: 60px; border-radius: 16px; object-fit: contain;
-    margin: 0 auto 14px; display: block;
-    filter: drop-shadow(0 8px 18px rgba(0,0,0,.3));
-    background: rgba(255,255,255,0.12);
-    padding: 8px;
+    width: 100%; height: 100%; border-radius: 50%;
+    object-fit: cover; object-position: center; display: block;
 }
-.welcome-modal-title { font-size: 21px; font-weight: 900; color: #fff; letter-spacing: -0.02em; margin-bottom: 6px; }
-.welcome-modal-sub { font-size: 12.5px; color: rgba(255,255,255,0.85); font-weight: 600; line-height: 1.4; }
+.welcome-modal-title { position: relative; z-index: 1; font-size: 21px; font-weight: 900; color: #fff; letter-spacing: -0.02em; margin-bottom: 6px; }
+.welcome-modal-sub { position: relative; z-index: 1; font-size: 12.5px; color: rgba(255,255,255,0.88); font-weight: 600; line-height: 1.4; max-width: 280px; margin: 0 auto; }
 .welcome-modal-body { padding: 22px 22px 24px; }
 .welcome-modal-tags { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; margin-bottom: 16px; }
 .welcome-modal-tags span {
-    font-size: 11px; font-weight: 800; padding: 6px 12px; border-radius: 999px;
+    font-size: 11px; font-weight: 800; padding: 6px 12px 6px 6px; border-radius: 999px;
     background: var(--card-hover); border: 1px solid var(--border); color: var(--text);
     display: inline-flex; align-items: center; gap: 6px;
 }
-.welcome-modal-copy { font-size: 12.5px; color: var(--muted); line-height: 1.55; text-align: center; margin-bottom: 18px; font-weight: 500; }
+.welcome-modal-tags .tag-ico {
+    width: 20px; height: 20px; border-radius: 50%; flex-shrink: 0;
+    background: linear-gradient(135deg, var(--primary), var(--accent)); color: #fff;
+    display: flex; align-items: center; justify-content: center; font-size: 9.5px;
+}
+.welcome-modal-copy { font-size: 12.5px; color: var(--muted); line-height: 1.6; text-align: center; margin-bottom: 20px; font-weight: 500; }
 .welcome-modal-social { display: flex; gap: 10px; margin-bottom: 12px; }
 .welcome-modal-social a {
     flex: 1; display: flex; align-items: center; justify-content: center; gap: 8px;
-    padding: 12px; border-radius: 14px; font-size: 13px; font-weight: 800;
-    text-decoration: none; color: #fff;
+    padding: 11px 10px; border-radius: 14px; font-size: 12.5px; font-weight: 800;
+    text-decoration: none; color: #fff; box-shadow: 0 8px 18px rgba(0,0,0,0.14);
 }
-.welcome-modal-social a.wa { background: var(--whatsapp); }
-.welcome-modal-social a.tg { background: #26A5E4; }
+.welcome-modal-social a .social-ico {
+    width: 22px; height: 22px; border-radius: 50%; flex-shrink: 0;
+    background: rgba(255,255,255,0.24);
+    display: flex; align-items: center; justify-content: center; font-size: 12px;
+}
+.welcome-modal-social a.wa { background: linear-gradient(135deg, #25d366, #128c7e); }
+.welcome-modal-social a.tg { background: linear-gradient(135deg, #34b7f1, #1e88c7); }
 .welcome-modal-dismiss {
     width: 100%; border: none; cursor: pointer; padding: 13px; border-radius: 14px;
     font-size: 13.5px; font-weight: 800; font-family: inherit;
     background: linear-gradient(135deg, var(--primary), var(--accent));
     color: #fff; display: flex; align-items: center; justify-content: center; gap: 8px;
     box-shadow: 0 10px 24px var(--primary-glow);
+}
+.welcome-modal-dismiss .cta-ico {
+    width: 18px; height: 18px; border-radius: 50%; flex-shrink: 0;
+    background: rgba(255,255,255,0.24);
+    display: flex; align-items: center; justify-content: center; font-size: 9px;
 }
 .welcome-modal-dismiss:active { transform: scale(0.98); }
 
@@ -1279,19 +1313,6 @@ body::before {
                     <span class="sleek-value" id="homeUsdBalance">$0.00</span>
                 </div>
                 <div class="sleek-card-icon icon-purple"><i class="fa-solid fa-dollar-sign"></i></div>
-            </div>
-        </div>
-
-        <div class="community-banner" id="communityBanner">
-            <button class="community-banner-close" id="communityBannerClose" aria-label="Dismiss">✕</button>
-            <div class="community-banner-icon"><i class="fa-solid fa-users"></i></div>
-            <div class="community-banner-text">
-                <strong>Join our community</strong>
-                <span>Get updates, deals & support on WhatsApp or Telegram</span>
-            </div>
-            <div class="community-banner-actions">
-                <a href="https://chat.whatsapp.com/DxgYNbkV0fjLpWbP2aODRj" target="_blank" rel="noopener" class="wa" aria-label="WhatsApp community"><i class="fa-brands fa-whatsapp"></i></a>
-                <a href="https://t.me/mj_hub_tg" target="_blank" rel="noopener" class="tg" aria-label="Telegram community"><i class="fa-brands fa-telegram"></i></a>
             </div>
         </div>
 
@@ -1940,23 +1961,10 @@ function escapeHtml(str) {
 
 function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
 
-function initCommunityBanner() {
-    const banner = document.getElementById('communityBanner');
-    const closeBtn = document.getElementById('communityBannerClose');
-    if (!banner || !closeBtn) return;
-    if (localStorage.getItem('mjhub-community-banner-dismissed') === '1') {
-        banner.classList.add('hidden');
-        return;
-    }
-    closeBtn.addEventListener('click', () => {
-        banner.classList.add('hidden');
-        localStorage.setItem('mjhub-community-banner-dismissed', '1');
-    });
-}
-
 function initWelcomeModal() {
     const overlay = document.getElementById('welcomeModalOverlay');
     const dismissBtn = document.getElementById('welcomeModalDismissBtn');
+    const closeBtn = document.getElementById('welcomeModalCloseBtn');
     if (!overlay || !dismissBtn) return;
 
     let showIt = false;
@@ -1977,6 +1985,7 @@ function initWelcomeModal() {
         document.body.style.overflow = '';
     }
     dismissBtn.addEventListener('click', close);
+    if (closeBtn) closeBtn.addEventListener('click', close);
     overlay.addEventListener('click', (e) => {
         if (e.target === overlay) close();
     });
@@ -2047,7 +2056,6 @@ document.addEventListener('DOMContentLoaded', async () => {
                 // Admin broadcasts → bell + one-time popup + realtime
                 await loadAdminNotifications();
                 subscribeNotifRealtime();
-                initCommunityBanner();
                 initWelcomeModal();
             } else {
                 // No active session — this page is the signed-in dashboard,
@@ -3950,22 +3958,26 @@ function toggleBoosterMenu(e) {
 <div class="welcome-modal-overlay" id="welcomeModalOverlay">
   <div class="welcome-modal-card" role="dialog" aria-labelledby="welcomeModalTitle">
     <div class="welcome-modal-hero">
-      <img id="welcomeModalLogo" class="welcome-modal-logo" src="https://atczodlljmlayvldxfmv.supabase.co/storage/v1/object/public/avatars/dark%20background%20log" alt="MJ HUB">
+      <button type="button" class="welcome-modal-close" id="welcomeModalCloseBtn" aria-label="Close">✕</button>
+      <div class="welcome-modal-logo-glow"></div>
+      <div class="welcome-modal-logo-wrap">
+        <img id="welcomeModalLogo" class="welcome-modal-logo" src="https://atczodlljmlayvldxfmv.supabase.co/storage/v1/object/public/avatars/dark%20background%20log" alt="MJ HUB">
+      </div>
       <div class="welcome-modal-title" id="welcomeModalTitle">Welcome to MJ HUB</div>
       <div class="welcome-modal-sub">Your trusted hub for logs, SMS & social boosters</div>
     </div>
     <div class="welcome-modal-body">
       <div class="welcome-modal-tags">
-        <span><i class="fa-solid fa-bullhorn"></i> Updates</span>
-        <span><i class="fa-solid fa-tags"></i> Promos</span>
-        <span><i class="fa-solid fa-headset"></i> Support</span>
+        <span><span class="tag-ico"><i class="fa-solid fa-bullhorn"></i></span> Updates</span>
+        <span><span class="tag-ico"><i class="fa-solid fa-tags"></i></span> Promos</span>
+        <span><span class="tag-ico"><i class="fa-solid fa-headset"></i></span> Support</span>
       </div>
       <p class="welcome-modal-copy">Stay ahead with exclusive deals, real-time platform updates and priority support — join our community today!</p>
       <div class="welcome-modal-social">
-        <a href="https://chat.whatsapp.com/DxgYNbkV0fjLpWbP2aODRj" target="_blank" rel="noopener" class="wa"><i class="fa-brands fa-whatsapp"></i> WhatsApp</a>
-        <a href="https://t.me/mj_hub_tg" target="_blank" rel="noopener" class="tg"><i class="fa-brands fa-telegram"></i> Telegram</a>
+        <a href="https://chat.whatsapp.com/DxgYNbkV0fjLpWbP2aODRj" target="_blank" rel="noopener" class="wa"><span class="social-ico"><i class="fa-brands fa-whatsapp"></i></span> WhatsApp</a>
+        <a href="https://t.me/mj_hub_tg" target="_blank" rel="noopener" class="tg"><span class="social-ico"><i class="fa-brands fa-telegram"></i></span> Telegram</a>
       </div>
-      <button type="button" class="welcome-modal-dismiss" id="welcomeModalDismissBtn"><i class="fa-solid fa-check"></i> Got it, thanks!</button>
+      <button type="button" class="welcome-modal-dismiss" id="welcomeModalDismissBtn"><span class="cta-ico"><i class="fa-solid fa-check"></i></span> Got it, thanks!</button>
     </div>
   </div>
 </div>
