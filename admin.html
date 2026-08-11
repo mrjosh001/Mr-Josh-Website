@@ -879,7 +879,7 @@
           <div class="panel">
             <div class="panel-header">
               <div class="panel-title">Booster Orders</div>
-              <button class="btn btn-ghost btn-sm" onclick="loadBoosterOrders()"><i class="fas fa-sync"></i> Refresh</button>
+              <button class="btn btn-ghost btn-sm" id="btnRefreshBoosterOrders" onclick="loadBoosterOrders()"><i class="fas fa-sync"></i> Refresh</button>
             </div>
             <div class="search-row" style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;">
               <input type="search" id="boosterOrderSearch" placeholder="Search order ID, service, customer ID or link…" style="flex:1;min-width:200px;" onkeydown="if(event.key==='Enter'){boosterOrderPage=1;loadBoosterOrders()}">
@@ -3692,6 +3692,12 @@ async function loadBoosterOrders() {
   const tbody = document.getElementById('boosterOrdersBody');
   const cards = document.getElementById('boosterOrdersCards');
   const pager = document.getElementById('boosterOrdersPager');
+  const btn = document.getElementById('btnRefreshBoosterOrders');
+  // This now makes a real Owlet API call per pending order to pull live
+  // status (previously it was an instant re-read of whatever was already
+  // in the database, which is why Refresh looked like it "did nothing" —
+  // it wasn't actually checking anything). Show it's genuinely working.
+  setBtnBusy(btn, true, 'Refreshing…');
   try {
     const headers = await authHeaders();
     const q = (document.getElementById('boosterOrderSearch')?.value || '').trim();
@@ -3737,6 +3743,8 @@ async function loadBoosterOrders() {
       <button class="btn btn-ghost btn-sm" ${boosterOrderPage>=maxPage?'disabled':''} onclick="boosterOrderPage++;loadBoosterOrders()">Next</button>`;
   } catch (e) {
     if (tbody) tbody.innerHTML = `<tr><td colspan="8" class="empty-state">${escapeHtml(e.message || String(e))}</td></tr>`;
+  } finally {
+    setBtnBusy(btn, false, '<i class="fas fa-sync"></i> Refresh');
   }
 }
 
