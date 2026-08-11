@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Refer & Earn 2% | MJ HUB</title>
+<link rel="icon" href="https://atczodlljmlayvldxfmv.supabase.co/storage/v1/object/public/avatars/dark%20background%20log">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script>
+(function(){try{var t=localStorage.getItem('mjhub-theme');document.documentElement.setAttribute('data-theme',(t==='light'||t==='dark')?t:'dark');}catch(e){document.documentElement.setAttribute('data-theme','dark');}})();
+</script>
+<style>
+:root[data-theme="dark"]{--bg:#06080f;--card:#0f1524;--border:rgba(148,163,184,.12);--text:#f1f5f9;--muted:#8b9bb4;--primary:#5b8af5;--primary2:#a78bfa;--success:#34d399;--danger:#f87171}
+:root[data-theme="light"]{--bg:#f4f6fb;--card:#fff;--border:rgba(15,23,42,.08);--text:#0f172a;--muted:#64748b;--primary:#3b6ef5;--primary2:#7c5cfc;--success:#059669;--danger:#dc2626}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:Inter,system-ui,-apple-system,sans-serif;background:var(--bg);color:var(--text);min-height:100vh}
+.header{position:sticky;top:0;z-index:20;display:flex;align-items:center;gap:12px;padding:14px 16px;background:rgba(7,11,20,.92);backdrop-filter:blur(12px);border-bottom:1px solid var(--border)}
+:root[data-theme="light"] .header{background:rgba(255,255,255,.92)}
+.back{width:40px;height:40px;border-radius:12px;border:1px solid var(--border);background:var(--card);display:flex;align-items:center;justify-content:center;color:var(--text);text-decoration:none}
+h1{font-size:17px;font-weight:800;flex:1}
+.theme-btn{width:40px;height:40px;border-radius:12px;border:1px solid var(--border);background:var(--card);cursor:pointer;font-size:16px}
+.wrap{padding:16px;max-width:520px;margin:0 auto;padding-bottom:40px}
+.hero{padding:20px 16px;border-radius:20px;background:radial-gradient(120% 120% at 0% 0%,rgba(239,68,68,.25),transparent 50%),radial-gradient(100% 100% at 100% 0%,rgba(167,139,250,.22),transparent 45%),linear-gradient(160deg,#1a1020,#0b1220);border:1px solid rgba(255,255,255,.1);margin-bottom:16px}
+:root[data-theme="light"] .hero{background:linear-gradient(160deg,#fff5f5,#f8fafc);border-color:var(--border)}
+.hero .tag{font-size:12px;font-weight:900;color:#fca5a5;margin-bottom:8px}
+.hero h2{font-size:22px;font-weight:900;line-height:1.2;margin-bottom:8px}
+.hero p{font-size:13px;color:var(--muted);line-height:1.5}
+.stats{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px}
+.stat{background:var(--card);border:1px solid var(--border);border-radius:16px;padding:14px}
+.stat .l{font-size:11px;font-weight:800;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
+.stat .v{font-size:22px;font-weight:900;margin-top:6px;color:var(--success)}
+.stat .v.blue{color:var(--primary)}
+.card{background:var(--card);border:1px solid var(--border);border-radius:18px;padding:16px;margin-bottom:14px}
+.card h3{font-size:14px;font-weight:800;margin-bottom:10px}
+.link-row{display:flex;gap:8px;align-items:center}
+.link-row input{flex:1;min-width:0;padding:12px 12px;border-radius:12px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:12px;font-weight:700}
+.link-row button{flex:0 0 auto;border:0;cursor:pointer;border-radius:12px;padding:12px 16px;font-weight:800;font-size:13px;background:linear-gradient(135deg,#ef4444,#f97316);color:#fff}
+.actions{display:flex;gap:8px;margin-top:10px}
+.actions button,.actions a{flex:1;text-align:center;border:1px solid var(--border);background:var(--bg);color:var(--text);border-radius:12px;padding:11px;font-weight:800;font-size:12px;cursor:pointer;text-decoration:none}
+.note{font-size:12px;color:var(--muted);line-height:1.5;margin-top:10px}
+.list{display:flex;flex-direction:column;gap:8px}
+.row{display:flex;justify-content:space-between;gap:10px;padding:10px 12px;border-radius:12px;background:var(--bg);border:1px solid var(--border);font-size:12px;font-weight:700}
+.row .m{color:var(--muted);font-weight:600}
+.empty{text-align:center;padding:20px;color:var(--muted);font-size:13px}
+.toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:#111827;color:#fff;padding:12px 16px;border-radius:12px;font-size:13px;font-weight:700;z-index:50;opacity:0;pointer-events:none;transition:.2s;max-width:90%}
+.toast.show{opacity:1}
+.spinner{width:28px;height:28px;border:3px solid var(--border);border-top-color:var(--primary);border-radius:50%;animation:spin .8s linear infinite;margin:20px auto}
+@keyframes spin{to{transform:rotate(360deg)}}
+</style>
+</head>
+<body>
+<header class="header">
+  <a class="back" href="index.html#home"><i class="fa-solid fa-arrow-left"></i></a>
+  <h1>Refer & Earn</h1>
+  <button type="button" class="theme-btn" id="themeBtn" onclick="toggleTheme()">🌙</button>
+</header>
+
+<div class="wrap">
+  <section class="hero">
+    <div class="tag">🤝 Refer & earn 2%</div>
+    <h2>Earn 2% every time a friend funds their wallet — for life.</h2>
+    <p>Share your link. When they deposit, you get <strong>2%</strong> of that amount in your NGN wallet. Usable on logs, SMS, boosters — anything on MJ Hub.</p>
+  </section>
+
+  <div class="stats">
+    <div class="stat">
+      <div class="l">Total earned</div>
+      <div class="v" id="earned">₦—</div>
+    </div>
+    <div class="stat">
+      <div class="l">Friends referred</div>
+      <div class="v blue" id="count">—</div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h3>Your referral link</h3>
+    <div class="link-row">
+      <input id="link" readonly value="Loading…">
+      <button type="button" onclick="copyLink()">Copy</button>
+    </div>
+    <div class="actions">
+      <button type="button" onclick="shareLink()">Share ↗</button>
+      <button type="button" onclick="copyCode()">Copy code</button>
+    </div>
+    <p class="note" id="codeNote">Code: —</p>
+    <p class="note">They must sign up with your link (or code). You earn on <strong>every deposit they make forever</strong>, not only the first.</p>
+  </div>
+
+  <div class="card">
+    <h3>Recent commissions</h3>
+    <div class="list" id="earnings"><div class="spinner"></div></div>
+  </div>
+
+  <div class="card">
+    <h3>Your referrals</h3>
+    <div class="list" id="refs"><div class="spinner"></div></div>
+  </div>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+const SUPABASE_URL = 'https://atczodlljmlayvldxfmv.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImF0Y3pvZGxsam1sYXl2bGR4Zm12Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODUwNzUyMzgsImV4cCI6MjEwMDY1MTIzOH0.ufthD-p7BmeD_B7xyuMM6PNPL8DmcL4AtRYgg-MuoLI';
+const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+let state = null;
+
+function toast(m){const t=document.getElementById('toast');t.textContent=m;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),2800)}
+function fmt(n){return '₦'+Number(n||0).toLocaleString()}
+function syncThemeUi(){
+  const dark=document.documentElement.getAttribute('data-theme')!=='light';
+  const b=document.getElementById('themeBtn');
+  if(b)b.textContent=dark?'🌙':'☀️';
+}
+function toggleTheme(){
+  const cur=document.documentElement.getAttribute('data-theme')==='light'?'light':'dark';
+  const next=cur==='dark'?'light':'dark';
+  document.documentElement.setAttribute('data-theme',next);
+  try{localStorage.setItem('mjhub-theme',next)}catch(e){}
+  syncThemeUi();
+}
+syncThemeUi();
+
+async function load(){
+  const {data}=await sb.auth.getSession();
+  if(!data?.session){ location.href='auth.html?next='+encodeURIComponent('referral.html'); return; }
+  const headers={Authorization:'Bearer '+data.session.access_token};
+  const res=await fetch('/api/referral?action=me',{headers});
+  const j=await res.json();
+  if(!j.success){
+    document.getElementById('earnings').innerHTML='<div class="empty">'+ (j.message||'Could not load') +'</div>';
+    document.getElementById('refs').innerHTML='';
+    return;
+  }
+  state=j;
+  document.getElementById('earned').textContent=fmt(j.total_earned_ngn);
+  document.getElementById('count').textContent=String(j.referred_count||0);
+  document.getElementById('link').value=j.link||'';
+  document.getElementById('codeNote').textContent='Code: '+(j.referral_code||'—');
+
+  const earns=j.recent_earnings||[];
+  document.getElementById('earnings').innerHTML = earns.length
+    ? earns.map(e=>`<div class="row"><span>+${fmt(e.commission_ngn)}</span><span class="m">from ₦${Number(e.deposit_amount_ngn||0).toLocaleString()} · ${e.created_at?new Date(e.created_at).toLocaleDateString():''}</span></div>`).join('')
+    : '<div class="empty">No commissions yet — share your link.</div>';
+
+  const refs=j.referrals||[];
+  document.getElementById('refs').innerHTML = refs.length
+    ? refs.map(r=>`<div class="row"><span>${(r.full_name||r.customer_id||'Friend').toString().slice(0,28)}</span><span class="m">${r.created_at?new Date(r.created_at).toLocaleDateString():''}</span></div>`).join('')
+    : '<div class="empty">No referrals yet.</div>';
+}
+
+function copyLink(){
+  const v=document.getElementById('link').value;
+  if(!v||v==='Loading…')return;
+  navigator.clipboard.writeText(v).then(()=>toast('Link copied')).catch(()=>toast('Copy failed'));
+}
+function copyCode(){
+  if(!state?.referral_code)return;
+  navigator.clipboard.writeText(state.referral_code).then(()=>toast('Code copied')).catch(()=>toast('Copy failed'));
+}
+async function shareLink(){
+  const v=document.getElementById('link').value;
+  if(!v)return;
+  const text='Join MJ Hub with my link and fund your wallet. I earn 2% when you deposit — you get full access to logs, SMS & boosters.\n'+v;
+  if(navigator.share){
+    try{ await navigator.share({title:'MJ Hub referral',text,url:v}); return; }catch(e){}
+  }
+  navigator.clipboard.writeText(text).then(()=>toast('Share text copied'));
+}
+
+load();
+</script>
+</body>
+</html>

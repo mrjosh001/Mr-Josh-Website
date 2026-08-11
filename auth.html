@@ -546,6 +546,16 @@
         // Initialize Supabase Client
         const SUPABASE_URL = 'https://atczodlljmlayvldxfmv.supabase.co';
         const SUPABASE_PUBLISHABLE_KEY = 'sb_publishable_dwbeKLcSG7-nfKzZz8x8Zw_U9FtwJTy';
+        
+        // Referral: persist ?ref=CODE for signup linking
+        (function(){
+          try {
+            var p = new URLSearchParams(window.location.search);
+            var ref = (p.get('ref') || p.get('referral') || '').trim();
+            if (ref) localStorage.setItem('mjhub_ref_code', ref.toUpperCase());
+          } catch (e) {}
+        })();
+
         const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY);
 
         window.addEventListener('DOMContentLoaded', async () => {
@@ -588,7 +598,25 @@
                 window.history.replaceState({}, document.title, window.location.pathname);
             }
 
-            supabaseClient.auth.onAuthStateChange(async (event, session) => {
+            async function attachReferralIfNeeded(session) {
+            try {
+              var refCode = localStorage.getItem('mjhub_ref_code');
+              if (!refCode || !session?.access_token) return;
+              await fetch('/api/referral?action=attach', {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                  Authorization: 'Bearer ' + session.access_token
+                },
+                body: JSON.stringify({ code: refCode })
+              });
+              localStorage.removeItem('mjhub_ref_code');
+            } catch (e) {}
+          }
+        supabaseClient.auth.onAuthStateChange(async (event, session) => {
+            if ((event === 'SIGNED_IN' || event === 'INITIAL_SESSION') && session) {
+              attachReferralIfNeeded(session);
+            }
                 if (event === 'PASSWORD_RECOVERY') {
                     switchTab('updatePassword');
                 }
@@ -827,6 +855,20 @@
             if (data.session) {
                 // Email confirmation is off — user is already signed in.
                 showSuccess('Account created successfully!');
+                try {
+                  var refCode = localStorage.getItem('mjhub_ref_code');
+                  if (refCode && data.session.access_token) {
+                    fetch('/api/referral?action=attach', {
+                      method: 'POST',
+                      headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': 'Bearer ' + data.session.access_token
+                      },
+                      body: JSON.stringify({ code: refCode })
+                    }).catch(function(){});
+                    localStorage.removeItem('mjhub_ref_code');
+                  }
+                } catch (e) {}
                 setTimeout(() => {
                     window.location.href = 'index.html';
                 }, 1000);
