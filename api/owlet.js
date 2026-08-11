@@ -824,6 +824,164 @@ async function handleAdminOrders(req, res) {
 }
 
 
+
+async function handleCancel(req, res) {
+  const userGate = await requireUser(req);
+  if (!userGate.ok) return res.status(userGate.status).json({ success: false, message: userGate.message });
+
+  const body = typeof req.body === 'string' ? (() => { try { return JSON.parse(req.body || '{}'); } catch { return {}; } })() : (req.body || {});
+  const orderId = String(body.order || body.supplier_order_id || req.query?.order || '').trim();
+  if (!orderId) {
+    return res.status(400).json({ success: false, message: 'order is required' });
+  }
+
+  // Must own the order (unless admin — admin path uses requireAdmin elsewhere)
+  const { data: row } = await supabase
+    .from('booster_orders')
+    .select('*')
+    .eq('supplier_order_id', orderId)
+    .eq('user_id', userGate.user.id)
+    .maybeSingle();
+
+  if (!row) {
+    return res.status(404).json({ success: false, message: 'Order not found' });
+  }
+
+  const st = String(row.status || '').toLowerCase();
+  if (/completed|canceled|cancelled|refunded|partial/i.test(st) && !/pending|in progress|processing|awaiting/i.test(st)) {
+    // Allow cancel attempt for pending/progress; block clear completed
+    if (/completed|canceled|cancelled|refunded/i.test(st)) {
+      return res.status(400).json({ success: false, message: 'This order can no longer be cancelled' });
+    }
+  }
+
+  const { ok, status, json } = await owletCall({ action: 'cancel', orders: orderId });
+  // Owlet returns array: [{ order, cancel: 1 }] or cancel: { error }
+  let cancelOk = false;
+  let errMsg = null;
+  if (Array.isArray(json)) {
+    const hit = json.find(x => String(x.order) === orderId) || json[0];
+    if (hit && hit.cancel != null && typeof hit.cancel !== 'object') cancelOk = true;
+    else if (hit?.cancel?.error) errMsg = hit.cancel.error;
+  } else if (json && !json.error) {
+    cancelOk = true;
+  } else {
+    errMsg = json?.error || json?.message || 'Cancel failed';
+  }
+
+  if (!ok || !cancelOk) {
+    return res.status(status || 502).json({
+      success: false,
+      message: errMsg || 'Supplier could not cancel this order'
+    });
+  }
+
+  // Best-effort: mark cancelled. Refund only if still pending (not started) —
+  // supplier cancel does not always return money; we refund wallet only when
+  // status was still Pending before cancel to avoid double-loss edge cases.
+  const wasPending = /pending|awaiting|waiting/i.test(String(row.status || ''));
+  await supabase.from('booster_orders').update({
+    status: 'Canceled',
+    updated_at: new Date().toISOString()
+  }).eq('id', row.id);
+
+  let refunded = 0;
+  if (wasPending && Number(row.price_ngn) > 0) {
+    const { data: prof } = await supabase.from('profiles').select('balance').eq('id', userGate.user.id).maybeSingle();
+    const bal = Number(prof?.balance) || 0;
+    refunded = Number(row.price_ngn) || 0;
+    await supabase.from('profiles').update({ balance: bal + refunded }).eq('id', userGate.user.id);
+    try {
+      await supabase.from('transactions').insert({
+        user_id: userGate.user.id,
+        customer_id: row.customer_id || null,
+        type: 'booster',
+        category: 'booster',
+        title: 'Booster cancel refund',
+        subtitle: `Order #${orderId}`,
+        amount: refunded,
+        amount_ngn: refunded,
+        status: 'completed',
+        created_at: new Date().toISOString()
+      });
+    } catch (_) {}
+  }
+
+  return res.status(200).json({
+    success: true,
+    message: refunded
+      ? `Order cancelled. ₦${refunded.toLocaleString()} returned to wallet.`
+      : 'Cancel requested with supplier. Status updated.',
+    refunded,
+    order_id: orderId
+  });
+}
+
+async function handleRefill(req, res) {
+  const userGate = await requireUser(req);
+  if (!userGate.ok) return res.status(userGate.status).json({ success: false, message: userGate.message });
+
+  const body = typeof req.body === 'string' ? (() => { try { return JSON.parse(req.body || '{}'); } catch { return {}; } })() : (req.body || {});
+  const orderId = String(body.order || body.supplier_order_id || req.query?.order || '').trim();
+  if (!orderId) {
+    return res.status(400).json({ success: false, message: 'order is required' });
+  }
+
+  const { data: row } = await supabase
+    .from('booster_orders')
+    .select('*')
+    .eq('supplier_order_id', orderId)
+    .eq('user_id', userGate.user.id)
+    .maybeSingle();
+
+  if (!row) {
+    return res.status(404).json({ success: false, message: 'Order not found' });
+  }
+
+  const { ok, status, json } = await owletCall({ action: 'refill', order: orderId });
+  if (!ok || json?.error || (json?.refill && typeof json.refill === 'object' && json.refill.error)) {
+    const msg = json?.error || json?.refill?.error || json?.message || 'Refill not available for this order';
+    return res.status(status || 502).json({ success: false, message: msg });
+  }
+
+  const refillId = json?.refill != null ? String(json.refill) : null;
+  try {
+    const patch = {
+      updated_at: new Date().toISOString(),
+      raw: { ...(typeof row.raw === 'object' && row.raw ? row.raw : {}), last_refill_id: refillId, last_refill_at: new Date().toISOString() }
+    };
+    await supabase.from('booster_orders').update(patch).eq('id', row.id);
+  } catch (_) {}
+
+  return res.status(200).json({
+    success: true,
+    message: 'Refill requested',
+    refill_id: refillId,
+    order_id: orderId
+  });
+}
+
+async function handleRefillStatus(req, res) {
+  const userGate = await requireUser(req);
+  if (!userGate.ok) return res.status(userGate.status).json({ success: false, message: userGate.message });
+
+  const body = typeof req.body === 'string' ? (() => { try { return JSON.parse(req.body || '{}'); } catch { return {}; } })() : (req.body || {});
+  const refillId = String(body.refill || req.query?.refill || '').trim();
+  if (!refillId) {
+    return res.status(400).json({ success: false, message: 'refill id is required' });
+  }
+
+  const { ok, status, json } = await owletCall({ action: 'refill_status', refill: refillId });
+  if (!ok || json?.error) {
+    return res.status(status || 502).json({
+      success: false,
+      message: json?.error || json?.message || 'Could not fetch refill status'
+    });
+  }
+  return res.status(200).json({ success: true, data: json });
+}
+
+
 export default async function handler(req, res) {
   try {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -871,6 +1029,15 @@ export default async function handler(req, res) {
   if (action === 'my_orders') {
     return handleMyOrders(req, res);
   }
+  if (action === 'cancel') {
+    return handleCancel(req, res);
+  }
+  if (action === 'refill') {
+    return handleRefill(req, res);
+  }
+  if (action === 'refill_status') {
+    return handleRefillStatus(req, res);
+  }
 
   // Admin-only
   const admin = await requireAdmin(req);
@@ -885,7 +1052,7 @@ export default async function handler(req, res) {
 
   return res.status(400).json({
     success: false,
-    message: 'action required: catalog | order | my_orders | balance | services | sync | list | status | admin_orders'
+    message: 'action required: catalog | order | my_orders | cancel | refill | refill_status | balance | services | sync | list | status | admin_orders'
   });
   } catch (err) {
     console.error('[owlet] handler error', err);
