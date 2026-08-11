@@ -833,6 +833,17 @@
         <label>Available</label>
         <select id="pAvailable"><option value="true">Yes — Active</option><option value="false">No — Hidden</option></select>
       </div>
+      <div class="field" style="border:1px solid var(--border);border-radius:12px;padding:12px;background:rgba(99,102,241,0.06);">
+        <label style="display:flex;align-items:center;gap:8px;cursor:pointer;">
+          <input type="checkbox" id="pIsShared" onchange="toggleSharedFields()" style="width:16px;height:16px;" />
+          Shared product — every buyer gets the same content
+        </label>
+        <div class="price-note" style="margin-top:6px;">Use for one VPN log or config you sell many times. Not for unique accounts.</div>
+        <div id="sharedCredentialWrap" class="hidden" style="margin-top:10px;">
+          <label>Shared content (what every buyer receives)</label>
+          <textarea id="pSharedCredential" rows="4" placeholder="user:pass or full delivery text"></textarea>
+        </div>
+      </div>
       <div id="productModalError" class="error-msg"></div>
       <div class="modal-actions">
         <button class="btn btn-ghost" onclick="closeProductModal()">Cancel</button>
@@ -2317,9 +2328,11 @@ function openProductModal(product) {
     document.getElementById('pStock').value = product.stock_quantity ?? '';
     document.getElementById('pAvailable').value = product.is_available === false ? 'false' : 'true';
     const shared = !!(product.is_shared);
-    document.getElementById('pIsShared').checked = shared;
-    document.getElementById('pSharedCredential').value = product.shared_credential || '';
-    toggleSharedFields();
+    const pShared = document.getElementById('pIsShared');
+    const pSharedCred = document.getElementById('pSharedCredential');
+    if (pShared) pShared.checked = shared;
+    if (pSharedCred) pSharedCred.value = product.shared_credential || '';
+    if (typeof toggleSharedFields === 'function') toggleSharedFields();
   } else {
     document.getElementById('productModalTitle').textContent = 'Add Product';
     document.getElementById('editProductId').value = '';
@@ -2332,9 +2345,11 @@ function openProductModal(product) {
     document.getElementById('pPrice').value = '';
     document.getElementById('pStock').value = '';
     document.getElementById('pAvailable').value = 'true';
-    document.getElementById('pIsShared').checked = false;
-    document.getElementById('pSharedCredential').value = '';
-    toggleSharedFields();
+    const pShared = document.getElementById('pIsShared');
+    const pSharedCred = document.getElementById('pSharedCredential');
+    if (pShared) pShared.checked = false;
+    if (pSharedCred) pSharedCred.value = '';
+    if (typeof toggleSharedFields === 'function') toggleSharedFields();
   }
   document.getElementById('productModal').classList.remove('hidden');
 }
