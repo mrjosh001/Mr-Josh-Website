@@ -820,6 +820,33 @@ async function handleAdminOrders(req, res) {
   if (error) {
     return res.status(500).json({ success: false, message: error.message });
   }
+
+  // Same live-status-pull the customer's My Orders page already does —
+  // the admin "Refresh" button previously only re-read whatever status
+  // was already stored, which stayed stale forever unless a customer
+  // happened to open their own order history in the meantime (the only
+  // place this existed until now). Capped to this page's non-terminal
+  // orders so Refresh stays fast instead of hammering Owlet for the
+  // entire order history on every click.
+  const pending = (data || []).filter(o => /pending|progress|processing|in progress/i.test(String(o.status || '')));
+  for (const o of pending) {
+    if (!o.supplier_order_id) continue;
+    try {
+      const st = await owletCall({ action: 'status', order: String(o.supplier_order_id) });
+      if (st.ok && st.json && !st.json.error) {
+        o.status = st.json.status || o.status;
+        o.start_count = st.json.start_count ?? o.start_count;
+        o.remains = st.json.remains ?? o.remains;
+        await supabase.from('booster_orders').update({
+          status: o.status,
+          start_count: o.start_count,
+          remains: o.remains,
+          updated_at: new Date().toISOString()
+        }).eq('id', o.id);
+      }
+    } catch (_) {}
+  }
+
   return res.status(200).json({ success: true, data: data || [], total: count || 0, page, page_size: pageSize });
 }
 
