@@ -602,7 +602,7 @@
             try {
               var refCode = localStorage.getItem('mjhub_ref_code');
               if (!refCode || !session?.access_token) return;
-              await fetch('/api/referral?action=attach', {
+              await fetch('/api/pocketfi?action=referral_attach', {
                 method: 'POST',
                 headers: {
                   'Content-Type': 'application/json',
@@ -858,7 +858,7 @@
                 try {
                   var refCode = localStorage.getItem('mjhub_ref_code');
                   if (refCode && data.session.access_token) {
-                    fetch('/api/referral?action=attach', {
+                    fetch('/api/pocketfi?action=referral_attach', {
                       method: 'POST',
                       headers: {
                         'Content-Type': 'application/json',

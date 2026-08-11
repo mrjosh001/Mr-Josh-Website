@@ -127,7 +127,7 @@ async function load(){
   const {data}=await sb.auth.getSession();
   if(!data?.session){ location.href='auth.html?next='+encodeURIComponent('referral.html'); return; }
   const headers={Authorization:'Bearer '+data.session.access_token};
-  const res=await fetch('/api/referral?action=me',{headers});
+  const res=await fetch('/api/pocketfi?action=referral_me',{headers});
   const j=await res.json();
   if(!j.success){
     document.getElementById('earnings').innerHTML='<div class="empty">'+ (j.message||'Could not load') +'</div>';
