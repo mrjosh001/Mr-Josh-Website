@@ -532,20 +532,37 @@ async function handleReferralAttach(req, res, user) {
   const code = String(body.code || body.ref || req.query?.code || '').trim().toUpperCase();
   if (!code) return res.status(400).json({ success: false, message: 'Referral code required' });
 
-  const { data: me } = await supabase
-    .from('profiles')
-    .select('id, referred_by, referral_code')
-    .eq('id', user.id)
-    .maybeSingle();
-  if (!me) return res.status(400).json({ success: false, message: 'Profile not found' });
+  // Ensure profile row exists (signup trigger can lag)
+  let me = null;
+  for (let i = 0; i < 6; i++) {
+    const { data, error } = await supabase
+      .from('profiles')
+      .select('id, referred_by, referral_code')
+      .eq('id', user.id)
+      .maybeSingle();
+    if (error) {
+      return res.status(500).json({
+        success: false,
+        message: 'Profile read failed: ' + error.message + ( /referred_by|referral_code/i.test(error.message) ? ' — run referral_setup.sql' : '')
+      });
+    }
+    if (data) { me = data; break; }
+    await new Promise(r => setTimeout(r, 500));
+  }
+  if (!me) {
+    return res.status(400).json({
+      success: false,
+      message: 'Profile not ready yet. Wait a few seconds and open the app again, or re-open the referral link after login.'
+    });
+  }
+
   if (me.referred_by) {
     return res.status(200).json({ success: true, message: 'Already linked to a referrer', already: true });
   }
-  if (me.referral_code && me.referral_code.toUpperCase() === code) {
+  if (me.referral_code && String(me.referral_code).toUpperCase() === code) {
     return res.status(400).json({ success: false, message: 'You cannot use your own referral code' });
   }
 
-  // Match code case-insensitively
   let referrer = null;
   {
     const { data: exact } = await supabase
@@ -563,25 +580,50 @@ async function handleReferralAttach(req, res, user) {
       referrer = rows && rows[0] ? rows[0] : null;
     }
   }
-  if (!referrer) return res.status(404).json({ success: false, message: 'Invalid referral code' });
+  if (!referrer) {
+    return res.status(404).json({ success: false, message: 'Invalid referral code: ' + code });
+  }
   if (referrer.id === user.id) {
     return res.status(400).json({ success: false, message: 'You cannot refer yourself' });
   }
 
-  const { error } = await supabase
+  const { data: updated, error } = await supabase
     .from('profiles')
     .update({ referred_by: referrer.id })
     .eq('id', user.id)
-    .is('referred_by', null);
-  if (error) return res.status(500).json({ success: false, message: error.message });
+    .is('referred_by', null)
+    .select('id, referred_by')
+    .maybeSingle();
+
+  if (error) {
+    return res.status(500).json({
+      success: false,
+      message: 'Could not save referrer: ' + error.message + ( /referred_by/i.test(error.message) ? ' — run referral_setup.sql' : '')
+    });
+  }
+
+  if (!updated || !updated.referred_by) {
+    // Re-read — maybe already set in parallel
+    const { data: again } = await supabase
+      .from('profiles')
+      .select('referred_by')
+      .eq('id', user.id)
+      .maybeSingle();
+    if (again?.referred_by) {
+      return res.status(200).json({ success: true, message: 'Already linked', already: true, referrer_id: again.referred_by });
+    }
+    return res.status(500).json({
+      success: false,
+      message: 'Referral did not save (0 rows updated). Check profiles.referred_by column exists and RLS allows service role updates.'
+    });
+  }
 
   return res.status(200).json({
     success: true,
-    message: 'Referral linked — your future deposits earn them 2% for life',
+    message: 'Referral linked — future deposits earn them 2% for life',
     referrer_id: referrer.id
   });
 }
-/* ========== /Referral ========== */
 
 
 async function creditUser(userId, amountNgn, reference) {
