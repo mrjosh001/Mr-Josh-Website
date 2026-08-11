@@ -61,11 +61,28 @@ function costNgnFromRate(rate) {
   return r; // already NGN-scale
 }
 
-function sellPriceNgnFromRate(rate, markupPercent) {
+/**
+ * Never sell below MIN_SELL_PRICE_NGN (₦200).
+ * If a calculated price is under the floor, lift it into a stable band
+ * ₦200–₦349 so cheap services don't all display as exactly ₦200.
+ * Uses serviceId (when provided) so the same service always gets the same price.
+ */
+function floorSellNgn(n, serviceId) {
+  const v = Math.ceil(Number(n) || 0);
+  if (v >= MIN_SELL_PRICE_NGN) return v;
+  const seed = String(serviceId != null ? serviceId : v);
+  let h = 0;
+  for (let i = 0; i < seed.length; i++) h = (h * 31 + seed.charCodeAt(i)) >>> 0;
+  // 200 + 0..149 → 200–349
+  return MIN_SELL_PRICE_NGN + (h % 150);
+}
+
+function sellPriceNgnFromRate(rate, markupPercent, serviceId) {
   const cost = costNgnFromRate(rate);
   const markup = markupPercent ?? getMarkupPercent();
-  // Never list / sell a service below ₦200 per 1k (site rule)
-  return Math.max(MIN_SELL_PRICE_NGN, Math.ceil(cost * (1 + markup / 100)));
+  const raw = Math.ceil(cost * (1 + markup / 100));
+  // Under ₦200 → stable 200–349 band (not a flat 200 for every cheap service)
+  return floorSellNgn(raw, serviceId != null ? serviceId : rate);
 }
 
 function supplierUsdFromRate(rate) {
@@ -257,10 +274,12 @@ async function handleSync(req, res) {
       const serviceId = String(s.service);
       const rateRaw = Number(s.rate) || 0;
       const supplierUsdVal = supplierUsdFromRate(rateRaw);
-      const defaultNgn = sellPriceNgnFromRate(rateRaw);
+      const defaultNgn = sellPriceNgnFromRate(rateRaw, null, serviceId);
 
       const prev = map.get(serviceId);
       const manual = prev && prev.price_source === 'manual';
+      // Manual admin prices kept, but never below site minimum ₦200
+      const listed = manual ? floorSellNgn(prev.price_ngn, serviceId) : floorSellNgn(defaultNgn, serviceId);
       return {
         source: 'owlet',
         service_id: serviceId,
@@ -268,7 +287,7 @@ async function handleSync(req, res) {
         category: s.category || 'Other',
         service_type: s.type || 'Default',
         supplier_rate_usd: supplierUsdVal,
-        price_ngn: manual ? Number(prev.price_ngn) : defaultNgn,
+        price_ngn: listed,
         price_source: manual ? 'manual' : 'system',
         min_quantity: Number(s.min) || 0,
         max_quantity: Number(s.max) || 0,
@@ -380,6 +399,11 @@ async function handleList(req, res) {
     .limit(5000);
   const categories = [...new Set((catRows || []).map(r => r.category).filter(Boolean))].sort();
 
+  rows = rows.map(s => ({
+    ...s,
+    price_ngn: floorSellNgn(s.price_ngn, s.service_id)
+  }));
+
   return res.status(200).json({
     success: true,
     data: rows,
@@ -464,6 +488,12 @@ async function handleCatalog(req, res) {
     );
   }
 
+  // Enforce ₦200 floor on every service shown to users (old DB rows included)
+  rows = rows.map(s => ({
+    ...s,
+    price_ngn: floorSellNgn(s.price_ngn, s.service_id)
+  }));
+
   return res.status(200).json({
     success: true,
     mode: 'services',
@@ -521,11 +551,11 @@ async function handleOrder(req, res) {
   }
 
   // price_ngn is selling rate per 1000 units (SMM standard)
-  const ratePer1k = Number(service.price_ngn) || 0;
+  // Listed rate never below ₦200 even if DB still has old cheap rows
+  const ratePer1k = floorSellNgn(service.price_ngn, service.service_id);
   if (ratePer1k <= 0) {
     return res.status(400).json({ success: false, message: 'Service price not configured' });
   }
-  // Charge never below site minimum (₦200)
   const totalNgn = Math.max(MIN_SELL_PRICE_NGN, Math.ceil((ratePer1k / 1000) * quantity));
   if (totalNgn < 1) {
     return res.status(400).json({ success: false, message: 'Order total too low' });
