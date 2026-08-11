@@ -595,6 +595,68 @@ footer a:hover { color: var(--primary); }
   .section { padding: 60px 24px; }
   .compare-table th, .compare-table td { padding: 12px 10px; font-size: 13px; }
 }
+
+/* Earn / referral landing promo */
+.earn-section {
+  padding: 72px 24px;
+  max-width: 1100px;
+  margin: 0 auto;
+}
+.earn-card {
+  border-radius: 28px;
+  padding: 40px 36px;
+  border: 1px solid rgba(239, 68, 68, 0.25);
+  background:
+    radial-gradient(120% 100% at 100% 0%, rgba(249, 115, 22, 0.2), transparent 55%),
+    radial-gradient(90% 90% at 0% 100%, rgba(239, 68, 68, 0.12), transparent 50%),
+    linear-gradient(160deg, rgba(20, 16, 28, 0.95), rgba(10, 12, 22, 0.98));
+  display: grid;
+  grid-template-columns: 1.2fr 0.8fr;
+  gap: 28px;
+  align-items: center;
+}
+@media (max-width: 800px) {
+  .earn-card { grid-template-columns: 1fr; padding: 28px 22px; }
+}
+.earn-card .tag {
+  display: inline-flex; align-items: center; gap: 8px;
+  font-size: 12px; font-weight: 800; letter-spacing: 0.06em;
+  text-transform: uppercase; color: #fb7185; margin-bottom: 12px;
+}
+.earn-card h2 {
+  font-size: clamp(24px, 3.5vw, 32px);
+  font-weight: 800; line-height: 1.2; margin-bottom: 12px; color: #fff;
+}
+.earn-card p {
+  font-size: 15px; color: rgba(255,255,255,0.78); line-height: 1.6; margin-bottom: 20px;
+}
+.earn-points { list-style: none; padding: 0; margin: 0 0 22px; }
+.earn-points li {
+  font-size: 14px; color: rgba(255,255,255,0.88); font-weight: 600;
+  padding: 8px 0; display: flex; gap: 10px; align-items: flex-start;
+}
+.earn-points li::before { content: "✓"; color: #34d399; font-weight: 900; }
+.earn-actions { display: flex; flex-wrap: wrap; gap: 12px; }
+.earn-side {
+  background: rgba(255,255,255,0.06);
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 20px; padding: 22px; text-align: center;
+}
+.earn-side .big {
+  font-size: 42px; font-weight: 900; color: #fb7185; line-height: 1;
+  margin-bottom: 6px;
+}
+.earn-side .lbl { font-size: 13px; color: rgba(255,255,255,0.7); font-weight: 600; margin-bottom: 14px; }
+.earn-side .mini {
+  font-size: 12px; color: rgba(255,255,255,0.55); line-height: 1.45;
+}
+.hero-earn-pill {
+  display: inline-flex; align-items: center; gap: 8px;
+  margin-top: 14px; padding: 8px 14px; border-radius: 999px;
+  background: rgba(239, 68, 68, 0.15); border: 1px solid rgba(239, 68, 68, 0.3);
+  font-size: 13px; font-weight: 700; color: #fecaca;
+}
+
 </style>
 </head>
 <body>
@@ -606,6 +668,8 @@ footer a:hover { color: var(--primary); }
     <a href="landing.html" class="logo"><img id="brandLogo" src="https://atczodlljmlayvldxfmv.supabase.co/storage/v1/object/public/avatars/dark%20background%20log" alt="MJ HUB"></a>
     <nav class="nav-desktop">
       <a href="#features">Services</a>
+    <a href="#earn">Earn 2%</a>
+      <a href="#earn">Earn 2%</a>
       <a href="#how-it-works">How it works</a>
       <a href="#why-us">Why us</a>
       <a href="faq.html">FAQ</a>
@@ -648,9 +712,10 @@ footer a:hover { color: var(--primary); }
       <h1>Premium accounts, real numbers,<br><span class="grad">and social growth that works.</span></h1>
       <p>MJ Hub is the all-in-one marketplace for verified social media accounts, non-VOIP SMS numbers, and results-driven growth services. Built for creators, marketers, and businesses who need reliable tools without the guesswork.</p>
       <div class="hero-cta">
-        <a href="auth.html?mode=signup" class="btn btn-primary">Create Free Account</a>
+        <a href="auth.html?tab=signup" class="btn btn-primary">Create Free Account</a>
         <a href="auth.html?mode=signin" class="btn btn-ghost">Sign In</a>
       </div>
+      <div class="hero-earn-pill">🤝 Members earn 2% for life when friends fund their wallet</div>
       <div class="hero-stats">
         <div><div class="stat-value">24/7</div><div class="stat-label">Human Support</div></div>
         <div><div class="stat-value">Instant</div><div class="stat-label">Order Delivery</div></div>
@@ -755,6 +820,32 @@ footer a:hover { color: var(--primary); }
       <div class="step-num">3</div>
       <h3>Order and receive</h3>
       <p>Pick your product, place the order, and receive delivery within minutes right on your dashboard.</p>
+    </div>
+  </div>
+</section>
+
+
+<!-- EARN / REFERRAL — visitors learn they can make money, not only spend -->
+<section class="earn-section" id="earn">
+  <div class="earn-card">
+    <div>
+      <div class="tag">🤝 Refer &amp; earn</div>
+      <h2>Don’t only spend on MJ Hub — earn with it.</h2>
+      <p>Share your personal link. Every time someone you invite funds their wallet, you earn <strong style="color:#fff">2% of that deposit — for life</strong>. Credits go to your NGN wallet and can be used on logs, SMS, boosters, or withdrawn value as balance.</p>
+      <ul class="earn-points">
+        <li>Unique link for every member after signup</li>
+        <li>2% on every deposit your referrals make, forever</li>
+        <li>Automatic credit — no forms, no chasing payments</li>
+      </ul>
+      <div class="earn-actions">
+        <a href="auth.html?tab=signup" class="btn btn-primary">Create account &amp; get your link</a>
+        <a href="auth.html?mode=signin" class="btn btn-ghost">I already have an account</a>
+      </div>
+    </div>
+    <div class="earn-side">
+      <div class="big">2%</div>
+      <div class="lbl">Lifetime commission on referrals’ deposits</div>
+      <div class="mini">Example: your friend funds ₦50,000 → you get ₦1,000. They fund again next month → you earn again.</div>
     </div>
   </div>
 </section>
