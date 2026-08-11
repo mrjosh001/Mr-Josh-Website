@@ -83,7 +83,9 @@ async function claimInventoryRows(productKey, qty, userId, orderRef) {
 // rows we DID claim rather than leaving the order half-fulfilled.
 async function releaseClaims(rows) {
   if (!rows || !rows.length) return;
-  const ids = rows.map(r => r.id);
+  // Shared synthetic rows are not real inventory — never touch them.
+  const ids = rows.filter(r => r && !r.shared && r.id != null && !String(r.id).startsWith('shared-')).map(r => r.id);
+  if (!ids.length) return;
   await supabase
     .from('product_inventory')
     .update({ status: 'available', sold_to: null, order_id: null, sold_at: null })
@@ -137,7 +139,7 @@ export default async function handler(req, res) {
     // 1. Product from DB
     const { data: product, error: prodErr } = await supabase
       .from('products')
-      .select('id, product_key, name, price, stock_quantity, source, display_description, description')
+      .select('id, product_key, name, price, stock_quantity, source, display_description, description, is_shared, shared_credential, is_available')
       .eq('product_key', product_key)
       .single();
 
@@ -195,18 +197,40 @@ export default async function handler(req, res) {
     }
     deducted = true;
 
-    // 4. Claim `qty` credentials from product_inventory
+    // 4. Fulfill credentials
+    // Shared products: same content for every buyer (no inventory claim).
+    // Unique products: claim one inventory row per unit as before.
     const orderRef = external_order_id || `MJ-MAN-${String(user_id).slice(0, 8)}-${Date.now()}`;
-    claimedRows = await claimInventoryRows(product_key, qty, user_id, orderRef);
+    const isShared = product.is_shared === true || product.is_shared === 'true' || product.is_shared === 1;
+    const sharedCred = (product.shared_credential || '').trim();
+
+    if (isShared) {
+      if (!sharedCred) {
+        await supabase.from('profiles').update({ [balanceColumn]: originalBalance }).eq('id', user_id);
+        deducted = false;
+        return res.status(400).json({
+          success: false,
+          message: 'This shared product has no content set. Ask admin to add the shared credential.'
+        });
+      }
+      // One synthetic row per qty unit — same credential each time
+      claimedRows = Array.from({ length: qty }, (_, i) => ({
+        id: `shared-${product.id}-${i}`,
+        credential: sharedCred,
+        shared: true
+      }));
+    } else {
+      claimedRows = await claimInventoryRows(product_key, qty, user_id, orderRef);
+    }
 
     if (claimedRows.length < qty) {
       // Couldn't fully fulfill — give back any partial claims, refund, fail cleanly.
-      await releaseClaims(claimedRows);
+      if (!isShared) await releaseClaims(claimedRows);
       claimedRows = [];
 
       await supabase.from('profiles').update({ [balanceColumn]: originalBalance }).eq('id', user_id);
 
-      await syncStockCount(product_key); // reflect true remaining stock after the failed attempt
+      if (!isShared) await syncStockCount(product_key);
 
       await supabase.from('transactions').insert({
         user_id,
@@ -267,16 +291,22 @@ export default async function handler(req, res) {
       type: 'log',
       category: 'log',
       title: productName,
-      subtitle: `Qty: ${qty} · Manual`,
+      subtitle: isShared ? `Qty: ${qty} · Shared` : `Qty: ${qty} · Manual`,
       amount: `₦${total.toLocaleString()}`,
       amount_ngn: total,
       status: 'completed',
       product_details: detailsText
     });
 
-    // 6. Stock: recount actual remaining available rows rather than just
-    // subtracting, so it self-heals against any drift.
-    await syncStockCount(product_key);
+    // 6. Stock: unique products recount inventory. Shared products stay in stock.
+    if (isShared) {
+      await supabase
+        .from('products')
+        .update({ stock_quantity: 99999, is_available: true })
+        .eq('product_key', product_key);
+    } else {
+      await syncStockCount(product_key);
+    }
 
     // 7. Return credentials to the customer
     return res.status(200).json({

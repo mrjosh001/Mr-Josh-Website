@@ -249,6 +249,13 @@ async function productUpdate(body) {
   if (fields.price !== undefined) payload.price = Number(fields.price);
   if (fields.stock_quantity !== undefined) payload.stock_quantity = Number(fields.stock_quantity);
   if (fields.is_available !== undefined) payload.is_available = !!fields.is_available;
+  if (fields.is_shared !== undefined) payload.is_shared = !!fields.is_shared;
+  if (fields.shared_credential !== undefined) payload.shared_credential = fields.shared_credential || null;
+  // Shared products stay listed as in stock
+  if (payload.is_shared) {
+    payload.stock_quantity = 99999;
+    payload.is_available = true;
+  }
   payload.updated_at = new Date().toISOString();
 
   let error = null, data = null;
@@ -279,8 +286,10 @@ async function productInsert(body) {
     display_description: fields.display_description || fields.description || null,
     price: Number(fields.price) || 0,
     supplier_price: Number(fields.supplier_price) || 0,
-    stock_quantity: Number(fields.stock_quantity) || 0,
+    stock_quantity: fields.is_shared ? 99999 : (Number(fields.stock_quantity) || 0),
     is_available: fields.is_available !== false,
+    is_shared: !!fields.is_shared,
+    shared_credential: fields.shared_credential || null,
     product_key: productKey,
     source: String(productKey).startsWith('manual_') ? 'manual' : (fields.source || null),
     updated_at: new Date().toISOString()
@@ -357,6 +366,41 @@ async function inventoryHandle(body) {
     return { status: 200, body: { success: true, data: { product_key, available } } };
   }
 
+  // Shared mode: same credential for every buyer, no inventory rows consumed
+  if (action === 'set_shared') {
+    const credential = String(body.credential || body.text || '').trim();
+    if (!credential) {
+      return { status: 400, body: { success: false, message: 'Paste the content every buyer should receive.' } };
+    }
+    const { error } = await supabase.from('products').update({
+      is_shared: true,
+      shared_credential: credential,
+      stock_quantity: 99999,
+      is_available: true,
+      source: 'manual',
+      updated_at: new Date().toISOString()
+    }).eq('product_key', product_key);
+    if (error) return { status: 400, body: { success: false, message: error.message } };
+    return {
+      status: 200,
+      body: {
+        success: true,
+        data: { product_key, mode: 'shared', message: 'Shared content saved. Every buyer of this product will receive the same details.' }
+      }
+    };
+  }
+
+  if (action === 'clear_shared') {
+    const { error } = await supabase.from('products').update({
+      is_shared: false,
+      shared_credential: null,
+      updated_at: new Date().toISOString()
+    }).eq('product_key', product_key);
+    if (error) return { status: 400, body: { success: false, message: error.message } };
+    const available = await inventorySyncStockCount(product_key);
+    return { status: 200, body: { success: true, data: { product_key, mode: 'unique', available } } };
+  }
+
   if (action === 'bulk_upload') {
     const text = String(body.text || '');
     const lines = text.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
@@ -383,7 +427,7 @@ async function inventoryHandle(body) {
     };
   }
 
-  return { status: 400, body: { success: false, message: 'Unknown action. Use "bulk_upload" or "stock_count".' } };
+  return { status: 400, body: { success: false, message: 'Unknown action. Use "bulk_upload", "stock_count", "set_shared", or "clear_shared".' } };
 }
 
 // ---------- resource: supplier_balances ----------
