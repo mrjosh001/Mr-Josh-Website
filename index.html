@@ -320,61 +320,123 @@ body::before {
 .community-banner-close { position: absolute; top: 6px; right: 6px; background: none; border: none; color: var(--muted); opacity: .6; font-size: 14px; cursor: pointer; padding: 4px; }
 .community-banner.hidden { display: none; }
 
-.boosters-promo {
-    display: block;
+/* Quick-promo grid: Buy Logs + Boost Social Media, side by side */
+.promo-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    margin: 14px 0 4px;
+}
+.promo-card {
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
     text-decoration: none;
     color: inherit;
-    margin: 12px 0;
     border-radius: 18px;
-    padding: 16px 16px 16px 14px;
-    border: 1px solid rgba(139, 92, 246, 0.28);
+    padding: 15px 13px;
+    min-height: 138px;
+    border: 1px solid var(--border);
+    position: relative;
+    overflow: hidden;
+}
+.promo-card:active { transform: scale(0.985); }
+.promo-card-icon {
+    width: 40px; height: 40px; border-radius: 13px; flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 18px; color: #fff; margin-bottom: 12px;
+}
+.promo-card-title {
+    display: block; font-size: 13.5px; font-weight: 900; color: var(--text);
+    margin-bottom: 4px; letter-spacing: -0.01em; line-height: 1.2;
+}
+.promo-card-sub {
+    display: block; font-size: 10.5px; color: var(--muted);
+    line-height: 1.35; font-weight: 600; margin-bottom: 12px;
+}
+.promo-card-cta {
+    align-self: flex-start;
+    font-size: 10px; font-weight: 800;
+    padding: 6px 11px; border-radius: 999px;
+    color: #fff; white-space: nowrap;
+}
+.promo-card--logs {
+    border-color: rgba(249, 115, 22, 0.28);
+    background:
+      radial-gradient(120% 120% at 100% 0%, rgba(251, 191, 36, 0.18), transparent 45%),
+      radial-gradient(100% 120% at 0% 100%, rgba(249, 115, 22, 0.20), transparent 50%),
+      linear-gradient(135deg, rgba(249, 115, 22, 0.14), rgba(251, 191, 36, 0.16));
+    box-shadow: 0 10px 24px rgba(249, 115, 22, 0.12);
+}
+.promo-card--logs .promo-card-icon { background: linear-gradient(135deg, #f97316, #f59e0b); box-shadow: 0 8px 18px rgba(249, 115, 22, 0.35); }
+.promo-card--logs .promo-card-cta { background: linear-gradient(135deg, #f97316, #f59e0b); box-shadow: 0 6px 14px rgba(249, 115, 22, 0.35); }
+.promo-card--boost {
+    border-color: rgba(139, 92, 246, 0.28);
     background:
       radial-gradient(120% 120% at 100% 0%, rgba(251, 113, 133, 0.18), transparent 45%),
       radial-gradient(100% 120% at 0% 100%, rgba(59, 130, 246, 0.22), transparent 50%),
       linear-gradient(135deg, rgba(91, 138, 245, 0.16), rgba(167, 139, 250, 0.18));
-    box-shadow: 0 10px 28px rgba(91, 138, 245, 0.12);
+    box-shadow: 0 10px 24px rgba(91, 138, 245, 0.12);
+}
+.promo-card--boost .promo-card-icon { background: linear-gradient(135deg, #3b82f6, #8b5cf6); box-shadow: 0 8px 18px rgba(59, 130, 246, 0.35); }
+.promo-card--boost .promo-card-cta { background: linear-gradient(135deg, #3b82f6, #8b5cf6); box-shadow: 0 6px 14px rgba(91, 138, 245, 0.35); }
+
+/* Referral contest banner */
+.contest-banner {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    text-decoration: none;
+    color: inherit;
+    margin: 12px 0;
+    border-radius: 18px;
+    padding: 15px 15px;
+    border: 1px solid rgba(16, 185, 129, 0.28);
+    background:
+      radial-gradient(120% 120% at 100% 0%, rgba(250, 204, 21, 0.16), transparent 45%),
+      radial-gradient(100% 120% at 0% 100%, rgba(52, 211, 153, 0.20), transparent 50%),
+      linear-gradient(135deg, rgba(16, 185, 129, 0.14), rgba(250, 204, 21, 0.10));
+    box-shadow: 0 10px 24px rgba(16, 185, 129, 0.12);
     position: relative;
     overflow: hidden;
 }
-.boosters-promo:active { transform: scale(0.985); }
-.boosters-promo-inner { display: flex; align-items: center; gap: 12px; position: relative; z-index: 1; }
-.boosters-promo-icon {
-    width: 48px; height: 48px; border-radius: 16px; flex-shrink: 0;
+.contest-banner:active { transform: scale(0.985); }
+.contest-banner-icon {
+    width: 46px; height: 46px; border-radius: 15px; flex-shrink: 0;
     display: flex; align-items: center; justify-content: center;
-    font-size: 22px;
-    background: linear-gradient(135deg, #3b82f6, #8b5cf6);
+    font-size: 19px;
+    background: linear-gradient(135deg, #10b981, #facc15);
     color: #fff;
-    box-shadow: 0 8px 20px rgba(59, 130, 246, 0.35);
+    box-shadow: 0 8px 20px rgba(16, 185, 129, 0.35);
 }
-.boosters-promo-text { flex: 1; min-width: 0; }
-.boosters-promo-text strong {
-    display: block; font-size: 14.5px; font-weight: 900; color: var(--text);
+.contest-banner-text { flex: 1; min-width: 0; }
+.contest-banner-text strong {
+    display: block; font-size: 13.5px; font-weight: 900; color: var(--text);
     margin-bottom: 3px; letter-spacing: -0.01em;
 }
-.boosters-promo-text span {
-    display: block; font-size: 12px; color: var(--muted); line-height: 1.35; font-weight: 600;
+.contest-banner-text span {
+    display: block; font-size: 11.5px; color: var(--muted); line-height: 1.35; font-weight: 600;
 }
-.boosters-promo-cta {
+.contest-banner-cta {
     flex-shrink: 0;
     font-size: 11px; font-weight: 800;
     padding: 8px 12px; border-radius: 999px;
-    background: linear-gradient(135deg, #3b82f6, #8b5cf6);
+    background: linear-gradient(135deg, #10b981, #facc15);
     color: #fff;
     white-space: nowrap;
-    box-shadow: 0 6px 16px rgba(91, 138, 245, 0.35);
+    box-shadow: 0 6px 16px rgba(16, 185, 129, 0.35);
 }
-.boosters-promo-platforms {
-    display: flex; gap: 6px; margin-top: 10px; flex-wrap: wrap; position: relative; z-index: 1;
+.contest-banner-badge {
+    position: absolute; top: 10px; right: 10px;
+    font-size: 8.5px; font-weight: 900;
+    padding: 3px 8px; border-radius: 999px;
+    background: rgba(16, 185, 129, 0.16);
+    border: 1px solid rgba(16, 185, 129, 0.4);
+    color: #10b981;
+    letter-spacing: 0.04em; text-transform: uppercase;
 }
-.boosters-promo-platforms span {
-    font-size: 10px; font-weight: 800;
-    padding: 4px 8px; border-radius: 999px;
-    background: rgba(255,255,255,0.55);
-    border: 1px solid var(--border);
-    color: var(--text);
-}
-:root[data-theme="dark"] .boosters-promo-platforms span {
-    background: rgba(15, 23, 42, 0.45);
+@media (max-width: 340px) {
+    .promo-grid { grid-template-columns: 1fr; }
 }
 
 .sleek-card {
@@ -1192,25 +1254,36 @@ body::before {
                 <div class="sleek-card-icon icon-purple"><i class="fa-solid fa-naira-sign"></i></div>
             </div>
         </div>
-        <!-- MJ Boosters promo -->
-        <a class="boosters-promo" href="mj-boosters.html" id="boostersPromoBanner">
-            <div class="boosters-promo-inner">
-                <div class="boosters-promo-icon"><i class="fa-solid fa-bolt"></i></div>
-                <div class="boosters-promo-text">
-                    <strong>Boost your social media</strong>
-                    <span>Followers, likes, views & more — IG, TikTok, YouTube, X…</span>
+        <!-- Quick promos: Buy Logs + Boost Social Media -->
+        <div class="promo-grid">
+            <a class="promo-card promo-card--logs" href="mj-logs.html" id="logsPromoCard">
+                <div class="promo-card-icon"><i class="fa-solid fa-box-archive"></i></div>
+                <div>
+                    <span class="promo-card-title">Buy Logs</span>
+                    <span class="promo-card-sub">Fresh, verified logs delivered instantly</span>
                 </div>
-                <div class="boosters-promo-cta">Open →</div>
-            </div>
-            <div class="boosters-promo-platforms">
-                <span>Instagram</span>
-                <span>TikTok</span>
-                <span>YouTube</span>
-                <span>X</span>
-                <span>Telegram</span>
-            </div>
-        </a>
+                <span class="promo-card-cta">Open →</span>
+            </a>
+            <a class="promo-card promo-card--boost" href="mj-boosters.html" id="boostersPromoBanner">
+                <div class="promo-card-icon"><i class="fa-solid fa-bolt"></i></div>
+                <div>
+                    <span class="promo-card-title">Boost Social Media</span>
+                    <span class="promo-card-sub">Followers, likes & views — IG, TikTok, X…</span>
+                </div>
+                <span class="promo-card-cta">Open →</span>
+            </a>
+        </div>
 
+        <!-- Referral contest banner -->
+        <a class="contest-banner" href="referral.html" id="referralContestBanner">
+            <span class="contest-banner-badge">Live now</span>
+            <div class="contest-banner-icon"><i class="fa-solid fa-trophy"></i></div>
+            <div class="contest-banner-text">
+                <strong>You don't just spend here — you can earn too</strong>
+                <span>Refer friends and earn 2% for life. Join the referral contest →</span>
+            </div>
+            <div class="contest-banner-cta">Refer →</div>
+        </a>
 
     </section>
 
