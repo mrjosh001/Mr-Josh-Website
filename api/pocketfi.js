@@ -496,12 +496,14 @@ async function handleReferralMe(req, res, user) {
   const origin = process.env.SITE_URL || (`https://${host}`);
   const link = `${String(origin).replace(/\/$/, '')}/auth.html?tab=signup&ref=${encodeURIComponent(prof.referral_code)}`;
 
-  const { data: refs } = await supabase
+  // profiles has updated_at (not created_at) — wrong column made the list always empty
+  const { data: refs, error: refsErr } = await supabase
     .from('profiles')
-    .select('id, full_name, customer_id, created_at')
+    .select('id, full_name, customer_id, email, updated_at')
     .eq('referred_by', user.id)
-    .order('created_at', { ascending: false })
+    .order('updated_at', { ascending: false })
     .limit(100);
+  if (refsErr) console.error('[referral] list refs', refsErr.message);
 
   const { data: earnings } = await supabase
     .from('referral_earnings')
