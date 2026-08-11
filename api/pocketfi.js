@@ -484,10 +484,17 @@ async function requireUserToken(req) {
 async function handleReferralMe(req, res, user) {
   const prof = await ensureReferralCode(user.id);
   if (!prof) return res.status(400).json({ success: false, message: 'Profile not found' });
+  // If ensure failed silently due to missing SQL columns, surface it
+  if (!prof.referral_code) {
+    return res.status(500).json({
+      success: false,
+      message: 'Referral not set up — run referral_setup.sql in Supabase (referral_code / referred_by columns).'
+    });
+  }
 
   const host = req.headers['x-forwarded-host'] || req.headers.host || 'app.mjhub.store';
   const origin = process.env.SITE_URL || (`https://${host}`);
-  const link = `${String(origin).replace(/\/$/, '')}/auth.html?ref=${encodeURIComponent(prof.referral_code)}`;
+  const link = `${String(origin).replace(/\/$/, '')}/auth.html?tab=signup&ref=${encodeURIComponent(prof.referral_code)}`;
 
   const { data: refs } = await supabase
     .from('profiles')
@@ -538,11 +545,24 @@ async function handleReferralAttach(req, res, user) {
     return res.status(400).json({ success: false, message: 'You cannot use your own referral code' });
   }
 
-  const { data: referrer } = await supabase
-    .from('profiles')
-    .select('id, referral_code')
-    .eq('referral_code', code)
-    .maybeSingle();
+  // Match code case-insensitively
+  let referrer = null;
+  {
+    const { data: exact } = await supabase
+      .from('profiles')
+      .select('id, referral_code')
+      .eq('referral_code', code)
+      .maybeSingle();
+    referrer = exact;
+    if (!referrer) {
+      const { data: rows } = await supabase
+        .from('profiles')
+        .select('id, referral_code')
+        .ilike('referral_code', code)
+        .limit(1);
+      referrer = rows && rows[0] ? rows[0] : null;
+    }
+  }
   if (!referrer) return res.status(404).json({ success: false, message: 'Invalid referral code' });
   if (referrer.id === user.id) {
     return res.status(400).json({ success: false, message: 'You cannot refer yourself' });
