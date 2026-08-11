@@ -20,6 +20,8 @@ import { createClient } from '@supabase/supabase-js';
 const OWLET_URL = 'https://theowlet.com/api/v2';
 const OWLET_KEY = process.env.OWLET_API_KEY;
 const USD_TO_NGN = Number(process.env.USD_TO_NGN_RATE) || 1450;
+/** No booster service / order is sold below this (NGN). Override with OWLET_MIN_SELL_NGN */
+const MIN_SELL_PRICE_NGN = Math.max(0, Number(process.env.OWLET_MIN_SELL_NGN) || 200);
 
 const supabase = createClient(
   process.env.SUPABASE_URL,
@@ -62,7 +64,8 @@ function costNgnFromRate(rate) {
 function sellPriceNgnFromRate(rate, markupPercent) {
   const cost = costNgnFromRate(rate);
   const markup = markupPercent ?? getMarkupPercent();
-  return Math.ceil(cost * (1 + markup / 100));
+  // Never list / sell a service below ₦200 per 1k (site rule)
+  return Math.max(MIN_SELL_PRICE_NGN, Math.ceil(cost * (1 + markup / 100)));
 }
 
 function supplierUsdFromRate(rate) {
@@ -522,7 +525,8 @@ async function handleOrder(req, res) {
   if (ratePer1k <= 0) {
     return res.status(400).json({ success: false, message: 'Service price not configured' });
   }
-  const totalNgn = Math.ceil((ratePer1k / 1000) * quantity);
+  // Charge never below site minimum (₦200)
+  const totalNgn = Math.max(MIN_SELL_PRICE_NGN, Math.ceil((ratePer1k / 1000) * quantity));
   if (totalNgn < 1) {
     return res.status(400).json({ success: false, message: 'Order total too low' });
   }
