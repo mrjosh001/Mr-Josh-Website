@@ -831,6 +831,64 @@ body::before {
 }
 .logout-btn-confirm:disabled { opacity: 0.7; cursor: wait; }
 
+/* WELCOME MODAL — shown once per fresh login */
+.welcome-modal-overlay {
+    position: fixed; inset: 0; z-index: 2100;
+    background: rgba(0,0,0,0.6); backdrop-filter: blur(6px);
+    display: none; align-items: center; justify-content: center; padding: 20px;
+}
+.welcome-modal-overlay.active { display: flex; }
+.welcome-modal-card {
+    width: 100%; max-width: 380px;
+    background: var(--card); border: 1px solid var(--border);
+    border-radius: 26px; overflow: hidden; box-shadow: var(--shadow);
+    animation: welcomeModalPop .32s cubic-bezier(.34,1.56,.64,1);
+}
+@keyframes welcomeModalPop {
+    from { opacity: 0; transform: scale(0.92) translateY(10px); }
+    to { opacity: 1; transform: scale(1) translateY(0); }
+}
+.welcome-modal-hero {
+    position: relative; padding: 34px 24px 26px; text-align: center;
+    background:
+      radial-gradient(120% 140% at 10% -20%, rgba(167,139,250,.45), transparent 55%),
+      radial-gradient(120% 140% at 100% 0%, rgba(91,138,245,.5), transparent 50%),
+      linear-gradient(160deg, var(--primary-strong), var(--accent));
+}
+.welcome-modal-logo {
+    width: 60px; height: 60px; border-radius: 16px; object-fit: contain;
+    margin: 0 auto 14px; display: block;
+    filter: drop-shadow(0 8px 18px rgba(0,0,0,.3));
+    background: rgba(255,255,255,0.12);
+    padding: 8px;
+}
+.welcome-modal-title { font-size: 21px; font-weight: 900; color: #fff; letter-spacing: -0.02em; margin-bottom: 6px; }
+.welcome-modal-sub { font-size: 12.5px; color: rgba(255,255,255,0.85); font-weight: 600; line-height: 1.4; }
+.welcome-modal-body { padding: 22px 22px 24px; }
+.welcome-modal-tags { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; margin-bottom: 16px; }
+.welcome-modal-tags span {
+    font-size: 11px; font-weight: 800; padding: 6px 12px; border-radius: 999px;
+    background: var(--card-hover); border: 1px solid var(--border); color: var(--text);
+    display: inline-flex; align-items: center; gap: 6px;
+}
+.welcome-modal-copy { font-size: 12.5px; color: var(--muted); line-height: 1.55; text-align: center; margin-bottom: 18px; font-weight: 500; }
+.welcome-modal-social { display: flex; gap: 10px; margin-bottom: 12px; }
+.welcome-modal-social a {
+    flex: 1; display: flex; align-items: center; justify-content: center; gap: 8px;
+    padding: 12px; border-radius: 14px; font-size: 13px; font-weight: 800;
+    text-decoration: none; color: #fff;
+}
+.welcome-modal-social a.wa { background: var(--whatsapp); }
+.welcome-modal-social a.tg { background: #26A5E4; }
+.welcome-modal-dismiss {
+    width: 100%; border: none; cursor: pointer; padding: 13px; border-radius: 14px;
+    font-size: 13.5px; font-weight: 800; font-family: inherit;
+    background: linear-gradient(135deg, var(--primary), var(--accent));
+    color: #fff; display: flex; align-items: center; justify-content: center; gap: 8px;
+    box-shadow: 0 10px 24px var(--primary-glow);
+}
+.welcome-modal-dismiss:active { transform: scale(0.98); }
+
 .currency-modal-card {
     background: var(--card); width: 100%; max-width: 420px; border-radius: 24px;
     padding: 24px; border: 1px solid var(--border); box-shadow: var(--shadow);
@@ -1896,6 +1954,34 @@ function initCommunityBanner() {
     });
 }
 
+function initWelcomeModal() {
+    const overlay = document.getElementById('welcomeModalOverlay');
+    const dismissBtn = document.getElementById('welcomeModalDismissBtn');
+    if (!overlay || !dismissBtn) return;
+
+    let showIt = false;
+    try { showIt = sessionStorage.getItem('mjhub-fresh-login') === '1'; } catch (e) {}
+
+    // Consume the flag immediately so the modal only ever appears once per
+    // fresh login redirect — a later reload of this same tab session won't
+    // trigger it again, and it only comes back after the next sign-in.
+    try { sessionStorage.removeItem('mjhub-fresh-login'); } catch (e) {}
+
+    if (!showIt) return;
+
+    overlay.classList.add('active');
+    document.body.style.overflow = 'hidden';
+
+    function close() {
+        overlay.classList.remove('active');
+        document.body.style.overflow = '';
+    }
+    dismissBtn.addEventListener('click', close);
+    overlay.addEventListener('click', (e) => {
+        if (e.target === overlay) close();
+    });
+}
+
 // --- Idle auto-logout ---------------------------------------------------
 // After 10 minutes with no interaction, the session is signed out and the
 // user is sent back to auth.html. The last-activity timestamp lives in
@@ -1962,6 +2048,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 await loadAdminNotifications();
                 subscribeNotifRealtime();
                 initCommunityBanner();
+                initWelcomeModal();
             } else {
                 // No active session — this page is the signed-in dashboard,
                 // so a visitor who isn't logged in must never see it. Send
@@ -2260,8 +2347,10 @@ function initTheme() {
         const logoSrc = mode === 'light' ? 'https://atczodlljmlayvldxfmv.supabase.co/storage/v1/object/public/avatars/light%20background%20logo' : 'https://atczodlljmlayvldxfmv.supabase.co/storage/v1/object/public/avatars/dark%20background%20log';
         const navLogo = document.getElementById('navBrandLogo');
         const sideLogo = document.getElementById('sidebarBrandLogo');
+        const welcomeLogo = document.getElementById('welcomeModalLogo');
         if (navLogo) navLogo.src = logoSrc;
         if (sideLogo) sideLogo.src = logoSrc;
+        if (welcomeLogo) welcomeLogo.src = logoSrc;
     }
     function toggle() {
         const cur = document.documentElement.getAttribute('data-theme') === 'light' ? 'light' : 'dark';
@@ -3857,6 +3946,29 @@ function toggleBoosterMenu(e) {
   if (chev) chev.style.transform = open ? '' : 'rotate(180deg)';
 }
 </script>
+
+<div class="welcome-modal-overlay" id="welcomeModalOverlay">
+  <div class="welcome-modal-card" role="dialog" aria-labelledby="welcomeModalTitle">
+    <div class="welcome-modal-hero">
+      <img id="welcomeModalLogo" class="welcome-modal-logo" src="https://atczodlljmlayvldxfmv.supabase.co/storage/v1/object/public/avatars/dark%20background%20log" alt="MJ HUB">
+      <div class="welcome-modal-title" id="welcomeModalTitle">Welcome to MJ HUB</div>
+      <div class="welcome-modal-sub">Your trusted hub for logs, SMS & social boosters</div>
+    </div>
+    <div class="welcome-modal-body">
+      <div class="welcome-modal-tags">
+        <span><i class="fa-solid fa-bullhorn"></i> Updates</span>
+        <span><i class="fa-solid fa-tags"></i> Promos</span>
+        <span><i class="fa-solid fa-headset"></i> Support</span>
+      </div>
+      <p class="welcome-modal-copy">Stay ahead with exclusive deals, real-time platform updates and priority support — join our community today!</p>
+      <div class="welcome-modal-social">
+        <a href="https://chat.whatsapp.com/DxgYNbkV0fjLpWbP2aODRj" target="_blank" rel="noopener" class="wa"><i class="fa-brands fa-whatsapp"></i> WhatsApp</a>
+        <a href="https://t.me/mj_hub_tg" target="_blank" rel="noopener" class="tg"><i class="fa-brands fa-telegram"></i> Telegram</a>
+      </div>
+      <button type="button" class="welcome-modal-dismiss" id="welcomeModalDismissBtn"><i class="fa-solid fa-check"></i> Got it, thanks!</button>
+    </div>
+  </div>
+</div>
 
 <div class="logout-confirm-overlay" id="logoutConfirmModal" onclick="if(event.target===this)closeLogoutConfirm()">
   <div class="logout-confirm-card" role="dialog" aria-labelledby="logoutConfirmTitle">

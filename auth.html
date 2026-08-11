@@ -821,6 +821,7 @@
             }
 
             showSuccess('Signed in successfully!');
+            try { sessionStorage.setItem('mjhub-fresh-login', '1'); } catch (e) {}
             setTimeout(() => {
                 window.location.href = 'index.html';
             }, 500);
@@ -879,6 +880,7 @@
                 try {
                   if (data.session) await attachReferralIfNeeded(data.session);
                 } catch (e) {}
+                try { sessionStorage.setItem('mjhub-fresh-login', '1'); } catch (e) {}
                 setTimeout(() => {
                     window.location.href = 'index.html';
                 }, 1200);
