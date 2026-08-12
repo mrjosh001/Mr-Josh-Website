@@ -169,6 +169,15 @@ async function userDelete(body, adminId) {
   if (!user_id) return { status: 400, body: { success: false, message: 'user_id is required' } };
   if (user_id === adminId) return { status: 400, body: { success: false, message: 'You cannot delete your own account.' } };
 
+  // Sever referral links before deleting — see the matching comment in
+  // api/delete-account.js. This is the same fix applied on the admin side,
+  // since admins were hitting the identical foreign-key block.
+  const { error: unlinkErr } = await supabase.from('profiles').update({ referred_by: null }).eq('referred_by', user_id);
+  if (unlinkErr) console.warn('admin userDelete: could not unlink referred users', unlinkErr.message);
+
+  const { error: earningsErr } = await supabase.from('referral_earnings').delete().or(`referrer_id.eq.${user_id},referee_id.eq.${user_id}`);
+  if (earningsErr) console.warn('admin userDelete: could not clear referral_earnings', earningsErr.message);
+
   const { error: profileError } = await supabase.from('profiles').delete().eq('id', user_id);
   if (profileError) return { status: 500, body: { success: false, message: 'Profile delete failed: ' + profileError.message } };
 

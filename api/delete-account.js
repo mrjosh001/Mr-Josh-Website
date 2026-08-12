@@ -35,6 +35,24 @@ export default async function handler(req, res) {
   if (authErr || !user) return res.status(401).json({ success: false, message: 'Invalid or expired session' });
 
   try {
+    // Sever any referral links pointing at this account before deleting
+    // the profiles row. Without this, deleting a user who referred other
+    // people (their id sits in profiles.referred_by on those other rows)
+    // or who has any referral_earnings history (as either referrer or
+    // referee) fails silently against a foreign-key constraint — that's
+    // why referred/referring accounts couldn't be deleted before.
+    const { error: unlinkErr } = await supabase
+      .from('profiles')
+      .update({ referred_by: null })
+      .eq('referred_by', user.id);
+    if (unlinkErr) console.warn('delete-account: could not unlink referred users', unlinkErr.message);
+
+    const { error: earningsErr } = await supabase
+      .from('referral_earnings')
+      .delete()
+      .or(`referrer_id.eq.${user.id},referee_id.eq.${user.id}`);
+    if (earningsErr) console.warn('delete-account: could not clear referral_earnings', earningsErr.message);
+
     const { error: profileError } = await supabase
       .from('profiles')
       .delete()
