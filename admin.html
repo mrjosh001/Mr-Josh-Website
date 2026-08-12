@@ -768,6 +768,13 @@
                 <option value="inactive">Inactive only</option>
                 <option value="banned">Banned only</option>
               </select>
+              <select id="userSortFilter" onchange="filterUsers()">
+                <option value="joined_asc">Oldest joined first</option>
+                <option value="joined_desc">Newest joined first</option>
+                <option value="name_asc">Name (A–Z)</option>
+                <option value="name_desc">Name (Z–A)</option>
+                <option value="balance_desc">Highest balance first</option>
+              </select>
             </div>
             <div class="desktop-only table-wrap">
               <table>
@@ -1144,6 +1151,7 @@ let allProducts = [];
 let allProfiles = [];
 let liveRate = 1420;
 let currentUserStatusFilter = 'all';
+let currentUserSort = 'joined_asc';
 
 const tabTitles = {
   overview: 'Overview',
@@ -2989,9 +2997,34 @@ function renderUsers(list) {
   }
 }
 
+function sortUsersList(list, sortKey) {
+  const arr = list.slice();
+  const nameOf = u => (u.full_name || u.username || u.email || '').toLowerCase();
+  switch (sortKey) {
+    case 'joined_desc':
+      arr.sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0));
+      break;
+    case 'name_asc':
+      arr.sort((a, b) => nameOf(a).localeCompare(nameOf(b)));
+      break;
+    case 'name_desc':
+      arr.sort((a, b) => nameOf(b).localeCompare(nameOf(a)));
+      break;
+    case 'balance_desc':
+      arr.sort((a, b) => Number(b.balance || 0) - Number(a.balance || 0));
+      break;
+    case 'joined_asc':
+    default:
+      arr.sort((a, b) => new Date(a.created_at || 0) - new Date(b.created_at || 0));
+      break;
+  }
+  return arr;
+}
+
 function filterUsers() {
   const q = (document.getElementById('userSearch').value || '').toLowerCase().trim();
   const status = document.getElementById('userStatusFilter')?.value || currentUserStatusFilter;
+  currentUserSort = document.getElementById('userSortFilter')?.value || currentUserSort;
   let filtered = allProfiles;
   if (status === 'active') filtered = filtered.filter(u => isUserActive(u) && !u.is_banned);
   if (status === 'inactive') filtered = filtered.filter(u => !isUserActive(u) && !u.is_banned);
@@ -3005,6 +3038,7 @@ function filterUsers() {
       (u.phone_number || u.phone || '').toLowerCase().includes(q)
     );
   }
+  filtered = sortUsersList(filtered, currentUserSort);
   renderUsers(filtered);
 }
 
