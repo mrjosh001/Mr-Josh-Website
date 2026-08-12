@@ -275,7 +275,7 @@ function renderWaiting(data){
     </div>
     <div class="cancel-hint" id="cancelHint"></div>
     <a href="mj-sms.html" class="btn btn-outline">Back to MJ SMS</a>
-    <a href="index.html" class="btn btn-outline">Back to Home</a>
+    <a href="dashboard.html" class="btn btn-outline">Back to Home</a>
   `;
   document.getElementById('cancelBtn').addEventListener('click', cancelOrder);
   document.getElementById('checkNowBtn').addEventListener('click', checkNow);
@@ -309,7 +309,7 @@ function renderCompleted(data){
     </div>
     <button type="button" class="btn btn-primary" id="copyCodeBtn"><i class="fa-solid fa-copy"></i> Copy Code</button>
     <a href="mj-sms.html" class="btn btn-outline">Buy Another Number</a>
-    <a href="index.html" class="btn btn-outline">Back to Home</a>
+    <a href="dashboard.html" class="btn btn-outline">Back to Home</a>
   `;
   document.getElementById('copyCodeBtn').addEventListener('click', () => {
     navigator.clipboard.writeText(data.code || '');
@@ -326,7 +326,7 @@ function renderCancelled(msg){
     <div class="status-title">Balance Restored</div>
     <div class="status-sub">${escapeHtml(msg || 'This number was cancelled and your wallet balance has been restored.')}</div>
     <a href="mj-sms.html" class="btn btn-primary">Buy Another Number</a>
-    <a href="index.html" class="btn btn-outline">Back to Home</a>
+    <a href="dashboard.html" class="btn btn-outline">Back to Home</a>
   `;
 }
 
@@ -339,7 +339,7 @@ function renderError(msg){
     <div class="status-title">Something went wrong</div>
     <div class="status-sub">${escapeHtml(msg)}</div>
     <a href="mj-sms.html" class="btn btn-primary">Back to MJ SMS</a>
-    <a href="index.html" class="btn btn-outline">Back to Home</a>
+    <a href="dashboard.html" class="btn btn-outline">Back to Home</a>
   `;
 }
 
