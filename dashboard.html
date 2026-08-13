@@ -2276,7 +2276,9 @@ async function initUserData(user) {
             if (profile) {
                 if (profile.full_name) name = profile.full_name;
                 else if (profile.name) name = profile.name;
-                if (profile.phone) phone = profile.phone;
+                if (profile.phone_number) phone = profile.phone_number;
+                else if (profile.phone) phone = profile.phone;
+                if (profile.username) userData.username = profile.username;
                 if (profile.address) address = profile.address;
                 if (profile.bio) bio = profile.bio;
                 if (profile.avatar_url) avatarUrl = profile.avatar_url;
@@ -2998,61 +3000,95 @@ window.saveProfileSettingsData = async function() {
         return showToast('Please sign in again', 'error');
     }
 
+    const saveBtn = document.querySelector('#profileSettingsView .btn-sm-primary');
+    const prevBtnText = saveBtn ? saveBtn.textContent : '';
+    if (saveBtn) {
+        saveBtn.disabled = true;
+        saveBtn.textContent = 'Saving…';
+    }
+
     try {
-        // 1) Auth metadata (for display on next login)
+        // 1) Auth metadata — used as fallback when profiles columns differ
         const { error: authErr } = await supabaseClient.auth.updateUser({
             data: {
                 full_name: name,
-                phone,
-                address,
-                bio,
+                username: userData.username || undefined,
+                phone: phone,
+                phone_number: phone,
+                address: address,
+                bio: bio,
                 avatar_url: userData.avatarUrl || null
             }
         });
-        if (authErr) {
-            console.warn('auth.updateUser', authErr);
+        if (authErr) console.warn('auth.updateUser', authErr);
+
+        // 2) profiles table — write both possible column names where needed
+        // (phone vs phone_number, full_name vs name) so it matches the real schema.
+        async function upsertPatch(patch) {
+            return supabaseClient
+                .from('profiles')
+                .upsert({ id: currentUserId, ...patch }, { onConflict: 'id' })
+                .select('id, full_name, phone, phone_number, email, address, bio, avatar_url');
         }
 
-        // 2) profiles table — core fields first (address/bio may not exist yet)
-        // Using upsert (not update) so this also creates the profiles row
-        // if it's missing, and .select() so we can tell whether a row was
-        // actually written — a plain .update() on a row RLS won't let us
-        // touch, or that doesn't exist, returns success with zero rows
-        // changed and no error, which is how edits looked "saved" but
-        // vanished on refresh.
-        async function tryProfileUpsert(patch) {
-            return supabaseClient.from('profiles').upsert({ id: currentUserId, ...patch }, { onConflict: 'id' }).select();
-        }
+        const attempts = [
+            {
+                full_name: name,
+                email: userData.email || null,
+                phone: phone || null,
+                phone_number: phone || null,
+                address: address || null,
+                bio: bio || null,
+                avatar_url: userData.avatarUrl || null
+            },
+            {
+                full_name: name,
+                email: userData.email || null,
+                phone_number: phone || null,
+                address: address || null,
+                bio: bio || null
+            },
+            {
+                full_name: name,
+                phone: phone || null,
+                phone_number: phone || null
+            },
+            {
+                full_name: name,
+                phone_number: phone || null
+            },
+            {
+                name: name,
+                phone: phone || null
+            }
+        ];
 
-        let core = { phone: phone || null };
-        if (userData.avatarUrl) core.avatar_url = userData.avatarUrl;
-
-        let { data: savedRows, error: profileErr } = await tryProfileUpsert({ ...core, full_name: name, email: userData.email || undefined });
-        if (profileErr && /full_name/i.test(profileErr.message || '')) {
-            ({ data: savedRows, error: profileErr } = await tryProfileUpsert({ ...core, name }));
-        }
-        if (profileErr && /column|schema cache/i.test(profileErr.message || '')) {
-            ({ data: savedRows, error: profileErr } = await tryProfileUpsert({ full_name: name, phone: phone || null }));
-            if (profileErr && /full_name/i.test(profileErr.message || '')) {
-                ({ data: savedRows, error: profileErr } = await tryProfileUpsert({ name, phone: phone || null }));
+        let savedRows = null;
+        let lastErr = null;
+        for (const patch of attempts) {
+            // Drop undefined keys
+            Object.keys(patch).forEach((k) => patch[k] === undefined && delete patch[k]);
+            const { data, error } = await upsertPatch(patch);
+            if (!error && data && data.length) {
+                savedRows = data;
+                lastErr = null;
+                break;
+            }
+            lastErr = error;
+            // Stop retrying only on permission errors; column errors → next attempt
+            if (error && /permission|policy|rls|not authorized/i.test(error.message || '')) {
+                break;
             }
         }
-        if (profileErr) throw profileErr;
-        if (!savedRows || savedRows.length === 0) {
-            throw new Error('Changes were not saved — your account may not have permission to update its profile. Please contact support.');
+
+        if (lastErr && !savedRows) {
+            throw new Error(lastErr.message || 'Could not update profile in database');
+        }
+        if (!savedRows || !savedRows.length) {
+            throw new Error('Profile was not saved. Check that your account can update the profiles table (RLS).');
         }
 
-        // Optional columns — skip quietly if missing in schema
-        if (address || bio) {
-            const optional = {};
-            if (address) optional.address = address;
-            if (bio) optional.bio = bio;
-            const { error: optErr } = await tryProfileUpsert(optional);
-            if (optErr && !/column|schema cache/i.test(optErr.message || '')) {
-                console.warn('optional profile fields', optErr);
-            }
-        }
-
+        // Reflect immediately in UI + memory
         userData.name = name;
         userData.phone = phone;
         userData.address = address;
@@ -3060,10 +3096,22 @@ window.saveProfileSettingsData = async function() {
         safeSet('dropdownName', name);
         safeSet('profileHeaderName', name);
         safeSet('heroWelcomeTitle', `Welcome back, ${name}!`);
+        const phoneInput = document.getElementById('profilePhoneInput');
+        const addressInput = document.getElementById('profileAddressInput');
+        const bioInput = document.getElementById('profileBioInput');
+        if (phoneInput) phoneInput.value = phone;
+        if (addressInput) addressInput.value = address;
+        if (bioInput) bioInput.value = bio;
+
         showToast('Profile saved!', 'success');
     } catch (err) {
         console.error('saveProfileSettingsData', err);
         showToast(err.message || 'Could not save profile', 'error');
+    } finally {
+        if (saveBtn) {
+            saveBtn.disabled = false;
+            saveBtn.textContent = prevBtnText || 'Save Changes';
+        }
     }
 };
 
