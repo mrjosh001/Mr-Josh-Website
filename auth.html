@@ -578,7 +578,14 @@
           } catch (e) {}
         })();
 
-        const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY);
+        const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
+            auth: {
+                persistSession: true,
+                autoRefreshToken: true,
+                detectSessionInUrl: true,
+                storage: window.localStorage
+            }
+        });
 
         window.addEventListener('DOMContentLoaded', async () => {
             // Check for saved "Remember Me" details within the 24-hour expiry window
@@ -840,9 +847,28 @@
 
             showSuccess('Signed in successfully!');
             try { sessionStorage.setItem('mjhub-fresh-login', '1'); } catch (e) {}
-            setTimeout(() => {
+            // Reset idle timer so dashboard does not immediately log them out
+            // from a stale mjhub-last-activity timestamp left by a prior visit.
+            try { localStorage.setItem('mjhub-last-activity', String(Date.now())); } catch (e) {}
+
+            // Wait until the session is actually readable from storage before
+            // redirecting. Without this, the first dashboard load sometimes
+            // sees null session and sends the user back to login (double sign-in).
+            async function goDashboardWhenReady() {
+                for (let i = 0; i < 10; i++) {
+                    try {
+                        const { data: { session: s } } = await supabaseClient.auth.getSession();
+                        if (s && s.access_token) {
+                            window.location.href = 'dashboard.html';
+                            return;
+                        }
+                    } catch (e) {}
+                    await new Promise(r => setTimeout(r, 150));
+                }
+                // Last resort — still go; dashboard has its own retry.
                 window.location.href = 'dashboard.html';
-            }, 500);
+            }
+            goDashboardWhenReady();
         }
 
         async function handleSignUp(e) {
@@ -899,9 +925,17 @@
                   if (data.session) await attachReferralIfNeeded(data.session);
                 } catch (e) {}
                 try { sessionStorage.setItem('mjhub-fresh-login', '1'); } catch (e) {}
-                setTimeout(() => {
+                try { localStorage.setItem('mjhub-last-activity', String(Date.now())); } catch (e) {}
+                setTimeout(async () => {
+                    for (let i = 0; i < 8; i++) {
+                        try {
+                            const { data: { session: s } } = await supabaseClient.auth.getSession();
+                            if (s && s.access_token) break;
+                        } catch (e) {}
+                        await new Promise(r => setTimeout(r, 150));
+                    }
                     window.location.href = 'dashboard.html';
-                }, 1200);
+                }, 800);
             } else {
                 // Email confirmation is required — send them to the
                 // dedicated "check your email" page with their address,

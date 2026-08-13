@@ -1927,7 +1927,14 @@ const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
 
 let supabaseClient = null;
 if (window.supabase) {
-    supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+    supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+        auth: {
+            persistSession: true,
+            autoRefreshToken: true,
+            detectSessionInUrl: true,
+            storage: window.localStorage
+        }
+    });
 }
 
 
@@ -2019,7 +2026,7 @@ function initWelcomeModal() {
 // dashboard content renders, rather than only timing out during a single
 // continuously-open session. This is a safety measure so a lost/shared
 // device can't be used to reach a signed-in wallet indefinitely.
-const IDLE_LIMIT_MS = 10 * 60 * 1000;
+const IDLE_LIMIT_MS = 30 * 60 * 1000; // 30 minutes (was 10 — too aggressive, caused double login feel)
 const IDLE_KEY = 'mjhub-last-activity';
 
 function markActivity() {
@@ -2059,7 +2066,23 @@ async function enforceIdleTimeout() {
 document.addEventListener('DOMContentLoaded', async () => {
     if (supabaseClient) {
         try {
-            const { data: { session } } = await supabaseClient.auth.getSession();
+            // Retry getSession — right after redirect from auth.html the session
+            // can lag a moment in localStorage (causes "must sign in twice").
+            let session = null;
+            for (let attempt = 0; attempt < 8; attempt++) {
+                const { data } = await supabaseClient.auth.getSession();
+                session = data?.session || null;
+                if (session && session.access_token) break;
+                await new Promise(r => setTimeout(r, 200));
+            }
+
+            // Fresh login from auth.html — never idle-kick on first paint
+            let isFresh = false;
+            try { isFresh = sessionStorage.getItem('mjhub-fresh-login') === '1'; } catch (e) {}
+            if (isFresh) {
+                try { localStorage.setItem(IDLE_KEY, String(Date.now())); } catch (e) {}
+            }
+
             if (session) {
                 const idleTimedOut = await enforceIdleTimeout();
                 if (idleTimedOut) return;
@@ -2076,23 +2099,17 @@ document.addEventListener('DOMContentLoaded', async () => {
                 subscribeNotifRealtime();
                 initWelcomeModal();
             } else {
-                // No active session — this page is the signed-in dashboard,
-                // so a visitor who isn't logged in must never see it. Send
-                // them to the public landing page to sign up / log in first.
-                window.location.href = '/';
+                // No active session after retries — send to sign-in
+                window.location.href = 'auth.html';
                 return;
             }
         } catch(e) {
-            // If we can't even determine session state, fail safe and send
-            // the visitor to the landing page rather than risk showing the
-            // dashboard to someone who isn't signed in.
             console.log('No session', e);
-            window.location.href = '/';
+            window.location.href = 'auth.html';
             return;
         }
     } else {
-        // Supabase client failed to initialize — same fail-safe rule applies.
-        window.location.href = '/';
+        window.location.href = 'auth.html';
         return;
     }
 
@@ -2916,8 +2933,10 @@ window.confirmLogout = async function() {
     try {
         if (supabaseClient) await supabaseClient.auth.signOut();
     } catch (e) { /* ignore */ }
-    try { localStorage.clear(); } catch (e) { /* ignore */ }
-    window.location.href = '/';
+    try { localStorage.removeItem('mjhub-last-activity'); } catch (e) { /* ignore */ }
+    // Do NOT localStorage.clear() — that wiped the whole browser store and
+    // contributed to flaky "sign in twice" behaviour.
+    window.location.href = 'auth.html';
 };
 
 
