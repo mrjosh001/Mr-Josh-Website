@@ -1,0 +1,341 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MJ HUB — Support Desk</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <style>
+    :root {
+      --bg: #06080f; --card: #0f1524; --card2: #151d30; --text: #f1f5f9; --muted: #8b9bb4;
+      --border: rgba(148,163,184,.12); --primary: #5b8af5; --success: #34d399; --danger: #f87171; --warn: #fbbf24;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: 'Plus Jakarta Sans', system-ui, sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
+    .login-wrap { min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 24px; }
+    .login-card { width: 100%; max-width: 400px; background: var(--card); border: 1px solid var(--border); border-radius: 18px; padding: 28px; }
+    .login-card h1 { font-size: 22px; margin-bottom: 6px; }
+    .login-card p { color: var(--muted); font-size: 13px; margin-bottom: 20px; }
+    .login-card input { width: 100%; padding: 12px 14px; border-radius: 12px; border: 1px solid var(--border); background: var(--bg); color: var(--text); margin-bottom: 10px; font: inherit; }
+    .btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; padding: 11px 16px; border-radius: 12px; border: none; cursor: pointer; font: inherit; font-weight: 600; }
+    .btn-primary { background: var(--primary); color: #fff; width: 100%; }
+    .btn-ghost { background: transparent; border: 1px solid var(--border); color: var(--text); }
+    .btn-sm { padding: 8px 12px; font-size: 13px; }
+    .error-msg { color: var(--danger); font-size: 13px; margin-top: 10px; display: none; }
+    .shell { display: none; height: 100vh; flex-direction: column; }
+    .shell.open { display: flex; }
+    .topbar { height: 56px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; padding: 0 16px; background: rgba(11,16,28,.9); }
+    .topbar a { color: var(--muted); text-decoration: none; font-size: 13px; font-weight: 600; }
+    .topbar a:hover { color: var(--text); }
+    .brand { font-weight: 800; font-size: 16px; }
+    .brand span { color: var(--primary); }
+    .main { flex: 1; display: grid; grid-template-columns: 340px 1fr; min-height: 0; }
+    @media (max-width: 860px) { .main { grid-template-columns: 1fr; } .thread-pane.hide-mobile { display: none; } .list-pane.hide-mobile { display: none; } }
+    .list-pane { border-right: 1px solid var(--border); display: flex; flex-direction: column; min-height: 0; background: var(--card); }
+    .list-head { padding: 14px; border-bottom: 1px solid var(--border); }
+    .list-head h2 { font-size: 15px; margin-bottom: 10px; }
+    .filters { display: flex; gap: 6px; flex-wrap: wrap; }
+    .chip { padding: 6px 10px; border-radius: 999px; border: 1px solid var(--border); background: transparent; color: var(--muted); font-size: 12px; font-weight: 600; cursor: pointer; }
+    .chip.active { background: rgba(91,138,245,.15); color: var(--primary); border-color: rgba(91,138,245,.35); }
+    .ticket-list { flex: 1; overflow-y: auto; }
+    .ticket-item { padding: 12px 14px; border-bottom: 1px solid var(--border); cursor: pointer; }
+    .ticket-item:hover, .ticket-item.active { background: var(--card2); }
+    .ticket-item .row1 { display: flex; justify-content: space-between; gap: 8px; margin-bottom: 4px; }
+    .ticket-item .name { font-weight: 700; font-size: 13px; }
+    .ticket-item .time { font-size: 11px; color: var(--muted); white-space: nowrap; }
+    .ticket-item .preview { font-size: 12px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .badge { font-size: 10px; font-weight: 700; padding: 2px 7px; border-radius: 999px; text-transform: uppercase; }
+    .badge.open { background: rgba(52,211,153,.15); color: var(--success); }
+    .badge.pending { background: rgba(251,191,36,.15); color: var(--warn); }
+    .badge.closed { background: rgba(148,163,184,.15); color: var(--muted); }
+    .thread-pane { display: flex; flex-direction: column; min-height: 0; }
+    .thread-empty { flex: 1; display: flex; align-items: center; justify-content: center; color: var(--muted); font-size: 14px; padding: 24px; text-align: center; }
+    .thread-head { padding: 12px 16px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+    .thread-head .meta { font-size: 12px; color: var(--muted); }
+    .thread-messages { flex: 1; overflow-y: auto; padding: 16px; display: flex; flex-direction: column; gap: 10px; background: rgba(0,0,0,.2); }
+    .bubble { max-width: 78%; padding: 10px 12px; border-radius: 14px; font-size: 13px; line-height: 1.45; white-space: pre-wrap; word-break: break-word; }
+    .bubble.user { align-self: flex-start; background: var(--card2); }
+    .bubble.admin { align-self: flex-end; background: var(--primary); color: #fff; }
+    .bubble.system { align-self: center; background: transparent; color: var(--muted); font-size: 12px; max-width: 90%; text-align: center; }
+    .bubble .who { font-size: 10px; opacity: .75; margin-bottom: 4px; font-weight: 700; }
+    .composer { border-top: 1px solid var(--border); padding: 12px; display: flex; gap: 8px; background: var(--card); }
+    .composer textarea { flex: 1; min-height: 44px; max-height: 120px; resize: vertical; border-radius: 12px; border: 1px solid var(--border); background: var(--bg); color: var(--text); padding: 10px 12px; font: inherit; }
+    .composer button { align-self: flex-end; }
+  </style>
+</head>
+<body>
+  <div id="loginScreen" class="login-wrap">
+    <div class="login-card">
+      <h1>Support Desk</h1>
+      <p>Admin sign-in required. Same account as the main admin panel.</p>
+      <input type="email" id="email" placeholder="Admin email" autocomplete="username">
+      <input type="password" id="password" placeholder="Password" autocomplete="current-password">
+      <button class="btn btn-primary" id="loginBtn" onclick="doLogin()">Sign in</button>
+      <div id="loginError" class="error-msg"></div>
+      <p style="margin-top:14px;font-size:12px;"><a href="admin.html" style="color:var(--primary);">← Back to Admin</a></p>
+    </div>
+  </div>
+
+  <div id="appShell" class="shell">
+    <div class="topbar">
+      <div class="brand">MJ <span>Hub</span> · Support</div>
+      <div style="display:flex;gap:14px;align-items:center;">
+        <a href="admin.html">Main Admin</a>
+        <button class="btn btn-ghost btn-sm" onclick="doLogout()">Log out</button>
+      </div>
+    </div>
+    <div class="main">
+      <aside class="list-pane" id="listPane">
+        <div class="list-head">
+          <h2>Conversations <span id="openCount" style="color:var(--muted);font-weight:600;"></span></h2>
+          <div class="filters">
+            <button class="chip active" data-filter="open" onclick="setFilter('open')">Open</button>
+            <button class="chip" data-filter="pending" onclick="setFilter('pending')">Pending</button>
+            <button class="chip" data-filter="closed" onclick="setFilter('closed')">Closed</button>
+            <button class="chip" data-filter="all" onclick="setFilter('all')">All</button>
+          </div>
+        </div>
+        <div class="ticket-list" id="ticketList"></div>
+      </aside>
+      <section class="thread-pane" id="threadPane">
+        <div class="thread-empty" id="threadEmpty">Select a conversation to reply.</div>
+        <div id="threadActive" style="display:none;flex-direction:column;flex:1;min-height:0;">
+          <div class="thread-head">
+            <div>
+              <div id="threadTitle" style="font-weight:800;font-size:15px;">—</div>
+              <div class="meta" id="threadMeta"></div>
+            </div>
+            <div style="display:flex;gap:8px;flex-wrap:wrap;">
+              <button class="btn btn-ghost btn-sm" onclick="setTicketStatus('open')">Mark open</button>
+              <button class="btn btn-ghost btn-sm" onclick="setTicketStatus('pending')">Pending</button>
+              <button class="btn btn-ghost btn-sm" onclick="setTicketStatus('closed')">Close</button>
+              <button class="btn btn-ghost btn-sm" id="backToList" style="display:none;" onclick="showListMobile()">← List</button>
+            </div>
+          </div>
+          <div class="thread-messages" id="threadMessages"></div>
+          <form class="composer" onsubmit="return sendAdminReply(event)">
+            <textarea id="replyInput" placeholder="Type your reply to the customer…" required></textarea>
+            <button type="submit" class="btn btn-primary btn-sm" style="width:auto;padding:12px 16px;">Send</button>
+          </form>
+        </div>
+      </section>
+    </div>
+  </div>
+
+  <script>
+    const SUPABASE_URL = 'https://atczodlljmlayvldxfmv.supabase.co';
+    const SUPABASE_KEY = 'sb_publishable_dwbeKLcSG7-nfKzZz8x8Zw_U9FtwJTy';
+    const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY, {
+      auth: { persistSession: true, autoRefreshToken: true, storage: window.sessionStorage }
+    });
+
+    let currentFilter = 'open';
+    let tickets = [];
+    let activeTicketId = null;
+    let messagesChannel = null;
+    let ticketsChannel = null;
+
+    function isAdminValue(v) {
+      return v === true || v === 'true' || v === 1 || v === '1';
+    }
+
+    function fmtTime(iso) {
+      if (!iso) return '';
+      try {
+        return new Date(iso).toLocaleString('en-NG', { timeZone: 'Africa/Lagos', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+      } catch (e) { return iso; }
+    }
+
+    async function evaluateSession(session) {
+      const login = document.getElementById('loginScreen');
+      const shell = document.getElementById('appShell');
+      if (!session) {
+        login.style.display = 'flex';
+        shell.classList.remove('open');
+        return;
+      }
+      const { data: profile } = await sb.from('profiles').select('is_admin, email, full_name, customer_id').eq('id', session.user.id).maybeSingle();
+      if (!profile || !isAdminValue(profile.is_admin)) {
+        document.getElementById('loginError').style.display = 'block';
+        document.getElementById('loginError').textContent = 'Not an admin account.';
+        await sb.auth.signOut();
+        return;
+      }
+      login.style.display = 'none';
+      shell.classList.add('open');
+      await loadTickets();
+      subscribeRealtime();
+      if (window.matchMedia('(max-width: 860px)').matches) {
+        document.getElementById('backToList').style.display = 'inline-flex';
+      }
+    }
+
+    sb.auth.onAuthStateChange((event, session) => {
+      if (event === 'INITIAL_SESSION' || event === 'SIGNED_IN' || event === 'SIGNED_OUT' || event === 'TOKEN_REFRESHED') {
+        evaluateSession(session);
+      }
+    });
+
+    async function doLogin() {
+      const email = document.getElementById('email').value.trim();
+      const password = document.getElementById('password').value;
+      const err = document.getElementById('loginError');
+      err.style.display = 'none';
+      const { error } = await sb.auth.signInWithPassword({ email, password });
+      if (error) {
+        err.style.display = 'block';
+        err.textContent = error.message || 'Login failed';
+      }
+    }
+
+    async function doLogout() {
+      await sb.auth.signOut();
+      location.reload();
+    }
+
+    function setFilter(f) {
+      currentFilter = f;
+      document.querySelectorAll('.chip').forEach(c => c.classList.toggle('active', c.getAttribute('data-filter') === f));
+      renderTicketList();
+    }
+
+    async function loadTickets() {
+      let q = sb.from('support_tickets').select('*').order('last_message_at', { ascending: false }).limit(200);
+      const { data, error } = await q;
+      if (error) {
+        console.error(error);
+        document.getElementById('ticketList').innerHTML = '<div style="padding:16px;color:var(--danger);font-size:13px;">Could not load tickets. Run support-schema.sql in Supabase if tables are missing.<br>' + (error.message || '') + '</div>';
+        return;
+      }
+      tickets = data || [];
+      renderTicketList();
+    }
+
+    function renderTicketList() {
+      const list = document.getElementById('ticketList');
+      const filtered = tickets.filter(t => currentFilter === 'all' ? true : t.status === currentFilter);
+      const openN = tickets.filter(t => t.status === 'open').length;
+      document.getElementById('openCount').textContent = openN ? '(' + openN + ' open)' : '';
+      if (!filtered.length) {
+        list.innerHTML = '<div style="padding:20px;color:var(--muted);font-size:13px;text-align:center;">No conversations in this filter.</div>';
+        return;
+      }
+      list.innerHTML = filtered.map(t => `
+        <div class="ticket-item ${t.id === activeTicketId ? 'active' : ''}" onclick="openTicket('${t.id}')">
+          <div class="row1">
+            <span class="name">${escapeHtml(t.user_name || t.user_email || t.customer_id || 'User')}</span>
+            <span class="time">${fmtTime(t.last_message_at)}</span>
+          </div>
+          <div class="row1">
+            <span class="preview">${escapeHtml(t.subject || 'Support request')}</span>
+            <span class="badge ${t.status}">${t.status}</span>
+          </div>
+        </div>
+      `).join('');
+    }
+
+    function escapeHtml(s) {
+      return String(s || '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+    }
+
+    async function openTicket(id) {
+      activeTicketId = id;
+      renderTicketList();
+      const t = tickets.find(x => x.id === id);
+      document.getElementById('threadEmpty').style.display = 'none';
+      const active = document.getElementById('threadActive');
+      active.style.display = 'flex';
+      document.getElementById('threadTitle').textContent = (t && (t.user_name || t.user_email)) || 'Conversation';
+      document.getElementById('threadMeta').textContent = [
+        t && t.customer_id ? 'ID: ' + t.customer_id : null,
+        t && t.user_email ? t.user_email : null,
+        t ? 'Status: ' + t.status : null
+      ].filter(Boolean).join(' · ');
+      if (window.matchMedia('(max-width: 860px)').matches) {
+        document.getElementById('listPane').classList.add('hide-mobile');
+        document.getElementById('threadPane').classList.remove('hide-mobile');
+      }
+      await loadMessages(id);
+    }
+
+    function showListMobile() {
+      document.getElementById('listPane').classList.remove('hide-mobile');
+      document.getElementById('threadPane').classList.add('hide-mobile');
+    }
+
+    async function loadMessages(ticketId) {
+      const box = document.getElementById('threadMessages');
+      box.innerHTML = '<div style="color:var(--muted);font-size:13px;">Loading…</div>';
+      const { data, error } = await sb
+        .from('support_messages')
+        .select('*')
+        .eq('ticket_id', ticketId)
+        .order('created_at', { ascending: true });
+      if (error) {
+        box.innerHTML = '<div style="color:var(--danger);">' + escapeHtml(error.message) + '</div>';
+        return;
+      }
+      box.innerHTML = (data || []).map(m => {
+        const cls = m.sender_type === 'admin' ? 'admin' : (m.sender_type === 'system' ? 'system' : 'user');
+        const who = m.sender_type === 'admin' ? 'You (admin)' : (m.sender_type === 'system' ? 'System' : 'Customer');
+        return `<div class="bubble ${cls}"><div class="who">${who} · ${fmtTime(m.created_at)}</div>${escapeHtml(m.body)}</div>`;
+      }).join('') || '<div style="color:var(--muted);">No messages yet.</div>';
+      box.scrollTop = box.scrollHeight;
+    }
+
+    async function sendAdminReply(e) {
+      e.preventDefault();
+      if (!activeTicketId) return false;
+      const input = document.getElementById('replyInput');
+      const body = (input.value || '').trim();
+      if (!body) return false;
+      const { data: { user } } = await sb.auth.getUser();
+      const { error } = await sb.from('support_messages').insert({
+        ticket_id: activeTicketId,
+        sender_type: 'admin',
+        sender_id: user && user.id,
+        body
+      });
+      if (error) {
+        alert(error.message || 'Failed to send');
+        return false;
+      }
+      input.value = '';
+      await loadMessages(activeTicketId);
+      await loadTickets();
+      return false;
+    }
+
+    async function setTicketStatus(status) {
+      if (!activeTicketId) return;
+      const { error } = await sb.from('support_tickets').update({ status, updated_at: new Date().toISOString() }).eq('id', activeTicketId);
+      if (error) { alert(error.message); return; }
+      await loadTickets();
+      const t = tickets.find(x => x.id === activeTicketId);
+      if (t) document.getElementById('threadMeta').textContent = [
+        t.customer_id ? 'ID: ' + t.customer_id : null,
+        t.user_email || null,
+        'Status: ' + t.status
+      ].filter(Boolean).join(' · ');
+    }
+
+    function subscribeRealtime() {
+      try {
+        if (ticketsChannel) sb.removeChannel(ticketsChannel);
+        ticketsChannel = sb.channel('admin-support-tickets')
+          .on('postgres_changes', { event: '*', schema: 'public', table: 'support_tickets' }, () => loadTickets())
+          .subscribe();
+        if (messagesChannel) sb.removeChannel(messagesChannel);
+        messagesChannel = sb.channel('admin-support-messages')
+          .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'support_messages' }, (payload) => {
+            if (payload.new && payload.new.ticket_id === activeTicketId) loadMessages(activeTicketId);
+            loadTickets();
+          })
+          .subscribe();
+      } catch (e) { console.warn('realtime', e); }
+    }
+  </script>
+</body>
+</html>
