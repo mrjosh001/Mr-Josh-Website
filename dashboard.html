@@ -576,6 +576,108 @@ body::before {
 .profile-menu-info p { font-size: 12px; color: var(--muted); margin-top: 2px; }
 .profile-menu-arrow { font-size: 18px; color: var(--muted); }
 
+/* ===== Profile settings groups (Account / Preferences / Developer) ===== */
+.profile-section-label {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted, #94a3b8);
+  margin: 18px 4px 8px;
+}
+.profile-section-label:first-of-type { margin-top: 4px; }
+.profile-menu-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  border-radius: 16px;
+  border: 1px solid var(--border-color, rgba(255,255,255,0.08));
+  background: var(--card-bg, rgba(255,255,255,0.03));
+  overflow: hidden;
+  margin-bottom: 4px;
+}
+.profile-menu-group .profile-menu-item {
+  border: none;
+  border-radius: 0;
+  border-bottom: 1px solid var(--border-color, rgba(255,255,255,0.06));
+  background: transparent;
+  margin: 0;
+}
+.profile-menu-group .profile-menu-item:last-child { border-bottom: none; }
+.profile-menu-group .profile-menu-item:hover { background: var(--card-hover, rgba(255,255,255,0.04)); }
+.profile-subview { display: none; }
+.profile-subview.active { display: block; }
+.theme-choice-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+}
+.theme-choice {
+  border: 1.5px solid var(--border-color, rgba(255,255,255,0.1));
+  background: var(--card-bg, rgba(255,255,255,0.03));
+  border-radius: 14px;
+  padding: 16px 10px;
+  text-align: center;
+  cursor: pointer;
+  color: var(--text-color, #e2e8f0);
+  transition: border-color .15s, background .15s;
+}
+.theme-choice:hover { border-color: var(--primary, #3b82f6); }
+.theme-choice.active {
+  border-color: var(--primary, #3b82f6);
+  background: rgba(59,130,246,0.12);
+  box-shadow: 0 0 0 1px rgba(59,130,246,0.35);
+}
+.theme-choice i { font-size: 20px; display: block; margin-bottom: 8px; opacity: 0.9; }
+.theme-choice span { font-size: 13px; font-weight: 600; }
+.lang-list { display: flex; flex-direction: column; gap: 0; border-radius: 16px; border: 1px solid var(--border-color, rgba(255,255,255,0.08)); overflow: hidden; background: var(--card-bg, rgba(255,255,255,0.03)); }
+.lang-item {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 14px 16px; cursor: pointer;
+  border-bottom: 1px solid var(--border-color, rgba(255,255,255,0.06));
+  background: transparent;
+}
+.lang-item:last-child { border-bottom: none; }
+.lang-item:hover { background: var(--card-hover, rgba(255,255,255,0.04)); }
+.lang-item .lang-name { font-weight: 700; font-size: 14px; color: var(--text-color, #e2e8f0); }
+.lang-item .lang-native { font-size: 12px; color: var(--muted, #94a3b8); margin-top: 2px; }
+.lang-item .lang-check { color: var(--primary, #3b82f6); font-size: 16px; opacity: 0; }
+.lang-item.selected .lang-check { opacity: 1; }
+.notif-pref-row {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 14px 0; border-bottom: 1px solid var(--border-color, rgba(255,255,255,0.06));
+}
+.notif-pref-row:last-child { border-bottom: none; }
+.notif-pref-row .np-title { font-weight: 700; font-size: 14px; }
+.notif-pref-row .np-sub { font-size: 12px; color: var(--muted, #94a3b8); margin-top: 2px; }
+.mj-switch {
+  position: relative; width: 46px; height: 26px; flex-shrink: 0;
+}
+.mj-switch input { opacity: 0; width: 0; height: 0; }
+.mj-switch .slider {
+  position: absolute; inset: 0; border-radius: 999px;
+  background: rgba(148,163,184,0.35); cursor: pointer; transition: .2s;
+}
+.mj-switch .slider:before {
+  content: ''; position: absolute; width: 20px; height: 20px; left: 3px; top: 3px;
+  border-radius: 50%; background: #fff; transition: .2s;
+}
+.mj-switch input:checked + .slider { background: var(--primary, #3b82f6); }
+.mj-switch input:checked + .slider:before { transform: translateX(20px); }
+.api-key-box {
+  font-family: ui-monospace, monospace; font-size: 13px;
+  padding: 12px 14px; border-radius: 12px;
+  border: 1px solid var(--border-color, rgba(255,255,255,0.1));
+  background: rgba(0,0,0,0.25); word-break: break-all; color: var(--muted, #94a3b8);
+}
+.profile-logout-btn {
+  display: block; width: 100%; text-align: center; margin-top: 22px;
+  padding: 14px; border: none; background: transparent; cursor: pointer;
+  color: #ef4444; font-weight: 700; font-size: 15px;
+}
+.profile-logout-btn:hover { opacity: 0.85; }
+
+
 /* PRODUCTS */
 .product-grid { display: grid; grid-template-columns: 1fr; gap: 12px; margin-top: 12px; }
 @media(min-width: 520px) { .product-grid { grid-template-columns: repeat(2, 1fr); } }
@@ -1407,33 +1509,196 @@ body::before {
                 </div>
             </div>
 
-            <div class="profile-menu-list">
+            <div class="profile-section-label">Account</div>
+            <div class="profile-menu-group">
                 <div class="profile-menu-item" onclick="openProfileSettings()">
                     <div class="profile-menu-left">
-                        <div class="profile-menu-icon icon-blue"><i class="fa-solid fa-gear"></i></div>
+                        <div class="profile-menu-icon icon-blue"><i class="fa-solid fa-user"></i></div>
                         <div class="profile-menu-info">
-                            <h4>Profile Settings</h4>
-                            <p>Name, phone, address and bio</p>
+                            <h4>Personal Info</h4>
+                            <p>Name, email, phone</p>
                         </div>
                     </div>
                     <div class="profile-menu-arrow">›</div>
                 </div>
-                <div class="profile-menu-item" onclick="openChangePasswordModal()">
+                <div class="profile-menu-item" onclick="openProfileSubview('security')">
                     <div class="profile-menu-left">
                         <div class="profile-menu-icon icon-blue"><i class="fa-solid fa-shield-halved"></i></div>
                         <div class="profile-menu-info">
-                            <h4>Change Password</h4>
-                            <p>Update your security password</p>
+                            <h4>Security</h4>
+                            <p>Password, account safety</p>
                         </div>
                     </div>
                     <div class="profile-menu-arrow">›</div>
                 </div>
-                <div class="profile-menu-item" onclick="handleLogout()">
+                <div class="profile-menu-item" onclick="openProfileSubview('notifications')">
                     <div class="profile-menu-left">
-                        <div class="profile-menu-icon" style="background:rgba(239,68,68,0.15);color:var(--danger-color);"><i class="fa-solid fa-right-from-bracket"></i></div>
+                        <div class="profile-menu-icon icon-blue"><i class="fa-solid fa-bell"></i></div>
                         <div class="profile-menu-info">
-                            <h4 style="color:var(--danger-color);">Log Out</h4>
-                            <p>Sign out of your session</p>
+                            <h4>Notifications</h4>
+                            <p>Alerts &amp; updates</p>
+                        </div>
+                    </div>
+                    <div class="profile-menu-arrow">›</div>
+                </div>
+            </div>
+
+            <div class="profile-section-label">Preferences</div>
+            <div class="profile-menu-group">
+                <div class="profile-menu-item" onclick="openProfileSubview('appearance')">
+                    <div class="profile-menu-left">
+                        <div class="profile-menu-icon icon-blue"><i class="fa-solid fa-palette"></i></div>
+                        <div class="profile-menu-info">
+                            <h4>Appearance</h4>
+                            <p>Theme &amp; display</p>
+                        </div>
+                    </div>
+                    <div class="profile-menu-arrow">›</div>
+                </div>
+                <div class="profile-menu-item" onclick="openProfileSubview('language')">
+                    <div class="profile-menu-left">
+                        <div class="profile-menu-icon icon-blue"><i class="fa-solid fa-globe"></i></div>
+                        <div class="profile-menu-info">
+                            <h4>Language</h4>
+                            <p>App language</p>
+                        </div>
+                    </div>
+                    <div class="profile-menu-arrow">›</div>
+                </div>
+                <div class="profile-menu-item" onclick="window.location.href='support.html'">
+                    <div class="profile-menu-left">
+                        <div class="profile-menu-icon icon-blue"><i class="fa-solid fa-circle-question"></i></div>
+                        <div class="profile-menu-info">
+                            <h4>Help &amp; Support</h4>
+                            <p>FAQ &amp; contact</p>
+                        </div>
+                    </div>
+                    <div class="profile-menu-arrow">›</div>
+                </div>
+            </div>
+
+            <div class="profile-section-label">Developer</div>
+            <div class="profile-menu-group">
+                <div class="profile-menu-item" onclick="openProfileSubview('apikeys')">
+                    <div class="profile-menu-left">
+                        <div class="profile-menu-icon icon-blue"><i class="fa-solid fa-key"></i></div>
+                        <div class="profile-menu-info">
+                            <h4>API Keys</h4>
+                            <p>Build with our API · 60 req/min</p>
+                        </div>
+                    </div>
+                    <div class="profile-menu-arrow">›</div>
+                </div>
+            </div>
+
+            <button type="button" class="profile-logout-btn" onclick="handleLogout()">Log Out</button>
+        </div>
+
+
+        <!-- Appearance subview -->
+        <div id="profileAppearanceView" class="profile-subview">
+            <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px;">
+                <button type="button" onclick="closeProfileSubview()" aria-label="Back"
+                    style="width:40px;height:40px;border-radius:12px;border:1px solid var(--border-color,rgba(255,255,255,0.08));background:var(--card-bg,rgba(255,255,255,0.04));color:var(--text-color,#fff);cursor:pointer;display:flex;align-items:center;justify-content:center;">
+                    <i class="fa-solid fa-arrow-left"></i>
+                </button>
+                <h2 style="margin:0;font-size:18px;font-weight:800;">Appearance</h2>
+            </div>
+            <div class="content-card">
+                <p class="helper-text" style="margin-bottom:14px;">Theme</p>
+                <div class="theme-choice-grid" id="themeChoiceGrid">
+                    <button type="button" class="theme-choice" data-theme="light" onclick="setAppTheme('light')">
+                        <i class="fa-solid fa-sun"></i><span>Light</span>
+                    </button>
+                    <button type="button" class="theme-choice" data-theme="dark" onclick="setAppTheme('dark')">
+                        <i class="fa-solid fa-moon"></i><span>Dark</span>
+                    </button>
+                    <button type="button" class="theme-choice" data-theme="system" onclick="setAppTheme('system')">
+                        <i class="fa-solid fa-desktop"></i><span>System</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Language subview -->
+        <div id="profileLanguageView" class="profile-subview">
+            <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px;">
+                <button type="button" onclick="closeProfileSubview()" aria-label="Back"
+                    style="width:40px;height:40px;border-radius:12px;border:1px solid var(--border-color,rgba(255,255,255,0.08));background:var(--card-bg,rgba(255,255,255,0.04));color:var(--text-color,#fff);cursor:pointer;display:flex;align-items:center;justify-content:center;">
+                    <i class="fa-solid fa-arrow-left"></i>
+                </button>
+                <h2 style="margin:0;font-size:18px;font-weight:800;">Language</h2>
+            </div>
+            <div class="lang-list" id="langList">
+                <div class="lang-item" data-lang="en" onclick="setAppLanguage('en')">
+                    <div><div class="lang-name">English</div><div class="lang-native">English</div></div>
+                    <i class="fa-solid fa-circle-check lang-check"></i>
+                </div>
+                <div class="lang-item" data-lang="yo" onclick="setAppLanguage('yo')">
+                    <div><div class="lang-name">Yoruba</div><div class="lang-native">Èdè Yorùbá</div></div>
+                    <i class="fa-solid fa-circle-check lang-check"></i>
+                </div>
+                <div class="lang-item" data-lang="ig" onclick="setAppLanguage('ig')">
+                    <div><div class="lang-name">Igbo</div><div class="lang-native">Asụsụ Igbo</div></div>
+                    <i class="fa-solid fa-circle-check lang-check"></i>
+                </div>
+                <div class="lang-item" data-lang="ha" onclick="setAppLanguage('ha')">
+                    <div><div class="lang-name">Hausa</div><div class="lang-native">Harshen Hausa</div></div>
+                    <i class="fa-solid fa-circle-check lang-check"></i>
+                </div>
+                <div class="lang-item" data-lang="pcm" onclick="setAppLanguage('pcm')">
+                    <div><div class="lang-name">Pidgin</div><div class="lang-native">Naija Pidgin</div></div>
+                    <i class="fa-solid fa-circle-check lang-check"></i>
+                </div>
+                <div class="lang-item" data-lang="fr" onclick="setAppLanguage('fr')">
+                    <div><div class="lang-name">French</div><div class="lang-native">Français</div></div>
+                    <i class="fa-solid fa-circle-check lang-check"></i>
+                </div>
+            </div>
+            <p class="helper-text" style="margin-top:12px;padding:0 4px;">Language preference is saved on this device. Full translations roll out gradually.</p>
+        </div>
+
+        <!-- Notifications prefs subview -->
+        <div id="profileNotificationsView" class="profile-subview">
+            <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px;">
+                <button type="button" onclick="closeProfileSubview()" aria-label="Back"
+                    style="width:40px;height:40px;border-radius:12px;border:1px solid var(--border-color,rgba(255,255,255,0.08));background:var(--card-bg,rgba(255,255,255,0.04));color:var(--text-color,#fff);cursor:pointer;display:flex;align-items:center;justify-content:center;">
+                    <i class="fa-solid fa-arrow-left"></i>
+                </button>
+                <h2 style="margin:0;font-size:18px;font-weight:800;">Notifications</h2>
+            </div>
+            <div class="content-card">
+                <div class="notif-pref-row">
+                    <div><div class="np-title">Order updates</div><div class="np-sub">When orders complete or fail</div></div>
+                    <label class="mj-switch"><input type="checkbox" id="prefNotifOrders" checked onchange="saveNotifPrefs()"><span class="slider"></span></label>
+                </div>
+                <div class="notif-pref-row">
+                    <div><div class="np-title">Wallet &amp; deposits</div><div class="np-sub">Payment confirmations</div></div>
+                    <label class="mj-switch"><input type="checkbox" id="prefNotifWallet" checked onchange="saveNotifPrefs()"><span class="slider"></span></label>
+                </div>
+                <div class="notif-pref-row">
+                    <div><div class="np-title">Promotions</div><div class="np-sub">Deals and announcements</div></div>
+                    <label class="mj-switch"><input type="checkbox" id="prefNotifPromo" onchange="saveNotifPrefs()"><span class="slider"></span></label>
+                </div>
+            </div>
+        </div>
+
+        <!-- Security subview -->
+        <div id="profileSecurityView" class="profile-subview">
+            <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px;">
+                <button type="button" onclick="closeProfileSubview()" aria-label="Back"
+                    style="width:40px;height:40px;border-radius:12px;border:1px solid var(--border-color,rgba(255,255,255,0.08));background:var(--card-bg,rgba(255,255,255,0.04));color:var(--text-color,#fff);cursor:pointer;display:flex;align-items:center;justify-content:center;">
+                    <i class="fa-solid fa-arrow-left"></i>
+                </button>
+                <h2 style="margin:0;font-size:18px;font-weight:800;">Security</h2>
+            </div>
+            <div class="profile-menu-group">
+                <div class="profile-menu-item" onclick="openChangePasswordModal()">
+                    <div class="profile-menu-left">
+                        <div class="profile-menu-icon icon-blue"><i class="fa-solid fa-key"></i></div>
+                        <div class="profile-menu-info">
+                            <h4>Change Password</h4>
+                            <p>Update your login password</p>
                         </div>
                     </div>
                     <div class="profile-menu-arrow">›</div>
@@ -1443,11 +1708,28 @@ body::before {
                         <div class="profile-menu-icon" style="background:rgba(239,68,68,0.15);color:var(--danger-color);"><i class="fa-solid fa-trash"></i></div>
                         <div class="profile-menu-info">
                             <h4 style="color:var(--danger-color);">Delete Account</h4>
-                            <p>Permanently remove your account and data</p>
+                            <p>Permanently remove your account</p>
                         </div>
                     </div>
                     <div class="profile-menu-arrow">›</div>
                 </div>
+            </div>
+        </div>
+
+        <!-- API Keys subview -->
+        <div id="profileApiKeysView" class="profile-subview">
+            <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px;">
+                <button type="button" onclick="closeProfileSubview()" aria-label="Back"
+                    style="width:40px;height:40px;border-radius:12px;border:1px solid var(--border-color,rgba(255,255,255,0.08));background:var(--card-bg,rgba(255,255,255,0.04));color:var(--text-color,#fff);cursor:pointer;display:flex;align-items:center;justify-content:center;">
+                    <i class="fa-solid fa-arrow-left"></i>
+                </button>
+                <h2 style="margin:0;font-size:18px;font-weight:800;">API Keys</h2>
+            </div>
+            <div class="content-card">
+                <p class="helper-text" style="margin-bottom:10px;">Your Customer ID can be used as a reference when integrating. Full public API access is rolling out.</p>
+                <div class="api-key-box" id="apiKeyDisplay">Loading…</div>
+                <button type="button" class="btn-sm-primary" style="width:100%;padding:12px;margin-top:12px;" onclick="copyApiKeyRef()">Copy Customer ID</button>
+                <p class="helper-text" style="margin-top:12px;">Rate limit: 60 requests / minute when API is enabled for your account.</p>
             </div>
         </div>
 
@@ -1458,7 +1740,7 @@ body::before {
                     style="width:40px;height:40px;border-radius:12px;border:1px solid var(--border-color,rgba(255,255,255,0.08));background:var(--card-bg,rgba(255,255,255,0.04));color:var(--text-color,#fff);cursor:pointer;display:flex;align-items:center;justify-content:center;">
                     <i class="fa-solid fa-arrow-left"></i>
                 </button>
-                <h2 style="margin:0;font-size:18px;font-weight:800;">Profile Settings</h2>
+                <h2 style="margin:0;font-size:18px;font-weight:800;">Personal Info</h2>
             </div>
 
             <div class="content-card">
@@ -1485,38 +1767,6 @@ body::before {
                 <button class="btn-sm-primary" style="width:100%;padding:14px;" onclick="saveProfileSettingsData()">Save Changes</button>
             </div>
 
-            <div class="profile-menu-list">
-                <div class="profile-menu-item" onclick="openChangePasswordModal()">
-                    <div class="profile-menu-left">
-                        <div class="profile-menu-icon icon-blue"><i class="fa-solid fa-shield-halved"></i></div>
-                        <div class="profile-menu-info">
-                            <h4>Change Password</h4>
-                            <p>Update your security password</p>
-                        </div>
-                    </div>
-                    <div class="profile-menu-arrow">›</div>
-                </div>
-                <div class="profile-menu-item" onclick="handleLogout()">
-                    <div class="profile-menu-left">
-                        <div class="profile-menu-icon" style="background:rgba(239,68,68,0.15);color:var(--danger-color);"><i class="fa-solid fa-right-from-bracket"></i></div>
-                        <div class="profile-menu-info">
-                            <h4 style="color:var(--danger-color);">Log Out</h4>
-                            <p>Sign out of your session</p>
-                        </div>
-                    </div>
-                    <div class="profile-menu-arrow">›</div>
-                </div>
-                <div class="profile-menu-item" onclick="openDeleteAccountModal()">
-                    <div class="profile-menu-left">
-                        <div class="profile-menu-icon" style="background:rgba(239,68,68,0.15);color:var(--danger-color);"><i class="fa-solid fa-trash"></i></div>
-                        <div class="profile-menu-info">
-                            <h4 style="color:var(--danger-color);">Delete Account</h4>
-                            <p>Permanently remove your account and data</p>
-                        </div>
-                    </div>
-                    <div class="profile-menu-arrow">›</div>
-                </div>
-            </div>
         </div>
     </section>
 
@@ -2906,9 +3156,122 @@ window.closeLogoutConfirm = function() {
 };
 
 
+
+/* ===== Profile subviews: Appearance / Language / Notifications / Security / API ===== */
+window.openProfileSubview = function(name) {
+    const main = document.getElementById('profileMainView');
+    const settings = document.getElementById('profileSettingsView');
+    if (main) main.style.display = 'none';
+    if (settings) settings.style.display = 'none';
+    document.querySelectorAll('.profile-subview').forEach(el => el.classList.remove('active'));
+    const map = {
+        appearance: 'profileAppearanceView',
+        language: 'profileLanguageView',
+        notifications: 'profileNotificationsView',
+        security: 'profileSecurityView',
+        apikeys: 'profileApiKeysView'
+    };
+    const id = map[name];
+    const el = id ? document.getElementById(id) : null;
+    if (el) el.classList.add('active');
+    if (name === 'appearance') syncThemeChoiceUI();
+    if (name === 'language') syncLanguageUI();
+    if (name === 'notifications') loadNotifPrefs();
+    if (name === 'apikeys') {
+        const cid = (document.getElementById('myCustomerId') || {}).value || localStorage.getItem('mjhub_customer_id') || '—';
+        const box = document.getElementById('apiKeyDisplay');
+        if (box) box.textContent = cid;
+    }
+};
+window.closeProfileSubview = function() {
+    document.querySelectorAll('.profile-subview').forEach(el => el.classList.remove('active'));
+    const main = document.getElementById('profileMainView');
+    const settings = document.getElementById('profileSettingsView');
+    if (settings) settings.style.display = 'none';
+    if (main) main.style.display = '';
+};
+window.setAppTheme = function(mode) {
+    let resolved = mode;
+    if (mode === 'system') {
+        try {
+            resolved = window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
+        } catch (e) { resolved = 'dark'; }
+    }
+    document.documentElement.setAttribute('data-theme', resolved === 'light' ? 'light' : 'dark');
+    try {
+        localStorage.setItem('mjhub-theme', resolved === 'light' ? 'light' : 'dark');
+        localStorage.setItem('mjhub-theme-pref', mode);
+    } catch (e) {}
+    const btn = document.getElementById('themeToggleBtn');
+    if (btn) btn.textContent = resolved === 'dark' ? '🌙' : '☀️';
+    const ind = document.getElementById('themeIndicatorText');
+    if (ind) ind.textContent = resolved === 'dark' ? 'Dark' : 'Light';
+    const logoSrc = resolved === 'light'
+        ? 'https://atczodlljmlayvldxfmv.supabase.co/storage/v1/object/public/avatars/light%20background%20logo'
+        : 'https://atczodlljmlayvldxfmv.supabase.co/storage/v1/object/public/avatars/dark%20background%20log';
+    ['navBrandLogo','sidebarBrandLogo','welcomeModalLogo'].forEach(id => {
+        const n = document.getElementById(id);
+        if (n) n.src = logoSrc;
+    });
+    syncThemeChoiceUI();
+};
+function syncThemeChoiceUI() {
+    let pref = 'dark';
+    try { pref = localStorage.getItem('mjhub-theme-pref') || localStorage.getItem('mjhub-theme') || 'dark'; } catch (e) {}
+    document.querySelectorAll('#themeChoiceGrid .theme-choice').forEach(btn => {
+        btn.classList.toggle('active', btn.getAttribute('data-theme') === pref);
+    });
+}
+window.setAppLanguage = function(code) {
+    try { localStorage.setItem('mjhub_lang', code); } catch (e) {}
+    document.documentElement.setAttribute('lang', code === 'pcm' ? 'en' : code);
+    syncLanguageUI();
+    if (typeof showToast === 'function') showToast('Language preference saved');
+    else if (typeof toast === 'function') toast('Language preference saved');
+};
+function syncLanguageUI() {
+    let code = 'en';
+    try { code = localStorage.getItem('mjhub_lang') || 'en'; } catch (e) {}
+    document.querySelectorAll('#langList .lang-item').forEach(el => {
+        el.classList.toggle('selected', el.getAttribute('data-lang') === code);
+    });
+}
+window.saveNotifPrefs = function() {
+    const prefs = {
+        orders: !!(document.getElementById('prefNotifOrders') || {}).checked,
+        wallet: !!(document.getElementById('prefNotifWallet') || {}).checked,
+        promo: !!(document.getElementById('prefNotifPromo') || {}).checked
+    };
+    try { localStorage.setItem('mjhub_notif_prefs', JSON.stringify(prefs)); } catch (e) {}
+};
+function loadNotifPrefs() {
+    let prefs = { orders: true, wallet: true, promo: false };
+    try {
+        const raw = localStorage.getItem('mjhub_notif_prefs');
+        if (raw) prefs = Object.assign(prefs, JSON.parse(raw));
+    } catch (e) {}
+    const o = document.getElementById('prefNotifOrders');
+    const w = document.getElementById('prefNotifWallet');
+    const p = document.getElementById('prefNotifPromo');
+    if (o) o.checked = !!prefs.orders;
+    if (w) w.checked = !!prefs.wallet;
+    if (p) p.checked = !!prefs.promo;
+}
+window.copyApiKeyRef = function() {
+    const box = document.getElementById('apiKeyDisplay');
+    const v = (box && box.textContent) ? box.textContent.trim() : '';
+    if (!v || v === '—' || v === 'Loading…') return;
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(v).then(() => {
+            if (typeof showToast === 'function') showToast('Copied');
+        });
+    }
+};
+
 window.openProfileSettings = function() {
     const main = document.getElementById('profileMainView');
     const settings = document.getElementById('profileSettingsView');
+    document.querySelectorAll('.profile-subview').forEach(el => el.classList.remove('active'));
     if (main) main.style.display = 'none';
     if (settings) settings.style.display = 'block';
     try { window.scrollTo({ top: 0, behavior: 'smooth' }); } catch (e) {}
@@ -2916,9 +3279,10 @@ window.openProfileSettings = function() {
 window.closeProfileSettings = function() {
     const main = document.getElementById('profileMainView');
     const settings = document.getElementById('profileSettingsView');
+    document.querySelectorAll('.profile-subview').forEach(el => el.classList.remove('active'));
     if (settings) settings.style.display = 'none';
-    if (main) main.style.display = 'block';
-};
+    if (main) main.style.display = '';
+};;
 
 window.handleLogout = function() {
     const m = document.getElementById('logoutConfirmModal');
