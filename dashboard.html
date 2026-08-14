@@ -37,12 +37,13 @@
     <script>
     (function() {
         try {
-            var t = localStorage.getItem('mjhub-theme');
-            if (t === 'light' || t === 'dark') {
-                document.documentElement.setAttribute('data-theme', t);
-            } else {
-                document.documentElement.setAttribute('data-theme', 'dark');
+            var pref = localStorage.getItem('mjhub-theme-pref') || localStorage.getItem('mjhub-theme') || 'dark';
+            var t = pref;
+            if (pref === 'system') {
+                try { t = window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark'; }
+                catch (e2) { t = 'dark'; }
             }
+            document.documentElement.setAttribute('data-theme', (t === 'light') ? 'light' : 'dark');
         } catch (e) {
             document.documentElement.setAttribute('data-theme', 'dark');
         }
@@ -676,6 +677,64 @@ body::before {
   color: #ef4444; font-weight: 700; font-size: 15px;
 }
 .profile-logout-btn:hover { opacity: 0.85; }
+
+.help-faq-item { border-bottom: 1px solid var(--border-color, rgba(255,255,255,0.06)); }
+.help-faq-item:last-child { border-bottom: none; }
+.help-faq-q {
+  width: 100%; display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  padding: 14px 16px; background: transparent; border: none; cursor: pointer; text-align: left;
+  color: var(--text, #e2e8f0); font-size: 14px; font-weight: 600; font-family: inherit;
+}
+.help-faq-q i { color: var(--muted); font-size: 12px; transition: transform .2s; }
+.help-faq-item.open .help-faq-q i { transform: rotate(180deg); }
+.help-faq-a {
+  display: none; padding: 0 16px 14px; font-size: 13px; line-height: 1.55; color: var(--muted, #94a3b8);
+}
+.help-faq-item.open .help-faq-a { display: block; }
+.live-chat-shell {
+  display: flex; flex-direction: column;
+  border: 1px solid var(--border-color, rgba(255,255,255,0.08));
+  border-radius: 16px; overflow: hidden;
+  background: var(--card, #0f1524);
+  min-height: 420px; max-height: min(62vh, 560px);
+}
+.live-chat-header {
+  display: flex; align-items: center; gap: 12px; padding: 12px 14px;
+  border-bottom: 1px solid var(--border-color, rgba(255,255,255,0.08));
+}
+.live-chat-avatar {
+  width: 40px; height: 40px; border-radius: 50%;
+  background: rgba(59,130,246,0.15); color: var(--primary);
+  display: flex; align-items: center; justify-content: center;
+}
+.live-chat-messages {
+  flex: 1; overflow-y: auto; padding: 14px; display: flex; flex-direction: column; gap: 10px;
+  background: rgba(0,0,0,0.12);
+}
+:root[data-theme="light"] .live-chat-messages { background: rgba(15,23,42,0.03); }
+.live-chat-bubble {
+  max-width: 88%; padding: 10px 12px; border-radius: 14px; font-size: 13px; line-height: 1.45;
+}
+.live-chat-bubble.bot {
+  align-self: flex-start; background: var(--card-hover, #151d30); color: var(--text);
+  border-bottom-left-radius: 4px;
+}
+.live-chat-bubble.user {
+  align-self: flex-end; background: var(--primary, #3b82f6); color: #fff;
+  border-bottom-right-radius: 4px;
+}
+.live-chat-input-row {
+  display: flex; gap: 8px; padding: 10px; border-top: 1px solid var(--border-color, rgba(255,255,255,0.08));
+}
+.live-chat-input-row input {
+  flex: 1; border-radius: 12px; border: 1px solid var(--border-color, rgba(255,255,255,0.1));
+  background: var(--bg, #06080f); color: var(--text); padding: 11px 12px; font-size: 14px; font-family: inherit;
+}
+.live-chat-input-row button {
+  width: 44px; height: 44px; border-radius: 12px; border: none; cursor: pointer;
+  background: var(--primary); color: #fff; font-size: 15px;
+}
+
 
 
 /* PRODUCTS */
@@ -1565,7 +1624,7 @@ body::before {
                     </div>
                     <div class="profile-menu-arrow">›</div>
                 </div>
-                <div class="profile-menu-item" onclick="window.location.href='support.html'">
+                <div class="profile-menu-item" onclick="openProfileSubview('help')">
                     <div class="profile-menu-left">
                         <div class="profile-menu-icon icon-blue"><i class="fa-solid fa-circle-question"></i></div>
                         <div class="profile-menu-info">
@@ -1594,6 +1653,126 @@ body::before {
             <button type="button" class="profile-logout-btn" onclick="handleLogout()">Log Out</button>
         </div>
 
+
+
+        <!-- Help & Support subview -->
+        <div id="profileHelpView" class="profile-subview">
+            <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px;">
+                <button type="button" onclick="closeProfileSubview()" aria-label="Back"
+                    style="width:40px;height:40px;border-radius:12px;border:1px solid var(--border-color,rgba(255,255,255,0.08));background:var(--card-bg,rgba(255,255,255,0.04));color:var(--text-color,#fff);cursor:pointer;display:flex;align-items:center;justify-content:center;">
+                    <i class="fa-solid fa-arrow-left"></i>
+                </button>
+                <h2 style="margin:0;font-size:18px;font-weight:800;">Help &amp; Support</h2>
+            </div>
+
+            <div class="profile-section-label">Frequently Asked Questions</div>
+            <div class="profile-menu-group" id="helpFaqList">
+                <div class="help-faq-item">
+                    <button type="button" class="help-faq-q" onclick="toggleHelpFaq(this)">How do purchases work? <i class="fa-solid fa-chevron-down"></i></button>
+                    <div class="help-faq-a">Fund your MJ Hub wallet, choose a product (logs, SMS numbers, or social boosters), and complete checkout. Digital items are delivered to your Orders / History as soon as payment is confirmed.</div>
+                </div>
+                <div class="help-faq-item">
+                    <button type="button" class="help-faq-q" onclick="toggleHelpFaq(this)">How do I get a refund? <i class="fa-solid fa-chevron-down"></i></button>
+                    <div class="help-faq-a">Refunds follow our Refund Policy. Open the affected order, report the issue with proof within the inspection window, or contact support. Approved refunds are credited to your in-app wallet.</div>
+                </div>
+                <div class="help-faq-item">
+                    <button type="button" class="help-faq-q" onclick="toggleHelpFaq(this)">Is my payment secure? <i class="fa-solid fa-chevron-down"></i></button>
+                    <div class="help-faq-a">Yes. Payments are processed through our payment partners or wallet balance. We do not store full card numbers on MJ Hub servers.</div>
+                </div>
+                <div class="help-faq-item">
+                    <button type="button" class="help-faq-q" onclick="toggleHelpFaq(this)">How do I contact support? <i class="fa-solid fa-chevron-down"></i></button>
+                    <div class="help-faq-a">Use Live Chat below (in-app), join our WhatsApp channel, or email support. Include your Customer ID for faster help.</div>
+                </div>
+                <div class="help-faq-item">
+                    <button type="button" class="help-faq-q" onclick="toggleHelpFaq(this)">What are SMS numbers used for? <i class="fa-solid fa-chevron-down"></i></button>
+                    <div class="help-faq-a">Temporary numbers are for OTP verification when you prefer not to use your personal number, or for creators setting up accounts. Always follow each platform’s own rules.</div>
+                </div>
+            </div>
+
+            <div class="profile-section-label" style="margin-top:18px;">Contact Support</div>
+            <div class="profile-menu-group">
+                <div class="profile-menu-item" onclick="openProfileSubview('livechat')">
+                    <div class="profile-menu-left">
+                        <div class="profile-menu-icon icon-blue"><i class="fa-solid fa-comments"></i></div>
+                        <div class="profile-menu-info">
+                            <h4>Start a Live Chat</h4>
+                            <p>Talk to our team in real time</p>
+                        </div>
+                    </div>
+                    <div class="profile-menu-arrow">›</div>
+                </div>
+                <a class="profile-menu-item" href="https://whatsapp.com/channel/0029VbBdXJ2KQuJSJcqcck3o" target="_blank" rel="noopener" style="text-decoration:none;color:inherit;">
+                    <div class="profile-menu-left">
+                        <div class="profile-menu-icon" style="background:rgba(37,211,102,0.15);color:#25d366;"><i class="fa-brands fa-whatsapp"></i></div>
+                        <div class="profile-menu-info">
+                            <h4>Join our WhatsApp Channel</h4>
+                            <p>Support, updates &amp; giveaways</p>
+                        </div>
+                    </div>
+                    <div class="profile-menu-arrow"><i class="fa-solid fa-arrow-up-right-from-square" style="font-size:12px;"></i></div>
+                </a>
+            </div>
+
+            <div class="profile-section-label" style="margin-top:18px;">Legal</div>
+            <div class="profile-menu-group">
+                <a class="profile-menu-item" href="terms.html" style="text-decoration:none;color:inherit;">
+                    <div class="profile-menu-left">
+                        <div class="profile-menu-icon icon-blue"><i class="fa-solid fa-file-lines"></i></div>
+                        <div class="profile-menu-info"><h4>Terms of Service</h4><p>Rules for using MJ Hub</p></div>
+                    </div>
+                    <div class="profile-menu-arrow">›</div>
+                </a>
+                <a class="profile-menu-item" href="privacy.html" style="text-decoration:none;color:inherit;">
+                    <div class="profile-menu-left">
+                        <div class="profile-menu-icon icon-blue"><i class="fa-solid fa-lock"></i></div>
+                        <div class="profile-menu-info"><h4>Privacy Policy</h4><p>How we handle your data</p></div>
+                    </div>
+                    <div class="profile-menu-arrow">›</div>
+                </a>
+                <a class="profile-menu-item" href="acceptable-use.html" style="text-decoration:none;color:inherit;">
+                    <div class="profile-menu-left">
+                        <div class="profile-menu-icon icon-blue"><i class="fa-solid fa-shield-halved"></i></div>
+                        <div class="profile-menu-info"><h4>Acceptable Use Policy</h4><p>What is and is not allowed</p></div>
+                    </div>
+                    <div class="profile-menu-arrow">›</div>
+                </a>
+                <a class="profile-menu-item" href="refund.html" style="text-decoration:none;color:inherit;">
+                    <div class="profile-menu-left">
+                        <div class="profile-menu-icon icon-blue"><i class="fa-solid fa-rotate-left"></i></div>
+                        <div class="profile-menu-info"><h4>Refund Policy</h4><p>When refunds apply</p></div>
+                    </div>
+                    <div class="profile-menu-arrow">›</div>
+                </a>
+            </div>
+        </div>
+
+        <!-- Live Chat subview -->
+        <div id="profileLiveChatView" class="profile-subview">
+            <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px;">
+                <button type="button" onclick="openProfileSubview('help')" aria-label="Back"
+                    style="width:40px;height:40px;border-radius:12px;border:1px solid var(--border-color,rgba(255,255,255,0.08));background:var(--card-bg,rgba(255,255,255,0.04));color:var(--text-color,#fff);cursor:pointer;display:flex;align-items:center;justify-content:center;">
+                    <i class="fa-solid fa-arrow-left"></i>
+                </button>
+                <div style="flex:1;">
+                    <h2 style="margin:0;font-size:18px;font-weight:800;">Live Support</h2>
+                    <p style="margin:2px 0 0;font-size:12px;color:var(--muted);">Chat with MJ Hub support</p>
+                </div>
+            </div>
+            <div class="live-chat-shell">
+                <div class="live-chat-header">
+                    <div class="live-chat-avatar"><i class="fa-solid fa-headset"></i></div>
+                    <div>
+                        <div style="font-weight:700;font-size:14px;">MJ Hub Support</div>
+                        <div style="font-size:11px;color:var(--muted);" id="liveChatStatus">Online · typically replies within a few hours</div>
+                    </div>
+                </div>
+                <div class="live-chat-messages" id="liveChatMessages"></div>
+                <form class="live-chat-input-row" onsubmit="return sendLiveChatMessage(event)">
+                    <input type="text" id="liveChatInput" placeholder="Type your message…" autocomplete="off" maxlength="1000">
+                    <button type="submit" aria-label="Send"><i class="fa-solid fa-paper-plane"></i></button>
+                </form>
+            </div>
+        </div>
 
         <!-- Appearance subview -->
         <div id="profileAppearanceView" class="profile-subview">
@@ -1725,11 +1904,12 @@ body::before {
                 </button>
                 <h2 style="margin:0;font-size:18px;font-weight:800;">API Keys</h2>
             </div>
-            <div class="content-card">
-                <p class="helper-text" style="margin-bottom:10px;">Your Customer ID can be used as a reference when integrating. Full public API access is rolling out.</p>
-                <div class="api-key-box" id="apiKeyDisplay">Loading…</div>
-                <button type="button" class="btn-sm-primary" style="width:100%;padding:12px;margin-top:12px;" onclick="copyApiKeyRef()">Copy Customer ID</button>
-                <p class="helper-text" style="margin-top:12px;">Rate limit: 60 requests / minute when API is enabled for your account.</p>
+            <div class="content-card" style="text-align:center;padding:28px 18px;">
+                <div style="width:56px;height:56px;border-radius:16px;background:rgba(59,130,246,0.12);color:var(--primary);display:flex;align-items:center;justify-content:center;margin:0 auto 14px;font-size:22px;">
+                    <i class="fa-solid fa-key"></i>
+                </div>
+                <h3 style="margin:0 0 8px;font-size:17px;font-weight:800;">Coming soon</h3>
+                <p class="helper-text" style="margin:0;">Public API keys for MJ Hub are not available yet. We will notify you in-app when developer access opens. Planned rate limit: 60 requests / minute.</p>
             </div>
         </div>
 
@@ -2655,30 +2835,64 @@ function initNavigation() {
 
 function initTheme() {
     const btn = document.getElementById('themeToggleBtn');
-    function applyTheme(theme) {
-        const mode = (theme === 'light') ? 'light' : 'dark';
+    window.applyMjTheme = function(resolvedMode, pref) {
+        const mode = (resolvedMode === 'light') ? 'light' : 'dark';
         document.documentElement.setAttribute('data-theme', mode);
-        try { localStorage.setItem('mjhub-theme', mode); } catch (e) {}
+        try {
+            localStorage.setItem('mjhub-theme', mode);
+            if (pref) localStorage.setItem('mjhub-theme-pref', pref);
+        } catch (e) {}
         if (btn) btn.textContent = mode === 'dark' ? '🌙' : '☀️';
         const ind = document.getElementById('themeIndicatorText');
         if (ind) ind.textContent = mode === 'dark' ? 'Dark' : 'Light';
-        // Logo: dark-bg artwork for dark theme, light-bg for light theme
-        const logoSrc = mode === 'light' ? 'https://atczodlljmlayvldxfmv.supabase.co/storage/v1/object/public/avatars/light%20background%20logo' : 'https://atczodlljmlayvldxfmv.supabase.co/storage/v1/object/public/avatars/dark%20background%20log';
-        const navLogo = document.getElementById('navBrandLogo');
-        const sideLogo = document.getElementById('sidebarBrandLogo');
-        const welcomeLogo = document.getElementById('welcomeModalLogo');
-        if (navLogo) navLogo.src = logoSrc;
-        if (sideLogo) sideLogo.src = logoSrc;
-        if (welcomeLogo) welcomeLogo.src = logoSrc;
+        const meta = document.querySelector('meta[name="theme-color"]');
+        if (meta) meta.setAttribute('content', mode === 'light' ? '#f4f6fb' : '#06080f');
+        const logoSrc = mode === 'light'
+            ? 'https://atczodlljmlayvldxfmv.supabase.co/storage/v1/object/public/avatars/light%20background%20logo'
+            : 'https://atczodlljmlayvldxfmv.supabase.co/storage/v1/object/public/avatars/dark%20background%20log';
+        ['navBrandLogo','sidebarBrandLogo','welcomeModalLogo'].forEach(function(id) {
+            var n = document.getElementById(id);
+            if (n) n.src = logoSrc;
+        });
+        if (typeof syncThemeChoiceUI === 'function') syncThemeChoiceUI();
+    };
+    window.resolveSystemTheme = function() {
+        try {
+            return window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
+        } catch (e) { return 'dark'; }
+    };
+    window.setAppTheme = function(mode) {
+        var pref = mode || 'dark';
+        var resolved = pref === 'system' ? window.resolveSystemTheme() : (pref === 'light' ? 'light' : 'dark');
+        window.applyMjTheme(resolved, pref);
+    };
+    function toggleFromNav() {
+        var pref = 'dark';
+        try { pref = localStorage.getItem('mjhub-theme-pref') || localStorage.getItem('mjhub-theme') || 'dark'; } catch (e) {}
+        // Nav toggle switches between light and dark explicitly (clears system lock-in for clarity)
+        var cur = document.documentElement.getAttribute('data-theme') === 'light' ? 'light' : 'dark';
+        window.setAppTheme(cur === 'dark' ? 'light' : 'dark');
     }
-    function toggle() {
-        const cur = document.documentElement.getAttribute('data-theme') === 'light' ? 'light' : 'dark';
-        applyTheme(cur === 'dark' ? 'light' : 'dark');
+    var savedPref = 'dark';
+    try { savedPref = localStorage.getItem('mjhub-theme-pref') || localStorage.getItem('mjhub-theme') || 'dark'; } catch (e) {}
+    if (savedPref === 'system') {
+        window.applyMjTheme(window.resolveSystemTheme(), 'system');
+    } else {
+        window.applyMjTheme(savedPref === 'light' ? 'light' : 'dark', savedPref === 'light' ? 'light' : 'dark');
     }
-    let saved = 'dark';
-    try { saved = localStorage.getItem('mjhub-theme') || 'dark'; } catch (e) {}
-    applyTheme(saved);
-    if (btn) btn.addEventListener('click', toggle);
+    if (btn) {
+        btn.addEventListener('click', toggleFromNav);
+    }
+    try {
+        var mq = window.matchMedia('(prefers-color-scheme: light)');
+        var onChange = function() {
+            var pref = 'dark';
+            try { pref = localStorage.getItem('mjhub-theme-pref') || ''; } catch (e) {}
+            if (pref === 'system') window.applyMjTheme(window.resolveSystemTheme(), 'system');
+        };
+        if (mq.addEventListener) mq.addEventListener('change', onChange);
+        else if (mq.addListener) mq.addListener(onChange);
+    } catch (e) {}
 }
 
 function initDropdowns() {
@@ -3169,7 +3383,9 @@ window.openProfileSubview = function(name) {
         language: 'profileLanguageView',
         notifications: 'profileNotificationsView',
         security: 'profileSecurityView',
-        apikeys: 'profileApiKeysView'
+        apikeys: 'profileApiKeysView',
+        help: 'profileHelpView',
+        livechat: 'profileLiveChatView'
     };
     const id = map[name];
     const el = id ? document.getElementById(id) : null;
@@ -3177,10 +3393,8 @@ window.openProfileSubview = function(name) {
     if (name === 'appearance') syncThemeChoiceUI();
     if (name === 'language') syncLanguageUI();
     if (name === 'notifications') loadNotifPrefs();
-    if (name === 'apikeys') {
-        const cid = (document.getElementById('myCustomerId') || {}).value || localStorage.getItem('mjhub_customer_id') || '—';
-        const box = document.getElementById('apiKeyDisplay');
-        if (box) box.textContent = cid;
+    if (name === 'livechat') {
+        initLiveChatIfNeeded();
     }
 };
 window.closeProfileSubview = function() {
@@ -3191,28 +3405,15 @@ window.closeProfileSubview = function() {
     if (main) main.style.display = '';
 };
 window.setAppTheme = function(mode) {
-    let resolved = mode;
-    if (mode === 'system') {
-        try {
-            resolved = window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
-        } catch (e) { resolved = 'dark'; }
+    if (typeof window.applyMjTheme === 'function') {
+        var pref = mode || 'dark';
+        var resolved = pref === 'system' ? (typeof window.resolveSystemTheme === 'function' ? window.resolveSystemTheme() : 'dark') : (pref === 'light' ? 'light' : 'dark');
+        window.applyMjTheme(resolved, pref);
+        return;
     }
-    document.documentElement.setAttribute('data-theme', resolved === 'light' ? 'light' : 'dark');
-    try {
-        localStorage.setItem('mjhub-theme', resolved === 'light' ? 'light' : 'dark');
-        localStorage.setItem('mjhub-theme-pref', mode);
-    } catch (e) {}
-    const btn = document.getElementById('themeToggleBtn');
-    if (btn) btn.textContent = resolved === 'dark' ? '🌙' : '☀️';
-    const ind = document.getElementById('themeIndicatorText');
-    if (ind) ind.textContent = resolved === 'dark' ? 'Dark' : 'Light';
-    const logoSrc = resolved === 'light'
-        ? 'https://atczodlljmlayvldxfmv.supabase.co/storage/v1/object/public/avatars/light%20background%20logo'
-        : 'https://atczodlljmlayvldxfmv.supabase.co/storage/v1/object/public/avatars/dark%20background%20log';
-    ['navBrandLogo','sidebarBrandLogo','welcomeModalLogo'].forEach(id => {
-        const n = document.getElementById(id);
-        if (n) n.src = logoSrc;
-    });
+    var resolved = mode === 'system' ? (window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark') : (mode === 'light' ? 'light' : 'dark');
+    document.documentElement.setAttribute('data-theme', resolved);
+    try { localStorage.setItem('mjhub-theme', resolved); localStorage.setItem('mjhub-theme-pref', mode); } catch (e) {}
     syncThemeChoiceUI();
 };
 function syncThemeChoiceUI() {
@@ -3226,8 +3427,72 @@ window.setAppLanguage = function(code) {
     try { localStorage.setItem('mjhub_lang', code); } catch (e) {}
     document.documentElement.setAttribute('lang', code === 'pcm' ? 'en' : code);
     syncLanguageUI();
-    if (typeof showToast === 'function') showToast('Language preference saved');
-    else if (typeof toast === 'function') toast('Language preference saved');
+    var msg = (code === 'en')
+        ? 'Language set to English'
+        : 'Preference saved. Full in-app translation for this language is coming soon — UI remains English for now.';
+    if (typeof showToast === 'function') showToast(msg);
+    else if (typeof toast === 'function') toast(msg);
+};
+window.toggleHelpFaq = function(btn) {
+    var item = btn && btn.closest ? btn.closest('.help-faq-item') : null;
+    if (!item) return;
+    var open = item.classList.contains('open');
+    document.querySelectorAll('.help-faq-item.open').forEach(function(el) { el.classList.remove('open'); });
+    if (!open) item.classList.add('open');
+};
+window._liveChatBooted = false;
+window.initLiveChatIfNeeded = function() {
+    var box = document.getElementById('liveChatMessages');
+    if (!box) return;
+    if (window._liveChatBooted && box.children.length) return;
+    window._liveChatBooted = true;
+    box.innerHTML = '';
+    function addBot(html) {
+        var d = document.createElement('div');
+        d.className = 'live-chat-bubble bot';
+        d.innerHTML = html;
+        box.appendChild(d);
+        box.scrollTop = box.scrollHeight;
+    }
+    addBot('Hi there 👋 Welcome to <strong>MJ Hub</strong> support. I can help with orders, payments, refunds, and account issues.');
+    setTimeout(function() {
+        addBot('To help our team assist you faster, please reply with:<br><br>1. Your <strong>Customer ID</strong> (from Profile)<br>2. What you need help with<br>3. Order ID or payment reference (if any)<br>4. Screenshots description if relevant');
+    }, 600);
+};
+window.sendLiveChatMessage = function(e) {
+    if (e && e.preventDefault) e.preventDefault();
+    var input = document.getElementById('liveChatInput');
+    var box = document.getElementById('liveChatMessages');
+    if (!input || !box) return false;
+    var text = (input.value || '').trim();
+    if (!text) return false;
+    var u = document.createElement('div');
+    u.className = 'live-chat-bubble user';
+    u.textContent = text;
+    box.appendChild(u);
+    input.value = '';
+    box.scrollTop = box.scrollHeight;
+    // Persist locally for admin handoff later
+    try {
+        var key = 'mjhub_support_thread';
+        var arr = JSON.parse(localStorage.getItem(key) || '[]');
+        arr.push({ role: 'user', text: text, at: Date.now() });
+        localStorage.setItem(key, JSON.stringify(arr.slice(-50)));
+    } catch (err) {}
+    setTimeout(function() {
+        var b = document.createElement('div');
+        b.className = 'live-chat-bubble bot';
+        b.innerHTML = 'Thanks — your message is queued. You have been <strong>transferred to a human agent</strong>. An admin will respond from the MJ Hub support desk as soon as possible. Keep this chat open or check back later.<br><br>For urgent cases, also message our <a href="https://whatsapp.com/channel/0029VbBdXJ2KQuJSJcqcck3o" target="_blank" rel="noopener" style="color:var(--primary);">WhatsApp channel</a> with your Customer ID.';
+        box.appendChild(b);
+        box.scrollTop = box.scrollHeight;
+        try {
+            var key = 'mjhub_support_thread';
+            var arr = JSON.parse(localStorage.getItem(key) || '[]');
+            arr.push({ role: 'bot', text: 'transferred_to_human', at: Date.now() });
+            localStorage.setItem(key, JSON.stringify(arr.slice(-50)));
+        } catch (err) {}
+    }, 700);
+    return false;
 };
 function syncLanguageUI() {
     let code = 'en';
