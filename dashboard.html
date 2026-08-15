@@ -618,6 +618,70 @@
       el.classList.toggle('selected', el.getAttribute('data-lang') === lang);
     });
 
+    
+  // Bulk translate common UI labels (logs, SMS, deposit, orders, nav)
+  function bulkTranslate(lang) {
+    var map = {
+      en: {},
+      yo: {
+        'Dashboard': 'Dasibodu', 'Settings': 'Ètò', 'Cart': 'Àpótí', 'My Orders': 'Àwọn òrder mi',
+        'Deposit': 'Fi owó sí', 'Logout': 'Jáde', 'Home': 'Ilé', 'History': 'Ìtàn', 'Profile': 'Profaili',
+        'Fund Account': 'Fi owó sí àkántì', 'NGN Wallet': 'Wallet NGN', 'USD Wallet': 'Wallet USD',
+        'Total Orders': 'Àpapọ̀ òrder', 'Orders': 'Àwọn òrder', 'SMS': 'SMS', 'Logs': 'Logs',
+        'Boosters': 'Boosters', 'Search': 'Wá', 'Continue': 'Tẹ̀síwájú', 'Cancel': 'Fagilé',
+        'Save': 'Fi pamọ́', 'Confirm': 'Jẹ́rìí', 'Amount': 'Iye', 'Status': 'Ipò',
+        'Pending': 'Ń dúró', 'Success': 'Aṣeyọrí', 'Failed': 'Kùnà', 'Copy': 'Dàákọ',
+        'Wallet': 'Wallet', 'Support': 'Support', 'Help': 'Ìrànlọ́wọ́'
+      },
+      ig: {
+        'Dashboard': 'Dashboard', 'Settings': 'Ntọala', 'Cart': 'Cart', 'My Orders': 'Iwu m',
+        'Deposit': 'Tinye ego', 'Logout': 'Pụọ', 'Home': 'Ụlọ', 'History': 'Akụkọ', 'Profile': 'Profailụ',
+        'Fund Account': 'Tinye ego n\'akaụntụ', 'NGN Wallet': 'Akpa NGN', 'USD Wallet': 'Akpa USD',
+        'Total Orders': 'Ngụkọta iwu', 'Orders': 'Iwu', 'Search': 'Chọọ', 'Continue': 'Gaa n\'ihu',
+        'Cancel': 'Kagbuo', 'Save': 'Chekwaa', 'Confirm': 'Kwenye', 'Amount': 'Ego', 'Status': 'Ọnọdụ',
+        'Pending': 'Na-eche', 'Success': 'Ihe ịga nke ọma', 'Failed': 'Dara ada', 'Copy': 'Detuo',
+        'Wallet': 'Akpa', 'Support': 'Support', 'Help': 'Enyemaka'
+      },
+      ha: {
+        'Dashboard': 'Dashboard', 'Settings': 'Saituna', 'Cart': 'Kati', 'My Orders': 'Oda na',
+        'Deposit': 'Saka kuɗi', 'Logout': 'Fita', 'Home': 'Gida', 'History': 'Tarihi', 'Profile': 'Bayani',
+        'Fund Account': 'Saka kuɗi a asusu', 'NGN Wallet': 'Wallet NGN', 'USD Wallet': 'Wallet USD',
+        'Total Orders': 'Jimlar oda', 'Orders': 'Oda', 'Search': 'Nema', 'Continue': 'Ci gaba',
+        'Cancel': 'Soke', 'Save': 'Ajiye', 'Confirm': 'Tabbatar', 'Amount': 'Adadi', 'Status': 'Matsayi',
+        'Pending': 'Ana jira', 'Success': 'Nasara', 'Failed': 'Ya gaza', 'Copy': 'Kwafi',
+        'Wallet': 'Wallet', 'Support': 'Support', 'Help': 'Taimako'
+      },
+      pcm: {
+        'Dashboard': 'Dashboard', 'Settings': 'Settings', 'Cart': 'Cart', 'My Orders': 'My Orders',
+        'Deposit': 'Deposit', 'Logout': 'Log out', 'Home': 'Home', 'History': 'History', 'Profile': 'Profile',
+        'Fund Account': 'Fund Account', 'Search': 'Search', 'Continue': 'Continue', 'Cancel': 'Cancel',
+        'Save': 'Save', 'Confirm': 'Confirm', 'Amount': 'Amount', 'Status': 'Status',
+        'Pending': 'E dey wait', 'Success': 'E successful', 'Failed': 'E fail', 'Copy': 'Copy',
+        'Help': 'Help', 'Support': 'Support'
+      },
+      fr: {
+        'Dashboard': 'Tableau de bord', 'Settings': 'Paramètres', 'Cart': 'Panier', 'My Orders': 'Mes commandes',
+        'Deposit': 'Dépôt', 'Logout': 'Déconnexion', 'Home': 'Accueil', 'History': 'Historique', 'Profile': 'Profil',
+        'Fund Account': 'Alimenter le compte', 'NGN Wallet': 'Portefeuille NGN', 'USD Wallet': 'Portefeuille USD',
+        'Total Orders': 'Total des commandes', 'Orders': 'Commandes', 'Search': 'Rechercher', 'Continue': 'Continuer',
+        'Cancel': 'Annuler', 'Save': 'Enregistrer', 'Confirm': 'Confirmer', 'Amount': 'Montant', 'Status': 'Statut',
+        'Pending': 'En attente', 'Success': 'Réussi', 'Failed': 'Échoué', 'Copy': 'Copier',
+        'Wallet': 'Portefeuille', 'Support': 'Support', 'Help': 'Aide'
+      }
+    };
+    if (lang === 'en' || !map[lang]) return;
+    var dict = map[lang];
+    var nodes = document.querySelectorAll('a, button, label, h1, h2, h3, h4, span, p, .sleek-label, .nav-item, .sidebar-link span, .hero-btn, th, .panel-title, .metric-label');
+    nodes.forEach(function(el) {
+      if (el.closest && el.closest('[data-i18n]')) return;
+      if (el.children && el.children.length > 1) return;
+      var raw = (el.childNodes.length === 1 && el.childNodes[0].nodeType === 3) ? el.textContent.trim() : null;
+      if (!raw) return;
+      if (dict[raw]) el.textContent = dict[raw];
+    });
+  }
+
+    try { bulkTranslate(lang); } catch (e) {}
     if (typeof global.syncLanguageUI === 'function') {
       try { global.syncLanguageUI(); } catch (e) {}
     }
@@ -1312,6 +1376,76 @@ body::before {
   flex: 1; border-radius: 12px; border: 1px solid var(--border-color, rgba(255,255,255,0.1));
   background: var(--bg, #06080f); color: var(--text); padding: 11px 12px; font-size: 14px; font-family: inherit;
 }
+
+/* ===== Floating in-page support chat (no redirect) ===== */
+.mj-support-panel {
+  display: none; position: fixed; z-index: 10050;
+  right: 16px; bottom: 90px; width: min(400px, calc(100vw - 24px));
+  height: min(560px, calc(100vh - 120px));
+  background: var(--card); border: 1px solid var(--border);
+  border-radius: 20px; box-shadow: 0 24px 64px rgba(0,0,0,.45);
+  flex-direction: column; overflow: hidden;
+}
+.mj-support-panel.open { display: flex; }
+.mj-support-panel-head {
+  padding: 14px 16px; border-bottom: 1px solid var(--border);
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  background: linear-gradient(135deg, rgba(91,138,245,.18), rgba(124,92,252,.12));
+}
+.mj-support-panel-head h3 { font-size: 15px; font-weight: 800; margin: 0; }
+.mj-support-panel-head p { font-size: 11px; color: var(--muted); margin: 2px 0 0; }
+.mj-support-panel-close {
+  width: 32px; height: 32px; border-radius: 10px; border: 1px solid var(--border);
+  background: var(--bg); color: var(--text); cursor: pointer; font-size: 16px;
+}
+.mj-support-tabs { display: flex; gap: 6px; padding: 10px 12px 0; }
+.mj-support-tab {
+  flex: 1; padding: 8px; border-radius: 10px; border: 1px solid var(--border);
+  background: transparent; color: var(--muted); font-size: 12px; font-weight: 700;
+  cursor: pointer; font-family: inherit;
+}
+.mj-support-tab.active { background: rgba(91,138,245,.15); color: var(--primary); border-color: rgba(91,138,245,.35); }
+.mj-support-body { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.mj-support-ticket-list { flex: 1; overflow-y: auto; padding: 10px 12px; }
+.mj-support-ticket-item {
+  padding: 12px; border: 1px solid var(--border); border-radius: 12px;
+  margin-bottom: 8px; cursor: pointer; background: var(--bg);
+}
+.mj-support-ticket-item:hover { border-color: var(--primary); }
+.mj-support-ticket-item .t-title { font-size: 13px; font-weight: 700; }
+.mj-support-ticket-item .t-meta { font-size: 11px; color: var(--muted); margin-top: 4px; }
+.mj-support-chat-view { flex: 1; min-height: 0; display: none; flex-direction: column; }
+.mj-support-chat-view.active { display: flex; }
+.mj-support-messages { flex: 1; overflow-y: auto; padding: 12px; display: flex; flex-direction: column; gap: 8px; background: rgba(0,0,0,.15); }
+.mj-support-msg {
+  max-width: 88%; padding: 10px 12px; border-radius: 14px; font-size: 13px; line-height: 1.45;
+  white-space: pre-wrap; word-break: break-word;
+}
+.mj-support-msg.bot { align-self: flex-start; background: var(--card2, #151d30); }
+.mj-support-msg.user { align-self: flex-end; background: var(--primary); color: #fff; }
+.mj-support-msg.sys { align-self: center; background: transparent; color: var(--muted); font-size: 12px; text-align: center; max-width: 95%; }
+.mj-support-actions { padding: 8px 12px; display: flex; flex-wrap: wrap; gap: 6px; border-top: 1px solid var(--border); }
+.mj-support-actions button {
+  padding: 8px 12px; border-radius: 999px; border: 1px solid var(--border);
+  background: var(--bg); color: var(--text); font-size: 12px; font-weight: 700;
+  cursor: pointer; font-family: inherit;
+}
+.mj-support-actions button.primary { background: var(--primary); color: #fff; border-color: transparent; }
+.mj-support-compose {
+  display: flex; gap: 8px; padding: 10px 12px; border-top: 1px solid var(--border);
+}
+.mj-support-compose input {
+  flex: 1; padding: 10px 12px; border-radius: 12px; border: 1px solid var(--border);
+  background: var(--bg); color: var(--text); font: inherit;
+}
+.mj-support-compose button {
+  padding: 10px 14px; border-radius: 12px; border: none; background: var(--primary);
+  color: #fff; font-weight: 700; cursor: pointer; font-family: inherit;
+}
+@media (max-width: 480px) {
+  .mj-support-panel { right: 8px; left: 8px; width: auto; bottom: 80px; height: min(70vh, 560px); }
+}
+
 .live-chat-input-row button {
   width: 44px; height: 44px; border-radius: 12px; border: none; cursor: pointer;
   background: var(--primary); color: #fff; font-size: 15px;
@@ -2273,7 +2407,7 @@ body::before {
 
             <div class="profile-section-label" style="margin-top:18px;">Contact Support</div>
             <div class="profile-menu-group">
-                <div class="profile-menu-item" onclick="openProfileSubview('livechat')">
+                <div class="profile-menu-item" onclick="openMjSupportPanel()">
                     <div class="profile-menu-left">
                         <div class="profile-menu-icon icon-blue"><i class="fa-solid fa-comments"></i></div>
                         <div class="profile-menu-info">
@@ -2721,6 +2855,43 @@ body::before {
     <div class="np-body" id="npBody"></div>
     <div class="np-actions">
       <button type="button" class="np-ok" id="npOkBtn" onclick="dismissNotifPopup()">Got it</button>
+    </div>
+  </div>
+</div>
+
+
+<!-- In-page support chat panel (stays on current page) -->
+<div id="mjSupportPanel" class="mj-support-panel" aria-hidden="true">
+  <div class="mj-support-panel-head">
+    <div>
+      <h3>MJ Hub Support</h3>
+      <p id="mjSupportStatus">We are here to help</p>
+    </div>
+    <button type="button" class="mj-support-panel-close" onclick="closeMjSupportPanel()" aria-label="Close">×</button>
+  </div>
+  <div class="mj-support-tabs">
+    <button type="button" class="mj-support-tab active" id="mjTabNew" onclick="mjSupportShowTab('new')">New chat</button>
+    <button type="button" class="mj-support-tab" id="mjTabPrev" onclick="mjSupportShowTab('prev')">Previous</button>
+  </div>
+  <div class="mj-support-body">
+    <div id="mjSupportHome" class="mj-support-ticket-list">
+      <p style="font-size:13px;color:var(--muted);margin-bottom:12px;">Start a new conversation or open a previous one.</p>
+      <button type="button" class="mj-support-actions" style="width:100%;display:block;padding:0;border:none;background:none;" onclick="mjSupportStartNew()">
+        <span style="display:block;width:100%;padding:14px;border-radius:14px;background:var(--primary);color:#fff;font-weight:800;font-size:13px;text-align:center;">Start new complaint</span>
+      </button>
+      <div id="mjPrevTicketList" style="margin-top:12px;"></div>
+    </div>
+    <div id="mjSupportChat" class="mj-support-chat-view">
+      <div style="padding:8px 12px;font-size:12px;">
+        <button type="button" onclick="mjSupportShowTab('home')" style="background:none;border:none;color:var(--primary);font-weight:700;cursor:pointer;font-family:inherit;padding:0;">← Back</button>
+        <span id="mjChatTicketLabel" style="color:var(--muted);margin-left:8px;"></span>
+      </div>
+      <div class="mj-support-messages" id="mjSupportMessages"></div>
+      <div class="mj-support-actions" id="mjSupportQuickActions"></div>
+      <form class="mj-support-compose" onsubmit="return mjSupportSend(event)">
+        <input type="text" id="mjSupportInput" placeholder="Type your message…" maxlength="1000" autocomplete="off">
+        <button type="submit">Send</button>
+      </form>
     </div>
   </div>
 </div>
@@ -4122,13 +4293,288 @@ window.appendLiveChatBubble = function(role, text, isHtml) {
   box.scrollTop = box.scrollHeight;
 };
 
+
+/* ===== In-page MJ Support Panel (standalone, connected to Supabase) ===== */
+window._mjSup = {
+  ticketId: null,
+  channel: null,
+  step: 'bot', // bot | human
+  human: false,
+  faqAsked: false
+};
+
+window.openMjSupportPanel = function() {
+  var p = document.getElementById('mjSupportPanel');
+  if (!p) return;
+  p.classList.add('open');
+  p.setAttribute('aria-hidden', 'false');
+  mjSupportShowTab('home');
+  mjSupportLoadPrevious();
+};
+
+window.closeMjSupportPanel = function() {
+  var p = document.getElementById('mjSupportPanel');
+  if (!p) return;
+  p.classList.remove('open');
+  p.setAttribute('aria-hidden', 'true');
+};
+
+window.mjSupportShowTab = function(which) {
+  var home = document.getElementById('mjSupportHome');
+  var chat = document.getElementById('mjSupportChat');
+  var tNew = document.getElementById('mjTabNew');
+  var tPrev = document.getElementById('mjTabPrev');
+  if (which === 'prev' || which === 'home') {
+    if (home) home.style.display = '';
+    if (chat) { chat.classList.remove('active'); }
+    if (which === 'prev') {
+      if (tPrev) tPrev.classList.add('active');
+      if (tNew) tNew.classList.remove('active');
+      mjSupportLoadPrevious();
+    } else {
+      if (tNew) tNew.classList.add('active');
+      if (tPrev) tPrev.classList.remove('active');
+    }
+  }
+  if (which === 'chat') {
+    if (home) home.style.display = 'none';
+    if (chat) chat.classList.add('active');
+  }
+};
+
+window.mjSupportAppend = function(role, text) {
+  var box = document.getElementById('mjSupportMessages');
+  if (!box) return;
+  var d = document.createElement('div');
+  d.className = 'mj-support-msg ' + (role === 'user' ? 'user' : (role === 'sys' ? 'sys' : 'bot'));
+  d.textContent = text;
+  box.appendChild(d);
+  box.scrollTop = box.scrollHeight;
+};
+
+window.mjSupportSetActions = function(buttons) {
+  var row = document.getElementById('mjSupportQuickActions');
+  if (!row) return;
+  row.innerHTML = '';
+  (buttons || []).forEach(function(b) {
+    var btn = document.createElement('button');
+    btn.type = 'button';
+    btn.textContent = b.label;
+    if (b.primary) btn.className = 'primary';
+    btn.onclick = b.onClick;
+    row.appendChild(btn);
+  });
+};
+
+window.mjSupportFaqMatch = function(text) {
+  var q = String(text || '').toLowerCase();
+  var FAQ = [
+    { keys: ['purchase', 'buy', 'order', 'checkout', 'how to buy'], a: 'To order: fund your wallet, choose a product, then checkout. Delivery appears under Orders / History after payment confirms.' },
+    { keys: ['refund', 'money back'], a: 'Refunds follow our Refund Policy. Report with proof in the inspection window. Approved refunds go to your in-app wallet.' },
+    { keys: ['deposit', 'fund', 'payment', 'pay', 'pocketfi', 'wallet'], a: 'Use Fund / Deposit on the app. Balance updates after confirmation. If delayed, share your payment reference when you speak to a human.' },
+    { keys: ['sms', 'otp', 'number', 'verification'], a: 'Pick an SMS service, pay from your wallet, then watch for the code in your SMS history. Always follow each platform’s rules.' },
+    { keys: ['boost', 'follower', 'like', 'view'], a: 'Choose a booster package, enter the required link/username, and pay. Track status under booster orders.' },
+    { keys: ['password', 'login', 'sign in'], a: 'Use Forgot password on sign-in, or Profile → Security to change password. Never share your password in chat.' },
+    { keys: ['customer id', 'my id'], a: 'Your Customer ID is on the Profile page. Copy it and include it in support messages.' }
+  ];
+  for (var i = 0; i < FAQ.length; i++) {
+    for (var k = 0; k < FAQ[i].keys.length; k++) {
+      if (q.indexOf(FAQ[i].keys[k]) !== -1) return FAQ[i].a;
+    }
+  }
+  return null;
+};
+
+window.mjSupportStartNew = async function() {
+  window._mjSup = { ticketId: null, channel: null, step: 'bot', human: false, faqAsked: false };
+  var box = document.getElementById('mjSupportMessages');
+  if (box) box.innerHTML = '';
+  mjSupportShowTab('chat');
+  document.getElementById('mjChatTicketLabel').textContent = 'New conversation';
+  document.getElementById('mjSupportStatus').textContent = 'Assistant';
+  mjSupportAppend('bot', 'Hi — welcome to MJ Hub Support.');
+  mjSupportAppend('bot', 'Briefly describe what you need help with (orders, deposit, SMS, account, etc.).');
+  mjSupportSetActions([]);
+};
+
+window.mjSupportLoadPrevious = async function() {
+  var list = document.getElementById('mjPrevTicketList');
+  if (!list) return;
+  list.innerHTML = '<p style="font-size:12px;color:var(--muted);">Loading…</p>';
+  if (!supabaseClient) {
+    list.innerHTML = '<p style="font-size:12px;color:var(--muted);">Sign in to see previous chats.</p>';
+    return;
+  }
+  try {
+    var sess = await supabaseClient.auth.getSession();
+    var user = sess && sess.data && sess.data.session && sess.data.session.user;
+    if (!user) {
+      list.innerHTML = '<p style="font-size:12px;color:var(--muted);">Sign in to see previous chats.</p>';
+      return;
+    }
+    var { data, error } = await supabaseClient
+      .from('support_tickets')
+      .select('id, subject, status, last_message_at, created_at')
+      .eq('user_id', user.id)
+      .order('last_message_at', { ascending: false })
+      .limit(20);
+    if (error) {
+      list.innerHTML = '<p style="font-size:12px;color:var(--muted);">Could not load history.</p>';
+      return;
+    }
+    if (!data || !data.length) {
+      list.innerHTML = '<p style="font-size:12px;color:var(--muted);">No previous conversations yet.</p>';
+      return;
+    }
+    list.innerHTML = data.map(function(t) {
+      var when = t.last_message_at || t.created_at || '';
+      try { when = new Date(when).toLocaleString(); } catch (e) {}
+      return '<div class="mj-support-ticket-item" onclick="mjSupportOpenTicket(\'' + t.id + '\')">' +
+        '<div class="t-title">' + (t.subject || 'Support request') + '</div>' +
+        '<div class="t-meta">' + (t.status || '') + ' · ' + when + '</div></div>';
+    }).join('');
+  } catch (e) {
+    list.innerHTML = '<p style="font-size:12px;color:var(--muted);">Could not load history.</p>';
+  }
+};
+
+window.mjSupportOpenTicket = async function(id) {
+  window._mjSup.ticketId = id;
+  window._mjSup.human = true;
+  window._mjSup.step = 'human';
+  var box = document.getElementById('mjSupportMessages');
+  if (box) box.innerHTML = '';
+  mjSupportShowTab('chat');
+  document.getElementById('mjChatTicketLabel').textContent = 'Previous chat';
+  document.getElementById('mjSupportStatus').textContent = 'Connected';
+  mjSupportSetActions([]);
+  if (!supabaseClient) return;
+  var { data } = await supabaseClient.from('support_messages').select('*').eq('ticket_id', id).order('created_at', { ascending: true });
+  (data || []).forEach(function(m) {
+    if (m.sender_type === 'user') mjSupportAppend('user', m.body);
+    else if (m.sender_type === 'admin') mjSupportAppend('bot', m.body);
+    else mjSupportAppend('sys', m.body);
+  });
+  mjSupportSubscribe(id);
+};
+
+window.mjSupportEnsureTicket = async function() {
+  if (window._mjSup.ticketId) return window._mjSup.ticketId;
+  if (!supabaseClient) return null;
+  var sess = await supabaseClient.auth.getSession();
+  var user = sess && sess.data && sess.data.session && sess.data.session.user;
+  if (!user) return null;
+  var cid = (document.getElementById('myCustomerId') || {}).value || '';
+  var name = (document.getElementById('profileHeaderName') || {}).textContent || '';
+  var email = (document.getElementById('profileHeaderEmail') || {}).textContent || user.email || '';
+  if (name === 'Loading...') name = '';
+  var { data, error } = await supabaseClient.from('support_tickets').insert({
+    user_id: user.id,
+    customer_id: cid || null,
+    user_email: email,
+    user_name: name || null,
+    subject: 'Support request',
+    status: 'open'
+  }).select('id').single();
+  if (error || !data) return null;
+  window._mjSup.ticketId = data.id;
+  return data.id;
+};
+
+window.mjSupportSubscribe = function(ticketId) {
+  if (!supabaseClient || !ticketId) return;
+  try {
+    if (window._mjSup.channel) supabaseClient.removeChannel(window._mjSup.channel);
+    window._mjSup.channel = supabaseClient.channel('mj-sup-' + ticketId)
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'support_messages', filter: 'ticket_id=eq.' + ticketId }, function(payload) {
+        var m = payload.new;
+        if (m && m.sender_type === 'admin') mjSupportAppend('bot', m.body);
+      })
+      .subscribe();
+  } catch (e) {}
+};
+
+window.mjSupportConnectHuman = async function() {
+  var tid = await mjSupportEnsureTicket();
+  if (!tid) {
+    mjSupportAppend('bot', 'Please sign in so we can connect you with the team.');
+    return;
+  }
+  window._mjSup.human = true;
+  window._mjSup.step = 'human';
+  document.getElementById('mjSupportStatus').textContent = 'Waiting for support';
+  mjSupportSubscribe(tid);
+  mjSupportSetActions([]);
+  try {
+    var sess = await supabaseClient.auth.getSession();
+    var user = sess && sess.data && sess.data.session && sess.data.session.user;
+    await supabaseClient.from('support_messages').insert({
+      ticket_id: tid,
+      sender_type: 'system',
+      sender_id: user && user.id,
+      body: 'Customer requested a human agent.'
+    });
+  } catch (e) {}
+  mjSupportAppend('bot', 'You are connected to live support. A team member will reply here. Please share your Customer ID and any order or payment reference.');
+};
+
+window.mjSupportSend = async function(e) {
+  if (e && e.preventDefault) e.preventDefault();
+  var input = document.getElementById('mjSupportInput');
+  if (!input) return false;
+  var text = (input.value || '').trim();
+  if (!text) return false;
+  input.value = '';
+  mjSupportAppend('user', text);
+
+  // Already with human → save only
+  if (window._mjSup.human) {
+    var tid = await mjSupportEnsureTicket();
+    if (!tid || !supabaseClient) {
+      mjSupportAppend('bot', 'Could not send. Please try again or use WhatsApp from the Help menu.');
+      return false;
+    }
+    var sess = await supabaseClient.auth.getSession();
+    var user = sess && sess.data && sess.data.session && sess.data.session.user;
+    var { error } = await supabaseClient.from('support_messages').insert({
+      ticket_id: tid, sender_type: 'user', sender_id: user && user.id, body: text
+    });
+    if (error) mjSupportAppend('bot', 'Message failed. Please try again.');
+    return false;
+  }
+
+  // Bot phase: try FAQ
+  var ans = mjSupportFaqMatch(text);
+  if (ans) {
+    window._mjSup.faqAsked = true;
+    mjSupportAppend('bot', ans);
+    mjSupportAppend('bot', 'Did this resolve your issue?');
+    mjSupportSetActions([
+      { label: 'Yes, thanks', onClick: function() {
+          mjSupportAppend('bot', 'Glad that helped. You can close this chat or start a new one anytime.');
+          mjSupportSetActions([{ label: 'New chat', primary: true, onClick: function() { mjSupportStartNew(); } }]);
+        }},
+      { label: 'Speak to a human', primary: true, onClick: function() { mjSupportConnectHuman(); } }
+    ]);
+    return false;
+  }
+
+  // No FAQ match
+  mjSupportAppend('bot', 'I could not fully resolve that with our guides.');
+  mjSupportSetActions([
+    { label: 'Speak to a human', primary: true, onClick: function() { mjSupportConnectHuman(); } },
+    { label: 'Try another question', onClick: function() {
+        mjSupportAppend('bot', 'Sure — tell me more about the issue.');
+        mjSupportSetActions([]);
+      }}
+  ]);
+  return false;
+};
+
 window.openSupportLiveChatFromWidget = function() {
   var popup = document.getElementById('support-popup');
   if (popup) popup.classList.remove('active');
-  if (typeof switchSection === 'function') switchSection('profile');
-  setTimeout(function() {
-    if (typeof openProfileSubview === 'function') openProfileSubview('livechat');
-  }, 120);
+  openMjSupportPanel();
 };
 
 window.openSupportHelpFromWidget = function() {

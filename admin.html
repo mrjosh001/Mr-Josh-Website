@@ -497,6 +497,12 @@
   </style>
 </head>
 <body>
+
+<div id="supportTopBell" onclick="location.href='admin-support.html'" title="Open support tickets" style="display:none;position:fixed;top:16px;right:16px;z-index:5000;width:44px;height:44px;border-radius:14px;background:#0f1524;border:1px solid rgba(148,163,184,.2);align-items:center;justify-content:center;cursor:pointer;box-shadow:0 8px 24px rgba(0,0,0,.35);">
+  <i class="fas fa-bell" style="color:#f87171;font-size:16px;"></i>
+  <span id="supportTopBellCount" style="position:absolute;top:-4px;right:-4px;background:#ef4444;color:#fff;font-size:10px;font-weight:800;min-width:18px;height:18px;border-radius:999px;display:flex;align-items:center;justify-content:center;padding:0 4px;">0</span>
+</div>
+
   <div id="toastStack" class="toast-stack"></div>
   <div id="loginScreen" class="login-wrap">
     <div class="login-card">
@@ -537,7 +543,7 @@
         <button class="nav-item" data-tab="boosters" onclick="switchTab('boosters')"><i class="fas fa-bolt"></i> MJ Boosters (Owlet)</button>
         <button class="nav-item" data-tab="booster-orders" onclick="switchTab('booster-orders')"><i class="fas fa-receipt"></i> Booster Orders</button>
         <button class="nav-item" data-tab="notify" onclick="switchTab('notify')"><i class="fas fa-bullhorn"></i> Notifications</button>
-        <a class="nav-item" href="admin-support.html" style="text-decoration:none;"><i class="fas fa-headset"></i> Support Desk</a>
+        <a class="nav-item" href="admin-support.html" id="navSupportDesk" style="text-decoration:none;position:relative;"><i class="fas fa-headset"></i> Support Desk <span id="supportNavBadge" style="display:none;margin-left:6px;background:#ef4444;color:#fff;font-size:10px;font-weight:800;padding:2px 7px;border-radius:999px;min-width:18px;text-align:center;">0</span></a>
         <button class="nav-item" data-tab="settings" onclick="switchTab('settings')"><i class="fas fa-cog"></i> Settings</button>
       </nav>
       <div class="sidebar-footer">
@@ -3823,5 +3829,51 @@ async function loadBoosterOrders() {
     </div>
   </div>
 </div>
+
+<script>
+/* Support desk unread indicator */
+(function() {
+  async function pollSupportBadge() {
+    try {
+      if (typeof sb === 'undefined' || !sb) return;
+      const { data: { session } } = await sb.auth.getSession();
+      if (!session) return;
+      const { count, error } = await sb
+        .from('support_tickets')
+        .select('id', { count: 'exact', head: true })
+        .eq('status', 'open');
+      if (error) return;
+      const n = count || 0;
+      const badge = document.getElementById('supportNavBadge');
+      const bell = document.getElementById('supportTopBell');
+      if (badge) {
+        if (n > 0) {
+          badge.style.display = 'inline-block';
+          badge.textContent = n > 99 ? '99+' : String(n);
+        } else {
+          badge.style.display = 'none';
+        }
+      }
+      if (bell) {
+        bell.style.display = n > 0 ? 'inline-flex' : 'none';
+        const bc = document.getElementById('supportTopBellCount');
+        if (bc) bc.textContent = n > 99 ? '99+' : String(n);
+      }
+      document.title = n > 0 ? '(' + n + ') MJ HUB Admin' : document.title.replace(/^\(\d+\+?\)\s*/, '');
+    } catch (e) {}
+  }
+  setInterval(pollSupportBadge, 20000);
+  setTimeout(pollSupportBadge, 2500);
+  try {
+    if (typeof sb !== 'undefined' && sb) {
+      sb.channel('admin-support-badge')
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'support_tickets' }, pollSupportBadge)
+        .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'support_messages' }, pollSupportBadge)
+        .subscribe();
+    }
+  } catch (e) {}
+})();
+</script>
+
 </body>
 </html>

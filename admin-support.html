@@ -115,8 +115,13 @@
             </div>
           </div>
           <div class="thread-messages" id="threadMessages"></div>
+          <div id="quickReplies" style="padding:8px 12px;display:flex;flex-wrap:wrap;gap:6px;border-top:1px solid var(--border);background:var(--card);">
+            <button type="button" class="btn btn-ghost btn-sm" onclick="insertQuick('Thanks for reaching out. We are looking into this now.')">Looking into it</button>
+            <button type="button" class="btn btn-ghost btn-sm" onclick="insertQuick('Please share your Customer ID and order/payment reference.')">Ask for ID</button>
+            <button type="button" class="btn btn-ghost btn-sm" onclick="insertQuick('This has been resolved. Reply here if you need anything else.')">Resolved</button>
+          </div>
           <form class="composer" onsubmit="return sendAdminReply(event)">
-            <textarea id="replyInput" placeholder="Type your reply to the customer…" required></textarea>
+            <textarea id="replyInput" placeholder="Write a clear, professional reply…" required></textarea>
             <button type="submit" class="btn btn-primary btn-sm" style="width:auto;padding:12px 16px;">Send</button>
           </form>
         </div>
@@ -167,6 +172,7 @@
       shell.classList.add('open');
       await loadTickets();
       subscribeRealtime();
+      try { if (window.Notification && Notification.permission === 'default') Notification.requestPermission(); } catch (e) {}
       if (window.matchMedia('(max-width: 860px)').matches) {
         document.getElementById('backToList').style.display = 'inline-flex';
       }
@@ -321,17 +327,31 @@
       ].filter(Boolean).join(' · ');
     }
 
+    function insertQuick(text) {
+      const input = document.getElementById('replyInput');
+      if (input) { input.value = text; input.focus(); }
+    }
     function subscribeRealtime() {
       try {
         if (ticketsChannel) sb.removeChannel(ticketsChannel);
         ticketsChannel = sb.channel('admin-support-tickets')
           .on('postgres_changes', { event: '*', schema: 'public', table: 'support_tickets' }, () => loadTickets())
           .subscribe();
+        // title flash on new activity
+        document.addEventListener('visibilitychange', () => { if (!document.hidden) document.title = 'MJ HUB — Support Desk'; });
         if (messagesChannel) sb.removeChannel(messagesChannel);
         messagesChannel = sb.channel('admin-support-messages')
           .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'support_messages' }, (payload) => {
             if (payload.new && payload.new.ticket_id === activeTicketId) loadMessages(activeTicketId);
             loadTickets();
+            if (payload.new && payload.new.sender_type === 'user') {
+              document.title = '● New message — Support Desk';
+              try {
+                if (window.Notification && Notification.permission === 'granted') {
+                  new Notification('MJ Hub Support', { body: 'New customer message', tag: 'mj-support' });
+                }
+              } catch (e) {}
+            }
           })
           .subscribe();
       } catch (e) { console.warn('realtime', e); }
