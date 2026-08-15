@@ -349,8 +349,8 @@ async function productUpdate(body) {
   if (fields.shared_credential !== undefined) payload.shared_credential = fields.shared_credential || null;
   // Shared products stay listed as in stock
   if (payload.is_shared) {
-    payload.stock_quantity = 99999;
-    payload.is_available = true;
+    // Do not force is_available — admin may hide a shared product from the storefront.
+    if (payload.is_available !== false) payload.stock_quantity = 99999;
   }
   payload.updated_at = new Date().toISOString();
 
@@ -382,7 +382,7 @@ async function productInsert(body) {
     display_description: fields.display_description || fields.description || null,
     price: Number(fields.price) || 0,
     supplier_price: Number(fields.supplier_price) || 0,
-    stock_quantity: fields.is_shared ? 99999 : (Number(fields.stock_quantity) || 0),
+    stock_quantity: (fields.is_shared && fields.is_available !== false) ? 99999 : (Number(fields.stock_quantity) || 0),
     is_available: fields.is_available !== false,
     is_shared: !!fields.is_shared,
     shared_credential: fields.shared_credential || null,
@@ -439,7 +439,30 @@ async function inventorySyncStockCount(productKey) {
     .eq('status', 'available');
 
   const available = count || 0;
-  await supabase.from('products').update({ stock_quantity: available, is_available: available > 0 }).eq('product_key', productKey);
+
+  // Never auto-unhide products. Admin "Hidden" must stick.
+  // Shared listings keep infinite stock display; unique inventory only updates quantity.
+  const { data: prod } = await supabase
+    .from('products')
+    .select('is_shared, is_available')
+    .eq('product_key', productKey)
+    .maybeSingle();
+
+  if (prod?.is_shared) {
+    await supabase.from('products').update({
+      stock_quantity: 99999,
+      updated_at: new Date().toISOString()
+    }).eq('product_key', productKey);
+    return available;
+  }
+
+  const upd = {
+    stock_quantity: available,
+    updated_at: new Date().toISOString()
+  };
+  // Only auto-hide when stock hits 0. Do not force is_available true when stock > 0.
+  if (available === 0) upd.is_available = false;
+  await supabase.from('products').update(upd).eq('product_key', productKey);
   return available;
 }
 
