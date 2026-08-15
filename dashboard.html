@@ -52,6 +52,588 @@
 
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
+/* ===== MJ Hub i18n (inlined — not a serverless function) ===== */
+/**
+ * MJ Hub — client-side i18n
+ * Languages: en, yo (Yoruba), ig (Igbo), ha (Hausa), pcm (Naija Pidgin), fr (French)
+ */
+(function (global) {
+  'use strict';
+
+  var STRINGS = {
+    en: {
+      // Nav / chrome
+      'nav.home': 'Home',
+      'nav.history': 'History',
+      'nav.cart': 'Cart',
+      'nav.profile': 'Profile',
+      'nav.dashboard': 'Dashboard',
+      'nav.settings': 'Settings',
+      'nav.orders': 'My Orders',
+      'nav.deposit': 'Deposit',
+      'nav.logout': 'Logout',
+      // Home
+      'home.fundSub': 'Fund your wallet to get started with logs, SMS verification, and boosters.',
+      'home.fundBtn': 'Fund Account',
+      'home.ngnWallet': 'NGN Wallet',
+      'home.usdWallet': 'USD Wallet',
+      'home.totalOrders': 'Total Orders',
+      // Profile
+      'profile.customerId': 'Customer ID',
+      'profile.customerIdHelp': 'Provide this ID to support for inquiries:',
+      'profile.copy': 'Copy',
+      'profile.account': 'Account',
+      'profile.personalInfo': 'Personal Info',
+      'profile.personalInfoSub': 'Name, email, phone',
+      'profile.security': 'Security',
+      'profile.securitySub': 'Password, account safety',
+      'profile.notifications': 'Notifications',
+      'profile.notificationsSub': 'Alerts & updates',
+      'profile.preferences': 'Preferences',
+      'profile.appearance': 'Appearance',
+      'profile.appearanceSub': 'Theme & display',
+      'profile.language': 'Language',
+      'profile.languageSub': 'App language',
+      'profile.help': 'Help & Support',
+      'profile.helpSub': 'FAQ & contact',
+      'profile.developer': 'Developer',
+      'profile.apiKeys': 'API Keys',
+      'profile.apiKeysSub': 'Build with our API · 60 req/min',
+      'profile.logout': 'Log Out',
+      'profile.personalInfoTitle': 'Personal Info',
+      'profile.fullName': 'Full Name',
+      'profile.email': 'Email',
+      'profile.phone': 'Phone',
+      'profile.address': 'Address',
+      'profile.bio': 'Bio',
+      'profile.save': 'Save Changes',
+      'profile.theme': 'Theme',
+      'profile.themeLight': 'Light',
+      'profile.themeDark': 'Dark',
+      'profile.themeSystem': 'System',
+      'profile.languageTitle': 'Language',
+      'profile.languageNote': 'The full app interface switches to your selected language.',
+      'profile.securityTitle': 'Security',
+      'profile.changePassword': 'Change Password',
+      'profile.changePasswordSub': 'Update your login password',
+      'profile.deleteAccount': 'Delete Account',
+      'profile.deleteAccountSub': 'Permanently remove your account',
+      'profile.notifTitle': 'Notifications',
+      'profile.notifOrders': 'Order updates',
+      'profile.notifOrdersSub': 'When orders complete or fail',
+      'profile.notifWallet': 'Wallet & deposits',
+      'profile.notifWalletSub': 'Payment confirmations',
+      'profile.notifPromo': 'Promotions',
+      'profile.notifPromoSub': 'Deals and announcements',
+      'profile.apiComingSoon': 'Coming soon',
+      'profile.apiComingSoonBody': 'Public API keys for MJ Hub are not available yet. We will notify you in-app when developer access opens.',
+      // Help
+      'help.title': 'Help & Support',
+      'help.faq': 'Frequently Asked Questions',
+      'help.contact': 'Contact Support',
+      'help.liveChat': 'Start a Live Chat',
+      'help.liveChatSub': 'Talk to our team in real time',
+      'help.whatsapp': 'Join our WhatsApp Channel',
+      'help.whatsappSub': 'Support, updates & giveaways',
+      'help.legal': 'Legal',
+      'help.terms': 'Terms of Service',
+      'help.privacy': 'Privacy Policy',
+      'help.aup': 'Acceptable Use Policy',
+      'help.refund': 'Refund Policy',
+      'help.liveTitle': 'Live Support',
+      'help.liveSub': 'Chat with MJ Hub support',
+      'help.typeMessage': 'Type your message…',
+      // Common
+      'common.back': 'Back',
+      'common.loading': 'Loading…',
+      'lang.saved': 'Language updated'
+    },
+
+    yo: {
+      'nav.home': 'Ilé',
+      'nav.history': 'Ìtàn',
+      'nav.cart': 'Àpótí',
+      'nav.profile': 'Profaili',
+      'nav.dashboard': 'Dasibodu',
+      'nav.settings': 'Ètò',
+      'nav.orders': 'Àwọn òrder mi',
+      'nav.deposit': 'Fi owó sí',
+      'nav.logout': 'Jáde',
+      'home.fundSub': 'Fi owó sí wallet rẹ láti bẹ̀rẹ̀ pẹ̀lú logs, nọ́mbà SMS, àti boosters.',
+      'home.fundBtn': 'Fi owó sí àkántì',
+      'home.ngnWallet': 'Wallet NGN',
+      'home.usdWallet': 'Wallet USD',
+      'home.totalOrders': 'Àpapọ̀ òrder',
+      'profile.customerId': 'ID Oníbàárà',
+      'profile.customerIdHelp': 'Fi ID yìí fún support nígbà tí o bá ní ìbéèrè:',
+      'profile.copy': 'Dàákọ',
+      'profile.account': 'Àkántì',
+      'profile.personalInfo': 'Àlàyé ara ẹni',
+      'profile.personalInfoSub': 'Orúkọ, email, foonu',
+      'profile.security': 'Ààbò',
+      'profile.securitySub': 'Ọ̀rọ̀ ìgbaniwọlé, ààbò àkántì',
+      'profile.notifications': 'Àwọn ìfitónilétí',
+      'profile.notificationsSub': 'Àkíyèsí & ìmúdójúìwọ̀n',
+      'profile.preferences': 'Àwọn àṣàyàn',
+      'profile.appearance': 'Ìrísí',
+      'profile.appearanceSub': 'Àwọ̀ & ìfihàn',
+      'profile.language': 'Èdè',
+      'profile.languageSub': 'Èdè app',
+      'profile.help': 'Ìrànlọ́wọ́ & Support',
+      'profile.helpSub': 'FAQ & olùbásọ̀rọ̀',
+      'profile.developer': 'Olùgbékalẹ̀',
+      'profile.apiKeys': 'API Keys',
+      'profile.apiKeysSub': 'Kọ́ pẹ̀lú API wa · 60 req/min',
+      'profile.logout': 'Jáde',
+      'profile.personalInfoTitle': 'Àlàyé ara ẹni',
+      'profile.fullName': 'Orúkọ kíkún',
+      'profile.email': 'Email',
+      'profile.phone': 'Foonu',
+      'profile.address': 'Àdírẹ́sì',
+      'profile.bio': 'Nípa rẹ',
+      'profile.save': 'Fi àyípadà pamọ́',
+      'profile.theme': 'Àwọ̀',
+      'profile.themeLight': 'Imọ́lẹ̀',
+      'profile.themeDark': 'Òkùnkùn',
+      'profile.themeSystem': 'Ètò ẹ̀rọ',
+      'profile.languageTitle': 'Èdè',
+      'profile.languageNote': 'Gbogbo ojú-iṣẹ́ app yí padà sí èdè tí o yàn.',
+      'profile.securityTitle': 'Ààbò',
+      'profile.changePassword': 'Pààrọ̀ ọ̀rọ̀ ìgbaniwọlé',
+      'profile.changePasswordSub': 'Ṣe àtúnṣe ọ̀rọ̀ ìgbaniwọlé rẹ',
+      'profile.deleteAccount': 'Pa àkántì rẹ',
+      'profile.deleteAccountSub': 'Yọ àkántì rẹ kúrò láìlepadà',
+      'profile.notifTitle': 'Àwọn ìfitónilétí',
+      'profile.notifOrders': 'Ìmúdójúìwọ̀n òrder',
+      'profile.notifOrdersSub': 'Nígbà tí òrder bá parí tàbí kùnà',
+      'profile.notifWallet': 'Wallet & ìfowósí',
+      'profile.notifWalletSub': 'Ìjẹ́rìísí ìsanwó',
+      'profile.notifPromo': 'Ìpolówó',
+      'profile.notifPromoSub': 'Àwọn ètò & ìkéde',
+      'profile.apiComingSoon': 'Ń bọ̀ láìpẹ́',
+      'profile.apiComingSoonBody': 'API keys àwújọ kò tíì sí. A ó fi tó ọ létí nínú app nígbà tí ó bá ṣí.',
+      'help.title': 'Ìrànlọ́wọ́ & Support',
+      'help.faq': 'Àwọn ìbéèrè tí a sábà béèrè',
+      'help.contact': 'Kàn sí Support',
+      'help.liveChat': 'Bẹ̀rẹ̀ ìjíròrò',
+      'help.liveChatSub': 'Sọ̀rọ̀ pẹ̀lú ẹgbẹ́ wa lẹ́sẹ̀kẹsẹ̀',
+      'help.whatsapp': 'Darapọ̀ mọ́ WhatsApp Channel',
+      'help.whatsappSub': 'Support, ìmúdójúìwọ̀n & giveaway',
+      'help.legal': 'Òfin',
+      'help.terms': 'Àwọn òfin iṣẹ́',
+      'help.privacy': 'Ètò ìpamọ́',
+      'help.aup': 'Ètò lílo tó tọ́',
+      'help.refund': 'Ètò ìdápadà owó',
+      'help.liveTitle': 'Support nígbà gidi',
+      'help.liveSub': 'Sọ̀rọ̀ pẹ̀lú support MJ Hub',
+      'help.typeMessage': 'Kọ àtẹ̀jíṣẹ́ rẹ…',
+      'common.back': 'Padà',
+      'common.loading': 'Ń kojọ…',
+      'lang.saved': 'Èdè ti yí padà'
+    },
+
+    ig: {
+      'nav.home': 'Ụlọ',
+      'nav.history': 'Akụkọ',
+      'nav.cart': 'Cart',
+      'nav.profile': 'Profailụ',
+      'nav.dashboard': 'Dashboard',
+      'nav.settings': 'Ntọala',
+      'nav.orders': 'Iwu m',
+      'nav.deposit': 'Tinye ego',
+      'nav.logout': 'Pụọ',
+      'home.fundSub': 'Tinye ego n\'akpa gị iji malite logs, nọmba SMS, na boosters.',
+      'home.fundBtn': 'Tinye ego n\'akaụntụ',
+      'home.ngnWallet': 'Akpa NGN',
+      'home.usdWallet': 'Akpa USD',
+      'home.totalOrders': 'Ngụkọta iwu',
+      'profile.customerId': 'ID onye ahịa',
+      'profile.customerIdHelp': 'Nye ID a nye support mgbe ị nwere ajụjụ:',
+      'profile.copy': 'Detuo',
+      'profile.account': 'Akaụntụ',
+      'profile.personalInfo': 'Ozi onwe',
+      'profile.personalInfoSub': 'Aha, email, ekwentị',
+      'profile.security': 'Nchekwa',
+      'profile.securitySub': 'Okwuntughe, nchekwa akaụntụ',
+      'profile.notifications': 'Ọkwa',
+      'profile.notificationsSub': 'Alert & mmelite',
+      'profile.preferences': 'Mmasị',
+      'profile.appearance': 'Ọdịdị',
+      'profile.appearanceSub': 'Isiokwu & ngosipụta',
+      'profile.language': 'Asụsụ',
+      'profile.languageSub': 'Asụsụ app',
+      'profile.help': 'Enyemaka & Support',
+      'profile.helpSub': 'FAQ & kọntaktị',
+      'profile.developer': 'Onye mmepe',
+      'profile.apiKeys': 'API Keys',
+      'profile.apiKeysSub': 'Jiri API anyị rụọ · 60 req/min',
+      'profile.logout': 'Pụọ',
+      'profile.personalInfoTitle': 'Ozi onwe',
+      'profile.fullName': 'Aha zuru ezu',
+      'profile.email': 'Email',
+      'profile.phone': 'Ekwentị',
+      'profile.address': 'Adreesị',
+      'profile.bio': 'Banyere gị',
+      'profile.save': 'Chekwaa mgbanwe',
+      'profile.theme': 'Isiokwu',
+      'profile.themeLight': 'Ìhè',
+      'profile.themeDark': 'Ọchịchịrị',
+      'profile.themeSystem': 'Sistemụ',
+      'profile.languageTitle': 'Asụsụ',
+      'profile.languageNote': 'Ihu app niile na-agbanwe gaa n\'asụsụ ị họọrọ.',
+      'profile.securityTitle': 'Nchekwa',
+      'profile.changePassword': 'Gbanwee okwuntughe',
+      'profile.changePasswordSub': 'Melite okwuntughe nbanye gị',
+      'profile.deleteAccount': 'Hichapụ akaụntụ',
+      'profile.deleteAccountSub': 'Wepụ akaụntụ gị kpamkpam',
+      'profile.notifTitle': 'Ọkwa',
+      'profile.notifOrders': 'Mmelite iwu',
+      'profile.notifOrdersSub': 'Mgbe iwu mechara ma ọ bụ dara',
+      'profile.notifWallet': 'Akpa & ntinye ego',
+      'profile.notifWalletSub': 'Nkwenye ịkwụ ụgwọ',
+      'profile.notifPromo': 'Nkwalite',
+      'profile.notifPromoSub': 'Azụmahịa & ọkwa',
+      'profile.apiComingSoon': 'Na-abịa n\'oge na-adịghị anya',
+      'profile.apiComingSoonBody': 'API keys ọha adịbeghị. Anyị ga-agwa gị n\'ime app mgbe o mepere.',
+      'help.title': 'Enyemaka & Support',
+      'help.faq': 'Ajụjụ a na-ajụkarị',
+      'help.contact': 'Kpọtụrụ Support',
+      'help.liveChat': 'Malite mkparịta ụka',
+      'help.liveChatSub': 'Soro ndị otu anyị kwuo okwu ozugbo',
+      'help.whatsapp': 'Sonyere WhatsApp Channel anyị',
+      'help.whatsappSub': 'Support, mmelite & giveaway',
+      'help.legal': 'Iwu',
+      'help.terms': 'Usoro ọrụ',
+      'help.privacy': 'Amụma nzuzo',
+      'help.aup': 'Amụma eji eme ihe',
+      'help.refund': 'Amụma nkwaghachi ego',
+      'help.liveTitle': 'Support ozugbo',
+      'help.liveSub': 'Soro support MJ Hub kwuo okwu',
+      'help.typeMessage': 'Dee ozi gị…',
+      'common.back': 'Laghachi',
+      'common.loading': 'Na-ebugo…',
+      'lang.saved': 'Asụsụ emelitere'
+    },
+
+    ha: {
+      'nav.home': 'Gida',
+      'nav.history': 'Tarihi',
+      'nav.cart': 'Kati',
+      'nav.profile': 'Bayani',
+      'nav.dashboard': 'Dashboard',
+      'nav.settings': 'Saituna',
+      'nav.orders': 'Oda na',
+      'nav.deposit': 'Saka kuɗi',
+      'nav.logout': 'Fita',
+      'home.fundSub': 'Saka kuɗi a wallet ɗinka don farawa da logs, lambobin SMS, da boosters.',
+      'home.fundBtn': 'Saka kuɗi a asusu',
+      'home.ngnWallet': 'Wallet NGN',
+      'home.usdWallet': 'Wallet USD',
+      'home.totalOrders': 'Jimlar oda',
+      'profile.customerId': 'ID abokin ciniki',
+      'profile.customerIdHelp': 'Ba da wannan ID ga support idan kana da tambaya:',
+      'profile.copy': 'Kwafi',
+      'profile.account': 'Asusu',
+      'profile.personalInfo': 'Bayanan kai',
+      'profile.personalInfoSub': 'Suna, email, waya',
+      'profile.security': 'Tsaro',
+      'profile.securitySub': 'Kalmar sirri, tsaron asusu',
+      'profile.notifications': 'Sanarwa',
+      'profile.notificationsSub': 'Faɗakarwa & sabuntawa',
+      'profile.preferences': 'Zaɓuɓɓuka',
+      'profile.appearance': 'Bayyanar',
+      'profile.appearanceSub': 'Jigo & nunawa',
+      'profile.language': 'Harshe',
+      'profile.languageSub': 'Harshen app',
+      'profile.help': 'Taimako & Support',
+      'profile.helpSub': 'FAQ & tuntuɓa',
+      'profile.developer': 'Mai haɓakawa',
+      'profile.apiKeys': 'API Keys',
+      'profile.apiKeysSub': 'Gina da API ɗinmu · 60 req/min',
+      'profile.logout': 'Fita',
+      'profile.personalInfoTitle': 'Bayanan kai',
+      'profile.fullName': 'Cikakken suna',
+      'profile.email': 'Email',
+      'profile.phone': 'Waya',
+      'profile.address': 'Adireshi',
+      'profile.bio': 'Game da kai',
+      'profile.save': 'Ajiye canje-canje',
+      'profile.theme': 'Jigo',
+      'profile.themeLight': 'Haske',
+      'profile.themeDark': 'Duhu',
+      'profile.themeSystem': 'Na\'ura',
+      'profile.languageTitle': 'Harshe',
+      'profile.languageNote': 'Dukkan fuskar app tana canzawa zuwa harshen da ka zaɓa.',
+      'profile.securityTitle': 'Tsaro',
+      'profile.changePassword': 'Canza kalmar sirri',
+      'profile.changePasswordSub': 'Sabunta kalmar shiga',
+      'profile.deleteAccount': 'Share asusu',
+      'profile.deleteAccountSub': 'Cire asusunka gaba ɗaya',
+      'profile.notifTitle': 'Sanarwa',
+      'profile.notifOrders': 'Sabuntawar oda',
+      'profile.notifOrdersSub': 'Lokacin da oda ta kare ko ta gaza',
+      'profile.notifWallet': 'Wallet & sakawa',
+      'profile.notifWalletSub': 'Tabbatar da biya',
+      'profile.notifPromo': 'Talla',
+      'profile.notifPromoSub': 'Rangwame & sanarwa',
+      'profile.apiComingSoon': 'Yana zuwa nan ba da jimawa ba',
+      'profile.apiComingSoonBody': 'API keys na jama\'a ba su wanzu tukuna. Za mu sanar da kai a cikin app.',
+      'help.title': 'Taimako & Support',
+      'help.faq': 'Tambayoyin da ake yawan yi',
+      'help.contact': 'Tuntuɓi Support',
+      'help.liveChat': 'Fara hira',
+      'help.liveChatSub': 'Yi magana da ƙungiyarmu a yanzu',
+      'help.whatsapp': 'Shiga tashar WhatsApp ɗinmu',
+      'help.whatsappSub': 'Support, sabuntawa & giveaway',
+      'help.legal': 'Dokoki',
+      'help.terms': 'Sharuɗɗan hidima',
+      'help.privacy': 'Manufar sirri',
+      'help.aup': 'Manufar amfani',
+      'help.refund': 'Manufar mayar da kuɗi',
+      'help.liveTitle': 'Support kai tsaye',
+      'help.liveSub': 'Yi magana da support na MJ Hub',
+      'help.typeMessage': 'Rubuta saƙonka…',
+      'common.back': 'Koma baya',
+      'common.loading': 'Ana lodawa…',
+      'lang.saved': 'An sabunta harshe'
+    },
+
+    pcm: {
+      'nav.home': 'Home',
+      'nav.history': 'History',
+      'nav.cart': 'Cart',
+      'nav.profile': 'Profile',
+      'nav.dashboard': 'Dashboard',
+      'nav.settings': 'Settings',
+      'nav.orders': 'My Orders',
+      'nav.deposit': 'Deposit',
+      'nav.logout': 'Log out',
+      'home.fundSub': 'Put money for your wallet make you fit start with logs, SMS number, and boosters.',
+      'home.fundBtn': 'Fund Account',
+      'home.ngnWallet': 'NGN Wallet',
+      'home.usdWallet': 'USD Wallet',
+      'home.totalOrders': 'Total Orders',
+      'profile.customerId': 'Customer ID',
+      'profile.customerIdHelp': 'Give this ID to support if you get any wahala:',
+      'profile.copy': 'Copy',
+      'profile.account': 'Account',
+      'profile.personalInfo': 'Personal Info',
+      'profile.personalInfoSub': 'Name, email, phone',
+      'profile.security': 'Security',
+      'profile.securitySub': 'Password, account safety',
+      'profile.notifications': 'Notifications',
+      'profile.notificationsSub': 'Alerts & updates',
+      'profile.preferences': 'Preferences',
+      'profile.appearance': 'Appearance',
+      'profile.appearanceSub': 'Theme & display',
+      'profile.language': 'Language',
+      'profile.languageSub': 'App language',
+      'profile.help': 'Help & Support',
+      'profile.helpSub': 'FAQ & contact',
+      'profile.developer': 'Developer',
+      'profile.apiKeys': 'API Keys',
+      'profile.apiKeysSub': 'Build with our API · 60 req/min',
+      'profile.logout': 'Log Out',
+      'profile.personalInfoTitle': 'Personal Info',
+      'profile.fullName': 'Full Name',
+      'profile.email': 'Email',
+      'profile.phone': 'Phone',
+      'profile.address': 'Address',
+      'profile.bio': 'About you',
+      'profile.save': 'Save Changes',
+      'profile.theme': 'Theme',
+      'profile.themeLight': 'Light',
+      'profile.themeDark': 'Dark',
+      'profile.themeSystem': 'System',
+      'profile.languageTitle': 'Language',
+      'profile.languageNote': 'Di whole app go change to di language wey you select.',
+      'profile.securityTitle': 'Security',
+      'profile.changePassword': 'Change Password',
+      'profile.changePasswordSub': 'Update your login password',
+      'profile.deleteAccount': 'Delete Account',
+      'profile.deleteAccountSub': 'Remove your account for good',
+      'profile.notifTitle': 'Notifications',
+      'profile.notifOrders': 'Order updates',
+      'profile.notifOrdersSub': 'When order finish or fail',
+      'profile.notifWallet': 'Wallet & deposits',
+      'profile.notifWalletSub': 'Payment confirmations',
+      'profile.notifPromo': 'Promotions',
+      'profile.notifPromoSub': 'Deals and announcements',
+      'profile.apiComingSoon': 'E dey come soon',
+      'profile.apiComingSoonBody': 'Public API keys no ready yet. We go alert you for app when e open.',
+      'help.title': 'Help & Support',
+      'help.faq': 'Questions wey people dey ask',
+      'help.contact': 'Contact Support',
+      'help.liveChat': 'Start Live Chat',
+      'help.liveChatSub': 'Talk to our team sharp sharp',
+      'help.whatsapp': 'Join our WhatsApp Channel',
+      'help.whatsappSub': 'Support, updates & giveaways',
+      'help.legal': 'Legal',
+      'help.terms': 'Terms of Service',
+      'help.privacy': 'Privacy Policy',
+      'help.aup': 'Acceptable Use Policy',
+      'help.refund': 'Refund Policy',
+      'help.liveTitle': 'Live Support',
+      'help.liveSub': 'Chat with MJ Hub support',
+      'help.typeMessage': 'Type your message…',
+      'common.back': 'Back',
+      'common.loading': 'E dey load…',
+      'lang.saved': 'Language don update'
+    },
+
+    fr: {
+      'nav.home': 'Accueil',
+      'nav.history': 'Historique',
+      'nav.cart': 'Panier',
+      'nav.profile': 'Profil',
+      'nav.dashboard': 'Tableau de bord',
+      'nav.settings': 'Paramètres',
+      'nav.orders': 'Mes commandes',
+      'nav.deposit': 'Dépôt',
+      'nav.logout': 'Déconnexion',
+      'home.fundSub': 'Alimentez votre portefeuille pour commencer avec les logs, les numéros SMS et les boosters.',
+      'home.fundBtn': 'Alimenter le compte',
+      'home.ngnWallet': 'Portefeuille NGN',
+      'home.usdWallet': 'Portefeuille USD',
+      'home.totalOrders': 'Total des commandes',
+      'profile.customerId': 'ID client',
+      'profile.customerIdHelp': 'Donnez cet ID au support pour vos demandes :',
+      'profile.copy': 'Copier',
+      'profile.account': 'Compte',
+      'profile.personalInfo': 'Infos personnelles',
+      'profile.personalInfoSub': 'Nom, e-mail, téléphone',
+      'profile.security': 'Sécurité',
+      'profile.securitySub': 'Mot de passe, sécurité du compte',
+      'profile.notifications': 'Notifications',
+      'profile.notificationsSub': 'Alertes et mises à jour',
+      'profile.preferences': 'Préférences',
+      'profile.appearance': 'Apparence',
+      'profile.appearanceSub': 'Thème et affichage',
+      'profile.language': 'Langue',
+      'profile.languageSub': 'Langue de l’appli',
+      'profile.help': 'Aide et support',
+      'profile.helpSub': 'FAQ et contact',
+      'profile.developer': 'Développeur',
+      'profile.apiKeys': 'Clés API',
+      'profile.apiKeysSub': 'Construire avec notre API · 60 req/min',
+      'profile.logout': 'Déconnexion',
+      'profile.personalInfoTitle': 'Infos personnelles',
+      'profile.fullName': 'Nom complet',
+      'profile.email': 'E-mail',
+      'profile.phone': 'Téléphone',
+      'profile.address': 'Adresse',
+      'profile.bio': 'Bio',
+      'profile.save': 'Enregistrer',
+      'profile.theme': 'Thème',
+      'profile.themeLight': 'Clair',
+      'profile.themeDark': 'Sombre',
+      'profile.themeSystem': 'Système',
+      'profile.languageTitle': 'Langue',
+      'profile.languageNote': 'Toute l’interface passe dans la langue choisie.',
+      'profile.securityTitle': 'Sécurité',
+      'profile.changePassword': 'Changer le mot de passe',
+      'profile.changePasswordSub': 'Mettre à jour votre mot de passe',
+      'profile.deleteAccount': 'Supprimer le compte',
+      'profile.deleteAccountSub': 'Supprimer définitivement votre compte',
+      'profile.notifTitle': 'Notifications',
+      'profile.notifOrders': 'Mises à jour des commandes',
+      'profile.notifOrdersSub': 'Quand une commande aboutit ou échoue',
+      'profile.notifWallet': 'Portefeuille et dépôts',
+      'profile.notifWalletSub': 'Confirmations de paiement',
+      'profile.notifPromo': 'Promotions',
+      'profile.notifPromoSub': 'Offres et annonces',
+      'profile.apiComingSoon': 'Bientôt disponible',
+      'profile.apiComingSoonBody': 'Les clés API publiques ne sont pas encore disponibles. Nous vous préviendrons dans l’appli.',
+      'help.title': 'Aide et support',
+      'help.faq': 'Questions fréquentes',
+      'help.contact': 'Contacter le support',
+      'help.liveChat': 'Démarrer un chat',
+      'help.liveChatSub': 'Parlez à notre équipe en direct',
+      'help.whatsapp': 'Rejoindre notre chaîne WhatsApp',
+      'help.whatsappSub': 'Support, actus et cadeaux',
+      'help.legal': 'Mentions légales',
+      'help.terms': 'Conditions d’utilisation',
+      'help.privacy': 'Politique de confidentialité',
+      'help.aup': 'Politique d’utilisation acceptable',
+      'help.refund': 'Politique de remboursement',
+      'help.liveTitle': 'Support en direct',
+      'help.liveSub': 'Discutez avec le support MJ Hub',
+      'help.typeMessage': 'Écrivez votre message…',
+      'common.back': 'Retour',
+      'common.loading': 'Chargement…',
+      'lang.saved': 'Langue mise à jour'
+    }
+  };
+
+  function t(key, lang) {
+    lang = lang || currentLang();
+    var pack = STRINGS[lang] || STRINGS.en;
+    return pack[key] || STRINGS.en[key] || key;
+  }
+
+  function currentLang() {
+    try {
+      return localStorage.getItem('mjhub_lang') || 'en';
+    } catch (e) {
+      return 'en';
+    }
+  }
+
+  function apply(lang) {
+    lang = lang || currentLang();
+    if (!STRINGS[lang]) lang = 'en';
+    try {
+      localStorage.setItem('mjhub_lang', lang);
+    } catch (e) {}
+    document.documentElement.setAttribute('lang', lang === 'pcm' ? 'en' : lang);
+
+    document.querySelectorAll('[data-i18n]').forEach(function (el) {
+      var key = el.getAttribute('data-i18n');
+      if (!key) return;
+      var val = t(key, lang);
+      if (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') {
+        // don't overwrite typed values; only placeholder via data-i18n-placeholder
+      } else {
+        el.textContent = val;
+      }
+    });
+
+    document.querySelectorAll('[data-i18n-html]').forEach(function (el) {
+      var key = el.getAttribute('data-i18n-html');
+      if (key) el.innerHTML = t(key, lang);
+    });
+
+    document.querySelectorAll('[data-i18n-placeholder]').forEach(function (el) {
+      var key = el.getAttribute('data-i18n-placeholder');
+      if (key) el.setAttribute('placeholder', t(key, lang));
+    });
+
+    document.querySelectorAll('[data-i18n-title]').forEach(function (el) {
+      var key = el.getAttribute('data-i18n-title');
+      if (key) el.setAttribute('title', t(key, lang));
+    });
+
+    // Sync language picker ticks
+    document.querySelectorAll('#langList .lang-item').forEach(function (el) {
+      el.classList.toggle('selected', el.getAttribute('data-lang') === lang);
+    });
+
+    if (typeof global.syncLanguageUI === 'function') {
+      try { global.syncLanguageUI(); } catch (e) {}
+    }
+  }
+
+  global.MJHubI18n = {
+    strings: STRINGS,
+    t: t,
+    apply: apply,
+    currentLang: currentLang,
+    supported: ['en', 'yo', 'ig', 'ha', 'pcm', 'fr']
+  };
+})(typeof window !== 'undefined' ? window : globalThis);
+
+</script>
+<script>
 // Force all date/time displays to Nigeria time (WAT, Africa/Lagos),
 // regardless of the viewer's device timezone — keeps order timestamps
 // consistent for admins and users everywhere, so orders sort/display
@@ -1470,7 +2052,7 @@ body::before {
     <section id="home" class="app-section active">
         <div class="dashboard-card-hero">
             <div class="hero-welcome" id="heroWelcomeTitle">Welcome to MJ HUB</div>
-            <div class="hero-sub" id="heroSubText">Fund your wallet to get started with logs, SMS verification, and boosters.</div>
+            <div class="hero-sub" id="heroSubText" data-i18n="home.fundSub">Fund your wallet to get started with logs, SMS verification, and boosters.</div>
             <div class="hero-actions">
                 <a class="hero-btn" href="deposit.html" style="text-decoration:none;display:inline-flex;align-items:center;gap:8px;"><i class="fa-solid fa-wallet"></i> Fund Account</a>
                 <button class="hero-btn" onclick="openCurrencyModal()"><i class="fa-solid fa-right-left"></i> Convert</button>
@@ -1560,22 +2142,22 @@ body::before {
             </div>
 
             <div class="content-card">
-                <h2>Customer ID</h2>
-                <p class="helper-text">Provide this ID to support for inquiries:</p>
+                <h2 data-i18n="profile.customerId">Customer ID</h2>
+                <p class="helper-text"><span data-i18n="profile.customerIdHelp">Provide this ID to support for inquiries:</span></p>
                 <div style="display:flex;gap:10px;align-items:center;">
                     <input type="text" id="myCustomerId" readonly style="font-family:monospace;font-weight:bold;color:var(--primary-color);" placeholder="Loading...">
                     <button class="btn-sm-primary" style="flex:unset;padding:13px 20px;" onclick="copyIdToClipboard()">Copy</button>
                 </div>
             </div>
 
-            <div class="profile-section-label">Account</div>
+            <div class="profile-section-label" data-i18n="profile.account">Account</div>
             <div class="profile-menu-group">
                 <div class="profile-menu-item" onclick="openProfileSettings()">
                     <div class="profile-menu-left">
                         <div class="profile-menu-icon icon-blue"><i class="fa-solid fa-user"></i></div>
                         <div class="profile-menu-info">
-                            <h4>Personal Info</h4>
-                            <p>Name, email, phone</p>
+                            <h4 data-i18n="profile.personalInfo">Personal Info</h4>
+                            <p data-i18n="profile.personalInfoSub">Name, email, phone</p>
                         </div>
                     </div>
                     <div class="profile-menu-arrow">›</div>
@@ -1584,8 +2166,8 @@ body::before {
                     <div class="profile-menu-left">
                         <div class="profile-menu-icon icon-blue"><i class="fa-solid fa-shield-halved"></i></div>
                         <div class="profile-menu-info">
-                            <h4>Security</h4>
-                            <p>Password, account safety</p>
+                            <h4 data-i18n="profile.security">Security</h4>
+                            <p data-i18n="profile.securitySub">Password, account safety</p>
                         </div>
                     </div>
                     <div class="profile-menu-arrow">›</div>
@@ -1594,22 +2176,22 @@ body::before {
                     <div class="profile-menu-left">
                         <div class="profile-menu-icon icon-blue"><i class="fa-solid fa-bell"></i></div>
                         <div class="profile-menu-info">
-                            <h4>Notifications</h4>
-                            <p>Alerts &amp; updates</p>
+                            <h4 data-i18n="profile.notifications">Notifications</h4>
+                            <p data-i18n="profile.notificationsSub">Alerts &amp; updates</p>
                         </div>
                     </div>
                     <div class="profile-menu-arrow">›</div>
                 </div>
             </div>
 
-            <div class="profile-section-label">Preferences</div>
+            <div class="profile-section-label" data-i18n="profile.preferences">Preferences</div>
             <div class="profile-menu-group">
                 <div class="profile-menu-item" onclick="openProfileSubview('appearance')">
                     <div class="profile-menu-left">
                         <div class="profile-menu-icon icon-blue"><i class="fa-solid fa-palette"></i></div>
                         <div class="profile-menu-info">
-                            <h4>Appearance</h4>
-                            <p>Theme &amp; display</p>
+                            <h4 data-i18n="profile.appearance">Appearance</h4>
+                            <p data-i18n="profile.appearanceSub">Theme &amp; display</p>
                         </div>
                     </div>
                     <div class="profile-menu-arrow">›</div>
@@ -1618,8 +2200,8 @@ body::before {
                     <div class="profile-menu-left">
                         <div class="profile-menu-icon icon-blue"><i class="fa-solid fa-globe"></i></div>
                         <div class="profile-menu-info">
-                            <h4>Language</h4>
-                            <p>App language</p>
+                            <h4 data-i18n="profile.language">Language</h4>
+                            <p data-i18n="profile.languageSub">App language</p>
                         </div>
                     </div>
                     <div class="profile-menu-arrow">›</div>
@@ -1628,29 +2210,29 @@ body::before {
                     <div class="profile-menu-left">
                         <div class="profile-menu-icon icon-blue"><i class="fa-solid fa-circle-question"></i></div>
                         <div class="profile-menu-info">
-                            <h4>Help &amp; Support</h4>
-                            <p>FAQ &amp; contact</p>
+                            <h4 data-i18n="profile.help">Help &amp; Support</h4>
+                            <p data-i18n="profile.helpSub">FAQ &amp; contact</p>
                         </div>
                     </div>
                     <div class="profile-menu-arrow">›</div>
                 </div>
             </div>
 
-            <div class="profile-section-label">Developer</div>
+            <div class="profile-section-label" data-i18n="profile.developer">Developer</div>
             <div class="profile-menu-group">
                 <div class="profile-menu-item" onclick="openProfileSubview('apikeys')">
                     <div class="profile-menu-left">
                         <div class="profile-menu-icon icon-blue"><i class="fa-solid fa-key"></i></div>
                         <div class="profile-menu-info">
-                            <h4>API Keys</h4>
-                            <p>Build with our API · 60 req/min</p>
+                            <h4 data-i18n="profile.apiKeys">API Keys</h4>
+                            <p data-i18n="profile.apiKeysSub">Build with our API · 60 req/min</p>
                         </div>
                     </div>
                     <div class="profile-menu-arrow">›</div>
                 </div>
             </div>
 
-            <button type="button" class="profile-logout-btn" onclick="handleLogout()">Log Out</button>
+            <button type="button" class="profile-logout-btn" onclick="handleLogout()" data-i18n="profile.logout">Log Out</button>
         </div>
 
 
@@ -1662,7 +2244,7 @@ body::before {
                     style="width:40px;height:40px;border-radius:12px;border:1px solid var(--border-color,rgba(255,255,255,0.08));background:var(--card-bg,rgba(255,255,255,0.04));color:var(--text-color,#fff);cursor:pointer;display:flex;align-items:center;justify-content:center;">
                     <i class="fa-solid fa-arrow-left"></i>
                 </button>
-                <h2 style="margin:0;font-size:18px;font-weight:800;">Help &amp; Support</h2>
+                <h2 style="margin:0;font-size:18px;font-weight:800;" data-i18n="help.title">Help &amp; Support</h2>
             </div>
 
             <div class="profile-section-label">Frequently Asked Questions</div>
@@ -1754,7 +2336,7 @@ body::before {
                     <i class="fa-solid fa-arrow-left"></i>
                 </button>
                 <div style="flex:1;">
-                    <h2 style="margin:0;font-size:18px;font-weight:800;">Live Support</h2>
+                    <h2 style="margin:0;font-size:18px;font-weight:800;" data-i18n="help.liveTitle">Live Support</h2>
                     <p style="margin:2px 0 0;font-size:12px;color:var(--muted);">Chat with MJ Hub support</p>
                 </div>
             </div>
@@ -1768,7 +2350,7 @@ body::before {
                 </div>
                 <div class="live-chat-messages" id="liveChatMessages"></div>
                 <form class="live-chat-input-row" onsubmit="return sendLiveChatMessage(event)">
-                    <input type="text" id="liveChatInput" placeholder="Type your message…" autocomplete="off" maxlength="1000">
+                    <input type="text" id="liveChatInput" placeholder="Type your message…" data-i18n-placeholder="help.typeMessage" autocomplete="off" maxlength="1000">
                     <button type="submit" aria-label="Send"><i class="fa-solid fa-paper-plane"></i></button>
                 </form>
             </div>
@@ -1781,19 +2363,19 @@ body::before {
                     style="width:40px;height:40px;border-radius:12px;border:1px solid var(--border-color,rgba(255,255,255,0.08));background:var(--card-bg,rgba(255,255,255,0.04));color:var(--text-color,#fff);cursor:pointer;display:flex;align-items:center;justify-content:center;">
                     <i class="fa-solid fa-arrow-left"></i>
                 </button>
-                <h2 style="margin:0;font-size:18px;font-weight:800;">Appearance</h2>
+                <h2 style="margin:0;font-size:18px;font-weight:800;" data-i18n="profile.appearance">Appearance</h2>
             </div>
             <div class="content-card">
                 <p class="helper-text" style="margin-bottom:14px;">Theme</p>
                 <div class="theme-choice-grid" id="themeChoiceGrid">
                     <button type="button" class="theme-choice" data-theme="light" onclick="setAppTheme('light')">
-                        <i class="fa-solid fa-sun"></i><span>Light</span>
+                        <i class="fa-solid fa-sun"></i><span data-i18n="profile.themeLight">Light</span>
                     </button>
                     <button type="button" class="theme-choice" data-theme="dark" onclick="setAppTheme('dark')">
-                        <i class="fa-solid fa-moon"></i><span>Dark</span>
+                        <i class="fa-solid fa-moon"></i><span data-i18n="profile.themeDark">Dark</span>
                     </button>
                     <button type="button" class="theme-choice" data-theme="system" onclick="setAppTheme('system')">
-                        <i class="fa-solid fa-desktop"></i><span>System</span>
+                        <i class="fa-solid fa-desktop"></i><span data-i18n="profile.themeSystem">System</span>
                     </button>
                 </div>
             </div>
@@ -1806,7 +2388,7 @@ body::before {
                     style="width:40px;height:40px;border-radius:12px;border:1px solid var(--border-color,rgba(255,255,255,0.08));background:var(--card-bg,rgba(255,255,255,0.04));color:var(--text-color,#fff);cursor:pointer;display:flex;align-items:center;justify-content:center;">
                     <i class="fa-solid fa-arrow-left"></i>
                 </button>
-                <h2 style="margin:0;font-size:18px;font-weight:800;">Language</h2>
+                <h2 style="margin:0;font-size:18px;font-weight:800;" data-i18n="profile.languageTitle">Language</h2>
             </div>
             <div class="lang-list" id="langList">
                 <div class="lang-item" data-lang="en" onclick="setAppLanguage('en')">
@@ -1834,7 +2416,7 @@ body::before {
                     <i class="fa-solid fa-circle-check lang-check"></i>
                 </div>
             </div>
-            <p class="helper-text" style="margin-top:12px;padding:0 4px;">Language preference is saved on this device. Full translations roll out gradually.</p>
+            <p class="helper-text" style="margin-top:12px;padding:0 4px;"><span data-i18n="profile.languageNote">The full app interface switches to your selected language.</span></p>
         </div>
 
         <!-- Notifications prefs subview -->
@@ -1844,7 +2426,7 @@ body::before {
                     style="width:40px;height:40px;border-radius:12px;border:1px solid var(--border-color,rgba(255,255,255,0.08));background:var(--card-bg,rgba(255,255,255,0.04));color:var(--text-color,#fff);cursor:pointer;display:flex;align-items:center;justify-content:center;">
                     <i class="fa-solid fa-arrow-left"></i>
                 </button>
-                <h2 style="margin:0;font-size:18px;font-weight:800;">Notifications</h2>
+                <h2 style="margin:0;font-size:18px;font-weight:800;" data-i18n="profile.notifTitle">Notifications</h2>
             </div>
             <div class="content-card">
                 <div class="notif-pref-row">
@@ -1869,7 +2451,7 @@ body::before {
                     style="width:40px;height:40px;border-radius:12px;border:1px solid var(--border-color,rgba(255,255,255,0.08));background:var(--card-bg,rgba(255,255,255,0.04));color:var(--text-color,#fff);cursor:pointer;display:flex;align-items:center;justify-content:center;">
                     <i class="fa-solid fa-arrow-left"></i>
                 </button>
-                <h2 style="margin:0;font-size:18px;font-weight:800;">Security</h2>
+                <h2 style="margin:0;font-size:18px;font-weight:800;" data-i18n="profile.securityTitle">Security</h2>
             </div>
             <div class="profile-menu-group">
                 <div class="profile-menu-item" onclick="openChangePasswordModal()">
@@ -1920,7 +2502,7 @@ body::before {
                     style="width:40px;height:40px;border-radius:12px;border:1px solid var(--border-color,rgba(255,255,255,0.08));background:var(--card-bg,rgba(255,255,255,0.04));color:var(--text-color,#fff);cursor:pointer;display:flex;align-items:center;justify-content:center;">
                     <i class="fa-solid fa-arrow-left"></i>
                 </button>
-                <h2 style="margin:0;font-size:18px;font-weight:800;">Personal Info</h2>
+                <h2 style="margin:0;font-size:18px;font-weight:800;" data-i18n="profile.personalInfoTitle">Personal Info</h2>
             </div>
 
             <div class="content-card">
@@ -2283,22 +2865,22 @@ body::before {
 <nav class="bottom-nav">
     <button class="nav-item active" id="navHome" onclick="goHome()">
         <svg viewBox="0 0 24 24"><path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"/></svg>
-        <span>Home</span>
+        <span data-i18n="nav.home">Home</span>
     </button>
     <button class="nav-item" id="navHistory" onclick="toggleActivityHistory()">
         <svg viewBox="0 0 24 24"><path d="M13 3a9 9 0 0 0-9 9H1l3.89 3.89.07.14L9 12H6a7 7 0 1 1 7 7 7 7 0 0 1-7-7h-2a9 9 0 1 0 9-9zm-1 5v5l4.28 2.54.72-1.21-3.5-2.08V8H12z"/></svg>
-        <span>History</span>
+        <span data-i18n="nav.history">History</span>
     </button>
     <div class="nav-item" onclick="toggleFloatingPopup()">
         <div class="plus-circle">+</div>
     </div>
     <button class="nav-item" id="navCart" onclick="switchSection('cart')">
         <svg viewBox="0 0 24 24"><path d="M7 18c-1.1 0-1.99.9-1.99 2S5.9 22 7 22s2-.9 2-2-.9-2-2-2zM1 2v2h2l3.6 7.59-1.35 2.45c-.16.28-.25.61-.25.96 0 1.1.9 2 2 2h12v-2H7.42c-.14 0-.25-.11-.25-.25l.03-.12.9-1.63h7.45c.75 0 1.41-.41 1.75-1.03l3.58-6.49c.08-.14.12-.31.12-.48 0-.55-.45-1-1-1H5.21l-.94-2H1zm16 16c-1.1 0-1.99.9-1.99 2s.89 2 1.99 2 2-.9 2-2-.9-2-2-2z"/></svg>
-        <span>Cart</span>
+        <span data-i18n="nav.cart">Cart</span>
     </button>
     <button class="nav-item" id="navProfile" onclick="switchSection('profile')">
         <svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 3c1.66 0 3 1.34 3 3s-1.34 3-3 3-3-1.34-3-3 1.34-3 3-3zm0 14.2c-2.5 0-4.71-1.28-6-3.22.03-1.99 4-3.08 6-3.08 1.99 0 5.97 1.09 6 3.08-1.29 1.94-3.5 3.22-6 3.22z"/></svg>
-        <span>Profile</span>
+        <span data-i18n="nav.profile">Profile</span>
     </button>
 </nav>
 
@@ -2545,6 +3127,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     initNavigation();
     initTheme();
+    try { if (window.MJHubI18n) MJHubI18n.apply(localStorage.getItem('mjhub_lang') || 'en'); } catch (e) {}
     initDropdowns();
     initSupportWidget();
     updateCartDisplay();
@@ -3424,12 +4007,14 @@ function syncThemeChoiceUI() {
     });
 }
 window.setAppLanguage = function(code) {
-    try { localStorage.setItem('mjhub_lang', code); } catch (e) {}
-    document.documentElement.setAttribute('lang', code === 'pcm' ? 'en' : code);
-    syncLanguageUI();
-    var msg = (code === 'en')
-        ? 'Language set to English'
-        : 'Preference saved. Full in-app translation for this language is coming soon — UI remains English for now.';
+    if (window.MJHubI18n && typeof MJHubI18n.apply === 'function') {
+        MJHubI18n.apply(code);
+    } else {
+        try { localStorage.setItem('mjhub_lang', code); } catch (e) {}
+        document.documentElement.setAttribute('lang', code === 'pcm' ? 'en' : code);
+        syncLanguageUI();
+    }
+    var msg = (window.MJHubI18n && MJHubI18n.t) ? MJHubI18n.t('lang.saved', code) : 'Language updated';
     if (typeof showToast === 'function') showToast(msg);
     else if (typeof toast === 'function') toast(msg);
 };
