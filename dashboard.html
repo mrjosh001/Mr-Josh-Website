@@ -2745,7 +2745,7 @@ body::before {
                 <div class="channel-icon-wrap" style="background:rgba(91,138,245,0.15);color:var(--primary);"><i class="fa-solid fa-comments"></i></div>
                 <div class="channel-info"><h4>In-app chat</h4><p>Message our team here</p></div>
             </button>
-            <a href="https://wa.me/14305583021" target="_blank" rel="noopener" class="support-channel-item" id="supportWidgetWhatsApp">
+            <a href="#" id="supportWidgetWhatsApp" target="_blank" rel="noopener" class="support-channel-item">
                 <div class="channel-icon-wrap whatsapp"><i class="fa-brands fa-whatsapp"></i></div>
                 <div class="channel-info"><h4>WhatsApp</h4><p>Chat with support</p></div>
             </a>
@@ -3655,7 +3655,30 @@ window.payWithPocketFi = async function() {
     }
 };
 
+
+/* WhatsApp support — same as landing page index.html */
+window.SUPPORT_WA_NUMBER = '14305583021';
+window.buildSupportWhatsAppLink = function(customerId) {
+    var idPart = customerId ? customerId : 'Not signed in';
+    var message = "Hello Admin, I've a complaint.\\n\\nCustomer ID: " + idPart + "\\nComplaint: ";
+    return 'https://wa.me/' + window.SUPPORT_WA_NUMBER + '?text=' + encodeURIComponent(message);
+};
+window.refreshSupportWhatsAppLinks = function() {
+    var cid = null;
+    try {
+        var el = document.getElementById('myCustomerId');
+        if (el && el.value) cid = el.value.trim();
+        if (!cid && typeof userData !== 'undefined' && userData && userData.customerId) cid = userData.customerId;
+    } catch (e) {}
+    var href = window.buildSupportWhatsAppLink(cid);
+    ['supportWidgetWhatsApp', 'helpWhatsAppLink'].forEach(function(id) {
+        var a = document.getElementById(id);
+        if (a) a.href = href;
+    });
+};
+
 function initSupportWidget() {
+    try { if (typeof refreshSupportWhatsAppLinks === 'function') refreshSupportWhatsAppLinks(); } catch (e) {}
     const widget = document.getElementById('support-widget');
     const btn = document.getElementById('support-toggle-btn');
     const popup = document.getElementById('support-popup');
@@ -3808,6 +3831,7 @@ async function fetchUserBalance(userId) {
             // the user's account id is displayed, e.g. profile settings.
             const idInput = document.getElementById('myCustomerId');
             if (idInput && data.customer_id) idInput.value = data.customer_id;
+            try { if (typeof refreshSupportWhatsAppLinks === 'function') refreshSupportWhatsAppLinks(); } catch (e) {}
             const depId = document.getElementById('depositCustomerId');
             if (depId && data.customer_id) depId.value = data.customer_id;
         }
