@@ -2345,7 +2345,7 @@ body::before {
                     <div class="live-chat-avatar"><i class="fa-solid fa-headset"></i></div>
                     <div>
                         <div style="font-weight:700;font-size:14px;">MJ Hub Support</div>
-                        <div style="font-size:11px;color:var(--muted);" id="liveChatStatus">Online · typically replies within a few hours</div>
+                        <div style="font-size:11px;color:var(--muted);" id="liveChatStatus">Assistant online</div>
                     </div>
                 </div>
                 <div class="live-chat-messages" id="liveChatMessages"></div>
@@ -2726,29 +2726,37 @@ body::before {
 </div>
 
 <div id="support-widget" class="support-widget-container">
-    <button id="support-toggle-btn" class="support-toggle-btn">
+    <button id="support-toggle-btn" class="support-toggle-btn" type="button" aria-label="Open support">
         <span class="support-icon"><i class="fa-solid fa-headset"></i></span>
         <span class="support-badge-tag">Help</span>
     </button>
     <div id="support-popup" class="support-popup-card">
         <div class="support-popup-header">
-            <button id="support-close-btn" class="support-close-inner">&times;</button>
-            <h3>Need help?</h3>
-            <p>We reply in minutes</p>
+            <button id="support-close-btn" class="support-close-inner" type="button" aria-label="Close">&times;</button>
+            <h3>MJ Hub Support</h3>
+            <p>How can we help you today?</p>
             <div class="support-status-indicator">
                 <span class="status-dot"></span>
-                <span>Support online 24/7</span>
+                <span>Typically replies within a few hours</span>
             </div>
         </div>
         <div class="support-popup-body">
-            <a href="https://wa.me/2348XXXXXXXXX" target="_blank" class="support-channel-item">
+            <button type="button" class="support-channel-item" onclick="openSupportLiveChatFromWidget()" style="width:100%;cursor:pointer;font:inherit;text-align:left;border:1px solid var(--border);background:var(--bg);">
+                <div class="channel-icon-wrap" style="background:rgba(91,138,245,0.15);color:var(--primary);"><i class="fa-solid fa-comments"></i></div>
+                <div class="channel-info"><h4>In-app chat</h4><p>Message our team here</p></div>
+            </button>
+            <a href="https://wa.me/14305583021" target="_blank" rel="noopener" class="support-channel-item" id="supportWidgetWhatsApp">
                 <div class="channel-icon-wrap whatsapp"><i class="fa-brands fa-whatsapp"></i></div>
                 <div class="channel-info"><h4>WhatsApp</h4><p>Chat with support</p></div>
             </a>
-            <a href="https://t.me/XXXXX" target="_blank" class="support-channel-item">
+            <a href="https://t.me/mj_hub_tg" target="_blank" rel="noopener" class="support-channel-item">
                 <div class="channel-icon-wrap telegram"><i class="fa-brands fa-telegram"></i></div>
-                <div class="channel-info"><h4>Telegram</h4><p>Chat with support</p></div>
+                <div class="channel-info"><h4>Telegram</h4><p>Community &amp; support</p></div>
             </a>
+            <button type="button" class="support-channel-item" onclick="openSupportHelpFromWidget()" style="width:100%;cursor:pointer;font:inherit;text-align:left;border:1px solid var(--border);background:var(--bg);">
+                <div class="channel-icon-wrap" style="background:rgba(167,139,250,0.15);color:#a78bfa;"><i class="fa-solid fa-circle-question"></i></div>
+                <div class="channel-info"><h4>Help centre</h4><p>FAQs, policies &amp; guides</p></div>
+            </button>
         </div>
     </div>
 </div>
@@ -4028,171 +4036,273 @@ window.toggleHelpFaq = function(btn) {
 window._liveChatTicketId = null;
 window._liveChatChannel = null;
 window._liveChatBooted = false;
+window._liveChatStep = 'welcome'; // welcome | details | human
+window._liveChatTransferred = false;
+window._liveChatFaqMatched = false;
+
+window.SUPPORT_FAQ = [
+  {
+    keys: ['purchase', 'buy', 'order', 'how do purchases', 'how to buy', 'checkout', 'shop'],
+    answer: 'To place an order: fund your wallet, open the product you need (SMS, boosters, or catalog items), then complete checkout. Delivery shows under Orders / History once payment is confirmed.'
+  },
+  {
+    keys: ['refund', 'money back', 'reverse', 'chargeback'],
+    answer: 'Refunds follow our Refund Policy. Report the issue with proof within the inspection window (usually 30 minutes after delivery). Approved refunds are credited to your in-app wallet. Open Help → Refund Policy for full details.'
+  },
+  {
+    keys: ['payment', 'pay', 'secure', 'deposit', 'fund', 'pocketfi', 'wallet'],
+    answer: 'Payments go through our payment partners or your MJ Hub wallet. We do not store full card numbers. For deposits, use Fund Wallet on the dashboard. If a deposit is delayed, send your payment reference in this chat.'
+  },
+  {
+    keys: ['sms', 'number', 'otp', 'virtual number', 'verification'],
+    answer: 'SMS numbers are temporary numbers for verification when you prefer not to use your personal line. Pick a service, complete payment, then wait for the code in your number history. Always follow each platform’s own rules.'
+  },
+  {
+    keys: ['boost', 'follower', 'like', 'view', 'social'],
+    answer: 'Boosters are social growth packages. Choose a package, provide the required link or username, and pay from your wallet. Status updates appear in your booster order history.'
+  },
+  {
+    keys: ['password', 'login', 'sign in', 'account locked', 'cannot login'],
+    answer: 'Use “Forgot password” on the sign-in page, or update your password under Profile → Security. If you still cannot access your account, share the email on the account (not your password) and we will assist.'
+  },
+  {
+    keys: ['customer id', 'my id', 'where is my id'],
+    answer: 'Your Customer ID is on the Profile page. Copy it and include it whenever you contact support so we can find your account quickly.'
+  },
+  {
+    keys: ['contact', 'support', 'help', 'human', 'agent', 'speak to'],
+    answer: null // force human path
+  }
+];
+
+window.matchSupportFaq = function(text) {
+  var q = String(text || '').toLowerCase();
+  if (!q) return null;
+  for (var i = 0; i < window.SUPPORT_FAQ.length; i++) {
+    var item = window.SUPPORT_FAQ[i];
+    for (var k = 0; k < item.keys.length; k++) {
+      if (q.indexOf(item.keys[k]) !== -1) return item;
+    }
+  }
+  return null;
+};
 
 window.appendLiveChatBubble = function(role, text, isHtml) {
-    var box = document.getElementById('liveChatMessages');
-    if (!box) return;
-    var d = document.createElement('div');
-    d.className = 'live-chat-bubble ' + (role === 'user' ? 'user' : 'bot');
-    if (isHtml) d.innerHTML = text;
-    else d.textContent = text;
-    box.appendChild(d);
-    box.scrollTop = box.scrollHeight;
+  var box = document.getElementById('liveChatMessages');
+  if (!box) return;
+  var d = document.createElement('div');
+  d.className = 'live-chat-bubble ' + (role === 'user' ? 'user' : 'bot');
+  if (isHtml) d.innerHTML = text;
+  else d.textContent = text;
+  box.appendChild(d);
+  box.scrollTop = box.scrollHeight;
+};
+
+window.openSupportLiveChatFromWidget = function() {
+  var popup = document.getElementById('support-popup');
+  if (popup) popup.classList.remove('active');
+  if (typeof switchSection === 'function') switchSection('profile');
+  setTimeout(function() {
+    if (typeof openProfileSubview === 'function') openProfileSubview('livechat');
+  }, 120);
+};
+
+window.openSupportHelpFromWidget = function() {
+  var popup = document.getElementById('support-popup');
+  if (popup) popup.classList.remove('active');
+  if (typeof switchSection === 'function') switchSection('profile');
+  setTimeout(function() {
+    if (typeof openProfileSubview === 'function') openProfileSubview('help');
+  }, 120);
+};
+
+window.ensureSupportTicket = async function() {
+  if (!supabaseClient) return null;
+  var sess = await supabaseClient.auth.getSession();
+  var user = sess && sess.data && sess.data.session && sess.data.session.user;
+  if (!user) return null;
+
+  var { data: existing } = await supabaseClient
+    .from('support_tickets')
+    .select('id, status')
+    .eq('user_id', user.id)
+    .neq('status', 'closed')
+    .order('created_at', { ascending: false })
+    .limit(1);
+
+  if (existing && existing[0] && existing[0].id) return { ticketId: existing[0].id, user: user };
+
+  var cid = (document.getElementById('myCustomerId') || {}).value || '';
+  var name = (document.getElementById('profileHeaderName') || {}).textContent || '';
+  var email = (document.getElementById('profileHeaderEmail') || {}).textContent || user.email || '';
+  if (name === 'Loading...') name = '';
+
+  var { data: created, error } = await supabaseClient.from('support_tickets').insert({
+    user_id: user.id,
+    customer_id: cid || null,
+    user_email: email,
+    user_name: name || null,
+    subject: 'Support request',
+    status: 'open'
+  }).select('id').single();
+
+  if (error || !created) {
+    console.warn(error);
+    return null;
+  }
+  return { ticketId: created.id, user: user };
+};
+
+window.subscribeSupportMessages = function(ticketId) {
+  if (!supabaseClient || !ticketId) return;
+  try {
+    if (window._liveChatChannel) supabaseClient.removeChannel(window._liveChatChannel);
+    window._liveChatChannel = supabaseClient.channel('user-support-' + ticketId)
+      .on('postgres_changes', {
+        event: 'INSERT',
+        schema: 'public',
+        table: 'support_messages',
+        filter: 'ticket_id=eq.' + ticketId
+      }, function(payload) {
+        var m = payload.new;
+        if (!m) return;
+        if (m.sender_type === 'admin') {
+          window.appendLiveChatBubble('bot', m.body, false);
+        }
+      })
+      .subscribe();
+  } catch (e) { console.warn(e); }
 };
 
 window.initLiveChatIfNeeded = async function() {
-    var box = document.getElementById('liveChatMessages');
-    if (!box) return;
-    box.innerHTML = '';
-    window._liveChatBooted = true;
+  var box = document.getElementById('liveChatMessages');
+  if (!box) return;
+  box.innerHTML = '';
+  window._liveChatBooted = true;
+  window._liveChatStep = 'welcome';
+  window._liveChatTransferred = false;
+  window._liveChatFaqMatched = false;
 
-    window.appendLiveChatBubble('bot', 'Hi there 👋 Welcome to <strong>MJ Hub</strong> support.', true);
-    window.appendLiveChatBubble('bot', 'Please send:<br>1. Your <strong>Customer ID</strong><br>2. What you need help with<br>3. Order / payment reference (if any)<br><br>After your first message you are transferred to a human agent on our support desk.', true);
+  var st = document.getElementById('liveChatStatus');
+  if (st) st.textContent = 'Assistant online';
 
-    if (!supabaseClient) {
-        window.appendLiveChatBubble('bot', 'Chat is offline (not signed in). Please refresh after logging in, or use WhatsApp support.', false);
-        return;
+  window.appendLiveChatBubble('bot', 'Hi — welcome to MJ Hub Support. I can help with orders, payments, refunds, and your account.', false);
+  window.appendLiveChatBubble('bot', 'Describe your issue in a short message. If it is a common question, I will answer right away. Otherwise I will connect you with a specialist.', false);
+
+  if (!supabaseClient) {
+    window.appendLiveChatBubble('bot', 'Please sign in to save this conversation and receive a reply.', false);
+    return;
+  }
+
+  try {
+    var ctx = await window.ensureSupportTicket();
+    if (!ctx) {
+      window.appendLiveChatBubble('bot', 'Chat is available after you sign in. You can also reach us on WhatsApp or Telegram from the Help menu.', false);
+      return;
+    }
+    window._liveChatTicketId = ctx.ticketId;
+
+    var { data: msgs } = await supabaseClient
+      .from('support_messages')
+      .select('*')
+      .eq('ticket_id', ctx.ticketId)
+      .order('created_at', { ascending: true });
+
+    if (msgs && msgs.length) {
+      // Keep welcome brief; then show history
+      msgs.forEach(function(m) {
+        if (m.sender_type === 'user') window.appendLiveChatBubble('user', m.body, false);
+        else if (m.sender_type === 'admin') window.appendLiveChatBubble('bot', m.body, false);
+      });
+      window._liveChatStep = 'human';
+      window._liveChatTransferred = true;
+      if (st) st.textContent = 'Connected with support';
     }
 
-    try {
-        var sess = await supabaseClient.auth.getSession();
-        var user = sess && sess.data && sess.data.session && sess.data.session.user;
-        if (!user) {
-            window.appendLiveChatBubble('bot', 'Please sign in to chat with support.', false);
-            return;
-        }
-
-        // Reuse latest non-closed ticket, or create one
-        var { data: existing, error: exErr } = await supabaseClient
-            .from('support_tickets')
-            .select('id, status')
-            .eq('user_id', user.id)
-            .neq('status', 'closed')
-            .order('created_at', { ascending: false })
-            .limit(1);
-
-        if (exErr) {
-            console.warn(exErr);
-            window.appendLiveChatBubble('bot', 'Support inbox is being set up. If this persists, contact WhatsApp support. (' + (exErr.message || 'error') + ')', false);
-            return;
-        }
-
-        var ticketId = existing && existing[0] && existing[0].id;
-        if (!ticketId) {
-            var cid = (document.getElementById('myCustomerId') || {}).value || '';
-            var name = (document.getElementById('profileHeaderName') || {}).textContent || '';
-            var email = (document.getElementById('profileHeaderEmail') || {}).textContent || user.email || '';
-            var { data: created, error: cErr } = await supabaseClient.from('support_tickets').insert({
-                user_id: user.id,
-                customer_id: cid || null,
-                user_email: email,
-                user_name: name === 'Loading...' ? null : name,
-                subject: 'Support request',
-                status: 'open'
-            }).select('id').single();
-            if (cErr) {
-                console.warn(cErr);
-                window.appendLiveChatBubble('bot', 'Could not open a support ticket. Tell admin to run support-schema.sql. ' + (cErr.message || ''), false);
-                return;
-            }
-            ticketId = created.id;
-            await supabaseClient.from('support_messages').insert({
-                ticket_id: ticketId,
-                sender_type: 'system',
-                sender_id: user.id,
-                body: 'Ticket opened. Waiting for customer details.'
-            });
-        }
-
-        window._liveChatTicketId = ticketId;
-
-        // Load history
-        var { data: msgs } = await supabaseClient
-            .from('support_messages')
-            .select('*')
-            .eq('ticket_id', ticketId)
-            .order('created_at', { ascending: true });
-
-        if (msgs && msgs.length) {
-            box.innerHTML = '';
-            msgs.forEach(function(m) {
-                if (m.sender_type === 'user') window.appendLiveChatBubble('user', m.body, false);
-                else if (m.sender_type === 'admin') window.appendLiveChatBubble('bot', '<strong>Support:</strong> ' + String(m.body).replace(/</g,'&lt;'), true);
-                else window.appendLiveChatBubble('bot', m.body, false);
-            });
-        }
-
-        // Realtime admin replies
-        try {
-            if (window._liveChatChannel) supabaseClient.removeChannel(window._liveChatChannel);
-            window._liveChatChannel = supabaseClient.channel('user-support-' + ticketId)
-                .on('postgres_changes', {
-                    event: 'INSERT',
-                    schema: 'public',
-                    table: 'support_messages',
-                    filter: 'ticket_id=eq.' + ticketId
-                }, function(payload) {
-                    var m = payload.new;
-                    if (!m) return;
-                    if (m.sender_type === 'admin') {
-                        window.appendLiveChatBubble('bot', '<strong>Support:</strong> ' + String(m.body).replace(/</g,'&lt;'), true);
-                    } else if (m.sender_type === 'system') {
-                        window.appendLiveChatBubble('bot', m.body, false);
-                    }
-                })
-                .subscribe();
-        } catch (rt) { console.warn(rt); }
-
-        var st = document.getElementById('liveChatStatus');
-        if (st) st.textContent = 'Connected · agents reply from Support Desk';
-    } catch (err) {
-        console.error(err);
-        window.appendLiveChatBubble('bot', 'Could not connect support chat.', false);
-    }
+    window.subscribeSupportMessages(ctx.ticketId);
+  } catch (err) {
+    console.error(err);
+  }
 };
 
 window.sendLiveChatMessage = async function(e) {
-    if (e && e.preventDefault) e.preventDefault();
-    var input = document.getElementById('liveChatInput');
-    if (!input) return false;
-    var text = (input.value || '').trim();
-    if (!text) return false;
+  if (e && e.preventDefault) e.preventDefault();
+  var input = document.getElementById('liveChatInput');
+  if (!input) return false;
+  var text = (input.value || '').trim();
+  if (!text) return false;
+  input.value = '';
+  window.appendLiveChatBubble('user', text, false);
 
-    if (!supabaseClient || !window._liveChatTicketId) {
-        // ensure ticket exists
-        await window.initLiveChatIfNeeded();
+  // FAQ path before human
+  if (!window._liveChatTransferred) {
+    var hit = window.matchSupportFaq(text);
+    if (hit && hit.answer) {
+      window._liveChatFaqMatched = true;
+      window.appendLiveChatBubble('bot', hit.answer, false);
+      window.appendLiveChatBubble('bot', 'Did that solve it? If you still need help, reply with more detail (include your Customer ID and any order reference) and I will connect you with a specialist.', false);
+      window._liveChatStep = 'details';
+      // Still log message if we have a ticket
+      try {
         if (!window._liveChatTicketId) {
-            if (typeof showToast === 'function') showToast('Support chat unavailable');
-            return false;
+          var ctx0 = await window.ensureSupportTicket();
+          if (ctx0) window._liveChatTicketId = ctx0.ticketId;
         }
-    }
-
-    input.value = '';
-    window.appendLiveChatBubble('user', text, false);
-
-    try {
-        var sess = await supabaseClient.auth.getSession();
-        var user = sess && sess.data && sess.data.session && sess.data.session.user;
-        var { error } = await supabaseClient.from('support_messages').insert({
+        if (window._liveChatTicketId && supabaseClient) {
+          var sess0 = await supabaseClient.auth.getSession();
+          var u0 = sess0 && sess0.data && sess0.data.session && sess0.data.session.user;
+          await supabaseClient.from('support_messages').insert({
             ticket_id: window._liveChatTicketId,
             sender_type: 'user',
-            sender_id: user && user.id,
+            sender_id: u0 && u0.id,
             body: text
-        });
-        if (error) {
-            window.appendLiveChatBubble('bot', 'Message failed: ' + (error.message || 'error'), false);
-            return false;
+          });
         }
-        // First human transfer notice (once per session)
-        if (!window._liveChatTransferredNote) {
-            window._liveChatTransferredNote = true;
-            window.appendLiveChatBubble('bot', 'Thanks — your message was sent. You have been <strong>transferred to a human agent</strong>. An admin will reply here from the MJ Hub Support Desk. Keep this page open or check back later.', true);
-        }
-    } catch (err) {
-        window.appendLiveChatBubble('bot', 'Network error sending message.', false);
+      } catch (err0) {}
+      return false;
     }
-    return false;
+  }
+
+  // Ensure ticket + save message
+  try {
+    if (!window._liveChatTicketId) {
+      var ctx = await window.ensureSupportTicket();
+      if (ctx) {
+        window._liveChatTicketId = ctx.ticketId;
+        window.subscribeSupportMessages(ctx.ticketId);
+      }
+    }
+    if (!supabaseClient || !window._liveChatTicketId) {
+      window.appendLiveChatBubble('bot', 'Could not start a secure conversation. Please use WhatsApp or Telegram from Help, or sign in and try again.', false);
+      return false;
+    }
+
+    var sess = await supabaseClient.auth.getSession();
+    var user = sess && sess.data && sess.data.session && sess.data.session.user;
+    var { error } = await supabaseClient.from('support_messages').insert({
+      ticket_id: window._liveChatTicketId,
+      sender_type: 'user',
+      sender_id: user && user.id,
+      body: text
+    });
+    if (error) {
+      window.appendLiveChatBubble('bot', 'Message could not be sent. Please try again in a moment.', false);
+      return false;
+    }
+
+    if (!window._liveChatTransferred) {
+      window._liveChatTransferred = true;
+      window._liveChatStep = 'human';
+      var st = document.getElementById('liveChatStatus');
+      if (st) st.textContent = 'Connected with support';
+      window.appendLiveChatBubble('bot', 'Thanks — a specialist will continue with you here. Please include your Customer ID and any order or payment reference if you have not already. You can keep this chat open or check back later for a reply.', false);
+    }
+  } catch (err) {
+    window.appendLiveChatBubble('bot', 'Connection issue. Please try again shortly.', false);
+  }
+  return false;
 };
+
 function syncLanguageUI() {
     let code = 'en';
     try { code = localStorage.getItem('mjhub_lang') || 'en'; } catch (e) {}
