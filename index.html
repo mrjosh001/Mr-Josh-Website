@@ -764,6 +764,168 @@ footer a:hover { color: var(--primary); }
   font-size: 13px; font-weight: 700; color: #fecaca;
 }
 
+
+/* ===== MJ Hub sleek polish (blue/white brand, glass + float) ===== */
+:root {
+  --glass: rgba(255,255,255,.62);
+  --glass-border: rgba(255,255,255,.45);
+  --float-shadow: 0 20px 50px rgba(37,99,235,.12), 0 8px 20px rgba(15,23,42,.06);
+}
+body[data-theme="dark"] {
+  --glass: rgba(15,23,42,.55);
+  --glass-border: rgba(148,163,184,.14);
+  --float-shadow: 0 24px 60px rgba(0,0,0,.45), 0 0 40px rgba(59,130,246,.08);
+}
+
+/* Soft ambient blue glow behind main sections */
+.hero::before {
+  content: "";
+  position: absolute; inset: -20% -10% auto -10%; height: 70%;
+  background:
+    radial-gradient(ellipse 50% 60% at 20% 40%, rgba(59,130,246,.22), transparent 70%),
+    radial-gradient(ellipse 40% 50% at 80% 20%, rgba(96,165,250,.15), transparent 65%);
+  pointer-events: none; z-index: 0;
+}
+.hero > * { position: relative; z-index: 1; }
+
+/* Glass cards */
+.feature-card, .platform-card, .step, .trust-item, .earn-card {
+  backdrop-filter: blur(18px) saturate(1.2);
+  -webkit-backdrop-filter: blur(18px) saturate(1.2);
+  box-shadow: var(--float-shadow);
+  transition: transform .35s cubic-bezier(.34,1.2,.64,1), box-shadow .35s, border-color .25s;
+}
+.feature-card, .platform-card, .step {
+  background: var(--glass) !important;
+  border: 1px solid var(--glass-border) !important;
+}
+.feature-card:hover, .platform-card:hover, .step:hover {
+  transform: translateY(-8px) scale(1.02);
+  box-shadow: 0 28px 60px rgba(59,130,246,.18), 0 12px 24px rgba(15,23,42,.08);
+  border-color: color-mix(in srgb, var(--primary) 45%, transparent) !important;
+}
+
+/* Floating pill chips */
+.chip {
+  box-shadow: 0 8px 24px rgba(59,130,246,.15);
+  transition: transform .25s ease;
+}
+.chip:hover { transform: translateY(-3px) scale(1.05); }
+
+/* Hero phone / floating showcase */
+.hero-showcase {
+  margin-top: 40px;
+  display: flex;
+  justify-content: center;
+  perspective: 1200px;
+}
+.hero-phone-stack {
+  position: relative;
+  width: min(320px, 88vw);
+  height: 420px;
+}
+.hero-phone {
+  position: absolute; left: 50%; top: 0;
+  width: 240px; height: 400px;
+  transform: translateX(-50%);
+  border-radius: 36px;
+  background: linear-gradient(160deg, rgba(255,255,255,.75), rgba(219,234,254,.5));
+  border: 1px solid rgba(255,255,255,.6);
+  box-shadow: 0 30px 80px rgba(37,99,235,.2), 0 0 0 1px rgba(59,130,246,.12);
+  backdrop-filter: blur(20px);
+  overflow: hidden;
+  animation: phoneFloat 5s ease-in-out infinite;
+}
+body[data-theme="dark"] .hero-phone {
+  background: linear-gradient(160deg, rgba(15,23,42,.9), rgba(30,58,138,.45));
+  border-color: rgba(148,163,184,.2);
+}
+.hero-phone-notch {
+  width: 88px; height: 22px; margin: 12px auto 0;
+  background: #0f172a; border-radius: 20px; opacity: .85;
+}
+.hero-phone-screen {
+  padding: 18px 16px;
+  display: flex; flex-direction: column; gap: 10px;
+}
+.hero-phone-row {
+  display: flex; gap: 8px;
+}
+.hero-phone-card {
+  flex: 1; border-radius: 14px; padding: 12px;
+  background: rgba(255,255,255,.7);
+  border: 1px solid rgba(59,130,246,.15);
+  font-size: 11px; font-weight: 700; color: #1e3a8a;
+  box-shadow: 0 6px 16px rgba(37,99,235,.1);
+}
+body[data-theme="dark"] .hero-phone-card {
+  background: rgba(30,41,59,.75); color: #bfdbfe; border-color: rgba(96,165,250,.2);
+}
+.hero-phone-card span { display: block; font-size: 10px; font-weight: 500; color: var(--muted); margin-top: 4px; }
+.hero-float-badge {
+  position: absolute;
+  padding: 10px 14px;
+  border-radius: 16px;
+  background: rgba(255,255,255,.85);
+  border: 1px solid rgba(59,130,246,.2);
+  box-shadow: 0 12px 32px rgba(37,99,235,.18);
+  font-size: 12px; font-weight: 700; color: #1d4ed8;
+  backdrop-filter: blur(12px);
+  animation: badgeFloat 4.5s ease-in-out infinite;
+}
+body[data-theme="dark"] .hero-float-badge {
+  background: rgba(15,23,42,.85); color: #93c5fd; border-color: rgba(96,165,250,.25);
+}
+.hero-float-badge.b1 { left: -28px; top: 70px; animation-delay: 0s; }
+.hero-float-badge.b2 { right: -32px; top: 160px; animation-delay: .8s; }
+.hero-float-badge.b3 { left: -16px; bottom: 50px; animation-delay: 1.4s; }
+@keyframes phoneFloat {
+  0%, 100% { transform: translateX(-50%) translateY(0); }
+  50% { transform: translateX(-50%) translateY(-12px); }
+}
+@keyframes badgeFloat {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-8px); }
+}
+@media (max-width: 640px) {
+  .hero-float-badge.b1 { left: 0; }
+  .hero-float-badge.b2 { right: 0; }
+  .hero-phone-stack { height: 380px; }
+}
+
+/* Section spacing + soft divider glow */
+.section-head h2 {
+  letter-spacing: -0.03em;
+}
+.section-head h2::after {
+  content: "";
+  display: block;
+  width: 48px; height: 4px; margin: 14px auto 0;
+  border-radius: 99px;
+  background: linear-gradient(90deg, var(--primary), #93c5fd);
+}
+
+/* Primary buttons — richer blue depth */
+.btn-primary {
+  background: linear-gradient(135deg, #3b82f6 0%, #2563eb 55%, #1d4ed8 100%) !important;
+  box-shadow: 0 8px 28px rgba(37,99,235,.35), inset 0 1px 0 rgba(255,255,255,.25) !important;
+}
+.btn-primary:hover {
+  box-shadow: 0 12px 36px rgba(37,99,235,.45), inset 0 1px 0 rgba(255,255,255,.3) !important;
+}
+
+/* Nav glass stronger */
+.nav {
+  backdrop-filter: blur(20px) saturate(1.3) !important;
+  -webkit-backdrop-filter: blur(20px) saturate(1.3) !important;
+}
+
+/* Support widget — match glass language */
+.support-popup {
+  backdrop-filter: blur(22px) saturate(1.25) !important;
+  box-shadow: 0 24px 60px rgba(15,23,42,.25) !important;
+}
+
 </style>
 </head>
 <body>
