@@ -995,7 +995,8 @@
       <div class="field"><label>Stock Quantity</label><input type="number" id="pStock" min="0" step="1" /></div>
       <div class="field">
         <label>Available</label>
-        <select id="pAvailable"><option value="true">Yes — Active</option><option value="false">No — Hidden</option></select>
+        <select id="pAvailable"><option value="true">Yes — Active (customers can see &amp; buy)</option><option value="false">No — Hidden (customers cannot see)</option></select>
+        <div class="price-note">Hidden products stay hidden even after supplier sync. Shared products can also be hidden.</div>
       </div>
       <div class="field" style="border:1px solid var(--border);border-radius:12px;padding:12px;background:rgba(99,102,241,0.06);">
         <label style="display:flex;align-items:center;gap:8px;cursor:pointer;">
@@ -2393,7 +2394,7 @@ function renderProducts(list) {
         <td class="price">₦${price.toLocaleString()}</td>
         <td class="profit">₦${profit.toLocaleString()}</td>
         <td>${stock}</td>
-        <td><span class="badge ${available ? 'badge-on' : 'badge-off'}">${available ? 'Active' : 'Hidden'}</span></td>
+        <td><button type="button" class="badge ${available ? 'badge-on' : 'badge-off'}" style="cursor:pointer;border:none;font:inherit;" title="Click to show/hide" onclick="event.stopPropagation();toggleProductAvailability('${rowId}', ${available})">${available ? 'Active' : 'Hidden'}</button></td>
         <td>
           <button class="btn btn-ghost btn-sm" onclick="editProduct('${escapeHtml(String(rowId))}')"><i class="fas fa-edit"></i></button>
           <button class="btn btn-ghost btn-sm" style="color:#f87171;" onclick="deleteProduct('${escapeHtml(String(rowId))}', event)"><i class="fas fa-trash"></i></button>
@@ -2426,7 +2427,7 @@ function renderProductCards(items) {
         <div class="row-line"><span>Supplier</span><span class="supplier-price">₦${supplier.toLocaleString()}</span></div>
         <div class="row-line"><span>Profit</span><span class="profit">₦${profit.toLocaleString()}</span></div>
         <div class="row-line"><span>Stock</span><span>${stock}</span></div>
-        <div class="row-line"><span>Status</span><span class="badge ${available ? 'badge-on' : 'badge-off'}">${available ? 'Active' : 'Hidden'}</span></div>
+        <div class="row-line"><span>Status</span><button type="button" class="badge ${available ? 'badge-on' : 'badge-off'}" style="cursor:pointer;border:none;font:inherit;" title="Click to show/hide" onclick="event.stopPropagation();toggleProductAvailability('${rowId}', ${available})">${available ? 'Active' : 'Hidden'}</button></div>
         <div style="margin-top:10px;display:flex;gap:8px;">
           <button class="btn btn-ghost btn-sm" onclick="editProduct('${escapeHtml(String(rowId))}')"><i class="fas fa-edit"></i> Edit</button>
           <button class="btn btn-ghost btn-sm" style="color:#f87171;" onclick="deleteProduct('${escapeHtml(String(rowId))}', event)"><i class="fas fa-trash"></i> Delete</button>
@@ -2574,6 +2575,31 @@ async function deleteProduct(id, evt) {
   }
 }
 
+
+async function toggleProductAvailability(id, currentlyAvailable) {
+  const next = !currentlyAvailable;
+  if (!confirm(next ? 'Show this product to customers?' : 'Hide this product from customers?')) return;
+  try {
+    const headers = { 'Content-Type': 'application/json' };
+    const { data: { session } } = await sb.auth.getSession();
+    if (session?.access_token) headers['Authorization'] = 'Bearer ' + session.access_token;
+    const res = await fetch('/api/admin', {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ resource: 'product', action: 'update', id, is_available: next })
+    });
+    const data = await res.json();
+    if (!data.success) {
+      showAdminToast(data.message || 'Could not update visibility', 'error');
+      return;
+    }
+    showAdminToast(next ? 'Product is now visible to customers' : 'Product hidden from customers', 'success');
+    await loadProducts();
+  } catch (e) {
+    showAdminToast('Network error: ' + e.message, 'error');
+  }
+}
+
 async function saveProduct() {
   const id = document.getElementById('editProductId').value;
   const name = document.getElementById('pName').value.trim();
@@ -2623,8 +2649,9 @@ async function saveProduct() {
     return;
   }
   if (body.is_shared) {
-    body.stock_quantity = 99999;
-    body.is_available = true;
+    // Keep unlimited stock for shared listings, but respect Active/Hidden from admin.
+    // Previously is_available was forced true, so Hidden never stuck for shared products.
+    if (body.is_available) body.stock_quantity = 99999;
   }
 
   const btn = document.getElementById('saveProductBtn');

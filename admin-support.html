@@ -9,79 +9,136 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <style>
     :root {
-      --bg: #06080f; --card: #0f1524; --card2: #151d30; --text: #f1f5f9; --muted: #8b9bb4;
+      --bg: #070b14; --card: #0e1524; --card2: #141c2e; --text: #f1f5f9; --muted: #8b9bb4;
       --border: rgba(148,163,184,.12); --primary: #5b8af5; --success: #34d399; --danger: #f87171; --warn: #fbbf24;
     }
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body { font-family: 'Plus Jakarta Sans', system-ui, sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
     .login-wrap { min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 24px; }
-    .login-card { width: 100%; max-width: 400px; background: var(--card); border: 1px solid var(--border); border-radius: 18px; padding: 28px; }
-    .login-card h1 { font-size: 22px; margin-bottom: 6px; }
+    .login-card { width: 100%; max-width: 400px; background: var(--card); border: 1px solid var(--border); border-radius: 20px; padding: 32px; }
+    .login-card h1 { font-size: 22px; margin-bottom: 6px; font-weight: 800; }
     .login-card p { color: var(--muted); font-size: 13px; margin-bottom: 20px; }
     .login-card input { width: 100%; padding: 12px 14px; border-radius: 12px; border: 1px solid var(--border); background: var(--bg); color: var(--text); margin-bottom: 10px; font: inherit; }
     .btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; padding: 11px 16px; border-radius: 12px; border: none; cursor: pointer; font: inherit; font-weight: 600; }
-    .btn-primary { background: var(--primary); color: #fff; width: 100%; }
+    .btn-primary { background: linear-gradient(135deg, var(--primary), #7c5cfc); color: #fff; width: 100%; }
     .btn-ghost { background: transparent; border: 1px solid var(--border); color: var(--text); }
-    .btn-sm { padding: 8px 12px; font-size: 13px; }
+    .btn-sm { padding: 8px 12px; font-size: 12px; }
     .error-msg { color: var(--danger); font-size: 13px; margin-top: 10px; display: none; }
     .shell { display: none; height: 100vh; flex-direction: column; }
     .shell.open { display: flex; }
-    .topbar { height: 56px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; padding: 0 16px; background: rgba(11,16,28,.9); }
+    .topbar {
+      height: 58px; border-bottom: 1px solid var(--border);
+      display: flex; align-items: center; justify-content: space-between; padding: 0 18px;
+      background: rgba(14,21,36,.92); backdrop-filter: blur(12px);
+    }
     .topbar a { color: var(--muted); text-decoration: none; font-size: 13px; font-weight: 600; }
     .topbar a:hover { color: var(--text); }
-    .brand { font-weight: 800; font-size: 16px; }
+    .brand { font-weight: 800; font-size: 15px; letter-spacing: -0.02em; }
     .brand span { color: var(--primary); }
-    .main { flex: 1; display: grid; grid-template-columns: 340px 1fr; min-height: 0; }
-    @media (max-width: 860px) { .main { grid-template-columns: 1fr; } .thread-pane.hide-mobile { display: none; } .list-pane.hide-mobile { display: none; } }
+    .top-stats { display: flex; gap: 10px; align-items: center; }
+    .stat-pill {
+      font-size: 11px; font-weight: 700; padding: 5px 10px; border-radius: 999px;
+      background: rgba(91,138,245,.12); color: var(--primary); border: 1px solid rgba(91,138,245,.25);
+    }
+    .stat-pill.warn { background: rgba(251,191,36,.12); color: var(--warn); border-color: rgba(251,191,36,.3); }
+    .stat-pill.danger { background: rgba(248,113,113,.12); color: var(--danger); border-color: rgba(248,113,113,.3); }
+    .main { flex: 1; display: grid; grid-template-columns: 360px 1fr; min-height: 0; }
+    @media (max-width: 860px) {
+      .main { grid-template-columns: 1fr; }
+      .thread-pane.hide-mobile { display: none; }
+      .list-pane.hide-mobile { display: none; }
+    }
     .list-pane { border-right: 1px solid var(--border); display: flex; flex-direction: column; min-height: 0; background: var(--card); }
-    .list-head { padding: 14px; border-bottom: 1px solid var(--border); }
-    .list-head h2 { font-size: 15px; margin-bottom: 10px; }
+    .list-head { padding: 16px; border-bottom: 1px solid var(--border); }
+    .list-head h2 { font-size: 15px; margin-bottom: 12px; font-weight: 800; }
+    .search-box {
+      width: 100%; padding: 10px 12px; border-radius: 12px; border: 1px solid var(--border);
+      background: var(--bg); color: var(--text); font: inherit; font-size: 13px; margin-bottom: 10px;
+    }
     .filters { display: flex; gap: 6px; flex-wrap: wrap; }
-    .chip { padding: 6px 10px; border-radius: 999px; border: 1px solid var(--border); background: transparent; color: var(--muted); font-size: 12px; font-weight: 600; cursor: pointer; }
-    .chip.active { background: rgba(91,138,245,.15); color: var(--primary); border-color: rgba(91,138,245,.35); }
+    .chip {
+      padding: 6px 11px; border-radius: 999px; border: 1px solid var(--border);
+      background: transparent; color: var(--muted); font-size: 11px; font-weight: 700; cursor: pointer;
+    }
+    .chip.active { background: rgba(91,138,245,.15); color: var(--primary); border-color: rgba(91,138,245,.4); }
     .ticket-list { flex: 1; overflow-y: auto; }
-    .ticket-item { padding: 12px 14px; border-bottom: 1px solid var(--border); cursor: pointer; }
-    .ticket-item:hover, .ticket-item.active { background: var(--card2); }
+    .ticket-item {
+      padding: 14px 16px; border-bottom: 1px solid var(--border); cursor: pointer;
+      transition: background .15s;
+    }
+    .ticket-item:hover { background: rgba(255,255,255,.02); }
+    .ticket-item.active { background: var(--card2); border-left: 3px solid var(--primary); }
+    .ticket-item.unread .name { color: #fff; }
     .ticket-item .row1 { display: flex; justify-content: space-between; gap: 8px; margin-bottom: 4px; }
     .ticket-item .name { font-weight: 700; font-size: 13px; }
     .ticket-item .time { font-size: 11px; color: var(--muted); white-space: nowrap; }
     .ticket-item .preview { font-size: 12px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .badge { font-size: 10px; font-weight: 700; padding: 2px 7px; border-radius: 999px; text-transform: uppercase; }
+    .badge { font-size: 10px; font-weight: 800; padding: 2px 8px; border-radius: 999px; text-transform: uppercase; letter-spacing: .03em; }
     .badge.open { background: rgba(52,211,153,.15); color: var(--success); }
     .badge.pending { background: rgba(251,191,36,.15); color: var(--warn); }
-    .badge.closed { background: rgba(148,163,184,.15); color: var(--muted); }
-    .thread-pane { display: flex; flex-direction: column; min-height: 0; }
-    .thread-empty { flex: 1; display: flex; align-items: center; justify-content: center; color: var(--muted); font-size: 14px; padding: 24px; text-align: center; }
-    .thread-head { padding: 12px 16px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
-    .thread-head .meta { font-size: 12px; color: var(--muted); }
-    .thread-messages { flex: 1; overflow-y: auto; padding: 16px; display: flex; flex-direction: column; gap: 10px; background: rgba(0,0,0,.2); }
-    .bubble { max-width: 78%; padding: 10px 12px; border-radius: 14px; font-size: 13px; line-height: 1.45; white-space: pre-wrap; word-break: break-word; }
-    .bubble.user { align-self: flex-start; background: var(--card2); }
-    .bubble.admin { align-self: flex-end; background: var(--primary); color: #fff; }
-    .bubble.system { align-self: center; background: transparent; color: var(--muted); font-size: 12px; max-width: 90%; text-align: center; }
-    .bubble .who { font-size: 10px; opacity: .75; margin-bottom: 4px; font-weight: 700; }
-    .composer { border-top: 1px solid var(--border); padding: 12px; display: flex; gap: 8px; background: var(--card); }
-    .composer textarea { flex: 1; min-height: 44px; max-height: 120px; resize: vertical; border-radius: 12px; border: 1px solid var(--border); background: var(--bg); color: var(--text); padding: 10px 12px; font: inherit; }
-    .composer button { align-self: flex-end; }
+    .badge.closed { background: rgba(148,163,184,.12); color: var(--muted); }
+    .thread-pane { display: flex; flex-direction: column; min-height: 0; background: var(--bg); }
+    .thread-empty {
+      flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center;
+      color: var(--muted); font-size: 14px; padding: 32px; text-align: center; gap: 10px;
+    }
+    .thread-empty i { font-size: 36px; opacity: .4; }
+    .thread-head {
+      padding: 14px 18px; border-bottom: 1px solid var(--border);
+      display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap;
+      background: var(--card);
+    }
+    .thread-head .meta { font-size: 12px; color: var(--muted); margin-top: 3px; }
+    .avatar {
+      width: 40px; height: 40px; border-radius: 12px;
+      background: linear-gradient(135deg, var(--primary), #7c5cfc);
+      display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 14px; color: #fff;
+    }
+    .thread-messages {
+      flex: 1; overflow-y: auto; padding: 20px 18px;
+      display: flex; flex-direction: column; gap: 12px;
+      background: radial-gradient(ellipse at top, rgba(91,138,245,.06), transparent 50%);
+    }
+    .bubble {
+      max-width: 72%; padding: 12px 14px; border-radius: 16px;
+      font-size: 13.5px; line-height: 1.5; white-space: pre-wrap; word-break: break-word;
+      box-shadow: 0 2px 8px rgba(0,0,0,.12);
+    }
+    .bubble.user { align-self: flex-start; background: var(--card2); border: 1px solid var(--border); border-bottom-left-radius: 4px; }
+    .bubble.admin { align-self: flex-end; background: linear-gradient(135deg, #4f7df0, #6b5cf0); color: #fff; border-bottom-right-radius: 4px; }
+    .bubble.system { align-self: center; background: transparent; color: var(--muted); font-size: 12px; max-width: 90%; text-align: center; box-shadow: none; }
+    .bubble .who { font-size: 10px; opacity: .75; margin-bottom: 5px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; }
+    .composer-wrap { border-top: 1px solid var(--border); background: var(--card); }
+    .quick-replies { padding: 10px 14px 0; display: flex; flex-wrap: wrap; gap: 6px; }
+    .composer { padding: 12px 14px; display: flex; gap: 10px; align-items: flex-end; }
+    .composer textarea {
+      flex: 1; min-height: 48px; max-height: 140px; resize: vertical; border-radius: 14px;
+      border: 1px solid var(--border); background: var(--bg); color: var(--text);
+      padding: 12px 14px; font: inherit; line-height: 1.4;
+    }
+    .composer textarea:focus { outline: none; border-color: rgba(91,138,245,.5); }
+    .composer .btn-primary { width: auto; padding: 12px 18px; border-radius: 14px; }
   </style>
 </head>
 <body>
   <div id="loginScreen" class="login-wrap">
     <div class="login-card">
       <h1>Support Desk</h1>
-      <p>Admin sign-in required. Same account as the main admin panel.</p>
+      <p>Sign in with your admin account to manage customer conversations.</p>
       <input type="email" id="email" placeholder="Admin email" autocomplete="username">
       <input type="password" id="password" placeholder="Password" autocomplete="current-password">
       <button class="btn btn-primary" id="loginBtn" onclick="doLogin()">Sign in</button>
       <div id="loginError" class="error-msg"></div>
-      <p style="margin-top:14px;font-size:12px;"><a href="admin.html" style="color:var(--primary);">← Back to Admin</a></p>
+      <p style="margin-top:16px;font-size:12px;"><a href="admin.html" style="color:var(--primary);">← Main Admin</a></p>
     </div>
   </div>
 
   <div id="appShell" class="shell">
     <div class="topbar">
-      <div class="brand">MJ <span>Hub</span> · Support</div>
-      <div style="display:flex;gap:14px;align-items:center;">
+      <div class="brand">MJ <span>Hub</span> · Customer Support</div>
+      <div class="top-stats">
+        <span class="stat-pill danger" id="statOpen">0 open</span>
+        <span class="stat-pill warn" id="statPending">0 pending</span>
         <a href="admin.html">Main Admin</a>
         <button class="btn btn-ghost btn-sm" onclick="doLogout()">Log out</button>
       </div>
@@ -89,7 +146,8 @@
     <div class="main">
       <aside class="list-pane" id="listPane">
         <div class="list-head">
-          <h2>Conversations <span id="openCount" style="color:var(--muted);font-weight:600;"></span></h2>
+          <h2>Inbox</h2>
+          <input class="search-box" id="ticketSearch" type="search" placeholder="Search name, email, Customer ID…" oninput="renderTicketList()">
           <div class="filters">
             <button class="chip active" data-filter="open" onclick="setFilter('open')">Open</button>
             <button class="chip" data-filter="pending" onclick="setFilter('pending')">Pending</button>
@@ -100,30 +158,40 @@
         <div class="ticket-list" id="ticketList"></div>
       </aside>
       <section class="thread-pane" id="threadPane">
-        <div class="thread-empty" id="threadEmpty">Select a conversation to reply.</div>
+        <div class="thread-empty" id="threadEmpty">
+          <i class="fas fa-comments"></i>
+          <div>Select a conversation to reply</div>
+          <div style="font-size:12px;max-width:280px;">New customer messages appear under Open. Use quick replies for faster handling.</div>
+        </div>
         <div id="threadActive" style="display:none;flex-direction:column;flex:1;min-height:0;">
           <div class="thread-head">
-            <div>
-              <div id="threadTitle" style="font-weight:800;font-size:15px;">—</div>
-              <div class="meta" id="threadMeta"></div>
+            <div style="display:flex;gap:12px;align-items:center;">
+              <div class="avatar" id="threadAvatar">?</div>
+              <div>
+                <div id="threadTitle" style="font-weight:800;font-size:15px;">—</div>
+                <div class="meta" id="threadMeta"></div>
+              </div>
             </div>
             <div style="display:flex;gap:8px;flex-wrap:wrap;">
-              <button class="btn btn-ghost btn-sm" onclick="setTicketStatus('open')">Mark open</button>
+              <button class="btn btn-ghost btn-sm" onclick="setTicketStatus('open')">Open</button>
               <button class="btn btn-ghost btn-sm" onclick="setTicketStatus('pending')">Pending</button>
               <button class="btn btn-ghost btn-sm" onclick="setTicketStatus('closed')">Close</button>
-              <button class="btn btn-ghost btn-sm" id="backToList" style="display:none;" onclick="showListMobile()">← List</button>
+              <button class="btn btn-ghost btn-sm" id="backToList" style="display:none;" onclick="showListMobile()">← Inbox</button>
             </div>
           </div>
           <div class="thread-messages" id="threadMessages"></div>
-          <div id="quickReplies" style="padding:8px 12px;display:flex;flex-wrap:wrap;gap:6px;border-top:1px solid var(--border);background:var(--card);">
-            <button type="button" class="btn btn-ghost btn-sm" onclick="insertQuick('Thanks for reaching out. We are looking into this now.')">Looking into it</button>
-            <button type="button" class="btn btn-ghost btn-sm" onclick="insertQuick('Please share your Customer ID and order/payment reference.')">Ask for ID</button>
-            <button type="button" class="btn btn-ghost btn-sm" onclick="insertQuick('This has been resolved. Reply here if you need anything else.')">Resolved</button>
+          <div class="composer-wrap">
+            <div class="quick-replies">
+              <button type="button" class="btn btn-ghost btn-sm" onclick="insertQuick('Thanks for reaching out. We are looking into this for you now.')">Looking into it</button>
+              <button type="button" class="btn btn-ghost btn-sm" onclick="insertQuick('Please share your Customer ID and any order or payment reference so we can assist faster.')">Ask for ID</button>
+              <button type="button" class="btn btn-ghost btn-sm" onclick="insertQuick('This has been resolved on our side. Reply here if you need anything else — happy to help.')">Mark resolved</button>
+              <button type="button" class="btn btn-ghost btn-sm" onclick="insertQuick('We have credited your wallet. Please refresh the app to see the updated balance.')">Wallet credited</button>
+            </div>
+            <form class="composer" onsubmit="return sendAdminReply(event)">
+              <textarea id="replyInput" placeholder="Write a clear, professional reply…" required></textarea>
+              <button type="submit" class="btn btn-primary btn-sm">Send</button>
+            </form>
           </div>
-          <form class="composer" onsubmit="return sendAdminReply(event)">
-            <textarea id="replyInput" placeholder="Write a clear, professional reply…" required></textarea>
-            <button type="submit" class="btn btn-primary btn-sm" style="width:auto;padding:12px 16px;">Send</button>
-          </form>
         </div>
       </section>
     </div>
@@ -145,12 +213,18 @@
     function isAdminValue(v) {
       return v === true || v === 'true' || v === 1 || v === '1';
     }
-
     function fmtTime(iso) {
       if (!iso) return '';
       try {
         return new Date(iso).toLocaleString('en-NG', { timeZone: 'Africa/Lagos', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
       } catch (e) { return iso; }
+    }
+    function escapeHtml(s) {
+      return String(s || '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+    }
+    function initials(name) {
+      const p = String(name || '?').trim().split(/\s+/);
+      return ((p[0] && p[0][0]) || '?') + ((p[1] && p[1][0]) || '');
     }
 
     async function evaluateSession(session) {
@@ -195,7 +269,6 @@
         err.textContent = error.message || 'Login failed';
       }
     }
-
     async function doLogout() {
       await sb.auth.signOut();
       location.reload();
@@ -208,42 +281,48 @@
     }
 
     async function loadTickets() {
-      let q = sb.from('support_tickets').select('*').order('last_message_at', { ascending: false }).limit(200);
-      const { data, error } = await q;
+      const { data, error } = await sb.from('support_tickets').select('*').order('last_message_at', { ascending: false }).limit(250);
       if (error) {
-        console.error(error);
-        document.getElementById('ticketList').innerHTML = '<div style="padding:16px;color:var(--danger);font-size:13px;">Could not load tickets. Run support-schema.sql in Supabase if tables are missing.<br>' + (error.message || '') + '</div>';
+        document.getElementById('ticketList').innerHTML = '<div style="padding:16px;color:var(--danger);font-size:13px;">Could not load tickets. Run support-schema.sql if tables are missing.<br>' + escapeHtml(error.message || '') + '</div>';
         return;
       }
       tickets = data || [];
+      const openN = tickets.filter(t => t.status === 'open').length;
+      const pendN = tickets.filter(t => t.status === 'pending').length;
+      document.getElementById('statOpen').textContent = openN + ' open';
+      document.getElementById('statPending').textContent = pendN + ' pending';
+      document.title = openN > 0 ? '(' + openN + ') Support Desk' : 'MJ HUB — Support Desk';
       renderTicketList();
     }
 
     function renderTicketList() {
       const list = document.getElementById('ticketList');
-      const filtered = tickets.filter(t => currentFilter === 'all' ? true : t.status === currentFilter);
-      const openN = tickets.filter(t => t.status === 'open').length;
-      document.getElementById('openCount').textContent = openN ? '(' + openN + ' open)' : '';
+      const q = (document.getElementById('ticketSearch')?.value || '').trim().toLowerCase();
+      let filtered = tickets.filter(t => currentFilter === 'all' ? true : t.status === currentFilter);
+      if (q) {
+        filtered = filtered.filter(t =>
+          String(t.user_name || '').toLowerCase().includes(q) ||
+          String(t.user_email || '').toLowerCase().includes(q) ||
+          String(t.customer_id || '').toLowerCase().includes(q) ||
+          String(t.subject || '').toLowerCase().includes(q)
+        );
+      }
       if (!filtered.length) {
-        list.innerHTML = '<div style="padding:20px;color:var(--muted);font-size:13px;text-align:center;">No conversations in this filter.</div>';
+        list.innerHTML = '<div style="padding:24px;color:var(--muted);font-size:13px;text-align:center;">No conversations in this view.</div>';
         return;
       }
       list.innerHTML = filtered.map(t => `
-        <div class="ticket-item ${t.id === activeTicketId ? 'active' : ''}" onclick="openTicket('${t.id}')">
+        <div class="ticket-item ${t.id === activeTicketId ? 'active' : ''} ${t.status === 'open' ? 'unread' : ''}" onclick="openTicket('${t.id}')">
           <div class="row1">
-            <span class="name">${escapeHtml(t.user_name || t.user_email || t.customer_id || 'User')}</span>
+            <span class="name">${escapeHtml(t.user_name || t.user_email || t.customer_id || 'Customer')}</span>
             <span class="time">${fmtTime(t.last_message_at)}</span>
           </div>
           <div class="row1">
-            <span class="preview">${escapeHtml(t.subject || 'Support request')}</span>
+            <span class="preview">${escapeHtml(t.subject || 'Support request')}${t.customer_id ? ' · ' + escapeHtml(t.customer_id) : ''}</span>
             <span class="badge ${t.status}">${t.status}</span>
           </div>
         </div>
       `).join('');
-    }
-
-    function escapeHtml(s) {
-      return String(s || '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
     }
 
     async function openTicket(id) {
@@ -253,7 +332,9 @@
       document.getElementById('threadEmpty').style.display = 'none';
       const active = document.getElementById('threadActive');
       active.style.display = 'flex';
-      document.getElementById('threadTitle').textContent = (t && (t.user_name || t.user_email)) || 'Conversation';
+      const name = (t && (t.user_name || t.user_email)) || 'Customer';
+      document.getElementById('threadTitle').textContent = name;
+      document.getElementById('threadAvatar').textContent = initials(name).toUpperCase();
       document.getElementById('threadMeta').textContent = [
         t && t.customer_id ? 'ID: ' + t.customer_id : null,
         t && t.user_email ? t.user_email : null,
@@ -274,21 +355,22 @@
     async function loadMessages(ticketId) {
       const box = document.getElementById('threadMessages');
       box.innerHTML = '<div style="color:var(--muted);font-size:13px;">Loading…</div>';
-      const { data, error } = await sb
-        .from('support_messages')
-        .select('*')
-        .eq('ticket_id', ticketId)
-        .order('created_at', { ascending: true });
+      const { data, error } = await sb.from('support_messages').select('*').eq('ticket_id', ticketId).order('created_at', { ascending: true });
       if (error) {
         box.innerHTML = '<div style="color:var(--danger);">' + escapeHtml(error.message) + '</div>';
         return;
       }
       box.innerHTML = (data || []).map(m => {
         const cls = m.sender_type === 'admin' ? 'admin' : (m.sender_type === 'system' ? 'system' : 'user');
-        const who = m.sender_type === 'admin' ? 'You (admin)' : (m.sender_type === 'system' ? 'System' : 'Customer');
+        const who = m.sender_type === 'admin' ? 'You' : (m.sender_type === 'system' ? 'System' : 'Customer');
         return `<div class="bubble ${cls}"><div class="who">${who} · ${fmtTime(m.created_at)}</div>${escapeHtml(m.body)}</div>`;
       }).join('') || '<div style="color:var(--muted);">No messages yet.</div>';
       box.scrollTop = box.scrollHeight;
+    }
+
+    function insertQuick(text) {
+      const input = document.getElementById('replyInput');
+      if (input) { input.value = text; input.focus(); }
     }
 
     async function sendAdminReply(e) {
@@ -304,10 +386,7 @@
         sender_id: user && user.id,
         body
       });
-      if (error) {
-        alert(error.message || 'Failed to send');
-        return false;
-      }
+      if (error) { alert(error.message || 'Failed to send'); return false; }
       input.value = '';
       await loadMessages(activeTicketId);
       await loadTickets();
@@ -320,25 +399,21 @@
       if (error) { alert(error.message); return; }
       await loadTickets();
       const t = tickets.find(x => x.id === activeTicketId);
-      if (t) document.getElementById('threadMeta').textContent = [
-        t.customer_id ? 'ID: ' + t.customer_id : null,
-        t.user_email || null,
-        'Status: ' + t.status
-      ].filter(Boolean).join(' · ');
+      if (t) {
+        document.getElementById('threadMeta').textContent = [
+          t.customer_id ? 'ID: ' + t.customer_id : null,
+          t.user_email || null,
+          'Status: ' + t.status
+        ].filter(Boolean).join(' · ');
+      }
     }
 
-    function insertQuick(text) {
-      const input = document.getElementById('replyInput');
-      if (input) { input.value = text; input.focus(); }
-    }
     function subscribeRealtime() {
       try {
         if (ticketsChannel) sb.removeChannel(ticketsChannel);
         ticketsChannel = sb.channel('admin-support-tickets')
           .on('postgres_changes', { event: '*', schema: 'public', table: 'support_tickets' }, () => loadTickets())
           .subscribe();
-        // title flash on new activity
-        document.addEventListener('visibilitychange', () => { if (!document.hidden) document.title = 'MJ HUB — Support Desk'; });
         if (messagesChannel) sb.removeChannel(messagesChannel);
         messagesChannel = sb.channel('admin-support-messages')
           .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'support_messages' }, (payload) => {
