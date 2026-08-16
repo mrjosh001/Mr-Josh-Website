@@ -817,7 +817,7 @@ body::before {
 .menu-btn:hover { border-color: var(--border-strong); background: var(--card-hover); }
 .brand-title {
     font-size: 18px; font-weight: 800; letter-spacing: -0.02em;
-    background: linear-gradient(135deg, var(--primary), var(--accent));
+    background: linear-gradient(135deg, var(--primary), var(--primary-strong, #2563eb));
     -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
 }
 .brand-logo {
@@ -851,7 +851,7 @@ body::before {
 .profile-dropdown-container { position: relative; }
 .profile-icon {
     width: 40px; height: 40px; border-radius: 12px;
-    background: linear-gradient(135deg, var(--primary), var(--accent));
+    background: linear-gradient(135deg, var(--primary), var(--primary-strong, #2563eb));
     color: #fff; display: flex; align-items: center; justify-content: center;
     font-weight: 700; font-size: 13px; cursor: pointer; overflow: hidden;
     border: 2px solid var(--border); transition: transform .15s;
@@ -902,7 +902,7 @@ body::before {
 .sidebar-brand-wrap { display: flex; align-items: center; gap: 10px; }
 .sidebar-brand-logo {
     width: 34px; height: 34px; border-radius: 10px;
-    background: linear-gradient(135deg, var(--primary), var(--accent));
+    background: linear-gradient(135deg, var(--primary), var(--primary-strong, #2563eb));
     color: #fff; display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 14px;
 }
 .sidebar-brand { font-size: 16px; font-weight: 800; letter-spacing: -0.02em; }
@@ -1179,7 +1179,7 @@ body::before {
     display: flex; align-items: center; justify-content: center; font-size: 16px;
 }
 .icon-blue { background: rgba(91,138,245,0.15); color: var(--primary); }
-.icon-purple { background: rgba(59,130,246,0.15); color: var(--accent); }
+.icon-purple { background: rgba(59,130,246,0.15); color: var(--primary); }
 .icon-green { background: rgba(52,211,153,0.15); color: var(--success); }
 
 /* CARDS / FORMS */
@@ -1448,27 +1448,57 @@ body::before {
   background: var(--bg, #06080f); color: var(--text); padding: 11px 12px; font-size: 14px; font-family: inherit;
 }
 
-/* ===== Floating in-page support chat (no redirect) ===== */
+/* ===== Floating in-page support chat (Intercom-style) ===== */
 .mj-support-panel {
   display: none; position: fixed; z-index: 10050;
   right: 16px; bottom: 90px; width: min(400px, calc(100vw - 24px));
-  height: min(560px, calc(100vh - 120px));
-  background: var(--card); border: 1px solid var(--border);
-  border-radius: 20px; box-shadow: 0 24px 64px rgba(0,0,0,.45);
+  height: min(580px, calc(100vh - 110px));
+  background: var(--card);
+  border: 1px solid var(--glass-border, var(--border));
+  border-radius: 22px;
+  box-shadow: 0 28px 70px rgba(0,0,0,.5), 0 0 0 1px rgba(255,255,255,.06) inset;
+  backdrop-filter: blur(28px) saturate(1.6);
+  -webkit-backdrop-filter: blur(28px) saturate(1.6);
   flex-direction: column; overflow: hidden;
 }
 .mj-support-panel.open { display: flex; }
 .mj-support-panel-head {
-  padding: 14px 16px; border-bottom: 1px solid var(--border);
-  display: flex; align-items: center; justify-content: space-between; gap: 10px;
-  background: linear-gradient(135deg, rgba(91,138,245,.18), rgba(124,92,252,.12));
+  padding: 16px 16px 14px;
+  border-bottom: 1px solid var(--border);
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  background: linear-gradient(160deg, rgba(37,99,235,.28) 0%, rgba(15,23,42,.35) 100%);
+  position: relative;
 }
-.mj-support-panel-head h3 { font-size: 15px; font-weight: 800; margin: 0; }
-.mj-support-panel-head p { font-size: 11px; color: var(--muted); margin: 2px 0 0; }
+.mj-support-panel-head::after {
+  content: ''; position: absolute; left: 0; right: 0; bottom: 0; height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,.15), transparent);
+}
+.mj-support-head-left { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.mj-support-agent {
+  width: 42px; height: 42px; border-radius: 14px; flex-shrink: 0;
+  background: linear-gradient(145deg, #3b82f6, #1d4ed8);
+  display: flex; align-items: center; justify-content: center;
+  color: #fff; font-size: 18px;
+  box-shadow: 0 8px 18px rgba(37,99,235,.4);
+  border: 1px solid rgba(255,255,255,.2);
+}
+.mj-support-panel-head h3 { font-size: 15px; font-weight: 800; margin: 0; letter-spacing: -0.02em; }
+.mj-support-panel-head p { font-size: 11px; color: var(--muted); margin: 3px 0 0; display: flex; align-items: center; gap: 6px; }
+.mj-support-live-dot {
+  width: 7px; height: 7px; border-radius: 50%; background: #34d399;
+  box-shadow: 0 0 0 3px rgba(52,211,153,.25); display: inline-block;
+  animation: mjPulse 1.8s ease infinite;
+}
+@keyframes mjPulse {
+  0%, 100% { box-shadow: 0 0 0 3px rgba(52,211,153,.25); }
+  50% { box-shadow: 0 0 0 5px rgba(52,211,153,.12); }
+}
 .mj-support-panel-close {
-  width: 32px; height: 32px; border-radius: 10px; border: 1px solid var(--border);
-  background: var(--bg); color: var(--text); cursor: pointer; font-size: 16px;
+  width: 34px; height: 34px; border-radius: 12px; border: 1px solid var(--border);
+  background: rgba(255,255,255,.06); color: var(--text); cursor: pointer; font-size: 18px;
+  display: flex; align-items: center; justify-content: center; transition: background .15s;
 }
+.mj-support-panel-close:hover { background: rgba(255,255,255,.12); }
 .mj-support-tabs { display: flex; gap: 6px; padding: 10px 12px 0; }
 .mj-support-tab {
   flex: 1; padding: 8px; border-radius: 10px; border: 1px solid var(--border);
@@ -1640,7 +1670,7 @@ body::before {
 .support-widget-container.collapsed .support-popup-card { display: none !important; }
 .support-toggle-btn {
     width: 54px; height: 54px; border-radius: 50%;
-    background: linear-gradient(135deg, var(--primary), var(--accent));
+    background: linear-gradient(135deg, var(--primary), var(--primary-strong, #2563eb));
     color: #fff; border: none; cursor: grab;
     box-shadow: 0 10px 28px var(--primary-glow);
     display: flex; align-items: center; justify-content: center; position: relative;
@@ -1888,7 +1918,7 @@ body::before {
 }
 .welcome-modal-tags .tag-ico {
     width: 20px; height: 20px; border-radius: 50%; flex-shrink: 0;
-    background: linear-gradient(135deg, var(--primary), var(--accent)); color: #fff;
+    background: linear-gradient(135deg, var(--primary), var(--primary-strong, #2563eb)); color: #fff;
     display: flex; align-items: center; justify-content: center; font-size: 9.5px;
 }
 .welcome-modal-copy { font-size: 12.5px; color: var(--muted); line-height: 1.6; text-align: center; margin-bottom: 20px; font-weight: 500; }
@@ -1908,7 +1938,7 @@ body::before {
 .welcome-modal-dismiss {
     width: 100%; border: none; cursor: pointer; padding: 13px; border-radius: 14px;
     font-size: 13.5px; font-weight: 800; font-family: inherit;
-    background: linear-gradient(135deg, var(--primary), var(--accent));
+    background: linear-gradient(135deg, var(--primary), var(--primary-strong, #2563eb));
     color: #fff; display: flex; align-items: center; justify-content: center; gap: 8px;
     box-shadow: 0 10px 24px var(--primary-glow);
 }
@@ -1948,7 +1978,7 @@ body::before {
     position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); z-index: 10;
 }
 .converter-swap-vector-btn {
-    width: 40px; height: 40px; background: linear-gradient(135deg, var(--primary), var(--accent));
+    width: 40px; height: 40px; background: linear-gradient(135deg, var(--primary), var(--primary-strong, #2563eb));
     color: #fff; border-radius: 50%; border: 3px solid var(--card);
     display: flex; align-items: center; justify-content: center; cursor: pointer;
 }
@@ -2003,7 +2033,7 @@ body::before {
 .nav-item.active { color: var(--primary); }
 .plus-circle {
     width: 48px; height: 48px;
-    background: linear-gradient(135deg, var(--primary), var(--accent));
+    background: linear-gradient(135deg, var(--primary), var(--primary-strong, #2563eb));
     color: #fff; border-radius: 50%; display: flex; align-items: center; justify-content: center;
     font-size: 24px; margin-top: -22px; border: 4px solid var(--bg);
     box-shadow: 0 8px 20px var(--primary-glow);
@@ -2149,7 +2179,7 @@ body::before {
 .notif-popup-card .np-actions button {
   flex: 1; border: 0; border-radius: 12px; padding: 12px; font-weight: 800; font-size: 13px; cursor: pointer; font-family: inherit;
 }
-.notif-popup-card .np-ok { background: linear-gradient(135deg, var(--primary), #7c5cfc); color: #fff; }
+.notif-popup-card .np-ok { background: linear-gradient(135deg, var(--primary), #2563eb); color: #fff; }
 
 
 .drawer-hero {
@@ -2291,7 +2321,6 @@ body::before {
             <div class="hero-actions">
                 <a class="hero-btn" href="deposit.html" style="text-decoration:none;display:inline-flex;align-items:center;gap:8px;"><i class="fa-solid fa-wallet"></i> Fund Account</a>
                 <button class="hero-btn" onclick="openCurrencyModal()"><i class="fa-solid fa-right-left"></i> Convert</button>
-                <a class="hero-btn" href="mj-sms-choose-server.html"><i class="fa-solid fa-comment-sms"></i> Get SMS</a>
             </div>
         </div>
 
@@ -2308,7 +2337,7 @@ body::before {
                     <span class="sleek-label">USD Wallet</span>
                     <span class="sleek-value" id="homeUsdBalance">$0.00</span>
                 </div>
-                <div class="sleek-card-icon icon-purple"><i class="fa-solid fa-dollar-sign"></i></div>
+                <div class="sleek-card-icon icon-blue"><i class="fa-solid fa-dollar-sign"></i></div>
             </div>
         </div>
 
@@ -2326,7 +2355,7 @@ body::before {
                     <span class="sleek-label">Total Spent</span>
                     <span class="sleek-value" id="homeTotalSpent">₦0.00</span>
                 </div>
-                <div class="sleek-card-icon icon-purple"><i class="fa-solid fa-naira-sign"></i></div>
+                <div class="sleek-card-icon icon-blue"><i class="fa-solid fa-naira-sign"></i></div>
             </div>
         </div>
         <!-- Quick promos: Buy Logs + Boost Social Media -->
@@ -2972,9 +3001,12 @@ body::before {
 <!-- In-page support chat panel (stays on current page) -->
 <div id="mjSupportPanel" class="mj-support-panel" aria-hidden="true">
   <div class="mj-support-panel-head">
-    <div>
-      <h3>MJ Hub Support</h3>
-      <p id="mjSupportStatus">We are here to help</p>
+    <div class="mj-support-head-left">
+      <div class="mj-support-agent"><i class="fa-solid fa-headset"></i></div>
+      <div>
+        <h3>MJ Hub Support</h3>
+        <p id="mjSupportStatus"><span class="mj-support-live-dot"></span> Online · replies in a few hours</p>
+      </div>
     </div>
     <button type="button" class="mj-support-panel-close" onclick="closeMjSupportPanel()" aria-label="Close">×</button>
   </div>
