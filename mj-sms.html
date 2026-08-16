@@ -28,8 +28,8 @@
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <style>
-:root[data-theme="dark"]{--primary:#5b8af5;--primary-strong:#3b6ef5;--primary-glow:rgba(91,138,245,.28);--accent:#a78bfa;--bg:#06080f;--card:#0f1524;--text:#f1f5f9;--muted:#8b9bb4;--border:rgba(148,163,184,.12);--success:#34d399;--danger:#f87171;--shadow:0 18px 50px rgba(0,0,0,.45);}
-:root[data-theme="light"]{--primary:#3b6ef5;--primary-strong:#2554e8;--primary-glow:rgba(59,110,245,.18);--accent:#7c5cfc;--bg:#f4f6fb;--card:#fff;--text:#0f172a;--muted:#64748b;--border:rgba(15,23,42,.08);--success:#059669;--danger:#dc2626;--shadow:0 16px 40px rgba(15,23,42,.08);}
+:root[data-theme="dark"]{--primary:#5b8af5;--primary-strong:#3b6ef5;--primary-glow:rgba(91,138,245,.28);--accent:#a78bfa;--bg:#06080f;--card:rgba(15,21,36,.62);--text:#f1f5f9;--muted:#8b9bb4;--border:rgba(148,163,184,.12);--success:#34d399;--danger:#f87171;--shadow:0 18px 50px rgba(0,0,0,.45);}
+:root[data-theme="light"]{--primary:#3b6ef5;--primary-strong:#2554e8;--primary-glow:rgba(59,110,245,.18);--accent:#7c5cfc;--bg:#f4f6fb;--card:rgba(255,255,255,.78);--text:#0f172a;--muted:#64748b;--border:rgba(15,23,42,.08);--success:#059669;--danger:#dc2626;--shadow:0 16px 40px rgba(15,23,42,.08);}
 *{box-sizing:border-box;margin:0;padding:0}
 body{font-family:'Plus Jakarta Sans',system-ui,sans-serif;background:var(--bg);color:var(--text);min-height:100vh;padding-bottom:90px}
 body::before{content:'';position:fixed;inset:0;pointer-events:none;z-index:0;background:radial-gradient(ellipse 80% 50% at 10% -10%,rgba(91,138,245,.12),transparent 50%),radial-gradient(ellipse 60% 40% at 100% 0%,rgba(167,139,250,.08),transparent 45%)}
@@ -106,6 +106,19 @@ body::before{content:'';position:fixed;inset:0;pointer-events:none;z-index:0;bac
 .ps-total-price{font-size:18px;font-weight:800;color:#312e81}
 .ps-buy{width:100%;border:none;border-radius:14px;padding:15px;font-size:15px;font-weight:800;color:#fff;cursor:pointer;font-family:inherit;background:linear-gradient(135deg,#4f46e5,#2563eb);display:flex;align-items:center;justify-content:center;gap:8px}
 .ps-buy:disabled{opacity:.5;cursor:not-allowed}
+
+/* Glass UI (brand blue / white) */
+.content-card,.product-card,.service-card,.card,.platform-card,.cat-chip,.search-bar,header.header,.bottom-nav{
+  background:var(--card)!important;
+  border:1px solid rgba(255,255,255,.12)!important;
+  backdrop-filter:blur(20px) saturate(1.5);
+  -webkit-backdrop-filter:blur(20px) saturate(1.5);
+}
+:root[data-theme="light"] .content-card,:root[data-theme="light"] .product-card,:root[data-theme="light"] .service-card,:root[data-theme="light"] .card{
+  border:1px solid rgba(59,110,245,.12)!important;
+  background:rgba(255,255,255,.75)!important;
+}
+
 </style>
 </head>
 <body>

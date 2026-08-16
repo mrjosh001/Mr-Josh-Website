@@ -722,17 +722,21 @@
 :root[data-theme="dark"] {
     --primary: #5b8af5;
     --primary-strong: #3b6ef5;
-    --primary-glow: rgba(91, 138, 245, 0.28);
+    --primary-glow: rgba(91, 138, 245, 0.35);
     --accent: #a78bfa;
-    --bg: #06080f;
-    --bg-elevated: #0b101c;
-    --card: #0f1524;
-    --card-hover: #151d30;
+    --bg: #05070e;
+    --bg-elevated: #0a0f1a;
+    --card: rgba(15, 22, 40, 0.55);
+    --card-solid: #0f1628;
+    --card-hover: rgba(22, 32, 54, 0.72);
     --text: #f1f5f9;
     --muted: #8b9bb4;
-    --border: rgba(148, 163, 184, 0.12);
-    --border-strong: rgba(148, 163, 184, 0.2);
-    --nav: rgba(11, 16, 28, 0.88);
+    --border: rgba(148, 163, 184, 0.16);
+    --border-strong: rgba(148, 163, 184, 0.28);
+    --nav: rgba(8, 12, 22, 0.55);
+    --glass: rgba(255, 255, 255, 0.06);
+    --glass-border: rgba(255, 255, 255, 0.14);
+    --glass-blur: blur(22px) saturate(1.6);
     --success: #34d399;
     --warning: #fbbf24;
     --danger: #f87171;
@@ -744,17 +748,21 @@
 :root[data-theme="light"] {
     --primary: #3b6ef5;
     --primary-strong: #2554e8;
-    --primary-glow: rgba(59, 110, 245, 0.18);
+    --primary-glow: rgba(59, 110, 245, 0.22);
     --accent: #7c5cfc;
-    --bg: #f4f6fb;
+    --bg: #eef2fb;
     --bg-elevated: #ffffff;
-    --card: #ffffff;
-    --card-hover: #f0f3fa;
+    --card: rgba(255, 255, 255, 0.72);
+    --card-solid: #ffffff;
+    --card-hover: rgba(255, 255, 255, 0.9);
     --text: #0f172a;
     --muted: #64748b;
-    --border: rgba(15, 23, 42, 0.08);
-    --border-strong: rgba(15, 23, 42, 0.12);
-    --nav: rgba(255,255,255,0.92);
+    --border: rgba(59, 110, 245, 0.12);
+    --border-strong: rgba(59, 110, 245, 0.22);
+    --nav: rgba(255,255,255,0.72);
+    --glass: rgba(255, 255, 255, 0.65);
+    --glass-border: rgba(255, 255, 255, 0.7);
+    --glass-blur: blur(22px) saturate(1.5);
     --success: #059669;
     --warning: #d97706;
     --danger: #dc2626;
@@ -973,12 +981,48 @@ body::before {
 
 /* WALLETS */
 .sleek-stats-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 8px; }
-/* Quick-promo grid: Buy Logs + Boost Social Media, side by side */
+
+/* Apple-style glass surfaces (blue / white brand) */
+.glass-surface {
+  background: var(--card);
+  border: 1px solid var(--glass-border, var(--border));
+  backdrop-filter: var(--glass-blur, blur(20px) saturate(1.5));
+  -webkit-backdrop-filter: var(--glass-blur, blur(20px) saturate(1.5));
+  box-shadow: 0 8px 32px rgba(0,0,0,0.12), inset 0 1px 0 rgba(255,255,255,0.06);
+}
+.sleek-card, .promo-card, .contest-banner, .content-card, .profile-menu-item {
+  background: var(--card) !important;
+  border: 1px solid var(--glass-border, var(--border)) !important;
+  backdrop-filter: var(--glass-blur, blur(20px) saturate(1.5));
+  -webkit-backdrop-filter: var(--glass-blur, blur(20px) saturate(1.5));
+  box-shadow: 0 8px 28px rgba(0,0,0,0.14), inset 0 1px 0 rgba(255,255,255,0.05);
+}
+.navbar, .bottom-nav, .sidebar {
+  backdrop-filter: blur(24px) saturate(1.7) !important;
+  -webkit-backdrop-filter: blur(24px) saturate(1.7) !important;
+  background: var(--nav) !important;
+  border-color: var(--glass-border, var(--border)) !important;
+}
+.mj-support-panel, .support-popup-card {
+  background: var(--card) !important;
+  border: 1px solid var(--glass-border, var(--border)) !important;
+  backdrop-filter: blur(28px) saturate(1.7) !important;
+  -webkit-backdrop-filter: blur(28px) saturate(1.7) !important;
+  box-shadow: 0 24px 60px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.08) !important;
+}
+
+/* Quick-promo grid: 3 services same lane */
 .promo-grid {
     display: grid;
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
     gap: 10px;
     margin: 14px 0 4px;
+}
+@media (max-width: 380px) {
+  .promo-grid { gap: 8px; }
+  .promo-card { padding: 12px 10px; min-height: 128px; }
+  .promo-card-title { font-size: 12px; }
+  .promo-card-sub { font-size: 9.5px; }
 }
 .promo-card {
     display: flex;
@@ -1033,6 +1077,33 @@ body::before {
 }
 .promo-card--boost .promo-card-icon { background: linear-gradient(135deg, #3b82f6, #8b5cf6); box-shadow: 0 8px 18px rgba(59, 130, 246, 0.35); }
 .promo-card--boost .promo-card-cta { background: linear-gradient(135deg, #3b82f6, #8b5cf6); box-shadow: 0 6px 14px rgba(91, 138, 245, 0.35); }
+
+.promo-card--sms {
+    border-color: rgba(91, 138, 245, 0.35);
+    background:
+      radial-gradient(120% 120% at 100% 0%, rgba(147, 197, 253, 0.22), transparent 45%),
+      radial-gradient(100% 120% at 0% 100%, rgba(59, 130, 246, 0.20), transparent 50%),
+      linear-gradient(135deg, rgba(59, 130, 246, 0.18), rgba(255, 255, 255, 0.06));
+    box-shadow: 0 10px 24px rgba(59, 130, 246, 0.14);
+}
+.promo-card--sms .promo-card-icon { background: linear-gradient(135deg, #3b82f6, #60a5fa); box-shadow: 0 8px 18px rgba(59, 130, 246, 0.4); }
+.promo-card--sms .promo-card-cta { background: linear-gradient(135deg, #3b82f6, #2563eb); box-shadow: 0 6px 14px rgba(59, 130, 246, 0.35); }
+/* Soften logs/boost to sit in same glass family while keeping accent */
+.promo-card--logs {
+    border-color: rgba(249, 115, 22, 0.28);
+    background:
+      radial-gradient(120% 120% at 100% 0%, rgba(251, 191, 36, 0.14), transparent 45%),
+      radial-gradient(100% 120% at 0% 100%, rgba(249, 115, 22, 0.14), transparent 50%),
+      linear-gradient(135deg, rgba(249, 115, 22, 0.10), rgba(255, 255, 255, 0.05));
+}
+.promo-card--boost {
+    border-color: rgba(139, 92, 246, 0.28);
+    background:
+      radial-gradient(120% 120% at 100% 0%, rgba(251, 113, 133, 0.12), transparent 45%),
+      radial-gradient(100% 120% at 0% 100%, rgba(59, 130, 246, 0.16), transparent 50%),
+      linear-gradient(135deg, rgba(91, 138, 245, 0.12), rgba(167, 139, 250, 0.12));
+}
+
 
 /* Referral contest banner */
 .contest-banner {
@@ -1089,7 +1160,7 @@ body::before {
     letter-spacing: 0.04em; text-transform: uppercase;
 }
 @media (max-width: 340px) {
-    .promo-grid { grid-template-columns: 1fr; }
+    .promo-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 }
 
 .sleek-card {
@@ -1438,6 +1509,36 @@ body::before {
   flex: 1; padding: 10px 12px; border-radius: 12px; border: 1px solid var(--border);
   background: var(--bg); color: var(--text); font: inherit;
 }
+
+.mj-support-status-row {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 8px;
+  font-size: 12px; font-weight: 700; color: var(--text);
+  padding: 10px 12px; border-radius: 14px;
+  background: rgba(52, 211, 153, 0.08);
+  border: 1px solid rgba(52, 211, 153, 0.22);
+}
+.mj-online-dot {
+  width: 8px; height: 8px; border-radius: 50%; background: #34d399;
+  box-shadow: 0 0 0 4px rgba(52, 211, 153, 0.2);
+  animation: pulse 2s infinite;
+}
+.mj-support-eta { font-weight: 600; color: var(--muted); font-size: 11px; margin-left: auto; }
+.mj-support-cats { display: flex; flex-wrap: wrap; gap: 6px; }
+.mj-cat-btn {
+  border: 1px solid var(--glass-border, var(--border));
+  background: rgba(91,138,245,0.1);
+  color: var(--text);
+  font-size: 11px; font-weight: 700;
+  padding: 8px 10px; border-radius: 999px;
+  cursor: pointer; font-family: inherit;
+}
+.mj-cat-btn:hover { border-color: var(--primary); color: var(--primary); }
+.support-status-indicator .status-dot {
+  width: 8px; height: 8px; border-radius: 50%; background: #34d399;
+  display: inline-block; margin-right: 6px;
+  box-shadow: 0 0 0 3px rgba(52,211,153,.25);
+}
+
 .mj-support-compose button {
   padding: 10px 14px; border-radius: 12px; border: none; background: var(--primary);
   color: #fff; font-weight: 700; cursor: pointer; font-family: inherit;
@@ -2234,7 +2335,15 @@ body::before {
                 <div class="promo-card-icon"><i class="fa-solid fa-box-archive"></i></div>
                 <div>
                     <span class="promo-card-title">Buy Logs</span>
-                    <span class="promo-card-sub">Fresh, verified logs delivered instantly</span>
+                    <span class="promo-card-sub">Digital products to your dashboard</span>
+                </div>
+                <span class="promo-card-cta">Open →</span>
+            </a>
+            <a class="promo-card promo-card--sms" href="mj-sms-choose-server.html" id="smsPromoCard">
+                <div class="promo-card-icon"><i class="fa-solid fa-comment-sms"></i></div>
+                <div>
+                    <span class="promo-card-title">Get SMS</span>
+                    <span class="promo-card-sub">Temporary numbers for verification</span>
                 </div>
                 <span class="promo-card-cta">Open →</span>
             </a>
@@ -2875,10 +2984,23 @@ body::before {
   </div>
   <div class="mj-support-body">
     <div id="mjSupportHome" class="mj-support-ticket-list">
-      <p style="font-size:13px;color:var(--muted);margin-bottom:12px;">Start a new conversation or open a previous one.</p>
-      <button type="button" class="mj-support-actions" style="width:100%;display:block;padding:0;border:none;background:none;" onclick="mjSupportStartNew()">
-        <span style="display:block;width:100%;padding:14px;border-radius:14px;background:var(--primary);color:#fff;font-weight:800;font-size:13px;text-align:center;">Start new complaint</span>
+      <div class="mj-support-status-row">
+        <span class="mj-online-dot"></span>
+        <span>Support desk online</span>
+        <span class="mj-support-eta">Usually replies within a few hours</span>
+      </div>
+      <p style="font-size:13px;color:var(--muted);margin:10px 0 8px;">Choose a topic or start a new chat. Keep your Customer ID ready.</p>
+      <div class="mj-support-cats">
+        <button type="button" class="mj-cat-btn" onclick="mjSupportStartNew('Deposit / payment')">Deposit</button>
+        <button type="button" class="mj-cat-btn" onclick="mjSupportStartNew('Order issue')">Order</button>
+        <button type="button" class="mj-cat-btn" onclick="mjSupportStartNew('SMS number')">SMS</button>
+        <button type="button" class="mj-cat-btn" onclick="mjSupportStartNew('Account')">Account</button>
+        <button type="button" class="mj-cat-btn" onclick="mjSupportStartNew('Other')">Other</button>
+      </div>
+      <button type="button" class="mj-support-actions" style="width:100%;display:block;padding:0;border:none;background:none;margin-top:10px;" onclick="mjSupportStartNew()">
+        <span style="display:block;width:100%;padding:14px;border-radius:14px;background:var(--primary);color:#fff;font-weight:800;font-size:13px;text-align:center;">Start new chat</span>
       </button>
+      <a href="support.html" style="display:block;text-align:center;margin-top:10px;font-size:12px;font-weight:700;color:var(--primary);text-decoration:none;">Open full Support Desk →</a>
       <div id="mjPrevTicketList" style="margin-top:12px;"></div>
     </div>
     <div id="mjSupportChat" class="mj-support-chat-view">
@@ -2905,10 +3027,10 @@ body::before {
         <div class="support-popup-header">
             <button id="support-close-btn" class="support-close-inner" type="button" aria-label="Close">&times;</button>
             <h3>MJ Hub Support</h3>
-            <p>How can we help you today?</p>
+            <p>In-app desk · WhatsApp · Telegram</p>
             <div class="support-status-indicator">
                 <span class="status-dot"></span>
-                <span>Typically replies within a few hours</span>
+                <span>Online · usually replies within a few hours</span>
             </div>
         </div>
         <div class="support-popup-body">
@@ -4385,16 +4507,30 @@ window.mjSupportFaqMatch = function(text) {
   return null;
 };
 
-window.mjSupportStartNew = async function() {
-  window._mjSup = { ticketId: null, channel: null, step: 'bot', human: false, faqAsked: false };
+window.mjSupportStartNew = async function(topic) {
+  window._mjSup = { ticketId: null, channel: null, step: 'bot', human: false, faqAsked: false, topic: topic || null };
   var box = document.getElementById('mjSupportMessages');
   if (box) box.innerHTML = '';
   mjSupportShowTab('chat');
-  document.getElementById('mjChatTicketLabel').textContent = 'New conversation';
-  document.getElementById('mjSupportStatus').textContent = 'Assistant';
-  mjSupportAppend('bot', 'Hi — welcome to MJ Hub Support.');
-  mjSupportAppend('bot', 'Briefly describe what you need help with (orders, deposit, SMS, account, etc.).');
-  mjSupportSetActions([]);
+  document.getElementById('mjChatTicketLabel').textContent = topic ? String(topic) : 'New conversation';
+  document.getElementById('mjSupportStatus').textContent = 'Support desk';
+  mjSupportAppend('bot', 'Hi, welcome to MJ Hub Support.');
+  if (topic) {
+    mjSupportAppend('bot', 'Topic: ' + topic + '. Share order ID, Customer ID, or amount if relevant so we can help faster.');
+  } else {
+    mjSupportAppend('bot', 'Describe your issue (deposit, order, SMS, account). Include Customer ID or order ID when you can.');
+  }
+  mjSupportSetActions([
+    { label: 'I need a human', primary: true, onClick: function() { if (window.mjSupportRequestHuman) mjSupportRequestHuman(); } },
+    { label: 'Copy Customer ID', onClick: function() {
+      try {
+        var el = document.getElementById('customerIdValue') || document.getElementById('profileCustomerId');
+        var id = el ? (el.textContent || el.value || '').trim() : '';
+        if (id && navigator.clipboard) navigator.clipboard.writeText(id);
+        if (window.showToast) showToast(id ? 'Customer ID copied' : 'Open Profile to view Customer ID', id ? 'success' : 'error');
+      } catch (e) {}
+    }}
+  ]);
 };
 
 window.mjSupportLoadPrevious = async function() {

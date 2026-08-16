@@ -14,14 +14,14 @@
 <meta name="theme-color" content="#06080f">
 <style>
 :root[data-theme="dark"]{
-  --bg:#06080f; --card:#0f1524; --card-hover:#141c2e; --border:rgba(148,163,184,.12);
+  --bg:#06080f; --card:rgba(15,21,36,.62); --card-hover:#141c2e; --border:rgba(148,163,184,.12);
   --text:#f1f5f9; --muted:#8b9bb4; --primary:#5b8af5; --primary2:#a78bfa;
   --success:#34d399; --warn:#fbbf24; --danger:#f87171; --glow:rgba(91,138,245,.28);
   --header-bg:rgba(6,8,15,.92); --hero-bg:linear-gradient(160deg,#10182a,#0b1220);
   --bottom-bg:rgba(6,8,15,.94);
 }
 :root[data-theme="light"]{
-  --bg:#f4f6fb; --card:#ffffff; --card-hover:#f8fafc; --border:rgba(15,23,42,.08);
+  --bg:#f4f6fb; --card:rgba(255,255,255,.78)fff; --card-hover:#f8fafc; --border:rgba(15,23,42,.08);
   --text:#0f172a; --muted:#64748b; --primary:#3b6ef5; --primary2:#7c5cfc;
   --success:#059669; --warn:#d97706; --danger:#dc2626; --glow:rgba(59,110,245,.18);
   --header-bg:rgba(255,255,255,.92); --hero-bg:linear-gradient(160deg,#eef4ff,#f8fafc);
@@ -126,6 +126,19 @@ a{color:inherit;text-decoration:none}
 @keyframes spin{to{transform:rotate(360deg)}}
 .pager{display:flex;justify-content:center;gap:10px;align-items:center;padding:8px 16px 20px;font-size:12px;color:var(--muted);font-weight:700}
 .hint{padding:0 16px 10px;font-size:12px;color:var(--muted);font-weight:600}
+
+/* Glass UI (brand blue / white) */
+.content-card,.product-card,.service-card,.card,.platform-card,.cat-chip,.search-bar,header.header,.bottom-nav{
+  background:var(--card)!important;
+  border:1px solid rgba(255,255,255,.12)!important;
+  backdrop-filter:blur(20px) saturate(1.5);
+  -webkit-backdrop-filter:blur(20px) saturate(1.5);
+}
+:root[data-theme="light"] .content-card,:root[data-theme="light"] .product-card,:root[data-theme="light"] .service-card,:root[data-theme="light"] .card{
+  border:1px solid rgba(59,110,245,.12)!important;
+  background:rgba(255,255,255,.75)!important;
+}
+
 </style>
 </head>
 <body>
