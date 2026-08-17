@@ -5294,12 +5294,25 @@ window.commitSwapTransaction = async function() {
     box.classList.add('active');
     await sleep(800);
 
-    const converted = currentFromCurrency === 'NGN' ? val / exchangeRateUsdToNgn : val * exchangeRateUsdToNgn;
-    if (currentFromCurrency === 'NGN') { currentBalanceNgn -= val; currentBalanceUsd += converted; }
-    else { currentBalanceUsd -= val; currentBalanceNgn += converted; }
-
+    // Secure server-side conversion (RLS blocks client balance updates)
+    const direction = currentFromCurrency === 'NGN' ? 'ngn_to_usd' : 'usd_to_ngn';
+    let converted = currentFromCurrency === 'NGN' ? val / exchangeRateUsdToNgn : val * exchangeRateUsdToNgn;
     if (supabaseClient && currentUserId) {
-        await supabaseClient.from('profiles').update({ balance: currentBalanceNgn, balance_usd: currentBalanceUsd }).eq('id', currentUserId);
+        const { data: conv, error: convErr } = await supabaseClient.rpc('mj_convert_balance', {
+            p_direction: direction,
+            p_amount: val
+        });
+        if (convErr) {
+            box.classList.remove('active');
+            return showToast(convErr.message || 'Conversion failed', 'error');
+        }
+        if (conv && conv.balance != null) currentBalanceNgn = Number(conv.balance) || 0;
+        if (conv && conv.balance_usd != null) currentBalanceUsd = Number(conv.balance_usd) || 0;
+        if (direction === 'ngn_to_usd') converted = val / (exchangeRateUsdToNgn || 1500);
+        else converted = val * (exchangeRateUsdToNgn || 1500);
+    } else {
+        if (currentFromCurrency === 'NGN') { currentBalanceNgn -= val; currentBalanceUsd += converted; }
+        else { currentBalanceUsd -= val; currentBalanceNgn += converted; }
     }
     updateBalanceDisplay();
 
