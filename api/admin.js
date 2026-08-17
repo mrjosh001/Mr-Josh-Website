@@ -232,7 +232,7 @@ async function userUpdate(body) {
       subtitle: 'Funded by admin',
       amount: '₦' + amountAdded.toLocaleString(),
       amount_ngn: amountAdded,
-      status: 'completed',
+      status: 'Success',
       channel: 'Manual Deposit',
       payment_provider: 'Admin'
     });
