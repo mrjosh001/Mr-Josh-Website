@@ -11,7 +11,7 @@ import { applyMarkup } from '../lib/pricing.js';
  * does exactly what those 5 did, unchanged, just routed by a `resource`
  * field instead of by filename.
  *
- * Body shape: { resource: 'user' | 'product' | 'inventory', action: '...', ...fields }
+ * Body shape: { resource: 'user' | 'product' | 'inventory' | 'secrets_status' | ..., action: '...', ...fields }
  *
  *   resource: 'user'
  *     action: 'ban'     — { user_id, banned }
@@ -904,6 +904,45 @@ async function getOverviewStats(body) {
   };
 }
 
+
+// ---------- resource: secrets_status (booleans only — never secret values) ----------
+function secretsStatusHandle() {
+  const names = [
+    'SUPABASE_URL',
+    'SUPABASE_SERVICE_ROLE_KEY',
+    'GRIZZLYSMS_API_KEY',
+    'LOGSDOMAIN_API_KEY',
+    'FADDED_API_KEY',
+    'OWLET_API_KEY',
+    'SUJAN_API_KEY',
+    'POCKETFI_SECRET_KEY',
+    'POCKETFI_PUBLIC_KEY',
+    'POCKETFI_BUSINESS_ID',
+    'POCKETFI_WEBHOOK_SECRET',
+    'CRON_SECRET',
+    'APP_URL',
+    'SITE_URL',
+  ];
+  const secrets = {};
+  for (const name of names) {
+    const v = process.env[name];
+    const prev = process.env[`${name}_PREVIOUS`];
+    secrets[name] = {
+      configured: !!(v && String(v).trim()),
+      hasPrevious: !!(prev && String(prev).trim()),
+    };
+  }
+  return {
+    status: 200,
+    body: {
+      success: true,
+      env: process.env.VERCEL_ENV || process.env.NODE_ENV || 'unknown',
+      secrets,
+      note: 'Values are never returned. Configure keys in Vercel → Settings → Environment Variables.',
+    },
+  };
+}
+
 // ---------- router ----------
 
 export default async function handler(req, res) {
@@ -947,8 +986,10 @@ export default async function handler(req, res) {
       result = await getOverviewStats(body);
     } else if (resource === 'user_join_dates') {
       result = await getUserJoinDates();
+    } else if (resource === 'secrets_status') {
+      result = secretsStatusHandle();
     } else {
-      result = { status: 400, body: { success: false, message: 'Unknown resource. Use "user", "product", "inventory", "sms", "supplier_balances", "overview", or "user_join_dates".' } };
+      result = { status: 400, body: { success: false, message: 'Unknown resource. Use "user", "product", "inventory", "sms", "supplier_balances", "overview", "user_join_dates", or "secrets_status".' } };
     }
 
     return res.status(result.status).json(result.body);
