@@ -30,25 +30,18 @@
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
   <style>
     :root {
-      --primary: #6366f1;
-      --primary-hover: #4f46e5;
-      --primary-soft: rgba(99, 102, 241, 0.12);
-      --primary-glow: rgba(99, 102, 241, 0.28);
-      --bg: #09090b;
-      --bg-elevated: #0c0c0f;
-      --card: #121216;
-      --card-hover: #16161c;
-      --text: #fafafa;
-      --muted: #a1a1aa;
-      --border: #27272a;
-      --border-soft: #1f1f23;
-      --success: #22c55e;
+      --primary: #3b82f6;
+      --primary-hover: #2563eb;
+      --primary-glow: rgba(59, 130, 246, 0.35);
+      --bg: #07090e;
+      --card: #0d1322;
+      --text: #f8fafc;
+      --muted: #94a3b8;
+      --border: #1e293b;
+      --success: #10b981;
       --danger: #ef4444;
       --warning: #f59e0b;
-      --info: #38bdf8;
-      --radius: 14px;
-      --radius-sm: 10px;
-      --shadow: 0 1px 0 rgba(255,255,255,0.04) inset, 0 8px 32px rgba(0,0,0,0.35);
+      --radius: 16px;
     }
     * { box-sizing: border-box; margin: 0; padding: 0; }
     html, body { width: 100%; max-width: 100%; overflow-x: hidden; }
@@ -58,19 +51,15 @@
       color: var(--text);
       min-height: 100vh;
       line-height: 1.5;
-      background-image:
-        radial-gradient(ellipse 80% 50% at 20% -10%, rgba(99,102,241,0.08), transparent),
-        radial-gradient(ellipse 60% 40% at 100% 0%, rgba(139,92,246,0.05), transparent);
-      background-attachment: fixed;
     }
     .login-wrap { min-height: 100vh; display:flex; align-items:center; justify-content:center; padding:24px; }
     .login-card {
       width:100%; max-width:400px; background:var(--card); border:1px solid var(--border);
-      border-radius:20px; padding:36px 28px; box-shadow: var(--shadow);
+      border-radius:20px; padding:36px 28px; box-shadow:0 20px 50px rgba(0,0,0,.45);
     }
     .login-card h1 {
       font-size:22px; font-weight:800; margin-bottom:6px;
-      background:linear-gradient(135deg,var(--primary),#a78bfa);
+      background:linear-gradient(135deg,var(--primary),#8b5cf6);
       -webkit-background-clip:text; -webkit-text-fill-color:transparent;
     }
     .login-logo-img { height:40px; width:auto; max-width:200px; object-fit:contain; display:block; margin-bottom:10px; }
@@ -81,245 +70,138 @@
       letter-spacing:.6px; color:var(--muted); margin-bottom:6px;
     }
     .field input, .field select, .field textarea {
-      width:100%; padding:12px 14px; background:var(--bg); border:1px solid var(--border);
+      width:100%; padding:12px 14px; background:#07090e; border:1px solid var(--border);
       border-radius:12px; color:var(--text); font-size:14px; font-family:inherit; outline:none;
-      transition: border-color .15s ease, box-shadow .15s ease;
     }
-    .field input:focus, .field select:focus, .field textarea:focus {
-      border-color: var(--primary); box-shadow: 0 0 0 3px var(--primary-soft);
-    }
+    .field input:focus, .field select:focus, .field textarea:focus { border-color:var(--primary); }
     .field input:disabled { opacity:.65; cursor:not-allowed; }
     .price-note { font-size:11px; color:var(--muted); margin-top:4px; }
     .btn {
       display:inline-flex; align-items:center; justify-content:center; gap:8px;
       padding:12px 18px; border-radius:12px; font-size:14px; font-weight:700;
       font-family:inherit; border:none; cursor:pointer;
-      transition:transform .1s ease, opacity .1s ease, background .15s ease, border-color .15s ease, box-shadow .15s ease;
+      transition:transform .1s ease, opacity .1s ease, background .15s ease, border-color .15s ease;
     }
+    /* Universal "this was clicked" feedback — applies to every .btn the
+       instant it's pressed, independent of whether that specific button
+       also has its own async spinner/busy-state logic layered on top. */
     .btn:active { transform:scale(0.96); opacity:0.8; }
     .btn:disabled { opacity:0.6; cursor:not-allowed; transform:none; }
     @keyframes btnPulse { 0%{ transform:scale(1); } 40%{ transform:scale(0.94); } 100%{ transform:scale(1); } }
     .btn-pulse { animation: btnPulse .35s ease; }
-    .btn-primary {
-      background: linear-gradient(135deg, #6366f1, #7c3aed);
-      color:#fff; width:100%;
-      box-shadow: 0 4px 16px rgba(99,102,241,0.35);
-    }
-    .btn-primary:hover { background: linear-gradient(135deg, #4f46e5, #6d28d9); }
-    .btn-primary:disabled { opacity: 0.75; cursor: wait; pointer-events: none; transform: none; }
-    .btn-primary .btn-spinner {
-      display: inline-block; width: 14px; height: 14px;
-      border: 2px solid rgba(255,255,255,0.35); border-top-color: #fff;
-      border-radius: 50%; animation: authSpin 0.7s linear infinite; vertical-align: -2px;
-    }
-    @keyframes authSpin { to { transform: rotate(360deg); } }
-    .logout-confirm-overlay {
-      position: fixed; inset: 0; z-index: 9999;
-      background: rgba(0,0,0,0.55);
-      display: none; align-items: center; justify-content: center;
-      padding: 20px; backdrop-filter: blur(4px);
-    }
-    .logout-confirm-overlay.open { display: flex; }
-    .logout-confirm-card {
-      background: var(--card); border: 1px solid var(--border);
-      border-radius: 18px; padding: 22px 20px 16px;
-      width: min(340px, 100%); box-shadow: 0 20px 50px rgba(0,0,0,0.45);
-      text-align: center;
-    }
-    .logout-confirm-card h3 { font-size: 17px; font-weight: 700; margin: 0 0 6px; color: var(--text); }
-    .logout-confirm-card p { font-size: 13px; color: var(--muted); margin: 0 0 18px; line-height: 1.45; }
-    .logout-confirm-actions { display: flex; gap: 10px; }
-    .logout-confirm-actions button {
-      flex: 1; padding: 12px 14px; border-radius: 12px;
-      font-weight: 700; font-size: 14px; border: none; cursor: pointer; font-family: inherit;
-    }
-    .logout-btn-cancel { background: rgba(255,255,255,0.06); color: var(--text); border: 1px solid var(--border) !important; }
-    .logout-btn-confirm { background: rgba(239,68,68,0.15); color: #f87171; border: 1px solid rgba(239,68,68,0.35) !important; }
-    .logout-btn-confirm:disabled { opacity: 0.7; cursor: wait; }
+    .btn-primary { background:var(--primary); color:#fff; width:100%; }
+    .btn-primary:hover { background:var(--primary-hover); }
     .btn-ghost { background:transparent; color:var(--muted); border:1px solid var(--border); }
-    .btn-ghost:hover { border-color:var(--primary); color:#c7d2fe; background: var(--primary-soft); }
+    .btn-ghost:hover { border-color:var(--primary); color:var(--primary); }
     .btn-sm { padding:7px 12px; font-size:12px; border-radius:8px; width:auto; }
-    .btn-secondary {
-      background: rgba(255,255,255,0.06); color: var(--text); border:1px solid var(--border);
-      width:auto;
-    }
-    .btn-secondary:hover { background: rgba(255,255,255,0.1); }
     .error-msg { color:var(--danger); font-size:13px; margin-top:12px; text-align:center; min-height:20px; }
     .hidden { display:none !important; }
     .shell { display:flex; min-height:100vh; }
     .sidebar {
-      width:264px;
-      background: linear-gradient(180deg, #0e0e12 0%, #0a0a0d 100%);
-      border-right:1px solid var(--border);
+      width:260px; background:var(--card); border-right:1px solid var(--border);
       display:flex; flex-direction:column; position:fixed; top:0; left:0; bottom:0; z-index:50;
       transition:transform .25s ease;
     }
     .sidebar-brand {
-      height:72px; display:flex; align-items:center; gap:12px; padding:0 20px;
+      height:72px; display:flex; align-items:center; gap:12px; padding:0 22px;
       border-bottom:1px solid var(--border);
     }
     .brand-logo {
       width:36px; height:36px; border-radius:10px; display:flex; align-items:center; justify-content:center;
-      background:linear-gradient(135deg,var(--primary),#a78bfa); font-weight:800; color:#fff;
+      background:linear-gradient(135deg,var(--primary),#8b5cf6); font-weight:800; color:#fff;
     }
     .brand-logo-img { height:38px; width:auto; max-width:160px; object-fit:contain; display:block; }
     .brand-text { font-size:17px; font-weight:800; }
-    .brand-text span { display:block; color:var(--muted); font-size:11px; font-weight:600; margin-top:-2px; letter-spacing:.04em; text-transform:uppercase; }
-    .nav-list { padding:16px 12px; flex:1; overflow-y:auto; }
+    .brand-text span { display:block; color:var(--muted); font-size:12px; font-weight:600; margin-top:-2px; }
+    .nav-list { padding:18px 14px; flex:1; overflow-y:auto; }
     .nav-item {
-      display:flex; align-items:center; gap:12px; width:100%; padding:11px 14px; margin-bottom:3px;
-      border-radius:11px; border:1px solid transparent; background:none; color:var(--muted);
-      font-size:13px; font-weight:600; font-family:inherit; text-align:left; cursor:pointer;
-      transition: all .15s ease;
+      display:flex; align-items:center; gap:12px; width:100%; padding:12px 14px; margin-bottom:4px;
+      border-radius:12px; border:1px solid transparent; background:none; color:var(--muted);
+      font-size:13.5px; font-weight:600; font-family:inherit; text-align:left; cursor:pointer;
     }
-    .nav-item:hover { background:rgba(255,255,255,.04); color:var(--text); }
-    .nav-item.active {
-      background: linear-gradient(135deg, rgba(99,102,241,.2), rgba(139,92,246,.1));
-      color:#c7d2fe; border-color:rgba(99,102,241,.3);
-      box-shadow: 0 0 20px rgba(99,102,241,.08);
-    }
-    .nav-item i { width:18px; text-align:center; font-size:14px; opacity:.9; }
-    .sidebar-footer { padding:14px 16px; border-top:1px solid var(--border); }
-    .main { flex:1; margin-left:264px; min-height:100vh; display:flex; flex-direction:column; width:calc(100% - 264px); }
+    .nav-item:hover { background:rgba(59,130,246,.08); color:var(--text); }
+    .nav-item.active { background:var(--primary-glow); color:var(--primary); border-color:rgba(59,130,246,.25); }
+    .nav-item i { width:18px; text-align:center; }
+    .sidebar-footer { padding:16px 18px; border-top:1px solid var(--border); }
+    .main { flex:1; margin-left:260px; min-height:100vh; display:flex; flex-direction:column; width:calc(100% - 260px); }
     .topbar {
-      height:68px; display:flex; align-items:center; justify-content:space-between; padding:0 20px;
-      border-bottom:1px solid var(--border);
-      background:rgba(9,9,11,.75); backdrop-filter:blur(18px) saturate(1.3);
+      height:72px; display:flex; align-items:center; justify-content:space-between; padding:0 16px;
+      border-bottom:1px solid var(--border); background:rgba(13,19,34,.85); backdrop-filter:blur(12px);
       position:sticky; top:0; z-index:40;
     }
-    .topbar h2 { font-size:18px; font-weight:800; letter-spacing:-0.02em; }
+    .topbar h2 { font-size:18px; font-weight:800; }
     .mobile-menu-btn {
       display:none; background:var(--card); border:1px solid var(--border); width:40px; height:40px;
       border-radius:12px; color:var(--text); font-size:16px; cursor:pointer;
     }
-    .content { padding:16px; flex:1; width:100%; max-width:100%; overflow-x:hidden; }
-    .metrics { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px; margin-bottom:16px; }
-    .metric-card {
-      position: relative;
-      background: var(--card);
-      border:1px solid var(--border);
-      border-radius: var(--radius);
-      padding:18px 16px;
-      overflow: hidden;
-      transition: border-color .2s ease, transform .15s ease, box-shadow .2s ease;
-      box-shadow: var(--shadow);
-    }
-    .metric-card::before {
-      content: '';
-      position: absolute; top:0; left:0; right:0; height:2px;
-      background: linear-gradient(90deg, var(--primary), #a78bfa, transparent);
-      opacity: .55;
-    }
-    .metric-card:hover {
-      border-color: rgba(99,102,241,.4);
-      transform: translateY(-1px);
-      box-shadow: 0 12px 40px rgba(0,0,0,.4);
-    }
-    .metric-label {
-      font-size:11px; font-weight:700; text-transform:uppercase;
-      letter-spacing:.6px; color:var(--muted); margin-bottom:10px;
-    }
-    .metric-value { font-size:24px; font-weight:800; letter-spacing: -0.03em; line-height:1.15; }
-    .metric-sub { font-size:12px; color:var(--muted); margin-top:6px; }
-    .panel {
-      background: var(--card);
-      border:1px solid var(--border);
-      border-radius: 16px;
-      padding:18px;
-      margin-bottom:18px;
-      overflow:hidden;
-      box-shadow: var(--shadow);
-    }
-    .panel-header { display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:10px; margin-bottom:16px; }
-    .panel-title {
-      font-size:15px; font-weight:800; letter-spacing:-0.01em;
-      display:flex; align-items:center; gap:8px;
-    }
-    .panel-title::before {
-      content:''; width:6px; height:6px; border-radius:50%;
-      background: var(--primary); box-shadow: 0 0 8px var(--primary);
-    }
+    .content { padding:12px; flex:1; width:100%; max-width:100%; overflow-x:hidden; }
+    .metrics { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px; margin-bottom:16px; }
+    .metric-card { background:var(--card); border:1px solid var(--border); border-radius:var(--radius); padding:14px; }
+    .metric-label { font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.5px; color:var(--muted); margin-bottom:8px; }
+    .metric-value { font-size:20px; font-weight:800; }
+    .metric-sub { font-size:12px; color:var(--muted); margin-top:4px; }
+    .panel { background:var(--card); border:1px solid var(--border); border-radius:var(--radius); padding:14px; margin-bottom:16px; overflow:hidden; }
+    .panel-header { display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:8px; margin-bottom:14px; }
+    .panel-title { font-size:16px; font-weight:700; }
     .search-row { display:grid; grid-template-columns:1fr; gap:8px; margin-bottom:12px; }
     .search-row input, .search-row select {
-      width:100%; min-width:0; padding:10px 14px; background:var(--bg); border:1px solid var(--border);
+      width:100%; min-width:0; padding:10px 14px; background:#07090e; border:1px solid var(--border);
       border-radius:10px; color:var(--text); font-size:13px; font-family:inherit; outline:none;
     }
-    .search-row input:focus, .search-row select:focus { border-color: var(--primary); }
-    .table-wrap, .desktop-table { width:100%; overflow-x:auto; -webkit-overflow-scrolling:touch; border-radius:12px; border:1px solid var(--border-soft); }
+    .table-wrap, .desktop-table { width:100%; overflow-x:auto; -webkit-overflow-scrolling:touch; }
     table { width:100%; min-width:900px; border-collapse:collapse; font-size:13px; }
     th {
-      text-align:left; padding:12px 14px; font-size:10px; font-weight:700; text-transform:uppercase;
-      letter-spacing:.6px; color:var(--muted); border-bottom:1px solid var(--border);
-      background:rgba(0,0,0,.35); white-space:nowrap;
+      text-align:left; padding:10px 12px; font-size:11px; font-weight:700; text-transform:uppercase;
+      letter-spacing:.5px; color:var(--muted); border-bottom:1px solid var(--border); background:rgba(7,9,14,.5); white-space:nowrap;
     }
-    td {
-      padding:12px 14px; border-bottom:1px solid var(--border-soft);
-      color:#d4d4d8; vertical-align:middle; white-space:nowrap;
-    }
-    tr:hover td { background: rgba(255,255,255,.015); }
+    td { padding:10px 12px; border-bottom:1px solid rgba(255,255,255,.04); color:#cbd5e1; vertical-align:middle; white-space:nowrap; }
     td:first-child { white-space:normal; min-width:150px; max-width:220px; }
-    .badge {
-      display:inline-flex; align-items:center; gap:4px;
-      padding:4px 10px; border-radius:999px; font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:.03em;
-    }
-    .badge-on { background:rgba(34,197,94,.12); color:#4ade80; border:1px solid rgba(34,197,94,.2); }
-    .badge-off { background:rgba(239,68,68,.12); color:#f87171; border:1px solid rgba(239,68,68,.2); }
-    .badge-admin { background:rgba(99,102,241,.15); color:#a5b4fc; border:1px solid rgba(99,102,241,.25); }
-    .badge-banned { background:rgba(127,29,29,.35); color:#fca5a5; border:1px solid rgba(239,68,68,.25); }
-    .badge-pending { background:rgba(245,158,11,.12); color:#fbbf24; border:1px solid rgba(245,158,11,.25); }
-    .price { color:#4ade80; font-weight:700; }
-    .supplier-price { color:#fbbf24; font-weight:600; }
+    .badge { display:inline-block; padding:4px 10px; border-radius:20px; font-size:11px; font-weight:700; text-transform:uppercase; }
+    .badge-on { background:rgba(16,185,129,.15); color:#34d399; }
+    .badge-off { background:rgba(239,68,68,.15); color:#f87171; }
+    .badge-admin { background:rgba(59,130,246,.15); color:#60a5fa; }
+    .badge-banned { background:rgba(127,29,29,.35); color:#fca5a5; }
+    .price { color:#34d399; font-weight:700; }
+    .supplier-price { color:#f59e0b; font-weight:600; }
     .profit { color:#38bdf8; font-weight:600; }
-    .empty-state { text-align:center; padding:48px 16px; color:var(--muted); font-size:14px; }
+    .empty-state { text-align:center; padding:40px 16px; color:var(--muted); font-size:14px; }
     .desc-cell { max-width:160px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; color:var(--muted); font-size:12px; }
     .mobile-cards { display:grid; gap:10px; }
-    .product-card, .user-card, .mobile-card {
-      background:var(--bg); border:1px solid var(--border); border-radius:12px; padding:14px;
-      transition: border-color .15s ease;
+    .product-card, .user-card {
+      background:#07090e; border:1px solid var(--border); border-radius:12px; padding:12px;
     }
-    .product-card:hover, .user-card:hover, .mobile-card:hover { border-color: rgba(99,102,241,.35); }
     .product-card h4, .user-card h4 { font-size:14px; margin-bottom:6px; }
     .meta { font-size:12px; color:var(--muted); margin-bottom:6px; }
     .row-line { display:flex; justify-content:space-between; gap:8px; font-size:12px; margin-top:4px; }
     .modal-backdrop {
-      position:fixed; inset:0; background:rgba(0,0,0,.72); backdrop-filter:blur(6px);
+      position:fixed; inset:0; background:rgba(0,0,0,.7); backdrop-filter:blur(4px);
       display:flex; align-items:center; justify-content:center; z-index:100; padding:16px;
     }
     .modal {
       background:var(--card); border:1px solid var(--border); border-radius:18px; width:100%;
-      max-width:520px; max-height:90vh; overflow-y:auto; padding:24px;
-      box-shadow: 0 24px 80px rgba(0,0,0,.55);
+      max-width:520px; max-height:90vh; overflow-y:auto; padding:22px;
     }
     .modal h3 { font-size:18px; font-weight:800; margin-bottom:18px; }
     .modal-actions { display:flex; justify-content:flex-end; gap:10px; margin-top:18px; }
     .overlay-mobile { display:none; position:fixed; inset:0; background:rgba(0,0,0,.6); z-index:45; }
     .overlay-mobile.show { display:block; }
     .tab-content { display:none; }
-    .tab-content.active { display:block; animation: fadeIn .2s ease; }
-    @keyframes fadeIn { from { opacity:0; transform: translateY(4px); } to { opacity:1; transform:none; } }
+    .tab-content.active { display:block; }
     .desktop-only { display:none; }
     .mobile-only { display:grid; }
-    .card {
-      background: var(--card);
-      border:1px solid var(--border);
-      border-radius: 16px;
-      padding:18px;
-      margin-bottom:16px;
-      box-shadow: var(--shadow);
-    }
 
     @media (min-width:901px) {
       .metrics { grid-template-columns:repeat(auto-fit,minmax(180px,1fr)); }
       .search-row { display:flex; flex-wrap:wrap; }
       .search-row input, .search-row select { flex:1; min-width:160px; width:auto; }
-      .content { padding:24px 28px; }
-      .panel { padding:22px; }
+      .content { padding:24px; }
+      .panel { padding:20px; }
       .desktop-only { display:block; }
       .mobile-only { display:none; }
       .mobile-menu-btn { display:none; }
     }
     @media (max-width:900px) {
-      .sidebar { transform:translateX(-100%); width:260px; }
+      .sidebar { transform:translateX(-100%); width:240px; }
       .sidebar.open { transform:translateX(0); }
       .main { margin-left:0; width:100%; }
       .mobile-menu-btn { display:flex; align-items:center; justify-content:center; }
@@ -330,184 +212,26 @@
       max-width: calc(100vw - 32px);
     }
     .toast {
-      padding: 12px 16px; border-radius: 12px; font-size: 14px; font-weight: 600;
-      box-shadow: 0 12px 32px rgba(0,0,0,.45);
+      padding: 12px 16px; border-radius: 10px; font-size: 14px; font-weight: 600;
+      box-shadow: 0 8px 24px rgba(0,0,0,.35);
       animation: toast-in .18s ease-out;
       display: flex; align-items: center; gap: 8px;
-      color: #fff; border: 1px solid rgba(255,255,255,.08);
+      color: #fff;
     }
     .toast-success { background: #15803d; }
     .toast-error { background: #b91c1c; }
-    .toast-info { background: #4338ca; }
+    .toast-info { background: #1d4ed8; }
     .toast.leaving { animation: toast-out .18s ease-in forwards; }
     @keyframes toast-in { from { opacity: 0; transform: translateY(-8px); } to { opacity: 1; transform: translateY(0); } }
     @keyframes toast-out { from { opacity: 1; } to { opacity: 0; transform: translateY(-8px); } }
-
-    /* Stat accent helpers */
-    .stat-icon {
-      width:32px; height:32px; border-radius:9px; display:inline-flex; align-items:center; justify-content:center;
-      font-size:13px; margin-bottom:10px;
-      background: var(--primary-soft); color: #a5b4fc;
-    }
-  
-    /* ===== Professional overview polish (UI only) ===== */
-    body {
-      background:
-        radial-gradient(1200px 600px at 10% -10%, rgba(99,102,241,0.16), transparent 55%),
-        radial-gradient(900px 500px at 100% 0%, rgba(168,85,247,0.10), transparent 50%),
-        var(--bg);
-    }
-    .sidebar {
-      background: linear-gradient(180deg, #0e0e14 0%, #0a0a0e 100%) !important;
-      border-right: 1px solid rgba(255,255,255,0.06) !important;
-    }
-    .nav-item {
-      border-radius: 12px !important;
-      margin: 3px 8px !important;
-      transition: background .15s ease, color .15s ease, transform .12s ease !important;
-    }
-    .nav-item:hover { background: rgba(99,102,241,0.10) !important; }
-    .nav-item.active {
-      background: linear-gradient(135deg, rgba(99,102,241,0.28), rgba(139,92,246,0.18)) !important;
-      color: #fff !important;
-      box-shadow: 0 0 0 1px rgba(99,102,241,0.25);
-    }
-    .topbar {
-      backdrop-filter: blur(14px);
-      background: rgba(9,9,11,0.75) !important;
-      border-bottom: 1px solid rgba(255,255,255,0.06) !important;
-    }
-    .panel {
-      background: linear-gradient(180deg, rgba(24,24,30,0.95), rgba(16,16,20,0.98)) !important;
-      border: 1px solid rgba(255,255,255,0.07) !important;
-      border-radius: 18px !important;
-      box-shadow: 0 10px 40px rgba(0,0,0,0.25), inset 0 1px 0 rgba(255,255,255,0.04) !important;
-    }
-    .panel-title {
-      font-size: 15px !important;
-      font-weight: 800 !important;
-      letter-spacing: -0.02em !important;
-    }
-    .metrics {
-      display: grid !important;
-      grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)) !important;
-      gap: 12px !important;
-    }
-    .metric-card {
-      background: linear-gradient(165deg, rgba(30,30,38,0.9), rgba(18,18,24,0.95)) !important;
-      border: 1px solid rgba(255,255,255,0.07) !important;
-      border-radius: 16px !important;
-      padding: 18px 16px !important;
-      box-shadow: 0 8px 24px rgba(0,0,0,0.2) !important;
-      min-height: 108px;
-    }
-    .metric-card::before {
-      height: 3px !important;
-      opacity: 0.9 !important;
-      background: linear-gradient(90deg, #6366f1, #a78bfa, #22d3ee) !important;
-    }
-    .metric-card:hover {
-      transform: translateY(-2px);
-      border-color: rgba(99,102,241,0.45) !important;
-      box-shadow: 0 14px 32px rgba(0,0,0,0.3), 0 0 0 1px rgba(99,102,241,0.15) !important;
-    }
-    .metric-label {
-      font-size: 11px !important;
-      font-weight: 700 !important;
-      letter-spacing: 0.06em !important;
-      text-transform: uppercase !important;
-      color: #a1a1aa !important;
-      margin-bottom: 8px !important;
-    }
-    .metric-value {
-      font-size: 24px !important;
-      font-weight: 800 !important;
-      letter-spacing: -0.03em !important;
-      line-height: 1.15 !important;
-      color: #fafafa !important;
-    }
-    .metric-sub {
-      margin-top: 6px !important;
-      font-size: 12px !important;
-      color: #71717a !important;
-    }
-    /* Accent metric variants via nth for overview hero row */
-    .panel .metrics .metric-card:first-child {
-      background: linear-gradient(145deg, #4f46e5 0%, #7c3aed 55%, #6366f1 100%) !important;
-      border-color: transparent !important;
-    }
-    .panel .metrics .metric-card:first-child .metric-label,
-    .panel .metrics .metric-card:first-child .metric-sub {
-      color: rgba(255,255,255,0.78) !important;
-    }
-    .panel .metrics .metric-card:first-child .metric-value {
-      color: #fff !important;
-    }
-    .panel .metrics .metric-card:first-child::before { display: none; }
-    table {
-      border-collapse: separate !important;
-      border-spacing: 0 !important;
-    }
-    thead th {
-      font-size: 11px !important;
-      letter-spacing: 0.05em !important;
-      text-transform: uppercase !important;
-      color: #a1a1aa !important;
-      background: rgba(255,255,255,0.02) !important;
-      border-bottom: 1px solid rgba(255,255,255,0.06) !important;
-      padding: 12px 14px !important;
-    }
-    tbody td {
-      padding: 13px 14px !important;
-      border-bottom: 1px solid rgba(255,255,255,0.04) !important;
-      font-size: 13px !important;
-    }
-    tbody tr:hover td {
-      background: rgba(99,102,241,0.06) !important;
-    }
-    .badge, .badge-on, .badge-off, .badge-status {
-      border-radius: 999px !important;
-      font-weight: 700 !important;
-      font-size: 11px !important;
-      padding: 4px 10px !important;
-    }
-    .btn-primary {
-      background: linear-gradient(135deg, #6366f1, #7c3aed) !important;
-      border: none !important;
-      box-shadow: 0 8px 20px rgba(99,102,241,0.35) !important;
-      border-radius: 12px !important;
-    }
-    .btn-primary:hover {
-      filter: brightness(1.08);
-      transform: translateY(-1px);
-    }
-    .content { padding: 22px 20px 40px !important; }
-    .page-title, h1.page-title, .topbar h1 {
-      font-weight: 800 !important;
-      letter-spacing: -0.03em !important;
-    }
-    select, input, textarea {
-      border-radius: 12px !important;
-    }
-    @media (max-width: 768px) {
-      .metric-value { font-size: 20px !important; }
-      .metrics { grid-template-columns: 1fr 1fr !important; }
-    }
-
   </style>
 </head>
 <body>
-
-<div id="supportTopBell" onclick="location.href='admin-support.html'" title="Open support tickets" style="display:none;position:fixed;top:16px;right:16px;z-index:5000;width:44px;height:44px;border-radius:14px;background:#0f1524;border:1px solid rgba(148,163,184,.2);align-items:center;justify-content:center;cursor:pointer;box-shadow:0 8px 24px rgba(0,0,0,.35);">
-  <i class="fas fa-bell" style="color:#f87171;font-size:16px;"></i>
-  <span id="supportTopBellCount" style="position:absolute;top:-4px;right:-4px;background:#ef4444;color:#fff;font-size:10px;font-weight:800;min-width:18px;height:18px;border-radius:999px;display:flex;align-items:center;justify-content:center;padding:0 4px;">0</span>
-</div>
-
   <div id="toastStack" class="toast-stack"></div>
   <div id="loginScreen" class="login-wrap">
     <div class="login-card">
       <img class="login-logo-img" src="https://atczodlljmlayvldxfmv.supabase.co/storage/v1/object/public/avatars/dark%20background%20log" alt="MJ HUB">
-      <p>Sign in with an admin account</p>
+      <p>Admin portal — sign in with an admin account</p>
       <div class="field"><label>Email</label><input type="email" id="adminEmail" placeholder="admin@example.com" /></div>
       <div class="field">
         <label>Password</label>
@@ -519,7 +243,7 @@
           </button>
         </div>
       </div>
-      <button class="btn btn-primary" id="adminSignInBtn" onclick="handleLogin()"><i class="fas fa-lock"></i> Sign In</button>
+      <button class="btn btn-primary" onclick="handleLogin()"><i class="fas fa-lock"></i> Sign In</button>
       <div id="loginError" class="error-msg"></div>
     </div>
   </div>
@@ -543,7 +267,6 @@
         <button class="nav-item" data-tab="boosters" onclick="switchTab('boosters')"><i class="fas fa-bolt"></i> MJ Boosters (Owlet)</button>
         <button class="nav-item" data-tab="booster-orders" onclick="switchTab('booster-orders')"><i class="fas fa-receipt"></i> Booster Orders</button>
         <button class="nav-item" data-tab="notify" onclick="switchTab('notify')"><i class="fas fa-bullhorn"></i> Notifications</button>
-        <a class="nav-item" href="admin-support.html" id="navSupportDesk" style="text-decoration:none;position:relative;"><i class="fas fa-headset"></i> Support Desk <span id="supportNavBadge" style="display:none;margin-left:6px;background:#ef4444;color:#fff;font-size:10px;font-weight:800;padding:2px 7px;border-radius:999px;min-width:18px;text-align:center;">0</span></a>
         <button class="nav-item" data-tab="settings" onclick="switchTab('settings')"><i class="fas fa-cog"></i> Settings</button>
       </nav>
       <div class="sidebar-footer">
@@ -567,10 +290,6 @@
 
       <div class="content">
         <div id="tab-overview" class="tab-content active">
-          <div style="margin-bottom:18px;">
-            <div style="font-size:22px;font-weight:800;letter-spacing:-0.03em;color:var(--text);">Overview</div>
-            <div style="font-size:13px;color:var(--muted);margin-top:4px;">Live store performance for the selected period.</div>
-          </div>
           <div class="panel">
             <div class="panel-header">
               <div class="panel-title">Revenue</div>
@@ -585,33 +304,18 @@
             </div>
             <div class="metrics" style="margin-bottom:0;">
               <div class="metric-card"><div class="metric-label" id="revenuePeriodLabel">This Month</div><div class="metric-value" id="mRevenueNgn">₦0</div><div class="metric-sub" id="mRevenueUsd">$0.00 USD</div></div>
-              <div class="metric-card"><div class="metric-label">Sales</div><div class="metric-value" id="mSalesNgn">₦0</div><div class="metric-sub">Completed orders — Logs + SMS + Boosters</div></div>
-              <div class="metric-card"><div class="metric-label">Profit</div><div class="metric-value" id="mProfitNgn" style="color:#34d399;">₦0</div><div class="metric-sub">After all supplier costs</div></div>
+              <div class="metric-card"><div class="metric-label">Sales</div><div class="metric-value" id="mSalesNgn">₦0</div><div class="metric-sub">Completed orders</div></div>
+              <div class="metric-card"><div class="metric-label">Logs Sold</div><div class="metric-value" id="mLogsSoldCount">0</div><div class="metric-sub">Completed log orders</div></div>
+              <div class="metric-card"><div class="metric-label">Profit Margin</div><div class="metric-value" id="mProfitNgn" style="color:#34d399;">₦0</div><div class="metric-sub" id="mProfitPct">0% margin</div></div>
               <div class="metric-card"><div class="metric-label">Wallet Balances</div><div class="metric-value" id="mTotalBalance">₦0</div><div class="metric-sub">All user wallets</div></div>
-            </div>
-          </div>
-          <div class="panel">
-            <div class="panel-header"><div class="panel-title">MJ Logs</div></div>
-            <div class="metrics" style="margin-bottom:0;">
-              <div class="metric-card"><div class="metric-label">Total Orders</div><div class="metric-value" id="mLogsSoldCount">0</div><div class="metric-sub" id="mLogsOrderPeriodLabel">This Month</div></div>
-              <div class="metric-card"><div class="metric-label">Amount Spent</div><div class="metric-value" id="mLogsAmountSpent">₦0</div><div class="metric-sub">Customer spend</div></div>
-              <div class="metric-card"><div class="metric-label">Profit Made</div><div class="metric-value" id="mLogsProfit" style="color:#34d399;">₦0</div><div class="metric-sub">After supplier cost</div></div>
             </div>
           </div>
           <div class="panel">
             <div class="panel-header"><div class="panel-title">SMS Numbers</div></div>
             <div class="metrics" style="margin-bottom:0;">
-              <div class="metric-card"><div class="metric-label">Orders</div><div class="metric-value" id="mSmsOrderCount">0</div><div class="metric-sub" id="mSmsOrderPeriodLabel">This Month</div></div>
-              <div class="metric-card"><div class="metric-label">Amount Spent</div><div class="metric-value" id="mSmsAmountSpent">₦0</div><div class="metric-sub">Customer spend</div></div>
-              <div class="metric-card"><div class="metric-label">Profit Made</div><div class="metric-value" id="mSmsProfit" style="color:#34d399;">₦0</div><div class="metric-sub">After supplier cost</div></div>
-            </div>
-          </div>
-          <div class="panel">
-            <div class="panel-header"><div class="panel-title">MJ Boosters</div></div>
-            <div class="metrics" style="margin-bottom:0;">
-              <div class="metric-card"><div class="metric-label">Total Orders</div><div class="metric-value" id="mBoostOrderCount">0</div><div class="metric-sub" id="mBoostOrderPeriodLabel">This Month</div></div>
-              <div class="metric-card"><div class="metric-label">Amount Spent</div><div class="metric-value" id="mBoostAmountSpent">₦0</div><div class="metric-sub">Customer spend</div></div>
-              <div class="metric-card"><div class="metric-label">Profit Made</div><div class="metric-value" id="mBoostProfit" style="color:#34d399;">₦0</div><div class="metric-sub">After supplier cost</div></div>
+              <div class="metric-card"><div class="metric-label">Orders</div><div class="metric-value" id="mSmsOrderCount">0</div><div class="metric-sub" id="mSmsOrderPeriodLabel">This Month · Completed</div></div>
+              <div class="metric-card"><div class="metric-label">Amount Spent</div><div class="metric-value" id="mSmsAmountSpent">₦0</div><div class="metric-sub">By customers on numbers</div></div>
+              <div class="metric-card"><div class="metric-label">Profit Made</div><div class="metric-value" id="mSmsProfit" style="color:#34d399;">₦0</div><div class="metric-sub">Revenue minus supplier cost</div></div>
             </div>
           </div>
           <div class="panel">
@@ -699,10 +403,10 @@
               </div>
             </div>
             <p style="color:#94a3b8;font-size:13px;margin:-4px 0 4px;">
-              Sync updates country, service, supplier price and stock. Your selling price is never overwritten.
+              Syncing pulls the latest country, service, supplier price, and stock from GrizzlySMS or LogsDomain. Your own selling price is never overwritten by a sync — edit it manually below, or use "Price Unpriced Numbers" to bulk-apply the standard markup to anything still sitting at ₦0.
             </p>
-            <p id="grizzlySyncProgress" style="color:var(--primary,#6366f1);font-size:12px;font-weight:700;margin:0 0 4px;min-height:16px;"></p>
-            <p id="logsdomainSyncProgress" style="color:var(--primary,#6366f1);font-size:12px;font-weight:700;margin:0 0 14px;min-height:16px;"></p>
+            <p id="grizzlySyncProgress" style="color:var(--primary,#3b82f6);font-size:12px;font-weight:700;margin:0 0 4px;min-height:16px;"></p>
+            <p id="logsdomainSyncProgress" style="color:var(--primary,#3b82f6);font-size:12px;font-weight:700;margin:0 0 14px;min-height:16px;"></p>
             <div class="search-row" style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;">
               <input type="text" id="smsSearch" placeholder="Search service (WhatsApp, Google, tg…)" oninput="filterNumberServices()" style="flex:1;min-width:160px;" />
               <input type="text" id="smsCountryFilter" placeholder="Country (Nigeria, USA…)" oninput="filterNumberServices()" style="flex:1;min-width:160px;" />
@@ -732,7 +436,7 @@
               <div class="panel-title">SMS Orders — Customer Purchases</div>
             </div>
             <p style="color:#94a3b8;font-size:13px;margin:-4px 0 4px;">
-              Customer number purchases, codes, and order status.
+              Every number a customer has bought, the code they got (if any), and whether it's still waiting, completed, or was cancelled &amp; refunded.
             </p>
             <div class="search-row" style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;">
               <input type="text" id="smsOrdersSearch" placeholder="Search by Customer ID, service, or number…" oninput="filterSmsOrders()" style="flex:1;min-width:200px;" />
@@ -775,13 +479,6 @@
                 <option value="inactive">Inactive only</option>
                 <option value="banned">Banned only</option>
               </select>
-              <select id="userSortFilter" onchange="filterUsers()">
-                <option value="joined_asc">Oldest joined first</option>
-                <option value="joined_desc">Newest joined first</option>
-                <option value="name_asc">Name (A–Z)</option>
-                <option value="name_desc">Name (Z–A)</option>
-                <option value="balance_desc">Highest balance first</option>
-              </select>
             </div>
             <div class="desktop-only table-wrap">
               <table>
@@ -810,7 +507,7 @@
             <p style="color:#94a3b8;font-size:13px;margin:-4px 0 4px;">
               Same catalog as the "SMS — Server 1" tab, filtered to LogsDomain only — search, edit price, or delete a listing here without wading through Grizzly's rows too.
             </p>
-            <p id="logsdomainSyncProgress2" style="color:var(--primary,#6366f1);font-size:12px;font-weight:700;margin:0 0 14px;min-height:16px;"></p>
+            <p id="logsdomainSyncProgress2" style="color:var(--primary,#3b82f6);font-size:12px;font-weight:700;margin:0 0 14px;min-height:16px;"></p>
 
             <div class="search-row" style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;">
               <input type="text" id="smsServer2Search" placeholder="Search service (WhatsApp, Google, tg…)" oninput="filterNumberServicesServer2()" style="flex:1;min-width:160px;" />
@@ -850,22 +547,30 @@
 
         
         <div id="tab-boosters" class="tab-content">
-          <div class="panel">
-            <div class="panel-header">
-              <div class="panel-title">MJ Boosters Catalog</div>
-              <button class="btn btn-primary btn-sm" id="btnOwletSync" onclick="syncOwletServices()"><i class="fas fa-sync"></i> Sync Services</button>
+          <div class="card" style="margin-bottom:16px;">
+            <div style="display:flex;flex-wrap:wrap;gap:12px;align-items:center;justify-content:space-between;">
+              <div>
+                <h3 style="margin:0 0 4px;">MJ Boosters — The Owlet</h3>
+                <p style="margin:0;font-size:13px;color:var(--muted);">Admin only. Catalog syncs into <code>booster_services</code>. Wallet balance is on <strong>Overview</strong> with the other suppliers. Not on user dashboard yet.</p>
+              </div>
+              <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;">
+                <button class="btn btn-primary btn-sm" id="btnOwletSync" onclick="syncOwletServices()"><i class="fas fa-sync"></i> Sync Services</button>
+              </div>
             </div>
-            <div id="owletSyncProgress" style="font-size:12px;color:var(--muted);margin-bottom:12px;min-height:16px;"></div>
-            <div class="search-row" style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;">
+            <div id="owletSyncProgress" style="margin-top:8px;font-size:12px;color:var(--muted);"></div>
+          </div>
+
+          <div class="card">
+            <div style="display:flex;flex-wrap:wrap;gap:10px;margin-bottom:12px;align-items:center;">
               <input type="search" id="owletSearch" placeholder="Search service name or category…" style="flex:1;min-width:180px;" onkeydown="if(event.key==='Enter'){owletPage=1;loadOwletServicesFromDb()}">
               <select id="owletCategoryFilter" onchange="owletPage=1;loadOwletServicesFromDb()">
                 <option value="">All categories</option>
               </select>
-              <label style="font-size:12px;display:flex;align-items:center;gap:6px;color:var(--muted);white-space:nowrap;">
+              <label style="font-size:12px;display:flex;align-items:center;gap:6px;">
                 <input type="checkbox" id="owletHideUnavailable" checked onchange="owletPage=1;loadOwletServicesFromDb()"> Hide unavailable
               </label>
             </div>
-            <div class="desktop-only desktop-table table-wrap">
+            <div class="table-wrap desktop-only">
               <table>
                 <thead>
                   <tr>
@@ -885,22 +590,27 @@
                 </tbody>
               </table>
             </div>
-            <div id="owletMobileCards" class="mobile-only mobile-cards"></div>
+            <div id="owletMobileCards" class="mobile-only"></div>
           </div>
         </div>
 
         
         <div id="tab-booster-orders" class="tab-content">
-          <div class="panel">
-            <div class="panel-header">
-              <div class="panel-title">Booster Orders</div>
-              <button class="btn btn-ghost btn-sm" id="btnRefreshBoosterOrders" onclick="loadBoosterOrders()"><i class="fas fa-sync"></i> Refresh</button>
+          <div class="card" style="margin-bottom:16px;">
+            <div style="display:flex;flex-wrap:wrap;gap:12px;align-items:center;justify-content:space-between;">
+              <div>
+                <h3 style="margin:0 0 4px;">MJ Booster Orders</h3>
+                <p style="margin:0;font-size:13px;color:var(--muted);">Customer boost orders from The Owlet. Search by order ID, service, customer ID or link.</p>
+              </div>
+              <button class="btn btn-secondary btn-sm" onclick="loadBoosterOrders()"><i class="fas fa-sync"></i> Refresh</button>
             </div>
-            <div class="search-row" style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;">
-              <input type="search" id="boosterOrderSearch" placeholder="Search order ID, service, customer ID or link…" style="flex:1;min-width:200px;" onkeydown="if(event.key==='Enter'){boosterOrderPage=1;loadBoosterOrders()}">
-              <button class="btn btn-primary btn-sm" style="width:auto;" onclick="boosterOrderPage=1;loadBoosterOrders()"><i class="fas fa-search"></i> Search</button>
+            <div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap;">
+              <input type="search" id="boosterOrderSearch" placeholder="Search orders…" style="flex:1;min-width:180px;" onkeydown="if(event.key==='Enter'){boosterOrderPage=1;loadBoosterOrders()}">
+              <button class="btn btn-primary btn-sm" onclick="boosterOrderPage=1;loadBoosterOrders()">Search</button>
             </div>
-            <div class="desktop-only desktop-table table-wrap">
+          </div>
+          <div class="card">
+            <div class="table-wrap desktop-only">
               <table>
                 <thead>
                   <tr>
@@ -909,7 +619,7 @@
                     <th>Service</th>
                     <th>Link</th>
                     <th>Qty</th>
-                    <th>Paid</th>
+                    <th>Paid ₦</th>
                     <th>Status</th>
                     <th>Supplier #</th>
                   </tr>
@@ -919,8 +629,8 @@
                 </tbody>
               </table>
             </div>
-            <div id="boosterOrdersCards" class="mobile-only mobile-cards"></div>
-            <div id="boosterOrdersPager" style="display:flex;gap:8px;justify-content:center;align-items:center;margin-top:14px;font-size:12px;color:var(--muted);"></div>
+            <div id="boosterOrdersCards" class="mobile-only"></div>
+            <div id="boosterOrdersPager" style="display:flex;gap:8px;justify-content:center;align-items:center;margin-top:12px;font-size:12px;color:var(--muted);"></div>
           </div>
         </div>
 
@@ -995,19 +705,7 @@
       <div class="field"><label>Stock Quantity</label><input type="number" id="pStock" min="0" step="1" /></div>
       <div class="field">
         <label>Available</label>
-        <select id="pAvailable"><option value="true">Yes — Active (customers can see &amp; buy)</option><option value="false">No — Hidden (customers cannot see)</option></select>
-        <div class="price-note">Hidden products stay hidden even after supplier sync. Shared products can also be hidden.</div>
-      </div>
-      <div class="field" style="border:1px solid var(--border);border-radius:12px;padding:12px;background:rgba(99,102,241,0.06);">
-        <label style="display:flex;align-items:center;gap:8px;cursor:pointer;">
-          <input type="checkbox" id="pIsShared" onchange="toggleSharedFields()" style="width:16px;height:16px;" />
-          Shared product — every buyer gets the same content
-        </label>
-        <div class="price-note" style="margin-top:6px;">Use for one VPN log or config you sell many times. Not for unique accounts.</div>
-        <div id="sharedCredentialWrap" class="hidden" style="margin-top:10px;">
-          <label>Shared content (what every buyer receives)</label>
-          <textarea id="pSharedCredential" rows="4" placeholder="user:pass or full delivery text"></textarea>
-        </div>
+        <select id="pAvailable"><option value="true">Yes — Active</option><option value="false">No — Hidden</option></select>
       </div>
       <div id="productModalError" class="error-msg"></div>
       <div class="modal-actions">
@@ -1060,25 +758,13 @@
         <div class="price-note">Only products with source "manual" or a product_key starting with "manual_" are listed here. Create the product first (Add button) if it's not showing up.</div>
       </div>
       <div class="field">
-        <label>Stock mode</label>
-        <select id="rsMode" onchange="onRestockModeChange()">
-          <option value="unique">Unique lines — each buyer gets a different log</option>
-          <option value="shared">Shared — every buyer gets the same content</option>
-        </select>
-      </div>
-      <div class="field">
         <label>Current stock</label>
         <input type="text" id="rsCurrentStock" disabled />
       </div>
-      <div class="field" id="rsUniqueWrap">
+      <div class="field">
         <label>Paste logs — one per line (e.g. user1@mail.com:pass1)</label>
         <textarea id="rsPasteBox" rows="10" placeholder="user1@mail.com:pass1&#10;user2@mail.com:pass2&#10;user3@mail.com:pass3"></textarea>
         <div class="price-note" id="rsLineCount">0 lines</div>
-      </div>
-      <div class="field hidden" id="rsSharedWrap">
-        <label>Shared content (delivered to every buyer of this product)</label>
-        <textarea id="rsSharedBox" rows="8" placeholder="Paste the single VPN log / config / details here"></textarea>
-        <div class="price-note">This replaces unique stock for this product. Sales will never run out.</div>
       </div>
       <div id="restockModalError" class="error-msg"></div>
       <div id="restockModalResult" style="font-size:13px;color:var(--success,#34d399);"></div>
@@ -1159,7 +845,6 @@ let allProducts = [];
 let allProfiles = [];
 let liveRate = 1420;
 let currentUserStatusFilter = 'all';
-let currentUserSort = 'joined_asc';
 
 const tabTitles = {
   overview: 'Overview',
@@ -1220,7 +905,7 @@ sb.auth.onAuthStateChange((event, session) => {
 // admin isn't stuck on a blank/loading state forever.
 setTimeout(() => {
   if (!authFlowStarted) checkAuth();
-}, 2500);
+}, 1500);
 
 async function checkAuth() {
   authFlowStarted = true;
@@ -1255,22 +940,23 @@ async function evaluateSession(session) {
 
   document.getElementById('adminEmailLabel').textContent = session.user.email || profile.email || '';
   showDashboard();
-  await loadAllData();
+  // Do not block the admin shell on full data load — run in background.
+  loadAllData().catch(function (e) { console.error('loadAllData', e); });
 }
 
 async function fetchAdminProfileWithRetry(userId, attempts = 3) {
   let lastError = null;
   for (let i = 0; i < attempts; i++) {
+    // Only the fields needed to authorize + label the admin (much lighter than select *)
     const { data: profile, error } = await sb
       .from('profiles')
-      .select('*')
+      .select('id, email, full_name, is_admin')
       .eq('id', userId)
       .maybeSingle();
     if (!error) return { profile, error: null };
     lastError = error;
-    // Small backoff — gives Supabase's auto token refresh time to finish
-    // before we try again.
-    await new Promise(r => setTimeout(r, 350 * (i + 1)));
+    // Short backoff for transient token/network hiccups
+    await new Promise(r => setTimeout(r, 150 * (i + 1)));
   }
   return { profile: null, error: lastError };
 }
@@ -1325,47 +1011,38 @@ async function handleLogin() {
   const email = document.getElementById('adminEmail').value.trim();
   const password = document.getElementById('adminPassword').value;
   const errEl = document.getElementById('loginError');
-  const btn = document.getElementById('adminSignInBtn');
   errEl.textContent = '';
   if (!email || !password) { errEl.textContent = 'Enter email and password.'; return; }
-  if (btn) {
-    if (!btn.dataset.idleHtml) btn.dataset.idleHtml = btn.innerHTML;
-    btn.disabled = true;
-    btn.innerHTML = '<span class="btn-spinner"></span> Signing in…';
-  }
-  try {
-    const { error } = await sb.auth.signInWithPassword({ email, password });
-    if (error) {
-      errEl.textContent = error.message;
-      if (btn) { btn.disabled = false; btn.innerHTML = btn.dataset.idleHtml || '<i class="fas fa-lock"></i> Sign In'; }
-      return;
-    }
-    await checkAuth();
-  } catch (e) {
-    errEl.textContent = e.message || 'Sign in failed';
-    if (btn) { btn.disabled = false; btn.innerHTML = btn.dataset.idleHtml || '<i class="fas fa-lock"></i> Sign In'; }
-  }
+  const { error } = await sb.auth.signInWithPassword({ email, password });
+  if (error) { errEl.textContent = error.message; return; }
+  await checkAuth();
 }
-function closeLogoutConfirm() {
-  document.getElementById('logoutConfirmModal')?.classList.remove('open');
-}
-function handleLogout() {
-  const m = document.getElementById('logoutConfirmModal');
-  if (m) m.classList.add('open');
-  else if (confirm('Log out of admin?')) confirmLogout();
-}
-async function confirmLogout() {
-  const btn = document.getElementById('logoutConfirmBtn');
-  if (btn) { btn.disabled = true; btn.textContent = 'Signing out…'; }
-  try { await sb.auth.signOut(); } catch (e) {}
+async function handleLogout() {
+  await sb.auth.signOut();
   location.reload();
 }
 
+let _adminDataLoading = false;
+let _adminDataLoadedOnce = false;
 async function loadAllData() {
-  await Promise.all([loadProducts(), loadProfiles(), tryLoadOrders(), tryLoadSmsOrders(), loadNotificationHistory()]);
-  resumeGrizzlySyncIfRunning();
-  updateMetrics();
-  loadSupplierBalances();
+  if (_adminDataLoading) return;
+  _adminDataLoading = true;
+  try {
+    await Promise.all([
+      loadProducts().catch(function(e){ console.error('products', e); }),
+      loadProfiles().catch(function(e){ console.error('profiles', e); }),
+      tryLoadOrders().catch(function(e){ console.error('orders', e); }),
+      tryLoadSmsOrders().catch(function(e){ console.error('sms orders', e); }),
+      loadNotificationHistory().catch(function(e){ console.error('notifs', e); })
+    ]);
+    _adminDataLoadedOnce = true;
+    try { resumeGrizzlySyncIfRunning(); } catch (e) {}
+    try { updateMetrics(); } catch (e) {}
+    // Supplier balances are secondary — never block first paint metrics
+    try { loadSupplierBalances(); } catch (e) {}
+  } finally {
+    _adminDataLoading = false;
+  }
 }
 
 function ngnFmt(n) { return '₦' + Number(n || 0).toLocaleString(undefined, { maximumFractionDigits: 2 }); }
@@ -2055,7 +1732,15 @@ async function loadProfiles() {
   // separately from Supabase Auth itself (see loadUserJoinDates), which
   // always has the real signup date for every account regardless of what
   // columns exist on profiles.
-  const { data, error } = await sb.from('profiles').select('*').order('full_name', { ascending: true });
+  // Select only columns the admin UI actually uses (avoids pulling large unused fields).
+  let data = null, error = null;
+  ({ data, error } = await sb.from('profiles').select(
+    'id, full_name, email, phone, customer_id, is_admin, is_banned, balance, balance_usd, updated_at, avatar_url'
+  ).order('full_name', { ascending: true }));
+  if (error && /column|schema cache|Could not find/i.test(error.message || '')) {
+    // Fallback if a column is missing on this project
+    ({ data, error } = await sb.from('profiles').select('*').order('full_name', { ascending: true }));
+  }
   if (error) {
     console.error('Profiles error:', error.message);
     allProfiles = [];
@@ -2241,7 +1926,9 @@ function updateRevenueDisplay() {
   set('mRevenueNgn', '₦' + sales.toLocaleString(undefined, { maximumFractionDigits: 0 }));
   set('mSalesNgn', '₦' + sales.toLocaleString(undefined, { maximumFractionDigits: 0 }));
   set('mRevenueUsd', '$' + (sales / liveRate).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' USD');
-  // Logs profit is shown on the MJ Logs panel via loadOverviewStats (server-side).
+  set('mProfitNgn', '₦' + profit.toLocaleString(undefined, { maximumFractionDigits: 0 }));
+  const marginPct = sales > 0 ? (profit / sales * 100) : 0;
+  set('mProfitPct', marginPct.toLocaleString(undefined, { maximumFractionDigits: 1 }) + '% margin');
 
   loadOverviewStats(period);
 }
@@ -2269,83 +1956,14 @@ async function loadOverviewStats(period) {
       return;
     }
 
-    set('mLogsSoldCount', (data.logs_sold_count || 0).toLocaleString());
-    set('mLogsAmountSpent', '₦' + Number(data.logs_amount_spent || 0).toLocaleString());
-    set('mLogsProfit', '₦' + Number(data.logs_profit || 0).toLocaleString());
-    const logsPeriodEl = document.getElementById('mLogsOrderPeriodLabel');
-    if (logsPeriodEl) logsPeriodEl.textContent = (revenueLabels[period] || period);
-    set('mSmsOrderCount', (data.sms_order_count || 0).toLocaleString());
-    set('mSmsAmountSpent', '₦' + Number(data.sms_amount_spent || 0).toLocaleString());
-    set('mSmsProfit', '₦' + Number(data.sms_profit || 0).toLocaleString());
+    set('mLogsSoldCount', data.logs_sold_count.toLocaleString());
+    set('mSmsOrderCount', data.sms_order_count.toLocaleString());
+    set('mSmsAmountSpent', '₦' + data.sms_amount_spent.toLocaleString());
+    set('mSmsProfit', '₦' + data.sms_profit.toLocaleString());
     const periodLabelEl = document.getElementById('mSmsOrderPeriodLabel');
-    if (periodLabelEl) periodLabelEl.textContent = (revenueLabels[period] || period);
-    set('mBoostOrderCount', (data.boost_order_count || 0).toLocaleString());
-    set('mBoostAmountSpent', '₦' + Number(data.boost_amount_spent || 0).toLocaleString());
-    set('mBoostProfit', '₦' + Number(data.boost_profit || 0).toLocaleString());
-    const boostPeriodEl = document.getElementById('mBoostOrderPeriodLabel');
-    if (boostPeriodEl) boostPeriodEl.textContent = (revenueLabels[period] || period);
-
-    // The headline "Sales" card above was previously computed client-side
-    // from window._cachedOrders — which only ever holds LOG orders, so
-    // "Sales" silently excluded SMS and Booster revenue entirely, even
-    // though this same response has accurate combined numbers for all
-    // three. Overwrite it here with the true combined total once this
-    // (more complete, server-computed) data arrives.
-    const combinedSales = Number(data.logs_amount_spent || 0) + Number(data.sms_amount_spent || 0) + Number(data.boost_amount_spent || 0);
-    const combinedProfit = Number(data.logs_profit || 0) + Number(data.sms_profit || 0) + Number(data.boost_profit || 0);
-    set('mSalesNgn', '₦' + combinedSales.toLocaleString(undefined, { maximumFractionDigits: 0 }));
-    set('mRevenueNgn', '₦' + combinedSales.toLocaleString(undefined, { maximumFractionDigits: 0 }));
-    set('mRevenueUsd', '$' + (combinedSales / liveRate).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' USD');
-    const profitEl = document.getElementById('mProfitNgn');
-    if (profitEl) profitEl.textContent = '₦' + combinedProfit.toLocaleString(undefined, { maximumFractionDigits: 0 });
-
-    // Fallback when api/admin.js has not been redeployed yet (no boost_* fields)
-    if (data.boost_order_count == null) {
-      loadBoosterOverviewFallback(period);
-    }
+    if (periodLabelEl) periodLabelEl.textContent = (revenueLabels[period] || period) + ' · Completed';
   } catch (e) {
     console.error('Overview stats error:', e);
-    loadBoosterOverviewFallback(period);
-  }
-}
-
-async function loadBoosterOverviewFallback(period) {
-  const set = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
-  try {
-    const headers = await authHeaders();
-    const ranges = { today:1, '7days':7, month:30, '3months':90, '6months':180, '12months':365 };
-    const days = ranges[period] || 30;
-    // Pull recent booster orders via admin endpoint (same path used by Booster Orders tab)
-    const params = new URLSearchParams({ action: 'admin_orders', page: '1', page_size: '200' });
-    const res = await fetch('/api/owlet?' + params.toString(), { headers });
-    const data = await res.json();
-    if (!data.success) return;
-    const cutoff = Date.now() - days * 86400000;
-    const rows = (data.data || []).filter(o => {
-      const t = o.created_at ? new Date(o.created_at).getTime() : 0;
-      const st = String(o.status || '').toLowerCase();
-      return t >= cutoff && !['failed','cancelled','canceled','refunded'].includes(st);
-    });
-    const spent = rows.reduce((s, o) => s + Number(o.price_ngn || 0), 0);
-    const rate = liveRate || 1450;
-    const profit = rows.reduce((s, o) => {
-      const paid = Number(o.price_ngn || 0);
-      const charge = Number(o.charge_usd);
-      let cost = 0;
-      if (Number.isFinite(charge) && charge > 0) {
-        const asUsd = charge * rate;
-        if (charge < 100 && asUsd <= paid * 1.5) cost = asUsd;
-        else cost = charge;
-      }
-      return s + (paid - cost);
-    }, 0);
-    set('mBoostOrderCount', rows.length.toLocaleString());
-    set('mBoostAmountSpent', '₦' + Math.round(spent).toLocaleString());
-    set('mBoostProfit', '₦' + Math.round(profit).toLocaleString());
-    const boostPeriodEl = document.getElementById('mBoostOrderPeriodLabel');
-    if (boostPeriodEl) boostPeriodEl.textContent = (revenueLabels[period] || period);
-  } catch (e) {
-    console.warn('Booster overview fallback failed:', e);
   }
 }
 
@@ -2379,7 +1997,7 @@ function renderProducts(list) {
     const supplier = Number(p.supplier_price || 0);
     const price = Number(p.price || 0);
     const profit = price - supplier;
-    const stock = p.is_shared ? 'Shared ∞' : (p.stock_quantity != null ? p.stock_quantity : '—');
+    const stock = p.stock_quantity != null ? p.stock_quantity : '—';
     const available = p.is_available !== false;
     const category = p.category || 'OTHER';
     const rowId = p.id || p.product_key;
@@ -2394,7 +2012,7 @@ function renderProducts(list) {
         <td class="price">₦${price.toLocaleString()}</td>
         <td class="profit">₦${profit.toLocaleString()}</td>
         <td>${stock}</td>
-        <td><button type="button" class="badge ${available ? 'badge-on' : 'badge-off'}" style="cursor:pointer;border:none;font:inherit;" title="Click to show/hide" onclick="event.stopPropagation();toggleProductAvailability('${rowId}', ${available})">${available ? 'Active' : 'Hidden'}</button></td>
+        <td><span class="badge ${available ? 'badge-on' : 'badge-off'}">${available ? 'Active' : 'Hidden'}</span></td>
         <td>
           <button class="btn btn-ghost btn-sm" onclick="editProduct('${escapeHtml(String(rowId))}')"><i class="fas fa-edit"></i></button>
           <button class="btn btn-ghost btn-sm" style="color:#f87171;" onclick="deleteProduct('${escapeHtml(String(rowId))}', event)"><i class="fas fa-trash"></i></button>
@@ -2416,7 +2034,7 @@ function renderProductCards(items) {
     const supplier = Number(p.supplier_price || 0);
     const price = Number(p.price || 0);
     const profit = price - supplier;
-    const stock = p.is_shared ? 'Shared ∞' : (p.stock_quantity != null ? p.stock_quantity : '—');
+    const stock = p.stock_quantity != null ? p.stock_quantity : '—';
     const available = p.is_available !== false;
     const rowId = p.id || p.product_key;
     return `
@@ -2427,7 +2045,7 @@ function renderProductCards(items) {
         <div class="row-line"><span>Supplier</span><span class="supplier-price">₦${supplier.toLocaleString()}</span></div>
         <div class="row-line"><span>Profit</span><span class="profit">₦${profit.toLocaleString()}</span></div>
         <div class="row-line"><span>Stock</span><span>${stock}</span></div>
-        <div class="row-line"><span>Status</span><button type="button" class="badge ${available ? 'badge-on' : 'badge-off'}" style="cursor:pointer;border:none;font:inherit;" title="Click to show/hide" onclick="event.stopPropagation();toggleProductAvailability('${rowId}', ${available})">${available ? 'Active' : 'Hidden'}</button></div>
+        <div class="row-line"><span>Status</span><span class="badge ${available ? 'badge-on' : 'badge-off'}">${available ? 'Active' : 'Hidden'}</span></div>
         <div style="margin-top:10px;display:flex;gap:8px;">
           <button class="btn btn-ghost btn-sm" onclick="editProduct('${escapeHtml(String(rowId))}')"><i class="fas fa-edit"></i> Edit</button>
           <button class="btn btn-ghost btn-sm" style="color:#f87171;" onclick="deleteProduct('${escapeHtml(String(rowId))}', event)"><i class="fas fa-trash"></i> Delete</button>
@@ -2507,12 +2125,6 @@ function openProductModal(product) {
     document.getElementById('pPrice').value = product.price ?? '';
     document.getElementById('pStock').value = product.stock_quantity ?? '';
     document.getElementById('pAvailable').value = product.is_available === false ? 'false' : 'true';
-    const shared = !!(product.is_shared);
-    const pShared = document.getElementById('pIsShared');
-    const pSharedCred = document.getElementById('pSharedCredential');
-    if (pShared) pShared.checked = shared;
-    if (pSharedCred) pSharedCred.value = product.shared_credential || '';
-    if (typeof toggleSharedFields === 'function') toggleSharedFields();
   } else {
     document.getElementById('productModalTitle').textContent = 'Add Product';
     document.getElementById('editProductId').value = '';
@@ -2525,11 +2137,6 @@ function openProductModal(product) {
     document.getElementById('pPrice').value = '';
     document.getElementById('pStock').value = '';
     document.getElementById('pAvailable').value = 'true';
-    const pShared = document.getElementById('pIsShared');
-    const pSharedCred = document.getElementById('pSharedCredential');
-    if (pShared) pShared.checked = false;
-    if (pSharedCred) pSharedCred.value = '';
-    if (typeof toggleSharedFields === 'function') toggleSharedFields();
   }
   document.getElementById('productModal').classList.remove('hidden');
 }
@@ -2575,31 +2182,6 @@ async function deleteProduct(id, evt) {
   }
 }
 
-
-async function toggleProductAvailability(id, currentlyAvailable) {
-  const next = !currentlyAvailable;
-  if (!confirm(next ? 'Show this product to customers?' : 'Hide this product from customers?')) return;
-  try {
-    const headers = { 'Content-Type': 'application/json' };
-    const { data: { session } } = await sb.auth.getSession();
-    if (session?.access_token) headers['Authorization'] = 'Bearer ' + session.access_token;
-    const res = await fetch('/api/admin', {
-      method: 'POST',
-      headers,
-      body: JSON.stringify({ resource: 'product', action: 'update', id, is_available: next })
-    });
-    const data = await res.json();
-    if (!data.success) {
-      showAdminToast(data.message || 'Could not update visibility', 'error');
-      return;
-    }
-    showAdminToast(next ? 'Product is now visible to customers' : 'Product hidden from customers', 'success');
-    await loadProducts();
-  } catch (e) {
-    showAdminToast('Network error: ' + e.message, 'error');
-  }
-}
-
 async function saveProduct() {
   const id = document.getElementById('editProductId').value;
   const name = document.getElementById('pName').value.trim();
@@ -2640,19 +2222,8 @@ async function saveProduct() {
     price,
     stock_quantity: isNaN(stock_quantity) ? 0 : stock_quantity,
     is_available,
-    is_shared: document.getElementById('pIsShared')?.checked === true,
-    shared_credential: (document.getElementById('pSharedCredential')?.value || '').trim() || null,
     supplier_price: existing ? Number(existing.supplier_price || 0) : 0
   };
-  if (body.is_shared && !body.shared_credential) {
-    errEl.textContent = 'Shared products need the content every buyer will receive.';
-    return;
-  }
-  if (body.is_shared) {
-    // Keep unlimited stock for shared listings, but respect Active/Hidden from admin.
-    // Previously is_available was forced true, so Hidden never stuck for shared products.
-    if (body.is_available) body.stock_quantity = 99999;
-  }
 
   const btn = document.getElementById('saveProductBtn');
   setBtnBusy(btn, true, 'Saving...');
@@ -2817,21 +2388,6 @@ function isManualProductRow(p) {
   return String(p.product_key || '').startsWith('manual_');
 }
 
-
-function toggleSharedFields() {
-  const on = document.getElementById('pIsShared')?.checked === true;
-  const wrap = document.getElementById('sharedCredentialWrap');
-  if (wrap) wrap.classList.toggle('hidden', !on);
-  const stock = document.getElementById('pStock');
-  if (stock) stock.disabled = on;
-}
-
-function onRestockModeChange() {
-  const mode = document.getElementById('rsMode')?.value || 'unique';
-  document.getElementById('rsUniqueWrap')?.classList.toggle('hidden', mode === 'shared');
-  document.getElementById('rsSharedWrap')?.classList.toggle('hidden', mode !== 'shared');
-}
-
 function openRestockModal() {
   const select = document.getElementById('rsProductKey');
   const manualProducts = allProducts.filter(isManualProductRow);
@@ -2861,18 +2417,7 @@ function openRestockModal() {
 function updateRestockCurrentStock() {
   const key = document.getElementById('rsProductKey').value;
   const p = allProducts.find(x => x.product_key === key);
-  const el = document.getElementById('rsCurrentStock');
-  if (!p) { el.value = '—'; return; }
-  if (p.is_shared) {
-    el.value = 'Shared (same content for every buyer)';
-    const mode = document.getElementById('rsMode');
-    if (mode) mode.value = 'shared';
-    onRestockModeChange();
-    const box = document.getElementById('rsSharedBox');
-    if (box && p.shared_credential) box.value = p.shared_credential;
-  } else {
-    el.value = `${p.stock_quantity || 0} available`;
-  }
+  document.getElementById('rsCurrentStock').value = p ? `${p.stock_quantity || 0} available` : '—';
 }
 
 function closeRestockModal() {
@@ -2886,25 +2431,15 @@ async function uploadManualStock() {
   resultEl.textContent = '';
 
   const product_key = document.getElementById('rsProductKey').value;
-  const mode = document.getElementById('rsMode')?.value || 'unique';
-  const text = mode === 'shared'
-    ? (document.getElementById('rsSharedBox')?.value || '')
-    : document.getElementById('rsPasteBox').value;
+  const text = document.getElementById('rsPasteBox').value;
 
   if (!product_key) { errEl.textContent = 'Choose a manual product first.'; return; }
-  if (!text.trim()) {
-    errEl.textContent = mode === 'shared'
-      ? 'Paste the shared content every buyer should receive.'
-      : 'Paste at least one credential line.';
-    return;
-  }
+  if (!text.trim()) { errEl.textContent = 'Paste at least one credential line.'; return; }
 
   const btn = document.getElementById('rsUploadBtn');
   const idleHtml = btn.innerHTML;
   btn.disabled = true;
-  btn.innerHTML = mode === 'shared'
-    ? '<i class="fas fa-spinner fa-spin"></i> Saving...'
-    : '<i class="fas fa-spinner fa-spin"></i> Uploading...';
+  btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Uploading...';
 
   let step = 'reading session';
   try {
@@ -2914,20 +2449,24 @@ async function uploadManualStock() {
       const { data } = await sb.auth.getSession();
       token = data?.session?.access_token || null;
     } catch (sessErr) {
-      token = null;
+      token = null; // fall through without a token rather than blocking the whole upload
     }
+    // Safari's fetch() strictly validates header values and throws an opaque
+    // "The string did not match the expected pattern" TypeError on anything
+    // it doesn't like (e.g. mid-refresh session weirdness) — Chrome doesn't
+    // enforce this as strictly, which is why this only shows up on iPhone.
+    // Only attach the token if it actually looks like a real JWT (three
+    // dot-separated segments, no stray whitespace) so a bad value never
+    // reaches fetch() in the first place.
     if (token && /^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/.test(token.trim())) {
       headers['Authorization'] = 'Bearer ' + token.trim();
     }
 
     step = 'uploading';
-    const payload = mode === 'shared'
-      ? { resource: 'inventory', action: 'set_shared', product_key, credential: text.trim() }
-      : { resource: 'inventory', action: 'bulk_upload', product_key, text };
     const res = await fetch('/api/admin', {
       method: 'POST',
       headers,
-      body: JSON.stringify(payload)
+      body: JSON.stringify({ resource: 'inventory', action: 'bulk_upload', product_key, text })
     });
 
     step = 'reading response';
@@ -2938,16 +2477,11 @@ async function uploadManualStock() {
       return;
     }
 
-    if (mode === 'shared') {
-      resultEl.textContent = data.data?.message || 'Shared content saved. Every buyer gets the same details.';
-      document.getElementById('rsSharedBox').value = text.trim();
-    } else {
-      resultEl.textContent = `Uploaded ${data.data.inserted} new log${data.data.inserted === 1 ? '' : 's'}`
-        + (data.data.skipped_duplicates ? ` (skipped ${data.data.skipped_duplicates} duplicate${data.data.skipped_duplicates === 1 ? '' : 's'})` : '')
-        + `. Stock now: ${data.data.available_stock}.`;
-      document.getElementById('rsPasteBox').value = '';
-      document.getElementById('rsLineCount').textContent = '0 lines';
-    }
+    resultEl.textContent = `Uploaded ${data.data.inserted} new log${data.data.inserted === 1 ? '' : 's'}`
+      + (data.data.skipped_duplicates ? ` (skipped ${data.data.skipped_duplicates} duplicate${data.data.skipped_duplicates === 1 ? '' : 's'})` : '')
+      + `. Stock now: ${data.data.available_stock}.`;
+    document.getElementById('rsPasteBox').value = '';
+    document.getElementById('rsLineCount').textContent = '0 lines';
     await loadProducts();
     updateRestockCurrentStock();
   } catch (e) {
@@ -3031,34 +2565,9 @@ function renderUsers(list) {
   }
 }
 
-function sortUsersList(list, sortKey) {
-  const arr = list.slice();
-  const nameOf = u => (u.full_name || u.username || u.email || '').toLowerCase();
-  switch (sortKey) {
-    case 'joined_desc':
-      arr.sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0));
-      break;
-    case 'name_asc':
-      arr.sort((a, b) => nameOf(a).localeCompare(nameOf(b)));
-      break;
-    case 'name_desc':
-      arr.sort((a, b) => nameOf(b).localeCompare(nameOf(a)));
-      break;
-    case 'balance_desc':
-      arr.sort((a, b) => Number(b.balance || 0) - Number(a.balance || 0));
-      break;
-    case 'joined_asc':
-    default:
-      arr.sort((a, b) => new Date(a.created_at || 0) - new Date(b.created_at || 0));
-      break;
-  }
-  return arr;
-}
-
 function filterUsers() {
   const q = (document.getElementById('userSearch').value || '').toLowerCase().trim();
   const status = document.getElementById('userStatusFilter')?.value || currentUserStatusFilter;
-  currentUserSort = document.getElementById('userSortFilter')?.value || currentUserSort;
   let filtered = allProfiles;
   if (status === 'active') filtered = filtered.filter(u => isUserActive(u) && !u.is_banned);
   if (status === 'inactive') filtered = filtered.filter(u => !isUserActive(u) && !u.is_banned);
@@ -3072,7 +2581,6 @@ function filterUsers() {
       (u.phone_number || u.phone || '').toLowerCase().includes(q)
     );
   }
-  filtered = sortUsersList(filtered, currentUserSort);
   renderUsers(filtered);
 }
 
@@ -3309,7 +2817,7 @@ function renderOrders(orders) {
   for (const [key, dayOrders] of groups) {
     html += `
       <tr>
-        <td colspan="7" style="background:rgba(99,102,241,.06);border-bottom:1px solid var(--border);padding:10px 12px;font-size:12px;font-weight:800;color:var(--primary);text-transform:uppercase;letter-spacing:.4px;white-space:nowrap;">
+        <td colspan="7" style="background:rgba(59,130,246,.06);border-bottom:1px solid var(--border);padding:10px 12px;font-size:12px;font-weight:800;color:var(--primary);text-transform:uppercase;letter-spacing:.4px;white-space:nowrap;">
           ${escapeHtml(dayLabel(key))} <span style="color:var(--muted);font-weight:600;text-transform:none;letter-spacing:0;">— ${dayOrders.length} order${dayOrders.length !== 1 ? 's' : ''}</span>
         </td>
       </tr>`;
@@ -3759,28 +3267,11 @@ async function editOwletService(id) {
 
 
 
-
-function boosterStatusBadge(status) {
-  const s = String(status || 'Pending');
-  const low = s.toLowerCase();
-  let cls = 'badge-pending';
-  if (/completed|success|done|partial/i.test(low)) cls = 'badge-on';
-  else if (/fail|cancel|refund|error/i.test(low)) cls = 'badge-off';
-  else if (/pending|progress|processing|in progress/i.test(low)) cls = 'badge-pending';
-  return `<span class="badge ${cls}">${escapeHtml(s)}</span>`;
-}
-
 let boosterOrderPage = 1;
 async function loadBoosterOrders() {
   const tbody = document.getElementById('boosterOrdersBody');
   const cards = document.getElementById('boosterOrdersCards');
   const pager = document.getElementById('boosterOrdersPager');
-  const btn = document.getElementById('btnRefreshBoosterOrders');
-  // This now makes a real Owlet API call per pending order to pull live
-  // status (previously it was an instant re-read of whatever was already
-  // in the database, which is why Refresh looked like it "did nothing" —
-  // it wasn't actually checking anything). Show it's genuinely working.
-  setBtnBusy(btn, true, 'Refreshing…');
   try {
     const headers = await authHeaders();
     const q = (document.getElementById('boosterOrderSearch')?.value || '').trim();
@@ -3806,13 +3297,13 @@ async function loadBoosterOrders() {
           <td style="max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${escapeHtml(o.link || '')}">${escapeHtml(o.link || '—')}</td>
           <td>${Number(o.quantity || 0).toLocaleString()}</td>
           <td class="price">₦${Number(o.price_ngn || 0).toLocaleString()}</td>
-          <td>${boosterStatusBadge(o.status)}</td>
+          <td><span class="badge badge-on">${escapeHtml(o.status || 'Pending')}</span></td>
           <td>${escapeHtml(o.supplier_order_id || '—')}</td>
         </tr>`).join('');
       if (cards) cards.innerHTML = rows.map(o => `
         <div class="mobile-card">
           <div style="font-weight:700;">${escapeHtml(o.service_name || 'Boost')}</div>
-          <div class="row-line"><span>Status</span>${boosterStatusBadge(o.status)}</div>
+          <div class="row-line"><span>Status</span><span>${escapeHtml(o.status || 'Pending')}</span></div>
           <div class="row-line"><span>Paid</span><span class="price">₦${Number(o.price_ngn || 0).toLocaleString()}</span></div>
           <div class="row-line"><span>Qty</span><span>${Number(o.quantity || 0).toLocaleString()}</span></div>
           <div class="row-line"><span>Customer</span><span>${escapeHtml(o.customer_id || '—')}</span></div>
@@ -3826,8 +3317,6 @@ async function loadBoosterOrders() {
       <button class="btn btn-ghost btn-sm" ${boosterOrderPage>=maxPage?'disabled':''} onclick="boosterOrderPage++;loadBoosterOrders()">Next</button>`;
   } catch (e) {
     if (tbody) tbody.innerHTML = `<tr><td colspan="8" class="empty-state">${escapeHtml(e.message || String(e))}</td></tr>`;
-  } finally {
-    setBtnBusy(btn, false, '<i class="fas fa-sync"></i> Refresh');
   }
 }
 
@@ -3845,62 +3334,5 @@ async function loadBoosterOrders() {
   };
 })();
 </script>
-
-<div class="logout-confirm-overlay" id="logoutConfirmModal" onclick="if(event.target===this)closeLogoutConfirm()">
-  <div class="logout-confirm-card" role="dialog">
-    <h3>Log out?</h3>
-    <p>You will need to sign in again to access the admin dashboard.</p>
-    <div class="logout-confirm-actions">
-      <button type="button" class="logout-btn-cancel" onclick="closeLogoutConfirm()">Cancel</button>
-      <button type="button" class="logout-btn-confirm" id="logoutConfirmBtn" onclick="confirmLogout()">Log out</button>
-    </div>
-  </div>
-</div>
-
-<script>
-/* Support desk unread indicator */
-(function() {
-  async function pollSupportBadge() {
-    try {
-      if (typeof sb === 'undefined' || !sb) return;
-      const { data: { session } } = await sb.auth.getSession();
-      if (!session) return;
-      const { count, error } = await sb
-        .from('support_tickets')
-        .select('id', { count: 'exact', head: true })
-        .eq('status', 'open');
-      if (error) return;
-      const n = count || 0;
-      const badge = document.getElementById('supportNavBadge');
-      const bell = document.getElementById('supportTopBell');
-      if (badge) {
-        if (n > 0) {
-          badge.style.display = 'inline-block';
-          badge.textContent = n > 99 ? '99+' : String(n);
-        } else {
-          badge.style.display = 'none';
-        }
-      }
-      if (bell) {
-        bell.style.display = n > 0 ? 'inline-flex' : 'none';
-        const bc = document.getElementById('supportTopBellCount');
-        if (bc) bc.textContent = n > 99 ? '99+' : String(n);
-      }
-      document.title = n > 0 ? '(' + n + ') MJ HUB Admin' : document.title.replace(/^\(\d+\+?\)\s*/, '');
-    } catch (e) {}
-  }
-  setInterval(pollSupportBadge, 20000);
-  setTimeout(pollSupportBadge, 2500);
-  try {
-    if (typeof sb !== 'undefined' && sb) {
-      sb.channel('admin-support-badge')
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'support_tickets' }, pollSupportBadge)
-        .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'support_messages' }, pollSupportBadge)
-        .subscribe();
-    }
-  } catch (e) {}
-})();
-</script>
-
 </body>
 </html>

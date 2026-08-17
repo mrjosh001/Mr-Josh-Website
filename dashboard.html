@@ -3409,16 +3409,28 @@ async function enforceIdleTimeout() {
 }
 
 document.addEventListener('DOMContentLoaded', async () => {
+    // Paint chrome immediately so the page does not feel frozen while auth/data load.
+    try {
+        initNavigation();
+        initTheme();
+        try { if (window.MJHubI18n) MJHubI18n.apply(localStorage.getItem('mjhub_lang') || 'en'); } catch (e) {}
+        initDropdowns();
+        initSupportWidget();
+        updateCartDisplay();
+        initHashRouting();
+    } catch (e) { console.warn('early UI init', e); }
+
     if (supabaseClient) {
         try {
             // Retry getSession — right after redirect from auth.html the session
             // can lag a moment in localStorage (causes "must sign in twice").
+            // Cap retries tightly so a missing session fails fast to auth.html.
             let session = null;
-            for (let attempt = 0; attempt < 8; attempt++) {
+            for (let attempt = 0; attempt < 5; attempt++) {
                 const { data } = await supabaseClient.auth.getSession();
                 session = data?.session || null;
                 if (session && session.access_token) break;
-                await new Promise(r => setTimeout(r, 200));
+                await new Promise(r => setTimeout(r, 100));
             }
 
             // Fresh login from auth.html — never idle-kick on first paint
@@ -3432,19 +3444,20 @@ document.addEventListener('DOMContentLoaded', async () => {
                 const idleTimedOut = await enforceIdleTimeout();
                 if (idleTimedOut) return;
                 currentUserId = session.user.id;
+
+                // Profile first (needed for name/Customer ID), then parallel data.
                 await initUserData(session.user);
-                await fetchUserBalance(currentUserId);
-                await fetchUserTransactions(currentUserId);
-                await fetchUserOrders(currentUserId);
-                fetchUserSpendingSummary(currentUserId);
-                buildNotificationsFromActivity();
-                renderNotifications();
-                // Admin broadcasts → bell + one-time popup + realtime
-                await loadAdminNotifications();
-                subscribeNotifRealtime();
-                initWelcomeModal();
+                await Promise.all([
+                    fetchUserBalance(currentUserId).catch(function(e){ console.warn('balance', e); }),
+                    fetchUserTransactions(currentUserId).catch(function(e){ console.warn('tx', e); }),
+                    fetchUserOrders(currentUserId).catch(function(e){ console.warn('orders', e); }),
+                    loadAdminNotifications().catch(function(e){ console.warn('notifs', e); }),
+                    Promise.resolve().then(function(){ try { fetchUserSpendingSummary(currentUserId); } catch (e) {} })
+                ]);
+                try { buildNotificationsFromActivity(); renderNotifications(); } catch (e) {}
+                try { subscribeNotifRealtime(); } catch (e) {}
+                try { initWelcomeModal(); } catch (e) {}
             } else {
-                // No active session after retries — send to sign-in
                 window.location.href = 'auth.html';
                 return;
             }
@@ -3458,15 +3471,9 @@ document.addEventListener('DOMContentLoaded', async () => {
         return;
     }
 
-    initNavigation();
-    initTheme();
-    try { if (window.MJHubI18n) MJHubI18n.apply(localStorage.getItem('mjhub_lang') || 'en'); } catch (e) {}
-    initDropdowns();
-    initSupportWidget();
-    updateCartDisplay();
-    initHashRouting();
-    await handleDepositReturn();
-    checkPendingPocketFiPayment();
+    // Deposit return + pending payment checks (non-critical path)
+    try { await handleDepositReturn(); } catch (e) { console.warn('deposit return', e); }
+    try { checkPendingPocketFiPayment(); } catch (e) {}
 });
 
 /** After PocketFi (or other) checkout, user lands on dashboard.html?deposit=success */
@@ -3597,21 +3604,21 @@ async function initUserData(user) {
     // Prefer profiles table (persistent app data)
     if (supabaseClient && user.id) {
         try {
-            // Select only columns that commonly exist; optional fields loaded if present
+            // One primary query; only fall back if the schema is missing columns.
             let profile = null;
             let { data, error: selErr } = await supabaseClient
                 .from('profiles')
-                .select('full_name, phone, avatar_url, customer_id, email, address, bio')
+                .select('full_name, name, phone, phone_number, avatar_url, customer_id, email, address, bio, username, balance, balance_usd')
                 .eq('id', user.id)
                 .maybeSingle();
-            if (selErr && /column|schema cache/i.test(selErr.message || '')) {
+            if (selErr && /column|schema cache|Could not find/i.test(selErr.message || '')) {
                 ({ data, error: selErr } = await supabaseClient
                     .from('profiles')
                     .select('full_name, phone, avatar_url, customer_id, email')
                     .eq('id', user.id)
                     .maybeSingle());
             }
-            if (selErr && /full_name/i.test(selErr.message || '')) {
+            if (selErr && /full_name|column|schema/i.test(selErr.message || '')) {
                 ({ data } = await supabaseClient
                     .from('profiles')
                     .select('name, phone, avatar_url, customer_id, email')
@@ -5084,16 +5091,18 @@ window.saveProfileSettingsData = async function() {
     }
 
     try {
-        // Refresh session so RLS sees a valid JWT
+        // Use existing session first (fast). Only refresh if missing/expired.
         let accessToken = null;
         try {
-            const { data: ref, error: refErr } = await supabaseClient.auth.refreshSession();
-            if (!refErr && ref?.session) accessToken = ref.session.access_token;
-        } catch (e) {}
-        if (!accessToken) {
             const { data: { session } } = await supabaseClient.auth.getSession();
             accessToken = session?.access_token || null;
-        }
+            const exp = session?.expires_at ? (session.expires_at * 1000) : 0;
+            // Refresh only if token expires within ~2 minutes
+            if (!accessToken || (exp && exp < Date.now() + 120000)) {
+                const { data: ref, error: refErr } = await supabaseClient.auth.refreshSession();
+                if (!refErr && ref?.session) accessToken = ref.session.access_token;
+            }
+        } catch (e) {}
         if (!accessToken) {
             throw new Error('Session expired. Please sign in again.');
         }
