@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en" data-theme="dark">
+<html lang="en" data-theme="light">
 <head>
 <!-- TikTok Pixel Code Start -->
 <script>
@@ -43,9 +43,9 @@
                 try { t = window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark'; }
                 catch (e2) { t = 'dark'; }
             }
-            document.documentElement.setAttribute('data-theme', (t === 'light') ? 'light' : 'dark');
+            document.documentElement.setAttribute('data-theme', (t === 'dark') ? 'dark' : 'light');
         } catch (e) {
-            document.documentElement.setAttribute('data-theme', 'dark');
+            document.documentElement.setAttribute('data-theme', 'light');
         }
     })();
     </script>
@@ -720,56 +720,56 @@
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <style>
 :root[data-theme="dark"] {
-    --primary: #5b8af5;
-    --primary-strong: #3b6ef5;
-    --primary-glow: rgba(91, 138, 245, 0.35);
-    --accent: #3b82f6;
-    --bg: #05070e;
-    --bg-elevated: #0a0f1a;
-    --card: rgba(15, 22, 40, 0.55);
-    --card-solid: #0f1628;
-    --card-hover: rgba(22, 32, 54, 0.72);
-    --text: #f1f5f9;
-    --muted: #8b9bb4;
-    --border: rgba(148, 163, 184, 0.16);
-    --border-strong: rgba(148, 163, 184, 0.28);
-    --nav: rgba(8, 12, 22, 0.55);
-    --glass: rgba(255, 255, 255, 0.06);
-    --glass-border: rgba(255, 255, 255, 0.14);
-    --glass-blur: blur(22px) saturate(1.6);
+    --primary: #4c8bf5;
+    --primary-strong: #3b7aef;
+    --primary-glow: rgba(76, 139, 245, 0.28);
+    --accent: #6ba3f7;
+    --bg: #0c111b;
+    --bg-elevated: #141b28;
+    --card: #141b28;
+    --card-solid: #141b28;
+    --card-hover: #1a2333;
+    --text: #f8fafc;
+    --muted: #94a3b8;
+    --border: rgba(148, 163, 184, 0.12);
+    --border-strong: rgba(148, 163, 184, 0.22);
+    --nav: rgba(12, 17, 27, 0.92);
+    --glass: rgba(255, 255, 255, 0.04);
+    --glass-border: rgba(255, 255, 255, 0.08);
+    --glass-blur: blur(20px) saturate(1.2);
     --success: #34d399;
     --warning: #fbbf24;
     --danger: #f87171;
     --whatsapp: #25d366;
-    --shadow: 0 18px 50px rgba(0,0,0,0.45);
-    --radius: 20px;
-    --radius-sm: 14px;
+    --shadow: 0 12px 40px rgba(0, 0, 0, 0.4);
+    --radius: 18px;
+    --radius-sm: 12px;
 }
 :root[data-theme="light"] {
-    --primary: #3b6ef5;
-    --primary-strong: #2554e8;
-    --primary-glow: rgba(59, 110, 245, 0.22);
-    --accent: #2563eb;
-    --bg: #eef2fb;
+    --primary: #2f6fed;
+    --primary-strong: #1f5ad8;
+    --primary-glow: rgba(47, 111, 237, 0.18);
+    --accent: #4c8bf5;
+    --bg: #f7f9fc;
     --bg-elevated: #ffffff;
-    --card: rgba(255, 255, 255, 0.72);
+    --card: #ffffff;
     --card-solid: #ffffff;
-    --card-hover: rgba(255, 255, 255, 0.9);
+    --card-hover: #f3f6fb;
     --text: #0f172a;
     --muted: #64748b;
-    --border: rgba(59, 110, 245, 0.12);
-    --border-strong: rgba(59, 110, 245, 0.22);
-    --nav: rgba(255,255,255,0.72);
-    --glass: rgba(255, 255, 255, 0.65);
-    --glass-border: rgba(255, 255, 255, 0.7);
-    --glass-blur: blur(22px) saturate(1.5);
+    --border: rgba(15, 23, 42, 0.08);
+    --border-strong: rgba(47, 111, 237, 0.2);
+    --nav: rgba(255, 255, 255, 0.96);
+    --glass: rgba(255, 255, 255, 0.9);
+    --glass-border: rgba(15, 23, 42, 0.06);
+    --glass-blur: blur(20px) saturate(1.15);
     --success: #059669;
     --warning: #d97706;
     --danger: #dc2626;
     --whatsapp: #25d366;
-    --shadow: 0 16px 40px rgba(15,23,42,0.08);
-    --radius: 20px;
-    --radius-sm: 14px;
+    --shadow: 0 8px 28px rgba(15, 23, 42, 0.06);
+    --radius: 18px;
+    --radius-sm: 12px;
 }
 * { box-sizing: border-box; margin: 0; padding: 0; }
 html { -webkit-tap-highlight-color: transparent; }
@@ -786,8 +786,8 @@ body::before {
     position: fixed;
     inset: 0;
     background:
-        radial-gradient(ellipse 80% 50% at 10% -10%, rgba(91,138,245,0.12), transparent 50%),
-        radial-gradient(ellipse 60% 40% at 100% 0%, rgba(167,139,250,0.08), transparent 45%);
+        radial-gradient(ellipse 70% 45% at 8% -8%, rgba(47,111,237,0.07), transparent 55%),
+        radial-gradient(ellipse 50% 35% at 100% 0%, rgba(76,139,245,0.05), transparent 50%);
     pointer-events: none;
     z-index: 0;
 }
@@ -945,7 +945,7 @@ body::before {
 /* HERO */
 .dashboard-card-hero {
     position: relative; overflow: hidden;
-    background: linear-gradient(145deg, #1a2d6b 0%, #2a4db8 42%, #6d3fd4 100%);
+    background: linear-gradient(145deg, #1e4fd6 0%, #2f6fed 55%, #4c8bf5 100%);
     border-radius: 24px; padding: 26px 22px 24px; color: #fff;
     margin-bottom: 18px;
     box-shadow: 0 20px 50px rgba(37, 77, 184, 0.35);
@@ -960,7 +960,7 @@ body::before {
 .dashboard-card-hero::after {
     content: ''; position: absolute; bottom: -30%; left: -10%;
     width: 160px; height: 160px; border-radius: 50%;
-    background: radial-gradient(circle, rgba(167,139,250,0.25), transparent 70%);
+    background: radial-gradient(circle, rgba(59,130,246,0.25), transparent 70%);
     pointer-events: none;
 }
 .hero-welcome { font-size: 22px; font-weight: 800; letter-spacing: -0.03em; margin-bottom: 6px; position: relative; z-index: 1; }
@@ -1058,50 +1058,38 @@ body::before {
     color: #fff; white-space: nowrap;
 }
 .promo-card--logs {
-    border-color: rgba(249, 115, 22, 0.28);
-    background:
-      radial-gradient(120% 120% at 100% 0%, rgba(251, 191, 36, 0.18), transparent 45%),
-      radial-gradient(100% 120% at 0% 100%, rgba(249, 115, 22, 0.20), transparent 50%),
-      linear-gradient(135deg, rgba(249, 115, 22, 0.14), rgba(251, 191, 36, 0.16));
-    box-shadow: 0 10px 24px rgba(249, 115, 22, 0.12);
+    border-color: var(--border);
+    background: var(--card);
+    box-shadow: var(--shadow);
 }
-.promo-card--logs .promo-card-icon { background: linear-gradient(135deg, #f97316, #f59e0b); box-shadow: 0 8px 18px rgba(249, 115, 22, 0.35); }
-.promo-card--logs .promo-card-cta { background: linear-gradient(135deg, #f97316, #f59e0b); box-shadow: 0 6px 14px rgba(249, 115, 22, 0.35); }
+.promo-card--logs .promo-card-icon { background: linear-gradient(135deg, #2f6fed, #4c8bf5); box-shadow: 0 6px 14px rgba(47, 111, 237, 0.22); }
+.promo-card--logs .promo-card-cta { background: var(--primary); box-shadow: none; }
 .promo-card--boost {
-    border-color: rgba(139, 92, 246, 0.28);
-    background:
-      radial-gradient(120% 120% at 100% 0%, rgba(251, 113, 133, 0.18), transparent 45%),
-      radial-gradient(100% 120% at 0% 100%, rgba(59, 130, 246, 0.22), transparent 50%),
-      linear-gradient(135deg, rgba(91, 138, 245, 0.16), rgba(167, 139, 250, 0.18));
-    box-shadow: 0 10px 24px rgba(91, 138, 245, 0.12);
+    border-color: var(--border);
+    background: var(--card);
+    box-shadow: var(--shadow);
 }
-.promo-card--boost .promo-card-icon { background: linear-gradient(135deg, #2563eb, #3b82f6); box-shadow: 0 8px 18px rgba(59, 130, 246, 0.35); }
-.promo-card--boost .promo-card-cta { background: linear-gradient(135deg, #2563eb, #3b82f6); box-shadow: 0 6px 14px rgba(91, 138, 245, 0.35); }
+.promo-card--boost .promo-card-icon { background: linear-gradient(135deg, #2f6fed, #4c8bf5); box-shadow: 0 6px 14px rgba(47, 111, 237, 0.22); }
+.promo-card--boost .promo-card-cta { background: var(--primary); box-shadow: none; }
 
 .promo-card--sms {
-    border-color: rgba(91, 138, 245, 0.35);
-    background:
-      radial-gradient(120% 120% at 100% 0%, rgba(147, 197, 253, 0.22), transparent 45%),
-      radial-gradient(100% 120% at 0% 100%, rgba(59, 130, 246, 0.20), transparent 50%),
-      linear-gradient(135deg, rgba(59, 130, 246, 0.18), rgba(255, 255, 255, 0.06));
-    box-shadow: 0 10px 24px rgba(59, 130, 246, 0.14);
+    border-color: var(--border);
+    background: var(--card);
+    box-shadow: var(--shadow);
 }
-.promo-card--sms .promo-card-icon { background: linear-gradient(135deg, #3b82f6, #60a5fa); box-shadow: 0 8px 18px rgba(59, 130, 246, 0.4); }
-.promo-card--sms .promo-card-cta { background: linear-gradient(135deg, #3b82f6, #2563eb); box-shadow: 0 6px 14px rgba(59, 130, 246, 0.35); }
+.promo-card--sms .promo-card-icon { background: linear-gradient(135deg, #2f6fed, #4c8bf5); box-shadow: 0 6px 14px rgba(47, 111, 237, 0.22); }
+.promo-card--sms .promo-card-cta { background: var(--primary); box-shadow: none; }
 /* Soften logs/boost to sit in same glass family while keeping accent */
 .promo-card--logs {
-    border-color: rgba(249, 115, 22, 0.28);
-    background:
-      radial-gradient(120% 120% at 100% 0%, rgba(251, 191, 36, 0.14), transparent 45%),
-      radial-gradient(100% 120% at 0% 100%, rgba(249, 115, 22, 0.14), transparent 50%),
-      linear-gradient(135deg, rgba(249, 115, 22, 0.10), rgba(255, 255, 255, 0.05));
+    border-color: var(--border);
+    background: var(--card);
 }
 .promo-card--boost {
-    border-color: rgba(139, 92, 246, 0.28);
+    border-color: rgba(37, 99, 235, 0.28);
     background:
       radial-gradient(120% 120% at 100% 0%, rgba(251, 113, 133, 0.12), transparent 45%),
       radial-gradient(100% 120% at 0% 100%, rgba(59, 130, 246, 0.16), transparent 50%),
-      linear-gradient(135deg, rgba(91, 138, 245, 0.12), rgba(167, 139, 250, 0.12));
+      linear-gradient(135deg, rgba(91, 138, 245, 0.12), rgba(96, 165, 250, 0.12));
 }
 
 
@@ -1114,50 +1102,46 @@ body::before {
     color: inherit;
     margin: 12px 0;
     border-radius: 18px;
-    padding: 15px 15px;
-    border: 1px solid rgba(16, 185, 129, 0.28);
-    background:
-      radial-gradient(120% 120% at 100% 0%, rgba(250, 204, 21, 0.16), transparent 45%),
-      radial-gradient(100% 120% at 0% 100%, rgba(52, 211, 153, 0.20), transparent 50%),
-      linear-gradient(135deg, rgba(16, 185, 129, 0.14), rgba(250, 204, 21, 0.10));
-    box-shadow: 0 10px 24px rgba(16, 185, 129, 0.12);
+    padding: 15px;
+    border: 1px solid var(--border);
+    background: var(--card);
+    box-shadow: var(--shadow);
     position: relative;
     overflow: hidden;
+    transition: transform .15s, border-color .15s;
 }
 .contest-banner:active { transform: scale(0.985); }
 .contest-banner-icon {
-    width: 46px; height: 46px; border-radius: 15px; flex-shrink: 0;
-    display: flex; align-items: center; justify-content: center;
-    font-size: 19px;
-    background: linear-gradient(135deg, #10b981, #facc15);
+    width: 44px; height: 44px; border-radius: 12px; flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center; font-size: 17px;
+    background: linear-gradient(135deg, #2f6fed, #4c8bf5);
     color: #fff;
-    box-shadow: 0 8px 20px rgba(16, 185, 129, 0.35);
+    box-shadow: 0 6px 14px rgba(47, 111, 237, 0.22);
 }
-.contest-banner-text { flex: 1; min-width: 0; }
+.contest-banner-text { flex: 1; min-width: 0; padding-right: 36px; }
 .contest-banner-text strong {
-    display: block; font-size: 13.5px; font-weight: 900; color: var(--text);
-    margin-bottom: 3px; letter-spacing: -0.01em;
+    display: block; font-size: 13px; font-weight: 800; letter-spacing: -0.02em;
+    color: var(--text); margin-bottom: 2px;
 }
 .contest-banner-text span {
-    display: block; font-size: 11.5px; color: var(--muted); line-height: 1.35; font-weight: 600;
+    display: block; font-size: 11px; color: var(--muted); line-height: 1.4; font-weight: 600;
 }
 .contest-banner-cta {
     flex-shrink: 0;
     font-size: 11px; font-weight: 800;
-    padding: 8px 12px; border-radius: 999px;
-    background: linear-gradient(135deg, #10b981, #facc15);
+    padding: 8px 14px; border-radius: 999px;
+    background: var(--primary);
     color: #fff;
     white-space: nowrap;
-    box-shadow: 0 6px 16px rgba(16, 185, 129, 0.35);
 }
 .contest-banner-badge {
     position: absolute; top: 10px; right: 10px;
-    font-size: 8.5px; font-weight: 900;
+    font-size: 8.5px; font-weight: 800;
     padding: 3px 8px; border-radius: 999px;
-    background: rgba(16, 185, 129, 0.16);
-    border: 1px solid rgba(16, 185, 129, 0.4);
-    color: #10b981;
-    letter-spacing: 0.04em; text-transform: uppercase;
+    background: rgba(47, 111, 237, 0.1);
+    border: 1px solid rgba(47, 111, 237, 0.22);
+    color: var(--primary);
+    letter-spacing: 0.03em; text-transform: uppercase;
 }
 @media (max-width: 340px) {
     .promo-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
@@ -1869,7 +1853,7 @@ body::before {
 .welcome-modal-hero {
     position: relative; padding: 38px 24px 30px; text-align: center; overflow: hidden;
     background:
-      radial-gradient(130% 140% at 12% -25%, rgba(167,139,250,.55), transparent 55%),
+      radial-gradient(130% 140% at 12% -25%, rgba(59,130,246,.55), transparent 55%),
       radial-gradient(130% 140% at 105% -10%, rgba(91,138,245,.6), transparent 50%),
       linear-gradient(165deg, var(--primary-strong), var(--accent) 120%);
 }
@@ -2033,10 +2017,10 @@ body::before {
 .nav-item.active { color: var(--primary); }
 .plus-circle {
     width: 48px; height: 48px;
-    background: linear-gradient(135deg, var(--primary), var(--primary-strong, #2563eb));
+    background: var(--primary);
     color: #fff; border-radius: 50%; display: flex; align-items: center; justify-content: center;
     font-size: 24px; margin-top: -22px; border: 4px solid var(--bg);
-    box-shadow: 0 8px 20px var(--primary-glow);
+    box-shadow: 0 6px 16px rgba(47, 111, 237, 0.28);
 }
 @media(min-width: 768px) {
     .bottom-nav { display: none; }
@@ -2364,9 +2348,9 @@ body::before {
                 <div class="promo-card-icon"><i class="fa-solid fa-box-archive"></i></div>
                 <div>
                     <span class="promo-card-title">Buy Logs</span>
-                    <span class="promo-card-sub">Digital products to your dashboard</span>
+                    <span class="promo-card-sub">Gmail, Outlook, social accounts and more delivered to your dashboard</span>
                 </div>
-                <span class="promo-card-cta">Open →</span>
+                <span class="promo-card-cta">Open</span>
             </a>
             <a class="promo-card promo-card--sms" href="mj-sms-choose-server.html" id="smsPromoCard">
                 <div class="promo-card-icon"><i class="fa-solid fa-comment-sms"></i></div>
@@ -2374,15 +2358,15 @@ body::before {
                     <span class="promo-card-title">Get SMS</span>
                     <span class="promo-card-sub">Temporary numbers for verification</span>
                 </div>
-                <span class="promo-card-cta">Open →</span>
+                <span class="promo-card-cta">Open</span>
             </a>
             <a class="promo-card promo-card--boost" href="mj-boosters.html" id="boostersPromoBanner">
                 <div class="promo-card-icon"><i class="fa-solid fa-bolt"></i></div>
                 <div>
                     <span class="promo-card-title">Boost Social Media</span>
-                    <span class="promo-card-sub">Followers, likes & views — IG, TikTok, X…</span>
+                    <span class="promo-card-sub">Followers, likes and views for Instagram, TikTok, X and more</span>
                 </div>
-                <span class="promo-card-cta">Open →</span>
+                <span class="promo-card-cta">Open</span>
             </a>
         </div>
 
@@ -2391,10 +2375,10 @@ body::before {
             <span class="contest-banner-badge">Live now</span>
             <div class="contest-banner-icon"><i class="fa-solid fa-trophy"></i></div>
             <div class="contest-banner-text">
-                <strong>You don't just spend here — you can earn too</strong>
-                <span>Refer friends and earn 2% for life. Join the referral contest →</span>
+                <strong>You don't just spend here, you can earn too</strong>
+                <span>Refer friends and earn 2% for life. Join the referral contest</span>
             </div>
-            <div class="contest-banner-cta">Refer →</div>
+            <div class="contest-banner-cta">Refer</div>
         </a>
 
     </section>
@@ -4215,7 +4199,7 @@ function normalizeTxType(tx) {
     const channel = String(tx.channel || '').toLowerCase();
     // Grizzly SMS rows: type=purchase, category=MJ SMS
     if (type === 'sms' || cat.includes('sms') || channel.includes('sms')) return 'sms';
-    if (type === 'deposit' || cat.includes('deposit') || channel.includes('pocketfi') || channel.includes('paystack')) return 'deposit';
+    if (type === 'deposit' || cat.includes('deposit') || channel.includes('pocketfi') || channel.includes('paystack') || channel.includes('manual')) return 'deposit';
     if (type === 'log' || type === 'logs' || cat.includes('log')) return 'log';
     if (type === 'booster' || cat.includes('boost')) return 'booster';
     if (type === 'conversion') return 'conversion';
@@ -4273,12 +4257,23 @@ async function fetchUserTransactions(userId) {
 async function saveTransaction(tx) {
     if (!supabaseClient || !currentUserId) return;
     try {
-        await supabaseClient.from('transactions').insert([{
-            user_id: currentUserId, type: tx.type, title: tx.title,
-            subtitle: tx.subtitle, amount: tx.amount, status: tx.status,
-            payment_provider: tx.paymentProvider, channel: tx.channel
-        }]);
-    } catch(e) {}
+        const row = {
+            user_id: currentUserId,
+            type: tx.type || 'deposit',
+            category: tx.category || tx.type || null,
+            title: tx.title,
+            subtitle: tx.subtitle,
+            amount: tx.amount,
+            status: tx.status || 'Success',
+            payment_provider: tx.paymentProvider || 'MJ HUB',
+            channel: tx.channel || 'Wallet'
+        };
+        if (tx.amount_ngn != null) row.amount_ngn = tx.amount_ngn;
+        const { error } = await supabaseClient.from('transactions').insert([row]);
+        if (error) console.warn('saveTransaction', error.message);
+    } catch (e) {
+        console.warn('saveTransaction', e);
+    }
 }
 
 function updateBalanceDisplay() {
@@ -5289,44 +5284,92 @@ window.commitSwapTransaction = async function() {
     if (val <= 0) return showToast('Enter valid amount', 'error');
     if (currentFromCurrency === 'NGN' && currentBalanceNgn < val) return showToast('Insufficient NGN', 'error');
     if (currentFromCurrency === 'USD' && currentBalanceUsd < val) return showToast('Insufficient USD', 'error');
+    if (!supabaseClient || !currentUserId) {
+        return showToast('Please sign in again to convert', 'error');
+    }
 
     const box = document.getElementById('conversionLoadingBox');
-    box.classList.add('active');
-    await sleep(800);
+    const btn = document.getElementById('executeConversionBtn');
+    if (box) box.classList.add('active');
+    if (btn) { btn.disabled = true; btn.textContent = 'Converting…'; }
 
-    // Secure server-side conversion (RLS blocks client balance updates)
     const direction = currentFromCurrency === 'NGN' ? 'ngn_to_usd' : 'usd_to_ngn';
-    let converted = currentFromCurrency === 'NGN' ? val / exchangeRateUsdToNgn : val * exchangeRateUsdToNgn;
-    if (supabaseClient && currentUserId) {
+    const rate = exchangeRateUsdToNgn || 1450;
+    let converted = currentFromCurrency === 'NGN' ? val / rate : val * rate;
+
+    try {
+        // Server-side RPC persists both balance + balance_usd (client cannot update balances under RLS)
         const { data: conv, error: convErr } = await supabaseClient.rpc('mj_convert_balance', {
             p_direction: direction,
             p_amount: val
         });
+
         if (convErr) {
-            box.classList.remove('active');
-            return showToast(convErr.message || 'Conversion failed', 'error');
+            console.error('mj_convert_balance', convErr);
+            const msg = convErr.message || '';
+            if (/function|does not exist|schema cache/i.test(msg)) {
+                throw new Error('Currency convert is not set up on the server yet. Ask admin to install mj_convert_balance.');
+            }
+            throw new Error(msg || 'Conversion failed');
         }
-        if (conv && conv.balance != null) currentBalanceNgn = Number(conv.balance) || 0;
-        if (conv && conv.balance_usd != null) currentBalanceUsd = Number(conv.balance_usd) || 0;
-        if (direction === 'ngn_to_usd') converted = val / (exchangeRateUsdToNgn || 1500);
-        else converted = val * (exchangeRateUsdToNgn || 1500);
-    } else {
-        if (currentFromCurrency === 'NGN') { currentBalanceNgn -= val; currentBalanceUsd += converted; }
-        else { currentBalanceUsd -= val; currentBalanceNgn += converted; }
+
+        // Prefer authoritative balances from the RPC response
+        if (conv && typeof conv === 'object') {
+            const row = Array.isArray(conv) ? conv[0] : conv;
+            if (row && row.balance != null) currentBalanceNgn = Number(row.balance) || 0;
+            if (row && row.balance_usd != null) currentBalanceUsd = Number(row.balance_usd) || 0;
+            if (row && row.converted != null) converted = Number(row.converted) || converted;
+        }
+
+        // Always re-read from profiles so logout/login shows the same figures
+        try {
+            const { data: prof } = await supabaseClient
+                .from('profiles')
+                .select('balance, balance_usd')
+                .eq('id', currentUserId)
+                .single();
+            if (prof) {
+                if (prof.balance != null) currentBalanceNgn = Number(prof.balance) || 0;
+                if (prof.balance_usd != null) currentBalanceUsd = Number(prof.balance_usd) || 0;
+            }
+        } catch (e) {
+            console.warn('post-convert balance refresh', e);
+        }
+
+        updateBalanceDisplay();
+
+        const outLabel = currentFromCurrency === 'NGN'
+            ? ('$' + converted.toFixed(2))
+            : ('₦' + Number(converted).toLocaleString(undefined, { maximumFractionDigits: 2 }));
+        const inLabel = currentFromCurrency === 'NGN'
+            ? ('₦' + val.toLocaleString())
+            : ('$' + val.toFixed(2));
+
+        const tx = {
+            id: Date.now(),
+            type: 'conversion',
+            category: 'conversion',
+            title: 'Currency Conversion',
+            subtitle: inLabel + ' → ' + outLabel,
+            amount: outLabel,
+            date: new Date().toLocaleString(),
+            status: 'Success',
+            paymentProvider: 'MJ HUB',
+            channel: 'Converter'
+        };
+        transactions.unshift(tx);
+        await saveTransaction(tx);
+        renderRecentActivity();
+
+        closeCurrencyModal();
+        showToast('Converted successfully!', 'success');
+    } catch (err) {
+        console.error('commitSwapTransaction', err);
+        showToast(err.message || 'Conversion failed', 'error');
+    } finally {
+        if (box) box.classList.remove('active');
+        if (btn) { btn.disabled = false; btn.textContent = 'Convert'; }
     }
-    updateBalanceDisplay();
-
-    const tx = { id: Date.now(), type: 'conversion', title: 'Currency Conversion',
-        subtitle: `Converted ${val}`, amount: `${currentFromCurrency === 'NGN' ? '$' : '₦'}${converted.toFixed(2)}`,
-        date: new Date().toLocaleString(), status: 'Success',
-        paymentProvider: 'MJ HUB', channel: 'Converter' };
-    transactions.unshift(tx);
-    await saveTransaction(tx);
-    renderRecentActivity();
-
-    box.classList.remove('active');
-    closeCurrencyModal();
-    showToast('Converted successfully!', 'success');
 };
 
 window.addToCart = function(title, price, type, subtitle) {
@@ -5877,7 +5920,7 @@ function renderHistoryList(filterType = 'all') {
         else if (t.type === 'booster') { iconClass = 'fa-bolt'; boxClass = 'tx-blue'; }
         else if (t.type === 'conversion') { iconClass = 'fa-right-left'; boxClass = 'tx-purple'; }
 
-        const st = String(t.status || 'Success').toLowerCase();
+        const st = String(t.status || 'Success').toLowerCase().replace('completed', 'success');
         let badgeClass = 'badge-success';
         if (st === 'pending' || st === 'waiting') badgeClass = 'badge-pending';
         else if (st === 'failed' || st === 'expired' || st === 'cancelled') badgeClass = 'badge-danger';
