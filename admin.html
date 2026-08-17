@@ -1,3338 +1,436 @@
 <!DOCTYPE html>
 <html lang="en" data-theme="dark">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
-  <meta http-equiv="Pragma" content="no-cache" />
-  <meta http-equiv="Expires" content="0" />
-  <title>MJ HUB — Admin</title>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MJ HUB — Support Desk</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script>
-// Force all date/time displays to Nigeria time (WAT, Africa/Lagos),
-// regardless of the viewer's device timezone — keeps order timestamps
-// consistent for admins and users everywhere, so orders sort/display
-// the same way no matter where someone is looking from.
-(function () {
-  var _toLocaleString = Date.prototype.toLocaleString;
-  var _toLocaleDateString = Date.prototype.toLocaleDateString;
-  var _toLocaleTimeString = Date.prototype.toLocaleTimeString;
-  function withLagos(opts) { return Object.assign({ timeZone: 'Africa/Lagos' }, opts || {}); }
-  Date.prototype.toLocaleString = function (locales, opts) { return _toLocaleString.call(this, locales || 'en-NG', withLagos(opts)); };
-  Date.prototype.toLocaleDateString = function (locales, opts) { return _toLocaleDateString.call(this, locales || 'en-NG', withLagos(opts)); };
-  Date.prototype.toLocaleTimeString = function (locales, opts) { return _toLocaleTimeString.call(this, locales || 'en-NG', withLagos(opts)); };
-})();
-</script>
-
-  <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
   <style>
     :root {
-      --primary: #3b82f6;
-      --primary-hover: #2563eb;
-      --primary-glow: rgba(59, 130, 246, 0.35);
-      --bg: #07090e;
-      --card: #0d1322;
-      --text: #f8fafc;
-      --muted: #94a3b8;
-      --border: #1e293b;
-      --success: #10b981;
-      --danger: #ef4444;
-      --warning: #f59e0b;
-      --radius: 16px;
+      --bg: #070b14; --card: #0e1524; --card2: #141c2e; --text: #f1f5f9; --muted: #8b9bb4;
+      --border: rgba(148,163,184,.12); --primary: #5b8af5; --success: #34d399; --danger: #f87171; --warn: #fbbf24;
     }
     * { box-sizing: border-box; margin: 0; padding: 0; }
-    html, body { width: 100%; max-width: 100%; overflow-x: hidden; }
-    body {
-      font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
-      background: var(--bg);
-      color: var(--text);
-      min-height: 100vh;
-      line-height: 1.5;
-    }
-    .login-wrap { min-height: 100vh; display:flex; align-items:center; justify-content:center; padding:24px; }
-    .login-card {
-      width:100%; max-width:400px; background:var(--card); border:1px solid var(--border);
-      border-radius:20px; padding:36px 28px; box-shadow:0 20px 50px rgba(0,0,0,.45);
-    }
-    .login-card h1 {
-      font-size:22px; font-weight:800; margin-bottom:6px;
-      background:linear-gradient(135deg,var(--primary),#8b5cf6);
-      -webkit-background-clip:text; -webkit-text-fill-color:transparent;
-    }
-    .login-logo-img { height:40px; width:auto; max-width:200px; object-fit:contain; display:block; margin-bottom:10px; }
-    .login-card p { color:var(--muted); font-size:13px; margin-bottom:28px; }
-    .field { margin-bottom:16px; }
-    .field label {
-      display:block; font-size:11px; font-weight:700; text-transform:uppercase;
-      letter-spacing:.6px; color:var(--muted); margin-bottom:6px;
-    }
-    .field input, .field select, .field textarea {
-      width:100%; padding:12px 14px; background:#07090e; border:1px solid var(--border);
-      border-radius:12px; color:var(--text); font-size:14px; font-family:inherit; outline:none;
-    }
-    .field input:focus, .field select:focus, .field textarea:focus { border-color:var(--primary); }
-    .field input:disabled { opacity:.65; cursor:not-allowed; }
-    .price-note { font-size:11px; color:var(--muted); margin-top:4px; }
-    .btn {
-      display:inline-flex; align-items:center; justify-content:center; gap:8px;
-      padding:12px 18px; border-radius:12px; font-size:14px; font-weight:700;
-      font-family:inherit; border:none; cursor:pointer;
-      transition:transform .1s ease, opacity .1s ease, background .15s ease, border-color .15s ease;
-    }
-    /* Universal "this was clicked" feedback — applies to every .btn the
-       instant it's pressed, independent of whether that specific button
-       also has its own async spinner/busy-state logic layered on top. */
-    .btn:active { transform:scale(0.96); opacity:0.8; }
-    .btn:disabled { opacity:0.6; cursor:not-allowed; transform:none; }
-    @keyframes btnPulse { 0%{ transform:scale(1); } 40%{ transform:scale(0.94); } 100%{ transform:scale(1); } }
-    .btn-pulse { animation: btnPulse .35s ease; }
-    .btn-primary { background:var(--primary); color:#fff; width:100%; }
-    .btn-primary:hover { background:var(--primary-hover); }
-    .btn-ghost { background:transparent; color:var(--muted); border:1px solid var(--border); }
-    .btn-ghost:hover { border-color:var(--primary); color:var(--primary); }
-    .btn-sm { padding:7px 12px; font-size:12px; border-radius:8px; width:auto; }
-    .error-msg { color:var(--danger); font-size:13px; margin-top:12px; text-align:center; min-height:20px; }
-    .hidden { display:none !important; }
-    .shell { display:flex; min-height:100vh; }
-    .sidebar {
-      width:260px; background:var(--card); border-right:1px solid var(--border);
-      display:flex; flex-direction:column; position:fixed; top:0; left:0; bottom:0; z-index:50;
-      transition:transform .25s ease;
-    }
-    .sidebar-brand {
-      height:72px; display:flex; align-items:center; gap:12px; padding:0 22px;
-      border-bottom:1px solid var(--border);
-    }
-    .brand-logo {
-      width:36px; height:36px; border-radius:10px; display:flex; align-items:center; justify-content:center;
-      background:linear-gradient(135deg,var(--primary),#8b5cf6); font-weight:800; color:#fff;
-    }
-    .brand-logo-img { height:38px; width:auto; max-width:160px; object-fit:contain; display:block; }
-    .brand-text { font-size:17px; font-weight:800; }
-    .brand-text span { display:block; color:var(--muted); font-size:12px; font-weight:600; margin-top:-2px; }
-    .nav-list { padding:18px 14px; flex:1; overflow-y:auto; }
-    .nav-item {
-      display:flex; align-items:center; gap:12px; width:100%; padding:12px 14px; margin-bottom:4px;
-      border-radius:12px; border:1px solid transparent; background:none; color:var(--muted);
-      font-size:13.5px; font-weight:600; font-family:inherit; text-align:left; cursor:pointer;
-    }
-    .nav-item:hover { background:rgba(59,130,246,.08); color:var(--text); }
-    .nav-item.active { background:var(--primary-glow); color:var(--primary); border-color:rgba(59,130,246,.25); }
-    .nav-item i { width:18px; text-align:center; }
-    .sidebar-footer { padding:16px 18px; border-top:1px solid var(--border); }
-    .main { flex:1; margin-left:260px; min-height:100vh; display:flex; flex-direction:column; width:calc(100% - 260px); }
+    body { font-family: 'Plus Jakarta Sans', system-ui, sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
+    .login-wrap { min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 24px; }
+    .login-card { width: 100%; max-width: 400px; background: var(--card); border: 1px solid var(--border); border-radius: 20px; padding: 32px; }
+    .login-card h1 { font-size: 22px; margin-bottom: 6px; font-weight: 800; }
+    .login-card p { color: var(--muted); font-size: 13px; margin-bottom: 20px; }
+    .login-card input { width: 100%; padding: 12px 14px; border-radius: 12px; border: 1px solid var(--border); background: var(--bg); color: var(--text); margin-bottom: 10px; font: inherit; }
+    .btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; padding: 11px 16px; border-radius: 12px; border: none; cursor: pointer; font: inherit; font-weight: 600; }
+    .btn-primary { background: linear-gradient(135deg, var(--primary), #7c5cfc); color: #fff; width: 100%; }
+    .btn-ghost { background: transparent; border: 1px solid var(--border); color: var(--text); }
+    .btn-sm { padding: 8px 12px; font-size: 12px; }
+    .error-msg { color: var(--danger); font-size: 13px; margin-top: 10px; display: none; }
+    .shell { display: none; height: 100vh; flex-direction: column; }
+    .shell.open { display: flex; }
     .topbar {
-      height:72px; display:flex; align-items:center; justify-content:space-between; padding:0 16px;
-      border-bottom:1px solid var(--border); background:rgba(13,19,34,.85); backdrop-filter:blur(12px);
-      position:sticky; top:0; z-index:40;
+      height: 58px; border-bottom: 1px solid var(--border);
+      display: flex; align-items: center; justify-content: space-between; padding: 0 18px;
+      background: rgba(14,21,36,.92); backdrop-filter: blur(12px);
     }
-    .topbar h2 { font-size:18px; font-weight:800; }
-    .mobile-menu-btn {
-      display:none; background:var(--card); border:1px solid var(--border); width:40px; height:40px;
-      border-radius:12px; color:var(--text); font-size:16px; cursor:pointer;
+    .topbar a { color: var(--muted); text-decoration: none; font-size: 13px; font-weight: 600; }
+    .topbar a:hover { color: var(--text); }
+    .brand { font-weight: 800; font-size: 15px; letter-spacing: -0.02em; }
+    .brand span { color: var(--primary); }
+    .top-stats { display: flex; gap: 10px; align-items: center; }
+    .stat-pill {
+      font-size: 11px; font-weight: 700; padding: 5px 10px; border-radius: 999px;
+      background: rgba(91,138,245,.12); color: var(--primary); border: 1px solid rgba(91,138,245,.25);
     }
-    .content { padding:12px; flex:1; width:100%; max-width:100%; overflow-x:hidden; }
-    .metrics { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px; margin-bottom:16px; }
-    .metric-card { background:var(--card); border:1px solid var(--border); border-radius:var(--radius); padding:14px; }
-    .metric-label { font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.5px; color:var(--muted); margin-bottom:8px; }
-    .metric-value { font-size:20px; font-weight:800; }
-    .metric-sub { font-size:12px; color:var(--muted); margin-top:4px; }
-    .panel { background:var(--card); border:1px solid var(--border); border-radius:var(--radius); padding:14px; margin-bottom:16px; overflow:hidden; }
-    .panel-header { display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:8px; margin-bottom:14px; }
-    .panel-title { font-size:16px; font-weight:700; }
-    .search-row { display:grid; grid-template-columns:1fr; gap:8px; margin-bottom:12px; }
-    .search-row input, .search-row select {
-      width:100%; min-width:0; padding:10px 14px; background:#07090e; border:1px solid var(--border);
-      border-radius:10px; color:var(--text); font-size:13px; font-family:inherit; outline:none;
+    .stat-pill.warn { background: rgba(251,191,36,.12); color: var(--warn); border-color: rgba(251,191,36,.3); }
+    .stat-pill.danger { background: rgba(248,113,113,.12); color: var(--danger); border-color: rgba(248,113,113,.3); }
+    .main { flex: 1; display: grid; grid-template-columns: 360px 1fr; min-height: 0; }
+    @media (max-width: 860px) {
+      .main { grid-template-columns: 1fr; }
+      .thread-pane.hide-mobile { display: none; }
+      .list-pane.hide-mobile { display: none; }
     }
-    .table-wrap, .desktop-table { width:100%; overflow-x:auto; -webkit-overflow-scrolling:touch; }
-    table { width:100%; min-width:900px; border-collapse:collapse; font-size:13px; }
-    th {
-      text-align:left; padding:10px 12px; font-size:11px; font-weight:700; text-transform:uppercase;
-      letter-spacing:.5px; color:var(--muted); border-bottom:1px solid var(--border); background:rgba(7,9,14,.5); white-space:nowrap;
+    .list-pane { border-right: 1px solid var(--border); display: flex; flex-direction: column; min-height: 0; background: var(--card); }
+    .list-head { padding: 16px; border-bottom: 1px solid var(--border); }
+    .list-head h2 { font-size: 15px; margin-bottom: 12px; font-weight: 800; }
+    .search-box {
+      width: 100%; padding: 10px 12px; border-radius: 12px; border: 1px solid var(--border);
+      background: var(--bg); color: var(--text); font: inherit; font-size: 13px; margin-bottom: 10px;
     }
-    td { padding:10px 12px; border-bottom:1px solid rgba(255,255,255,.04); color:#cbd5e1; vertical-align:middle; white-space:nowrap; }
-    td:first-child { white-space:normal; min-width:150px; max-width:220px; }
-    .badge { display:inline-block; padding:4px 10px; border-radius:20px; font-size:11px; font-weight:700; text-transform:uppercase; }
-    .badge-on { background:rgba(16,185,129,.15); color:#34d399; }
-    .badge-off { background:rgba(239,68,68,.15); color:#f87171; }
-    .badge-admin { background:rgba(59,130,246,.15); color:#60a5fa; }
-    .badge-banned { background:rgba(127,29,29,.35); color:#fca5a5; }
-    .price { color:#34d399; font-weight:700; }
-    .supplier-price { color:#f59e0b; font-weight:600; }
-    .profit { color:#38bdf8; font-weight:600; }
-    .empty-state { text-align:center; padding:40px 16px; color:var(--muted); font-size:14px; }
-    .desc-cell { max-width:160px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; color:var(--muted); font-size:12px; }
-    .mobile-cards { display:grid; gap:10px; }
-    .product-card, .user-card {
-      background:#07090e; border:1px solid var(--border); border-radius:12px; padding:12px;
+    .filters { display: flex; gap: 6px; flex-wrap: wrap; }
+    .chip {
+      padding: 6px 11px; border-radius: 999px; border: 1px solid var(--border);
+      background: transparent; color: var(--muted); font-size: 11px; font-weight: 700; cursor: pointer;
     }
-    .product-card h4, .user-card h4 { font-size:14px; margin-bottom:6px; }
-    .meta { font-size:12px; color:var(--muted); margin-bottom:6px; }
-    .row-line { display:flex; justify-content:space-between; gap:8px; font-size:12px; margin-top:4px; }
-    .modal-backdrop {
-      position:fixed; inset:0; background:rgba(0,0,0,.7); backdrop-filter:blur(4px);
-      display:flex; align-items:center; justify-content:center; z-index:100; padding:16px;
+    .chip.active { background: rgba(91,138,245,.15); color: var(--primary); border-color: rgba(91,138,245,.4); }
+    .ticket-list { flex: 1; overflow-y: auto; }
+    .ticket-item {
+      padding: 14px 16px; border-bottom: 1px solid var(--border); cursor: pointer;
+      transition: background .15s;
     }
-    .modal {
-      background:var(--card); border:1px solid var(--border); border-radius:18px; width:100%;
-      max-width:520px; max-height:90vh; overflow-y:auto; padding:22px;
+    .ticket-item:hover { background: rgba(255,255,255,.02); }
+    .ticket-item.active { background: var(--card2); border-left: 3px solid var(--primary); }
+    .ticket-item.unread .name { color: #fff; }
+    .ticket-item .row1 { display: flex; justify-content: space-between; gap: 8px; margin-bottom: 4px; }
+    .ticket-item .name { font-weight: 700; font-size: 13px; }
+    .ticket-item .time { font-size: 11px; color: var(--muted); white-space: nowrap; }
+    .ticket-item .preview { font-size: 12px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .badge { font-size: 10px; font-weight: 800; padding: 2px 8px; border-radius: 999px; text-transform: uppercase; letter-spacing: .03em; }
+    .badge.open { background: rgba(52,211,153,.15); color: var(--success); }
+    .badge.pending { background: rgba(251,191,36,.15); color: var(--warn); }
+    .badge.closed { background: rgba(148,163,184,.12); color: var(--muted); }
+    .thread-pane { display: flex; flex-direction: column; min-height: 0; background: var(--bg); }
+    .thread-empty {
+      flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center;
+      color: var(--muted); font-size: 14px; padding: 32px; text-align: center; gap: 10px;
     }
-    .modal h3 { font-size:18px; font-weight:800; margin-bottom:18px; }
-    .modal-actions { display:flex; justify-content:flex-end; gap:10px; margin-top:18px; }
-    .overlay-mobile { display:none; position:fixed; inset:0; background:rgba(0,0,0,.6); z-index:45; }
-    .overlay-mobile.show { display:block; }
-    .tab-content { display:none; }
-    .tab-content.active { display:block; }
-    .desktop-only { display:none; }
-    .mobile-only { display:grid; }
-
-    @media (min-width:901px) {
-      .metrics { grid-template-columns:repeat(auto-fit,minmax(180px,1fr)); }
-      .search-row { display:flex; flex-wrap:wrap; }
-      .search-row input, .search-row select { flex:1; min-width:160px; width:auto; }
-      .content { padding:24px; }
-      .panel { padding:20px; }
-      .desktop-only { display:block; }
-      .mobile-only { display:none; }
-      .mobile-menu-btn { display:none; }
+    .thread-empty i { font-size: 36px; opacity: .4; }
+    .thread-head {
+      padding: 14px 18px; border-bottom: 1px solid var(--border);
+      display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap;
+      background: var(--card);
     }
-    @media (max-width:900px) {
-      .sidebar { transform:translateX(-100%); width:240px; }
-      .sidebar.open { transform:translateX(0); }
-      .main { margin-left:0; width:100%; }
-      .mobile-menu-btn { display:flex; align-items:center; justify-content:center; }
+    .thread-head .meta { font-size: 12px; color: var(--muted); margin-top: 3px; }
+    .avatar {
+      width: 40px; height: 40px; border-radius: 12px;
+      background: linear-gradient(135deg, var(--primary), #7c5cfc);
+      display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 14px; color: #fff;
     }
-    .toast-stack {
-      position: fixed; top: 16px; right: 16px; z-index: 9999;
-      display: flex; flex-direction: column; gap: 8px;
-      max-width: calc(100vw - 32px);
+    .thread-messages {
+      flex: 1; overflow-y: auto; padding: 20px 18px;
+      display: flex; flex-direction: column; gap: 12px;
+      background: radial-gradient(ellipse at top, rgba(91,138,245,.06), transparent 50%);
     }
-    .toast {
-      padding: 12px 16px; border-radius: 10px; font-size: 14px; font-weight: 600;
-      box-shadow: 0 8px 24px rgba(0,0,0,.35);
-      animation: toast-in .18s ease-out;
-      display: flex; align-items: center; gap: 8px;
-      color: #fff;
+    .bubble {
+      max-width: 72%; padding: 12px 14px; border-radius: 16px;
+      font-size: 13.5px; line-height: 1.5; white-space: pre-wrap; word-break: break-word;
+      box-shadow: 0 2px 8px rgba(0,0,0,.12);
     }
-    .toast-success { background: #15803d; }
-    .toast-error { background: #b91c1c; }
-    .toast-info { background: #1d4ed8; }
-    .toast.leaving { animation: toast-out .18s ease-in forwards; }
-    @keyframes toast-in { from { opacity: 0; transform: translateY(-8px); } to { opacity: 1; transform: translateY(0); } }
-    @keyframes toast-out { from { opacity: 1; } to { opacity: 0; transform: translateY(-8px); } }
+    .bubble.user { align-self: flex-start; background: var(--card2); border: 1px solid var(--border); border-bottom-left-radius: 4px; }
+    .bubble.admin { align-self: flex-end; background: linear-gradient(135deg, #4f7df0, #6b5cf0); color: #fff; border-bottom-right-radius: 4px; }
+    .bubble.system { align-self: center; background: transparent; color: var(--muted); font-size: 12px; max-width: 90%; text-align: center; box-shadow: none; }
+    .bubble .who { font-size: 10px; opacity: .75; margin-bottom: 5px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; }
+    .composer-wrap { border-top: 1px solid var(--border); background: var(--card); }
+    .quick-replies { padding: 10px 14px 0; display: flex; flex-wrap: wrap; gap: 6px; }
+    .composer { padding: 12px 14px; display: flex; gap: 10px; align-items: flex-end; }
+    .composer textarea {
+      flex: 1; min-height: 48px; max-height: 140px; resize: vertical; border-radius: 14px;
+      border: 1px solid var(--border); background: var(--bg); color: var(--text);
+      padding: 12px 14px; font: inherit; line-height: 1.4;
+    }
+    .composer textarea:focus { outline: none; border-color: rgba(91,138,245,.5); }
+    .composer .btn-primary { width: auto; padding: 12px 18px; border-radius: 14px; }
   </style>
 </head>
 <body>
-  <div id="toastStack" class="toast-stack"></div>
   <div id="loginScreen" class="login-wrap">
     <div class="login-card">
-      <img class="login-logo-img" src="https://atczodlljmlayvldxfmv.supabase.co/storage/v1/object/public/avatars/dark%20background%20log" alt="MJ HUB">
-      <p>Admin portal — sign in with an admin account</p>
-      <div class="field"><label>Email</label><input type="email" id="adminEmail" placeholder="admin@example.com" /></div>
-      <div class="field">
-        <label>Password</label>
-        <div style="position:relative;">
-          <input type="password" id="adminPassword" placeholder="••••••••" style="padding-right:44px;" />
-          <button type="button" id="togglePasswordBtn" onclick="toggleAdminPasswordVisibility()" aria-label="Show password"
-            style="position:absolute;right:6px;top:50%;transform:translateY(-50%);background:none;border:none;color:var(--muted);cursor:pointer;width:32px;height:32px;">
-            <i class="fas fa-eye" id="togglePasswordIcon"></i>
-          </button>
-        </div>
-      </div>
-      <button class="btn btn-primary" onclick="handleLogin()"><i class="fas fa-lock"></i> Sign In</button>
+      <h1>Support Desk</h1>
+      <p>Sign in with your admin account to manage customer conversations.</p>
+      <input type="email" id="email" placeholder="Admin email" autocomplete="username">
+      <input type="password" id="password" placeholder="Password" autocomplete="current-password">
+      <button class="btn btn-primary" id="loginBtn" onclick="doLogin()">Sign in</button>
       <div id="loginError" class="error-msg"></div>
+      <p style="margin-top:16px;font-size:12px;"><a href="admin.html" style="color:var(--primary);">← Main Admin</a></p>
     </div>
   </div>
 
-  <div id="adminShell" class="shell hidden">
-    <div id="mobileOverlay" class="overlay-mobile" onclick="closeSidebar()"></div>
-    <aside class="sidebar" id="sidebar">
-      <div class="sidebar-brand">
-        <img class="brand-logo-img" src="https://atczodlljmlayvldxfmv.supabase.co/storage/v1/object/public/avatars/dark%20background%20log" alt="MJ HUB">
-        <div class="brand-text"><span>Admin</span></div>
+  <div id="appShell" class="shell">
+    <div class="topbar">
+      <div class="brand">MJ <span>Hub</span> · Customer Support</div>
+      <div class="top-stats">
+        <span class="stat-pill danger" id="statOpen">0 open</span>
+        <span class="stat-pill warn" id="statPending">0 pending</span>
+        <a href="admin.html">Main Admin</a>
+        <button class="btn btn-ghost btn-sm" onclick="doLogout()">Log out</button>
       </div>
-      <nav class="nav-list">
-        <button class="nav-item active" data-tab="overview" onclick="switchTab('overview')"><i class="fas fa-chart-pie"></i> Overview</button>
-        <button class="nav-item" data-tab="users" onclick="switchTab('users')"><i class="fas fa-users"></i> Customers</button>
-        <button class="nav-item" data-tab="lookup" onclick="switchTab('lookup')"><i class="fas fa-search"></i> Customer Lookup</button>
-        <button class="nav-item" data-tab="products" onclick="switchTab('products')"><i class="fas fa-box"></i> Products & Stock</button>
-        <button class="nav-item" data-tab="orders" onclick="switchTab('orders')"><i class="fas fa-receipt"></i> LOGS Orders</button>
-        <button class="nav-item" data-tab="sms" onclick="switchTab('sms')"><i class="fas fa-sim-card"></i> SMS — Server 1 (GrizzlySMS)</button>
-        <button class="nav-item" data-tab="sms-orders" onclick="switchTab('sms-orders')"><i class="fas fa-comment-sms"></i> SMS Orders</button>
-        <button class="nav-item" data-tab="sms-server2" onclick="switchTab('sms-server2')"><i class="fas fa-server"></i> SMS — Server 2 (LogsDomain)</button>
-        <button class="nav-item" data-tab="boosters" onclick="switchTab('boosters')"><i class="fas fa-bolt"></i> MJ Boosters (Owlet)</button>
-        <button class="nav-item" data-tab="booster-orders" onclick="switchTab('booster-orders')"><i class="fas fa-receipt"></i> Booster Orders</button>
-        <button class="nav-item" data-tab="notify" onclick="switchTab('notify')"><i class="fas fa-bullhorn"></i> Notifications</button>
-        <button class="nav-item" data-tab="settings" onclick="switchTab('settings')"><i class="fas fa-cog"></i> Settings</button>
-      </nav>
-      <div class="sidebar-footer">
-        <button class="btn btn-ghost" style="width:100%" onclick="handleLogout()"><i class="fas fa-sign-out-alt"></i> Sign Out</button>
-      </div>
-    </aside>
-
+    </div>
     <div class="main">
-      <header class="topbar">
-        <div style="display:flex;align-items:center;gap:12px;">
-          <button class="mobile-menu-btn" onclick="openSidebar()"><i class="fas fa-bars"></i></button>
-          <h2 id="pageTitle">Overview</h2>
-        </div>
-        <span style="display:flex;align-items:center;gap:8px;">
-          <span id="onlineIndicator" style="display:flex;align-items:center;gap:6px;font-size:11px;font-weight:700;color:#34d399;background:rgba(52,211,153,.12);padding:5px 10px;border-radius:20px;">
-            <span style="width:7px;height:7px;border-radius:50%;background:#34d399;display:inline-block;"></span> Signed in
-          </span>
-          <span id="adminEmailLabel" style="font-size:12px;color:var(--muted);"></span>
-        </span>
-      </header>
-
-      <div class="content">
-        <div id="tab-overview" class="tab-content active">
-          <div class="panel">
-            <div class="panel-header">
-              <div class="panel-title">Revenue</div>
-              <select id="revenuePeriod" onchange="updateRevenueDisplay()" style="padding:8px 12px;background:#07090e;border:1px solid var(--border);border-radius:10px;color:var(--text);">
-                <option value="today">Today</option>
-                <option value="7days">Last 7 Days</option>
-                <option value="month" selected>This Month</option>
-                <option value="3months">Last 3 Months</option>
-                <option value="6months">Last 6 Months</option>
-                <option value="12months">Last 12 Months</option>
-              </select>
-            </div>
-            <div class="metrics" style="margin-bottom:0;">
-              <div class="metric-card"><div class="metric-label" id="revenuePeriodLabel">This Month</div><div class="metric-value" id="mRevenueNgn">₦0</div><div class="metric-sub" id="mRevenueUsd">$0.00 USD</div></div>
-              <div class="metric-card"><div class="metric-label">Sales</div><div class="metric-value" id="mSalesNgn">₦0</div><div class="metric-sub">Completed orders</div></div>
-              <div class="metric-card"><div class="metric-label">Logs Sold</div><div class="metric-value" id="mLogsSoldCount">0</div><div class="metric-sub">Completed log orders</div></div>
-              <div class="metric-card"><div class="metric-label">Profit Margin</div><div class="metric-value" id="mProfitNgn" style="color:#34d399;">₦0</div><div class="metric-sub" id="mProfitPct">0% margin</div></div>
-              <div class="metric-card"><div class="metric-label">Wallet Balances</div><div class="metric-value" id="mTotalBalance">₦0</div><div class="metric-sub">All user wallets</div></div>
-            </div>
-          </div>
-          <div class="panel">
-            <div class="panel-header"><div class="panel-title">SMS Numbers</div></div>
-            <div class="metrics" style="margin-bottom:0;">
-              <div class="metric-card"><div class="metric-label">Orders</div><div class="metric-value" id="mSmsOrderCount">0</div><div class="metric-sub" id="mSmsOrderPeriodLabel">This Month · Completed</div></div>
-              <div class="metric-card"><div class="metric-label">Amount Spent</div><div class="metric-value" id="mSmsAmountSpent">₦0</div><div class="metric-sub">By customers on numbers</div></div>
-              <div class="metric-card"><div class="metric-label">Profit Made</div><div class="metric-value" id="mSmsProfit" style="color:#34d399;">₦0</div><div class="metric-sub">Revenue minus supplier cost</div></div>
-            </div>
-          </div>
-          <div class="panel">
-            <div class="panel-header">
-              <div class="panel-title">Supplier Balances</div>
-              <button class="btn btn-ghost btn-sm" id="btnRefreshSupplierBalances" onclick="loadSupplierBalances()"><i class="fas fa-sync"></i> Refresh</button>
-            </div>
-            <div class="metrics" style="margin-bottom:0;" id="supplierBalanceGrid">
-              <div class="metric-card"><div class="metric-label">FADDED</div><div class="metric-value" id="balFadded">—</div><div class="metric-sub" id="balFaddedSub">Loading…</div></div>
-              <div class="metric-card"><div class="metric-label">Logs Domain</div><div class="metric-value" id="balLogsdomain">—</div><div class="metric-sub" id="balLogsdomainSub">Loading…</div></div>
-              <div class="metric-card"><div class="metric-label">GrizzlySMS</div><div class="metric-value" id="balGrizzly">—</div><div class="metric-sub" id="balGrizzlySub">Loading…</div></div>
-              <div class="metric-card"><div class="metric-label">Sujan Dept.</div><div class="metric-value" id="balSujan">—</div><div class="metric-sub" id="balSujanSub">Loading…</div></div>
-              <div class="metric-card"><div class="metric-label">Owlet (Boosters)</div><div class="metric-value" id="balOwlet">—</div><div class="metric-sub" id="balOwletSub">Loading…</div></div>
-            </div>
-          </div>
-          <div class="panel">
-            <div class="panel-header"><div class="panel-title">Customers</div><button class="btn btn-ghost btn-sm" onclick="switchTab('users')">View all →</button></div>
-            <div class="metrics" style="margin-bottom:0;">
-              <div class="metric-card" style="cursor:pointer;" onclick="switchTab('users');filterUsersByStatus('all')"><div class="metric-label">Total Users</div><div class="metric-value" id="mTotalUsers">0</div></div>
-              <div class="metric-card" style="cursor:pointer;" onclick="switchTab('users');filterUsersByStatus('active')"><div class="metric-label">Active</div><div class="metric-value" id="mActiveUsers" style="color:#34d399;">0</div></div>
-              <div class="metric-card" style="cursor:pointer;" onclick="switchTab('users');filterUsersByStatus('inactive')"><div class="metric-label">Inactive</div><div class="metric-value" id="mInactiveUsers" style="color:#f87171;">0</div></div>
-            </div>
+      <aside class="list-pane" id="listPane">
+        <div class="list-head">
+          <h2>Inbox</h2>
+          <input class="search-box" id="ticketSearch" type="search" placeholder="Search name, email, Customer ID…" oninput="renderTicketList()">
+          <div class="filters">
+            <button class="chip active" data-filter="open" onclick="setFilter('open')">Open</button>
+            <button class="chip" data-filter="pending" onclick="setFilter('pending')">Pending</button>
+            <button class="chip" data-filter="closed" onclick="setFilter('closed')">Closed</button>
+            <button class="chip" data-filter="all" onclick="setFilter('all')">All</button>
           </div>
         </div>
-
-        <div id="tab-lookup" class="tab-content">
-          <div class="panel">
-            <div class="panel-title" style="margin-bottom:10px;">Customer Lookup by ID</div>
-            <div class="search-row">
-              <input type="text" id="lookupCustomerId" placeholder="Enter Customer ID..." />
-              <button class="btn btn-primary btn-sm" onclick="lookupByCustomerId()">Search</button>
-            </div>
-            <div id="lookupResult" class="hidden" style="margin-top:12px;padding:14px;background:#07090e;border:1px solid var(--border);border-radius:12px;">
-              <div id="lookupName" style="font-weight:700;font-size:16px;"></div>
-              <div id="lookupEmail" class="meta"></div>
-              <div id="lookupPhone" class="meta"></div>
-              <div style="margin-top:8px;"><span class="price" id="lookupNgn"></span> · <span style="color:#38bdf8;" id="lookupUsd"></span></div>
-              <button class="btn btn-primary btn-sm" style="margin-top:10px;" id="lookupEditBtn">Edit Account</button>
-            </div>
-            <div id="lookupError" class="error-msg" style="text-align:left;"></div>
-          </div>
+        <div class="ticket-list" id="ticketList"></div>
+      </aside>
+      <section class="thread-pane" id="threadPane">
+        <div class="thread-empty" id="threadEmpty">
+          <i class="fas fa-comments"></i>
+          <div>Select a conversation to reply</div>
+          <div style="font-size:12px;max-width:280px;">New customer messages appear under Open. Use quick replies for faster handling.</div>
         </div>
-
-        <div id="tab-products" class="tab-content">
-          <div class="panel">
-            <div class="panel-header">
-              <div class="panel-title">Product Catalog & Stock</div>
-              <div style="display:flex;gap:8px;flex-wrap:wrap;">
-                <button class="btn btn-ghost btn-sm" id="btnSyncFadded" onclick="syncProductsNow()"><i class="fas fa-sync"></i> Sync Fadded</button>
-                <button class="btn btn-ghost btn-sm" id="btnSyncLogsDomain" onclick="syncLogsDomainNow()"><i class="fas fa-sync"></i> Sync Logs Domain</button>
-                <button class="btn btn-ghost btn-sm" id="btnSyncSujan" onclick="syncSujanNow()"><i class="fas fa-sync"></i> Sync Sujan Dept.</button>
-                <button class="btn btn-primary btn-sm" id="btnSyncAll" onclick="syncAllSuppliersNow()"><i class="fas fa-sync"></i> Sync All</button>
-                <button class="btn btn-ghost btn-sm" onclick="openRestockModal()"><i class="fas fa-upload"></i> Restock Manual</button>
-                <button class="btn btn-primary btn-sm" onclick="openProductModal()"><i class="fas fa-plus"></i> Add</button>
-              </div>
-            </div>
-            <div class="search-row">
-              <input type="text" id="productSearch" placeholder="Search products..." oninput="filterProducts()" />
-              <select id="categoryFilter" onchange="filterProducts()"><option value="">All Categories</option></select>
-            </div>
-
-            <div class="desktop-only desktop-table table-wrap">
-              <table>
-                <thead>
-                  <tr>
-                    <th>Product</th><th>Category</th><th>Cost</th><th>Your Price</th><th>Profit</th><th>Stock</th><th>Status</th><th>Action</th>
-                  </tr>
-                </thead>
-                <tbody id="productsTableBody"></tbody>
-              </table>
-            </div>
-            <div id="productsMobileCards" class="mobile-only mobile-cards"></div>
-          </div>
-        </div>
-
-        <div id="tab-sms" class="tab-content">
-          <div class="panel">
-            <div class="panel-header">
-              <div class="panel-title">SMS Numbers — Supplier Catalog</div>
-              <div style="display:flex;gap:8px;flex-wrap:wrap;">
-                <button class="btn btn-primary btn-sm" id="btnSyncGrizzly" onclick="syncGrizzlyNow()"><i class="fas fa-sync"></i> Sync Grizzly</button>
-                <button class="btn btn-primary btn-sm" id="btnSyncLogsDomainNumbers" onclick="syncLogsDomainNumbersNow()"><i class="fas fa-sync"></i> Sync LogsDomain</button>
-                <button class="btn btn-secondary btn-sm" id="btnBulkRepriceUnpriced" onclick="bulkRepriceNumbers('unpriced_only')"><i class="fas fa-tags"></i> Price Unpriced Numbers</button>
-                <button class="btn btn-ghost btn-sm" id="btnBulkRepriceAll" onclick="bulkRepriceNumbers('all')" title="Rerolls markup on every system-priced row. Prices you've set manually are never touched."><i class="fas fa-dice"></i> Reprice All (skips manual prices)</button>
-              </div>
-            </div>
-            <p style="color:#94a3b8;font-size:13px;margin:-4px 0 4px;">
-              Syncing pulls the latest country, service, supplier price, and stock from GrizzlySMS or LogsDomain. Your own selling price is never overwritten by a sync — edit it manually below, or use "Price Unpriced Numbers" to bulk-apply the standard markup to anything still sitting at ₦0.
-            </p>
-            <p id="grizzlySyncProgress" style="color:var(--primary,#3b82f6);font-size:12px;font-weight:700;margin:0 0 4px;min-height:16px;"></p>
-            <p id="logsdomainSyncProgress" style="color:var(--primary,#3b82f6);font-size:12px;font-weight:700;margin:0 0 14px;min-height:16px;"></p>
-            <div class="search-row" style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;">
-              <input type="text" id="smsSearch" placeholder="Search service (WhatsApp, Google, tg…)" oninput="filterNumberServices()" style="flex:1;min-width:160px;" />
-              <input type="text" id="smsCountryFilter" placeholder="Country (Nigeria, USA…)" oninput="filterNumberServices()" style="flex:1;min-width:160px;" />
-              <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:#94a3b8;white-space:nowrap;">
-                <input type="checkbox" id="smsHideZeroStock" checked onchange="filterNumberServices()" />
-                Hide 0 stock
-              </label>
-            </div>
-
-            <div class="desktop-only desktop-table table-wrap">
-              <table>
-                <thead>
-                  <tr>
-                    <th>Country</th><th>Service</th><th>Source</th><th>Supplier Price</th><th>Your Price</th><th>Stock</th><th>Status</th><th>Action</th>
-                  </tr>
-                </thead>
-                <tbody id="smsTableBody"></tbody>
-              </table>
-            </div>
-            <div id="smsMobileCards" class="mobile-only mobile-cards"></div>
-          </div>
-        </div>
-
-        <div id="tab-sms-orders" class="tab-content">
-          <div class="panel">
-            <div class="panel-header">
-              <div class="panel-title">SMS Orders — Customer Purchases</div>
-            </div>
-            <p style="color:#94a3b8;font-size:13px;margin:-4px 0 4px;">
-              Every number a customer has bought, the code they got (if any), and whether it's still waiting, completed, or was cancelled &amp; refunded.
-            </p>
-            <div class="search-row" style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;">
-              <input type="text" id="smsOrdersSearch" placeholder="Search by Customer ID, service, or number…" oninput="filterSmsOrders()" style="flex:1;min-width:200px;" />
-              <select id="smsOrdersStatusFilter" onchange="filterSmsOrders()" style="min-width:160px;">
-                <option value="">All Statuses</option>
-                <option value="waiting_for_code">Waiting for code</option>
-                <option value="completed">Completed</option>
-                <option value="refunded">Cancelled &amp; refunded</option>
-                <option value="failed">Failed</option>
-              </select>
-            </div>
-
-            <div class="desktop-only desktop-table table-wrap">
-              <table>
-                <thead>
-                  <tr>
-                    <th>Customer ID</th><th>Service</th><th>Country</th><th>Number</th><th>Price</th><th>Code</th><th>Status</th><th>Date</th>
-                  </tr>
-                </thead>
-                <tbody id="smsOrdersTableBody"></tbody>
-              </table>
-            </div>
-            <div id="smsOrdersMobileCards" class="mobile-only mobile-cards"></div>
-          </div>
-        </div>
-
-        <div id="tab-users" class="tab-content">
-          <div class="metrics">
-            <div class="metric-card" style="cursor:pointer;" onclick="filterUsersByStatus('all')"><div class="metric-label">Total</div><div class="metric-value" id="uTotalCount">0</div></div>
-            <div class="metric-card" style="cursor:pointer;" onclick="filterUsersByStatus('active')"><div class="metric-label">Active</div><div class="metric-value" id="uActiveCount" style="color:#34d399;">0</div></div>
-            <div class="metric-card" style="cursor:pointer;" onclick="filterUsersByStatus('inactive')"><div class="metric-label">Inactive</div><div class="metric-value" id="uInactiveCount" style="color:#f87171;">0</div></div>
-          </div>
-          <div class="panel">
-            <div class="panel-title" style="margin-bottom:10px;">Customer Directory</div>
-            <div class="search-row">
-              <input type="text" id="userSearch" placeholder="Search name, email, phone, Customer ID..." oninput="filterUsers()" />
-              <select id="userStatusFilter" onchange="filterUsers()">
-                <option value="all">All Status</option>
-                <option value="active">Active only</option>
-                <option value="inactive">Inactive only</option>
-                <option value="banned">Banned only</option>
-              </select>
-            </div>
-            <div class="desktop-only table-wrap">
-              <table>
-                <thead>
-                  <tr>
-                    <th>Name</th><th>Email</th><th>Phone</th><th>Customer ID</th><th>NGN</th><th>USD</th><th>Status</th><th>Role</th><th>Joined</th><th>Action</th>
-                  </tr>
-                </thead>
-                <tbody id="usersTableBody"></tbody>
-              </table>
-            </div>
-            <div id="usersMobileCards" class="mobile-only mobile-cards"></div>
-          </div>
-        </div>
-
-        <div id="tab-sms-server2" class="tab-content">
-          <div class="panel">
-            <div class="panel-title" style="margin-bottom:10px;display:flex;align-items:center;justify-content:space-between;">
-              <span>SMS — Server 2 (LogsDomain)</span>
-              <span style="font-size:11px;color:var(--muted);">Live — reachable by customers via Choose Server → Server 2.</span>
-            </div>
-
-            <div style="display:flex;gap:16px;align-items:center;flex-wrap:wrap;margin-bottom:16px;">
-              <button class="btn btn-primary btn-sm" id="btnSyncLogsDomainNumbers2" onclick="syncLogsDomainNumbersNow()"><i class="fas fa-sync"></i> Sync LogsDomain</button>
-            </div>
-            <p style="color:#94a3b8;font-size:13px;margin:-4px 0 4px;">
-              Same catalog as the "SMS — Server 1" tab, filtered to LogsDomain only — search, edit price, or delete a listing here without wading through Grizzly's rows too.
-            </p>
-            <p id="logsdomainSyncProgress2" style="color:var(--primary,#3b82f6);font-size:12px;font-weight:700;margin:0 0 14px;min-height:16px;"></p>
-
-            <div class="search-row" style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;">
-              <input type="text" id="smsServer2Search" placeholder="Search service (WhatsApp, Google, tg…)" oninput="filterNumberServicesServer2()" style="flex:1;min-width:160px;" />
-              <input type="text" id="smsServer2CountryFilter" placeholder="Country (Nigeria, USA…)" oninput="filterNumberServicesServer2()" style="flex:1;min-width:160px;" />
-              <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:#94a3b8;white-space:nowrap;">
-                <input type="checkbox" id="smsServer2HideZeroStock" checked onchange="filterNumberServicesServer2()" />
-                Hide 0 stock
-              </label>
-            </div>
-
-            <div class="desktop-only desktop-table table-wrap">
-              <table>
-                <thead>
-                  <tr>
-                    <th>Country</th><th>Service</th><th>Supplier Price</th><th>Your Price</th><th>Stock</th><th>Status</th><th>Action</th>
-                  </tr>
-                </thead>
-                <tbody id="smsServer2TableBody"></tbody>
-              </table>
-            </div>
-            <div id="smsServer2MobileCards" class="mobile-only mobile-cards"></div>
-          </div>
-        </div>
-
-        <div id="tab-orders" class="tab-content">
-          <div class="panel">
-            <div class="panel-title" style="margin-bottom:10px;">LOGS Orders</div>
-            <div class="empty-state" id="ordersEmpty">No orders table connected yet.</div>
-            <div class="table-wrap hidden" id="ordersTableWrap">
-              <table>
-                <thead><tr><th>Order ID</th><th>Customer</th><th>Item</th><th>Amount</th><th>Status</th><th>Date</th><th>Action</th></tr></thead>
-                <tbody id="ordersTableBody"></tbody>
-              </table>
-            </div>
-          </div>
-        </div>
-
-        
-        <div id="tab-boosters" class="tab-content">
-          <div class="card" style="margin-bottom:16px;">
-            <div style="display:flex;flex-wrap:wrap;gap:12px;align-items:center;justify-content:space-between;">
+        <div id="threadActive" style="display:none;flex-direction:column;flex:1;min-height:0;">
+          <div class="thread-head">
+            <div style="display:flex;gap:12px;align-items:center;">
+              <div class="avatar" id="threadAvatar">?</div>
               <div>
-                <h3 style="margin:0 0 4px;">MJ Boosters — The Owlet</h3>
-                <p style="margin:0;font-size:13px;color:var(--muted);">Admin only. Catalog syncs into <code>booster_services</code>. Wallet balance is on <strong>Overview</strong> with the other suppliers. Not on user dashboard yet.</p>
-              </div>
-              <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;">
-                <button class="btn btn-primary btn-sm" id="btnOwletSync" onclick="syncOwletServices()"><i class="fas fa-sync"></i> Sync Services</button>
+                <div id="threadTitle" style="font-weight:800;font-size:15px;">—</div>
+                <div class="meta" id="threadMeta"></div>
               </div>
             </div>
-            <div id="owletSyncProgress" style="margin-top:8px;font-size:12px;color:var(--muted);"></div>
+            <div style="display:flex;gap:8px;flex-wrap:wrap;">
+              <button class="btn btn-ghost btn-sm" onclick="setTicketStatus('open')">Open</button>
+              <button class="btn btn-ghost btn-sm" onclick="setTicketStatus('pending')">Pending</button>
+              <button class="btn btn-ghost btn-sm" onclick="setTicketStatus('closed')">Close</button>
+              <button class="btn btn-ghost btn-sm" id="backToList" style="display:none;" onclick="showListMobile()">← Inbox</button>
+            </div>
           </div>
-
-          <div class="card">
-            <div style="display:flex;flex-wrap:wrap;gap:10px;margin-bottom:12px;align-items:center;">
-              <input type="search" id="owletSearch" placeholder="Search service name or category…" style="flex:1;min-width:180px;" onkeydown="if(event.key==='Enter'){owletPage=1;loadOwletServicesFromDb()}">
-              <select id="owletCategoryFilter" onchange="owletPage=1;loadOwletServicesFromDb()">
-                <option value="">All categories</option>
-              </select>
-              <label style="font-size:12px;display:flex;align-items:center;gap:6px;">
-                <input type="checkbox" id="owletHideUnavailable" checked onchange="owletPage=1;loadOwletServicesFromDb()"> Hide unavailable
-              </label>
+          <div class="thread-messages" id="threadMessages"></div>
+          <div class="composer-wrap">
+            <div class="quick-replies">
+              <button type="button" class="btn btn-ghost btn-sm" onclick="insertQuick('Thanks for reaching out. We are looking into this for you now.')">Looking into it</button>
+              <button type="button" class="btn btn-ghost btn-sm" onclick="insertQuick('Please share your Customer ID and any order or payment reference so we can assist faster.')">Ask for ID</button>
+              <button type="button" class="btn btn-ghost btn-sm" onclick="insertQuick('This has been resolved on our side. Reply here if you need anything else — happy to help.')">Mark resolved</button>
+              <button type="button" class="btn btn-ghost btn-sm" onclick="insertQuick('We have credited your wallet. Please refresh the app to see the updated balance.')">Wallet credited</button>
             </div>
-            <div class="table-wrap desktop-only">
-              <table>
-                <thead>
-                  <tr>
-                    <th>ID</th>
-                    <th>Name</th>
-                    <th>Category</th>
-                    <th>Supplier USD</th>
-                    <th>Sell ₦</th>
-                    <th>Min–Max</th>
-                    <th>Refill</th>
-                    <th>Status</th>
-                    <th></th>
-                  </tr>
-                </thead>
-                <tbody id="owletTableBody">
-                  <tr><td colspan="9" class="empty-state">Click <strong>Sync Services</strong> to pull Owlet catalog.</td></tr>
-                </tbody>
-              </table>
-            </div>
-            <div id="owletMobileCards" class="mobile-only"></div>
+            <form class="composer" onsubmit="return sendAdminReply(event)">
+              <textarea id="replyInput" placeholder="Write a clear, professional reply…" required></textarea>
+              <button type="submit" class="btn btn-primary btn-sm">Send</button>
+            </form>
           </div>
         </div>
-
-        
-        <div id="tab-booster-orders" class="tab-content">
-          <div class="card" style="margin-bottom:16px;">
-            <div style="display:flex;flex-wrap:wrap;gap:12px;align-items:center;justify-content:space-between;">
-              <div>
-                <h3 style="margin:0 0 4px;">MJ Booster Orders</h3>
-                <p style="margin:0;font-size:13px;color:var(--muted);">Customer boost orders from The Owlet. Search by order ID, service, customer ID or link.</p>
-              </div>
-              <button class="btn btn-secondary btn-sm" onclick="loadBoosterOrders()"><i class="fas fa-sync"></i> Refresh</button>
-            </div>
-            <div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap;">
-              <input type="search" id="boosterOrderSearch" placeholder="Search orders…" style="flex:1;min-width:180px;" onkeydown="if(event.key==='Enter'){boosterOrderPage=1;loadBoosterOrders()}">
-              <button class="btn btn-primary btn-sm" onclick="boosterOrderPage=1;loadBoosterOrders()">Search</button>
-            </div>
-          </div>
-          <div class="card">
-            <div class="table-wrap desktop-only">
-              <table>
-                <thead>
-                  <tr>
-                    <th>When</th>
-                    <th>Customer</th>
-                    <th>Service</th>
-                    <th>Link</th>
-                    <th>Qty</th>
-                    <th>Paid ₦</th>
-                    <th>Status</th>
-                    <th>Supplier #</th>
-                  </tr>
-                </thead>
-                <tbody id="boosterOrdersBody">
-                  <tr><td colspan="8" class="empty-state">Loading…</td></tr>
-                </tbody>
-              </table>
-            </div>
-            <div id="boosterOrdersCards" class="mobile-only"></div>
-            <div id="boosterOrdersPager" style="display:flex;gap:8px;justify-content:center;align-items:center;margin-top:12px;font-size:12px;color:var(--muted);"></div>
-          </div>
-        </div>
-
-        <div id="tab-notify" class="tab-content">
-          <div class="panel">
-            <div class="panel-title" style="margin-bottom:10px;">Send Notification to All Users</div>
-            <div class="field" style="max-width:480px;">
-              <label>Title</label>
-              <input type="text" id="notifTitle" placeholder="e.g. New products added" maxlength="120" />
-            </div>
-            <div class="field" style="max-width:480px;">
-              <label>Message</label>
-              <textarea id="notifBody" rows="3" placeholder="What do you want users to see?" maxlength="500"></textarea>
-            </div>
-            <div class="field" style="max-width:240px;">
-              <label>Type</label>
-              <select id="notifType">
-                <option value="activity">General</option>
-                <option value="announcement">Announcement</option>
-                <option value="promo">Promo</option>
-                <option value="alert">Alert</option>
-              </select>
-            </div>
-            <div id="notifSendError" class="error-msg"></div>
-            <button class="btn btn-primary btn-sm" onclick="sendBroadcastNotification()">Send to All Users</button>
-            <div class="price-note" style="margin-top:6px;">Every user will see this in their notification bell next time they load the app. It disappears from their view 24 hours after they open it.</div>
-
-            <div class="panel-title" style="margin:24px 0 10px;">Recently Sent</div>
-            <div id="notifHistoryList" style="font-size:13px;color:var(--muted);">Loading…</div>
-          </div>
-        </div>
-
-        <div id="tab-settings" class="tab-content">
-          <div class="panel">
-            <div class="panel-title" style="margin-bottom:10px;">Platform Settings</div>
-            <div class="field" style="max-width:320px;">
-              <label>P2P Exchange Rate (1 USD = ₦)</label>
-              <input type="number" id="settingRate" value="1420" step="1" min="1" />
-            </div>
-          </div>
-        </div>
-      </div>
+      </section>
     </div>
   </div>
 
-  <div id="productModal" class="modal-backdrop hidden">
-    <div class="modal">
-      <h3 id="productModalTitle">Add Product</h3>
-      <input type="hidden" id="editProductId" />
-      <div class="field"><label>Product Name</label><input type="text" id="pName" /></div>
-      <div class="field">
-        <label>Product Key</label>
-        <input type="text" id="pProductKey" placeholder="e.g. manual_mail_com" />
-        <div class="price-note">For a manually-stocked product, start this with "manual_" — that's how the site knows to pull logs from your Supabase inventory instead of a supplier. Leave blank to auto-generate. Stays fixed once a product is saved.</div>
-      </div>
-      <div class="field">
-        <label>Category</label>
-        <select id="pCategory" onchange="handleCategorySelectChange()"></select>
-        <input type="text" id="pCategoryNew" placeholder="New category name" class="hidden" style="margin-top:8px;" />
-      </div>
-      <div class="field"><label>Description</label><textarea id="pDesc" rows="3"></textarea></div>
-      <div class="field">
-        <label>Supplier Price (₦) — Read Only</label>
-        <input type="number" id="pSupplierPrice" disabled />
-        <div class="price-note">From supplier sync. Not editable.</div>
-      </div>
-      <div class="field">
-        <label>Your Selling Price (₦)</label>
-        <input type="number" id="pPrice" min="0" step="1" />
-        <div class="price-note">This is what customers see.</div>
-      </div>
-      <div class="field"><label>Stock Quantity</label><input type="number" id="pStock" min="0" step="1" /></div>
-      <div class="field">
-        <label>Available</label>
-        <select id="pAvailable"><option value="true">Yes — Active</option><option value="false">No — Hidden</option></select>
-      </div>
-      <div id="productModalError" class="error-msg"></div>
-      <div class="modal-actions">
-        <button class="btn btn-ghost" onclick="closeProductModal()">Cancel</button>
-        <button class="btn btn-primary btn-sm" id="saveProductBtn" onclick="saveProduct()">Save</button>
-      </div>
-    </div>
-  </div>
-
-  <div id="smsModal" class="modal-backdrop hidden">
-    <div class="modal">
-      <h3>Edit SMS Number Pricing</h3>
-      <input type="hidden" id="editSmsId" />
-      <div class="field"><label>Country</label><input type="text" id="smsCountryDisplay" disabled /></div>
-      <div class="field"><label>Service</label><input type="text" id="smsServiceDisplay" disabled /></div>
-      <div class="field">
-        <label>Supplier Price (from GrizzlySMS) — Read Only</label>
-        <input type="text" id="smsSupplierPriceDisplay" disabled />
-        <div class="price-note">Updated automatically every sync. Not editable here.</div>
-      </div>
-      <div class="field">
-        <label>Available Stock — Read Only</label>
-        <input type="text" id="smsStockDisplay" disabled />
-        <div class="price-note">Comes from the supplier's live stock count.</div>
-      </div>
-      <div class="field">
-        <label>Your Selling Price (₦)</label>
-        <input type="number" id="smsPrice" min="0" step="1" />
-        <div class="price-note">This is what customers see and pay. Never changed by a sync — only by you, here.</div>
-      </div>
-      <div class="field">
-        <label>Listing Status</label>
-        <select id="smsAvailable"><option value="true">Visible to customers</option><option value="false">Hidden (won't sell even if supplier has stock)</option></select>
-        <div class="price-note">Use "Hidden" to manually pull a listing regardless of supplier stock.</div>
-      </div>
-      <div id="smsModalError" class="error-msg"></div>
-      <div class="modal-actions">
-        <button class="btn btn-ghost" onclick="closeSmsModal()">Cancel</button>
-        <button class="btn btn-primary btn-sm" id="saveSmsBtn" onclick="saveNumberService()">Save</button>
-      </div>
-    </div>
-  </div>
-
-  <div id="restockModal" class="modal-backdrop hidden">
-    <div class="modal">
-      <h3>Restock Manual Product</h3>
-      <div class="field">
-        <label>Product</label>
-        <select id="rsProductKey"></select>
-        <div class="price-note">Only products with source "manual" or a product_key starting with "manual_" are listed here. Create the product first (Add button) if it's not showing up.</div>
-      </div>
-      <div class="field">
-        <label>Current stock</label>
-        <input type="text" id="rsCurrentStock" disabled />
-      </div>
-      <div class="field">
-        <label>Paste logs — one per line (e.g. user1@mail.com:pass1)</label>
-        <textarea id="rsPasteBox" rows="10" placeholder="user1@mail.com:pass1&#10;user2@mail.com:pass2&#10;user3@mail.com:pass3"></textarea>
-        <div class="price-note" id="rsLineCount">0 lines</div>
-      </div>
-      <div id="restockModalError" class="error-msg"></div>
-      <div id="restockModalResult" style="font-size:13px;color:var(--success,#34d399);"></div>
-      <div class="modal-actions">
-        <button class="btn btn-ghost" onclick="closeRestockModal()">Close</button>
-        <button class="btn btn-primary btn-sm" id="rsUploadBtn" onclick="uploadManualStock()"><i class="fas fa-upload"></i> Upload logs</button>
-      </div>
-    </div>
-  </div>
-
-
-  <div id="orderModal" class="modal-backdrop hidden">
-    <div class="modal">
-      <h3>Order Details</h3>
-      <div id="orderModalBody" style="display:flex;flex-direction:column;gap:12px;"></div>
-      <div class="modal-actions">
-        <button class="btn btn-ghost" onclick="closeOrderModal()">Close</button>
-      </div>
-    </div>
-  </div>
-
-  <div id="userModal" class="modal-backdrop hidden">
-    <div class="modal">
-      <h3>Edit Customer Account</h3>
-      <input type="hidden" id="editUserId" />
-      <div class="field"><label>Full Name</label><input type="text" id="uName" /></div>
-      <div class="field"><label>Username</label><input type="text" id="uUsername" /></div>
-      <div class="field"><label>Email</label><input type="email" id="uEmail" /></div>
-      <div class="field"><label>Phone Number</label><input type="text" id="uPhone" /></div>
-      <div class="field"><label>Customer ID</label><input type="text" id="uCustomerId" readonly style="opacity:.7;" /></div>
-      <div class="field"><label>NGN Balance (₦)</label><input type="number" id="uBalance" step="0.01" /></div>
-      <div class="field"><label>USD Balance ($)</label><input type="number" id="uBalanceUsd" step="0.01" /></div>
-      <div class="field">
-        <label>Admin Privileges</label>
-        <select id="uIsAdmin"><option value="false">Standard User</option><option value="true">Administrator</option></select>
-      </div>
-      <div id="userModalError" class="error-msg"></div>
-      <div class="modal-actions">
-        <button class="btn btn-ghost" onclick="closeUserModal()">Cancel</button>
-        <button class="btn btn-primary btn-sm" id="saveUserBtn" onclick="saveUser()">Save</button>
-      </div>
-    </div>
-  </div>
-
-
-<script>
-// Every button click gets a brief visual "bounce" so it's always obvious a
-// tap registered, even for buttons with no async logic behind them (tab
-// switches, modal opens) and independent of any button's own busy-state
-// spinner logic elsewhere in this file — purely additive, never touches or
-// interferes with an existing onclick handler.
-document.addEventListener('click', function(e) {
-  const btn = e.target.closest('.btn');
-  if (!btn || btn.disabled) return;
-  btn.classList.remove('btn-pulse');
-  // Force reflow so the animation restarts on rapid repeat clicks.
-  void btn.offsetWidth;
-  btn.classList.add('btn-pulse');
-  setTimeout(() => btn.classList.remove('btn-pulse'), 350);
-}, true);
-
-const SUPABASE_URL = 'https://atczodlljmlayvldxfmv.supabase.co';
-const SUPABASE_KEY = 'sb_publishable_dwbeKLcSG7-nfKzZz8x8Zw_U9FtwJTy';
-const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY, {
-  auth: {
-    persistSession: true,
-    autoRefreshToken: true,
-    detectSessionInUrl: false,
-    // sessionStorage (not localStorage): survives a page refresh within
-    // this tab, but is wiped the moment the tab/browser closes — so a
-    // refresh doesn't log you out, but reopening the browser later, or
-    // opening admin.html in a new tab, always requires signing in again.
-    storage: window.sessionStorage
-  }
-});
-
-let allProducts = [];
-let allProfiles = [];
-let liveRate = 1420;
-let currentUserStatusFilter = 'all';
-
-const tabTitles = {
-  overview: 'Overview',
-  users: 'Customers',
-  lookup: 'Customer Lookup',
-  products: 'Products & Stock',
-  sms: 'SMS — Server 1 (GrizzlySMS)',
-  'sms-orders': 'SMS Orders',
-  'sms-server2': 'SMS — Server 2 (LogsDomain)',
-      'boosters': 'MJ Boosters (Owlet)',
-      'booster-orders': 'Booster Orders',
-  orders: 'LOGS Orders',
-  settings: 'Settings'
-};
-
-const revenueLabels = {
-  today: 'Today',
-  '7days': 'Last 7 Days',
-  month: 'This Month',
-  '3months': 'Last 3 Months',
-  '6months': 'Last 6 Months',
-  '12months': 'Last 12 Months'
-};
-
-function isAdminValue(v) {
-  return v === true || v === 'true' || v === 1 || v === '1';
-}
-
-function isUserActive(profile) {
-  const last = profile.updated_at || profile.last_sign_in_at;
-  if (!last) return true;
-  return (Date.now() - new Date(last).getTime()) < (30 * 24 * 60 * 60 * 1000);
-}
-
-let authFlowStarted = false;
-
-// Root cause of the refresh flash-logout: right after a hard reload, the
-// Supabase client may still be restoring/refreshing the saved session in
-// the background. Calling getSession() immediately can catch it mid-flight
-// and briefly report "no session" even though the admin IS still logged
-// in — which is exactly what looked like "logs out, then auto logs back
-// in". INITIAL_SESSION is fired once by the client after it has finished
-// restoring (and refreshing, if needed) the session from storage, so
-// driving the auth check off that event instead removes the race.
-sb.auth.onAuthStateChange((event, session) => {
-  if (event === 'INITIAL_SESSION') {
-    authFlowStarted = true;
-    evaluateSession(session);
-  } else if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
-    if (authFlowStarted) evaluateSession(session);
-  } else if (event === 'SIGNED_OUT') {
-    showLogin();
-  }
-});
-
-// Safety net: if for any reason INITIAL_SESSION never fires (older library
-// versions, unexpected environment), fall back to a direct check so the
-// admin isn't stuck on a blank/loading state forever.
-setTimeout(() => {
-  if (!authFlowStarted) checkAuth();
-}, 1500);
-
-async function checkAuth() {
-  authFlowStarted = true;
-  const { data: { session } } = await sb.auth.getSession();
-  await evaluateSession(session);
-}
-
-async function evaluateSession(session) {
-  if (!session) return showLogin();
-
-  // Even once we have a session, querying "profiles" can still fail on a
-  // one-off transient/network error. Retry briefly rather than treating a
-  // single failed request as "not authorized".
-  const { profile, error } = await fetchAdminProfileWithRetry(session.user.id);
-
-  if (error) {
-    // Transient failure (network hiccup, etc.) — do NOT sign the admin out
-    // or destroy their session. Just let them retry; the session itself is
-    // still valid and intact.
-    document.getElementById('loginError').textContent =
-      'Could not verify admin access (connection issue). Please try refreshing again.';
-    return showLogin();
-  }
-  if (!profile || !isAdminValue(profile.is_admin)) {
-    // We successfully read the profile and confirmed this account is not
-    // an admin — this is a real authorization decision, so signing out
-    // here is correct.
-    await sb.auth.signOut();
-    document.getElementById('loginError').textContent = 'Access denied. Admin privileges required.';
-    return showLogin();
-  }
-
-  document.getElementById('adminEmailLabel').textContent = session.user.email || profile.email || '';
-  showDashboard();
-  // Do not block the admin shell on full data load — run in background.
-  loadAllData().catch(function (e) { console.error('loadAllData', e); });
-}
-
-async function fetchAdminProfileWithRetry(userId, attempts = 3) {
-  let lastError = null;
-  for (let i = 0; i < attempts; i++) {
-    // Only the fields needed to authorize + label the admin (much lighter than select *)
-    const { data: profile, error } = await sb
-      .from('profiles')
-      .select('id, email, full_name, is_admin')
-      .eq('id', userId)
-      .maybeSingle();
-    if (!error) return { profile, error: null };
-    lastError = error;
-    // Short backoff for transient token/network hiccups
-    await new Promise(r => setTimeout(r, 150 * (i + 1)));
-  }
-  return { profile: null, error: lastError };
-}
-
-function showLogin() {
-  document.getElementById('loginScreen').classList.remove('hidden');
-  document.getElementById('adminShell').classList.add('hidden');
-  stopInactivityTimer();
-}
-function showDashboard() {
-  document.getElementById('loginScreen').classList.add('hidden');
-  document.getElementById('adminShell').classList.remove('hidden');
-  startInactivityTimer();
-}
-
-// -------------------------------------------------------------------------
-// AUTO SIGN-OUT AFTER 10 MINUTES OF INACTIVITY
-// -------------------------------------------------------------------------
-const INACTIVITY_LIMIT_MS = 10 * 60 * 1000; // 10 minutes
-let inactivityTimer = null;
-const INACTIVITY_EVENTS = ['mousemove', 'mousedown', 'keydown', 'scroll', 'touchstart', 'click'];
-
-function resetInactivityTimer() {
-  if (inactivityTimer) clearTimeout(inactivityTimer);
-  inactivityTimer = setTimeout(async () => {
-    await sb.auth.signOut();
-    document.getElementById('loginError').textContent = 'You were signed out after 10 minutes of inactivity.';
-    showLogin();
-  }, INACTIVITY_LIMIT_MS);
-}
-function startInactivityTimer() {
-  INACTIVITY_EVENTS.forEach(evt => document.addEventListener(evt, resetInactivityTimer));
-  resetInactivityTimer();
-}
-function stopInactivityTimer() {
-  if (inactivityTimer) clearTimeout(inactivityTimer);
-  inactivityTimer = null;
-  INACTIVITY_EVENTS.forEach(evt => document.removeEventListener(evt, resetInactivityTimer));
-}
-
-function toggleAdminPasswordVisibility() {
-  const input = document.getElementById('adminPassword');
-  const icon = document.getElementById('togglePasswordIcon');
-  if (!input || !icon) return;
-  const isHidden = input.type === 'password';
-  input.type = isHidden ? 'text' : 'password';
-  icon.classList.toggle('fa-eye', !isHidden);
-  icon.classList.toggle('fa-eye-slash', isHidden);
-}
-
-async function handleLogin() {
-  const email = document.getElementById('adminEmail').value.trim();
-  const password = document.getElementById('adminPassword').value;
-  const errEl = document.getElementById('loginError');
-  errEl.textContent = '';
-  if (!email || !password) { errEl.textContent = 'Enter email and password.'; return; }
-  const { error } = await sb.auth.signInWithPassword({ email, password });
-  if (error) { errEl.textContent = error.message; return; }
-  await checkAuth();
-}
-async function handleLogout() {
-  await sb.auth.signOut();
-  location.reload();
-}
-
-let _adminDataLoading = false;
-let _adminDataLoadedOnce = false;
-async function loadAllData() {
-  if (_adminDataLoading) return;
-  _adminDataLoading = true;
-  try {
-    await Promise.all([
-      loadProducts().catch(function(e){ console.error('products', e); }),
-      loadProfiles().catch(function(e){ console.error('profiles', e); }),
-      tryLoadOrders().catch(function(e){ console.error('orders', e); }),
-      tryLoadSmsOrders().catch(function(e){ console.error('sms orders', e); }),
-      loadNotificationHistory().catch(function(e){ console.error('notifs', e); })
-    ]);
-    _adminDataLoadedOnce = true;
-    try { resumeGrizzlySyncIfRunning(); } catch (e) {}
-    try { updateMetrics(); } catch (e) {}
-    // Supplier balances are secondary — never block first paint metrics
-    try { loadSupplierBalances(); } catch (e) {}
-  } finally {
-    _adminDataLoading = false;
-  }
-}
-
-function ngnFmt(n) { return '₦' + Number(n || 0).toLocaleString(undefined, { maximumFractionDigits: 2 }); }
-
-function renderSupplierBalance(prefix, result) {
-  const valueEl = document.getElementById('bal' + prefix);
-  const subEl = document.getElementById('bal' + prefix + 'Sub');
-  if (!valueEl || !subEl) return;
-
-  if (!result || result.ok === false) {
-    valueEl.textContent = '—';
-    valueEl.style.color = '#f87171';
-    subEl.textContent = result?.error ? ('Error: ' + result.error) : 'Could not fetch';
-    subEl.title = result?.raw || '';
-    return;
-  }
-
-  valueEl.style.color = '';
-  const isNgn = result.currency === 'NGN';
-  valueEl.textContent = isNgn ? ngnFmt(result.balance) : usdFmt(result.balance);
-  subEl.textContent = 'Updated just now';
-}
-
-async function bulkRepriceNumbers(mode) {
-  if (mode === 'all') {
-    const confirmed = confirm(
-      'This overwrites the selling price on EVERY SMS number listing — including any you\'ve already priced manually — with a fresh random 40–85% markup. This cannot be undone. Continue?'
-    );
-    if (!confirmed) return;
-  }
-
-  const btnId = mode === 'all' ? 'btnBulkRepriceAll' : 'btnBulkRepriceUnpriced';
-  const idleLabel = mode === 'all'
-    ? '<i class="fas fa-dice"></i> Reprice All (skips manual prices)'
-    : '<i class="fas fa-tags"></i> Price Unpriced Numbers';
-  const btn = document.getElementById(btnId);
-  setBtnBusy(btn, true, 'Pricing...');
-
-  let repriceSucceeded = false;
-  let step = 'building auth headers';
-  try {
-    const headers = await authHeaders();
-    headers['Content-Type'] = 'application/json';
-
-    step = 'requesting bulk reprice';
-    const res = await fetch('/api/admin', {
-      method: 'POST',
-      headers,
-      body: JSON.stringify({ resource: 'sms', action: 'bulk_reprice', mode })
+  <script>
+    const SUPABASE_URL = 'https://atczodlljmlayvldxfmv.supabase.co';
+    const SUPABASE_KEY = 'sb_publishable_dwbeKLcSG7-nfKzZz8x8Zw_U9FtwJTy';
+    const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY, {
+      auth: { persistSession: true, autoRefreshToken: true, storage: window.sessionStorage }
     });
 
-    step = 'reading response';
-    const data = await res.json();
-    if (!data.success) {
-      showAdminToast(data.message || 'Bulk repricing failed', 'error');
-    } else {
-      repriceSucceeded = true;
-      if (data.updated === 0) {
-        showAdminToast(data.message || 'Nothing to price.', 'info');
-      } else {
-        showAdminToast(`Priced ${data.updated} of ${data.total} number listings.`, 'success');
-      }
-      if (data.errors && data.errors.length) {
-        console.warn('Bulk reprice partial errors:', data.errors);
-      }
+    let currentFilter = 'open';
+    let tickets = [];
+    let activeTicketId = null;
+    let messagesChannel = null;
+    let ticketsChannel = null;
+
+    function isAdminValue(v) {
+      return v === true || v === 'true' || v === 1 || v === '1';
     }
-  } catch (err) {
-    console.error('Bulk reprice error at step:', step, err.name, err.message, err.stack);
-    showAdminToast(`Bulk repricing failed while ${step}: ` + (err.message || 'network error'), 'error');
-  } finally {
-    setBtnBusy(btn, false, idleLabel);
-  }
-
-  // Separate from the block above on purpose: if repricing actually
-  // succeeded server-side, a hiccup while refreshing the table should
-  // never be reported back to you as "repricing failed" — that's a
-  // different problem and would be misleading.
-  if (repriceSucceeded) {
-    try {
-      await loadNumberServices();
-    } catch (err) {
-      console.error('Table refresh after reprice error:', err.name, err.message, err.stack);
-      showAdminToast('Prices were updated, but the table didn\'t auto-refresh — pull to refresh or reopen this tab to see them.', 'info');
-    }
-  }
-}
-
-async function loadSupplierBalances() {
-  const btn = document.getElementById('btnRefreshSupplierBalances');
-  setBtnBusy(btn, true, 'Refreshing...');
-  ['Fadded', 'Logsdomain', 'Grizzly', 'Sujan', 'Owlet'].forEach(p => {
-    const sub = document.getElementById('bal' + p + 'Sub');
-    if (sub) sub.textContent = 'Loading…';
-  });
-  // Step-tracked the same way uploadManualStock() already does, so a
-  // failure reports exactly which operation broke (building headers vs.
-  // the network request vs. parsing the response) instead of one generic
-  // message that could mean any of those three very different things.
-  let step = 'building auth headers';
-  try {
-    const headers = await authHeaders();
-    headers['Content-Type'] = 'application/json';
-
-    step = 'requesting supplier balances';
-    const res = await fetch('/api/admin', {
-      method: 'POST',
-      headers,
-      body: JSON.stringify({ resource: 'supplier_balances' })
-    });
-
-    step = 'reading response';
-    const data = await res.json();
-
-    if (!data.success) {
-      showAdminToast(data.message || 'Could not load supplier balances', 'error');
-      return;
-    }
-    renderSupplierBalance('Fadded', data.suppliers.fadded);
-    renderSupplierBalance('Logsdomain', data.suppliers.logsdomain);
-    renderSupplierBalance('Grizzly', data.suppliers.grizzly);
-    renderSupplierBalance('Sujan', data.suppliers.sujan);
-    renderSupplierBalance('Owlet', data.suppliers.owlet);
-  } catch (err) {
-    console.error('Supplier balance error at step:', step, err.name, err.message, err.stack);
-    showAdminToast(`Supplier balance check failed while ${step}: ` + (err.message || 'network error'), 'error');
-  } finally {
-    setBtnBusy(btn, false, '<i class="fas fa-sync"></i> Refresh');
-  }
-}
-
-async function loadProducts() {
-  const { data, error } = await sb.from('products').select('*').order('name');
-  allProducts = error ? [] : (data || []);
-  if (error) console.error('Products error:', error.message);
-  populateCategoryFilter();
-  // Reapply whatever category/search filter the admin currently has
-  // selected, instead of always snapping back to "All Categories" — that
-  // was the cause of the product list appearing to "scatter" after an edit.
-  filterProducts();
-}
-
-function populateCategoryFilter() {
-  const select = document.getElementById('categoryFilter');
-  if (!select) return;
-  const cats = [...new Set(allProducts.map(p => (p.category || 'OTHER').trim()).filter(Boolean))].sort();
-  const current = select.value;
-  select.innerHTML = '<option value="">All Categories</option>' + cats.map(c => `<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join('');
-  if (cats.includes(current)) select.value = current;
-}
-
-// ---------- SMS Numbers (GrizzlySMS / number_services) ----------
-// Mirrors the Products section's pattern (load → populate filter → render),
-// but for the number_services table. Supplier-owned fields (country,
-// service, supplier_price, available_quantity) are read-only here — they
-// only ever change via a sync. `price` (admin's own selling price) and
-// `is_available` are the only two fields this section ever writes, and a
-// sync never touches either of them (see grizzly-sync.js).
-let allNumberServices = [];
-
-let smsTabLoaded = false;
-let ldNumTabLoaded = false;
-
-// Lazy — only called when the SMS tab is actually opened (see switchTab),
-// not on every dashboard load. There's no country list to preload anymore:
-// the country field is a plain text filter matched server-side, same as
-// the service search box, so opening this tab is now a single cheap query
-// (or no query at all until you type something) instead of scanning the
-// whole table just to build a dropdown.
-async function loadNumberServices() {
-  await loadSmsRowsForCurrentFilter();
-}
-
-async function loadSmsRowsForCurrentFilter() {
-  const country = document.getElementById('smsCountryFilter')?.value || '';
-  const q = (document.getElementById('smsSearch')?.value || '').trim();
-  const hideZero = document.getElementById('smsHideZeroStock')?.checked !== false;
-  const cols = 'id,source,country_id,country_name,service_id,service_name,supplier_price,price,available_quantity,is_available,currency,updated_at';
-
-  allNumberServices = [];
-
-  if (!country && !q) {
-    renderNumberServices([]);
-    const cards = document.getElementById('smsMobileCards');
-    const tbody = document.getElementById('smsTableBody');
-    const hint =
-      '<div class="empty-state">Select a <strong>country</strong> or search a <strong>service</strong> (WhatsApp, Google…).<br><span style="opacity:.7;font-size:12px;">Use country filter box to find Nigeria, USA, etc. quickly.</span></div>';
-    if (cards) cards.innerHTML = hint;
-    if (tbody) tbody.innerHTML = `<tr><td colspan="8">${hint}</td></tr>`;
-    return;
-  }
-
-  try {
-    let query = sb.from('number_services').select(cols);
-    if (country) query = query.ilike('country_name', `%${country}%`);
-    if (q) {
-      query = query.or(
-        `service_name.ilike.%${q}%,service_id.ilike.%${q}%,country_name.ilike.%${q}%`
-      );
-    }
-    if (hideZero) {
-      // available_quantity is null for suppliers that don't report live
-      // stock (LogsDomain always returns null here) — null isn't "zero",
-      // it's "unknown", so treat it as available. Only exclude rows that
-      // explicitly report 0 or less. A plain .gt('available_quantity', 0)
-      // would silently exclude every null row, which is what was hiding
-      // the entire LogsDomain catalog after a successful sync.
-      query = query.or('available_quantity.is.null,available_quantity.gt.0');
-    }
-    query = query
-      .order('service_name', { ascending: true })
-      .limit(country ? 3000 : 1000);
-
-    const { data, error } = await query;
-    if (error) {
-      console.error('SMS rows error:', error);
-      showAdminToast('SMS load error: ' + error.message, 'error');
-      allNumberServices = [];
-    } else {
-      allNumberServices = data || [];
-    }
-  } catch (e) {
-    console.error(e);
-    showAdminToast('SMS load failed: ' + (e.message || e), 'error');
-    allNumberServices = [];
-  }
-  renderNumberServices(allNumberServices);
-}
-
-function populateSmsCountryFilter() {
-  loadSmsCountryOptions();
-}
-
-function filterNumberServices() {
-  loadSmsRowsForCurrentFilter();
-}
-
-function usdFmt(n) { return '$' + Number(n || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
-
-function renderNumberServices(list) {
-  const items = list || allNumberServices;
-  const tbody = document.getElementById('smsTableBody');
-  const cards = document.getElementById('smsMobileCards');
-
-  if (!items.length) {
-    if (tbody) tbody.innerHTML = `<tr><td colspan="8" class="empty-state">No SMS numbers yet — run "Sync Grizzly" or "Sync LogsDomain" to pull a supplier catalog.</td></tr>`;
-    if (cards) cards.innerHTML = `<div class="empty-state">No SMS numbers yet — run "Sync Grizzly" or "Sync LogsDomain" to pull a supplier catalog.</div>`;
-    return;
-  }
-
-  const sourceLabel = (src) => src === 'logsdomain' ? 'LogsDomain' : (src === 'grizzlysms' ? 'Grizzly' : (src || '—'));
-
-  if (tbody) {
-    tbody.innerHTML = items.map(s => {
-      const stock = s.available_quantity;
-      const stockDisplay = stock == null ? '—' : stock;
-      const available = s.is_available !== false && (stock == null || stock > 0);
-      const statusLabel = s.is_available === false ? 'Hidden' : (available ? 'Active' : 'Out of stock');
-      return `
-        <tr>
-          <td style="font-weight:600;">${escapeHtml(s.country_name || '—')}</td>
-          <td>${escapeHtml(s.service_name || s.service_id || '—')}</td>
-          <td><span class="badge">${sourceLabel(s.source)}</span></td>
-          <td class="supplier-price">${s.currency === 'NGN' ? '₦' + Number(s.supplier_price || 0).toLocaleString() : usdFmt(s.supplier_price)}</td>
-          <td class="price">₦${Number(s.price || 0).toLocaleString()}</td>
-          <td>${stockDisplay}</td>
-          <td><span class="badge ${available ? 'badge-on' : 'badge-off'}">${statusLabel}</span></td>
-          <td style="white-space:nowrap;">
-            <button class="btn btn-ghost btn-sm" onclick="editNumberService('${s.id}')" title="Edit price"><i class="fas fa-edit"></i></button>
-            <button class="btn btn-ghost btn-sm" onclick="deleteNumberService('${s.id}')" title="Delete" style="color:#f87171;"><i class="fas fa-trash"></i></button>
-          </td>
-        </tr>`;
-    }).join('');
-  }
-
-  if (cards) {
-    cards.innerHTML = items.map(s => {
-      const stock = s.available_quantity;
-      const stockDisplay = stock == null ? '—' : stock;
-      const available = s.is_available !== false && (stock == null || stock > 0);
-      const statusLabel = s.is_available === false ? 'Hidden' : (available ? 'Active' : 'Out of stock');
-      return `
-        <div class="product-card">
-          <h4>${escapeHtml(s.country_name || '—')}</h4>
-          <div class="meta">${escapeHtml(s.service_name || s.service_id || '—')} · <span class="badge">${sourceLabel(s.source)}</span></div>
-          <div class="row-line"><span>Supplier Price</span><span class="supplier-price">${s.currency === 'NGN' ? '₦' + Number(s.supplier_price || 0).toLocaleString() : usdFmt(s.supplier_price)}</span></div>
-          <div class="row-line"><span>Your Price</span><strong class="price">₦${Number(s.price || 0).toLocaleString()}</strong></div>
-          <div class="row-line"><span>Stock</span><span>${stockDisplay}</span></div>
-          <div class="row-line"><span>Status</span><span class="badge ${available ? 'badge-on' : 'badge-off'}">${statusLabel}</span></div>
-          <div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap;">
-            <button class="btn btn-ghost btn-sm" onclick="editNumberService('${s.id}')"><i class="fas fa-edit"></i> Edit Price</button>
-            <button class="btn btn-ghost btn-sm" onclick="deleteNumberService('${s.id}')" style="color:#f87171;"><i class="fas fa-trash"></i> Delete</button>
-          </div>
-        </div>`;
-    }).join('');
-  }
-}
-
-function editNumberService(id) {
-  const s = allNumberServices.find(x => String(x.id) === String(id));
-  if (!s) return;
-  document.getElementById('smsModalError').textContent = '';
-  document.getElementById('editSmsId').value = s.id;
-  document.getElementById('smsCountryDisplay').value = s.country_name || '—';
-  document.getElementById('smsServiceDisplay').value = s.service_name || s.service_id || '—';
-  document.getElementById('smsSupplierPriceDisplay').value = usdFmt(s.supplier_price);
-  document.getElementById('smsStockDisplay').value = s.available_quantity ?? 0;
-  document.getElementById('smsPrice').value = s.price ?? 0;
-  document.getElementById('smsAvailable').value = s.is_available === false ? 'false' : 'true';
-  document.getElementById('smsModal').classList.remove('hidden');
-}
-function closeSmsModal() { document.getElementById('smsModal').classList.add('hidden'); }
-
-// ---------- SMS Numbers — Server 2 (LogsDomain only) ----------
-// Same table (number_services), same modal, same edit/save/delete backend
-// call as Server 1 above — just a separate array + separate DOM targets, so
-// browsing one tab can never stomp on data loaded in the other, and always
-// filtered to source='logsdomain' so this view never shows Grizzly rows.
-let allNumberServicesServer2 = [];
-
-async function loadSmsServer2RowsForCurrentFilter() {
-  const country = document.getElementById('smsServer2CountryFilter')?.value || '';
-  const q = (document.getElementById('smsServer2Search')?.value || '').trim();
-  const hideZero = document.getElementById('smsServer2HideZeroStock')?.checked !== false;
-  const cols = 'id,source,country_id,country_name,service_id,service_name,supplier_price,price,available_quantity,is_available,currency,updated_at';
-
-  allNumberServicesServer2 = [];
-
-  if (!country && !q) {
-    renderNumberServicesServer2([]);
-    const cards = document.getElementById('smsServer2MobileCards');
-    const tbody = document.getElementById('smsServer2TableBody');
-    const hint =
-      '<div class="empty-state">Select a <strong>country</strong> or search a <strong>service</strong> (WhatsApp, Google…).<br><span style="opacity:.7;font-size:12px;">Use country filter box to find Nigeria, USA, etc. quickly.</span></div>';
-    if (cards) cards.innerHTML = hint;
-    if (tbody) tbody.innerHTML = `<tr><td colspan="7">${hint}</td></tr>`;
-    return;
-  }
-
-  try {
-    let query = sb.from('number_services').select(cols).eq('source', 'logsdomain');
-    if (country) query = query.ilike('country_name', `%${country}%`);
-    if (q) {
-      query = query.or(
-        `service_name.ilike.%${q}%,service_id.ilike.%${q}%,country_name.ilike.%${q}%`
-      );
-    }
-    if (hideZero) query = query.or('available_quantity.is.null,available_quantity.gt.0');
-    query = query.order('service_name', { ascending: true }).limit(country ? 3000 : 1000);
-
-    const { data, error } = await query;
-    if (error) {
-      console.error('SMS Server2 rows error:', error);
-      showAdminToast('SMS load error: ' + error.message, 'error');
-      allNumberServicesServer2 = [];
-    } else {
-      allNumberServicesServer2 = data || [];
-    }
-  } catch (e) {
-    console.error(e);
-    showAdminToast('SMS load failed: ' + (e.message || e), 'error');
-    allNumberServicesServer2 = [];
-  }
-  renderNumberServicesServer2(allNumberServicesServer2);
-}
-
-function filterNumberServicesServer2() {
-  loadSmsServer2RowsForCurrentFilter();
-}
-
-function renderNumberServicesServer2(list) {
-  const items = list || allNumberServicesServer2;
-  const tbody = document.getElementById('smsServer2TableBody');
-  const cards = document.getElementById('smsServer2MobileCards');
-
-  if (!items.length) {
-    if (tbody) tbody.innerHTML = `<tr><td colspan="7" class="empty-state">No LogsDomain numbers yet — click "Sync LogsDomain" above to pull the catalog.</td></tr>`;
-    if (cards) cards.innerHTML = `<div class="empty-state">No LogsDomain numbers yet — click "Sync LogsDomain" above to pull the catalog.</div>`;
-    return;
-  }
-
-  const rowStatus = (s) => {
-    const stock = s.available_quantity;
-    const stockDisplay = stock == null ? '—' : stock;
-    const available = s.is_available !== false && (stock == null || stock > 0);
-    const statusLabel = s.is_available === false ? 'Hidden' : (available ? 'Active' : 'Out of stock');
-    return { stockDisplay, available, statusLabel };
-  };
-
-  if (tbody) {
-    tbody.innerHTML = items.map(s => {
-      const { stockDisplay, available, statusLabel } = rowStatus(s);
-      return `
-        <tr>
-          <td style="font-weight:600;">${escapeHtml(s.country_name || '—')}</td>
-          <td>${escapeHtml(s.service_name || s.service_id || '—')}</td>
-          <td class="supplier-price">₦${Number(s.supplier_price || 0).toLocaleString()}</td>
-          <td class="price">₦${Number(s.price || 0).toLocaleString()}</td>
-          <td>${stockDisplay}</td>
-          <td><span class="badge ${available ? 'badge-on' : 'badge-off'}">${statusLabel}</span></td>
-          <td style="white-space:nowrap;">
-            <button class="btn btn-ghost btn-sm" onclick="editNumberServiceServer2('${s.id}')" title="Edit price"><i class="fas fa-edit"></i></button>
-            <button class="btn btn-ghost btn-sm" onclick="deleteNumberService('${s.id}')" title="Delete" style="color:#f87171;"><i class="fas fa-trash"></i></button>
-          </td>
-        </tr>`;
-    }).join('');
-  }
-
-  if (cards) {
-    cards.innerHTML = items.map(s => {
-      const { stockDisplay, available, statusLabel } = rowStatus(s);
-      return `
-        <div class="product-card">
-          <h4>${escapeHtml(s.country_name || '—')}</h4>
-          <div class="meta">${escapeHtml(s.service_name || s.service_id || '—')}</div>
-          <div class="row-line"><span>Supplier Price</span><span class="supplier-price">₦${Number(s.supplier_price || 0).toLocaleString()}</span></div>
-          <div class="row-line"><span>Your Price</span><strong class="price">₦${Number(s.price || 0).toLocaleString()}</strong></div>
-          <div class="row-line"><span>Stock</span><span>${stockDisplay}</span></div>
-          <div class="row-line"><span>Status</span><span class="badge ${available ? 'badge-on' : 'badge-off'}">${statusLabel}</span></div>
-          <div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap;">
-            <button class="btn btn-ghost btn-sm" onclick="editNumberServiceServer2('${s.id}')"><i class="fas fa-edit"></i> Edit Price</button>
-            <button class="btn btn-ghost btn-sm" onclick="deleteNumberService('${s.id}')" style="color:#f87171;"><i class="fas fa-trash"></i> Delete</button>
-          </div>
-        </div>`;
-    }).join('');
-  }
-}
-
-function editNumberServiceServer2(id) {
-  const s = allNumberServicesServer2.find(x => String(x.id) === String(id));
-  if (!s) return;
-  document.getElementById('smsModalError').textContent = '';
-  document.getElementById('editSmsId').value = s.id;
-  document.getElementById('smsCountryDisplay').value = s.country_name || '—';
-  document.getElementById('smsServiceDisplay').value = s.service_name || s.service_id || '—';
-  // LogsDomain's supplier_price is already NGN (unlike Grizzly's, which is
-  // USD) — shown in NGN here rather than reusing usdFmt().
-  document.getElementById('smsSupplierPriceDisplay').value = '₦' + Number(s.supplier_price || 0).toLocaleString();
-  document.getElementById('smsStockDisplay').value = s.available_quantity ?? 0;
-  document.getElementById('smsPrice').value = s.price ?? 0;
-  document.getElementById('smsAvailable').value = s.is_available === false ? 'false' : 'true';
-  document.getElementById('smsModal').classList.remove('hidden');
-}
-
-
-async function deleteNumberService(id) {
-  const s = allNumberServices.find(x => String(x.id) === String(id))
-    || allNumberServicesServer2.find(x => String(x.id) === String(id));
-  const label = s
-    ? `${s.country_name || ''} — ${s.service_name || s.service_id || id}`
-    : id;
-  if (!confirm('Delete this SMS listing from your catalog?\n\n' + label + '\n\nThis does not affect the supplier. You can sync again later to restore it.')) {
-    return;
-  }
-  try {
-    const { error } = await sb.from('number_services').delete().eq('id', id);
-    if (error) {
-      showAdminToast('Delete failed: ' + error.message, 'error');
-      return;
-    }
-    showAdminToast('Deleted from catalog', 'success');
-    // Refresh both — the row could have come from either tab's table.
-    await Promise.all([loadSmsRowsForCurrentFilter(), loadSmsServer2RowsForCurrentFilter()]);
-  } catch (e) {
-    showAdminToast('Delete failed: ' + (e.message || e), 'error');
-  }
-}
-
-async function saveNumberService() {
-  const id = document.getElementById('editSmsId').value;
-  const price = parseFloat(document.getElementById('smsPrice').value);
-  const is_available = document.getElementById('smsAvailable').value === 'true';
-  const errEl = document.getElementById('smsModalError');
-  errEl.textContent = '';
-  if (isNaN(price) || price < 0) { errEl.textContent = 'Enter a valid selling price.'; return; }
-
-  const btn = document.getElementById('saveSmsBtn');
-  setBtnBusy(btn, true, 'Saving...');
-  try {
-    const headers = { 'Content-Type': 'application/json' };
-    const { data: { session } } = await sb.auth.getSession();
-    if (session?.access_token) headers['Authorization'] = 'Bearer ' + session.access_token;
-
-    const res = await fetch('/api/admin', {
-      method: 'POST',
-      headers,
-      body: JSON.stringify({ resource: 'sms', action: 'update', id, price, is_available })
-    });
-    const data = await res.json();
-    if (!res.ok || !data.success) {
-      errEl.textContent = data.message || 'Save failed.';
-      showAdminToast(data.message || 'Save failed', 'error');
-      return;
-    }
-  } catch (e) {
-    errEl.textContent = 'Network error: ' + e.message;
-    showAdminToast('Network error: ' + e.message, 'error');
-    return;
-  } finally {
-    setBtnBusy(btn, false);
-  }
-
-  closeSmsModal();
-  await Promise.all([loadNumberServices(), loadSmsServer2RowsForCurrentFilter()]);
-  showAdminToast('Price updated successfully', 'success');
-}
-
-// Grizzly sync now runs as a chunked, resumable job tracked server-side in
-// "sync_jobs" (see api/grizzly-sync.js for why). This function just drives
-// the loop from the browser: call once with ?action=start, then keep
-// calling the plain endpoint — each call advances the job by one small,
-// time-boxed chunk and reports progress. If the dashboard is refreshed or
-// closed mid-sync, nothing is lost: reopening the SMS tab calls
-// resumeGrizzlySyncIfRunning() below, which finds the still-"running" job
-// in the database and picks the polling loop back up right where it left
-// off, instead of starting over from country 0.
-let grizzlySyncPolling = false;
-
-function setGrizzlySyncProgress(text) {
-  const el = document.getElementById('grizzlySyncProgress');
-  if (el) el.textContent = text || '';
-}
-
-async function authHeaders() {
-  const headers = {};
-  let token = null;
-  try {
-    // On Safari specifically, a corrupted/malformed stored session can
-    // cause the SDK's internal base64 decode to throw here — not just
-    // return a bad value, but actually throw — with the exact same opaque
-    // "The string did not match the expected pattern" message. Guarding
-    // the token format below isn't enough on its own if retrieval itself
-    // blows up before we ever get to check it, so the whole thing is
-    // wrapped: any failure here just means "proceed without auth" (which
-    // the server safely rejects with a normal error) instead of crashing
-    // whatever feature called authHeaders().
-    const { data } = await sb.auth.getSession();
-    token = data?.session?.access_token || null;
-  } catch (e) {
-    token = null;
-  }
-  // Safari's fetch() also strictly validates header values and throws the
-  // same opaque TypeError on anything it doesn't like — Chrome doesn't
-  // enforce this as strictly, which is why this only shows up on iPhone.
-  // Only attach the token if it actually looks like a real JWT (three
-  // dot-separated segments, no stray whitespace) so a bad value never
-  // reaches fetch() in the first place. Every caller of authHeaders() gets
-  // both protections automatically.
-  if (token && /^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/.test(token.trim())) {
-    headers['Authorization'] = 'Bearer ' + token.trim();
-  }
-  return headers;
-}
-
-async function pollGrizzlySync() {
-  if (grizzlySyncPolling) return; // already looping — don't start a second one
-  grizzlySyncPolling = true;
-  const btn = document.getElementById('btnSyncGrizzly');
-  const idle = '<i class="fas fa-sync"></i> Sync Grizzly';
-  setBtnBusy(btn, true, 'Syncing...');
-  try {
-    const headers = await authHeaders();
-    while (true) {
-      const res = await fetch('/api/grizzly-sync', { headers });
-      const data = await res.json();
-      if (!data.success) {
-        showAdminToast(data.message || 'Grizzly sync failed', 'error');
-        setGrizzlySyncProgress('Sync failed: ' + (data.message || 'unknown error'));
-        break;
-      }
-      if (data.idle) {
-        setGrizzlySyncProgress('');
-        break;
-      }
-      setGrizzlySyncProgress(`Syncing ${data.cursor_index}/${data.total_countries} countries — ${data.new_services} new, ${data.updated_services} updated`);
-      if (data.done) {
-        await loadNumberServices();
-        showAdminToast(`Grizzly synced — ${data.new_services} new, ${data.updated_services} updated`, 'success');
-        setGrizzlySyncProgress('');
-        break;
-      }
-      // Do not reload the full table every chunk (that was a major slowdown).
-      // Tiny pause only so we don't hammer the API between large chunks.
-      await new Promise(r => setTimeout(r, 50));
-    }
-  } catch (e) {
-    showAdminToast('Sync failed: ' + e.message, 'error');
-    setGrizzlySyncProgress('');
-  } finally {
-    grizzlySyncPolling = false;
-    setBtnBusy(btn, false, idle);
-    if (btn) btn.innerHTML = idle;
-  }
-}
-
-async function syncGrizzlyNow() {
-  try {
-    const headers = await authHeaders();
-    const res = await fetch('/api/grizzly-sync?action=start', { headers });
-    const data = await res.json();
-    if (!data.success) {
-      showAdminToast(data.message || 'Could not start Grizzly sync', 'error');
-      return;
-    }
-  } catch (e) {
-    showAdminToast('Sync failed: ' + e.message, 'error');
-    return;
-  }
-  pollGrizzlySync();
-}
-
-// LogsDomain's catalog is expected to be far smaller than Grizzly's, so
-// this sync runs to completion in one request rather than needing the
-// resumable job/polling setup Grizzly's does. If it ever does run out of
-// time budget server-side, it returns partial progress with a message
-// telling you to just click the button again — safe to re-run, each
-// service is upserted by its own ID so nothing gets duplicated.
-async function syncLogsDomainNumbersNow() {
-  const btns = [document.getElementById('btnSyncLogsDomainNumbers'), document.getElementById('btnSyncLogsDomainNumbers2')].filter(Boolean);
-  const progresses = [document.getElementById('logsdomainSyncProgress'), document.getElementById('logsdomainSyncProgress2')].filter(Boolean);
-  const idleLabel = '<i class="fas fa-sync"></i> Sync LogsDomain';
-  btns.forEach(btn => setBtnBusy(btn, true, 'Syncing...'));
-  progresses.forEach(p => p.textContent = 'Pulling countries and services from LogsDomain…');
-  try {
-    const headers = await authHeaders();
-    let done = false;
-    let last = null;
-    let rounds = 0;
-    const MAX_ROUNDS = 40;
-    while (!done && rounds < MAX_ROUNDS) {
-      rounds += 1;
-      progresses.forEach(p => {
-        p.textContent = last
-          ? `Syncing… ${last.countries_seen || 0}/${last.total_countries || '?'} countries (round ${rounds})`
-          : `Pulling countries and services from LogsDomain… (round ${rounds})`;
-      });
-      let res = await fetch('/api/logsdomain-numbers?action=sync', { method: 'POST', headers });
-      let data = await res.json().catch(() => ({}));
-      if (!data.success && (res.status === 405 || res.status === 400)) {
-        res = await fetch('/api/logsdomain-numbers?action=sync', { method: 'GET', headers });
-        data = await res.json().catch(() => ({}));
-      }
-      if (!data.success) {
-        showAdminToast(data.message || 'Could not sync LogsDomain', 'error');
-        progresses.forEach(p => p.textContent = data.message || '');
-        return;
-      }
-      last = data;
-      done = !!data.done;
-      progresses.forEach(p => {
-        p.textContent = done
-          ? `Synced ${data.countries_seen}/${data.total_countries} countries, ${data.services_seen} services (${data.new_services} new, ${data.updated_services} updated).`
-          : `${data.message || 'Partial'} (${data.countries_seen}/${data.total_countries})`;
-      });
-      if (!done) await new Promise(r => setTimeout(r, 400));
-    }
-    if (last && last.errors && last.errors.length) {
-      console.warn('LogsDomain numbers sync partial errors:', last.errors);
-      showAdminToast(last.errors[0], 'info');
-    } else {
-      showAdminToast(done ? 'LogsDomain numbers catalog synced.' : 'Partial sync — click Sync LogsDomain again to continue.', done ? 'success' : 'info');
-    }
-    await Promise.all([loadSmsRowsForCurrentFilter(), loadSmsServer2RowsForCurrentFilter()]);
-  } catch (e) {
-    showAdminToast('Sync failed: ' + e.message, 'error');
-    progresses.forEach(p => p.textContent = '');
-  } finally {
-    btns.forEach(btn => setBtnBusy(btn, false, idleLabel));
-  }
-}
-
-// Called on admin dashboard load — if a sync was already running when the
-// page was refreshed/reopened, pick the progress loop back up instead of
-// requiring the admin to notice and click Sync again.
-async function resumeGrizzlySyncIfRunning() {
-  try {
-    const headers = await authHeaders();
-    const res = await fetch('/api/grizzly-sync?action=status', { headers });
-    const data = await res.json();
-    if (data.success && data.job && data.job.status === 'running') {
-      pollGrizzlySync();
-    }
-  } catch (e) { /* silent — this is a background convenience check */ }
-}
-
-async function loadProfiles() {
-  // profiles table has no created_at column — join dates are fetched
-  // separately from Supabase Auth itself (see loadUserJoinDates), which
-  // always has the real signup date for every account regardless of what
-  // columns exist on profiles.
-  // Select only columns the admin UI actually uses (avoids pulling large unused fields).
-  let data = null, error = null;
-  ({ data, error } = await sb.from('profiles').select(
-    'id, full_name, email, phone, customer_id, is_admin, is_banned, balance, balance_usd, updated_at, avatar_url'
-  ).order('full_name', { ascending: true }));
-  if (error && /column|schema cache|Could not find/i.test(error.message || '')) {
-    // Fallback if a column is missing on this project
-    ({ data, error } = await sb.from('profiles').select('*').order('full_name', { ascending: true }));
-  }
-  if (error) {
-    console.error('Profiles error:', error.message);
-    allProfiles = [];
-  } else {
-    allProfiles = data || [];
-  }
-  loadUserJoinDates(); // fire-and-forget — re-renders once it resolves, doesn't block the rest of the dashboard
-  // Reapply the current search/status filter instead of resetting the view.
-  filterUsers();
-}
-
-async function loadUserJoinDates() {
-  try {
-    const headers = await authHeaders();
-    headers['Content-Type'] = 'application/json';
-    const res = await fetch('/api/admin', {
-      method: 'POST',
-      headers,
-      body: JSON.stringify({ resource: 'user_join_dates' })
-    });
-    const rawText = await res.text();
-    let data;
-    try { data = JSON.parse(rawText); } catch { return; }
-    if (!data.success || !data.join_dates) return;
-
-    allProfiles.forEach(u => {
-      if (data.join_dates[u.id]) u.created_at = data.join_dates[u.id];
-    });
-    filterUsers(); // re-render now that dates are in
-  } catch (e) {
-    console.warn('loadUserJoinDates failed (Joined column will show "—"):', e);
-  }
-}
-
-async function tryLoadOrders() {
-  const { data, error } = await sb.from('orders').select('*').order('created_at', { ascending: false }).limit(200);
-  if (!error && data) {
-    window._cachedOrders = data;
-    document.getElementById('ordersEmpty').classList.add('hidden');
-    document.getElementById('ordersTableWrap').classList.remove('hidden');
-    renderOrders(data);
-  } else {
-    window._cachedOrders = [];
-  }
-}
-
-const SMS_ORDER_STATUS_LABELS = {
-  waiting_for_code: 'Waiting for code',
-  completed: 'Completed',
-  refunded: 'Cancelled & refunded',
-  failed: 'Failed'
-};
-
-async function tryLoadSmsOrders() {
-  // No source filter — same reasoning as mj-sms-history.html: Server 1
-  // (grizzlysms) and Server 2 (logsdomain) both write into number_orders,
-  // and admin needs to see every customer's orders from both.
-  const { data, error } = await sb
-    .from('number_orders')
-    .select('*')
-    .order('created_at', { ascending: false })
-    .limit(300);
-  if (error) {
-    console.error('SMS orders load error:', error.message);
-    window._cachedSmsOrders = [];
-    return;
-  }
-  window._cachedSmsOrders = data || [];
-  filterSmsOrders();
-}
-
-function filterSmsOrders() {
-  const q = (document.getElementById('smsOrdersSearch')?.value || '').trim().toLowerCase();
-  const status = document.getElementById('smsOrdersStatusFilter')?.value || '';
-  const all = window._cachedSmsOrders || [];
-  const filtered = all.filter(o => {
-    if (status && o.status !== status) return false;
-    if (!q) return true;
-    return String(o.customer_id || '').toLowerCase().includes(q)
-      || String(o.service_name || '').toLowerCase().includes(q)
-      || String(o.phone_number || '').toLowerCase().includes(q)
-      || String(o.order_id || '').toLowerCase().includes(q);
-  });
-  renderSmsOrders(filtered);
-}
-
-function renderSmsOrders(orders) {
-  const tbody = document.getElementById('smsOrdersTableBody');
-  const cards = document.getElementById('smsOrdersMobileCards');
-  if (!tbody || !cards) return;
-
-  if (!orders?.length) {
-    tbody.innerHTML = `<tr><td colspan="8" class="empty-state">No SMS orders found.</td></tr>`;
-    cards.innerHTML = `<div class="empty-state">No SMS orders found.</div>`;
-    return;
-  }
-
-  // Reuses the same badge-on/badge-off convention as the rest of the admin
-  // dashboard (green for a good outcome, red for cancelled/failed); waiting
-  // gets its own inline color since neither on/off fits "still pending".
-  const statusBadge = (s) => {
-    if (s === 'completed') return '<span class="badge badge-on">Completed</span>';
-    if (s === 'waiting_for_code') return '<span class="badge" style="background:rgba(251,191,36,.15);color:#fbbf24;">Waiting</span>';
-    return `<span class="badge badge-off">${escapeHtml(SMS_ORDER_STATUS_LABELS[s] || s || '—')}</span>`;
-  };
-
-  tbody.innerHTML = orders.map(o => {
-    const name = (o.service_name || o.service_id || '—').replace(/_/g, ' ');
-    const date = o.created_at ? new Date(o.created_at).toLocaleString() : '—';
-    return `<tr>
-      <td style="font-family:monospace;font-weight:700;">${escapeHtml(o.customer_id || '—')}</td>
-      <td style="text-transform:capitalize;">${escapeHtml(name)}</td>
-      <td>${escapeHtml(o.country_name || '—')}</td>
-      <td style="font-family:monospace;">${escapeHtml(o.phone_number || '—')}</td>
-      <td>₦${Number(o.price || 0).toLocaleString()}</td>
-      <td style="font-family:monospace;">${o.code ? escapeHtml(o.code) : '—'}</td>
-      <td>${statusBadge(o.status)}</td>
-      <td style="white-space:nowrap;font-size:12px;color:#94a3b8;">${escapeHtml(date)}</td>
-    </tr>`;
-  }).join('');
-
-  cards.innerHTML = orders.map(o => {
-    const name = (o.service_name || o.service_id || '—').replace(/_/g, ' ');
-    const date = o.created_at ? new Date(o.created_at).toLocaleString() : '—';
-    return `<div class="product-card">
-      <h4 style="text-transform:capitalize;">${escapeHtml(name)}</h4>
-      <div class="meta" style="font-family:monospace;">Customer: ${escapeHtml(o.customer_id || '—')}</div>
-      <div class="row-line"><span>Country</span><span>${escapeHtml(o.country_name || '—')}</span></div>
-      <div class="row-line"><span>Number</span><span style="font-family:monospace;">${escapeHtml(o.phone_number || '—')}</span></div>
-      <div class="row-line"><span>Price</span><strong class="price">₦${Number(o.price || 0).toLocaleString()}</strong></div>
-      ${o.code ? `<div class="row-line"><span>Code</span><span style="font-family:monospace;">${escapeHtml(o.code)}</span></div>` : ''}
-      <div class="row-line"><span>Status</span>${statusBadge(o.status)}</div>
-      <div class="row-line"><span>Date</span><span>${escapeHtml(date)}</span></div>
-    </div>`;
-  }).join('');
-}
-
-function updateMetrics() {
-  const total = allProfiles.length;
-  let activeCount = 0, inactiveCount = 0;
-  allProfiles.forEach(p => isUserActive(p) ? activeCount++ : inactiveCount++);
-  const set = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
-  set('mTotalUsers', total); set('mActiveUsers', activeCount); set('mInactiveUsers', inactiveCount);
-  set('uTotalCount', total); set('uActiveCount', activeCount); set('uInactiveCount', inactiveCount);
-  const totalBal = allProfiles.reduce((s, p) => s + (Number(p.balance) || 0), 0);
-  set('mTotalBalance', '₦' + totalBal.toLocaleString(undefined, { maximumFractionDigits: 0 }));
-  updateRevenueDisplay();
-}
-
-function updateRevenueDisplay() {
-  const period = document.getElementById('revenuePeriod')?.value || 'month';
-  const labelEl = document.getElementById('revenuePeriodLabel');
-  if (labelEl) labelEl.textContent = revenueLabels[period] || period;
-  let sales = 0;
-  let profit = 0;
-  if (window._cachedOrders?.length) {
-    const ranges = { today:1, '7days':7, month:30, '3months':90, '6months':180, '12months':365 };
-    const cutoff = Date.now() - ((ranges[period] || 30) * 86400000);
-    const periodOrders = window._cachedOrders.filter(o => {
-      const d = o.created_at ? new Date(o.created_at).getTime() : 0;
-      const st = String(o.status || '').toLowerCase();
-      return d >= cutoff && ['completed', 'paid', 'success'].includes(st);
-    });
-    sales = periodOrders.reduce((s, o) => s + Number(o.amount || o.total || 0), 0);
-
-    // Profit = revenue minus supplier cost. Orders don't store the cost at
-    // the time of sale, so this looks up each order's product by code/id/name
-    // in the current product catalog and uses today's supplier_price as the
-    // best available estimate of cost.
-    profit = periodOrders.reduce((s, o) => {
-      const qty = Number(o.quantity) || 1;
-      const revenue = Number(o.amount || o.total || 0);
-      const product = allProducts.find(p =>
-        (o.product_code && p.product_key === o.product_code) ||
-        (o.product_id && p.id === o.product_id) ||
-        (o.product_name && p.name === o.product_name)
-      );
-      const cost = product ? Number(product.supplier_price || 0) * qty : 0;
-      return s + (revenue - cost);
-    }, 0);
-  }
-  const set = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
-  set('mRevenueNgn', '₦' + sales.toLocaleString(undefined, { maximumFractionDigits: 0 }));
-  set('mSalesNgn', '₦' + sales.toLocaleString(undefined, { maximumFractionDigits: 0 }));
-  set('mRevenueUsd', '$' + (sales / liveRate).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' USD');
-  set('mProfitNgn', '₦' + profit.toLocaleString(undefined, { maximumFractionDigits: 0 }));
-  const marginPct = sales > 0 ? (profit / sales * 100) : 0;
-  set('mProfitPct', marginPct.toLocaleString(undefined, { maximumFractionDigits: 1 }) + '% margin');
-
-  loadOverviewStats(period);
-}
-
-/**
- * Logs Sold count + SMS order count/amount spent/profit — computed
- * server-side (accurate for any volume, unlike the client-side calc above
- * which only ever looks at the 200 most-recently-cached log orders).
- */
-async function loadOverviewStats(period) {
-  const set = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
-  try {
-    const headers = { 'Content-Type': 'application/json' };
-    const { data: { session } } = await sb.auth.getSession();
-    if (session?.access_token) headers['Authorization'] = 'Bearer ' + session.access_token;
-
-    const res = await fetch('/api/admin', {
-      method: 'POST',
-      headers,
-      body: JSON.stringify({ resource: 'overview', period })
-    });
-    const data = await res.json();
-    if (!res.ok || !data.success) {
-      console.error('Overview stats failed:', data.message);
-      return;
-    }
-
-    set('mLogsSoldCount', data.logs_sold_count.toLocaleString());
-    set('mSmsOrderCount', data.sms_order_count.toLocaleString());
-    set('mSmsAmountSpent', '₦' + data.sms_amount_spent.toLocaleString());
-    set('mSmsProfit', '₦' + data.sms_profit.toLocaleString());
-    const periodLabelEl = document.getElementById('mSmsOrderPeriodLabel');
-    if (periodLabelEl) periodLabelEl.textContent = (revenueLabels[period] || period) + ' · Completed';
-  } catch (e) {
-    console.error('Overview stats error:', e);
-  }
-}
-
-// Maps the raw `source` column on a product row to a short readable label +
-// a distinct color, so it's a quick visual scan instead of reading text.
-// Add a new entry here whenever a new supplier is wired in.
-const SUPPLIER_BADGES = {
-  fadded:          { label: 'FADDED',      color: '#38bdf8' },
-  logsdomain:      { label: 'LOGS DOMAIN', color: '#a78bfa' },
-  sujandepartment: { label: 'SUJAN DEPT.', color: '#fb923c' },
-  manual:          { label: 'MANUAL',      color: '#94a3b8' }
-};
-
-function supplierBadgeHtml(source) {
-  const key = String(source || '').trim().toLowerCase();
-  const info = SUPPLIER_BADGES[key] || { label: key ? key.toUpperCase() : 'UNKNOWN', color: '#64748b' };
-  return `<span style="display:inline-block;font-size:10px;font-weight:700;letter-spacing:0.03em;padding:2px 7px;border-radius:6px;background:${info.color}22;color:${info.color};white-space:nowrap;">${escapeHtml(info.label)}</span>`;
-}
-
-function renderProducts(list) {
-  const items = list || allProducts;
-  const tbody = document.getElementById('productsTableBody');
-
-  if (!items.length) {
-    tbody.innerHTML = `<tr><td colspan="8" class="empty-state">No products found.</td></tr>`;
-    renderProductCards([]);
-    return;
-  }
-
-  tbody.innerHTML = items.map(p => {
-    const supplier = Number(p.supplier_price || 0);
-    const price = Number(p.price || 0);
-    const profit = price - supplier;
-    const stock = p.stock_quantity != null ? p.stock_quantity : '—';
-    const available = p.is_available !== false;
-    const category = p.category || 'OTHER';
-    const rowId = p.id || p.product_key;
-    return `
-      <tr>
-        <td style="font-weight:700;color:var(--text);">
-          ${escapeHtml(p.name || 'Unnamed')}
-          <div style="margin-top:4px;">${supplierBadgeHtml(p.source)}</div>
-        </td>
-        <td>${escapeHtml(category)}</td>
-        <td class="supplier-price">₦${supplier.toLocaleString()}</td>
-        <td class="price">₦${price.toLocaleString()}</td>
-        <td class="profit">₦${profit.toLocaleString()}</td>
-        <td>${stock}</td>
-        <td><span class="badge ${available ? 'badge-on' : 'badge-off'}">${available ? 'Active' : 'Hidden'}</span></td>
-        <td>
-          <button class="btn btn-ghost btn-sm" onclick="editProduct('${escapeHtml(String(rowId))}')"><i class="fas fa-edit"></i></button>
-          <button class="btn btn-ghost btn-sm" style="color:#f87171;" onclick="deleteProduct('${escapeHtml(String(rowId))}', event)"><i class="fas fa-trash"></i></button>
-        </td>
-      </tr>`;
-  }).join('');
-
-  renderProductCards(items);
-}
-
-function renderProductCards(items) {
-  const wrap = document.getElementById('productsMobileCards');
-  if (!wrap) return;
-  if (!items.length) {
-    wrap.innerHTML = `<div class="empty-state">No products found.</div>`;
-    return;
-  }
-  wrap.innerHTML = items.map(p => {
-    const supplier = Number(p.supplier_price || 0);
-    const price = Number(p.price || 0);
-    const profit = price - supplier;
-    const stock = p.stock_quantity != null ? p.stock_quantity : '—';
-    const available = p.is_available !== false;
-    const rowId = p.id || p.product_key;
-    return `
-      <div class="product-card">
-        <h4>${escapeHtml(p.name || 'Unnamed')} ${supplierBadgeHtml(p.source)}</h4>
-        <div class="meta">${escapeHtml(p.category || 'OTHER')}</div>
-        <div class="row-line"><span>Your Price</span><strong class="price">₦${price.toLocaleString()}</strong></div>
-        <div class="row-line"><span>Supplier</span><span class="supplier-price">₦${supplier.toLocaleString()}</span></div>
-        <div class="row-line"><span>Profit</span><span class="profit">₦${profit.toLocaleString()}</span></div>
-        <div class="row-line"><span>Stock</span><span>${stock}</span></div>
-        <div class="row-line"><span>Status</span><span class="badge ${available ? 'badge-on' : 'badge-off'}">${available ? 'Active' : 'Hidden'}</span></div>
-        <div style="margin-top:10px;display:flex;gap:8px;">
-          <button class="btn btn-ghost btn-sm" onclick="editProduct('${escapeHtml(String(rowId))}')"><i class="fas fa-edit"></i> Edit</button>
-          <button class="btn btn-ghost btn-sm" style="color:#f87171;" onclick="deleteProduct('${escapeHtml(String(rowId))}', event)"><i class="fas fa-trash"></i> Delete</button>
-        </div>
-      </div>`;
-  }).join('');
-}
-
-function filterProducts() {
-  const q = (document.getElementById('productSearch').value || '').toLowerCase().trim();
-  const cat = (document.getElementById('categoryFilter')?.value || '').trim();
-  let filtered = allProducts;
-  if (cat) filtered = filtered.filter(p => String(p.category || '').trim() === cat);
-  if (q) {
-    filtered = filtered.filter(p =>
-      (p.name || '').toLowerCase().includes(q) ||
-      (p.category || '').toLowerCase().includes(q) ||
-      (p.product_key || '').toLowerCase().includes(q) ||
-      (p.description || '').toLowerCase().includes(q)
-    );
-  }
-  // Available products first within each category, so admins see what's
-  // actually live before scrolling past hidden ones. Sorting by category
-  // first keeps same-category products grouped together even though the
-  // table itself has no visual section headers.
-  filtered = [...filtered].sort((a, b) => {
-    const catA = (a.category || 'OTHER').trim();
-    const catB = (b.category || 'OTHER').trim();
-    if (catA !== catB) return catA.localeCompare(catB);
-    const availA = a.is_available !== false;
-    const availB = b.is_available !== false;
-    if (availA !== availB) return availA ? -1 : 1;
-    return (a.name || '').localeCompare(b.name || '');
-  });
-  renderProducts(filtered);
-}
-
-function getKnownCategories() {
-  return [...new Set(allProducts.map(p => (p.category || '').trim()).filter(Boolean))].sort();
-}
-
-function populateProductCategoryDropdown(selected) {
-  const select = document.getElementById('pCategory');
-  if (!select) return;
-  const cats = getKnownCategories();
-  if (selected && !cats.includes(selected)) cats.push(selected);
-  select.innerHTML = cats.map(c => `<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join('')
-    + `<option value="__new__">+ Add new category…</option>`;
-  select.value = selected && cats.includes(selected) ? selected : (cats[0] || '__new__');
-  handleCategorySelectChange();
-}
-
-function handleCategorySelectChange() {
-  const select = document.getElementById('pCategory');
-  const newInput = document.getElementById('pCategoryNew');
-  if (!select || !newInput) return;
-  if (select.value === '__new__') {
-    newInput.classList.remove('hidden');
-    newInput.focus();
-  } else {
-    newInput.classList.add('hidden');
-  }
-}
-
-function openProductModal(product) {
-  document.getElementById('productModalError').textContent = '';
-  document.getElementById('pCategoryNew').value = '';
-  if (product) {
-    document.getElementById('productModalTitle').textContent = 'Edit Product';
-    document.getElementById('editProductId').value = product.id || product.product_key || '';
-    document.getElementById('pName').value = product.name || '';
-    document.getElementById('pProductKey').value = product.product_key || '';
-    document.getElementById('pProductKey').disabled = true; // stays fixed once created (Stage 2)
-    populateProductCategoryDropdown(product.category || '');
-    document.getElementById('pDesc').value = stripHtml(product.display_description || product.description || '');
-    document.getElementById('pSupplierPrice').value = product.supplier_price ?? 0;
-    document.getElementById('pPrice').value = product.price ?? '';
-    document.getElementById('pStock').value = product.stock_quantity ?? '';
-    document.getElementById('pAvailable').value = product.is_available === false ? 'false' : 'true';
-  } else {
-    document.getElementById('productModalTitle').textContent = 'Add Product';
-    document.getElementById('editProductId').value = '';
-    document.getElementById('pName').value = '';
-    document.getElementById('pProductKey').value = '';
-    document.getElementById('pProductKey').disabled = false;
-    populateProductCategoryDropdown('OTHER');
-    document.getElementById('pDesc').value = '';
-    document.getElementById('pSupplierPrice').value = 0;
-    document.getElementById('pPrice').value = '';
-    document.getElementById('pStock').value = '';
-    document.getElementById('pAvailable').value = 'true';
-  }
-  document.getElementById('productModal').classList.remove('hidden');
-}
-function closeProductModal() { document.getElementById('productModal').classList.add('hidden'); }
-function editProduct(id) {
-  const p = allProducts.find(x => String(x.id) === String(id) || String(x.product_key) === String(id));
-  if (p) openProductModal(p);
-}
-
-async function deleteProduct(id, evt) {
-  const p = allProducts.find(x => String(x.id) === String(id) || String(x.product_key) === String(id));
-  if (!p) return;
-
-  const confirmed = confirm(`Delete "${p.name}"? This can't be undone.\n\nIf it has past orders, deletion will be blocked automatically to protect order history — use "Hidden" instead in that case.`);
-  if (!confirmed) return;
-
-  const btn = evt?.currentTarget;
-  setBtnBusy(btn, true, '');
-  try {
-    const headers = { 'Content-Type': 'application/json' };
-    const { data: { session } } = await sb.auth.getSession();
-    if (session?.access_token) headers['Authorization'] = 'Bearer ' + session.access_token;
-
-    const res = await fetch('/api/admin', {
-      method: 'POST',
-      headers,
-      body: JSON.stringify({ resource: 'product', action: 'delete', id: p.id, product_key: p.product_key })
-    });
-    const data = await res.json();
-
-    if (!res.ok || !data.success) {
-      showAdminToast(data.message || 'Delete failed.', 'error');
-      return;
-    }
-
-    await loadProducts();
-    updateMetrics();
-    showAdminToast(`"${p.name}" deleted`, 'success');
-  } catch (e) {
-    showAdminToast('Network error: ' + e.message, 'error');
-  } finally {
-    setBtnBusy(btn, false);
-  }
-}
-
-async function saveProduct() {
-  const id = document.getElementById('editProductId').value;
-  const name = document.getElementById('pName').value.trim();
-  const enteredProductKey = document.getElementById('pProductKey').value.trim();
-  const categorySelectVal = document.getElementById('pCategory').value;
-  const category = (categorySelectVal === '__new__'
-    ? document.getElementById('pCategoryNew').value.trim()
-    : categorySelectVal.trim()) || 'OTHER';
-  const description = stripHtml(document.getElementById('pDesc').value);
-  const price = parseFloat(document.getElementById('pPrice').value);
-  const stock_quantity = parseInt(document.getElementById('pStock').value, 10);
-  const is_available = document.getElementById('pAvailable').value === 'true';
-  const errEl = document.getElementById('productModalError');
-  errEl.textContent = '';
-
-  if (!name) { errEl.textContent = 'Product name is required.'; return; }
-  if (categorySelectVal === '__new__' && !document.getElementById('pCategoryNew').value.trim()) {
-    errEl.textContent = 'Enter a name for the new category.'; return;
-  }
-  if (isNaN(price) || price < 0) { errEl.textContent = 'Enter a valid selling price.'; return; }
-  if (enteredProductKey && /\s/.test(enteredProductKey)) {
-    errEl.textContent = 'Product Key cannot contain spaces — use underscores instead.'; return;
-  }
-
-  const existing = id
-    ? allProducts.find(x => String(x.id) === String(id) || String(x.product_key) === String(id))
-    : null;
-
-  const body = {
-    resource: 'product',
-    action: id ? 'update' : 'insert',
-    id: existing?.id || (id || undefined),
-    product_key: existing?.product_key || enteredProductKey || undefined,
-    name,
-    category,
-    description: description || null,
-    display_description: description || null,
-    price,
-    stock_quantity: isNaN(stock_quantity) ? 0 : stock_quantity,
-    is_available,
-    supplier_price: existing ? Number(existing.supplier_price || 0) : 0
-  };
-
-  const btn = document.getElementById('saveProductBtn');
-  setBtnBusy(btn, true, 'Saving...');
-  try {
-    const headers = { 'Content-Type': 'application/json' };
-    const { data: { session } } = await sb.auth.getSession();
-    if (session?.access_token) {
-      headers['Authorization'] = 'Bearer ' + session.access_token;
-    }
-
-    const res = await fetch('/api/admin', {
-      method: 'POST',
-      headers,
-      body: JSON.stringify(body)
-    });
-    const data = await res.json();
-
-    if (!res.ok || !data.success) {
-      errEl.textContent = (data.message || 'Save failed') + ' — check Vercel env (SUPABASE_SERVICE_ROLE_KEY)';
-      showAdminToast(data.message || 'Product save failed', 'error');
-      return;
-    }
-
-    closeProductModal();
-    await loadProducts();
-    updateMetrics();
-    showAdminToast(id ? 'Product updated successfully' : 'Product added successfully', 'success');
-  } catch (e) {
-    errEl.textContent = 'Network error: ' + e.message;
-    showAdminToast('Network error: ' + e.message, 'error');
-  } finally {
-    setBtnBusy(btn, false);
-  }
-}
-
-function setSyncButtonLoading(btn, loading, idleHtml) {
-  if (!btn) return;
-  if (loading) {
-    btn.disabled = true;
-    btn.dataset.idleHtml = idleHtml || btn.innerHTML;
-    btn.innerHTML = '<i class="fas fa-sync fa-spin"></i> Syncing...';
-    btn.style.opacity = '0.85';
-  } else {
-    btn.disabled = false;
-    btn.innerHTML = btn.dataset.idleHtml || idleHtml || btn.innerHTML;
-    btn.style.opacity = '';
-  }
-}
-
-async function syncProductsNow() {
-  const btn = document.getElementById('btnSyncFadded');
-  const idle = '<i class="fas fa-sync"></i> Sync Fadded';
-  setSyncButtonLoading(btn, true, idle);
-  try {
-    const res = await fetch('/api/products');
-    const data = await res.json();
-    alert(data.success ? `Fadded sync complete\nSynced: ${data.synced}\nNew: ${data.new_products}\nUpdated: ${data.updated_products}` : ('Sync failed: ' + (data.message || 'Unknown error')));
-    await loadProducts();
-  } catch (e) {
-    alert('Sync failed: ' + e.message);
-  } finally {
-    setSyncButtonLoading(btn, false, idle);
-  }
-}
-
-async function syncLogsDomainNow() {
-  const btn = document.getElementById('btnSyncLogsDomain');
-  const idle = '<i class="fas fa-sync"></i> Sync Logs Domain';
-  setSyncButtonLoading(btn, true, idle);
-  try {
-    const res = await fetch('/api/products-logsdomain');
-    const data = await res.json();
-    alert(
-      data.success
-        ? `Logs Domain sync complete\nSynced: ${data.synced}\nNew: ${data.new_products || 0}\nUpdated: ${data.updated_products || 0}`
-        : ('Logs Domain sync failed: ' + (data.message || 'Unknown error'))
-    );
-    await loadProducts();
-  } catch (e) {
-    alert('Logs Domain sync failed: ' + e.message);
-  } finally {
-    setSyncButtonLoading(btn, false, idle);
-  }
-}
-
-async function syncSujanNow() {
-  const btn = document.getElementById('btnSyncSujan');
-  const idle = '<i class="fas fa-sync"></i> Sync Sujan Dept.';
-  setSyncButtonLoading(btn, true, idle);
-  try {
-    const res = await fetch('/api/sujan');
-    const data = await res.json();
-    let msg = data.success
-      ? `Sujan Department sync complete\nSynced: ${data.synced}\nNew: ${data.new_products || 0}\nUpdated: ${data.updated_products || 0}`
-      : ('Sujan Department sync failed: ' + (data.message || 'Unknown error'));
-    if (data.success && data.zero_price_count > 0) {
-      msg += `\n\n⚠️ ${data.zero_price_count} of ${data.synced} products came back with a ₦0 supplier price — check the Vercel logs for "[sujan sync] raw first product" to see the raw response.`;
-    }
-    alert(msg);
-    await loadProducts();
-  } catch (e) {
-    alert('Sujan Department sync failed: ' + e.message);
-  } finally {
-    setSyncButtonLoading(btn, false, idle);
-  }
-}
-
-async function syncAllSuppliersNow() {
-  const btn = document.getElementById('btnSyncAll');
-  const idle = '<i class="fas fa-sync"></i> Sync All';
-  setSyncButtonLoading(btn, true, idle);
-  const fBtn = document.getElementById('btnSyncFadded');
-  const lBtn = document.getElementById('btnSyncLogsDomain');
-  const sBtn = document.getElementById('btnSyncSujan');
-  setSyncButtonLoading(fBtn, true, '<i class="fas fa-sync"></i> Sync Fadded');
-  setSyncButtonLoading(lBtn, true, '<i class="fas fa-sync"></i> Sync Logs Domain');
-  setSyncButtonLoading(sBtn, true, '<i class="fas fa-sync"></i> Sync Sujan Dept.');
-  try {
-    const [fRes, lRes, sRes] = await Promise.all([
-      fetch('/api/products'),
-      fetch('/api/products-logsdomain'),
-      fetch('/api/sujan')
-    ]);
-    const fadded = await fRes.json();
-    const ld = await lRes.json();
-    const sujan = await sRes.json();
-    const lines = [];
-    if (fadded.success) {
-      lines.push(`Fadded: ${fadded.synced} (new ${fadded.new_products || 0}, updated ${fadded.updated_products || 0})`);
-    } else {
-      lines.push('Fadded failed: ' + (fadded.message || 'error'));
-    }
-    if (ld.success) {
-      lines.push(`Logs Domain: ${ld.synced} (new ${ld.new_products || 0}, updated ${ld.updated_products || 0})`);
-    } else {
-      lines.push('Logs Domain failed: ' + (ld.message || 'error'));
-    }
-    if (sujan.success) {
-      lines.push(`Sujan Dept.: ${sujan.synced} (new ${sujan.new_products || 0}, updated ${sujan.updated_products || 0})`);
-      if (sujan.zero_price_count > 0) lines.push(`  ⚠️ ${sujan.zero_price_count} came back at ₦0 — check Vercel logs`);
-    } else {
-      lines.push('Sujan Dept. failed: ' + (sujan.message || 'error'));
-    }
-    alert(lines.join('\n'));
-    await loadProducts();
-  } catch (e) {
-    alert('Sync All failed: ' + e.message);
-  } finally {
-    setSyncButtonLoading(btn, false, idle);
-    setSyncButtonLoading(fBtn, false, '<i class="fas fa-sync"></i> Sync Fadded');
-    setSyncButtonLoading(lBtn, false, '<i class="fas fa-sync"></i> Sync Logs Domain');
-    setSyncButtonLoading(sBtn, false, '<i class="fas fa-sync"></i> Sync Sujan Dept.');
-  }
-}
-
-// -------------------------------------------------------------------------
-// STAGE 6 — RESTOCK MANUAL PRODUCTS (bulk-paste credentials)
-// -------------------------------------------------------------------------
-function isManualProductRow(p) {
-  if (!p) return false;
-  if (p.source && String(p.source).trim().toLowerCase() === 'manual') return true;
-  return String(p.product_key || '').startsWith('manual_');
-}
-
-function openRestockModal() {
-  const select = document.getElementById('rsProductKey');
-  const manualProducts = allProducts.filter(isManualProductRow);
-
-  if (!manualProducts.length) {
-    select.innerHTML = '<option value="">No manual products yet — add one first (Stage 2)</option>';
-  } else {
-    select.innerHTML = manualProducts
-      .map(p => `<option value="${escapeHtml(p.product_key)}">${escapeHtml(p.name)} (${escapeHtml(p.product_key)})</option>`)
-      .join('');
-  }
-
-  document.getElementById('rsPasteBox').value = '';
-  document.getElementById('rsLineCount').textContent = '0 lines';
-  document.getElementById('restockModalError').textContent = '';
-  document.getElementById('restockModalResult').textContent = '';
-  updateRestockCurrentStock();
-  select.onchange = updateRestockCurrentStock;
-  document.getElementById('rsPasteBox').oninput = function () {
-    const n = this.value.split(/\r?\n/).map(l => l.trim()).filter(Boolean).length;
-    document.getElementById('rsLineCount').textContent = n + ' line' + (n === 1 ? '' : 's');
-  };
-
-  document.getElementById('restockModal').classList.remove('hidden');
-}
-
-function updateRestockCurrentStock() {
-  const key = document.getElementById('rsProductKey').value;
-  const p = allProducts.find(x => x.product_key === key);
-  document.getElementById('rsCurrentStock').value = p ? `${p.stock_quantity || 0} available` : '—';
-}
-
-function closeRestockModal() {
-  document.getElementById('restockModal').classList.add('hidden');
-}
-
-async function uploadManualStock() {
-  const errEl = document.getElementById('restockModalError');
-  const resultEl = document.getElementById('restockModalResult');
-  errEl.textContent = '';
-  resultEl.textContent = '';
-
-  const product_key = document.getElementById('rsProductKey').value;
-  const text = document.getElementById('rsPasteBox').value;
-
-  if (!product_key) { errEl.textContent = 'Choose a manual product first.'; return; }
-  if (!text.trim()) { errEl.textContent = 'Paste at least one credential line.'; return; }
-
-  const btn = document.getElementById('rsUploadBtn');
-  const idleHtml = btn.innerHTML;
-  btn.disabled = true;
-  btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Uploading...';
-
-  let step = 'reading session';
-  try {
-    const headers = { 'Content-Type': 'application/json' };
-    let token = null;
-    try {
-      const { data } = await sb.auth.getSession();
-      token = data?.session?.access_token || null;
-    } catch (sessErr) {
-      token = null; // fall through without a token rather than blocking the whole upload
-    }
-    // Safari's fetch() strictly validates header values and throws an opaque
-    // "The string did not match the expected pattern" TypeError on anything
-    // it doesn't like (e.g. mid-refresh session weirdness) — Chrome doesn't
-    // enforce this as strictly, which is why this only shows up on iPhone.
-    // Only attach the token if it actually looks like a real JWT (three
-    // dot-separated segments, no stray whitespace) so a bad value never
-    // reaches fetch() in the first place.
-    if (token && /^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/.test(token.trim())) {
-      headers['Authorization'] = 'Bearer ' + token.trim();
-    }
-
-    step = 'uploading';
-    const res = await fetch('/api/admin', {
-      method: 'POST',
-      headers,
-      body: JSON.stringify({ resource: 'inventory', action: 'bulk_upload', product_key, text })
-    });
-
-    step = 'reading response';
-    const data = await res.json();
-
-    if (!res.ok || !data.success) {
-      errEl.textContent = data.message || 'Upload failed.';
-      return;
-    }
-
-    resultEl.textContent = `Uploaded ${data.data.inserted} new log${data.data.inserted === 1 ? '' : 's'}`
-      + (data.data.skipped_duplicates ? ` (skipped ${data.data.skipped_duplicates} duplicate${data.data.skipped_duplicates === 1 ? '' : 's'})` : '')
-      + `. Stock now: ${data.data.available_stock}.`;
-    document.getElementById('rsPasteBox').value = '';
-    document.getElementById('rsLineCount').textContent = '0 lines';
-    await loadProducts();
-    updateRestockCurrentStock();
-  } catch (e) {
-    errEl.textContent = `Error while ${step}: ` + (e.message || e);
-  } finally {
-    btn.disabled = false;
-    btn.innerHTML = idleHtml;
-  }
-}
-
-function renderUsers(list) {
-  const items = list || allProfiles;
-  const tbody = document.getElementById('usersTableBody');
-  const cards = document.getElementById('usersMobileCards');
-
-  if (!items.length) {
-    tbody.innerHTML = `<tr><td colspan="10" class="empty-state">No customers found.</td></tr>`;
-    if (cards) cards.innerHTML = `<div class="empty-state">No customers found.</div>`;
-    return;
-  }
-
-  tbody.innerHTML = items.map(u => {
-    const ngn = Number(u.balance || 0);
-    const usd = u.balance_usd != null ? Number(u.balance_usd) : (ngn / liveRate);
-    const active = isUserActive(u);
-    const banned = !!u.is_banned;
-    const phone = u.phone_number || u.phone || '—';
-    const joinedDate = u.created_at
-      ? new Date(u.created_at).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })
-      : '—';
-    const statusBadge = banned
-      ? '<span class="badge badge-banned">Banned</span>'
-      : `<span class="badge ${active ? 'badge-on' : 'badge-off'}">${active ? 'Active' : 'Inactive'}</span>`;
-    return `
-      <tr>
-        <td style="font-weight:600;">${escapeHtml(u.full_name || u.username || '—')}</td>
-        <td>${escapeHtml(u.email || '—')}</td>
-        <td>${escapeHtml(phone)}</td>
-        <td>${escapeHtml(u.customer_id || '—')}</td>
-        <td class="price">₦${ngn.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}</td>
-        <td style="color:#38bdf8;font-weight:600;">$${usd.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}</td>
-        <td>${statusBadge}</td>
-        <td>${isAdminValue(u.is_admin) ? '<span class="badge badge-admin">Admin</span>' : 'User'}</td>
-        <td style="white-space:nowrap;color:var(--text-muted);">${escapeHtml(joinedDate)}</td>
-        <td style="white-space:nowrap;">
-          <button class="btn btn-ghost btn-sm" onclick="editUser('${u.id}')" title="Edit"><i class="fas fa-edit"></i></button>
-          <button class="btn btn-ghost btn-sm" onclick="toggleBanUser('${u.id}', event)" title="${banned ? 'Unban' : 'Ban'}"><i class="fas fa-${banned ? 'unlock' : 'ban'}"></i></button>
-          <button class="btn btn-ghost btn-sm" style="color:#f87171;" onclick="deleteUserPermanently('${u.id}', event)" title="Delete"><i class="fas fa-trash"></i></button>
-        </td>
-      </tr>`;
-  }).join('');
-
-  if (cards) {
-    cards.innerHTML = items.map(u => {
-      const ngn = Number(u.balance || 0);
-      const usd = u.balance_usd != null ? Number(u.balance_usd) : (ngn / liveRate);
-      const active = isUserActive(u);
-      const banned = !!u.is_banned;
-      const joinedDate = u.created_at
-        ? new Date(u.created_at).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })
-        : '—';
-      const statusBadge = banned
-        ? '<span class="badge badge-banned">Banned</span>'
-        : `<span class="badge ${active ? 'badge-on' : 'badge-off'}">${active ? 'Active' : 'Inactive'}</span>`;
-      return `
-        <div class="user-card">
-          <h4>${escapeHtml(u.full_name || u.username || '—')}</h4>
-          <div class="meta">${escapeHtml(u.email || '—')}</div>
-          <div class="meta">ID: ${escapeHtml(u.customer_id || '—')}</div>
-          <div class="row-line"><span>NGN</span><strong class="price">₦${ngn.toLocaleString()}</strong></div>
-          <div class="row-line"><span>USD</span><span style="color:#38bdf8;">$${usd.toFixed(2)}</span></div>
-          <div class="row-line"><span>Status</span>${statusBadge}</div>
-          <div class="row-line"><span>Joined</span><span>${escapeHtml(joinedDate)}</span></div>
-          <div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap;">
-            <button class="btn btn-ghost btn-sm" onclick="editUser('${u.id}')"><i class="fas fa-edit"></i> Edit</button>
-            <button class="btn btn-ghost btn-sm" onclick="toggleBanUser('${u.id}', event)"><i class="fas fa-${banned ? 'unlock' : 'ban'}"></i> ${banned ? 'Unban' : 'Ban'}</button>
-            <button class="btn btn-ghost btn-sm" style="color:#f87171;" onclick="deleteUserPermanently('${u.id}', event)"><i class="fas fa-trash"></i> Delete</button>
-          </div>
-        </div>`;
-    }).join('');
-  }
-}
-
-function filterUsers() {
-  const q = (document.getElementById('userSearch').value || '').toLowerCase().trim();
-  const status = document.getElementById('userStatusFilter')?.value || currentUserStatusFilter;
-  let filtered = allProfiles;
-  if (status === 'active') filtered = filtered.filter(u => isUserActive(u) && !u.is_banned);
-  if (status === 'inactive') filtered = filtered.filter(u => !isUserActive(u) && !u.is_banned);
-  if (status === 'banned') filtered = filtered.filter(u => !!u.is_banned);
-  if (q) {
-    filtered = filtered.filter(u =>
-      (u.full_name || '').toLowerCase().includes(q) ||
-      (u.email || '').toLowerCase().includes(q) ||
-      (u.username || '').toLowerCase().includes(q) ||
-      (u.customer_id || '').toLowerCase().includes(q) ||
-      (u.phone_number || u.phone || '').toLowerCase().includes(q)
-    );
-  }
-  renderUsers(filtered);
-}
-
-function filterUsersByStatus(status) {
-  currentUserStatusFilter = status;
-  const sel = document.getElementById('userStatusFilter');
-  if (sel) sel.value = status;
-  const search = document.getElementById('userSearch');
-  if (search) search.value = '';
-  filterUsers();
-}
-
-function lookupByCustomerId() {
-  const cid = (document.getElementById('lookupCustomerId').value || '').trim();
-  const errEl = document.getElementById('lookupError');
-  const resultEl = document.getElementById('lookupResult');
-  errEl.textContent = '';
-  resultEl.classList.add('hidden');
-  if (!cid) { errEl.textContent = 'Enter a Customer ID.'; return; }
-  const u = allProfiles.find(p => String(p.customer_id || '').toLowerCase() === cid.toLowerCase());
-  if (!u) { errEl.textContent = 'No customer found with that Customer ID.'; return; }
-  const ngn = Number(u.balance || 0);
-  const usd = u.balance_usd != null ? Number(u.balance_usd) : (ngn / liveRate);
-  document.getElementById('lookupName').textContent = u.full_name || u.username || '—';
-  document.getElementById('lookupEmail').textContent = u.email || '—';
-  document.getElementById('lookupPhone').textContent = u.phone_number || u.phone || '—';
-  document.getElementById('lookupNgn').textContent = '₦' + ngn.toLocaleString(undefined, { minimumFractionDigits: 2 });
-  document.getElementById('lookupUsd').textContent = '$' + usd.toLocaleString(undefined, { minimumFractionDigits: 2 });
-  document.getElementById('lookupEditBtn').onclick = () => editUser(u.id);
-  resultEl.classList.remove('hidden');
-}
-
-function editUser(id) {
-  const u = allProfiles.find(x => String(x.id) === String(id));
-  if (!u) return;
-  document.getElementById('userModalError').textContent = '';
-  document.getElementById('editUserId').value = u.id;
-  document.getElementById('uName').value = u.full_name || '';
-  document.getElementById('uUsername').value = u.username || '';
-  document.getElementById('uEmail').value = u.email || '';
-  document.getElementById('uPhone').value = u.phone_number || u.phone || '';
-  document.getElementById('uCustomerId').value = u.customer_id || '';
-  document.getElementById('uBalance').value = u.balance ?? 0;
-  document.getElementById('uBalanceUsd').value = u.balance_usd != null ? u.balance_usd : '';
-  document.getElementById('uIsAdmin').value = isAdminValue(u.is_admin) ? 'true' : 'false';
-  document.getElementById('userModal').classList.remove('hidden');
-}
-function closeUserModal() { document.getElementById('userModal').classList.add('hidden'); }
-
-async function saveUser() {
-  const id = document.getElementById('editUserId').value;
-  const full_name = document.getElementById('uName').value.trim();
-  const username = document.getElementById('uUsername').value.trim();
-  const email = document.getElementById('uEmail').value.trim();
-  const phone_number = document.getElementById('uPhone').value.trim();
-  const balance = parseFloat(document.getElementById('uBalance').value);
-  const balance_usd_raw = document.getElementById('uBalanceUsd').value;
-  const balance_usd = balance_usd_raw === '' ? null : parseFloat(balance_usd_raw);
-  const is_admin = document.getElementById('uIsAdmin').value === 'true';
-  const errEl = document.getElementById('userModalError');
-  errEl.textContent = '';
-  if (isNaN(balance)) { errEl.textContent = 'Enter a valid NGN balance.'; return; }
-
-  const btn = document.getElementById('saveUserBtn');
-  setBtnBusy(btn, true, 'Saving...');
-  try {
-    const headers = { 'Content-Type': 'application/json' };
-    const { data: { session } } = await sb.auth.getSession();
-    if (session?.access_token) headers['Authorization'] = 'Bearer ' + session.access_token;
-
-    const res = await fetch('/api/admin', {
-      method: 'POST',
-      headers,
-      body: JSON.stringify({
-        resource: 'user',
-        action: 'update',
-        user_id: id,
-        full_name, username,
-        email: email || null,
-        phone_number: phone_number || null,
-        balance,
-        balance_usd,
-        is_admin
-      })
-    });
-    const data = await res.json();
-
-    if (!res.ok || !data.success) {
-      errEl.textContent = data.message || 'Save failed.';
-      showAdminToast(data.message || 'Save failed', 'error');
-      return;
-    }
-    if (data.warning) {
-      // Balance saved, but the deposit history record failed — this must
-      // be visible to the admin, not just logged quietly like before.
-      alert(data.warning);
-    }
-  } catch (e) {
-    errEl.textContent = 'Network error: ' + e.message;
-    showAdminToast('Network error: ' + e.message, 'error');
-    return;
-  } finally {
-    setBtnBusy(btn, false);
-  }
-
-  closeUserModal();
-  await loadProfiles();
-  updateMetrics();
-  showAdminToast('Customer updated successfully', 'success');
-}
-
-async function getAdminAuthHeaders() {
-  const headers = { 'Content-Type': 'application/json' };
-  const { data: { session } } = await sb.auth.getSession();
-  if (session?.access_token) headers['Authorization'] = 'Bearer ' + session.access_token;
-  return { headers, session };
-}
-
-async function toggleBanUser(id, evt) {
-  const u = allProfiles.find(x => String(x.id) === String(id));
-  if (!u) return;
-
-  const { headers, session } = await getAdminAuthHeaders();
-  if (session?.user?.id === id) {
-    alert('You cannot ban your own account.');
-    return;
-  }
-
-  const banning = !u.is_banned;
-  const label = u.full_name || u.email || 'this user';
-  const confirmMsg = banning
-    ? `Ban ${label}? They'll be signed out and blocked from logging in, and will see a "You have been banned" message.`
-    : `Unban ${label}? They'll be able to sign in again.`;
-  if (!confirm(confirmMsg)) return;
-
-  const btn = evt?.currentTarget;
-  setBtnBusy(btn, true, '');
-  try {
-    const res = await fetch('/api/admin', {
-      method: 'POST',
-      headers,
-      body: JSON.stringify({ resource: 'user', action: 'ban', user_id: id, banned: banning })
-    });
-    const data = await res.json();
-    if (!res.ok || !data.success) {
-      showAdminToast(data.message || 'Action failed.', 'error');
-      return;
-    }
-    if (data.warning) alert(data.warning);
-  } catch (e) {
-    showAdminToast('Network error: ' + e.message, 'error');
-    return;
-  } finally {
-    setBtnBusy(btn, false);
-  }
-
-  await loadProfiles();
-  updateMetrics();
-  showAdminToast(banning ? `${label} has been banned` : `${label} has been unbanned`, 'success');
-}
-
-async function deleteUserPermanently(id, evt) {
-  const u = allProfiles.find(x => String(x.id) === String(id));
-  if (!u) return;
-
-  const { headers, session } = await getAdminAuthHeaders();
-  if (session?.user?.id === id) {
-    alert('You cannot delete your own account.');
-    return;
-  }
-
-  const label = u.full_name || u.email || u.customer_id || 'this user';
-  const typed = prompt(`This permanently deletes ${label}'s account, login, and profile — useful for removing duplicate accounts, but it cannot be undone. Type DELETE to confirm.`);
-  if (typed !== 'DELETE') return;
-
-  const btn = evt?.currentTarget;
-  setBtnBusy(btn, true, '');
-  try {
-    const res = await fetch('/api/admin', {
-      method: 'POST',
-      headers,
-      body: JSON.stringify({ resource: 'user', action: 'delete', user_id: id })
-    });
-    const data = await res.json();
-    if (!res.ok || !data.success) {
-      showAdminToast(data.message || 'Delete failed.', 'error');
-      return;
-    }
-    if (data.warning) alert(data.warning);
-  } catch (e) {
-    showAdminToast('Network error: ' + e.message, 'error');
-    return;
-  } finally {
-    setBtnBusy(btn, false);
-  }
-
-  await loadProfiles();
-  updateMetrics();
-  showAdminToast(`${label}'s account was deleted`, 'success');
-}
-
-function renderOrders(orders) {
-  const tbody = document.getElementById('ordersTableBody');
-  if (!orders?.length) {
-    tbody.innerHTML = `<tr><td colspan="7" class="empty-state">No orders yet.</td></tr>`;
-    return;
-  }
-
-  // Group by calendar day (using created_at; orders with no date fall into
-  // their own "Unknown date" bucket so nothing gets silently dropped).
-  // window._cachedOrders is already sorted newest-first by tryLoadOrders(),
-  // and Map preserves insertion order, so groups come out newest-day-first.
-  const groups = new Map();
-  orders.forEach(o => {
-    const d = o.created_at ? new Date(o.created_at) : null;
-    const key = d && !isNaN(d) ? d.toDateString() : 'Unknown date';
-    if (!groups.has(key)) groups.set(key, []);
-    groups.get(key).push(o);
-  });
-
-  const today = new Date().toDateString();
-  const yesterday = new Date(Date.now() - 86400000).toDateString();
-  const dayLabel = (key) => {
-    if (key === today) return 'Today';
-    if (key === yesterday) return 'Yesterday';
-    if (key === 'Unknown date') return 'Unknown date';
-    return new Date(key).toLocaleDateString(undefined, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
-  };
-
-  let html = '';
-  // Global index (matches the flat "orders" array / window._cachedOrders)
-  // so openOrderModal(i) still points at the right row after grouping.
-  let globalIndex = 0;
-  for (const [key, dayOrders] of groups) {
-    html += `
-      <tr>
-        <td colspan="7" style="background:rgba(59,130,246,.06);border-bottom:1px solid var(--border);padding:10px 12px;font-size:12px;font-weight:800;color:var(--primary);text-transform:uppercase;letter-spacing:.4px;white-space:nowrap;">
-          ${escapeHtml(dayLabel(key))} <span style="color:var(--muted);font-weight:600;text-transform:none;letter-spacing:0;">— ${dayOrders.length} order${dayOrders.length !== 1 ? 's' : ''}</span>
-        </td>
-      </tr>`;
-    dayOrders.forEach(o => {
-      const i = globalIndex++;
-      html += `
-    <tr>
-      <td>${escapeHtml(o.order_id || o.id || '—')}</td>
-      <td>${escapeHtml(o.customer_name || o.customer || o.email || '—')}</td>
-      <td>${escapeHtml(o.product_name || o.item || o.service || '—')}</td>
-      <td class="price">₦${Number(o.amount || o.total || 0).toLocaleString()}</td>
-      <td>${escapeHtml(o.status || '—')}</td>
-      <td>${o.created_at ? new Date(o.created_at).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' }) : '—'}</td>
-      <td><button class="btn btn-ghost btn-sm" onclick="openOrderModal(${i})"><i class="fas fa-eye"></i> View</button></td>
-    </tr>`;
-    });
-  }
-  tbody.innerHTML = html;
-}
-
-function openOrderModal(index) {
-  const o = (window._cachedOrders || [])[index];
-  if (!o) return;
-  const body = document.getElementById('orderModalBody');
-  const row = (label, value, mono) => `
-    <div>
-      <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);margin-bottom:4px;">${escapeHtml(label)}</div>
-      <div style="font-size:14px;${mono ? 'font-family:monospace;white-space:pre-wrap;word-break:break-word;' : ''}background:#07090e;border:1px solid var(--border);border-radius:10px;padding:10px 12px;">${value ? escapeHtml(value) : '<span style=\'color:var(--muted)\'>—</span>'}</div>
-    </div>`;
-  body.innerHTML = [
-    row('Order ID', o.order_id || o.id || ''),
-    row('Product', o.product_name || o.item || ''),
-    row('Amount', '₦' + Number(o.amount || o.total || 0).toLocaleString()),
-    row('Status', o.status || ''),
-    row('Date', o.created_at ? new Date(o.created_at).toLocaleString() : ''),
-    // Description: shown for every order — blank when the product has none.
-    row('Description', o.description || ''),
-    // Login credentials kept here for admin record-keeping purposes.
-    row('Login Credentials', o.login_credentials || '', true)
-  ].join('');
-  document.getElementById('orderModal').classList.remove('hidden');
-}
-function closeOrderModal() { document.getElementById('orderModal').classList.add('hidden'); }
-
-/* NOTIFICATIONS (broadcast to all users) */
-async function sendBroadcastNotification() {
-  const errEl = document.getElementById('notifSendError');
-  errEl.textContent = '';
-
-  const title = document.getElementById('notifTitle').value.trim();
-  const body = document.getElementById('notifBody').value.trim();
-  const type = document.getElementById('notifType').value;
-
-  if (!title) { errEl.textContent = 'Title is required.'; return; }
-
-  const { error } = await sb.from('notifications').insert({
-    user_id: null, // null = broadcast to every user
-    title,
-    body: body || null,
-    type
-  });
-
-  if (error) {
-    errEl.textContent = error.message || 'Failed to send notification.';
-    return;
-  }
-
-  document.getElementById('notifTitle').value = '';
-  document.getElementById('notifBody').value = '';
-  await loadNotificationHistory();
-}
-
-async function loadNotificationHistory() {
-  const list = document.getElementById('notifHistoryList');
-  if (!list) return;
-
-  const { data, error } = await sb
-    .from('notifications')
-    .select('id, title, body, type, created_at')
-    .is('user_id', null)
-    .order('created_at', { ascending: false })
-    .limit(20);
-
-  if (error) {
-    list.innerHTML = `<span style="color:var(--danger,#f87171)">${escapeHtml(error.message)}</span>`;
-    return;
-  }
-  if (!data || !data.length) {
-    list.innerHTML = 'No broadcasts sent yet.';
-    return;
-  }
-
-  list.innerHTML = data.map(n => `
-    <div style="padding:10px 0;border-bottom:1px solid var(--border,#22232b);">
-      <div style="font-weight:700;color:var(--text,#fff);">${escapeHtml(n.title)}</div>
-      ${n.body ? `<div style="margin-top:2px;">${escapeHtml(n.body)}</div>` : ''}
-      <div style="margin-top:4px;font-size:11px;">${new Date(n.created_at).toLocaleString()} · ${escapeHtml(n.type || 'activity')}</div>
-    </div>
-  `).join('');
-}
-
-/* ===========================================================================
-   SMS SERVER 2 (LogsDomain Numbers) — admin-only test console.
-   Talks to /api/logsdomain-numbers, which itself re-checks admin status
-   server-side on every call (this client-side gating is just UX; the real
-   enforcement is in the API).
-=========================================================================== */
-async function ldNumFetch(action, opts = {}) {
-  const headers = await authHeaders();
-  const method = opts.method || 'GET';
-  const qs = opts.query ? '&' + new URLSearchParams(opts.query).toString() : '';
-  const res = await fetch(`/api/logsdomain-numbers?action=${action}${qs}`, {
-    method,
-    headers: method === 'POST' ? { ...headers, 'Content-Type': 'application/json' } : headers,
-    body: opts.body ? JSON.stringify(opts.body) : undefined
-  });
-  const data = await res.json();
-  if (!data.success) throw new Error(data.message || 'Request failed');
-  return data;
-}
-
-async function initLdNumTab() {
-  loadSmsServer2RowsForCurrentFilter();
-}
-
-function switchTab(name) {
-  document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
-  document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
-  document.getElementById('tab-' + name).classList.add('active');
-  document.querySelector(`.nav-item[data-tab="${name}"]`).classList.add('active');
-  document.getElementById('pageTitle').textContent = tabTitles[name] || name;
-  closeSidebar();
-  if (name === 'sms' && !smsTabLoaded) {
-    smsTabLoaded = true;
-    loadNumberServices();
-  }
-  if (name === 'sms-server2' && !ldNumTabLoaded) {
-    ldNumTabLoaded = true;
-    initLdNumTab();
-  }
-}
-function openSidebar() {
-  document.getElementById('sidebar').classList.add('open');
-  document.getElementById('mobileOverlay').classList.add('show');
-}
-function closeSidebar() {
-  document.getElementById('sidebar').classList.remove('open');
-  document.getElementById('mobileOverlay').classList.remove('show');
-}
-// Lets the admin know an action actually went through (or failed) instead
-// of the page just silently updating with no feedback.
-function showAdminToast(message, type) {
-  const stack = document.getElementById('toastStack');
-  if (!stack) return;
-  const el = document.createElement('div');
-  el.className = `toast toast-${type || 'success'}`;
-  const icon = type === 'error' ? 'fa-circle-exclamation' : type === 'info' ? 'fa-circle-info' : 'fa-circle-check';
-  el.innerHTML = `<i class="fas ${icon}"></i><span>${escapeHtml(message)}</span>`;
-  stack.appendChild(el);
-  setTimeout(() => {
-    el.classList.add('leaving');
-    setTimeout(() => el.remove(), 200);
-  }, 3200);
-}
-
-// Disables a button and swaps its label to a spinner while an action is in
-// flight, so admins get immediate visual confirmation their click landed —
-// then restores it afterward.
-function setBtnBusy(btn, busy, busyLabel) {
-  if (!btn) return;
-  if (busy) {
-    btn.dataset.idleHtml = btn.innerHTML;
-    btn.disabled = true;
-    btn.innerHTML = `<i class="fas fa-spinner fa-spin"></i> ${busyLabel || 'Working...'}`;
-  } else {
-    btn.disabled = false;
-    if (btn.dataset.idleHtml) btn.innerHTML = btn.dataset.idleHtml;
-  }
-}
-
-function escapeHtml(str) {
-  if (!str) return '';
-  return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-}
-function stripHtml(html) {
-  if (!html) return '';
-  return String(html).replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
-}
-
-window.addEventListener('DOMContentLoaded', async () => {
-  try {
-    const res = await fetch('https://open.er-api.com/v6/latest/USD');
-    const data = await res.json();
-    if (data?.rates?.NGN) {
-      liveRate = data.rates.NGN;
-      const rateInput = document.getElementById('settingRate');
-      if (rateInput) rateInput.value = Math.round(liveRate);
-    }
-  } catch (e) {}
-  document.getElementById('adminPassword')?.addEventListener('keydown', e => { if (e.key === 'Enter') handleLogin(); });
-  document.getElementById('lookupCustomerId')?.addEventListener('keydown', e => { if (e.key === 'Enter') loo
-
-(function patchBoostersTab(){
-  const _st = window.switchTab;
-  if (typeof _st !== 'function') return;
-  window.switchTab = function(tab) {
-    _st(tab);
-    if (tab === 'boosters') {
-      const t = document.getElementById('pageTitle');
-      if (t) t.textContent = 'MJ Boosters (Owlet)';
-      loadOwletServicesFromDb();
-    }
-  };
-})();
-
-kupByCustomerId(); });
-});
-
-
-// ---------- MJ Boosters (The Owlet) — admin only ----------
-let allOwletServices = [];
-
-async function loadOwletBalance() {
-  const el = document.getElementById('owletBalanceText');
-  if (el) el.textContent = 'Loading…';
-  try {
-    const headers = await authHeaders();
-    const res = await fetch('/api/owlet?action=balance', { headers });
-    const data = await res.json();
-    if (!data.success) {
-      if (el) el.textContent = data.message || 'Error';
-      showAdminToast(data.message || 'Owlet balance failed', 'error');
-      return;
-    }
-    if (el) el.textContent = `${data.currency || 'USD'} ${data.balance}`;
-  } catch (e) {
-    if (el) el.textContent = 'Error';
-    showAdminToast('Owlet balance: ' + e.message, 'error');
-  }
-}
-
-async function syncOwletServices() {
-  const btn = document.getElementById('btnOwletSync');
-  const prog = document.getElementById('owletSyncProgress');
-  setBtnBusy(btn, true, 'Syncing…');
-  if (prog) prog.textContent = 'Pulling services from The Owlet…';
-  try {
-    const headers = await authHeaders();
-    if (!headers.Authorization) {
-      showAdminToast('Not signed in — refresh admin and sign in again', 'error');
-      if (prog) prog.textContent = 'Missing session';
-      return;
-    }
-
-    let done = false;
-    let rounds = 0;
-    const maxRounds = 40; // safety cap
-
-    while (!done && rounds < maxRounds) {
-      rounds += 1;
-      if (prog) prog.textContent = rounds === 1
-        ? 'Syncing Owlet catalog…'
-        : `Continuing sync (round ${rounds})…`;
-
-      const res = await fetch('/api/owlet?action=sync', { method: 'GET', headers });
-      let data = null;
+    function fmtTime(iso) {
+      if (!iso) return '';
       try {
-        data = await res.json();
-      } catch (parseErr) {
-        showAdminToast('Sync failed: bad response (' + res.status + ')', 'error');
-        if (prog) prog.textContent = 'HTTP ' + res.status;
+        return new Date(iso).toLocaleString('en-NG', { timeZone: 'Africa/Lagos', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+      } catch (e) { return iso; }
+    }
+    function escapeHtml(s) {
+      return String(s || '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+    }
+    function initials(name) {
+      const p = String(name || '?').trim().split(/\s+/);
+      return ((p[0] && p[0][0]) || '?') + ((p[1] && p[1][0]) || '');
+    }
+
+    async function evaluateSession(session) {
+      const login = document.getElementById('loginScreen');
+      const shell = document.getElementById('appShell');
+      if (!session) {
+        login.style.display = 'flex';
+        shell.classList.remove('open');
         return;
       }
-
-      if (!res.ok || data.success === false) {
-        const msg = data.message || ('HTTP ' + res.status);
-        showAdminToast(msg, 'error');
-        if (prog) prog.textContent = msg;
+      const { data: profile } = await sb.from('profiles').select('is_admin, email, full_name, customer_id').eq('id', session.user.id).maybeSingle();
+      if (!profile || !isAdminValue(profile.is_admin)) {
+        document.getElementById('loginError').style.display = 'block';
+        document.getElementById('loginError').textContent = 'Not an admin account.';
+        await sb.auth.signOut();
         return;
       }
-
-      done = !!data.done;
-      if (prog) {
-        prog.textContent = data.message || (done ? 'Done' : `Progress ${data.cursor}/${data.total}`);
-      }
-      if (!done) {
-        // brief pause so UI can paint; next chunk continues from cursor
-        await new Promise(r => setTimeout(r, 400));
-      } else {
-        showAdminToast(data.message || 'Owlet services synced', 'success');
+      login.style.display = 'none';
+      shell.classList.add('open');
+      await loadTickets();
+      subscribeRealtime();
+      try { if (window.Notification && Notification.permission === 'default') Notification.requestPermission(); } catch (e) {}
+      if (window.matchMedia('(max-width: 860px)').matches) {
+        document.getElementById('backToList').style.display = 'inline-flex';
       }
     }
 
-    if (!done) {
-      showAdminToast('Sync still running — click Sync again to continue', 'info');
-    }
-    await loadOwletServicesFromDb();
-  } catch (e) {
-    const msg = e.message || String(e);
-    showAdminToast('Sync failed: ' + msg, 'error');
-    if (prog) prog.textContent = msg + ' — check OWLET_API_KEY and booster_services SQL';
-  } finally {
-    setBtnBusy(btn, false, '<i class="fas fa-sync"></i> Sync Services');
-  }
-}
-
-
-let owletPage = 1;
-let owletTotal = 0;
-
-async function loadOwletServicesFromDb() {
-  const tbody = document.getElementById('owletTableBody');
-  const cards = document.getElementById('owletMobileCards');
-  try {
-    const headers = await authHeaders();
-    if (!headers.Authorization) {
-      if (tbody) tbody.innerHTML = '<tr><td colspan="9" class="empty-state">Sign in again to load services.</td></tr>';
-      return;
-    }
-    const q = (document.getElementById('owletSearch')?.value || '').trim();
-    const cat = document.getElementById('owletCategoryFilter')?.value || '';
-    const hide = document.getElementById('owletHideUnavailable')?.checked !== false ? '1' : '0';
-    const params = new URLSearchParams({
-      action: 'list',
-      page: String(owletPage),
-      page_size: '100',
-      hide_unavailable: hide
+    sb.auth.onAuthStateChange((event, session) => {
+      if (event === 'INITIAL_SESSION' || event === 'SIGNED_IN' || event === 'SIGNED_OUT' || event === 'TOKEN_REFRESHED') {
+        evaluateSession(session);
+      }
     });
-    if (q) params.set('q', q);
-    if (cat) params.set('category', cat);
 
-    const res = await fetch('/api/owlet?' + params.toString(), { headers });
-    const data = await res.json();
-    if (!data.success) {
-      const msg = data.message || 'Could not load services';
-      if (tbody) tbody.innerHTML = `<tr><td colspan="9" class="empty-state">${escapeHtml(msg)}</td></tr>`;
-      if (cards) cards.innerHTML = `<div class="empty-state">${escapeHtml(msg)}</div>`;
-      showAdminToast(msg, 'error');
-      return;
+    async function doLogin() {
+      const email = document.getElementById('email').value.trim();
+      const password = document.getElementById('password').value;
+      const err = document.getElementById('loginError');
+      err.style.display = 'none';
+      const { error } = await sb.auth.signInWithPassword({ email, password });
+      if (error) {
+        err.style.display = 'block';
+        err.textContent = error.message || 'Login failed';
+      }
     }
-    allOwletServices = data.data || [];
-    owletTotal = data.total || 0;
-    const cats = data.categories || [];
-    const sel = document.getElementById('owletCategoryFilter');
-    if (sel) {
-      const cur = sel.value;
-      sel.innerHTML = '<option value="">All categories</option>' + cats.map(c => `<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join('');
-      if ([...sel.options].some(o => o.value === cur)) sel.value = cur;
+    async function doLogout() {
+      await sb.auth.signOut();
+      location.reload();
     }
-    renderOwletServices();
-  } catch (e) {
-    if (tbody) tbody.innerHTML = `<tr><td colspan="9" class="empty-state">${escapeHtml(e.message || String(e))}</td></tr>`;
-  }
-}
 
-function renderOwletServices() {
-  const list = allOwletServices || [];
-  const tbody = document.getElementById('owletTableBody');
-  const cards = document.getElementById('owletMobileCards');
-  const maxPage = Math.max(1, Math.ceil((owletTotal || 0) / 100));
-
-  // Ensure pager exists
-  let pager = document.getElementById('owletPager');
-  if (!pager) {
-    const wrap = document.getElementById('owletTableBody')?.closest('.card') || document.getElementById('tab-boosters');
-    if (wrap) {
-      pager = document.createElement('div');
-      pager.id = 'owletPager';
-      pager.style.cssText = 'display:flex;gap:8px;align-items:center;justify-content:center;margin-top:12px;flex-wrap:wrap;';
-      wrap.appendChild(pager);
+    function setFilter(f) {
+      currentFilter = f;
+      document.querySelectorAll('.chip').forEach(c => c.classList.toggle('active', c.getAttribute('data-filter') === f));
+      renderTicketList();
     }
-  }
-  if (pager) {
-    pager.innerHTML = `
-      <button class="btn btn-ghost btn-sm" ${owletPage <= 1 ? 'disabled' : ''} onclick="owletPage=Math.max(1,owletPage-1);loadOwletServicesFromDb()">Prev</button>
-      <span style="font-size:12px;color:var(--muted);">Page ${owletPage} / ${maxPage} · ${owletTotal} services</span>
-      <button class="btn btn-ghost btn-sm" ${owletPage >= maxPage ? 'disabled' : ''} onclick="owletPage=owletPage+1;loadOwletServicesFromDb()">Next</button>`;
-  }
 
-  if (!list.length) {
-    if (tbody) tbody.innerHTML = '<tr><td colspan="9" class="empty-state">No services on this page. Try another page or clear filters.</td></tr>';
-    if (cards) cards.innerHTML = '<div class="empty-state">No services on this page.</div>';
-    return;
-  }
-  if (tbody) {
-    tbody.innerHTML = list.map(s => `
-      <tr>
-        <td>${escapeHtml(String(s.service_id))}</td>
-        <td style="font-weight:600;">${escapeHtml(s.name || '—')}</td>
-        <td>${escapeHtml(s.category || '—')}</td>
-        <td class="supplier-price">$${Number(s.supplier_rate_usd || 0).toFixed(4)}</td>
-        <td class="price">₦${Number(s.price_ngn || 0).toLocaleString()}</td>
-        <td>${s.min_quantity ?? '—'} – ${s.max_quantity ?? '—'}</td>
-        <td>${s.refill ? 'Yes' : 'No'}</td>
-        <td><span class="badge ${s.is_available !== false ? 'badge-on' : 'badge-off'}">${s.is_available !== false ? 'Active' : 'Hidden'}</span></td>
-        <td><button class="btn btn-ghost btn-sm" onclick="editOwletService('${s.id}')" title="Edit sell price"><i class="fas fa-edit"></i></button></td>
-      </tr>`).join('');
-  }
-  if (cards) {
-    cards.innerHTML = list.map(s => `
-      <div class="mobile-card">
-        <div style="font-weight:700;">${escapeHtml(s.name || '—')}</div>
-        <div class="row-line"><span>Category</span><span>${escapeHtml(s.category || '—')}</span></div>
-        <div class="row-line"><span>Supplier</span><span class="supplier-price">$${Number(s.supplier_rate_usd || 0).toFixed(4)}</span></div>
-        <div class="row-line"><span>Sell</span><span class="price">₦${Number(s.price_ngn || 0).toLocaleString()}</span></div>
-        <button class="btn btn-ghost btn-sm" style="margin-top:8px;" onclick="editOwletService('${s.id}')"><i class="fas fa-edit"></i> Edit Price</button>
-      </div>`).join('');
-  }
-}
-
-
-
-
-async function editOwletService(id) {
-  const s = allOwletServices.find(x => String(x.id) === String(id));
-  if (!s) return;
-  const next = prompt(`Selling price (₦) for:\n${s.name}\n\nSupplier: $${Number(s.supplier_rate_usd || 0).toFixed(4)} USD`, String(s.price_ngn ?? ''));
-  if (next === null) return;
-  const price = parseFloat(next);
-  if (isNaN(price) || price < 0) {
-    showAdminToast('Enter a valid price', 'error');
-    return;
-  }
-  const { error } = await sb.from('booster_services').update({
-    price_ngn: price,
-    price_source: 'manual',
-    updated_at: new Date().toISOString()
-  }).eq('id', id);
-  if (error) {
-    // retry without price_source if column missing
-    if (/price_source/i.test(error.message || '')) {
-      const r2 = await sb.from('booster_services').update({ price_ngn: price, updated_at: new Date().toISOString() }).eq('id', id);
-      if (r2.error) {
-        showAdminToast(r2.error.message, 'error');
+    async function loadTickets() {
+      const { data, error } = await sb.from('support_tickets').select('*').order('last_message_at', { ascending: false }).limit(250);
+      if (error) {
+        document.getElementById('ticketList').innerHTML = '<div style="padding:16px;color:var(--danger);font-size:13px;">Could not load tickets. Run support-schema.sql if tables are missing.<br>' + escapeHtml(error.message || '') + '</div>';
         return;
       }
-    } else {
-      showAdminToast(error.message, 'error');
-      return;
+      tickets = data || [];
+      const openN = tickets.filter(t => t.status === 'open').length;
+      const pendN = tickets.filter(t => t.status === 'pending').length;
+      document.getElementById('statOpen').textContent = openN + ' open';
+      document.getElementById('statPending').textContent = pendN + ' pending';
+      document.title = openN > 0 ? '(' + openN + ') Support Desk' : 'MJ HUB — Support Desk';
+      renderTicketList();
     }
-  }
-  s.price_ngn = price;
-  s.price_source = 'manual';
-  renderOwletServices();
-  showAdminToast('Booster price updated', 'success');
-}
 
-
-
-let boosterOrderPage = 1;
-async function loadBoosterOrders() {
-  const tbody = document.getElementById('boosterOrdersBody');
-  const cards = document.getElementById('boosterOrdersCards');
-  const pager = document.getElementById('boosterOrdersPager');
-  try {
-    const headers = await authHeaders();
-    const q = (document.getElementById('boosterOrderSearch')?.value || '').trim();
-    const params = new URLSearchParams({ action: 'admin_orders', page: String(boosterOrderPage), page_size: '50' });
-    if (q) params.set('q', q);
-    const res = await fetch('/api/owlet?' + params.toString(), { headers });
-    const data = await res.json();
-    if (!data.success) {
-      if (tbody) tbody.innerHTML = `<tr><td colspan="8" class="empty-state">${escapeHtml(data.message || 'Failed')}</td></tr>`;
-      if (cards) cards.innerHTML = `<div class="empty-state">${escapeHtml(data.message || 'Failed')}</div>`;
-      return;
+    function renderTicketList() {
+      const list = document.getElementById('ticketList');
+      const q = (document.getElementById('ticketSearch')?.value || '').trim().toLowerCase();
+      let filtered = tickets.filter(t => currentFilter === 'all' ? true : t.status === currentFilter);
+      if (q) {
+        filtered = filtered.filter(t =>
+          String(t.user_name || '').toLowerCase().includes(q) ||
+          String(t.user_email || '').toLowerCase().includes(q) ||
+          String(t.customer_id || '').toLowerCase().includes(q) ||
+          String(t.subject || '').toLowerCase().includes(q)
+        );
+      }
+      if (!filtered.length) {
+        list.innerHTML = '<div style="padding:24px;color:var(--muted);font-size:13px;text-align:center;">No conversations in this view.</div>';
+        return;
+      }
+      list.innerHTML = filtered.map(t => `
+        <div class="ticket-item ${t.id === activeTicketId ? 'active' : ''} ${t.status === 'open' ? 'unread' : ''}" onclick="openTicket('${t.id}')">
+          <div class="row1">
+            <span class="name">${escapeHtml(t.user_name || t.user_email || t.customer_id || 'Customer')}</span>
+            <span class="time">${fmtTime(t.last_message_at)}</span>
+          </div>
+          <div class="row1">
+            <span class="preview">${escapeHtml(t.subject || 'Support request')}${t.customer_id ? ' · ' + escapeHtml(t.customer_id) : ''}</span>
+            <span class="badge ${t.status}">${t.status}</span>
+          </div>
+        </div>
+      `).join('');
     }
-    const rows = data.data || [];
-    if (!rows.length) {
-      if (tbody) tbody.innerHTML = '<tr><td colspan="8" class="empty-state">No booster orders yet.</td></tr>';
-      if (cards) cards.innerHTML = '<div class="empty-state">No booster orders yet.</div>';
-    } else {
-      if (tbody) tbody.innerHTML = rows.map(o => `
-        <tr>
-          <td>${o.created_at ? new Date(o.created_at).toLocaleString() : '—'}</td>
-          <td>${escapeHtml(o.customer_id || (o.user_id || '').slice(0,8) || '—')}</td>
-          <td style="font-weight:600;">${escapeHtml(o.service_name || o.service_id || '—')}</td>
-          <td style="max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${escapeHtml(o.link || '')}">${escapeHtml(o.link || '—')}</td>
-          <td>${Number(o.quantity || 0).toLocaleString()}</td>
-          <td class="price">₦${Number(o.price_ngn || 0).toLocaleString()}</td>
-          <td><span class="badge badge-on">${escapeHtml(o.status || 'Pending')}</span></td>
-          <td>${escapeHtml(o.supplier_order_id || '—')}</td>
-        </tr>`).join('');
-      if (cards) cards.innerHTML = rows.map(o => `
-        <div class="mobile-card">
-          <div style="font-weight:700;">${escapeHtml(o.service_name || 'Boost')}</div>
-          <div class="row-line"><span>Status</span><span>${escapeHtml(o.status || 'Pending')}</span></div>
-          <div class="row-line"><span>Paid</span><span class="price">₦${Number(o.price_ngn || 0).toLocaleString()}</span></div>
-          <div class="row-line"><span>Qty</span><span>${Number(o.quantity || 0).toLocaleString()}</span></div>
-          <div class="row-line"><span>Customer</span><span>${escapeHtml(o.customer_id || '—')}</span></div>
-          <div style="font-size:11px;color:var(--muted);margin-top:6px;word-break:break-all;">${escapeHtml(o.link || '')}</div>
-        </div>`).join('');
-    }
-    const maxPage = Math.max(1, Math.ceil((data.total || 0) / 50));
-    if (pager) pager.innerHTML = `
-      <button class="btn btn-ghost btn-sm" ${boosterOrderPage<=1?'disabled':''} onclick="boosterOrderPage=Math.max(1,boosterOrderPage-1);loadBoosterOrders()">Prev</button>
-      <span>Page ${boosterOrderPage}/${maxPage} · ${data.total||0} orders</span>
-      <button class="btn btn-ghost btn-sm" ${boosterOrderPage>=maxPage?'disabled':''} onclick="boosterOrderPage++;loadBoosterOrders()">Next</button>`;
-  } catch (e) {
-    if (tbody) tbody.innerHTML = `<tr><td colspan="8" class="empty-state">${escapeHtml(e.message || String(e))}</td></tr>`;
-  }
-}
 
-
-(function(){
-  const _st = window.switchTab;
-  if (typeof _st !== 'function') return;
-  window.switchTab = function(tab) {
-    _st(tab);
-    if (tab === 'booster-orders') {
-      const t = document.getElementById('pageTitle');
-      if (t) t.textContent = 'Booster Orders';
-      if (typeof loadBoosterOrders === 'function') loadBoosterOrders();
+    async function openTicket(id) {
+      activeTicketId = id;
+      renderTicketList();
+      const t = tickets.find(x => x.id === id);
+      document.getElementById('threadEmpty').style.display = 'none';
+      const active = document.getElementById('threadActive');
+      active.style.display = 'flex';
+      const name = (t && (t.user_name || t.user_email)) || 'Customer';
+      document.getElementById('threadTitle').textContent = name;
+      document.getElementById('threadAvatar').textContent = initials(name).toUpperCase();
+      document.getElementById('threadMeta').textContent = [
+        t && t.customer_id ? 'ID: ' + t.customer_id : null,
+        t && t.user_email ? t.user_email : null,
+        t ? 'Status: ' + t.status : null
+      ].filter(Boolean).join(' · ');
+      if (window.matchMedia('(max-width: 860px)').matches) {
+        document.getElementById('listPane').classList.add('hide-mobile');
+        document.getElementById('threadPane').classList.remove('hide-mobile');
+      }
+      await loadMessages(id);
     }
-  };
-})();
-</script>
+
+    function showListMobile() {
+      document.getElementById('listPane').classList.remove('hide-mobile');
+      document.getElementById('threadPane').classList.add('hide-mobile');
+    }
+
+    async function loadMessages(ticketId) {
+      const box = document.getElementById('threadMessages');
+      box.innerHTML = '<div style="color:var(--muted);font-size:13px;">Loading…</div>';
+      const { data, error } = await sb.from('support_messages').select('*').eq('ticket_id', ticketId).order('created_at', { ascending: true });
+      if (error) {
+        box.innerHTML = '<div style="color:var(--danger);">' + escapeHtml(error.message) + '</div>';
+        return;
+      }
+      box.innerHTML = (data || []).map(m => {
+        const cls = m.sender_type === 'admin' ? 'admin' : (m.sender_type === 'system' ? 'system' : 'user');
+        const who = m.sender_type === 'admin' ? 'You' : (m.sender_type === 'system' ? 'System' : 'Customer');
+        return `<div class="bubble ${cls}"><div class="who">${who} · ${fmtTime(m.created_at)}</div>${escapeHtml(m.body)}</div>`;
+      }).join('') || '<div style="color:var(--muted);">No messages yet.</div>';
+      box.scrollTop = box.scrollHeight;
+    }
+
+    function insertQuick(text) {
+      const input = document.getElementById('replyInput');
+      if (input) { input.value = text; input.focus(); }
+    }
+
+    async function sendAdminReply(e) {
+      e.preventDefault();
+      if (!activeTicketId) return false;
+      const input = document.getElementById('replyInput');
+      const body = (input.value || '').trim();
+      if (!body) return false;
+      const { data: { user } } = await sb.auth.getUser();
+      const { error } = await sb.from('support_messages').insert({
+        ticket_id: activeTicketId,
+        sender_type: 'admin',
+        sender_id: user && user.id,
+        body
+      });
+      if (error) { alert(error.message || 'Failed to send'); return false; }
+      input.value = '';
+      await loadMessages(activeTicketId);
+      await loadTickets();
+      return false;
+    }
+
+    async function setTicketStatus(status) {
+      if (!activeTicketId) return;
+      const { error } = await sb.from('support_tickets').update({ status, updated_at: new Date().toISOString() }).eq('id', activeTicketId);
+      if (error) { alert(error.message); return; }
+      await loadTickets();
+      const t = tickets.find(x => x.id === activeTicketId);
+      if (t) {
+        document.getElementById('threadMeta').textContent = [
+          t.customer_id ? 'ID: ' + t.customer_id : null,
+          t.user_email || null,
+          'Status: ' + t.status
+        ].filter(Boolean).join(' · ');
+      }
+    }
+
+    function subscribeRealtime() {
+      try {
+        if (ticketsChannel) sb.removeChannel(ticketsChannel);
+        ticketsChannel = sb.channel('admin-support-tickets')
+          .on('postgres_changes', { event: '*', schema: 'public', table: 'support_tickets' }, () => loadTickets())
+          .subscribe();
+        if (messagesChannel) sb.removeChannel(messagesChannel);
+        messagesChannel = sb.channel('admin-support-messages')
+          .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'support_messages' }, (payload) => {
+            if (payload.new && payload.new.ticket_id === activeTicketId) loadMessages(activeTicketId);
+            loadTickets();
+            if (payload.new && payload.new.sender_type === 'user') {
+              document.title = '● New message — Support Desk';
+              try {
+                if (window.Notification && Notification.permission === 'granted') {
+                  new Notification('MJ Hub Support', { body: 'New customer message', tag: 'mj-support' });
+                }
+              } catch (e) {}
+            }
+          })
+          .subscribe();
+      } catch (e) { console.warn('realtime', e); }
+    }
+  </script>
 </body>
 </html>
