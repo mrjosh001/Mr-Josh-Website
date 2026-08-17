@@ -10,7 +10,7 @@
   <style>
     :root {
       --bg: #070b14; --card: #0e1524; --card2: #141c2e; --text: #f1f5f9; --muted: #8b9bb4;
-      --border: rgba(148,163,184,.12); --primary: #5b8af5; --success: #34d399; --danger: #f87171; --warn: #fbbf24;
+      --border: rgba(148,163,184,.12); --primary: #3b82f6; --success: #34d399; --danger: #f87171; --warn: #fbbf24;
     }
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body { font-family: 'Plus Jakarta Sans', system-ui, sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
@@ -20,7 +20,7 @@
     .login-card p { color: var(--muted); font-size: 13px; margin-bottom: 20px; }
     .login-card input { width: 100%; padding: 12px 14px; border-radius: 12px; border: 1px solid var(--border); background: var(--bg); color: var(--text); margin-bottom: 10px; font: inherit; }
     .btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; padding: 11px 16px; border-radius: 12px; border: none; cursor: pointer; font: inherit; font-weight: 600; }
-    .btn-primary { background: linear-gradient(135deg, var(--primary), #7c5cfc); color: #fff; width: 100%; }
+    .btn-primary { background: linear-gradient(135deg, var(--primary), #2563eb); color: #fff; width: 100%; }
     .btn-ghost { background: transparent; border: 1px solid var(--border); color: var(--text); }
     .btn-sm { padding: 8px 12px; font-size: 12px; }
     .error-msg { color: var(--danger); font-size: 13px; margin-top: 10px; display: none; }
@@ -91,7 +91,7 @@
     .thread-head .meta { font-size: 12px; color: var(--muted); margin-top: 3px; }
     .avatar {
       width: 40px; height: 40px; border-radius: 12px;
-      background: linear-gradient(135deg, var(--primary), #7c5cfc);
+      background: linear-gradient(135deg, var(--primary), #2563eb);
       display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 14px; color: #fff;
     }
     .thread-messages {
@@ -105,7 +105,7 @@
       box-shadow: 0 2px 8px rgba(0,0,0,.12);
     }
     .bubble.user { align-self: flex-start; background: var(--card2); border: 1px solid var(--border); border-bottom-left-radius: 4px; }
-    .bubble.admin { align-self: flex-end; background: linear-gradient(135deg, #4f7df0, #6b5cf0); color: #fff; border-bottom-right-radius: 4px; }
+    .bubble.admin { align-self: flex-end; background: linear-gradient(135deg, #3b82f6, #3b82f6); color: #fff; border-bottom-right-radius: 4px; }
     .bubble.system { align-self: center; background: transparent; color: var(--muted); font-size: 12px; max-width: 90%; text-align: center; box-shadow: none; }
     .bubble .who { font-size: 10px; opacity: .75; margin-bottom: 5px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; }
     .composer-wrap { border-top: 1px solid var(--border); background: var(--card); }
@@ -244,7 +244,7 @@
       }
       login.style.display = 'none';
       shell.classList.add('open');
-      await loadTickets();
+      loadTickets().catch(function(e){ console.error('tickets', e); });
       subscribeRealtime();
       try { if (window.Notification && Notification.permission === 'default') Notification.requestPermission(); } catch (e) {}
       if (window.matchMedia('(max-width: 860px)').matches) {
