@@ -957,7 +957,7 @@ async function handleCancel(req, res) {
   if (!/pending|awaiting|waiting/i.test(st)) {
     return res.status(400).json({
       success: false,
-      message: 'This order can no longer be cancelled. Contact support if there is an issue.'
+      message: 'Cancel not available for this order right now.'
     });
   }
 
@@ -988,7 +988,7 @@ async function handleCancel(req, res) {
   if (!ok || !cancelOk) {
     return res.status(status || 502).json({
       success: false,
-      message: errMsg || 'Supplier could not cancel this order. No refund issued.'
+      message: 'Cancel not available for this order right now.'
     });
   }
 
@@ -1008,7 +1008,7 @@ async function handleCancel(req, res) {
     // Supplier still running — do not mark local cancel / do not refund
     return res.status(409).json({
       success: false,
-      message: 'Supplier is still processing this order (' + supplierStatus + '). No refund issued.',
+      message: 'Cancel not available for this order right now.',
       supplier_status: supplierStatus
     });
   }
@@ -1043,8 +1043,8 @@ async function handleCancel(req, res) {
   return res.status(200).json({
     success: true,
     message: refunded
-      ? ('Order cancelled with supplier. ₦' + refunded.toLocaleString() + ' returned to wallet.')
-      : 'Order cancelled with supplier.',
+      ? ('Order cancelled. ₦' + refunded.toLocaleString() + ' returned to your wallet.')
+      : 'Order cancelled.',
     refunded,
     order_id: orderId,
     supplier_status: supplierStatus || 'canceled'
