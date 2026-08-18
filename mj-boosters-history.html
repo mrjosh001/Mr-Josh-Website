@@ -127,11 +127,11 @@ function progressHtml(o){
 
   window.cancelOrder = async function(orderId){
     if(!orderId) return;
-    if(!confirm('Cancel this boost order? Refund only if the supplier confirms the cancel.')) return;
+    if(!confirm('Cancel this order?')) return;
     try{
       const res=await fetch('/api/owlet?action=cancel',{method:'POST',headers:{...headers,'Content-Type':'application/json'},body:JSON.stringify({order:orderId})});
       const j=await res.json();
-      toast(j.message||(j.success?'Cancelled':'Cancel failed'));
+      toast(j.success ? (j.refunded ? 'Order cancelled. Refund added to wallet.' : 'Order cancelled.') : (j.message && !/supplier/i.test(j.message) ? j.message : 'Cancel not available for this order right now.'));
       if(j.success) setTimeout(()=>loadOrders(true),600);
     }catch(e){toast(e.message||'Network error')}
   };
