@@ -162,7 +162,7 @@ async function handleBalance(req, res) {
   if (!ok || json?.error) {
     return res.status(status || 502).json({
       success: false,
-      message: json?.error || json?.message || 'Could not fetch Owlet balance'
+      message: 'Could not load booster balance right now'
     });
   }
   return res.status(200).json({
@@ -178,7 +178,7 @@ async function handleServices(req, res) {
   if (!ok || json?.error || !Array.isArray(json)) {
     return res.status(status || 502).json({
       success: false,
-      message: json?.error || json?.message || 'Could not fetch Owlet services',
+      message: 'Could not load booster services right now',
       raw: json
     });
   }
@@ -237,7 +237,7 @@ async function handleSync(req, res) {
   if (!ok || json?.error || !Array.isArray(json)) {
     return res.status(status || 502).json({
       success: false,
-      message: json?.error || json?.message || 'Could not fetch Owlet services for sync'
+      message: 'Could not sync booster services right now'
     });
   }
 
@@ -607,7 +607,10 @@ async function handleOrder(req, res) {
   if (!ok || json?.error || !json?.order) {
     // refund
     await supabase.from('profiles').update({ balance: originalBalance }).eq('id', user.id);
-    const errMsg = json?.error || json?.message || 'Supplier rejected the order';
+    const rawErr = json?.error || json?.message || '';
+    const errMsg = /supplier|owlet|panel/i.test(String(rawErr))
+      ? 'This order could not be placed right now. Your balance was restored.'
+      : (rawErr || 'This order could not be placed right now. Your balance was restored.');
     try {
       await supabase.from('transactions').insert({
         user_id: user.id,
@@ -729,7 +732,7 @@ async function handleOrder(req, res) {
   if (saveErrMsg) {
     return res.status(200).json({
       success: true,
-      message: 'Boost sent to supplier, but history save failed — run booster_orders SQL in Supabase',
+      message: 'Boost order placed. History may take a moment to appear.',
       warning: saveErrMsg,
       order: { supplier_order_id: supplierOrderId, service_name: service.name, quantity, price_ngn: totalNgn, status: 'Pending', link },
       supplier_order_id: supplierOrderId,
@@ -776,8 +779,8 @@ async function refundIfSupplierFailed(order, oldStatus, newStatus) {
       customer_id: order.customer_id || null,
       type: 'booster',
       category: 'booster',
-      title: 'Booster auto-refund (supplier failed)',
-      subtitle: `Order #${order.supplier_order_id} — ${newStatus}`,
+      title: 'Booster order refund',
+      subtitle: `Order #${order.supplier_order_id} cancelled — balance restored`,
       amount: refunded,
       amount_ngn: refunded,
       status: 'completed',
@@ -973,16 +976,16 @@ async function handleCancel(req, res) {
       if (hit.cancel === 1 || hit.cancel === '1' || hit.cancel === true) cancelOk = true;
       else if (hit.cancel && typeof hit.cancel === 'object' && hit.cancel.error) errMsg = String(hit.cancel.error);
       else if (hit.error) errMsg = String(hit.error);
-      else errMsg = 'Supplier did not confirm cancel';
+      else errMsg = 'Cancel not available for this order right now';
     } else {
-      errMsg = 'Supplier did not return this order';
+      errMsg = 'Cancel not available for this order right now';
     }
   } else if (json && (json.cancel === 1 || json.cancel === '1' || json.cancel === true)) {
     cancelOk = true;
   } else if (json?.error || json?.message) {
     errMsg = json.error || json.message;
   } else {
-    errMsg = 'Supplier did not confirm cancel';
+    errMsg = 'Cancel not available for this order right now';
   }
 
   if (!ok || !cancelOk) {
@@ -1031,7 +1034,7 @@ async function handleCancel(req, res) {
         type: 'booster',
         category: 'booster',
         title: 'Booster cancel refund',
-        subtitle: 'Order #' + orderId + ' (supplier confirmed)',
+        subtitle: 'Order #' + orderId + ' — cancelled, balance restored',
         amount: refunded,
         amount_ngn: refunded,
         status: 'Success',
