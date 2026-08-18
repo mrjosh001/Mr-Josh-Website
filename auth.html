@@ -688,9 +688,26 @@
             if (urlParams.get('verified') === '1') {
                 switchTab('signin');
                 showSuccess('✅ Your email has been verified! Please sign in below.');
-                // Clean the query param off the visible URL without reloading.
                 window.history.replaceState({}, document.title, window.location.pathname);
             }
+
+            // Supabase email confirm often returns with tokens in the hash.
+            // If a session is established, send the user into the app.
+            (async function handleEmailConfirmSession() {
+              try {
+                if (!supabaseClient) return;
+                const hasAuthHash = /access_token=|refresh_token=|type=signup|type=email/i.test(window.location.hash || '');
+                if (!hasAuthHash && urlParams.get('verified') !== '1') return;
+                const { data: { session } } = await supabaseClient.auth.getSession();
+                if (session && session.user) {
+                  try { sessionStorage.setItem('mjhub-fresh-login', '1'); } catch (e) {}
+                  showSuccess('✅ Email confirmed. Taking you to your dashboard…');
+                  setTimeout(function () {
+                    window.location.href = 'index.html';
+                  }, 900);
+                }
+              } catch (e) { console.warn('confirm session', e); }
+            })();
 
             if (urlParams.get('banned') === '1') {
                 switchTab('signin');
@@ -1046,7 +1063,7 @@
                         // Where Supabase sends the user after they click the
                         // confirm-email link — back to the sign-in page here,
                         // with ?verified=1 so auth.html can greet them.
-                        emailRedirectTo: window.location.origin + window.location.pathname + '?verified=1'
+                        emailRedirectTo: window.location.origin + '/auth.html?verified=1'
                     }
                 }));
             } catch (e) {
@@ -1101,7 +1118,7 @@
             setAuthButtonLoading(btn, true, 'Sending…');
 
             const { data, error } = await supabaseClient.auth.resetPasswordForEmail(email, {
-                redirectTo: window.location.origin + window.location.pathname
+                redirectTo: window.location.origin + '/auth.html?type=recovery'
             });
 
             if (error) {

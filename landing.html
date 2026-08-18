@@ -1,6 +1,19 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
+<script>
+/* Email confirm / auth callback: never leave users on marketing home */
+(function () {
+  try {
+    var q = window.location.search || '';
+    var h = window.location.hash || '';
+    if (/access_token=|refresh_token=|type=signup|type=recovery|type=email|verified=1/i.test(q + h)) {
+      window.location.replace('/auth.html' + q + h);
+    }
+  } catch (e) {}
+})();
+</script>
+
   <meta charset="UTF-8" />
   <meta http-equiv="refresh" content="0;url=/" />
   <link rel="canonical" href="/" />
