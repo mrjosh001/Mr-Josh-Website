@@ -810,30 +810,65 @@ async function handleMyOrders(req, res) {
     });
   }
 
-  // Refresh a few pending statuses
-  const pending = (data || []).filter(o => /pending|progress|processing|in progress/i.test(String(o.status || ''))).slice(0, 5);
-  for (const o of pending) {
+  // Live refresh from Owlet for active orders (Pending / In progress / Processing)
+  const active = (data || []).filter((o) => {
+    const s = String(o.status || '').toLowerCase();
+    return /pending|progress|processing|awaiting|waiting|partial/i.test(s)
+      && !/completed|canceled|cancelled|refunded|failed/i.test(s);
+  }).slice(0, 15);
+
+  for (const o of active) {
     if (!o.supplier_order_id) continue;
     try {
       const st = await owletCall({ action: 'status', order: String(o.supplier_order_id) });
-      if (st.ok && st.json && !st.json.error) {
-        const oldStatus = o.status;
-        o.status = st.json.status || o.status;
-        o.start_count = st.json.start_count ?? o.start_count;
-        o.remains = st.json.remains ?? o.remains;
-        const refunded = await refundIfSupplierFailed(o, oldStatus, o.status);
-        await supabase.from('booster_orders').update({
-          status: o.status,
-          start_count: o.start_count,
-          remains: o.remains,
-          updated_at: new Date().toISOString()
-        }).eq('id', o.id);
-        if (refunded) o.auto_refunded = refunded;
+      if (!st.ok || !st.json || st.json.error) continue;
+
+      const j = st.json;
+      const oldStatus = o.status;
+      o.status = j.status || o.status;
+
+      // Normalize numbers (Owlet often returns strings)
+      if (j.start_count != null && j.start_count !== '') {
+        const n = Number(j.start_count);
+        if (!Number.isNaN(n)) o.start_count = n;
       }
+      if (j.remains != null && j.remains !== '') {
+        const n = Number(j.remains);
+        if (!Number.isNaN(n)) o.remains = n;
+      }
+      if (j.charge != null && j.charge !== '') o.charge = j.charge;
+      if (j.currency) o.currency = j.currency;
+
+      // Derived delivered for client convenience
+      const qty = Number(o.quantity) || 0;
+      if (o.remains != null && qty > 0) {
+        o.delivered = Math.max(0, Math.min(qty, qty - Number(o.remains)));
+      } else if (/completed/i.test(String(o.status || ''))) {
+        o.delivered = qty;
+        o.remains = 0;
+      }
+
+      const refunded = await refundIfSupplierFailed(o, oldStatus, o.status);
+      await supabase.from('booster_orders').update({
+        status: o.status,
+        start_count: o.start_count,
+        remains: o.remains,
+        updated_at: new Date().toISOString()
+      }).eq('id', o.id);
+      if (refunded) o.auto_refunded = refunded;
+      o.live = true;
+      o.synced_at = new Date().toISOString();
     } catch (_) {}
   }
 
-  return res.status(200).json({ success: true, data: data || [], page, page_size: pageSize, total: count || 0 });
+  return res.status(200).json({
+    success: true,
+    data: data || [],
+    page,
+    page_size: pageSize,
+    total: count || 0,
+    live_refreshed: active.length
+  });
 }
 
 async function handleAdminOrders(req, res) {
