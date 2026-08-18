@@ -94,7 +94,7 @@ function progressHtml(o){
   const leftLabel = remains != null ? (remains.toLocaleString() + ' left') : (pct != null ? pct + '%' : '…');
   const doneLabel = done != null
     ? (done.toLocaleString() + ' of ' + qty.toLocaleString() + ' done')
-    : 'Waiting for supplier…';
+    : 'Waiting for update…';
   const startLabel = start != null ? (' · start count ' + start.toLocaleString()) : '';
   const barW = pct != null ? pct : 0;
   const live = o.live ? ' · live' : '';
@@ -149,7 +149,7 @@ function progressHtml(o){
 
   function renderRows(rows){
     if(!rows.length){
-      el.innerHTML=`<div class="empty"><div style="font-size:40px;margin-bottom:8px">⚡</div><h3>No boost orders yet</h3><p>Your growth orders will show here with live progress from the supplier.</p><a href="mj-boosters.html">Place first boost</a></div>`;
+      el.innerHTML=`<div class="empty"><div style="font-size:40px;margin-bottom:8px">⚡</div><h3>No boost orders yet</h3><p>Your growth orders will show here with live progress.</p><a href="mj-boosters.html">Place first boost</a></div>`;
       return;
     }
     el.innerHTML=rows.map(o=>{
@@ -185,7 +185,7 @@ function progressHtml(o){
       renderRows(rows);
       const hasActive=rows.some(isActive);
       if(pollTimer){ clearInterval(pollTimer); pollTimer=null; }
-      // Poll supplier every 20s while any order is still active
+      // Poll every 20s while any order is still active
       if(hasActive){
         pollTimer=setInterval(()=>loadOrders(true), 20000);
       }
