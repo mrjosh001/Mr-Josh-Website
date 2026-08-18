@@ -905,7 +905,6 @@ async function handleCancel(req, res) {
     return res.status(400).json({ success: false, message: 'order is required' });
   }
 
-  // Must own the order (unless admin — admin path uses requireAdmin elsewhere)
   const { data: row } = await supabase
     .from('booster_orders')
     .select('*')
@@ -918,45 +917,74 @@ async function handleCancel(req, res) {
   }
 
   const st = String(row.status || '').toLowerCase();
-  if (/completed|canceled|cancelled|refunded|partial/i.test(st) && !/pending|in progress|processing|awaiting/i.test(st)) {
-    // Allow cancel attempt for pending/progress; block clear completed
-    if (/completed|canceled|cancelled|refunded/i.test(st)) {
-      return res.status(400).json({ success: false, message: 'This order can no longer be cancelled' });
-    }
+  // Only allow cancel while truly pending. Once supplier has started, cancel
+  // often fails on Owlet while we still refunded locally — that loses money.
+  if (!/pending|awaiting|waiting/i.test(st)) {
+    return res.status(400).json({
+      success: false,
+      message: 'This order can no longer be cancelled. Contact support if there is an issue.'
+    });
   }
 
+  // Ask supplier to cancel first. Never refund until supplier confirms.
   const { ok, status, json } = await owletCall({ action: 'cancel', orders: orderId });
-  // Owlet returns array: [{ order, cancel: 1 }] or cancel: { error }
+
+  // PerfectPanel-style: [{ order: "123", cancel: 1 }] success; cancel: 0 or { error } = fail
   let cancelOk = false;
   let errMsg = null;
   if (Array.isArray(json)) {
-    const hit = json.find(x => String(x.order) === orderId) || json[0];
-    if (hit && hit.cancel != null && typeof hit.cancel !== 'object') cancelOk = true;
-    else if (hit?.cancel?.error) errMsg = hit.cancel.error;
-  } else if (json && !json.error) {
+    const hit = json.find((x) => String(x.order) === String(orderId)) || json[0];
+    if (hit) {
+      if (hit.cancel === 1 || hit.cancel === '1' || hit.cancel === true) cancelOk = true;
+      else if (hit.cancel && typeof hit.cancel === 'object' && hit.cancel.error) errMsg = String(hit.cancel.error);
+      else if (hit.error) errMsg = String(hit.error);
+      else errMsg = 'Supplier did not confirm cancel';
+    } else {
+      errMsg = 'Supplier did not return this order';
+    }
+  } else if (json && (json.cancel === 1 || json.cancel === '1' || json.cancel === true)) {
     cancelOk = true;
+  } else if (json?.error || json?.message) {
+    errMsg = json.error || json.message;
   } else {
-    errMsg = json?.error || json?.message || 'Cancel failed';
+    errMsg = 'Supplier did not confirm cancel';
   }
 
   if (!ok || !cancelOk) {
     return res.status(status || 502).json({
       success: false,
-      message: errMsg || 'Supplier could not cancel this order'
+      message: errMsg || 'Supplier could not cancel this order. No refund issued.'
     });
   }
 
-  // Best-effort: mark cancelled. Refund only if still pending (not started) —
-  // supplier cancel does not always return money; we refund wallet only when
-  // status was still Pending before cancel to avoid double-loss edge cases.
-  const wasPending = /pending|awaiting|waiting/i.test(String(row.status || ''));
+  // Double-check status on supplier so we never refund a still-running order
+  let supplierStatus = '';
+  try {
+    const stRes = await owletCall({ action: 'status', order: orderId });
+    if (stRes.ok && stRes.json) {
+      supplierStatus = String(stRes.json.status || stRes.json.order_status || '').toLowerCase();
+    }
+  } catch (_) {}
+
+  const supplierStopped = !supplierStatus
+    || /cancel|refund|fail|error|stop/i.test(supplierStatus);
+
+  if (supplierStatus && !supplierStopped) {
+    // Supplier still running — do not mark local cancel / do not refund
+    return res.status(409).json({
+      success: false,
+      message: 'Supplier is still processing this order (' + supplierStatus + '). No refund issued.',
+      supplier_status: supplierStatus
+    });
+  }
+
   await supabase.from('booster_orders').update({
     status: 'Canceled',
     updated_at: new Date().toISOString()
   }).eq('id', row.id);
 
   let refunded = 0;
-  if (wasPending && Number(row.price_ngn) > 0) {
+  if (Number(row.price_ngn) > 0) {
     const { data: prof } = await supabase.from('profiles').select('balance').eq('id', userGate.user.id).maybeSingle();
     const bal = Number(prof?.balance) || 0;
     refunded = Number(row.price_ngn) || 0;
@@ -968,10 +996,10 @@ async function handleCancel(req, res) {
         type: 'booster',
         category: 'booster',
         title: 'Booster cancel refund',
-        subtitle: `Order #${orderId}`,
+        subtitle: 'Order #' + orderId + ' (supplier confirmed)',
         amount: refunded,
         amount_ngn: refunded,
-        status: 'completed',
+        status: 'Success',
         created_at: new Date().toISOString()
       });
     } catch (_) {}
@@ -980,10 +1008,11 @@ async function handleCancel(req, res) {
   return res.status(200).json({
     success: true,
     message: refunded
-      ? `Order cancelled. ₦${refunded.toLocaleString()} returned to wallet.`
-      : 'Cancel requested with supplier. Status updated.',
+      ? ('Order cancelled with supplier. ₦' + refunded.toLocaleString() + ' returned to wallet.')
+      : 'Order cancelled with supplier.',
     refunded,
-    order_id: orderId
+    order_id: orderId,
+    supplier_status: supplierStatus || 'canceled'
   });
 }
 
