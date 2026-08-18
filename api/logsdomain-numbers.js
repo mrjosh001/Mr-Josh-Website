@@ -427,6 +427,84 @@ async function handleOrder(req, res, userId) {
 // CHECK — poll for the SMS code
 // ===========================================================================
 
+/**
+ * Claim Server-2 order for refund once, then credit wallet.
+ * Stops double-credit when Check poll and Cancel race.
+ */
+async function claimAndRefundLogsDomainOrder(order, userId, opts = {}) {
+  if (!order || !order.id) {
+    return { refunded: false, reason: 'missing_order' };
+  }
+  if (order.refunded || order.status === 'refunded' || order.status === 'completed') {
+    return { refunded: false, reason: 'already_final' };
+  }
+
+  const subtitle = opts.subtitle || 'No SMS — balance restored';
+
+  const { data: claimed, error: claimErr } = await supabase
+    .from('number_orders')
+    .update({
+      status: 'refunded',
+      refunded: true,
+      updated_at: new Date().toISOString()
+    })
+    .eq('id', order.id)
+    .or('refunded.eq.false,refunded.is.null')
+    .neq('status', 'completed')
+    .select('id, price')
+    .maybeSingle();
+
+  if (claimErr) {
+    console.error('[logsdomain claimAndRefund] claim failed', claimErr);
+    return { refunded: false, reason: 'claim_error', error: claimErr.message };
+  }
+  if (!claimed) {
+    return { refunded: false, reason: 'already_final' };
+  }
+
+  const refundAmount = Number(order.price != null ? order.price : claimed.price) || 0;
+  let newBalance = null;
+
+  if (refundAmount > 0) {
+    const { data: profile, error: profErr } = await supabase
+      .from('profiles')
+      .select('balance')
+      .eq('id', userId)
+      .single();
+    if (profErr) {
+      console.error('[logsdomain claimAndRefund] profile read failed', profErr);
+    } else if (profile) {
+      newBalance = Number(profile.balance || 0) + refundAmount;
+      const { error: balErr } = await supabase
+        .from('profiles')
+        .update({ balance: newBalance })
+        .eq('id', userId);
+      if (balErr) {
+        console.error('[logsdomain claimAndRefund] balance credit failed', balErr);
+      }
+    }
+  }
+
+  try {
+    await supabase
+      .from('transactions')
+      .update({ status: 'cancelled', subtitle })
+      .eq('user_id', userId)
+      .eq('category', 'MJ SMS - Server 2 (LogsDomain)')
+      .eq('type', 'purchase')
+      .in('status', ['pending', 'completed', 'success'])
+      .eq('amount_ngn', refundAmount);
+  } catch (e) {
+    console.warn('[logsdomain claimAndRefund] tx update', e.message || e);
+  }
+
+  return {
+    refunded: true,
+    refunded_amount: refundAmount,
+    new_balance: newBalance
+  };
+}
+
 async function handleCheck(req, res, userId) {
   const body = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : (req.body || {});
   const orderId = body.order_id;
@@ -459,38 +537,25 @@ async function handleCheck(req, res, userId) {
     updated_at: new Date().toISOString()
   };
 
-  // Supplier ended the order without a code (expired / cancelled) → refund
-  // the customer. Previously only explicit Cancel did this, so many Server 2
-  // orders "ended" with no balance restore.
+  // Supplier ended the order without a code (expired / cancelled) → refund once
   const endedNoCode = ['cancelled', 'canceled', 'expired', 'refunded', 'failed'].includes(remoteStatus)
     && !d.code
     && !order.refunded
     && order.status !== 'completed';
 
   if (endedNoCode) {
-    const refundAmount = Number(order.price || 0);
-    if (refundAmount > 0) {
-      const { data: profile } = await supabase.from('profiles').select('balance').eq('id', userId).single();
-      if (profile) {
-        const restored = Number(profile.balance || 0) + refundAmount;
-        const { error: balErr } = await supabase.from('profiles').update({ balance: restored }).eq('id', userId);
-        if (balErr) console.error('[logsdomain-numbers check] refund balance failed', balErr);
-        updates.new_balance = restored;
-      }
-    }
-    updates.status = 'refunded';
-    updates.refunded = true;
-    await supabase.from('number_orders').update(updates).eq('id', order.id);
-    await supabase
-      .from('transactions')
-      .update({ status: 'cancelled', subtitle: 'No SMS — balance restored' })
-      .eq('user_id', userId)
-      .eq('category', 'MJ SMS - Server 2 (LogsDomain)')
-      .eq('amount_ngn', Number(order.price || 0))
-      .eq('status', 'pending');
+    const refundResult = await claimAndRefundLogsDomainOrder(order, userId, {
+      subtitle: 'No SMS — balance restored'
+    });
     return res.status(200).json({
       success: true,
-      data: { ...order, ...updates, refunded: true, refunded_amount: Number(order.price || 0) }
+      data: {
+        ...order,
+        status: 'refunded',
+        refunded: true,
+        refunded_amount: refundResult.refunded_amount || Number(order.price || 0),
+        new_balance: refundResult.new_balance
+      }
     });
   }
 
@@ -558,39 +623,33 @@ async function handleCancel(req, res, userId) {
     });
   }
 
-  const refundAmount = Number(order.price || 0);
-  let newBalance = null;
-  if (refundAmount > 0) {
-    const { data: profile, error: profErr } = await supabase.from('profiles').select('balance').eq('id', userId).single();
-    if (profErr || !profile) {
-      console.error('[logsdomain-numbers cancel] profile read failed', profErr);
-      return res.status(500).json({ success: false, message: 'Could not refund — profile not found. Contact support with your order ID.' });
-    }
-    newBalance = Number(profile.balance || 0) + refundAmount;
-    const { error: balErr } = await supabase.from('profiles').update({ balance: newBalance }).eq('id', userId);
-    if (balErr) {
-      console.error('[logsdomain-numbers cancel] balance update failed', balErr);
-      return res.status(500).json({ success: false, message: 'Could not restore balance. Contact support with your order ID.' });
-    }
+  // Claim once then credit — blocks Check/Cancel double refund
+  const refundResult = await claimAndRefundLogsDomainOrder(order, userId, {
+    subtitle: 'No SMS — balance restored'
+  });
+
+  if (!refundResult.refunded && refundResult.reason === 'already_final') {
+    return res.status(200).json({
+      success: true,
+      message: 'Already refunded',
+      data: { refunded_amount: 0, new_balance: null, already_refunded: true }
+    });
   }
 
-  await supabase
-    .from('number_orders')
-    .update({ status: 'refunded', refunded: true, updated_at: new Date().toISOString() })
-    .eq('id', order.id);
-
-  await supabase
-    .from('transactions')
-    .update({ status: 'cancelled', subtitle: 'No SMS — balance restored' })
-    .eq('user_id', userId)
-    .eq('category', 'MJ SMS - Server 2 (LogsDomain)')
-    .eq('amount_ngn', refundAmount)
-    .eq('status', 'pending');
+  if (!refundResult.refunded && refundResult.reason === 'claim_error') {
+    return res.status(500).json({
+      success: false,
+      message: 'Could not restore balance. Contact support with your order ID.'
+    });
+  }
 
   return res.status(200).json({
     success: true,
     message: 'Order cancelled and refunded',
-    data: { refunded_amount: refundAmount, new_balance: newBalance }
+    data: {
+      refunded_amount: refundResult.refunded_amount || Number(order.price || 0),
+      new_balance: refundResult.new_balance
+    }
   });
 }
 

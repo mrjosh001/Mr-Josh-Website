@@ -780,54 +780,100 @@ async function handleOrder(req, res) {
 
 const EXPIRY_MS = 20 * 60 * 1000;
 
-async function refundOrderSilently(order, userId) {
-  if (!order || order.refunded || order.status === 'refunded' || order.status === 'completed') {
+/**
+ * Claim order for refund once, then credit wallet.
+ * Prevents double-credit when Check + Cancel (or two polls) race.
+ * Only the first caller that flips refunded=false→true may add balance.
+ */
+async function claimAndRefundOrder(order, userId, opts = {}) {
+  if (!order || !order.id) {
+    return { refunded: false, reason: 'missing_order' };
+  }
+  if (order.refunded || order.status === 'refunded' || order.status === 'completed') {
     return { refunded: false, reason: 'already_final' };
   }
 
-  const refundAmount = Number(order.price || 0);
-  const { data: profile } = await supabase
-    .from('profiles')
-    .select('balance')
-    .eq('id', userId)
-    .single();
+  const subtitle = opts.subtitle || 'No SMS — balance restored';
+  const notes = opts.notes || null;
+  const category = opts.category || 'MJ SMS';
 
-  if (profile && refundAmount > 0) {
-    const restored = Number(profile.balance || 0) + refundAmount;
-    await supabase.from('profiles').update({ balance: restored }).eq('id', userId);
-  }
-
-  await supabase
+  // Atomic claim: only one concurrent request can win this update
+  const { data: claimed, error: claimErr } = await supabase
     .from('number_orders')
     .update({
       status: 'refunded',
       refunded: true,
       updated_at: new Date().toISOString()
     })
-    .eq('id', order.id);
+    .eq('id', order.id)
+    .or('refunded.eq.false,refunded.is.null')
+    .neq('status', 'completed')
+    .select('id, price')
+    .maybeSingle();
 
-  // Mark original purchase cancelled — no separate refund transaction
+  if (claimErr) {
+    console.error('[claimAndRefundOrder] claim failed', claimErr);
+    return { refunded: false, reason: 'claim_error', error: claimErr.message };
+  }
+  if (!claimed) {
+    // Another request already refunded this order
+    return { refunded: false, reason: 'already_final' };
+  }
+
+  const refundAmount = Number(order.price != null ? order.price : claimed.price) || 0;
+  let newBalance = null;
+
+  if (refundAmount > 0) {
+    const { data: profile, error: profErr } = await supabase
+      .from('profiles')
+      .select('balance')
+      .eq('id', userId)
+      .single();
+    if (profErr) {
+      console.error('[claimAndRefundOrder] profile read failed', profErr);
+    } else if (profile) {
+      newBalance = Number(profile.balance || 0) + refundAmount;
+      const { error: balErr } = await supabase
+        .from('profiles')
+        .update({ balance: newBalance })
+        .eq('id', userId);
+      if (balErr) {
+        console.error('[claimAndRefundOrder] balance credit failed', balErr);
+        // Order already marked refunded — log for manual fix; do not retry credit here
+      }
+    }
+  }
+
   try {
-    await supabase
+    let q = supabase
       .from('transactions')
       .update({
         status: 'cancelled',
-        subtitle: 'No SMS — balance restored'
+        subtitle,
+        ...(notes ? { notes } : {})
       })
       .eq('user_id', userId)
-      .eq('category', 'MJ SMS')
+      .eq('category', category)
       .eq('type', 'purchase')
-      .in('status', ['pending', 'completed'])
+      .in('status', ['pending', 'completed', 'success'])
       .eq('amount_ngn', refundAmount);
+    await q;
   } catch (e) {
-    console.warn('tx update on silent refund', e.message || e);
+    console.warn('[claimAndRefundOrder] tx update', e.message || e);
   }
 
   return {
     refunded: true,
     refunded_amount: refundAmount,
-    new_balance: profile ? Number(profile.balance || 0) + refundAmount : null
+    new_balance: newBalance
   };
+}
+
+async function refundOrderSilently(order, userId) {
+  return claimAndRefundOrder(order, userId, {
+    category: 'MJ SMS',
+    subtitle: 'No SMS — balance restored'
+  });
 }
 
 async function handleCheck(req, res) {
@@ -1138,29 +1184,21 @@ async function handleCancel(req, res) {
       });
     }
 
-    // Confirmed cancel → credit wallet (no refund transaction row)
-    const refundAmount = Number(order.price || 0);
-    const { data: profile } = await supabase
-      .from('profiles')
-      .select('balance')
-      .eq('id', user_id)
-      .single();
+    // Confirmed cancel → claim order once, then credit wallet (idempotent)
+    const refundResult = await claimAndRefundOrder(order, user_id, {
+      category: 'MJ SMS',
+      subtitle: 'Cancelled — balance restored',
+      notes: 'SMS number cancelled; wallet credited without separate refund row'
+    });
 
-    if (profile) {
-      const restored = Number(profile.balance || 0) + refundAmount;
-      await supabase.from('profiles').update({ balance: restored }).eq('id', user_id);
+    if (!refundResult.refunded && refundResult.reason === 'already_final') {
+      return res.status(409).json({
+        success: false,
+        message: 'This order was already refunded.'
+      });
     }
 
-    await supabase
-      .from('number_orders')
-      .update({
-        status: 'refunded',
-        refunded: true,
-        updated_at: new Date().toISOString()
-      })
-      .eq('id', order.id);
-
-    // Flip original purchase tx to cancelled — do NOT insert a separate refund row
+    // Keep secondary tx match for service title when claim path already updated by amount
     try {
       await supabase
         .from('transactions')
@@ -1172,7 +1210,7 @@ async function handleCancel(req, res) {
         .eq('user_id', user_id)
         .eq('category', 'MJ SMS')
         .eq('type', 'purchase')
-        .eq('status', 'pending')
+        .in('status', ['pending', 'completed', 'success'])
         .ilike('title', order.service_name || '%');
     } catch (e) {
       console.warn('tx status update skipped', e.message || e);
@@ -1180,6 +1218,7 @@ async function handleCancel(req, res) {
 
     // Broader match: any pending MJ SMS purchase for this user around this order price
     try {
+      const refundAmount = Number(order.price || 0);
       await supabase
         .from('transactions')
         .update({ status: 'cancelled', subtitle: 'Cancelled — balance restored' })
@@ -1196,8 +1235,8 @@ async function handleCancel(req, res) {
         order_id,
         status: 'refunded',
         refunded: true,
-        refunded_amount: refundAmount,
-        new_balance: profile ? Number(profile.balance || 0) + refundAmount : null
+        refunded_amount: refundResult.refunded_amount || Number(order.price || 0),
+        new_balance: refundResult.new_balance
       }
     });
   } catch (err) {
