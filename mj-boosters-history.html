@@ -56,7 +56,9 @@ h1{font-size:17px;font-weight:800}
 
 const SUPABASE_URL = 'https://atczodlljmlayvldxfmv.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImF0Y3pvZGxsam1sYXl2bGR4Zm12Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODUwNzUyMzgsImV4cCI6MjEwMDY1MTIzOH0.ufthD-p7BmeD_B7xyuMM6PNPL8DmcL4AtRYgg-MuoLI';
-const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+  auth: { persistSession: true, autoRefreshToken: true, storage: window.sessionStorage }
+});
 
 function syncThemeUi(){const dark=document.documentElement.getAttribute('data-theme')!=='light';const b=document.getElementById('themeBtn');if(b)b.textContent=dark?'🌙':'☀️';const m=document.querySelector('meta[name="theme-color"]');if(m)m.setAttribute('content',dark?'#06080f':'#f4f6fb');}
 function toggleTheme(){const cur=document.documentElement.getAttribute('data-theme')==='light'?'light':'dark';const next=cur==='dark'?'light':'dark';document.documentElement.setAttribute('data-theme',next);try{localStorage.setItem('mjhub-theme',next);}catch(e){}syncThemeUi();}

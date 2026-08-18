@@ -470,7 +470,9 @@
     <script>
         const SUPABASE_URL = 'https://atczodlljmlayvldxfmv.supabase.co';
         const SUPABASE_PUBLISHABLE_KEY = 'sb_publishable_dwbeKLcSG7-nfKzZz8x8Zw_U9FtwJTy';
-        const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY);
+        const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
+  auth: { persistSession: true, autoRefreshToken: true, storage: window.sessionStorage }
+});
 
         // Email is passed via ?email=... from auth.html so this page can
         // display it and support "Resend verification email."

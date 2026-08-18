@@ -281,7 +281,9 @@ async function ldFetch(action, opts = {}){
 async function initSession(){
   try{
     if(!window.supabase) return;
-    sbClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+    sbClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+  auth: { persistSession: true, autoRefreshToken: true, storage: window.sessionStorage }
+});
     const { data: { session } } = await sbClient.auth.getSession();
     if(session && session.user){
       currentUserId = session.user.id;

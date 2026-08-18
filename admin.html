@@ -1249,6 +1249,7 @@ async function evaluateSession(session) {
     // an admin — this is a real authorization decision, so signing out
     // here is correct.
     await sb.auth.signOut();
+    try { sessionStorage.clear(); } catch (e) {}
     document.getElementById('loginError').textContent = 'Access denied. Admin privileges required.';
     return showLogin();
   }

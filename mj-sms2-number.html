@@ -373,7 +373,9 @@ async function cancelOrder(){
 async function init(){
   if(!orderId){ renderError('No order specified.'); return; }
   if(!window.supabase){ renderError('Failed to load Supabase.'); return; }
-  sbClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+  sbClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+  auth: { persistSession: true, autoRefreshToken: true, storage: window.sessionStorage }
+});
   const { data: { session } } = await sbClient.auth.getSession();
   if(!session || !session.user){
     showToast('Please sign in', 'error');

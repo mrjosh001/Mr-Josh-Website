@@ -417,6 +417,21 @@
             z-index: 1;
         }
         .forgot-password-link:hover { color: #fff; }
+        .pw-strength { margin-top: 8px; }
+        .pw-strength-bar {
+            height: 4px; border-radius: 2px; background: rgba(148,163,184,.2);
+            overflow: hidden; margin-bottom: 6px;
+        }
+        .pw-strength-bar > span {
+            display: block; height: 100%; width: 0%; transition: width .25s, background .25s;
+            border-radius: 2px;
+        }
+        .pw-strength-label { font-size: 11px; color: #94a3b8; }
+        .pw-rules { list-style: none; padding: 0; margin: 6px 0 0; font-size: 11px; color: #64748b; }
+        .pw-rules li { margin: 2px 0; }
+        .pw-rules li.ok { color: #34d399; }
+        .pw-rules li.bad { color: #f87171; }
+
 
         .divider {
             display: flex;
@@ -568,7 +583,17 @@
                 </div>
                 <div class="form-group">
                     <label>Choose Password</label>
-                    <input type="password" id="signupPassword" required autocomplete="new-password" placeholder="••••••••">
+                    <input type="password" id="signupPassword" required autocomplete="new-password" placeholder="Min. 8 characters" minlength="8" oninput="updatePasswordStrength(this.value)">
+                    <div class="pw-strength" id="pwStrengthBox">
+                        <div class="pw-strength-bar"><span id="pwStrengthBar"></span></div>
+                        <div class="pw-strength-label" id="pwStrengthLabel">Password strength</div>
+                        <ul class="pw-rules" id="pwRules">
+                            <li id="pwRuleLen" class="bad">At least 8 characters</li>
+                            <li id="pwRuleUp" class="bad">One uppercase letter</li>
+                            <li id="pwRuleLow" class="bad">One lowercase letter</li>
+                            <li id="pwRuleNum" class="bad">One number</li>
+                        </ul>
+                    </div>
                 </div>
                 <button type="submit" class="btn-submit" id="signupSubmitBtn">Register Account</button>
             </form>
@@ -587,7 +612,11 @@
             <form id="updatePasswordForm" class="hidden" onsubmit="handleUpdatePassword(event)">
                 <div class="form-group">
                     <label>New Password</label>
-                    <input type="password" id="newPassword" required autocomplete="new-password" placeholder="••••••••">
+                    <input type="password" id="newPassword" required autocomplete="new-password" placeholder="Min. 8 characters" minlength="8" oninput="updatePasswordStrength(this.value)">
+                    <div class="pw-strength">
+                        <div class="pw-strength-bar"><span id="pwStrengthBar2"></span></div>
+                        <div class="pw-strength-label" id="pwStrengthLabel2">Password strength</div>
+                    </div>
                 </div>
                 <button type="submit" class="btn-submit" id="updatePassSubmitBtn">Update Password</button>
             </form>
@@ -619,7 +648,15 @@
           } catch (e) {}
         })();
 
-        const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY);
+        const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
+            auth: {
+                persistSession: true,
+                autoRefreshToken: true,
+                detectSessionInUrl: true,
+                // sessionStorage: token clears when the browser tab/window closes (harder for XSS to keep long-lived access)
+                storage: window.sessionStorage
+            }
+        });
 
         window.addEventListener('DOMContentLoaded', async () => {
             // Check for saved "Remember Me" details within the 24-hour expiry window
@@ -810,32 +847,123 @@
             }
         }
 
+
+        // ========== Security helpers (login rate limit + password rules) ==========
+        var MJ_LOGIN_MAX = 5;
+        var MJ_LOGIN_WINDOW_MS = 15 * 60 * 1000; // 15 minutes
+        var MJ_RESET_MAX = 3;
+        var MJ_RESET_WINDOW_MS = 15 * 60 * 1000;
+
+        function mjRateKey(kind) {
+            return 'mjhub_rl_' + kind;
+        }
+        function mjGetAttempts(kind) {
+            try {
+                var raw = sessionStorage.getItem(mjRateKey(kind));
+                if (!raw) return [];
+                var arr = JSON.parse(raw);
+                var cutoff = Date.now() - (kind === 'reset' ? MJ_RESET_WINDOW_MS : MJ_LOGIN_WINDOW_MS);
+                return (arr || []).filter(function (t) { return t > cutoff; });
+            } catch (e) { return []; }
+        }
+        function mjRecordAttempt(kind) {
+            var arr = mjGetAttempts(kind);
+            arr.push(Date.now());
+            try { sessionStorage.setItem(mjRateKey(kind), JSON.stringify(arr)); } catch (e) {}
+            return arr.length;
+        }
+        function mjClearAttempts(kind) {
+            try { sessionStorage.removeItem(mjRateKey(kind)); } catch (e) {}
+        }
+        function mjIsRateLimited(kind) {
+            var max = kind === 'reset' ? MJ_RESET_MAX : MJ_LOGIN_MAX;
+            return mjGetAttempts(kind).length >= max;
+        }
+        function mjRateLimitMessage(kind) {
+            return kind === 'reset'
+                ? 'Too many reset requests. Wait 15 minutes and try again.'
+                : 'Too many sign-in attempts. Wait 15 minutes or reset your password.';
+        }
+
+        function validatePasswordStrength(password) {
+            var p = String(password || '');
+            var checks = {
+                len: p.length >= 8,
+                up: /[A-Z]/.test(p),
+                low: /[a-z]/.test(p),
+                num: /[0-9]/.test(p)
+            };
+            var score = (checks.len ? 1 : 0) + (checks.up ? 1 : 0) + (checks.low ? 1 : 0) + (checks.num ? 1 : 0);
+            var ok = checks.len && checks.up && checks.low && checks.num;
+            return { ok: ok, score: score, checks: checks };
+        }
+
+        function updatePasswordStrength(password) {
+            var r = validatePasswordStrength(password);
+            var bar = document.getElementById('pwStrengthBar');
+            var label = document.getElementById('pwStrengthLabel');
+            var bar2 = document.getElementById('pwStrengthBar2');
+            var label2 = document.getElementById('pwStrengthLabel2');
+            var colors = ['#ef4444', '#f97316', '#eab308', '#22c55e'];
+            var texts = ['Too weak', 'Weak', 'Fair', 'Strong'];
+            var pct = (r.score / 4) * 100;
+            var col = colors[Math.max(0, r.score - 1)] || '#ef4444';
+            var txt = r.score === 0 ? 'Password strength' : texts[r.score - 1];
+            if (bar) { bar.style.width = pct + '%'; bar.style.background = col; }
+            if (label) label.textContent = txt;
+            if (bar2) { bar2.style.width = pct + '%'; bar2.style.background = col; }
+            if (label2) label2.textContent = txt;
+            var map = { pwRuleLen: 'len', pwRuleUp: 'up', pwRuleLow: 'low', pwRuleNum: 'num' };
+            Object.keys(map).forEach(function (id) {
+                var el = document.getElementById(id);
+                if (!el) return;
+                var good = r.checks[map[id]];
+                el.className = good ? 'ok' : 'bad';
+            });
+            return r;
+        }
+
         async function handleSignIn(e) {
             e.preventDefault();
             const email = document.getElementById('signinEmail').value.trim();
             const password = document.getElementById('signinPassword').value.trim();
             const rememberMe = document.getElementById('rememberMe').checked;
             const btn = document.getElementById('signinSubmitBtn') || (e.submitter) || e.target.querySelector('.btn-submit');
+
+            if (typeof mjIsRateLimited === 'function' && mjIsRateLimited('login')) {
+                showError(mjRateLimitMessage('login'));
+                return;
+            }
+
             setAuthButtonLoading(btn, true, 'Signing in…');
 
             let data, error;
             try {
                 ({ data, error } = await supabaseClient.auth.signInWithPassword({ email, password }));
             } catch (e) {
+                if (typeof mjRecordAttempt === 'function') mjRecordAttempt('login');
                 setAuthButtonLoading(btn, false);
                 showError(formatAuthError(e));
                 return;
             }
 
             if (error) {
+                if (typeof mjRecordAttempt === 'function') mjRecordAttempt('login');
                 setAuthButtonLoading(btn, false);
                 if (isBannedError(error)) {
                     showBannedError();
                 } else {
-                    showError(formatAuthError(error));
+                    var msg = formatAuthError(error);
+                    if (typeof mjGetAttempts === 'function') {
+                        var left = MJ_LOGIN_MAX - mjGetAttempts('login').length;
+                        if (left <= 2 && left > 0) msg += ' (' + left + ' attempts left before temporary lockout)';
+                        if (left <= 0) msg = mjRateLimitMessage('login');
+                    }
+                    showError(msg);
                 }
                 return;
             }
+            if (typeof mjClearAttempts === 'function') mjClearAttempts('login');
 
             // Belt-and-suspenders: even if the auth-level ban somehow let a
             // session through (e.g. an existing token that hasn't refreshed
@@ -894,6 +1022,14 @@
             const email = document.getElementById('emailAddress').value.trim();
             const password = document.getElementById('signupPassword').value.trim();
             const btn = document.getElementById('signupSubmitBtn') || e.target.querySelector('.btn-submit');
+
+            var pwCheck = validatePasswordStrength(password);
+            if (!pwCheck.ok) {
+                showError('Password must be at least 8 characters and include uppercase, lowercase, and a number.');
+                updatePasswordStrength(password);
+                return;
+            }
+
             setAuthButtonLoading(btn, true, 'Creating account…');
 
             let data, error;
@@ -955,6 +1091,13 @@
             e.preventDefault();
             const email = document.getElementById('forgotEmail').value.trim();
             const btn = document.getElementById('forgotSubmitBtn') || e.target.querySelector('.btn-submit');
+
+            if (mjIsRateLimited('reset')) {
+                showError(mjRateLimitMessage('reset'));
+                return;
+            }
+            mjRecordAttempt('reset');
+
             setAuthButtonLoading(btn, true, 'Sending…');
 
             const { data, error } = await supabaseClient.auth.resetPasswordForEmail(email, {
@@ -975,6 +1118,14 @@
             e.preventDefault();
             const newPassword = document.getElementById('newPassword').value.trim();
             const btn = document.getElementById('updatePassSubmitBtn') || e.target.querySelector('.btn-submit');
+
+            var pwCheck = validatePasswordStrength(newPassword);
+            if (!pwCheck.ok) {
+                showError('Password must be at least 8 characters and include uppercase, lowercase, and a number.');
+                updatePasswordStrength(newPassword);
+                return;
+            }
+
             setAuthButtonLoading(btn, true, 'Updating…');
 
             const { data, error } = await supabaseClient.auth.updateUser({

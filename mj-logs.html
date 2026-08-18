@@ -399,7 +399,9 @@ async function loadProducts(){
 try{
 setStatus('Connecting to database...');
 if(!window.supabase){showError('Supabase library did not load.');return}
-if(!sbClient) sbClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+if(!sbClient) sbClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+  auth: { persistSession: true, autoRefreshToken: true, storage: window.sessionStorage }
+});
 const sb = sbClient;
 setStatus('Fetching products...');
 const {data:products,error} = await sb.from('products').select('*').eq('is_available',true).order('category',{ascending:true});
@@ -433,7 +435,9 @@ return currentBalanceNgn;
 async function initSession(){
 try{
 if(!window.supabase) return;
-if(!sbClient) sbClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+if(!sbClient) sbClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+  auth: { persistSession: true, autoRefreshToken: true, storage: window.sessionStorage }
+});
 const { data: { session } } = await sbClient.auth.getSession();
 if(session && session.user){
 currentUserId = session.user.id;
