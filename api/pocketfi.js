@@ -1205,6 +1205,108 @@ async function handleCheckout(req, res, raw, publicKey, businessId) {
   });
 }
 
+
+async function handleConvert(req, res, user) {
+  // Body may be empty when bodyParser is false — accept JSON body or query
+  let body = {};
+  if (req.body && typeof req.body === 'object') {
+    body = req.body;
+  } else if (typeof req.body === 'string' && req.body) {
+    try { body = JSON.parse(req.body); } catch (_) {}
+  } else {
+    try {
+      const raw = await readRawBody(req);
+      if (raw) body = JSON.parse(raw.toString('utf8') || '{}');
+    } catch (_) {}
+  }
+
+  let direction = String(body.direction || req.query?.direction || '').toLowerCase();
+  let amount = Number(body.amount != null ? body.amount : req.query?.amount);
+
+  if (!['ngn_to_usd', 'usd_to_ngn'].includes(direction)) {
+    return res.status(400).json({ success: false, message: 'Invalid direction' });
+  }
+  if (!Number.isFinite(amount) || amount <= 0) {
+    return res.status(400).json({ success: false, message: 'Enter a valid amount' });
+  }
+
+  const rate = Number(process.env.DEPOSIT_USD_RATE) || Number(process.env.USD_TO_NGN_RATE) || USD_RATE || 1450;
+
+  const { data: profile, error: fetchErr } = await supabase
+    .from('profiles')
+    .select('id, balance, balance_usd, customer_id')
+    .eq('id', user.id)
+    .single();
+
+  if (fetchErr || !profile) {
+    return res.status(404).json({ success: false, message: 'Profile not found' });
+  }
+
+  let bal = Number(profile.balance) || 0;
+  let balUsd = Number(profile.balance_usd) || 0;
+  let converted = 0;
+
+  if (direction === 'ngn_to_usd') {
+    if (bal < amount) {
+      return res.status(400).json({ success: false, message: 'Insufficient NGN balance' });
+    }
+    converted = amount / rate;
+    bal = Math.round((bal - amount) * 100) / 100;
+    balUsd = Math.round((balUsd + converted) * 10000) / 10000;
+  } else {
+    if (balUsd < amount) {
+      return res.status(400).json({ success: false, message: 'Insufficient USD balance' });
+    }
+    converted = amount * rate;
+    balUsd = Math.round((balUsd - amount) * 10000) / 10000;
+    bal = Math.round((bal + converted) * 100) / 100;
+  }
+
+  const { error: upErr } = await supabase
+    .from('profiles')
+    .update({ balance: bal, balance_usd: balUsd })
+    .eq('id', user.id);
+
+  if (upErr) {
+    console.error('[convert] update', upErr.message);
+    return res.status(500).json({ success: false, message: 'Could not update balance' });
+  }
+
+  const inLabel = direction === 'ngn_to_usd'
+    ? ('₦' + amount.toLocaleString())
+    : ('$' + amount.toFixed(2));
+  const outLabel = direction === 'ngn_to_usd'
+    ? ('$' + converted.toFixed(2))
+    : ('₦' + converted.toLocaleString(undefined, { maximumFractionDigits: 2 }));
+
+  try {
+    await supabase.from('transactions').insert({
+      user_id: user.id,
+      customer_id: profile.customer_id || null,
+      type: 'conversion',
+      category: 'conversion',
+      title: 'Currency Conversion',
+      subtitle: inLabel + ' to ' + outLabel,
+      amount: outLabel,
+      amount_ngn: direction === 'ngn_to_usd' ? amount : converted,
+      status: 'Success',
+      channel: 'Converter',
+      payment_provider: 'MJ HUB'
+    });
+  } catch (e) {
+    console.warn('[convert] tx', e?.message || e);
+  }
+
+  return res.status(200).json({
+    success: true,
+    balance: bal,
+    balance_usd: balUsd,
+    converted,
+    direction,
+    rate
+  });
+}
+
 export default async function handler(req, res) {
   // --- Referral (no extra serverless file) ---
   {
@@ -1228,6 +1330,11 @@ export default async function handler(req, res) {
       const gate = await requireUserToken(req);
       if (!gate.ok) return res.status(gate.status).json({ success: false, message: gate.message });
       return handleReferralAttach(req, res, gate.user);
+    }
+    if (_act === 'convert' || _act === 'currency_convert') {
+      const gate = await requireUserToken(req);
+      if (!gate.ok) return res.status(gate.status).json({ success: false, message: gate.message });
+      return handleConvert(req, res, gate.user);
     }
   }
   // --- /Referral ---
