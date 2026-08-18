@@ -5349,34 +5349,38 @@ window.commitSwapTransaction = async function() {
     if (btn) { btn.disabled = true; btn.textContent = 'Converting…'; }
 
     const direction = currentFromCurrency === 'NGN' ? 'ngn_to_usd' : 'usd_to_ngn';
-    const rate = exchangeRateUsdToNgn || 1450;
-    let converted = currentFromCurrency === 'NGN' ? val / rate : val * rate;
+    let converted = currentFromCurrency === 'NGN'
+        ? val / (exchangeRateUsdToNgn || 1450)
+        : val * (exchangeRateUsdToNgn || 1450);
 
     try {
-        // Server-side RPC persists both balance + balance_usd (client cannot update balances under RLS)
-        const { data: conv, error: convErr } = await supabaseClient.rpc('mj_convert_balance', {
-            p_direction: direction,
-            p_amount: val
+        const { data: sessWrap } = await supabaseClient.auth.getSession();
+        let accessToken = sessWrap?.session?.access_token;
+        if (!accessToken) {
+            const { data: refreshed } = await supabaseClient.auth.refreshSession();
+            accessToken = refreshed?.session?.access_token;
+        }
+        if (!accessToken) throw new Error('Session expired. Please sign in again.');
+
+        // Uses existing /api/pocketfi (no new serverless file). Service role updates balances (RLS-safe).
+        const res = await fetch('/api/pocketfi?action=convert', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': 'Bearer ' + accessToken
+            },
+            body: JSON.stringify({ action: 'convert', direction, amount: val })
         });
-
-        if (convErr) {
-            console.error('mj_convert_balance', convErr);
-            const msg = convErr.message || '';
-            if (/function|does not exist|schema cache/i.test(msg)) {
-                throw new Error('Currency convert is not set up on the server yet. Ask admin to install mj_convert_balance.');
-            }
-            throw new Error(msg || 'Conversion failed');
+        let payload = {};
+        try { payload = await res.json(); } catch (_) {}
+        if (!res.ok || !payload.success) {
+            throw new Error(payload.message || 'Conversion failed');
         }
 
-        // Prefer authoritative balances from the RPC response
-        if (conv && typeof conv === 'object') {
-            const row = Array.isArray(conv) ? conv[0] : conv;
-            if (row && row.balance != null) currentBalanceNgn = Number(row.balance) || 0;
-            if (row && row.balance_usd != null) currentBalanceUsd = Number(row.balance_usd) || 0;
-            if (row && row.converted != null) converted = Number(row.converted) || converted;
-        }
+        if (payload.balance != null) currentBalanceNgn = Number(payload.balance) || 0;
+        if (payload.balance_usd != null) currentBalanceUsd = Number(payload.balance_usd) || 0;
+        if (payload.converted != null) converted = Number(payload.converted) || converted;
 
-        // Always re-read from profiles so logout/login shows the same figures
         try {
             const { data: prof } = await supabaseClient
                 .from('profiles')
@@ -5387,34 +5391,33 @@ window.commitSwapTransaction = async function() {
                 if (prof.balance != null) currentBalanceNgn = Number(prof.balance) || 0;
                 if (prof.balance_usd != null) currentBalanceUsd = Number(prof.balance_usd) || 0;
             }
-        } catch (e) {
-            console.warn('post-convert balance refresh', e);
-        }
+        } catch (e) {}
 
         updateBalanceDisplay();
 
         const outLabel = currentFromCurrency === 'NGN'
-            ? ('$' + converted.toFixed(2))
+            ? ('$' + Number(converted).toFixed(2))
             : ('₦' + Number(converted).toLocaleString(undefined, { maximumFractionDigits: 2 }));
         const inLabel = currentFromCurrency === 'NGN'
             ? ('₦' + val.toLocaleString())
             : ('$' + val.toFixed(2));
 
-        const tx = {
+        transactions.unshift({
             id: Date.now(),
             type: 'conversion',
             category: 'conversion',
             title: 'Currency Conversion',
-            subtitle: inLabel + ' → ' + outLabel,
+            subtitle: inLabel + ' to ' + outLabel,
             amount: outLabel,
             date: new Date().toLocaleString(),
             status: 'Success',
             paymentProvider: 'MJ HUB',
             channel: 'Converter'
-        };
-        transactions.unshift(tx);
-        await saveTransaction(tx);
+        });
         renderRecentActivity();
+        if (typeof fetchUserTransactions === 'function') {
+            try { await fetchUserTransactions(currentUserId); } catch (_) {}
+        }
 
         closeCurrencyModal();
         showToast('Converted successfully!', 'success');
