@@ -102,7 +102,8 @@ function progressHtml(o){
   function toast(msg,ms){const t=document.getElementById('toast');if(!t)return;t.textContent=msg;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),ms||3200)}
   function canCancel(o){
     const s=String(o.status||'').toLowerCase();
-    return /pending|in progress|processing|awaiting|waiting/.test(s);
+    // Only while pending — in-progress cancel often fails on supplier while we used to refund locally
+    return /^(pending|awaiting|waiting)/.test(s) || s==='pending';
   }
   function canRefill(o){
     const s=String(o.status||'').toLowerCase();
@@ -111,7 +112,7 @@ function progressHtml(o){
   }
   window.cancelOrder = async function(orderId){
     if(!orderId) return;
-    if(!confirm('Cancel this boost order? If still pending, wallet may be refunded.')) return;
+    if(!confirm('Cancel this boost order? Refund only if the supplier confirms the cancel.')) return;
     try{
       const res=await fetch('/api/owlet?action=cancel',{method:'POST',headers:{...headers,'Content-Type':'application/json'},body:JSON.stringify({order:orderId})});
       const j=await res.json();
