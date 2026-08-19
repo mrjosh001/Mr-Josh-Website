@@ -891,7 +891,11 @@ async function handleMyOrders(req, res) {
   }
 
   // Live refresh: skip if ?live=0 (instant DB-only list). Default: few orders, short timeouts.
-  const skipLive = String((req.query && req.query.live) || '') === '0';
+  let liveParam = (req.query && req.query.live) != null ? req.query.live : '';
+  if (!liveParam && req.url) {
+    try { liveParam = new URL(req.url, 'http://localhost').searchParams.get('live') || ''; } catch (_) {}
+  }
+  const skipLive = String(liveParam) === '0';
   const active = skipLive ? [] : (data || []).filter((o) => {
     const s = String(o.status || '').toLowerCase();
     return /pending|progress|processing|awaiting|waiting|partial/i.test(s)
