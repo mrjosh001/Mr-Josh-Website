@@ -260,7 +260,13 @@ function isActive(o){
         return;
       }
       let rows = jsonFast.data || [];
-      renderRows(rows);
+      if (window.__mjSkelDone) {
+        var _rows = rows;
+        window.__mjSkelDone(function(){ renderRows(_rows); });
+        window.__mjSkelDone = null;
+      } else {
+        renderRows(rows);
+      }
 
       const hasActive = rows.some(isActive);
       if (hasActive) {

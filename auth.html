@@ -747,6 +747,16 @@
 
             if (type === 'recovery') {
                 switchTab('updatePassword');
+                // Links expire (Supabase default ~1 hour). If session missing, show help.
+                setTimeout(async function () {
+                    try {
+                        var s = await supabaseClient.auth.getSession();
+                        if (!s.data || !s.data.session) {
+                            showError('This reset link is invalid or has expired. Request a new one below.');
+                            switchTab('forgot');
+                        }
+                    } catch (e) {}
+                }, 800);
                 return;
             }
 
