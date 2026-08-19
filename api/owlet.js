@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
+import { rateLimit, applyRateLimitHeaders } from '../lib/rateLimit.js';
 
 /**
  * /api/owlet — MJ Boosters supplier (The Owlet SMM panel v2 API)
@@ -870,6 +871,12 @@ async function refundIfSupplierFailed(order, oldStatus, newStatus) {
 async function handleMyOrders(req, res) {
   const userGate = await requireUser(req);
   if (!userGate.ok) return res.status(userGate.status).json({ success: false, message: userGate.message });
+
+  try {
+    const rl = rateLimit(req, { limit: 30, windowMs: 60_000, suffix: 'my_orders' });
+    applyRateLimitHeaders(res, rl);
+    if (!rl.ok) return res.status(rl.status).json({ success: false, message: rl.message });
+  } catch (_) {}
 
   const page = Math.max(1, parseInt(req.query?.page || '1', 10) || 1);
   const pageSize = Math.min(50, Math.max(10, parseInt(req.query?.page_size || '20', 10) || 20));
