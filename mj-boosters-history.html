@@ -176,19 +176,36 @@ function progressHtml(o){
   let pollTimer=null;
   async function loadOrders(silent){
     try{
-      const res=await fetch('/api/owlet?action=my_orders&page_size=50',{headers});
-      const json=await res.json();
-      if(!json.success){
-        if(!silent) el.innerHTML=`<div class="empty"><h3>Could not load orders</h3><p>${esc(json.message||'')}</p><a href="mj-boosters.html">Back to Boosters</a></div>`;
+      if(!silent && el && !el.dataset.loaded){
+        el.innerHTML='<div class="empty"><p>Loading orders…</p></div>';
+      }
+      // 1) Fast path: DB only (no Owlet wait)
+      const resFast=await fetch('/api/owlet?action=my_orders&page_size=50&live=0',{headers});
+      const jsonFast=await resFast.json();
+      if(!jsonFast.success){
+        if(!silent) el.innerHTML=`<div class="empty"><h3>Could not load orders</h3><p>${esc(jsonFast.message||'')}</p><a href="mj-boosters.html">Back to Boosters</a></div>`;
         return;
       }
-      const rows=json.data||[];
+      let rows=jsonFast.data||[];
+      el.dataset.loaded='1';
       renderRows(rows);
+
       const hasActive=rows.some(isActive);
-      if(pollTimer){ clearInterval(pollTimer); pollTimer=null; }
-      // Poll every 20s while any order is still active
+      // 2) Background live refresh (may take a few seconds)
       if(hasActive){
-        pollTimer=setInterval(()=>loadOrders(true), 12000);
+        fetch('/api/owlet?action=my_orders&page_size=50',{headers})
+          .then(r=>r.json())
+          .then(json=>{
+            if(json && json.success && Array.isArray(json.data)){
+              rows=json.data;
+              renderRows(rows);
+            }
+          })
+          .catch(()=>{});
+      }
+      if(pollTimer){ clearInterval(pollTimer); pollTimer=null; }
+      if(hasActive){
+        pollTimer=setInterval(()=>loadOrders(true), 15000);
       }
     }catch(e){
       if(!silent) el.innerHTML=`<div class="empty"><h3>Network error</h3><p>${esc(e.message||'')}</p></div>`;
