@@ -903,14 +903,25 @@ async function handleMyOrders(req, res) {
   }).slice(0, 5); // max 5 per request to avoid gateway timeouts
 
   // Normalize Owlet status payload (field names vary by panel version)
-  function pickStatusPayload(json) {
+  function pickStatusPayload(json, orderId) {
     if (!json || typeof json !== 'object') return null;
-    if (json.error) return null;
-    // Some panels wrap: { order: { ... } } or return array
-    let j = json;
-    if (Array.isArray(json) && json[0]) j = json[0];
-    if (j.order && typeof j.order === 'object' && !Array.isArray(j.order)) j = j.order;
-    return j;
+    if (json.error && !json.status && json.remains == null) return null;
+    // Perfect Panel multi-status: { "123": { status, remains, start_count }, ... }
+    const id = String(orderId || '');
+    if (id && json[id] && typeof json[id] === 'object') {
+      const row = json[id];
+      if (typeof row === 'string') return null;
+      if (row.error) return null;
+      return row;
+    }
+    // Flat single-order response
+    if (json.status != null || json.remains != null || json.start_count != null) return json;
+    if (Array.isArray(json) && json[0]) return json[0];
+    if (json.order && typeof json.order === 'object' && !Array.isArray(json.order)) return json.order;
+    // Sometimes only one keyed entry
+    const keys = Object.keys(json).filter(k => /^\d+$/.test(k));
+    if (keys.length === 1 && typeof json[keys[0]] === 'object') return json[keys[0]];
+    return null;
   }
   function numField(j, ...keys) {
     for (const k of keys) {
@@ -921,15 +932,33 @@ async function handleMyOrders(req, res) {
     return null;
   }
 
+  // Batch status (Perfect Panel): one request for many order IDs
+  let batchMap = null;
+  if (active.length > 0) {
+    const ids = active.map(o => String(o.supplier_order_id || '')).filter(Boolean);
+    if (ids.length) {
+      try {
+        const batch = await owletCall({ action: 'status', orders: ids.join(',') }, 15000);
+        if (batch.ok && batch.json && typeof batch.json === 'object' && !batch.json.error) {
+          batchMap = batch.json;
+        }
+      } catch (e) {
+        console.warn('[owlet] batch status', e.message || e);
+      }
+    }
+  }
+
   for (const o of active) {
     if (!o.supplier_order_id) continue;
     try {
-      let st = await owletCall({ action: 'status', order: String(o.supplier_order_id) }, 8000);
-      // Fallback: some Perfect-Panel forks expect "orders"
-      if (!st.ok || !st.json || st.json.error) {
-        st = await owletCall({ action: 'status', orders: String(o.supplier_order_id) }, 8000);
+      let j = batchMap ? pickStatusPayload(batchMap, o.supplier_order_id) : null;
+      if (!j) {
+        let st = await owletCall({ action: 'status', order: String(o.supplier_order_id) }, 8000);
+        if (!st.ok || !st.json || (st.json.error && !st.json.status)) {
+          st = await owletCall({ action: 'status', orders: String(o.supplier_order_id) }, 8000);
+        }
+        j = pickStatusPayload(st.json, o.supplier_order_id);
       }
-      const j = pickStatusPayload(st.json);
       if (!j) continue;
 
       const oldStatus = o.status;
