@@ -10,7 +10,7 @@
 <script>(function(){try{var th=localStorage.getItem('mjhub-theme');document.documentElement.setAttribute('data-theme',(th==='light'||th==='dark')?th:'dark');}catch(e){document.documentElement.setAttribute('data-theme','dark');}})();</script>
 <meta name="theme-color" content="#06080f">
 <style>
-:root[data-theme="dark"]{--bg:#06080f;--card:#0f1524;--border:rgba(148,163,184,.12);--text:#f1f5f9;--muted:#8b9bb4;--primary:#5b8af5;--success:#34d399;--warn:#fbbf24;--danger:#f87171;--header-bg:rgba(6,8,15,.92)}
+:root[data-theme="dark"]{--bg:#06080f;--card:#0f1524;--border:rgba(148,163,184,.12);--text:#f1f5f9;--muted:#8b9bb4;--primary:#3b82f6;--success:#34d399;--warn:#fbbf24;--danger:#f87171;--header-bg:rgba(6,8,15,.92)}
 :root[data-theme="light"]{--bg:#f4f6fb;--card:#fff;--border:rgba(15,23,42,.08);--text:#0f172a;--muted:#64748b;--primary:#3b6ef5;--success:#059669;--warn:#d97706;--danger:#dc2626;--header-bg:rgba(255,255,255,.92)}
 *{box-sizing:border-box;margin:0;padding:0}
 body{font-family:Inter,system-ui,sans-serif;background:var(--bg);color:var(--text);min-height:100vh}
@@ -49,8 +49,8 @@ h1{font-size:17px;font-weight:800}
 .prog-meta .right{font-size:12px;color:var(--muted);font-weight:600;white-space:nowrap}
 .prog-detail{font-size:11px;color:var(--muted);margin-top:8px;line-height:1.4}
 .bar{height:8px;border-radius:99px;background:rgba(148,163,184,.14);overflow:hidden}
-.bar-fill{height:100%;border-radius:99px;background:linear-gradient(90deg,var(--primary),#60a5fa);transition:width .5s ease;min-width:0}
-.bar-fill.done{background:linear-gradient(90deg,#34d399,#6ee7b7)}
+.bar-fill{height:100%;border-radius:99px;background:linear-gradient(90deg,#2563eb,#3b82f6);transition:width .5s ease;min-width:0}
+.bar-fill.done{background:linear-gradient(90deg,#2563eb,#60a5fa)}
 .bar-fill.partial{background:linear-gradient(90deg,#fbbf24,#fcd34d)}
 .live-dot{display:inline-block;width:6px;height:6px;border-radius:50%;background:#34d399;margin-right:6px;vertical-align:middle;box-shadow:0 0 0 3px rgba(52,211,153,.2)}
 
@@ -124,24 +124,19 @@ function progressHtml(o){
     remains = qty || 0;
     pct = 0;
   } else if (/progress|processing|waiting/.test(st)) {
-    pct = 2;
+    pct = Math.max(pct, 2);
   }
-
   if (remains == null && qty > 0) remains = Math.max(0, qty - done);
 
   const fillClass = pct >= 100 ? 'done' : (/partial/.test(st) ? 'partial' : '');
-  const liveBit = o.live
-    ? '<span class="live-dot"></span>Live from supplier'
-    : 'Last saved progress';
-  const startBit = start != null ? 'Start count ' + start.toLocaleString() : '';
 
   return `<div class="prog">
     <div class="prog-meta">
-      <span class="left"><strong style="color:var(--text)">${done.toLocaleString()}</strong> / ${qty.toLocaleString()} delivered</span>
-      <span class="right">${remains != null ? remains.toLocaleString() + ' remaining' : ''}</span>
+      <span class="left"><strong style="color:var(--text)">${done.toLocaleString()}</strong> of <strong style="color:var(--text)">${qty.toLocaleString()}</strong> complete</span>
+      <span class="right">${remains != null ? remains.toLocaleString() + ' left' : ''}</span>
     </div>
     <div class="bar"><div class="bar-fill ${fillClass}" style="width:${Math.max(0, Math.min(100, pct))}%"></div></div>
-    <div class="prog-detail">${liveBit}${startBit ? ' · ' + startBit : ''} · ${pct}%</div>
+    <div class="prog-detail">${pct}% done${start != null ? ' · was at ' + start.toLocaleString() + ' when order started' : ''}</div>
   </div>`;
 }
 
