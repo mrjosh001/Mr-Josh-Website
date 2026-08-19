@@ -404,6 +404,44 @@
         }
         @keyframes authSpin { to { transform: rotate(360deg); } }
 
+        
+        .pw-field {
+            position: relative;
+            display: flex;
+            align-items: center;
+        }
+        .pw-field input {
+            width: 100%;
+            padding-right: 48px !important;
+        }
+        .pw-toggle {
+            position: absolute;
+            right: 10px;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 36px;
+            height: 36px;
+            border: none;
+            border-radius: 10px;
+            background: transparent;
+            color: var(--text-muted, #8b9bb4);
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            padding: 0;
+            z-index: 2;
+        }
+        .pw-toggle:hover { color: var(--text-main, #fff); background: rgba(255,255,255,0.06); }
+        .pw-toggle svg { width: 20px; height: 20px; display: block; pointer-events: none; }
+        .pw-match-hint {
+            font-size: 12px;
+            margin-top: 6px;
+            font-weight: 600;
+        }
+        .pw-match-hint.ok { color: #34d399; }
+        .pw-match-hint.bad { color: #f87171; }
+
         .forgot-password-link {
             display: block;
             text-align: right;
@@ -555,7 +593,12 @@
                 </div>
                 <div class="form-group">
                     <label>Password</label>
-                    <input type="password" id="signinPassword" required autocomplete="new-password" placeholder="••••••••">
+                    <div class="pw-field">
+                    <input type="password" id="signinPassword" required autocomplete="current-password" placeholder="••••••••">
+                    <button type="button" class="pw-toggle" id="toggleSigninPassword" aria-label="Show password" onclick="togglePasswordVisibility(this)" data-visible="0">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
+                    </button>
+                </div>
                 </div>
                 <label class="remember-me-group">
                     <input type="checkbox" id="rememberMe"> Remember me for 24 hours
@@ -584,7 +627,12 @@
                 </div>
                 <div class="form-group">
                     <label>Choose Password</label>
-                    <input type="password" id="signupPassword" required autocomplete="new-password" placeholder="Min. 8 characters" minlength="8" oninput="updatePasswordStrength(this.value)">
+                    <div class="pw-field">
+                    <input type="password" id="signupPassword" required autocomplete="new-password" placeholder="Min. 8 characters" minlength="8" oninput="updatePasswordStrength(this.value); checkSignupPasswordMatch();">
+                    <button type="button" class="pw-toggle" id="toggleSignupPassword" aria-label="Show password" onclick="togglePasswordVisibility(this)" data-visible="0">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
+                    </button>
+                </div>
                     <div class="pw-strength" id="pwStrengthBox">
                         <div class="pw-strength-bar"><span id="pwStrengthBar"></span></div>
                         <div class="pw-strength-label" id="pwStrengthLabel">Password strength</div>
@@ -595,6 +643,17 @@
                             <li id="pwRuleNum" class="bad">One number</li>
                         </ul>
                     </div>
+                </div>
+
+                <div class="form-group">
+                    <label>Confirm Password</label>
+                    <div class="pw-field">
+                    <input type="password" id="signupPasswordConfirm" required autocomplete="new-password" placeholder="Re-enter password" minlength="8" oninput="checkSignupPasswordMatch();">
+                    <button type="button" class="pw-toggle" id="toggleSignupPasswordConfirm" aria-label="Show password" onclick="togglePasswordVisibility(this)" data-visible="0">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
+                    </button>
+                    </div>
+                    <div class="pw-match-hint" id="signupPwMatchHint" aria-live="polite"></div>
                 </div>
                 <button type="submit" class="btn-submit" id="signupSubmitBtn">Register Account</button>
             </form>
@@ -613,7 +672,12 @@
             <form id="updatePasswordForm" class="hidden" onsubmit="handleUpdatePassword(event)">
                 <div class="form-group">
                     <label>New Password</label>
+                    <div class="pw-field">
                     <input type="password" id="newPassword" required autocomplete="new-password" placeholder="Min. 8 characters" minlength="8" oninput="updatePasswordStrength(this.value)">
+                    <button type="button" class="pw-toggle" id="toggleNewPassword" aria-label="Show password" onclick="togglePasswordVisibility(this)" data-visible="0">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
+                    </button>
+                </div>
                     <div class="pw-strength">
                         <div class="pw-strength-bar"><span id="pwStrengthBar2"></span></div>
                         <div class="pw-strength-label" id="pwStrengthLabel2">Password strength</div>
@@ -999,6 +1063,43 @@
             return r;
         }
 
+        
+        function togglePasswordVisibility(btn) {
+            if (!btn) return;
+            const wrap = btn.closest('.pw-field');
+            const input = wrap ? wrap.querySelector('input') : null;
+            if (!input) return;
+            const show = btn.getAttribute('data-visible') !== '1';
+            input.type = show ? 'text' : 'password';
+            btn.setAttribute('data-visible', show ? '1' : '0');
+            btn.setAttribute('aria-label', show ? 'Hide password' : 'Show password');
+            btn.innerHTML = show
+                ? '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>'
+                : '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>';
+        }
+
+        function checkSignupPasswordMatch() {
+            const a = document.getElementById('signupPassword');
+            const b = document.getElementById('signupPasswordConfirm');
+            const hint = document.getElementById('signupPwMatchHint');
+            if (!a || !b || !hint) return true;
+            const p1 = a.value;
+            const p2 = b.value;
+            if (!p2) {
+                hint.textContent = '';
+                hint.className = 'pw-match-hint';
+                return false;
+            }
+            if (p1 === p2) {
+                hint.textContent = 'Passwords match';
+                hint.className = 'pw-match-hint ok';
+                return true;
+            }
+            hint.textContent = 'Passwords do not match';
+            hint.className = 'pw-match-hint bad';
+            return false;
+        }
+
         async function handleSignIn(e) {
             e.preventDefault();
             const email = document.getElementById('signinEmail').value.trim();
@@ -1097,12 +1198,24 @@
             const phone = document.getElementById('phoneNumber').value.trim();
             const email = document.getElementById('emailAddress').value.trim();
             const password = document.getElementById('signupPassword').value.trim();
+            const passwordConfirm = (document.getElementById('signupPasswordConfirm') || {}).value
+                ? document.getElementById('signupPasswordConfirm').value.trim()
+                : '';
             const btn = document.getElementById('signupSubmitBtn') || e.target.querySelector('.btn-submit');
 
             var pwCheck = validatePasswordStrength(password);
             if (!pwCheck.ok) {
                 showError('Password must be at least 8 characters and include uppercase, lowercase, and a number.');
                 updatePasswordStrength(password);
+                return;
+            }
+            if (!passwordConfirm) {
+                showError('Please confirm your password.');
+                return;
+            }
+            if (password !== passwordConfirm) {
+                showError('Passwords do not match. Please re-enter the same password.');
+                checkSignupPasswordMatch();
                 return;
             }
 
