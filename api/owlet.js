@@ -133,27 +133,37 @@ async function requireAdmin(req) {
   return { ok: true, adminId: user.id };
 }
 
-async function owletCall(params) {
+async function owletCall(params, timeoutMs = 12000) {
   if (!OWLET_KEY) {
     return { ok: false, status: 500, json: { error: 'OWLET_API_KEY not configured' } };
   }
   const body = new URLSearchParams({ key: OWLET_KEY, ...params });
-  const res = await fetch(OWLET_URL, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/x-www-form-urlencoded',
-      Accept: 'application/json'
-    },
-    body: body.toString()
-  });
-  const text = await res.text();
-  let json;
+  const ac = typeof AbortController !== 'undefined' ? new AbortController() : null;
+  const timer = ac ? setTimeout(() => ac.abort(), timeoutMs) : null;
   try {
-    json = JSON.parse(text);
-  } catch {
-    return { ok: false, status: res.status || 502, json: { error: 'Invalid JSON from Owlet', raw: text.slice(0, 300) } };
+    const res = await fetch(OWLET_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+        Accept: 'application/json'
+      },
+      body: body.toString(),
+      signal: ac ? ac.signal : undefined
+    });
+    const text = await res.text();
+    let json;
+    try {
+      json = JSON.parse(text);
+    } catch {
+      return { ok: false, status: res.status || 502, json: { error: 'Invalid JSON from Owlet', raw: text.slice(0, 300) } };
+    }
+    return { ok: res.ok, status: res.status, json };
+  } catch (e) {
+    const msg = e && e.name === 'AbortError' ? 'Owlet timeout' : (e.message || 'Owlet request failed');
+    return { ok: false, status: 504, json: { error: msg } };
+  } finally {
+    if (timer) clearTimeout(timer);
   }
-  return { ok: res.ok, status: res.status, json };
 }
 
 
@@ -880,12 +890,13 @@ async function handleMyOrders(req, res) {
     });
   }
 
-  // Live refresh from Owlet for active orders (Pending / In progress / Processing)
-  const active = (data || []).filter((o) => {
+  // Live refresh: skip if ?live=0 (instant DB-only list). Default: few orders, short timeouts.
+  const skipLive = String((req.query && req.query.live) || '') === '0';
+  const active = skipLive ? [] : (data || []).filter((o) => {
     const s = String(o.status || '').toLowerCase();
     return /pending|progress|processing|awaiting|waiting|partial/i.test(s)
       && !/completed|canceled|cancelled|refunded|failed/i.test(s);
-  }).slice(0, 15);
+  }).slice(0, 5); // max 5 per request to avoid gateway timeouts
 
   // Normalize Owlet status payload (field names vary by panel version)
   function pickStatusPayload(json) {
@@ -909,10 +920,10 @@ async function handleMyOrders(req, res) {
   for (const o of active) {
     if (!o.supplier_order_id) continue;
     try {
-      let st = await owletCall({ action: 'status', order: String(o.supplier_order_id) });
+      let st = await owletCall({ action: 'status', order: String(o.supplier_order_id) }, 8000);
       // Fallback: some Perfect-Panel forks expect "orders"
       if (!st.ok || !st.json || st.json.error) {
-        st = await owletCall({ action: 'status', orders: String(o.supplier_order_id) });
+        st = await owletCall({ action: 'status', orders: String(o.supplier_order_id) }, 8000);
       }
       const j = pickStatusPayload(st.json);
       if (!j) continue;
