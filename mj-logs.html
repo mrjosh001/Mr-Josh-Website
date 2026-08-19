@@ -133,6 +133,8 @@ details[open] .product-description-toggle::before{transform:rotate(90deg);displa
 }
 
 </style>
+<link rel="stylesheet" href="/css/skeleton.css">
+<script src="/js/skeleton.js" defer></script>
 </head>
 <body>
 <div class="toast-container" id="toastContainer"></div>
@@ -688,5 +690,26 @@ if(e.target===this) this.classList.remove('active');
 initSession();
 loadProducts();
 </script>
+
+<script>
+(function(){
+  function paint(){
+    if(!window.mjSkeleton) return;
+    var nodes = document.querySelectorAll('[data-skel], #list, #catalog, #servicesGrid, #productsGrid, #orderList');
+    nodes.forEach(function(el){
+      if(el.dataset.skelReady) return;
+      if(el.children.length) return;
+      var type = el.getAttribute('data-skel') || (el.id && /list|order/i.test(el.id) ? 'cards' : 'grid');
+      el.innerHTML = (mjSkeleton[type] || mjSkeleton.grid)(type === 'cards' ? 3 : 6);
+      el.dataset.skelReady = '1';
+    });
+  }
+  if(document.readyState === 'loading') document.addEventListener('DOMContentLoaded', paint);
+  else paint();
+  // retry once scripts loaded
+  setTimeout(paint, 50);
+})();
+</script>
+
 </body>
 </html>

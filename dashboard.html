@@ -2252,6 +2252,8 @@ body::after {
 }
 
 </style>
+<link rel="stylesheet" href="/css/skeleton.css">
+<script src="/js/skeleton.js" defer></script>
 </head>
 <body>
 
@@ -6344,6 +6346,22 @@ function toggleBoosterMenu(e) {
     </div>
   </div>
 </div>
+
+
+<script>
+(function(){
+  function go(){
+    if(!window.mjSkeleton) return;
+    var el = document.getElementById('mainContent') || document.querySelector('[data-skel]');
+    if(el && !el.dataset.skelReady && el.innerHTML.trim().length < 40){
+      el.innerHTML = mjSkeleton.cards(4);
+      el.dataset.skelReady = '1';
+    }
+  }
+  document.addEventListener('DOMContentLoaded', go);
+  setTimeout(go, 80);
+})();
+</script>
 
 </body>
 </html>

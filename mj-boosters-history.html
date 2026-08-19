@@ -55,6 +55,8 @@ h1{font-size:17px;font-weight:800}
 .live-dot{display:inline-block;width:6px;height:6px;border-radius:50%;background:#34d399;margin-right:6px;vertical-align:middle;box-shadow:0 0 0 3px rgba(52,211,153,.2)}
 
 </style>
+<link rel="stylesheet" href="/css/skeleton.css">
+<script src="/js/skeleton.js" defer></script>
 </head>
 <body>
 <header class="header">
@@ -160,7 +162,7 @@ function isActive(o){
     console.error('No #list container');
     return;
   }
-  el.innerHTML = '<div class="empty"><p>Loading orders…</p></div>';
+  el.innerHTML = (window.mjSkeleton ? mjSkeleton.cards(3) : '<div class="empty"><p>Loading orders…</p></div>');
 
   // Session required for API
   let session = null;
@@ -239,7 +241,7 @@ function isActive(o){
     if (loading && silent) return;
     loading = true;
     try {
-      if (!silent) el.innerHTML = '<div class="empty"><p>Loading orders…</p></div>';
+      if (!silent) el.innerHTML = (window.mjSkeleton ? mjSkeleton.cards(3) : '<div class="empty"><p>Loading orders…</p></div>');
 
       // Fast: DB only
       const controller = new AbortController();
