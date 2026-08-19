@@ -53,19 +53,39 @@ h1{font-size:17px;font-weight:800}
 </header>
 <div class="list" id="list"><div class="spinner"></div></div>
 <div class="toast" id="toast"></div>
-<script>
 
+<script>
 const SUPABASE_URL = 'https://atczodlljmlayvldxfmv.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImF0Y3pvZGxsam1sYXl2bGR4Zm12Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODUwNzUyMzgsImV4cCI6MjEwMDY1MTIzOH0.ufthD-p7BmeD_B7xyuMM6PNPL8DmcL4AtRYgg-MuoLI';
 const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
   auth: { persistSession: true, autoRefreshToken: true, storage: window.sessionStorage }
 });
 
-function syncThemeUi(){const dark=document.documentElement.getAttribute('data-theme')!=='light';const b=document.getElementById('themeBtn');if(b)b.textContent=dark?'🌙':'☀️';const m=document.querySelector('meta[name="theme-color"]');if(m)m.setAttribute('content',dark?'#06080f':'#f4f6fb');}
-function toggleTheme(){const cur=document.documentElement.getAttribute('data-theme')==='light'?'light':'dark';const next=cur==='dark'?'light':'dark';document.documentElement.setAttribute('data-theme',next);try{localStorage.setItem('mjhub-theme',next);}catch(e){}syncThemeUi();}
+function syncThemeUi(){
+  const dark = document.documentElement.getAttribute('data-theme') !== 'light';
+  const b = document.getElementById('themeBtn');
+  if (b) b.textContent = dark ? '🌙' : '☀️';
+  const m = document.querySelector('meta[name="theme-color"]');
+  if (m) m.setAttribute('content', dark ? '#06080f' : '#f4f6fb');
+}
+function toggleTheme(){
+  const cur = document.documentElement.getAttribute('data-theme') === 'light' ? 'light' : 'dark';
+  const next = cur === 'dark' ? 'light' : 'dark';
+  document.documentElement.setAttribute('data-theme', next);
+  try { localStorage.setItem('mjhub-theme', next); } catch (e) {}
+  syncThemeUi();
+}
 syncThemeUi();
-function esc(s){return String(s||'').replace(/[&<>"']/g,c=>({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]))}
-function fmt(n){return '₦'+Number(n||0).toLocaleString()}
+const themeBtn = document.getElementById('themeBtn');
+if (themeBtn) themeBtn.onclick = toggleTheme;
+
+function esc(s){
+  return String(s || '').replace(/[&<>"']/g, c => ({
+    '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'
+  }[c]));
+}
+function fmt(n){ return '₦' + Number(n || 0).toLocaleString(); }
+
 function progressHtml(o){
   const qty = Number(o.quantity) || 0;
   const st = String(o.status || '').toLowerCase();
@@ -77,9 +97,7 @@ function progressHtml(o){
   let done = null;
   let pct = null;
   if (st === 'completed' || st === 'complete') {
-    done = qty;
-    remains = 0;
-    pct = 100;
+    done = qty; remains = 0; pct = 100;
   } else if (remains != null && qty > 0) {
     done = Math.max(0, Math.min(qty, qty - remains));
     pct = Math.round((done / qty) * 100);
@@ -87,15 +105,10 @@ function progressHtml(o){
     done = Math.max(0, Math.min(qty, Number(o.delivered) || 0));
     pct = Math.round((done / qty) * 100);
     remains = qty - done;
-  } else if (o.progress_pct != null && !Number.isNaN(Number(o.progress_pct))) {
-    pct = Math.max(0, Math.min(100, Number(o.progress_pct)));
-    if (qty > 0) done = Math.round((pct / 100) * qty);
   } else if (st === 'pending' || st === 'awaiting') {
-    done = 0;
-    pct = 0;
+    done = 0; pct = 0;
   }
 
-  // In progress with no numbers yet: show subtle indeterminate-looking thin pulse via 3% min
   const activeNoData = /progress|processing|waiting/.test(st) && pct == null;
   if (activeNoData) pct = 3;
 
@@ -115,108 +128,150 @@ function progressHtml(o){
   </div>`;
 }
 
-  function canCancel(o){
-    const s=String(o.status||'').toLowerCase();
-    return s==='pending' || s==='awaiting' || s==='waiting';
+function canCancel(o){
+  const s = String(o.status || '').toLowerCase();
+  return /pending|awaiting|waiting/.test(s);
+}
+function canRefill(o){
+  const s = String(o.status || '').toLowerCase();
+  return /completed|partial/.test(s);
+}
+function isActive(o){
+  const s = String(o.status || '').toLowerCase();
+  return /pending|progress|processing|awaiting|waiting|partial/.test(s)
+    && !/completed|canceled|cancelled|refunded|failed/.test(s);
+}
+
+(async function main(){
+  const el = document.getElementById('list') || document.querySelector('.list');
+  if (!el) {
+    console.error('No #list container');
+    return;
   }
-  function canRefill(o){
-    const s=String(o.status||'').toLowerCase();
-    return /completed|partial/.test(s);
+  el.innerHTML = '<div class="empty"><p>Loading orders…</p></div>';
+
+  // Session required for API
+  let session = null;
+  try {
+    const res = await sb.auth.getSession();
+    session = res.data && res.data.session;
+  } catch (e) {
+    console.error(e);
   }
-  function isActive(o){
-    const s=String(o.status||'').toLowerCase();
-    return /pending|progress|processing|awaiting|waiting|partial/.test(s) && !/completed|canceled|cancelled|refunded|failed/.test(s);
+  if (!session || !session.access_token) {
+    el.innerHTML = `<div class="empty"><h3>Please sign in</h3><p>Your session is missing. Sign in again to see booster orders.</p><a href="auth.html">Sign in</a></div>`;
+    return;
   }
 
-  window.cancelOrder = async function(orderId){
-    if(!orderId) return;
-    if(!confirm('Cancel this order?')) return;
-    try{
-      const res=await fetch('/api/owlet?action=cancel',{method:'POST',headers:{...headers,'Content-Type':'application/json'},body:JSON.stringify({order:orderId})});
-      const j=await res.json();
-      toast(j.success ? (j.refunded ? 'Order cancelled. Refund added to wallet.' : 'Order cancelled.') : (j.message && !/supplier/i.test(j.message) ? j.message : 'Cancel not available for this order right now.'));
-      if(j.success) setTimeout(()=>loadOrders(true),600);
-    }catch(e){toast(e.message||'Network error')}
+  const headers = {
+    Authorization: 'Bearer ' + session.access_token,
+    Accept: 'application/json'
   };
+
+  window.cancelOrder = async function(orderId){
+    if (!orderId || !confirm('Cancel this order?')) return;
+    try {
+      const res = await fetch('/api/owlet?action=cancel', {
+        method: 'POST',
+        headers: { ...headers, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ order: orderId })
+      });
+      const json = await res.json();
+      if (!json.success) alert(json.message || 'Cancel failed');
+      else loadOrders(true);
+    } catch (e) { alert(e.message || 'Network error'); }
+  };
+
   window.refillOrder = async function(orderId){
-    if(!orderId) return;
-    try{
-      const res=await fetch('/api/owlet?action=refill',{method:'POST',headers:{...headers,'Content-Type':'application/json'},body:JSON.stringify({order:orderId})});
-      const j=await res.json();
-      toast(j.message||(j.success?'Refill requested':'Refill failed'));
-      if(j.success) setTimeout(()=>loadOrders(true),600);
-    }catch(e){toast(e.message||'Network error')}
+    if (!orderId) return;
+    try {
+      const res = await fetch('/api/owlet?action=refill', {
+        method: 'POST',
+        headers: { ...headers, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ order: orderId })
+      });
+      const json = await res.json();
+      if (!json.success) alert(json.message || 'Refill failed');
+      else { alert('Refill requested'); loadOrders(true); }
+    } catch (e) { alert(e.message || 'Network error'); }
   };
 
   function renderRows(rows){
-    if(!rows.length){
-      el.innerHTML=`<div class="empty"><div style="font-size:40px;margin-bottom:8px">⚡</div><h3>No boost orders yet</h3><p>Your growth orders will show here with live progress.</p><a href="mj-boosters.html">Place first boost</a></div>`;
+    if (!rows.length) {
+      el.innerHTML = `<div class="empty"><div style="font-size:40px;margin-bottom:8px">⚡</div><h3>No boost orders yet</h3><p>Your growth orders will show here with live progress.</p><a href="mj-boosters.html">Place first boost</a></div>`;
       return;
     }
-    el.innerHTML=rows.map(o=>{
-      const oid=o.supplier_order_id||'';
-      const actions=[];
-      if(canCancel(o)&&oid) actions.push(`<button type="button" class="btn-mini danger" onclick="cancelOrder('${esc(oid)}')">Cancel</button>`);
-      if(canRefill(o)&&oid) actions.push(`<button type="button" class="btn-mini primary" onclick="refillOrder('${esc(oid)}')">Request refill</button>`);
-      return `
-      <div class="card" data-order="${esc(oid)}">
+    el.innerHTML = rows.map(o => {
+      const oid = o.supplier_order_id || '';
+      const actions = [];
+      if (canCancel(o) && oid) actions.push(`<button type="button" class="btn-mini danger" onclick="cancelOrder('${esc(oid)}')">Cancel</button>`);
+      if (canRefill(o) && oid) actions.push(`<button type="button" class="btn-mini primary" onclick="refillOrder('${esc(oid)}')">Request refill</button>`);
+      return `<div class="card" data-order="${esc(oid)}">
         <div class="top">
-          <div class="title">${esc(o.service_name||'Boost')}</div>
-          <span class="status ${esc(o.status||'')}">${esc(o.status||'Pending')}</span>
+          <div class="title">${esc(o.service_name || 'Boost')}</div>
+          <span class="status ${esc(o.status || '')}">${esc(o.status || 'Pending')}</span>
         </div>
-        <div class="meta">${esc(o.link||'')}</div>
-        <div class="row"><span>Ordered ${Number(o.quantity||0).toLocaleString()}</span><span>${fmt(o.price_ngn)}</span></div>
+        <div class="meta">${esc(o.link || '')}</div>
+        <div class="row"><span>Ordered ${Number(o.quantity || 0).toLocaleString()}</span><span>${fmt(o.price_ngn)}</span></div>
         ${progressHtml(o)}
-        <div class="row"><span>Order #${esc(oid||o.id||'')}</span><span>${o.created_at?new Date(o.created_at).toLocaleString():''}</span></div>
-        ${actions.length?`<div class="btn-row">${actions.join('')}</div>`:''}
+        <div class="row"><span>Order #${esc(oid || o.id || '')}</span><span>${o.created_at ? new Date(o.created_at).toLocaleString() : ''}</span></div>
+        ${actions.length ? `<div class="btn-row">${actions.join('')}</div>` : ''}
       </div>`;
     }).join('');
   }
 
-  let pollTimer=null;
+  let pollTimer = null;
+  let loading = false;
+
   async function loadOrders(silent){
-    try{
-      if(!silent && el && !el.dataset.loaded){
-        el.innerHTML='<div class="empty"><p>Loading orders…</p></div>';
-      }
-      // 1) Fast path: DB only (no Owlet wait)
-      const resFast=await fetch('/api/owlet?action=my_orders&page_size=50&live=0',{headers});
-      const jsonFast=await resFast.json();
-      if(!jsonFast.success){
-        if(!silent) el.innerHTML=`<div class="empty"><h3>Could not load orders</h3><p>${esc(jsonFast.message||'')}</p><a href="mj-boosters.html">Back to Boosters</a></div>`;
+    if (loading && silent) return;
+    loading = true;
+    try {
+      if (!silent) el.innerHTML = '<div class="empty"><p>Loading orders…</p></div>';
+
+      // Fast: DB only
+      const controller = new AbortController();
+      const t = setTimeout(() => controller.abort(), 20000);
+      const resFast = await fetch('/api/owlet?action=my_orders&page_size=50&live=0', {
+        headers,
+        signal: controller.signal
+      });
+      clearTimeout(t);
+      const jsonFast = await resFast.json().catch(() => ({}));
+      if (!jsonFast.success) {
+        el.innerHTML = `<div class="empty"><h3>Could not load orders</h3><p>${esc(jsonFast.message || resFast.statusText || 'Error')}</p><a href="auth.html">Sign in again</a></div>`;
         return;
       }
-      let rows=jsonFast.data||[];
-      el.dataset.loaded='1';
+      let rows = jsonFast.data || [];
       renderRows(rows);
 
-      const hasActive=rows.some(isActive);
-      // 2) Background live refresh (may take a few seconds)
-      if(hasActive){
-        fetch('/api/owlet?action=my_orders&page_size=50',{headers})
-          .then(r=>r.json())
-          .then(json=>{
-            if(json && json.success && Array.isArray(json.data)){
-              rows=json.data;
-              renderRows(rows);
-            }
+      const hasActive = rows.some(isActive);
+      if (hasActive) {
+        // Background live update (do not block UI)
+        fetch('/api/owlet?action=my_orders&page_size=50', { headers })
+          .then(r => r.json())
+          .then(json => {
+            if (json && json.success && Array.isArray(json.data)) renderRows(json.data);
           })
-          .catch(()=>{});
+          .catch(() => {});
       }
-      if(pollTimer){ clearInterval(pollTimer); pollTimer=null; }
-      if(hasActive){
-        pollTimer=setInterval(()=>loadOrders(true), 15000);
-      }
-    }catch(e){
-      if(!silent) el.innerHTML=`<div class="empty"><h3>Network error</h3><p>${esc(e.message||'')}</p></div>`;
+
+      if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
+      if (hasActive) pollTimer = setInterval(() => loadOrders(true), 20000);
+    } catch (e) {
+      const msg = e.name === 'AbortError' ? 'Request timed out. Try refresh.' : (e.message || 'Network error');
+      if (!silent) el.innerHTML = `<div class="empty"><h3>Could not load</h3><p>${esc(msg)}</p><button type="button" class="btn-mini primary" onclick="location.reload()">Retry</button></div>`;
+    } finally {
+      loading = false;
     }
   }
 
-  const rb=document.getElementById('refreshBtn');
-  if(rb) rb.onclick=()=>loadOrders(false);
+  const rb = document.getElementById('refreshBtn');
+  if (rb) rb.onclick = () => loadOrders(false);
+
   await loadOrders(false);
-  document.addEventListener('visibilitychange', ()=>{
-    if(!document.hidden) loadOrders(true);
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden) loadOrders(true);
   });
 })();
 </script>
