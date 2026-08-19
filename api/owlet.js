@@ -887,29 +887,47 @@ async function handleMyOrders(req, res) {
       && !/completed|canceled|cancelled|refunded|failed/i.test(s);
   }).slice(0, 15);
 
+  // Normalize Owlet status payload (field names vary by panel version)
+  function pickStatusPayload(json) {
+    if (!json || typeof json !== 'object') return null;
+    if (json.error) return null;
+    // Some panels wrap: { order: { ... } } or return array
+    let j = json;
+    if (Array.isArray(json) && json[0]) j = json[0];
+    if (j.order && typeof j.order === 'object' && !Array.isArray(j.order)) j = j.order;
+    return j;
+  }
+  function numField(j, ...keys) {
+    for (const k of keys) {
+      if (j[k] == null || j[k] === '') continue;
+      const n = Number(j[k]);
+      if (!Number.isNaN(n)) return n;
+    }
+    return null;
+  }
+
   for (const o of active) {
     if (!o.supplier_order_id) continue;
     try {
-      const st = await owletCall({ action: 'status', order: String(o.supplier_order_id) });
-      if (!st.ok || !st.json || st.json.error) continue;
+      let st = await owletCall({ action: 'status', order: String(o.supplier_order_id) });
+      // Fallback: some Perfect-Panel forks expect "orders"
+      if (!st.ok || !st.json || st.json.error) {
+        st = await owletCall({ action: 'status', orders: String(o.supplier_order_id) });
+      }
+      const j = pickStatusPayload(st.json);
+      if (!j) continue;
 
-      const j = st.json;
       const oldStatus = o.status;
-      o.status = j.status || o.status;
+      const newStatus = j.status || j.Status || o.status;
+      o.status = newStatus;
 
-      // Normalize numbers (Owlet often returns strings)
-      if (j.start_count != null && j.start_count !== '') {
-        const n = Number(j.start_count);
-        if (!Number.isNaN(n)) o.start_count = n;
-      }
-      if (j.remains != null && j.remains !== '') {
-        const n = Number(j.remains);
-        if (!Number.isNaN(n)) o.remains = n;
-      }
+      const startN = numField(j, 'start_count', 'startCount', 'start', 'Start_count');
+      const remainsN = numField(j, 'remains', 'Remains', 'remain', 'remaining');
+      if (startN != null) o.start_count = startN;
+      if (remainsN != null) o.remains = remainsN;
       if (j.charge != null && j.charge !== '') o.charge = j.charge;
       if (j.currency) o.currency = j.currency;
 
-      // Derived delivered for client convenience
       const qty = Number(o.quantity) || 0;
       if (o.remains != null && qty > 0) {
         o.delivered = Math.max(0, Math.min(qty, qty - Number(o.remains)));
@@ -919,22 +937,39 @@ async function handleMyOrders(req, res) {
       }
 
       const refunded = await refundIfSupplierFailed(o, oldStatus, o.status);
-      const patch = {
+
+      // Persist core fields first (never block live response if optional cols missing)
+      const core = {
         status: o.status,
         start_count: o.start_count,
         remains: o.remains,
         updated_at: new Date().toISOString()
       };
-      if (refunded > 0) patch.refund_ngn = refunded;
-      if (o.delivered != null) patch.delivered = o.delivered;
-      await supabase.from('booster_orders').update(patch).eq('id', o.id);
+      let { error: upErr } = await supabase.from('booster_orders').update(core).eq('id', o.id);
+      if (upErr) console.warn('[owlet my_orders] update core', upErr.message);
+
+      if (refunded > 0 || o.delivered != null) {
+        const extra = {};
+        if (refunded > 0) extra.refund_ngn = refunded;
+        if (o.delivered != null) extra.delivered = o.delivered;
+        if (Object.keys(extra).length) {
+          const { error: exErr } = await supabase.from('booster_orders').update(extra).eq('id', o.id);
+          if (exErr) console.warn('[owlet my_orders] update extra', exErr.message);
+        }
+      }
+
       if (refunded) {
         o.auto_refunded = refunded;
         o.refund_ngn = refunded;
       }
       o.live = true;
       o.synced_at = new Date().toISOString();
-    } catch (_) {}
+      o.progress_pct = qty > 0 && o.delivered != null
+        ? Math.round((Number(o.delivered) / qty) * 100)
+        : (/completed/i.test(String(o.status)) ? 100 : null);
+    } catch (e) {
+      console.warn('[owlet my_orders] status refresh', e.message || e);
+    }
   }
 
   return res.status(200).json({
