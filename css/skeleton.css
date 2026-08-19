@@ -1,0 +1,76 @@
+/* MJ Hub skeleton loaders — blue/white brand safe */
+.mj-skel {
+  --skel-base: rgba(148, 163, 184, 0.14);
+  --skel-shine: rgba(255, 255, 255, 0.08);
+}
+:root[data-theme="light"] .mj-skel,
+html[data-theme="light"] .mj-skel {
+  --skel-base: rgba(15, 23, 42, 0.08);
+  --skel-shine: rgba(255, 255, 255, 0.55);
+}
+
+.mj-skel-pulse {
+  background: linear-gradient(
+    90deg,
+    var(--skel-base) 0%,
+    var(--skel-shine) 50%,
+    var(--skel-base) 100%
+  );
+  background-size: 200% 100%;
+  animation: mjSkelShine 1.2s ease-in-out infinite;
+  border-radius: 10px;
+}
+@keyframes mjSkelShine {
+  0% { background-position: 100% 0; }
+  100% { background-position: -100% 0; }
+}
+
+.mj-skel-card {
+  background: var(--card, #0f1524);
+  border: 1px solid var(--border, rgba(148,163,184,.12));
+  border-radius: 16px;
+  padding: 16px;
+  margin-bottom: 12px;
+}
+.mj-skel-line {
+  height: 12px;
+  border-radius: 8px;
+  margin-bottom: 10px;
+}
+.mj-skel-line.lg { height: 16px; width: 70%; }
+.mj-skel-line.md { height: 12px; width: 55%; }
+.mj-skel-line.sm { height: 10px; width: 40%; }
+.mj-skel-line.full { width: 100%; }
+.mj-skel-bar {
+  height: 8px;
+  border-radius: 99px;
+  width: 100%;
+  margin-top: 8px;
+}
+.mj-skel-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 8px;
+}
+.mj-skel-pill {
+  height: 22px;
+  width: 72px;
+  border-radius: 999px;
+}
+.mj-skel-avatar {
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  flex-shrink: 0;
+}
+.mj-skel-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 12px;
+}
+.mj-skel-tile {
+  height: 110px;
+  border-radius: 16px;
+}
+.mj-skel-wrap { padding: 14px 16px; }
