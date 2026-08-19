@@ -47,7 +47,8 @@ h1{font-size:17px;font-weight:800}
 <body>
 <header class="header">
   <a class="back" href="mj-boosters.html"><i class="fa-solid fa-arrow-left"></i></a>
-  <h1>Booster Orders</h1>
+  <h1 style="flex:1">Booster Orders</h1>
+<button type="button" class="back" id="refreshBtn" title="Refresh" aria-label="Refresh" style="border:none;cursor:pointer;font-size:16px">↻</button>
   <button type="button" id="themeBtn" onclick="toggleTheme()" style="margin-left:auto;width:40px;height:40px;border-radius:12px;border:1px solid var(--border);background:var(--card);cursor:pointer;font-size:16px;">🌙</button>
 </header>
 <div class="list" id="list"><div class="spinner"></div></div>
@@ -86,34 +87,34 @@ function progressHtml(o){
     done = Math.max(0, Math.min(qty, Number(o.delivered) || 0));
     pct = Math.round((done / qty) * 100);
     remains = qty - done;
+  } else if (o.progress_pct != null && !Number.isNaN(Number(o.progress_pct))) {
+    pct = Math.max(0, Math.min(100, Number(o.progress_pct)));
+    if (qty > 0) done = Math.round((pct / 100) * qty);
   } else if (st === 'pending' || st === 'awaiting') {
     done = 0;
     pct = 0;
   }
 
-  const leftLabel = remains != null ? (remains.toLocaleString() + ' left') : (pct != null ? pct + '%' : '…');
+  // In progress with no numbers yet: show subtle indeterminate-looking thin pulse via 3% min
+  const activeNoData = /progress|processing|waiting/.test(st) && pct == null;
+  if (activeNoData) pct = 3;
+
+  const leftLabel = remains != null
+    ? (remains.toLocaleString() + ' left')
+    : (pct != null && !activeNoData ? pct + '%' : 'updating…');
   const doneLabel = done != null
     ? (done.toLocaleString() + ' of ' + qty.toLocaleString() + ' done')
-    : 'Waiting for update…';
+    : (activeNoData ? 'Waiting for supplier update…' : 'Waiting for update…');
   const startLabel = start != null ? (' · start count ' + start.toLocaleString()) : '';
-  const barW = pct != null ? pct : 0;
   const live = o.live ? ' · live' : '';
+  const barPct = pct != null ? pct : 0;
 
-  return `<div class="progress-wrap">
-    <div class="progress-label">
-      <span>${doneLabel}${startLabel}${live}</span>
-      <span>${leftLabel}</span>
-    </div>
-    <div class="bar"><span style="width:${barW}%"></span></div>
+  return `<div class="prog">
+    <div class="prog-top"><span>${doneLabel}${startLabel}${live}</span><span>${leftLabel}</span></div>
+    <div class="bar"><div class="bar-fill" style="width:${barPct}%"></div></div>
   </div>`;
 }
-(async()=>{
-  const {data}=await sb.auth.getSession();
-  if(!data?.session){ location.href='auth.html?next=mj-boosters-history.html'; return; }
-  const headers={Authorization:'Bearer '+data.session.access_token};
-  const el=document.getElementById('list');
 
-  function toast(msg,ms){const t=document.getElementById('toast');if(!t)return;t.textContent=msg;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),ms||3200)}
   function canCancel(o){
     const s=String(o.status||'').toLowerCase();
     return s==='pending' || s==='awaiting' || s==='waiting';
@@ -187,13 +188,15 @@ function progressHtml(o){
       if(pollTimer){ clearInterval(pollTimer); pollTimer=null; }
       // Poll every 20s while any order is still active
       if(hasActive){
-        pollTimer=setInterval(()=>loadOrders(true), 20000);
+        pollTimer=setInterval(()=>loadOrders(true), 12000);
       }
     }catch(e){
       if(!silent) el.innerHTML=`<div class="empty"><h3>Network error</h3><p>${esc(e.message||'')}</p></div>`;
     }
   }
 
+  const rb=document.getElementById('refreshBtn');
+  if(rb) rb.onclick=()=>loadOrders(false);
   await loadOrders(false);
   document.addEventListener('visibilitychange', ()=>{
     if(!document.hidden) loadOrders(true);
