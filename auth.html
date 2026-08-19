@@ -702,10 +702,18 @@
                 const { data: { session } } = await supabaseClient.auth.getSession();
                 if (session && session.user) {
                   try { sessionStorage.setItem('mjhub-fresh-login', '1'); } catch (e) {}
+                  // Confirmed + session ready → user app (never landing index.html)
                   showSuccess('✅ Email confirmed. Taking you to your dashboard…');
                   setTimeout(function () {
-                    window.location.href = 'index.html';
+                    window.location.href = 'dashboard.html';
                   }, 900);
+                } else if (hasAuthHash || urlParams.get('verified') === '1') {
+                  // Tokens missing/expired but user landed from confirm link → stay on sign-in
+                  switchTab('signin');
+                  showSuccess('✅ Your email has been verified! Please sign in below.');
+                  try {
+                    window.history.replaceState({}, document.title, window.location.pathname + window.location.search.replace(/[?&]verified=1/, '').replace(/^&/, '?') || window.location.pathname);
+                  } catch (e2) {}
                 }
               } catch (e) { console.warn('confirm session', e); }
             })();
@@ -812,14 +820,64 @@
 
         function formatAuthError(error) {
             if (!error) return 'Something went wrong. Please try again.';
-            const tag = [];
-            if (error.status) tag.push('[' + error.status + ']');
-            if (error.code) tag.push('(' + error.code + ')');
-            let msg = error.message;
-            if (!msg || msg === '{}' || msg === '[object Object]') {
-                msg = error.error_description || error.msg || error.error || 'Registration failed — no details were returned by the server. Please try again in a moment.';
+            const raw = String(error.message || error.error_description || error.msg || error.error || '').trim();
+            const code = String(error.code || error.error_code || '').toLowerCase();
+            const low = raw.toLowerCase();
+
+            // Clear, user-facing messages (no cryptic codes)
+            if (low.includes('banned')) {
+                return 'You have been banned from MJ HUB. Contact support if this is a mistake.';
             }
-            return (tag.length ? tag.join(' ') + ' ' : '') + msg;
+            if (code === 'email_not_confirmed' || low.includes('email not confirmed') || low.includes('not confirmed')) {
+                return 'Your email is not confirmed yet. Open the link we sent you, then sign in.';
+            }
+            if (code === 'user_already_exists' || low.includes('already registered') || low.includes('already been registered') || low.includes('user already registered')) {
+                return 'An account with this email already exists. Please sign in instead.';
+            }
+            if (low.includes('password') && (low.includes('weak') || low.includes('least') || low.includes('characters'))) {
+                return 'Password is too weak. Use at least 8 characters with uppercase, lowercase, and a number.';
+            }
+            if (code === 'over_request_rate_limit' || low.includes('rate limit') || low.includes('too many requests')) {
+                return 'Too many attempts. Please wait a few minutes and try again.';
+            }
+            if (low.includes('network') || low.includes('failed to fetch')) {
+                return 'Network error. Check your connection and try again.';
+            }
+            // Invalid login: refined further by resolveLoginError()
+            if (code === 'invalid_credentials' || low.includes('invalid login credentials') || low.includes('invalid credentials')) {
+                return 'Incorrect email or password. Check both and try again.';
+            }
+            if (raw && raw !== '{}' && raw !== '[object Object]') {
+                return raw;
+            }
+            return 'Something went wrong. Please try again.';
+        }
+
+        /**
+         * After a failed password login, try to tell "no account" vs "wrong password".
+         * Uses optional RPC public.email_registered(p_email) when you add it in Supabase.
+         * Falls back to a clear combined message if the RPC is not installed.
+         */
+        async function resolveLoginError(error, email) {
+            const raw = String(error && (error.message || error.error_description) || '').toLowerCase();
+            const code = String(error && (error.code || error.error_code) || '').toLowerCase();
+            const isInvalidCreds = code === 'invalid_credentials' || raw.includes('invalid login credentials') || raw.includes('invalid credentials');
+
+            if (!isInvalidCreds) {
+                return formatAuthError(error);
+            }
+
+            try {
+                const { data, error: rpcErr } = await supabaseClient.rpc('email_registered', { p_email: String(email || '').trim().toLowerCase() });
+                if (!rpcErr && data === true) {
+                    return 'Incorrect password. Try again or use Forgot Password.';
+                }
+                if (!rpcErr && data === false) {
+                    return 'No account found with this email. Please sign up first.';
+                }
+            } catch (e) { /* RPC not installed yet */ }
+
+            return 'Incorrect email or password. If you do not have an account, sign up first.';
         }
 
         function showError(message) {
@@ -971,7 +1029,7 @@
                 if (isBannedError(error)) {
                     showBannedError();
                 } else {
-                    var msg = formatAuthError(error);
+                    var msg = await resolveLoginError(error, email);
                     if (typeof mjGetAttempts === 'function') {
                         var left = MJ_LOGIN_MAX - mjGetAttempts('login').length;
                         if (left <= 2 && left > 0) msg += ' (' + left + ' attempts left before temporary lockout)';
@@ -1064,7 +1122,7 @@
                         // Where Supabase sends the user after they click the
                         // confirm-email link — back to the sign-in page here,
                         // with ?verified=1 so auth.html can greet them.
-                        emailRedirectTo: window.location.origin + '/auth.html?verified=1'
+                        emailRedirectTo: window.location.origin + '/auth?verified=1'
                     }
                 }));
             } catch (e) {

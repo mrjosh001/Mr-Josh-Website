@@ -500,7 +500,7 @@
             const { error } = await supabaseClient.auth.resend({
                 type: 'signup',
                 email: email,
-                options: { emailRedirectTo: window.location.origin + window.location.pathname.replace('check-email.html', 'auth.html') + '?verified=1' }
+                options: { emailRedirectTo: window.location.origin + '/auth?verified=1' }
             });
 
             if (error) {
