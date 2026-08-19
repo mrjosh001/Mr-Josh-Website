@@ -1,0 +1,36 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Ensure API routes exist
+        run: |
+          test -f api/admin.js
+          test -f api/owlet.js
+          test -f api/pocketfi.js
+          test -f api/order.js
+          test -f api/products.js
+
+      - name: Block service role JWT in HTML
+        run: |
+          if grep -R -nE "SERVICE_ROLE_KEY[[:space:]]*=[[:space:]]*['\"]eyJ" --include="*.html" . ; then
+            echo "Service role JWT must not appear in HTML"
+            exit 1
+          fi
+          echo "OK"
+
+      - name: Syntax check API and lib JS
+        run: |
+          for f in api/*.js lib/*.js; do
+            node --check "$f" || exit 1
+          done
+          echo "Syntax OK"
