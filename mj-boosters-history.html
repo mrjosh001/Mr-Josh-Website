@@ -42,6 +42,18 @@ h1{font-size:17px;font-weight:800}
 .btn-mini.primary{border-color:rgba(91,138,245,.4);color:var(--primary)}
 .toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:#111827;color:#fff;padding:12px 16px;border-radius:12px;font-size:13px;font-weight:700;z-index:50;opacity:0;pointer-events:none;transition:.2s;max-width:90%}
 .toast.show{opacity:1}
+
+.prog{margin-top:12px}
+.prog-meta{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:6px}
+.prog-meta .left{font-size:12px;color:var(--muted);font-weight:600}
+.prog-meta .right{font-size:12px;color:var(--muted);font-weight:600;white-space:nowrap}
+.prog-detail{font-size:11px;color:var(--muted);margin-top:8px;line-height:1.4}
+.bar{height:8px;border-radius:99px;background:rgba(148,163,184,.14);overflow:hidden}
+.bar-fill{height:100%;border-radius:99px;background:linear-gradient(90deg,var(--primary),#60a5fa);transition:width .5s ease;min-width:0}
+.bar-fill.done{background:linear-gradient(90deg,#34d399,#6ee7b7)}
+.bar-fill.partial{background:linear-gradient(90deg,#fbbf24,#fcd34d)}
+.live-dot{display:inline-block;width:6px;height:6px;border-radius:50%;background:#34d399;margin-right:6px;vertical-align:middle;box-shadow:0 0 0 3px rgba(52,211,153,.2)}
+
 </style>
 </head>
 <body>
@@ -94,37 +106,42 @@ function progressHtml(o){
   if (remains != null && Number.isNaN(remains)) remains = null;
   if (start != null && Number.isNaN(start)) start = null;
 
-  let done = null;
-  let pct = null;
-  if (st === 'completed' || st === 'complete') {
-    done = qty; remains = 0; pct = 100;
+  let done = 0;
+  let pct = 0;
+  if (/completed|complete/.test(st)) {
+    done = qty;
+    remains = 0;
+    pct = 100;
   } else if (remains != null && qty > 0) {
     done = Math.max(0, Math.min(qty, qty - remains));
     pct = Math.round((done / qty) * 100);
   } else if (o.delivered != null && qty > 0) {
     done = Math.max(0, Math.min(qty, Number(o.delivered) || 0));
+    remains = Math.max(0, qty - done);
     pct = Math.round((done / qty) * 100);
-    remains = qty - done;
-  } else if (st === 'pending' || st === 'awaiting') {
-    done = 0; pct = 0;
+  } else if (/pending|awaiting/.test(st)) {
+    done = 0;
+    remains = qty || 0;
+    pct = 0;
+  } else if (/progress|processing|waiting/.test(st)) {
+    pct = 2;
   }
 
-  const activeNoData = /progress|processing|waiting/.test(st) && pct == null;
-  if (activeNoData) pct = 3;
+  if (remains == null && qty > 0) remains = Math.max(0, qty - done);
 
-  const leftLabel = remains != null
-    ? (remains.toLocaleString() + ' left')
-    : (pct != null && !activeNoData ? pct + '%' : 'updating…');
-  const doneLabel = done != null
-    ? (done.toLocaleString() + ' of ' + qty.toLocaleString() + ' done')
-    : (activeNoData ? 'Waiting for supplier update…' : 'Waiting for update…');
-  const startLabel = start != null ? (' · start count ' + start.toLocaleString()) : '';
-  const live = o.live ? ' · live' : '';
-  const barPct = pct != null ? pct : 0;
+  const fillClass = pct >= 100 ? 'done' : (/partial/.test(st) ? 'partial' : '');
+  const liveBit = o.live
+    ? '<span class="live-dot"></span>Live from supplier'
+    : 'Last saved progress';
+  const startBit = start != null ? 'Start count ' + start.toLocaleString() : '';
 
   return `<div class="prog">
-    <div class="prog-top"><span>${doneLabel}${startLabel}${live}</span><span>${leftLabel}</span></div>
-    <div class="bar"><div class="bar-fill" style="width:${barPct}%"></div></div>
+    <div class="prog-meta">
+      <span class="left"><strong style="color:var(--text)">${done.toLocaleString()}</strong> / ${qty.toLocaleString()} delivered</span>
+      <span class="right">${remains != null ? remains.toLocaleString() + ' remaining' : ''}</span>
+    </div>
+    <div class="bar"><div class="bar-fill ${fillClass}" style="width:${Math.max(0, Math.min(100, pct))}%"></div></div>
+    <div class="prog-detail">${liveBit}${startBit ? ' · ' + startBit : ''} · ${pct}%</div>
   </div>`;
 }
 
@@ -232,7 +249,10 @@ function isActive(o){
       // Fast: DB only
       const controller = new AbortController();
       const t = setTimeout(() => controller.abort(), 20000);
-      const resFast = await fetch('/api/owlet?action=my_orders&page_size=50&live=0', {
+      const url = silent
+        ? '/api/owlet?action=my_orders&page_size=50'
+        : '/api/owlet?action=my_orders&page_size=50&live=0';
+      const resFast = await fetch(url, {
         headers,
         signal: controller.signal
       });
@@ -257,7 +277,7 @@ function isActive(o){
       }
 
       if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
-      if (hasActive) pollTimer = setInterval(() => loadOrders(true), 20000);
+      if (hasActive) pollTimer = setInterval(() => loadOrders(true), 12000);
     } catch (e) {
       const msg = e.name === 'AbortError' ? 'Request timed out. Try refresh.' : (e.message || 'Network error');
       if (!silent) el.innerHTML = `<div class="empty"><h3>Could not load</h3><p>${esc(msg)}</p><button type="button" class="btn-mini primary" onclick="location.reload()">Retry</button></div>`;
