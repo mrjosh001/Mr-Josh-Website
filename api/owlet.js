@@ -762,31 +762,98 @@ async function handleOrder(req, res) {
 // again for the same order (guarded by only firing when the OLD status
 // wasn't already terminal, so re-polling an already-refunded order is a
 // no-op instead of a double-refund).
+/**
+ * Credit the user when Owlet cancels/fails OR ends as Partial.
+ * Partial: refund only the undelivered share (remains / quantity * price_ngn),
+ * matching supplier behaviour. Idempotent via refund_ngn on the order row.
+ */
 async function refundIfSupplierFailed(order, oldStatus, newStatus) {
-  const wasTerminal = /completed|canceled|cancelled|refunded|failed/i.test(String(oldStatus || ''));
-  const isNowFailed = /canceled|cancelled|refunded|failed/i.test(String(newStatus || ''));
-  if (wasTerminal || !isNowFailed) return 0;
+  const oldS = String(oldStatus || '');
+  const newS = String(newStatus || '');
+  const wasDone = /completed|canceled|cancelled|refunded|failed/i.test(oldS);
+  // Partial can be re-checked; skip only if we already stored a refund
+  const alreadyRefunded = Number(order.refund_ngn) > 0;
+  if (alreadyRefunded) return 0;
+
+  const isFailed = /canceled|cancelled|refunded|failed/i.test(newS);
+  const isPartial = /partial/i.test(newS);
+  if (!isFailed && !isPartial) return 0;
+  // Don't full-refund if we already treated old status as terminal cancel
+  if (wasDone && isFailed) return 0;
   if (!order.user_id || !(Number(order.price_ngn) > 0)) return 0;
 
-  const { data: prof } = await supabase.from('profiles').select('balance').eq('id', order.user_id).maybeSingle();
+  const qty = Math.max(0, Number(order.quantity) || 0);
+  const price = Number(order.price_ngn) || 0;
+  let remains = order.remains != null && order.remains !== '' ? Number(order.remains) : NaN;
+  if (Number.isNaN(remains) && isPartial && qty > 0) {
+    // Fallback: if delivered was derived earlier
+    if (order.delivered != null) remains = Math.max(0, qty - Number(order.delivered));
+  }
+
+  let refunded = 0;
+  let subtitle = '';
+  if (isPartial && qty > 0 && !Number.isNaN(remains) && remains > 0) {
+    // Undelivered portion only (same idea as supplier)
+    remains = Math.min(qty, Math.max(0, remains));
+    refunded = Math.round((remains / qty) * price);
+    if (refunded < 1 && remains > 0 && price > 0) refunded = 1;
+    if (refunded > price) refunded = price;
+    const delivered = qty - remains;
+    subtitle = `Order #${order.supplier_order_id} partial · ${delivered}/${qty} delivered · ₦${refunded.toLocaleString()} refunded`;
+  } else if (isFailed) {
+    refunded = price;
+    subtitle = `Order #${order.supplier_order_id} cancelled · full balance restored`;
+  } else if (isPartial) {
+    // Partial but no remains data — do not guess full refund
+    console.warn('[owlet refund] Partial without remains, skip auto refund', order.supplier_order_id);
+    return 0;
+  }
+
+  if (!(refunded > 0)) return 0;
+
+  const { data: prof } = await supabase
+    .from('profiles')
+    .select('balance, customer_id')
+    .eq('id', order.user_id)
+    .maybeSingle();
   if (!prof) return 0;
+
   const bal = Number(prof.balance) || 0;
-  const refunded = Number(order.price_ngn) || 0;
-  await supabase.from('profiles').update({ balance: bal + refunded }).eq('id', order.user_id);
+  const { error: balErr } = await supabase
+    .from('profiles')
+    .update({ balance: bal + refunded })
+    .eq('id', order.user_id);
+  if (balErr) {
+    console.error('[owlet refund] balance update failed', balErr.message);
+    return 0;
+  }
+
+  // Mark on order so we never double-pay (column may be missing — ignore error)
+  try {
+    await supabase.from('booster_orders').update({
+      refund_ngn: refunded,
+      updated_at: new Date().toISOString()
+    }).eq('id', order.id);
+  } catch (_) {}
+
   try {
     await supabase.from('transactions').insert({
       user_id: order.user_id,
-      customer_id: order.customer_id || null,
-      type: 'booster',
-      category: 'booster',
-      title: 'Booster order refund',
-      subtitle: `Order #${order.supplier_order_id} cancelled — balance restored`,
-      amount: refunded,
+      customer_id: order.customer_id || prof.customer_id || null,
+      type: 'deposit',
+      category: 'deposit',
+      title: isPartial ? 'Booster partial refund' : 'Booster order refund',
+      subtitle: subtitle,
+      amount: '₦' + refunded.toLocaleString(),
       amount_ngn: refunded,
       status: 'completed',
       created_at: new Date().toISOString()
     });
-  } catch (_) {}
+  } catch (txErr) {
+    console.warn('[owlet refund] transaction row', txErr.message || txErr);
+  }
+
+  order.refund_ngn = refunded;
   return refunded;
 }
 
@@ -852,13 +919,19 @@ async function handleMyOrders(req, res) {
       }
 
       const refunded = await refundIfSupplierFailed(o, oldStatus, o.status);
-      await supabase.from('booster_orders').update({
+      const patch = {
         status: o.status,
         start_count: o.start_count,
         remains: o.remains,
         updated_at: new Date().toISOString()
-      }).eq('id', o.id);
-      if (refunded) o.auto_refunded = refunded;
+      };
+      if (refunded > 0) patch.refund_ngn = refunded;
+      if (o.delivered != null) patch.delivered = o.delivered;
+      await supabase.from('booster_orders').update(patch).eq('id', o.id);
+      if (refunded) {
+        o.auto_refunded = refunded;
+        o.refund_ngn = refunded;
+      }
       o.live = true;
       o.synced_at = new Date().toISOString();
     } catch (_) {}
