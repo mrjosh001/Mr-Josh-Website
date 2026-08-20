@@ -548,7 +548,90 @@
             .auth-container { max-width: 420px; padding: 40px 36px 32px; }
             .form-icon-header h3 { font-size: 24px; }
         }
-    </style>
+    
+/* ===== Animated floating inputs (SmoothUI-style) ===== */
+.form-group.ai-field {
+  position: relative;
+  margin-bottom: 18px;
+}
+.form-group.ai-field > label {
+  position: absolute;
+  left: 44px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 14px;
+  font-weight: 500;
+  color: #94a3b8;
+  pointer-events: none;
+  transition: top .2s ease, transform .2s ease, font-size .2s ease, color .2s ease, left .2s ease;
+  margin: 0;
+  background: transparent;
+  z-index: 2;
+}
+.form-group.ai-field.has-icon > label { left: 44px; }
+.form-group.ai-field .ai-icon {
+  position: absolute;
+  left: 14px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 18px;
+  height: 18px;
+  color: #64748b;
+  z-index: 2;
+  pointer-events: none;
+  transition: color .2s;
+}
+.form-group.ai-field .ai-icon svg {
+  width: 18px; height: 18px; display: block;
+}
+.form-group.ai-field input {
+  width: 100%;
+  padding: 16px 14px 12px 44px !important;
+  background: var(--input-bg);
+  border: 1.5px solid var(--input-border);
+  border-radius: 12px;
+  color: #f1f5f9;
+  font-size: 15px;
+  outline: none;
+  transition: border-color .2s, box-shadow .2s, background .2s;
+}
+.form-group.ai-field .pw-field input {
+  padding-right: 46px !important;
+}
+.form-group.ai-field input::placeholder {
+  color: transparent !important;
+}
+.form-group.ai-field input:focus {
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59,130,246,.2);
+}
+.form-group.ai-field.is-focused .ai-icon,
+.form-group.ai-field input:focus ~ .ai-icon,
+.form-group.ai-field:focus-within .ai-icon {
+  color: #60a5fa;
+}
+/* float label when focused or has value */
+.form-group.ai-field.is-active > label,
+.form-group.ai-field:focus-within > label {
+  top: 0;
+  transform: translateY(-50%);
+  left: 12px;
+  font-size: 11px;
+  font-weight: 700;
+  color: #60a5fa;
+  padding: 0 6px;
+  background: linear-gradient(180deg, transparent 40%, rgba(8,18,36,.95) 40%);
+}
+body[data-theme="light"] .form-group.ai-field.is-active > label,
+body[data-theme="light"] .form-group.ai-field:focus-within > label {
+  background: linear-gradient(180deg, transparent 40%, #fff 40%);
+  color: #2563eb;
+}
+@media (prefers-reduced-motion: reduce) {
+  .form-group.ai-field > label { transition: none; }
+}
+
+</style>
 <script defer src="/_vercel/insights/script.js"></script>
 </head>
 <body>
@@ -587,12 +670,14 @@
 
             <!-- Sign In Form -->
             <form id="signinForm" onsubmit="handleSignIn(event)">
-                <div class="form-group">
+                <div class="form-group ai-field has-icon">
                     <label>Email Address</label>
+                    <span class="ai-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg></span>
                     <input type="email" id="signinEmail" required autocomplete="off" placeholder="name@example.com">
                 </div>
-                <div class="form-group">
+                <div class="form-group ai-field has-icon">
                     <label>Password</label>
+                    <span class="ai-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg></span>
                     <div class="pw-field">
                     <input type="password" id="signinPassword" required autocomplete="current-password" placeholder="••••••••">
                     <button type="button" class="pw-toggle" id="toggleSigninPassword" aria-label="Show password" onclick="togglePasswordVisibility(this)" data-visible="0">
@@ -609,24 +694,29 @@
 
             <!-- Sign Up Form -->
             <form id="signupForm" class="hidden" onsubmit="handleSignUp(event)">
-                <div class="form-group">
+                <div class="form-group ai-field has-icon">
                     <label>Full Name</label>
+                    <span class="ai-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></span>
                     <input type="text" id="fullName" required autocomplete="off" placeholder="Enter full name">
                 </div>
-                <div class="form-group">
+                <div class="form-group ai-field has-icon">
                     <label>Username</label>
+                    <span class="ai-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></span>
                     <input type="text" id="username" required autocomplete="off" placeholder="Choose a username">
                 </div>
-                <div class="form-group">
+                <div class="form-group ai-field has-icon">
                     <label>Email Address</label>
+                    <span class="ai-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg></span>
                     <input type="email" id="emailAddress" required autocomplete="off" placeholder="name@example.com">
                 </div>
-                <div class="form-group">
+                <div class="form-group ai-field has-icon">
                     <label>Phone Number</label>
+                    <span class="ai-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></span>
                     <input type="tel" id="phoneNumber" required autocomplete="off" placeholder="Enter phone number">
                 </div>
-                <div class="form-group">
+                <div class="form-group ai-field has-icon">
                     <label>Choose Password</label>
+                    <span class="ai-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg></span>
                     <div class="pw-field">
                     <input type="password" id="signupPassword" required autocomplete="new-password" placeholder="Min. 8 characters" minlength="8" oninput="updatePasswordStrength(this.value); checkSignupPasswordMatch();">
                     <button type="button" class="pw-toggle" id="toggleSignupPassword" aria-label="Show password" onclick="togglePasswordVisibility(this)" data-visible="0">
@@ -645,8 +735,9 @@
                     </div>
                 </div>
 
-                <div class="form-group">
+                <div class="form-group ai-field has-icon">
                     <label>Confirm Password</label>
+                    <span class="ai-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg></span>
                     <div class="pw-field">
                     <input type="password" id="signupPasswordConfirm" required autocomplete="new-password" placeholder="Re-enter password" minlength="8" oninput="checkSignupPasswordMatch();">
                     <button type="button" class="pw-toggle" id="toggleSignupPasswordConfirm" aria-label="Show password" onclick="togglePasswordVisibility(this)" data-visible="0">
@@ -660,8 +751,9 @@
 
             <!-- Forgot Password Form -->
             <form id="forgotForm" class="hidden" onsubmit="handleForgotPassword(event)">
-                <div class="form-group">
+                <div class="form-group ai-field has-icon">
                     <label>Enter Your Email Address</label>
+                    <span class="ai-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg></span>
                     <input type="email" id="forgotEmail" required autocomplete="off" placeholder="name@example.com">
                 </div>
                 <button type="submit" class="btn-submit" id="forgotSubmitBtn">Send Reset Instructions</button>
@@ -670,8 +762,9 @@
 
             <!-- Update New Password Form -->
             <form id="updatePasswordForm" class="hidden" onsubmit="handleUpdatePassword(event)">
-                <div class="form-group">
+                <div class="form-group ai-field has-icon">
                     <label>New Password</label>
+                    <span class="ai-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg></span>
                     <div class="pw-field">
                     <input type="password" id="newPassword" required autocomplete="new-password" placeholder="Min. 8 characters" minlength="8" oninput="updatePasswordStrength(this.value)">
                     <button type="button" class="pw-toggle" id="toggleNewPassword" aria-label="Show password" onclick="togglePasswordVisibility(this)" data-visible="0">
@@ -1343,5 +1436,40 @@
             }, 1500);
         }
     </script>
+
+<script>
+(function(){
+  function syncAiField(field){
+    var input = field.querySelector('input:not([type="checkbox"])');
+    if (!input) return;
+    if (input.value && String(input.value).length) field.classList.add('is-active');
+    else field.classList.remove('is-active');
+  }
+  function bind(){
+    document.querySelectorAll('.form-group.ai-field').forEach(function(field){
+      var input = field.querySelector('input:not([type="checkbox"])');
+      if (!input || input.dataset.aiBound) return;
+      input.dataset.aiBound = '1';
+      input.addEventListener('focus', function(){ field.classList.add('is-focused','is-active'); });
+      input.addEventListener('blur', function(){
+        field.classList.remove('is-focused');
+        syncAiField(field);
+      });
+      input.addEventListener('input', function(){ syncAiField(field); });
+      syncAiField(field);
+    });
+  }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', bind);
+  else bind();
+  // re-bind when tabs switch
+  document.addEventListener('click', function(e){
+    if (e.target && (e.target.classList.contains('tab-btn') || e.target.closest('.tab-btn'))) {
+      setTimeout(bind, 50);
+    }
+  });
+  window.MJAuthAnimatedInputs = { bind: bind };
+})();
+</script>
+
 </body>
 </html>
