@@ -1433,7 +1433,6 @@ footer.footer3, .footer3 { z-index: 10 !important; isolation: isolate; }
         <a href="auth.html?tab=signup" class="btn btn-primary">Start free</a>
         <a href="auth.html?mode=signin" class="btn btn-ghost">Sign In</a>
       </div>
-      <div class="hero-earn-pill">Earn 2% for life when people you invite fund their wallet</div>
       <div class="hero-stats mj-stats" id="mjLiveStats" data-skeleton="stats">
         <div class="mj-stat">
           <div class="stat-value" id="statUsers"><span class="sk-pulse">, </span></div>
@@ -2298,27 +2297,18 @@ document.addEventListener('DOMContentLoaded', () => {
       var SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImF0Y3pvZGxsam1sYXl2bGR4Zm12Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODUwNzUyMzgsImV4cCI6MjEwMDY1MTIzOH0.ufthD-p7BmeD_B7xyuMM6PNPL8DmcL4AtRYgg-MuoLI';
       var sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-      // Total users = profiles rows (public count; needs RLS allowing anon count or a public RPC)
-      var users = await sb.from('profiles').select('id', { count: 'exact', head: true });
+      // The direct table counts below used to return 0 (not an error) for
+      // every anonymous visitor: RLS on profiles/orders/number_orders/
+      // booster_orders is correctly restricted to authenticated users only,
+      // so an anon-key count query legitimately sees zero visible rows.
+      // get_public_stats() is a SECURITY DEFINER function that computes the
+      // real aggregate counts server-side and returns only those numbers —
+      // never row data — so this doesn't loosen the actual RLS protection.
+      var { data: stats, error: statsErr } = await sb.rpc('get_public_stats');
 
-      // Orders completed — sum of order tables where status looks complete
-      var logs = await sb.from('orders').select('id', { count: 'exact', head: true });
-      var sms = await sb.from('sms_orders').select('id', { count: 'exact', head: true });
-      if (sms.error) sms = await sb.from('number_orders').select('id', { count: 'exact', head: true });
-      var boost = await sb.from('booster_orders').select('id', { count: 'exact', head: true });
-
-      var orderTotal = 0;
-      var orderOk = false;
-      [logs, sms, boost].forEach(function(r){
-        if (r && !r.error && typeof r.count === 'number') { orderTotal += r.count; orderOk = true; }
-      });
-
-      // Community members ≈ users (same community) — or profiles with referral if available
-      var members = users;
-
-      if (elU) elU.textContent = users.error ? '—' : fmt(users.count || 0);
-      if (elO) elO.textContent = orderOk ? fmt(orderTotal) : '—';
-      if (elM) elM.textContent = members.error ? '—' : fmt(members.count || 0);
+      if (elU) elU.textContent = (statsErr || !stats) ? '—' : fmt(stats.total_users || 0);
+      if (elO) elO.textContent = (statsErr || !stats) ? '—' : fmt(stats.orders_completed || 0);
+      if (elM) elM.textContent = (statsErr || !stats) ? '—' : fmt(stats.community_members || 0);
     } catch (e) {
       if (elU) elU.textContent = '—';
       if (elO) elO.textContent = '—';
