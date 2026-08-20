@@ -759,6 +759,22 @@ footer a:hover { color: var(--primary); }
   font-size: 13px; font-weight: 700; color: #fecaca;
 }
 
+/* ===== SCROLL-REVEAL MOTION ===== */
+/* Expo-out style curve — fast start, long smooth settle. This is what was
+   completely missing before: every section just appeared instantly on
+   load with zero entrance choreography, while every hover state already
+   had a proper spring-style bezier. Respects prefers-reduced-motion. */
+[data-reveal] {
+  opacity: 0;
+  transform: translateY(26px);
+  transition: opacity .8s cubic-bezier(.16,1,.3,1), transform .8s cubic-bezier(.16,1,.3,1);
+  transition-delay: var(--reveal-delay, 0ms);
+}
+[data-reveal].is-visible { opacity: 1; transform: translateY(0); }
+@media (prefers-reduced-motion: reduce) {
+  [data-reveal] { opacity: 1; transform: none; transition: none; }
+}
+
 </style>
 <script defer src="/_vercel/insights/script.js"></script>
 </head>
@@ -823,9 +839,9 @@ footer a:hover { color: var(--primary); }
       </div>
       <div class="hero-earn-pill">🤝 Members earn 2% for life when friends fund their wallet</div>
       <div class="hero-stats">
-        <div><div class="stat-value">Support</div><div class="stat-label">Help channels</div></div>
-        <div><div class="stat-value">Wallet</div><div class="stat-label">Pay then order</div></div>
-        <div><div class="stat-value">Dashboard</div><div class="stat-label">Track orders</div></div>
+        <div><div class="stat-value" id="statCountries">—</div><div class="stat-label">Countries covered</div></div>
+        <div><div class="stat-value" id="statNumbers">—</div><div class="stat-label">Numbers in stock</div></div>
+        <div><div class="stat-value">Wallet</div><div class="stat-label">Fund once, order anything</div></div>
       </div>
     </div>
 
@@ -862,12 +878,12 @@ footer a:hover { color: var(--primary); }
 </section>
 
 <section class="section" id="features">
-  <div class="section-head">
+  <div class="section-head" data-reveal>
     <h2>Three services. One marketplace.</h2>
     <p>Order from a single wallet and manage everything in your dashboard.</p>
   </div>
   <div class="features">
-    <div class="feature-card">
+    <div class="feature-card" data-reveal style="--reveal-delay:0ms;">
       <div class="feature-icon">📋</div>
       <h3>MJ Logs</h3>
       <p>Browse digital account products for platforms such as Facebook, Instagram, X, Gmail, Spotify and others. Availability is shown in the catalog. After purchase, delivery details appear in your dashboard.</p>
@@ -879,7 +895,7 @@ footer a:hover { color: var(--primary); }
         <span class="chip" style="background:#1DB954;"><img src="https://cdn.simpleicons.org/spotify/ffffff" alt="Spotify" loading="lazy"></span>
       </div>
     </div>
-    <div class="feature-card">
+    <div class="feature-card" data-reveal style="--reveal-delay:90ms;">
       <div class="feature-icon">📱</div>
       <h3>MJ SMS</h3>
       <p>Rent a temporary mobile number to receive a one-time passcode for apps that ask for SMS verification. Numbers are sold for short use; live prices and stock are shown before you pay from your wallet.</p>
@@ -890,7 +906,7 @@ footer a:hover { color: var(--primary); }
         <span class="chip" style="background:#4285F4;"><img src="https://cdn.simpleicons.org/google/ffffff" alt="Google" loading="lazy"></span>
       </div>
     </div>
-    <div class="feature-card">
+    <div class="feature-card" data-reveal style="--reveal-delay:180ms;">
       <div class="feature-icon">📈</div>
       <h3>MJ Boosters</h3>
       <p>Order paid engagement services such as followers, likes, views and comments for Instagram, TikTok, YouTube, X and Facebook. Delivery and status are tracked in your dashboard.</p>
@@ -907,22 +923,22 @@ footer a:hover { color: var(--primary); }
 </section>
 
 <section class="section" id="how-it-works">
-  <div class="section-head">
+  <div class="section-head" data-reveal>
     <h2>How ordering works</h2>
     <p>Create an account, fund your wallet, then place an order from the catalog.</p>
   </div>
   <div class="steps">
-    <div class="step">
+    <div class="step" data-reveal style="--reveal-delay:0ms;">
       <div class="step-num">1</div>
       <h3>Create your account</h3>
       <p>Register with your email to open a customer dashboard.</p>
     </div>
-    <div class="step">
+    <div class="step" data-reveal style="--reveal-delay:90ms;">
       <div class="step-num">2</div>
       <h3>Fund your wallet</h3>
       <p>Add funds in NGN or USD using the available payment methods. Your balance updates after payment confirms.</p>
     </div>
-    <div class="step">
+    <div class="step" data-reveal style="--reveal-delay:180ms;">
       <div class="step-num">3</div>
       <h3>Order and receive</h3>
       <p>Choose a product, complete the order, and view delivery details in your dashboard when the order is fulfilled.</p>
@@ -933,7 +949,7 @@ footer a:hover { color: var(--primary); }
 
 <!-- EARN / REFERRAL — visitors learn they can make money, not only spend -->
 <section class="earn-section" id="earn">
-  <div class="earn-card">
+  <div class="earn-card" data-reveal>
     <div>
       <div class="tag">🤝 Refer &amp; earn</div>
       <h2>Don’t only spend on MJ Hub — earn with it.</h2>
@@ -959,21 +975,21 @@ footer a:hover { color: var(--primary); }
 <!-- TRUST STRIP -->
 <div class="trust-strip">
   <div class="trust-inner">
-    <div class="trust-item"><span class="ico">🔒</span> Wallet payments</div>
-    <div class="trust-item"><span class="ico">⚡</span> Dashboard delivery</div>
-    <div class="trust-item"><span class="ico">🛡️</span> Order tracking</div>
-    <div class="trust-item"><span class="ico">💬</span> Customer support</div>
-    <div class="trust-item"><span class="ico">🌍</span> Multiple countries</div>
+    <div class="trust-item" data-reveal style="--reveal-delay:0ms;"><span class="ico">🔒</span> Wallet payments</div>
+    <div class="trust-item" data-reveal style="--reveal-delay:90ms;"><span class="ico">⚡</span> Dashboard delivery</div>
+    <div class="trust-item" data-reveal style="--reveal-delay:180ms;"><span class="ico">🛡️</span> Order tracking</div>
+    <div class="trust-item" data-reveal style="--reveal-delay:270ms;"><span class="ico">💬</span> Customer support</div>
+    <div class="trust-item" data-reveal style="--reveal-delay:360ms;"><span class="ico">🌍</span> Multiple countries</div>
   </div>
 </div>
 
 <!-- WHY CHOOSE US -->
 <section class="section" id="why-us" style="padding-top: 60px;">
-  <div class="section-head">
+  <div class="section-head" data-reveal>
     <h2>What you get with MJ Hub</h2>
     <p>Core features of the marketplace.</p>
   </div>
-  <div class="compare-wrap">
+  <div class="compare-wrap" data-reveal>
     <table class="compare-table">
       <thead>
         <tr>
@@ -1019,23 +1035,23 @@ footer a:hover { color: var(--primary); }
 </section>
 
 <div class="boosters-section" id="mj-boosters">
-  <div class="boosters-intro">
+  <div class="boosters-intro" data-reveal>
     <div class="eyebrow">MJ Boosters · SMM Panel</div>
     <h2>Social media growth services.</h2>
   </div>
 
   <div class="boost-highlights">
-    <div class="boost-highlight-card">
+    <div class="boost-highlight-card" data-reveal style="--reveal-delay:0ms;">
       <div class="eyebrow">Platform Focus</div>
       <h3>Growth</h3>
       <p>Followers, views, likes, and engagement across every major platform.</p>
     </div>
-    <div class="boost-highlight-card">
+    <div class="boost-highlight-card" data-reveal style="--reveal-delay:90ms;">
       <div class="eyebrow">Built For</div>
       <h3>Scale</h3>
       <p>Bulk ordering and API access for agencies and resellers.</p>
     </div>
-    <div class="boost-highlight-card">
+    <div class="boost-highlight-card" data-reveal style="--reveal-delay:180ms;">
       <div class="eyebrow">Dashboard</div>
       <h3>One Place</h3>
       <p>Fund, order, and track campaigns from a single wallet.</p>
@@ -1043,27 +1059,27 @@ footer a:hover { color: var(--primary); }
   </div>
 
   <div class="platform-grid">
-    <div class="platform-card">
+    <div class="platform-card" data-reveal style="--reveal-delay:0ms;">
       <div class="platform-icon ig-logo"><img src="https://cdn.simpleicons.org/instagram/ffffff" alt="Instagram" loading="lazy"></div>
       <h4>Instagram</h4>
       <p>Followers, likes, reel views, comments</p>
     </div>
-    <div class="platform-card">
+    <div class="platform-card" data-reveal style="--reveal-delay:90ms;">
       <div class="platform-icon" style="background:#000000;"><img src="https://cdn.simpleicons.org/tiktok/ffffff" alt="TikTok" loading="lazy"></div>
       <h4>TikTok</h4>
       <p>Views, likes, followers, saves</p>
     </div>
-    <div class="platform-card">
+    <div class="platform-card" data-reveal style="--reveal-delay:180ms;">
       <div class="platform-icon" style="background:#FF0000;"><img src="https://cdn.simpleicons.org/youtube/ffffff" alt="YouTube" loading="lazy"></div>
       <h4>YouTube</h4>
       <p>Views, subscribers, engagement</p>
     </div>
-    <div class="platform-card">
+    <div class="platform-card" data-reveal style="--reveal-delay:270ms;">
       <div class="platform-icon" style="background:#26A5E4;"><img src="https://cdn.simpleicons.org/telegram/ffffff" alt="Telegram" loading="lazy"></div>
       <h4>Telegram</h4>
       <p>Channel members, post views</p>
     </div>
-    <div class="platform-card">
+    <div class="platform-card" data-reveal style="--reveal-delay:360ms;">
       <div class="platform-icon" style="background:#000000;"><img src="https://cdn.simpleicons.org/x/ffffff" alt="X" loading="lazy"></div>
       <h4>X (Twitter)</h4>
       <p>Followers, post engagement</p>
@@ -1073,7 +1089,7 @@ footer a:hover { color: var(--primary); }
 
 <!-- TELEGRAM SMS BOT -->
 <section class="tg-bot-section" id="telegram-sms">
-  <div class="tg-bot-card">
+  <div class="tg-bot-card" data-reveal>
     <div>
       <div class="tg-bot-eyebrow">
         <img src="https://cdn.simpleicons.org/telegram/26A5E4" alt="" width="16" height="16">
@@ -1128,7 +1144,7 @@ footer a:hover { color: var(--primary); }
   </div>
 </div>
 
-<div class="cta">
+<div class="cta" data-reveal>
   <h2>Start with a free account.</h2>
   <p>Create an account, fund your wallet, and order from the catalog when you are ready.</p>
   <a href="auth.html?mode=signup" class="btn btn-primary">Create account</a>
@@ -1210,6 +1226,48 @@ footer a:hover { color: var(--primary); }
       if (profile?.customer_id) buildAndSetLink(profile.customer_id);
     }
   } catch (e) { /* anonymous visitor — the safe default link above still works */ }
+})();
+
+(async function() {
+  const SUPABASE_URL = 'https://atczodlljmlayvldxfmv.supabase.co';
+  const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImF0Y3pvZGxsam1sYXl2bGR4Zm12Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODUwNzUyMzgsImV4cCI6MjEwMDY1MTIzOH0.ufthD-p7BmeD_B7xyuMM6PNPL8DmcL4AtRYgg-MuoLI';
+  const countriesEl = document.getElementById('statCountries');
+  const numbersEl = document.getElementById('statNumbers');
+  if (!countriesEl || !numbersEl || !window.supabase) return;
+
+  try {
+    const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+    const [{ data: rows }, { count: numbersCount }] = await Promise.all([
+      sb.from('number_services').select('country_id').eq('is_available', true).limit(5000),
+      sb.from('number_services').select('id', { count: 'exact', head: true }).eq('is_available', true)
+    ]);
+    const distinctCountries = rows ? new Set(rows.map(r => r.country_id)).size : 0;
+
+    countriesEl.textContent = distinctCountries ? (distinctCountries + '+') : 'Global';
+    numbersEl.textContent = numbersCount ? (numbersCount.toLocaleString() + '+') : 'Live stock';
+  } catch (e) {
+    countriesEl.textContent = 'Global';
+    numbersEl.textContent = 'Live stock';
+  }
+})();
+
+(function() {
+  if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  const els = document.querySelectorAll('[data-reveal]');
+  if (!els.length) return;
+  if (!('IntersectionObserver' in window)) {
+    els.forEach(el => el.classList.add('is-visible'));
+    return;
+  }
+  const io = new IntersectionObserver((entries) => {
+    entries.forEach(entry => {
+      if (entry.isIntersecting) {
+        entry.target.classList.add('is-visible');
+        io.unobserve(entry.target);
+      }
+    });
+  }, { threshold: 0.15, rootMargin: '0px 0px -60px 0px' });
+  els.forEach(el => io.observe(el));
 })();
 
 (async function() {
