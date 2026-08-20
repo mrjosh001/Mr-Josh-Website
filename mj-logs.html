@@ -629,9 +629,12 @@ const orderEndpoint = productSource === 'manual' ? '/api/order-manual'
 : productSource === 'logsdomain' ? '/api/order-logsdomain'
 : productSource === 'sujandepartment' ? '/api/sujan'
 : '/api/order';
+const { data: { session: orderSess } } = await sbClient.auth.getSession();
+const orderToken = orderSess && orderSess.access_token;
+if (!orderToken) { showToast('Please sign in again', 'error'); return; }
 const res = await fetch(orderEndpoint, {
 method: 'POST',
-headers: { 'Content-Type': 'application/json' },
+headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + orderToken },
 body: JSON.stringify({
 product_key: purchasedProduct.product_key,
 quantity: activeQty,

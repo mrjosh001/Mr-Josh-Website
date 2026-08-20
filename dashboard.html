@@ -5543,9 +5543,12 @@ window.checkoutCart = async function() {
         : productSource === 'manual' ? '/api/order-manual'
         : '/api/order';
 
+      const { data: { session: orderSess } } = await supabaseClient.auth.getSession();
+      const orderToken = orderSess?.access_token;
+      if (!orderToken) { anyError = 'Please sign in again'; break; }
       const res = await fetch(orderEndpoint, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + orderToken },
         body: JSON.stringify({
           product_key: item.product_key,
           quantity: qty,
