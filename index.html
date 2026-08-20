@@ -20,7 +20,7 @@
 <!-- TikTok Pixel Code End -->
 
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=5">
 <title>MJ Hub | SMS Numbers, Digital Products & Social Growth</title>
 <meta name="description" content="MJ Hub is a digital marketplace for temporary SMS numbers, curated digital products, and social media growth. Fund your wallet, order in one place, and track delivery from your dashboard.">
 <meta name="keywords" content="MJ Hub, SMS number, temporary number, one-time passcode, digital marketplace, social growth services, MJ SMS, MJ Logs, MJ Boosters">
@@ -90,6 +90,8 @@ body {
 #webgl-bg {
   position: fixed;
   inset: 0;
+  width: 100%;
+  height: 100%;
   z-index: 0;
   pointer-events: none;
 }
@@ -206,7 +208,7 @@ body {
 .hero {
   position: relative; z-index: 2;
   padding: 80px 24px 80px;
-  min-height: 88vh;
+  min-height: auto;
   display: flex; align-items: center;
 }
 .hero-grid {
@@ -1042,6 +1044,332 @@ body[data-theme="dark"] .footer3-cols a { color: #e2e8f0; }
   font-size: 12px; color: var(--text2, #64748b);
 }
 
+
+/* Hero without service-list — full-width copy */
+.hero-grid { grid-template-columns: 1fr !important; max-width: 720px; margin: 0 auto; }
+.hero-copy { text-align: center; }
+.hero-cta { justify-content: center; }
+.hero-earn-pill { margin-left: auto; margin-right: auto; }
+.mj-stats { max-width: 520px; margin: 0 auto; }
+.scs-card { cursor: pointer; }
+.scs-card .scs-cta { cursor: pointer; }
+
+
+/* ===== SCREEN FIT / NO CUT-OFF ===== */
+html, body {
+  width: 100%;
+  max-width: 100%;
+  overflow-x: hidden !important;
+}
+body {
+  min-height: 100%;
+  min-height: 100dvh;
+}
+img, svg, video {
+  max-width: 100%;
+  height: auto;
+}
+.hero {
+  min-height: auto !important;
+  height: auto !important;
+  padding: 48px 20px 40px !important;
+  display: block !important;
+  align-items: stretch !important;
+  overflow: visible !important;
+}
+.hero-grid {
+  grid-template-columns: 1fr !important;
+  max-width: min(720px, 100%) !important;
+  width: 100% !important;
+  margin: 0 auto !important;
+  gap: 24px !important;
+  padding: 0 !important;
+}
+.hero-copy {
+  text-align: center;
+  width: 100%;
+  max-width: 100%;
+}
+.hero h1 {
+  font-size: clamp(28px, 7vw, 48px) !important;
+  letter-spacing: -0.03em !important;
+  word-wrap: break-word;
+}
+.hero p {
+  max-width: 36rem !important;
+  margin-left: auto;
+  margin-right: auto;
+  font-size: clamp(15px, 3.8vw, 17px) !important;
+}
+.hero-cta {
+  justify-content: center;
+  width: 100%;
+}
+.hero-cta .btn {
+  flex: 1 1 auto;
+  min-width: 140px;
+  max-width: 220px;
+  text-align: center;
+  justify-content: center;
+}
+.hero-earn-pill {
+  margin-left: auto;
+  margin-right: auto;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+.mj-stats, .hero-stats {
+  width: 100%;
+  max-width: 520px;
+  margin-left: auto;
+  margin-right: auto;
+  display: grid !important;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px !important;
+  box-sizing: border-box;
+}
+.mj-stat, .hero-stats > div {
+  min-width: 0;
+  text-align: center;
+}
+.stat-value {
+  font-size: clamp(18px, 5vw, 24px) !important;
+  word-break: break-word;
+}
+.stat-label {
+  font-size: clamp(10px, 2.8vw, 12px) !important;
+  line-height: 1.3;
+}
+
+.section, .community-section, .tg-bot-section {
+  width: 100%;
+  max-width: min(1100px, 100%);
+  margin-left: auto;
+  margin-right: auto;
+  padding-left: max(16px, env(safe-area-inset-left));
+  padding-right: max(16px, env(safe-area-inset-right));
+  box-sizing: border-box;
+}
+.section { padding-top: 56px; padding-bottom: 56px; }
+
+/* Card stack fits screen */
+.scs {
+  width: 100%;
+  max-width: min(520px, 100%);
+  margin: 0 auto;
+  padding: 0 4px;
+  box-sizing: border-box;
+}
+.scs-viewport {
+  height: auto !important;
+  min-height: 340px;
+  max-height: none;
+  width: 100%;
+}
+.scs-card {
+  position: absolute;
+  left: 0; right: 0;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+  padding: 22px 18px !important;
+}
+@media (max-width: 400px) {
+  .scs-viewport { min-height: 380px; }
+  .scs-card h3 { font-size: 18px !important; }
+  .scs-card p { font-size: 13px !important; }
+}
+
+.nav-inner, .trust-inner, .footer3-inner, .footer3-bottom {
+  width: 100%;
+  max-width: min(1120px, 100%);
+  padding-left: max(16px, env(safe-area-inset-left));
+  padding-right: max(16px, env(safe-area-inset-right));
+  box-sizing: border-box;
+}
+.footer3 { padding-left: 16px; padding-right: 16px; }
+.footer3-cols {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+@media (max-width: 560px) {
+  .footer3-inner { grid-template-columns: 1fr !important; }
+  .footer3-cols { grid-template-columns: 1fr 1fr !important; gap: 20px; }
+  .invite-layout { grid-template-columns: 1fr !important; }
+  .community-card, .community-card-invites { padding: 24px 16px !important; }
+  .community-links { flex-direction: column; align-items: stretch; }
+  .community-link { justify-content: center; }
+}
+
+/* Prevent fixed/absolute widgets from causing horizontal scroll */
+.help-fab, .support-widget, .float-support {
+  max-width: calc(100vw - 24px);
+}
+
+/* Hide removed service-list if cached CSS still references layout */
+.service-list { display: none !important; }
+
+@media (min-width: 901px) {
+  .hero { padding: 72px 24px 56px !important; }
+  .hero-copy { text-align: left; }
+  .hero-cta { justify-content: flex-start; }
+  .hero p { margin-left: 0; }
+  .hero-earn-pill { margin-left: 0; }
+  .mj-stats, .hero-stats { margin-left: 0; }
+}
+
+
+.scs-logos {
+  display: flex; flex-wrap: wrap; gap: 8px;
+  margin-bottom: 16px; align-items: center;
+}
+.scs-logo {
+  width: 32px; height: 32px; border-radius: 10px;
+  display: inline-flex; align-items: center; justify-content: center;
+  box-shadow: 0 4px 12px rgba(0,0,0,.2);
+  flex-shrink: 0;
+}
+.scs-logo img {
+  width: 16px; height: 16px; object-fit: contain;
+  display: block;
+}
+
+
+/* Section rhythm */
+.section-head { margin-bottom: 36px !important; }
+.section-head h2 { margin-bottom: 10px; }
+.section + .section, .section + .community-section { margin-top: 0; }
+.scs-hint { margin-bottom: 8px; }
+
+
+/* Footer: Product | Support | Legal in one horizontal row */
+.footer3 {
+  position: relative;
+  z-index: 5;
+  overflow: visible !important;
+  padding-bottom: calc(28px + env(safe-area-inset-bottom, 0px)) !important;
+  margin-bottom: 0 !important;
+  background: rgba(8, 12, 24, 0.92) !important;
+}
+.footer3-inner {
+  display: grid !important;
+  grid-template-columns: 1fr !important;
+  gap: 28px !important;
+  max-width: min(1100px, 100%);
+  margin: 0 auto 20px !important;
+  overflow: visible !important;
+}
+.footer3-cols {
+  display: grid !important;
+  grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+  gap: 16px 20px !important;
+  width: 100%;
+  align-items: start;
+}
+.footer3-cols > div {
+  min-width: 0;
+  text-align: left;
+}
+.footer3-cols h4 {
+  margin: 0 0 12px !important;
+  font-size: 11px !important;
+  letter-spacing: 0.08em;
+  opacity: 0.85;
+}
+.footer3-cols a {
+  display: block;
+  margin-bottom: 8px;
+  line-height: 1.4;
+  word-break: break-word;
+}
+.footer3-bottom {
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: flex-start !important;
+  gap: 6px !important;
+  width: 100%;
+  max-width: min(1100px, 100%);
+  margin: 0 auto !important;
+  padding: 16px 0 8px !important;
+  border-top: 1px solid rgba(148,163,184,0.2) !important;
+  font-size: 12px !important;
+  color: #94a3b8 !important;
+  opacity: 1 !important;
+  visibility: visible !important;
+  position: relative;
+  z-index: 6;
+}
+.footer3-bottom span {
+  display: block;
+  color: #94a3b8 !important;
+  visibility: visible !important;
+}
+/* Keep help FAB from covering copyright */
+.footer3-bottom {
+  padding-right: 16px !important;
+  padding-bottom: 12px !important;
+}
+@media (min-width: 768px) {
+  .footer3-inner {
+    grid-template-columns: 1.2fr 1.8fr !important;
+    align-items: start;
+  }
+  .footer3-bottom {
+    flex-direction: row !important;
+    justify-content: space-between !important;
+    align-items: center !important;
+  }
+}
+@media (max-width: 400px) {
+  .footer3-cols {
+    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+    gap: 10px !important;
+  }
+  .footer3-cols a { font-size: 12px; }
+  .footer3-cols h4 { font-size: 10px !important; }
+}
+
+
+body > *:not(#webgl-bg):not(script) { position: relative; z-index: 1; }
+footer.footer3, .footer3 { z-index: 10 !important; isolation: isolate; }
+#webgl-bg { z-index: 0 !important; pointer-events: none !important; }
+
+/* Standard footer copyright bar */
+.footer3-bottom {
+  display: block !important;
+  width: 100% !important;
+  max-width: min(1100px, 100%) !important;
+  margin: 0 auto !important;
+  padding: 20px 16px 24px !important;
+  padding-bottom: calc(24px + env(safe-area-inset-bottom, 0px)) !important;
+  border-top: 1px solid rgba(148, 163, 184, 0.22) !important;
+  text-align: center !important;
+  font-size: 13px !important;
+  line-height: 1.6 !important;
+  color: #94a3b8 !important;
+  opacity: 1 !important;
+  visibility: visible !important;
+  position: relative !important;
+  z-index: 20 !important;
+  background: transparent !important;
+}
+.footer3-bottom span,
+.footer3-bottom .footer-copy,
+.footer3-bottom .footer3-note {
+  display: block !important;
+  width: 100% !important;
+  text-align: center !important;
+  color: #94a3b8 !important;
+  visibility: visible !important;
+  float: none !important;
+  margin: 0 auto 4px !important;
+  padding-right: 0 !important;
+}
+.footer3-bottom .footer3-note {
+  font-size: 12px !important;
+  opacity: 0.9;
+}
+/* Help FAB sits above content but does not shift copyright */
+
 </style>
 <script defer src="/_vercel/insights/script.js"></script>
   <link rel="stylesheet" href="css/skeleton.css">
@@ -1108,56 +1436,27 @@ body[data-theme="dark"] .footer3-cols a { color: #e2e8f0; }
       <div class="hero-earn-pill">Earn 2% for life when people you invite fund their wallet</div>
       <div class="hero-stats mj-stats" id="mjLiveStats" data-skeleton="stats">
         <div class="mj-stat">
-          <div class="stat-value" id="statProducts"><span class="sk-pulse">—</span></div>
-          <div class="stat-label">Live products</div>
+          <div class="stat-value" id="statUsers"><span class="sk-pulse">, </span></div>
+          <div class="stat-label">Total users</div>
         </div>
         <div class="mj-stat">
-          <div class="stat-value" id="statSms"><span class="sk-pulse">—</span></div>
-          <div class="stat-label">SMS services</div>
+          <div class="stat-value" id="statOrders"><span class="sk-pulse">, </span></div>
+          <div class="stat-label">Orders completed</div>
         </div>
         <div class="mj-stat">
-          <div class="stat-value" id="statBoost"><span class="sk-pulse">—</span></div>
-          <div class="stat-label">Booster services</div>
+          <div class="stat-value" id="statMembers"><span class="sk-pulse">, </span></div>
+          <div class="stat-label">Community members</div>
         </div>
       </div>
     </div>
 
-    <div class="service-list" id="serviceList">
-      <div class="service-item active" data-service="0">
-        <div class="service-icon">📋</div>
-        <div class="service-text">
-          <h3>MJ Logs</h3>
-          <p>Ready-to-use digital products, delivered to your dashboard</p>
-          <div style="display:flex;gap:6px;margin-top:8px;">
-            <span style="width:22px;height:22px;border-radius:6px;display:flex;align-items:center;justify-content:center;background:#1877F2;"><img src="https://cdn.simpleicons.org/facebook/ffffff" alt="Facebook" style="width:55%;height:55%;object-fit:contain;"></span>
-            <span style="width:22px;height:22px;border-radius:6px;display:flex;align-items:center;justify-content:center;background:radial-gradient(circle at 30% 107%,#fdf497 0%,#fdf497 5%,#fd5949 45%,#d6249f 60%,#285AEB 90%);"><img src="https://cdn.simpleicons.org/instagram/ffffff" alt="Instagram" style="width:55%;height:55%;object-fit:contain;"></span>
-            <span style="width:22px;height:22px;border-radius:6px;display:flex;align-items:center;justify-content:center;background:#000000;"><img src="https://cdn.simpleicons.org/x/ffffff" alt="X" style="width:55%;height:55%;object-fit:contain;"></span>
-            <span style="width:22px;height:22px;border-radius:6px;display:flex;align-items:center;justify-content:center;background:#1DB954;"><img src="https://cdn.simpleicons.org/spotify/ffffff" alt="Spotify" style="width:55%;height:55%;object-fit:contain;"></span>
-          </div>
-        </div>
-      </div>
-      <div class="service-item" data-service="1">
-        <div class="service-icon">📱</div>
-        <div class="service-text">
-          <h3>MJ SMS</h3>
-          <p>Private numbers for one-time verification codes</p>
-        </div>
-      </div>
-      <div class="service-item" data-service="2">
-        <div class="service-icon">📈</div>
-        <div class="service-text">
-          <h3>MJ Boosters</h3>
-          <p>Followers, views, and likes for the platforms you already use</p>
-        </div>
-      </div>
-    </div>
   </div>
 </section>
 
 <section class="section" id="features" aria-label="Scrollable card stack" aria-live="polite" aria-atomic="true">
   <div class="section-head">
     <h2>Three products. One clean workflow.</h2>
-    <p>Swipe or use arrow keys. One wallet. One dashboard.</p>
+    <p>Tap a card to go next. One wallet. One dashboard.</p>
   </div>
   <div class="scs" id="scsRoot" role="application" aria-label="Scrollable card stack" tabindex="0">
     <div class="scs-viewport">
@@ -1166,39 +1465,56 @@ body[data-theme="dark"] .footer3-cols a { color: #e2e8f0; }
           <div class="scs-icon">📋</div>
           <h3>MJ Logs</h3>
           <p>Shop digital products for Facebook, Instagram, X, Gmail, Spotify and more. Live stock; delivery details land in your dashboard.</p>
-          <div class="scs-chips"><span>Facebook</span><span>Instagram</span><span>X</span><span>Gmail</span></div>
+          <div class="scs-logos">
+          <span class="scs-logo" title="Facebook" style="background:#1877F2;"><img src="https://cdn.simpleicons.org/facebook/ffffff" alt="Facebook" width="16" height="16" loading="lazy"></span>
+          <span class="scs-logo" title="Instagram" style="background:radial-gradient(circle at 30% 107%,#fdf497 0%,#fdf497 5%,#fd5949 45%,#d6249f 60%,#285AEB 90%);"><img src="https://cdn.simpleicons.org/instagram/ffffff" alt="Instagram" width="16" height="16" loading="lazy"></span>
+          <span class="scs-logo" title="X" style="background:#000000;"><img src="https://cdn.simpleicons.org/x/ffffff" alt="X" width="16" height="16" loading="lazy"></span>
+          <span class="scs-logo" title="Gmail" style="background:#EA4335;"><img src="https://cdn.simpleicons.org/gmail/ffffff" alt="Gmail" width="16" height="16" loading="lazy"></span>
+          <span class="scs-logo" title="Spotify" style="background:#1DB954;"><img src="https://cdn.simpleicons.org/spotify/ffffff" alt="Spotify" width="16" height="16" loading="lazy"></span>
+          </div>
           <a class="scs-cta" href="auth.html?tab=signup">Open catalog</a>
         </article>
         <article class="scs-card" data-index="1" aria-hidden="true">
           <div class="scs-icon">📱</div>
           <h3>MJ SMS</h3>
           <p>Temporary numbers for one-time verification. Check price, pay from wallet, receive the code in your dashboard.</p>
-          <div class="scs-chips"><span>WhatsApp</span><span>Telegram</span><span>Google</span></div>
+          <div class="scs-logos">
+          <span class="scs-logo" title="WhatsApp" style="background:#25D366;"><img src="https://cdn.simpleicons.org/whatsapp/ffffff" alt="WhatsApp" width="16" height="16" loading="lazy"></span>
+          <span class="scs-logo" title="Telegram" style="background:#26A5E4;"><img src="https://cdn.simpleicons.org/telegram/ffffff" alt="Telegram" width="16" height="16" loading="lazy"></span>
+          <span class="scs-logo" title="Instagram" style="background:radial-gradient(circle at 30% 107%,#fdf497 0%,#fdf497 5%,#fd5949 45%,#d6249f 60%,#285AEB 90%);"><img src="https://cdn.simpleicons.org/instagram/ffffff" alt="Instagram" width="16" height="16" loading="lazy"></span>
+          <span class="scs-logo" title="Google" style="background:#4285F4;"><img src="https://cdn.simpleicons.org/google/ffffff" alt="Google" width="16" height="16" loading="lazy"></span>
+          <span class="scs-logo" title="TikTok" style="background:#010101;"><img src="https://cdn.simpleicons.org/tiktok/ffffff" alt="TikTok" width="16" height="16" loading="lazy"></span>
+          </div>
           <a class="scs-cta" href="auth.html?tab=signup">Get a number</a>
         </article>
         <article class="scs-card" data-index="2" aria-hidden="true">
           <div class="scs-icon">📈</div>
           <h3>MJ Boosters</h3>
-          <p>Followers, views, likes and engagement. Track every order from the dashboard until delivery completes.</p>
-          <div class="scs-chips"><span>Followers</span><span>Views</span><span>Likes</span></div>
+          <p>Followers, views, likes and engagement for the platforms you already use. Track every order until delivery completes.</p>
+          <div class="scs-logos">
+          <span class="scs-logo" title="Instagram" style="background:radial-gradient(circle at 30% 107%,#fdf497 0%,#fdf497 5%,#fd5949 45%,#d6249f 60%,#285AEB 90%);"><img src="https://cdn.simpleicons.org/instagram/ffffff" alt="Instagram" width="16" height="16" loading="lazy"></span>
+          <span class="scs-logo" title="TikTok" style="background:#010101;"><img src="https://cdn.simpleicons.org/tiktok/ffffff" alt="TikTok" width="16" height="16" loading="lazy"></span>
+          <span class="scs-logo" title="YouTube" style="background:#FF0000;"><img src="https://cdn.simpleicons.org/youtube/ffffff" alt="YouTube" width="16" height="16" loading="lazy"></span>
+          <span class="scs-logo" title="X" style="background:#000000;"><img src="https://cdn.simpleicons.org/x/ffffff" alt="X" width="16" height="16" loading="lazy"></span>
+          <span class="scs-logo" title="Facebook" style="background:#1877F2;"><img src="https://cdn.simpleicons.org/facebook/ffffff" alt="Facebook" width="16" height="16" loading="lazy"></span>
+          </div>
           <a class="scs-cta" href="auth.html?tab=signup">Start boosting</a>
         </article>
         <article class="scs-card" data-index="3" aria-hidden="true">
           <div class="scs-icon">💰</div>
           <h3>Wallet</h3>
-          <p>Fund once in Naira, spend across Logs, SMS and Boosters. Clear balance and full order history.</p>
-          <div class="scs-chips"><span>NGN</span><span>Fast credit</span></div>
+          <p>Fund once in Naira, spend across Logs, SMS and Boosters. Clear balance and full order history in one place.</p>
+          
           <a class="scs-cta" href="auth.html?tab=signup">Create wallet</a>
         </article>
         <article class="scs-card" data-index="4" aria-hidden="true">
           <div class="scs-icon">🤝</div>
-          <h3>Refer &amp; earn</h3>
-          <p>Share your link. Earn 2% lifetime on every deposit your referrals make — paid into your wallet.</p>
-          <div class="scs-chips"><span>2% lifetime</span><span>Auto payout</span></div>
+          <h3>Refer and earn</h3>
+          <p>Share your link. Earn 2% lifetime on every deposit your referrals make, paid into your wallet.</p>
+          <div class="scs-chips"><span>2% lifetime</span><span>Auto payout</span><span>Your link</span></div>
           <a class="scs-cta" href="auth.html?tab=signup">Get referral link</a>
         </article>
       </div>
-    </div>
     <div class="scs-nav" role="tablist" aria-label="Card navigation">
       <button type="button" class="scs-dot" role="tab" aria-selected="true" aria-label="Go to card 1 of 5" data-go="0"></button>
       <button type="button" class="scs-dot" role="tab" aria-selected="false" aria-label="Go to card 2 of 5" data-go="1"></button>
@@ -1207,7 +1523,7 @@ body[data-theme="dark"] .footer3-cols a { color: #e2e8f0; }
       <button type="button" class="scs-dot" role="tab" aria-selected="false" aria-label="Go to card 5 of 5" data-go="4"></button>
     </div>
     <p class="scs-live" id="scsLive">Card 1 of 5 selected.</p>
-    <div class="scs-hint">← Swipe or arrow keys →</div>
+    <div class="scs-hint">Tap card for next, or swipe</div>
   </div>
 </section>
 
@@ -1237,17 +1553,17 @@ body[data-theme="dark"] .footer3-cols a { color: #e2e8f0; }
 </section>
 
 
-<!-- EARN / REFERRAL — visitors learn they can make money, not only spend -->
+<!-- EARN / REFERRAL. visitors learn they can make money, not only spend -->
 <section class="earn-section" id="earn">
   <div class="earn-card">
     <div>
-      <div class="tag">🤝 Refer &amp; earn</div>
+      <div class="tag">🤝 Refer and earn</div>
       <h2>Invite friends. Earn 2% for life.</h2>
-      <p>Share your personal link. When someone you invite funds their wallet, you earn <strong style="color:#fff">2% of that deposit — every time, for life</strong>. Credits go to your NGN wallet and can be used on logs, SMS, boosters, or kept as balance.</p>
+      <p>Share your personal link. When someone you invite funds their wallet, you earn <strong style="color:#fff">2% of that deposit. every time, for life</strong>. Credits go to your NGN wallet and can be used on logs, SMS, boosters, or kept as balance.</p>
       <ul class="earn-points">
         <li>Unique link for every member after signup</li>
         <li>2% on every deposit your referrals make, for life</li>
-        <li>Paid straight into your wallet — no invoices, no chasing</li>
+        <li>Paid straight into your wallet. No invoices, no chasing</li>
       </ul>
       <div class="earn-actions">
         <a href="auth.html?tab=signup" class="btn btn-primary">Get your referral link</a>
@@ -1387,7 +1703,7 @@ body[data-theme="dark"] .footer3-cols a { color: #e2e8f0; }
         Use the official <strong>MJ SMS bot</strong> to fund a bot wallet and buy temporary numbers for verification codes. No website login required. Bot wallet is separate from your MJ Hub store wallet.
       </p>
       <ul class="tg-bot-points">
-        <li>Order inside Telegram — no extra signup on the site</li>
+        <li>Order inside Telegram. No extra signup on the site</li>
         <li>Temporary numbers for apps that send SMS codes</li>
         <li>Type something like “USA WhatsApp” to see live prices before you pay</li>
         <li>Number is sent in chat; check for the passcode in the bot. Cancel may be available after a short wait if no code arrives</li>
@@ -1424,7 +1740,7 @@ body[data-theme="dark"] .footer3-cols a { color: #e2e8f0; }
     <div class="invite-layout">
       <div class="invite-copy">
         <h2>Stay close to the team</h2>
-        <p>Product drops, price updates, and support — shared directly in our channels. Invite your circle; grow with MJ Hub.</p>
+        <p>Product drops, price updates, and support, shared directly in our channels. Invite your circle and grow with MJ Hub.</p>
         <div class="community-links">
           <a href="https://chat.whatsapp.com/DxgYNbkV0fjLpWbP2aODRj" target="_blank" rel="noopener" class="community-link wa"><img src="https://cdn.simpleicons.org/whatsapp/ffffff" alt="" width="17" height="17"> Join WhatsApp</a>
           <a href="https://t.me/mj_hub_tg" target="_blank" rel="noopener" class="community-link tg"><img src="https://cdn.simpleicons.org/telegram/ffffff" alt="" width="17" height="17"> Join Telegram</a>
@@ -1435,8 +1751,8 @@ body[data-theme="dark"] .footer3-cols a { color: #e2e8f0; }
         <div class="ai-card" role="group" aria-label="MJ Hub community invite">
           <div class="ai-banner" aria-hidden="true">MJ Hub</div>
           <div class="ai-body">
-            <h3 class="ai-title">You're invited</h3>
-            <p class="ai-sub">WhatsApp &amp; Telegram communities</p>
+            <h3 class="ai-title">You are invited</h3>
+            <p class="ai-sub">WhatsApp and Telegram communities</p>
             <div class="ai-people" id="aiPeople" aria-live="polite"></div>
             <div class="ai-actions">
               <button type="button" class="ai-btn ai-add" id="aiAdd" aria-label="Add invitee">+ Add</button>
@@ -1444,7 +1760,7 @@ body[data-theme="dark"] .footer3-cols a { color: #e2e8f0; }
             </div>
           </div>
         </div>
-        <p class="ai-hint">Animated invitees · drag-friendly chips · reduced-motion safe</p>
+        <p class="ai-hint">Tap Add to preview invitees. Drag to reorder.</p>
       </div>
     </div>
   </div>
@@ -1461,7 +1777,7 @@ body[data-theme="dark"] .footer3-cols a { color: #e2e8f0; }
   <div class="footer3-inner">
     <div class="footer3-brand">
       <div class="footer3-logo">MJ Hub</div>
-      <p>Digital marketplace for SMS numbers, logs, and social growth — one wallet, one dashboard.</p>
+      <p>Digital marketplace for SMS numbers, logs, and social growth. One wallet, one dashboard.</p>
       <div class="footer3-social">
         <a href="https://chat.whatsapp.com/DxgYNbkV0fjLpWbP2aODRj" target="_blank" rel="noopener" aria-label="WhatsApp community">WA</a>
         <a href="https://t.me/mj_hub_tg" target="_blank" rel="noopener" aria-label="Telegram community">TG</a>
@@ -1492,8 +1808,8 @@ body[data-theme="dark"] .footer3-cols a { color: #e2e8f0; }
     </div>
   </div>
   <div class="footer3-bottom">
-    <span>© <span id="footerYear">2026</span> MJ Hub. All rights reserved.</span>
-    <span class="footer3-note">Built for creators who value privacy and speed.</span>
+    <p class="footer-copy">© <span id="footerYear">2026</span> MJ Hub. All rights reserved.</p>
+    <p class="footer3-note">Built for creators who value privacy and speed.</p>
   </div>
 </footer>
 
@@ -1883,6 +2199,12 @@ document.addEventListener('DOMContentLoaded', () => {
       if (Math.abs(dx)<40||Math.abs(dx)<Math.abs(dy)) return;
       if (dx<0) go(i+1); else go(i-1);
     }, {passive:true});
+    /* Tap / click card body → next (ignore CTA links & dots) */
+    root.addEventListener('click', function(e){
+      var t = e.target;
+      if (t.closest && (t.closest('a') || t.closest('button') || t.closest('.scs-dot') || t.closest('.scs-nav'))) return;
+      if (t.closest && t.closest('.scs-card')) { go(i + 1); }
+    });
     if (!reduce) setInterval(function(){ if(document.activeElement && root.contains(document.activeElement)) return; go(i+1); }, 5200);
     paint();
   }
@@ -1960,28 +2282,47 @@ document.addEventListener('DOMContentLoaded', () => {
 
   /* Live stats — public counts, auto-refresh */
   async function loadStats(){
-    var elP = document.getElementById('statProducts');
-    var elS = document.getElementById('statSms');
-    var elB = document.getElementById('statBoost');
-    if (!elP || !window.supabase) return;
+    var elU = document.getElementById('statUsers');
+    var elO = document.getElementById('statOrders');
+    var elM = document.getElementById('statMembers');
+    if (!elU || !window.supabase) return;
+    function fmt(n){
+      if (n == null || isNaN(n)) return '—';
+      n = Number(n);
+      if (n >= 1000000) return (n/1000000).toFixed(1).replace(/\.0$/,'') + 'M';
+      if (n >= 1000) return (n/1000).toFixed(n >= 10000 ? 0 : 1).replace(/\.0$/,'') + 'k';
+      return String(n);
+    }
     try {
       var SUPABASE_URL = 'https://atczodlljmlayvldxfmv.supabase.co';
       var SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImF0Y3pvZGxsam1sYXl2bGR4Zm12Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODUwNzUyMzgsImV4cCI6MjEwMDY1MTIzOH0.ufthD-p7BmeD_B7xyuMM6PNPL8DmcL4AtRYgg-MuoLI';
       var sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-      function fmt(n){ if(n==null) return '—'; if(n>=1000) return (n/1000).toFixed(n>=10000?0:1).replace(/\.0$/,'')+'k'; return String(n); }
-      var products = await sb.from('products').select('id', { count: 'exact', head: true }).eq('is_available', true);
-      var sms = await sb.from('number_services').select('id', { count: 'exact', head: true });
-      var boost = await sb.from('booster_services').select('id', { count: 'exact', head: true });
-      // fallback table names if needed
-      if (sms.error) sms = await sb.from('sms_services').select('id', { count: 'exact', head: true });
-      if (boost.error) boost = await sb.from('boost_services').select('id', { count: 'exact', head: true });
-      if (elP) elP.textContent = products.error ? '—' : fmt(products.count||0);
-      if (elS) elS.textContent = sms.error ? '—' : fmt(sms.count||0);
-      if (elB) elB.textContent = boost.error ? '—' : fmt(boost.count||0);
+
+      // Total users = profiles rows (public count; needs RLS allowing anon count or a public RPC)
+      var users = await sb.from('profiles').select('id', { count: 'exact', head: true });
+
+      // Orders completed — sum of order tables where status looks complete
+      var logs = await sb.from('orders').select('id', { count: 'exact', head: true });
+      var sms = await sb.from('sms_orders').select('id', { count: 'exact', head: true });
+      if (sms.error) sms = await sb.from('number_orders').select('id', { count: 'exact', head: true });
+      var boost = await sb.from('booster_orders').select('id', { count: 'exact', head: true });
+
+      var orderTotal = 0;
+      var orderOk = false;
+      [logs, sms, boost].forEach(function(r){
+        if (r && !r.error && typeof r.count === 'number') { orderTotal += r.count; orderOk = true; }
+      });
+
+      // Community members ≈ users (same community) — or profiles with referral if available
+      var members = users;
+
+      if (elU) elU.textContent = users.error ? '—' : fmt(users.count || 0);
+      if (elO) elO.textContent = orderOk ? fmt(orderTotal) : '—';
+      if (elM) elM.textContent = members.error ? '—' : fmt(members.count || 0);
     } catch (e) {
-      if (elP) elP.textContent = '—';
-      if (elS) elS.textContent = '—';
-      if (elB) elB.textContent = '—';
+      if (elU) elU.textContent = '—';
+      if (elO) elO.textContent = '—';
+      if (elM) elM.textContent = '—';
     }
   }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', loadStats);
