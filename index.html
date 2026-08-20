@@ -926,8 +926,125 @@ body[data-theme="dark"] .hero-float-badge {
   box-shadow: 0 24px 60px rgba(15,23,42,.25) !important;
 }
 
+
+/* ===== Live stats (Stats1-style) ===== */
+.mj-stats { display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 12px; }
+.mj-stat .stat-value { font-size: 22px; font-weight: 800; letter-spacing: -.02em; color: var(--primary, #3b82f6); min-height: 1.2em; }
+.sk-pulse { display: inline-block; min-width: 2.2em; border-radius: 6px; background: linear-gradient(90deg,#e2e8f0,#f8fafc,#e2e8f0); background-size: 200% 100%; animation: skPulse 1.2s ease-in-out infinite; color: transparent; }
+@keyframes skPulse { 0% { background-position: 100% 0 } 100% { background-position: -100% 0 } }
+@media (prefers-reduced-motion: reduce) { .sk-pulse { animation: none; background: #e2e8f0; } }
+
+/* ===== Scrollable Card Stack ===== */
+.scs { max-width: 520px; margin: 0 auto; position: relative; }
+.scs-viewport { position: relative; height: 400px; }
+.scs-card {
+  position: absolute; inset: 0; border-radius: 24px; padding: 26px 24px;
+  background: rgba(255,255,255,.92); border: 1px solid rgba(147,197,253,.5);
+  box-shadow: 0 22px 50px rgba(37,99,235,.14); backdrop-filter: blur(16px);
+  display: flex; flex-direction: column;
+  transition: transform .55s cubic-bezier(.22,1,.36,1), opacity .45s ease;
+  color: #0f172a;
+}
+body[data-theme="dark"] .scs-card { background: rgba(15,23,42,.92); border-color: rgba(96,165,250,.25); color: #e2e8f0; }
+.scs-icon { width: 48px; height: 48px; border-radius: 14px; display: grid; place-items: center; font-size: 24px; background: linear-gradient(135deg,#dbeafe,#93c5fd); margin-bottom: 14px; }
+.scs-card h3 { font-size: 20px; font-weight: 800; margin: 0 0 8px; }
+.scs-card p { font-size: 14px; line-height: 1.6; color: #475569; flex: 1; margin: 0 0 12px; }
+body[data-theme="dark"] .scs-card p { color: #94a3b8; }
+.scs-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 14px; }
+.scs-chips span { font-size: 11px; font-weight: 700; padding: 4px 10px; border-radius: 999px; background: rgba(59,130,246,.12); color: #1d4ed8; }
+.scs-cta { display: inline-flex; justify-content: center; padding: 11px 14px; border-radius: 12px; font-weight: 700; font-size: 13px; background: linear-gradient(135deg,#3b82f6,#1d4ed8); color: #fff !important; text-decoration: none; }
+.scs-card.is-active { z-index: 5; opacity: 1; transform: translateY(0) scale(1); pointer-events: auto; }
+.scs-card.is-next { z-index: 4; opacity: .9; transform: translateY(16px) scale(.94); pointer-events: none; }
+.scs-card.is-next2 { z-index: 3; opacity: .7; transform: translateY(30px) scale(.88); pointer-events: none; }
+.scs-card.is-prev, .scs-card.is-away { z-index: 1; opacity: 0; transform: translateY(48px) scale(.84); pointer-events: none; }
+.scs-nav { display: flex; justify-content: center; gap: 8px; margin-top: 26px; }
+.scs-dot { width: 8px; height: 8px; border-radius: 99px; border: 0; background: #cbd5e1; cursor: pointer; }
+.scs-dot[aria-selected="true"] { width: 22px; background: #3b82f6; }
+.scs-live { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0,0,0,0); }
+.scs-hint { text-align: center; margin-top: 10px; font-size: 12px; color: #64748b; font-weight: 600; }
+@media (prefers-reduced-motion: reduce) { .scs-card { transition: none !important; } }
+
+/* ===== Apple Invites (community) ===== */
+.community-card-invites { text-align: left; padding: 36px 28px; }
+.invite-layout { display: grid; grid-template-columns: 1.1fr .9fr; gap: 28px; align-items: center; }
+@media (max-width: 800px) { .invite-layout { grid-template-columns: 1fr; } }
+.invite-copy h2 { text-align: left; }
+.invite-copy p { margin: 0 0 20px; max-width: none; text-align: left; }
+.apple-invites { display: flex; flex-direction: column; align-items: center; gap: 10px; }
+.ai-card {
+  width: 100%; max-width: 300px; border-radius: 22px; overflow: hidden;
+  background: #0f172a; color: #fff; box-shadow: 0 24px 50px rgba(15,23,42,.35);
+  border: 1px solid rgba(148,163,184,.2);
+}
+.ai-banner {
+  height: 72px; display: grid; place-items: center; font-weight: 900; letter-spacing: .04em;
+  background: linear-gradient(135deg, #1d4ed8, #3b82f6 50%, #60a5fa);
+}
+.ai-body { padding: 16px 16px 18px; }
+.ai-title { margin: 0 0 4px; font-size: 18px; font-weight: 800; }
+.ai-sub { margin: 0 0 14px; font-size: 12px; color: #94a3b8; }
+.ai-people { display: flex; flex-wrap: wrap; gap: 8px; min-height: 44px; margin-bottom: 14px; }
+.ai-chip {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 6px 10px 6px 6px; border-radius: 999px;
+  background: rgba(255,255,255,.08); border: 1px solid rgba(255,255,255,.1);
+  font-size: 12px; font-weight: 600; cursor: grab;
+  transition: transform .25s ease, opacity .25s ease;
+}
+.ai-chip img, .ai-chip .ai-av {
+  width: 22px; height: 22px; border-radius: 50%;
+  display: grid; place-items: center; font-size: 11px; font-weight: 800;
+  background: linear-gradient(135deg,#60a5fa,#2563eb);
+}
+.ai-chip.is-enter { animation: aiIn .35s ease; }
+.ai-chip.is-leave { opacity: 0; transform: scale(.8); }
+@keyframes aiIn { from { opacity: 0; transform: scale(.7) translateY(6px); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) {
+  .ai-chip.is-enter { animation: none; }
+  .ai-chip { transition: none; }
+}
+.ai-actions { display: flex; gap: 8px; }
+.ai-btn {
+  flex: 1; border: 0; border-radius: 12px; padding: 10px; font-weight: 700; font-size: 13px; cursor: pointer;
+}
+.ai-add { background: rgba(255,255,255,.1); color: #fff; }
+.ai-join { background: #3b82f6; color: #fff; }
+.ai-hint { font-size: 11px; color: var(--text2, #64748b); text-align: center; }
+
+/* ===== Footer3 ===== */
+.footer3 {
+  margin-top: 40px; padding: 48px 24px 24px;
+  border-top: 1px solid var(--border, rgba(148,163,184,.2));
+  background: linear-gradient(180deg, transparent, rgba(59,130,246,.04));
+}
+.footer3-inner {
+  max-width: 1100px; margin: 0 auto 28px;
+  display: grid; grid-template-columns: 1.3fr 2fr; gap: 32px;
+}
+@media (max-width: 800px) { .footer3-inner { grid-template-columns: 1fr; } }
+.footer3-logo { font-size: 20px; font-weight: 900; margin-bottom: 8px; color: var(--primary, #3b82f6); }
+.footer3-brand p { font-size: 14px; color: var(--text2, #64748b); line-height: 1.6; max-width: 320px; }
+.footer3-social { display: flex; gap: 10px; margin-top: 14px; }
+.footer3-social a {
+  width: 36px; height: 36px; border-radius: 10px; display: grid; place-items: center;
+  font-size: 11px; font-weight: 800; text-decoration: none;
+  background: rgba(59,130,246,.12); color: #1d4ed8;
+}
+.footer3-cols { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+.footer3-cols h4 { font-size: 12px; text-transform: uppercase; letter-spacing: .06em; margin: 0 0 10px; color: var(--text2); }
+.footer3-cols a { display: block; font-size: 14px; color: var(--text, #0f172a); text-decoration: none; margin-bottom: 8px; }
+.footer3-cols a:hover { color: var(--primary, #3b82f6); }
+body[data-theme="dark"] .footer3-cols a { color: #e2e8f0; }
+.footer3-bottom {
+  max-width: 1100px; margin: 0 auto; padding-top: 18px;
+  border-top: 1px solid var(--border, rgba(148,163,184,.15));
+  display: flex; flex-wrap: wrap; gap: 10px; justify-content: space-between;
+  font-size: 12px; color: var(--text2, #64748b);
+}
+
 </style>
 <script defer src="/_vercel/insights/script.js"></script>
+  <link rel="stylesheet" href="css/skeleton.css">
 </head>
 <body>
 
@@ -989,10 +1106,19 @@ body[data-theme="dark"] .hero-float-badge {
         <a href="auth.html?mode=signin" class="btn btn-ghost">Sign In</a>
       </div>
       <div class="hero-earn-pill">Earn 2% for life when people you invite fund their wallet</div>
-      <div class="hero-stats">
-        <div><div class="stat-value">Fast</div><div class="stat-label">Order delivery</div></div>
-        <div><div class="stat-value">Wallet</div><div class="stat-label">NGN &amp; USD</div></div>
-        <div><div class="stat-value">Support</div><div class="stat-label">Always reachable</div></div>
+      <div class="hero-stats mj-stats" id="mjLiveStats" data-skeleton="stats">
+        <div class="mj-stat">
+          <div class="stat-value" id="statProducts"><span class="sk-pulse">—</span></div>
+          <div class="stat-label">Live products</div>
+        </div>
+        <div class="mj-stat">
+          <div class="stat-value" id="statSms"><span class="sk-pulse">—</span></div>
+          <div class="stat-label">SMS services</div>
+        </div>
+        <div class="mj-stat">
+          <div class="stat-value" id="statBoost"><span class="sk-pulse">—</span></div>
+          <div class="stat-label">Booster services</div>
+        </div>
       </div>
     </div>
 
@@ -1028,50 +1154,63 @@ body[data-theme="dark"] .hero-float-badge {
   </div>
 </section>
 
-<section class="section" id="features">
+<section class="section" id="features" aria-label="Scrollable card stack" aria-live="polite" aria-atomic="true">
   <div class="section-head">
     <h2>Three products. One clean workflow.</h2>
-    <p>One wallet. One dashboard. Order what you need without jumping between tools.</p>
+    <p>Swipe or use arrow keys. One wallet. One dashboard.</p>
   </div>
-  <div class="features">
-    <div class="feature-card">
-      <div class="feature-icon">📋</div>
-      <h3>MJ Logs</h3>
-      <p>Shop digital products for platforms like Facebook, Instagram, X, Gmail, and Spotify. Live stock in the catalog. After you buy, delivery details show in your dashboard right away.</p>
-      <div class="logo-strip">
-        <span class="chip" style="background:#1877F2;"><img src="https://cdn.simpleicons.org/facebook/ffffff" alt="Facebook" loading="lazy"></span>
-        <span class="chip ig-logo"><img src="https://cdn.simpleicons.org/instagram/ffffff" alt="Instagram" loading="lazy"></span>
-        <span class="chip" style="background:#000000;"><img src="https://cdn.simpleicons.org/x/ffffff" alt="X" loading="lazy"></span>
-        <span class="chip" style="background:#4285F4;"><img src="https://cdn.simpleicons.org/google/ffffff" alt="Google" loading="lazy"></span>
-        <span class="chip" style="background:#1DB954;"><img src="https://cdn.simpleicons.org/spotify/ffffff" alt="Spotify" loading="lazy"></span>
+  <div class="scs" id="scsRoot" role="application" aria-label="Scrollable card stack" tabindex="0">
+    <div class="scs-viewport">
+      <div class="scs-track">
+        <article class="scs-card is-active" data-index="0" aria-hidden="false">
+          <div class="scs-icon">📋</div>
+          <h3>MJ Logs</h3>
+          <p>Shop digital products for Facebook, Instagram, X, Gmail, Spotify and more. Live stock; delivery details land in your dashboard.</p>
+          <div class="scs-chips"><span>Facebook</span><span>Instagram</span><span>X</span><span>Gmail</span></div>
+          <a class="scs-cta" href="auth.html?tab=signup">Open catalog</a>
+        </article>
+        <article class="scs-card" data-index="1" aria-hidden="true">
+          <div class="scs-icon">📱</div>
+          <h3>MJ SMS</h3>
+          <p>Temporary numbers for one-time verification. Check price, pay from wallet, receive the code in your dashboard.</p>
+          <div class="scs-chips"><span>WhatsApp</span><span>Telegram</span><span>Google</span></div>
+          <a class="scs-cta" href="auth.html?tab=signup">Get a number</a>
+        </article>
+        <article class="scs-card" data-index="2" aria-hidden="true">
+          <div class="scs-icon">📈</div>
+          <h3>MJ Boosters</h3>
+          <p>Followers, views, likes and engagement. Track every order from the dashboard until delivery completes.</p>
+          <div class="scs-chips"><span>Followers</span><span>Views</span><span>Likes</span></div>
+          <a class="scs-cta" href="auth.html?tab=signup">Start boosting</a>
+        </article>
+        <article class="scs-card" data-index="3" aria-hidden="true">
+          <div class="scs-icon">💰</div>
+          <h3>Wallet</h3>
+          <p>Fund once in Naira, spend across Logs, SMS and Boosters. Clear balance and full order history.</p>
+          <div class="scs-chips"><span>NGN</span><span>Fast credit</span></div>
+          <a class="scs-cta" href="auth.html?tab=signup">Create wallet</a>
+        </article>
+        <article class="scs-card" data-index="4" aria-hidden="true">
+          <div class="scs-icon">🤝</div>
+          <h3>Refer &amp; earn</h3>
+          <p>Share your link. Earn 2% lifetime on every deposit your referrals make — paid into your wallet.</p>
+          <div class="scs-chips"><span>2% lifetime</span><span>Auto payout</span></div>
+          <a class="scs-cta" href="auth.html?tab=signup">Get referral link</a>
+        </article>
       </div>
     </div>
-    <div class="feature-card">
-      <div class="feature-icon">📱</div>
-      <h3>MJ SMS</h3>
-      <p>Get a temporary number when an app asks for SMS verification. See live price and availability first, pay from your wallet, then receive the code in your dashboard.</p>
-      <div class="logo-strip">
-        <span class="chip" style="background:#25D366;"><img src="https://cdn.simpleicons.org/whatsapp/ffffff" alt="WhatsApp" loading="lazy"></span>
-        <span class="chip" style="background:#26A5E4;"><img src="https://cdn.simpleicons.org/telegram/ffffff" alt="Telegram" loading="lazy"></span>
-        <span class="chip ig-logo"><img src="https://cdn.simpleicons.org/instagram/ffffff" alt="Instagram" loading="lazy"></span>
-        <span class="chip" style="background:#4285F4;"><img src="https://cdn.simpleicons.org/google/ffffff" alt="Google" loading="lazy"></span>
-      </div>
+    <div class="scs-nav" role="tablist" aria-label="Card navigation">
+      <button type="button" class="scs-dot" role="tab" aria-selected="true" aria-label="Go to card 1 of 5" data-go="0"></button>
+      <button type="button" class="scs-dot" role="tab" aria-selected="false" aria-label="Go to card 2 of 5" data-go="1"></button>
+      <button type="button" class="scs-dot" role="tab" aria-selected="false" aria-label="Go to card 3 of 5" data-go="2"></button>
+      <button type="button" class="scs-dot" role="tab" aria-selected="false" aria-label="Go to card 4 of 5" data-go="3"></button>
+      <button type="button" class="scs-dot" role="tab" aria-selected="false" aria-label="Go to card 5 of 5" data-go="4"></button>
     </div>
-    <div class="feature-card">
-      <div class="feature-icon">📈</div>
-      <h3>MJ Boosters</h3>
-      <p>Boost Instagram, TikTok, YouTube, X, and Facebook with followers, likes, views, and comments. Track every order status from your dashboard until delivery completes.</p>
-      <div class="logo-strip">
-        <span class="chip ig-logo"><img src="https://cdn.simpleicons.org/instagram/ffffff" alt="Instagram" loading="lazy"></span>
-        <span class="chip" style="background:#000000;"><img src="https://cdn.simpleicons.org/tiktok/ffffff" alt="TikTok" loading="lazy"></span>
-        <span class="chip" style="background:#FF0000;"><img src="https://cdn.simpleicons.org/youtube/ffffff" alt="YouTube" loading="lazy"></span>
-        <span class="chip" style="background:#000000;"><img src="https://cdn.simpleicons.org/x/ffffff" alt="X" loading="lazy"></span>
-        <span class="chip" style="background:#1877F2;"><img src="https://cdn.simpleicons.org/facebook/ffffff" alt="Facebook" loading="lazy"></span>
-      </div>
-    </div>
-    </div>
+    <p class="scs-live" id="scsLive">Card 1 of 5 selected.</p>
+    <div class="scs-hint">← Swipe or arrow keys →</div>
   </div>
 </section>
+
 
 <section class="section" id="how-it-works">
   <div class="section-head">
@@ -1280,16 +1419,36 @@ body[data-theme="dark"] .hero-float-badge {
   </div>
 </section>
 
-<div class="community-section">
-  <div class="community-card">
-    <h2>Stay close to the team</h2>
-    <p>Product drops, price updates, and support — shared directly in our communities.</p>
-    <div class="community-links">
-      <a href="https://chat.whatsapp.com/DxgYNbkV0fjLpWbP2aODRj" target="_blank" rel="noopener" class="community-link wa"><img src="https://cdn.simpleicons.org/whatsapp/ffffff" alt="" style="width:17px;height:17px;vertical-align:-3px;margin-right:6px;"> Join WhatsApp Community</a>
-      <a href="https://t.me/mj_hub_tg" target="_blank" rel="noopener" class="community-link tg"><img src="https://cdn.simpleicons.org/telegram/ffffff" alt="" style="width:17px;height:17px;vertical-align:-3px;margin-right:6px;"> Join Telegram Community</a>
-      <a href="https://t.me/mj_smss_bot" target="_blank" rel="noopener" class="community-link tg"><img src="https://cdn.simpleicons.org/telegram/ffffff" alt="" style="width:17px;height:17px;vertical-align:-3px;margin-right:6px;"> MJ SMS Bot</a>
+<div class="community-section" id="community">
+  <div class="community-card community-card-invites">
+    <div class="invite-layout">
+      <div class="invite-copy">
+        <h2>Stay close to the team</h2>
+        <p>Product drops, price updates, and support — shared directly in our channels. Invite your circle; grow with MJ Hub.</p>
+        <div class="community-links">
+          <a href="https://chat.whatsapp.com/DxgYNbkV0fjLpWbP2aODRj" target="_blank" rel="noopener" class="community-link wa"><img src="https://cdn.simpleicons.org/whatsapp/ffffff" alt="" width="17" height="17"> Join WhatsApp</a>
+          <a href="https://t.me/mj_hub_tg" target="_blank" rel="noopener" class="community-link tg"><img src="https://cdn.simpleicons.org/telegram/ffffff" alt="" width="17" height="17"> Join Telegram</a>
+          <a href="https://t.me/mj_smss_bot" target="_blank" rel="noopener" class="community-link tg"><img src="https://cdn.simpleicons.org/telegram/ffffff" alt="" width="17" height="17"> MJ SMS Bot</a>
+        </div>
+      </div>
+      <div class="apple-invites" id="appleInvites" aria-label="Community invite preview">
+        <div class="ai-card" role="group" aria-label="MJ Hub community invite">
+          <div class="ai-banner" aria-hidden="true">MJ Hub</div>
+          <div class="ai-body">
+            <h3 class="ai-title">You're invited</h3>
+            <p class="ai-sub">WhatsApp &amp; Telegram communities</p>
+            <div class="ai-people" id="aiPeople" aria-live="polite"></div>
+            <div class="ai-actions">
+              <button type="button" class="ai-btn ai-add" id="aiAdd" aria-label="Add invitee">+ Add</button>
+              <button type="button" class="ai-btn ai-join" id="aiJoinDemo" aria-label="Preview join">Join</button>
+            </div>
+          </div>
+        </div>
+        <p class="ai-hint">Animated invitees · drag-friendly chips · reduced-motion safe</p>
+      </div>
     </div>
   </div>
+</div>
 </div>
 
 <div class="cta">
@@ -1298,17 +1457,46 @@ body[data-theme="dark"] .hero-float-badge {
   <a href="auth.html?mode=signup" class="btn btn-primary">Create free account</a>
 </div>
 
-<footer>
-  <p>© 2026 MJ Hub. All rights reserved.</p>
-  <p style="margin-top:10px;font-size:13px;opacity:.9;">
-    <a href="faq.html">FAQ</a> ·
-    <a href="support.html">Support</a> ·
-    <a href="terms.html">Terms</a> ·
-    <a href="privacy.html">Privacy</a> ·
-    <a href="acceptable-use.html">Acceptable Use</a> ·
-    <a href="refund.html">Refunds</a>
-  </p>
+<footer class="footer3">
+  <div class="footer3-inner">
+    <div class="footer3-brand">
+      <div class="footer3-logo">MJ Hub</div>
+      <p>Digital marketplace for SMS numbers, logs, and social growth — one wallet, one dashboard.</p>
+      <div class="footer3-social">
+        <a href="https://chat.whatsapp.com/DxgYNbkV0fjLpWbP2aODRj" target="_blank" rel="noopener" aria-label="WhatsApp community">WA</a>
+        <a href="https://t.me/mj_hub_tg" target="_blank" rel="noopener" aria-label="Telegram community">TG</a>
+        <a href="https://t.me/mj_smss_bot" target="_blank" rel="noopener" aria-label="MJ SMS Telegram bot">Bot</a>
+      </div>
+    </div>
+    <div class="footer3-cols">
+      <div>
+        <h4>Product</h4>
+        <a href="#features">Services</a>
+        <a href="#how-it-works">How it works</a>
+        <a href="#telegram-sms">Telegram SMS</a>
+        <a href="auth.html?tab=signup">Create account</a>
+      </div>
+      <div>
+        <h4>Support</h4>
+        <a href="faq.html">FAQ</a>
+        <a href="support.html">Help</a>
+        <a href="#community">Communities</a>
+      </div>
+      <div>
+        <h4>Legal</h4>
+        <a href="terms.html">Terms</a>
+        <a href="privacy.html">Privacy</a>
+        <a href="refund.html">Refunds</a>
+        <a href="acceptable-use.html">Acceptable use</a>
+      </div>
+    </div>
+  </div>
+  <div class="footer3-bottom">
+    <span>© <span id="footerYear">2026</span> MJ Hub. All rights reserved.</span>
+    <span class="footer3-note">Built for creators who value privacy and speed.</span>
+  </div>
 </footer>
+
 
 <div class="mobile-cta">
   <a href="auth.html?mode=signup" class="btn btn-primary" style="width:100%">Get started</a>
@@ -1330,7 +1518,7 @@ body[data-theme="dark"] .hero-float-badge {
         <div class="channel-icon wa"><img src="https://cdn.simpleicons.org/whatsapp/25D366" alt="" style="width:20px;height:20px;"></div>
         <div><h4>WhatsApp</h4><p>Chat with us on WhatsApp</p></div>
       </a>
-      <a href="https://t.me/XXXXXXXXXX" target="_blank" class="channel">
+      <a href="https://t.me/mj_hub_tg" target="_blank" class="channel">
         <div class="channel-icon tg"><img src="https://cdn.simpleicons.org/telegram/26A5E4" alt="" style="width:20px;height:20px;"></div>
         <div><h4>Telegram</h4><p>Chat with us on Telegram</p></div>
       </a>
@@ -1654,5 +1842,153 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 });
 </script>
+  <script src="js/skeleton.js" defer></script>
+
+<script>
+(function(){
+  /* Scrollable card stack */
+  var root = document.getElementById('scsRoot');
+  if (root) {
+    var cards = [].slice.call(root.querySelectorAll('.scs-card'));
+    var dots = [].slice.call(root.querySelectorAll('.scs-dot'));
+    var live = document.getElementById('scsLive');
+    var i = 0, n = cards.length;
+    var reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    function paint(){
+      cards.forEach(function(c, idx){
+        c.classList.remove('is-active','is-next','is-next2','is-prev','is-away');
+        var d = (idx - i + n) % n;
+        if (d===0){ c.classList.add('is-active'); c.setAttribute('aria-hidden','false'); }
+        else if (d===1){ c.classList.add('is-next'); c.setAttribute('aria-hidden','true'); }
+        else if (d===2){ c.classList.add('is-next2'); c.setAttribute('aria-hidden','true'); }
+        else if (d===n-1){ c.classList.add('is-prev'); c.setAttribute('aria-hidden','true'); }
+        else { c.classList.add('is-away'); c.setAttribute('aria-hidden','true'); }
+      });
+      dots.forEach(function(d, idx){ d.setAttribute('aria-selected', idx===i ? 'true':'false'); });
+      if (live) live.textContent = 'Card '+(i+1)+' of '+n+' selected. Use arrow keys or dots.';
+    }
+    function go(to){ i = ((to % n)+n)%n; paint(); }
+    dots.forEach(function(d){ d.addEventListener('click', function(){ go(+d.getAttribute('data-go')); }); });
+    root.addEventListener('keydown', function(e){
+      if (e.key==='ArrowRight'||e.key==='ArrowDown'){ e.preventDefault(); go(i+1); }
+      else if (e.key==='ArrowLeft'||e.key==='ArrowUp'){ e.preventDefault(); go(i-1); }
+      else if (e.key==='Home'){ e.preventDefault(); go(0); }
+      else if (e.key==='End'){ e.preventDefault(); go(n-1); }
+    });
+    var sx=0,sy=0,tr=false;
+    root.addEventListener('touchstart', function(e){ if(!e.touches[0])return; tr=true; sx=e.touches[0].clientX; sy=e.touches[0].clientY; }, {passive:true});
+    root.addEventListener('touchend', function(e){
+      if(!tr||!e.changedTouches[0])return; tr=false;
+      var dx=e.changedTouches[0].clientX-sx, dy=e.changedTouches[0].clientY-sy;
+      if (Math.abs(dx)<40||Math.abs(dx)<Math.abs(dy)) return;
+      if (dx<0) go(i+1); else go(i-1);
+    }, {passive:true});
+    if (!reduce) setInterval(function(){ if(document.activeElement && root.contains(document.activeElement)) return; go(i+1); }, 5200);
+    paint();
+  }
+
+  /* Apple Invites */
+  var peopleEl = document.getElementById('aiPeople');
+  var addBtn = document.getElementById('aiAdd');
+  var joinBtn = document.getElementById('aiJoinDemo');
+  if (peopleEl && addBtn) {
+    var pool = [
+      { n: 'Ada', c: '#3b82f6' },
+      { n: 'Tunde', c: '#10b981' },
+      { n: 'Chioma', c: '#f59e0b' },
+      { n: 'Ibrahim', c: '#8b5cf6' },
+      { n: 'Zainab', c: '#ec4899' },
+      { n: 'Kola', c: '#06b6d4' }
+    ];
+    var active = [];
+    var reduceM = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    function render(){
+      peopleEl.innerHTML = '';
+      active.forEach(function(p, idx){
+        var chip = document.createElement('div');
+        chip.className = 'ai-chip' + (reduceM ? '' : ' is-enter');
+        chip.setAttribute('draggable', 'true');
+        chip.dataset.idx = String(idx);
+        chip.innerHTML = '<span class="ai-av" style="background:'+p.c+'" aria-hidden="true">'+p.n.charAt(0)+'</span><span>'+p.n+'</span>';
+        chip.title = 'Participant '+(idx+1)+': '+p.n+' — double-click to remove';
+        chip.setAttribute('aria-label', 'Participant '+(idx+1)+', '+p.n);
+        chip.addEventListener('dblclick', function(){ removeAt(idx); });
+        chip.addEventListener('dragstart', function(e){ e.dataTransfer.setData('text/plain', String(idx)); });
+        chip.addEventListener('dragover', function(e){ e.preventDefault(); });
+        chip.addEventListener('drop', function(e){
+          e.preventDefault();
+          var from = parseInt(e.dataTransfer.getData('text/plain'),10);
+          var to = idx;
+          if (isNaN(from)||from===to) return;
+          var item = active.splice(from,1)[0];
+          active.splice(to,0,item);
+          render();
+        });
+        peopleEl.appendChild(chip);
+      });
+    }
+    function removeAt(idx){
+      var nodes = peopleEl.querySelectorAll('.ai-chip');
+      if (nodes[idx] && !reduceM) {
+        nodes[idx].classList.add('is-leave');
+        setTimeout(function(){ active.splice(idx,1); render(); }, 200);
+      } else {
+        active.splice(idx,1); render();
+      }
+    }
+    addBtn.addEventListener('click', function(){
+      if (active.length >= pool.length) { active = []; }
+      var next = pool[active.length % pool.length];
+      // pick unused name if possible
+      var used = {};
+      active.forEach(function(a){ used[a.n]=1; });
+      for (var k=0;k<pool.length;k++){ if(!used[pool[k].n]){ next=pool[k]; break; } }
+      active.push(next);
+      render();
+    });
+    if (joinBtn) joinBtn.addEventListener('click', function(){
+      window.open('https://chat.whatsapp.com/DxgYNbkV0fjLpWbP2aODRj', '_blank', 'noopener');
+    });
+    // seed 3
+    active = pool.slice(0,3);
+    render();
+  }
+
+  /* Footer year */
+  var y = document.getElementById('footerYear');
+  if (y) y.textContent = String(new Date().getFullYear());
+
+  /* Live stats — public counts, auto-refresh */
+  async function loadStats(){
+    var elP = document.getElementById('statProducts');
+    var elS = document.getElementById('statSms');
+    var elB = document.getElementById('statBoost');
+    if (!elP || !window.supabase) return;
+    try {
+      var SUPABASE_URL = 'https://atczodlljmlayvldxfmv.supabase.co';
+      var SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImF0Y3pvZGxsam1sYXl2bGR4Zm12Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODUwNzUyMzgsImV4cCI6MjEwMDY1MTIzOH0.ufthD-p7BmeD_B7xyuMM6PNPL8DmcL4AtRYgg-MuoLI';
+      var sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+      function fmt(n){ if(n==null) return '—'; if(n>=1000) return (n/1000).toFixed(n>=10000?0:1).replace(/\.0$/,'')+'k'; return String(n); }
+      var products = await sb.from('products').select('id', { count: 'exact', head: true }).eq('is_available', true);
+      var sms = await sb.from('number_services').select('id', { count: 'exact', head: true });
+      var boost = await sb.from('booster_services').select('id', { count: 'exact', head: true });
+      // fallback table names if needed
+      if (sms.error) sms = await sb.from('sms_services').select('id', { count: 'exact', head: true });
+      if (boost.error) boost = await sb.from('boost_services').select('id', { count: 'exact', head: true });
+      if (elP) elP.textContent = products.error ? '—' : fmt(products.count||0);
+      if (elS) elS.textContent = sms.error ? '—' : fmt(sms.count||0);
+      if (elB) elB.textContent = boost.error ? '—' : fmt(boost.count||0);
+    } catch (e) {
+      if (elP) elP.textContent = '—';
+      if (elS) elS.textContent = '—';
+      if (elB) elB.textContent = '—';
+    }
+  }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', loadStats);
+  else loadStats();
+  setInterval(loadStats, 60000);
+})();
+</script>
+
 </body>
 </html>
