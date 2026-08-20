@@ -36,21 +36,46 @@ function getSupplierConfig(product) {
   return SUPPLIERS[key] || SUPPLIERS.faded;
 }
 
+
+async function requireAuthUser(req) {
+  const authHeader = req.headers.authorization || req.headers.Authorization || '';
+  const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7).trim() : '';
+  if (!token || token.includes('service_role')) {
+    return { error: { status: 401, message: 'Not signed in' } };
+  }
+  const { data: { user }, error } = await supabase.auth.getUser(token);
+  if (error || !user) {
+    return { error: { status: 401, message: 'Invalid or expired session' } };
+  }
+  return { user };
+}
+
 export default async function handler(req, res) {
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  if (req.method === 'OPTIONS') return res.status(200).end();
   if (req.method !== 'POST') {
     return res.status(405).json({ success: false, message: 'Method not allowed' });
   }
 
+  // IDOR protection: never trust body.user_id — bind to JWT only
+  const auth = await requireAuthUser(req);
+  if (auth.error) {
+    return res.status(auth.error.status).json({ success: false, message: auth.error.message });
+  }
+  const user_id = auth.user.id;
+
+  const body = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : (req.body || {});
   const {
     product_key,
     quantity = 1,
     external_order_id,
-    user_id,
     customer_info
-  } = req.body;
+  } = body;
 
-  if (!product_key || !user_id) {
-    return res.status(400).json({ success: false, message: 'product_key and user_id are required' });
+  if (!product_key) {
+    return res.status(400).json({ success: false, message: 'product_key is required' });
   }
 
   let originalBalance = 0;
