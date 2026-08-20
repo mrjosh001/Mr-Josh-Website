@@ -363,7 +363,32 @@ export default async function handler(req, res) {
     let newCount = 0;
     let updatedCount = 0;
 
+    // One batched query for every product_key in this sync, instead of a
+    // separate select('*') per item (was N+1 — one full-row round trip per
+    // product just to check truthiness, times however many products Fadded
+    // returns, plus a second round trip each for the actual insert/update).
+    // Only the column actually needed for the existence check is selected.
+    const allKeys = products.map((item) => item.product_key).filter(Boolean);
+    const existingKeySet = new Set();
+    const EXISTS_CHECK_BATCH = 500;
+    for (let i = 0; i < allKeys.length; i += EXISTS_CHECK_BATCH) {
+      const keyBatch = allKeys.slice(i, i + EXISTS_CHECK_BATCH);
+      const { data: existingRows, error: existErr } = await supabase
+        .from('products')
+        .select('product_key')
+        .in('product_key', keyBatch);
+      if (existErr) {
+        console.error('Error checking existing product_keys:', existErr.message);
+        continue;
+      }
+      (existingRows || []).forEach((r) => existingKeySet.add(r.product_key));
+    }
+
+    const toInsert = [];
+    const toUpdate = [];
+
     for (const item of products) {
+      if (!item.product_key) continue;
       const cleanDescription = stripHtml(item.description);
       const displayDescription = replaceChannelLinks(cleanDescription);
 
@@ -379,14 +404,9 @@ export default async function handler(req, res) {
       ) || 0;
 
       const stock = item.in_stock ?? 0;
+      const now = new Date().toISOString();
 
-      const { data: existing } = await supabase
-        .from('products')
-        .select('*')
-        .eq('product_key', item.product_key)
-        .maybeSingle();
-
-      if (existing) {
+      if (existingKeySet.has(item.product_key)) {
         // EXISTING: refresh name/description + supplier cost + stock so the
         // catalog always reflects what the supplier currently calls this
         // product (protects against them renaming/reusing a listing).
@@ -397,46 +417,49 @@ export default async function handler(req, res) {
         // the rest of an existing catalog stayed permanently blank on the
         // admin dashboard's supplier badge.
         updatedCount++;
-        const { error } = await supabase
-          .from('products')
-          .update({
-            name: item.name,
-            description: cleanDescription,
-            display_description: displayDescription,
-            supplier_price: supplierPrice,
-            stock_quantity: stock,
-            is_available: stock > 0,
-            source: 'fadded',
-            updated_at: new Date().toISOString()
-          })
-          .eq('product_key', item.product_key);
-
-        if (error) {
-          console.error(`Error updating ${item.product_key}:`, error.message);
-        }
+        toUpdate.push({
+          product_key: item.product_key,
+          name: item.name,
+          description: cleanDescription,
+          display_description: displayDescription,
+          supplier_price: supplierPrice,
+          stock_quantity: stock,
+          is_available: stock > 0,
+          source: 'fadded',
+          updated_at: now
+        });
       } else {
         // NEW product: set full row including auto markup + category
         newCount++;
-        const { error } = await supabase
-          .from('products')
-          .insert({
-            product_key: item.product_key,
-            name: item.name,
-            description: cleanDescription,
-            display_description: displayDescription,
-            supplier_price: supplierPrice,
-            price: applyRandomMarkup(supplierPrice),
-            stock_quantity: stock,
-            is_available: stock > 0,
-            category: categorize(item.name),
-            source: 'fadded',
-            updated_at: new Date().toISOString()
-          });
-
-        if (error) {
-          console.error(`Error inserting ${item.product_key}:`, error.message);
-        }
+        toInsert.push({
+          product_key: item.product_key,
+          name: item.name,
+          description: cleanDescription,
+          display_description: displayDescription,
+          supplier_price: supplierPrice,
+          price: applyRandomMarkup(supplierPrice),
+          stock_quantity: stock,
+          is_available: stock > 0,
+          category: categorize(item.name),
+          source: 'fadded',
+          updated_at: now
+        });
       }
+    }
+
+    // Batched upsert for updates — upsert() only touches the columns present
+    // in each row, so price/category (deliberately excluded above) are never
+    // reset for an existing row, same guarantee as the old per-item .update().
+    const WRITE_BATCH = 200;
+    for (let i = 0; i < toUpdate.length; i += WRITE_BATCH) {
+      const batch = toUpdate.slice(i, i + WRITE_BATCH);
+      const { error } = await supabase.from('products').upsert(batch, { onConflict: 'product_key' });
+      if (error) console.error('Error updating product batch:', error.message);
+    }
+    for (let i = 0; i < toInsert.length; i += WRITE_BATCH) {
+      const batch = toInsert.slice(i, i + WRITE_BATCH);
+      const { error } = await supabase.from('products').insert(batch);
+      if (error) console.error('Error inserting product batch:', error.message);
     }
 
     let nudge = { sent: 0 };
