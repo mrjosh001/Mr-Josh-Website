@@ -633,6 +633,70 @@ body[data-theme="light"] .form-group.ai-field:focus-within > label {
 
 </style>
 <script defer src="/_vercel/insights/script.js"></script>
+<script src="/js/user-errors.js"></script>
+<script src="/js/form-ux.js"></script>
+<style>
+/* Form UX: validation, checklist, counts */
+.form-group.is-invalid input,
+.form-group.is-missing input {
+  border-color: rgba(248,113,113,.7) !important;
+  box-shadow: 0 0 0 3px rgba(248,113,113,.12);
+}
+.form-group.is-valid input {
+  border-color: rgba(74,222,128,.55) !important;
+}
+.field-hint {
+  font-size: 12px;
+  margin-top: 6px;
+  color: #fca5a5;
+  font-weight: 600;
+  line-height: 1.35;
+}
+.form-group.is-valid .field-hint { color: #86efac; }
+.char-count {
+  font-size: 11px;
+  color: rgba(148,163,184,.95);
+  text-align: right;
+  margin-top: 4px;
+  font-weight: 600;
+}
+.char-count.is-over { color: #f87171; }
+.pw-checklist {
+  margin-top: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.pw-check-item {
+  font-size: 12px;
+  font-weight: 600;
+  color: rgba(148,163,184,.95);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.pw-check-item.is-done { color: #4ade80; }
+.pw-check-mark {
+  width: 18px;
+  text-align: center;
+  font-weight: 800;
+}
+.form-missing-tip {
+  font-size: 12px;
+  font-weight: 700;
+  color: #fbbf24;
+  margin: 0 0 10px;
+  line-height: 1.4;
+}
+.btn-submit:disabled,
+.btn-submit.is-disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  filter: grayscale(0.3);
+  box-shadow: none !important;
+  transform: none !important;
+}
+</style>
 </head>
 <body>
     <div class="bg-ribbon r1" aria-hidden="true"></div>
@@ -689,7 +753,7 @@ body[data-theme="light"] .form-group.ai-field:focus-within > label {
                     <input type="checkbox" id="rememberMe"> Remember me for 24 hours
                 </label>
                 <a href="#" class="forgot-password-link" onclick="switchTab('forgot'); return false;">Forgot Password?</a>
-                <button type="submit" class="btn-submit" id="signinSubmitBtn">Sign In to Dashboard</button>
+                <button type="submit" class="btn-submit is-disabled" id="signinSubmitBtn" disabled>Sign In to Dashboard</button>
             </form>
 
             <!-- Sign Up Form -->
@@ -746,7 +810,7 @@ body[data-theme="light"] .form-group.ai-field:focus-within > label {
                     </div>
                     <div class="pw-match-hint" id="signupPwMatchHint" aria-live="polite"></div>
                 </div>
-                <button type="submit" class="btn-submit" id="signupSubmitBtn">Register Account</button>
+                <button type="submit" class="btn-submit" disabled id="signupSubmitBtn">Register Account</button>
             </form>
 
             <!-- Forgot Password Form -->
@@ -853,36 +917,82 @@ body[data-theme="light"] .form-group.ai-field:focus-within > label {
                 return;
             }
 
-            if (urlParams.get('verified') === '1') {
-                switchTab('signin');
-                showSuccess('✅ Your email has been verified! Please sign in below.');
-                window.history.replaceState({}, document.title, window.location.pathname);
-            }
-
-            // Supabase email confirm often returns with tokens in the hash.
-            // If a session is established, send the user into the app.
+            // ---- Email confirmation / magic-link / recovery error handling ----
             (async function handleEmailConfirmSession() {
               try {
                 if (!supabaseClient) return;
-                const hasAuthHash = /access_token=|refresh_token=|type=signup|type=email/i.test(window.location.hash || '');
-                if (!hasAuthHash && urlParams.get('verified') !== '1') return;
-                const { data: { session } } = await supabaseClient.auth.getSession();
+                function cleanAuthUrl() {
+                  try {
+                    var path = window.location.pathname || '/auth.html';
+                    window.history.replaceState({}, document.title, path);
+                  } catch (e) {}
+                }
+                function friendlyAuthLinkError(raw) {
+                  if (window.mjExplainError) return window.mjExplainError(raw, 'auth').text;
+                  var s = String(raw || '').toLowerCase();
+                  if (/expired|otp_expired|invalid/.test(s)) {
+                    return 'This confirmation link has expired or was already used. Sign in if you already confirmed, or sign up again to get a new email.';
+                  }
+                  return 'We could not confirm your email from this link. Please sign in, or sign up again for a new confirmation email.';
+                }
+                var hashStr = (window.location.hash || '').replace(/^#/, '');
+                var hashParams = new URLSearchParams(hashStr);
+                var q = new URLSearchParams(window.location.search || '');
+                var errCode = q.get('error') || hashParams.get('error') || q.get('error_code') || hashParams.get('error_code');
+                var errDesc = q.get('error_description') || hashParams.get('error_description') || '';
+                try { errDesc = decodeURIComponent(String(errDesc).replace(/\+/g, ' ')); } catch (e) {}
+                if (errCode || /error=|error_description=/i.test(window.location.href)) {
+                  switchTab('signin');
+                  showError(friendlyAuthLinkError(errDesc || errCode));
+                  cleanAuthUrl();
+                  return;
+                }
+                var hasAuthHash = /access_token=|refresh_token=|type=signup|type=email|type=magiclink/i.test(window.location.hash || '');
+                var code = q.get('code');
+                var verifiedFlag = q.get('verified') === '1';
+                if (code) {
+                  try {
+                    var exch = await supabaseClient.auth.exchangeCodeForSession(code);
+                    if (exch.error) {
+                      switchTab('signin');
+                      showError(friendlyAuthLinkError(exch.error.message || 'code'));
+                      cleanAuthUrl();
+                      return;
+                    }
+                  } catch (ex) {
+                    switchTab('signin');
+                    showError(friendlyAuthLinkError(ex.message || 'code'));
+                    cleanAuthUrl();
+                    return;
+                  }
+                }
+                if (!hasAuthHash && !code && !verifiedFlag) return;
+                var session = null;
+                for (var i = 0; i < 6; i++) {
+                  var res = await supabaseClient.auth.getSession();
+                  session = res && res.data && res.data.session;
+                  if (session && session.user) break;
+                  await new Promise(function (r) { setTimeout(r, 200); });
+                }
+                switchTab('signin');
+                cleanAuthUrl();
                 if (session && session.user) {
                   try { sessionStorage.setItem('mjhub-fresh-login', '1'); } catch (e) {}
-                  // Confirmed + session ready → user app (never landing index.html)
-                  showSuccess('✅ Email confirmed. Taking you to your dashboard…');
-                  setTimeout(function () {
-                    window.location.href = 'dashboard.html';
-                  }, 900);
-                } else if (hasAuthHash || urlParams.get('verified') === '1') {
-                  // Tokens missing/expired but user landed from confirm link → stay on sign-in
-                  switchTab('signin');
-                  showSuccess('✅ Your email has been verified! Please sign in below.');
+                  showSuccess('Your email is confirmed. Sign in with your email and password to continue.');
                   try {
-                    window.history.replaceState({}, document.title, window.location.pathname + window.location.search.replace(/[?&]verified=1/, '').replace(/^&/, '?') || window.location.pathname);
-                  } catch (e2) {}
+                    var em = session.user.email;
+                    if (em && document.getElementById('signinEmail')) document.getElementById('signinEmail').value = em;
+                  } catch (e3) {}
+                } else {
+                  showSuccess('Your email is confirmed. Please sign in below.');
                 }
-              } catch (e) { console.warn('confirm session', e); }
+              } catch (e) {
+                console.warn('confirm session', e);
+                try {
+                  switchTab('signin');
+                  showError(window.mjExplainError ? window.mjExplainError(e, 'auth').text : 'Something went wrong opening the confirmation link. Please sign in.');
+                } catch (e4) {}
+              }
             })();
 
             if (urlParams.get('banned') === '1') {
@@ -986,38 +1096,27 @@ body[data-theme="light"] .form-group.ai-field:focus-within > label {
         }
 
         function formatAuthError(error) {
+            if (window.mjExplainError) {
+                var e = window.mjExplainError(error, 'auth');
+                return e.text || (e.what + ' ' + e.action);
+            }
             if (!error) return 'Something went wrong. Please try again.';
             const raw = String(error.message || error.error_description || error.msg || error.error || '').trim();
             const code = String(error.code || error.error_code || '').toLowerCase();
             const low = raw.toLowerCase();
-
-            // Clear, user-facing messages (no cryptic codes)
-            if (low.includes('banned')) {
-                return 'You have been banned from MJ HUB. Contact support if this is a mistake.';
-            }
             if (code === 'email_not_confirmed' || low.includes('email not confirmed') || low.includes('not confirmed')) {
                 return 'Your email is not confirmed yet. Open the link we sent you, then sign in.';
             }
-            if (code === 'user_already_exists' || low.includes('already registered') || low.includes('already been registered') || low.includes('user already registered')) {
+            if (low.includes('already registered') || low.includes('already been registered') || low.includes('user already')) {
                 return 'An account with this email already exists. Please sign in instead.';
             }
-            if (low.includes('password') && (low.includes('weak') || low.includes('least') || low.includes('characters'))) {
-                return 'Password is too weak. Use at least 8 characters with uppercase, lowercase, and a number.';
-            }
-            if (code === 'over_request_rate_limit' || low.includes('rate limit') || low.includes('too many requests')) {
-                return 'Too many attempts. Please wait a few minutes and try again.';
-            }
-            if (low.includes('network') || low.includes('failed to fetch')) {
+            if (low.includes('failed to fetch') || low.includes('network')) {
                 return 'Network error. Check your connection and try again.';
             }
-            // Invalid login: refined further by resolveLoginError()
-            if (code === 'invalid_credentials' || low.includes('invalid login credentials') || low.includes('invalid credentials')) {
+            if (low.includes('invalid login') || low.includes('invalid credentials')) {
                 return 'Incorrect email or password. Check both and try again.';
             }
-            if (raw && raw !== '{}' && raw !== '[object Object]') {
-                return raw;
-            }
-            return 'Something went wrong. Please try again.';
+            return raw || 'Something went wrong. Please try again.';
         }
 
         /**
@@ -1298,7 +1397,8 @@ body[data-theme="light"] .form-group.ai-field:focus-within > label {
             e.preventDefault();
             const fullName = document.getElementById('fullName').value.trim();
             const username = document.getElementById('username').value.trim();
-            const phone = document.getElementById('phoneNumber').value.trim();
+            let phone = document.getElementById('phoneNumber').value.trim();
+            if (window.MJFormUX && MJFormUX.normalizePhone) phone = MJFormUX.normalizePhone(phone);
             const email = document.getElementById('emailAddress').value.trim();
             const password = document.getElementById('signupPassword').value.trim();
             const passwordConfirm = (document.getElementById('signupPasswordConfirm') || {}).value
@@ -1338,7 +1438,7 @@ body[data-theme="light"] .form-group.ai-field:focus-within > label {
                         // Where Supabase sends the user after they click the
                         // confirm-email link — back to the sign-in page here,
                         // with ?verified=1 so auth.html can greet them.
-                        emailRedirectTo: window.location.origin + '/auth?verified=1'
+                        emailRedirectTo: window.location.origin + '/auth.html?verified=1'
                     }
                 }));
             } catch (e) {
