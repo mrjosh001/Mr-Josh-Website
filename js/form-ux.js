@@ -36,33 +36,44 @@
     pw = String(pw || '');
     return {
       length: pw.length >= 8,
-      letter: /[a-zA-Z]/.test(pw),
-      number: /\d/.test(pw),
-      // optional soft extras
       upper: /[A-Z]/.test(pw),
-      special: /[^a-zA-Z0-9]/.test(pw)
+      lower: /[a-z]/.test(pw),
+      number: /\d/.test(pw)
     };
   }
 
   function passwordOk(pw) {
     var r = passwordRules(pw);
-    return r.length && r.letter && r.number;
+    return r.length && r.upper && r.lower && r.number;
   }
 
-  function setFieldState(input, state, message) {
+  function setFieldState(input, state, message, force) {
     if (!input) return;
     var group = input.closest('.form-group') || input.parentElement;
     if (!group) return;
     group.classList.remove('is-valid', 'is-invalid', 'is-missing');
-    if (state) group.classList.add(state);
+    // Don't paint red errors until the user has touched the field
+    if (state && state !== 'is-valid' && !force && !group.classList.contains('touched')) {
+      // keep clean until interaction
+    } else if (state) {
+      group.classList.add(state);
+    }
     var hint = group.querySelector('.field-hint');
     if (!hint) {
       hint = document.createElement('div');
       hint.className = 'field-hint';
       group.appendChild(hint);
     }
-    hint.textContent = message || '';
-    hint.hidden = !message;
+    if (state === 'is-valid') {
+      hint.textContent = '';
+      hint.hidden = true;
+    } else if (message && (force || group.classList.contains('touched'))) {
+      hint.textContent = message;
+      hint.hidden = false;
+    } else {
+      hint.textContent = '';
+      hint.hidden = true;
+    }
   }
 
   function ensureCharCount(input, max) {
@@ -82,18 +93,33 @@
   }
 
   function renderPwChecklist(container, pw) {
-    if (!container) return false;
+    // Prefer the existing #pwRules list in auth.html — do not inject a second list
     var r = passwordRules(pw);
-    var items = [
-      { ok: r.length, label: 'At least 8 characters' },
-      { ok: r.letter, label: 'Contains a letter' },
-      { ok: r.number, label: 'Contains a number' }
-    ];
-    container.innerHTML = items.map(function (it) {
-      return '<div class="pw-check-item ' + (it.ok ? 'is-done' : '') + '">' +
-        '<span class="pw-check-mark">' + (it.ok ? '✓' : '○') + '</span> ' +
-        it.label + '</div>';
-    }).join('');
+    var map = {
+      pwRuleLen: r.length,
+      pwRuleUp: r.upper,
+      pwRuleLow: r.lower,
+      pwRuleNum: r.number
+    };
+    Object.keys(map).forEach(function (id) {
+      var el = document.getElementById(id);
+      if (!el) return;
+      el.className = map[id] ? 'ok' : 'bad';
+    });
+    // If a dedicated checklist container exists (no #pwRules), render once there
+    if (container && !document.getElementById('pwRules')) {
+      var items = [
+        { ok: r.length, label: 'At least 8 characters' },
+        { ok: r.upper, label: 'One uppercase letter' },
+        { ok: r.lower, label: 'One lowercase letter' },
+        { ok: r.number, label: 'One number' }
+      ];
+      container.innerHTML = items.map(function (it) {
+        return '<div class="pw-check-item ' + (it.ok ? 'is-done' : '') + '">' +
+          '<span class="pw-check-mark">' + (it.ok ? '✓' : '○') + '</span> ' +
+          it.label + '</div>';
+      }).join('');
+    }
     return passwordOk(pw);
   }
 
@@ -109,18 +135,7 @@
     var pass2 = $('signupPasswordConfirm');
     var btn = form.querySelector('.btn-submit') || $('signupSubmitBtn');
 
-    // Password checklist UI
-    if (pass) {
-      var group = pass.closest('.form-group');
-      if (group && !group.querySelector('.pw-checklist')) {
-        var box = document.createElement('div');
-        box.className = 'pw-checklist';
-        box.id = 'signupPwChecklist';
-        var strength = group.querySelector('.pw-strength');
-        if (strength) group.insertBefore(box, strength);
-        else group.appendChild(box);
-      }
-    }
+    // Password rules live in #pwRules (auth.html) — no duplicate list
 
     // Char limits
     if (fullName) { fullName.setAttribute('maxlength', '60'); }
@@ -169,11 +184,10 @@
       } else if (phone) setFieldState(phone, 'is-valid', '');
 
       var pw = pass && pass.value || '';
-      var checklist = $('signupPwChecklist');
-      var pwGood = renderPwChecklist(checklist, pw);
+      var pwGood = renderPwChecklist(null, pw);
       if (!pwGood) {
         ok = false; missing.push('password');
-        if (showHints && pass) setFieldState(pass, 'is-missing', 'Meet all password checks below');
+        if (showHints && pass) setFieldState(pass, 'is-missing', 'Use 8+ characters with upper, lower, and a number');
       } else if (pass) setFieldState(pass, 'is-valid', '');
 
       var pwC = pass2 && pass2.value || '';
@@ -215,6 +229,10 @@
 
     function onInput(e) {
       var t = e.target;
+      if (t && t.closest) {
+        var g = t.closest('.form-group');
+        if (g) g.classList.add('touched');
+      }
       if (t === fullName) ensureCharCount(fullName, 60);
       if (t === username) ensureCharCount(username, 24);
       if (t === phone) ensureCharCount(phone, 18);
@@ -238,6 +256,10 @@
       if (phone) phone.value = normalizePhone(phone.value);
     }, true);
 
+    // Remove any stale duplicate checklist nodes from older deploys
+    document.querySelectorAll('.pw-checklist, #signupPwChecklist').forEach(function (n) {
+      try { n.remove(); } catch (e) {}
+    });
     validate(false);
   }
 
@@ -302,19 +324,9 @@
     if (!form) return;
     var pass = $('newPassword');
     var btn = form.querySelector('.btn-submit') || $('updatePassSubmitBtn');
-    var box = null;
-    if (pass) {
-      var group = pass.closest('.form-group');
-      if (group && !group.querySelector('.pw-checklist')) {
-        box = document.createElement('div');
-        box.className = 'pw-checklist';
-        box.id = 'updatePwChecklist';
-        group.appendChild(box);
-      } else box = group && group.querySelector('.pw-checklist');
-    }
     function validate(showHints) {
       var pw = pass && pass.value || '';
-      var ok = renderPwChecklist($('updatePwChecklist') || box, pw);
+      var ok = renderPwChecklist(null, pw);
       if (showHints && pass) setFieldState(pass, ok ? 'is-valid' : 'is-missing', ok ? '' : 'Meet all password checks');
       if (btn) { btn.disabled = !ok; btn.classList.toggle('is-disabled', !ok); }
       return ok;
