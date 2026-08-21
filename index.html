@@ -1410,12 +1410,10 @@ footer.footer3, .footer3 { z-index: 10 !important; isolation: isolate; }
 /* ===== Support FAB (landing) — fixed, always visible, no drag bugs ===== */
 .support-widget {
   position: fixed !important;
-  bottom: max(24px, env(safe-area-inset-bottom)) !important;
-  right: max(18px, env(safe-area-inset-right)) !important;
-  left: auto !important;
-  top: auto !important;
+  bottom: max(24px, env(safe-area-inset-bottom));
+  right: max(18px, env(safe-area-inset-right));
   z-index: 2147483000 !important;
-  touch-action: manipulation;
+  touch-action: none;
   user-select: none;
 }
 .support-btn {
@@ -2136,10 +2134,10 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   const currentTheme = body.getAttribute('data-theme') || 'dark';
-  themeBtn.textContent = currentTheme === 'dark' ? '☀️' : '🌙';
+  if (themeBtn) themeBtn.textContent = currentTheme === 'dark' ? '☀️' : '🌙';
   applyLogo(currentTheme);
 
-  themeBtn.addEventListener('click', () => {
+  if (themeBtn) themeBtn.addEventListener('click', () => {
     const isDark = body.getAttribute('data-theme') === 'dark';
     const newTheme = isDark ? 'light' : 'dark';
     body.setAttribute('data-theme', newTheme);
@@ -2148,7 +2146,7 @@ document.addEventListener('DOMContentLoaded', () => {
     applyLogo(newTheme);
   });
 
-  menuBtn.addEventListener('click', e => {
+  menuBtn && menuBtn.addEventListener('click', e => {
     e.stopPropagation();
     mobileMenu.classList.toggle('active');
   });
@@ -2193,20 +2191,66 @@ document.addEventListener('DOMContentLoaded', () => {
     if (wa && (!wa.href || wa.getAttribute('href') === '#')) {
       wa.href = 'https://wa.me/14305583021?text=' + encodeURIComponent("Hello Admin, I've a complaint.\n\nCustomer ID: Not signed in\nComplaint: ");
     }
-    function openSupport(e) {
-      if (e) { e.preventDefault(); e.stopPropagation(); }
-      popup.classList.toggle('active');
+    // Draggable like dashboard (does not break page clicks)
+    let isDragging = false, hasMoved = false, startX, startY, initX, initY;
+
+    function dragStart(e) {
+      if (e.type === 'mousedown' && e.button !== 0) return;
+      isDragging = true;
+      hasMoved = false;
+      const pt = e.touches ? e.touches[0] : e;
+      startX = pt.clientX;
+      startY = pt.clientY;
+      const rect = widget.getBoundingClientRect();
+      initX = rect.left;
+      initY = rect.top;
+      widget.style.bottom = 'auto';
+      widget.style.right = 'auto';
+      widget.style.left = initX + 'px';
+      widget.style.top = initY + 'px';
+      widget.style.transition = 'none';
+      document.addEventListener('mousemove', dragMove);
+      document.addEventListener('mouseup', dragEnd);
+      document.addEventListener('touchmove', dragMove, { passive: false });
+      document.addEventListener('touchend', dragEnd);
     }
-    toggle.addEventListener('click', openSupport);
-    if (closeBtn) closeBtn.addEventListener('click', function(e) {
-      e.preventDefault(); e.stopPropagation();
+    function dragMove(e) {
+      if (!isDragging) return;
+      if (e.cancelable) e.preventDefault();
+      const pt = e.touches ? e.touches[0] : e;
+      const dx = pt.clientX - startX;
+      const dy = pt.clientY - startY;
+      if (Math.abs(dx) > 5 || Math.abs(dy) > 5) hasMoved = true;
+      const x = Math.max(8, Math.min(initX + dx, window.innerWidth - widget.offsetWidth - 8));
+      const y = Math.max(8, Math.min(initY + dy, window.innerHeight - widget.offsetHeight - 8));
+      widget.style.left = x + 'px';
+      widget.style.top = y + 'px';
+    }
+    function dragEnd() {
+      isDragging = false;
+      document.removeEventListener('mousemove', dragMove);
+      document.removeEventListener('mouseup', dragEnd);
+      document.removeEventListener('touchmove', dragMove);
+      document.removeEventListener('touchend', dragEnd);
+      setTimeout(function () { hasMoved = false; }, 60);
+    }
+
+    toggle.addEventListener('mousedown', dragStart);
+    toggle.addEventListener('touchstart', dragStart, { passive: true });
+
+    toggle.addEventListener('click', function (e) {
+      e.stopPropagation();
+      if (hasMoved) return;
+      popup.classList.toggle('active');
+    });
+    if (closeBtn) closeBtn.addEventListener('click', function (e) {
+      e.stopPropagation();
       popup.classList.remove('active');
     });
-    document.addEventListener('click', function(e) {
+    document.addEventListener('click', function (e) {
       if (!widget.contains(e.target)) popup.classList.remove('active');
     });
   }
-});
 });
 </script>
   <script src="js/skeleton.js" defer></script>
