@@ -1370,6 +1370,42 @@ footer.footer3, .footer3 { z-index: 10 !important; isolation: isolate; }
 }
 /* Help FAB sits above content but does not shift copyright */
 
+
+/* Support FAB always easy to find */
+.support-widget { z-index: 99999 !important; touch-action: none; }
+.support-btn {
+  box-shadow: 0 12px 32px rgba(37,99,235,.45), 0 0 0 3px rgba(59,130,246,.25) !important;
+  background: linear-gradient(145deg, #3b82f6, #1d4ed8) !important;
+  border: 2px solid rgba(255,255,255,.2) !important;
+}
+.support-badge {
+  background: #ef4444 !important;
+  font-size: 10px !important;
+  font-weight: 800 !important;
+  z-index: 2;
+}
+
+.hero-trust-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: center;
+  padding-top: 28px;
+  border-top: 1px solid var(--border, rgba(148,163,184,.2));
+}
+.hero-trust-chip {
+  font-size: 13px;
+  font-weight: 600;
+  padding: 8px 14px;
+  border-radius: 999px;
+  color: #93c5fd;
+  background: rgba(59,130,246,.12);
+  border: 1px solid rgba(59,130,246,.25);
+}
+@media (min-width: 901px) {
+  .hero-trust-row { justify-content: flex-start; }
+}
+
 </style>
 <script defer src="/_vercel/insights/script.js"></script>
   <link rel="stylesheet" href="css/skeleton.css">
@@ -1433,19 +1469,10 @@ footer.footer3, .footer3 { z-index: 10 !important; isolation: isolate; }
         <a href="auth.html?tab=signup" class="btn btn-primary">Start free</a>
         <a href="auth.html?mode=signin" class="btn btn-ghost">Sign In</a>
       </div>
-      <div class="hero-stats mj-stats" id="mjLiveStats" data-skeleton="stats">
-        <div class="mj-stat">
-          <div class="stat-value" id="statUsers"><span class="sk-pulse">, </span></div>
-          <div class="stat-label">Total users</div>
-        </div>
-        <div class="mj-stat">
-          <div class="stat-value" id="statOrders"><span class="sk-pulse">, </span></div>
-          <div class="stat-label">Orders completed</div>
-        </div>
-        <div class="mj-stat">
-          <div class="stat-value" id="statMembers"><span class="sk-pulse">, </span></div>
-          <div class="stat-label">Community members</div>
-        </div>
+            <div class="hero-trust-row" aria-label="Why MJ Hub">
+        <span class="hero-trust-chip">Fast delivery</span>
+        <span class="hero-trust-chip">Wallet in NGN</span>
+        <span class="hero-trust-chip">WhatsApp support</span>
       </div>
     </div>
 
@@ -2097,9 +2124,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
   let isDragging = false, hasMoved = false, startX, startY, initX, initY;
 
-  const preventScroll = e => { if (isDragging) e.preventDefault(); };
-
   const dragStart = e => {
+    if (e.type === 'mousedown' && e.button !== 0) return;
     isDragging = true; hasMoved = false;
     const clientX = e.type.includes('touch') ? e.touches[0].clientX : e.clientX;
     const clientY = e.type.includes('touch') ? e.touches[0].clientY : e.clientY;
@@ -2110,8 +2136,9 @@ document.addEventListener('DOMContentLoaded', () => {
     widget.style.right = 'auto';
     widget.style.left = initX + 'px';
     widget.style.top = initY + 'px';
+    widget.style.transition = 'none';
     document.body.style.overflow = 'hidden';
-    document.addEventListener('touchmove', preventScroll, { passive: false });
+    document.documentElement.style.overflow = 'hidden';
     document.addEventListener('mousemove', dragMove);
     document.addEventListener('mouseup', dragEnd);
     document.addEventListener('touchmove', dragMove, { passive: false });
@@ -2120,7 +2147,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   const dragMove = e => {
     if (!isDragging) return;
-    e.preventDefault();
+    if (e.cancelable) e.preventDefault();
     const clientX = e.type.includes('touch') ? e.touches[0].clientX : e.clientX;
     const clientY = e.type.includes('touch') ? e.touches[0].clientY : e.clientY;
     const dx = clientX - startX, dy = clientY - startY;
@@ -2134,21 +2161,23 @@ document.addEventListener('DOMContentLoaded', () => {
   const dragEnd = () => {
     isDragging = false;
     document.body.style.overflow = '';
-    document.removeEventListener('touchmove', preventScroll);
+    document.documentElement.style.overflow = '';
+    widget.style.transition = '';
     document.removeEventListener('mousemove', dragMove);
     document.removeEventListener('mouseup', dragEnd);
     document.removeEventListener('touchmove', dragMove);
     document.removeEventListener('touchend', dragEnd);
+    setTimeout(function(){ hasMoved = false; }, 80);
   };
 
   toggle.addEventListener('mousedown', dragStart);
   toggle.addEventListener('touchstart', dragStart, { passive: false });
   toggle.addEventListener('click', e => {
-    if (hasMoved) return;
+    if (hasMoved) { e.preventDefault(); e.stopPropagation(); return; }
     e.stopPropagation();
     popup.classList.toggle('active');
   });
-  closeBtn.addEventListener('click', e => {
+  if (closeBtn) closeBtn.addEventListener('click', e => {
     e.stopPropagation();
     popup.classList.remove('active');
   });
@@ -2279,45 +2308,6 @@ document.addEventListener('DOMContentLoaded', () => {
   var y = document.getElementById('footerYear');
   if (y) y.textContent = String(new Date().getFullYear());
 
-  /* Live stats — public counts, auto-refresh */
-  async function loadStats(){
-    var elU = document.getElementById('statUsers');
-    var elO = document.getElementById('statOrders');
-    var elM = document.getElementById('statMembers');
-    if (!elU || !window.supabase) return;
-    function fmt(n){
-      if (n == null || isNaN(n)) return '—';
-      n = Number(n);
-      if (n >= 1000000) return (n/1000000).toFixed(1).replace(/\.0$/,'') + 'M';
-      if (n >= 1000) return (n/1000).toFixed(n >= 10000 ? 0 : 1).replace(/\.0$/,'') + 'k';
-      return String(n);
-    }
-    try {
-      var SUPABASE_URL = 'https://atczodlljmlayvldxfmv.supabase.co';
-      var SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImF0Y3pvZGxsam1sYXl2bGR4Zm12Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODUwNzUyMzgsImV4cCI6MjEwMDY1MTIzOH0.ufthD-p7BmeD_B7xyuMM6PNPL8DmcL4AtRYgg-MuoLI';
-      var sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-
-      // The direct table counts below used to return 0 (not an error) for
-      // every anonymous visitor: RLS on profiles/orders/number_orders/
-      // booster_orders is correctly restricted to authenticated users only,
-      // so an anon-key count query legitimately sees zero visible rows.
-      // get_public_stats() is a SECURITY DEFINER function that computes the
-      // real aggregate counts server-side and returns only those numbers —
-      // never row data — so this doesn't loosen the actual RLS protection.
-      var { data: stats, error: statsErr } = await sb.rpc('get_public_stats');
-
-      if (elU) elU.textContent = (statsErr || !stats) ? '—' : fmt(stats.total_users || 0);
-      if (elO) elO.textContent = (statsErr || !stats) ? '—' : fmt(stats.orders_completed || 0);
-      if (elM) elM.textContent = (statsErr || !stats) ? '—' : fmt(stats.community_members || 0);
-    } catch (e) {
-      if (elU) elU.textContent = '—';
-      if (elO) elO.textContent = '—';
-      if (elM) elM.textContent = '—';
-    }
-  }
-  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', loadStats);
-  else loadStats();
-  setInterval(loadStats, 60000);
 })();
 </script>
 
