@@ -1704,9 +1704,41 @@ body::after {
     position: fixed; bottom: 100px; right: 14px; z-index: 99999; user-select: none;
     transition: transform .35s ease, opacity .35s ease;
 }
-.support-widget-container.collapsed { transform: translateX(40px); opacity: 0.9; }
-.support-widget-container.collapsed .support-badge-tag { display: none; }
+.support-widget-container.collapsed {
+  transform: translateX(0);
+  opacity: 1;
+  right: 0 !important;
+}
+.support-widget-container.collapsed .support-badge-tag {
+  display: flex !important;
+  top: 50%;
+  right: auto;
+  left: -6px;
+  transform: translateY(-50%);
+  writing-mode: horizontal-tb;
+  font-size: 9px;
+  padding: 4px 6px;
+  box-shadow: 0 4px 12px rgba(0,0,0,.35);
+}
 .support-widget-container.collapsed .support-popup-card { display: none !important; }
+.support-widget-container {
+  touch-action: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+.support-toggle-btn {
+  touch-action: none;
+  cursor: grab;
+}
+.support-toggle-btn:active { cursor: grabbing; }
+/* Docked edge tab — always visible */
+.support-widget-container.collapsed .support-toggle-btn {
+  border-radius: 14px 0 0 14px !important;
+  width: 48px !important;
+  height: 52px !important;
+  box-shadow: -4px 8px 24px rgba(37,99,235,.45), 0 0 0 2px rgba(255,255,255,.12);
+  background: linear-gradient(135deg, #3b82f6, #1d4ed8) !important;
+}
 .support-toggle-btn {
     width: 54px; height: 54px; border-radius: 50%;
     background: linear-gradient(135deg, var(--primary), var(--primary-strong, #2563eb));
@@ -4116,6 +4148,9 @@ function initSupportWidget() {
         widget.style.left = initialX + 'px';
         widget.style.top = initialY + 'px';
         widget.style.transform = 'none';
+        widget.style.transition = 'none';
+        document.body.style.overflow = 'hidden';
+        document.documentElement.style.overflow = 'hidden';
     }
 
     function moveDrag(clientX, clientY) {
@@ -4128,24 +4163,37 @@ function initSupportWidget() {
         }
         let newX = initialX + dx;
         let newY = initialY + dy;
-        const maxX = window.innerWidth - widget.offsetWidth;
-        const maxY = window.innerHeight - widget.offsetHeight;
-        newX = Math.max(0, Math.min(newX, maxX));
-        newY = Math.max(0, Math.min(newY, maxY));
+        const maxX = window.innerWidth - widget.offsetWidth - 4;
+        const maxY = window.innerHeight - widget.offsetHeight - 4;
+        newX = Math.max(4, Math.min(newX, maxX));
+        newY = Math.max(4, Math.min(newY, maxY));
         widget.style.left = newX + 'px';
         widget.style.top = newY + 'px';
     }
 
     function endDrag() {
         isDragging = false;
-        setTimeout(() => { hasMoved = false; }, 50);
+        document.body.style.overflow = '';
+        document.documentElement.style.overflow = '';
+        widget.style.transition = '';
+        setTimeout(() => { hasMoved = false; }, 80);
         scheduleCollapse();
+    }
+
+    function onTouchMove(e) {
+        if (!isDragging) return;
+        e.preventDefault();
+        const touch = e.touches[0];
+        moveDrag(touch.clientX, touch.clientY);
     }
 
     btn.addEventListener('mousedown', (e) => {
         e.preventDefault();
         startDrag(e.clientX, e.clientY);
-        const onMove = (ev) => moveDrag(ev.clientX, ev.clientY);
+        const onMove = (ev) => {
+            ev.preventDefault();
+            moveDrag(ev.clientX, ev.clientY);
+        };
         const onUp = () => {
             endDrag();
             document.removeEventListener('mousemove', onMove);
@@ -4156,19 +4204,36 @@ function initSupportWidget() {
     });
 
     btn.addEventListener('touchstart', (e) => {
-        const t = e.touches[0];
-        startDrag(t.clientX, t.clientY);
+        const touch = e.touches[0];
+        startDrag(touch.clientX, touch.clientY);
+        document.addEventListener('touchmove', onTouchMove, { passive: false });
+        document.addEventListener('touchend', onTouchEnd);
     }, { passive: true });
 
-    btn.addEventListener('touchmove', (e) => {
-        if (!isDragging) return;
-        const t = e.touches[0];
-        moveDrag(t.clientX, t.clientY);
-    }, { passive: true });
+    function onTouchEnd() {
+        endDrag();
+        document.removeEventListener('touchmove', onTouchMove);
+        document.removeEventListener('touchend', onTouchEnd);
+    }
 
-    btn.addEventListener('touchend', endDrag);
+    // Dock to edge when collapsed for visibility
+    const _origSchedule = scheduleCollapse;
+    scheduleCollapse = function() {
+        clearTimeout(collapseTimer);
+        collapseTimer = setTimeout(() => {
+            if (!popup.classList.contains('active') && !isDragging) {
+                // Snap to right edge when sleeping
+                const rect = widget.getBoundingClientRect();
+                widget.style.left = (window.innerWidth - 48) + 'px';
+                widget.style.right = 'auto';
+                widget.style.bottom = 'auto';
+                widget.classList.add('collapsed');
+                isCollapsed = true;
+            }
+        }, 5000);
+    };
 
-    // Auto-collapse after 4 seconds on load
+    // Auto-collapse after idle
     scheduleCollapse();
 }
 
@@ -6354,10 +6419,12 @@ function toggleBoosterMenu(e) {
 <script>
 (function(){
   function go(){
-    if(!window.mjSkeleton) return;
-    var el = document.getElementById('mainContent') || document.querySelector('[data-skel]');
-    if(el && !el.dataset.skelReady && el.innerHTML.trim().length < 40){
-      el.innerHTML = mjSkeleton.cards(4);
+    if(!window.mjSkeleton && !window.MJSkeleton) return;
+    var sk = window.mjSkeleton || window.MJSkeleton;
+    var el = document.getElementById('productGrid') || document.getElementById('mainContent') || document.querySelector('[data-skel]');
+    if(el){
+      el.innerHTML = sk.grid(6);
+    }
       el.dataset.skelReady = '1';
     }
   }
