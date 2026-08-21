@@ -1472,6 +1472,39 @@ footer.footer3, .footer3 { z-index: 10 !important; isolation: isolate; }
 </style>
 <script defer src="/_vercel/insights/script.js"></script>
   <link rel="stylesheet" href="css/skeleton.css">
+
+<script>
+/* Referral: landing ?ref=CODE → localStorage → auth signup still attaches referee */
+(function(){
+  try {
+    var p = new URLSearchParams(location.search);
+    var ref = (p.get('ref') || p.get('referral') || '').trim();
+    if (ref) {
+      localStorage.setItem('mjhub_ref_code', ref.toUpperCase());
+      // clean URL optional - keep ref visible for sharing transparency
+    }
+    function withRef(href) {
+      var code = localStorage.getItem('mjhub_ref_code');
+      if (!code) return href;
+      try {
+        var u = new URL(href, location.origin);
+        if (!u.searchParams.get('ref')) u.searchParams.set('ref', code);
+        if (u.pathname.indexOf('auth') >= 0 && !u.searchParams.get('tab')) u.searchParams.set('tab', 'signup');
+        return u.pathname + u.search + u.hash;
+      } catch (e) { return href; }
+    }
+    document.addEventListener('DOMContentLoaded', function(){
+      document.querySelectorAll('a[href*="auth.html"]').forEach(function(a){
+        var h = a.getAttribute('href') || '';
+        if (/signup|register|tab=signup/i.test(h) || /Start free|Get started|Create/i.test(a.textContent||'')) {
+          a.setAttribute('href', withRef(h));
+        }
+      });
+    });
+  } catch (e) {}
+})();
+</script>
+
 </head>
 <body>
 

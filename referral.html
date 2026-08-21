@@ -11,6 +11,24 @@
 (function(){try{var t=localStorage.getItem('mjhub-theme');document.documentElement.setAttribute('data-theme',(t==='light'||t==='dark')?t:'dark');}catch(e){document.documentElement.setAttribute('data-theme','dark');}})();
 </script>
 <style>
+:root{
+  --primary:#3b82f6;
+  --primary-strong:#1d4ed8;
+  --primary-glow:rgba(59,130,246,.2);
+  --bg:#0b1220;
+  --card:#111827;
+  --text:#f1f5f9;
+  --muted:#94a3b8;
+  --border:rgba(148,163,184,.18);
+}
+:root[data-theme="light"]{
+  --bg:#e9eef7;
+  --card:#ffffff;
+  --text:#0f172a;
+  --muted:#475569;
+  --border:rgba(15,23,42,.08);
+}
+
 :root[data-theme="dark"]{--bg:#06080f;--card:#0f1524;--border:rgba(148,163,184,.12);--text:#f1f5f9;--muted:#8b9bb4;--primary:#5b8af5;--primary2:#a78bfa;--success:#34d399;--danger:#f87171}
 :root[data-theme="light"]{--bg:#f4f6fb;--card:#fff;--border:rgba(15,23,42,.08);--text:#0f172a;--muted:#64748b;--primary:#3b6ef5;--primary2:#7c5cfc;--success:#059669;--danger:#dc2626}
 *{box-sizing:border-box;margin:0;padding:0}
@@ -35,7 +53,7 @@ h1{font-size:17px;font-weight:800;flex:1}
 .card h3{font-size:14px;font-weight:800;margin-bottom:10px}
 .link-row{display:flex;gap:8px;align-items:center}
 .link-row input{flex:1;min-width:0;padding:12px 12px;border-radius:12px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:12px;font-weight:700}
-.link-row button{flex:0 0 auto;border:0;cursor:pointer;border-radius:12px;padding:12px 16px;font-weight:800;font-size:13px;background:linear-gradient(135deg,#ef4444,#f97316);color:#fff}
+.link-row button{flex:0 0 auto;border:0;cursor:pointer;border-radius:12px;padding:12px 16px;font-weight:800;font-size:13px;background:linear-gradient(135deg,#3b82f6,#1d4ed8);color:#fff}
 .actions{display:flex;gap:8px;margin-top:10px}
 .actions button,.actions a{flex:1;text-align:center;border:1px solid var(--border);background:var(--bg);color:var(--text);border-radius:12px;padding:11px;font-weight:800;font-size:12px;cursor:pointer;text-decoration:none}
 .note{font-size:12px;color:var(--muted);line-height:1.5;margin-top:10px}
@@ -139,7 +157,12 @@ async function load(){
   state=j;
   document.getElementById('earned').textContent=fmt(j.total_earned_ngn);
   document.getElementById('count').textContent=String(j.referred_count||0);
-  document.getElementById('link').value=j.link||'';
+  const code=(j.referral_code||'').toString().trim();
+  const landLink = code
+    ? (location.origin.replace(/\/$/,'') + '/index.html?ref=' + encodeURIComponent(code))
+    : (j.link||'');
+  document.getElementById('link').value = landLink;
+  if (state) state.link = landLink;
   document.getElementById('codeNote').textContent='Code: '+(j.referral_code||'—');
 
   const earns=j.recent_earnings||[];

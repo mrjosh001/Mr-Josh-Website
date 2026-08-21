@@ -720,6 +720,7 @@
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <style>
 :root[data-theme="dark"] {
+    --danger-color: #f87171;
     --primary: #5b9cff;
     --primary-strong: #3d82f6;
     --primary-glow: rgba(91, 156, 255, 0.32);
@@ -746,6 +747,7 @@
     --radius-sm: 14px;
 }
 :root[data-theme="light"] {
+    --danger-color: #dc2626;
     --primary: #2f6fed;
     --primary-strong: #1f5ad8;
     --primary-glow: rgba(47, 111, 237, 0.2);
@@ -2283,9 +2285,103 @@ body::after {
     padding: 0 !important; background: var(--card);
 }
 
+
+/* Light mode: sidebar text black (not ash) + logo fits without white plate */
+:root[data-theme="light"] .sidebar-links li a {
+  color: #0f172a !important;
+}
+:root[data-theme="light"] .sidebar-links li a:hover,
+:root[data-theme="light"] .sidebar-links li a.active {
+  color: var(--primary) !important;
+  background: rgba(47, 111, 237, 0.12) !important;
+}
+:root[data-theme="light"] .sidebar-footer span {
+  color: #334155 !important;
+}
+:root[data-theme="light"] .sidebar-footer {
+  color: #0f172a;
+}
+.brand-logo,
+.sidebar-brand-logo-img {
+  height: 36px !important;
+  width: auto !important;
+  max-width: 148px !important;
+  object-fit: contain !important;
+  object-position: left center !important;
+  background: transparent !important;
+  border: none !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  padding: 0 !important;
+  display: block !important;
+}
+:root[data-theme="light"] .brand-logo,
+:root[data-theme="light"] .sidebar-brand-logo-img {
+  /* drops pure-white rectangular plate in logo PNGs on light UI */
+  mix-blend-mode: multiply;
+}
+:root[data-theme="dark"] .brand-logo,
+:root[data-theme="dark"] .sidebar-brand-logo-img {
+  mix-blend-mode: normal;
+}
+.sidebar-brand-wrap {
+  gap: 0 !important;
+  min-width: 0;
+  max-width: calc(100% - 48px);
+}
+.sidebar-header {
+  overflow: visible;
+}
+
+
+/* Logout always red (light + dark) */
+:root[data-theme="light"] .sidebar-links li a[href*="logout"],
+:root[data-theme="light"] .sidebar-links li a.logout,
+:root[data-theme="light"] .sidebar-links li a[onclick*="logout"],
+:root[data-theme="light"] .sidebar-links li a[onclick*="Logout"],
+:root[data-theme="light"] .sidebar-links li a[onclick*="signOut"],
+:root[data-theme="light"] a.profile-logout-btn,
+:root[data-theme="light"] .profile-logout-btn,
+.sidebar-links li a.logout,
+.sidebar-links li a[data-i18n="nav.logout" class="logout"],
+.sidebar-links li a[onclick*="confirmLogout"],
+.sidebar-links li a[onclick*="handleLogout"] {
+  color: #dc2626 !important;
+}
+:root[data-theme="light"] .sidebar-links li a[href*="logout"]:hover,
+:root[data-theme="light"] .sidebar-links li a.logout:hover,
+:root[data-theme="light"] .profile-logout-btn:hover,
+.sidebar-links li a.logout:hover,
+.sidebar-links li a[data-i18n="nav.logout" class="logout"]:hover {
+  color: #b91c1c !important;
+  background: rgba(220, 38, 38, 0.1) !important;
+}
+
 </style>
 <link rel="stylesheet" href="/css/skeleton.css">
 <script src="/js/skeleton.js" defer></script>
+<!-- Early logo sync -->
+
+<script>
+(function(){
+  try {
+    var t = localStorage.getItem('mjhub-theme') || localStorage.getItem('mjhub_theme') || 'dark';
+    if (t === 'system') {
+      t = window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
+    }
+    var light = 'https://atczodlljmlayvldxfmv.supabase.co/storage/v1/object/public/avatars/light%20background%20logo';
+    var dark = 'https://atczodlljmlayvldxfmv.supabase.co/storage/v1/object/public/avatars/dark%20background%20log';
+    var src = (t === 'light') ? light : dark;
+    document.addEventListener('DOMContentLoaded', function(){
+      ['navBrandLogo','sidebarBrandLogo','welcomeModalLogo'].forEach(function(id){
+        var n = document.getElementById(id);
+        if (n) n.src = src;
+      });
+    });
+  } catch(e) {}
+})();
+</script>
+
 </head>
 <body>
 
@@ -2333,7 +2429,7 @@ body::after {
                 </ul>
                 <div class="dropdown-divider"></div>
                 <ul class="dropdown-links">
-                    <li><a href="#" onclick="handleLogout();return false;" style="color:var(--danger-color);"><i class="fa-solid fa-right-from-bracket"></i> Logout</a></li>
+                    <li><a href="#" onclick="handleLogout();return false;" class="logout" style="color:#dc2626 !important;"><i class="fa-solid fa-right-from-bracket"></i> Logout</a></li>
                 </ul>
             </div>
         </div>
@@ -2375,7 +2471,7 @@ body::after {
             <li><a href="referral.html"><i class="fa-solid fa-handshake"></i> <span>Refer & Earn 2%</span></a></li>
             <li><a href="#" class="sidebar-link" data-target="cart"><i class="fa-solid fa-bag-shopping"></i> <span>Cart</span></a></li>
             <li><a href="#" class="sidebar-link" data-target="orders"><i class="fa-solid fa-receipt"></i> <span>My Orders</span></a></li>
-            <li><a href="#" onclick="handleLogout();return false;" style="color:var(--danger-color);"><i class="fa-solid fa-right-from-bracket"></i> <span>Logout</span></a></li>
+            <li><a href="#" onclick="handleLogout();return false;" class="logout" style="color:#dc2626 !important;"><i class="fa-solid fa-right-from-bracket"></i> <span>Logout</span></a></li>
         </ul>
     </div>
     <div class="sidebar-footer">
