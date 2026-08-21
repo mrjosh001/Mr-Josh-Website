@@ -697,6 +697,74 @@ body[data-theme="light"] .form-group.ai-field:focus-within > label {
   transform: none !important;
 }
 </style>
+<style>
+/* Single clean password requirements list */
+.pw-strength { margin-top: 10px; clear: both; position: relative; z-index: 1; }
+.pw-strength-bar {
+  height: 4px; border-radius: 99px; background: rgba(255,255,255,.1); overflow: hidden; margin-bottom: 8px;
+}
+.pw-strength-bar > span { display: block; height: 100%; width: 0; border-radius: 99px; transition: width .25s, background .25s; }
+.pw-strength-label { font-size: 11px; font-weight: 700; color: #94a3b8; margin-bottom: 8px; }
+.pw-rules {
+  list-style: none; margin: 0; padding: 0;
+  display: flex; flex-direction: column; gap: 6px;
+}
+.pw-rules li {
+  font-size: 12px; font-weight: 600;
+  display: flex; align-items: center; gap: 8px;
+  color: #94a3b8;
+}
+.pw-rules li .pw-dot {
+  width: 8px; height: 8px; border-radius: 50%;
+  border: 1.5px solid #64748b; flex-shrink: 0;
+  background: transparent;
+}
+.pw-rules li.ok { color: #4ade80; }
+.pw-rules li.ok .pw-dot {
+  background: #4ade80; border-color: #4ade80;
+}
+.pw-rules li.bad { color: #fca5a5; }
+.pw-rules li.bad .pw-dot { border-color: #f87171; }
+/* Keep floating label on the input only — not over the rules */
+.form-group.ai-field .pw-strength,
+.form-group.ai-field .field-hint,
+.form-group.ai-field .char-count {
+  position: relative;
+  z-index: 0;
+}
+.form-group.ai-field > label {
+  pointer-events: none;
+}
+.pw-checklist { display: none !important; } /* never show duplicate list */
+</style>
+<style>
+#signupPasswordGroup {
+  margin-bottom: 8px;
+}
+#signupPasswordGroup > label {
+  top: 50%;
+  transform: translateY(-50%);
+}
+#signupPasswordGroup.is-active > label,
+#signupPasswordGroup:focus-within > label {
+  top: 0;
+  transform: translateY(-50%);
+}
+.pw-strength {
+  margin: 0 0 14px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: rgba(0,0,0,.18);
+  border: 1px solid rgba(148,163,184,.12);
+}
+.pw-checklist, #signupPwChecklist { display: none !important; height: 0 !important; overflow: hidden !important; }
+.form-group:not(.touched) .field-hint { display: none; }
+.form-group:not(.touched).is-missing input,
+.form-group:not(.touched).is-invalid input {
+  border-color: inherit;
+  box-shadow: none;
+}
+</style>
 </head>
 <body>
     <div class="bg-ribbon r1" aria-hidden="true"></div>
@@ -778,25 +846,25 @@ body[data-theme="light"] .form-group.ai-field:focus-within > label {
                     <span class="ai-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></span>
                     <input type="tel" id="phoneNumber" required autocomplete="off" placeholder="Enter phone number">
                 </div>
-                <div class="form-group ai-field has-icon">
-                    <label>Choose Password</label>
+                <div class="form-group ai-field has-icon" id="signupPasswordGroup">
+                    <label for="signupPassword">Choose Password</label>
                     <span class="ai-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg></span>
                     <div class="pw-field">
-                    <input type="password" id="signupPassword" required autocomplete="new-password" placeholder="Min. 8 characters" minlength="8" oninput="updatePasswordStrength(this.value); checkSignupPasswordMatch();">
+                    <input type="password" id="signupPassword" required autocomplete="new-password" placeholder=" " minlength="8" oninput="updatePasswordStrength(this.value); checkSignupPasswordMatch();">
                     <button type="button" class="pw-toggle" id="toggleSignupPassword" aria-label="Show password" onclick="togglePasswordVisibility(this)" data-visible="0">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
                     </button>
-                </div>
-                    <div class="pw-strength" id="pwStrengthBox">
-                        <div class="pw-strength-bar"><span id="pwStrengthBar"></span></div>
-                        <div class="pw-strength-label" id="pwStrengthLabel">Password strength</div>
-                        <ul class="pw-rules" id="pwRules">
-                            <li id="pwRuleLen" class="bad">At least 8 characters</li>
-                            <li id="pwRuleUp" class="bad">One uppercase letter</li>
-                            <li id="pwRuleLow" class="bad">One lowercase letter</li>
-                            <li id="pwRuleNum" class="bad">One number</li>
-                        </ul>
                     </div>
+                </div>
+                <div class="pw-strength" id="pwStrengthBox">
+                    <div class="pw-strength-bar"><span id="pwStrengthBar"></span></div>
+                    <div class="pw-strength-label" id="pwStrengthLabel">Password strength</div>
+                    <ul class="pw-rules" id="pwRules" aria-label="Password requirements">
+                        <li id="pwRuleLen" class="bad"><span class="pw-dot"></span>At least 8 characters</li>
+                        <li id="pwRuleUp" class="bad"><span class="pw-dot"></span>One uppercase letter</li>
+                        <li id="pwRuleLow" class="bad"><span class="pw-dot"></span>One lowercase letter</li>
+                        <li id="pwRuleNum" class="bad"><span class="pw-dot"></span>One number</li>
+                    </ul>
                 </div>
 
                 <div class="form-group ai-field has-icon">
