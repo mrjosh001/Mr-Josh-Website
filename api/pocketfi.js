@@ -494,7 +494,7 @@ async function handleReferralMe(req, res, user) {
 
   const host = req.headers['x-forwarded-host'] || req.headers.host || 'app.mjhub.store';
   const origin = process.env.SITE_URL || (`https://${host}`);
-  const link = `${String(origin).replace(/\/$/, '')}/auth.html?tab=signup&ref=${encodeURIComponent(prof.referral_code)}`;
+  const link = `${String(origin).replace(/\/$/, '')}/index.html?ref=${encodeURIComponent(prof.referral_code)}`;
 
   // profiles has updated_at (not created_at) — wrong column made the list always empty
   const { data: refs, error: refsErr } = await supabase
