@@ -184,7 +184,7 @@ a{color:inherit;text-decoration:none}
     <input class="search" id="search" placeholder="Search services…" onkeydown="if(event.key==='Enter'){page=1;loadServices()}">
   </div>
 </div>
-<div id="content" class="grid"><div class="empty"><div class="spinner"></div>Loading catalog…</div></div>
+<div id="content" class="grid"><div class="sk-grid" aria-hidden="true" aria-busy="true"><div class="sk-grid-item"><div class="sk-bone sk-thumb"></div><div class="sk-bone sk-line w90"></div><div class="sk-bone sk-line w60"></div><div class="sk-bone sk-line w40"></div></div><div class="sk-grid-item"><div class="sk-bone sk-thumb"></div><div class="sk-bone sk-line w90"></div><div class="sk-bone sk-line w60"></div><div class="sk-bone sk-line w40"></div></div><div class="sk-grid-item"><div class="sk-bone sk-thumb"></div><div class="sk-bone sk-line w90"></div><div class="sk-bone sk-line w60"></div><div class="sk-bone sk-line w40"></div></div><div class="sk-grid-item"><div class="sk-bone sk-thumb"></div><div class="sk-bone sk-line w90"></div><div class="sk-bone sk-line w60"></div><div class="sk-bone sk-line w40"></div></div><div class="sk-grid-item"><div class="sk-bone sk-thumb"></div><div class="sk-bone sk-line w90"></div><div class="sk-bone sk-line w60"></div><div class="sk-bone sk-line w40"></div></div><div class="sk-grid-item"><div class="sk-bone sk-thumb"></div><div class="sk-bone sk-line w90"></div><div class="sk-bone sk-line w60"></div><div class="sk-bone sk-line w40"></div></div><div class="sk-grid-item"><div class="sk-bone sk-thumb"></div><div class="sk-bone sk-line w90"></div><div class="sk-bone sk-line w60"></div><div class="sk-bone sk-line w40"></div></div><div class="sk-grid-item"><div class="sk-bone sk-thumb"></div><div class="sk-bone sk-line w90"></div><div class="sk-bone sk-line w60"></div><div class="sk-bone sk-line w40"></div></div></div></div>
 <div class="pager" id="pager"></div>
 
 <div class="bottom-nav">
@@ -485,7 +485,7 @@ async function loadServices(){
   if(q) params.set('q', q);
   if(!category && q && allCategories[0]) params.set('category', allCategories[0].name);
 
-  document.getElementById('content').innerHTML='<div class="empty"><div class="spinner"></div>Loading services…</div>';
+  document.getElementById('content').innerHTML=(window.mjSkeleton||window.MJSkeleton)?(window.mjSkeleton||window.MJSkeleton).grid(8):'';
   const res=await fetch('/api/owlet?'+params.toString(),{headers});
   const data=await res.json();
   if(!data.success){
@@ -702,5 +702,13 @@ async function placeOrder(){
 })();
 </script>
 
+
+<script>
+(function(){
+  var sk=window.mjSkeleton||window.MJSkeleton;
+  var el=document.getElementById('content');
+  if(sk && el && el.querySelector('.spinner')) el.innerHTML=sk.grid(8);
+})();
+</script>
 </body>
 </html>

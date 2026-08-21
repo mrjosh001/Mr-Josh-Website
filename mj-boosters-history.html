@@ -65,7 +65,7 @@ h1{font-size:17px;font-weight:800}
 <button type="button" class="back" id="refreshBtn" title="Refresh" aria-label="Refresh" style="border:none;cursor:pointer;font-size:16px">↻</button>
   <button type="button" id="themeBtn" onclick="toggleTheme()" style="margin-left:auto;width:40px;height:40px;border-radius:12px;border:1px solid var(--border);background:var(--card);cursor:pointer;font-size:16px;">🌙</button>
 </header>
-<div class="list" id="list"><div class="spinner"></div></div>
+<div class="list" id="list"><div class="sk-cards" aria-hidden="true" aria-busy="true"><div class="sk-card-row"><div class="sk-bone sk-avatar"></div><div class="sk-card-body"><div class="sk-bone sk-line w70"></div><div class="sk-bone sk-line w90"></div></div><div class="sk-bone sk-pill"></div></div><div class="sk-card-row"><div class="sk-bone sk-avatar"></div><div class="sk-card-body"><div class="sk-bone sk-line w70"></div><div class="sk-bone sk-line w90"></div></div><div class="sk-bone sk-pill"></div></div><div class="sk-card-row"><div class="sk-bone sk-avatar"></div><div class="sk-card-body"><div class="sk-bone sk-line w70"></div><div class="sk-bone sk-line w90"></div></div><div class="sk-bone sk-pill"></div></div><div class="sk-card-row"><div class="sk-bone sk-avatar"></div><div class="sk-card-body"><div class="sk-bone sk-line w70"></div><div class="sk-bone sk-line w90"></div></div><div class="sk-bone sk-pill"></div></div></div></div>
 <div class="toast" id="toast"></div>
 
 <script>
@@ -162,7 +162,7 @@ function isActive(o){
     console.error('No #list container');
     return;
   }
-  el.innerHTML = (window.mjSkeleton ? mjSkeleton.cards(3) : '<div class="empty"><p>Loading orders…</p></div>');
+  el.innerHTML = ((window.mjSkeleton||window.MJSkeleton)?(window.mjSkeleton||window.MJSkeleton).cards(3) : '<div class="empty"><p>Loading orders…</p></div>');
 
   // Session required for API
   let session = null;
@@ -241,7 +241,7 @@ function isActive(o){
     if (loading && silent) return;
     loading = true;
     try {
-      if (!silent) el.innerHTML = (window.mjSkeleton ? mjSkeleton.cards(3) : '<div class="empty"><p>Loading orders…</p></div>');
+      if (!silent) el.innerHTML = ((window.mjSkeleton||window.MJSkeleton)?(window.mjSkeleton||window.MJSkeleton).cards(3) : '<div class="empty"><p>Loading orders…</p></div>');
 
       // Fast: DB only
       const controller = new AbortController();

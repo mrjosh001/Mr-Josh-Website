@@ -108,6 +108,8 @@ body::before{content:'';position:fixed;inset:0;pointer-events:none;z-index:0;bac
 .ps-buy{width:100%;border:none;border-radius:14px;padding:15px;font-size:15px;font-weight:800;color:#fff;cursor:pointer;font-family:inherit;background:linear-gradient(135deg,#4f46e5,#2563eb);display:flex;align-items:center;justify-content:center;gap:8px}
 .ps-buy:disabled{opacity:.5;cursor:not-allowed}
 </style>
+<link rel="stylesheet" href="/css/skeleton.css">
+<script src="/js/skeleton.js" defer></script>
 </head>
 <body>
 <div class="toast-container" id="toastContainer"></div>
@@ -126,7 +128,7 @@ body::before{content:'';position:fixed;inset:0;pointer-events:none;z-index:0;bac
 <p class="helper-text">Pick the country your number should come from. Prices vary by country and service.</p>
 <div class="search-bar"><i class="fa-solid fa-magnifying-glass"></i><input type="text" id="countrySearch" placeholder="Search countries..."></div>
 <div id="countryList" class="country-list">
-<div class="loading-spinner"><div class="spinner"></div><span class="loading-text">Loading countries...</span></div>
+<div class="sk-cards" aria-hidden="true" aria-busy="true"><div class="sk-card-row"><div class="sk-bone sk-avatar"></div><div class="sk-card-body"><div class="sk-bone sk-line w70"></div><div class="sk-bone sk-line w90"></div></div><div class="sk-bone sk-pill"></div></div><div class="sk-card-row"><div class="sk-bone sk-avatar"></div><div class="sk-card-body"><div class="sk-bone sk-line w70"></div><div class="sk-bone sk-line w90"></div></div><div class="sk-bone sk-pill"></div></div><div class="sk-card-row"><div class="sk-bone sk-avatar"></div><div class="sk-card-body"><div class="sk-bone sk-line w70"></div><div class="sk-bone sk-line w90"></div></div><div class="sk-bone sk-pill"></div></div><div class="sk-card-row"><div class="sk-bone sk-avatar"></div><div class="sk-card-body"><div class="sk-bone sk-line w70"></div><div class="sk-bone sk-line w90"></div></div><div class="sk-bone sk-pill"></div></div><div class="sk-card-row"><div class="sk-bone sk-avatar"></div><div class="sk-card-body"><div class="sk-bone sk-line w70"></div><div class="sk-bone sk-line w90"></div></div><div class="sk-bone sk-pill"></div></div><div class="sk-card-row"><div class="sk-bone sk-avatar"></div><div class="sk-card-body"><div class="sk-bone sk-line w70"></div><div class="sk-bone sk-line w90"></div></div><div class="sk-bone sk-pill"></div></div></div>
 </div>
 </div>
 
@@ -139,7 +141,7 @@ body::before{content:'';position:fixed;inset:0;pointer-events:none;z-index:0;bac
 <div class="search-bar"><i class="fa-solid fa-magnifying-glass"></i><input type="text" id="serviceSearch" placeholder="Search services (Telegram, WhatsApp...)"></div>
 <div id="serviceCountBadge"></div>
 <div id="serviceGrid">
-<div class="loading-spinner"><div class="spinner"></div><span class="loading-text">Loading services...</span></div>
+<div class="sk-grid" aria-hidden="true" aria-busy="true"><div class="sk-grid-item"><div class="sk-bone sk-thumb"></div><div class="sk-bone sk-line w90"></div><div class="sk-bone sk-line w60"></div><div class="sk-bone sk-line w40"></div></div><div class="sk-grid-item"><div class="sk-bone sk-thumb"></div><div class="sk-bone sk-line w90"></div><div class="sk-bone sk-line w60"></div><div class="sk-bone sk-line w40"></div></div><div class="sk-grid-item"><div class="sk-bone sk-thumb"></div><div class="sk-bone sk-line w90"></div><div class="sk-bone sk-line w60"></div><div class="sk-bone sk-line w40"></div></div><div class="sk-grid-item"><div class="sk-bone sk-thumb"></div><div class="sk-bone sk-line w90"></div><div class="sk-bone sk-line w60"></div><div class="sk-bone sk-line w40"></div></div><div class="sk-grid-item"><div class="sk-bone sk-thumb"></div><div class="sk-bone sk-line w90"></div><div class="sk-bone sk-line w60"></div><div class="sk-bone sk-line w40"></div></div><div class="sk-grid-item"><div class="sk-bone sk-thumb"></div><div class="sk-bone sk-line w90"></div><div class="sk-bone sk-line w60"></div><div class="sk-bone sk-line w40"></div></div></div>
 </div>
 </div>
 
@@ -399,7 +401,7 @@ async function selectCountry(countryId){
   countryStep.style.display = 'none';
   serviceStep.style.display = 'block';
   document.getElementById('selectedCountryName').innerHTML = `<span class="flag">${countryFlag(currentCountry.country_name)}</span>${escapeHtml(currentCountry.country_name)}`;
-  serviceGrid.innerHTML = '<div class="loading-spinner"><div class="spinner"></div><span class="loading-text">Loading services...</span></div>';
+  serviceGrid.innerHTML = '<div class="sk-grid" aria-hidden="true" aria-busy="true"><div class="sk-grid-item"><div class="sk-bone sk-thumb"></div><div class="sk-bone sk-line w90"></div><div class="sk-bone sk-line w60"></div><div class="sk-bone sk-line w40"></div></div><div class="sk-grid-item"><div class="sk-bone sk-thumb"></div><div class="sk-bone sk-line w90"></div><div class="sk-bone sk-line w60"></div><div class="sk-bone sk-line w40"></div></div><div class="sk-grid-item"><div class="sk-bone sk-thumb"></div><div class="sk-bone sk-line w90"></div><div class="sk-bone sk-line w60"></div><div class="sk-bone sk-line w40"></div></div><div class="sk-grid-item"><div class="sk-bone sk-thumb"></div><div class="sk-bone sk-line w90"></div><div class="sk-bone sk-line w60"></div><div class="sk-bone sk-line w40"></div></div><div class="sk-grid-item"><div class="sk-bone sk-thumb"></div><div class="sk-bone sk-line w90"></div><div class="sk-bone sk-line w60"></div><div class="sk-bone sk-line w40"></div></div><div class="sk-grid-item"><div class="sk-bone sk-thumb"></div><div class="sk-bone sk-line w90"></div><div class="sk-bone sk-line w60"></div><div class="sk-bone sk-line w40"></div></div></div>';
   serviceSearch.value = '';
 
   try{
@@ -588,6 +590,19 @@ document.getElementById('psBuyBtn').addEventListener('click', async function(){
 });
 
 initSession();
+</script>
+
+<script>
+(function(){
+  function boot(){
+    var sk=window.mjSkeleton||window.MJSkeleton; if(!sk) return;
+    var c=document.getElementById('countryList');
+    var s=document.getElementById('serviceGrid');
+    if(c && c.querySelector('.loading-spinner')) c.innerHTML=sk.cards(6);
+    if(s && s.querySelector('.loading-spinner')) s.innerHTML=sk.grid(6);
+  }
+  if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',boot); else boot();
+})();
 </script>
 </body>
 </html>
