@@ -27,7 +27,7 @@ function categoryIdFromKey(productKey) {
 }
 
 
-/** Normalize one supplier item → { details, serial } */
+/** Normalize one supplier item → { details, serial } with full email + password */
 function normalizeLdItem(raw, index = 0) {
   if (raw == null) return null;
   if (typeof raw === 'string') {
@@ -35,11 +35,70 @@ function normalizeLdItem(raw, index = 0) {
     return details ? { details, serial: String(index + 1) } : null;
   }
   if (typeof raw !== 'object') return null;
-  const details = String(
-    raw.details || raw.credentials || raw.log || raw.login || raw.data || raw.content || ''
+
+  const email = String(
+    raw.email || raw.mail || raw.Email || raw.e_mail || ''
   ).trim();
-  if (!details) return null;
-  const serial = raw.serial != null ? String(raw.serial) : (raw.id != null ? String(raw.id) : String(index + 1));
+  const username = String(
+    raw.username || raw.user || raw.account || raw.Username || raw.User || ''
+  ).trim();
+  // "login" is often the email/username only — never treat it as the full credential blob alone
+  const loginOnly = String(raw.login || raw.Login || '').trim();
+  const password = String(
+    raw.password || raw.pass || raw.pwd || raw.Password || raw.pass_word || raw.passwd || ''
+  ).trim();
+  const emailPassword = String(
+    raw.email_password || raw.emailPassword || raw.mail_password || ''
+  ).trim();
+  const token = String(
+    raw.token || raw['2fa'] || raw.otp || raw.cookie || raw.auth || ''
+  ).trim();
+
+  let details = String(
+    raw.details || raw.credentials || raw.credential || raw.log || raw.content || raw.data || ''
+  ).trim();
+  // Avoid treating a bare login/email field as the entire log
+  if (!details && typeof raw.data === 'object' && raw.data) {
+    try { details = ''; } catch (_) {}
+  }
+
+  if (!details) {
+    const lines = [];
+    const idEmail = email || (loginOnly.includes('@') ? loginOnly : '');
+    const idUser = username || (loginOnly && !loginOnly.includes('@') ? loginOnly : '');
+    if (idEmail) lines.push('Email: ' + idEmail);
+    if (idUser && idUser !== idEmail) lines.push('Username: ' + idUser);
+    if (password) lines.push('Password: ' + password);
+    if (emailPassword) lines.push('Email Password: ' + emailPassword);
+    if (token) lines.push('2FA / Token: ' + token);
+    details = lines.join('\n');
+  } else {
+    // Blob present but password only in sibling fields — append so nothing is lost
+    const hasPassInBlob = /password\s*[:=]/i.test(details) || /\|[^|\n]{4,}/.test(details);
+    if (password && !hasPassInBlob) {
+      details = details + '\nPassword: ' + password;
+    }
+    if (email && !/@/.test(details)) {
+      details = 'Email: ' + email + '\n' + details;
+    }
+  }
+
+  if (!details) {
+    try {
+      const copy = { ...raw };
+      details = JSON.stringify(copy);
+    } catch (_) {
+      details = '';
+    }
+  }
+  if (!details || details === '{}' || details === 'null') return null;
+
+  const serial =
+    raw.serial != null
+      ? String(raw.serial)
+      : raw.id != null
+        ? String(raw.id)
+        : String(index + 1);
   return { details, serial };
 }
 
@@ -371,7 +430,8 @@ export default async function handler(req, res) {
         .map(String)
         .join(', ');
       const insertErr = await insertLogOrder({
-        order_id: String(supplierOrderId),
+        // Customer-facing MJ id — never the supplier's logs-api-… id
+        order_id: String(orderRef),
         user_id,
         product_id: product.id,
         product_code: product_key,
@@ -383,12 +443,13 @@ export default async function handler(req, res) {
         status: 'completed',
         login_credentials: combinedCreds,
         login_credentials_raw: combinedRaw,
-        supplier_ref: supplierRefs || String(supplierOrderId),
+        supplier_ref: [String(supplierOrderId), supplierRefs].filter(Boolean).join(' | ') || String(supplierOrderId),
         guide_url: 'https://t.me/mj_hub_tg'
       });
       if (insertErr) {
         console.error('[order-logsdomain] FAILED to save order row:', insertErr.message, {
-          order_id: supplierOrderId, user_id, product_key, qty: deliveredCount
+          order_id: orderRef,
+        supplier_order_id: supplierOrderId, user_id, product_key, qty: deliveredCount
         });
       } else {
         savedCount = deliveredCount;
@@ -396,7 +457,7 @@ export default async function handler(req, res) {
     } else {
       // fallback single row if API returns no items array
       const insertErr = await insertLogOrder({
-        order_id: String(supplierOrderId),
+        order_id: String(orderRef),
         user_id,
         product_id: product.id,
         product_code: product_key,
@@ -408,6 +469,7 @@ export default async function handler(req, res) {
         status: 'completed',
         login_credentials: formatCredentials(detailsText, formatHint) || detailsText || 'Delivered — see order for details',
         login_credentials_raw: detailsText || null,
+        supplier_ref: String(supplierOrderId),
         guide_url: 'https://t.me/mj_hub_tg'
       });
       if (insertErr) {
@@ -479,7 +541,8 @@ export default async function handler(req, res) {
           : [{ details: detailsText || 'Order completed' }],
         total_amount: chargedTotal,
         new_balance: newBalance,
-        order_id: supplierOrderId,
+        order_id: orderRef,
+        supplier_order_id: supplierOrderId,
         quantity_requested: qty,
         quantity_delivered: deliveredCount,
         quantity_saved: savedCount,

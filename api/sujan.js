@@ -242,19 +242,55 @@ function productIdFromKey(productKey) {
   return Number.isFinite(n) ? n : null;
 }
 
+function buildDetailsFromObject(obj) {
+  if (!obj || typeof obj !== 'object') return '';
+  if (typeof obj === 'string') return obj;
+  const email = String(obj.email || obj.mail || obj.Email || '').trim();
+  const username = String(obj.username || obj.user || obj.account || '').trim();
+  const login = String(obj.login || obj.Login || '').trim();
+  const password = String(obj.password || obj.pass || obj.pwd || obj.Password || '').trim();
+  const emailPassword = String(obj.email_password || obj.emailPassword || '').trim();
+  const token = String(obj.token || obj['2fa'] || obj.otp || '').trim();
+  let details = String(obj.details || obj.credentials || obj.credential || obj.log || obj.content || '').trim();
+  if (!details) {
+    const lines = [];
+    const idEmail = email || (login.includes('@') ? login : '');
+    const idUser = username || (login && !login.includes('@') ? login : '');
+    if (idEmail) lines.push('Email: ' + idEmail);
+    if (idUser && idUser !== idEmail) lines.push('Username: ' + idUser);
+    if (password) lines.push('Password: ' + password);
+    if (emailPassword) lines.push('Email Password: ' + emailPassword);
+    if (token) lines.push('2FA / Token: ' + token);
+    details = lines.join('\n');
+  } else if (password && !/password/i.test(details)) {
+    details = details + '\nPassword: ' + password;
+  }
+  if (!details) {
+    try { details = JSON.stringify(obj); } catch (_) { details = ''; }
+  }
+  return details;
+}
+
 function extractItems(orderData) {
   const d = orderData?.data ?? orderData;
   if (Array.isArray(d?.items)) {
     return d.items.map((i) => ({
-      details: i.details || i.credentials || i.credential || JSON.stringify(i),
+      details: buildDetailsFromObject(i) || String(i.details || i.credentials || i.credential || JSON.stringify(i)),
       ref: String(i.id || i.serial || i.product_detail_id || '')
     }));
   }
+  if (Array.isArray(d)) {
+    return d.map((i, idx) => ({
+      details: typeof i === 'string' ? i : buildDetailsFromObject(i),
+      ref: String((i && (i.id || i.serial)) || idx + 1)
+    }));
+  }
   if (d?.credentials) {
-    return [{ details: typeof d.credentials === 'string' ? d.credentials : JSON.stringify(d.credentials), ref: '' }];
+    return [{ details: typeof d.credentials === 'string' ? d.credentials : buildDetailsFromObject(d.credentials) || JSON.stringify(d.credentials), ref: '' }];
   }
   if (d && typeof d === 'object') {
-    return [{ details: JSON.stringify(d), ref: '' }];
+    const built = buildDetailsFromObject(d);
+    return [{ details: built || JSON.stringify(d), ref: '' }];
   }
   return [{ details: 'Delivered — see order for details', ref: '' }];
 }
@@ -451,7 +487,7 @@ async function handleOrder(req, res) {
       null;
     const combinedRaw = joinRawLogDetails(items) || detailsText || null;
     const insertErr = await insertLogOrder({
-      order_id: String(supplierOrderId),
+      order_id: String(orderRef),
       user_id,
       product_id: product.id,
       product_code: product_key,
@@ -499,7 +535,8 @@ async function handleOrder(req, res) {
         items,
         total_amount: total,
         new_balance: newBalance,
-        order_id: supplierOrderId,
+        order_id: orderRef,
+        supplier_order_id: supplierOrderId,
         source: 'sujandepartment'
       }
     });
