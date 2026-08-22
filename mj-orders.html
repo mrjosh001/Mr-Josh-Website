@@ -913,10 +913,14 @@ async function fetchMyOrdersFromApi() {
   if (_myOrdersCache) return _myOrdersCache;
   const token = session && session.access_token;
   if (!token) throw new Error('Please sign in');
-  const res = await fetch('/api/order?action=my_orders', {
-    headers: { Authorization: 'Bearer ' + token }
-  });
-  const json = await res.json().catch(() => ({}));
+  const headers = { Authorization: 'Bearer ' + token };
+  let res = await fetch('/api/order?action=my_orders', { headers });
+  let json = await res.json().catch(() => ({}));
+  // Fallback: owlet hub_orders if order endpoint fails
+  if (!res.ok || !json.success) {
+    res = await fetch('/api/owlet?action=hub_orders', { headers });
+    json = await res.json().catch(() => ({}));
+  }
   if (!res.ok || !json.success) {
     throw new Error(json.message || 'Could not load orders');
   }
@@ -1209,13 +1213,6 @@ async function openModal(kind, i) {
           '</span></div>'
         );
       }).join('');
-      return (
-        '<div class="cred-card">' +
-        '<div class="idx">' + (idx + 1) + (allAccounts.length > 1 ? ' of ' + allAccounts.length : '') + '</div>' +
-        lines +
-        '</div>'
-      );
-    }).join('');
       return (
         '<div class="cred-card">' +
         '<div class="idx">' + (idx + 1) + (allAccounts.length > 1 ? ' of ' + allAccounts.length : '') + '</div>' +
