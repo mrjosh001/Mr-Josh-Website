@@ -6127,7 +6127,7 @@ async function fetchUserSpendingSummary(userId) {
 
         const [logsRes, smsRes, boostJson] = await Promise.all([
             supabaseClient.from('orders')
-                .select('amount, status', { count: 'exact' })
+                .select('amount, quantity, status')
                 .eq('user_id', userId)
                 .in('status', ['completed', 'paid', 'success', 'delivered']),
             supabaseClient.from('number_orders')
@@ -6149,7 +6149,8 @@ async function fetchUserSpendingSummary(userId) {
 
         const logRows = logsRes.error ? [] : (logsRes.data || []);
         const smsRows = smsRes.error ? [] : (smsRes.data || []);
-        const logCount = logsRes.error ? 0 : (logsRes.count ?? logRows.length);
+        // Logs: sum quantity (qty 3 = 3), not number of rows
+        const logCount = logRows.reduce((s, o) => s + Math.max(1, Number(o.quantity) || 1), 0);
         const smsCount = smsRes.error ? 0 : (smsRes.count ?? smsRows.length);
         const boostCount = boostRows.length;
         const totalOrders = logCount + smsCount + boostCount;
