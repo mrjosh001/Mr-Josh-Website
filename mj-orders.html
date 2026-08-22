@@ -217,78 +217,93 @@
     }
 
   
-    /* Log receipt modal — high contrast, readable */
+    /* Log receipt modal — match reference (light, high contrast) */
+    .sheet{
+      background:#ffffff !important;
+      color:#0f172a !important;
+      border-radius:24px 24px 0 0;
+      max-height:min(88vh,720px);
+      overflow:auto;
+      box-shadow:0 -12px 40px rgba(15,23,42,.18);
+    }
+    .sheet-h{
+      display:flex;align-items:flex-start;justify-content:space-between;gap:12px;
+      padding:18px 18px 12px;border-bottom:1px solid #eef2f7;background:#fff;
+      position:sticky;top:0;z-index:2
+    }
+    .sheet-h strong{
+      display:block;font-size:18px;font-weight:800;color:#0f172a !important;
+      letter-spacing:-0.02em;line-height:1.25
+    }
+    .sheet-h span{
+      display:block;margin-top:4px;font-size:13px;font-weight:600;color:#64748b !important
+    }
+    .sheet-h button{
+      width:36px;height:36px;border-radius:12px;border:none;background:#f1f5f9;
+      color:#0f172a;font-size:16px;cursor:pointer;flex-shrink:0
+    }
+    .sheet-b{padding:16px 18px 28px;background:#fff;color:#0f172a}
+
     .sheet-b .log-actions{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px}
     .sheet-b .la-btn{
-      flex:1;min-width:100px;border:none;cursor:pointer;font-family:inherit;font-weight:800;font-size:13px;
-      padding:12px 14px;border-radius:14px;display:inline-flex;align-items:center;justify-content:center;gap:8px;
-      text-decoration:none;
+      flex:1;min-width:96px;border:none;cursor:pointer;font-family:inherit;
+      font-weight:700;font-size:13px;padding:12px 12px;border-radius:14px;
+      display:inline-flex;align-items:center;justify-content:center;gap:7px;
+      text-decoration:none;line-height:1.2
     }
     .sheet-b .la-btn.copy{
-      background:rgba(59,130,246,.18);color:#1d4ed8;border:1px solid rgba(37,99,235,.35);
+      background:#eef2ff;color:#4338ca;border:1px solid #e0e7ff
     }
-    :root[data-theme="dark"] .sheet-b .la-btn.copy{color:#93c5fd;background:rgba(59,130,246,.22);border-color:rgba(147,197,253,.35)}
     .sheet-b .la-btn.dl{
-      background:rgba(15,23,42,.06);color:#0f172a;border:1px solid rgba(15,23,42,.12);
+      background:#f1f5f9;color:#334155;border:1px solid #e2e8f0
     }
-    :root[data-theme="dark"] .sheet-b .la-btn.dl{background:rgba(148,163,184,.16);color:#e2e8f0;border-color:rgba(148,163,184,.28)}
     .sheet-b .la-btn.guide{
       background:linear-gradient(135deg,#fbbf24,#f59e0b);color:#1c1917;
-      box-shadow:0 8px 18px rgba(245,158,11,.35)
+      box-shadow:0 6px 16px rgba(245,158,11,.35);border:none
     }
+
     .sheet-b .vpn-banner{
-      display:flex;gap:10px;align-items:flex-start;padding:12px 14px;border-radius:14px;margin-bottom:14px;
-      background:#fff7ed;border:1px solid #fdba74;
-      color:#9a3412;font-size:13px;font-weight:700;line-height:1.5
+      display:flex;gap:10px;align-items:flex-start;padding:13px 14px;border-radius:14px;
+      margin-bottom:14px;background:#fffbeb;border:1px solid #fcd34d;
+      color:#92400e;font-size:13px;font-weight:600;line-height:1.5
     }
-    :root[data-theme="dark"] .sheet-b .vpn-banner{
-      background:rgba(251,146,60,.14);border-color:rgba(251,146,60,.45);color:#fdba74
-    }
-    .sheet-b .vpn-banner strong{color:#c2410c;font-weight:800}
-    :root[data-theme="dark"] .sheet-b .vpn-banner strong{color:#fde68a}
-    .sheet-b .vpn-banner i{margin-top:2px;flex-shrink:0}
+    .sheet-b .vpn-banner strong{color:#b45309;font-weight:800}
+    .sheet-b .vpn-banner i{color:#d97706;margin-top:2px;flex-shrink:0}
+
     .sheet-b .desc-box{
-      padding:14px 16px;border-radius:14px;margin-bottom:14px;font-size:13.5px;line-height:1.55;
-      background:#eff6ff;border:1px solid #bfdbfe;color:#0f172a;font-weight:600
-    }
-    :root[data-theme="dark"] .sheet-b .desc-box{
-      background:rgba(59,130,246,.14);border-color:rgba(96,165,250,.35);color:#e2e8f0
+      padding:14px 16px;border-radius:14px;margin-bottom:14px;
+      background:#f8fafc;border:1px solid #e2e8f0;
+      color:#1e293b;font-size:13.5px;font-weight:600;line-height:1.55
     }
     .sheet-b .desc-box .lbl{
-      font-size:11px;font-weight:800;color:#1d4ed8;text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px
+      font-size:11px;font-weight:800;color:#64748b;text-transform:uppercase;
+      letter-spacing:.06em;margin-bottom:8px
     }
-    :root[data-theme="dark"] .sheet-b .desc-box .lbl{color:#93c5fd}
+
     .sheet-b .cred-cards{display:flex;flex-direction:column;gap:10px}
     .sheet-b .cred-card{
       border-radius:16px;padding:14px 16px;background:#f8fafc;border:1px solid #e2e8f0
     }
-    :root[data-theme="dark"] .sheet-b .cred-card{
-      background:rgba(30,41,59,.85);border-color:rgba(148,163,184,.22)
+    .sheet-b .cred-card .idx{
+      font-size:13px;font-weight:700;color:#94a3b8;margin-bottom:12px
     }
-    .sheet-b .cred-card .idx{font-size:12px;font-weight:800;color:#64748b;margin-bottom:10px}
-    :root[data-theme="dark"] .sheet-b .cred-card .idx{color:#94a3b8}
-    .sheet-b .cred-line{display:flex;gap:10px;align-items:center;margin-bottom:10px;font-size:14px;flex-wrap:wrap}
+    .sheet-b .cred-line{
+      display:flex;gap:12px;align-items:center;margin-bottom:10px;flex-wrap:wrap
+    }
     .sheet-b .cred-line:last-child{margin-bottom:0}
-    .sheet-b .cred-k{min-width:86px;font-weight:800;font-size:11px;letter-spacing:.04em;color:#64748b}
-    .sheet-b .cred-k.pass{color:#dc2626}
-    :root[data-theme="dark"] .sheet-b .cred-k.pass{color:#f87171}
-    .sheet-b .cred-v{
-      flex:1;font-weight:700;word-break:break-all;
-      font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:14px;color:#0f172a
+    .sheet-b .cred-k{
+      min-width:88px;font-weight:800;font-size:12px;letter-spacing:.03em;color:#64748b
     }
-    :root[data-theme="dark"] .sheet-b .cred-v{color:#f1f5f9}
+    .sheet-b .cred-k.pass{color:#dc2626}
+    .sheet-b .cred-v{
+      flex:1;font-weight:700;word-break:break-all;color:#0f172a;
+      font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:14px
+    }
     .sheet-b .cred-v button,
     .sheet-b .cred-v .copy-one{
-      margin-left:6px;border:none;background:#dbeafe;color:#1d4ed8;border-radius:8px;
-      padding:5px 10px;font-size:11px;font-weight:800;cursor:pointer;font-family:inherit;vertical-align:middle
+      margin-left:8px;border:none;background:#e0e7ff;color:#3730a3;border-radius:8px;
+      padding:5px 10px;font-size:11px;font-weight:800;cursor:pointer;font-family:inherit
     }
-    :root[data-theme="dark"] .sheet-b .cred-v button,
-    :root[data-theme="dark"] .sheet-b .cred-v .copy-one{
-      background:rgba(59,130,246,.25);color:#bfdbfe
-    }
-    /* Sheet header readable */
-    .sheet-h strong{color:var(--text);font-size:16px}
-    .sheet-h span{color:var(--muted);font-size:12px;font-weight:600}
 
   </style>
 </head>
