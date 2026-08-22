@@ -26,6 +26,104 @@ function categoryIdFromKey(productKey) {
   return Number.isFinite(n) ? n : null;
 }
 
+
+/** Normalize one supplier item → { details, serial } */
+function normalizeLdItem(raw, index = 0) {
+  if (raw == null) return null;
+  if (typeof raw === 'string') {
+    const details = raw.trim();
+    return details ? { details, serial: String(index + 1) } : null;
+  }
+  if (typeof raw !== 'object') return null;
+  const details = String(
+    raw.details || raw.credentials || raw.log || raw.login || raw.data || raw.content || ''
+  ).trim();
+  if (!details) return null;
+  const serial = raw.serial != null ? String(raw.serial) : (raw.id != null ? String(raw.id) : String(index + 1));
+  return { details, serial };
+}
+
+/**
+ * Logs Domain sometimes returns:
+ *  - data.items[]
+ *  - data as array
+ *  - data.logs / data.accounts
+ *  - a single details blob with multiple accounts separated by blank lines
+ */
+function extractLdItems(orderData) {
+  const d = orderData && orderData.data;
+  let rawList = [];
+  if (!d) {
+    // rare: top-level items
+    if (Array.isArray(orderData?.items)) rawList = orderData.items;
+  } else if (Array.isArray(d)) {
+    rawList = d;
+  } else if (Array.isArray(d.items)) {
+    rawList = d.items;
+  } else if (Array.isArray(d.logs)) {
+    rawList = d.logs;
+  } else if (Array.isArray(d.accounts)) {
+    rawList = d.accounts;
+  } else if (d.details || d.credentials || d.log) {
+    rawList = [d];
+  }
+
+  const normalized = [];
+  rawList.forEach((raw, i) => {
+    const n = normalizeLdItem(raw, i);
+    if (n) normalized.push(n);
+  });
+
+  // Split multi-account blobs (blank-line separated) into separate logs
+  const expanded = [];
+  for (const item of normalized) {
+    const parts = String(item.details)
+      .split(/\n\s*\n+/)
+      .map((p) => p.trim())
+      .filter((p) => p.length > 8);
+    if (parts.length > 1) {
+      parts.forEach((p, j) => {
+        expanded.push({
+          details: p,
+          serial: `${item.serial || 'x'}-${j + 1}`
+        });
+      });
+    } else {
+      expanded.push(item);
+    }
+  }
+  return expanded;
+}
+
+async function fetchLdOrderById(orderId) {
+  if (!orderId || !LD_KEY) return null;
+  try {
+    // Try direct GET by id (some panels support this)
+    let res = await fetch(`${LD_BASE}/logs/orders/${encodeURIComponent(orderId)}`, {
+      method: 'GET',
+      headers: { Authorization: `Bearer ${LD_KEY}`, Accept: 'application/json' }
+    });
+    if (res.ok) {
+      const json = await res.json().catch(() => null);
+      if (json) return json;
+    }
+    // Fallback: list recent orders and find match
+    res = await fetch(`${LD_BASE}/logs/orders?per_page=50`, {
+      method: 'GET',
+      headers: { Authorization: `Bearer ${LD_KEY}`, Accept: 'application/json' }
+    });
+    if (!res.ok) return null;
+    const json = await res.json().catch(() => null);
+    const list = Array.isArray(json?.data) ? json.data : (json?.data?.data || []);
+    const hit = list.find((o) => String(o.order_id || o.id) === String(orderId));
+    if (hit) return { success: true, data: hit };
+  } catch (e) {
+    console.warn('[order-logsdomain] fetchLdOrderById', e.message || e);
+  }
+  return null;
+}
+
+
 // NOTE: the "orders" table only has a single "login_credentials" text column —
 // that's what api/order.js (Fadded) and api/order-manual.js (Manual) both write
 // to, and it's the only column index.html and admin.html actually read from.
@@ -224,9 +322,20 @@ export default async function handler(req, res) {
       });
     }
 
-    // 6. Success → save orders
-    const items = orderData.data?.items || [];
-    const supplierOrderId = orderData.data?.order_id || orderRef;
+    // 6. Success → save orders (normalize every response shape)
+    let items = extractLdItems(orderData);
+    const supplierOrderId = orderData.data?.order_id || orderData.data?.id || orderRef;
+    const supplierQty = Number(orderData.data?.quantity) || qty;
+
+    // If supplier says qty>1 but we only got 1 item blob, try re-fetch order
+    if (items.length < supplierQty || items.length < qty) {
+      const refetch = await fetchLdOrderById(supplierOrderId);
+      if (refetch) {
+        const more = extractLdItems(refetch);
+        if (more.length > items.length) items = more;
+      }
+    }
+
     const detailsText = items.map((i) => i.details).filter(Boolean).join('\n\n');
 
     // Traceability for the "wrong product delivered" class of bug: log exactly
@@ -273,6 +382,26 @@ export default async function handler(req, res) {
           console.error('[order-logsdomain] FAILED to save order row:', insertErr.message, {
             order_id: lineOrderId, user_id, product_key, idx
           });
+          // Retry once with unique suffix (duplicate order_id race)
+          const retryId = `${lineOrderId}-${Date.now().toString(36)}`;
+          const retryErr = await insertLogOrder({
+            order_id: retryId,
+            user_id,
+            product_id: product.id,
+            product_code: product_key,
+            product_name: productName,
+            product_type: 'log',
+            description: (product.display_description || product.description || '').trim() || null,
+            quantity: 1,
+            amount: product.price,
+            status: 'completed',
+            login_credentials: formatCredentials(item.details, product.display_description || product.description || product.name),
+            login_credentials_raw: item.details || null,
+            supplier_ref: String(item.serial || item.id || retryId),
+            guide_url: 'https://t.me/mj_hub_tg'
+          });
+          if (!retryErr) savedCount += 1;
+          else console.error('[order-logsdomain] retry also failed', retryErr.message);
         } else {
           savedCount += 1;
         }
