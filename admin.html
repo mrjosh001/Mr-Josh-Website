@@ -3401,13 +3401,12 @@ function openOrderModal(index) {
   body.innerHTML = [
     row('Order ID', o.order_id || o.id || ''),
     row('Product', o.product_name || o.item || ''),
+    row('Quantity', String(o.quantity != null ? o.quantity : 1)),
     row('Amount', '₦' + Number(o.amount || o.total || 0).toLocaleString()),
     row('Status', o.status || ''),
     row('Date', o.created_at ? new Date(o.created_at).toLocaleString() : ''),
-    // Description: shown for every order — blank when the product has none.
     row('Description', o.description || ''),
-    // Login credentials kept here for admin record-keeping purposes.
-    row('Login Credentials (customer view)', o.login_credentials || '', true),
+    row('Logs (numbered — customer view)', o.login_credentials || '', true),
     row('Supplier raw (as received)', o.login_credentials_raw || o.login_credentials || '', true)
   ].join('');
   document.getElementById('orderModal').classList.remove('hidden');

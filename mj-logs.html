@@ -262,13 +262,17 @@ details[open] .product-description-toggle::before{transform:rotate(90deg);displa
 <div class="ps-meta"><span class="ps-pill ps-pill-stock">Delivered</span></div>
 </div>
 </div>
+<div class="ps-block" id="rcMetaWrap" style="display:none">
+<div class="ps-block-label">Order</div>
+<div class="ps-block-text" id="rcMeta">—</div>
+</div>
 <div class="ps-block" id="rcDescWrap">
 <div class="ps-block-label">Description</div>
 <div class="ps-block-text" id="rcDesc">—</div>
 </div>
 <div class="ps-format">
-<div class="ps-format-title"><i class="fa-solid fa-key"></i> Login Credentials</div>
-<div class="ps-format-box" id="rcCreds" style="white-space:pre-wrap;">—</div>
+<div class="ps-format-title"><i class="fa-solid fa-key"></i> Your logs</div>
+<div class="ps-format-box" id="rcCreds" style="white-space:pre-wrap;line-height:1.55;font-size:13px;">—</div>
 </div>
 <div class="product-actions">
 <button type="button" class="btn btn-outline" id="rcCopyBtn">Copy</button>
@@ -715,16 +719,27 @@ buyBtn.innerHTML = originalLabel;
 }
 }
 
-function openReceiptModal(p, desc, creds){
+function openReceiptModal(p, desc, creds, qty, orderId){
 document.getElementById('rcName').textContent = cleanText(p.name||'Product');
 document.getElementById('rcIcon').textContent = (cleanText(p.name||'M').charAt(0)||'M').toUpperCase();
+var metaWrap = document.getElementById('rcMetaWrap');
+var metaEl = document.getElementById('rcMeta');
+var metaParts = [];
+if (qty && Number(qty) > 0) metaParts.push(Number(qty) + ' log' + (Number(qty) === 1 ? '' : 's'));
+if (orderId) metaParts.push('ID: ' + orderId);
+if (metaWrap && metaEl) {
+  if (metaParts.length) { metaWrap.style.display = 'block'; metaEl.textContent = metaParts.join(' · '); }
+  else { metaWrap.style.display = 'none'; }
+}
 const descWrap = document.getElementById('rcDescWrap');
 if(desc){ descWrap.style.display='block'; document.getElementById('rcDesc').textContent = desc; }
 else { descWrap.style.display='none'; }
-document.getElementById('rcCreds').textContent = creds;
+// Ensure multi-line credentials stay readable on the hero receipt card
+var text = String(creds || '').trim() || 'Delivered — open My Orders to view your logs.';
+document.getElementById('rcCreds').textContent = text;
 document.getElementById('rcCopyBtn').onclick = function(){
-navigator.clipboard.writeText(creds);
-showToast('Copied to clipboard!','success');
+navigator.clipboard.writeText(text);
+showToast('Copied all logs!','success');
 };
 document.getElementById('receiptModal').classList.add('active');
 }
