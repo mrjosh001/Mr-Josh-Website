@@ -2480,13 +2480,13 @@ body::after {
 <body>
 
 <style id="mj-boot-style">
-#mj-boot{position:fixed;inset:0;z-index:2147483646;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:18px;background:#000;color:rgba(148,163,184,.8);font:500 12px/1.2 system-ui,sans-serif;letter-spacing:.2em;text-transform:lowercase;transition:opacity .3s ease}
+#mj-boot{position:fixed;inset:0;z-index:2147483646;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:18px;background:rgba(5,7,13,.55);-webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px);color:rgba(226,232,240,.85);font:500 12px/1.2 system-ui,sans-serif;letter-spacing:.2em;text-transform:lowercase;transition:opacity .25s ease}
 #mj-boot.is-done{opacity:0;pointer-events:none}
 #mj-boot .mj-inf{position:relative;width:120px;height:64px}
 #mj-boot .mj-inf::before{content:"";position:absolute;left:50%;top:50%;width:140px;height:140px;transform:translate(-50%,-50%);border-radius:50%;background:radial-gradient(circle,rgba(124,58,237,.4) 0%,rgba(56,189,248,.15) 40%,transparent 70%);animation:mjBloom 2.2s ease-in-out infinite;pointer-events:none}
 #mj-boot .mj-inf svg{position:relative;z-index:1;display:block;width:120px;height:64px;overflow:visible}
 #mj-boot .mj-track{fill:none;stroke:rgba(167,139,250,.25);stroke-width:3.5;stroke-linecap:round;stroke-linejoin:round}
-#mj-boot .mj-beam{fill:none;stroke:#e9d5ff;stroke-width:3.5;stroke-linecap:round;stroke-linejoin:round;stroke-dasharray:28 200;filter:drop-shadow(0 0 4px #c084fc) drop-shadow(0 0 12px #22d3ee) drop-shadow(0 0 20px rgba(139,92,246,.85));animation:mjBeam 1.6s linear infinite}
+#mj-boot .mj-beam{fill:none;stroke:#e9d5ff;stroke-width:3.5;stroke-linecap:round;stroke-linejoin:round;stroke-dasharray:28 200;filter:drop-shadow(0 0 4px #c084fc) drop-shadow(0 0 12px #22d3ee);animation:mjBeam 1.6s linear infinite}
 #mj-boot .mj-lbl{position:relative;z-index:1}
 @keyframes mjBeam{to{stroke-dashoffset:-228}}
 @keyframes mjBloom{0%,100%{opacity:.55;transform:translate(-50%,-50%) scale(1)}50%{opacity:1;transform:translate(-50%,-50%) scale(1.08)}}
@@ -2508,14 +2508,15 @@ body::after {
     if(!el||el.classList.contains('is-done'))return;
     el.classList.add('is-done');
     el.setAttribute('aria-busy','false');
-    setTimeout(function(){ try{ el.remove(); var s=document.getElementById('mj-boot-style'); if(s)s.remove(); }catch(e){} }, 320);
+    setTimeout(function(){ try{ el.remove(); var s=document.getElementById('mj-boot-style'); if(s)s.remove(); }catch(e){} }, 280);
     try{ sessionStorage.removeItem('mj_nav_loading'); }catch(e){}
     if(window.mjHidePageLoader) try{ window.mjHidePageLoader(); }catch(e){}
   }
-  if(document.readyState==='complete') setTimeout(done, 80);
+  if(document.readyState==='complete') setTimeout(done, 60);
   else {
-    window.addEventListener('load', function(){ setTimeout(done, 80); });
-    setTimeout(done, 15000);
+    window.addEventListener('load', function(){ setTimeout(done, 60); });
+    document.addEventListener('DOMContentLoaded', function(){ setTimeout(done, 4000); });
+    setTimeout(done, 12000);
   }
 })();
 </script>
@@ -4344,24 +4345,59 @@ window.payWithPocketFi = async function() {
 
 /* WhatsApp support — same as landing page index.html */
 window.SUPPORT_WA_NUMBER = '14305583021';
-window.buildSupportWhatsAppLink = function(customerId) {
-    var idPart = customerId ? customerId : 'Not signed in';
-    var message = "Hello Admin, I've a complaint.\\n\\nCustomer ID: " + idPart + "\\nComplaint: ";
+window.buildSupportWhatsAppLink = function(details) {
+    details = details || {};
+    var cid = details.customerId || details.customer_id || 'Not signed in';
+    var name = details.name || details.full_name || '';
+    var email = details.email || '';
+    var phone = details.phone || '';
+    var lines = [
+      "Hello Admin, I've a complaint / enquiry on MJ Hub.",
+      "",
+      "Customer ID: " + cid
+    ];
+    if (name) lines.push("Name: " + name);
+    if (email) lines.push("Email: " + email);
+    if (phone) lines.push("Phone: " + phone);
+    lines.push("");
+    lines.push("Issue: ");
+    var message = lines.join("\n");
     return 'https://wa.me/' + window.SUPPORT_WA_NUMBER + '?text=' + encodeURIComponent(message);
 };
 window.refreshSupportWhatsAppLinks = function() {
-    var cid = null;
+    var details = { customerId: null, name: '', email: '', phone: '' };
     try {
         var el = document.getElementById('myCustomerId');
-        if (el && el.value) cid = el.value.trim();
-        if (!cid && typeof userData !== 'undefined' && userData && userData.customerId) cid = userData.customerId;
+        if (el && el.value) details.customerId = el.value.trim();
+        if (!details.customerId && typeof userData !== 'undefined' && userData) {
+            details.customerId = userData.customerId || userData.customer_id || null;
+            details.name = userData.full_name || userData.name || userData.fullName || '';
+            details.email = userData.email || '';
+            details.phone = userData.phone || userData.phone_number || '';
+        }
+        var nameEl = document.getElementById('profileFullName') || document.getElementById('userName');
+        var emailEl = document.getElementById('profileEmail') || document.getElementById('userEmail');
+        var phoneEl = document.getElementById('profilePhone');
+        if (nameEl && (nameEl.value || nameEl.textContent)) details.name = details.name || (nameEl.value || nameEl.textContent || '').trim();
+        if (emailEl && (emailEl.value || emailEl.textContent)) details.email = details.email || (emailEl.value || emailEl.textContent || '').trim();
+        if (phoneEl && (phoneEl.value || phoneEl.textContent)) details.phone = details.phone || (phoneEl.value || phoneEl.textContent || '').trim();
+        if (!details.email && window.__mjUserEmail) details.email = window.__mjUserEmail;
     } catch (e) {}
-    var href = window.buildSupportWhatsAppLink(cid);
+    var href = window.buildSupportWhatsAppLink(details);
     ['supportWidgetWhatsApp', 'helpWhatsAppLink'].forEach(function(id) {
         var a = document.getElementById(id);
         if (a) a.href = href;
     });
 };
+/* Keep WA prefill fresh after profile loads */
+(function(){
+  function tick(){ try { if (typeof refreshSupportWhatsAppLinks === 'function') refreshSupportWhatsAppLinks(); } catch(e){} }
+  document.addEventListener('DOMContentLoaded', tick);
+  window.addEventListener('load', tick);
+  setTimeout(tick, 1500);
+  setTimeout(tick, 4000);
+})();
+
 
 function initSupportWidget() {
     try { if (typeof refreshSupportWhatsAppLinks === 'function') refreshSupportWhatsAppLinks(); } catch (e) {}

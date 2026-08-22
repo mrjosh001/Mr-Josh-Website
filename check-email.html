@@ -424,13 +424,13 @@
 <body>
 
 <style id="mj-boot-style">
-#mj-boot{position:fixed;inset:0;z-index:2147483646;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:18px;background:#000;color:rgba(148,163,184,.8);font:500 12px/1.2 system-ui,sans-serif;letter-spacing:.2em;text-transform:lowercase;transition:opacity .3s ease}
+#mj-boot{position:fixed;inset:0;z-index:2147483646;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:18px;background:rgba(5,7,13,.55);-webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px);color:rgba(226,232,240,.85);font:500 12px/1.2 system-ui,sans-serif;letter-spacing:.2em;text-transform:lowercase;transition:opacity .25s ease}
 #mj-boot.is-done{opacity:0;pointer-events:none}
 #mj-boot .mj-inf{position:relative;width:120px;height:64px}
 #mj-boot .mj-inf::before{content:"";position:absolute;left:50%;top:50%;width:140px;height:140px;transform:translate(-50%,-50%);border-radius:50%;background:radial-gradient(circle,rgba(124,58,237,.4) 0%,rgba(56,189,248,.15) 40%,transparent 70%);animation:mjBloom 2.2s ease-in-out infinite;pointer-events:none}
 #mj-boot .mj-inf svg{position:relative;z-index:1;display:block;width:120px;height:64px;overflow:visible}
 #mj-boot .mj-track{fill:none;stroke:rgba(167,139,250,.25);stroke-width:3.5;stroke-linecap:round;stroke-linejoin:round}
-#mj-boot .mj-beam{fill:none;stroke:#e9d5ff;stroke-width:3.5;stroke-linecap:round;stroke-linejoin:round;stroke-dasharray:28 200;filter:drop-shadow(0 0 4px #c084fc) drop-shadow(0 0 12px #22d3ee) drop-shadow(0 0 20px rgba(139,92,246,.85));animation:mjBeam 1.6s linear infinite}
+#mj-boot .mj-beam{fill:none;stroke:#e9d5ff;stroke-width:3.5;stroke-linecap:round;stroke-linejoin:round;stroke-dasharray:28 200;filter:drop-shadow(0 0 4px #c084fc) drop-shadow(0 0 12px #22d3ee);animation:mjBeam 1.6s linear infinite}
 #mj-boot .mj-lbl{position:relative;z-index:1}
 @keyframes mjBeam{to{stroke-dashoffset:-228}}
 @keyframes mjBloom{0%,100%{opacity:.55;transform:translate(-50%,-50%) scale(1)}50%{opacity:1;transform:translate(-50%,-50%) scale(1.08)}}
@@ -452,14 +452,15 @@
     if(!el||el.classList.contains('is-done'))return;
     el.classList.add('is-done');
     el.setAttribute('aria-busy','false');
-    setTimeout(function(){ try{ el.remove(); var s=document.getElementById('mj-boot-style'); if(s)s.remove(); }catch(e){} }, 320);
+    setTimeout(function(){ try{ el.remove(); var s=document.getElementById('mj-boot-style'); if(s)s.remove(); }catch(e){} }, 280);
     try{ sessionStorage.removeItem('mj_nav_loading'); }catch(e){}
     if(window.mjHidePageLoader) try{ window.mjHidePageLoader(); }catch(e){}
   }
-  if(document.readyState==='complete') setTimeout(done, 80);
+  if(document.readyState==='complete') setTimeout(done, 60);
   else {
-    window.addEventListener('load', function(){ setTimeout(done, 80); });
-    setTimeout(done, 15000);
+    window.addEventListener('load', function(){ setTimeout(done, 60); });
+    document.addEventListener('DOMContentLoaded', function(){ setTimeout(done, 4000); });
+    setTimeout(done, 12000);
   }
 })();
 </script>
