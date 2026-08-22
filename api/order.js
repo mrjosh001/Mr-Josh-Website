@@ -61,14 +61,45 @@ async function insertLogOrder(row) {
   return error;
 }
 
+async function handleMyOrders(req, res, userId) {
+  try {
+    const [logsRes, smsRes] = await Promise.all([
+      supabase
+        .from('orders')
+        .select('*')
+        .eq('user_id', userId)
+        .order('created_at', { ascending: false })
+        .limit(150),
+      supabase
+        .from('number_orders')
+        .select('*')
+        .eq('user_id', userId)
+        .order('created_at', { ascending: false })
+        .limit(150)
+    ]);
+
+    const logs = logsRes.error ? [] : logsRes.data || [];
+    const sms = smsRes.error ? [] : smsRes.data || [];
+    if (logsRes.error) console.warn('[order my_orders] logs', logsRes.error.message);
+    if (smsRes.error) console.warn('[order my_orders] sms', smsRes.error.message);
+
+    return res.status(200).json({
+      success: true,
+      logs,
+      sms,
+      counts: { logs: logs.length, sms: sms.length }
+    });
+  } catch (e) {
+    console.error('[order my_orders]', e);
+    return res.status(500).json({ success: false, message: 'Could not load orders right now' });
+  }
+}
+
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
   if (req.method === 'OPTIONS') return res.status(200).end();
-  if (req.method !== 'POST') {
-    return res.status(405).json({ success: false, message: 'Method not allowed' });
-  }
 
   // IDOR protection: never trust body.user_id — bind to JWT only
   const auth = await requireAuthUser(req);
@@ -77,7 +108,30 @@ export default async function handler(req, res) {
   }
   const user_id = auth.user.id;
 
+  // GET /api/order?action=my_orders  — list this user's logs + SMS (no new serverless function)
+  let action = req.query?.action;
+  if (!action && req.url) {
+    try {
+      action = new URL(req.url, 'http://localhost').searchParams.get('action');
+    } catch (_) {}
+  }
+  if (req.method === 'GET' || action === 'my_orders') {
+    if (req.method === 'GET' || action === 'my_orders') {
+      return handleMyOrders(req, res, user_id);
+    }
+  }
+
+  if (req.method !== 'POST') {
+    return res.status(405).json({ success: false, message: 'Method not allowed' });
+  }
+
   const body = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : (req.body || {});
+
+  // POST { action: 'my_orders' } also supported
+  if (body.action === 'my_orders') {
+    return handleMyOrders(req, res, user_id);
+  }
+
   const {
     product_key,
     quantity = 1,
