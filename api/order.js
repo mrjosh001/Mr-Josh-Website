@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
+import { formatCredentials } from '../lib/formatCredentials.js';
 
 const supabase = createClient(
   process.env.SUPABASE_URL,
@@ -239,7 +240,7 @@ export default async function handler(req, res) {
         quantity: 1,
         amount: product.price,
         status: 'completed',
-        login_credentials: item.details || null,
+        login_credentials: formatCredentials(item.details, product.display_description || product.description || product.name || product.product_name) || null,
         supplier_ref: String(item.product_detail_id || ''),
         guide_url: 'https://t.me/mj_hub_tg'
       });

@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
+import { formatCredentials } from '../lib/formatCredentials.js';
 
 /**
  * POST /api/order-logsdomain
@@ -34,16 +35,7 @@ function categoryIdFromKey(productKey) {
 // fulfilled and charged, but never actually saved — which is why it never
 // showed up in "My Orders" or the admin Orders tab. Keeping this function
 // around only to build one clean login_credentials string.
-function formatCredentials(details) {
-  if (!details) return '';
-  const text = String(details);
-  const userMatch = text.match(/(?:Username|User|ID|Email|Login)\s*[:=]\s*([^\s|]+)/i);
-  const passMatch = text.match(/(?:Password|Pass)\s*[:=]\s*([^\s|]+)/i);
-  const credId = userMatch ? userMatch[1].trim() : null;
-  const credPass = passMatch ? passMatch[1].trim() : null;
-  if (credId && credPass) return `${credId}:${credPass}`;
-  return text;
-}
+/* formatCredentials from lib */
 
 
 async function requireAuthUser(req) {
@@ -112,7 +104,7 @@ export default async function handler(req, res) {
     // 1. Product from DB
     const { data: product, error: prodErr } = await supabase
       .from('products')
-      .select('id, product_key, name, price, stock_quantity, source')
+      .select('id, product_key, name, price, stock_quantity, source, description, display_description')
       .eq('product_key', product_key)
       .single();
 
@@ -254,7 +246,7 @@ export default async function handler(req, res) {
           quantity: 1,
           amount: product.price,
           status: 'completed',
-          login_credentials: formatCredentials(item.details),
+          login_credentials: formatCredentials(item.details, product.display_description || product.description || product.name),
           supplier_ref: String(item.serial || ''),
           guide_url: 'https://t.me/mj_hub_tg'
         });
@@ -310,7 +302,7 @@ export default async function handler(req, res) {
       message: 'Order fulfilled successfully',
       data: {
         items: items.length
-          ? items.map((i) => ({ details: i.details, serial: i.serial }))
+          ? items.map((i) => ({ details: formatCredentials(i.details, product.display_description || product.description || product.name), serial: i.serial }))
           : [{ details: detailsText || 'Order completed' }],
         total_amount: total,
         new_balance: newBalance,

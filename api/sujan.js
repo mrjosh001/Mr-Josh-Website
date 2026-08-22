@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
+import { formatCredentials } from '../lib/formatCredentials.js';
 
 /**
  * /api/sujan — everything for the Sujan Department supplier, one file.
@@ -272,6 +273,17 @@ async function requireAuthUser(req) {
   return { user };
 }
 
+
+async function insertLogOrder(row) {
+  // Prefer storing supplier raw for admin; fall back if column not migrated yet
+  let { error } = await supabase.from('orders').insert(row);
+  if (error && /login_credentials_raw|schema cache|column/i.test(error.message || '')) {
+    const { login_credentials_raw, ...rest } = row;
+    ({ error } = await supabase.from('orders').insert(rest));
+  }
+  return error;
+}
+
 async function handleOrder(req, res) {
   // IDOR protection: never trust body.user_id — bind to JWT only
   const auth = await requireAuthUser(req);
@@ -429,7 +441,7 @@ async function handleOrder(req, res) {
     });
 
     for (const item of items) {
-      const { error: insertErr } = await supabase.from('orders').insert({
+      const insertErr = await insertLogOrder({
         order_id: supplierOrderId,
         user_id,
         product_id: product.id,
@@ -440,7 +452,8 @@ async function handleOrder(req, res) {
         quantity: 1,
         amount: product.price,
         status: 'completed',
-        login_credentials: item.details || null,
+        login_credentials: formatCredentials(item.details, product.display_description || product.description || productName) || (item.details || null),
+        login_credentials_raw: item.details || null,
         supplier_ref: item.ref || '',
         guide_url: 'https://t.me/mj_hub_tg'
       });
