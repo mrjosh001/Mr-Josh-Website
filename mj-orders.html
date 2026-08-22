@@ -660,7 +660,8 @@ function formatCredentials(details, description) {
 
 /** Structured fields for View Log UI cards */
 function parseCredentialFields(details, description) {
-  const formatted = formatCredentials(details, description);
+  const fmt = (_fmtMod && _fmtMod.formatCredentials) || formatCredentials;
+  const formatted = fmt(details, description);
   const accounts = [];
   const chunks = String(formatted || '')
     .split(/\n\s*\n/)
@@ -690,7 +691,8 @@ function parseCredentialFields(details, description) {
     if (!f.username && !f.password && !f.email) {
       const parts = splitDelimiters(chunk.replace(/\n/g, ' '));
       if (parts.length >= 2) {
-        const hinted = applyHint(parts, parseFormatHint(description));
+        const hintFn = (_fmtMod && _fmtMod.parseFormatHint) || parseFormatHint;
+      const hinted = applyHint(parts, hintFn(description));
         Object.assign(f, hinted || partsToFields(parts));
       } else {
         f.username = chunk;
@@ -715,6 +717,40 @@ function fieldLabel(key) {
 }
 
 /* ===== end formatCredentials ===== */
+
+/** Prefer live lib/formatCredentials.js; fall back to inlined copy below */
+let _fmtReady = null;
+let _fmtMod = {
+  formatCredentials: typeof formatCredentials === 'function' ? formatCredentials : null,
+  parseFormatHint: typeof parseFormatHint === 'function' ? parseFormatHint : null,
+  formatOneAccount: typeof formatOneAccount === 'function' ? formatOneAccount : null
+};
+
+async function loadFormatLib() {
+  if (_fmtReady) return _fmtReady;
+  _fmtReady = (async () => {
+    try {
+      const mod = await import('/lib/formatCredentials.js');
+      _fmtMod = {
+        formatCredentials: mod.formatCredentials || mod.default,
+        parseFormatHint: mod.parseFormatHint,
+        formatOneAccount: mod.formatOneAccount
+      };
+      console.info('[orders] using /lib/formatCredentials.js');
+    } catch (e) {
+      console.warn('[orders] lib import failed, using inlined formatter', e);
+      _fmtMod = {
+        formatCredentials: typeof formatCredentials === 'function' ? formatCredentials : null,
+        parseFormatHint: typeof parseFormatHint === 'function' ? parseFormatHint : null,
+        formatOneAccount: typeof formatOneAccount === 'function' ? formatOneAccount : null
+      };
+    }
+    return _fmtMod;
+  })();
+  return _fmtReady;
+}
+
+
 
 let tab = 'logs';
 let session = null;
@@ -1051,7 +1087,7 @@ function renderBoosters() {
   bindViewButtons();
 }
 
-function openModal(kind, i) {
+async function openModal(kind, i) {
   const title = document.getElementById('mTitle');
   const body = document.getElementById('mBody');
   const sub = document.getElementById('mSub');
@@ -1061,6 +1097,7 @@ function openModal(kind, i) {
   }
 
   if (kind === 'logs') {
+    await loadFormatLib();
     const g = logGroups[i];
     if (!g) return;
     const items = g.items && g.items.length ? g.items : [g];
