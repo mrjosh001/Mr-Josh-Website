@@ -150,6 +150,72 @@
     .bottom-nav a.active{color:#60a5fa}
     .progress{height:6px;border-radius:99px;background:rgba(148,163,184,.2);overflow:hidden;margin-top:10px}
     .progress>span{display:block;height:100%;background:linear-gradient(90deg,#60a5fa,#3b82f6);border-radius:99px}
+  
+    /* Advanced polish */
+    .type-tabs {
+      box-shadow: 0 8px 28px rgba(0,0,0,.2);
+    }
+    .type-tab {
+      letter-spacing: 0.02em;
+    }
+    .type-tab:not(.active):hover {
+      color: var(--text);
+      background: rgba(59,130,246,.08);
+    }
+    .hero {
+      position: relative;
+      overflow: hidden;
+    }
+    .hero::after {
+      content: '';
+      position: absolute;
+      right: -20px; top: -30px;
+      width: 120px; height: 120px;
+      border-radius: 50%;
+      background: radial-gradient(circle, rgba(96,165,250,.25), transparent 70%);
+      pointer-events: none;
+    }
+    .card {
+      transition: transform .18s ease, border-color .2s, box-shadow .2s;
+    }
+    .card:active {
+      transform: scale(0.992);
+    }
+    .meta span {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      padding: 4px 8px;
+      border-radius: 8px;
+      background: rgba(59,130,246,.1);
+      border: 1px solid rgba(96,165,250,.15);
+      font-size: 11px;
+    }
+    :root[data-theme="light"] .meta span {
+      background: rgba(37,99,235,.06);
+    }
+    .btn-view {
+      transition: filter .15s, transform .15s, box-shadow .15s;
+    }
+    .btn-view:hover {
+      filter: brightness(1.08);
+      box-shadow: 0 10px 22px rgba(37,99,235,.45);
+    }
+    .sheet {
+      animation: sheetUp .28s ease;
+    }
+    @keyframes sheetUp {
+      from { transform: translateY(24px); opacity: 0; }
+      to { transform: translateY(0); opacity: 1; }
+    }
+    .progress {
+      box-shadow: inset 0 1px 2px rgba(0,0,0,.2);
+    }
+    .progress > span {
+      box-shadow: 0 0 12px rgba(59,130,246,.45);
+      transition: width .4s ease;
+    }
+
   </style>
 </head>
 <body>
@@ -430,7 +496,7 @@ function openItem(kind,i){
         <div class="detail-row"><span class="l">Date</span><span class="v">${esc(fmtDate(o.created_at))}</span></div>
       </div>
       <div class="actions">
-        <button type="button" class="btn-copy" onclick="copyRaw(${JSON.stringify(text).replace(/"/g,'&quot;')})"><i class="fa-regular fa-copy"></i> Copy</button>
+        <button type="button" class="btn-copy" onclick="copyText()"><i class="fa-regular fa-copy"></i> Copy</button>
         <a class="btn-guide" href="${numberPage}?order_id=${encodeURIComponent(o.order_id||'')}"><i class="fa-solid fa-arrow-right"></i> Open number</a>
       </div>
       <div class="cred" id="credBox">${esc(text)}</div>`;

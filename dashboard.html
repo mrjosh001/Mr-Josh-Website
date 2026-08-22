@@ -2572,7 +2572,7 @@ body::after {
             <li><a href="deposit.html"><i class="fa-solid fa-credit-card"></i> <span>Deposit</span></a></li>
             <li><a href="referral.html"><i class="fa-solid fa-handshake"></i> <span>Refer & Earn 2%</span></a></li>
             <li><a href="#" class="sidebar-link" data-target="cart"><i class="fa-solid fa-bag-shopping"></i> <span>Cart</span></a></li>
-            <li><a href="#" class="sidebar-link" data-target="orders"><i class="fa-solid fa-receipt"></i> <span>My Orders</span></a></li>
+            <li><a href="mj-orders.html" class="sidebar-link" data-external="orders"><i class="fa-solid fa-receipt"></i> <span>My Orders</span></a></li>
             <li><a href="#" onclick="handleLogout();return false;" class="logout" style="color:#dc2626 !important;"><i class="fa-solid fa-right-from-bracket"></i> <span>Logout</span></a></li>
         </ul>
     </div>
@@ -3994,7 +3994,22 @@ function initNavigation() {
     const sidebar = document.getElementById('sidebarDrawer');
     const overlay = document.getElementById('sidebarOverlay');
 
-    window.switchSection = function(id, skipHash) {
+    
+// #orders deep link → dedicated page
+(function(){
+  try {
+    if ((location.hash || '').replace('#','') === 'orders') {
+      location.replace('mj-orders.html');
+    }
+  } catch (e) {}
+})();
+
+window.switchSection = function(id, skipHash) {
+        // Dedicated My Orders page (logs + SMS + boosters)
+        if (id === 'orders') {
+            location.href = 'mj-orders.html';
+            return;
+        }
         sections.forEach(s => s.classList.remove('active'));
         const target = document.getElementById(id);
         if (target) target.classList.add('active');
@@ -4028,6 +4043,10 @@ function initNavigation() {
 
     sidebarLinks.forEach(link => {
         link.addEventListener('click', (e) => {
+            if (link.getAttribute('data-external') === 'orders' || (link.getAttribute('href') || '').indexOf('mj-orders.html') !== -1) {
+                // full navigation to dedicated orders page
+                return;
+            }
             const target = link.getAttribute('data-target');
             if (target) { e.preventDefault(); window.switchSection(target); }
         });
