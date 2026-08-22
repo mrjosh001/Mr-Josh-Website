@@ -285,338 +285,423 @@
   }catch(e){document.documentElement.setAttribute('data-theme','dark');}
 })();
 
-const SUPABASE_URL='https://atczodlljmlayvldxfmv.supabase.co';
-const SUPABASE_ANON_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmVzZSIsInJlZiI6ImF0Y3pvZGxsam1sYXl2bGR4Zm12Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODUwNzUyMzgsImV4cCI6MjEwMDY1MTIzOH0.ufthD-p7BmeD_B7xyuMM6PNPL8DmcL4AtRYgg-MuoLI';
-const sb=window.supabase.createClient(SUPABASE_URL,SUPABASE_ANON_KEY,{
-  auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:true,storage:window.sessionStorage}
+
+const SUPABASE_URL = 'https://atczodlljmlayvldxfmv.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmVzZSIsInJlZiI6ImF0Y3pvZGxsam1sYXl2bGR4Zm12Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODUwNzUyMzgsImV4cCI6MjEwMDY1MTIzOH0.ufthD-p7BmeD_B7xyuMM6PNPL8DmcL4AtRYgg-MuoLI';
+
+const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+  auth: {
+    persistSession: true,
+    autoRefreshToken: true,
+    detectSessionInUrl: true,
+    storage: window.sessionStorage
+  }
 });
 
-let tab='logs';
-let session=null;
-let logGroups=[];
-let smsRows=[];
-let boostRows=[];
-let modalMode='logs';
-let modalPayload=null;
+let tab = 'logs';
+let session = null;
+let logGroups = [];
+let smsRows = [];
+let boostRows = [];
+let loadErrors = { logs: null, sms: null, boosters: null };
 
-function esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
-function toast(m){const el=document.getElementById('toast');el.textContent=m;el.classList.add('show');setTimeout(()=>el.classList.remove('show'),2200);}
-function money(n){return '₦'+Number(n||0).toLocaleString();}
-function fmtDate(iso){
-  try{return new Date(iso).toLocaleString(undefined,{day:'numeric',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'});}
-  catch(e){return '';}
+function esc(s) {
+  return String(s || '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
 }
-function statusClass(s){
-  s=String(s||'').toLowerCase();
-  if(/pending|processing|progress|waiting|in progress/.test(s)) return 'pending';
-  if(/fail|cancel|refund|reject|partial/.test(s)&&!/complete/.test(s)) return 'failed';
+function toast(m) {
+  const el = document.getElementById('toast');
+  if (!el) return;
+  el.textContent = m;
+  el.classList.add('show');
+  setTimeout(() => el.classList.remove('show'), 2200);
+}
+function money(n) {
+  return '₦' + Number(n || 0).toLocaleString();
+}
+function fmtDate(iso) {
+  try {
+    return new Date(iso).toLocaleString(undefined, {
+      day: 'numeric',
+      month: 'short',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+  } catch (e) {
+    return '';
+  }
+}
+function statusClass(s) {
+  s = String(s || '').toLowerCase();
+  if (/pending|processing|progress|waiting|in progress/.test(s)) return 'pending';
+  if (/fail|cancel|refund|reject|partial/.test(s) && !/complete/.test(s)) return 'failed';
   return '';
 }
+/** Never show raw backend / API key errors to customers */
+function friendlyError(err) {
+  const raw = String((err && err.message) || err || '').toLowerCase();
+  if (/invalid api key|jwt|api key|not authorized|401|403/.test(raw)) {
+    return 'Session expired. Please sign out and sign in again.';
+  }
+  if (/failed to fetch|network|timeout/.test(raw)) {
+    return 'Network error. Check your connection and try again.';
+  }
+  if (/row level security|rls|permission/.test(raw)) {
+    return 'Unable to load orders for this account. Contact support if this continues.';
+  }
+  return 'Could not load orders right now. Pull to refresh or try again shortly.';
+}
 
-function groupLogs(rows){
-  const map=new Map(), keys=[];
-  rows.forEach(o=>{
-    const key=o.order_id||('single-'+(o.id||Math.random()));
-    if(!map.has(key)){map.set(key,[]);keys.push(key);}
+function groupLogs(rows) {
+  const map = new Map(),
+    keys = [];
+  rows.forEach((o) => {
+    const key = o.order_id || 'single-' + (o.id || Math.random());
+    if (!map.has(key)) {
+      map.set(key, []);
+      keys.push(key);
+    }
     map.get(key).push(o);
   });
-  return keys.map(key=>{
-    const items=map.get(key), first=items[0];
+  return keys.map((key) => {
+    const items = map.get(key),
+      first = items[0];
     return {
-      order_id:first.order_id||key,
-      product_name:first.product_name,
-      status:first.status,
-      created_at:first.created_at,
-      quantity:items.reduce((s,it)=>s+(Number(it.quantity)||1),0),
-      amount:items.reduce((s,it)=>s+(Number(it.amount)||0),0),
-      items
+      order_id: first.order_id || key,
+      product_name: first.product_name || first.title || 'Product',
+      status: first.status || 'Completed',
+      created_at: first.created_at,
+      quantity: items.reduce((s, it) => s + (Number(it.quantity) || 1), 0),
+      amount: items.reduce((s, it) => s + (Number(it.amount) || 0), 0),
+      items,
+      login_credentials:
+        first.login_credentials ||
+        [first.credentials_id, first.credentials_pass].filter(Boolean).join(':') ||
+        '',
+      guide_url: first.guide_url || 'https://t.me/mj_hub_tg',
+      description: first.description || ''
     };
   });
 }
 
-async function ensureAuth(){
-  // Prefer active session; refresh if needed so RLS queries see auth.uid()
-  let {data:{session:s},error}=await sb.auth.getSession();
-  if(error) console.warn('[orders] getSession', error.message);
-  if(!s){
-    const ref=await sb.auth.refreshSession();
-    s=ref.data&&ref.data.session;
+async function ensureAuth() {
+  let {
+    data: { session: s }
+  } = await sb.auth.getSession();
+  if (!s) {
+    const ref = await sb.auth.refreshSession();
+    s = ref.data && ref.data.session;
   }
-  if(!s||!s.user) return null;
-  session=s;
+  if (!s || !s.user) return null;
+  session = s;
   return s;
 }
 
-/** Query with order-by, fall back without order if column missing / RLS oddity */
-async function queryUserRows(table, userId){
-  let q=sb.from(table).select('*').eq('user_id', userId).limit(150);
-  let res=await q.order('created_at',{ascending:false});
-  if(res.error){
-    console.warn('[orders]', table, res.error.message);
-    // Retry without order (created_at may not exist)
-    res=await sb.from(table).select('*').eq('user_id', userId).limit(150);
+async function fetchTable(table, userId) {
+  // Same pattern as dashboard.html fetchUserOrders
+  let { data, error } = await sb
+    .from(table)
+    .select('*')
+    .eq('user_id', userId)
+    .order('created_at', { ascending: false })
+    .limit(100);
+  if (error) {
+    // Retry without order clause
+    const r2 = await sb.from(table).select('*').eq('user_id', userId).limit(100);
+    data = r2.data;
+    error = r2.error;
   }
-  if(res.error){
-    // Last try: filter via maybe text id mismatch
-    const res2=await sb.from(table).select('*').eq('user_id', String(userId)).limit(150);
-    if(!res2.error) return {data:res2.data||[], error:null};
-    return {data:[], error:res.error};
-  }
-  return {data:res.data||[], error:null};
+  return { data: data || [], error };
 }
 
-let loadErrors={logs:null,sms:null,boosters:null};
-
-async function loadLogs(){
-  loadErrors.logs=null;
-  const uid=session&&session.user&&session.user.id;
-  if(!uid){ logGroups=[]; document.getElementById('countLogs').textContent='0'; loadErrors.logs='Not signed in'; return; }
-  const {data,error}=await queryUserRows('orders', uid);
-  if(error){
-    loadErrors.logs=error.message||'Failed to load logs';
-    logGroups=[];
-    document.getElementById('countLogs').textContent='!';
-    throw error;
-  }
-  logGroups=groupLogs(data||[]);
-  document.getElementById('countLogs').textContent=String(logGroups.length);
-}
-
-async function loadSms(){
-  loadErrors.sms=null;
-  const uid=session&&session.user&&session.user.id;
-  if(!uid){ smsRows=[]; document.getElementById('countSms').textContent='0'; loadErrors.sms='Not signed in'; return; }
-  const {data,error}=await queryUserRows('number_orders', uid);
-  if(error){
-    loadErrors.sms=error.message||'Failed to load SMS orders';
-    smsRows=[];
-    document.getElementById('countSms').textContent='!';
-    throw error;
-  }
-  // Newest first if we have dates
-  smsRows=(data||[]).slice().sort((a,b)=>{
-    const ta=new Date(a.created_at||a.updated_at||0).getTime();
-    const tb=new Date(b.created_at||b.updated_at||0).getTime();
-    return tb-ta;
-  });
-  document.getElementById('countSms').textContent=String(smsRows.length);
-}
-
-async function loadBoosters(){
-  loadErrors.boosters=null;
-  const s=await ensureAuth();
-  const token=s&&s.access_token;
-  if(!token){
-    boostRows=[];
-    document.getElementById('countBoost').textContent='0';
-    loadErrors.boosters='Not signed in';
+async function loadLogs() {
+  loadErrors.logs = null;
+  const uid = session && session.user && session.user.id;
+  if (!uid) {
+    logGroups = [];
+    document.getElementById('countLogs').textContent = '0';
     return;
   }
-  // Primary: same Owlet API as mj-boosters-history.html
-  try{
-    const res=await fetch('/api/owlet?action=my_orders&page_size=50&live=0',{
-      headers:{Authorization:'Bearer '+token,'Content-Type':'application/json'}
+  try {
+    const { data, error } = await fetchTable('orders', uid);
+    if (error) throw error;
+    let rows = data || [];
+    // Dashboard fallback: local cache
+    if (!rows.length) {
+      try {
+        const cached = JSON.parse(localStorage.getItem('mjhub_orders_' + uid) || '[]');
+        if (Array.isArray(cached) && cached.length) rows = cached;
+      } catch (e) {}
+    }
+    logGroups = groupLogs(rows);
+    document.getElementById('countLogs').textContent = String(logGroups.length);
+  } catch (e) {
+    console.warn('[orders] logs', e);
+    loadErrors.logs = friendlyError(e);
+    logGroups = [];
+    document.getElementById('countLogs').textContent = '0';
+  }
+}
+
+async function loadSms() {
+  loadErrors.sms = null;
+  const uid = session && session.user && session.user.id;
+  if (!uid) {
+    smsRows = [];
+    document.getElementById('countSms').textContent = '0';
+    return;
+  }
+  try {
+    const { data, error } = await fetchTable('number_orders', uid);
+    if (error) throw error;
+    smsRows = (data || []).slice().sort((a, b) => {
+      return new Date(b.created_at || 0) - new Date(a.created_at || 0);
     });
-    const json=await res.json().catch(()=>({}));
-    if(json.success && Array.isArray(json.data)){
-      boostRows=json.data;
-      document.getElementById('countBoost').textContent=String(boostRows.length);
-      return;
-    }
-    // Fall through to table if API shape unexpected
-    if(json.message) loadErrors.boosters=json.message;
-  }catch(e){
-    loadErrors.boosters=e.message||'Owlet API error';
-    console.warn('[orders] boosters api', e);
+    document.getElementById('countSms').textContent = String(smsRows.length);
+  } catch (e) {
+    console.warn('[orders] sms', e);
+    loadErrors.sms = friendlyError(e);
+    smsRows = [];
+    document.getElementById('countSms').textContent = '0';
   }
-  // Fallback: direct table if present (booster_orders / owlet_orders)
-  const uid=s.user.id;
-  for(const table of ['booster_orders','owlet_orders']){
-    try{
-      const {data,error}=await queryUserRows(table, uid);
-      if(!error && data && data.length){
-        boostRows=data;
-        document.getElementById('countBoost').textContent=String(boostRows.length);
-        loadErrors.boosters=null;
-        return;
-      }
-    }catch(_){}
-  }
-  boostRows=boostRows||[];
-  document.getElementById('countBoost').textContent=String(boostRows.length);
-  if(loadErrors.boosters) throw new Error(loadErrors.boosters);
 }
 
-function setHero(){
-  const map={
-    logs:['MJ Logs','Account logins and digital deliveries from your purchases.'],
-    sms:['MJ SMS','Virtual numbers and OTP codes you bought.'],
-    boosters:['MJ Boosters','Social growth orders and live delivery progress.']
-  };
-  const [t,s]=map[tab];
-  document.getElementById('heroTitle').textContent=t;
-  document.getElementById('heroSub').textContent=s;
-}
-
-function renderLogs(){
-  const list=document.getElementById('list');
-  if(!logGroups.length){
-    if(loadErrors.logs){
-      list.innerHTML='<div class="empty"><div class="ico">⚠️</div><h3>Could not load logs</h3><p>'+esc(loadErrors.logs)+'</p><p style="font-size:12px;color:var(--muted)">If you just bought, pull to refresh or re-open My Orders.</p></div>';
-      return;
-    }
-    list.innerHTML='<div class="empty"><div class="ico">📦</div><h3>No log orders yet</h3><p>Buy from MJ Logs and deliveries show here.</p><a href="mj-logs.html"><i class="fa-solid fa-store"></i> Browse logs</a></div>';
+async function loadBoosters() {
+  loadErrors.boosters = null;
+  const s = session || (await ensureAuth());
+  const token = s && s.access_token;
+  if (!token) {
+    boostRows = [];
+    document.getElementById('countBoost').textContent = '0';
     return;
   }
-  list.innerHTML=logGroups.map((o,i)=>{
-    const st=o.status||'Completed';
-    const initial=(o.product_name||'P').charAt(0).toUpperCase();
-    const qty=o.quantity||1;
-    return `<article class="card"><div class="row">
+  try {
+    const res = await fetch('/api/owlet?action=my_orders&page_size=50&live=0', {
+      headers: { Authorization: 'Bearer ' + token }
+    });
+    const json = await res.json().catch(() => ({}));
+    if (!json.success) throw new Error(json.message || 'Could not load boosters');
+    boostRows = json.data || [];
+    document.getElementById('countBoost').textContent = String(boostRows.length);
+  } catch (e) {
+    console.warn('[orders] boosters', e);
+    loadErrors.boosters = friendlyError(e);
+    boostRows = [];
+    document.getElementById('countBoost').textContent = '0';
+  }
+}
+
+function setHero() {
+  const map = {
+    logs: ['MJ Logs', 'Account logins and digital deliveries from your purchases.'],
+    sms: ['MJ SMS', 'Virtual numbers and OTP codes you bought.'],
+    boosters: ['MJ Boosters', 'Social growth orders and live delivery progress.']
+  };
+  const [t, sub] = map[tab];
+  document.getElementById('heroTitle').textContent = t;
+  document.getElementById('heroSub').textContent = sub;
+}
+
+function bindViewButtons() {
+  document.querySelectorAll('.btn-view').forEach((btn) => {
+    btn.onclick = () => {
+      const kind = btn.getAttribute('data-kind');
+      const i = Number(btn.getAttribute('data-i'));
+      openModal(kind, i);
+    };
+  });
+}
+
+function renderLogs() {
+  const list = document.getElementById('list');
+  if (!logGroups.length) {
+    if (loadErrors.logs) {
+      list.innerHTML =
+        '<div class="empty"><div class="ico">⚠️</div><h3>Could not load logs</h3><p>' +
+        esc(loadErrors.logs) +
+        '</p><button type="button" class="btn-view" onclick="boot()">Retry</button></div>';
+      return;
+    }
+    list.innerHTML =
+      '<div class="empty"><div class="ico">📦</div><h3>No log orders yet</h3><p>Buy from MJ Logs and deliveries show here.</p><a href="mj-logs.html"><i class="fa-solid fa-store"></i> Browse logs</a></div>';
+    return;
+  }
+  list.innerHTML = logGroups
+    .map((o, i) => {
+      const st = o.status || 'Completed';
+      const initial = (o.product_name || 'P').charAt(0).toUpperCase();
+      const qty = o.quantity || 1;
+      return `<article class="card"><div class="row">
       <div class="icon">${esc(initial)}</div>
       <div class="main">
-        <div class="title-row"><div class="title">${esc(o.product_name||'Product')}</div><span class="status ${statusClass(st)}">${esc(st)}</span></div>
-        <div class="meta"><span><i class="fa-solid fa-cube"></i> ${qty} log${qty>1?'s':''}</span></div>
+        <div class="title-row"><div class="title">${esc(o.product_name || 'Product')}</div><span class="status ${statusClass(st)}">${esc(st)}</span></div>
+        <div class="meta"><span><i class="fa-solid fa-cube"></i> ${qty} log${qty > 1 ? 's' : ''} purchased</span></div>
         <div class="bottom"><div><div class="price">${money(o.amount)}</div><div class="date">${esc(fmtDate(o.created_at))}</div></div>
-        <button type="button" class="btn-view" data-kind="logs" data-i="${i}"><i class="fa-regular fa-eye"></i> View</button></div>
+        <button type="button" class="btn-view" data-kind="logs" data-i="${i}"><i class="fa-regular fa-eye"></i> View Log</button></div>
       </div></div></article>`;
-  }).join('');
+    })
+    .join('');
   bindViewButtons();
 }
 
-function renderSms(){
-  const list=document.getElementById('list');
-  if(!smsRows.length){
-    if(loadErrors.sms){
-      list.innerHTML='<div class="empty"><div class="ico">⚠️</div><h3>Could not load SMS orders</h3><p>'+esc(loadErrors.sms)+'</p></div>';
+function renderSms() {
+  const list = document.getElementById('list');
+  if (!smsRows.length) {
+    if (loadErrors.sms) {
+      list.innerHTML =
+        '<div class="empty"><div class="ico">⚠️</div><h3>Could not load SMS</h3><p>' +
+        esc(loadErrors.sms) +
+        '</p><button type="button" class="btn-view" onclick="boot()">Retry</button></div>';
       return;
     }
-    list.innerHTML='<div class="empty"><div class="ico">📱</div><h3>No SMS orders yet</h3><p>Get a virtual number for OTP verification.</p><a href="mj-sms-choose-server.html"><i class="fa-solid fa-comment-sms"></i> Get a number</a></div>';
+    list.innerHTML =
+      '<div class="empty"><div class="ico">📱</div><h3>No SMS orders yet</h3><p>Get a virtual number for OTP verification.</p><a href="mj-sms-choose-server.html"><i class="fa-solid fa-comment-sms"></i> Get a number</a></div>';
     return;
   }
-  list.innerHTML=smsRows.map((o,i)=>{
-    const name=(o.service_name||o.service_id||'Service').replace(/_/g,' ');
-    const st=o.status||'waiting_for_code';
-    return `<article class="card"><div class="row">
+  list.innerHTML = smsRows
+    .map((o, i) => {
+      const name = (o.service_name || o.service_id || 'Service').replace(/_/g, ' ');
+      const st = o.status || 'waiting_for_code';
+      const href = o.order_id
+        ? `mj-sms-number.html?order_id=${encodeURIComponent(o.order_id)}`
+        : '#';
+      return `<article class="card"><div class="row">
       <div class="icon sms"><i class="fa-solid fa-mobile-screen"></i></div>
       <div class="main">
         <div class="title-row"><div class="title" style="text-transform:capitalize">${esc(name)}</div><span class="status ${statusClass(st)}">${esc(st)}</span></div>
         <div class="meta">
-          <span>${esc(o.country_name||'—')}</span>
-          <span style="font-family:monospace">${esc(o.phone_number||'—')}</span>
+          <span>${esc(o.country_name || '—')}</span>
+          <span style="font-family:monospace">${esc(o.phone_number || '—')}</span>
         </div>
         <div class="bottom"><div><div class="price">${money(o.price)}</div><div class="date">${esc(fmtDate(o.created_at))}</div></div>
-        <button type="button" class="btn-view" data-kind="sms" data-i="${i}"><i class="fa-regular fa-eye"></i> View</button></div>
+        <a class="btn-view" href="${href}"><i class="fa-regular fa-eye"></i> View</a></div>
       </div></div></article>`;
-  }).join('');
-  bindViewButtons();
+    })
+    .join('');
 }
 
-function boostProgress(o){
-  const qty=Number(o.quantity||o.qty||0)||0;
-  const remains=Number(o.remains!=null?o.remains:qty);
-  const delivered=Math.max(0,qty-remains);
-  const pct=qty>0?Math.min(100,Math.round((delivered/qty)*100)):0;
-  return {delivered,remains,pct,qty};
+function boostProgress(o) {
+  const qty = Number(o.quantity || o.qty || 0);
+  const remains = Number(o.remains != null ? o.remains : qty);
+  const delivered = Math.max(0, qty - (isNaN(remains) ? 0 : remains));
+  const pct = qty > 0 ? Math.min(100, Math.round((delivered / qty) * 100)) : 0;
+  return { qty, remains: isNaN(remains) ? '—' : remains, delivered, pct };
 }
 
-function renderBoosters(){
-  const list=document.getElementById('list');
-  if(!boostRows.length){
-    if(loadErrors.boosters){
-      list.innerHTML='<div class="empty"><div class="ico">⚠️</div><h3>Could not load boosters</h3><p>'+esc(loadErrors.boosters)+'</p><a href="mj-boosters-history.html">Open full booster history</a></div>';
+function renderBoosters() {
+  const list = document.getElementById('list');
+  if (!boostRows.length) {
+    if (loadErrors.boosters) {
+      list.innerHTML =
+        '<div class="empty"><div class="ico">⚠️</div><h3>Could not load boosters</h3><p>' +
+        esc(loadErrors.boosters) +
+        '</p><a href="mj-boosters-history.html">Open full history</a></div>';
       return;
     }
-    list.innerHTML='<div class="empty"><div class="ico">⚡</div><h3>No boost orders yet</h3><p>Social growth orders will show here with progress.</p><a href="mj-boosters.html"><i class="fa-solid fa-bolt"></i> Place a boost</a></div>';
+    list.innerHTML =
+      '<div class="empty"><div class="ico">⚡</div><h3>No boost orders yet</h3><p>Social growth orders will show here with progress.</p><a href="mj-boosters.html"><i class="fa-solid fa-bolt"></i> Place a boost</a></div>';
     return;
   }
-  list.innerHTML=boostRows.map((o,i)=>{
-    const name=o.service_name||o.name||('Service '+(o.service||''));
-    const st=o.status||'Pending';
-    const p=boostProgress(o);
-    return `<article class="card"><div class="row">
+  list.innerHTML = boostRows
+    .map((o, i) => {
+      const p = boostProgress(o);
+      const st = o.status || 'Processing';
+      const name = o.service_name || o.service || 'Boost';
+      return `<article class="card"><div class="row">
       <div class="icon boost"><i class="fa-solid fa-bolt"></i></div>
       <div class="main">
         <div class="title-row"><div class="title">${esc(name)}</div><span class="status ${statusClass(st)}">${esc(st)}</span></div>
-        <div class="meta"><span>${p.delivered} / ${p.qty||'—'} done</span><span>${p.remains} left</span></div>
+        <div class="meta"><span>${p.delivered} / ${p.qty || '—'} delivered</span></div>
         <div class="progress"><span style="width:${p.pct}%"></span></div>
-        <div class="bottom"><div><div class="price">${money(o.charge||o.amount||o.price)}</div><div class="date">${esc(fmtDate(o.created_at||o.date))}</div></div>
+        <div class="bottom"><div><div class="price">${money(o.price_ngn || o.charge || o.price)}</div><div class="date">${esc(fmtDate(o.created_at))}</div></div>
         <button type="button" class="btn-view" data-kind="boosters" data-i="${i}"><i class="fa-regular fa-eye"></i> View</button></div>
       </div></div></article>`;
-  }).join('');
+    })
+    .join('');
   bindViewButtons();
 }
 
-function bindViewButtons(){
-  document.querySelectorAll('.btn-view').forEach(btn=>{
-    btn.onclick=()=>openItem(btn.getAttribute('data-kind'), Number(btn.getAttribute('data-i')));
-  });
-}
+function openModal(kind, i) {
+  const title = document.getElementById('modalTitle');
+  const body = document.getElementById('modalBody');
+  if (!title || !body) return;
 
-function openItem(kind,i){
-  modalMode=kind;
-  const body=document.getElementById('mBody');
-  if(kind==='logs'){
-    const g=logGroups[i]; if(!g) return;
-    modalPayload=g;
-    document.getElementById('mTitle').textContent=g.product_name||'Log order';
-    document.getElementById('mSub').textContent=(g.quantity||1)+' log'+(g.quantity>1?'s':'');
-    const blocks=(g.items||[]).map((it,n)=>{
-      const cred=it.login_credentials||'No credentials on this line.';
-      return (g.items.length===1?cred:('[Log '+(n+1)+']\n'+cred));
-    }).join('\n\n');
-    body.innerHTML=`
+  if (kind === 'logs') {
+    const g = logGroups[i];
+    if (!g) return;
+    title.textContent = g.product_name || 'Order';
+    const lines = (g.items || [g])
+      .map((it, idx) => {
+        const cred =
+          it.login_credentials ||
+          [it.credentials_id, it.credentials_pass].filter(Boolean).join(':') ||
+          g.login_credentials ||
+          '';
+        return (
+          (g.items && g.items.length > 1 ? `[Item ${idx + 1}]\n` : '') +
+          'Product: ' +
+          (it.product_name || g.product_name || '') +
+          '\n' +
+          'Order ID: ' +
+          (it.order_id || g.order_id || '') +
+          '\n' +
+          'Login: ' +
+          cred +
+          '\n' +
+          'Guide: ' +
+          (it.guide_url || g.guide_url || '') +
+          '\n' +
+          'Date: ' +
+          (it.created_at || g.created_at || '')
+        );
+      })
+      .join('\n\n');
+    body.innerHTML = `
+      <div class="detail-grid">
+        <div class="detail-row"><span class="l">Status</span><span class="v">${esc(g.status || '—')}</span></div>
+        <div class="detail-row"><span class="l">Qty</span><span class="v">${g.quantity || 1}</span></div>
+        <div class="detail-row"><span class="l">Amount</span><span class="v">${money(g.amount)}</span></div>
+        <div class="detail-row"><span class="l">Order ID</span><span class="v">${esc(g.order_id || '—')}</span></div>
+      </div>
       <div class="actions">
         <button type="button" class="btn-copy" onclick="copyText()"><i class="fa-regular fa-copy"></i> Copy</button>
-        <button type="button" class="btn-dl" onclick="downloadText()"><i class="fa-solid fa-download"></i> .txt</button>
-        <a class="btn-guide" href="${esc((g.items[0]&&g.items[0].guide_url)||'https://t.me/mj_hub_tg')}" target="_blank" rel="noopener"><i class="fa-solid fa-arrow-up-right-from-square"></i> Guide</a>
+        <button type="button" class="btn-copy" onclick="downloadText()"><i class="fa-solid fa-download"></i> Download</button>
       </div>
-      <div class="warn"><i class="fa-solid fa-shield-halved"></i> Use a good VPN and enable 2-step verification after login.</div>
-      <div class="cred" id="credBox">${esc(blocks||'—')}</div>`;
-  } else if(kind==='sms'){
-    const o=smsRows[i]; if(!o) return;
-    modalPayload=o;
-    const name=(o.service_name||o.service_id||'SMS').replace(/_/g,' ');
-    document.getElementById('mTitle').textContent=name;
-    document.getElementById('mSub').textContent=o.status||'';
-    const isServer2=o.source==='logsdomain';
-    const numberPage=isServer2?'mj-sms2-number.html':'mj-sms-number.html';
-    const text=['Number: '+(o.phone_number||'—'),'Code: '+(o.code||'Not received'),'Country: '+(o.country_name||'—'),'Order: '+(o.order_id||'—')].join('\n');
-    body.innerHTML=`
+      <div class="cred" id="credBox">${esc(lines)}</div>`;
+  } else if (kind === 'sms') {
+    const o = smsRows[i];
+    if (!o) return;
+    title.textContent = (o.service_name || 'SMS').replace(/_/g, ' ');
+    body.innerHTML = `
       <div class="detail-grid">
-        <div class="detail-row"><span class="l">Number</span><span class="v" style="font-family:monospace">${esc(o.phone_number||'—')}</span></div>
-        <div class="detail-row"><span class="l">Code</span><span class="v" style="font-family:monospace">${esc(o.code||'Not received')}</span></div>
-        <div class="detail-row"><span class="l">Country</span><span class="v">${esc(o.country_name||'—')}</span></div>
-        <div class="detail-row"><span class="l">Server</span><span class="v">${isServer2?'Server 2':'Server 1'}</span></div>
+        <div class="detail-row"><span class="l">Status</span><span class="v">${esc(o.status || '—')}</span></div>
+        <div class="detail-row"><span class="l">Number</span><span class="v" style="font-family:monospace">${esc(o.phone_number || '—')}</span></div>
+        <div class="detail-row"><span class="l">Country</span><span class="v">${esc(o.country_name || '—')}</span></div>
         <div class="detail-row"><span class="l">Price</span><span class="v">${money(o.price)}</span></div>
-        <div class="detail-row"><span class="l">Date</span><span class="v">${esc(fmtDate(o.created_at))}</span></div>
       </div>
       <div class="actions">
-        <button type="button" class="btn-copy" onclick="copyText()"><i class="fa-regular fa-copy"></i> Copy</button>
-        <a class="btn-guide" href="${numberPage}?order_id=${encodeURIComponent(o.order_id||'')}"><i class="fa-solid fa-arrow-right"></i> Open number</a>
-      </div>
-      <div class="cred" id="credBox">${esc(text)}</div>`;
+        ${o.order_id ? `<a class="btn-guide" href="mj-sms-number.html?order_id=${encodeURIComponent(o.order_id)}">Open number</a>` : ''}
+      </div>`;
   } else {
-    const o=boostRows[i]; if(!o) return;
-    modalPayload=o;
-    const name=o.service_name||o.name||'Boost order';
-    const p=boostProgress(o);
-    document.getElementById('mTitle').textContent=name;
-    document.getElementById('mSub').textContent=o.status||'';
-    const text=[
-      'Status: '+(o.status||'—'),
-      'Progress: '+p.delivered+' / '+(p.qty||'—')+' (left '+p.remains+')',
-      'Link: '+(o.link||o.url||'—'),
-      'Order: '+(o.order_id||o.id||'—'),
-      'Charge: '+(o.charge||o.amount||o.price||'—')
+    const o = boostRows[i];
+    if (!o) return;
+    const p = boostProgress(o);
+    title.textContent = o.service_name || 'Boost';
+    const text = [
+      'Status: ' + (o.status || '—'),
+      'Progress: ' + p.delivered + ' / ' + (p.qty || '—') + ' (left ' + p.remains + ')',
+      'Link: ' + (o.link || o.url || '—'),
+      'Order: ' + (o.order_id || o.id || '—')
     ].join('\n');
-    body.innerHTML=`
+    body.innerHTML = `
       <div class="detail-grid">
-        <div class="detail-row"><span class="l">Status</span><span class="v">${esc(o.status||'—')}</span></div>
-        <div class="detail-row"><span class="l">Delivered</span><span class="v">${p.delivered} / ${p.qty||'—'}</span></div>
-        <div class="detail-row"><span class="l">Remaining</span><span class="v">${p.remains}</span></div>
-        <div class="detail-row"><span class="l">Link</span><span class="v">${esc(o.link||o.url||'—')}</span></div>
-        <div class="detail-row"><span class="l">Order ID</span><span class="v">${esc(o.order_id||o.id||'—')}</span></div>
+        <div class="detail-row"><span class="l">Status</span><span class="v">${esc(o.status || '—')}</span></div>
+        <div class="detail-row"><span class="l">Delivered</span><span class="v">${p.delivered} / ${p.qty || '—'}</span></div>
+        <div class="detail-row"><span class="l">Link</span><span class="v">${esc(o.link || o.url || '—')}</span></div>
       </div>
       <div class="progress" style="margin-bottom:12px"><span style="width:${p.pct}%"></span></div>
       <div class="actions">
@@ -628,58 +713,64 @@ function openItem(kind,i){
   document.getElementById('modal').classList.add('open');
 }
 
-function closeModal(){document.getElementById('modal').classList.remove('open');}
-function copyText(){
-  const t=document.getElementById('credBox');
-  navigator.clipboard.writeText((t&&t.textContent)||'').then(()=>toast('Copied')).catch(()=>toast('Copy failed'));
+function closeModal() {
+  document.getElementById('modal').classList.remove('open');
 }
-function copyRaw(t){navigator.clipboard.writeText(t||'').then(()=>toast('Copied')).catch(()=>toast('Copy failed'));}
-function downloadText(){
-  const t=(document.getElementById('credBox')&&document.getElementById('credBox').textContent)||'';
-  const a=document.createElement('a');
-  a.href=URL.createObjectURL(new Blob([t],{type:'text/plain'}));
-  a.download='mj-hub-order.txt';a.click();URL.revokeObjectURL(a.href);
+function copyText() {
+  const t = document.getElementById('credBox');
+  navigator.clipboard
+    .writeText((t && t.textContent) || '')
+    .then(() => toast('Copied'))
+    .catch(() => toast('Copy failed'));
+}
+function downloadText() {
+  const t = (document.getElementById('credBox') && document.getElementById('credBox').textContent) || '';
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([t], { type: 'text/plain' }));
+  a.download = 'mj-hub-order.txt';
+  a.click();
+  URL.revokeObjectURL(a.href);
 }
 
-function render(){
+function render() {
   setHero();
-  if(tab==='logs') renderLogs();
-  else if(tab==='sms') renderSms();
+  if (tab === 'logs') renderLogs();
+  else if (tab === 'sms') renderSms();
   else renderBoosters();
 }
 
-document.querySelectorAll('.type-tab').forEach(btn=>{
-  btn.addEventListener('click',()=>{
-    document.querySelectorAll('.type-tab').forEach(b=>b.classList.remove('active'));
+document.querySelectorAll('.type-tab').forEach((btn) => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.type-tab').forEach((b) => b.classList.remove('active'));
     btn.classList.add('active');
-    tab=btn.getAttribute('data-tab')||'logs';
+    tab = btn.getAttribute('data-tab') || 'logs';
     render();
   });
 });
 
-async function boot(){
-  const s=await ensureAuth();
-  if(!s||!s.user){location.href='auth.html';return;}
-  session=s;
-  const list=document.getElementById('list');
-  if(list) list.innerHTML='<div class="empty"><p>Loading your orders…</p></div>';
-  await Promise.all([
-    loadLogs().catch(e=>{console.warn('[orders] logs', e);}),
-    loadSms().catch(e=>{console.warn('[orders] sms', e);}),
-    loadBoosters().catch(e=>{console.warn('[orders] boosters', e);})
-  ]);
-  try{
-    const q=new URLSearchParams(location.search).get('tab');
-    if(q==='sms'||q==='boosters'||q==='logs'){
-      tab=q;
-      document.querySelectorAll('.type-tab').forEach(b=>{
-        b.classList.toggle('active',b.getAttribute('data-tab')===tab);
+async function boot() {
+  const s = await ensureAuth();
+  if (!s || !s.user) {
+    location.href = 'auth.html';
+    return;
+  }
+  session = s;
+  const list = document.getElementById('list');
+  if (list) list.innerHTML = '<div class="empty"><p>Loading your orders…</p></div>';
+  await Promise.all([loadLogs(), loadSms(), loadBoosters()]);
+  try {
+    const q = new URLSearchParams(location.search).get('tab');
+    if (q === 'sms' || q === 'boosters' || q === 'logs') {
+      tab = q;
+      document.querySelectorAll('.type-tab').forEach((b) => {
+        b.classList.toggle('active', b.getAttribute('data-tab') === tab);
       });
     }
-  }catch(e){}
+  } catch (e) {}
   render();
 }
 boot();
+
 </script>
 </body>
 </html>
