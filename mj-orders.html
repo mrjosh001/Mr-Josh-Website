@@ -664,93 +664,78 @@ function formatCredentials(details, description) {
 
 
 /** Structured fields for View Log UI cards */
+/**
+ * My Orders display parser.
+ * Future log orders (api/order.js) already save:
+ *   login_credentials = formatCredentials(supplierDetails, productDescription)
+ *   description = product display_description
+ * So we primarily PARSE the saved fieldsToText lines — we do NOT re-run
+ * formatCredentials on already-formatted text (that caused Username→"Username" bugs).
+ * Only if the blob looks raw/unformatted do we call formatCredentials once.
+ */
 function parseCredentialFields(details, description) {
   const rawIn = details == null ? '' : (typeof details === 'object' ? JSON.stringify(details) : String(details));
-  const raw = String(rawIn || '').replace(/\r/g, '').trim();
-  if (!raw) return [{ _raw: '' }];
+  let text = String(rawIn || '').replace(/\r/g, '').trim();
+  if (!text) return [{ _raw: '' }];
 
-  // 1) Prefer live lib, then inline
-  const fmt = (_fmtMod && _fmtMod.formatCredentials) || (typeof formatCredentials === 'function' ? formatCredentials : null);
-  let formatted = '';
-  try {
-    formatted = fmt ? String(fmt(raw, description || '') || '').trim() : '';
-  } catch (e) {
-    formatted = '';
+  function looksAlreadyFormatted(t) {
+    return /^(Username|Password|Email|Email Password|Phone|2FA\s*\/\s*Token|Extra)\s*:/im.test(t);
   }
 
-  function fieldsFromLabeledText(text) {
+  function parseFieldsToTextBlock(block) {
     const f = {};
-    const lines = String(text || '').split(/\n+/).map((l) => l.trim()).filter(Boolean);
-    for (const line of lines) {
-      const m = line.match(/^(Username|User\s*name|User|Login|ID|Password|Pass|Email\s*Password|Email|Mail|Phone|Mobile|2FA\s*\/\s*Token|2FA|Token|Cookie|Extra)\s*:\s*(.+)$/i);
+    for (const line of String(block || '').split(/\n+/)) {
+      const lineT = line.trim();
+      if (!lineT) continue;
+      const m = lineT.match(/^(Username|Password|Email Password|Email|Phone|2FA\s*\/\s*Token|Extra)\s*:\s*(.+)$/i);
       if (!m) continue;
-      const label = m[1].toLowerCase().replace(/\s+/g, ' ');
+      const label = m[1].toLowerCase();
       const val = m[2].trim();
       if (!val) continue;
-      // Reject when value is just another field name (parser confusion)
-      if (/^(username|password|email|login|user|pass|id)$/i.test(val)) continue;
-      if (/^user/.test(label) || label === 'login' || label === 'id') f.username = f.username || val;
-      else if (label === 'password' || label === 'pass') f.password = f.password || val;
-      else if (/email pass/.test(label)) f.email_password = f.email_password || val;
-      else if (label === 'email' || label === 'mail') f.email = f.email || val;
-      else if (label === 'phone' || label === 'mobile') f.phone = f.phone || val;
-      else if (/2fa|token|cookie/.test(label)) f.token = f.token || val;
-      else if (label === 'extra') f.extra = f.extra || val;
+      if (/^(username|password|email|user|pass|login|id)$/i.test(val)) continue;
+      if (label === 'username') f.username = val;
+      else if (label === 'password') f.password = val;
+      else if (label === 'email password') f.email_password = val;
+      else if (label === 'email') f.email = val;
+      else if (label === 'phone') f.phone = val;
+      else if (label.indexOf('2fa') >= 0 || label.indexOf('token') >= 0) f.token = val;
+      else if (label === 'extra') f.extra = val;
     }
     return f;
-  }
-
-  // "Username xxx Password yyy" without colons (common supplier format)
-  function fieldsFromInlineLabels(text) {
-    const t = String(text || '').replace(/\s+/g, ' ').trim();
-    const f = {};
-    const re = /(?:^|\s)(Username|User\s*name|User|Login|Password|Pass|Email\s*Password|Email|2FA|Token|Cookie)\s+([^\s]+(?:\s+[^\s]+)*?)(?=\s+(?:Username|User\s*name|User|Login|Password|Pass|Email\s*Password|Email|2FA|Token|Cookie)\s+|$)/gi;
-    let m;
-    while ((m = re.exec(t))) {
-      const label = m[1].toLowerCase().replace(/\s+/g, ' ');
-      const val = m[2].trim();
-      if (!val || /^(username|password|email|login|user|pass)$/i.test(val)) continue;
-      if (/user|login/.test(label)) f.username = f.username || val;
-      else if (/^pass/.test(label)) f.password = f.password || val;
-      else if (/email pass/.test(label)) f.email_password = f.email_password || val;
-      else if (/email/.test(label)) f.email = f.email || val;
-      else if (/2fa|token|cookie/.test(label)) f.token = f.token || val;
-    }
-    return f;
-  }
-
-  function fieldsFromEmailPass(text) {
-    const t = String(text || '').trim();
-    // email:password only
-    const m = t.match(/^([^\s:<>]+@[^\s:<>]+):(.+)$/);
-    if (m) return { username: m[1], password: m[2] };
-    const m2 = t.match(/^([^\s|]+@[^\s|]+)\s*[|]\s*(.+)$/);
-    if (m2) return { username: m2[1], password: m2[2] };
-    return {};
   }
 
   function isUseful(f) {
     if (!f) return false;
     const vals = [f.username, f.password, f.email, f.email_password, f.phone, f.token, f.link].filter(Boolean);
     if (!vals.length) return false;
-    // Any value that is clearly a misplaced label → not useful
-    if (vals.some((v) => /^(username|password|email|login|user|pass|id)$/i.test(String(v).trim()))) return false;
+    if (vals.some((v) => /^(username|password|email|user|pass|login|id)$/i.test(String(v).trim()))) return false;
     return true;
   }
 
+  // If still raw supplier text, format ONCE (same as api/order.js)
+  if (!looksAlreadyFormatted(text)) {
+    const fmt = (_fmtMod && _fmtMod.formatCredentials) || (typeof formatCredentials === 'function' ? formatCredentials : null);
+    if (fmt) {
+      try {
+        const once = String(fmt(text, description || '') || '').trim();
+        if (once) text = once;
+      } catch (e) {}
+    }
+  }
+
+  // Split multi-account blocks (formatCredentials joins with blank lines)
+  const chunks = text.split(/\n\s*\n/).map((c) => c.trim()).filter(Boolean);
+  const list = chunks.length ? chunks : [text];
   const accounts = [];
-  const chunks = (formatted || raw)
-    .split(/\n\s*\n|\n-{3,}\n/)
-    .map((c) => c.trim())
-    .filter(Boolean);
-  const list = chunks.length ? chunks : [raw];
 
   for (const chunk of list) {
-    let f = fieldsFromLabeledText(chunk);
-    if (!isUseful(f)) f = fieldsFromInlineLabels(chunk);
-    if (!isUseful(f)) f = fieldsFromEmailPass(chunk);
+    let f = parseFieldsToTextBlock(chunk);
     if (!isUseful(f)) {
-      // URL only
+      // email:pass
+      const ep = chunk.match(/^([^\s:<>]+@[^\s:<>]+):(.+)$/);
+      if (ep) f = { username: ep[1], password: ep[2] };
+    }
+    if (!isUseful(f)) {
       const url = chunk.match(/https?:\/\/[^\s<>"']+/i);
       if (url) {
         f = { link: url[0] };
@@ -759,13 +744,12 @@ function parseCredentialFields(details, description) {
       }
     }
     if (!isUseful(f) && !(f && f.link)) {
-      // Last resort: show full details — do not invent fields
       accounts.push({ _raw: chunk });
     } else {
       accounts.push(f);
     }
   }
-  return accounts.length ? accounts : [{ _raw: raw }];
+  return accounts.length ? accounts : [{ _raw: text }];
 }
 
 function fieldLabel(key) {
