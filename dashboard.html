@@ -50,7 +50,7 @@
     })();
     </script>
 
-    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2" onerror="window.__mjSupabaseCdnFailed=1"></script>
 <script>
 /* ===== MJ Hub i18n (inlined — not a serverless function) ===== */
 /**
@@ -2360,6 +2360,7 @@ body::after {
 </style>
 <link rel="stylesheet" href="/css/skeleton.css">
 <script src="/js/skeleton.js" defer></script>
+<script src="/js/user-errors.js"></script>
 <!-- Early logo sync -->
 
 <script>
@@ -2382,8 +2383,28 @@ body::after {
 })();
 </script>
 
+<style>
+.toast{max-width:min(420px,92vw);line-height:1.45;white-space:normal}
+.toast.error{border-color:rgba(248,113,113,.45)}
+.mj-error-panel{text-align:left;padding:16px 18px;border-radius:14px;border:1px solid rgba(248,113,113,.35);background:rgba(248,113,113,.08);color:inherit;margin:12px 0}
+.mj-error-title{font-weight:800;font-size:15px;margin-bottom:8px}
+.mj-error-panel p{font-size:13px;margin:6px 0;opacity:.95}
+</style>
+
+<link rel="stylesheet" href="/css/graceful.css">
+<script src="/js/graceful.js" defer></script>
+
 </head>
 <body>
+
+<noscript>
+  <div class="mj-noscript">
+    <p><strong>JavaScript is turned off</strong></p>
+    <p>MJ Hub needs JavaScript for sign-in, wallet, and orders. Enable it in your browser settings, then refresh.</p>
+    <p><a href="/">Home</a></p>
+  </div>
+</noscript>
+
 
 <div class="toast-container" id="toastContainer"></div>
 
@@ -3485,12 +3506,33 @@ function safeSetHTML(id, html) { const el = document.getElementById(id); if(el) 
 
 function showToast(message, type = 'info', duration = 3000) {
     const container = document.getElementById('toastContainer');
+    if (!container) return;
+    // Expand bare/silent failures into clear guidance
+    if (type === 'error' && window.mjFormatError) {
+        const raw = String(message || '');
+        if (!raw || /^(failed|error|something went wrong|null|undefined)$/i.test(raw.trim())) {
+            message = window.mjFormatError(raw || 'unknown', 'general');
+            duration = Math.max(duration, 6500);
+        } else if (raw.length < 48 && !/try again|sign in|fund|check/i.test(raw)) {
+            // Short opaque errors → attach action
+            message = window.mjFormatError(raw, 'general');
+            duration = Math.max(duration, 6000);
+        }
+    }
+    if (type === 'error') duration = Math.max(duration, 5000);
     const icons = { success: '✅', error: '❌', info: 'ℹ️', warning: '⚠️' };
     const toast = document.createElement('div');
     toast.className = `toast ${type}`;
-    toast.innerHTML = `<span>${icons[type] || 'ℹ️'}</span><span>${message}</span>`;
+    const safe = (typeof escapeHtml === 'function') ? escapeHtml(String(message || '')) : String(message || '');
+    toast.innerHTML = `<span>${icons[type] || 'ℹ️'}</span><span style="white-space:normal;text-align:left">${safe}</span>`;
     container.appendChild(toast);
     setTimeout(() => toast.remove(), duration);
+}
+
+/** Prefer this for catch blocks: mjFail(err, 'deposit') */
+function mjFail(err, context) {
+    if (window.mjShowError) return window.mjShowError(err, context || 'general');
+    showToast((err && err.message) || String(err || 'Something went wrong'), 'error', 6500);
 }
 
 function escapeHtml(str) {
