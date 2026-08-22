@@ -153,7 +153,7 @@ export default async function handler(req, res) {
     }
 
     // 3. Debit customer
-    const newBalance = originalBalance - total;
+    let newBalance = originalBalance - total;
     const { error: deductErr } = await supabase
       .from('profiles')
       .update({ [balanceColumn]: newBalance })
@@ -243,10 +243,18 @@ export default async function handler(req, res) {
       supplier_items_raw: items
     });
 
-    if (items.length) {
-      for (const item of items) {
+    // Each delivered log must be its own orders row with a UNIQUE order_id.
+    // Reusing the same supplier order_id for every line caused duplicate-key
+    // failures on the 2nd+ insert — only the first log appeared in My Orders / admin.
+    const deliveredCount = items.length;
+    let savedCount = 0;
+
+    if (deliveredCount > 0) {
+      for (let idx = 0; idx < items.length; idx++) {
+        const item = items[idx];
+        const lineOrderId = `${supplierOrderId}-${idx + 1}`;
         const insertErr = await insertLogOrder({
-          order_id: supplierOrderId,
+          order_id: lineOrderId,
           user_id,
           product_id: product.id,
           product_code: product_key,
@@ -258,17 +266,21 @@ export default async function handler(req, res) {
           status: 'completed',
           login_credentials: formatCredentials(item.details, product.display_description || product.description || product.name),
           login_credentials_raw: item.details || null,
-          supplier_ref: String(item.serial || ''),
+          supplier_ref: String(item.serial || item.id || `${supplierOrderId}-${idx + 1}`),
           guide_url: 'https://t.me/mj_hub_tg'
         });
         if (insertErr) {
-          console.error('[order-logsdomain] FAILED to save order row — customer was charged and delivered credentials, but this will not appear in My Orders / admin Orders:', insertErr.message, { order_id: supplierOrderId, user_id, product_key });
+          console.error('[order-logsdomain] FAILED to save order row:', insertErr.message, {
+            order_id: lineOrderId, user_id, product_key, idx
+          });
+        } else {
+          savedCount += 1;
         }
       }
     } else {
       // fallback single row if API returns no items array
       const insertErr = await insertLogOrder({
-        order_id: supplierOrderId,
+        order_id: `${supplierOrderId}-1`,
         user_id,
         product_id: product.id,
         product_code: product_key,
@@ -284,8 +296,39 @@ export default async function handler(req, res) {
       });
       if (insertErr) {
         console.error('[order-logsdomain] FAILED to save order row (fallback branch):', insertErr.message, { order_id: supplierOrderId, user_id, product_key });
+      } else {
+        savedCount = 1;
       }
     }
+
+    // If supplier delivered fewer items than paid quantity, refund the shortfall
+    const shortfall = Math.max(0, qty - Math.max(deliveredCount, savedCount > 0 && deliveredCount === 0 ? 1 : deliveredCount));
+    let refundedShortfall = 0;
+    if (shortfall > 0) {
+      refundedShortfall = shortfall * Number(product.price || 0);
+      const balanceAfterShortfall = Number(newBalance) + refundedShortfall;
+      await supabase
+        .from('profiles')
+        .update({ [balanceColumn]: balanceAfterShortfall })
+        .eq('id', user_id);
+      newBalance = balanceAfterShortfall;
+      await supabase.from('transactions').insert({
+        user_id,
+        customer_id: customerId,
+        type: 'refund',
+        category: productName,
+        title: 'Automatic Refund',
+        subtitle: `Partial delivery: paid qty ${qty}, received ${deliveredCount} — shortfall refunded`,
+        amount: `₦${refundedShortfall.toLocaleString()}`,
+        amount_ngn: refundedShortfall,
+        status: 'refunded',
+        notes: JSON.stringify({ requested: qty, delivered: deliveredCount, supplierOrderId })
+      });
+      console.warn('[order-logsdomain] partial delivery refund', { qty, deliveredCount, refundedShortfall, supplierOrderId });
+    }
+
+    const chargedQty = Math.max(deliveredCount, savedCount > 0 && deliveredCount === 0 ? 1 : deliveredCount);
+    const chargedTotal = Math.max(0, total - refundedShortfall);
 
     await supabase.from('transactions').insert({
       user_id,
@@ -293,9 +336,9 @@ export default async function handler(req, res) {
       type: 'purchase',
       category: productName,
       title: productName,
-      subtitle: `Qty: ${qty} · Logs Domain`,
-      amount: `₦${total.toLocaleString()}`,
-      amount_ngn: total,
+      subtitle: `Qty: ${chargedQty}${shortfall ? ` of ${qty} requested` : ''} · Logs Domain`,
+      amount: `₦${chargedTotal.toLocaleString()}`,
+      amount_ngn: chargedTotal,
       status: 'completed',
       product_details: detailsText,
       supplier_order: orderData.data
@@ -304,21 +347,26 @@ export default async function handler(req, res) {
     await supabase
       .from('products')
       .update({
-        stock_quantity: Math.max(0, (product.stock_quantity || 0) - qty),
-        is_available: (product.stock_quantity || 0) - qty > 0
+        stock_quantity: Math.max(0, (product.stock_quantity || 0) - chargedQty),
+        is_available: (product.stock_quantity || 0) - chargedQty > 0
       })
       .eq('product_key', product_key);
 
     return res.status(200).json({
       success: true,
-      message: 'Order fulfilled successfully',
+      message: shortfall > 0
+        ? `Delivered ${deliveredCount} of ${qty}. Shortfall of ${shortfall} was refunded to your wallet.`
+        : 'Order fulfilled successfully',
       data: {
         items: items.length
           ? items.map((i) => ({ details: formatCredentials(i.details, product.display_description || product.description || product.name), serial: i.serial }))
           : [{ details: detailsText || 'Order completed' }],
-        total_amount: total,
+        total_amount: chargedTotal,
         new_balance: newBalance,
         order_id: supplierOrderId,
+        quantity_requested: qty,
+        quantity_delivered: deliveredCount,
+        quantity_saved: savedCount,
         source: 'logsdomain'
       }
     });
