@@ -704,16 +704,17 @@ function parseCredentialFields(details, description) {
 }
 
 function fieldLabel(key) {
+  // Match fieldsToText() labels in lib/formatCredentials.js exactly
   const map = {
-    username: 'ID',
-    password: 'PASSWORD',
-    email: 'EMAIL',
-    email_password: 'EMAIL PASSWORD',
-    phone: 'PHONE',
-    token: '2FA / TOKEN',
-    extra: 'EXTRA'
+    username: 'Username',
+    password: 'Password',
+    email: 'Email',
+    email_password: 'Email Password',
+    phone: 'Phone',
+    token: '2FA / Token',
+    extra: 'Extra'
   };
-  return map[key] || key.toUpperCase();
+  return map[key] || key;
 }
 
 /* ===== end formatCredentials ===== */
@@ -1123,7 +1124,7 @@ async function openModal(kind, i) {
       if (!keys.length) {
         return (
           '<div class="cred-card"><div class="idx">' + (idx + 1) + '</div>' +
-          '<div class="cred-line"><span class="cred-k">ID</span><span class="cred-v">' + esc(String(f.username || '—')) + '</span></div></div>'
+          '<div class="cred-line"><span class="cred-k">Username</span><span class="cred-v">' + esc(String(f.username || '—')) + '</span></div></div>'
         );
       }
       const lines = keys.map((k) => {
