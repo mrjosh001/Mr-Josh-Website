@@ -746,10 +746,49 @@ function parseCredentialFields(details, description) {
     if (!isUseful(f) && !(f && f.link)) {
       accounts.push({ _raw: chunk });
     } else {
-      accounts.push(f);
+      accounts.push(normalizeAccountFields(f));
     }
   }
   return accounts.length ? accounts : [{ _raw: text }];
+}
+
+
+function isEmailAddr(s) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(s || '').trim());
+}
+
+/** Fix common mis-labels; order: Email → Username → Password → … */
+function normalizeAccountFields(f) {
+  if (!f || f._raw != null) return f;
+  const out = { ...f };
+
+  // Username is actually an email
+  if (out.username && isEmailAddr(out.username) && !out.email) {
+    out.email = out.username;
+    delete out.username;
+  }
+
+  // Have email + "username" that is really the password (no password field)
+  if (out.email && out.username && !out.password && !isEmailAddr(out.username)) {
+    out.password = out.username;
+    delete out.username;
+  }
+
+  // Password field holds an email and username holds the pass (swapped)
+  if (out.password && isEmailAddr(out.password) && out.username && !isEmailAddr(out.username)) {
+    out.email = out.email || out.password;
+    out.password = out.username;
+    delete out.username;
+  }
+
+  // Only password + email swapped in email:pass stored backwards
+  if (out.username && isEmailAddr(out.password) && !out.email) {
+    out.email = out.password;
+    out.password = out.username;
+    delete out.username;
+  }
+
+  return out;
 }
 
 function fieldLabel(key) {
@@ -1174,7 +1213,8 @@ async function openModal(kind, i) {
       accounts.forEach((f) => allAccounts.push(f));
     });
 
-    const cards = allAccounts.map((f, idx) => {
+    const cards = allAccounts.map((f0, idx) => {
+      const f = normalizeAccountFields(f0);
       if (f._raw != null && !f.username && !f.password && !f.email && !f.link) {
         return (
           '<div class="cred-card">' +
@@ -1184,7 +1224,7 @@ async function openModal(kind, i) {
           '</div>'
         );
       }
-      const keys = ['username', 'password', 'email', 'email_password', 'phone', 'token', 'link', 'extra'].filter((k) => f[k]);
+      const keys = ['email', 'username', 'password', 'email_password', 'phone', 'token', 'link', 'extra'].filter((k) => f[k]);
       if (!keys.length) {
         const raw = f._raw || f.username || '';
         return (
@@ -1222,7 +1262,7 @@ async function openModal(kind, i) {
     }).join('');
 
     const allText = allAccounts.map((f, idx) => {
-      const keys = ['username', 'password', 'email', 'email_password', 'phone', 'token', 'link', 'extra'].filter((k) => f[k]);
+      const keys = ['email', 'username', 'password', 'email_password', 'phone', 'token', 'link', 'extra'].filter((k) => f[k]);
       const body = keys.map((k) => fieldLabel(k) + ': ' + f[k]).join('\n');
       return (allAccounts.length > 1 ? '#' + (idx + 1) + '\n' : '') + body;
     }).join('\n\n');
