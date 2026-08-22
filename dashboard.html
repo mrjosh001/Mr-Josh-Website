@@ -3341,7 +3341,7 @@ body::after {
                 <div class="channel-icon-wrap" style="background:rgba(91,138,245,0.15);color:var(--primary);"><i class="fa-solid fa-comments"></i></div>
                 <div class="channel-info"><h4>In-app chat</h4><p>Message our team here</p></div>
             </button>
-            <a href="#" id="supportWidgetWhatsApp" target="_blank" rel="noopener" class="support-channel-item">
+            <a href="https://wa.me/14305583021?text=Hello%20Admin%2C%20I%27ve%20a%20complain%20/%20enquiry%20on%20MJ%20Hub" id="supportWidgetWhatsApp" target="_blank" rel="noopener" class="support-channel-item">
                 <div class="channel-icon-wrap whatsapp"><i class="fa-brands fa-whatsapp"></i></div>
                 <div class="channel-info"><h4>WhatsApp</h4><p>Chat with support</p></div>
             </a>
@@ -6017,17 +6017,39 @@ async function fetchUserOrders(userId) {
 async function fetchUserSpendingSummary(userId) {
     if (!supabaseClient || !userId) return;
 
-    const COMPLETED = ['completed', 'paid', 'success', 'delivered', 'partial'];
-    // "partial" boosts often still charged — count as completed spend; exclude refunded/cancelled/failed
-
+    // Completed-only: exclude cancel / refund / fail
     function isCompletedStatus(s) {
         const t = String(s || '').toLowerCase();
         if (/cancel|refund|fail|reject/.test(t)) return false;
-        return COMPLETED.some((c) => t === c || t.includes(c));
+        // Owlet often returns "Completed" / "Partial" / "In progress"
+        if (/pending|progress|processing|awaiting|waiting/.test(t) && !/partial|complete/.test(t)) return false;
+        return /completed|paid|success|delivered|partial/.test(t) || t === 'complete';
+    }
+
+    function boostPrice(o) {
+        const n = Number(
+            o.price_ngn != null ? o.price_ngn
+            : (o.charge != null ? o.charge
+            : (o.price != null ? o.price : o.amount))
+        );
+        return Number.isFinite(n) ? n : 0;
     }
 
     try {
-        const [logsRes, smsRes, boostRes] = await Promise.all([
+        // Session token for Owlet API (RLS on booster_orders often blocks browser reads)
+        let token = null;
+        try {
+            const { data: sess } = await supabaseClient.auth.getSession();
+            token = sess && sess.session && sess.session.access_token;
+        } catch (_) {}
+
+        const boostFetch = token
+            ? fetch('/api/owlet?action=my_orders&page_size=100&live=0', {
+                headers: { Authorization: 'Bearer ' + token }
+              }).then((r) => r.json().catch(() => ({}))).catch(() => ({}))
+            : Promise.resolve({});
+
+        const [logsRes, smsRes, boostJson] = await Promise.all([
             supabaseClient.from('orders')
                 .select('amount, status', { count: 'exact' })
                 .eq('user_id', userId)
@@ -6036,29 +6058,32 @@ async function fetchUserSpendingSummary(userId) {
                 .select('price, status', { count: 'exact' })
                 .eq('user_id', userId)
                 .eq('status', 'completed'),
-            // Boosters — table may be missing on old projects; ignore errors
-            supabaseClient.from('booster_orders')
-                .select('price_ngn, charge, price, status')
-                .eq('user_id', userId)
+            boostFetch
         ]);
+
+        // Fallback: direct table if API fails
+        let boostRows = [];
+        if (boostJson && boostJson.success && Array.isArray(boostJson.data)) {
+            boostRows = boostJson.data.filter((o) => isCompletedStatus(o.status));
+        } else {
+            const boostRes = await supabaseClient.from('booster_orders')
+                .select('price_ngn, charge, price, status')
+                .eq('user_id', userId);
+            boostRows = (boostRes.error ? [] : (boostRes.data || [])).filter((o) => isCompletedStatus(o.status));
+        }
 
         const logRows = logsRes.error ? [] : (logsRes.data || []);
         const smsRows = smsRes.error ? [] : (smsRes.data || []);
-        const boostRows = (boostRes.error ? [] : (boostRes.data || [])).filter((o) => isCompletedStatus(o.status));
 
         const logCount = logsRes.error ? 0 : (logsRes.count ?? logRows.length);
         const smsCount = smsRes.error ? 0 : (smsRes.count ?? smsRows.length);
         const boostCount = boostRows.length;
 
         const totalOrders = logCount + smsCount + boostCount;
-
         const totalSpent =
             logRows.reduce((s, o) => s + (Number(o.amount) || 0), 0) +
             smsRows.reduce((s, o) => s + (Number(o.price) || 0), 0) +
-            boostRows.reduce((s, o) => {
-                const n = Number(o.price_ngn != null ? o.price_ngn : (o.charge != null ? o.charge : o.price));
-                return s + (Number.isFinite(n) ? n : 0);
-            }, 0);
+            boostRows.reduce((s, o) => s + boostPrice(o), 0);
 
         safeSet('homeTotalOrders', totalOrders.toLocaleString());
         safeSet('homeTotalSpent', '₦' + totalSpent.toLocaleString(undefined, { minimumFractionDigits: 2 }));
