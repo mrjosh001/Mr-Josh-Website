@@ -338,6 +338,29 @@
       font-size:13px;font-weight:600;color:#0f172a;line-height:1.55;
       padding:12px;border-radius:12px;background:#f1f5f9;border:1px solid #e2e8f0
     }
+  
+    .sms-filters{display:flex;gap:8px;flex-wrap:wrap;margin:0 0 12px;padding:0 2px}
+    .sms-chip{
+      border:1px solid var(--border);background:var(--card);color:var(--muted);
+      border-radius:999px;padding:7px 14px;font-size:12px;font-weight:700;
+      font-family:inherit;cursor:pointer;transition:.15s;
+    }
+    .sms-chip.active{background:var(--primary);border-color:var(--primary);color:#fff}
+    :root[data-theme="light"] .sms-chip{background:#fff;color:#475569}
+    :root[data-theme="light"] .sms-chip.active{background:#2563eb;color:#fff}
+    .sms-detail-card{
+      background:var(--card);border:1px solid var(--border);border-radius:16px;padding:14px;
+    }
+    .sms-detail-card .phone{
+      font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:18px;font-weight:800;
+      color:var(--primary);letter-spacing:.02em;margin:6px 0 12px;word-break:break-all;
+    }
+    .sms-detail-card .code-box{
+      margin-top:12px;padding:12px;border-radius:12px;background:rgba(59,130,246,.1);
+      border:1px dashed rgba(59,130,246,.35);font-family:ui-monospace,monospace;font-size:20px;
+      font-weight:800;text-align:center;color:var(--text);letter-spacing:.08em;
+    }
+
   </style>
   <script src="/js/mj-page-loader.js"></script>
 </head>
@@ -902,6 +925,7 @@ let tab = 'logs';
 let session = null;
 let logGroups = [];
 let smsRows = [];
+let smsStatusFilter = 'all'; // all | completed | cancelled
 let boostRows = [];
 let loadErrors = { logs: null, sms: null, boosters: null };
 
@@ -1161,8 +1185,20 @@ function renderLogs() {
   bindViewButtons();
 }
 
+function smsBucket(st) {
+  const t = String(st || '').toLowerCase();
+  if (/complete|success|received|done|delivered/.test(t)) return 'completed';
+  if (/cancel|expired|refund|fail|reject|timeout/.test(t)) return 'cancelled';
+  return 'other'; // waiting etc still under "all"
+}
 function renderSms() {
   const list = document.getElementById('list');
+  const chips = `
+    <div class="sms-filters" id="smsFilters">
+      <button type="button" class="sms-chip ${smsStatusFilter==='all'?'active':''}" data-sf="all">All numbers</button>
+      <button type="button" class="sms-chip ${smsStatusFilter==='completed'?'active':''}" data-sf="completed">Completed</button>
+      <button type="button" class="sms-chip ${smsStatusFilter==='cancelled'?'active':''}" data-sf="cancelled">Cancelled</button>
+    </div>`;
   if (!smsRows.length) {
     if (loadErrors.sms) {
       list.innerHTML =
@@ -1171,30 +1207,51 @@ function renderSms() {
         '</p><button type="button" class="btn-view" onclick="boot()">Retry</button></div>';
       return;
     }
-    list.innerHTML =
+    list.innerHTML = chips +
       '<div class="empty"><div class="ico">📱</div><h3>No SMS orders yet</h3><p>Get a virtual number for OTP verification.</p><a href="mj-sms-choose-server.html"><i class="fa-solid fa-comment-sms"></i> Get a number</a></div>';
+    bindSmsFilters();
     return;
   }
-  list.innerHTML = smsRows
-    .map((o, i) => {
+  const filtered = smsRows
+    .map((o, i) => ({ o, i }))
+    .filter(({ o }) => {
+      if (smsStatusFilter === 'all') return true;
+      return smsBucket(o.status) === smsStatusFilter;
+    });
+  if (!filtered.length) {
+    list.innerHTML = chips +
+      '<div class="empty"><div class="ico">📱</div><h3>No matching SMS</h3><p>Try another filter.</p></div>';
+    bindSmsFilters();
+    return;
+  }
+  list.innerHTML = chips + filtered
+    .map(({ o, i }) => {
       const name = (o.service_name || o.service_id || 'Service').replace(/_/g, ' ');
       const st = o.status || 'waiting_for_code';
-      const href = o.order_id
-        ? `mj-sms-number.html?order_id=${encodeURIComponent(o.order_id)}`
-        : '#';
+      const stLabel = String(st).replace(/_/g, ' ');
       return `<article class="card"><div class="row">
       <div class="icon sms"><i class="fa-solid fa-mobile-screen"></i></div>
       <div class="main">
-        <div class="title-row"><div class="title" style="text-transform:capitalize">${esc(name)}</div><span class="status ${statusClass(st)}">${esc(st)}</span></div>
+        <div class="title-row"><div class="title" style="text-transform:capitalize">${esc(name)}</div><span class="status ${statusClass(st)}">${esc(stLabel)}</span></div>
         <div class="meta">
           <span>${esc(o.country_name || '—')}</span>
           <span style="font-family:monospace">${esc(o.phone_number || '—')}</span>
         </div>
         <div class="bottom"><div><div class="price">${money(o.price)}</div><div class="date">${esc(fmtDate(o.created_at))}</div></div>
-        <a class="btn-view" href="${href}"><i class="fa-regular fa-eye"></i> View</a></div>
+        <button type="button" class="btn-view" data-kind="sms" data-i="${i}"><i class="fa-regular fa-eye"></i> View</button></div>
       </div></div></article>`;
     })
     .join('');
+  bindSmsFilters();
+  bindViewButtons();
+}
+function bindSmsFilters() {
+  document.querySelectorAll('#smsFilters .sms-chip').forEach((btn) => {
+    btn.onclick = () => {
+      smsStatusFilter = btn.getAttribute('data-sf') || 'all';
+      renderSms();
+    };
+  });
 }
 
 function boostProgress(o) {
@@ -1334,21 +1391,29 @@ async function openModal(kind, i) {
       '<div class="cred-cards">' + cards + '</div>' +
       '<div class="cred" id="credBox" style="position:absolute;left:-9999px;height:0;overflow:hidden">' + esc(allText) + '</div>';
   } else if (kind === 'sms') {
-
-
     const o = smsRows[i];
     if (!o) return;
-    title.textContent = (o.service_name || 'SMS').replace(/_/g, ' ');
-    if (sub) sub.textContent = o.phone_number || o.status || '';
+    const name = (o.service_name || o.service_id || 'SMS').replace(/_/g, ' ');
+    const st = String(o.status || '—').replace(/_/g, ' ');
+    const code = o.sms_code || o.code || o.otp || o.message || '';
+    title.textContent = name;
+    if (sub) sub.textContent = st;
+    window.__smsCopy = [o.phone_number, code].filter(Boolean).join('\n');
     body.innerHTML = `
-      <div class="detail-grid">
-        <div class="detail-row"><span class="l">Status</span><span class="v">${esc(o.status || '—')}</span></div>
-        <div class="detail-row"><span class="l">Number</span><span class="v" style="font-family:monospace">${esc(o.phone_number || '—')}</span></div>
-        <div class="detail-row"><span class="l">Country</span><span class="v">${esc(o.country_name || '—')}</span></div>
-        <div class="detail-row"><span class="l">Price</span><span class="v">${money(o.price)}</span></div>
-      </div>
-      <div class="actions">
-        ${o.order_id ? `<a class="btn-guide" href="mj-sms-number.html?order_id=${encodeURIComponent(o.order_id)}">Open number</a>` : ''}
+      <div class="sms-detail-card">
+        <div class="detail-row"><span class="l">Status</span><span class="v"><span class="status ${statusClass(o.status)}">${esc(st)}</span></span></div>
+        <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);margin-top:10px">Phone number</div>
+        <div class="phone">${esc(o.phone_number || '—')}</div>
+        <div class="detail-grid">
+          <div class="detail-row"><span class="l">Country</span><span class="v">${esc(o.country_name || '—')}</span></div>
+          <div class="detail-row"><span class="l">Price</span><span class="v">${money(o.price)}</span></div>
+          <div class="detail-row"><span class="l">Order ID</span><span class="v">${esc(o.order_id || '—')}</span></div>
+          <div class="detail-row"><span class="l">Date</span><span class="v">${esc(fmtDate(o.created_at))}</span></div>
+        </div>
+        ${code ? `<div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);margin-top:14px">SMS / OTP code</div><div class="code-box">${esc(code)}</div>` : '<p style="color:var(--muted);font-size:13px;margin-top:14px">No code received yet. If status is waiting, keep this order open or refresh later.</p>'}
+        <div class="log-actions" style="margin-top:14px">
+          <button type="button" class="la-btn copy" onclick="copyRaw(window.__smsCopy||'')"><i class="fa-regular fa-copy"></i> Copy number${code ? ' + code' : ''}</button>
+        </div>
       </div>`;
   } else if (kind === 'boosters' || kind === 'boost') {
     const o = boostRows[i];

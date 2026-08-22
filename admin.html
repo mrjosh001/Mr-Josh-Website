@@ -885,7 +885,7 @@
             <div class="empty-state" id="ordersEmpty">No orders table connected yet.</div>
             <div class="table-wrap hidden" id="ordersTableWrap">
               <table>
-                <thead><tr><th>Order ID</th><th>Customer</th><th>Item</th><th>Amount</th><th>Status</th><th>Date</th><th>Action</th></tr></thead>
+                <thead><tr><th>Order ID</th><th>Customer</th><th>Item</th><th>Qty</th><th>Amount</th><th>Status</th><th>Date</th><th>Action</th></tr></thead>
                 <tbody id="ordersTableBody"></tbody>
               </table>
             </div>
@@ -3336,7 +3336,7 @@ async function deleteUserPermanently(id, evt) {
 function renderOrders(orders) {
   const tbody = document.getElementById('ordersTableBody');
   if (!orders?.length) {
-    tbody.innerHTML = `<tr><td colspan="7" class="empty-state">No orders yet.</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="8" class="empty-state">No orders yet.</td></tr>`;
     return;
   }
 
@@ -3368,7 +3368,7 @@ function renderOrders(orders) {
   for (const [key, dayOrders] of groups) {
     html += `
       <tr>
-        <td colspan="7" style="background:rgba(59,130,246,.06);border-bottom:1px solid var(--border);padding:10px 12px;font-size:12px;font-weight:800;color:var(--primary);text-transform:uppercase;letter-spacing:.4px;white-space:nowrap;">
+        <td colspan="8" style="background:rgba(59,130,246,.06);border-bottom:1px solid var(--border);padding:10px 12px;font-size:12px;font-weight:800;color:var(--primary);text-transform:uppercase;letter-spacing:.4px;white-space:nowrap;">
           ${escapeHtml(dayLabel(key))} <span style="color:var(--muted);font-weight:600;text-transform:none;letter-spacing:0;">— ${dayOrders.length} order${dayOrders.length !== 1 ? 's' : ''}</span>
         </td>
       </tr>`;
@@ -3379,6 +3379,7 @@ function renderOrders(orders) {
       <td>${escapeHtml(o.order_id || o.id || '—')}</td>
       <td>${escapeHtml(o.customer_name || o.customer || o.email || '—')}</td>
       <td>${escapeHtml(o.product_name || o.item || o.service || '—')}</td>
+      <td style="font-weight:700;color:var(--primary);">${Number(o.quantity != null ? o.quantity : 1)}</td>
       <td class="price">₦${Number(o.amount || o.total || 0).toLocaleString()}</td>
       <td>${escapeHtml(o.status || '—')}</td>
       <td>${o.created_at ? new Date(o.created_at).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' }) : '—'}</td>

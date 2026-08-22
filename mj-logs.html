@@ -700,11 +700,12 @@ if(data.data && data.data.new_balance != null){
 currentBalanceNgn = Number(data.data.new_balance);
 }
 const items = (data.data && data.data.items) ? data.data.items : [];
-const creds = items.map(function(it){ return it.details; }).filter(Boolean).join('\n\n') || 'Delivered — see My Orders for details';
+var creds = (data.data && data.data.login_credentials) || items.map(function(it){ return it.details; }).filter(Boolean).join('\n\n') || 'Delivered — see My Orders for details';
+creds = formatReceiptCredentials(creds);
 const desc = getDisplayDescription(purchasedProduct);
 const purchasedQty = activeQty;
 closePurchaseModal();
-openReceiptModal(purchasedProduct, desc, creds);
+openReceiptModal(purchasedProduct, desc, creds, purchasedQty, data.data && data.data.order_id);
 showToast('Purchase successful!','success');
 // Reflect reduced stock locally so the grid doesn't show stale numbers
 const stock = parseInt(purchasedProduct.stock_quantity,10);
@@ -717,6 +718,49 @@ isBuying = false;
 buyBtn.disabled = false;
 buyBtn.innerHTML = originalLabel;
 }
+}
+
+
+/** Format raw supplier lines for the Purchase Complete modal (Email/Username/Password). */
+function formatReceiptCredentials(raw) {
+  var text = String(raw || '').replace(/\r/g, '').trim();
+  if (!text) return '';
+  // Already labeled by formatCredentials on the server
+  if (/^\s*(Email|Username|Password|Phone|2FA|Token|Login)\s*:/im.test(text)) return text;
+  var blocks = text.split(/\n\s*\n/).map(function(b){ return b.trim(); }).filter(Boolean);
+  if (blocks.length <= 1) {
+    var lines = text.split(/\n+/).map(function(l){ return l.trim(); }).filter(Boolean);
+    // Multiple email:pass lines in one blob
+    if (lines.length > 1 && lines.every(function(ln){ return /@/.test(ln) && /[:|]/.test(ln); })) {
+      blocks = lines;
+    } else {
+      blocks = [text];
+    }
+  }
+  function one(line) {
+    var s = String(line || '').trim();
+    if (!s) return '';
+    if (/^\s*(Email|Username|Password|Phone|2FA)\s*:/im.test(s)) return s;
+    // numbered prefix "1. email:pass"
+    s = s.replace(/^\d+\.\s*/, '');
+    var em = s.match(/^([^\s:]+@[^\s:]+)\s*[:|]\s*(.+)$/);
+    if (em) return 'Email: ' + em[1] + '\nPassword: ' + em[2].trim();
+    var parts = s.split(/\s*[|:]\s*/).filter(Boolean);
+    if (parts.length >= 2) {
+      var a = parts[0], b = parts.slice(1).join(':');
+      if (/@/.test(a)) return 'Email: ' + a + '\nPassword: ' + b;
+      return 'Username: ' + a + '\nPassword: ' + b;
+    }
+    return s;
+  }
+  var out = [];
+  for (var i = 0; i < blocks.length; i++) {
+    var f = one(blocks[i]);
+    if (!f) continue;
+    if (blocks.length > 1) out.push((i + 1) + '. ' + f);
+    else out.push(f);
+  }
+  return out.join('\n\n') || text;
 }
 
 function openReceiptModal(p, desc, creds, qty, orderId){
@@ -735,7 +779,7 @@ const descWrap = document.getElementById('rcDescWrap');
 if(desc){ descWrap.style.display='block'; document.getElementById('rcDesc').textContent = desc; }
 else { descWrap.style.display='none'; }
 // Ensure multi-line credentials stay readable on the hero receipt card
-var text = String(creds || '').trim() || 'Delivered — open My Orders to view your logs.';
+var text = formatReceiptCredentials(String(creds || '').trim()) || 'Delivered — open My Orders to view your logs.';
 document.getElementById('rcCreds').textContent = text;
 document.getElementById('rcCopyBtn').onclick = function(){
 navigator.clipboard.writeText(text);
