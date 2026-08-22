@@ -618,9 +618,10 @@ function partsToFields(parts) {
 
 function fieldsToText(f) {
   const lines = [];
+  // Email / Username always before Password
+  if (f.email) lines.push('Email: ' + f.email);
   if (f.username) lines.push('Username: ' + f.username);
   if (f.password) lines.push('Password: ' + f.password);
-  if (f.email) lines.push('Email: ' + f.email);
   if (f.email_password) lines.push('Email Password: ' + f.email_password);
   if (f.phone) lines.push('Phone: ' + f.phone);
   if (f.token) lines.push('2FA / Token: ' + f.token);
@@ -724,14 +725,20 @@ function parseCredentialFields(details, description) {
   if (!text) return [{ _raw: '' }];
 
   function looksAlreadyFormatted(t) {
-    return /^(Username|Password|Email|Email Password|Phone|2FA\s*\/\s*Token|Extra)\s*:/im.test(t);
+    return /^(?:\d+\s*[.):-]\s*)?(Username|Password|Email|Email Password|Phone|2FA\s*\/\s*Token|Extra)\s*:/im.test(t);
+  }
+
+  function stripLogNumberPrefix(s) {
+    return String(s || '').replace(/^\s*\d+\s*[.):-]\s*/gm, '').trim();
   }
 
   function parseFieldsToTextBlock(block) {
     const f = {};
     for (const line of String(block || '').split(/\n+/)) {
-      const lineT = line.trim();
+      let lineT = line.trim();
       if (!lineT) continue;
+      // "1. Email: x@y.com" or "2) Password: secret"
+      lineT = lineT.replace(/^\d+\s*[.):-]\s*/, '');
       const m = lineT.match(/^(Username|Password|Email Password|Email|Phone|2FA\s*\/\s*Token|Extra)\s*:\s*(.+)$/i);
       if (!m) continue;
       const label = m[1].toLowerCase();
@@ -768,17 +775,21 @@ function parseCredentialFields(details, description) {
     }
   }
 
-  // Split multi-account blocks (formatCredentials joins with blank lines)
-  const chunks = text.split(/\n\s*\n/).map((c) => c.trim()).filter(Boolean);
+  // Split multi-account blocks (blank lines OR "1. … / 2. …" numbering)
+  let chunks = text.split(/\n\s*\n/).map((c) => c.trim()).filter(Boolean);
+  if (chunks.length <= 1 && /^\s*1\s*[.):-]/.test(text) && /\n\s*2\s*[.):-]/.test(text)) {
+    chunks = text.split(/\n\s*(?=\d+\s*[.):-]\s*)/).map((c) => c.trim()).filter(Boolean);
+  }
   const list = chunks.length ? chunks : [text];
   const accounts = [];
 
   for (const chunk of list) {
-    let f = parseFieldsToTextBlock(chunk);
+    const chunkClean = stripLogNumberPrefix(chunk);
+    let f = parseFieldsToTextBlock(chunkClean);
     if (!isUseful(f)) {
-      // email:pass
-      const ep = chunk.match(/^([^\s:<>]+@[^\s:<>]+):(.+)$/);
-      if (ep) f = { username: ep[1], password: ep[2] };
+      // email:pass → Email + Password (not Username)
+      const ep = chunkClean.match(/^([^\s:<>]+@[^\s:<>]+):(.+)$/);
+      if (ep) f = { email: ep[1], password: ep[2] };
     }
     if (!isUseful(f)) {
       const url = chunk.match(/https?:\/\/[^\s<>"']+/i);
