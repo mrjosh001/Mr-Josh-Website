@@ -1,35 +1,37 @@
-# MJ Hub security checklist
+# MJ Hub security (implemented + required)
 
-Implemented in the website code (this deploy):
+## Implemented in this deploy (API code)
 
-1. **Password strength** — signup + password reset require 8+ chars, upper, lower, number (with on-screen strength meter).
-2. **Login rate limiting** — max 5 failed sign-ins per 15 minutes (client-side; Supabase also rate-limits Auth).
-3. **Password reset rate limiting** — max 3 requests per 15 minutes.
-4. **Session storage** — auth tokens use `sessionStorage` (cleared when the browser tab/window closes) instead of long-lived `localStorage`.
-5. **Remember me** — stores email only, never the password.
-6. **Admin gate** — client checks `profiles.is_admin`; non-admins are signed out. Sensitive APIs use server-side `requireAdmin` (service role + JWT).
-7. **API hardening** — `lib/secure.js` blocks client-supplied service_role secrets.
+1. **Reject client-supplied secrets** on money / admin / order routes (`rejectClientSuppliedSecrets`).
+2. **CORS** restricted to mjhub origins via `applyApiCors` (not open `*`).
+3. **Rate limits** (per-isolate): orders 30/min, deposits 15/min, delete-account 5/15min, admin 60/min.
+4. **IDOR**: order routes bind to JWT user id only; body `user_id` cannot impersonate.
+5. **Quantity / amount validation** on server for orders and PocketFi checkout.
+6. **Admin balance edits** clamped to sane ranges.
+7. **Public errors** strip secrets via `lib/errors.js`.
 
-## You must set these in Supabase (Dashboard)
+## You must run in Supabase (money safety)
 
-### Auth
-- **Email confirmation**: ON (recommended)
-- **Minimum password length**: 8 (Auth → Providers → Email)
-- **Leaked password protection**: ON if available (Have I Been Pwned)
-- **MFA / 2FA**: enable TOTP under Auth → MFA for admin accounts (optional but recommended)
+Open **SQL Editor** and run:
 
-### Auth rate limits (Auth → Rate Limits)
-Keep defaults or tighten sign-in / recovery if you see abuse.
+`sql/rls_profiles_money_guard.sql`
 
-### RLS (Row Level Security)
-- Ensure **RLS is enabled** on `profiles`, wallets, orders, products, tickets.
-- Users may only **select/update their own** profile rows.
-- Only **admins** may set `is_admin` or edit other users (prefer server API with service role).
-- Never expose `service_role` key in HTML or public repo.
+This:
 
-### Vercel
-- Keep all supplier keys, `SUPABASE_SERVICE_ROLE_KEY`, Paystack/PocketFi secrets in **Vercel Environment Variables** only.
-- Do not commit `.env` files.
+- Enables RLS on `profiles` / `orders` / `number_orders`
+- **Blocks browser clients from changing `balance`, `balance_usd`, or `is_admin`**
+- Lets **service_role** (Vercel APIs) still credit/debit balances
 
-### 2FA note
-Full authenticator 2FA is a Supabase Auth MFA feature. Turn it on in the Supabase dashboard, then we can add enroll/verify UI on the site for admins.
+Without this SQL, a skilled user could try to patch `profiles.balance` from the browser if policies were too open.
+
+## Env (Vercel)
+
+- Never put `SUPABASE_SERVICE_ROLE_KEY` in frontend HTML
+- Set `CORS_ALLOWED_ORIGINS=https://www.mjhub.store,https://app.mjhub.store,https://mjhub.store`
+- Keep supplier keys, PocketFi, CRON_SECRET only in Vercel env
+
+## Auth (Supabase dashboard)
+
+- Email confirmation ON
+- Leaked password protection ON if available
+- MFA for admin accounts recommended
