@@ -305,6 +305,34 @@
       padding:5px 10px;font-size:11px;font-weight:800;cursor:pointer;font-family:inherit
     }
 
+
+    .sheet-b .detail-grid{display:flex;flex-direction:column;gap:8px}
+    .sheet-b .detail-row{
+      display:flex;justify-content:space-between;align-items:flex-start;gap:12px;
+      padding:12px 14px;border-radius:12px;background:#f8fafc;border:1px solid #eef2f7
+    }
+    .sheet-b .detail-row .l{font-size:13px;font-weight:600;color:#64748b;flex-shrink:0}
+    .sheet-b .detail-row .v{font-size:13px;font-weight:700;color:#0f172a;text-align:right;word-break:break-word}
+    .sheet-b .detail-row.detail-link{flex-direction:column;align-items:stretch}
+    .sheet-b .detail-row.detail-link .l{margin-bottom:8px}
+    .sheet-b .link-row{display:flex;flex-direction:column;gap:10px;text-align:left !important}
+    .sheet-b a.link-url{
+      color:#2563eb;font-weight:700;font-size:13px;word-break:break-all;text-decoration:none
+    }
+    .sheet-b a.link-open{
+      display:inline-flex;align-items:center;justify-content:center;gap:8px;align-self:flex-start;
+      padding:10px 16px;border-radius:12px;font-weight:800;font-size:13px;text-decoration:none;
+      background:linear-gradient(135deg,#3b82f6,#1d4ed8);color:#fff;
+      box-shadow:0 8px 18px rgba(37,99,235,.3)
+    }
+    .sheet-b .progress{
+      height:6px;border-radius:999px;background:#e2e8f0;overflow:hidden
+    }
+    .sheet-b .progress span{
+      display:block;height:100%;border-radius:999px;
+      background:linear-gradient(90deg,#60a5fa,#2563eb)
+    }
+
   </style>
 </head>
 <body>
@@ -818,36 +846,47 @@ function openModal(kind, i) {
     if (!o) return;
     const p = boostProgress(o);
     const oid = o.order_id || o.supplier_order_id || o.id || '';
-    const link = o.link || o.url || '';
+    const link = String(o.link || o.url || '').trim();
     const price = o.price_ngn != null ? o.price_ngn : (o.charge != null ? o.charge : o.price);
     title.textContent = o.service_name || o.service || 'Boost';
     if (sub) sub.textContent = (o.status || '') + (oid ? ' · #' + oid : '');
-    const text = [
-      'Service: ' + (o.service_name || o.service || '—'),
-      'Status: ' + (o.status || '—'),
+
+    window.__boostCopyText = [
+      'Service: ' + (o.service_name || o.service || ''),
+      'Status: ' + (o.status || ''),
       'Progress: ' + p.delivered + ' / ' + (p.qty || '—') + ' (left ' + p.remains + ')',
       'Link: ' + (link || '—'),
       'Order ID: ' + (oid || '—'),
-      'Price: ₦' + Number(price || 0).toLocaleString(),
-      'Date: ' + (o.created_at || '—')
+      'Price: ' + money(price),
+      'Date: ' + (o.created_at || '')
     ].join('\n');
-    body.innerHTML = `
-      <div class="detail-grid">
-        <div class="detail-row"><span class="l">Status</span><span class="v">${esc(o.status || '—')}</span></div>
-        <div class="detail-row"><span class="l">Delivered</span><span class="v">${p.delivered} / ${p.qty || '—'}</span></div>
-        <div class="detail-row"><span class="l">Remaining</span><span class="v">${esc(String(p.remains))}</span></div>
-        <div class="detail-row"><span class="l">Price</span><span class="v">${money(price)}</span></div>
-        <div class="detail-row"><span class="l">Order ID</span><span class="v">${esc(String(oid || '—'))}</span></div>
-        <div class="detail-row"><span class="l">Link</span><span class="v" style="word-break:break-all">${esc(link || '—')}</span></div>
-        <div class="detail-row"><span class="l">Date</span><span class="v">${esc(fmtDate(o.created_at))}</span></div>
-      </div>
-      <div class="progress" style="margin:12px 0"><span style="width:${p.pct}%"></span></div>
-      <div class="actions">
-        <button type="button" class="btn-copy" onclick="copyText()"><i class="fa-regular fa-copy"></i> Copy details</button>
-        <a class="btn-guide" href="mj-boosters-history.html"><i class="fa-solid fa-bolt"></i> Full history</a>
-      </div>
-      <div class="cred" id="credBox">${esc(text)}</div>`;
+
+    const openBtn = link
+      ? '<a class="link-open" href="' + esc(link) + '" target="_blank" rel="noopener"><i class="fa-solid fa-arrow-up-right-from-square"></i> Open link</a>'
+      : '';
+
+    body.innerHTML =
+      '<div class="detail-grid">' +
+        '<div class="detail-row"><span class="l">Status</span><span class="v">' + esc(o.status || '—') + '</span></div>' +
+        '<div class="detail-row"><span class="l">Delivered</span><span class="v">' + p.delivered + ' / ' + (p.qty || '—') + '</span></div>' +
+        '<div class="detail-row"><span class="l">Remaining</span><span class="v">' + esc(String(p.remains)) + '</span></div>' +
+        '<div class="detail-row"><span class="l">Price</span><span class="v">' + money(price) + '</span></div>' +
+        '<div class="detail-row"><span class="l">Order ID</span><span class="v">' + esc(String(oid || '—')) + '</span></div>' +
+        '<div class="detail-row detail-link"><span class="l">Link</span><span class="v link-row">' +
+          (link
+            ? '<a class="link-url" href="' + esc(link) + '" target="_blank" rel="noopener">' + esc(link) + '</a>' + openBtn
+            : '—') +
+        '</span></div>' +
+        '<div class="detail-row"><span class="l">Date</span><span class="v">' + esc(fmtDate(o.created_at)) + '</span></div>' +
+      '</div>' +
+      '<div class="progress" style="margin:14px 0 16px"><span style="width:' + p.pct + '%"></span></div>' +
+      '<div class="log-actions">' +
+        '<button type="button" class="la-btn copy" onclick="copyRaw(window.__boostCopyText||\'\')"><i class="fa-regular fa-copy"></i> Copy details</button>' +
+        '<a class="la-btn dl" href="mj-boosters-history.html" style="background:#ecfdf5;color:#047857;border:1px solid #a7f3d0"><i class="fa-solid fa-bolt"></i> Full history</a>' +
+      '</div>';
   } else {
+
+
     title.textContent = 'Order';
     if (sub) sub.textContent = '';
     body.innerHTML = '<p style="color:var(--muted);padding:12px">No details for this item.</p>';
