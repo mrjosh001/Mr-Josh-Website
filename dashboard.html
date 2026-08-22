@@ -2135,39 +2135,120 @@ body::after {
 .see-all-link { font-size: 12px; font-weight: 700; color: var(--primary); cursor: pointer; }
 .quick-actions-grid { display: none; }
 
-/* ORDERS + RECEIPT + CONFIRM */
-.orders-list { display: flex; flex-direction: column; gap: 10px; }
-.order-card {
-    background: var(--card); border: 1px solid var(--border); border-radius: 18px;
-    padding: 16px; transition: border-color .15s, box-shadow .15s;
+/* ORDERS + RECEIPT + CONFIRM — brand blue glass */
+.orders-list { display: flex; flex-direction: column; gap: 12px; }
+.orders-page-wrap {
+  background: transparent; border: none; padding: 0;
 }
-.order-card:hover { border-color: var(--border-strong); box-shadow: 0 8px 24px rgba(0,0,0,0.12); }
+.orders-page-wrap h2 {
+  margin-bottom: 2px;
+  font-size: 22px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  background: linear-gradient(135deg, #60a5fa, #3b82f6 50%, #2563eb);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+:root[data-theme="light"] .orders-page-wrap h2 {
+  background: linear-gradient(135deg, #2563eb, #1d4ed8);
+  -webkit-background-clip: text;
+  background-clip: text;
+}
+.orders-page-sub {
+  font-size: 13px;
+  color: var(--muted);
+  margin-bottom: 16px;
+  font-weight: 500;
+}
+.order-card {
+  position: relative;
+  overflow: hidden;
+  background: linear-gradient(145deg, rgba(59,130,246,0.08), rgba(15,23,42,0.35));
+  border: 1px solid rgba(96,165,250,0.22);
+  border-radius: 20px;
+  padding: 16px 16px 14px;
+  transition: border-color .2s, box-shadow .2s, transform .15s;
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  box-shadow: 0 8px 28px rgba(0,0,0,0.18);
+}
+:root[data-theme="light"] .order-card {
+  background: linear-gradient(145deg, rgba(255,255,255,0.95), rgba(239,246,255,0.9));
+  border-color: rgba(59,130,246,0.18);
+  box-shadow: 0 10px 28px rgba(37,99,235,0.08);
+}
+.order-card::before {
+  content: '';
+  position: absolute;
+  left: 0; top: 0; bottom: 0;
+  width: 3px;
+  border-radius: 20px 0 0 20px;
+  background: linear-gradient(180deg, #60a5fa, #2563eb);
+  opacity: 0.9;
+}
+.order-card:hover {
+  border-color: rgba(96,165,250,0.45);
+  box-shadow: 0 12px 36px rgba(37,99,235,0.18);
+  transform: translateY(-1px);
+}
 .order-card-row1 { display: flex; gap: 12px; align-items: flex-start; }
 .order-icon {
-    width: 42px; height: 42px; border-radius: 12px; flex-shrink: 0;
-    background: #eef2ff; color: #4f46e5;
-    display: flex; align-items: center; justify-content: center; font-size: 16px; font-weight: 800;
+  width: 46px; height: 46px; border-radius: 14px; flex-shrink: 0;
+  background: linear-gradient(145deg, #3b82f6, #1d4ed8);
+  color: #fff;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 16px; font-weight: 800;
+  box-shadow: 0 6px 16px rgba(37,99,235,0.35);
 }
 .order-card-main { flex: 1; min-width: 0; }
-.order-card-title-row { display: flex; justify-content: space-between; gap: 8px; align-items: flex-start; margin-bottom: 4px; }
-.order-card-title { font-size: 15px; font-weight: 800; color: var(--text); }
+.order-card-title-row {
+  display: flex; justify-content: space-between; gap: 8px;
+  align-items: flex-start; margin-bottom: 6px;
+}
+.order-card-title {
+  font-size: 15px; font-weight: 800; color: var(--text);
+  line-height: 1.35; letter-spacing: -0.01em;
+}
 .order-status-pill {
-    font-size: 11px; font-weight: 700; padding: 4px 10px; border-radius: 20px;
-    background: rgba(52,211,153,0.15); color: #059669; white-space: nowrap;
+  font-size: 10px; font-weight: 800; padding: 5px 11px; border-radius: 999px;
+  background: rgba(52,211,153,0.16); color: #34d399;
+  white-space: nowrap; letter-spacing: 0.02em;
+  border: 1px solid rgba(52,211,153,0.25);
+}
+:root[data-theme="light"] .order-status-pill {
+  color: #059669; background: rgba(16,185,129,0.12);
 }
 .order-card-desc { font-size: 12px; color: var(--muted); line-height: 1.4; margin-bottom: 8px; }
-.order-card-qty { font-size: 12px; font-weight: 700; color: #4f46e5; margin-bottom: 10px; display: flex; align-items: center; gap: 6px; }
-.order-card-bottom { display: flex; justify-content: space-between; align-items: flex-end; gap: 10px; }
-.order-card-price { font-size: 18px; font-weight: 800; color: var(--text); letter-spacing: -0.02em; }
-.order-card-date { font-size: 11px; color: var(--muted); margin-top: 2px; }
-.order-view-btn {
-    background: #eef2ff; color: #4f46e5; border: none; border-radius: 12px;
-    padding: 10px 16px; font-size: 13px; font-weight: 700; cursor: pointer;
-    display: inline-flex; align-items: center; gap: 6px; font-family: inherit;
+.order-card-qty {
+  font-size: 12px; font-weight: 700; color: #93c5fd;
+  margin-bottom: 12px; display: flex; align-items: center; gap: 6px;
 }
-.order-view-btn:hover { filter: brightness(0.97); }
-.orders-page-wrap { background: transparent; border: none; padding: 0; }
-.orders-page-wrap h2 { margin-bottom: 4px; }
+:root[data-theme="light"] .order-card-qty { color: #2563eb; }
+.order-card-bottom {
+  display: flex; justify-content: space-between; align-items: flex-end; gap: 10px;
+  padding-top: 4px;
+}
+.order-card-price {
+  font-size: 18px; font-weight: 800; color: #fff;
+  letter-spacing: -0.02em;
+}
+:root[data-theme="light"] .order-card-price { color: #0f172a; }
+.order-card-date { font-size: 11px; color: var(--muted); margin-top: 3px; font-weight: 500; }
+.order-view-btn {
+  background: linear-gradient(135deg, #3b82f6, #2563eb);
+  color: #fff; border: none; border-radius: 12px;
+  padding: 10px 16px; font-size: 13px; font-weight: 700; cursor: pointer;
+  display: inline-flex; align-items: center; gap: 6px; font-family: inherit;
+  box-shadow: 0 6px 16px rgba(37,99,235,0.35);
+  transition: transform .15s, filter .15s, box-shadow .15s;
+}
+.order-view-btn:hover {
+  filter: brightness(1.06);
+  box-shadow: 0 8px 20px rgba(37,99,235,0.45);
+}
+.order-view-btn:active { transform: scale(0.97); }
+
 
 .receipt-modal-card {
     background: #fff; color: #0f172a; width: 100%; max-width: 400px;
@@ -2446,7 +2527,7 @@ body::after {
                     <li><a href="#" onclick="goHome();return false;"><i class="fa-solid fa-house"></i> Dashboard</a></li>
                     <li><a href="#" onclick="switchSection('profile'); openProfileSettings(); return false;"><i class="fa-solid fa-gear"></i> Settings</a></li>
                     <li><a href="#" onclick="switchSection('cart');return false;"><i class="fa-solid fa-cart-shopping"></i> Cart</a></li>
-                    <li><a href="#" onclick="switchSection('orders');return false;"><i class="fa-solid fa-receipt"></i> My Orders</a></li>
+                    <li><a href="#" onclick="location.href='mj-orders.html';return false;"><i class="fa-solid fa-receipt"></i> My Orders</a></li>
                 </ul>
                 <div class="dropdown-divider"></div>
                 <ul class="dropdown-links">
@@ -3041,7 +3122,7 @@ body::after {
     <section id="orders" class="app-section">
         <div class="content-card orders-page-wrap">
             <h2>My Orders</h2>
-            <p class="helper-text">Track purchases and view delivered login details.</p>
+            <p class="orders-page-sub" class="helper-text">Track purchases and view delivered login details.</p>
             <div class="orders-list" id="ordersList">
                 <div class="empty-state">
                     <div class="empty-state-icon">📦</div>
@@ -3451,7 +3532,7 @@ body::after {
                 Please kindly use a <strong>GOOD VPN</strong> to login and add <strong>2-step verification</strong> after purchase.
             </div>
             <div class="receipt-cred-box" id="receiptCredBox"></div>
-            <button class="btn-view-orders" id="receiptFooterBtn" onclick="closeOrderReceipt(); switchSection('orders');">View My Orders</button>
+            <button class="btn-view-orders" id="receiptFooterBtn" onclick="closeOrderReceipt(); location.href='mj-orders.html';">View My Orders</button>
         </div>
     </div>
 </div>

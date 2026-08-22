@@ -1,0 +1,525 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>My Orders · MJ Hub</title>
+  <meta name="theme-color" content="#0b1220" />
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" />
+  <link rel="stylesheet" href="/css/graceful.css" />
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="/js/graceful.js" defer></script>
+  <style>
+    :root {
+      --bg:#060a12; --bg2:#0b1220; --card:rgba(15,23,42,.72); --text:#f1f5f9; --muted:#94a3b8;
+      --border:rgba(148,163,184,.14); --blue:#3b82f6; --blue2:#2563eb; --blue-soft:rgba(59,130,246,.14);
+      --success:#34d399; --danger:#f87171; --shadow:0 16px 40px rgba(0,0,0,.35); --radius:20px;
+      --safe-b:env(safe-area-inset-bottom,0px);
+    }
+    :root[data-theme="light"] {
+      --bg:#f1f5f9; --bg2:#e8eef7; --card:rgba(255,255,255,.92); --text:#0f172a; --muted:#64748b;
+      --border:rgba(15,23,42,.08); --blue-soft:rgba(37,99,235,.1); --shadow:0 12px 32px rgba(37,99,235,.08);
+    }
+    *{box-sizing:border-box;margin:0;padding:0}
+    body{
+      font-family:"Plus Jakarta Sans",system-ui,sans-serif;color:var(--text);min-height:100vh;
+      background:radial-gradient(900px 400px at 10% -10%,rgba(59,130,246,.22),transparent 55%),
+        radial-gradient(700px 360px at 100% 0%,rgba(37,99,235,.12),transparent 50%),var(--bg);
+      padding-bottom:calc(88px + var(--safe-b));
+    }
+    .topbar{
+      position:sticky;top:0;z-index:40;display:flex;align-items:center;gap:12px;padding:14px 16px;
+      padding-top:max(14px,env(safe-area-inset-top));
+      background:color-mix(in srgb,var(--bg) 82%,transparent);backdrop-filter:blur(16px);
+      border-bottom:1px solid var(--border);
+    }
+    .back{
+      width:42px;height:42px;border-radius:14px;display:grid;place-items:center;
+      background:var(--card);border:1px solid var(--border);color:var(--text);text-decoration:none;
+    }
+    .topbar h1{
+      font-size:18px;font-weight:800;letter-spacing:-.02em;
+      background:linear-gradient(135deg,#93c5fd,#3b82f6 55%,#1d4ed8);
+      -webkit-background-clip:text;background-clip:text;color:transparent;
+    }
+    .topbar p{font-size:12px;color:var(--muted);font-weight:600}
+    .wrap{max-width:560px;margin:0 auto;padding:16px 16px 24px}
+
+    /* Type tabs at top */
+    .type-tabs{
+      display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:14px;
+      padding:6px;border-radius:16px;background:var(--card);border:1px solid var(--border);
+    }
+    .type-tab{
+      border:none;cursor:pointer;font-family:inherit;font-weight:800;font-size:12px;
+      padding:11px 8px;border-radius:12px;background:transparent;color:var(--muted);
+      display:flex;flex-direction:column;align-items:center;gap:4px;transition:.15s;
+    }
+    .type-tab i{font-size:15px}
+    .type-tab.active{
+      background:linear-gradient(135deg,#3b82f6,#1d4ed8);color:#fff;
+      box-shadow:0 8px 18px rgba(37,99,235,.35);
+    }
+    .type-tab .count{
+      font-size:10px;font-weight:700;opacity:.85;
+    }
+
+    .hero{
+      border-radius:var(--radius);padding:14px 16px;margin-bottom:14px;
+      background:linear-gradient(135deg,rgba(59,130,246,.2),rgba(15,23,42,.5));
+      border:1px solid rgba(96,165,250,.25);box-shadow:var(--shadow);
+    }
+    :root[data-theme="light"] .hero{background:linear-gradient(135deg,#eff6ff,#fff)}
+    .hero h2{font-size:17px;font-weight:800}
+    .hero .sub{font-size:12px;color:var(--muted);margin-top:4px;line-height:1.4}
+
+    .list{display:flex;flex-direction:column;gap:12px}
+    .card{
+      position:relative;overflow:hidden;
+      background:linear-gradient(145deg,rgba(59,130,246,.1),rgba(15,23,42,.45));
+      border:1px solid rgba(96,165,250,.22);border-radius:var(--radius);padding:16px;
+      box-shadow:var(--shadow);backdrop-filter:blur(12px);
+    }
+    :root[data-theme="light"] .card{background:linear-gradient(145deg,#fff,#eff6ff);border-color:rgba(59,130,246,.15)}
+    .card::before{content:'';position:absolute;left:0;top:0;bottom:0;width:3px;background:linear-gradient(180deg,#60a5fa,#1d4ed8)}
+    .row{display:flex;gap:12px;align-items:flex-start}
+    .icon{
+      width:46px;height:46px;border-radius:14px;flex-shrink:0;
+      background:linear-gradient(145deg,#3b82f6,#1d4ed8);color:#fff;
+      display:grid;place-items:center;font-weight:800;font-size:16px;
+      box-shadow:0 8px 18px rgba(37,99,235,.35);
+    }
+    .icon.sms{background:linear-gradient(145deg,#06b6d4,#0284c7)}
+    .icon.boost{background:linear-gradient(145deg,#a78bfa,#7c3aed)}
+    .main{flex:1;min-width:0}
+    .title-row{display:flex;justify-content:space-between;gap:8px;align-items:flex-start}
+    .title{font-size:14px;font-weight:800;line-height:1.35}
+    .status{
+      font-size:10px;font-weight:800;padding:5px 10px;border-radius:999px;white-space:nowrap;
+      background:rgba(52,211,153,.15);color:var(--success);border:1px solid rgba(52,211,153,.28);
+    }
+    .status.pending{background:rgba(251,191,36,.15);color:#fbbf24;border-color:rgba(251,191,36,.3)}
+    .status.failed{background:rgba(248,113,113,.12);color:var(--danger);border-color:rgba(248,113,113,.3)}
+    .meta{margin-top:8px;font-size:12px;font-weight:700;color:#93c5fd;display:flex;flex-wrap:wrap;gap:8px 12px}
+    :root[data-theme="light"] .meta{color:#2563eb}
+    .bottom{margin-top:12px;display:flex;justify-content:space-between;align-items:flex-end;gap:10px}
+    .price{font-size:17px;font-weight:800}
+    .date{font-size:11px;color:var(--muted);margin-top:3px;font-weight:600}
+    .btn-view{
+      border:none;cursor:pointer;font-family:inherit;
+      background:linear-gradient(135deg,#3b82f6,#1d4ed8);color:#fff;font-weight:700;font-size:12px;
+      padding:10px 14px;border-radius:12px;display:inline-flex;align-items:center;gap:6px;
+      box-shadow:0 8px 18px rgba(37,99,235,.35);text-decoration:none;
+    }
+    .empty{text-align:center;padding:44px 18px;border-radius:var(--radius);border:1px dashed var(--border);background:var(--card)}
+    .empty .ico{font-size:34px;margin-bottom:10px}
+    .empty h3{font-size:16px;font-weight:800;margin-bottom:6px}
+    .empty p{font-size:13px;color:var(--muted);margin-bottom:14px;line-height:1.45}
+    .empty a{
+      display:inline-flex;align-items:center;gap:8px;background:linear-gradient(135deg,#3b82f6,#2563eb);
+      color:#fff;text-decoration:none;font-weight:700;padding:11px 16px;border-radius:12px;
+    }
+    .skeleton{height:108px;border-radius:var(--radius);background:linear-gradient(90deg,rgba(148,163,184,.08),rgba(148,163,184,.16),rgba(148,163,184,.08));background-size:200% 100%;animation:sk 1.2s ease infinite}
+    @keyframes sk{to{background-position:-200% 0}}
+
+    .modal{display:none;position:fixed;inset:0;z-index:1000;align-items:flex-end;justify-content:center;background:rgba(2,6,23,.55);backdrop-filter:blur(8px);padding:12px}
+    .modal.open{display:flex}
+    .sheet{width:100%;max-width:420px;max-height:90vh;overflow:auto;background:#fff;color:#0f172a;border-radius:24px;box-shadow:0 24px 60px rgba(0,0,0,.4)}
+    .sheet-h{display:flex;justify-content:space-between;align-items:center;padding:16px 18px;border-bottom:1px solid #eef2f7}
+    .sheet-h strong{font-size:15px;font-weight:800}
+    .sheet-h span{display:block;font-size:12px;color:#64748b;margin-top:2px;font-weight:600}
+    .sheet-h button{border:none;background:none;font-size:18px;color:#64748b;cursor:pointer}
+    .sheet-b{padding:16px 18px 22px}
+    .actions{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px}
+    .actions button,.actions a{flex:1;min-width:100px;text-align:center;text-decoration:none;border:none;border-radius:12px;padding:11px 10px;font-size:12px;font-weight:700;font-family:inherit;cursor:pointer}
+    .btn-copy{background:#eff6ff;color:#1d4ed8}
+    .btn-dl{background:#f1f5f9;color:#334155}
+    .btn-guide{background:#ecfdf5;color:#047857}
+    .warn{background:#fff7ed;color:#9a3412;border-radius:12px;padding:12px;font-size:12px;font-weight:600;line-height:1.45;margin-bottom:12px}
+    .cred{background:#0f172a;color:#e2e8f0;border-radius:14px;padding:14px;font-size:13px;font-weight:600;white-space:pre-wrap;word-break:break-word;line-height:1.55;font-family:ui-monospace,Menlo,monospace}
+    .detail-grid{display:flex;flex-direction:column;gap:8px;margin-bottom:12px}
+    .detail-row{display:flex;justify-content:space-between;gap:10px;font-size:13px;padding:8px 10px;background:#f8fafc;border-radius:10px}
+    .detail-row .l{color:#64748b;font-weight:600}
+    .detail-row .v{font-weight:700;color:#0f172a;text-align:right;word-break:break-word}
+    .toast{position:fixed;left:50%;bottom:calc(90px + var(--safe-b));transform:translateX(-50%);z-index:1100;background:#0f172a;color:#fff;border:1px solid rgba(148,163,184,.25);padding:10px 16px;border-radius:12px;font-size:13px;font-weight:700;box-shadow:var(--shadow);display:none}
+    .toast.show{display:block}
+    .bottom-nav{position:fixed;left:0;right:0;bottom:0;z-index:50;display:flex;justify-content:space-around;align-items:center;padding:10px 8px calc(10px + var(--safe-b));background:color-mix(in srgb,var(--bg2) 88%,transparent);backdrop-filter:blur(18px);border-top:1px solid var(--border)}
+    .bottom-nav a{text-decoration:none;color:var(--muted);font-size:10px;font-weight:700;text-align:center;display:flex;flex-direction:column;gap:4px;align-items:center;min-width:56px}
+    .bottom-nav a i{font-size:16px}
+    .bottom-nav a.active{color:#60a5fa}
+    .progress{height:6px;border-radius:99px;background:rgba(148,163,184,.2);overflow:hidden;margin-top:10px}
+    .progress>span{display:block;height:100%;background:linear-gradient(90deg,#60a5fa,#3b82f6);border-radius:99px}
+  </style>
+</head>
+<body>
+  <header class="topbar">
+    <a class="back" href="dashboard.html" aria-label="Back"><i class="fa-solid fa-arrow-left"></i></a>
+    <div>
+      <h1>My Orders</h1>
+      <p>Logs · SMS · Boosters</p>
+    </div>
+  </header>
+
+  <main class="wrap">
+    <div class="type-tabs" role="tablist">
+      <button type="button" class="type-tab active" data-tab="logs" id="tabLogs">
+        <i class="fa-solid fa-box"></i> Logs
+        <span class="count" id="countLogs">—</span>
+      </button>
+      <button type="button" class="type-tab" data-tab="sms" id="tabSms">
+        <i class="fa-solid fa-comment-sms"></i> SMS
+        <span class="count" id="countSms">—</span>
+      </button>
+      <button type="button" class="type-tab" data-tab="boosters" id="tabBoost">
+        <i class="fa-solid fa-bolt"></i> Boosters
+        <span class="count" id="countBoost">—</span>
+      </button>
+    </div>
+
+    <section class="hero">
+      <h2 id="heroTitle">MJ Logs</h2>
+      <p class="sub" id="heroSub">Account logins and digital deliveries from your purchases.</p>
+    </section>
+
+    <div class="list" id="list">
+      <div class="skeleton"></div>
+      <div class="skeleton"></div>
+    </div>
+  </main>
+
+  <div class="modal" id="modal" onclick="if(event.target===this)closeModal()">
+    <div class="sheet" role="dialog" aria-modal="true">
+      <div class="sheet-h">
+        <div>
+          <strong id="mTitle">Order</strong>
+          <span id="mSub"></span>
+        </div>
+        <button type="button" onclick="closeModal()" aria-label="Close">✕</button>
+      </div>
+      <div class="sheet-b" id="mBody"></div>
+    </div>
+  </div>
+
+  <div class="toast" id="toast"></div>
+
+  <nav class="bottom-nav">
+    <a href="dashboard.html"><i class="fa-solid fa-house"></i>Home</a>
+    <a href="mj-orders.html" class="active"><i class="fa-solid fa-receipt"></i>Orders</a>
+    <a href="dashboard.html#cart"><i class="fa-solid fa-cart-shopping"></i>Cart</a>
+    <a href="dashboard.html#profile"><i class="fa-solid fa-user"></i>Profile</a>
+  </nav>
+
+<script>
+(function(){
+  try{
+    var t=localStorage.getItem('mjhub-theme-pref')||localStorage.getItem('mjhub-theme')||'dark';
+    if(t==='system') t=window.matchMedia('(prefers-color-scheme: light)').matches?'light':'dark';
+    document.documentElement.setAttribute('data-theme', t==='light'?'light':'dark');
+  }catch(e){document.documentElement.setAttribute('data-theme','dark');}
+})();
+
+const SUPABASE_URL='https://atczodlljmlayvldxfmv.supabase.co';
+const SUPABASE_ANON_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmVzZSIsInJlZiI6ImF0Y3pvZGxsam1sYXl2bGR4Zm12Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODUwNzUyMzgsImV4cCI6MjEwMDY1MTIzOH0.ufthD-p7BmeD_B7xyuMM6PNPL8DmcL4AtRYgg-MuoLI';
+const sb=window.supabase.createClient(SUPABASE_URL,SUPABASE_ANON_KEY,{
+  auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:true,storage:window.sessionStorage}
+});
+
+let tab='logs';
+let session=null;
+let logGroups=[];
+let smsRows=[];
+let boostRows=[];
+let modalMode='logs';
+let modalPayload=null;
+
+function esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+function toast(m){const el=document.getElementById('toast');el.textContent=m;el.classList.add('show');setTimeout(()=>el.classList.remove('show'),2200);}
+function money(n){return '₦'+Number(n||0).toLocaleString();}
+function fmtDate(iso){
+  try{return new Date(iso).toLocaleString(undefined,{day:'numeric',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'});}
+  catch(e){return '';}
+}
+function statusClass(s){
+  s=String(s||'').toLowerCase();
+  if(/pending|processing|progress|waiting|in progress/.test(s)) return 'pending';
+  if(/fail|cancel|refund|reject|partial/.test(s)&&!/complete/.test(s)) return 'failed';
+  return '';
+}
+
+function groupLogs(rows){
+  const map=new Map(), keys=[];
+  rows.forEach(o=>{
+    const key=o.order_id||('single-'+(o.id||Math.random()));
+    if(!map.has(key)){map.set(key,[]);keys.push(key);}
+    map.get(key).push(o);
+  });
+  return keys.map(key=>{
+    const items=map.get(key), first=items[0];
+    return {
+      order_id:first.order_id||key,
+      product_name:first.product_name,
+      status:first.status,
+      created_at:first.created_at,
+      quantity:items.reduce((s,it)=>s+(Number(it.quantity)||1),0),
+      amount:items.reduce((s,it)=>s+(Number(it.amount)||0),0),
+      items
+    };
+  });
+}
+
+async function loadLogs(){
+  const {data,error}=await sb.from('orders').select('*').eq('user_id',session.user.id)
+    .order('created_at',{ascending:false}).limit(100);
+  if(error) throw error;
+  logGroups=groupLogs(data||[]);
+  document.getElementById('countLogs').textContent=String(logGroups.length);
+}
+
+async function loadSms(){
+  const {data,error}=await sb.from('number_orders').select('*').eq('user_id',session.user.id)
+    .order('created_at',{ascending:false}).limit(100);
+  if(error) throw error;
+  smsRows=data||[];
+  document.getElementById('countSms').textContent=String(smsRows.length);
+}
+
+async function loadBoosters(){
+  const {data:{session:s}}=await sb.auth.getSession();
+  const token=s&&s.access_token;
+  if(!token){boostRows=[];document.getElementById('countBoost').textContent='0';return;}
+  const res=await fetch('/api/owlet?action=my_orders&page_size=50&live=0',{
+    headers:{Authorization:'Bearer '+token}
+  });
+  const json=await res.json().catch(()=>({}));
+  if(!json.success) throw new Error(json.message||'Could not load boosters');
+  boostRows=json.data||[];
+  document.getElementById('countBoost').textContent=String(boostRows.length);
+}
+
+function setHero(){
+  const map={
+    logs:['MJ Logs','Account logins and digital deliveries from your purchases.'],
+    sms:['MJ SMS','Virtual numbers and OTP codes you bought.'],
+    boosters:['MJ Boosters','Social growth orders and live delivery progress.']
+  };
+  const [t,s]=map[tab];
+  document.getElementById('heroTitle').textContent=t;
+  document.getElementById('heroSub').textContent=s;
+}
+
+function renderLogs(){
+  const list=document.getElementById('list');
+  if(!logGroups.length){
+    list.innerHTML='<div class="empty"><div class="ico">📦</div><h3>No log orders yet</h3><p>Buy from MJ Logs and deliveries show here.</p><a href="mj-logs.html"><i class="fa-solid fa-store"></i> Browse logs</a></div>';
+    return;
+  }
+  list.innerHTML=logGroups.map((o,i)=>{
+    const st=o.status||'Completed';
+    const initial=(o.product_name||'P').charAt(0).toUpperCase();
+    const qty=o.quantity||1;
+    return `<article class="card"><div class="row">
+      <div class="icon">${esc(initial)}</div>
+      <div class="main">
+        <div class="title-row"><div class="title">${esc(o.product_name||'Product')}</div><span class="status ${statusClass(st)}">${esc(st)}</span></div>
+        <div class="meta"><span><i class="fa-solid fa-cube"></i> ${qty} log${qty>1?'s':''}</span></div>
+        <div class="bottom"><div><div class="price">${money(o.amount)}</div><div class="date">${esc(fmtDate(o.created_at))}</div></div>
+        <button type="button" class="btn-view" data-kind="logs" data-i="${i}"><i class="fa-regular fa-eye"></i> View</button></div>
+      </div></div></article>`;
+  }).join('');
+  bindViewButtons();
+}
+
+function renderSms(){
+  const list=document.getElementById('list');
+  if(!smsRows.length){
+    list.innerHTML='<div class="empty"><div class="ico">📱</div><h3>No SMS orders yet</h3><p>Get a virtual number for OTP verification.</p><a href="mj-sms-choose-server.html"><i class="fa-solid fa-comment-sms"></i> Get a number</a></div>';
+    return;
+  }
+  list.innerHTML=smsRows.map((o,i)=>{
+    const name=(o.service_name||o.service_id||'Service').replace(/_/g,' ');
+    const st=o.status||'waiting_for_code';
+    return `<article class="card"><div class="row">
+      <div class="icon sms"><i class="fa-solid fa-mobile-screen"></i></div>
+      <div class="main">
+        <div class="title-row"><div class="title" style="text-transform:capitalize">${esc(name)}</div><span class="status ${statusClass(st)}">${esc(st)}</span></div>
+        <div class="meta">
+          <span>${esc(o.country_name||'—')}</span>
+          <span style="font-family:monospace">${esc(o.phone_number||'—')}</span>
+        </div>
+        <div class="bottom"><div><div class="price">${money(o.price)}</div><div class="date">${esc(fmtDate(o.created_at))}</div></div>
+        <button type="button" class="btn-view" data-kind="sms" data-i="${i}"><i class="fa-regular fa-eye"></i> View</button></div>
+      </div></div></article>`;
+  }).join('');
+  bindViewButtons();
+}
+
+function boostProgress(o){
+  const qty=Number(o.quantity||o.qty||0)||0;
+  const remains=Number(o.remains!=null?o.remains:qty);
+  const delivered=Math.max(0,qty-remains);
+  const pct=qty>0?Math.min(100,Math.round((delivered/qty)*100)):0;
+  return {delivered,remains,pct,qty};
+}
+
+function renderBoosters(){
+  const list=document.getElementById('list');
+  if(!boostRows.length){
+    list.innerHTML='<div class="empty"><div class="ico">⚡</div><h3>No boost orders yet</h3><p>Social growth orders will show here with progress.</p><a href="mj-boosters.html"><i class="fa-solid fa-bolt"></i> Place a boost</a></div>';
+    return;
+  }
+  list.innerHTML=boostRows.map((o,i)=>{
+    const name=o.service_name||o.name||('Service '+(o.service||''));
+    const st=o.status||'Pending';
+    const p=boostProgress(o);
+    return `<article class="card"><div class="row">
+      <div class="icon boost"><i class="fa-solid fa-bolt"></i></div>
+      <div class="main">
+        <div class="title-row"><div class="title">${esc(name)}</div><span class="status ${statusClass(st)}">${esc(st)}</span></div>
+        <div class="meta"><span>${p.delivered} / ${p.qty||'—'} done</span><span>${p.remains} left</span></div>
+        <div class="progress"><span style="width:${p.pct}%"></span></div>
+        <div class="bottom"><div><div class="price">${money(o.charge||o.amount||o.price)}</div><div class="date">${esc(fmtDate(o.created_at||o.date))}</div></div>
+        <button type="button" class="btn-view" data-kind="boosters" data-i="${i}"><i class="fa-regular fa-eye"></i> View</button></div>
+      </div></div></article>`;
+  }).join('');
+  bindViewButtons();
+}
+
+function bindViewButtons(){
+  document.querySelectorAll('.btn-view').forEach(btn=>{
+    btn.onclick=()=>openItem(btn.getAttribute('data-kind'), Number(btn.getAttribute('data-i')));
+  });
+}
+
+function openItem(kind,i){
+  modalMode=kind;
+  const body=document.getElementById('mBody');
+  if(kind==='logs'){
+    const g=logGroups[i]; if(!g) return;
+    modalPayload=g;
+    document.getElementById('mTitle').textContent=g.product_name||'Log order';
+    document.getElementById('mSub').textContent=(g.quantity||1)+' log'+(g.quantity>1?'s':'');
+    const blocks=(g.items||[]).map((it,n)=>{
+      const cred=it.login_credentials||'No credentials on this line.';
+      return (g.items.length===1?cred:('[Log '+(n+1)+']\n'+cred));
+    }).join('\n\n');
+    body.innerHTML=`
+      <div class="actions">
+        <button type="button" class="btn-copy" onclick="copyText()"><i class="fa-regular fa-copy"></i> Copy</button>
+        <button type="button" class="btn-dl" onclick="downloadText()"><i class="fa-solid fa-download"></i> .txt</button>
+        <a class="btn-guide" href="${esc((g.items[0]&&g.items[0].guide_url)||'https://t.me/mj_hub_tg')}" target="_blank" rel="noopener"><i class="fa-solid fa-arrow-up-right-from-square"></i> Guide</a>
+      </div>
+      <div class="warn"><i class="fa-solid fa-shield-halved"></i> Use a good VPN and enable 2-step verification after login.</div>
+      <div class="cred" id="credBox">${esc(blocks||'—')}</div>`;
+  } else if(kind==='sms'){
+    const o=smsRows[i]; if(!o) return;
+    modalPayload=o;
+    const name=(o.service_name||o.service_id||'SMS').replace(/_/g,' ');
+    document.getElementById('mTitle').textContent=name;
+    document.getElementById('mSub').textContent=o.status||'';
+    const isServer2=o.source==='logsdomain';
+    const numberPage=isServer2?'mj-sms2-number.html':'mj-sms-number.html';
+    const text=['Number: '+(o.phone_number||'—'),'Code: '+(o.code||'Not received'),'Country: '+(o.country_name||'—'),'Order: '+(o.order_id||'—')].join('\n');
+    body.innerHTML=`
+      <div class="detail-grid">
+        <div class="detail-row"><span class="l">Number</span><span class="v" style="font-family:monospace">${esc(o.phone_number||'—')}</span></div>
+        <div class="detail-row"><span class="l">Code</span><span class="v" style="font-family:monospace">${esc(o.code||'Not received')}</span></div>
+        <div class="detail-row"><span class="l">Country</span><span class="v">${esc(o.country_name||'—')}</span></div>
+        <div class="detail-row"><span class="l">Server</span><span class="v">${isServer2?'Server 2':'Server 1'}</span></div>
+        <div class="detail-row"><span class="l">Price</span><span class="v">${money(o.price)}</span></div>
+        <div class="detail-row"><span class="l">Date</span><span class="v">${esc(fmtDate(o.created_at))}</span></div>
+      </div>
+      <div class="actions">
+        <button type="button" class="btn-copy" onclick="copyRaw(${JSON.stringify(text).replace(/"/g,'&quot;')})"><i class="fa-regular fa-copy"></i> Copy</button>
+        <a class="btn-guide" href="${numberPage}?order_id=${encodeURIComponent(o.order_id||'')}"><i class="fa-solid fa-arrow-right"></i> Open number</a>
+      </div>
+      <div class="cred" id="credBox">${esc(text)}</div>`;
+  } else {
+    const o=boostRows[i]; if(!o) return;
+    modalPayload=o;
+    const name=o.service_name||o.name||'Boost order';
+    const p=boostProgress(o);
+    document.getElementById('mTitle').textContent=name;
+    document.getElementById('mSub').textContent=o.status||'';
+    const text=[
+      'Status: '+(o.status||'—'),
+      'Progress: '+p.delivered+' / '+(p.qty||'—')+' (left '+p.remains+')',
+      'Link: '+(o.link||o.url||'—'),
+      'Order: '+(o.order_id||o.id||'—'),
+      'Charge: '+(o.charge||o.amount||o.price||'—')
+    ].join('\n');
+    body.innerHTML=`
+      <div class="detail-grid">
+        <div class="detail-row"><span class="l">Status</span><span class="v">${esc(o.status||'—')}</span></div>
+        <div class="detail-row"><span class="l">Delivered</span><span class="v">${p.delivered} / ${p.qty||'—'}</span></div>
+        <div class="detail-row"><span class="l">Remaining</span><span class="v">${p.remains}</span></div>
+        <div class="detail-row"><span class="l">Link</span><span class="v">${esc(o.link||o.url||'—')}</span></div>
+        <div class="detail-row"><span class="l">Order ID</span><span class="v">${esc(o.order_id||o.id||'—')}</span></div>
+      </div>
+      <div class="progress" style="margin-bottom:12px"><span style="width:${p.pct}%"></span></div>
+      <div class="actions">
+        <button type="button" class="btn-copy" onclick="copyText()"><i class="fa-regular fa-copy"></i> Copy</button>
+        <a class="btn-guide" href="mj-boosters-history.html"><i class="fa-solid fa-bolt"></i> Full history</a>
+      </div>
+      <div class="cred" id="credBox">${esc(text)}</div>`;
+  }
+  document.getElementById('modal').classList.add('open');
+}
+
+function closeModal(){document.getElementById('modal').classList.remove('open');}
+function copyText(){
+  const t=document.getElementById('credBox');
+  navigator.clipboard.writeText((t&&t.textContent)||'').then(()=>toast('Copied')).catch(()=>toast('Copy failed'));
+}
+function copyRaw(t){navigator.clipboard.writeText(t||'').then(()=>toast('Copied')).catch(()=>toast('Copy failed'));}
+function downloadText(){
+  const t=(document.getElementById('credBox')&&document.getElementById('credBox').textContent)||'';
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(new Blob([t],{type:'text/plain'}));
+  a.download='mj-hub-order.txt';a.click();URL.revokeObjectURL(a.href);
+}
+
+function render(){
+  setHero();
+  if(tab==='logs') renderLogs();
+  else if(tab==='sms') renderSms();
+  else renderBoosters();
+}
+
+document.querySelectorAll('.type-tab').forEach(btn=>{
+  btn.addEventListener('click',()=>{
+    document.querySelectorAll('.type-tab').forEach(b=>b.classList.remove('active'));
+    btn.classList.add('active');
+    tab=btn.getAttribute('data-tab')||'logs';
+    render();
+  });
+});
+
+async function boot(){
+  const {data:{session:s}}=await sb.auth.getSession();
+  if(!s||!s.user){location.href='auth.html';return;}
+  session=s;
+  const list=document.getElementById('list');
+  try{
+    await Promise.all([
+      loadLogs().catch(e=>{console.warn(e);logGroups=[];document.getElementById('countLogs').textContent='0';}),
+      loadSms().catch(e=>{console.warn(e);smsRows=[];document.getElementById('countSms').textContent='0';}),
+      loadBoosters().catch(e=>{console.warn(e);boostRows=[];document.getElementById('countBoost').textContent='0';})
+    ]);
+  }catch(e){}
+  // Deep link ?tab=sms|boosters|logs
+  try{
+    const q=new URLSearchParams(location.search).get('tab');
+    if(q==='sms'||q==='boosters'||q==='logs'){
+      tab=q;
+      document.querySelectorAll('.type-tab').forEach(b=>{
+        b.classList.toggle('active',b.getAttribute('data-tab')===tab);
+      });
+    }
+  }catch(e){}
+  render();
+}
+boot();
+</script>
+</body>
+</html>
