@@ -304,7 +304,12 @@ export default async function handler(req, res) {
         quantity: 1,
         amount: product.price,
         status: 'completed',
-        login_credentials: formatCredentials(item.details, product.display_description || product.description || product.name || product.product_name) || null,
+        // Format hint = product description ONLY (never product name — names like
+        // "GMX" / marketing text caused Username/Email swaps in formatCredentials).
+        login_credentials: formatCredentials(
+          item.details,
+          product.display_description || product.description || ''
+        ) || String(item.details || '').trim() || null,
         supplier_ref: String(item.product_detail_id || ''),
         guide_url: 'https://t.me/mj_hub_tg'
       });
