@@ -6011,40 +6011,59 @@ async function fetchUserOrders(userId) {
     renderOrders();
 }
 
-// Total Orders / Total Spent cards on Home. Deliberately a separate,
-// dedicated count+sum query rather than reusing `userOrders` above:
-// fetchUserOrders() only pulls the 50 most-recent rows (fine for the "My
-// Orders" list) and includes pending/failed rows (fine for that list too,
-// but wrong for a lifetime total). This counts every completed order
-// across BOTH log purchases (orders table) and SMS numbers (number_orders
-// table) with accurate SQL aggregation, the same approach the admin
-// dashboard's overview stats use.
+// Total Orders / Total Spent — completed orders only across ALL services.
+// Logs (orders) + SMS (number_orders) + Boosters (booster_orders).
+// Add a new block in SERVICE_SPEND_SOURCES when you launch another service.
 async function fetchUserSpendingSummary(userId) {
     if (!supabaseClient || !userId) return;
+
+    const COMPLETED = ['completed', 'paid', 'success', 'delivered', 'partial'];
+    // "partial" boosts often still charged — count as completed spend; exclude refunded/cancelled/failed
+
+    function isCompletedStatus(s) {
+        const t = String(s || '').toLowerCase();
+        if (/cancel|refund|fail|reject/.test(t)) return false;
+        return COMPLETED.some((c) => t === c || t.includes(c));
+    }
+
     try {
-        const [logsRes, smsRes] = await Promise.all([
+        const [logsRes, smsRes, boostRes] = await Promise.all([
             supabaseClient.from('orders')
-                .select('amount', { count: 'exact' })
+                .select('amount, status', { count: 'exact' })
                 .eq('user_id', userId)
                 .in('status', ['completed', 'paid', 'success', 'delivered']),
             supabaseClient.from('number_orders')
-                .select('price', { count: 'exact' })
+                .select('price, status', { count: 'exact' })
                 .eq('user_id', userId)
-                .eq('status', 'completed')
+                .eq('status', 'completed'),
+            // Boosters — table may be missing on old projects; ignore errors
+            supabaseClient.from('booster_orders')
+                .select('price_ngn, charge, price, status')
+                .eq('user_id', userId)
         ]);
 
-        const logRows = logsRes.data || [];
-        const smsRows = smsRes.data || [];
-        const totalOrders = (logsRes.count ?? logRows.length) + (smsRes.count ?? smsRows.length);
+        const logRows = logsRes.error ? [] : (logsRes.data || []);
+        const smsRows = smsRes.error ? [] : (smsRes.data || []);
+        const boostRows = (boostRes.error ? [] : (boostRes.data || [])).filter((o) => isCompletedStatus(o.status));
+
+        const logCount = logsRes.error ? 0 : (logsRes.count ?? logRows.length);
+        const smsCount = smsRes.error ? 0 : (smsRes.count ?? smsRows.length);
+        const boostCount = boostRows.length;
+
+        const totalOrders = logCount + smsCount + boostCount;
+
         const totalSpent =
             logRows.reduce((s, o) => s + (Number(o.amount) || 0), 0) +
-            smsRows.reduce((s, o) => s + (Number(o.price) || 0), 0);
+            smsRows.reduce((s, o) => s + (Number(o.price) || 0), 0) +
+            boostRows.reduce((s, o) => {
+                const n = Number(o.price_ngn != null ? o.price_ngn : (o.charge != null ? o.charge : o.price));
+                return s + (Number.isFinite(n) ? n : 0);
+            }, 0);
 
         safeSet('homeTotalOrders', totalOrders.toLocaleString());
         safeSet('homeTotalSpent', '₦' + totalSpent.toLocaleString(undefined, { minimumFractionDigits: 2 }));
     } catch (e) {
-        // Non-critical — leave the cards at their default 0 rather than
-        // showing an error on the home screen for a stat, not a balance.
+        // Non-critical — leave cards at 0
     }
 }
 
