@@ -847,7 +847,8 @@ async function getOverviewStats(body) {
     if (p.id != null) productById.set(String(p.id), p);
     if (p.name) productByName.set(String(p.name).toLowerCase(), p);
   }
-  const logsSoldCount = logRows.length;
+  // Units sold (sum quantity). One order with qty 3 counts as 3.
+  const logsSoldCount = logRows.reduce((s, r) => s + Math.max(1, Number(r.quantity) || 1), 0);
   const logsAmountSpent = logRows.reduce((s, r) => s + Number(r.amount || 0), 0);
   const logsProfit = logRows.reduce((s, r) => {
     const paid = Number(r.amount || 0);
