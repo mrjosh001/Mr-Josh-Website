@@ -245,7 +245,7 @@ export default async function handler(req, res) {
       },
       body: JSON.stringify({
         product_key,
-        safeQty,
+        quantity: safeQty,
         external_order_id: orderRef,
         customer_info: customer_info || {}
       })
@@ -312,9 +312,11 @@ export default async function handler(req, res) {
     // Whatever format the supplier sends (Username/Password labels, email:pass,
     // JSON, etc.) is stored as-is in a single login_credentials column so
     // nothing gets silently dropped or misrouted into "description".
-    for (const item of items) {
+    for (let idx = 0; idx < items.length; idx++) {
+      const item = items[idx];
+      const lineOrderId = items.length > 1 ? `${orderRef}-${idx + 1}` : orderRef;
       await insertLogOrder({
-        order_id: orderRef,
+        order_id: lineOrderId,
         user_id,
         product_id: product.id,
         product_code: product_key,
