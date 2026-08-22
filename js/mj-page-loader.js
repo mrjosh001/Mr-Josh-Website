@@ -1,6 +1,6 @@
 /**
- * MJ Hub — page transition loader
- * Visible when user clicks to another HTML page (not first-paint only).
+ * MJ Hub — infinity page loader (overlay on navigation)
+ * Style: glowing infinity mark + "Loading" on dark field (reference: ∞ loop).
  */
 (function () {
   if (window.__mjPageLoader) return;
@@ -14,27 +14,40 @@
     var css = [
       '#' + OVERLAY_ID + '{',
       'position:fixed;inset:0;z-index:2147483000;',
-      'display:flex;flex-direction:column;align-items:center;justify-content:center;gap:18px;',
-      'background:#05070d;',
+      'display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;',
+      'background:rgba(5,7,13,.92);',
+      '-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px);',
       'opacity:0;visibility:hidden;pointer-events:none;',
-      'transition:opacity .2s ease,visibility .2s ease;',
+      'transition:opacity .22s ease,visibility .22s ease;',
       '}',
       '#' + OVERLAY_ID + '.is-on{opacity:1;visibility:visible;pointer-events:auto;}',
-      '#' + OVERLAY_ID + ' .mj-spin{',
-      'width:40px;height:40px;border-radius:50%;',
-      'border:3px solid rgba(125,211,252,.22);',
-      'border-top-color:#7dd3fc;',
-      'animation:mjSpin .65s linear infinite;',
-      'box-shadow:0 0 20px rgba(56,189,248,.35);',
+      '#' + OVERLAY_ID + ' .mj-inf-wrap{',
+      'width:88px;height:48px;position:relative;',
+      'filter:drop-shadow(0 0 12px rgba(167,139,250,.55)) drop-shadow(0 0 22px rgba(56,189,248,.35));',
+      '}',
+      '#' + OVERLAY_ID + ' .mj-inf-wrap svg{width:100%;height:100%;overflow:visible;}',
+      '#' + OVERLAY_ID + ' .mj-inf-wrap path{',
+      'fill:none;stroke:#c4b5fd;stroke-width:3.2;stroke-linecap:round;stroke-linejoin:round;',
+      'stroke-dasharray:140;stroke-dashoffset:140;',
+      'animation:mjInfFlow 1.35s ease-in-out infinite;',
+      '}',
+      '#' + OVERLAY_ID + ' .mj-inf-wrap path.mj-inf-glow{',
+      'stroke:#67e8f9;stroke-width:2.4;opacity:.95;',
+      'filter:drop-shadow(0 0 6px #22d3ee);',
+      'animation-delay:.08s;',
       '}',
       '#' + OVERLAY_ID + ' .mj-lbl{',
       'font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;',
-      'font-size:12px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;',
-      'color:rgba(226,232,240,.75);',
+      'font-size:11px;font-weight:600;letter-spacing:.18em;text-transform:lowercase;',
+      'color:rgba(148,163,184,.85);',
       '}',
-      '@keyframes mjSpin{to{transform:rotate(360deg)}}',
+      '@keyframes mjInfFlow{',
+      '0%{stroke-dashoffset:140;opacity:.4}',
+      '45%{stroke-dashoffset:0;opacity:1}',
+      '100%{stroke-dashoffset:-140;opacity:.4}',
+      '}',
       '@media (prefers-reduced-motion:reduce){',
-      '#' + OVERLAY_ID + ' .mj-spin{animation:none;border-top-color:#7dd3fc;opacity:.9}',
+      '#' + OVERLAY_ID + ' .mj-inf-wrap path{animation:none;stroke-dashoffset:0;opacity:.95}',
       '}'
     ].join('');
     var s = document.createElement('style');
@@ -42,6 +55,13 @@
     s.textContent = css;
     (document.head || document.documentElement).appendChild(s);
   }
+
+  var INF_SVG =
+    '<div class="mj-inf-wrap" aria-hidden="true">' +
+    '<svg viewBox="0 0 80 40" fill="none" xmlns="http://www.w3.org/2000/svg">' +
+    '<path d="M12 20 C12 10, 22 8, 28 14 C34 20, 36 26, 40 20 C44 14, 46 8, 52 14 C58 20, 68 30, 68 20 C68 10, 58 8, 52 14 C46 20, 44 26, 40 20 C36 14, 34 8, 28 14 C22 20, 12 30, 12 20 Z"/>' +
+    '<path class="mj-inf-glow" d="M12 20 C12 10, 22 8, 28 14 C34 20, 36 26, 40 20 C44 14, 46 8, 52 14 C58 20, 68 30, 68 20 C68 10, 58 8, 52 14 C46 20, 44 26, 40 20 C36 14, 34 8, 28 14 C22 20, 12 30, 12 20 Z"/>' +
+    '</svg></div>';
 
   function ensureOverlay() {
     injectStyle();
@@ -52,16 +72,13 @@
     el.setAttribute('role', 'status');
     el.setAttribute('aria-live', 'polite');
     el.setAttribute('aria-busy', 'true');
-    el.innerHTML =
-      '<div class="mj-spin" aria-hidden="true"></div>' +
-      '<div class="mj-lbl">Loading</div>';
+    el.innerHTML = INF_SVG + '<div class="mj-lbl">loading</div>';
     (document.body || document.documentElement).appendChild(el);
     return el;
   }
 
   function show() {
     var el = ensureOverlay();
-    // force reflow so transition always runs
     void el.offsetWidth;
     el.classList.add('is-on');
     try { sessionStorage.setItem('mj_nav_loading', '1'); } catch (e) {}
@@ -110,37 +127,25 @@
     true
   );
 
-  // Programmatic navigations: location.href = '...'
-  var _assign = window.location.assign.bind(window.location);
-  var _replace = window.location.replace.bind(window.location);
   try {
+    var _assign = window.location.assign.bind(window.location);
+    var _replace = window.location.replace.bind(window.location);
     window.location.assign = function (url) {
-      try {
-        if (sameOrigin(String(url))) show();
-      } catch (e) {}
+      try { if (sameOrigin(String(url))) show(); } catch (e) {}
       return _assign(url);
     };
     window.location.replace = function (url) {
-      try {
-        if (sameOrigin(String(url))) show();
-      } catch (e) {}
+      try { if (sameOrigin(String(url))) show(); } catch (e) {}
       return _replace(url);
     };
   } catch (e) {}
 
   window.addEventListener('pageshow', hide);
-  window.addEventListener('load', function () {
-    setTimeout(hide, 30);
-  });
-  document.addEventListener('DOMContentLoaded', function () {
-    setTimeout(hide, 60);
-  });
+  window.addEventListener('load', function () { setTimeout(hide, 40); });
+  document.addEventListener('DOMContentLoaded', function () { setTimeout(hide, 80); });
 
-  // If we arrived from another MJ page, show boot until load
   try {
-    if (sessionStorage.getItem('mj_nav_loading') === '1') {
-      show();
-    }
+    if (sessionStorage.getItem('mj_nav_loading') === '1') show();
   } catch (e) {}
 
   window.mjShowPageLoader = show;
