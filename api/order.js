@@ -51,6 +51,16 @@ async function requireAuthUser(req) {
   return { user };
 }
 
+
+async function insertLogOrder(row) {
+  let { error } = await supabase.from('orders').insert(row);
+  if (error && /login_credentials_raw|schema cache|column/i.test(String(error.message || ''))) {
+    const { login_credentials_raw, ...rest } = row;
+    ({ error } = await supabase.from('orders').insert(rest));
+  }
+  return error;
+}
+
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
@@ -229,7 +239,7 @@ export default async function handler(req, res) {
     // JSON, etc.) is stored as-is in a single login_credentials column so
     // nothing gets silently dropped or misrouted into "description".
     for (const item of items) {
-      await supabase.from('orders').insert({
+      await insertLogOrder({
         order_id: orderRef,
         user_id,
         product_id: product.id,

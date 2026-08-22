@@ -51,6 +51,16 @@ async function requireAuthUser(req) {
   return { user };
 }
 
+
+async function insertLogOrder(row) {
+  let { error } = await supabase.from('orders').insert(row);
+  if (error && /login_credentials_raw|schema cache|column/i.test(String(error.message || ''))) {
+    const { login_credentials_raw, ...rest } = row;
+    ({ error } = await supabase.from('orders').insert(rest));
+  }
+  return error;
+}
+
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
@@ -235,7 +245,7 @@ export default async function handler(req, res) {
 
     if (items.length) {
       for (const item of items) {
-        const { error: insertErr } = await supabase.from('orders').insert({
+        const insertErr = await insertLogOrder({
           order_id: supplierOrderId,
           user_id,
           product_id: product.id,
@@ -247,6 +257,7 @@ export default async function handler(req, res) {
           amount: product.price,
           status: 'completed',
           login_credentials: formatCredentials(item.details, product.display_description || product.description || product.name),
+          login_credentials_raw: item.details || null,
           supplier_ref: String(item.serial || ''),
           guide_url: 'https://t.me/mj_hub_tg'
         });
@@ -256,7 +267,7 @@ export default async function handler(req, res) {
       }
     } else {
       // fallback single row if API returns no items array
-      const { error: insertErr } = await supabase.from('orders').insert({
+      const insertErr = await insertLogOrder({
         order_id: supplierOrderId,
         user_id,
         product_id: product.id,
@@ -267,7 +278,8 @@ export default async function handler(req, res) {
         quantity: qty,
         amount: total,
         status: 'completed',
-        login_credentials: detailsText || 'Delivered — see order for details',
+        login_credentials: formatCredentials(detailsText, product.display_description || product.description || product.name) || detailsText || 'Delivered — see order for details',
+        login_credentials_raw: detailsText || null,
         guide_url: 'https://t.me/mj_hub_tg'
       });
       if (insertErr) {

@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
+import { formatCredentials } from '../lib/formatCredentials.js';
 
 /**
  * POST /api/order-manual
@@ -120,6 +121,16 @@ async function requireAuthUser(req) {
     return { error: { status: 401, message: 'Invalid or expired session' } };
   }
   return { user };
+}
+
+
+async function insertLogOrder(row) {
+  let { error } = await supabase.from('orders').insert(row);
+  if (error && /login_credentials_raw|schema cache|column/i.test(String(error.message || ''))) {
+    const { login_credentials_raw, ...rest } = row;
+    ({ error } = await supabase.from('orders').insert(rest));
+  }
+  return error;
 }
 
 export default async function handler(req, res) {
@@ -300,7 +311,8 @@ export default async function handler(req, res) {
         quantity: 1,
         amount: product.price,
         status: 'completed',
-        login_credentials: row.credential,
+        login_credentials: formatCredentials(row.credential, product.display_description || product.description || product.name) || row.credential,
+        login_credentials_raw: row.credential || null,
         supplier_ref: String(row.id),
         guide_url: 'https://t.me/mj_hub_tg'
       });
@@ -334,7 +346,7 @@ export default async function handler(req, res) {
       success: true,
       message: 'Order fulfilled successfully',
       data: {
-        items: claimedRows.map(r => ({ details: r.credential })),
+        items: claimedRows.map(r => ({ details: formatCredentials(r.credential, product.display_description || product.description || product.name) || r.credential })),
         total_amount: total,
         new_balance: newBalance,
         order_id: orderRef,
