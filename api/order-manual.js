@@ -354,6 +354,7 @@ export default async function handler(req, res) {
       message: 'Order fulfilled successfully',
       data: {
         items: claimedRows.map(r => ({ details: formatCredentials(r.credential, product.display_description || product.description || product.name) || r.credential })),
+        login_credentials: combinedCreds || null,
         total_amount: total,
         new_balance: newBalance,
         order_id: orderRef,

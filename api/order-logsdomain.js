@@ -530,15 +530,26 @@ export default async function handler(req, res) {
       })
       .eq('product_key', product_key);
 
+    const formattedItems = items.length
+      ? items.map((i) => ({
+          details: formatCredentials(i.details, formatHint) || String(i.details || '').trim(),
+          serial: i.serial
+        }))
+      : [{ details: formatCredentials(detailsText, formatHint) || detailsText || 'Order completed' }];
+    const loginCredentials =
+      formatMultiLogCredentials(items.length ? items : [{ details: detailsText }], formatHint) ||
+      formattedItems.map((i) => i.details).filter(Boolean).join('\n\n') ||
+      detailsText ||
+      '';
+
     return res.status(200).json({
       success: true,
       message: shortfall > 0
         ? `Delivered ${deliveredCount} of ${qty}. Shortfall of ${shortfall} was refunded to your wallet.`
         : 'Order fulfilled successfully',
       data: {
-        items: items.length
-          ? items.map((i) => ({ details: formatCredentials(i.details, product.display_description || product.description || product.name), serial: i.serial }))
-          : [{ details: detailsText || 'Order completed' }],
+        items: formattedItems,
+        login_credentials: loginCredentials,
         total_amount: chargedTotal,
         new_balance: newBalance,
         order_id: orderRef,

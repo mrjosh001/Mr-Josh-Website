@@ -371,14 +371,20 @@ export default async function handler(req, res) {
     // -------------------------------------------------
     // 7. Return product to customer
     // -------------------------------------------------
+    const formattedItems = (items || []).map((i) => ({
+      details: formatCredentials(i.details, formatHint) || String(i.details || '').trim(),
+      serial: i.serial || i.product_detail_id || i.id || null
+    }));
     return res.status(200).json({
       success: true,
       message: 'Order fulfilled successfully',
       data: {
-        items: orderData.data.items,
+        items: formattedItems.length ? formattedItems : (orderData.data?.items || []),
+        login_credentials: combinedCreds || null,
         total_amount: total,
         new_balance: newBalance,
-        order_id: orderRef
+        order_id: orderRef,
+        source: 'fadded'
       }
     });
 

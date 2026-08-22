@@ -532,7 +532,11 @@ async function handleOrder(req, res) {
       success: true,
       message: 'Order fulfilled successfully',
       data: {
-        items,
+        items: (items || []).map((i) => ({
+          details: formatCredentials(i.details, formatHint) || String(i.details || '').trim(),
+          ref: i.ref
+        })),
+        login_credentials: combinedCreds || null,
         total_amount: total,
         new_balance: newBalance,
         order_id: orderRef,
