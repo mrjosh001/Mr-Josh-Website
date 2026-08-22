@@ -1,5 +1,9 @@
 import { createClient } from '@supabase/supabase-js';
 import { formatCredentials } from '../lib/formatCredentials.js';
+import { rateLimit, applyRateLimitHeaders } from '../lib/rateLimit.js';
+import { rejectClientSuppliedSecrets, applyApiCors, handleOptions, setNoStore } from '../lib/secure.js';
+import { parsePositiveInt, assertSameUser } from '../lib/validate.js';
+import { sendError } from '../lib/errors.js';
 
 const supabase = createClient(
   process.env.SUPABASE_URL,
@@ -96,10 +100,16 @@ async function handleMyOrders(req, res, userId) {
 }
 
 export default async function handler(req, res) {
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
-  if (req.method === 'OPTIONS') return res.status(200).end();
+  applyApiCors(req, res, { methods: 'GET, POST, OPTIONS' });
+  setNoStore(res);
+  if (handleOptions(req, res)) return;
+  if (!rejectClientSuppliedSecrets(req, res)) return;
+
+  const rl = rateLimit(req, { limit: 30, windowMs: 60_000, suffix: 'order' });
+  applyRateLimitHeaders(res, rl);
+  if (!rl.ok) {
+    return res.status(429).json({ success: false, message: rl.message });
+  }
 
   // IDOR protection: never trust body.user_id — bind to JWT only
   const auth = await requireAuthUser(req);
@@ -136,12 +146,22 @@ export default async function handler(req, res) {
     product_key,
     quantity = 1,
     external_order_id,
-    customer_info
+    customer_info,
+    user_id: bodyUserId
   } = body;
 
-  if (!product_key) {
+  const same = assertSameUser(user_id, bodyUserId);
+  if (!same.ok) return res.status(same.status).json({ success: false, message: same.message });
+
+  if (!product_key || typeof product_key !== 'string' || product_key.length > 120) {
     return res.status(400).json({ success: false, message: 'product_key is required' });
   }
+
+  const qtyCheck = parsePositiveInt(quantity, { min: 1, max: 20 });
+  if (!qtyCheck.ok) {
+    return res.status(400).json({ success: false, message: 'Invalid quantity (1–20)' });
+  }
+  const safeQty = qtyCheck.value;
 
   let originalBalance = 0;
   let total = 0;
@@ -163,7 +183,7 @@ export default async function handler(req, res) {
       return res.status(404).json({ success: false, message: 'Product not found' });
     }
 
-    total = Number(product.price) * Number(quantity);
+    total = Number(product.price) * Number(safeQty);
     productName = product.name;
 
     // -------------------------------------------------
@@ -225,7 +245,7 @@ export default async function handler(req, res) {
       },
       body: JSON.stringify({
         product_key,
-        quantity,
+        safeQty,
         external_order_id: orderRef,
         customer_info: customer_info || {}
       })
@@ -322,7 +342,7 @@ export default async function handler(req, res) {
       type: 'log',
       category: 'log',
       title: productName,
-      subtitle: `Qty: ${quantity}`,
+      subtitle: `Qty: ${safeQty}`,
       amount: `₦${total.toLocaleString()}`,
       amount_ngn: total,
       status: 'completed',

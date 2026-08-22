@@ -20,6 +20,10 @@
  */
 
 import crypto from 'crypto';
+import { rateLimit, applyRateLimitHeaders } from '../lib/rateLimit.js';
+import { rejectClientSuppliedSecrets, applyApiCors, handleOptions, setNoStore } from '../lib/secure.js';
+import { parseAmountNgn } from '../lib/validate.js';
+import { sendError } from '../lib/errors.js';
 import { createClient } from '@supabase/supabase-js';
 
 
@@ -1040,7 +1044,12 @@ async function handleCheckout(req, res, raw, publicKey, businessId) {
     return res.status(400).json({ success: false, message: 'Invalid JSON body' });
   }
 
-  const amount = Math.round(Number(body?.amount) || 0);
+  const rlPay = rateLimit(req, { limit: 15, windowMs: 60_000, suffix: 'pocketfi-checkout' });
+  applyRateLimitHeaders(res, rlPay);
+  if (!rlPay.ok) return res.status(429).json({ success: false, message: rlPay.message });
+  const amountParsed = parseAmountNgn(body?.amount, { min: 100, max: 500000 });
+  if (!amountParsed.ok) return res.status(400).json({ success: false, message: amountParsed.message });
+  const amount = amountParsed.value;
   const walletRaw = String(body?.wallet || body?.currency || 'ngn').toLowerCase();
   const wallet = walletRaw === 'usd' || walletRaw === 'dollar' ? 'usd' : 'ngn';
   if (amount < MIN) {
@@ -1339,13 +1348,17 @@ export default async function handler(req, res) {
   }
   // --- /Referral ---
 
-  res.setHeader('Access-Control-Allow-Origin', '*');
+  /* CORS via applyApiCors */
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
-  if (req.method === 'OPTIONS') return res.status(200).end();
+  if (handleOptions(req, res)) return;
+  applyApiCors(req, res, { methods: 'POST, OPTIONS' });
+  setNoStore(res);
   if (req.method !== 'POST') {
     return res.status(405).json({ success: false, message: 'POST only' });
   }
+  if (!rejectClientSuppliedSecrets(req, res)) return;
+
 
   const secret = process.env.POCKETFI_SECRET_KEY;
   const publicKey = process.env.POCKETFI_PUBLIC_KEY;

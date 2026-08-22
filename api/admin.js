@@ -1,5 +1,8 @@
 import { createClient } from '@supabase/supabase-js';
 import { applyMarkup } from '../lib/pricing.js';
+import { rateLimit, applyRateLimitHeaders } from '../lib/rateLimit.js';
+import { rejectClientSuppliedSecrets, applyApiCors, handleOptions, setNoStore } from '../lib/secure.js';
+import { sendError } from '../lib/errors.js';
 
 /**
  * POST /api/admin
@@ -189,6 +192,20 @@ async function userDelete(body, adminId) {
 }
 
 async function userUpdate(body) {
+  // balance changes only allowed here (admin JWT already verified)
+  if (body.balance != null) {
+    const b = Number(body.balance);
+    if (!Number.isFinite(b) || b < 0 || b > 50_000_000) {
+      return { status: 400, body: { success: false, message: 'Invalid balance value' } };
+    }
+  }
+  if (body.balance_usd != null) {
+    const b = Number(body.balance_usd);
+    if (!Number.isFinite(b) || b < 0 || b > 1_000_000) {
+      return { status: 400, body: { success: false, message: 'Invalid USD balance' } };
+    }
+  }
+
   const { user_id, full_name, username, email, phone_number, balance, balance_usd, is_admin } = body;
   if (!user_id) return { status: 400, body: { success: false, message: 'user_id is required' } };
   if (balance == null || isNaN(Number(balance))) {
@@ -946,15 +963,17 @@ function secretsStatusHandle() {
 // ---------- router ----------
 
 export default async function handler(req, res) {
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  applyApiCors(req, res, { methods: 'POST, OPTIONS' });
+  setNoStore(res);
   res.setHeader('Content-Type', 'application/json');
-
-  if (req.method === 'OPTIONS') return res.status(200).end();
+  if (handleOptions(req, res)) return;
+  if (!rejectClientSuppliedSecrets(req, res)) return;
   if (req.method !== 'POST') {
     return res.status(405).json({ success: false, message: 'Method not allowed' });
   }
+  const rl = rateLimit(req, { limit: 60, windowMs: 60_000, suffix: 'admin' });
+  applyRateLimitHeaders(res, rl);
+  if (!rl.ok) return res.status(429).json({ success: false, message: rl.message });
 
   const admin = await requireAdmin(req);
   if (!admin.ok) return res.status(admin.status).json({ success: false, message: admin.message });

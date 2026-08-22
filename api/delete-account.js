@@ -1,4 +1,7 @@
 import { createClient } from '@supabase/supabase-js';
+import { rateLimit, applyRateLimitHeaders } from '../lib/rateLimit.js';
+import { rejectClientSuppliedSecrets, applyApiCors, handleOptions, setNoStore } from '../lib/secure.js';
+import { sendError } from '../lib/errors.js';
 
 /**
  * POST /api/delete-account
@@ -17,15 +20,17 @@ const supabase = createClient(
 );
 
 export default async function handler(req, res) {
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  applyApiCors(req, res, { methods: 'POST, OPTIONS' });
+  setNoStore(res);
   res.setHeader('Content-Type', 'application/json');
-
-  if (req.method === 'OPTIONS') return res.status(200).end();
+  if (handleOptions(req, res)) return;
+  if (!rejectClientSuppliedSecrets(req, res)) return;
   if (req.method !== 'POST') {
     return res.status(405).json({ success: false, message: 'Method not allowed' });
   }
+  const rl = rateLimit(req, { limit: 5, windowMs: 15 * 60_000, suffix: 'delete-account' });
+  applyRateLimitHeaders(res, rl);
+  if (!rl.ok) return res.status(429).json({ success: false, message: rl.message });
 
   const authHeader = req.headers.authorization || '';
   const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : null;
