@@ -216,6 +216,48 @@
       transition: width .4s ease;
     }
 
+  
+    /* Log receipt modal — brand clean */
+    .sheet-b .log-actions{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px}
+    .sheet-b .la-btn{
+      flex:1;min-width:100px;border:none;cursor:pointer;font-family:inherit;font-weight:700;font-size:13px;
+      padding:12px 14px;border-radius:14px;display:inline-flex;align-items:center;justify-content:center;gap:8px;
+      text-decoration:none;color:inherit
+    }
+    .sheet-b .la-btn.copy{background:rgba(59,130,246,.12);color:#3b82f6;border:1px solid rgba(59,130,246,.2)}
+    .sheet-b .la-btn.dl{background:rgba(148,163,184,.12);color:var(--text);border:1px solid var(--border)}
+    .sheet-b .la-btn.guide{
+      background:linear-gradient(135deg,#fbbf24,#f59e0b);color:#1c1917;
+      box-shadow:0 8px 18px rgba(245,158,11,.35)
+    }
+    .sheet-b .vpn-banner{
+      display:flex;gap:10px;align-items:flex-start;padding:12px 14px;border-radius:14px;margin-bottom:14px;
+      background:rgba(251,191,36,.12);border:1px solid rgba(251,191,36,.35);
+      color:#b45309;font-size:13px;font-weight:600;line-height:1.45
+    }
+    :root[data-theme="dark"] .sheet-b .vpn-banner{color:#fbbf24;background:rgba(251,191,36,.1)}
+    .sheet-b .vpn-banner i{margin-top:2px}
+    .sheet-b .desc-box{
+      padding:12px 14px;border-radius:14px;margin-bottom:14px;font-size:13px;line-height:1.45;
+      background:var(--blue-soft);border:1px solid rgba(59,130,246,.2);color:var(--text)
+    }
+    .sheet-b .desc-box .lbl{font-size:11px;font-weight:800;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;margin-bottom:6px}
+    .sheet-b .cred-cards{display:flex;flex-direction:column;gap:10px}
+    .sheet-b .cred-card{
+      border-radius:16px;padding:14px;background:rgba(148,163,184,.08);border:1px solid var(--border)
+    }
+    :root[data-theme="light"] .sheet-b .cred-card{background:#f8fafc}
+    .sheet-b .cred-card .idx{font-size:12px;font-weight:800;color:var(--muted);margin-bottom:10px}
+    .sheet-b .cred-line{display:flex;gap:10px;align-items:flex-start;margin-bottom:8px;font-size:13px}
+    .sheet-b .cred-line:last-child{margin-bottom:0}
+    .sheet-b .cred-k{min-width:78px;font-weight:800;font-size:11px;letter-spacing:.03em;color:var(--muted);padding-top:2px}
+    .sheet-b .cred-k.pass{color:var(--danger)}
+    .sheet-b .cred-v{flex:1;font-weight:700;word-break:break-all;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px}
+    .sheet-b .cred-v button{
+      margin-left:8px;border:none;background:rgba(59,130,246,.12);color:#3b82f6;border-radius:8px;
+      padding:4px 8px;font-size:11px;font-weight:700;cursor:pointer;font-family:inherit
+    }
+
   </style>
 </head>
 <body>
@@ -640,47 +682,76 @@ function openModal(kind, i) {
   if (kind === 'logs') {
     const g = logGroups[i];
     if (!g) return;
+    const items = g.items && g.items.length ? g.items : [g];
+    const guide = g.guide_url || items[0].guide_url || 'https://t.me/mj_hub_tg';
+    const desc = g.description || items[0].description || '';
     title.textContent = g.product_name || 'Order';
-    if (sub) sub.textContent = (g.quantity || 1) + ' log(s) · ' + (g.status || '');
-    const lines = (g.items || [g])
-      .map((it, idx) => {
-        const cred =
-          it.login_credentials ||
-          [it.credentials_id, it.credentials_pass].filter(Boolean).join(':') ||
-          g.login_credentials ||
-          '';
-        return (
-          (g.items && g.items.length > 1 ? `[Item ${idx + 1}]\n` : '') +
-          'Product: ' +
-          (it.product_name || g.product_name || '') +
-          '\n' +
-          'Order ID: ' +
-          (it.order_id || g.order_id || '') +
-          '\n' +
-          'Login: ' +
-          cred +
-          '\n' +
-          'Guide: ' +
-          (it.guide_url || g.guide_url || '') +
-          '\n' +
-          'Date: ' +
-          (it.created_at || g.created_at || '')
-        );
-      })
-      .join('\n\n');
-    body.innerHTML = `
-      <div class="detail-grid">
-        <div class="detail-row"><span class="l">Status</span><span class="v">${esc(g.status || '—')}</span></div>
-        <div class="detail-row"><span class="l">Qty</span><span class="v">${g.quantity || 1}</span></div>
-        <div class="detail-row"><span class="l">Amount</span><span class="v">${money(g.amount)}</span></div>
-        <div class="detail-row"><span class="l">Order ID</span><span class="v">${esc(g.order_id || '—')}</span></div>
-      </div>
-      <div class="actions">
-        <button type="button" class="btn-copy" onclick="copyText()"><i class="fa-regular fa-copy"></i> Copy</button>
-        <button type="button" class="btn-copy" onclick="downloadText()"><i class="fa-solid fa-download"></i> Download</button>
-      </div>
-      <div class="cred" id="credBox">${esc(lines)}</div>`;
+    if (sub) sub.textContent = (g.quantity || items.length || 1) + ' log' + ((g.quantity || items.length || 1) > 1 ? 's' : '');
+
+    function splitCred(raw) {
+      raw = String(raw || '').trim();
+      if (!raw) return { id: '', pass: '' };
+      // email:pass | user:pass | Username x Password y
+      let id = '', pass = '';
+      const up = raw.match(/username\s*[:\s]+(\S+)\s+password\s*[:\s]+(\S+)/i);
+      if (up) return { id: up[1], pass: up[2] };
+      if (raw.includes(':') && !raw.includes(' ')) {
+        const p = raw.split(':');
+        id = p.shift() || '';
+        pass = p.join(':');
+        return { id, pass };
+      }
+      if (raw.includes('|')) {
+        const p = raw.split('|').map((s) => s.trim());
+        return { id: p[0] || '', pass: p[1] || '' };
+      }
+      const lines = raw.split(/\n/).map((s) => s.trim()).filter(Boolean);
+      if (lines.length >= 2) return { id: lines[0], pass: lines[1] };
+      return { id: raw, pass: '' };
+    }
+
+    const cards = items.map((it, idx) => {
+      const raw =
+        it.login_credentials ||
+        [it.credentials_id, it.credentials_pass].filter(Boolean).join(':') ||
+        g.login_credentials ||
+        '';
+      const { id, pass } = splitCred(raw);
+      return (
+        '<div class="cred-card">' +
+        '<div class="idx">' + (idx + 1) + (items.length > 1 ? ' of ' + items.length : '') + '</div>' +
+        '<div class="cred-line"><span class="cred-k">ID</span><span class="cred-v">' + esc(id || '—') +
+        (id ? ' <button type="button" onclick="copyRaw(\'' + esc(id).replace(/'/g, "\\'") + '\')">Copy</button>' : '') +
+        '</span></div>' +
+        '<div class="cred-line"><span class="cred-k pass">PASSWORD</span><span class="cred-v">' + esc(pass || '—') +
+        (pass ? ' <button type="button" onclick="copyRaw(\'' + esc(pass).replace(/'/g, "\\'") + '\')">Copy</button>' : '') +
+        '</span></div>' +
+        '</div>'
+      );
+    }).join('');
+
+    const allText = items.map((it, idx) => {
+      const raw =
+        it.login_credentials ||
+        [it.credentials_id, it.credentials_pass].filter(Boolean).join(':') ||
+        g.login_credentials ||
+        '';
+      const { id, pass } = splitCred(raw);
+      return (items.length > 1 ? '#' + (idx + 1) + '\n' : '') + 'ID: ' + id + '\nPASSWORD: ' + pass;
+    }).join('\n\n');
+
+    body.innerHTML =
+      '<div class="log-actions">' +
+      '<button type="button" class="la-btn copy" onclick="copyRaw(document.getElementById(\'credBox\').textContent)"><i class="fa-regular fa-copy"></i> Copy All</button>' +
+      '<button type="button" class="la-btn dl" onclick="downloadText()"><i class="fa-solid fa-download"></i> Download .txt</button>' +
+      '<a class="la-btn guide" href="' + esc(guide) + '" target="_blank" rel="noopener"><i class="fa-solid fa-arrow-up-right-from-square"></i> How to Login</a>' +
+      '</div>' +
+      '<div class="vpn-banner"><i class="fa-solid fa-shield-halved"></i><div>Please kindly use a <strong>GOOD VPN</strong> to login and add <strong>2-step verification</strong> after purchase.</div></div>' +
+      (desc ? '<div class="desc-box"><div class="lbl">Description</div>' + esc(desc) + '</div>' : '') +
+      '<div class="cred-cards">' + cards + '</div>' +
+      '<div class="cred" id="credBox" style="position:absolute;left:-9999px;height:0;overflow:hidden">' + esc(allText) + '</div>';
   } else if (kind === 'sms') {
+
     const o = smsRows[i];
     if (!o) return;
     title.textContent = (o.service_name || 'SMS').replace(/_/g, ' ');
@@ -739,6 +810,9 @@ function openModal(kind, i) {
 
 function closeModal() {
   document.getElementById('modal').classList.remove('open');
+}
+function copyRaw(t) {
+  navigator.clipboard.writeText(String(t || '')).then(() => toast('Copied')).catch(() => toast('Copy failed'));
 }
 function copyText() {
   const t = document.getElementById('credBox');
