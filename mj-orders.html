@@ -333,6 +333,11 @@
       background:linear-gradient(90deg,#60a5fa,#2563eb)
     }
 
+    .sheet-b .raw-block{
+      white-space:pre-wrap;word-break:break-word;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;
+      font-size:13px;font-weight:600;color:#0f172a;line-height:1.55;
+      padding:12px;border-radius:12px;background:#f1f5f9;border:1px solid #e2e8f0
+    }
   </style>
 </head>
 <body>
@@ -660,51 +665,111 @@ function formatCredentials(details, description) {
 
 /** Structured fields for View Log UI cards */
 function parseCredentialFields(details, description) {
-  const fmt = (_fmtMod && _fmtMod.formatCredentials) || formatCredentials;
-  const formatted = fmt(details, description);
+  const rawIn = details == null ? '' : (typeof details === 'object' ? JSON.stringify(details) : String(details));
+  const raw = String(rawIn || '').replace(/\r/g, '').trim();
+  if (!raw) return [{ _raw: '' }];
+
+  // 1) Prefer live lib, then inline
+  const fmt = (_fmtMod && _fmtMod.formatCredentials) || (typeof formatCredentials === 'function' ? formatCredentials : null);
+  let formatted = '';
+  try {
+    formatted = fmt ? String(fmt(raw, description || '') || '').trim() : '';
+  } catch (e) {
+    formatted = '';
+  }
+
+  function fieldsFromLabeledText(text) {
+    const f = {};
+    const lines = String(text || '').split(/\n+/).map((l) => l.trim()).filter(Boolean);
+    for (const line of lines) {
+      const m = line.match(/^(Username|User\s*name|User|Login|ID|Password|Pass|Email\s*Password|Email|Mail|Phone|Mobile|2FA\s*\/\s*Token|2FA|Token|Cookie|Extra)\s*:\s*(.+)$/i);
+      if (!m) continue;
+      const label = m[1].toLowerCase().replace(/\s+/g, ' ');
+      const val = m[2].trim();
+      if (!val) continue;
+      // Reject when value is just another field name (parser confusion)
+      if (/^(username|password|email|login|user|pass|id)$/i.test(val)) continue;
+      if (/^user/.test(label) || label === 'login' || label === 'id') f.username = f.username || val;
+      else if (label === 'password' || label === 'pass') f.password = f.password || val;
+      else if (/email pass/.test(label)) f.email_password = f.email_password || val;
+      else if (label === 'email' || label === 'mail') f.email = f.email || val;
+      else if (label === 'phone' || label === 'mobile') f.phone = f.phone || val;
+      else if (/2fa|token|cookie/.test(label)) f.token = f.token || val;
+      else if (label === 'extra') f.extra = f.extra || val;
+    }
+    return f;
+  }
+
+  // "Username xxx Password yyy" without colons (common supplier format)
+  function fieldsFromInlineLabels(text) {
+    const t = String(text || '').replace(/\s+/g, ' ').trim();
+    const f = {};
+    const re = /(?:^|\s)(Username|User\s*name|User|Login|Password|Pass|Email\s*Password|Email|2FA|Token|Cookie)\s+([^\s]+(?:\s+[^\s]+)*?)(?=\s+(?:Username|User\s*name|User|Login|Password|Pass|Email\s*Password|Email|2FA|Token|Cookie)\s+|$)/gi;
+    let m;
+    while ((m = re.exec(t))) {
+      const label = m[1].toLowerCase().replace(/\s+/g, ' ');
+      const val = m[2].trim();
+      if (!val || /^(username|password|email|login|user|pass)$/i.test(val)) continue;
+      if (/user|login/.test(label)) f.username = f.username || val;
+      else if (/^pass/.test(label)) f.password = f.password || val;
+      else if (/email pass/.test(label)) f.email_password = f.email_password || val;
+      else if (/email/.test(label)) f.email = f.email || val;
+      else if (/2fa|token|cookie/.test(label)) f.token = f.token || val;
+    }
+    return f;
+  }
+
+  function fieldsFromEmailPass(text) {
+    const t = String(text || '').trim();
+    // email:password only
+    const m = t.match(/^([^\s:<>]+@[^\s:<>]+):(.+)$/);
+    if (m) return { username: m[1], password: m[2] };
+    const m2 = t.match(/^([^\s|]+@[^\s|]+)\s*[|]\s*(.+)$/);
+    if (m2) return { username: m2[1], password: m2[2] };
+    return {};
+  }
+
+  function isUseful(f) {
+    if (!f) return false;
+    const vals = [f.username, f.password, f.email, f.email_password, f.phone, f.token, f.link].filter(Boolean);
+    if (!vals.length) return false;
+    // Any value that is clearly a misplaced label → not useful
+    if (vals.some((v) => /^(username|password|email|login|user|pass|id)$/i.test(String(v).trim()))) return false;
+    return true;
+  }
+
   const accounts = [];
-  const chunks = String(formatted || '')
-    .split(/\n\s*\n/)
+  const chunks = (formatted || raw)
+    .split(/\n\s*\n|\n-{3,}\n/)
     .map((c) => c.trim())
     .filter(Boolean);
-  const src = chunks.length ? chunks : [String(formatted || details || '').trim()];
+  const list = chunks.length ? chunks : [raw];
 
-  for (const chunk of src) {
-    if (!chunk) continue;
-    const f = extractLabeled(chunk);
-    // Also parse "Username: x\nPassword: y" style from fieldsToText output
-    if (!f.username && !f.password && !f.email) {
-      for (const line of chunk.split(/\n+/)) {
-        const m = line.match(/^(Username|Password|Email|Email Password|Phone|2FA\s*\/\s*Token|Token|Extra)\s*:\s*(.+)$/i);
-        if (!m) continue;
-        const k = m[1].toLowerCase().replace(/\s+/g, '_').replace('2fa_/_token', 'token').replace('email_password', 'email_password');
-        if (k === 'username') f.username = m[2].trim();
-        else if (k === 'password') f.password = m[2].trim();
-        else if (k === 'email') f.email = m[2].trim();
-        else if (k === 'email_password') f.email_password = m[2].trim();
-        else if (k === 'phone') f.phone = m[2].trim();
-        else if (k === 'token' || k.includes('2fa')) f.token = m[2].trim();
-        else if (k === 'extra') f.extra = m[2].trim();
+  for (const chunk of list) {
+    let f = fieldsFromLabeledText(chunk);
+    if (!isUseful(f)) f = fieldsFromInlineLabels(chunk);
+    if (!isUseful(f)) f = fieldsFromEmailPass(chunk);
+    if (!isUseful(f)) {
+      // URL only
+      const url = chunk.match(/https?:\/\/[^\s<>"']+/i);
+      if (url) {
+        f = { link: url[0] };
+        const rest = chunk.replace(url[0], '').trim();
+        if (rest) f.extra = rest;
       }
     }
-    // Fallback: simple id:pass via splitCred-like
-    if (!f.username && !f.password && !f.email) {
-      const parts = splitDelimiters(chunk.replace(/\n/g, ' '));
-      if (parts.length >= 2) {
-        const hintFn = (_fmtMod && _fmtMod.parseFormatHint) || parseFormatHint;
-      const hinted = applyHint(parts, hintFn(description));
-        Object.assign(f, hinted || partsToFields(parts));
-      } else {
-        f.username = chunk;
-      }
+    if (!isUseful(f) && !(f && f.link)) {
+      // Last resort: show full details — do not invent fields
+      accounts.push({ _raw: chunk });
+    } else {
+      accounts.push(f);
     }
-    accounts.push(f);
   }
-  return accounts.length ? accounts : [{ username: String(details || '') }];
+  return accounts.length ? accounts : [{ _raw: raw }];
 }
 
 function fieldLabel(key) {
-  // Match fieldsToText() labels in lib/formatCredentials.js exactly
+  // Match fieldsToText() labels in lib/formatCredentials.js + access link
   const map = {
     username: 'Username',
     password: 'Password',
@@ -712,6 +777,7 @@ function fieldLabel(key) {
     email_password: 'Email Password',
     phone: 'Phone',
     token: '2FA / Token',
+    link: 'Access link',
     extra: 'Extra'
   };
   return map[key] || key;
@@ -1002,7 +1068,8 @@ function renderLogs() {
       <div class="icon">${esc(initial)}</div>
       <div class="main">
         <div class="title-row"><div class="title">${esc(o.product_name || 'Product')}</div><span class="status ${statusClass(st)}">${esc(st)}</span></div>
-        <div class="meta"><span><i class="fa-solid fa-cube"></i> ${qty} log${qty > 1 ? 's' : ''} purchased</span></div>
+        <div class="meta"><span><i class="fa-solid fa-cube"></i> ${qty} log${qty > 1 ? 's' : ''} purchased</span>
+          ${o.order_id ? `<span style="font-family:monospace;opacity:.9">#${esc(o.order_id)}</span>` : ''}</div>
         <div class="bottom"><div><div class="price">${money(o.amount)}</div><div class="date">${esc(fmtDate(o.created_at))}</div></div>
         <button type="button" class="btn-view" data-kind="logs" data-i="${i}"><i class="fa-regular fa-eye"></i> View Log</button></div>
       </div></div></article>`;
@@ -1105,7 +1172,7 @@ async function openModal(kind, i) {
     const guide = g.guide_url || items[0].guide_url || 'https://t.me/mj_hub_tg';
     const desc = g.description || items[0].description || '';
     title.textContent = g.product_name || 'Order';
-    if (sub) sub.textContent = (g.quantity || items.length || 1) + ' log' + ((g.quantity || items.length || 1) > 1 ? 's' : '');
+    if (sub) sub.textContent = (g.quantity || items.length || 1) + ' log' + ((g.quantity || items.length || 1) > 1 ? 's' : '') + (g.order_id ? ' · ' + g.order_id : '');
 
     const allAccounts = [];
     items.forEach((it) => {
@@ -1120,16 +1187,37 @@ async function openModal(kind, i) {
     });
 
     const cards = allAccounts.map((f, idx) => {
-      const keys = ['username', 'password', 'email', 'email_password', 'phone', 'token', 'extra'].filter((k) => f[k]);
+      if (f._raw != null && !f.username && !f.password && !f.email && !f.link) {
+        return (
+          '<div class="cred-card">' +
+          '<div class="idx">' + (idx + 1) + (allAccounts.length > 1 ? ' of ' + allAccounts.length : '') + '</div>' +
+          '<div class="raw-block">' + esc(f._raw) + '</div>' +
+          '<button type="button" class="copy-one" style="margin-top:10px" data-copy="' + esc(f._raw).replace(/"/g, '&quot;') + '">Copy</button>' +
+          '</div>'
+        );
+      }
+      const keys = ['username', 'password', 'email', 'email_password', 'phone', 'token', 'link', 'extra'].filter((k) => f[k]);
       if (!keys.length) {
+        const raw = f._raw || f.username || '';
         return (
           '<div class="cred-card"><div class="idx">' + (idx + 1) + '</div>' +
-          '<div class="cred-line"><span class="cred-k">Username</span><span class="cred-v">' + esc(String(f.username || '—')) + '</span></div></div>'
+          '<div class="raw-block">' + esc(raw) + '</div></div>'
         );
       }
       const lines = keys.map((k) => {
         const val = String(f[k] || '');
         const passClass = k === 'password' || k === 'email_password' ? ' pass' : '';
+        if (k === 'link') {
+          return (
+            '<div class="cred-line cred-link-line"><span class="cred-k">' + fieldLabel(k) + '</span>' +
+            '<span class="cred-v link-row">' +
+            '<a class="link-url" href="' + esc(val) + '" target="_blank" rel="noopener">' + esc(val) + '</a>' +
+            '<span style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px">' +
+            '<a class="link-open" href="' + esc(val) + '" target="_blank" rel="noopener"><i class="fa-solid fa-arrow-up-right-from-square"></i> Open</a>' +
+            '<button type="button" class="copy-one" data-copy="' + esc(val).replace(/"/g, '&quot;') + '">Copy</button>' +
+            '</span></span></div>'
+          );
+        }
         return (
           '<div class="cred-line"><span class="cred-k' + passClass + '">' + fieldLabel(k) + '</span>' +
           '<span class="cred-v">' + esc(val) +
@@ -1144,9 +1232,16 @@ async function openModal(kind, i) {
         '</div>'
       );
     }).join('');
+      return (
+        '<div class="cred-card">' +
+        '<div class="idx">' + (idx + 1) + (allAccounts.length > 1 ? ' of ' + allAccounts.length : '') + '</div>' +
+        lines +
+        '</div>'
+      );
+    }).join('');
 
     const allText = allAccounts.map((f, idx) => {
-      const keys = ['username', 'password', 'email', 'email_password', 'phone', 'token', 'extra'].filter((k) => f[k]);
+      const keys = ['username', 'password', 'email', 'email_password', 'phone', 'token', 'link', 'extra'].filter((k) => f[k]);
       const body = keys.map((k) => fieldLabel(k) + ': ' + f[k]).join('\n');
       return (allAccounts.length > 1 ? '#' + (idx + 1) + '\n' : '') + body;
     }).join('\n\n');
