@@ -334,33 +334,117 @@ function groupLogs(rows){
   });
 }
 
+async function ensureAuth(){
+  // Prefer active session; refresh if needed so RLS queries see auth.uid()
+  let {data:{session:s},error}=await sb.auth.getSession();
+  if(error) console.warn('[orders] getSession', error.message);
+  if(!s){
+    const ref=await sb.auth.refreshSession();
+    s=ref.data&&ref.data.session;
+  }
+  if(!s||!s.user) return null;
+  session=s;
+  return s;
+}
+
+/** Query with order-by, fall back without order if column missing / RLS oddity */
+async function queryUserRows(table, userId){
+  let q=sb.from(table).select('*').eq('user_id', userId).limit(150);
+  let res=await q.order('created_at',{ascending:false});
+  if(res.error){
+    console.warn('[orders]', table, res.error.message);
+    // Retry without order (created_at may not exist)
+    res=await sb.from(table).select('*').eq('user_id', userId).limit(150);
+  }
+  if(res.error){
+    // Last try: filter via maybe text id mismatch
+    const res2=await sb.from(table).select('*').eq('user_id', String(userId)).limit(150);
+    if(!res2.error) return {data:res2.data||[], error:null};
+    return {data:[], error:res.error};
+  }
+  return {data:res.data||[], error:null};
+}
+
+let loadErrors={logs:null,sms:null,boosters:null};
+
 async function loadLogs(){
-  const {data,error}=await sb.from('orders').select('*').eq('user_id',session.user.id)
-    .order('created_at',{ascending:false}).limit(100);
-  if(error) throw error;
+  loadErrors.logs=null;
+  const uid=session&&session.user&&session.user.id;
+  if(!uid){ logGroups=[]; document.getElementById('countLogs').textContent='0'; loadErrors.logs='Not signed in'; return; }
+  const {data,error}=await queryUserRows('orders', uid);
+  if(error){
+    loadErrors.logs=error.message||'Failed to load logs';
+    logGroups=[];
+    document.getElementById('countLogs').textContent='!';
+    throw error;
+  }
   logGroups=groupLogs(data||[]);
   document.getElementById('countLogs').textContent=String(logGroups.length);
 }
 
 async function loadSms(){
-  const {data,error}=await sb.from('number_orders').select('*').eq('user_id',session.user.id)
-    .order('created_at',{ascending:false}).limit(100);
-  if(error) throw error;
-  smsRows=data||[];
+  loadErrors.sms=null;
+  const uid=session&&session.user&&session.user.id;
+  if(!uid){ smsRows=[]; document.getElementById('countSms').textContent='0'; loadErrors.sms='Not signed in'; return; }
+  const {data,error}=await queryUserRows('number_orders', uid);
+  if(error){
+    loadErrors.sms=error.message||'Failed to load SMS orders';
+    smsRows=[];
+    document.getElementById('countSms').textContent='!';
+    throw error;
+  }
+  // Newest first if we have dates
+  smsRows=(data||[]).slice().sort((a,b)=>{
+    const ta=new Date(a.created_at||a.updated_at||0).getTime();
+    const tb=new Date(b.created_at||b.updated_at||0).getTime();
+    return tb-ta;
+  });
   document.getElementById('countSms').textContent=String(smsRows.length);
 }
 
 async function loadBoosters(){
-  const {data:{session:s}}=await sb.auth.getSession();
+  loadErrors.boosters=null;
+  const s=await ensureAuth();
   const token=s&&s.access_token;
-  if(!token){boostRows=[];document.getElementById('countBoost').textContent='0';return;}
-  const res=await fetch('/api/owlet?action=my_orders&page_size=50&live=0',{
-    headers:{Authorization:'Bearer '+token}
-  });
-  const json=await res.json().catch(()=>({}));
-  if(!json.success) throw new Error(json.message||'Could not load boosters');
-  boostRows=json.data||[];
+  if(!token){
+    boostRows=[];
+    document.getElementById('countBoost').textContent='0';
+    loadErrors.boosters='Not signed in';
+    return;
+  }
+  // Primary: same Owlet API as mj-boosters-history.html
+  try{
+    const res=await fetch('/api/owlet?action=my_orders&page_size=50&live=0',{
+      headers:{Authorization:'Bearer '+token,'Content-Type':'application/json'}
+    });
+    const json=await res.json().catch(()=>({}));
+    if(json.success && Array.isArray(json.data)){
+      boostRows=json.data;
+      document.getElementById('countBoost').textContent=String(boostRows.length);
+      return;
+    }
+    // Fall through to table if API shape unexpected
+    if(json.message) loadErrors.boosters=json.message;
+  }catch(e){
+    loadErrors.boosters=e.message||'Owlet API error';
+    console.warn('[orders] boosters api', e);
+  }
+  // Fallback: direct table if present (booster_orders / owlet_orders)
+  const uid=s.user.id;
+  for(const table of ['booster_orders','owlet_orders']){
+    try{
+      const {data,error}=await queryUserRows(table, uid);
+      if(!error && data && data.length){
+        boostRows=data;
+        document.getElementById('countBoost').textContent=String(boostRows.length);
+        loadErrors.boosters=null;
+        return;
+      }
+    }catch(_){}
+  }
+  boostRows=boostRows||[];
   document.getElementById('countBoost').textContent=String(boostRows.length);
+  if(loadErrors.boosters) throw new Error(loadErrors.boosters);
 }
 
 function setHero(){
@@ -377,6 +461,10 @@ function setHero(){
 function renderLogs(){
   const list=document.getElementById('list');
   if(!logGroups.length){
+    if(loadErrors.logs){
+      list.innerHTML='<div class="empty"><div class="ico">⚠️</div><h3>Could not load logs</h3><p>'+esc(loadErrors.logs)+'</p><p style="font-size:12px;color:var(--muted)">If you just bought, pull to refresh or re-open My Orders.</p></div>';
+      return;
+    }
     list.innerHTML='<div class="empty"><div class="ico">📦</div><h3>No log orders yet</h3><p>Buy from MJ Logs and deliveries show here.</p><a href="mj-logs.html"><i class="fa-solid fa-store"></i> Browse logs</a></div>';
     return;
   }
@@ -399,6 +487,10 @@ function renderLogs(){
 function renderSms(){
   const list=document.getElementById('list');
   if(!smsRows.length){
+    if(loadErrors.sms){
+      list.innerHTML='<div class="empty"><div class="ico">⚠️</div><h3>Could not load SMS orders</h3><p>'+esc(loadErrors.sms)+'</p></div>';
+      return;
+    }
     list.innerHTML='<div class="empty"><div class="ico">📱</div><h3>No SMS orders yet</h3><p>Get a virtual number for OTP verification.</p><a href="mj-sms-choose-server.html"><i class="fa-solid fa-comment-sms"></i> Get a number</a></div>';
     return;
   }
@@ -431,6 +523,10 @@ function boostProgress(o){
 function renderBoosters(){
   const list=document.getElementById('list');
   if(!boostRows.length){
+    if(loadErrors.boosters){
+      list.innerHTML='<div class="empty"><div class="ico">⚠️</div><h3>Could not load boosters</h3><p>'+esc(loadErrors.boosters)+'</p><a href="mj-boosters-history.html">Open full booster history</a></div>';
+      return;
+    }
     list.innerHTML='<div class="empty"><div class="ico">⚡</div><h3>No boost orders yet</h3><p>Social growth orders will show here with progress.</p><a href="mj-boosters.html"><i class="fa-solid fa-bolt"></i> Place a boost</a></div>';
     return;
   }
@@ -562,18 +658,16 @@ document.querySelectorAll('.type-tab').forEach(btn=>{
 });
 
 async function boot(){
-  const {data:{session:s}}=await sb.auth.getSession();
+  const s=await ensureAuth();
   if(!s||!s.user){location.href='auth.html';return;}
   session=s;
   const list=document.getElementById('list');
-  try{
-    await Promise.all([
-      loadLogs().catch(e=>{console.warn(e);logGroups=[];document.getElementById('countLogs').textContent='0';}),
-      loadSms().catch(e=>{console.warn(e);smsRows=[];document.getElementById('countSms').textContent='0';}),
-      loadBoosters().catch(e=>{console.warn(e);boostRows=[];document.getElementById('countBoost').textContent='0';})
-    ]);
-  }catch(e){}
-  // Deep link ?tab=sms|boosters|logs
+  if(list) list.innerHTML='<div class="empty"><p>Loading your orders…</p></div>';
+  await Promise.all([
+    loadLogs().catch(e=>{console.warn('[orders] logs', e);}),
+    loadSms().catch(e=>{console.warn('[orders] sms', e);}),
+    loadBoosters().catch(e=>{console.warn('[orders] boosters', e);})
+  ]);
   try{
     const q=new URLSearchParams(location.search).get('tab');
     if(q==='sms'||q==='boosters'||q==='logs'){
