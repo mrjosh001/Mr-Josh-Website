@@ -1,5 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
-import { formatCredentials } from '../lib/formatCredentials.js';
+import { formatCredentials, formatMultiLogCredentials, joinRawLogDetails } from '../lib/formatCredentials.js';
 
 /**
  * /api/sujan — everything for the Sujan Department supplier, one file.
@@ -440,26 +440,34 @@ async function handleOrder(req, res) {
       supplier_response_raw: orderData
     });
 
-    for (const item of items) {
-      const insertErr = await insertLogOrder({
-        order_id: supplierOrderId,
-        user_id,
-        product_id: product.id,
-        product_code: product_key,
-        product_name: productName,
-        product_type: 'log',
-        description: (product.display_description || product.description || '').trim() || null,
-        quantity: 1,
-        amount: product.price,
-        status: 'completed',
-        login_credentials: formatCredentials(item.details, product.display_description || product.description || productName) || (item.details || null),
-        login_credentials_raw: item.details || null,
-        supplier_ref: item.ref || '',
-        guide_url: 'https://t.me/mj_hub_tg'
-      });
-      if (insertErr) {
-        console.error('[sujan order] FAILED to save order row — customer was charged and delivered credentials, but this will not appear in My Orders / admin Orders:', insertErr.message, { order_id: supplierOrderId, user_id, product_key });
-      }
+    // ONE row for the full qty — numbered logs under one order_id
+    const formatHint = product.display_description || product.description || productName || '';
+    const combinedCreds =
+      formatMultiLogCredentials(items, formatHint) ||
+      (items[0]
+        ? formatCredentials(items[0].details, formatHint) || items[0].details
+        : null) ||
+      detailsText ||
+      null;
+    const combinedRaw = joinRawLogDetails(items) || detailsText || null;
+    const insertErr = await insertLogOrder({
+      order_id: String(supplierOrderId),
+      user_id,
+      product_id: product.id,
+      product_code: product_key,
+      product_name: productName,
+      product_type: 'log',
+      description: (product.display_description || product.description || '').trim() || null,
+      quantity: items.length || qty,
+      amount: total,
+      status: 'completed',
+      login_credentials: combinedCreds,
+      login_credentials_raw: combinedRaw,
+      supplier_ref: items.map((it) => it.ref).filter(Boolean).join(', ') || String(supplierOrderId),
+      guide_url: 'https://t.me/mj_hub_tg'
+    });
+    if (insertErr) {
+      console.error('[sujan order] FAILED to save order row:', insertErr.message, { order_id: supplierOrderId, user_id, product_key });
     }
 
     await supabase.from('transactions').insert({

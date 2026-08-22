@@ -1,5 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
-import { formatCredentials } from '../lib/formatCredentials.js';
+import { formatCredentials, formatMultiLogCredentials, joinRawLogDetails } from '../lib/formatCredentials.js';
 
 /**
  * POST /api/order-manual
@@ -295,28 +295,35 @@ export default async function handler(req, res) {
       });
     }
 
-    // 5. Success → save one order row per credential delivered
+    // 5. Success → ONE orders row for the whole qty (shared order_id)
     const orderDescription = (product.display_description || product.description || '').trim() || null;
-    const detailsText = claimedRows.map(r => r.credential).filter(Boolean).join('\n\n');
+    const formatHint = product.display_description || product.description || product.name || '';
+    const itemsForFmt = claimedRows.map(r => ({ details: r.credential }));
+    const detailsText = joinRawLogDetails(itemsForFmt) || claimedRows.map(r => r.credential).filter(Boolean).join('\n\n');
+    const combinedCreds =
+      formatMultiLogCredentials(itemsForFmt, formatHint) ||
+      (claimedRows[0]
+        ? formatCredentials(claimedRows[0].credential, formatHint) || claimedRows[0].credential
+        : null);
+    const supplierRefs = claimedRows.map(r => r.id).filter(Boolean).map(String).join(', ');
 
-    for (const row of claimedRows) {
-      await supabase.from('orders').insert({
-        order_id: orderRef,
-        user_id,
-        product_id: product.id,
-        product_code: product_key,
-        product_name: productName,
-        product_type: 'log',
-        description: orderDescription,
-        quantity: 1,
-        amount: product.price,
-        status: 'completed',
-        login_credentials: formatCredentials(row.credential, product.display_description || product.description || product.name) || row.credential,
-        login_credentials_raw: row.credential || null,
-        supplier_ref: String(row.id),
-        guide_url: 'https://t.me/mj_hub_tg'
-      });
-    }
+    const { error: insErr } = await supabase.from('orders').insert({
+      order_id: orderRef,
+      user_id,
+      product_id: product.id,
+      product_code: product_key,
+      product_name: productName,
+      product_type: 'log',
+      description: orderDescription,
+      quantity: claimedRows.length || qty,
+      amount: total,
+      status: 'completed',
+      login_credentials: combinedCreds,
+      login_credentials_raw: detailsText,
+      supplier_ref: supplierRefs || orderRef,
+      guide_url: 'https://t.me/mj_hub_tg'
+    });
+    if (insErr) console.error('[order-manual] insert failed', insErr.message);
 
     await supabase.from('transactions').insert({
       user_id,

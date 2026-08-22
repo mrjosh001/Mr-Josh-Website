@@ -1,5 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
-import { formatCredentials } from '../lib/formatCredentials.js';
+import { formatCredentials, formatMultiLogCredentials, joinRawLogDetails } from '../lib/formatCredentials.js';
 import { rateLimit, applyRateLimitHeaders } from '../lib/rateLimit.js';
 import { rejectClientSuppliedSecrets, applyApiCors, handleOptions, setNoStore } from '../lib/secure.js';
 import { parsePositiveInt, assertSameUser } from '../lib/validate.js';
@@ -308,33 +308,40 @@ export default async function handler(req, res) {
     // is left blank rather than guessing/filling in something else.
     const orderDescription = (product.display_description || product.description || '').trim() || null;
 
-    // Save into orders table (one row per item is cleaner)
-    // Whatever format the supplier sends (Username/Password labels, email:pass,
-    // JSON, etc.) is stored as-is in a single login_credentials column so
-    // nothing gets silently dropped or misrouted into "description".
-    for (let idx = 0; idx < items.length; idx++) {
-      const item = items[idx];
-      const lineOrderId = items.length > 1 ? `${orderRef}-${idx + 1}` : orderRef;
-      await insertLogOrder({
-        order_id: lineOrderId,
-        user_id,
-        product_id: product.id,
-        product_code: product_key,
-        product_name: productName,
-        product_type: 'log',
-        description: orderDescription,
-        quantity: 1,
-        amount: product.price,
-        status: 'completed',
-        // Format hint = product description ONLY (never product name — names like
-        // "GMX" / marketing text caused Username/Email swaps in formatCredentials).
-        login_credentials: formatCredentials(
-          item.details,
-          product.display_description || product.description || ''
-        ) || String(item.details || '').trim() || null,
-        supplier_ref: String(item.product_detail_id || ''),
-        guide_url: 'https://t.me/mj_hub_tg'
-      });
+    // ONE orders row per purchase (same product + qty). All logs share orderRef.
+    // Numbered 1. 2. 3. … inside login_credentials so My Orders / admin stay tidy
+    // and the DB does not grow one row per unit.
+    const formatHint = product.display_description || product.description || '';
+    const combinedCreds =
+      formatMultiLogCredentials(items, formatHint) ||
+      (items[0]
+        ? formatCredentials(items[0].details, formatHint) || String(items[0].details || '').trim()
+        : null);
+    const combinedRaw = joinRawLogDetails(items) || detailsText || null;
+    const supplierRefs = items
+      .map((it) => it.product_detail_id || it.id || it.serial)
+      .filter(Boolean)
+      .map(String)
+      .join(', ');
+
+    const insertErr = await insertLogOrder({
+      order_id: orderRef,
+      user_id,
+      product_id: product.id,
+      product_code: product_key,
+      product_name: productName,
+      product_type: 'log',
+      description: orderDescription,
+      quantity: items.length || safeQty,
+      amount: total,
+      status: 'completed',
+      login_credentials: combinedCreds,
+      login_credentials_raw: combinedRaw,
+      supplier_ref: supplierRefs || orderRef,
+      guide_url: 'https://t.me/mj_hub_tg'
+    });
+    if (insertErr) {
+      console.error('[order] insert failed', insertErr.message, { order_id: orderRef, qty: items.length });
     }
 
     // Save money movement in transactions → Log Orders tab

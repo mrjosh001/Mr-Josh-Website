@@ -1,5 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
-import { formatCredentials } from '../lib/formatCredentials.js';
+import { formatCredentials, formatMultiLogCredentials, joinRawLogDetails } from '../lib/formatCredentials.js';
 
 /**
  * POST /api/order-logsdomain
@@ -352,74 +352,61 @@ export default async function handler(req, res) {
       supplier_items_raw: items
     });
 
-    // Each delivered log must be its own orders row with a UNIQUE order_id.
-    // Reusing the same supplier order_id for every line caused duplicate-key
-    // failures on the 2nd+ insert — only the first log appeared in My Orders / admin.
+    // ONE orders row for the whole purchase — all logs under supplierOrderId.
+    // Numbered 1. 2. 3. … so user/admin see every log without N database rows.
     const deliveredCount = items.length;
+    const formatHint = product.display_description || product.description || product.name || '';
     let savedCount = 0;
 
     if (deliveredCount > 0) {
-      for (let idx = 0; idx < items.length; idx++) {
-        const item = items[idx];
-        const lineOrderId = `${supplierOrderId}-${idx + 1}`;
-        const insertErr = await insertLogOrder({
-          order_id: lineOrderId,
-          user_id,
-          product_id: product.id,
-          product_code: product_key,
-          product_name: productName,
-          product_type: 'log',
-          description: (product.display_description || product.description || '').trim() || null,
-          quantity: 1,
-          amount: product.price,
-          status: 'completed',
-          login_credentials: formatCredentials(item.details, product.display_description || product.description || product.name),
-          login_credentials_raw: item.details || null,
-          supplier_ref: String(item.serial || item.id || `${supplierOrderId}-${idx + 1}`),
-          guide_url: 'https://t.me/mj_hub_tg'
-        });
-        if (insertErr) {
-          console.error('[order-logsdomain] FAILED to save order row:', insertErr.message, {
-            order_id: lineOrderId, user_id, product_key, idx
-          });
-          // Retry once with unique suffix (duplicate order_id race)
-          const retryId = `${lineOrderId}-${Date.now().toString(36)}`;
-          const retryErr = await insertLogOrder({
-            order_id: retryId,
-            user_id,
-            product_id: product.id,
-            product_code: product_key,
-            product_name: productName,
-            product_type: 'log',
-            description: (product.display_description || product.description || '').trim() || null,
-            quantity: 1,
-            amount: product.price,
-            status: 'completed',
-            login_credentials: formatCredentials(item.details, product.display_description || product.description || product.name),
-            login_credentials_raw: item.details || null,
-            supplier_ref: String(item.serial || item.id || retryId),
-            guide_url: 'https://t.me/mj_hub_tg'
-          });
-          if (!retryErr) savedCount += 1;
-          else console.error('[order-logsdomain] retry also failed', retryErr.message);
-        } else {
-          savedCount += 1;
-        }
-      }
-    } else {
-      // fallback single row if API returns no items array
+      const combinedCreds =
+        formatMultiLogCredentials(items, formatHint) ||
+        formatCredentials(items[0].details, formatHint) ||
+        String(items[0].details || '').trim() ||
+        null;
+      const combinedRaw = joinRawLogDetails(items) || detailsText || null;
+      const supplierRefs = items
+        .map((it) => it.serial || it.id)
+        .filter(Boolean)
+        .map(String)
+        .join(', ');
       const insertErr = await insertLogOrder({
-        order_id: `${supplierOrderId}-1`,
+        order_id: String(supplierOrderId),
         user_id,
         product_id: product.id,
         product_code: product_key,
         product_name: productName,
         product_type: 'log',
-        description: JSON.stringify(orderData.data || {}),
+        description: (product.display_description || product.description || '').trim() || null,
+        quantity: deliveredCount,
+        amount: total,
+        status: 'completed',
+        login_credentials: combinedCreds,
+        login_credentials_raw: combinedRaw,
+        supplier_ref: supplierRefs || String(supplierOrderId),
+        guide_url: 'https://t.me/mj_hub_tg'
+      });
+      if (insertErr) {
+        console.error('[order-logsdomain] FAILED to save order row:', insertErr.message, {
+          order_id: supplierOrderId, user_id, product_key, qty: deliveredCount
+        });
+      } else {
+        savedCount = deliveredCount;
+      }
+    } else {
+      // fallback single row if API returns no items array
+      const insertErr = await insertLogOrder({
+        order_id: String(supplierOrderId),
+        user_id,
+        product_id: product.id,
+        product_code: product_key,
+        product_name: productName,
+        product_type: 'log',
+        description: (product.display_description || product.description || '').trim() || null,
         quantity: qty,
         amount: total,
         status: 'completed',
-        login_credentials: formatCredentials(detailsText, product.display_description || product.description || product.name) || detailsText || 'Delivered — see order for details',
+        login_credentials: formatCredentials(detailsText, formatHint) || detailsText || 'Delivered — see order for details',
         login_credentials_raw: detailsText || null,
         guide_url: 'https://t.me/mj_hub_tg'
       });
