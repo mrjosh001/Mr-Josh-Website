@@ -504,12 +504,18 @@ function setHero() {
 }
 
 function bindViewButtons() {
-  document.querySelectorAll('.btn-view').forEach((btn) => {
-    btn.onclick = () => {
-      const kind = btn.getAttribute('data-kind');
-      const i = Number(btn.getAttribute('data-i'));
-      openModal(kind, i);
-    };
+  // Event delegation — works even after re-render
+  const list = document.getElementById('list');
+  if (!list || list._viewBound) return;
+  list._viewBound = true;
+  list.addEventListener('click', (e) => {
+    const btn = e.target.closest('[data-kind][data-i]');
+    if (!btn || !list.contains(btn)) return;
+    e.preventDefault();
+    const kind = btn.getAttribute('data-kind');
+    const i = Number(btn.getAttribute('data-i'));
+    if (!kind || Number.isNaN(i)) return;
+    openModal(kind, i);
   });
 }
 
@@ -623,14 +629,19 @@ function renderBoosters() {
 }
 
 function openModal(kind, i) {
-  const title = document.getElementById('modalTitle');
-  const body = document.getElementById('modalBody');
-  if (!title || !body) return;
+  const title = document.getElementById('mTitle');
+  const body = document.getElementById('mBody');
+  const sub = document.getElementById('mSub');
+  if (!title || !body) {
+    console.warn('[orders] modal elements missing');
+    return;
+  }
 
   if (kind === 'logs') {
     const g = logGroups[i];
     if (!g) return;
     title.textContent = g.product_name || 'Order';
+    if (sub) sub.textContent = (g.quantity || 1) + ' log(s) · ' + (g.status || '');
     const lines = (g.items || [g])
       .map((it, idx) => {
         const cred =
@@ -673,6 +684,7 @@ function openModal(kind, i) {
     const o = smsRows[i];
     if (!o) return;
     title.textContent = (o.service_name || 'SMS').replace(/_/g, ' ');
+    if (sub) sub.textContent = o.phone_number || o.status || '';
     body.innerHTML = `
       <div class="detail-grid">
         <div class="detail-row"><span class="l">Status</span><span class="v">${esc(o.status || '—')}</span></div>
@@ -683,29 +695,44 @@ function openModal(kind, i) {
       <div class="actions">
         ${o.order_id ? `<a class="btn-guide" href="mj-sms-number.html?order_id=${encodeURIComponent(o.order_id)}">Open number</a>` : ''}
       </div>`;
-  } else {
+  } else if (kind === 'boosters' || kind === 'boost') {
     const o = boostRows[i];
     if (!o) return;
     const p = boostProgress(o);
-    title.textContent = o.service_name || 'Boost';
+    const oid = o.order_id || o.supplier_order_id || o.id || '';
+    const link = o.link || o.url || '';
+    const price = o.price_ngn != null ? o.price_ngn : (o.charge != null ? o.charge : o.price);
+    title.textContent = o.service_name || o.service || 'Boost';
+    if (sub) sub.textContent = (o.status || '') + (oid ? ' · #' + oid : '');
     const text = [
+      'Service: ' + (o.service_name || o.service || '—'),
       'Status: ' + (o.status || '—'),
       'Progress: ' + p.delivered + ' / ' + (p.qty || '—') + ' (left ' + p.remains + ')',
-      'Link: ' + (o.link || o.url || '—'),
-      'Order: ' + (o.order_id || o.id || '—')
+      'Link: ' + (link || '—'),
+      'Order ID: ' + (oid || '—'),
+      'Price: ₦' + Number(price || 0).toLocaleString(),
+      'Date: ' + (o.created_at || '—')
     ].join('\n');
     body.innerHTML = `
       <div class="detail-grid">
         <div class="detail-row"><span class="l">Status</span><span class="v">${esc(o.status || '—')}</span></div>
         <div class="detail-row"><span class="l">Delivered</span><span class="v">${p.delivered} / ${p.qty || '—'}</span></div>
-        <div class="detail-row"><span class="l">Link</span><span class="v">${esc(o.link || o.url || '—')}</span></div>
+        <div class="detail-row"><span class="l">Remaining</span><span class="v">${esc(String(p.remains))}</span></div>
+        <div class="detail-row"><span class="l">Price</span><span class="v">${money(price)}</span></div>
+        <div class="detail-row"><span class="l">Order ID</span><span class="v">${esc(String(oid || '—'))}</span></div>
+        <div class="detail-row"><span class="l">Link</span><span class="v" style="word-break:break-all">${esc(link || '—')}</span></div>
+        <div class="detail-row"><span class="l">Date</span><span class="v">${esc(fmtDate(o.created_at))}</span></div>
       </div>
-      <div class="progress" style="margin-bottom:12px"><span style="width:${p.pct}%"></span></div>
+      <div class="progress" style="margin:12px 0"><span style="width:${p.pct}%"></span></div>
       <div class="actions">
-        <button type="button" class="btn-copy" onclick="copyText()"><i class="fa-regular fa-copy"></i> Copy</button>
+        <button type="button" class="btn-copy" onclick="copyText()"><i class="fa-regular fa-copy"></i> Copy details</button>
         <a class="btn-guide" href="mj-boosters-history.html"><i class="fa-solid fa-bolt"></i> Full history</a>
       </div>
       <div class="cred" id="credBox">${esc(text)}</div>`;
+  } else {
+    title.textContent = 'Order';
+    if (sub) sub.textContent = '';
+    body.innerHTML = '<p style="color:var(--muted);padding:12px">No details for this item.</p>';
   }
   document.getElementById('modal').classList.add('open');
 }
@@ -765,6 +792,7 @@ async function boot() {
       });
     }
   } catch (e) {}
+  bindViewButtons();
   render();
 }
 boot();
