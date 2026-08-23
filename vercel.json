@@ -47,10 +47,6 @@
   ],
   "crons": [
     {
-      "path": "/api/order?action=sync",
-      "schedule": "0 6 * * *"
-    },
-    {
       "path": "/api/grizzly-sync",
       "schedule": "0 3 * * *"
     },
@@ -59,12 +55,20 @@
       "schedule": "0 4 * * *"
     },
     {
-      "path": "/api/products-logsdomain",
+      "path": "/api/classy",
       "schedule": "0 5 * * *"
+    },
+    {
+      "path": "/api/order?action=sync",
+      "schedule": "0 6 * * *"
     },
     {
       "path": "/api/owlet?action=sync",
       "schedule": "0 7 * * *"
+    },
+    {
+      "path": "/api/sujan?action=sync",
+      "schedule": "0 8 * * *"
     }
   ],
   "functions": {
@@ -78,6 +82,9 @@
       "maxDuration": 300
     },
     "api/order.js": {
+      "maxDuration": 300
+    },
+    "api/classy.js": {
       "maxDuration": 300
     }
   },
