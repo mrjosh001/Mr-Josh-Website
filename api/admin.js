@@ -124,6 +124,10 @@ async function payReferralCommission(refereeUserId, depositAmountNgn, depositRef
 
 const PERMANENT_BAN_DURATION = '876000h';
 
+function truthyFlag(v) {
+  return v === true || v === 'true' || v === 1 || v === '1';
+}
+
 async function requireAdmin(req) {
   const authHeader = req.headers.authorization || '';
   const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : null;
@@ -134,15 +138,311 @@ async function requireAdmin(req) {
 
   const { data: profile } = await supabase
     .from('profiles')
-    .select('is_admin')
+    .select('is_admin, is_sub_admin, customer_id, full_name, email, username')
     .eq('id', user.id)
     .maybeSingle();
 
-  const isAdmin = profile && (profile.is_admin === true || profile.is_admin === 'true' || profile.is_admin === 1);
+  const isAdmin = profile && truthyFlag(profile.is_admin);
   if (!isAdmin) return { ok: false, status: 403, message: 'Admin privileges required' };
 
-  return { ok: true, adminId: user.id };
+  return { ok: true, adminId: user.id, isAdmin: true, isSubAdmin: false, profile };
 }
+
+/** Main admin OR sub-admin (vendor) */
+async function requireStaff(req) {
+  const authHeader = req.headers.authorization || '';
+  const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : null;
+  if (!token) return { ok: false, status: 401, message: 'Missing session' };
+
+  const { data: { user }, error: authErr } = await supabase.auth.getUser(token);
+  if (authErr || !user) return { ok: false, status: 401, message: 'Invalid session' };
+
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('is_admin, is_sub_admin, customer_id, full_name, email, username')
+    .eq('id', user.id)
+    .maybeSingle();
+
+  const isAdmin = profile && truthyFlag(profile.is_admin);
+  const isSubAdmin = profile && truthyFlag(profile.is_sub_admin);
+  if (!isAdmin && !isSubAdmin) {
+    return { ok: false, status: 403, message: 'Staff privileges required' };
+  }
+
+  return {
+    ok: true,
+    adminId: user.id,
+    userId: user.id,
+    isAdmin,
+    isSubAdmin,
+    profile
+  };
+}
+
+// ---------- resource: sub_admin (main admin only) ----------
+
+async function subAdminAssign(body) {
+  const email = (body.email || '').toString().trim().toLowerCase();
+  const customerId = (body.customer_id || body.customerId || '').toString().trim();
+  if (!email && !customerId) {
+    return { status: 400, body: { success: false, message: 'Provide email or customer_id' } };
+  }
+
+  let q = supabase.from('profiles').select('id, email, customer_id, full_name, username, is_admin, is_sub_admin');
+  if (customerId) q = q.eq('customer_id', customerId);
+  else q = q.ilike('email', email);
+
+  const { data: row, error } = await q.maybeSingle();
+  if (error) return { status: 500, body: { success: false, message: error.message } };
+  if (!row) return { status: 404, body: { success: false, message: 'User not found' } };
+  if (truthyFlag(row.is_admin)) {
+    return { status: 400, body: { success: false, message: 'Cannot convert a main admin into sub-admin' } };
+  }
+
+  const { error: upErr } = await supabase
+    .from('profiles')
+    .update({ is_sub_admin: true })
+    .eq('id', row.id);
+  if (upErr) {
+    // column missing
+    if (/is_sub_admin|column/i.test(upErr.message || '')) {
+      return {
+        status: 500,
+        body: {
+          success: false,
+          message: 'Run sql/sub_admin.sql in Supabase first (is_sub_admin column missing)'
+        }
+      };
+    }
+    return { status: 500, body: { success: false, message: upErr.message } };
+  }
+
+  return {
+    status: 200,
+    body: {
+      success: true,
+      message: 'Sub-admin assigned',
+      data: { id: row.id, email: row.email, customer_id: row.customer_id, full_name: row.full_name }
+    }
+  };
+}
+
+async function subAdminRevoke(body) {
+  const userId = body.user_id || body.id;
+  const email = (body.email || '').toString().trim().toLowerCase();
+  const customerId = (body.customer_id || '').toString().trim();
+  if (!userId && !email && !customerId) {
+    return { status: 400, body: { success: false, message: 'Provide user_id, email, or customer_id' } };
+  }
+
+  let q = supabase.from('profiles').update({ is_sub_admin: false });
+  if (userId) q = q.eq('id', userId);
+  else if (customerId) q = q.eq('customer_id', customerId);
+  else q = q.ilike('email', email);
+
+  const { error } = await q;
+  if (error) return { status: 500, body: { success: false, message: error.message } };
+  return { status: 200, body: { success: true, message: 'Sub-admin access revoked' } };
+}
+
+async function subAdminList() {
+  const { data, error } = await supabase
+    .from('profiles')
+    .select('id, email, customer_id, full_name, username, is_sub_admin, created_at')
+    .eq('is_sub_admin', true)
+    .order('created_at', { ascending: false });
+  if (error) return { status: 500, body: { success: false, message: error.message } };
+  return { status: 200, body: { success: true, data: data || [] } };
+}
+
+// ---------- resource: vendor (sub-admin portal) ----------
+
+async function vendorProductsList(staff) {
+  const ownerId = staff.userId;
+  let q = supabase
+    .from('products')
+    .select('id, product_key, name, description, display_description, price, supplier_price, stock_quantity, is_available, category, source, owner_id, updated_at')
+    .order('updated_at', { ascending: false })
+    .limit(500);
+  if (!staff.isAdmin) q = q.eq('owner_id', ownerId);
+  else q = q.not('owner_id', 'is', null); // main admin: all vendor-owned
+  const { data, error } = await q;
+  if (error) {
+    if (/owner_id|column/i.test(error.message || '')) {
+      return { status: 500, body: { success: false, message: 'Run sql/sub_admin.sql (owner_id on products)' } };
+    }
+    return { status: 500, body: { success: false, message: error.message } };
+  }
+  return { status: 200, body: { success: true, data: data || [] } };
+}
+
+async function vendorProductUpsert(body, staff) {
+  const fields = body.fields || body;
+  const productKey = (fields.product_key || body.product_key || '').toString().trim();
+  if (!productKey && !body.id) {
+    return { status: 400, body: { success: false, message: 'product_key or id required' } };
+  }
+
+  // Load existing if any
+  let existing = null;
+  if (body.id) {
+    const { data } = await supabase.from('products').select('*').eq('id', body.id).maybeSingle();
+    existing = data;
+  } else if (productKey) {
+    const { data } = await supabase.from('products').select('*').eq('product_key', productKey).maybeSingle();
+    existing = data;
+  }
+
+  if (existing && !staff.isAdmin && existing.owner_id !== staff.userId) {
+    return { status: 403, body: { success: false, message: 'You can only edit your own products' } };
+  }
+
+  const payload = {};
+  if (fields.name != null) payload.name = String(fields.name).trim();
+  if (fields.description != null) payload.description = fields.description;
+  if (fields.display_description != null) payload.display_description = fields.display_description;
+  if (fields.price != null) payload.price = Number(fields.price) || 0;
+  if (fields.stock_quantity != null) payload.stock_quantity = Number(fields.stock_quantity) || 0;
+  if (fields.is_available != null) payload.is_available = !!fields.is_available;
+  if (fields.category != null) payload.category = fields.category;
+  if (fields.login_format != null || fields.credential_format != null) {
+    // store format hint in display_description prefix if empty description
+    const fmt = fields.login_format || fields.credential_format;
+    if (fmt && !payload.display_description) payload.display_description = String(fmt);
+  }
+  payload.updated_at = new Date().toISOString();
+
+  if (!existing) {
+    // Create manual product owned by this vendor
+    const key = productKey || ('manual_v_' + staff.userId.slice(0, 8) + '_' + Date.now());
+    const insertRow = {
+      product_key: key,
+      name: payload.name || 'Manual product',
+      description: payload.description || null,
+      display_description: payload.display_description || fields.credential_format || null,
+      price: payload.price != null ? payload.price : 1000,
+      supplier_price: 0,
+      stock_quantity: payload.stock_quantity != null ? payload.stock_quantity : 0,
+      is_available: payload.is_available != null ? payload.is_available : true,
+      category: payload.category || 'MANUAL',
+      source: 'manual',
+      owner_id: staff.userId,
+      updated_at: payload.updated_at
+    };
+    const { data, error } = await supabase.from('products').insert(insertRow).select('*').maybeSingle();
+    if (error) {
+      if (/owner_id|column/i.test(error.message || '')) {
+        return { status: 500, body: { success: false, message: 'Run sql/sub_admin.sql (owner_id on products)' } };
+      }
+      return { status: 500, body: { success: false, message: error.message } };
+    }
+    return { status: 200, body: { success: true, data, message: 'Product created' } };
+  }
+
+  const { data, error } = await supabase
+    .from('products')
+    .update(payload)
+    .eq('id', existing.id)
+    .select('*')
+    .maybeSingle();
+  if (error) return { status: 500, body: { success: false, message: error.message } };
+  return { status: 200, body: { success: true, data, message: 'Product updated' } };
+}
+
+async function vendorProductDelete(body, staff) {
+  const id = body.id;
+  const productKey = body.product_key;
+  if (!id && !productKey) {
+    return { status: 400, body: { success: false, message: 'id or product_key required' } };
+  }
+  let q = supabase.from('products').select('id, owner_id, product_key');
+  if (id) q = q.eq('id', id);
+  else q = q.eq('product_key', productKey);
+  const { data: row, error } = await q.maybeSingle();
+  if (error || !row) return { status: 404, body: { success: false, message: 'Product not found' } };
+  if (!staff.isAdmin && row.owner_id !== staff.userId) {
+    return { status: 403, body: { success: false, message: 'You can only delete your own products' } };
+  }
+  const { error: delErr } = await supabase.from('products').delete().eq('id', row.id);
+  if (delErr) return { status: 500, body: { success: false, message: delErr.message } };
+  return { status: 200, body: { success: true, message: 'Product deleted' } };
+}
+
+async function vendorStats(staff) {
+  const ownerId = staff.isAdmin && staff.bodyOwnerId ? staff.bodyOwnerId : staff.userId;
+  const { data: products, error: pErr } = await supabase
+    .from('products')
+    .select('id, product_key, name, price')
+    .eq('owner_id', ownerId);
+  if (pErr) {
+    if (/owner_id|column/i.test(pErr.message || '')) {
+      return { status: 500, body: { success: false, message: 'Run sql/sub_admin.sql first' } };
+    }
+    return { status: 500, body: { success: false, message: pErr.message } };
+  }
+  const ids = (products || []).map((p) => p.id).filter(Boolean);
+  const keys = (products || []).map((p) => p.product_key).filter(Boolean);
+  if (!ids.length && !keys.length) {
+    return {
+      status: 200,
+      body: {
+        success: true,
+        data: { products: 0, orders: 0, revenue_ngn: 0, recent_orders: [] }
+      }
+    };
+  }
+
+  let orders = [];
+  // Match by product_id or product_code
+  const { data: byId } = await supabase
+    .from('orders')
+    .select('id, order_id, product_id, product_code, product_name, quantity, amount, status, created_at, login_credentials')
+    .in('product_id', ids.length ? ids : ['00000000-0000-0000-0000-000000000000'])
+    .eq('status', 'completed')
+    .order('created_at', { ascending: false })
+    .limit(200);
+  const { data: byKey } = keys.length
+    ? await supabase
+        .from('orders')
+        .select('id, order_id, product_id, product_code, product_name, quantity, amount, status, created_at, login_credentials')
+        .in('product_code', keys)
+        .eq('status', 'completed')
+        .order('created_at', { ascending: false })
+        .limit(200)
+    : { data: [] };
+
+  const map = new Map();
+  for (const o of [...(byId || []), ...(byKey || [])]) {
+    map.set(o.id || o.order_id, o);
+  }
+  orders = Array.from(map.values());
+  const revenue = orders.reduce((s, o) => s + (Number(o.amount) || 0), 0);
+  const units = orders.reduce((s, o) => s + (Number(o.quantity) || 1), 0);
+
+  return {
+    status: 200,
+    body: {
+      success: true,
+      data: {
+        products: (products || []).length,
+        orders: orders.length,
+        units_sold: units,
+        revenue_ngn: revenue,
+        recent_orders: orders.slice(0, 50).map((o) => ({
+          order_id: o.order_id,
+          product_name: o.product_name,
+          quantity: o.quantity,
+          amount: o.amount,
+          status: o.status,
+          created_at: o.created_at
+          // credentials intentionally omitted from list (privacy)
+        }))
+      }
+    }
+  };
+}
+
+
 
 // ---------- resource: user ----------
 
@@ -990,15 +1290,38 @@ export default async function handler(req, res) {
   applyRateLimitHeaders(res, rl);
   if (!rl.ok) return res.status(429).json({ success: false, message: rl.message });
 
-  const admin = await requireAdmin(req);
-  if (!admin.ok) return res.status(admin.status).json({ success: false, message: admin.message });
-
   try {
     const body = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : (req.body || {});
     const { resource, action } = body;
 
+    // Vendor portal: sub-admin OR main admin
+    if (resource === 'vendor') {
+      const staff = await requireStaff(req);
+      if (!staff.ok) return res.status(staff.status).json({ success: false, message: staff.message });
+      let result;
+      if (action === 'products') result = await vendorProductsList(staff);
+      else if (action === 'product_save') result = await vendorProductUpsert(body, staff);
+      else if (action === 'product_delete') result = await vendorProductDelete(body, staff);
+      else if (action === 'stats') {
+        staff.bodyOwnerId = body.user_id || null;
+        result = await vendorStats(staff);
+      } else {
+        result = { status: 400, body: { success: false, message: 'Unknown vendor action' } };
+      }
+      return res.status(result.status).json(result.body);
+    }
+
+    // Everything else: main admin only
+    const admin = await requireAdmin(req);
+    if (!admin.ok) return res.status(admin.status).json({ success: false, message: admin.message });
+
     let result;
-    if (resource === 'user') {
+    if (resource === 'sub_admin') {
+      if (action === 'assign') result = await subAdminAssign(body);
+      else if (action === 'revoke') result = await subAdminRevoke(body);
+      else if (action === 'list') result = await subAdminList();
+      else result = { status: 400, body: { success: false, message: 'Unknown sub_admin action' } };
+    } else if (resource === 'user') {
       if (action === 'ban') result = await userBan(body, admin.adminId);
       else if (action === 'delete') result = await userDelete(body, admin.adminId);
       else if (action === 'update') result = await userUpdate(body);
@@ -1023,7 +1346,7 @@ export default async function handler(req, res) {
     } else if (resource === 'secrets_status') {
       result = secretsStatusHandle();
     } else {
-      result = { status: 400, body: { success: false, message: 'Unknown resource. Use "user", "product", "inventory", "sms", "supplier_balances", "overview", "user_join_dates", or "secrets_status".' } };
+      result = { status: 400, body: { success: false, message: 'Unknown resource. Use "user", "product", "inventory", "sms", "supplier_balances", "overview", "user_join_dates", "secrets_status", "sub_admin", or "vendor".' } };
     }
 
     return res.status(result.status).json(result.body);
