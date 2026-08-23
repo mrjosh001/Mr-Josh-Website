@@ -89,7 +89,8 @@ a.link{color:var(--primary);text-decoration:none;font-size:13px}
       <label>Stock</label>
       <input id="pstock" type="number" min="0" placeholder="10"/>
       <label>Category</label>
-      <input id="pcat" placeholder="MANUAL"/>
+      <select id="pcat"><option value="">Loading categories…</option></select>
+      <p class="sub" style="margin-top:6px">Pick an existing site category only — you cannot create new ones.</p>
       <label>Credential format / description</label>
       <textarea id="pdesc" rows="3" placeholder="Login format: Username:pass:2fa:email:emailpass"></textarea>
       <div class="row">
@@ -147,6 +148,23 @@ async function api(body) {
   return json;
 }
 
+
+async function loadCategories() {
+  const sel = document.getElementById('pcat');
+  if (!sel) return;
+  try {
+    const res = await api({ resource: 'vendor', action: 'categories' });
+    const list = res.data || [];
+    if (!list.length) {
+      sel.innerHTML = '<option value="MANUAL">MANUAL</option>';
+      return;
+    }
+    sel.innerHTML = list.map(c => '<option value="'+esc(c)+'">'+esc(c)+'</option>').join('');
+  } catch (e) {
+    sel.innerHTML = '<option value="MANUAL">MANUAL</option>';
+  }
+}
+
 async function refresh() {
   const st = await api({ resource: 'vendor', action: 'stats' });
   const d = st.data || {};
@@ -177,7 +195,16 @@ async function refresh() {
       document.getElementById('pname').value = p.name || '';
       document.getElementById('pprice').value = p.price || '';
       document.getElementById('pstock').value = p.stock_quantity || 0;
-      document.getElementById('pcat').value = p.category || 'MANUAL';
+      {
+        const cat = p.category || '';
+        const sel = document.getElementById('pcat');
+        if (cat && ![...sel.options].some(o => o.value === cat)) {
+          const opt = document.createElement('option');
+          opt.value = cat; opt.textContent = cat;
+          sel.appendChild(opt);
+        }
+        sel.value = cat || (sel.options[0] && sel.options[0].value) || '';
+      }
       document.getElementById('pdesc').value = p.display_description || p.description || '';
     };
   });
@@ -187,6 +214,7 @@ async function enterPortal() {
   const { data: { session } } = await sb.auth.getSession();
   if (!session) { showAuth(); return; }
   try {
+    await loadCategories();
     await refresh();
     const email = session.user && session.user.email;
     document.getElementById('whoami').textContent = email ? ('Signed in as ' + email) : 'Signed in';
@@ -267,7 +295,10 @@ document.getElementById('resetBtn').onclick = ()=>{
   document.getElementById('pname').value = '';
   document.getElementById('pprice').value = '';
   document.getElementById('pstock').value = '';
-  document.getElementById('pcat').value = 'MANUAL';
+  {
+    const sel = document.getElementById('pcat');
+    if (sel && sel.options.length) sel.selectedIndex = 0;
+  }
   document.getElementById('pdesc').value = '';
   document.getElementById('msg').textContent = '';
 };
