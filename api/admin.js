@@ -276,6 +276,24 @@ async function vendorProductsList(staff) {
   return { status: 200, body: { success: true, data: data || [] } };
 }
 
+
+async function vendorCategoriesList() {
+  // Distinct categories already on the platform (all products)
+  const { data, error } = await supabase
+    .from('products')
+    .select('category')
+    .not('category', 'is', null)
+    .limit(2000);
+  if (error) return { status: 500, body: { success: false, message: error.message } };
+  const set = new Set();
+  for (const row of data || []) {
+    const c = String(row.category || '').trim();
+    if (c) set.add(c);
+  }
+  const list = Array.from(set).sort((a, b) => a.localeCompare(b));
+  return { status: 200, body: { success: true, data: list } };
+}
+
 async function vendorProductUpsert(body, staff) {
   const fields = body.fields || body;
   const productKey = (fields.product_key || body.product_key || '').toString().trim();
@@ -304,7 +322,17 @@ async function vendorProductUpsert(body, staff) {
   if (fields.price != null) payload.price = Number(fields.price) || 0;
   if (fields.stock_quantity != null) payload.stock_quantity = Number(fields.stock_quantity) || 0;
   if (fields.is_available != null) payload.is_available = !!fields.is_available;
-  if (fields.category != null) payload.category = fields.category;
+  if (fields.category != null) {
+    const cat = String(fields.category).trim();
+    if (!staff.isAdmin && cat) {
+      const { data: cats } = await supabase.from('products').select('category').not('category', 'is', null).limit(2000);
+      const allowed = new Set((cats || []).map((r) => String(r.category || '').trim()).filter(Boolean));
+      if (allowed.size && !allowed.has(cat)) {
+        return { status: 400, body: { success: false, message: 'Category must be one of the existing site categories' } };
+      }
+    }
+    payload.category = cat;
+  }
   if (fields.login_format != null || fields.credential_format != null) {
     // store format hint in display_description prefix if empty description
     const fmt = fields.login_format || fields.credential_format;
@@ -1300,6 +1328,7 @@ export default async function handler(req, res) {
       if (!staff.ok) return res.status(staff.status).json({ success: false, message: staff.message });
       let result;
       if (action === 'products') result = await vendorProductsList(staff);
+      else if (action === 'categories') result = await vendorCategoriesList();
       else if (action === 'product_save') result = await vendorProductUpsert(body, staff);
       else if (action === 'product_delete') result = await vendorProductDelete(body, staff);
       else if (action === 'stats') {
