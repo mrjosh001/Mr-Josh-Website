@@ -668,6 +668,7 @@
               <div class="metric-card"><div class="metric-label">Logs Domain</div><div class="metric-value" id="balLogsdomain">—</div><div class="metric-sub" id="balLogsdomainSub">Loading…</div></div>
               <div class="metric-card"><div class="metric-label">GrizzlySMS</div><div class="metric-value" id="balGrizzly">—</div><div class="metric-sub" id="balGrizzlySub">Loading…</div></div>
               <div class="metric-card"><div class="metric-label">Sujan Dept.</div><div class="metric-value" id="balSujan">—</div><div class="metric-sub" id="balSujanSub">Loading…</div></div>
+              <div class="metric-card"><div class="metric-label">ClassyTee</div><div class="metric-value" id="balClassy">—</div><div class="metric-sub" id="balClassySub">Loading…</div></div>
               <div class="metric-card"><div class="metric-label">Owlet (Boosters)</div><div class="metric-value" id="balOwlet">—</div><div class="metric-sub" id="balOwletSub">Loading…</div></div>
             </div>
           </div>
@@ -1514,7 +1515,7 @@ async function bulkRepriceNumbers(mode) {
 async function loadSupplierBalances() {
   const btn = document.getElementById('btnRefreshSupplierBalances');
   setBtnBusy(btn, true, 'Refreshing...');
-  ['Fadded', 'Logsdomain', 'Grizzly', 'Sujan', 'Owlet'].forEach(p => {
+  ['Fadded', 'Logsdomain', 'Grizzly', 'Sujan', 'Classy', 'Owlet'].forEach(p => {
     const sub = document.getElementById('bal' + p + 'Sub');
     if (sub) sub.textContent = 'Loading…';
   });
@@ -1545,6 +1546,7 @@ async function loadSupplierBalances() {
     renderSupplierBalance('Logsdomain', data.suppliers.logsdomain);
     renderSupplierBalance('Grizzly', data.suppliers.grizzly);
     renderSupplierBalance('Sujan', data.suppliers.sujan);
+    renderSupplierBalance('Classy', data.suppliers.classy);
     renderSupplierBalance('Owlet', data.suppliers.owlet);
   } catch (err) {
     console.error('Supplier balance error at step:', step, err.name, err.message, err.stack);
@@ -2422,6 +2424,7 @@ const SUPPLIER_BADGES = {
   fadded:          { label: 'FADDED',      color: '#38bdf8' },
   logsdomain:      { label: 'LOGS DOMAIN', color: '#3b82f6' },
   sujandepartment: { label: 'SUJAN DEPT.', color: '#fb923c' },
+  classy:          { label: 'CLASSYTEE',   color: '#a78bfa' },
   manual:          { label: 'MANUAL',      color: '#94a3b8' }
 };
 
@@ -2857,41 +2860,43 @@ async function syncClassyNow() {
 async function syncAllSuppliersNow() {
   const btn = document.getElementById('btnSyncAll');
   const idle = '<i class="fas fa-sync"></i> Sync All';
-  setSyncButtonLoading(btn, true, idle);
   const fBtn = document.getElementById('btnSyncFadded');
   const lBtn = document.getElementById('btnSyncLogsDomain');
   const sBtn = document.getElementById('btnSyncSujan');
+  const cBtn = document.getElementById('btnSyncClassy');
+  setSyncButtonLoading(btn, true, idle);
   setSyncButtonLoading(fBtn, true, '<i class="fas fa-sync"></i> Sync Fadded');
   setSyncButtonLoading(lBtn, true, '<i class="fas fa-sync"></i> Sync Logs Domain');
   setSyncButtonLoading(sBtn, true, '<i class="fas fa-sync"></i> Sync Sujan Dept.');
+  setSyncButtonLoading(cBtn, true, '<i class="fas fa-sync"></i> Sync ClassyTee');
   try {
-    const [fRes, lRes, sRes] = await Promise.all([
+    const [fRes, lRes, sRes, cRes] = await Promise.all([
       fetch('/api/order?action=sync'),
       fetch('/api/order-logsdomain?action=sync'),
-      fetch('/api/sujan')
+      fetch('/api/sujan'),
+      fetch('/api/classy')
     ]);
-    const fadded = await fRes.json();
-    const ld = await lRes.json();
-    const sujan = await sRes.json();
+    const [fadded, ld, sujan, classy] = await Promise.all([
+      fRes.json().catch(() => ({})),
+      lRes.json().catch(() => ({})),
+      sRes.json().catch(() => ({})),
+      cRes.json().catch(() => ({}))
+    ]);
     const lines = [];
-    if (fadded.success) {
-      lines.push(`Fadded: ${fadded.synced} (new ${fadded.new_products || 0}, updated ${fadded.updated_products || 0})`);
-    } else {
-      lines.push('Fadded failed: ' + (fadded.message || 'error'));
-    }
-    if (ld.success) {
-      lines.push(`Logs Domain: ${ld.synced} (new ${ld.new_products || 0}, updated ${ld.updated_products || 0})`);
-    } else {
-      lines.push('Logs Domain failed: ' + (ld.message || 'error'));
-    }
+    if (fadded.success) lines.push(`Fadded OK (synced ${fadded.synced || 0}, new ${fadded.new_products || 0}, updated ${fadded.updated_products || 0})`);
+    else lines.push('Fadded failed: ' + (fadded.message || 'error'));
+    if (ld.success) lines.push(`Logs Domain OK (synced ${ld.synced || 0}, new ${ld.new_products || 0}, updated ${ld.updated_products || 0})`);
+    else lines.push('Logs Domain failed: ' + (ld.message || 'error'));
     if (sujan.success) {
-      lines.push(`Sujan Dept.: ${sujan.synced} (new ${sujan.new_products || 0}, updated ${sujan.updated_products || 0})`);
+      lines.push(`Sujan Dept. OK (synced ${sujan.synced || 0}, new ${sujan.new_products || 0}, updated ${sujan.updated_products || 0})`);
       if (sujan.zero_price_count > 0) lines.push(`  ⚠️ ${sujan.zero_price_count} came back at ₦0 — check Vercel logs`);
     } else {
       lines.push('Sujan Dept. failed: ' + (sujan.message || 'error'));
     }
+    if (classy.success) lines.push(`ClassyTee OK (synced ${classy.synced || 0}, new ${classy.new_products || 0}, updated ${classy.updated_products || 0})`);
+    else lines.push('ClassyTee failed: ' + (classy.message || 'error'));
     alert(lines.join('\n'));
-    await loadProducts();
+    try { await loadProducts(); } catch (_) {}
   } catch (e) {
     alert('Sync All failed: ' + e.message);
   } finally {
@@ -2899,10 +2904,10 @@ async function syncAllSuppliersNow() {
     setSyncButtonLoading(fBtn, false, '<i class="fas fa-sync"></i> Sync Fadded');
     setSyncButtonLoading(lBtn, false, '<i class="fas fa-sync"></i> Sync Logs Domain');
     setSyncButtonLoading(sBtn, false, '<i class="fas fa-sync"></i> Sync Sujan Dept.');
+    setSyncButtonLoading(cBtn, false, '<i class="fas fa-sync"></i> Sync ClassyTee');
   }
 }
 
-// -------------------------------------------------------------------------
 // STAGE 6 — RESTOCK MANUAL PRODUCTS (bulk-paste credentials)
 // -------------------------------------------------------------------------
 function isManualProductRow(p) {
