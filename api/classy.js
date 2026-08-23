@@ -267,7 +267,7 @@ async function handleOrder(req, res) {
 
   const body = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : (req.body || {});
   const { product_key, quantity = 1, external_order_id } = body;
-  const qty = Math.max(1, Math.min(20, parseInt(quantity, 10) || 1));
+  const qty = Math.max(1, Math.min(10, parseInt(quantity, 10) || 1));
   const productId = productIdFromKey(product_key);
   if (!productId) {
     return res.status(400).json({ success: false, message: 'Invalid ClassyTee product_key (expected ct_{id})' });

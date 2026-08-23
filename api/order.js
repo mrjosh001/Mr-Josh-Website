@@ -684,9 +684,9 @@ export default async function handler(req, res) {
     return res.status(400).json({ success: false, message: 'product_key is required' });
   }
 
-  const qtyCheck = parsePositiveInt(quantity, { min: 1, max: 20 });
+  const qtyCheck = parsePositiveInt(quantity, { min: 1, max: 10 });
   if (!qtyCheck.ok) {
-    return res.status(400).json({ success: false, message: 'Invalid quantity (1–20)' });
+    return res.status(400).json({ success: false, message: 'Invalid quantity (1–10)' });
   }
   const safeQty = qtyCheck.value;
 

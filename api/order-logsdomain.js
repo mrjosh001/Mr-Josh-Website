@@ -533,7 +533,7 @@ export default async function handler(req, res) {
     });
   }
 
-  const qty = Math.max(1, Math.min(100, parseInt(quantity, 10) || 1));
+  const qty = Math.max(1, Math.min(10, parseInt(quantity, 10) || 1));
   let originalBalance = 0;
   let total = 0;
   let productName = '';
