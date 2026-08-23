@@ -97,6 +97,43 @@ async function insertLogOrder(row) {
 // ---------------------------------------------------------------------------
 // GET — catalog sync
 // ---------------------------------------------------------------------------
+
+/** Pull human-readable description from supplier product + category. */
+function supplierDescription(product, category) {
+  if (!product || typeof product !== 'object') product = {};
+  const candidates = [
+    product.description,
+    product.product_description,
+    product.desc,
+    product.details,
+    product.detail,
+    product.info,
+    product.information,
+    product.about,
+    product.note,
+    product.notes,
+    product.content,
+    product.long_description,
+    product.short_description,
+    product.product_info,
+    product.spec,
+    product.specs
+  ];
+  for (const c of candidates) {
+    if (c == null) continue;
+    const s = String(c).trim();
+    if (s && s.toLowerCase() !== 'null' && s.toLowerCase() !== 'undefined') return s;
+  }
+  if (category && typeof category === 'object') {
+    for (const c of [category.description, category.category_description, category.details]) {
+      if (c == null) continue;
+      const s = String(c).trim();
+      if (s) return s;
+    }
+  }
+  return '';
+}
+
 async function handleSync(req, res) {
   if (!API_KEY) {
     return res.status(500).json({ success: false, message: 'CLASSYTEE_API_KEY not configured' });
@@ -145,6 +182,14 @@ async function handleSync(req, res) {
 
   const existing = new Map((existingRows || []).map((r) => [r.product_key, r]));
 
+  // Log first raw product once so we can see real description field names in Vercel logs
+  if (products.length > 0) {
+    try {
+      console.log('[classy sync] raw first product keys:', Object.keys(products[0] || {}));
+      console.log('[classy sync] raw first product sample:', JSON.stringify(products[0]).slice(0, 800));
+    } catch (_) {}
+  }
+
   for (const p of products) {
     const pid = p.product_id ?? p.id;
     if (pid == null) continue;
@@ -155,6 +200,8 @@ async function handleSync(req, res) {
     const inStock = p.in_stock != null ? !!p.in_stock : stock > 0;
     const cat = catById.get(Number(p.category_id));
     const category = categorize(name + ' ' + (cat && cat.category_name ? cat.category_name : ''));
+    // Supplier-facing text only — never invent a credential format string as the product description
+    const desc = supplierDescription(p, cat) || null;
     const prev = existing.get(product_key);
 
     if (prev) {
@@ -168,6 +215,9 @@ async function handleSync(req, res) {
           // never overwrite admin selling price or forced hide
           is_available: prev.is_available === false ? false : inStock,
           source: 'classy',
+          // Keep description in sync with supplier (fixes earlier wrong default)
+          description: desc,
+          display_description: desc,
           updated_at: new Date().toISOString()
         })
         .eq('product_key', product_key);
@@ -183,8 +233,8 @@ async function handleSync(req, res) {
         stock_quantity: stock,
         is_available: inStock,
         source: 'classy',
-        description: (cat && (cat.description || cat.category_name)) || null,
-        display_description: 'Username : Password : Email : Token',
+        description: desc,
+        display_description: desc,
         updated_at: new Date().toISOString()
       });
       if (!error) newCount++;
@@ -287,8 +337,10 @@ async function handleOrder(req, res) {
       serial: String(it.log_id || it.id || idx + 1)
     })).filter((it) => it.details);
 
-    const formatHint =
-      product.display_description || product.description || 'Username : Password : Email : Token';
+    // Prefer real supplier text only if it looks like a field layout hint (contains : separators).
+    // Otherwise leave empty so formatCredentials auto-detects email:pass / multi-part lines.
+    const rawHint = String(product.display_description || product.description || '').trim();
+    const formatHint = /:/.test(rawHint) && rawHint.length < 120 ? rawHint : '';
     const combinedCreds =
       formatMultiLogCredentials(items, formatHint) ||
       (items[0] ? formatCredentials(items[0].details, formatHint) || items[0].details : null);
