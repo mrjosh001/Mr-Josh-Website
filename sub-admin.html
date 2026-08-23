@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>Vendor portal | MJ HUB</title>
+<link rel="stylesheet" href="/css/skeleton.css"/>
+<style>
+:root{--bg:#06080f;--card:#0f1524;--text:#e8eefc;--muted:#94a3b8;--primary:#3b82f6;--border:rgba(148,163,184,.14)}
+html[data-theme=light]{--bg:#f4f6fb;--card:#fff;--text:#0f172a;--muted:#64748b;--border:rgba(15,23,42,.1)}
+*{box-sizing:border-box}
+body{margin:0;font-family:system-ui,-apple-system,sans-serif;background:var(--bg);color:var(--text)}
+.wrap{max-width:920px;margin:0 auto;padding:20px 16px 80px}
+h1{font-size:1.35rem;margin:0 0 4px}
+.sub{color:var(--muted);font-size:.9rem;margin-bottom:20px}
+.card{background:var(--card);border:1px solid var(--border);border-radius:16px;padding:16px;margin-bottom:14px}
+.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+.stat{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:14px;text-align:center}
+.stat b{display:block;font-size:1.25rem;color:var(--primary)}
+.stat span{font-size:.75rem;color:var(--muted)}
+label{display:block;font-size:.8rem;color:var(--muted);margin:10px 0 4px}
+input,textarea,select{width:100%;padding:10px 12px;border-radius:10px;border:1px solid var(--border);background:var(--bg);color:var(--text)}
+button{background:var(--primary);color:#fff;border:none;border-radius:10px;padding:10px 16px;font-weight:600;cursor:pointer}
+button.ghost{background:transparent;border:1px solid var(--border);color:var(--text)}
+button.danger{background:#ef4444}
+.row{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
+.err{color:#f87171;font-size:.9rem}
+.ok{color:#34d399;font-size:.9rem}
+table{width:100%;border-collapse:collapse;font-size:.85rem}
+td,th{padding:8px;border-bottom:1px solid var(--border);text-align:left}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Vendor portal</h1>
+  <p class="sub">Upload and manage your products. View orders and revenue for your listings only.</p>
+  <div id="gate" class="card">Checking access…</div>
+  <div id="app" style="display:none">
+    <div class="stats" id="stats"></div>
+    <div class="card" style="margin-top:14px">
+      <h3 style="margin:0 0 8px">Your products</h3>
+      <div id="plist"></div>
+    </div>
+    <div class="card">
+      <h3 style="margin:0 0 8px">Add / edit product</h3>
+      <p class="sub">Use a clear credential format in the description, e.g. <code>Username:pass:2fa:email:emailpass</code></p>
+      <input type="hidden" id="editId"/>
+      <label>Name</label>
+      <input id="pname" placeholder="Product name"/>
+      <label>Price (₦)</label>
+      <input id="pprice" type="number" min="0" step="50" placeholder="3000"/>
+      <label>Stock</label>
+      <input id="pstock" type="number" min="0" placeholder="10"/>
+      <label>Category</label>
+      <input id="pcat" placeholder="MANUAL"/>
+      <label>Credential format / description</label>
+      <textarea id="pdesc" rows="3" placeholder="Login format: Username:pass:2fa:email:emailpass"></textarea>
+      <div class="row">
+        <button type="button" id="saveBtn">Save product</button>
+        <button type="button" class="ghost" id="resetBtn">Clear form</button>
+      </div>
+      <p id="msg"></p>
+    </div>
+    <div class="card">
+      <h3 style="margin:0 0 8px">Recent sales</h3>
+      <div id="sales"></div>
+    </div>
+  </div>
+</div>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script>
+const SUPABASE_URL = 'https://atczodlljmlayvldxfmv.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImF0Y3pvZGxsam1sYXl2bGR4Zm12Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODUwNzUyMzgsImV4cCI6MjEwMDY1MTIzOH0.ufthD-p7BmeD_B7xyuMM6PNPL8DmcL4AtRYgg-MuoLI';
+const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+  auth: { persistSession: true, autoRefreshToken: true, storage: window.sessionStorage }
+});
+
+async function api(body) {
+  const { data: { session } } = await sb.auth.getSession();
+  if (!session) throw new Error('Please sign in');
+  const res = await fetch('/api/admin', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: 'Bearer ' + session.access_token
+    },
+    body: JSON.stringify(body)
+  });
+  const json = await res.json();
+  if (!json.success) throw new Error(json.message || 'Request failed');
+  return json;
+}
+
+function money(n){ return '₦' + Number(n||0).toLocaleString(); }
+
+async function refresh() {
+  const st = await api({ resource: 'vendor', action: 'stats' });
+  const d = st.data || {};
+  document.getElementById('stats').innerHTML =
+    '<div class="stat"><b>'+ (d.products||0) +'</b><span>Products</span></div>' +
+    '<div class="stat"><b>'+ (d.orders||0) +'</b><span>Orders</span></div>' +
+    '<div class="stat"><b>'+ money(d.revenue_ngn) +'</b><span>Revenue</span></div>';
+
+  const sales = (d.recent_orders||[]);
+  document.getElementById('sales').innerHTML = sales.length
+    ? '<table><tr><th>Product</th><th>Qty</th><th>Amount</th><th>Date</th></tr>' +
+      sales.map(o=>'<tr><td>'+esc(o.product_name)+'</td><td>'+o.quantity+'</td><td>'+money(o.amount)+'</td><td>'+esc((o.created_at||'').slice(0,16))+'</td></tr>').join('') +
+      '</table>'
+    : '<p class="sub">No sales yet.</p>';
+
+  const pr = await api({ resource: 'vendor', action: 'products' });
+  const list = pr.data || [];
+  document.getElementById('plist').innerHTML = list.length
+    ? '<table><tr><th>Name</th><th>Price</th><th>Stock</th><th></th></tr>' +
+      list.map(p=>'<tr><td>'+esc(p.name)+'</td><td>'+money(p.price)+'</td><td>'+p.stock_quantity+'</td><td><button type="button" class="ghost" data-edit=\''+encodeURIComponent(JSON.stringify(p))+'\'>Edit</button></td></tr>').join('') +
+      '</table>'
+    : '<p class="sub">No products yet. Add one below.</p>';
+
+  document.querySelectorAll('[data-edit]').forEach(btn=>{
+    btn.onclick = ()=>{
+      const p = JSON.parse(decodeURIComponent(btn.getAttribute('data-edit')));
+      document.getElementById('editId').value = p.id || '';
+      document.getElementById('pname').value = p.name || '';
+      document.getElementById('pprice').value = p.price || '';
+      document.getElementById('pstock').value = p.stock_quantity || 0;
+      document.getElementById('pcat').value = p.category || 'MANUAL';
+      document.getElementById('pdesc').value = p.display_description || p.description || '';
+    };
+  });
+}
+
+function esc(s){ return String(s||'').replace(/[&<>"']/g,c=>({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c])); }
+
+document.getElementById('saveBtn').onclick = async ()=>{
+  const msg = document.getElementById('msg');
+  msg.className = '';
+  msg.textContent = 'Saving…';
+  try {
+    await api({
+      resource: 'vendor',
+      action: 'product_save',
+      id: document.getElementById('editId').value || undefined,
+      fields: {
+        name: document.getElementById('pname').value,
+        price: document.getElementById('pprice').value,
+        stock_quantity: document.getElementById('pstock').value,
+        category: document.getElementById('pcat').value,
+        display_description: document.getElementById('pdesc').value,
+        description: document.getElementById('pdesc').value,
+        is_available: true
+      }
+    });
+    msg.className = 'ok';
+    msg.textContent = 'Saved';
+    document.getElementById('resetBtn').onclick();
+    await refresh();
+  } catch (e) {
+    msg.className = 'err';
+    msg.textContent = e.message || 'Failed';
+  }
+};
+
+document.getElementById('resetBtn').onclick = ()=>{
+  document.getElementById('editId').value = '';
+  document.getElementById('pname').value = '';
+  document.getElementById('pprice').value = '';
+  document.getElementById('pstock').value = '';
+  document.getElementById('pcat').value = 'MANUAL';
+  document.getElementById('pdesc').value = '';
+  document.getElementById('msg').textContent = '';
+};
+
+(async function init(){
+  const gate = document.getElementById('gate');
+  try {
+    const { data: { session } } = await sb.auth.getSession();
+    if (!session) {
+      gate.innerHTML = '<p class="err">Please <a href="auth.html">sign in</a> with a sub-admin account.</p>';
+      return;
+    }
+    await refresh();
+    gate.style.display = 'none';
+    document.getElementById('app').style.display = 'block';
+  } catch (e) {
+    gate.innerHTML = '<p class="err">'+esc(e.message)+'</p><p class="sub">Main admin must assign you as sub-admin first.</p>';
+  }
+})();
+</script>
+</body>
+</html>
