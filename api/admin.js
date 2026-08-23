@@ -246,13 +246,15 @@ async function subAdminRevoke(body) {
 }
 
 async function subAdminList() {
+  // profiles may not have created_at — select only columns that exist on this project
   const { data, error } = await supabase
     .from('profiles')
-    .select('id, email, customer_id, full_name, username, is_sub_admin, created_at')
-    .eq('is_sub_admin', true)
-    .order('created_at', { ascending: false });
+    .select('id, email, customer_id, full_name, username, is_sub_admin')
+    .eq('is_sub_admin', true);
   if (error) return { status: 500, body: { success: false, message: error.message } };
-  return { status: 200, body: { success: true, data: data || [] } };
+  const rows = data || [];
+  rows.sort((a, b) => String(a.email || '').localeCompare(String(b.email || '')));
+  return { status: 200, body: { success: true, data: rows } };
 }
 
 // ---------- resource: vendor (sub-admin portal) ----------
