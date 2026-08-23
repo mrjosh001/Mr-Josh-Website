@@ -18,7 +18,9 @@ jobs:
           test -f api/owlet.js
           test -f api/pocketfi.js
           test -f api/order.js
-          test -f api/products.js
+          # Fadded catalog sync lives in api/order.js (?action=sync).
+          # api/products.js is optional legacy; remove when rewrite is live.
+          if [ -f api/products.js ]; then node --check api/products.js; fi
 
       - name: Block service role JWT in HTML
         run: |
