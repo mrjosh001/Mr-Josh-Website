@@ -6168,11 +6168,25 @@ async function fetchUserSpendingSummary(userId) {
 // sharing the same order_id. This groups those rows back into a single
 // logical order so "My Orders" shows one card with the FULL quantity, and
 // "View Log" shows every credential from that purchase — not just one.
+// The backend saves ONE row per unit purchased (so quantity 2 = 2 rows).
+// Each row gets its OWN unique order_id suffix (e.g. "...-1", "...-2") —
+// that was a separate fix for duplicate-key insert failures — so rows
+// from the same purchase no longer share an identical order_id. This
+// strips that trailing "-N" (only 1-3 digits, so it never touches a
+// supplier's own longer numeric IDs, like a timestamp segment) before
+// grouping, so sibling rows — and older rows saved before this suffix
+// existed — all group back into one logical order.
+function baseOrderKey(orderId) {
+  const s = String(orderId || '');
+  const stripped = s.replace(/-\d{1,3}$/, '');
+  return stripped || s;
+}
+
 function groupOrdersById(rows) {
     const map = new Map();
     const orderedKeys = [];
     rows.forEach(o => {
-        const key = o.order_id || `single-${o.id || Math.random()}`;
+        const key = baseOrderKey(o.order_id) || `single-${o.id || Math.random()}`;
         if (!map.has(key)) {
             map.set(key, []);
             orderedKeys.push(key);
@@ -6293,7 +6307,9 @@ function showOrderReceipt(items, isViewOnly = false) {
     credBox.innerHTML = lastReceiptItems.map((it, idx) => {
         const credVal = it.login_credentials || 'N/A';
         const descVal = it.description || '';
-        const label = it.product_name ? escapeHtml(it.product_name) : `Item #${idx+1}`;
+        const label = lastReceiptItems.length > 1
+            ? `${idx + 1}. ${it.product_name ? escapeHtml(it.product_name) : ''}`
+            : (it.product_name ? escapeHtml(it.product_name) : `Item #${idx+1}`);
         return `
             <div style="font-weight:800;font-size:12px;color:#0f172a;margin-bottom:8px;padding-bottom:4px;border-bottom:1px dashed #e2e8f0;">
                 ${label}
@@ -6778,7 +6794,6 @@ function toggleBoosterMenu(e) {
     var el = document.getElementById('productGrid') || document.getElementById('mainContent') || document.querySelector('[data-skel]');
     if(el){
       el.innerHTML = sk.grid(6);
-    }
       el.dataset.skelReady = '1';
     }
   }

@@ -3333,6 +3333,50 @@ async function deleteUserPermanently(id, evt) {
   showAdminToast(`${label}'s account was deleted`, 'success');
 }
 
+// The backend saves one row per unit purchased for multi-quantity Logs
+// Domain orders (qty 2 = 2 rows), each with its own unique order_id
+// suffix (e.g. "...-1", "...-2") — that suffix was added to fix a
+// separate bug (duplicate-key insert failures), but it means rows from
+// the same purchase no longer share an identical order_id, and each raw
+// row's own "quantity" field is always 1. The "Qty" column added
+// recently reads that per-row field directly, so it will always show 1
+// no matter how many units were actually bought — this groups sibling
+// rows back into one logical order first, so Qty reflects the real total.
+function baseOrderKey(orderId) {
+  const s = String(orderId || '');
+  const stripped = s.replace(/-\d{1,3}$/, '');
+  return stripped || s;
+}
+
+function groupOrdersById(rows) {
+  const map = new Map();
+  const orderedKeys = [];
+  rows.forEach(o => {
+    const key = baseOrderKey(o.order_id) || `single-${o.id || Math.random()}`;
+    if (!map.has(key)) { map.set(key, []); orderedKeys.push(key); }
+    map.get(key).push(o);
+  });
+  return orderedKeys.map(key => {
+    const items = map.get(key);
+    const first = items[0];
+    return {
+      order_id: first.order_id || key,
+      customer_name: first.customer_name,
+      customer: first.customer,
+      email: first.email,
+      product_name: first.product_name,
+      item: first.item,
+      service: first.service,
+      status: first.status,
+      created_at: first.created_at,
+      quantity: items.reduce((sum, it) => sum + (Number(it.quantity) || 1), 0),
+      amount: items.reduce((sum, it) => sum + (Number(it.amount) || it.total || 0), 0),
+      description: first.description,
+      items
+    };
+  });
+}
+
 function renderOrders(orders) {
   const tbody = document.getElementById('ordersTableBody');
   if (!orders?.length) {
@@ -3340,12 +3384,15 @@ function renderOrders(orders) {
     return;
   }
 
+  const orderGroups = groupOrdersById(orders);
+  window._cachedOrderGroups = orderGroups;
+
   // Group by calendar day (using created_at; orders with no date fall into
   // their own "Unknown date" bucket so nothing gets silently dropped).
-  // window._cachedOrders is already sorted newest-first by tryLoadOrders(),
-  // and Map preserves insertion order, so groups come out newest-day-first.
+  // Groups are already newest-first since tryLoadOrders() sorts the raw
+  // rows newest-first and Map preserves insertion order.
   const groups = new Map();
-  orders.forEach(o => {
+  orderGroups.forEach(o => {
     const d = o.created_at ? new Date(o.created_at) : null;
     const key = d && !isNaN(d) ? d.toDateString() : 'Unknown date';
     if (!groups.has(key)) groups.set(key, []);
@@ -3362,8 +3409,9 @@ function renderOrders(orders) {
   };
 
   let html = '';
-  // Global index (matches the flat "orders" array / window._cachedOrders)
-  // so openOrderModal(i) still points at the right row after grouping.
+  // Index now matches window._cachedOrderGroups (one entry per logical
+  // order), not the flat per-row array — openOrderModal(i) reads from
+  // that grouped array so it can show every item in the order.
   let globalIndex = 0;
   for (const [key, dayOrders] of groups) {
     html += `
@@ -3376,13 +3424,13 @@ function renderOrders(orders) {
       const i = globalIndex++;
       html += `
     <tr>
-      <td>${escapeHtml(o.order_id || o.id || '—')}</td>
+      <td>${escapeHtml(o.order_id || '—')}</td>
       <td>${escapeHtml(o.customer_name || o.customer || o.email || '—')}</td>
       <td>${escapeHtml(o.product_name || o.item || o.service || '—')}</td>
       <td style="font-weight:700;color:var(--primary);">${Number(o.quantity != null ? o.quantity : 1)}</td>
-      <td class="price">₦${Number(o.amount || o.total || 0).toLocaleString()}</td>
+      <td class="price">₦${Number(o.amount || 0).toLocaleString()}</td>
       <td>${escapeHtml(o.status || '—')}</td>
-      <td>${o.created_at ? new Date(o.created_at).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' }) : '—'}</td>
+      <td>${o.created_at ? new Date(o.created_at).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', timeZone: 'Africa/Lagos' }) : '—'}</td>
       <td><button class="btn btn-ghost btn-sm" onclick="openOrderModal(${i})"><i class="fas fa-eye"></i> View</button></td>
     </tr>`;
     });
@@ -3391,7 +3439,7 @@ function renderOrders(orders) {
 }
 
 function openOrderModal(index) {
-  const o = (window._cachedOrders || [])[index];
+  const o = (window._cachedOrderGroups || [])[index];
   if (!o) return;
   const body = document.getElementById('orderModalBody');
   const row = (label, value, mono) => `
@@ -3399,16 +3447,31 @@ function openOrderModal(index) {
       <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);margin-bottom:4px;">${escapeHtml(label)}</div>
       <div style="font-size:14px;${mono ? 'font-family:monospace;white-space:pre-wrap;word-break:break-word;' : ''}background:#07090e;border:1px solid var(--border);border-radius:10px;padding:10px 12px;">${value ? escapeHtml(value) : '<span style=\'color:var(--muted)\'>—</span>'}</div>
     </div>`;
+
+  const qty = o.quantity || (o.items || []).length || 1;
+  const items = o.items && o.items.length ? o.items : [o];
+
+  const credentialsBlock = row(
+    `Logs — numbered, all ${items.length} purchased (customer view)`,
+    items.map((it, idx) => `${idx + 1}.\n${it.login_credentials || it.login_credentials_raw || '(missing)'}`).join('\n\n'),
+    true
+  );
+  const rawBlock = row(
+    `Supplier raw — all ${items.length} (as received)`,
+    items.map((it, idx) => `${idx + 1}.\n${it.login_credentials_raw || it.login_credentials || '(missing)'}`).join('\n\n'),
+    true
+  );
+
   body.innerHTML = [
-    row('Order ID', o.order_id || o.id || ''),
+    row('Order ID', o.order_id || ''),
     row('Product', o.product_name || o.item || ''),
-    row('Quantity', String(o.quantity != null ? o.quantity : 1)),
-    row('Amount', '₦' + Number(o.amount || o.total || 0).toLocaleString()),
+    row('Quantity', String(qty)),
+    row('Amount', '₦' + Number(o.amount || 0).toLocaleString()),
     row('Status', o.status || ''),
-    row('Date', o.created_at ? new Date(o.created_at).toLocaleString() : ''),
+    row('Date', o.created_at ? new Date(o.created_at).toLocaleString(undefined, { timeZone: 'Africa/Lagos' }) : ''),
     row('Description', o.description || ''),
-    row('Logs (numbered — customer view)', o.login_credentials || '', true),
-    row('Supplier raw (as received)', o.login_credentials_raw || o.login_credentials || '', true)
+    credentialsBlock,
+    rawBlock
   ].join('');
   document.getElementById('orderModal').classList.remove('hidden');
 }
