@@ -176,19 +176,18 @@ async function handleSync(req, res) {
       // are live on the storefront as of this sync, no longer force-hidden.
       // `source` IS re-set here (same fix applied to Fadded/Logs Domain) so
       // it stays tagged correctly on every sync, not just the first insert.
+      // EXISTING: never overwrite admin price, category, name, or display text.
       updatedCount++;
+      const patch = {
+        supplier_price: supplierPrice,
+        stock_quantity: stock,
+        source: 'sujandepartment',
+        updated_at: new Date().toISOString()
+      };
+      if (stock <= 0) patch.is_available = false;
       const { error } = await supabase
         .from('products')
-        .update({
-          name,
-          description: cleanDescription,
-          display_description: cleanDescription,
-          supplier_price: supplierPrice,
-          stock_quantity: stock,
-          is_available: stock > 0,
-          source: 'sujandepartment',
-          updated_at: new Date().toISOString()
-        })
+        .update(patch)
         .eq('product_key', productKey);
 
       if (error) {

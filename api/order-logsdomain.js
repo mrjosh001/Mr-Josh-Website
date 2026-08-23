@@ -477,6 +477,129 @@ async function handleLogsDomainSync(req, res) {
 }
 
 // ===== Order dispatcher =====
+
+// ----- Catalog sync (admin-safe): GET ?action=sync -----
+function applyRandomMarkupLd(supplierPrice) {
+  const percent = 50 + Math.random() * 50;
+  const finalPrice = Math.ceil(Number(supplierPrice) * (1 + percent / 100));
+  return Math.ceil(finalPrice / 50) * 50;
+}
+
+function categorizeLd(name) {
+  const n = (name || '').toUpperCase();
+  if (n.includes('TWITTER') || n.includes(' X ') || n.startsWith('X ')) return 'X / TWITTER';
+  if (n.includes('INSTAGRAM')) return 'INSTAGRAM';
+  if (n.includes('TIKTOK') || n.includes('TIK TOK')) return 'TIKTOK';
+  if (n.includes('FACEBOOK')) return 'FACEBOOK';
+  if (n.includes('DISCORD')) return 'DISCORD';
+  if (n.includes('TELEGRAM')) return 'TELEGRAM';
+  if (n.includes('SNAPCHAT')) return 'SNAPCHAT';
+  if (n.includes('YOUTUBE')) return 'YOUTUBE';
+  return 'LOGS';
+}
+
+async function fetchAllLdCategories() {
+  const all = [];
+  let page = 1;
+  const perPage = 100;
+  while (page <= 50) {
+    const url = `${LD_BASE}/logs/categories?per_page=${perPage}&page=${page}`;
+    const res = await fetch(url, {
+      method: 'GET',
+      headers: { Accept: 'application/json', Authorization: `Bearer ${LD_KEY}` }
+    });
+    if (!res.ok) {
+      const text = await res.text();
+      throw new Error(`Logs Domain categories error ${res.status}: ${text.slice(0, 300)}`);
+    }
+    const json = await res.json();
+    if (!json.success) throw new Error(json.message || 'Logs Domain reported failure');
+    const batch = Array.isArray(json.data)
+      ? json.data
+      : (json.data?.data || json.data?.categories || []);
+    if (!Array.isArray(batch) || batch.length === 0) break;
+    all.push(...batch);
+    if (batch.length < perPage) break;
+    page += 1;
+  }
+  return all;
+}
+
+async function handleLdProductSync(req, res) {
+  if (!LD_KEY) {
+    return res.status(500).json({ success: false, message: 'LOGSDOMAIN_API_KEY not configured' });
+  }
+  try {
+    const categories = await fetchAllLdCategories();
+    let newCount = 0;
+    let updatedCount = 0;
+    const keys = categories
+      .map((c) => {
+        const id = c.id ?? c.category_id;
+        return id != null ? `ld_${id}` : null;
+      })
+      .filter(Boolean);
+
+    const existingKeySet = new Set();
+    for (let i = 0; i < keys.length; i += 200) {
+      const batch = keys.slice(i, i + 200);
+      const { data } = await supabase.from('products').select('product_key').in('product_key', batch);
+      (data || []).forEach((r) => existingKeySet.add(String(r.product_key)));
+    }
+
+    for (const c of categories) {
+      const id = c.id ?? c.category_id;
+      if (id == null) continue;
+      const product_key = `ld_${id}`;
+      const name = String(c.name || c.category_name || `Log ${id}`).trim();
+      const supplierPrice = Number(c.price ?? c.unit_price ?? c.rate ?? 0) || 0;
+      const stock = Number(c.stock ?? c.available ?? c.quantity ?? c.in_stock ?? 0) || 0;
+      const now = new Date().toISOString();
+
+      if (existingKeySet.has(product_key)) {
+        const patch = {
+          supplier_price: supplierPrice,
+          stock_quantity: stock,
+          source: 'logsdomain',
+          updated_at: now
+        };
+        if (stock <= 0) patch.is_available = false;
+        const { error } = await supabase.from('products').update(patch).eq('product_key', product_key);
+        if (error) console.error('[ld sync] update', product_key, error.message);
+        else updatedCount++;
+      } else {
+        const { error } = await supabase.from('products').insert({
+          product_key,
+          name,
+          description: c.description || null,
+          display_description: c.description || null,
+          supplier_price: supplierPrice,
+          price: applyRandomMarkupLd(supplierPrice || 100),
+          stock_quantity: stock,
+          is_available: stock > 0,
+          category: categorizeLd(name),
+          source: 'logsdomain',
+          updated_at: now
+        });
+        if (error) console.error('[ld sync] insert', product_key, error.message);
+        else newCount++;
+      }
+    }
+
+    return res.status(200).json({
+      success: true,
+      source: 'logsdomain',
+      synced: categories.length,
+      new_products: newCount,
+      updated_products: updatedCount
+    });
+  } catch (err) {
+    console.error('[ld product sync]', err);
+    return res.status(500).json({ success: false, message: err.message || 'Logs Domain sync failed' });
+  }
+}
+
+
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
@@ -484,6 +607,12 @@ export default async function handler(req, res) {
   res.setHeader('Content-Type', 'application/json');
 
   if (req.method === 'OPTIONS') return res.status(200).end();
+  // Catalog sync (cron / manual) — does not overwrite admin price/category
+  const syncAction = String((req.query && req.query.action) || '') === 'sync';
+  if (syncAction && (req.method === 'GET' || req.method === 'POST')) {
+    return handleLdProductSync(req, res);
+  }
+
 
   // Catalog sync (formerly api/products-logsdomain.js)
   // GET /api/order-logsdomain  |  GET/POST ?action=sync
