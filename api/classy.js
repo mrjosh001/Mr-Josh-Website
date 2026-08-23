@@ -177,7 +177,7 @@ async function handleSync(req, res) {
 
   const { data: existingRows } = await supabase
     .from('products')
-    .select('product_key, price, is_available')
+    .select('product_key, price, is_available, category, name')
     .in('product_key', keys.length ? keys : ['__none__']);
 
   const existing = new Map((existingRows || []).map((r) => [r.product_key, r]));
@@ -205,21 +205,19 @@ async function handleSync(req, res) {
     const prev = existing.get(product_key);
 
     if (prev) {
+      // EXISTING: never touch admin customer-facing fields (price, category, name, descriptions).
+      // Only refresh supplier cost + stock so orders still work.
+      const patch = {
+        supplier_price: supplierPrice,
+        stock_quantity: stock,
+        source: 'classy',
+        updated_at: new Date().toISOString()
+      };
+      // Out of stock → hide. In stock → keep admin is_available as-is.
+      if (!inStock || stock <= 0) patch.is_available = false;
       const { error } = await supabase
         .from('products')
-        .update({
-          name,
-          category,
-          supplier_price: supplierPrice,
-          stock_quantity: stock,
-          // never overwrite admin selling price or forced hide
-          is_available: prev.is_available === false ? false : inStock,
-          source: 'classy',
-          // Keep description in sync with supplier (fixes earlier wrong default)
-          description: desc,
-          display_description: desc,
-          updated_at: new Date().toISOString()
-        })
+        .update(patch)
         .eq('product_key', product_key);
       if (!error) updatedCount++;
     } else {

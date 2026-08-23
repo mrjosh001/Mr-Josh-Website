@@ -498,11 +498,11 @@ async function handleFaddedSync(req, res) {
         console.error('Error checking existing product_keys:', existErr.message);
         continue;
       }
-      (existingRows || []).forEach((r) => existingKeySet.add(r.product_key));
+      (existingRows || []).forEach((r) => { if (r.product_key) existingKeySet.add(String(r.product_key)); });
     }
 
     const toInsert = [];
-    const toUpdate = [];
+    const toUpdate = []; // { product_key, patch }
 
     for (const item of products) {
       if (!item.product_key) continue;
@@ -520,33 +520,26 @@ async function handleFaddedSync(req, res) {
         0
       ) || 0;
 
-      const stock = item.in_stock ?? 0;
+      const stock = Number(item.in_stock ?? 0) || 0;
       const now = new Date().toISOString();
+      const key = String(item.product_key);
 
-      if (existingKeySet.has(item.product_key)) {
-        // EXISTING: refresh name/description + supplier cost + stock so the
-        // catalog always reflects what the supplier currently calls this
-        // product (protects against them renaming/reusing a listing).
-        // Your resale price and category are business decisions — those are
-        // still never touched here, only ever changed by you in the admin panel.
-        // `source` IS re-set here to backfill rows synced before this field
-        // existed — otherwise only brand-new products ever got tagged, and
-        // the rest of an existing catalog stayed permanently blank on the
-        // admin dashboard's supplier badge.
+      if (existingKeySet.has(key) || existingKeySet.has(item.product_key)) {
+        // EXISTING: NEVER touch admin customer-facing fields:
+        // price, category, name, description, display_description, is_available (except force off if stock 0).
+        // Only refresh supplier cost + stock so ordering still works.
         updatedCount++;
-        toUpdate.push({
-          product_key: item.product_key,
-          name: item.name,
-          description: cleanDescription,
-          display_description: displayDescription,
+        const patch = {
           supplier_price: supplierPrice,
           stock_quantity: stock,
-          is_available: stock > 0,
           source: 'fadded',
           updated_at: now
-        });
+        };
+        // Out of stock at supplier → hide. If in stock, leave admin is_available as-is.
+        if (stock <= 0) patch.is_available = false;
+        toUpdate.push({ product_key: item.product_key, patch });
       } else {
-        // NEW product: set full row including auto markup + category
+        // NEW product only: full row + auto markup + category
         newCount++;
         toInsert.push({
           product_key: item.product_key,
@@ -564,15 +557,15 @@ async function handleFaddedSync(req, res) {
       }
     }
 
-    // Batched upsert for updates — upsert() only touches the columns present
-    // in each row, so price/category (deliberately excluded above) are never
-    // reset for an existing row, same guarantee as the old per-item .update().
-    const WRITE_BATCH = 200;
-    for (let i = 0; i < toUpdate.length; i += WRITE_BATCH) {
-      const batch = toUpdate.slice(i, i + WRITE_BATCH);
-      const { error } = await supabase.from('products').upsert(batch, { onConflict: 'product_key' });
-      if (error) console.error('Error updating product batch:', error.message);
+    // Per-row UPDATE (not upsert) so omitted columns can never be nulled.
+    for (const row of toUpdate) {
+      const { error } = await supabase
+        .from('products')
+        .update(row.patch)
+        .eq('product_key', row.product_key);
+      if (error) console.error('Error updating product', row.product_key, error.message);
     }
+    const WRITE_BATCH = 200;
     for (let i = 0; i < toInsert.length; i += WRITE_BATCH) {
       const batch = toInsert.slice(i, i + WRITE_BATCH);
       const { error } = await supabase.from('products').insert(batch);
