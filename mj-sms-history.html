@@ -3,124 +3,164 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <title>Number History · MJ HUB</title>
 <script>
-(function(){
-  try {
-    var t = localStorage.getItem('mjhub-theme');
-    document.documentElement.setAttribute('data-theme', (t === 'light' || t === 'dark') ? t : 'dark');
-  } catch (e) {
-    document.documentElement.setAttribute('data-theme', 'dark');
-  }
-})();
+(function(){try{var t=localStorage.getItem('mjhub-theme');document.documentElement.setAttribute('data-theme',(t==='light'||t==='dark')?t:'dark');}catch(e){document.documentElement.setAttribute('data-theme','dark');}})();
 </script>
 <script src="/js/mj-page-loader.js" defer></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
-(function () {
-  var a = Date.prototype.toLocaleString, b = Date.prototype.toLocaleDateString, c = Date.prototype.toLocaleTimeString;
-  function L(o) { return Object.assign({ timeZone: 'Africa/Lagos' }, o || {}); }
-  Date.prototype.toLocaleString = function (l, o) { return a.call(this, l || 'en-NG', L(o)); };
-  Date.prototype.toLocaleDateString = function (l, o) { return b.call(this, l || 'en-NG', L(o)); };
-  Date.prototype.toLocaleTimeString = function (l, o) { return c.call(this, l || 'en-NG', L(o)); };
+(function(){
+  var a=Date.prototype.toLocaleString,b=Date.prototype.toLocaleDateString,c=Date.prototype.toLocaleTimeString;
+  function L(o){return Object.assign({timeZone:'Africa/Lagos'},o||{});}
+  Date.prototype.toLocaleString=function(l,o){return a.call(this,l||'en-NG',L(o));};
+  Date.prototype.toLocaleDateString=function(l,o){return b.call(this,l||'en-NG',L(o));};
+  Date.prototype.toLocaleTimeString=function(l,o){return c.call(this,l||'en-NG',L(o));};
 })();
 </script>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
-<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap" rel="stylesheet">
 <style>
+
 :root[data-theme="dark"] {
-  --bg: #06080f; --card: #0f1524; --border: rgba(148,163,184,.14);
-  --text: #f8fafc; --text-secondary: #cbd5e1; --muted: #94a3b8;
-  --primary: #3b82f6; --primary-soft: rgba(59,130,246,.16);
-  --ok: #34d399; --ok-soft: rgba(52,211,153,.16);
-  --bad: #f87171; --bad-soft: rgba(248,113,113,.16);
-  --warn: #fbbf24; --warn-soft: rgba(251,191,36,.16);
-  --chip: #131b2e; --shadow: 0 12px 40px rgba(0,0,0,.35);
+  --bg: #0b1220;
+  --bg-soft: #111827;
+  --card: #ffffff;
+  --card-ink: #0f172a;
+  --muted: #64748b;
+  --line: #e2e8f0;
+  --blue: #2563eb;
+  --blue-2: #1d4ed8;
+  --blue-soft: #eff6ff;
+  --blue-ring: rgba(37, 99, 235, 0.2);
+  --ok: #059669;
+  --ok-soft: #ecfdf5;
+  --warn: #d97706;
+  --warn-soft: #fffbeb;
+  --bad: #dc2626;
+  --bad-soft: #fef2f2;
+  --shadow: 0 10px 30px rgba(15, 23, 42, 0.12);
 }
 :root[data-theme="light"] {
-  --bg: #eef2f7; --card: #ffffff; --border: rgba(15,23,42,.1);
-  --text: #0f172a; --text-secondary: #334155; --muted: #64748b;
-  --primary: #2563eb; --primary-soft: rgba(37,99,235,.1);
-  --ok: #059669; --ok-soft: rgba(5,150,105,.12);
-  --bad: #dc2626; --bad-soft: rgba(220,38,38,.1);
-  --warn: #d97706; --warn-soft: rgba(217,119,6,.12);
-  --chip: #f1f5f9; --shadow: 0 10px 30px rgba(15,23,42,.06);
+  --bg: #f0f5ff;
+  --bg-soft: #e8effc;
+  --card: #ffffff;
+  --card-ink: #0f172a;
+  --muted: #64748b;
+  --line: #e2e8f0;
+  --blue: #2563eb;
+  --blue-2: #1d4ed8;
+  --blue-soft: #eff6ff;
+  --blue-ring: rgba(37, 99, 235, 0.18);
+  --ok: #059669;
+  --ok-soft: #ecfdf5;
+  --warn: #d97706;
+  --warn-soft: #fffbeb;
+  --bad: #dc2626;
+  --bad-soft: #fef2f2;
+  --shadow: 0 10px 28px rgba(37, 99, 235, 0.08);
 }
+/* Cards always white + dark text for brand clarity on both themes */
 * { box-sizing: border-box; margin: 0; padding: 0; }
 body {
-  font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
-  background: var(--bg); color: var(--text); min-height: 100vh;
+  font-family: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+  background: var(--bg);
+  color: var(--card-ink);
+  min-height: 100vh;
   -webkit-font-smoothing: antialiased;
 }
-.shell { max-width: 560px; margin: 0 auto; padding: 0 16px 56px; }
+body::before {
+  content: '';
+  position: fixed; inset: 0; z-index: 0; pointer-events: none;
+  background:
+    radial-gradient(ellipse 100% 60% at 50% -20%, rgba(37,99,235,.22), transparent 55%),
+    linear-gradient(180deg, #dbeafe 0%, var(--bg) 42%);
+}
+:root[data-theme="dark"] body::before {
+  background:
+    radial-gradient(ellipse 100% 60% at 50% -20%, rgba(37,99,235,.35), transparent 55%),
+    linear-gradient(180deg, #0f1a33 0%, var(--bg) 45%);
+}
+.shell { position: relative; z-index: 1; max-width: 540px; margin: 0 auto; padding: 0 16px 72px; }
 .topbar {
-  display: flex; align-items: center; gap: 12px; padding: 14px 0 10px;
-  position: sticky; top: 0; z-index: 30;
-  background: color-mix(in srgb, var(--bg) 92%, transparent);
-  backdrop-filter: blur(16px);
+  display: flex; align-items: center; gap: 12px;
+  padding: 16px 0 12px;
+  position: sticky; top: 0; z-index: 50;
+  background: color-mix(in srgb, var(--bg) 75%, transparent);
+  backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
 }
 .btn-icon {
-  width: 44px; height: 44px; border-radius: 14px; border: 1px solid var(--border);
-  background: var(--card); color: var(--text); display: inline-flex; align-items: center;
-  justify-content: center; text-decoration: none; flex-shrink: 0; box-shadow: var(--shadow);
+  width: 44px; height: 44px; border-radius: 14px;
+  border: 1.5px solid #bfdbfe; background: #fff; color: var(--blue);
+  display: inline-flex; align-items: center; justify-content: center;
+  text-decoration: none; cursor: pointer; font-size: 15px; flex-shrink: 0;
+  box-shadow: var(--shadow);
 }
+.btn-icon:active { transform: scale(.97); }
 .topbar-copy { flex: 1; min-width: 0; }
-.topbar-copy h1 { font-size: 18px; font-weight: 800; letter-spacing: -0.03em; }
-.topbar-copy p { font-size: 12px; color: var(--muted); margin-top: 2px; font-weight: 500; }
-.stats {
-  display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin: 8px 0 14px;
+.topbar-copy h1 {
+  font-size: 20px; font-weight: 800; letter-spacing: -0.04em;
+  color: #fff;
 }
+:root[data-theme="light"] .topbar-copy h1 { color: #0f172a; }
+.topbar-copy p { font-size: 12px; font-weight: 600; margin-top: 2px; color: #93c5fd; }
+:root[data-theme="light"] .topbar-copy p { color: var(--blue); }
+.brand-bar {
+  height: 4px; border-radius: 999px;
+  background: linear-gradient(90deg, #60a5fa, var(--blue), #1d4ed8);
+  margin: 0 0 14px; opacity: .95;
+}
+
+.stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 14px; }
 .stat {
-  background: var(--card); border: 1px solid var(--border); border-radius: 16px;
-  padding: 14px 10px; text-align: center; box-shadow: var(--shadow);
+  background: #fff; border: 1.5px solid #dbeafe; border-radius: 16px;
+  padding: 14px 8px; text-align: center; box-shadow: var(--shadow);
 }
-.stat b { display: block; font-size: 20px; font-weight: 800; color: var(--text); letter-spacing: -0.03em; }
-.stat span { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); }
-.filters {
-  display: flex; gap: 8px; overflow-x: auto; margin-bottom: 16px; padding-bottom: 2px;
-  scrollbar-width: none; -webkit-overflow-scrolling: touch;
-}
+.stat b { display: block; font-size: 22px; font-weight: 800; color: var(--blue); letter-spacing: -0.04em; }
+.stat span { font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
+.filters { display: flex; gap: 8px; overflow-x: auto; margin-bottom: 16px; scrollbar-width: none; }
 .filters::-webkit-scrollbar { display: none; }
 .chip {
-  flex-shrink: 0; border: 1px solid var(--border); background: var(--chip);
-  color: var(--text-secondary); font: 700 12px/1 'Plus Jakarta Sans', system-ui, sans-serif;
+  flex-shrink: 0; border: 1.5px solid #bfdbfe; background: #fff; color: var(--blue);
+  font: 700 12px/1 'Plus Jakarta Sans', system-ui, sans-serif;
   padding: 11px 15px; border-radius: 999px; cursor: pointer;
 }
 .chip.on {
-  background: var(--primary); border-color: var(--primary); color: #fff;
-  box-shadow: 0 8px 22px var(--primary-soft);
+  background: linear-gradient(135deg, var(--blue), var(--blue-2));
+  border-color: transparent; color: #fff;
+  box-shadow: 0 8px 20px var(--blue-ring);
 }
 .list { display: flex; flex-direction: column; gap: 12px; }
 .card {
-  background: var(--card); border: 1px solid var(--border); border-radius: 20px;
-  padding: 16px; box-shadow: var(--shadow);
+  background: #fff; border: 1.5px solid #dbeafe; border-radius: 20px;
+  padding: 16px; box-shadow: var(--shadow); color: #0f172a;
 }
 .card-head { display: flex; justify-content: space-between; gap: 12px; margin-bottom: 10px; }
-.card-head .name { font-size: 15px; font-weight: 800; text-transform: capitalize; color: var(--text); line-height: 1.3; }
-.card-head .price { font-size: 14px; font-weight: 800; color: var(--primary); white-space: nowrap; }
+.card-head .name { font-size: 15px; font-weight: 800; text-transform: capitalize; letter-spacing: -0.02em; }
+.card-head .price { font-size: 15px; font-weight: 800; color: var(--blue); }
 .pills { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; }
 .pill { font-size: 11px; font-weight: 700; padding: 5px 10px; border-radius: 999px; }
 .pill.ok { background: var(--ok-soft); color: var(--ok); }
-.pill.wait { background: var(--primary-soft); color: var(--primary); }
+.pill.wait { background: var(--blue-soft); color: var(--blue); }
 .pill.bad { background: var(--bad-soft); color: var(--bad); }
-.pill.muted { background: var(--chip); color: var(--muted); border: 1px solid var(--border); }
+.pill.muted { background: #f8fafc; color: var(--muted); border: 1px solid var(--line); }
 .grid { display: grid; gap: 9px; }
 .row { display: flex; justify-content: space-between; gap: 12px; font-size: 12.5px; }
 .row .l { color: var(--muted); font-weight: 600; }
-.row .v { color: var(--text); font-weight: 700; text-align: right; word-break: break-all; }
-.row .v.mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; font-weight: 600; }
-.act { margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--border); }
+.row .v { color: #0f172a; font-weight: 700; text-align: right; word-break: break-all; }
+.row .v.mono { font-family: ui-monospace, Menlo, monospace; font-size: 12px; font-weight: 600; color: #1e3a8a; }
+.act { margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--line); }
 .act a {
-  display: inline-flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 700;
-  color: #fff; background: var(--primary); text-decoration: none; padding: 11px 14px; border-radius: 12px;
+  display: inline-flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 800;
+  color: #fff; background: linear-gradient(135deg, var(--blue), var(--blue-2));
+  text-decoration: none; padding: 12px 14px; border-radius: 12px;
 }
 .empty {
-  text-align: center; padding: 48px 20px; background: var(--card);
-  border: 1px solid var(--border); border-radius: 20px; box-shadow: var(--shadow);
+  text-align: center; padding: 48px 20px; background: #fff;
+  border: 1.5px solid #dbeafe; border-radius: 20px; box-shadow: var(--shadow);
 }
-.empty h4 { font-size: 16px; font-weight: 800; color: var(--text); margin: 10px 0 6px; }
-.empty p { font-size: 13px; color: var(--muted); line-height: 1.5; }
+.empty h4 { font-size: 16px; font-weight: 800; margin-bottom: 6px; color: #0f172a; }
+.empty p { font-size: 13px; color: var(--muted); }
 </style>
 </head>
 <body>
@@ -129,16 +169,15 @@ body {
     <a class="btn-icon" href="mj-sms-choose-server.html" aria-label="Back"><i class="fa-solid fa-arrow-left"></i></a>
     <div class="topbar-copy">
       <h1>Number history</h1>
-      <p>Filter by status · Lagos time</p>
+      <p>White · Blue · MJ HUB</p>
     </div>
   </header>
-
+  <div class="brand-bar"></div>
   <div class="stats">
     <div class="stat"><b id="stAll">0</b><span>All</span></div>
     <div class="stat"><b id="stDone">0</b><span>Completed</span></div>
     <div class="stat"><b id="stCancel">0</b><span>Cancelled</span></div>
   </div>
-
   <div class="filters" id="filters">
     <button type="button" class="chip on" data-filter="all">All</button>
     <button type="button" class="chip" data-filter="completed">Completed</button>
@@ -146,110 +185,42 @@ body {
     <button type="button" class="chip" data-filter="waiting">Waiting</button>
     <button type="button" class="chip" data-filter="failed">Failed</button>
   </div>
-
   <div class="list" id="historyList"></div>
 </div>
 <script>
-const SUPABASE_URL = 'https://atczodlljmlayvldxfmv.supabase.co';
-const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImF0Y3pvZGxsam1sYXl2bGR4Zm12Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODUwNzUyMzgsImV4cCI6MjEwMDY1MTIzOH0.ufthD-p7BmeD_B7xyuMM6PNPL8DmcL4AtRYgg-MuoLI';
-const historyList = document.getElementById('historyList');
-let allOrders = [];
-let currentFilter = 'all';
-
-function escapeHtml(str) {
-  if (!str) return '';
-  return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
-}
-function money(n) { return '₦' + Number(n || 0).toLocaleString(); }
-
-const STATUS_LABELS = {
-  waiting_for_code: 'Waiting for code',
-  completed: 'Code received',
-  refunded: 'Cancelled & refunded',
-  cancelled: 'Cancelled',
-  canceled: 'Cancelled',
-  failed: 'Failed'
-};
-
-function bucket(status) {
-  const s = String(status || '').toLowerCase();
-  if (s === 'completed' || s === 'success' || s === 'delivered') return 'completed';
-  if (s === 'refunded' || s === 'cancelled' || s === 'canceled') return 'cancelled';
-  if (s === 'waiting_for_code' || s === 'pending' || s === 'waiting') return 'waiting';
-  if (s === 'failed' || s === 'error' || s === 'expired') return 'failed';
-  return 'other';
-}
-
-function statusPill(status) {
-  const b = bucket(status);
-  const label = STATUS_LABELS[status] || STATUS_LABELS[String(status || '').toLowerCase()] || status || '—';
-  const cls = b === 'completed' ? 'ok' : b === 'waiting' ? 'wait' : (b === 'cancelled' || b === 'failed') ? 'bad' : 'muted';
-  return '<span class="pill ' + cls + '">' + escapeHtml(label) + '</span>';
-}
-
-function updateCounts(orders) {
-  const c = { all: orders.length, completed: 0, cancelled: 0, waiting: 0, failed: 0 };
-  orders.forEach(o => { const b = bucket(o.status); if (c[b] != null) c[b]++; });
-  document.getElementById('stAll').textContent = c.all;
-  document.getElementById('stDone').textContent = c.completed;
-  document.getElementById('stCancel').textContent = c.cancelled;
-}
-
-function renderOrders(orders) {
-  const filtered = currentFilter === 'all' ? orders : orders.filter(o => bucket(o.status) === currentFilter);
-  if (!filtered.length) {
-    historyList.innerHTML = '<div class="empty"><h4>No numbers here</h4><p>' +
-      (orders.length ? 'Nothing matches this filter. Try All.' : 'Your rented numbers will appear here.') + '</p></div>';
-    return;
-  }
-  historyList.innerHTML = filtered.map(o => {
-    const name = (o.service_name || o.service || 'SMS').replace(/_/g, ' ');
-    const date = o.created_at ? new Date(o.created_at).toLocaleString() : '—';
-    const serverTag = (o.server === 2 || o.server === '2')
-      ? '<span class="pill muted">Server 2</span>' : '<span class="pill muted">Server 1</span>';
-    let numberPage = 'mj-sms-number.html';
-    if (o.server === 2 || o.server === '2' || /server\\s*2/i.test(String(o.source || ''))) numberPage = 'mj-sms2-number.html';
-    let actionHtml = '';
-    if (String(o.status) === 'waiting_for_code') {
-      actionHtml = '<div class="act"><a href="' + numberPage + '?order_id=' + encodeURIComponent(o.order_id || '') + '"><i class="fa-solid fa-arrow-right"></i> View &amp; check status</a></div>';
-    }
-    return '<div class="card"><div class="card-head"><div class="name">' + escapeHtml(name) + '</div><div class="price">' + money(o.price) + '</div></div>' +
-      '<div class="pills">' + statusPill(o.status) + serverTag + '</div><div class="grid">' +
-      '<div class="row"><span class="l">Country</span><span class="v">' + escapeHtml(o.country_name || '—') + '</span></div>' +
-      '<div class="row"><span class="l">Number</span><span class="v mono">' + escapeHtml(o.phone_number || '—') + '</span></div>' +
-      '<div class="row"><span class="l">Code</span><span class="v mono">' + (o.code ? escapeHtml(o.code) : 'Not received') + '</span></div>' +
-      '<div class="row"><span class="l">Date</span><span class="v">' + escapeHtml(date) + '</span></div>' +
-      '<div class="row"><span class="l">Order ID</span><span class="v mono" style="font-size:11px">' + escapeHtml(o.order_id || '—') + '</span></div>' +
-      '</div>' + actionHtml + '</div>';
+const SUPABASE_URL='https://atczodlljmlayvldxfmv.supabase.co';
+const SUPABASE_ANON_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImF0Y3pvZGxsam1sYXl2bGR4Zm12Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODUwNzUyMzgsImV4cCI6MjEwMDY1MTIzOH0.ufthD-p7BmeD_B7xyuMM6PNPL8DmcL4AtRYgg-MuoLI';
+const historyList=document.getElementById('historyList');
+let allOrders=[], currentFilter='all';
+function escapeHtml(str){if(!str)return'';return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;')}
+function money(n){return '₦'+Number(n||0).toLocaleString()}
+const STATUS_LABELS={waiting_for_code:'Waiting for code',completed:'Code received',refunded:'Cancelled & refunded',cancelled:'Cancelled',canceled:'Cancelled',failed:'Failed'};
+function bucket(status){const s=String(status||'').toLowerCase();if(s==='completed'||s==='success'||s==='delivered')return'completed';if(s==='refunded'||s==='cancelled'||s==='canceled')return'cancelled';if(s==='waiting_for_code'||s==='pending'||s==='waiting')return'waiting';if(s==='failed'||s==='error'||s==='expired')return'failed';return'other'}
+function statusPill(status){const b=bucket(status);const label=STATUS_LABELS[status]||STATUS_LABELS[String(status||'').toLowerCase()]||status||'—';const cls=b==='completed'?'ok':b==='waiting'?'wait':(b==='cancelled'||b==='failed')?'bad':'muted';return'<span class="pill '+cls+'">'+escapeHtml(label)+'</span>'}
+function updateCounts(orders){const c={all:orders.length,completed:0,cancelled:0,waiting:0,failed:0};orders.forEach(o=>{const b=bucket(o.status);if(c[b]!=null)c[b]++});document.getElementById('stAll').textContent=c.all;document.getElementById('stDone').textContent=c.completed;document.getElementById('stCancel').textContent=c.cancelled}
+function renderOrders(orders){
+  const filtered=currentFilter==='all'?orders:orders.filter(o=>bucket(o.status)===currentFilter);
+  if(!filtered.length){historyList.innerHTML='<div class="empty"><h4>No numbers here</h4><p>'+(orders.length?'Nothing matches this filter.':'Your rented numbers will appear here.')+'</p></div>';return}
+  historyList.innerHTML=filtered.map(o=>{
+    const name=(o.service_name||o.service||'SMS').replace(/_/g,' ');
+    const date=o.created_at?new Date(o.created_at).toLocaleString():'—';
+    const serverTag=(o.server===2||o.server==='2')?'<span class="pill muted">Server 2</span>':'<span class="pill muted">Server 1</span>';
+    let numberPage='mj-sms-number.html';
+    if(o.server===2||o.server==='2'||/server\s*2/i.test(String(o.source||''))) numberPage='mj-sms2-number.html';
+    let actionHtml='';
+    if(String(o.status)==='waiting_for_code') actionHtml='<div class="act"><a href="'+numberPage+'?order_id='+encodeURIComponent(o.order_id||'')+'"><i class="fa-solid fa-arrow-right"></i> View &amp; check status</a></div>';
+    return '<div class="card"><div class="card-head"><div class="name">'+escapeHtml(name)+'</div><div class="price">'+money(o.price)+'</div></div><div class="pills">'+statusPill(o.status)+serverTag+'</div><div class="grid"><div class="row"><span class="l">Country</span><span class="v">'+escapeHtml(o.country_name||'—')+'</span></div><div class="row"><span class="l">Number</span><span class="v mono">'+escapeHtml(o.phone_number||'—')+'</span></div><div class="row"><span class="l">Code</span><span class="v mono">'+(o.code?escapeHtml(o.code):'Not received')+'</span></div><div class="row"><span class="l">Date</span><span class="v">'+escapeHtml(date)+'</span></div><div class="row"><span class="l">Order ID</span><span class="v mono" style="font-size:11px">'+escapeHtml(o.order_id||'—')+'</span></div></div>'+actionHtml+'</div>';
   }).join('');
 }
-
-document.getElementById('filters').addEventListener('click', function (e) {
-  const btn = e.target.closest('.chip');
-  if (!btn) return;
-  currentFilter = btn.getAttribute('data-filter') || 'all';
-  document.querySelectorAll('.chip').forEach(c => c.classList.toggle('on', c === btn));
-  renderOrders(allOrders);
-});
-
-async function init() {
-  if (!window.supabase) {
-    historyList.innerHTML = '<div class="empty"><h4>Failed to load</h4></div>';
-    return;
-  }
-  const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
-    auth: { persistSession: true, autoRefreshToken: true, storage: window.sessionStorage }
-  });
-  const { data: { session } } = await sb.auth.getSession();
-  if (!session || !session.user) { window.location.href = 'auth.html'; return; }
-  const { data, error } = await sb.from('number_orders').select('*').eq('user_id', session.user.id).order('created_at', { ascending: false });
-  if (error) {
-    historyList.innerHTML = '<div class="empty"><h4>Failed to load</h4><p>' + escapeHtml(error.message) + '</p></div>';
-    return;
-  }
-  allOrders = data || [];
-  updateCounts(allOrders);
-  renderOrders(allOrders);
+document.getElementById('filters').addEventListener('click',function(e){const btn=e.target.closest('.chip');if(!btn)return;currentFilter=btn.getAttribute('data-filter')||'all';document.querySelectorAll('.chip').forEach(c=>c.classList.toggle('on',c===btn));renderOrders(allOrders);});
+async function init(){
+  if(!window.supabase){historyList.innerHTML='<div class="empty"><h4>Failed to load</h4></div>';return;}
+  const sb=window.supabase.createClient(SUPABASE_URL,SUPABASE_ANON_KEY,{auth:{persistSession:true,autoRefreshToken:true,storage:window.sessionStorage}});
+  const {data:{session}}=await sb.auth.getSession();
+  if(!session||!session.user){window.location.href='auth.html';return;}
+  const {data,error}=await sb.from('number_orders').select('*').eq('user_id',session.user.id).order('created_at',{ascending:false});
+  if(error){historyList.innerHTML='<div class="empty"><h4>Failed to load</h4><p>'+escapeHtml(error.message)+'</p></div>';return;}
+  allOrders=data||[];updateCounts(allOrders);renderOrders(allOrders);
 }
 init();
 </script>
