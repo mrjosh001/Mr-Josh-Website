@@ -653,16 +653,9 @@ export default async function handler(req, res) {
   const user_id = auth.user.id;
 
   // GET /api/order?action=my_orders  — list this user's logs + SMS (no new serverless function)
-  let action = req.query?.action;
-  if (!action && req.url) {
-    try {
-      action = new URL(req.url, 'http://localhost').searchParams.get('action');
-    } catch (_) {}
-  }
+  // `action` already parsed above from query/body
   if (req.method === 'GET' || action === 'my_orders') {
-    if (req.method === 'GET' || action === 'my_orders') {
-      return handleMyOrders(req, res, user_id);
-    }
+    return handleMyOrders(req, res, user_id);
   }
 
   if (req.method !== 'POST') {
