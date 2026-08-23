@@ -167,8 +167,8 @@ td{padding:12px;border-top:1px solid var(--border);vertical-align:middle}
       <label>Category</label>
       <select id="pcat"><option value="">Loading…</option></select>
 
-      <label>Login format (optional)</label>
-      <input id="pformat" placeholder="Username:pass:2fa:email:emailpass"/>
+      <label>Product description &amp; login format</label>
+      <input id="pformat" placeholder="Describe the product and login format, e.g. Username:pass:2fa:email:emailpass"/>
 
       <label id="credsLabel">Credentials (one account per line)</label>
       <textarea id="pcreds" rows="8" placeholder="user1:pass1:token1&#10;user2:pass2:token2&#10;user3:pass3:token3"></textarea>
@@ -193,8 +193,19 @@ td{padding:12px;border-top:1px solid var(--border);vertical-align:middle}
 <script>
 const SUPABASE_URL = 'https://atczodlljmlayvldxfmv.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImF0Y3pvZGxsam1sYXl2bGR4Zm12Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODUwNzUyMzgsImV4cCI6MjEwMDY1MTIzOH0.ufthD-p7BmeD_B7xyuMM6PNPL8DmcL4AtRYgg-MuoLI';
+
+// Do not keep vendor session in localStorage (privacy). Use sessionStorage only.
+try {
+  const keys = [];
+  for (let i = 0; i < localStorage.length; i++) {
+    const k = localStorage.key(i);
+    if (k && (k.indexOf('supabase') !== -1 || k.indexOf('sb-') === 0)) keys.push(k);
+  }
+  keys.forEach(k => localStorage.removeItem(k));
+} catch (e) {}
+
 const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
-  auth: { persistSession: true, autoRefreshToken: true, storage: window.localStorage }
+  auth: { persistSession: true, autoRefreshToken: true, storage: window.sessionStorage, detectSessionInUrl: false }
 });
 
 const IDLE_MS = 10 * 60 * 1000; // 10 minutes
