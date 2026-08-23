@@ -294,6 +294,7 @@ const searchClearBtn = document.getElementById('searchClearBtn');
 let allProducts = [];
 let activeProduct = null;
 let activeQty = 1;
+const MAX_QTY = 10; // hard cap for all products
 let sbClient = null;
 let currentUserId = null;
 let currentBalanceNgn = 0;
@@ -613,16 +614,15 @@ document.getElementById('purchaseModal').classList.add('active');
 
 function updatePurchaseTotal(){
 if(!activeProduct) return;
+const stock=parseInt(activeProduct.stock_quantity,10);
+const cap = Math.min(MAX_QTY, Number.isNaN(stock) ? MAX_QTY : stock);
+if(activeQty > cap) activeQty = cap;
+if(activeQty < 1) activeQty = 1;
 const price=parseFloat(activeProduct.price)||0;
 document.getElementById('psQty').textContent=String(activeQty);
 document.getElementById('psTotal').textContent=money(price*activeQty);
-const stock=parseInt(activeProduct.stock_quantity,10);
 const buyBtn=document.getElementById('psBuyBtn');
-if(!Number.isNaN(stock) && activeQty>stock){
-buyBtn.disabled=true;
-} else {
-buyBtn.disabled=false;
-}
+buyBtn.disabled = (!Number.isNaN(stock) && stock <= 0);
 }
 
 function closePurchaseModal(){
@@ -636,8 +636,13 @@ if(activeQty>1){activeQty--;updatePurchaseTotal()}
 });
 document.getElementById('psQtyPlus').addEventListener('click', function(){
 const stock=parseInt(activeProduct&&activeProduct.stock_quantity,10);
-if(!Number.isNaN(stock) && activeQty>=stock){showToast('Only '+stock+' in stock','error');return}
+const cap = Math.min(MAX_QTY, Number.isNaN(stock) ? MAX_QTY : stock);
+if(activeQty>=cap){
+showToast(activeQty>=MAX_QTY ? ('Maximum '+MAX_QTY+' per order') : ('Only '+stock+' in stock'),'error');
+return;
+}
 activeQty++;updatePurchaseTotal();
+
 });
 document.getElementById('psBuyBtn').addEventListener('click', confirmBuyNow);
 
