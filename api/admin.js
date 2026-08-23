@@ -726,17 +726,31 @@ async function fetchOwletBalance() {
   }
 }
 
+
+async function getClassyBalance() {
+  const apiKey = process.env.CLASSYTEE_API_KEY;
+  if (!apiKey) return { ok: false, error: 'Missing CLASSYTEE_API_KEY' };
+  const base = (process.env.CLASSYTEE_BASE_URL || 'https://classyteelogs.com.ng').replace(/\/$/, '');
+  // Docs: GET /api/v1/balance — Authorization: Bearer KEY
+  return tryJsonEndpoints(
+    [`${base}/api/v1/balance`, `${base}/api/v1/wallet`, `${base}/api/v1/profile`],
+    { Authorization: `Bearer ${apiKey}`, Accept: 'application/json' },
+    'NGN'
+  );
+}
+
 async function supplierBalancesFetch() {
-  const [fadded, logsdomain, grizzly, sujan, owlet] = await Promise.all([
+  const [fadded, logsdomain, grizzly, sujan, owlet, classy] = await Promise.all([
     getFaddedBalance(),
     getLogsDomainBalance(),
     getGrizzlyBalance(),
     getSujanBalance(),
-    fetchOwletBalance()
+    fetchOwletBalance(),
+    getClassyBalance()
   ]);
   return {
     status: 200,
-    body: { success: true, suppliers: { fadded, logsdomain, grizzly, sujan, owlet }, fetched_at: new Date().toISOString() }
+    body: { success: true, suppliers: { fadded, logsdomain, grizzly, sujan, owlet, classy }, fetched_at: new Date().toISOString() }
   };
 }
 
