@@ -588,6 +588,7 @@
         <button class="nav-item" data-tab="booster-orders" onclick="switchTab('booster-orders')"><i class="fas fa-receipt"></i> Booster Orders</button>
         <button class="nav-item" data-tab="notify" onclick="switchTab('notify')"><i class="fas fa-bullhorn"></i> Notifications</button>
         <a class="nav-item" href="admin-support.html" id="navSupportDesk" style="text-decoration:none;position:relative;"><i class="fas fa-headset"></i> Support Desk <span id="supportNavBadge" style="display:none;margin-left:6px;background:#ef4444;color:#fff;font-size:10px;font-weight:800;padding:2px 7px;border-radius:999px;min-width:18px;text-align:center;">0</span></a>
+        <button class="nav-item" data-tab="sub-admins" onclick="switchTab('sub-admins')"><i class="fas fa-user-shield"></i> Sub-Admins</button>
         <button class="nav-item" data-tab="settings" onclick="switchTab('settings')"><i class="fas fa-cog"></i> Settings</button>
       </nav>
       <div class="sidebar-footer">
@@ -999,6 +1000,39 @@
           </div>
         </div>
 
+        
+        <div id="tab-sub-admins" class="tab-content">
+          <div class="panel">
+            <div class="panel-title">Assign Sub-Admin (Vendor)</div>
+            <p style="color:var(--text-muted);font-size:13px;margin:0 0 14px;line-height:1.5;">
+              Sub-admins can only manage <strong>their own</strong> manual products and see their sales/revenue.
+              They sign in at <code>auth.html</code>, then open <code>sub-admin.html</code>.
+            </p>
+            <div style="display:flex;flex-wrap:wrap;gap:12px;align-items:flex-end;margin-bottom:16px;">
+              <div class="field" style="margin:0;min-width:220px;flex:1;">
+                <label>Email</label>
+                <input type="email" id="subAdminEmail" placeholder="vendor@email.com" autocomplete="off"/>
+              </div>
+              <div style="color:var(--text-muted);font-size:12px;padding-bottom:10px;">or</div>
+              <div class="field" style="margin:0;min-width:160px;">
+                <label>Customer ID</label>
+                <input type="text" id="subAdminCustomerId" placeholder="MJ-123456" autocomplete="off"/>
+              </div>
+              <button type="button" class="btn btn-primary" onclick="assignSubAdmin()"><i class="fas fa-user-plus"></i> Assign</button>
+            </div>
+            <div id="subAdminMsg" style="font-size:13px;margin-bottom:12px;"></div>
+          </div>
+          <div class="panel" style="margin-top:14px;">
+            <div class="panel-title" style="display:flex;justify-content:space-between;align-items:center;">
+              <span>Current Sub-Admins</span>
+              <button type="button" class="btn btn-ghost" onclick="loadSubAdmins()"><i class="fas fa-sync"></i> Refresh</button>
+            </div>
+            <div id="subAdminList" style="overflow-x:auto;">
+              <p style="color:var(--text-muted);font-size:13px;">Loading…</p>
+            </div>
+          </div>
+        </div>
+
         <div id="tab-settings" class="tab-content">
           <div class="panel">
             <div class="panel-title" style="margin-bottom:10px;">Platform Settings</div>
@@ -1218,6 +1252,7 @@ const tabTitles = {
       'boosters': 'MJ Boosters (Owlet)',
       'booster-orders': 'Booster Orders',
   orders: 'LOGS Orders',
+  'sub-admins': 'Sub-Admins',
   settings: 'Settings'
 };
 
@@ -3598,12 +3633,95 @@ async function initLdNumTab() {
   loadSmsServer2RowsForCurrentFilter();
 }
 
+
+async function loadSubAdmins() {
+  const el = document.getElementById('subAdminList');
+  if (!el) return;
+  el.innerHTML = '<p style="color:var(--text-muted);font-size:13px;">Loading…</p>';
+  try {
+    const headers = await authHeaders();
+    headers['Content-Type'] = 'application/json';
+    const res = await fetch('/api/admin', {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ resource: 'sub_admin', action: 'list' })
+    });
+    const data = await res.json();
+    if (!data.success) throw new Error(data.message || 'Failed to load');
+    const rows = data.data || [];
+    if (!rows.length) {
+      el.innerHTML = '<p style="color:var(--text-muted);font-size:13px;">No sub-admins yet. Assign one above.</p>';
+      return;
+    }
+    el.innerHTML = '<table class="data-table" style="width:100%;font-size:13px;"><thead><tr><th>Name</th><th>Email</th><th>Customer ID</th><th></th></tr></thead><tbody>' +
+      rows.map(function(r) {
+        return '<tr><td>' + escSub(r.full_name || r.username || '—') + '</td><td>' + escSub(r.email || '—') + '</td><td>' + escSub(r.customer_id || '—') + '</td><td><button type="button" class="btn btn-ghost" style="color:#ef4444;" onclick="revokeSubAdmin(\'' + String(r.id).replace(/'/g, '') + '\')">Revoke</button></td></tr>';
+      }).join('') + '</tbody></table>';
+  } catch (e) {
+    el.innerHTML = '<p style="color:#ef4444;font-size:13px;">' + escSub(e.message || 'Failed') + '</p>';
+  }
+}
+
+async function assignSubAdmin() {
+  const msg = document.getElementById('subAdminMsg');
+  const email = (document.getElementById('subAdminEmail') && document.getElementById('subAdminEmail').value || '').trim();
+  const customer_id = (document.getElementById('subAdminCustomerId') && document.getElementById('subAdminCustomerId').value || '').trim();
+  if (!msg) return;
+  msg.style.color = 'var(--text-muted)';
+  msg.textContent = 'Assigning…';
+  try {
+    if (!email && !customer_id) throw new Error('Enter email or customer ID');
+    const headers = await authHeaders();
+    headers['Content-Type'] = 'application/json';
+    const body = { resource: 'sub_admin', action: 'assign' };
+    if (customer_id) body.customer_id = customer_id;
+    else body.email = email;
+    const res = await fetch('/api/admin', { method: 'POST', headers, body: JSON.stringify(body) });
+    const data = await res.json();
+    if (!data.success) throw new Error(data.message || 'Assign failed');
+    msg.style.color = '#34d399';
+    msg.textContent = (data.message || 'Assigned') + ' — they sign in, then open /sub-admin.html';
+    if (document.getElementById('subAdminEmail')) document.getElementById('subAdminEmail').value = '';
+    if (document.getElementById('subAdminCustomerId')) document.getElementById('subAdminCustomerId').value = '';
+    await loadSubAdmins();
+  } catch (e) {
+    msg.style.color = '#ef4444';
+    msg.textContent = e.message || 'Failed';
+  }
+}
+
+async function revokeSubAdmin(userId) {
+  if (!userId || !confirm('Revoke sub-admin access for this user?')) return;
+  try {
+    const headers = await authHeaders();
+    headers['Content-Type'] = 'application/json';
+    const res = await fetch('/api/admin', {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ resource: 'sub_admin', action: 'revoke', user_id: userId })
+    });
+    const data = await res.json();
+    if (!data.success) throw new Error(data.message || 'Revoke failed');
+    if (typeof showAdminToast === 'function') showAdminToast('Sub-admin revoked', 'success');
+    await loadSubAdmins();
+  } catch (e) {
+    alert(e.message || 'Failed');
+  }
+}
+
+function escSub(s) {
+  return String(s || '').replace(/[&<>"']/g, function(c) {
+    return ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' })[c];
+  });
+}
+
 function switchTab(name) {
   document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
   document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
   document.getElementById('tab-' + name).classList.add('active');
   document.querySelector(`.nav-item[data-tab="${name}"]`).classList.add('active');
   document.getElementById('pageTitle').textContent = tabTitles[name] || name;
+  if (name === 'sub-admins') loadSubAdmins();
   closeSidebar();
   if (name === 'sms' && !smsTabLoaded) {
     smsTabLoaded = true;
