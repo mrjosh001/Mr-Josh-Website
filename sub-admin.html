@@ -3,48 +3,115 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1"/>
-<title>Vendor portal | MJ HUB</title>
+<title>Vendor portal · MJ HUB</title>
 <style>
-:root{--bg:#06080f;--card:#0f1524;--text:#e8eefc;--muted:#94a3b8;--primary:#3b82f6;--border:rgba(148,163,184,.14);--danger:#f87171;--ok:#34d399}
-html[data-theme=light]{--bg:#f4f6fb;--card:#fff;--text:#0f172a;--muted:#64748b;--border:rgba(15,23,42,.1)}
+:root{
+  --bg:#070b14;--bg2:#0c1220;--card:rgba(15,23,42,.85);--card-solid:#111827;
+  --text:#f1f5f9;--muted:#94a3b8;--primary:#3b82f6;--primary2:#2563eb;
+  --border:rgba(148,163,184,.12);--ok:#34d399;--danger:#f87171;
+  --shadow:0 12px 40px rgba(0,0,0,.35);--radius:18px;
+}
 *{box-sizing:border-box}
-body{margin:0;font-family:system-ui,-apple-system,sans-serif;background:var(--bg);color:var(--text);min-height:100vh}
-.wrap{max-width:920px;margin:0 auto;padding:20px 16px 80px}
-h1{font-size:1.35rem;margin:0 0 4px}
-.sub{color:var(--muted);font-size:.9rem;margin-bottom:16px;line-height:1.45}
-.card{background:var(--card);border:1px solid var(--border);border-radius:16px;padding:18px;margin-bottom:14px}
-.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
-.stat{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:14px;text-align:center}
-.stat b{display:block;font-size:1.25rem;color:var(--primary)}
-.stat span{font-size:.75rem;color:var(--muted)}
-label{display:block;font-size:.8rem;color:var(--muted);margin:12px 0 4px}
-input,textarea,select{width:100%;padding:11px 12px;border-radius:10px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:15px}
-button{background:var(--primary);color:#fff;border:none;border-radius:10px;padding:11px 16px;font-weight:600;cursor:pointer;font-size:14px}
-button.ghost{background:transparent;border:1px solid var(--border);color:var(--text)}
-button:disabled{opacity:.6;cursor:not-allowed}
+html,body{margin:0;min-height:100%;font-family:Inter,system-ui,-apple-system,Segoe UI,Roboto,sans-serif;background:var(--bg);color:var(--text)}
+body{
+  background:
+    radial-gradient(900px 500px at 10% -10%, rgba(59,130,246,.18), transparent 55%),
+    radial-gradient(700px 400px at 100% 0%, rgba(37,99,235,.12), transparent 50%),
+    var(--bg);
+}
+.wrap{max-width:960px;margin:0 auto;padding:20px 16px 96px}
+.topbar{
+  display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;
+  margin-bottom:20px;padding:14px 16px;border-radius:var(--radius);
+  background:rgba(15,23,42,.7);border:1px solid var(--border);
+  backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);
+}
+.brand-lockup{display:flex;align-items:center;gap:12px}
+.logo-mark{
+  width:40px;height:40px;border-radius:12px;display:grid;place-items:center;
+  background:linear-gradient(135deg,var(--primary),#1d4ed8);font-weight:800;font-size:14px;color:#fff;
+  box-shadow:0 8px 24px rgba(37,99,235,.35);
+}
+.brand-lockup h1{margin:0;font-size:1.05rem;font-weight:700;letter-spacing:-.02em}
+.brand-lockup p{margin:2px 0 0;font-size:.78rem;color:var(--muted)}
+.pill{
+  display:inline-flex;align-items:center;gap:6px;font-size:12px;padding:6px 10px;border-radius:999px;
+  background:rgba(52,211,153,.12);color:var(--ok);border:1px solid rgba(52,211,153,.25);
+}
+.btn{
+  appearance:none;border:none;cursor:pointer;font-weight:600;font-size:13.5px;
+  padding:11px 16px;border-radius:12px;transition:.15s ease;
+}
+.btn-primary{background:linear-gradient(180deg,var(--primary),var(--primary2));color:#fff;box-shadow:0 8px 20px rgba(37,99,235,.3)}
+.btn-primary:hover{filter:brightness(1.06)}
+.btn-ghost{background:transparent;color:var(--text);border:1px solid var(--border)}
+.btn-ghost:hover{background:rgba(148,163,184,.08)}
+.btn-sm{padding:8px 12px;font-size:12.5px}
+.btn:disabled{opacity:.55;cursor:not-allowed}
+.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:16px}
+@media(max-width:560px){.stats{grid-template-columns:1fr}}
+.stat{
+  padding:16px;border-radius:var(--radius);border:1px solid var(--border);
+  background:linear-gradient(180deg,rgba(30,41,59,.9),rgba(15,23,42,.9));
+  box-shadow:var(--shadow);
+}
+.stat b{display:block;font-size:1.35rem;letter-spacing:-.03em;color:#fff;margin-bottom:4px}
+.stat span{font-size:.75rem;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
+.card{
+  background:var(--card);border:1px solid var(--border);border-radius:var(--radius);
+  padding:18px 18px 16px;margin-bottom:14px;box-shadow:var(--shadow);
+  backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);
+}
+.card h3{margin:0 0 6px;font-size:1rem;font-weight:700}
+.sub{color:var(--muted);font-size:.86rem;line-height:1.5;margin:0 0 12px}
+label{display:block;font-size:.78rem;color:var(--muted);margin:12px 0 5px;font-weight:500}
+input,textarea,select{
+  width:100%;padding:12px 13px;border-radius:12px;border:1px solid var(--border);
+  background:rgba(2,6,23,.55);color:var(--text);font-size:14.5px;outline:none;
+}
+input:focus,textarea:focus,select:focus{border-color:rgba(59,130,246,.55);box-shadow:0 0 0 3px rgba(59,130,246,.15)}
+textarea{resize:vertical;min-height:120px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px}
 .row{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px;align-items:center}
-.err{color:var(--danger);font-size:.9rem;margin-top:8px}
-.ok{color:var(--ok);font-size:.9rem;margin-top:8px}
-table{width:100%;border-collapse:collapse;font-size:.85rem}
-td,th{padding:8px;border-bottom:1px solid var(--border);text-align:left}
-.auth-box{max-width:400px;margin:40px auto}
-.brand{text-align:center;margin-bottom:18px}
-.brand h1{font-size:1.5rem}
-.topbar{display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;gap:10px;flex-wrap:wrap}
+.err{color:var(--danger);font-size:.88rem;margin-top:10px}
+.ok{color:var(--ok);font-size:.88rem;margin-top:10px}
+.table-wrap{overflow-x:auto;border-radius:12px;border:1px solid var(--border)}
+table{width:100%;border-collapse:collapse;font-size:.84rem}
+th{text-align:left;padding:10px 12px;color:var(--muted);font-weight:600;background:rgba(15,23,42,.6);font-size:.72rem;text-transform:uppercase;letter-spacing:.04em}
+td{padding:12px;border-top:1px solid var(--border);vertical-align:middle}
+.badge{
+  display:inline-block;padding:3px 8px;border-radius:999px;font-size:11px;font-weight:600;
+  background:rgba(59,130,246,.15);color:#93c5fd;border:1px solid rgba(59,130,246,.25);
+}
+.actions{display:flex;gap:6px;flex-wrap:wrap}
+.auth-box{max-width:420px;margin:48px auto}
+.auth-card{
+  padding:22px;border-radius:20px;border:1px solid var(--border);
+  background:rgba(15,23,42,.88);box-shadow:var(--shadow);backdrop-filter:blur(16px);
+}
+.auth-head{text-align:center;margin-bottom:18px}
+.auth-head h1{margin:0 0 6px;font-size:1.35rem}
 .pw-wrap{position:relative}
-.pw-wrap input{padding-right:44px}
-.pw-toggle{position:absolute;right:8px;top:50%;transform:translateY(-50%);background:transparent;border:none;color:var(--muted);padding:6px;cursor:pointer}
+.pw-wrap input{padding-right:46px}
+.pw-toggle{position:absolute;right:8px;top:50%;transform:translateY(-50%);background:transparent;border:none;color:var(--muted);cursor:pointer;padding:6px}
+.idle-bar{
+  position:fixed;left:0;right:0;bottom:0;height:3px;background:rgba(59,130,246,.25);z-index:50;
+  transform-origin:left center;transform:scaleX(0);transition:transform .3s linear;
+}
+.section-label{font-size:.72rem;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin:4px 0 10px}
 </style>
 </head>
 <body>
+<div class="idle-bar" id="idleBar"></div>
 <div class="wrap">
 
+  <!-- AUTH -->
   <div id="authScreen" class="auth-box">
-    <div class="brand">
-      <h1>Vendor portal</h1>
-      <p class="sub">Sign in with the account the main admin assigned as sub-admin.</p>
-    </div>
-    <div class="card">
+    <div class="auth-card">
+      <div class="auth-head">
+        <div class="logo-mark" style="margin:0 auto 12px">MJ</div>
+        <h1>Vendor portal</h1>
+        <p class="sub" style="margin:0">Sign in with your assigned sub-admin account.</p>
+      </div>
       <form id="signinForm">
         <label>Email</label>
         <input type="email" id="authEmail" required autocomplete="username" placeholder="you@email.com"/>
@@ -54,60 +121,69 @@ td,th{padding:8px;border-bottom:1px solid var(--border);text-align:left}
           <button type="button" class="pw-toggle" id="togglePw" aria-label="Show password">👁</button>
         </div>
         <div class="row" style="margin-top:16px">
-          <button type="submit" id="authBtn" style="width:100%">Sign in</button>
+          <button type="submit" class="btn btn-primary" id="authBtn" style="width:100%">Sign in</button>
         </div>
         <p id="authMsg" class="err" style="display:none"></p>
       </form>
     </div>
   </div>
 
+  <!-- APP -->
   <div id="app" style="display:none">
     <div class="topbar">
-      <div>
-        <h1>Vendor portal</h1>
-        <p class="sub" style="margin:0" id="whoami"></p>
+      <div class="brand-lockup">
+        <div class="logo-mark">MJ</div>
+        <div>
+          <h1>Vendor portal</h1>
+          <p id="whoami">Signed in</p>
+        </div>
       </div>
-      <button type="button" class="ghost" id="signOutBtn">Sign out</button>
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+        <span class="pill" title="Auto sign-out after 10 minutes idle">● Session protected</span>
+        <button type="button" class="btn btn-ghost btn-sm" id="signOutBtn">Sign out</button>
+      </div>
     </div>
+
     <div class="stats" id="stats"></div>
 
-    <div class="card" style="margin-top:14px">
-      <h3 style="margin:0 0 4px">Your products</h3>
+    <div class="card">
+      <h3>Your products</h3>
+      <p class="sub">Open a product to change price/details or <strong>add more credentials</strong> (restock).</p>
       <div id="plist"></div>
     </div>
 
-    <div class="card">
-      <h3 style="margin:0 0 6px" id="formTitle">Add product</h3>
-      <p class="sub">One form: product details + stock. Paste one account per line. Qty 3 gives 3 different lines; sold lines are not resold.</p>
+    <div class="card" id="formCard">
+      <h3 id="formTitle">Add product</h3>
+      <p class="sub" id="formSub">Fill everything below and save. One account per line in credentials. Each line sells once.</p>
       <input type="hidden" id="editId"/>
       <input type="hidden" id="editKey"/>
 
-      <label>Name</label>
-      <input id="pname" placeholder="Product name"/>
+      <label>Product name</label>
+      <input id="pname" placeholder="e.g. X accounts pack"/>
 
       <label>Price (₦)</label>
       <input id="pprice" type="number" min="0" step="50" placeholder="3000"/>
 
       <label>Category</label>
-      <select id="pcat"><option value="">Loading categories…</option></select>
-      <p class="sub" style="margin-top:6px">Existing site categories only.</p>
+      <select id="pcat"><option value="">Loading…</option></select>
 
-      <label>Login format (optional hint for buyers)</label>
-      <input id="pformat" placeholder="e.g. Username:pass:2fa:email:emailpass"/>
+      <label>Login format (optional)</label>
+      <input id="pformat" placeholder="Username:pass:2fa:email:emailpass"/>
 
-      <label>Credentials — one account per line</label>
+      <label id="credsLabel">Credentials (one account per line)</label>
       <textarea id="pcreds" rows="8" placeholder="user1:pass1:token1&#10;user2:pass2:token2&#10;user3:pass3:token3"></textarea>
-      <p class="sub" id="stockHint" style="margin-top:6px"></p>
+      <p class="sub" id="stockHint" style="margin-top:8px"></p>
 
       <div class="row">
-        <button type="button" id="saveBtn">Save product</button>
-        <button type="button" class="ghost" id="resetBtn">Clear form</button>
+        <button type="button" class="btn btn-primary" id="saveBtn">Save product</button>
+        <button type="button" class="btn btn-ghost" id="resetBtn">New product</button>
       </div>
       <p id="msg"></p>
     </div>
 
     <div class="card">
-      <h3 style="margin:0 0 8px">Recent sales</h3>
+      <h3>Recent sales</h3>
+      <p class="sub">Orders for your products only.</p>
       <div id="sales"></div>
     </div>
   </div>
@@ -121,6 +197,10 @@ const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
   auth: { persistSession: true, autoRefreshToken: true, storage: window.localStorage }
 });
 
+const IDLE_MS = 10 * 60 * 1000; // 10 minutes
+let idleTimer = null;
+let idleStarted = 0;
+
 function esc(s){
   return String(s||'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 }
@@ -129,6 +209,7 @@ function money(n){ return '₦' + Number(n||0).toLocaleString(); }
 function showAuth(msg){
   document.getElementById('authScreen').style.display = 'block';
   document.getElementById('app').style.display = 'none';
+  stopIdleWatch();
   const m = document.getElementById('authMsg');
   if (msg) { m.style.display = 'block'; m.textContent = msg; m.className = 'err'; }
   else { m.style.display = 'none'; m.textContent = ''; }
@@ -136,6 +217,38 @@ function showAuth(msg){
 function showApp(){
   document.getElementById('authScreen').style.display = 'none';
   document.getElementById('app').style.display = 'block';
+  startIdleWatch();
+}
+
+function startIdleWatch(){
+  stopIdleWatch();
+  idleStarted = Date.now();
+  const bar = document.getElementById('idleBar');
+  const tick = () => {
+    const elapsed = Date.now() - idleStarted;
+    const p = Math.min(1, elapsed / IDLE_MS);
+    if (bar) bar.style.transform = 'scaleX(' + p + ')';
+    if (elapsed >= IDLE_MS) {
+      stopIdleWatch();
+      sb.auth.signOut().finally(() => {
+        showAuth('Signed out after 10 minutes of inactivity. Sign in again.');
+      });
+      return;
+    }
+    idleTimer = setTimeout(tick, 1000);
+  };
+  const bump = () => { idleStarted = Date.now(); };
+  ['pointerdown','keydown','touchstart','scroll','mousemove'].forEach(ev => {
+    window.addEventListener(ev, bump, { passive: true });
+  });
+  window.__idleBump = bump;
+  tick();
+}
+function stopIdleWatch(){
+  if (idleTimer) clearTimeout(idleTimer);
+  idleTimer = null;
+  const bar = document.getElementById('idleBar');
+  if (bar) bar.style.transform = 'scaleX(0)';
 }
 
 async function api(body) {
@@ -156,18 +269,57 @@ async function api(body) {
 
 async function loadCategories() {
   const sel = document.getElementById('pcat');
-  if (!sel) return;
   try {
     const res = await api({ resource: 'vendor', action: 'categories' });
     const list = res.data || [];
-    if (!list.length) {
-      sel.innerHTML = '<option value="MANUAL">MANUAL</option>';
-      return;
-    }
-    sel.innerHTML = list.map(c => '<option value="'+esc(c)+'">'+esc(c)+'</option>').join('');
+    sel.innerHTML = (list.length ? list : ['MANUAL']).map(c => '<option value="'+esc(c)+'">'+esc(c)+'</option>').join('');
   } catch (e) {
     sel.innerHTML = '<option value="MANUAL">MANUAL</option>';
   }
+}
+
+async function openProduct(p, mode) {
+  // mode: 'edit' | 'restock'
+  document.getElementById('formTitle').textContent = mode === 'restock' ? 'Restock product' : 'Edit product';
+  document.getElementById('formSub').textContent = mode === 'restock'
+    ? 'Add more accounts below. Existing sold lines stay sold and are never reused.'
+    : 'Update details and/or paste more accounts to increase stock.';
+  document.getElementById('editId').value = p.id || '';
+  document.getElementById('editKey').value = p.product_key || '';
+  document.getElementById('pname').value = p.name || '';
+  document.getElementById('pprice').value = p.price || '';
+  document.getElementById('pformat').value = p.display_description || p.description || '';
+  document.getElementById('pcreds').value = '';
+  document.getElementById('credsLabel').textContent = mode === 'restock'
+    ? 'Add more credentials (one per line)'
+    : 'Credentials — leave empty to keep stock, or paste to add more';
+  document.getElementById('pcreds').placeholder = 'Paste NEW accounts only (one per line)';
+  const sel = document.getElementById('pcat');
+  const cat = p.category || '';
+  if (cat && ![...sel.options].some(o => o.value === cat)) {
+    const opt = document.createElement('option');
+    opt.value = cat; opt.textContent = cat;
+    sel.appendChild(opt);
+  }
+  if (cat) sel.value = cat;
+  document.getElementById('msg').textContent = '';
+  document.getElementById('stockHint').textContent = 'Loading stock…';
+  try {
+    if (p.product_key) {
+      const inv = await api({
+        resource: 'vendor', action: 'inventory',
+        inventory_action: 'stock_count', product_key: p.product_key
+      });
+      const x = inv.data || {};
+      document.getElementById('stockHint').textContent =
+        'Available now: ' + (x.available||0) + ' · Already sold: ' + (x.sold||0) +
+        (mode === 'restock' ? ' · Paste more lines below to refill.' : '');
+    }
+  } catch (e) {
+    document.getElementById('stockHint').textContent = e.message || '';
+  }
+  document.getElementById('formCard').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  if (mode === 'restock') document.getElementById('pcreds').focus();
 }
 
 async function refresh() {
@@ -180,51 +332,35 @@ async function refresh() {
 
   const sales = d.recent_orders || [];
   document.getElementById('sales').innerHTML = sales.length
-    ? '<table><tr><th>Product</th><th>Qty</th><th>Amount</th><th>Date</th></tr>'+
-      sales.map(o=>'<tr><td>'+esc(o.product_name)+'</td><td>'+o.quantity+'</td><td>'+money(o.amount)+'</td><td>'+esc((o.created_at||'').slice(0,16))+'</td></tr>').join('')+
-      '</table>'
+    ? '<div class="table-wrap"><table><thead><tr><th>Product</th><th>Qty</th><th>Amount</th><th>Date</th></tr></thead><tbody>'+
+      sales.map(o=>'<tr><td>'+esc(o.product_name)+'</td><td>'+o.quantity+'</td><td>'+money(o.amount)+'</td><td>'+esc((o.created_at||'').slice(0,16).replace('T',' '))+'</td></tr>').join('')+
+      '</tbody></table></div>'
     : '<p class="sub">No sales yet.</p>';
 
   const pr = await api({ resource: 'vendor', action: 'products' });
   const list = pr.data || [];
-  document.getElementById('plist').innerHTML = list.length
-    ? '<table><tr><th>Name</th><th>Price</th><th>Stock</th><th></th></tr>'+
-      list.map(p=>'<tr><td>'+esc(p.name)+'</td><td>'+money(p.price)+'</td><td>'+(p.stock_quantity!=null?p.stock_quantity:'—')+'</td><td><button type="button" class="ghost" data-edit="'+encodeURIComponent(JSON.stringify(p))+'">Edit</button></td></tr>').join('')+
-      '</table>'
-    : '<p class="sub">No products yet. Use the form below.</p>';
+  if (!list.length) {
+    document.getElementById('plist').innerHTML = '<p class="sub">No products yet. Create one in the form below.</p>';
+    return;
+  }
+  document.getElementById('plist').innerHTML =
+    '<div class="table-wrap"><table><thead><tr><th>Product</th><th>Price</th><th>Stock</th><th>Actions</th></tr></thead><tbody>' +
+    list.map(p => {
+      const payload = encodeURIComponent(JSON.stringify(p));
+      return '<tr>' +
+        '<td><strong>'+esc(p.name)+'</strong><div style="color:var(--muted);font-size:11px;margin-top:2px">'+esc(p.category||'')+'</div></td>' +
+        '<td>'+money(p.price)+'</td>' +
+        '<td><span class="badge">'+(p.stock_quantity!=null?p.stock_quantity:'—')+' left</span></td>' +
+        '<td class="actions">' +
+          '<button type="button" class="btn btn-ghost btn-sm" data-act="edit" data-p="'+payload+'">Edit</button>' +
+          '<button type="button" class="btn btn-primary btn-sm" data-act="restock" data-p="'+payload+'">Add stock</button>' +
+        '</td></tr>';
+    }).join('') + '</tbody></table></div>';
 
-  document.querySelectorAll('[data-edit]').forEach(btn=>{
-    btn.onclick = async ()=>{
-      const p = JSON.parse(decodeURIComponent(btn.getAttribute('data-edit')));
-      document.getElementById('formTitle').textContent = 'Edit product';
-      document.getElementById('editId').value = p.id || '';
-      document.getElementById('editKey').value = p.product_key || '';
-      document.getElementById('pname').value = p.name || '';
-      document.getElementById('pprice').value = p.price || '';
-      document.getElementById('pformat').value = p.display_description || p.description || '';
-      document.getElementById('pcreds').value = '';
-      document.getElementById('pcreds').placeholder = 'Paste NEW accounts to add to stock (one per line). Leave empty to only update details.';
-      const sel = document.getElementById('pcat');
-      const cat = p.category || '';
-      if (cat && ![...sel.options].some(o => o.value === cat)) {
-        const opt = document.createElement('option');
-        opt.value = cat; opt.textContent = cat;
-        sel.appendChild(opt);
-      }
-      if (cat) sel.value = cat;
-      document.getElementById('stockHint').textContent = 'Current stock on product: ' + (p.stock_quantity != null ? p.stock_quantity : '—') + '. New lines below are added to inventory.';
-      try {
-        if (p.product_key) {
-          const inv = await api({
-            resource: 'vendor', action: 'inventory',
-            inventory_action: 'stock_count', product_key: p.product_key
-          });
-          const x = inv.data || {};
-          document.getElementById('stockHint').textContent =
-            'Available: ' + (x.available||0) + ' · Sold: ' + (x.sold||0) + '. Paste more lines below to add stock.';
-        }
-      } catch (_) {}
-      window.scrollTo({ top: document.getElementById('formTitle').offsetTop - 20, behavior: 'smooth' });
+  document.querySelectorAll('[data-act]').forEach(btn => {
+    btn.onclick = () => {
+      const p = JSON.parse(decodeURIComponent(btn.getAttribute('data-p')));
+      openProduct(p, btn.getAttribute('data-act') === 'restock' ? 'restock' : 'edit');
     };
   });
 }
@@ -236,7 +372,7 @@ async function enterPortal() {
     await loadCategories();
     await refresh();
     const email = session.user && session.user.email;
-    document.getElementById('whoami').textContent = email ? ('Signed in as ' + email) : 'Signed in';
+    document.getElementById('whoami').textContent = email ? email : 'Signed in';
     showApp();
   } catch (e) {
     await sb.auth.signOut();
@@ -244,7 +380,7 @@ async function enterPortal() {
   }
 }
 
-document.getElementById('signinForm').onsubmit = async (e)=>{
+document.getElementById('signinForm').onsubmit = async (e) => {
   e.preventDefault();
   const btn = document.getElementById('authBtn');
   const msg = document.getElementById('authMsg');
@@ -268,17 +404,17 @@ document.getElementById('signinForm').onsubmit = async (e)=>{
   }
 };
 
-document.getElementById('togglePw').onclick = ()=>{
+document.getElementById('togglePw').onclick = () => {
   const i = document.getElementById('authPassword');
   i.type = i.type === 'password' ? 'text' : 'password';
 };
 
-document.getElementById('signOutBtn').onclick = async ()=>{
+document.getElementById('signOutBtn').onclick = async () => {
   await sb.auth.signOut();
   showAuth();
 };
 
-document.getElementById('saveBtn').onclick = async ()=>{
+document.getElementById('saveBtn').onclick = async () => {
   const msg = document.getElementById('msg');
   msg.className = '';
   msg.textContent = 'Saving…';
@@ -292,9 +428,8 @@ document.getElementById('saveBtn').onclick = async ()=>{
 
   try {
     if (!name) throw new Error('Enter a product name');
-    if (!price || Number(price) < 0) throw new Error('Enter a valid price');
+    if (price === '' || Number(price) < 0) throw new Error('Enter a valid price');
 
-    // 1) Save product details
     const saved = await api({
       resource: 'vendor',
       action: 'product_save',
@@ -308,12 +443,10 @@ document.getElementById('saveBtn').onclick = async ()=>{
         is_available: true
       }
     });
-
     const product = saved.data || {};
     productKey = product.product_key || productKey;
-    if (!productKey) throw new Error('Product saved but no product_key returned');
+    if (!productKey) throw new Error('Product saved but missing key');
 
-    // 2) If credentials pasted, upload inventory in same action
     let invNote = '';
     const lines = creds.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
     if (lines.length) {
@@ -325,7 +458,7 @@ document.getElementById('saveBtn').onclick = async ()=>{
         text: creds
       });
       const d = inv.data || {};
-      invNote = ' · Stock +' + (d.inserted||0) + ' (available ' + (d.available_stock||0) + ')';
+      invNote = ' · Added ' + (d.inserted||0) + ' to stock (available ' + (d.available_stock||0) + ')';
     }
 
     msg.className = 'ok';
@@ -338,15 +471,17 @@ document.getElementById('saveBtn').onclick = async ()=>{
   }
 };
 
-document.getElementById('resetBtn').onclick = ()=>{
+document.getElementById('resetBtn').onclick = () => {
   document.getElementById('formTitle').textContent = 'Add product';
+  document.getElementById('formSub').textContent = 'Fill everything below and save. One account per line in credentials. Each line sells once.';
   document.getElementById('editId').value = '';
   document.getElementById('editKey').value = '';
   document.getElementById('pname').value = '';
   document.getElementById('pprice').value = '';
   document.getElementById('pformat').value = '';
   document.getElementById('pcreds').value = '';
-  document.getElementById('pcreds').placeholder = 'user1:pass1:token1\nuser2:pass2:token2\nuser3:pass3:token3';
+  document.getElementById('credsLabel').textContent = 'Credentials (one account per line)';
+  document.getElementById('pcreds').placeholder = 'user1:pass1:token1\nuser2:pass2:token2';
   document.getElementById('stockHint').textContent = '';
   document.getElementById('msg').textContent = '';
   const sel = document.getElementById('pcat');
