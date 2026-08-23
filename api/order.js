@@ -614,10 +614,13 @@ export default async function handler(req, res) {
   // Fadded catalog sync + inactive nudges (was api/products.js)
   // GET/POST /api/order?action=sync   — same as old GET /api/products
   // GET/POST /api/order?nudge_only=1  — nudge emails only
-  // Also accepts action=sync from body for POSTs.
   // No customer JWT required (admin button + Vercel cron).
   // -----------------------------------------------------------------------
-  const q = req.query || {};
+  const q = Object.assign({}, req.query || {});
+  try {
+    const u = new URL(req.url || '/', 'http://localhost');
+    u.searchParams.forEach((v, k) => { if (q[k] == null || q[k] === '') q[k] = v; });
+  } catch (_) {}
   let bodyPeek = {};
   try {
     if (req.method === 'POST' && req.body) {
