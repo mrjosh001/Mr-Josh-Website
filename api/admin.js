@@ -279,6 +279,143 @@ async function vendorProductsList(staff) {
 }
 
 
+
+async function assertVendorOwnsProduct(staff, productKey) {
+  const { data: product, error } = await supabase
+    .from('products')
+    .select('id, product_key, name, owner_id, source, is_shared')
+    .eq('product_key', productKey)
+    .maybeSingle();
+  if (error || !product) {
+    return { ok: false, status: 404, message: 'Product not found' };
+  }
+  if (!staff.isAdmin && product.owner_id !== staff.userId) {
+    return { ok: false, status: 403, message: 'You can only manage inventory for your own products' };
+  }
+  return { ok: true, product };
+}
+
+async function vendorInventory(body, staff) {
+  const action = body.inventory_action || body.action_detail || body.inv_action;
+  const product_key = String(body.product_key || '').trim();
+  if (!product_key) {
+    return { status: 400, body: { success: false, message: 'product_key is required' } };
+  }
+
+  const owned = await assertVendorOwnsProduct(staff, product_key);
+  if (!owned.ok) return { status: owned.status, body: { success: false, message: owned.message } };
+  const product = owned.product;
+
+  // stock counts
+  if (action === 'stock_count' || action === 'status') {
+    const { count: available } = await supabase
+      .from('product_inventory')
+      .select('id', { count: 'exact', head: true })
+      .eq('product_key', product_key)
+      .eq('status', 'available');
+    const { count: sold } = await supabase
+      .from('product_inventory')
+      .select('id', { count: 'exact', head: true })
+      .eq('product_key', product_key)
+      .eq('status', 'sold');
+    await supabase
+      .from('products')
+      .update({
+        stock_quantity: available || 0,
+        is_available: (available || 0) > 0,
+        is_shared: false,
+        source: 'manual',
+        updated_at: new Date().toISOString()
+      })
+      .eq('product_key', product_key);
+    return {
+      status: 200,
+      body: {
+        success: true,
+        data: {
+          product_key,
+          product_name: product.name,
+          available: available || 0,
+          sold: sold || 0
+        }
+      }
+    };
+  }
+
+  if (action === 'bulk_upload') {
+    const text = String(body.text || '');
+    const lines = text.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+    if (!lines.length) {
+      return { status: 400, body: { success: false, message: 'Paste at least one credential line' } };
+    }
+
+    const { data: existingRows } = await supabase
+      .from('product_inventory')
+      .select('credential')
+      .eq('product_key', product_key);
+    const existingSet = new Set((existingRows || []).map((r) => r.credential));
+    const newLines = lines.filter((l) => !existingSet.has(l));
+    const skippedDuplicates = lines.length - newLines.length;
+
+    if (newLines.length) {
+      const rows = newLines.map((credential) => ({
+        product_key,
+        credential,
+        status: 'available'
+      }));
+      const CHUNK = 500;
+      for (let i = 0; i < rows.length; i += CHUNK) {
+        const { error: insErr } = await supabase
+          .from('product_inventory')
+          .insert(rows.slice(i, i + CHUNK));
+        if (insErr) {
+          return {
+            status: 500,
+            body: { success: false, message: 'Upload failed: ' + insErr.message }
+          };
+        }
+      }
+    }
+
+    const { count: available } = await supabase
+      .from('product_inventory')
+      .select('id', { count: 'exact', head: true })
+      .eq('product_key', product_key)
+      .eq('status', 'available');
+
+    await supabase
+      .from('products')
+      .update({
+        stock_quantity: available || 0,
+        is_available: (available || 0) > 0,
+        is_shared: false,
+        source: 'manual',
+        updated_at: new Date().toISOString()
+      })
+      .eq('product_key', product_key);
+
+    return {
+      status: 200,
+      body: {
+        success: true,
+        data: {
+          product_key,
+          product_name: product.name,
+          inserted: newLines.length,
+          skipped_duplicates: skippedDuplicates,
+          available_stock: available || 0,
+          message: 'Each line is one unique log. Sold lines cannot be sold again.'
+        }
+      }
+    };
+  }
+
+  return {
+    status: 400,
+    body: { success: false, message: 'Unknown inventory action. Use bulk_upload or stock_count.' }
+  };
+}
+
 async function vendorCategoriesList() {
   // Distinct categories already on the platform (all products)
   const { data, error } = await supabase
@@ -1331,6 +1468,7 @@ export default async function handler(req, res) {
       let result;
       if (action === 'products') result = await vendorProductsList(staff);
       else if (action === 'categories') result = await vendorCategoriesList();
+      else if (action === 'inventory') result = await vendorInventory(body, staff);
       else if (action === 'product_save') result = await vendorProductUpsert(body, staff);
       else if (action === 'product_delete') result = await vendorProductDelete(body, staff);
       else if (action === 'stats') {
