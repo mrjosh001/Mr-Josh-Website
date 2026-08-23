@@ -17,13 +17,12 @@ h1{font-size:1.35rem;margin:0 0 4px}
 .stat{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:14px;text-align:center}
 .stat b{display:block;font-size:1.25rem;color:var(--primary)}
 .stat span{font-size:.75rem;color:var(--muted)}
-label{display:block;font-size:.8rem;color:var(--muted);margin:10px 0 4px}
+label{display:block;font-size:.8rem;color:var(--muted);margin:12px 0 4px}
 input,textarea,select{width:100%;padding:11px 12px;border-radius:10px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:15px}
-button,.btn{background:var(--primary);color:#fff;border:none;border-radius:10px;padding:11px 16px;font-weight:600;cursor:pointer;font-size:14px}
+button{background:var(--primary);color:#fff;border:none;border-radius:10px;padding:11px 16px;font-weight:600;cursor:pointer;font-size:14px}
 button.ghost{background:transparent;border:1px solid var(--border);color:var(--text)}
-button.danger{background:#ef4444}
 button:disabled{opacity:.6;cursor:not-allowed}
-.row{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px;align-items:center}
+.row{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px;align-items:center}
 .err{color:var(--danger);font-size:.9rem;margin-top:8px}
 .ok{color:var(--ok);font-size:.9rem;margin-top:8px}
 table{width:100%;border-collapse:collapse;font-size:.85rem}
@@ -35,13 +34,11 @@ td,th{padding:8px;border-bottom:1px solid var(--border);text-align:left}
 .pw-wrap{position:relative}
 .pw-wrap input{padding-right:44px}
 .pw-toggle{position:absolute;right:8px;top:50%;transform:translateY(-50%);background:transparent;border:none;color:var(--muted);padding:6px;cursor:pointer}
-a.link{color:var(--primary);text-decoration:none;font-size:13px}
 </style>
 </head>
 <body>
 <div class="wrap">
 
-  <!-- SIGN IN (on this page only) -->
   <div id="authScreen" class="auth-box">
     <div class="brand">
       <h1>Vendor portal</h1>
@@ -64,7 +61,6 @@ a.link{color:var(--primary);text-decoration:none;font-size:13px}
     </div>
   </div>
 
-  <!-- PORTAL (after sign-in) -->
   <div id="app" style="display:none">
     <div class="topbar">
       <div>
@@ -74,45 +70,40 @@ a.link{color:var(--primary);text-decoration:none;font-size:13px}
       <button type="button" class="ghost" id="signOutBtn">Sign out</button>
     </div>
     <div class="stats" id="stats"></div>
+
     <div class="card" style="margin-top:14px">
-      <h3 style="margin:0 0 8px">Your products</h3>
+      <h3 style="margin:0 0 4px">Your products</h3>
       <div id="plist"></div>
     </div>
+
     <div class="card">
-      <h3 style="margin:0 0 8px">Add / edit product</h3>
-      <p class="sub">Credential format example: <code>Username:pass:2fa:email:emailpass</code></p>
+      <h3 style="margin:0 0 6px" id="formTitle">Add product</h3>
+      <p class="sub">One form: product details + stock. Paste one account per line. Qty 3 gives 3 different lines; sold lines are not resold.</p>
       <input type="hidden" id="editId"/>
+      <input type="hidden" id="editKey"/>
+
       <label>Name</label>
       <input id="pname" placeholder="Product name"/>
+
       <label>Price (₦)</label>
       <input id="pprice" type="number" min="0" step="50" placeholder="3000"/>
-      <label>Stock</label>
-      <input id="pstock" type="number" min="0" placeholder="10"/>
+
       <label>Category</label>
       <select id="pcat"><option value="">Loading categories…</option></select>
-      <p class="sub" style="margin-top:6px">Pick an existing site category only — you cannot create new ones.</p>
-      <label>Credential format / description</label>
-      <textarea id="pdesc" rows="3" placeholder="Login format: Username:pass:2fa:email:emailpass"></textarea>
+      <p class="sub" style="margin-top:6px">Existing site categories only.</p>
+
+      <label>Login format (optional hint for buyers)</label>
+      <input id="pformat" placeholder="e.g. Username:pass:2fa:email:emailpass"/>
+
+      <label>Credentials — one account per line</label>
+      <textarea id="pcreds" rows="8" placeholder="user1:pass1:token1&#10;user2:pass2:token2&#10;user3:pass3:token3"></textarea>
+      <p class="sub" id="stockHint" style="margin-top:6px"></p>
+
       <div class="row">
         <button type="button" id="saveBtn">Save product</button>
         <button type="button" class="ghost" id="resetBtn">Clear form</button>
       </div>
       <p id="msg"></p>
-    </div>
-    
-    <div class="card">
-      <h3 style="margin:0 0 8px">Upload credentials (inventory)</h3>
-      <p class="sub">Paste <strong>one account per line</strong>. When a customer buys quantity 3, they get 3 different lines. Each line is marked sold and cannot be resold.</p>
-      <label>Product</label>
-      <select id="invProduct"><option value="">Select your product…</option></select>
-      <p class="sub" id="invStockInfo" style="margin-top:6px"></p>
-      <label>Credentials (one per line)</label>
-      <textarea id="invText" rows="8" placeholder="user1:pass1:token1&#10;user2:pass2:token2&#10;user3:pass3:token3"></textarea>
-      <div class="row">
-        <button type="button" id="invUploadBtn">Upload to stock</button>
-        <button type="button" class="ghost" id="invRefreshBtn">Refresh stock</button>
-      </div>
-      <p id="invMsg"></p>
     </div>
 
     <div class="card">
@@ -142,7 +133,6 @@ function showAuth(msg){
   if (msg) { m.style.display = 'block'; m.textContent = msg; m.className = 'err'; }
   else { m.style.display = 'none'; m.textContent = ''; }
 }
-
 function showApp(){
   document.getElementById('authScreen').style.display = 'none';
   document.getElementById('app').style.display = 'block';
@@ -162,35 +152,6 @@ async function api(body) {
   const json = await res.json().catch(()=>({}));
   if (!json.success) throw new Error(json.message || 'Request failed');
   return json;
-}
-
-
-
-async function fillInvProductSelect(list) {
-  const sel = document.getElementById('invProduct');
-  if (!sel) return;
-  const cur = sel.value;
-  sel.innerHTML = '<option value="">Select your product…</option>' +
-    (list || []).map(p => '<option value="'+esc(p.product_key)+'">'+esc(p.name)+' ('+esc(p.product_key)+')</option>').join('');
-  if (cur) sel.value = cur;
-}
-
-async function refreshInvStock() {
-  const key = document.getElementById('invProduct')?.value;
-  const info = document.getElementById('invStockInfo');
-  if (!key) { if (info) info.textContent = ''; return; }
-  try {
-    const res = await api({
-      resource: 'vendor',
-      action: 'inventory',
-      inventory_action: 'stock_count',
-      product_key: key
-    });
-    const d = res.data || {};
-    if (info) info.textContent = 'Available: ' + (d.available||0) + ' · Already sold: ' + (d.sold||0);
-  } catch (e) {
-    if (info) info.textContent = e.message || 'Could not load stock';
-  }
 }
 
 async function loadCategories() {
@@ -226,31 +187,44 @@ async function refresh() {
 
   const pr = await api({ resource: 'vendor', action: 'products' });
   const list = pr.data || [];
-  await fillInvProductSelect(list);
   document.getElementById('plist').innerHTML = list.length
     ? '<table><tr><th>Name</th><th>Price</th><th>Stock</th><th></th></tr>'+
-      list.map(p=>'<tr><td>'+esc(p.name)+'</td><td>'+money(p.price)+'</td><td>'+p.stock_quantity+'</td><td><button type="button" class="ghost" data-edit="'+encodeURIComponent(JSON.stringify(p))+'">Edit</button></td></tr>').join('')+
+      list.map(p=>'<tr><td>'+esc(p.name)+'</td><td>'+money(p.price)+'</td><td>'+(p.stock_quantity!=null?p.stock_quantity:'—')+'</td><td><button type="button" class="ghost" data-edit="'+encodeURIComponent(JSON.stringify(p))+'">Edit</button></td></tr>').join('')+
       '</table>'
-    : '<p class="sub">No products yet. Add one below.</p>';
+    : '<p class="sub">No products yet. Use the form below.</p>';
 
   document.querySelectorAll('[data-edit]').forEach(btn=>{
-    btn.onclick = ()=>{
+    btn.onclick = async ()=>{
       const p = JSON.parse(decodeURIComponent(btn.getAttribute('data-edit')));
+      document.getElementById('formTitle').textContent = 'Edit product';
       document.getElementById('editId').value = p.id || '';
+      document.getElementById('editKey').value = p.product_key || '';
       document.getElementById('pname').value = p.name || '';
       document.getElementById('pprice').value = p.price || '';
-      document.getElementById('pstock').value = p.stock_quantity || 0;
-      {
-        const cat = p.category || '';
-        const sel = document.getElementById('pcat');
-        if (cat && ![...sel.options].some(o => o.value === cat)) {
-          const opt = document.createElement('option');
-          opt.value = cat; opt.textContent = cat;
-          sel.appendChild(opt);
-        }
-        sel.value = cat || (sel.options[0] && sel.options[0].value) || '';
+      document.getElementById('pformat').value = p.display_description || p.description || '';
+      document.getElementById('pcreds').value = '';
+      document.getElementById('pcreds').placeholder = 'Paste NEW accounts to add to stock (one per line). Leave empty to only update details.';
+      const sel = document.getElementById('pcat');
+      const cat = p.category || '';
+      if (cat && ![...sel.options].some(o => o.value === cat)) {
+        const opt = document.createElement('option');
+        opt.value = cat; opt.textContent = cat;
+        sel.appendChild(opt);
       }
-      document.getElementById('pdesc').value = p.display_description || p.description || '';
+      if (cat) sel.value = cat;
+      document.getElementById('stockHint').textContent = 'Current stock on product: ' + (p.stock_quantity != null ? p.stock_quantity : '—') + '. New lines below are added to inventory.';
+      try {
+        if (p.product_key) {
+          const inv = await api({
+            resource: 'vendor', action: 'inventory',
+            inventory_action: 'stock_count', product_key: p.product_key
+          });
+          const x = inv.data || {};
+          document.getElementById('stockHint').textContent =
+            'Available: ' + (x.available||0) + ' · Sold: ' + (x.sold||0) + '. Paste more lines below to add stock.';
+        }
+      } catch (_) {}
+      window.scrollTo({ top: document.getElementById('formTitle').offsetTop - 20, behavior: 'smooth' });
     };
   });
 }
@@ -265,10 +239,8 @@ async function enterPortal() {
     document.getElementById('whoami').textContent = email ? ('Signed in as ' + email) : 'Signed in';
     showApp();
   } catch (e) {
-    const msg = (e && e.message) || 'Access denied';
-    // Not a sub-admin / admin
     await sb.auth.signOut();
-    showAuth(msg + ' — Ask main admin to assign your account as sub-admin.');
+    showAuth(((e && e.message) || 'Access denied') + ' — Ask main admin to assign you as sub-admin.');
   }
 }
 
@@ -310,23 +282,54 @@ document.getElementById('saveBtn').onclick = async ()=>{
   const msg = document.getElementById('msg');
   msg.className = '';
   msg.textContent = 'Saving…';
+  const name = document.getElementById('pname').value.trim();
+  const price = document.getElementById('pprice').value;
+  const category = document.getElementById('pcat').value;
+  const format = document.getElementById('pformat').value.trim();
+  const creds = document.getElementById('pcreds').value;
+  const editId = document.getElementById('editId').value;
+  let productKey = document.getElementById('editKey').value;
+
   try {
-    await api({
+    if (!name) throw new Error('Enter a product name');
+    if (!price || Number(price) < 0) throw new Error('Enter a valid price');
+
+    // 1) Save product details
+    const saved = await api({
       resource: 'vendor',
       action: 'product_save',
-      id: document.getElementById('editId').value || undefined,
+      id: editId || undefined,
       fields: {
-        name: document.getElementById('pname').value,
-        price: document.getElementById('pprice').value,
-        stock_quantity: document.getElementById('pstock').value,
-        category: document.getElementById('pcat').value,
-        display_description: document.getElementById('pdesc').value,
-        description: document.getElementById('pdesc').value,
+        name,
+        price,
+        category,
+        display_description: format || null,
+        description: format || null,
         is_available: true
       }
     });
+
+    const product = saved.data || {};
+    productKey = product.product_key || productKey;
+    if (!productKey) throw new Error('Product saved but no product_key returned');
+
+    // 2) If credentials pasted, upload inventory in same action
+    let invNote = '';
+    const lines = creds.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+    if (lines.length) {
+      const inv = await api({
+        resource: 'vendor',
+        action: 'inventory',
+        inventory_action: 'bulk_upload',
+        product_key: productKey,
+        text: creds
+      });
+      const d = inv.data || {};
+      invNote = ' · Stock +' + (d.inserted||0) + ' (available ' + (d.available_stock||0) + ')';
+    }
+
     msg.className = 'ok';
-    msg.textContent = 'Saved';
+    msg.textContent = 'Saved' + invNote;
     document.getElementById('resetBtn').click();
     await refresh();
   } catch (e) {
@@ -336,48 +339,19 @@ document.getElementById('saveBtn').onclick = async ()=>{
 };
 
 document.getElementById('resetBtn').onclick = ()=>{
+  document.getElementById('formTitle').textContent = 'Add product';
   document.getElementById('editId').value = '';
+  document.getElementById('editKey').value = '';
   document.getElementById('pname').value = '';
   document.getElementById('pprice').value = '';
-  document.getElementById('pstock').value = '';
-  {
-    const sel = document.getElementById('pcat');
-    if (sel && sel.options.length) sel.selectedIndex = 0;
-  }
-  document.getElementById('pdesc').value = '';
+  document.getElementById('pformat').value = '';
+  document.getElementById('pcreds').value = '';
+  document.getElementById('pcreds').placeholder = 'user1:pass1:token1\nuser2:pass2:token2\nuser3:pass3:token3';
+  document.getElementById('stockHint').textContent = '';
   document.getElementById('msg').textContent = '';
+  const sel = document.getElementById('pcat');
+  if (sel && sel.options.length) sel.selectedIndex = 0;
 };
-
-
-document.getElementById('invProduct')?.addEventListener('change', refreshInvStock);
-document.getElementById('invRefreshBtn')?.addEventListener('click', refreshInvStock);
-document.getElementById('invUploadBtn')?.addEventListener('click', async ()=>{
-  const msg = document.getElementById('invMsg');
-  const key = document.getElementById('invProduct')?.value;
-  const text = document.getElementById('invText')?.value || '';
-  msg.className = '';
-  msg.textContent = 'Uploading…';
-  try {
-    if (!key) throw new Error('Select a product first');
-    if (!text.trim()) throw new Error('Paste credential lines');
-    const res = await api({
-      resource: 'vendor',
-      action: 'inventory',
-      inventory_action: 'bulk_upload',
-      product_key: key,
-      text
-    });
-    const d = res.data || {};
-    msg.className = 'ok';
-    msg.textContent = 'Added ' + (d.inserted||0) + ' new line(s). Skipped duplicates: ' + (d.skipped_duplicates||0) + '. Available now: ' + (d.available_stock||0);
-    document.getElementById('invText').value = '';
-    await refreshInvStock();
-    await refresh();
-  } catch (e) {
-    msg.className = 'err';
-    msg.textContent = e.message || 'Upload failed';
-  }
-});
 
 (async function init(){
   const { data: { session } } = await sb.auth.getSession();
