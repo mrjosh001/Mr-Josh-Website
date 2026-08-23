@@ -4,38 +4,75 @@
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1"/>
 <title>Vendor portal | MJ HUB</title>
-<link rel="stylesheet" href="/css/skeleton.css"/>
 <style>
-:root{--bg:#06080f;--card:#0f1524;--text:#e8eefc;--muted:#94a3b8;--primary:#3b82f6;--border:rgba(148,163,184,.14)}
+:root{--bg:#06080f;--card:#0f1524;--text:#e8eefc;--muted:#94a3b8;--primary:#3b82f6;--border:rgba(148,163,184,.14);--danger:#f87171;--ok:#34d399}
 html[data-theme=light]{--bg:#f4f6fb;--card:#fff;--text:#0f172a;--muted:#64748b;--border:rgba(15,23,42,.1)}
 *{box-sizing:border-box}
-body{margin:0;font-family:system-ui,-apple-system,sans-serif;background:var(--bg);color:var(--text)}
+body{margin:0;font-family:system-ui,-apple-system,sans-serif;background:var(--bg);color:var(--text);min-height:100vh}
 .wrap{max-width:920px;margin:0 auto;padding:20px 16px 80px}
 h1{font-size:1.35rem;margin:0 0 4px}
-.sub{color:var(--muted);font-size:.9rem;margin-bottom:20px}
-.card{background:var(--card);border:1px solid var(--border);border-radius:16px;padding:16px;margin-bottom:14px}
+.sub{color:var(--muted);font-size:.9rem;margin-bottom:16px;line-height:1.45}
+.card{background:var(--card);border:1px solid var(--border);border-radius:16px;padding:18px;margin-bottom:14px}
 .stats{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
 .stat{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:14px;text-align:center}
 .stat b{display:block;font-size:1.25rem;color:var(--primary)}
 .stat span{font-size:.75rem;color:var(--muted)}
 label{display:block;font-size:.8rem;color:var(--muted);margin:10px 0 4px}
-input,textarea,select{width:100%;padding:10px 12px;border-radius:10px;border:1px solid var(--border);background:var(--bg);color:var(--text)}
-button{background:var(--primary);color:#fff;border:none;border-radius:10px;padding:10px 16px;font-weight:600;cursor:pointer}
+input,textarea,select{width:100%;padding:11px 12px;border-radius:10px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:15px}
+button,.btn{background:var(--primary);color:#fff;border:none;border-radius:10px;padding:11px 16px;font-weight:600;cursor:pointer;font-size:14px}
 button.ghost{background:transparent;border:1px solid var(--border);color:var(--text)}
 button.danger{background:#ef4444}
-.row{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
-.err{color:#f87171;font-size:.9rem}
-.ok{color:#34d399;font-size:.9rem}
+button:disabled{opacity:.6;cursor:not-allowed}
+.row{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px;align-items:center}
+.err{color:var(--danger);font-size:.9rem;margin-top:8px}
+.ok{color:var(--ok);font-size:.9rem;margin-top:8px}
 table{width:100%;border-collapse:collapse;font-size:.85rem}
 td,th{padding:8px;border-bottom:1px solid var(--border);text-align:left}
+.auth-box{max-width:400px;margin:40px auto}
+.brand{text-align:center;margin-bottom:18px}
+.brand h1{font-size:1.5rem}
+.topbar{display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;gap:10px;flex-wrap:wrap}
+.pw-wrap{position:relative}
+.pw-wrap input{padding-right:44px}
+.pw-toggle{position:absolute;right:8px;top:50%;transform:translateY(-50%);background:transparent;border:none;color:var(--muted);padding:6px;cursor:pointer}
+a.link{color:var(--primary);text-decoration:none;font-size:13px}
 </style>
 </head>
 <body>
 <div class="wrap">
-  <h1>Vendor portal</h1>
-  <p class="sub">Upload and manage your products. View orders and revenue for your listings only.</p>
-  <div id="gate" class="card">Checking access…</div>
+
+  <!-- SIGN IN (on this page only) -->
+  <div id="authScreen" class="auth-box">
+    <div class="brand">
+      <h1>Vendor portal</h1>
+      <p class="sub">Sign in with the account the main admin assigned as sub-admin.</p>
+    </div>
+    <div class="card">
+      <form id="signinForm">
+        <label>Email</label>
+        <input type="email" id="authEmail" required autocomplete="username" placeholder="you@email.com"/>
+        <label>Password</label>
+        <div class="pw-wrap">
+          <input type="password" id="authPassword" required autocomplete="current-password" placeholder="Password"/>
+          <button type="button" class="pw-toggle" id="togglePw" aria-label="Show password">👁</button>
+        </div>
+        <div class="row" style="margin-top:16px">
+          <button type="submit" id="authBtn" style="width:100%">Sign in</button>
+        </div>
+        <p id="authMsg" class="err" style="display:none"></p>
+      </form>
+    </div>
+  </div>
+
+  <!-- PORTAL (after sign-in) -->
   <div id="app" style="display:none">
+    <div class="topbar">
+      <div>
+        <h1>Vendor portal</h1>
+        <p class="sub" style="margin:0" id="whoami"></p>
+      </div>
+      <button type="button" class="ghost" id="signOutBtn">Sign out</button>
+    </div>
     <div class="stats" id="stats"></div>
     <div class="card" style="margin-top:14px">
       <h3 style="margin:0 0 8px">Your products</h3>
@@ -43,7 +80,7 @@ td,th{padding:8px;border-bottom:1px solid var(--border);text-align:left}
     </div>
     <div class="card">
       <h3 style="margin:0 0 8px">Add / edit product</h3>
-      <p class="sub">Use a clear credential format in the description, e.g. <code>Username:pass:2fa:email:emailpass</code></p>
+      <p class="sub">Credential format example: <code>Username:pass:2fa:email:emailpass</code></p>
       <input type="hidden" id="editId"/>
       <label>Name</label>
       <input id="pname" placeholder="Product name"/>
@@ -67,13 +104,32 @@ td,th{padding:8px;border-bottom:1px solid var(--border);text-align:left}
     </div>
   </div>
 </div>
+
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
 const SUPABASE_URL = 'https://atczodlljmlayvldxfmv.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImF0Y3pvZGxsam1sYXl2bGR4Zm12Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODUwNzUyMzgsImV4cCI6MjEwMDY1MTIzOH0.ufthD-p7BmeD_B7xyuMM6PNPL8DmcL4AtRYgg-MuoLI';
 const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
-  auth: { persistSession: true, autoRefreshToken: true, storage: window.sessionStorage }
+  auth: { persistSession: true, autoRefreshToken: true, storage: window.localStorage }
 });
+
+function esc(s){
+  return String(s||'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+function money(n){ return '₦' + Number(n||0).toLocaleString(); }
+
+function showAuth(msg){
+  document.getElementById('authScreen').style.display = 'block';
+  document.getElementById('app').style.display = 'none';
+  const m = document.getElementById('authMsg');
+  if (msg) { m.style.display = 'block'; m.textContent = msg; m.className = 'err'; }
+  else { m.style.display = 'none'; m.textContent = ''; }
+}
+
+function showApp(){
+  document.getElementById('authScreen').style.display = 'none';
+  document.getElementById('app').style.display = 'block';
+}
 
 async function api(body) {
   const { data: { session } } = await sb.auth.getSession();
@@ -86,33 +142,31 @@ async function api(body) {
     },
     body: JSON.stringify(body)
   });
-  const json = await res.json();
+  const json = await res.json().catch(()=>({}));
   if (!json.success) throw new Error(json.message || 'Request failed');
   return json;
 }
-
-function money(n){ return '₦' + Number(n||0).toLocaleString(); }
 
 async function refresh() {
   const st = await api({ resource: 'vendor', action: 'stats' });
   const d = st.data || {};
   document.getElementById('stats').innerHTML =
-    '<div class="stat"><b>'+ (d.products||0) +'</b><span>Products</span></div>' +
-    '<div class="stat"><b>'+ (d.orders||0) +'</b><span>Orders</span></div>' +
-    '<div class="stat"><b>'+ money(d.revenue_ngn) +'</b><span>Revenue</span></div>';
+    '<div class="stat"><b>'+(d.products||0)+'</b><span>Products</span></div>'+
+    '<div class="stat"><b>'+(d.orders||0)+'</b><span>Orders</span></div>'+
+    '<div class="stat"><b>'+money(d.revenue_ngn)+'</b><span>Revenue</span></div>';
 
-  const sales = (d.recent_orders||[]);
+  const sales = d.recent_orders || [];
   document.getElementById('sales').innerHTML = sales.length
-    ? '<table><tr><th>Product</th><th>Qty</th><th>Amount</th><th>Date</th></tr>' +
-      sales.map(o=>'<tr><td>'+esc(o.product_name)+'</td><td>'+o.quantity+'</td><td>'+money(o.amount)+'</td><td>'+esc((o.created_at||'').slice(0,16))+'</td></tr>').join('') +
+    ? '<table><tr><th>Product</th><th>Qty</th><th>Amount</th><th>Date</th></tr>'+
+      sales.map(o=>'<tr><td>'+esc(o.product_name)+'</td><td>'+o.quantity+'</td><td>'+money(o.amount)+'</td><td>'+esc((o.created_at||'').slice(0,16))+'</td></tr>').join('')+
       '</table>'
     : '<p class="sub">No sales yet.</p>';
 
   const pr = await api({ resource: 'vendor', action: 'products' });
   const list = pr.data || [];
   document.getElementById('plist').innerHTML = list.length
-    ? '<table><tr><th>Name</th><th>Price</th><th>Stock</th><th></th></tr>' +
-      list.map(p=>'<tr><td>'+esc(p.name)+'</td><td>'+money(p.price)+'</td><td>'+p.stock_quantity+'</td><td><button type="button" class="ghost" data-edit=\''+encodeURIComponent(JSON.stringify(p))+'\'>Edit</button></td></tr>').join('') +
+    ? '<table><tr><th>Name</th><th>Price</th><th>Stock</th><th></th></tr>'+
+      list.map(p=>'<tr><td>'+esc(p.name)+'</td><td>'+money(p.price)+'</td><td>'+p.stock_quantity+'</td><td><button type="button" class="ghost" data-edit="'+encodeURIComponent(JSON.stringify(p))+'">Edit</button></td></tr>').join('')+
       '</table>'
     : '<p class="sub">No products yet. Add one below.</p>';
 
@@ -129,7 +183,55 @@ async function refresh() {
   });
 }
 
-function esc(s){ return String(s||'').replace(/[&<>"']/g,c=>({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c])); }
+async function enterPortal() {
+  const { data: { session } } = await sb.auth.getSession();
+  if (!session) { showAuth(); return; }
+  try {
+    await refresh();
+    const email = session.user && session.user.email;
+    document.getElementById('whoami').textContent = email ? ('Signed in as ' + email) : 'Signed in';
+    showApp();
+  } catch (e) {
+    const msg = (e && e.message) || 'Access denied';
+    // Not a sub-admin / admin
+    await sb.auth.signOut();
+    showAuth(msg + ' — Ask main admin to assign your account as sub-admin.');
+  }
+}
+
+document.getElementById('signinForm').onsubmit = async (e)=>{
+  e.preventDefault();
+  const btn = document.getElementById('authBtn');
+  const msg = document.getElementById('authMsg');
+  msg.style.display = 'none';
+  btn.disabled = true;
+  btn.textContent = 'Signing in…';
+  try {
+    const email = document.getElementById('authEmail').value.trim();
+    const password = document.getElementById('authPassword').value;
+    const { data, error } = await sb.auth.signInWithPassword({ email, password });
+    if (error) throw error;
+    if (!data.session) throw new Error('Sign in failed');
+    await enterPortal();
+  } catch (err) {
+    msg.style.display = 'block';
+    msg.className = 'err';
+    msg.textContent = err.message || 'Sign in failed';
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Sign in';
+  }
+};
+
+document.getElementById('togglePw').onclick = ()=>{
+  const i = document.getElementById('authPassword');
+  i.type = i.type === 'password' ? 'text' : 'password';
+};
+
+document.getElementById('signOutBtn').onclick = async ()=>{
+  await sb.auth.signOut();
+  showAuth();
+};
 
 document.getElementById('saveBtn').onclick = async ()=>{
   const msg = document.getElementById('msg');
@@ -152,7 +254,7 @@ document.getElementById('saveBtn').onclick = async ()=>{
     });
     msg.className = 'ok';
     msg.textContent = 'Saved';
-    document.getElementById('resetBtn').onclick();
+    document.getElementById('resetBtn').click();
     await refresh();
   } catch (e) {
     msg.className = 'err';
@@ -171,19 +273,9 @@ document.getElementById('resetBtn').onclick = ()=>{
 };
 
 (async function init(){
-  const gate = document.getElementById('gate');
-  try {
-    const { data: { session } } = await sb.auth.getSession();
-    if (!session) {
-      gate.innerHTML = '<p class="err">Please <a href="auth.html">sign in</a> with a sub-admin account.</p>';
-      return;
-    }
-    await refresh();
-    gate.style.display = 'none';
-    document.getElementById('app').style.display = 'block';
-  } catch (e) {
-    gate.innerHTML = '<p class="err">'+esc(e.message)+'</p><p class="sub">Main admin must assign you as sub-admin first.</p>';
-  }
+  const { data: { session } } = await sb.auth.getSession();
+  if (session) await enterPortal();
+  else showAuth();
 })();
 </script>
 </body>
