@@ -13,6 +13,14 @@
     {
       "source": "/api/pocketfi-webhook",
       "destination": "/api/pocketfi"
+    },
+    {
+      "source": "/api/products",
+      "destination": "/api/order?action=sync"
+    },
+    {
+      "source": "/api/products/",
+      "destination": "/api/order?action=sync"
     }
   ],
   "redirects": [
@@ -39,7 +47,7 @@
   ],
   "crons": [
     {
-      "path": "/api/products",
+      "path": "/api/order?action=sync",
       "schedule": "0 6 * * *"
     },
     {
@@ -67,6 +75,9 @@
       "maxDuration": 300
     },
     "api/owlet.js": {
+      "maxDuration": 300
+    },
+    "api/order.js": {
       "maxDuration": 300
     }
   },

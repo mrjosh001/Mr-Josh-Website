@@ -2766,7 +2766,7 @@ async function syncProductsNow() {
   const idle = '<i class="fas fa-sync"></i> Sync Fadded';
   setSyncButtonLoading(btn, true, idle);
   try {
-    const res = await fetch('/api/products');
+    const res = await fetch('/api/order?action=sync');
     const data = await res.json();
     alert(data.success ? `Fadded sync complete\nSynced: ${data.synced}\nNew: ${data.new_products}\nUpdated: ${data.updated_products}` : ('Sync failed: ' + (data.message || 'Unknown error')));
     await loadProducts();
@@ -2831,7 +2831,7 @@ async function syncAllSuppliersNow() {
   setSyncButtonLoading(sBtn, true, '<i class="fas fa-sync"></i> Sync Sujan Dept.');
   try {
     const [fRes, lRes, sRes] = await Promise.all([
-      fetch('/api/products'),
+      fetch('/api/order?action=sync'),
       fetch('/api/products-logsdomain'),
       fetch('/api/sujan')
     ]);
