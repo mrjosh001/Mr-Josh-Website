@@ -99,6 +99,22 @@ a.link{color:var(--primary);text-decoration:none;font-size:13px}
       </div>
       <p id="msg"></p>
     </div>
+    
+    <div class="card">
+      <h3 style="margin:0 0 8px">Upload credentials (inventory)</h3>
+      <p class="sub">Paste <strong>one account per line</strong>. When a customer buys quantity 3, they get 3 different lines. Each line is marked sold and cannot be resold.</p>
+      <label>Product</label>
+      <select id="invProduct"><option value="">Select your product…</option></select>
+      <p class="sub" id="invStockInfo" style="margin-top:6px"></p>
+      <label>Credentials (one per line)</label>
+      <textarea id="invText" rows="8" placeholder="user1:pass1:token1&#10;user2:pass2:token2&#10;user3:pass3:token3"></textarea>
+      <div class="row">
+        <button type="button" id="invUploadBtn">Upload to stock</button>
+        <button type="button" class="ghost" id="invRefreshBtn">Refresh stock</button>
+      </div>
+      <p id="invMsg"></p>
+    </div>
+
     <div class="card">
       <h3 style="margin:0 0 8px">Recent sales</h3>
       <div id="sales"></div>
@@ -149,6 +165,34 @@ async function api(body) {
 }
 
 
+
+async function fillInvProductSelect(list) {
+  const sel = document.getElementById('invProduct');
+  if (!sel) return;
+  const cur = sel.value;
+  sel.innerHTML = '<option value="">Select your product…</option>' +
+    (list || []).map(p => '<option value="'+esc(p.product_key)+'">'+esc(p.name)+' ('+esc(p.product_key)+')</option>').join('');
+  if (cur) sel.value = cur;
+}
+
+async function refreshInvStock() {
+  const key = document.getElementById('invProduct')?.value;
+  const info = document.getElementById('invStockInfo');
+  if (!key) { if (info) info.textContent = ''; return; }
+  try {
+    const res = await api({
+      resource: 'vendor',
+      action: 'inventory',
+      inventory_action: 'stock_count',
+      product_key: key
+    });
+    const d = res.data || {};
+    if (info) info.textContent = 'Available: ' + (d.available||0) + ' · Already sold: ' + (d.sold||0);
+  } catch (e) {
+    if (info) info.textContent = e.message || 'Could not load stock';
+  }
+}
+
 async function loadCategories() {
   const sel = document.getElementById('pcat');
   if (!sel) return;
@@ -182,6 +226,7 @@ async function refresh() {
 
   const pr = await api({ resource: 'vendor', action: 'products' });
   const list = pr.data || [];
+  await fillInvProductSelect(list);
   document.getElementById('plist').innerHTML = list.length
     ? '<table><tr><th>Name</th><th>Price</th><th>Stock</th><th></th></tr>'+
       list.map(p=>'<tr><td>'+esc(p.name)+'</td><td>'+money(p.price)+'</td><td>'+p.stock_quantity+'</td><td><button type="button" class="ghost" data-edit="'+encodeURIComponent(JSON.stringify(p))+'">Edit</button></td></tr>').join('')+
@@ -302,6 +347,37 @@ document.getElementById('resetBtn').onclick = ()=>{
   document.getElementById('pdesc').value = '';
   document.getElementById('msg').textContent = '';
 };
+
+
+document.getElementById('invProduct')?.addEventListener('change', refreshInvStock);
+document.getElementById('invRefreshBtn')?.addEventListener('click', refreshInvStock);
+document.getElementById('invUploadBtn')?.addEventListener('click', async ()=>{
+  const msg = document.getElementById('invMsg');
+  const key = document.getElementById('invProduct')?.value;
+  const text = document.getElementById('invText')?.value || '';
+  msg.className = '';
+  msg.textContent = 'Uploading…';
+  try {
+    if (!key) throw new Error('Select a product first');
+    if (!text.trim()) throw new Error('Paste credential lines');
+    const res = await api({
+      resource: 'vendor',
+      action: 'inventory',
+      inventory_action: 'bulk_upload',
+      product_key: key,
+      text
+    });
+    const d = res.data || {};
+    msg.className = 'ok';
+    msg.textContent = 'Added ' + (d.inserted||0) + ' new line(s). Skipped duplicates: ' + (d.skipped_duplicates||0) + '. Available now: ' + (d.available_stock||0);
+    document.getElementById('invText').value = '';
+    await refreshInvStock();
+    await refresh();
+  } catch (e) {
+    msg.className = 'err';
+    msg.textContent = e.message || 'Upload failed';
+  }
+});
 
 (async function init(){
   const { data: { session } } = await sb.auth.getSession();
