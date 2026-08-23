@@ -707,6 +707,7 @@
                 <button class="btn btn-ghost btn-sm" id="btnSyncFadded" onclick="syncProductsNow()"><i class="fas fa-sync"></i> Sync Fadded</button>
                 <button class="btn btn-ghost btn-sm" id="btnSyncLogsDomain" onclick="syncLogsDomainNow()"><i class="fas fa-sync"></i> Sync Logs Domain</button>
                 <button class="btn btn-ghost btn-sm" id="btnSyncSujan" onclick="syncSujanNow()"><i class="fas fa-sync"></i> Sync Sujan Dept.</button>
+                <button class="btn btn-ghost btn-sm" id="btnSyncClassy" onclick="syncClassyNow()"><i class="fas fa-sync"></i> Sync ClassyTee</button>
                 <button class="btn btn-primary btn-sm" id="btnSyncAll" onclick="syncAllSuppliersNow()"><i class="fas fa-sync"></i> Sync All</button>
                 <button class="btn btn-ghost btn-sm" onclick="openRestockModal()"><i class="fas fa-upload"></i> Restock Manual</button>
                 <button class="btn btn-primary btn-sm" onclick="openProductModal()"><i class="fas fa-plus"></i> Add</button>
@@ -1554,14 +1555,20 @@ async function loadSupplierBalances() {
 }
 
 async function loadProducts() {
-  const { data, error } = await sb.from('products').select('*').order('name');
-  allProducts = error ? [] : (data || []);
-  if (error) console.error('Products error:', error.message);
-  populateCategoryFilter();
-  // Reapply whatever category/search filter the admin currently has
-  // selected, instead of always snapping back to "All Categories" — that
-  // was the cause of the product list appearing to "scatter" after an edit.
-  filterProducts();
+  try {
+    const { data, error } = await sb.from('products').select('*').order('name');
+    allProducts = error ? [] : (data || []);
+    if (error) console.error('Products error:', error.message);
+  } catch (e) {
+    console.error('Products load failed', e);
+    allProducts = allProducts || [];
+  }
+  try {
+    populateCategoryFilter();
+    filterProducts();
+  } catch (e2) {
+    console.warn('filterProducts after load', e2);
+  }
 }
 
 function populateCategoryFilter() {
@@ -2766,12 +2773,25 @@ async function syncProductsNow() {
   const idle = '<i class="fas fa-sync"></i> Sync Fadded';
   setSyncButtonLoading(btn, true, idle);
   try {
-    const res = await fetch('/api/order?action=sync');
-    const data = await res.json();
-    alert(data.success ? `Fadded sync complete\nSynced: ${data.synced}\nNew: ${data.new_products}\nUpdated: ${data.updated_products}` : ('Sync failed: ' + (data.message || 'Unknown error')));
-    await loadProducts();
+    // No Authorization header — sync is public to cron/admin (server uses service role).
+    // Avoid attaching a Safari-corrupted JWT (throws "string did not match the expected pattern").
+    const res = await fetch('/api/order?action=sync', { method: 'GET', headers: { 'Accept': 'application/json' } });
+    const raw = await res.text();
+    let data = {};
+    try { data = raw ? JSON.parse(raw) : {}; } catch (_) {
+      alert('Sync failed: server returned non-JSON (HTTP ' + res.status + ').\n' + String(raw).slice(0, 180));
+      return;
+    }
+    if (!data.success) {
+      alert('Sync failed: ' + (data.message || ('HTTP ' + res.status)));
+      return;
+    }
+    alert('Fadded sync complete\nSynced: ' + (data.synced ?? '—') + '\nNew: ' + (data.new_products ?? 0) + '\nUpdated: ' + (data.updated_products ?? 0));
+    try { await loadProducts(); } catch (reloadErr) {
+      console.warn('Reload products after sync failed', reloadErr);
+    }
   } catch (e) {
-    alert('Sync failed: ' + e.message);
+    alert('Sync failed: ' + (e && e.message ? e.message : e));
   } finally {
     setSyncButtonLoading(btn, false, idle);
   }
@@ -2782,7 +2802,7 @@ async function syncLogsDomainNow() {
   const idle = '<i class="fas fa-sync"></i> Sync Logs Domain';
   setSyncButtonLoading(btn, true, idle);
   try {
-    const res = await fetch('/api/products-logsdomain');
+    const res = await fetch('/api/order-logsdomain?action=sync');
     const data = await res.json();
     alert(
       data.success
@@ -2819,6 +2839,21 @@ async function syncSujanNow() {
   }
 }
 
+async function syncClassyNow() {
+  const btn = document.getElementById('btnSyncClassy');
+  const idle = '<i class="fas fa-sync"></i> Sync ClassyTee';
+  if (typeof setSyncButtonLoading === 'function') setSyncButtonLoading(btn, true, idle);
+  try {
+    const res = await fetch('/api/classy');
+    const data = await res.json();
+    alert(data.success ? `ClassyTee sync complete\nSynced: ${data.synced}\nNew: ${data.new_products}\nUpdated: ${data.updated_products}` : ('ClassyTee sync failed: ' + (data.message || res.status)));
+  } catch (e) {
+    alert('ClassyTee sync error: ' + (e.message || e));
+  } finally {
+    if (typeof setSyncButtonLoading === 'function') setSyncButtonLoading(btn, false, idle);
+  }
+}
+
 async function syncAllSuppliersNow() {
   const btn = document.getElementById('btnSyncAll');
   const idle = '<i class="fas fa-sync"></i> Sync All';
@@ -2832,7 +2867,7 @@ async function syncAllSuppliersNow() {
   try {
     const [fRes, lRes, sRes] = await Promise.all([
       fetch('/api/order?action=sync'),
-      fetch('/api/products-logsdomain'),
+      fetch('/api/order-logsdomain?action=sync'),
       fetch('/api/sujan')
     ]);
     const fadded = await fRes.json();
