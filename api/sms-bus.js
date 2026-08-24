@@ -78,6 +78,76 @@ function busOk(data) {
 }
 
 
+/**
+ * Claim order for refund once, then credit wallet (idempotent).
+ * Prevents double-credit when Cancel + auto-expiry race.
+ */
+async function claimAndRefundSmsBusOrder(order, userId, opts = {}) {
+  if (!order || !order.id) return { refunded: false, reason: 'missing_order' };
+  if (order.refunded || order.status === 'refunded' || order.status === 'completed') {
+    return { refunded: false, reason: 'already_final' };
+  }
+
+  const subtitle = opts.subtitle || 'No SMS — balance restored';
+  const { data: claimed, error: claimErr } = await supabase
+    .from('number_orders')
+    .update({
+      status: 'refunded',
+      refunded: true,
+      updated_at: new Date().toISOString()
+    })
+    .eq('id', order.id)
+    .or('refunded.eq.false,refunded.is.null')
+    .neq('status', 'completed')
+    .select('id, price')
+    .maybeSingle();
+
+  if (claimErr) {
+    console.error('[smsbus claimAndRefund]', claimErr.message);
+    return { refunded: false, reason: 'claim_error', error: claimErr.message };
+  }
+  if (!claimed) return { refunded: false, reason: 'already_final' };
+
+  const refundAmount = Number(order.price != null ? order.price : claimed.price) || 0;
+  let newBalance = null;
+  if (refundAmount > 0) {
+    const { data: profile } = await supabase.from('profiles').select('balance, customer_id').eq('id', userId).single();
+    if (profile) {
+      newBalance = Number(profile.balance || 0) + refundAmount;
+      await supabase.from('profiles').update({ balance: newBalance }).eq('id', userId);
+      try {
+        await supabase.from('transactions').insert({
+          user_id: userId,
+          customer_id: profile.customer_id || order.customer_id,
+          type: 'refund',
+          category: 'MJ SMS',
+          title: 'SMS cancel refund',
+          subtitle: subtitle,
+          amount: `₦${refundAmount.toLocaleString()}`,
+          amount_ngn: refundAmount,
+          status: 'refunded'
+        });
+      } catch (_) {}
+    }
+  }
+  return { refunded: true, amount: refundAmount, new_balance: newBalance };
+}
+
+function parseSupplierBalance(data) {
+  if (data == null) return null;
+  if (typeof data === 'number') return data;
+  if (typeof data === 'string' && /^-?\d+(\.\d+)?$/.test(data.trim())) return Number(data);
+  if (typeof data === 'object') {
+    const v = data.balance ?? data.amount ?? data.credit ?? data.funds ?? data.money;
+    if (v != null) return Number(v);
+  }
+  return null;
+}
+
+const SMSBUS_CANCEL_COOLDOWN_MS = 5 * 60 * 1000;
+const SMSBUS_EXPIRY_MS = 20 * 60 * 1000;
+
+
 /** Persist Server 2 catalog. Never overwrites admin selling price or forced hide. */
 async function syncSmsBusCatalog() {
   const usdToNgn = Number(process.env.USD_TO_NGN) || 1500;
@@ -407,6 +477,21 @@ export default async function handler(req, res) {
         });
       }
 
+      // Block purchase when supplier wallet cannot cover cost
+      try {
+        const { data: sBal } = await smsbusGet(OTP_BASE, '/get/balance');
+        if (busOk(sBal)) {
+          const supplierUsd = parseSupplierBalance(sBal.data);
+          if (supplierUsd != null && costUsd > 0 && supplierUsd < costUsd) {
+            return json(res, 503, {
+              success: false,
+              code: 'SUPPLIER_BALANCE_LOW',
+              message: 'This SMS server is temporarily unavailable (supplier funds). Try Server 1 or another service.'
+            });
+          }
+        }
+      } catch (_) {}
+
       const originalBalance = bal;
       const newBalance = bal - price;
       await supabase.from('profiles').update({ balance: newBalance }).eq('id', auth.userId);
@@ -427,9 +512,18 @@ export default async function handler(req, res) {
 
       if (!busOk(bus.data) || !bus.data?.data?.request_id) {
         await supabase.from('profiles').update({ balance: originalBalance }).eq('id', auth.userId);
+        const code = bus.data?.code;
+        const msg = String(bus.data?.message || '');
+        if (code === 50201 || /balance not enough/i.test(msg)) {
+          return json(res, 503, {
+            success: false,
+            code: 'SUPPLIER_BALANCE_LOW',
+            message: 'This SMS server is temporarily unavailable (supplier funds). Try Server 1 or another service.'
+          });
+        }
         return json(res, 400, {
           success: false,
-          message: 'No number available right now. Try another service or country.'
+          message: msg || 'No number available right now. Try another service or country.'
         });
       }
 
@@ -522,11 +616,66 @@ export default async function handler(req, res) {
       }
       const msg = data.message || '';
       if (/released|timeout|50102/i.test(msg) || data.code === 50102) {
+        // Supplier released — refund once if still open
+        const refundResult = await claimAndRefundSmsBusOrder(order, auth.userId, {
+          subtitle: 'Expired — no SMS, balance restored'
+        });
+        if (refundResult.refunded) {
+          return json(res, 200, {
+            success: true,
+            data: {
+              status: 'refunded',
+              code: null,
+              message: 'Time expired — balance restored',
+              refunded: true,
+              new_balance: refundResult.new_balance
+            }
+          });
+        }
         return json(res, 200, { success: true, data: { status: 'expired', code: null, message: msg } });
       }
+
+      // Local 20-minute expiry (matches Server 1 UX)
+      if (order.created_at) {
+        const age = Date.now() - new Date(order.created_at).getTime();
+        if (age >= SMSBUS_EXPIRY_MS) {
+          try {
+            await smsbusGet(OTP_BASE, '/cancel', { request_id: order_id });
+          } catch (_) {}
+          const refundResult = await claimAndRefundSmsBusOrder(order, auth.userId, {
+            subtitle: 'Expired — no SMS, balance restored'
+          });
+          if (refundResult.refunded) {
+            return json(res, 200, {
+              success: true,
+              data: {
+                status: 'refunded',
+                code: null,
+                message: 'Time expired — balance restored',
+                refunded: true,
+                new_balance: refundResult.new_balance
+              }
+            });
+          }
+        }
+      }
+
       return json(res, 200, {
         success: true,
-        data: { status: 'waiting_for_code', code: null, message: msg || 'Not received yet' }
+        data: {
+          status: 'waiting_for_code',
+          code: null,
+          message: msg || 'Not received yet',
+          number: order.phone_number,
+          phone_number: order.phone_number,
+          service_name: order.service_name,
+          country_name: order.country_name,
+          price: order.price,
+          created_at: order.created_at,
+          time_left: order.created_at
+            ? Math.max(0, Math.floor((SMSBUS_EXPIRY_MS - (Date.now() - new Date(order.created_at).getTime())) / 1000))
+            : null
+        }
       });
     }
 
@@ -545,39 +694,83 @@ export default async function handler(req, res) {
         .eq('source', 'smsbus')
         .maybeSingle();
       if (!order) return json(res, 404, { success: false, message: 'Order not found' });
-      if (order.status === 'completed') {
-        return json(res, 400, { success: false, message: 'Already completed — cannot cancel' });
+      if (order.status === 'completed' && order.code) {
+        return json(res, 400, {
+          success: false,
+          code: 'CODE_ALREADY_RECEIVED',
+          message: 'A code was already received — this order cannot be cancelled.'
+        });
       }
       if (order.refunded || order.status === 'refunded') {
-        return json(res, 200, { success: true, message: 'Already refunded' });
+        return json(res, 200, { success: true, message: 'Already refunded', refunded: 0 });
       }
 
-      await smsbusGet(OTP_BASE, '/cancel', { request_id: order_id });
+      // Match Server 1: 5-minute cancel cooldown
+      if (order.created_at) {
+        const age = Date.now() - new Date(order.created_at).getTime();
+        if (age < SMSBUS_CANCEL_COOLDOWN_MS) {
+          const waitSec = Math.ceil((SMSBUS_CANCEL_COOLDOWN_MS - age) / 1000);
+          return json(res, 400, {
+            success: false,
+            code: 'EARLY_CANCEL_DENIED',
+            wait_seconds: waitSec,
+            message: `Cancel available in ${waitSec}s. Please wait a moment.`
+          });
+        }
+      }
 
-      const refund = Number(order.price) || 0;
-      const { data: profile } = await supabase.from('profiles').select('balance').eq('id', auth.userId).single();
-      const bal = Number(profile?.balance) || 0;
-      await supabase.from('profiles').update({ balance: bal + refund }).eq('id', auth.userId);
-      await supabase
-        .from('number_orders')
-        .update({ status: 'refunded', refunded: true })
-        .eq('id', order.id);
-
+      // Ask supplier first
+      let cancelOk = false;
+      let cancelMsg = '';
       try {
-        await supabase.from('transactions').insert({
-          user_id: auth.userId,
-          customer_id: order.customer_id,
-          type: 'refund',
-          category: 'MJ SMS',
-          title: 'SMS cancel refund',
-          subtitle: order.phone_number || order_id,
-          amount: `₦${refund.toLocaleString()}`,
-          amount_ngn: refund,
-          status: 'refunded'
-        });
-      } catch (_) {}
+        const cancelRes = await smsbusGet(OTP_BASE, '/cancel', { request_id: order_id });
+        cancelOk = busOk(cancelRes.data);
+        cancelMsg = String(cancelRes.data?.message || cancelRes.data?.code || '');
+        const code = cancelRes.data?.code;
+        // Already closed / released — safe to refund if we never completed
+        if (!cancelOk && (code === 50103 || /already closed|closed|timeout|released/i.test(cancelMsg))) {
+          cancelOk = true;
+          cancelMsg = cancelMsg || 'request closed';
+        }
+      } catch (e) {
+        cancelMsg = e.message || 'supplier error';
+      }
 
-      return json(res, 200, { success: true, message: 'Cancelled and refunded', refunded: refund });
+      if (!cancelOk) {
+        // Last look: if SMS arrived, never refund
+        try {
+          const smsRes = await smsbusGet(OTP_BASE, '/get/sms', { request_id: order_id });
+          if (busOk(smsRes.data) && smsRes.data.data) {
+            const code = String(smsRes.data.data);
+            await supabase.from('number_orders').update({ status: 'completed', code }).eq('id', order.id);
+            return json(res, 400, {
+              success: false,
+              code: 'CODE_ALREADY_RECEIVED',
+              message: 'A code was received — cancel is not available.'
+            });
+          }
+        } catch (_) {}
+        return json(res, 400, {
+          success: false,
+          message: cancelMsg || 'Could not cancel at supplier. Try again or wait for expiry.'
+        });
+      }
+
+      const refundResult = await claimAndRefundSmsBusOrder(order, auth.userId, {
+        subtitle: 'Cancelled — balance restored'
+      });
+      if (!refundResult.refunded && refundResult.reason === 'already_final') {
+        return json(res, 200, { success: true, message: 'Already refunded', refunded: 0 });
+      }
+      if (!refundResult.refunded) {
+        return json(res, 500, { success: false, message: 'Cancel recorded but refund failed — contact support.' });
+      }
+      return json(res, 200, {
+        success: true,
+        message: 'Cancelled and refunded',
+        refunded: refundResult.amount,
+        new_balance: refundResult.new_balance
+      });
     }
 
     if (method === 'POST' && action === 'reuse') {

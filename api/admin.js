@@ -1115,6 +1115,27 @@ async function getFaddedBalance() {
   );
 }
 
+
+async function getSmsBusBalance() {
+  const apiKey = process.env.SMSBUS_API_TOKEN || process.env.SMS_BUS_TOKEN;
+  if (!apiKey) return { ok: false, error: 'Missing SMSBUS_API_TOKEN' };
+  const url = `https://sms-bus.com/api/control/get/balance?token=${encodeURIComponent(apiKey)}`;
+  try {
+    const r = await fetch(url, { headers: { Accept: 'application/json' } });
+    const raw = await r.text();
+    let data = {};
+    try { data = JSON.parse(raw); } catch (_) {}
+    if (!(data.code === 200 || data.code === '200')) {
+      return { ok: false, error: data.message || 'SMS-Bus balance error', raw: safeSlice(raw, 200) };
+    }
+    let bal = data.data;
+    if (bal && typeof bal === 'object') bal = bal.balance ?? bal.amount ?? bal.credit ?? bal;
+    return { ok: true, balance: bal, currency: 'USD', raw: safeSlice(raw, 120) };
+  } catch (e) {
+    return { ok: false, error: e.message || 'SMS-Bus fetch failed' };
+  }
+}
+
 async function getLogsDomainBalance() {
   const apiKey = process.env.LOGSDOMAIN_API_KEY;
   if (!apiKey) return { ok: false, error: 'Missing LOGSDOMAIN_API_KEY' };
@@ -1207,17 +1228,18 @@ async function getClassyBalance() {
 }
 
 async function supplierBalancesFetch() {
-  const [fadded, logsdomain, grizzly, sujan, owlet, classy] = await Promise.all([
+  const [fadded, logsdomain, grizzly, sujan, owlet, classy, smsbus] = await Promise.all([
     getFaddedBalance(),
     getLogsDomainBalance(),
     getGrizzlyBalance(),
     getSujanBalance(),
     fetchOwletBalance(),
-    getClassyBalance()
+    getClassyBalance(),
+    getSmsBusBalance()
   ]);
   return {
     status: 200,
-    body: { success: true, suppliers: { fadded, logsdomain, grizzly, sujan, owlet, classy }, fetched_at: new Date().toISOString() }
+    body: { success: true, suppliers: { fadded, logsdomain, grizzly, sujan, owlet, classy, smsbus }, fetched_at: new Date().toISOString() }
   };
 }
 
