@@ -1033,6 +1033,60 @@ async function inventoryHandle(body) {
   return { status: 400, body: { success: false, message: 'Unknown action. Use "bulk_upload", "stock_count", "set_shared", or "clear_shared".' } };
 }
 
+
+async function listProfilesHandle() {
+  // Service role — bypasses RLS so admin always sees every customer + live balances
+  let { data, error } = await supabase
+    .from('profiles')
+    .select('id, full_name, email, phone, phone_number, customer_id, is_admin, is_banned, balance, balance_usd, updated_at, avatar_url, username')
+    .order('full_name', { ascending: true })
+    .limit(5000);
+  if (error && /column|schema cache|Could not find/i.test(error.message || '')) {
+    ({ data, error } = await supabase.from('profiles').select('*').order('full_name', { ascending: true }).limit(5000));
+  }
+  if (error) {
+    return { status: 500, body: { success: false, message: 'Could not load profiles: ' + error.message } };
+  }
+  return { status: 200, body: { success: true, data: data || [] } };
+}
+
+async function listOrdersHandle() {
+  let { data, error } = await supabase
+    .from('orders')
+    .select('*')
+    .order('created_at', { ascending: false })
+    .limit(500);
+  if (error) {
+    return { status: 500, body: { success: false, message: 'Could not load orders: ' + error.message } };
+  }
+  return { status: 200, body: { success: true, data: data || [] } };
+}
+
+async function listSmsOrdersHandle() {
+  let { data, error } = await supabase
+    .from('number_orders')
+    .select('*')
+    .order('created_at', { ascending: false })
+    .limit(500);
+  if (error) {
+    return { status: 500, body: { success: false, message: 'Could not load SMS orders: ' + error.message } };
+  }
+  return { status: 200, body: { success: true, data: data || [] } };
+}
+
+async function listBoosterOrdersHandle() {
+  let { data, error } = await supabase
+    .from('booster_orders')
+    .select('*')
+    .order('created_at', { ascending: false })
+    .limit(500);
+  if (error) {
+    return { status: 500, body: { success: false, message: 'Could not load booster orders: ' + error.message } };
+  }
+  return { status: 200, body: { success: true, data: data || [] } };
+}
+
+
 // ---------- resource: supplier_balances ----------
 // Fetches your account balance from each supplier so you can see who needs
 // a top-up without logging into each one separately. Folded into this file
@@ -1528,6 +1582,14 @@ export default async function handler(req, res) {
       if (action === 'update') result = await smsUpdate(body);
       else if (action === 'bulk_reprice') result = await smsBulkReprice(body);
       else result = { status: 400, body: { success: false, message: 'Unknown sms action. Use "update" or "bulk_reprice".' } };
+    } else if (resource === 'profiles' && (action === 'list' || !action)) {
+      result = await listProfilesHandle();
+    } else if (resource === 'orders' && (action === 'list' || !action)) {
+      result = await listOrdersHandle();
+    } else if (resource === 'sms_orders' && (action === 'list' || !action)) {
+      result = await listSmsOrdersHandle();
+    } else if (resource === 'booster_orders' && (action === 'list' || !action)) {
+      result = await listBoosterOrdersHandle();
     } else if (resource === 'supplier_balances') {
       result = await supplierBalancesFetch();
     } else if (resource === 'overview') {
@@ -1537,7 +1599,7 @@ export default async function handler(req, res) {
     } else if (resource === 'secrets_status') {
       result = secretsStatusHandle();
     } else {
-      result = { status: 400, body: { success: false, message: 'Unknown resource. Use "user", "product", "inventory", "sms", "supplier_balances", "overview", "user_join_dates", "secrets_status", "sub_admin", or "vendor".' } };
+      result = { status: 400, body: { success: false, message: 'Unknown resource. Use "user", "product", "inventory", "sms", "profiles", "orders", "sms_orders", "booster_orders", "supplier_balances", "overview", "user_join_dates", "secrets_status", "sub_admin", or "vendor".' } };
     }
 
     return res.status(result.status).json(result.body);
