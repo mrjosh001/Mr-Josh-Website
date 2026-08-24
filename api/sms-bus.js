@@ -77,6 +77,140 @@ function busOk(data) {
   return data && (data.code === 200 || data.code === '200');
 }
 
+
+/** Persist Server 2 catalog. Never overwrites admin selling price or forced hide. */
+async function syncSmsBusCatalog() {
+  const usdToNgn = Number(process.env.USD_TO_NGN) || 1500;
+  const [countriesRes, projectsRes] = await Promise.all([
+    smsbusGet(OTP_BASE, '/list/countries'),
+    smsbusGet(OTP_BASE, '/list/projects')
+  ]);
+  if (!busOk(countriesRes.data)) {
+    throw new Error(countriesRes.data?.message || 'Could not load countries');
+  }
+  if (!busOk(projectsRes.data)) {
+    throw new Error(projectsRes.data?.message || 'Could not load projects');
+  }
+
+  const countries = Object.values(countriesRes.data.data || {}).map((c) => ({
+    id: String(c.id),
+    name: c.title || c.name || String(c.id)
+  }));
+  const nameById = {};
+  Object.values(projectsRes.data.data || {}).forEach((pr) => {
+    nameById[String(pr.id)] = pr.title || pr.name || String(pr.id);
+  });
+
+  let newCount = 0;
+  let updatedCount = 0;
+  let errors = 0;
+
+  // Concurrency-limited country price pulls
+  const queue = 4;
+  for (let i = 0; i < countries.length; i += queue) {
+    const slice = countries.slice(i, i + queue);
+    await Promise.all(
+      slice.map(async (country) => {
+        try {
+          const { data: priceData } = await smsbusGet(OTP_BASE, '/list/prices', {
+            country_id: country.id
+          });
+          if (!busOk(priceData)) return;
+
+          const entries = Object.values(priceData.data || {});
+          if (!entries.length) return;
+
+          const { data: existingRows } = await supabase
+            .from('number_services')
+            .select('id, service_id, price, is_available, price_source')
+            .eq('source', 'smsbus')
+            .eq('country_id', country.id);
+
+          const existingMap = new Map(
+            (existingRows || []).map((r) => [String(r.service_id), r])
+          );
+          const now = new Date().toISOString();
+          const toInsert = [];
+          const toUpdate = [];
+
+          for (const row of entries) {
+            const sid = String(row.project_id);
+            if (!sid || sid === 'undefined') continue;
+            const costUsd = Number(row.cost || row.price || 0);
+            const stock = Number(row.total_count || row.count || 0);
+            const serviceName =
+              nameById[sid] ||
+              (row.title && !/united|russia|state|country/i.test(String(row.title))
+                ? row.title
+                : '') ||
+              `Service ${sid}`;
+            const prev = existingMap.get(sid);
+
+            if (prev) {
+              // NEVER touch price (admin selling price). Preserve is_available when admin hid.
+              const fields = {
+                country_name: country.name,
+                service_name: serviceName,
+                supplier_price: costUsd,
+                available_quantity: stock,
+                updated_at: now
+              };
+              if (prev.is_available === false) {
+                // keep hidden
+                fields.is_available = false;
+              } else {
+                fields.is_available = stock > 0;
+              }
+              toUpdate.push({ id: prev.id, ...fields });
+            } else {
+              toInsert.push({
+                source: 'smsbus',
+                country_id: country.id,
+                country_name: country.name,
+                service_id: sid,
+                service_name: serviceName,
+                supplier_price: costUsd,
+                price: applyMarkup(costUsd || 0.01, usdToNgn),
+                price_source: 'system',
+                currency: 'NGN',
+                available_quantity: stock,
+                is_available: stock > 0,
+                updated_at: now
+              });
+            }
+          }
+
+          for (const u of toUpdate) {
+            const { id, ...fields } = u;
+            const { error } = await supabase.from('number_services').update(fields).eq('id', id);
+            if (error) errors += 1;
+            else updatedCount += 1;
+          }
+          if (toInsert.length) {
+            const { error } = await supabase.from('number_services').insert(toInsert);
+            if (error) {
+              // fallback one-by-one
+              for (const row of toInsert) {
+                const { error: e2 } = await supabase.from('number_services').insert(row);
+                if (e2) errors += 1;
+                else newCount += 1;
+              }
+            } else {
+              newCount += toInsert.length;
+            }
+          }
+        } catch (e) {
+          console.error('[smsbus catalog]', country.id, e.message);
+          errors += 1;
+        }
+      })
+    );
+  }
+
+  return { newCount, updatedCount, errors, countries: countries.length };
+}
+
+
 export default async function handler(req, res) {
   try {
     const url = new URL(req.url, 'http://localhost');
@@ -149,7 +283,7 @@ export default async function handler(req, res) {
         });
       }
 
-      const list = Object.values(priceRes.data.data || {})
+      const live = Object.values(priceRes.data.data || {})
         .map((row) => {
           const pid = String(row.project_id);
           const costUsd = Number(row.cost || row.price || 0);
@@ -170,7 +304,29 @@ export default async function handler(req, res) {
             price_ngn: priceNgn
           };
         })
-        .filter((r) => r.project_id != null)
+        .filter((r) => r.project_id != null);
+
+      // Overlay admin prices / hide flags from DB
+      try {
+        const { data: dbRows } = await supabase
+          .from('number_services')
+          .select('service_id, price, is_available')
+          .eq('source', 'smsbus')
+          .eq('country_id', String(country_id));
+        const bySid = new Map((dbRows || []).map((r) => [String(r.service_id), r]));
+        for (const item of live) {
+          const db = bySid.get(String(item.project_id));
+          if (!db) continue;
+          if (db.is_available === false) item._hidden = true;
+          if (Number(db.price) > 0) {
+            item.price = Number(db.price);
+            item.price_ngn = Number(db.price);
+          }
+        }
+      } catch (_) {}
+
+      const list = live
+        .filter((r) => !r._hidden)
         .sort((a, b) => String(a.title).localeCompare(String(b.title)));
 
       return json(res, 200, { success: true, data: list });
@@ -228,7 +384,21 @@ export default async function handler(req, res) {
         }
       } catch (_) {}
 
-      const price = applyMarkup(costUsd || 0.5);
+      // Prefer admin-controlled selling price from DB (never reset by sync)
+      let price = applyMarkup(costUsd || 0.5);
+      try {
+        const { data: dbSvc } = await supabase
+          .from('number_services')
+          .select('price, is_available')
+          .eq('source', 'smsbus')
+          .eq('country_id', String(country_id))
+          .eq('service_id', String(project_id))
+          .maybeSingle();
+        if (dbSvc && dbSvc.is_available === false) {
+          return json(res, 400, { success: false, message: 'This service is not available' });
+        }
+        if (dbSvc && Number(dbSvc.price) > 0) price = Number(dbSvc.price);
+      } catch (_) {}
       const bal = Number(profile.balance) || 0;
       if (bal < price) {
         return json(res, 400, {
@@ -700,27 +870,34 @@ export default async function handler(req, res) {
           return json(res, 403, { success: false, message: 'Admin only' });
         }
       }
-      const [bal, countries, projects, areas] = await Promise.all([
+      const [bal, areas] = await Promise.all([
         smsbusGet(OTP_BASE, '/get/balance'),
-        smsbusGet(OTP_BASE, '/list/countries'),
-        smsbusGet(OTP_BASE, '/list/projects'),
         smsbusGet(RENT_BASE, '/v1/rent/list/area')
       ]);
-      const countryCount = busOk(countries.data) ? Object.keys(countries.data.data || {}).length : 0;
-      const projectCount = busOk(projects.data) ? Object.keys(projects.data.data || {}).length : 0;
       let areaCount = 0;
       if (busOk(areas.data)) {
         const d = areas.data.data;
         areaCount = Array.isArray(d) ? d.length : Object.keys(d || {}).length;
       }
+      let catalog = { newCount: 0, updatedCount: 0, errors: 0, countries: 0 };
+      try {
+        catalog = await syncSmsBusCatalog();
+      } catch (e) {
+        console.error('[smsbus] catalog sync failed', e);
+        return json(res, 500, { success: false, message: e.message || 'Catalog sync failed' });
+      }
       return json(res, 200, {
         success: true,
         data: {
           balance: busOk(bal.data) ? bal.data.data : null,
-          countries: countryCount,
-          projects: projectCount,
+          countries: catalog.countries,
+          projects: catalog.newCount + catalog.updatedCount,
+          new_products: catalog.newCount,
+          updated_products: catalog.updatedCount,
+          errors: catalog.errors,
           rent_areas: areaCount,
-          synced_at: new Date().toISOString()
+          synced_at: new Date().toISOString(),
+          saved_to_db: true
         }
       });
     }
