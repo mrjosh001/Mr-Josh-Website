@@ -3568,41 +3568,61 @@ function renderOrders(orders) {
 }
 
 function openOrderModal(index) {
- const o = (window._cachedOrderGroups || [])[index];
- if (!o) return;
- const body = document.getElementById('orderModalBody');
- const row = (label, value, mono) => `
+  const o = (window._cachedOrderGroups || [])[index];
+  if (!o) return;
+  const body = document.getElementById('orderModalBody');
+  const row = (label, value, mono) => `
  <div>
  <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);margin-bottom:4px;">${escapeHtml(label)}</div>
  <div style="font-size:14px;${mono ? 'font-family:monospace;white-space:pre-wrap;word-break:break-word;' : ''}background:#07090e;border:1px solid var(--border);border-radius:10px;padding:10px 12px;">${value ? escapeHtml(value) : '<span style=\'color:var(--muted)\'> </span>'}</div>
  </div>`;
 
- const qty = o.quantity || (o.items || []).length || 1;
- const items = o.items && o.items.length ? o.items : [o];
+  const qty = o.quantity || (o.items || []).length || 1;
+  const items = o.items && o.items.length ? o.items : [o];
 
- const credentialsBlock = row(
- `Logs: numbered, all ${items.length} purchased (customer view)`,
- items.map((it, idx) => `${idx + 1}.\n${it.login_credentials || it.login_credentials_raw || '(missing)'}`).join('\n\n'),
- true
- );
- const rawBlock = row(
- `Supplier raw: all ${items.length} (as received)`,
- items.map((it, idx) => `${idx + 1}.\n${it.login_credentials_raw || it.login_credentials || '(missing)'}`).join('\n\n'),
- true
- );
+  // Stored text often already has "1. Email:…". Don't add another "1." on top.
+  function formatLogBlock(text, idx, total) {
+    let s = String(text || '').trim() || '(missing)';
+    s = s.replace(/^\s*\d+\.\s*/m, '').trim(); // strip leading "1. "
+    if (total <= 1) return s;
+    return (idx + 1) + '.\n' + s;
+  }
 
- body.innerHTML = [
- row('Order ID', o.order_id || ''),
- row('Product', o.product_name || o.item || ''),
- row('Quantity', String(qty)),
- row('Amount', '₦' + Number(o.amount || 0).toLocaleString()),
- row('Status', o.status || ''),
- row('Date', o.created_at ? new Date(o.created_at).toLocaleString(undefined, { timeZone: 'Africa/Lagos' }) : ''),
- row('Description', o.description || ''),
- credentialsBlock,
- rawBlock
- ].join('');
- document.getElementById('orderModal').classList.remove('hidden');
+  const credentialsBlock = row(
+    items.length <= 1
+      ? 'Logs (customer view)'
+      : `Logs: numbered, all ${items.length} purchased (customer view)`,
+    items
+      .map((it, idx) =>
+        formatLogBlock(it.login_credentials || it.login_credentials_raw, idx, items.length)
+      )
+      .join('\n\n'),
+    true
+  );
+  const rawBlock = row(
+    items.length <= 1
+      ? 'Supplier raw (as received)'
+      : `Supplier raw: all ${items.length} (as received)`,
+    items
+      .map((it, idx) =>
+        formatLogBlock(it.login_credentials_raw || it.login_credentials, idx, items.length)
+      )
+      .join('\n\n'),
+    true
+  );
+
+  body.innerHTML = [
+    row('Order ID', o.order_id || ''),
+    row('Product', o.product_name || o.item || ''),
+    row('Quantity', String(qty)),
+    row('Amount', '₦' + Number(o.amount || 0).toLocaleString()),
+    row('Status', o.status || ''),
+    row('Date', o.created_at ? new Date(o.created_at).toLocaleString(undefined, { timeZone: 'Africa/Lagos' }) : ''),
+    row('Description', o.description || ''),
+    credentialsBlock,
+    rawBlock
+  ].join('');
+  document.getElementById('orderModal').classList.remove('hidden');
 }
 function closeOrderModal() { document.getElementById('orderModal').classList.add('hidden'); }
 
