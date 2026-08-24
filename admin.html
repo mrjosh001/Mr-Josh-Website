@@ -2128,13 +2128,12 @@ async function resumeGrizzlySyncIfRunning() {
 }
 
 async function loadProfiles() {
- // Prefer service-role API so RLS cannot hide other customers' balances
+ // Service-role API — RLS cannot hide other customers or live balances
  try {
   const headers = await authHeaders();
   headers['Content-Type'] = 'application/json';
   const res = await fetch('/api/admin', {
-    method: 'POST',
-    headers,
+    method: 'POST', headers,
     body: JSON.stringify({ resource: 'profiles', action: 'list' })
   });
   const json = await res.json().catch(() => ({}));
@@ -2145,11 +2144,8 @@ async function loadProfiles() {
     if (typeof updateMetrics === 'function') updateMetrics();
     return;
   }
-  console.warn('profiles API fallback:', json.message || res.status);
- } catch (e) {
-  console.warn('profiles API error', e);
- }
- // Fallback: direct Supabase (may be limited by RLS)
+  console.warn('profiles API:', json.message || res.status);
+ } catch (e) { console.warn('profiles API error', e); }
  let data = null, error = null;
  ({ data, error } = await sb.from('profiles').select(
  'id, full_name, email, phone, customer_id, is_admin, is_banned, balance, balance_usd, updated_at, avatar_url'
@@ -2160,7 +2156,7 @@ async function loadProfiles() {
  if (error) {
  console.error('Profiles error:', error.message);
  allProfiles = [];
- showAdminToast('Could not load customers: ' + error.message, 'error');
+ if (typeof showAdminToast === 'function') showAdminToast('Could not load customers: ' + error.message, 'error');
  } else {
  allProfiles = data || [];
  }
@@ -2196,8 +2192,7 @@ async function tryLoadOrders() {
   const headers = await authHeaders();
   headers['Content-Type'] = 'application/json';
   const res = await fetch('/api/admin', {
-    method: 'POST',
-    headers,
+    method: 'POST', headers,
     body: JSON.stringify({ resource: 'orders', action: 'list' })
   });
   const json = await res.json().catch(() => ({}));
@@ -2208,23 +2203,24 @@ async function tryLoadOrders() {
     if (json.data.length) {
       if (empty) empty.classList.add('hidden');
       if (wrap) wrap.classList.remove('hidden');
-      renderOrders(json.data);
+      if (typeof renderOrders === 'function') renderOrders(json.data);
     } else {
       if (empty) empty.classList.remove('hidden');
       if (wrap) wrap.classList.add('hidden');
     }
+    if (typeof updateMetrics === 'function') updateMetrics();
     return;
   }
   console.warn('orders API:', json.message || res.status);
- } catch (e) {
-  console.warn('orders API error', e);
- }
- const { data, error } = await sb.from('orders').select('*').order('created_at', { ascending: false }).limit(200);
+ } catch (e) { console.warn('orders API error', e); }
+ const { data, error } = await sb.from('orders').select('*').order('created_at', { ascending: false }).limit(500);
  if (!error && data) {
  window._cachedOrders = data;
- document.getElementById('ordersEmpty').classList.add('hidden');
- document.getElementById('ordersTableWrap').classList.remove('hidden');
- renderOrders(data);
+ const empty = document.getElementById('ordersEmpty');
+ const wrap = document.getElementById('ordersTableWrap');
+ if (empty) empty.classList.add('hidden');
+ if (wrap) wrap.classList.remove('hidden');
+ if (typeof renderOrders === 'function') renderOrders(data);
  } else {
  window._cachedOrders = [];
  if (error) console.error('Orders error:', error.message);
@@ -2239,13 +2235,11 @@ const SMS_ORDER_STATUS_LABELS = {
 };
 
 async function tryLoadSmsOrders() {
- // Service-role list so admin sees Grizzly + SMS-Bus for every customer
  try {
   const headers = await authHeaders();
   headers['Content-Type'] = 'application/json';
   const res = await fetch('/api/admin', {
-    method: 'POST',
-    headers,
+    method: 'POST', headers,
     body: JSON.stringify({ resource: 'sms_orders', action: 'list' })
   });
   const json = await res.json().catch(() => ({}));
@@ -2255,14 +2249,12 @@ async function tryLoadSmsOrders() {
     return;
   }
   console.warn('sms_orders API:', json.message || res.status);
- } catch (e) {
-  console.warn('sms_orders API error', e);
- }
+ } catch (e) { console.warn('sms_orders API error', e); }
  const { data, error } = await sb
  .from('number_orders')
  .select('*')
  .order('created_at', { ascending: false })
- .limit(300);
+ .limit(500);
  if (error) {
  console.error('SMS orders load error:', error.message);
  window._cachedSmsOrders = [];
