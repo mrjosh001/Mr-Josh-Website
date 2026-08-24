@@ -1,124 +1,311 @@
 <!DOCTYPE html>
-<html lang="en" data-theme="dark">
+<html lang="en">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Waiting for SMS · MJ HUB</title>
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<title>Server 2 · Waiting for code - MJ HUB</title>
 <script>(function(){try{var t=localStorage.getItem('mjhub-theme');document.documentElement.setAttribute('data-theme',(t==='light'||t==='dark')?t:'dark');}catch(e){document.documentElement.setAttribute('data-theme','dark');}})();</script>
 <script src="/js/mj-page-loader.js" defer></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap" rel="stylesheet">
 <style>
-:root[data-theme="dark"]{--bg:#06080f;--card:#0f1524;--text:#f1f5f9;--muted:#8b9bb4;--border:rgba(148,163,184,.12);--primary:#3b82f6;--danger:#f87171}
-:root[data-theme="light"]{--bg:#f4f6fb;--card:#fff;--text:#0f172a;--muted:#64748b;--border:rgba(15,23,42,.08);--primary:#2563eb;--danger:#dc2626}
+:root[data-theme="dark"]{--primary:#5b8af5;--primary-strong:#3b6ef5;--primary-glow:rgba(91,138,245,.28);--accent:#a78bfa;--bg:#06080f;--card:#0f1524;--text:#f1f5f9;--muted:#8b9bb4;--border:rgba(148,163,184,.12);--success:#34d399;--danger:#f87171;--shadow:0 18px 50px rgba(0,0,0,.45)}
+:root[data-theme="light"]{--primary:#3b6ef5;--primary-strong:#2554e8;--primary-glow:rgba(59,110,245,.18);--accent:#7c5cfc;--bg:#f4f6fb;--card:#fff;--text:#0f172a;--muted:#64748b;--border:rgba(15,23,42,.08);--success:#059669;--danger:#dc2626;--shadow:0 16px 40px rgba(15,23,42,.08)}
 *{box-sizing:border-box;margin:0;padding:0}
-body{font-family:'Plus Jakarta Sans',system-ui,sans-serif;background:var(--bg);color:var(--text);min-height:100vh}
-.shell{max-width:480px;margin:0 auto;padding:16px}
-.card{background:var(--card);border:1px solid var(--border);border-radius:16px;padding:18px;margin-top:16px}
-.phone{font-size:22px;font-weight:800;letter-spacing:.02em}
-.code{font-size:28px;font-weight:800;color:var(--primary);margin:12px 0}
-.muted{color:var(--muted);font-size:13px;line-height:1.45}
-button{width:100%;margin-top:10px;padding:12px;border-radius:12px;border:1px solid var(--border);background:var(--card);color:var(--text);font:700 14px inherit;cursor:pointer}
-button.primary{background:var(--primary);border-color:var(--primary);color:#fff}
-button.danger{color:var(--danger)}
-a.back{display:inline-flex;margin-bottom:8px;color:var(--primary);font-weight:700;text-decoration:none;font-size:14px}
+body{font-family:'Plus Jakarta Sans',system-ui,sans-serif;background:var(--bg);color:var(--text);min-height:100vh;padding-bottom:90px}
+.header{padding:14px 16px;display:flex;align-items:center;gap:12px;position:sticky;top:0;z-index:100;background:color-mix(in srgb,var(--bg) 88%,transparent);backdrop-filter:blur(16px);border-bottom:1px solid var(--border)}
+.back-button{width:40px;height:40px;border-radius:12px;background:var(--card);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;color:var(--text);text-decoration:none}
+.page-title{font-size:18px;font-weight:800;background:linear-gradient(135deg,var(--primary),var(--accent));-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+.main-content{padding:16px;max-width:520px;margin:0 auto}
+.status-card{background:var(--card);border:1px solid var(--border);border-radius:22px;padding:28px 22px;text-align:center;margin-bottom:16px;box-shadow:var(--shadow)}
+.vpn-advice{background:rgba(245,158,11,.1);border:1px solid rgba(245,158,11,.35);border-radius:16px;padding:16px;margin-bottom:16px;text-align:left;display:flex;gap:12px;align-items:flex-start}
+.vpn-advice-icon{width:38px;height:38px;border-radius:50%;background:#f59e0b;color:#fff;display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0}
+.vpn-advice-title{font-weight:800;font-size:13px;color:#f59e0b;margin-bottom:4px}
+.vpn-advice-text{font-size:12.5px;line-height:1.55;color:var(--text);opacity:.9}
+.status-icon{width:64px;height:64px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:26px;margin:0 auto 16px}
+.status-icon.waiting{background:var(--primary-glow);color:var(--primary)}
+.status-icon.success{background:rgba(52,211,153,.15);color:var(--success)}
+.status-icon.cancelled{background:rgba(248,113,113,.15);color:var(--danger)}
+.status-title{font-size:18px;font-weight:800;margin-bottom:6px}
+.status-sub{font-size:13px;color:var(--muted);margin-bottom:20px;line-height:1.5}
+.number-display{background:var(--bg);border:1px solid var(--border);border-radius:14px;padding:16px;margin-bottom:14px;text-align:left}
+.number-display .label{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;font-weight:700;margin-bottom:6px}
+.number-display .value-row{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.number-display .value{font-size:20px;font-weight:800;font-family:monospace;letter-spacing:.02em;word-break:break-all;flex:1;min-width:0}
+.copy-mini{border:1px solid var(--border);background:var(--card);color:var(--primary);font-size:11px;font-weight:700;padding:6px 10px;border-radius:8px;cursor:pointer;font-family:inherit;white-space:nowrap}
+.code-display{background:linear-gradient(135deg,rgba(52,211,153,.15),rgba(52,211,153,.05));border:1px solid rgba(52,211,153,.3);border-radius:14px;padding:20px;margin-bottom:14px;text-align:left}
+.code-display .label{font-size:11px;color:var(--success);text-transform:uppercase;letter-spacing:.04em;font-weight:700;margin-bottom:8px}
+.code-display .value{font-size:28px;font-weight:800;font-family:monospace;letter-spacing:.08em;color:var(--success);word-break:break-all}
+.btn{width:100%;padding:14px;border-radius:14px;font-size:14px;font-weight:700;cursor:pointer;border:none;font-family:inherit;margin-top:10px;display:flex;align-items:center;justify-content:center;gap:8px;text-decoration:none}
+.btn-primary{background:linear-gradient(135deg,var(--primary),var(--primary-strong));color:#fff}
+.btn-outline{background:transparent;color:var(--text);border:1px solid var(--border)}
+.btn-danger{background:transparent;color:var(--danger);border:1px solid rgba(248,113,113,.4)}
+.btn:disabled{opacity:.55;cursor:not-allowed}
+.cancel-row{display:flex;align-items:center;justify-content:center;gap:12px;margin-top:10px;flex-wrap:wrap}
+.cancel-row .btn{width:auto;min-width:120px;margin-top:0;flex:1}
+.cancel-available{font-size:13px;font-weight:600;color:var(--muted)}
+.cancel-available strong{color:var(--primary);font-variant-numeric:tabular-nums}
+.cancel-hint{font-size:11px;color:var(--muted);margin-top:6px;text-align:center}
+.toast-container{position:fixed;top:76px;right:12px;z-index:9999;display:flex;flex-direction:column;gap:8px;pointer-events:none}
+.toast{background:var(--card);border:1px solid var(--success);border-radius:12px;padding:12px 14px;display:flex;align-items:center;gap:10px;font-size:12px;font-weight:600;max-width:280px;pointer-events:all;box-shadow:var(--shadow);color:var(--text)}
+.toast.error{border-color:var(--danger)}
+.pulse-dot{display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--primary);animation:pulse 1.4s ease-in-out infinite;margin-right:6px}
+@keyframes pulse{0%,100%{opacity:.4}50%{opacity:1}}
 </style>
 </head>
 <body>
-<div class="shell">
-  <a class="back" href="mj-sms-history.html">← History</a>
-  <div class="card">
-    <div class="muted">Number</div>
-    <div class="phone" id="phone">…</div>
-    <div class="muted" style="margin-top:12px">SMS code</div>
-    <div class="code" id="code">Waiting…</div>
-    <p class="muted" id="status">Waiting for SMS…</p>
-    <button type="button" class="primary" id="checkBtn">Check now</button>
-    <button type="button" id="reuseBtn">Reuse this number (~20 min window)</button>
-    <button type="button" class="danger" id="cancelBtn">Cancel & refund</button>
+<div class="header">
+  <a href="mj-sms3.html" class="back-button"><i class="fa-solid fa-arrow-left"></i></a>
+  <div class="page-title">Server 2 · SMS</div>
+</div>
+<div class="main-content">
+  <div class="status-card" id="statusCard">
+    <div class="status-icon waiting"><i class="fa-solid fa-spinner fa-spin"></i></div>
+    <div class="status-title">Loading order…</div>
   </div>
 </div>
+<div class="toast-container" id="toastContainer"></div>
 <script>
 const SUPABASE_URL = 'https://atczodlljmlayvldxfmv.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImF0Y3pvZGxsam1sYXl2bGR4Zm12Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODUwNzUyMzgsImV4cCI6MjEwMDY1MTIzOH0.ufthD-p7BmeD_B7xyuMM6PNPL8DmcL4AtRYgg-MuoLI';
-const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
-  auth: { persistSession: true, autoRefreshToken: true, storage: window.sessionStorage }
-});
+
+const statusCard = document.getElementById('statusCard');
+const toastContainer = document.getElementById('toastContainer');
 const orderId = new URLSearchParams(location.search).get('order_id') || '';
+
+let sbClient = null;
+let accessToken = null;
+let pollTimer = null;
+let countdownTimer = null;
+let cancelCooldownTimer = null;
+let cancelling = false;
+let autoRefundStarted = false;
+let orderCreatedAt = null;
 let meta = {};
 
-async function headers() {
-  const { data: { session } } = await sb.auth.getSession();
-  if (!session) { location.href = 'auth.html'; return null; }
-  return { Authorization: 'Bearer ' + session.access_token, 'Content-Type': 'application/json' };
-}
-async function post(action, body) {
-  const h = await headers();
-  if (!h) return null;
-  const res = await fetch('/api/sms-bus?action=' + action, { method: 'POST', headers: h, body: JSON.stringify(body) });
-  return res.json();
-}
+const EXPIRY_SECONDS = 20 * 60;
+const CANCEL_COOLDOWN_SECONDS = 5 * 60;
 
-async function loadMeta() {
-  const { data: { session } } = await sb.auth.getSession();
-  if (!session) return;
-  const { data } = await sb.from('number_orders').select('*').eq('order_id', orderId).eq('user_id', session.user.id).maybeSingle();
-  if (data) {
-    meta = data;
-    document.getElementById('phone').textContent = data.phone_number || '—';
-    if (data.code) {
-      document.getElementById('code').textContent = data.code;
-      document.getElementById('status').textContent = 'Code received';
+function escapeHtml(str){if(!str)return'';return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;')}
+function money(n){return '₦'+Number(n||0).toLocaleString()}
+function showToast(msg,type){const t=document.createElement('div');t.className='toast'+(type==='error'?' error':'');t.innerHTML='<span>'+(type==='error'?'❌':'✅')+'</span><span>'+escapeHtml(msg)+'</span>';toastContainer.appendChild(t);setTimeout(()=>t.remove(),3500)}
+function formatCountdown(seconds){if(seconds<=0)return'0:00';const m=Math.floor(seconds/60);const s=Math.floor(seconds%60);return m+':'+String(s).padStart(2,'0')}
+function copyText(val,label){navigator.clipboard.writeText(String(val||'')).then(()=>showToast((label||'Copied')+'!','success')).catch(()=>showToast('Copy failed','error'))}
+
+function stopCountdown(){if(countdownTimer)clearInterval(countdownTimer);countdownTimer=null}
+function stopCancelCooldown(){if(cancelCooldownTimer)clearInterval(cancelCooldownTimer);cancelCooldownTimer=null}
+function stopPolling(){if(pollTimer)clearTimeout(pollTimer);pollTimer=null}
+
+function updateCancelButtonState(){
+  const btn=document.getElementById('cancelBtn');
+  const avail=document.getElementById('cancelAvailable');
+  const hint=document.getElementById('cancelHint');
+  if(!btn||cancelling)return;
+  const startMs=orderCreatedAt?new Date(orderCreatedAt).getTime():Date.now();
+  const elapsed=Math.floor((Date.now()-startMs)/1000);
+  const waitLeft=CANCEL_COOLDOWN_SECONDS-elapsed;
+  btn.innerHTML='Cancel & Refund';
+  if(waitLeft>0){
+    btn.disabled=true;
+    if(avail){avail.style.display='';avail.innerHTML='Available in : <strong>'+formatCountdown(waitLeft)+'</strong>'}
+    if(hint)hint.textContent='';
+  }else{
+    btn.disabled=false;
+    if(avail){avail.style.display='none';avail.innerHTML=''}
+    if(hint)hint.textContent='No code yet? Cancel to restore your balance.';
+  }
+}
+function startCancelCooldown(){stopCancelCooldown();updateCancelButtonState();cancelCooldownTimer=setInterval(updateCancelButtonState,1000)}
+
+function startCountdown(createdAt,timeLeft){
+  stopCountdown();
+  orderCreatedAt=createdAt||orderCreatedAt||new Date().toISOString();
+  const startMs=new Date(orderCreatedAt).getTime();
+  function tick(){
+    const elapsed=Math.floor((Date.now()-startMs)/1000);
+    let remaining=EXPIRY_SECONDS-elapsed;
+    if(timeLeft!=null&&Number(timeLeft)>=0) remaining=Math.min(remaining,Number(timeLeft));
+    const label=document.getElementById('countdownValue');
+    if(!label){stopCountdown();return}
+    if(remaining<=0){
+      label.textContent='Expired — refunding…';
+      if(!autoRefundStarted&&!cancelling){autoRefundStarted=true;autoRefundOnExpiry()}
+      return;
     }
+    label.textContent=formatCountdown(remaining);
   }
+  tick();
+  countdownTimer=setInterval(tick,1000);
+  startCancelCooldown();
 }
 
-async function check() {
-  if (!orderId) return;
-  const j = await post('check', { order_id: orderId });
-  if (!j || !j.success) {
-    document.getElementById('status').textContent = (j && j.message) || 'Check failed';
-    return;
-  }
-  const d = j.data;
-  if (d.number) document.getElementById('phone').textContent = d.number;
-  if (d.status === 'completed' && d.code) {
-    document.getElementById('code').textContent = d.code;
-    document.getElementById('status').textContent = 'Code received';
-  } else if (d.status === 'expired') {
-    document.getElementById('status').textContent = 'Number expired / released';
-  } else {
-    document.getElementById('status').textContent = d.message || 'Still waiting for SMS…';
-  }
-}
-
-document.getElementById('checkBtn').onclick = check;
-document.getElementById('cancelBtn').onclick = async function() {
-  if (!confirm('Cancel and refund?')) return;
-  const j = await post('cancel', { order_id: orderId });
-  alert((j && j.message) || (j && j.success ? 'Refunded' : 'Failed'));
-  if (j && j.success) location.href = 'mj-sms-history.html';
-};
-document.getElementById('reuseBtn').onclick = async function() {
-  if (!meta.phone_number || !meta.country_id || !meta.service_id) {
-    alert('Missing order details for reuse');
-    return;
-  }
-  const j = await post('reuse', {
-    country_id: meta.country_id,
-    project_id: meta.service_id,
-    mobile_number: meta.phone_number
+async function api(action,body){
+  const res=await fetch('/api/sms-bus?action='+encodeURIComponent(action),{
+    method:'POST',
+    headers:{Authorization:'Bearer '+accessToken,'Content-Type':'application/json'},
+    body:JSON.stringify(body||{})
   });
-  if (!j || !j.success) {
-    alert((j && j.message) || 'Reuse not available (usually only within about 20 minutes)');
-    return;
-  }
-  location.href = 'mj-sms3-number.html?order_id=' + encodeURIComponent(j.data.order_id);
-};
+  const data=await res.json().catch(()=>({}));
+  return {ok:res.ok,data};
+}
 
-loadMeta().then(check);
-setInterval(check, 5000);
+async function autoRefundOnExpiry(){
+  if(!orderId)return;
+  stopPolling();
+  const btn=document.getElementById('cancelBtn');
+  if(btn){btn.disabled=true;btn.innerHTML='<i class="fa-solid fa-spinner fa-spin"></i> Refunding…'}
+  try{
+    const {ok,data}=await api('cancel',{order_id:orderId});
+    if(ok&&data.success){showToast('Time expired — balance restored','success');renderCancelled('Time ran out with no SMS. Your balance has been restored.');return}
+    const check=await api('check',{order_id:orderId});
+    if(check.ok&&check.data.success&&check.data.data?.status==='refunded'){showToast('Balance restored','success');renderCancelled('No SMS received. Your balance has been restored.');return}
+    if(check.ok&&check.data.success&&check.data.data?.status==='completed'&&check.data.data?.code){renderCompleted(Object.assign({},meta,check.data.data));return}
+    showToast(data.message||'Could not auto-refund yet. Try Cancel.','error');
+    autoRefundStarted=false;
+    pollTimer=setTimeout(checkStatus,5000);
+  }catch(e){autoRefundStarted=false;showToast('Network error during refund. Try Cancel.','error');pollTimer=setTimeout(checkStatus,6000)}
+}
+
+function vpnBlock(){
+  return '<div class="vpn-advice"><div class="vpn-advice-icon"><i class="fa-solid fa-triangle-exclamation"></i></div><div><div class="vpn-advice-title">Important activation advice</div><div class="vpn-advice-text">Use a VPN from the same country as the phone number you are verifying. For smooth delivery.</div></div></div>';
+}
+
+function renderWaiting(data){
+  if(data.created_at) orderCreatedAt=data.created_at;
+  const phone=data.number||data.phone_number||meta.phone_number||'—';
+  const serviceLabel=String(data.service_name||meta.service_name||'').replace(/_/g,' ');
+  statusCard.innerHTML=
+    '<div class="status-icon waiting"><i class="fa-solid fa-mobile-screen"></i></div>'+
+    '<div class="status-title">Waiting for code</div>'+
+    '<div class="status-sub"><span class="pulse-dot"></span>We\'ll show the code here the moment it arrives — usually within a minute or two.</div>'+
+    vpnBlock()+
+    '<div class="number-display" style="text-transform:capitalize"><div class="label">Service</div><div class="value" style="font-size:16px">'+escapeHtml(serviceLabel||'—')+(data.country_name||meta.country_name?' · '+escapeHtml(data.country_name||meta.country_name):'')+'</div></div>'+
+    '<div class="number-display"><div class="label">Your Number</div><div class="value-row"><div class="value" id="phoneValue">'+escapeHtml(phone)+'</div><button type="button" class="copy-mini" id="copyPhoneBtn"><i class="fa-regular fa-copy"></i> Copy</button></div></div>'+
+    '<div class="number-display"><div class="label">Price</div><div class="value" style="font-size:16px;color:var(--primary)">'+money(data.price!=null?data.price:meta.price)+'</div></div>'+
+    '<div class="number-display"><div class="label">Time Remaining</div><div class="value" id="countdownValue" style="color:var(--primary)">--:--</div></div>'+
+    '<button type="button" class="btn btn-outline" id="checkNowBtn"><i class="fa-solid fa-rotate"></i> Check for SMS Now</button>'+
+    '<div class="cancel-row"><button type="button" class="btn btn-danger" id="cancelBtn">Cancel & Refund</button><span class="cancel-available" id="cancelAvailable"></span></div>'+
+    '<div class="cancel-hint" id="cancelHint"></div>'+
+    '<a href="mj-sms3.html" class="btn btn-outline">Back to Server 2</a>'+
+    '<a href="dashboard.html" class="btn btn-outline">Back to Home</a>';
+  document.getElementById('copyPhoneBtn').onclick=()=>copyText(phone,'Number copied');
+  document.getElementById('cancelBtn').onclick=cancelOrder;
+  document.getElementById('checkNowBtn').onclick=checkNow;
+  startCountdown(orderCreatedAt,data.time_left);
+}
+
+function renderCompleted(data){
+  stopPolling();stopCountdown();stopCancelCooldown();
+  const phone=data.number||data.phone_number||meta.phone_number||'—';
+  const code=data.code||'—';
+  const serviceLabel=String(data.service_name||meta.service_name||'').replace(/_/g,' ');
+  statusCard.innerHTML=
+    '<div class="status-icon success"><i class="fa-solid fa-circle-check"></i></div>'+
+    '<div class="status-title">Code Received!</div>'+
+    '<div class="status-sub">Copy the code below and use it to complete verification. This order is complete — no cancel or refund.</div>'+
+    vpnBlock()+
+    '<div class="number-display" style="text-transform:capitalize"><div class="label">Service</div><div class="value" style="font-size:16px">'+escapeHtml(serviceLabel||'—')+'</div></div>'+
+    '<div class="number-display"><div class="label">Number</div><div class="value-row"><div class="value">'+escapeHtml(phone)+'</div><button type="button" class="copy-mini" id="copyPhoneBtn"><i class="fa-regular fa-copy"></i> Copy</button></div></div>'+
+    '<div class="code-display"><div class="label">Verification Code</div><div class="value-row"><div class="value" id="codeValue">'+escapeHtml(code)+'</div><button type="button" class="copy-mini" id="copyCodeBtn"><i class="fa-regular fa-copy"></i> Copy</button></div></div>'+
+    '<button type="button" class="btn btn-primary" id="copyCodeBtn2"><i class="fa-solid fa-copy"></i> Copy Code</button>'+
+    '<a href="mj-sms3.html" class="btn btn-outline">Buy Another Number</a>'+
+    '<a href="dashboard.html" class="btn btn-outline">Back to Home</a>';
+  document.getElementById('copyPhoneBtn').onclick=()=>copyText(phone,'Number copied');
+  document.getElementById('copyCodeBtn').onclick=()=>copyText(code,'Code copied');
+  document.getElementById('copyCodeBtn2').onclick=()=>copyText(code,'Code copied');
+}
+
+function renderCancelled(msg){
+  stopPolling();stopCountdown();stopCancelCooldown();
+  statusCard.innerHTML=
+    '<div class="status-icon cancelled"><i class="fa-solid fa-circle-xmark"></i></div>'+
+    '<div class="status-title">Balance Restored</div>'+
+    '<div class="status-sub">'+escapeHtml(msg||'This number was cancelled and your wallet balance has been restored.')+'</div>'+
+    '<a href="mj-sms3.html" class="btn btn-primary">Buy Another Number</a>'+
+    '<a href="dashboard.html" class="btn btn-outline">Back to Home</a>';
+}
+
+function renderError(msg){
+  stopPolling();stopCountdown();stopCancelCooldown();
+  statusCard.innerHTML=
+    '<div class="status-icon cancelled"><i class="fa-solid fa-triangle-exclamation"></i></div>'+
+    '<div class="status-title">Something went wrong</div>'+
+    '<div class="status-sub">'+escapeHtml(msg)+'</div>'+
+    '<a href="mj-sms3.html" class="btn btn-primary">Back to Server 2</a>';
+}
+
+async function cancelOrder(){
+  if(cancelling||!orderId)return;
+  cancelling=true;
+  const btn=document.getElementById('cancelBtn');
+  if(btn){btn.disabled=true;btn.innerHTML='<i class="fa-solid fa-spinner fa-spin"></i> Cancelling…'}
+  try{
+    const {ok,data}=await api('cancel',{order_id:orderId});
+    if(ok&&data.success){showToast('Cancelled — balance restored','success');renderCancelled('Cancelled. Your balance has been restored.');return}
+    if(data&&data.code==='EARLY_CANCEL_DENIED'){
+      showToast(data.message||'Cancel not available yet','error');
+      cancelling=false;
+      updateCancelButtonState();
+      return;
+    }
+    showToast((data&&data.message)||'Cancel failed','error');
+    cancelling=false;
+    updateCancelButtonState();
+  }catch(e){showToast('Network error','error');cancelling=false;updateCancelButtonState()}
+}
+
+async function checkNow(){
+  const btn=document.getElementById('checkNowBtn');
+  if(btn){btn.disabled=true;btn.innerHTML='<i class="fa-solid fa-spinner fa-spin"></i> Checking…'}
+  await checkStatus(true);
+  if(btn&&document.getElementById('checkNowBtn')){btn.disabled=false;btn.innerHTML='<i class="fa-solid fa-rotate"></i> Check for SMS Now'}
+}
+
+async function checkStatus(fromBtn){
+  if(!orderId||!accessToken)return;
+  try{
+    const {ok,data}=await api('check',{order_id:orderId});
+    if(!ok||!data.success){
+      if(fromBtn) showToast((data&&data.message)||'Check failed','error');
+      pollTimer=setTimeout(checkStatus,5000);
+      return;
+    }
+    const d=data.data||{};
+    if(d.status==='completed'&&d.code){renderCompleted(Object.assign({},meta,d));return}
+    if(d.status==='refunded'||d.refunded){renderCancelled(d.message||'No SMS received. Your balance has been restored.');return}
+    if(d.status==='expired'){renderCancelled(d.message||'Number expired. If not refunded yet, use Cancel.');return}
+    if(!document.getElementById('countdownValue')) renderWaiting(Object.assign({},meta,d));
+    else if(d.time_left!=null){/* keep UI */}
+    pollTimer=setTimeout(checkStatus,5000);
+  }catch(e){pollTimer=setTimeout(checkStatus,6000)}
+}
+
+async function boot(){
+  if(!orderId){renderError('Missing order id');return}
+  sbClient=window.supabase.createClient(SUPABASE_URL,SUPABASE_ANON_KEY,{auth:{persistSession:true,autoRefreshToken:true,storage:window.sessionStorage}});
+  const {data:{session}}=await sbClient.auth.getSession();
+  if(!session){location.href='auth.html';return}
+  accessToken=session.access_token;
+  const {data}=await sbClient.from('number_orders').select('*').eq('order_id',orderId).eq('user_id',session.user.id).maybeSingle();
+  if(data){
+    meta=data;
+    orderCreatedAt=data.created_at;
+    if(data.status==='completed'&&data.code){renderCompleted(data);return}
+    if(data.refunded||data.status==='refunded'){renderCancelled('Already refunded.');return}
+    renderWaiting({
+      number:data.phone_number,
+      phone_number:data.phone_number,
+      service_name:data.service_name,
+      country_name:data.country_name,
+      price:data.price,
+      created_at:data.created_at
+    });
+  }
+  checkStatus();
+}
+boot();
 </script>
 </body>
 </html>

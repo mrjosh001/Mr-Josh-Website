@@ -671,6 +671,7 @@
  <div class="metric-card"><div class="metric-label">Sujan Dept.</div><div class="metric-value" id="balSujan"> </div><div class="metric-sub" id="balSujanSub">Loading…</div></div>
  <div class="metric-card"><div class="metric-label">ClassyTee</div><div class="metric-value" id="balClassy"> </div><div class="metric-sub" id="balClassySub">Loading…</div></div>
  <div class="metric-card"><div class="metric-label">Owlet (Boosters)</div><div class="metric-value" id="balOwlet"> </div><div class="metric-sub" id="balOwletSub">Loading…</div></div>
+ <div class="metric-card"><div class="metric-label">SMS-Bus (Server 2)</div><div class="metric-value" id="balSmsbus"> </div><div class="metric-sub" id="balSmsbusSub">Loading…</div></div>
  </div>
  </div>
  <div class="panel">
@@ -1544,7 +1545,7 @@ async function bulkRepriceNumbers(mode) {
 async function loadSupplierBalances() {
  const btn = document.getElementById('btnRefreshSupplierBalances');
  setBtnBusy(btn, true, 'Refreshing...');
- ['Fadded', 'Logsdomain', 'Grizzly', 'Sujan', 'Classy', 'Owlet'].forEach(p => {
+ ['Fadded', 'Logsdomain', 'Grizzly', 'Sujan', 'Classy', 'Owlet', 'Smsbus'].forEach(p => {
  const sub = document.getElementById('bal' + p + 'Sub');
  if (sub) sub.textContent = 'Loading…';
  });
@@ -1577,6 +1578,7 @@ async function loadSupplierBalances() {
  renderSupplierBalance('Sujan', data.suppliers.sujan);
  renderSupplierBalance('Classy', data.suppliers.classy);
  renderSupplierBalance('Owlet', data.suppliers.owlet);
+ renderSupplierBalance('Smsbus', data.suppliers.smsbus);
  } catch (err) {
  console.error('Supplier balance error at step:', step, err.name, err.message, err.stack);
  showAdminToast(`Supplier balance check failed while ${step}: ` + (err.message || 'network error'), 'error');
