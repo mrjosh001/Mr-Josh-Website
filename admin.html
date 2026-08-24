@@ -2128,7 +2128,28 @@ async function resumeGrizzlySyncIfRunning() {
 }
 
 async function loadProfiles() {
- // Select only columns the admin UI uses (fallback to * if a column is missing).
+ // Prefer service-role API so RLS cannot hide other customers' balances
+ try {
+  const headers = await authHeaders();
+  headers['Content-Type'] = 'application/json';
+  const res = await fetch('/api/admin', {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({ resource: 'profiles', action: 'list' })
+  });
+  const json = await res.json().catch(() => ({}));
+  if (res.ok && json.success && Array.isArray(json.data)) {
+    allProfiles = json.data;
+    if (typeof loadUserJoinDates === 'function') loadUserJoinDates();
+    if (typeof filterUsers === 'function') filterUsers();
+    if (typeof updateMetrics === 'function') updateMetrics();
+    return;
+  }
+  console.warn('profiles API fallback:', json.message || res.status);
+ } catch (e) {
+  console.warn('profiles API error', e);
+ }
+ // Fallback: direct Supabase (may be limited by RLS)
  let data = null, error = null;
  ({ data, error } = await sb.from('profiles').select(
  'id, full_name, email, phone, customer_id, is_admin, is_banned, balance, balance_usd, updated_at, avatar_url'
@@ -2139,6 +2160,7 @@ async function loadProfiles() {
  if (error) {
  console.error('Profiles error:', error.message);
  allProfiles = [];
+ showAdminToast('Could not load customers: ' + error.message, 'error');
  } else {
  allProfiles = data || [];
  }
@@ -2170,6 +2192,33 @@ async function loadUserJoinDates() {
 }
 
 async function tryLoadOrders() {
+ try {
+  const headers = await authHeaders();
+  headers['Content-Type'] = 'application/json';
+  const res = await fetch('/api/admin', {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({ resource: 'orders', action: 'list' })
+  });
+  const json = await res.json().catch(() => ({}));
+  if (res.ok && json.success && Array.isArray(json.data)) {
+    window._cachedOrders = json.data;
+    const empty = document.getElementById('ordersEmpty');
+    const wrap = document.getElementById('ordersTableWrap');
+    if (json.data.length) {
+      if (empty) empty.classList.add('hidden');
+      if (wrap) wrap.classList.remove('hidden');
+      renderOrders(json.data);
+    } else {
+      if (empty) empty.classList.remove('hidden');
+      if (wrap) wrap.classList.add('hidden');
+    }
+    return;
+  }
+  console.warn('orders API:', json.message || res.status);
+ } catch (e) {
+  console.warn('orders API error', e);
+ }
  const { data, error } = await sb.from('orders').select('*').order('created_at', { ascending: false }).limit(200);
  if (!error && data) {
  window._cachedOrders = data;
@@ -2178,6 +2227,7 @@ async function tryLoadOrders() {
  renderOrders(data);
  } else {
  window._cachedOrders = [];
+ if (error) console.error('Orders error:', error.message);
  }
 }
 
@@ -2189,9 +2239,25 @@ const SMS_ORDER_STATUS_LABELS = {
 };
 
 async function tryLoadSmsOrders() {
- // No source filter: same reasoning as mj-sms-history.html: Server 1
- // (grizzlysms) and Server 2 (logsdomain) both write into number_orders,
- // and admin needs to see every customer's orders from both.
+ // Service-role list so admin sees Grizzly + SMS-Bus for every customer
+ try {
+  const headers = await authHeaders();
+  headers['Content-Type'] = 'application/json';
+  const res = await fetch('/api/admin', {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({ resource: 'sms_orders', action: 'list' })
+  });
+  const json = await res.json().catch(() => ({}));
+  if (res.ok && json.success && Array.isArray(json.data)) {
+    window._cachedSmsOrders = json.data;
+    if (typeof renderSmsOrders === 'function') renderSmsOrders(json.data);
+    return;
+  }
+  console.warn('sms_orders API:', json.message || res.status);
+ } catch (e) {
+  console.warn('sms_orders API error', e);
+ }
  const { data, error } = await sb
  .from('number_orders')
  .select('*')
@@ -2203,7 +2269,7 @@ async function tryLoadSmsOrders() {
  return;
  }
  window._cachedSmsOrders = data || [];
- filterSmsOrders();
+ if (typeof renderSmsOrders === 'function') renderSmsOrders(window._cachedSmsOrders);
 }
 
 function isSmsRentalOrder(o) {
