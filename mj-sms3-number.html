@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Waiting for SMS · MJ HUB</title>
+<script>(function(){try{var t=localStorage.getItem('mjhub-theme');document.documentElement.setAttribute('data-theme',(t==='light'||t==='dark')?t:'dark');}catch(e){document.documentElement.setAttribute('data-theme','dark');}})();</script>
+<script src="/js/mj-page-loader.js" defer></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap" rel="stylesheet">
+<style>
+:root[data-theme="dark"]{--bg:#06080f;--card:#0f1524;--text:#f1f5f9;--muted:#8b9bb4;--border:rgba(148,163,184,.12);--primary:#3b82f6;--danger:#f87171}
+:root[data-theme="light"]{--bg:#f4f6fb;--card:#fff;--text:#0f172a;--muted:#64748b;--border:rgba(15,23,42,.08);--primary:#2563eb;--danger:#dc2626}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Plus Jakarta Sans',system-ui,sans-serif;background:var(--bg);color:var(--text);min-height:100vh}
+.shell{max-width:480px;margin:0 auto;padding:16px}
+.card{background:var(--card);border:1px solid var(--border);border-radius:16px;padding:18px;margin-top:16px}
+.phone{font-size:22px;font-weight:800;letter-spacing:.02em}
+.code{font-size:28px;font-weight:800;color:var(--primary);margin:12px 0}
+.muted{color:var(--muted);font-size:13px;line-height:1.45}
+button{width:100%;margin-top:10px;padding:12px;border-radius:12px;border:1px solid var(--border);background:var(--card);color:var(--text);font:700 14px inherit;cursor:pointer}
+button.primary{background:var(--primary);border-color:var(--primary);color:#fff}
+button.danger{color:var(--danger)}
+a.back{display:inline-flex;margin-bottom:8px;color:var(--primary);font-weight:700;text-decoration:none;font-size:14px}
+</style>
+</head>
+<body>
+<div class="shell">
+  <a class="back" href="mj-sms-history.html">← History</a>
+  <div class="card">
+    <div class="muted">Number</div>
+    <div class="phone" id="phone">…</div>
+    <div class="muted" style="margin-top:12px">SMS code</div>
+    <div class="code" id="code">Waiting…</div>
+    <p class="muted" id="status">Waiting for SMS…</p>
+    <button type="button" class="primary" id="checkBtn">Check now</button>
+    <button type="button" id="reuseBtn">Reuse this number (~20 min window)</button>
+    <button type="button" class="danger" id="cancelBtn">Cancel & refund</button>
+  </div>
+</div>
+<script>
+const SUPABASE_URL = 'https://atczodlljmlayvldxfmv.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImF0Y3pvZGxsam1sYXl2bGR4Zm12Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODUwNzUyMzgsImV4cCI6MjEwMDY1MTIzOH0.ufthD-p7BmeD_B7xyuMM6PNPL8DmcL4AtRYgg-MuoLI';
+const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+  auth: { persistSession: true, autoRefreshToken: true, storage: window.sessionStorage }
+});
+const orderId = new URLSearchParams(location.search).get('order_id') || '';
+let meta = {};
+
+async function headers() {
+  const { data: { session } } = await sb.auth.getSession();
+  if (!session) { location.href = 'auth.html'; return null; }
+  return { Authorization: 'Bearer ' + session.access_token, 'Content-Type': 'application/json' };
+}
+async function post(action, body) {
+  const h = await headers();
+  if (!h) return null;
+  const res = await fetch('/api/sms-bus?action=' + action, { method: 'POST', headers: h, body: JSON.stringify(body) });
+  return res.json();
+}
+
+async function loadMeta() {
+  const { data: { session } } = await sb.auth.getSession();
+  if (!session) return;
+  const { data } = await sb.from('number_orders').select('*').eq('order_id', orderId).eq('user_id', session.user.id).maybeSingle();
+  if (data) {
+    meta = data;
+    document.getElementById('phone').textContent = data.phone_number || '—';
+    if (data.code) {
+      document.getElementById('code').textContent = data.code;
+      document.getElementById('status').textContent = 'Code received';
+    }
+  }
+}
+
+async function check() {
+  if (!orderId) return;
+  const j = await post('check', { order_id: orderId });
+  if (!j || !j.success) {
+    document.getElementById('status').textContent = (j && j.message) || 'Check failed';
+    return;
+  }
+  const d = j.data;
+  if (d.number) document.getElementById('phone').textContent = d.number;
+  if (d.status === 'completed' && d.code) {
+    document.getElementById('code').textContent = d.code;
+    document.getElementById('status').textContent = 'Code received';
+  } else if (d.status === 'expired') {
+    document.getElementById('status').textContent = 'Number expired / released';
+  } else {
+    document.getElementById('status').textContent = d.message || 'Still waiting for SMS…';
+  }
+}
+
+document.getElementById('checkBtn').onclick = check;
+document.getElementById('cancelBtn').onclick = async function() {
+  if (!confirm('Cancel and refund?')) return;
+  const j = await post('cancel', { order_id: orderId });
+  alert((j && j.message) || (j && j.success ? 'Refunded' : 'Failed'));
+  if (j && j.success) location.href = 'mj-sms-history.html';
+};
+document.getElementById('reuseBtn').onclick = async function() {
+  if (!meta.phone_number || !meta.country_id || !meta.service_id) {
+    alert('Missing order details for reuse');
+    return;
+  }
+  const j = await post('reuse', {
+    country_id: meta.country_id,
+    project_id: meta.service_id,
+    mobile_number: meta.phone_number
+  });
+  if (!j || !j.success) {
+    alert((j && j.message) || 'Reuse not available (usually only within about 20 minutes)');
+    return;
+  }
+  location.href = 'mj-sms3-number.html?order_id=' + encodeURIComponent(j.data.order_id);
+};
+
+loadMeta().then(check);
+setInterval(check, 5000);
+</script>
+</body>
+</html>

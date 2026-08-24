@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Number rental · MJ HUB</title>
+<script>(function(){try{var t=localStorage.getItem('mjhub-theme');document.documentElement.setAttribute('data-theme',(t==='light'||t==='dark')?t:'dark');}catch(e){document.documentElement.setAttribute('data-theme','dark');}})();</script>
+<script src="/js/mj-page-loader.js" defer></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap" rel="stylesheet">
+<style>
+:root[data-theme="dark"]{
+  --bg:#06080f;--card:#0f1524;--text:#f1f5f9;--muted:#8b9bb4;--border:rgba(148,163,184,.12);
+  --primary:#3b82f6;--primary-2:#2563eb;--soft:rgba(59,130,246,.12);
+}
+:root[data-theme="light"]{
+  --bg:#f4f6fb;--card:#fff;--text:#0f172a;--muted:#64748b;--border:rgba(15,23,42,.08);
+  --primary:#2563eb;--primary-2:#1d4ed8;--soft:#eff6ff;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Plus Jakarta Sans',system-ui,sans-serif;background:var(--bg);color:var(--text);min-height:100vh}
+.shell{max-width:480px;margin:0 auto;padding:0 16px 48px}
+.hdr{display:flex;align-items:center;gap:12px;padding:16px 0}
+.back{width:42px;height:42px;border-radius:12px;border:1px solid var(--border);background:var(--card);display:flex;align-items:center;justify-content:center;color:var(--text);text-decoration:none}
+h1{font-size:18px;font-weight:800;letter-spacing:-0.02em}
+.lead{font-size:14px;font-weight:700;margin:4px 0 18px;line-height:1.4}
+.panel{background:var(--card);border:1px solid var(--border);border-radius:20px;padding:20px 18px;box-shadow:0 12px 40px rgba(0,0,0,.12)}
+.step{margin-bottom:22px}
+.step:last-of-type{margin-bottom:0}
+.step-label{font-size:13px;font-weight:700;color:var(--muted);margin-bottom:10px}
+select{
+  width:100%;padding:14px 16px;border-radius:14px;border:1.5px solid var(--border);
+  background:var(--bg);color:var(--text);font:600 15px inherit;appearance:none;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath fill='%2364748b' d='M1 1l5 5 5-5'/%3E%3C/svg%3E");
+  background-repeat:no-repeat;background-position:right 16px center;
+}
+.months{
+  display:flex;align-items:center;justify-content:space-between;gap:12px;
+  border:1.5px solid var(--border);border-radius:14px;padding:6px;background:var(--bg);
+}
+.months button{
+  width:44px;height:44px;border-radius:12px;border:none;background:var(--soft);
+  color:var(--primary);font-size:20px;font-weight:800;cursor:pointer;
+}
+.months .val{font-size:20px;font-weight:800;min-width:48px;text-align:center}
+.cost{
+  width:100%;padding:16px;border-radius:14px;border:none;
+  background:var(--soft);color:var(--text);font:700 15px inherit;text-align:center;margin-bottom:12px;
+}
+.cost strong{color:var(--primary);font-size:17px}
+.rent-btn{
+  width:100%;padding:16px;border-radius:14px;border:none;cursor:pointer;
+  background:linear-gradient(135deg,var(--primary),var(--primary-2));color:#fff;
+  font:800 16px inherit;
+}
+.rent-btn:disabled{opacity:.55;cursor:not-allowed}
+.link{display:block;text-align:center;margin-top:16px;font-size:14px;font-weight:700;color:var(--primary);text-decoration:none}
+.err{color:#f87171;font-size:13px;margin-top:12px;text-align:center}
+.ok{color:#34d399;font-size:13px;margin-top:12px;text-align:center;line-height:1.45}
+.stock{font-size:12px;color:var(--muted);margin-top:6px}
+</style>
+</head>
+<body>
+<div class="shell">
+  <header class="hdr">
+    <a class="back" href="mj-sms-choose-server.html" aria-label="Back"><i class="fa-solid fa-arrow-left"></i></a>
+    <h1>Number rental</h1>
+  </header>
+  <p class="lead">Rent a virtual number in 3 steps</p>
+  <div class="panel">
+    <div class="step">
+      <div class="step-label">Step 1. Select a country</div>
+      <select id="area"></select>
+      <div class="stock" id="stock"></div>
+    </div>
+    <div class="step">
+      <div class="step-label">Step 2. Months to rent</div>
+      <div class="months">
+        <button type="button" id="minus" aria-label="Less">−</button>
+        <div class="val" id="monthsVal">1</div>
+        <button type="button" id="plus" aria-label="More">+</button>
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-label">Step 3. Rent</div>
+      <div class="cost" id="cost">—</div>
+      <button type="button" class="rent-btn" id="rentBtn">Rent now</button>
+    </div>
+  </div>
+  <a class="link" href="mj-sms-history.html">View my numbers</a>
+  <div class="err" id="err"></div>
+  <div class="ok" id="ok"></div>
+</div>
+<script>
+const SUPABASE_URL = 'https://atczodlljmlayvldxfmv.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImF0Y3pvZGxsam1sYXl2bGR4Zm12Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODUwNzUyMzgsImV4cCI6MjEwMDY1MTIzOH0.ufthD-p7BmeD_B7xyuMM6PNPL8DmcL4AtRYgg-MuoLI';
+const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+  auth: { persistSession: true, autoRefreshToken: true, storage: window.sessionStorage }
+});
+let areas = [];
+let months = 1;
+
+async function headers() {
+  const { data: { session } } = await sb.auth.getSession();
+  if (!session) { location.href = 'auth.html'; return null; }
+  return { Authorization: 'Bearer ' + session.access_token, 'Content-Type': 'application/json' };
+}
+function money(n){ return '₦' + Number(n||0).toLocaleString(); }
+function selected() {
+  const code = document.getElementById('area').value;
+  return areas.find(function(a){ return a.area_code === code; });
+}
+function updateCost() {
+  const a = selected();
+  const el = document.getElementById('cost');
+  const stock = document.getElementById('stock');
+  if (!a) { el.textContent = '—'; stock.textContent = ''; return; }
+  const total = Math.round(Number(a.price_1mo || 0) * months);
+  el.innerHTML = 'It will cost <strong>' + money(total) + '</strong>';
+  stock.textContent = a.stock ? (a.stock + ' numbers available') : '';
+  document.getElementById('monthsVal').textContent = String(months);
+}
+document.getElementById('minus').onclick = function() {
+  const a = selected();
+  const min = (a && a.min_month) ? Number(a.min_month) : 1;
+  if (months > min) { months--; updateCost(); }
+};
+document.getElementById('plus').onclick = function() {
+  if (months < 24) { months++; updateCost(); }
+};
+document.getElementById('area').onchange = function() {
+  const a = selected();
+  const min = (a && a.min_month) ? Number(a.min_month) : 1;
+  if (months < min) months = min;
+  updateCost();
+};
+
+async function loadAreas() {
+  const h = await headers();
+  if (!h) return;
+  const res = await fetch('/api/sms-bus?action=rent_areas', { headers: h });
+  const j = await res.json();
+  const sel = document.getElementById('area');
+  if (!j.success || !j.data || !j.data.length) {
+    document.getElementById('err').textContent = j.message || 'No rental countries available';
+    sel.innerHTML = '<option value="">Unavailable</option>';
+    return;
+  }
+  areas = j.data;
+  sel.innerHTML = areas.map(function(a){
+    return '<option value="'+a.area_code+'">'+a.title+'</option>';
+  }).join('');
+  months = Number(areas[0].min_month || 1);
+  updateCost();
+}
+
+document.getElementById('rentBtn').onclick = async function() {
+  document.getElementById('err').textContent = '';
+  document.getElementById('ok').textContent = '';
+  const a = selected();
+  if (!a) return;
+  const h = await headers();
+  if (!h) return;
+  this.disabled = true; this.textContent = 'Processing…';
+  const res = await fetch('/api/sms-bus?action=rent_order', {
+    method: 'POST', headers: h,
+    body: JSON.stringify({
+      area_code: a.area_code,
+      time: months,
+      quoted_usd: a.unit_usd
+    })
+  });
+  const j = await res.json();
+  this.disabled = false; this.textContent = 'Rent now';
+  if (!j.success) {
+    document.getElementById('err').textContent = j.message || 'Could not complete rental';
+    return;
+  }
+  document.getElementById('ok').textContent =
+    'Number ' + (j.data.number || '') +
+    (j.data.expire_at ? (' · active until ' + new Date(j.data.expire_at).toLocaleDateString()) : '');
+};
+loadAreas();
+</script>
+</body>
+</html>
