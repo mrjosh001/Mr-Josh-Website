@@ -130,22 +130,49 @@ export default async function handler(req, res) {
       if (!auth.ok) return json(res, auth.status, { success: false, message: auth.message });
       const country_id = url.searchParams.get('country_id');
       if (!country_id) return json(res, 400, { success: false, message: 'country_id required' });
-      const { data } = await smsbusGet(OTP_BASE, '/list/prices', { country_id: String(country_id) });
-      if (!busOk(data)) return json(res, 400, { success: false, message: data.message || 'Prices error' });
-      const list = Object.values(data.data || {}).map((row) => {
-        const costUsd = Number(row.cost || row.price || 0);
-        const priceNgn = applyMarkup(costUsd);
-        return {
-          country_id: row.country_id,
-          project_id: row.project_id,
-          title: row.title || '',
-          code: row.code || '',
-          stock: Number(row.total_count || row.count || 0),
-          supplier_usd: costUsd,
-          price: priceNgn,
-          price_ngn: priceNgn
-        };
-      });
+
+      const [priceRes, projRes] = await Promise.all([
+        smsbusGet(OTP_BASE, '/list/prices', { country_id: String(country_id) }),
+        smsbusGet(OTP_BASE, '/list/projects')
+      ]);
+      if (!busOk(priceRes.data)) {
+        return json(res, 400, { success: false, message: 'Unable to load services for this country' });
+      }
+
+      // Map project_id → real service name (WhatsApp, Telegram, …)
+      const nameById = {};
+      const codeById = {};
+      if (busOk(projRes.data)) {
+        Object.values(projRes.data.data || {}).forEach((p) => {
+          nameById[String(p.id)] = p.title || p.name || '';
+          codeById[String(p.id)] = p.code || '';
+        });
+      }
+
+      const list = Object.values(priceRes.data.data || {})
+        .map((row) => {
+          const pid = String(row.project_id);
+          const costUsd = Number(row.cost || row.price || 0);
+          const priceNgn = applyMarkup(costUsd);
+          const title =
+            nameById[pid] ||
+            (row.title && !/united|russia|state|country/i.test(String(row.title)) ? row.title : '') ||
+            codeById[pid] ||
+            '';
+          return {
+            country_id: row.country_id,
+            project_id: row.project_id,
+            title: title || `Service ${pid}`,
+            code: codeById[pid] || row.code || '',
+            stock: Number(row.total_count || row.count || 0),
+            supplier_usd: costUsd,
+            price: priceNgn,
+            price_ngn: priceNgn
+          };
+        })
+        .filter((r) => r.project_id != null)
+        .sort((a, b) => String(a.title).localeCompare(String(b.title)));
+
       return json(res, 200, { success: true, data: list });
     }
 
@@ -658,6 +685,46 @@ export default async function handler(req, res) {
       return json(res, 200, { success: true, data: bus.data.data, price });
     }
 
+    
+    if ((method === 'GET' || method === 'POST') && action === 'sync') {
+      const cronSecret = process.env.CRON_SECRET;
+      const authHeader = req.headers.authorization || '';
+      const isCron =
+        (cronSecret && authHeader === `Bearer ${cronSecret}`) ||
+        req.headers['x-vercel-cron'] === '1';
+      if (!isCron) {
+        const auth = await requireAuth(req);
+        if (!auth.ok) return json(res, auth.status, { success: false, message: auth.message });
+        const { data: prof } = await supabase.from('profiles').select('is_admin').eq('id', auth.userId).maybeSingle();
+        if (!prof?.is_admin) {
+          return json(res, 403, { success: false, message: 'Admin only' });
+        }
+      }
+      const [bal, countries, projects, areas] = await Promise.all([
+        smsbusGet(OTP_BASE, '/get/balance'),
+        smsbusGet(OTP_BASE, '/list/countries'),
+        smsbusGet(OTP_BASE, '/list/projects'),
+        smsbusGet(RENT_BASE, '/v1/rent/list/area')
+      ]);
+      const countryCount = busOk(countries.data) ? Object.keys(countries.data.data || {}).length : 0;
+      const projectCount = busOk(projects.data) ? Object.keys(projects.data.data || {}).length : 0;
+      let areaCount = 0;
+      if (busOk(areas.data)) {
+        const d = areas.data.data;
+        areaCount = Array.isArray(d) ? d.length : Object.keys(d || {}).length;
+      }
+      return json(res, 200, {
+        success: true,
+        data: {
+          balance: busOk(bal.data) ? bal.data.data : null,
+          countries: countryCount,
+          projects: projectCount,
+          rent_areas: areaCount,
+          synced_at: new Date().toISOString()
+        }
+      });
+    }
+
     return json(res, 400, {
       success: false,
       message: `Unknown action: ${action}`,
@@ -673,7 +740,8 @@ export default async function handler(req, res) {
         'rent_areas',
         'rent_prices',
         'rent_order',
-        'rent_renew'
+        'rent_renew',
+        'sync'
       ]
     });
   } catch (err) {
