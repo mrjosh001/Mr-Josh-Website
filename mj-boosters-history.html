@@ -15,8 +15,9 @@
 <style>
 
 :root[data-theme="dark"] {
-  --bg: #0b1220;
-  --bg-soft: #111827;
+  --bg: #06080f;
+  --title: #f8fafc;
+  --bg-soft: #0f1524;
   --card: #ffffff;
   --card-ink: #0f172a;
   --muted: #64748b;
@@ -34,8 +35,9 @@
   --shadow: 0 10px 30px rgba(15, 23, 42, 0.12);
 }
 :root[data-theme="light"] {
-  --bg: #f0f5ff;
-  --bg-soft: #e8effc;
+  --bg: #f4f6fb;
+  --title: #0f172a;
+  --bg-soft: #eef2f7;
   --card: #ffffff;
   --card-ink: #0f172a;
   --muted: #64748b;
@@ -64,21 +66,15 @@ body {
 body::before {
   content: '';
   position: fixed; inset: 0; z-index: 0; pointer-events: none;
-  background:
-    radial-gradient(ellipse 100% 60% at 50% -20%, rgba(37,99,235,.22), transparent 55%),
-    linear-gradient(180deg, #dbeafe 0%, var(--bg) 42%);
+  background: transparent;
 }
-:root[data-theme="dark"] body::before {
-  background:
-    radial-gradient(ellipse 100% 60% at 50% -20%, rgba(37,99,235,.35), transparent 55%),
-    linear-gradient(180deg, #0f1a33 0%, var(--bg) 45%);
-}
+
 .shell { position: relative; z-index: 1; max-width: 540px; margin: 0 auto; padding: 0 16px 72px; }
 .topbar {
   display: flex; align-items: center; gap: 12px;
   padding: 16px 0 12px;
   position: sticky; top: 0; z-index: 50;
-  background: color-mix(in srgb, var(--bg) 75%, transparent);
+  background: color-mix(in srgb, var(--bg) 92%, transparent);
   backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
 }
 .btn-icon {
@@ -91,17 +87,11 @@ body::before {
 .btn-icon:active { transform: scale(.97); }
 .topbar-copy { flex: 1; min-width: 0; }
 .topbar-copy h1 {
-  font-size: 20px; font-weight: 800; letter-spacing: -0.04em;
-  color: #fff;
+  font-size: 18px; font-weight: 800; letter-spacing: -0.03em;
+  color: var(--title);
 }
-:root[data-theme="light"] .topbar-copy h1 { color: #0f172a; }
-.topbar-copy p { font-size: 12px; font-weight: 600; margin-top: 2px; color: #93c5fd; }
-:root[data-theme="light"] .topbar-copy p { color: var(--blue); }
-.brand-bar {
-  height: 4px; border-radius: 999px;
-  background: linear-gradient(90deg, #60a5fa, var(--blue), #1d4ed8);
-  margin: 0 0 14px; opacity: .95;
-}
+.topbar-copy p { font-size: 12px; font-weight: 500; margin-top: 2px; color: var(--muted); }
+.brand-bar { display: none; }
 
 .list { display: flex; flex-direction: column; gap: 14px; }
 .card {
@@ -177,7 +167,7 @@ body::before {
     <a class="btn-icon" href="mj-boosters.html" aria-label="Back"><i class="fa-solid fa-arrow-left"></i></a>
     <div class="topbar-copy">
       <h1>Booster orders</h1>
-      <p>White · Blue · MJ HUB</p>
+      <p>Live progress · open target link</p>
     </div>
     <button type="button" class="btn-icon" id="refreshBtn" aria-label="Refresh"><i class="fa-solid fa-rotate-right"></i></button>
   </header>
