@@ -1055,7 +1055,7 @@ async function listOrdersHandle() {
     .from('orders')
     .select('*')
     .order('created_at', { ascending: false })
-    .limit(500);
+    .limit(1000);
   if (error) {
     return { status: 500, body: { success: false, message: 'Could not load orders: ' + error.message } };
   }
@@ -1067,7 +1067,7 @@ async function listSmsOrdersHandle() {
     .from('number_orders')
     .select('*')
     .order('created_at', { ascending: false })
-    .limit(500);
+    .limit(1000);
   if (error) {
     return { status: 500, body: { success: false, message: 'Could not load SMS orders: ' + error.message } };
   }
@@ -1079,7 +1079,7 @@ async function listBoosterOrdersHandle() {
     .from('booster_orders')
     .select('*')
     .order('created_at', { ascending: false })
-    .limit(500);
+    .limit(1000);
   if (error) {
     return { status: 500, body: { success: false, message: 'Could not load booster orders: ' + error.message } };
   }
@@ -1347,19 +1347,18 @@ async function getOverviewStats(body) {
 
   let logsRes = await supabase.from('orders')
     .select('amount, quantity, product_key, product_code, product_name, product_id, status')
-    .in('status', ['completed', 'paid', 'success', 'delivered'])
+    .in('status', ['completed', 'paid', 'success', 'delivered', 'complete', 'fulfilled'])
     .gte('created_at', cutoff);
   if (logsRes.error && /column|schema cache/i.test(logsRes.error.message || '')) {
     logsRes = await supabase.from('orders')
       .select('amount, quantity, product_name, status')
-      .in('status', ['completed', 'paid', 'success', 'delivered'])
+      .in('status', ['completed', 'paid', 'success', 'delivered', 'complete', 'fulfilled'])
       .gte('created_at', cutoff);
   }
 
   const [smsRes, boostRes, productsRes] = await Promise.all([
     supabase.from('number_orders')
-      .select('price, supplier_price, source, status')
-      .eq('status', 'completed')
+      .select('price, supplier_price, source, status, refunded')
       .gte('created_at', cutoff),
     supabase.from('booster_orders')
       .select('price_ngn, charge_usd, quantity, status, created_at')
@@ -1371,9 +1370,12 @@ async function getOverviewStats(body) {
   if (logsRes.error) return { status: 500, body: { success: false, message: 'Logs stats failed: ' + logsRes.error.message } };
   if (smsRes.error) return { status: 500, body: { success: false, message: 'SMS stats failed: ' + smsRes.error.message } };
 
-  // ----- SMS: customer paid (price) minus supplier cost -----
-  // Grizzly stores supplier_price in USD; LogsDomain stores it in NGN.
-  const smsRows = smsRes.data || [];
+  // ----- SMS: Grizzly (Server 1) + SMS-Bus (Server 2) completed orders -----
+  // supplier_price is USD for grizzly + smsbus; legacy logsdomain numbers may be NGN.
+  const smsRows = (smsRes.data || []).filter((r) => {
+    const st = String(r.status || '').toLowerCase();
+    return st === 'completed' || st === 'complete' || st === 'success';
+  });
   const smsAmountSpent = smsRows.reduce((s, r) => s + Number(r.price || 0), 0);
   const smsProfit = smsRows.reduce((s, r) => {
     const paid = Number(r.price || 0);
@@ -1381,12 +1383,11 @@ async function getOverviewStats(body) {
     if (!(sp > 0)) return s + paid;
     const source = String(r.source || '').toLowerCase();
     let cost = 0;
-    if (source.includes('grizzly')) {
+    if (source.includes('grizzly') || source.includes('smsbus')) {
       cost = sp * usdToNgn; // USD → NGN
     } else if (source.includes('logsdomain') || source.includes('logdomain') || source.includes('ld')) {
       cost = sp; // already NGN
     } else {
-      // Unknown source: small values that convert cleanly → USD, else NGN
       const asUsd = sp * usdToNgn;
       cost = (sp < 50 && asUsd <= paid * 1.5) ? asUsd : sp;
     }
