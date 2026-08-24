@@ -1800,7 +1800,7 @@ async function syncSmsBusNow() {
       if (bal != null && typeof bal === 'object') {
         bal = bal.balance ?? bal.amount ?? bal.credit ?? bal.funds ?? JSON.stringify(bal);
       }
-      showAdminToast(`Server 2 OK · Countries ${d.countries||0} · Services ${d.projects||0} · Rent areas ${d.rent_areas||0}`, 'success');
+      showAdminToast(`Server 2 saved · Countries ${d.countries||0} · Rows ${d.projects||0} · New ${d.new_products||0} · Updated ${d.updated_products||0}`, 'success');
       const prog = document.getElementById('logsdomainSyncProgress2');
       if (prog) prog.textContent = `Server 2 live: ${d.countries||0} countries · ${d.projects||0} services · balance ${bal != null ? bal : '—'}`;
     } else {
@@ -1815,8 +1815,9 @@ async function syncSmsBusNow() {
 
 async function loadSmsServer2RowsForCurrentFilter() {
   const country = (document.getElementById('smsServer2CountryFilter')?.value || '').trim();
-  const q = (document.getElementById('smsServer2Search')?.value || '').trim().toLowerCase();
+  const q = (document.getElementById('smsServer2Search')?.value || '').trim();
   const hideZero = document.getElementById('smsServer2HideZeroStock')?.checked !== false;
+  const cols = 'id,source,country_id,country_name,service_id,service_name,supplier_price,price,available_quantity,is_available,currency,updated_at,price_source';
 
   allNumberServicesServer2 = [];
 
@@ -1825,83 +1826,40 @@ async function loadSmsServer2RowsForCurrentFilter() {
     const cards = document.getElementById('smsServer2MobileCards');
     const tbody = document.getElementById('smsServer2TableBody');
     const hint =
-      '<div class="empty-state">Server 2 catalog is <strong>live</strong> (not stored in DB like Server 1).<br>Type a <strong>country</strong> (e.g. United Kingdom) to load services from Server 2.<br><span style="opacity:.7;font-size:12px;">Customers see the full list in the app under Choose Server → Server 2.</span></div>';
+      '<div class="empty-state">Select a <strong>country</strong> or search a <strong>service</strong>.<br><span style="opacity:.7;font-size:12px;">After <b>Sync Server 2</b>, catalog is saved in DB (your prices are never overwritten).</span></div>';
     if (cards) cards.innerHTML = hint;
     if (tbody) tbody.innerHTML = `<tr><td colspan="7">${hint}</td></tr>`;
     return;
   }
 
   try {
-    const headers = await authHeaders();
-    // Resolve country_id from live countries list
-    const cRes = await fetch('/api/sms-bus?action=countries', { headers });
-    const cData = await cRes.json();
-    if (!cData.success) throw new Error(cData.message || 'Could not load countries');
-
-    let countries = [];
-    const raw = cData.data;
-    if (Array.isArray(raw)) {
-      countries = raw.map((c) => ({
-        id: c.country_id ?? c.id ?? c.code,
-        name: c.country_name || c.title || c.name || String(c.country_id || c.id)
-      }));
-    } else if (raw && typeof raw === 'object') {
-      countries = Object.keys(raw).map((k) => {
-        const v = raw[k];
-        if (v && typeof v === 'object') {
-          return { id: v.country_id ?? v.id ?? k, name: v.country_name || v.title || v.name || String(k) };
-        }
-        return { id: k, name: String(v || k) };
-      });
+    let query = sb.from('number_services').select(cols).eq('source', 'smsbus');
+    if (country) query = query.ilike('country_name', `%${country}%`);
+    if (q) {
+      query = query.or(
+        `service_name.ilike.%${q}%,service_id.ilike.%${q}%,country_name.ilike.%${q}%`
+      );
     }
+    if (hideZero) query = query.or('available_quantity.is.null,available_quantity.gt.0');
+    query = query.order('service_name', { ascending: true }).limit(country ? 3000 : 1000);
 
-    let match = countries;
-    if (country) {
-      const needle = country.toLowerCase();
-      match = countries.filter((c) => String(c.name).toLowerCase().includes(needle));
-    }
-    if (!match.length) {
+    const { data, error } = await query;
+    if (error) {
+      console.error('SMS Server2 rows error:', error);
+      showAdminToast('SMS load error: ' + error.message, 'error');
       allNumberServicesServer2 = [];
-      renderNumberServicesServer2([]);
-      showAdminToast('No Server 2 country matched "' + country + '"', 'error');
-      return;
+    } else {
+      allNumberServicesServer2 = data || [];
     }
-
-    // Load prices for up to 3 matching countries to avoid overload
-    const pick = match.slice(0, 3);
-    const rows = [];
-    for (const c of pick) {
-      const pRes = await fetch('/api/sms-bus?action=prices&country_id=' + encodeURIComponent(c.id), { headers });
-      const pData = await pRes.json();
-      const list = (pData.success && Array.isArray(pData.data)) ? pData.data : [];
-      for (const s of list) {
-        const name = s.title || s.name || s.service_name || ('Service ' + (s.project_id || s.id));
-        if (q && !String(name).toLowerCase().includes(q) && !String(c.name).toLowerCase().includes(q)) continue;
-        const stock = s.stock != null ? s.stock : s.available_quantity;
-        if (hideZero && stock === 0) continue;
-        rows.push({
-          id: 's2-' + c.id + '-' + (s.project_id || s.id),
-          source: 'smsbus',
-          country_id: c.id,
-          country_name: c.name,
-          service_id: String(s.project_id || s.id),
-          service_name: name,
-          supplier_price: s.supplier_price != null ? s.supplier_price : null,
-          price: s.price,
-          available_quantity: stock,
-          is_available: true,
-          currency: 'NGN'
-        });
-      }
-    }
-    allNumberServicesServer2 = rows;
   } catch (e) {
     console.error(e);
-    showAdminToast('Server 2 load failed: ' + (e.message || e), 'error');
+    showAdminToast('SMS load failed: ' + (e.message || e), 'error');
     allNumberServicesServer2 = [];
   }
   renderNumberServicesServer2(allNumberServicesServer2);
 }
+
+
 
 
 function filterNumberServicesServer2() {
@@ -1914,8 +1872,8 @@ function renderNumberServicesServer2(list) {
   const cards = document.getElementById('smsServer2MobileCards');
 
   if (!items.length) {
-    if (tbody) tbody.innerHTML = `<tr><td colspan="7" class="empty-state">Server 2 uses live SMS-Bus data (not stored like Grizzly). Type a country (e.g. United States) to load services, or use customer app → Server 2.</td></tr>`;
-    if (cards) cards.innerHTML = `<div class="empty-state">Server 2 uses live SMS-Bus data (not stored like Grizzly). Type a country (e.g. United States) to load services, or use customer app → Server 2.</div>`;
+    if (tbody) tbody.innerHTML = `<tr><td colspan="7" class="empty-state">No Server 2 rows yet. Click <b>Sync Server 2</b> (can take 1–2 min), then search a country.</td></tr>`;
+    if (cards) cards.innerHTML = `<div class="empty-state">No Server 2 rows yet. Click <b>Sync Server 2</b> (can take 1–2 min), then search a country.</div>`;
     return;
   }
 
