@@ -740,7 +740,6 @@
               <div class="panel-title">SMS Numbers — Supplier Catalog</div>
               <div style="display:flex;gap:8px;flex-wrap:wrap;">
                 <button class="btn btn-primary btn-sm" id="btnSyncGrizzly" onclick="syncGrizzlyNow()"><i class="fas fa-sync"></i> Sync Grizzly</button>
-                <button class="btn btn-primary btn-sm" id="btnSyncLogsDomainNumbers" onclick="syncLogsDomainNumbersNow()"><i class="fas fa-sync"></i> Sync LogsDomain</button>
                 <button class="btn btn-secondary btn-sm" id="btnBulkRepriceUnpriced" onclick="bulkRepriceNumbers('unpriced_only')"><i class="fas fa-tags"></i> Price Unpriced Numbers</button>
                 <button class="btn btn-ghost btn-sm" id="btnBulkRepriceAll" onclick="bulkRepriceNumbers('all')" title="Rerolls markup on every system-priced row. Prices you've set manually are never touched."><i class="fas fa-dice"></i> Reprice All (skips manual prices)</button>
               </div>
@@ -1711,8 +1710,8 @@ function renderNumberServices(list) {
   const cards = document.getElementById('smsMobileCards');
 
   if (!items.length) {
-    if (tbody) tbody.innerHTML = `<tr><td colspan="8" class="empty-state">No SMS numbers yet — run "Sync Grizzly" or "Sync LogsDomain" to pull a supplier catalog.</td></tr>`;
-    if (cards) cards.innerHTML = `<div class="empty-state">No SMS numbers yet — run "Sync Grizzly" or "Sync LogsDomain" to pull a supplier catalog.</div>`;
+    if (tbody) tbody.innerHTML = `<tr><td colspan="8" class="empty-state">No SMS numbers yet — run "Sync Grizzly" to pull Grizzly catalog (Server 1). Server 2 uses live SMS-Bus data.</td></tr>`;
+    if (cards) cards.innerHTML = `<div class="empty-state">No SMS numbers yet — run "Sync Grizzly" to pull Grizzly catalog (Server 1). Server 2 uses live SMS-Bus data.</div>`;
     return;
   }
 
@@ -1779,12 +1778,36 @@ function editNumberService(id) {
 }
 function closeSmsModal() { document.getElementById('smsModal').classList.add('hidden'); }
 
-// ---------- SMS Numbers — Server 2 (LogsDomain only) ----------
+// ---------- SMS Numbers — Server 2 (SMS-Bus only) ----------
 // Same table (number_services), same modal, same edit/save/delete backend
 // call as Server 1 above — just a separate array + separate DOM targets, so
 // browsing one tab can never stomp on data loaded in the other, and always
-// filtered to source='logsdomain' so this view never shows Grizzly rows.
+// filtered to source='smsbus' so this view never shows Grizzly rows.
 let allNumberServicesServer2 = [];
+
+
+async function syncSmsBusNow() {
+  const btn = document.getElementById('btnSyncSmsBus');
+  const idle = '<i class="fas fa-sync"></i> Sync Server 2';
+  setBtnBusy(btn, true, 'Syncing…');
+  try {
+    const headers = await authHeaders();
+    const res = await fetch('/api/sms-bus?action=sync', { method: 'GET', headers });
+    const data = await res.json();
+    if (data.success) {
+      const d = data.data || {};
+      showAdminToast(`Server 2 OK · Countries ${d.countries||0} · Services ${d.projects||0} · Rent areas ${d.rent_areas||0}`, 'success');
+      const prog = document.getElementById('logsdomainSyncProgress2');
+      if (prog) prog.textContent = `SMS-Bus: ${d.countries||0} countries, ${d.projects||0} services, balance ${d.balance != null ? d.balance : '—'}`;
+    } else {
+      showAdminToast(data.message || 'Server 2 sync failed', 'error');
+    }
+  } catch (e) {
+    showAdminToast('Server 2 sync failed: ' + (e.message || e), 'error');
+  } finally {
+    setBtnBusy(btn, false, idle);
+  }
+}
 
 async function loadSmsServer2RowsForCurrentFilter() {
   const country = document.getElementById('smsServer2CountryFilter')?.value || '';
@@ -1806,7 +1829,7 @@ async function loadSmsServer2RowsForCurrentFilter() {
   }
 
   try {
-    let query = sb.from('number_services').select(cols).eq('source', 'logsdomain');
+    let query = sb.from('number_services').select(cols).eq('source', 'smsbus');
     if (country) query = query.ilike('country_name', `%${country}%`);
     if (q) {
       query = query.or(
@@ -2084,57 +2107,7 @@ async function syncGrizzlyNow() {
 // telling you to just click the button again — safe to re-run, each
 // service is upserted by its own ID so nothing gets duplicated.
 async function syncLogsDomainNumbersNow() {
-  const btns = [document.getElementById('btnSyncLogsDomainNumbers'), document.getElementById('btnSyncLogsDomainNumbers2')].filter(Boolean);
-  const progresses = [document.getElementById('logsdomainSyncProgress'), document.getElementById('logsdomainSyncProgress2')].filter(Boolean);
-  const idleLabel = '<i class="fas fa-sync"></i> Sync LogsDomain';
-  btns.forEach(btn => setBtnBusy(btn, true, 'Syncing...'));
-  progresses.forEach(p => p.textContent = 'Pulling countries and services from LogsDomain…');
-  try {
-    const headers = await authHeaders();
-    let done = false;
-    let last = null;
-    let rounds = 0;
-    const MAX_ROUNDS = 40;
-    while (!done && rounds < MAX_ROUNDS) {
-      rounds += 1;
-      progresses.forEach(p => {
-        p.textContent = last
-          ? `Syncing… ${last.countries_seen || 0}/${last.total_countries || '?'} countries (round ${rounds})`
-          : `Pulling countries and services from LogsDomain… (round ${rounds})`;
-      });
-      let res = await fetch('/api/logsdomain-numbers?action=sync', { method: 'POST', headers });
-      let data = await res.json().catch(() => ({}));
-      if (!data.success && (res.status === 405 || res.status === 400)) {
-        res = await fetch('/api/logsdomain-numbers?action=sync', { method: 'GET', headers });
-        data = await res.json().catch(() => ({}));
-      }
-      if (!data.success) {
-        showAdminToast(data.message || 'Could not sync LogsDomain', 'error');
-        progresses.forEach(p => p.textContent = data.message || '');
-        return;
-      }
-      last = data;
-      done = !!data.done;
-      progresses.forEach(p => {
-        p.textContent = done
-          ? `Synced ${data.countries_seen}/${data.total_countries} countries, ${data.services_seen} services (${data.new_services} new, ${data.updated_services} updated).`
-          : `${data.message || 'Partial'} (${data.countries_seen}/${data.total_countries})`;
-      });
-      if (!done) await new Promise(r => setTimeout(r, 400));
-    }
-    if (last && last.errors && last.errors.length) {
-      console.warn('LogsDomain numbers sync partial errors:', last.errors);
-      showAdminToast(last.errors[0], 'info');
-    } else {
-      showAdminToast(done ? 'LogsDomain numbers catalog synced.' : 'Partial sync — click Sync LogsDomain again to continue.', done ? 'success' : 'info');
-    }
-    await Promise.all([loadSmsRowsForCurrentFilter(), loadSmsServer2RowsForCurrentFilter()]);
-  } catch (e) {
-    showAdminToast('Sync failed: ' + e.message, 'error');
-    progresses.forEach(p => p.textContent = '');
-  } finally {
-    btns.forEach(btn => setBtnBusy(btn, false, idleLabel));
-  }
+  showAdminToast('LogsDomain SMS was removed. Use Server 2 → Sync Server 2 (SMS-Bus).', 'error');
 }
 
 // Called on admin dashboard load — if a sync was already running when the

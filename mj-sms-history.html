@@ -72,6 +72,10 @@ body{font-family:'Plus Jakarta Sans',system-ui,sans-serif;background:var(--bg);c
     <button type="button" class="chip" data-filter="cancelled">Cancelled</button>
     <button type="button" class="chip" data-filter="waiting">Waiting</button>
   </div>
+  <div style="display:flex;gap:8px;margin:0 0 14px;flex-wrap:wrap;align-items:center">
+    <input id="histSearch" type="search" placeholder="Search number, country, order id…" style="flex:1;min-width:160px;padding:10px 12px;border-radius:12px;border:1px solid var(--border);background:var(--card);color:var(--text);font:600 13px inherit">
+    <a id="histPrimaryCta" href="mj-sms-choose-server.html" style="padding:10px 14px;border-radius:12px;background:var(--primary,#3b82f6);color:#fff;font:800 12px inherit;text-decoration:none;white-space:nowrap">Get OTP</a>
+  </div>
   <div class="list" id="list"></div>
 </div>
 <script>
@@ -84,17 +88,34 @@ function money(n){return '₦'+Number(n||0).toLocaleString()}
 function bucket(status){const s=String(status||'').toLowerCase();if(s==='completed'||s==='success')return'completed';if(s==='refunded'||s==='cancelled'||s==='canceled')return'cancelled';if(s==='waiting_for_code'||s==='pending'||s==='waiting')return'waiting';return'other'}
 function isRent(o){return String(o.source||'')==='smsbus_rent'||String(o.service_id||'')==='rent'||/rental/i.test(String(o.service_name||''))}
 function serverLabel(o){
-  const src=String(o.source||'');
-  if(src==='smsbus')return'Server 2';
-  if(src==='smsbus_rent')return'Rental';
-  if(src==='logsdomain')return'Server 2 (legacy)';
-  return'Server 1';
+  // Customer-facing labels only — never show supplier names
+  const src=String(o.source||'').toLowerCase();
+  if(src==='smsbus_rent'||src.indexOf('rent')>=0) return 'Rental';
+  if(src==='smsbus'||src==='logsdomain') return 'Server 2';
+  return 'Server 1';
+}
+function updateHistCta(){
+  var a=document.getElementById('histPrimaryCta');
+  if(!a) return;
+  if(view==='rent'){
+    a.href='mj-sms-rent.html';
+    a.textContent='+ Rent a Number';
+  } else {
+    a.href='mj-sms-choose-server.html';
+    a.textContent='Get OTP';
+  }
+}
+function matchesSearch(o){
+  var q=(document.getElementById('histSearch')&&document.getElementById('histSearch').value||'').trim().toLowerCase();
+  if(!q) return true;
+  var blob=[o.phone_number,o.country_name,o.service_name,o.order_id,o.status].join(' ').toLowerCase();
+  return blob.indexOf(q)!==-1;
 }
 function render(){
-  let rows=allOrders.filter(function(o){return view==='rent'?isRent(o):!isRent(o)});
+  let rows=allOrders.filter(function(o){return matchesSearch(o)&&(view==='rent'?isRent(o):!isRent(o))});
   if(view==='otp'&&filter!=='all')rows=rows.filter(function(o){return bucket(o.status)===filter});
   if(!rows.length){
-    listEl.innerHTML='<div class="empty">'+(view==='rent'?'No rented numbers yet.':'No OTP numbers yet.')+'</div>';
+    listEl.innerHTML='<div class="empty">'+(view==='rent'?'No rented numbers yet. Use + Rent a Number to get one.':'No OTP numbers yet. Tap Get OTP to choose a server.')+'</div>';
     return;
   }
   listEl.innerHTML=rows.map(function(o){
@@ -106,7 +127,7 @@ function render(){
     let action='';
     if(!isRent(o)&&String(o.status)==='waiting_for_code'){
       const page=(o.source==='smsbus')?'mj-sms3-number.html':'mj-sms-number.html';
-      action='<div class="act"><a href="'+page+'?order_id='+encodeURIComponent(o.order_id||'')+'">Open</a></div>';
+      action='<div class="act"><a href="'+page+'?order_id='+encodeURIComponent(o.order_id||'')+'">Verify SMS</a></div>';
     }
     const expire=isRent(o)&&(o.code?('<div class="row"><span class="l">Expires</span><span class="v">'+esc(o.code)+'</span></div>'):'');
     return '<div class="card"><div class="card-head"><div class="name">'+esc(name)+'</div><div class="price">'+money(o.price)+'</div></div>'+
@@ -125,6 +146,7 @@ document.querySelectorAll('.tab').forEach(function(t){
     view=t.getAttribute('data-view');
     document.querySelectorAll('.tab').forEach(function(x){x.classList.toggle('on',x===t)});
     document.getElementById('otpFilters').style.display=view==='otp'?'flex':'none';
+    updateHistCta();
     render();
   };
 });
@@ -134,13 +156,14 @@ document.getElementById('otpFilters').onclick=function(e){
   document.querySelectorAll('#otpFilters .chip').forEach(function(x){x.classList.toggle('on',x===c)});
   render();
 };
+document.getElementById('histSearch').addEventListener('input',function(){render()});
 async function init(){
   const sb=window.supabase.createClient(SUPABASE_URL,SUPABASE_ANON_KEY,{auth:{persistSession:true,autoRefreshToken:true,storage:window.sessionStorage}});
   const {data:{session}}=await sb.auth.getSession();
   if(!session){location.href='auth.html';return}
   const {data,error}=await sb.from('number_orders').select('*').eq('user_id',session.user.id).order('created_at',{ascending:false});
   if(error){listEl.innerHTML='<div class="empty">Failed to load</div>';return}
-  allOrders=data||[];render();
+  allOrders=data||[];updateHistCta();render();
 }
 init();
 </script>

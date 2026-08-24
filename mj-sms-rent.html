@@ -136,6 +136,39 @@ document.getElementById('area').onchange = function() {
   updateCost();
 };
 
+
+const COUNTRY_ISO = {
+  canada:'ca','united kingdom':'gb',uk:'gb','united states':'us','united states of america':'us',usa:'us',
+  nigeria:'ng',india:'in',germany:'de',france:'fr',spain:'es',italy:'it',brazil:'br',mexico:'mx',
+  australia:'au',netherlands:'nl',poland:'pl',turkey:'tr',sweden:'se',norway:'no',denmark:'dk',finland:'fi'
+};
+function countryIso(name){
+  var n = String(name||'').toLowerCase().trim();
+  return COUNTRY_ISO[n] || null;
+}
+function enhanceAreaSelect(){
+  var wrap = document.getElementById('areaFlagWrap');
+  if(!wrap){
+    var area = document.getElementById('area');
+    if(!area) return;
+    wrap = document.createElement('div');
+    wrap.id = 'areaFlagWrap';
+    wrap.style.cssText = 'display:flex;align-items:center;gap:10px;margin-top:8px;font-size:14px;font-weight:700';
+    area.parentNode.insertBefore(wrap, area.nextSibling);
+    area.addEventListener('change', syncAreaFlag);
+  }
+  syncAreaFlag();
+}
+function syncAreaFlag(){
+  var area = document.getElementById('area');
+  var wrap = document.getElementById('areaFlagWrap');
+  if(!area||!wrap) return;
+  var title = area.options[area.selectedIndex] ? area.options[area.selectedIndex].text : '';
+  var iso = countryIso(title);
+  wrap.innerHTML = (iso ? ('<img src="https://flagcdn.com/w40/'+iso+'.png" width="28" height="20" style="border-radius:3px;object-fit:cover" alt="">') : '🌍') +
+    '<span>'+title+'</span>';
+}
+
 async function loadAreas() {
   const h = await headers();
   if (!h) return;
@@ -149,8 +182,13 @@ async function loadAreas() {
   }
   areas = j.data;
   sel.innerHTML = areas.map(function(a){
-    return '<option value="'+a.area_code+'">'+a.title+'</option>';
+    var iso = countryIso(a.title);
+    var flag = iso ? ('https://flagcdn.com/w20/'+iso+'.png') : '';
+    var label = a.title;
+    return '<option value="'+a.area_code+'" data-flag="'+flag+'">'+label+'</option>';
   }).join('');
+  // Custom display: show flag next to selected country in a helper line
+  enhanceAreaSelect();
   months = Number(areas[0].min_month || 1);
   updateCost();
 }

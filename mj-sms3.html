@@ -3,126 +3,373 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Server 2 · OTP · MJ HUB</title>
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<title>Server 2 · OTP · MJ SMS - MJ HUB</title>
 <script>(function(){try{var t=localStorage.getItem('mjhub-theme');document.documentElement.setAttribute('data-theme',(t==='light'||t==='dark')?t:'dark');}catch(e){document.documentElement.setAttribute('data-theme','dark');}})();</script>
 <script src="/js/mj-page-loader.js" defer></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/css/skeleton.css">
 <style>
-:root[data-theme="dark"]{--bg:#06080f;--card:#0f1524;--text:#f1f5f9;--muted:#8b9bb4;--border:rgba(148,163,184,.12);--primary:#3b82f6}
-:root[data-theme="light"]{--bg:#f4f6fb;--card:#fff;--text:#0f172a;--muted:#64748b;--border:rgba(15,23,42,.08);--primary:#2563eb}
+:root[data-theme="dark"]{--primary:#5b8af5;--primary-strong:#3b6ef5;--primary-glow:rgba(91,138,245,.28);--accent:#a78bfa;--bg:#06080f;--card:#0f1524;--text:#f1f5f9;--muted:#8b9bb4;--border:rgba(148,163,184,.12);--success:#34d399;--shadow:0 18px 50px rgba(0,0,0,.45)}
+:root[data-theme="light"]{--primary:#3b6ef5;--primary-strong:#2554e8;--primary-glow:rgba(59,110,245,.18);--accent:#7c5cfc;--bg:#f4f6fb;--card:#fff;--text:#0f172a;--muted:#64748b;--border:rgba(15,23,42,.08);--success:#059669;--shadow:0 16px 40px rgba(15,23,42,.08)}
 *{box-sizing:border-box;margin:0;padding:0}
-body{font-family:'Plus Jakarta Sans',system-ui,sans-serif;background:var(--bg);color:var(--text);min-height:100vh}
-.shell{max-width:560px;margin:0 auto;padding:0 16px 48px}
-.hdr{display:flex;align-items:center;gap:12px;padding:14px 0;position:sticky;top:0;background:color-mix(in srgb,var(--bg) 90%,transparent);backdrop-filter:blur(12px);z-index:10}
-.back{width:42px;height:42px;border-radius:12px;border:1px solid var(--border);background:var(--card);display:flex;align-items:center;justify-content:center;color:var(--text);text-decoration:none}
-h1{font-size:18px;font-weight:800}
-.note{font-size:12px;color:var(--muted);margin:8px 0 16px;line-height:1.45}
-label{display:block;font-size:12px;font-weight:700;color:var(--muted);margin:12px 0 6px}
-select,button.primary{width:100%;padding:12px 14px;border-radius:12px;border:1px solid var(--border);background:var(--card);color:var(--text);font:600 14px inherit}
-button.primary{background:var(--primary);border-color:var(--primary);color:#fff;font-weight:800;cursor:pointer;margin-top:16px}
-.row{display:flex;align-items:center;gap:8px;margin-top:12px;font-size:13px}
-.list{margin-top:16px;display:flex;flex-direction:column;gap:10px}
-.card{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:14px}
-.card b{display:block;font-size:14px}
-.card span{font-size:12px;color:var(--muted)}
-.price{color:var(--primary);font-weight:800}
-.err{color:#f87171;font-size:13px;margin-top:10px}
+body{font-family:'Plus Jakarta Sans',system-ui,sans-serif;background:var(--bg);color:var(--text);min-height:100vh;padding-bottom:40px}
+.header{padding:14px 16px;display:flex;align-items:center;gap:12px;position:sticky;top:0;z-index:100;background:color-mix(in srgb,var(--bg) 88%,transparent);backdrop-filter:blur(16px);border-bottom:1px solid var(--border)}
+.back-button{width:40px;height:40px;border-radius:12px;background:var(--card);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;color:var(--text);text-decoration:none}
+.page-title{font-size:18px;font-weight:800;background:linear-gradient(135deg,var(--primary),var(--accent));-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+.hist-btn{margin-left:auto;font-size:12px;font-weight:700;color:var(--primary);text-decoration:none;padding:8px 12px;border-radius:10px;border:1px solid var(--border);background:var(--card)}
+.main{padding:16px;max-width:700px;margin:0 auto}
+.content-card{background:var(--card);border:1px solid var(--border);border-radius:18px;padding:18px 16px;box-shadow:var(--shadow)}
+.content-card h2{font-size:16px;font-weight:800;margin-bottom:6px;display:flex;align-items:center;gap:8px}
+.helper-text{font-size:12px;color:var(--muted);margin-bottom:14px;line-height:1.45}
+.search-bar{display:flex;align-items:center;gap:10px;background:var(--bg);border:1px solid var(--border);border-radius:12px;padding:10px 12px;margin-bottom:12px}
+.search-bar i{color:var(--muted)}
+.search-bar input{flex:1;border:none;background:transparent;color:var(--text);font:600 14px inherit;outline:none}
+.country-list{display:flex;flex-direction:column;gap:8px;max-height:62vh;overflow-y:auto}
+.country-row{display:flex;align-items:center;justify-content:space-between;padding:13px 14px;border-radius:12px;background:var(--bg);border:1px solid var(--border);cursor:pointer}
+.country-row:active{background:var(--primary-glow)}
+.country-row .left{display:flex;align-items:center;gap:10px;font-weight:700;font-size:14px}
+.country-row .flag-img{width:28px;height:20px;object-fit:cover;border-radius:3px;background:var(--border)}
+.country-row .count{font-size:11px;color:var(--primary);background:var(--primary-glow);padding:3px 9px;border-radius:20px;font-weight:700;white-space:nowrap}
+.selected-country-bar{display:flex;align-items:center;justify-content:space-between;background:var(--primary-glow);border-radius:12px;padding:12px 14px;margin-bottom:14px}
+.selected-country-bar .name{font-weight:800;font-size:14px;color:var(--primary);display:flex;align-items:center;gap:8px}
+.selected-country-bar button{background:none;border:1px solid var(--primary);color:var(--primary);font-size:11px;font-weight:700;padding:6px 12px;border-radius:8px;cursor:pointer;font-family:inherit}
+.product-count-badge{display:inline-block;font-size:11px;font-weight:700;color:var(--primary);background:var(--primary-glow);padding:4px 10px;border-radius:20px;margin-bottom:12px}
+.product-grid{display:flex;flex-direction:column;gap:10px}
+.svc-card{background:var(--bg);border:1px solid var(--border);border-radius:14px;padding:14px;display:flex;flex-direction:column;gap:10px}
+.svc-top{display:flex;align-items:center;gap:12px}
+.svc-logo{width:42px;height:42px;border-radius:12px;object-fit:contain;background:#fff;padding:4px}
+.svc-icon{width:42px;height:42px;border-radius:12px;display:flex;align-items:center;justify-content:center;color:#fff;font-size:18px;flex-shrink:0}
+.svc-meta{flex:1;min-width:0}
+.svc-name{font-weight:800;font-size:14px}
+.svc-price{font-weight:800;font-size:15px;color:var(--primary);margin-left:auto}
+.badge-stock{display:inline-block;padding:3px 8px;border-radius:6px;font-size:10px;font-weight:700;background:rgba(52,211,153,.15);color:var(--success);margin-top:4px}
+.btn-buy{width:100%;padding:12px;border:none;border-radius:11px;font:700 13px inherit;cursor:pointer;background:linear-gradient(135deg,var(--primary),var(--primary-strong));color:#fff}
+.btn-buy:disabled{opacity:.5;cursor:not-allowed}
+.reuse-row{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--muted);margin:8px 0 4px}
+.toast-c{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);z-index:200;display:flex;flex-direction:column;gap:8px}
+.toast{background:var(--card);border:1px solid var(--success);border-radius:12px;padding:12px 14px;font-size:12px;font-weight:600;box-shadow:var(--shadow);color:var(--text);max-width:300px}
+.toast.error{border-color:#f87171}
+.empty-state{text-align:center;padding:40px 16px;color:var(--muted)}
+.server-tag{display:inline-flex;align-items:center;gap:6px;font-size:11px;font-weight:700;color:var(--primary);background:var(--primary-glow);padding:4px 10px;border-radius:20px;margin-bottom:10px}
 </style>
 </head>
 <body>
-<div class="shell">
-  <header class="hdr">
-    <a class="back" href="mj-sms-choose-server.html"><i class="fa-solid fa-arrow-left"></i></a>
-    <h1>Server 2 · OTP</h1>
-  </header>
-  <p class="note">Reuse of the same number is only possible within about <strong>20 minutes</strong> when available — not the next day.</p>
-  <label>Country</label>
-  <select id="country"></select>
-  <label>Service</label>
-  <select id="project"><option value="">Select country first</option></select>
-  <div class="row"><input type="checkbox" id="reusePref"> <label for="reusePref" style="margin:0">Prefer reusable numbers</label></div>
-  <div id="priceBox" class="note"></div>
-  <button type="button" class="primary" id="buyBtn">Buy number</button>
-  <div class="err" id="err"></div>
-  <div class="list" id="services"></div>
+<div class="header">
+  <a href="mj-sms-choose-server.html" class="back-button"><i class="fa-solid fa-arrow-left"></i></a>
+  <div class="page-title">MJ SMS</div>
+  <a class="hist-btn" href="mj-sms-history.html"><i class="fa-solid fa-clock-rotate-left"></i> History</a>
 </div>
+<div class="main">
+  <div class="content-card" id="countryStep">
+    <span class="server-tag"><i class="fa-solid fa-server"></i> Server 2</span>
+    <h2><i class="fa-solid fa-earth-americas" style="color:var(--primary)"></i> Choose a Country</h2>
+    <p class="helper-text">Pick the country your number should come from. Prices vary by country and service.</p>
+    <div class="search-bar"><i class="fa-solid fa-magnifying-glass"></i><input type="text" id="countrySearch" placeholder="Search countries..."></div>
+    <div id="countryList" class="country-list">
+      <div class="sk-cards" aria-busy="true"></div>
+    </div>
+  </div>
+  <div class="content-card" id="serviceStep" style="display:none">
+    <h2><i class="fa-solid fa-mobile-screen" style="color:var(--primary)"></i> Choose a Service</h2>
+    <div class="selected-country-bar">
+      <span class="name" id="selectedCountryName"></span>
+      <button type="button" id="changeCountryBtn">Change</button>
+    </div>
+    <div class="search-bar"><i class="fa-solid fa-magnifying-glass"></i><input type="text" id="serviceSearch" placeholder="Search services (Telegram, WhatsApp...)"></div>
+    <label class="reuse-row"><input type="checkbox" id="reusePref"> Prefer reusable number when available</label>
+    <div id="serviceCountBadge"></div>
+    <div id="serviceGrid"></div>
+  </div>
+</div>
+<div class="toast-c" id="toastContainer"></div>
 <script>
 const SUPABASE_URL = 'https://atczodlljmlayvldxfmv.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImF0Y3pvZGxsam1sYXl2bGR4Zm12Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODUwNzUyMzgsImV4cCI6MjEwMDY1MTIzOH0.ufthD-p7BmeD_B7xyuMM6PNPL8DmcL4AtRYgg-MuoLI';
-const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
-  auth: { persistSession: true, autoRefreshToken: true, storage: window.sessionStorage }
-});
-let priceMap = {};
-async function authHeaders() {
-  const { data: { session } } = await sb.auth.getSession();
-  if (!session) { location.href = 'auth.html'; return null; }
-  return { Authorization: 'Bearer ' + session.access_token, 'Content-Type': 'application/json' };
-}
-async function api(action, opts) {
-  opts = opts || {};
-  const h = await authHeaders();
-  if (!h) return null;
-  const res = await fetch('/api/sms-bus?action=' + encodeURIComponent(action) + (opts.qs || ''), {
-    method: opts.method || 'GET', headers: h, body: opts.body ? JSON.stringify(opts.body) : undefined
-  });
-  return res.json();
-}
-function money(n){ return '₦' + Number(n||0).toLocaleString(); }
-async function loadCountries() {
-  const j = await api('countries');
-  const sel = document.getElementById('country');
-  if (!j || !j.success) { document.getElementById('err').textContent = (j && j.message) || 'Failed to load countries'; return; }
-  sel.innerHTML = '<option value="">Select country</option>' + j.data.map(function(c){
-    return '<option value="'+c.id+'">'+c.title+'</option>';
-  }).join('');
-}
-document.getElementById('country').onchange = async function() {
-  var id = this.value;
-  document.getElementById('project').innerHTML = '<option value="">Loading…</option>';
-  document.getElementById('services').innerHTML = '';
-  if (!id) return;
-  var j = await api('prices', { qs: '&country_id=' + encodeURIComponent(id) });
-  if (!j || !j.success) {
-    document.getElementById('project').innerHTML = '<option value="">No services</option>';
-    document.getElementById('err').textContent = (j && j.message) || 'No prices';
-    return;
+</script>
+<script>
+(function(){
+  window.SUPABASE_URL = SUPABASE_URL;
+  window.SUPABASE_ANON_KEY = SUPABASE_ANON_KEY;
+
+  const toastContainer = document.getElementById('toastContainer');
+  const countryList = document.getElementById('countryList');
+  const countryStep = document.getElementById('countryStep');
+  const serviceStep = document.getElementById('serviceStep');
+  const serviceGrid = document.getElementById('serviceGrid');
+  const serviceCountBadge = document.getElementById('serviceCountBadge');
+  const countrySearch = document.getElementById('countrySearch');
+  const serviceSearch = document.getElementById('serviceSearch');
+
+  let sbClient, accessToken, allCountries = [], currentCountry = null, allServices = [], isBuying = false;
+
+  function esc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+  function money(n){ return '₦' + Number(n||0).toLocaleString(); }
+  function toast(msg, type){
+    const t = document.createElement('div');
+    t.className = 'toast' + (type==='error'?' error':'');
+    t.textContent = msg;
+    toastContainer.appendChild(t);
+    setTimeout(()=>t.remove(), 3500);
   }
-  priceMap = {};
-  j.data.forEach(function(r){ priceMap[r.project_id] = r; });
-  document.getElementById('project').innerHTML = '<option value="">Select service</option>' +
-    j.data.map(function(r){
-      return '<option value="'+r.project_id+'">'+(r.title||('Service '+r.project_id))+' — '+money(r.price)+'</option>';
+
+  const COUNTRY_ISO = {
+    afghanistan:'af',albania:'al',algeria:'dz','american samoa':'as',andorra:'ad',angola:'ao',anguilla:'ai',
+    'antigua and barbuda':'ag',argentina:'ar',armenia:'am',australia:'au',austria:'at',azerbaijan:'az',
+    bahamas:'bs',bahrain:'bh',bangladesh:'bd',barbados:'bb',belarus:'by',belgium:'be',belize:'bz',benin:'bj',
+    bermuda:'bm',bolivia:'bo','bosnia and herzegovina':'ba',botswana:'bw',brazil:'br',brunei:'bn',bulgaria:'bg',
+    'burkina faso':'bf',burundi:'bi',cambodia:'kh',cameroon:'cm',canada:'ca','cape verde':'cv',chad:'td',chile:'cl',
+    china:'cn',colombia:'co',congo:'cg','costa rica':'cr',croatia:'hr',cuba:'cu',cyprus:'cy','czech republic':'cz',
+    denmark:'dk','dominican republic':'do',ecuador:'ec',egypt:'eg','el salvador':'sv',england:'gb',estonia:'ee',
+    ethiopia:'et',fiji:'fj',finland:'fi',france:'fr',gabon:'ga',gambia:'gm',georgia:'ge',germany:'de',ghana:'gh',
+    greece:'gr',guatemala:'gt',guinea:'gn',haiti:'ht',honduras:'hn','hong kong':'hk',hungary:'hu',iceland:'is',
+    india:'in',indonesia:'id',iran:'ir',iraq:'iq',ireland:'ie',israel:'il',italy:'it','ivory coast':'ci',jamaica:'jm',
+    japan:'jp',jordan:'jo',kazakhstan:'kz',kenya:'ke',kuwait:'kw',kyrgyzstan:'kg',laos:'la',latvia:'lv',lebanon:'lb',
+    liberia:'lr',libya:'ly',lithuania:'lt',luxembourg:'lu',macau:'mo',madagascar:'mg',malawi:'mw',malaysia:'my',
+    maldives:'mv',mali:'ml',malta:'mt',mauritania:'mr',mauritius:'mu',mexico:'mx',moldova:'md',mongolia:'mn',
+    montenegro:'me',morocco:'ma',mozambique:'mz',myanmar:'mm',namibia:'na',nepal:'np',netherlands:'nl','new zealand':'nz',
+    nicaragua:'ni',niger:'ne',nigeria:'ng',norway:'no',oman:'om',pakistan:'pk',panama:'pa',paraguay:'py',peru:'pe',
+    philippines:'ph',poland:'pl',portugal:'pt','puerto rico':'pr',qatar:'qa',romania:'ro',russia:'ru',rwanda:'rw',
+    'saudi arabia':'sa',senegal:'sn',serbia:'rs',singapore:'sg',slovakia:'sk',slovenia:'si','south africa':'za',
+    'south korea':'kr',spain:'es','sri lanka':'lk',sudan:'sd',sweden:'se',switzerland:'ch',syria:'sy',taiwan:'tw',
+    tajikistan:'tj',tanzania:'tz',thailand:'th',togo:'tg',tunisia:'tn',turkey:'tr',turkmenistan:'tm',uganda:'ug',
+    ukraine:'ua','united arab emirates':'ae',uae:'ae','united kingdom':'gb',uk:'gb','united states':'us',usa:'us',
+    'united states of america':'us',uruguay:'uy',uzbekistan:'uz',venezuela:'ve',vietnam:'vn',yemen:'ye',zambia:'zm',zimbabwe:'zw'
+  };
+
+  function countryIso(name){
+    const n = String(name||'').toLowerCase().trim().replace(/\s*\(.*?\)\s*/g,' ').replace(/\s+/g,' ').trim();
+    return COUNTRY_ISO[n] || COUNTRY_ISO[n.replace(/ of america$/,'')] || null;
+  }
+  function flagHtml(name){
+    const iso = countryIso(name);
+    if(iso) return '<img class="flag-img" src="https://flagcdn.com/w40/'+iso+'.png" alt="" loading="lazy" onerror="this.style.display=\'none\'">';
+    return '<span style="font-size:18px">🌍</span>';
+  }
+
+  // Service brand domain for logo (Brandfetch CDN / Google favicon fallback)
+  const SERVICE_DOMAIN = {
+    whatsapp:'whatsapp.com',telegram:'telegram.org',facebook:'facebook.com',instagram:'instagram.com',
+    tiktok:'tiktok.com',twitter:'x.com',google:'google.com',gmail:'gmail.com',discord:'discord.com',
+    snapchat:'snapchat.com',linkedin:'linkedin.com',amazon:'amazon.com',apple:'apple.com',microsoft:'microsoft.com',
+    paypal:'paypal.com',steam:'steampowered.com',twitch:'twitch.tv',youtube:'youtube.com',viber:'viber.com',
+    wechat:'wechat.com',line:'line.me',tinder:'tinder.com',uber:'uber.com',netflix:'netflix.com',
+    openai:'openai.com',chatgpt:'openai.com',binance:'binance.com',signal:'signal.org'
+  };
+  function serviceLogo(name){
+    const n = String(name||'').toLowerCase();
+    let domain = null;
+    for(const k of Object.keys(SERVICE_DOMAIN)){ if(n.includes(k)){ domain = SERVICE_DOMAIN[k]; break; } }
+    if(!domain){
+      // try first word as domain guess
+      const w = n.replace(/[^a-z0-9]+/g,' ').trim().split(' ')[0];
+      if(w && w.length > 2) domain = w + '.com';
+    }
+    if(!domain) return null;
+    // Brandfetch CDN (public icon path) + Google favicon fallback via onerror
+    return 'https://www.google.com/s2/favicons?domain='+encodeURIComponent(domain)+'&sz=64';
+  }
+
+  const SERVICE_ICON_MAP = [
+    ['whatsapp','fa-brands fa-whatsapp','#25D366'],['telegram','fa-brands fa-telegram','#26A5E4'],
+    ['facebook','fa-brands fa-facebook-f','#1877F2'],['instagram','fa-brands fa-instagram','#E1306C'],
+    ['tiktok','fa-brands fa-tiktok','#111'],['google','fa-brands fa-google','#4285F4'],
+    ['discord','fa-brands fa-discord','#5865F2'],['snapchat','fa-brands fa-snapchat','#FFFC00'],
+    ['amazon','fa-brands fa-amazon','#FF9900'],['apple','fa-brands fa-apple','#000'],
+    ['microsoft','fa-brands fa-microsoft','#00A4EF'],['paypal','fa-brands fa-paypal','#00457C'],
+    ['youtube','fa-brands fa-youtube','#FF0000'],['twitter','fa-brands fa-x-twitter','#000'],
+    ['viber','fa-brands fa-viber','#7360F2'],['wechat','fa-brands fa-weixin','#07C160']
+  ];
+  function serviceFa(name){
+    const n = String(name||'').toLowerCase();
+    for(const [k,cls,color] of SERVICE_ICON_MAP){ if(n.includes(k)) return {cls,color}; }
+    return {cls:'fa-solid fa-mobile-screen',color:'#5b8af5'};
+  }
+
+  function skCountries(){
+    return '<div style="display:flex;flex-direction:column;gap:8px" aria-busy="true">'+
+      Array.from({length:8}).map(()=>'<div style="height:52px;border-radius:12px;background:linear-gradient(90deg,var(--border),transparent,var(--border));background-size:200% 100%;animation:sk 1.2s infinite"></div>').join('')+
+      '</div><style>@keyframes sk{0%{background-position:200% 0}100%{background-position:-200% 0}}</style>';
+  }
+  function skServices(){
+    return Array.from({length:6}).map(()=>'<div class="svc-card"><div class="svc-top"><div style="width:42px;height:42px;border-radius:12px;background:var(--border)"></div><div style="flex:1"><div style="height:12px;width:60%;background:var(--border);border-radius:6px;margin-bottom:8px"></div><div style="height:10px;width:40%;background:var(--border);border-radius:6px"></div></div></div><div style="height:40px;background:var(--border);border-radius:11px"></div></div>').join('');
+  }
+
+  async function api(action, opts){
+    opts = opts || {};
+    const qs = opts.qs || '';
+    const res = await fetch('/api/sms-bus?action='+encodeURIComponent(action)+qs, {
+      method: opts.method || 'GET',
+      headers: Object.assign({'Authorization':'Bearer '+accessToken}, opts.body?{'Content-Type':'application/json'}:{}),
+      body: opts.body ? JSON.stringify(opts.body) : undefined
+    });
+    const data = await res.json().catch(()=>({}));
+    if(!res.ok || data.success === false) throw new Error(data.message || ('HTTP '+res.status));
+    return data;
+  }
+
+  async function init(){
+    countryList.innerHTML = skCountries();
+    const url = (typeof SUPABASE_URL !== 'undefined' && SUPABASE_URL) || window.SUPABASE_URL;
+    const key = window.SUPABASE_ANON_KEY;
+    if(!window.supabase || !url || !key){
+      // try global from supabase-config
+    }
+    const SU = window.SUPABASE_URL || url;
+    const SK = window.SUPABASE_ANON_KEY;
+    if(!window.supabase || !SU || !SK){
+      countryList.innerHTML = '<div class="empty-state"><h4>Config missing</h4></div>';
+      return;
+    }
+    sbClient = window.supabase.createClient(SU, SK, {auth:{persistSession:true,autoRefreshToken:true,storage:window.sessionStorage}});
+    const { data: { session } } = await sbClient.auth.getSession();
+    if(!session){ location.href = 'auth.html'; return; }
+    accessToken = session.access_token;
+    await loadCountries();
+  }
+
+  async function loadCountries(){
+    countryList.innerHTML = skCountries();
+    try{
+      const j = await api('countries');
+      // data may be object map or array
+      let rows = [];
+      const d = j.data;
+      if(Array.isArray(d)){
+        rows = d.map(c => ({
+          country_id: c.country_id || c.id || c.code,
+          country_name: c.country_name || c.title || c.name || String(c.country_id||c.id),
+          service_count: c.service_count || c.projects || c.count || null
+        }));
+      } else if(d && typeof d === 'object'){
+        rows = Object.keys(d).map(k => {
+          const v = d[k];
+          if(v && typeof v === 'object'){
+            return {
+              country_id: v.country_id || v.id || k,
+              country_name: v.country_name || v.title || v.name || String(k),
+              service_count: v.service_count || v.count || null
+            };
+          }
+          return { country_id: k, country_name: String(v || k), service_count: null };
+        });
+      }
+      rows.sort((a,b)=>String(a.country_name).localeCompare(String(b.country_name)));
+      allCountries = rows;
+      renderCountries(allCountries);
+    }catch(e){
+      countryList.innerHTML = '<div class="empty-state"><h4>Failed to load</h4><p>'+esc(e.message)+'</p></div>';
+    }
+  }
+
+  function renderCountries(list){
+    if(!list.length){
+      countryList.innerHTML = '<div class="empty-state"><h4>No countries found</h4></div>';
+      return;
+    }
+    countryList.innerHTML = list.map(c => {
+      const count = c.service_count != null ? ('<span class="count">'+c.service_count+' services</span>') : '<span class="count">View</span>';
+      return '<div class="country-row" data-id="'+esc(c.country_id)+'"><span class="left">'+flagHtml(c.country_name)+'<span>'+esc(c.country_name)+'</span></span>'+count+'</div>';
     }).join('');
-  document.getElementById('services').innerHTML = j.data.map(function(r){
-    return '<div class="card svc" data-id="'+r.project_id+'" style="cursor:pointer"><b>'+(r.title||('Service '+r.project_id))+'</b><span>Stock '+r.stock+' · <span class="price">'+money(r.price)+'</span></span></div>';
-  }).join('');
-  document.querySelectorAll('.svc').forEach(function(el){
-    el.onclick = function(){
-      document.getElementById('project').value = el.getAttribute('data-id');
-      document.getElementById('project').dispatchEvent(new Event('change'));
-      el.scrollIntoView({behavior:'smooth', block:'nearest'});
-    };
+    countryList.querySelectorAll('.country-row').forEach(row => {
+      row.addEventListener('click', () => selectCountry(row.getAttribute('data-id')));
+    });
+  }
+
+  countrySearch.addEventListener('input', () => {
+    const q = countrySearch.value.trim().toLowerCase();
+    renderCountries(q ? allCountries.filter(c => String(c.country_name).toLowerCase().includes(q)) : allCountries);
   });
-};
-document.getElementById('project').onchange = function() {
-  var r = priceMap[this.value];
-  document.getElementById('priceBox').textContent = r ? ('You pay ' + money(r.price)) : '';
-};
-document.getElementById('buyBtn').onclick = async function() {
-  var err = document.getElementById('err');
-  err.textContent = '';
-  var country_id = document.getElementById('country').value;
-  var project_id = document.getElementById('project').value;
-  if (!country_id || !project_id) { err.textContent = 'Select country and service'; return; }
-  this.disabled = true; this.textContent = 'Buying…';
-  var j = await api('order', { method: 'POST', body: { country_id: country_id, project_id: project_id, reuse: document.getElementById('reusePref').checked } });
-  this.disabled = false; this.textContent = 'Buy number';
-  if (!j || !j.success) { err.textContent = (j && j.message) || 'Purchase failed'; return; }
-  location.href = 'mj-sms3-number.html?order_id=' + encodeURIComponent(j.data.order_id);
-};
-loadCountries();
+
+  async function selectCountry(id){
+    currentCountry = allCountries.find(c => String(c.country_id) === String(id));
+    if(!currentCountry) return;
+    countryStep.style.display = 'none';
+    serviceStep.style.display = 'block';
+    document.getElementById('selectedCountryName').innerHTML = flagHtml(currentCountry.country_name)+'<span>'+esc(currentCountry.country_name)+'</span>';
+    serviceGrid.innerHTML = skServices();
+    serviceCountBadge.innerHTML = '';
+    serviceSearch.value = '';
+    try{
+      const j = await api('prices', { qs: '&country_id='+encodeURIComponent(id) });
+      let list = Array.isArray(j.data) ? j.data : [];
+      allServices = list.map(r => ({
+        project_id: r.project_id || r.id,
+        title: r.title || r.name || r.service_name || ('Service '+ (r.project_id||r.id)),
+        price: r.price,
+        stock: r.stock != null ? r.stock : r.available_quantity
+      })).filter(s => s.project_id != null);
+      // update service count on country if missing
+      if(currentCountry.service_count == null) currentCountry.service_count = allServices.length;
+      renderServices(allServices);
+    }catch(e){
+      serviceGrid.innerHTML = '<div class="empty-state"><h4>Failed to load services</h4><p>'+esc(e.message)+'</p></div>';
+    }
+  }
+
+  function renderServices(list){
+    if(!list.length){
+      serviceGrid.innerHTML = '<div class="empty-state"><h4>No services</h4></div>';
+      serviceCountBadge.innerHTML = '';
+      return;
+    }
+    serviceCountBadge.innerHTML = '<span class="product-count-badge">'+list.length+' service'+(list.length!==1?'s':'')+' available</span>';
+    serviceGrid.innerHTML = '<div class="product-grid">'+list.map(s => {
+      const logo = serviceLogo(s.title);
+      const fa = serviceFa(s.title);
+      const icon = logo
+        ? '<img class="svc-logo" src="'+logo+'" alt="" loading="lazy" onerror="this.style.display=\'none\';this.nextElementSibling.style.display=\'flex\'"><div class="svc-icon" style="display:none;background:'+fa.color+'"><i class="'+fa.cls+'"></i></div>'
+        : '<div class="svc-icon" style="background:'+fa.color+'"><i class="'+fa.cls+'"></i></div>';
+      const stock = (s.stock != null && s.stock !== '') ? ('<span class="badge-stock">'+esc(s.stock)+' available</span>') : '';
+      return '<div class="svc-card"><div class="svc-top">'+icon+'<div class="svc-meta"><div class="svc-name">'+esc(s.title)+'</div>'+stock+'</div><div class="svc-price">'+money(s.price)+'</div></div><button type="button" class="btn-buy" data-id="'+esc(s.project_id)+'">Buy Number</button></div>';
+    }).join('')+'</div>';
+    serviceGrid.querySelectorAll('.btn-buy').forEach(btn => {
+      btn.addEventListener('click', () => buy(btn.getAttribute('data-id'), btn));
+    });
+  }
+
+  serviceSearch.addEventListener('input', () => {
+    const q = serviceSearch.value.trim().toLowerCase();
+    renderServices(q ? allServices.filter(s => String(s.title).toLowerCase().includes(q)) : allServices);
+  });
+
+  document.getElementById('changeCountryBtn').onclick = function(){
+    serviceStep.style.display = 'none';
+    countryStep.style.display = 'block';
+    currentCountry = null;
+    allServices = [];
+  };
+
+  async function buy(projectId, btn){
+    if(isBuying || !currentCountry) return;
+    isBuying = true;
+    btn.disabled = true;
+    const prev = btn.textContent;
+    btn.textContent = 'Processing…';
+    try{
+      const j = await api('order', {
+        method: 'POST',
+        body: {
+          country_id: currentCountry.country_id,
+          project_id: projectId,
+          reuse: document.getElementById('reusePref').checked
+        }
+      });
+      const oid = j.data && j.data.order_id;
+      if(!oid) throw new Error('No order id returned');
+      location.href = 'mj-sms3-number.html?order_id='+encodeURIComponent(oid);
+    }catch(e){
+      toast(e.message || 'Purchase failed', 'error');
+      btn.disabled = false;
+      btn.textContent = prev;
+      isBuying = false;
+    }
+  }
+
+  init();
+})();
 </script>
 </body>
 </html>
