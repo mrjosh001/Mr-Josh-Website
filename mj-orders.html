@@ -1028,8 +1028,8 @@ async function ensureAuth() {
 /** Server-side load (same approach as boosters / owlet) — avoids browser anon-key failures */
 let _myOrdersCache = null;
 
-async function fetchMyOrdersFromApi() {
-  if (_myOrdersCache) return _myOrdersCache;
+async function fetchMyOrdersFromApi(force) {
+  if (_myOrdersCache && !force) return _myOrdersCache;
   const token = session && session.access_token;
   if (!token) throw new Error('Please sign in');
   const headers = { Authorization: 'Bearer ' + token };
@@ -1055,7 +1055,7 @@ async function loadLogs() {
     return;
   }
   try {
-    const json = await fetchMyOrdersFromApi();
+    const json = await fetchMyOrdersFromApi(true);
     let rows = json.logs || [];
     if (!rows.length) {
       try {
@@ -1082,7 +1082,7 @@ async function loadSms() {
     return;
   }
   try {
-    const json = await fetchMyOrdersFromApi();
+    const json = await fetchMyOrdersFromApi(true);
     smsRows = (json.sms || []).slice().sort((a, b) => {
       return new Date(b.created_at || 0) - new Date(a.created_at || 0);
     });

@@ -732,12 +732,15 @@ buyBtn.innerHTML = originalLabel;
 function formatReceiptCredentials(raw) {
   var text = String(raw || '').replace(/\r/g, '').trim();
   if (!text) return '';
-  // Already labeled by formatCredentials on the server
-  if (/^\s*(Email|Username|Password|Phone|2FA|Token|Login)\s*:/im.test(text)) return text;
+  text = text.replace(/^(\s*Email:\s*)([^\s:]+@[^\s:]+)\s*:\s*([^\n|]+)/gim, function(_, p, email, pass) {
+    return p + email + '\nPassword: ' + pass.trim();
+  });
+  text = text.replace(/^(\s*Password:\s*)((?:Plan|AutoRenew|ExpireDate|DaysLeft)\s*=[^\n]*)/gim, function(_, p, meta) {
+    return 'Extra: ' + meta.trim();
+  });
   var blocks = text.split(/\n\s*\n/).map(function(b){ return b.trim(); }).filter(Boolean);
   if (blocks.length <= 1) {
     var lines = text.split(/\n+/).map(function(l){ return l.trim(); }).filter(Boolean);
-    // Multiple email:pass lines in one blob
     if (lines.length > 1 && lines.every(function(ln){ return /@/.test(ln) && /[:|]/.test(ln); })) {
       blocks = lines;
     } else {
@@ -747,27 +750,45 @@ function formatReceiptCredentials(raw) {
   function one(line) {
     var s = String(line || '').trim();
     if (!s) return '';
-    if (/^\s*(Email|Username|Password|Phone|2FA)\s*:/im.test(s)) return s;
-    // numbered prefix "1. email:pass"
     s = s.replace(/^\d+\.\s*/, '');
+    if (/^\s*(Email|Username|Password|Phone|2FA)\s*:/im.test(s) && !/^Email:\s*\S+@\S+:/.test(s)) return s;
+    if (s.indexOf('|') >= 0) {
+      var segs = s.split('|').map(function(x){ return x.trim(); }).filter(Boolean);
+      var head = segs[0] || '';
+      var em2 = head.match(/^([^\s:]+@[^\s:]+)\s*:\s*(.+)$/);
+      if (em2) {
+        var out = 'Email: ' + em2[1] + '\nPassword: ' + em2[2].trim();
+        var extra = segs.slice(1).join(' | ');
+        if (extra) out += '\nExtra: ' + extra;
+        return out;
+      }
+    }
     var em = s.match(/^([^\s:]+@[^\s:]+)\s*[:|]\s*(.+)$/);
-    if (em) return 'Email: ' + em[1] + '\nPassword: ' + em[2].trim();
+    if (em) {
+      var rest = em[2].trim();
+      var pipeBits = rest.split('|').map(function(x){ return x.trim(); }).filter(Boolean);
+      if (pipeBits.length > 1) {
+        return 'Email: ' + em[1] + '\nPassword: ' + pipeBits[0] + '\nExtra: ' + pipeBits.slice(1).join(' | ');
+      }
+      var colonBits = rest.split(':').map(function(x){ return x.trim(); }).filter(Boolean);
+      if (colonBits.length > 1 && /^(Plan|AutoRenew|Expire|DaysLeft)/i.test(colonBits[1])) {
+        return 'Email: ' + em[1] + '\nPassword: ' + colonBits[0] + '\nExtra: ' + colonBits.slice(1).join(' | ');
+      }
+      return 'Email: ' + em[1] + '\nPassword: ' + rest;
+    }
     var parts = s.split(/\s*[|:]\s*/).filter(Boolean);
     if (parts.length >= 2) {
-      var a = parts[0], b = parts.slice(1).join(':');
+      var a = parts[0], b = parts.slice(1).join(' | ');
       if (/@/.test(a)) return 'Email: ' + a + '\nPassword: ' + b;
       return 'Username: ' + a + '\nPassword: ' + b;
     }
     return s;
   }
-  var out = [];
-  for (var i = 0; i < blocks.length; i++) {
-    var f = one(blocks[i]);
-    if (!f) continue;
-    if (blocks.length > 1) out.push((i + 1) + '. ' + f);
-    else out.push(f);
-  }
-  return out.join('\n\n') || text;
+  return blocks.map(function(b, i) {
+    var body = one(b);
+    if (blocks.length > 1) return (i + 1) + '.\n' + body;
+    return body;
+  }).join('\n\n');
 }
 
 function openReceiptModal(p, desc, creds, qty, orderId){
