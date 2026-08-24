@@ -583,7 +583,7 @@
         <button class="nav-item" data-tab="orders" onclick="switchTab('orders')"><i class="fas fa-receipt"></i> LOGS Orders</button>
         <button class="nav-item" data-tab="sms" onclick="switchTab('sms')"><i class="fas fa-sim-card"></i> SMS — Server 1 (GrizzlySMS)</button>
         <button class="nav-item" data-tab="sms-orders" onclick="switchTab('sms-orders')"><i class="fas fa-comment-sms"></i> SMS Orders</button>
-        <button class="nav-item" data-tab="sms-server2" onclick="switchTab('sms-server2')"><i class="fas fa-server"></i> SMS — Server 2 (LogsDomain)</button>
+        <button class="nav-item" data-tab="sms-server2" onclick="switchTab('sms-server2')"><i class="fas fa-server"></i> SMS — Server 2</button>
         <button class="nav-item" data-tab="boosters" onclick="switchTab('boosters')"><i class="fas fa-bolt"></i> MJ Boosters (Owlet)</button>
         <button class="nav-item" data-tab="booster-orders" onclick="switchTab('booster-orders')"><i class="fas fa-receipt"></i> Booster Orders</button>
         <button class="nav-item" data-tab="notify" onclick="switchTab('notify')"><i class="fas fa-bullhorn"></i> Notifications</button>
@@ -847,15 +847,15 @@
         <div id="tab-sms-server2" class="tab-content">
           <div class="panel">
             <div class="panel-title" style="margin-bottom:10px;display:flex;align-items:center;justify-content:space-between;">
-              <span>SMS — Server 2 (LogsDomain)</span>
-              <span style="font-size:11px;color:var(--muted);">Live — reachable by customers via Choose Server → Server 2.</span>
+              <span>SMS — Server 2</span>
+              <span style="font-size:11px;color:var(--muted);">OTP + reuse + rentals. Customers: Choose Server → Server 2 / Number rental.</span>
             </div>
 
             <div style="display:flex;gap:16px;align-items:center;flex-wrap:wrap;margin-bottom:16px;">
-              <button class="btn btn-primary btn-sm" id="btnSyncLogsDomainNumbers2" onclick="syncLogsDomainNumbersNow()"><i class="fas fa-sync"></i> Sync LogsDomain</button>
+              <button class="btn btn-primary btn-sm" id="btnSyncSmsBus" onclick="syncSmsBusNow()"><i class="fas fa-sync"></i> Sync Server 2</button>
             </div>
             <p style="color:#94a3b8;font-size:13px;margin:-4px 0 4px;">
-              Same catalog as the "SMS — Server 1" tab, filtered to LogsDomain only — search, edit price, or delete a listing here without wading through Grizzly's rows too.
+              Live status for Server 2 (OTP / rental). Sync checks balance, countries, services, and rental areas. Orders appear in SMS order history with source Server 2.
             </p>
             <p id="logsdomainSyncProgress2" style="color:var(--primary,#3b82f6);font-size:12px;font-weight:700;margin:0 0 14px;min-height:16px;"></p>
 
@@ -1248,7 +1248,7 @@ const tabTitles = {
   products: 'Products & Stock',
   sms: 'SMS — Server 1 (GrizzlySMS)',
   'sms-orders': 'SMS Orders',
-  'sms-server2': 'SMS — Server 2 (LogsDomain)',
+  'sms-server2': 'SMS — Server 2',
       'boosters': 'MJ Boosters (Owlet)',
       'booster-orders': 'Booster Orders',
   orders: 'LOGS Orders',

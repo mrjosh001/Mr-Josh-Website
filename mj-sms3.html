@@ -95,9 +95,16 @@ document.getElementById('country').onchange = async function() {
     j.data.map(function(r){
       return '<option value="'+r.project_id+'">'+(r.title||('Service '+r.project_id))+' — '+money(r.price)+'</option>';
     }).join('');
-  document.getElementById('services').innerHTML = j.data.slice(0,40).map(function(r){
-    return '<div class="card"><b>'+(r.title||r.project_id)+'</b><span>Stock '+r.stock+' · <span class="price">'+money(r.price)+'</span></span></div>';
+  document.getElementById('services').innerHTML = j.data.map(function(r){
+    return '<div class="card svc" data-id="'+r.project_id+'" style="cursor:pointer"><b>'+(r.title||('Service '+r.project_id))+'</b><span>Stock '+r.stock+' · <span class="price">'+money(r.price)+'</span></span></div>';
   }).join('');
+  document.querySelectorAll('.svc').forEach(function(el){
+    el.onclick = function(){
+      document.getElementById('project').value = el.getAttribute('data-id');
+      document.getElementById('project').dispatchEvent(new Event('change'));
+      el.scrollIntoView({behavior:'smooth', block:'nearest'});
+    };
+  });
 };
 document.getElementById('project').onchange = function() {
   var r = priceMap[this.value];
