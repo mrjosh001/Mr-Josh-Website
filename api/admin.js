@@ -1051,6 +1051,7 @@ async function listProfilesHandle() {
 }
 
 async function listOrdersHandle() {
+  // Service role: every log sale including manual_ / restock products
   let { data, error } = await supabase
     .from('orders')
     .select('*')
@@ -1059,7 +1060,32 @@ async function listOrdersHandle() {
   if (error) {
     return { status: 500, body: { success: false, message: 'Could not load orders: ' + error.message } };
   }
-  return { status: 200, body: { success: true, data: data || [] } };
+  const rows = data || [];
+  const userIds = [...new Set(rows.map((o) => o.user_id).filter(Boolean))];
+  let profileMap = new Map();
+  if (userIds.length) {
+    const { data: profiles } = await supabase
+      .from('profiles')
+      .select('id, email, full_name, customer_id')
+      .in('id', userIds);
+    for (const p of profiles || []) profileMap.set(p.id, p);
+  }
+  const enriched = rows.map((o) => {
+    const p = profileMap.get(o.user_id) || {};
+    const code = String(o.product_code || o.product_key || '');
+    const isManual =
+      String(o.source || '').toLowerCase() === 'manual' ||
+      code.startsWith('manual_');
+    return {
+      ...o,
+      customer_email: p.email || o.customer_email || null,
+      customer_name: p.full_name || o.customer_name || null,
+      customer_id: p.customer_id || o.customer_id || null,
+      source: o.source || (isManual ? 'manual' : o.source || null),
+      is_manual: isManual
+    };
+  });
+  return { status: 200, body: { success: true, data: enriched } };
 }
 
 async function listSmsOrdersHandle() {

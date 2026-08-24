@@ -125,12 +125,31 @@ async function requireAuthUser(req) {
 
 
 async function insertLogOrder(row) {
-  let { error } = await supabase.from('orders').insert(row);
-  if (error && /login_credentials_raw|schema cache|column/i.test(String(error.message || ''))) {
-    const { login_credentials_raw, ...rest } = row;
-    ({ error } = await supabase.from('orders').insert(rest));
+  // Progressive column strip so a missing optional column never drops the whole sale from admin LOGS Orders
+  const optional = [
+    'login_credentials_raw',
+    'supplier_ref',
+    'guide_url',
+    'product_type',
+    'description',
+    'product_id'
+  ];
+  let attempt = { ...row };
+  let lastErr = null;
+  for (let i = 0; i <= optional.length; i++) {
+    const { error } = await supabase.from('orders').insert(attempt);
+    if (!error) return null;
+    lastErr = error;
+    const msg = String(error.message || '');
+    if (!/column|schema cache|Could not find/i.test(msg)) return error;
+    if (i >= optional.length) break;
+    const drop = optional[i];
+    if (Object.prototype.hasOwnProperty.call(attempt, drop)) {
+      const { [drop]: _removed, ...rest } = attempt;
+      attempt = rest;
+    }
   }
-  return error;
+  return lastErr;
 }
 
 export default async function handler(req, res) {
@@ -307,7 +326,7 @@ export default async function handler(req, res) {
         : null);
     const supplierRefs = claimedRows.map(r => r.id).filter(Boolean).map(String).join(', ');
 
-    const { error: insErr } = await supabase.from('orders').insert({
+    const insertErr = await insertLogOrder({
       order_id: orderRef,
       user_id,
       product_id: product.id,
@@ -323,7 +342,21 @@ export default async function handler(req, res) {
       supplier_ref: supplierRefs || orderRef,
       guide_url: 'https://t.me/mj_hub_tg'
     });
-    if (insErr) console.error('[order-manual] insert failed', insErr.message);
+    if (insertErr) {
+      console.error('[order-manual] insert failed', insertErr.message, { order_id: orderRef, product_key });
+      // Last-ditch minimal row so admin LOGS Orders always shows the sale
+      const { error: minErr } = await supabase.from('orders').insert({
+        order_id: orderRef,
+        user_id,
+        product_code: product_key,
+        product_name: productName,
+        quantity: claimedRows.length || qty,
+        amount: total,
+        status: 'completed',
+        login_credentials: combinedCreds || detailsText || 'See inventory'
+      });
+      if (minErr) console.error('[order-manual] minimal insert also failed', minErr.message);
+    }
 
     await supabase.from('transactions').insert({
       user_id,
