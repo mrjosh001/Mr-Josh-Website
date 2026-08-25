@@ -292,6 +292,14 @@ async function syncSmsBusCatalog() {
 async function insertNumberOrder(row) {
   const lastErrors = [];
 
+  // idempotency_key is NOT NULL with a UNIQUE(source, idempotency_key)
+  // index — every insert attempt below was missing it entirely, so every
+  // single one was failing that constraint silently. Derive a stable,
+  // per-order value from order_id (already unique per purchase from the
+  // supplier) so this can never collide across real orders.
+  const idemKey = row.idempotency_key || `${row.source || 'smsbus'}-${row.order_id}`;
+  row = { ...row, idempotency_key: idemKey };
+
   // Build progressive payloads — strip fields that often break older schemas
   const variants = [];
   const full = { ...row };
@@ -301,7 +309,7 @@ async function insertNumberOrder(row) {
   variants.push(asStringCountry);
 
   const noOptional = { ...row };
-  for (const k of ['supplier_price', 'currency', 'refunded', 'time_left', 'idempotency_key', 'customer_id', 'code']) {
+  for (const k of ['supplier_price', 'currency', 'refunded', 'time_left', 'customer_id', 'code']) {
     delete noOptional[k];
   }
   variants.push(noOptional);
@@ -316,6 +324,7 @@ async function insertNumberOrder(row) {
   variants.push({
     user_id: row.user_id,
     order_id: String(row.order_id),
+    idempotency_key: idemKey,
     phone_number: row.phone_number || null,
     status: row.status || 'waiting_for_code',
     price: row.price != null ? row.price : null,
@@ -326,6 +335,7 @@ async function insertNumberOrder(row) {
   variants.push({
     user_id: row.user_id,
     order_id: String(row.order_id),
+    idempotency_key: idemKey,
     phone_number: row.phone_number || null,
     status: 'waiting_for_code',
     price: row.price
@@ -657,6 +667,7 @@ export default async function handler(req, res) {
         const emergency = {
           user_id: auth.userId,
           order_id: String(requestId),
+          idempotency_key: `smsbus-${requestId}`,
           phone_number: phone || null,
           service_name: serviceName || 'SMS',
           country_name: countryName || null,
@@ -781,6 +792,7 @@ export default async function handler(req, res) {
               source: 'smsbus',
               user_id: auth.userId,
               order_id: order_id,
+              idempotency_key: `smsbus-${order_id}`,
               status: 'completed',
               code,
               phone_number: null
@@ -1070,6 +1082,7 @@ export default async function handler(req, res) {
         user_id: auth.userId,
         customer_id: profile.customer_id,
         order_id: requestId,
+        idempotency_key: `smsbus-${requestId}`,
         country_id: Number(country_id) || null,
         country_name: String(country_id),
         service_id: String(project_id),
@@ -1202,6 +1215,7 @@ export default async function handler(req, res) {
         user_id: auth.userId,
         customer_id: profile.customer_id,
         order_id: orderId,
+        idempotency_key: `smsbus_rent-${orderId}`,
         country_id: null,
         country_name: d.area_code || area_code,
         service_id: 'rent',
