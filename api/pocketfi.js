@@ -17,7 +17,7 @@
  *   POCKETFI_SECRET_KEY, POCKETFI_PUBLIC_KEY, POCKETFI_BUSINESS_ID
  *   SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY
  *   Optional: POCKETFI_WEBHOOK_SECRET, POCKETFI_API_BASE, APP_URL
- *   Optional: POCKETFI_VA_BANK (kuda/paga/saveheaven/9psb/palmpay, default kuda)
+ *   Optional: POCKETFI_VA_BANK (paga|saveheaven only, default paga)
  *   RESEND_API_KEY, RESEND_FROM_EMAIL (e.g. "MJ Hub <noreply@yourdomain.com>")
  *
  * Webhook URL in PocketFi dashboard:
@@ -1292,25 +1292,54 @@ async function handleCheckout(req, res, raw, publicKey, businessId) {
  *     created_at timestamptz default now()
  *   );
  *
- * Env: POCKETFI_VA_BANK (optional, default 'kuda' — one of saveheaven,
- * paga, kuda, 9psb, palmpay; avoid palmpay unless you also collect NIN/BVN
- * from users, which this project deliberately does not)
+ * Env: POCKETFI_VA_BANK — only "paga" or "saveheaven" (default: paga).
+ * Account name is always taken from the user's website profile full_name.
+ *
+ * Body (optional): { "bank": "paga" | "saveheaven", "create": true }
+ *   - Without create / when account already exists → return stored details
+ *   - create:true only needed when user has no account yet
  */
 async function handleVirtualAccount(req, res, publicKey, businessId) {
   const gate = await requireUserToken(req);
   if (!gate.ok) return res.status(gate.status).json({ success: false, message: gate.message });
   const user = gate.user;
 
-  // Already have one on file — PocketFi wants one account per customer,
-  // so always prefer the stored row over calling create() again.
+  let body = {};
+  try {
+    if (typeof req.body === 'string' && req.body) body = JSON.parse(req.body);
+    else if (req.body && typeof req.body === 'object') body = req.body;
+  } catch (_) {}
+
+  // Already have one on file — one account per customer
   const { data: existingVa } = await supabase
     .from('virtual_accounts')
     .select('bank, account_number, account_name')
     .eq('user_id', user.id)
     .maybeSingle();
 
-  if (existingVa) {
-    return res.status(200).json({ success: true, data: existingVa, created: false });
+  if (existingVa?.account_number) {
+    return res.status(200).json({
+      success: true,
+      data: existingVa,
+      created: false,
+      has_account: true
+    });
+  }
+
+  // No account yet — only create when client asks (clean "Generate" UX)
+  const wantCreate =
+    body.create === true ||
+    body.create === 'true' ||
+    body.generate === true ||
+    String(req.query?.create || '').toLowerCase() === '1';
+
+  if (!wantCreate) {
+    return res.status(200).json({
+      success: true,
+      has_account: false,
+      data: null,
+      message: 'No virtual account yet. Generate one to get your permanent account number.'
+    });
   }
 
   const { data: profile } = await supabase
@@ -1319,22 +1348,24 @@ async function handleVirtualAccount(req, res, publicKey, businessId) {
     .eq('id', user.id)
     .maybeSingle();
 
-  const { first_name, last_name } = splitName(profile?.full_name || user.user_metadata?.full_name);
+  const profileFullName = String(
+    profile?.full_name || user.user_metadata?.full_name || user.user_metadata?.name || ''
+  ).trim();
+  const { first_name, last_name } = splitName(profileFullName || 'MJ Hub Customer');
+  // Always prefer full website profile name for display / storage
+  const displayAccountName = profileFullName || `${first_name} ${last_name}`.trim();
+
   const email = profile?.email || user.email || `user-${user.id.slice(0, 8)}@mjhub.store`;
   const phoneDigits = String(profile?.phone || user.phone || '').replace(/\D/g, '');
   const phone = phoneDigits.length >= 10 ? phoneDigits.slice(-11) : '08000000000';
-  const bank = (process.env.POCKETFI_VA_BANK || 'kuda').toLowerCase();
 
-  if (bank === 'palmpay') {
-    // PalmPay strictly requires KYC — this project doesn't collect NIN/BVN
-    // at signup (deliberately, to avoid looking like a phishing site to
-    // Chrome's Safe Browsing classifier), so fail clearly instead of
-    // sending PocketFi an incomplete request that bounces anyway.
-    return res.status(400).json({
-      success: false,
-      message: 'PalmPay virtual accounts require NIN/BVN, which this app does not collect. Set POCKETFI_VA_BANK to kuda, paga, saveheaven, or 9psb instead.'
-    });
-  }
+  // Only Paga or Safe Haven
+  const ALLOWED_BANKS = new Set(['paga', 'saveheaven']);
+  let bank = String(body.bank || process.env.POCKETFI_VA_BANK || 'paga')
+    .toLowerCase()
+    .replace(/[^a-z]/g, '');
+  if (bank === 'safehaven' || bank === 'safe_haven' || bank === 'safe-heaven') bank = 'saveheaven';
+  if (!ALLOWED_BANKS.has(bank)) bank = 'paga';
 
   const base = (process.env.POCKETFI_API_BASE || 'https://api.pocketfi.ng/api/v1').replace(/\/$/, '');
   const payload = {
@@ -1365,24 +1396,33 @@ async function handleVirtualAccount(req, res, publicKey, businessId) {
   try {
     data = JSON.parse(pfRaw);
   } catch {
-    return res.status(502).json({ success: false, message: 'PocketFi returned non-JSON', raw: pfRaw.slice(0, 400) });
+    return res.status(502).json({
+      success: false,
+      message: 'PocketFi returned non-JSON',
+      raw: pfRaw.slice(0, 400)
+    });
   }
 
   if (!pfRes.ok || data.status === false) {
     return res.status(502).json({
       success: false,
-      message: data.message || data.error || 'PocketFi virtual account creation failed',
+      message: data.message || data.error || 'Could not create virtual account. Try again shortly.',
       data
     });
   }
 
   const bankRow = Array.isArray(data.banks) ? data.banks[0] : null;
   const accountNumber = bankRow?.accountNumber || data.accountNumber || null;
-  const accountName = bankRow?.accountName || data.accountName || `${first_name} ${last_name}`.trim();
+  // Prefer full profile name over provider short name
+  const accountName = displayAccountName || bankRow?.accountName || data.accountName || first_name;
   const bankName = bankRow?.bankName || bank;
 
   if (!accountNumber) {
-    return res.status(502).json({ success: false, message: 'No account number in PocketFi response', data });
+    return res.status(502).json({
+      success: false,
+      message: 'No account number returned. Please try again.',
+      data
+    });
   }
 
   const row = {
@@ -1395,22 +1435,22 @@ async function handleVirtualAccount(req, res, publicKey, businessId) {
 
   const { error: insErr } = await supabase.from('virtual_accounts').insert(row);
   if (insErr) {
-    // Someone else's request for the same user raced us and inserted first
-    // (unique constraint on user_id) — fetch and return that one instead
-    // of erroring, since the account itself was still created successfully.
     const { data: raceRow } = await supabase
       .from('virtual_accounts')
       .select('bank, account_number, account_name')
       .eq('user_id', user.id)
       .maybeSingle();
-    if (raceRow) return res.status(200).json({ success: true, data: raceRow, created: true });
+    if (raceRow) {
+      return res.status(200).json({ success: true, data: raceRow, created: true, has_account: true });
+    }
     console.error('[virtual-account] insert failed', insErr.message);
   }
 
   return res.status(200).json({
     success: true,
     data: { bank: bankName, account_number: accountNumber, account_name: accountName },
-    created: true
+    created: true,
+    has_account: true
   });
 }
 
