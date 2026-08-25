@@ -373,7 +373,7 @@ function pickVaAmount(n) {
   document.getElementById('vaAmountInput').value = String(n);
   onVaAmountInput();
 }
-function continueVaPay() {
+async function continueVaPay() {
   if (!vaDetails || !vaDetails.account_number) {
     toast('Generate your account first');
     return;
@@ -381,19 +381,41 @@ function continueVaPay() {
   const amount = Math.round(parseFloat(document.getElementById('vaAmountInput').value) || 0);
   if (amount < VA_MIN) return toast('Minimum is ₦' + VA_MIN.toLocaleString());
   if (amount > VA_MAX) return toast('Maximum is ₦' + VA_MAX.toLocaleString());
+
+  // Register THIS expected payment before showing account details (webhook binds to it)
+  try {
+    const accessToken = await getAccessToken();
+    if (!accessToken) {
+      toast('Session expired. Please sign in again.');
+      return;
+    }
+    const reg = await fetch('/api/pocketfi?action=va_begin', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + accessToken },
+      body: JSON.stringify({ amount: amount })
+    });
+    const regData = await reg.json().catch(function () { return {}; });
+    if (!reg.ok || !regData.success) {
+      toast(regData.message || 'Could not start deposit session');
+      return;
+    }
+    window.__vaSessionId = regData.data && regData.data.session_id;
+  } catch (e) {
+    toast(e.message || 'Could not start deposit session');
+    return;
+  }
+
   vaChosenAmount = amount;
-  window.__vaDesire = Math.round(amount);
+  window.__vaDesire = amount;
   vaExactToSend = calcExactToSend(amount);
-  window.__vaExpectAmount = Math.round(amount);
-  window.__vaWaitSince = Date.now();
-  window.__vaExpectAmount = Math.round(amount); // wallet credit target (not gross)
+  window.__vaExpectAmount = amount; // wallet credit target
   window.__vaWaitSince = Date.now();
   document.getElementById('vaExactAmount').textContent = fmtNgn(vaExactToSend);
   document.getElementById('vaAccountNumber').textContent = vaDetails.account_number;
   document.getElementById('vaAccountName').textContent = vaDetails.account_name || '—';
   document.getElementById('vaBankName').textContent = vaDetails.bank || '—';
   document.getElementById('vaInstruct').innerHTML =
-    'Transfer exactly <strong>' + fmtNgn(vaExactToSend) + '</strong> to the account above. Your wallet is credited with the amount you chose (a 1% payment processing fee is included in the transfer total).';
+    'Transfer exactly <strong>' + fmtNgn(vaExactToSend) + '</strong> to the account above. Your wallet receives <strong>' + fmtNgn(amount) + '</strong> after confirmation.';
   showVaState('pay');
   startBalanceWatch();
 }
