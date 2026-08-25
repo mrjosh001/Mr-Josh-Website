@@ -237,10 +237,10 @@ const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
     }
     if (!session) {
       try {
-        for (let i = 0; i < sessionStorage.length; i++) {
-          const k = sessionStorage.key(i);
+        for (let i = 0; i < localStorage.length; i++) {
+          const k = localStorage.key(i);
           if (k && (k.indexOf('sb-') === 0 || k.indexOf('supabase') !== -1) && !localStorage.getItem(k)) {
-            localStorage.setItem(k, sessionStorage.getItem(k));
+            localStorage.setItem(k, localStorage.getItem(k));
           }
         }
         const r3 = await sbClient.auth.getSession();
@@ -381,6 +381,7 @@ const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
       });
       const oid = j.data && j.data.order_id;
       if(!oid) throw new Error('No order id returned');
+      try{sessionStorage.setItem('mj_sms3_last_order',JSON.stringify({order_id:oid,number:(j.data&& (j.data.number||j.data.phone_number))||'',price:j.data&&j.data.price,service_name:j.data&&j.data.service_name,country_name:j.data&&j.data.country_name,ts:Date.now()}));}catch(_){}
       location.href = 'mj-sms3-number.html?order_id='+encodeURIComponent(oid);
     }catch(e){
       toast(e.message || 'Purchase failed', 'error');
