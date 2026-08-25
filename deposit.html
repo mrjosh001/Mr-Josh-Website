@@ -501,7 +501,7 @@ async function checkVirtualAccount() {
     });
     let data = {};
     try { data = await res.json(); } catch (_) {}
-    if (!res.ok) throw new Error(data.message || 'Could not load account');
+    if (!res.ok) throw new Error(data.message || ('Could not load account (' + res.status + ')'));
     if (data.has_account && data.data?.account_number) {
       vaDetails = data.data;
       showVaState('amount');
