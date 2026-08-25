@@ -228,7 +228,7 @@ a{color:inherit;text-decoration:none}
         </div>
         <div class="instruct" id="vaInstruct">Transfer the exact amount above. Your wallet credits automatically once the payment is confirmed.</div>
         <div class="waiting" id="vaWaiting"><i class="fa-solid fa-rotate fa-spin"></i> Waiting for confirmation…</div>
-        <button type="button" class="btn btn-soft" onclick="checkVaPaymentNow()"><i class="fa-solid fa-rotate"></i> I've sent the money · Check now</button>
+        <button type="button" class="btn btn-soft" onclick="checkVaPaymentNow()"><i class="fa-solid fa-rotate"></i> Check status</button>
         <button type="button" class="btn btn-outline" style="margin-top:10px;" onclick="backToVaAmount()">Change amount</button>
       </div>
     </div>
@@ -441,11 +441,37 @@ async function checkVaPaymentNow() {
 function startBalanceWatch() {
   stopBalanceWatch();
   let ticks = 0;
+  let done = false;
   balancePollTimer = setInterval(async function () {
+    if (done) return;
     ticks += 1;
+    try {
+      const accessToken = await getAccessToken();
+      if (accessToken) {
+        const expect = Number(window.__vaExpectAmount || 0) || 0;
+        const res = await fetch('/api/pocketfi?action=verify_deposit', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer ' + accessToken
+          },
+          body: JSON.stringify({ amount: expect })
+        });
+        const data = await res.json().catch(function () { return {}; });
+        if (data.credited) {
+          done = true;
+          stopBalanceWatch();
+          await loadProfile();
+          toast('Payment received. Wallet credited.');
+          if (document.getElementById('successBox')) document.getElementById('successBox').classList.add('show');
+          setTimeout(function () { location.href = 'dashboard.html?deposit=success'; }, 1000);
+          return;
+        }
+      }
+    } catch (_) {}
     await loadProfile();
-    if (ticks >= 40) stopBalanceWatch();
-  }, 3000);
+    if (ticks >= 60) stopBalanceWatch();
+  }, 2500);
 }
 function stopBalanceWatch() {
   if (balancePollTimer) {
