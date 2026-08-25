@@ -409,8 +409,6 @@ export default async function handler(req, res) {
     }
 
     if (method === 'GET' && action === 'countries') {
-      const auth = await requireAuth(req);
-      if (!auth.ok) return json(res, auth.status, { success: false, message: auth.message });
       const { data } = await smsbusGet(OTP_BASE, '/list/countries');
       if (!busOk(data)) return json(res, 400, { success: false, message: data.message || 'Countries error' });
       const list = Object.values(data.data || {}).map((c) => ({
@@ -422,8 +420,6 @@ export default async function handler(req, res) {
     }
 
     if (method === 'GET' && action === 'projects') {
-      const auth = await requireAuth(req);
-      if (!auth.ok) return json(res, auth.status, { success: false, message: auth.message });
       const { data } = await smsbusGet(OTP_BASE, '/list/projects');
       if (!busOk(data)) return json(res, 400, { success: false, message: data.message || 'Projects error' });
       const list = Object.values(data.data || {}).map((p) => ({
@@ -435,8 +431,6 @@ export default async function handler(req, res) {
     }
 
     if (method === 'GET' && action === 'prices') {
-      const auth = await requireAuth(req);
-      if (!auth.ok) return json(res, auth.status, { success: false, message: auth.message });
       const country_id = url.searchParams.get('country_id');
       if (!country_id) return json(res, 400, { success: false, message: 'country_id required' });
 
