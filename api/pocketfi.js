@@ -1886,9 +1886,11 @@ async function handleVaBegin(req, res) {
   // Do not send currency/wallet unless those columns exist in production.
   const { error } = await supabase.from('deposit_intents').insert({
     user_id: user.id,
+    provider: 'pocketfi',
     external_id: sessionId,
     amount: desired,
-    status: 'pending'
+    status: 'pending',
+    created_at: new Date().toISOString()
   });
   if (error) {
     console.error('[va_begin]', error.message);
