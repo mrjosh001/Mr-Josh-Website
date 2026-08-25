@@ -596,10 +596,30 @@ export default async function handler(req, res) {
 
       if (!order) return json(res, 404, { success: false, message: 'Order not found' });
       if (order.status === 'completed' && order.code) {
-        return json(res, 200, { success: true, data: { status: 'completed', code: order.code, number: order.phone_number } });
+        return json(res, 200, {
+          success: true,
+          data: {
+            status: 'completed',
+            code: order.code,
+            number: order.phone_number,
+            phone_number: order.phone_number,
+            service_name: order.service_name,
+            country_name: order.country_name,
+            price: order.price,
+            created_at: order.created_at
+          }
+        });
       }
       if (order.status === 'refunded') {
-        return json(res, 200, { success: true, data: { status: 'refunded', code: null } });
+        return json(res, 200, {
+          success: true,
+          data: {
+            status: 'refunded',
+            code: null,
+            number: order.phone_number,
+            message: 'Already refunded'
+          }
+        });
       }
 
       const { data } = await smsbusGet(OTP_BASE, '/get/sms', { request_id: order_id });
