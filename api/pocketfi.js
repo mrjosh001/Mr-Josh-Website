@@ -1126,42 +1126,94 @@ async function handleWebhook(req, res, raw, secret, publicKey) {
     }
   }
 
-  // Credit amount:
-  // - Checkout with pending intent: use stored intended amount when available
-  // - VA (with or without prior UI session): net 1% from gross received
+  // --- Resolve how much to credit ---
+  // Checkout: full amount user selected (PocketFi charges the customer).
+  // VA: only after account_number match + paid webhook; net 1%; bind to pending va-session when present.
   let creditNet = creditAmount;
   try {
-    const { data: intentAmt } = await supabase
+    const { data: intentByRef } = await supabase
       .from('deposit_intents')
-      .select('amount, status')
+      .select('amount, status, external_id, user_id')
       .eq('external_id', String(reference))
       .maybeSingle();
+
     if (
-      intentAmt &&
-      Number(intentAmt.amount) > 0 &&
-      ['pending', 'success'].includes(String(intentAmt.status || '').toLowerCase())
+      intentByRef &&
+      Number(intentByRef.amount) > 0 &&
+      ['pending', 'success'].includes(String(intentByRef.status || '').toLowerCase()) &&
+      !String(intentByRef.external_id || '').startsWith('va-')
     ) {
-      // Checkout: always credit the amount the user chose (PocketFi fees the payer)
-      creditNet = Math.round(Number(intentAmt.amount));
+      creditNet = Math.round(Number(intentByRef.amount));
       viaCheckout = true;
+      console.log('Checkout credit from intent', { creditNet, reference });
     } else if (viaVa) {
-      // Permanent VA only: we absorb provider cost → net 1%
-      const net = netDepositFromGross(creditAmount);
-      if (net > 0) {
-        console.log('PocketFi VA credit netted', { gross: creditAmount, net });
-        creditNet = net;
+      // STRICT VA rules:
+      // 1) account_number already matched this user
+      // 2) gross amount in 1000–700000
+      // 3) webhook looks paid + has reference
+      // 4) prefer pending va-session for this user with matching desired/net amount (last 45 min)
+      if (!accountNumber) {
+        console.warn('VA webhook missing account_number — refuse');
+        return res.status(200).json({ message: 'va_missing_account' });
       }
+      if (!reference) {
+        console.warn('VA webhook missing reference — refuse');
+        return res.status(200).json({ message: 'va_missing_reference' });
+      }
+
+      const net = netDepositFromGross(creditAmount);
+      creditNet = net > 0 ? net : 0;
       if (creditNet < Math.floor(VA_MIN * 0.99)) {
-        console.warn('PocketFi VA net too small — not credited', { creditNet, reference });
         return res.status(200).json({ message: 'net_too_small' });
       }
+
+      const since = new Date(Date.now() - 45 * 60 * 1000).toISOString();
+      const { data: sessions } = await supabase
+        .from('deposit_intents')
+        .select('external_id, amount, status, created_at')
+        .eq('user_id', userId)
+        .eq('status', 'pending')
+        .like('external_id', 'va-%')
+        .gte('created_at', since)
+        .order('created_at', { ascending: false })
+        .limit(10);
+
+      let bound = null;
+      for (const s of sessions || []) {
+        const want = Math.round(Number(s.amount) || 0);
+        // Match net credit OR gross they were told to send
+        const grossWant = want + Math.ceil(want * 0.01);
+        if (Math.abs(want - creditNet) <= 2 || Math.abs(grossWant - creditAmount) <= 2) {
+          bound = s;
+          creditNet = want; // exact amount they chose on the site
+          break;
+        }
+      }
+
+      if (bound) {
+        console.log('VA payment bound to session', {
+          session: bound.external_id,
+          gross: creditAmount,
+          creditNet,
+          reference
+        });
+        // Mark session used (idempotent credit still keyed by payment reference)
+        try {
+          await supabase
+            .from('deposit_intents')
+            .update({ status: 'success' })
+            .eq('external_id', bound.external_id);
+        } catch (_) {}
+      } else {
+        // Direct transfer with no open session: still credit net if webhook is solid
+        console.log('VA direct credit (no open session)', { gross: creditAmount, creditNet, reference });
+      }
     } else {
-      // Checkout/webhook without pending row: credit full gross (no 1% cut)
       creditNet = Math.round(creditAmount);
-      console.log('PocketFi checkout-style credit full amount', { creditNet, reference });
+      console.log('Checkout-style full credit', { creditNet, reference });
     }
   } catch (e) {
-    console.warn('net deposit resolve failed', e?.message || e);
+    console.warn('credit resolve failed', e?.message || e);
   }
 
   try {
@@ -1266,6 +1318,7 @@ async function handleCheckout(req, res, raw, publicKey, businessId) {
 
   // Absolute HTTPS URL required — PocketFi "Go to Home" / auto-redirect uses this
   const appUrl = (process.env.APP_URL || process.env.NEXT_PUBLIC_APP_URL || 'https://www.mjhub.store').replace(/\/$/, '');
+  // PocketFi in-dashboard "Go to Home" uses this; must be absolute HTTPS on your domain
   const redirect_link = `${appUrl}/dashboard.html?deposit=success&provider=pocketfi`;
 
   const base = (process.env.POCKETFI_API_BASE || 'https://api.pocketfi.ng/api/v1').replace(
@@ -1784,6 +1837,77 @@ async function handleVerifyDeposit(req, res) {
 }
 
 
+
+/**
+ * POST ?action=va_begin — user chose an amount on Fund Wallet.
+ * Stores a pending intent so the webhook can bind THIS transfer to THIS user/amount.
+ * Body: { amount: number }  // desired wallet credit (before gross uplift)
+ */
+async function handleVaBegin(req, res) {
+  const authHeader = req.headers.authorization || '';
+  const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7).trim() : null;
+  if (!token) return res.status(401).json({ success: false, message: 'Login required' });
+  const user = await resolveUserFromToken(token);
+  if (!user) return res.status(401).json({ success: false, message: 'Invalid session' });
+
+  let body = {};
+  try {
+    body = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : (req.body || {});
+  } catch (_) {}
+
+  const desired = Math.round(Number(body.amount) || 0);
+  if (desired < 1000 || desired > 700000) {
+    return res.status(400).json({ success: false, message: 'Amount must be between ₦1,000 and ₦700,000' });
+  }
+
+  const { data: va } = await supabase
+    .from('virtual_accounts')
+    .select('account_number')
+    .eq('user_id', user.id)
+    .maybeSingle();
+  if (!va?.account_number) {
+    return res.status(400).json({ success: false, message: 'Generate your permanent account first' });
+  }
+
+  const gross = desired + Math.ceil(desired * 0.01);
+  const sessionId = `va-${user.id.slice(0, 8)}-${Date.now()}-${desired}`;
+
+  // Expire older pending VA sessions for this user (keep table clean)
+  try {
+    await supabase
+      .from('deposit_intents')
+      .update({ status: 'expired' })
+      .eq('user_id', user.id)
+      .eq('status', 'pending')
+      .like('external_id', 'va-%');
+  } catch (_) {}
+
+  const { error } = await supabase.from('deposit_intents').insert({
+    user_id: user.id,
+    external_id: sessionId,
+    amount: desired,
+    status: 'pending',
+    wallet: 'ngn',
+    currency: 'NGN'
+  });
+  if (error) {
+    console.error('[va_begin]', error.message);
+    return res.status(500).json({ success: false, message: error.message });
+  }
+
+  return res.status(200).json({
+    success: true,
+    data: {
+      session_id: sessionId,
+      desired_amount: desired,
+      exact_to_send: gross,
+      account_number: va.account_number,
+      expires_in_minutes: 45
+    }
+  });
+}
+
+
 export default async function handler(req, res) {
   // --- Referral (no extra serverless file) ---
   {
@@ -1822,6 +1946,9 @@ export default async function handler(req, res) {
     }
     if (_act === 'verify_deposit' || _act === 'check_deposit') {
       return handleVerifyDeposit(req, res);
+    }
+    if (_act === 'va_begin') {
+      return handleVaBegin(req, res);
     }
   }
   // --- /Referral ---
