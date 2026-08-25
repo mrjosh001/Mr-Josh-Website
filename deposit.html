@@ -198,7 +198,7 @@ a{color:inherit;text-decoration:none}
         <button type="button" class="chip" data-amt="20000" onclick="pickVaAmount(20000)">₦20,000</button>
         <button type="button" class="chip" data-amt="50000" onclick="pickVaAmount(50000)">₦50,000</button>
       </div>
-      <p class="fee-line" id="vaFeeLine">Min ₦1,000 · Max ₦700,000 · Includes a small processing fee</p>
+      <p class="fee-line" id="vaFeeLine">Min ₦1,000 · Max ₦700,000 · A 1% payment processing fee applies</p>
       <button type="button" class="btn" id="vaContinueBtn" onclick="continueVaPay()">Continue</button>
     </div>
 
@@ -296,7 +296,7 @@ const MIN = 1000;
 const MAX = 500000;
 const VA_MIN = 1000;
 const VA_MAX = 700000;
-const VA_FEE_RATE = 0.009;
+const VA_FEE_RATE = 0.01;
 const ADMIN_WA = '14305583021';
 
 let depositWallet = 'ngn';
@@ -359,12 +359,11 @@ function calcExactToSend(desired) {
 function onVaAmountInput() {
   const raw = parseFloat(document.getElementById('vaAmountInput').value) || 0;
   const exact = calcExactToSend(raw);
-  const fee = exact - Math.round(raw);
   const line = document.getElementById('vaFeeLine');
   if (raw >= VA_MIN) {
-    line.textContent = 'You send ' + fmtNgn(exact) + ' (includes ~₦' + fee.toLocaleString() + ' processing fee)';
+    line.textContent = 'Send ' + fmtNgn(exact) + '. Includes a 1% payment processing fee. Your wallet receives ' + fmtNgn(Math.round(raw)) + '.';
   } else {
-    line.textContent = 'Min ₦1,000 · Max ₦700,000 · Includes a small processing fee';
+    line.textContent = 'Min ₦1,000 · Max ₦700,000 · A 1% payment processing fee applies';
   }
   document.querySelectorAll('#vaChips .chip').forEach(function (c) {
     c.classList.toggle('active', Number(c.getAttribute('data-amt')) === Math.round(raw));
@@ -390,7 +389,7 @@ function continueVaPay() {
   document.getElementById('vaAccountName').textContent = vaDetails.account_name || '—';
   document.getElementById('vaBankName').textContent = vaDetails.bank || '—';
   document.getElementById('vaInstruct').innerHTML =
-    'Transfer exactly <strong>' + fmtNgn(vaExactToSend) + '</strong> to the account above. Your wallet credits automatically once confirmed.';
+    'Transfer exactly <strong>' + fmtNgn(vaExactToSend) + '</strong> to the account above. Your wallet is credited with the amount you chose (a 1% payment processing fee is included in the transfer total).';
   showVaState('pay');
   startBalanceWatch();
 }
