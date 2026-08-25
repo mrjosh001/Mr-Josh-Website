@@ -315,11 +315,55 @@ async function ensureSession(){
   }
   return session;
 }
+async function loadCachedMeta(){
+  const params=new URLSearchParams(location.search);
+  const fromUrl={
+    order_id:params.get('order_id')||orderId,
+    number:params.get('number')||params.get('phone')||'',
+    phone_number:params.get('number')||params.get('phone')||'',
+    service_name:params.get('service_name')||params.get('service')||'',
+    country_name:params.get('country_name')||params.get('country')||'',
+    price:params.get('price')?Number(params.get('price')):null
+  };
+  try{
+    const raw=sessionStorage.getItem('mj_sms3_last_order')||localStorage.getItem('mj_sms3_last_order');
+    if(raw){
+      const j=JSON.parse(raw);
+      if(j&&String(j.order_id)===String(orderId||fromUrl.order_id)){
+        return Object.assign({},fromUrl,{
+          number:j.number||j.phone_number||fromUrl.number,
+          phone_number:j.number||j.phone_number||fromUrl.phone_number,
+          service_name:j.service_name||fromUrl.service_name,
+          country_name:j.country_name||fromUrl.country_name,
+          price:j.price!=null?j.price:fromUrl.price,
+          created_at:j.ts?new Date(j.ts).toISOString():null
+        });
+      }
+    }
+  }catch(_){}
+  return fromUrl;
+}
+
 async function boot(){
   if(!orderId){renderError('Missing order id');return}
   const session=await ensureSession();
   if(!session){location.href='auth.html?next='+encodeURIComponent('mj-sms-choose-server.html');return}
   accessToken=session.access_token;
+
+  // Server 1 style: always show waiting UI from cache/URL first, then poll
+  const cached=await loadCachedMeta();
+  if(cached&&(cached.number||cached.phone_number)){
+    meta=Object.assign({},meta||{},cached);
+    orderCreatedAt=cached.created_at||new Date().toISOString();
+    renderWaiting({
+      number:cached.number||cached.phone_number,
+      phone_number:cached.number||cached.phone_number,
+      service_name:cached.service_name,
+      country_name:cached.country_name,
+      price:cached.price,
+      created_at:orderCreatedAt
+    });
+  }
 
   // Prefer server API (service role) — RLS on number_orders often blocks browser reads
   try{
@@ -367,6 +411,18 @@ async function boot(){
     }
   }catch(e){console.warn('db boot',e)}
 
+  if(meta&&(meta.number||meta.phone_number||orderId)){
+    renderWaiting({
+      number:meta.number||meta.phone_number||'—',
+      phone_number:meta.phone_number||meta.number||'—',
+      service_name:meta.service_name||'SMS',
+      country_name:meta.country_name||'',
+      price:meta.price,
+      created_at:orderCreatedAt||new Date().toISOString()
+    });
+    checkStatus();
+    return;
+  }
   renderError('Could not load this order. Go back and try again, or open SMS history.');
 }
 boot();

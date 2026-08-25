@@ -381,8 +381,15 @@ const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
       });
       const oid = j.data && j.data.order_id;
       if(!oid) throw new Error('No order id returned');
-      try{sessionStorage.setItem('mj_sms3_last_order',JSON.stringify({order_id:oid,number:(j.data&& (j.data.number||j.data.phone_number))||'',price:j.data&&j.data.price,service_name:j.data&&j.data.service_name,country_name:j.data&&j.data.country_name,ts:Date.now()}));}catch(_){}
-      location.href = 'mj-sms3-number.html?order_id='+encodeURIComponent(oid);
+      const num=(j.data&&(j.data.number||j.data.phone_number))||'';
+      const payload={order_id:oid,number:num,phone_number:num,price:j.data&&j.data.price,service_name:j.data&&j.data.service_name,country_name:j.data&&j.data.country_name,ts:Date.now()};
+      try{sessionStorage.setItem('mj_sms3_last_order',JSON.stringify(payload));localStorage.setItem('mj_sms3_last_order',JSON.stringify(payload));}catch(_){}
+      const q=new URLSearchParams({order_id:oid});
+      if(num) q.set('number',num);
+      if(j.data&&j.data.service_name) q.set('service_name',j.data.service_name);
+      if(j.data&&j.data.country_name) q.set('country_name',j.data.country_name);
+      if(j.data&&j.data.price!=null) q.set('price',String(j.data.price));
+      location.href='mj-sms3-number.html?'+q.toString();
     }catch(e){
       toast(e.message || 'Purchase failed', 'error');
       btn.disabled = false;
