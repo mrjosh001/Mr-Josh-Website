@@ -198,7 +198,7 @@ a{color:inherit;text-decoration:none}
         <button type="button" class="chip" data-amt="20000" onclick="pickVaAmount(20000)">₦20,000</button>
         <button type="button" class="chip" data-amt="50000" onclick="pickVaAmount(50000)">₦50,000</button>
       </div>
-      <p class="fee-line" id="vaFeeLine">Min ₦1,000 · Max ₦700,000 · Includes ~0.9% provider fee</p>
+      <p class="fee-line" id="vaFeeLine">Min ₦1,000 · Max ₦700,000 · Includes a small processing fee</p>
       <button type="button" class="btn" id="vaContinueBtn" onclick="continueVaPay()">Continue</button>
     </div>
 
@@ -242,7 +242,7 @@ a{color:inherit;text-decoration:none}
   <div class="section-label">Other ways to pay</div>
   <div class="card">
     <div class="method-tabs">
-      <button type="button" class="method-tab active" id="tabPocketfi" onclick="setOtherMethod('pocketfi')"><i class="fa-solid fa-link"></i> PocketFi checkout</button>
+      <button type="button" class="method-tab active" id="tabPocketfi" onclick="setOtherMethod('pocketfi')"><i class="fa-solid fa-link"></i> Instant payment</button>
       <button type="button" class="method-tab" id="tabManual" onclick="setOtherMethod('manual')"><i class="fa-brands fa-whatsapp"></i> Manual (WhatsApp)</button>
     </div>
     <div id="pocketfiDepositBox">
@@ -362,9 +362,9 @@ function onVaAmountInput() {
   const fee = exact - Math.round(raw);
   const line = document.getElementById('vaFeeLine');
   if (raw >= VA_MIN) {
-    line.textContent = 'You send ' + fmtNgn(exact) + ' (includes ~₦' + fee.toLocaleString() + ' provider fee at 0.9%)';
+    line.textContent = 'You send ' + fmtNgn(exact) + ' (includes ~₦' + fee.toLocaleString() + ' processing fee)';
   } else {
-    line.textContent = 'Min ₦1,000 · Max ₦700,000 · Includes ~0.9% provider fee';
+    line.textContent = 'Min ₦1,000 · Max ₦700,000 · Includes a small processing fee';
   }
   document.querySelectorAll('#vaChips .chip').forEach(function (c) {
     c.classList.toggle('active', Number(c.getAttribute('data-amt')) === Math.round(raw));
