@@ -1,24 +1,6 @@
 <!DOCTYPE html>
 <html lang="en" data-theme="dark">
 <head>
-<!-- TikTok Pixel Code Start -->
-<script>
-!function (w, d, t) {
-  w.TiktokAnalyticsObject=t;var ttq=w[t]=w[t]||[];
-  ttq.methods=["page","track","identify","instances","debug","on","off","once","ready","alias","group","enableCookie","disableCookie","holdConsent","revokeConsent","grantConsent"];
-  ttq.setAndDefer=function(t,e){t[e]=function(){t.push([e].concat(Array.prototype.slice.call(arguments,0)))}};
-  for(var i=0;i<ttq.methods.length;i++)ttq.setAndDefer(ttq,ttq.methods[i]);
-  ttq.instance=function(t){for(var e=ttq._i[t]||[],n=0;n<ttq.methods.length;n++)ttq.setAndDefer(e,ttq.methods[n]);return e};
-  ttq.load=function(e,n){var r="https://analytics.tiktok.com/i18n/pixel/events.js",o=n&&n.partner;
-  ttq._i=ttq._i||{},ttq._i[e]=[],ttq._i[e]._u=r,ttq._t=ttq._t||{},ttq._t[e]=+new Date,ttq._o=ttq._o||{},ttq._o[e]=n||{};
-  var a=document.createElement("script");a.type="text/javascript",a.async=!0,a.src=r+"?sdkid="+e+"&lib="+t;
-  var s=document.getElementsByTagName("script")[0];s.parentNode.insertBefore(a,s)};
-  ttq.load('D9UNVR3C77UDGUKDTK60');
-  ttq.page();
-}(window, document, 'ttq');
-</script>
-<!-- TikTok Pixel Code End -->
-
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>Fund Wallet — MJ HUB</title>
@@ -31,18 +13,22 @@
 </script>
 <style>
 :root[data-theme="dark"]{
-  --bg:#06080f;--card:#0f1524;--border:rgba(148,163,184,.12);--text:#f1f5f9;--muted:#8b9bb4;
-  --primary:#5b8af5;--primary2:#a78bfa;--success:#34d399;--danger:#f87171;
-  --header-bg:rgba(6,8,15,.92);--input-bg:#0a0e18;--soft:rgba(91,138,245,.1);
+  --bg:#06080f;--card:#0f1524;--border:rgba(148,163,184,.14);--text:#f1f5f9;--muted:#94a3b8;
+  --primary:#5b8af5;--primary2:#3b6ef5;--primary-soft:rgba(91,138,245,.14);
+  --success:#34d399;--success-soft:rgba(52,211,153,.12);--danger:#f87171;
+  --header-bg:rgba(6,8,15,.94);--input-bg:#0a0e18;--chip-bg:#0a0e18;--sheet:#111827;
+  --amount-placeholder:rgba(148,163,184,.45);
 }
 :root[data-theme="light"]{
-  --bg:#f4f6fb;--card:#fff;--border:rgba(15,23,42,.08);--text:#0f172a;--muted:#64748b;
-  --primary:#3b6ef5;--primary2:#7c5cfc;--success:#059669;--danger:#dc2626;
-  --header-bg:rgba(255,255,255,.92);--input-bg:#f8fafc;--soft:rgba(59,110,245,.08);
+  --bg:#f0f4ff;--card:#ffffff;--border:rgba(59,110,245,.12);--text:#0f172a;--muted:#475569;
+  --primary:#3b6ef5;--primary2:#5b8af5;--primary-soft:rgba(59,110,245,.08);
+  --success:#059669;--success-soft:rgba(5,150,105,.1);--danger:#dc2626;
+  --header-bg:rgba(255,255,255,.96);--input-bg:#f8fafc;--chip-bg:#f8fafc;--sheet:#ffffff;
+  --amount-placeholder:rgba(71,85,105,.4);
 }
 *{box-sizing:border-box;margin:0;padding:0}
 html{-webkit-tap-highlight-color:transparent}
-body{font-family:Inter,system-ui,-apple-system,sans-serif;background:var(--bg);color:var(--text);min-height:100vh;}
+body{font-family:Inter,system-ui,-apple-system,sans-serif;background:var(--bg);color:var(--text);min-height:100vh}
 a{color:inherit;text-decoration:none}
 .header{position:sticky;top:0;z-index:20;display:flex;align-items:center;gap:12px;padding:14px 16px;background:var(--header-bg);backdrop-filter:blur(14px);border-bottom:1px solid var(--border)}
 .back,.theme-btn{width:40px;height:40px;border-radius:12px;border:1px solid var(--border);background:var(--card);display:flex;align-items:center;justify-content:center;cursor:pointer;color:var(--text);font-size:16px}
@@ -53,72 +39,75 @@ a{color:inherit;text-decoration:none}
 .wcard .lbl{font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.06em;color:var(--muted)}
 .wcard .val{font-size:18px;font-weight:900;margin-top:4px}
 .card{background:var(--card);border:1px solid var(--border);border-radius:20px;padding:18px 16px;margin-bottom:14px}
-.card h2{font-size:17px;font-weight:900;margin-bottom:4px}
-.card .sub{font-size:13px;color:var(--muted);margin-bottom:14px;line-height:1.45}
-.section-label{font-size:11px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin:18px 2px 10px}
+.card h2{font-size:17px;font-weight:900;margin-bottom:4px;color:var(--text)}
+.card .sub{font-size:13px;color:var(--muted);margin-bottom:14px;line-height:1.5}
+.section-label{font-size:11px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin:6px 2px 10px}
 .form-group{margin-bottom:14px}
 .form-group label{display:block;font-size:11px;font-weight:800;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;margin-bottom:6px}
-.form-group select,.form-group input{
-  width:100%;padding:13px 14px;border-radius:12px;border:1px solid var(--border);
-  background:var(--input-bg);color:var(--text);font-size:15px;font-weight:600;outline:none;
-}
+.form-group select,.form-group input{width:100%;padding:13px 14px;border-radius:12px;border:1px solid var(--border);background:var(--input-bg);color:var(--text);font-size:15px;font-weight:600;outline:none}
 .form-group input:focus,.form-group select:focus{border-color:var(--primary)}
-.form-group input[readonly]{cursor:default}
-.btn{width:100%;border:0;cursor:pointer;border-radius:14px;padding:14px 16px;font-weight:800;font-size:14px;
-  display:inline-flex;align-items:center;justify-content:center;gap:8px;
-  background:linear-gradient(135deg,var(--primary),var(--primary2));color:#fff;
-  box-shadow:0 10px 28px rgba(91,138,245,.28)}
+.btn{width:100%;border:0;cursor:pointer;border-radius:14px;padding:14px 16px;font-weight:800;font-size:14px;display:inline-flex;align-items:center;justify-content:center;gap:8px;background:linear-gradient(135deg,var(--primary),var(--primary2));color:#fff;box-shadow:0 10px 28px rgba(91,138,245,.28)}
 .btn:disabled{opacity:.65;cursor:not-allowed}
 .btn-outline{background:transparent;color:var(--text);border:1px solid var(--border);box-shadow:none}
-.btn-row{display:grid;grid-template-columns:1fr 1fr;gap:10px}
-.hint{font-size:12px;color:var(--muted);margin-top:12px;line-height:1.45;text-align:center}
-.usd-preview{display:none;padding:12px 14px;margin-bottom:12px;border-radius:14px;background:rgba(52,211,153,.1);border:1px solid rgba(52,211,153,.28)}
+.btn-soft{background:var(--success-soft);color:var(--success);border:1px solid rgba(52,211,153,.28);box-shadow:none}
+.hint{font-size:12px;color:var(--muted);margin-top:12px;line-height:1.5;text-align:center}
+.usd-preview{display:none;padding:12px 14px;margin-bottom:12px;border-radius:14px;background:var(--success-soft);border:1px solid rgba(52,211,153,.28)}
 .usd-preview .t{font-size:12px;color:var(--muted);font-weight:600}
 .usd-preview .a{font-size:20px;font-weight:800;color:var(--success);margin-top:4px}
 .usd-preview .r{font-size:11px;color:var(--muted);margin-top:6px}
 .toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:#111827;color:#fff;padding:12px 16px;border-radius:12px;font-size:13px;font-weight:700;z-index:100;opacity:0;pointer-events:none;transition:.2s;max-width:90%}
 :root[data-theme="light"] .toast{background:#0f172a}
 .toast.show{opacity:1}
-.success-box{display:none;padding:14px;border-radius:14px;margin-bottom:14px;background:rgba(52,211,153,.12);border:1px solid rgba(52,211,153,.3);font-size:13px;font-weight:700;line-height:1.4}
+.success-box{display:none;padding:14px;border-radius:14px;margin-bottom:14px;background:var(--success-soft);border:1px solid rgba(52,211,153,.3);font-size:13px;font-weight:700;line-height:1.4;color:var(--text)}
 .success-box.show{display:block}
-
-/* Virtual account */
-.va-hero{background:var(--soft);border:1px solid rgba(91,138,245,.22);border-radius:16px;padding:14px;margin-bottom:14px}
-.va-hero p{font-size:13px;line-height:1.5;color:var(--text);opacity:.9}
-.va-hero strong{font-weight:800}
 .va-pill{display:inline-flex;align-items:center;gap:6px;font-size:11px;font-weight:800;letter-spacing:.04em;text-transform:uppercase;color:var(--primary);margin-bottom:8px}
-.va-detail-card{background:var(--input-bg);border:1px solid var(--border);border-radius:16px;padding:14px;margin-bottom:12px}
-.va-detail-row{display:flex;justify-content:space-between;align-items:flex-start;gap:10px;padding:10px 0;border-bottom:1px solid var(--border)}
-.va-detail-row:last-child{border-bottom:0;padding-bottom:0}
-.va-detail-row:first-child{padding-top:0}
-.va-detail-row .k{font-size:11px;font-weight:800;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
-.va-detail-row .v{font-size:15px;font-weight:800;text-align:right;word-break:break-all}
-.va-detail-row .v.mono{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:17px;letter-spacing:.04em;color:var(--primary)}
 .bank-choice{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px}
-.bank-choice label{
-  display:flex;align-items:center;gap:10px;padding:14px 12px;border-radius:14px;
-  border:1px solid var(--border);background:var(--input-bg);cursor:pointer;font-weight:700;font-size:13px;
-}
+.bank-choice label{display:flex;align-items:center;gap:10px;padding:14px 12px;border-radius:14px;border:1px solid var(--border);background:var(--input-bg);cursor:pointer;font-weight:700;font-size:13px;color:var(--text)}
 .bank-choice input{accent-color:var(--primary)}
-.bank-choice label:has(input:checked){border-color:var(--primary);background:var(--soft)}
+.bank-choice label:has(input:checked){border-color:var(--primary);background:var(--primary-soft)}
 .va-empty{text-align:center;padding:8px 0 4px}
 .va-empty i{font-size:28px;color:var(--primary);margin-bottom:10px}
 .va-empty p{font-size:13px;color:var(--muted);line-height:1.5;margin-bottom:14px}
 .loading-inline{text-align:center;padding:28px 0;color:var(--muted);font-size:13px;font-weight:600}
 .method-tabs{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:14px}
-.method-tab{
-  border:1px solid var(--border);background:var(--input-bg);color:var(--muted);
-  border-radius:12px;padding:12px 10px;font-size:12px;font-weight:800;cursor:pointer;text-align:center;
-}
-.method-tab.active{border-color:var(--primary);color:var(--text);background:var(--soft)}
+.method-tab{border:1px solid var(--border);background:var(--input-bg);color:var(--muted);border-radius:12px;padding:12px 10px;font-size:12px;font-weight:800;cursor:pointer;text-align:center}
+.method-tab.active{border-color:var(--primary);color:var(--text);background:var(--primary-soft)}
 .method-tab i{display:block;margin-bottom:4px;font-size:14px}
+.amount-field{width:100%;padding:22px 16px;border-radius:16px;border:1px solid var(--border);background:var(--input-bg);color:var(--text);font-size:28px;font-weight:800;text-align:center;outline:none}
+.amount-field::placeholder{color:var(--amount-placeholder);font-weight:700}
+.amount-field:focus{border-color:var(--primary)}
+.chips{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;margin:14px 0 4px}
+.chip{border:1px solid var(--border);background:var(--chip-bg);color:var(--text);border-radius:999px;padding:10px 14px;font-size:13px;font-weight:700;cursor:pointer}
+.chip:hover,.chip.active{border-color:var(--primary);background:var(--primary-soft);color:var(--primary)}
+.fee-line{font-size:12px;color:var(--muted);text-align:center;margin:10px 0 14px;line-height:1.45}
+.pay-sheet{display:none}
+.pay-sheet.show{display:block}
+.pay-hero{background:var(--sheet);border:1px solid var(--border);border-radius:20px;padding:18px 16px;margin-bottom:4px}
+.pay-hero-top{display:flex;align-items:center;gap:12px;margin-bottom:16px}
+.pay-hero-icon{width:40px;height:40px;border-radius:12px;background:linear-gradient(135deg,var(--primary),var(--primary2));color:#fff;display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0}
+.pay-hero-top h3{font-size:16px;font-weight:900;color:var(--text)}
+.pay-hero-top p{font-size:12px;color:var(--muted);margin-top:2px}
+.exact-box{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:14px 16px;border-radius:14px;background:var(--success-soft);border:1px solid rgba(52,211,153,.25);margin-bottom:12px}
+.exact-box .k{font-size:13px;font-weight:700;color:var(--muted)}
+.exact-box .v{font-size:18px;font-weight:900;color:var(--success)}
+.acct-box{padding:16px;border-radius:14px;background:var(--input-bg);border:1px solid var(--border);margin-bottom:12px}
+.acct-label{font-size:11px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin-bottom:8px}
+.acct-num-row{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.acct-num{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:22px;font-weight:900;letter-spacing:.04em;color:var(--text);word-break:break-all}
+.copy-btn{border:0;cursor:pointer;border-radius:10px;padding:10px 14px;font-weight:800;font-size:13px;background:var(--primary);color:#fff;display:inline-flex;align-items:center;gap:6px;flex-shrink:0}
+.meta-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px}
+.meta-box{padding:12px;border-radius:12px;background:var(--input-bg);border:1px solid var(--border)}
+.meta-box .k{font-size:10px;font-weight:800;letter-spacing:.05em;text-transform:uppercase;color:var(--muted);margin-bottom:4px}
+.meta-box .v{font-size:14px;font-weight:800;color:var(--text);word-break:break-word}
+.instruct{padding:12px 14px;border-radius:12px;background:var(--primary-soft);border:1px solid rgba(91,138,245,.22);font-size:13px;line-height:1.5;color:var(--text);margin-bottom:14px;font-weight:600}
+.waiting{text-align:center;font-size:13px;color:var(--muted);font-weight:600;margin-bottom:12px}
+.waiting i{margin-right:6px}
 </style>
 <link rel="stylesheet" href="/css/skeleton.css">
 <script src="/js/skeleton.js" defer></script>
 <script src="/js/mj-page-loader.js"></script>
 </head>
 <body>
-
 <style id="mj-boot-style">
 #mj-boot{position:fixed;inset:0;z-index:2147483646;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:18px;background:rgba(5,7,13,.55);-webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px);color:rgba(226,232,240,.85);font:500 12px/1.2 system-ui,sans-serif;letter-spacing:.2em;text-transform:lowercase;transition:opacity .25s ease}
 #mj-boot.is-done{opacity:0;pointer-events:none}
@@ -169,97 +158,95 @@ a{color:inherit;text-decoration:none}
 
 <div class="wrap">
   <div class="wallets">
-    <div class="wcard">
-      <div class="lbl">NGN Wallet</div>
-      <div class="val" id="balNgn">₦—</div>
-    </div>
-    <div class="wcard">
-      <div class="lbl">USD Wallet</div>
-      <div class="val" id="balUsd">$—</div>
-    </div>
+    <div class="wcard"><div class="lbl">NGN Wallet</div><div class="val" id="balNgn">₦—</div></div>
+    <div class="wcard"><div class="lbl">USD Wallet</div><div class="val" id="balUsd">$—</div></div>
   </div>
+  <div class="success-box" id="successBox">Payment received. Refreshing your balance…</div>
 
-  <div class="success-box" id="successBox">Payment received — refreshing your balance…</div>
-
-  <!-- ========== 1. Permanent virtual account (separate) ========== -->
   <div class="card" id="vaCard">
     <div class="va-pill"><i class="fa-solid fa-building-columns"></i> Permanent account</div>
-    <h2>Your bank account</h2>
-    <p class="sub">Transfer any amount anytime. NGN wallet is credited automatically when the transfer lands.</p>
+    <h2>Bank transfer</h2>
+    <p class="sub">One account number for every top up. Your NGN wallet credits when the transfer is confirmed.</p>
 
-    <div id="vaLoadingState" class="loading-inline">
-      <i class="fa-solid fa-spinner fa-spin"></i> Checking your account…
-    </div>
+    <div id="vaLoadingState" class="loading-inline"><i class="fa-solid fa-spinner fa-spin"></i> Checking your account…</div>
 
     <div id="vaEmptyState" style="display:none;">
       <div class="va-empty">
         <i class="fa-solid fa-circle-plus"></i>
-        <p>You don’t have a permanent account number yet. Generate one — the name on the account will match your MJ HUB profile name.</p>
+        <p>Generate your permanent account. The account name will match your MJ HUB profile name.</p>
       </div>
       <div class="bank-choice">
-        <label>
-          <input type="radio" name="vaBank" value="paga" checked>
-          <span>Paga</span>
-        </label>
-        <label>
-          <input type="radio" name="vaBank" value="saveheaven">
-          <span>Safe Haven</span>
-        </label>
+        <label><input type="radio" name="vaBank" value="paga" checked><span>Paga</span></label>
+        <label><input type="radio" name="vaBank" value="saveheaven"><span>Safe Haven</span></label>
       </div>
       <button type="button" class="btn" id="vaGenerateBtn" onclick="generateVirtualAccount()">
         <i class="fa-solid fa-wand-magic-sparkles"></i> Generate account details
       </button>
-      <p class="hint">One account per customer · stays the same forever</p>
+      <p class="hint">One account per customer. It stays the same.</p>
     </div>
 
-    <div id="vaDetailsState" style="display:none;">
-      <div class="va-detail-card">
-        <div class="va-detail-row">
-          <div class="k">Bank</div>
-          <div class="v" id="vaBankName">—</div>
-        </div>
-        <div class="va-detail-row">
-          <div class="k">Account number</div>
-          <div class="v mono" id="vaAccountNumber">—</div>
-        </div>
-        <div class="va-detail-row">
-          <div class="k">Account name</div>
-          <div class="v" id="vaAccountName">—</div>
-        </div>
+    <div id="vaAmountState" style="display:none;">
+      <div class="form-group" style="margin-bottom:8px;">
+        <label>Enter amount (NGN)</label>
+        <input type="number" class="amount-field" id="vaAmountInput" min="1000" max="700000" step="100" placeholder="₦0.00" inputmode="numeric" oninput="onVaAmountInput()">
       </div>
-      <div class="btn-row">
-        <button type="button" class="btn" onclick="copyVirtualAccountNumber()">
-          <i class="fa-solid fa-copy"></i> Copy number
-        </button>
-        <button type="button" class="btn btn-outline" onclick="copyVirtualAccountAll()">
-          <i class="fa-solid fa-share-nodes"></i> Copy all
-        </button>
+      <div class="chips" id="vaChips">
+        <button type="button" class="chip" data-amt="1000" onclick="pickVaAmount(1000)">₦1,000</button>
+        <button type="button" class="chip" data-amt="2000" onclick="pickVaAmount(2000)">₦2,000</button>
+        <button type="button" class="chip" data-amt="5000" onclick="pickVaAmount(5000)">₦5,000</button>
+        <button type="button" class="chip" data-amt="10000" onclick="pickVaAmount(10000)">₦10,000</button>
+        <button type="button" class="chip" data-amt="20000" onclick="pickVaAmount(20000)">₦20,000</button>
+        <button type="button" class="chip" data-amt="50000" onclick="pickVaAmount(50000)">₦50,000</button>
       </div>
-      <p class="hint">Send only from an account in your name when possible. Credits usually land in under a minute.</p>
+      <p class="fee-line" id="vaFeeLine">Min ₦1,000 · Max ₦700,000 · Includes ~0.9% provider fee</p>
+      <button type="button" class="btn" id="vaContinueBtn" onclick="continueVaPay()">Continue</button>
+    </div>
+
+    <div id="vaPaySheet" class="pay-sheet">
+      <div class="pay-hero">
+        <div class="pay-hero-top">
+          <div class="pay-hero-icon"><i class="fa-solid fa-building-columns"></i></div>
+          <div>
+            <h3>Bank transfer details</h3>
+            <p>Transfer from any Nigerian bank</p>
+          </div>
+        </div>
+        <div class="exact-box">
+          <span class="k">Exact amount to send</span>
+          <span class="v" id="vaExactAmount">₦0</span>
+        </div>
+        <div class="acct-box">
+          <div class="acct-label">Account number</div>
+          <div class="acct-num-row">
+            <div class="acct-num" id="vaAccountNumber">—</div>
+            <button type="button" class="copy-btn" onclick="copyVirtualAccountNumber()"><i class="fa-solid fa-copy"></i> Copy</button>
+          </div>
+        </div>
+        <div class="meta-grid">
+          <div class="meta-box"><div class="k">Account name</div><div class="v" id="vaAccountName">—</div></div>
+          <div class="meta-box"><div class="k">Bank</div><div class="v" id="vaBankName">—</div></div>
+        </div>
+        <div class="instruct" id="vaInstruct">Transfer the exact amount above. Your wallet credits automatically once the payment is confirmed.</div>
+        <div class="waiting" id="vaWaiting"><i class="fa-solid fa-rotate fa-spin"></i> Waiting for confirmation…</div>
+        <button type="button" class="btn btn-soft" onclick="checkVaPaymentNow()"><i class="fa-solid fa-rotate"></i> I've sent the money · Check now</button>
+        <button type="button" class="btn btn-outline" style="margin-top:10px;" onclick="backToVaAmount()">Change amount</button>
+      </div>
     </div>
 
     <div id="vaErrorState" style="display:none;">
       <p class="hint" id="vaErrorText" style="color:var(--danger);text-align:left;"></p>
-      <button type="button" class="btn btn-outline" onclick="checkVirtualAccount()">
-        <i class="fa-solid fa-rotate-right"></i> Try again
-      </button>
+      <button type="button" class="btn btn-outline" onclick="checkVirtualAccount()"><i class="fa-solid fa-rotate-right"></i> Try again</button>
     </div>
   </div>
 
-  <!-- ========== 2. Other payment methods ========== -->
   <div class="section-label">Other ways to pay</div>
   <div class="card">
     <div class="method-tabs">
-      <button type="button" class="method-tab active" id="tabPocketfi" onclick="setOtherMethod('pocketfi')">
-        <i class="fa-solid fa-link"></i> PocketFi checkout
-      </button>
-      <button type="button" class="method-tab" id="tabManual" onclick="setOtherMethod('manual')">
-        <i class="fa-brands fa-whatsapp"></i> Manual (WhatsApp)
-      </button>
+      <button type="button" class="method-tab active" id="tabPocketfi" onclick="setOtherMethod('pocketfi')"><i class="fa-solid fa-link"></i> PocketFi checkout</button>
+      <button type="button" class="method-tab" id="tabManual" onclick="setOtherMethod('manual')"><i class="fa-brands fa-whatsapp"></i> Manual (WhatsApp)</button>
     </div>
-
     <div id="pocketfiDepositBox">
-      <p class="sub" style="margin-top:0;">One-time payment link for a fixed amount. Min ₦1,000 · Max ₦500,000.</p>
+      <p class="sub" style="margin-top:0;">One time payment link for a fixed amount. Min ₦1,000 · Max ₦500,000.</p>
       <div class="form-group">
         <label>Wallet to fund</label>
         <select id="depositWalletSelect" onchange="selectDepositWallet(this.value)">
@@ -276,12 +263,9 @@ a{color:inherit;text-decoration:none}
         <div class="a" id="depositUsdAmountText">$0.00</div>
         <div class="r" id="depositUsdRateText">Rate: ₦1,450 = $1</div>
       </div>
-      <button type="button" class="btn" id="pocketfiPayBtn" onclick="payWithPocketFi()">
-        <i class="fa-solid fa-lock"></i> Continue to bank transfer
-      </button>
+      <button type="button" class="btn" id="pocketfiPayBtn" onclick="payWithPocketFi()"><i class="fa-solid fa-lock"></i> Continue to bank transfer</button>
       <p class="hint">Pay in Naira. Selected wallet is credited after confirmation.</p>
     </div>
-
     <div id="manualDepositBox" style="display:none;">
       <p class="sub" style="margin-top:0;">Message admin with your Customer ID and amount.</p>
       <div class="form-group">
@@ -292,16 +276,14 @@ a{color:inherit;text-decoration:none}
         <label>Amount (₦)</label>
         <input type="number" id="depositInput" min="1000" max="500000" step="100" placeholder="e.g. 5000">
       </div>
-      <button type="button" class="btn" onclick="messageAdminForDeposit()">
-        <i class="fa-brands fa-whatsapp"></i> Message Admin to Deposit
-      </button>
-      <p class="hint">WhatsApp opens with your Customer ID and amount pre-filled.</p>
+      <button type="button" class="btn" onclick="messageAdminForDeposit()"><i class="fa-brands fa-whatsapp"></i> Message Admin to Deposit</button>
+      <p class="hint">WhatsApp opens with your Customer ID and amount pre filled.</p>
     </div>
   </div>
 </div>
-
 <div class="toast" id="toast"></div>
-
+<script>
+</script>
 <script>
 const SUPABASE_URL = 'https://atczodlljmlayvldxfmv.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImF0Y3pvZGxsam1sYXl2bGR4Zm12Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODUwNzUyMzgsImV4cCI6MjEwMDY1MTIzOH0.ufthD-p7BmeD_B7xyuMM6PNPL8DmcL4AtRYgg-MuoLI';
@@ -312,12 +294,19 @@ const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
 const DEPOSIT_USD_RATE = 1450;
 const MIN = 1000;
 const MAX = 500000;
+const VA_MIN = 1000;
+const VA_MAX = 700000;
+const VA_FEE_RATE = 0.009;
 const ADMIN_WA = '14305583021';
 
 let depositWallet = 'ngn';
 let currentUserId = null;
 let customerId = '';
 let generatingVa = false;
+let vaDetails = null;
+let vaChosenAmount = 0;
+let vaExactToSend = 0;
+let balancePollTimer = null;
 
 function toast(msg, ms) {
   const t = document.getElementById('toast');
@@ -325,15 +314,21 @@ function toast(msg, ms) {
   t.classList.add('show');
   setTimeout(() => t.classList.remove('show'), ms || 3200);
 }
-function fmtNgn(n) { return '₦' + Number(n || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
-function fmtUsd(n) { return '$' + Number(n || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
-
+function fmtNgn(n) {
+  return '₦' + Number(n || 0).toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 });
+}
+function fmtNgn2(n) {
+  return '₦' + Number(n || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+function fmtUsd(n) {
+  return '$' + Number(n || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
 function syncThemeUi() {
   const dark = document.documentElement.getAttribute('data-theme') !== 'light';
   const btn = document.getElementById('themeBtn');
   if (btn) btn.textContent = dark ? '🌙' : '☀️';
   const meta = document.querySelector('meta[name="theme-color"]');
-  if (meta) meta.setAttribute('content', dark ? '#06080f' : '#f4f6fb');
+  if (meta) meta.setAttribute('content', dark ? '#06080f' : '#f0f4ff');
 }
 function toggleTheme() {
   const cur = document.documentElement.getAttribute('data-theme') === 'light' ? 'light' : 'dark';
@@ -342,7 +337,6 @@ function toggleTheme() {
   try { localStorage.setItem('mjhub-theme', next); } catch (e) {}
   syncThemeUi();
 }
-
 function setOtherMethod(method) {
   const pf = method === 'pocketfi';
   document.getElementById('pocketfiDepositBox').style.display = pf ? '' : 'none';
@@ -350,28 +344,95 @@ function setOtherMethod(method) {
   document.getElementById('tabPocketfi').classList.toggle('active', pf);
   document.getElementById('tabManual').classList.toggle('active', !pf);
 }
-
 function showVaState(which) {
   document.getElementById('vaLoadingState').style.display = which === 'loading' ? '' : 'none';
   document.getElementById('vaEmptyState').style.display = which === 'empty' ? '' : 'none';
-  document.getElementById('vaDetailsState').style.display = which === 'details' ? '' : 'none';
+  document.getElementById('vaAmountState').style.display = which === 'amount' ? '' : 'none';
+  document.getElementById('vaPaySheet').classList.toggle('show', which === 'pay');
   document.getElementById('vaErrorState').style.display = which === 'error' ? '' : 'none';
 }
-
-function fillVaDetails(data) {
-  document.getElementById('vaBankName').textContent = data.bank || '—';
-  document.getElementById('vaAccountNumber').textContent = data.account_number || '—';
-  document.getElementById('vaAccountName').textContent = data.account_name || '—';
+function calcExactToSend(desired) {
+  const d = Math.round(Number(desired) || 0);
+  if (d <= 0) return 0;
+  return d + Math.ceil(d * VA_FEE_RATE);
 }
-
+function onVaAmountInput() {
+  const raw = parseFloat(document.getElementById('vaAmountInput').value) || 0;
+  const exact = calcExactToSend(raw);
+  const fee = exact - Math.round(raw);
+  const line = document.getElementById('vaFeeLine');
+  if (raw >= VA_MIN) {
+    line.textContent = 'You send ' + fmtNgn(exact) + ' (includes ~₦' + fee.toLocaleString() + ' provider fee at 0.9%)';
+  } else {
+    line.textContent = 'Min ₦1,000 · Max ₦700,000 · Includes ~0.9% provider fee';
+  }
+  document.querySelectorAll('#vaChips .chip').forEach(function (c) {
+    c.classList.toggle('active', Number(c.getAttribute('data-amt')) === Math.round(raw));
+  });
+}
+function pickVaAmount(n) {
+  document.getElementById('vaAmountInput').value = String(n);
+  onVaAmountInput();
+}
+function continueVaPay() {
+  if (!vaDetails || !vaDetails.account_number) {
+    toast('Generate your account first');
+    return;
+  }
+  const amount = Math.round(parseFloat(document.getElementById('vaAmountInput').value) || 0);
+  if (amount < VA_MIN) return toast('Minimum is ₦' + VA_MIN.toLocaleString());
+  if (amount > VA_MAX) return toast('Maximum is ₦' + VA_MAX.toLocaleString());
+  vaChosenAmount = amount;
+  vaExactToSend = calcExactToSend(amount);
+  document.getElementById('vaExactAmount').textContent = fmtNgn(vaExactToSend);
+  document.getElementById('vaAccountNumber').textContent = vaDetails.account_number;
+  document.getElementById('vaAccountName').textContent = vaDetails.account_name || '—';
+  document.getElementById('vaBankName').textContent = vaDetails.bank || '—';
+  document.getElementById('vaInstruct').innerHTML =
+    'Transfer exactly <strong>' + fmtNgn(vaExactToSend) + '</strong> to the account above. Your wallet credits automatically once confirmed.';
+  showVaState('pay');
+  startBalanceWatch();
+}
+function backToVaAmount() {
+  stopBalanceWatch();
+  showVaState('amount');
+}
+async function checkVaPaymentNow() {
+  toast('Checking your balance…');
+  const before = document.getElementById('balNgn').textContent;
+  for (let i = 0; i < 5; i++) {
+    await loadProfile();
+    await new Promise(r => setTimeout(r, 1200));
+  }
+  const after = document.getElementById('balNgn').textContent;
+  if (after !== before) {
+    document.getElementById('successBox').classList.add('show');
+    toast('Wallet updated');
+  } else {
+    toast('Not seen yet. Keep this page open or check again in a minute.');
+  }
+}
+function startBalanceWatch() {
+  stopBalanceWatch();
+  let ticks = 0;
+  balancePollTimer = setInterval(async function () {
+    ticks += 1;
+    await loadProfile();
+    if (ticks >= 40) stopBalanceWatch();
+  }, 3000);
+}
+function stopBalanceWatch() {
+  if (balancePollTimer) {
+    clearInterval(balancePollTimer);
+    balancePollTimer = null;
+  }
+}
 async function getAccessToken() {
   const { data: refreshed } = await sb.auth.refreshSession();
   if (refreshed?.session?.access_token) return refreshed.session.access_token;
   const { data: { session } } = await sb.auth.getSession();
   return session?.access_token || null;
 }
-
-/** Check only — does not create */
 async function checkVirtualAccount() {
   showVaState('loading');
   try {
@@ -383,20 +444,17 @@ async function checkVirtualAccount() {
     }
     const res = await fetch('/api/pocketfi?action=virtual_account', {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': 'Bearer ' + accessToken
-      },
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + accessToken },
       body: JSON.stringify({ create: false })
     });
     let data = {};
     try { data = await res.json(); } catch (_) {}
     if (!res.ok) throw new Error(data.message || 'Could not load account');
-
     if (data.has_account && data.data?.account_number) {
-      fillVaDetails(data.data);
-      showVaState('details');
+      vaDetails = data.data;
+      showVaState('amount');
     } else {
+      vaDetails = null;
       showVaState('empty');
     }
   } catch (err) {
@@ -404,16 +462,11 @@ async function checkVirtualAccount() {
     showVaState('error');
   }
 }
-
-/** User taps Generate — creates with Paga or Safe Haven */
 async function generateVirtualAccount() {
   if (generatingVa) return;
   generatingVa = true;
   const btn = document.getElementById('vaGenerateBtn');
-  if (btn) {
-    btn.disabled = true;
-    btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Generating…';
-  }
+  if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Generating…'; }
   showVaState('loading');
   try {
     const accessToken = await getAccessToken();
@@ -424,13 +477,9 @@ async function generateVirtualAccount() {
     }
     const bankEl = document.querySelector('input[name="vaBank"]:checked');
     const bank = (bankEl?.value === 'saveheaven') ? 'saveheaven' : 'paga';
-
     const res = await fetch('/api/pocketfi?action=virtual_account', {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': 'Bearer ' + accessToken
-      },
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + accessToken },
       body: JSON.stringify({ create: true, bank: bank })
     });
     let data = {};
@@ -438,9 +487,9 @@ async function generateVirtualAccount() {
     if (!res.ok || !data.success || !data.data?.account_number) {
       throw new Error(data.message || 'Could not generate account details');
     }
-    fillVaDetails(data.data);
-    showVaState('details');
-    toast('Account ready — transfer anytime');
+    vaDetails = data.data;
+    showVaState('amount');
+    toast('Account ready. Enter the amount to fund.');
   } catch (err) {
     document.getElementById('vaErrorText').textContent = err.message || 'Something went wrong';
     showVaState('error');
@@ -452,22 +501,11 @@ async function generateVirtualAccount() {
     }
   }
 }
-
 function copyVirtualAccountNumber() {
   const n = document.getElementById('vaAccountNumber')?.textContent?.trim();
   if (!n || n === '—') return;
   navigator.clipboard?.writeText(n).then(() => toast('Account number copied')).catch(() => toast('Copy failed'));
 }
-
-function copyVirtualAccountAll() {
-  const bank = document.getElementById('vaBankName')?.textContent?.trim() || '';
-  const num = document.getElementById('vaAccountNumber')?.textContent?.trim() || '';
-  const name = document.getElementById('vaAccountName')?.textContent?.trim() || '';
-  if (!num || num === '—') return;
-  const text = 'Bank: ' + bank + '\nAccount Number: ' + num + '\nAccount Name: ' + name;
-  navigator.clipboard?.writeText(text).then(() => toast('Account details copied')).catch(() => toast('Copy failed'));
-}
-
 function selectDepositWallet(wallet) {
   depositWallet = wallet === 'usd' ? 'usd' : 'ngn';
   const sel = document.getElementById('depositWalletSelect');
@@ -486,7 +524,6 @@ function updateDepositUsdPreview() {
   const usd = ngn > 0 ? ngn / DEPOSIT_USD_RATE : 0;
   if (amtEl) amtEl.textContent = '$' + usd.toFixed(2);
 }
-
 async function ensureAuth() {
   const { data } = await sb.auth.getSession();
   if (!data?.session) {
@@ -497,22 +534,18 @@ async function ensureAuth() {
   await loadProfile();
   return true;
 }
-
 async function loadProfile() {
   if (!currentUserId) return;
   const { data: prof } = await sb.from('profiles')
     .select('balance, balance_usd, customer_id')
     .eq('id', currentUserId)
     .maybeSingle();
-  const ngn = Number(prof?.balance) || 0;
-  const usd = Number(prof?.balance_usd) || 0;
-  document.getElementById('balNgn').textContent = fmtNgn(ngn);
-  document.getElementById('balUsd').textContent = fmtUsd(usd);
+  document.getElementById('balNgn').textContent = fmtNgn2(Number(prof?.balance) || 0);
+  document.getElementById('balUsd').textContent = fmtUsd(Number(prof?.balance_usd) || 0);
   customerId = (prof?.customer_id || '').toString();
   const cidEl = document.getElementById('depositCustomerId');
   if (cidEl) cidEl.value = customerId || '—';
 }
-
 async function payWithPocketFi() {
   const amount = parseFloat(document.getElementById('pocketfiDepositInput')?.value) || 0;
   if (amount < MIN) return toast('Minimum deposit is ₦' + MIN.toLocaleString());
@@ -521,22 +554,17 @@ async function payWithPocketFi() {
   if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Starting…'; }
   try {
     let accessToken = await getAccessToken();
-    let userId = currentUserId;
     const { data: { session } } = await sb.auth.getSession();
-    userId = session?.user?.id || userId;
+    let userId = session?.user?.id || currentUserId;
     if (!accessToken || !userId) {
       toast('Session expired. Please sign in again.');
       setTimeout(() => { location.href = 'auth.html?next=deposit.html'; }, 1200);
       return;
     }
     currentUserId = userId;
-
     const res = await fetch('/api/pocketfi', {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': 'Bearer ' + accessToken
-      },
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + accessToken },
       body: JSON.stringify({ amount: amount, wallet: depositWallet || 'ngn' })
     });
     let data = {};
@@ -556,7 +584,6 @@ async function payWithPocketFi() {
     if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fa-solid fa-lock"></i> Continue to bank transfer'; }
   }
 }
-
 function messageAdminForDeposit() {
   const amount = parseFloat(document.getElementById('depositInput')?.value) || 0;
   if (amount < MIN) return toast('Minimum deposit is ₦' + MIN.toLocaleString());
@@ -565,15 +592,10 @@ function messageAdminForDeposit() {
   if (!cid || cid === '—' || cid === 'Loading…') {
     return toast('Customer ID not loaded yet. Wait a moment and try again.');
   }
-  const msg =
-    'Good day Admin, I want to fund my Wallet.\n\n' +
-    'Here are my details:\n\n' +
-    'Customer ID: ' + cid + '\n' +
-    'Amount: ₦' + amount.toLocaleString();
+  const msg = 'Good day Admin, I want to fund my Wallet.\n\nHere are my details:\n\nCustomer ID: ' + cid + '\nAmount: ₦' + amount.toLocaleString();
   window.open('https://wa.me/' + ADMIN_WA + '?text=' + encodeURIComponent(msg), '_blank');
   toast('Opening WhatsApp…');
 }
-
 async function handleDepositReturn() {
   try {
     const params = new URLSearchParams(window.location.search);
@@ -582,23 +604,19 @@ async function handleDepositReturn() {
     history.replaceState(null, '', window.location.pathname);
     if (deposit === 'success' || deposit === 'pocketfi') {
       document.getElementById('successBox').classList.add('show');
-      toast('Payment received — updating balance…');
+      toast('Payment received. Updating balance…');
       for (let i = 0; i < 6; i++) {
         await new Promise(r => setTimeout(r, 1500));
         await loadProfile();
       }
-      toast('Wallet refreshed. If balance is still old, wait ~30s then refresh.');
+      toast('Wallet refreshed. If balance is still old, wait about 30 seconds then refresh.');
     } else if (deposit === 'failed' || deposit === 'cancelled') {
       toast('Payment was not completed.');
     }
-  } catch (e) {
-    console.warn(e);
-  }
+  } catch (e) { console.warn(e); }
 }
-
 document.addEventListener('visibilitychange', async () => {
   if (document.visibilityState !== 'visible') return;
-  // Refresh balances when user returns from banking app after VA transfer
   for (let i = 0; i < 4; i++) {
     await new Promise(r => setTimeout(r, 1200));
     await loadProfile();
@@ -618,7 +636,6 @@ document.addEventListener('visibilitychange', async () => {
     localStorage.removeItem('mjhub_pending_pocketfi');
   } catch (_) {}
 });
-
 (async () => {
   syncThemeUi();
   if (!(await ensureAuth())) return;
@@ -626,25 +643,5 @@ document.addEventListener('visibilitychange', async () => {
   await checkVirtualAccount();
 })();
 </script>
-
-<script>
-(function(){
-  function paint(){
-    if(!window.mjSkeleton) return;
-    var nodes = document.querySelectorAll('[data-skel], #list, #catalog, #servicesGrid, #productsGrid, #orderList');
-    nodes.forEach(function(el){
-      if(el.dataset.skelReady) return;
-      if(el.children.length) return;
-      var type = el.getAttribute('data-skel') || (el.id && /list|order/i.test(el.id) ? 'cards' : 'grid');
-      el.innerHTML = (mjSkeleton[type] || mjSkeleton.grid)(type === 'cards' ? 3 : 6);
-      el.dataset.skelReady = '1';
-    });
-  }
-  if(document.readyState === 'loading') document.addEventListener('DOMContentLoaded', paint);
-  else paint();
-  setTimeout(paint, 50);
-})();
-</script>
-
 </body>
 </html>
