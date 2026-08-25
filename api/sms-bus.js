@@ -148,7 +148,7 @@ function parseSupplierBalance(data) {
 }
 
 const SMSBUS_CANCEL_COOLDOWN_MS = 60 * 1000; // 1 minute (supplier min is ~30s)
-const SMSBUS_EXPIRY_MS = 20 * 60 * 1000;
+const SMSBUS_EXPIRY_MS = 5 * 60 * 1000; // Server 2 numbers last 5 minutes
 
 
 /** Persist Server 2 catalog. Never overwrites admin selling price or forced hide. */
@@ -552,7 +552,18 @@ export default async function handler(req, res) {
       };
 
       const { error: insErr } = await supabase.from('number_orders').insert(row);
-      if (insErr) console.error('[sms-bus order] insert', insErr.message);
+      if (insErr) {
+        console.error('[sms-bus order] insert', insErr.message);
+        // Critical: number was taken from supplier but DB insert failed — refund user + try cancel
+        try {
+          await smsbusGet(OTP_BASE, '/cancel', { request_id: requestId });
+        } catch (_) {}
+        await supabase.from('profiles').update({ balance: originalBalance }).eq('id', auth.userId);
+        return json(res, 500, {
+          success: false,
+          message: 'Could not save order. Your balance was not charged. Please try again.'
+        });
+      }
 
       try {
         await supabase.from('transactions').insert({
@@ -564,7 +575,7 @@ export default async function handler(req, res) {
           subtitle: `OTP · ${phone || requestId}`,
           amount: `₦${price.toLocaleString()}`,
           amount_ngn: price,
-          status: 'completed'
+          status: 'pending' // becomes completed when SMS arrives, or refunded on cancel/expiry
         });
       } catch (_) {}
 
@@ -573,11 +584,13 @@ export default async function handler(req, res) {
         data: {
           order_id: requestId,
           number: phone,
+          phone_number: phone,
           price,
           new_balance: newBalance,
           service_name: serviceName,
           country_name: countryName,
-          source: 'smsbus'
+          source: 'smsbus',
+          status: 'waiting_for_code'
         }
       });
     }
@@ -589,13 +602,33 @@ export default async function handler(req, res) {
       const order_id = String(body.order_id || '');
       if (!order_id) return json(res, 400, { success: false, message: 'order_id required' });
 
-      const { data: order } = await supabase
+      let { data: order } = await supabase
         .from('number_orders')
         .select('*')
         .eq('order_id', order_id)
         .eq('user_id', auth.userId)
         .eq('source', 'smsbus')
         .maybeSingle();
+      if (!order) {
+        const r2 = await supabase
+          .from('number_orders')
+          .select('*')
+          .eq('order_id', String(order_id))
+          .eq('user_id', auth.userId)
+          .maybeSingle();
+        order = r2.data;
+      }
+      if (!order) {
+        // supplier request_id may be stored differently
+        const r3 = await supabase
+          .from('number_orders')
+          .select('*')
+          .eq('user_id', auth.userId)
+          .eq('source', 'smsbus')
+          .order('created_at', { ascending: false })
+          .limit(5);
+        order = (r3.data || []).find((o) => String(o.order_id) === String(order_id)) || null;
+      }
 
       if (!order) return json(res, 404, { success: false, message: 'Order not found' });
       if (order.status === 'completed' && order.code) {
