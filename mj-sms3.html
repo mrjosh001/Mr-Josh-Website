@@ -257,16 +257,56 @@ const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
     return Array.from({length:6}).map(()=>'<div class="svc-card"><div class="svc-top"><div style="width:42px;height:42px;border-radius:12px;background:var(--border)"></div><div style="flex:1"><div style="height:12px;width:60%;background:var(--border);border-radius:6px;margin-bottom:8px"></div><div style="height:10px;width:40%;background:var(--border);border-radius:6px"></div></div></div><div style="height:40px;background:var(--border);border-radius:11px"></div></div>').join('');
   }
 
+  async function ensureAccessToken(){
+    if(!sbClient) return accessToken;
+    try{
+      const r = await sbClient.auth.getSession();
+      if(r.data && r.data.session && r.data.session.access_token){
+        accessToken = r.data.session.access_token;
+        return accessToken;
+      }
+    }catch(_){}
+    try{
+      const r2 = await sbClient.auth.refreshSession();
+      if(r2.data && r2.data.session && r2.data.session.access_token){
+        accessToken = r2.data.session.access_token;
+        return accessToken;
+      }
+    }catch(_){}
+    return accessToken;
+  }
+
   async function api(action, opts){
     opts = opts || {};
     const qs = opts.qs || '';
-    const res = await fetch('/api/sms-bus?action='+encodeURIComponent(action)+qs, {
-      method: opts.method || 'GET',
-      headers: Object.assign({'Authorization':'Bearer '+accessToken}, opts.body?{'Content-Type':'application/json'}:{}),
-      body: opts.body ? JSON.stringify(opts.body) : undefined
-    });
-    const data = await res.json().catch(()=>({}));
-    if(!res.ok || data.success === false) throw new Error(data.message || ('HTTP '+res.status));
+    await ensureAccessToken();
+    const doFetch = async () => {
+      const res = await fetch('/api/sms-bus?action='+encodeURIComponent(action)+qs, {
+        method: opts.method || 'GET',
+        headers: Object.assign({'Authorization':'Bearer '+(accessToken||'')}, opts.body?{'Content-Type':'application/json'}:{}),
+        body: opts.body ? JSON.stringify(opts.body) : undefined
+      });
+      const data = await res.json().catch(()=>({}));
+      return { res, data };
+    };
+    let { res, data } = await doFetch();
+    // One silent refresh + retry on session errors
+    if(res.status === 401 || /session expired|sign in/i.test(String(data.message||''))){
+      try{
+        const r2 = await sbClient.auth.refreshSession();
+        if(r2.data && r2.data.session){
+          accessToken = r2.data.session.access_token;
+          ({ res, data } = await doFetch());
+        }
+      }catch(_){}
+    }
+    if(!res.ok || data.success === false){
+      const msg = data.message || ('HTTP '+res.status);
+      if(res.status === 401 || /session expired|sign in/i.test(msg)){
+        throw new Error('Session expired. Sign in again.');
+      }
+      throw new Error(msg);
+    }
     return data;
   }
 
@@ -283,7 +323,16 @@ const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
       countryList.innerHTML = '<div class="empty-state"><h4>Config missing</h4></div>';
       return;
     }
-    sbClient = window.supabase.createClient(SU, SK, {auth:{persistSession:true,autoRefreshToken:true,storage:window.localStorage}});
+    // Prefer localStorage; migrate any supabase session keys from sessionStorage
+    try{
+      for(let i=0;i<sessionStorage.length;i++){
+        const k=sessionStorage.key(i);
+        if(k&&(k.indexOf('sb-')===0||k.indexOf('supabase')!==-1)){
+          if(!localStorage.getItem(k)) localStorage.setItem(k, sessionStorage.getItem(k));
+        }
+      }
+    }catch(_){}
+    sbClient = window.supabase.createClient(SU, SK, {auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:true,storage:window.localStorage}});
     let session = null;
     try {
       const r = await sbClient.auth.getSession();
@@ -296,18 +345,30 @@ const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
       } catch (_) {}
     }
     if (!session) {
+      // Last try: sessionStorage-backed client (some pages still store there)
       try {
-        for (let i = 0; i < localStorage.length; i++) {
-          const k = localStorage.key(i);
-          if (k && (k.indexOf('sb-') === 0 || k.indexOf('supabase') !== -1) && !localStorage.getItem(k)) {
-            localStorage.setItem(k, localStorage.getItem(k));
-          }
+        const sb2 = window.supabase.createClient(SU, SK, {auth:{persistSession:true,autoRefreshToken:true,storage:window.sessionStorage}});
+        const r4 = await sb2.auth.getSession();
+        session = r4.data && r4.data.session;
+        if(session){
+          // copy into localStorage client
+          try{
+            for(let i=0;i<sessionStorage.length;i++){
+              const k=sessionStorage.key(i);
+              if(k&&(k.indexOf('sb-')===0||k.indexOf('supabase')!==-1)){
+                localStorage.setItem(k, sessionStorage.getItem(k));
+              }
+            }
+          }catch(_){}
+          const r5 = await sbClient.auth.getSession();
+          if(r5.data && r5.data.session) session = r5.data.session;
         }
-        const r3 = await sbClient.auth.getSession();
-        session = r3.data && r3.data.session;
       } catch (_) {}
     }
-    if (!session) { location.href = 'auth.html?next=' + encodeURIComponent('mj-sms3.html'); return; }
+    if (!session) {
+      countryList.innerHTML = '<div class="empty-state"><h4>Sign in required</h4><p>Your session is not available on this page.</p><a href="auth.html?next='+encodeURIComponent('mj-sms3.html')+'" class="btn-buy" style="display:inline-block;margin-top:12px;text-decoration:none;text-align:center">Sign in</a></div>';
+      return;
+    }
     accessToken = session.access_token;
     await loadCountries();
   }
@@ -342,7 +403,13 @@ const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
       allCountries = rows;
       renderCountries(allCountries);
     }catch(e){
-      countryList.innerHTML = '<div class="empty-state"><h4>Failed to load</h4><p>'+esc(e.message)+'</p></div>';
+      countryList.innerHTML = '<div class="empty-state"><h4>Failed to load</h4><p>'+esc(e.message)+'</p>'+
+        (/session|sign in/i.test(String(e.message||''))
+          ? '<a href="auth.html?next='+encodeURIComponent('mj-sms3.html')+'" class="btn-buy" style="display:inline-block;margin-top:12px;text-decoration:none;text-align:center">Sign in again</a>'
+          : '<button type="button" class="btn-buy" style="margin-top:12px" id="retryCountries">Try again</button>')+
+        '</div>';
+      var rb=document.getElementById('retryCountries');
+      if(rb) rb.onclick=function(){ loadCountries(); };
     }
   }
 
