@@ -18,8 +18,6 @@ jobs:
           test -f api/owlet.js
           test -f api/pocketfi.js
           test -f api/order.js
-          # Fadded catalog sync lives in api/order.js (?action=sync).
-          # api/products.js is optional legacy; remove when rewrite is live.
           if [ -f api/products.js ]; then node --check api/products.js; fi
 
       - name: Block service role JWT in HTML
@@ -32,7 +30,15 @@ jobs:
 
       - name: Syntax check API and lib JS
         run: |
-          for f in api/*.js lib/*.js; do
-            node --check "$f" || exit 1
+          set -e
+          shopt -s nullglob
+          files=(api/*.js lib/*.js)
+          if [ ${#files[@]} -eq 0 ]; then
+            echo "No JS files matched"
+            exit 1
+          fi
+          for f in "${files[@]}"; do
+            echo "check $f"
+            node --check "$f"
           done
           echo "Syntax OK"
