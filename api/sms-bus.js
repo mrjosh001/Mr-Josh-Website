@@ -644,7 +644,9 @@ export default async function handler(req, res) {
         currency: 'NGN',
         status: 'waiting_for_code',
         code: null,
-        refunded: false
+        refunded: false,
+        // User checked "Prefer reusable number" at buy time
+        is_reusable: !!wantReuse
       };
 
       const ins = await insertNumberOrder(row);
@@ -667,7 +669,8 @@ export default async function handler(req, res) {
           country_name: countryName || null,
           price,
           status: 'waiting_for_code',
-          source: 'smsbus'
+          source: 'smsbus',
+          is_reusable: !!wantReuse
         };
         const { error: emErr } = await supabase.from('number_orders').insert(emergency);
         if (emErr) {
@@ -1140,7 +1143,8 @@ export default async function handler(req, res) {
         currency: 'NGN',
         status: 'waiting_for_code',
         code: null,
-        refunded: false
+        refunded: false,
+        is_reusable: true
       };
       let { error: insertErr } = await supabase.from('number_orders').insert(row);
       if (insertErr) {
