@@ -44,9 +44,9 @@ body::before{content:'';position:fixed;inset:0;pointer-events:none;z-index:0;bac
 .number-display{background:var(--bg);border:1px solid var(--border);border-radius:14px;padding:16px;margin-bottom:14px;}
 .number-display .label{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;font-weight:700;margin-bottom:6px;}
 .number-display .value{font-size:22px;font-weight:800;font-family:monospace;letter-spacing:.02em;word-break:break-all;}
-.code-display{background:linear-gradient(135deg,rgba(52,211,153,.15),rgba(52,211,153,.05));border:1px solid rgba(52,211,153,.3);border-radius:14px;padding:20px;margin-bottom:14px;}
+.code-display{text-align:center;background:linear-gradient(135deg,rgba(52,211,153,.15),rgba(52,211,153,.05));border:1px solid rgba(52,211,153,.3);border-radius:14px;padding:20px;margin-bottom:14px;}
 .code-display .label{font-size:11px;color:var(--success);text-transform:uppercase;letter-spacing:.04em;font-weight:700;margin-bottom:8px;}
-.code-display .value{font-size:32px;font-weight:800;font-family:monospace;letter-spacing:.08em;color:var(--success);}
+.code-display .value{font-size:32px;font-weight:800;font-family:monospace;letter-spacing:.08em;color:var(--success);;text-align:center}
 .spinner{width:36px;height:36px;border:3px solid var(--border);border-top-color:var(--primary);border-radius:50%;animation:spin .8s linear infinite;margin:0 auto 16px;}
 @keyframes spin{to{transform:rotate(360deg)}}
 .pulse-dot{display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--primary);animation:pulse 1.4s ease-in-out infinite;margin-right:6px;}
@@ -399,7 +399,6 @@ function renderCompleted(data){
       <div class="label">Verification Code</div>
       <div class="value" id="codeValue">${escapeHtml(data.code || '—')}</div>
     </div>
-    <button type="button" class="btn btn-primary" id="copyCodeBtn"><i class="fa-solid fa-copy"></i> Copy Code</button>
     <a href="mj-sms.html" class="btn btn-outline">Buy Another Number</a>
     <a href="dashboard.html" class="btn btn-outline">Back to Home</a>
   `;

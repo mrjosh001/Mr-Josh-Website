@@ -27,9 +27,9 @@ body{font-family:'Plus Jakarta Sans',system-ui,sans-serif;background:var(--bg);c
 .number-display .value-row{display:flex;align-items:center;justify-content:center;gap:10px;flex-wrap:wrap}
 .number-display .value{font-size:20px;font-weight:800;font-family:monospace;letter-spacing:.02em;word-break:break-all}
 .copy-mini{border:1px solid var(--border);background:var(--card);color:var(--primary);font-size:11px;font-weight:700;padding:6px 10px;border-radius:8px;cursor:pointer;font-family:inherit;white-space:nowrap}
-.code-display{background:linear-gradient(135deg,rgba(52,211,153,.15),rgba(52,211,153,.05));border:1px solid rgba(52,211,153,.3);border-radius:14px;padding:20px;margin-bottom:14px;text-align:left}
+.code-display{background:linear-gradient(135deg,rgba(52,211,153,.15),rgba(52,211,153,.05));border:1px solid rgba(52,211,153,.3);border-radius:14px;padding:20px;margin-bottom:14px;text-align:center}
 .code-display .label{font-size:11px;color:var(--success);text-transform:uppercase;letter-spacing:.04em;font-weight:700;margin-bottom:8px}
-.code-display .value{font-size:28px;font-weight:800;font-family:monospace;letter-spacing:.08em;color:var(--success);word-break:break-all}
+.code-display .value{font-size:28px;font-weight:800;font-family:monospace;letter-spacing:.08em;color:var(--success);word-break:break-all;text-align:center}
 .btn{width:100%;padding:14px;border-radius:14px;font-size:14px;font-weight:700;cursor:pointer;border:none;font-family:inherit;margin-top:10px;display:flex;align-items:center;justify-content:center;gap:8px;text-decoration:none}
 .btn-primary{background:linear-gradient(135deg,var(--primary),var(--primary-strong));color:#fff}
 .btn-outline{background:transparent;color:var(--text);border:1px solid var(--border)}
@@ -260,12 +260,12 @@ function renderCompleted(data){
     vpnBlock()+
     '<div class="number-display" style="text-transform:capitalize"><div class="label">Service</div><div class="value" style="font-size:16px">'+escapeHtml(serviceLabel||'—')+'</div></div>'+
     phoneBlockHtml(phone, data.country_name||meta.country_name||'')+
-    '<div class="code-display"><div class="label">Verification Code</div><div class="value-row"><div class="value" id="codeValue">'+escapeHtml(code)+'</div><button type="button" class="copy-mini" id="copyCodeBtn"><i class="fa-regular fa-copy"></i> Copy</button></div></div>'+
+    '<div class="code-display"><div class="label">Verification Code</div><div class="value" id="codeValue">'+escapeHtml(code)+'</div></div>'+
     '<button type="button" class="btn btn-primary" id="copyCodeBtn2"><i class="fa-solid fa-copy"></i> Copy Code</button>'+
     '<a href="mj-sms3.html" class="btn btn-outline">Buy Another Number</a>'+
     '<a href="dashboard.html" class="btn btn-outline">Back to Home</a>';
   var _cpb=document.getElementById('copyPhoneBtn');if(_cpb){_cpb.onclick=()=>{var n=(document.getElementById('phoneValue')||{}).textContent||'';copyText(String(n).replace(/\s/g,''),'Number copied');}};
-  document.getElementById('copyCodeBtn').onclick=()=>copyText(code,'Code copied');
+  
   document.getElementById('copyCodeBtn2').onclick=()=>copyText(code,'Code copied');
 }
 

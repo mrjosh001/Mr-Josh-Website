@@ -129,7 +129,7 @@ function render(){
       const page=(o.source==='smsbus')?'mj-sms3-number.html':'mj-sms-number.html';
       action='<div class="act"><a href="'+page+'?order_id='+encodeURIComponent(o.order_id||'')+'">Verify SMS</a></div>';
     }
-    const expire=isRent(o)&&(o.code?('<div class="row"><span class="l">Expires</span><span class="v">'+esc(o.code)+'</span></div>'):'');
+    const expire=(isRent(o)&&o.code)?('<div class="row"><span class="l">Expires</span><span class="v">'+esc(o.code)+'</span></div>'):'';
     return '<div class="card"><div class="card-head"><div class="name">'+esc(name)+'</div><div class="price">'+money(o.price)+'</div></div>'+
       '<div class="pills"><span class="pill '+pillCls+'">'+statusLabel+'</span><span class="pill muted">'+esc(serverLabel(o))+'</span></div>'+
       '<div class="row"><span class="l">Country</span><span class="v">'+esc(o.country_name||'—')+'</span></div>'+
@@ -161,6 +161,13 @@ async function init(){
   const sb=window.supabase.createClient(SUPABASE_URL,SUPABASE_ANON_KEY,{auth:{persistSession:true,autoRefreshToken:true,storage:window.sessionStorage}});
   const {data:{session}}=await sb.auth.getSession();
   if(!session){location.href='auth.html';return}
+  try{
+    const res=await fetch('/api/order?action=my_orders',{headers:{Authorization:'Bearer '+session.access_token,Accept:'application/json'}});
+    const json=await res.json().catch(function(){return {}});
+    if(res.ok&&json&&json.success&&Array.isArray(json.sms)){
+      allOrders=json.sms;updateHistCta();render();return;
+    }
+  }catch(e){console.warn('history api',e)}
   const {data,error}=await sb.from('number_orders').select('*').eq('user_id',session.user.id).order('created_at',{ascending:false});
   if(error){listEl.innerHTML='<div class="empty">Failed to load</div>';return}
   allOrders=data||[];updateHistCta();render();
