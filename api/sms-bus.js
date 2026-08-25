@@ -769,7 +769,41 @@ export default async function handler(req, res) {
         order = (r3.data || []).find((o) => String(o.order_id) === String(order_id)) || null;
       }
 
-      if (!order) return json(res, 404, { success: false, message: 'Order not found' });
+      if (!order) {
+        // Order row may be missing (insert race) but supplier still has request_id —
+        // poll supplier and still return a waiting payload so the number page works.
+        const { data: live } = await smsbusGet(OTP_BASE, '/get/sms', { request_id: order_id });
+        if (busOk(live) && live.data) {
+          const code = String(live.data);
+          // Best-effort save completed row
+          try {
+            await supabase.from('number_orders').insert({
+              source: 'smsbus',
+              user_id: auth.userId,
+              order_id: order_id,
+              status: 'completed',
+              code,
+              phone_number: null
+            });
+          } catch (_) {}
+          return json(res, 200, {
+            success: true,
+            data: { status: 'completed', code, number: null, phone_number: null, order_id }
+          });
+        }
+        return json(res, 200, {
+          success: true,
+          data: {
+            status: 'waiting_for_code',
+            code: null,
+            message: 'Not received yet',
+            number: null,
+            phone_number: null,
+            order_id,
+            orphan: true
+          }
+        });
+      }
       if (order.status === 'completed' && order.code) {
         return json(res, 200, {
           success: true,
