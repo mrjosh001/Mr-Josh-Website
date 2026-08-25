@@ -962,8 +962,8 @@ async function handleWebhook(req, res, raw, secret, publicKey) {
     return res.status(400).json({ message: 'Invalid JSON' });
   }
 
-  const amount = extractAmount(data);
-  const reference = extractReference(data);
+  let amount = extractAmount(data);
+  let reference = extractReference(data);
 
   // Signature failed: do NOT hard-reject with 400 if this payment is one we
   // already created as pending. PocketFi support confirmed they send webhooks
@@ -1037,9 +1037,10 @@ async function handleWebhook(req, res, raw, secret, publicKey) {
   const VA_MIN = 1000;
   const VA_MAX = 700000;
 
-  let reference = extractReference(data);
+  reference = extractReference(data);
   const accountNumber = extractAccountNumber(data);
   const grossAmount = extractAmount(data);
+  amount = grossAmount;
 
   // Synthetic reference for VA events missing a payment id (still idempotent per account+amount+day bucket)
   if (!reference && accountNumber && grossAmount > 0) {
