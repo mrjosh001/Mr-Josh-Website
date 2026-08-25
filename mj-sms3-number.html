@@ -262,11 +262,37 @@ function renderCompleted(data){
     phoneBlockHtml(phone, data.country_name||meta.country_name||'')+
     '<div class="code-display"><div class="label">Verification Code</div><div class="value" id="codeValue">'+escapeHtml(code)+'</div></div>'+
     '<button type="button" class="btn btn-primary" id="copyCodeBtn2"><i class="fa-solid fa-copy"></i> Copy Code</button>'+
-    '<a href="mj-sms3.html" class="btn btn-outline">Buy Another Number</a>'+
+    '<button type="button" class="btn btn-primary" id="reuseBtn" style="display:none"><i class="fa-solid fa-rotate"></i> Reuse this number</button>'+'<a href="mj-sms3.html" class="btn btn-outline">Buy Another Number</a>'+
     '<a href="dashboard.html" class="btn btn-outline">Back to Home</a>';
   var _cpb=document.getElementById('copyPhoneBtn');if(_cpb){_cpb.onclick=()=>{var n=(document.getElementById('phoneValue')||{}).textContent||'';copyText(String(n).replace(/\s/g,''),'Number copied');}};
   
   document.getElementById('copyCodeBtn2').onclick=()=>copyText(code,'Code copied');
+  var rb=document.getElementById('reuseBtn');
+  if(rb){
+    var cid=meta.country_id||data.country_id;
+    var sid=meta.service_id||data.service_id;
+    var ph=String(phone||'').replace(/\D/g,'');
+    var doneAt=new Date(data.updated_at||meta.updated_at||data.created_at||meta.created_at||Date.now()).getTime();
+    var left=(doneAt+20*60*1000)-Date.now();
+    if(cid&&sid&&ph&&left>0){
+      rb.style.display='block';
+      rb.onclick=async function(){
+        rb.disabled=true;rb.innerHTML='Reusing…';
+        try{
+          var r=await api('reuse',{country_id:cid,project_id:sid,mobile_number:ph,country_name:meta.country_name||data.country_name,service_name:meta.service_name||data.service_name});
+          if(!r.ok||!r.data||!r.data.success||!r.data.data||!r.data.data.order_id) throw new Error((r.data&&r.data.message)||'Reuse failed');
+          var d=r.data.data;
+          var num=d.number||d.phone_number||ph;
+          try{sessionStorage.setItem('mj_sms3_last_order',JSON.stringify({order_id:d.order_id,number:num,price:d.price,service_name:d.service_name,country_name:d.country_name,ts:Date.now()}));}catch(_){}
+          var q=new URLSearchParams({order_id:String(d.order_id),number:num});
+          if(d.service_name)q.set('service_name',d.service_name);
+          if(d.country_name)q.set('country_name',d.country_name);
+          if(d.price!=null)q.set('price',String(d.price));
+          location.href='mj-sms3-number.html?'+q.toString();
+        }catch(e){showToast(e.message||'Reuse failed','error');rb.disabled=false;rb.innerHTML='<i class="fa-solid fa-rotate"></i> Reuse this number';}
+      };
+    }
+  }
 }
 
 function renderCancelled(msg){

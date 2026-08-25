@@ -38,6 +38,12 @@ body{font-family:'Plus Jakarta Sans',system-ui,sans-serif;background:var(--bg);c
 .chip.on{background:var(--primary);border-color:var(--primary);color:#fff}
 .list{display:flex;flex-direction:column;gap:12px}
 .card{background:var(--card);border:1px solid var(--border);border-radius:18px;padding:16px;box-shadow:var(--shadow)}
+.act{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}
+.act a,.act button{flex:1;min-width:120px;text-align:center;padding:10px 12px;border-radius:12px;font:700 12px inherit;text-decoration:none;border:none;cursor:pointer}
+.act a{background:rgba(59,130,246,.15);color:var(--primary)}
+.btn-reuse{background:linear-gradient(135deg,#0d9488,#0891b2)!important;color:#fff!important}
+.reuse-hint{font-size:11px;color:var(--muted);margin-top:6px;font-weight:600}
+
 .card-head{display:flex;justify-content:space-between;gap:10px;margin-bottom:8px}
 .name{font-size:15px;font-weight:800}
 .price{font-weight:800;color:var(--primary)}
@@ -125,9 +131,31 @@ function render(){
     const pillCls=b==='completed'?'ok':b==='waiting'?'wait':b==='cancelled'?'bad':'muted';
     const statusLabel=b==='completed'?(isRent(o)?'Active / completed':'Code received'):b==='waiting'?'Waiting for code':b==='cancelled'?'Cancelled':'—';
     let action='';
+    const src=String(o.source||'').toLowerCase();
+    const isS2=src==='smsbus'||src==='sms-bus';
     if(!isRent(o)&&String(o.status)==='waiting_for_code'){
-      const page=(o.source==='smsbus')?'mj-sms3-number.html':'mj-sms-number.html';
+      const page=isS2?'mj-sms3-number.html':'mj-sms-number.html';
       action='<div class="act"><a href="'+page+'?order_id='+encodeURIComponent(o.order_id||'')+'">Verify SMS</a></div>';
+    }
+    // Server 2 only: Reuse for 20 minutes after code received (SMS-Bus rule)
+    const REUSE_MS=20*60*1000;
+    if(!isRent(o)&&isS2&&b==='completed'&&o.code){
+      const doneAt=new Date(o.updated_at||o.completed_at||o.created_at||0).getTime();
+      const left=doneAt? (doneAt+REUSE_MS-Date.now()) : 0;
+      if(left>0&&o.country_id!=null&&o.service_id&&o.phone_number){
+        const mins=Math.max(1,Math.ceil(left/60000));
+        action=
+          '<div class="act">'+
+            '<button type="button" class="btn-reuse" data-reuse="1" '+
+              'data-country="'+esc(String(o.country_id))+'" '+
+              'data-service="'+esc(String(o.service_id))+'" '+
+              'data-phone="'+esc(String(o.phone_number).replace(/\D/g,''))+'" '+
+              'data-cname="'+esc(o.country_name||'')+'" '+
+              'data-sname="'+esc(o.service_name||'')+'">'+
+              'Reuse number</button>'+
+          '</div>'+
+          '<div class="reuse-hint">Same number · about '+mins+' min left to reuse</div>';
+      }
     }
     const expire=(isRent(o)&&o.code)?('<div class="row"><span class="l">Expires</span><span class="v">'+esc(o.code)+'</span></div>'):'';
     return '<div class="card"><div class="card-head"><div class="name">'+esc(name)+'</div><div class="price">'+money(o.price)+'</div></div>'+
@@ -157,6 +185,57 @@ document.getElementById('otpFilters').onclick=function(e){
   render();
 };
 document.getElementById('histSearch').addEventListener('input',function(){render()});
+
+let reusing=false;
+async function reuseNumber(btn){
+  if(reusing||!btn) return;
+  reusing=true;
+  const prev=btn.textContent;
+  btn.disabled=true;
+  btn.textContent='Reusing…';
+  try{
+    const session=(await window.supabase.createClient(SUPABASE_URL,SUPABASE_ANON_KEY,{auth:{persistSession:true,autoRefreshToken:true,storage:window.sessionStorage}}).auth.getSession()).data.session;
+    if(!session){location.href='auth.html';return}
+    const res=await fetch('/api/sms-bus?action=reuse',{
+      method:'POST',
+      headers:{'Content-Type':'application/json','Authorization':'Bearer '+session.access_token},
+      body:JSON.stringify({
+        country_id:btn.getAttribute('data-country'),
+        project_id:btn.getAttribute('data-service'),
+        mobile_number:btn.getAttribute('data-phone'),
+        country_name:btn.getAttribute('data-cname')||'',
+        service_name:btn.getAttribute('data-sname')||''
+      })
+    });
+    const j=await res.json().catch(function(){return {}});
+    if(!res.ok||!j.success||!j.data||!j.data.order_id){
+      throw new Error((j&&j.message)||'Could not reuse this number');
+    }
+    const d=j.data;
+    const num=d.number||d.phone_number||btn.getAttribute('data-phone')||'';
+    try{
+      const payload={order_id:d.order_id,number:num,phone_number:num,price:d.price,service_name:d.service_name,country_name:d.country_name,ts:Date.now()};
+      sessionStorage.setItem('mj_sms3_last_order',JSON.stringify(payload));
+      localStorage.setItem('mj_sms3_last_order',JSON.stringify(payload));
+    }catch(_){}
+    const q=new URLSearchParams({order_id:String(d.order_id)});
+    if(num) q.set('number',num);
+    if(d.service_name) q.set('service_name',d.service_name);
+    if(d.country_name) q.set('country_name',d.country_name);
+    if(d.price!=null) q.set('price',String(d.price));
+    location.href='mj-sms3-number.html?'+q.toString();
+  }catch(e){
+    alert(e.message||'Reuse failed');
+    btn.disabled=false;
+    btn.textContent=prev;
+    reusing=false;
+  }
+}
+document.getElementById('list').addEventListener('click',function(e){
+  const btn=e.target.closest('[data-reuse]');
+  if(btn) reuseNumber(btn);
+});
+
 async function init(){
   const sb=window.supabase.createClient(SUPABASE_URL,SUPABASE_ANON_KEY,{auth:{persistSession:true,autoRefreshToken:true,storage:window.sessionStorage}});
   const {data:{session}}=await sb.auth.getSession();
