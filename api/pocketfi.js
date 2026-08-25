@@ -112,6 +112,24 @@ function extractAmount(data) {
   return Math.round(n);
 }
 
+
+/**
+ * VA deposits: user wallet gets net after 1% payment processing fee.
+ * - Sent 1010 (uplifted from 1000) → credit 1000
+ * - Sent 1000 (no uplift) → credit 990 (1000 minus 1%)
+ */
+function netDepositFromGross(gross) {
+  const g = Math.round(Number(gross) || 0);
+  if (g <= 0) return 0;
+  const rate = 0.01;
+  // Prefer inverse of UI formula: desired + ceil(desired * 0.01) === gross
+  for (let d = g; d >= Math.max(1, g - Math.ceil(g * 0.05) - 5); d--) {
+    if (d + Math.ceil(d * rate) === g) return d;
+  }
+  // Paid exact desired with no uplift — still withhold 1%
+  return Math.max(1, Math.round(g / (1 + rate)));
+}
+
 function extractReference(data) {
   return (
     data?.transaction?.reference ||
@@ -1082,8 +1100,32 @@ async function handleWebhook(req, res, raw, secret, publicKey) {
     return res.status(200).json({ message: 'no matching user — logged' });
   }
 
+  // Permanent VA: user is told to send gross (desired + small processing uplift).
+  // Wallet credit = desired amount only (what they typed), not the gross transfer.
+  // Checkout (pending intent) already stores the intended amount — prefer that.
+  let creditNet = creditAmount;
   try {
-    await creditUser(userId, creditAmount, String(reference));
+    const { data: intentAmt } = await supabase
+      .from('deposit_intents')
+      .select('amount, status')
+      .eq('external_id', String(reference))
+      .maybeSingle();
+    if (intentAmt && Number(intentAmt.amount) > 0 && String(intentAmt.status || '').toLowerCase() === 'pending') {
+      creditNet = Math.round(Number(intentAmt.amount));
+    } else {
+      // No checkout intent → VA transfer. Always net ~1% (with or without uplift).
+      const net = netDepositFromGross(creditAmount);
+      if (net > 0) {
+        console.log('PocketFi VA credit netted', { gross: creditAmount, net });
+        creditNet = net;
+      }
+    }
+  } catch (e) {
+    console.warn('net deposit resolve failed', e?.message || e);
+  }
+
+  try {
+    await creditUser(userId, creditNet, String(reference));
   } catch (err) {
     console.error('PocketFi credit failed', err);
     return res.status(500).json({ message: err.message || 'credit failed' });
