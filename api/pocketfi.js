@@ -133,12 +133,16 @@ function netDepositFromGross(gross) {
 function extractReference(data) {
   return (
     data?.transaction?.reference ||
+    data?.transaction?.id ||
     data?.data?.reference ||
     data?.data?.payment_id ||
+    data?.data?.transaction_id ||
     data?.payment_id ||
     data?.reference ||
     data?.order?.reference ||
+    data?.order?.id ||
     data?.data?.transaction_reference ||
+    data?.id ||
     null
   );
 }
@@ -967,12 +971,13 @@ async function handleWebhook(req, res, raw, secret, publicKey) {
   // delivery log at Failed. Matching a pending intent/tx is enough proof the
   // event is real for that payment_id.
   if (candidates.length && !matched) {
-    console.warn('PocketFi webhook signature mismatch — will accept only if pending deposit exists', {
+    console.warn('PocketFi webhook signature mismatch — will accept only if pending deposit or known VA', {
       candidates: candidates.map((c) => `${c.header}=${String(c.value).slice(0, 20)}...`),
       reference,
       amount
     });
-    if (!reference) {
+    // VA webhooks may omit reference; allow through to account_number matching below
+    if (!reference && !extractAccountNumber(data)) {
       return res.status(400).json({ message: 'Invalid signature' });
     }
     const { data: pendingIntent } = await supabase
@@ -1029,8 +1034,22 @@ async function handleWebhook(req, res, raw, secret, publicKey) {
     return res.status(200).json({ message: 'ignored_status' });
   }
 
+  const VA_MIN = 1000;
+  const VA_MAX = 700000;
+
+  let reference = extractReference(data);
+  const accountNumber = extractAccountNumber(data);
+  const grossAmount = extractAmount(data);
+
+  // Synthetic reference for VA events missing a payment id (still idempotent per account+amount+day bucket)
+  if (!reference && accountNumber && grossAmount > 0) {
+    const day = new Date().toISOString().slice(0, 10);
+    reference = `va-${accountNumber}-${grossAmount}-${day}`;
+    console.warn('PocketFi webhook: synthetic VA reference', reference);
+  }
+
   if (!reference) {
-    console.warn('PocketFi webhook missing reference', { raw_preview: raw.slice(0, 300) });
+    console.warn('PocketFi webhook missing reference', { raw_preview: String(raw).slice(0, 300) });
     return res.status(200).json({ message: 'ignored_no_reference' });
   }
 
@@ -1046,8 +1065,11 @@ async function handleWebhook(req, res, raw, secret, publicKey) {
   }
 
   let userId = existing?.user_id || null;
-  let creditAmount = amount > 0 ? amount : Number(existing?.amount_ngn || 0);
+  let creditAmount = grossAmount > 0 ? grossAmount : Number(existing?.amount_ngn || 0);
+  let viaCheckout = false;
+  let viaVa = false;
 
+  // Checkout: pending intent / tx by reference
   if (!userId || !creditAmount) {
     const { data: intent } = await supabase
       .from('deposit_intents')
@@ -1057,36 +1079,31 @@ async function handleWebhook(req, res, raw, secret, publicKey) {
     if (intent?.user_id) {
       userId = userId || intent.user_id;
       if (!creditAmount) creditAmount = Number(intent.amount) || 0;
+      if (String(intent.status || '').toLowerCase() === 'pending') viaCheckout = true;
     }
   }
 
   if (!userId) {
     const { data: pending } = await supabase
       .from('transactions')
-      .select('id, user_id, amount_ngn')
+      .select('id, user_id, amount_ngn, status')
       .eq('payment_provider', 'pocketfi')
       .eq('external_reference', String(reference))
       .maybeSingle();
     if (pending?.user_id) {
       userId = pending.user_id;
       if (!creditAmount) creditAmount = Number(pending.amount_ngn) || 0;
+      if (String(pending.status || '').toLowerCase() === 'pending') viaCheckout = true;
     }
   }
 
-  // Dedicated virtual-account transfers have no pre-existing checkout
-  // reference or deposit_intent — the user just sent a bank transfer
-  // straight to their own account number, with nothing created on our side
-  // beforehand. The only way to identify the customer is by which account
-  // number the transfer landed in, matched against what we stored when we
-  // created it (see handleVirtualAccount above).
-  if (!userId) {
-    const accountNumber = extractAccountNumber(data);
-    if (accountNumber) {
-      const uid = await findUserByVirtualAccount(accountNumber);
-      if (uid) {
-        userId = uid;
-        console.log('PocketFi webhook: matched by virtual account number', { accountNumber, userId });
-      }
+  // Permanent VA — works even if user never opened Fund Wallet / set an amount
+  if (!userId && accountNumber) {
+    const uid = await findUserByVirtualAccount(accountNumber);
+    if (uid) {
+      userId = uid;
+      viaVa = true;
+      console.log('PocketFi webhook: matched by virtual account number', { accountNumber, userId });
     }
   }
 
@@ -1094,15 +1111,23 @@ async function handleWebhook(req, res, raw, secret, publicKey) {
     console.error('PocketFi webhook: cannot resolve user/amount', {
       reference,
       amount: creditAmount,
-      userId
+      userId,
+      accountNumber
     });
-    // 200 so PocketFi stops retrying forever — check logs and credit manually if needed
     return res.status(200).json({ message: 'no matching user — logged' });
   }
 
-  // Permanent VA: user is told to send gross (desired + small processing uplift).
-  // Wallet credit = desired amount only (what they typed), not the gross transfer.
-  // Checkout (pending intent) already stores the intended amount — prefer that.
+  // Bounds: protect against bad/malicious payloads (VA and unknown gross)
+  if (viaVa || !viaCheckout) {
+    if (creditAmount < VA_MIN || creditAmount > VA_MAX) {
+      console.warn('PocketFi webhook amount out of range — not credited', { creditAmount, reference });
+      return res.status(200).json({ message: 'amount_out_of_range' });
+    }
+  }
+
+  // Credit amount:
+  // - Checkout with pending intent: use stored intended amount when available
+  // - VA (with or without prior UI session): net 1% from gross received
   let creditNet = creditAmount;
   try {
     const { data: intentAmt } = await supabase
@@ -1110,14 +1135,23 @@ async function handleWebhook(req, res, raw, secret, publicKey) {
       .select('amount, status')
       .eq('external_id', String(reference))
       .maybeSingle();
-    if (intentAmt && Number(intentAmt.amount) > 0 && String(intentAmt.status || '').toLowerCase() === 'pending') {
+    if (
+      intentAmt &&
+      Number(intentAmt.amount) > 0 &&
+      String(intentAmt.status || '').toLowerCase() === 'pending'
+    ) {
       creditNet = Math.round(Number(intentAmt.amount));
-    } else {
-      // No checkout intent → VA transfer. Always net ~1% (with or without uplift).
+      viaCheckout = true;
+    } else if (viaVa || !viaCheckout) {
       const net = netDepositFromGross(creditAmount);
       if (net > 0) {
         console.log('PocketFi VA credit netted', { gross: creditAmount, net });
         creditNet = net;
+      }
+      // Net must still be meaningful
+      if (creditNet < Math.floor(VA_MIN * 0.99)) {
+        console.warn('PocketFi VA net too small — not credited', { creditNet, reference });
+        return res.status(200).json({ message: 'net_too_small' });
       }
     }
   } catch (e) {
