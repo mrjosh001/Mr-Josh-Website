@@ -1882,13 +1882,13 @@ async function handleVaBegin(req, res) {
       .like('external_id', 'va-%');
   } catch (_) {}
 
+  // deposit_intents schema: user_id, external_id, amount, status (+ optional fields if present)
+  // Do not send currency/wallet unless those columns exist in production.
   const { error } = await supabase.from('deposit_intents').insert({
     user_id: user.id,
     external_id: sessionId,
     amount: desired,
-    status: 'pending',
-    wallet: 'ngn',
-    currency: 'NGN'
+    status: 'pending'
   });
   if (error) {
     console.error('[va_begin]', error.message);
