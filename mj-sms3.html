@@ -323,16 +323,16 @@ const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
       countryList.innerHTML = '<div class="empty-state"><h4>Config missing</h4></div>';
       return;
     }
-    // Prefer localStorage; migrate any supabase session keys from sessionStorage
+    // Align with dashboard + Server 1: session lives in sessionStorage
     try{
-      for(let i=0;i<sessionStorage.length;i++){
-        const k=sessionStorage.key(i);
+      for(let i=0;i<localStorage.length;i++){
+        const k=localStorage.key(i);
         if(k&&(k.indexOf('sb-')===0||k.indexOf('supabase')!==-1)){
-          if(!localStorage.getItem(k)) localStorage.setItem(k, sessionStorage.getItem(k));
+          if(!sessionStorage.getItem(k)) sessionStorage.setItem(k, localStorage.getItem(k));
         }
       }
     }catch(_){}
-    sbClient = window.supabase.createClient(SU, SK, {auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:true,storage:window.localStorage}});
+    sbClient = window.supabase.createClient(SU, SK, {auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:true,storage:window.sessionStorage}});
     let session = null;
     try {
       const r = await sbClient.auth.getSession();
@@ -366,7 +366,8 @@ const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
       } catch (_) {}
     }
     if (!session) {
-      countryList.innerHTML = '<div class="empty-state"><h4>Sign in required</h4><p>Your session is not available on this page.</p><a href="auth.html?next='+encodeURIComponent('mj-sms3.html')+'" class="btn-buy" style="display:inline-block;margin-top:12px;text-decoration:none;text-align:center">Sign in</a></div>';
+      accessToken = '';
+      await loadCountries();
       return;
     }
     accessToken = session.access_token;
@@ -531,6 +532,11 @@ const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
   };
 
   async function buy(projectId, btn){
+    if(!accessToken){
+      toast('Please sign in to buy a number', 'error');
+      setTimeout(function(){ location.href = 'auth.html?next=' + encodeURIComponent('mj-sms3.html'); }, 600);
+      return;
+    }
     if(isBuying || !currentCountry) return;
     isBuying = true;
     btn.disabled = true;
