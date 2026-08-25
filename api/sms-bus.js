@@ -89,6 +89,10 @@ async function claimAndRefundSmsBusOrder(order, userId, opts = {}) {
   }
 
   const subtitle = opts.subtitle || 'No SMS — balance restored';
+  // Only refund open orders (not completed with a code)
+  if (order.status === 'completed' && order.code) {
+    return { refunded: false, reason: 'already_final' };
+  }
   const { data: claimed, error: claimErr } = await supabase
     .from('number_orders')
     .update({
@@ -97,7 +101,6 @@ async function claimAndRefundSmsBusOrder(order, userId, opts = {}) {
       updated_at: new Date().toISOString()
     })
     .eq('id', order.id)
-    .or('refunded.eq.false,refunded.is.null')
     .neq('status', 'completed')
     .select('id, price')
     .maybeSingle();
@@ -144,7 +147,7 @@ function parseSupplierBalance(data) {
   return null;
 }
 
-const SMSBUS_CANCEL_COOLDOWN_MS = 5 * 60 * 1000;
+const SMSBUS_CANCEL_COOLDOWN_MS = 60 * 1000; // 1 minute (supplier min is ~30s)
 const SMSBUS_EXPIRY_MS = 20 * 60 * 1000;
 
 
@@ -725,7 +728,7 @@ export default async function handler(req, res) {
         return json(res, 200, { success: true, message: 'Already refunded', refunded: 0 });
       }
 
-      // Match Server 1: 5-minute cancel cooldown
+      // 1-minute cancel cooldown (above supplier 30s minimum)
       if (order.created_at) {
         const age = Date.now() - new Date(order.created_at).getTime();
         if (age < SMSBUS_CANCEL_COOLDOWN_MS) {
