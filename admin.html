@@ -3801,10 +3801,10 @@ function switchTab(name) {
  smsTabLoaded = true;
  loadNumberServices();
  }
- if (name === 'sms-server2' && !ldNumTabLoaded) {
- ldNumTabLoaded = true;
- initLdNumTab();
- }
+ // initLdNumTab() removed from here — it called /api/logsdomain-numbers,
+ // which no longer exists (replaced by api/sms-bus.js). The working
+ // catalog view for this tab is driven by the search inputs via
+ // loadSmsServer2RowsForCurrentFilter(), not by this hook.
 }
 function openSidebar() {
  document.getElementById('sidebar').classList.add('open');
