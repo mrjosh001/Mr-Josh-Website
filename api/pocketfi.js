@@ -1119,7 +1119,7 @@ async function handleWebhook(req, res, raw, secret, publicKey) {
   }
 
   // Bounds: protect against bad/malicious payloads (VA and unknown gross)
-  if (viaVa || !viaCheckout) {
+  if (viaVa) {
     if (creditAmount < VA_MIN || creditAmount > VA_MAX) {
       console.warn('PocketFi webhook amount out of range — not credited', { creditAmount, reference });
       return res.status(200).json({ message: 'amount_out_of_range' });
@@ -1139,21 +1139,26 @@ async function handleWebhook(req, res, raw, secret, publicKey) {
     if (
       intentAmt &&
       Number(intentAmt.amount) > 0 &&
-      String(intentAmt.status || '').toLowerCase() === 'pending'
+      ['pending', 'success'].includes(String(intentAmt.status || '').toLowerCase())
     ) {
+      // Checkout: always credit the amount the user chose (PocketFi fees the payer)
       creditNet = Math.round(Number(intentAmt.amount));
       viaCheckout = true;
-    } else if (viaVa || !viaCheckout) {
+    } else if (viaVa) {
+      // Permanent VA only: we absorb provider cost → net 1%
       const net = netDepositFromGross(creditAmount);
       if (net > 0) {
         console.log('PocketFi VA credit netted', { gross: creditAmount, net });
         creditNet = net;
       }
-      // Net must still be meaningful
       if (creditNet < Math.floor(VA_MIN * 0.99)) {
         console.warn('PocketFi VA net too small — not credited', { creditNet, reference });
         return res.status(200).json({ message: 'net_too_small' });
       }
+    } else {
+      // Checkout/webhook without pending row: credit full gross (no 1% cut)
+      creditNet = Math.round(creditAmount);
+      console.log('PocketFi checkout-style credit full amount', { creditNet, reference });
     }
   } catch (e) {
     console.warn('net deposit resolve failed', e?.message || e);
@@ -1261,7 +1266,7 @@ async function handleCheckout(req, res, raw, publicKey, businessId) {
 
   // Absolute HTTPS URL required — PocketFi "Go to Home" / auto-redirect uses this
   const appUrl = (process.env.APP_URL || 'https://app.mjhub.store').replace(/\/$/, '');
-  const redirect_link = `${appUrl}/deposit.html?deposit=success&provider=pocketfi`;
+  const redirect_link = `${appUrl}/dashboard.html?deposit=success&provider=pocketfi`;
 
   const base = (process.env.POCKETFI_API_BASE || 'https://api.pocketfi.ng/api/v1').replace(
     /\/$/,
