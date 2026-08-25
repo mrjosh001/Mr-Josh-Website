@@ -288,64 +288,71 @@ async function syncSmsBusCatalog() {
 
 
 
+
 async function insertNumberOrder(row) {
-  // Save activation even if some columns differ across schema versions
-  const attempts = [
-    { ...row },
-    { ...row, country_id: row.country_id != null ? String(row.country_id) : null },
-  ];
-  // Drop optional columns progressively
-  const optionalKeys = [
-    'supplier_price',
-    'currency',
-    'refunded',
-    'time_left',
-    'idempotency_key',
-    'customer_id',
-    'code'
-  ];
-  let lastErr = null;
-  for (const base of attempts) {
-    let attempt = { ...base };
-    for (let round = 0; round < optionalKeys.length + 1; round++) {
-      const { error } = await supabase.from('number_orders').insert(attempt);
-      if (!error) return { error: null, row: attempt };
-      lastErr = error;
-      const msg = String(error.message || '');
-      // Column / constraint issues → strip one optional field
-      if (/column|schema cache|does not exist/i.test(msg)) {
-        const next = optionalKeys[round];
-        if (next && next in attempt) {
-          delete attempt[next];
-          continue;
-        }
-      }
-      // Unique violation on order_id → treat as already saved
-      if (/duplicate|unique/i.test(msg)) {
-        return { error: null, row: attempt, duplicate: true };
-      }
-      break;
-    }
+  const lastErrors = [];
+
+  // Build progressive payloads — strip fields that often break older schemas
+  const variants = [];
+  const full = { ...row };
+  variants.push(full);
+
+  const asStringCountry = { ...row, country_id: row.country_id != null ? String(row.country_id) : null };
+  variants.push(asStringCountry);
+
+  const noOptional = { ...row };
+  for (const k of ['supplier_price', 'currency', 'refunded', 'time_left', 'idempotency_key', 'customer_id', 'code']) {
+    delete noOptional[k];
   }
-  // Minimal row last resort
-  const minimal = {
-    source: row.source || 'smsbus',
+  variants.push(noOptional);
+  variants.push({ ...noOptional, country_id: row.country_id != null ? String(row.country_id) : null });
+
+  // Without source (if CHECK constraint only allows grizzlysms)
+  const noSource = { ...noOptional };
+  delete noSource.source;
+  variants.push(noSource);
+
+  // Absolute minimum
+  variants.push({
     user_id: row.user_id,
-    order_id: row.order_id,
+    order_id: String(row.order_id),
     phone_number: row.phone_number || null,
+    status: row.status || 'waiting_for_code',
+    price: row.price != null ? row.price : null,
     service_name: row.service_name || null,
     country_name: row.country_name || null,
-    price: row.price,
-    status: row.status || 'waiting_for_code'
+    source: row.source || 'smsbus'
+  });
+  variants.push({
+    user_id: row.user_id,
+    order_id: String(row.order_id),
+    phone_number: row.phone_number || null,
+    status: 'waiting_for_code',
+    price: row.price
+  });
+
+  for (const attempt of variants) {
+    // drop undefined keys
+    const payload = {};
+    for (const [k, v] of Object.entries(attempt)) {
+      if (v !== undefined) payload[k] = v;
+    }
+    const { data, error } = await supabase.from('number_orders').insert(payload).select('id, order_id').maybeSingle();
+    if (!error) return { error: null, row: payload, id: data && data.id };
+    const msg = String(error.message || error.code || '');
+    lastErrors.push(msg);
+    if (/duplicate|unique/i.test(msg)) {
+      return { error: null, row: payload, duplicate: true };
+    }
+  }
+
+  return {
+    error: { message: lastErrors.filter(Boolean).slice(-3).join(' | ') || 'insert failed' }
   };
-  const { error } = await supabase.from('number_orders').insert(minimal);
-  if (!error) return { error: null, row: minimal };
-  return { error: error || lastErr };
 }
 
 async function markTxStatus(userId, orderId, phone, status) {
   try {
-    // Match pending purchase rows for this activation
     const { data } = await supabase
       .from('transactions')
       .select('id, subtitle, notes, status')
@@ -353,18 +360,23 @@ async function markTxStatus(userId, orderId, phone, status) {
       .eq('category', 'MJ SMS')
       .order('created_at', { ascending: false })
       .limit(15);
-    const hit = (data || []).find((t) => {
-      const blob = `${t.subtitle || ''} ${t.notes || ''}`;
+    const hit = (data || []).find((tx) => {
+      const blob = `${tx.subtitle || ''} ${tx.notes || ''}`;
       return blob.includes(String(orderId)) || (phone && blob.includes(String(phone)));
     });
-    if (hit) {
-      await supabase.from('transactions').update({ status }).eq('id', hit.id);
-    }
+    if (hit) await supabase.from('transactions').update({ status }).eq('id', hit.id);
   } catch (_) {}
 }
 
 
 export default async function handler(req, res) {
+  if (!process.env.SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
+    return json(res, 500, {
+      success: false,
+      message: 'Server misconfigured (database key missing). Contact support.'
+    });
+  }
+
   try {
     const url = new URL(req.url, 'http://localhost');
     const action = (url.searchParams.get('action') || '').toLowerCase();
@@ -636,17 +648,58 @@ export default async function handler(req, res) {
         console.error('[sms-bus order] insert failed after retries:', ins.error.message, {
           requestId,
           user_id: auth.userId,
+          phone,
           columns: Object.keys(row)
         });
-        // Last resort: keep supplier number live ONLY if we cannot record it — refund user + cancel
+        // CRITICAL: supplier already issued a number. Do NOT cancel yet and do NOT
+        // block the number page — return success so the client can open the waiting
+        // screen. Persist a soft recovery row via raw SQL-like minimal retry once more.
+        const emergency = {
+          user_id: auth.userId,
+          order_id: String(requestId),
+          phone_number: phone || null,
+          service_name: serviceName || 'SMS',
+          country_name: countryName || null,
+          price,
+          status: 'waiting_for_code',
+          source: 'smsbus'
+        };
+        const { error: emErr } = await supabase.from('number_orders').insert(emergency);
+        if (emErr) {
+          console.error('[sms-bus order] emergency insert also failed:', emErr.message);
+          // Still send user to number page with supplier ids — check API can use request_id
+        }
         try {
-          await smsbusGet(OTP_BASE, '/cancel', { request_id: requestId });
+          await supabase.from('transactions').insert({
+            user_id: auth.userId,
+            customer_id: profile.customer_id,
+            type: 'purchase',
+            category: 'MJ SMS',
+            title: serviceName,
+            subtitle: `OTP · ${phone || requestId}`,
+            amount: `₦${price.toLocaleString()}`,
+            amount_ngn: price,
+            status: 'pending',
+            notes: `order_id:${requestId}`
+          });
         } catch (_) {}
-        await supabase.from('profiles').update({ balance: originalBalance }).eq('id', auth.userId);
-        return json(res, 500, {
-          success: false,
-          message:
-            'Could not save this number on our side. Your wallet was restored. If a number still shows on the supplier panel it will be cancelled shortly — try again.'
+
+        return json(res, 200, {
+          success: true,
+          data: {
+            order_id: requestId,
+            number: phone,
+            phone_number: phone,
+            price,
+            new_balance: newBalance,
+            service_name: serviceName,
+            country_name: countryName,
+            source: 'smsbus',
+            status: 'waiting_for_code',
+            warning: emErr
+              ? 'Saved to supplier; local order row may need admin sync'
+              : null
+          }
         });
       }
 
