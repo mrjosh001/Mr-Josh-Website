@@ -1016,16 +1016,20 @@ export default async function handler(req, res) {
     }
 
     if (method === 'POST' && action === 'reuse') {
+      // SMS-Bus: reuse same mobile for same country/project within ~20 min of a successful SMS.
+      // GET /api/control/reuse?country_id&project_id&mobile_number
       const auth = await requireAuth(req);
       if (!auth.ok) return json(res, auth.status, { success: false, message: auth.message });
       const body = await readBody(req);
       const country_id = body.country_id;
-      const project_id = body.project_id;
-      const mobile_number = String(body.mobile_number || body.phone_number || '').replace(/\D/g, '');
+      const project_id = body.project_id || body.service_id;
+      let mobile_number = String(body.mobile_number || body.phone_number || '').replace(/\D/g, '');
+      const countryNameHint = body.country_name || '';
+      const serviceNameHint = body.service_name || '';
       if (!country_id || !project_id || !mobile_number) {
         return json(res, 400, {
           success: false,
-          message: 'country_id, project_id and mobile_number required'
+          message: 'country, service and number are required to reuse'
         });
       }
 
@@ -1036,55 +1040,104 @@ export default async function handler(req, res) {
         .single();
       if (!profile) return json(res, 400, { success: false, message: 'Profile not found' });
 
-      const { data: priceData } = await smsbusGet(OTP_BASE, '/list/prices', {
-        country_id: String(country_id)
-      });
+      // Selling price: prefer DB catalog, else supplier + markup (same as order)
       let costUsd = 0.3;
-      let serviceName = 'SMS reuse';
-      if (busOk(priceData)) {
-        const hit = Object.values(priceData.data || {}).find(
-          (r) => String(r.project_id) === String(project_id)
-        );
-        if (hit) {
-          costUsd = Number(hit.cost || costUsd);
-          serviceName = (hit.title || serviceName) + ' (reuse)';
+      let serviceName = serviceNameHint || 'SMS';
+      let countryName = countryNameHint || String(country_id);
+      let price = 0;
+      try {
+        const { data: dbSvc } = await supabase
+          .from('number_services')
+          .select('price, supplier_price, service_name, country_name')
+          .eq('source', 'smsbus')
+          .eq('country_id', String(country_id))
+          .eq('service_id', String(project_id))
+          .maybeSingle();
+        if (dbSvc && Number(dbSvc.price) > 0) {
+          price = Number(dbSvc.price);
+          costUsd = Number(dbSvc.supplier_price) || costUsd;
+          serviceName = dbSvc.service_name || serviceName;
+          countryName = dbSvc.country_name || countryName;
         }
+      } catch (_) {}
+      if (!(price > 0)) {
+        try {
+          const { data: priceData } = await smsbusGet(OTP_BASE, '/list/prices', {
+            country_id: String(country_id)
+          });
+          if (busOk(priceData)) {
+            const hit = Object.values(priceData.data || {}).find(
+              (r) => String(r.project_id) === String(project_id)
+            );
+            if (hit) {
+              costUsd = Number(hit.cost || costUsd);
+              serviceName = hit.title || serviceName;
+              price = applyMarkup(costUsd);
+            }
+          }
+        } catch (_) {}
       }
-      const price = applyMarkup(costUsd);
+      if (!(price > 0)) price = applyMarkup(costUsd);
+
       const bal = Number(profile.balance) || 0;
       if (bal < price) {
-        return json(res, 400, { success: false, message: `Need ₦${price.toLocaleString()} to reuse` });
-      }
-
-      const originalBalance = bal;
-      await supabase.from('profiles').update({ balance: bal - price }).eq('id', auth.userId);
-
-      const bus = await smsbusGet(OTP_BASE, '/reuse', {
-        country_id: String(country_id),
-        project_id: String(project_id),
-        mobile_number
-      });
-
-      if (!busOk(bus.data) || !bus.data?.data?.request_id) {
-        await supabase.from('profiles').update({ balance: originalBalance }).eq('id', auth.userId);
         return json(res, 400, {
           success: false,
-          message:
-            'This number cannot be reused right now. Try a new number.'
+          message: `Need ₦${price.toLocaleString()} to reuse this number`,
+          required: price,
+          available: bal
         });
       }
 
-      const requestId = String(bus.data.data.request_id);
-      const phone = String(bus.data.data.number || mobile_number);
+      const originalBalance = bal;
+      const newBalance = bal - price;
+      await supabase.from('profiles').update({ balance: newBalance }).eq('id', auth.userId);
 
-      await supabase.from('number_orders').insert({
+      let bus;
+      try {
+        bus = await smsbusGet(OTP_BASE, '/reuse', {
+          country_id: String(country_id),
+          project_id: String(project_id),
+          mobile_number
+        });
+      } catch (e) {
+        await supabase.from('profiles').update({ balance: originalBalance }).eq('id', auth.userId);
+        return json(res, 502, { success: false, message: 'Could not reach SMS server. Try again.' });
+      }
+
+      if (!busOk(bus.data) || !bus.data?.data?.request_id) {
+        await supabase.from('profiles').update({ balance: originalBalance }).eq('id', auth.userId);
+        const code = bus.data?.code;
+        const msg = String(bus.data?.message || '');
+        if (code === 50109 || /expired/i.test(msg)) {
+          return json(res, 400, {
+            success: false,
+            message: 'Reuse window ended. Buy a new number instead.'
+          });
+        }
+        if (code === 50107 || code === 50108 || /cannot be reused/i.test(msg)) {
+          return json(res, 400, {
+            success: false,
+            message: 'This number cannot be reused right now.'
+          });
+        }
+        return json(res, 400, {
+          success: false,
+          message: 'This number cannot be reused right now. Try a new number.'
+        });
+      }
+
+      const dNum = bus.data.data || {};
+      const requestId = String(dNum.request_id || '');
+      const phone = String(dNum.number || dNum.phone || mobile_number).replace(/\D/g, '') || mobile_number;
+
+      const row = {
         source: 'smsbus',
         user_id: auth.userId,
-        customer_id: profile.customer_id,
+        customer_id: profile.customer_id != null ? String(profile.customer_id) : null,
         order_id: requestId,
-        idempotency_key: `smsbus-${requestId}`,
-        country_id: Number(country_id) || null,
-        country_name: String(country_id),
+        country_id: String(country_id),
+        country_name: countryName,
         service_id: String(project_id),
         service_name: serviceName,
         phone_number: phone,
@@ -1094,16 +1147,56 @@ export default async function handler(req, res) {
         status: 'waiting_for_code',
         code: null,
         refunded: false
-      });
+      };
+      let { error: insertErr } = await supabase.from('number_orders').insert(row);
+      if (insertErr) {
+        const slim = {
+          source: 'smsbus',
+          user_id: auth.userId,
+          order_id: requestId,
+          phone_number: phone,
+          service_name: serviceName,
+          country_name: countryName,
+          service_id: String(project_id),
+          country_id: String(country_id),
+          price,
+          status: 'waiting_for_code'
+        };
+        ({ error: insertErr } = await supabase.from('number_orders').insert(slim));
+      }
+      if (insertErr) {
+        console.error('[sms-bus reuse] insert failed', insertErr.message);
+      }
+
+      try {
+        await supabase.from('transactions').insert({
+          user_id: auth.userId,
+          customer_id: profile.customer_id,
+          type: 'purchase',
+          category: 'MJ SMS',
+          title: serviceName,
+          subtitle: `${countryName} · reuse · waiting for SMS`,
+          amount: `₦${price.toLocaleString()}`,
+          amount_ngn: price,
+          status: 'pending',
+          notes: `order_id:${requestId}`
+        });
+      } catch (_) {}
 
       return json(res, 200, {
         success: true,
+        message: 'Number reused successfully',
         data: {
           order_id: requestId,
           number: phone,
+          phone_number: phone,
           price,
-          new_balance: bal - price,
-          message: 'Reuse started — wait for the new code'
+          new_balance: newBalance,
+          service_name: serviceName,
+          country_name: countryName,
+          source: 'smsbus',
+          status: 'waiting_for_code',
+          created_at: new Date().toISOString()
         }
       });
     }
