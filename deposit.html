@@ -155,6 +155,7 @@ a{color:inherit;text-decoration:none}
       <label>Payment method</label>
       <select id="depositProviderSelect" onchange="onDepositMethodChange()">
         <option value="pocketfi" selected>Pay with PocketFi</option>
+        <option value="virtual_account">Bank Transfer (Instant Account Number)</option>
         <option value="manual">Manual (WhatsApp)</option>
         <option value="crypto" disabled>Crypto — Coming soon</option>
       </select>
@@ -181,6 +182,41 @@ a{color:inherit;text-decoration:none}
         <i class="fa-solid fa-lock"></i> Continue to bank transfer
       </button>
       <p class="hint">Pay in Naira. Selected wallet is credited after confirmation.</p>
+    </div>
+
+    <div id="virtualAccountBox" style="display:none;">
+      <p class="hint" style="margin-bottom:12px;">
+        This account number is yours permanently — transfer any amount to it,
+        any time, and your NGN wallet is credited automatically once the
+        transfer lands (usually under a minute, no need to come back to this
+        page).
+      </p>
+      <div id="vaLoadingState" style="text-align:center;padding:18px 0;">
+        <i class="fa-solid fa-spinner fa-spin"></i> Setting up your account…
+      </div>
+      <div id="vaDetailsState" style="display:none;">
+        <div class="form-group">
+          <label>Bank</label>
+          <input type="text" id="vaBankName" readonly style="font-weight:700;text-transform:capitalize;">
+        </div>
+        <div class="form-group">
+          <label>Account Number</label>
+          <input type="text" id="vaAccountNumber" readonly style="font-family:monospace;font-weight:700;font-size:18px;letter-spacing:1px;color:var(--primary)">
+        </div>
+        <div class="form-group">
+          <label>Account Name</label>
+          <input type="text" id="vaAccountName" readonly>
+        </div>
+        <button type="button" class="btn" id="vaCopyBtn" onclick="copyVirtualAccountNumber()">
+          <i class="fa-solid fa-copy"></i> Copy Account Number
+        </button>
+      </div>
+      <div id="vaErrorState" style="display:none;">
+        <p class="hint" id="vaErrorText" style="color:#f87171;"></p>
+        <button type="button" class="btn" onclick="loadVirtualAccount()">
+          <i class="fa-solid fa-rotate-right"></i> Try Again
+        </button>
+      </div>
     </div>
 
     <div id="manualDepositBox" style="display:none;">
@@ -245,7 +281,68 @@ function toggleTheme() {
 function onDepositMethodChange() {
   const v = document.getElementById('depositProviderSelect')?.value || 'pocketfi';
   document.getElementById('pocketfiDepositBox').style.display = v === 'pocketfi' ? '' : 'none';
+  document.getElementById('virtualAccountBox').style.display = v === 'virtual_account' ? '' : 'none';
   document.getElementById('manualDepositBox').style.display = v === 'manual' ? '' : 'none';
+  if (v === 'virtual_account' && !window._vaLoadedOnce) {
+    window._vaLoadedOnce = true;
+    loadVirtualAccount();
+  }
+}
+
+async function loadVirtualAccount() {
+  const loadingEl = document.getElementById('vaLoadingState');
+  const detailsEl = document.getElementById('vaDetailsState');
+  const errorEl = document.getElementById('vaErrorState');
+  loadingEl.style.display = '';
+  detailsEl.style.display = 'none';
+  errorEl.style.display = 'none';
+
+  try {
+    const { data: { session } } = await sb.auth.getSession();
+    const accessToken = session?.access_token;
+    if (!accessToken) {
+      toast('Session expired. Please sign in again.');
+      setTimeout(() => { location.href = 'auth.html?next=deposit.html'; }, 1200);
+      return;
+    }
+
+    const res = await fetch('/api/pocketfi?action=virtual_account', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer ' + accessToken
+      },
+      body: JSON.stringify({})
+    });
+    let data = {};
+    try { data = await res.json(); } catch (_) {}
+    if (!res.ok || !data.success || !data.data?.account_number) {
+      throw new Error(data.message || 'Could not set up your account number');
+    }
+
+    document.getElementById('vaBankName').value = data.data.bank || '—';
+    document.getElementById('vaAccountNumber').value = data.data.account_number;
+    document.getElementById('vaAccountName').value = data.data.account_name || '—';
+    loadingEl.style.display = 'none';
+    detailsEl.style.display = '';
+  } catch (err) {
+    loadingEl.style.display = 'none';
+    errorEl.style.display = '';
+    document.getElementById('vaErrorText').textContent = err.message || 'Something went wrong';
+    window._vaLoadedOnce = false; // allow retry via re-selecting the method too
+  }
+}
+
+function copyVirtualAccountNumber() {
+  const input = document.getElementById('vaAccountNumber');
+  if (!input || !input.value) return;
+  navigator.clipboard?.writeText(input.value).then(() => {
+    toast('Account number copied');
+  }).catch(() => {
+    input.select();
+    document.execCommand('copy');
+    toast('Account number copied');
+  });
 }
 function selectDepositWallet(wallet) {
   depositWallet = wallet === 'usd' ? 'usd' : 'ngn';
@@ -385,6 +482,18 @@ async function handleDepositReturn() {
 // iOS PWA: returning from Safari checkout without full reload
 document.addEventListener('visibilitychange', async () => {
   if (document.visibilityState !== 'visible') return;
+
+  // Virtual account view: the user has no "return redirect" moment (they
+  // just transfer from their banking app and come back to this tab), so
+  // refresh whenever that tab is showing and they've switched back to us.
+  const method = document.getElementById('depositProviderSelect')?.value;
+  if (method === 'virtual_account') {
+    for (let i = 0; i < 4; i++) {
+      await new Promise(r => setTimeout(r, 1200));
+      await loadProfile();
+    }
+  }
+
   try {
     const raw = localStorage.getItem('mjhub_pending_pocketfi');
     if (!raw) return;
