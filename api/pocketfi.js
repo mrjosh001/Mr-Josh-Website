@@ -98,12 +98,18 @@ function isWebhookRequest(req, hasAnySignature) {
 function extractAmount(data) {
   const raw =
     data?.order?.amount ??
+    data?.order?.settlement_amount ??
     data?.data?.amount ??
+    data?.data?.settlement_amount ??
     data?.transaction?.amount ??
     data?.amount ??
     data?.data?.order?.amount ??
+    data?.data?.order?.settlement_amount ??
     0;
-  return Math.round(Number(raw) || 0);
+  let n = Number(raw) || 0;
+  // If PocketFi ever sends kobo (very large ints), convert — NGN deposits are whole naira
+  if (n > 5000000 && Number.isInteger(n)) n = Math.round(n / 100);
+  return Math.round(n);
 }
 
 function extractReference(data) {
@@ -126,8 +132,14 @@ function extractReference(data) {
 // `account_number`, but we check a few likely nested spots too in case a
 // virtual-account credit event is shaped slightly differently from a
 // checkout event.
+function normalizeAccountNumber(v) {
+  if (v == null || v === '') return null;
+  const digits = String(v).replace(/\D/g, '');
+  return digits || null;
+}
+
 function extractAccountNumber(data) {
-  return (
+  const raw =
     data?.account_number ||
     data?.accountNumber ||
     data?.data?.account_number ||
@@ -135,9 +147,31 @@ function extractAccountNumber(data) {
     data?.virtual_account?.account_number ||
     data?.virtual_account?.accountNumber ||
     data?.bank?.accountNumber ||
-    (Array.isArray(data?.banks) && data.banks[0]?.accountNumber) ||
-    null
-  );
+    data?.bank?.account_number ||
+    (Array.isArray(data?.banks) && (data.banks[0]?.accountNumber || data.banks[0]?.account_number)) ||
+    null;
+  return normalizeAccountNumber(raw);
+}
+
+async function findUserByVirtualAccount(accountNumber) {
+  const want = normalizeAccountNumber(accountNumber);
+  if (!want) return null;
+  // Exact match first
+  let { data: va } = await supabase
+    .from('virtual_accounts')
+    .select('user_id, account_number')
+    .eq('account_number', want)
+    .maybeSingle();
+  if (va?.user_id) return va.user_id;
+  // Fallback: match digits only (leading zeros / formatting drift)
+  const { data: rows } = await supabase
+    .from('virtual_accounts')
+    .select('user_id, account_number')
+    .limit(500);
+  for (const r of rows || []) {
+    if (normalizeAccountNumber(r.account_number) === want) return r.user_id;
+  }
+  return null;
 }
 
 function isPaidStatus(data) {
@@ -670,6 +704,20 @@ async function creditUser(userId, amountNgn, reference) {
       .eq('external_reference', reference)
       .maybeSingle();
     existing = tx;
+    if (tx && String(tx.status || '').toLowerCase() === 'success') {
+      console.log('creditUser: already credited', reference);
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('balance, balance_usd')
+        .eq('id', userId)
+        .maybeSingle();
+      return {
+        balance: Number(profile?.balance || 0),
+        balance_usd: Number(profile?.balance_usd || 0),
+        wallet: 'ngn',
+        already: true
+      };
+    }
     const cur = String(tx?.currency || '').toUpperCase();
     if (cur === 'USD' || /usd wallet/i.test(String(tx?.subtitle || ''))) wallet = 'usd';
   } catch (_) {}
@@ -935,9 +983,21 @@ async function handleWebhook(req, res, raw, secret, publicKey) {
       return res.status(200).json({ message: 'checkout expired or failed — not credited' });
     }
     if (!hasOpenPending) {
-      return res.status(400).json({ message: 'Invalid signature' });
+      // Permanent VA transfers have no pending checkout — still accept if account_number is ours
+      const acc = extractAccountNumber(data);
+      const vaUser = acc ? await findUserByVirtualAccount(acc) : null;
+      if (vaUser && (amount > 0 || extractAmount(data) > 0)) {
+        console.warn('PocketFi webhook accepted via virtual account number (signature skipped)', {
+          account: acc,
+          userId: vaUser,
+          reference
+        });
+      } else {
+        return res.status(400).json({ message: 'Invalid signature' });
+      }
+    } else {
+      console.warn('PocketFi webhook accepted via pending deposit match (signature skipped)');
     }
-    console.warn('PocketFi webhook accepted via pending deposit match (signature skipped)');
   } else if (!candidates.length) {
     console.warn('PocketFi webhook: no signature header — processing by reference match only');
   } else if (matched) {
@@ -1004,13 +1064,9 @@ async function handleWebhook(req, res, raw, secret, publicKey) {
   if (!userId) {
     const accountNumber = extractAccountNumber(data);
     if (accountNumber) {
-      const { data: va } = await supabase
-        .from('virtual_accounts')
-        .select('user_id')
-        .eq('account_number', String(accountNumber))
-        .maybeSingle();
-      if (va?.user_id) {
-        userId = va.user_id;
+      const uid = await findUserByVirtualAccount(accountNumber);
+      if (uid) {
+        userId = uid;
         console.log('PocketFi webhook: matched by virtual account number', { accountNumber, userId });
       }
     }
@@ -1348,11 +1404,18 @@ async function handleVirtualAccount(req, res, publicKey, businessId) {
     .eq('id', user.id)
     .maybeSingle();
 
+  // Use the customer's real profile name so PocketFi labels the VA with their name
+  // (not a generic "Fresh" / merchant placeholder).
   const profileFullName = String(
-    profile?.full_name || user.user_metadata?.full_name || user.user_metadata?.name || ''
+    profile?.full_name ||
+      user.user_metadata?.full_name ||
+      user.user_metadata?.name ||
+      user.user_metadata?.username ||
+      ''
   ).trim();
-  const { first_name, last_name } = splitName(profileFullName || 'MJ Hub Customer');
-  // Always prefer full website profile name for display / storage
+  const { first_name, last_name } = splitName(
+    profileFullName || String(user.email || '').split('@')[0] || 'MJ Hub Customer'
+  );
   const displayAccountName = profileFullName || `${first_name} ${last_name}`.trim();
 
   const email = profile?.email || user.email || `user-${user.id.slice(0, 8)}@mjhub.store`;
@@ -1428,7 +1491,7 @@ async function handleVirtualAccount(req, res, publicKey, businessId) {
   const row = {
     user_id: user.id,
     bank: bankName,
-    account_number: accountNumber,
+    account_number: normalizeAccountNumber(accountNumber) || String(accountNumber),
     account_name: accountName,
     business_id: String(businessId)
   };
@@ -1556,6 +1619,73 @@ async function handleConvert(req, res, user) {
   });
 }
 
+
+/** Client "I've sent the money" — return latest successful VA/checkout deposit for this user */
+async function handleVerifyDeposit(req, res) {
+  const authHeader = req.headers.authorization || '';
+  const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7).trim() : null;
+  if (!token) return res.status(401).json({ success: false, message: 'Login required' });
+  const user = await resolveUserFromToken(token);
+  if (!user) return res.status(401).json({ success: false, message: 'Invalid session' });
+
+  const body = typeof req.body === 'string' ? (() => { try { return JSON.parse(req.body || '{}'); } catch { return {}; } })() : (req.body || {});
+  const expect = Math.round(Number(body.amount || body.expected_amount || 0)) || 0;
+
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('balance, balance_usd, customer_id')
+    .eq('id', user.id)
+    .maybeSingle();
+
+  // Recent successful pocketfi deposits (last 2 hours)
+  const since = new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString();
+  const { data: txs } = await supabase
+    .from('transactions')
+    .select('id, amount, amount_ngn, status, external_reference, created_at, title, subtitle')
+    .eq('user_id', user.id)
+    .eq('payment_provider', 'pocketfi')
+    .eq('status', 'success')
+    .gte('created_at', since)
+    .order('created_at', { ascending: false })
+    .limit(10);
+
+  let match = null;
+  for (const tx of txs || []) {
+    const a = Number(tx.amount_ngn) || 0;
+    if (expect > 0 && Math.abs(a - expect) <= 2) {
+      match = tx;
+      break;
+    }
+  }
+  if (!match && (txs || []).length) match = txs[0];
+
+  if (match) {
+    return res.status(200).json({
+      success: true,
+      credited: true,
+      message: 'Payment received',
+      data: {
+        balance: Number(profile?.balance || 0),
+        balance_usd: Number(profile?.balance_usd || 0),
+        amount_ngn: Number(match.amount_ngn) || 0,
+        reference: match.external_reference,
+        transaction_id: match.id
+      }
+    });
+  }
+
+  return res.status(200).json({
+    success: true,
+    credited: false,
+    message: 'Not seen yet. Keep this page open — we credit as soon as PocketFi confirms.',
+    data: {
+      balance: Number(profile?.balance || 0),
+      balance_usd: Number(profile?.balance_usd || 0)
+    }
+  });
+}
+
+
 export default async function handler(req, res) {
   // --- Referral (no extra serverless file) ---
   {
@@ -1591,6 +1721,9 @@ export default async function handler(req, res) {
       if (!publicKey) return res.status(500).json({ success: false, message: 'Missing POCKETFI_PUBLIC_KEY' });
       if (!businessId) return res.status(500).json({ success: false, message: 'Missing POCKETFI_BUSINESS_ID' });
       return handleVirtualAccount(req, res, publicKey, businessId);
+    }
+    if (_act === 'verify_deposit' || _act === 'check_deposit') {
+      return handleVerifyDeposit(req, res);
     }
   }
   // --- /Referral ---
