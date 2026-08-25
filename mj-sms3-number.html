@@ -86,7 +86,7 @@ let orderCreatedAt = null;
 let meta = {};
 
 const EXPIRY_SECONDS = 20 * 60;
-const CANCEL_COOLDOWN_SECONDS = 5 * 60;
+const CANCEL_COOLDOWN_SECONDS = 60; // 1 minute
 
 function escapeHtml(str){if(!str)return'';return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;')}
 function money(n){return '₦'+Number(n||0).toLocaleString()}
@@ -282,9 +282,9 @@ async function checkStatus(fromBtn){
   }catch(e){pollTimer=setTimeout(checkStatus,6000)}
 }
 
-async function boot(){
-  if(!orderId){renderError('Missing order id');return}
-  sbClient=window.supabase.createClient(SUPABASE_URL,SUPABASE_ANON_KEY,{auth:{persistSession:true,autoRefreshToken:true,storage:window.localStorage}});
+async function ensureSession(){
+  const opts={auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:true,storage:window.localStorage}};
+  sbClient=window.supabase.createClient(SUPABASE_URL,SUPABASE_ANON_KEY,opts);
   let session=null;
   try{
     const r=await sbClient.auth.getSession();
@@ -296,7 +296,29 @@ async function boot(){
       session=r2.data&&r2.data.session;
     }catch(_){}
   }
-  if(!session){location.href='auth.html?next='+encodeURIComponent(location.href);return}
+  // Migrate old sessionStorage session once
+  if(!session){
+    try{
+      const keys=[];
+      for(let i=0;i<sessionStorage.length;i++){
+        const k=sessionStorage.key(i);
+        if(k&&(k.indexOf('sb-')===0||k.indexOf('supabase')!==-1)) keys.push(k);
+      }
+      for(const k of keys){
+        if(!localStorage.getItem(k)) localStorage.setItem(k, sessionStorage.getItem(k));
+      }
+      if(keys.length){
+        const r3=await sbClient.auth.getSession();
+        session=r3.data&&r3.data.session;
+      }
+    }catch(_){}
+  }
+  return session;
+}
+async function boot(){
+  if(!orderId){renderError('Missing order id');return}
+  const session=await ensureSession();
+  if(!session){location.href='auth.html?next='+encodeURIComponent('mj-sms-choose-server.html');return}
   accessToken=session.access_token;
 
   // Prefer server API (service role) — RLS on number_orders often blocks browser reads
