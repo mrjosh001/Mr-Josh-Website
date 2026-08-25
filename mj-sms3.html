@@ -223,7 +223,7 @@ const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
       countryList.innerHTML = '<div class="empty-state"><h4>Config missing</h4></div>';
       return;
     }
-    sbClient = window.supabase.createClient(SU, SK, {auth:{persistSession:true,autoRefreshToken:true,storage:window.sessionStorage}});
+    sbClient = window.supabase.createClient(SU, SK, {auth:{persistSession:true,autoRefreshToken:true,storage:window.localStorage}});
     const { data: { session } } = await sbClient.auth.getSession();
     if(!session){ location.href = 'auth.html'; return; }
     accessToken = session.access_token;

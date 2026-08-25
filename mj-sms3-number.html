@@ -284,26 +284,68 @@ async function checkStatus(fromBtn){
 
 async function boot(){
   if(!orderId){renderError('Missing order id');return}
-  sbClient=window.supabase.createClient(SUPABASE_URL,SUPABASE_ANON_KEY,{auth:{persistSession:true,autoRefreshToken:true,storage:window.sessionStorage}});
-  const {data:{session}}=await sbClient.auth.getSession();
-  if(!session){location.href='auth.html';return}
-  accessToken=session.access_token;
-  const {data}=await sbClient.from('number_orders').select('*').eq('order_id',orderId).eq('user_id',session.user.id).maybeSingle();
-  if(data){
-    meta=data;
-    orderCreatedAt=data.created_at;
-    if(data.status==='completed'&&data.code){renderCompleted(data);return}
-    if(data.refunded||data.status==='refunded'){renderCancelled('Already refunded.');return}
-    renderWaiting({
-      number:data.phone_number,
-      phone_number:data.phone_number,
-      service_name:data.service_name,
-      country_name:data.country_name,
-      price:data.price,
-      created_at:data.created_at
-    });
+  sbClient=window.supabase.createClient(SUPABASE_URL,SUPABASE_ANON_KEY,{auth:{persistSession:true,autoRefreshToken:true,storage:window.localStorage}});
+  let session=null;
+  try{
+    const r=await sbClient.auth.getSession();
+    session=r.data&&r.data.session;
+  }catch(_){}
+  if(!session){
+    try{
+      const r2=await sbClient.auth.refreshSession();
+      session=r2.data&&r2.data.session;
+    }catch(_){}
   }
-  checkStatus();
+  if(!session){location.href='auth.html?next='+encodeURIComponent(location.href);return}
+  accessToken=session.access_token;
+
+  // Prefer server API (service role) — RLS on number_orders often blocks browser reads
+  try{
+    const {ok,data}=await api('check',{order_id:orderId});
+    if(ok&&data&&data.success&&data.data){
+      const d=data.data;
+      meta=Object.assign({},meta||{},d);
+      if(d.status==='completed'&&d.code){renderCompleted(d);return}
+      if(d.status==='refunded'||d.refunded){renderCancelled(d.message||'Already refunded.');return}
+      if(d.status==='expired'){renderCancelled(d.message||'Number expired.');return}
+      renderWaiting({
+        number:d.number||d.phone_number,
+        phone_number:d.number||d.phone_number,
+        service_name:d.service_name||meta.service_name,
+        country_name:d.country_name||meta.country_name,
+        price:d.price!=null?d.price:meta.price,
+        created_at:d.created_at||meta.created_at
+      });
+      checkStatus();
+      return;
+    }
+    if(ok&&data&&data.message){
+      // fall through to direct DB
+    }
+  }catch(e){console.warn('check boot',e)}
+
+  // Fallback: direct table read
+  try{
+    const {data}=await sbClient.from('number_orders').select('*').eq('order_id',orderId).eq('user_id',session.user.id).maybeSingle();
+    if(data){
+      meta=data;
+      orderCreatedAt=data.created_at;
+      if(data.status==='completed'&&data.code){renderCompleted(data);return}
+      if(data.refunded||data.status==='refunded'){renderCancelled('Already refunded.');return}
+      renderWaiting({
+        number:data.phone_number,
+        phone_number:data.phone_number,
+        service_name:data.service_name,
+        country_name:data.country_name,
+        price:data.price,
+        created_at:data.created_at
+      });
+      checkStatus();
+      return;
+    }
+  }catch(e){console.warn('db boot',e)}
+
+  renderError('Could not load this order. Go back and try again, or open SMS history.');
 }
 boot();
 </script>
