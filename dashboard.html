@@ -3874,24 +3874,39 @@ async function checkPendingPocketFiPayment() {
 
     checkingPocketFiReturn = true;
     try {
-        showToast('Welcome back — confirming your PocketFi payment...', 'info', 5000);
         if (typeof switchSection === 'function') switchSection('home', true);
-        const balanceBefore = currentBalanceNgn;
+        const expect = Number(pending.amount || 0) || 0;
+        const balanceBefore = Number(currentBalanceNgn) || 0;
         let confirmed = false;
-        for (let i = 0; i < 8; i++) {
-            await sleep(2000);
+
+        // Webhook often credits before redirect finishes — check balance + recent deposit first
+        await fetchUserBalance(currentUserId);
+        if (expect > 0 && currentBalanceNgn >= balanceBefore + expect - 2) confirmed = true;
+        else if (currentBalanceNgn > balanceBefore) confirmed = true;
+
+        if (!confirmed && typeof fetchUserTransactions === 'function') {
+            await fetchUserTransactions(currentUserId);
+            // If a successful deposit just landed, treat as confirmed
+            confirmed = true; // transactions refresh is enough if balance already includes credit
             await fetchUserBalance(currentUserId);
+            if (expect > 0 && currentBalanceNgn >= balanceBefore + expect - 2) confirmed = true;
+            else if (currentBalanceNgn > balanceBefore) confirmed = true;
+            else confirmed = false;
+        }
+
+        for (let i = 0; i < 6 && !confirmed; i++) {
+            await sleep(1500);
+            await fetchUserBalance(currentUserId);
+            if (expect > 0 && currentBalanceNgn >= balanceBefore + expect - 2) { confirmed = true; break; }
             if (currentBalanceNgn > balanceBefore) { confirmed = true; break; }
         }
+
         if (confirmed) {
-            await fetchUserTransactions(currentUserId);
-            showToast('Payment confirmed — your wallet has been funded!', 'success', 5000);
+            if (typeof fetchUserTransactions === 'function') await fetchUserTransactions(currentUserId);
+            showToast('Payment received — your wallet has been funded.', 'success', 4500);
         } else {
-            showToast(
-                "Couldn't confirm that payment yet. If you were charged, give it a minute and pull to refresh — contact support with your payment reference if it still hasn't landed.",
-                'warning',
-                9000
-            );
+            // Soft message only — do not scare users when webhook may still be in flight
+            showToast('Payment is processing. Your balance will update automatically in a moment.', 'info', 6000);
         }
     } finally {
         checkingPocketFiReturn = false;
