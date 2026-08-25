@@ -133,6 +133,9 @@ async function claimAndRefundSmsBusOrder(order, userId, opts = {}) {
       } catch (_) {}
     }
   }
+  try {
+    await markTxStatus(userId, order.order_id, order.phone_number, 'cancelled');
+  } catch (_) {}
   return { refunded: true, amount: refundAmount, new_balance: newBalance };
 }
 
@@ -281,6 +284,83 @@ async function syncSmsBusCatalog() {
   }
 
   return { newCount, updatedCount, errors, countries: countries.length };
+}
+
+
+
+async function insertNumberOrder(row) {
+  // Save activation even if some columns differ across schema versions
+  const attempts = [
+    { ...row },
+    { ...row, country_id: row.country_id != null ? String(row.country_id) : null },
+  ];
+  // Drop optional columns progressively
+  const optionalKeys = [
+    'supplier_price',
+    'currency',
+    'refunded',
+    'time_left',
+    'idempotency_key',
+    'customer_id',
+    'code'
+  ];
+  let lastErr = null;
+  for (const base of attempts) {
+    let attempt = { ...base };
+    for (let round = 0; round < optionalKeys.length + 1; round++) {
+      const { error } = await supabase.from('number_orders').insert(attempt);
+      if (!error) return { error: null, row: attempt };
+      lastErr = error;
+      const msg = String(error.message || '');
+      // Column / constraint issues → strip one optional field
+      if (/column|schema cache|does not exist/i.test(msg)) {
+        const next = optionalKeys[round];
+        if (next && next in attempt) {
+          delete attempt[next];
+          continue;
+        }
+      }
+      // Unique violation on order_id → treat as already saved
+      if (/duplicate|unique/i.test(msg)) {
+        return { error: null, row: attempt, duplicate: true };
+      }
+      break;
+    }
+  }
+  // Minimal row last resort
+  const minimal = {
+    source: row.source || 'smsbus',
+    user_id: row.user_id,
+    order_id: row.order_id,
+    phone_number: row.phone_number || null,
+    service_name: row.service_name || null,
+    country_name: row.country_name || null,
+    price: row.price,
+    status: row.status || 'waiting_for_code'
+  };
+  const { error } = await supabase.from('number_orders').insert(minimal);
+  if (!error) return { error: null, row: minimal };
+  return { error: error || lastErr };
+}
+
+async function markTxStatus(userId, orderId, phone, status) {
+  try {
+    // Match pending purchase rows for this activation
+    const { data } = await supabase
+      .from('transactions')
+      .select('id, subtitle, notes, status')
+      .eq('user_id', userId)
+      .eq('category', 'MJ SMS')
+      .order('created_at', { ascending: false })
+      .limit(15);
+    const hit = (data || []).find((t) => {
+      const blob = `${t.subtitle || ''} ${t.notes || ''}`;
+      return blob.includes(String(orderId)) || (phone && blob.includes(String(phone)));
+    });
+    if (hit) {
+      await supabase.from('transactions').update({ status }).eq('id', hit.id);
+    }
+  } catch (_) {}
 }
 
 
@@ -551,17 +631,22 @@ export default async function handler(req, res) {
         refunded: false
       };
 
-      const { error: insErr } = await supabase.from('number_orders').insert(row);
-      if (insErr) {
-        console.error('[sms-bus order] insert', insErr.message);
-        // Critical: number was taken from supplier but DB insert failed — refund user + try cancel
+      const ins = await insertNumberOrder(row);
+      if (ins.error) {
+        console.error('[sms-bus order] insert failed after retries:', ins.error.message, {
+          requestId,
+          user_id: auth.userId,
+          columns: Object.keys(row)
+        });
+        // Last resort: keep supplier number live ONLY if we cannot record it — refund user + cancel
         try {
           await smsbusGet(OTP_BASE, '/cancel', { request_id: requestId });
         } catch (_) {}
         await supabase.from('profiles').update({ balance: originalBalance }).eq('id', auth.userId);
         return json(res, 500, {
           success: false,
-          message: 'Could not save order. Your balance was not charged. Please try again.'
+          message:
+            'Could not save this number on our side. Your wallet was restored. If a number still shows on the supplier panel it will be cancelled shortly — try again.'
         });
       }
 
@@ -575,7 +660,8 @@ export default async function handler(req, res) {
           subtitle: `OTP · ${phone || requestId}`,
           amount: `₦${price.toLocaleString()}`,
           amount_ngn: price,
-          status: 'pending' // becomes completed when SMS arrives, or refunded on cancel/expiry
+          status: 'pending', // pending until SMS code arrives
+          notes: `order_id:${requestId}`
         });
       } catch (_) {}
 
@@ -665,6 +751,7 @@ export default async function handler(req, res) {
           .from('number_orders')
           .update({ status: 'completed', code })
           .eq('id', order.id);
+        await markTxStatus(auth.userId, order_id, order.phone_number, 'completed');
         return json(res, 200, {
           success: true,
           data: { status: 'completed', code, number: order.phone_number }
