@@ -382,8 +382,12 @@ function continueVaPay() {
   if (amount < VA_MIN) return toast('Minimum is ₦' + VA_MIN.toLocaleString());
   if (amount > VA_MAX) return toast('Maximum is ₦' + VA_MAX.toLocaleString());
   vaChosenAmount = amount;
+  window.__vaDesire = Math.round(amount);
   vaExactToSend = calcExactToSend(amount);
-  window.__vaExpectAmount = vaExactToSend;
+  window.__vaExpectAmount = Math.round(amount);
+  window.__vaWaitSince = Date.now();
+  window.__vaExpectAmount = Math.round(amount); // wallet credit target (not gross)
+  window.__vaWaitSince = Date.now();
   document.getElementById('vaExactAmount').textContent = fmtNgn(vaExactToSend);
   document.getElementById('vaAccountNumber').textContent = vaDetails.account_number;
   document.getElementById('vaAccountName').textContent = vaDetails.account_name || '—';
@@ -415,7 +419,7 @@ async function checkVaPaymentNow() {
           'Content-Type': 'application/json',
           'Authorization': 'Bearer ' + accessToken
         },
-        body: JSON.stringify({ amount: expect })
+        body: JSON.stringify({ amount: expect, since: window.__vaWaitSince || Date.now() })
       });
       const data = await res.json().catch(() => ({}));
       last = data;
@@ -449,13 +453,14 @@ function startBalanceWatch() {
       const accessToken = await getAccessToken();
       if (accessToken) {
         const expect = Number(window.__vaExpectAmount || 0) || 0;
+        if (!(expect > 0)) return;
         const res = await fetch('/api/pocketfi?action=verify_deposit', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
             'Authorization': 'Bearer ' + accessToken
           },
-          body: JSON.stringify({ amount: expect })
+          body: JSON.stringify({ amount: expect, since: window.__vaWaitSince || Date.now() })
         });
         const data = await res.json().catch(function () { return {}; });
         if (data.credited) {
