@@ -1,16 +1,8 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
-<title>Server 2 · Waiting for code - MJ HUB</title>
+<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate"><title>Server 2 · Waiting for code - MJ HUB</title>
 <script>(function(){try{var t=localStorage.getItem('mjhub-theme');document.documentElement.setAttribute('data-theme',(t==='light'||t==='dark')?t:'dark');}catch(e){document.documentElement.setAttribute('data-theme','dark');}})();</script>
 <script src="/js/mj-page-loader.js" defer></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
-<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap" rel="stylesheet">
-<style>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css"><link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap" rel="stylesheet"><style>
 :root[data-theme="dark"]{--primary:#5b8af5;--primary-strong:#3b6ef5;--primary-glow:rgba(91,138,245,.28);--accent:#a78bfa;--bg:#06080f;--card:#0f1524;--text:#f1f5f9;--muted:#8b9bb4;--border:rgba(148,163,184,.12);--success:#34d399;--danger:#f87171;--shadow:0 18px 50px rgba(0,0,0,.45)}
 :root[data-theme="light"]{--primary:#3b6ef5;--primary-strong:#2554e8;--primary-glow:rgba(59,110,245,.18);--accent:#7c5cfc;--bg:#f4f6fb;--card:#fff;--text:#0f172a;--muted:#64748b;--border:rgba(15,23,42,.08);--success:#059669;--danger:#dc2626;--shadow:0 16px 40px rgba(15,23,42,.08)}
 *{box-sizing:border-box;margin:0;padding:0}
@@ -53,20 +45,17 @@ body{font-family:'Plus Jakarta Sans',system-ui,sans-serif;background:var(--bg);c
 .toast.error{border-color:var(--danger)}
 .pulse-dot{display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--primary);animation:pulse 1.4s ease-in-out infinite;margin-right:6px}
 @keyframes pulse{0%,100%{opacity:.4}50%{opacity:1}}
-</style>
-</head>
-<body>
-<div class="header">
-  <a href="mj-sms3.html" class="back-button"><i class="fa-solid fa-arrow-left"></i></a>
-  <div class="page-title">Server 2 · SMS</div>
-</div>
-<div class="main-content">
-  <div class="status-card" id="statusCard">
-    <div class="status-icon waiting"><i class="fa-solid fa-spinner fa-spin"></i></div>
-    <div class="status-title">Loading order…</div>
-  </div>
-</div>
-<div class="toast-container" id="toastContainer"></div>
+
+.phone-split .phone-row{display:flex;align-items:center;justify-content:center;gap:10px;flex-wrap:nowrap}
+.phone-split .dial-code{
+  font-size:15px;font-weight:800;color:var(--muted);
+  background:rgba(148,163,184,.12);border:1px solid var(--border);
+  padding:8px 12px;border-radius:12px;letter-spacing:.02em;
+}
+.phone-split .national-num{font-size:22px;font-weight:800;letter-spacing:.04em}
+.phone-hint{font-size:11px;color:var(--muted);margin-top:8px;font-weight:600}
+
+</style></head><body><div class="header"><a href="mj-sms3.html" class="back-button"><i class="fa-solid fa-arrow-left"></i></a><div class="page-title">Server 2 · SMS</div></div><div class="main-content"><div class="status-card" id="statusCard"><div class="status-icon waiting"><i class="fa-solid fa-spinner fa-spin"></i></div><div class="status-title">Loading order…</div></div></div><div class="toast-container" id="toastContainer"></div>
 <script>
 const SUPABASE_URL = 'https://atczodlljmlayvldxfmv.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImF0Y3pvZGxsam1sYXl2bGR4Zm12Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODUwNzUyMzgsImV4cCI6MjEwMDY1MTIzOH0.ufthD-p7BmeD_B7xyuMM6PNPL8DmcL4AtRYgg-MuoLI';
@@ -89,6 +78,69 @@ const EXPIRY_SECONDS = 5 * 60;
 const CANCEL_COOLDOWN_SECONDS = 60; // 1 minute
 
 function escapeHtml(str){if(!str)return'';return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;')}
+
+/** Split full MSISDN into dial code + national number. Copy uses national only. */
+function splitPhoneDisplay(raw, countryName) {
+  var digits = String(raw || '').replace(/\D/g, '');
+  var cn = String(countryName || '').toLowerCase().replace(/\s+/g, ' ').trim();
+  var dialMap = {
+    'united states':'1','usa':'1','us':'1','usa (2)':'1','canada':'1','ca':'1',
+    'united kingdom':'44','uk':'44','nigeria':'234','ng':'234','india':'91','germany':'49','france':'33',
+    'austria':'43','netherlands':'31','sweden':'46','poland':'48','spain':'34','italy':'39',
+    'brazil':'55','mexico':'52','indonesia':'62','philippines':'63','vietnam':'84','thailand':'66',
+    'malaysia':'60','singapore':'65','australia':'61','south africa':'27','kenya':'254','ghana':'233',
+    'egypt':'20','turkey':'90','russia':'7','ukraine':'380','china':'86','hong kong':'852','japan':'81',
+    'south korea':'82','korea':'82','israel':'972','uae':'971','united arab emirates':'971',
+    'portugal':'351','belgium':'32','switzerland':'41','ireland':'353','romania':'40','czech':'420',
+    'czech republic':'420','hungary':'36','denmark':'45','norway':'47','finland':'358',
+    'colombia':'57','argentina':'54','chile':'56','peru':'51','bangladesh':'880','pakistan':'92',
+    'cambodia':'855','laos':'856','myanmar':'95','nepal':'977','sri lanka':'94','morocco':'212',
+    'tunisia':'216','algeria':'213','ivory coast':'225','senegal':'221','cameroon':'237',
+    'uganda':'256','tanzania':'255','ethiopia':'251','new zealand':'64'
+  };
+  var dial = '';
+  if (cn && dialMap[cn]) dial = dialMap[cn];
+  else {
+    // try starts-with match e.g. "USA (2)"
+    for (var k in dialMap) {
+      if (cn.indexOf(k) === 0 || k.indexOf(cn) === 0) { dial = dialMap[k]; break; }
+    }
+  }
+  var national = digits;
+  if (dial && digits.indexOf(dial) === 0 && digits.length > dial.length + 4) {
+    national = digits.slice(dial.length);
+  } else if (!dial && digits.length > 10) {
+    // heuristic: leading 1 for NANP
+    if (digits.charAt(0) === '1' && digits.length === 11) { dial = '1'; national = digits.slice(1); }
+  }
+  if (!dial && digits.length >= 10) {
+    // leave dial empty — show full as national
+    national = digits;
+  }
+  return {
+    dial: dial ? ('+' + dial) : '',
+    national: national || digits || '—',
+    full: digits ? ('+' + digits.replace(/^\+/, '')) : ''
+  };
+}
+function phoneBlockHtml(raw, countryName) {
+  var p = splitPhoneDisplay(raw, countryName);
+  var dialHtml = p.dial
+    ? ('<span class="dial-code">' + escapeHtml(p.dial) + '</span>')
+    : '';
+  return (
+    '<div class="number-display phone-split">' +
+      '<div class="label">Your Number</div>' +
+      '<div class="value-row phone-row">' +
+        dialHtml +
+        '<div class="value national-num" id="phoneValue">' + escapeHtml(p.national) + '</div>' +
+        '<button type="button" class="copy-mini" id="copyPhoneBtn" type="button"><i class="fa-regular fa-copy"></i> Copy</button>' +
+      '</div>' +
+      (p.dial ? '<div class="phone-hint">Copy uses the number only (without country code)</div>' : '') +
+    '</div>'
+  );
+}
+
 function money(n){return '₦'+Number(n||0).toLocaleString()}
 function showToast(msg,type){const t=document.createElement('div');t.className='toast'+(type==='error'?' error':'');t.innerHTML='<span>'+(type==='error'?'❌':'✅')+'</span><span>'+escapeHtml(msg)+'</span>';toastContainer.appendChild(t);setTimeout(()=>t.remove(),3500)}
 function formatCountdown(seconds){if(seconds<=0)return'0:00';const m=Math.floor(seconds/60);const s=Math.floor(seconds%60);return m+':'+String(s).padStart(2,'0')}
@@ -182,7 +234,7 @@ function renderWaiting(data){
     '<div class="status-sub"><span class="pulse-dot"></span>We\'ll show the code here the moment it arrives — usually within a minute or two.</div>'+
     vpnBlock()+
     '<div class="number-display" style="text-transform:capitalize"><div class="label">Service</div><div class="value" style="font-size:16px">'+escapeHtml(serviceLabel||'—')+(data.country_name||meta.country_name?' · '+escapeHtml(data.country_name||meta.country_name):'')+'</div></div>'+
-    '<div class="number-display"><div class="label">Your Number</div><div class="value-row"><div class="value" id="phoneValue">'+escapeHtml(phone)+'</div><button type="button" class="copy-mini" id="copyPhoneBtn"><i class="fa-regular fa-copy"></i> Copy</button></div></div>'+
+    phoneBlockHtml(phone, data.country_name||meta.country_name||'')+
     '<div class="number-display"><div class="label">Price</div><div class="value" style="font-size:16px;color:var(--primary)">'+money(data.price!=null?data.price:meta.price)+'</div></div>'+
     '<div class="number-display"><div class="label">Time Remaining</div><div class="value" id="countdownValue" style="color:var(--primary)">--:--</div></div>'+
     '<button type="button" class="btn btn-outline" id="checkNowBtn"><i class="fa-solid fa-rotate"></i> Check for SMS Now</button>'+
@@ -190,7 +242,7 @@ function renderWaiting(data){
     '<div class="cancel-hint" id="cancelHint"></div>'+
     '<a href="mj-sms3.html" class="btn btn-outline">Back to Server 2</a>'+
     '<a href="dashboard.html" class="btn btn-outline">Back to Home</a>';
-  document.getElementById('copyPhoneBtn').onclick=()=>copyText(phone,'Number copied');
+  var _cpb=document.getElementById('copyPhoneBtn');if(_cpb){_cpb.onclick=()=>{var n=(document.getElementById('phoneValue')||{}).textContent||'';copyText(String(n).replace(/\s/g,''),'Number copied');}};
   document.getElementById('cancelBtn').onclick=cancelOrder;
   document.getElementById('checkNowBtn').onclick=checkNow;
   startCountdown(orderCreatedAt,data.time_left);
@@ -207,12 +259,12 @@ function renderCompleted(data){
     '<div class="status-sub">Copy the code below and use it to complete verification. This order is complete — no cancel or refund.</div>'+
     vpnBlock()+
     '<div class="number-display" style="text-transform:capitalize"><div class="label">Service</div><div class="value" style="font-size:16px">'+escapeHtml(serviceLabel||'—')+'</div></div>'+
-    '<div class="number-display"><div class="label">Number</div><div class="value-row"><div class="value">'+escapeHtml(phone)+'</div><button type="button" class="copy-mini" id="copyPhoneBtn"><i class="fa-regular fa-copy"></i> Copy</button></div></div>'+
+    phoneBlockHtml(phone, data.country_name||meta.country_name||'')+
     '<div class="code-display"><div class="label">Verification Code</div><div class="value-row"><div class="value" id="codeValue">'+escapeHtml(code)+'</div><button type="button" class="copy-mini" id="copyCodeBtn"><i class="fa-regular fa-copy"></i> Copy</button></div></div>'+
     '<button type="button" class="btn btn-primary" id="copyCodeBtn2"><i class="fa-solid fa-copy"></i> Copy Code</button>'+
     '<a href="mj-sms3.html" class="btn btn-outline">Buy Another Number</a>'+
     '<a href="dashboard.html" class="btn btn-outline">Back to Home</a>';
-  document.getElementById('copyPhoneBtn').onclick=()=>copyText(phone,'Number copied');
+  var _cpb=document.getElementById('copyPhoneBtn');if(_cpb){_cpb.onclick=()=>{var n=(document.getElementById('phoneValue')||{}).textContent||'';copyText(String(n).replace(/\s/g,''),'Number copied');}};
   document.getElementById('copyCodeBtn').onclick=()=>copyText(code,'Code copied');
   document.getElementById('copyCodeBtn2').onclick=()=>copyText(code,'Code copied');
 }
@@ -268,7 +320,7 @@ async function checkStatus(fromBtn){
   try{
     const {ok,data}=await api('check',{order_id:orderId});
     if(!ok||!data.success){
-      if(fromBtn) showToast((data&&data.message)||'Check failed','error');
+      if(fromBtn) showToast('Could not check for SMS right now','error');
       pollTimer=setTimeout(checkStatus,5000);
       return;
     }
@@ -427,5 +479,4 @@ async function boot(){
 }
 boot();
 </script>
-</body>
-</html>
+</body></html>
