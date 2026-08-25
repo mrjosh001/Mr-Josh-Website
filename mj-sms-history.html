@@ -139,7 +139,7 @@ function render(){
     }
     // Server 2 only: Reuse for 20 minutes after code received (SMS-Bus rule)
     const REUSE_MS=20*60*1000;
-    if(!isRent(o)&&isS2&&b==='completed'&&o.code){
+    if(!isRent(o)&&isS2&&b==='completed'&&o.code&&(o.is_reusable===true||o.is_reusable===1||o.is_reusable==='true')){
       const doneAt=new Date(o.updated_at||o.completed_at||o.created_at||0).getTime();
       const left=doneAt? (doneAt+REUSE_MS-Date.now()) : 0;
       if(left>0&&o.country_id!=null&&o.service_id&&o.phone_number){

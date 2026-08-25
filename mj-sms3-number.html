@@ -274,7 +274,7 @@ function renderCompleted(data){
     var ph=String(phone||'').replace(/\D/g,'');
     var doneAt=new Date(data.updated_at||meta.updated_at||data.created_at||meta.created_at||Date.now()).getTime();
     var left=(doneAt+20*60*1000)-Date.now();
-    if(cid&&sid&&ph&&left>0){
+    if(cid&&sid&&ph&&left>0&&(meta.is_reusable===true||data.is_reusable===true||meta.is_reusable===1||data.is_reusable===1)){
       rb.style.display='block';
       rb.onclick=async function(){
         rb.disabled=true;rb.innerHTML='Reusing…';
