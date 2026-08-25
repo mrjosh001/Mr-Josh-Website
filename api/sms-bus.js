@@ -52,6 +52,20 @@ async function readBody(req) {
   }
 }
 
+
+/** Fields safe to send to the browser — never cost, tokens, or provider names */
+function publicOrderPayload(data) {
+  if (!data || typeof data !== 'object') return data;
+  const out = { ...data };
+  delete out.supplier_price;
+  delete out.supplier_usd;
+  delete out.cost;
+  delete out.cost_usd;
+  delete out.token;
+  delete out.api_key;
+  return out;
+}
+
 async function requireAuth(req) {
   const authHeader = req.headers.authorization || '';
   const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : null;
@@ -227,7 +241,6 @@ async function syncSmsBusCatalog() {
               const fields = {
                 country_name: country.name,
                 service_name: serviceName,
-                supplier_price: costUsd,
                 available_quantity: stock,
                 updated_at: now
               };
@@ -245,7 +258,6 @@ async function syncSmsBusCatalog() {
                 country_name: country.name,
                 service_id: sid,
                 service_name: serviceName,
-                supplier_price: costUsd,
                 price: applyMarkup(costUsd || 0.01, usdToNgn),
                 price_source: 'system',
                 currency: 'NGN',
@@ -383,7 +395,7 @@ export default async function handler(req, res) {
   if (!process.env.SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
     return json(res, 500, {
       success: false,
-      message: 'Server misconfigured (database key missing). Contact support.'
+      message: 'Something went wrong on our side. Please contact support.'
     });
   }
 
@@ -395,17 +407,17 @@ export default async function handler(req, res) {
     if (!TOKEN) {
       return json(res, 503, {
         success: false,
-        message: 'This server is temporarily unavailable'
+        message: 'This server is temporarily unavailable. Contact support if it keeps happening.'
       });
     }
 
     // ——— Public-ish catalog (still require auth so only customers hit supplier) ———
+    // Supplier wallet balance is never exposed to customers
     if (method === 'GET' && action === 'balance') {
-      const auth = await requireAuth(req);
-      if (!auth.ok) return json(res, auth.status, { success: false, message: auth.message });
-      const { data } = await smsbusGet(OTP_BASE, '/get/balance');
-      if (!busOk(data)) return json(res, 400, { success: false, message: 'Unable to load balance' });
-      return json(res, 200, { success: true, data: data.data });
+      return json(res, 403, {
+        success: false,
+        message: 'Not available'
+      });
     }
 
     if (method === 'GET' && action === 'countries') {
@@ -439,7 +451,7 @@ export default async function handler(req, res) {
         smsbusGet(OTP_BASE, '/list/projects')
       ]);
       if (!busOk(priceRes.data)) {
-        return json(res, 400, { success: false, message: 'Unable to load services for this country' });
+        return json(res, 400, { success: false, message: 'Unable to load services for this country. Try again or contact support.' });
       }
 
       // Map project_id → real service name (WhatsApp, Telegram, …)
@@ -468,7 +480,7 @@ export default async function handler(req, res) {
             title: title || `Service ${pid}`,
             code: codeById[pid] || row.code || '',
             stock: Number(row.total_count || row.count || 0),
-            supplier_usd: costUsd,
+            // never expose supplier cost to clients
             price: priceNgn,
             price_ngn: priceNgn
           };
@@ -564,7 +576,7 @@ export default async function handler(req, res) {
           .eq('service_id', String(project_id))
           .maybeSingle();
         if (dbSvc && dbSvc.is_available === false) {
-          return json(res, 400, { success: false, message: 'This service is not available' });
+          return json(res, 400, { success: false, message: 'This service is not available. Try another or contact support.' });
         }
         if (dbSvc && Number(dbSvc.price) > 0) price = Number(dbSvc.price);
       } catch (_) {}
@@ -584,8 +596,8 @@ export default async function handler(req, res) {
           if (supplierUsd != null && costUsd > 0 && supplierUsd < costUsd) {
             return json(res, 503, {
               success: false,
-              code: 'SUPPLIER_BALANCE_LOW',
-              message: 'This SMS server is temporarily unavailable (supplier funds). Try Server 1 or another service.'
+              code: 'SERVER_BUSY',
+              message: 'This SMS server is temporarily unavailable. Try the other server, or contact support.'
             });
           }
         }
@@ -606,7 +618,7 @@ export default async function handler(req, res) {
         bus = await smsbusGet(OTP_BASE, '/get/number', params);
       } catch (e) {
         await supabase.from('profiles').update({ balance: originalBalance }).eq('id', auth.userId);
-        return json(res, 502, { success: false, message: e.message || 'Supplier error' });
+        return json(res, 502, { success: false, message: 'This SMS server is busy. Try again in a moment, or contact support.' });
       }
 
       if (!busOk(bus.data) || !bus.data?.data?.request_id) {
@@ -616,13 +628,13 @@ export default async function handler(req, res) {
         if (code === 50201 || /balance not enough/i.test(msg)) {
           return json(res, 503, {
             success: false,
-            code: 'SUPPLIER_BALANCE_LOW',
-            message: 'This SMS server is temporarily unavailable (supplier funds). Try Server 1 or another service.'
+            code: 'SERVER_BUSY',
+            message: 'This SMS server is temporarily unavailable. Try the other server, or contact support.'
           });
         }
         return json(res, 400, {
           success: false,
-          message: msg || 'No number available right now. Try another service or country.'
+          message: 'No number available right now. Try another service or country, or contact support.'
         });
       }
 
@@ -640,7 +652,6 @@ export default async function handler(req, res) {
         service_name: serviceName,
         phone_number: phone,
         price,
-        supplier_price: costUsd,
         currency: 'NGN',
         status: 'waiting_for_code',
         code: null,
@@ -693,8 +704,8 @@ export default async function handler(req, res) {
         } catch (_) {}
 
         return json(res, 200, {
-          success: true,
-          data: {
+        success: true,
+        data: {
             order_id: requestId,
             number: phone,
             phone_number: phone,
@@ -705,7 +716,7 @@ export default async function handler(req, res) {
             source: 'smsbus',
             status: 'waiting_for_code',
             warning: emErr
-              ? 'Saved to supplier; local order row may need admin sync'
+              ? 'Number ready. Open the waiting page to get your code.'
               : null
           }
         });
@@ -796,13 +807,13 @@ export default async function handler(req, res) {
             });
           } catch (_) {}
           return json(res, 200, {
-            success: true,
-            data: { status: 'completed', code, number: null, phone_number: null, order_id }
+        success: true,
+        data: { status: 'completed', code, number: null, phone_number: null, order_id }
           });
         }
         return json(res, 200, {
-          success: true,
-          data: {
+        success: true,
+        data: {
             status: 'waiting_for_code',
             code: null,
             message: 'Not received yet',
@@ -815,8 +826,8 @@ export default async function handler(req, res) {
       }
       if (order.status === 'completed' && order.code) {
         return json(res, 200, {
-          success: true,
-          data: {
+        success: true,
+        data: {
             status: 'completed',
             code: order.code,
             number: order.phone_number,
@@ -830,8 +841,8 @@ export default async function handler(req, res) {
       }
       if (order.status === 'refunded') {
         return json(res, 200, {
-          success: true,
-          data: {
+        success: true,
+        data: {
             status: 'refunded',
             code: null,
             number: order.phone_number,
@@ -849,8 +860,8 @@ export default async function handler(req, res) {
           .eq('id', order.id);
         await markTxStatus(auth.userId, order_id, order.phone_number, 'completed');
         return json(res, 200, {
-          success: true,
-          data: { status: 'completed', code, number: order.phone_number }
+        success: true,
+        data: { status: 'completed', code, number: order.phone_number }
         });
       }
       const msg = data.message || '';
@@ -861,8 +872,8 @@ export default async function handler(req, res) {
         });
         if (refundResult.refunded) {
           return json(res, 200, {
-            success: true,
-            data: {
+        success: true,
+        data: {
               status: 'refunded',
               code: null,
               message: 'Time expired — balance restored',
@@ -871,7 +882,9 @@ export default async function handler(req, res) {
             }
           });
         }
-        return json(res, 200, { success: true, data: { status: 'expired', code: null, message: msg } });
+        return json(res, 200, {
+        success: true,
+        data: { status: 'expired', code: null, message: msg } });
       }
 
       // Local 20-minute expiry (matches Server 1 UX)
@@ -886,8 +899,8 @@ export default async function handler(req, res) {
           });
           if (refundResult.refunded) {
             return json(res, 200, {
-              success: true,
-              data: {
+        success: true,
+        data: {
                 status: 'refunded',
                 code: null,
                 message: 'Time expired — balance restored',
@@ -972,7 +985,7 @@ export default async function handler(req, res) {
           cancelMsg = cancelMsg || 'request closed';
         }
       } catch (e) {
-        cancelMsg = e.message || 'supplier error';
+        cancelMsg = 'Could not cancel right now';
       }
 
       if (!cancelOk) {
@@ -991,7 +1004,7 @@ export default async function handler(req, res) {
         } catch (_) {}
         return json(res, 400, {
           success: false,
-          message: cancelMsg || 'Could not cancel at supplier. Try again or wait for expiry.'
+          message: 'Could not cancel right now. Wait for the timer, try again, or contact support.'
         });
       }
 
@@ -1002,7 +1015,7 @@ export default async function handler(req, res) {
         return json(res, 200, { success: true, message: 'Already refunded', refunded: 0 });
       }
       if (!refundResult.refunded) {
-        return json(res, 500, { success: false, message: 'Cancel recorded but refund failed — contact support.' });
+        return json(res, 500, { success: false, message: 'Cancel was recorded but the refund failed. Please contact support.' });
       }
       return json(res, 200, {
         success: true,
@@ -1099,7 +1112,7 @@ export default async function handler(req, res) {
         });
       } catch (e) {
         await supabase.from('profiles').update({ balance: originalBalance }).eq('id', auth.userId);
-        return json(res, 502, { success: false, message: 'Could not reach SMS server. Try again.' });
+        return json(res, 502, { success: false, message: 'Could not reach the SMS server. Try again or contact support.' });
       }
 
       if (!busOk(bus.data) || !bus.data?.data?.request_id) {
@@ -1109,18 +1122,18 @@ export default async function handler(req, res) {
         if (code === 50109 || /expired/i.test(msg)) {
           return json(res, 400, {
             success: false,
-            message: 'Reuse window ended. Buy a new number instead.'
+            message: 'Reuse window ended. Buy a new number, or contact support if you need help.'
           });
         }
         if (code === 50107 || code === 50108 || /cannot be reused/i.test(msg)) {
           return json(res, 400, {
             success: false,
-            message: 'This number cannot be reused right now.'
+            message: 'This number cannot be reused right now. Contact support if you need help.'
           });
         }
         return json(res, 400, {
           success: false,
-          message: 'This number cannot be reused right now. Try a new number.'
+          message: 'This number cannot be reused right now. Try a new number or contact support.'
         });
       }
 
@@ -1139,7 +1152,6 @@ export default async function handler(req, res) {
         service_name: serviceName,
         phone_number: phone,
         price,
-        supplier_price: costUsd,
         currency: 'NGN',
         status: 'waiting_for_code',
         code: null,
@@ -1205,7 +1217,7 @@ export default async function handler(req, res) {
       if (!auth.ok) return json(res, auth.status, { success: false, message: auth.message });
       const { data } = await smsbusGet(RENT_BASE, '/v1/rent/list/area');
       if (!busOk(data)) {
-        return json(res, 400, { success: false, message: 'Unable to load rental areas' });
+        return json(res, 400, { success: false, message: 'Unable to load rental areas. Try again or contact support.' });
       }
       const raw = data.data;
       const list = Array.isArray(raw) ? raw : Object.values(raw || {});
@@ -1291,7 +1303,7 @@ export default async function handler(req, res) {
         await supabase.from('profiles').update({ balance: originalBalance }).eq('id', auth.userId);
         return json(res, 400, {
           success: false,
-          message: 'Rental unavailable for this area right now'
+          message: 'Rental is unavailable for this area right now. Contact support if you need help.'
         });
       }
 
@@ -1378,7 +1390,7 @@ export default async function handler(req, res) {
       });
       if (!busOk(bus.data)) {
         await supabase.from('profiles').update({ balance: bal }).eq('id', auth.userId);
-        return json(res, 400, { success: false, message: 'Renew failed. Try again later.' });
+        return json(res, 400, { success: false, message: 'Renew failed. Try again later or contact support.' });
       }
       return json(res, 200, { success: true, data: bus.data.data, price });
     }

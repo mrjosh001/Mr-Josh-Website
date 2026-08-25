@@ -368,7 +368,7 @@ async function syncOneCountry(apiKey, country, usdToNgn, counters, serviceNames)
 
 async function handleSync(req, res) {
   if (!process.env.GRIZZLYSMS_API_KEY) {
-    return res.status(500).json({ success: false, message: 'Missing GRIZZLYSMS_API_KEY' });
+    return res.status(500).json({ success: false, message: 'This SMS server is not available right now. Please contact support.' });
   }
 
   const authHeader = req.headers.authorization || '';
@@ -400,7 +400,7 @@ async function handleSync(req, res) {
       if (countriesRes.text === 'BAD_KEY') {
         return res
           .status(401)
-          .json({ success: false, message: 'GrizzlySMS rejected the API key (BAD_KEY)' });
+          .json({ success: false, message: 'This SMS server is not available right now. Please contact support.' });
       }
       let countryList;
       try {
@@ -408,7 +408,7 @@ async function handleSync(req, res) {
       } catch {
         return res.status(502).json({
           success: false,
-          message: 'getCountries did not return JSON',
+          message: 'Could not load countries. Try again or contact support.',
           raw: countriesRes.text.slice(0, 500)
         });
       }
@@ -440,7 +440,7 @@ async function handleSync(req, res) {
       if (startCountriesRes.text === 'BAD_KEY') {
         return res
           .status(401)
-          .json({ success: false, message: 'GrizzlySMS rejected the API key (BAD_KEY)' });
+          .json({ success: false, message: 'This SMS server is not available right now. Please contact support.' });
       }
       let startCountryList;
       try {
@@ -448,7 +448,7 @@ async function handleSync(req, res) {
       } catch {
         return res.status(502).json({
           success: false,
-          message: 'getCountries did not return JSON',
+          message: 'Could not load countries. Try again or contact support.',
           raw: startCountriesRes.text.slice(0, 500)
         });
       }
@@ -485,7 +485,7 @@ async function handleSync(req, res) {
       });
       return res
         .status(502)
-        .json({ success: false, message: 'getCountries did not return JSON mid-sync' });
+        .json({ success: false, message: 'Could not load countries. Try again or contact support.' });
     }
 
     const TIME_BUDGET_MS = isCronRequest ? CRON_TIME_BUDGET_MS : MANUAL_TIME_BUDGET_MS;
@@ -536,7 +536,7 @@ async function handleSync(req, res) {
     );
     return res
       .status(500)
-      .json({ success: false, message: err.message || 'Internal server error' });
+      .json({ success: false, message: 'Something went wrong. Try again or contact support.' });
   }
 }
 
@@ -558,7 +558,7 @@ async function handleOrder(req, res) {
     });
   }
   if (!GRIZZLY_KEY) {
-    return res.status(500).json({ success: false, message: 'GRIZZLYSMS_API_KEY not configured' });
+    return res.status(500).json({ success: false, message: 'This SMS server is not available right now. Please contact support.' });
   }
 
   let originalBalance = 0;
@@ -580,7 +580,7 @@ async function handleOrder(req, res) {
     if (svcErr || !svc) {
       return res.status(404).json({
         success: false,
-        message: 'This service is no longer available. Please refresh and try another.'
+        message: 'This service is no longer available. Refresh, try another, or contact support.'
       });
     }
     if (!svc.is_available) {
@@ -624,7 +624,7 @@ async function handleOrder(req, res) {
     if (deductErr) {
       return res.status(500).json({
         success: false,
-        message: 'Could not debit your balance. Please try again.'
+        message: 'Could not debit your balance. Try again or contact support.'
       });
     }
     deducted = true;
@@ -884,7 +884,7 @@ async function handleCheck(req, res) {
     return res.status(400).json({ success: false, message: 'order_id and user_id are required' });
   }
   if (!GRIZZLY_KEY) {
-    return res.status(500).json({ success: false, message: 'GRIZZLYSMS_API_KEY not configured' });
+    return res.status(500).json({ success: false, message: 'This SMS server is not available right now. Please contact support.' });
   }
 
   try {
@@ -1110,7 +1110,7 @@ async function handleCancel(req, res) {
     return res.status(400).json({ success: false, message: 'order_id and user_id are required' });
   }
   if (!GRIZZLY_KEY) {
-    return res.status(500).json({ success: false, message: 'GRIZZLYSMS_API_KEY not configured' });
+    return res.status(500).json({ success: false, message: 'This SMS server is not available right now. Please contact support.' });
   }
 
   try {
@@ -1164,7 +1164,7 @@ async function handleCancel(req, res) {
         success: false,
         code: 'EARLY_CANCEL_DENIED',
         wait_seconds: 300,
-        message: 'Cancel is not available yet. Please wait until the countdown finishes (5 minutes from purchase).'
+        message: 'Cancel is not available yet. Wait for the countdown, or contact support if it looks stuck.'
       });
     }
 
