@@ -1265,7 +1265,7 @@ async function handleCheckout(req, res, raw, publicKey, businessId) {
   const phoneFmt = phone.length >= 10 ? phone.slice(-11) : '08000000000';
 
   // Absolute HTTPS URL required — PocketFi "Go to Home" / auto-redirect uses this
-  const appUrl = (process.env.APP_URL || 'https://app.mjhub.store').replace(/\/$/, '');
+  const appUrl = (process.env.APP_URL || process.env.NEXT_PUBLIC_APP_URL || 'https://www.mjhub.store').replace(/\/$/, '');
   const redirect_link = `${appUrl}/dashboard.html?deposit=success&provider=pocketfi`;
 
   const base = (process.env.POCKETFI_API_BASE || 'https://api.pocketfi.ng/api/v1').replace(
@@ -1280,9 +1280,11 @@ async function handleCheckout(req, res, raw, publicKey, businessId) {
     business_id: String(businessId),
     email: email || `user-${user.id.slice(0, 8)}@mjhub.store`,
     redirect_link,
-    // some PocketFi builds read alternate keys
     redirect_url: redirect_link,
     callback_url: redirect_link,
+    success_url: redirect_link,
+    success_redirect_url: redirect_link,
+    return_url: redirect_link,
     amount: String(amount)
   };
 
@@ -1711,7 +1713,13 @@ async function handleVerifyDeposit(req, res) {
   if (!user) return res.status(401).json({ success: false, message: 'Invalid session' });
 
   const body = typeof req.body === 'string' ? (() => { try { return JSON.parse(req.body || '{}'); } catch { return {}; } })() : (req.body || {});
+  // expected_amount = what user should receive in wallet (not the gross transfer with fee)
   const expect = Math.round(Number(body.amount || body.expected_amount || 0)) || 0;
+  // Client must send when they started waiting — ignore older deposits
+  const sinceMs = Number(body.since || body.since_ts || 0) || 0;
+  const sinceIso = sinceMs > 0
+    ? new Date(sinceMs).toISOString()
+    : new Date(Date.now() - 3 * 60 * 1000).toISOString(); // default: only last 3 minutes
 
   const { data: profile } = await supabase
     .from('profiles')
@@ -1719,27 +1727,35 @@ async function handleVerifyDeposit(req, res) {
     .eq('id', user.id)
     .maybeSingle();
 
-  // Recent successful pocketfi deposits (last 2 hours)
-  const since = new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString();
+  // Require expected amount so we never treat an old deposit as "this" payment
+  if (!(expect > 0)) {
+    return res.status(200).json({
+      success: true,
+      credited: false,
+      message: 'Waiting for payment…',
+      data: { balance: Number(profile?.balance || 0), balance_usd: Number(profile?.balance_usd || 0) }
+    });
+  }
+
   const { data: txs } = await supabase
     .from('transactions')
     .select('id, amount, amount_ngn, status, external_reference, created_at, title, subtitle')
     .eq('user_id', user.id)
     .eq('payment_provider', 'pocketfi')
     .eq('status', 'success')
-    .gte('created_at', since)
+    .gte('created_at', sinceIso)
     .order('created_at', { ascending: false })
-    .limit(10);
+    .limit(20);
 
   let match = null;
   for (const tx of txs || []) {
     const a = Number(tx.amount_ngn) || 0;
-    if (expect > 0 && Math.abs(a - expect) <= 2) {
+    // Match wallet credit amount (e.g. 1000), not gross 1010
+    if (Math.abs(a - expect) <= 2) {
       match = tx;
       break;
     }
   }
-  if (!match && (txs || []).length) match = txs[0];
 
   if (match) {
     return res.status(200).json({
@@ -1759,7 +1775,7 @@ async function handleVerifyDeposit(req, res) {
   return res.status(200).json({
     success: true,
     credited: false,
-    message: 'Not seen yet. Keep this page open — we credit as soon as PocketFi confirms.',
+    message: 'Waiting for payment confirmation…',
     data: {
       balance: Number(profile?.balance || 0),
       balance_usd: Number(profile?.balance_usd || 0)
