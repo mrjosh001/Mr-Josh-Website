@@ -108,18 +108,27 @@ async function claimAndRefundSmsBusOrder(order, userId, opts = {}) {
   if (order.status === 'completed' && order.code) {
     return { refunded: false, reason: 'already_final' };
   }
-  const { data: claimed, error: claimErr } = await supabase
-    .from('number_orders')
-    .update({
-      status: finalStatus,
-      refunded: true,
-      updated_at: new Date().toISOString()
-    })
-    .eq('id', order.id)
-    .neq('status', 'completed')
-    .or('refunded.eq.false,refunded.is.null')
-    .select('id, price')
-    .maybeSingle();
+  async function tryClaim(statusValue) {
+    return supabase
+      .from('number_orders')
+      .update({
+        status: statusValue,
+        refunded: true,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', order.id)
+      .neq('status', 'completed')
+      .select('id, price')
+      .maybeSingle();
+  }
+
+  let claimed = null;
+  let claimErr = null;
+  ({ data: claimed, error: claimErr } = await tryClaim(finalStatus));
+  if (claimErr && finalStatus !== 'refunded') {
+    console.warn('[smsbus claimAndRefund] status', finalStatus, 'rejected, retry refunded:', claimErr.message);
+    ({ data: claimed, error: claimErr } = await tryClaim('refunded'));
+  }
 
   if (claimErr) {
     console.error('[smsbus claimAndRefund]', claimErr.message);
@@ -417,21 +426,21 @@ async function handleExpireStaleSmsBus(req, res) {
     .select('id, user_id, order_id, price, status, refunded, created_at, phone_number, service_name, customer_id')
     .eq('source', 'smsbus')
     .eq('status', 'waiting_for_code')
-    .or('refunded.eq.false,refunded.is.null')
     .lt('created_at', cutoff)
     .order('created_at', { ascending: true })
-    .limit(80);
+    .limit(200);
   if (scopeUserId) q = q.eq('user_id', scopeUserId);
-  const { data: stale, error } = await q;
+  const { data: rows, error } = await q;
 
   if (error) {
     console.error('[smsbus expire_stale]', error.message);
     return json(res, 500, { success: false, message: error.message });
   }
 
+  const stale = (rows || []).filter((o) => o.refunded !== true);
   let expired = 0;
   let skipped = 0;
-  for (const order of stale || []) {
+  for (const order of stale) {
     try {
       if (order.order_id) {
         try {
