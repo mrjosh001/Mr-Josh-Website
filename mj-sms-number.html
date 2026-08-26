@@ -76,6 +76,7 @@ body::before{content:'';position:fixed;inset:0;pointer-events:none;z-index:0;bac
 
 </style>
   <script src="/js/mj-page-loader.js"></script>
+<link rel="stylesheet" href="/css/graceful.css">
 </head><body><style id="mj-boot-style">
 #mj-boot{position:fixed;inset:0;z-index:2147483646;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:18px;background:rgba(5,7,13,.55);-webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px);color:rgba(226,232,240,.85);font:500 12px/1.2 system-ui,sans-serif;letter-spacing:.2em;text-transform:lowercase;transition:opacity .25s ease}
 #mj-boot.is-done{opacity:0;pointer-events:none}
@@ -264,9 +265,14 @@ function startCountdown(createdAt){
     const remaining = EXPIRY_SECONDS - elapsed;
     const label = document.getElementById('countdownValue');
     if(!label) { stopCountdown(); return; }
+    const bar = document.getElementById('mjWaitBar');
+    if(bar){
+      const frac = Math.max(0, Math.min(1, remaining / EXPIRY_SECONDS));
+      bar.style.transform = 'scaleX(' + frac + ')';
+    }
     if(remaining <= 0){
       label.textContent = 'Expired — refunding…';
-      // Auto-refund once when countdown ends and still no code
+      if(bar) bar.style.transform = 'scaleX(0)';
       if(!autoRefundStarted && !cancelling){
         autoRefundStarted = true;
         autoRefundOnExpiry();
@@ -352,6 +358,7 @@ function renderWaiting(data){
     <div class="number-display" style="margin-bottom:14px;">
       <div class="label">Time Remaining</div>
       <div class="value" id="countdownValue" style="color:var(--primary);">--:--</div>
+      <div class="mj-wait-track" aria-hidden="true"><div class="mj-wait-bar" id="mjWaitBar" style="transform:scaleX(1)"></div></div>
     </div>
     <button type="button" class="btn btn-outline" id="checkNowBtn"><i class="fa-solid fa-rotate"></i> Check for SMS Now</button>
     <div class="cancel-row">
