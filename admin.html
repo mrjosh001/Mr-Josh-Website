@@ -786,7 +786,8 @@
  <option value="">All statuses</option>
  <option value="waiting_for_code">Waiting for code</option>
  <option value="completed">Completed</option>
- <option value="refunded">Cancelled &amp; refunded</option>
+ <option value="expired">Expired</option>
+                <option value="refunded">Cancelled &amp; refunded</option>
  <option value="failed">Failed</option>
  </select>
  </div>
@@ -2230,6 +2231,7 @@ async function tryLoadOrders() {
 const SMS_ORDER_STATUS_LABELS = {
  waiting_for_code: 'Waiting for code',
  completed: 'Completed',
+ expired: 'Expired',
  refunded: 'Cancelled & refunded',
  failed: 'Failed'
 };
@@ -2237,6 +2239,13 @@ const SMS_ORDER_STATUS_LABELS = {
 async function tryLoadSmsOrders() {
  try {
   const headers = await authHeaders();
+  // Expire ALL past-window OTP (admin JWT → full sweep) before listing
+  try {
+    await Promise.all([
+      fetch('/api/grizzly-sync?action=expire_stale', { headers }).catch(() => null),
+      fetch('/api/sms-bus?action=expire_stale', { headers }).catch(() => null)
+    ]);
+  } catch (_) {}
   headers['Content-Type'] = 'application/json';
   const res = await fetch('/api/admin', {
     method: 'POST', headers,
