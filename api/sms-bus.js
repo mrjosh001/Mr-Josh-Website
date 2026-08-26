@@ -384,6 +384,76 @@ async function insertNumberOrder(row) {
   };
 }
 
+
+/** Code after refund: re-debit and complete (supplier delivered). Idempotent. */
+async function reclaimAndCompleteSmsBus(order, userId, code) {
+  if (!order?.id || !code) return { ok: false, reason: 'missing' };
+  if (order.status === 'completed' && order.code) {
+    return { ok: true, already: true, order };
+  }
+
+  const { data: claimed, error: claimErr } = await supabase
+    .from('number_orders')
+    .update({
+      status: 'completed',
+      code: String(code),
+      refunded: false,
+      updated_at: new Date().toISOString()
+    })
+    .eq('id', order.id)
+    .eq('refunded', true)
+    .neq('status', 'completed')
+    .select('id, price, phone_number, service_name, country_name, order_id, customer_id')
+    .maybeSingle();
+
+  if (claimErr) {
+    console.error('[reclaimAndCompleteSmsBus]', claimErr.message);
+    return { ok: false, reason: 'claim_error' };
+  }
+  if (!claimed) {
+    const { data: current } = await supabase.from('number_orders').select('*').eq('id', order.id).single();
+    if (current?.status === 'completed' && current?.code) {
+      return { ok: true, already: true, order: current };
+    }
+    return { ok: false, reason: 'not_reclaimable', order: current };
+  }
+
+  const price = Number(order.price != null ? order.price : claimed.price) || 0;
+  let newBalance = null;
+  if (price > 0) {
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('balance, customer_id')
+      .eq('id', userId)
+      .single();
+    if (profile) {
+      newBalance = Number(profile.balance || 0) - price;
+      await supabase.from('profiles').update({ balance: newBalance }).eq('id', userId);
+      try {
+        await supabase.from('transactions').insert({
+          user_id: userId,
+          customer_id: profile.customer_id || claimed.customer_id || order.customer_id,
+          type: 'purchase',
+          category: 'MJ SMS',
+          title: claimed.service_name || order.service_name || 'SMS',
+          subtitle: 'Code received after refund — recharged',
+          amount: `₦${price.toLocaleString()}`,
+          amount_ngn: price,
+          status: 'completed'
+        });
+      } catch (_) {}
+    }
+  }
+  return {
+    ok: true,
+    recharged: true,
+    amount: price,
+    new_balance: newBalance,
+    code: String(code)
+  };
+}
+
+
 async function markTxStatus(userId, orderId, phone, status) {
   try {
     const { data } = await supabase
@@ -917,22 +987,35 @@ export default async function handler(req, res) {
           }
         });
       }
-      if (order.status === 'refunded') {
-        return json(res, 200, {
-        success: true,
-        data: {
-            status: 'refunded',
-            code: null,
-            number: order.phone_number,
-            message: 'Already refunded'
-          }
-        });
-      }
+      // Refunded/expired: still poll supplier — if code exists, re-charge + complete
+      const wasRefunded =
+        order.refunded === true ||
+        ['refunded', 'expired', 'cancelled', 'canceled'].includes(String(order.status || '').toLowerCase());
 
       const { data } = await smsbusGet(OTP_BASE, '/get/sms', { request_id: order_id });
       if (busOk(data) && data.data) {
         const code = String(data.data);
-        // Atomic CAS: do not overwrite a concurrent refund (free-number race)
+        if (wasRefunded) {
+          const re = await reclaimAndCompleteSmsBus(order, auth.userId, code);
+          if (re.ok) {
+            return json(res, 200, {
+              success: true,
+              data: {
+                status: 'completed',
+                code: re.code || code,
+                number: order.phone_number,
+                refunded: false,
+                recharged: !!re.recharged,
+                recharged_amount: re.amount,
+                new_balance: re.new_balance,
+                message: re.recharged
+                  ? 'Code received — balance charged for this number'
+                  : 'Code received'
+              }
+            });
+          }
+        }
+        // Normal complete (not refunded)
         const { data: updatedRows } = await supabase
           .from('number_orders')
           .update({ status: 'completed', code })
@@ -940,6 +1023,27 @@ export default async function handler(req, res) {
           .eq('refunded', false)
           .select();
         if (!updatedRows || updatedRows.length === 0) {
+          // Concurrent refund mid-flight → try reclaim
+          const re = await reclaimAndCompleteSmsBus(
+            { ...order, refunded: true },
+            auth.userId,
+            code
+          );
+          if (re.ok) {
+            return json(res, 200, {
+              success: true,
+              data: {
+                status: 'completed',
+                code: re.code || code,
+                number: order.phone_number,
+                refunded: false,
+                recharged: !!re.recharged,
+                recharged_amount: re.amount,
+                new_balance: re.new_balance,
+                message: 'Code received — balance charged for this number'
+              }
+            });
+          }
           const { data: current } = await supabase.from('number_orders').select('*').eq('id', order.id).single();
           return json(res, 200, {
             success: true,
@@ -955,6 +1059,17 @@ export default async function handler(req, res) {
         return json(res, 200, {
           success: true,
           data: { status: 'completed', code, number: order.phone_number }
+        });
+      }
+      if (wasRefunded) {
+        return json(res, 200, {
+          success: true,
+          data: {
+            status: order.status || 'refunded',
+            code: null,
+            number: order.phone_number,
+            message: 'Already refunded'
+          }
         });
       }
       const msg = data.message || '';

@@ -889,6 +889,86 @@ async function refundOrderSilently(order, userId) {
   });
 }
 
+/**
+ * Code arrived after a refund/expiry: re-debit the customer and mark completed.
+ * Supplier delivered value — site must charge again (idempotent).
+ */
+async function reclaimAndCompleteOnCode(order, userId, code) {
+  if (!order?.id || !code) return { ok: false, reason: 'missing' };
+  if (order.status === 'completed' && order.code) {
+    return { ok: true, already: true, order };
+  }
+
+  // Claim only refunded/expired rows that are not already completed with a code
+  const { data: claimed, error: claimErr } = await supabase
+    .from('number_orders')
+    .update({
+      status: 'completed',
+      code: String(code),
+      refunded: false,
+      updated_at: new Date().toISOString()
+    })
+    .eq('id', order.id)
+    .eq('refunded', true)
+    .neq('status', 'completed')
+    .select('id, price, phone_number, service_name, country_name, order_id, customer_id')
+    .maybeSingle();
+
+  if (claimErr) {
+    console.error('[reclaimAndCompleteOnCode]', claimErr.message);
+    return { ok: false, reason: 'claim_error', error: claimErr.message };
+  }
+  if (!claimed) {
+    // Maybe already completed by concurrent check
+    const { data: current } = await supabase.from('number_orders').select('*').eq('id', order.id).single();
+    if (current?.status === 'completed' && current?.code) {
+      return { ok: true, already: true, order: current };
+    }
+    return { ok: false, reason: 'not_reclaimable', order: current };
+  }
+
+  const price = Number(order.price != null ? order.price : claimed.price) || 0;
+  let newBalance = null;
+
+  if (price > 0) {
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('balance, customer_id')
+      .eq('id', userId)
+      .single();
+    if (profile) {
+      newBalance = Number(profile.balance || 0) - price;
+      await supabase.from('profiles').update({ balance: newBalance }).eq('id', userId);
+      try {
+        await supabase.from('transactions').insert({
+          user_id: userId,
+          customer_id: profile.customer_id || claimed.customer_id || order.customer_id,
+          type: 'purchase',
+          category: 'MJ SMS',
+          title: claimed.service_name || order.service_name || 'SMS',
+          subtitle: `${claimed.country_name || order.country_name || ''} · code received after refund — recharged`.trim(),
+          amount: `₦${price.toLocaleString()}`,
+          amount_ngn: price,
+          status: 'completed'
+        });
+      } catch (e) {
+        console.warn('[reclaimAndCompleteOnCode] tx', e.message || e);
+      }
+    }
+  }
+
+  return {
+    ok: true,
+    recharged: true,
+    amount: price,
+    new_balance: newBalance,
+    code: String(code),
+    order: { ...order, ...claimed, status: 'completed', code: String(code), refunded: false }
+  };
+}
+
+
+
 async function handleCheck(req, res) {
   const body = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : (req.body || {});
   const { order_id, user_id } = body;
@@ -915,7 +995,8 @@ async function handleCheck(req, res) {
       return res.status(404).json({ success: false, message: 'Order not found for this account' });
     }
 
-    if (existing.status === 'completed' || existing.status === 'refunded' || existing.status === 'expired' || existing.refunded) {
+    // Final success — no further supplier work
+    if (existing.status === 'completed') {
       const { data: current } = await supabase
         .from('number_orders')
         .select('*')
@@ -923,6 +1004,9 @@ async function handleCheck(req, res) {
         .single();
       return res.status(200).json({ success: true, data: current });
     }
+
+    // Refunded/expired: still ask supplier. If code exists, re-charge + complete.
+    const wasRefunded = existing.refunded === true || ['refunded', 'expired', 'cancelled', 'canceled'].includes(String(existing.status || '').toLowerCase());
 
     const qs = new URLSearchParams({
       api_key: GRIZZLY_KEY,
@@ -1020,7 +1104,40 @@ async function handleCheck(req, res) {
       }
     }
 
+    // Code arrived after refund/expiry → charge again and complete
+    if (code && wasRefunded) {
+      const re = await reclaimAndCompleteOnCode(existing, user_id, code);
+      if (re.ok) {
+        return res.status(200).json({
+          success: true,
+          data: {
+            order_id,
+            status: 'completed',
+            number: existing.phone_number,
+            code: re.code || code,
+            created_at: existing.created_at,
+            service_name: existing.service_name,
+            country_name: existing.country_name,
+            price: existing.price,
+            refunded: false,
+            recharged: !!re.recharged,
+            recharged_amount: re.amount,
+            new_balance: re.new_balance,
+            message: re.recharged
+              ? 'Code received — balance charged for this number'
+              : 'Code received',
+            raw
+          }
+        });
+      }
+    }
+
     if (newStatus === 'refunded' || newStatus === 'expired') {
+      // Do not re-refund if already refunded
+      if (wasRefunded) {
+        const { data: current } = await supabase.from('number_orders').select('*').eq('id', existing.id).single();
+        return res.status(200).json({ success: true, data: current || existing });
+      }
       const result = await claimAndRefundOrder(existing, user_id, {
         status: newStatus === 'expired' ? 'expired' : 'refunded',
         subtitle: newStatus === 'expired' ? 'Expired — no SMS, balance restored' : 'No SMS — balance restored',
@@ -1063,7 +1180,35 @@ async function handleCheck(req, res) {
     }
 
     if (!updateErr && (!updatedRows || updatedRows.length === 0)) {
-      // Concurrent cancel/expire already claimed this order — return real state
+      // Concurrent refund won — if we have a code, re-charge and complete
+      if (code) {
+        const re = await reclaimAndCompleteOnCode(
+          { ...existing, refunded: true, status: 'refunded' },
+          user_id,
+          code
+        );
+        if (re.ok) {
+          return res.status(200).json({
+            success: true,
+            data: {
+              order_id,
+              status: 'completed',
+              number: existing.phone_number,
+              code: re.code || code,
+              created_at: existing.created_at,
+              service_name: existing.service_name,
+              country_name: existing.country_name,
+              price: existing.price,
+              refunded: false,
+              recharged: !!re.recharged,
+              recharged_amount: re.amount,
+              new_balance: re.new_balance,
+              message: 'Code received — balance charged for this number',
+              raw
+            }
+          });
+        }
+      }
       const { data: current } = await supabase.from('number_orders').select('*').eq('id', existing.id).single();
       if (current) {
         return res.status(200).json({
