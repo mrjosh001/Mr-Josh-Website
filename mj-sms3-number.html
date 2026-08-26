@@ -55,7 +55,8 @@ body{font-family:'Plus Jakarta Sans',system-ui,sans-serif;background:var(--bg);c
 .phone-split .national-num{font-size:22px;font-weight:800;letter-spacing:.04em}
 .phone-hint{font-size:11px;color:var(--muted);margin-top:8px;font-weight:600}
 
-</style></head><body><div class="header"><a href="mj-sms3.html" class="back-button"><i class="fa-solid fa-arrow-left"></i></a><div class="page-title">Server 2 · SMS</div></div><div class="main-content"><div class="status-card" id="statusCard"><div class="status-icon waiting"><i class="fa-solid fa-spinner fa-spin"></i></div><div class="status-title">Loading order…</div></div></div><div class="toast-container" id="toastContainer"></div>
+</style><link rel="stylesheet" href="/css/mj-motion.css">
+</head><body><div class="header"><a href="mj-sms3.html" class="back-button"><i class="fa-solid fa-arrow-left"></i></a><div class="page-title">Server 2 · SMS</div></div><div class="main-content"><div class="status-card" id="statusCard"><div class="status-icon waiting"><i class="fa-solid fa-spinner fa-spin"></i></div><div class="status-title">Loading order…</div></div></div><div class="toast-container" id="toastContainer"></div>
 <script>
 const SUPABASE_URL = 'https://atczodlljmlayvldxfmv.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImF0Y3pvZGxsam1sYXl2bGR4Zm12Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODUwNzUyMzgsImV4cCI6MjEwMDY1MTIzOH0.ufthD-p7BmeD_B7xyuMM6PNPL8DmcL4AtRYgg-MuoLI';
@@ -181,8 +182,15 @@ function startCountdown(createdAt,timeLeft){
     if(timeLeft!=null&&Number(timeLeft)>=0) remaining=Math.min(remaining,Number(timeLeft));
     const label=document.getElementById('countdownValue');
     if(!label){stopCountdown();return}
+    const bar=document.getElementById('mjWaitBar');
+    if(bar){
+      const total=typeof EXPIRY_SECONDS==='number'?EXPIRY_SECONDS:(typeof timeLeftMax==='number'?timeLeftMax:300);
+      const frac=Math.max(0,Math.min(1,remaining/total));
+      bar.style.transform='scaleX('+frac+')';
+    }
     if(remaining<=0){
       label.textContent='Expired — refunding…';
+      if(bar) bar.style.transform='scaleX(0)';
       if(!autoRefundStarted&&!cancelling){autoRefundStarted=true;autoRefundOnExpiry()}
       return;
     }
@@ -236,7 +244,7 @@ function renderWaiting(data){
     '<div class="number-display" style="text-transform:capitalize"><div class="label">Service</div><div class="value" style="font-size:16px">'+escapeHtml(serviceLabel||'—')+(data.country_name||meta.country_name?' · '+escapeHtml(data.country_name||meta.country_name):'')+'</div></div>'+
     phoneBlockHtml(phone, data.country_name||meta.country_name||'')+
     '<div class="number-display"><div class="label">Price</div><div class="value" style="font-size:16px;color:var(--primary)">'+money(data.price!=null?data.price:meta.price)+'</div></div>'+
-    '<div class="number-display"><div class="label">Time Remaining</div><div class="value" id="countdownValue" style="color:var(--primary)">--:--</div></div>'+
+    '<div class="number-display"><div class="label">Time Remaining</div><div class="value" id="countdownValue" style="color:var(--primary)">--:--</div><div class="mj-wait-track" aria-hidden="true"><div class="mj-wait-bar" id="mjWaitBar" style="transform:scaleX(1)"></div></div></div>'+
     '<button type="button" class="btn btn-outline" id="checkNowBtn"><i class="fa-solid fa-rotate"></i> Check for SMS Now</button>'+
     '<div class="cancel-row"><button type="button" class="btn btn-danger" id="cancelBtn">Cancel & Refund</button><span class="cancel-available" id="cancelAvailable"></span></div>'+
     '<div class="cancel-hint" id="cancelHint"></div>'+
