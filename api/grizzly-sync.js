@@ -1045,18 +1045,43 @@ async function handleCheck(req, res) {
       });
     }
 
-    const { error: updateErr } = await supabase
+    // Atomic CAS: only complete/update if still un-refunded (blocks free-number race)
+    const { data: updatedRows, error: updateErr } = await supabase
       .from('number_orders')
       .update({
         status: newStatus,
         code,
-        refunded: false,
         updated_at: new Date().toISOString()
+        // Do NOT force refunded:false — that could clobber a concurrent refund.
       })
-      .eq('id', existing.id);
+      .eq('id', existing.id)
+      .eq('refunded', false)
+      .select();
 
     if (updateErr) {
       console.error('[grizzly check] update failed:', updateErr.message, { order_id });
+    }
+
+    if (!updateErr && (!updatedRows || updatedRows.length === 0)) {
+      // Concurrent cancel/expire already claimed this order — return real state
+      const { data: current } = await supabase.from('number_orders').select('*').eq('id', existing.id).single();
+      if (current) {
+        return res.status(200).json({
+          success: true,
+          data: {
+            order_id,
+            status: current.status,
+            number: current.phone_number,
+            code: current.code,
+            created_at: current.created_at,
+            service_name: current.service_name,
+            country_name: current.country_name,
+            price: current.price,
+            refunded: current.refunded,
+            raw
+          }
+        });
+      }
     }
 
     // Code received → lock as completed on purchase transaction

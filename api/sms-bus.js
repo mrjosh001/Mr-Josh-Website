@@ -932,14 +932,29 @@ export default async function handler(req, res) {
       const { data } = await smsbusGet(OTP_BASE, '/get/sms', { request_id: order_id });
       if (busOk(data) && data.data) {
         const code = String(data.data);
-        await supabase
+        // Atomic CAS: do not overwrite a concurrent refund (free-number race)
+        const { data: updatedRows } = await supabase
           .from('number_orders')
           .update({ status: 'completed', code })
-          .eq('id', order.id);
+          .eq('id', order.id)
+          .eq('refunded', false)
+          .select();
+        if (!updatedRows || updatedRows.length === 0) {
+          const { data: current } = await supabase.from('number_orders').select('*').eq('id', order.id).single();
+          return json(res, 200, {
+            success: true,
+            data: {
+              status: current ? current.status : 'refunded',
+              code: current ? current.code : null,
+              number: order.phone_number,
+              refunded: current ? current.refunded : true
+            }
+          });
+        }
         await markTxStatus(auth.userId, order_id, order.phone_number, 'completed');
         return json(res, 200, {
-        success: true,
-        data: { status: 'completed', code, number: order.phone_number }
+          success: true,
+          data: { status: 'completed', code, number: order.phone_number }
         });
       }
       const msg = data.message || '';
@@ -1074,12 +1089,20 @@ export default async function handler(req, res) {
           const smsRes = await smsbusGet(OTP_BASE, '/get/sms', { request_id: order_id });
           if (busOk(smsRes.data) && smsRes.data.data) {
             const code = String(smsRes.data.data);
-            await supabase.from('number_orders').update({ status: 'completed', code }).eq('id', order.id);
-            return json(res, 400, {
-              success: false,
-              code: 'CODE_ALREADY_RECEIVED',
-              message: 'A code was received — cancel is not available.'
-            });
+            const { data: updatedRows } = await supabase
+              .from('number_orders')
+              .update({ status: 'completed', code })
+              .eq('id', order.id)
+              .eq('refunded', false)
+              .select();
+            if (updatedRows && updatedRows.length > 0) {
+              return json(res, 400, {
+                success: false,
+                code: 'CODE_ALREADY_RECEIVED',
+                message: 'A code was received — cancel is not available.'
+              });
+            }
+            // else: concurrent refund already won — fall through
           }
         } catch (_) {}
         return json(res, 400, {
