@@ -789,19 +789,20 @@ async function claimAndRefundOrder(order, userId, opts = {}) {
   if (!order || !order.id) {
     return { refunded: false, reason: 'missing_order' };
   }
-  if (order.refunded || order.status === 'refunded' || order.status === 'completed') {
+  if (order.refunded || ['refunded', 'completed', 'expired', 'cancelled', 'canceled'].includes(String(order.status || '').toLowerCase())) {
     return { refunded: false, reason: 'already_final' };
   }
 
   const subtitle = opts.subtitle || 'No SMS — balance restored';
   const notes = opts.notes || null;
   const category = opts.category || 'MJ SMS';
+  const finalStatus = opts.status || 'refunded';
 
   // Atomic claim: only one concurrent request can win this update
   const { data: claimed, error: claimErr } = await supabase
     .from('number_orders')
     .update({
-      status: 'refunded',
+      status: finalStatus,
       refunded: true,
       updated_at: new Date().toISOString()
     })
@@ -902,7 +903,7 @@ async function handleCheck(req, res) {
       return res.status(404).json({ success: false, message: 'Order not found for this account' });
     }
 
-    if (existing.status === 'completed' || existing.status === 'refunded' || existing.refunded) {
+    if (existing.status === 'completed' || existing.status === 'refunded' || existing.status === 'expired' || existing.refunded) {
       const { data: current } = await supabase
         .from('number_orders')
         .select('*')
@@ -1003,17 +1004,21 @@ async function handleCheck(req, res) {
           });
           await fetch(`${BASE}?${cancelQs.toString()}`, { method: 'GET' });
         } catch (_) {}
-        newStatus = 'refunded';
+        newStatus = 'expired';
       }
     }
 
-    if (newStatus === 'refunded') {
-      const result = await refundOrderSilently(existing, user_id);
+    if (newStatus === 'refunded' || newStatus === 'expired') {
+      const result = await claimAndRefundOrder(existing, user_id, {
+        status: newStatus === 'expired' ? 'expired' : 'refunded',
+        subtitle: newStatus === 'expired' ? 'Expired — no SMS, balance restored' : 'No SMS — balance restored',
+        category: 'MJ SMS'
+      });
       return res.status(200).json({
         success: true,
         data: {
           order_id,
-          status: 'refunded',
+          status: newStatus === 'expired' ? 'expired' : 'refunded',
           number: existing.phone_number,
           code: null,
           created_at: existing.created_at,
@@ -1252,6 +1257,96 @@ async function handleCancel(req, res) {
 // DISPATCHER
 // ===========================================================================
 
+
+/**
+ * Background job: mark + refund Server 1 numbers past the 20-min window
+ * without requiring the customer to open the number page.
+ * Cron: GET /api/grizzly-sync?action=expire_stale
+ */
+async function handleExpireStale(req, res) {
+  const cronSecret = process.env.CRON_SECRET;
+  const authHeader = req.headers.authorization || '';
+  const isCron =
+    (cronSecret && authHeader === `Bearer ${cronSecret}`) ||
+    req.headers['x-vercel-cron'] === '1';
+
+  let scopeUserId = null; // null = all users (cron/admin)
+  if (!isCron) {
+    // Customer JWT: expire only their own stale orders (history / any page can trigger)
+    // Admin JWT: expire all
+    try {
+      const admin = await requireAdmin(req);
+      if (admin.ok) {
+        scopeUserId = null;
+      } else {
+        const token = (authHeader.match(/^Bearer\s+(.+)$/i) || [])[1];
+        if (!token) return res.status(401).json({ success: false, message: 'Unauthorized' });
+        const { data: { user }, error: authErr } = await supabase.auth.getUser(token);
+        if (authErr || !user) return res.status(401).json({ success: false, message: 'Unauthorized' });
+        scopeUserId = user.id;
+      }
+    } catch (_) {
+      return res.status(401).json({ success: false, message: 'Unauthorized' });
+    }
+  }
+
+  const cutoff = new Date(Date.now() - EXPIRY_MS).toISOString();
+  let q = supabase
+    .from('number_orders')
+    .select('id, user_id, order_id, price, status, refunded, created_at, phone_number, service_name, customer_id')
+    .eq('source', 'grizzlysms')
+    .eq('status', 'waiting_for_code')
+    .or('refunded.eq.false,refunded.is.null')
+    .lt('created_at', cutoff)
+    .order('created_at', { ascending: true })
+    .limit(80);
+  if (scopeUserId) q = q.eq('user_id', scopeUserId);
+  const { data: stale, error } = await q;
+
+  if (error) {
+    console.error('[grizzly expire_stale]', error.message);
+    return res.status(500).json({ success: false, message: error.message });
+  }
+
+  let expired = 0;
+  let skipped = 0;
+  for (const order of stale || []) {
+    try {
+      // Best-effort supplier cancel
+      if (GRIZZLY_KEY && order.order_id) {
+        try {
+          const cancelQs = new URLSearchParams({
+            api_key: GRIZZLY_KEY,
+            action: 'setStatus',
+            id: String(order.order_id),
+            status: '8'
+          });
+          await fetch(`${BASE}?${cancelQs.toString()}`, { method: 'GET' });
+        } catch (_) {}
+      }
+      const result = await claimAndRefundOrder(order, order.user_id, {
+        status: 'expired',
+        subtitle: 'Expired — no SMS, balance restored',
+        category: 'MJ SMS'
+      });
+      if (result.refunded) expired += 1;
+      else skipped += 1;
+    } catch (e) {
+      console.error('[grizzly expire_stale] order', order.id, e.message);
+      skipped += 1;
+    }
+  }
+
+  return res.status(200).json({
+    success: true,
+    scanned: (stale || []).length,
+    expired,
+    skipped,
+    cutoff
+  });
+}
+
+
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
@@ -1276,6 +1371,7 @@ export default async function handler(req, res) {
   if (req.method === 'POST') {
     if (action === 'order') return handleOrder(req, res);
     if (action === 'check') return handleCheck(req, res);
+    if (action === 'expire_stale' || action === 'expire-stale') return handleExpireStale(req, res);
     if (action === 'cancel') return handleCancel(req, res);
     return res.status(400).json({
       success: false,

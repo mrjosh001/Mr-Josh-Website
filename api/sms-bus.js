@@ -98,11 +98,12 @@ function busOk(data) {
  */
 async function claimAndRefundSmsBusOrder(order, userId, opts = {}) {
   if (!order || !order.id) return { refunded: false, reason: 'missing_order' };
-  if (order.refunded || order.status === 'refunded' || order.status === 'completed') {
+  if (order.refunded || ['refunded', 'completed', 'expired', 'cancelled', 'canceled'].includes(String(order.status || '').toLowerCase())) {
     return { refunded: false, reason: 'already_final' };
   }
 
   const subtitle = opts.subtitle || 'No SMS — balance restored';
+  const finalStatus = opts.status || 'refunded';
   // Only refund open orders (not completed with a code)
   if (order.status === 'completed' && order.code) {
     return { refunded: false, reason: 'already_final' };
@@ -110,12 +111,13 @@ async function claimAndRefundSmsBusOrder(order, userId, opts = {}) {
   const { data: claimed, error: claimErr } = await supabase
     .from('number_orders')
     .update({
-      status: 'refunded',
+      status: finalStatus,
       refunded: true,
       updated_at: new Date().toISOString()
     })
     .eq('id', order.id)
     .neq('status', 'completed')
+    .or('refunded.eq.false,refunded.is.null')
     .select('id, price')
     .maybeSingle();
 
@@ -388,6 +390,73 @@ async function markTxStatus(userId, orderId, phone, status) {
     });
     if (hit) await supabase.from('transactions').update({ status }).eq('id', hit.id);
   } catch (_) {}
+}
+
+
+
+/** Background / history: expire Server 2 OTP past window without opening number page. */
+async function handleExpireStaleSmsBus(req, res) {
+  const cronSecret = process.env.CRON_SECRET;
+  const authHeader = req.headers.authorization || '';
+  const isCron =
+    (cronSecret && authHeader === `Bearer ${cronSecret}`) ||
+    req.headers['x-vercel-cron'] === '1';
+
+  let scopeUserId = null;
+  if (!isCron) {
+    const auth = await requireAuth(req);
+    if (!auth.ok) return json(res, auth.status, { success: false, message: auth.message });
+    const { data: prof } = await supabase.from('profiles').select('is_admin').eq('id', auth.userId).maybeSingle();
+    if (prof?.is_admin) scopeUserId = null;
+    else scopeUserId = auth.userId;
+  }
+
+  const cutoff = new Date(Date.now() - SMSBUS_EXPIRY_MS).toISOString();
+  let q = supabase
+    .from('number_orders')
+    .select('id, user_id, order_id, price, status, refunded, created_at, phone_number, service_name, customer_id')
+    .eq('source', 'smsbus')
+    .eq('status', 'waiting_for_code')
+    .or('refunded.eq.false,refunded.is.null')
+    .lt('created_at', cutoff)
+    .order('created_at', { ascending: true })
+    .limit(80);
+  if (scopeUserId) q = q.eq('user_id', scopeUserId);
+  const { data: stale, error } = await q;
+
+  if (error) {
+    console.error('[smsbus expire_stale]', error.message);
+    return json(res, 500, { success: false, message: error.message });
+  }
+
+  let expired = 0;
+  let skipped = 0;
+  for (const order of stale || []) {
+    try {
+      if (order.order_id) {
+        try {
+          await smsbusGet(OTP_BASE, '/cancel', { request_id: String(order.order_id) });
+        } catch (_) {}
+      }
+      const result = await claimAndRefundSmsBusOrder(order, order.user_id, {
+        status: 'expired',
+        subtitle: 'Expired — no SMS, balance restored'
+      });
+      if (result.refunded) expired += 1;
+      else skipped += 1;
+    } catch (e) {
+      console.error('[smsbus expire_stale]', order.id, e.message);
+      skipped += 1;
+    }
+  }
+
+  return json(res, 200, {
+    success: true,
+    scanned: (stale || []).length,
+    expired,
+    skipped,
+    cutoff
+  });
 }
 
 
@@ -868,7 +937,8 @@ export default async function handler(req, res) {
       if (/released|timeout|50102/i.test(msg) || data.code === 50102) {
         // Supplier released — refund once if still open
         const refundResult = await claimAndRefundSmsBusOrder(order, auth.userId, {
-          subtitle: 'Expired — no SMS, balance restored'
+          subtitle: 'Expired — no SMS, balance restored',
+          status: 'expired'
         });
         if (refundResult.refunded) {
           return json(res, 200, {
@@ -895,7 +965,8 @@ export default async function handler(req, res) {
             await smsbusGet(OTP_BASE, '/cancel', { request_id: order_id });
           } catch (_) {}
           const refundResult = await claimAndRefundSmsBusOrder(order, auth.userId, {
-            subtitle: 'Expired — no SMS, balance restored'
+            subtitle: 'Expired — no SMS, balance restored',
+            status: 'expired'
           });
           if (refundResult.refunded) {
             return json(res, 200, {
@@ -1396,6 +1467,10 @@ export default async function handler(req, res) {
     }
 
     
+    if ((method === 'GET' || method === 'POST') && (action === 'expire_stale' || action === 'expire-stale')) {
+      return handleExpireStaleSmsBus(req, res);
+    }
+
     if ((method === 'GET' || method === 'POST') && action === 'sync') {
       const cronSecret = process.env.CRON_SECRET;
       const authHeader = req.headers.authorization || '';
@@ -1458,7 +1533,8 @@ export default async function handler(req, res) {
         'rent_prices',
         'rent_order',
         'rent_renew',
-        'sync'
+        'sync',
+        'expire_stale'
       ]
     });
   } catch (err) {
