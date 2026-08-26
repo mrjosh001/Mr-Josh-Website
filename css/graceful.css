@@ -87,3 +87,147 @@ html.reduce-motion *::after {
 body {
   font-family: "Plus Jakarta Sans", system-ui, -apple-system, "Segoe UI", Roboto, Ubuntu, Cantarell, "Noto Sans", sans-serif;
 }
+
+/* === from mj-motion.css (bundled so /css/graceful.css always ships polish) === */
+/**
+ * MJ Hub — light interaction polish (Apple-inspired, safe).
+ * No layout rewrites. Additive only. Safe to load on all customer pages.
+ */
+
+:root {
+  --mj-press-scale: 0.96;
+  --mj-press-ms: 90ms;
+  --mj-r-sm: 10px;
+  --mj-r-md: 14px;
+  --mj-r-lg: 20px;
+  --mj-r-xl: 24px;
+}
+
+/* Instant press feedback (pointer-down feel via :active) */
+button:not(:disabled):not([disabled]):active,
+a.btn:active,
+.btn:not(:disabled):active,
+[role="button"]:active,
+.product-card:active,
+.country-card:active,
+.service-card:active,
+.server-card:active,
+.chip:active,
+.tab:active,
+.pill-tab:active,
+.nav-item:active,
+.bottom-nav a:active,
+.dropdown-links li a:active,
+.quick-action:active,
+.action-btn:active,
+.card-btn:active {
+  transform: scale(var(--mj-press-scale));
+  transition: transform var(--mj-press-ms) ease-out, opacity var(--mj-press-ms) ease-out;
+}
+
+/* Avoid scaling structural chrome */
+.navbar:active,
+.bottom-nav:active,
+header:active,
+main:active,
+.sidebar:active,
+.panel:active {
+  transform: none !important;
+}
+
+/* Clear keyboard focus without changing mouse UI */
+button:focus-visible,
+a:focus-visible,
+[role="button"]:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  outline: 2px solid var(--primary, #3b82f6);
+  outline-offset: 2px;
+}
+
+/* Sheets: slightly smoother settle (only if they already animate) */
+.purchase-sheet,
+.sheet,
+.bottom-sheet,
+.modal-sheet {
+  will-change: transform;
+}
+
+/* Soften default sheet keyframes if present — do not redefine layout */
+@media (prefers-reduced-motion: no-preference) {
+  .purchase-sheet {
+    animation-timing-function: cubic-bezier(0.22, 1, 0.36, 1);
+  }
+}
+
+/* Continuous wait affordance (optional class for number pages) */
+.mj-wait-track {
+  height: 4px;
+  border-radius: 999px;
+  background: rgba(148, 163, 184, 0.25);
+  overflow: hidden;
+  margin: 10px 0 4px;
+}
+.mj-wait-bar {
+  height: 100%;
+  width: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, var(--primary, #3b82f6), var(--primary-strong, #2563eb));
+  transform-origin: left center;
+  transition: transform 1s linear;
+}
+
+/* Reduced motion: kill decorative motion, keep UI usable */
+@media (prefers-reduced-motion: reduce) {
+  .purchase-sheet,
+  .sheet,
+  .bottom-sheet,
+  .modal-sheet,
+  [class*="sheet"] {
+    animation: none !important;
+  }
+
+  button:not(:disabled):active,
+  a.btn:active,
+  .btn:active,
+  [role="button"]:active,
+  .product-card:active,
+  .country-card:active,
+  .service-card:active,
+  .server-card:active,
+  .chip:active,
+  .tab:active,
+  .nav-item:active,
+  .bottom-nav a:active {
+    transform: none !important;
+  }
+
+  .mj-wait-bar {
+    transition: none !important;
+  }
+}
+
+
+/* Stronger coverage for MJ Hub interactive rows */
+.balance-card:active,
+.stat-card:active,
+.menu-item:active,
+.list-item:active,
+.order-card:active,
+.sms-card:active,
+.server-option:active,
+.country-item:active,
+.service-item:active,
+.qty-btn:active,
+.btn-primary:active,
+.btn-ghost:active,
+.btn-sm-primary:active,
+button.btn-primary:active,
+a.hero-btn:active,
+.bottom-nav button:active,
+.bottom-nav .nav-link:active {
+  transform: scale(var(--mj-press-scale, 0.96));
+  transition: transform var(--mj-press-ms, 90ms) ease-out;
+  opacity: 0.92;
+}
