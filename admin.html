@@ -2310,6 +2310,7 @@ function renderSmsOrders(orders) {
  const statusBadge = (s) => {
  if (s === 'completed') return '<span class="badge badge-on">Completed</span>';
  if (s === 'waiting_for_code') return '<span class="badge" style="background:rgba(251,191,36,.15);color:#fbbf24;">Waiting</span>';
+    if (s === 'expired') return '<span class="badge badge-off">Expired</span>';
  return `<span class="badge badge-off">${escapeHtml(SMS_ORDER_STATUS_LABELS[s] || s || ' ')}</span>`;
  };
 

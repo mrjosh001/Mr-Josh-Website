@@ -91,7 +91,7 @@ const listEl=document.getElementById('list');
 let allOrders=[], view='otp', filter='all';
 function esc(s){if(!s)return'';return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;')}
 function money(n){return '₦'+Number(n||0).toLocaleString()}
-function bucket(status){const s=String(status||'').toLowerCase();if(s==='completed'||s==='success')return'completed';if(s==='refunded'||s==='cancelled'||s==='canceled')return'cancelled';if(s==='waiting_for_code'||s==='pending'||s==='waiting')return'waiting';return'other'}
+function bucket(status){const s=String(status||'').toLowerCase();if(s==='completed'||s==='success')return'completed';if(s==='expired')return'expired';if(s==='refunded'||s==='cancelled'||s==='canceled')return'cancelled';if(s==='waiting_for_code'||s==='pending'||s==='waiting')return'waiting';return'other'}
 function isRent(o){return String(o.source||'')==='smsbus_rent'||String(o.service_id||'')==='rent'||/rental/i.test(String(o.service_name||''))}
 function serverLabel(o){
   // Customer-facing labels only — never show supplier names
@@ -129,7 +129,7 @@ function render(){
     const date=o.created_at?new Date(o.created_at).toLocaleString():'—';
     const b=bucket(o.status);
     const pillCls=b==='completed'?'ok':b==='waiting'?'wait':b==='cancelled'?'bad':'muted';
-    const statusLabel=b==='completed'?(isRent(o)?'Active / completed':'Code received'):b==='waiting'?'Waiting for code':b==='cancelled'?'Cancelled':'—';
+    const statusLabel=b==='completed'?(isRent(o)?'Active / completed':'Code received'):b==='waiting'?'Waiting for code':b==='expired'?'Expired':b==='cancelled'?'Cancelled':'—';
     let action='';
     const src=String(o.source||'').toLowerCase();
     const isS2=src==='smsbus'||src==='sms-bus';
@@ -240,6 +240,14 @@ async function init(){
   const sb=window.supabase.createClient(SUPABASE_URL,SUPABASE_ANON_KEY,{auth:{persistSession:true,autoRefreshToken:true,storage:window.sessionStorage}});
   const {data:{session}}=await sb.auth.getSession();
   if(!session){location.href='auth.html';return}
+  // Expire past-window OTP on both servers before showing history
+  try {
+    const headers = { Authorization: 'Bearer ' + session.access_token };
+    await Promise.all([
+      fetch('/api/grizzly-sync?action=expire_stale', { headers }).catch(function(){ return null; }),
+      fetch('/api/sms-bus?action=expire_stale', { headers }).catch(function(){ return null; })
+    ]);
+  } catch (_) {}
   try{
     const res=await fetch('/api/order?action=my_orders',{headers:{Authorization:'Bearer '+session.access_token,Accept:'application/json'}});
     const json=await res.json().catch(function(){return {}});
