@@ -3614,9 +3614,13 @@ function openOrderModal(index) {
       ? 'Supplier raw (as received)'
       : `Supplier raw: all ${items.length} (as received)`,
     items
-      .map((it, idx) =>
-        formatLogBlock(it.login_credentials_raw || it.login_credentials, idx, items.length)
-      )
+      .map((it, idx) => {
+        const raw = String(it.login_credentials_raw || '').trim();
+        if (!raw) {
+          return formatLogBlock('(not stored — original supplier payload was not saved for this order)', idx, items.length);
+        }
+        return formatLogBlock(raw, idx, items.length);
+      })
       .join('\n\n'),
     true
   );
