@@ -300,6 +300,7 @@ let sbClient = null;
 let currentUserId = null;
 let currentBalanceNgn = 0;
 let isBuying = false;
+let purchaseNonce = null;
 let searchQuery = '';
 
 function setStatus(m){const s=document.getElementById('statusText');if(s)s.textContent=m}
@@ -572,6 +573,8 @@ renderProducts(getFilteredProducts());
 function openPurchaseModal(p){
 activeProduct=p;
 activeQty=1;
+isBuying=false;
+purchaseNonce='MJ-'+Date.now()+'-'+Math.random().toString(36).slice(2,9);
 const name=cleanText(p.name||'Product');
 const desc=getDisplayDescription(p) || 'No description';
 const price=parseFloat(p.price)||0;
@@ -648,33 +651,32 @@ activeQty++;updatePurchaseTotal();
 document.getElementById('psBuyBtn').addEventListener('click', confirmBuyNow);
 
 async function confirmBuyNow(){
+// Lock FIRST — before any await — so double/triple taps only run once
 if(!activeProduct || isBuying) return;
+isBuying = true;
 if(!currentUserId){
+isBuying = false;
 showToast('Please sign in to buy','error');
 setTimeout(function(){ window.location.href='auth.html'; }, 900);
 return;
 }
-// Capture the product now, while activeProduct is still set. closePurchaseModal()
-// (called below, after a successful order) resets the global activeProduct to
-// null — reading activeProduct again after that point was throwing
-// "null is not an object (evaluating 'p.name')" on every successful purchase,
-// which then got caught and shown to the customer as a false "Network error"
-// even though the order had already gone through and been paid for.
 const purchasedProduct = activeProduct;
+const qtyRequested = Math.max(1, Math.min(10, parseInt(activeQty, 10) || 1));
 const price = parseFloat(purchasedProduct.price)||0;
-const total = price * activeQty;
+const total = price * qtyRequested;
+const buyBtn = document.getElementById('psBuyBtn');
+const originalLabel = buyBtn ? buyBtn.innerHTML : '';
+if(buyBtn){ buyBtn.disabled = true; buyBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Processing...'; }
+// One stable id for this modal session — retries reuse it; second click does not create a new order
+if(!purchaseNonce) purchaseNonce = 'MJ-'+Date.now()+'-'+Math.random().toString(36).slice(2,9);
+const externalOrderId = purchaseNonce;
+try{
 await refreshBalance();
 if(currentBalanceNgn < total){
 showToast('Insufficient balance. Redirecting to deposit...','error');
 setTimeout(function(){ window.location.href='dashboard.html#deposit'; }, 900);
 return;
 }
-const buyBtn = document.getElementById('psBuyBtn');
-isBuying = true;
-buyBtn.disabled = true;
-const originalLabel = buyBtn.innerHTML;
-buyBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Processing...';
-try{
 const productSource = purchasedProduct.source
 || (String(purchasedProduct.product_key || '').startsWith('ld_') ? 'logsdomain'
 : String(purchasedProduct.product_key || '').startsWith('manual_') ? 'manual'
@@ -694,9 +696,9 @@ method: 'POST',
 headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + orderToken },
 body: JSON.stringify({
 product_key: purchasedProduct.product_key,
-quantity: activeQty,
+quantity: qtyRequested,
 user_id: currentUserId,
-external_order_id: 'MJ-' + Date.now() + '-' + Math.random().toString(36).slice(2, 7)
+external_order_id: externalOrderId
 })
 });
 const data = await res.json();
@@ -711,7 +713,7 @@ const items = (data.data && data.data.items) ? data.data.items : [];
 var creds = (data.data && data.data.login_credentials) || items.map(function(it){ return it.details; }).filter(Boolean).join('\n\n') || 'Delivered — see My Orders for details';
 creds = formatReceiptCredentials(creds);
 const desc = getDisplayDescription(purchasedProduct);
-const purchasedQty = activeQty;
+const purchasedQty = qtyRequested;
 closePurchaseModal();
 openReceiptModal(purchasedProduct, desc, creds, purchasedQty, data.data && data.data.order_id);
 showToast('Purchase successful!','success');
@@ -719,12 +721,12 @@ showToast('Purchase successful!','success');
 const stock = parseInt(purchasedProduct.stock_quantity,10);
 if(!Number.isNaN(stock)) purchasedProduct.stock_quantity = Math.max(0, stock - purchasedQty);
 renderProducts(getFilteredProducts());
+if(data.success){ purchaseNonce = null; }
 }catch(err){
 showToast('Network error: '+(err.message||err), 'error');
 }finally{
 isBuying = false;
-buyBtn.disabled = false;
-buyBtn.innerHTML = originalLabel;
+if(buyBtn){ buyBtn.disabled = false; buyBtn.innerHTML = originalLabel; }
 }
 }
 
