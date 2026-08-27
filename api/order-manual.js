@@ -205,7 +205,7 @@ export default async function handler(req, res) {
 
     const { data: profile, error: profileErr } = await supabase
       .from('profiles')
-      .select('balance, customer_id')
+      .select('customer_id')
       .eq('id', user_id)
       .single();
 
@@ -213,28 +213,33 @@ export default async function handler(req, res) {
       return res.status(400).json({ success: false, message: 'User profile not found' });
     }
 
-    balanceColumn = 'balance';
-    originalBalance = Number(profile.balance || 0);
     customerId = profile.customer_id;
 
-    if (originalBalance < total) {
+    // Atomic check-and-debit: the database re-verifies balance at write
+    // time under a row lock, so two near-simultaneous requests (e.g. a
+    // double-click) can't both read the same starting balance and both
+    // succeed — the second one correctly sees the already-reduced balance
+    // and fails with insufficient funds instead of silently overcharging.
+    const { data: debitResult, error: debitRpcErr } = await supabase
+      .rpc('debit_balance_if_sufficient', { p_user_id: user_id, p_amount: total })
+      .single();
+
+    if (debitRpcErr) {
+      return res.status(500).json({ success: false, message: 'Could not debit your balance. Please try again.' });
+    }
+
+    if (!debitResult || !debitResult.success) {
       return res.status(402).json({
         success: false,
         message: 'Insufficient balance',
         required: total,
-        available: originalBalance
+        available: debitResult ? Number(debitResult.new_balance || 0) : 0
       });
     }
 
-    const newBalance = originalBalance - total;
-    const { error: deductErr } = await supabase
-      .from('profiles')
-      .update({ [balanceColumn]: newBalance })
-      .eq('id', user_id);
-
-    if (deductErr) {
-      return res.status(500).json({ success: false, message: 'Could not debit your balance. Please try again.' });
-    }
+    originalBalance = Number(debitResult.new_balance) + total;
+    const newBalance = Number(debitResult.new_balance);
+    balanceColumn = 'balance';
     deducted = true;
 
     const orderRef = external_order_id || `MJ-MAN-${String(user_id).slice(0, 8)}-${Date.now()}`;
@@ -244,7 +249,7 @@ export default async function handler(req, res) {
 
     if (isShared) {
       if (!sharedCred) {
-        await supabase.from('profiles').update({ [balanceColumn]: originalBalance }).eq('id', user_id);
+        await supabase.rpc('credit_balance', { p_user_id: user_id, p_amount: total });
         deducted = false;
         return res.status(400).json({
           success: false,
@@ -263,7 +268,7 @@ export default async function handler(req, res) {
     if (claimedRows.length < qty) {
       if (!isShared) await releaseClaims(claimedRows);
       claimedRows = [];
-      await supabase.from('profiles').update({ [balanceColumn]: originalBalance }).eq('id', user_id);
+      await supabase.rpc('credit_balance', { p_user_id: user_id, p_amount: total });
       if (!isShared) await syncStockCount(product_key);
 
       await supabase.from('transactions').insert({
@@ -388,7 +393,7 @@ export default async function handler(req, res) {
     try {
       if (claimedRows.length) await releaseClaims(claimedRows);
       if (deducted) {
-        await supabase.from('profiles').update({ [balanceColumn]: originalBalance }).eq('id', user_id);
+        await supabase.rpc('credit_balance', { p_user_id: user_id, p_amount: total });
         await supabase.from('transactions').insert({
           user_id,
           customer_id: customerId,
