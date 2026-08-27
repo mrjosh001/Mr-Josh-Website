@@ -597,6 +597,22 @@ async function handleFaddedSync(req, res) {
 }
 
 // ===== Order + my_orders dispatcher =====
+
+/** Idempotency: same external_order_id for same user → return existing order, no second charge/delivery */
+async function findExistingLogOrder(userId, orderRef) {
+  if (!orderRef || !userId) return null;
+  try {
+    const { data } = await supabase
+      .from('orders')
+      .select('order_id, product_name, quantity, amount, status, login_credentials, supplier_ref, created_at')
+      .eq('order_id', String(orderRef))
+      .eq('user_id', userId)
+      .maybeSingle();
+    if (data && String(data.status || '').toLowerCase() !== 'failed') return data;
+  } catch (_) {}
+  return null;
+}
+
 export default async function handler(req, res) {
   applyApiCors(req, res, { methods: 'GET, POST, OPTIONS' });
   setNoStore(res);
@@ -688,6 +704,26 @@ export default async function handler(req, res) {
   let productName = '';
   let customerId = null;
   let deducted = false;
+    // Idempotency: duplicate click with same external_order_id
+    if (external_order_id) {
+      const existing = await findExistingLogOrder(user_id, external_order_id);
+      if (existing) {
+        const { data: balRow } = await supabase.from('profiles').select('balance').eq('id', user_id).maybeSingle();
+        return res.status(200).json({
+          success: true,
+          replayed: true,
+          message: 'Order already completed',
+          data: {
+            order_id: existing.order_id,
+            login_credentials: existing.login_credentials,
+            items: existing.login_credentials ? [{ details: existing.login_credentials }] : [],
+            quantity: existing.quantity,
+            new_balance: Number(balRow?.balance || 0)
+          }
+        });
+      }
+    }
+
 
   try {
     // -------------------------------------------------
