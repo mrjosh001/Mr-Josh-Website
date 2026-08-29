@@ -109,6 +109,19 @@ async function claimAndRefundSmsBusOrder(order, userId, opts = {}) {
     return { refunded: false, reason: 'already_final' };
   }
   async function tryClaim(statusValue) {
+    // BUG FIX (was the root cause of a 27x duplicate refund incident):
+    // this only excluded status='completed', not status='refunded' — so
+    // once the FIRST call successfully refunded an order (setting its
+    // status to 'refunded'), that row still matched .neq('status',
+    // 'completed') and could be refunded again by every subsequent call,
+    // unlimited times. Repeated/rapid retries (e.g. a user tapping Cancel
+    // many times while seeing errors) each independently won this "atomic"
+    // claim because it was never actually excluding already-refunded rows
+    // at the database level — only via a single in-memory check up top,
+    // which isn't reliable under concurrent or rapid-fire requests. Adding
+    // .eq('refunded', false) here means the database itself only lets ONE
+    // of any number of simultaneous/rapid calls actually win this update —
+    // every other one matches zero rows and returns claimed=null below.
     return supabase
       .from('number_orders')
       .update({
@@ -117,6 +130,7 @@ async function claimAndRefundSmsBusOrder(order, userId, opts = {}) {
         updated_at: new Date().toISOString()
       })
       .eq('id', order.id)
+      .eq('refunded', false)
       .neq('status', 'completed')
       .select('id, price')
       .maybeSingle();
