@@ -131,7 +131,7 @@ async function claimAndRefundSmsBusOrder(order, userId, opts = {}) {
       })
       .eq('id', order.id)
       .eq('refunded', false)
-      .neq('status', 'completed')
+      .in('status', ['waiting_for_code', 'pending', 'active', 'waiting', 'processing'])
       .select('id, price')
       .maybeSingle();
   }
@@ -153,24 +153,37 @@ async function claimAndRefundSmsBusOrder(order, userId, opts = {}) {
   const refundAmount = Number(order.price != null ? order.price : claimed.price) || 0;
   let newBalance = null;
   if (refundAmount > 0) {
-    const { data: profile } = await supabase.from('profiles').select('balance, customer_id').eq('id', userId).single();
-    if (profile) {
-      newBalance = Number(profile.balance || 0) + refundAmount;
-      await supabase.from('profiles').update({ balance: newBalance }).eq('id', userId);
-      try {
-        await supabase.from('transactions').insert({
-          user_id: userId,
-          customer_id: profile.customer_id || order.customer_id,
-          type: 'refund',
-          category: 'MJ SMS',
-          title: 'SMS cancel refund',
-          subtitle: subtitle,
-          amount: `₦${refundAmount.toLocaleString()}`,
-          amount_ngn: refundAmount,
-          status: 'refunded'
-        });
-      } catch (_) {}
+    const { data: credited, error: credErr } = await supabase.rpc('credit_balance', {
+      p_user_id: userId,
+      p_amount: refundAmount
+    });
+    if (credErr) {
+      console.error('[smsbus claimAndRefund] credit_balance', credErr.message);
+      const { data: profileFb } = await supabase.from('profiles').select('balance, customer_id').eq('id', userId).maybeSingle();
+      if (profileFb) {
+        newBalance = Number(profileFb.balance || 0) + refundAmount;
+        await supabase.from('profiles').update({ balance: newBalance }).eq('id', userId);
+      }
+    } else if (credited != null && typeof credited === 'object' && credited.new_balance != null) {
+      newBalance = Number(credited.new_balance);
+    } else if (typeof credited === 'number') {
+      newBalance = credited;
     }
+    const { data: profile } = await supabase.from('profiles').select('customer_id, balance').eq('id', userId).maybeSingle();
+    if (newBalance == null && profile) newBalance = Number(profile.balance || 0);
+    try {
+      await supabase.from('transactions').insert({
+        user_id: userId,
+        customer_id: (profile && profile.customer_id) || order.customer_id,
+        type: 'refund',
+        category: 'MJ SMS',
+        title: 'SMS cancel refund',
+        subtitle: subtitle,
+        amount: `₦${refundAmount.toLocaleString()}`,
+        amount_ngn: refundAmount,
+        status: 'refunded'
+      });
+    } catch (_) {}
   }
   try {
     await markTxStatus(userId, order.order_id, order.phone_number, 'cancelled');
@@ -441,8 +454,16 @@ async function reclaimAndCompleteSmsBus(order, userId, code) {
       .eq('id', userId)
       .single();
     if (profile) {
-      newBalance = Number(profile.balance || 0) - price;
-      await supabase.from('profiles').update({ balance: newBalance }).eq('id', userId);
+      const { data: debited, error: debErr } = await supabase.rpc('debit_balance_if_sufficient', {
+        p_user_id: userId,
+        p_amount: price
+      });
+      if (debErr) {
+        newBalance = Number(profile.balance || 0) - price;
+        await supabase.from('profiles').update({ balance: newBalance }).eq('id', userId);
+      } else if (typeof debited === 'number') newBalance = debited;
+      else if (debited && debited.new_balance != null) newBalance = Number(debited.new_balance);
+      else newBalance = Number(profile.balance || 0) - price;
       try {
         await supabase.from('transactions').insert({
           user_id: userId,
