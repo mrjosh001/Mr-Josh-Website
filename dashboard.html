@@ -1671,6 +1671,7 @@ body::after {
 .badge-status { padding: 4px 9px; border-radius: 8px; font-size: 11px; font-weight: 700; }
 .badge-success { background: rgba(52,211,153,0.12); color: var(--success); }
 .badge-pending { background: rgba(251,191,36,0.12); color: var(--warning); }
+.badge-danger { background: rgba(239,68,68,0.14); color: #ef4444; }
 .empty-text { text-align: center; color: var(--muted); padding: 28px 0; font-size: 13px; }
 .cart-summary-box {
     background: var(--bg); border: 1px solid var(--border); border-radius: 16px;
@@ -4756,7 +4757,7 @@ function renderRecentActivity() {
             </div>
             <div class="transaction-right">
                 <div class="transaction-amount">${escapeHtml(tx.amount)}</div>
-                <span class="badge-status badge-success">${tx.status}</span>
+                <span class="badge-status ${['failed','expired','cancelled','canceled','refunded'].includes(String(tx.status||'').toLowerCase()) ? 'badge-danger' : (['pending','waiting'].includes(String(tx.status||'').toLowerCase()) ? 'badge-pending' : 'badge-success')}">${escapeHtml(tx.status || '')}</span>
             </div>
         </div>`).join('');
 }
@@ -6437,7 +6438,7 @@ function renderHistoryList(filterType = 'all') {
         const st = String(t.status || 'Success').toLowerCase().replace('completed', 'success');
         let badgeClass = 'badge-success';
         if (st === 'pending' || st === 'waiting') badgeClass = 'badge-pending';
-        else if (st === 'failed' || st === 'expired' || st === 'cancelled') badgeClass = 'badge-danger';
+        else if (st === 'failed' || st === 'expired' || st === 'cancelled' || st === 'canceled' || st === 'refunded') badgeClass = 'badge-danger';
 
         return `
         <div class="transaction-card">
