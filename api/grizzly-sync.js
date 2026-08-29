@@ -809,7 +809,8 @@ async function claimAndRefundOrder(order, userId, opts = {}) {
         updated_at: new Date().toISOString()
       })
       .eq('id', order.id)
-      .neq('status', 'completed')
+      .eq('refunded', false)
+      .in('status', ['waiting_for_code', 'pending', 'active', 'waiting', 'processing'])
       .select('id, price, status, refunded')
       .maybeSingle();
   }
@@ -837,23 +838,29 @@ async function claimAndRefundOrder(order, userId, opts = {}) {
   let newBalance = null;
 
   if (refundAmount > 0) {
-    const { data: profile, error: profErr } = await supabase
-      .from('profiles')
-      .select('balance')
-      .eq('id', userId)
-      .single();
-    if (profErr) {
-      console.error('[claimAndRefundOrder] profile read failed', profErr);
-    } else if (profile) {
-      newBalance = Number(profile.balance || 0) + refundAmount;
-      const { error: balErr } = await supabase
+    const { data: credited, error: credErr } = await supabase.rpc('credit_balance', {
+      p_user_id: userId,
+      p_amount: refundAmount
+    });
+    if (credErr) {
+      console.error('[claimAndRefundOrder] credit_balance', credErr.message);
+      const { data: profile, error: profErr } = await supabase
         .from('profiles')
-        .update({ balance: newBalance })
-        .eq('id', userId);
-      if (balErr) {
-        console.error('[claimAndRefundOrder] balance credit failed', balErr);
-        // Order already marked refunded — log for manual fix; do not retry credit here
+        .select('balance')
+        .eq('id', userId)
+        .single();
+      if (!profErr && profile) {
+        newBalance = Number(profile.balance || 0) + refundAmount;
+        const { error: balErr } = await supabase
+          .from('profiles')
+          .update({ balance: newBalance })
+          .eq('id', userId);
+        if (balErr) console.error('[claimAndRefundOrder] balance credit failed', balErr);
       }
+    } else if (credited != null && typeof credited === 'object' && credited.new_balance != null) {
+      newBalance = Number(credited.new_balance);
+    } else if (typeof credited === 'number') {
+      newBalance = credited;
     }
   }
 
@@ -937,8 +944,16 @@ async function reclaimAndCompleteOnCode(order, userId, code) {
       .eq('id', userId)
       .single();
     if (profile) {
-      newBalance = Number(profile.balance || 0) - price;
-      await supabase.from('profiles').update({ balance: newBalance }).eq('id', userId);
+      const { data: debited, error: debErr } = await supabase.rpc('debit_balance_if_sufficient', {
+        p_user_id: userId,
+        p_amount: price
+      });
+      if (debErr) {
+        newBalance = Number(profile.balance || 0) - price;
+        await supabase.from('profiles').update({ balance: newBalance }).eq('id', userId);
+      } else if (typeof debited === 'number') newBalance = debited;
+      else if (debited && debited.new_balance != null) newBalance = Number(debited.new_balance);
+      else newBalance = Number(profile.balance || 0) - price;
       try {
         await supabase.from('transactions').insert({
           user_id: userId,
