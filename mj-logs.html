@@ -552,14 +552,23 @@ html+='</div></div>';
 });
 html+='</div>';
 productGrid.innerHTML=html;
-const list=products;
-document.querySelectorAll('.btn[data-action]').forEach(btn=>{
-btn.addEventListener('click',function(){
-const p=list[Number(this.dataset.index)]; if(!p) return;
-if(this.dataset.action==='cart') addToCart(p);
-else openPurchaseModal(p);
+window._logsVisibleList = products;
+if(!productGrid._buyBound){
+productGrid._buyBound = true;
+productGrid.addEventListener('click', function(e){
+const btn = e.target.closest('[data-action]');
+if(!btn || !productGrid.contains(btn)) return;
+e.preventDefault();
+const list = window._logsVisibleList || [];
+const p = list[Number(btn.getAttribute('data-index'))];
+if(!p) return;
+if(btn.getAttribute('data-action')==='cart') addToCart(p);
+else {
+  try { openPurchaseModal(p); }
+  catch(err){ console.error(err); showToast('Could not open purchase: '+(err.message||err),'error'); }
+}
 });
-});
+}
 }
 
 categoryFilter.addEventListener('change',()=>{
@@ -675,6 +684,9 @@ function bindRulesAck(){
 }
 
 function openPurchaseModal(p){
+if(!p){ showToast('Product not found','error'); return; }
+const modal=document.getElementById('purchaseModal');
+if(!modal){ showToast('Purchase window missing. Refresh the page.','error'); return; }
 activeProduct=p;
 activeQty=1;
 isBuying=false;
