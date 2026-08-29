@@ -667,7 +667,7 @@ function productSkipsRules(p){
 
 function bindRulesAck(){
   const toggle = document.getElementById('psRulesToggle');
-  const wrap = document.getElementById('psRulesWrap');
+  const rulesWrap = document.getElementById('psRulesWrap');
   if (toggle && wrap && !toggle._bound){
     toggle._bound = true;
     toggle.onclick = function(){ wrap.classList.toggle('open'); };
@@ -717,13 +717,13 @@ const wrap=document.getElementById('psFormatWrap');
 if(format){wrap.style.display='block';document.getElementById('psFormat').textContent=format}
 else{wrap.style.display='none'}
 updatePurchaseTotal();
-const wrap = document.getElementById('psRulesWrap');
+const rulesWrap = document.getElementById('psRulesWrap');
 const ack = document.getElementById('psRulesAck');
 if (productSkipsRules(p)){
-  if (wrap) wrap.style.display = 'none';
+  if (rulesWrap) rulesWrap.style.display = 'none';
   if (ack) ack.checked = true;
 } else {
-  if (wrap){ wrap.style.display = 'block'; wrap.classList.remove('open'); }
+  if (rulesWrap){ rulesWrap.style.display = 'block'; rulesWrap.classList.remove('open'); }
   const rules = rulesForProduct(p);
   const rulesTitle = document.getElementById('psRulesTitle');
   if (rulesTitle) rulesTitle.innerHTML = '<i class="fa-solid fa-book"></i> '+rules.title;
