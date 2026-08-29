@@ -483,6 +483,7 @@ if(error){showError('Database error: '+error.message);return}
 if(!products||!products.length){
 productGrid.innerHTML='<div class="empty-state"><div class="empty-state-icon">📦</div><h4>No Products</h4><p>Check back later</p></div>';
 categoryFilter.innerHTML='<option value="all">No categories</option>';
+if (productGrid) productGrid.dataset.skelReady = '1';
 return;
 }
 allProducts = products;
@@ -493,6 +494,7 @@ const count=products.filter(p=>(p.category||'').trim()===cat).length;
 const opt=document.createElement('option');opt.value=cat;opt.textContent=cat+' ('+count+')';categoryFilter.appendChild(opt);
 });
 renderProducts(getFilteredProducts());
+if (productGrid) productGrid.dataset.skelReady = '1';
 }catch(err){showError('Unexpected error: '+(err.message||err))}
 }
 
@@ -966,15 +968,13 @@ loadProducts();
     var nodes = document.querySelectorAll('[data-skel], #productGrid, #list, #catalog, #servicesGrid, #productsGrid, #orderList');
     nodes.forEach(function(el){
       if(el.dataset.skelReady) return;
+      if(el.querySelector('.product-card, .empty-state')) { el.dataset.skelReady = '1'; return; }
       var type = el.getAttribute('data-skel') || (el.id && /list|order/i.test(el.id) ? 'cards' : 'grid');
       el.innerHTML = (mjSkeleton[type] || mjSkeleton.grid)(type === 'cards' ? 3 : 6);
-      el.dataset.skelReady = '1';
     });
   }
   if(document.readyState === 'loading') document.addEventListener('DOMContentLoaded', paint);
   else paint();
-  // retry once scripts loaded
-  setTimeout(paint, 50);
 })();
 </script>
 
