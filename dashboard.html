@@ -1673,6 +1673,9 @@ body::after {
 .badge-pending { background: rgba(251,191,36,0.12); color: var(--warning); }
 .badge-danger { background: rgba(239,68,68,0.14); color: #ef4444; }
 .empty-text { text-align: center; color: var(--muted); padding: 28px 0; font-size: 13px; }
+.cart-qty{display:inline-flex;align-items:center;gap:6px}
+.cart-qty button{width:28px;height:28px;border-radius:8px;border:1px solid var(--border);background:var(--card);color:var(--text);font-weight:800;cursor:pointer}
+.cart-qty span{min-width:18px;text-align:center;font-weight:800;font-size:13px}
 .cart-summary-box {
     background: var(--bg); border: 1px solid var(--border); border-radius: 16px;
     padding: 16px; margin-top: 16px; display: flex; justify-content: space-between; align-items: center;
@@ -3181,15 +3184,20 @@ body::after {
 
 <section id="cart" class="app-section">
         <div class="content-card">
+            <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;flex-wrap:wrap;">
+            <div>
             <h2>Shopping Cart</h2>
-            <p class="helper-text">Review your items before checkout.</p>
+            <p class="helper-text">Review your items before checkout. Set quantity on each log.</p>
+            </div>
+            <button type="button" class="btn-danger" id="clearCartBtn" style="padding:8px 12px;font-size:12px;display:none;" onclick="clearCart()">Remove all</button>
+            </div>
             <div class="table-responsive">
                 <table class="history-table">
                     <thead>
-                        <tr><th>Item</th><th>Type</th><th>Price</th><th>Action</th></tr>
+                        <tr><th>Item</th><th>Type</th><th>Qty</th><th>Price</th><th>Action</th></tr>
                     </thead>
                     <tbody id="cartTableBody">
-                        <tr><td colspan="4" class="empty-text">Cart is empty.</td></tr>
+                        <tr><td colspan="5" class="empty-text">Cart is empty.</td></tr>
                     </tbody>
                 </table>
             </div>
@@ -5844,9 +5852,33 @@ window.commitSwapTransaction = async function() {
     }
 };
 
+function cartUnitPrice(item){
+    const q = Math.max(1, parseInt(item && item.quantity, 10) || 1);
+    if (item && item.unit_price != null && item.unit_price !== '') return Number(item.unit_price) || 0;
+    const p = Number(item && item.price) || 0;
+    return q > 1 ? p / q : p;
+}
+function cartLineTotal(item){
+    const q = Math.max(1, parseInt(item && item.quantity, 10) || 1);
+    return cartUnitPrice(item) * q;
+}
+function normalizeCartItems(){
+    cartItems = (cartItems || []).map(function(item){
+        const q = Math.max(1, parseInt(item.quantity, 10) || 1);
+        const unit = cartUnitPrice(item);
+        return Object.assign({}, item, { quantity: q, unit_price: unit, price: unit });
+    });
+}
+
 window.addToCart = function(title, price, type, subtitle) {
-    if (cartItems.find(i => i.title === title)) return showToast(`Already in cart`, 'warning');
-    cartItems.push({ title, price, type, subtitle });
+    const hit = cartItems.find(i => i.title === title);
+    if (hit) {
+        hit.quantity = Math.max(1, parseInt(hit.quantity, 10) || 1) + 1;
+        saveCart();
+        updateCartDisplay();
+        return showToast('Quantity updated', 'success');
+    }
+    cartItems.push({ title, price, unit_price: Number(price)||0, quantity: 1, type, subtitle });
     saveCart();
     updateCartDisplay();
     showToast(`Added to cart!`, 'success');
@@ -5859,22 +5891,53 @@ window.removeFromCart = function(i) {
     showToast('Removed', 'info');
 };
 
+window.changeCartQty = function(i, delta){
+    const item = cartItems[i];
+    if (!item) return;
+    const next = Math.max(1, Math.min(10, (parseInt(item.quantity, 10) || 1) + delta));
+    item.quantity = next;
+    saveCart();
+    updateCartDisplay();
+};
+
+window.clearCart = function(){
+    if (!cartItems.length) return;
+    cartItems = [];
+    saveCart();
+    updateCartDisplay();
+    showToast('Cart cleared', 'info');
+};
+
 function updateCartDisplay() {
     const tbody = document.getElementById('cartTableBody');
     const total = document.getElementById('cartTotalDisplay');
+    const clearBtn = document.getElementById('clearCartBtn');
     if (!tbody) return;
+    normalizeCartItems();
+    if (clearBtn) clearBtn.style.display = cartItems.length ? 'inline-flex' : 'none';
     if (cartItems.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="4" class="empty-text">Cart is empty.</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="5" class="empty-text">Cart is empty.</td></tr>`;
         if (total) total.textContent = '₦0.00';
         return;
     }
     let sum = 0;
     tbody.innerHTML = cartItems.map((item, i) => {
-        sum += item.price;
+        const qty = Math.max(1, parseInt(item.quantity, 10) || 1);
+        const unit = cartUnitPrice(item);
+        const line = unit * qty;
+        sum += line;
+        const typ = String(item.type || 'log').toUpperCase();
         return `<tr>
             <td><strong>${escapeHtml(item.title)}</strong><br><span style="font-size:11px;color:var(--text-muted);">${escapeHtml(item.subtitle || '')}</span></td>
-            <td><span class="badge-status badge-pending">${item.type.toUpperCase()}</span></td>
-            <td>₦${item.price.toLocaleString()}</td>
+            <td><span class="badge-status badge-pending">${escapeHtml(typ)}</span></td>
+            <td>
+              <div class="cart-qty">
+                <button type="button" onclick="changeCartQty(${i},-1)">−</button>
+                <span>${qty}</span>
+                <button type="button" onclick="changeCartQty(${i},1)">+</button>
+              </div>
+            </td>
+            <td>₦${line.toLocaleString()}</td>
             <td><button class="btn-danger" style="padding:4px 8px;font-size:11px;" onclick="removeFromCart(${i})">Remove</button></td>
         </tr>`;
     }).join('');
@@ -5885,7 +5948,7 @@ window.openCheckoutConfirm = function() {
     if (cartItems.length === 0) return showToast('Cart is empty', 'warning');
     if (!currentUserId) return showToast('Please sign in to checkout', 'error');
 
-    const total = cartItems.reduce((a, i) => a + Number(i.price || 0), 0);
+    const total = cartItems.reduce((a, i) => a + cartLineTotal(i), 0);
     if (currentBalanceNgn < total) {
         showToast('Insufficient balance. Please fund wallet.', 'error');
         return location.href='deposit.html';
@@ -5924,7 +5987,7 @@ window.checkoutCart = async function() {
     return;
   }
 
-  const total = cartItems.reduce((a, i) => a + Number(i.price || 0), 0);
+  const total = cartItems.reduce((a, i) => a + cartLineTotal(i), 0);
   if (currentBalanceNgn < total) {
     showToast('Insufficient balance. Please fund wallet.', 'error');
     return location.href='deposit.html';
