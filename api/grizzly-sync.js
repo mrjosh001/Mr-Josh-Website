@@ -868,7 +868,7 @@ async function claimAndRefundOrder(order, userId, opts = {}) {
     let q = supabase
       .from('transactions')
       .update({
-        status: 'cancelled',
+        status: (String(finalStatus).toLowerCase() === 'expired' ? 'expired' : 'cancelled'),
         subtitle,
         ...(notes ? { notes } : {})
       })
@@ -1491,7 +1491,6 @@ async function handleExpireStale(req, res) {
   let q = supabase
     .from('number_orders')
     .select('id, user_id, order_id, price, status, refunded, created_at, phone_number, service_name, customer_id')
-    .eq('source', 'grizzlysms')
     .eq('status', 'waiting_for_code')
     .lt('created_at', cutoff)
     .order('created_at', { ascending: true })
@@ -1504,8 +1503,12 @@ async function handleExpireStale(req, res) {
     return res.status(500).json({ success: false, message: error.message });
   }
 
-  const stale = (rows || []).filter((o) => o.refunded !== true);
-  let expired = 0;
+    const stale = (rows || []).filter((o) => {
+    if (o.refunded === true) return false;
+    const src = String(o.source || '').toLowerCase();
+    if (src === 'smsbus' || src === 'smsbus_rent') return false;
+    return true;
+  }); let expired = 0;
   let skipped = 0;
   for (const order of stale) {
     try {
