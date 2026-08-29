@@ -118,12 +118,15 @@ details[open] .product-description-toggle::before{transform:rotate(90deg);displa
 .ps-total-label{font-size:14px;font-weight:700;color:#4338ca}
 .ps-total-price{font-size:18px;font-weight:800;color:#312e81}
 
-.ps-rules{background:#eef3ff;border:1px solid #c7d7fe;border-radius:14px;padding:14px 14px 12px;margin:0 0 12px;text-align:left;color:#0f172a}
-.ps-rules-title{font-size:12px;font-weight:800;letter-spacing:.04em;text-transform:uppercase;color:#2563eb;margin-bottom:8px;display:flex;align-items:center;gap:8px}
+.ps-rules{background:#eef3ff;border:1px solid #c7d7fe;border-radius:14px;padding:0;margin:0 0 12px;text-align:left;color:#0f172a;overflow:hidden}
+.ps-rules-toggle{width:100%;border:none;background:transparent;padding:14px;display:flex;align-items:center;justify-content:space-between;gap:10px;cursor:pointer;font-family:inherit;color:#2563eb;font-size:12px;font-weight:800;letter-spacing:.04em;text-transform:uppercase}
+.ps-rules-toggle i.chev{transition:transform .2s}
+.ps-rules.open .ps-rules-toggle i.chev{transform:rotate(180deg)}
+.ps-rules-panel{display:none;padding:0 14px 14px}
+.ps-rules.open .ps-rules-panel{display:block}
 .ps-rules-body{font-size:13px;line-height:1.6;color:#0f172a !important;white-space:pre-wrap}
 .ps-rules-check{display:flex;align-items:flex-start;gap:10px;margin:12px 0 0;font-size:13px;font-weight:650;color:#0f172a !important}
 .ps-rules-check input{margin-top:3px;accent-color:#2563eb;width:16px;height:16px;flex-shrink:0}
-.ps-buy:disabled{opacity:.45;cursor:not-allowed}
 .ps-buy{width:100%;border:none;border-radius:14px;padding:15px;font-size:15px;font-weight:800;color:#fff;cursor:pointer;font-family:inherit;background:linear-gradient(135deg,#4f46e5,#2563eb);display:flex;align-items:center;justify-content:center;gap:8px}
 .ps-buy:disabled{opacity:.5;cursor:not-allowed}
 
@@ -252,9 +255,11 @@ details[open] .product-description-toggle::before{transform:rotate(90deg);displa
 </div>
 
 <div class="ps-rules" id="psRulesWrap">
-<div class="ps-rules-title"><i class="fa-solid fa-book"></i> Read before you buy</div>
+<button type="button" class="ps-rules-toggle" id="psRulesToggle"><span id="psRulesTitle"><i class="fa-solid fa-book"></i> Read rules</span><i class="fa-solid fa-chevron-down chev"></i></button>
+<div class="ps-rules-panel">
 <div class="ps-rules-body" id="psRulesBody"></div>
 <label class="ps-rules-check"><input type="checkbox" id="psRulesAck"> I have read these rules and I am ready to log in the right way</label>
+</div>
 </div>
 <button type="button" class="ps-buy" id="psBuyBtn"><i class="fa-solid fa-cart-shopping"></i> Confirm Purchase</button>
 </div>
@@ -486,6 +491,7 @@ const count=products.filter(p=>(p.category||'').trim()===cat).length;
 const opt=document.createElement('option');opt.value=cat;opt.textContent=cat+' ('+count+')';categoryFilter.appendChild(opt);
 });
 renderProducts(getFilteredProducts());
+if (productGrid) productGrid.dataset.skelReady = '1';
 }catch(err){showError('Unexpected error: '+(err.message||err))}
 }
 
@@ -605,7 +611,7 @@ Sign in with the username or email and password.
 
 If a code is asked for, open the email access that came with this log.
 
-Replacement window: 3 hours if the account is locked or bad after login.
+Replacement window: 3 hours if the account is locked or bad the moment you log in.
 
 Buy only when you are ready to log in. Stay on the VPN and let the account rest 3 hours to a day before you use it. HMA or Surfshark work well.` };
   if (/twitter|\bx\b|x old/.test(blob)) return { title: 'X / Twitter rules', body:
@@ -615,7 +621,7 @@ Sign in with the username and password.
 
 If a code is asked for, put the 2FA secret into 2fa.live to get the code.
 
-Replacement window: 3 hours if the account is locked or bad after login.
+Replacement window: 3 hours if the account is locked or bad the moment you log in.
 
 Buy only when you are ready to log in. Stay on the VPN and let the account rest 3 hours to a day before you use it. HMA or Surfshark work well.` };
   if (/instagram/.test(blob)) return { title: 'Instagram rules', body:
@@ -625,7 +631,7 @@ Sign in with the username and password.
 
 If a code is asked for, put the 2FA secret into 2fa.live to get the code.
 
-Replacement window: 3 hours if the account is locked or bad after login.
+Replacement window: 3 hours if the account is locked or bad the moment you log in.
 
 Buy only when you are ready to log in. Stay on the VPN and let the account rest 3 hours to a day before you use it. HMA or Surfshark work well.` };
   if (/facebook|fb\b/.test(blob)) return { title: 'Facebook rules', body:
@@ -635,7 +641,7 @@ Sign in with the login / UID and password.
 
 If a code is asked for, put the 2FA secret into 2fa.live to get the code.
 
-Replacement window: 3 hours if the account is locked or bad after login.
+Replacement window: 3 hours if the account is locked or bad the moment you log in.
 
 Buy only when you are ready to log in. Stay on the VPN and let the account rest 3 hours to a day before you use it. HMA or Surfshark work well.` };
   return { title: 'Account rules', body:
@@ -645,22 +651,27 @@ Buy only when you are ready to sign in.
 
 If 2FA is included, use the 2FA link or email that comes with the log.
 
-Replacement window: 3 hours if the account is locked or bad after login.
+Replacement window: 3 hours if the account is locked or bad the moment you log in.
 
 Let the account rest 3 hours to a day before heavy use.` };
 }
 
+function productSkipsRules(p){
+  const blob = [p && p.name, p && p.category, p && p.description].join(' ').toLowerCase();
+  const cat = String(p && p.category || '').toLowerCase();
+  if (cat.indexOf('vpn') >= 0 || cat.indexOf('tutorial') >= 0 || cat.indexOf('update') >= 0) return true;
+  if (/\btutorial\b|update pack|\bupdates?\b/.test(blob) && !/facebook|instagram|tiktok|twitter|talkatone|textplus/.test(blob)) return true;
+  if ((/\bvpn\b|surfshark|nordvpn|expressvpn|octohide|hma /.test(blob)) && !/facebook|instagram|tiktok|twitter|talkatone|textplus/.test(blob)) return true;
+  return false;
+}
+
 function bindRulesAck(){
-  const ack = document.getElementById('psRulesAck');
-  const buyBtn = document.getElementById('psBuyBtn');
-  if (!ack || !buyBtn) return;
-  const sync = function(){
-    const stock = activeProduct ? parseInt(activeProduct.stock_quantity, 10) : 0;
-    const out = !Number.isNaN(stock) && stock <= 0;
-    buyBtn.disabled = out || !ack.checked;
-  };
-  ack.onchange = sync;
-  sync();
+  const toggle = document.getElementById('psRulesToggle');
+  const wrap = document.getElementById('psRulesWrap');
+  if (toggle && wrap && !toggle._bound){
+    toggle._bound = true;
+    toggle.onclick = function(){ wrap.classList.toggle('open'); };
+  }
 }
 
 function openPurchaseModal(p){
@@ -706,14 +717,21 @@ const wrap=document.getElementById('psFormatWrap');
 if(format){wrap.style.display='block';document.getElementById('psFormat').textContent=format}
 else{wrap.style.display='none'}
 updatePurchaseTotal();
-const rules = rulesForProduct(p);
-const rulesTitle = document.querySelector('#psRulesWrap .ps-rules-title');
-if (rulesTitle) rulesTitle.innerHTML = '<i class="fa-solid fa-book"></i> '+rules.title;
-const rulesBody = document.getElementById('psRulesBody');
-if (rulesBody){ rulesBody.textContent = rules.body; rulesBody.style.color='#0f172a'; rulesBody.style.opacity='1'; }
+const wrap = document.getElementById('psRulesWrap');
 const ack = document.getElementById('psRulesAck');
-if (ack) ack.checked = false;
-bindRulesAck();
+if (productSkipsRules(p)){
+  if (wrap) wrap.style.display = 'none';
+  if (ack) ack.checked = true;
+} else {
+  if (wrap){ wrap.style.display = 'block'; wrap.classList.remove('open'); }
+  const rules = rulesForProduct(p);
+  const rulesTitle = document.getElementById('psRulesTitle');
+  if (rulesTitle) rulesTitle.innerHTML = '<i class="fa-solid fa-book"></i> '+rules.title;
+  const rulesBody = document.getElementById('psRulesBody');
+  if (rulesBody){ rulesBody.textContent = rules.body; rulesBody.style.color='#0f172a'; }
+  if (ack) ack.checked = false;
+  bindRulesAck();
+}
 document.getElementById('purchaseModal').classList.add('active');
 }
 
@@ -727,8 +745,7 @@ const price=parseFloat(activeProduct.price)||0;
 document.getElementById('psQty').textContent=String(activeQty);
 document.getElementById('psTotal').textContent=money(price*activeQty);
 const buyBtn=document.getElementById('psBuyBtn');
-const ack=document.getElementById('psRulesAck');
-buyBtn.disabled = (!Number.isNaN(stock) && stock <= 0) || !(ack && ack.checked);
+buyBtn.disabled = (!Number.isNaN(stock) && stock <= 0);
 }
 
 function closePurchaseModal(){
@@ -755,9 +772,12 @@ document.getElementById('psBuyBtn').addEventListener('click', confirmBuyNow);
 async function confirmBuyNow(){
 // Lock FIRST — before any await — so double/triple taps only run once
 if(!activeProduct || isBuying) return;
+const wrapEl = document.getElementById('psRulesWrap');
 const ackEl = document.getElementById('psRulesAck');
-if (ackEl && !ackEl.checked){
-  showToast('Read the rules and tick the box first','error');
+const rulesOn = wrapEl && wrapEl.style.display !== 'none';
+if (rulesOn && ackEl && !ackEl.checked){
+  wrapEl.classList.add('open');
+  showToast('Open the rules, read them, then tick the box before you buy','error');
   return;
 }
 isBuying = true;
@@ -944,15 +964,13 @@ loadProducts();
     var nodes = document.querySelectorAll('[data-skel], #productGrid, #list, #catalog, #servicesGrid, #productsGrid, #orderList');
     nodes.forEach(function(el){
       if(el.dataset.skelReady) return;
+      if(el.querySelector('.product-card, .empty-state')) { el.dataset.skelReady = '1'; return; }
       var type = el.getAttribute('data-skel') || (el.id && /list|order/i.test(el.id) ? 'cards' : 'grid');
       el.innerHTML = (mjSkeleton[type] || mjSkeleton.grid)(type === 'cards' ? 3 : 6);
-      el.dataset.skelReady = '1';
     });
   }
   if(document.readyState === 'loading') document.addEventListener('DOMContentLoaded', paint);
   else paint();
-  // retry once scripts loaded
-  setTimeout(paint, 50);
 })();
 </script>
 
