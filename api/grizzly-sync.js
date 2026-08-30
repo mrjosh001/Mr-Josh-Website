@@ -1490,8 +1490,8 @@ async function handleExpireStale(req, res) {
   const cutoff = new Date(Date.now() - EXPIRY_MS).toISOString();
   let q = supabase
     .from('number_orders')
-    .select('id, user_id, order_id, price, status, refunded, created_at, phone_number, service_name, customer_id')
-    .eq('status', 'waiting_for_code')
+    .select('id, user_id, order_id, price, status, refunded, created_at, phone_number, service_name, customer_id, source')
+    .in('status', ['waiting_for_code', 'waiting', 'pending', 'active', 'processing'])
     .lt('created_at', cutoff)
     .order('created_at', { ascending: true })
     .limit(200);
@@ -1564,7 +1564,11 @@ export default async function handler(req, res) {
   const action = req.query?.action || null;
 
   if (req.method === 'GET') {
-    // action is one of: null (continue/cron), 'start', 'status' — all handled inside handleSync
+    const getAction = String(action || '').toLowerCase();
+    if (getAction === 'expire_stale' || getAction === 'expire-stale') {
+      return handleExpireStale(req, res);
+    }
+    // action is one of: null (continue/cron), 'start', 'status' — handled inside handleSync
     return handleSync(req, res);
   }
 
