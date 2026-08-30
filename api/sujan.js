@@ -184,7 +184,7 @@ async function handleSync(req, res) {
         source: 'sujandepartment',
         updated_at: new Date().toISOString()
       };
-      if (stock <= 0) patch.is_available = false; else if (!adminHiddenSet.has(product_key)) patch.is_available = true;
+      if (stock <= 0) patch.is_available = false; else if (!existing.admin_hidden) patch.is_available = true;
       const { error } = await supabase
         .from('products')
         .update(patch)
