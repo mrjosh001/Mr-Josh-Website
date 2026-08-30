@@ -135,6 +135,7 @@ function supplierDescription(product, category) {
 }
 
 async function handleSync(req, res) {
+  const adminHiddenSet = new Set();
   if (!API_KEY) {
     return res.status(500).json({ success: false, message: 'CLASSYTEE_API_KEY not configured' });
   }
@@ -177,10 +178,11 @@ async function handleSync(req, res) {
 
   const { data: existingRows } = await supabase
     .from('products')
-    .select('product_key, price, is_available, category, name')
+    .select('product_key, price, is_available, category, name, admin_hidden')
     .in('product_key', keys.length ? keys : ['__none__']);
 
   const existing = new Map((existingRows || []).map((r) => [r.product_key, r]));
+  (existingRows || []).forEach((r) => { if (r.admin_hidden && r.product_key) adminHiddenSet.add(String(r.product_key)); });
 
   // Log first raw product once so we can see real description field names in Vercel logs
   if (products.length > 0) {
