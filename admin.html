@@ -3616,10 +3616,9 @@ function openOrderModal(index) {
     items
       .map((it, idx) => {
         const raw = String(it.login_credentials_raw || '').trim();
-        if (!raw) {
-          return formatLogBlock('(not stored — original supplier payload was not saved for this order)', idx, items.length);
-        }
-        return formatLogBlock(raw, idx, items.length);
+        if (raw) return formatLogBlock(raw, idx, items.length);
+        const view = String(it.login_credentials || '').trim();
+        return formatLogBlock(view ? ('(raw not saved)\n' + view) : '(raw not saved for this order)', idx, items.length);
       })
       .join('\n\n'),
     true
