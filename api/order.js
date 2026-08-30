@@ -487,18 +487,19 @@ async function handleFaddedSync(req, res) {
     // Only the column actually needed for the existence check is selected.
     const allKeys = products.map((item) => item.product_key).filter(Boolean);
     const existingKeySet = new Set();
+    const adminHiddenSet = new Set();
     const EXISTS_CHECK_BATCH = 500;
     for (let i = 0; i < allKeys.length; i += EXISTS_CHECK_BATCH) {
       const keyBatch = allKeys.slice(i, i + EXISTS_CHECK_BATCH);
       const { data: existingRows, error: existErr } = await supabase
         .from('products')
-        .select('product_key')
+        .select('product_key, admin_hidden')
         .in('product_key', keyBatch);
       if (existErr) {
         console.error('Error checking existing product_keys:', existErr.message);
         continue;
       }
-      (existingRows || []).forEach((r) => { if (r.product_key) existingKeySet.add(String(r.product_key)); });
+      (existingRows || []).forEach((r) => { if (r.product_key) existingKeySet.add(String(r.product_key)); if (r.admin_hidden) adminHiddenSet.add(String(r.product_key)); });
     }
 
     const toInsert = [];
@@ -535,8 +536,8 @@ async function handleFaddedSync(req, res) {
           source: 'fadded',
           updated_at: now
         };
-        // Out of stock at supplier → hide. If in stock, leave admin is_available as-is.
-        if (stock <= 0) patch.is_available = false;
+        // 0 stock stays hidden. Stock back in → show again (this was leaving leftovers hidden).
+        if (stock <= 0) patch.is_available = false; else if (!adminHiddenSet.has(key)) patch.is_available = true;
         toUpdate.push({ product_key: item.product_key, patch });
       } else {
         // NEW product only: full row + auto markup + category

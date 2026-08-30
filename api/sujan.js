@@ -164,7 +164,7 @@ async function handleSync(req, res) {
 
     const { data: existing } = await supabase
       .from('products')
-      .select('product_key')
+      .select('product_key, admin_hidden')
       .eq('product_key', productKey)
       .maybeSingle();
 
@@ -184,7 +184,7 @@ async function handleSync(req, res) {
         source: 'sujandepartment',
         updated_at: new Date().toISOString()
       };
-      if (stock <= 0) patch.is_available = false;
+      if (stock <= 0) patch.is_available = false; else if (!adminHiddenSet.has(product_key)) patch.is_available = true;
       const { error } = await supabase
         .from('products')
         .update(patch)

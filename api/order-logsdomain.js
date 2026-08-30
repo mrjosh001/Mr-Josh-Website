@@ -541,9 +541,10 @@ async function handleLdProductSync(req, res) {
       .filter(Boolean);
 
     const existingKeySet = new Set();
+    const adminHiddenSet = new Set();
     for (let i = 0; i < keys.length; i += 200) {
       const batch = keys.slice(i, i + 200);
-      const { data } = await supabase.from('products').select('product_key').in('product_key', batch);
+      const { data } = await supabase.from('products').select('product_key, admin_hidden').in('product_key', batch);
       (data || []).forEach((r) => existingKeySet.add(String(r.product_key)));
     }
 
@@ -563,7 +564,7 @@ async function handleLdProductSync(req, res) {
           source: 'logsdomain',
           updated_at: now
         };
-        if (stock <= 0) patch.is_available = false;
+        if (stock <= 0) patch.is_available = false; else if (!adminHiddenSet.has(product_key)) patch.is_available = true;
         const { error } = await supabase.from('products').update(patch).eq('product_key', product_key);
         if (error) console.error('[ld sync] update', product_key, error.message);
         else updatedCount++;

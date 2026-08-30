@@ -460,7 +460,7 @@ async function vendorProductUpsert(body, staff) {
   if (fields.display_description != null) payload.display_description = fields.display_description;
   if (fields.price != null) payload.price = Number(fields.price) || 0;
   if (fields.stock_quantity != null) payload.stock_quantity = Number(fields.stock_quantity) || 0;
-  if (fields.is_available != null) payload.is_available = !!fields.is_available;
+  if (fields.is_available != null) { payload.is_available = !!fields.is_available; payload.admin_hidden = !payload.is_available; }
   if (fields.category != null) {
     const cat = String(fields.category).trim();
     if (!staff.isAdmin && cat) {

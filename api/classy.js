@@ -213,8 +213,8 @@ async function handleSync(req, res) {
         source: 'classy',
         updated_at: new Date().toISOString()
       };
-      // Out of stock → hide. In stock → keep admin is_available as-is.
-      if (!inStock || stock <= 0) patch.is_available = false;
+      // 0 stock hidden. In stock visible again.
+      if (!inStock || stock <= 0) patch.is_available = false; else if (!adminHiddenSet.has(product_key)) patch.is_available = true;
       const { error } = await supabase
         .from('products')
         .update(patch)
