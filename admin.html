@@ -897,7 +897,7 @@ function withLagos(opts) { return Object.assign({ timeZone: 'Africa/Lagos' }, op
  <div class="empty-state" id="ordersEmpty">No orders table connected yet.</div>
  <div class="table-wrap hidden" id="ordersTableWrap">
  <table>
- <thead><tr><th>Order ID</th><th>Customer</th><th>Item</th><th>Qty</th><th>Amount</th><th>Status</th><th>Date</th><th>Action</th></tr></thead>
+ <thead><tr><th>Order ID</th><th>Customer ID</th><th>Item</th><th>Qty</th><th>Amount</th><th>Status</th><th>Date</th><th>Action</th></tr></thead>
  <tbody id="ordersTableBody"></tbody>
  </table>
  </div>
@@ -2227,7 +2227,7 @@ async function tryLoadOrders() {
   }
   console.warn('orders API:', json.message || res.status);
  } catch (e) { console.warn('orders API error', e); }
- const { data, error } = await sb.from('orders').select('*').order('created_at', { ascending: false }).limit(500);
+ const { data, error } = await sb.from('orders').select('*').order('created_at', { ascending: false }).limit(5000);
  if (!error && data) {
  window._cachedOrders = data;
  const empty = document.getElementById('ordersEmpty');
@@ -3513,6 +3513,7 @@ function groupOrdersById(rows) {
  const first = items[0];
  return {
  order_id: first.order_id || key,
+ customer_id: first.customer_id,
  customer_name: first.customer_name,
  customer: first.customer,
  email: first.email,
@@ -3546,18 +3547,22 @@ function renderOrders(orders) {
  const groups = new Map();
  orderGroups.forEach(o => {
  const d = o.created_at ? new Date(o.created_at) : null;
- const key = d && !isNaN(d) ? d.toDateString() : 'Unknown date';
+ let key = 'Unknown date';
+ if (d && !isNaN(d)) {
+   key = d.toLocaleDateString('en-NG', { timeZone: 'Africa/Lagos', weekday: 'short', year: 'numeric', month: 'short', day: '2-digit' });
+ }
  if (!groups.has(key)) groups.set(key, []);
  groups.get(key).push(o);
  });
 
- const today = new Date().toDateString();
- const yesterday = new Date(Date.now() - 86400000).toDateString();
+ const lagosKey = (d) => d.toLocaleDateString('en-NG', { timeZone: 'Africa/Lagos', weekday: 'short', year: 'numeric', month: 'short', day: '2-digit' });
+ const today = lagosKey(new Date());
+ const yesterday = lagosKey(new Date(Date.now() - 86400000));
  const dayLabel = (key) => {
  if (key === today) return 'Today';
  if (key === yesterday) return 'Yesterday';
  if (key === 'Unknown date') return 'Unknown date';
- return new Date(key).toLocaleDateString('en-NG', { timeZone: 'Africa/Lagos', weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' });
+ return key;
  };
 
  let html = '';
@@ -3577,7 +3582,7 @@ function renderOrders(orders) {
  html += `
  <tr>
  <td>${escapeHtml(o.order_id || ' ')}</td>
- <td>${escapeHtml(o.customer_name || o.customer || o.email || ' ')}</td>
+ <td style="font-weight:700;letter-spacing:.3px;">${escapeHtml(o.customer_id || o.customer_name || o.customer || ' ')}</td>
  <td>${escapeHtml(o.product_name || o.item || o.service || ' ')}${(o.is_manual || String(o.product_code||'').startsWith('manual_') || String(o.source||'').toLowerCase()==='manual') ? ' <span style="font-size:10px;font-weight:700;color:#94a3b8;background:#94a3b822;padding:2px 6px;border-radius:6px;">MANUAL</span>' : ''}<div style="font-size:11px;color:var(--muted);margin-top:2px;">${escapeHtml(o.customer_email || o.customer_name || o.customer_id || '')}</div></td>
  <td style="font-weight:700;color:var(--primary);">${Number(o.quantity != null ? o.quantity : 1)}</td>
  <td class="price">₦${Number(o.amount || 0).toLocaleString()}</td>
@@ -3642,6 +3647,7 @@ function openOrderModal(index) {
 
   body.innerHTML = [
     row('Order ID', o.order_id || ''),
+    row('Customer ID', o.customer_id || ''),
     row('Product', o.product_name || o.item || ''),
     row('Quantity', String(qty)),
     row('Amount', '₦' + Number(o.amount || 0).toLocaleString()),
