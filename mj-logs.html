@@ -369,16 +369,39 @@ const LOG_ICON_EXACT = {
 };
 // Substring fallback (category, then product name) for anything not in the
 // exact list above — new suppliers, renamed categories, future products.
+const BRAND_DOMAIN = {
+  instagram:'instagram.com', facebook:'facebook.com', tiktok:'tiktok.com', x:'x.com',
+  twitter:'x.com', discord:'discord.com', linkedin:'linkedin.com', reddit:'reddit.com',
+  snapchat:'snapchat.com', whatsapp:'whatsapp.com', telegram:'telegram.org',
+  google:'google.com', gmail:'gmail.com', apple:'apple.com', spotify:'spotify.com',
+  steam:'steampowered.com', twitch:'twitch.tv', youtube:'youtube.com', paypal:'paypal.com',
+  netflix:'netflix.com', hulu:'hulu.com', nordvpn:'nordvpn.com', surfshark:'surfshark.com',
+  expressvpn:'expressvpn.com', tinder:'tinder.com', bumble:'bumble.com',
+  talkatone:'talkatone.com', textplus:'textplus.com', textnow:'textnow.com',
+  outlook:'outlook.com', yahoo:'yahoo.com', rambler:'rambler.ru', pinterest:'pinterest.com',
+  threads:'threads.com', crunchyroll:'crunchyroll.com'
+};
+function brandfetchUrl(domain){
+  return 'https://cdn.brandfetch.io/'+domain+'/w/64/h/64/theme/dark/type/icon.png';
+}
 const LOG_ICON_KEYWORDS = [
   ['facebook','facebook','#1877F2'],['instagram','instagram','#E1306C'],
   ['tiktok','tiktok','#000000'],['twitter','x','#000000'],[' x ','x','#000000'],
   ['discord','discord','#5865F2'],['linkedin','linkedin','#0A66C2'],
   ['reddit','reddit','#FF4500'],['snapchat','snapchat','#FFFC00'],
   ['whatsapp','whatsapp','#25D366'],['telegram','telegram','#26A5E4'],
-  ['google','google','#4285F4'],['gmail','google','#4285F4'],
+  ['google','google','#4285F4'],['gmail','gmail','#EA4335'],
   ['apple','apple','#000000'],['spotify','spotify','#1DB954'],
   ['steam','steam','#1B2838'],['twitch','twitch','#9146FF'],
-  ['youtube','youtube','#FF0000'],['paypal','paypal','#00457C']
+  ['youtube','youtube','#FF0000'],['paypal','paypal','#00457C'],
+  ['netflix','netflix','#E50914'],['nordvpn','nordvpn','#4687FF'],
+  ['surfshark','surfshark','#1EBDFF'],['expressvpn','expressvpn','#DA3940'],
+  ['tinder','tinder','#FE3C72'],['bumble','bumble','#FFC629'],
+  ['talkatone','talkatone','#FF6A00'],['textplus','textplus','#00AEEF'],
+  ['textnow','textnow','#D52B1E'],['outlook','outlook','#0078D4'],
+  ['yahoo','yahoo','#6001D2'],['rambler','rambler','#315EFB'],
+  ['pinterest','pinterest','#E60023'],['threads','threads','#000000'],
+  ['crunchyroll','crunchyroll','#F47521'],['hulu','hulu','#1CE783']
 ];
 const GENERIC_KEYWORDS = [
   ['proxy','fa-solid fa-shield-halved','#0ea5e9'],['vpn','fa-solid fa-shield-halved','#0ea5e9'],
@@ -401,10 +424,12 @@ function logIcon(category, name){
 function logIconInnerHtml(icon){
   if(icon.dual) return '<i class="fa-solid fa-screwdriver-wrench"></i><i class="fa-solid fa-arrows-rotate"></i>';
   if(icon.brand){
+    const domain = BRAND_DOMAIN[icon.brand] || (icon.brand+'.com');
     const glyphColor = icon.darkGlyph ? '000000' : 'ffffff';
     const fallbackCls = icon.brand==='x' ? 'fa-brands fa-x-twitter' : ('fa-brands fa-'+icon.brand);
-    return '<img src="https://cdn.simpleicons.org/'+icon.brand+'/'+glyphColor+'" alt="" '
-      + 'onerror="this.replaceWith(Object.assign(document.createElement(\'i\'),{className:\''+fallbackCls+'\'}))" />';
+    const simple = 'https://cdn.simpleicons.org/'+icon.brand+'/'+glyphColor;
+    return '<img src="'+brandfetchUrl(domain)+'" alt="" '
+      + 'onerror="this.onerror=null;this.src=\''+simple+'\';this.addEventListener(\'error\',function(){this.replaceWith(Object.assign(document.createElement(\'i\'),{className:\''+fallbackCls+'\'}))})" />';
   }
   return '<i class="'+icon.solid+'"></i>';
 }
