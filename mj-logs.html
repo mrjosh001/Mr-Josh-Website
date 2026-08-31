@@ -430,6 +430,10 @@ function logIcon(category, name){
   }
   return null;
 }
+function logotypUrl(slug){
+  const file = ({x:'x', twitter:'x', googlevoice:'google', textplus:'textplus', texplus:'textplus'}[slug] || slug);
+  return 'https://logotyp.us/file/'+file+'.svg';
+}
 function logIconInnerHtml(icon){
   if(icon.dual) return '<i class="fa-solid fa-screwdriver-wrench"></i><i class="fa-solid fa-arrows-rotate"></i>';
   if(icon.brand){
@@ -437,10 +441,10 @@ function logIconInnerHtml(icon){
     const glyphColor = icon.darkGlyph ? '000000' : 'ffffff';
     const fallbackCls = icon.brand==='x' ? 'fa-brands fa-x-twitter' : ('fa-brands fa-'+icon.brand);
     const simple = 'https://cdn.simpleicons.org/'+icon.brand+'/'+glyphColor;
-    var img = '<img src="'+brandfetchUrl(domain)+'" alt="" '
-      + 'onerror="this.onerror=null;this.src=\''+simple+'\';this.addEventListener(\'error\',function(){this.replaceWith(Object.assign(document.createElement(\'i\'),{className:\''+fallbackCls+'\'}))})" />';
-    if(icon.brand==='googlevoice') img += '<i class="fa-solid fa-phone log-icon-badge"></i>';
-    return img;
+    const src = logotypUrl(icon.brand);
+    const bf = brandfetchUrl(domain);
+    return '<img src="'+src+'" alt="" '
+      + 'onerror="if(!this.dataset.bf){this.dataset.bf=1;this.src=\''+bf+'\';}else if(!this.dataset.si){this.dataset.si=1;this.src=\''+simple+'\';}else{this.replaceWith(Object.assign(document.createElement(\'i\'),{className:\''+fallbackCls+'\'}));}" />';
   }
   return '<i class="'+icon.solid+'"></i>';
 }
