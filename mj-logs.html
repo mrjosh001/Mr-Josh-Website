@@ -382,7 +382,7 @@ const BRAND_DOMAIN = {
   threads:'threads.com', crunchyroll:'crunchyroll.com'
 };
 function brandfetchUrl(domain){
-  return 'https://cdn.brandfetch.io/'+domain+'/w/64/h/64/theme/dark/type/icon.png';
+  return 'https://cdn.brandfetch.io/'+domain+'/w/128/h/128/theme/light/type/icon.png';
 }
 const LOG_ICON_KEYWORDS = [
   ['nordvpn','nordvpn','#4687FF'],['nord vpn','nordvpn','#4687FF'],['surfshark','surfshark','#1EBDFF'],['expressvpn','expressvpn','#DA3940'],['express vpn','expressvpn','#DA3940'],['protonvpn','proton','#6D4AFF'],['proton vpn','proton','#6D4AFF'],['cyberghost','cyberghost','#00B67A'],['windscribe','windscribe','#1BA3E5'],['9proxy','9proxy','#0ea5e9'],['9 proxy','9proxy','#0ea5e9'],['talkatone','talkatone','#2BB24C'],['textplus','textplus','#00AEEF'],['texplus','textplus','#00AEEF'],
@@ -441,8 +441,8 @@ function logIconInnerHtml(icon){
     const simple = 'https://cdn.simpleicons.org/'+icon.brand+'/'+glyphColor;
     const bf = brandfetchUrl(domain);
     const gico = 'https://www.google.com/s2/favicons?sz=128&domain_url='+encodeURIComponent('https://'+domain);
-    return '<img src="'+simple+'" alt="" '
-      + 'onerror="if(!this.dataset.gi){this.dataset.gi=1;this.src=\''+gico+'\';}else if(!this.dataset.bf){this.dataset.bf=1;this.src=\''+bf+'\';}else{this.replaceWith(Object.assign(document.createElement(\'i\'),{className:\''+fallbackCls+'\'}));}" />';
+    return '<img src="'+bf+'" alt="" '
+      + 'onerror="if(!this.dataset.gi){this.dataset.gi=1;this.src=\''+gico+'\';}else if(!this.dataset.si){this.dataset.si=1;this.src=\''+simple+'\';}else{this.replaceWith(Object.assign(document.createElement(\'i\'),{className:\''+fallbackCls+'\'}));}" />';
   }
   return '<i class="'+icon.solid+'"></i>';
 }
