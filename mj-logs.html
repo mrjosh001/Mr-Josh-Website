@@ -365,7 +365,9 @@ const LOG_ICON_EXACT = {
   'texting app': {solid:'fa-solid fa-comment-dots', color:'#22c55e'},
   'tiktok/high followers': {brand:'tiktok', color:'#000000'},
   'tutorial/update': {dual:true},
-  'x / twitter': {brand:'x', color:'#000000'}
+  'x / twitter': {brand:'x', color:'#000000'},
+  'x/twitter': {brand:'x', color:'#000000'},
+  'twitter': {brand:'x', color:'#000000'}
 };
 // Substring fallback (category, then product name) for anything not in the
 // exact list above — new suppliers, renamed categories, future products.
@@ -431,6 +433,12 @@ const GENERIC_KEYWORDS = [
 function logIcon(category, name){
   const cat = (category||'').toLowerCase().trim();
   const n = (name||'').toLowerCase();
+  if (cat.includes('twitter') || cat === 'x' || cat.startsWith('x /') || cat.includes('x / twitter')) {
+    return {brand:'x', color:'#000000'};
+  }
+  if (cat.includes('9proxy') || n.includes('9proxy') || n.includes('9 proxy')) {
+    return {brand:'9proxy', color:'#0084FF'};
+  }
   // Name first so "TEXTING APP" / "MAILS" does not hide Talkatone, Google Voice, etc.
   for(const [key, slug, color] of LOG_ICON_KEYWORDS){
     if(key==='google' && (n.includes('talkatone') || n.includes('textplus') || n.includes('texplus') || n.includes('google voice'))) continue;
@@ -456,11 +464,16 @@ function logIconInnerHtml(icon){
     const domain = BRAND_DOMAIN[icon.brand] || (icon.brand+'.com');
     const glyphColor = icon.darkGlyph ? '000000' : 'ffffff';
     const fallbackCls = icon.brand==='x' ? 'fa-brands fa-x-twitter' : ('fa-brands fa-'+icon.brand);
-    const simple = 'https://cdn.simpleicons.org/'+icon.brand+'/'+glyphColor;
+    const simple = icon.brand==='x'
+      ? 'https://cdn.simpleicons.org/x/ffffff'
+      : 'https://cdn.simpleicons.org/'+icon.brand+'/'+glyphColor;
     const bf = brandfetchUrl(domain);
-    const gico = 'https://www.google.com/s2/favicons?sz=128&domain_url='+encodeURIComponent('https://'+domain);
-    return '<img src="'+bf+'" alt="" '
-      + 'onerror="if(!this.dataset.gi){this.dataset.gi=1;this.src=\''+gico+'\';}else if(!this.dataset.si){this.dataset.si=1;this.src=\''+simple+'\';}else{this.replaceWith(Object.assign(document.createElement(\'i\'),{className:\''+fallbackCls+'\'}));}" />';
+    const gico = 'https://www.google.com/s2/favicons?sz=128&domain='+encodeURIComponent(domain);
+    const first = icon.brand==='9proxy'
+      ? (gico)
+      : (icon.brand==='x' ? simple : bf);
+    return '<img src="'+first+'" alt="" '
+      + 'onerror="if(!this.dataset.gi){this.dataset.gi=1;this.src=\''+gico+'\';}else if(!this.dataset.si){this.dataset.si=1;this.src=\''+simple+'\';}else if(!this.dataset.bf){this.dataset.bf=1;this.src=\''+bf+'\';}else{this.replaceWith(Object.assign(document.createElement(\'i\'),{className:\''+fallbackCls+'\'}));}" />';
   }
   return '<i class="'+icon.solid+'"></i>';
 }
