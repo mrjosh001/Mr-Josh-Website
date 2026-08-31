@@ -375,9 +375,9 @@ const BRAND_DOMAIN = {
   snapchat:'snapchat.com', whatsapp:'whatsapp.com', telegram:'telegram.org',
   google:'google.com', gmail:'gmail.com', 'google voice':'voice.google.com', apple:'apple.com', spotify:'spotify.com',
   steam:'steampowered.com', twitch:'twitch.tv', youtube:'youtube.com', paypal:'paypal.com',
-  netflix:'netflix.com', hulu:'hulu.com', nordvpn:'nordvpn.com', surfshark:'surfshark.com',
+  netflix:'netflix.com', hulu:'hulu.com', deepseek:'deepseek.com', openai:'openai.com', onlyfans:'onlyfans.com', canva:'canva.com', quora:'quora.com', prime:'primevideo.com', ipvanish:'ipvanish.com', pia:'privateinternetaccess.com', purevpn:'purevpn.com', avast:'avast.com', hma:'hidemyass.com', hotmail:'hotmail.com', mailru:'mail.ru', mailcom:'mail.com', pof:'pof.com', badoo:'badoo.com', nordvpn:'nordvpn.com', surfshark:'surfshark.com',
   expressvpn:'expressvpn.com', tinder:'tinder.com', bumble:'bumble.com',
-  nordvpn:'nordvpn.com', surfshark:'surfshark.com', expressvpn:'expressvpn.com', proton:'protonvpn.com', cyberghost:'cyberghostvpn.com', windscribe:'windscribe.com', '9proxy':'9proxy.com', talkatone:'talkatone.com', googlevoice:'google.com', textplus:'textplus.com', texplus:'textplus.com', textnow:'textnow.com',
+  deepseek:'deepseek.com', openai:'openai.com', onlyfans:'onlyfans.com', canva:'canva.com', quora:'quora.com', prime:'primevideo.com', ipvanish:'ipvanish.com', pia:'privateinternetaccess.com', purevpn:'purevpn.com', avast:'avast.com', hma:'hidemyass.com', hotmail:'hotmail.com', mailru:'mail.ru', mailcom:'mail.com', pof:'pof.com', badoo:'badoo.com', nordvpn:'nordvpn.com', surfshark:'surfshark.com', expressvpn:'expressvpn.com', proton:'protonvpn.com', cyberghost:'cyberghostvpn.com', windscribe:'windscribe.com', '9proxy':'9proxy.com', talkatone:'talkatone.com', googlevoice:'google.com', textplus:'textplus.com', texplus:'textplus.com', textnow:'textnow.com',
   outlook:'outlook.com', yahoo:'yahoo.com', rambler:'rambler.ru', pinterest:'pinterest.com',
   threads:'threads.com', crunchyroll:'crunchyroll.com'
 };
@@ -385,6 +385,23 @@ function brandfetchUrl(domain){
   return 'https://cdn.brandfetch.io/'+domain+'/w/128/h/128/theme/light/type/icon.png';
 }
 const LOG_ICON_KEYWORDS = [
+  ['deepseek','deepseek','#4D6BFE'],['deep seek','deepseek','#4D6BFE'],
+  ['chatgpt','openai','#10A37F'],['chat gpt','openai','#10A37F'],['openai','openai','#10A37F'],
+  ['onlyfans','onlyfans','#00AFF0'],['only fans','onlyfans','#00AFF0'],
+  ['canva','canva','#00C4CC'],['quora','quora','#B92B27'],
+  ['prime video','prime','#00A8E1'],['primevideo','prime','#00A8E1'],
+  ['ipvanish','ipvanish','#0073FF'],['ip vanish','ipvanish','#0073FF'],
+  ['pia vpn','pia','#1C355E'],['private internet','pia','#1C355E'],
+  ['purevpn','purevpn','#FF6B00'],['pure vpn','purevpn','#FF6B00'],
+  ['avast','avast','#FF7800'],
+  ['hma vpn','hma','#E31C3D'],['hidemyass','hma','#E31C3D'],[' hma ','hma','#E31C3D'],
+  ['express for','expressvpn','#DA3940'],['express 20','expressvpn','#DA3940'],['express vpn','expressvpn','#DA3940'],
+  ['hotmail','hotmail','#0078D4'],['outlook','outlook','#0078D4'],
+  ['mail.ru','mailru','#005FF9'],['mailru','mailru','#005FF9'],
+  ['mail.com','mailcom','#1A73E8'],
+  ['plenty of fish','pof','#1A7F3D'],[' pof ','pof','#1A7F3D'],['pof accounts','pof','#1A7F3D'],
+  ['badoo','badoo','#783BF9'],
+
   ['nordvpn','nordvpn','#4687FF'],['nord vpn','nordvpn','#4687FF'],['surfshark','surfshark','#1EBDFF'],['expressvpn','expressvpn','#DA3940'],['express vpn','expressvpn','#DA3940'],['protonvpn','proton','#6D4AFF'],['proton vpn','proton','#6D4AFF'],['cyberghost','cyberghost','#00B67A'],['windscribe','windscribe','#1BA3E5'],['9proxy','9proxy','#0ea5e9'],['9 proxy','9proxy','#0ea5e9'],['talkatone','talkatone','#2BB24C'],['textplus','textplus','#00AEEF'],['texplus','textplus','#00AEEF'],
   ['google voice','googlevoice','#4285F4'],['googlevoice','googlevoice','#4285F4'],
   ['facebook','facebook','#1877F2'],['instagram','instagram','#E1306C'],
@@ -417,6 +434,7 @@ function logIcon(category, name){
   // Name first so "TEXTING APP" / "MAILS" does not hide Talkatone, Google Voice, etc.
   for(const [key, slug, color] of LOG_ICON_KEYWORDS){
     if(key==='google' && (n.includes('talkatone') || n.includes('textplus') || n.includes('texplus') || n.includes('google voice'))) continue;
+    if(key==='facebook' && (n.includes('badoo') || n.includes('pof') || n.includes('plenty of fish'))) continue;
     if(n.includes(key)) return {brand:slug, color, gradient: slug==='instagram', darkGlyph: slug==='snapchat'};
   }
   if(LOG_ICON_EXACT[cat]) return LOG_ICON_EXACT[cat];
