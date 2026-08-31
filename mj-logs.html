@@ -343,7 +343,7 @@ function money(n){return '₦'+Number(n||0).toLocaleString()}
 // Generic, non-branded categories (VPN, Mail, Dating, etc.) keep a plain
 // Font Awesome glyph since there's no single real company logo for those.
 const LOG_ICON_EXACT = {
-  '9proxy (ips)': {solid:'fa-solid fa-shield-halved', color:'#0ea5e9'},
+  '9proxy (ips)': {brand:'9proxy', color:'#0ea5e9'},
   'ai': {solid:'fa-solid fa-robot', color:'#8b5cf6'},
   'all countries instagram': {brand:'instagram', color:'#E1306C', gradient:true},
   'all countries tiktok': {brand:'tiktok', color:'#000000'},
@@ -357,8 +357,6 @@ const LOG_ICON_EXACT = {
   'instagram / high followers': {brand:'instagram', color:'#E1306C', gradient:true},
   'linkedin': {brand:'linkedin', color:'#0A66C2'},
   'mails': {solid:'fa-solid fa-envelope', color:'#64748b'},
-  'premium vpn for pc': {solid:'fa-solid fa-shield-halved', color:'#0ea5e9'},
-  'premium vpn for phone': {solid:'fa-solid fa-shield-halved', color:'#0ea5e9'},
   'random country facebook': {brand:'facebook', color:'#1877F2'},
   'reddit': {brand:'reddit', color:'#FF4500'},
   'snapchat': {brand:'snapchat', color:'#FFFC00', darkGlyph:true},
@@ -387,7 +385,7 @@ function brandfetchUrl(domain){
   return 'https://cdn.brandfetch.io/'+domain+'/w/64/h/64/theme/dark/type/icon.png';
 }
 const LOG_ICON_KEYWORDS = [
-  ['nordvpn','nordvpn','#4687FF'],['nord vpn','nordvpn','#4687FF'],['surfshark','surfshark','#1EBDFF'],['expressvpn','expressvpn','#DA3940'],['express vpn','expressvpn','#DA3940'],['protonvpn','proton','#6D4AFF'],['proton vpn','proton','#6D4AFF'],['cyberghost','cyberghost','#00B67A'],['windscribe','windscribe','#1BA3E5'],['9proxy','9proxy','#0ea5e9'],['talkatone','talkatone','#2BB24C'],['textplus','textplus','#00AEEF'],['texplus','textplus','#00AEEF'],
+  ['nordvpn','nordvpn','#4687FF'],['nord vpn','nordvpn','#4687FF'],['surfshark','surfshark','#1EBDFF'],['expressvpn','expressvpn','#DA3940'],['express vpn','expressvpn','#DA3940'],['protonvpn','proton','#6D4AFF'],['proton vpn','proton','#6D4AFF'],['cyberghost','cyberghost','#00B67A'],['windscribe','windscribe','#1BA3E5'],['9proxy','9proxy','#0ea5e9'],['9 proxy','9proxy','#0ea5e9'],['talkatone','talkatone','#2BB24C'],['textplus','textplus','#00AEEF'],['texplus','textplus','#00AEEF'],
   ['google voice','googlevoice','#4285F4'],['googlevoice','googlevoice','#4285F4'],
   ['facebook','facebook','#1877F2'],['instagram','instagram','#E1306C'],
   ['tiktok','tiktok','#000000'],['twitter','x','#000000'],[' x ','x','#000000'],
@@ -441,10 +439,10 @@ function logIconInnerHtml(icon){
     const glyphColor = icon.darkGlyph ? '000000' : 'ffffff';
     const fallbackCls = icon.brand==='x' ? 'fa-brands fa-x-twitter' : ('fa-brands fa-'+icon.brand);
     const simple = 'https://cdn.simpleicons.org/'+icon.brand+'/'+glyphColor;
-    const src = logotypUrl(icon.brand);
     const bf = brandfetchUrl(domain);
-    return '<img src="'+src+'" alt="" '
-      + 'onerror="if(!this.dataset.bf){this.dataset.bf=1;this.src=\''+bf+'\';}else if(!this.dataset.si){this.dataset.si=1;this.src=\''+simple+'\';}else{this.replaceWith(Object.assign(document.createElement(\'i\'),{className:\''+fallbackCls+'\'}));}" />';
+    const gico = 'https://www.google.com/s2/favicons?sz=128&domain_url='+encodeURIComponent('https://'+domain);
+    return '<img src="'+simple+'" alt="" '
+      + 'onerror="if(!this.dataset.gi){this.dataset.gi=1;this.src=\''+gico+'\';}else if(!this.dataset.bf){this.dataset.bf=1;this.src=\''+bf+'\';}else{this.replaceWith(Object.assign(document.createElement(\'i\'),{className:\''+fallbackCls+'\'}));}" />';
   }
   return '<i class="'+icon.solid+'"></i>';
 }
