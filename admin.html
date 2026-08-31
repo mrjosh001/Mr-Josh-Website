@@ -507,7 +507,9 @@ function withLagos(opts) { return Object.assign({ timeZone: 'Africa/Lagos' }, op
  .metrics { grid-template-columns: 1fr 1fr !important; }
  }
 
- </style>
+ .admin-pager{display:flex;gap:10px;justify-content:center;align-items:center;margin-top:14px;flex-wrap:wrap}
+.admin-pager button{min-width:96px}
+</style>
  <script src="/js/mj-page-loader.js"></script>
 </head>
 <body>
@@ -796,9 +798,9 @@ function withLagos(opts) { return Object.assign({ timeZone: 'Africa/Lagos' }, op
  <option value="rental">Rental</option>
  </select>
  <select id="smsOrdersStatusFilter" onchange="filterSmsOrders()" style="min-width:160px;">
+ <option value="completed" selected>Completed</option>
  <option value="">All statuses</option>
  <option value="waiting_for_code">Waiting for code</option>
- <option value="completed">Completed</option>
  <option value="expired">Expired</option>
                 <option value="refunded">Cancelled &amp; refunded</option>
  <option value="failed">Failed</option>
@@ -816,6 +818,7 @@ function withLagos(opts) { return Object.assign({ timeZone: 'Africa/Lagos' }, op
  </table>
  </div>
  <div id="smsOrdersMobileCards" class="mobile-only mobile-cards"></div>
+ <div id="smsOrdersPager" class="admin-pager"></div>
  </div>
  </div>
 
@@ -901,6 +904,7 @@ function withLagos(opts) { return Object.assign({ timeZone: 'Africa/Lagos' }, op
  <tbody id="ordersTableBody"></tbody>
  </table>
  </div>
+ <div id="ordersPager" class="admin-pager"></div>
  </div>
  </div>
 
@@ -2267,6 +2271,8 @@ async function tryLoadSmsOrders() {
   const json = await res.json().catch(() => ({}));
   if (res.ok && json.success && Array.isArray(json.data)) {
     window._cachedSmsOrders = json.data;
+    window._smsOrderPage = 1;
+    if (typeof filterSmsOrders === 'function') { filterSmsOrders(); return; }
     if (typeof renderSmsOrders === 'function') renderSmsOrders(json.data);
     return;
   }
@@ -2300,6 +2306,8 @@ function smsOrderServerLabel(o) {
  return 'Server 1';
 }
 function filterSmsOrders() {
+ if (!window._smsKeepPage) window._smsOrderPage = 1;
+ window._smsKeepPage = false;
  const q = (document.getElementById('smsOrdersSearch')?.value || '').trim().toLowerCase();
  const status = document.getElementById('smsOrdersStatusFilter')?.value || '';
  const type = document.getElementById('smsOrdersTypeFilter')?.value || '';
@@ -2315,6 +2323,7 @@ function filterSmsOrders() {
  || String(o.order_id || '').toLowerCase().includes(q)
  || String(o.country_name || '').toLowerCase().includes(q);
  });
+ window._smsFilterCache = filtered;
  renderSmsOrders(filtered);
 }
 
@@ -2326,8 +2335,15 @@ function renderSmsOrders(orders) {
  if (!orders?.length) {
  tbody.innerHTML = `<tr><td colspan="9" class="empty-state">No SMS orders found.</td></tr>`;
  cards.innerHTML = `<div class="empty-state">No SMS orders found.</div>`;
+ const p0 = document.getElementById('smsOrdersPager');
+ if (p0) p0.innerHTML = '';
  return;
  }
+ const pg = adminPageSlice(orders, window._smsOrderPage || 1, 10);
+ window._smsOrderPage = pg.page;
+ orders = pg.slice;
+ const pEl = document.getElementById('smsOrdersPager');
+ if (pEl) pEl.innerHTML = adminPagerHtml('sms', pg.page, pg.pages, pg.total);
 
  const statusBadge = (s) => {
  if (s === 'completed') return '<span class="badge badge-on">Completed</span>';
@@ -3530,6 +3546,34 @@ function groupOrdersById(rows) {
  });
 }
 
+
+window._logOrderPage = 1;
+window._smsOrderPage = 1;
+function adminPageSlice(arr, page, size) {
+  size = size || 10;
+  const total = (arr || []).length;
+  const pages = Math.max(1, Math.ceil(total / size) || 1);
+  page = Math.min(Math.max(1, page || 1), pages);
+  return { slice: (arr || []).slice((page - 1) * size, page * size), page, pages, total };
+}
+function adminPagerHtml(kind, page, pages, total) {
+  const prevDis = page <= 1 ? 'disabled' : '';
+  const nextDis = page >= pages ? 'disabled' : '';
+  return '<button class="btn btn-ghost btn-sm" '+prevDis+' onclick="adminTurnPage(\''+kind+'\',-1)">Previous</button>'
+    + '<span>Page '+page+' / '+pages+' · '+total+' orders</span>'
+    + '<button class="btn btn-ghost btn-sm" '+nextDis+' onclick="adminTurnPage(\''+kind+'\',1)">Next</button>';
+}
+function adminTurnPage(kind, dir) {
+  if (kind === 'logs') {
+    window._logOrderPage = Math.max(1, (window._logOrderPage || 1) + dir);
+    renderOrders(window._cachedOrders || []);
+  } else if (kind === 'sms') {
+    window._smsOrderPage = Math.max(1, (window._smsOrderPage || 1) + dir);
+    window._smsKeepPage = true;
+    filterSmsOrders();
+  }
+}
+
 function renderOrders(orders) {
  const tbody = document.getElementById('ordersTableBody');
  if (!orders?.length) {
@@ -3565,20 +3609,30 @@ function renderOrders(orders) {
  return key;
  };
 
- let html = '';
- // Index now matches window._cachedOrderGroups (one entry per logical
- // order), not the flat per-row array: openOrderModal(i) reads from
- // that grouped array so it can show every item in the order.
- let globalIndex = 0;
+ window._allOrderGroupsFlat = [];
  for (const [key, dayOrders] of groups) {
+   dayOrders.forEach(o => window._allOrderGroupsFlat.push({ dayKey: key, o }));
+ }
+ const pg = adminPageSlice(window._allOrderGroupsFlat, window._logOrderPage || 1, 10);
+ window._logOrderPage = pg.page;
+ window._cachedOrderGroups = pg.slice.map(x => x.o);
+ const pager = document.getElementById('ordersPager');
+ if (pager) pager.innerHTML = adminPagerHtml('logs', pg.page, pg.pages, pg.total);
+
+ let html = '';
+ let lastDay = null;
+ pg.slice.forEach((entry, i) => {
+ const key = entry.dayKey;
+ const o = entry.o;
+ if (key !== lastDay) {
+ lastDay = key;
  html += `
  <tr>
  <td colspan="8" style="background:rgba(59,130,246,.06);border-bottom:1px solid var(--border);padding:10px 12px;font-size:12px;font-weight:800;color:var(--primary);text-transform:uppercase;letter-spacing:.4px;white-space:nowrap;">
- ${escapeHtml(dayLabel(key))} <span style="color:var(--muted);font-weight:600;text-transform:none;letter-spacing:0;"> ${dayOrders.length} order${dayOrders.length !== 1 ? 's' : ''}</span>
+ ${escapeHtml(dayLabel(key))}
  </td>
  </tr>`;
- dayOrders.forEach(o => {
- const i = globalIndex++;
+ }
  html += `
  <tr>
  <td>${escapeHtml(o.order_id || ' ')}</td>
@@ -3591,7 +3645,6 @@ function renderOrders(orders) {
  <td><button class="btn btn-ghost btn-sm" onclick="openOrderModal(${i})"><i class="fas fa-eye"></i> View</button></td>
  </tr>`;
  });
- }
  tbody.innerHTML = html;
 }
 
@@ -4179,7 +4232,7 @@ async function loadBoosterOrders() {
  try {
  const headers = await authHeaders();
  const q = (document.getElementById('boosterOrderSearch')?.value || '').trim();
- const params = new URLSearchParams({ action: 'admin_orders', page: String(boosterOrderPage), page_size: '50' });
+ const params = new URLSearchParams({ action: 'admin_orders', page: String(boosterOrderPage), page_size: '10' });
  if (q) params.set('q', q);
  const res = await fetch('/api/owlet?' + params.toString(), { headers });
  const data = await res.json();
