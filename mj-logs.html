@@ -53,8 +53,8 @@ body::before{content:'';position:fixed;inset:0;pointer-events:none;z-index:0;bac
 .product-grid{display:grid;grid-template-columns:1fr;gap:12px}
 @media(min-width:600px){.product-grid{grid-template-columns:repeat(2,1fr)}}
 .product-card{background:var(--bg);border:1px solid var(--border);border-radius:16px;padding:14px;display:flex;flex-direction:column;gap:10px}
-.log-icon{width:38px;height:38px;border-radius:11px;display:flex;align-items:center;justify-content:center;color:#fff;font-size:16px;flex-shrink:0;box-shadow:0 4px 10px rgba(0,0,0,.18)}
-.log-icon img,.ps-icon img{width:55%;height:55%;object-fit:contain;display:block}
+.log-icon{width:38px;height:38px;border-radius:11px;display:flex;align-items:center;justify-content:center;color:#fff;font-size:16px;flex-shrink:0;box-shadow:0 4px 10px rgba(0,0,0,.18);overflow:hidden;padding:7px;box-sizing:border-box}
+.log-icon img,.ps-icon img{width:100%;height:100%;max-width:22px;max-height:22px;object-fit:contain;object-position:center;display:block;flex-shrink:0}
 .log-icon-fallback{background:var(--primary-glow);color:var(--primary);box-shadow:none}
 .log-icon-instagram{background:radial-gradient(circle at 30% 107%,#fdf497 0%,#fdf497 5%,#fd5949 45%,#d6249f 60%,#285AEB 90%)}
 .log-icon-dual{display:flex;align-items:center;justify-content:center;gap:1px;background:linear-gradient(135deg,#f59e0b,#0ea5e9)}
@@ -96,7 +96,7 @@ details[open] .product-description-toggle::before{transform:rotate(90deg);displa
 .ps-close{background:none;border:none;font-size:18px;cursor:pointer;color:#64748b;width:32px;height:32px}
 .ps-body{padding:16px 18px 20px}
 .ps-title-row{display:flex;gap:12px;align-items:flex-start;margin-bottom:12px}
-.ps-icon{width:48px;height:48px;border-radius:14px;background:#1877f2;color:#fff;display:flex;align-items:center;justify-content:center;font-size:22px;font-weight:800;flex-shrink:0}
+.ps-icon{overflow:hidden;padding:8px;box-sizing:border-box;width:48px;height:48px;border-radius:14px;background:#1877f2;color:#fff;display:flex;align-items:center;justify-content:center;font-size:22px;font-weight:800;flex-shrink:0}
 .ps-name{font-size:16px;font-weight:800;margin-bottom:6px}
 .ps-meta{display:flex;gap:8px;flex-wrap:wrap}
 .ps-pill{font-size:11px;font-weight:700;padding:4px 10px;border-radius:20px}
@@ -142,6 +142,7 @@ details[open] .product-description-toggle::before{transform:rotate(90deg);displa
   background:rgba(255,255,255,.75)!important;
 }
 
+ .log-icon{position:relative}.log-icon-badge{position:absolute;right:-2px;bottom:-2px;font-size:9px;background:#4285F4;color:#fff;border-radius:999px;width:14px;height:14px;display:flex;align-items:center;justify-content:center;border:2px solid #0b1220;}
 </style>
 <link rel="stylesheet" href="/css/skeleton.css">
 <link rel="stylesheet" href="/css/mj-motion.css">
@@ -162,6 +163,7 @@ details[open] .product-description-toggle::before{transform:rotate(90deg);displa
 @keyframes mjBeam{to{stroke-dashoffset:-228}}
 @keyframes mjBloom{0%,100%{opacity:.55;transform:translate(-50%,-50%) scale(1)}50%{opacity:1;transform:translate(-50%,-50%) scale(1.08)}}
 @media(prefers-reduced-motion:reduce){#mj-boot .mj-beam{animation:none;stroke-dasharray:none}#mj-boot .mj-inf::before{animation:none}}
+ .log-icon{position:relative}.log-icon-badge{position:absolute;right:-2px;bottom:-2px;font-size:9px;background:#4285F4;color:#fff;border-radius:999px;width:14px;height:14px;display:flex;align-items:center;justify-content:center;border:2px solid #0b1220;}
 </style>
 <div id="mj-boot" role="status" aria-live="polite" aria-busy="true">
   <div class="mj-inf" aria-hidden="true">
@@ -377,7 +379,7 @@ const BRAND_DOMAIN = {
   steam:'steampowered.com', twitch:'twitch.tv', youtube:'youtube.com', paypal:'paypal.com',
   netflix:'netflix.com', hulu:'hulu.com', nordvpn:'nordvpn.com', surfshark:'surfshark.com',
   expressvpn:'expressvpn.com', tinder:'tinder.com', bumble:'bumble.com',
-  talkatone:'talkatone.com', textplus:'textplus.com', texplus:'textplus.com', textnow:'textnow.com',
+  talkatone:'talkatone.com', googlevoice:'voice.google.com', textplus:'textplus.com', texplus:'textplus.com', textnow:'textnow.com',
   outlook:'outlook.com', yahoo:'yahoo.com', rambler:'rambler.ru', pinterest:'pinterest.com',
   threads:'threads.com', crunchyroll:'crunchyroll.com'
 };
@@ -385,12 +387,14 @@ function brandfetchUrl(domain){
   return 'https://cdn.brandfetch.io/'+domain+'/w/64/h/64/theme/dark/type/icon.png';
 }
 const LOG_ICON_KEYWORDS = [
+  ['talkatone','talkatone','#2BB24C'],['textplus','textplus','#00AEEF'],['texplus','textplus','#00AEEF'],
+  ['google voice','googlevoice','#4285F4'],['googlevoice','googlevoice','#4285F4'],
   ['facebook','facebook','#1877F2'],['instagram','instagram','#E1306C'],
   ['tiktok','tiktok','#000000'],['twitter','x','#000000'],[' x ','x','#000000'],
   ['discord','discord','#5865F2'],['linkedin','linkedin','#0A66C2'],
   ['reddit','reddit','#FF4500'],['snapchat','snapchat','#FFFC00'],
   ['whatsapp','whatsapp','#25D366'],['telegram','telegram','#26A5E4'],
-  ['google voice','google','#4285F4'],['googlevoice','google','#4285F4'],['google','google','#4285F4'],['gmail','gmail','#EA4335'],
+  ['google','google','#4285F4'],['gmail','gmail','#EA4335'],
   ['apple','apple','#000000'],['spotify','spotify','#1DB954'],
   ['steam','steam','#1B2838'],['twitch','twitch','#9146FF'],
   ['youtube','youtube','#FF0000'],['paypal','paypal','#00457C'],
@@ -414,6 +418,7 @@ function logIcon(category, name){
   const n = (name||'').toLowerCase();
   // Name first so "TEXTING APP" / "MAILS" does not hide Talkatone, Google Voice, etc.
   for(const [key, slug, color] of LOG_ICON_KEYWORDS){
+    if(key==='google' && (n.includes('talkatone') || n.includes('textplus') || n.includes('texplus') || n.includes('google voice'))) continue;
     if(n.includes(key)) return {brand:slug, color, gradient: slug==='instagram', darkGlyph: slug==='snapchat'};
   }
   if(LOG_ICON_EXACT[cat]) return LOG_ICON_EXACT[cat];
@@ -432,8 +437,10 @@ function logIconInnerHtml(icon){
     const glyphColor = icon.darkGlyph ? '000000' : 'ffffff';
     const fallbackCls = icon.brand==='x' ? 'fa-brands fa-x-twitter' : ('fa-brands fa-'+icon.brand);
     const simple = 'https://cdn.simpleicons.org/'+icon.brand+'/'+glyphColor;
-    return '<img src="'+brandfetchUrl(domain)+'" alt="" '
+    var img = '<img src="'+brandfetchUrl(domain)+'" alt="" '
       + 'onerror="this.onerror=null;this.src=\''+simple+'\';this.addEventListener(\'error\',function(){this.replaceWith(Object.assign(document.createElement(\'i\'),{className:\''+fallbackCls+'\'}))})" />';
+    if(icon.brand==='googlevoice') img += '<i class="fa-solid fa-phone log-icon-badge"></i>';
+    return img;
   }
   return '<i class="'+icon.solid+'"></i>';
 }
