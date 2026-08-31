@@ -373,11 +373,11 @@ const BRAND_DOMAIN = {
   instagram:'instagram.com', facebook:'facebook.com', tiktok:'tiktok.com', x:'x.com',
   twitter:'x.com', discord:'discord.com', linkedin:'linkedin.com', reddit:'reddit.com',
   snapchat:'snapchat.com', whatsapp:'whatsapp.com', telegram:'telegram.org',
-  google:'google.com', gmail:'gmail.com', apple:'apple.com', spotify:'spotify.com',
+  google:'google.com', gmail:'gmail.com', 'google voice':'voice.google.com', apple:'apple.com', spotify:'spotify.com',
   steam:'steampowered.com', twitch:'twitch.tv', youtube:'youtube.com', paypal:'paypal.com',
   netflix:'netflix.com', hulu:'hulu.com', nordvpn:'nordvpn.com', surfshark:'surfshark.com',
   expressvpn:'expressvpn.com', tinder:'tinder.com', bumble:'bumble.com',
-  talkatone:'talkatone.com', textplus:'textplus.com', textnow:'textnow.com',
+  talkatone:'talkatone.com', textplus:'textplus.com', texplus:'textplus.com', textnow:'textnow.com',
   outlook:'outlook.com', yahoo:'yahoo.com', rambler:'rambler.ru', pinterest:'pinterest.com',
   threads:'threads.com', crunchyroll:'crunchyroll.com'
 };
@@ -390,14 +390,14 @@ const LOG_ICON_KEYWORDS = [
   ['discord','discord','#5865F2'],['linkedin','linkedin','#0A66C2'],
   ['reddit','reddit','#FF4500'],['snapchat','snapchat','#FFFC00'],
   ['whatsapp','whatsapp','#25D366'],['telegram','telegram','#26A5E4'],
-  ['google','google','#4285F4'],['gmail','gmail','#EA4335'],
+  ['google voice','google','#4285F4'],['googlevoice','google','#4285F4'],['google','google','#4285F4'],['gmail','gmail','#EA4335'],
   ['apple','apple','#000000'],['spotify','spotify','#1DB954'],
   ['steam','steam','#1B2838'],['twitch','twitch','#9146FF'],
   ['youtube','youtube','#FF0000'],['paypal','paypal','#00457C'],
   ['netflix','netflix','#E50914'],['nordvpn','nordvpn','#4687FF'],
   ['surfshark','surfshark','#1EBDFF'],['expressvpn','expressvpn','#DA3940'],
   ['tinder','tinder','#FE3C72'],['bumble','bumble','#FFC629'],
-  ['talkatone','talkatone','#FF6A00'],['textplus','textplus','#00AEEF'],
+  ['talkatone','talkatone','#FF6A00'],['textplus','textplus','#00AEEF'],['texplus','textplus','#00AEEF'],
   ['textnow','textnow','#D52B1E'],['outlook','outlook','#0078D4'],
   ['yahoo','yahoo','#6001D2'],['rambler','rambler','#315EFB'],
   ['pinterest','pinterest','#E60023'],['threads','threads','#000000'],
@@ -411,15 +411,19 @@ const GENERIC_KEYWORDS = [
 ];
 function logIcon(category, name){
   const cat = (category||'').toLowerCase().trim();
-  if(LOG_ICON_EXACT[cat]) return LOG_ICON_EXACT[cat];
   const n = (name||'').toLowerCase();
+  // Name first so "TEXTING APP" / "MAILS" does not hide Talkatone, Google Voice, etc.
   for(const [key, slug, color] of LOG_ICON_KEYWORDS){
-    if(cat.includes(key) || n.includes(key)) return {brand:slug, color, gradient: slug==='instagram'};
+    if(n.includes(key)) return {brand:slug, color, gradient: slug==='instagram', darkGlyph: slug==='snapchat'};
+  }
+  if(LOG_ICON_EXACT[cat]) return LOG_ICON_EXACT[cat];
+  for(const [key, slug, color] of LOG_ICON_KEYWORDS){
+    if(cat.includes(key)) return {brand:slug, color, gradient: slug==='instagram', darkGlyph: slug==='snapchat'};
   }
   for(const [key, cls, color] of GENERIC_KEYWORDS){
     if(cat.includes(key) || n.includes(key)) return cls==='__dual__' ? {dual:true} : {solid:cls, color};
   }
-  return null; // unmatched -> generic fallback icon rendered by caller
+  return null;
 }
 function logIconInnerHtml(icon){
   if(icon.dual) return '<i class="fa-solid fa-screwdriver-wrench"></i><i class="fa-solid fa-arrows-rotate"></i>';
