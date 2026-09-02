@@ -301,24 +301,102 @@ function nudgeEmailContent(week, name, appUrl) {
     4: 'Last reminder — we are here when you need us'
   };
   const bodies = {
-    1: `Hi ${safe},<br><br>You signed up for <strong>MJ Hub</strong> a week ago. Your account is ready whenever you are.<br><br>Fund your wallet, then grab SMS numbers, logs, or social boosts in a few taps.<br><br><a href="${appUrl}/dashboard" style="color:#3b82f6;font-weight:700;">Open your dashboard</a>`,
-    2: `Hi ${safe},<br><br>A quick reminder that MJ Hub covers <strong>SMS verification</strong>, <strong>logs</strong>, and <strong>boosters</strong> in one wallet.<br><br>Whenever you are ready, fund and place your first order from the dashboard.<br><br><a href="${appUrl}/dashboard" style="color:#3b82f6;font-weight:700;">Continue on MJ Hub</a>`,
-    3: `Hi ${safe},<br><br>If anything blocked you after signup — funding, a product question, or support — reply to this email or use in-app support. We are happy to help.<br><br><a href="${appUrl}/dashboard" style="color:#3b82f6;font-weight:700;">Get help in the app</a>`,
-    4: `Hi ${safe},<br><br>This is our last check-in for now. Your MJ Hub account stays open; come back anytime you need SMS, logs, or boosts.<br><br><a href="${appUrl}/dashboard" style="color:#3b82f6;font-weight:700;">Visit MJ Hub</a>`
+    1: `Hi ${safe},<br><br>You signed up for <strong>MJ Hub</strong> a week ago. Your account is ready whenever you are.<br><br>Fund your wallet, then grab SMS numbers, logs, or social boosts in a few taps.`,
+    2: `Hi ${safe},<br><br>A quick reminder that MJ Hub covers <strong>SMS verification</strong>, <strong>logs</strong>, and <strong>boosters</strong> in one wallet.<br><br>Whenever you are ready, fund and place your first order from the dashboard.`,
+    3: `Hi ${safe},<br><br>If anything blocked you after signup — funding, a product question, or support — reply to this email or use in-app support. We are happy to help.`,
+    4: `Hi ${safe},<br><br>This is our last check-in for now. Your MJ Hub account stays open; come back anytime you need SMS, logs, or boosts.`
   };
-  const w = Math.min(Math.max(week, 1), 4);
+  const w = Math.min(Math.max(Number(week) || 1, 1), 4);
   const subject = subjects[w] || subjects[1];
   const inner = bodies[w] || bodies[1];
   const year = new Date().getFullYear();
-  const html = `<!DOCTYPE html><html><body style="margin:0;background:#0a0a0f;font-family:Arial,sans-serif;color:#e5e7eb;">
-  <table width="100%" cellpadding="0" cellspacing="0" style="background:#0a0a0f;padding:32px 16px;"><tr><td align="center">
-  <table width="560" cellpadding="0" cellspacing="0" style="background:#111118;border-radius:16px;border:1px solid #1c1c28;padding:28px;">
-  <tr><td style="font-size:20px;font-weight:800;color:#fff;padding-bottom:8px;">MJ Hub</td></tr>
-  <tr><td style="font-size:15px;line-height:1.6;color:#cbd5e1;">${inner}</td></tr>
-  <tr><td style="padding-top:24px;font-size:12px;color:#6b7280;line-height:1.5;">
-  You received this because you registered on MJ Hub and have not placed an order yet.
-  <a href="${unsub}" style="color:#9ca3af;">Unsubscribe from these tips</a><br>© ${year} MJ Hub
-  </td></tr></table></td></tr></table></body></html>`;
+  const LOGO_DARK = 'https://mjhub.store/assets/logo-dark.png';
+  const LOGO_LIGHT = 'https://mjhub.store/assets/logo-light.png';
+
+  // Adaptive light/dark — follows the phone/mail app color scheme
+  // (same approach as deposit emails in api/pocketfi.js)
+  const html = `<!DOCTYPE html>
+<html lang="en" xmlns="http://www.w3.org/1999/xhtml">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="color-scheme" content="light dark">
+  <meta name="supported-color-schemes" content="light dark">
+  <title>${subject}</title>
+  <style>
+    :root { color-scheme: light dark; }
+    @media (prefers-color-scheme: light) {
+      .body-bg { background-color: #f4f5f7 !important; }
+      .card-bg { background-color: #ffffff !important; border-color: #e5e7eb !important; }
+      .text-primary { color: #111827 !important; }
+      .text-secondary { color: #374151 !important; }
+      .text-muted { color: #6b7280 !important; }
+      .btn-bg { background-color: #3b82f6 !important; color: #ffffff !important; }
+      .logo-dark { display: none !important; max-height: 0 !important; overflow: hidden !important; width: 0 !important; height: 0 !important; }
+      .logo-light { display: block !important; max-height: none !important; }
+      .divider { border-color: #e5e7eb !important; }
+    }
+    @media (prefers-color-scheme: dark) {
+      .body-bg { background-color: #0a0a0f !important; }
+      .card-bg { background-color: #111118 !important; border-color: #1c1c28 !important; }
+      .text-primary { color: #f4f4f8 !important; }
+      .text-secondary { color: #cbd5e1 !important; }
+      .text-muted { color: #9ca3af !important; }
+      .btn-bg { background-color: #3b82f6 !important; color: #ffffff !important; }
+      .logo-light { display: none !important; max-height: 0 !important; overflow: hidden !important; width: 0 !important; height: 0 !important; }
+      .logo-dark { display: block !important; max-height: none !important; }
+      .divider { border-color: #1c1c28 !important; }
+    }
+  </style>
+  <!--[if mso]>
+  <style>body,table,td{font-family:Arial,sans-serif!important}</style>
+  <![endif]-->
+</head>
+<body class="body-bg" style="margin:0;padding:0;background-color:#0a0a0f;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;">
+  <div style="display:none;max-height:0;overflow:hidden;opacity:0;">MJ Hub — ${subject}</div>
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" class="body-bg" style="background-color:#0a0a0f;padding:32px 16px;">
+    <tr>
+      <td align="center">
+        <table role="presentation" width="560" cellpadding="0" cellspacing="0" class="card-bg" style="max-width:560px;width:100%;background-color:#111118;border-radius:16px;border:1px solid #1c1c28;padding:0;">
+          <tr>
+            <td style="padding:28px 28px 12px;text-align:center;">
+              <img class="logo-dark" src="${LOGO_DARK}" alt="MJ Hub" width="140" style="display:block;margin:0 auto;max-width:140px;height:auto;">
+              <img class="logo-light" src="${LOGO_LIGHT}" alt="MJ Hub" width="140" style="display:none;margin:0 auto;max-width:140px;height:auto;">
+            </td>
+          </tr>
+          <tr>
+            <td class="text-primary" style="padding:8px 28px 0;font-size:20px;font-weight:800;color:#f4f4f8;text-align:center;">
+              MJ Hub
+            </td>
+          </tr>
+          <tr>
+            <td class="text-secondary" style="padding:20px 28px 8px;font-size:15px;line-height:1.65;color:#cbd5e1;">
+              ${inner}
+            </td>
+          </tr>
+          <tr>
+            <td align="center" style="padding:20px 28px 8px;">
+              <a href="${appUrl}/dashboard" class="btn-bg" style="display:inline-block;background-color:#3b82f6;color:#ffffff;font-weight:700;font-size:14px;text-decoration:none;padding:14px 28px;border-radius:12px;">
+                Open your dashboard
+              </a>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:24px 28px 28px;">
+              <hr class="divider" style="border:none;border-top:1px solid #1c1c28;margin:0 0 16px;">
+              <p class="text-muted" style="margin:0;font-size:12px;line-height:1.5;color:#9ca3af;">
+                You received this because you registered on MJ Hub and have not placed an order yet.
+                <a href="${unsub}" class="text-muted" style="color:#9ca3af;">Unsubscribe from these tips</a><br>
+                © ${year} MJ Hub
+              </p>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>`;
   return { subject, html };
 }
 
