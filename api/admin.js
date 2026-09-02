@@ -1050,28 +1050,13 @@ async function listProfilesHandle() {
   return { status: 200, body: { success: true, data: data || [] } };
 }
 
-async function fetchAllRows(table, orderCol) {
-  const pageSize = 1000;
-  const all = [];
-  let from = 0;
-  for (;;) {
-    const { data, error } = await supabase
-      .from(table)
-      .select('*')
-      .order(orderCol, { ascending: false })
-      .range(from, from + pageSize - 1);
-    if (error) return { error, data: all };
-    const batch = data || [];
-    all.push(...batch);
-    if (batch.length < pageSize) break;
-    from += pageSize;
-    if (from > 20000) break;
-  }
-  return { error: null, data: all };
-}
-
 async function listOrdersHandle() {
-  const { data, error } = await fetchAllRows('orders', 'created_at');
+  // Service role: every log sale including manual_ / restock products
+  let { data, error } = await supabase
+    .from('orders')
+    .select('*')
+    .order('created_at', { ascending: false })
+    .limit(1000);
   if (error) {
     return { status: 500, body: { success: false, message: 'Could not load orders: ' + error.message } };
   }
@@ -1181,12 +1166,9 @@ function safeSlice(str, max) {
 async function tryJsonEndpoints(urls, headers, currencyGuess) {
   let lastRaw = null;
   let lastStatus = null;
-  for (const url of (urls || []).slice(0, 2)) {
+  for (const url of urls) {
     try {
-      const ac = new AbortController();
-      const timer = setTimeout(() => ac.abort(), 2500);
-      const res = await fetch(url, { method: 'GET', headers, signal: ac.signal });
-      clearTimeout(timer);
+      const res = await fetch(url, { method: 'GET', headers });
       const text = await res.text();
       lastRaw = safeSlice(text, 300);
       lastStatus = res.status;
@@ -1325,28 +1307,15 @@ async function getClassyBalance() {
   );
 }
 
-async function safeBal(fn, name) {
-  let timer;
-  try {
-    return await Promise.race([
-      fn(),
-      new Promise((_, rej) => { timer = setTimeout(() => rej(new Error('timeout')), 4000); })
-    ]);
-  } catch (e) {
-    return { ok: false, error: name + ': ' + (e.message || String(e)) };
-  } finally {
-    if (timer) clearTimeout(timer);
-  }
-}
 async function supplierBalancesFetch() {
   const [fadded, logsdomain, grizzly, sujan, owlet, classy, smsbus] = await Promise.all([
-    safeBal(getFaddedBalance, 'fadded'),
-    safeBal(getLogsDomainBalance, 'logsdomain'),
-    safeBal(getGrizzlyBalance, 'grizzly'),
-    safeBal(getSujanBalance, 'sujan'),
-    safeBal(fetchOwletBalance, 'owlet'),
-    safeBal(getClassyBalance, 'classy'),
-    safeBal(getSmsBusBalance, 'smsbus')
+    getFaddedBalance(),
+    getLogsDomainBalance(),
+    getGrizzlyBalance(),
+    getSujanBalance(),
+    fetchOwletBalance(),
+    getClassyBalance(),
+    getSmsBusBalance()
   ]);
   return {
     status: 200,
@@ -1404,10 +1373,12 @@ async function getOverviewStats(body) {
 
   let logsRes = await supabase.from('orders')
     .select('amount, quantity, product_key, product_code, product_name, product_id, status')
+    .in('status', ['completed', 'paid', 'success', 'delivered', 'complete', 'fulfilled'])
     .gte('created_at', cutoff);
   if (logsRes.error && /column|schema cache/i.test(logsRes.error.message || '')) {
     logsRes = await supabase.from('orders')
       .select('amount, quantity, product_name, status')
+      .in('status', ['completed', 'paid', 'success', 'delivered', 'complete', 'fulfilled'])
       .gte('created_at', cutoff);
   }
 
@@ -1429,7 +1400,7 @@ async function getOverviewStats(body) {
   // supplier_price is USD for grizzly + smsbus; legacy logsdomain numbers may be NGN.
   const smsRows = (smsRes.data || []).filter((r) => {
     const st = String(r.status || '').toLowerCase();
-    return ['completed','complete','success','received','code_received'].includes(st);
+    return st === 'completed' || st === 'complete' || st === 'success';
   });
   const smsAmountSpent = smsRows.reduce((s, r) => s + Number(r.price || 0), 0);
   const smsProfit = smsRows.reduce((s, r) => {
@@ -1450,8 +1421,7 @@ async function getOverviewStats(body) {
   }, 0);
 
   // ----- LOGS (product orders): customer paid (amount) minus product supplier_price -----
-  const SKIP = new Set(['cancelled','canceled','refunded','failed','void']);
-  const logRows = (logsRes.data || []).filter((r) => !SKIP.has(String(r.status || '').toLowerCase()));
+  const logRows = logsRes.data || [];
   const productList = productsRes.error ? [] : (productsRes.data || []);
   const productByKey = new Map();
   const productById = new Map();
@@ -1577,234 +1547,6 @@ function secretsStatusHandle() {
 
 // ---------- router ----------
 
-
-/* ---------- Email broadcast (Resend) — no extra serverless function ---------- */
-function escapeHtmlEmail(s) {
-  return String(s || '')
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;');
-}
-
-function bodyToEmailHtml(raw) {
-  const safe = escapeHtmlEmail(raw).replace(/\r\n/g, '\n').replace(/\r/g, '\n');
-  return safe
-    .split(/\n{2,}/)
-    .map((p) => `<p style="margin:0 0 14px;line-height:1.65;color:#cbd5e1;">${p.replace(/\n/g, '<br>')}</p>`)
-    .join('');
-}
-
-function buildBroadcastEmailHtml({ subject, body, name, appUrl }) {
-  const year = new Date().getFullYear();
-  const safeName = escapeHtmlEmail(name || 'there');
-  const LOGO_DARK =
-    'https://atczodlljmlayvldxfmv.supabase.co/storage/v1/object/public/avatars/dark%20background%20log';
-  const LOGO_LIGHT =
-    'https://atczodlljmlayvldxfmv.supabase.co/storage/v1/object/public/avatars/light%20background%20logo';
-  const unsub = `${appUrl}/dashboard?unsubscribe=1`;
-  const inner = bodyToEmailHtml(body);
-  return `<!DOCTYPE html>
-<html lang="en"><head>
-<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<meta name="color-scheme" content="light dark">
-<meta name="supported-color-schemes" content="light dark">
-<title>${escapeHtmlEmail(subject)}</title>
-<style>
-:root{color-scheme:light dark}
-@media (prefers-color-scheme:light){
-.body-bg{background-color:#f4f5f7!important}.card-bg{background-color:#fff!important;border-color:#e5e7eb!important}
-.text-primary{color:#111827!important}.text-secondary{color:#374151!important}.text-muted{color:#6b7280!important}
-.logo-dark{display:none!important;max-height:0!important;overflow:hidden!important;width:0!important;height:0!important}
-.logo-light{display:block!important}.divider{border-color:#e5e7eb!important}
-}
-@media (prefers-color-scheme:dark){
-.body-bg{background-color:#0a0a0f!important}.card-bg{background-color:#111118!important;border-color:#1c1c28!important}
-.text-primary{color:#f4f4f8!important}.text-secondary{color:#cbd5e1!important}.text-muted{color:#9ca3af!important}
-.logo-light{display:none!important;max-height:0!important;overflow:hidden!important;width:0!important;height:0!important}
-.logo-dark{display:block!important}.divider{border-color:#1c1c28!important}
-}
-</style></head>
-<body class="body-bg" style="margin:0;padding:0;background-color:#0a0a0f;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;">
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0" class="body-bg" style="background-color:#0a0a0f;padding:32px 16px;"><tr><td align="center">
-<table role="presentation" width="560" cellpadding="0" cellspacing="0" class="card-bg" style="max-width:560px;width:100%;background-color:#111118;border-radius:16px;border:1px solid #1c1c28;">
-<tr><td style="padding:28px 28px 8px;text-align:center;">
-<img class="logo-dark" src="${LOGO_DARK}" alt="MJ Hub" width="140" style="display:block;margin:0 auto;max-width:140px;height:auto;">
-<img class="logo-light" src="${LOGO_LIGHT}" alt="MJ Hub" width="140" style="display:none;margin:0 auto;max-width:140px;height:auto;">
-</td></tr>
-<tr><td class="text-primary" style="padding:8px 28px 0;font-size:20px;font-weight:800;color:#f4f4f8;text-align:center;">MJ Hub</td></tr>
-<tr><td class="text-secondary" style="padding:20px 28px 8px;font-size:15px;line-height:1.65;color:#cbd5e1;">
-<p style="margin:0 0 14px;">Hi ${safeName},</p>
-${inner}
-</td></tr>
-<tr><td align="center" style="padding:12px 28px 8px;">
-<a href="${appUrl}/dashboard" style="display:inline-block;background-color:#3b82f6;color:#ffffff;font-weight:700;font-size:14px;text-decoration:none;padding:14px 28px;border-radius:12px;">Open dashboard</a>
-</td></tr>
-<tr><td style="padding:24px 28px 28px;">
-<hr class="divider" style="border:none;border-top:1px solid #1c1c28;margin:0 0 16px;">
-<p class="text-muted" style="margin:0;font-size:12px;line-height:1.5;color:#9ca3af;">
-You received this because you have an MJ Hub account.
-<a href="${unsub}" style="color:#9ca3af;">Unsubscribe</a><br>© ${year} MJ Hub
-</p></td></tr>
-</table></td></tr></table>
-</body></html>`;
-}
-
-async function resendBroadcastOne({ to, subject, html }) {
-  const apiKey = process.env.RESEND_API_KEY;
-  const from = process.env.RESEND_FROM_EMAIL || process.env.RESEND_FROM || 'MJ Hub <onboarding@resend.dev>';
-  if (!apiKey) return { ok: false, error: 'RESEND_API_KEY not set' };
-  const res = await fetch('https://api.resend.com/emails', {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      'Content-Type': 'application/json'
-    },
-    body: JSON.stringify({ from, to: [to], subject, html })
-  });
-  const json = await res.json().catch(() => ({}));
-  if (!res.ok) return { ok: false, error: json.message || json.error || res.statusText };
-  return { ok: true, id: json.id };
-}
-
-async function emailBroadcastHandle(body) {
-  const subject = String(body.subject || '').trim();
-  const message = String(body.body || body.message || '').trim();
-  const dryRun = !!body.dry_run;
-
-  if (!subject) return { status: 400, body: { success: false, message: 'Subject is required' } };
-  if (!message) return { status: 400, body: { success: false, message: 'Email body is required' } };
-  if (subject.length > 200) return { status: 400, body: { success: false, message: 'Subject too long' } };
-  if (message.length > 20000) return { status: 400, body: { success: false, message: 'Body too long' } };
-  if (!process.env.RESEND_API_KEY && !dryRun) {
-    return { status: 500, body: { success: false, message: 'RESEND_API_KEY not configured' } };
-  }
-
-  const appUrl = (process.env.APP_URL || process.env.SITE_URL || 'https://app.mjhub.store').replace(/\/$/, '');
-  const recipients = [];
-  let from = 0;
-  const pageSize = 1000;
-  for (;;) {
-    const { data, error } = await supabase
-      .from('profiles')
-      .select('id, email, full_name, email_unsubscribed')
-      .not('email', 'is', null)
-      .range(from, from + pageSize - 1);
-    if (error) return { status: 500, body: { success: false, message: error.message } };
-    if (!data || !data.length) break;
-    for (const row of data) {
-      const email = String(row.email || '').trim();
-      if (!email.includes('@')) continue;
-      if (row.email_unsubscribed === true) continue;
-      recipients.push({ email, full_name: row.full_name || '' });
-    }
-    if (data.length < pageSize) break;
-    from += pageSize;
-    if (from > 20000) break;
-  }
-
-  const seen = new Set();
-  const unique = [];
-  for (const r of recipients) {
-    const k = r.email.toLowerCase();
-    if (seen.has(k)) continue;
-    seen.add(k);
-    unique.push(r);
-  }
-
-  if (dryRun) {
-    return {
-      status: 200,
-      body: {
-        success: true,
-        dry_run: true,
-        would_send: unique.length,
-        sample: unique.slice(0, 5).map((r) => r.email)
-      }
-    };
-  }
-
-  // Resend batch API (up to 100 per request) — stays inside Vercel time limits better
-  const apiKey = process.env.RESEND_API_KEY;
-  const from = process.env.RESEND_FROM_EMAIL || process.env.RESEND_FROM || 'MJ Hub <onboarding@resend.dev>';
-  let sent = 0;
-  let failed = 0;
-  const errors = [];
-  const CHUNK = 50;
-  for (let i = 0; i < unique.length; i += CHUNK) {
-    const slice = unique.slice(i, i + CHUNK);
-    const payload = slice.map((r) => ({
-      from,
-      to: [r.email],
-      subject,
-      html: buildBroadcastEmailHtml({
-        subject,
-        body: message,
-        name: r.full_name,
-        appUrl
-      })
-    }));
-    try {
-      const res = await fetch('https://api.resend.com/emails/batch', {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${apiKey}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(payload)
-      });
-      const json = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        failed += slice.length;
-        if (errors.length < 10) {
-          errors.push({ error: json.message || json.error || res.statusText, chunk: i });
-        }
-      } else {
-        // Resend batch returns array of results or data
-        const rows = Array.isArray(json) ? json : (json.data || []);
-        if (rows.length) {
-          for (const row of rows) {
-            if (row.id || row.status === 'success' || !row.error) sent += 1;
-            else {
-              failed += 1;
-              if (errors.length < 10) errors.push({ error: row.error || 'failed' });
-            }
-          }
-          // if API returns fewer rows, count remainder as sent optimistically
-          if (rows.length < slice.length) sent += (slice.length - rows.length);
-        } else {
-          sent += slice.length;
-        }
-      }
-    } catch (e) {
-      failed += slice.length;
-      if (errors.length < 10) errors.push({ error: e.message || 'batch failed', chunk: i });
-    }
-    await new Promise((r) => setTimeout(r, 150));
-  }
-
-  try {
-    await supabase.from('notifications').insert({
-      user_id: null,
-      title: `[Email] ${subject}`,
-      body: message.slice(0, 500),
-      type: 'email_broadcast'
-    });
-  } catch (_) {}
-
-  return {
-    status: 200,
-    body: {
-      success: true,
-      total: unique.length,
-      sent,
-      failed,
-      errors
-    }
-  };
-}
-
-
 export default async function handler(req, res) {
   applyApiCors(req, res, { methods: 'POST, OPTIONS' });
   setNoStore(res);
@@ -1883,10 +1625,8 @@ export default async function handler(req, res) {
       result = await getUserJoinDates();
     } else if (resource === 'secrets_status') {
       result = secretsStatusHandle();
-    } else if (resource === 'email_broadcast') {
-      result = await emailBroadcastHandle(body);
     } else {
-      result = { status: 400, body: { success: false, message: 'Unknown resource. Use "user", "product", "inventory", "sms", "profiles", "orders", "sms_orders", "booster_orders", "supplier_balances", "overview", "user_join_dates", "secrets_status", "sub_admin", "vendor", or "email_broadcast".' } };
+      result = { status: 400, body: { success: false, message: 'Unknown resource. Use "user", "product", "inventory", "sms", "profiles", "orders", "sms_orders", "booster_orders", "supplier_balances", "overview", "user_join_dates", "secrets_status", "sub_admin", or "vendor".' } };
     }
 
     return res.status(result.status).json(result.body);
