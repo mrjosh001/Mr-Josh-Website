@@ -1181,9 +1181,12 @@ function safeSlice(str, max) {
 async function tryJsonEndpoints(urls, headers, currencyGuess) {
   let lastRaw = null;
   let lastStatus = null;
-  for (const url of urls) {
+  for (const url of (urls || []).slice(0, 2)) {
     try {
-      const res = await fetch(url, { method: 'GET', headers });
+      const ac = new AbortController();
+      const timer = setTimeout(() => ac.abort(), 2500);
+      const res = await fetch(url, { method: 'GET', headers, signal: ac.signal });
+      clearTimeout(timer);
       const text = await res.text();
       lastRaw = safeSlice(text, 300);
       lastStatus = res.status;
@@ -1323,10 +1326,16 @@ async function getClassyBalance() {
 }
 
 async function safeBal(fn, name) {
+  let timer;
   try {
-    return await fn();
+    return await Promise.race([
+      fn(),
+      new Promise((_, rej) => { timer = setTimeout(() => rej(new Error('timeout')), 4000); })
+    ]);
   } catch (e) {
     return { ok: false, error: name + ': ' + (e.message || String(e)) };
+  } finally {
+    if (timer) clearTimeout(timer);
   }
 }
 async function supplierBalancesFetch() {
