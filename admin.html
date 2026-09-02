@@ -1017,6 +1017,30 @@ img.brand-logo, img.sidebar-brand-logo-img, #brandLogo, #navBrandLogo, #sidebarB
  <button class="btn btn-primary btn-sm" onclick="sendBroadcastNotification()">Send to All Users</button>
  <div class="price-note" style="margin-top:6px;">Every user will see this in their notification bell next time they load the app. It disappears from their view 24 hours after they open it.</div>
 
+ 
+ <div class="panel" style="margin-top:18px;">
+ <div class="panel-title" style="margin-bottom:10px;">Send Email to All Users (Resend)</div>
+ <p style="font-size:13px;color:var(--muted);margin:0 0 12px;line-height:1.5;">
+ Sends a real email to every customer with an address on file (skips unsubscribed).
+ Line breaks in the body are kept in the email. Uses your Resend domain.
+ </p>
+ <div class="field" style="max-width:560px;">
+ <label>Subject</label>
+ <input type="text" id="emailSubject" placeholder="e.g. New accounts + lower prices" maxlength="200" />
+ </div>
+ <div class="field" style="max-width:560px;">
+ <label>Email body</label>
+ <textarea id="emailBody" rows="8" placeholder="Write the message exactly as customers should read it.&#10;&#10;Use blank lines between paragraphs." maxlength="20000" style="min-height:160px;font-family:inherit;"></textarea>
+ </div>
+ <div id="emailSendError" class="error-msg"></div>
+ <div id="emailSendOk" style="display:none;font-size:13px;color:#34d399;margin:8px 0;"></div>
+ <div style="display:flex;flex-wrap:wrap;gap:10px;align-items:center;">
+ <button type="button" class="btn btn-primary btn-sm" id="emailSendBtn" onclick="sendBroadcastEmail()">Send email to all users</button>
+ <button type="button" class="btn btn-sm" id="emailDryBtn" onclick="sendBroadcastEmail(true)" style="opacity:0.9;">Preview count (dry run)</button>
+ </div>
+ <div class="price-note" style="margin-top:8px;">Requires RESEND_API_KEY + verified domain. Large lists send slowly to respect rate limits — keep this tab open until it finishes.</div>
+ </div>
+
  <div class="panel-title" style="margin:24px 0 10px;">Recently Sent</div>
  <div id="notifHistoryList" style="font-size:13px;color:var(--muted);">Loading…</div>
  </div>
@@ -3729,6 +3753,75 @@ window.openOrderModal = openOrderModal;
 function closeOrderModal() { document.getElementById('orderModal').classList.add('hidden'); }
 
 /* NOTIFICATIONS (broadcast to all users) */
+
+async function sendBroadcastEmail(dryRun) {
+  const errEl = document.getElementById('emailSendError');
+  const okEl = document.getElementById('emailSendOk');
+  const btn = document.getElementById('emailSendBtn');
+  const dryBtn = document.getElementById('emailDryBtn');
+  if (errEl) errEl.textContent = '';
+  if (okEl) { okEl.style.display = 'none'; okEl.textContent = ''; }
+
+  const subject = (document.getElementById('emailSubject') || {}).value || '';
+  const body = (document.getElementById('emailBody') || {}).value || '';
+  const sub = String(subject).trim();
+  const msg = String(body).trim();
+
+  if (!sub) { if (errEl) errEl.textContent = 'Subject is required.'; return; }
+  if (!msg) { if (errEl) errEl.textContent = 'Email body is required.'; return; }
+
+  if (!dryRun) {
+    const n = (msg.match(/\S/g) || []).length;
+    if (!confirm('Send this email to ALL customers who have an email on file?\n\nSubject: ' + sub + '\n\nThis cannot be undone.')) return;
+  }
+
+  if (btn) btn.disabled = true;
+  if (dryBtn) dryBtn.disabled = true;
+  if (okEl) {
+    okEl.style.display = 'block';
+    okEl.style.color = 'var(--muted,#9ca3af)';
+    okEl.textContent = dryRun ? 'Counting recipients…' : 'Sending… keep this tab open.';
+  }
+
+  try {
+    const headers = await authHeaders();
+    headers['Content-Type'] = 'application/json';
+    const res = await fetch('/api/admin', {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({
+        resource: 'email_broadcast',
+        subject: sub,
+        body: msg,
+        dry_run: !!dryRun
+      })
+    });
+    const data = await res.json().catch(function(){ return {}; });
+    if (!res.ok || data.success === false) throw new Error(data.message || data.error || ('HTTP ' + res.status));
+
+    if (dryRun) {
+      if (okEl) {
+        okEl.style.color = '#34d399';
+        okEl.textContent = 'Would send to ' + (data.would_send || 0) + ' users.' +
+          (data.sample && data.sample.length ? ' Sample: ' + data.sample.join(', ') : '');
+      }
+    } else {
+      if (okEl) {
+        okEl.style.color = '#34d399';
+        okEl.textContent = 'Done. Sent: ' + (data.sent || 0) + ' / ' + (data.total || 0) +
+          (data.failed ? (' · Failed: ' + data.failed) : '');
+      }
+      if (typeof loadNotificationHistory === 'function') await loadNotificationHistory();
+    }
+  } catch (e) {
+    if (errEl) errEl.textContent = e.message || 'Failed to send email broadcast.';
+    if (okEl) okEl.style.display = 'none';
+  } finally {
+    if (btn) btn.disabled = false;
+    if (dryBtn) dryBtn.disabled = false;
+  }
+}
+
 async function sendBroadcastNotification() {
  const errEl = document.getElementById('notifSendError');
  errEl.textContent = '';
