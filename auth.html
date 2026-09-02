@@ -631,6 +631,15 @@ body[data-theme="light"] .form-group.ai-field:focus-within > label {
   .form-group.ai-field > label { transition: none; }
 }
 
+
+/* Transparent brand logos — no plate behind mark */
+img.brand-logo, img.sidebar-brand-logo-img, #brandLogo, #navBrandLogo, #sidebarBrandLogo, #welcomeModalLogo,
+.logo img, .brand-logo-img, .login-logo-img, .logo-dark, .logo-light {
+  background: transparent !important;
+  background-color: transparent !important;
+  box-shadow: none !important;
+  object-fit: contain;
+}
 </style>
 <script defer src="/_vercel/insights/script.js"></script>
 <script src="/js/user-errors.js"></script>
@@ -830,7 +839,7 @@ body[data-theme="light"] .form-group.ai-field:focus-within > label {
 
     <!-- Top Navigation -->
     <nav class="top-nav">
-        <img class="brand-logo-img" src="https://atczodlljmlayvldxfmv.supabase.co/storage/v1/object/public/avatars/dark%20background%20log" alt="MJ HUB">
+        <img class="brand-logo-img" src="/assets/logo-dark.png" alt="MJ HUB">
         <a href="landing.html" class="home-link">
             <span>←</span> Home
         </a>
@@ -1697,5 +1706,22 @@ body[data-theme="light"] .form-group.ai-field:focus-within > label {
 })();
 </script>
 
+
+<script>
+(function(){
+  var LIGHT='/assets/logo-light.png', DARK='/assets/logo-dark.png';
+  function apply(){
+    var t = document.documentElement.getAttribute('data-theme') || localStorage.getItem('mjhub-theme') || 'dark';
+    document.querySelectorAll('.brand-logo-img, #brandLogo, .login-logo-img').forEach(function(img){
+      img.src = t === 'light' ? LIGHT : DARK;
+      img.style.background = 'transparent';
+    });
+  }
+  apply();
+  window.addEventListener('storage', apply);
+  var obs = new MutationObserver(apply);
+  obs.observe(document.documentElement, { attributes:true, attributeFilter:['data-theme'] });
+})();
+</script>
 </body>
 </html>

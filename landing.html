@@ -1482,6 +1482,15 @@ footer.footer3, .footer3 { z-index: 10 !important; isolation: isolate; }
 
 .mobile-cta { z-index: 100 !important; }
 .support-widget { z-index: 2147483000 !important; }
+
+/* Transparent brand logos — no plate behind mark */
+img.brand-logo, img.sidebar-brand-logo-img, #brandLogo, #navBrandLogo, #sidebarBrandLogo, #welcomeModalLogo,
+.logo img, .brand-logo-img, .login-logo-img, .logo-dark, .logo-light {
+  background: transparent !important;
+  background-color: transparent !important;
+  box-shadow: none !important;
+  object-fit: contain;
+}
 </style>
 <script defer src="/_vercel/insights/script.js"></script>
   <link rel="stylesheet" href="css/skeleton.css">
@@ -1583,7 +1592,7 @@ footer.footer3, .footer3 { z-index: 10 !important; isolation: isolate; }
 
 <header class="header">
   <div class="header-inner">
-    <a href="/" class="logo"><img id="brandLogo" src="https://atczodlljmlayvldxfmv.supabase.co/storage/v1/object/public/avatars/dark%20background%20log" alt="MJ HUB"></a>
+    <a href="/" class="logo"><img id="brandLogo" src="/assets/logo-dark.png" alt="MJ HUB"></a>
     <nav class="nav-desktop">
       <a href="#features">Services</a>
       <a href="#telegram-sms">Telegram Bot</a>
@@ -2259,8 +2268,8 @@ document.addEventListener('DOMContentLoaded', () => {
   const menuBtn = document.getElementById('menuToggle');
   const mobileMenu = document.getElementById('mobileMenu');
   const brandLogo = document.getElementById('brandLogo');
-  const LOGO_DARK = 'https://atczodlljmlayvldxfmv.supabase.co/storage/v1/object/public/avatars/dark%20background%20log';
-  const LOGO_LIGHT = 'https://atczodlljmlayvldxfmv.supabase.co/storage/v1/object/public/avatars/light%20background%20logo';
+  const LOGO_DARK = '/assets/logo-dark.png';
+  const LOGO_LIGHT = '/assets/logo-light.png';
 
   function applyLogo(theme) {
     if (!brandLogo) return;
