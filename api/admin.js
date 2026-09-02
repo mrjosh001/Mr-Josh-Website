@@ -1050,13 +1050,28 @@ async function listProfilesHandle() {
   return { status: 200, body: { success: true, data: data || [] } };
 }
 
+async function fetchAllRows(table, orderCol) {
+  const pageSize = 1000;
+  const all = [];
+  let from = 0;
+  for (;;) {
+    const { data, error } = await supabase
+      .from(table)
+      .select('*')
+      .order(orderCol, { ascending: false })
+      .range(from, from + pageSize - 1);
+    if (error) return { error, data: all };
+    const batch = data || [];
+    all.push(...batch);
+    if (batch.length < pageSize) break;
+    from += pageSize;
+    if (from > 20000) break;
+  }
+  return { error: null, data: all };
+}
+
 async function listOrdersHandle() {
-  // Service role: every log sale including manual_ / restock products
-  let { data, error } = await supabase
-    .from('orders')
-    .select('*')
-    .order('created_at', { ascending: false })
-    .limit(1000);
+  const { data, error } = await fetchAllRows('orders', 'created_at');
   if (error) {
     return { status: 500, body: { success: false, message: 'Could not load orders: ' + error.message } };
   }
@@ -1307,15 +1322,22 @@ async function getClassyBalance() {
   );
 }
 
+async function safeBal(fn, name) {
+  try {
+    return await fn();
+  } catch (e) {
+    return { ok: false, error: name + ': ' + (e.message || String(e)) };
+  }
+}
 async function supplierBalancesFetch() {
   const [fadded, logsdomain, grizzly, sujan, owlet, classy, smsbus] = await Promise.all([
-    getFaddedBalance(),
-    getLogsDomainBalance(),
-    getGrizzlyBalance(),
-    getSujanBalance(),
-    fetchOwletBalance(),
-    getClassyBalance(),
-    getSmsBusBalance()
+    safeBal(getFaddedBalance, 'fadded'),
+    safeBal(getLogsDomainBalance, 'logsdomain'),
+    safeBal(getGrizzlyBalance, 'grizzly'),
+    safeBal(getSujanBalance, 'sujan'),
+    safeBal(fetchOwletBalance, 'owlet'),
+    safeBal(getClassyBalance, 'classy'),
+    safeBal(getSmsBusBalance, 'smsbus')
   ]);
   return {
     status: 200,
@@ -1373,12 +1395,10 @@ async function getOverviewStats(body) {
 
   let logsRes = await supabase.from('orders')
     .select('amount, quantity, product_key, product_code, product_name, product_id, status')
-    .in('status', ['completed', 'paid', 'success', 'delivered', 'complete', 'fulfilled'])
     .gte('created_at', cutoff);
   if (logsRes.error && /column|schema cache/i.test(logsRes.error.message || '')) {
     logsRes = await supabase.from('orders')
       .select('amount, quantity, product_name, status')
-      .in('status', ['completed', 'paid', 'success', 'delivered', 'complete', 'fulfilled'])
       .gte('created_at', cutoff);
   }
 
@@ -1400,7 +1420,7 @@ async function getOverviewStats(body) {
   // supplier_price is USD for grizzly + smsbus; legacy logsdomain numbers may be NGN.
   const smsRows = (smsRes.data || []).filter((r) => {
     const st = String(r.status || '').toLowerCase();
-    return st === 'completed' || st === 'complete' || st === 'success';
+    return ['completed','complete','success','received','code_received'].includes(st);
   });
   const smsAmountSpent = smsRows.reduce((s, r) => s + Number(r.price || 0), 0);
   const smsProfit = smsRows.reduce((s, r) => {
@@ -1421,7 +1441,8 @@ async function getOverviewStats(body) {
   }, 0);
 
   // ----- LOGS (product orders): customer paid (amount) minus product supplier_price -----
-  const logRows = logsRes.data || [];
+  const SKIP = new Set(['cancelled','canceled','refunded','failed','void']);
+  const logRows = (logsRes.data || []).filter((r) => !SKIP.has(String(r.status || '').toLowerCase()));
   const productList = productsRes.error ? [] : (productsRes.data || []);
   const productByKey = new Map();
   const productById = new Map();
