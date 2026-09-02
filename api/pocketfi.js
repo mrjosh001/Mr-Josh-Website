@@ -272,8 +272,8 @@ async function sendDepositEmail({ to, name, amountLabel, walletLabel, reference 
   const subject = "Deposit Notification";
 
   // Hosted brand logos (same assets as the live site)
-  const LOGO_DARK = 'https://mjhub.store/assets/logo-dark.png';
-  const LOGO_LIGHT = 'https://mjhub.store/assets/logo-light.png';
+  const LOGO_DARK = 'https://atczodlljmlayvldxfmv.supabase.co/storage/v1/object/public/avatars/dark%20background%20log';
+  const LOGO_LIGHT = 'https://atczodlljmlayvldxfmv.supabase.co/storage/v1/object/public/avatars/light%20background%20logo';
 
   const html = `
 <!DOCTYPE html>

@@ -310,8 +310,8 @@ function nudgeEmailContent(week, name, appUrl) {
   const subject = subjects[w] || subjects[1];
   const inner = bodies[w] || bodies[1];
   const year = new Date().getFullYear();
-  const LOGO_DARK = 'https://mjhub.store/assets/logo-dark.png';
-  const LOGO_LIGHT = 'https://mjhub.store/assets/logo-light.png';
+  const LOGO_DARK = 'https://atczodlljmlayvldxfmv.supabase.co/storage/v1/object/public/avatars/dark%20background%20log';
+  const LOGO_LIGHT = 'https://atczodlljmlayvldxfmv.supabase.co/storage/v1/object/public/avatars/light%20background%20logo';
 
   // Adaptive light/dark — follows the phone/mail app color scheme
   // (same approach as deposit emails in api/pocketfi.js)
