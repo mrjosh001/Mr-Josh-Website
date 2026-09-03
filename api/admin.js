@@ -1547,6 +1547,277 @@ function secretsStatusHandle() {
 
 // ---------- router ----------
 
+/* ===========================================================================
+ * EMAIL BROADCAST — resource: 'email_broadcast'
+ *   action: 'preview' — no fields — returns { would_send, sample: [5 emails] }
+ *   action: 'send'    — { subject, body } — actually sends via Resend
+ *
+ * Recipients: pages through profiles (1000 at a time), keeps rows with a
+ * plausible email (contains '@'), skips email_unsubscribed = true, dedupes
+ * by lowercased email. Same eligibility rule the existing nudge-email system
+ * in api/order.js already uses, so "who's subscribed" means one consistent
+ * thing everywhere in this codebase.
+ *
+ * Sending: Resend's /emails/batch endpoint, 50 emails per call (well under
+ * their 100/call cap, leaves headroom), with a short pause between batches
+ * so this function has less chance of hitting Vercel's execution time limit
+ * on a large customer list. After a real send, logs one row to
+ * "notifications" as "[Email] {subject}" with user_id: null — a record for
+ * the admin's own "Recently Sent" list, NOT a real broadcast notification
+ * (dashboard.html's bell/popup query explicitly excludes type:'email_log'
+ * so customers never see this row as an in-app notification — see
+ * loadAdminNotifications() in dashboard.html).
+ *
+ * Env: RESEND_API_KEY, RESEND_FROM_EMAIL (or RESEND_FROM), APP_URL
+ * ========================================================================= */
+
+async function fetchBroadcastRecipients() {
+  const seen = new Set();
+  const recipients = [];
+  const pageSize = 1000;
+  let from = 0;
+
+  while (true) {
+    const { data, error } = await supabase
+      .from('profiles')
+      .select('email, full_name')
+      .or('email_unsubscribed.is.null,email_unsubscribed.eq.false')
+      .range(from, from + pageSize - 1);
+
+    if (error) throw new Error(error.message);
+    if (!data || data.length === 0) break;
+
+    for (const row of data) {
+      const email = String(row.email || '').trim();
+      if (!email || !email.includes('@')) continue;
+      const key = email.toLowerCase();
+      if (seen.has(key)) continue;
+      seen.add(key);
+      recipients.push({ email, full_name: String(row.full_name || '').trim() });
+    }
+
+    if (data.length < pageSize) break;
+    from += pageSize;
+  }
+
+  return recipients;
+}
+
+function escapeHtmlForEmail(str) {
+  return String(str || '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+/** Same brand template as the deposit-notification email (pocketfi.js) —
+ * dark/light adaptive, logo, blue CTA — with the admin's plain-text body
+ * dropped in (HTML-escaped, line breaks kept) instead of an amount card. */
+function buildBroadcastEmailHtml({ name, subject, message }) {
+  const safeName = escapeHtmlForEmail(String(name || '').trim() || 'there');
+  const safeSubject = escapeHtmlForEmail(subject);
+  const safeMessageHtml = escapeHtmlForEmail(message).replace(/\n/g, '<br>');
+  const appUrl = (process.env.APP_URL || 'https://app.mjhub.store').replace(/\/$/, '');
+  const year = new Date().getFullYear();
+  const unsubUrl = `${appUrl}/dashboard?unsubscribe=1`;
+
+  const LOGO_DARK = 'https://atczodlljmlayvldxfmv.supabase.co/storage/v1/object/public/avatars/dark%20background%20log';
+  const LOGO_LIGHT = 'https://atczodlljmlayvldxfmv.supabase.co/storage/v1/object/public/avatars/light%20background%20logo';
+
+  return `
+<!DOCTYPE html>
+<html lang="en" xmlns="http://www.w3.org/1999/xhtml">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="color-scheme" content="light dark">
+  <meta name="supported-color-schemes" content="light dark">
+  <title>${safeSubject}</title>
+  <style>
+    :root { color-scheme: light dark; }
+    @media (prefers-color-scheme: light) {
+      .body-bg { background-color: #f4f5f7 !important; }
+      .card-bg { background-color: #ffffff !important; border-color: #e5e7eb !important; }
+      .inner-bg { background-color: #f8f9fb !important; border-color: #e5e7eb !important; }
+      .text-primary { color: #111827 !important; }
+      .text-secondary { color: #6b7280 !important; }
+      .text-muted { color: #9ca3af !important; }
+      .divider { border-color: #e5e7eb !important; background-color: #e5e7eb !important; }
+      .badge { background-color: rgba(91,138,245,0.10) !important; border-color: rgba(91,138,245,0.22) !important; color: #3b6fd4 !important; }
+      .logo-dark { display: none !important; max-height: 0 !important; overflow: hidden !important; width: 0 !important; height: 0 !important; }
+      .logo-light { display: block !important; max-height: none !important; }
+    }
+    @media (prefers-color-scheme: dark) {
+      .body-bg { background-color: #0a0a0f !important; }
+      .card-bg { background-color: #111118 !important; border-color: #1c1c28 !important; }
+      .inner-bg { background-color: #0a0a0f !important; border-color: #1c1c28 !important; }
+      .text-primary { color: #f4f4f8 !important; }
+      .text-secondary { color: #9ca3af !important; }
+      .text-muted { color: #6b7280 !important; }
+      .divider { border-color: #1c1c28 !important; background-color: #1c1c28 !important; }
+      .badge { background-color: rgba(91,138,245,0.12) !important; border-color: rgba(91,138,245,0.25) !important; color: #8badea !important; }
+      .logo-light { display: none !important; max-height: 0 !important; overflow: hidden !important; width: 0 !important; height: 0 !important; }
+      .logo-dark { display: block !important; max-height: none !important; }
+    }
+  </style>
+</head>
+<body class="body-bg" style="margin:0;padding:0;background:#0a0a0f;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" class="body-bg" style="background:#0a0a0f;padding:40px 16px;">
+    <tr>
+      <td align="center">
+        <table role="presentation" width="100%" class="card-bg" style="max-width:440px;background:#111118;border-radius:20px;border:1px solid #1c1c28;overflow:hidden;">
+
+          <tr>
+            <td style="padding:28px 28px 0;text-align:center;">
+              <img class="logo-dark" src="${LOGO_DARK}" width="140" alt="MJ Hub" style="display:block;margin:0 auto;width:140px;max-width:140px;height:auto;border:0;">
+              <img class="logo-light" src="${LOGO_LIGHT}" width="140" alt="MJ Hub" style="display:none;margin:0 auto;width:140px;max-width:140px;height:auto;border:0;">
+            </td>
+          </tr>
+
+          <tr>
+            <td style="padding:22px 28px 0;text-align:center;">
+              <div class="badge" style="display:inline-block;background:rgba(91,138,245,0.12);border:1px solid rgba(91,138,245,0.25);color:#8badea;font-size:11px;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;padding:6px 14px;border-radius:999px;">
+                ${safeSubject}
+              </div>
+            </td>
+          </tr>
+
+          <tr>
+            <td style="padding:22px 28px 0;">
+              <p class="text-primary" style="margin:0;font-size:16px;font-weight:600;color:#f4f4f8;line-height:1.4;">Hi ${safeName},</p>
+              <p class="text-secondary" style="margin:14px 0 0;font-size:14px;color:#9ca3af;line-height:1.75;">${safeMessageHtml}</p>
+            </td>
+          </tr>
+
+          <tr>
+            <td style="padding:28px 28px 0;text-align:center;">
+              <a href="${appUrl}/dashboard" style="display:inline-block;background:linear-gradient(135deg,#5b8af5 0%,#7c5cfc 100%);color:#ffffff;text-decoration:none;font-weight:700;font-size:14px;padding:14px 32px;border-radius:12px;letter-spacing:0.01em;">
+                Open Dashboard
+              </a>
+            </td>
+          </tr>
+
+          <tr>
+            <td style="padding:24px 28px 0;">
+              <p class="text-muted" style="margin:0;font-size:12px;color:#6b7280;line-height:1.55;text-align:center;">
+                Don't want emails like this? <a href="${unsubUrl}" style="color:#5b8af5;text-decoration:none;">Unsubscribe</a>
+              </p>
+            </td>
+          </tr>
+
+          <tr>
+            <td style="padding:24px 28px 28px;text-align:center;">
+              <div class="divider" style="height:1px;background:#1c1c28;margin-bottom:18px;"></div>
+              <p class="text-muted" style="margin:0;font-size:11px;color:#4b5563;line-height:1.5;">
+                © ${year} MJ Hub. All rights reserved.
+              </p>
+            </td>
+          </tr>
+
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>`.trim();
+}
+
+async function emailBroadcastPreview() {
+  try {
+    const recipients = await fetchBroadcastRecipients();
+    return {
+      status: 200,
+      body: {
+        success: true,
+        would_send: recipients.length,
+        sample: recipients.slice(0, 5).map((r) => r.email)
+      }
+    };
+  } catch (e) {
+    return { status: 500, body: { success: false, message: 'Could not load recipients: ' + e.message } };
+  }
+}
+
+async function emailBroadcastSend(body) {
+  const subject = String(body.subject || '').trim();
+  const message = String(body.body || '').trim();
+  if (!subject) return { status: 400, body: { success: false, message: 'Subject is required' } };
+  if (!message) return { status: 400, body: { success: false, message: 'Body is required' } };
+
+  const apiKey = process.env.RESEND_API_KEY;
+  if (!apiKey) {
+    return { status: 500, body: { success: false, message: 'Missing RESEND_API_KEY' } };
+  }
+  const from = process.env.RESEND_FROM_EMAIL || process.env.RESEND_FROM || 'MJ Hub <onboarding@resend.dev>';
+
+  let recipients;
+  try {
+    recipients = await fetchBroadcastRecipients();
+  } catch (e) {
+    return { status: 500, body: { success: false, message: 'Could not load recipients: ' + e.message } };
+  }
+
+  if (recipients.length === 0) {
+    return { status: 200, body: { success: true, sent: 0, failed: 0, total: 0 } };
+  }
+
+  let sent = 0;
+  let failed = 0;
+  const BATCH_SIZE = 50;
+
+  for (let i = 0; i < recipients.length; i += BATCH_SIZE) {
+    const chunk = recipients.slice(i, i + BATCH_SIZE);
+    const payload = chunk.map((r) => ({
+      from,
+      to: [r.email],
+      subject,
+      html: buildBroadcastEmailHtml({ name: r.full_name, subject, message })
+    }));
+
+    try {
+      const resp = await fetch('https://api.resend.com/emails/batch', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${apiKey}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(payload)
+      });
+      const json = await resp.json().catch(() => ({}));
+      if (resp.ok && Array.isArray(json.data)) {
+        sent += json.data.length;
+        failed += chunk.length - json.data.length;
+      } else {
+        failed += chunk.length;
+        console.error('[email_broadcast] batch failed', json?.error || json || resp.status);
+      }
+    } catch (e) {
+      failed += chunk.length;
+      console.error('[email_broadcast] batch request error', e.message);
+    }
+
+    // Short pause between batches so the function does not time out as easily
+    if (i + BATCH_SIZE < recipients.length) {
+      await new Promise((r) => setTimeout(r, 400));
+    }
+  }
+
+  try {
+    await supabase.from('notifications').insert({
+      user_id: null,
+      title: `[Email] ${subject}`,
+      body: null,
+      type: 'email_log'
+    });
+  } catch (e) {
+    console.warn('[email_broadcast] history log insert failed', e.message);
+  }
+
+  return { status: 200, body: { success: true, sent, failed, total: recipients.length } };
+}
+
 export default async function handler(req, res) {
   applyApiCors(req, res, { methods: 'POST, OPTIONS' });
   setNoStore(res);
@@ -1625,8 +1896,12 @@ export default async function handler(req, res) {
       result = await getUserJoinDates();
     } else if (resource === 'secrets_status') {
       result = secretsStatusHandle();
+    } else if (resource === 'email_broadcast') {
+      if (action === 'preview') result = await emailBroadcastPreview();
+      else if (action === 'send') result = await emailBroadcastSend(body);
+      else result = { status: 400, body: { success: false, message: 'Unknown email_broadcast action. Use "preview" or "send".' } };
     } else {
-      result = { status: 400, body: { success: false, message: 'Unknown resource. Use "user", "product", "inventory", "sms", "profiles", "orders", "sms_orders", "booster_orders", "supplier_balances", "overview", "user_join_dates", "secrets_status", "sub_admin", or "vendor".' } };
+      result = { status: 400, body: { success: false, message: 'Unknown resource. Use "user", "product", "inventory", "sms", "profiles", "orders", "sms_orders", "booster_orders", "supplier_balances", "overview", "user_join_dates", "secrets_status", "sub_admin", "email_broadcast", or "vendor".' } };
     }
 
     return res.status(result.status).json(result.body);
