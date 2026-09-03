@@ -99,7 +99,7 @@ async function requireAuthUser(req) {
 
 /**
  * Insert into orders using only columns that exist on THIS project.
- * login_credentials_raw is NOT used (column missing on your DB).
+ * login_credentials_raw is saved when the column exists (true supplier payload for admin).
  */
 async function insertLogOrder(row) {
   const optional = [
@@ -113,8 +113,7 @@ async function insertLogOrder(row) {
   ];
 
   let attempt = { ...row };
-  delete attempt.login_credentials_raw;
-  if (!attempt.created_at) attempt.created_at = new Date().toISOString();
+    if (!attempt.created_at) attempt.created_at = new Date().toISOString();
 
   let lastErr = null;
   for (let i = 0; i <= optional.length; i++) {
@@ -219,14 +218,40 @@ export default async function handler(req, res) {
     total = Number(product.price) * qty;
     productName = product.name;
 
-    const { data: profile, error: profileErr } = await supabase
+    let { data: profile, error: profileErr } = await supabase
       .from('profiles')
-      .select('customer_id')
+      .select('customer_id, balance')
       .eq('id', user_id)
-      .single();
+      .maybeSingle();
 
     if (profileErr || !profile) {
-      return res.status(400).json({ success: false, message: 'User profile not found' });
+      const email = auth.user.email || null;
+      const name =
+        auth.user.user_metadata?.full_name ||
+        auth.user.user_metadata?.name ||
+        (email ? String(email).split('@')[0] : 'User');
+      const customer_id = 'MJ' + String(Date.now()).slice(-8) + Math.random().toString(36).slice(2, 5).toUpperCase();
+      const { error: upErr } = await supabase.from('profiles').upsert({
+        id: user_id,
+        email,
+        full_name: name,
+        customer_id,
+        balance: 0,
+        updated_at: new Date().toISOString()
+      }, { onConflict: 'id' });
+      if (upErr) {
+        console.error('[order-manual] profile upsert', upErr.message || profileErr?.message);
+        return res.status(400).json({ success: false, message: 'User profile not found' });
+      }
+      const again = await supabase
+        .from('profiles')
+        .select('customer_id, balance')
+        .eq('id', user_id)
+        .maybeSingle();
+      profile = again.data;
+      if (!profile) {
+        return res.status(400).json({ success: false, message: 'User profile not found' });
+      }
     }
 
     customerId = profile.customer_id;

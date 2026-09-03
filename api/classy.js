@@ -300,19 +300,54 @@ async function handleOrder(req, res) {
   const total = unitPrice * qty;
   const productName = product.name || 'ClassyTee product';
 
-  // Balance column: prefer balance_ngn, fall back to balance
-  const { data: profile } = await supabase
+  // Only select columns that always exist. Selecting a missing column
+  // (e.g. balance_ngn) makes PostgREST fail the whole query and we
+  // falsely return "Profile not found".
+  let { data: profile, error: profileErr } = await supabase
     .from('profiles')
-    .select('id, balance, balance_ngn, customer_id')
+    .select('id, balance, customer_id')
     .eq('id', user_id)
     .maybeSingle();
 
-  if (!profile) {
-    return res.status(400).json({ success: false, message: 'Profile not found' });
+  if (profileErr) {
+    console.error('[classy] profile select', profileErr.message);
   }
 
-  const balanceColumn = profile.balance_ngn != null ? 'balance_ngn' : 'balance';
-  const originalBalance = Number(profile[balanceColumn] || 0);
+  if (!profile) {
+    // Auth user exists but profiles row was never created (failed signup
+    // trigger, deleted soft, or race). Create a minimal row so purchase
+    // can continue; balance starts at 0 so insufficient-balance still applies.
+    const email = auth.user.email || null;
+    const name =
+      auth.user.user_metadata?.full_name ||
+      auth.user.user_metadata?.name ||
+      (email ? String(email).split('@')[0] : 'User');
+    const customer_id = 'MJ' + String(Date.now()).slice(-8) + Math.random().toString(36).slice(2, 5).toUpperCase();
+    const { error: upErr } = await supabase.from('profiles').upsert({
+      id: user_id,
+      email,
+      full_name: name,
+      customer_id,
+      balance: 0,
+      updated_at: new Date().toISOString()
+    }, { onConflict: 'id' });
+    if (upErr) {
+      console.error('[classy] profile upsert', upErr.message);
+      return res.status(400).json({ success: false, message: 'Profile not found' });
+    }
+    const again = await supabase
+      .from('profiles')
+      .select('id, balance, customer_id')
+      .eq('id', user_id)
+      .maybeSingle();
+    profile = again.data;
+    if (!profile) {
+      return res.status(400).json({ success: false, message: 'Profile not found' });
+    }
+  }
+
+  const balanceColumn = 'balance';
+  const originalBalance = Number(profile.balance || 0);
   if (originalBalance < total) {
     return res.status(400).json({ success: false, message: 'Insufficient balance' });
   }

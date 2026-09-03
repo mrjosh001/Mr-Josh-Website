@@ -784,12 +784,39 @@ export default async function handler(req, res) {
         .from('profiles')
         .select('balance, customer_id')
         .eq('id', user_id)
-        .single();
+        .maybeSingle();
       if (r1.error || !r1.data) {
         console.error('[order-logsdomain] profile lookup failed:', r1.error);
-        return res.status(400).json({ success: false, message: 'User profile not found' });
+        const email = auth.user.email || null;
+        const name =
+          auth.user.user_metadata?.full_name ||
+          auth.user.user_metadata?.name ||
+          (email ? String(email).split('@')[0] : 'User');
+        const customer_id = 'MJ' + String(Date.now()).slice(-8) + Math.random().toString(36).slice(2, 5).toUpperCase();
+        const { error: upErr } = await supabase.from('profiles').upsert({
+          id: user_id,
+          email,
+          full_name: name,
+          customer_id,
+          balance: 0,
+          updated_at: new Date().toISOString()
+        }, { onConflict: 'id' });
+        if (upErr) {
+          console.error('[order-logsdomain] profile upsert', upErr.message);
+          return res.status(400).json({ success: false, message: 'User profile not found' });
+        }
+        const again = await supabase
+          .from('profiles')
+          .select('balance, customer_id')
+          .eq('id', user_id)
+          .maybeSingle();
+        if (!again.data) {
+          return res.status(400).json({ success: false, message: 'User profile not found' });
+        }
+        profile = again.data;
+      } else {
+        profile = r1.data;
       }
-      profile = r1.data;
       balanceColumn = 'balance';
       originalBalance = Number(profile.balance || 0);
       customerId = profile.customer_id;
