@@ -1367,28 +1367,47 @@ async function getUserJoinDates() {
  * weren't reflected in the overview at all.
  */
 async function getOverviewStats(body) {
-  const period = PERIOD_DAYS[body.period] ? body.period : 'month';
-  const cutoff = new Date(Date.now() - PERIOD_DAYS[period] * 86400000).toISOString();
+  const period = body.period === 'custom'
+    ? 'custom'
+    : (PERIOD_DAYS[body.period] ? body.period : '7days');
+  let cutoff = new Date(Date.now() - (PERIOD_DAYS[period] || 7) * 86400000).toISOString();
+  let endAt = null;
+  if (period === 'custom') {
+    const from = String(body.from || '').trim();
+    const to = String(body.to || '').trim();
+    if (from) cutoff = new Date(from + 'T00:00:00.000Z').toISOString();
+    else cutoff = new Date(Date.now() - 7 * 86400000).toISOString();
+    if (to) endAt = new Date(to + 'T23:59:59.999Z').toISOString();
+  }
   const usdToNgn = Number(process.env.USD_TO_NGN_RATE) || 1500;
 
-  let logsRes = await supabase.from('orders')
+  let logsQuery = supabase.from('orders')
     .select('amount, quantity, product_key, product_code, product_name, product_id, status')
     .in('status', ['completed', 'paid', 'success', 'delivered', 'complete', 'fulfilled'])
     .gte('created_at', cutoff);
+  if (endAt) logsQuery = logsQuery.lte('created_at', endAt);
+  let logsRes = await logsQuery;
   if (logsRes.error && /column|schema cache/i.test(logsRes.error.message || '')) {
-    logsRes = await supabase.from('orders')
+    let q = supabase.from('orders')
       .select('amount, quantity, product_name, status')
       .in('status', ['completed', 'paid', 'success', 'delivered', 'complete', 'fulfilled'])
       .gte('created_at', cutoff);
+    if (endAt) q = q.lte('created_at', endAt);
+    logsRes = await q;
   }
 
+  let smsQuery = supabase.from('number_orders')
+    .select('price, supplier_price, source, status, refunded')
+    .gte('created_at', cutoff);
+  if (endAt) smsQuery = smsQuery.lte('created_at', endAt);
+  let boostQuery = supabase.from('booster_orders')
+    .select('price_ngn, charge_usd, quantity, status, created_at')
+    .gte('created_at', cutoff);
+  if (endAt) boostQuery = boostQuery.lte('created_at', endAt);
+
   const [smsRes, boostRes, productsRes] = await Promise.all([
-    supabase.from('number_orders')
-      .select('price, supplier_price, source, status, refunded')
-      .gte('created_at', cutoff),
-    supabase.from('booster_orders')
-      .select('price_ngn, charge_usd, quantity, status, created_at')
-      .gte('created_at', cutoff),
+    smsQuery,
+    boostQuery,
     supabase.from('products')
       .select('id, product_key, name, supplier_price')
   ]);
@@ -1455,7 +1474,9 @@ async function getOverviewStats(body) {
   if (boostRes.error) {
     console.warn('[overview] booster_orders:', boostRes.error.message);
     // Retry with minimal columns
-    const retry = await supabase.from('booster_orders').select('price_ngn, status, created_at').gte('created_at', cutoff);
+    let retryQ = supabase.from('booster_orders').select('price_ngn, status, created_at').gte('created_at', cutoff);
+    if (endAt) retryQ = retryQ.lte('created_at', endAt);
+    const retry = await retryQ;
     if (!retry.error) boostRows = retry.data || [];
   } else {
     boostRows = boostRes.data || [];
