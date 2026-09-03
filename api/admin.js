@@ -145,7 +145,7 @@ async function requireAdmin(req) {
   const isAdmin = profile && truthyFlag(profile.is_admin);
   if (!isAdmin) return { ok: false, status: 403, message: 'Admin privileges required' };
 
-  return { ok: true, adminId: user.id, isAdmin: true, isSubAdmin: false, profile };
+  return { ok: true, adminId: user.id, isAdmin: true, isSubAdmin: false, profile, email: (profile && profile.email) || user.email || '' };
 }
 
 /** Main admin OR sub-admin (vendor) */
@@ -1724,6 +1724,49 @@ function buildBroadcastEmailHtml({ name, subject, message }) {
 </html>`.trim();
 }
 
+
+async function emailBroadcastTest(body, admin) {
+  const subject = String(body.subject || '').trim();
+  const message = String(body.body || '').trim();
+  if (!subject) return { status: 400, body: { success: false, message: 'Subject is required' } };
+  if (!message) return { status: 400, body: { success: false, message: 'Body is required' } };
+
+  const to = String((admin && admin.email) || (admin && admin.profile && admin.profile.email) || '').trim();
+  if (!to || !to.includes('@')) {
+    return { status: 400, body: { success: false, message: 'Your admin profile has no email. Add it on your profile first.' } };
+  }
+
+  const apiKey = process.env.RESEND_API_KEY;
+  if (!apiKey) {
+    return { status: 500, body: { success: false, message: 'Missing RESEND_API_KEY' } };
+  }
+  const from = process.env.RESEND_FROM_EMAIL || process.env.RESEND_FROM || 'MJ Hub <onboarding@resend.dev>';
+  const name = (admin && admin.profile && admin.profile.full_name) || 'Admin';
+
+  try {
+    const resp = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: {
+        Authorization: 'Bearer ' + apiKey,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        from,
+        to: [to],
+        subject: '[TEST] ' + subject,
+        html: buildBroadcastEmailHtml({ name, subject, message })
+      })
+    });
+    const json = await resp.json().catch(() => ({}));
+    if (!resp.ok) {
+      return { status: 500, body: { success: false, message: json.message || json.error || ('Resend ' + resp.status) } };
+    }
+    return { status: 200, body: { success: true, sent: 1, failed: 0, to, id: json.id || null } };
+  } catch (e) {
+    return { status: 500, body: { success: false, message: e.message || 'Test send failed' } };
+  }
+}
+
 async function emailBroadcastPreview() {
   try {
     const recipients = await fetchBroadcastRecipients();
@@ -1899,7 +1942,8 @@ export default async function handler(req, res) {
     } else if (resource === 'email_broadcast') {
       if (action === 'preview') result = await emailBroadcastPreview();
       else if (action === 'send') result = await emailBroadcastSend(body);
-      else result = { status: 400, body: { success: false, message: 'Unknown email_broadcast action. Use "preview" or "send".' } };
+      else if (action === 'test') result = await emailBroadcastTest(body, admin);
+      else result = { status: 400, body: { success: false, message: 'Unknown email_broadcast action. Use "preview", "test", or "send".' } };
     } else {
       result = { status: 400, body: { success: false, message: 'Unknown resource. Use "user", "product", "inventory", "sms", "profiles", "orders", "sms_orders", "booster_orders", "supplier_balances", "overview", "user_join_dates", "secrets_status", "sub_admin", "email_broadcast", or "vendor".' } };
     }
