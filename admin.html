@@ -1489,7 +1489,7 @@ async function loadAllData() {
  await Promise.all(tasks);
  try { if (typeof resumeGrizzlySyncIfRunning === 'function') resumeGrizzlySyncIfRunning(); } catch (e) {}
  try { if (typeof updateMetrics === 'function') updateMetrics(); } catch (e) {}
- try { if (typeof loadSupplierBalances === 'function') loadSupplierBalances(); } catch (e) {}
+ try { /* supplier balances: Refresh only */ } catch (e) {}
  } finally {
  _adminDataLoading = false;
  }
@@ -1581,55 +1581,41 @@ async function bulkRepriceNumbers(mode) {
 }
 
 async function loadSupplierBalances() {
+ const names = ['fadded','logsdomain','grizzly','sujan','classy','owlet','smsbus'];
+ const ui = { fadded:'Fadded', logsdomain:'Logsdomain', grizzly:'Grizzly', sujan:'Sujan', classy:'Classy', owlet:'Owlet', smsbus:'Smsbus' };
  const btn = document.getElementById('btnRefreshSupplierBalances');
  setBtnBusy(btn, true, 'Refreshing...');
- ['Fadded', 'Logsdomain', 'Grizzly', 'Sujan', 'Classy', 'Owlet', 'Smsbus'].forEach(p => {
- const sub = document.getElementById('bal' + p + 'Sub');
- if (sub) sub.textContent = 'Loading…';
+ names.forEach(n => {
+   const sub = document.getElementById('bal' + ui[n] + 'Sub');
+   if (sub) sub.textContent = 'Loading…';
  });
- // Step-tracked the same way uploadManualStock() already does, so a
- // failure reports exactly which operation broke (building headers vs.
- // the network request vs. parsing the response) instead of one generic
- // message that could mean any of those three very different things.
- let step = 'building auth headers';
  try {
- const headers = await authHeaders();
- headers['Content-Type'] = 'application/json';
-
- step = 'requesting supplier balances';
- const res = await fetch('/api/admin', {
- method: 'POST',
- headers,
- body: JSON.stringify({ resource: 'supplier_balances' })
- });
-
- step = 'reading response';
- const raw = await res.text();
- let data = {};
- try { data = raw ? JSON.parse(raw) : {}; }
- catch (e) {
-   throw new Error('Server did not return JSON (' + res.status + '). ' + String(raw).slice(0, 80));
- }
-
- if (!data.success) {
- showAdminToast(data.message || 'Could not load supplier balances', 'error');
- return;
- }
- renderSupplierBalance('Fadded', data.suppliers.fadded);
- renderSupplierBalance('Logsdomain', data.suppliers.logsdomain);
- renderSupplierBalance('Grizzly', data.suppliers.grizzly);
- renderSupplierBalance('Sujan', data.suppliers.sujan);
- renderSupplierBalance('Classy', data.suppliers.classy);
- renderSupplierBalance('Owlet', data.suppliers.owlet);
- renderSupplierBalance('Smsbus', data.suppliers.smsbus);
+   const headers = await authHeaders();
+   headers['Content-Type'] = 'application/json';
+   for (const name of names) {
+     try {
+       const res = await fetch('/api/admin', {
+         method: 'POST', headers,
+         body: JSON.stringify({ resource: 'supplier_balances', supplier: name })
+       });
+       const raw = await res.text();
+       let data = {};
+       try { data = raw ? JSON.parse(raw) : {}; } catch (_) {
+         renderSupplierBalance(ui[name], { ok: false, error: 'HTTP ' + res.status });
+         continue;
+       }
+       const row = (data.suppliers && data.suppliers[name]) || { ok: false, error: data.message || 'No data' };
+       renderSupplierBalance(ui[name], row);
+     } catch (e) {
+       renderSupplierBalance(ui[name], { ok: false, error: e.message || 'failed' });
+     }
+   }
  } catch (err) {
- console.error('Supplier balance error at step:', step, err.name, err.message, err.stack);
- showAdminToast(`Supplier balance check failed while ${step}: ` + (err.message || 'network error'), 'error');
+   showAdminToast('Supplier balance: ' + (err.message || 'network error'), 'error');
  } finally {
- setBtnBusy(btn, false, '<i class="fas fa-sync"></i> Refresh');
+   setBtnBusy(btn, false, '<i class="fas fa-sync"></i> Refresh');
  }
 }
-
 async function loadProducts() {
  try {
  const { data, error } = await sb.from('products').select('*').order('name');
