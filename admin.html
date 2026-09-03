@@ -1011,6 +1011,27 @@ function withLagos(opts) { return Object.assign({ timeZone: 'Africa/Lagos' }, op
  <div class="panel-title" style="margin:24px 0 10px;">Recently Sent</div>
  <div id="notifHistoryList" style="font-size:13px;color:var(--muted);">Loading…</div>
  </div>
+
+ <div class="panel" style="margin-top:14px;">
+ <div class="panel-title" style="margin-bottom:4px;">Email All Customers</div>
+ <p style="color:var(--text-muted);font-size:12.5px;margin:0 0 14px;line-height:1.5;">
+ Sends a real email via Resend to every customer with a valid, subscribed email address. Separate from the in-app notification above — this lands in their inbox.
+ </p>
+ <div class="field" style="max-width:520px;">
+ <label>Subject</label>
+ <input type="text" id="emailBroadcastSubject" placeholder="e.g. New products just added" maxlength="150" />
+ </div>
+ <div class="field" style="max-width:520px;">
+ <label>Body</label>
+ <textarea id="emailBroadcastBody" rows="6" placeholder="Plain text only — no HTML. Line breaks are kept as written." maxlength="5000"></textarea>
+ </div>
+ <div id="emailBroadcastMsg" style="font-size:13px;margin:4px 0 12px;"></div>
+ <div style="display:flex;flex-wrap:wrap;gap:10px;">
+ <button class="btn btn-secondary btn-sm" id="emailBroadcastPreviewBtn" onclick="previewEmailBroadcast()"><i class="fas fa-eye"></i> Preview count</button>
+ <button class="btn btn-primary btn-sm" id="emailBroadcastSendBtn" onclick="sendEmailBroadcast()"><i class="fas fa-paper-plane"></i> Send email to all customers</button>
+ </div>
+ <div class="price-note" style="margin-top:10px;">No mail is sent until you click "Send" and confirm. Skips unsubscribed addresses automatically.</div>
+ </div>
  </div>
 
  
@@ -3779,6 +3800,81 @@ async function loadNotificationHistory() {
  <div style="margin-top:4px;font-size:11px;">${ngWhen(n.created_at)} · ${escapeHtml(n.type || 'activity')}</div>
  </div>
  `).join('');
+}
+
+/* EMAIL BROADCAST (Resend, real email to all customers) */
+function emailBroadcastFields() {
+ return {
+ subject: document.getElementById('emailBroadcastSubject').value.trim(),
+ body: document.getElementById('emailBroadcastBody').value.trim()
+ };
+}
+
+async function callEmailBroadcast(action, extra) {
+ const headers = await authHeaders();
+ const res = await fetch('/api/admin', {
+ method: 'POST',
+ headers: { ...headers, 'Content-Type': 'application/json' },
+ body: JSON.stringify({ resource: 'email_broadcast', action, ...(extra || {}) })
+ });
+ const data = await res.json().catch(() => ({}));
+ if (!res.ok || !data.success) {
+ throw new Error(data.message || `Request failed (${res.status})`);
+ }
+ return data;
+}
+
+async function previewEmailBroadcast() {
+ const msgEl = document.getElementById('emailBroadcastMsg');
+ const btn = document.getElementById('emailBroadcastPreviewBtn');
+ msgEl.style.color = '';
+ msgEl.textContent = 'Checking…';
+ btn.disabled = true;
+ try {
+ const data = await callEmailBroadcast('preview');
+ const sample = (data.sample || []).join(', ');
+ msgEl.style.color = 'var(--muted)';
+ msgEl.innerHTML = `Would send to <strong style="color:var(--text,#fff);">${data.would_send}</strong> customer(s).` +
+ (sample ? ` Sample: ${escapeHtml(sample)}` : '') +
+ ' No mail sent by this preview.';
+ } catch (e) {
+ msgEl.style.color = 'var(--danger,#f87171)';
+ msgEl.textContent = e.message || 'Could not load preview.';
+ } finally {
+ btn.disabled = false;
+ }
+}
+
+async function sendEmailBroadcast() {
+ const msgEl = document.getElementById('emailBroadcastMsg');
+ const { subject, body } = emailBroadcastFields();
+
+ if (!subject) { msgEl.style.color = 'var(--danger,#f87171)'; msgEl.textContent = 'Subject is required.'; return; }
+ if (!body) { msgEl.style.color = 'var(--danger,#f87171)'; msgEl.textContent = 'Body is required.'; return; }
+
+ if (!confirm('Send this email to every subscribed customer? This cannot be undone.')) return;
+
+ const sendBtn = document.getElementById('emailBroadcastSendBtn');
+ const previewBtn = document.getElementById('emailBroadcastPreviewBtn');
+ sendBtn.disabled = true;
+ previewBtn.disabled = true;
+ msgEl.style.color = 'var(--muted)';
+ msgEl.textContent = 'Sending… this can take a moment for a large customer list.';
+
+ try {
+ const data = await callEmailBroadcast('send', { subject, body });
+ msgEl.style.color = 'var(--muted)';
+ msgEl.innerHTML = `Sent <strong style="color:var(--text,#fff);">${data.sent}</strong>, failed <strong style="color:var(--text,#fff);">${data.failed}</strong> (of ${data.total}).`;
+ document.getElementById('emailBroadcastSubject').value = '';
+ document.getElementById('emailBroadcastBody').value = '';
+ await loadNotificationHistory();
+ } catch (e) {
+ msgEl.style.color = 'var(--danger,#f87171)';
+ msgEl.textContent = e.message || 'Send failed.';
+ } finally {
+ sendBtn.disabled = false;
+ previewBtn.disabled = false;
+ }
 }
 
 /* ===========================================================================
