@@ -1008,26 +1008,6 @@ function withLagos(opts) { return Object.assign({ timeZone: 'Africa/Lagos' }, op
  <button class="btn btn-primary btn-sm" onclick="sendBroadcastNotification()">Send to All Users</button>
  <div class="price-note" style="margin-top:6px;">Every user will see this in their notification bell next time they load the app. It disappears from their view 24 hours after they open it.</div>
 
- <div class="panel-title" style="margin:28px 0 10px;">Email all customers</div>
- <p style="font-size:13px;color:var(--muted);margin:0 0 12px;line-height:1.5;max-width:560px;">
- Sends a branded MJ Hub email through Resend to every profile with an email, except people who unsubscribed. In-app notification above is separate.
- </p>
- <div class="field" style="max-width:560px;">
- <label>Subject</label>
- <input type="text" id="emailBroadcastSubject" placeholder="e.g. New logs just dropped" maxlength="200" />
- </div>
- <div class="field" style="max-width:560px;">
- <label>Email body</label>
- <textarea id="emailBroadcastBody" rows="7" placeholder="Plain text. Line breaks are kept. Do not paste raw HTML." maxlength="20000"></textarea>
- </div>
- <div id="emailBroadcastError" class="error-msg"></div>
- <div id="emailBroadcastOk" style="font-size:13px;color:#34d399;margin:0 0 8px;"></div>
- <div style="display:flex;flex-wrap:wrap;gap:8px;">
- <button class="btn btn-ghost btn-sm" type="button" onclick="sendEmailBroadcast(true)">Preview count</button>
- <button class="btn btn-primary btn-sm" type="button" onclick="sendEmailBroadcast(false)">Send email to all customers</button>
- </div>
- <div class="price-note" style="margin-top:8px;">Preview count does not send. Send uses Resend in batches of 50. Requires RESEND_API_KEY on Vercel.</div>
-
  <div class="panel-title" style="margin:24px 0 10px;">Recently Sent</div>
  <div id="notifHistoryList" style="font-size:13px;color:var(--muted);">Loading…</div>
  </div>
@@ -1489,7 +1469,7 @@ async function loadAllData() {
  await Promise.all(tasks);
  try { if (typeof resumeGrizzlySyncIfRunning === 'function') resumeGrizzlySyncIfRunning(); } catch (e) {}
  try { if (typeof updateMetrics === 'function') updateMetrics(); } catch (e) {}
- try { /* supplier balances: Refresh only */ } catch (e) {}
+ try { if (typeof loadSupplierBalances === 'function') loadSupplierBalances(); } catch (e) {}
  } finally {
  _adminDataLoading = false;
  }
@@ -1581,10 +1561,54 @@ async function bulkRepriceNumbers(mode) {
 }
 
 async function loadSupplierBalances() {
- const ui = ['Fadded','Logsdomain','Grizzly','Sujan','Classy','Owlet','Smsbus'];
- ui.forEach(p => renderSupplierBalance(p, { ok: false, error: 'Check supplier site' }));
-}
+ const btn = document.getElementById('btnRefreshSupplierBalances');
+ setBtnBusy(btn, true, 'Refreshing...');
+ ['Fadded', 'Logsdomain', 'Grizzly', 'Sujan', 'Classy', 'Owlet', 'Smsbus'].forEach(p => {
+ const sub = document.getElementById('bal' + p + 'Sub');
+ if (sub) sub.textContent = 'Loading…';
+ });
+ // Step-tracked the same way uploadManualStock() already does, so a
+ // failure reports exactly which operation broke (building headers vs.
+ // the network request vs. parsing the response) instead of one generic
+ // message that could mean any of those three very different things.
+ let step = 'building auth headers';
+ try {
+ const headers = await authHeaders();
+ headers['Content-Type'] = 'application/json';
 
+ step = 'requesting supplier balances';
+ const res = await fetch('/api/admin', {
+ method: 'POST',
+ headers,
+ body: JSON.stringify({ resource: 'supplier_balances' })
+ });
+
+ step = 'reading response';
+ const raw = await res.text();
+ let data = {};
+ try { data = raw ? JSON.parse(raw) : {}; }
+ catch (e) {
+   throw new Error('Server did not return JSON (' + res.status + '). ' + String(raw).slice(0, 80));
+ }
+
+ if (!data.success) {
+ showAdminToast(data.message || 'Could not load supplier balances', 'error');
+ return;
+ }
+ renderSupplierBalance('Fadded', data.suppliers.fadded);
+ renderSupplierBalance('Logsdomain', data.suppliers.logsdomain);
+ renderSupplierBalance('Grizzly', data.suppliers.grizzly);
+ renderSupplierBalance('Sujan', data.suppliers.sujan);
+ renderSupplierBalance('Classy', data.suppliers.classy);
+ renderSupplierBalance('Owlet', data.suppliers.owlet);
+ renderSupplierBalance('Smsbus', data.suppliers.smsbus);
+ } catch (err) {
+ console.error('Supplier balance error at step:', step, err.name, err.message, err.stack);
+ showAdminToast(`Supplier balance check failed while ${step}: ` + (err.message || 'network error'), 'error');
+ } finally {
+ setBtnBusy(btn, false, '<i class="fas fa-sync"></i> Refresh');
+ }
+}
 
 async function loadProducts() {
  try {
@@ -2428,31 +2452,6 @@ function updateRevenueDisplay() {
  * server-side (accurate for any volume, unlike the client-side calc above
  * which only ever looks at the 200 most-recently-cached log orders).
  */
-
-function fillOverviewFromCache(period) {
-  const ranges = { today:1, '7days':7, month:30, '3months':90, '6months':180, '12months':365 };
-  const cutoff = Date.now() - ((ranges[period] || 30) * 86400000);
-  const set = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
-  const orders = window._cachedOrders || [];
-  const logs = orders.filter(o => {
-    const d = o.created_at ? new Date(o.created_at).getTime() : 0;
-    const st = String(o.status || '').toLowerCase();
-    return d >= cutoff && !['cancelled','canceled','refunded','failed','void'].includes(st);
-  });
-  const units = logs.reduce((s,o) => s + Math.max(1, Number(o.quantity)||1), 0);
-  const spent = logs.reduce((s,o) => s + Number(o.amount || o.total || 0), 0);
-  set('mLogsSoldCount', units.toLocaleString());
-  set('mLogsAmountSpent', '₦' + spent.toLocaleString());
-  const sms = (window._cachedSmsOrders || []).filter(o => {
-    const d = o.created_at ? new Date(o.created_at).getTime() : 0;
-    const st = String(o.status || '').toLowerCase();
-    return d >= cutoff && ['completed','complete','success','received','code_received'].includes(st);
-  });
-  const smsSpend = sms.reduce((s,o) => s + Number(o.price || o.amount || 0), 0);
-  set('mSmsOrderCount', sms.length.toLocaleString());
-  set('mSmsAmountSpent', '₦' + smsSpend.toLocaleString());
-}
-
 async function loadOverviewStats(period) {
  const set = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
  try {
@@ -2467,8 +2466,7 @@ async function loadOverviewStats(period) {
  });
  const data = await res.json();
  if (!res.ok || !data.success) {
- console.error('Overview stats failed:', data && data.message);
- fillOverviewFromCache(period);
+ console.error('Overview stats failed:', data.message);
  return;
  }
 
@@ -3727,53 +3725,6 @@ window.openOrderModal = openOrderModal;
 function closeOrderModal() { document.getElementById('orderModal').classList.add('hidden'); }
 
 /* NOTIFICATIONS (broadcast to all users) */
-
-async function sendEmailBroadcast(dryRun) {
-  const errEl = document.getElementById('emailBroadcastError');
-  const okEl = document.getElementById('emailBroadcastOk');
-  if (errEl) errEl.textContent = '';
-  if (okEl) okEl.textContent = '';
-  const subject = (document.getElementById('emailBroadcastSubject')?.value || '').trim();
-  const body = (document.getElementById('emailBroadcastBody')?.value || '').trim();
-  if (!subject) { if (errEl) errEl.textContent = 'Subject is required.'; return; }
-  if (!body) { if (errEl) errEl.textContent = 'Email body is required.'; return; }
-  if (!dryRun) {
-    const n = (window._emailBroadcastWouldSend != null) ? window._emailBroadcastWouldSend : '?';
-    if (!confirm('Send this email to all subscribed customers' + (n !== '?' ? ' (' + n + ')' : '') + '?')) return;
-  }
-  try {
-    const headers = await authHeaders();
-    headers['Content-Type'] = 'application/json';
-    const res = await fetch('/api/admin', {
-      method: 'POST',
-      headers,
-      body: JSON.stringify({ resource: 'email_broadcast', subject, body, dry_run: !!dryRun })
-    });
-    const raw = await res.text();
-    let data = {};
-    try { data = raw ? JSON.parse(raw) : {}; } catch (_) {
-      if (errEl) errEl.textContent = 'Server did not return JSON (' + res.status + ').';
-      return;
-    }
-    if (!data.success) {
-      if (errEl) errEl.textContent = data.message || 'Broadcast failed.';
-      return;
-    }
-    if (dryRun) {
-      window._emailBroadcastWouldSend = data.would_send;
-      const sample = (data.sample || []).join(', ');
-      if (okEl) okEl.textContent = 'Would send to ' + data.would_send + ' customers.' + (sample ? ' Sample: ' + sample : '');
-    } else {
-      if (okEl) okEl.textContent = 'Sent ' + (data.sent || 0) + ', failed ' + (data.failed || 0) + '.';
-      if ((data.errors || []).length && errEl) {
-        errEl.textContent = data.errors.map(e => e.error || JSON.stringify(e)).slice(0, 3).join(' · ');
-      }
-    }
-  } catch (e) {
-    if (errEl) errEl.textContent = e.message || 'Network error';
-  }
-}
-
 async function sendBroadcastNotification() {
  const errEl = document.getElementById('notifSendError');
  errEl.textContent = '';
