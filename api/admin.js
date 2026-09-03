@@ -1618,110 +1618,94 @@ function escapeHtmlForEmail(str) {
 function buildBroadcastEmailHtml({ name, subject, message }) {
   const safeName = escapeHtmlForEmail(String(name || '').trim() || 'there');
   const safeSubject = escapeHtmlForEmail(subject);
-  const safeMessageHtml = escapeHtmlForEmail(message).replace(/\n/g, '<br>');
-  const appUrl = (process.env.APP_URL || 'https://app.mjhub.store').replace(/\/$/, '');
+  const paragraphs = escapeHtmlForEmail(message)
+    .replace(/\r\n/g, '\n')
+    .replace(/\r/g, '\n')
+    .split(/\n{2,}/)
+    .map((p) => `<p style="margin:0 0 14px;font-size:16px;line-height:1.65;color:#1e293b;" class="text-body">${p.replace(/\n/g, '<br>')}</p>`)
+    .join('');
+  const appUrl = (process.env.APP_URL || process.env.SITE_URL || 'https://www.mjhub.store').replace(/\/$/, '');
   const year = new Date().getFullYear();
-  const unsubUrl = `${appUrl}/dashboard?unsubscribe=1`;
-
+  const unsubUrl = `${appUrl}/dashboard.html?unsubscribe=1`;
   const LOGO_DARK = 'https://atczodlljmlayvldxfmv.supabase.co/storage/v1/object/public/avatars/dark%20background%20log';
   const LOGO_LIGHT = 'https://atczodlljmlayvldxfmv.supabase.co/storage/v1/object/public/avatars/light%20background%20logo';
 
-  return `
-<!DOCTYPE html>
+  return `<!DOCTYPE html>
 <html lang="en" xmlns="http://www.w3.org/1999/xhtml">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1">
-  <meta name="color-scheme" content="light dark">
-  <meta name="supported-color-schemes" content="light dark">
-  <title>${safeSubject}</title>
-  <style>
-    :root { color-scheme: light dark; }
-    @media (prefers-color-scheme: light) {
-      .body-bg { background-color: #f4f5f7 !important; }
-      .card-bg { background-color: #ffffff !important; border-color: #e5e7eb !important; }
-      .inner-bg { background-color: #f8f9fb !important; border-color: #e5e7eb !important; }
-      .text-primary { color: #111827 !important; }
-      .text-secondary { color: #6b7280 !important; }
-      .text-muted { color: #9ca3af !important; }
-      .divider { border-color: #e5e7eb !important; background-color: #e5e7eb !important; }
-      .badge { background-color: rgba(91,138,245,0.10) !important; border-color: rgba(91,138,245,0.22) !important; color: #3b6fd4 !important; }
-      .logo-dark { display: none !important; max-height: 0 !important; overflow: hidden !important; width: 0 !important; height: 0 !important; }
-      .logo-light { display: block !important; max-height: none !important; }
-    }
-    @media (prefers-color-scheme: dark) {
-      .body-bg { background-color: #0a0a0f !important; }
-      .card-bg { background-color: #111118 !important; border-color: #1c1c28 !important; }
-      .inner-bg { background-color: #0a0a0f !important; border-color: #1c1c28 !important; }
-      .text-primary { color: #f4f4f8 !important; }
-      .text-secondary { color: #9ca3af !important; }
-      .text-muted { color: #6b7280 !important; }
-      .divider { border-color: #1c1c28 !important; background-color: #1c1c28 !important; }
-      .badge { background-color: rgba(91,138,245,0.12) !important; border-color: rgba(91,138,245,0.25) !important; color: #8badea !important; }
-      .logo-light { display: none !important; max-height: 0 !important; overflow: hidden !important; width: 0 !important; height: 0 !important; }
-      .logo-dark { display: block !important; max-height: none !important; }
-    }
-  </style>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<meta name="supported-color-schemes" content="light dark">
+<title>${safeSubject}</title>
+<style>
+  :root { color-scheme: light dark; }
+  @media (prefers-color-scheme: dark) {
+    .page { background-color:#0b1220 !important; }
+    .card { background-color:#111827 !important; border-color:#1e293b !important; }
+    .text-title { color:#f8fafc !important; }
+    .text-body { color:#e2e8f0 !important; }
+    .text-muted { color:#94a3b8 !important; }
+    .logo-light { display:none !important; width:0 !important; height:0 !important; overflow:hidden !important; }
+    .logo-dark { display:block !important; }
+    .rule { border-color:#1e293b !important; }
+  }
+  @media (prefers-color-scheme: light) {
+    .page { background-color:#e8eef8 !important; }
+    .card { background-color:#ffffff !important; border-color:#dbe4f0 !important; }
+    .text-title { color:#0f172a !important; }
+    .text-body { color:#1e293b !important; }
+    .text-muted { color:#64748b !important; }
+    .logo-dark { display:none !important; width:0 !important; height:0 !important; overflow:hidden !important; }
+    .logo-light { display:block !important; }
+    .rule { border-color:#e2e8f0 !important; }
+  }
+</style>
 </head>
-<body class="body-bg" style="margin:0;padding:0;background:#0a0a0f;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
-  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" class="body-bg" style="background:#0a0a0f;padding:40px 16px;">
+<body class="page" style="margin:0;padding:0;background-color:#e8eef8;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
+  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" class="page" style="background-color:#e8eef8;padding:28px 12px;">
     <tr>
       <td align="center">
-        <table role="presentation" width="100%" class="card-bg" style="max-width:440px;background:#111118;border-radius:20px;border:1px solid #1c1c28;overflow:hidden;">
-
+        <table role="presentation" width="560" cellspacing="0" cellpadding="0" class="card" style="max-width:560px;width:100%;background-color:#ffffff;border:1px solid #dbe4f0;border-radius:20px;overflow:hidden;">
           <tr>
-            <td style="padding:28px 28px 0;text-align:center;">
-              <img class="logo-dark" src="${LOGO_DARK}" width="140" alt="MJ Hub" style="display:block;margin:0 auto;width:140px;max-width:140px;height:auto;border:0;">
-              <img class="logo-light" src="${LOGO_LIGHT}" width="140" alt="MJ Hub" style="display:none;margin:0 auto;width:140px;max-width:140px;height:auto;border:0;">
+            <td align="center" style="padding:28px 28px 8px;background:transparent;">
+              <img class="logo-light" src="${LOGO_LIGHT}" alt="MJ Hub" width="132" height="40" style="display:block;height:40px;width:auto;max-width:160px;background:transparent;border:0;outline:none;">
+              <img class="logo-dark" src="${LOGO_DARK}" alt="MJ Hub" width="132" height="40" style="display:none;height:40px;width:auto;max-width:160px;background:transparent;border:0;outline:none;">
             </td>
           </tr>
-
           <tr>
-            <td style="padding:22px 28px 0;text-align:center;">
-              <div class="badge" style="display:inline-block;background:rgba(91,138,245,0.12);border:1px solid rgba(91,138,245,0.25);color:#8badea;font-size:11px;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;padding:6px 14px;border-radius:999px;">
-                ${safeSubject}
-              </div>
+            <td style="padding:8px 32px 0;text-align:center;">
+              <div style="width:48px;height:4px;border-radius:4px;background-color:#3b82f6;margin:0 auto 20px;"></div>
+              <h1 class="text-title" style="margin:0 0 8px;font-size:24px;line-height:1.25;color:#0f172a;font-weight:800;">${safeSubject}</h1>
+              <p class="text-muted" style="margin:0 0 20px;font-size:15px;color:#64748b;">Hi ${safeName},</p>
             </td>
           </tr>
-
           <tr>
-            <td style="padding:22px 28px 0;">
-              <p class="text-primary" style="margin:0;font-size:16px;font-weight:600;color:#f4f4f8;line-height:1.4;">Hi ${safeName},</p>
-              <p class="text-secondary" style="margin:14px 0 0;font-size:14px;color:#9ca3af;line-height:1.75;">${safeMessageHtml}</p>
+            <td style="padding:0 32px 8px;">
+              ${paragraphs}
             </td>
           </tr>
-
           <tr>
-            <td style="padding:28px 28px 0;text-align:center;">
-              <a href="${appUrl}/dashboard" style="display:inline-block;background:linear-gradient(135deg,#5b8af5 0%,#7c5cfc 100%);color:#ffffff;text-decoration:none;font-weight:700;font-size:14px;padding:14px 32px;border-radius:12px;letter-spacing:0.01em;">
-                Open Dashboard
-              </a>
+            <td align="center" style="padding:8px 32px 28px;">
+              <a href="${appUrl}/dashboard.html" style="display:inline-block;background-color:#2563eb;color:#ffffff;font-weight:700;font-size:15px;text-decoration:none;padding:14px 28px;border-radius:12px;">Open MJ Hub</a>
             </td>
           </tr>
-
           <tr>
-            <td style="padding:24px 28px 0;">
-              <p class="text-muted" style="margin:0;font-size:12px;color:#6b7280;line-height:1.55;text-align:center;">
-                Don't want emails like this? <a href="${unsubUrl}" style="color:#5b8af5;text-decoration:none;">Unsubscribe</a>
+            <td style="padding:0 32px 28px;">
+              <hr class="rule" style="border:none;border-top:1px solid #e2e8f0;margin:0 0 16px;">
+              <p class="text-muted" style="margin:0;font-size:12px;line-height:1.5;color:#64748b;text-align:center;">
+                You received this because you have an MJ Hub account.
+                <a href="${unsubUrl}" style="color:#2563eb;text-decoration:none;">Unsubscribe</a><br>
+                © ${year} MJ Hub
               </p>
             </td>
           </tr>
-
-          <tr>
-            <td style="padding:24px 28px 28px;text-align:center;">
-              <div class="divider" style="height:1px;background:#1c1c28;margin-bottom:18px;"></div>
-              <p class="text-muted" style="margin:0;font-size:11px;color:#4b5563;line-height:1.5;">
-                © ${year} MJ Hub. All rights reserved.
-              </p>
-            </td>
-          </tr>
-
         </table>
       </td>
     </tr>
   </table>
 </body>
-</html>`.trim();
+</html>`;
 }
 
 
