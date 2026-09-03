@@ -1008,6 +1008,26 @@ function withLagos(opts) { return Object.assign({ timeZone: 'Africa/Lagos' }, op
  <button class="btn btn-primary btn-sm" onclick="sendBroadcastNotification()">Send to All Users</button>
  <div class="price-note" style="margin-top:6px;">Every user will see this in their notification bell next time they load the app. It disappears from their view 24 hours after they open it.</div>
 
+ <div class="panel-title" style="margin:28px 0 10px;">Email all customers</div>
+ <p style="font-size:13px;color:var(--muted);margin:0 0 12px;line-height:1.5;max-width:560px;">
+ Sends a branded MJ Hub email through Resend to every profile with an email, except people who unsubscribed. In-app notification above is separate.
+ </p>
+ <div class="field" style="max-width:560px;">
+ <label>Subject</label>
+ <input type="text" id="emailBroadcastSubject" placeholder="e.g. New logs just dropped" maxlength="200" />
+ </div>
+ <div class="field" style="max-width:560px;">
+ <label>Email body</label>
+ <textarea id="emailBroadcastBody" rows="7" placeholder="Plain text. Line breaks are kept. Do not paste raw HTML." maxlength="20000"></textarea>
+ </div>
+ <div id="emailBroadcastError" class="error-msg"></div>
+ <div id="emailBroadcastOk" style="font-size:13px;color:#34d399;margin:0 0 8px;"></div>
+ <div style="display:flex;flex-wrap:wrap;gap:8px;">
+ <button class="btn btn-ghost btn-sm" type="button" onclick="sendEmailBroadcast(true)">Preview count</button>
+ <button class="btn btn-primary btn-sm" type="button" onclick="sendEmailBroadcast(false)">Send email to all customers</button>
+ </div>
+ <div class="price-note" style="margin-top:8px;">Preview count does not send. Send uses Resend in batches of 50. Requires RESEND_API_KEY on Vercel.</div>
+
  <div class="panel-title" style="margin:24px 0 10px;">Recently Sent</div>
  <div id="notifHistoryList" style="font-size:13px;color:var(--muted);">Loading…</div>
  </div>
@@ -3725,6 +3745,53 @@ window.openOrderModal = openOrderModal;
 function closeOrderModal() { document.getElementById('orderModal').classList.add('hidden'); }
 
 /* NOTIFICATIONS (broadcast to all users) */
+
+async function sendEmailBroadcast(dryRun) {
+  const errEl = document.getElementById('emailBroadcastError');
+  const okEl = document.getElementById('emailBroadcastOk');
+  if (errEl) errEl.textContent = '';
+  if (okEl) okEl.textContent = '';
+  const subject = (document.getElementById('emailBroadcastSubject')?.value || '').trim();
+  const body = (document.getElementById('emailBroadcastBody')?.value || '').trim();
+  if (!subject) { if (errEl) errEl.textContent = 'Subject is required.'; return; }
+  if (!body) { if (errEl) errEl.textContent = 'Email body is required.'; return; }
+  if (!dryRun) {
+    const n = (window._emailBroadcastWouldSend != null) ? window._emailBroadcastWouldSend : '?';
+    if (!confirm('Send this email to all subscribed customers' + (n !== '?' ? ' (' + n + ')' : '') + '?')) return;
+  }
+  try {
+    const headers = await authHeaders();
+    headers['Content-Type'] = 'application/json';
+    const res = await fetch('/api/admin', {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ resource: 'email_broadcast', subject, body, dry_run: !!dryRun })
+    });
+    const raw = await res.text();
+    let data = {};
+    try { data = raw ? JSON.parse(raw) : {}; } catch (_) {
+      if (errEl) errEl.textContent = 'Server did not return JSON (' + res.status + ').';
+      return;
+    }
+    if (!data.success) {
+      if (errEl) errEl.textContent = data.message || 'Broadcast failed.';
+      return;
+    }
+    if (dryRun) {
+      window._emailBroadcastWouldSend = data.would_send;
+      const sample = (data.sample || []).join(', ');
+      if (okEl) okEl.textContent = 'Would send to ' + data.would_send + ' customers.' + (sample ? ' Sample: ' + sample : '');
+    } else {
+      if (okEl) okEl.textContent = 'Sent ' + (data.sent || 0) + ', failed ' + (data.failed || 0) + '.';
+      if ((data.errors || []).length && errEl) {
+        errEl.textContent = data.errors.map(e => e.error || JSON.stringify(e)).slice(0, 3).join(' · ');
+      }
+    }
+  } catch (e) {
+    if (errEl) errEl.textContent = e.message || 'Network error';
+  }
+}
+
 async function sendBroadcastNotification() {
  const errEl = document.getElementById('notifSendError');
  errEl.textContent = '';
