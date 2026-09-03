@@ -628,8 +628,13 @@ function withLagos(opts) { return Object.assign({ timeZone: 'Africa/Lagos' }, op
  <div class="content">
  <div id="tab-overview" class="tab-content active">
  <div style="margin-bottom:18px;">
+ <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;flex-wrap:wrap;">
+ <div>
  <div style="font-size:22px;font-weight:800;letter-spacing:-0.03em;color:var(--text);">Overview</div>
  <div style="font-size:13px;color:var(--muted);margin-top:4px;">Live store performance for the selected period.</div>
+ </div>
+ <button type="button" class="btn btn-ghost btn-sm" onclick="refreshAdminDashboard()"><i class="fas fa-sync"></i> Refresh</button>
+ </div>
  </div>
  <div class="panel">
  <div class="panel-header">
@@ -1028,9 +1033,10 @@ function withLagos(opts) { return Object.assign({ timeZone: 'Africa/Lagos' }, op
  <div id="emailBroadcastMsg" style="font-size:13px;margin:4px 0 12px;"></div>
  <div style="display:flex;flex-wrap:wrap;gap:10px;">
  <button class="btn btn-secondary btn-sm" id="emailBroadcastPreviewBtn" onclick="previewEmailBroadcast()"><i class="fas fa-eye"></i> Preview count</button>
+ <button class="btn btn-ghost btn-sm" id="emailBroadcastTestBtn" onclick="sendEmailBroadcastTest()"><i class="fas fa-user"></i> Send test to me</button>
  <button class="btn btn-primary btn-sm" id="emailBroadcastSendBtn" onclick="sendEmailBroadcast()"><i class="fas fa-paper-plane"></i> Send email to all customers</button>
  </div>
- <div class="price-note" style="margin-top:10px;">No mail is sent until you click "Send" and confirm. Skips unsubscribed addresses automatically.</div>
+ <div class="price-note" style="margin-top:10px;">Preview counts recipients. Send test to me emails only the signed-in admin. Send to all customers emails everyone subscribed. No mail is sent until you click "Send" and confirm. Skips unsubscribed addresses automatically.</div>
  </div>
  </div>
 
@@ -3842,6 +3848,32 @@ async function previewEmailBroadcast() {
  msgEl.textContent = e.message || 'Could not load preview.';
  } finally {
  btn.disabled = false;
+ }
+}
+
+function refreshAdminDashboard() {
+  try { sessionStorage.setItem('mj-admin-tab', document.querySelector('.tab-content.active')?.id || ''); } catch (e) {}
+  location.reload();
+}
+
+async function sendEmailBroadcastTest() {
+ const msgEl = document.getElementById('emailBroadcastMsg');
+ const { subject, body } = emailBroadcastFields();
+ if (!subject) { msgEl.style.color = 'var(--danger,#f87171)'; msgEl.textContent = 'Subject is required.'; return; }
+ if (!body) { msgEl.style.color = 'var(--danger,#f87171)'; msgEl.textContent = 'Body is required.'; return; }
+ const testBtn = document.getElementById('emailBroadcastTestBtn');
+ if (testBtn) testBtn.disabled = true;
+ msgEl.style.color = 'var(--muted)';
+ msgEl.textContent = 'Sending test to your admin email…';
+ try {
+   const data = await callEmailBroadcast('test', { subject, body });
+   msgEl.style.color = '#34d399';
+   msgEl.textContent = 'Test sent to ' + (data.to || 'your admin email') + '. Check inbox (and spam).';
+ } catch (e) {
+   msgEl.style.color = 'var(--danger,#f87171)';
+   msgEl.textContent = e.message || 'Test send failed.';
+ } finally {
+   if (testBtn) testBtn.disabled = false;
  }
 }
 
