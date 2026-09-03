@@ -515,11 +515,12 @@ async function fetchLdPaged(path) {
   const all = [];
   let page = 1;
   const perPage = 50;
-  while (page <= 80) {
+  while (page <= 6) {
     const url = `${LD_BASE}${path}${path.includes('?') ? '&' : '?'}per_page=${perPage}&page=${page}`;
     const res = await fetch(url, {
       method: 'GET',
-      headers: { Accept: 'application/json', Authorization: `Bearer ${LD_KEY}` }
+      headers: { Accept: 'application/json', Authorization: `Bearer ${LD_KEY}` },
+      signal: AbortSignal.timeout(12000)
     });
     if (!res.ok) {
       if (page === 1 && res.status === 404) return [];
@@ -535,6 +536,8 @@ async function fetchLdPaged(path) {
       ? json.data
       : (json.data?.data || json.data?.categories || json.data?.products || json.data?.items || json.products || json.categories || []);
     if (!Array.isArray(batch) || batch.length === 0) break;
+    const batchFirst = String(batch[0]?.id ?? batch[0]?.category_id ?? batch[0]?.product_id ?? '');
+    if (page > 1 && all[0] && String(all[0].id ?? all[0].category_id ?? '') === batchFirst) break;
     all.push(...batch);
     const lastPage = Number(
       json.last_page || json.data?.last_page || json.meta?.last_page || json.data?.meta?.last_page || 0

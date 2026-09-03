@@ -108,7 +108,7 @@ async function handleSync(req, res) {
   }
 
   const products = [];
-  for (let page = 1; page <= 30; page++) {
+  for (let page = 1; page <= 1; page++) {
     const apiRes = await fetch(`${BASE}/reseller/v1/products?page=${page}&per_page=100`, {
       method: 'GET',
       headers: {

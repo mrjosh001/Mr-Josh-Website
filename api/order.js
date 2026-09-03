@@ -526,7 +526,7 @@ async function handleFaddedSync(req, res) {
 
     const products = [];
     let lastSupplierData = null;
-    for (let page = 1; page <= 30; page++) {
+    for (let page = 1; page <= 1; page++) {
       const apiRes = await fetch(`https://fadded.net/api/v1/reseller/products?page=${page}&per_page=100`, {
         method: 'GET',
         headers: {

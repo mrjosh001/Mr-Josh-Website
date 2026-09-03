@@ -159,7 +159,7 @@ async function handleSync(req, res) {
   }
 
   const products = [];
-  for (let page = 1; page <= 30; page++) {
+  for (let page = 1; page <= 1; page++) {
     const prodRes = await fetch(BASE + `/api/v1/products?page=${page}&per_page=100`, { headers: supplierHeaders() });
     if (!prodRes.ok) {
       const t = await prodRes.text();
