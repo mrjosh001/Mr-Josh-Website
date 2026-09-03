@@ -1626,7 +1626,7 @@ function buildBroadcastEmailHtml({ name, subject, message }) {
   const appUrl = (process.env.APP_URL || process.env.SITE_URL || 'https://www.mjhub.store').replace(/\/$/, '');
   const year = new Date().getFullYear();
   const unsubUrl = `${appUrl}/dashboard.html?unsubscribe=1`;
-  const LOGO = 'https://atczodlljmlayvldxfmv.supabase.co/storage/v1/object/public/avatars/light%20background%20logo';
+  const LOGO = 'https://atczodlljmlayvldxfmv.supabase.co/storage/v1/object/public/avatars/dark%20background%20log';
 
   return `<!DOCTYPE html>
 <html lang="en" xmlns="http://www.w3.org/1999/xhtml">
@@ -1637,13 +1637,11 @@ function buildBroadcastEmailHtml({ name, subject, message }) {
 <meta name="supported-color-schemes" content="light dark">
 <style>
   :root { color-scheme: light dark; }
-  .logo { background: transparent !important; mix-blend-mode: multiply; }
   @media (prefers-color-scheme: dark) {
     .page { background-color:#0b1220 !important; }
     .card { background-color:#111827 !important; border-color:#1e293b !important; }
     .text-body { color:#e2e8f0 !important; }
     .text-muted { color:#94a3b8 !important; }
-    .logo { mix-blend-mode: screen; }
     .rule { border-color:#1e293b !important; }
   }
   @media (prefers-color-scheme: light) {
@@ -1651,7 +1649,6 @@ function buildBroadcastEmailHtml({ name, subject, message }) {
     .card { background-color:#ffffff !important; border-color:#dbe4f0 !important; }
     .text-body { color:#1e293b !important; }
     .text-muted { color:#64748b !important; }
-    .logo { mix-blend-mode: multiply; }
     .rule { border-color:#e2e8f0 !important; }
   }
 </style>
@@ -1661,8 +1658,8 @@ function buildBroadcastEmailHtml({ name, subject, message }) {
     <tr><td align="center">
       <table role="presentation" width="560" cellspacing="0" cellpadding="0" class="card" style="max-width:560px;width:100%;background-color:#ffffff;border:1px solid #dbe4f0;border-radius:20px;">
         <tr>
-          <td align="center" style="padding:28px 28px 12px;background:transparent;">
-            <img class="logo" src="${LOGO}" alt="MJ Hub" width="120" style="display:block;height:44px;width:auto;background:transparent;border:0;outline:none;mix-blend-mode:multiply;">
+          <td align="center" style="padding:22px 28px;background-color:#2563eb;">
+            <img src="${LOGO}" alt="MJ Hub" width="140" style="display:block;height:48px;width:auto;background:transparent;border:0;outline:none;">
           </td>
         </tr>
         <tr>
