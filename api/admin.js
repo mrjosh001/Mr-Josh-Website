@@ -1339,28 +1339,15 @@ async function safeBal(fn, name) {
   }
 }
 async function supplierBalancesFetch(body) {
-  const jobs = {
-    fadded: getFaddedBalance,
-    logsdomain: getLogsDomainBalance,
-    grizzly: getGrizzlyBalance,
-    sujan: getSujanBalance,
-    owlet: fetchOwletBalance,
-    classy: getClassyBalance,
-    smsbus: getSmsBusBalance
-  };
-  const only = String((body && body.supplier) || '').toLowerCase();
-  if (!only || !jobs[only]) {
-    const suppliers = {};
-    for (const k of Object.keys(jobs)) suppliers[k] = { ok: false, error: 'Click Refresh' };
-    return { status: 200, body: { success: true, suppliers, fetched_at: new Date().toISOString() } };
-  }
-  try {
-    const result = await safeBal(jobs[only], only);
-    return { status: 200, body: { success: true, suppliers: { [only]: result }, fetched_at: new Date().toISOString() } };
-  } catch (e) {
-    return { status: 200, body: { success: true, suppliers: { [only]: { ok: false, error: String(e.message || e) } } } };
-  }
+  // Outbound supplier HTTP from this function is what Vercel Hobby kills
+  // (FUNCTION_INVOCATION_FAILED). Return a stub so /api/admin stays alive
+  // for overview, orders, email, and everything else.
+  const names = ['fadded','logsdomain','grizzly','sujan','owlet','classy','smsbus'];
+  const suppliers = {};
+  for (const k of names) suppliers[k] = { ok: false, error: 'Check supplier dashboard' };
+  return { status: 200, body: { success: true, suppliers, fetched_at: new Date().toISOString() } };
 }
+
 
 const PERIOD_DAYS = { today: 1, '7days': 7, month: 30, '3months': 90, '6months': 180, '12months': 365 };
 
