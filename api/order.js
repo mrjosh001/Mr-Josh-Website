@@ -293,112 +293,108 @@ async function resendEmail({ to, subject, html }) {
 
 function nudgeEmailContent(week, name, appUrl) {
   const safe = String(name || 'there').trim() || 'there';
-  const unsub = `${appUrl}/dashboard?unsubscribe=1`;
+  const base = String(appUrl || 'https://www.mjhub.store').replace(/\/$/, '');
+  const unsub = `${base}/dashboard.html?unsubscribe=1`;
   const subjects = {
-    1: 'Your MJ Hub account is ready — fund & get started',
-    2: 'Still exploring? SMS, logs & boosts in one place',
-    3: 'Need a hand getting started on MJ Hub?',
-    4: 'Last reminder — we are here when you need us'
+    1: 'Your MJ Hub account is ready',
+    2: 'SMS, logs and boosts in one wallet',
+    3: 'Need a hand getting started?',
+    4: 'We are here when you need MJ Hub'
   };
   const bodies = {
-    1: `Hi ${safe},<br><br>You signed up for <strong>MJ Hub</strong> a week ago. Your account is ready whenever you are.<br><br>Fund your wallet, then grab SMS numbers, logs, or social boosts in a few taps.`,
-    2: `Hi ${safe},<br><br>A quick reminder that MJ Hub covers <strong>SMS verification</strong>, <strong>logs</strong>, and <strong>boosters</strong> in one wallet.<br><br>Whenever you are ready, fund and place your first order from the dashboard.`,
-    3: `Hi ${safe},<br><br>If anything blocked you after signup — funding, a product question, or support — reply to this email or use in-app support. We are happy to help.`,
-    4: `Hi ${safe},<br><br>This is our last check-in for now. Your MJ Hub account stays open; come back anytime you need SMS, logs, or boosts.`
+    1: `You signed up for MJ Hub a week ago. Your account is ready whenever you are.\n\nFund your wallet, then grab SMS numbers, logs, or social boosts in a few taps.`,
+    2: `A reminder that MJ Hub covers SMS verification, logs, and boosters in one wallet.\n\nWhenever you are ready, fund and place your first order from the dashboard.`,
+    3: `If anything blocked you after signup — funding, a product question, or support — reply to this email or use in-app support. We are happy to help.`,
+    4: `This is our last check-in for now. Your MJ Hub account stays open. Come back anytime you need SMS, logs, or boosts.`
   };
   const w = Math.min(Math.max(Number(week) || 1, 1), 4);
   const subject = subjects[w] || subjects[1];
-  const inner = bodies[w] || bodies[1];
+  const inner = escapeNudge(bodies[w] || bodies[1]).split(/\n\n/).map((p) =>
+    `<p class="text-body" style="margin:0 0 14px;font-size:16px;line-height:1.65;color:#1e293b;">${p.replace(/\n/g,'<br>')}</p>`
+  ).join('');
   const year = new Date().getFullYear();
-  const LOGO_DARK = 'https://atczodlljmlayvldxfmv.supabase.co/storage/v1/object/public/avatars/dark%20background%20log';
-  const LOGO_LIGHT = 'https://atczodlljmlayvldxfmv.supabase.co/storage/v1/object/public/avatars/light%20background%20logo';
-
-  // Adaptive light/dark — follows the phone/mail app color scheme
-  // (same approach as deposit emails in api/pocketfi.js)
+  const LOGO_DARK = 'https://atczodlljmlayvldxfmv.supabase.co/storage/v1/object/public/avatars/mjhub-logo-dark-clear.png';
+  const LOGO_LIGHT = 'https://atczodlljmlayvldxfmv.supabase.co/storage/v1/object/public/avatars/IMG_2796.jpeg';
   const html = `<!DOCTYPE html>
 <html lang="en" xmlns="http://www.w3.org/1999/xhtml">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1">
-  <meta name="color-scheme" content="light dark">
-  <meta name="supported-color-schemes" content="light dark">
-  <title>${subject}</title>
-  <style>
-    :root { color-scheme: light dark; }
-    @media (prefers-color-scheme: light) {
-      .body-bg { background-color: #f4f5f7 !important; }
-      .card-bg { background-color: #ffffff !important; border-color: #e5e7eb !important; }
-      .text-primary { color: #111827 !important; }
-      .text-secondary { color: #374151 !important; }
-      .text-muted { color: #6b7280 !important; }
-      .btn-bg { background-color: #3b82f6 !important; color: #ffffff !important; }
-      .logo-dark { display: none !important; max-height: 0 !important; overflow: hidden !important; width: 0 !important; height: 0 !important; }
-      .logo-light { display: block !important; max-height: none !important; }
-      .divider { border-color: #e5e7eb !important; }
-    }
-    @media (prefers-color-scheme: dark) {
-      .body-bg { background-color: #0a0a0f !important; }
-      .card-bg { background-color: #111118 !important; border-color: #1c1c28 !important; }
-      .text-primary { color: #f4f4f8 !important; }
-      .text-secondary { color: #cbd5e1 !important; }
-      .text-muted { color: #9ca3af !important; }
-      .btn-bg { background-color: #3b82f6 !important; color: #ffffff !important; }
-      .logo-light { display: none !important; max-height: 0 !important; overflow: hidden !important; width: 0 !important; height: 0 !important; }
-      .logo-dark { display: block !important; max-height: none !important; }
-      .divider { border-color: #1c1c28 !important; }
-    }
-  </style>
-  <!--[if mso]>
-  <style>body,table,td{font-family:Arial,sans-serif!important}</style>
-  <![endif]-->
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<meta name="supported-color-schemes" content="light dark">
+<title>${subject}</title>
+<style>
+  :root { color-scheme: light dark; }
+  @media (prefers-color-scheme: dark) {
+    .page { background-color:#0b1220 !important; }
+    .card { background-color:#111827 !important; border-color:#1e293b !important; }
+    .text-title { color:#f8fafc !important; }
+    .text-body { color:#e2e8f0 !important; }
+    .text-muted { color:#94a3b8 !important; }
+    .logo-light { display:none !important; width:0 !important; height:0 !important; overflow:hidden !important; }
+    .logo-dark { display:block !important; }
+    .brand-word { color:#ffffff !important; }
+    .logo-light { display:none !important; width:0 !important; height:0 !important; overflow:hidden !important; }
+    .logo-dark { display:block !important; }
+    .brand-word { color:#ffffff !important; }
+    .rule { border-color:#1e293b !important; }
+  }
+  @media (prefers-color-scheme: light) {
+    .page { background-color:#e8eef8 !important; }
+    .card { background-color:#ffffff !important; border-color:#dbe4f0 !important; }
+    .text-title { color:#0f172a !important; }
+    .text-body { color:#1e293b !important; }
+    .text-muted { color:#64748b !important; }
+    .logo-dark { display:none !important; width:0 !important; height:0 !important; overflow:hidden !important; }
+    .logo-light { display:block !important; }
+    .brand-word { color:#0f172a !important; }
+    .logo-dark { display:none !important; width:0 !important; height:0 !important; overflow:hidden !important; }
+    .logo-light { display:block !important; }
+    .brand-word { color:#0f172a !important; }
+    .rule { border-color:#e2e8f0 !important; }
+  }
+</style>
 </head>
-<body class="body-bg" style="margin:0;padding:0;background-color:#0a0a0f;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;">
-  <div style="display:none;max-height:0;overflow:hidden;opacity:0;">MJ Hub — ${subject}</div>
-  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" class="body-bg" style="background-color:#0a0a0f;padding:32px 16px;">
-    <tr>
-      <td align="center">
-        <table role="presentation" width="560" cellpadding="0" cellspacing="0" class="card-bg" style="max-width:560px;width:100%;background-color:#111118;border-radius:16px;border:1px solid #1c1c28;padding:0;">
-          <tr>
-            <td style="padding:28px 28px 12px;text-align:center;">
-              <img class="logo-dark" src="${LOGO_DARK}" alt="MJ Hub" width="140" style="display:block;margin:0 auto;max-width:140px;height:auto;">
-              <img class="logo-light" src="${LOGO_LIGHT}" alt="MJ Hub" width="140" style="display:none;margin:0 auto;max-width:140px;height:auto;">
-            </td>
-          </tr>
-          <tr>
-            <td class="text-primary" style="padding:8px 28px 0;font-size:20px;font-weight:800;color:#f4f4f8;text-align:center;">
-              MJ Hub
-            </td>
-          </tr>
-          <tr>
-            <td class="text-secondary" style="padding:20px 28px 8px;font-size:15px;line-height:1.65;color:#cbd5e1;">
-              ${inner}
-            </td>
-          </tr>
-          <tr>
-            <td align="center" style="padding:20px 28px 8px;">
-              <a href="${appUrl}/dashboard" class="btn-bg" style="display:inline-block;background-color:#3b82f6;color:#ffffff;font-weight:700;font-size:14px;text-decoration:none;padding:14px 28px;border-radius:12px;">
-                Open your dashboard
-              </a>
-            </td>
-          </tr>
-          <tr>
-            <td style="padding:24px 28px 28px;">
-              <hr class="divider" style="border:none;border-top:1px solid #1c1c28;margin:0 0 16px;">
-              <p class="text-muted" style="margin:0;font-size:12px;line-height:1.5;color:#9ca3af;">
-                You received this because you registered on MJ Hub and have not placed an order yet.
-                <a href="${unsub}" class="text-muted" style="color:#9ca3af;">Unsubscribe from these tips</a><br>
-                © ${year} MJ Hub
-              </p>
-            </td>
-          </tr>
-        </table>
-      </td>
-    </tr>
+<body class="page" style="margin:0;padding:0;background-color:#e8eef8;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
+  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" class="page" style="background-color:#e8eef8;padding:28px 12px;">
+    <tr><td align="center">
+      <table role="presentation" width="560" cellspacing="0" cellpadding="0" class="card" style="max-width:560px;width:100%;background-color:#ffffff;border:1px solid #dbe4f0;border-radius:20px;">
+        <tr>
+          <td align="center" style="padding:32px 24px 12px;background:transparent;">
+            <img src="https://atczodlljmlayvldxfmv.supabase.co/storage/v1/object/public/avatars/mjhub-mark-only.png" alt="MJ Hub" width="120" style="display:block;height:44px;width:auto;border:0;outline:none;background:transparent;">
+            <div class="brand-word" style="margin-top:6px;font-size:13px;font-weight:800;letter-spacing:0.14em;color:#0f172a;">MJ HUB</div>
+          </td>
+        </tr>
+        <tr>
+          <td style="padding:8px 32px 0;">
+            <p class="text-body" style="margin:0 0 16px;font-size:18px;font-weight:700;color:#0f172a;">Hi ${safe},</p>
+          </td>
+        </tr>
+        <tr><td style="padding:0 32px 8px;">${inner}</td></tr>
+        <tr>
+          <td align="center" style="padding:8px 32px 28px;">
+            <a href="${base}/dashboard.html" style="display:inline-block;background-color:#2563eb;color:#ffffff;font-weight:700;font-size:15px;text-decoration:none;padding:14px 28px;border-radius:12px;">Open MJ Hub</a>
+          </td>
+        </tr>
+        <tr>
+          <td style="padding:0 32px 28px;">
+            <hr class="rule" style="border:none;border-top:1px solid #e2e8f0;margin:0 0 16px;">
+            <p class="text-muted" style="margin:0;font-size:12px;line-height:1.5;color:#64748b;text-align:center;">
+              <a href="${unsub}" style="color:#2563eb;text-decoration:none;">Unsubscribe</a><br>© ${year} MJ Hub
+            </p>
+          </td>
+        </tr>
+      </table>
+    </td></tr>
   </table>
 </body>
 </html>`;
   return { subject, html };
 }
+function escapeNudge(s) {
+  return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
 
 async function userHasPurchased(supabase, userId) {
   const checks = ['orders', 'number_orders', 'booster_orders'];
