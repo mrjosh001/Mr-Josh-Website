@@ -1,5 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
 import { formatCredentials, formatMultiLogCredentials, joinRawLogDetails } from '../lib/formatCredentials.js';
+import { readSupplierStock } from '../lib/supplierStock.js';
 
 /**
  * /api/sujan — everything for the Sujan Department supplier, one file.
@@ -106,25 +107,34 @@ async function handleSync(req, res) {
     return res.status(500).json({ success: false, message: 'Missing SUJAN_API_KEY' });
   }
 
-  const apiRes = await fetch(`${BASE}/reseller/v1/products`, {
-    method: 'GET',
-    headers: {
-      Authorization: `Bearer ${process.env.SUJAN_API_KEY}`,
-      Accept: 'application/json'
-    }
-  });
-
-  if (!apiRes.ok) {
-    const errorText = await apiRes.text();
-    return res.status(apiRes.status).json({
-      success: false,
-      message: `Sujan Department API error: ${apiRes.status}`,
-      details: errorText
+  const products = [];
+  for (let page = 1; page <= 30; page++) {
+    const apiRes = await fetch(`${BASE}/reseller/v1/products?page=${page}&per_page=100`, {
+      method: 'GET',
+      headers: {
+        Authorization: `Bearer ${process.env.SUJAN_API_KEY}`,
+        Accept: 'application/json'
+      }
     });
-  }
 
-  const json = await apiRes.json();
-  const products = Array.isArray(json) ? json : (json.data || json.products || []);
+    if (!apiRes.ok) {
+      const errorText = await apiRes.text();
+      if (page === 1) {
+        return res.status(apiRes.status).json({
+          success: false,
+          message: `Sujan Department API error: ${apiRes.status}`,
+          details: errorText
+        });
+      }
+      break;
+    }
+
+    const json = await apiRes.json();
+    const batch = Array.isArray(json) ? json : (json.data || json.products || json.data?.data || []);
+    if (!Array.isArray(batch) || !batch.length) break;
+    products.push(...batch);
+    if (batch.length < 100) break;
+  }
 
   // Sujan's docs don't list exact field names (see file header). Log the
   // very first raw product object once per sync so the real field names
@@ -158,9 +168,7 @@ async function handleSync(req, res) {
     if (supplierPrice === 0) zeroPriceCount++;
     // Confirmed via the debug log below: Sujan's real field is
     // available_stock, not stock/in_stock/available_quantity/quantity.
-    const stock = Number(
-      item.available_stock ?? item.stock ?? item.in_stock ?? item.available_quantity ?? item.quantity ?? 0
-    ) || 0;
+    const stock = readSupplierStock(item);
 
     const { data: existing } = await supabase
       .from('products')
@@ -184,7 +192,9 @@ async function handleSync(req, res) {
         source: 'sujandepartment',
         updated_at: new Date().toISOString()
       };
-      if (stock <= 0) patch.is_available = false; else if (!existing.admin_hidden) patch.is_available = true;
+      if (stock <= 0) patch.is_available = false;
+      else if (existing.admin_hidden) { /* admin hid — stay hidden */ }
+      else patch.is_available = true;
       const { error } = await supabase
         .from('products')
         .update(patch)
@@ -196,7 +206,6 @@ async function handleSync(req, res) {
     } else {
       // NEW: full insert with markup + category. is_available follows real
       // stock, same as the update branch above.
-      newCount++;
       const { error } = await supabase
         .from('products')
         .insert({
@@ -215,6 +224,8 @@ async function handleSync(req, res) {
 
       if (error) {
         console.error(`Sujan Department insert ${productKey}:`, error.message);
+      } else {
+        newCount++;
       }
     }
   }
@@ -225,6 +236,7 @@ async function handleSync(req, res) {
     new_products: newCount,
     updated_products: updatedCount,
     zero_price_count: zeroPriceCount,
+    in_stock_from_api: products.filter((p) => readSupplierStock(p) > 0).length,
     source: 'sujandepartment'
   });
 }

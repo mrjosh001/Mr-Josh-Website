@@ -12,6 +12,7 @@
 
 import { createClient } from '@supabase/supabase-js';
 import { formatCredentials, formatMultiLogCredentials, joinRawLogDetails } from '../lib/formatCredentials.js';
+import { readSupplierStock } from '../lib/supplierStock.js';
 
 /**
  * POST /api/order-logsdomain
@@ -243,46 +244,7 @@ async function insertLogOrder(row) {
 const BASE = 'https://logsdomain.com/api/v1';
 
 function readLdStock(item) {
-  if (!item || typeof item !== 'object') return 0;
-  const bags = [item];
-  if (item.stock && typeof item.stock === 'object') bags.push(item.stock);
-  if (item.inventory && typeof item.inventory === 'object') bags.push(item.inventory);
-  if (item.meta && typeof item.meta === 'object') bags.push(item.meta);
-  const keys = [
-    'available_quantity',
-    'available_qty',
-    'available_count',
-    'in_stock_count',
-    'in_stock_qty',
-    'stock_count',
-    'stock_quantity',
-    'stock_qty',
-    'quantity_available',
-    'qty_available',
-    'qty',
-    'quantity',
-    'stock',
-    'available',
-    'in_stock',
-    'units',
-    'count'
-  ];
-  let best = 0;
-  for (const bag of bags) {
-    for (const k of keys) {
-      if (!(k in bag)) continue;
-      const v = bag[k];
-      if (v === true || v === 'true' || v === 'yes' || v === 'in_stock') {
-        if (best < 1) best = 1;
-        continue;
-      }
-      if (v === false || v === 'false' || v === 'no' || v == null || v === '') continue;
-      if (typeof v === 'object') continue;
-      const n = Number(String(v).replace(/,/g, '').replace(/[^\d.-]/g, ''));
-      if (Number.isFinite(n) && n > best) best = Math.floor(n);
-    }
-  }
-  return best;
+  return readSupplierStock(item);
 }
 
 function stripHtml(html) {
@@ -549,25 +511,29 @@ function categorizeLd(name) {
   return 'LOGS';
 }
 
-async function fetchAllLdCategories() {
+async function fetchLdPaged(path) {
   const all = [];
   let page = 1;
-  const perPage = 100;
-  while (page <= 50) {
-    const url = `${LD_BASE}/logs/categories?per_page=${perPage}&page=${page}`;
+  const perPage = 50;
+  while (page <= 80) {
+    const url = `${LD_BASE}${path}${path.includes('?') ? '&' : '?'}per_page=${perPage}&page=${page}`;
     const res = await fetch(url, {
       method: 'GET',
       headers: { Accept: 'application/json', Authorization: `Bearer ${LD_KEY}` }
     });
     if (!res.ok) {
-      const text = await res.text();
-      throw new Error(`Logs Domain categories error ${res.status}: ${text.slice(0, 300)}`);
+      if (page === 1 && res.status === 404) return [];
+      if (page === 1) {
+        const text = await res.text();
+        throw new Error(`Logs Domain ${path} error ${res.status}: ${text.slice(0, 300)}`);
+      }
+      break;
     }
     const json = await res.json();
-    if (!json.success) throw new Error(json.message || 'Logs Domain reported failure');
+    if (json && json.success === false && page === 1) return [];
     const batch = Array.isArray(json.data)
       ? json.data
-      : (json.data?.data || json.data?.categories || []);
+      : (json.data?.data || json.data?.categories || json.data?.products || json.data?.items || json.products || json.categories || []);
     if (!Array.isArray(batch) || batch.length === 0) break;
     all.push(...batch);
     const lastPage = Number(
@@ -579,6 +545,28 @@ async function fetchAllLdCategories() {
     page += 1;
   }
   return all;
+}
+
+async function fetchAllLdCategories() {
+  const fromCats = await fetchLdPaged('/logs/categories');
+  let fromProducts = [];
+  try {
+    fromProducts = await fetchLdPaged('/logs/products');
+  } catch (e) {
+    console.warn('[ld sync] /logs/products', e.message || e);
+  }
+  const byId = new Map();
+  for (const row of [...fromCats, ...fromProducts]) {
+    const id = row && (row.id ?? row.category_id ?? row.product_id);
+    if (id == null) continue;
+    const prev = byId.get(String(id));
+    if (!prev) {
+      byId.set(String(id), row);
+      continue;
+    }
+    if (readLdStock(row) > readLdStock(prev)) byId.set(String(id), { ...prev, ...row });
+  }
+  return Array.from(byId.values());
 }
 
 async function handleLdProductSync(req, res) {
@@ -648,12 +636,16 @@ async function handleLdProductSync(req, res) {
       }
     }
 
+    const sample = categories[0] ? Object.keys(categories[0]) : [];
+    const withStock = categories.filter((c) => readLdStock(c) > 0).length;
     return res.status(200).json({
       success: true,
       source: 'logsdomain',
       synced: categories.length,
       new_products: newCount,
-      updated_products: updatedCount
+      updated_products: updatedCount,
+      in_stock_from_api: withStock,
+      sample_fields: sample
     });
   } catch (err) {
     console.error('[ld product sync]', err);

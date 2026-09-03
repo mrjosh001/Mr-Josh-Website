@@ -15,6 +15,7 @@
 
 import { createClient } from '@supabase/supabase-js';
 import { formatCredentials, formatMultiLogCredentials, joinRawLogDetails } from '../lib/formatCredentials.js';
+import { readSupplierStock } from '../lib/supplierStock.js';
 import { rateLimit, applyRateLimitHeaders } from '../lib/rateLimit.js';
 import { rejectClientSuppliedSecrets, applyApiCors, handleOptions, setNoStore } from '../lib/secure.js';
 import { parsePositiveInt, assertSameUser } from '../lib/validate.js';
@@ -523,34 +524,45 @@ async function handleFaddedSync(req, res) {
       });
     }
 
-    const apiRes = await fetch('https://fadded.net/api/v1/reseller/products', {
-      method: 'GET',
-      headers: {
-        'X-Api-Key': process.env.FADDED_API_KEY,
-        'Accept': 'application/json'
+    const products = [];
+    let lastSupplierData = null;
+    for (let page = 1; page <= 30; page++) {
+      const apiRes = await fetch(`https://fadded.net/api/v1/reseller/products?page=${page}&per_page=100`, {
+        method: 'GET',
+        headers: {
+          'X-Api-Key': process.env.FADDED_API_KEY,
+          'Accept': 'application/json'
+        }
+      });
+
+      if (!apiRes.ok) {
+        const errorText = await apiRes.text();
+        if (page === 1) {
+          return res.status(apiRes.status).json({
+            success: false,
+            message: `Supplier API error: ${apiRes.status}`,
+            details: errorText
+          });
+        }
+        break;
       }
-    });
 
-    if (!apiRes.ok) {
-      const errorText = await apiRes.text();
-      return res.status(apiRes.status).json({
-        success: false,
-        message: `Supplier API error: ${apiRes.status}`,
-        details: errorText
-      });
+      const supplierData = await apiRes.json();
+      lastSupplierData = supplierData;
+      if (supplierData && supplierData.success === false && page === 1) {
+        return res.status(400).json({
+          success: false,
+          message: 'Supplier reported failure',
+          error: supplierData
+        });
+      }
+      const batch = Array.isArray(supplierData.data)
+        ? supplierData.data
+        : (supplierData.data?.data || supplierData.products || []);
+      if (!Array.isArray(batch) || !batch.length) break;
+      products.push(...batch);
+      if (batch.length < 100) break;
     }
-
-    const supplierData = await apiRes.json();
-
-    if (!supplierData.success) {
-      return res.status(400).json({
-        success: false,
-        message: 'Supplier reported failure',
-        error: supplierData
-      });
-    }
-
-    const products = supplierData.data || [];
     let newCount = 0;
     let updatedCount = 0;
 
@@ -595,7 +607,7 @@ async function handleFaddedSync(req, res) {
         0
       ) || 0;
 
-      const stock = Number(item.in_stock ?? 0) || 0;
+      const stock = readSupplierStock(item);
       const now = new Date().toISOString();
       const key = String(item.product_key);
 
@@ -660,6 +672,7 @@ async function handleFaddedSync(req, res) {
       synced: products.length,
       new_products: newCount,
       updated_products: updatedCount,
+      in_stock_from_api: products.filter((p) => readSupplierStock(p) > 0).length,
       inactive_nudges: nudge
     });
   } catch (error) {

@@ -17,6 +17,7 @@
 
 import { createClient } from '@supabase/supabase-js';
 import { formatCredentials, formatMultiLogCredentials, joinRawLogDetails } from '../lib/formatCredentials.js';
+import { readSupplierStock } from '../lib/supplierStock.js';
 
 const supabase = createClient(
   process.env.SUPABASE_URL,
@@ -157,17 +158,26 @@ async function handleSync(req, res) {
     if (id != null) catById.set(Number(id), c);
   }
 
-  const prodRes = await fetch(BASE + '/api/v1/products', { headers: supplierHeaders() });
-  if (!prodRes.ok) {
-    const t = await prodRes.text();
-    return res.status(prodRes.status).json({
-      success: false,
-      message: 'ClassyTee products error: ' + prodRes.status,
-      details: t.slice(0, 500)
-    });
+  const products = [];
+  for (let page = 1; page <= 30; page++) {
+    const prodRes = await fetch(BASE + `/api/v1/products?page=${page}&per_page=100`, { headers: supplierHeaders() });
+    if (!prodRes.ok) {
+      const t = await prodRes.text();
+      if (page === 1) {
+        return res.status(prodRes.status).json({
+          success: false,
+          message: 'ClassyTee products error: ' + prodRes.status,
+          details: t.slice(0, 500)
+        });
+      }
+      break;
+    }
+    const prodJson = await prodRes.json();
+    const batch = prodJson.products || prodJson.data || prodJson.data?.data || [];
+    if (!Array.isArray(batch) || !batch.length) break;
+    products.push(...batch);
+    if (batch.length < 100) break;
   }
-  const prodJson = await prodRes.json();
-  const products = prodJson.products || prodJson.data || [];
   if (!Array.isArray(products)) {
     return res.status(400).json({ success: false, message: 'Unexpected products payload', raw: prodJson });
   }
@@ -198,8 +208,8 @@ async function handleSync(req, res) {
     const product_key = 'ct_' + pid;
     const name = String(p.name || p.product_name || 'Product ' + pid).trim();
     const supplierPrice = Number(p.price || 0);
-    const stock = Number(p.stock_count ?? p.stock ?? 0);
-    const inStock = p.in_stock != null ? !!p.in_stock : stock > 0;
+    const stock = readSupplierStock(p);
+    const inStock = stock > 0 || p.in_stock === true || p.in_stock === 'true';
     const cat = catById.get(Number(p.category_id));
     const category = categorize(name + ' ' + (cat && cat.category_name ? cat.category_name : ''));
     // Supplier-facing text only — never invent a credential format string as the product description
@@ -216,7 +226,9 @@ async function handleSync(req, res) {
         updated_at: new Date().toISOString()
       };
       // 0 stock hidden. In stock visible again.
-      if (!inStock || stock <= 0) patch.is_available = false; else if (!adminHiddenSet.has(product_key)) patch.is_available = true;
+      if (!inStock || stock <= 0) patch.is_available = false;
+      else if (adminHiddenSet.has(product_key)) { /* admin hid — stay hidden */ }
+      else patch.is_available = true;
       const { error } = await supabase
         .from('products')
         .update(patch)
@@ -247,6 +259,7 @@ async function handleSync(req, res) {
     synced: products.length,
     new_products: newCount,
     updated_products: updatedCount,
+    in_stock_from_api: products.filter((p) => readSupplierStock(p) > 0).length,
     base: BASE
   });
 }
