@@ -3185,18 +3185,6 @@ body::after {
     </section>
 
 
-<div id="depositCreditModal" class="purchase-modal" style="z-index:3000;align-items:center;">
-  <div class="purchase-sheet" style="text-align:center;padding:28px 22px 22px;max-width:360px;">
-    <div style="width:64px;height:64px;border-radius:18px;margin:0 auto 14px;background:#d1fae5;color:#059669;display:flex;align-items:center;justify-content:center;font-size:28px;">✓</div>
-    <div style="font-size:22px;font-weight:800;margin-bottom:8px;">Wallet credited</div>
-    <div id="depositCreditCopy" style="font-size:15px;line-height:1.5;color:#334155;">Your wallet has been updated.</div>
-    <div id="depositCreditAmt" style="font-size:28px;font-weight:800;color:#2563eb;margin:16px 0 6px;">₦0</div>
-    <div style="font-size:12px;color:#64748b;margin-bottom:18px;">This is the amount added to your MJ HUB wallet.</div>
-    <button type="button" class="btn-sm-primary" id="depositCreditDone" style="width:100%;padding:12px;">Done</button>
-    <div style="font-size:11px;color:#94a3b8;margin-top:10px;">Taking you home in a few seconds…</div>
-  </div>
-</div>
-
 <section id="cart" class="app-section">
         <div class="content-card">
             <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;flex-wrap:wrap;">
@@ -3842,64 +3830,51 @@ document.addEventListener('DOMContentLoaded', async () => {
 function latestDepositCredit(){
   try{
     var list = (typeof transactions !== 'undefined' && transactions) ? transactions : [];
+    var now = Date.now();
+    var MAX_AGE_MS = 20 * 60 * 1000;
     for (var i=0;i<list.length;i++){
       var tx=list[i];
       var st=String(tx.status||'').toLowerCase();
-      var title=String(tx.title||tx.category||'');
-      if ((st==='completed'||st==='success'||st==='paid') && /deposit|wallet fund|pocketfi/i.test(title+' '+String(tx.category||'')+' '+String(tx.type||''))){
-        return Math.abs(Number(tx.amount_ngn||tx.amount||0));
-      }
+      var title=String(tx.title||tx.category||'')+' '+String(tx.category||'')+' '+String(tx.type||'');
+      if (!(st==='completed'||st==='success'||st==='paid')) continue;
+      if (!/deposit|wallet fund|pocketfi/i.test(title)) continue;
+      var amt = Math.abs(Number(tx.amount_ngn||tx.amount||0));
+      if (!(amt > 0)) continue;
+      var created = tx.created_at ? new Date(tx.created_at).getTime() : 0;
+      if (created && (now - created) > MAX_AGE_MS) continue;
+      return amt;
     }
   }catch(_){}
   return null;
 }
-function showDepositCreditModal(amount){
-  var m=document.getElementById('depositCreditModal');
-  if(!m) return;
-  m.classList.add('active');
-  var amt=document.getElementById('depositCreditAmt');
-  var copy=document.getElementById('depositCreditCopy');
-  if (amount != null && amount > 0){
-    if (amt) amt.textContent = '₦' + Number(amount).toLocaleString();
-    if (copy) copy.textContent = 'This amount has been confirmed and added to your wallet.';
-  } else {
-    if (copy) copy.textContent = 'Payment received. Updating the exact wallet credit…';
-  }
-}
-function hideDepositCreditModal(){
-  var m=document.getElementById('depositCreditModal');
-  if (m) m.classList.remove('active');
-  if (typeof switchSection === 'function') switchSection('home');
-}
-
-document.addEventListener('click', function(e){
-  if (e.target && e.target.id === 'depositCreditDone') hideDepositCreditModal();
-});
 async function handleDepositReturn() {
     try {
         const params = new URLSearchParams(window.location.search);
         const deposit = params.get('deposit');
         if (!deposit) return;
 
-        // Clean URL without losing hash section
+        // Clean URL so this never re-triggers on a normal login
         const hash = window.location.hash || '#home';
         history.replaceState(null, '', window.location.pathname + hash);
 
         if (deposit === 'success' || deposit === 'pocketfi') {
             if (typeof switchSection === 'function') switchSection('home');
-            showDepositCreditModal(null);
             if (currentUserId) {
                 for (let i = 0; i < 6; i++) {
-                    await sleep(1200);
+                    await sleep(i === 0 ? 300 : 1000);
                     await fetchUserBalance(currentUserId);
                     try { await fetchUserTransactions(currentUserId); } catch (_) {}
                     var credited = latestDepositCredit();
-                    if (credited != null) { showDepositCreditModal(credited); break; }
+                    if (credited != null && credited > 0) {
+                      if (typeof showToast === 'function') {
+                        showToast('Wallet funded: ₦' + Number(credited).toLocaleString(), 'success');
+                      }
+                      break;
+                    }
                 }
             }
-            setTimeout(function(){ hideDepositCreditModal(); if (typeof switchSection === 'function') switchSection('home'); }, 4500);
         } else if (deposit === 'failed' || deposit === 'cancelled') {
-            showToast('Payment was not completed.', 'error');
+            if (typeof showToast === 'function') showToast('Payment was not completed.', 'error');
         }
     } catch (e) {
         console.warn('handleDepositReturn', e);
