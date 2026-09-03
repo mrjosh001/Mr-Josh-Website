@@ -1617,18 +1617,16 @@ function escapeHtmlForEmail(str) {
  * dropped in (HTML-escaped, line breaks kept) instead of an amount card. */
 function buildBroadcastEmailHtml({ name, subject, message }) {
   const safeName = escapeHtmlForEmail(String(name || '').trim() || 'there');
-  const safeSubject = escapeHtmlForEmail(subject);
   const paragraphs = escapeHtmlForEmail(message)
     .replace(/\r\n/g, '\n')
     .replace(/\r/g, '\n')
     .split(/\n{2,}/)
-    .map((p) => `<p style="margin:0 0 14px;font-size:16px;line-height:1.65;color:#1e293b;" class="text-body">${p.replace(/\n/g, '<br>')}</p>`)
+    .map((p) => `<p class="text-body" style="margin:0 0 14px;font-size:16px;line-height:1.65;color:#1e293b;">${p.replace(/\n/g, '<br>')}</p>`)
     .join('');
   const appUrl = (process.env.APP_URL || process.env.SITE_URL || 'https://www.mjhub.store').replace(/\/$/, '');
   const year = new Date().getFullYear();
   const unsubUrl = `${appUrl}/dashboard.html?unsubscribe=1`;
-  const LOGO_DARK = 'https://atczodlljmlayvldxfmv.supabase.co/storage/v1/object/public/avatars/dark%20background%20log';
-  const LOGO_LIGHT = 'https://atczodlljmlayvldxfmv.supabase.co/storage/v1/object/public/avatars/light%20background%20logo';
+  const LOGO = 'https://atczodlljmlayvldxfmv.supabase.co/storage/v1/object/public/avatars/light%20background%20logo';
 
   return `<!DOCTYPE html>
 <html lang="en" xmlns="http://www.w3.org/1999/xhtml">
@@ -1637,72 +1635,58 @@ function buildBroadcastEmailHtml({ name, subject, message }) {
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="color-scheme" content="light dark">
 <meta name="supported-color-schemes" content="light dark">
-<title>${safeSubject}</title>
 <style>
   :root { color-scheme: light dark; }
+  .logo { background: transparent !important; mix-blend-mode: multiply; }
   @media (prefers-color-scheme: dark) {
     .page { background-color:#0b1220 !important; }
     .card { background-color:#111827 !important; border-color:#1e293b !important; }
-    .text-title { color:#f8fafc !important; }
     .text-body { color:#e2e8f0 !important; }
     .text-muted { color:#94a3b8 !important; }
-    .logo-light { display:none !important; width:0 !important; height:0 !important; overflow:hidden !important; }
-    .logo-dark { display:block !important; }
+    .logo { mix-blend-mode: screen; }
     .rule { border-color:#1e293b !important; }
   }
   @media (prefers-color-scheme: light) {
     .page { background-color:#e8eef8 !important; }
     .card { background-color:#ffffff !important; border-color:#dbe4f0 !important; }
-    .text-title { color:#0f172a !important; }
     .text-body { color:#1e293b !important; }
     .text-muted { color:#64748b !important; }
-    .logo-dark { display:none !important; width:0 !important; height:0 !important; overflow:hidden !important; }
-    .logo-light { display:block !important; }
+    .logo { mix-blend-mode: multiply; }
     .rule { border-color:#e2e8f0 !important; }
   }
 </style>
 </head>
 <body class="page" style="margin:0;padding:0;background-color:#e8eef8;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
-  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" class="page" style="background-color:#e8eef8;padding:28px 12px;">
-    <tr>
-      <td align="center">
-        <table role="presentation" width="560" cellspacing="0" cellpadding="0" class="card" style="max-width:560px;width:100%;background-color:#ffffff;border:1px solid #dbe4f0;border-radius:20px;overflow:hidden;">
-          <tr>
-            <td align="center" style="padding:28px 28px 8px;background:transparent;">
-              <img class="logo-light" src="${LOGO_LIGHT}" alt="MJ Hub" width="132" height="40" style="display:block;height:40px;width:auto;max-width:160px;background:transparent;border:0;outline:none;">
-              <img class="logo-dark" src="${LOGO_DARK}" alt="MJ Hub" width="132" height="40" style="display:none;height:40px;width:auto;max-width:160px;background:transparent;border:0;outline:none;">
-            </td>
-          </tr>
-          <tr>
-            <td style="padding:8px 32px 0;text-align:center;">
-              <div style="width:48px;height:4px;border-radius:4px;background-color:#3b82f6;margin:0 auto 20px;"></div>
-              <h1 class="text-title" style="margin:0 0 8px;font-size:24px;line-height:1.25;color:#0f172a;font-weight:800;">${safeSubject}</h1>
-              <p class="text-muted" style="margin:0 0 20px;font-size:15px;color:#64748b;">Hi ${safeName},</p>
-            </td>
-          </tr>
-          <tr>
-            <td style="padding:0 32px 8px;">
-              ${paragraphs}
-            </td>
-          </tr>
-          <tr>
-            <td align="center" style="padding:8px 32px 28px;">
-              <a href="${appUrl}/dashboard.html" style="display:inline-block;background-color:#2563eb;color:#ffffff;font-weight:700;font-size:15px;text-decoration:none;padding:14px 28px;border-radius:12px;">Open MJ Hub</a>
-            </td>
-          </tr>
-          <tr>
-            <td style="padding:0 32px 28px;">
-              <hr class="rule" style="border:none;border-top:1px solid #e2e8f0;margin:0 0 16px;">
-              <p class="text-muted" style="margin:0;font-size:12px;line-height:1.5;color:#64748b;text-align:center;">
-                You received this because you have an MJ Hub account.
-                <a href="${unsubUrl}" style="color:#2563eb;text-decoration:none;">Unsubscribe</a><br>
-                © ${year} MJ Hub
-              </p>
-            </td>
-          </tr>
-        </table>
-      </td>
-    </tr>
+  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" class="page" style="background-color:#e8eef8;padding:24px 12px;">
+    <tr><td align="center">
+      <table role="presentation" width="560" cellspacing="0" cellpadding="0" class="card" style="max-width:560px;width:100%;background-color:#ffffff;border:1px solid #dbe4f0;border-radius:20px;">
+        <tr>
+          <td align="center" style="padding:28px 28px 12px;background:transparent;">
+            <img class="logo" src="${LOGO}" alt="MJ Hub" width="120" style="display:block;height:44px;width:auto;background:transparent;border:0;outline:none;mix-blend-mode:multiply;">
+          </td>
+        </tr>
+        <tr>
+          <td style="padding:8px 32px 6px;">
+            <p class="text-body" style="margin:0 0 16px;font-size:18px;font-weight:700;color:#0f172a;">Hi ${safeName},</p>
+            ${paragraphs}
+          </td>
+        </tr>
+        <tr>
+          <td align="center" style="padding:8px 32px 28px;">
+            <a href="${appUrl}/dashboard.html" style="display:inline-block;background-color:#2563eb;color:#ffffff;font-weight:700;font-size:15px;text-decoration:none;padding:14px 28px;border-radius:12px;">Open MJ Hub</a>
+          </td>
+        </tr>
+        <tr>
+          <td style="padding:0 32px 28px;">
+            <hr class="rule" style="border:none;border-top:1px solid #e2e8f0;margin:0 0 16px;">
+            <p class="text-muted" style="margin:0;font-size:12px;line-height:1.5;color:#64748b;text-align:center;">
+              You received this because you have an MJ Hub account.
+              <a href="${unsubUrl}" style="color:#2563eb;text-decoration:none;">Unsubscribe</a><br>© ${year} MJ Hub
+            </p>
+          </td>
+        </tr>
+      </table>
+    </td></tr>
   </table>
 </body>
 </html>`;
