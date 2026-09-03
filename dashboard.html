@@ -2442,15 +2442,6 @@ body::after {
   background: rgba(220, 38, 38, 0.1) !important;
 }
 
-
-/* Transparent brand logos — no plate behind mark */
-img.brand-logo, img.sidebar-brand-logo-img, #brandLogo, #navBrandLogo, #sidebarBrandLogo, #welcomeModalLogo,
-.logo img, .brand-logo-img, .login-logo-img, .logo-dark, .logo-light {
-  background: transparent !important;
-  background-color: transparent !important;
-  box-shadow: none !important;
-  object-fit: contain;
-}
 </style>
 <link rel="stylesheet" href="/css/skeleton.css">
 <script src="/js/skeleton.js" defer></script>
@@ -2490,6 +2481,8 @@ img.brand-logo, img.sidebar-brand-logo-img, #brandLogo, #navBrandLogo, #sidebarB
 <script src="/js/graceful.js" defer></script>
 
   <script src="/js/mj-page-loader.js"></script>
+<link rel="stylesheet" href="/css/mj-glass.css">
+<script src="/js/mj-glass.js" defer></script>
 </head>
 <body>
 
@@ -3191,6 +3184,19 @@ img.brand-logo, img.sidebar-brand-logo-img, #brandLogo, #navBrandLogo, #sidebarB
         </div>
     </section>
 
+
+<div id="depositCreditModal" class="purchase-modal" style="z-index:3000;align-items:center;">
+  <div class="purchase-sheet" style="text-align:center;padding:28px 22px 22px;max-width:360px;">
+    <div style="width:64px;height:64px;border-radius:18px;margin:0 auto 14px;background:#d1fae5;color:#059669;display:flex;align-items:center;justify-content:center;font-size:28px;">✓</div>
+    <div style="font-size:22px;font-weight:800;margin-bottom:8px;">Wallet credited</div>
+    <div id="depositCreditCopy" style="font-size:15px;line-height:1.5;color:#334155;">Your wallet has been updated.</div>
+    <div id="depositCreditAmt" style="font-size:28px;font-weight:800;color:#2563eb;margin:16px 0 6px;">₦0</div>
+    <div style="font-size:12px;color:#64748b;margin-bottom:18px;">This is the amount added to your MJ HUB wallet.</div>
+    <button type="button" class="btn-sm-primary" id="depositCreditDone" style="width:100%;padding:12px;">Done</button>
+    <div style="font-size:11px;color:#94a3b8;margin-top:10px;">Taking you home in a few seconds…</div>
+  </div>
+</div>
+
 <section id="cart" class="app-section">
         <div class="content-card">
             <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;flex-wrap:wrap;">
@@ -3832,6 +3838,43 @@ document.addEventListener('DOMContentLoaded', async () => {
 });
 
 /** After PocketFi (or other) checkout, user lands on dashboard.html?deposit=success */
+
+function latestDepositCredit(){
+  try{
+    var list = (typeof transactions !== 'undefined' && transactions) ? transactions : [];
+    for (var i=0;i<list.length;i++){
+      var tx=list[i];
+      var st=String(tx.status||'').toLowerCase();
+      var title=String(tx.title||tx.category||'');
+      if ((st==='completed'||st==='success'||st==='paid') && /deposit|wallet fund|pocketfi/i.test(title+' '+String(tx.category||'')+' '+String(tx.type||''))){
+        return Math.abs(Number(tx.amount_ngn||tx.amount||0));
+      }
+    }
+  }catch(_){}
+  return null;
+}
+function showDepositCreditModal(amount){
+  var m=document.getElementById('depositCreditModal');
+  if(!m) return;
+  m.classList.add('active');
+  var amt=document.getElementById('depositCreditAmt');
+  var copy=document.getElementById('depositCreditCopy');
+  if (amount != null && amount > 0){
+    if (amt) amt.textContent = '₦' + Number(amount).toLocaleString();
+    if (copy) copy.textContent = 'This amount has been confirmed and added to your wallet.';
+  } else {
+    if (copy) copy.textContent = 'Payment received. Updating the exact wallet credit…';
+  }
+}
+function hideDepositCreditModal(){
+  var m=document.getElementById('depositCreditModal');
+  if (m) m.classList.remove('active');
+  if (typeof switchSection === 'function') switchSection('home');
+}
+
+document.addEventListener('click', function(e){
+  if (e.target && e.target.id === 'depositCreditDone') hideDepositCreditModal();
+});
 async function handleDepositReturn() {
     try {
         const params = new URLSearchParams(window.location.search);
@@ -3843,18 +3886,18 @@ async function handleDepositReturn() {
         history.replaceState(null, '', window.location.pathname + hash);
 
         if (deposit === 'success' || deposit === 'pocketfi') {
-            showToast('Payment received — updating your balance…', 'success', 4000);
             if (typeof switchSection === 'function') switchSection('home');
-
-            // Webhook may lag a few seconds — poll balance a few times
+            showDepositCreditModal(null);
             if (currentUserId) {
                 for (let i = 0; i < 6; i++) {
-                    await sleep(1500);
+                    await sleep(1200);
                     await fetchUserBalance(currentUserId);
                     try { await fetchUserTransactions(currentUserId); } catch (_) {}
+                    var credited = latestDepositCredit();
+                    if (credited != null) { showDepositCreditModal(credited); break; }
                 }
-                showToast('Wallet refreshed. If balance is still old, wait ~30s then pull to refresh.', 'info', 4500);
             }
+            setTimeout(function(){ hideDepositCreditModal(); if (typeof switchSection === 'function') switchSection('home'); }, 4500);
         } else if (deposit === 'failed' || deposit === 'cancelled') {
             showToast('Payment was not completed.', 'error');
         }
@@ -6643,6 +6686,7 @@ async function loadAdminNotifications() {
       .from('notifications')
       .select('id, title, body, type, created_at')
       .is('user_id', null)
+      .neq('type', 'email_log')
       .order('created_at', { ascending: false })
       .limit(30);
     if (error) {
@@ -6729,7 +6773,8 @@ function subscribeNotifRealtime() {
         { event: 'INSERT', schema: 'public', table: 'notifications' },
         (payload) => {
           const row = payload?.new;
-          if (!row || row.user_id != null) return; // only global broadcasts
+          if (!row || row.user_id != null) return;
+          if (row.type === 'email_log') return;
           // Prepend if not already present
           if (!adminBroadcasts.some(n => String(n.id) === String(row.id))) {
             adminBroadcasts.unshift(row);
@@ -6904,6 +6949,5 @@ function toggleBoosterMenu(e) {
 })();
 </script>
 
-<script src="/js/logo-transparent.js" defer></script>
 </body>
 </html>
