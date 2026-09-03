@@ -376,13 +376,17 @@ async function fetchAllCategories(apiKey) {
 
     const batch = Array.isArray(json.data)
       ? json.data
-      : (json.data?.data || json.data?.items || []);
+      : (json.data?.data || json.data?.items || json.data?.categories || []);
 
-    if (!batch.length) break;
+    if (!Array.isArray(batch) || !batch.length) break;
     all.push(...batch);
 
-    // Stop if fewer than a full page (no more pages)
-    if (batch.length < perPage) break;
+    const lastPage = Number(
+      json.last_page || json.data?.last_page || json.meta?.last_page || json.data?.meta?.last_page || 0
+    );
+    const nextUrl = json.next_page_url || json.data?.next_page_url || json.links?.next;
+    if (lastPage && page >= lastPage) break;
+    if (!lastPage && !nextUrl && batch.length < perPage) break;
     page += 1;
   }
 
@@ -481,8 +485,6 @@ async function handleLogsDomainSync(req, res) {
           console.error(`Logs Domain update ${productKey}:`, error.message);
         }
       } else {
-        // NEW: full insert with markup + category
-        newCount += 1;
         const { error } = await supabase
           .from('products')
           .insert({
@@ -501,6 +503,8 @@ async function handleLogsDomainSync(req, res) {
 
         if (error) {
           console.error(`Logs Domain insert ${productKey}:`, error.message);
+        } else {
+          newCount += 1;
         }
       }
     }
@@ -511,7 +515,8 @@ async function handleLogsDomainSync(req, res) {
       new_products: newCount,
       updated_products: updatedCount,
       in_stock_from_api: withStock,
-      source: 'logsdomain'
+      source: 'logsdomain',
+      note: 'Walks every LogsDomain category page so new uploads are included'
     });
   } catch (error) {
     console.error('products-logsdomain error:', error);
@@ -565,7 +570,12 @@ async function fetchAllLdCategories() {
       : (json.data?.data || json.data?.categories || []);
     if (!Array.isArray(batch) || batch.length === 0) break;
     all.push(...batch);
-    if (batch.length < perPage) break;
+    const lastPage = Number(
+      json.last_page || json.data?.last_page || json.meta?.last_page || json.data?.meta?.last_page || 0
+    );
+    const nextUrl = json.next_page_url || json.data?.next_page_url || json.links?.next;
+    if (lastPage && page >= lastPage) break;
+    if (!lastPage && !nextUrl && batch.length < perPage) break;
     page += 1;
   }
   return all;
@@ -634,7 +644,7 @@ async function handleLdProductSync(req, res) {
           updated_at: now
         });
         if (error) console.error('[ld sync] insert', product_key, error.message);
-        else newCount++;
+        else newCount += 1;
       }
     }
 
