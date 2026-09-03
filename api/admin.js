@@ -1626,7 +1626,8 @@ function buildBroadcastEmailHtml({ name, subject, message }) {
   const appUrl = (process.env.APP_URL || process.env.SITE_URL || 'https://www.mjhub.store').replace(/\/$/, '');
   const year = new Date().getFullYear();
   const unsubUrl = `${appUrl}/dashboard.html?unsubscribe=1`;
-  const LOGO = 'https://atczodlljmlayvldxfmv.supabase.co/storage/v1/object/public/avatars/dark%20background%20log';
+  const LOGO_LIGHT = 'https://atczodlljmlayvldxfmv.supabase.co/storage/v1/object/public/avatars/IMG_2796.jpeg';
+  const LOGO_DARK = 'https://atczodlljmlayvldxfmv.supabase.co/storage/v1/object/public/avatars/IMG_2797.jpeg';
 
   return `<!DOCTYPE html>
 <html lang="en" xmlns="http://www.w3.org/1999/xhtml">
@@ -1642,6 +1643,8 @@ function buildBroadcastEmailHtml({ name, subject, message }) {
     .card { background-color:#111827 !important; border-color:#1e293b !important; }
     .text-body { color:#e2e8f0 !important; }
     .text-muted { color:#94a3b8 !important; }
+    .logo-light { display:none !important; width:0 !important; height:0 !important; overflow:hidden !important; }
+    .logo-dark { display:block !important; }
     .rule { border-color:#1e293b !important; }
   }
   @media (prefers-color-scheme: light) {
@@ -1649,6 +1652,8 @@ function buildBroadcastEmailHtml({ name, subject, message }) {
     .card { background-color:#ffffff !important; border-color:#dbe4f0 !important; }
     .text-body { color:#1e293b !important; }
     .text-muted { color:#64748b !important; }
+    .logo-dark { display:none !important; width:0 !important; height:0 !important; overflow:hidden !important; }
+    .logo-light { display:block !important; }
     .rule { border-color:#e2e8f0 !important; }
   }
 </style>
@@ -1658,8 +1663,9 @@ function buildBroadcastEmailHtml({ name, subject, message }) {
     <tr><td align="center">
       <table role="presentation" width="560" cellspacing="0" cellpadding="0" class="card" style="max-width:560px;width:100%;background-color:#ffffff;border:1px solid #dbe4f0;border-radius:20px;">
         <tr>
-          <td align="center" style="padding:22px 28px;background-color:#2563eb;">
-            <img src="${LOGO}" alt="MJ Hub" width="140" style="display:block;height:48px;width:auto;background:transparent;border:0;outline:none;">
+          <td align="center" style="padding:32px 24px 12px;background:transparent;">
+            <img class="logo-light" src="${LOGO_LIGHT}" alt="MJ Hub" width="140" style="display:block;height:52px;width:auto;border:0;outline:none;background:transparent;">
+            <img class="logo-dark" src="${LOGO_DARK}" alt="MJ Hub" width="140" style="display:none;height:52px;width:auto;border:0;outline:none;background:transparent;">
           </td>
         </tr>
         <tr>
