@@ -242,6 +242,49 @@ async function insertLogOrder(row) {
 
 const BASE = 'https://logsdomain.com/api/v1';
 
+function readLdStock(item) {
+  if (!item || typeof item !== 'object') return 0;
+  const bags = [item];
+  if (item.stock && typeof item.stock === 'object') bags.push(item.stock);
+  if (item.inventory && typeof item.inventory === 'object') bags.push(item.inventory);
+  if (item.meta && typeof item.meta === 'object') bags.push(item.meta);
+  const keys = [
+    'available_quantity',
+    'available_qty',
+    'available_count',
+    'in_stock_count',
+    'in_stock_qty',
+    'stock_count',
+    'stock_quantity',
+    'stock_qty',
+    'quantity_available',
+    'qty_available',
+    'qty',
+    'quantity',
+    'stock',
+    'available',
+    'in_stock',
+    'units',
+    'count'
+  ];
+  let best = 0;
+  for (const bag of bags) {
+    for (const k of keys) {
+      if (!(k in bag)) continue;
+      const v = bag[k];
+      if (v === true || v === 'true' || v === 'yes' || v === 'in_stock') {
+        if (best < 1) best = 1;
+        continue;
+      }
+      if (v === false || v === 'false' || v === 'no' || v == null || v === '') continue;
+      if (typeof v === 'object') continue;
+      const n = Number(String(v).replace(/,/g, '').replace(/[^\d.-]/g, ''));
+      if (Number.isFinite(n) && n > best) best = Math.floor(n);
+    }
+  }
+  return best;
+}
+
 function stripHtml(html) {
   if (!html) return '';
   let text = String(html);
@@ -377,6 +420,7 @@ async function handleLogsDomainSync(req, res) {
     const categories = await fetchAllCategories(process.env.LOGSDOMAIN_API_KEY);
     let newCount = 0;
     let updatedCount = 0;
+    let withStock = 0;
 
     for (const item of categories) {
       const id = item.id;
@@ -387,11 +431,12 @@ async function handleLogsDomainSync(req, res) {
       const parentName = item.parent_category?.name || '';
       const cleanDescription = stripHtml(item.description || '');
       const supplierPrice = Number(item.price) || 0;
-      const stock = Number(item.available_quantity) || 0;
+      const stock = readLdStock(item);
+      if (stock > 0) withStock += 1;
 
       const { data: existing } = await supabase
         .from('products')
-        .select('product_key, price, name')
+        .select('product_key, price, name, admin_hidden')
         .eq('product_key', productKey)
         .maybeSingle();
 
@@ -426,7 +471,7 @@ async function handleLogsDomainSync(req, res) {
             display_description: cleanDescription,
             supplier_price: supplierPrice,
             stock_quantity: stock,
-            is_available: stock > 0,
+            is_available: existing.admin_hidden ? false : stock > 0,
             source: 'logsdomain',
             updated_at: new Date().toISOString()
           })
@@ -465,6 +510,7 @@ async function handleLogsDomainSync(req, res) {
       synced: categories.length,
       new_products: newCount,
       updated_products: updatedCount,
+      in_stock_from_api: withStock,
       source: 'logsdomain'
     });
   } catch (error) {
@@ -545,7 +591,10 @@ async function handleLdProductSync(req, res) {
     for (let i = 0; i < keys.length; i += 200) {
       const batch = keys.slice(i, i + 200);
       const { data } = await supabase.from('products').select('product_key, admin_hidden').in('product_key', batch);
-      (data || []).forEach((r) => existingKeySet.add(String(r.product_key)));
+      (data || []).forEach((r) => {
+        if (r.product_key) existingKeySet.add(String(r.product_key));
+        if (r.admin_hidden) adminHiddenSet.add(String(r.product_key));
+      });
     }
 
     for (const c of categories) {
@@ -554,7 +603,7 @@ async function handleLdProductSync(req, res) {
       const product_key = `ld_${id}`;
       const name = String(c.name || c.category_name || `Log ${id}`).trim();
       const supplierPrice = Number(c.price ?? c.unit_price ?? c.rate ?? 0) || 0;
-      const stock = Number(c.stock ?? c.available ?? c.quantity ?? c.in_stock ?? 0) || 0;
+      const stock = readLdStock(c);
       const now = new Date().toISOString();
 
       if (existingKeySet.has(product_key)) {
@@ -564,7 +613,9 @@ async function handleLdProductSync(req, res) {
           source: 'logsdomain',
           updated_at: now
         };
-        if (stock <= 0) patch.is_available = false; else if (!adminHiddenSet.has(product_key)) patch.is_available = true;
+        if (stock <= 0) patch.is_available = false;
+        else if (adminHiddenSet.has(product_key)) { /* admin hid — stay hidden */ }
+        else patch.is_available = true;
         const { error } = await supabase.from('products').update(patch).eq('product_key', product_key);
         if (error) console.error('[ld sync] update', product_key, error.message);
         else updatedCount++;
