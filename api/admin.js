@@ -1338,26 +1338,28 @@ async function safeBal(fn, name) {
     if (timer) clearTimeout(timer);
   }
 }
-async function supplierBalancesFetch() {
-  // One at a time + short timeout so Hobby 10s limit cannot kill the function
-  // (Promise.all of 7 outbound APIs was causing FUNCTION_INVOCATION_FAILED).
-  const jobs = [
-    ['fadded', getFaddedBalance],
-    ['logsdomain', getLogsDomainBalance],
-    ['grizzly', getGrizzlyBalance],
-    ['sujan', getSujanBalance],
-    ['owlet', fetchOwletBalance],
-    ['classy', getClassyBalance],
-    ['smsbus', getSmsBusBalance]
-  ];
-  const suppliers = {};
-  for (const [name, fn] of jobs) {
-    suppliers[name] = await safeBal(fn, name);
-  }
-  return {
-    status: 200,
-    body: { success: true, suppliers, fetched_at: new Date().toISOString() }
+async function supplierBalancesFetch(body) {
+  const jobs = {
+    fadded: getFaddedBalance,
+    logsdomain: getLogsDomainBalance,
+    grizzly: getGrizzlyBalance,
+    sujan: getSujanBalance,
+    owlet: fetchOwletBalance,
+    classy: getClassyBalance,
+    smsbus: getSmsBusBalance
   };
+  const only = String((body && body.supplier) || '').toLowerCase();
+  if (!only || !jobs[only]) {
+    const suppliers = {};
+    for (const k of Object.keys(jobs)) suppliers[k] = { ok: false, error: 'Click Refresh' };
+    return { status: 200, body: { success: true, suppliers, fetched_at: new Date().toISOString() } };
+  }
+  try {
+    const result = await safeBal(jobs[only], only);
+    return { status: 200, body: { success: true, suppliers: { [only]: result }, fetched_at: new Date().toISOString() } };
+  } catch (e) {
+    return { status: 200, body: { success: true, suppliers: { [only]: { ok: false, error: String(e.message || e) } } } };
+  }
 }
 
 const PERIOD_DAYS = { today: 1, '7days': 7, month: 30, '3months': 90, '6months': 180, '12months': 365 };
@@ -1882,7 +1884,7 @@ export default async function handler(req, res) {
     } else if (resource === 'booster_orders' && (action === 'list' || !action)) {
       result = await listBoosterOrdersHandle();
     } else if (resource === 'supplier_balances') {
-      try { result = await supplierBalancesFetch(); } catch (e) { result = { status: 200, body: { success: true, suppliers: {}, message: String(e.message||e) } }; }
+      try { result = await supplierBalancesFetch(body); } catch (e) { result = { status: 200, body: { success: true, suppliers: {}, message: String(e.message||e) } }; }
     } else if (resource === 'overview') {
       result = await getOverviewStats(body);
     } else if (resource === 'user_join_dates') {
