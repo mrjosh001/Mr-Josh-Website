@@ -1645,6 +1645,7 @@ function buildBroadcastEmailHtml({ name, subject, message }) {
     .text-muted { color:#94a3b8 !important; }
     .logo-light { display:none !important; width:0 !important; height:0 !important; overflow:hidden !important; }
     .logo-dark { display:block !important; }
+    .brand-word { color:#ffffff !important; }
     .rule { border-color:#1e293b !important; }
   }
   @media (prefers-color-scheme: light) {
@@ -1654,6 +1655,7 @@ function buildBroadcastEmailHtml({ name, subject, message }) {
     .text-muted { color:#64748b !important; }
     .logo-dark { display:none !important; width:0 !important; height:0 !important; overflow:hidden !important; }
     .logo-light { display:block !important; }
+    .brand-word { color:#0f172a !important; }
     .rule { border-color:#e2e8f0 !important; }
   }
 </style>
@@ -1664,8 +1666,8 @@ function buildBroadcastEmailHtml({ name, subject, message }) {
       <table role="presentation" width="560" cellspacing="0" cellpadding="0" class="card" style="max-width:560px;width:100%;background-color:#ffffff;border:1px solid #dbe4f0;border-radius:20px;">
         <tr>
           <td align="center" style="padding:32px 24px 12px;background:transparent;">
-            <img class="logo-light" src="https://atczodlljmlayvldxfmv.supabase.co/storage/v1/object/public/avatars/IMG_2796.jpeg" alt="MJ Hub" width="140" style="display:block;height:52px;width:auto;border:0;outline:none;background:transparent;">
-            <img class="logo-dark" src="https://atczodlljmlayvldxfmv.supabase.co/storage/v1/object/public/avatars/mjhub-logo-dark-clear.png" alt="MJ Hub" width="140" style="display:none;height:52px;width:auto;border:0;outline:none;background:transparent;">
+            <img src="https://atczodlljmlayvldxfmv.supabase.co/storage/v1/object/public/avatars/mjhub-mark-only.png" alt="MJ Hub" width="120" style="display:block;height:44px;width:auto;border:0;outline:none;background:transparent;">
+            <div class="brand-word" style="margin-top:6px;font-size:13px;font-weight:800;letter-spacing:0.14em;color:#0f172a;">MJ HUB</div>
           </td>
         </tr>
         <tr>
