@@ -1330,7 +1330,7 @@ async function safeBal(fn, name) {
   try {
     return await Promise.race([
       fn(),
-      new Promise((_, rej) => { timer = setTimeout(() => rej(new Error('timeout')), 4000); })
+      new Promise((_, rej) => { timer = setTimeout(() => rej(new Error('timeout')), 1200); })
     ]);
   } catch (e) {
     return { ok: false, error: name + ': ' + (e.message || String(e)) };
@@ -1339,18 +1339,24 @@ async function safeBal(fn, name) {
   }
 }
 async function supplierBalancesFetch() {
-  const [fadded, logsdomain, grizzly, sujan, owlet, classy, smsbus] = await Promise.all([
-    safeBal(getFaddedBalance, 'fadded'),
-    safeBal(getLogsDomainBalance, 'logsdomain'),
-    safeBal(getGrizzlyBalance, 'grizzly'),
-    safeBal(getSujanBalance, 'sujan'),
-    safeBal(fetchOwletBalance, 'owlet'),
-    safeBal(getClassyBalance, 'classy'),
-    safeBal(getSmsBusBalance, 'smsbus')
-  ]);
+  // One at a time + short timeout so Hobby 10s limit cannot kill the function
+  // (Promise.all of 7 outbound APIs was causing FUNCTION_INVOCATION_FAILED).
+  const jobs = [
+    ['fadded', getFaddedBalance],
+    ['logsdomain', getLogsDomainBalance],
+    ['grizzly', getGrizzlyBalance],
+    ['sujan', getSujanBalance],
+    ['owlet', fetchOwletBalance],
+    ['classy', getClassyBalance],
+    ['smsbus', getSmsBusBalance]
+  ];
+  const suppliers = {};
+  for (const [name, fn] of jobs) {
+    suppliers[name] = await safeBal(fn, name);
+  }
   return {
     status: 200,
-    body: { success: true, suppliers: { fadded, logsdomain, grizzly, sujan, owlet, classy, smsbus }, fetched_at: new Date().toISOString() }
+    body: { success: true, suppliers, fetched_at: new Date().toISOString() }
   };
 }
 
@@ -1876,7 +1882,7 @@ export default async function handler(req, res) {
     } else if (resource === 'booster_orders' && (action === 'list' || !action)) {
       result = await listBoosterOrdersHandle();
     } else if (resource === 'supplier_balances') {
-      result = await supplierBalancesFetch();
+      try { result = await supplierBalancesFetch(); } catch (e) { result = { status: 200, body: { success: true, suppliers: {}, message: String(e.message||e) } }; }
     } else if (resource === 'overview') {
       result = await getOverviewStats(body);
     } else if (resource === 'user_join_dates') {
