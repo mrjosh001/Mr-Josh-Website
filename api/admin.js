@@ -1626,7 +1626,7 @@ function buildBroadcastEmailHtml({ name, subject, message }) {
   const appUrl = (process.env.APP_URL || process.env.SITE_URL || 'https://www.mjhub.store').replace(/\/$/, '');
   const year = new Date().getFullYear();
   const unsubUrl = `${appUrl}/dashboard.html?unsubscribe=1`;
-  const LOGO_LIGHT = 'https://atczodlljmlayvldxfmv.supabase.co/storage/v1/object/public/avatars/mjhub-logo-dark-clear.png';
+  const LOGO_LIGHT = 'https://atczodlljmlayvldxfmv.supabase.co/storage/v1/object/public/avatars/IMG_2796.jpeg';
   const LOGO_DARK = 'https://atczodlljmlayvldxfmv.supabase.co/storage/v1/object/public/avatars/mjhub-logo-dark-clear.png';
 
   return `<!DOCTYPE html>
@@ -1664,8 +1664,8 @@ function buildBroadcastEmailHtml({ name, subject, message }) {
       <table role="presentation" width="560" cellspacing="0" cellpadding="0" class="card" style="max-width:560px;width:100%;background-color:#ffffff;border:1px solid #dbe4f0;border-radius:20px;">
         <tr>
           <td align="center" style="padding:32px 24px 12px;background:transparent;">
-            <img class="logo-light" src="https://atczodlljmlayvldxfmv.supabase.co/storage/v1/object/public/avatars/IMG_2796.jpeg" alt="MJ Hub" width="140" style="display:block;height:52px;width:auto;border:0;outline:none;background:transparent;">
-            <img class="logo-dark" src="https://atczodlljmlayvldxfmv.supabase.co/storage/v1/object/public/avatars/mjhub-logo-dark-clear.png" alt="MJ Hub" width="140" style="display:none;height:52px;width:auto;border:0;outline:none;background:transparent;">
+            <img class="logo-dark" src="https://atczodlljmlayvldxfmv.supabase.co/storage/v1/object/public/avatars/mjhub-logo-dark-clear.png" alt="MJ Hub" width="140" style="display:block;height:52px;width:auto;border:0;outline:none;background:transparent;">
+            <img class="logo-light" src="https://atczodlljmlayvldxfmv.supabase.co/storage/v1/object/public/avatars/IMG_2796.jpeg" alt="MJ Hub" width="140" style="display:none;height:52px;width:auto;border:0;outline:none;background:transparent;">
           </td>
         </tr>
         <tr>
