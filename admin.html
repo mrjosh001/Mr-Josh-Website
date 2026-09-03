@@ -1581,41 +1581,11 @@ async function bulkRepriceNumbers(mode) {
 }
 
 async function loadSupplierBalances() {
- const names = ['fadded','logsdomain','grizzly','sujan','classy','owlet','smsbus'];
- const ui = { fadded:'Fadded', logsdomain:'Logsdomain', grizzly:'Grizzly', sujan:'Sujan', classy:'Classy', owlet:'Owlet', smsbus:'Smsbus' };
- const btn = document.getElementById('btnRefreshSupplierBalances');
- setBtnBusy(btn, true, 'Refreshing...');
- names.forEach(n => {
-   const sub = document.getElementById('bal' + ui[n] + 'Sub');
-   if (sub) sub.textContent = 'Loading…';
- });
- try {
-   const headers = await authHeaders();
-   headers['Content-Type'] = 'application/json';
-   for (const name of names) {
-     try {
-       const res = await fetch('/api/admin', {
-         method: 'POST', headers,
-         body: JSON.stringify({ resource: 'supplier_balances', supplier: name })
-       });
-       const raw = await res.text();
-       let data = {};
-       try { data = raw ? JSON.parse(raw) : {}; } catch (_) {
-         renderSupplierBalance(ui[name], { ok: false, error: 'HTTP ' + res.status });
-         continue;
-       }
-       const row = (data.suppliers && data.suppliers[name]) || { ok: false, error: data.message || 'No data' };
-       renderSupplierBalance(ui[name], row);
-     } catch (e) {
-       renderSupplierBalance(ui[name], { ok: false, error: e.message || 'failed' });
-     }
-   }
- } catch (err) {
-   showAdminToast('Supplier balance: ' + (err.message || 'network error'), 'error');
- } finally {
-   setBtnBusy(btn, false, '<i class="fas fa-sync"></i> Refresh');
- }
+ const ui = ['Fadded','Logsdomain','Grizzly','Sujan','Classy','Owlet','Smsbus'];
+ ui.forEach(p => renderSupplierBalance(p, { ok: false, error: 'Check supplier site' }));
 }
+
+
 async function loadProducts() {
  try {
  const { data, error } = await sb.from('products').select('*').order('name');
@@ -2458,6 +2428,31 @@ function updateRevenueDisplay() {
  * server-side (accurate for any volume, unlike the client-side calc above
  * which only ever looks at the 200 most-recently-cached log orders).
  */
+
+function fillOverviewFromCache(period) {
+  const ranges = { today:1, '7days':7, month:30, '3months':90, '6months':180, '12months':365 };
+  const cutoff = Date.now() - ((ranges[period] || 30) * 86400000);
+  const set = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
+  const orders = window._cachedOrders || [];
+  const logs = orders.filter(o => {
+    const d = o.created_at ? new Date(o.created_at).getTime() : 0;
+    const st = String(o.status || '').toLowerCase();
+    return d >= cutoff && !['cancelled','canceled','refunded','failed','void'].includes(st);
+  });
+  const units = logs.reduce((s,o) => s + Math.max(1, Number(o.quantity)||1), 0);
+  const spent = logs.reduce((s,o) => s + Number(o.amount || o.total || 0), 0);
+  set('mLogsSoldCount', units.toLocaleString());
+  set('mLogsAmountSpent', '₦' + spent.toLocaleString());
+  const sms = (window._cachedSmsOrders || []).filter(o => {
+    const d = o.created_at ? new Date(o.created_at).getTime() : 0;
+    const st = String(o.status || '').toLowerCase();
+    return d >= cutoff && ['completed','complete','success','received','code_received'].includes(st);
+  });
+  const smsSpend = sms.reduce((s,o) => s + Number(o.price || o.amount || 0), 0);
+  set('mSmsOrderCount', sms.length.toLocaleString());
+  set('mSmsAmountSpent', '₦' + smsSpend.toLocaleString());
+}
+
 async function loadOverviewStats(period) {
  const set = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
  try {
@@ -2472,7 +2467,8 @@ async function loadOverviewStats(period) {
  });
  const data = await res.json();
  if (!res.ok || !data.success) {
- console.error('Overview stats failed:', data.message);
+ console.error('Overview stats failed:', data && data.message);
+ fillOverviewFromCache(period);
  return;
  }
 
