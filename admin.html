@@ -627,9 +627,14 @@ function withLagos(opts) { return Object.assign({ timeZone: 'Africa/Lagos' }, op
 
  <div class="content">
  <div id="tab-overview" class="tab-content active">
- <div style="margin-bottom:18px;">
+ <div style="margin-bottom:18px;display:flex;align-items:flex-start;justify-content:space-between;gap:12px;flex-wrap:wrap;">
+ <div>
  <div style="font-size:22px;font-weight:800;letter-spacing:-0.03em;color:var(--text);">Overview</div>
  <div style="font-size:13px;color:var(--muted);margin-top:4px;">Live store performance for the selected period.</div>
+ </div>
+ <button class="btn btn-secondary btn-sm" id="dashRefreshBtn" onclick="refreshEntireDashboard()" title="Reload every panel across the whole admin dashboard">
+ <i class="fas fa-sync"></i> Refresh dashboard
+ </button>
  </div>
  <div class="panel">
  <div class="panel-header">
@@ -1028,9 +1033,10 @@ function withLagos(opts) { return Object.assign({ timeZone: 'Africa/Lagos' }, op
  <div id="emailBroadcastMsg" style="font-size:13px;margin:4px 0 12px;"></div>
  <div style="display:flex;flex-wrap:wrap;gap:10px;">
  <button class="btn btn-secondary btn-sm" id="emailBroadcastPreviewBtn" onclick="previewEmailBroadcast()"><i class="fas fa-eye"></i> Preview count</button>
+ <button class="btn btn-secondary btn-sm" id="emailBroadcastTestBtn" onclick="sendTestEmailBroadcast()"><i class="fas fa-flask"></i> Send test to myself</button>
  <button class="btn btn-primary btn-sm" id="emailBroadcastSendBtn" onclick="sendEmailBroadcast()"><i class="fas fa-paper-plane"></i> Send email to all customers</button>
  </div>
- <div class="price-note" style="margin-top:10px;">No mail is sent until you click "Send" and confirm. Skips unsubscribed addresses automatically.</div>
+ <div class="price-note" style="margin-top:10px;">"Send test to myself" delivers the exact email — subject prefixed with [TEST] — to your own admin inbox only, so you can check how it renders before sending to customers. No mail is sent to anyone else until you click "Send" and confirm. Skips unsubscribed addresses automatically.</div>
  </div>
  </div>
 
@@ -1476,6 +1482,35 @@ async function confirmLogout() {
 }
 
 let _adminDataLoading = false;
+async function refreshEntireDashboard() {
+ const btn = document.getElementById('dashRefreshBtn');
+ const icon = btn?.querySelector('i');
+ if (btn) btn.disabled = true;
+ if (icon) icon.classList.add('fa-spin');
+
+ try {
+ const tasks = [loadAllData()];
+ if (typeof updateRevenueDisplay === 'function') {
+ try { updateRevenueDisplay(); } catch (e) { console.error('revenue display', e); }
+ }
+ if (typeof loadUserJoinDates === 'function') tasks.push(loadUserJoinDates().catch(function(e){ console.error('join dates', e); }));
+ if (typeof loadOwletBalance === 'function' && document.getElementById('owletBalanceText')) {
+ tasks.push(loadOwletBalance().catch(function(e){ console.error('owlet balance', e); }));
+ }
+ if (typeof loadSubAdmins === 'function' && document.getElementById('tab-subadmins')) {
+ tasks.push(loadSubAdmins().catch(function(e){ console.error('sub admins', e); }));
+ }
+ await Promise.all(tasks);
+ if (typeof showAdminToast === 'function') showAdminToast('Dashboard refreshed', 'success');
+ } catch (e) {
+ console.error('refreshEntireDashboard', e);
+ if (typeof showAdminToast === 'function') showAdminToast('Refresh had errors — check console', 'error');
+ } finally {
+ if (btn) btn.disabled = false;
+ if (icon) icon.classList.remove('fa-spin');
+ }
+}
+
 async function loadAllData() {
  if (_adminDataLoading) return;
  _adminDataLoading = true;
@@ -3845,6 +3880,36 @@ async function previewEmailBroadcast() {
  }
 }
 
+async function sendTestEmailBroadcast() {
+ const msgEl = document.getElementById('emailBroadcastMsg');
+ const { subject, body } = emailBroadcastFields();
+
+ if (!subject) { msgEl.style.color = 'var(--danger,#f87171)'; msgEl.textContent = 'Subject is required.'; return; }
+ if (!body) { msgEl.style.color = 'var(--danger,#f87171)'; msgEl.textContent = 'Body is required.'; return; }
+
+ const testBtn = document.getElementById('emailBroadcastTestBtn');
+ const sendBtn = document.getElementById('emailBroadcastSendBtn');
+ const previewBtn = document.getElementById('emailBroadcastPreviewBtn');
+ testBtn.disabled = true;
+ sendBtn.disabled = true;
+ previewBtn.disabled = true;
+ msgEl.style.color = 'var(--muted)';
+ msgEl.textContent = 'Sending test to your own inbox…';
+
+ try {
+ const data = await callEmailBroadcast('test', { subject, body });
+ msgEl.style.color = 'var(--muted)';
+ msgEl.innerHTML = `Test sent to <strong style="color:var(--text,#fff);">${escapeHtml(data.sent_to || 'your inbox')}</strong> — nothing was sent to customers.`;
+ } catch (e) {
+ msgEl.style.color = 'var(--danger,#f87171)';
+ msgEl.textContent = e.message || 'Test send failed.';
+ } finally {
+ testBtn.disabled = false;
+ sendBtn.disabled = false;
+ previewBtn.disabled = false;
+ }
+}
+
 async function sendEmailBroadcast() {
  const msgEl = document.getElementById('emailBroadcastMsg');
  const { subject, body } = emailBroadcastFields();
@@ -4059,7 +4124,8 @@ window.addEventListener('DOMContentLoaded', async () => {
  }
  } catch (e) {}
  document.getElementById('adminPassword')?.addEventListener('keydown', e => { if (e.key === 'Enter') handleLogin(); });
- document.getElementById('lookupCustomerId')?.addEventListener('keydown', e => { if (e.key === 'Enter') loo
+ document.getElementById('lookupCustomerId')?.addEventListener('keydown', e => { if (e.key === 'Enter') lookupByCustomerId(); });
+});
 
 (function patchBoostersTab(){
  const _st = window.switchTab;
@@ -4073,9 +4139,6 @@ window.addEventListener('DOMContentLoaded', async () => {
  }
  };
 })();
-
-kupByCustomerId(); });
-});
 
 
 // ---------- MJ Boosters (The Owlet): admin only ----------
