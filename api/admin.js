@@ -1434,9 +1434,8 @@ async function getOverviewStats(body) {
   }
 
   // ----- SMS: Server 1 (grizzlysms) + Server 2 (smsbus) -----
-  // Rule: supplier_price is always USD for both servers.
-  // cost_ngn = supplier_usd * USD_TO_NGN_RATE
-  // profit   = customer_price_ngn - cost_ngn
+  // Profit = customer paid (₦) − (supplier USD × FX rate)
+  // FX rate = USD_TO_NGN_RATE || USD_TO_NGN || 1500
   const smsRows = (smsRes.data || []).filter((r) => {
     const st = String(r.status || '').toLowerCase();
     if (r.refunded === true) return false;
@@ -1447,15 +1446,15 @@ async function getOverviewStats(body) {
   let smsSupplierCostNgn = 0;
   let smsMissingCost = 0;
   const smsProfit = smsRows.reduce((s, r) => {
-    const paid = Number(r.price || 0);
-    if (!(paid > 0)) return s;
+    const paidNgn = Number(r.price || 0);
+    if (!(paidNgn > 0)) return s;
+
+    // 1) Supplier cost in USD from the order (both servers)
     let supplierUsd = Number(r.supplier_price || 0);
-    // If value looks like NGN was stored by mistake (e.g. 1200), don't treat as USD
-    if (supplierUsd >= 50) {
-      // Already NGN-ish — convert back only if it was wrongly saved as NGN dollars
-      // For SMS servers we expect USD under ~$20; treat large numbers as NGN cost
-    }
-    // Fallback: catalog USD when order row missing supplier_price (legacy Server 2)
+    // SMS supplier USD is always small (typical $0.1–$5). Values >= 50 are NGN by mistake.
+    if (supplierUsd >= 50) supplierUsd = 0;
+
+    // 2) If order has no USD, take it from number_services catalog (same service)
     if (!(supplierUsd > 0) && r.service_id != null) {
       const sid = String(r.service_id);
       const cid = r.country_id != null ? String(r.country_id) : '';
@@ -1463,40 +1462,24 @@ async function getOverviewStats(body) {
         (cid && svcCostUsd.get(cid + ':' + sid)) ||
         svcCostUsd.get(sid) ||
         0;
+      if (supplierUsd >= 50) supplierUsd = 0;
     }
-    const source = String(r.source || '').toLowerCase();
-    const isSmsServer =
-      source.includes('grizzly') ||
-      source.includes('smsbus') ||
-      source.includes('sms_bus') ||
-      source === '' ||
-      source === 'null';
 
+    // 3) Supplier price in ₦ = USD × live rate (1500 by default)
     let costNgn = 0;
     if (supplierUsd > 0) {
-      if (isSmsServer) {
-        // Always: supplier USD × FX rate = NGN cost
-        // Guard only if someone stored full NGN in supplier_price by mistake (>= 50)
-        costNgn = supplierUsd >= 50 ? supplierUsd : supplierUsd * usdToNgn;
-      } else if (source.includes('logsdomain') || source.includes('logdomain')) {
-        costNgn = supplierUsd;
-      } else {
-        costNgn = supplierUsd < 50 ? supplierUsd * usdToNgn : supplierUsd;
-      }
+      costNgn = supplierUsd * usdToNgn;
     } else {
-      // No USD on order or catalog — invert markup floors so profit is not ~100% of spend
-      // Selling price ≈ max(supplierNgn * 1.6, supplierNgn + 500, 1000)
-      // → supplierNgn ≈ min(paid / 1.6, paid - 500)
-      const fromPct = paid / 1.6;
-      const fromFloor = Math.max(0, paid - 500);
-      costNgn = Math.round(Math.min(fromPct, fromFloor));
-      if (costNgn < paid * 0.15) costNgn = Math.round(paid * 0.25);
+      // No USD available — cannot invent a supplier rate; leave cost 0 and track
       smsMissingCost += 1;
+      costNgn = 0;
     }
-    if (costNgn > paid) costNgn = paid;
+
     if (costNgn < 0) costNgn = 0;
     smsSupplierCostNgn += costNgn;
-    return s + (paid - costNgn);
+
+    // 4) Profit = what user paid − supplier price in ₦
+    return s + (paidNgn - costNgn);
   }, 0);
 
   // ----- LOGS (product orders): customer paid (amount) minus product supplier_price -----
