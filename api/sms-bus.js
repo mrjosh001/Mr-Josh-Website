@@ -177,7 +177,7 @@ async function claimAndRefundSmsBusOrder(order, userId, opts = {}) {
         customer_id: (profile && profile.customer_id) || order.customer_id,
         type: 'refund',
         category: 'MJ SMS',
-        title: 'SMS cancel refund',
+        title: /expir/i.test(String(subtitle || '')) ? 'SMS expired' : 'SMS canceled',
         subtitle: subtitle,
         amount: `₦${refundAmount.toLocaleString()}`,
         amount_ngn: refundAmount,
@@ -493,11 +493,11 @@ async function markTxStatus(userId, orderId, phone, status) {
   try {
     const { data } = await supabase
       .from('transactions')
-      .select('id, subtitle, notes, status')
+      .select('id, subtitle, notes, status, title')
       .eq('user_id', userId)
       .eq('category', 'MJ SMS')
       .order('created_at', { ascending: false })
-      .limit(15);
+      .limit(25);
     const hit = (data || []).find((tx) => {
       const blob = `${tx.subtitle || ''} ${tx.notes || ''}`;
       return blob.includes(String(orderId)) || (phone && blob.includes(String(phone)));
@@ -629,12 +629,41 @@ export default async function handler(req, res) {
       const country_id = url.searchParams.get('country_id');
       if (!country_id) return json(res, 400, { success: false, message: 'country_id required' });
 
-      const [priceRes, projRes] = await Promise.all([
-        smsbusGet(OTP_BASE, '/list/prices', { country_id: String(country_id) }),
-        smsbusGet(OTP_BASE, '/list/projects')
-      ]);
+      let priceRes;
+      let projRes;
+      try {
+        [priceRes, projRes] = await Promise.all([
+          smsbusGet(OTP_BASE, '/list/prices', { country_id: String(country_id) }),
+          smsbusGet(OTP_BASE, '/list/projects')
+        ]);
+      } catch (e) {
+        console.error('[smsbus prices] fetch failed', e.message);
+        return json(res, 502, {
+          success: false,
+          message: e.message && /SMSBUS_API_TOKEN/i.test(e.message)
+            ? 'Server 2 is not configured (missing API token). Contact support.'
+            : 'Could not reach Server 2. Try again in a moment.'
+        });
+      }
+
+      if (priceRes.http === 403 || priceRes.http === 401) {
+        console.error('[smsbus prices] supplier auth', priceRes.http, priceRes.data);
+        return json(res, 502, {
+          success: false,
+          message: 'Server 2 rejected the request (token/account). Check SMSBUS_API_TOKEN and supplier account.'
+        });
+      }
       if (!busOk(priceRes.data)) {
-        return json(res, 400, { success: false, message: 'Unable to load services for this country. Try again or contact support.' });
+        const supplierMsg =
+          (priceRes.data && (priceRes.data.message || priceRes.data.error || priceRes.data.msg)) ||
+          '';
+        console.error('[smsbus prices] bad response', priceRes.http, supplierMsg || priceRes.data);
+        return json(res, 400, {
+          success: false,
+          message: supplierMsg
+            ? String(supplierMsg).slice(0, 160)
+            : 'Unable to load services for this country. Try again or contact support.'
+        });
       }
 
       // Map project_id → real service name (WhatsApp, Telegram, …)
@@ -835,6 +864,8 @@ export default async function handler(req, res) {
         service_name: serviceName,
         phone_number: phone,
         price,
+        // Supplier cost in USD — admin overview converts with USD_TO_NGN_RATE
+        supplier_price: costUsd > 0 ? costUsd : null,
         currency: 'NGN',
         status: 'waiting_for_code',
         code: null,
@@ -1107,8 +1138,30 @@ export default async function handler(req, res) {
           }
         });
       }
-      const msg = data.message || '';
-      if (/released|timeout|50102/i.test(msg) || data.code === 50102) {
+      // SMS-Bus: 50101 = not received yet (still waiting); 50102 = released/timeout
+      const msg = data?.message || '';
+      const scode = data?.code;
+      if (scode === 50101 || /not received sms yet/i.test(msg)) {
+        // Explicit waiting — do not treat as error
+        return json(res, 200, {
+          success: true,
+          data: {
+            status: 'waiting_for_code',
+            code: null,
+            message: 'Not received yet',
+            number: order.phone_number,
+            phone_number: order.phone_number,
+            service_name: order.service_name,
+            country_name: order.country_name,
+            price: order.price,
+            created_at: order.created_at,
+            time_left: order.created_at
+              ? Math.max(0, Math.floor((SMSBUS_EXPIRY_MS - (Date.now() - new Date(order.created_at).getTime())) / 1000))
+              : null
+          }
+        });
+      }
+      if (/released|timeout/i.test(msg) || scode === 50102) {
         // Supplier released — refund once if still open
         const refundResult = await claimAndRefundSmsBusOrder(order, auth.userId, {
           subtitle: 'Expired — no SMS, balance restored',
@@ -1116,8 +1169,8 @@ export default async function handler(req, res) {
         });
         if (refundResult.refunded) {
           return json(res, 200, {
-        success: true,
-        data: {
+            success: true,
+            data: {
               status: 'refunded',
               code: null,
               message: 'Time expired — balance restored',
@@ -1127,8 +1180,9 @@ export default async function handler(req, res) {
           });
         }
         return json(res, 200, {
-        success: true,
-        data: { status: 'expired', code: null, message: msg } });
+          success: true,
+          data: { status: 'expired', code: null, message: 'Number expired' }
+        });
       }
 
       // Local 20-minute expiry (matches Server 1 UX)
@@ -1216,59 +1270,72 @@ export default async function handler(req, res) {
         }
       }
 
-      // Ask supplier first
+      // Last look: if SMS arrived, never refund
+      try {
+        const smsRes = await smsbusGet(OTP_BASE, '/get/sms', { request_id: order_id });
+        if (busOk(smsRes.data) && smsRes.data.data) {
+          const code = String(smsRes.data.data);
+          const { data: updatedRows } = await supabase
+            .from('number_orders')
+            .update({ status: 'completed', code })
+            .eq('id', order.id)
+            .eq('refunded', false)
+            .select();
+          if (updatedRows && updatedRows.length > 0) {
+            return json(res, 400, {
+              success: false,
+              code: 'CODE_ALREADY_RECEIVED',
+              message: 'A code was received — cancel is not available.'
+            });
+          }
+        }
+      } catch (_) {}
+
+      // Ask supplier to cancel (docs: 200 ok, 50103 already closed, 401 bad token)
       let cancelOk = false;
       let cancelMsg = '';
       try {
         const cancelRes = await smsbusGet(OTP_BASE, '/cancel', { request_id: order_id });
         cancelOk = busOk(cancelRes.data);
         cancelMsg = String(cancelRes.data?.message || cancelRes.data?.code || '');
-        const code = cancelRes.data?.code;
-        // Already closed / released — safe to refund if we never completed
-        if (!cancelOk && (code === 50103 || /already closed|closed|timeout|released/i.test(cancelMsg))) {
+        const ccode = cancelRes.data?.code;
+        // Already closed / released / timeout — safe to refund if we never got a code
+        if (
+          !cancelOk &&
+          (ccode === 50103 ||
+            ccode === 50102 ||
+            /already closed|closed|timeout|released|not received/i.test(cancelMsg))
+        ) {
           cancelOk = true;
-          cancelMsg = cancelMsg || 'request closed';
+        }
+        // Token/account issues must not trap the customer's money after cooldown
+        if (!cancelOk && (ccode === 401 || /wrong token/i.test(cancelMsg))) {
+          cancelOk = true;
+          cancelMsg = 'supplier unavailable — refunding locally';
         }
       } catch (e) {
-        cancelMsg = 'Could not cancel right now';
+        // Network failure talking to supplier — after cooldown, still refund if no code
+        cancelOk = true;
+        cancelMsg = 'supplier unreachable — refunding locally';
       }
 
+      // After 1-minute cooldown with no code: always refund the user
       if (!cancelOk) {
-        // Last look: if SMS arrived, never refund
-        try {
-          const smsRes = await smsbusGet(OTP_BASE, '/get/sms', { request_id: order_id });
-          if (busOk(smsRes.data) && smsRes.data.data) {
-            const code = String(smsRes.data.data);
-            const { data: updatedRows } = await supabase
-              .from('number_orders')
-              .update({ status: 'completed', code })
-              .eq('id', order.id)
-              .eq('refunded', false)
-              .select();
-            if (updatedRows && updatedRows.length > 0) {
-              return json(res, 400, {
-                success: false,
-                code: 'CODE_ALREADY_RECEIVED',
-                message: 'A code was received — cancel is not available.'
-              });
-            }
-            // else: concurrent refund already won — fall through
-          }
-        } catch (_) {}
-        return json(res, 400, {
-          success: false,
-          message: 'Could not cancel right now. Wait for the timer, try again, or contact support.'
-        });
+        cancelOk = true;
       }
 
       const refundResult = await claimAndRefundSmsBusOrder(order, auth.userId, {
+        status: 'cancelled',
         subtitle: 'Cancelled — balance restored'
       });
       if (!refundResult.refunded && refundResult.reason === 'already_final') {
         return json(res, 200, { success: true, message: 'Already refunded', refunded: 0 });
       }
       if (!refundResult.refunded) {
-        return json(res, 500, { success: false, message: 'Cancel was recorded but the refund failed. Please contact support.' });
+        return json(res, 500, {
+          success: false,
+          message: 'Could not restore balance automatically. Please contact support with your order ID.'
+        });
       }
       return json(res, 200, {
         success: true,

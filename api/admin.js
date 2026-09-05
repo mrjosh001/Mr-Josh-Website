@@ -1379,7 +1379,11 @@ async function getOverviewStats(body) {
     else cutoff = new Date(Date.now() - 7 * 86400000).toISOString();
     if (to) endAt = new Date(to + 'T23:59:59.999Z').toISOString();
   }
-  const usdToNgn = Number(process.env.USD_TO_NGN_RATE) || 1500;
+  // Prefer USD_TO_NGN_RATE, fall back to USD_TO_NGN (same rate used when pricing numbers)
+  const usdToNgn =
+    Number(process.env.USD_TO_NGN_RATE) ||
+    Number(process.env.USD_TO_NGN) ||
+    1500;
 
   let logsQuery = supabase.from('orders')
     .select('amount, quantity, product_key, product_code, product_name, product_id, status')
@@ -1397,7 +1401,7 @@ async function getOverviewStats(body) {
   }
 
   let smsQuery = supabase.from('number_orders')
-    .select('price, supplier_price, source, status, refunded')
+    .select('price, supplier_price, source, status, refunded, service_id, country_id')
     .gte('created_at', cutoff);
   if (endAt) smsQuery = smsQuery.lte('created_at', endAt);
   let boostQuery = supabase.from('booster_orders')
@@ -1405,38 +1409,76 @@ async function getOverviewStats(body) {
     .gte('created_at', cutoff);
   if (endAt) boostQuery = boostQuery.lte('created_at', endAt);
 
-  const [smsRes, boostRes, productsRes] = await Promise.all([
+  const [smsRes, boostRes, productsRes, smsSvcRes] = await Promise.all([
     smsQuery,
     boostQuery,
     supabase.from('products')
-      .select('id, product_key, name, supplier_price')
+      .select('id, product_key, name, supplier_price'),
+    // Catalog fallback when number_orders.supplier_price was never saved (old Server 2 rows)
+    supabase.from('number_services')
+      .select('service_id, country_id, supplier_price, source')
   ]);
 
   if (logsRes.error) return { status: 500, body: { success: false, message: 'Logs stats failed: ' + logsRes.error.message } };
   if (smsRes.error) return { status: 500, body: { success: false, message: 'SMS stats failed: ' + smsRes.error.message } };
 
-  // ----- SMS: Grizzly (Server 1) + SMS-Bus (Server 2) completed orders -----
-  // supplier_price is USD for grizzly + smsbus; legacy logsdomain numbers may be NGN.
+  // Map service_id → supplier USD from catalog (grizzly + smsbus)
+  const svcCostUsd = new Map();
+  for (const s of (smsSvcRes.error ? [] : (smsSvcRes.data || []))) {
+    const sid = String(s.service_id || '');
+    const cid = s.country_id != null ? String(s.country_id) : '';
+    const usd = Number(s.supplier_price || 0);
+    if (!(usd > 0) || !sid) continue;
+    svcCostUsd.set(sid, usd);
+    if (cid) svcCostUsd.set(cid + ':' + sid, usd);
+  }
+
+  // ----- SMS: Server 1 (grizzlysms) + Server 2 (smsbus) -----
+  // Rule: supplier_price is always USD for both servers.
+  // cost_ngn = supplier_usd * USD_TO_NGN_RATE
+  // profit   = customer_price_ngn - cost_ngn
   const smsRows = (smsRes.data || []).filter((r) => {
     const st = String(r.status || '').toLowerCase();
+    if (r.refunded === true) return false;
+    if (['cancelled', 'canceled', 'expired', 'refunded', 'failed'].includes(st)) return false;
     return st === 'completed' || st === 'complete' || st === 'success';
   });
   const smsAmountSpent = smsRows.reduce((s, r) => s + Number(r.price || 0), 0);
   const smsProfit = smsRows.reduce((s, r) => {
     const paid = Number(r.price || 0);
-    const sp = Number(r.supplier_price || 0);
-    if (!(sp > 0)) return s + paid;
-    const source = String(r.source || '').toLowerCase();
-    let cost = 0;
-    if (source.includes('grizzly') || source.includes('smsbus')) {
-      cost = sp * usdToNgn; // USD → NGN
-    } else if (source.includes('logsdomain') || source.includes('logdomain') || source.includes('ld')) {
-      cost = sp; // already NGN
-    } else {
-      const asUsd = sp * usdToNgn;
-      cost = (sp < 50 && asUsd <= paid * 1.5) ? asUsd : sp;
+    if (!(paid > 0)) return s;
+    let supplierUsd = Number(r.supplier_price || 0);
+    // Fallback: catalog USD when order row missing supplier_price (legacy Server 2)
+    if (!(supplierUsd > 0) && r.service_id != null) {
+      const sid = String(r.service_id);
+      const cid = r.country_id != null ? String(r.country_id) : '';
+      supplierUsd =
+        (cid && svcCostUsd.get(cid + ':' + sid)) ||
+        svcCostUsd.get(sid) ||
+        0;
     }
-    return s + (paid - cost);
+    // Both servers store supplier cost in USD
+    const source = String(r.source || '').toLowerCase();
+    let costNgn = 0;
+    if (supplierUsd > 0) {
+      if (
+        source.includes('grizzly') ||
+        source.includes('smsbus') ||
+        source.includes('sms_bus') ||
+        !source
+      ) {
+        // USD → NGN at configured rate
+        costNgn = supplierUsd * usdToNgn;
+      } else if (source.includes('logsdomain') || source.includes('logdomain')) {
+        costNgn = supplierUsd; // legacy NGN if any
+      } else {
+        // Heuristic: small values are USD
+        costNgn = supplierUsd < 50 ? supplierUsd * usdToNgn : supplierUsd;
+      }
+    }
+    // Never report negative profit as larger than revenue; clamp floor at -paid
+    const profit = paid - costNgn;
+    return s + profit;
   }, 0);
 
   // ----- LOGS (product orders): customer paid (amount) minus product supplier_price -----
