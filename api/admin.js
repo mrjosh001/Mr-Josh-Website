@@ -1444,10 +1444,17 @@ async function getOverviewStats(body) {
     return st === 'completed' || st === 'complete' || st === 'success';
   });
   const smsAmountSpent = smsRows.reduce((s, r) => s + Number(r.price || 0), 0);
+  let smsSupplierCostNgn = 0;
+  let smsMissingCost = 0;
   const smsProfit = smsRows.reduce((s, r) => {
     const paid = Number(r.price || 0);
     if (!(paid > 0)) return s;
     let supplierUsd = Number(r.supplier_price || 0);
+    // If value looks like NGN was stored by mistake (e.g. 1200), don't treat as USD
+    if (supplierUsd >= 50) {
+      // Already NGN-ish — convert back only if it was wrongly saved as NGN dollars
+      // For SMS servers we expect USD under ~$20; treat large numbers as NGN cost
+    }
     // Fallback: catalog USD when order row missing supplier_price (legacy Server 2)
     if (!(supplierUsd > 0) && r.service_id != null) {
       const sid = String(r.service_id);
@@ -1457,28 +1464,39 @@ async function getOverviewStats(body) {
         svcCostUsd.get(sid) ||
         0;
     }
-    // Both servers store supplier cost in USD
     const source = String(r.source || '').toLowerCase();
+    const isSmsServer =
+      source.includes('grizzly') ||
+      source.includes('smsbus') ||
+      source.includes('sms_bus') ||
+      source === '' ||
+      source === 'null';
+
     let costNgn = 0;
     if (supplierUsd > 0) {
-      if (
-        source.includes('grizzly') ||
-        source.includes('smsbus') ||
-        source.includes('sms_bus') ||
-        !source
-      ) {
-        // USD → NGN at configured rate
-        costNgn = supplierUsd * usdToNgn;
+      if (isSmsServer) {
+        // Always: supplier USD × FX rate = NGN cost
+        // Guard only if someone stored full NGN in supplier_price by mistake (>= 50)
+        costNgn = supplierUsd >= 50 ? supplierUsd : supplierUsd * usdToNgn;
       } else if (source.includes('logsdomain') || source.includes('logdomain')) {
-        costNgn = supplierUsd; // legacy NGN if any
+        costNgn = supplierUsd;
       } else {
-        // Heuristic: small values are USD
         costNgn = supplierUsd < 50 ? supplierUsd * usdToNgn : supplierUsd;
       }
+    } else {
+      // No USD on order or catalog — invert markup floors so profit is not ~100% of spend
+      // Selling price ≈ max(supplierNgn * 1.6, supplierNgn + 500, 1000)
+      // → supplierNgn ≈ min(paid / 1.6, paid - 500)
+      const fromPct = paid / 1.6;
+      const fromFloor = Math.max(0, paid - 500);
+      costNgn = Math.round(Math.min(fromPct, fromFloor));
+      if (costNgn < paid * 0.15) costNgn = Math.round(paid * 0.25);
+      smsMissingCost += 1;
     }
-    // Never report negative profit as larger than revenue; clamp floor at -paid
-    const profit = paid - costNgn;
-    return s + profit;
+    if (costNgn > paid) costNgn = paid;
+    if (costNgn < 0) costNgn = 0;
+    smsSupplierCostNgn += costNgn;
+    return s + (paid - costNgn);
   }, 0);
 
   // ----- LOGS (product orders): customer paid (amount) minus product supplier_price -----
@@ -1562,6 +1580,9 @@ async function getOverviewStats(body) {
       sms_order_count: smsRows.length,
       sms_amount_spent: Math.round(smsAmountSpent),
       sms_profit: Math.round(smsProfit),
+      sms_supplier_cost_ngn: Math.round(smsSupplierCostNgn),
+      sms_fx_rate: usdToNgn,
+      sms_orders_missing_supplier_cost: smsMissingCost,
       boost_order_count: boostOrderCount,
       boost_amount_spent: Math.round(boostAmountSpent),
       boost_profit: Math.round(boostProfit)
