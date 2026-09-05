@@ -208,7 +208,10 @@ const SMSBUS_EXPIRY_MS = 5 * 60 * 1000; // Server 2 numbers last 5 minutes
 
 /** Persist Server 2 catalog. Never overwrites admin selling price or forced hide. */
 async function syncSmsBusCatalog() {
-  const usdToNgn = Number(process.env.USD_TO_NGN) || 1500;
+  const usdToNgn =
+    Number(process.env.USD_TO_NGN_RATE) ||
+    Number(process.env.USD_TO_NGN) ||
+    1500;
   const [countriesRes, projectsRes] = await Promise.all([
     smsbusGet(OTP_BASE, '/list/countries'),
     smsbusGet(OTP_BASE, '/list/projects')
@@ -275,15 +278,15 @@ async function syncSmsBusCatalog() {
             const prev = existingMap.get(sid);
 
             if (prev) {
-              // NEVER touch price (admin selling price). Preserve is_available when admin hid.
+              // NEVER touch selling price (admin). Always refresh supplier USD cost for profit math.
               const fields = {
                 country_name: country.name,
                 service_name: serviceName,
                 available_quantity: stock,
                 updated_at: now
               };
+              if (costUsd > 0) fields.supplier_price = costUsd;
               if (prev.is_available === false) {
-                // keep hidden
                 fields.is_available = false;
               } else {
                 fields.is_available = stock > 0;
@@ -296,6 +299,7 @@ async function syncSmsBusCatalog() {
                 country_name: country.name,
                 service_id: sid,
                 service_name: serviceName,
+                supplier_price: costUsd > 0 ? costUsd : null,
                 price: applyMarkup(costUsd || 0.01, usdToNgn),
                 price_source: 'system',
                 currency: 'NGN',
@@ -358,8 +362,9 @@ async function insertNumberOrder(row) {
   const asStringCountry = { ...row, country_id: row.country_id != null ? String(row.country_id) : null };
   variants.push(asStringCountry);
 
+  // Keep supplier_price (USD) on as many variants as possible — admin profit needs it
   const noOptional = { ...row };
-  for (const k of ['supplier_price', 'currency', 'refunded', 'time_left', 'customer_id', 'code']) {
+  for (const k of ['currency', 'refunded', 'time_left', 'customer_id', 'code']) {
     delete noOptional[k];
   }
   variants.push(noOptional);
@@ -370,7 +375,7 @@ async function insertNumberOrder(row) {
   delete noSource.source;
   variants.push(noSource);
 
-  // Absolute minimum
+  // Absolute minimum — still keep supplier USD when present
   variants.push({
     user_id: row.user_id,
     order_id: String(row.order_id),
@@ -378,6 +383,7 @@ async function insertNumberOrder(row) {
     phone_number: row.phone_number || null,
     status: row.status || 'waiting_for_code',
     price: row.price != null ? row.price : null,
+    supplier_price: row.supplier_price != null ? row.supplier_price : null,
     service_name: row.service_name || null,
     country_name: row.country_name || null,
     source: row.source || 'smsbus'
@@ -388,7 +394,8 @@ async function insertNumberOrder(row) {
     idempotency_key: idemKey,
     phone_number: row.phone_number || null,
     status: 'waiting_for_code',
-    price: row.price
+    price: row.price,
+    supplier_price: row.supplier_price != null ? row.supplier_price : null
   });
 
   for (const attempt of variants) {
