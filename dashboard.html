@@ -4688,13 +4688,17 @@ function normalizeTxType(tx) {
     const type = String(tx.type || '').toLowerCase();
     const cat = String(tx.category || '').toLowerCase();
     const channel = String(tx.channel || '').toLowerCase();
+    const title = String(tx.title || '').toLowerCase();
     // Grizzly SMS rows: type=purchase, category=MJ SMS
-    if (type === 'sms' || cat.includes('sms') || channel.includes('sms')) return 'sms';
+    if (type === 'sms' || cat.includes('sms') || channel.includes('sms') || /mj sms|sms number|server\s*[12]/i.test(title + ' ' + cat)) return 'sms';
     if (type === 'deposit' || cat.includes('deposit') || channel.includes('pocketfi') || channel.includes('paystack') || channel.includes('manual')) return 'deposit';
-    if (type === 'log' || type === 'logs' || cat.includes('log')) return 'log';
-    if (type === 'booster' || cat.includes('boost')) return 'booster';
+    if (type === 'booster' || cat.includes('boost') || /booster|followers|likes|views|owlet/i.test(cat + ' ' + title)) return 'booster';
+    if (type === 'log' || type === 'logs' || cat.includes('log') || /mj logs|logs domain|fadded|sujan|classy|vpn|google voice|facebook|instagram|twitter|tiktok/i.test(cat + ' ' + title)) return 'log';
     if (type === 'conversion') return 'conversion';
-    if (type === 'purchase' && (cat.includes('log') || cat.includes('mj logs'))) return 'log';
+    if (type === 'purchase' && (cat.includes('log') || cat.includes('mj logs') || cat.includes('digital'))) return 'log';
+    if (type === 'purchase' && cat.includes('boost')) return 'booster';
+    // Generic wallet purchase with product-like title → treat as log/digital product
+    if (type === 'purchase' || type === 'order') return 'log';
     return type || 'deposit';
 }
 
@@ -4710,6 +4714,127 @@ async function expireStaleSmsEverywhere() {
     } catch (_) {}
 }
 
+function fmtNgnAmount(n) {
+    const v = Number(n) || 0;
+    return '₦' + v.toLocaleString(undefined, { maximumFractionDigits: 0 });
+}
+
+/** Merge orders / SMS / boosters into activity list when transactions rows are missing */
+async function fetchActivityFromOrders(userId) {
+    const extra = [];
+    if (!supabaseClient || !userId) return extra;
+    try {
+        const [logsRes, smsRes, boostRes] = await Promise.all([
+            supabaseClient
+                .from('orders')
+                .select('id, order_id, product_name, amount, status, created_at, quantity')
+                .eq('user_id', userId)
+                .order('created_at', { ascending: false })
+                .limit(200),
+            supabaseClient
+                .from('number_orders')
+                .select('id, order_id, service_name, country_name, price, status, created_at, phone_number, source')
+                .eq('user_id', userId)
+                .order('created_at', { ascending: false })
+                .limit(200),
+            supabaseClient
+                .from('booster_orders')
+                .select('id, order_id, service_name, link, price_ngn, charge, price, status, created_at')
+                .eq('user_id', userId)
+                .order('created_at', { ascending: false })
+                .limit(200)
+        ]);
+
+        const logRows = logsRes.error ? [] : (logsRes.data || []);
+        // Group multi-qty log purchases by base order_id
+        const logMap = new Map();
+        for (const o of logRows) {
+            const key = baseOrderKey(o.order_id || o.id);
+            if (!logMap.has(key)) {
+                logMap.set(key, {
+                    id: 'log-' + key,
+                    type: 'log',
+                    category: 'MJ Logs',
+                    title: o.product_name || 'Log order',
+                    subtitle: '',
+                    amount_ngn: 0,
+                    quantity: 0,
+                    status: o.status || 'completed',
+                    created_at: o.created_at,
+                    channel: 'Wallet'
+                });
+            }
+            const g = logMap.get(key);
+            g.amount_ngn += Number(o.amount) || 0;
+            g.quantity += Math.max(1, Number(o.quantity) || 1);
+            if (o.created_at && (!g.created_at || o.created_at > g.created_at)) g.created_at = o.created_at;
+            if (o.product_name) g.title = o.product_name;
+            if (o.status) g.status = o.status;
+        }
+        for (const g of logMap.values()) {
+            extra.push({
+                id: g.id,
+                type: 'log',
+                category: g.category,
+                title: g.title,
+                subtitle: g.quantity > 1 ? (g.quantity + ' units') : '',
+                amount: fmtNgnAmount(g.amount_ngn),
+                amount_ngn: g.amount_ngn,
+                date: g.created_at ? new Date(g.created_at).toLocaleString() : '',
+                created_at: g.created_at,
+                status: g.status || 'completed',
+                paymentProvider: 'MJ HUB',
+                channel: 'Wallet',
+                _source: 'orders'
+            });
+        }
+
+        for (const o of (smsRes.error ? [] : (smsRes.data || []))) {
+            const title = (o.service_name || 'SMS') + (o.country_name ? (' · ' + o.country_name) : '');
+            extra.push({
+                id: 'sms-' + (o.id || o.order_id),
+                type: 'sms',
+                category: 'MJ SMS',
+                title: title,
+                subtitle: o.phone_number || '',
+                amount: fmtNgnAmount(o.price),
+                amount_ngn: Number(o.price) || 0,
+                date: o.created_at ? new Date(o.created_at).toLocaleString() : '',
+                created_at: o.created_at,
+                status: o.status || 'completed',
+                paymentProvider: 'MJ HUB',
+                channel: 'Wallet',
+                _source: 'number_orders'
+            });
+        }
+
+        for (const o of (boostRes.error ? [] : (boostRes.data || []))) {
+            const price = Number(
+                o.price_ngn != null ? o.price_ngn
+                    : (o.charge != null ? o.charge : o.price)
+            ) || 0;
+            extra.push({
+                id: 'boost-' + (o.id || o.order_id),
+                type: 'booster',
+                category: 'MJ Boosters',
+                title: o.service_name || 'Social boost',
+                subtitle: o.link ? String(o.link).slice(0, 40) : '',
+                amount: fmtNgnAmount(price),
+                amount_ngn: price,
+                date: o.created_at ? new Date(o.created_at).toLocaleString() : '',
+                created_at: o.created_at,
+                status: o.status || 'completed',
+                paymentProvider: 'MJ HUB',
+                channel: 'Wallet',
+                _source: 'booster_orders'
+            });
+        }
+    } catch (e) {
+        console.warn('fetchActivityFromOrders', e);
+    }
+    return extra;
+}
+
 async function fetchUserTransactions(userId) {
     if (!supabaseClient) return;
     try {
@@ -4719,10 +4844,10 @@ async function fetchUserTransactions(userId) {
             .select('*')
             .eq('user_id', userId)
             .order('created_at', { ascending: false })
-            .limit(80);
-        if (!data) return;
+            .limit(200);
+        if (!data) data = [];
         data = await expireStalePocketFiDeposits(data);
-        transactions = data.map(tx => {
+        const fromTx = data.map(tx => {
             let title = tx.title || 'Transaction';
             let channel = tx.channel || 'Wallet';
             // Hide processor brand names in history
@@ -4746,12 +4871,54 @@ async function fetchUserTransactions(userId) {
                 title,
                 subtitle: tx.subtitle || '',
                 amount: tx.amount || '₦0.00',
+                amount_ngn: Number(tx.amount_ngn) || 0,
                 date: new Date(tx.created_at).toLocaleString(),
+                created_at: tx.created_at,
                 status: tx.status || 'Success',
                 paymentProvider: tx.payment_provider || 'MJ HUB',
-                channel
+                channel,
+                _source: 'transactions'
             };
         });
+
+        // Fill gaps: real orders that never got a transactions row
+        const fromOrders = await fetchActivityFromOrders(userId);
+        const seen = new Set();
+        function dedupeKey(t) {
+            // Prefer matching by normalized title + amount + day
+            const day = (t.created_at || t.date || '').toString().slice(0, 10);
+            return [t.type, String(t.title || '').toLowerCase().slice(0, 40), String(t.amount_ngn || t.amount || ''), day].join('|');
+        }
+        const merged = [];
+        for (const t of fromTx) {
+            const k = dedupeKey(t);
+            if (seen.has(k)) continue;
+            seen.add(k);
+            merged.push(t);
+        }
+        for (const t of fromOrders) {
+            const k = dedupeKey(t);
+            // Skip if a transactions row already covers this order
+            if (seen.has(k)) continue;
+            // Also skip if same type+title exists within ~same amount
+            let dup = false;
+            for (const m of merged) {
+                if (m.type === t.type && String(m.title).toLowerCase() === String(t.title).toLowerCase()) {
+                    const a = Number(m.amount_ngn) || 0;
+                    const b = Number(t.amount_ngn) || 0;
+                    if (a && b && Math.abs(a - b) < 1) { dup = true; break; }
+                }
+            }
+            if (dup) continue;
+            seen.add(k);
+            merged.push(t);
+        }
+        merged.sort((a, b) => {
+            const ta = a.created_at ? new Date(a.created_at).getTime() : 0;
+            const tb = b.created_at ? new Date(b.created_at).getTime() : 0;
+            return tb - ta;
+        });
+        transactions = merged;
         renderRecentActivity();
     } catch (e) {
         console.warn('fetchUserTransactions', e);
@@ -6485,7 +6652,7 @@ window.downloadCredentialsTxt = function() {
 };
 
 /* HISTORY DRAWER */
-window.toggleActivityHistory = function() {
+window.toggleActivityHistory = async function() {
     const drawer = document.getElementById('activityHistoryDrawer');
     const overlay = document.getElementById('sidebarOverlay');
     const isOpen = drawer.classList.contains('active');
@@ -6495,6 +6662,9 @@ window.toggleActivityHistory = function() {
     } else {
         drawer.classList.add('active');
         overlay.classList.add('active');
+        if (currentUserId && typeof fetchUserTransactions === 'function') {
+            try { await fetchUserTransactions(currentUserId); } catch (_) {}
+        }
         renderHistoryList('all');
     }
 };
@@ -6517,10 +6687,11 @@ function renderHistoryList(filterType = 'all') {
             // for the exact same kind of order, so both are included here
             // too — otherwise their purchases silently never show up under
             // this specific filter tab (they'd still appear under "All").
-            if (filterType === 'log') return t.type === 'log' || t.type === 'logs' || t.type === 'purchase';
+            if (filterType === 'log') return t.type === 'log' || t.type === 'logs';
             if (filterType === 'sms') return t.type === 'sms';
             if (filterType === 'deposit') return t.type === 'deposit';
             if (filterType === 'booster') return t.type === 'booster';
+            if (filterType === 'digital') return t.type === 'log' || t.type === 'digital';
             return t.type === filterType;
         });
     }
