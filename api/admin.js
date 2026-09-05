@@ -1422,20 +1422,54 @@ async function getOverviewStats(body) {
   if (logsRes.error) return { status: 500, body: { success: false, message: 'Logs stats failed: ' + logsRes.error.message } };
   if (smsRes.error) return { status: 500, body: { success: false, message: 'SMS stats failed: ' + smsRes.error.message } };
 
-  // Map service_id → supplier USD from catalog (grizzly + smsbus)
+  // Catalog supplier USD for Server 1 + Server 2
   const svcCostUsd = new Map();
+  function putSvcCost(key, usd) {
+    if (!(usd > 0) || usd >= 50 || !key) return;
+    if (!svcCostUsd.has(key)) svcCostUsd.set(key, usd);
+  }
   for (const s of (smsSvcRes.error ? [] : (smsSvcRes.data || []))) {
-    const sid = String(s.service_id || '');
-    const cid = s.country_id != null ? String(s.country_id) : '';
+    const sid = String(s.service_id || '').trim();
+    const cid = s.country_id != null ? String(s.country_id).trim() : '';
+    let src = String(s.source || '').toLowerCase().trim();
+    if (src.includes('grizzly')) src = 'grizzlysms';
+    if (src.includes('smsbus') || src.includes('sms_bus') || src.includes('sms-bus')) src = 'smsbus';
     const usd = Number(s.supplier_price || 0);
     if (!(usd > 0) || !sid) continue;
-    svcCostUsd.set(sid, usd);
-    if (cid) svcCostUsd.set(cid + ':' + sid, usd);
+    putSvcCost(src + ':' + cid + ':' + sid, usd);
+    putSvcCost(src + ':' + sid, usd);
+    putSvcCost(cid + ':' + sid, usd);
+    putSvcCost(sid, usd);
   }
 
-  // ----- SMS: Server 1 (grizzlysms) + Server 2 (smsbus) -----
-  // Profit = customer paid (₦) − (supplier USD × FX rate)
-  // FX rate = USD_TO_NGN_RATE || USD_TO_NGN || 1500
+  function resolveSupplierUsd(r) {
+    let usd = Number(r.supplier_price || 0);
+    if (usd >= 50) usd = 0; // NGN stored by mistake
+    if (usd > 0) return usd;
+
+    const sid = r.service_id != null ? String(r.service_id).trim() : '';
+    const cid = r.country_id != null ? String(r.country_id).trim() : '';
+    let src = String(r.source || '').toLowerCase().trim();
+    if (src.includes('grizzly')) src = 'grizzlysms';
+    if (src.includes('smsbus') || src.includes('sms_bus') || src.includes('sms-bus')) src = 'smsbus';
+
+    for (const k of [
+      src && cid && sid ? src + ':' + cid + ':' + sid : null,
+      src && sid ? src + ':' + sid : null,
+      cid && sid ? cid + ':' + sid : null,
+      sid || null
+    ]) {
+      if (k && svcCostUsd.has(k)) {
+        const v = Number(svcCostUsd.get(k));
+        if (v > 0 && v < 50) return v;
+      }
+    }
+    return 0;
+  }
+
+  // ----- SMS: Server 1 + Server 2 -----
+  // supplier cost ₦ = supplier USD × rate (1500)
+  // profit ₦        = customer paid ₦ − supplier cost ₦
   const smsRows = (smsRes.data || []).filter((r) => {
     const st = String(r.status || '').toLowerCase();
     if (r.refunded === true) return false;
@@ -1449,36 +1483,12 @@ async function getOverviewStats(body) {
     const paidNgn = Number(r.price || 0);
     if (!(paidNgn > 0)) return s;
 
-    // 1) Supplier cost in USD from the order (both servers)
-    let supplierUsd = Number(r.supplier_price || 0);
-    // SMS supplier USD is always small (typical $0.1–$5). Values >= 50 are NGN by mistake.
-    if (supplierUsd >= 50) supplierUsd = 0;
-
-    // 2) If order has no USD, take it from number_services catalog (same service)
-    if (!(supplierUsd > 0) && r.service_id != null) {
-      const sid = String(r.service_id);
-      const cid = r.country_id != null ? String(r.country_id) : '';
-      supplierUsd =
-        (cid && svcCostUsd.get(cid + ':' + sid)) ||
-        svcCostUsd.get(sid) ||
-        0;
-      if (supplierUsd >= 50) supplierUsd = 0;
-    }
-
-    // 3) Supplier price in ₦ = USD × live rate (1500 by default)
-    let costNgn = 0;
-    if (supplierUsd > 0) {
-      costNgn = supplierUsd * usdToNgn;
-    } else {
-      // No USD available — cannot invent a supplier rate; leave cost 0 and track
-      smsMissingCost += 1;
-      costNgn = 0;
-    }
-
+    const supplierUsd = resolveSupplierUsd(r);
+    let costNgn = supplierUsd > 0 ? supplierUsd * usdToNgn : 0;
+    if (!(costNgn > 0)) smsMissingCost += 1;
     if (costNgn < 0) costNgn = 0;
     smsSupplierCostNgn += costNgn;
 
-    // 4) Profit = what user paid − supplier price in ₦
     return s + (paidNgn - costNgn);
   }, 0);
 
