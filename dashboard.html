@@ -37,10 +37,10 @@
     <script>
     (function() {
         try {
-            var pref = localStorage.getItem('mjhub-theme-pref') || 'system';
-            if (!localStorage.getItem('mjhub-theme-pref')) {
-                localStorage.setItem('mjhub-theme-pref', 'system');
-            }
+            localStorage.setItem('mjhub-theme-pref', 'system');
+            localStorage.setItem('mjhub-theme', 'system');
+            localStorage.setItem('mjhub-force-system-20260906', '1');
+            var pref = 'system';
             var t = pref;
             if (pref === 'system') {
                 try { t = window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark'; }
