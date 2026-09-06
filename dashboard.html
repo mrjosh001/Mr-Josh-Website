@@ -4700,24 +4700,9 @@ function initSupportWidget() {
     scheduleCollapse();
 }
 
-/** Bottom nav Home = pull-to-refresh alternative (balance, history, orders) */
-window.goHome = async function() {
+/** Bottom nav Home: go to home only. Pull-down still refreshes. */
+window.goHome = function() {
     if (typeof switchSection === 'function') switchSection('home');
-    if (!currentUserId) return;
-    try {
-        if (typeof showToast === 'function') showToast('Refreshing…', 'info', 1000);
-        await Promise.all([
-            typeof fetchUserBalance === 'function' ? fetchUserBalance(currentUserId) : null,
-            typeof fetchUserTransactions === 'function' ? fetchUserTransactions(currentUserId) : null,
-            typeof fetchUserOrders === 'function' ? fetchUserOrders(currentUserId) : null
-        ]);
-        if (typeof buildNotificationsFromActivity === 'function') buildNotificationsFromActivity();
-        if (typeof renderNotifications === 'function') renderNotifications();
-        if (typeof showToast === 'function') showToast('Updated', 'success', 1500);
-    } catch (e) {
-        console.warn('goHome refresh', e);
-        if (typeof showToast === 'function') showToast('Could not refresh', 'error');
-    }
 };
 
 async function fetchUserBalance(userId) {
