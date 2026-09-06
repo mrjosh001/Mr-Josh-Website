@@ -623,10 +623,10 @@
       <div class="sheet-b complaint-form">
         <div class="cf-label">Send through</div>
         <div class="cf-channels" role="tablist">
-          <button type="button" class="cf-ch active" id="chInApp" onclick="setComplaintChannel('inapp')">
+          <button type="button" class="cf-ch active" id="chInApp" data-action="channel-inapp">
             <i class="fa-solid fa-comments"></i> In-app support
           </button>
-          <button type="button" class="cf-ch wa" id="chWa" onclick="setComplaintChannel('whatsapp')">
+          <button type="button" class="cf-ch wa" id="chWa" data-action="channel-whatsapp">
             <i class="fa-brands fa-whatsapp"></i> WhatsApp
           </button>
         </div>
@@ -648,7 +648,7 @@
         </div>
         <p class="cf-hint" id="cfHint">Your ticket is sent in-app with these details. You can attach screenshots here.</p>
 
-        <button type="button" class="btn-contact-support" id="cfSubmit" onclick="submitComplaint()">
+        <button type="button" class="btn-contact-support" id="cfSubmit" data-action="send-complaint">
           <i class="fa-solid fa-paper-plane"></i> Send complaint
         </button>
       </div>
@@ -1816,6 +1816,7 @@ document.addEventListener('change', function (e) {
 });
 
 window.submitComplaint = async function submitComplaint() {
+  try {
   const textEl = document.getElementById('cfText');
   const complaint = textEl ? String(textEl.value || '').trim() : '';
   if (!complaint) {
@@ -1823,6 +1824,7 @@ window.submitComplaint = async function submitComplaint() {
     if (textEl) textEl.focus();
     return;
   }
+  toast('Sending…');
   const msg = buildComplaintMessage(complaint);
   if (window.__complaintChannel === 'whatsapp') {
     try { await navigator.clipboard.writeText(msg); } catch (e) {}
@@ -1844,6 +1846,10 @@ window.submitComplaint = async function submitComplaint() {
       btn.disabled = false;
       setComplaintChannel(window.__complaintChannel);
     }
+  }
+  } catch (err) {
+    console.warn(err);
+    toast('Could not send. Try WhatsApp.');
   }
 }
 
@@ -2030,10 +2036,27 @@ function render() {
 }
 
 document.addEventListener('click', function (e) {
-  const sendBtn = e.target.closest('#cfSubmit');
-  if (sendBtn) return;
-  const btn = e.target.closest('.btn-contact-support');
-  if (!btn) return;
+  const sendBtn = e.target.closest('#cfSubmit, [data-action="send-complaint"]');
+  if (sendBtn) {
+    e.preventDefault();
+    e.stopPropagation();
+    if (typeof window.submitComplaint === 'function') window.submitComplaint();
+    return;
+  }
+  const chIn = e.target.closest('#chInApp, [data-action="channel-inapp"]');
+  if (chIn) {
+    e.preventDefault();
+    if (typeof window.setComplaintChannel === 'function') window.setComplaintChannel('inapp');
+    return;
+  }
+  const chWa = e.target.closest('#chWa, [data-action="channel-whatsapp"]');
+  if (chWa) {
+    e.preventDefault();
+    if (typeof window.setComplaintChannel === 'function') window.setComplaintChannel('whatsapp');
+    return;
+  }
+  const btn = e.target.closest('.btn-contact-support[data-oid], .sheet-foot .btn-contact-support');
+  if (!btn || btn.id === 'cfSubmit') return;
   e.preventDefault();
   e.stopPropagation();
   window.openSupportPick(btn.getAttribute('data-oid') || '', btn.getAttribute('data-prod') || 'Order');
