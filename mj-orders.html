@@ -1953,66 +1953,73 @@ function showComplaintSent(nShots) {
   }
 }
 
+function withTimeout(promise, ms, label) {
+  return Promise.race([
+    promise,
+    new Promise(function (_, reject) {
+      setTimeout(function () { reject(new Error(label || 'timeout')); }, ms);
+    })
+  ]);
+}
+
 async function sendComplaintInApp(fullMsg, complaint) {
   const token = session && session.access_token;
-  const user = session && session.user;
-  if (!token || !user) {
+  if (!token) {
+    toast('Please sign in again');
     location.href = 'auth.html';
     return;
   }
   const oid = (window.__orderComplaint && window.__orderComplaint.orderId) || '';
+  const prod = (window.__orderComplaint && window.__orderComplaint.product) || 'Order';
   const nFiles = (window.__complaintFiles || []).length;
   let body = fullMsg;
   if (nFiles) {
-    body += '\n\nScreenshots: ' + nFiles + ' saved on the customer device for 30 days (not uploaded to MJ Hub servers).';
+    body += '\n\nScreenshots: ' + nFiles + ' kept on this phone for 30 days.';
   }
 
-  let created = null;
-  let error = null;
-  ({ data: created, error } = await sb.from('support_tickets').insert({
-    user_id: user.id,
-    customer_id: window.__customerId || null,
-    user_email: user.email || null,
-    user_name: window.__customerName || null,
-    subject: 'Order complaint' + (oid ? ' · ' + oid : ''),
-    status: 'open'
-  }).select('id').single());
+  const res = await withTimeout(fetch('/api/order?action=support_ticket', {
+    method: 'POST',
+    headers: {
+      Authorization: 'Bearer ' + token,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({
+      action: 'support_ticket',
+      message: body,
+      complaint: complaint,
+      order_id: oid,
+      product: prod,
+      customer_id: window.__customerId || '',
+      user_name: window.__customerName || ''
+    })
+  }), 12000, 'Send timed out');
 
-  if (error || !created) {
-    const retry = await sb.from('support_tickets').insert({
-      user_id: user.id,
-      subject: 'Order complaint' + (oid ? ' · ' + oid : ''),
-      status: 'open'
-    }).select('id').single();
-    created = retry.data;
-    error = retry.error;
+  const json = await res.json().catch(function () { return {}; });
+  if (!res.ok || !json.success) {
+    throw new Error(json.message || 'Could not send');
   }
-  if (error || !created) throw error || new Error('ticket failed');
-
-  const { error: mErr } = await sb.from('support_messages').insert({
-    ticket_id: created.id,
-    sender_type: 'user',
-    sender_id: user.id,
-    body: body
-  });
-  if (mErr) throw mErr;
-
-  let saved = 0;
-  try { saved = await saveShotsLocal({ id: created.id, ticketId: created.id, orderId: oid }); } catch (e) {}
+  if (json.customer_id) window.__customerId = String(json.customer_id);
 
   try {
     localStorage.setItem('mjhub_support_prefill', JSON.stringify({
       message: body,
       order_id: oid,
       customer_id: window.__customerId || '',
-      ticket_id: created.id,
-      shots: saved,
+      ticket_id: json.ticket_id || '',
+      shots: nFiles,
       ts: Date.now()
     }));
   } catch (e) {}
 
   closeSupportPick();
-  showComplaintSent(saved || nFiles);
+  showComplaintSent(nFiles);
+  if (nFiles) {
+    saveShotsLocal({
+      id: json.ticket_id || String(Date.now()),
+      ticketId: json.ticket_id || '',
+      orderId: oid
+    }).catch(function () {});
+  }
 }
 
 function compressImage(file) {
