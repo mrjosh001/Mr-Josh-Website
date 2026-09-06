@@ -6,173 +6,140 @@
 <title>Refer & Earn 2% | MJ HUB</title>
 <link rel="icon" href="https://atczodlljmlayvldxfmv.supabase.co/storage/v1/object/public/avatars/dark%20background%20log">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
 (function(){try{var t=localStorage.getItem('mjhub-theme');document.documentElement.setAttribute('data-theme',(t==='light'||t==='dark')?t:'dark');}catch(e){document.documentElement.setAttribute('data-theme','dark');}})();
 </script>
 <style>
 :root{
-  --primary:#3b82f6;
-  --primary-strong:#1d4ed8;
-  --primary-glow:rgba(59,130,246,.2);
-  --bg:#0b1220;
-  --card:#111827;
-  --text:#f1f5f9;
-  --muted:#94a3b8;
-  --border:rgba(148,163,184,.18);
+  --blue:#2f6fed;
+  --blue2:#1d4ed8;
+  --bg:#07101f;
+  --card:#0d1730;
+  --ink:#f8fbff;
+  --mute:#9db0c9;
+  --line:rgba(170,196,230,.16);
+  --ok:#3ddc97;
+  --field:#08101c;
 }
 :root[data-theme="light"]{
-  --bg:#e9eef7;
+  --bg:#eef3fb;
   --card:#ffffff;
-  --text:#0f172a;
-  --muted:#475569;
-  --border:rgba(15,23,42,.08);
+  --ink:#0b1b33;
+  --mute:#4b607c;
+  --line:rgba(15,40,80,.12);
+  --ok:#0f9f6e;
+  --field:#f4f7fc;
 }
-
-:root[data-theme="dark"]{--bg:#06080f;--card:#0f1524;--border:rgba(148,163,184,.12);--text:#f1f5f9;--muted:#8b9bb4;--primary:#5b8af5;--primary2:#a78bfa;--success:#34d399;--danger:#f87171}
-:root[data-theme="light"]{--bg:#f4f6fb;--card:#fff;--border:rgba(15,23,42,.08);--text:#0f172a;--muted:#64748b;--primary:#3b6ef5;--primary2:#7c5cfc;--success:#059669;--danger:#dc2626}
 *{box-sizing:border-box;margin:0;padding:0}
-body{font-family:Inter,system-ui,-apple-system,sans-serif;background:var(--bg);color:var(--text);min-height:100vh}
-.header{position:sticky;top:0;z-index:20;display:flex;align-items:center;gap:12px;padding:14px 16px;background:rgba(7,11,20,.92);backdrop-filter:blur(12px);border-bottom:1px solid var(--border)}
-:root[data-theme="light"] .header{background:rgba(255,255,255,.92)}
-.back{width:40px;height:40px;border-radius:12px;border:1px solid var(--border);background:var(--card);display:flex;align-items:center;justify-content:center;color:var(--text);text-decoration:none}
-h1{font-size:17px;font-weight:800;flex:1}
-.theme-btn{width:40px;height:40px;border-radius:12px;border:1px solid var(--border);background:var(--card);cursor:pointer;font-size:16px}
-.wrap{padding:16px;max-width:520px;margin:0 auto;padding-bottom:40px}
-.hero{padding:20px 16px;border-radius:20px;background:radial-gradient(120% 120% at 0% 0%,rgba(239,68,68,.25),transparent 50%),radial-gradient(100% 100% at 100% 0%,rgba(167,139,250,.22),transparent 45%),linear-gradient(160deg,#1a1020,#0b1220);border:1px solid rgba(255,255,255,.1);margin-bottom:16px}
-:root[data-theme="light"] .hero{background:linear-gradient(160deg,#fff5f5,#f8fafc);border-color:var(--border)}
-.hero .tag{font-size:12px;font-weight:900;color:#fca5a5;margin-bottom:8px}
-.hero h2{font-size:22px;font-weight:900;line-height:1.2;margin-bottom:8px}
-.hero p{font-size:13px;color:var(--muted);line-height:1.5}
-.stats{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px}
-.stat{background:var(--card);border:1px solid var(--border);border-radius:16px;padding:14px}
-.stat .l{font-size:11px;font-weight:800;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
-.stat .v{font-size:22px;font-weight:900;margin-top:6px;color:var(--success)}
-.stat .v.blue{color:var(--primary)}
-.card{background:var(--card);border:1px solid var(--border);border-radius:18px;padding:16px;margin-bottom:14px}
-.card h3{font-size:14px;font-weight:800;margin-bottom:10px}
-.link-row{display:flex;gap:8px;align-items:center}
-.link-row input{flex:1;min-width:0;padding:12px 12px;border-radius:12px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:12px;font-weight:700}
-.link-row button{flex:0 0 auto;border:0;cursor:pointer;border-radius:12px;padding:12px 16px;font-weight:800;font-size:13px;background:linear-gradient(135deg,#3b82f6,#1d4ed8);color:#fff}
-.actions{display:flex;gap:8px;margin-top:10px}
-.actions button,.actions a{flex:1;text-align:center;border:1px solid var(--border);background:var(--bg);color:var(--text);border-radius:12px;padding:11px;font-weight:800;font-size:12px;cursor:pointer;text-decoration:none}
-.note{font-size:12px;color:var(--muted);line-height:1.5;margin-top:10px}
-.list{display:flex;flex-direction:column;gap:8px}
-.row{display:flex;justify-content:space-between;gap:10px;padding:10px 12px;border-radius:12px;background:var(--bg);border:1px solid var(--border);font-size:12px;font-weight:700}
-.row .m{color:var(--muted);font-weight:600}
-.empty{text-align:center;padding:20px;color:var(--muted);font-size:13px}
-.toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:#111827;color:#fff;padding:12px 16px;border-radius:12px;font-size:13px;font-weight:700;z-index:50;opacity:0;pointer-events:none;transition:.2s;max-width:90%}
+body{font-family:"Plus Jakarta Sans",system-ui,sans-serif;background:var(--bg);color:var(--ink);min-height:100vh}
+body:before{content:"";position:fixed;inset:auto -20% 40% -20%;height:50vh;background:radial-gradient(circle,rgba(47,111,237,.28),transparent 70%);pointer-events:none;z-index:0}
+.top{position:sticky;top:0;z-index:5;display:flex;align-items:center;gap:10px;padding:12px 16px;background:color-mix(in srgb,var(--bg) 86%,transparent);backdrop-filter:blur(16px);border-bottom:1px solid var(--line)}
+.circ{width:40px;height:40px;border-radius:14px;border:1px solid var(--line);background:var(--card);color:var(--ink);display:grid;place-items:center;text-decoration:none;cursor:pointer}
+.top h1{flex:1;font-size:16px;font-weight:800}
+.page{position:relative;z-index:1;max-width:540px;margin:0 auto;padding:16px 16px 48px}
+.banner{border-radius:24px;padding:22px 18px 18px;background:linear-gradient(165deg,#1e4fd7 0%,#2f6fed 48%,#163a8a 100%);color:#fff;box-shadow:0 16px 40px rgba(30,79,215,.28)}
+.banner b{display:inline-block;font-size:10px;letter-spacing:.14em;text-transform:uppercase;background:rgba(255,255,255,.16);padding:5px 9px;border-radius:999px;margin-bottom:10px}
+.banner h2{font-size:24px;line-height:1.15;font-weight:800;margin-bottom:8px}
+.banner p{font-size:13px;line-height:1.55;color:rgba(255,255,255,.86)}
+.refresh{margin:14px 0;width:100%;border:1px solid var(--line);background:var(--card);color:var(--ink);border-radius:14px;padding:11px;font-weight:800;font-size:13px;cursor:pointer}
+.stats{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px}
+.tile{background:var(--card);border:1px solid var(--line);border-radius:20px;padding:14px 14px 13px}
+.tile em{display:block;font-style:normal;font-size:10px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--mute)}
+.tile strong{display:block;margin-top:7px;font-size:22px;font-weight:800}
+.tile small{display:block;margin-top:6px;font-size:11px;font-weight:700;color:var(--ok)}
+.tile.main{grid-column:1/-1;background:linear-gradient(135deg,#1e4fd7,#2f6fed);color:#fff;border:0}
+.tile.main em,.tile.main small{color:#d6e6ff}
+.sheet{background:var(--card);border:1px solid var(--line);border-radius:22px;padding:16px;margin-bottom:14px}
+.sheet h3{font-size:15px;font-weight:800;margin-bottom:4px}
+.sheet .sub{font-size:12px;color:var(--mute);margin-bottom:12px}
+.lab{font-size:10px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--mute);margin:12px 0 6px}
+.pill{text-align:center;padding:13px;border-radius:14px;background:var(--field);border:1px solid var(--line);color:var(--blue);font-size:20px;font-weight:800;letter-spacing:.16em}
+.rowline{display:flex;gap:8px}
+.rowline input{flex:1;min-width:0;border:1px solid var(--line);background:var(--field);color:var(--ink);border-radius:14px;padding:12px;font-weight:700;font-size:12px}
+.copy{width:48px;border:0;border-radius:14px;background:#2f6fed;color:#fff;cursor:pointer;font-size:16px}
+.split{display:flex;gap:8px;margin-top:10px}
+.split button{flex:1;border:1px solid var(--line);background:var(--field);color:var(--ink);border-radius:14px;padding:11px;font-weight:800;font-size:12px;cursor:pointer}
+.qrbox{margin:16px auto 6px;width:176px;background:#fff;border-radius:20px;padding:12px;box-shadow:0 10px 30px rgba(15,40,80,.12)}
+.qrbox img{width:152px;height:152px;display:block}
+.cap{text-align:center;font-size:11px;font-weight:700;color:var(--mute)}
+.meta{display:flex;justify-content:space-between;align-items:center;margin-top:12px;padding-top:12px;border-top:1px solid var(--line);font-size:13px;font-weight:700}
+.meta span:first-child{color:var(--mute)}
+.live{background:#16a34a;color:#fff;border-radius:999px;padding:4px 10px;font-size:11px;font-weight:800}
+.seg{display:flex;background:var(--field);border:1px solid var(--line);border-radius:16px;padding:4px;margin-bottom:12px}
+.seg button{flex:1;border:0;background:transparent;color:var(--mute);font-weight:800;font-size:12px;padding:10px 6px;border-radius:12px;cursor:pointer}
+.seg button.on{background:#2f6fed;color:#fff}
+.item{display:flex;justify-content:space-between;gap:10px;padding:12px;border-radius:14px;background:var(--field);border:1px solid var(--line);margin-bottom:8px;font-size:13px;font-weight:700}
+.item .m{color:var(--mute);font-size:11px;text-align:right}
+.empty{text-align:center;padding:30px 10px;color:var(--mute)}
+.empty i{display:block;font-size:26px;color:#2f6fed;margin-bottom:8px}
+.toast{position:fixed;left:50%;bottom:22px;transform:translateX(-50%);background:#0b1b33;color:#fff;border:1px solid rgba(47,111,237,.45);padding:12px 16px;border-radius:14px;font-size:13px;font-weight:700;z-index:20;opacity:0;pointer-events:none;transition:.2s}
 .toast.show{opacity:1}
-.spinner{width:28px;height:28px;border:3px solid var(--border);border-top-color:var(--primary);border-radius:50%;animation:spin .8s linear infinite;margin:20px auto}
+.spin{width:26px;height:26px;border:3px solid var(--line);border-top-color:#2f6fed;border-radius:50%;margin:18px auto;animation:spin .8s linear infinite}
 @keyframes spin{to{transform:rotate(360deg)}}
+.hid{display:none}
 </style>
-  <script src="/js/mj-page-loader.js"></script>
-<link rel="stylesheet" href="/css/mj-motion.css">
+<script src="/js/mj-page-loader.js"></script>
 </head>
 <body>
-
-<style id="mj-boot-style">
-#mj-boot{position:fixed;inset:0;z-index:2147483646;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:18px;background:rgba(5,7,13,.55);-webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px);color:rgba(226,232,240,.85);font:500 12px/1.2 system-ui,sans-serif;letter-spacing:.2em;text-transform:lowercase;transition:opacity .25s ease}
-#mj-boot.is-done{opacity:0;pointer-events:none}
-#mj-boot .mj-inf{position:relative;width:120px;height:64px}
-#mj-boot .mj-inf::before{content:"";position:absolute;left:50%;top:50%;width:140px;height:140px;transform:translate(-50%,-50%);border-radius:50%;background:radial-gradient(circle,rgba(124,58,237,.4) 0%,rgba(56,189,248,.15) 40%,transparent 70%);animation:mjBloom 2.2s ease-in-out infinite;pointer-events:none}
-#mj-boot .mj-inf svg{position:relative;z-index:1;display:block;width:120px;height:64px;overflow:visible}
-#mj-boot .mj-track{fill:none;stroke:rgba(167,139,250,.25);stroke-width:3.5;stroke-linecap:round;stroke-linejoin:round}
-#mj-boot .mj-beam{fill:none;stroke:#e9d5ff;stroke-width:3.5;stroke-linecap:round;stroke-linejoin:round;stroke-dasharray:28 200;filter:drop-shadow(0 0 4px #c084fc) drop-shadow(0 0 12px #22d3ee);animation:mjBeam 1.6s linear infinite}
-#mj-boot .mj-lbl{position:relative;z-index:1}
-@keyframes mjBeam{to{stroke-dashoffset:-228}}
-@keyframes mjBloom{0%,100%{opacity:.55;transform:translate(-50%,-50%) scale(1)}50%{opacity:1;transform:translate(-50%,-50%) scale(1.08)}}
-@media(prefers-reduced-motion:reduce){#mj-boot .mj-beam{animation:none;stroke-dasharray:none}#mj-boot .mj-inf::before{animation:none}}
-</style>
-<div id="mj-boot" role="status" aria-live="polite" aria-busy="true">
-  <div class="mj-inf" aria-hidden="true">
-    <svg viewBox="0 0 96 64" width="120" height="64">
-      <path class="mj-track" d="M 16 32 C 16 16, 36 16, 48 32 C 60 48, 80 48, 80 32 C 80 16, 60 16, 48 32 C 36 48, 16 48, 16 32"/>
-      <path class="mj-beam" d="M 16 32 C 16 16, 36 16, 48 32 C 60 48, 80 48, 80 32 C 80 16, 60 16, 48 32 C 36 48, 16 48, 16 32"/>
-    </svg>
-  </div>
-  <div class="mj-lbl">loading</div>
-</div>
-<script>
-(function(){
-  function done(){
-    var el=document.getElementById('mj-boot');
-    if(!el||el.classList.contains('is-done'))return;
-    el.classList.add('is-done');
-    el.setAttribute('aria-busy','false');
-    setTimeout(function(){ try{ el.remove(); var s=document.getElementById('mj-boot-style'); if(s)s.remove(); }catch(e){} }, 280);
-    try{ sessionStorage.removeItem('mj_nav_loading'); }catch(e){}
-    if(window.mjHidePageLoader) try{ window.mjHidePageLoader(); }catch(e){}
-  }
-  if(document.readyState==='complete') setTimeout(done, 60);
-  else {
-    window.addEventListener('load', function(){ setTimeout(done, 60); });
-    document.addEventListener('DOMContentLoaded', function(){ setTimeout(done, 4000); });
-    setTimeout(done, 12000);
-  }
-})();
-</script>
-
-
-<header class="header">
-  <a class="back" href="dashboard.html#home"><i class="fa-solid fa-arrow-left"></i></a>
+<div class="top">
+  <a class="circ" href="dashboard.html#home"><i class="fa-solid fa-arrow-left"></i></a>
   <h1>Refer & Earn</h1>
-  <button type="button" class="theme-btn" id="themeBtn" onclick="toggleTheme()">🌙</button>
-</header>
-
-<div class="wrap">
-  <section class="hero">
-    <div class="tag">🤝 Refer & earn 2%</div>
-    <h2>Earn 2% every time a friend funds their wallet — for life.</h2>
-    <p>Share your link. When they deposit, you get <strong>2%</strong> of that amount in your NGN wallet. Usable on logs, SMS, boosters — anything on MJ Hub.</p>
-  </section>
-
-  <div class="stats">
-    <div class="stat">
-      <div class="l">Total earned</div>
-      <div class="v" id="earned">₦—</div>
-    </div>
-    <div class="stat">
-      <div class="l">Friends referred</div>
-      <div class="v blue" id="count">—</div>
-    </div>
+  <button class="circ" id="themeBtn" type="button" onclick="toggleTheme()">🌙</button>
+</div>
+<div class="page">
+  <div class="banner">
+    <b>2% for life</b>
+    <h2>Invite a friend. Get paid when they fund.</h2>
+    <p>They sign up with your link. Every time they deposit, 2% is added to your NGN wallet at once.</p>
   </div>
-
-  <div class="card">
-    <h3>Your referral link</h3>
-    <div class="link-row">
-      <input id="link" readonly value="Loading…">
-      <button type="button" onclick="copyLink()">Copy</button>
+  <button class="refresh" type="button" onclick="load()"><i class="fa-solid fa-rotate"></i> Refresh data</button>
+  <div class="stats">
+    <div class="tile main">
+      <em>Wallet credit</em>
+      <strong id="earned">₦—</strong>
+      <small>Instant · already in NGN wallet</small>
     </div>
-    <div class="actions">
-      <button type="button" onclick="shareLink()">Share ↗</button>
+    <div class="tile"><em>Friends</em><strong id="count">—</strong><small>On your link</small></div>
+    <div class="tile"><em>Rate</em><strong>2%</strong><small>Every deposit</small></div>
+  </div>
+  <div class="sheet">
+    <h3>Invite link</h3>
+    <p class="sub">Same code works in ads, WhatsApp, and the QR.</p>
+    <div class="lab">Referral code</div>
+    <div class="pill" id="codePill">—</div>
+    <div class="lab">Referral link</div>
+    <div class="rowline">
+      <input id="link" readonly value="Loading…">
+      <button class="copy" type="button" onclick="copyLink()"><i class="fa-regular fa-copy"></i></button>
+    </div>
+    <div class="split">
+      <button type="button" onclick="shareLink()">Share link</button>
       <button type="button" onclick="copyCode()">Copy code</button>
     </div>
-    <p class="note" id="codeNote">Code: —</p>
-    <p class="note">They must sign up with your link (or code). You earn on <strong>every deposit they make forever</strong>, not only the first.</p>
+    <div class="qrbox"><img id="qrImg" alt="QR"></div>
+    <div class="cap">Scan to join under you</div>
+    <div class="meta"><span>Program status</span><span class="live">ACTIVE</span></div>
+    <div class="meta"><span>Your code</span><span id="codeNote">—</span></div>
   </div>
-
-  <div class="card">
-    <h3>Recent commissions</h3>
-    <div class="list" id="earnings"><div class="spinner"></div></div>
-  </div>
-
-  <div class="card">
-    <h3>Your referrals</h3>
-    <div class="list" id="refs"><div class="spinner"></div></div>
+  <div class="sheet">
+    <div class="seg">
+      <button type="button" class="on" id="tabFriends" onclick="showTab('friends')">Friends</button>
+      <button type="button" id="tabComms" onclick="showTab('comms')">Commissions</button>
+    </div>
+    <div id="panelFriends"><div id="refs"><div class="spin"></div></div></div>
+    <div id="panelComms" class="hid"><div id="earnings"><div class="spin"></div></div></div>
   </div>
 </div>
 <div class="toast" id="toast"></div>
-
 <script>
 const SUPABASE_URL = 'https://atczodlljmlayvldxfmv.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImF0Y3pvZGxsam1sYXl2bGR4Zm12Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODUwNzUyMzgsImV4cCI6MjEwMDY1MTIzOH0.ufthD-p7BmeD_B7xyuMM6PNPL8DmcL4AtRYgg-MuoLI';
 const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
   auth: { persistSession: true, autoRefreshToken: true, storage: window.sessionStorage }
 });
-
 let state = null;
-
 function toast(m){const t=document.getElementById('toast');t.textContent=m;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),2800)}
 function fmt(n){return '₦'+Number(n||0).toLocaleString()}
 function syncThemeUi(){
@@ -181,28 +148,31 @@ function syncThemeUi(){
   if(b)b.textContent=dark?'🌙':'☀️';
 }
 function toggleTheme(){
-  const cur=document.documentElement.getAttribute('data-theme')==='light'?'light':'dark';
-  const next=cur==='dark'?'light':'dark';
+  const next=document.documentElement.getAttribute('data-theme')==='light'?'dark':'light';
   document.documentElement.setAttribute('data-theme',next);
   try{localStorage.setItem('mjhub-theme',next)}catch(e){}
   syncThemeUi();
 }
+function showTab(which){
+  document.getElementById('panelFriends').classList.toggle('hid', which!=='friends');
+  document.getElementById('panelComms').classList.toggle('hid', which!=='comms');
+  document.getElementById('tabFriends').classList.toggle('on', which==='friends');
+  document.getElementById('tabComms').classList.toggle('on', which==='comms');
+}
 syncThemeUi();
-
 async function load(){
   const {data}=await sb.auth.getSession();
   if(!data?.session){ location.href='auth.html?next='+encodeURIComponent('referral.html'); return; }
   try {
-    var refCode = '';
-    try { refCode = localStorage.getItem('mjhub_ref_code') || sessionStorage.getItem('mjhub_ref_code') || ''; } catch (e) {}
-    await fetch('/api/pocketfi?action=referral_attach', {
-      method: 'POST',
-      headers: { Authorization: 'Bearer ' + data.session.access_token, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ code: String(refCode || '').trim().toUpperCase() })
+    var refCode='';
+    try { refCode=localStorage.getItem('mjhub_ref_code')||sessionStorage.getItem('mjhub_ref_code')||''; } catch(e){}
+    await fetch('/api/pocketfi?action=referral_attach',{
+      method:'POST',
+      headers:{Authorization:'Bearer '+data.session.access_token,'Content-Type':'application/json'},
+      body:JSON.stringify({code:String(refCode||'').trim().toUpperCase()})
     });
-  } catch (e) {}
-  const headers={Authorization:'Bearer '+data.session.access_token};
-  const res=await fetch('/api/pocketfi?action=referral_me',{headers});
+  } catch(e){}
+  const res=await fetch('/api/pocketfi?action=referral_me',{headers:{Authorization:'Bearer '+data.session.access_token}});
   const j=await res.json();
   if(!j.success){
     document.getElementById('earnings').innerHTML='<div class="empty">'+ (j.message||'Could not load') +'</div>';
@@ -213,43 +183,37 @@ async function load(){
   document.getElementById('earned').textContent=fmt(j.total_earned_ngn);
   document.getElementById('count').textContent=String(j.referred_count||0);
   const code=(j.referral_code||'').toString().trim();
-  const landLink = code
-    ? (location.origin.replace(/\/$/,'') + '/landing.html?ref=' + encodeURIComponent(code))
-    : (j.link || '');
-  document.getElementById('link').value = landLink;
-  if (state) state.link = landLink;
-  document.getElementById('codeNote').textContent='Code: '+(j.referral_code||'—');
-
+  const landLink=code?(location.origin.replace(/\/$/,'')+'/landing.html?ref='+encodeURIComponent(code)):(j.link||'');
+  document.getElementById('link').value=landLink;
+  if(state) state.link=landLink;
+  document.getElementById('codePill').textContent=code||'—';
+  document.getElementById('codeNote').textContent=code||'—';
+  if(landLink) document.getElementById('qrImg').src='https://api.qrserver.com/v1/create-qr-code/?size=200x200&data='+encodeURIComponent(landLink);
   const earns=j.recent_earnings||[];
-  document.getElementById('earnings').innerHTML = earns.length
-    ? earns.map(e=>`<div class="row"><span>+${fmt(e.commission_ngn)}</span><span class="m">from ₦${Number(e.deposit_amount_ngn||0).toLocaleString()} · ${e.created_at?new Date(e.created_at).toLocaleDateString():''}</span></div>`).join('')
-    : '<div class="empty">No commissions yet — share your link.</div>';
-
+  document.getElementById('earnings').innerHTML=earns.length
+    ? earns.map(e=>'<div class="item"><span>+'+fmt(e.commission_ngn)+'</span><span class="m">from ₦'+Number(e.deposit_amount_ngn||0).toLocaleString()+' · '+(e.created_at?new Date(e.created_at).toLocaleDateString():'')+'</span></div>').join('')
+    : '<div class="empty"><i class="fa-solid fa-bolt"></i>No commissions yet. 2% lands in your wallet the moment they deposit.</div>';
   const refs=j.referrals||[];
-  document.getElementById('refs').innerHTML = refs.length
-    ? refs.map(r=>`<div class="row"><span>${(r.full_name||r.customer_id||'Friend').toString().slice(0,28)}</span><span class="m">${(r.updated_at||r.created_at)?new Date(r.updated_at||r.created_at).toLocaleDateString():''}</span></div>`).join('')
-    : '<div class="empty">No referrals yet.</div>';
+  document.getElementById('refs').innerHTML=refs.length
+    ? refs.map(r=>'<div class="item"><span>'+String(r.full_name||r.customer_id||'Friend').slice(0,28)+'</span><span class="m">'+((r.updated_at||r.created_at)?new Date(r.updated_at||r.created_at).toLocaleDateString():'')+'</span></div>').join('')
+    : '<div class="empty"><i class="fa-solid fa-user-plus"></i>Nobody has joined with your link yet.</div>';
 }
-
 function copyLink(){
   const v=document.getElementById('link').value;
   if(!v||v==='Loading…')return;
   navigator.clipboard.writeText(v).then(()=>toast('Link copied')).catch(()=>toast('Copy failed'));
 }
 function copyCode(){
-  if(!state?.referral_code)return;
+  if(!state||!state.referral_code)return;
   navigator.clipboard.writeText(state.referral_code).then(()=>toast('Code copied')).catch(()=>toast('Copy failed'));
 }
 async function shareLink(){
   const v=document.getElementById('link').value;
   if(!v)return;
-  const text='Join MJ Hub with my link and fund your wallet. I earn 2% when you deposit — you get full access to logs, SMS & boosters.\n'+v;
-  if(navigator.share){
-    try{ await navigator.share({title:'MJ Hub referral',text,url:v}); return; }catch(e){}
-  }
+  const text='Join MJ Hub with my link. Fund your wallet and I earn 2%.\n'+v;
+  if(navigator.share){ try{ await navigator.share({title:'MJ Hub',text,url:v}); return; }catch(e){} }
   navigator.clipboard.writeText(text).then(()=>toast('Share text copied'));
 }
-
 load();
 </script>
 </body>
