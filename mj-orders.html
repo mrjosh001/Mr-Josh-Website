@@ -641,10 +641,12 @@
         <label class="cf-label" for="cfText">Your complaint</label>
         <textarea id="cfText" rows="5" maxlength="1200" placeholder="Explain what happened. Include anything we should check."></textarea>
 
-        <label class="cf-label" for="cfFiles">Screenshots (optional, up to 3)</label>
-        <input type="file" id="cfFiles" accept="image/*" multiple />
-        <div class="cf-previews" id="cfPreviews"></div>
-        <p class="cf-hint" id="cfHint">In-app: screenshots go with your ticket. WhatsApp: the chat opens with your details — attach photos there too.</p>
+        <div id="cfAttachWrap">
+          <label class="cf-label" for="cfFiles">Screenshots (optional, up to 3)</label>
+          <input type="file" id="cfFiles" accept="image/*" multiple />
+          <div class="cf-previews" id="cfPreviews"></div>
+        </div>
+        <p class="cf-hint" id="cfHint">Your ticket is sent in-app with these details. You can attach screenshots here.</p>
 
         <button type="button" class="btn-contact-support" id="cfSubmit" onclick="submitComplaint()">
           <i class="fa-solid fa-paper-plane"></i> Send complaint
@@ -1708,9 +1710,13 @@ window.openSupportPick = function openSupportPick(orderId, productName) {
   const textEl = document.getElementById('cfText');
   const filesEl = document.getElementById('cfFiles');
   const prev = document.getElementById('cfPreviews');
-  if (cidEl) cidEl.textContent = window.__customerId || 'Not available';
+  if (cidEl) cidEl.textContent = window.__customerId || 'Loading…';
   if (oidEl) oidEl.textContent = window.__orderComplaint.orderId || '—';
   if (prodEl) prodEl.textContent = window.__orderComplaint.product || 'Order';
+  loadCustomerProfile().then(function () {
+    const el = document.getElementById('cfCid');
+    if (el) el.textContent = window.__customerId || 'Not available';
+  });
   if (textEl) textEl.value = '';
   if (filesEl) filesEl.value = '';
   if (prev) prev.innerHTML = '';
@@ -1731,10 +1737,19 @@ window.setComplaintChannel = function setComplaintChannel(ch) {
   if (a) a.classList.toggle('active', window.__complaintChannel === 'inapp');
   if (b) b.classList.toggle('active', window.__complaintChannel === 'whatsapp');
   const hint = document.getElementById('cfHint');
+  const attach = document.getElementById('cfAttachWrap');
+  if (attach) attach.style.display = window.__complaintChannel === 'whatsapp' ? 'none' : '';
+  if (window.__complaintChannel === 'whatsapp') {
+    window.__complaintFiles = [];
+    const filesEl = document.getElementById('cfFiles');
+    const prev = document.getElementById('cfPreviews');
+    if (filesEl) filesEl.value = '';
+    if (prev) prev.innerHTML = '';
+  }
   if (hint) {
     hint.textContent = window.__complaintChannel === 'whatsapp'
-      ? 'WhatsApp will open with your details filled in. Attach the screenshots in WhatsApp after it opens.'
-      : 'Your details and complaint are sent to in-app support. Screenshots are attached when possible.';
+      ? 'WhatsApp opens with your details filled in. Attach photos in the WhatsApp chat after it opens.'
+      : 'Your ticket is sent in-app with these details. You can attach screenshots here.';
   }
   const btn = document.getElementById('cfSubmit');
   if (btn) {
@@ -1963,6 +1978,45 @@ document.querySelectorAll('.type-tab').forEach((btn) => {
   });
 });
 
+async function loadCustomerProfile() {
+  const uid = session && session.user && session.user.id;
+  if (!uid) return;
+  const pick = function (row) {
+    if (!row) return;
+    const cid = row.customer_id || row.customerId || '';
+    const name = row.full_name || row.name || row.username || '';
+    if (cid) window.__customerId = String(cid);
+    if (name) window.__customerName = String(name);
+  };
+  try {
+    const a = await sb.from('profiles').select('customer_id, full_name, name, username').eq('id', uid).maybeSingle();
+    if (!a.error) pick(a.data);
+  } catch (e) {}
+  if (!window.__customerId) {
+    try {
+      const b = await sb.from('profiles').select('customer_id, full_name, name, username').eq('user_id', uid).maybeSingle();
+      if (!b.error) pick(b.data);
+    } catch (e) {}
+  }
+  if (!window.__customerId) {
+    try {
+      const json = await fetchMyOrdersFromApi(false);
+      if (json && (json.customer_id || (json.profile && json.profile.customer_id))) {
+        pick(json.profile || json);
+      }
+    } catch (e) {}
+  }
+  if (!window.__customerId) {
+    try {
+      const cached = localStorage.getItem('mjhub_customer_id') || sessionStorage.getItem('mjhub_customer_id');
+      if (cached) window.__customerId = cached;
+    } catch (e) {}
+  }
+  if (window.__customerId) {
+    try { localStorage.setItem('mjhub_customer_id', window.__customerId); } catch (e) {}
+  }
+}
+
 async function boot() {
   const s = await ensureAuth();
   if (!s || !s.user) {
@@ -1971,12 +2025,7 @@ async function boot() {
   }
   session = s;
   _myOrdersCache = null;
-  // Customer ID for complaint prefill
-  try {
-    const { data: prof } = await sb.from('profiles').select('customer_id, full_name').eq('id', s.user.id).maybeSingle();
-    window.__customerId = (prof && prof.customer_id) || '';
-    window.__customerName = (prof && prof.full_name) || '';
-  } catch (e) {}
+  await loadCustomerProfile();
   const list = document.getElementById('list');
   if (list) list.innerHTML = '<div class="empty"><p>Loading your orders…</p></div>';
   await Promise.all([loadLogs(), loadSms(), loadBoosters()]);
