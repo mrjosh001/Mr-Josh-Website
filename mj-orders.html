@@ -1893,6 +1893,24 @@ function openShotDb() {
   });
 }
 
+async function putShotLocal(id, blob, orderId) {
+  const db = await openShotDb();
+  await new Promise(function (resolve, reject) {
+    const tx = db.transaction('shots', 'readwrite');
+    tx.oncomplete = resolve;
+    tx.onerror = function () { reject(tx.error); };
+    tx.objectStore('shots').put({
+      id: id,
+      ticketId: '',
+      orderId: orderId || '',
+      createdAt: Date.now(),
+      expiresAt: Date.now() + 30 * 24 * 60 * 60 * 1000,
+      blob: blob
+    });
+  });
+  try { db.close(); } catch (e) {}
+}
+
 async function saveShotsLocal(meta) {
   const files = window.__complaintFiles || [];
   if (!files.length) return 0;
@@ -1966,14 +1984,17 @@ async function sendComplaintInApp(fullMsg, complaint) {
   const oid = (window.__orderComplaint && window.__orderComplaint.orderId) || '';
   const prod = (window.__orderComplaint && window.__orderComplaint.product) || 'Order';
   const files = window.__complaintFiles || [];
-  const attachments = [];
-  for (let i = 0; i < files.length && attachments.length < 3; i++) {
+  const shotIds = [];
+  for (let i = 0; i < files.length && shotIds.length < 3; i++) {
     try {
       const blob = await compressImage(files[i]);
-      const b64 = await blobToBase64(blob);
-      if (b64) attachments.push({ data: b64 });
+      const id = (crypto.randomUUID && crypto.randomUUID()) || (Date.now() + '-' + i);
+      await putShotLocal(id, blob, oid);
+      shotIds.push(id);
     } catch (e) {}
   }
+  let msg = fullMsg;
+  shotIds.forEach(function (id) { msg += '\n[[MJSHOT:' + id + ']]'; });
 
   const res = await withTimeout(fetch('/api/order?action=support_ticket', {
     method: 'POST',
@@ -1983,15 +2004,14 @@ async function sendComplaintInApp(fullMsg, complaint) {
     },
     body: JSON.stringify({
       action: 'support_ticket',
-      message: fullMsg,
+      message: msg,
       complaint: complaint,
       order_id: oid,
       product: prod,
       customer_id: window.__customerId || '',
-      user_name: window.__customerName || '',
-      attachments: attachments
+      user_name: window.__customerName || ''
     })
-  }), 20000, 'Send timed out');
+  }), 12000, 'Send timed out');
 
   const json = await res.json().catch(function () { return {}; });
   if (!res.ok || !json.success) {
@@ -2001,11 +2021,9 @@ async function sendComplaintInApp(fullMsg, complaint) {
 
   try {
     localStorage.setItem('mjhub_support_prefill', JSON.stringify({
-      message: body,
       order_id: oid,
       customer_id: window.__customerId || '',
       ticket_id: json.ticket_id || '',
-      shots: nFiles,
       ts: Date.now()
     }));
   } catch (e) {}
