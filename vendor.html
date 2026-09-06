@@ -127,6 +127,7 @@ a{color:var(--blue);text-decoration:none}
         <a href="support.html">Support</a>
         <a href="terms.html">Terms</a>
         <a href="/vendor">Vendors</a>
+        <a href="#" id="apiSoonLink">API · Coming soon</a>
       </nav>
     </div>
   </div>
@@ -243,6 +244,15 @@ a{color:var(--blue);text-decoration:none}
   btn.onclick=function(e){ e.preventDefault(); setOpen(!menu.classList.contains('active')); };
   menu.onclick=function(e){ if(e.target.closest('[data-close-menu]')) setOpen(false); };
 })();
+</script>
+
+<script>
+document.addEventListener('click', function(e){
+  var a=e.target.closest('#apiSoonLink');
+  if(!a) return;
+  e.preventDefault();
+  alert('API is coming soon.');
+});
 </script>
 </body>
 </html>

@@ -60,7 +60,7 @@ body {
 
 /* ===== HEADER ===== */
 .header {
-  position: sticky; top: 0; z-index: 100;
+  position: fixed; top: 0; left: 0; right: 0; z-index: 500;
   background: color-mix(in srgb, var(--elevated) 75%, transparent);
   backdrop-filter: blur(20px);
   border-bottom: 1px solid var(--border);
@@ -347,6 +347,7 @@ footer a:hover { color: var(--primary); }
 
 <canvas id="webgl-bg"></canvas>
 
+<div id="headerSpacer" style="height:72px"></div>
 <header class="header">
   <div class="header-inner">
     <a href="landing.html" class="logo"><img src="https://atczodlljmlayvldxfmv.supabase.co/storage/v1/object/public/avatars/dark%20background%20log" alt="MJ HUB"></a>
@@ -383,6 +384,7 @@ footer a:hover { color: var(--primary); }
         <a href="support.html">Support</a>
         <a href="terms.html">Terms</a>
         <a href="/vendor">Vendors</a>
+        <a href="#" id="apiSoonLink">API · Coming soon</a>
       </nav>
       <div class="mobile-auth">
         <a href="auth.html?mode=signin" class="btn btn-ghost">Sign In</a>

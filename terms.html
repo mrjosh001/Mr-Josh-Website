@@ -20,7 +20,7 @@
 }
 * { box-sizing: border-box; margin: 0; padding: 0; }
 body { font-family: Inter, system-ui, sans-serif; background: var(--bg); color: var(--text); line-height: 1.65; min-height: 100vh; }
-.header { position: sticky; top: 0; z-index: 20; background: color-mix(in srgb, var(--elevated) 90%, transparent); backdrop-filter: blur(12px); border-bottom: 1px solid var(--border); }
+.header { position: fixed; top: 0; left: 0; right: 0; z-index: 500; background: color-mix(in srgb, var(--elevated) 90%, transparent); backdrop-filter: blur(12px); border-bottom: 1px solid var(--border); }
 .header-inner { max-width: 820px; margin: 0 auto; padding: 14px 20px; display: flex; align-items: center; justify-content: space-between; }
 .logo { font-weight: 800; font-size: 18px; text-decoration: none; color: var(--text); }
 .logo span { color: var(--primary); }
@@ -118,6 +118,7 @@ body.menu-open { overflow:hidden; }
 </script>
 
 
+<div id="headerSpacer" style="height:72px"></div>
 <header class="header"><div class="header-inner">
   <a class="logo" href="landing.html">MJ <span>Hub</span></a>
   <div style="display:flex;align-items:center;gap:8px;">
@@ -143,6 +144,7 @@ body.menu-open { overflow:hidden; }
         <a href="support.html">Support</a>
         <a href="terms.html" class="on">Terms</a>
         <a href="/vendor">Vendors</a>
+        <a href="#" id="apiSoonLink">API · Coming soon</a>
       </nav>
       <div class="mobile-auth">
         <a href="auth.html?mode=signin" class="btn btn-ghost">Sign In</a>
