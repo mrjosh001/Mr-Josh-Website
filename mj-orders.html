@@ -436,7 +436,7 @@
       text-transform:uppercase;
       color:#64748b;
     }
-    .cf-channels{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+    .cf-channels{display:grid;grid-template-columns:1fr 1fr;gap:8px;position:relative;z-index:6}
     .cf-ch{
       border:1px solid #e2e8f0;
       background:#f8fafc;
@@ -451,6 +451,12 @@
       align-items:center;
       justify-content:center;
       gap:6px;
+      position:relative;
+      z-index:7;
+      touch-action:manipulation;
+      pointer-events:auto;
+      -webkit-tap-highlight-color: rgba(37,211,102,.25);
+      min-height:44px;
     }
     .cf-ch.active{
       background:linear-gradient(135deg,#3b82f6,#1d4ed8);
@@ -631,10 +637,10 @@
       <div class="sheet-b complaint-form">
         <div class="cf-label">Send through</div>
         <div class="cf-channels" role="tablist">
-          <button type="button" class="cf-ch active" id="chInApp" data-action="channel-inapp">
+          <button type="button" class="cf-ch active" id="chInApp" onclick="setComplaintChannel('inapp')">
             <i class="fa-solid fa-comments"></i> In-app support
           </button>
-          <button type="button" class="cf-ch wa" id="chWa" data-action="channel-whatsapp">
+          <button type="button" class="cf-ch wa" id="chWa" onclick="setComplaintChannel('whatsapp')">
             <i class="fa-brands fa-whatsapp"></i> WhatsApp
           </button>
         </div>
@@ -1760,16 +1766,33 @@ window.openSupportPick = function openSupportPick(orderId, productName) {
 
 function bindSendButton() {
   const btn = document.getElementById('cfSubmit');
-  if (!btn || btn._bound) return;
-  btn._bound = true;
-  const go = function (ev) {
-    if (ev) {
-      ev.preventDefault();
-      ev.stopPropagation();
-    }
-    if (typeof window.submitComplaint === 'function') window.submitComplaint();
-  };
-  btn.addEventListener('click', go);
+  if (btn && !btn._bound) {
+    btn._bound = true;
+    const go = function (ev) {
+      if (ev) {
+        ev.preventDefault();
+        ev.stopPropagation();
+      }
+      if (typeof window.submitComplaint === 'function') window.submitComplaint();
+    };
+    btn.addEventListener('click', go);
+  }
+  function hook(id, ch) {
+    const el = document.getElementById(id);
+    if (!el || el._boundCh) return;
+    el._boundCh = true;
+    const go = function (ev) {
+      if (ev) {
+        ev.preventDefault();
+        ev.stopPropagation();
+      }
+      if (typeof window.setComplaintChannel === 'function') window.setComplaintChannel(ch);
+    };
+    el.addEventListener('click', go);
+    el.addEventListener('touchend', go, { passive: false });
+  }
+  hook('chInApp', 'inapp');
+  hook('chWa', 'whatsapp');
 }
 window.closeSupportPick = function closeSupportPick() {
   const m = document.getElementById('supportPickModal');
