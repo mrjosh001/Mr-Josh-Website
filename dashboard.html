@@ -37,7 +37,10 @@
     <script>
     (function() {
         try {
-            var pref = localStorage.getItem('mjhub-theme-pref') || localStorage.getItem('mjhub-theme') || 'dark';
+            var pref = localStorage.getItem('mjhub-theme-pref') || 'system';
+            if (!localStorage.getItem('mjhub-theme-pref')) {
+                localStorage.setItem('mjhub-theme-pref', 'system');
+            }
             var t = pref;
             if (pref === 'system') {
                 try { t = window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark'; }
@@ -2467,7 +2470,7 @@ body::after {
 <script>
 (function(){
   try {
-    var t = localStorage.getItem('mjhub-theme') || localStorage.getItem('mjhub_theme') || 'dark';
+    var t = localStorage.getItem('mjhub-theme-pref') || 'system';
     if (t === 'system') {
       t = window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
     }
@@ -2497,6 +2500,7 @@ body::after {
 <script src="/js/graceful.js" defer></script>
 
   <script src="/js/mj-page-loader.js"></script>
+  <script src="/js/mj-logo-bg.js"></script>
 <link rel="stylesheet" href="/css/mj-glass.css">
 <script src="/js/mj-glass.js" defer></script>
 </head>
@@ -3827,7 +3831,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                   }
                   var qRef = new URLSearchParams(location.search).get('ref');
                   if (qRef) refCode = qRef;
-                  if (refCode && session.access_token) {
+                  if (session.access_token) {
                     for (var ra = 0; ra < 6; ra++) {
                       if (ra) await new Promise(function(r){ setTimeout(r, 500 * ra); });
                       var rRes = await fetch('/api/pocketfi?action=referral_attach', {
@@ -4266,19 +4270,19 @@ function initTheme() {
         } catch (e) { return 'dark'; }
     };
     window.setAppTheme = function(mode) {
-        var pref = mode || 'dark';
+        var pref = mode || 'system';
         var resolved = pref === 'system' ? window.resolveSystemTheme() : (pref === 'light' ? 'light' : 'dark');
         window.applyMjTheme(resolved, pref);
     };
     function toggleFromNav() {
         var pref = 'dark';
-        try { pref = localStorage.getItem('mjhub-theme-pref') || localStorage.getItem('mjhub-theme') || 'dark'; } catch (e) {}
+        try { pref = localStorage.getItem('mjhub-theme-pref') || 'system'; } catch (e) {}
         // Nav toggle switches between light and dark explicitly (clears system lock-in for clarity)
         var cur = document.documentElement.getAttribute('data-theme') === 'light' ? 'light' : 'dark';
         window.setAppTheme(cur === 'dark' ? 'light' : 'dark');
     }
-    var savedPref = 'dark';
-    try { savedPref = localStorage.getItem('mjhub-theme-pref') || localStorage.getItem('mjhub-theme') || 'dark'; } catch (e) {}
+    var savedPref = 'system';
+    try { savedPref = localStorage.getItem('mjhub-theme-pref') || 'system'; } catch (e) {}
     if (savedPref === 'system') {
         window.applyMjTheme(window.resolveSystemTheme(), 'system');
     } else {
@@ -5093,7 +5097,7 @@ window.closeProfileSubview = function() {
 };
 window.setAppTheme = function(mode) {
     if (typeof window.applyMjTheme === 'function') {
-        var pref = mode || 'dark';
+        var pref = mode || 'system';
         var resolved = pref === 'system' ? (typeof window.resolveSystemTheme === 'function' ? window.resolveSystemTheme() : 'dark') : (pref === 'light' ? 'light' : 'dark');
         window.applyMjTheme(resolved, pref);
         return;
@@ -5104,8 +5108,8 @@ window.setAppTheme = function(mode) {
     syncThemeChoiceUI();
 };
 function syncThemeChoiceUI() {
-    let pref = 'dark';
-    try { pref = localStorage.getItem('mjhub-theme-pref') || localStorage.getItem('mjhub-theme') || 'dark'; } catch (e) {}
+    let pref = 'system';
+    try { pref = localStorage.getItem('mjhub-theme-pref') || 'system'; } catch (e) {}
     document.querySelectorAll('#themeChoiceGrid .theme-choice').forEach(btn => {
         btn.classList.toggle('active', btn.getAttribute('data-theme') === pref);
     });
