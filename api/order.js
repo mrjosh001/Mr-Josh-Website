@@ -155,6 +155,54 @@ async function handleSupportTicket(req, res, user) {
   }
 }
 
+async function handleSupportUpload(req, res, user) {
+  try {
+    const body = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : (req.body || {});
+    const raw = String(body.data || body.base64 || '').replace(/\s/g, '');
+    if (!raw || raw.length < 32 || raw.length > 500000) {
+      return res.status(400).json({ success: false, message: 'Photo is missing or too large' });
+    }
+    if (!/^[A-Za-z0-9+/=]+$/.test(raw.slice(0, 80))) {
+      return res.status(400).json({ success: false, message: 'Invalid photo' });
+    }
+    const buf = Buffer.from(raw, 'base64');
+    if (!buf || buf.length < 32) {
+      return res.status(400).json({ success: false, message: 'Invalid photo' });
+    }
+    const ticketPart = String(body.ticket_id || user.id || 'misc').replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 60);
+    const path = 'tickets/' + ticketPart + '/' + Date.now() + '-' + Math.random().toString(36).slice(2, 8) + '.jpg';
+    const buckets = ['support-attachments', 'support', 'attachments'];
+    try {
+      await supabase.storage.createBucket('support-attachments', { public: true, fileSizeLimit: 2 * 1024 * 1024 });
+    } catch (e) {}
+    let savedUrl = '';
+    for (const bucket of buckets) {
+      const up = await supabase.storage.from(bucket).upload(path, buf, {
+        contentType: 'image/jpeg',
+        upsert: true
+      });
+      if (up.error) continue;
+      const pub = supabase.storage.from(bucket).getPublicUrl(path);
+      if (pub && pub.data && pub.data.publicUrl) {
+        savedUrl = pub.data.publicUrl;
+        break;
+      }
+      const signed = await supabase.storage.from(bucket).createSignedUrl(path, 60 * 60 * 24 * 365);
+      if (signed && signed.data && signed.data.signedUrl) {
+        savedUrl = signed.data.signedUrl;
+        break;
+      }
+    }
+    if (!savedUrl) {
+      return res.status(500).json({ success: false, message: 'Could not store the photo' });
+    }
+    return res.status(200).json({ success: true, url: savedUrl });
+  } catch (e) {
+    console.error('[order support_upload]', e);
+    return res.status(500).json({ success: false, message: 'Could not store the photo' });
+  }
+}
+
 async function handleMyOrders(req, res, userId) {
   try {
     const [logsRes, smsRes] = await Promise.all([
@@ -839,6 +887,9 @@ export default async function handler(req, res) {
 
   if (action === 'support_ticket') {
     return handleSupportTicket(req, res, auth.user);
+  }
+  if (action === 'support_upload') {
+    return handleSupportUpload(req, res, auth.user);
   }
 
   // GET /api/order?action=my_orders  — list this user's logs + SMS (no new serverless function)
