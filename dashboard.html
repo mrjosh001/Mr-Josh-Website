@@ -2461,6 +2461,11 @@ body::after {
   background: rgba(220, 38, 38, 0.1) !important;
 }
 
+
+.brand-logo-link, .sidebar-brand-wrap { display:inline-flex !important; align-items:center !important; gap:8px !important; }
+.logo-word{font-family:"Plus Jakarta Sans",Inter,system-ui,sans-serif !important;font-size:20px !important;font-weight:800 !important;letter-spacing:-.04em;line-height:24px;color:#93c5fd !important;-webkit-text-fill-color:#93c5fd !important;display:inline-block !important;visibility:visible !important}
+html[data-theme="light"] .logo-word, :root[data-theme="light"] .logo-word{color:#1e3a8a !important;-webkit-text-fill-color:#1e3a8a !important}
+
 </style>
 <link rel="stylesheet" href="/css/skeleton.css">
 <script src="/js/skeleton.js" defer></script>
@@ -2564,8 +2569,9 @@ body::after {
 <header class="navbar">
     <div class="nav-left">
         <button class="menu-btn" id="menuToggleBtn"><i class="fa-solid fa-bars"></i></button>
-        <a href="#" onclick="goHome();return false;" class="brand-logo-link" title="MJ HUB" style="display:flex;align-items:center;">
-            <img id="navBrandLogo" class="brand-logo" src="/img/IMG_3027.png" alt="MJ HUB">
+        <a href="#" onclick="goHome();return false;" class="brand-logo-link" title="MJ HUB" style="display:inline-flex;align-items:center;gap:8px;">
+            <img id="navBrandLogo" class="brand-logo" src="/img/IMG_3027.png" alt="">
+            <span class="logo-word">HUB</span>
         </a>
     </div>
     <div class="nav-right">
@@ -2612,8 +2618,9 @@ body::after {
 
 <div class="sidebar" id="sidebarDrawer">
     <div class="sidebar-header">
-        <div class="sidebar-brand-wrap">
-            <img id="sidebarBrandLogo" class="sidebar-brand-logo-img" src="/img/IMG_3027.png" alt="MJ HUB">
+        <div class="sidebar-brand-wrap" style="display:inline-flex;align-items:center;gap:8px;">
+            <img id="sidebarBrandLogo" class="sidebar-brand-logo-img" src="/img/IMG_3027.png" alt="">
+            <span class="logo-word">HUB</span>
         </div>
         <button class="close-btn" id="sidebarCloseBtn"><i class="fa-solid fa-xmark"></i></button>
     </div>
