@@ -3873,6 +3873,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 ]);
                 try { buildNotificationsFromActivity(); renderNotifications(); } catch (e) {}
                 try { subscribeNotifRealtime(); } catch (e) {}
+                try { await checkSupportReplyOnLogin(); } catch (e) {}
                 try { initWelcomeModal(); } catch (e) {}
                 // Open in-app support with order complaint prefill
                 try {
@@ -5445,9 +5446,15 @@ window.mjSupportOpenTicket = async function(id) {
   var { data } = await supabaseClient.from('support_messages').select('*').eq('ticket_id', id).order('created_at', { ascending: true });
   (data || []).forEach(function(m) {
     if (m.sender_type === 'user') mjSupportAppend('user', m.body);
-    else if (m.sender_type === 'admin') mjSupportAppend('bot', m.body);
+    else if (m.sender_type === 'admin' || m.sender_type === 'agent' || m.sender_type === 'staff' || m.sender_type === 'support') mjSupportAppend('bot', m.body);
     else mjSupportAppend('sys', m.body);
   });
+  try {
+    var lastAdmin = (data || []).filter(function(m){
+      return m && (m.sender_type === 'admin' || m.sender_type === 'agent' || m.sender_type === 'staff' || m.sender_type === 'support');
+    }).pop();
+    if (lastAdmin && lastAdmin.id) localStorage.setItem('mjhub_last_admin_msg_id', String(lastAdmin.id));
+  } catch (e) {}
   mjSupportSubscribe(id);
 };
 
@@ -7005,6 +7012,67 @@ function formatNotifTime(iso) {
   } catch (_) { return String(iso); }
 }
 
+
+async function checkSupportReplyOnLogin() {
+  if (!supabaseClient || !currentUserId) return;
+  try {
+    var lastSeen = '';
+    try { lastSeen = localStorage.getItem('mjhub_last_admin_msg_id') || ''; } catch (e) {}
+    var { data: tickets, error: tErr } = await supabaseClient
+      .from('support_tickets')
+      .select('id, subject')
+      .eq('user_id', currentUserId)
+      .limit(30);
+    if (tErr || !tickets || !tickets.length) return;
+    var ids = tickets.map(function(x){ return x.id; });
+    var { data: msgs, error: mErr } = await supabaseClient
+      .from('support_messages')
+      .select('id, ticket_id, body, sender_type, created_at')
+      .in('ticket_id', ids)
+      .in('sender_type', ['admin','agent','staff','support'])
+      .order('created_at', { ascending: false })
+      .limit(5);
+    if (mErr || !msgs || !msgs.length) return;
+    var newest = msgs[0];
+    if (!newest || String(newest.id) === String(lastSeen)) return;
+    var preview = String(newest.body || 'Support has replied to your message.').replace(/\s+/g,' ').trim();
+    if (preview.length > 160) preview = preview.slice(0,157) + '…';
+    var ticket = tickets.find(function(x){ return String(x.id) === String(newest.ticket_id); });
+    var item = {
+      id: 'support-reply-' + newest.id,
+      source: 'admin',
+      title: 'Support replied',
+      time: formatNotifTime(newest.created_at),
+      text: preview,
+      type: 'support',
+      ticketId: newest.ticket_id,
+      adminMsgId: newest.id
+    };
+    userNotifications = [item].concat(userNotifications || []);
+    try { renderNotifications(); } catch (e) {}
+    var dot = document.getElementById('notifDot');
+    if (dot) dot.style.display = 'block';
+    var overlay = document.getElementById('notifPopupOverlay');
+    if (!overlay) {
+      if (typeof showToast === 'function') showToast('Support replied to your message', 'info', 4000);
+      return;
+    }
+    document.getElementById('npTitle').textContent = 'Support replied';
+    document.getElementById('npBody').textContent = preview || 'The support team replied to your in-app chat.';
+    document.getElementById('npType').textContent = 'in-app support';
+    overlay.dataset.notifId = '';
+    overlay.dataset.supportTicket = String(newest.ticket_id || '');
+    overlay.dataset.adminMsgId = String(newest.id || '');
+    var ok = document.getElementById('npOkBtn');
+    if (ok) ok.textContent = 'Open chat';
+    overlay.classList.add('open');
+    notifPopupShowing = true;
+    if (typeof showToast === 'function') showToast('Support replied to your message', 'info', 3500);
+  } catch (e) {
+    console.warn('checkSupportReplyOnLogin', e);
+  }
+}
+
 function buildNotificationsFromActivity() {
   // Rebuild combined list: admin broadcasts first, then recent activity
   const activity = [];
@@ -7134,8 +7202,20 @@ window.dismissNotifPopup = function() {
   if (!overlay) return;
   const id = overlay.dataset.notifId;
   if (id) markNotifSeen(id);
+  const supportTicket = overlay.dataset.supportTicket || '';
+  const adminMsgId = overlay.dataset.adminMsgId || '';
+  if (adminMsgId) {
+    try { localStorage.setItem('mjhub_last_admin_msg_id', String(adminMsgId)); } catch (e) {}
+  }
   overlay.classList.remove('open');
   overlay.dataset.notifId = '';
+  overlay.dataset.supportTicket = '';
+  overlay.dataset.adminMsgId = '';
+  var ok = document.getElementById('npOkBtn');
+  if (ok) ok.textContent = 'Got it';
+  if (supportTicket && typeof openMjSupportPanel === 'function') {
+    setTimeout(function(){ openMjSupportPanel({ ticketId: supportTicket }); }, 80);
+  }
   // Brief pause then next
   setTimeout(() => {
     notifPopupShowing = false;
