@@ -2499,6 +2499,7 @@ body::after {
 <link rel="stylesheet" href="/css/mj-motion.css">
 <script src="/js/graceful.js" defer></script>
 
+  <script src="/js/mj-theme.js"></script>
   <script src="/js/mj-page-loader.js"></script>
   <script src="/js/mj-logo-bg.js"></script>
 <link rel="stylesheet" href="/css/mj-glass.css">
@@ -4320,6 +4321,11 @@ function initDropdowns() {
         notifDropdown.classList.toggle('active');
         profileDropdown.classList.remove('active');
         notifDot.style.display = 'none';
+        if (notifDropdown.classList.contains('active')) {
+            (adminBroadcasts || []).forEach(function (n) { if (n && n.id) markNotifSeen(n.id); });
+            buildNotificationsFromActivity();
+            renderNotifications();
+        }
     });
     document.addEventListener('click', () => {
         profileDropdown.classList.remove('active');
@@ -6942,6 +6948,8 @@ function renderHistoryList(filterType = 'all') {
 
 /* NOTIFICATIONS — activity + admin broadcasts (realtime) */
 const SEEN_NOTIFS_KEY = 'mjhub_seen_notif_ids';
+const VIEWED_NOTIFS_KEY = 'mjhub_notif_viewed_at';
+const NOTIF_KEEP_MS = 24 * 60 * 60 * 1000;
 let adminBroadcasts = [];
 let notifPopupQueue = [];
 let notifPopupShowing = false;
@@ -6954,19 +6962,43 @@ function getSeenNotifIds() {
     return Array.isArray(arr) ? arr.map(String) : [];
   } catch (_) { return []; }
 }
+function getViewedAtMap() {
+  try {
+    const raw = localStorage.getItem(VIEWED_NOTIFS_KEY);
+    const obj = raw ? JSON.parse(raw) : {};
+    return obj && typeof obj === 'object' ? obj : {};
+  } catch (_) { return {}; }
+}
 function markNotifSeen(id) {
   if (!id) return;
   const seen = getSeenNotifIds();
   const sid = String(id);
   if (!seen.includes(sid)) {
     seen.push(sid);
-    // keep last 100 only
-    const trimmed = seen.slice(-100);
-    try { localStorage.setItem(SEEN_NOTIFS_KEY, JSON.stringify(trimmed)); } catch (_) {}
+    try { localStorage.setItem(SEEN_NOTIFS_KEY, JSON.stringify(seen.slice(-100))); } catch (_) {}
+  }
+  const map = getViewedAtMap();
+  if (!map[sid]) {
+    map[sid] = Date.now();
+    const ids = Object.keys(map);
+    if (ids.length > 100) {
+      ids.sort(function (a, b) { return (map[a] || 0) - (map[b] || 0); });
+      ids.slice(0, ids.length - 100).forEach(function (k) { delete map[k]; });
+    }
+    try { localStorage.setItem(VIEWED_NOTIFS_KEY, JSON.stringify(map)); } catch (_) {}
   }
 }
 function isNotifSeen(id) {
   return getSeenNotifIds().includes(String(id));
+}
+function isNotifExpired(n) {
+  if (!n || !n.id || !isNotifSeen(n.id)) return false;
+  const map = getViewedAtMap();
+  const viewed = Number(map[String(n.id)] || 0);
+  const created = n.created_at ? new Date(n.created_at).getTime() : 0;
+  const start = viewed || created;
+  if (!start || isNaN(start)) return false;
+  return (Date.now() - start) > NOTIF_KEEP_MS;
 }
 
 function formatNotifTime(iso) {
@@ -6993,7 +7025,7 @@ function buildNotificationsFromActivity() {
       });
     });
   }
-  const adminItems = (adminBroadcasts || []).map(n => ({
+  const adminItems = (adminBroadcasts || []).filter(n => !isNotifExpired(n)).map(n => ({
     id: n.id,
     source: 'admin',
     title: n.title,
