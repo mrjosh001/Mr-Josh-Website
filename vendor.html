@@ -94,12 +94,41 @@ a{color:var(--blue);text-decoration:none}
   margin-top:14px;padding:12px 14px;border-radius:12px;background:rgba(15,23,42,.6);
   border:1px solid var(--line);font-size:.88rem;color:var(--muted);
 }
+
+.mobile-menu{display:none;position:fixed;inset:0;z-index:400}
+.mobile-menu[hidden]{display:none!important}
+.mobile-menu.active{display:block!important}
+.mobile-menu .kinetic-overlay{position:absolute;inset:0;background:rgba(2,6,23,.45)}
+.mobile-menu .kinetic-panel{position:absolute;top:0;right:0;bottom:0;width:min(300px,84vw);background:#1d3fa8;color:#e8eeff;padding:22px 0 20px;transform:translateX(105%);transition:transform .32s;display:flex;flex-direction:column}
+.mobile-menu.active .kinetic-panel{transform:translateX(0)}
+.mobile-menu .menu-sheet-top{display:flex;justify-content:space-between;align-items:center;padding:0 18px 16px;color:#fff}
+.mobile-menu .kinetic-close{width:36px;height:36px;border-radius:12px;border:1px solid rgba(255,255,255,.2);background:transparent;color:#fff}
+.mobile-menu .kinetic-links a{display:flex;margin-right:14px;padding:13px 18px;border-radius:0 22px 22px 0;color:#d7e3ff;text-decoration:none;font-weight:650}
+.mobile-menu .kinetic-links a.on{background:#fff;color:#1d3fa8}
 </style>
 </head>
 <body>
 <div class="wrap">
   <div class="top">
-    <a class="logo" href="/"><div class="mark">MJ</div> MJ HUB</a>
+    <a class="logo" href="landing.html"><div class="mark">MJ</div> MJ HUB</a>
+    <button type="button" id="menuToggle" aria-label="Menu" style="width:40px;height:40px;border-radius:12px;border:1px solid rgba(255,255,255,.14);background:rgba(255,255,255,.06);color:#fff;font-size:18px;">☰</button>
+  </div>
+  <div class="mobile-menu" id="mobileMenu" hidden>
+    <div class="kinetic-overlay" data-close-menu></div>
+    <div class="kinetic-panel">
+      <div class="menu-sheet-top">
+        <div class="menu-brand"><b>MJ Hub</b></div>
+        <button type="button" class="kinetic-close" data-close-menu>✕</button>
+      </div>
+      <nav class="kinetic-links">
+        <a class="on" href="landing.html">Home</a>
+        <a href="landing.html#features">Services</a>
+        <a href="faq.html">FAQ</a>
+        <a href="support.html">Support</a>
+        <a href="terms.html">Terms</a>
+        <a href="/vendor">Vendors</a>
+      </nav>
+    </div>
   </div>
 
   <header class="hero">
@@ -201,5 +230,19 @@ a{color:var(--blue);text-decoration:none}
 
   <p class="foot">MJ HUB vendor partnership · Growing with our vendors</p>
 </div>
+
+<script>
+(function(){
+  var btn=document.getElementById('menuToggle');
+  var menu=document.getElementById('mobileMenu');
+  if(!btn||!menu) return;
+  function setOpen(on){
+    menu.classList.toggle('active', !!on);
+    if(on) menu.removeAttribute('hidden'); else menu.setAttribute('hidden','');
+  }
+  btn.onclick=function(e){ e.preventDefault(); setOpen(!menu.classList.contains('active')); };
+  menu.onclick=function(e){ if(e.target.closest('[data-close-menu]')) setOpen(false); };
+})();
+</script>
 </body>
 </html>
