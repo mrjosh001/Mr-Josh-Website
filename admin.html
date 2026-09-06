@@ -230,6 +230,18 @@ function withLagos(opts) { return Object.assign({ timeZone: 'Africa/Lagos' }, op
   display:none; align-items:center; justify-content:center;
 }
 .tb-bell-count.show { display:flex; }
+
+.tb-user { display:flex; align-items:center; }
+.tb-avatar {
+  width:36px; height:36px; border-radius:50%;
+  display:grid; place-items:center;
+  background:linear-gradient(145deg,#2563eb,#1d4ed8);
+  color:#fff; font-weight:800; font-size:13px;
+  border:1px solid rgba(255,255,255,.18);
+}
+.tb-status { font-size:11px; }
+.tb-bell i { color:var(--text); }
+
 @media(max-width:720px){
   .tb-email { max-width: 28vw; }
   .tb-status { display:none; }
@@ -649,12 +661,15 @@ function withLagos(opts) { return Object.assign({ timeZone: 'Africa/Lagos' }, op
  <h2 id="pageTitle">Overview</h2>
  </div>
  <div class="tb-right">
- <span class="tb-status" id="onlineIndicator"><i></i> Signed in</span>
- <span class="tb-email" id="adminEmailLabel" title=""></span>
+ <span class="tb-status" id="onlineIndicator"><i></i> Online</span>
  <button type="button" class="tb-bell" id="supportTopBell" onclick="location.href='admin-support.html'" title="Support desk">
  <i class="fas fa-bell"></i>
  <span id="supportTopBellCount" class="tb-bell-count">0</span>
  </button>
+ <div class="tb-user" id="adminUserChip" title="">
+ <span class="tb-avatar" id="adminAvatar">A</span>
+ </div>
+ <span id="adminEmailLabel" hidden></span>
  </div>
 </header>
 
@@ -1454,11 +1469,13 @@ async function evaluateSession(session) {
  }
 
  (function(){
- var el=document.getElementById('adminEmailLabel');
  var em=session.user.email || profile.email || '';
- if(!el) return;
- el.textContent = em;
- el.title = em;
+ var el=document.getElementById('adminEmailLabel');
+ if(el){ el.textContent=em; }
+ var chip=document.getElementById('adminUserChip');
+ var av=document.getElementById('adminAvatar');
+ if(chip) chip.title = em;
+ if(av) av.textContent = (em.split('@')[0]||'A').charAt(0).toUpperCase();
 })();
  showDashboard();
  loadAllData().catch(function (e) { console.error('loadAllData', e); });
@@ -4599,10 +4616,25 @@ async function loadBoosterOrders() {
  (msgs || []).forEach(function(m){
  if (m && m.ticket_id && !latest[m.ticket_id]) latest[m.ticket_id] = m;
  });
+ let seen = {};
+ try { seen = JSON.parse(localStorage.getItem('mjhub_admin_msg_seen') || '{}') || {}; } catch (e) { seen = {}; }
+ if (!localStorage.getItem('mjhub_admin_support_seeded_v2')) {
+ Object.keys(latest).forEach(function(id){ seen[id] = latest[id].created_at; });
+ try {
+ localStorage.setItem('mjhub_admin_msg_seen', JSON.stringify(seen));
+ localStorage.setItem('mjhub_admin_support_seeded_v2', '1');
+ } catch (e) {}
+ n = 0;
+ } else {
  Object.keys(latest).forEach(function(id){
- var st = String(latest[id].sender_type || '').toLowerCase();
- if (st === 'user' || st === 'customer') n += 1;
+ var m = latest[id];
+ var st = String(m.sender_type || '').toLowerCase();
+ if (st !== 'user' && st !== 'customer') return;
+ var seenAt = seen[id] ? Date.parse(seen[id]) : 0;
+ var at = Date.parse(m.created_at || '') || 0;
+ if (at > seenAt) n += 1;
  });
+ }
  }
  const badge = document.getElementById('supportNavBadge');
  const bell = document.getElementById('supportTopBell');

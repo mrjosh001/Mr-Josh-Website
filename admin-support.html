@@ -525,6 +525,11 @@
         document.getElementById('threadPane').classList.remove('hide-mobile');
       }
       await loadMessages(id);
+      try {
+        var seen = JSON.parse(localStorage.getItem('mjhub_admin_msg_seen') || '{}') || {};
+        seen[id] = new Date().toISOString();
+        localStorage.setItem('mjhub_admin_msg_seen', JSON.stringify(seen));
+      } catch (e) {}
     }
 
     function showListMobile() {
