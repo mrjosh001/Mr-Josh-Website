@@ -361,11 +361,14 @@
     }
     .sheet-foot{
       flex:0 0 auto;
-      z-index:5;
+      z-index:20;
+      position:relative;
+      pointer-events:auto;
       background:#fff;
       border-top:1px solid #e8eef5;
       padding:12px 18px calc(14px + env(safe-area-inset-bottom, 0px));
     }
+    .btn-contact-support{pointer-events:auto;position:relative;z-index:21}
     .sheet-foot .complaint-box{
       margin:0 !important;
       padding:0 !important;
@@ -1683,8 +1686,7 @@ function complaintBlock(orderId, productName) {
   const html =
     '<div class="complaint-box">' +
     '<div class="complaint-hint">Need help with this order?</div>' +
-    '<button type="button" class="btn-contact-support" ' +
-    'onclick="openSupportPick(' + JSON.stringify(oid) + ',' + JSON.stringify(pname) + ')">' +
+    '<button type="button" class="btn-contact-support" data-oid="' + esc(oid) + '" data-prod="' + esc(pname) + '">' +
     '<i class="fa-solid fa-headset"></i> Contact support</button>' +
     '</div>';
   const foot = document.getElementById('mFoot');
@@ -1696,7 +1698,7 @@ function complaintBlock(orderId, productName) {
   return html;
 }
 
-function openSupportPick(orderId, productName) {
+window.openSupportPick = function openSupportPick(orderId, productName) {
   window.__orderComplaint = { orderId: String(orderId || ''), product: String(productName || '') };
   window.__complaintChannel = 'inapp';
   window.__complaintFiles = [];
@@ -1717,12 +1719,12 @@ function openSupportPick(orderId, productName) {
   if (m) m.classList.add('open');
   setTimeout(function () { if (textEl) textEl.focus(); }, 280);
 }
-function closeSupportPick() {
+window.closeSupportPick = function closeSupportPick() {
   const m = document.getElementById('supportPickModal');
   if (m) m.classList.remove('open');
 }
 
-function setComplaintChannel(ch) {
+window.setComplaintChannel = function setComplaintChannel(ch) {
   window.__complaintChannel = ch === 'whatsapp' ? 'whatsapp' : 'inapp';
   const a = document.getElementById('chInApp');
   const b = document.getElementById('chWa');
@@ -1775,7 +1777,7 @@ document.addEventListener('change', function (e) {
   });
 });
 
-async function submitComplaint() {
+window.submitComplaint = async function submitComplaint() {
   const textEl = document.getElementById('cfText');
   const complaint = textEl ? String(textEl.value || '').trim() : '';
   if (!complaint) {
@@ -1941,6 +1943,16 @@ function render() {
   else if (tab === 'sms') renderSms();
   else renderBoosters();
 }
+
+document.addEventListener('click', function (e) {
+  const sendBtn = e.target.closest('#cfSubmit');
+  if (sendBtn) return;
+  const btn = e.target.closest('.btn-contact-support');
+  if (!btn) return;
+  e.preventDefault();
+  e.stopPropagation();
+  window.openSupportPick(btn.getAttribute('data-oid') || '', btn.getAttribute('data-prod') || 'Order');
+});
 
 document.querySelectorAll('.type-tab').forEach((btn) => {
   btn.addEventListener('click', () => {
