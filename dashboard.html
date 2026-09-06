@@ -1617,6 +1617,22 @@ body::after {
 @media (max-width: 480px) {
   .mj-support-panel { right: 8px; left: 8px; width: auto; bottom: 80px; height: min(70vh, 560px); }
 }
+.mj-support-panel.expanded {
+  inset: 0 !important;
+  width: 100% !important;
+  height: 100% !important;
+  right: 0 !important;
+  left: 0 !important;
+  bottom: 0 !important;
+  border-radius: 0;
+  z-index: 2147483000;
+}
+.mj-support-head-actions { display:flex; gap:6px; flex-shrink:0; }
+.mj-attach-btn {
+  width: 42px; height: 42px; border-radius: 12px; border: 1px solid var(--border);
+  background: var(--bg); color: var(--text); cursor: pointer; flex-shrink:0;
+}
+.mj-shot-ph { font-size:12px; opacity:.8; }
 
 .live-chat-input-row button {
   width: 44px; height: 44px; border-radius: 12px; border: none; cursor: pointer;
@@ -3336,7 +3352,10 @@ body::after {
         <p id="mjSupportStatus"><span class="mj-support-live-dot"></span> Online · replies in a few hours</p>
       </div>
     </div>
-    <button type="button" class="mj-support-panel-close" onclick="closeMjSupportPanel()" aria-label="Close">×</button>
+    <div class="mj-support-head-actions">
+      <button type="button" class="mj-support-panel-close" onclick="mjSupportToggleExpand()" aria-label="Expand chat">⤢</button>
+      <button type="button" class="mj-support-panel-close" onclick="closeMjSupportPanel()" aria-label="Close">×</button>
+    </div>
   </div>
   <div class="mj-support-tabs">
     <button type="button" class="mj-support-tab active" id="mjTabNew" onclick="mjSupportShowTab('new')">New chat</button>
@@ -3371,6 +3390,8 @@ body::after {
       <div class="mj-support-messages" id="mjSupportMessages"></div>
       <div class="mj-support-actions" id="mjSupportQuickActions"></div>
       <form class="mj-support-compose" onsubmit="return mjSupportSend(event)">
+        <input type="file" id="mjSupportFiles" accept="image/*" multiple hidden>
+        <button type="button" class="mj-attach-btn" onclick="document.getElementById('mjSupportFiles').click()" aria-label="Attach image">📎</button>
         <input type="text" id="mjSupportInput" placeholder="Type your message…" maxlength="1000" autocomplete="off">
         <button type="submit">Send</button>
       </form>
@@ -5260,11 +5281,22 @@ window.mjSupportAppend = function(role, text) {
   }
   function flushText(str) {
     if (!str) return;
-    var bits = String(str).split(/\[\[MJURL\]\]([\s\S]*?)\[\[\/MJURL\]\]/i);
+    var bits = String(str).split(/\[\[MJSHOT:([a-z0-9\-]+)\]\]/i);
     for (var i = 0; i < bits.length; i++) {
       if (i % 2) {
-        if (/^https?:\/\//i.test(String(bits[i]).trim())) addShot(String(bits[i]).trim());
-      } else if (bits[i]) d.appendChild(document.createTextNode(bits[i]));
+        var ph = document.createElement('span');
+        ph.className = 'mj-shot-ph';
+        ph.setAttribute('data-mjshot', bits[i]);
+        ph.textContent = 'Photo';
+        d.appendChild(ph);
+      } else if (bits[i]) {
+        var urlBits = bits[i].split(/\[\[MJURL\]\]([\s\S]*?)\[\[\/MJURL\]\]/i);
+        for (var u = 0; u < urlBits.length; u++) {
+          if (u % 2) {
+            if (/^https?:\/\//i.test(String(urlBits[u]).trim())) addShot(String(urlBits[u]).trim());
+          } else if (urlBits[u]) d.appendChild(document.createTextNode(urlBits[u]));
+        }
+      }
     }
   }
   var raw = String(text || '');
@@ -5291,6 +5323,7 @@ window.mjSupportAppend = function(role, text) {
   else if (last < raw.length) flushText(raw.slice(last));
   box.appendChild(d);
   box.scrollTop = box.scrollHeight;
+  if (window.mjHydrateShots) window.mjHydrateShots(box);
 };
 
 window.mjSupportSetActions = function(buttons) {
@@ -5473,14 +5506,100 @@ window.mjSupportConnectHuman = async function() {
   mjSupportAppend('bot', 'You are connected to live support. A team member will reply here. Please share your Customer ID and any order or payment reference.');
 };
 
+window.mjSupportToggleExpand = function() {
+  var p = document.getElementById('mjSupportPanel');
+  if (p) p.classList.toggle('expanded');
+};
+
+window.mjShotDb = function() {
+  return new Promise(function (resolve, reject) {
+    var req = indexedDB.open('mjhub_support', 1);
+    req.onupgradeneeded = function () {
+      if (!req.result.objectStoreNames.contains('shots')) req.result.createObjectStore('shots', { keyPath: 'id' });
+    };
+    req.onsuccess = function () { resolve(req.result); };
+    req.onerror = function () { reject(req.error); };
+  });
+};
+window.mjPutShot = async function(id, blob, ticketId) {
+  var db = await window.mjShotDb();
+  await new Promise(function (resolve, reject) {
+    var tx = db.transaction('shots', 'readwrite');
+    tx.oncomplete = resolve;
+    tx.onerror = function () { reject(tx.error); };
+    tx.objectStore('shots').put({
+      id: id,
+      ticketId: ticketId || '',
+      createdAt: Date.now(),
+      expiresAt: Date.now() + 30 * 24 * 60 * 60 * 1000,
+      blob: blob
+    });
+  });
+  try { db.close(); } catch (e) {}
+};
+window.mjGetShot = async function(id) {
+  var db = await window.mjShotDb();
+  var row = await new Promise(function (resolve, reject) {
+    var tx = db.transaction('shots', 'readonly');
+    var q = tx.objectStore('shots').get(id);
+    q.onsuccess = function () { resolve(q.result || null); };
+    q.onerror = function () { reject(q.error); };
+  });
+  try { db.close(); } catch (e) {}
+  return row;
+};
+window.mjHydrateShots = async function(root) {
+  var box = root || document.getElementById('mjSupportMessages');
+  if (!box) return;
+  var nodes = box.querySelectorAll('[data-mjshot]');
+  for (var i = 0; i < nodes.length; i++) {
+    var el = nodes[i];
+    var id = el.getAttribute('data-mjshot');
+    if (!id || el.getAttribute('data-ready')) continue;
+    try {
+      var row = await window.mjGetShot(id);
+      var blob = row && (row.blob || (row.files && row.files[0] && row.files[0].blob));
+      if (!blob) {
+        el.textContent = 'Photo on sender device (30 days)';
+        el.setAttribute('data-ready', '1');
+        continue;
+      }
+      var url = URL.createObjectURL(blob);
+      var img = document.createElement('img');
+      img.alt = 'Screenshot';
+      img.style.cssText = 'display:block;max-width:220px;margin-top:8px;border-radius:12px;cursor:zoom-in;';
+      img.src = url;
+      img.addEventListener('click', function (src) { return function () { window.mjOpenShot(src); }; }(url));
+      el.innerHTML = '';
+      el.appendChild(img);
+      el.setAttribute('data-ready', '1');
+    } catch (e) {
+      el.textContent = 'Photo on sender device (30 days)';
+    }
+  }
+};
+
 window.mjSupportSend = async function(e) {
   if (e && e.preventDefault) e.preventDefault();
   var input = document.getElementById('mjSupportInput');
+  var fileEl = document.getElementById('mjSupportFiles');
   if (!input) return false;
   var text = (input.value || '').trim();
-  if (!text) return false;
+  var files = Array.from((fileEl && fileEl.files) || []).filter(function (f) {
+    return f && String(f.type || '').indexOf('image/') === 0;
+  }).slice(0, 3);
+  if (!text && !files.length) return false;
   input.value = '';
+  if (fileEl) fileEl.value = '';
+  var shotIds = [];
+  for (var i = 0; i < files.length; i++) {
+    var sid = (crypto.randomUUID && crypto.randomUUID()) || (Date.now() + '-' + i);
+    try { await window.mjPutShot(sid, files[i], window._mjSup.ticketId || ''); } catch (err) {}
+    shotIds.push(sid);
+    text += (text ? '\n' : '') + '[[MJSHOT:' + sid + ']]';
+  }
   mjSupportAppend('user', text);
+  window.mjHydrateShots();
 
   // Already with human → save only
   if (window._mjSup.human) {
@@ -5492,7 +5611,7 @@ window.mjSupportSend = async function(e) {
     var sess = await supabaseClient.auth.getSession();
     var user = sess && sess.data && sess.data.session && sess.data.session.user;
     var { error } = await supabaseClient.from('support_messages').insert({
-      ticket_id: tid, sender_type: 'user', sender_id: user && user.id, body: text
+      ticket_id: tid, sender_type: 'user', sender_id: user && user.id, body: String(text || '').slice(0, 4000)
     });
     if (error) mjSupportAppend('bot', 'Message failed. Please try again.');
     return false;

@@ -243,7 +243,9 @@
               <button type="button" class="btn btn-ghost btn-sm" onclick="insertQuick('We have credited your wallet. Please refresh the app to see the updated balance.')">Wallet credited</button>
             </div>
             <form class="composer" onsubmit="return sendAdminReply(event)">
-              <textarea id="replyInput" placeholder="Write a clear, professional reply…" required></textarea>
+              <input type="file" id="adminShotFiles" accept="image/*" multiple hidden>
+              <button type="button" class="btn btn-ghost btn-sm" onclick="document.getElementById('adminShotFiles').click()">Attach</button>
+              <textarea id="replyInput" placeholder="Write a clear, professional reply…"></textarea>
               <button type="submit" class="btn btn-primary btn-sm">Send</button>
             </form>
           </div>
@@ -286,7 +288,10 @@
           const url = String(u || '').trim();
           return /^https?:\/\//i.test(url) ? shotTag(escapeHtml(url)) : '';
         });
-        return t.split(/(<img class="mj-shot"[^>]*>)/).map(function (b, i) {
+        t = t.replace(/\[\[MJSHOT:([a-z0-9\-]+)\]\]/gi, function (_, id) {
+          return '<span class="mj-shot-ph" data-mjshot="' + escapeHtml(id) + '">Photo</span>';
+        });
+        return t.split(/(<img class="mj-shot"[^>]*>|<span class="mj-shot-ph"[^>]*>Photo<\/span>)/).map(function (b, i) {
           return i % 2 ? b : escapeHtml(b);
         }).join('');
       }
@@ -303,7 +308,59 @@
         if (raw.length > 32) html += shotTag('data:image/jpeg;base64,' + raw);
         html += textHtml(rest);
       }
-      return html;
+      return html.replace(/\[\[MJSHOT:([a-z0-9\-]+)\]\]/gi, function (_, id) {
+        return '<span class="mj-shot-ph" data-mjshot="' + escapeHtml(id) + '">Photo</span>';
+      });
+    }
+    function openShotDb() {
+      return new Promise(function (resolve, reject) {
+        const req = indexedDB.open('mjhub_support', 1);
+        req.onupgradeneeded = function () {
+          if (!req.result.objectStoreNames.contains('shots')) req.result.createObjectStore('shots', { keyPath: 'id' });
+        };
+        req.onsuccess = function () { resolve(req.result); };
+        req.onerror = function () { reject(req.error); };
+      });
+    }
+    async function putAdminShot(id, blob) {
+      const db = await openShotDb();
+      await new Promise(function (resolve, reject) {
+        const tx = db.transaction('shots', 'readwrite');
+        tx.oncomplete = resolve;
+        tx.onerror = function () { reject(tx.error); };
+        tx.objectStore('shots').put({
+          id: id,
+          createdAt: Date.now(),
+          expiresAt: Date.now() + 30 * 24 * 60 * 60 * 1000,
+          blob: blob
+        });
+      });
+    }
+    async function hydrateAdminShots() {
+      const nodes = document.querySelectorAll('#threadMessages [data-mjshot]');
+      for (const el of nodes) {
+        if (el.getAttribute('data-ready')) continue;
+        const id = el.getAttribute('data-mjshot');
+        try {
+          const db = await openShotDb();
+          const row = await new Promise(function (resolve, reject) {
+            const q = db.transaction('shots', 'readonly').objectStore('shots').get(id);
+            q.onsuccess = function () { resolve(q.result || null); };
+            q.onerror = function () { reject(q.error); };
+          });
+          const blob = row && (row.blob || (row.files && row.files[0] && row.files[0].blob));
+          if (!blob) {
+            el.textContent = 'Photo on sender device (30 days)';
+            el.setAttribute('data-ready', '1');
+            continue;
+          }
+          const url = URL.createObjectURL(blob);
+          el.innerHTML = '<img class="mj-shot" alt="Screenshot" src="' + url + '">';
+          el.setAttribute('data-ready', '1');
+        } catch (e) {
+          el.textContent = 'Photo on sender device (30 days)';
+        }
+      }
     }
     function openShotViewer(src) {
       const box = document.getElementById('shotViewer');
@@ -456,6 +513,7 @@
         return `<div class="bubble ${cls}"><div class="who">${who} · ${fmtTime(m.created_at)}</div>${formatSupportBody(m.body)}</div>`;
       }).join('') || '<div style="color:var(--muted);">No messages yet.</div>';
       box.scrollTop = box.scrollHeight;
+      hydrateAdminShots();
     }
 
     function insertQuick(text) {
@@ -467,17 +525,27 @@
       e.preventDefault();
       if (!activeTicketId) return false;
       const input = document.getElementById('replyInput');
-      const body = (input.value || '').trim();
-      if (!body) return false;
+      const fileEl = document.getElementById('adminShotFiles');
+      let body = (input.value || '').trim();
+      const files = Array.from((fileEl && fileEl.files) || []).filter(function (f) {
+        return f && String(f.type || '').indexOf('image/') === 0;
+      }).slice(0, 3);
+      if (!body && !files.length) return false;
+      for (let i = 0; i < files.length; i++) {
+        const id = (crypto.randomUUID && crypto.randomUUID()) || (Date.now() + '-' + i);
+        try { await putAdminShot(id, files[i]); } catch (err) {}
+        body += (body ? '\n' : '') + '[[MJSHOT:' + id + ']]';
+      }
       const { data: { user } } = await sb.auth.getUser();
       const { error } = await sb.from('support_messages').insert({
         ticket_id: activeTicketId,
         sender_type: 'admin',
         sender_id: user && user.id,
-        body
+        body: String(body || '').slice(0, 4000)
       });
       if (error) { alert(error.message || 'Failed to send'); return false; }
       input.value = '';
+      if (fileEl) fileEl.value = '';
       await loadMessages(activeTicketId);
       await loadTickets();
       return false;
