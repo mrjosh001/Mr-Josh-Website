@@ -1,6 +1,22 @@
 <!DOCTYPE html>
 <html lang="en" data-theme="dark">
 <head>
+<script>
+(function(){
+  function apply(){
+    var pref='system';
+    try{ pref=localStorage.getItem('mjhub-theme-pref')||localStorage.getItem('mjhub-theme')||'system'; }catch(e){}
+    var t=pref;
+    if(!t || t==='system'){
+      try{ t=window.matchMedia('(prefers-color-scheme: light)').matches?'light':'dark'; }catch(e){ t='dark'; }
+    }
+    document.documentElement.setAttribute('data-theme', t==='light'?'light':'dark');
+  }
+  apply();
+  try{ window.matchMedia('(prefers-color-scheme: light)').addEventListener('change', apply); }catch(e){}
+})();
+</script>
+
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>MJ HUB — Support Desk</title>
@@ -128,7 +144,16 @@
     }
     .composer textarea:focus { outline: none; border-color: rgba(91,138,245,.5); }
     .composer .btn-primary { width: auto; padding: 12px 18px; border-radius: 14px; }
-  </style>
+  
+:root[data-theme="light"] {
+  --bg:#f1f5f9; --card:#ffffff; --card2:#f8fafc; --text:#0f172a; --muted:#475569;
+  --border:rgba(15,23,42,.10);
+}
+:root[data-theme="light"] .topbar { background:rgba(255,255,255,.94); }
+:root[data-theme="light"] .ticket-item:hover { background:rgba(15,23,42,.04); }
+:root[data-theme="light"] .ticket-item.active { background:#eef2ff; }
+
+</style>
   <script src="/js/mj-page-loader.js"></script>
 </head>
 <body>
@@ -641,5 +666,43 @@
     });
   </script>
   <div id="shotViewer"><img id="shotViewerImg" alt="Screenshot"></div>
+
+<style>
+#mjPtrIndicator{position:fixed;top:0;left:0;right:0;z-index:9999;display:flex;align-items:center;justify-content:center;height:0;overflow:hidden;pointer-events:none;transition:height .15s ease;background:linear-gradient(180deg,rgba(59,130,246,.28),transparent);color:#93c5fd;font-size:12px;font-weight:700}
+#mjPtrIndicator.show{height:48px}
+#mjPtrIndicator i{margin-right:8px}
+:root[data-theme="light"] #mjPtrIndicator{color:#1e3a8a}
+</style>
+<div id="mjPtrIndicator" aria-hidden="true"><i class="fa-solid fa-arrow-down"></i> Pull to refresh</div>
+<script>
+(function(){
+  var startY=0,pulling=false,armed=false;
+  var ind=document.getElementById('mjPtrIndicator');
+  function atTop(){
+    var y=window.scrollY||document.documentElement.scrollTop||document.body.scrollTop||0;
+    return y<=2;
+  }
+  document.addEventListener('touchstart',function(e){
+    if(!atTop()){pulling=false;return;}
+    if(!e.touches||!e.touches[0])return;
+    startY=e.touches[0].clientY; pulling=true; armed=false;
+  },{passive:true});
+  document.addEventListener('touchmove',function(e){
+    if(!pulling||!e.touches||!e.touches[0])return;
+    var dy=e.touches[0].clientY-startY;
+    if(dy>70&&atTop()){ armed=true; if(ind){ind.classList.add('show');ind.innerHTML='<i class="fa-solid fa-arrows-rotate"></i> Release to refresh';} }
+    else if(dy>24&&atTop()){ if(ind){ind.classList.add('show');ind.innerHTML='<i class="fa-solid fa-arrow-down"></i> Pull to refresh';} }
+    else { if(ind)ind.classList.remove('show'); armed=false; }
+  },{passive:true});
+  document.addEventListener('touchend',function(){
+    if(armed&&atTop()){
+      if(ind){ind.classList.add('show');ind.innerHTML='<i class="fa-solid fa-spinner fa-spin"></i> Refreshing…';}
+      setTimeout(function(){ location.reload(); },280);
+    } else { if(ind)ind.classList.remove('show'); }
+    pulling=false; armed=false;
+  },{passive:true});
+})();
+</script>
+
 </body>
 </html>

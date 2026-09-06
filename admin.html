@@ -1,6 +1,22 @@
 <!DOCTYPE html>
 <html lang="en" data-theme="dark">
 <head>
+<script>
+(function(){
+  function apply(){
+    var pref='system';
+    try{ pref=localStorage.getItem('mjhub-theme-pref')||localStorage.getItem('mjhub-theme')||'system'; }catch(e){}
+    var t=pref;
+    if(!t || t==='system'){
+      try{ t=window.matchMedia('(prefers-color-scheme: light)').matches?'light':'dark'; }catch(e){ t='dark'; }
+    }
+    document.documentElement.setAttribute('data-theme', t==='light'?'light':'dark');
+  }
+  apply();
+  try{ window.matchMedia('(prefers-color-scheme: light)').addEventListener('change', apply); }catch(e){}
+})();
+</script>
+
  <meta charset="UTF-8" />
  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
@@ -555,6 +571,30 @@ function withLagos(opts) { return Object.assign({ timeZone: 'Africa/Lagos' }, op
 
  .admin-pager{display:flex;gap:10px;justify-content:center;align-items:center;margin-top:14px;flex-wrap:wrap}
 .admin-pager button{min-width:96px}
+
+:root[data-theme="light"] {
+  --bg:#f1f5f9; --bg-elevated:#ffffff; --card:#ffffff; --card-hover:#f8fafc;
+  --text:#0f172a; --muted:#475569; --border:#e2e8f0; --border-soft:#eef2f7;
+  --shadow:0 8px 24px rgba(15,23,42,.08);
+}
+:root[data-theme="light"] body {
+  background-image: radial-gradient(ellipse 80% 50% at 20% -10%, rgba(59,130,246,.10), transparent);
+}
+:root[data-theme="light"] .topbar {
+  background: rgba(255,255,255,.92) !important;
+  border-bottom: 1px solid #e2e8f0 !important;
+}
+:root[data-theme="light"] .sidebar {
+  background:#ffffff;
+  border-right:1px solid #e2e8f0;
+}
+:root[data-theme="light"] .tb-bell { background:#fff; color:#0f172a; }
+:root[data-theme="light"] .tb-email { background:#f1f5f9; color:#334155; }
+:root[data-theme="light"] .panel {
+  background:#fff !important;
+  border:1px solid #e2e8f0 !important;
+}
+
 </style>
  <script src="/js/mj-page-loader.js"></script>
 </head>
@@ -4666,6 +4706,44 @@ async function loadBoosterOrders() {
 <script type="module">
   import { formatCredentials } from '/lib/formatCredentials.js';
   window.formatCredentials = formatCredentials;
+</script>
+
+
+<style>
+#mjPtrIndicator{position:fixed;top:0;left:0;right:0;z-index:9999;display:flex;align-items:center;justify-content:center;height:0;overflow:hidden;pointer-events:none;transition:height .15s ease;background:linear-gradient(180deg,rgba(59,130,246,.28),transparent);color:#93c5fd;font-size:12px;font-weight:700}
+#mjPtrIndicator.show{height:48px}
+#mjPtrIndicator i{margin-right:8px}
+:root[data-theme="light"] #mjPtrIndicator{color:#1e3a8a}
+</style>
+<div id="mjPtrIndicator" aria-hidden="true"><i class="fa-solid fa-arrow-down"></i> Pull to refresh</div>
+<script>
+(function(){
+  var startY=0,pulling=false,armed=false;
+  var ind=document.getElementById('mjPtrIndicator');
+  function atTop(){
+    var y=window.scrollY||document.documentElement.scrollTop||document.body.scrollTop||0;
+    return y<=2;
+  }
+  document.addEventListener('touchstart',function(e){
+    if(!atTop()){pulling=false;return;}
+    if(!e.touches||!e.touches[0])return;
+    startY=e.touches[0].clientY; pulling=true; armed=false;
+  },{passive:true});
+  document.addEventListener('touchmove',function(e){
+    if(!pulling||!e.touches||!e.touches[0])return;
+    var dy=e.touches[0].clientY-startY;
+    if(dy>70&&atTop()){ armed=true; if(ind){ind.classList.add('show');ind.innerHTML='<i class="fa-solid fa-arrows-rotate"></i> Release to refresh';} }
+    else if(dy>24&&atTop()){ if(ind){ind.classList.add('show');ind.innerHTML='<i class="fa-solid fa-arrow-down"></i> Pull to refresh';} }
+    else { if(ind)ind.classList.remove('show'); armed=false; }
+  },{passive:true});
+  document.addEventListener('touchend',function(){
+    if(armed&&atTop()){
+      if(ind){ind.classList.add('show');ind.innerHTML='<i class="fa-solid fa-spinner fa-spin"></i> Refreshing…';}
+      setTimeout(function(){ location.reload(); },280);
+    } else { if(ind)ind.classList.remove('show'); }
+    pulling=false; armed=false;
+  },{passive:true});
+})();
 </script>
 
 </body>
