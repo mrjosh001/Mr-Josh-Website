@@ -176,6 +176,9 @@ body {
 .icon-btn:hover { background: color-mix(in srgb, var(--primary) 15%, transparent); transform: scale(1.08); }
 .menu-btn { display: none; }
 
+
+
+
 .mobile-menu.kinetic-nav {
   display: none;
   position: fixed; inset: 0; z-index: 400 !important;
@@ -185,68 +188,92 @@ body {
 .mobile-menu.kinetic-nav[data-nav="open"] {
   display: block !important;
   visibility: visible !important;
-  opacity: 1 !important;
 }
 .kinetic-overlay {
   position: absolute; inset: 0;
-  background: rgba(15,23,42,.45);
-  backdrop-filter: blur(6px);
+  background: rgba(2,6,23,.45);
+  backdrop-filter: blur(8px);
 }
 .kinetic-panel {
-  position: absolute; top: 0; right: 0; height: 100%;
-  width: min(360px, 92vw);
+  position: absolute; top: 0; left: 0; bottom: 0;
+  width: min(300px, 84vw);
   overflow: auto;
-  padding: 18px 18px 28px;
-  background: #ffffff;
-  color: #0f172a;
-  box-shadow: -16px 0 40px rgba(15,23,42,.18);
-  transform: translateX(104%);
-  transition: transform .28s ease;
-}
-html[data-theme="dark"] .kinetic-panel,
-body[data-theme="dark"] .kinetic-panel {
-  background: #0b1220;
-  color: #f8fafc;
-  box-shadow: -16px 0 40px rgba(0,0,0,.45);
+  padding: 22px 0 20px;
+  background: #1d3fa8;
+  color: #e8eeff;
+  box-shadow: 18px 0 50px rgba(15,23,42,.28);
+  transform: translateX(-105%);
+  transition: transform .32s cubic-bezier(.22,1,.36,1);
+  display: flex;
+  flex-direction: column;
 }
 .mobile-menu.active .kinetic-panel,
 .mobile-menu[data-nav="open"] .kinetic-panel { transform: translateX(0); }
-.kinetic-bg, .kinetic-layer { display: none; }
 .menu-sheet-top {
   display: flex; align-items: center; justify-content: space-between;
-  gap: 12px; margin-bottom: 18px;
+  gap: 10px; padding: 0 18px 16px;
 }
-.menu-sheet-top strong { font-size: 16px; font-weight: 800; }
+.menu-brand { display: flex; align-items: center; gap: 10px; }
+.menu-brand img { width: 34px; height: 34px; object-fit: contain; border-radius: 10px; background: #fff; }
+.menu-brand b { display: block; font-size: 15px; font-weight: 800; color: #fff; }
+.menu-brand small { display: block; font-size: 11px; color: #c7d7ff; }
 .kinetic-close {
-  width: 40px; height: 40px; border-radius: 12px;
-  border: 1px solid var(--border); background: var(--elevated);
-  color: var(--text); font-size: 18px;
-  display: flex; align-items: center; justify-content: center; cursor: pointer;
+  width: 36px; height: 36px; border-radius: 12px;
+  border: 1px solid rgba(255,255,255,.18);
+  background: rgba(255,255,255,.1); color: #fff;
+  display: grid; place-items: center; cursor: pointer;
 }
-.menu-group { margin-bottom: 16px; }
-.menu-group span {
-  display: block; font-size: 11px; font-weight: 800; letter-spacing: .08em;
-  text-transform: uppercase; color: var(--muted); margin: 0 8px 8px;
+.kinetic-links {
+  list-style: none; margin: 8px 0 0; padding: 0 0 8px;
+  display: flex; flex-direction: column; gap: 4px;
 }
-.kinetic-links { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
 .kinetic-links a {
-  display: flex; align-items: center; justify-content: space-between;
-  padding: 13px 14px; border-radius: 14px;
-  font-size: 15px; font-weight: 700; color: inherit;
-  text-decoration: none; background: rgba(59,130,246,.06);
-  border: 1px solid transparent;
+  position: relative;
+  display: flex; align-items: center; gap: 12px;
+  margin-left: 14px; margin-right: 0;
+  padding: 13px 18px 13px 16px;
+  border-radius: 22px 0 0 22px;
+  color: #d7e3ff; text-decoration: none;
+  font-size: 15px; font-weight: 650;
+  background: transparent; border: 0;
 }
-.kinetic-links a:after { content: "›"; font-size: 20px; color: #3b82f6; }
-.kinetic-links a:hover, .kinetic-links a:active {
-  border-color: rgba(59,130,246,.35);
-  background: rgba(59,130,246,.12);
+.kinetic-links a svg { width: 18px; height: 18px; flex: 0 0 auto; opacity: .9; }
+.kinetic-links a.on {
+  background: #fff;
+  color: #1d3fa8;
+  font-weight: 800;
+  z-index: 1;
+}
+.kinetic-links a.on svg { opacity: 1; }
+.kinetic-links a.on:before,
+.kinetic-links a.on:after {
+  content: "";
+  position: absolute;
+  right: 0;
+  width: 22px;
+  height: 22px;
+  background: transparent;
+}
+.kinetic-links a.on:before {
+  top: -22px;
+  border-bottom-right-radius: 22px;
+  box-shadow: 6px 6px 0 6px #fff;
+}
+.kinetic-links a.on:after {
+  bottom: -22px;
+  border-top-right-radius: 22px;
+  box-shadow: 6px -6px 0 6px #fff;
 }
 .kinetic-auth, .mobile-auth {
-  display: grid; grid-template-columns: 1fr 1fr; gap: 10px;
-  margin-top: 8px; padding-top: 16px;
-  border-top: 1px solid var(--border);
+  display: grid; grid-template-columns: 1fr 1fr; gap: 8px;
+  margin-top: auto; padding: 16px 16px 8px;
 }
+.kinetic-auth .btn-ghost { background: rgba(255,255,255,.12); color: #fff; border-color: rgba(255,255,255,.2); }
+.kinetic-auth .btn { width: 100%; }
 body.menu-open { overflow: hidden; }
+
+
+
 
 /* ===== LIVE STOCK TICKER ===== */
 .ticker-strip {
@@ -1705,37 +1732,56 @@ body[data-theme="dark"] .footer3 {
     <div class="kinetic-overlay" data-close-menu></div>
     <div class="kinetic-panel">
       <div class="menu-sheet-top">
-        <strong>MJ Hub</strong>
+        <div class="menu-brand">
+          <img src="https://atczodlljmlayvldxfmv.supabase.co/storage/v1/object/public/avatars/light%20background%20logo" alt="">
+          <div><b>MJ Hub</b><small>Menu</small></div>
+        </div>
         <button type="button" class="kinetic-close" data-close-menu aria-label="Close menu">✕</button>
       </div>
-      <div class="menu-group">
-        <span>Explore</span>
-        <nav class="kinetic-links">
-          <a href="#features" data-close-menu>Services</a>
-          <a href="#telegram-sms" data-close-menu>Telegram Bot</a>
-          <a href="https://t.me/mj_smss_bot" target="_blank" rel="noopener">Open SMS Bot</a>
-          <a href="#earn" data-close-menu>Earn 2%</a>
-          <a href="#how-it-works" data-close-menu>How it works</a>
-          <a href="#why-us" data-close-menu>Why us</a>
-        </nav>
-      </div>
-      <div class="menu-group">
-        <span>Help</span>
-        <nav class="kinetic-links">
-          <a href="faq.html">FAQ</a>
-          <a href="support.html">Support</a>
-          <a href="/vendor">Become a vendor</a>
-          <a href="terms.html">Terms</a>
-          <a href="#" id="apiLinkMobile">API soon</a>
-        </nav>
-      </div>
+      <nav class="kinetic-links" id="landingSideNav">
+        <a class="on" href="#features" data-close-menu>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 10l8-6 8 6v8a2 2 0 0 1-2 2h-3v-6H9v6H6a2 2 0 0 1-2-2z"/></svg>
+          Services
+        </a>
+        <a href="https://t.me/mj_smss_bot" target="_blank" rel="noopener">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 2L11 13"/><path d="M22 2L15 22l-4-9-9-4 20-7z"/></svg>
+          SMS Bot
+        </a>
+        <a href="#earn" data-close-menu>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 7v10M9 10h6M9 14h6"/></svg>
+          Earn 2%
+        </a>
+        <a href="#how-it-works" data-close-menu>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 8v4l3 2"/></svg>
+          How it works
+        </a>
+        <a href="faq.html">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M9.5 9a2.5 2.5 0 1 1 3.5 2.3c-.7.4-1 1-1 1.7V14"/><circle cx="12" cy="17" r=".7" fill="currentColor"/></svg>
+          FAQ
+        </a>
+        <a href="support.html">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 15a8 8 0 1 1 16 0"/><path d="M4 15v3a2 2 0 0 0 2 2h1v-5H4zM20 15v3a2 2 0 0 1-2 2h-1v-5h3z"/></svg>
+          Support
+        </a>
+        <a href="/vendor">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 7h18l-2 11H5L3 7z"/><path d="M8 7V5a4 4 0 0 1 8 0v2"/></svg>
+          Vendors
+        </a>
+        <a href="terms.html">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M7 3h8l4 4v14H7z"/><path d="M15 3v4h4"/></svg>
+          Terms
+        </a>
+        <a href="#" id="apiLinkMobile">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 9l-3 3 3 3M16 9l3 3-3 3M13 7l-2 10"/></svg>
+          API
+        </a>
+      </nav>
       <div class="mobile-auth kinetic-auth">
-        <a href="auth.html?mode=signin" class="btn btn-ghost">Sign In</a>
-        <a href="auth.html?mode=signup" class="btn btn-primary">Get Started</a>
+        <a href="auth.html?mode=signin" class="btn btn-ghost">Sign in</a>
+        <a href="auth.html?mode=signup" class="btn btn-primary">Get started</a>
       </div>
     </div>
   </div>
-
 
 <script>
 (function(){
@@ -1756,6 +1802,11 @@ body[data-theme="dark"] .footer3 {
   };
   btn.onclick=window.toggleLandingMenu;
   menu.addEventListener('click', function(e){
+    var link=e.target.closest('.kinetic-links a');
+    if(link){
+      menu.querySelectorAll('.kinetic-links a').forEach(function(n){ n.classList.remove('on'); });
+      link.classList.add('on');
+    }
     if(e.target.closest('[data-close-menu]')) setOpen(false);
   });
 })();
