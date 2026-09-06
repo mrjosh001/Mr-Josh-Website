@@ -5227,11 +5227,46 @@ window.mjSupportShowTab = function(which) {
   }
 };
 
+window.mjOpenShot = function(src) {
+  var box = document.getElementById('mjShotViewer');
+  if (!box) {
+    box = document.createElement('div');
+    box.id = 'mjShotViewer';
+    box.style.cssText = 'display:none;position:fixed;inset:0;z-index:2147483000;background:rgba(0,0,0,.86);align-items:center;justify-content:center;padding:18px;';
+    box.innerHTML = '<img alt="Screenshot" style="max-width:100%;max-height:100%;border-radius:12px;">';
+    box.addEventListener('click', function () { box.style.display = 'none'; });
+    document.body.appendChild(box);
+  }
+  var img = box.querySelector('img');
+  if (img) img.src = src;
+  box.style.display = 'flex';
+};
+
 window.mjSupportAppend = function(role, text) {
   var box = document.getElementById('mjSupportMessages');
   if (!box) return;
   var d = document.createElement('div');
   d.className = 'mj-support-msg ' + (role === 'user' ? 'user' : (role === 'sys' ? 'sys' : 'bot'));
+  function addShot(src) {
+    var img = document.createElement('img');
+    img.alt = 'Screenshot';
+    img.style.cssText = 'display:block;max-width:220px;margin-top:8px;border-radius:12px;cursor:zoom-in;';
+    img.src = src;
+    img.addEventListener('click', function (ev) {
+      ev.preventDefault();
+      window.mjOpenShot(src);
+    });
+    d.appendChild(img);
+  }
+  function flushText(str) {
+    if (!str) return;
+    var bits = String(str).split(/\[\[MJURL\]\]([\s\S]*?)\[\[\/MJURL\]\]/i);
+    for (var i = 0; i < bits.length; i++) {
+      if (i % 2) {
+        if (/^https?:\/\//i.test(String(bits[i]).trim())) addShot(String(bits[i]).trim());
+      } else if (bits[i]) d.appendChild(document.createTextNode(bits[i]));
+    }
+  }
   var raw = String(text || '');
   var startRe = /\[\[MJIMG(?::[a-z0-9]+)?\]\]/gi;
   var last = 0;
@@ -5239,18 +5274,11 @@ window.mjSupportAppend = function(role, text) {
   var hasImg = false;
   while ((m = startRe.exec(raw))) {
     hasImg = true;
-    var chunk = raw.slice(last, m.index);
-    if (chunk) d.appendChild(document.createTextNode(chunk));
+    flushText(raw.slice(last, m.index));
     var after = raw.slice(m.index + m[0].length);
     var endIdx = after.search(/\[\[\/MJIMG\]\]/i);
     var b64 = (endIdx >= 0 ? after.slice(0, endIdx) : after).replace(/\s+/g, '').replace(/[^A-Za-z0-9+/=]/g, '');
-    if (b64.length > 32) {
-      var img = document.createElement('img');
-      img.alt = 'Screenshot';
-      img.style.cssText = 'display:block;max-width:220px;margin-top:8px;border-radius:12px;';
-      img.src = 'data:image/jpeg;base64,' + b64;
-      d.appendChild(img);
-    }
+    if (b64.length > 32) addShot('data:image/jpeg;base64,' + b64);
     if (endIdx >= 0) {
       last = m.index + m[0].length + endIdx + 11;
       startRe.lastIndex = last;
@@ -5259,8 +5287,8 @@ window.mjSupportAppend = function(role, text) {
       break;
     }
   }
-  if (!hasImg) d.textContent = raw;
-  else if (last < raw.length) d.appendChild(document.createTextNode(raw.slice(last)));
+  if (!hasImg) flushText(raw);
+  else if (last < raw.length) flushText(raw.slice(last));
   box.appendChild(d);
   box.scrollTop = box.scrollHeight;
 };

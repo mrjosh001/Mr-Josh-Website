@@ -110,8 +110,14 @@
     .bubble .who { font-size: 10px; opacity: .75; margin-bottom: 5px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; }
     .bubble img.mj-shot {
       display: block; max-width: 100%; margin-top: 8px; border-radius: 12px;
-      border: 1px solid var(--border);
+      border: 1px solid var(--border); cursor: zoom-in;
     }
+    #shotViewer{
+      display:none; position:fixed; inset:0; z-index:9999;
+      background:rgba(0,0,0,.86); align-items:center; justify-content:center; padding:18px;
+    }
+    #shotViewer.open{ display:flex; }
+    #shotViewer img{ max-width:100%; max-height:100%; border-radius:12px; }
     .composer-wrap { border-top: 1px solid var(--border); background: var(--card); }
     .quick-replies { padding: 10px 14px 0; display: flex; flex-wrap: wrap; gap: 6px; }
     .composer { padding: 12px 14px; display: flex; gap: 10px; align-items: flex-end; }
@@ -271,31 +277,40 @@
     function escapeHtml(s) {
       return String(s || '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
     }
+    function shotTag(src) {
+      return '<img class="mj-shot" alt="Screenshot" src="' + src + '">';
+    }
     function formatSupportBody(s) {
-      const text = String(s || '');
-      const startRe = /\[\[MJIMG(?::[a-z0-9]+)?\]\]/gi;
-      let out = '';
-      let last = 0;
-      let m;
-      while ((m = startRe.exec(text))) {
-        out += escapeHtml(text.slice(last, m.index));
-        const after = text.slice(m.index + m[0].length);
-        const endIdx = after.search(/\[\[\/MJIMG\]\]/i);
-        let raw = endIdx >= 0 ? after.slice(0, endIdx) : after;
-        raw = raw.replace(/\s+/g, '').replace(/[^A-Za-z0-9+/=]/g, '');
-        if (raw.length > 32) {
-          out += '<img class="mj-shot" alt="Screenshot" src="data:image/jpeg;base64,' + raw + '">';
-        }
-        if (endIdx >= 0) {
-          last = m.index + m[0].length + endIdx + 11;
-          startRe.lastIndex = last;
-        } else {
-          last = text.length;
-          break;
-        }
+      function textHtml(t) {
+        t = String(t || '').replace(/\[\[MJURL\]\]([\s\S]*?)\[\[\/MJURL\]\]/gi, function (_, u) {
+          const url = String(u || '').trim();
+          return /^https?:\/\//i.test(url) ? shotTag(escapeHtml(url)) : '';
+        });
+        return t.split(/(<img class="mj-shot"[^>]*>)/).map(function (b, i) {
+          return i % 2 ? b : escapeHtml(b);
+        }).join('');
       }
-      out += escapeHtml(text.slice(last));
-      return out;
+      const text = String(s || '');
+      const parts = text.split(/\[\[MJIMG(?::[a-z0-9]+)?\]\]/i);
+      if (parts.length === 1) return textHtml(text);
+      let html = textHtml(parts[0]);
+      for (let i = 1; i < parts.length; i++) {
+        const chunk = parts[i];
+        const end = chunk.search(/\[\[\/MJIMG\]\]/i);
+        let raw = end >= 0 ? chunk.slice(0, end) : chunk;
+        const rest = end >= 0 ? chunk.slice(end).replace(/\[\[\/MJIMG\]\]/i, '') : '';
+        raw = raw.replace(/\s+/g, '').replace(/[^A-Za-z0-9+/=]/g, '');
+        if (raw.length > 32) html += shotTag('data:image/jpeg;base64,' + raw);
+        html += textHtml(rest);
+      }
+      return html;
+    }
+    function openShotViewer(src) {
+      const box = document.getElementById('shotViewer');
+      const img = document.getElementById('shotViewerImg');
+      if (!box || !img || !src) return;
+      img.src = src;
+      box.classList.add('open');
     }
     function initials(name) {
       const p = String(name || '?').trim().split(/\s+/);
@@ -506,6 +521,16 @@
           .subscribe();
       } catch (e) { console.warn('realtime', e); }
     }
+    document.addEventListener('click', function (e) {
+      const img = e.target && e.target.closest && e.target.closest('img.mj-shot');
+      if (img && img.src) {
+        e.preventDefault();
+        openShotViewer(img.src);
+        return;
+      }
+      if (e.target && e.target.id === 'shotViewer') e.target.classList.remove('open');
+    });
   </script>
+  <div id="shotViewer"><img id="shotViewerImg" alt="Screenshot"></div>
 </body>
 </html>
