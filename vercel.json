@@ -19,6 +19,26 @@
     { "source": "/home", "destination": "/landing.html", "permanent": true },
     { "source": "/app", "destination": "/dashboard", "permanent": false }
   ],
+  "crons": [
+    { "path": "/api/grizzly-sync", "schedule": "0 3 * * *" },
+    { "path": "/api/order-logsdomain?action=sync", "schedule": "0 5 * * *" },
+    { "path": "/api/classy", "schedule": "30 5 * * *" },
+    { "path": "/api/order?action=sync", "schedule": "0 6 * * *" },
+    { "path": "/api/owlet?action=sync", "schedule": "0 7 * * *" },
+    { "path": "/api/sujan?action=sync", "schedule": "0 8 * * *" },
+    { "path": "/api/sms-bus?action=sync", "schedule": "0 9 * * *" },
+    { "path": "/api/grizzly-sync?action=expire_stale", "schedule": "0 4 * * *" },
+    { "path": "/api/sms-bus?action=expire_stale", "schedule": "30 4 * * *" }
+  ],
+  "functions": {
+    "api/grizzly-sync.js": { "maxDuration": 300 },
+    "api/sms-bus.js": { "maxDuration": 300 },
+    "api/owlet.js": { "maxDuration": 300 },
+    "api/order.js": { "maxDuration": 300 },
+    "api/classy.js": { "maxDuration": 300 },
+    "api/order-logsdomain.js": { "maxDuration": 300 },
+    "api/sujan.js": { "maxDuration": 300 }
+  },
   "headers": [
     {
       "source": "/img/(.*)",
