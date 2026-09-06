@@ -1,28 +1,28 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>MJ Hub</title>
-  <link rel="canonical" href="https://www.mjhub.store/landing.html" />
-  <meta http-equiv="refresh" content="0;url=/landing.html" />
-  <script>
-  (function () {
-    var q = '';
-    var h = '';
-    try {
-      q = window.location.search || '';
-      h = window.location.hash || '';
-      if (/access_token=|refresh_token=|type=signup|type=recovery|type=email|verified=1/i.test(q + h)) {
-        window.location.replace('/auth.html' + q + h);
-        return;
-      }
-    } catch (e) {}
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MJ Hub</title>
+<!-- Root must not compete with landing.html. Vercel also redirects / and /index.html → /landing.html -->
+<script>
+(function () {
+  try {
+    var q = window.location.search || '';
+    var h = window.location.hash || '';
+    // Preserve ?ref= and other query params on the real landing page
     window.location.replace('/landing.html' + q + h);
-  })();
-  </script>
+  } catch (e) {
+    window.location.href = '/landing.html';
+  }
+})();
+</script>
+<meta http-equiv="refresh" content="0;url=/landing.html">
+<link rel="canonical" href="https://www.mjhub.store/landing.html">
 </head>
-<body style="margin:0;background:#06080f;color:#94a3b8;font-family:system-ui;display:flex;min-height:100vh;align-items:center;justify-content:center">
-  <p><a href="/landing.html" style="color:#60a5fa">Continue to MJ Hub</a></p>
+<body>
+<p style="font-family:system-ui,sans-serif;text-align:center;margin-top:2rem;">
+  <a href="/landing.html">Continue to MJ Hub</a>
+</p>
 </body>
 </html>
