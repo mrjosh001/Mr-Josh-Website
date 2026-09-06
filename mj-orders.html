@@ -398,31 +398,89 @@
     }
     #supportPickModal{
       z-index:1200;
-      align-items:center;
-      padding:16px;
+      align-items:flex-end;
+      padding:0;
     }
-    #supportPickModal .sheet{
+    #supportPickModal .complaint-sheet{
       width:100%;
-      max-width:400px;
-      max-height:min(80vh, 520px);
-      border-radius:24px !important;
-      overflow:auto;
+      max-width:420px;
+      max-height:min(92vh, 720px);
+      border-radius:24px 24px 0 0 !important;
+      overflow:hidden;
+      display:flex;
+      flex-direction:column;
     }
-    #supportPickModal .sheet-b{
+    #supportPickModal .complaint-form{
       display:flex;
       flex-direction:column;
       gap:10px;
-      padding:16px 18px calc(18px + env(safe-area-inset-bottom, 0px));
+      overflow:auto;
+      -webkit-overflow-scrolling:touch;
+      padding:16px 18px calc(20px + env(safe-area-inset-bottom, 0px));
     }
-    #supportPickModal .la-btn{
+    .cf-label{
+      font-size:11px;
+      font-weight:800;
+      letter-spacing:.04em;
+      text-transform:uppercase;
+      color:#64748b;
+    }
+    .cf-channels{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+    .cf-ch{
+      border:1px solid #e2e8f0;
+      background:#f8fafc;
+      color:#334155;
+      border-radius:12px;
+      padding:11px 8px;
+      font-family:inherit;
+      font-weight:800;
+      font-size:12px;
+      cursor:pointer;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      gap:6px;
+    }
+    .cf-ch.active{
+      background:linear-gradient(135deg,#3b82f6,#1d4ed8);
+      color:#fff;
+      border-color:transparent;
+    }
+    .cf-ch.wa.active{
+      background:#25D366;
+      color:#fff;
+    }
+    .cf-meta{
+      display:flex;
+      flex-direction:column;
+      gap:8px;
+      background:#f8fafc;
+      border:1px solid #e2e8f0;
+      border-radius:14px;
+      padding:12px 14px;
+    }
+    .cf-meta div{display:flex;justify-content:space-between;gap:10px;font-size:13px}
+    .cf-meta span{color:#64748b;font-weight:600;flex-shrink:0}
+    .cf-meta strong{font-weight:800;text-align:right;word-break:break-word;color:#0f172a}
+    #cfText{
       width:100%;
-      min-width:0;
-      padding:14px 12px;
-      justify-content:flex-start;
-      gap:12px;
-      text-align:left;
-      white-space:normal;
+      min-height:110px;
+      resize:vertical;
+      border:1px solid #e2e8f0;
+      border-radius:14px;
+      padding:12px 14px;
+      font-family:inherit;
+      font-size:14px;
+      font-weight:600;
+      color:#0f172a;
+      background:#fff;
     }
+    #cfFiles{font-size:13px;color:#334155}
+    .cf-previews{display:flex;flex-wrap:wrap;gap:8px}
+    .cf-previews img{
+      width:64px;height:64px;object-fit:cover;border-radius:10px;border:1px solid #e2e8f0
+    }
+    .cf-hint{font-size:12px;font-weight:600;color:#64748b;line-height:1.45}
     @media (max-width:380px){
       .sheet-h strong{font-size:16px}
       .btn-contact-support{font-size:13px;padding:13px 12px}
@@ -549,24 +607,44 @@
     </div>
   </div>
 
-  <!-- Choose support channel for order complaint -->
+  <!-- Complaint form: channel + details + message + screenshots -->
   <div class="modal" id="supportPickModal" onclick="if(event.target===this)closeSupportPick()">
-    <div class="sheet" role="dialog" aria-modal="true" style="max-width:400px;border-radius:24px;max-height:none">
+    <div class="sheet complaint-sheet" role="dialog" aria-modal="true" onclick="event.stopPropagation()">
       <div class="sheet-h">
         <div>
           <strong>Contact support</strong>
-          <span>Choose how you want to reach us</span>
+          <span>Tell us what went wrong with this order</span>
         </div>
         <button type="button" onclick="closeSupportPick()" aria-label="Close">✕</button>
       </div>
-      <div class="sheet-b" style="display:flex;flex-direction:column;gap:10px">
-        <button type="button" class="la-btn copy" style="width:100%;padding:14px;justify-content:flex-start;gap:12px" onclick="sendOrderComplaintInApp()">
-          <i class="fa-solid fa-comments" style="font-size:18px"></i>
-          <span style="text-align:left"><strong style="display:block;font-size:14px">In-app support</strong><span style="font-weight:600;opacity:.75;font-size:12px">Open chat on MJ Hub</span></span>
-        </button>
-        <button type="button" class="la-btn guide" style="width:100%;padding:14px;justify-content:flex-start;gap:12px;background:#25D366;color:#fff;box-shadow:none" onclick="sendOrderComplaintWhatsApp()">
-          <i class="fa-brands fa-whatsapp" style="font-size:20px"></i>
-          <span style="text-align:left"><strong style="display:block;font-size:14px">WhatsApp</strong><span style="font-weight:600;opacity:.9;font-size:12px">Message our support line</span></span>
+      <div class="sheet-b complaint-form">
+        <div class="cf-label">Send through</div>
+        <div class="cf-channels" role="tablist">
+          <button type="button" class="cf-ch active" id="chInApp" onclick="setComplaintChannel('inapp')">
+            <i class="fa-solid fa-comments"></i> In-app support
+          </button>
+          <button type="button" class="cf-ch wa" id="chWa" onclick="setComplaintChannel('whatsapp')">
+            <i class="fa-brands fa-whatsapp"></i> WhatsApp
+          </button>
+        </div>
+
+        <div class="cf-label">Your details</div>
+        <div class="cf-meta">
+          <div><span>Customer ID</span><strong id="cfCid">—</strong></div>
+          <div><span>Order ID</span><strong id="cfOid">—</strong></div>
+          <div><span>Product</span><strong id="cfProd">—</strong></div>
+        </div>
+
+        <label class="cf-label" for="cfText">Your complaint</label>
+        <textarea id="cfText" rows="5" maxlength="1200" placeholder="Explain what happened. Include anything we should check."></textarea>
+
+        <label class="cf-label" for="cfFiles">Screenshots (optional, up to 3)</label>
+        <input type="file" id="cfFiles" accept="image/*" multiple />
+        <div class="cf-previews" id="cfPreviews"></div>
+        <p class="cf-hint" id="cfHint">In-app: screenshots go with your ticket. WhatsApp: the chat opens with your details — attach photos there too.</p>
+
+        <button type="button" class="btn-contact-support" id="cfSubmit" onclick="submitComplaint()">
+          <i class="fa-solid fa-paper-plane"></i> Send complaint
         </button>
       </div>
     </div>
@@ -1595,6 +1673,9 @@ function closeModal() {
 const SUPPORT_WA = '14305583021';
 window.__orderComplaint = { orderId: '', product: '' };
 window.__customerId = '';
+window.__customerName = '';
+window.__complaintChannel = 'inapp';
+window.__complaintFiles = [];
 
 function complaintBlock(orderId, productName) {
   const oid = String(orderId || '').trim();
@@ -1617,46 +1698,223 @@ function complaintBlock(orderId, productName) {
 
 function openSupportPick(orderId, productName) {
   window.__orderComplaint = { orderId: String(orderId || ''), product: String(productName || '') };
+  window.__complaintChannel = 'inapp';
+  window.__complaintFiles = [];
+  const cidEl = document.getElementById('cfCid');
+  const oidEl = document.getElementById('cfOid');
+  const prodEl = document.getElementById('cfProd');
+  const textEl = document.getElementById('cfText');
+  const filesEl = document.getElementById('cfFiles');
+  const prev = document.getElementById('cfPreviews');
+  if (cidEl) cidEl.textContent = window.__customerId || 'Not available';
+  if (oidEl) oidEl.textContent = window.__orderComplaint.orderId || '—';
+  if (prodEl) prodEl.textContent = window.__orderComplaint.product || 'Order';
+  if (textEl) textEl.value = '';
+  if (filesEl) filesEl.value = '';
+  if (prev) prev.innerHTML = '';
+  setComplaintChannel('inapp');
   const m = document.getElementById('supportPickModal');
   if (m) m.classList.add('open');
+  setTimeout(function () { if (textEl) textEl.focus(); }, 280);
 }
 function closeSupportPick() {
   const m = document.getElementById('supportPickModal');
   if (m) m.classList.remove('open');
 }
 
-function buildComplaintMessage() {
+function setComplaintChannel(ch) {
+  window.__complaintChannel = ch === 'whatsapp' ? 'whatsapp' : 'inapp';
+  const a = document.getElementById('chInApp');
+  const b = document.getElementById('chWa');
+  if (a) a.classList.toggle('active', window.__complaintChannel === 'inapp');
+  if (b) b.classList.toggle('active', window.__complaintChannel === 'whatsapp');
+  const hint = document.getElementById('cfHint');
+  if (hint) {
+    hint.textContent = window.__complaintChannel === 'whatsapp'
+      ? 'WhatsApp will open with your details filled in. Attach the screenshots in WhatsApp after it opens.'
+      : 'Your details and complaint are sent to in-app support. Screenshots are attached when possible.';
+  }
+  const btn = document.getElementById('cfSubmit');
+  if (btn) {
+    btn.innerHTML = window.__complaintChannel === 'whatsapp'
+      ? '<i class="fa-brands fa-whatsapp"></i> Continue on WhatsApp'
+      : '<i class="fa-solid fa-paper-plane"></i> Send to in-app support';
+  }
+}
+
+function buildComplaintMessage(extra) {
   const cid = window.__customerId || 'Not available';
+  const name = window.__customerName || '';
   const oid = (window.__orderComplaint && window.__orderComplaint.orderId) || '—';
   const prod = (window.__orderComplaint && window.__orderComplaint.product) || 'Order';
+  const body = String(extra || '').trim();
   return (
     'Hello Admin, I have a complaint about an order on MJ Hub.\n\n' +
+    (name ? 'Name: ' + name + '\n' : '') +
     'Customer ID: ' + cid + '\n' +
     'Order ID: ' + oid + '\n' +
     'Product: ' + prod + '\n' +
-    'Complaint: '
+    'Complaint: ' + (body || '')
   );
 }
 
-function sendOrderComplaintWhatsApp() {
-  const msg = buildComplaintMessage();
-  const url = 'https://wa.me/' + SUPPORT_WA + '?text=' + encodeURIComponent(msg);
-  closeSupportPick();
-  window.open(url, '_blank', 'noopener');
+document.addEventListener('change', function (e) {
+  if (!e.target || e.target.id !== 'cfFiles') return;
+  const files = Array.from(e.target.files || []).filter(function (f) {
+    return f && String(f.type || '').indexOf('image/') === 0;
+  }).slice(0, 3);
+  window.__complaintFiles = files;
+  const box = document.getElementById('cfPreviews');
+  if (!box) return;
+  box.innerHTML = '';
+  files.forEach(function (f) {
+    const img = document.createElement('img');
+    img.alt = f.name || 'screenshot';
+    img.src = URL.createObjectURL(f);
+    box.appendChild(img);
+  });
+});
+
+async function submitComplaint() {
+  const textEl = document.getElementById('cfText');
+  const complaint = textEl ? String(textEl.value || '').trim() : '';
+  if (!complaint) {
+    toast('Write your complaint first');
+    if (textEl) textEl.focus();
+    return;
+  }
+  const msg = buildComplaintMessage(complaint);
+  if (window.__complaintChannel === 'whatsapp') {
+    try { await navigator.clipboard.writeText(msg); } catch (e) {}
+    const url = 'https://wa.me/' + SUPPORT_WA + '?text=' + encodeURIComponent(msg);
+    closeSupportPick();
+    toast('Opening WhatsApp — attach screenshots there');
+    window.open(url, '_blank', 'noopener');
+    return;
+  }
+  const btn = document.getElementById('cfSubmit');
+  if (btn) { btn.disabled = true; btn.textContent = 'Sending…'; }
+  try {
+    await sendComplaintInApp(msg, complaint);
+  } catch (e) {
+    console.warn(e);
+    try {
+      localStorage.setItem('mjhub_support_prefill', JSON.stringify({
+        message: msg,
+        order_id: (window.__orderComplaint && window.__orderComplaint.orderId) || '',
+        customer_id: window.__customerId || '',
+        ts: Date.now()
+      }));
+    } catch (err) {}
+    closeSupportPick();
+    location.href = 'dashboard.html?openSupport=1';
+    return;
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      setComplaintChannel(window.__complaintChannel);
+    }
+  }
 }
 
-function sendOrderComplaintInApp() {
-  const msg = buildComplaintMessage();
+async function sendComplaintInApp(fullMsg, complaint) {
+  const token = session && session.access_token;
+  const user = session && session.user;
+  if (!token || !user) {
+    location.href = 'auth.html';
+    return;
+  }
+  const oid = (window.__orderComplaint && window.__orderComplaint.orderId) || '';
+  const prod = (window.__orderComplaint && window.__orderComplaint.product) || 'Order';
+  const links = await uploadComplaintShots(user.id);
+  let body = fullMsg;
+  if (links.length) body += '\n\nScreenshots:\n' + links.join('\n');
+  else if ((window.__complaintFiles || []).length) {
+    body += '\n\n(Customer selected screenshots but they could not be uploaded automatically.)';
+  }
+
+  const { data: created, error } = await sb.from('support_tickets').insert({
+    user_id: user.id,
+    customer_id: window.__customerId || null,
+    user_email: user.email || null,
+    user_name: window.__customerName || null,
+    subject: 'Order complaint' + (oid ? ' · ' + oid : ''),
+    status: 'open'
+  }).select('id').single();
+  if (error || !created) throw error || new Error('ticket failed');
+
+  const { error: mErr } = await sb.from('support_messages').insert({
+    ticket_id: created.id,
+    sender_type: 'user',
+    sender_id: user.id,
+    body: body
+  });
+  if (mErr) throw mErr;
+
   try {
     localStorage.setItem('mjhub_support_prefill', JSON.stringify({
-      message: msg,
-      order_id: (window.__orderComplaint && window.__orderComplaint.orderId) || '',
+      message: body,
+      order_id: oid,
       customer_id: window.__customerId || '',
+      ticket_id: created.id,
       ts: Date.now()
     }));
   } catch (e) {}
   closeSupportPick();
+  toast('Complaint sent');
   location.href = 'dashboard.html?openSupport=1';
+}
+
+async function uploadComplaintShots(userId) {
+  const files = window.__complaintFiles || [];
+  const urls = [];
+  for (let i = 0; i < files.length; i++) {
+    try {
+      const blob = await compressImage(files[i]);
+      const path = userId + '/' + Date.now() + '-' + i + '.jpg';
+      let up = await sb.storage.from('support-attachments').upload(path, blob, {
+        contentType: 'image/jpeg',
+        upsert: false
+      });
+      if (up.error) {
+        up = await sb.storage.from('support').upload(path, blob, {
+          contentType: 'image/jpeg',
+          upsert: false
+        });
+      }
+      if (up.error) continue;
+      const bucket = up.error ? 'support' : (up.data && up.data.fullPath && String(up.data.fullPath).indexOf('support-attachments') >= 0 ? 'support-attachments' : 'support-attachments');
+      let pub = sb.storage.from('support-attachments').getPublicUrl(path);
+      if (!pub || !pub.data || !pub.data.publicUrl) {
+        pub = sb.storage.from('support').getPublicUrl(path);
+      }
+      if (pub && pub.data && pub.data.publicUrl) urls.push(pub.data.publicUrl);
+    } catch (e) {}
+  }
+  return urls;
+}
+
+function compressImage(file) {
+  return new Promise(function (resolve) {
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+    img.onload = function () {
+      const max = 1280;
+      let w = img.width, h = img.height;
+      if (w > max || h > max) {
+        const s = Math.min(max / w, max / h);
+        w = Math.round(w * s);
+        h = Math.round(h * s);
+      }
+      const c = document.createElement('canvas');
+      c.width = w; c.height = h;
+      c.getContext('2d').drawImage(img, 0, 0, w, h);
+      URL.revokeObjectURL(url);
+      c.toBlob(function (b) { resolve(b || file); }, 'image/jpeg', 0.72);
+    };
+    img.onerror = function () { URL.revokeObjectURL(url); resolve(file); };
+    img.src = url;
+  });
 }
 function copyRaw(t) {
   navigator.clipboard.writeText(String(t || '')).then(() => toast('Copied')).catch(() => toast('Copy failed'));
@@ -1705,6 +1963,7 @@ async function boot() {
   try {
     const { data: prof } = await sb.from('profiles').select('customer_id, full_name').eq('id', s.user.id).maybeSingle();
     window.__customerId = (prof && prof.customer_id) || '';
+    window.__customerName = (prof && prof.full_name) || '';
   } catch (e) {}
   const list = document.getElementById('list');
   if (list) list.innerHTML = '<div class="empty"><p>Loading your orders…</p></div>';
