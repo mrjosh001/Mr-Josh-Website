@@ -22,7 +22,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>MJ HUB - Sign In & Sign Up</title>
-    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2" onerror="window.__mjSupabaseCdnFailed=1"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <style>
         :root {
@@ -548,292 +548,10 @@
             .auth-container { max-width: 420px; padding: 40px 36px 32px; }
             .form-icon-header h3 { font-size: 24px; }
         }
-    
-/* ===== Animated floating inputs (SmoothUI-style) ===== */
-.form-group.ai-field {
-  position: relative;
-  margin-bottom: 18px;
-}
-.form-group.ai-field > label {
-  position: absolute;
-  left: 44px;
-  top: 50%;
-  transform: translateY(-50%);
-  font-size: 14px;
-  font-weight: 500;
-  color: #94a3b8;
-  pointer-events: none;
-  transition: top .2s ease, transform .2s ease, font-size .2s ease, color .2s ease, left .2s ease;
-  margin: 0;
-  background: transparent;
-  z-index: 2;
-}
-.form-group.ai-field.has-icon > label { left: 44px; }
-.form-group.ai-field .ai-icon {
-  position: absolute;
-  left: 14px;
-  top: 50%;
-  transform: translateY(-50%);
-  width: 18px;
-  height: 18px;
-  color: #64748b;
-  z-index: 2;
-  pointer-events: none;
-  transition: color .2s;
-}
-.form-group.ai-field .ai-icon svg {
-  width: 18px; height: 18px; display: block;
-}
-.form-group.ai-field input {
-  width: 100%;
-  padding: 16px 14px 12px 44px !important;
-  background: var(--input-bg);
-  border: 1.5px solid var(--input-border);
-  border-radius: 12px;
-  color: #f1f5f9;
-  font-size: 15px;
-  outline: none;
-  transition: border-color .2s, box-shadow .2s, background .2s;
-}
-.form-group.ai-field .pw-field input {
-  padding-right: 46px !important;
-}
-.form-group.ai-field input::placeholder {
-  color: transparent !important;
-}
-.form-group.ai-field input:focus {
-  border-color: #3b82f6;
-  box-shadow: 0 0 0 3px rgba(59,130,246,.2);
-}
-.form-group.ai-field.is-focused .ai-icon,
-.form-group.ai-field input:focus ~ .ai-icon,
-.form-group.ai-field:focus-within .ai-icon {
-  color: #60a5fa;
-}
-/* float label when focused or has value */
-.form-group.ai-field.is-active > label,
-.form-group.ai-field:focus-within > label {
-  top: 0;
-  transform: translateY(-50%);
-  left: 12px;
-  font-size: 11px;
-  font-weight: 700;
-  color: #60a5fa;
-  padding: 0 6px;
-  background: linear-gradient(180deg, transparent 40%, rgba(8,18,36,.95) 40%);
-}
-body[data-theme="light"] .form-group.ai-field.is-active > label,
-body[data-theme="light"] .form-group.ai-field:focus-within > label {
-  background: linear-gradient(180deg, transparent 40%, #fff 40%);
-  color: #2563eb;
-}
-@media (prefers-reduced-motion: reduce) {
-  .form-group.ai-field > label { transition: none; }
-}
-
-
-/* Transparent brand logos — no plate behind mark */
-img.brand-logo, img.sidebar-brand-logo-img, #brandLogo, #navBrandLogo, #sidebarBrandLogo, #welcomeModalLogo,
-.logo img, .brand-logo-img, .login-logo-img, .logo-dark, .logo-light {
-  background: transparent !important;
-  background-color: transparent !important;
-  box-shadow: none !important;
-  object-fit: contain;
-}
-</style>
+    </style>
 <script defer src="/_vercel/insights/script.js"></script>
-<script src="/js/user-errors.js"></script>
-<script src="/js/form-ux.js"></script>
-<style>
-/* Form UX: validation, checklist, counts */
-.form-group.is-invalid input,
-.form-group.is-missing input {
-  border-color: rgba(248,113,113,.7) !important;
-  box-shadow: 0 0 0 3px rgba(248,113,113,.12);
-}
-.form-group.is-valid input {
-  border-color: rgba(74,222,128,.55) !important;
-}
-.field-hint {
-  font-size: 12px;
-  margin-top: 6px;
-  color: #fca5a5;
-  font-weight: 600;
-  line-height: 1.35;
-}
-.form-group.is-valid .field-hint { color: #86efac; }
-.char-count {
-  font-size: 11px;
-  color: rgba(148,163,184,.95);
-  text-align: right;
-  margin-top: 4px;
-  font-weight: 600;
-}
-.char-count.is-over { color: #f87171; }
-.pw-checklist {
-  margin-top: 10px;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-.pw-check-item {
-  font-size: 12px;
-  font-weight: 600;
-  color: rgba(148,163,184,.95);
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-.pw-check-item.is-done { color: #4ade80; }
-.pw-check-mark {
-  width: 18px;
-  text-align: center;
-  font-weight: 800;
-}
-.form-missing-tip {
-  font-size: 12px;
-  font-weight: 700;
-  color: #fbbf24;
-  margin: 0 0 10px;
-  line-height: 1.4;
-}
-.btn-submit:disabled,
-.btn-submit.is-disabled {
-  opacity: 0.45;
-  cursor: not-allowed;
-  filter: grayscale(0.3);
-  box-shadow: none !important;
-  transform: none !important;
-}
-</style>
-<style>
-/* Single clean password requirements list */
-.pw-strength { margin-top: 10px; clear: both; position: relative; z-index: 1; }
-.pw-strength-bar {
-  height: 4px; border-radius: 99px; background: rgba(255,255,255,.1); overflow: hidden; margin-bottom: 8px;
-}
-.pw-strength-bar > span { display: block; height: 100%; width: 0; border-radius: 99px; transition: width .25s, background .25s; }
-.pw-strength-label { font-size: 11px; font-weight: 700; color: #94a3b8; margin-bottom: 8px; }
-.pw-rules {
-  list-style: none; margin: 0; padding: 0;
-  display: flex; flex-direction: column; gap: 6px;
-}
-.pw-rules li {
-  font-size: 12px; font-weight: 600;
-  display: flex; align-items: center; gap: 8px;
-  color: #94a3b8;
-}
-.pw-rules li .pw-dot {
-  width: 8px; height: 8px; border-radius: 50%;
-  border: 1.5px solid #64748b; flex-shrink: 0;
-  background: transparent;
-}
-.pw-rules li.ok { color: #4ade80; }
-.pw-rules li.ok .pw-dot {
-  background: #4ade80; border-color: #4ade80;
-}
-.pw-rules li.bad { color: #fca5a5; }
-.pw-rules li.bad .pw-dot { border-color: #f87171; }
-/* Keep floating label on the input only — not over the rules */
-.form-group.ai-field .pw-strength,
-.form-group.ai-field .field-hint,
-.form-group.ai-field .char-count {
-  position: relative;
-  z-index: 0;
-}
-.form-group.ai-field > label {
-  pointer-events: none;
-}
-.pw-checklist { display: none !important; } /* never show duplicate list */
-</style>
-<style>
-#signupPasswordGroup {
-  margin-bottom: 8px;
-}
-#signupPasswordGroup > label {
-  top: 50%;
-  transform: translateY(-50%);
-}
-#signupPasswordGroup.is-active > label,
-#signupPasswordGroup:focus-within > label {
-  top: 0;
-  transform: translateY(-50%);
-}
-.pw-strength {
-  margin: 0 0 14px;
-  padding: 10px 12px;
-  border-radius: 12px;
-  background: rgba(0,0,0,.18);
-  border: 1px solid rgba(148,163,184,.12);
-}
-.pw-checklist, #signupPwChecklist { display: none !important; height: 0 !important; overflow: hidden !important; }
-.form-group:not(.touched) .field-hint { display: none; }
-.form-group:not(.touched).is-missing input,
-.form-group:not(.touched).is-invalid input {
-  border-color: inherit;
-  box-shadow: none;
-}
-</style>
-
-<link rel="stylesheet" href="/css/graceful.css">
-<link rel="stylesheet" href="/css/mj-motion.css">
-<script src="/js/graceful.js" defer></script>
-
-  <script src="/js/mj-page-loader.js"></script>
 </head>
 <body>
-
-<style id="mj-boot-style">
-#mj-boot{position:fixed;inset:0;z-index:2147483646;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:18px;background:rgba(5,7,13,.55);-webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px);color:rgba(226,232,240,.85);font:500 12px/1.2 system-ui,sans-serif;letter-spacing:.2em;text-transform:lowercase;transition:opacity .25s ease}
-#mj-boot.is-done{opacity:0;pointer-events:none}
-#mj-boot .mj-inf{position:relative;width:120px;height:64px}
-#mj-boot .mj-inf::before{content:"";position:absolute;left:50%;top:50%;width:140px;height:140px;transform:translate(-50%,-50%);border-radius:50%;background:radial-gradient(circle,rgba(124,58,237,.4) 0%,rgba(56,189,248,.15) 40%,transparent 70%);animation:mjBloom 2.2s ease-in-out infinite;pointer-events:none}
-#mj-boot .mj-inf svg{position:relative;z-index:1;display:block;width:120px;height:64px;overflow:visible}
-#mj-boot .mj-track{fill:none;stroke:rgba(167,139,250,.25);stroke-width:3.5;stroke-linecap:round;stroke-linejoin:round}
-#mj-boot .mj-beam{fill:none;stroke:#e9d5ff;stroke-width:3.5;stroke-linecap:round;stroke-linejoin:round;stroke-dasharray:28 200;filter:drop-shadow(0 0 4px #c084fc) drop-shadow(0 0 12px #22d3ee);animation:mjBeam 1.6s linear infinite}
-#mj-boot .mj-lbl{position:relative;z-index:1}
-@keyframes mjBeam{to{stroke-dashoffset:-228}}
-@keyframes mjBloom{0%,100%{opacity:.55;transform:translate(-50%,-50%) scale(1)}50%{opacity:1;transform:translate(-50%,-50%) scale(1.08)}}
-@media(prefers-reduced-motion:reduce){#mj-boot .mj-beam{animation:none;stroke-dasharray:none}#mj-boot .mj-inf::before{animation:none}}
-</style>
-<div id="mj-boot" role="status" aria-live="polite" aria-busy="true">
-  <div class="mj-inf" aria-hidden="true">
-    <svg viewBox="0 0 96 64" width="120" height="64">
-      <path class="mj-track" d="M 16 32 C 16 16, 36 16, 48 32 C 60 48, 80 48, 80 32 C 80 16, 60 16, 48 32 C 36 48, 16 48, 16 32"/>
-      <path class="mj-beam" d="M 16 32 C 16 16, 36 16, 48 32 C 60 48, 80 48, 80 32 C 80 16, 60 16, 48 32 C 36 48, 16 48, 16 32"/>
-    </svg>
-  </div>
-  <div class="mj-lbl">loading</div>
-</div>
-<script>
-(function(){
-  function done(){
-    var el=document.getElementById('mj-boot');
-    if(!el||el.classList.contains('is-done'))return;
-    el.classList.add('is-done');
-    el.setAttribute('aria-busy','false');
-    setTimeout(function(){ try{ el.remove(); var s=document.getElementById('mj-boot-style'); if(s)s.remove(); }catch(e){} }, 280);
-    try{ sessionStorage.removeItem('mj_nav_loading'); }catch(e){}
-    if(window.mjHidePageLoader) try{ window.mjHidePageLoader(); }catch(e){}
-  }
-  if(document.readyState==='complete') setTimeout(done, 60);
-  else {
-    window.addEventListener('load', function(){ setTimeout(done, 60); });
-    document.addEventListener('DOMContentLoaded', function(){ setTimeout(done, 4000); });
-    setTimeout(done, 12000);
-  }
-})();
-</script>
-
-
-<noscript>
-  <div class="mj-noscript">
-    <p><strong>JavaScript is turned off</strong></p>
-    <p>MJ Hub needs JavaScript for sign-in, wallet, and orders. Enable it in your browser settings, then refresh.</p>
-    <p><a href="/">Home</a></p>
-  </div>
-</noscript>
-
     <div class="bg-ribbon r1" aria-hidden="true"></div>
     <div class="bg-ribbon r2" aria-hidden="true"></div>
 
@@ -869,14 +587,12 @@ img.brand-logo, img.sidebar-brand-logo-img, #brandLogo, #navBrandLogo, #sidebarB
 
             <!-- Sign In Form -->
             <form id="signinForm" onsubmit="handleSignIn(event)">
-                <div class="form-group ai-field has-icon">
+                <div class="form-group">
                     <label>Email Address</label>
-                    <span class="ai-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg></span>
                     <input type="email" id="signinEmail" required autocomplete="off" placeholder="name@example.com">
                 </div>
-                <div class="form-group ai-field has-icon">
+                <div class="form-group">
                     <label>Password</label>
-                    <span class="ai-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg></span>
                     <div class="pw-field">
                     <input type="password" id="signinPassword" required autocomplete="current-password" placeholder="••••••••">
                     <button type="button" class="pw-toggle" id="toggleSigninPassword" aria-label="Show password" onclick="togglePasswordVisibility(this)" data-visible="0">
@@ -888,55 +604,49 @@ img.brand-logo, img.sidebar-brand-logo-img, #brandLogo, #navBrandLogo, #sidebarB
                     <input type="checkbox" id="rememberMe"> Remember me for 24 hours
                 </label>
                 <a href="#" class="forgot-password-link" onclick="switchTab('forgot'); return false;">Forgot Password?</a>
-                <button type="submit" class="btn-submit is-disabled" id="signinSubmitBtn" disabled>Sign In to Dashboard</button>
+                <button type="submit" class="btn-submit" id="signinSubmitBtn">Sign In to Dashboard</button>
             </form>
 
             <!-- Sign Up Form -->
             <form id="signupForm" class="hidden" onsubmit="handleSignUp(event)">
-                <div class="form-group ai-field has-icon">
+                <div class="form-group">
                     <label>Full Name</label>
-                    <span class="ai-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></span>
                     <input type="text" id="fullName" required autocomplete="off" placeholder="Enter full name">
                 </div>
-                <div class="form-group ai-field has-icon">
+                <div class="form-group">
                     <label>Username</label>
-                    <span class="ai-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></span>
                     <input type="text" id="username" required autocomplete="off" placeholder="Choose a username">
                 </div>
-                <div class="form-group ai-field has-icon">
+                <div class="form-group">
                     <label>Email Address</label>
-                    <span class="ai-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg></span>
                     <input type="email" id="emailAddress" required autocomplete="off" placeholder="name@example.com">
                 </div>
-                <div class="form-group ai-field has-icon">
+                <div class="form-group">
                     <label>Phone Number</label>
-                    <span class="ai-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></span>
                     <input type="tel" id="phoneNumber" required autocomplete="off" placeholder="Enter phone number">
                 </div>
-                <div class="form-group ai-field has-icon" id="signupPasswordGroup">
-                    <label for="signupPassword">Choose Password</label>
-                    <span class="ai-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg></span>
+                <div class="form-group">
+                    <label>Choose Password</label>
                     <div class="pw-field">
-                    <input type="password" id="signupPassword" required autocomplete="new-password" placeholder=" " minlength="8" oninput="updatePasswordStrength(this.value); checkSignupPasswordMatch();">
+                    <input type="password" id="signupPassword" required autocomplete="new-password" placeholder="Min. 8 characters" minlength="8" oninput="updatePasswordStrength(this.value); checkSignupPasswordMatch();">
                     <button type="button" class="pw-toggle" id="toggleSignupPassword" aria-label="Show password" onclick="togglePasswordVisibility(this)" data-visible="0">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
                     </button>
+                </div>
+                    <div class="pw-strength" id="pwStrengthBox">
+                        <div class="pw-strength-bar"><span id="pwStrengthBar"></span></div>
+                        <div class="pw-strength-label" id="pwStrengthLabel">Password strength</div>
+                        <ul class="pw-rules" id="pwRules">
+                            <li id="pwRuleLen" class="bad">At least 8 characters</li>
+                            <li id="pwRuleUp" class="bad">One uppercase letter</li>
+                            <li id="pwRuleLow" class="bad">One lowercase letter</li>
+                            <li id="pwRuleNum" class="bad">One number</li>
+                        </ul>
                     </div>
                 </div>
-                <div class="pw-strength" id="pwStrengthBox">
-                    <div class="pw-strength-bar"><span id="pwStrengthBar"></span></div>
-                    <div class="pw-strength-label" id="pwStrengthLabel">Password strength</div>
-                    <ul class="pw-rules" id="pwRules" aria-label="Password requirements">
-                        <li id="pwRuleLen" class="bad"><span class="pw-dot"></span>At least 8 characters</li>
-                        <li id="pwRuleUp" class="bad"><span class="pw-dot"></span>One uppercase letter</li>
-                        <li id="pwRuleLow" class="bad"><span class="pw-dot"></span>One lowercase letter</li>
-                        <li id="pwRuleNum" class="bad"><span class="pw-dot"></span>One number</li>
-                    </ul>
-                </div>
 
-                <div class="form-group ai-field has-icon">
+                <div class="form-group">
                     <label>Confirm Password</label>
-                    <span class="ai-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg></span>
                     <div class="pw-field">
                     <input type="password" id="signupPasswordConfirm" required autocomplete="new-password" placeholder="Re-enter password" minlength="8" oninput="checkSignupPasswordMatch();">
                     <button type="button" class="pw-toggle" id="toggleSignupPasswordConfirm" aria-label="Show password" onclick="togglePasswordVisibility(this)" data-visible="0">
@@ -945,14 +655,13 @@ img.brand-logo, img.sidebar-brand-logo-img, #brandLogo, #navBrandLogo, #sidebarB
                     </div>
                     <div class="pw-match-hint" id="signupPwMatchHint" aria-live="polite"></div>
                 </div>
-                <button type="submit" class="btn-submit" disabled id="signupSubmitBtn">Register Account</button>
+                <button type="submit" class="btn-submit" id="signupSubmitBtn">Register Account</button>
             </form>
 
             <!-- Forgot Password Form -->
             <form id="forgotForm" class="hidden" onsubmit="handleForgotPassword(event)">
-                <div class="form-group ai-field has-icon">
+                <div class="form-group">
                     <label>Enter Your Email Address</label>
-                    <span class="ai-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg></span>
                     <input type="email" id="forgotEmail" required autocomplete="off" placeholder="name@example.com">
                 </div>
                 <button type="submit" class="btn-submit" id="forgotSubmitBtn">Send Reset Instructions</button>
@@ -961,9 +670,8 @@ img.brand-logo, img.sidebar-brand-logo-img, #brandLogo, #navBrandLogo, #sidebarB
 
             <!-- Update New Password Form -->
             <form id="updatePasswordForm" class="hidden" onsubmit="handleUpdatePassword(event)">
-                <div class="form-group ai-field has-icon">
+                <div class="form-group">
                     <label>New Password</label>
-                    <span class="ai-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg></span>
                     <div class="pw-field">
                     <input type="password" id="newPassword" required autocomplete="new-password" placeholder="Min. 8 characters" minlength="8" oninput="updatePasswordStrength(this.value)">
                     <button type="button" class="pw-toggle" id="toggleNewPassword" aria-label="Show password" onclick="togglePasswordVisibility(this)" data-visible="0">
@@ -992,12 +700,36 @@ img.brand-logo, img.sidebar-brand-logo-img, #brandLogo, #navBrandLogo, #sidebarB
         const SUPABASE_URL = 'https://atczodlljmlayvldxfmv.supabase.co';
         const SUPABASE_PUBLISHABLE_KEY = 'sb_publishable_dwbeKLcSG7-nfKzZz8x8Zw_U9FtwJTy';
         
-        // Referral: persist ?ref=CODE and open Register (create account)
+        // Referral: persist ?ref=CODE (localStorage + cookie) and open Register
         (function(){
+          function saveRef(code) {
+            if (!code) return;
+            code = String(code).trim().toUpperCase().replace(/[^A-Z0-9_-]/g, '');
+            if (!code || code.length < 3) return;
+            try { localStorage.setItem('mjhub_ref_code', code); } catch (e) {}
+            try { sessionStorage.setItem('mjhub_ref_code', code); } catch (e) {}
+            try {
+              var exp = new Date(Date.now() + 30 * 864e5).toUTCString();
+              document.cookie = 'mjhub_ref_code=' + encodeURIComponent(code) + '; path=/; expires=' + exp + '; SameSite=Lax';
+            } catch (e) {}
+          }
+          function readRef() {
+            try {
+              var c = localStorage.getItem('mjhub_ref_code') || sessionStorage.getItem('mjhub_ref_code');
+              if (c) return c;
+            } catch (e) {}
+            try {
+              var m = document.cookie.match(/(?:^|;\s*)mjhub_ref_code=([^;]+)/);
+              if (m) return decodeURIComponent(m[1]);
+            } catch (e) {}
+            return '';
+          }
+          window.__mjhub_save_ref = saveRef;
+          window.__mjhub_read_ref = readRef;
           try {
             var p = new URLSearchParams(window.location.search);
-            var ref = (p.get('ref') || p.get('referral') || '').trim();
-            if (ref) localStorage.setItem('mjhub_ref_code', ref.toUpperCase());
+            var ref = (p.get('ref') || p.get('referral') || p.get('r') || '').trim();
+            if (ref) saveRef(ref);
             var tab = (p.get('tab') || p.get('mode') || '').toLowerCase();
             if (ref || tab === 'signup' || tab === 'register') {
               window.__mjhub_open_signup = true;
@@ -1052,82 +784,36 @@ img.brand-logo, img.sidebar-brand-logo-img, #brandLogo, #navBrandLogo, #sidebarB
                 return;
             }
 
-            // ---- Email confirmation / magic-link / recovery error handling ----
+            if (urlParams.get('verified') === '1') {
+                switchTab('signin');
+                showSuccess('✅ Your email has been verified! Please sign in below.');
+                window.history.replaceState({}, document.title, window.location.pathname);
+            }
+
+            // Supabase email confirm often returns with tokens in the hash.
+            // If a session is established, send the user into the app.
             (async function handleEmailConfirmSession() {
               try {
                 if (!supabaseClient) return;
-                function cleanAuthUrl() {
-                  try {
-                    var path = window.location.pathname || '/auth.html';
-                    window.history.replaceState({}, document.title, path);
-                  } catch (e) {}
-                }
-                function friendlyAuthLinkError(raw) {
-                  if (window.mjExplainError) return window.mjExplainError(raw, 'auth').text;
-                  var s = String(raw || '').toLowerCase();
-                  if (/expired|otp_expired|invalid/.test(s)) {
-                    return 'This confirmation link has expired or was already used. Sign in if you already confirmed, or sign up again to get a new email.';
-                  }
-                  return 'We could not confirm your email from this link. Please sign in, or sign up again for a new confirmation email.';
-                }
-                var hashStr = (window.location.hash || '').replace(/^#/, '');
-                var hashParams = new URLSearchParams(hashStr);
-                var q = new URLSearchParams(window.location.search || '');
-                var errCode = q.get('error') || hashParams.get('error') || q.get('error_code') || hashParams.get('error_code');
-                var errDesc = q.get('error_description') || hashParams.get('error_description') || '';
-                try { errDesc = decodeURIComponent(String(errDesc).replace(/\+/g, ' ')); } catch (e) {}
-                if (errCode || /error=|error_description=/i.test(window.location.href)) {
-                  switchTab('signin');
-                  showError(friendlyAuthLinkError(errDesc || errCode));
-                  cleanAuthUrl();
-                  return;
-                }
-                var hasAuthHash = /access_token=|refresh_token=|type=signup|type=email|type=magiclink/i.test(window.location.hash || '');
-                var code = q.get('code');
-                var verifiedFlag = q.get('verified') === '1';
-                if (code) {
-                  try {
-                    var exch = await supabaseClient.auth.exchangeCodeForSession(code);
-                    if (exch.error) {
-                      switchTab('signin');
-                      showError(friendlyAuthLinkError(exch.error.message || 'code'));
-                      cleanAuthUrl();
-                      return;
-                    }
-                  } catch (ex) {
-                    switchTab('signin');
-                    showError(friendlyAuthLinkError(ex.message || 'code'));
-                    cleanAuthUrl();
-                    return;
-                  }
-                }
-                if (!hasAuthHash && !code && !verifiedFlag) return;
-                var session = null;
-                for (var i = 0; i < 6; i++) {
-                  var res = await supabaseClient.auth.getSession();
-                  session = res && res.data && res.data.session;
-                  if (session && session.user) break;
-                  await new Promise(function (r) { setTimeout(r, 200); });
-                }
-                switchTab('signin');
-                cleanAuthUrl();
+                const hasAuthHash = /access_token=|refresh_token=|type=signup|type=email/i.test(window.location.hash || '');
+                if (!hasAuthHash && urlParams.get('verified') !== '1') return;
+                const { data: { session } } = await supabaseClient.auth.getSession();
                 if (session && session.user) {
                   try { sessionStorage.setItem('mjhub-fresh-login', '1'); } catch (e) {}
-                  showSuccess('Your email is confirmed. Sign in with your email and password to continue.');
-                  try {
-                    var em = session.user.email;
-                    if (em && document.getElementById('signinEmail')) document.getElementById('signinEmail').value = em;
-                  } catch (e3) {}
-                } else {
-                  showSuccess('Your email is confirmed. Please sign in below.');
-                }
-              } catch (e) {
-                console.warn('confirm session', e);
-                try {
+                  // Confirmed + session ready → user app (never landing index.html)
+                  showSuccess('✅ Email confirmed. Taking you to your dashboard…');
+                  setTimeout(function () {
+                    window.location.href = 'dashboard.html';
+                  }, 900);
+                } else if (hasAuthHash || urlParams.get('verified') === '1') {
+                  // Tokens missing/expired but user landed from confirm link → stay on sign-in
                   switchTab('signin');
-                  showError(window.mjExplainError ? window.mjExplainError(e, 'auth').text : 'Something went wrong opening the confirmation link. Please sign in.');
-                } catch (e4) {}
-              }
+                  showSuccess('✅ Your email has been verified! Please sign in below.');
+                  try {
+                    window.history.replaceState({}, document.title, window.location.pathname + window.location.search.replace(/[?&]verified=1/, '').replace(/^&/, '?') || window.location.pathname);
+                  } catch (e2) {}
+                }
+              } catch (e) { console.warn('confirm session', e); }
             })();
 
             if (urlParams.get('banned') === '1') {
@@ -1138,11 +824,12 @@ img.brand-logo, img.sidebar-brand-logo-img, #brandLogo, #navBrandLogo, #sidebarB
 
             async function attachReferralIfNeeded(session) {
             try {
-              var refCode = localStorage.getItem('mjhub_ref_code');
-              if (!refCode || !session || !session.access_token) return;
-              // Profile row may lag signup trigger — retry a few times
-              for (var attempt = 0; attempt < 5; attempt++) {
-                if (attempt > 0) await new Promise(function(r){ setTimeout(r, 800 * attempt); });
+              var refCode = (window.__mjhub_read_ref && window.__mjhub_read_ref()) || '';
+              try { refCode = refCode || localStorage.getItem('mjhub_ref_code') || ''; } catch (e) {}
+              if (!refCode || !session || !session.access_token) return false;
+              // Profile row may lag signup trigger — retry longer
+              for (var attempt = 0; attempt < 10; attempt++) {
+                if (attempt > 0) await new Promise(function(r){ setTimeout(r, 600 * attempt); });
                 var res = await fetch('/api/pocketfi?action=referral_attach', {
                   method: 'POST',
                   headers: {
@@ -1154,20 +841,25 @@ img.brand-logo, img.sidebar-brand-logo-img, #brandLogo, #navBrandLogo, #sidebarB
                 var j = {};
                 try { j = await res.json(); } catch (e) {}
                 if (j && j.success) {
-                  localStorage.removeItem('mjhub_ref_code');
+                  try { localStorage.removeItem('mjhub_ref_code'); } catch (e) {}
+                  try { sessionStorage.removeItem('mjhub_ref_code'); } catch (e) {}
+                  try { document.cookie = 'mjhub_ref_code=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT'; } catch (e) {}
                   console.log('[referral] linked', j);
-                  return;
+                  return true;
                 }
-                // invalid code — stop
-                if (res.status === 404 || res.status === 400) {
+                // invalid / self-refer — stop
+                if (res.status === 404 || (res.status === 400 && j && /own referral|cannot refer/i.test(j.message || ''))) {
                   console.warn('[referral] attach failed', j);
-                  return;
+                  return false;
                 }
+                // profile not ready — keep retrying
               }
             } catch (e) {
               console.warn('[referral] attach error', e);
             }
+            return false;
           }
+          window.__mjhub_attach_referral = attachReferralIfNeeded;
         supabaseClient.auth.onAuthStateChange(async (event, session) => {
             if ((event === 'SIGNED_IN' || event === 'INITIAL_SESSION') && session) {
               attachReferralIfNeeded(session);
@@ -1231,27 +923,38 @@ img.brand-logo, img.sidebar-brand-logo-img, #brandLogo, #navBrandLogo, #sidebarB
         }
 
         function formatAuthError(error) {
-            if (window.mjExplainError) {
-                var e = window.mjExplainError(error, 'auth');
-                return e.text || (e.what + ' ' + e.action);
-            }
             if (!error) return 'Something went wrong. Please try again.';
             const raw = String(error.message || error.error_description || error.msg || error.error || '').trim();
             const code = String(error.code || error.error_code || '').toLowerCase();
             const low = raw.toLowerCase();
+
+            // Clear, user-facing messages (no cryptic codes)
+            if (low.includes('banned')) {
+                return 'You have been banned from MJ HUB. Contact support if this is a mistake.';
+            }
             if (code === 'email_not_confirmed' || low.includes('email not confirmed') || low.includes('not confirmed')) {
                 return 'Your email is not confirmed yet. Open the link we sent you, then sign in.';
             }
-            if (low.includes('already registered') || low.includes('already been registered') || low.includes('user already')) {
+            if (code === 'user_already_exists' || low.includes('already registered') || low.includes('already been registered') || low.includes('user already registered')) {
                 return 'An account with this email already exists. Please sign in instead.';
             }
-            if (low.includes('failed to fetch') || low.includes('network')) {
+            if (low.includes('password') && (low.includes('weak') || low.includes('least') || low.includes('characters'))) {
+                return 'Password is too weak. Use at least 8 characters with uppercase, lowercase, and a number.';
+            }
+            if (code === 'over_request_rate_limit' || low.includes('rate limit') || low.includes('too many requests')) {
+                return 'Too many attempts. Please wait a few minutes and try again.';
+            }
+            if (low.includes('network') || low.includes('failed to fetch')) {
                 return 'Network error. Check your connection and try again.';
             }
-            if (low.includes('invalid login') || low.includes('invalid credentials')) {
+            // Invalid login: refined further by resolveLoginError()
+            if (code === 'invalid_credentials' || low.includes('invalid login credentials') || low.includes('invalid credentials')) {
                 return 'Incorrect email or password. Check both and try again.';
             }
-            return raw || 'Something went wrong. Please try again.';
+            if (raw && raw !== '{}' && raw !== '[object Object]') {
+                return raw;
+            }
+            return 'Something went wrong. Please try again.';
         }
 
         /**
@@ -1532,8 +1235,7 @@ img.brand-logo, img.sidebar-brand-logo-img, #brandLogo, #navBrandLogo, #sidebarB
             e.preventDefault();
             const fullName = document.getElementById('fullName').value.trim();
             const username = document.getElementById('username').value.trim();
-            let phone = document.getElementById('phoneNumber').value.trim();
-            if (window.MJFormUX && MJFormUX.normalizePhone) phone = MJFormUX.normalizePhone(phone);
+            const phone = document.getElementById('phoneNumber').value.trim();
             const email = document.getElementById('emailAddress').value.trim();
             const password = document.getElementById('signupPassword').value.trim();
             const passwordConfirm = (document.getElementById('signupPasswordConfirm') || {}).value
@@ -1561,6 +1263,8 @@ img.brand-logo, img.sidebar-brand-logo-img, #brandLogo, #navBrandLogo, #sidebarB
 
             let data, error;
             try {
+                var refAtSignup = (window.__mjhub_read_ref && window.__mjhub_read_ref()) || '';
+                try { refAtSignup = refAtSignup || localStorage.getItem('mjhub_ref_code') || ''; } catch (e) {}
                 ({ data, error } = await supabaseClient.auth.signUp({
                     email: email,
                     password: password,
@@ -1568,12 +1272,14 @@ img.brand-logo, img.sidebar-brand-logo-img, #brandLogo, #navBrandLogo, #sidebarB
                         data: {
                             full_name: fullName,
                             username: username,
-                            phone_number: phone
+                            phone_number: phone,
+                            // Backup for server/trigger if attach races
+                            referral_code: refAtSignup || undefined
                         },
                         // Where Supabase sends the user after they click the
                         // confirm-email link — back to the sign-in page here,
                         // with ?verified=1 so auth.html can greet them.
-                        emailRedirectTo: window.location.origin + '/auth.html?verified=1'
+                        emailRedirectTo: window.location.origin + '/auth.html?verified=1' + (refAtSignup ? ('&ref=' + encodeURIComponent(refAtSignup)) : '')
                     }
                 }));
             } catch (e) {
@@ -1671,58 +1377,5 @@ img.brand-logo, img.sidebar-brand-logo-img, #brandLogo, #navBrandLogo, #sidebarB
             }, 1500);
         }
     </script>
-
-<script>
-(function(){
-  function syncAiField(field){
-    var input = field.querySelector('input:not([type="checkbox"])');
-    if (!input) return;
-    if (input.value && String(input.value).length) field.classList.add('is-active');
-    else field.classList.remove('is-active');
-  }
-  function bind(){
-    document.querySelectorAll('.form-group.ai-field').forEach(function(field){
-      var input = field.querySelector('input:not([type="checkbox"])');
-      if (!input || input.dataset.aiBound) return;
-      input.dataset.aiBound = '1';
-      input.addEventListener('focus', function(){ field.classList.add('is-focused','is-active'); });
-      input.addEventListener('blur', function(){
-        field.classList.remove('is-focused');
-        syncAiField(field);
-      });
-      input.addEventListener('input', function(){ syncAiField(field); });
-      syncAiField(field);
-    });
-  }
-  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', bind);
-  else bind();
-  // re-bind when tabs switch
-  document.addEventListener('click', function(e){
-    if (e.target && (e.target.classList.contains('tab-btn') || e.target.closest('.tab-btn'))) {
-      setTimeout(bind, 50);
-    }
-  });
-  window.MJAuthAnimatedInputs = { bind: bind };
-})();
-</script>
-
-
-<script>
-(function(){
-  var LIGHT='https://atczodlljmlayvldxfmv.supabase.co/storage/v1/object/public/avatars/light%20background%20logo', DARK='https://atczodlljmlayvldxfmv.supabase.co/storage/v1/object/public/avatars/dark%20background%20log';
-  function apply(){
-    var t = document.documentElement.getAttribute('data-theme') || localStorage.getItem('mjhub-theme') || 'dark';
-    document.querySelectorAll('.brand-logo-img, #brandLogo, .login-logo-img').forEach(function(img){
-      img.src = t === 'light' ? LIGHT : DARK;
-      img.style.background = 'transparent';
-    });
-  }
-  apply();
-  window.addEventListener('storage', apply);
-  var obs = new MutationObserver(apply);
-  obs.observe(document.documentElement, { attributes:true, attributeFilter:['data-theme'] });
-})();
-</script>
-<script src="/js/logo-transparent.js" defer></script>
 </body>
 </html>

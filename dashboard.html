@@ -3794,6 +3794,38 @@ document.addEventListener('DOMContentLoaded', async () => {
                 if (idleTimedOut) return;
                 currentUserId = session.user.id;
 
+                // Harden referral: if user signed up via ?ref= but attach lagged on auth page, link here
+                try {
+                  var refCode = '';
+                  try { refCode = localStorage.getItem('mjhub_ref_code') || sessionStorage.getItem('mjhub_ref_code') || ''; } catch (e) {}
+                  if (!refCode) {
+                    try {
+                      var m = document.cookie.match(/(?:^|;\s*)mjhub_ref_code=([^;]+)/);
+                      if (m) refCode = decodeURIComponent(m[1]);
+                    } catch (e) {}
+                  }
+                  var qRef = new URLSearchParams(location.search).get('ref');
+                  if (qRef) refCode = qRef;
+                  if (refCode && session.access_token) {
+                    for (var ra = 0; ra < 6; ra++) {
+                      if (ra) await new Promise(function(r){ setTimeout(r, 500 * ra); });
+                      var rRes = await fetch('/api/pocketfi?action=referral_attach', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + session.access_token },
+                        body: JSON.stringify({ code: String(refCode).trim().toUpperCase() })
+                      });
+                      var rj = {};
+                      try { rj = await rRes.json(); } catch (e) {}
+                      if (rj && rj.success) {
+                        try { localStorage.removeItem('mjhub_ref_code'); sessionStorage.removeItem('mjhub_ref_code'); } catch (e) {}
+                        try { document.cookie = 'mjhub_ref_code=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT'; } catch (e) {}
+                        break;
+                      }
+                      if (rRes.status === 404 || rRes.status === 400) break;
+                    }
+                  }
+                } catch (e) { console.warn('referral attach', e); }
+
                 // Profile first (needed for name/Customer ID), then parallel data.
                 await initUserData(session.user);
                 await Promise.all([

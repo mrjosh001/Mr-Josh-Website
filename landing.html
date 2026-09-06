@@ -171,15 +171,70 @@ body {
 .icon-btn:hover { background: color-mix(in srgb, var(--primary) 15%, transparent); transform: scale(1.08); }
 .menu-btn { display: none; }
 
-.mobile-menu {
-  display: none; flex-direction: column;
-  padding: 12px 24px 24px; border-top: 1px solid var(--border);
-  background: var(--elevated);
+.mobile-menu.kinetic-nav {
+  display: none;
+  position: fixed; inset: 0; z-index: 80;
 }
-.mobile-menu.active { display: flex; }
-.mobile-menu a { padding: 13px 12px; font-weight: 500; color: var(--text2); border-radius: 9px; text-decoration: none; }
-.mobile-menu a:hover { background: color-mix(in srgb, var(--primary) 10%, transparent); color: var(--text); }
+.mobile-menu.kinetic-nav.active,
+.mobile-menu.kinetic-nav[data-nav="open"] {
+  display: block;
+}
+.kinetic-overlay {
+  position: absolute; inset: 0;
+  background: rgba(6,8,15,.55);
+  backdrop-filter: blur(8px);
+}
+.kinetic-panel {
+  position: absolute; top: 0; right: 0; height: 100%;
+  width: min(420px, 100%);
+  overflow: auto;
+  padding: 28px 24px 32px;
+  color: #f8fafc;
+  transform: translateX(110%);
+  transition: transform .55s cubic-bezier(.65,.01,.05,.99);
+}
+.mobile-menu.active .kinetic-panel,
+.mobile-menu[data-nav="open"] .kinetic-panel { transform: translateX(0); }
+.kinetic-bg { position: absolute; inset: 0; overflow: hidden; z-index: 0; }
+.kinetic-layer { position: absolute; inset: 0; transform: translateX(101%); }
+.kinetic-layer.l1 { background: #1d4ed8; transition: transform .5s .02s cubic-bezier(.65,.01,.05,.99); }
+.kinetic-layer.l2 { background: #2563eb; transition: transform .55s .1s cubic-bezier(.65,.01,.05,.99); }
+.kinetic-layer.l3 { background: linear-gradient(180deg,#0b1224 0%,#172554 100%); transition: transform .6s .16s cubic-bezier(.65,.01,.05,.99); }
+.mobile-menu.active .kinetic-layer,
+.mobile-menu[data-nav="open"] .kinetic-layer { transform: translateX(0); }
+.kinetic-close {
+  position: relative; z-index: 2;
+  width: 40px; height: 40px; border-radius: 12px;
+  border: 1px solid rgba(255,255,255,.18);
+  background: rgba(255,255,255,.08); color: #fff;
+  font-size: 18px; margin-left: auto; display: flex;
+  align-items: center; justify-content: center; cursor: pointer;
+}
+.kinetic-links { position: relative; z-index: 2; list-style: none; margin: 28px 0 18px; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.kinetic-links a {
+  display: block; padding: 12px 4px;
+  font-size: 28px; font-weight: 800; letter-spacing: -.03em;
+  color: #fff; text-decoration: none;
+  transform: translateY(24px); opacity: 0;
+  transition: transform .45s cubic-bezier(.65,.01,.05,.99), opacity .35s, color .2s;
+}
+.mobile-menu.active .kinetic-links a,
+.mobile-menu[data-nav="open"] .kinetic-links a { transform: none; opacity: 1; }
+.kinetic-links a:nth-child(1){transition-delay:.18s}
+.kinetic-links a:nth-child(2){transition-delay:.22s}
+.kinetic-links a:nth-child(3){transition-delay:.26s}
+.kinetic-links a:nth-child(4){transition-delay:.3s}
+.kinetic-links a:nth-child(5){transition-delay:.34s}
+.kinetic-links a:nth-child(6){transition-delay:.38s}
+.kinetic-links a:nth-child(7){transition-delay:.42s}
+.kinetic-links a:nth-child(8){transition-delay:.46s}
+.kinetic-links a:nth-child(9){transition-delay:.5s}
+.kinetic-links a:nth-child(10){transition-delay:.54s}
+.kinetic-links a:nth-child(11){transition-delay:.58s}
+.kinetic-links a:hover { color: #93c5fd; }
+.kinetic-auth { position: relative; z-index: 2; display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 18px; padding-top: 18px; border-top: 1px solid rgba(255,255,255,.12); }
 .mobile-auth { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--border); }
+body.menu-open { overflow: hidden; }
 
 /* ===== LIVE STOCK TICKER ===== */
 .ticker-strip {
@@ -1482,28 +1537,22 @@ footer.footer3, .footer3 { z-index: 10 !important; isolation: isolate; }
 
 .mobile-cta { z-index: 100 !important; }
 .support-widget { z-index: 2147483000 !important; }
-
-/* Transparent brand logos — no plate behind mark */
-img.brand-logo, img.sidebar-brand-logo-img, #brandLogo, #navBrandLogo, #sidebarBrandLogo, #welcomeModalLogo,
-.logo img, .brand-logo-img, .login-logo-img, .logo-dark, .logo-light {
-  background: transparent !important;
-  background-color: transparent !important;
-  box-shadow: none !important;
-  object-fit: contain;
-}
 </style>
 <script defer src="/_vercel/insights/script.js"></script>
   <link rel="stylesheet" href="css/skeleton.css">
 
 <script>
-/* Referral: landing ?ref=CODE → localStorage → auth signup still attaches referee */
+/* Referral: landing ?ref=CODE → localStorage + cookie → auth signup attaches referee */
 (function(){
   try {
     var p = new URLSearchParams(location.search);
-    var ref = (p.get('ref') || p.get('referral') || '').trim();
-    if (ref) {
-      localStorage.setItem('mjhub_ref_code', ref.toUpperCase());
-      // clean URL optional - keep ref visible for sharing transparency
+    var ref = (p.get('ref') || p.get('referral') || p.get('r') || '').trim().toUpperCase().replace(/[^A-Z0-9_-]/g, '');
+    if (ref && ref.length >= 3) {
+      try { localStorage.setItem('mjhub_ref_code', ref); } catch (e) {}
+      try { sessionStorage.setItem('mjhub_ref_code', ref); } catch (e) {}
+      try {
+        document.cookie = 'mjhub_ref_code=' + encodeURIComponent(ref) + '; path=/; max-age=' + (30*86400) + '; SameSite=Lax';
+      } catch (e) {}
     }
     function withRef(href) {
       var code = localStorage.getItem('mjhub_ref_code');
@@ -1533,6 +1582,8 @@ img.brand-logo, img.sidebar-brand-logo-img, #brandLogo, #navBrandLogo, #sidebarB
 <script src="/js/graceful.js" defer></script>
 
   <script src="/js/mj-page-loader.js"></script>
+<link rel="stylesheet" href="/css/mj-glass.css">
+<script src="/js/mj-glass.js" defer></script>
 </head>
 <body>
 
@@ -1611,21 +1662,32 @@ img.brand-logo, img.sidebar-brand-logo-img, #brandLogo, #navBrandLogo, #sidebarB
       <button class="icon-btn menu-btn" id="menuToggle" aria-label="Menu">☰</button>
     </div>
   </div>
-  <div class="mobile-menu" id="mobileMenu">
-    <a href="#features">Services</a>
-    <a href="#telegram-sms">Telegram Bot</a>
-    <a href="https://t.me/mj_smss_bot" target="_blank" rel="noopener">Open SMS Bot ↗</a>
-    <a href="#earn">Earn 2%</a>
-    <a href="#how-it-works">How it works</a>
-    <a href="#why-us">Why us</a>
-    <a href="faq.html">FAQ</a>
-    <a href="/vendor">Become a vendor</a>
-    <a href="support.html">Support</a>
-    <a href="terms.html">Terms</a>
-    <a href="#" id="apiLinkMobile">API <span style="font-size:10px;background:#f59e0b;color:#000;padding:2px 6px;border-radius:4px;font-weight:700">Soon</span></a>
-    <div class="mobile-auth">
-      <a href="auth.html?mode=signin" class="btn btn-ghost">Sign In</a>
-      <a href="auth.html?mode=signup" class="btn btn-primary">Get Started</a>
+  <div class="mobile-menu kinetic-nav" id="mobileMenu" data-nav="closed" hidden>
+    <div class="kinetic-overlay" data-close-menu></div>
+    <div class="kinetic-panel">
+      <div class="kinetic-bg">
+        <div class="kinetic-layer l1"></div>
+        <div class="kinetic-layer l2"></div>
+        <div class="kinetic-layer l3"></div>
+      </div>
+      <button type="button" class="kinetic-close" data-close-menu aria-label="Close menu">✕</button>
+      <nav class="kinetic-links">
+        <a href="#features" data-close-menu>Services</a>
+        <a href="#telegram-sms" data-close-menu>Telegram Bot</a>
+        <a href="https://t.me/mj_smss_bot" target="_blank" rel="noopener">Open SMS Bot</a>
+        <a href="#earn" data-close-menu>Earn 2%</a>
+        <a href="#how-it-works" data-close-menu>How it works</a>
+        <a href="#why-us" data-close-menu>Why us</a>
+        <a href="faq.html">FAQ</a>
+        <a href="/vendor">Become a vendor</a>
+        <a href="support.html">Support</a>
+        <a href="terms.html">Terms</a>
+        <a href="#" id="apiLinkMobile">API <span style="font-size:10px;background:#f59e0b;color:#000;padding:2px 6px;border-radius:4px;font-weight:700">Soon</span></a>
+      </nav>
+      <div class="mobile-auth kinetic-auth">
+        <a href="auth.html?mode=signin" class="btn btn-ghost">Sign In</a>
+        <a href="auth.html?mode=signup" class="btn btn-primary">Get Started</a>
+      </div>
     </div>
   </div>
 </header>
@@ -2289,14 +2351,23 @@ document.addEventListener('DOMContentLoaded', () => {
     applyLogo(newTheme);
   });
 
+  function setLandingMenu(open) {
+    if (!mobileMenu) return;
+    mobileMenu.classList.toggle('active', open);
+    mobileMenu.setAttribute('data-nav', open ? 'open' : 'closed');
+    mobileMenu.hidden = !open;
+    document.body.classList.toggle('menu-open', open);
+    if (menuBtn) menuBtn.setAttribute('aria-expanded', open ? 'true' : 'false');
+  }
   menuBtn && menuBtn.addEventListener('click', e => {
     e.stopPropagation();
-    mobileMenu.classList.toggle('active');
+    setLandingMenu(!(mobileMenu && mobileMenu.classList.contains('active')));
   });
-  document.addEventListener('click', e => {
-    if (!mobileMenu.contains(e.target) && !menuBtn.contains(e.target)) {
-      mobileMenu.classList.remove('active');
-    }
+  mobileMenu && mobileMenu.addEventListener('click', e => {
+    if (e.target.closest('[data-close-menu]')) setLandingMenu(false);
+  });
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape') setLandingMenu(false);
   });
 
   const items = document.querySelectorAll('.service-item');
@@ -2521,6 +2592,5 @@ document.addEventListener('DOMContentLoaded', () => {
 })();
 </script>
 
-<script src="/js/logo-transparent.js" defer></script>
 </body>
 </html>
