@@ -105,12 +105,44 @@ a{color:var(--blue);text-decoration:none}
 .mobile-menu .kinetic-close{width:36px;height:36px;border-radius:12px;border:1px solid rgba(255,255,255,.2);background:transparent;color:#fff}
 .mobile-menu .kinetic-links a{display:flex;margin-right:14px;padding:13px 18px;border-radius:0 22px 22px 0;color:#d7e3ff;text-decoration:none;font-weight:650}
 .mobile-menu .kinetic-links a.on{background:#fff;color:#1d3fa8}
+
+.logo { display:inline-flex !important; align-items:center !important; gap:8px !important; line-height:1 !important; text-decoration:none !important; }
+.logo img { height:36px !important; width:auto !important; max-width:48px !important; object-fit:contain !important; object-position:center !important; border-radius:8px !important; background:transparent !important; flex:0 0 auto !important; }
+.logo-word { font-family:"Plus Jakarta Sans", Inter, system-ui, sans-serif !important; font-size:17px !important; font-weight:800 !important; letter-spacing:-.02em !important; line-height:32px !important; background:none !important; -webkit-background-clip:unset !important; color:#1e3a8a !important; -webkit-text-fill-color:#1e3a8a !important; }
+html[data-theme="dark"] .logo-word, body[data-theme="dark"] .logo-word { color:#dbeafe !important; -webkit-text-fill-color:#dbeafe !important; }
+
+
+.logo { display:inline-flex !important; align-items:center !important; gap:10px !important; height:32px !important; line-height:32px !important; text-decoration:none !important; }
+.logo img, .logo .brandLogo, .logo #brandLogo { height:36px !important; width:auto !important; max-width:48px !important; object-fit:contain !important; object-position:center !important; border-radius:8px !important; background:transparent !important; flex:0 0 auto !important; display:block !important; }
+.logo-word { font-family:"Plus Jakarta Sans", Inter, system-ui, sans-serif !important; font-size:17px !important; font-weight:800 !important; letter-spacing:-.03em !important; line-height:32px !important; height:32px !important; display:inline-flex !important; align-items:center !important; background:none !important; -webkit-background-clip:unset !important; color:#1e3a8a !important; -webkit-text-fill-color:#1e3a8a !important; }
+html[data-theme="dark"] .logo-word, body[data-theme="dark"] .logo-word { color:#dbeafe !important; -webkit-text-fill-color:#dbeafe !important; }
+
+
+.logo { display:inline-flex !important; align-items:center !important; gap:8px !important; height:28px !important; line-height:28px !important; text-decoration:none !important; }
+.logo img, .logo .brandLogo, .logo #brandLogo { height:24px !important; width:auto !important; max-height:24px !important; max-width:none !important; object-fit:contain !important; background:transparent !important; flex:0 0 auto !important; display:block !important; border-radius:0 !important; }
+.logo-word { font-family:"Plus Jakarta Sans", Inter, system-ui, sans-serif !important; font-size:24px !important; font-weight:800 !important; letter-spacing:-.04em !important; line-height:24px !important; height:24px !important; display:inline-flex !important; align-items:center !important; background:none !important; -webkit-background-clip:unset !important; color:#1e3a8a !important; -webkit-text-fill-color:#1e3a8a !important; }
+html[data-theme="dark"] .logo-word, body[data-theme="dark"] .logo-word { color:#dbeafe !important; -webkit-text-fill-color:#dbeafe !important; }
+
+
+html[data-theme="light"], body[data-theme="light"]{
+  --bg:#f8fbff; --text:#0f172a; --muted:#475569; --card:#ffffff; --line:rgba(15,23,42,.12);
+}
+html[data-theme="light"] body, body[data-theme="light"]{
+  background:#f8fbff !important; color:#0f172a !important;
+}
+html[data-theme="light"] .panel, body[data-theme="light"] .panel{
+  background:#fff !important; border-color:rgba(15,23,42,.12) !important; color:#0f172a;
+}
+html[data-theme="light"] .panel p, html[data-theme="light"] .panel li, body[data-theme="light"] .panel p, body[data-theme="light"] .panel li{ color:#475569 !important; }
+html[data-theme="light"] .logo-word{ color:#1e3a8a !important; -webkit-text-fill-color:#1e3a8a !important; }
+
 </style>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap" rel="stylesheet">
 </head>
 <body>
 <div class="wrap">
   <div class="top">
-    <a class="logo" href="landing.html"><div class="mark">MJ</div> MJ HUB</a>
+    <a href="landing.html" class="logo"><img class="brandLogo" src="https://atczodlljmlayvldxfmv.supabase.co/storage/v1/object/public/avatars/mjhub-mark-only.png" alt=""><span class="logo-word">HUB</span></a>
     <button type="button" id="menuToggle" aria-label="Menu" style="width:40px;height:40px;border-radius:12px;border:1px solid rgba(255,255,255,.14);background:rgba(255,255,255,.06);color:#fff;font-size:18px;">☰</button>
   </div>
   <div class="mobile-menu" id="mobileMenu" hidden>
@@ -254,5 +286,45 @@ document.addEventListener('click', function(e){
   alert('API is coming soon.');
 });
 </script>
+
+<script>
+(function(){
+  function knock(img){
+    if(!img) return;
+    var im=new Image(); im.crossOrigin='anonymous';
+    im.onload=function(){
+      try{
+        var c=document.createElement('canvas'); c.width=im.naturalWidth; c.height=im.naturalHeight;
+        var x=c.getContext('2d'); x.drawImage(im,0,0);
+        var d=x.getImageData(0,0,c.width,c.height); var p=d.data;
+        for(var i=0;i<p.length;i+=4){
+          var r=p[i],g=p[i+1],b=p[i+2];
+          if((r>232&&g>232&&b>232)||(r<45&&g<55&&b<95)) p[i+3]=0;
+        }
+        x.putImageData(d,0,0); img.src=c.toDataURL('image/png');
+      }catch(e){}
+    };
+    im.src=img.src;
+  }
+  function apply(){
+    var theme=(document.documentElement.getAttribute('data-theme')||document.body.getAttribute('data-theme')||'');
+    if(!theme){
+      try{
+        var pref=localStorage.getItem('mjhub-theme-pref')||localStorage.getItem('mjhub-theme')||'system';
+        theme = (pref==='light'||pref==='dark') ? pref : (matchMedia('(prefers-color-scheme: light)').matches?'light':'dark');
+      }catch(e){ theme='light'; }
+      document.documentElement.setAttribute('data-theme', theme);
+      if(document.body) document.body.setAttribute('data-theme', theme);
+    }
+    var src = theme==='dark'
+      ? 'https://atczodlljmlayvldxfmv.supabase.co/storage/v1/object/public/avatars/mjhub-mark-only.png'
+      : 'https://atczodlljmlayvldxfmv.supabase.co/storage/v1/object/public/avatars/mjhub-mark-only.png';
+    document.querySelectorAll('img.brandLogo, img#brandLogo').forEach(function(img){ img.src=src; knock(img); });
+  }
+  if(document.readyState==='loading') document.addEventListener('DOMContentLoaded', apply);
+  else apply();
+})();
+</script>
+
 </body>
 </html>
