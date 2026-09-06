@@ -863,7 +863,7 @@ function withLagos(opts) { return Object.assign({ timeZone: 'Africa/Lagos' }, op
  <table>
  <thead>
  <tr>
- <th>Name</th><th>Email</th><th>Phone</th><th>Customer ID</th><th>NGN</th><th>USD</th><th>Status</th><th>Role</th><th>Joined</th><th>Action</th>
+ <th>Name</th><th>Email</th><th>Verified</th><th>Phone</th><th>Customer ID</th><th>NGN</th><th>USD</th><th>Status</th><th>Role</th><th>Joined</th><th>Action</th>
  </tr>
  </thead>
  <tbody id="usersTableBody"></tbody>
@@ -1237,6 +1237,7 @@ function withLagos(opts) { return Object.assign({ timeZone: 'Africa/Lagos' }, op
  <div class="field"><label>Email</label><input type="email" id="uEmail" /></div>
  <div class="field"><label>Phone Number</label><input type="text" id="uPhone" /></div>
  <div class="field"><label>Customer ID</label><input type="text" id="uCustomerId" readonly style="opacity:.7;" /></div>
+ <div class="field"><label>Email verified</label><input type="text" id="uEmailVerified" readonly style="opacity:.7;" /></div>
  <div class="field"><label>NGN Balance (₦)</label><input type="number" id="uBalance" step="0.01" /></div>
  <div class="field"><label>USD Balance ($)</label><input type="number" id="uBalanceUsd" step="0.01" /></div>
  <div class="field">
@@ -1345,6 +1346,12 @@ function onRevenuePeriodChange() {
 
 function isAdminValue(v) {
  return v === true || v === 'true' || v === 1 || v === '1';
+}
+
+function emailVerifiedBadge(u) {
+ if (u && u.email_verified === true) return '<span class="badge badge-on">Verified</span>';
+ if (u && u.email_verified === false) return '<span class="badge badge-off">Not verified</span>';
+ return '<span class="badge badge-off">—</span>';
 }
 
 function isUserActive(profile) {
@@ -2268,6 +2275,9 @@ async function loadUserJoinDates() {
 
  allProfiles.forEach(u => {
  if (data.join_dates[u.id]) u.created_at = data.join_dates[u.id];
+ if (data.email_verified && Object.prototype.hasOwnProperty.call(data.email_verified, u.id)) {
+  u.email_verified = !!data.email_verified[u.id];
+ }
  });
  filterUsers(); // re-render now that dates are in
  } catch (e) {
@@ -3292,7 +3302,7 @@ function renderUsers(list) {
  const cards = document.getElementById('usersMobileCards');
 
  if (!items.length) {
- tbody.innerHTML = `<tr><td colspan="10" class="empty-state">No customers found.</td></tr>`;
+ tbody.innerHTML = `<tr><td colspan="11" class="empty-state">No customers found.</td></tr>`;
  if (cards) cards.innerHTML = `<div class="empty-state">No customers found.</div>`;
  return;
  }
@@ -3313,6 +3323,7 @@ function renderUsers(list) {
  <tr>
  <td style="font-weight:600;">${escapeHtml(u.full_name || u.username || ' ')}</td>
  <td>${escapeHtml(u.email || ' ')}</td>
+ <td>${emailVerifiedBadge(u)}</td>
  <td>${escapeHtml(phone)}</td>
  <td>${escapeHtml(u.customer_id || ' ')}</td>
  <td class="price">₦${ngn.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}</td>
@@ -3345,6 +3356,7 @@ function renderUsers(list) {
  <h4>${escapeHtml(u.full_name || u.username || ' ')}</h4>
  <div class="meta">${escapeHtml(u.email || ' ')}</div>
  <div class="meta">ID: ${escapeHtml(u.customer_id || ' ')}</div>
+ <div class="row-line"><span>Email</span>${emailVerifiedBadge(u)}</div>
  <div class="row-line"><span>NGN</span><strong class="price">₦${ngn.toLocaleString()}</strong></div>
  <div class="row-line"><span>USD</span><span style="color:#38bdf8;">$${usd.toFixed(2)}</span></div>
  <div class="row-line"><span>Status</span>${statusBadge}</div>
@@ -3443,6 +3455,8 @@ function editUser(id) {
  document.getElementById('uEmail').value = u.email || '';
  document.getElementById('uPhone').value = u.phone_number || u.phone || '';
  document.getElementById('uCustomerId').value = u.customer_id || '';
+ const ev = document.getElementById('uEmailVerified');
+ if (ev) ev.value = u.email_verified === true ? 'Verified' : (u.email_verified === false ? 'Not verified' : '—');
  document.getElementById('uBalance').value = u.balance ?? 0;
  document.getElementById('uBalanceUsd').value = u.balance_usd != null ? u.balance_usd : '';
  document.getElementById('uIsAdmin').value = isAdminValue(u.is_admin) ? 'true' : 'false';
@@ -3766,6 +3780,17 @@ function openOrderModal(index) {
   const items = o.items && o.items.length ? o.items : [o];
 
   // Stored text often already has "1. Email:…". Don't add another "1." on top.
+  function formatCustomerLog(text) {
+    const s = String(text || '').replace(/^\s*\d+\.\s*/, '').trim();
+    if (!s) return '';
+    const twoFa = s.match(/^([^:\s]{2,80}):([^:\s]{3,128}):([A-Za-z0-9]{16,64}):(.+)$/s);
+    if (twoFa && twoFa[4] && twoFa[4].length > 20) {
+      const secret = twoFa[3].toUpperCase().replace(/(.{4})/g, '$1 ').trim();
+      return 'Username: ' + twoFa[1] + '\nPassword: ' + twoFa[2] + '\n2FA / Token: ' + secret + '\nExtra: ' + String(twoFa[4]).replace(/\s+/g, '');
+    }
+    if (/^Username:/im.test(s) && /2FA \/ Token:/i.test(s) && !/\n\s*2\.\s*Username:/i.test(s)) return s;
+    return s;
+  }
   function formatLogBlock(text, idx, total) {
     let s = String(text || '').trim() || '(missing)';
     s = s.replace(/^\s*\d+\.\s*/m, '').trim(); // strip leading "1. "
@@ -3779,7 +3804,12 @@ function openOrderModal(index) {
       : `Logs: numbered, all ${items.length} purchased (customer view)`,
     items
       .map((it, idx) =>
-        formatLogBlock(it.login_credentials || it.login_credentials_raw, idx, items.length)
+        formatLogBlock(formatCustomerLog((function () {
+          const view = String(it.login_credentials || '');
+          const raw = String(it.login_credentials_raw || '');
+          if (/^Username:/im.test(view) && !/\n\s*2\.\s*Username:/i.test(view) && /2FA \/ Token:/i.test(view)) return view;
+          return raw || view;
+        })()), idx, items.length)
       )
       .join('\n\n'),
     true
@@ -4550,6 +4580,10 @@ async function loadBoosterOrders() {
  }
  } catch (e) {}
 })();
+</script>
+<script type="module">
+  import { formatCredentials } from '/lib/formatCredentials.js';
+  window.formatCredentials = formatCredentials;
 </script>
 
 </body>
