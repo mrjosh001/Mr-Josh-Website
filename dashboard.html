@@ -6996,9 +6996,9 @@ function isNotifExpired(n) {
   const map = getViewedAtMap();
   const viewed = Number(map[String(n.id)] || 0);
   const created = n.created_at ? new Date(n.created_at).getTime() : 0;
-  const start = viewed || created;
-  if (!start || isNaN(start)) return false;
-  return (Date.now() - start) > NOTIF_KEEP_MS;
+  if (created && !isNaN(created) && (Date.now() - created) > NOTIF_KEEP_MS) return true;
+  if (viewed && (Date.now() - viewed) > NOTIF_KEEP_MS) return true;
+  return false;
 }
 
 function formatNotifTime(iso) {
