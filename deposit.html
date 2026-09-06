@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>Fund Wallet — MJ HUB</title>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@800&display=swap" rel="stylesheet">
 <meta name="theme-color" content="#06080f">
 <link rel="icon" href="/img/IMG_3027.png">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
@@ -102,6 +103,11 @@ a{color:inherit;text-decoration:none}
 .instruct{padding:12px 14px;border-radius:12px;background:var(--primary-soft);border:1px solid rgba(91,138,245,.22);font-size:13px;line-height:1.5;color:var(--text);margin-bottom:14px;font-weight:600}
 .waiting{text-align:center;font-size:13px;color:var(--muted);font-weight:600;margin-bottom:12px}
 .waiting i{margin-right:6px}
+
+.logo-word{font-family:"Plus Jakarta Sans",Inter,sans-serif;font-size:20px;font-weight:800;letter-spacing:-.04em;color:#1e3a8a;line-height:24px}
+:root[data-theme="dark"] .logo-word{color:#dbeafe}
+.header h1{flex:0 0 auto;font-size:15px;margin-left:8px}
+
 </style>
 <link rel="stylesheet" href="/css/skeleton.css">
 <script src="/js/skeleton.js" defer></script>
@@ -152,6 +158,10 @@ a{color:inherit;text-decoration:none}
 
 <header class="header">
   <a class="back" href="dashboard.html#home" aria-label="Back"><i class="fa-solid fa-arrow-left"></i></a>
+  <a href="landing.html" class="logo" style="display:inline-flex;align-items:center;gap:8px;text-decoration:none;margin-right:auto">
+    <img src="/img/IMG_3027.png" alt="" style="height:24px;width:auto;display:block">
+    <span class="logo-word">HUB</span>
+  </a>
   <h1>Fund Wallet</h1>
   <button type="button" class="theme-btn" id="themeBtn" onclick="toggleTheme()">🌙</button>
 </header>
@@ -448,7 +458,6 @@ function startBalanceWatch() {
     } catch (e) {}
     if (ticks >= 60) stopBalanceWatch();
   }, 2000);
-}, 3000);
 }
 function stopBalanceWatch() {
   if (balancePollTimer) {
@@ -471,11 +480,15 @@ async function checkVirtualAccount() {
       setTimeout(() => { location.href = 'auth.html?next=deposit.html'; }, 1200);
       return;
     }
+    const ctrl = new AbortController();
+    const to = setTimeout(function(){ try{ ctrl.abort(); }catch(e){} }, 12000);
     const res = await fetch('/api/pocketfi?action=virtual_account', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + accessToken },
-      body: JSON.stringify({ create: false })
+      body: JSON.stringify({ create: false }),
+      signal: ctrl.signal
     });
+    clearTimeout(to);
     let data = {};
     try { data = await res.json(); } catch (_) {}
     if (!res.ok) throw new Error(data.message || 'Could not load account');
@@ -665,11 +678,24 @@ document.addEventListener('visibilitychange', async () => {
     localStorage.removeItem('mjhub_pending_pocketfi');
   } catch (_) {}
 });
+document.addEventListener('click', function(e){
+  var tab = e.target.closest && e.target.closest('.method-tab');
+  if(!tab) return;
+  if(tab.id==='tabManual') setOtherMethod('manual');
+  if(tab.id==='tabPocketfi') setOtherMethod('pocketfi');
+});
 (async () => {
   syncThemeUi();
-  if (!(await ensureAuth())) return;
-  await handleDepositReturn();
-  await checkVirtualAccount();
+  try {
+    if (!(await ensureAuth())) return;
+    await handleDepositReturn();
+    await checkVirtualAccount();
+  } catch (e) {
+    var msg = (e && e.message) ? e.message : 'Could not load account';
+    var el = document.getElementById('vaErrorText');
+    if (el) el.textContent = msg;
+    showVaState('error');
+  }
 })();
 </script>
 </body>
