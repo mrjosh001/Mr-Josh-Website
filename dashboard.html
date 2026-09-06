@@ -6063,107 +6063,38 @@ window.saveProfileSettingsData = async function() {
             // Not fatal if profiles write succeeds
         }
 
-        // 2) Write profiles — use .update first (row should exist), then upsert.
-        // IMPORTANT: .select() only asks for `id` so missing optional columns
-        // never break the whole save.
-        async function writeProfiles(patch) {
-            // Prefer update (RLS update policy is the usual one)
-            let res = await supabaseClient
-                .from('profiles')
-                .update(patch)
-                .eq('id', currentUserId)
-                .select('id');
-            if (!res.error && res.data && res.data.length) return res;
-            // Row missing → insert/upsert
-            res = await supabaseClient
-                .from('profiles')
-                .upsert({ id: currentUserId, ...patch }, { onConflict: 'id' })
-                .select('id');
-            return res;
+        const res = await fetch('/api/order?action=update_profile', {
+            method: 'POST',
+            headers: {
+                Authorization: 'Bearer ' + accessToken,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                action: 'update_profile',
+                full_name: name,
+                phone: phone,
+                address: address,
+                bio: bio
+            })
+        });
+        const json = await res.json().catch(function () { return {}; });
+        if (!res.ok || !json.success) {
+            throw new Error(json.message || 'Could not save profile');
         }
 
-        // Try richest payload first, then strip columns the schema may not have
-        const payloads = [
-            {
-                full_name: name,
-                email: userData.email || null,
-                phone: phone || null,
-                phone_number: phone || null,
-                address: address || null,
-                bio: bio || null,
-                avatar_url: userData.avatarUrl || null
-            },
-            {
-                full_name: name,
-                email: userData.email || null,
-                phone_number: phone || null,
-                address: address || null,
-                bio: bio || null
-            },
-            {
-                full_name: name,
-                phone_number: phone || null,
-                address: address || null,
-                bio: bio || null
-            },
-            {
-                full_name: name,
-                phone: phone || null
-            },
-            {
-                full_name: name
-            },
-            {
-                name: name,
-                phone: phone || null
-            }
-        ];
-
-        let ok = false;
-        let lastErr = null;
-        for (const patch of payloads) {
-            Object.keys(patch).forEach((k) => {
-                if (patch[k] === undefined) delete patch[k];
-            });
-            const { data, error } = await writeProfiles(patch);
-            if (!error && data && data.length) {
-                ok = true;
-                lastErr = null;
-                break;
-            }
-            lastErr = error;
-            // Permission → stop (user can't write profiles)
-            if (error && /permission|policy|rls|not authorized|401|403/i.test(String(error.message || error.code || ''))) {
-                break;
-            }
-            // Column missing → try next thinner payload
-            if (error && /column|schema cache|Could not find/i.test(error.message || '')) {
-                continue;
-            }
-        }
-
-        // Auth metadata saved counts as partial success even if profiles blocked
-        userData.name = name;
-        userData.phone = phone;
-        userData.address = address;
-        userData.bio = bio;
-        safeSet('dropdownName', name);
-        safeSet('profileHeaderName', name);
-        safeSet('heroWelcomeTitle', `Welcome back, ${name}!`);
-
-        if (ok) {
-            showToast('Profile saved!', 'success');
-        } else if (!authErr) {
-            // Metadata saved; profiles table failed
-            console.error('profiles write failed', lastErr);
-            showToast(
-                'Saved to your account. Database profile row may need RLS update permission. ' +
-                (lastErr?.message || ''),
-                'warning'
-            );
-        } else {
-            throw new Error(lastErr?.message || authErr?.message || 'Could not save profile');
-        }
+        const saved = json.profile || {};
+        userData.name = saved.full_name || name;
+        userData.phone = saved.phone || phone;
+        userData.address = saved.address || address;
+        userData.bio = saved.bio || bio;
+        safeSet('dropdownName', userData.name);
+        safeSet('profileHeaderName', userData.name);
+        safeSet('heroWelcomeTitle', 'Welcome back, ' + userData.name + '!');
+        if (document.getElementById('profileNameInput')) document.getElementById('profileNameInput').value = userData.name;
+        if (document.getElementById('profilePhoneInput')) document.getElementById('profilePhoneInput').value = userData.phone || '';
+        if (document.getElementById('profileAddressInput')) document.getElementById('profileAddressInput').value = userData.address || '';
+        if (document.getElementById('profileBioInput')) document.getElementById('profileBioInput').value = userData.bio || '';
+        showToast('Profile saved!', 'success');
     } catch (err) {
         console.error('saveProfileSettingsData', err);
         showToast(err.message || 'Could not save profile', 'error');
