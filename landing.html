@@ -175,7 +175,16 @@ body {
   background: linear-gradient(135deg, var(--primary), #a855f7);
   -webkit-background-clip: text; -webkit-text-fill-color: transparent;
 }
-.logo img { height: 34px; width: auto; max-width: 150px; object-fit: contain; display: block; }
+.logo img { height: 34px; width: 34px; object-fit: cover; object-position: left center; display: block; border-radius: 8px; background: transparent; }
+.logo-word {
+  font-family: Inter, system-ui, sans-serif !important;
+  font-size: 15px !important; font-weight: 800;
+  letter-spacing: -.02em;
+  background: none !important;
+  -webkit-background-clip: unset !important;
+  -webkit-text-fill-color: var(--text) !important;
+  color: var(--text) !important;
+}
 .nav-desktop { display: flex; gap: 4px; }
 .nav-desktop a {
   padding: 8px 14px; font-size: 14px; font-weight: 500;
@@ -1729,7 +1738,7 @@ body[data-theme="dark"] .footer3 {
 <div id="headerSpacer" style="height:72px"></div>
 <header class="header">
   <div class="header-inner">
-    <a href="/" class="logo"><img id="brandLogo" src="https://atczodlljmlayvldxfmv.supabase.co/storage/v1/object/public/avatars/light%20background%20logo" alt="MJ HUB"></a>
+    <a href="/" class="logo"><img id="brandLogo" src="https://atczodlljmlayvldxfmv.supabase.co/storage/v1/object/public/avatars/light%20background%20logo" alt=""><span class="logo-word">MJ HUB</span></a>
     <nav class="nav-desktop">
       <a href="landing.html">Home</a>
       <a href="#features">Services</a>
@@ -2498,9 +2507,32 @@ document.addEventListener('DOMContentLoaded', () => {
   const LOGO_DARK = 'https://atczodlljmlayvldxfmv.supabase.co/storage/v1/object/public/avatars/dark%20background%20log';
   const LOGO_LIGHT = 'https://atczodlljmlayvldxfmv.supabase.co/storage/v1/object/public/avatars/light%20background%20logo';
 
+  function knockPlate(img) {
+    if (!img) return;
+    var im = new Image();
+    im.crossOrigin = 'anonymous';
+    im.onload = function () {
+      try {
+        var c = document.createElement('canvas');
+        c.width = im.naturalWidth; c.height = im.naturalHeight;
+        var ctx = c.getContext('2d');
+        ctx.drawImage(im, 0, 0);
+        var data = ctx.getImageData(0, 0, c.width, c.height);
+        var p = data.data;
+        for (var i = 0; i < p.length; i += 4) {
+          var r = p[i], g = p[i+1], b = p[i+2];
+          if ((r > 232 && g > 232 && b > 232) || (r < 45 && g < 55 && b < 95)) p[i+3] = 0;
+        }
+        ctx.putImageData(data, 0, 0);
+        img.src = c.toDataURL('image/png');
+      } catch (e) {}
+    };
+    im.src = img.src;
+  }
   function applyLogo(theme) {
     if (!brandLogo) return;
     brandLogo.src = theme === 'light' ? LOGO_LIGHT : LOGO_DARK;
+    knockPlate(brandLogo);
   }
 
   const currentTheme = body.getAttribute('data-theme') || 'dark';
