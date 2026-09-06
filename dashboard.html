@@ -5521,6 +5521,46 @@ window.mjShotDb = function() {
     req.onerror = function () { reject(req.error); };
   });
 };
+window.mjBlobToB64 = function(blob) {
+  return new Promise(function (resolve, reject) {
+    var r = new FileReader();
+    r.onload = function () {
+      var s = String(r.result || '');
+      var i = s.indexOf(',');
+      resolve(i >= 0 ? s.slice(i + 1) : s);
+    };
+    r.onerror = reject;
+    r.readAsDataURL(blob);
+  });
+};
+window.mjUploadSupportShot = async function(file) {
+  var blob = file;
+  try {
+    if (typeof createImageBitmap === 'function') {
+      var bmp = await createImageBitmap(file);
+      var c = document.createElement('canvas');
+      var w = bmp.width || 1200;
+      var h = bmp.height || 1200;
+      var scale = Math.min(1, 1280 / Math.max(w, h));
+      c.width = Math.max(1, Math.round(w * scale));
+      c.height = Math.max(1, Math.round(h * scale));
+      c.getContext('2d').drawImage(bmp, 0, 0, c.width, c.height);
+      blob = await new Promise(function (resolve) { c.toBlob(function (b) { resolve(b || file); }, 'image/jpeg', 0.72); });
+    }
+  } catch (e) {}
+  var b64 = await window.mjBlobToB64(blob);
+  var sess = await supabaseClient.auth.getSession();
+  var token = sess && sess.data && sess.data.session && sess.data.session.access_token;
+  if (!token) throw new Error('Sign in again');
+  var res = await fetch('/api/order?action=support_upload', {
+    method: 'POST',
+    headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ action: 'support_upload', data: b64, ticket_id: (window._mjSup && window._mjSup.ticketId) || '' })
+  });
+  var json = await res.json().catch(function () { return {}; });
+  if (!res.ok || !json.url) throw new Error(json.message || 'Upload failed');
+  return json.url;
+};
 window.mjPutShot = async function(id, blob, ticketId) {
   var db = await window.mjShotDb();
   await new Promise(function (resolve, reject) {
@@ -5591,12 +5631,13 @@ window.mjSupportSend = async function(e) {
   if (!text && !files.length) return false;
   input.value = '';
   if (fileEl) fileEl.value = '';
-  var shotIds = [];
   for (var i = 0; i < files.length; i++) {
-    var sid = (crypto.randomUUID && crypto.randomUUID()) || (Date.now() + '-' + i);
-    try { await window.mjPutShot(sid, files[i], window._mjSup.ticketId || ''); } catch (err) {}
-    shotIds.push(sid);
-    text += (text ? '\n' : '') + '[[MJSHOT:' + sid + ']]';
+    try {
+      var url = await window.mjUploadSupportShot(files[i]);
+      text += (text ? '\n' : '') + '[[MJURL]]' + url + '[[/MJURL]]';
+    } catch (err) {
+      mjSupportAppend('bot', 'Could not attach that photo. Try a smaller screenshot.');
+    }
   }
   mjSupportAppend('user', text);
   window.mjHydrateShots();

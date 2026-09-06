@@ -1555,6 +1555,7 @@ async function openModal(kind, i) {
     const allAccounts = [];
     items.forEach((it) => {
       const raw =
+        it.login_credentials_raw ||
         it.login_credentials ||
         [it.credentials_id, it.credentials_pass].filter(Boolean).join(':') ||
         g.login_credentials ||
@@ -2007,17 +2008,23 @@ async function sendComplaintInApp(fullMsg, complaint) {
   const oid = (window.__orderComplaint && window.__orderComplaint.orderId) || '';
   const prod = (window.__orderComplaint && window.__orderComplaint.product) || 'Order';
   const files = window.__complaintFiles || [];
-  const shotIds = [];
-  for (let i = 0; i < files.length && shotIds.length < 3; i++) {
+  let msg = fullMsg;
+  for (let i = 0; i < files.length && i < 3; i++) {
     try {
       const blob = await compressImage(files[i]);
-      const id = (crypto.randomUUID && crypto.randomUUID()) || (Date.now() + '-' + i);
-      await putShotLocal(id, blob, oid);
-      shotIds.push(id);
+      const b64 = await blobToBase64(blob);
+      const up = await withTimeout(fetch('/api/order?action=support_upload', {
+        method: 'POST',
+        headers: {
+          Authorization: 'Bearer ' + token,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ action: 'support_upload', data: b64 })
+      }), 15000, 'Photo upload timed out');
+      const upJson = await up.json().catch(function () { return {}; });
+      if (up.ok && upJson.url) msg += '\n[[MJURL]]' + upJson.url + '[[/MJURL]]';
     } catch (e) {}
   }
-  let msg = fullMsg;
-  shotIds.forEach(function (id) { msg += '\n[[MJSHOT:' + id + ']]'; });
 
   const res = await withTimeout(fetch('/api/order?action=support_ticket', {
     method: 'POST',

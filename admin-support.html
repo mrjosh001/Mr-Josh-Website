@@ -322,6 +322,39 @@
         req.onerror = function () { reject(req.error); };
       });
     }
+    async function uploadAdminShot(file) {
+      let blob = file;
+      try {
+        const bmp = await createImageBitmap(file);
+        const c = document.createElement('canvas');
+        const scale = Math.min(1, 1280 / Math.max(bmp.width || 1200, bmp.height || 1200));
+        c.width = Math.max(1, Math.round((bmp.width || 1200) * scale));
+        c.height = Math.max(1, Math.round((bmp.height || 1200) * scale));
+        c.getContext('2d').drawImage(bmp, 0, 0, c.width, c.height);
+        blob = await new Promise(function (resolve) { c.toBlob(function (b) { resolve(b || file); }, 'image/jpeg', 0.72); });
+      } catch (e) {}
+      const b64 = await new Promise(function (resolve, reject) {
+        const r = new FileReader();
+        r.onload = function () {
+          const s = String(r.result || '');
+          const i = s.indexOf(',');
+          resolve(i >= 0 ? s.slice(i + 1) : s);
+        };
+        r.onerror = reject;
+        r.readAsDataURL(blob);
+      });
+      const { data: { session } } = await sb.auth.getSession();
+      const token = session && session.access_token;
+      if (!token) throw new Error('Sign in again');
+      const res = await fetch('/api/order?action=support_upload', {
+        method: 'POST',
+        headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'support_upload', data: b64, ticket_id: activeTicketId || '' })
+      });
+      const json = await res.json().catch(function () { return {}; });
+      if (!res.ok || !json.url) throw new Error(json.message || 'Upload failed');
+      return json.url;
+    }
     async function putAdminShot(id, blob) {
       const db = await openShotDb();
       await new Promise(function (resolve, reject) {
@@ -532,9 +565,12 @@
       }).slice(0, 3);
       if (!body && !files.length) return false;
       for (let i = 0; i < files.length; i++) {
-        const id = (crypto.randomUUID && crypto.randomUUID()) || (Date.now() + '-' + i);
-        try { await putAdminShot(id, files[i]); } catch (err) {}
-        body += (body ? '\n' : '') + '[[MJSHOT:' + id + ']]';
+        try {
+          const url = await uploadAdminShot(files[i]);
+          body += (body ? '\n' : '') + '[[MJURL]]' + url + '[[/MJURL]]';
+        } catch (err) {
+          alert('Could not attach that photo');
+        }
       }
       const { data: { user } } = await sb.auth.getUser();
       const { error } = await sb.from('support_messages').insert({
