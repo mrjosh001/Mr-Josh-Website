@@ -1,3 +1,4 @@
+(function(){try{var s=document.createElement('script');s.src='/js/mj-theme.js';s.async=false;(document.head||document.documentElement).appendChild(s);}catch(e){}})();
 /**
  * MJ Hub page loader — overlay from click until next page ready
  * Does not hang: navigates after one paint frame (max 80ms fallback).
@@ -17,13 +18,13 @@
     var css = [
       '#'+OVERLAY_ID+'{position:fixed;inset:0;z-index:2147483000;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:18px;',
       'background:rgba(5,7,13,.55);-webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px);',
-      'opacity:0;visibility:hidden;pointer-events:none;transition:opacity .15s ease}',
+      'opacity:0;visibility:hidden;pointer-events:none;transition:opacity .28s ease}',
       '#'+OVERLAY_ID+'.is-on{opacity:1;visibility:visible;pointer-events:auto}',
       '#'+OVERLAY_ID+' .mj-inf{position:relative;width:120px;height:64px}',
-      '#'+OVERLAY_ID+' .mj-inf::before{content:"";position:absolute;left:50%;top:50%;width:140px;height:140px;transform:translate(-50%,-50%);border-radius:50%;background:radial-gradient(circle,rgba(124,58,237,.4) 0%,rgba(56,189,248,.15) 40%,transparent 70%);animation:mjBloom 2.2s ease-in-out infinite;pointer-events:none}',
+      '#'+OVERLAY_ID+' .mj-inf::before{content:"";position:absolute;left:50%;top:50%;width:140px;height:140px;transform:translate(-50%,-50%);border-radius:50%;background:radial-gradient(circle,rgba(124,58,237,.4) 0%,rgba(56,189,248,.15) 40%,transparent 70%);animation:mjBloom 1.6s ease-in-out infinite;pointer-events:none}',
       '#'+OVERLAY_ID+' .mj-inf svg{position:relative;z-index:1;display:block;width:120px;height:64px;overflow:visible}',
       '#'+OVERLAY_ID+' .mj-track{fill:none;stroke:rgba(167,139,250,.25);stroke-width:3.5;stroke-linecap:round;stroke-linejoin:round}',
-      '#'+OVERLAY_ID+' .mj-beam{fill:none;stroke:#e9d5ff;stroke-width:3.5;stroke-linecap:round;stroke-linejoin:round;stroke-dasharray:28 200;filter:drop-shadow(0 0 4px #c084fc) drop-shadow(0 0 12px #22d3ee);animation:mjBeam 1.6s linear infinite}',
+      '#'+OVERLAY_ID+' .mj-beam{fill:none;stroke:#e9d5ff;stroke-width:3.5;stroke-linecap:round;stroke-linejoin:round;stroke-dasharray:28 200;filter:drop-shadow(0 0 4px #c084fc) drop-shadow(0 0 12px #22d3ee);animation:mjBeam 1.15s linear infinite}',
       '#'+OVERLAY_ID+' .mj-lbl{position:relative;z-index:1;font:500 12px system-ui,sans-serif;letter-spacing:.2em;color:rgba(226,232,240,.85);text-transform:lowercase}',
       '@keyframes mjBeam{to{stroke-dashoffset:-228}}',
       '@keyframes mjBloom{0%,100%{opacity:.55;transform:translate(-50%,-50%) scale(1)}50%{opacity:1;transform:translate(-50%,-50%) scale(1.08)}}',
@@ -59,7 +60,6 @@
   }
 
   function hide() {
-    if (navigating) return;
     var el = document.getElementById(OVERLAY_ID);
     if (el) el.classList.remove('is-on');
     try { sessionStorage.removeItem('mj_nav_loading'); } catch (e) {}
@@ -108,7 +108,16 @@
     var a = e.target && e.target.closest ? e.target.closest('a') : null;
     if (!isInternalNav(a)) return;
     e.preventDefault();
-    navigateTo(a.href);
+    var go = a.href;
+    try {
+      var code = localStorage.getItem('mjhub_ref_code') || sessionStorage.getItem('mjhub_ref_code') || '';
+      if (code && /auth\.html|\/auth/i.test(go)) {
+        var u = new URL(go, location.href);
+        if (!u.searchParams.get('ref')) u.searchParams.set('ref', code);
+        go = u.toString();
+      }
+    } catch (err) {}
+    navigateTo(go);
   }, true);
 
   window.addEventListener('pagehide', function () {
@@ -147,7 +156,9 @@
     setTimeout(hide, 30);
   }
   window.addEventListener('load', hideWhenReady);
-  if (document.readyState === 'complete') hideWhenReady();
+  document.addEventListener('DOMContentLoaded', hideWhenReady);
+  if (document.readyState === 'complete' || document.readyState === 'interactive') hideWhenReady();
+  setTimeout(hideWhenReady, 500);
 
   try {
     if (sessionStorage.getItem('mj_nav_loading') === '1') show();
@@ -155,4 +166,13 @@
 
   window.mjShowPageLoader = show;
   window.mjHidePageLoader = function () { navigating = false; hide(); };
+
+  try {
+    if (!window.__mjLogoBg) {
+      var ls = document.createElement('script');
+      ls.src = '/js/mj-logo-bg.js';
+      ls.defer = true;
+      (document.head || document.documentElement).appendChild(ls);
+    }
+  } catch (e) {}
 })();
