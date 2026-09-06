@@ -182,7 +182,9 @@ body {
 .mobile-menu.kinetic-nav[hidden] { display: none !important; }
 .mobile-menu.kinetic-nav.active,
 .mobile-menu.kinetic-nav[data-nav="open"] {
-  display: block;
+  display: block !important;
+  visibility: visible !important;
+  opacity: 1 !important;
 }
 .kinetic-overlay {
   position: absolute; inset: 0;
@@ -1410,8 +1412,15 @@ body > *:not(#webgl-bg):not(script) { position: relative; z-index: 1; }
 footer.footer3, .footer3 {
   z-index: 10 !important;
   isolation: isolate;
-  background: var(--elevated) !important;
-  color: var(--text) !important;
+  background: #f8fafc !important;
+  color: #0f172a !important;
+}
+html[data-theme="dark"] footer.footer3,
+html[data-theme="dark"] .footer3,
+body[data-theme="dark"] footer.footer3,
+body[data-theme="dark"] .footer3 {
+  background: #0b1220 !important;
+  color: #f8fafc !important;
 }
 #webgl-bg { z-index: 0 !important; pointer-events: none !important; }
 
@@ -1705,6 +1714,27 @@ footer.footer3, .footer3 {
     </div>
   </div>
 </header>
+
+<script>
+(function(){
+  var btn=document.getElementById('menuToggle');
+  var menu=document.getElementById('mobileMenu');
+  if(!btn||!menu) return;
+  function setOpen(on){
+    menu.classList.toggle('active', !!on);
+    menu.setAttribute('data-nav', on ? 'open' : 'closed');
+    if(on) menu.removeAttribute('hidden');
+    else menu.setAttribute('hidden','');
+    document.body.classList.toggle('menu-open', !!on);
+    btn.setAttribute('aria-expanded', on ? 'true' : 'false');
+  }
+  window.toggleLandingMenu=function(e){
+    if(e){ e.preventDefault(); e.stopPropagation(); }
+    setOpen(!(menu.classList.contains('active') || menu.getAttribute('data-nav')==='open'));
+  };
+  btn.onclick=window.toggleLandingMenu;
+})();
+</script>
 
 <!-- LIVE STOCK TICKER -->
 <div class="ticker-strip" id="tickerStrip">
