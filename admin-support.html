@@ -108,6 +108,10 @@
     .bubble.admin { align-self: flex-end; background: linear-gradient(135deg, #3b82f6, #3b82f6); color: #fff; border-bottom-right-radius: 4px; }
     .bubble.system { align-self: center; background: transparent; color: var(--muted); font-size: 12px; max-width: 90%; text-align: center; box-shadow: none; }
     .bubble .who { font-size: 10px; opacity: .75; margin-bottom: 5px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; }
+    .bubble img.mj-shot {
+      display: block; max-width: 100%; margin-top: 8px; border-radius: 12px;
+      border: 1px solid var(--border);
+    }
     .composer-wrap { border-top: 1px solid var(--border); background: var(--card); }
     .quick-replies { padding: 10px 14px 0; display: flex; flex-wrap: wrap; gap: 6px; }
     .composer { padding: 12px 14px; display: flex; gap: 10px; align-items: flex-end; }
@@ -267,6 +271,21 @@
     function escapeHtml(s) {
       return String(s || '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
     }
+    function formatSupportBody(s) {
+      const text = String(s || '');
+      const re = /\[\[MJIMG(?::[a-z0-9]+)?\]\]([\s\S]*?)\[\[\/MJIMG\]\]/gi;
+      let out = '';
+      let last = 0;
+      let m;
+      while ((m = re.exec(text))) {
+        out += escapeHtml(text.slice(last, m.index));
+        const b64 = String(m[1] || '').replace(/\s/g, '');
+        if (b64) out += '<img class="mj-shot" alt="Screenshot" src="data:image/jpeg;base64,' + b64 + '">';
+        last = m.index + m[0].length;
+      }
+      out += escapeHtml(text.slice(last));
+      return out;
+    }
     function initials(name) {
       const p = String(name || '?').trim().split(/\s+/);
       return ((p[0] && p[0][0]) || '?') + ((p[1] && p[1][0]) || '');
@@ -408,7 +427,7 @@
       box.innerHTML = (data || []).map(m => {
         const cls = m.sender_type === 'admin' ? 'admin' : (m.sender_type === 'system' ? 'system' : 'user');
         const who = m.sender_type === 'admin' ? 'You' : (m.sender_type === 'system' ? 'System' : 'Customer');
-        return `<div class="bubble ${cls}"><div class="who">${who} · ${fmtTime(m.created_at)}</div>${escapeHtml(m.body)}</div>`;
+        return `<div class="bubble ${cls}"><div class="who">${who} · ${fmtTime(m.created_at)}</div>${formatSupportBody(m.body)}</div>`;
       }).join('') || '<div style="color:var(--muted);">No messages yet.</div>';
       box.scrollTop = box.scrollHeight;
     }

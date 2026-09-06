@@ -674,7 +674,7 @@
         <button type="button" onclick="document.getElementById('complaintOk').classList.remove('open')" aria-label="Close">✕</button>
       </div>
       <div class="sheet-b complaint-form">
-        <p class="cf-hint">You can keep waiting here or open in-app support to continue the chat.</p>
+        <p class="cf-hint">Open in-app support if you want to continue the chat.</p>
         <button type="button" class="btn-contact-support" onclick="location.href='dashboard.html?openSupport=1'">
           <i class="fa-solid fa-comments"></i> Open in-app support
         </button>
@@ -1805,19 +1805,19 @@ window.setComplaintChannel = function setComplaintChannel(ch) {
   }
 }
 
-function buildComplaintMessage(extra) {
+function buildComplaintMessage(extra, forWhatsApp) {
   const cid = window.__customerId || 'Not available';
   const name = window.__customerName || '';
   const oid = (window.__orderComplaint && window.__orderComplaint.orderId) || '—';
   const prod = (window.__orderComplaint && window.__orderComplaint.product) || 'Order';
   const body = String(extra || '').trim();
+  if (!forWhatsApp) return body;
   return (
-    'Hello Admin, I have a complaint about an order on MJ Hub.\n\n' +
+    body + '\n\n' +
     (name ? 'Name: ' + name + '\n' : '') +
     'Customer ID: ' + cid + '\n' +
     'Order ID: ' + oid + '\n' +
-    'Product: ' + prod + '\n' +
-    'Complaint: ' + (body || '')
+    'Product: ' + prod
   );
 }
 
@@ -1850,7 +1850,7 @@ window.submitComplaint = async function submitComplaint() {
     return;
   }
   toast('Sending…');
-  const msg = buildComplaintMessage(complaint);
+  const msg = buildComplaintMessage(complaint, window.__complaintChannel === 'whatsapp');
   if (window.__complaintChannel === 'whatsapp') {
     try { await navigator.clipboard.writeText(msg); } catch (e) {}
     const url = 'https://wa.me/' + SUPPORT_WA + '?text=' + encodeURIComponent(msg);
@@ -1938,15 +1938,11 @@ async function saveShotsLocal(meta) {
   return kept.length;
 }
 
-function showComplaintSent(nShots) {
+function showComplaintSent() {
   const box = document.getElementById('complaintOk');
   if (box) {
     const sub = document.getElementById('complaintOkSub');
-    if (sub) {
-      sub.textContent = nShots
-        ? 'Support has your message. ' + nShots + ' screenshot(s) stay on this phone for 30 days.'
-        : 'Support has your message. We will reply in in-app support.';
-    }
+    if (sub) sub.textContent = 'Support has your message.';
     box.classList.add('open');
   } else {
     toast('Complaint sent');
@@ -1971,10 +1967,14 @@ async function sendComplaintInApp(fullMsg, complaint) {
   }
   const oid = (window.__orderComplaint && window.__orderComplaint.orderId) || '';
   const prod = (window.__orderComplaint && window.__orderComplaint.product) || 'Order';
-  const nFiles = (window.__complaintFiles || []).length;
-  let body = fullMsg;
-  if (nFiles) {
-    body += '\n\nScreenshots: ' + nFiles + ' kept on this phone for 30 days.';
+  const files = window.__complaintFiles || [];
+  const attachments = [];
+  for (let i = 0; i < files.length && attachments.length < 3; i++) {
+    try {
+      const blob = await compressImage(files[i]);
+      const b64 = await blobToBase64(blob);
+      if (b64) attachments.push({ data: b64 });
+    } catch (e) {}
   }
 
   const res = await withTimeout(fetch('/api/order?action=support_ticket', {
@@ -1985,14 +1985,15 @@ async function sendComplaintInApp(fullMsg, complaint) {
     },
     body: JSON.stringify({
       action: 'support_ticket',
-      message: body,
+      message: fullMsg,
       complaint: complaint,
       order_id: oid,
       product: prod,
       customer_id: window.__customerId || '',
-      user_name: window.__customerName || ''
+      user_name: window.__customerName || '',
+      attachments: attachments
     })
-  }), 12000, 'Send timed out');
+  }), 20000, 'Send timed out');
 
   const json = await res.json().catch(function () { return {}; });
   if (!res.ok || !json.success) {
@@ -2012,14 +2013,7 @@ async function sendComplaintInApp(fullMsg, complaint) {
   } catch (e) {}
 
   closeSupportPick();
-  showComplaintSent(nFiles);
-  if (nFiles) {
-    saveShotsLocal({
-      id: json.ticket_id || String(Date.now()),
-      ticketId: json.ticket_id || '',
-      orderId: oid
-    }).catch(function () {});
-  }
+  showComplaintSent();
 }
 
 function compressImage(file) {
@@ -2027,7 +2021,7 @@ function compressImage(file) {
     const img = new Image();
     const url = URL.createObjectURL(file);
     img.onload = function () {
-      const max = 1280;
+      const max = 900;
       let w = img.width, h = img.height;
       if (w > max || h > max) {
         const s = Math.min(max / w, max / h);
@@ -2038,10 +2032,23 @@ function compressImage(file) {
       c.width = w; c.height = h;
       c.getContext('2d').drawImage(img, 0, 0, w, h);
       URL.revokeObjectURL(url);
-      c.toBlob(function (b) { resolve(b || file); }, 'image/jpeg', 0.72);
+      c.toBlob(function (b) { resolve(b || file); }, 'image/jpeg', 0.62);
     };
     img.onerror = function () { URL.revokeObjectURL(url); resolve(file); };
     img.src = url;
+  });
+}
+function blobToBase64(blob) {
+  return new Promise(function (resolve) {
+    if (!blob) return resolve('');
+    const r = new FileReader();
+    r.onload = function () {
+      const s = String(r.result || '');
+      const i = s.indexOf(',');
+      resolve(i >= 0 ? s.slice(i + 1) : s);
+    };
+    r.onerror = function () { resolve(''); };
+    r.readAsDataURL(blob);
   });
 }
 function copyRaw(t) {

@@ -5244,7 +5244,27 @@ window.mjSupportAppend = function(role, text) {
   if (!box) return;
   var d = document.createElement('div');
   d.className = 'mj-support-msg ' + (role === 'user' ? 'user' : (role === 'sys' ? 'sys' : 'bot'));
-  d.textContent = text;
+  var raw = String(text || '');
+  var re = /\[\[MJIMG(?::[a-z0-9]+)?\]\]([\s\S]*?)\[\[\/MJIMG\]\]/gi;
+  var last = 0;
+  var m;
+  var hasImg = false;
+  while ((m = re.exec(raw))) {
+    hasImg = true;
+    var chunk = raw.slice(last, m.index);
+    if (chunk) d.appendChild(document.createTextNode(chunk));
+    var b64 = String(m[1] || '').replace(/\s/g, '');
+    if (b64) {
+      var img = document.createElement('img');
+      img.alt = 'Screenshot';
+      img.style.cssText = 'display:block;max-width:220px;margin-top:8px;border-radius:12px;';
+      img.src = 'data:image/jpeg;base64,' + b64;
+      d.appendChild(img);
+    }
+    last = m.index + m[0].length;
+  }
+  if (!hasImg) d.textContent = raw;
+  else if (last < raw.length) d.appendChild(document.createTextNode(raw.slice(last)));
   box.appendChild(d);
   box.scrollTop = box.scrollHeight;
 };
