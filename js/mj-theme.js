@@ -18,10 +18,22 @@
     try { document.documentElement.setAttribute('data-theme', t); } catch (e) {}
     try { if (document.body) document.body.setAttribute('data-theme', t); } catch (e2) {}
   }
+  function wireLogo() {
+    var local = '/img/IMG_3027.png';
+    var imgs = document.querySelectorAll('img');
+    for (var i = 0; i < imgs.length; i++) {
+      var s = imgs[i].getAttribute('src') || '';
+      if (/avatars\/(mjhub-mark-only|mjhub-logo-dark-clear|light%20background|dark%20background)/i.test(s) || /mjhub-mark-only\.png/i.test(s)) {
+        imgs[i].setAttribute('src', local);
+      }
+    }
+  }
   window.mjApplyTheme = apply;
   apply();
   if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', apply);
+    document.addEventListener('DOMContentLoaded', function () { apply(); wireLogo(); });
+  } else {
+    wireLogo();
   }
   try {
     var mq = window.matchMedia('(prefers-color-scheme: light)');
