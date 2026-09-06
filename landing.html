@@ -1,6 +1,8 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
+<script src="/js/mj-theme.js"></script>
+
 <script>
 /* Email confirm / auth tokens: send to auth, never stay on marketing home */
 (function () {
@@ -111,7 +113,7 @@ body {
 
 /* ===== HEADER ===== */
 .header {
-  position: sticky; top: 0; z-index: 100;
+  position: sticky; top: 0; z-index: 200 !important;
   background: color-mix(in srgb, var(--elevated) 75%, transparent);
   backdrop-filter: blur(20px);
   border-bottom: 1px solid var(--border);
@@ -167,14 +169,17 @@ body {
   backdrop-filter: blur(10px); color: var(--text); font-size: 18px;
   display: flex; align-items: center; justify-content: center;
   cursor: pointer; transition: .2s;
+  position: relative; z-index: 5;
+  pointer-events: auto;
 }
 .icon-btn:hover { background: color-mix(in srgb, var(--primary) 15%, transparent); transform: scale(1.08); }
 .menu-btn { display: none; }
 
 .mobile-menu.kinetic-nav {
   display: none;
-  position: fixed; inset: 0; z-index: 80;
+  position: fixed; inset: 0; z-index: 400 !important;
 }
+.mobile-menu.kinetic-nav[hidden] { display: none !important; }
 .mobile-menu.kinetic-nav.active,
 .mobile-menu.kinetic-nav[data-nav="open"] {
   display: block;
@@ -1659,7 +1664,7 @@ footer.footer3, .footer3 { z-index: 10 !important; isolation: isolate; }
     <div class="header-actions">
       <a href="auth.html?mode=signup" class="btn btn-primary">Get started</a>
       <button class="icon-btn" id="themeToggle" aria-label="Toggle theme">☀️</button>
-      <button class="icon-btn menu-btn" id="menuToggle" aria-label="Menu">☰</button>
+      <button type="button" class="icon-btn menu-btn" id="menuToggle" aria-label="Menu" aria-expanded="false" onclick="window.toggleLandingMenu && window.toggleLandingMenu(event)">☰</button>
     </div>
   </div>
   <div class="mobile-menu kinetic-nav" id="mobileMenu" data-nav="closed" hidden>
@@ -2147,8 +2152,15 @@ footer.footer3, .footer3 { z-index: 10 !important; isolation: isolate; }
 <script>
 /* ========== THEME PERSISTENCE (runs early) ========== */
 (function() {
-  const savedTheme = localStorage.getItem('mjhub_theme') || 'dark';
-  document.body.setAttribute('data-theme', savedTheme);
+  if (window.mjApplyTheme) { window.mjApplyTheme(); return; }
+  var pref = 'system';
+  try { pref = localStorage.getItem('mjhub-theme-pref') || localStorage.getItem('mjhub-theme') || localStorage.getItem('mjhub_theme') || 'system'; } catch (e) {}
+  var theme = pref;
+  if (pref !== 'light' && pref !== 'dark') {
+    try { theme = window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark'; } catch (e2) { theme = 'dark'; }
+  }
+  document.documentElement.setAttribute('data-theme', theme);
+  document.body.setAttribute('data-theme', theme);
 })();
 
 /* ========== LIVE STOCK TICKER ========== */
@@ -2345,9 +2357,14 @@ document.addEventListener('DOMContentLoaded', () => {
   if (themeBtn) themeBtn.addEventListener('click', () => {
     const isDark = body.getAttribute('data-theme') === 'dark';
     const newTheme = isDark ? 'light' : 'dark';
+    document.documentElement.setAttribute('data-theme', newTheme);
     body.setAttribute('data-theme', newTheme);
     themeBtn.textContent = newTheme === 'dark' ? '☀️' : '🌙';
-    localStorage.setItem('mjhub_theme', newTheme);
+    try {
+      localStorage.setItem('mjhub_theme', newTheme);
+      localStorage.setItem('mjhub-theme', newTheme);
+      localStorage.setItem('mjhub-theme-pref', newTheme);
+    } catch (e) {}
     applyLogo(newTheme);
   });
 
@@ -2355,14 +2372,22 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!mobileMenu) return;
     mobileMenu.classList.toggle('active', open);
     mobileMenu.setAttribute('data-nav', open ? 'open' : 'closed');
-    mobileMenu.hidden = !open;
+    if (open) mobileMenu.removeAttribute('hidden');
+    else mobileMenu.setAttribute('hidden', '');
     document.body.classList.toggle('menu-open', open);
     if (menuBtn) menuBtn.setAttribute('aria-expanded', open ? 'true' : 'false');
   }
-  menuBtn && menuBtn.addEventListener('click', e => {
-    e.stopPropagation();
-    setLandingMenu(!(mobileMenu && mobileMenu.classList.contains('active')));
-  });
+  window.toggleLandingMenu = function (e) {
+    if (e) { e.preventDefault(); e.stopPropagation(); }
+    var open = !(mobileMenu && (mobileMenu.classList.contains('active') || mobileMenu.getAttribute('data-nav') === 'open'));
+    setLandingMenu(open);
+  };
+  if (menuBtn) {
+    menuBtn.addEventListener('click', window.toggleLandingMenu);
+    menuBtn.addEventListener('pointerup', function (e) {
+      if (e.pointerType === 'touch') window.toggleLandingMenu(e);
+    });
+  }
   mobileMenu && mobileMenu.addEventListener('click', e => {
     if (e.target.closest('[data-close-menu]')) setLandingMenu(false);
   });
