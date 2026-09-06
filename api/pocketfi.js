@@ -623,6 +623,14 @@ async function handleReferralAttach(req, res, user) {
         .limit(1);
       referrer = rows && rows[0] ? rows[0] : null;
     }
+    if (!referrer) {
+      const { data: byCust } = await supabase
+        .from('profiles')
+        .select('id, referral_code, customer_id')
+        .ilike('customer_id', code)
+        .limit(1);
+      referrer = byCust && byCust[0] ? byCust[0] : null;
+    }
   }
   if (!referrer) {
     return res.status(404).json({ success: false, message: 'Invalid referral code: ' + code });
