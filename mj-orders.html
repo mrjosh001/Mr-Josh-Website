@@ -457,6 +457,29 @@
     </div>
   </div>
 
+  <!-- Choose support channel for order complaint -->
+  <div class="modal" id="supportPickModal" onclick="if(event.target===this)closeSupportPick()">
+    <div class="sheet" role="dialog" aria-modal="true" style="max-width:400px;border-radius:24px;max-height:none">
+      <div class="sheet-h">
+        <div>
+          <strong>Contact support</strong>
+          <span>Choose how you want to reach us</span>
+        </div>
+        <button type="button" onclick="closeSupportPick()" aria-label="Close">✕</button>
+      </div>
+      <div class="sheet-b" style="display:flex;flex-direction:column;gap:10px">
+        <button type="button" class="la-btn copy" style="width:100%;padding:14px;justify-content:flex-start;gap:12px" onclick="sendOrderComplaintInApp()">
+          <i class="fa-solid fa-comments" style="font-size:18px"></i>
+          <span style="text-align:left"><strong style="display:block;font-size:14px">In-app support</strong><span style="font-weight:600;opacity:.75;font-size:12px">Open chat on MJ Hub</span></span>
+        </button>
+        <button type="button" class="la-btn guide" style="width:100%;padding:14px;justify-content:flex-start;gap:12px;background:#25D366;color:#fff;box-shadow:none" onclick="sendOrderComplaintWhatsApp()">
+          <i class="fa-brands fa-whatsapp" style="font-size:20px"></i>
+          <span style="text-align:left"><strong style="display:block;font-size:14px">WhatsApp</strong><span style="font-weight:600;opacity:.9;font-size:12px">Message our support line</span></span>
+        </button>
+      </div>
+    </div>
+  </div>
+
   <div class="toast" id="toast"></div>
 
   <nav class="bottom-nav">
@@ -1389,7 +1412,8 @@ async function openModal(kind, i) {
       '<div class="vpn-banner"><i class="fa-solid fa-shield-halved"></i><div>Please kindly use a <strong>GOOD VPN</strong> to login and add <strong>2-step verification</strong> after purchase.</div></div>' +
       (desc ? '<div class="desc-box"><div class="lbl">Description</div>' + esc(desc) + '</div>' : '') +
       '<div class="cred-cards">' + cards + '</div>' +
-      '<div class="cred" id="credBox" style="position:absolute;left:-9999px;height:0;overflow:hidden">' + esc(allText) + '</div>';
+      '<div class="cred" id="credBox" style="position:absolute;left:-9999px;height:0;overflow:hidden">' + esc(allText) + '</div>' +
+      complaintBlock(g.order_id || items[0].order_id || '', g.product_name || 'Log order');
   } else if (kind === 'sms') {
     const o = smsRows[i];
     if (!o) return;
@@ -1414,7 +1438,7 @@ async function openModal(kind, i) {
         <div class="log-actions" style="margin-top:14px">
           <button type="button" class="la-btn copy" onclick="copyRaw(window.__smsCopy||'')"><i class="fa-regular fa-copy"></i> Copy number${code ? ' + code' : ''}</button>
         </div>
-      </div>`;
+      </div>` + complaintBlock(o.order_id || o.id || '', name);
   } else if (kind === 'boosters' || kind === 'boost') {
     const o = boostRows[i];
     if (!o) return;
@@ -1457,7 +1481,8 @@ async function openModal(kind, i) {
       '<div class="log-actions">' +
         '<button type="button" class="la-btn copy" onclick="copyRaw(window.__boostCopyText||\'\')"><i class="fa-regular fa-copy"></i> Copy details</button>' +
         '<a class="la-btn dl" href="mj-boosters-history.html" style="background:#ecfdf5;color:#047857;border:1px solid #a7f3d0"><i class="fa-solid fa-bolt"></i> Full history</a>' +
-      '</div>';
+      '</div>' +
+      complaintBlock(oid, o.service_name || o.service || 'Boost order');
   } else {
 
 
@@ -1470,6 +1495,67 @@ async function openModal(kind, i) {
 
 function closeModal() {
   document.getElementById('modal').classList.remove('open');
+}
+
+const SUPPORT_WA = '14305583021';
+window.__orderComplaint = { orderId: '', product: '' };
+window.__customerId = '';
+
+function complaintBlock(orderId, productName) {
+  const oid = String(orderId || '').trim();
+  const pname = String(productName || 'Order').trim();
+  return (
+    '<div class="complaint-box" style="margin-top:16px;padding:14px 16px;border-radius:14px;background:#f8fafc;border:1px solid #e2e8f0">' +
+    '<div style="font-size:13px;font-weight:700;color:#334155;margin-bottom:10px">Have a complaint about this order?</div>' +
+    '<button type="button" class="la-btn copy" style="width:100%;justify-content:center" ' +
+    'onclick="openSupportPick(' + JSON.stringify(oid) + ',' + JSON.stringify(pname) + ')">' +
+    '<i class="fa-solid fa-headset"></i> Contact support</button>' +
+    '</div>'
+  );
+}
+
+function openSupportPick(orderId, productName) {
+  window.__orderComplaint = { orderId: String(orderId || ''), product: String(productName || '') };
+  const m = document.getElementById('supportPickModal');
+  if (m) m.classList.add('open');
+}
+function closeSupportPick() {
+  const m = document.getElementById('supportPickModal');
+  if (m) m.classList.remove('open');
+}
+
+function buildComplaintMessage() {
+  const cid = window.__customerId || 'Not available';
+  const oid = (window.__orderComplaint && window.__orderComplaint.orderId) || '—';
+  const prod = (window.__orderComplaint && window.__orderComplaint.product) || 'Order';
+  return (
+    'Hello Admin, I have a complaint about an order on MJ Hub.\n\n' +
+    'Customer ID: ' + cid + '\n' +
+    'Order ID: ' + oid + '\n' +
+    'Product: ' + prod + '\n' +
+    'Complaint: '
+  );
+}
+
+function sendOrderComplaintWhatsApp() {
+  const msg = buildComplaintMessage();
+  const url = 'https://wa.me/' + SUPPORT_WA + '?text=' + encodeURIComponent(msg);
+  closeSupportPick();
+  window.open(url, '_blank', 'noopener');
+}
+
+function sendOrderComplaintInApp() {
+  const msg = buildComplaintMessage();
+  try {
+    localStorage.setItem('mjhub_support_prefill', JSON.stringify({
+      message: msg,
+      order_id: (window.__orderComplaint && window.__orderComplaint.orderId) || '',
+      customer_id: window.__customerId || '',
+      ts: Date.now()
+    }));
+  } catch (e) {}
+  closeSupportPick();
+  location.href = 'dashboard.html?openSupport=1';
 }
 function copyRaw(t) {
   navigator.clipboard.writeText(String(t || '')).then(() => toast('Copied')).catch(() => toast('Copy failed'));
@@ -1514,6 +1600,11 @@ async function boot() {
   }
   session = s;
   _myOrdersCache = null;
+  // Customer ID for complaint prefill
+  try {
+    const { data: prof } = await sb.from('profiles').select('customer_id, full_name').eq('id', s.user.id).maybeSingle();
+    window.__customerId = (prof && prof.customer_id) || '';
+  } catch (e) {}
   const list = document.getElementById('list');
   if (list) list.innerHTML = '<div class="empty"><p>Loading your orders…</p></div>';
   await Promise.all([loadLogs(), loadSms(), loadBoosters()]);

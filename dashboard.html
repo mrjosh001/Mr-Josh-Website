@@ -3838,6 +3838,27 @@ document.addEventListener('DOMContentLoaded', async () => {
                 try { buildNotificationsFromActivity(); renderNotifications(); } catch (e) {}
                 try { subscribeNotifRealtime(); } catch (e) {}
                 try { initWelcomeModal(); } catch (e) {}
+                // Open in-app support with order complaint prefill
+                try {
+                  var qs = new URLSearchParams(location.search);
+                  if (qs.get('openSupport') === '1') {
+                    var prefill = '';
+                    try {
+                      var raw = localStorage.getItem('mjhub_support_prefill');
+                      if (raw) {
+                        var j = JSON.parse(raw);
+                        if (j && j.message) prefill = j.message;
+                        localStorage.removeItem('mjhub_support_prefill');
+                      }
+                    } catch (e) {}
+                    setTimeout(function() {
+                      if (typeof openMjSupportPanel === 'function') {
+                        openMjSupportPanel(prefill ? { prefillMessage: prefill } : null);
+                      }
+                    }, 600);
+                    try { history.replaceState({}, '', location.pathname); } catch (e) {}
+                  }
+                } catch (e) {}
             } else {
                 window.location.href = 'auth.html';
                 return;
@@ -5162,13 +5183,30 @@ window._mjSup = {
   faqAsked: false
 };
 
-window.openMjSupportPanel = function() {
+window.openMjSupportPanel = function(opts) {
   var p = document.getElementById('mjSupportPanel');
   if (!p) return;
   p.classList.add('open');
   p.setAttribute('aria-hidden', 'false');
   mjSupportShowTab('home');
   mjSupportLoadPrevious();
+  // Prefill from order complaint (mj-orders → dashboard)
+  try {
+    if (opts && opts.prefillMessage) {
+      setTimeout(function() {
+        if (typeof mjSupportStartNew === 'function') {
+          mjSupportStartNew('Order issue');
+          setTimeout(function() {
+            var inp = document.getElementById('mjSupportInput');
+            if (inp) {
+              inp.value = opts.prefillMessage;
+              try { inp.focus(); } catch (e) {}
+            }
+          }, 200);
+        }
+      }, 100);
+    }
+  } catch (e) {}
 };
 
 window.closeMjSupportPanel = function() {
@@ -7124,6 +7162,58 @@ function toggleBoosterMenu(e) {
   }
   document.addEventListener('DOMContentLoaded', go);
   setTimeout(go, 80);
+})();
+</script>
+
+<!-- Pull to refresh (mobile / PWA-style) -->
+<style>
+#mjPtrIndicator{
+  position:fixed;top:0;left:0;right:0;z-index:9999;display:flex;align-items:center;justify-content:center;
+  height:0;overflow:hidden;pointer-events:none;transition:height .15s ease;
+  background:linear-gradient(180deg,rgba(59,130,246,.25),transparent);color:#93c5fd;font-size:12px;font-weight:700;
+}
+#mjPtrIndicator.show{height:48px}
+#mjPtrIndicator i{margin-right:8px}
+</style>
+<div id="mjPtrIndicator" aria-hidden="true"><i class="fa-solid fa-arrow-down"></i> Release to refresh</div>
+<script>
+(function(){
+  var startY = 0, pulling = false, armed = false;
+  var ind = document.getElementById('mjPtrIndicator');
+  function atTop(){
+    var y = window.scrollY || document.documentElement.scrollTop || document.body.scrollTop || 0;
+    return y <= 2;
+  }
+  document.addEventListener('touchstart', function(e){
+    if (!atTop()) { pulling = false; return; }
+    if (!e.touches || !e.touches[0]) return;
+    startY = e.touches[0].clientY;
+    pulling = true;
+    armed = false;
+  }, { passive: true });
+  document.addEventListener('touchmove', function(e){
+    if (!pulling || !e.touches || !e.touches[0]) return;
+    var dy = e.touches[0].clientY - startY;
+    if (dy > 70 && atTop()) {
+      armed = true;
+      if (ind) { ind.classList.add('show'); ind.innerHTML = '<i class="fa-solid fa-arrows-rotate"></i> Release to refresh'; }
+    } else if (dy > 24 && atTop()) {
+      if (ind) { ind.classList.add('show'); ind.innerHTML = '<i class="fa-solid fa-arrow-down"></i> Pull to refresh'; }
+    } else {
+      if (ind) ind.classList.remove('show');
+      armed = false;
+    }
+  }, { passive: true });
+  document.addEventListener('touchend', function(){
+    if (armed && atTop()) {
+      if (ind) { ind.classList.add('show'); ind.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Refreshing…'; }
+      setTimeout(function(){ location.reload(); }, 280);
+    } else {
+      if (ind) ind.classList.remove('show');
+    }
+    pulling = false;
+    armed = false;
+  }, { passive: true });
 })();
 </script>
 
