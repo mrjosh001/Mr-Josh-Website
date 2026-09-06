@@ -655,6 +655,27 @@
     </div>
   </div>
 
+  <div class="modal" id="complaintOk" onclick="if(event.target===this)this.classList.remove('open')">
+    <div class="sheet complaint-sheet" role="dialog" aria-modal="true" onclick="event.stopPropagation()">
+      <div class="sheet-h">
+        <div>
+          <strong>Complaint sent</strong>
+          <span id="complaintOkSub">Support has your message.</span>
+        </div>
+        <button type="button" onclick="document.getElementById('complaintOk').classList.remove('open')" aria-label="Close">✕</button>
+      </div>
+      <div class="sheet-b complaint-form">
+        <p class="cf-hint">You can keep waiting here or open in-app support to continue the chat.</p>
+        <button type="button" class="btn-contact-support" onclick="location.href='dashboard.html?openSupport=1'">
+          <i class="fa-solid fa-comments"></i> Open in-app support
+        </button>
+        <button type="button" class="cf-ch" style="width:100%;margin-top:8px" onclick="document.getElementById('complaintOk').classList.remove('open')">
+          Close
+        </button>
+      </div>
+    </div>
+  </div>
+
   <div class="toast" id="toast"></div>
 
   <nav class="bottom-nav">
@@ -1242,6 +1263,8 @@ async function fetchMyOrdersFromApi(force) {
     throw new Error(json.message || 'Could not load orders');
   }
   _myOrdersCache = json;
+  if (json.customer_id) window.__customerId = String(json.customer_id);
+  if (json.full_name) window.__customerName = String(json.full_name);
   return json;
 }
 
@@ -1815,22 +1838,84 @@ window.submitComplaint = async function submitComplaint() {
     await sendComplaintInApp(msg, complaint);
   } catch (e) {
     console.warn(e);
-    try {
-      localStorage.setItem('mjhub_support_prefill', JSON.stringify({
-        message: msg,
-        order_id: (window.__orderComplaint && window.__orderComplaint.orderId) || '',
-        customer_id: window.__customerId || '',
-        ts: Date.now()
-      }));
-    } catch (err) {}
-    closeSupportPick();
-    location.href = 'dashboard.html?openSupport=1';
-    return;
+    toast('Could not send to in-app support. Try WhatsApp.');
   } finally {
     if (btn) {
       btn.disabled = false;
       setComplaintChannel(window.__complaintChannel);
     }
+  }
+}
+
+function openShotDb() {
+  return new Promise(function (resolve, reject) {
+    const req = indexedDB.open('mjhub_support', 1);
+    req.onupgradeneeded = function () {
+      const db = req.result;
+      if (!db.objectStoreNames.contains('shots')) {
+        db.createObjectStore('shots', { keyPath: 'id' });
+      }
+    };
+    req.onsuccess = function () { resolve(req.result); };
+    req.onerror = function () { reject(req.error); };
+  });
+}
+
+async function saveShotsLocal(meta) {
+  const files = window.__complaintFiles || [];
+  if (!files.length) return 0;
+  const kept = [];
+  for (let i = 0; i < files.length; i++) {
+    try {
+      const blob = await compressImage(files[i]);
+      kept.push({
+        name: files[i].name || ('shot-' + (i + 1) + '.jpg'),
+        type: 'image/jpeg',
+        blob: blob
+      });
+    } catch (e) {}
+  }
+  if (!kept.length) return 0;
+  const db = await openShotDb();
+  const row = {
+    id: meta.id,
+    ticketId: meta.ticketId || '',
+    orderId: meta.orderId || '',
+    createdAt: Date.now(),
+    expiresAt: Date.now() + 30 * 24 * 60 * 60 * 1000,
+    files: kept
+  };
+  await new Promise(function (resolve, reject) {
+    const tx = db.transaction('shots', 'readwrite');
+    tx.oncomplete = resolve;
+    tx.onerror = function () { reject(tx.error); };
+    const store = tx.objectStore('shots');
+    store.put(row);
+    const sweep = store.openCursor();
+    sweep.onsuccess = function (ev) {
+      const cur = ev.target.result;
+      if (!cur) return;
+      const v = cur.value || {};
+      if (v.expiresAt && v.expiresAt < Date.now()) cur.delete();
+      cur.continue();
+    };
+  });
+  try { db.close(); } catch (e) {}
+  return kept.length;
+}
+
+function showComplaintSent(nShots) {
+  const box = document.getElementById('complaintOk');
+  if (box) {
+    const sub = document.getElementById('complaintOkSub');
+    if (sub) {
+      sub.textContent = nShots
+        ? 'Support has your message. ' + nShots + ' screenshot(s) stay on this phone for 30 days.'
+        : 'Support has your message. We will reply in in-app support.';
+    }
+    box.classList.add('open');
+  } else {
+    toast('Complaint sent');
   }
 }
 
@@ -1842,22 +1927,32 @@ async function sendComplaintInApp(fullMsg, complaint) {
     return;
   }
   const oid = (window.__orderComplaint && window.__orderComplaint.orderId) || '';
-  const prod = (window.__orderComplaint && window.__orderComplaint.product) || 'Order';
-  const links = await uploadComplaintShots(user.id);
+  const nFiles = (window.__complaintFiles || []).length;
   let body = fullMsg;
-  if (links.length) body += '\n\nScreenshots:\n' + links.join('\n');
-  else if ((window.__complaintFiles || []).length) {
-    body += '\n\n(Customer selected screenshots but they could not be uploaded automatically.)';
+  if (nFiles) {
+    body += '\n\nScreenshots: ' + nFiles + ' saved on the customer device for 30 days (not uploaded to MJ Hub servers).';
   }
 
-  const { data: created, error } = await sb.from('support_tickets').insert({
+  let created = null;
+  let error = null;
+  ({ data: created, error } = await sb.from('support_tickets').insert({
     user_id: user.id,
     customer_id: window.__customerId || null,
     user_email: user.email || null,
     user_name: window.__customerName || null,
     subject: 'Order complaint' + (oid ? ' · ' + oid : ''),
     status: 'open'
-  }).select('id').single();
+  }).select('id').single());
+
+  if (error || !created) {
+    const retry = await sb.from('support_tickets').insert({
+      user_id: user.id,
+      subject: 'Order complaint' + (oid ? ' · ' + oid : ''),
+      status: 'open'
+    }).select('id').single();
+    created = retry.data;
+    error = retry.error;
+  }
   if (error || !created) throw error || new Error('ticket failed');
 
   const { error: mErr } = await sb.from('support_messages').insert({
@@ -1868,47 +1963,22 @@ async function sendComplaintInApp(fullMsg, complaint) {
   });
   if (mErr) throw mErr;
 
+  let saved = 0;
+  try { saved = await saveShotsLocal({ id: created.id, ticketId: created.id, orderId: oid }); } catch (e) {}
+
   try {
     localStorage.setItem('mjhub_support_prefill', JSON.stringify({
       message: body,
       order_id: oid,
       customer_id: window.__customerId || '',
       ticket_id: created.id,
+      shots: saved,
       ts: Date.now()
     }));
   } catch (e) {}
-  closeSupportPick();
-  toast('Complaint sent');
-  location.href = 'dashboard.html?openSupport=1';
-}
 
-async function uploadComplaintShots(userId) {
-  const files = window.__complaintFiles || [];
-  const urls = [];
-  for (let i = 0; i < files.length; i++) {
-    try {
-      const blob = await compressImage(files[i]);
-      const path = userId + '/' + Date.now() + '-' + i + '.jpg';
-      let up = await sb.storage.from('support-attachments').upload(path, blob, {
-        contentType: 'image/jpeg',
-        upsert: false
-      });
-      if (up.error) {
-        up = await sb.storage.from('support').upload(path, blob, {
-          contentType: 'image/jpeg',
-          upsert: false
-        });
-      }
-      if (up.error) continue;
-      const bucket = up.error ? 'support' : (up.data && up.data.fullPath && String(up.data.fullPath).indexOf('support-attachments') >= 0 ? 'support-attachments' : 'support-attachments');
-      let pub = sb.storage.from('support-attachments').getPublicUrl(path);
-      if (!pub || !pub.data || !pub.data.publicUrl) {
-        pub = sb.storage.from('support').getPublicUrl(path);
-      }
-      if (pub && pub.data && pub.data.publicUrl) urls.push(pub.data.publicUrl);
-    } catch (e) {}
-  }
-  return urls;
+  closeSupportPick();
+  showComplaintSent(saved || nFiles);
 }
 
 function compressImage(file) {
@@ -1984,26 +2054,18 @@ async function loadCustomerProfile() {
   const pick = function (row) {
     if (!row) return;
     const cid = row.customer_id || row.customerId || '';
-    const name = row.full_name || row.name || row.username || '';
+    const name = row.full_name || '';
     if (cid) window.__customerId = String(cid);
     if (name) window.__customerName = String(name);
   };
   try {
-    const a = await sb.from('profiles').select('customer_id, full_name, name, username').eq('id', uid).maybeSingle();
-    if (!a.error) pick(a.data);
+    const json = await fetchMyOrdersFromApi(false);
+    if (json) pick(json);
   } catch (e) {}
   if (!window.__customerId) {
     try {
-      const b = await sb.from('profiles').select('customer_id, full_name, name, username').eq('user_id', uid).maybeSingle();
-      if (!b.error) pick(b.data);
-    } catch (e) {}
-  }
-  if (!window.__customerId) {
-    try {
-      const json = await fetchMyOrdersFromApi(false);
-      if (json && (json.customer_id || (json.profile && json.profile.customer_id))) {
-        pick(json.profile || json);
-      }
+      const a = await sb.from('profiles').select('customer_id, full_name').eq('id', uid).maybeSingle();
+      if (!a.error) pick(a.data);
     } catch (e) {}
   }
   if (!window.__customerId) {
@@ -2013,7 +2075,10 @@ async function loadCustomerProfile() {
     } catch (e) {}
   }
   if (window.__customerId) {
-    try { localStorage.setItem('mjhub_customer_id', window.__customerId); } catch (e) {}
+    try {
+      localStorage.setItem('mjhub_customer_id', window.__customerId);
+      sessionStorage.setItem('mjhub_customer_id', window.__customerId);
+    } catch (e) {}
   }
 }
 
