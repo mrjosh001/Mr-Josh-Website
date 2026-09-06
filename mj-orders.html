@@ -400,9 +400,17 @@
       margin-bottom:8px;
     }
     #supportPickModal{
-      z-index:1200;
+      z-index:3000;
       align-items:flex-end;
       padding:0;
+      pointer-events:auto;
+    }
+    #supportPickModal .sheet-foot{
+      z-index:6;
+    }
+    body:has(#supportPickModal.open) .bottom-nav{
+      pointer-events:none;
+      visibility:hidden;
     }
     #supportPickModal .complaint-sheet{
       width:100%;
@@ -647,9 +655,10 @@
           <div class="cf-previews" id="cfPreviews"></div>
         </div>
         <p class="cf-hint" id="cfHint">Your ticket is sent in-app with these details. You can attach screenshots here.</p>
-
-        <button type="button" class="btn-contact-support" id="cfSubmit" data-action="send-complaint">
-          <i class="fa-solid fa-paper-plane"></i> Send complaint
+      </div>
+      <div class="sheet-foot" id="cfFoot">
+        <button type="button" class="btn-contact-support" id="cfSubmit">
+          <i class="fa-solid fa-paper-plane"></i> Send to in-app support
         </button>
       </div>
     </div>
@@ -1746,7 +1755,21 @@ window.openSupportPick = function openSupportPick(orderId, productName) {
   setComplaintChannel('inapp');
   const m = document.getElementById('supportPickModal');
   if (m) m.classList.add('open');
-  setTimeout(function () { if (textEl) textEl.focus(); }, 280);
+  bindSendButton();
+}
+
+function bindSendButton() {
+  const btn = document.getElementById('cfSubmit');
+  if (!btn || btn._bound) return;
+  btn._bound = true;
+  const go = function (ev) {
+    if (ev) {
+      ev.preventDefault();
+      ev.stopPropagation();
+    }
+    if (typeof window.submitComplaint === 'function') window.submitComplaint();
+  };
+  btn.addEventListener('click', go);
 }
 window.closeSupportPick = function closeSupportPick() {
   const m = document.getElementById('supportPickModal');
@@ -1816,6 +1839,8 @@ document.addEventListener('change', function (e) {
 });
 
 window.submitComplaint = async function submitComplaint() {
+  if (window.__sendingComplaint) return;
+  window.__sendingComplaint = true;
   try {
   const textEl = document.getElementById('cfText');
   const complaint = textEl ? String(textEl.value || '').trim() : '';
@@ -1832,6 +1857,7 @@ window.submitComplaint = async function submitComplaint() {
     closeSupportPick();
     toast('Opening WhatsApp — attach screenshots there');
     window.open(url, '_blank', 'noopener');
+    window.__sendingComplaint = false;
     return;
   }
   const btn = document.getElementById('cfSubmit');
@@ -1850,6 +1876,8 @@ window.submitComplaint = async function submitComplaint() {
   } catch (err) {
     console.warn(err);
     toast('Could not send. Try WhatsApp.');
+  } finally {
+    window.__sendingComplaint = false;
   }
 }
 
@@ -2127,6 +2155,7 @@ async function boot() {
     }
   } catch (e) {}
   bindViewButtons();
+  bindSendButton();
   render();
 }
 boot();
