@@ -1,3 +1,4 @@
+(function(){try{var s=document.createElement('script');s.src='/js/mj-theme.js';s.async=false;(document.head||document.documentElement).appendChild(s);}catch(e){}})();
 /**
  * MJ Hub page loader — overlay from click until next page ready
  * Does not hang: navigates after one paint frame (max 80ms fallback).
@@ -155,4 +156,13 @@
 
   window.mjShowPageLoader = show;
   window.mjHidePageLoader = function () { navigating = false; hide(); };
+
+  try {
+    if (!window.__mjLogoBg) {
+      var ls = document.createElement('script');
+      ls.src = '/js/mj-logo-bg.js';
+      ls.defer = true;
+      (document.head || document.documentElement).appendChild(ls);
+    }
+  } catch (e) {}
 })();
