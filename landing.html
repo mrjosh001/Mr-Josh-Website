@@ -175,7 +175,7 @@ body {
   background: linear-gradient(135deg, var(--primary), #a855f7);
   -webkit-background-clip: text; -webkit-text-fill-color: transparent;
 }
-.logo img { height: 32px; width: 32px; object-fit: cover; object-position: left center; display: block; border-radius: 8px; background: transparent; flex: 0 0 32px; }
+.logo img { height: 36px; width: auto; max-width: 48px; object-fit: contain; display: block; background: transparent; }
 .logo-word {
   font-family: "Plus Jakarta Sans", Inter, system-ui, sans-serif !important;
   font-size: 16px !important; font-weight: 800;
@@ -1672,7 +1672,7 @@ body[data-theme="dark"] .footer3 {
 }
 
 .logo { display:inline-flex !important; align-items:center !important; gap:10px !important; height:32px !important; line-height:32px !important; text-decoration:none !important; }
-.logo img, .logo .brandLogo, .logo #brandLogo { height:32px !important; width:32px !important; object-fit:cover !important; object-position:left center !important; border-radius:8px !important; background:transparent !important; flex:0 0 32px !important; display:block !important; }
+.logo img, .logo .brandLogo, .logo #brandLogo { height:36px !important; width:auto !important; max-width:48px !important; object-fit:contain !important; object-position:center !important; border-radius:8px !important; background:transparent !important; flex:0 0 auto !important; display:block !important; }
 .logo-word { font-family:"Plus Jakarta Sans", Inter, system-ui, sans-serif !important; font-size:17px !important; font-weight:800 !important; letter-spacing:-.03em !important; line-height:32px !important; height:32px !important; display:inline-flex !important; align-items:center !important; background:none !important; -webkit-background-clip:unset !important; color:#1e3a8a !important; -webkit-text-fill-color:#1e3a8a !important; }
 html[data-theme="dark"] .logo-word, body[data-theme="dark"] .logo-word { color:#dbeafe !important; -webkit-text-fill-color:#dbeafe !important; }
 
@@ -1751,7 +1751,7 @@ html[data-theme="dark"] .logo-word, body[data-theme="dark"] .logo-word { color:#
 <div id="headerSpacer" style="height:72px"></div>
 <header class="header">
   <div class="header-inner">
-    <a href="/" class="logo"><img id="brandLogo" src="https://atczodlljmlayvldxfmv.supabase.co/storage/v1/object/public/avatars/light%20background%20logo" alt=""><span class="logo-word">MJ HUB</span></a>
+    <a href="/" class="logo"><img id="brandLogo" src="https://atczodlljmlayvldxfmv.supabase.co/storage/v1/object/public/avatars/mjhub-mark-only.png" alt=""><span class="logo-word">HUB</span></a>
     <nav class="nav-desktop">
       <a href="landing.html">Home</a>
       <a href="#features">Services</a>
@@ -1777,7 +1777,7 @@ html[data-theme="dark"] .logo-word, body[data-theme="dark"] .logo-word { color:#
     <div class="kinetic-panel">
       <div class="menu-sheet-top">
         <div class="menu-brand">
-          <img src="https://atczodlljmlayvldxfmv.supabase.co/storage/v1/object/public/avatars/light%20background%20logo" alt="">
+          <img src="https://atczodlljmlayvldxfmv.supabase.co/storage/v1/object/public/avatars/mjhub-mark-only.png" alt="">
           <div><b>MJ Hub</b><small>Menu</small></div>
         </div>
         <button type="button" class="kinetic-close" data-close-menu aria-label="Close menu">✕</button>
@@ -2237,7 +2237,7 @@ html[data-theme="dark"] .logo-word, body[data-theme="dark"] .logo-word { color:#
 <footer class="footer3">
   <div class="footer3-inner">
     <div class="footer3-brand">
-      <div class="footer3-logo">MJ HUB</div>
+      <div class="footer3-logo">HUB</div>
       <p>Digital marketplace for SMS numbers, logs, and social growth. One wallet, one dashboard.</p>
       <div class="footer3-social">
         <a href="https://chat.whatsapp.com/DxgYNbkV0fjLpWbP2aODRj" target="_blank" rel="noopener" aria-label="WhatsApp community">
@@ -2333,8 +2333,8 @@ html[data-theme="dark"] .logo-word, body[data-theme="dark"] .logo-word { color:#
   var logo = document.getElementById('brandLogo');
   if (logo) {
     logo.src = theme === 'light'
-      ? 'https://atczodlljmlayvldxfmv.supabase.co/storage/v1/object/public/avatars/light%20background%20logo'
-      : 'https://atczodlljmlayvldxfmv.supabase.co/storage/v1/object/public/avatars/dark%20background%20log';
+      ? 'https://atczodlljmlayvldxfmv.supabase.co/storage/v1/object/public/avatars/mjhub-mark-only.png'
+      : 'https://atczodlljmlayvldxfmv.supabase.co/storage/v1/object/public/avatars/mjhub-mark-only.png';
   }
 })();
 
@@ -2517,8 +2517,8 @@ document.addEventListener('DOMContentLoaded', () => {
   const menuBtn = document.getElementById('menuToggle');
   const mobileMenu = document.getElementById('mobileMenu');
   const brandLogo = document.getElementById('brandLogo');
-  const LOGO_DARK = 'https://atczodlljmlayvldxfmv.supabase.co/storage/v1/object/public/avatars/dark%20background%20log';
-  const LOGO_LIGHT = 'https://atczodlljmlayvldxfmv.supabase.co/storage/v1/object/public/avatars/light%20background%20logo';
+  const LOGO_DARK = 'https://atczodlljmlayvldxfmv.supabase.co/storage/v1/object/public/avatars/mjhub-mark-only.png';
+  const LOGO_LIGHT = 'https://atczodlljmlayvldxfmv.supabase.co/storage/v1/object/public/avatars/mjhub-mark-only.png';
 
   function knockPlate(img) {
     if (!img) return;
