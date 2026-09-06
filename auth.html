@@ -710,7 +710,7 @@
             try { sessionStorage.setItem('mjhub_ref_code', code); } catch (e) {}
             try {
               var exp = new Date(Date.now() + 30 * 864e5).toUTCString();
-              document.cookie = 'mjhub_ref_code=' + encodeURIComponent(code) + '; path=/; expires=' + exp + '; SameSite=Lax';
+              document.cookie = 'mjhub_ref_code=' + encodeURIComponent(code) + '; path=/; expires=' + exp + '; SameSite=Lax; Secure';
             } catch (e) {}
           }
           function readRef() {
@@ -787,7 +787,7 @@
             if (urlParams.get('verified') === '1') {
                 switchTab('signin');
                 showSuccess('✅ Your email has been verified! Please sign in below.');
-                window.history.replaceState({}, document.title, window.location.pathname);
+                window.history.replaceState({}, document.title, window.location.pathname + (window.__mjhub_read_ref && window.__mjhub_read_ref() ? ('?ref=' + encodeURIComponent(window.__mjhub_read_ref())) : ''));
             }
 
             // Supabase email confirm often returns with tokens in the hash.
@@ -819,7 +819,7 @@
             if (urlParams.get('banned') === '1') {
                 switchTab('signin');
                 showBannedError();
-                window.history.replaceState({}, document.title, window.location.pathname);
+                window.history.replaceState({}, document.title, window.location.pathname + (window.__mjhub_read_ref && window.__mjhub_read_ref() ? ('?ref=' + encodeURIComponent(window.__mjhub_read_ref())) : ''));
             }
 
             async function attachReferralIfNeeded(session) {

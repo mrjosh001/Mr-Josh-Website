@@ -1,6 +1,48 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
+<script>
+(function(){
+  function save(code){
+    code=String(code||'').trim().toUpperCase().replace(/[^A-Z0-9_-]/g,'');
+    if(!code||code.length<3) return '';
+    try{localStorage.setItem('mjhub_ref_code',code);}catch(e){}
+    try{sessionStorage.setItem('mjhub_ref_code',code);}catch(e){}
+    try{document.cookie='mjhub_ref_code='+encodeURIComponent(code)+'; path=/; max-age='+(30*86400)+'; SameSite=Lax; Secure';}catch(e){}
+    return code;
+  }
+  function read(){
+    try{ var c=localStorage.getItem('mjhub_ref_code')||sessionStorage.getItem('mjhub_ref_code'); if(c) return c; }catch(e){}
+    try{ var m=document.cookie.match(/(?:^|;\s*)mjhub_ref_code=([^;]+)/); if(m) return decodeURIComponent(m[1]); }catch(e){}
+    return '';
+  }
+  try{
+    var p=new URLSearchParams(location.search);
+    var h=String(location.hash||'').replace(/^#/,'');
+    var hp=new URLSearchParams(h.indexOf('=')>=0?h:'');
+    save(p.get('ref')||p.get('referral')||p.get('r')||hp.get('ref')||'');
+  }catch(e){}
+  window.__mjhub_save_ref=save;
+  window.__mjhub_read_ref=read;
+  function withRef(href){
+    var code=read();
+    if(!code) return href;
+    try{
+      var u=new URL(href, location.origin);
+      if(!u.searchParams.get('ref')) u.searchParams.set('ref', code);
+      return u.pathname+u.search+u.hash;
+    }catch(e){ return href; }
+  }
+  document.addEventListener('click', function(e){
+    var a=e.target && e.target.closest && e.target.closest('a[href]');
+    if(!a) return;
+    var href=a.getAttribute('href')||'';
+    if(!/auth\.html|auth\?|\/auth/i.test(href)) return;
+    a.setAttribute('href', withRef(href));
+  }, true);
+})();
+</script>
+
 <script src="/js/mj-theme.js"></script>
 
 <script>
