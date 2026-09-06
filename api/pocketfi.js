@@ -517,9 +517,9 @@ async function handleReferralMe(req, res, user) {
     });
   }
 
-  const host = req.headers['x-forwarded-host'] || req.headers.host || 'app.mjhub.store';
-  const origin = process.env.SITE_URL || (`https://${host}`);
-  const link = `${String(origin).replace(/\/$/, '')}/index.html?ref=${encodeURIComponent(prof.referral_code)}`;
+  // Prefer public marketing domain so ref links always hit pages that capture ?ref=
+  const origin = (process.env.SITE_URL || process.env.APP_URL || 'https://www.mjhub.store').replace(/\/$/, '');
+  const link = `${origin}/auth.html?ref=${encodeURIComponent(prof.referral_code)}&tab=signup`;
 
   // profiles has updated_at (not created_at) — wrong column made the list always empty
   const { data: refs, error: refsErr } = await supabase
@@ -556,12 +556,19 @@ async function handleReferralAttach(req, res, user) {
   const body = typeof req.body === 'string'
     ? (() => { try { return JSON.parse(req.body || '{}'); } catch { return {}; } })()
     : (req.body || {});
-  const code = String(body.code || body.ref || req.query?.code || '').trim().toUpperCase();
+  // Prefer body code; fall back to signup metadata (auth.users.user_metadata.referral_code)
+  let code = String(body.code || body.ref || req.query?.code || '').trim().toUpperCase();
+  if (!code) {
+    try {
+      const meta = user.user_metadata || user.raw_user_meta_data || {};
+      code = String(meta.referral_code || meta.ref || '').trim().toUpperCase();
+    } catch (_) {}
+  }
   if (!code) return res.status(400).json({ success: false, message: 'Referral code required' });
 
-  // Ensure profile row exists (signup trigger can lag)
+  // Ensure profile row exists (signup trigger can lag) — create minimal row if needed
   let me = null;
-  for (let i = 0; i < 6; i++) {
+  for (let i = 0; i < 10; i++) {
     const { data, error } = await supabase
       .from('profiles')
       .select('id, referred_by, referral_code')
@@ -574,7 +581,17 @@ async function handleReferralAttach(req, res, user) {
       });
     }
     if (data) { me = data; break; }
-    await new Promise(r => setTimeout(r, 500));
+    // Best-effort insert so attach is not blocked by slow trigger
+    if (i === 2) {
+      try {
+        await supabase.from('profiles').upsert({
+          id: user.id,
+          email: user.email || null,
+          full_name: (user.user_metadata && user.user_metadata.full_name) || null
+        }, { onConflict: 'id' });
+      } catch (_) {}
+    }
+    await new Promise(r => setTimeout(r, 400));
   }
   if (!me) {
     return res.status(400).json({
