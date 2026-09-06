@@ -206,6 +206,7 @@ body {
   transform: translateY(-3px) scale(1.04);
   box-shadow: 0 10px 36px var(--glow);
 }
+.header-actions, .icon-btn, .menu-btn { pointer-events: auto !important; }
 .icon-btn {
   width: 42px; height: 42px; border-radius: 11px;
   border: 1px solid var(--border); background: color-mix(in srgb, var(--card) 70%, transparent);
@@ -223,7 +224,7 @@ body {
 
 .mobile-menu.kinetic-nav {
   display: none;
-  position: fixed; inset: 0; z-index: 400 !important;
+  position: fixed; inset: 0; z-index: 600 !important;
 }
 .mobile-menu.kinetic-nav[hidden] { display: none !important; }
 .mobile-menu.kinetic-nav.active,
@@ -1728,7 +1729,7 @@ body[data-theme="dark"] .footer3 {
 <div id="headerSpacer" style="height:72px"></div>
 <header class="header">
   <div class="header-inner">
-    <a href="/" class="logo"><img id="brandLogo" src="https://atczodlljmlayvldxfmv.supabase.co/storage/v1/object/public/avatars/dark%20background%20log" alt="MJ HUB"></a>
+    <a href="/" class="logo"><img id="brandLogo" src="https://atczodlljmlayvldxfmv.supabase.co/storage/v1/object/public/avatars/light%20background%20logo" alt="MJ HUB"></a>
     <nav class="nav-desktop">
       <a href="landing.html">Home</a>
       <a href="#features">Services</a>
@@ -2307,6 +2308,12 @@ body[data-theme="dark"] .footer3 {
   }
   document.documentElement.setAttribute('data-theme', theme);
   document.body.setAttribute('data-theme', theme);
+  var logo = document.getElementById('brandLogo');
+  if (logo) {
+    logo.src = theme === 'light'
+      ? 'https://atczodlljmlayvldxfmv.supabase.co/storage/v1/object/public/avatars/light%20background%20logo'
+      : 'https://atczodlljmlayvldxfmv.supabase.co/storage/v1/object/public/avatars/dark%20background%20log';
+  }
 })();
 
 /* ========== LIVE STOCK TICKER ========== */
@@ -2514,21 +2521,20 @@ document.addEventListener('DOMContentLoaded', () => {
     applyLogo(newTheme);
   });
 
-  function setLandingMenu(open) {
-    if (!mobileMenu) return;
-    mobileMenu.classList.toggle('active', open);
-    mobileMenu.setAttribute('data-nav', open ? 'open' : 'closed');
-    if (open) mobileMenu.removeAttribute('hidden');
-    else mobileMenu.setAttribute('hidden', '');
-    document.body.classList.toggle('menu-open', open);
-    if (menuBtn) menuBtn.setAttribute('aria-expanded', open ? 'true' : 'false');
-  }
-  // Menu is bound once, next to the button. Do not bind again here.
-  mobileMenu && mobileMenu.addEventListener('click', e => {
-    if (e.target.closest('[data-close-menu]')) setLandingMenu(false);
-  });
+  window.setLandingMenu = function(open) {
+    if (window.toggleLandingMenu && open === false) {
+      var menu = document.getElementById('mobileMenu');
+      if (menu) {
+        menu.classList.remove('active');
+        menu.setAttribute('data-nav', 'closed');
+        menu.setAttribute('hidden', '');
+        document.body.classList.remove('menu-open');
+      }
+      return;
+    }
+  };
   document.addEventListener('keydown', e => {
-    if (e.key === 'Escape') setLandingMenu(false);
+    if (e.key === 'Escape' && window.setLandingMenu) window.setLandingMenu(false);
   });
 
   const items = document.querySelectorAll('.service-item');
