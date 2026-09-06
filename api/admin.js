@@ -1337,6 +1337,7 @@ const PERIOD_DAYS = { today: 1, '7days': 7, month: 30, '3months': 90, '6months':
  */
 async function getUserJoinDates() {
   const joinDates = {};
+  const emailVerified = {};
   let page = 1;
   const perPage = 1000;
   // Paginate defensively — listUsers defaults to 50/page; loop until a page
@@ -1348,11 +1349,12 @@ async function getUserJoinDates() {
     const users = data?.users || [];
     for (const u of users) {
       if (u.id && u.created_at) joinDates[u.id] = u.created_at;
+      if (u.id) emailVerified[u.id] = !!(u.email_confirmed_at || u.confirmed_at);
     }
     if (users.length < perPage) break;
     page += 1;
   }
-  return { status: 200, body: { success: true, join_dates: joinDates } };
+  return { status: 200, body: { success: true, join_dates: joinDates, email_verified: emailVerified } };
 }
 
 /**
