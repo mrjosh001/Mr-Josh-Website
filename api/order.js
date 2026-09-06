@@ -81,6 +81,86 @@ async function insertLogOrder(row) {
   return error;
 }
 
+async function handleSupportTicket(req, res, user) {
+  try {
+    const body = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : (req.body || {});
+    const message = String(body.message || body.complaint || '').trim();
+    if (!message || message.length < 3) {
+      return res.status(400).json({ success: false, message: 'Write your complaint first' });
+    }
+    if (message.length > 4000) {
+      return res.status(400).json({ success: false, message: 'Complaint is too long' });
+    }
+    const orderId = String(body.order_id || '').slice(0, 120);
+    const product = String(body.product || 'Order').slice(0, 160);
+
+    let customerId = String(body.customer_id || '').slice(0, 40);
+    let fullName = String(body.user_name || '').slice(0, 120);
+    try {
+      const { data: prof } = await supabase
+        .from('profiles')
+        .select('customer_id, full_name')
+        .eq('id', user.id)
+        .maybeSingle();
+      if (prof && prof.customer_id) customerId = String(prof.customer_id);
+      if (prof && prof.full_name) fullName = String(prof.full_name);
+    } catch (e) {}
+
+    const subject = ('Order complaint' + (orderId ? ' · ' + orderId : '')).slice(0, 180);
+    const ticketRow = {
+      user_id: user.id,
+      customer_id: customerId || null,
+      user_email: user.email || null,
+      user_name: fullName || null,
+      subject,
+      status: 'open'
+    };
+
+    let created = null;
+    let error = null;
+    ({ data: created, error } = await supabase.from('support_tickets').insert(ticketRow).select('id').single());
+    if (error) {
+      ({ data: created, error } = await supabase.from('support_tickets').insert({
+        user_id: user.id,
+        subject,
+        status: 'open'
+      }).select('id').single());
+    }
+    if (error || !created) {
+      console.error('[order support_ticket]', error && error.message);
+      return res.status(500).json({ success: false, message: 'Could not create the support ticket' });
+    }
+
+    const bodyText = [
+      message,
+      '',
+      'Customer ID: ' + (customerId || '—'),
+      'Order ID: ' + (orderId || '—'),
+      'Product: ' + product
+    ].join('\n');
+
+    const { error: msgErr } = await supabase.from('support_messages').insert({
+      ticket_id: created.id,
+      sender_type: 'user',
+      sender_id: user.id,
+      body: bodyText.slice(0, 8000)
+    });
+    if (msgErr) {
+      console.error('[order support_ticket message]', msgErr.message);
+      return res.status(500).json({ success: false, message: 'Ticket opened but the message did not save. Try again.' });
+    }
+
+    return res.status(200).json({
+      success: true,
+      ticket_id: created.id,
+      customer_id: customerId || null
+    });
+  } catch (e) {
+    console.error('[order support_ticket]', e);
+    return res.status(500).json({ success: false, message: 'Could not send the complaint right now' });
+  }
+}
+
 async function handleMyOrders(req, res, userId) {
   try {
     const [logsRes, smsRes] = await Promise.all([
@@ -762,6 +842,10 @@ export default async function handler(req, res) {
     return res.status(auth.error.status).json({ success: false, message: auth.error.message });
   }
   const user_id = auth.user.id;
+
+  if (action === 'support_ticket') {
+    return handleSupportTicket(req, res, auth.user);
+  }
 
   // GET /api/order?action=my_orders  — list this user's logs + SMS (no new serverless function)
   // `action` already parsed above from query/body
