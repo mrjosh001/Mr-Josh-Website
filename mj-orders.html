@@ -976,10 +976,28 @@ function formatCredentials(details, description) {
  * formatCredentials on already-formatted text (that caused Username→"Username" bugs).
  * Only if the blob looks raw/unformatted do we call formatCredentials once.
  */
+function parseUserPass2faCookie(text) {
+  const s = String(text || '').replace(/\r/g, '').trim();
+  if (!s) return null;
+  const four = s.match(/^([^:\s]{2,80}):([^:\s]{3,128}):([A-Za-z0-9]{16,64}):(.+)$/s);
+  if (!four || !four[4] || four[4].length < 20) return null;
+  const extra = String(four[4]).replace(/\s+/g, '');
+  if (!/;|=|android-|sessionid|Bearer/i.test(extra) && extra.length < 40) return null;
+  const token = four[3].toUpperCase().replace(/(.{4})/g, '$1 ').trim();
+  return {
+    username: four[1],
+    password: four[2],
+    token: token,
+    extra: extra
+  };
+}
+
 function parseCredentialFields(details, description) {
   const rawIn = details == null ? '' : (typeof details === 'object' ? JSON.stringify(details) : String(details));
   let text = String(rawIn || '').replace(/\r/g, '').trim();
   if (!text) return [{ _raw: '' }];
+  const combo = parseUserPass2faCookie(text);
+  if (combo) return [combo];
 
   function looksAlreadyFormatted(t) {
     return /^(?:\d+\s*[.):-]\s*)?(Username|Password|Email|Email Password|Phone|2FA\s*\/\s*Token|Extra)\s*:/im.test(t);
@@ -1553,15 +1571,27 @@ async function openModal(kind, i) {
     if (sub) sub.textContent = (g.quantity || items.length || 1) + ' log' + ((g.quantity || items.length || 1) > 1 ? 's' : '') + (g.order_id ? ' · ' + g.order_id : '');
 
     const allAccounts = [];
+    const qty = Number(g.quantity || items.length || 1);
     items.forEach((it) => {
-      const raw =
+      const view = String(it.login_credentials || g.login_credentials || '').trim();
+      const raw = String(
         it.login_credentials_raw ||
-        it.login_credentials ||
+        view ||
         [it.credentials_id, it.credentials_pass].filter(Boolean).join(':') ||
-        g.login_credentials ||
-        '';
+        ''
+      ).trim();
       const itemDesc = it.description || desc;
-      const accounts = parseCredentialFields(raw, itemDesc);
+      const combo = parseUserPass2faCookie(raw) || parseUserPass2faCookie(view.replace(/\s+/g, ' '));
+      if (combo) {
+        allAccounts.push(combo);
+        return;
+      }
+      const cleanView = /^Username:/im.test(view) && /2FA\s*\/\s*Token:/i.test(view) && !/\n\s*2\.\s*Username:/i.test(view);
+      const accounts = parseCredentialFields(cleanView ? view : (raw || view), itemDesc);
+      if (qty === 1 && accounts.length > 1) {
+        allAccounts.push(accounts[0]);
+        return;
+      }
       accounts.forEach((f) => allAccounts.push(f));
     });
 
