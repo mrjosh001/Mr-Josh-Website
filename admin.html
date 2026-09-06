@@ -3807,8 +3807,9 @@ function openOrderModal(index) {
         formatLogBlock(formatCustomerLog((function () {
           const view = String(it.login_credentials || '');
           const raw = String(it.login_credentials_raw || '');
-          if (/^Username:/im.test(view) && !/\n\s*2\.\s*Username:/i.test(view) && /2FA \/ Token:/i.test(view)) return view;
-          return raw || view;
+          const labeled = /^(Email|Username|Password)\s*:/im.test(view);
+          if (labeled) return view;
+          return view || raw;
         })()), idx, items.length)
       )
       .join('\n\n'),
