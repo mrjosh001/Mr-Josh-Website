@@ -168,22 +168,28 @@ body {
 }
 .logo {
   font-size: 22px; font-weight: 800; letter-spacing: -.5px;
-  display: flex; align-items: center; gap: 5px; position: relative; z-index: 2;
-  text-decoration: none; color: var(--text);
+  display: inline-flex; align-items: center; gap: 8px; position: relative; z-index: 2;
+  text-decoration: none; color: var(--text); line-height: 1;
 }
 .logo span {
   background: linear-gradient(135deg, var(--primary), #a855f7);
   -webkit-background-clip: text; -webkit-text-fill-color: transparent;
 }
-.logo img { height: 34px; width: 34px; object-fit: cover; object-position: left center; display: block; border-radius: 8px; background: transparent; }
+.logo img { height: 32px; width: 32px; object-fit: cover; object-position: left center; display: block; border-radius: 8px; background: transparent; flex: 0 0 32px; }
 .logo-word {
   font-family: Inter, system-ui, sans-serif !important;
-  font-size: 15px !important; font-weight: 800;
+  font-size: 16px !important; font-weight: 800;
   letter-spacing: -.02em;
+  line-height: 32px;
   background: none !important;
   -webkit-background-clip: unset !important;
-  -webkit-text-fill-color: var(--text) !important;
-  color: var(--text) !important;
+  color: #1e3a8a !important;
+  -webkit-text-fill-color: #1e3a8a !important;
+}
+html[data-theme="dark"] .logo-word,
+body[data-theme="dark"] .logo-word {
+  color: #dbeafe !important;
+  -webkit-text-fill-color: #dbeafe !important;
 }
 .nav-desktop { display: flex; gap: 4px; }
 .nav-desktop a {
