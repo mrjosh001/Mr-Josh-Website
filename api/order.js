@@ -103,10 +103,24 @@ async function handleMyOrders(req, res, userId) {
     if (logsRes.error) console.warn('[order my_orders] logs', logsRes.error.message);
     if (smsRes.error) console.warn('[order my_orders] sms', smsRes.error.message);
 
+    let customer_id = null;
+    let full_name = null;
+    try {
+      const { data: prof } = await supabase
+        .from('profiles')
+        .select('customer_id, full_name')
+        .eq('id', userId)
+        .maybeSingle();
+      customer_id = (prof && prof.customer_id) || null;
+      full_name = (prof && prof.full_name) || null;
+    } catch (e) {}
+
     return res.status(200).json({
       success: true,
       logs,
       sms,
+      customer_id,
+      full_name,
       counts: { logs: logs.length, sms: sms.length }
     });
   } catch (e) {
