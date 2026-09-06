@@ -137,7 +137,35 @@ async function handleSupportTicket(req, res, user) {
       const raw = String((shots[i] && (shots[i].data || shots[i].base64)) || '').replace(/\s/g, '');
       if (!raw || raw.length < 32 || raw.length > 450000) continue;
       if (!/^[A-Za-z0-9+/=]+$/.test(raw.slice(0, 80))) continue;
-      bodyText += '\n\n[[MJIMG:jpeg]]' + raw + '[[/MJIMG]]';
+      let savedUrl = '';
+      try {
+        const buf = Buffer.from(raw, 'base64');
+        if (buf && buf.length > 32) {
+          const path = 'tickets/' + created.id + '/' + Date.now() + '-' + i + '.jpg';
+          const buckets = ['support-attachments', 'support', 'attachments'];
+          for (const bucket of buckets) {
+            const up = await supabase.storage.from(bucket).upload(path, buf, {
+              contentType: 'image/jpeg',
+              upsert: true
+            });
+            if (up.error) continue;
+            const signed = await supabase.storage.from(bucket).createSignedUrl(path, 60 * 60 * 24 * 365);
+            if (signed && signed.data && signed.data.signedUrl) {
+              savedUrl = signed.data.signedUrl;
+              break;
+            }
+            const pub = supabase.storage.from(bucket).getPublicUrl(path);
+            if (pub && pub.data && pub.data.publicUrl) {
+              savedUrl = pub.data.publicUrl;
+              break;
+            }
+          }
+        }
+      } catch (e) {
+        console.warn('[order support_ticket shot]', e && e.message);
+      }
+      if (savedUrl) bodyText += '\n\n[[MJURL]]' + savedUrl + '[[/MJURL]]';
+      else bodyText += '\n\n[[MJIMG:jpeg]]' + raw + '[[/MJIMG]]';
     }
 
     const { error: msgErr } = await supabase.from('support_messages').insert({
