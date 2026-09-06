@@ -192,6 +192,15 @@ syncThemeUi();
 async function load(){
   const {data}=await sb.auth.getSession();
   if(!data?.session){ location.href='auth.html?next='+encodeURIComponent('referral.html'); return; }
+  try {
+    var refCode = '';
+    try { refCode = localStorage.getItem('mjhub_ref_code') || sessionStorage.getItem('mjhub_ref_code') || ''; } catch (e) {}
+    await fetch('/api/pocketfi?action=referral_attach', {
+      method: 'POST',
+      headers: { Authorization: 'Bearer ' + data.session.access_token, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ code: String(refCode || '').trim().toUpperCase() })
+    });
+  } catch (e) {}
   const headers={Authorization:'Bearer '+data.session.access_token};
   const res=await fetch('/api/pocketfi?action=referral_me',{headers});
   const j=await res.json();
@@ -205,8 +214,8 @@ async function load(){
   document.getElementById('count').textContent=String(j.referred_count||0);
   const code=(j.referral_code||'').toString().trim();
   const landLink = code
-    ? (location.origin.replace(/\/$/,'') + '/index.html?ref=' + encodeURIComponent(code))
-    : (j.link||'');
+    ? (location.origin.replace(/\/$/,'') + '/landing.html?ref=' + encodeURIComponent(code))
+    : (j.link || '');
   document.getElementById('link').value = landLink;
   if (state) state.link = landLink;
   document.getElementById('codeNote').textContent='Code: '+(j.referral_code||'—');
