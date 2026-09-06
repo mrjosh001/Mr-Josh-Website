@@ -270,8 +270,8 @@ async function sendDepositEmail({ to, name, amountLabel, walletLabel, reference 
   const appUrl = (process.env.APP_URL || process.env.SITE_URL || 'https://www.mjhub.store').replace(/\/$/, '');
   const year = new Date().getFullYear();
   const subject = 'Deposit received';
-  const LOGO_DARK = 'https://atczodlljmlayvldxfmv.supabase.co/storage/v1/object/public/avatars/mjhub-logo-dark-clear.png';
-  const LOGO_LIGHT = 'https://atczodlljmlayvldxfmv.supabase.co/storage/v1/object/public/avatars/IMG_2796.jpeg';
+  const LOGO_DARK = 'https://app.mjhub.store/img/IMG_3027.png';
+  const LOGO_LIGHT = 'https://app.mjhub.store/img/IMG_3027.png';
   const amount = String(amountLabel || '').trim() || 'your deposit';
   const wallet = String(walletLabel || 'NGN wallet');
   const ref = String(reference || '').trim();
@@ -318,8 +318,16 @@ async function sendDepositEmail({ to, name, amountLabel, walletLabel, reference 
       <table role="presentation" width="560" cellspacing="0" cellpadding="0" class="card" style="max-width:560px;width:100%;background-color:#ffffff;border:1px solid #dbe4f0;border-radius:20px;">
         <tr>
           <td align="center" style="padding:32px 24px 12px;background:transparent;">
-            <img src="https://atczodlljmlayvldxfmv.supabase.co/storage/v1/object/public/avatars/mjhub-mark-only.png" alt="MJ Hub" width="120" style="display:block;height:44px;width:auto;border:0;outline:none;background:transparent;">
-            <div class="brand-word" style="margin-top:6px;font-size:13px;font-weight:800;letter-spacing:0.14em;color:#0f172a;">MJ HUB</div>
+            <table role="presentation" cellspacing="0" cellpadding="0" align="center">
+              <tr>
+                <td valign="middle" style="padding-right:10px;">
+                  <img src="https://app.mjhub.store/img/IMG_3027.png" alt="MJ" width="36" height="36" style="display:block;border:0;outline:none;background:transparent;">
+                </td>
+                <td valign="middle">
+                  <div class="brand-word" style="font-size:22px;font-weight:800;letter-spacing:-0.02em;color:#1e3a8a;font-family:Arial,Helvetica,sans-serif;line-height:36px;">HUB</div>
+                </td>
+              </tr>
+            </table>
           </td>
         </tr>
         <tr>
