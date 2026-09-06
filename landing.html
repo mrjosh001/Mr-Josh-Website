@@ -2416,14 +2416,7 @@ document.addEventListener('DOMContentLoaded', () => {
     document.body.classList.toggle('menu-open', open);
     if (menuBtn) menuBtn.setAttribute('aria-expanded', open ? 'true' : 'false');
   }
-  window.toggleLandingMenu = function (e) {
-    if (e) { e.preventDefault(); e.stopPropagation(); }
-    var open = !(mobileMenu && (mobileMenu.classList.contains('active') || mobileMenu.getAttribute('data-nav') === 'open'));
-    setLandingMenu(open);
-  };
-  if (menuBtn) {
-    menuBtn.addEventListener('click', window.toggleLandingMenu);
-  }
+  // Menu is bound once, next to the button. Do not bind again here.
   mobileMenu && mobileMenu.addEventListener('click', e => {
     if (e.target.closest('[data-close-menu]')) setLandingMenu(false);
   });
