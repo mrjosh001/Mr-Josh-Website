@@ -195,14 +195,14 @@ body {
   backdrop-filter: blur(8px);
 }
 .kinetic-panel {
-  position: absolute; top: 0; left: 0; bottom: 0;
+  position: absolute; top: 0; right: 0; bottom: 0; left: auto;
   width: min(300px, 84vw);
   overflow: auto;
   padding: 22px 0 20px;
   background: #1d3fa8;
   color: #e8eeff;
   box-shadow: 18px 0 50px rgba(15,23,42,.28);
-  transform: translateX(-105%);
+  transform: translateX(105%);
   transition: transform .32s cubic-bezier(.22,1,.36,1);
   display: flex;
   flex-direction: column;
@@ -230,9 +230,9 @@ body {
 .kinetic-links a {
   position: relative;
   display: flex; align-items: center; gap: 12px;
-  margin-left: 14px; margin-right: 0;
-  padding: 13px 18px 13px 16px;
-  border-radius: 22px 0 0 22px;
+  margin-left: 0; margin-right: 14px;
+  padding: 13px 16px 13px 18px;
+  border-radius: 0 22px 22px 0;
   color: #d7e3ff; text-decoration: none;
   font-size: 15px; font-weight: 650;
   background: transparent; border: 0;
@@ -249,20 +249,20 @@ body {
 .kinetic-links a.on:after {
   content: "";
   position: absolute;
-  right: 0;
+  left: 0;
   width: 22px;
   height: 22px;
   background: transparent;
 }
 .kinetic-links a.on:before {
   top: -22px;
-  border-bottom-right-radius: 22px;
-  box-shadow: 6px 6px 0 6px #fff;
+  border-bottom-left-radius: 22px;
+  box-shadow: -6px 6px 0 6px #fff;
 }
 .kinetic-links a.on:after {
   bottom: -22px;
-  border-top-right-radius: 22px;
-  box-shadow: 6px -6px 0 6px #fff;
+  border-top-left-radius: 22px;
+  box-shadow: -6px -6px 0 6px #fff;
 }
 .kinetic-auth, .mobile-auth {
   display: grid; grid-template-columns: 1fr 1fr; gap: 8px;
@@ -1710,6 +1710,7 @@ body[data-theme="dark"] .footer3 {
   <div class="header-inner">
     <a href="/" class="logo"><img id="brandLogo" src="https://atczodlljmlayvldxfmv.supabase.co/storage/v1/object/public/avatars/dark%20background%20log" alt="MJ HUB"></a>
     <nav class="nav-desktop">
+      <a href="landing.html">Home</a>
       <a href="#features">Services</a>
       <a href="#telegram-sms">Telegram Bot</a>
       <a href="#earn">Earn 2%</a>
@@ -1739,8 +1740,12 @@ body[data-theme="dark"] .footer3 {
         <button type="button" class="kinetic-close" data-close-menu aria-label="Close menu">✕</button>
       </div>
       <nav class="kinetic-links" id="landingSideNav">
-        <a class="on" href="#features" data-close-menu>
+        <a class="on" href="landing.html" data-close-menu>
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 10l8-6 8 6v8a2 2 0 0 1-2 2h-3v-6H9v6H6a2 2 0 0 1-2-2z"/></svg>
+          Home
+        </a>
+        <a href="#features" data-close-menu>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="4" width="7" height="7" rx="1"/><rect x="13" y="4" width="7" height="7" rx="1"/><rect x="4" y="13" width="7" height="7" rx="1"/><rect x="13" y="13" width="7" height="7" rx="1"/></svg>
           Services
         </a>
         <a href="https://t.me/mj_smss_bot" target="_blank" rel="noopener">
