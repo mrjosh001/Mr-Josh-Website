@@ -517,9 +517,9 @@ async function handleReferralMe(req, res, user) {
     });
   }
 
-  // Prefer public marketing domain so ref links always hit pages that capture ?ref=
+  // Main landing is landing.html (Vercel "/" → /landing.html). Share that, not index.html.
   const origin = (process.env.SITE_URL || process.env.APP_URL || 'https://www.mjhub.store').replace(/\/$/, '');
-  const link = `${origin}/auth.html?ref=${encodeURIComponent(prof.referral_code)}&tab=signup`;
+  const link = `${origin}/?ref=${encodeURIComponent(prof.referral_code)}`;
 
   // profiles has updated_at (not created_at) — wrong column made the list always empty
   const { data: refs, error: refsErr } = await supabase
