@@ -131,19 +131,20 @@ async function handleSupportTicket(req, res, user) {
       return res.status(500).json({ success: false, message: 'Could not create the support ticket' });
     }
 
-    const bodyText = [
-      message,
-      '',
-      'Customer ID: ' + (customerId || '—'),
-      'Order ID: ' + (orderId || '—'),
-      'Product: ' + product
-    ].join('\n');
+    let bodyText = String(message || '').trim();
+    const shots = Array.isArray(body.attachments) ? body.attachments : [];
+    for (let i = 0; i < Math.min(3, shots.length); i++) {
+      const raw = String((shots[i] && (shots[i].data || shots[i].base64)) || '').replace(/\s/g, '');
+      if (!raw || raw.length < 32 || raw.length > 450000) continue;
+      if (!/^[A-Za-z0-9+/=]+$/.test(raw.slice(0, 80))) continue;
+      bodyText += '\n\n[[MJIMG:jpeg]]' + raw + '[[/MJIMG]]';
+    }
 
     const { error: msgErr } = await supabase.from('support_messages').insert({
       ticket_id: created.id,
       sender_type: 'user',
       sender_id: user.id,
-      body: bodyText.slice(0, 8000)
+      body: bodyText.slice(0, 1800000)
     });
     if (msgErr) {
       console.error('[order support_ticket message]', msgErr.message);
