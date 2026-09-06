@@ -1565,11 +1565,11 @@ footer.footer3, .footer3 { z-index: 10 !important; isolation: isolate; }
       } catch (e) { return href; }
     }
     document.addEventListener('DOMContentLoaded', function(){
-      document.querySelectorAll('a[href*="auth.html"]').forEach(function(a){
+      // Any path to auth keeps the referral code (signup + sign-in)
+      document.querySelectorAll('a[href*="auth"]').forEach(function(a){
         var h = a.getAttribute('href') || '';
-        if (/signup|register|tab=signup/i.test(h) || /Start free|Get started|Create/i.test(a.textContent||'')) {
-          a.setAttribute('href', withRef(h));
-        }
+        if (!h || h.indexOf('#') === 0) return;
+        a.setAttribute('href', withRef(h));
       });
     });
   } catch (e) {}
