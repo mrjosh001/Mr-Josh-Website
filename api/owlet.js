@@ -548,11 +548,11 @@ async function handleOrder(req, res) {
     return res.status(400).json({ success: false, message: 'This service is temporarily unavailable' });
   }
 
-  // Site rule: never sell below 500 units. Supplier min wins if higher.
+  // Site rule: never sell below 300 units. Supplier min wins if higher.
   const supplierMin = Number(service.min_quantity) || 1;
   let maxQ = Number(service.max_quantity) || 1000000;
   if (maxQ < 1) maxQ = 1000000;
-  let minQ = Math.max(500, supplierMin);
+  let minQ = Math.max(300, supplierMin);
   if (minQ > maxQ) minQ = maxQ;
   if (quantity < minQ || quantity > maxQ) {
     return res.status(400).json({
