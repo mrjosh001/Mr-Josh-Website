@@ -203,6 +203,71 @@ async function handleSupportUpload(req, res, user) {
   }
 }
 
+async function handleUpdateProfile(req, res, user) {
+  try {
+    const body = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : (req.body || {});
+    const full_name = String(body.full_name || body.name || '').trim().slice(0, 80);
+    const phone = String(body.phone || body.phone_number || '').trim().slice(0, 30);
+    const address = String(body.address || '').trim().slice(0, 200);
+    const bio = String(body.bio || '').trim().slice(0, 500);
+    if (!full_name) {
+      return res.status(400).json({ success: false, message: 'Enter your name' });
+    }
+    const patch = {
+      full_name,
+      name: full_name,
+      phone: phone || null,
+      phone_number: phone || null,
+      address: address || null,
+      bio: bio || null,
+      updated_at: new Date().toISOString()
+    };
+    let { data, error } = await supabase
+      .from('profiles')
+      .update(patch)
+      .eq('id', user.id)
+      .select('id, full_name, name, phone, phone_number, address, bio')
+      .maybeSingle();
+    if (error && /column|schema cache|Could not find/i.test(String(error.message || ''))) {
+      const slim = { full_name, phone: phone || null };
+      ({ data, error } = await supabase
+        .from('profiles')
+        .update(slim)
+        .eq('id', user.id)
+        .select('id, full_name, phone')
+        .maybeSingle());
+    }
+    if ((error || !data) && !error) {
+      const insertRow = { id: user.id, email: user.email || null, ...patch };
+      ({ data, error } = await supabase
+        .from('profiles')
+        .upsert(insertRow, { onConflict: 'id' })
+        .select('id, full_name, phone, address, bio')
+        .maybeSingle());
+    }
+    if (error || !data) {
+      console.error('[order update_profile]', error && error.message);
+      return res.status(500).json({ success: false, message: (error && error.message) || 'Could not save profile' });
+    }
+    const savedName = String(data.full_name || data.name || '');
+    if (savedName && savedName !== full_name) {
+      return res.status(500).json({ success: false, message: 'Profile did not keep the new name. A database rule is blocking the change.' });
+    }
+    return res.status(200).json({
+      success: true,
+      profile: {
+        full_name: data.full_name || data.name || full_name,
+        phone: data.phone_number || data.phone || phone,
+        address: data.address || address,
+        bio: data.bio || bio
+      }
+    });
+  } catch (e) {
+    console.error('[order update_profile]', e);
+    return res.status(500).json({ success: false, message: 'Could not save profile' });
+  }
+}
+
 async function handleMyOrders(req, res, userId) {
   try {
     const [logsRes, smsRes] = await Promise.all([
@@ -890,6 +955,9 @@ export default async function handler(req, res) {
   }
   if (action === 'support_upload') {
     return handleSupportUpload(req, res, auth.user);
+  }
+  if (action === 'update_profile') {
+    return handleUpdateProfile(req, res, auth.user);
   }
 
   // GET /api/order?action=my_orders  — list this user's logs + SMS (no new serverless function)
