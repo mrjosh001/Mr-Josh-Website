@@ -1811,14 +1811,12 @@ function buildComplaintMessage(extra, forWhatsApp) {
   const oid = (window.__orderComplaint && window.__orderComplaint.orderId) || '—';
   const prod = (window.__orderComplaint && window.__orderComplaint.product) || 'Order';
   const body = String(extra || '').trim();
-  if (!forWhatsApp) return body;
-  return (
-    body + '\n\n' +
+  const details =
     (name ? 'Name: ' + name + '\n' : '') +
     'Customer ID: ' + cid + '\n' +
     'Order ID: ' + oid + '\n' +
-    'Product: ' + prod
-  );
+    'Product: ' + prod;
+  return body + '\n\n' + details;
 }
 
 document.addEventListener('change', function (e) {

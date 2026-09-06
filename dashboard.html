@@ -3842,18 +3842,18 @@ document.addEventListener('DOMContentLoaded', async () => {
                 try {
                   var qs = new URLSearchParams(location.search);
                   if (qs.get('openSupport') === '1') {
-                    var prefill = '';
+                    var supportOpts = {};
                     try {
                       var raw = localStorage.getItem('mjhub_support_prefill');
                       if (raw) {
                         var j = JSON.parse(raw);
-                        if (j && j.message) prefill = j.message;
+                        if (j && j.ticket_id) supportOpts.ticketId = j.ticket_id;
                         localStorage.removeItem('mjhub_support_prefill');
                       }
                     } catch (e) {}
                     setTimeout(function() {
                       if (typeof openMjSupportPanel === 'function') {
-                        openMjSupportPanel(prefill ? { prefillMessage: prefill } : null);
+                        openMjSupportPanel(supportOpts);
                       }
                     }, 600);
                     try { history.replaceState({}, '', location.pathname); } catch (e) {}
@@ -5190,21 +5190,9 @@ window.openMjSupportPanel = function(opts) {
   p.setAttribute('aria-hidden', 'false');
   mjSupportShowTab('home');
   mjSupportLoadPrevious();
-  // Prefill from order complaint (mj-orders → dashboard)
   try {
-    if (opts && opts.prefillMessage) {
-      setTimeout(function() {
-        if (typeof mjSupportStartNew === 'function') {
-          mjSupportStartNew('Order issue');
-          setTimeout(function() {
-            var inp = document.getElementById('mjSupportInput');
-            if (inp) {
-              inp.value = opts.prefillMessage;
-              try { inp.focus(); } catch (e) {}
-            }
-          }, 200);
-        }
-      }, 100);
+    if (opts && opts.ticketId && typeof mjSupportOpenTicket === 'function') {
+      setTimeout(function() { mjSupportOpenTicket(opts.ticketId); }, 120);
     }
   } catch (e) {}
 };
@@ -5245,23 +5233,31 @@ window.mjSupportAppend = function(role, text) {
   var d = document.createElement('div');
   d.className = 'mj-support-msg ' + (role === 'user' ? 'user' : (role === 'sys' ? 'sys' : 'bot'));
   var raw = String(text || '');
-  var re = /\[\[MJIMG(?::[a-z0-9]+)?\]\]([\s\S]*?)\[\[\/MJIMG\]\]/gi;
+  var startRe = /\[\[MJIMG(?::[a-z0-9]+)?\]\]/gi;
   var last = 0;
   var m;
   var hasImg = false;
-  while ((m = re.exec(raw))) {
+  while ((m = startRe.exec(raw))) {
     hasImg = true;
     var chunk = raw.slice(last, m.index);
     if (chunk) d.appendChild(document.createTextNode(chunk));
-    var b64 = String(m[1] || '').replace(/\s/g, '');
-    if (b64) {
+    var after = raw.slice(m.index + m[0].length);
+    var endIdx = after.search(/\[\[\/MJIMG\]\]/i);
+    var b64 = (endIdx >= 0 ? after.slice(0, endIdx) : after).replace(/\s+/g, '').replace(/[^A-Za-z0-9+/=]/g, '');
+    if (b64.length > 32) {
       var img = document.createElement('img');
       img.alt = 'Screenshot';
       img.style.cssText = 'display:block;max-width:220px;margin-top:8px;border-radius:12px;';
       img.src = 'data:image/jpeg;base64,' + b64;
       d.appendChild(img);
     }
-    last = m.index + m[0].length;
+    if (endIdx >= 0) {
+      last = m.index + m[0].length + endIdx + 11;
+      startRe.lastIndex = last;
+    } else {
+      last = raw.length;
+      break;
+    }
   }
   if (!hasImg) d.textContent = raw;
   else if (last < raw.length) d.appendChild(document.createTextNode(raw.slice(last)));
