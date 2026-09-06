@@ -43,7 +43,16 @@ body:before{content:"";position:fixed;inset:auto -20% 40% -20%;height:50vh;backg
 .banner b{display:inline-block;font-size:10px;letter-spacing:.14em;text-transform:uppercase;background:rgba(255,255,255,.16);padding:5px 9px;border-radius:999px;margin-bottom:10px}
 .banner h2{font-size:24px;line-height:1.15;font-weight:800;margin-bottom:8px}
 .banner p{font-size:13px;line-height:1.55;color:rgba(255,255,255,.86)}
-.refresh{margin:14px 0;width:100%;border:1px solid var(--line);background:var(--card);color:var(--ink);border-radius:14px;padding:11px;font-weight:800;font-size:13px;cursor:pointer}
+.refresh{margin:14px 0;width:100%;border:1px solid var(--line);background:var(--card);color:var(--ink);border-radius:14px;padding:11px;font-weight:800;font-size:13px;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px}
+.refresh.busy{opacity:.7;pointer-events:none}
+.refresh.busy i{animation:spin .7s linear infinite}
+.menu{display:flex;flex-direction:column;gap:8px;margin-bottom:16px}
+.menu button{width:100%;border:0;border-radius:16px;padding:14px 16px;font-weight:800;font-size:14px;cursor:pointer;background:transparent;color:var(--mute);display:flex;align-items:center;justify-content:center;gap:8px}
+.menu button.on{background:#2f6fed;color:#fff}
+.board-title{font-size:16px;font-weight:800;margin:4px 0 12px}
+.board{min-height:160px;border:1px dashed var(--line);border-radius:18px;padding:12px}
+.hid{display:none}
+#friendsN,#commsN{color:inherit;font-weight:700;opacity:.8}
 .stats{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px}
 .tile{background:var(--card);border:1px solid var(--line);border-radius:20px;padding:14px 14px 13px}
 .tile em{display:block;font-style:normal;font-size:10px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--mute)}
@@ -67,9 +76,12 @@ body:before{content:"";position:fixed;inset:auto -20% 40% -20%;height:50vh;backg
 .meta{display:flex;justify-content:space-between;align-items:center;margin-top:12px;padding-top:12px;border-top:1px solid var(--line);font-size:13px;font-weight:700}
 .meta span:first-child{color:var(--mute)}
 .live{background:#16a34a;color:#fff;border-radius:999px;padding:4px 10px;font-size:11px;font-weight:800}
-.seg{display:flex;background:var(--field);border:1px solid var(--line);border-radius:16px;padding:4px;margin-bottom:12px}
-.seg button{flex:1;border:0;background:transparent;color:var(--mute);font-weight:800;font-size:12px;padding:10px 6px;border-radius:12px;cursor:pointer}
-.seg button.on{background:#2f6fed;color:#fff}
+.drop{border:1px solid var(--line);border-radius:16px;margin-bottom:10px;overflow:hidden;background:var(--field)}
+.drop-btn{width:100%;display:flex;align-items:center;justify-content:space-between;gap:10px;padding:14px 14px;border:0;background:transparent;color:var(--ink);font-weight:800;font-size:14px;cursor:pointer;text-align:left}
+.drop-btn i.chev{transition:transform .2s;color:var(--mute)}
+.drop.open .drop-btn i.chev{transform:rotate(180deg)}
+.drop-body{display:none;padding:0 10px 10px}
+.drop.open .drop-body{display:block}
 .item{display:flex;justify-content:space-between;gap:10px;padding:12px;border-radius:14px;background:var(--field);border:1px solid var(--line);margin-bottom:8px;font-size:13px;font-weight:700}
 .item .m{color:var(--mute);font-size:11px;text-align:right}
 .empty{text-align:center;padding:30px 10px;color:var(--mute)}
@@ -94,7 +106,7 @@ body:before{content:"";position:fixed;inset:auto -20% 40% -20%;height:50vh;backg
     <h2>Invite a friend. Get paid when they fund.</h2>
     <p>They sign up with your link. Every time they deposit, 2% is added to your NGN wallet at once.</p>
   </div>
-  <button class="refresh" type="button" onclick="load()"><i class="fa-solid fa-rotate"></i> Refresh data</button>
+  <button class="refresh" id="refreshBtn" type="button" onclick="refreshData()"><i class="fa-solid fa-rotate"></i> Refresh data</button>
   <div class="stats">
     <div class="tile main">
       <em>Wallet credit</em>
@@ -124,12 +136,15 @@ body:before{content:"";position:fixed;inset:auto -20% 40% -20%;height:50vh;backg
     <div class="meta"><span>Your code</span><span id="codeNote">—</span></div>
   </div>
   <div class="sheet">
-    <div class="seg">
-      <button type="button" class="on" id="tabFriends" onclick="showTab('friends')">Friends</button>
-      <button type="button" id="tabComms" onclick="showTab('comms')">Commissions</button>
+    <div class="menu">
+      <button type="button" class="on" id="tabFriends" onclick="showBoard('friends')"><i class="fa-solid fa-user-group"></i> Friends <span id="friendsN"></span></button>
+      <button type="button" id="tabComms" onclick="showBoard('comms')"><i class="fa-solid fa-bolt"></i> Live commissions <span id="commsN"></span></button>
     </div>
-    <div id="panelFriends"><div id="refs"><div class="spin"></div></div></div>
-    <div id="panelComms" class="hid"><div id="earnings"><div class="spin"></div></div></div>
+    <div class="board-title" id="boardTitle">Friends on your link</div>
+    <div class="board">
+      <div id="refs"><div class="spin"></div></div>
+      <div id="earnings" class="hid"><div class="spin"></div></div>
+    </div>
   </div>
 </div>
 <div class="toast" id="toast"></div>
@@ -153,11 +168,29 @@ function toggleTheme(){
   try{localStorage.setItem('mjhub-theme',next)}catch(e){}
   syncThemeUi();
 }
-function showTab(which){
-  document.getElementById('panelFriends').classList.toggle('hid', which!=='friends');
-  document.getElementById('panelComms').classList.toggle('hid', which!=='comms');
+function showBoard(which){
   document.getElementById('tabFriends').classList.toggle('on', which==='friends');
   document.getElementById('tabComms').classList.toggle('on', which==='comms');
+  document.getElementById('refs').classList.toggle('hid', which!=='friends');
+  document.getElementById('earnings').classList.toggle('hid', which!=='comms');
+  document.getElementById('boardTitle').textContent = which==='friends' ? 'Friends on your link' : 'Commission history';
+}
+async function refreshData(){
+  var btn=document.getElementById('refreshBtn');
+  if(btn){
+    btn.classList.add('busy');
+    btn.innerHTML='<i class="fa-solid fa-rotate"></i> Refreshing…';
+  }
+  try{
+    await load();
+    toast('Refreshed');
+  }catch(e){
+    toast('Could not refresh');
+  }
+  if(btn){
+    btn.classList.remove('busy');
+    btn.innerHTML='<i class="fa-solid fa-rotate"></i> Refresh data';
+  }
 }
 syncThemeUi();
 async function load(){
@@ -182,6 +215,10 @@ async function load(){
   state=j;
   document.getElementById('earned').textContent=fmt(j.total_earned_ngn);
   document.getElementById('count').textContent=String(j.referred_count||0);
+  var fn=document.getElementById('friendsN');
+  var cn=document.getElementById('commsN');
+  if(fn) fn.textContent='('+(j.referred_count||0)+')';
+  if(cn) cn.textContent='('+((j.recent_earnings||[]).length)+')';
   const code=(j.referral_code||'').toString().trim();
   const landLink=code?(location.origin.replace(/\/$/,'')+'/landing.html?ref='+encodeURIComponent(code)):(j.link||'');
   document.getElementById('link').value=landLink;
