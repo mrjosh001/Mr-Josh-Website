@@ -201,6 +201,40 @@ function withLagos(opts) { return Object.assign({ timeZone: 'Africa/Lagos' }, op
  position:sticky; top:0; z-index:40;
  }
  .topbar h2 { font-size:18px; font-weight:800; letter-spacing:-0.02em; }
+
+.topbar { gap:12px; }
+.tb-left { display:flex; align-items:center; gap:12px; min-width:0; }
+.tb-right { display:flex; align-items:center; gap:10px; min-width:0; }
+.tb-status {
+  display:inline-flex; align-items:center; gap:6px;
+  font-size:11px; font-weight:700; color:#34d399;
+  background:rgba(52,211,153,.12); border:1px solid rgba(52,211,153,.2);
+  padding:6px 10px; border-radius:999px; white-space:nowrap;
+}
+.tb-status i { width:7px; height:7px; border-radius:50%; background:#34d399; display:inline-block; }
+.tb-email {
+  max-width: min(280px, 36vw);
+  font-size:12px; font-weight:600; color:var(--muted);
+  overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+  padding:6px 10px; border-radius:10px; background:rgba(148,163,184,.08);
+  border:1px solid var(--border);
+}
+.tb-bell {
+  position:relative; width:42px; height:42px; border-radius:12px;
+  border:1px solid var(--border); background:var(--card); color:var(--text);
+  display:inline-flex; align-items:center; justify-content:center; cursor:pointer;
+}
+.tb-bell-count {
+  position:absolute; top:-5px; right:-5px; min-width:18px; height:18px; padding:0 4px;
+  border-radius:999px; background:#ef4444; color:#fff; font-size:10px; font-weight:800;
+  display:none; align-items:center; justify-content:center;
+}
+.tb-bell-count.show { display:flex; }
+@media(max-width:720px){
+  .tb-email { max-width: 28vw; }
+  .tb-status { display:none; }
+}
+
  .mobile-menu-btn {
  display:none; background:var(--card); border:1px solid var(--border); width:40px; height:40px;
  border-radius:12px; color:var(--text); font-size:16px; cursor:pointer;
@@ -557,10 +591,7 @@ function withLagos(opts) { return Object.assign({ timeZone: 'Africa/Lagos' }, op
 </script>
 
 
-<div id="supportTopBell" onclick="location.href='admin-support.html'" title="Open support tickets" style="display:none;position:fixed;top:16px;right:16px;z-index:5000;width:44px;height:44px;border-radius:14px;background:#0f1524;border:1px solid rgba(148,163,184,.2);align-items:center;justify-content:center;cursor:pointer;box-shadow:0 8px 24px rgba(0,0,0,.35);">
- <i class="fas fa-bell" style="color:#f87171;font-size:16px;"></i>
- <span id="supportTopBellCount" style="position:absolute;top:-4px;right:-4px;background:#ef4444;color:#fff;font-size:10px;font-weight:800;min-width:18px;height:18px;border-radius:999px;display:flex;align-items:center;justify-content:center;padding:0 4px;">0</span>
-</div>
+
 
  <div id="toastStack" class="toast-stack"></div>
  <div id="loginScreen" class="login-wrap">
@@ -613,17 +644,19 @@ function withLagos(opts) { return Object.assign({ timeZone: 'Africa/Lagos' }, op
 
  <div class="main">
  <header class="topbar">
- <div style="display:flex;align-items:center;gap:12px;">
+ <div class="tb-left">
  <button class="mobile-menu-btn" onclick="openSidebar()"><i class="fas fa-bars"></i></button>
  <h2 id="pageTitle">Overview</h2>
  </div>
- <span style="display:flex;align-items:center;gap:8px;">
- <span id="onlineIndicator" style="display:flex;align-items:center;gap:6px;font-size:11px;font-weight:700;color:#34d399;background:rgba(52,211,153,.12);padding:5px 10px;border-radius:20px;">
- <span style="width:7px;height:7px;border-radius:50%;background:#34d399;display:inline-block;"></span> Signed in
- </span>
- <span id="adminEmailLabel" style="font-size:12px;color:var(--muted);"></span>
- </span>
- </header>
+ <div class="tb-right">
+ <span class="tb-status" id="onlineIndicator"><i></i> Signed in</span>
+ <span class="tb-email" id="adminEmailLabel" title=""></span>
+ <button type="button" class="tb-bell" id="supportTopBell" onclick="location.href='admin-support.html'" title="Support desk">
+ <i class="fas fa-bell"></i>
+ <span id="supportTopBellCount" class="tb-bell-count">0</span>
+ </button>
+ </div>
+</header>
 
  <div class="content">
  <div id="tab-overview" class="tab-content active">
@@ -1420,7 +1453,13 @@ async function evaluateSession(session) {
  return showLogin();
  }
 
- document.getElementById('adminEmailLabel').textContent = session.user.email || profile.email || '';
+ (function(){
+ var el=document.getElementById('adminEmailLabel');
+ var em=session.user.email || profile.email || '';
+ if(!el) return;
+ el.textContent = em;
+ el.title = em;
+})();
  showDashboard();
  loadAllData().catch(function (e) { console.error('loadAllData', e); });
 }
@@ -4546,26 +4585,36 @@ async function loadBoosterOrders() {
  if (typeof sb === 'undefined' || !sb) return;
  const { data: { session } } = await sb.auth.getSession();
  if (!session) return;
- const { count, error } = await sb
- .from('support_tickets')
- .select('id', { count: 'exact', head: true })
- .eq('status', 'open');
+ const { data: tickets, error } = await sb.from('support_tickets').select('id').limit(400);
  if (error) return;
- const n = count || 0;
+ let n = 0;
+ if (tickets && tickets.length) {
+ const ids = tickets.map(function(x){ return x.id; });
+ const { data: msgs } = await sb.from('support_messages')
+ .select('ticket_id, sender_type, created_at')
+ .in('ticket_id', ids)
+ .order('created_at', { ascending: false })
+ .limit(800);
+ const latest = {};
+ (msgs || []).forEach(function(m){
+ if (m && m.ticket_id && !latest[m.ticket_id]) latest[m.ticket_id] = m;
+ });
+ Object.keys(latest).forEach(function(id){
+ var st = String(latest[id].sender_type || '').toLowerCase();
+ if (st === 'user' || st === 'customer') n += 1;
+ });
+ }
  const badge = document.getElementById('supportNavBadge');
  const bell = document.getElementById('supportTopBell');
+ const label = n > 99 ? '99+' : String(n);
  if (badge) {
- if (n > 0) {
- badge.style.display = 'inline-block';
- badge.textContent = n > 99 ? '99+' : String(n);
- } else {
- badge.style.display = 'none';
+ badge.style.display = n > 0 ? 'inline-block' : 'none';
+ badge.textContent = label;
  }
- }
- if (bell) {
- bell.style.display = n > 0 ? 'inline-flex' : 'none';
  const bc = document.getElementById('supportTopBellCount');
- if (bc) bc.textContent = n > 99 ? '99+' : String(n);
+ if (bc) {
+ bc.textContent = label;
+ if (n > 0) bc.classList.add('show'); else bc.classList.remove('show');
  }
  document.title = n > 0 ? '(' + n + ') MJ HUB Admin' : document.title.replace(/^\(\d+\+?\)\s*/, '');
  } catch (e) {}
