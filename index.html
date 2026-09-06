@@ -4,21 +4,29 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>MJ Hub</title>
-<!-- Root must not compete with landing.html. Vercel also redirects / and /index.html → /landing.html -->
 <script>
 (function () {
+  var q = '';
+  var h = '';
+  var ref = '';
   try {
-    var q = window.location.search || '';
-    var h = window.location.hash || '';
-    // Preserve ?ref= and other query params on the real landing page
-    window.location.replace('/landing.html' + q + h);
-  } catch (e) {
-    window.location.href = '/landing.html';
-  }
+    q = window.location.search || '';
+    h = window.location.hash || '';
+    var p = new URLSearchParams(q);
+    ref = (p.get('ref') || p.get('referral') || p.get('r') || '').trim().toUpperCase().replace(/[^A-Z0-9_-]/g, '');
+    if (ref && ref.length >= 3) {
+      try { localStorage.setItem('mjhub_ref_code', ref); } catch (e) {}
+      try { sessionStorage.setItem('mjhub_ref_code', ref); } catch (e) {}
+      try {
+        document.cookie = 'mjhub_ref_code=' + encodeURIComponent(ref) + '; path=/; max-age=' + (30 * 86400) + '; SameSite=Lax';
+      } catch (e) {}
+    }
+  } catch (e) {}
+  var next = '/landing.html' + q + h;
+  try { window.location.replace(next); } catch (e) { window.location.href = next; }
 })();
 </script>
-<meta http-equiv="refresh" content="0;url=/landing.html">
-<link rel="canonical" href="https://www.mjhub.store/landing.html">
+<link rel="canonical" href="https://app.mjhub.store/landing.html">
 </head>
 <body>
 <p style="font-family:system-ui,sans-serif;text-align:center;margin-top:2rem;">
