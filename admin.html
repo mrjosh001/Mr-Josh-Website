@@ -657,6 +657,46 @@ function withLagos(opts) { return Object.assign({ timeZone: 'Africa/Lagos' }, op
 :root[data-theme="light"] .badge-admin { color:#1d4ed8; background:#dbeafe; border-color:#bfdbfe; }
 :root[data-theme="light"] .badge-pending { color:#92400e; background:#fef3c7; border-color:#fde68a; }
 :root[data-theme="light"] #mj-boot { background:rgba(241,245,249,.86); color:#334155; }
+:root[data-theme="light"] .metric-value,
+:root[data-theme="light"] .metric-card .metric-value,
+:root[data-theme="light"] #uTotalCount,
+:root[data-theme="light"] #uActiveCount,
+:root[data-theme="light"] #uInactiveCount,
+:root[data-theme="light"] #mTotalUsers,
+:root[data-theme="light"] #mActiveUsers,
+:root[data-theme="light"] #mInactiveUsers {
+  color:#0f172a !important;
+}
+:root[data-theme="light"] #uActiveCount,
+:root[data-theme="light"] #mActiveUsers { color:#15803d !important; }
+:root[data-theme="light"] #uInactiveCount,
+:root[data-theme="light"] #mInactiveUsers { color:#b91c1c !important; }
+:root[data-theme="light"] .panel .metrics .metric-card:first-child {
+  background:#fff !important;
+  border:1px solid #e2e8f0 !important;
+}
+:root[data-theme="light"] .panel .metrics .metric-card:first-child .metric-label,
+:root[data-theme="light"] .panel .metrics .metric-card:first-child .metric-sub {
+  color:#475569 !important;
+}
+:root[data-theme="light"] .panel .metrics .metric-card:first-child .metric-value {
+  color:#0f172a !important;
+}
+:root[data-theme="light"] thead th {
+  color:#475569 !important;
+  background:#f8fafc !important;
+  border-bottom:1px solid #e2e8f0 !important;
+}
+:root[data-theme="light"] tbody td {
+  color:#0f172a !important;
+  border-bottom:1px solid #e2e8f0 !important;
+}
+:root[data-theme="light"] .detail-box,
+:root[data-theme="light"] [style*="background:#07090e"] {
+  background:#f1f5f9 !important;
+  color:#0f172a !important;
+  border-color:#e2e8f0 !important;
+}
 
 </style>
  <script src="/js/mj-page-loader.js"></script>
@@ -3961,7 +4001,7 @@ function openOrderModal(index) {
   const row = (label, value, mono) => `
  <div>
  <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);margin-bottom:4px;">${escapeHtml(label)}</div>
- <div style="font-size:14px;${mono ? 'font-family:monospace;white-space:pre-wrap;word-break:break-word;' : ''}background:#07090e;border:1px solid var(--border);border-radius:10px;padding:10px 12px;">${value ? escapeHtml(value) : '<span style=\'color:var(--muted)\'> </span>'}</div>
+ <div class="detail-box" style="font-size:14px;${mono ? 'font-family:monospace;white-space:pre-wrap;word-break:break-word;' : ''}background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:10px;padding:10px 12px;">${value ? escapeHtml(value) : '<span style=\'color:var(--muted)\'> </span>'}</div>
  </div>`;
 
   const qty = o.quantity || (o.items || []).length || 1;
