@@ -52,6 +52,8 @@ a{color:inherit;text-decoration:none}
 .btn-outline{background:transparent;color:var(--text);border:1px solid var(--border);box-shadow:none}
 .btn-soft{background:var(--success-soft);color:var(--success);border:1px solid rgba(52,211,153,.28);box-shadow:none}
 .hint{font-size:12px;color:var(--muted);margin-top:12px;line-height:1.5;text-align:center}
+.mj-maint-banner{margin:0 0 14px;padding:12px 14px;border-radius:12px;background:rgba(245,158,11,.12);border:1px solid rgba(245,158,11,.35);color:#b45309;font-size:13px;font-weight:700;line-height:1.45}
+:root[data-theme="dark"] .mj-maint-banner{color:#fbbf24}
 .usd-preview{display:none;padding:12px 14px;margin-bottom:12px;border-radius:14px;background:var(--success-soft);border:1px solid rgba(52,211,153,.28)}
 .usd-preview .t{font-size:12px;color:var(--muted);font-weight:600}
 .usd-preview .a{font-size:20px;font-weight:800;color:var(--success);margin-top:4px}
@@ -176,6 +178,7 @@ a{color:inherit;text-decoration:none}
   <div class="card" id="vaCard">
     <div class="va-pill"><i class="fa-solid fa-building-columns"></i> Permanent account</div>
     <h2>Bank transfer</h2>
+    <div class="mj-maint-banner" role="status">Under maintenance. Use manual deposit.</div>
     <p class="sub">One account number for every top up. Your NGN wallet credits when the transfer is confirmed.</p>
 
     <div id="vaLoadingState" class="loading-inline"><i class="fa-solid fa-spinner fa-spin"></i> Checking your account…</div>
@@ -189,7 +192,7 @@ a{color:inherit;text-decoration:none}
         <label><input type="radio" name="vaBank" value="paga" checked><span>Paga</span></label>
         <label><input type="radio" name="vaBank" value="saveheaven"><span>Safe Haven</span></label>
       </div>
-      <button type="button" class="btn" id="vaGenerateBtn" onclick="generateVirtualAccount()">
+      <button type="button" class="btn" id="vaGenerateBtn" disabled aria-disabled="true">
         <i class="fa-solid fa-wand-magic-sparkles"></i> Generate account details
       </button>
       <p class="hint">One account per customer. It stays the same.</p>
@@ -209,7 +212,7 @@ a{color:inherit;text-decoration:none}
         <button type="button" class="chip" data-amt="50000" onclick="pickVaAmount(50000)">₦50,000</button>
       </div>
       <p class="fee-line" id="vaFeeLine">Min ₦1,000 · Max ₦700,000 · Includes a small processing fee</p>
-      <button type="button" class="btn" id="vaContinueBtn" onclick="continueVaPay()">Continue</button>
+      <button type="button" class="btn" id="vaContinueBtn" disabled aria-disabled="true">Continue</button>
     </div>
 
     <div id="vaPaySheet" class="pay-sheet">
@@ -238,7 +241,7 @@ a{color:inherit;text-decoration:none}
         </div>
         <div class="instruct" id="vaInstruct">Transfer the exact amount above. Your wallet credits automatically once the payment is confirmed.</div>
         <div class="waiting" id="vaWaiting"><i class="fa-solid fa-rotate fa-spin"></i> Waiting for confirmation…</div>
-        <button type="button" class="btn btn-soft" onclick="checkVaPaymentNow()"><i class="fa-solid fa-rotate"></i> I've sent the money · Check now</button>
+        <button type="button" class="btn btn-soft" disabled aria-disabled="true"><i class="fa-solid fa-rotate"></i> I've sent the money · Check now</button>
         <button type="button" class="btn btn-outline" style="margin-top:10px;" onclick="backToVaAmount()">Change amount</button>
       </div>
     </div>
@@ -252,10 +255,11 @@ a{color:inherit;text-decoration:none}
   <div class="section-label">Other ways to pay</div>
   <div class="card">
     <div class="method-tabs">
-      <button type="button" class="method-tab active" id="tabPocketfi" onclick="setOtherMethod('pocketfi')"><i class="fa-solid fa-link"></i> Instant payment</button>
-      <button type="button" class="method-tab" id="tabManual" onclick="setOtherMethod('manual')"><i class="fa-brands fa-whatsapp"></i> Manual (WhatsApp)</button>
+      <button type="button" class="method-tab" id="tabPocketfi" onclick="setOtherMethod('pocketfi')"><i class="fa-solid fa-link"></i> Instant payment</button>
+      <button type="button" class="method-tab active" id="tabManual" onclick="setOtherMethod('manual')"><i class="fa-brands fa-whatsapp"></i> Manual (WhatsApp)</button>
     </div>
-    <div id="pocketfiDepositBox">
+    <div id="pocketfiDepositBox" style="display:none;">
+      <div class="mj-maint-banner" role="status">Under maintenance. Use manual deposit.</div>
       <p class="sub" style="margin-top:0;">One time payment link for a fixed amount. Min ₦1,000 · Max ₦500,000.</p>
       <div class="form-group">
         <label>Wallet to fund</label>
@@ -273,10 +277,10 @@ a{color:inherit;text-decoration:none}
         <div class="a" id="depositUsdAmountText">$0.00</div>
         <div class="r" id="depositUsdRateText">Rate: ₦1,450 = $1</div>
       </div>
-      <button type="button" class="btn" id="pocketfiPayBtn" onclick="payWithPocketFi()"><i class="fa-solid fa-lock"></i> Continue to bank transfer</button>
+      <button type="button" class="btn" id="pocketfiPayBtn" disabled aria-disabled="true"><i class="fa-solid fa-lock"></i> Continue to bank transfer</button>
       <p class="hint">Pay in Naira. Selected wallet is credited after confirmation.</p>
     </div>
-    <div id="manualDepositBox" style="display:none;">
+    <div id="manualDepositBox">
       <p class="sub" style="margin-top:0;">Message admin with your Customer ID and amount.</p>
       <div class="form-group">
         <label>Your Customer ID</label>
@@ -385,6 +389,8 @@ function pickVaAmount(n) {
   onVaAmountInput();
 }
 function continueVaPay() {
+  alert('Bank transfer is under maintenance. Use manual deposit.');
+  return;
   if (!vaDetails || !vaDetails.account_number) {
     toast('Generate your account first');
     return;
@@ -505,6 +511,8 @@ async function checkVirtualAccount() {
   }
 }
 async function generateVirtualAccount() {
+  alert('Bank transfer is under maintenance. Use manual deposit.');
+  return;
   if (generatingVa) return;
   generatingVa = true;
   const btn = document.getElementById('vaGenerateBtn');
@@ -589,6 +597,8 @@ async function loadProfile() {
   if (cidEl) cidEl.value = customerId || '—';
 }
 async function payWithPocketFi() {
+  alert('Instant payment is under maintenance. Use manual deposit.');
+  return;
   const amount = parseFloat(document.getElementById('pocketfiDepositInput')?.value) || 0;
   if (amount < MIN) return toast('Minimum deposit is ₦' + MIN.toLocaleString());
   if (amount > MAX) return toast('Maximum deposit is ₦' + MAX.toLocaleString());
@@ -689,7 +699,8 @@ document.addEventListener('click', function(e){
   try {
     if (!(await ensureAuth())) return;
     await handleDepositReturn();
-    await checkVirtualAccount();
+    showVaState('empty');
+    setOtherMethod('manual');
   } catch (e) {
     var msg = (e && e.message) ? e.message : 'Could not load account';
     var el = document.getElementById('vaErrorText');
