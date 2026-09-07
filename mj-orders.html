@@ -1286,12 +1286,10 @@ async function fetchMyOrdersFromApi(force) {
   const token = session && session.access_token;
   if (!token) throw new Error('Please sign in');
   const headers = { Authorization: 'Bearer ' + token };
-  let res = await fetch('/api/order?action=my_orders', { headers });
-  let json = await res.json().catch(() => ({}));
-  // Fallback: owlet hub_orders if order endpoint fails
-  if (!res.ok || !json.success) {
-    res = await fetch('/api/owlet?action=hub_orders', { headers });
-    json = await res.json().catch(() => ({}));
+  const res = await fetch('/api/order?action=my_orders', { headers });
+  const json = await res.json().catch(() => ({}));
+  if (res.status === 401 || res.status === 403) {
+    throw new Error('Session expired. Please sign out and sign in again.');
   }
   if (!res.ok || !json.success) {
     throw new Error(json.message || 'Could not load orders');
