@@ -889,6 +889,7 @@ function withLagos(opts) { return Object.assign({ timeZone: 'Africa/Lagos' }, op
  <div class="panel">
  <div class="panel-header">
  <div class="panel-title">SMS Orders</div>
+ <button type="button" class="btn btn-outline" id="wipeDeadSmsBtn" onclick="wipeUnusedSmsNumbers()">Remove unused numbers</button>
  </div>
  <div class="search-row" style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;">
  <input type="text" id="smsOrdersSearch" placeholder="Search by Customer ID, service, or number…" oninput="filterSmsOrders()" style="flex:1;min-width:200px;" />
@@ -2427,6 +2428,35 @@ const SMS_ORDER_STATUS_LABELS = {
  refunded: 'Cancelled & refunded',
  failed: 'Failed'
 };
+
+async function wipeUnusedSmsNumbers() {
+  const ok = window.confirm(
+    'Remove unused SMS numbers older than 15 days?\n\nOnly cancelled or expired orders with no received code. Newer than 15 days and completed codes stay.\n\nThis deletes those rows from Supabase, so they leave admin SMS orders, the user dashboard, and that order SMS transaction history.'
+  );
+  if (!ok) return;
+  const btn = document.getElementById('wipeDeadSmsBtn');
+  if (btn) { btn.disabled = true; btn.textContent = 'Removing…'; }
+  try {
+    const headers = await authHeaders();
+    headers['Content-Type'] = 'application/json';
+    const res = await fetch('/api/admin', {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ resource: 'sms_orders', action: 'wipe_unused_numbers' })
+    });
+    const json = await res.json().catch(() => ({}));
+    if (!res.ok || !json.success) {
+      alert(json.message || 'Could not remove numbers.');
+      return;
+    }
+    alert((json.wiped || 0) + ' unused number(s) removed. ' + (json.transactions_removed || 0) + ' transaction row(s) deleted.');
+    await tryLoadSmsOrders();
+  } catch (e) {
+    alert(e.message || 'Could not remove numbers.');
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = 'Remove unused numbers'; }
+  }
+}
 
 async function tryLoadSmsOrders() {
  try {
