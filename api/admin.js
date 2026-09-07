@@ -1100,6 +1100,68 @@ async function listSmsOrdersHandle() {
   return { status: 200, body: { success: true, data: data || [] } };
 }
 
+async function wipeUnusedSmsNumbersHandle() {
+  const dead = ['expired', 'refunded', 'cancelled', 'canceled'];
+  const cutoff = new Date(Date.now() - 15 * 24 * 60 * 60 * 1000).toISOString();
+  let { data: rows, error } = await supabase
+    .from('number_orders')
+    .select('id, user_id, order_id, phone_number, code, status, created_at')
+    .in('status', dead)
+    .lte('created_at', cutoff);
+  if (error && /column .*code/i.test(String(error.message || ''))) {
+    const retry = await supabase
+      .from('number_orders')
+      .select('id, user_id, order_id, phone_number, status, created_at')
+      .in('status', dead)
+      .lte('created_at', cutoff);
+    rows = retry.data;
+    error = retry.error;
+  }
+  if (error) {
+    return { status: 500, body: { success: false, message: 'Could not load unused numbers: ' + error.message } };
+  }
+
+  const targets = (rows || []).filter((row) => !String(row.code || '').trim());
+  if (!targets.length) {
+    return { status: 200, body: { success: true, wiped: 0, transactions_removed: 0 } };
+  }
+
+  let txRemoved = 0;
+  for (const row of targets) {
+    const orderId = String(row.order_id || '').trim();
+    const phone = String(row.phone_number || '').trim();
+    if (!row.user_id) continue;
+    const { data: txs } = await supabase
+      .from('transactions')
+      .select('id, subtitle, notes, title, category')
+      .eq('user_id', row.user_id)
+      .eq('category', 'MJ SMS')
+      .limit(40);
+    const ids = (txs || [])
+      .filter((tx) => {
+        const blob = `${tx.subtitle || ''} ${tx.notes || ''} ${tx.title || ''}`;
+        if (orderId && blob.includes(orderId)) return true;
+        if (phone && blob.includes(phone)) return true;
+        return false;
+      })
+      .map((tx) => tx.id);
+    if (!ids.length) continue;
+    const del = await supabase.from('transactions').delete().in('id', ids);
+    if (!del.error) txRemoved += ids.length;
+  }
+
+  const ids = targets.map((row) => row.id);
+  const gone = await supabase.from('number_orders').delete().in('id', ids);
+  if (gone.error) {
+    return { status: 500, body: { success: false, message: 'Could not wipe numbers: ' + gone.error.message } };
+  }
+
+  return {
+    status: 200,
+    body: { success: true, wiped: targets.length, transactions_removed: txRemoved }
+  };
+}
+
 async function listBoosterOrdersHandle() {
   let { data, error } = await supabase
     .from('booster_orders')
@@ -1979,6 +2041,8 @@ export default async function handler(req, res) {
       result = await listProfilesHandle();
     } else if (resource === 'orders' && (action === 'list' || !action)) {
       result = await listOrdersHandle();
+    } else if (resource === 'sms_orders' && action === 'wipe_unused_numbers') {
+      result = await wipeUnusedSmsNumbersHandle();
     } else if (resource === 'sms_orders' && (action === 'list' || !action)) {
       result = await listSmsOrdersHandle();
     } else if (resource === 'booster_orders' && (action === 'list' || !action)) {
