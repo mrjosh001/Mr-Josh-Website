@@ -6821,7 +6821,7 @@ function showOrderReceipt(items, isViewOnly = false) {
     }
 
     credBox.innerHTML = lastReceiptItems.map((it, idx) => {
-        const credVal = it.login_credentials || 'N/A';
+        const credVal = formatLoginForDisplay(it.login_credentials || 'N/A');
         const descVal = it.description || '';
         const label = lastReceiptItems.length > 1
             ? `${idx + 1}. ${it.product_name ? escapeHtml(it.product_name) : ''}`
@@ -6848,6 +6848,15 @@ window.closeOrderReceipt = function() {
     document.getElementById('orderReceiptModal').classList.remove('active');
 };
 
+function formatLoginForDisplay(text) {
+    const s = String(text || '').trim();
+    if (!s) return '';
+    if (/^Number\s*:/im.test(s) && /^Password\s*:/im.test(s)) return s;
+    const numPass = s.match(/^\s*(\+?\d[\d\s().-]{8,16}\d)\s*[\/|:]\s*([^\s\/][^\n]{0,80}?)\s*$/);
+    if (numPass) return 'Number: ' + numPass[1].trim() + '\nPassword: ' + numPass[2].trim();
+    return s;
+}
+
 window.copyText = function(str) {
     navigator.clipboard.writeText(str);
     showToast('Copied to clipboard!', 'success');
@@ -6856,7 +6865,7 @@ window.copyText = function(str) {
 window.copyAllCredentials = function() {
     if (!lastReceiptItems.length) return;
     const block = lastReceiptItems.map(it => {
-        return `Product: ${it.product_name || 'Log'}\nLogin Credentials: ${it.login_credentials || ''}`;
+        return `Product: ${it.product_name || 'Log'}\nLogin Credentials:\n${formatLoginForDisplay(it.login_credentials || '')}`;
     }).join('\n\n---\n\n');
     navigator.clipboard.writeText(block);
     showToast('All credentials copied!', 'success');
@@ -6865,7 +6874,7 @@ window.copyAllCredentials = function() {
 window.downloadCredentialsTxt = function() {
     if (!lastReceiptItems.length) return;
     const content = lastReceiptItems.map((it, i) => {
-        return `[Item ${i+1}]\nProduct: ${it.product_name || ''}\nOrder ID: ${formatOrderId(it)}\nLogin Credentials: ${it.login_credentials || ''}\nGuide: ${it.guide_url || ''}\nDate: ${it.created_at || new Date().toISOString()}`;
+        return `[Item ${i+1}]\nProduct: ${it.product_name || ''}\nOrder ID: ${formatOrderId(it)}\nLogin Credentials:\n${formatLoginForDisplay(it.login_credentials || '')}\nGuide: ${it.guide_url || ''}\nDate: ${it.created_at || new Date().toISOString()}`;
     }).join('\n\n====================\n\n');
 
     const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });

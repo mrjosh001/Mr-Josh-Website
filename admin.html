@@ -3884,6 +3884,11 @@ function openOrderModal(index) {
       return 'Username: ' + twoFa[1] + '\nPassword: ' + twoFa[2] + '\n2FA / Token: ' + secret + '\nExtra: ' + String(twoFa[4]).replace(/\s+/g, '');
     }
     if (/^Username:/im.test(s) && /2FA \/ Token:/i.test(s) && !/\n\s*2\.\s*Username:/i.test(s)) return s;
+    if (/^Number\s*:/im.test(s) && /^Password\s*:/im.test(s)) return s;
+    const numPass = s.match(/^\s*(\+?\d[\d\s().-]{8,16}\d)\s*[\/|:]\s*([^\s\/][^\n]{0,80}?)\s*$/);
+    if (numPass) {
+      return 'Number: ' + numPass[1].trim() + '\nPassword: ' + numPass[2].trim();
+    }
     return s;
   }
   function formatLogBlock(text, idx, total) {
