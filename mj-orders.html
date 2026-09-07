@@ -273,7 +273,8 @@
     .sheet-b .desc-box{
       padding:14px 16px;border-radius:14px;margin-bottom:14px;
       background:#f8fafc;border:1px solid #e2e8f0;
-      color:#1e293b;font-size:13.5px;font-weight:600;line-height:1.55
+      color:#1e293b;font-size:13.5px;font-weight:600;line-height:1.55;
+      white-space:pre-wrap;word-break:break-word
     }
     .sheet-b .desc-box .lbl{
       font-size:11px;font-weight:800;color:#64748b;text-transform:uppercase;
@@ -1606,7 +1607,7 @@ async function openModal(kind, i) {
           '</div>'
         );
       }
-      const keys = ['email', 'username', 'password', 'email_password', 'phone', 'token', 'link', 'extra'].filter((k) => f[k]);
+      const keys = ['phone', 'password', 'email', 'email_password', 'username', 'token', 'link', 'extra'].filter((k) => f[k]);
       if (!keys.length) {
         const raw = f._raw || f.username || '';
         return (
@@ -1644,7 +1645,7 @@ async function openModal(kind, i) {
     }).join('');
 
     const allText = allAccounts.map((f, idx) => {
-      const keys = ['email', 'username', 'password', 'email_password', 'phone', 'token', 'link', 'extra'].filter((k) => f[k]);
+      const keys = ['phone', 'password', 'email', 'email_password', 'username', 'token', 'link', 'extra'].filter((k) => f[k]);
       const body = keys.map((k) => fieldLabel(k) + ': ' + f[k]).join('\n');
       return (allAccounts.length > 1 ? '#' + (idx + 1) + '\n' : '') + body;
     }).join('\n\n');

@@ -1196,7 +1196,7 @@ function withLagos(opts) { return Object.assign({ timeZone: 'Africa/Lagos' }, op
  <select id="pCategory" onchange="handleCategorySelectChange()"></select>
  <input type="text" id="pCategoryNew" placeholder="New category name" class="hidden" style="margin-top:8px;" />
  </div>
- <div class="field"><label>Description</label><textarea id="pDesc" rows="3"></textarea></div>
+ <div class="field"><label>Description</label><textarea id="pDesc" rows="8" placeholder="One line per point. Line breaks are kept."></textarea></div>
  <div class="field">
  <label>Supplier Price (USD)</label>
  <input type="number" id="pSupplierPrice" disabled />
@@ -2905,7 +2905,7 @@ function openProductModal(product) {
  document.getElementById('pProductKey').value = product.product_key || '';
  document.getElementById('pProductKey').disabled = true; // stays fixed once created (Stage 2)
  populateProductCategoryDropdown(product.category || '');
- document.getElementById('pDesc').value = stripHtml(product.display_description || product.description || '');
+ document.getElementById('pDesc').value = stripHtmlKeepLines(product.display_description || product.description || '');
  document.getElementById('pSupplierPrice').value = product.supplier_price ?? 0;
  document.getElementById('pPrice').value = product.price ?? '';
  document.getElementById('pStock').value = product.stock_quantity ?? '';
@@ -3011,7 +3011,7 @@ async function saveProduct() {
  const category = (categorySelectVal === '__new__'
  ? document.getElementById('pCategoryNew').value.trim()
  : categorySelectVal.trim()) || 'OTHER';
- const description = stripHtml(document.getElementById('pDesc').value);
+ const description = stripHtmlKeepLines(document.getElementById('pDesc').value);
  const price = parseFloat(document.getElementById('pPrice').value);
  const stock_quantity = parseInt(document.getElementById('pStock').value, 10);
  const is_available = document.getElementById('pAvailable').value === 'true';
@@ -3946,7 +3946,7 @@ function openOrderModal(index) {
     row('Amount', '₦' + Number(o.amount || 0).toLocaleString()),
     row('Status', o.status || ''),
     row('Date', o.created_at ? ngWhen(o.created_at) : ''),
-    row('Description', o.description || ''),
+    row('Description', o.description || '', true),
     credentialsBlock,
     rawBlock
   ].join('');
@@ -4286,6 +4286,17 @@ function escapeHtml(str) {
 function stripHtml(html) {
  if (!html) return '';
  return String(html).replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
+}
+function stripHtmlKeepLines(html) {
+ if (!html) return '';
+ return String(html)
+  .replace(/<br\s*\/?>/gi, '\n')
+  .replace(/<\/p>/gi, '\n')
+  .replace(/<[^>]*>/g, '')
+  .replace(/[^\S\n]+/g, ' ')
+  .replace(/ *\n */g, '\n')
+  .replace(/\n{3,}/g, '\n\n')
+  .trim();
 }
 
 window.addEventListener('DOMContentLoaded', async () => {
