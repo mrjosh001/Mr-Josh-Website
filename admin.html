@@ -3883,9 +3883,17 @@ function openOrderModal(index) {
       const secret = twoFa[3].toUpperCase().replace(/(.{4})/g, '$1 ').trim();
       return 'Username: ' + twoFa[1] + '\nPassword: ' + twoFa[2] + '\n2FA / Token: ' + secret + '\nExtra: ' + String(twoFa[4]).replace(/\s+/g, '');
     }
+    const brokenUs = s.match(/Username:\s*\+1[\s\S]*Password:\s*(\(\d{3}\))[\s\S]*2FA \/ Token:\s*([\s\S]+)/i);
+    if (brokenUs) {
+      const compact = brokenUs[2].replace(/\s+/g, '').replace(/\/+/g, '/');
+      const rest = compact.match(/^(\d{3})-?(\d{4})\/(.+)$/i);
+      if (rest) {
+        return 'Number: +1 ' + brokenUs[1] + ' ' + rest[1] + '-' + rest[2] + '\nPassword: ' + rest[3];
+      }
+    }
     if (/^Username:/im.test(s) && /2FA \/ Token:/i.test(s) && !/\n\s*2\.\s*Username:/i.test(s)) return s;
-    if (/^Number\s*:/im.test(s) && /^Password\s*:/im.test(s)) return s;
-    const numPass = s.match(/^\s*(\+?\d[\d\s().-]{8,16}\d)\s*[\/|:]\s*([^\s\/][^\n]{0,80}?)\s*$/);
+    if (/^Number\s*:/im.test(s) && /^Password\s*:/im.test(s) && !/^Username:/im.test(s)) return s;
+    const numPass = String(s).replace(/\u200b/g, '').match(/(\+\d{10,15})\s*[\/|:]\s*([^\s\/][^\n]{0,80})/);
     if (numPass) {
       return 'Number: ' + numPass[1].trim() + '\nPassword: ' + numPass[2].trim();
     }
