@@ -1126,29 +1126,51 @@ async function wipeUnusedSmsNumbersHandle() {
     return { status: 200, body: { success: true, wiped: 0, transactions_removed: 0 } };
   }
 
+  const digits = (s) => String(s || '').replace(/\D/g, '');
   let txRemoved = 0;
   for (const row of targets) {
     const orderId = String(row.order_id || '').trim();
     const phone = String(row.phone_number || '').trim();
+    const phoneDigits = digits(phone);
     if (!row.user_id) continue;
     const { data: txs } = await supabase
       .from('transactions')
-      .select('id, subtitle, notes, title, category')
+      .select('id, subtitle, notes, title, category, status')
       .eq('user_id', row.user_id)
       .eq('category', 'MJ SMS')
-      .limit(40);
-    const ids = (txs || [])
+      .order('created_at', { ascending: false })
+      .limit(200);
+    const hitIds = (txs || [])
       .filter((tx) => {
         const blob = `${tx.subtitle || ''} ${tx.notes || ''} ${tx.title || ''}`;
         if (orderId && blob.includes(orderId)) return true;
         if (phone && blob.includes(phone)) return true;
+        if (phoneDigits.length >= 10 && digits(blob).includes(phoneDigits)) return true;
         return false;
       })
       .map((tx) => tx.id);
-    if (!ids.length) continue;
-    const del = await supabase.from('transactions').delete().in('id', ids);
-    if (!del.error) txRemoved += ids.length;
+    if (!hitIds.length) continue;
+    const del = await supabase.from('transactions').delete().in('id', hitIds);
+    if (!del.error) txRemoved += hitIds.length;
   }
+
+  const stale = await supabase
+    .from('transactions')
+    .delete()
+    .eq('category', 'MJ SMS')
+    .in('status', ['cancelled', 'canceled', 'refunded', 'expired'])
+    .lte('created_at', cutoff)
+    .select('id');
+  if (!stale.error && Array.isArray(stale.data)) txRemoved += stale.data.length;
+
+  const stalePending = await supabase
+    .from('transactions')
+    .delete()
+    .eq('category', 'MJ SMS')
+    .eq('status', 'pending')
+    .lte('created_at', cutoff)
+    .select('id');
+  if (!stalePending.error && Array.isArray(stalePending.data)) txRemoved += stalePending.data.length;
 
   const ids = targets.map((row) => row.id);
   const gone = await supabase.from('number_orders').delete().in('id', ids);
