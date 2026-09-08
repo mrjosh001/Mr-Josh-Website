@@ -1217,6 +1217,27 @@ function withLagos(opts) { return Object.assign({ timeZone: 'Africa/Lagos' }, op
  </div>
 
  <div class="panel" style="margin-top:14px;">
+ <div class="panel-title" style="margin-bottom:4px;">Email One Customer</div>
+ <p style="color:var(--muted);font-size:12.5px;margin:0 0 14px;line-height:1.5;">
+ Sends a real email to that customer’s own inbox. Use their email or Customer ID (MJ-XXXXXX).
+ </p>
+ <div class="field" style="max-width:520px;">
+ <label>Customer email or Customer ID</label>
+ <input type="text" id="emailOneTo" placeholder="e.g. user@gmail.com or MJ-E16D11" maxlength="180" />
+ </div>
+ <div class="field" style="max-width:520px;">
+ <label>Subject</label>
+ <input type="text" id="emailOneSubject" placeholder="e.g. About your last order" maxlength="150" />
+ </div>
+ <div class="field" style="max-width:520px;">
+ <label>Body</label>
+ <textarea id="emailOneBody" rows="5" placeholder="Plain text. Line breaks are kept." maxlength="5000"></textarea>
+ </div>
+ <div id="emailOneMsg" style="font-size:13px;margin:4px 0 12px;"></div>
+ <button class="btn btn-primary btn-sm" id="emailOneSendBtn" onclick="sendEmailToOneCustomer()"><i class="fas fa-paper-plane"></i> Send to this customer</button>
+ </div>
+
+ <div class="panel" style="margin-top:14px;">
  <div class="panel-title" style="margin-bottom:4px;">Email All Customers</div>
  <p style="color:var(--text-muted);font-size:12.5px;margin:0 0 14px;line-height:1.5;">
  Sends a real email via Resend to every customer with a valid, subscribed email address. Separate from the in-app notification above — this lands in their inbox.
@@ -4169,6 +4190,33 @@ async function callEmailBroadcast(action, extra) {
  throw new Error(data.message || `Request failed (${res.status})`);
  }
  return data;
+}
+
+async function sendEmailToOneCustomer() {
+ const msgEl = document.getElementById('emailOneMsg');
+ const to = (document.getElementById('emailOneTo')?.value || '').trim();
+ const subject = (document.getElementById('emailOneSubject')?.value || '').trim();
+ const body = (document.getElementById('emailOneBody')?.value || '').trim();
+ if (!to) { msgEl.style.color = 'var(--danger,#f87171)'; msgEl.textContent = 'Enter the customer email or Customer ID.'; return; }
+ if (!subject) { msgEl.style.color = 'var(--danger,#f87171)'; msgEl.textContent = 'Subject is required.'; return; }
+ if (!body) { msgEl.style.color = 'var(--danger,#f87171)'; msgEl.textContent = 'Body is required.'; return; }
+ if (!confirm('Send this email to ' + to + '?')) return;
+ const btn = document.getElementById('emailOneSendBtn');
+ if (btn) btn.disabled = true;
+ msgEl.style.color = 'var(--muted)';
+ msgEl.textContent = 'Sending…';
+ try {
+   const data = await callEmailBroadcast('one', { to, subject, body });
+   msgEl.style.color = '#15803d';
+   msgEl.textContent = 'Sent to ' + (data.to || to) + (data.customer_id ? ' (' + data.customer_id + ')' : '') + '.';
+   document.getElementById('emailOneBody').value = '';
+   await loadNotificationHistory();
+ } catch (e) {
+   msgEl.style.color = 'var(--danger,#f87171)';
+   msgEl.textContent = e.message || 'Send failed.';
+ } finally {
+   if (btn) btn.disabled = false;
+ }
 }
 
 async function previewEmailBroadcast() {
