@@ -4822,9 +4822,10 @@ function normalizeTxType(tx) {
     const channel = String(tx.channel || '').toLowerCase();
     const title = String(tx.title || '').toLowerCase();
     const blob = type + ' ' + cat + ' ' + title + ' ' + channel;
+    if (type === 'booster' || type === 'boost' || cat === 'booster' || cat.includes('mj boost')) return 'booster';
     if (type === 'deposit' || cat.includes('deposit') || channel.includes('pocketfi') || channel.includes('paystack')) return 'deposit';
     if (type === 'conversion') return 'conversion';
-    if (type === 'booster' || cat.includes('boost') || /owlet/.test(blob)) return 'booster';
+    if (cat.includes('boost') || /owlet/.test(blob)) return 'booster';
     if (
         type === 'log' || type === 'logs' || cat.includes('log') ||
         /mj logs|logs domain|fadded|sujan|classy|hotmail|tiktok|facebook|instagram|premade|google voice|\bvpn\b/i.test(title + ' ' + cat)
@@ -4982,6 +4983,20 @@ async function fetchUserTransactions(userId) {
             .order('created_at', { ascending: false })
             .limit(200);
         if (!data) data = [];
+        try {
+            const boostOnly = await supabaseClient
+                .from('transactions')
+                .select('*')
+                .eq('user_id', userId)
+                .in('type', ['booster', 'boost'])
+                .order('created_at', { ascending: false })
+                .limit(200);
+            const extraBoost = boostOnly.error ? [] : (boostOnly.data || []);
+            const have = new Set(data.map((r) => String(r.id)));
+            for (const row of extraBoost) {
+                if (!have.has(String(row.id))) data.push(row);
+            }
+        } catch (_) {}
         data = await expireStalePocketFiDeposits(data);
         const fromTx = data.map(tx => {
             let title = tx.title || 'Transaction';
