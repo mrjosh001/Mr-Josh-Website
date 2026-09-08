@@ -4998,6 +4998,12 @@ async function fetchUserTransactions(userId) {
             }
         } catch (_) {}
         data = await expireStalePocketFiDeposits(data);
+        data = (data || []).filter((tx) => {
+            const kind = String(tx.type || '').toLowerCase();
+            const st = String(tx.status || '').toLowerCase();
+            if ((kind === 'booster' || kind === 'boost') && (st === 'failed' || st === 'fail')) return false;
+            return true;
+        });
         const fromTx = data.map(tx => {
             let title = tx.title || 'Transaction';
             let channel = tx.channel || 'Wallet';
@@ -6977,8 +6983,14 @@ function renderHistoryList(filterType = 'all') {
     if (!container) return;
 
     let items = transactions;
+    items = items.filter((t) => {
+        const kind = normalizeTxType(t);
+        const st = String(t.status || '').toLowerCase();
+        if (kind === 'booster' && (st === 'failed' || st === 'fail')) return false;
+        return true;
+    });
     if (filterType !== 'all') {
-        items = transactions.filter((t) => {
+        items = items.filter((t) => {
             // 'log' historically meant Fadded only (type: 'log'/'logs').
             // Logs Domain and Sujan Department both use type: 'purchase'
             // for the exact same kind of order, so both are included here
