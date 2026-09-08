@@ -653,19 +653,6 @@ async function handleOrder(req, res) {
       : /supplier|owlet|panel/i.test(String(rawErr))
       ? 'This order could not be placed right now. Your balance was restored.'
       : (rawErr || 'This order could not be placed right now. Your balance was restored.');
-    try {
-      await supabase.from('transactions').insert({
-        user_id: user.id,
-        customer_id: profile.customer_id || null,
-        type: 'booster',
-        category: 'booster',
-        title: service.name || 'MJ Booster',
-        subtitle: `Failed: ${errMsg}`,
-        amount: totalNgn,
-        status: 'failed',
-        created_at: new Date().toISOString()
-      });
-    } catch (_) {}
     return res.status(502).json({ success: false, message: errMsg });
   }
 
