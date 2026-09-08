@@ -517,6 +517,34 @@ async function handleCatalog(req, res) {
   });
 }
 
+let owletServiceCache = { at: 0, list: [] };
+
+async function loadOwletServicesLive() {
+  const now = Date.now();
+  if (owletServiceCache.list.length && now - owletServiceCache.at < 10 * 60 * 1000) {
+    return owletServiceCache.list;
+  }
+  const live = await owletCall({ action: 'services' }, 25000);
+  const list = Array.isArray(live.json) ? live.json : [];
+  if (list.length) owletServiceCache = { at: now, list };
+  return list;
+}
+
+async function resolveOwletServiceId(storedId, name) {
+  const id = String(storedId || '').trim();
+  const list = await loadOwletServicesLive();
+  if (!list.length) return id;
+  if (list.some((s) => String(s.service) === id)) return id;
+  const want = String(name || '').trim().toLowerCase();
+  if (want) {
+    const exact = list.find((s) => String(s.name || '').trim().toLowerCase() === want);
+    if (exact) return String(exact.service);
+    const loose = list.find((s) => String(s.name || '').trim().toLowerCase().includes(want.slice(0, 24)));
+    if (loose) return String(loose.service);
+  }
+  return id;
+}
+
 async function handleOrder(req, res) {
   const body = typeof req.body === 'string' ? (() => { try { return JSON.parse(req.body || '{}'); } catch { return {}; } })() : (req.body || {});
   const serviceId = String(body.service_id || body.service || '').trim();
@@ -607,10 +635,11 @@ async function handleOrder(req, res) {
     }
   }
 
-  // Place order with Owlet
+  // Place order with Owlet — use live panel ID if our catalog ID is stale
+  const liveServiceId = await resolveOwletServiceId(serviceId, service.name);
   const { ok, status, json } = await owletCall({
     action: 'add',
-    service: serviceId,
+    service: liveServiceId,
     link,
     quantity: String(quantity)
   });
@@ -619,7 +648,9 @@ async function handleOrder(req, res) {
     // refund
     await supabase.from('profiles').update({ balance: originalBalance }).eq('id', user.id);
     const rawErr = json?.error || json?.message || '';
-    const errMsg = /supplier|owlet|panel/i.test(String(rawErr))
+    const errMsg = /incorrect service/i.test(String(rawErr))
+      ? 'This package is no longer available. Go back and pick another one. Your balance was restored.'
+      : /supplier|owlet|panel/i.test(String(rawErr))
       ? 'This order could not be placed right now. Your balance was restored.'
       : (rawErr || 'This order could not be placed right now. Your balance was restored.');
     try {
@@ -645,7 +676,7 @@ async function handleOrder(req, res) {
     customer_id: profile.customer_id || null,
     source: 'owlet',
     supplier_order_id: supplierOrderId,
-    service_id: serviceId,
+    service_id: liveServiceId,
     service_name: service.name,
     category: service.category || null,
     link,
