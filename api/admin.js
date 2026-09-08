@@ -1903,6 +1903,67 @@ async function emailBroadcastTest(body, admin) {
   }
 }
 
+async function emailBroadcastOne(body) {
+  const subject = String(body.subject || '').trim();
+  const message = String(body.body || '').trim();
+  const rawTo = String(body.to || body.email || body.customer_id || '').trim();
+  if (!subject) return { status: 400, body: { success: false, message: 'Subject is required' } };
+  if (!message) return { status: 400, body: { success: false, message: 'Body is required' } };
+  if (!rawTo) return { status: 400, body: { success: false, message: 'Enter a customer email or Customer ID' } };
+
+  let query = supabase.from('profiles').select('id, email, full_name, customer_id, email_unsubscribed');
+  if (rawTo.includes('@')) query = query.ilike('email', rawTo);
+  else query = query.eq('customer_id', rawTo.toUpperCase());
+  const { data: profile, error } = await query.maybeSingle();
+  if (error) return { status: 500, body: { success: false, message: error.message } };
+  if (!profile || !String(profile.email || '').includes('@')) {
+    return { status: 404, body: { success: false, message: 'No customer found with that email or Customer ID' } };
+  }
+  if (profile.email_unsubscribed === true) {
+    return { status: 400, body: { success: false, message: 'That customer unsubscribed from email' } };
+  }
+
+  const apiKey = process.env.RESEND_API_KEY;
+  if (!apiKey) return { status: 500, body: { success: false, message: 'Missing RESEND_API_KEY' } };
+  const from = process.env.RESEND_FROM_EMAIL || process.env.RESEND_FROM || 'MJ Hub <onboarding@resend.dev>';
+  const to = String(profile.email).trim();
+  const name = profile.full_name || 'there';
+
+  try {
+    const resp = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: {
+        Authorization: 'Bearer ' + apiKey,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        from,
+        to: [to],
+        subject,
+        html: buildBroadcastEmailHtml({ name, subject, message })
+      })
+    });
+    const json = await resp.json().catch(() => ({}));
+    if (!resp.ok) {
+      return { status: 500, body: { success: false, message: json.message || json.error || ('Resend ' + resp.status) } };
+    }
+    try {
+      await supabase.from('notifications').insert({
+        user_id: profile.id,
+        type: 'email_log',
+        title: '[Email] ' + subject,
+        body: 'Sent to ' + to
+      });
+    } catch (_) {}
+    return {
+      status: 200,
+      body: { success: true, sent: 1, to, customer_id: profile.customer_id || null, id: json.id || null }
+    };
+  } catch (e) {
+    return { status: 500, body: { success: false, message: e.message || 'Send failed' } };
+  }
+}
+
 async function emailBroadcastPreview() {
   try {
     const recipients = await fetchBroadcastRecipients();
@@ -2081,7 +2142,8 @@ export default async function handler(req, res) {
       if (action === 'preview') result = await emailBroadcastPreview();
       else if (action === 'send') result = await emailBroadcastSend(body);
       else if (action === 'test') result = await emailBroadcastTest(body, admin);
-      else result = { status: 400, body: { success: false, message: 'Unknown email_broadcast action. Use "preview", "test", or "send".' } };
+      else if (action === 'one') result = await emailBroadcastOne(body);
+      else result = { status: 400, body: { success: false, message: 'Unknown email_broadcast action. Use "preview", "test", "one", or "send".' } };
     } else {
       result = { status: 400, body: { success: false, message: 'Unknown resource. Use "user", "product", "inventory", "sms", "profiles", "orders", "sms_orders", "booster_orders", "supplier_balances", "overview", "user_join_dates", "secrets_status", "sub_admin", "email_broadcast", or "vendor".' } };
     }
