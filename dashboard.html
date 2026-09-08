@@ -1202,11 +1202,32 @@ body::after {
     color: var(--primary);
     letter-spacing: 0.03em; text-transform: uppercase;
 }
+.home-duo-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    margin: 10px 0 12px;
+}
+.home-duo-grid .contest-banner,
+.home-duo-grid .logs-shortcut {
+    margin: 0;
+    flex-direction: column;
+    align-items: flex-start;
+    padding: 14px 12px;
+    min-height: 148px;
+    position: relative;
+}
+.home-duo-grid .contest-banner-text,
+.home-duo-grid .logs-shortcut-text { padding-right: 0; }
+.home-duo-grid .contest-banner-cta,
+.home-duo-grid .logs-shortcut-cta { margin-top: auto; }
+.home-duo-grid .contest-banner-badge { top: 8px; right: 8px; }
 .logs-shortcut {
     display: flex;
     align-items: center;
     gap: 12px;
     text-decoration: none;
+    color: inherit;
     margin: 0 0 12px;
     border-radius: 16px;
     padding: 12px 14px;
@@ -2782,24 +2803,25 @@ html[data-theme="light"] .logo-word, :root[data-theme="light"] .logo-word{color:
             </a>
         </div>
 
-        <!-- Referral contest banner -->
+        <div class="home-duo-grid">
         <a class="contest-banner" href="referral.html" id="referralContestBanner">
             <span class="contest-banner-badge">Live now</span>
             <div class="contest-banner-icon"><i class="fa-solid fa-trophy"></i></div>
             <div class="contest-banner-text">
-                <strong>You don't just spend here, you can earn too</strong>
-                <span>Refer friends and earn 2% for life. Join the referral contest</span>
+                <strong>Refer & earn</strong>
+                <span>2% for life on friends you invite</span>
             </div>
             <div class="contest-banner-cta">Refer</div>
         </a>
-        <a class="logs-shortcut" href="mj-logs.html">
+        <a class="logs-shortcut" href="mj-orders.html">
             <div class="logs-shortcut-icon"><i class="fa-solid fa-box-open"></i></div>
             <div class="logs-shortcut-text">
-                <strong>View purchased logs</strong>
-                <span>Open the accounts you already bought</span>
+                <strong>Purchased logs</strong>
+                <span>Open accounts you already bought</span>
             </div>
             <div class="logs-shortcut-cta">Open</div>
         </a>
+        </div>
 
     </section>
 
@@ -3576,7 +3598,7 @@ html[data-theme="light"] .logo-word, :root[data-theme="light"] .logo-word{color:
             <button class="filter-tab" onclick="filterTransactions('sms',this)"><i class="fa-solid fa-phone"></i> SMS Numbers</button>
             <button class="filter-tab" onclick="filterTransactions('deposit',this)"><i class="fa-solid fa-arrow-down"></i> Deposits</button>
             <button class="filter-tab" onclick="filterTransactions('booster',this)"><i class="fa-solid fa-bolt"></i> Social Boost</button>
-            <button class="filter-tab" onclick="filterTransactions('digital',this)"><i class="fa-solid fa-gift"></i> Digital</button>
+            
             <button class="filter-tab" onclick="filterTransactions('conversion',this)"><i class="fa-solid fa-right-left"></i> Convert</button>
         </div>
     </div>
@@ -6952,7 +6974,6 @@ function renderHistoryList(filterType = 'all') {
             if (filterType === 'sms') return kind === 'sms';
             if (filterType === 'deposit') return kind === 'deposit';
             if (filterType === 'booster') return kind === 'booster';
-            if (filterType === 'digital') return kind === 'log' || kind === 'digital';
             return kind === filterType;
         });
     }
@@ -7458,15 +7479,9 @@ function toggleBoosterMenu(e) {
 
 <!-- Pull to refresh (mobile / PWA-style) -->
 <style>
-#mjPtrIndicator{
-  position:fixed;top:0;left:0;right:0;z-index:9999;display:flex;align-items:center;justify-content:center;
-  height:0;overflow:hidden;pointer-events:none;transition:height .15s ease;
-  background:linear-gradient(180deg,rgba(59,130,246,.25),transparent);color:#93c5fd;font-size:12px;font-weight:700;
-}
-#mjPtrIndicator.show{height:48px}
-#mjPtrIndicator i{margin-right:8px}
+#mjPtrIndicator{display:none!important;height:0!important;}
 </style>
-<div id="mjPtrIndicator" aria-hidden="true"><i class="fa-solid fa-arrow-down"></i> Release to refresh</div>
+<div id="mjPtrIndicator" hidden></div>
 <script>
 (function(){
   var startY = 0, pulling = false, armed = false;
@@ -7485,20 +7500,12 @@ function toggleBoosterMenu(e) {
   document.addEventListener('touchmove', function(e){
     if (!pulling || !e.touches || !e.touches[0]) return;
     var dy = e.touches[0].clientY - startY;
-    if (dy > 70 && atTop()) {
-      armed = true;
-      if (ind) { ind.classList.add('show'); ind.innerHTML = '<i class="fa-solid fa-arrows-rotate"></i> Release to refresh'; }
-    } else if (dy > 24 && atTop()) {
-      if (ind) { ind.classList.add('show'); ind.innerHTML = '<i class="fa-solid fa-arrow-down"></i> Pull to refresh'; }
-    } else {
-      if (ind) ind.classList.remove('show');
-      armed = false;
-    }
+    if (dy > 70 && atTop()) armed = true;
+    else armed = false;
   }, { passive: true });
   document.addEventListener('touchend', function(){
     if (armed && atTop()) {
-      if (ind) { ind.classList.add('show'); ind.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Refreshing…'; }
-      setTimeout(function(){ location.reload(); }, 280);
+      location.reload();
     } else {
       if (ind) ind.classList.remove('show');
     }
