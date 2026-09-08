@@ -1789,8 +1789,7 @@ function buildBroadcastEmailHtml({ name, subject, message }) {
   const appUrl = (process.env.APP_URL || process.env.SITE_URL || 'https://www.mjhub.store').replace(/\/$/, '');
   const year = new Date().getFullYear();
   const unsubUrl = `${appUrl}/dashboard.html?unsubscribe=1`;
-  const LOGO_LIGHT = 'https://atczodlljmlayvldxfmv.supabase.co/storage/v1/object/public/avatars/IMG_2796.jpeg';
-  const LOGO_DARK = 'https://atczodlljmlayvldxfmv.supabase.co/storage/v1/object/public/avatars/mjhub-logo-dark-clear.png';
+  const LOGO = (appUrl || 'https://www.mjhub.store') + '/img/IMG_3027.png';
 
   return `<!DOCTYPE html>
 <html lang="en" xmlns="http://www.w3.org/1999/xhtml">
@@ -1829,7 +1828,7 @@ function buildBroadcastEmailHtml({ name, subject, message }) {
       <table role="presentation" width="560" cellspacing="0" cellpadding="0" class="card" style="max-width:560px;width:100%;background-color:#ffffff;border:1px solid #dbe4f0;border-radius:20px;">
         <tr>
           <td align="center" style="padding:32px 24px 12px;background:transparent;">
-            <img src="https://atczodlljmlayvldxfmv.supabase.co/storage/v1/object/public/avatars/mjhub-mark-only.png" alt="MJ Hub" width="120" style="display:block;height:44px;width:auto;border:0;outline:none;background:transparent;">
+            <img src="${LOGO}" alt="MJ HUB" height="40" style="display:block;height:40px;width:auto;max-width:180px;border:0;outline:none;background:transparent;">
             <div class="brand-word" style="margin-top:6px;font-size:13px;font-weight:800;letter-spacing:0.14em;color:#0f172a;">MJ HUB</div>
           </td>
         </tr>
