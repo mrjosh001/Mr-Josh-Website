@@ -808,7 +808,7 @@ body::after {
     pointer-events: none;
     z-index: 0;
 }
-.navbar, .sidebar, .main-content, .bottom-nav, .support-widget-container,
+.navbar, .sidebar, .main-content, .bottom-nav,
 .toast-container, .overlay, .floating-action-modal, .currency-modal,
 .activity-history-drawer { position: relative; z-index: 1; }
 
@@ -1201,6 +1201,37 @@ body::after {
     border: 1px solid rgba(47, 111, 237, 0.22);
     color: var(--primary);
     letter-spacing: 0.03em; text-transform: uppercase;
+}
+.logs-shortcut {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    text-decoration: none;
+    margin: 0 0 12px;
+    border-radius: 16px;
+    padding: 12px 14px;
+    border: 1px solid var(--border);
+    background: var(--card);
+    box-shadow: var(--shadow);
+}
+.logs-shortcut-icon {
+    width: 40px; height: 40px; border-radius: 12px; flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center;
+    background: linear-gradient(135deg, #3b82f6, #1d4ed8);
+    color: #fff; font-size: 15px;
+}
+.logs-shortcut-text { flex: 1; min-width: 0; }
+.logs-shortcut-text strong {
+    display: block; font-size: 13px; font-weight: 800; color: var(--text);
+}
+.logs-shortcut-text span {
+    display: block; font-size: 11px; color: var(--muted); font-weight: 600;
+}
+.logs-shortcut-cta {
+    flex-shrink: 0;
+    font-size: 11px; font-weight: 800;
+    padding: 8px 12px; border-radius: 999px;
+    background: #2563eb; color: #fff;
 }
 @media (max-width: 340px) {
     .promo-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
@@ -2760,6 +2791,14 @@ html[data-theme="light"] .logo-word, :root[data-theme="light"] .logo-word{color:
                 <span>Refer friends and earn 2% for life. Join the referral contest</span>
             </div>
             <div class="contest-banner-cta">Refer</div>
+        </a>
+        <a class="logs-shortcut" href="mj-logs.html">
+            <div class="logs-shortcut-icon"><i class="fa-solid fa-box-open"></i></div>
+            <div class="logs-shortcut-text">
+                <strong>View purchased logs</strong>
+                <span>Open the accounts you already bought</span>
+            </div>
+            <div class="logs-shortcut-cta">Open</div>
         </a>
 
     </section>
@@ -4574,18 +4613,15 @@ function initSupportWidget() {
 
     function scheduleCollapse() {
         clearTimeout(collapseTimer);
-        collapseTimer = setTimeout(() => {
-            if (!popup.classList.contains('active') && !isDragging) {
-                widget.classList.add('collapsed');
-                isCollapsed = true;
-            }
-        }, 4000);
     }
 
     function expandWidget() {
         widget.classList.remove('collapsed');
         isCollapsed = false;
-        scheduleCollapse();
+        widget.style.left = '';
+        widget.style.top = '';
+        widget.style.right = '14px';
+        widget.style.bottom = '100px';
     }
 
     btn.addEventListener('click', (e) => {
@@ -4692,25 +4728,7 @@ function initSupportWidget() {
         document.removeEventListener('touchend', onTouchEnd);
     }
 
-    // Dock to edge when collapsed for visibility
-    const _origSchedule = scheduleCollapse;
-    scheduleCollapse = function() {
-        clearTimeout(collapseTimer);
-        collapseTimer = setTimeout(() => {
-            if (!popup.classList.contains('active') && !isDragging) {
-                // Snap to right edge when sleeping
-                const rect = widget.getBoundingClientRect();
-                widget.style.left = (window.innerWidth - 48) + 'px';
-                widget.style.right = 'auto';
-                widget.style.bottom = 'auto';
-                widget.classList.add('collapsed');
-                isCollapsed = true;
-            }
-        }, 5000);
-    };
-
-    // Auto-collapse after idle
-    scheduleCollapse();
+    expandWidget();
 }
 
 /** Bottom nav Home: go to home only. Pull-down still refreshes. */
@@ -4781,17 +4799,21 @@ function normalizeTxType(tx) {
     const cat = String(tx.category || '').toLowerCase();
     const channel = String(tx.channel || '').toLowerCase();
     const title = String(tx.title || '').toLowerCase();
-    // Grizzly SMS rows: type=purchase, category=MJ SMS
-    if (type === 'sms' || cat.includes('sms') || channel.includes('sms') || /mj sms|sms number|server\s*[12]/i.test(title + ' ' + cat)) return 'sms';
-    if (type === 'deposit' || cat.includes('deposit') || channel.includes('pocketfi') || channel.includes('paystack') || channel.includes('manual')) return 'deposit';
-    if (type === 'booster' || cat.includes('boost') || /booster|followers|likes|views|owlet/i.test(cat + ' ' + title)) return 'booster';
-    if (type === 'log' || type === 'logs' || cat.includes('log') || /mj logs|logs domain|fadded|sujan|classy|vpn|google voice|facebook|instagram|twitter|tiktok/i.test(cat + ' ' + title)) return 'log';
+    const blob = type + ' ' + cat + ' ' + title + ' ' + channel;
+    if (type === 'deposit' || cat.includes('deposit') || channel.includes('pocketfi') || channel.includes('paystack')) return 'deposit';
     if (type === 'conversion') return 'conversion';
-    if (type === 'purchase' && (cat.includes('log') || cat.includes('mj logs') || cat.includes('digital'))) return 'log';
-    if (type === 'purchase' && cat.includes('boost')) return 'booster';
-    // Generic wallet purchase with product-like title → treat as log/digital product
+    if (type === 'booster' || cat.includes('boost') || /owlet/.test(blob)) return 'booster';
+    if (
+        type === 'log' || type === 'logs' || cat.includes('log') ||
+        /mj logs|logs domain|fadded|sujan|classy|hotmail|tiktok|facebook|instagram|premade|google voice|\bvpn\b/i.test(title + ' ' + cat)
+    ) return 'log';
+    if (
+        type === 'sms' || cat.includes('mj sms') ||
+        /otp\s*·|waiting for sms|sms expired|sms canceled|whatsapp\s*·/i.test(title + ' ' + cat)
+    ) return 'sms';
+    if (type === 'purchase' && cat.includes('sms')) return 'sms';
     if (type === 'purchase' || type === 'order') return 'log';
-    return type || 'deposit';
+    return type || 'log';
 }
 
 async function expireStaleSmsEverywhere() {
@@ -5010,7 +5032,7 @@ async function fetchUserTransactions(userId) {
             const tb = b.created_at ? new Date(b.created_at).getTime() : 0;
             return tb - ta;
         });
-        transactions = merged;
+        transactions = merged.map((t) => Object.assign({}, t, { type: normalizeTxType(t) }));
         renderRecentActivity();
     } catch (e) {
         console.warn('fetchUserTransactions', e);
@@ -6852,7 +6874,7 @@ function formatLoginForDisplay(text) {
     const s = String(text || '').trim();
     if (!s) return '';
     if (/^Number\s*:/im.test(s) && /^Password\s*:/im.test(s)) return s;
-    const numPass = s.match(/^\s*(\+?\d[\d\s().-]{8,16}\d)\s*[\/|:]\s*([^\s\/][^\n]{0,80}?)\s*$/);
+    const numPass = String(s).replace(/\u200b/g, '').match(/(\+\d{10,15})\s*[\/|:]\s*([^\s\/][^\n]{0,80})/);
     if (numPass) return 'Number: ' + numPass[1].trim() + '\nPassword: ' + numPass[2].trim();
     return s;
 }
@@ -6925,12 +6947,13 @@ function renderHistoryList(filterType = 'all') {
             // for the exact same kind of order, so both are included here
             // too — otherwise their purchases silently never show up under
             // this specific filter tab (they'd still appear under "All").
-            if (filterType === 'log') return t.type === 'log' || t.type === 'logs';
-            if (filterType === 'sms') return t.type === 'sms';
-            if (filterType === 'deposit') return t.type === 'deposit';
-            if (filterType === 'booster') return t.type === 'booster';
-            if (filterType === 'digital') return t.type === 'log' || t.type === 'digital';
-            return t.type === filterType;
+            const kind = normalizeTxType(t);
+            if (filterType === 'log') return kind === 'log' || kind === 'logs';
+            if (filterType === 'sms') return kind === 'sms';
+            if (filterType === 'deposit') return kind === 'deposit';
+            if (filterType === 'booster') return kind === 'booster';
+            if (filterType === 'digital') return kind === 'log' || kind === 'digital';
+            return kind === filterType;
         });
     }
 
@@ -6942,10 +6965,11 @@ function renderHistoryList(filterType = 'all') {
     container.innerHTML = items.map(t => {
         let iconClass = 'fa-cube';
         let boxClass = 'tx-blue';
-        if (t.type === 'deposit') { iconClass = 'fa-arrow-down'; boxClass = 'tx-green'; }
-        else if (t.type === 'sms') { iconClass = 'fa-phone'; boxClass = 'tx-orange'; }
-        else if (t.type === 'booster') { iconClass = 'fa-bolt'; boxClass = 'tx-blue'; }
-        else if (t.type === 'conversion') { iconClass = 'fa-right-left'; boxClass = 'tx-purple'; }
+        const kind = normalizeTxType(t);
+        if (kind === 'deposit') { iconClass = 'fa-arrow-down'; boxClass = 'tx-green'; }
+        else if (kind === 'sms') { iconClass = 'fa-phone'; boxClass = 'tx-orange'; }
+        else if (kind === 'booster') { iconClass = 'fa-bolt'; boxClass = 'tx-blue'; }
+        else if (kind === 'conversion') { iconClass = 'fa-right-left'; boxClass = 'tx-purple'; }
 
         const st = String(t.status || 'Success').toLowerCase().replace('completed', 'success');
         let badgeClass = 'badge-success';
