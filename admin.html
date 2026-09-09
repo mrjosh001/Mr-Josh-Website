@@ -3495,16 +3495,12 @@ async function uploadManualStock() {
 
  let step = 'reading session';
  try {
- const headers = { 'Content-Type': 'application/json' };
- let token = null;
- try {
- const { data } = await sb.auth.getSession();
- token = data?.session?.access_token || null;
- } catch (sessErr) {
- token = null;
- }
- if (token && /^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/.test(token.trim())) {
- headers['Authorization'] = 'Bearer ' + token.trim();
+ const headers = await authHeaders();
+ headers['Content-Type'] = 'application/json';
+ headers['Accept'] = 'application/json';
+ if (!headers.Authorization) {
+ errEl.textContent = 'Session expired. Sign out and sign in again, then upload.';
+ return;
  }
 
  step = 'uploading';
@@ -3518,8 +3514,17 @@ async function uploadManualStock() {
  });
 
  step = 'reading response';
- const data = await res.json();
+ const raw = await res.text();
+ let data = {};
+ try { data = raw ? JSON.parse(raw) : {}; } catch (_) {
+ errEl.textContent = 'Upload failed. Server returned a bad reply (HTTP ' + res.status + '). Sign out, sign in, and try again.';
+ return;
+ }
 
+ if (res.status === 401 || res.status === 403) {
+ errEl.textContent = 'Session expired. Sign out and sign in again, then upload.';
+ return;
+ }
  if (!res.ok || !data.success) {
  errEl.textContent = data.message || 'Upload failed.';
  return;
@@ -4950,5 +4955,6 @@ async function loadBoosterOrders() {
 })();
 </script>
 
+<script src="haptic.js" defer></script>
 </body>
 </html>
