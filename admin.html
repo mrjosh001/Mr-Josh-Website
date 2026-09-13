@@ -105,6 +105,7 @@ function withLagos(opts) { return Object.assign({ timeZone: 'Africa/Lagos' }, op
  .login-logo-img { height:40px; width:auto; max-width:200px; object-fit:contain; display:block; margin-bottom:10px; }
  .login-card p { color:var(--muted); font-size:13px; margin-bottom:28px; }
  .field { margin-bottom:16px; }
+ .field-row-2 { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
  .field label {
  display:block; font-size:11px; font-weight:700; text-transform:uppercase;
  letter-spacing:.6px; color:var(--muted); margin-bottom:6px;
@@ -1450,8 +1451,14 @@ function withLagos(opts) { return Object.assign({ timeZone: 'Africa/Lagos' }, op
  <div class="field"><label>Phone Number</label><input type="text" id="uPhone" /></div>
  <div class="field"><label>Customer ID</label><input type="text" id="uCustomerId" readonly style="opacity:.7;" /></div>
  <div class="field"><label>Email verified</label><input type="text" id="uEmailVerified" readonly style="opacity:.7;" /></div>
- <div class="field"><label>NGN Balance (₦)</label><input type="number" id="uBalance" step="0.01" /></div>
- <div class="field"><label>USD Balance ($)</label><input type="number" id="uBalanceUsd" step="0.01" /></div>
+ <div class="field-row-2">
+ <div class="field"><label>NGN Balance (₦)</label><input type="number" id="uBalance" step="0.01" readonly style="opacity:.7;" /></div>
+ <div class="field"><label>Add NGN (₦)</label><input type="number" id="uAddNgn" step="0.01" min="0" placeholder="0" /></div>
+ </div>
+ <div class="field-row-2">
+ <div class="field"><label>USD Balance ($)</label><input type="number" id="uBalanceUsd" step="0.01" readonly style="opacity:.7;" /></div>
+ <div class="field"><label>Add USD ($)</label><input type="number" id="uAddUsd" step="0.01" min="0" placeholder="0" /></div>
+ </div>
  <div class="field">
  <label>Admin Privileges</label>
  <select id="uIsAdmin"><option value="false">Standard User</option><option value="true">Administrator</option></select>
@@ -3712,7 +3719,11 @@ function editUser(id) {
  const ev = document.getElementById('uEmailVerified');
  if (ev) ev.value = u.email_verified === true ? 'Verified' : (u.email_verified === false ? 'Not verified' : '—');
  document.getElementById('uBalance').value = u.balance ?? 0;
- document.getElementById('uBalanceUsd').value = u.balance_usd != null ? u.balance_usd : '';
+ document.getElementById('uBalanceUsd').value = u.balance_usd != null ? u.balance_usd : 0;
+ var addN = document.getElementById('uAddNgn');
+ var addU = document.getElementById('uAddUsd');
+ if (addN) addN.value = '';
+ if (addU) addU.value = '';
  document.getElementById('uIsAdmin').value = isAdminValue(u.is_admin) ? 'true' : 'false';
  document.getElementById('userModal').classList.remove('hidden');
 }
@@ -3724,13 +3735,19 @@ async function saveUser() {
  const username = document.getElementById('uUsername').value.trim();
  const email = document.getElementById('uEmail').value.trim();
  const phone_number = document.getElementById('uPhone').value.trim();
- const balance = parseFloat(document.getElementById('uBalance').value);
- const balance_usd_raw = document.getElementById('uBalanceUsd').value;
- const balance_usd = balance_usd_raw === '' ? null : parseFloat(balance_usd_raw);
+ const currentNgn = parseFloat(document.getElementById('uBalance').value);
+ const currentUsdRaw = document.getElementById('uBalanceUsd').value;
+ const currentUsd = currentUsdRaw === '' ? 0 : parseFloat(currentUsdRaw);
+ const addNgn = parseFloat((document.getElementById('uAddNgn') || {}).value);
+ const addUsd = parseFloat((document.getElementById('uAddUsd') || {}).value);
+ const addNgnSafe = !isNaN(addNgn) && addNgn > 0 ? addNgn : 0;
+ const addUsdSafe = !isNaN(addUsd) && addUsd > 0 ? addUsd : 0;
+ const balance = (isNaN(currentNgn) ? 0 : currentNgn) + addNgnSafe;
+ const balance_usd = (isNaN(currentUsd) ? 0 : currentUsd) + addUsdSafe;
  const is_admin = document.getElementById('uIsAdmin').value === 'true';
  const errEl = document.getElementById('userModalError');
  errEl.textContent = '';
- if (isNaN(balance)) { errEl.textContent = 'Enter a valid NGN balance.'; return; }
+ if (addNgn < 0 || addUsd < 0) { errEl.textContent = 'Add amount cannot be negative.'; return; }
 
  const btn = document.getElementById('saveUserBtn');
  setBtnBusy(btn, true, 'Saving...');
@@ -4955,6 +4972,6 @@ async function loadBoosterOrders() {
 })();
 </script>
 
-<script src="haptic.js" defer></script>
+<script src="js/haptic.js" defer></script>
 </body>
 </html>
