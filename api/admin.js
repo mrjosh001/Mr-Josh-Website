@@ -1731,7 +1731,9 @@ function secretsStatusHandle() {
  * so customers never see this row as an in-app notification — see
  * loadAdminNotifications() in dashboard.html).
  *
- * Env: RESEND_API_KEY, RESEND_FROM_EMAIL (or RESEND_FROM), APP_URL
+ * Env: RESEND_API_KEY, RESEND_FROM_EMAIL (or RESEND_FROM), BREVO_API_KEY,
+ *      optional BREVO_FROM_EMAIL / BREVO_FROM_NAME, APP_URL
+ * Send path: Resend first → Brevo on quota/error (sticky for rest of blast)
  * ========================================================================= */
 
 async function fetchBroadcastRecipients() {
@@ -1875,6 +1877,152 @@ function buildBroadcastEmailHtml({ name, subject, message }) {
 }
 
 
+/** Parse "Name <email@x.com>" or bare email into { name, email }. */
+function parseSender(fromStr) {
+  const raw = String(fromStr || '').trim();
+  const m = raw.match(/^(.*)<([^>]+)>$/);
+  if (m) {
+    return {
+      name: m[1].trim().replace(/^["']|["']$/g, '') || 'MJ HUB',
+      email: m[2].trim()
+    };
+  }
+  if (raw.includes('@')) return { name: 'MJ HUB', email: raw };
+  return { name: 'MJ HUB', email: 'support@app.mjhub.store' };
+}
+
+function getEmailFromAddress() {
+  return (
+    process.env.RESEND_FROM_EMAIL ||
+    process.env.RESEND_FROM ||
+    process.env.BREVO_FROM_EMAIL ||
+    'MJ HUB <support@app.mjhub.store>'
+  );
+}
+
+function hasAnyEmailProvider() {
+  return !!(process.env.RESEND_API_KEY || process.env.BREVO_API_KEY);
+}
+
+function isProviderQuotaError(status, json) {
+  if (status === 429) return true;
+  const blob = JSON.stringify(json || {}).toLowerCase();
+  return /quota|rate.?limit|daily.?limit|too many|maximum|limit exceeded|insufficient/.test(blob);
+}
+
+async function sendViaResend({ to, subject, html, from }) {
+  const apiKey = process.env.RESEND_API_KEY;
+  if (!apiKey) return { ok: false, quota: false, error: 'Missing RESEND_API_KEY', provider: 'resend' };
+  try {
+    const resp = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: {
+        Authorization: 'Bearer ' + apiKey,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        from: from || getEmailFromAddress(),
+        to: [to],
+        subject,
+        html
+      })
+    });
+    const json = await resp.json().catch(() => ({}));
+    if (resp.ok) return { ok: true, id: json.id || null, provider: 'resend' };
+    return {
+      ok: false,
+      quota: isProviderQuotaError(resp.status, json),
+      error: json.message || json.error || ('Resend ' + resp.status),
+      provider: 'resend',
+      status: resp.status
+    };
+  } catch (e) {
+    return { ok: false, quota: false, error: e.message || 'Resend network error', provider: 'resend' };
+  }
+}
+
+async function sendViaBrevo({ to, toName, subject, html, from }) {
+  const apiKey = process.env.BREVO_API_KEY;
+  if (!apiKey) return { ok: false, quota: false, error: 'Missing BREVO_API_KEY', provider: 'brevo' };
+  const sender = parseSender(from || process.env.BREVO_FROM_EMAIL || getEmailFromAddress());
+  if (process.env.BREVO_FROM_NAME) sender.name = String(process.env.BREVO_FROM_NAME).trim() || sender.name;
+  try {
+    const resp = await fetch('https://api.brevo.com/v3/smtp/email', {
+      method: 'POST',
+      headers: {
+        'api-key': apiKey,
+        'Content-Type': 'application/json',
+        Accept: 'application/json'
+      },
+      body: JSON.stringify({
+        sender: { name: sender.name, email: sender.email },
+        to: [{ email: to, name: String(toName || '').trim() || undefined }],
+        subject,
+        htmlContent: html
+      })
+    });
+    const json = await resp.json().catch(() => ({}));
+    if (resp.ok) {
+      return { ok: true, id: json.messageId || json.message_id || null, provider: 'brevo' };
+    }
+    return {
+      ok: false,
+      quota: isProviderQuotaError(resp.status, json),
+      error: json.message || (json.error && json.error.message) || ('Brevo ' + resp.status),
+      provider: 'brevo',
+      status: resp.status
+    };
+  } catch (e) {
+    return { ok: false, quota: false, error: e.message || 'Brevo network error', provider: 'brevo' };
+  }
+}
+
+/**
+ * Resend first, then Brevo on failure/quota.
+ * Once Resend hits quota, stickyPreferBrevo can be set so the rest of a broadcast
+ * skips Resend and goes straight to Brevo.
+ * Returns { ok, id, provider, error, preferBrevoNext }
+ */
+async function sendEmailWithFailover({ to, toName, subject, html, preferBrevo = false }) {
+  if (!hasAnyEmailProvider()) {
+    return { ok: false, error: 'Missing RESEND_API_KEY and BREVO_API_KEY', preferBrevoNext: preferBrevo };
+  }
+  const from = getEmailFromAddress();
+
+  if (!preferBrevo && process.env.RESEND_API_KEY) {
+    const r = await sendViaResend({ to, subject, html, from });
+    if (r.ok) return { ok: true, id: r.id, provider: 'resend', preferBrevoNext: false };
+    // Quota or hard fail → try Brevo
+    if (process.env.BREVO_API_KEY) {
+      const b = await sendViaBrevo({ to, toName, subject, html, from });
+      if (b.ok) {
+        return { ok: true, id: b.id, provider: 'brevo', preferBrevoNext: !!r.quota };
+      }
+      return {
+        ok: false,
+        error: `Resend: ${r.error}; Brevo: ${b.error}`,
+        preferBrevoNext: !!r.quota
+      };
+    }
+    return { ok: false, error: r.error, preferBrevoNext: !!r.quota };
+  }
+
+  // Brevo preferred or only Brevo configured
+  if (process.env.BREVO_API_KEY) {
+    const b = await sendViaBrevo({ to, toName, subject, html, from });
+    if (b.ok) return { ok: true, id: b.id, provider: 'brevo', preferBrevoNext: true };
+    // Brevo failed — last chance Resend if we skipped it
+    if (preferBrevo && process.env.RESEND_API_KEY) {
+      const r = await sendViaResend({ to, subject, html, from });
+      if (r.ok) return { ok: true, id: r.id, provider: 'resend', preferBrevoNext: false };
+      return { ok: false, error: `Brevo: ${b.error}; Resend: ${r.error}`, preferBrevoNext: true };
+    }
+    return { ok: false, error: b.error, preferBrevoNext: true };
+  }
+
+  return { ok: false, error: 'No email provider available', preferBrevoNext: preferBrevo };
+}
+
 async function emailBroadcastTest(body, admin) {
   const subject = String(body.subject || '').trim();
   const message = String(body.body || '').trim();
@@ -1886,35 +2034,25 @@ async function emailBroadcastTest(body, admin) {
     return { status: 400, body: { success: false, message: 'Your admin profile has no email. Add it on your profile first.' } };
   }
 
-  const apiKey = process.env.RESEND_API_KEY;
-  if (!apiKey) {
-    return { status: 500, body: { success: false, message: 'Missing RESEND_API_KEY' } };
+  if (!hasAnyEmailProvider()) {
+    return { status: 500, body: { success: false, message: 'Missing RESEND_API_KEY and BREVO_API_KEY' } };
   }
-  const from = process.env.RESEND_FROM_EMAIL || process.env.RESEND_FROM || 'MJ Hub <onboarding@resend.dev>';
-  const name = (admin && admin.profile && admin.profile.full_name) || 'Admin';
 
-  try {
-    const resp = await fetch('https://api.resend.com/emails', {
-      method: 'POST',
-      headers: {
-        Authorization: 'Bearer ' + apiKey,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        from,
-        to: [to],
-        subject: '[TEST] ' + subject,
-        html: buildBroadcastEmailHtml({ name, subject, message })
-      })
-    });
-    const json = await resp.json().catch(() => ({}));
-    if (!resp.ok) {
-      return { status: 500, body: { success: false, message: json.message || json.error || ('Resend ' + resp.status) } };
-    }
-    return { status: 200, body: { success: true, sent: 1, failed: 0, to, id: json.id || null } };
-  } catch (e) {
-    return { status: 500, body: { success: false, message: e.message || 'Test send failed' } };
+  const name = (admin && admin.profile && admin.profile.full_name) || 'Admin';
+  const result = await sendEmailWithFailover({
+    to,
+    toName: name,
+    subject: '[TEST] ' + subject,
+    html: buildBroadcastEmailHtml({ name, subject, message })
+  });
+
+  if (!result.ok) {
+    return { status: 500, body: { success: false, message: result.error || 'Test send failed' } };
   }
+  return {
+    status: 200,
+    body: { success: true, sent: 1, failed: 0, to, id: result.id || null, provider: result.provider }
+  };
 }
 
 async function emailBroadcastOne(body) {
@@ -1937,45 +2075,43 @@ async function emailBroadcastOne(body) {
     return { status: 400, body: { success: false, message: 'That customer unsubscribed from email' } };
   }
 
-  const apiKey = process.env.RESEND_API_KEY;
-  if (!apiKey) return { status: 500, body: { success: false, message: 'Missing RESEND_API_KEY' } };
-  const from = process.env.RESEND_FROM_EMAIL || process.env.RESEND_FROM || 'MJ Hub <onboarding@resend.dev>';
+  if (!hasAnyEmailProvider()) {
+    return { status: 500, body: { success: false, message: 'Missing RESEND_API_KEY and BREVO_API_KEY' } };
+  }
+
   const to = String(profile.email).trim();
   const name = profile.full_name || 'there';
+  const result = await sendEmailWithFailover({
+    to,
+    toName: name,
+    subject,
+    html: buildBroadcastEmailHtml({ name, subject, message })
+  });
+
+  if (!result.ok) {
+    return { status: 500, body: { success: false, message: result.error || 'Send failed' } };
+  }
 
   try {
-    const resp = await fetch('https://api.resend.com/emails', {
-      method: 'POST',
-      headers: {
-        Authorization: 'Bearer ' + apiKey,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        from,
-        to: [to],
-        subject,
-        html: buildBroadcastEmailHtml({ name, subject, message })
-      })
+    await supabase.from('notifications').insert({
+      user_id: profile.id,
+      type: 'email_log',
+      title: '[Email] ' + subject,
+      body: 'Sent to ' + to + ' via ' + (result.provider || 'email')
     });
-    const json = await resp.json().catch(() => ({}));
-    if (!resp.ok) {
-      return { status: 500, body: { success: false, message: json.message || json.error || ('Resend ' + resp.status) } };
+  } catch (_) {}
+
+  return {
+    status: 200,
+    body: {
+      success: true,
+      sent: 1,
+      to,
+      customer_id: profile.customer_id || null,
+      id: result.id || null,
+      provider: result.provider
     }
-    try {
-      await supabase.from('notifications').insert({
-        user_id: profile.id,
-        type: 'email_log',
-        title: '[Email] ' + subject,
-        body: 'Sent to ' + to
-      });
-    } catch (_) {}
-    return {
-      status: 200,
-      body: { success: true, sent: 1, to, customer_id: profile.customer_id || null, id: json.id || null }
-    };
-  } catch (e) {
-    return { status: 500, body: { success: false, message: e.message || 'Send failed' } };
-  }
+  };
 }
 
 async function emailBroadcastPreview() {
@@ -2000,11 +2136,9 @@ async function emailBroadcastSend(body) {
   if (!subject) return { status: 400, body: { success: false, message: 'Subject is required' } };
   if (!message) return { status: 400, body: { success: false, message: 'Body is required' } };
 
-  const apiKey = process.env.RESEND_API_KEY;
-  if (!apiKey) {
-    return { status: 500, body: { success: false, message: 'Missing RESEND_API_KEY' } };
+  if (!hasAnyEmailProvider()) {
+    return { status: 500, body: { success: false, message: 'Missing RESEND_API_KEY and BREVO_API_KEY' } };
   }
-  const from = process.env.RESEND_FROM_EMAIL || process.env.RESEND_FROM || 'MJ Hub <onboarding@resend.dev>';
 
   let recipients;
   try {
@@ -2019,42 +2153,32 @@ async function emailBroadcastSend(body) {
 
   let sent = 0;
   let failed = 0;
-  const BATCH_SIZE = 50;
+  let viaResend = 0;
+  let viaBrevo = 0;
+  let preferBrevo = false;
 
-  for (let i = 0; i < recipients.length; i += BATCH_SIZE) {
-    const chunk = recipients.slice(i, i + BATCH_SIZE);
-    const payload = chunk.map((r) => ({
-      from,
-      to: [r.email],
+  // One-by-one with sticky failover so Resend quota does not kill the whole blast
+  for (let i = 0; i < recipients.length; i++) {
+    const r = recipients[i];
+    const result = await sendEmailWithFailover({
+      to: r.email,
+      toName: r.full_name,
       subject,
-      html: buildBroadcastEmailHtml({ name: r.full_name, subject, message })
-    }));
-
-    try {
-      const resp = await fetch('https://api.resend.com/emails/batch', {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${apiKey}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(payload)
-      });
-      const json = await resp.json().catch(() => ({}));
-      if (resp.ok && Array.isArray(json.data)) {
-        sent += json.data.length;
-        failed += chunk.length - json.data.length;
-      } else {
-        failed += chunk.length;
-        console.error('[email_broadcast] batch failed', json?.error || json || resp.status);
-      }
-    } catch (e) {
-      failed += chunk.length;
-      console.error('[email_broadcast] batch request error', e.message);
+      html: buildBroadcastEmailHtml({ name: r.full_name, subject, message }),
+      preferBrevo
+    });
+    if (result.preferBrevoNext) preferBrevo = true;
+    if (result.ok) {
+      sent++;
+      if (result.provider === 'brevo') viaBrevo++;
+      else viaResend++;
+    } else {
+      failed++;
+      console.error('[email_broadcast] fail', r.email, result.error);
     }
-
-    // Short pause between batches so the function does not time out as easily
-    if (i + BATCH_SIZE < recipients.length) {
-      await new Promise((r) => setTimeout(r, 400));
+    // Light pacing to reduce rate-limit hits
+    if (i + 1 < recipients.length && (i + 1) % 10 === 0) {
+      await new Promise((resolve) => setTimeout(resolve, 300));
     }
   }
 
@@ -2062,14 +2186,24 @@ async function emailBroadcastSend(body) {
     await supabase.from('notifications').insert({
       user_id: null,
       title: `[Email] ${subject}`,
-      body: null,
+      body: `sent:${sent} failed:${failed} resend:${viaResend} brevo:${viaBrevo}`,
       type: 'email_log'
     });
   } catch (e) {
     console.warn('[email_broadcast] history log insert failed', e.message);
   }
 
-  return { status: 200, body: { success: true, sent, failed, total: recipients.length } };
+  return {
+    status: 200,
+    body: {
+      success: true,
+      sent,
+      failed,
+      total: recipients.length,
+      via_resend: viaResend,
+      via_brevo: viaBrevo
+    }
+  };
 }
 
 export default async function handler(req, res) {
