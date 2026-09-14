@@ -1775,9 +1775,8 @@ function escapeHtmlForEmail(str) {
     .replace(/'/g, '&#39;');
 }
 
-/** Same brand template as the deposit-notification email (pocketfi.js) —
- * dark/light adaptive, logo, blue CTA — with the admin's plain-text body
- * dropped in (HTML-escaped, line breaks kept) instead of an amount card. */
+/** Brand email template — white + blue, logo, WhatsApp support + channel CTAs.
+ * Admin plain-text body is HTML-escaped with line breaks kept. */
 function buildBroadcastEmailHtml({ name, subject, message }) {
   const safeName = escapeHtmlForEmail(String(name || '').trim() || 'there');
   const paragraphs = escapeHtmlForEmail(message)
@@ -1790,6 +1789,8 @@ function buildBroadcastEmailHtml({ name, subject, message }) {
   const year = new Date().getFullYear();
   const unsubUrl = `${appUrl}/dashboard.html?unsubscribe=1`;
   const LOGO = (appUrl || 'https://www.mjhub.store') + '/img/IMG_3027.png';
+  const WA_SUPPORT = 'https://wa.me/14305583021?text=Hello%20Admin%2C%20I%27ve%20a%20complaint.%0A%0ACustomer%20ID%3A%20Not%20signed%20in%0AComplaint%3A%20';
+  const WA_CHANNEL = 'https://chat.whatsapp.com/LVjbslHLHXh5zj7Os5plYb';
 
   return `<!DOCTYPE html>
 <html lang="en" xmlns="http://www.w3.org/1999/xhtml">
@@ -1805,20 +1806,18 @@ function buildBroadcastEmailHtml({ name, subject, message }) {
     .card { background-color:#111827 !important; border-color:#1e293b !important; }
     .text-body { color:#e2e8f0 !important; }
     .text-muted { color:#94a3b8 !important; }
-    .logo-light { display:none !important; width:0 !important; height:0 !important; overflow:hidden !important; }
-    .logo-dark { display:block !important; }
     .brand-word { color:#ffffff !important; }
     .rule { border-color:#1e293b !important; }
+    .panel { background-color:#0f172a !important; border-color:#1e3a8a !important; }
   }
   @media (prefers-color-scheme: light) {
     .page { background-color:#e8eef8 !important; }
     .card { background-color:#ffffff !important; border-color:#dbe4f0 !important; }
     .text-body { color:#1e293b !important; }
     .text-muted { color:#64748b !important; }
-    .logo-dark { display:none !important; width:0 !important; height:0 !important; overflow:hidden !important; }
-    .logo-light { display:block !important; }
     .brand-word { color:#0f172a !important; }
     .rule { border-color:#e2e8f0 !important; }
+    .panel { background-color:#eff6ff !important; border-color:#bfdbfe !important; }
   }
 </style>
 </head>
@@ -1827,20 +1826,34 @@ function buildBroadcastEmailHtml({ name, subject, message }) {
     <tr><td align="center">
       <table role="presentation" width="560" cellspacing="0" cellpadding="0" class="card" style="max-width:560px;width:100%;background-color:#ffffff;border:1px solid #dbe4f0;border-radius:20px;">
         <tr>
-          <td align="center" style="padding:32px 24px 12px;background:transparent;">
+          <td align="center" style="padding:28px 24px 8px;background:linear-gradient(180deg,#2563eb 0%,#1d4ed8 100%);border-radius:20px 20px 0 0;">
             <img src="${LOGO}" alt="MJ HUB" height="40" style="display:block;height:40px;width:auto;max-width:180px;border:0;outline:none;background:transparent;">
-            <div class="brand-word" style="margin-top:6px;font-size:13px;font-weight:800;letter-spacing:0.14em;color:#0f172a;">MJ HUB</div>
+            <div style="margin-top:8px;font-size:13px;font-weight:800;letter-spacing:0.14em;color:#ffffff;">MJ HUB</div>
           </td>
         </tr>
         <tr>
-          <td style="padding:8px 32px 6px;">
+          <td style="padding:24px 32px 8px;">
             <p class="text-body" style="margin:0 0 16px;font-size:18px;font-weight:700;color:#0f172a;">Hi ${safeName},</p>
             ${paragraphs}
           </td>
         </tr>
         <tr>
-          <td align="center" style="padding:8px 32px 28px;">
-            <a href="${appUrl}/dashboard.html" style="display:inline-block;background-color:#2563eb;color:#ffffff;font-weight:700;font-size:15px;text-decoration:none;padding:14px 28px;border-radius:12px;">Open MJ Hub</a>
+          <td style="padding:8px 32px 12px;">
+            <table role="presentation" width="100%" cellspacing="0" cellpadding="0" class="panel" style="background-color:#eff6ff;border:1px solid #bfdbfe;border-radius:14px;">
+              <tr>
+                <td style="padding:18px 16px;text-align:center;">
+                  <p class="text-body" style="margin:0 0 12px;font-size:14px;font-weight:700;color:#1e3a8a;">Stay connected</p>
+                  <a href="${WA_CHANNEL}" style="display:inline-block;background-color:#2563eb;color:#ffffff;font-weight:700;font-size:14px;text-decoration:none;padding:12px 22px;border-radius:999px;margin:0 4px 8px;">Join WhatsApp Channel</a>
+                  <br>
+                  <a href="${WA_SUPPORT}" style="display:inline-block;background-color:#ffffff;color:#1d4ed8;font-weight:700;font-size:14px;text-decoration:none;padding:12px 22px;border-radius:999px;border:2px solid #2563eb;margin:0 4px 4px;">Chat with Support</a>
+                </td>
+              </tr>
+            </table>
+          </td>
+        </tr>
+        <tr>
+          <td align="center" style="padding:8px 32px 24px;">
+            <a href="${appUrl}/dashboard.html" style="display:inline-block;background-color:#1d4ed8;color:#ffffff;font-weight:700;font-size:15px;text-decoration:none;padding:14px 28px;border-radius:12px;">Open MJ Hub</a>
           </td>
         </tr>
         <tr>
