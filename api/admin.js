@@ -1791,6 +1791,7 @@ function buildBroadcastEmailHtml({ name, subject, message }) {
   const LOGO = (appUrl || 'https://www.mjhub.store') + '/img/IMG_3027.png';
   const WA_SUPPORT = 'https://wa.me/14305583021?text=Hello%20Admin%2C%20I%27ve%20a%20complaint.%0A%0ACustomer%20ID%3A%20Not%20signed%20in%0AComplaint%3A%20';
   const WA_CHANNEL = 'https://chat.whatsapp.com/LVjbslHLHXh5zj7Os5plYb';
+  const TG_CHANNEL = 'https://t.me/mj_hub_tg';
 
   return `<!DOCTYPE html>
 <html lang="en" xmlns="http://www.w3.org/1999/xhtml">
@@ -1844,6 +1845,7 @@ function buildBroadcastEmailHtml({ name, subject, message }) {
                 <td style="padding:18px 16px;text-align:center;">
                   <p class="text-body" style="margin:0 0 12px;font-size:14px;font-weight:700;color:#1e3a8a;">Stay connected</p>
                   <a href="${WA_CHANNEL}" style="display:inline-block;background-color:#2563eb;color:#ffffff;font-weight:700;font-size:14px;text-decoration:none;padding:12px 22px;border-radius:999px;margin:0 4px 8px;">Join WhatsApp Channel</a>
+                  <a href="${TG_CHANNEL}" style="display:inline-block;background-color:#1d4ed8;color:#ffffff;font-weight:700;font-size:14px;text-decoration:none;padding:12px 22px;border-radius:999px;margin:0 4px 8px;">Join Telegram Channel</a>
                   <br>
                   <a href="${WA_SUPPORT}" style="display:inline-block;background-color:#ffffff;color:#1d4ed8;font-weight:700;font-size:14px;text-decoration:none;padding:12px 22px;border-radius:999px;border:2px solid #2563eb;margin:0 4px 4px;">Chat with Support</a>
                 </td>
