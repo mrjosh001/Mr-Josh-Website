@@ -827,7 +827,8 @@ async function handleFaddedSync(req, res) {
         if (stock <= 0) patch.is_available = false; else if (!adminHiddenSet.has(key)) patch.is_available = true;
         toUpdate.push({ product_key: item.product_key, patch });
       } else {
-        // NEW product only: full row + auto markup + category
+        // NEW product only: full row + auto markup.
+        // Always OTHER so admin can sort; existing products keep their category.
         newCount++;
         toInsert.push({
           product_key: item.product_key,
@@ -838,7 +839,7 @@ async function handleFaddedSync(req, res) {
           price: applyRandomMarkup(supplierPrice),
           stock_quantity: stock,
           is_available: stock > 0,
-          category: categorize(item.name),
+          category: 'OTHER',
           source: 'fadded',
           updated_at: now
         });

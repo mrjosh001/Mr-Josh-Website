@@ -458,7 +458,7 @@ async function handleLogsDomainSync(req, res) {
             price: applyRandomMarkup(supplierPrice),
             stock_quantity: stock,
             is_available: stock > 0,
-            category: categorize(name, parentName),
+            category: 'OTHER',
             source: 'logsdomain',
             updated_at: new Date().toISOString()
           });
@@ -630,7 +630,7 @@ async function handleLdProductSync(req, res) {
           price: applyRandomMarkupLd(supplierPrice || 100),
           stock_quantity: stock,
           is_available: stock > 0,
-          category: categorizeLd(name),
+          category: 'OTHER',
           source: 'logsdomain',
           updated_at: now
         });

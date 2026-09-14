@@ -204,8 +204,7 @@ async function handleSync(req, res) {
         console.error(`Sujan Department update ${productKey}:`, error.message);
       }
     } else {
-      // NEW: full insert with markup + category. is_available follows real
-      // stock, same as the update branch above.
+      // NEW: always OTHER so admin can sort. Existing rows keep their category.
       const { error } = await supabase
         .from('products')
         .insert({
@@ -217,7 +216,7 @@ async function handleSync(req, res) {
           price: applyRandomMarkup(supplierPrice),
           stock_quantity: stock,
           is_available: stock > 0,
-          category: categorize(name),
+          category: 'OTHER',
           source: 'sujandepartment',
           updated_at: new Date().toISOString()
         });

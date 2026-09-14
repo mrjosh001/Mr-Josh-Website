@@ -211,7 +211,6 @@ async function handleSync(req, res) {
     const stock = readSupplierStock(p);
     const inStock = stock > 0 || p.in_stock === true || p.in_stock === 'true';
     const cat = catById.get(Number(p.category_id));
-    const category = categorize(name + ' ' + (cat && cat.category_name ? cat.category_name : ''));
     // Supplier-facing text only — never invent a credential format string as the product description
     const desc = supplierDescription(p, cat) || null;
     const prev = existing.get(product_key);
@@ -235,11 +234,12 @@ async function handleSync(req, res) {
         .eq('product_key', product_key);
       if (!error) updatedCount++;
     } else {
+      // NEW: always OTHER so admin can sort into preferred logs category
       const sellPrice = applyRandomMarkup(supplierPrice || 100);
       const { error } = await supabase.from('products').insert({
         product_key,
         name,
-        category,
+        category: 'OTHER',
         price: sellPrice,
         supplier_price: supplierPrice,
         stock_quantity: stock,
