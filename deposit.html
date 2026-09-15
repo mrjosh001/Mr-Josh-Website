@@ -265,33 +265,10 @@ document.addEventListener('click', function(e){
 
   <div class="section-label">Other ways to pay</div>
   <div class="card">
-    <div class="method-tabs">
-      <button type="button" class="method-tab active" id="tabPocketfi" onclick="setOtherMethod('pocketfi')"><i class="fa-solid fa-link"></i> Instant payment</button>
-      <button type="button" class="method-tab" id="tabManual" onclick="setOtherMethod('manual')"><i class="fa-brands fa-whatsapp"></i> Manual (WhatsApp)</button>
-    </div>
-    <div id="pocketfiDepositBox">
-      <p class="sub" style="margin-top:0;">One time payment link for a fixed amount. Min ₦1,000 · Max ₦500,000.</p>
-      <div class="form-group">
-        <label>Wallet to fund</label>
-        <select id="depositWalletSelect" onchange="selectDepositWallet(this.value)">
-          <option value="ngn" selected>NGN Wallet (₦)</option>
-          <option value="usd">USD Wallet ($)</option>
-        </select>
-      </div>
-      <div class="form-group">
-        <label>Amount (₦)</label>
-        <input type="number" id="pocketfiDepositInput" min="1000" max="500000" step="100" placeholder="e.g. 5000" oninput="updateDepositUsdPreview()">
-      </div>
-      <div class="usd-preview" id="depositUsdPreview">
-        <div class="t">You will receive</div>
-        <div class="a" id="depositUsdAmountText">$0.00</div>
-        <div class="r" id="depositUsdRateText">Rate: ₦1,450 = $1</div>
-      </div>
-      <button type="button" class="btn" id="pocketfiPayBtn" onclick="payWithPocketFi()"><i class="fa-solid fa-lock"></i> Continue to bank transfer</button>
-      <p class="hint">Pay in Naira. Selected wallet is credited after confirmation.</p>
-    </div>
-    <div id="manualDepositBox" style="display:none;">
-      <p class="sub" style="margin-top:0;">Message admin with your Customer ID and amount.</p>
+    <div class="va-pill" style="margin-bottom:10px;"><i class="fa-brands fa-whatsapp"></i> Manual (WhatsApp)</div>
+    <h2 style="font-size:16px;margin:0 0 6px;">Message admin</h2>
+    <p class="sub" style="margin-top:0;">Send your Customer ID and amount on WhatsApp for a manual top up.</p>
+    <div id="manualDepositBox">
       <div class="form-group">
         <label>Your Customer ID</label>
         <input type="text" id="depositCustomerId" readonly placeholder="Loading…" style="font-family:monospace;font-weight:700;color:var(--primary)">
@@ -362,11 +339,9 @@ function toggleTheme() {
   syncThemeUi();
 }
 function setOtherMethod(method) {
-  const pf = method === 'pocketfi';
-  document.getElementById('pocketfiDepositBox').style.display = pf ? '' : 'none';
-  document.getElementById('manualDepositBox').style.display = pf ? 'none' : '';
-  document.getElementById('tabPocketfi').classList.toggle('active', pf);
-  document.getElementById('tabManual').classList.toggle('active', !pf);
+  /* Instant checkout removed — only manual remains under Other ways */
+  const box = document.getElementById('manualDepositBox');
+  if (box) box.style.display = '';
 }
 function showVaState(which) {
   document.getElementById('vaLoadingState').style.display = which === 'loading' ? '' : 'none';
@@ -656,6 +631,9 @@ async function loadProfile() {
   if (cidEl) cidEl.value = customerId || '—';
 }
 async function payWithPocketFi() {
+  toast('Instant checkout is temporarily unavailable. Use bank transfer or manual deposit.');
+  return;
+
   const amount = parseFloat(document.getElementById('pocketfiDepositInput')?.value) || 0;
   if (amount < MIN) return toast('Minimum deposit is ₦' + MIN.toLocaleString());
   if (amount > MAX) return toast('Maximum deposit is ₦' + MAX.toLocaleString());
