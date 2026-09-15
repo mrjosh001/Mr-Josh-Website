@@ -380,7 +380,7 @@ async function sendDepositEmail({ to, name, amountLabel, walletLabel, reference 
 
 
 /* ========== Referral (merged — no extra serverless file) ========== */
-const REFERRAL_COMMISSION_RATE = 0.02; // 2% lifetime on deposits
+const REFERRAL_COMMISSION_RATE = 0.03; // 3% lifetime on deposits
 
 function genReferralCode() {
   const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
@@ -473,7 +473,7 @@ async function payReferralCommission(refereeUserId, depositAmountNgn, depositRef
       type: 'deposit',
       category: 'deposit',
       title: 'Referral bonus',
-      subtitle: `2% of friend's deposit · ₦${amount.toLocaleString()}`,
+      subtitle: `3% of friend's deposit · ₦${amount.toLocaleString()}`,
       amount: '₦' + commission.toLocaleString(),
       amount_ngn: commission,
       status: 'completed',
@@ -544,7 +544,7 @@ async function handleReferralMe(req, res, user) {
     referral_code: prof.referral_code,
     link,
     rate: REFERRAL_COMMISSION_RATE,
-    rate_label: '2%',
+    rate_label: '3%',
     referred_count: (refs || []).length,
     total_earned_ngn: Math.round(totalEarned * 100) / 100,
     referrals: refs || [],
@@ -664,7 +664,7 @@ async function handleReferralAttach(req, res, user) {
 
   return res.status(200).json({
     success: true,
-    message: 'Referral linked — future deposits earn them 2% for life',
+    message: 'Referral linked — future deposits earn them 3% for life',
     referrer_id: referrer.id
   });
 }

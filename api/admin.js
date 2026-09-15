@@ -43,9 +43,9 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY
 );
 
-/** 2% lifetime referral on deposits — shared logic (kept here so no extra serverless file) */
+/** 3% lifetime referral on deposits — shared logic (kept here so no extra serverless file) */
 async function payReferralCommission(refereeUserId, depositAmountNgn, depositReference) {
-  const COMMISSION_RATE = 0.02;
+  const COMMISSION_RATE = 0.03;
   const amount = Number(depositAmountNgn) || 0;
   if (amount < 1 || !refereeUserId) return { paid: false, reason: 'skip' };
 
@@ -106,7 +106,7 @@ async function payReferralCommission(refereeUserId, depositAmountNgn, depositRef
       type: 'deposit',
       category: 'deposit',
       title: 'Referral bonus',
-      subtitle: `2% of friend's deposit · ₦${amount.toLocaleString()}`,
+      subtitle: `3% of friend's deposit · ₦${amount.toLocaleString()}`,
       amount: '₦' + commission.toLocaleString(),
       amount_ngn: commission,
       status: 'completed',
@@ -727,7 +727,7 @@ async function userUpdate(body) {
       };
     }
     depositRecorded = true;
-    // Lifetime 2% to referrer when admin manually funds a referred user
+    // Lifetime 3% to referrer when admin manually funds a referred user
     try {
       const refKey = 'manual_' + user_id + '_' + Date.now();
       const r = await payReferralCommission(user_id, amountAdded, refKey);
@@ -1100,90 +1100,6 @@ async function listSmsOrdersHandle() {
   return { status: 200, body: { success: true, data: data || [] } };
 }
 
-async function wipeUnusedSmsNumbersHandle() {
-  const dead = ['expired', 'refunded', 'cancelled', 'canceled'];
-  const cutoff = new Date(Date.now() - 15 * 24 * 60 * 60 * 1000).toISOString();
-  let { data: rows, error } = await supabase
-    .from('number_orders')
-    .select('id, user_id, order_id, phone_number, code, status, created_at')
-    .in('status', dead)
-    .lte('created_at', cutoff);
-  if (error && /column .*code/i.test(String(error.message || ''))) {
-    const retry = await supabase
-      .from('number_orders')
-      .select('id, user_id, order_id, phone_number, status, created_at')
-      .in('status', dead)
-      .lte('created_at', cutoff);
-    rows = retry.data;
-    error = retry.error;
-  }
-  if (error) {
-    return { status: 500, body: { success: false, message: 'Could not load unused numbers: ' + error.message } };
-  }
-
-  const targets = (rows || []).filter((row) => !String(row.code || '').trim());
-  if (!targets.length) {
-    return { status: 200, body: { success: true, wiped: 0, transactions_removed: 0 } };
-  }
-
-  const digits = (s) => String(s || '').replace(/\D/g, '');
-  let txRemoved = 0;
-  for (const row of targets) {
-    const orderId = String(row.order_id || '').trim();
-    const phone = String(row.phone_number || '').trim();
-    const phoneDigits = digits(phone);
-    if (!row.user_id) continue;
-    const { data: txs } = await supabase
-      .from('transactions')
-      .select('id, subtitle, notes, title, category, status')
-      .eq('user_id', row.user_id)
-      .eq('category', 'MJ SMS')
-      .order('created_at', { ascending: false })
-      .limit(200);
-    const hitIds = (txs || [])
-      .filter((tx) => {
-        const blob = `${tx.subtitle || ''} ${tx.notes || ''} ${tx.title || ''}`;
-        if (orderId && blob.includes(orderId)) return true;
-        if (phone && blob.includes(phone)) return true;
-        if (phoneDigits.length >= 10 && digits(blob).includes(phoneDigits)) return true;
-        return false;
-      })
-      .map((tx) => tx.id);
-    if (!hitIds.length) continue;
-    const del = await supabase.from('transactions').delete().in('id', hitIds);
-    if (!del.error) txRemoved += hitIds.length;
-  }
-
-  const stale = await supabase
-    .from('transactions')
-    .delete()
-    .eq('category', 'MJ SMS')
-    .in('status', ['cancelled', 'canceled', 'refunded', 'expired'])
-    .lte('created_at', cutoff)
-    .select('id');
-  if (!stale.error && Array.isArray(stale.data)) txRemoved += stale.data.length;
-
-  const stalePending = await supabase
-    .from('transactions')
-    .delete()
-    .eq('category', 'MJ SMS')
-    .eq('status', 'pending')
-    .lte('created_at', cutoff)
-    .select('id');
-  if (!stalePending.error && Array.isArray(stalePending.data)) txRemoved += stalePending.data.length;
-
-  const ids = targets.map((row) => row.id);
-  const gone = await supabase.from('number_orders').delete().in('id', ids);
-  if (gone.error) {
-    return { status: 500, body: { success: false, message: 'Could not wipe numbers: ' + gone.error.message } };
-  }
-
-  return {
-    status: 200,
-    body: { success: true, wiped: targets.length, transactions_removed: txRemoved }
-  };
-}
-
 async function listBoosterOrdersHandle() {
   let { data, error } = await supabase
     .from('booster_orders')
@@ -1421,7 +1337,6 @@ const PERIOD_DAYS = { today: 1, '7days': 7, month: 30, '3months': 90, '6months':
  */
 async function getUserJoinDates() {
   const joinDates = {};
-  const emailVerified = {};
   let page = 1;
   const perPage = 1000;
   // Paginate defensively — listUsers defaults to 50/page; loop until a page
@@ -1433,12 +1348,11 @@ async function getUserJoinDates() {
     const users = data?.users || [];
     for (const u of users) {
       if (u.id && u.created_at) joinDates[u.id] = u.created_at;
-      if (u.id) emailVerified[u.id] = !!(u.email_confirmed_at || u.confirmed_at);
     }
     if (users.length < perPage) break;
     page += 1;
   }
-  return { status: 200, body: { success: true, join_dates: joinDates, email_verified: emailVerified } };
+  return { status: 200, body: { success: true, join_dates: joinDates } };
 }
 
 /**
@@ -1731,9 +1645,7 @@ function secretsStatusHandle() {
  * so customers never see this row as an in-app notification — see
  * loadAdminNotifications() in dashboard.html).
  *
- * Env: RESEND_API_KEY, RESEND_FROM_EMAIL (or RESEND_FROM), BREVO_API_KEY,
- *      optional BREVO_FROM_EMAIL / BREVO_FROM_NAME, APP_URL
- * Send path: Resend first → Brevo on quota/error (sticky for rest of blast)
+ * Env: RESEND_API_KEY, RESEND_FROM_EMAIL (or RESEND_FROM), APP_URL
  * ========================================================================= */
 
 async function fetchBroadcastRecipients() {
@@ -1777,8 +1689,9 @@ function escapeHtmlForEmail(str) {
     .replace(/'/g, '&#39;');
 }
 
-/** Brand email template — white + blue, logo, WhatsApp support + channel CTAs.
- * Admin plain-text body is HTML-escaped with line breaks kept. */
+/** Same brand template as the deposit-notification email (pocketfi.js) —
+ * dark/light adaptive, logo, blue CTA — with the admin's plain-text body
+ * dropped in (HTML-escaped, line breaks kept) instead of an amount card. */
 function buildBroadcastEmailHtml({ name, subject, message }) {
   const safeName = escapeHtmlForEmail(String(name || '').trim() || 'there');
   const paragraphs = escapeHtmlForEmail(message)
@@ -1790,10 +1703,8 @@ function buildBroadcastEmailHtml({ name, subject, message }) {
   const appUrl = (process.env.APP_URL || process.env.SITE_URL || 'https://www.mjhub.store').replace(/\/$/, '');
   const year = new Date().getFullYear();
   const unsubUrl = `${appUrl}/dashboard.html?unsubscribe=1`;
-  const LOGO = (appUrl || 'https://www.mjhub.store') + '/img/IMG_3027.png';
-  const WA_SUPPORT = 'https://wa.me/14305583021?text=Hello%20Admin%2C%20I%27ve%20a%20complaint.%0A%0ACustomer%20ID%3A%20Not%20signed%20in%0AComplaint%3A%20';
-  const WA_CHANNEL = 'https://chat.whatsapp.com/LVjbslHLHXh5zj7Os5plYb';
-  const TG_CHANNEL = 'https://t.me/mj_hub_tg';
+  const LOGO_LIGHT = 'https://atczodlljmlayvldxfmv.supabase.co/storage/v1/object/public/avatars/IMG_2796.jpeg';
+  const LOGO_DARK = 'https://atczodlljmlayvldxfmv.supabase.co/storage/v1/object/public/avatars/mjhub-logo-dark-clear.png';
 
   return `<!DOCTYPE html>
 <html lang="en" xmlns="http://www.w3.org/1999/xhtml">
@@ -1809,18 +1720,20 @@ function buildBroadcastEmailHtml({ name, subject, message }) {
     .card { background-color:#111827 !important; border-color:#1e293b !important; }
     .text-body { color:#e2e8f0 !important; }
     .text-muted { color:#94a3b8 !important; }
+    .logo-light { display:none !important; width:0 !important; height:0 !important; overflow:hidden !important; }
+    .logo-dark { display:block !important; }
     .brand-word { color:#ffffff !important; }
     .rule { border-color:#1e293b !important; }
-    .panel { background-color:#0f172a !important; border-color:#1e3a8a !important; }
   }
   @media (prefers-color-scheme: light) {
     .page { background-color:#e8eef8 !important; }
     .card { background-color:#ffffff !important; border-color:#dbe4f0 !important; }
     .text-body { color:#1e293b !important; }
     .text-muted { color:#64748b !important; }
+    .logo-dark { display:none !important; width:0 !important; height:0 !important; overflow:hidden !important; }
+    .logo-light { display:block !important; }
     .brand-word { color:#0f172a !important; }
     .rule { border-color:#e2e8f0 !important; }
-    .panel { background-color:#eff6ff !important; border-color:#bfdbfe !important; }
   }
 </style>
 </head>
@@ -1829,35 +1742,20 @@ function buildBroadcastEmailHtml({ name, subject, message }) {
     <tr><td align="center">
       <table role="presentation" width="560" cellspacing="0" cellpadding="0" class="card" style="max-width:560px;width:100%;background-color:#ffffff;border:1px solid #dbe4f0;border-radius:20px;">
         <tr>
-          <td align="center" style="padding:28px 24px 8px;background:linear-gradient(180deg,#2563eb 0%,#1d4ed8 100%);border-radius:20px 20px 0 0;">
-            <img src="${LOGO}" alt="MJ HUB" height="40" style="display:block;height:40px;width:auto;max-width:180px;border:0;outline:none;background:transparent;">
-            <div style="margin-top:8px;font-size:13px;font-weight:800;letter-spacing:0.14em;color:#ffffff;">MJ HUB</div>
+          <td align="center" style="padding:32px 24px 12px;background:transparent;">
+            <img src="https://atczodlljmlayvldxfmv.supabase.co/storage/v1/object/public/avatars/mjhub-mark-only.png" alt="MJ Hub" width="120" style="display:block;height:44px;width:auto;border:0;outline:none;background:transparent;">
+            <div class="brand-word" style="margin-top:6px;font-size:13px;font-weight:800;letter-spacing:0.14em;color:#0f172a;">MJ HUB</div>
           </td>
         </tr>
         <tr>
-          <td style="padding:24px 32px 8px;">
+          <td style="padding:8px 32px 6px;">
             <p class="text-body" style="margin:0 0 16px;font-size:18px;font-weight:700;color:#0f172a;">Hi ${safeName},</p>
             ${paragraphs}
           </td>
         </tr>
         <tr>
-          <td style="padding:8px 32px 12px;">
-            <table role="presentation" width="100%" cellspacing="0" cellpadding="0" class="panel" style="background-color:#eff6ff;border:1px solid #bfdbfe;border-radius:14px;">
-              <tr>
-                <td style="padding:18px 16px;text-align:center;">
-                  <p class="text-body" style="margin:0 0 12px;font-size:14px;font-weight:700;color:#1e3a8a;">Stay connected</p>
-                  <a href="${WA_CHANNEL}" style="display:inline-block;background-color:#2563eb;color:#ffffff;font-weight:700;font-size:14px;text-decoration:none;padding:12px 22px;border-radius:999px;margin:0 4px 8px;">Join WhatsApp Channel</a>
-                  <a href="${TG_CHANNEL}" style="display:inline-block;background-color:#1d4ed8;color:#ffffff;font-weight:700;font-size:14px;text-decoration:none;padding:12px 22px;border-radius:999px;margin:0 4px 8px;">Join Telegram Channel</a>
-                  <br>
-                  <a href="${WA_SUPPORT}" style="display:inline-block;background-color:#ffffff;color:#1d4ed8;font-weight:700;font-size:14px;text-decoration:none;padding:12px 22px;border-radius:999px;border:2px solid #2563eb;margin:0 4px 4px;">Chat with Support</a>
-                </td>
-              </tr>
-            </table>
-          </td>
-        </tr>
-        <tr>
-          <td align="center" style="padding:8px 32px 24px;">
-            <a href="${appUrl}/dashboard.html" style="display:inline-block;background-color:#1d4ed8;color:#ffffff;font-weight:700;font-size:15px;text-decoration:none;padding:14px 28px;border-radius:12px;">Open MJ Hub</a>
+          <td align="center" style="padding:8px 32px 28px;">
+            <a href="${appUrl}/dashboard.html" style="display:inline-block;background-color:#2563eb;color:#ffffff;font-weight:700;font-size:15px;text-decoration:none;padding:14px 28px;border-radius:12px;">Open MJ Hub</a>
           </td>
         </tr>
         <tr>
@@ -1877,152 +1775,6 @@ function buildBroadcastEmailHtml({ name, subject, message }) {
 }
 
 
-/** Parse "Name <email@x.com>" or bare email into { name, email }. */
-function parseSender(fromStr) {
-  const raw = String(fromStr || '').trim();
-  const m = raw.match(/^(.*)<([^>]+)>$/);
-  if (m) {
-    return {
-      name: m[1].trim().replace(/^["']|["']$/g, '') || 'MJ HUB',
-      email: m[2].trim()
-    };
-  }
-  if (raw.includes('@')) return { name: 'MJ HUB', email: raw };
-  return { name: 'MJ HUB', email: 'support@app.mjhub.store' };
-}
-
-function getEmailFromAddress() {
-  return (
-    process.env.RESEND_FROM_EMAIL ||
-    process.env.RESEND_FROM ||
-    process.env.BREVO_FROM_EMAIL ||
-    'MJ HUB <support@app.mjhub.store>'
-  );
-}
-
-function hasAnyEmailProvider() {
-  return !!(process.env.RESEND_API_KEY || process.env.BREVO_API_KEY);
-}
-
-function isProviderQuotaError(status, json) {
-  if (status === 429) return true;
-  const blob = JSON.stringify(json || {}).toLowerCase();
-  return /quota|rate.?limit|daily.?limit|too many|maximum|limit exceeded|insufficient/.test(blob);
-}
-
-async function sendViaResend({ to, subject, html, from }) {
-  const apiKey = process.env.RESEND_API_KEY;
-  if (!apiKey) return { ok: false, quota: false, error: 'Missing RESEND_API_KEY', provider: 'resend' };
-  try {
-    const resp = await fetch('https://api.resend.com/emails', {
-      method: 'POST',
-      headers: {
-        Authorization: 'Bearer ' + apiKey,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        from: from || getEmailFromAddress(),
-        to: [to],
-        subject,
-        html
-      })
-    });
-    const json = await resp.json().catch(() => ({}));
-    if (resp.ok) return { ok: true, id: json.id || null, provider: 'resend' };
-    return {
-      ok: false,
-      quota: isProviderQuotaError(resp.status, json),
-      error: json.message || json.error || ('Resend ' + resp.status),
-      provider: 'resend',
-      status: resp.status
-    };
-  } catch (e) {
-    return { ok: false, quota: false, error: e.message || 'Resend network error', provider: 'resend' };
-  }
-}
-
-async function sendViaBrevo({ to, toName, subject, html, from }) {
-  const apiKey = process.env.BREVO_API_KEY;
-  if (!apiKey) return { ok: false, quota: false, error: 'Missing BREVO_API_KEY', provider: 'brevo' };
-  const sender = parseSender(from || process.env.BREVO_FROM_EMAIL || getEmailFromAddress());
-  if (process.env.BREVO_FROM_NAME) sender.name = String(process.env.BREVO_FROM_NAME).trim() || sender.name;
-  try {
-    const resp = await fetch('https://api.brevo.com/v3/smtp/email', {
-      method: 'POST',
-      headers: {
-        'api-key': apiKey,
-        'Content-Type': 'application/json',
-        Accept: 'application/json'
-      },
-      body: JSON.stringify({
-        sender: { name: sender.name, email: sender.email },
-        to: [{ email: to, name: String(toName || '').trim() || undefined }],
-        subject,
-        htmlContent: html
-      })
-    });
-    const json = await resp.json().catch(() => ({}));
-    if (resp.ok) {
-      return { ok: true, id: json.messageId || json.message_id || null, provider: 'brevo' };
-    }
-    return {
-      ok: false,
-      quota: isProviderQuotaError(resp.status, json),
-      error: json.message || (json.error && json.error.message) || ('Brevo ' + resp.status),
-      provider: 'brevo',
-      status: resp.status
-    };
-  } catch (e) {
-    return { ok: false, quota: false, error: e.message || 'Brevo network error', provider: 'brevo' };
-  }
-}
-
-/**
- * Resend first, then Brevo on failure/quota.
- * Once Resend hits quota, stickyPreferBrevo can be set so the rest of a broadcast
- * skips Resend and goes straight to Brevo.
- * Returns { ok, id, provider, error, preferBrevoNext }
- */
-async function sendEmailWithFailover({ to, toName, subject, html, preferBrevo = false }) {
-  if (!hasAnyEmailProvider()) {
-    return { ok: false, error: 'Missing RESEND_API_KEY and BREVO_API_KEY', preferBrevoNext: preferBrevo };
-  }
-  const from = getEmailFromAddress();
-
-  if (!preferBrevo && process.env.RESEND_API_KEY) {
-    const r = await sendViaResend({ to, subject, html, from });
-    if (r.ok) return { ok: true, id: r.id, provider: 'resend', preferBrevoNext: false };
-    // Quota or hard fail → try Brevo
-    if (process.env.BREVO_API_KEY) {
-      const b = await sendViaBrevo({ to, toName, subject, html, from });
-      if (b.ok) {
-        return { ok: true, id: b.id, provider: 'brevo', preferBrevoNext: !!r.quota };
-      }
-      return {
-        ok: false,
-        error: `Resend: ${r.error}; Brevo: ${b.error}`,
-        preferBrevoNext: !!r.quota
-      };
-    }
-    return { ok: false, error: r.error, preferBrevoNext: !!r.quota };
-  }
-
-  // Brevo preferred or only Brevo configured
-  if (process.env.BREVO_API_KEY) {
-    const b = await sendViaBrevo({ to, toName, subject, html, from });
-    if (b.ok) return { ok: true, id: b.id, provider: 'brevo', preferBrevoNext: true };
-    // Brevo failed — last chance Resend if we skipped it
-    if (preferBrevo && process.env.RESEND_API_KEY) {
-      const r = await sendViaResend({ to, subject, html, from });
-      if (r.ok) return { ok: true, id: r.id, provider: 'resend', preferBrevoNext: false };
-      return { ok: false, error: `Brevo: ${b.error}; Resend: ${r.error}`, preferBrevoNext: true };
-    }
-    return { ok: false, error: b.error, preferBrevoNext: true };
-  }
-
-  return { ok: false, error: 'No email provider available', preferBrevoNext: preferBrevo };
-}
-
 async function emailBroadcastTest(body, admin) {
   const subject = String(body.subject || '').trim();
   const message = String(body.body || '').trim();
@@ -2034,84 +1786,35 @@ async function emailBroadcastTest(body, admin) {
     return { status: 400, body: { success: false, message: 'Your admin profile has no email. Add it on your profile first.' } };
   }
 
-  if (!hasAnyEmailProvider()) {
-    return { status: 500, body: { success: false, message: 'Missing RESEND_API_KEY and BREVO_API_KEY' } };
+  const apiKey = process.env.RESEND_API_KEY;
+  if (!apiKey) {
+    return { status: 500, body: { success: false, message: 'Missing RESEND_API_KEY' } };
   }
-
+  const from = process.env.RESEND_FROM_EMAIL || process.env.RESEND_FROM || 'MJ Hub <onboarding@resend.dev>';
   const name = (admin && admin.profile && admin.profile.full_name) || 'Admin';
-  const result = await sendEmailWithFailover({
-    to,
-    toName: name,
-    subject: '[TEST] ' + subject,
-    html: buildBroadcastEmailHtml({ name, subject, message })
-  });
-
-  if (!result.ok) {
-    return { status: 500, body: { success: false, message: result.error || 'Test send failed' } };
-  }
-  return {
-    status: 200,
-    body: { success: true, sent: 1, failed: 0, to, id: result.id || null, provider: result.provider }
-  };
-}
-
-async function emailBroadcastOne(body) {
-  const subject = String(body.subject || '').trim();
-  const message = String(body.body || '').trim();
-  const rawTo = String(body.to || body.email || body.customer_id || '').trim();
-  if (!subject) return { status: 400, body: { success: false, message: 'Subject is required' } };
-  if (!message) return { status: 400, body: { success: false, message: 'Body is required' } };
-  if (!rawTo) return { status: 400, body: { success: false, message: 'Enter a customer email or Customer ID' } };
-
-  let query = supabase.from('profiles').select('id, email, full_name, customer_id, email_unsubscribed');
-  if (rawTo.includes('@')) query = query.ilike('email', rawTo);
-  else query = query.eq('customer_id', rawTo.toUpperCase());
-  const { data: profile, error } = await query.maybeSingle();
-  if (error) return { status: 500, body: { success: false, message: error.message } };
-  if (!profile || !String(profile.email || '').includes('@')) {
-    return { status: 404, body: { success: false, message: 'No customer found with that email or Customer ID' } };
-  }
-  if (profile.email_unsubscribed === true) {
-    return { status: 400, body: { success: false, message: 'That customer unsubscribed from email' } };
-  }
-
-  if (!hasAnyEmailProvider()) {
-    return { status: 500, body: { success: false, message: 'Missing RESEND_API_KEY and BREVO_API_KEY' } };
-  }
-
-  const to = String(profile.email).trim();
-  const name = profile.full_name || 'there';
-  const result = await sendEmailWithFailover({
-    to,
-    toName: name,
-    subject,
-    html: buildBroadcastEmailHtml({ name, subject, message })
-  });
-
-  if (!result.ok) {
-    return { status: 500, body: { success: false, message: result.error || 'Send failed' } };
-  }
 
   try {
-    await supabase.from('notifications').insert({
-      user_id: profile.id,
-      type: 'email_log',
-      title: '[Email] ' + subject,
-      body: 'Sent to ' + to + ' via ' + (result.provider || 'email')
+    const resp = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: {
+        Authorization: 'Bearer ' + apiKey,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        from,
+        to: [to],
+        subject: '[TEST] ' + subject,
+        html: buildBroadcastEmailHtml({ name, subject, message })
+      })
     });
-  } catch (_) {}
-
-  return {
-    status: 200,
-    body: {
-      success: true,
-      sent: 1,
-      to,
-      customer_id: profile.customer_id || null,
-      id: result.id || null,
-      provider: result.provider
+    const json = await resp.json().catch(() => ({}));
+    if (!resp.ok) {
+      return { status: 500, body: { success: false, message: json.message || json.error || ('Resend ' + resp.status) } };
     }
-  };
+    return { status: 200, body: { success: true, sent: 1, failed: 0, to, id: json.id || null } };
+  } catch (e) {
+    return { status: 500, body: { success: false, message: e.message || 'Test send failed' } };
+  }
 }
 
 async function emailBroadcastPreview() {
@@ -2136,9 +1839,11 @@ async function emailBroadcastSend(body) {
   if (!subject) return { status: 400, body: { success: false, message: 'Subject is required' } };
   if (!message) return { status: 400, body: { success: false, message: 'Body is required' } };
 
-  if (!hasAnyEmailProvider()) {
-    return { status: 500, body: { success: false, message: 'Missing RESEND_API_KEY and BREVO_API_KEY' } };
+  const apiKey = process.env.RESEND_API_KEY;
+  if (!apiKey) {
+    return { status: 500, body: { success: false, message: 'Missing RESEND_API_KEY' } };
   }
+  const from = process.env.RESEND_FROM_EMAIL || process.env.RESEND_FROM || 'MJ Hub <onboarding@resend.dev>';
 
   let recipients;
   try {
@@ -2153,32 +1858,42 @@ async function emailBroadcastSend(body) {
 
   let sent = 0;
   let failed = 0;
-  let viaResend = 0;
-  let viaBrevo = 0;
-  let preferBrevo = false;
+  const BATCH_SIZE = 50;
 
-  // One-by-one with sticky failover so Resend quota does not kill the whole blast
-  for (let i = 0; i < recipients.length; i++) {
-    const r = recipients[i];
-    const result = await sendEmailWithFailover({
-      to: r.email,
-      toName: r.full_name,
+  for (let i = 0; i < recipients.length; i += BATCH_SIZE) {
+    const chunk = recipients.slice(i, i + BATCH_SIZE);
+    const payload = chunk.map((r) => ({
+      from,
+      to: [r.email],
       subject,
-      html: buildBroadcastEmailHtml({ name: r.full_name, subject, message }),
-      preferBrevo
-    });
-    if (result.preferBrevoNext) preferBrevo = true;
-    if (result.ok) {
-      sent++;
-      if (result.provider === 'brevo') viaBrevo++;
-      else viaResend++;
-    } else {
-      failed++;
-      console.error('[email_broadcast] fail', r.email, result.error);
+      html: buildBroadcastEmailHtml({ name: r.full_name, subject, message })
+    }));
+
+    try {
+      const resp = await fetch('https://api.resend.com/emails/batch', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${apiKey}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(payload)
+      });
+      const json = await resp.json().catch(() => ({}));
+      if (resp.ok && Array.isArray(json.data)) {
+        sent += json.data.length;
+        failed += chunk.length - json.data.length;
+      } else {
+        failed += chunk.length;
+        console.error('[email_broadcast] batch failed', json?.error || json || resp.status);
+      }
+    } catch (e) {
+      failed += chunk.length;
+      console.error('[email_broadcast] batch request error', e.message);
     }
-    // Light pacing to reduce rate-limit hits
-    if (i + 1 < recipients.length && (i + 1) % 10 === 0) {
-      await new Promise((resolve) => setTimeout(resolve, 300));
+
+    // Short pause between batches so the function does not time out as easily
+    if (i + BATCH_SIZE < recipients.length) {
+      await new Promise((r) => setTimeout(r, 400));
     }
   }
 
@@ -2186,24 +1901,14 @@ async function emailBroadcastSend(body) {
     await supabase.from('notifications').insert({
       user_id: null,
       title: `[Email] ${subject}`,
-      body: `sent:${sent} failed:${failed} resend:${viaResend} brevo:${viaBrevo}`,
+      body: null,
       type: 'email_log'
     });
   } catch (e) {
     console.warn('[email_broadcast] history log insert failed', e.message);
   }
 
-  return {
-    status: 200,
-    body: {
-      success: true,
-      sent,
-      failed,
-      total: recipients.length,
-      via_resend: viaResend,
-      via_brevo: viaBrevo
-    }
-  };
+  return { status: 200, body: { success: true, sent, failed, total: recipients.length } };
 }
 
 export default async function handler(req, res) {
@@ -2272,8 +1977,6 @@ export default async function handler(req, res) {
       result = await listProfilesHandle();
     } else if (resource === 'orders' && (action === 'list' || !action)) {
       result = await listOrdersHandle();
-    } else if (resource === 'sms_orders' && action === 'wipe_unused_numbers') {
-      result = await wipeUnusedSmsNumbersHandle();
     } else if (resource === 'sms_orders' && (action === 'list' || !action)) {
       result = await listSmsOrdersHandle();
     } else if (resource === 'booster_orders' && (action === 'list' || !action)) {
@@ -2290,8 +1993,7 @@ export default async function handler(req, res) {
       if (action === 'preview') result = await emailBroadcastPreview();
       else if (action === 'send') result = await emailBroadcastSend(body);
       else if (action === 'test') result = await emailBroadcastTest(body, admin);
-      else if (action === 'one') result = await emailBroadcastOne(body);
-      else result = { status: 400, body: { success: false, message: 'Unknown email_broadcast action. Use "preview", "test", "one", or "send".' } };
+      else result = { status: 400, body: { success: false, message: 'Unknown email_broadcast action. Use "preview", "test", or "send".' } };
     } else {
       result = { status: 400, body: { success: false, message: 'Unknown resource. Use "user", "product", "inventory", "sms", "profiles", "orders", "sms_orders", "booster_orders", "supplier_balances", "overview", "user_join_dates", "secrets_status", "sub_admin", "email_broadcast", or "vendor".' } };
     }
