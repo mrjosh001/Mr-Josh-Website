@@ -2,50 +2,6 @@
 <html lang="en">
 <head>
 <script>
-(function(){
-  function save(code){
-    code=String(code||'').trim().toUpperCase().replace(/[^A-Z0-9_-]/g,'');
-    if(!code||code.length<3) return '';
-    try{localStorage.setItem('mjhub_ref_code',code);}catch(e){}
-    try{sessionStorage.setItem('mjhub_ref_code',code);}catch(e){}
-    try{document.cookie='mjhub_ref_code='+encodeURIComponent(code)+'; path=/; max-age='+(30*86400)+'; SameSite=Lax; Secure';}catch(e){}
-    return code;
-  }
-  function read(){
-    try{ var c=localStorage.getItem('mjhub_ref_code')||sessionStorage.getItem('mjhub_ref_code'); if(c) return c; }catch(e){}
-    try{ var m=document.cookie.match(/(?:^|;\s*)mjhub_ref_code=([^;]+)/); if(m) return decodeURIComponent(m[1]); }catch(e){}
-    return '';
-  }
-  try{
-    var p=new URLSearchParams(location.search);
-    var h=String(location.hash||'').replace(/^#/,'');
-    var hp=new URLSearchParams(h.indexOf('=')>=0?h:'');
-    save(p.get('ref')||p.get('referral')||p.get('r')||hp.get('ref')||'');
-  }catch(e){}
-  window.__mjhub_save_ref=save;
-  window.__mjhub_read_ref=read;
-  function withRef(href){
-    var code=read();
-    if(!code) return href;
-    try{
-      var u=new URL(href, location.origin);
-      if(!u.searchParams.get('ref')) u.searchParams.set('ref', code);
-      return u.pathname+u.search+u.hash;
-    }catch(e){ return href; }
-  }
-  document.addEventListener('click', function(e){
-    var a=e.target && e.target.closest && e.target.closest('a[href]');
-    if(!a) return;
-    var href=a.getAttribute('href')||'';
-    if(!/auth\.html|auth\?|\/auth/i.test(href)) return;
-    a.setAttribute('href', withRef(href));
-  }, true);
-})();
-</script>
-
-<script src="/js/mj-theme.js"></script>
-
-<script>
 /* Email confirm / auth tokens: send to auth, never stay on marketing home */
 (function () {
   try {
@@ -128,7 +84,7 @@
   --card: rgba(17,24,39,.55);
   --text: #f1f5f9;
   --text2: #94a3b8;
-  --muted: #cbd5e1;
+  --muted: #64748b;
   --border: rgba(255,255,255,.12);
 }
 
@@ -155,8 +111,7 @@ body {
 
 /* ===== HEADER ===== */
 .header {
-  position: fixed !important; top: 0; left: 0; right: 0; z-index: 500 !important;
-  overflow: visible;
+  position: sticky; top: 0; z-index: 100;
   background: color-mix(in srgb, var(--elevated) 75%, transparent);
   backdrop-filter: blur(20px);
   border-bottom: 1px solid var(--border);
@@ -168,29 +123,14 @@ body {
 }
 .logo {
   font-size: 22px; font-weight: 800; letter-spacing: -.5px;
-  display: inline-flex; align-items: center; gap: 8px; position: relative; z-index: 2;
-  text-decoration: none; color: var(--text); line-height: 1;
+  display: flex; align-items: center; gap: 5px; position: relative; z-index: 2;
+  text-decoration: none; color: var(--text);
 }
 .logo span {
   background: linear-gradient(135deg, var(--primary), #a855f7);
   -webkit-background-clip: text; -webkit-text-fill-color: transparent;
 }
-.logo img { height: 36px; width: auto; max-width: 48px; object-fit: contain; display: block; background: transparent; }
-.logo-word {
-  font-family: "Plus Jakarta Sans", Inter, system-ui, sans-serif !important;
-  font-size: 16px !important; font-weight: 800;
-  letter-spacing: -.02em;
-  line-height: 32px;
-  background: none !important;
-  -webkit-background-clip: unset !important;
-  color: #1e3a8a !important;
-  -webkit-text-fill-color: #1e3a8a !important;
-}
-html[data-theme="dark"] .logo-word,
-body[data-theme="dark"] .logo-word {
-  color: #dbeafe !important;
-  -webkit-text-fill-color: #dbeafe !important;
-}
+.logo img { height: 34px; width: auto; max-width: 150px; object-fit: contain; display: block; }
 .nav-desktop { display: flex; gap: 4px; }
 .nav-desktop a {
   padding: 8px 14px; font-size: 14px; font-weight: 500;
@@ -221,117 +161,80 @@ body[data-theme="dark"] .logo-word {
   transform: translateY(-3px) scale(1.04);
   box-shadow: 0 10px 36px var(--glow);
 }
-.header-actions, .icon-btn, .menu-btn { pointer-events: auto !important; }
 .icon-btn {
   width: 42px; height: 42px; border-radius: 11px;
   border: 1px solid var(--border); background: color-mix(in srgb, var(--card) 70%, transparent);
   backdrop-filter: blur(10px); color: var(--text); font-size: 18px;
   display: flex; align-items: center; justify-content: center;
   cursor: pointer; transition: .2s;
-  position: relative; z-index: 5;
-  pointer-events: auto;
 }
 .icon-btn:hover { background: color-mix(in srgb, var(--primary) 15%, transparent); transform: scale(1.08); }
 .menu-btn { display: none; }
 
-
-
-
 .mobile-menu.kinetic-nav {
   display: none;
-  position: fixed; inset: 0; z-index: 600 !important;
+  position: fixed; inset: 0; z-index: 80;
 }
-.mobile-menu.kinetic-nav[hidden] { display: none !important; }
 .mobile-menu.kinetic-nav.active,
 .mobile-menu.kinetic-nav[data-nav="open"] {
-  display: block !important;
-  visibility: visible !important;
+  display: block;
 }
 .kinetic-overlay {
   position: absolute; inset: 0;
-  background: rgba(2,6,23,.45);
+  background: rgba(6,8,15,.55);
   backdrop-filter: blur(8px);
 }
 .kinetic-panel {
-  position: absolute; top: 0; right: 0; bottom: 0; left: auto;
-  width: min(300px, 84vw);
+  position: absolute; top: 0; right: 0; height: 100%;
+  width: min(420px, 100%);
   overflow: auto;
-  padding: 22px 0 20px;
-  background: #1d3fa8;
-  color: #e8eeff;
-  box-shadow: 18px 0 50px rgba(15,23,42,.28);
-  transform: translateX(105%);
-  transition: transform .32s cubic-bezier(.22,1,.36,1);
-  display: flex;
-  flex-direction: column;
+  padding: 28px 24px 32px;
+  color: #f8fafc;
+  transform: translateX(110%);
+  transition: transform .55s cubic-bezier(.65,.01,.05,.99);
 }
 .mobile-menu.active .kinetic-panel,
 .mobile-menu[data-nav="open"] .kinetic-panel { transform: translateX(0); }
-.menu-sheet-top {
-  display: flex; align-items: center; justify-content: space-between;
-  gap: 10px; padding: 0 18px 16px;
-}
-.menu-brand { display: flex; align-items: center; gap: 10px; }
-.menu-brand img { width: 34px; height: 34px; object-fit: contain; border-radius: 10px; background: #fff; }
-.menu-brand b { display: block; font-size: 15px; font-weight: 800; color: #fff; }
-.menu-brand small { display: block; font-size: 11px; color: #c7d7ff; }
+.kinetic-bg { position: absolute; inset: 0; overflow: hidden; z-index: 0; }
+.kinetic-layer { position: absolute; inset: 0; transform: translateX(101%); }
+.kinetic-layer.l1 { background: #1d4ed8; transition: transform .5s .02s cubic-bezier(.65,.01,.05,.99); }
+.kinetic-layer.l2 { background: #2563eb; transition: transform .55s .1s cubic-bezier(.65,.01,.05,.99); }
+.kinetic-layer.l3 { background: linear-gradient(180deg,#0b1224 0%,#172554 100%); transition: transform .6s .16s cubic-bezier(.65,.01,.05,.99); }
+.mobile-menu.active .kinetic-layer,
+.mobile-menu[data-nav="open"] .kinetic-layer { transform: translateX(0); }
 .kinetic-close {
-  width: 36px; height: 36px; border-radius: 12px;
+  position: relative; z-index: 2;
+  width: 40px; height: 40px; border-radius: 12px;
   border: 1px solid rgba(255,255,255,.18);
-  background: rgba(255,255,255,.1); color: #fff;
-  display: grid; place-items: center; cursor: pointer;
+  background: rgba(255,255,255,.08); color: #fff;
+  font-size: 18px; margin-left: auto; display: flex;
+  align-items: center; justify-content: center; cursor: pointer;
 }
-.kinetic-links {
-  list-style: none; margin: 8px 0 0; padding: 0 0 8px;
-  display: flex; flex-direction: column; gap: 4px;
-}
+.kinetic-links { position: relative; z-index: 2; list-style: none; margin: 28px 0 18px; padding: 0; display: flex; flex-direction: column; gap: 4px; }
 .kinetic-links a {
-  position: relative;
-  display: flex; align-items: center; gap: 12px;
-  margin-left: 0; margin-right: 14px;
-  padding: 13px 16px 13px 18px;
-  border-radius: 0 22px 22px 0;
-  color: #d7e3ff; text-decoration: none;
-  font-size: 15px; font-weight: 650;
-  background: transparent; border: 0;
+  display: block; padding: 12px 4px;
+  font-size: 28px; font-weight: 800; letter-spacing: -.03em;
+  color: #fff; text-decoration: none;
+  transform: translateY(24px); opacity: 0;
+  transition: transform .45s cubic-bezier(.65,.01,.05,.99), opacity .35s, color .2s;
 }
-.kinetic-links a svg { width: 18px; height: 18px; flex: 0 0 auto; opacity: .9; }
-.kinetic-links a.on {
-  background: #fff;
-  color: #1d3fa8;
-  font-weight: 800;
-  z-index: 1;
-}
-.kinetic-links a.on svg { opacity: 1; }
-.kinetic-links a.on:before,
-.kinetic-links a.on:after {
-  content: "";
-  position: absolute;
-  left: 0;
-  width: 22px;
-  height: 22px;
-  background: transparent;
-}
-.kinetic-links a.on:before {
-  top: -22px;
-  border-bottom-left-radius: 22px;
-  box-shadow: -6px 6px 0 6px #fff;
-}
-.kinetic-links a.on:after {
-  bottom: -22px;
-  border-top-left-radius: 22px;
-  box-shadow: -6px -6px 0 6px #fff;
-}
-.kinetic-auth, .mobile-auth {
-  display: grid; grid-template-columns: 1fr 1fr; gap: 8px;
-  margin-top: auto; padding: 16px 16px 8px;
-}
-.kinetic-auth .btn-ghost { background: rgba(255,255,255,.12); color: #fff; border-color: rgba(255,255,255,.2); }
-.kinetic-auth .btn { width: 100%; }
+.mobile-menu.active .kinetic-links a,
+.mobile-menu[data-nav="open"] .kinetic-links a { transform: none; opacity: 1; }
+.kinetic-links a:nth-child(1){transition-delay:.18s}
+.kinetic-links a:nth-child(2){transition-delay:.22s}
+.kinetic-links a:nth-child(3){transition-delay:.26s}
+.kinetic-links a:nth-child(4){transition-delay:.3s}
+.kinetic-links a:nth-child(5){transition-delay:.34s}
+.kinetic-links a:nth-child(6){transition-delay:.38s}
+.kinetic-links a:nth-child(7){transition-delay:.42s}
+.kinetic-links a:nth-child(8){transition-delay:.46s}
+.kinetic-links a:nth-child(9){transition-delay:.5s}
+.kinetic-links a:nth-child(10){transition-delay:.54s}
+.kinetic-links a:nth-child(11){transition-delay:.58s}
+.kinetic-links a:hover { color: #93c5fd; }
+.kinetic-auth { position: relative; z-index: 2; display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 18px; padding-top: 18px; border-top: 1px solid rgba(255,255,255,.12); }
+.mobile-auth { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--border); }
 body.menu-open { overflow: hidden; }
-
-
-
 
 /* ===== LIVE STOCK TICKER ===== */
 .ticker-strip {
@@ -1182,31 +1085,26 @@ body[data-theme="dark"] .scs-card p { color: #94a3b8; }
 .footer3 {
   margin-top: 40px; padding: 48px 24px 24px;
   border-top: 1px solid var(--border, rgba(148,163,184,.2));
-  background: var(--elevated);
-  color: var(--text);
+  background: linear-gradient(180deg, transparent, rgba(59,130,246,.04));
 }
 .footer3-inner {
   max-width: 1100px; margin: 0 auto 28px;
   display: grid; grid-template-columns: 1.3fr 2fr; gap: 32px;
 }
 @media (max-width: 800px) { .footer3-inner { grid-template-columns: 1fr; } }
-.footer3-logo { font-size: 20px; font-weight: 900; margin-bottom: 8px; color: var(--primary, #3b82f6); letter-spacing: .04em; text-transform: uppercase; text-align: center; }
-.footer3-brand { text-align: center; }
-.footer3-brand p { font-size: 14px; color: var(--text2); line-height: 1.7; max-width: 420px; margin: 0 auto; text-align: justify; text-justify: inter-word; }
-.footer3-social { display: flex; gap: 10px; margin-top: 14px; justify-content: center; }
+.footer3-logo { font-size: 20px; font-weight: 900; margin-bottom: 8px; color: var(--primary, #3b82f6); }
+.footer3-brand p { font-size: 14px; color: var(--text2, #64748b); line-height: 1.6; max-width: 320px; }
+.footer3-social { display: flex; gap: 10px; margin-top: 14px; }
 .footer3-social a {
-  width: 42px; height: 42px; border-radius: 12px; display: grid; place-items: center;
-  text-decoration: none; background: rgba(255,255,255,.08);
-  border: 1px solid rgba(148,163,184,.2);
+  width: 36px; height: 36px; border-radius: 10px; display: grid; place-items: center;
+  font-size: 11px; font-weight: 800; text-decoration: none;
+  background: rgba(59,130,246,.12); color: #1d4ed8;
 }
 .footer3-cols { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
 .footer3-cols h4 { font-size: 12px; text-transform: uppercase; letter-spacing: .06em; margin: 0 0 10px; color: var(--text2); }
-.footer3-cols a { display: block; font-size: 14px; color: var(--text); text-decoration: none; margin-bottom: 8px; }
-.footer3-cols a:hover { color: var(--primary); }
-html[data-theme="dark"] .footer3-cols a,
-body[data-theme="dark"] .footer3-cols a { color: #f1f5f9; }
-html[data-theme="light"] .footer3-cols a,
-body[data-theme="light"] .footer3-cols a { color: #0f172a; }
+.footer3-cols a { display: block; font-size: 14px; color: var(--text, #0f172a); text-decoration: none; margin-bottom: 8px; }
+.footer3-cols a:hover { color: var(--primary, #3b82f6); }
+body[data-theme="dark"] .footer3-cols a { color: #e2e8f0; }
 .footer3-bottom {
   max-width: 1100px; margin: 0 auto; padding-top: 18px;
   border-top: 1px solid var(--border, rgba(148,163,184,.15));
@@ -1500,31 +1398,7 @@ img, svg, video {
 
 
 body > *:not(#webgl-bg):not(script) { position: relative; z-index: 1; }
-body > header.header,
-body > .header {
-  position: fixed !important;
-  top: 0 !important;
-  left: 0 !important;
-  right: 0 !important;
-  z-index: 500 !important;
-}
-body > .mobile-menu {
-  position: fixed !important;
-  z-index: 400 !important;
-}
-footer.footer3, .footer3 {
-  z-index: 10 !important;
-  isolation: isolate;
-  background: #f8fafc !important;
-  color: #0f172a !important;
-}
-html[data-theme="dark"] footer.footer3,
-html[data-theme="dark"] .footer3,
-body[data-theme="dark"] footer.footer3,
-body[data-theme="dark"] .footer3 {
-  background: #0b1220 !important;
-  color: #f8fafc !important;
-}
+footer.footer3, .footer3 { z-index: 10 !important; isolation: isolate; }
 #webgl-bg { z-index: 0 !important; pointer-events: none !important; }
 
 /* Standard footer copyright bar */
@@ -1539,7 +1413,7 @@ body[data-theme="dark"] .footer3 {
   text-align: center !important;
   font-size: 13px !important;
   line-height: 1.6 !important;
-  color: var(--text2) !important;
+  color: #94a3b8 !important;
   opacity: 1 !important;
   visibility: visible !important;
   position: relative !important;
@@ -1552,7 +1426,7 @@ body[data-theme="dark"] .footer3 {
   display: block !important;
   width: 100% !important;
   text-align: center !important;
-  color: var(--text2) !important;
+  color: #94a3b8 !important;
   visibility: visible !important;
   float: none !important;
   margin: 0 auto 4px !important;
@@ -1663,25 +1537,6 @@ body[data-theme="dark"] .footer3 {
 
 .mobile-cta { z-index: 100 !important; }
 .support-widget { z-index: 2147483000 !important; }
-
-.footer3-brand { text-align: center !important; }
-.footer3-brand .footer3-logo { text-align: center !important; text-transform: uppercase; letter-spacing: .06em; }
-.footer3-brand p { text-align: justify; text-justify: inter-word; hyphens: auto; max-width: 100%; }
-.footer3-bottom, .footer3-bottom p, .footer3-bottom span {
-  text-align: center !important;
-}
-
-.logo { display:inline-flex !important; align-items:center !important; gap:10px !important; height:32px !important; line-height:32px !important; text-decoration:none !important; }
-.logo img, .logo .brandLogo, .logo #brandLogo { height:36px !important; width:auto !important; max-width:48px !important; object-fit:contain !important; object-position:center !important; border-radius:8px !important; background:transparent !important; flex:0 0 auto !important; display:block !important; }
-.logo-word { font-family:"Plus Jakarta Sans", Inter, system-ui, sans-serif !important; font-size:17px !important; font-weight:800 !important; letter-spacing:-.03em !important; line-height:32px !important; height:32px !important; display:inline-flex !important; align-items:center !important; background:none !important; -webkit-background-clip:unset !important; color:#1e3a8a !important; -webkit-text-fill-color:#1e3a8a !important; }
-html[data-theme="dark"] .logo-word, body[data-theme="dark"] .logo-word { color:#dbeafe !important; -webkit-text-fill-color:#dbeafe !important; }
-
-
-.logo { display:inline-flex !important; align-items:center !important; gap:8px !important; height:28px !important; line-height:28px !important; text-decoration:none !important; }
-.logo img, .logo .brandLogo, .logo #brandLogo { height:24px !important; width:auto !important; max-height:24px !important; max-width:none !important; object-fit:contain !important; background:transparent !important; flex:0 0 auto !important; display:block !important; border-radius:0 !important; }
-.logo-word { font-family:"Plus Jakarta Sans", Inter, system-ui, sans-serif !important; font-size:24px !important; font-weight:800 !important; letter-spacing:-.04em !important; line-height:24px !important; height:24px !important; display:inline-flex !important; align-items:center !important; background:none !important; -webkit-background-clip:unset !important; color:#1e3a8a !important; -webkit-text-fill-color:#1e3a8a !important; }
-html[data-theme="dark"] .logo-word, body[data-theme="dark"] .logo-word { color:#dbeafe !important; -webkit-text-fill-color:#dbeafe !important; }
-
 </style>
 <script defer src="/_vercel/insights/script.js"></script>
   <link rel="stylesheet" href="css/skeleton.css">
@@ -1729,19 +1584,51 @@ html[data-theme="dark"] .logo-word, body[data-theme="dark"] .logo-word { color:#
   <script src="/js/mj-page-loader.js"></script>
 <link rel="stylesheet" href="/css/mj-glass.css">
 <script src="/js/mj-glass.js" defer></script>
-<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap" rel="stylesheet">
 </head>
 <body>
 
+<style id="mj-boot-style">
+#mj-boot{position:fixed;inset:0;z-index:2147483646;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:18px;background:rgba(5,7,13,.55);-webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px);color:rgba(226,232,240,.85);font:500 12px/1.2 system-ui,sans-serif;letter-spacing:.2em;text-transform:lowercase;transition:opacity .25s ease}
+#mj-boot.is-done{opacity:0;pointer-events:none}
+#mj-boot .mj-inf{position:relative;width:120px;height:64px}
+#mj-boot .mj-inf::before{content:"";position:absolute;left:50%;top:50%;width:140px;height:140px;transform:translate(-50%,-50%);border-radius:50%;background:radial-gradient(circle,rgba(124,58,237,.4) 0%,rgba(56,189,248,.15) 40%,transparent 70%);animation:mjBloom 2.2s ease-in-out infinite;pointer-events:none}
+#mj-boot .mj-inf svg{position:relative;z-index:1;display:block;width:120px;height:64px;overflow:visible}
+#mj-boot .mj-track{fill:none;stroke:rgba(167,139,250,.25);stroke-width:3.5;stroke-linecap:round;stroke-linejoin:round}
+#mj-boot .mj-beam{fill:none;stroke:#e9d5ff;stroke-width:3.5;stroke-linecap:round;stroke-linejoin:round;stroke-dasharray:28 200;filter:drop-shadow(0 0 4px #c084fc) drop-shadow(0 0 12px #22d3ee);animation:mjBeam 1.6s linear infinite}
+#mj-boot .mj-lbl{position:relative;z-index:1}
+@keyframes mjBeam{to{stroke-dashoffset:-228}}
+@keyframes mjBloom{0%,100%{opacity:.55;transform:translate(-50%,-50%) scale(1)}50%{opacity:1;transform:translate(-50%,-50%) scale(1.08)}}
+@media(prefers-reduced-motion:reduce){#mj-boot .mj-beam{animation:none;stroke-dasharray:none}#mj-boot .mj-inf::before{animation:none}}
+</style>
+<div id="mj-boot" role="status" aria-live="polite" aria-busy="true">
+  <div class="mj-inf" aria-hidden="true">
+    <svg viewBox="0 0 96 64" width="120" height="64">
+      <path class="mj-track" d="M 16 32 C 16 16, 36 16, 48 32 C 60 48, 80 48, 80 32 C 80 16, 60 16, 48 32 C 36 48, 16 48, 16 32"/>
+      <path class="mj-beam" d="M 16 32 C 16 16, 36 16, 48 32 C 60 48, 80 48, 80 32 C 80 16, 60 16, 48 32 C 36 48, 16 48, 16 32"/>
+    </svg>
+  </div>
+  <div class="mj-lbl">loading</div>
+</div>
 <script>
 (function(){
-  try{ sessionStorage.removeItem('mj_nav_loading'); }catch(e){}
-  function kill(){ if(window.mjHidePageLoader) try{ window.mjHidePageLoader(); }catch(e){} }
-  kill();
-  if(document.readyState==='loading') document.addEventListener('DOMContentLoaded', kill);
-  setTimeout(kill, 200);
+  function done(){
+    var el=document.getElementById('mj-boot');
+    if(!el||el.classList.contains('is-done'))return;
+    el.classList.add('is-done');
+    el.setAttribute('aria-busy','false');
+    setTimeout(function(){ try{ el.remove(); var s=document.getElementById('mj-boot-style'); if(s)s.remove(); }catch(e){} }, 280);
+    try{ sessionStorage.removeItem('mj_nav_loading'); }catch(e){}
+    if(window.mjHidePageLoader) try{ window.mjHidePageLoader(); }catch(e){}
+  }
+  if(document.readyState==='complete') setTimeout(done, 60);
+  else {
+    window.addEventListener('load', function(){ setTimeout(done, 60); });
+    document.addEventListener('DOMContentLoaded', function(){ setTimeout(done, 4000); });
+    setTimeout(done, 12000);
+  }
 })();
 </script>
+
 
 <noscript>
   <div class="mj-noscript">
@@ -1754,15 +1641,13 @@ html[data-theme="dark"] .logo-word, body[data-theme="dark"] .logo-word { color:#
 
 <canvas id="webgl-bg"></canvas>
 
-<div id="headerSpacer" style="height:72px"></div>
 <header class="header">
   <div class="header-inner">
-    <a href="/" class="logo"><img id="brandLogo" src="/img/IMG_3027.png" alt=""><span class="logo-word">HUB</span></a>
+    <a href="/" class="logo"><img id="brandLogo" src="https://atczodlljmlayvldxfmv.supabase.co/storage/v1/object/public/avatars/dark%20background%20log" alt="MJ HUB"></a>
     <nav class="nav-desktop">
-      <a href="landing.html">Home</a>
       <a href="#features">Services</a>
       <a href="#telegram-sms">Telegram Bot</a>
-      <a href="#earn">Earn 2%</a>
+      <a href="#earn">Earn 3%</a>
       <a href="#how-it-works">How it works</a>
       <a href="#why-us">Why us</a>
       <a href="faq.html">FAQ</a>
@@ -1774,97 +1659,38 @@ html[data-theme="dark"] .logo-word, body[data-theme="dark"] .logo-word { color:#
     <div class="header-actions">
       <a href="auth.html?mode=signup" class="btn btn-primary">Get started</a>
       <button class="icon-btn" id="themeToggle" aria-label="Toggle theme">☀️</button>
-      <button type="button" class="icon-btn menu-btn" id="menuToggle" aria-label="Menu" aria-expanded="false">☰</button>
+      <button class="icon-btn menu-btn" id="menuToggle" aria-label="Menu">☰</button>
     </div>
   </div>
-  </header>
-<div class="mobile-menu kinetic-nav" id="mobileMenu" data-nav="closed" hidden>
+  <div class="mobile-menu kinetic-nav" id="mobileMenu" data-nav="closed" hidden>
     <div class="kinetic-overlay" data-close-menu></div>
     <div class="kinetic-panel">
-      <div class="menu-sheet-top">
-        <div class="menu-brand">
-          <img src="/img/IMG_3027.png" alt="">
-          <div><b>MJ Hub</b><small>Menu</small></div>
-        </div>
-        <button type="button" class="kinetic-close" data-close-menu aria-label="Close menu">✕</button>
+      <div class="kinetic-bg">
+        <div class="kinetic-layer l1"></div>
+        <div class="kinetic-layer l2"></div>
+        <div class="kinetic-layer l3"></div>
       </div>
-      <nav class="kinetic-links" id="landingSideNav">
-        <a class="on" href="landing.html" data-close-menu>
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 10l8-6 8 6v8a2 2 0 0 1-2 2h-3v-6H9v6H6a2 2 0 0 1-2-2z"/></svg>
-          Home
-        </a>
-        <a href="#features" data-close-menu>
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="4" width="7" height="7" rx="1"/><rect x="13" y="4" width="7" height="7" rx="1"/><rect x="4" y="13" width="7" height="7" rx="1"/><rect x="13" y="13" width="7" height="7" rx="1"/></svg>
-          Services
-        </a>
-        <a href="https://t.me/mj_smss_bot" target="_blank" rel="noopener">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 2L11 13"/><path d="M22 2L15 22l-4-9-9-4 20-7z"/></svg>
-          SMS Bot
-        </a>
-        <a href="#earn" data-close-menu>
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 7v10M9 10h6M9 14h6"/></svg>
-          Earn 2%
-        </a>
-        <a href="#how-it-works" data-close-menu>
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 8v4l3 2"/></svg>
-          How it works
-        </a>
-        <a href="faq.html">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M9.5 9a2.5 2.5 0 1 1 3.5 2.3c-.7.4-1 1-1 1.7V14"/><circle cx="12" cy="17" r=".7" fill="currentColor"/></svg>
-          FAQ
-        </a>
-        <a href="support.html">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 15a8 8 0 1 1 16 0"/><path d="M4 15v3a2 2 0 0 0 2 2h1v-5H4zM20 15v3a2 2 0 0 1-2 2h-1v-5h3z"/></svg>
-          Support
-        </a>
-        <a href="/vendor">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 7h18l-2 11H5L3 7z"/><path d="M8 7V5a4 4 0 0 1 8 0v2"/></svg>
-          Vendors
-        </a>
-        <a href="terms.html">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M7 3h8l4 4v14H7z"/><path d="M15 3v4h4"/></svg>
-          Terms
-        </a>
-        <a href="#" id="apiLinkMobile">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 9l-3 3 3 3M16 9l3 3-3 3M13 7l-2 10"/></svg>
-          API · Coming soon
-        </a>
+      <button type="button" class="kinetic-close" data-close-menu aria-label="Close menu">✕</button>
+      <nav class="kinetic-links">
+        <a href="#features" data-close-menu>Services</a>
+        <a href="#telegram-sms" data-close-menu>Telegram Bot</a>
+        <a href="https://t.me/mj_smss_bot" target="_blank" rel="noopener">Open SMS Bot</a>
+        <a href="#earn" data-close-menu>Earn 3%</a>
+        <a href="#how-it-works" data-close-menu>How it works</a>
+        <a href="#why-us" data-close-menu>Why us</a>
+        <a href="faq.html">FAQ</a>
+        <a href="/vendor">Become a vendor</a>
+        <a href="support.html">Support</a>
+        <a href="terms.html">Terms</a>
+        <a href="#" id="apiLinkMobile">API <span style="font-size:10px;background:#f59e0b;color:#000;padding:2px 6px;border-radius:4px;font-weight:700">Soon</span></a>
       </nav>
       <div class="mobile-auth kinetic-auth">
-        <a href="auth.html?mode=signin" class="btn btn-ghost">Sign in</a>
-        <a href="auth.html?mode=signup" class="btn btn-primary">Get started</a>
+        <a href="auth.html?mode=signin" class="btn btn-ghost">Sign In</a>
+        <a href="auth.html?mode=signup" class="btn btn-primary">Get Started</a>
       </div>
     </div>
   </div>
-
-<script>
-(function(){
-  var btn=document.getElementById('menuToggle');
-  var menu=document.getElementById('mobileMenu');
-  if(!btn||!menu) return;
-  function setOpen(on){
-    menu.classList.toggle('active', !!on);
-    menu.setAttribute('data-nav', on ? 'open' : 'closed');
-    if(on) menu.removeAttribute('hidden');
-    else menu.setAttribute('hidden','');
-    document.body.classList.toggle('menu-open', !!on);
-    btn.setAttribute('aria-expanded', on ? 'true' : 'false');
-  }
-  window.toggleLandingMenu=function(e){
-    if(e){ e.preventDefault(); e.stopPropagation(); }
-    setOpen(!(menu.classList.contains('active') || menu.getAttribute('data-nav')==='open'));
-  };
-  btn.onclick=window.toggleLandingMenu;
-  menu.addEventListener('click', function(e){
-    var link=e.target.closest('.kinetic-links a');
-    if(link){
-      menu.querySelectorAll('.kinetic-links a').forEach(function(n){ n.classList.remove('on'); });
-      link.classList.add('on');
-    }
-    if(e.target.closest('[data-close-menu]')) setOpen(false);
-  });
-})();
-</script>
+</header>
 
 <!-- LIVE STOCK TICKER -->
 <div class="ticker-strip" id="tickerStrip">
@@ -1950,8 +1776,8 @@ html[data-theme="dark"] .logo-word, body[data-theme="dark"] .logo-word { color:#
         <article class="scs-card" data-index="4" aria-hidden="true">
           <div class="scs-icon">🤝</div>
           <h3>Refer and earn</h3>
-          <p>Share your link. Earn 2% lifetime on every deposit your referrals make, paid into your wallet.</p>
-          <div class="scs-chips"><span>2% lifetime</span><span>Auto payout</span><span>Your link</span></div>
+          <p>Share your link. Earn 3% lifetime on every deposit your referrals make, paid into your wallet.</p>
+          <div class="scs-chips"><span>3% lifetime</span><span>Auto payout</span><span>Your link</span></div>
           <a class="scs-cta" href="auth.html?tab=signup">Get referral link</a>
         </article>
       </div>
@@ -2025,11 +1851,11 @@ html[data-theme="dark"] .logo-word, body[data-theme="dark"] .logo-word { color:#
   <div class="earn-card">
     <div>
       <div class="tag">🤝 Refer and earn</div>
-      <h2>Invite friends. Earn 2% for life.</h2>
-      <p>Share your personal link. When someone you invite funds their wallet, you earn <strong style="color:#fff">2% of that deposit. every time, for life</strong>. Credits go to your NGN wallet and can be used on logs, SMS, boosters, or kept as balance.</p>
+      <h2>Invite friends. Earn 3% for life.</h2>
+      <p>Share your personal link. When someone you invite funds their wallet, you earn <strong style="color:#fff">3% of that deposit. every time, for life</strong>. Credits go to your NGN wallet and can be used on logs, SMS, boosters, or kept as balance.</p>
       <ul class="earn-points">
         <li>Unique link for every member after signup</li>
-        <li>2% on every deposit your referrals make, for life</li>
+        <li>3% on every deposit your referrals make, for life</li>
         <li>Paid straight into your wallet. No invoices, no chasing</li>
       </ul>
       <div class="earn-actions">
@@ -2096,7 +1922,7 @@ html[data-theme="dark"] .logo-word, body[data-theme="dark"] .logo-word { color:#
           <td><span class="compare-check">✓</span></td>
         </tr>
         <tr>
-          <td>2% lifetime referral on deposits</td>
+          <td>3% lifetime referral on deposits</td>
           <td><span class="compare-check">✓</span></td>
         </tr>
       </tbody>
@@ -2243,18 +2069,12 @@ html[data-theme="dark"] .logo-word, body[data-theme="dark"] .logo-word { color:#
 <footer class="footer3">
   <div class="footer3-inner">
     <div class="footer3-brand">
-      <div class="footer3-logo">HUB</div>
+      <div class="footer3-logo">MJ Hub</div>
       <p>Digital marketplace for SMS numbers, logs, and social growth. One wallet, one dashboard.</p>
       <div class="footer3-social">
-        <a href="https://chat.whatsapp.com/DxgYNbkV0fjLpWbP2aODRj" target="_blank" rel="noopener" aria-label="WhatsApp community">
-          <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path fill="#25D366" d="M12.04 2c-5.46 0-9.91 4.45-9.91 9.91 0 1.75.46 3.45 1.32 4.95L2.05 22l5.25-1.38c1.45.79 3.08 1.21 4.74 1.21 5.46 0 9.91-4.45 9.91-9.91 0-2.65-1.03-5.14-2.9-7.01A9.82 9.82 0 0 0 12.04 2zm.01 1.8a8.1 8.1 0 0 1 8.1 8.11 8.1 8.1 0 0 1-8.1 8.1c-1.42 0-2.8-.37-4.01-1.08l-.29-.17-3.12.82.83-3.04-.18-.3a8.07 8.07 0 0 1-1.23-4.33 8.1 8.1 0 0 1 8-8.11zm-2.68 4.2c-.16 0-.42.06-.64.31-.22.25-.84.82-.84 2s.86 2.32.98 2.48c.12.16 1.67 2.67 4.13 3.64 2.05.81 2.47.65 2.92.61.45-.04 1.45-.59 1.65-1.16.2-.57.2-1.06.14-1.16-.06-.1-.22-.16-.47-.28-.24-.12-1.45-.71-1.67-.8-.22-.08-.38-.12-.54.12-.16.25-.62.8-.76.96-.14.16-.28.18-.52.06-.24-.12-1.02-.38-1.94-1.2-.72-.64-1.2-1.43-1.34-1.67-.14-.25-.02-.38.11-.5.11-.11.24-.28.37-.42.12-.14.16-.25.24-.41.08-.16.04-.31-.02-.43-.06-.12-.54-1.3-.74-1.78-.2-.48-.39-.4-.54-.41z"/></svg>
-        </a>
-        <a href="https://t.me/mj_hub_tg" target="_blank" rel="noopener" aria-label="Telegram community">
-          <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path fill="#2AABEE" d="M11.94 2C6.48 2 2.05 6.43 2.05 11.89c0 5.46 4.43 9.89 9.89 9.89s9.89-4.43 9.89-9.89C21.83 6.43 17.4 2 11.94 2zm4.95 6.77-1.56 7.37c-.12.53-.43.66-.87.41l-2.4-1.77-1.16 1.12c-.13.13-.24.24-.49.24l.18-2.43 4.41-3.98c.19-.17-.04-.27-.3-.1l-5.45 3.43-2.35-.73c-.51-.16-.52-.51.11-.75l9.18-3.54c.42-.16.8.1.7.73z"/></svg>
-        </a>
-        <a href="https://t.me/mj_smss_bot" target="_blank" rel="noopener" aria-label="MJ SMS Telegram bot">
-          <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path fill="#60a5fa" d="M12 2a4 4 0 0 1 4 4v1.1A7 7 0 0 1 19 13v5a2 2 0 0 1-2 2h-1.2a3 3 0 0 1-5.6 0H7a2 2 0 0 1-2-2v-5a7 7 0 0 1 3-5.9V6a4 4 0 0 1 4-4zm-3 16h6a1 1 0 0 0 2 0v-5a5 5 0 0 0-10 0v5a1 1 0 0 0 2 0zm3-14a2 2 0 0 0-2 2v.54A6.96 6.96 0 0 1 12 6c.7 0 1.37.1 2 .28V6a2 2 0 0 0-2-2z"/></svg>
-        </a>
+        <a href="https://chat.whatsapp.com/DxgYNbkV0fjLpWbP2aODRj" target="_blank" rel="noopener" aria-label="WhatsApp community">WA</a>
+        <a href="https://t.me/mj_hub_tg" target="_blank" rel="noopener" aria-label="Telegram community">TG</a>
+        <a href="https://t.me/mj_smss_bot" target="_blank" rel="noopener" aria-label="MJ SMS Telegram bot">Bot</a>
       </div>
     </div>
     <div class="footer3-cols">
@@ -2282,7 +2102,7 @@ html[data-theme="dark"] .logo-word, body[data-theme="dark"] .logo-word { color:#
     </div>
   </div>
   <div class="footer3-bottom">
-    <p class="footer-copy">© <span id="footerYear">2026</span> MJ HUB. All rights reserved.</p>
+    <p class="footer-copy">© <span id="footerYear">2026</span> MJ Hub. All rights reserved.</p>
     <p class="footer3-note">Built for creators who value privacy and speed.</p>
   </div>
 </footer>
@@ -2327,21 +2147,8 @@ html[data-theme="dark"] .logo-word, body[data-theme="dark"] .logo-word { color:#
 <script>
 /* ========== THEME PERSISTENCE (runs early) ========== */
 (function() {
-  if (window.mjApplyTheme) { window.mjApplyTheme(); return; }
-  var pref = 'system';
-  try { pref = localStorage.getItem('mjhub-theme-pref') || localStorage.getItem('mjhub-theme') || localStorage.getItem('mjhub_theme') || 'system'; } catch (e) {}
-  var theme = pref;
-  if (pref !== 'light' && pref !== 'dark') {
-    try { theme = window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark'; } catch (e2) { theme = 'dark'; }
-  }
-  document.documentElement.setAttribute('data-theme', theme);
-  document.body.setAttribute('data-theme', theme);
-  var logo = document.getElementById('brandLogo');
-  if (logo) {
-    logo.src = theme === 'light'
-      ? '/img/IMG_3027.png'
-      : '/img/IMG_3027.png';
-  }
+  const savedTheme = localStorage.getItem('mjhub_theme') || 'dark';
+  document.body.setAttribute('data-theme', savedTheme);
 })();
 
 /* ========== LIVE STOCK TICKER ========== */
@@ -2523,35 +2330,12 @@ document.addEventListener('DOMContentLoaded', () => {
   const menuBtn = document.getElementById('menuToggle');
   const mobileMenu = document.getElementById('mobileMenu');
   const brandLogo = document.getElementById('brandLogo');
-  const LOGO_DARK = '/img/IMG_3027.png';
-  const LOGO_LIGHT = '/img/IMG_3027.png';
+  const LOGO_DARK = 'https://atczodlljmlayvldxfmv.supabase.co/storage/v1/object/public/avatars/dark%20background%20log';
+  const LOGO_LIGHT = 'https://atczodlljmlayvldxfmv.supabase.co/storage/v1/object/public/avatars/light%20background%20logo';
 
-  function knockPlate(img) {
-    if (!img) return;
-    var im = new Image();
-    im.crossOrigin = 'anonymous';
-    im.onload = function () {
-      try {
-        var c = document.createElement('canvas');
-        c.width = im.naturalWidth; c.height = im.naturalHeight;
-        var ctx = c.getContext('2d');
-        ctx.drawImage(im, 0, 0);
-        var data = ctx.getImageData(0, 0, c.width, c.height);
-        var p = data.data;
-        for (var i = 0; i < p.length; i += 4) {
-          var r = p[i], g = p[i+1], b = p[i+2];
-          if ((r > 232 && g > 232 && b > 232) || (r < 45 && g < 55 && b < 95)) p[i+3] = 0;
-        }
-        ctx.putImageData(data, 0, 0);
-        img.src = c.toDataURL('image/png');
-      } catch (e) {}
-    };
-    im.src = img.src;
-  }
   function applyLogo(theme) {
     if (!brandLogo) return;
     brandLogo.src = theme === 'light' ? LOGO_LIGHT : LOGO_DARK;
-    knockPlate(brandLogo);
   }
 
   const currentTheme = body.getAttribute('data-theme') || 'dark';
@@ -2561,31 +2345,29 @@ document.addEventListener('DOMContentLoaded', () => {
   if (themeBtn) themeBtn.addEventListener('click', () => {
     const isDark = body.getAttribute('data-theme') === 'dark';
     const newTheme = isDark ? 'light' : 'dark';
-    document.documentElement.setAttribute('data-theme', newTheme);
     body.setAttribute('data-theme', newTheme);
     themeBtn.textContent = newTheme === 'dark' ? '☀️' : '🌙';
-    try {
-      localStorage.setItem('mjhub_theme', newTheme);
-      localStorage.setItem('mjhub-theme', newTheme);
-      localStorage.setItem('mjhub-theme-pref', newTheme);
-    } catch (e) {}
+    localStorage.setItem('mjhub_theme', newTheme);
     applyLogo(newTheme);
   });
 
-  window.setLandingMenu = function(open) {
-    if (window.toggleLandingMenu && open === false) {
-      var menu = document.getElementById('mobileMenu');
-      if (menu) {
-        menu.classList.remove('active');
-        menu.setAttribute('data-nav', 'closed');
-        menu.setAttribute('hidden', '');
-        document.body.classList.remove('menu-open');
-      }
-      return;
-    }
-  };
+  function setLandingMenu(open) {
+    if (!mobileMenu) return;
+    mobileMenu.classList.toggle('active', open);
+    mobileMenu.setAttribute('data-nav', open ? 'open' : 'closed');
+    mobileMenu.hidden = !open;
+    document.body.classList.toggle('menu-open', open);
+    if (menuBtn) menuBtn.setAttribute('aria-expanded', open ? 'true' : 'false');
+  }
+  menuBtn && menuBtn.addEventListener('click', e => {
+    e.stopPropagation();
+    setLandingMenu(!(mobileMenu && mobileMenu.classList.contains('active')));
+  });
+  mobileMenu && mobileMenu.addEventListener('click', e => {
+    if (e.target.closest('[data-close-menu]')) setLandingMenu(false);
+  });
   document.addEventListener('keydown', e => {
-    if (e.key === 'Escape' && window.setLandingMenu) window.setLandingMenu(false);
+    if (e.key === 'Escape') setLandingMenu(false);
   });
 
   const items = document.querySelectorAll('.service-item');
@@ -2810,6 +2592,5 @@ document.addEventListener('DOMContentLoaded', () => {
 })();
 </script>
 
-<script src="haptic.js" defer></script>
 </body>
 </html>
