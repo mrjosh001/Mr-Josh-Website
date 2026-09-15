@@ -67,7 +67,7 @@ body::before{content:'';position:fixed;inset:0;pointer-events:none;z-index:0;bac
 .product-description-toggle::-webkit-details-marker{display:none}
 .product-description-toggle::before{content:'▸';font-size:10px}
 details[open] .product-description-toggle::before{transform:rotate(90deg);display:inline-block}
-.product-description-body{font-size:12px;color:var(--muted);line-height:1.65;padding-top:8px;border-top:1px solid var(--border);margin-top:4px;white-space:pre-wrap;word-break:break-word}
+.product-description-body{font-size:12px;color:var(--muted);line-height:1.6;padding-top:8px;border-top:1px solid var(--border);margin-top:4px}
 .product-badges{display:flex;gap:6px;flex-wrap:wrap}
 .badge{display:inline-block;padding:4px 10px;border-radius:6px;font-size:10px;font-weight:700}
 .badge-stock{background:rgba(52,211,153,.15);color:var(--success)}
@@ -105,7 +105,7 @@ details[open] .product-description-toggle::before{transform:rotate(90deg);displa
 .ps-pill-out{background:#fee2e2;color:#dc2626}
 .ps-block{background:#f8fafc;border-radius:14px;padding:12px 14px;margin-bottom:12px}
 .ps-block-label{font-size:11px;font-weight:700;color:#64748b;margin-bottom:6px;text-transform:uppercase;letter-spacing:.03em}
-.ps-block-text{font-size:13px;color:#334155;line-height:1.55;white-space:pre-wrap;word-break:break-word}
+.ps-block-text{font-size:13px;color:#334155;line-height:1.55}
 .ps-format{background:#eff6ff;border-radius:14px;padding:12px 14px;margin-bottom:12px}
 .ps-format-title{font-size:13px;font-weight:800;color:#1d4ed8;margin-bottom:8px;display:flex;align-items:center;gap:6px}
 .ps-format-box{background:#fff;border-radius:10px;padding:10px 12px;font-size:12px;font-weight:600;color:#3b82f6;line-height:1.4}
@@ -324,7 +324,7 @@ let purchaseNonce = null;
 let searchQuery = '';
 
 function setStatus(m){const s=document.getElementById('statusText');if(s)s.textContent=m}
-function cleanText(str){if(!str)return'';const t=document.createElement('div');t.innerHTML=String(str).replace(/<br\s*\/?>/gi,'\n');return(t.textContent||t.innerText||'').replace(/[^\S\n]+/g,' ').replace(/ *\n */g,'\n').replace(/\n{3,}/g,'\n\n').trim()}
+function cleanText(str){if(!str)return'';const t=document.createElement('div');t.innerHTML=str;return(t.textContent||t.innerText||'').replace(/\s+/g,' ').trim()}
 function escapeHtml(str){if(!str)return'';return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;')}
 function showToast(msg,type){const t=document.createElement('div');t.className='toast'+(type==='error'?' error':'');t.innerHTML='<span>'+(type==='error'?'❌':'✅')+'</span><span>'+escapeHtml(msg)+'</span>';toastContainer.appendChild(t);setTimeout(()=>t.remove(),3000)}
 function showError(reason){productGrid.innerHTML='<div class="empty-state"><div class="empty-state-icon">⚠️</div><h4>Failed to Load</h4><p>'+escapeHtml(reason)+'</p><button class="btn btn-primary" style="max-width:200px;margin:0 auto" onclick="location.reload()">Retry</button></div>'}
@@ -367,7 +367,10 @@ const LOG_ICON_EXACT = {
   'tutorial/update': {dual:true},
   'x / twitter': {brand:'x', color:'#000000'},
   'x/twitter': {brand:'x', color:'#000000'},
-  'twitter': {brand:'x', color:'#000000'}
+  'twitter': {brand:'x', color:'#000000'},
+  'truth social account': {brand:'truthsocial', color:'#5448EE'},
+  'truth social accounts': {brand:'truthsocial', color:'#5448EE'},
+  'truthsocial': {brand:'truthsocial', color:'#5448EE'}
 };
 // Substring fallback (category, then product name) for anything not in the
 // exact list above — new suppliers, renamed categories, future products.
@@ -381,7 +384,8 @@ const BRAND_DOMAIN = {
   expressvpn:'expressvpn.com', tinder:'tinder.com', bumble:'bumble.com',
   deepseek:'deepseek.com', openai:'openai.com', onlyfans:'onlyfans.com', canva:'canva.com', quora:'quora.com', prime:'primevideo.com', ipvanish:'ipvanish.com', pia:'privateinternetaccess.com', purevpn:'purevpn.com', avast:'avast.com', hma:'hidemyass.com', hotmail:'hotmail.com', mailru:'mail.ru', mailcom:'mail.com', pof:'pof.com', badoo:'badoo.com', nordvpn:'nordvpn.com', surfshark:'surfshark.com', expressvpn:'expressvpn.com', proton:'protonvpn.com', cyberghost:'cyberghostvpn.com', windscribe:'windscribe.com', '9proxy':'9proxy.com', talkatone:'talkatone.com', googlevoice:'google.com', textplus:'textplus.com', texplus:'textplus.com', textnow:'textnow.com',
   outlook:'outlook.com', yahoo:'yahoo.com', rambler:'rambler.ru', pinterest:'pinterest.com',
-  threads:'threads.com', crunchyroll:'crunchyroll.com'
+  threads:'threads.com', crunchyroll:'crunchyroll.com',
+  truthsocial:'truthsocial.com', 'truth social':'truthsocial.com'
 };
 function brandfetchUrl(domain){
   return 'https://cdn.brandfetch.io/'+domain+'/w/128/h/128/theme/light/type/icon.png';
@@ -406,6 +410,7 @@ const LOG_ICON_KEYWORDS = [
 
   ['nordvpn','nordvpn','#4687FF'],['nord vpn','nordvpn','#4687FF'],['surfshark','surfshark','#1EBDFF'],['expressvpn','expressvpn','#DA3940'],['express vpn','expressvpn','#DA3940'],['protonvpn','proton','#6D4AFF'],['proton vpn','proton','#6D4AFF'],['cyberghost','cyberghost','#00B67A'],['windscribe','windscribe','#1BA3E5'],['9proxy','9proxy','#0ea5e9'],['9 proxy','9proxy','#0ea5e9'],['talkatone','talkatone','#2BB24C'],['textplus','textplus','#00AEEF'],['texplus','textplus','#00AEEF'],
   ['google voice','googlevoice','#4285F4'],['googlevoice','googlevoice','#4285F4'],
+  ['truth social','truthsocial','#5448EE'],['truthsocial','truthsocial','#5448EE'],['truthsocial.com','truthsocial','#5448EE'],
   ['facebook','facebook','#1877F2'],['instagram','instagram','#E1306C'],
   ['tiktok','tiktok','#000000'],['twitter','x','#000000'],[' x ','x','#000000'],
   ['discord','discord','#5865F2'],['linkedin','linkedin','#0A66C2'],
@@ -436,6 +441,9 @@ function logIcon(category, name){
   if (cat.includes('twitter') || cat === 'x' || cat.startsWith('x /') || cat.includes('x / twitter')) {
     return {brand:'x', color:'#000000'};
   }
+  if (cat.includes('truth') || n.includes('truth social') || n.includes('truthsocial')) {
+    return {brand:'truthsocial', color:'#5448EE'};
+  }
   if (cat.includes('9proxy') || n.includes('9proxy') || n.includes('9 proxy')) {
     return {brand:'9proxy', color:'#0084FF'};
   }
@@ -462,6 +470,8 @@ function brandSvg(slug){
   if(slug==='9proxy') return '<svg viewBox="0 0 40 40" width="100%" height="100%" xmlns="http://www.w3.org/2000/svg"><rect width="40" height="40" rx="11" fill="#0084FF"/><text x="20" y="29" text-anchor="middle" font-size="24" font-weight="800" fill="#fff" font-family="Arial,sans-serif">9</text></svg>';
   if(slug==='x') return '<svg viewBox="0 0 40 40" width="100%" height="100%" xmlns="http://www.w3.org/2000/svg"><rect width="40" height="40" rx="11" fill="#000"/><path fill="#fff" d="M10.2 10.2h6.1l4.2 5.9 4.8-5.9H31l-8.2 9.7L31.4 29.8h-6.1l-4.6-6.4-5.3 6.4H8.6l8.8-10.2-7.2-9.4z"/></svg>';
   if(slug==='facebook') return '<svg viewBox="0 0 40 40" width="100%" height="100%" xmlns="http://www.w3.org/2000/svg"><rect width="40" height="40" rx="11" fill="#1877F2"/><path fill="#fff" d="M22.4 29.5v-8.2h2.8l.4-3.1h-3.2v-2c0-.9.3-1.5 1.6-1.5H26V12c-.3 0-1.4-.1-2.7-.1-2.7 0-4.5 1.6-4.5 4.6v2.6H16v3.1h2.8v8.3h3.6z"/></svg>';
+  // Truth Social app icon — primary #5448EE, white T with split bar + green accent (truthsocial.com brand)
+  if(slug==='truthsocial') return '<svg viewBox="0 0 40 40" width="100%" height="100%" xmlns="http://www.w3.org/2000/svg"><rect width="40" height="40" rx="11" fill="#5448EE"/><path fill="#fff" d="M12 11h16v4.2h-5.6V29h-4.8V15.2H12V11z"/><rect x="12" y="11" width="4.2" height="4.2" fill="#6B5AFF"/><rect x="28.2" y="28.2" width="4.2" height="4.2" rx="0.6" fill="#2FEECC"/></svg>';
   return null;
 }
 function logIconInnerHtml(icon){
@@ -898,7 +908,7 @@ try{
 await refreshBalance();
 if(currentBalanceNgn < total){
 showToast('Insufficient balance. Redirecting to deposit...','error');
-setTimeout(function(){ window.location.href='deposit.html'; }, 900);
+setTimeout(function(){ window.location.href='dashboard.html#deposit'; }, 900);
 return;
 }
 const productSource = purchasedProduct.source
