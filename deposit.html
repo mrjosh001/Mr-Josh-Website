@@ -4,9 +4,8 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>Fund Wallet — MJ HUB</title>
-<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@800&display=swap" rel="stylesheet">
 <meta name="theme-color" content="#06080f">
-<link rel="icon" href="/img/IMG_3027.png">
+<link rel="icon" href="https://atczodlljmlayvldxfmv.supabase.co/storage/v1/object/public/avatars/dark%20background%20log">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
@@ -52,8 +51,6 @@ a{color:inherit;text-decoration:none}
 .btn-outline{background:transparent;color:var(--text);border:1px solid var(--border);box-shadow:none}
 .btn-soft{background:var(--success-soft);color:var(--success);border:1px solid rgba(52,211,153,.28);box-shadow:none}
 .hint{font-size:12px;color:var(--muted);margin-top:12px;line-height:1.5;text-align:center}
-.mj-maint-banner{margin:0 0 14px;padding:12px 14px;border-radius:12px;background:rgba(245,158,11,.12);border:1px solid rgba(245,158,11,.35);color:#b45309;font-size:13px;font-weight:700;line-height:1.45}
-:root[data-theme="dark"] .mj-maint-banner{color:#fbbf24}
 .usd-preview{display:none;padding:12px 14px;margin-bottom:12px;border-radius:14px;background:var(--success-soft);border:1px solid rgba(52,211,153,.28)}
 .usd-preview .t{font-size:12px;color:var(--muted);font-weight:600}
 .usd-preview .a{font-size:20px;font-weight:800;color:var(--success);margin-top:4px}
@@ -61,8 +58,16 @@ a{color:inherit;text-decoration:none}
 .toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:#111827;color:#fff;padding:12px 16px;border-radius:12px;font-size:13px;font-weight:700;z-index:100;opacity:0;pointer-events:none;transition:.2s;max-width:90%}
 :root[data-theme="light"] .toast{background:#0f172a}
 .toast.show{opacity:1}
-.success-box{display:none;padding:14px;border-radius:14px;margin-bottom:14px;background:var(--success-soft);border:1px solid rgba(52,211,153,.3);font-size:13px;font-weight:700;line-height:1.4;color:var(--text)}
-.success-box.show{display:block}
+.success-box{display:none}
+.va-success-modal{display:none;position:fixed;inset:0;z-index:80;align-items:center;justify-content:center;padding:18px;background:rgba(6,8,15,.62);backdrop-filter:blur(10px)}
+.va-success-modal.show{display:flex}
+.va-success-card{width:100%;max-width:360px;background:#fff;color:#0f172a;border-radius:24px;padding:28px 22px 22px;text-align:center;box-shadow:0 24px 60px rgba(0,0,0,.35)}
+.va-success-icon{width:64px;height:64px;border-radius:18px;margin:0 auto 14px;background:#d1fae5;color:#059669;display:flex;align-items:center;justify-content:center;font-size:28px}
+.va-success-card h3{font-size:22px;font-weight:800;margin:0 0 8px}
+.va-success-card p{font-size:14px;line-height:1.5;color:#475569;margin:0}
+.va-success-amt{font-size:30px;font-weight:800;color:#2563eb;margin:16px 0 8px}
+.va-success-card button{width:100%;margin-top:16px;border:none;border-radius:14px;padding:13px;font-weight:800;font-family:inherit;background:#2563eb;color:#fff;cursor:pointer}
+
 .va-pill{display:inline-flex;align-items:center;gap:6px;font-size:11px;font-weight:800;letter-spacing:.04em;text-transform:uppercase;color:var(--primary);margin-bottom:8px}
 .bank-choice{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px}
 .bank-choice label{display:flex;align-items:center;gap:10px;padding:14px 12px;border-radius:14px;border:1px solid var(--border);background:var(--input-bg);cursor:pointer;font-weight:700;font-size:13px;color:var(--text)}
@@ -105,13 +110,9 @@ a{color:inherit;text-decoration:none}
 .instruct{padding:12px 14px;border-radius:12px;background:var(--primary-soft);border:1px solid rgba(91,138,245,.22);font-size:13px;line-height:1.5;color:var(--text);margin-bottom:14px;font-weight:600}
 .waiting{text-align:center;font-size:13px;color:var(--muted);font-weight:600;margin-bottom:12px}
 .waiting i{margin-right:6px}
-
-.logo-word{font-family:"Plus Jakarta Sans",Inter,sans-serif;font-size:20px;font-weight:800;letter-spacing:-.04em;color:#1e3a8a;line-height:24px}
-:root[data-theme="dark"] .logo-word{color:#dbeafe}
-.header h1{flex:0 0 auto;font-size:15px;margin-left:8px}
-
 </style>
 <link rel="stylesheet" href="/css/skeleton.css">
+<link rel="stylesheet" href="/css/mj-motion.css">
 <script src="/js/skeleton.js" defer></script>
 <script src="/js/mj-page-loader.js"></script>
 </head>
@@ -152,7 +153,10 @@ a{color:inherit;text-decoration:none}
   if(document.readyState==='complete') setTimeout(done, 60);
   else {
     window.addEventListener('load', function(){ setTimeout(done, 60); });
-    document.addEventListener('DOMContentLoaded', function(){ setTimeout(done, 4000); });
+    document.addEventListener('click', function(e){
+  if (e.target && e.target.id === 'vaSuccessDone') location.href = 'dashboard.html#home';
+});
+document.addEventListener('DOMContentLoaded, function(){ setTimeout(done, 4000); });
     setTimeout(done, 12000);
   }
 })();
@@ -160,10 +164,6 @@ a{color:inherit;text-decoration:none}
 
 <header class="header">
   <a class="back" href="dashboard.html#home" aria-label="Back"><i class="fa-solid fa-arrow-left"></i></a>
-  <a href="landing.html" class="logo" style="display:inline-flex;align-items:center;gap:8px;text-decoration:none;margin-right:auto">
-    <img src="/img/IMG_3027.png" alt="" style="height:24px;width:auto;display:block">
-    <span class="logo-word">HUB</span>
-  </a>
   <h1>Fund Wallet</h1>
   <button type="button" class="theme-btn" id="themeBtn" onclick="toggleTheme()">🌙</button>
 </header>
@@ -173,7 +173,17 @@ a{color:inherit;text-decoration:none}
     <div class="wcard"><div class="lbl">NGN Wallet</div><div class="val" id="balNgn">₦—</div></div>
     <div class="wcard"><div class="lbl">USD Wallet</div><div class="val" id="balUsd">$—</div></div>
   </div>
-  <div class="success-box" id="successBox">Payment received. Refreshing your balance…</div>
+  <div class="success-box" id="successBox"></div>
+<div class="va-success-modal" id="vaSuccessModal">
+  <div class="va-success-card">
+    <div class="va-success-icon">✓</div>
+    <h3>Wallet credited</h3>
+    <p>This amount has been confirmed and added to your NGN wallet.</p>
+    <div class="va-success-amt" id="vaSuccessAmt">₦0</div>
+    <p style="font-size:12px;color:#94a3b8;">Taking you home in a few seconds</p>
+    <button type="button" id="vaSuccessDone">Done</button>
+  </div>
+</div>
 
   <div class="card" id="vaCard">
     <div class="va-pill"><i class="fa-solid fa-building-columns"></i> Permanent account</div>
@@ -210,7 +220,7 @@ a{color:inherit;text-decoration:none}
         <button type="button" class="chip" data-amt="20000" onclick="pickVaAmount(20000)">₦20,000</button>
         <button type="button" class="chip" data-amt="50000" onclick="pickVaAmount(50000)">₦50,000</button>
       </div>
-      <p class="fee-line" id="vaFeeLine">Min ₦1,000 · Max ₦700,000 · Includes a small processing fee</p>
+      <p class="fee-line" id="vaFeeLine">Min ₦1,000 · Max ₦700,000 · A 1% payment processing fee applies</p>
       <button type="button" class="btn" id="vaContinueBtn" onclick="continueVaPay()">Continue</button>
     </div>
 
@@ -240,7 +250,7 @@ a{color:inherit;text-decoration:none}
         </div>
         <div class="instruct" id="vaInstruct">Transfer the exact amount above. Your wallet credits automatically once the payment is confirmed.</div>
         <div class="waiting" id="vaWaiting"><i class="fa-solid fa-rotate fa-spin"></i> Waiting for confirmation…</div>
-        <button type="button" class="btn btn-soft" onclick="checkVaPaymentNow()"><i class="fa-solid fa-rotate"></i> I've sent the money · Check now</button>
+        <button type="button" class="btn btn-soft" onclick="checkVaPaymentNow()"><i class="fa-solid fa-rotate"></i> Check status</button>
         <button type="button" class="btn btn-outline" style="margin-top:10px;" onclick="backToVaAmount()">Change amount</button>
       </div>
     </div>
@@ -258,7 +268,7 @@ a{color:inherit;text-decoration:none}
       <button type="button" class="method-tab" id="tabManual" onclick="setOtherMethod('manual')"><i class="fa-brands fa-whatsapp"></i> Manual (WhatsApp)</button>
     </div>
     <div id="pocketfiDepositBox">
-        <p class="sub" style="margin-top:0;">One time payment link for a fixed amount. Min ₦1,000 · Max ₦500,000.</p>
+      <p class="sub" style="margin-top:0;">One time payment link for a fixed amount. Min ₦1,000 · Max ₦500,000.</p>
       <div class="form-group">
         <label>Wallet to fund</label>
         <select id="depositWalletSelect" onchange="selectDepositWallet(this.value)">
@@ -308,7 +318,7 @@ const MIN = 1000;
 const MAX = 500000;
 const VA_MIN = 1000;
 const VA_MAX = 700000;
-const VA_FEE_RATE = 0.009;
+const VA_FEE_RATE = 0.01;
 const ADMIN_WA = '14305583021';
 
 let depositWallet = 'ngn';
@@ -371,12 +381,11 @@ function calcExactToSend(desired) {
 function onVaAmountInput() {
   const raw = parseFloat(document.getElementById('vaAmountInput').value) || 0;
   const exact = calcExactToSend(raw);
-  const fee = exact - Math.round(raw);
   const line = document.getElementById('vaFeeLine');
   if (raw >= VA_MIN) {
-    line.textContent = 'You send ' + fmtNgn(exact) + ' (includes ~₦' + fee.toLocaleString() + ' processing fee)';
+    line.textContent = 'Send ' + fmtNgn(exact) + '. Includes a 1% payment processing fee. Your wallet receives ' + fmtNgn(Math.round(raw)) + '.';
   } else {
-    line.textContent = 'Min ₦1,000 · Max ₦700,000 · Includes a small processing fee';
+    line.textContent = 'Min ₦1,000 · Max ₦700,000 · A 1% payment processing fee applies';
   }
   document.querySelectorAll('#vaChips .chip').forEach(function (c) {
     c.classList.toggle('active', Number(c.getAttribute('data-amt')) === Math.round(raw));
@@ -386,7 +395,7 @@ function pickVaAmount(n) {
   document.getElementById('vaAmountInput').value = String(n);
   onVaAmountInput();
 }
-function continueVaPay() {
+async function continueVaPay() {
   if (!vaDetails || !vaDetails.account_number) {
     toast('Generate your account first');
     return;
@@ -394,17 +403,41 @@ function continueVaPay() {
   const amount = Math.round(parseFloat(document.getElementById('vaAmountInput').value) || 0);
   if (amount < VA_MIN) return toast('Minimum is ₦' + VA_MIN.toLocaleString());
   if (amount > VA_MAX) return toast('Maximum is ₦' + VA_MAX.toLocaleString());
+
+  // Register THIS expected payment before showing account details (webhook binds to it)
+  try {
+    const accessToken = await getAccessToken();
+    if (!accessToken) {
+      toast('Session expired. Please sign in again.');
+      return;
+    }
+    const reg = await fetch('/api/pocketfi?action=va_begin', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + accessToken },
+      body: JSON.stringify({ amount: amount })
+    });
+    const regData = await reg.json().catch(function () { return {}; });
+    if (!reg.ok || !regData.success) {
+      toast(regData.message || 'Could not start deposit session');
+      return;
+    }
+    window.__vaSessionId = regData.data && regData.data.session_id;
+  } catch (e) {
+    toast(e.message || 'Could not start deposit session');
+    return;
+  }
+
   vaChosenAmount = amount;
+  window.__vaDesire = amount;
   vaExactToSend = calcExactToSend(amount);
+  window.__vaExpectAmount = amount; // wallet credit target
+  window.__vaWaitSince = Date.now();
   document.getElementById('vaExactAmount').textContent = fmtNgn(vaExactToSend);
   document.getElementById('vaAccountNumber').textContent = vaDetails.account_number;
   document.getElementById('vaAccountName').textContent = vaDetails.account_name || '—';
-  var bn = (vaDetails.bank || '—').toString();
-  if (bn.toLowerCase() === 'paga') bn = 'Paga';
-  if (bn.toLowerCase() === 'saveheaven') bn = 'Safe Haven';
-  document.getElementById('vaBankName').textContent = bn;
+  document.getElementById('vaBankName').textContent = vaDetails.bank || '—';
   document.getElementById('vaInstruct').innerHTML =
-    'Transfer exactly <strong>' + fmtNgn(vaExactToSend) + '</strong> to the account above. Your wallet credits automatically once confirmed.';
+    'Transfer exactly <strong>' + fmtNgn(vaExactToSend) + '</strong> to the account above. Your wallet receives <strong>' + fmtNgn(amount) + '</strong> after confirmation.';
   showVaState('pay');
   startBalanceWatch();
 }
@@ -412,54 +445,88 @@ function backToVaAmount() {
   stopBalanceWatch();
   showVaState('amount');
 }
+
+function showVaSuccessAndGoHome(creditedAmount){
+  stopBalanceWatch();
+  var amt = Number(creditedAmount || window.__vaExpectAmount || 0) || 0;
+  var modal = document.getElementById('vaSuccessModal');
+  var el = document.getElementById('vaSuccessAmt');
+  if (el) el.textContent = fmtNgn(amt);
+  if (modal) modal.classList.add('show');
+  setTimeout(function(){ location.href = 'dashboard.html#home'; }, 4000);
+}
 async function checkVaPaymentNow() {
-  toast('Checking your balance…');
-  const beforeBal = await readNgnBalance();
-  for (let i = 0; i < 8; i++) {
-    await loadProfile();
-    await new Promise(r => setTimeout(r, 1000));
-    const nowBal = await readNgnBalance();
-    if (nowBal > beforeBal + 0.5) {
-      onVaDepositConfirmed(nowBal - beforeBal);
+  toast('Checking payment…');
+  try {
+    const accessToken = await getAccessToken();
+    if (!accessToken) {
+      toast('Session expired. Please sign in again.');
       return;
     }
+    const expect = Number(window.__vaExpectAmount || 0) || 0;
+    let credited = false;
+    let last = null;
+    for (let i = 0; i < 8; i++) {
+      const res = await fetch('/api/pocketfi?action=verify_deposit', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer ' + accessToken
+        },
+        body: JSON.stringify({ amount: expect, since: window.__vaWaitSince || Date.now() })
+      });
+      const data = await res.json().catch(() => ({}));
+      last = data;
+      if (data.credited) {
+        credited = true;
+        break;
+      }
+      await loadProfile();
+      await new Promise(r => setTimeout(r, 1500));
+    }
+    if (credited) {
+      await loadProfile();
+      showVaSuccessAndGoHome((last && (last.credited_amount || last.amount_ngn || last.wallet_amount)) || window.__vaExpectAmount);
+    } else {
+      toast((last && last.message) || 'Not seen yet. Keep this page open or check again in a minute.');
+    }
+  } catch (e) {
+    toast(e.message || 'Could not check payment');
   }
-  toast('Not seen yet. Keep this page open or check again in a minute.');
-}
-
-async function readNgnBalance() {
-  if (!currentUserId) return 0;
-  const { data: prof } = await sb.from('profiles').select('balance').eq('id', currentUserId).maybeSingle();
-  return Number(prof?.balance) || 0;
-}
-
-function onVaDepositConfirmed(credited) {
-  stopBalanceWatch();
-  document.getElementById('successBox').textContent =
-    'Payment received. ₦' + Number(credited).toLocaleString() + ' has been added to your NGN wallet.';
-  document.getElementById('successBox').classList.add('show');
-  toast('Payment received. Redirecting…');
-  setTimeout(function () {
-    location.href = 'dashboard.html#home';
-  }, 1800);
 }
 function startBalanceWatch() {
   stopBalanceWatch();
   let ticks = 0;
-  let startBal = null;
+  let done = false;
   balancePollTimer = setInterval(async function () {
+    if (done) return;
     ticks += 1;
     try {
-      if (startBal === null) startBal = await readNgnBalance();
-      await loadProfile();
-      const nowBal = await readNgnBalance();
-      if (startBal !== null && nowBal > startBal + 0.5) {
-        onVaDepositConfirmed(nowBal - startBal);
-        return;
+      const accessToken = await getAccessToken();
+      if (accessToken) {
+        const expect = Number(window.__vaExpectAmount || 0) || 0;
+        if (!(expect > 0)) return;
+        const res = await fetch('/api/pocketfi?action=verify_deposit', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer ' + accessToken
+          },
+          body: JSON.stringify({ amount: expect, since: window.__vaWaitSince || Date.now() })
+        });
+        const data = await res.json().catch(function () { return {}; });
+        if (data.credited) {
+          done = true;
+          stopBalanceWatch();
+          await loadProfile();
+          showVaSuccessAndGoHome((data && (data.credited_amount || data.amount_ngn || data.wallet_amount)) || window.__vaExpectAmount);
+          return;
+        }
       }
-    } catch (e) {}
+    } catch (_) {}
+    await loadProfile();
     if (ticks >= 60) stopBalanceWatch();
-  }, 2000);
+  }, 2500);
 }
 function stopBalanceWatch() {
   if (balancePollTimer) {
@@ -482,18 +549,14 @@ async function checkVirtualAccount() {
       setTimeout(() => { location.href = 'auth.html?next=deposit.html'; }, 1200);
       return;
     }
-    const ctrl = new AbortController();
-    const to = setTimeout(function(){ try{ ctrl.abort(); }catch(e){} }, 12000);
     const res = await fetch('/api/pocketfi?action=virtual_account', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + accessToken },
-      body: JSON.stringify({ create: false }),
-      signal: ctrl.signal
+      body: JSON.stringify({ create: false })
     });
-    clearTimeout(to);
     let data = {};
     try { data = await res.json(); } catch (_) {}
-    if (!res.ok) throw new Error(data.message || 'Could not load account');
+    if (!res.ok) throw new Error(data.message || ('Could not load account (' + res.status + ')'));
     if (data.has_account && data.data?.account_number) {
       vaDetails = data.data;
       showVaState('amount');
@@ -680,24 +743,11 @@ document.addEventListener('visibilitychange', async () => {
     localStorage.removeItem('mjhub_pending_pocketfi');
   } catch (_) {}
 });
-document.addEventListener('click', function(e){
-  var tab = e.target.closest && e.target.closest('.method-tab');
-  if(!tab) return;
-  if(tab.id==='tabManual') setOtherMethod('manual');
-  if(tab.id==='tabPocketfi') setOtherMethod('pocketfi');
-});
 (async () => {
   syncThemeUi();
-  try {
-    if (!(await ensureAuth())) return;
-    await handleDepositReturn();
-    await checkVirtualAccount();
-  } catch (e) {
-    var msg = (e && e.message) ? e.message : 'Could not load account';
-    var el = document.getElementById('vaErrorText');
-    if (el) el.textContent = msg;
-    showVaState('error');
-  }
+  if (!(await ensureAuth())) return;
+  await handleDepositReturn();
+  await checkVirtualAccount();
 })();
 </script>
 </body>
