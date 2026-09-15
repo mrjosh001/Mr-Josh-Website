@@ -110,6 +110,24 @@ a{color:inherit;text-decoration:none}
 .instruct{padding:12px 14px;border-radius:12px;background:var(--primary-soft);border:1px solid rgba(91,138,245,.22);font-size:13px;line-height:1.5;color:var(--text);margin-bottom:14px;font-weight:600}
 .waiting{text-align:center;font-size:13px;color:var(--muted);font-weight:600;margin-bottom:12px}
 .waiting i{margin-right:6px}
+
+.header-right{display:flex;align-items:center;gap:8px;flex:0 0 auto}
+.deposit-guide-chip{
+  display:inline-flex;align-items:center;gap:6px;
+  padding:8px 12px;border-radius:999px;
+  border:1px solid color-mix(in srgb, var(--primary) 40%, var(--border));
+  background:color-mix(in srgb, var(--primary) 12%, var(--card));
+  color:var(--primary);text-decoration:none;
+  font-size:12px;font-weight:800;white-space:nowrap;
+  max-width:48vw;
+}
+.deposit-guide-chip i{font-size:12px}
+.deposit-guide-chip:active{opacity:.85}
+@media (max-width:360px){
+  .deposit-guide-chip span{display:none}
+  .deposit-guide-chip{padding:8px 10px}
+}
+
 </style>
 <link rel="stylesheet" href="/css/skeleton.css">
 <link rel="stylesheet" href="/css/mj-motion.css">
@@ -167,11 +185,16 @@ document.addEventListener('click', function(e){
 <header class="header">
   <a class="back" href="dashboard.html#home" aria-label="Back"><i class="fa-solid fa-arrow-left"></i></a>
   <h1>Fund Wallet</h1>
-  <button type="button" class="theme-btn" id="themeBtn" onclick="toggleTheme()">🌙</button>
+  <div class="header-right">
+    <a class="deposit-guide-chip" href="https://t.me/mj_hub_tg/44" target="_blank" rel="noopener noreferrer" title="How to deposit">
+      <i class="fa-brands fa-telegram"></i><span>How to deposit</span>
+    </a>
+    <button type="button" class="theme-btn" id="themeBtn" onclick="toggleTheme()">🌙</button>
+  </div>
 </header>
 
 <div class="wrap">
-  <div class="wallets">
+<div class="wallets">
     <div class="wcard"><div class="lbl">NGN Wallet</div><div class="val" id="balNgn">₦—</div></div>
     <div class="wcard"><div class="lbl">USD Wallet</div><div class="val" id="balUsd">$—</div></div>
   </div>
