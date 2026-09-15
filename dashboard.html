@@ -28,16 +28,19 @@
     <meta name="apple-mobile-web-app-title" content="MJ HUB">
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="theme-color" content="#06080f">
-    <link rel="icon" type="image/jpeg" href="https://atczodlljmlayvldxfmv.supabase.co/storage/v1/object/public/avatars/dark%20background%20log">
-    <link rel="apple-touch-icon" href="https://atczodlljmlayvldxfmv.supabase.co/storage/v1/object/public/avatars/dark%20background%20log">
-    <link rel="apple-touch-icon" sizes="180x180" href="https://atczodlljmlayvldxfmv.supabase.co/storage/v1/object/public/avatars/dark%20background%20log">
-    <link rel="apple-touch-icon" sizes="152x152" href="https://atczodlljmlayvldxfmv.supabase.co/storage/v1/object/public/avatars/dark%20background%20log">
-    <link rel="apple-touch-icon" sizes="120x120" href="https://atczodlljmlayvldxfmv.supabase.co/storage/v1/object/public/avatars/dark%20background%20log">
+    <link rel="icon" type="image/jpeg" href="/img/IMG_3027.png">
+    <link rel="apple-touch-icon" href="/img/IMG_3027.png">
+    <link rel="apple-touch-icon" sizes="180x180" href="/img/IMG_3027.png">
+    <link rel="apple-touch-icon" sizes="152x152" href="/img/IMG_3027.png">
+    <link rel="apple-touch-icon" sizes="120x120" href="/img/IMG_3027.png">
     <link rel="manifest" href="manifest.json">
     <script>
     (function() {
         try {
-            var pref = localStorage.getItem('mjhub-theme-pref') || localStorage.getItem('mjhub-theme') || 'dark';
+            localStorage.setItem('mjhub-theme-pref', 'system');
+            localStorage.setItem('mjhub-theme', 'system');
+            localStorage.setItem('mjhub-force-system-20260906', '1');
+            var pref = 'system';
             var t = pref;
             if (pref === 'system') {
                 try { t = window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark'; }
@@ -805,7 +808,7 @@ body::after {
     pointer-events: none;
     z-index: 0;
 }
-.navbar, .sidebar, .main-content, .bottom-nav, .support-widget-container,
+.navbar, .sidebar, .main-content, .bottom-nav,
 .toast-container, .overlay, .floating-action-modal, .currency-modal,
 .activity-history-drawer { position: relative; z-index: 1; }
 
@@ -835,11 +838,11 @@ body::after {
     -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
 }
 .brand-logo {
-    height: 36px; width: auto; max-width: 140px;
+    height: 20px; width: auto; max-width: 56px;
     object-fit: contain; display: block;
 }
 .sidebar-brand-logo-img {
-    height: 40px; width: auto; max-width: 150px;
+    height: 20px; width: auto; max-width: 56px;
     object-fit: contain; display: block;
 }
 .sidebar-brand-wrap { gap: 0; }
@@ -1199,6 +1202,58 @@ body::after {
     color: var(--primary);
     letter-spacing: 0.03em; text-transform: uppercase;
 }
+.home-duo-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    margin: 10px 0 12px;
+}
+.home-duo-grid .contest-banner,
+.home-duo-grid .logs-shortcut {
+    margin: 0;
+    flex-direction: column;
+    align-items: flex-start;
+    padding: 14px 12px;
+    min-height: 148px;
+    position: relative;
+}
+.home-duo-grid .contest-banner-text,
+.home-duo-grid .logs-shortcut-text { padding-right: 0; }
+.home-duo-grid .contest-banner-cta,
+.home-duo-grid .logs-shortcut-cta { margin-top: auto; }
+.home-duo-grid .contest-banner-badge { top: 8px; right: 8px; }
+.logs-shortcut {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    text-decoration: none;
+    color: inherit;
+    margin: 0 0 12px;
+    border-radius: 16px;
+    padding: 12px 14px;
+    border: 1px solid var(--border);
+    background: var(--card);
+    box-shadow: var(--shadow);
+}
+.logs-shortcut-icon {
+    width: 40px; height: 40px; border-radius: 12px; flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center;
+    background: linear-gradient(135deg, #3b82f6, #1d4ed8);
+    color: #fff; font-size: 15px;
+}
+.logs-shortcut-text { flex: 1; min-width: 0; }
+.logs-shortcut-text strong {
+    display: block; font-size: 13px; font-weight: 800; color: var(--text);
+}
+.logs-shortcut-text span {
+    display: block; font-size: 11px; color: var(--muted); font-weight: 600;
+}
+.logs-shortcut-cta {
+    flex-shrink: 0;
+    font-size: 11px; font-weight: 800;
+    padding: 8px 12px; border-radius: 999px;
+    background: #2563eb; color: #fff;
+}
 @media (max-width: 340px) {
     .promo-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 }
@@ -1229,6 +1284,18 @@ body::after {
 }
 .content-card h2 { font-size: 16px; font-weight: 800; margin-bottom: 6px; letter-spacing: -0.02em; }
 .helper-text { font-size: 13px; color: var(--muted); margin-bottom: 16px; line-height: 1.5; }
+.mj-maint-banner {
+  margin: 0 0 14px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: rgba(245,158,11,.12);
+  border: 1px solid rgba(245,158,11,.35);
+  color: #b45309;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.4;
+}
+:root[data-theme="dark"] .mj-maint-banner { color: #fbbf24; }
 .form-group { margin-bottom: 14px; }
 .form-group label {
     display: block; font-size: 11px; font-weight: 700; margin-bottom: 6px;
@@ -1617,6 +1684,22 @@ body::after {
 @media (max-width: 480px) {
   .mj-support-panel { right: 8px; left: 8px; width: auto; bottom: 80px; height: min(70vh, 560px); }
 }
+.mj-support-panel.expanded {
+  inset: 0 !important;
+  width: 100% !important;
+  height: 100% !important;
+  right: 0 !important;
+  left: 0 !important;
+  bottom: 0 !important;
+  border-radius: 0;
+  z-index: 2147483000;
+}
+.mj-support-head-actions { display:flex; gap:6px; flex-shrink:0; }
+.mj-attach-btn {
+  width: 42px; height: 42px; border-radius: 12px; border: 1px solid var(--border);
+  background: var(--bg); color: var(--text); cursor: pointer; flex-shrink:0;
+}
+.mj-shot-ph { font-size:12px; opacity:.8; }
 
 .live-chat-input-row button {
   width: 44px; height: 44px; border-radius: 12px; border: none; cursor: pointer;
@@ -1974,15 +2057,18 @@ body::after {
 }
 .welcome-modal-logo-wrap {
     position: relative; z-index: 1;
-    width: 84px; height: 84px; border-radius: 50%;
+    width: 88px; height: 88px; border-radius: 50%;
     margin: 0 auto 16px;
-    background: var(--card);
-    padding: 4px;
-    box-shadow: 0 14px 30px rgba(0,0,0,.35), 0 0 0 1px rgba(255,255,255,.4) inset;
+    background: rgba(7,12,24,.55);
+    padding: 12px;
+    box-sizing: border-box;
+    box-shadow: 0 14px 30px rgba(0,0,0,.35), 0 0 0 1px rgba(255,255,255,.35) inset;
+    overflow: hidden;
 }
 .welcome-modal-logo {
-    width: 100%; height: 100%; border-radius: 50%;
-    object-fit: cover; object-position: center; display: block;
+    width: 100%; height: 100%; border-radius: 0;
+    object-fit: contain; object-position: center; display: block;
+    background: transparent;
 }
 .welcome-modal-title { position: relative; z-index: 1; font-size: 21px; font-weight: 900; color: #fff; letter-spacing: -0.02em; margin-bottom: 6px; }
 .welcome-modal-sub { position: relative; z-index: 1; font-size: 12.5px; color: rgba(255,255,255,0.88); font-weight: 600; line-height: 1.4; max-width: 280px; margin: 0 auto; }
@@ -2442,6 +2528,11 @@ body::after {
   background: rgba(220, 38, 38, 0.1) !important;
 }
 
+
+.brand-logo-link, .sidebar-brand-wrap { display:inline-flex !important; align-items:center !important; gap:8px !important; }
+.logo-word{font-family:"Plus Jakarta Sans",Inter,system-ui,sans-serif !important;font-size:16px !important;font-weight:800 !important;letter-spacing:-.04em;line-height:26px;color:#93c5fd !important;-webkit-text-fill-color:#93c5fd !important;display:inline-block !important;visibility:visible !important}
+html[data-theme="light"] .logo-word, :root[data-theme="light"] .logo-word{color:#1e3a8a !important;-webkit-text-fill-color:#1e3a8a !important}
+
 </style>
 <link rel="stylesheet" href="/css/skeleton.css">
 <script src="/js/skeleton.js" defer></script>
@@ -2451,12 +2542,12 @@ body::after {
 <script>
 (function(){
   try {
-    var t = localStorage.getItem('mjhub-theme') || localStorage.getItem('mjhub_theme') || 'dark';
+    var t = localStorage.getItem('mjhub-theme-pref') || 'system';
     if (t === 'system') {
       t = window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
     }
-    var light = 'https://atczodlljmlayvldxfmv.supabase.co/storage/v1/object/public/avatars/light%20background%20logo';
-    var dark = 'https://atczodlljmlayvldxfmv.supabase.co/storage/v1/object/public/avatars/dark%20background%20log';
+    var light = '/img/IMG_3027.png';
+    var dark = '/img/IMG_3027.png';
     var src = (t === 'light') ? light : dark;
     document.addEventListener('DOMContentLoaded', function(){
       ['navBrandLogo','sidebarBrandLogo','welcomeModalLogo'].forEach(function(id){
@@ -2480,7 +2571,9 @@ body::after {
 <link rel="stylesheet" href="/css/mj-motion.css">
 <script src="/js/graceful.js" defer></script>
 
+  <script src="/js/mj-theme.js"></script>
   <script src="/js/mj-page-loader.js"></script>
+  <script src="/js/mj-logo-bg.js"></script>
 <link rel="stylesheet" href="/css/mj-glass.css">
 <script src="/js/mj-glass.js" defer></script>
 </head>
@@ -2543,8 +2636,9 @@ body::after {
 <header class="navbar">
     <div class="nav-left">
         <button class="menu-btn" id="menuToggleBtn"><i class="fa-solid fa-bars"></i></button>
-        <a href="#" onclick="goHome();return false;" class="brand-logo-link" title="MJ HUB" style="display:flex;align-items:center;">
-            <img id="navBrandLogo" class="brand-logo" src="https://atczodlljmlayvldxfmv.supabase.co/storage/v1/object/public/avatars/dark%20background%20log" alt="MJ HUB">
+        <a href="#" onclick="goHome();return false;" class="brand-logo-link" title="MJ HUB" style="display:inline-flex;align-items:center;gap:8px;">
+            <img id="navBrandLogo" class="brand-logo" src="/img/IMG_3027.png" alt="">
+            <span class="logo-word">HUB</span>
         </a>
     </div>
     <div class="nav-right">
@@ -2591,8 +2685,9 @@ body::after {
 
 <div class="sidebar" id="sidebarDrawer">
     <div class="sidebar-header">
-        <div class="sidebar-brand-wrap">
-            <img id="sidebarBrandLogo" class="sidebar-brand-logo-img" src="https://atczodlljmlayvldxfmv.supabase.co/storage/v1/object/public/avatars/dark%20background%20log" alt="MJ HUB">
+        <div class="sidebar-brand-wrap" style="display:inline-flex;align-items:center;gap:8px;">
+            <img id="sidebarBrandLogo" class="sidebar-brand-logo-img" src="/img/IMG_3027.png" alt="">
+            <span class="logo-word">HUB</span>
         </div>
         <button class="close-btn" id="sidebarCloseBtn"><i class="fa-solid fa-xmark"></i></button>
     </div>
@@ -2708,16 +2803,25 @@ body::after {
             </a>
         </div>
 
-        <!-- Referral contest banner -->
+        <div class="home-duo-grid">
         <a class="contest-banner" href="referral.html" id="referralContestBanner">
             <span class="contest-banner-badge">Live now</span>
             <div class="contest-banner-icon"><i class="fa-solid fa-trophy"></i></div>
             <div class="contest-banner-text">
-                <strong>You don't just spend here, you can earn too</strong>
-                <span>Refer friends and earn 2% for life. Join the referral contest</span>
+                <strong>Refer & earn</strong>
+                <span>2% for life on friends you invite</span>
             </div>
             <div class="contest-banner-cta">Refer</div>
         </a>
+        <a class="logs-shortcut" href="mj-orders.html">
+            <div class="logs-shortcut-icon"><i class="fa-solid fa-box-open"></i></div>
+            <div class="logs-shortcut-text">
+                <strong>Purchased logs</strong>
+                <span>Open accounts you already bought</span>
+            </div>
+            <div class="logs-shortcut-cta">Open</div>
+        </a>
+        </div>
 
     </section>
 
@@ -3336,7 +3440,10 @@ body::after {
         <p id="mjSupportStatus"><span class="mj-support-live-dot"></span> Online · replies in a few hours</p>
       </div>
     </div>
-    <button type="button" class="mj-support-panel-close" onclick="closeMjSupportPanel()" aria-label="Close">×</button>
+    <div class="mj-support-head-actions">
+      <button type="button" class="mj-support-panel-close" onclick="mjSupportToggleExpand()" aria-label="Expand chat">⤢</button>
+      <button type="button" class="mj-support-panel-close" onclick="closeMjSupportPanel()" aria-label="Close">×</button>
+    </div>
   </div>
   <div class="mj-support-tabs">
     <button type="button" class="mj-support-tab active" id="mjTabNew" onclick="mjSupportShowTab('new')">New chat</button>
@@ -3371,6 +3478,8 @@ body::after {
       <div class="mj-support-messages" id="mjSupportMessages"></div>
       <div class="mj-support-actions" id="mjSupportQuickActions"></div>
       <form class="mj-support-compose" onsubmit="return mjSupportSend(event)">
+        <input type="file" id="mjSupportFiles" accept="image/*" multiple hidden>
+        <button type="button" class="mj-attach-btn" onclick="document.getElementById('mjSupportFiles').click()" aria-label="Attach image">📎</button>
         <input type="text" id="mjSupportInput" placeholder="Type your message…" maxlength="1000" autocomplete="off">
         <button type="submit">Send</button>
       </form>
@@ -3489,7 +3598,7 @@ body::after {
             <button class="filter-tab" onclick="filterTransactions('sms',this)"><i class="fa-solid fa-phone"></i> SMS Numbers</button>
             <button class="filter-tab" onclick="filterTransactions('deposit',this)"><i class="fa-solid fa-arrow-down"></i> Deposits</button>
             <button class="filter-tab" onclick="filterTransactions('booster',this)"><i class="fa-solid fa-bolt"></i> Social Boost</button>
-            <button class="filter-tab" onclick="filterTransactions('digital',this)"><i class="fa-solid fa-gift"></i> Digital</button>
+            
             <button class="filter-tab" onclick="filterTransactions('conversion',this)"><i class="fa-solid fa-right-left"></i> Convert</button>
         </div>
     </div>
@@ -3806,7 +3915,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                   }
                   var qRef = new URLSearchParams(location.search).get('ref');
                   if (qRef) refCode = qRef;
-                  if (refCode && session.access_token) {
+                  if (session.access_token) {
                     for (var ra = 0; ra < 6; ra++) {
                       if (ra) await new Promise(function(r){ setTimeout(r, 500 * ra); });
                       var rRes = await fetch('/api/pocketfi?action=referral_attach', {
@@ -3837,23 +3946,24 @@ document.addEventListener('DOMContentLoaded', async () => {
                 ]);
                 try { buildNotificationsFromActivity(); renderNotifications(); } catch (e) {}
                 try { subscribeNotifRealtime(); } catch (e) {}
+                try { await checkSupportReplyOnLogin(); } catch (e) {}
                 try { initWelcomeModal(); } catch (e) {}
                 // Open in-app support with order complaint prefill
                 try {
                   var qs = new URLSearchParams(location.search);
                   if (qs.get('openSupport') === '1') {
-                    var prefill = '';
+                    var supportOpts = {};
                     try {
                       var raw = localStorage.getItem('mjhub_support_prefill');
                       if (raw) {
                         var j = JSON.parse(raw);
-                        if (j && j.message) prefill = j.message;
+                        if (j && j.ticket_id) supportOpts.ticketId = j.ticket_id;
                         localStorage.removeItem('mjhub_support_prefill');
                       }
                     } catch (e) {}
                     setTimeout(function() {
                       if (typeof openMjSupportPanel === 'function') {
-                        openMjSupportPanel(prefill ? { prefillMessage: prefill } : null);
+                        openMjSupportPanel(supportOpts);
                       }
                     }, 600);
                     try { history.replaceState({}, '', location.pathname); } catch (e) {}
@@ -4231,8 +4341,8 @@ function initTheme() {
         const meta = document.querySelector('meta[name="theme-color"]');
         if (meta) meta.setAttribute('content', mode === 'light' ? '#f4f6fb' : '#06080f');
         const logoSrc = mode === 'light'
-            ? 'https://atczodlljmlayvldxfmv.supabase.co/storage/v1/object/public/avatars/light%20background%20logo'
-            : 'https://atczodlljmlayvldxfmv.supabase.co/storage/v1/object/public/avatars/dark%20background%20log';
+            ? '/img/IMG_3027.png'
+            : '/img/IMG_3027.png';
         ['navBrandLogo','sidebarBrandLogo','welcomeModalLogo'].forEach(function(id) {
             var n = document.getElementById(id);
             if (n) n.src = logoSrc;
@@ -4245,19 +4355,19 @@ function initTheme() {
         } catch (e) { return 'dark'; }
     };
     window.setAppTheme = function(mode) {
-        var pref = mode || 'dark';
+        var pref = mode || 'system';
         var resolved = pref === 'system' ? window.resolveSystemTheme() : (pref === 'light' ? 'light' : 'dark');
         window.applyMjTheme(resolved, pref);
     };
     function toggleFromNav() {
         var pref = 'dark';
-        try { pref = localStorage.getItem('mjhub-theme-pref') || localStorage.getItem('mjhub-theme') || 'dark'; } catch (e) {}
+        try { pref = localStorage.getItem('mjhub-theme-pref') || 'system'; } catch (e) {}
         // Nav toggle switches between light and dark explicitly (clears system lock-in for clarity)
         var cur = document.documentElement.getAttribute('data-theme') === 'light' ? 'light' : 'dark';
         window.setAppTheme(cur === 'dark' ? 'light' : 'dark');
     }
-    var savedPref = 'dark';
-    try { savedPref = localStorage.getItem('mjhub-theme-pref') || localStorage.getItem('mjhub-theme') || 'dark'; } catch (e) {}
+    var savedPref = 'system';
+    try { savedPref = localStorage.getItem('mjhub-theme-pref') || 'system'; } catch (e) {}
     if (savedPref === 'system') {
         window.applyMjTheme(window.resolveSystemTheme(), 'system');
     } else {
@@ -4295,6 +4405,11 @@ function initDropdowns() {
         notifDropdown.classList.toggle('active');
         profileDropdown.classList.remove('active');
         notifDot.style.display = 'none';
+        if (notifDropdown.classList.contains('active')) {
+            (adminBroadcasts || []).forEach(function (n) { if (n && n.id) markNotifSeen(n.id); });
+            buildNotificationsFromActivity();
+            renderNotifications();
+        }
     });
     document.addEventListener('click', () => {
         profileDropdown.classList.remove('active');
@@ -4520,18 +4635,15 @@ function initSupportWidget() {
 
     function scheduleCollapse() {
         clearTimeout(collapseTimer);
-        collapseTimer = setTimeout(() => {
-            if (!popup.classList.contains('active') && !isDragging) {
-                widget.classList.add('collapsed');
-                isCollapsed = true;
-            }
-        }, 4000);
     }
 
     function expandWidget() {
         widget.classList.remove('collapsed');
         isCollapsed = false;
-        scheduleCollapse();
+        widget.style.left = '';
+        widget.style.top = '';
+        widget.style.right = '14px';
+        widget.style.bottom = '100px';
     }
 
     btn.addEventListener('click', (e) => {
@@ -4638,45 +4750,12 @@ function initSupportWidget() {
         document.removeEventListener('touchend', onTouchEnd);
     }
 
-    // Dock to edge when collapsed for visibility
-    const _origSchedule = scheduleCollapse;
-    scheduleCollapse = function() {
-        clearTimeout(collapseTimer);
-        collapseTimer = setTimeout(() => {
-            if (!popup.classList.contains('active') && !isDragging) {
-                // Snap to right edge when sleeping
-                const rect = widget.getBoundingClientRect();
-                widget.style.left = (window.innerWidth - 48) + 'px';
-                widget.style.right = 'auto';
-                widget.style.bottom = 'auto';
-                widget.classList.add('collapsed');
-                isCollapsed = true;
-            }
-        }, 5000);
-    };
-
-    // Auto-collapse after idle
-    scheduleCollapse();
+    expandWidget();
 }
 
-/** Bottom nav Home = pull-to-refresh alternative (balance, history, orders) */
-window.goHome = async function() {
+/** Bottom nav Home: go to home only. Pull-down still refreshes. */
+window.goHome = function() {
     if (typeof switchSection === 'function') switchSection('home');
-    if (!currentUserId) return;
-    try {
-        if (typeof showToast === 'function') showToast('Refreshing…', 'info', 1000);
-        await Promise.all([
-            typeof fetchUserBalance === 'function' ? fetchUserBalance(currentUserId) : null,
-            typeof fetchUserTransactions === 'function' ? fetchUserTransactions(currentUserId) : null,
-            typeof fetchUserOrders === 'function' ? fetchUserOrders(currentUserId) : null
-        ]);
-        if (typeof buildNotificationsFromActivity === 'function') buildNotificationsFromActivity();
-        if (typeof renderNotifications === 'function') renderNotifications();
-        if (typeof showToast === 'function') showToast('Updated', 'success', 1500);
-    } catch (e) {
-        console.warn('goHome refresh', e);
-        if (typeof showToast === 'function') showToast('Could not refresh', 'error');
-    }
 };
 
 async function fetchUserBalance(userId) {
@@ -4742,17 +4821,22 @@ function normalizeTxType(tx) {
     const cat = String(tx.category || '').toLowerCase();
     const channel = String(tx.channel || '').toLowerCase();
     const title = String(tx.title || '').toLowerCase();
-    // Grizzly SMS rows: type=purchase, category=MJ SMS
-    if (type === 'sms' || cat.includes('sms') || channel.includes('sms') || /mj sms|sms number|server\s*[12]/i.test(title + ' ' + cat)) return 'sms';
-    if (type === 'deposit' || cat.includes('deposit') || channel.includes('pocketfi') || channel.includes('paystack') || channel.includes('manual')) return 'deposit';
-    if (type === 'booster' || cat.includes('boost') || /booster|followers|likes|views|owlet/i.test(cat + ' ' + title)) return 'booster';
-    if (type === 'log' || type === 'logs' || cat.includes('log') || /mj logs|logs domain|fadded|sujan|classy|vpn|google voice|facebook|instagram|twitter|tiktok/i.test(cat + ' ' + title)) return 'log';
+    const blob = type + ' ' + cat + ' ' + title + ' ' + channel;
+    if (type === 'booster' || type === 'boost' || cat === 'booster' || cat.includes('mj boost')) return 'booster';
+    if (type === 'deposit' || cat.includes('deposit') || channel.includes('pocketfi') || channel.includes('paystack')) return 'deposit';
     if (type === 'conversion') return 'conversion';
-    if (type === 'purchase' && (cat.includes('log') || cat.includes('mj logs') || cat.includes('digital'))) return 'log';
-    if (type === 'purchase' && cat.includes('boost')) return 'booster';
-    // Generic wallet purchase with product-like title → treat as log/digital product
+    if (cat.includes('boost') || /owlet/.test(blob)) return 'booster';
+    if (
+        type === 'log' || type === 'logs' || cat.includes('log') ||
+        /mj logs|logs domain|fadded|sujan|classy|hotmail|tiktok|facebook|instagram|premade|google voice|\bvpn\b/i.test(title + ' ' + cat)
+    ) return 'log';
+    if (
+        type === 'sms' || cat.includes('mj sms') ||
+        /otp\s*·|waiting for sms|sms expired|sms canceled|whatsapp\s*·/i.test(title + ' ' + cat)
+    ) return 'sms';
+    if (type === 'purchase' && cat.includes('sms')) return 'sms';
     if (type === 'purchase' || type === 'order') return 'log';
-    return type || 'deposit';
+    return type || 'log';
 }
 
 async function expireStaleSmsEverywhere() {
@@ -4899,6 +4983,20 @@ async function fetchUserTransactions(userId) {
             .order('created_at', { ascending: false })
             .limit(200);
         if (!data) data = [];
+        try {
+            const boostOnly = await supabaseClient
+                .from('transactions')
+                .select('*')
+                .eq('user_id', userId)
+                .in('type', ['booster', 'boost'])
+                .order('created_at', { ascending: false })
+                .limit(200);
+            const extraBoost = boostOnly.error ? [] : (boostOnly.data || []);
+            const have = new Set(data.map((r) => String(r.id)));
+            for (const row of extraBoost) {
+                if (!have.has(String(row.id))) data.push(row);
+            }
+        } catch (_) {}
         data = await expireStalePocketFiDeposits(data);
         const fromTx = data.map(tx => {
             let title = tx.title || 'Transaction';
@@ -4971,7 +5069,7 @@ async function fetchUserTransactions(userId) {
             const tb = b.created_at ? new Date(b.created_at).getTime() : 0;
             return tb - ta;
         });
-        transactions = merged;
+        transactions = merged.map((t) => Object.assign({}, t, { type: normalizeTxType(t) }));
         renderRecentActivity();
     } catch (e) {
         console.warn('fetchUserTransactions', e);
@@ -5072,7 +5170,7 @@ window.closeProfileSubview = function() {
 };
 window.setAppTheme = function(mode) {
     if (typeof window.applyMjTheme === 'function') {
-        var pref = mode || 'dark';
+        var pref = mode || 'system';
         var resolved = pref === 'system' ? (typeof window.resolveSystemTheme === 'function' ? window.resolveSystemTheme() : 'dark') : (pref === 'light' ? 'light' : 'dark');
         window.applyMjTheme(resolved, pref);
         return;
@@ -5083,8 +5181,8 @@ window.setAppTheme = function(mode) {
     syncThemeChoiceUI();
 };
 function syncThemeChoiceUI() {
-    let pref = 'dark';
-    try { pref = localStorage.getItem('mjhub-theme-pref') || localStorage.getItem('mjhub-theme') || 'dark'; } catch (e) {}
+    let pref = 'system';
+    try { pref = localStorage.getItem('mjhub-theme-pref') || 'system'; } catch (e) {}
     document.querySelectorAll('#themeChoiceGrid .theme-choice').forEach(btn => {
         btn.classList.toggle('active', btn.getAttribute('data-theme') === pref);
     });
@@ -5190,21 +5288,9 @@ window.openMjSupportPanel = function(opts) {
   p.setAttribute('aria-hidden', 'false');
   mjSupportShowTab('home');
   mjSupportLoadPrevious();
-  // Prefill from order complaint (mj-orders → dashboard)
   try {
-    if (opts && opts.prefillMessage) {
-      setTimeout(function() {
-        if (typeof mjSupportStartNew === 'function') {
-          mjSupportStartNew('Order issue');
-          setTimeout(function() {
-            var inp = document.getElementById('mjSupportInput');
-            if (inp) {
-              inp.value = opts.prefillMessage;
-              try { inp.focus(); } catch (e) {}
-            }
-          }, 200);
-        }
-      }, 100);
+    if (opts && opts.ticketId && typeof mjSupportOpenTicket === 'function') {
+      setTimeout(function() { mjSupportOpenTicket(opts.ticketId); }, 120);
     }
   } catch (e) {}
 };
@@ -5239,14 +5325,82 @@ window.mjSupportShowTab = function(which) {
   }
 };
 
+window.mjOpenShot = function(src) {
+  var box = document.getElementById('mjShotViewer');
+  if (!box) {
+    box = document.createElement('div');
+    box.id = 'mjShotViewer';
+    box.style.cssText = 'display:none;position:fixed;inset:0;z-index:2147483000;background:rgba(0,0,0,.86);align-items:center;justify-content:center;padding:18px;';
+    box.innerHTML = '<img alt="Screenshot" style="max-width:100%;max-height:100%;border-radius:12px;">';
+    box.addEventListener('click', function () { box.style.display = 'none'; });
+    document.body.appendChild(box);
+  }
+  var img = box.querySelector('img');
+  if (img) img.src = src;
+  box.style.display = 'flex';
+};
+
 window.mjSupportAppend = function(role, text) {
   var box = document.getElementById('mjSupportMessages');
   if (!box) return;
   var d = document.createElement('div');
   d.className = 'mj-support-msg ' + (role === 'user' ? 'user' : (role === 'sys' ? 'sys' : 'bot'));
-  d.textContent = text;
+  function addShot(src) {
+    var img = document.createElement('img');
+    img.alt = 'Screenshot';
+    img.style.cssText = 'display:block;max-width:220px;margin-top:8px;border-radius:12px;cursor:zoom-in;';
+    img.src = src;
+    img.addEventListener('click', function (ev) {
+      ev.preventDefault();
+      window.mjOpenShot(src);
+    });
+    d.appendChild(img);
+  }
+  function flushText(str) {
+    if (!str) return;
+    var bits = String(str).split(/\[\[MJSHOT:([a-z0-9\-]+)\]\]/i);
+    for (var i = 0; i < bits.length; i++) {
+      if (i % 2) {
+        var ph = document.createElement('span');
+        ph.className = 'mj-shot-ph';
+        ph.setAttribute('data-mjshot', bits[i]);
+        ph.textContent = 'Photo';
+        d.appendChild(ph);
+      } else if (bits[i]) {
+        var urlBits = bits[i].split(/\[\[MJURL\]\]([\s\S]*?)\[\[\/MJURL\]\]/i);
+        for (var u = 0; u < urlBits.length; u++) {
+          if (u % 2) {
+            if (/^https?:\/\//i.test(String(urlBits[u]).trim())) addShot(String(urlBits[u]).trim());
+          } else if (urlBits[u]) d.appendChild(document.createTextNode(urlBits[u]));
+        }
+      }
+    }
+  }
+  var raw = String(text || '');
+  var startRe = /\[\[MJIMG(?::[a-z0-9]+)?\]\]/gi;
+  var last = 0;
+  var m;
+  var hasImg = false;
+  while ((m = startRe.exec(raw))) {
+    hasImg = true;
+    flushText(raw.slice(last, m.index));
+    var after = raw.slice(m.index + m[0].length);
+    var endIdx = after.search(/\[\[\/MJIMG\]\]/i);
+    var b64 = (endIdx >= 0 ? after.slice(0, endIdx) : after).replace(/\s+/g, '').replace(/[^A-Za-z0-9+/=]/g, '');
+    if (b64.length > 32) addShot('data:image/jpeg;base64,' + b64);
+    if (endIdx >= 0) {
+      last = m.index + m[0].length + endIdx + 11;
+      startRe.lastIndex = last;
+    } else {
+      last = raw.length;
+      break;
+    }
+  }
+  if (!hasImg) flushText(raw);
+  else if (last < raw.length) flushText(raw.slice(last));
   box.appendChild(d);
   box.scrollTop = box.scrollHeight;
+  if (window.mjHydrateShots) window.mjHydrateShots(box);
 };
 
 window.mjSupportSetActions = function(buttons) {
@@ -5363,9 +5517,15 @@ window.mjSupportOpenTicket = async function(id) {
   var { data } = await supabaseClient.from('support_messages').select('*').eq('ticket_id', id).order('created_at', { ascending: true });
   (data || []).forEach(function(m) {
     if (m.sender_type === 'user') mjSupportAppend('user', m.body);
-    else if (m.sender_type === 'admin') mjSupportAppend('bot', m.body);
+    else if (m.sender_type === 'admin' || m.sender_type === 'agent' || m.sender_type === 'staff' || m.sender_type === 'support') mjSupportAppend('bot', m.body);
     else mjSupportAppend('sys', m.body);
   });
+  try {
+    var lastAdmin = (data || []).filter(function(m){
+      return m && (m.sender_type === 'admin' || m.sender_type === 'agent' || m.sender_type === 'staff' || m.sender_type === 'support');
+    }).pop();
+    if (lastAdmin && lastAdmin.id) localStorage.setItem('mjhub_last_admin_msg_id', String(lastAdmin.id));
+  } catch (e) {}
   mjSupportSubscribe(id);
 };
 
@@ -5429,14 +5589,141 @@ window.mjSupportConnectHuman = async function() {
   mjSupportAppend('bot', 'You are connected to live support. A team member will reply here. Please share your Customer ID and any order or payment reference.');
 };
 
+window.mjSupportToggleExpand = function() {
+  var p = document.getElementById('mjSupportPanel');
+  if (p) p.classList.toggle('expanded');
+};
+
+window.mjShotDb = function() {
+  return new Promise(function (resolve, reject) {
+    var req = indexedDB.open('mjhub_support', 1);
+    req.onupgradeneeded = function () {
+      if (!req.result.objectStoreNames.contains('shots')) req.result.createObjectStore('shots', { keyPath: 'id' });
+    };
+    req.onsuccess = function () { resolve(req.result); };
+    req.onerror = function () { reject(req.error); };
+  });
+};
+window.mjBlobToB64 = function(blob) {
+  return new Promise(function (resolve, reject) {
+    var r = new FileReader();
+    r.onload = function () {
+      var s = String(r.result || '');
+      var i = s.indexOf(',');
+      resolve(i >= 0 ? s.slice(i + 1) : s);
+    };
+    r.onerror = reject;
+    r.readAsDataURL(blob);
+  });
+};
+window.mjUploadSupportShot = async function(file) {
+  var blob = file;
+  try {
+    if (typeof createImageBitmap === 'function') {
+      var bmp = await createImageBitmap(file);
+      var c = document.createElement('canvas');
+      var w = bmp.width || 1200;
+      var h = bmp.height || 1200;
+      var scale = Math.min(1, 1280 / Math.max(w, h));
+      c.width = Math.max(1, Math.round(w * scale));
+      c.height = Math.max(1, Math.round(h * scale));
+      c.getContext('2d').drawImage(bmp, 0, 0, c.width, c.height);
+      blob = await new Promise(function (resolve) { c.toBlob(function (b) { resolve(b || file); }, 'image/jpeg', 0.72); });
+    }
+  } catch (e) {}
+  var b64 = await window.mjBlobToB64(blob);
+  var sess = await supabaseClient.auth.getSession();
+  var token = sess && sess.data && sess.data.session && sess.data.session.access_token;
+  if (!token) throw new Error('Sign in again');
+  var res = await fetch('/api/order?action=support_upload', {
+    method: 'POST',
+    headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ action: 'support_upload', data: b64, ticket_id: (window._mjSup && window._mjSup.ticketId) || '' })
+  });
+  var json = await res.json().catch(function () { return {}; });
+  if (!res.ok || !json.url) throw new Error(json.message || 'Upload failed');
+  return json.url;
+};
+window.mjPutShot = async function(id, blob, ticketId) {
+  var db = await window.mjShotDb();
+  await new Promise(function (resolve, reject) {
+    var tx = db.transaction('shots', 'readwrite');
+    tx.oncomplete = resolve;
+    tx.onerror = function () { reject(tx.error); };
+    tx.objectStore('shots').put({
+      id: id,
+      ticketId: ticketId || '',
+      createdAt: Date.now(),
+      expiresAt: Date.now() + 30 * 24 * 60 * 60 * 1000,
+      blob: blob
+    });
+  });
+  try { db.close(); } catch (e) {}
+};
+window.mjGetShot = async function(id) {
+  var db = await window.mjShotDb();
+  var row = await new Promise(function (resolve, reject) {
+    var tx = db.transaction('shots', 'readonly');
+    var q = tx.objectStore('shots').get(id);
+    q.onsuccess = function () { resolve(q.result || null); };
+    q.onerror = function () { reject(q.error); };
+  });
+  try { db.close(); } catch (e) {}
+  return row;
+};
+window.mjHydrateShots = async function(root) {
+  var box = root || document.getElementById('mjSupportMessages');
+  if (!box) return;
+  var nodes = box.querySelectorAll('[data-mjshot]');
+  for (var i = 0; i < nodes.length; i++) {
+    var el = nodes[i];
+    var id = el.getAttribute('data-mjshot');
+    if (!id || el.getAttribute('data-ready')) continue;
+    try {
+      var row = await window.mjGetShot(id);
+      var blob = row && (row.blob || (row.files && row.files[0] && row.files[0].blob));
+      if (!blob) {
+        el.textContent = 'Photo on sender device (30 days)';
+        el.setAttribute('data-ready', '1');
+        continue;
+      }
+      var url = URL.createObjectURL(blob);
+      var img = document.createElement('img');
+      img.alt = 'Screenshot';
+      img.style.cssText = 'display:block;max-width:220px;margin-top:8px;border-radius:12px;cursor:zoom-in;';
+      img.src = url;
+      img.addEventListener('click', function (src) { return function () { window.mjOpenShot(src); }; }(url));
+      el.innerHTML = '';
+      el.appendChild(img);
+      el.setAttribute('data-ready', '1');
+    } catch (e) {
+      el.textContent = 'Photo on sender device (30 days)';
+    }
+  }
+};
+
 window.mjSupportSend = async function(e) {
   if (e && e.preventDefault) e.preventDefault();
   var input = document.getElementById('mjSupportInput');
+  var fileEl = document.getElementById('mjSupportFiles');
   if (!input) return false;
   var text = (input.value || '').trim();
-  if (!text) return false;
+  var files = Array.from((fileEl && fileEl.files) || []).filter(function (f) {
+    return f && String(f.type || '').indexOf('image/') === 0;
+  }).slice(0, 3);
+  if (!text && !files.length) return false;
   input.value = '';
+  if (fileEl) fileEl.value = '';
+  for (var i = 0; i < files.length; i++) {
+    try {
+      var url = await window.mjUploadSupportShot(files[i]);
+      text += (text ? '\n' : '') + '[[MJURL]]' + url + '[[/MJURL]]';
+    } catch (err) {
+      mjSupportAppend('bot', 'Could not attach that photo. Try a smaller screenshot.');
+    }
+  }
   mjSupportAppend('user', text);
+  window.mjHydrateShots();
 
   // Already with human → save only
   if (window._mjSup.human) {
@@ -5448,7 +5735,7 @@ window.mjSupportSend = async function(e) {
     var sess = await supabaseClient.auth.getSession();
     var user = sess && sess.data && sess.data.session && sess.data.session.user;
     var { error } = await supabaseClient.from('support_messages').insert({
-      ticket_id: tid, sender_type: 'user', sender_id: user && user.id, body: text
+      ticket_id: tid, sender_type: 'user', sender_id: user && user.id, body: String(text || '').slice(0, 4000)
     });
     if (error) mjSupportAppend('bot', 'Message failed. Please try again.');
     return false;
@@ -5859,107 +6146,38 @@ window.saveProfileSettingsData = async function() {
             // Not fatal if profiles write succeeds
         }
 
-        // 2) Write profiles — use .update first (row should exist), then upsert.
-        // IMPORTANT: .select() only asks for `id` so missing optional columns
-        // never break the whole save.
-        async function writeProfiles(patch) {
-            // Prefer update (RLS update policy is the usual one)
-            let res = await supabaseClient
-                .from('profiles')
-                .update(patch)
-                .eq('id', currentUserId)
-                .select('id');
-            if (!res.error && res.data && res.data.length) return res;
-            // Row missing → insert/upsert
-            res = await supabaseClient
-                .from('profiles')
-                .upsert({ id: currentUserId, ...patch }, { onConflict: 'id' })
-                .select('id');
-            return res;
+        const res = await fetch('/api/order?action=update_profile', {
+            method: 'POST',
+            headers: {
+                Authorization: 'Bearer ' + accessToken,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                action: 'update_profile',
+                full_name: name,
+                phone: phone,
+                address: address,
+                bio: bio
+            })
+        });
+        const json = await res.json().catch(function () { return {}; });
+        if (!res.ok || !json.success) {
+            throw new Error(json.message || 'Could not save profile');
         }
 
-        // Try richest payload first, then strip columns the schema may not have
-        const payloads = [
-            {
-                full_name: name,
-                email: userData.email || null,
-                phone: phone || null,
-                phone_number: phone || null,
-                address: address || null,
-                bio: bio || null,
-                avatar_url: userData.avatarUrl || null
-            },
-            {
-                full_name: name,
-                email: userData.email || null,
-                phone_number: phone || null,
-                address: address || null,
-                bio: bio || null
-            },
-            {
-                full_name: name,
-                phone_number: phone || null,
-                address: address || null,
-                bio: bio || null
-            },
-            {
-                full_name: name,
-                phone: phone || null
-            },
-            {
-                full_name: name
-            },
-            {
-                name: name,
-                phone: phone || null
-            }
-        ];
-
-        let ok = false;
-        let lastErr = null;
-        for (const patch of payloads) {
-            Object.keys(patch).forEach((k) => {
-                if (patch[k] === undefined) delete patch[k];
-            });
-            const { data, error } = await writeProfiles(patch);
-            if (!error && data && data.length) {
-                ok = true;
-                lastErr = null;
-                break;
-            }
-            lastErr = error;
-            // Permission → stop (user can't write profiles)
-            if (error && /permission|policy|rls|not authorized|401|403/i.test(String(error.message || error.code || ''))) {
-                break;
-            }
-            // Column missing → try next thinner payload
-            if (error && /column|schema cache|Could not find/i.test(error.message || '')) {
-                continue;
-            }
-        }
-
-        // Auth metadata saved counts as partial success even if profiles blocked
-        userData.name = name;
-        userData.phone = phone;
-        userData.address = address;
-        userData.bio = bio;
-        safeSet('dropdownName', name);
-        safeSet('profileHeaderName', name);
-        safeSet('heroWelcomeTitle', `Welcome back, ${name}!`);
-
-        if (ok) {
-            showToast('Profile saved!', 'success');
-        } else if (!authErr) {
-            // Metadata saved; profiles table failed
-            console.error('profiles write failed', lastErr);
-            showToast(
-                'Saved to your account. Database profile row may need RLS update permission. ' +
-                (lastErr?.message || ''),
-                'warning'
-            );
-        } else {
-            throw new Error(lastErr?.message || authErr?.message || 'Could not save profile');
-        }
+        const saved = json.profile || {};
+        userData.name = saved.full_name || name;
+        userData.phone = saved.phone || phone;
+        userData.address = saved.address || address;
+        userData.bio = saved.bio || bio;
+        safeSet('dropdownName', userData.name);
+        safeSet('profileHeaderName', userData.name);
+        safeSet('heroWelcomeTitle', 'Welcome back, ' + userData.name + '!');
+        if (document.getElementById('profileNameInput')) document.getElementById('profileNameInput').value = userData.name;
+        if (document.getElementById('profilePhoneInput')) document.getElementById('profilePhoneInput').value = userData.phone || '';
+        if (document.getElementById('profileAddressInput')) document.getElementById('profileAddressInput').value = userData.address || '';
+        if (document.getElementById('profileBioInput')) document.getElementById('profileBioInput').value = userData.bio || '';
+        showToast('Profile saved!', 'success');
     } catch (err) {
         console.error('saveProfileSettingsData', err);
         showToast(err.message || 'Could not save profile', 'error');
@@ -6662,7 +6880,7 @@ function showOrderReceipt(items, isViewOnly = false) {
     }
 
     credBox.innerHTML = lastReceiptItems.map((it, idx) => {
-        const credVal = it.login_credentials || 'N/A';
+        const credVal = formatLoginForDisplay(it.login_credentials || 'N/A');
         const descVal = it.description || '';
         const label = lastReceiptItems.length > 1
             ? `${idx + 1}. ${it.product_name ? escapeHtml(it.product_name) : ''}`
@@ -6689,6 +6907,15 @@ window.closeOrderReceipt = function() {
     document.getElementById('orderReceiptModal').classList.remove('active');
 };
 
+function formatLoginForDisplay(text) {
+    const s = String(text || '').trim();
+    if (!s) return '';
+    if (/^Number\s*:/im.test(s) && /^Password\s*:/im.test(s)) return s;
+    const numPass = String(s).replace(/\u200b/g, '').match(/(\+\d{10,15})\s*[\/|:]\s*([^\s\/][^\n]{0,80})/);
+    if (numPass) return 'Number: ' + numPass[1].trim() + '\nPassword: ' + numPass[2].trim();
+    return s;
+}
+
 window.copyText = function(str) {
     navigator.clipboard.writeText(str);
     showToast('Copied to clipboard!', 'success');
@@ -6697,7 +6924,7 @@ window.copyText = function(str) {
 window.copyAllCredentials = function() {
     if (!lastReceiptItems.length) return;
     const block = lastReceiptItems.map(it => {
-        return `Product: ${it.product_name || 'Log'}\nLogin Credentials: ${it.login_credentials || ''}`;
+        return `Product: ${it.product_name || 'Log'}\nLogin Credentials:\n${formatLoginForDisplay(it.login_credentials || '')}`;
     }).join('\n\n---\n\n');
     navigator.clipboard.writeText(block);
     showToast('All credentials copied!', 'success');
@@ -6706,7 +6933,7 @@ window.copyAllCredentials = function() {
 window.downloadCredentialsTxt = function() {
     if (!lastReceiptItems.length) return;
     const content = lastReceiptItems.map((it, i) => {
-        return `[Item ${i+1}]\nProduct: ${it.product_name || ''}\nOrder ID: ${formatOrderId(it)}\nLogin Credentials: ${it.login_credentials || ''}\nGuide: ${it.guide_url || ''}\nDate: ${it.created_at || new Date().toISOString()}`;
+        return `[Item ${i+1}]\nProduct: ${it.product_name || ''}\nOrder ID: ${formatOrderId(it)}\nLogin Credentials:\n${formatLoginForDisplay(it.login_credentials || '')}\nGuide: ${it.guide_url || ''}\nDate: ${it.created_at || new Date().toISOString()}`;
     }).join('\n\n====================\n\n');
 
     const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
@@ -6757,12 +6984,12 @@ function renderHistoryList(filterType = 'all') {
             // for the exact same kind of order, so both are included here
             // too — otherwise their purchases silently never show up under
             // this specific filter tab (they'd still appear under "All").
-            if (filterType === 'log') return t.type === 'log' || t.type === 'logs';
-            if (filterType === 'sms') return t.type === 'sms';
-            if (filterType === 'deposit') return t.type === 'deposit';
-            if (filterType === 'booster') return t.type === 'booster';
-            if (filterType === 'digital') return t.type === 'log' || t.type === 'digital';
-            return t.type === filterType;
+            const kind = normalizeTxType(t);
+            if (filterType === 'log') return kind === 'log' || kind === 'logs';
+            if (filterType === 'sms') return kind === 'sms';
+            if (filterType === 'deposit') return kind === 'deposit';
+            if (filterType === 'booster') return kind === 'booster';
+            return kind === filterType;
         });
     }
 
@@ -6774,10 +7001,11 @@ function renderHistoryList(filterType = 'all') {
     container.innerHTML = items.map(t => {
         let iconClass = 'fa-cube';
         let boxClass = 'tx-blue';
-        if (t.type === 'deposit') { iconClass = 'fa-arrow-down'; boxClass = 'tx-green'; }
-        else if (t.type === 'sms') { iconClass = 'fa-phone'; boxClass = 'tx-orange'; }
-        else if (t.type === 'booster') { iconClass = 'fa-bolt'; boxClass = 'tx-blue'; }
-        else if (t.type === 'conversion') { iconClass = 'fa-right-left'; boxClass = 'tx-purple'; }
+        const kind = normalizeTxType(t);
+        if (kind === 'deposit') { iconClass = 'fa-arrow-down'; boxClass = 'tx-green'; }
+        else if (kind === 'sms') { iconClass = 'fa-phone'; boxClass = 'tx-orange'; }
+        else if (kind === 'booster') { iconClass = 'fa-bolt'; boxClass = 'tx-blue'; }
+        else if (kind === 'conversion') { iconClass = 'fa-right-left'; boxClass = 'tx-purple'; }
 
         const st = String(t.status || 'Success').toLowerCase().replace('completed', 'success');
         let badgeClass = 'badge-success';
@@ -6803,6 +7031,8 @@ function renderHistoryList(filterType = 'all') {
 
 /* NOTIFICATIONS — activity + admin broadcasts (realtime) */
 const SEEN_NOTIFS_KEY = 'mjhub_seen_notif_ids';
+const VIEWED_NOTIFS_KEY = 'mjhub_notif_viewed_at';
+const NOTIF_KEEP_MS = 24 * 60 * 60 * 1000;
 let adminBroadcasts = [];
 let notifPopupQueue = [];
 let notifPopupShowing = false;
@@ -6815,19 +7045,43 @@ function getSeenNotifIds() {
     return Array.isArray(arr) ? arr.map(String) : [];
   } catch (_) { return []; }
 }
+function getViewedAtMap() {
+  try {
+    const raw = localStorage.getItem(VIEWED_NOTIFS_KEY);
+    const obj = raw ? JSON.parse(raw) : {};
+    return obj && typeof obj === 'object' ? obj : {};
+  } catch (_) { return {}; }
+}
 function markNotifSeen(id) {
   if (!id) return;
   const seen = getSeenNotifIds();
   const sid = String(id);
   if (!seen.includes(sid)) {
     seen.push(sid);
-    // keep last 100 only
-    const trimmed = seen.slice(-100);
-    try { localStorage.setItem(SEEN_NOTIFS_KEY, JSON.stringify(trimmed)); } catch (_) {}
+    try { localStorage.setItem(SEEN_NOTIFS_KEY, JSON.stringify(seen.slice(-100))); } catch (_) {}
+  }
+  const map = getViewedAtMap();
+  if (!map[sid]) {
+    map[sid] = Date.now();
+    const ids = Object.keys(map);
+    if (ids.length > 100) {
+      ids.sort(function (a, b) { return (map[a] || 0) - (map[b] || 0); });
+      ids.slice(0, ids.length - 100).forEach(function (k) { delete map[k]; });
+    }
+    try { localStorage.setItem(VIEWED_NOTIFS_KEY, JSON.stringify(map)); } catch (_) {}
   }
 }
 function isNotifSeen(id) {
   return getSeenNotifIds().includes(String(id));
+}
+function isNotifExpired(n) {
+  if (!n || !n.id || !isNotifSeen(n.id)) return false;
+  const map = getViewedAtMap();
+  const viewed = Number(map[String(n.id)] || 0);
+  const created = n.created_at ? new Date(n.created_at).getTime() : 0;
+  if (created && !isNaN(created) && (Date.now() - created) > NOTIF_KEEP_MS) return true;
+  if (viewed && (Date.now() - viewed) > NOTIF_KEEP_MS) return true;
+  return false;
 }
 
 function formatNotifTime(iso) {
@@ -6837,6 +7091,67 @@ function formatNotifTime(iso) {
     if (isNaN(d.getTime())) return String(iso);
     return d.toLocaleString();
   } catch (_) { return String(iso); }
+}
+
+
+async function checkSupportReplyOnLogin() {
+  if (!supabaseClient || !currentUserId) return;
+  try {
+    var lastSeen = '';
+    try { lastSeen = localStorage.getItem('mjhub_last_admin_msg_id') || ''; } catch (e) {}
+    var { data: tickets, error: tErr } = await supabaseClient
+      .from('support_tickets')
+      .select('id, subject')
+      .eq('user_id', currentUserId)
+      .limit(30);
+    if (tErr || !tickets || !tickets.length) return;
+    var ids = tickets.map(function(x){ return x.id; });
+    var { data: msgs, error: mErr } = await supabaseClient
+      .from('support_messages')
+      .select('id, ticket_id, body, sender_type, created_at')
+      .in('ticket_id', ids)
+      .in('sender_type', ['admin','agent','staff','support'])
+      .order('created_at', { ascending: false })
+      .limit(5);
+    if (mErr || !msgs || !msgs.length) return;
+    var newest = msgs[0];
+    if (!newest || String(newest.id) === String(lastSeen)) return;
+    var preview = String(newest.body || 'Support has replied to your message.').replace(/\s+/g,' ').trim();
+    if (preview.length > 160) preview = preview.slice(0,157) + '…';
+    var ticket = tickets.find(function(x){ return String(x.id) === String(newest.ticket_id); });
+    var item = {
+      id: 'support-reply-' + newest.id,
+      source: 'admin',
+      title: 'Support replied',
+      time: formatNotifTime(newest.created_at),
+      text: preview,
+      type: 'support',
+      ticketId: newest.ticket_id,
+      adminMsgId: newest.id
+    };
+    userNotifications = [item].concat(userNotifications || []);
+    try { renderNotifications(); } catch (e) {}
+    var dot = document.getElementById('notifDot');
+    if (dot) dot.style.display = 'block';
+    var overlay = document.getElementById('notifPopupOverlay');
+    if (!overlay) {
+      if (typeof showToast === 'function') showToast('Support replied to your message', 'info', 4000);
+      return;
+    }
+    document.getElementById('npTitle').textContent = 'Support replied';
+    document.getElementById('npBody').textContent = preview || 'The support team replied to your in-app chat.';
+    document.getElementById('npType').textContent = 'in-app support';
+    overlay.dataset.notifId = '';
+    overlay.dataset.supportTicket = String(newest.ticket_id || '');
+    overlay.dataset.adminMsgId = String(newest.id || '');
+    var ok = document.getElementById('npOkBtn');
+    if (ok) ok.textContent = 'Open chat';
+    overlay.classList.add('open');
+    notifPopupShowing = true;
+    if (typeof showToast === 'function') showToast('Support replied to your message', 'info', 3500);
+  } catch (e) {
+    console.warn('checkSupportReplyOnLogin', e);
+  }
 }
 
 function buildNotificationsFromActivity() {
@@ -6854,7 +7169,7 @@ function buildNotificationsFromActivity() {
       });
     });
   }
-  const adminItems = (adminBroadcasts || []).map(n => ({
+  const adminItems = (adminBroadcasts || []).filter(n => !isNotifExpired(n)).map(n => ({
     id: n.id,
     source: 'admin',
     title: n.title,
@@ -6968,8 +7283,20 @@ window.dismissNotifPopup = function() {
   if (!overlay) return;
   const id = overlay.dataset.notifId;
   if (id) markNotifSeen(id);
+  const supportTicket = overlay.dataset.supportTicket || '';
+  const adminMsgId = overlay.dataset.adminMsgId || '';
+  if (adminMsgId) {
+    try { localStorage.setItem('mjhub_last_admin_msg_id', String(adminMsgId)); } catch (e) {}
+  }
   overlay.classList.remove('open');
   overlay.dataset.notifId = '';
+  overlay.dataset.supportTicket = '';
+  overlay.dataset.adminMsgId = '';
+  var ok = document.getElementById('npOkBtn');
+  if (ok) ok.textContent = 'Got it';
+  if (supportTicket && typeof openMjSupportPanel === 'function') {
+    setTimeout(function(){ openMjSupportPanel({ ticketId: supportTicket }); }, 80);
+  }
   // Brief pause then next
   setTimeout(() => {
     notifPopupShowing = false;
@@ -7116,7 +7443,7 @@ function toggleBoosterMenu(e) {
       <button type="button" class="welcome-modal-close" id="welcomeModalCloseBtn" aria-label="Close">✕</button>
       <div class="welcome-modal-logo-glow"></div>
       <div class="welcome-modal-logo-wrap">
-        <img id="welcomeModalLogo" class="welcome-modal-logo" src="https://atczodlljmlayvldxfmv.supabase.co/storage/v1/object/public/avatars/dark%20background%20log" alt="MJ HUB">
+        <img id="welcomeModalLogo" class="welcome-modal-logo" src="/img/IMG_3027.png" alt="MJ HUB">
       </div>
       <div class="welcome-modal-title" id="welcomeModalTitle">Welcome to MJ HUB</div>
       <div class="welcome-modal-sub">Your trusted hub for logs, SMS & social boosters</div>
@@ -7167,15 +7494,9 @@ function toggleBoosterMenu(e) {
 
 <!-- Pull to refresh (mobile / PWA-style) -->
 <style>
-#mjPtrIndicator{
-  position:fixed;top:0;left:0;right:0;z-index:9999;display:flex;align-items:center;justify-content:center;
-  height:0;overflow:hidden;pointer-events:none;transition:height .15s ease;
-  background:linear-gradient(180deg,rgba(59,130,246,.25),transparent);color:#93c5fd;font-size:12px;font-weight:700;
-}
-#mjPtrIndicator.show{height:48px}
-#mjPtrIndicator i{margin-right:8px}
+#mjPtrIndicator{display:none!important;height:0!important;}
 </style>
-<div id="mjPtrIndicator" aria-hidden="true"><i class="fa-solid fa-arrow-down"></i> Release to refresh</div>
+<div id="mjPtrIndicator" hidden></div>
 <script>
 (function(){
   var startY = 0, pulling = false, armed = false;
@@ -7194,20 +7515,12 @@ function toggleBoosterMenu(e) {
   document.addEventListener('touchmove', function(e){
     if (!pulling || !e.touches || !e.touches[0]) return;
     var dy = e.touches[0].clientY - startY;
-    if (dy > 70 && atTop()) {
-      armed = true;
-      if (ind) { ind.classList.add('show'); ind.innerHTML = '<i class="fa-solid fa-arrows-rotate"></i> Release to refresh'; }
-    } else if (dy > 24 && atTop()) {
-      if (ind) { ind.classList.add('show'); ind.innerHTML = '<i class="fa-solid fa-arrow-down"></i> Pull to refresh'; }
-    } else {
-      if (ind) ind.classList.remove('show');
-      armed = false;
-    }
+    if (dy > 70 && atTop()) armed = true;
+    else armed = false;
   }, { passive: true });
   document.addEventListener('touchend', function(){
     if (armed && atTop()) {
-      if (ind) { ind.classList.add('show'); ind.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Refreshing…'; }
-      setTimeout(function(){ location.reload(); }, 280);
+      location.reload();
     } else {
       if (ind) ind.classList.remove('show');
     }
