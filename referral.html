@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>Refer & Earn 2% | MJ HUB</title>
+<title>Refer & Earn 3% | MJ HUB</title>
 <link rel="icon" href="/img/IMG_3027.png">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap" rel="stylesheet">
@@ -102,9 +102,9 @@ body:before{content:"";position:fixed;inset:auto -20% 40% -20%;height:50vh;backg
 </div>
 <div class="page">
   <div class="banner">
-    <b>2% for life</b>
+    <b>3% for life</b>
     <h2>Invite a friend. Get paid when they fund.</h2>
-    <p>They sign up with your link. Every time they deposit, 2% is added to your NGN wallet at once.</p>
+    <p>They sign up with your link. Every time they deposit, 3% is added to your NGN wallet at once.</p>
   </div>
   <button class="refresh" id="refreshBtn" type="button" onclick="refreshData()"><i class="fa-solid fa-rotate"></i> Refresh data</button>
   <div class="stats">
@@ -114,7 +114,7 @@ body:before{content:"";position:fixed;inset:auto -20% 40% -20%;height:50vh;backg
       <small>Instant · already in NGN wallet</small>
     </div>
     <div class="tile"><em>Friends</em><strong id="count">—</strong><small>On your link</small></div>
-    <div class="tile"><em>Rate</em><strong>2%</strong><small>Every deposit</small></div>
+    <div class="tile"><em>Rate</em><strong>3%</strong><small>Every deposit</small></div>
   </div>
   <div class="sheet">
     <h3>Invite link</h3>
@@ -194,18 +194,27 @@ async function refreshData(){
 }
 syncThemeUi();
 async function load(){
-  const {data}=await sb.auth.getSession();
-  if(!data?.session){ location.href='auth.html?next='+encodeURIComponent('referral.html'); return; }
+  let session = null;
+  for (let i = 0; i < 6; i++) {
+    const { data } = await sb.auth.getSession();
+    session = data && data.session ? data.session : null;
+    if (session) break;
+    await new Promise(function(r){ setTimeout(r, 150); });
+  }
+  if (!session) {
+    location.href = 'auth.html?next=' + encodeURIComponent('referral.html');
+    return;
+  }
   try {
     var refCode='';
     try { refCode=localStorage.getItem('mjhub_ref_code')||sessionStorage.getItem('mjhub_ref_code')||''; } catch(e){}
     await fetch('/api/pocketfi?action=referral_attach',{
       method:'POST',
-      headers:{Authorization:'Bearer '+data.session.access_token,'Content-Type':'application/json'},
+      headers:{Authorization:'Bearer '+session.access_token,'Content-Type':'application/json'},
       body:JSON.stringify({code:String(refCode||'').trim().toUpperCase()})
     });
   } catch(e){}
-  const res=await fetch('/api/pocketfi?action=referral_me',{headers:{Authorization:'Bearer '+data.session.access_token}});
+  const res=await fetch('/api/pocketfi?action=referral_me',{headers:{Authorization:'Bearer '+session.access_token}});
   const j=await res.json();
   if(!j.success){
     document.getElementById('earnings').innerHTML='<div class="empty">'+ (j.message||'Could not load') +'</div>';
@@ -229,7 +238,7 @@ async function load(){
   const earns=j.recent_earnings||[];
   document.getElementById('earnings').innerHTML=earns.length
     ? earns.map(e=>'<div class="item"><span>+'+fmt(e.commission_ngn)+'</span><span class="m">from ₦'+Number(e.deposit_amount_ngn||0).toLocaleString()+' · '+(e.created_at?new Date(e.created_at).toLocaleDateString():'')+'</span></div>').join('')
-    : '<div class="empty"><i class="fa-solid fa-bolt"></i>No commissions yet. 2% lands in your wallet the moment they deposit.</div>';
+    : '<div class="empty"><i class="fa-solid fa-bolt"></i>No commissions yet. 3% lands in your wallet the moment they deposit.</div>';
   const refs=j.referrals||[];
   document.getElementById('refs').innerHTML=refs.length
     ? refs.map(r=>'<div class="item"><span>'+String(r.full_name||r.customer_id||'Friend').slice(0,28)+'</span><span class="m">'+((r.updated_at||r.created_at)?new Date(r.updated_at||r.created_at).toLocaleDateString():'')+'</span></div>').join('')
@@ -247,7 +256,7 @@ function copyCode(){
 async function shareLink(){
   const v=document.getElementById('link').value;
   if(!v)return;
-  const text='Join MJ Hub with my link. Fund your wallet and I earn 2%.\n'+v;
+  const text='Join MJ Hub with my link. Fund your wallet and I earn 3%.\n'+v;
   if(navigator.share){ try{ await navigator.share({title:'MJ Hub',text,url:v}); return; }catch(e){} }
   navigator.clipboard.writeText(text).then(()=>toast('Share text copied'));
 }
