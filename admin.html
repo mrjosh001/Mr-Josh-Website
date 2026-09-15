@@ -1453,11 +1453,11 @@ function withLagos(opts) { return Object.assign({ timeZone: 'Africa/Lagos' }, op
  <div class="field"><label>Email verified</label><input type="text" id="uEmailVerified" readonly style="opacity:.7;" /></div>
  <div class="field-row-2">
  <div class="field"><label>NGN Balance (₦)</label><input type="number" id="uBalance" step="0.01" readonly style="opacity:.7;" /></div>
- <div class="field"><label>Add NGN (₦)</label><input type="number" id="uAddNgn" step="0.01" min="0" placeholder="0" /></div>
+ <div class="field"><label>Add NGN (₦) <span style="font-weight:400;color:#94a3b8;">— use a minus sign to deduct</span></label><input type="number" id="uAddNgn" step="0.01" placeholder="0" /></div>
  </div>
  <div class="field-row-2">
  <div class="field"><label>USD Balance ($)</label><input type="number" id="uBalanceUsd" step="0.01" readonly style="opacity:.7;" /></div>
- <div class="field"><label>Add USD ($)</label><input type="number" id="uAddUsd" step="0.01" min="0" placeholder="0" /></div>
+ <div class="field"><label>Add USD ($) <span style="font-weight:400;color:#94a3b8;">— use a minus sign to deduct</span></label><input type="number" id="uAddUsd" step="0.01" placeholder="0" /></div>
  </div>
  <div class="field">
  <label>Admin Privileges</label>
@@ -3740,14 +3740,25 @@ async function saveUser() {
  const currentUsd = currentUsdRaw === '' ? 0 : parseFloat(currentUsdRaw);
  const addNgn = parseFloat((document.getElementById('uAddNgn') || {}).value);
  const addUsd = parseFloat((document.getElementById('uAddUsd') || {}).value);
- const addNgnSafe = !isNaN(addNgn) && addNgn > 0 ? addNgn : 0;
- const addUsdSafe = !isNaN(addUsd) && addUsd > 0 ? addUsd : 0;
+ const addNgnSafe = !isNaN(addNgn) ? addNgn : 0;
+ const addUsdSafe = !isNaN(addUsd) ? addUsd : 0;
  const balance = (isNaN(currentNgn) ? 0 : currentNgn) + addNgnSafe;
  const balance_usd = (isNaN(currentUsd) ? 0 : currentUsd) + addUsdSafe;
  const is_admin = document.getElementById('uIsAdmin').value === 'true';
  const errEl = document.getElementById('userModalError');
  errEl.textContent = '';
- if (addNgn < 0 || addUsd < 0) { errEl.textContent = 'Add amount cannot be negative.'; return; }
+ // A negative "Add" amount now deducts (balance = current + addAmount,
+ // so a negative addAmount reduces it) — this used to be blocked
+ // outright and, even before that check, the amount was silently
+ // clamped to 0 for any negative input, so deducting was never
+ // actually possible. If this deduction would take the customer below
+ // zero, confirm rather than silently allow it — a negative balance is
+ // a valid state elsewhere in this app (e.g. correcting a duplicate
+ // charge), but it should be a deliberate choice here, not a typo.
+ if ((addNgnSafe < 0 && balance < 0) || (addUsdSafe < 0 && balance_usd < 0)) {
+ const ok = confirm('This deduction will take the customer below ₦0/$0 balance (new balance: ₦' + balance.toLocaleString() + ', $' + balance_usd.toLocaleString() + '). Continue?');
+ if (!ok) return;
+ }
 
  const btn = document.getElementById('saveUserBtn');
  setBtnBusy(btn, true, 'Saving...');
