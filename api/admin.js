@@ -743,31 +743,10 @@ async function userUpdate(body) {
       console.warn('[referral] manual deposit', e?.message || e);
     }
   } else if (amountAdded < 0) {
-    // Same audit-trail treatment as a deposit, just the deduction side —
-    // without this, a manual balance correction (e.g. reversing a
-    // duplicate charge) leaves no record on the customer's transaction
-    // history at all, even though the balance itself changed.
-    const deductAmount = Math.abs(amountAdded);
-    const { error: txErr } = await supabase.from('transactions').insert({
-      user_id,
-      customer_id: existing.customer_id || null,
-      type: 'adjustment',
-      category: 'adjustment',
-      title: 'Balance correction',
-      subtitle: 'Adjusted by admin',
-      amount: '-₦' + deductAmount.toLocaleString(),
-      amount_ngn: -deductAmount,
-      status: 'Success',
-      channel: 'Manual Adjustment',
-      payment_provider: 'Admin'
-    });
-    if (txErr) {
-      return {
-        status: 200,
-        body: { success: true, warning: `Balance updated, but the adjustment record failed to save: ${txErr.message}`, data: { amount_deducted: deductAmount, deposit_recorded: false } }
-      };
-    }
-    depositRecorded = true;
+    // Admin balance corrections (deductions) update the wallet only —
+    // do NOT write a "Balance correction / Manual Adjustment" row into
+    // the customer's transaction history.
+    depositRecorded = false;
   }
 
   return { status: 200, body: { success: true, data: { amount_added: amountAdded, deposit_recorded: depositRecorded } } };
