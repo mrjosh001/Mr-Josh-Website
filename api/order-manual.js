@@ -1,5 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
-import { formatCredentials, formatMultiLogCredentials, joinRawLogDetails } from '../lib/formatCredentials.js';
+import { joinRawLogDetails } from '../lib/formatCredentials.js';
 
 /**
  * POST /api/order-manual
@@ -369,24 +369,27 @@ export default async function handler(req, res) {
       (product.display_description || product.description || '').trim() || null;
     const formatHint = product.display_description || product.description || product.name || '';
     const itemsForFmt = claimedRows.map((r) => ({ details: r.credential }));
+    // Supplier raw = exact upload text (never reformatted)
     const detailsText =
       joinRawLogDetails(itemsForFmt) ||
       claimedRows
         .map((r) => r.credential)
         .filter(Boolean)
         .join('\n\n');
+    const combinedRaw = detailsText || null;
+    // Customer view = formatted for readability
     const combinedCreds =
       formatMultiLogCredentials(itemsForFmt, formatHint) ||
       (claimedRows[0]
         ? formatCredentials(claimedRows[0].credential, formatHint) || claimedRows[0].credential
-        : null);
+        : null) ||
+      detailsText;
     const supplierRefs = claimedRows
       .map((r) => r.id)
       .filter(Boolean)
       .map(String)
       .join(', ');
 
-    // Write to orders — NO login_credentials_raw
     const insertErr = await insertLogOrder({
       order_id: orderRef,
       user_id,
@@ -399,6 +402,7 @@ export default async function handler(req, res) {
       amount: total,
       status: 'completed',
       login_credentials: combinedCreds || detailsText,
+      login_credentials_raw: combinedRaw,
       supplier_ref: supplierRefs || orderRef,
       guide_url: 'https://t.me/mj_hub_tg',
       created_at: new Date().toISOString()
