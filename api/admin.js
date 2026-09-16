@@ -1835,12 +1835,8 @@ function buildBroadcastEmailHtml({ name, subject, message }) {
   const year = new Date().getFullYear();
   const unsubUrl = `${appUrl}/dashboard.html?unsubscribe=1`;
 
-  // Logos from live site / repo (transparent mark + light/dark wordmarks)
-  const LOGO_MARK = `${appUrl}/img/mjhub-mark-only.png`;
-  const LOGO_LIGHT = 'https://atczodlljmlayvldxfmv.supabase.co/storage/v1/object/public/avatars/IMG_2796.jpeg';
-  const LOGO_DARK = 'https://atczodlljmlayvldxfmv.supabase.co/storage/v1/object/public/avatars/mjhub-logo-dark-clear.png';
-  // Fallback mark on storage if /img path fails on some clients
-  const LOGO_MARK_FALLBACK = 'https://atczodlljmlayvldxfmv.supabase.co/storage/v1/object/public/avatars/mjhub-mark-only.png';
+  // Hardcoded absolute URL — live repo img/ (verified HTTP 200). Email clients need a full https URL.
+  const LOGO_MARK = 'https://www.mjhub.store/img/IMG_3027.png';
 
   const WA_CHANNEL = process.env.WHATSAPP_CHANNEL_URL || 'https://chat.whatsapp.com/LVjbslHLHXh5zj7Os5plYb';
   const TG_CHANNEL = process.env.TELEGRAM_CHANNEL_URL || 'https://t.me/mj_hub_tg';
@@ -1865,8 +1861,6 @@ function buildBroadcastEmailHtml({ name, subject, message }) {
     .accent { color:#93c5fd !important; }
     .panel { background-color:#0f172a !important; border-color:#1e293b !important; }
     .rule { border-color:#1e293b !important; }
-    .logo-light { display:none !important; max-height:0 !important; overflow:hidden !important; mso-hide:all; }
-    .logo-dark { display:block !important; }
     .btn-primary { background-color:#3b82f6 !important; color:#ffffff !important; }
     .btn-soft { background-color:#1e3a8a !important; color:#dbeafe !important; }
     .btn-outline { border-color:#3b82f6 !important; color:#93c5fd !important; }
@@ -1880,34 +1874,28 @@ function buildBroadcastEmailHtml({ name, subject, message }) {
     .accent { color:#1d4ed8 !important; }
     .panel { background-color:#f1f5f9 !important; border-color:#e2e8f0 !important; }
     .rule { border-color:#e2e8f0 !important; }
-    .logo-dark { display:none !important; max-height:0 !important; overflow:hidden !important; mso-hide:all; }
-    .logo-light { display:block !important; }
     .btn-primary { background-color:#2563eb !important; color:#ffffff !important; }
     .btn-soft { background-color:#dbeafe !important; color:#1e3a8a !important; }
     .btn-outline { border-color:#2563eb !important; color:#1d4ed8 !important; }
   }
 </style>
+<!--[if mso]>
+<style type="text/css">body,table,td{font-family:Arial,Helvetica,sans-serif!important;}</style>
+<![endif]-->
 </head>
 <body class="page" style="margin:0;padding:0;background-color:#e8eef8;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
   <table role="presentation" width="100%" cellspacing="0" cellpadding="0" class="page" style="background-color:#e8eef8;padding:20px 12px;">
     <tr><td align="center">
       <table role="presentation" width="560" cellspacing="0" cellpadding="0" class="card" style="max-width:560px;width:100%;background-color:#ffffff;border:1px solid #dbe4f0;border-radius:20px;overflow:hidden;">
-        <!-- Normal brand blue header -->
+        <!-- Single logo in brand blue header only -->
         <tr>
           <td align="center" style="padding:28px 24px 22px;background-color:#2563eb;">
-            <img src="${LOGO_MARK}" alt="MJ Hub" width="120" height="44" style="display:block;height:44px;width:auto;border:0;outline:none;background:transparent;" onerror="this.src='${LOGO_MARK_FALLBACK}'">
-            <div style="margin-top:8px;font-size:13px;font-weight:800;letter-spacing:0.16em;color:#ffffff;">MJ HUB</div>
-          </td>
-        </tr>
-        <!-- Optional theme logos under header (light/dark adaptive) -->
-        <tr>
-          <td align="center" style="padding:18px 24px 0;">
-            <img class="logo-light" src="${LOGO_LIGHT}" alt="MJ Hub" width="140" style="display:block;height:40px;width:auto;border:0;outline:none;background:transparent;">
-            <img class="logo-dark" src="${LOGO_DARK}" alt="MJ Hub" width="140" style="display:none;height:40px;width:auto;border:0;outline:none;background:transparent;">
+            <img src="${LOGO_MARK}" alt="MJ Hub" width="88" height="88" style="display:block;margin:0 auto;width:88px;height:88px;border:0;outline:none;text-decoration:none;">
+            <div style="margin-top:10px;font-size:13px;font-weight:800;letter-spacing:0.16em;color:#ffffff;">MJ HUB</div>
           </td>
         </tr>
         <tr>
-          <td style="padding:20px 28px 8px;">
+          <td style="padding:28px 28px 8px;">
             <p class="text-strong" style="margin:0 0 16px;font-size:18px;font-weight:700;color:#0f172a;">Hi ${safeName},</p>
             ${bodyHtml}
             <p class="text-body" style="margin:20px 0 8px;font-size:16px;line-height:1.65;color:#1e293b;">Need quick support?</p>
