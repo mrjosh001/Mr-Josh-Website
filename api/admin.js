@@ -1133,6 +1133,86 @@ async function listSmsOrdersHandle() {
   return { status: 200, body: { success: true, data: data || [] } };
 }
 
+
+async function wipeUnusedSmsNumbersHandle() {
+  // Remove cancelled/expired SMS number orders older than 15 days with no received code.
+  // Completed / waiting / recent rows stay. Also drop matching transaction history rows.
+  const cutoff = new Date(Date.now() - 15 * 24 * 60 * 60 * 1000).toISOString();
+  const deadStatuses = ['expired', 'cancelled', 'canceled', 'refunded', 'failed'];
+
+  const { data: rows, error: selErr } = await supabase
+    .from('number_orders')
+    .select('id, status, code, sms_code, received_code, created_at, user_id')
+    .lt('created_at', cutoff)
+    .in('status', deadStatuses)
+    .limit(5000);
+
+  if (selErr) {
+    return { status: 500, body: { success: false, message: 'Could not scan SMS orders: ' + selErr.message } };
+  }
+
+  const toWipe = (rows || []).filter((r) => {
+    const code = String(r.code || r.sms_code || r.received_code || '').trim();
+    return !code;
+  });
+
+  if (!toWipe.length) {
+    return { status: 200, body: { success: true, wiped: 0, transactions_removed: 0, message: 'Nothing to remove.' } };
+  }
+
+  const ids = toWipe.map((r) => r.id).filter(Boolean);
+  let wiped = 0;
+  let transactions_removed = 0;
+
+  // Delete in chunks to avoid URL/body limits
+  for (let i = 0; i < ids.length; i += 200) {
+    const chunk = ids.slice(i, i + 200);
+    const { error: delErr, count } = await supabase
+      .from('number_orders')
+      .delete({ count: 'exact' })
+      .in('id', chunk);
+    if (delErr) {
+      return {
+        status: 500,
+        body: {
+          success: false,
+          message: 'Partial wipe failed: ' + delErr.message,
+          wiped,
+          transactions_removed
+        }
+      };
+    }
+    wiped += typeof count === 'number' ? count : chunk.length;
+
+    // Best-effort: remove related transaction rows (order id / reference)
+    try {
+      const { count: txCount } = await supabase
+        .from('transactions')
+        .delete({ count: 'exact' })
+        .in('order_id', chunk.map(String));
+      if (typeof txCount === 'number') transactions_removed += txCount;
+    } catch (_) {}
+    try {
+      const { count: txCount2 } = await supabase
+        .from('transactions')
+        .delete({ count: 'exact' })
+        .in('reference', chunk.map(String));
+      if (typeof txCount2 === 'number') transactions_removed += txCount2;
+    } catch (_) {}
+  }
+
+  return {
+    status: 200,
+    body: {
+      success: true,
+      wiped,
+      transactions_removed,
+      message: wiped + ' unused number(s) removed.'
+    }
+  };
+}
+
+
 async function listBoosterOrdersHandle() {
   let { data, error } = await supabase
     .from('booster_orders')
@@ -2015,8 +2095,10 @@ export default async function handler(req, res) {
       result = await listProfilesHandle();
     } else if (resource === 'orders' && (action === 'list' || !action)) {
       result = await listOrdersHandle();
-    } else if (resource === 'sms_orders' && (action === 'list' || !action)) {
-      result = await listSmsOrdersHandle();
+    } else if (resource === 'sms_orders') {
+      if (action === 'list' || !action) result = await listSmsOrdersHandle();
+      else if (action === 'wipe_unused_numbers') result = await wipeUnusedSmsNumbersHandle();
+      else result = { status: 400, body: { success: false, message: 'Unknown sms_orders action. Use "list" or "wipe_unused_numbers".' } };
     } else if (resource === 'booster_orders' && (action === 'list' || !action)) {
       result = await listBoosterOrdersHandle();
     } else if (resource === 'supplier_balances') {
