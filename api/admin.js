@@ -1813,7 +1813,6 @@ function escapeHtmlForEmail(str) {
  * dropped in (HTML-escaped, line breaks kept) instead of an amount card. */
 function buildBroadcastEmailHtml({ name, subject, message }) {
   const safeName = escapeHtmlForEmail(String(name || '').trim() || 'there');
-  // Preserve line breaks; bullet lines stay readable
   const bodyHtml = escapeHtmlForEmail(message)
     .replace(/\r\n/g, '\n')
     .replace(/\r/g, '\n')
@@ -1824,82 +1823,124 @@ function buildBroadcastEmailHtml({ name, subject, message }) {
       if (allBullets) {
         const items = lines
           .map((ln) => ln.replace(/^[•\-\*]\s+/, '').replace(/^\d+[\.)]\s+/, ''))
-          .map((ln) => `<li style="margin:0 0 8px;font-size:15px;line-height:1.55;color:#e2e8f0;">${ln}</li>`)
+          .map((ln) => `<li class="text-body" style="margin:0 0 8px;font-size:15px;line-height:1.55;color:#1e293b;">${ln}</li>`)
           .join('');
-        return `<ul style="margin:0 0 16px;padding-left:20px;color:#e2e8f0;">${items}</ul>`;
+        return `<ul class="text-body" style="margin:0 0 16px;padding-left:20px;color:#1e293b;">${items}</ul>`;
       }
-      return `<p class="text-body" style="margin:0 0 14px;font-size:16px;line-height:1.65;color:#e2e8f0;">${block.replace(/\n/g, '<br>')}</p>`;
+      return `<p class="text-body" style="margin:0 0 14px;font-size:16px;line-height:1.65;color:#1e293b;">${block.replace(/\n/g, '<br>')}</p>`;
     })
     .join('');
 
   const appUrl = (process.env.APP_URL || process.env.SITE_URL || 'https://www.mjhub.store').replace(/\/$/, '');
   const year = new Date().getFullYear();
   const unsubUrl = `${appUrl}/dashboard.html?unsubscribe=1`;
-  const LOGO_MARK = 'https://atczodlljmlayvldxfmv.supabase.co/storage/v1/object/public/avatars/mjhub-mark-only.png';
-  const WA_CHANNEL = process.env.WHATSAPP_CHANNEL_URL || 'https://chat.whatsapp.com/DxgYNbkV0fjLpWbP2aODRj';
+
+  // Logos from live site / repo (transparent mark + light/dark wordmarks)
+  const LOGO_MARK = `${appUrl}/img/mjhub-mark-only.png`;
+  const LOGO_LIGHT = 'https://atczodlljmlayvldxfmv.supabase.co/storage/v1/object/public/avatars/IMG_2796.jpeg';
+  const LOGO_DARK = 'https://atczodlljmlayvldxfmv.supabase.co/storage/v1/object/public/avatars/mjhub-logo-dark-clear.png';
+  // Fallback mark on storage if /img path fails on some clients
+  const LOGO_MARK_FALLBACK = 'https://atczodlljmlayvldxfmv.supabase.co/storage/v1/object/public/avatars/mjhub-mark-only.png';
+
+  const WA_CHANNEL = process.env.WHATSAPP_CHANNEL_URL || 'https://chat.whatsapp.com/LVjbslHLHXh5zj7Os5plYb';
   const TG_CHANNEL = process.env.TELEGRAM_CHANNEL_URL || 'https://t.me/mj_hub_tg';
   const SUPPORT_WA = process.env.SUPPORT_WHATSAPP_URL || 'https://wa.me/14305583021?text=Hello%20Admin%2C%20I%27ve%20a%20complain%20/%20enquiry%20on%20MJ%20Hub';
 
-  // Permanent dark-friendly template (readable on phone dark mode; light clients still fine)
   return `<!DOCTYPE html>
 <html lang="en" xmlns="http://www.w3.org/1999/xhtml">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<meta name="color-scheme" content="dark light">
-<meta name="supported-color-schemes" content="dark light">
+<meta name="color-scheme" content="light dark">
+<meta name="supported-color-schemes" content="light dark">
 <title>MJ Hub</title>
+<style>
+  :root { color-scheme: light dark; }
+  @media (prefers-color-scheme: dark) {
+    .page { background-color:#0b1220 !important; }
+    .card { background-color:#111827 !important; border-color:#1e293b !important; }
+    .text-body { color:#e2e8f0 !important; }
+    .text-muted { color:#94a3b8 !important; }
+    .text-strong { color:#f8fafc !important; }
+    .accent { color:#93c5fd !important; }
+    .panel { background-color:#0f172a !important; border-color:#1e293b !important; }
+    .rule { border-color:#1e293b !important; }
+    .logo-light { display:none !important; max-height:0 !important; overflow:hidden !important; mso-hide:all; }
+    .logo-dark { display:block !important; }
+    .btn-primary { background-color:#3b82f6 !important; color:#ffffff !important; }
+    .btn-soft { background-color:#1e3a8a !important; color:#dbeafe !important; }
+    .btn-outline { border-color:#3b82f6 !important; color:#93c5fd !important; }
+  }
+  @media (prefers-color-scheme: light) {
+    .page { background-color:#e8eef8 !important; }
+    .card { background-color:#ffffff !important; border-color:#dbe4f0 !important; }
+    .text-body { color:#1e293b !important; }
+    .text-muted { color:#64748b !important; }
+    .text-strong { color:#0f172a !important; }
+    .accent { color:#1d4ed8 !important; }
+    .panel { background-color:#f1f5f9 !important; border-color:#e2e8f0 !important; }
+    .rule { border-color:#e2e8f0 !important; }
+    .logo-dark { display:none !important; max-height:0 !important; overflow:hidden !important; mso-hide:all; }
+    .logo-light { display:block !important; }
+    .btn-primary { background-color:#2563eb !important; color:#ffffff !important; }
+    .btn-soft { background-color:#dbeafe !important; color:#1e3a8a !important; }
+    .btn-outline { border-color:#2563eb !important; color:#1d4ed8 !important; }
+  }
+</style>
 </head>
-<body style="margin:0;padding:0;background-color:#0b1220;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
-  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background-color:#0b1220;padding:20px 12px;">
+<body class="page" style="margin:0;padding:0;background-color:#e8eef8;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
+  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" class="page" style="background-color:#e8eef8;padding:20px 12px;">
     <tr><td align="center">
-      <table role="presentation" width="560" cellspacing="0" cellpadding="0" style="max-width:560px;width:100%;background-color:#111827;border:1px solid #1e293b;border-radius:20px;overflow:hidden;">
-        <!-- Blue brand header -->
+      <table role="presentation" width="560" cellspacing="0" cellpadding="0" class="card" style="max-width:560px;width:100%;background-color:#ffffff;border:1px solid #dbe4f0;border-radius:20px;overflow:hidden;">
+        <!-- Normal brand blue header -->
         <tr>
-          <td align="center" style="padding:28px 24px 20px;background-color:#2563eb;">
-            <img src="${LOGO_MARK}" alt="MJ Hub" width="120" height="44" style="display:block;height:44px;width:auto;border:0;outline:none;background:transparent;">
+          <td align="center" style="padding:28px 24px 22px;background-color:#2563eb;">
+            <img src="${LOGO_MARK}" alt="MJ Hub" width="120" height="44" style="display:block;height:44px;width:auto;border:0;outline:none;background:transparent;" onerror="this.src='${LOGO_MARK_FALLBACK}'">
             <div style="margin-top:8px;font-size:13px;font-weight:800;letter-spacing:0.16em;color:#ffffff;">MJ HUB</div>
           </td>
         </tr>
-        <!-- Body -->
+        <!-- Optional theme logos under header (light/dark adaptive) -->
         <tr>
-          <td style="padding:28px 28px 8px;">
-            <p style="margin:0 0 16px;font-size:18px;font-weight:700;color:#f8fafc;">Hi ${safeName},</p>
-            ${bodyHtml}
-            <p style="margin:20px 0 8px;font-size:16px;line-height:1.65;color:#e2e8f0;">Need quick support?</p>
-            <p style="margin:0 0 14px;font-size:15px;line-height:1.6;color:#cbd5e1;">If you have an issue, a question, or need help with your account, our support team is available. Use Chat with Support below, or open in-app support on your dashboard.</p>
-            <p style="margin:0 0 6px;font-size:15px;line-height:1.6;color:#e2e8f0;">Thank you for choosing <strong style="color:#93c5fd;">MJ HUB</strong>.</p>
-            <p style="margin:0 0 20px;font-size:15px;line-height:1.6;color:#cbd5e1;">Warm regards,<br>The <strong style="color:#93c5fd;">MJ HUB</strong> Team</p>
+          <td align="center" style="padding:18px 24px 0;">
+            <img class="logo-light" src="${LOGO_LIGHT}" alt="MJ Hub" width="140" style="display:block;height:40px;width:auto;border:0;outline:none;background:transparent;">
+            <img class="logo-dark" src="${LOGO_DARK}" alt="MJ Hub" width="140" style="display:none;height:40px;width:auto;border:0;outline:none;background:transparent;">
           </td>
         </tr>
-        <!-- Stay connected -->
+        <tr>
+          <td style="padding:20px 28px 8px;">
+            <p class="text-strong" style="margin:0 0 16px;font-size:18px;font-weight:700;color:#0f172a;">Hi ${safeName},</p>
+            ${bodyHtml}
+            <p class="text-body" style="margin:20px 0 8px;font-size:16px;line-height:1.65;color:#1e293b;">Need quick support?</p>
+            <p class="text-body" style="margin:0 0 14px;font-size:15px;line-height:1.6;color:#1e293b;">If you have an issue, a question, or need help with your account, our support team is available. Use Chat with Support below, or open in-app support on your dashboard.</p>
+            <p class="text-body" style="margin:0 0 6px;font-size:15px;line-height:1.6;color:#1e293b;">Thank you for choosing <strong class="accent" style="color:#1d4ed8;">MJ HUB</strong>.</p>
+            <p class="text-body" style="margin:0 0 20px;font-size:15px;line-height:1.6;color:#1e293b;">Warm regards,<br>The <strong class="accent" style="color:#1d4ed8;">MJ HUB</strong> Team</p>
+          </td>
+        </tr>
         <tr>
           <td style="padding:0 28px 24px;">
-            <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background-color:#0f172a;border:1px solid #1e293b;border-radius:16px;">
+            <table role="presentation" width="100%" cellspacing="0" cellpadding="0" class="panel" style="background-color:#f1f5f9;border:1px solid #e2e8f0;border-radius:16px;">
               <tr>
                 <td align="center" style="padding:20px 16px;">
-                  <p style="margin:0 0 14px;font-size:14px;font-weight:700;color:#94a3b8;letter-spacing:0.04em;">Stay connected</p>
-                  <a href="${WA_CHANNEL}" style="display:inline-block;background-color:#60a5fa;color:#0f172a;font-weight:700;font-size:14px;text-decoration:none;padding:12px 22px;border-radius:999px;margin:0 0 10px;">Join WhatsApp Channel</a><br>
-                  <a href="${TG_CHANNEL}" style="display:inline-block;background-color:#93c5fd;color:#0f172a;font-weight:700;font-size:14px;text-decoration:none;padding:12px 22px;border-radius:999px;margin:0 0 10px;">Join Telegram Channel</a><br>
-                  <a href="${SUPPORT_WA}" style="display:inline-block;background-color:transparent;color:#93c5fd;font-weight:700;font-size:14px;text-decoration:none;padding:10px 22px;border-radius:999px;border:1.5px solid #3b82f6;">Chat with Support</a>
+                  <p class="text-muted" style="margin:0 0 14px;font-size:14px;font-weight:700;color:#64748b;letter-spacing:0.04em;">Stay connected</p>
+                  <a class="btn-soft" href="${WA_CHANNEL}" style="display:inline-block;background-color:#dbeafe;color:#1e3a8a;font-weight:700;font-size:14px;text-decoration:none;padding:12px 22px;border-radius:999px;margin:0 0 10px;">Join WhatsApp Channel</a><br>
+                  <a class="btn-soft" href="${TG_CHANNEL}" style="display:inline-block;background-color:#dbeafe;color:#1e3a8a;font-weight:700;font-size:14px;text-decoration:none;padding:12px 22px;border-radius:999px;margin:0 0 10px;">Join Telegram Channel</a><br>
+                  <a class="btn-outline" href="${SUPPORT_WA}" style="display:inline-block;background-color:transparent;color:#1d4ed8;font-weight:700;font-size:14px;text-decoration:none;padding:10px 22px;border-radius:999px;border:1.5px solid #2563eb;">Chat with Support</a>
                 </td>
               </tr>
             </table>
           </td>
         </tr>
-        <!-- CTA -->
         <tr>
           <td align="center" style="padding:0 28px 28px;">
-            <a href="${appUrl}/dashboard.html" style="display:inline-block;background-color:#818cf8;color:#0f172a;font-weight:800;font-size:15px;text-decoration:none;padding:14px 28px;border-radius:999px;">Open MJ Hub</a>
+            <a class="btn-primary" href="${appUrl}/dashboard.html" style="display:inline-block;background-color:#2563eb;color:#ffffff;font-weight:800;font-size:15px;text-decoration:none;padding:14px 28px;border-radius:999px;">Open MJ Hub</a>
           </td>
         </tr>
-        <!-- Footer -->
         <tr>
           <td style="padding:0 28px 28px;">
-            <hr style="border:none;border-top:1px solid #1e293b;margin:0 0 16px;">
-            <p style="margin:0;font-size:12px;line-height:1.5;color:#64748b;text-align:center;">
+            <hr class="rule" style="border:none;border-top:1px solid #e2e8f0;margin:0 0 16px;">
+            <p class="text-muted" style="margin:0;font-size:12px;line-height:1.5;color:#64748b;text-align:center;">
               You received this because you have an MJ Hub account.
-              <a href="${unsubUrl}" style="color:#60a5fa;text-decoration:none;">Unsubscribe</a><br>
+              <a href="${unsubUrl}" style="color:#2563eb;text-decoration:none;">Unsubscribe</a><br>
               &copy; ${year} MJ Hub
             </p>
           </td>
