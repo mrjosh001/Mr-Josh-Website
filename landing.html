@@ -2834,18 +2834,19 @@ document.addEventListener('DOMContentLoaded', () => {
 /* —— Add to Home Screen prompt (browser only, not installed PWA) —— */
 .a2hs-overlay{
   display:none;position:fixed;inset:0;z-index:99990;
-  background:rgba(6,8,15,.55);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);
-  align-items:flex-end;justify-content:center;padding:12px 12px calc(12px + env(safe-area-inset-bottom));
+  background:rgba(6,8,15,.55);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);
+  align-items:center;justify-content:center;padding:20px 16px;
 }
-.a2hs-overlay.open{display:flex;animation:a2hsFade .28s ease}
+.a2hs-overlay.open{display:flex;animation:a2hsFade .25s ease}
 @keyframes a2hsFade{from{opacity:0}to{opacity:1}}
 .a2hs-sheet{
-  width:100%;max-width:420px;background:var(--card,#fff);color:var(--text,#0f172a);
-  border-radius:24px 24px 20px 20px;box-shadow:0 24px 60px rgba(0,0,0,.28);
-  padding:22px 20px 18px;animation:a2hsUp .32s ease;
+  width:100%;max-width:400px;background:var(--card,#fff);color:var(--text,#0f172a);
+  border-radius:24px;box-shadow:0 28px 64px rgba(0,0,0,.32);
+  padding:24px 20px 20px;animation:a2hsPop .32s cubic-bezier(.22,1,.36,1);
   border:1px solid color-mix(in srgb, var(--primary,#3b82f6) 18%, transparent);
+  max-height:min(90vh,640px);overflow-y:auto;
 }
-@keyframes a2hsUp{from{transform:translateY(28px);opacity:0}to{transform:translateY(0);opacity:1}}
+@keyframes a2hsPop{from{transform:scale(.92);opacity:0}to{transform:scale(1);opacity:1}}
 .a2hs-head{display:flex;align-items:center;gap:12px;margin-bottom:6px}
 .a2hs-head .a2hs-icon{
   width:44px;height:44px;border-radius:12px;object-fit:contain;background:#fff;
@@ -2973,7 +2974,7 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     // Slight delay so landing paints first
-    setTimeout(open, 1200);
+    setTimeout(open, 400);
   } catch (e) {}
 })();
 </script>
