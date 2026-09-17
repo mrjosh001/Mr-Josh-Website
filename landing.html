@@ -2811,5 +2811,172 @@ document.addEventListener('DOMContentLoaded', () => {
 </script>
 
 <script src="haptic.js" defer></script>
+
+<!-- Add to Home Screen (shows only in mobile browser, not installed web app) -->
+<div class="a2hs-overlay" id="a2hsOverlay" role="dialog" aria-modal="true" aria-labelledby="a2hsTitle" hidden>
+  <div class="a2hs-sheet">
+    <div class="a2hs-head">
+      <img class="a2hs-icon" src="/img/IMG_3027.png" alt="MJ HUB" width="44" height="44" onerror="this.src='/img/mjhub-mark-only.png'">
+      <h3 id="a2hsTitle">Add to Home Screen</h3>
+    </div>
+    <p class="a2hs-sub" id="a2hsSub">Install MJ HUB for the best experience on your phone</p>
+    <div class="a2hs-steps" id="a2hsSteps">
+      <!-- filled by JS for iOS vs Android -->
+    </div>
+    <div class="a2hs-actions">
+      <button type="button" class="a2hs-later" id="a2hsLater">Later</button>
+      <button type="button" class="a2hs-got" id="a2hsGot">Got it!</button>
+    </div>
+  </div>
+</div>
+<style>
+
+/* —— Add to Home Screen prompt (browser only, not installed PWA) —— */
+.a2hs-overlay{
+  display:none;position:fixed;inset:0;z-index:99990;
+  background:rgba(6,8,15,.55);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);
+  align-items:flex-end;justify-content:center;padding:12px 12px calc(12px + env(safe-area-inset-bottom));
+}
+.a2hs-overlay.open{display:flex;animation:a2hsFade .28s ease}
+@keyframes a2hsFade{from{opacity:0}to{opacity:1}}
+.a2hs-sheet{
+  width:100%;max-width:420px;background:var(--card,#fff);color:var(--text,#0f172a);
+  border-radius:24px 24px 20px 20px;box-shadow:0 24px 60px rgba(0,0,0,.28);
+  padding:22px 20px 18px;animation:a2hsUp .32s ease;
+  border:1px solid color-mix(in srgb, var(--primary,#3b82f6) 18%, transparent);
+}
+@keyframes a2hsUp{from{transform:translateY(28px);opacity:0}to{transform:translateY(0);opacity:1}}
+.a2hs-head{display:flex;align-items:center;gap:12px;margin-bottom:6px}
+.a2hs-head .a2hs-icon{
+  width:44px;height:44px;border-radius:12px;object-fit:contain;background:#fff;
+  box-shadow:0 2px 10px rgba(37,99,235,.18);border:1px solid #e2e8f0;
+}
+.a2hs-head h3{margin:0;font-size:18px;font-weight:800;letter-spacing:-.02em;color:var(--text,#0f172a)}
+.a2hs-sub{margin:0 0 18px;font-size:13px;line-height:1.45;color:var(--muted,#64748b)}
+.a2hs-steps{display:flex;flex-direction:column;gap:10px;margin-bottom:18px}
+.a2hs-step{
+  display:flex;gap:12px;align-items:flex-start;
+  background:color-mix(in srgb, var(--primary,#3b82f6) 7%, transparent);
+  border:1px solid color-mix(in srgb, var(--primary,#3b82f6) 16%, transparent);
+  border-radius:14px;padding:12px 14px;
+}
+.a2hs-num{
+  flex-shrink:0;width:28px;height:28px;border-radius:9px;
+  background:var(--primary,#3b82f6);color:#fff;font-size:13px;font-weight:800;
+  display:flex;align-items:center;justify-content:center;
+}
+.a2hs-step strong{display:block;font-size:14px;font-weight:700;color:var(--text,#0f172a);margin-bottom:2px}
+.a2hs-step span{display:block;font-size:12px;line-height:1.4;color:var(--muted,#64748b)}
+.a2hs-actions{display:flex;gap:10px}
+.a2hs-actions button{
+  flex:1;border:none;border-radius:14px;padding:14px 12px;font-size:15px;font-weight:700;cursor:pointer;
+  font-family:inherit;
+}
+.a2hs-later{
+  background:color-mix(in srgb, var(--primary,#3b82f6) 10%, transparent);
+  color:var(--text,#0f172a);
+}
+.a2hs-got{
+  background:var(--primary,#3b82f6);color:#fff;
+  box-shadow:0 8px 20px rgba(37,99,235,.28);
+}
+.a2hs-got:active,.a2hs-later:active{transform:scale(.98)}
+@media (prefers-color-scheme: dark){
+  .a2hs-sheet{background:#111827;color:#f1f5f9;border-color:#1e293b}
+  .a2hs-head h3{color:#f8fafc}
+  .a2hs-sub,.a2hs-step span{color:#94a3b8}
+  .a2hs-step{background:rgba(59,130,246,.12);border-color:rgba(59,130,246,.25)}
+  .a2hs-step strong{color:#f1f5f9}
+  .a2hs-later{background:rgba(148,163,184,.15);color:#e2e8f0}
+}
+
+</style>
+<script>
+(function () {
+  try {
+    // Already running as installed app / PWA → never show
+    var isStandalone =
+      (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches) ||
+      (window.matchMedia && window.matchMedia('(display-mode: fullscreen)').matches) ||
+      (window.navigator.standalone === true) ||
+      (document.referrer && document.referrer.indexOf('android-app://') === 0);
+    if (isStandalone) return;
+
+    // Desktop: skip (optional — only mobile)
+    var ua = navigator.userAgent || '';
+    var isMobile = /iPhone|iPad|iPod|Android/i.test(ua) || (navigator.maxTouchPoints > 1 && /Macintosh/i.test(ua));
+    if (!isMobile) return;
+
+    var KEY = 'mjhub_a2hs_dismissed';
+    var dismissed = null;
+    try { dismissed = localStorage.getItem(KEY); } catch (e) {}
+    if (dismissed === 'forever') return;
+    if (dismissed) {
+      var until = parseInt(dismissed, 10);
+      if (until && Date.now() < until) return;
+    }
+
+    var isIOS = /iPhone|iPad|iPod/i.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+    var isAndroid = /Android/i.test(ua);
+
+    var stepsEl = document.getElementById('a2hsSteps');
+    var sub = document.getElementById('a2hsSub');
+    if (!stepsEl) return;
+
+    function step(n, title, desc) {
+      return '<div class="a2hs-step"><div class="a2hs-num">' + n + '</div><div><strong>' + title + '</strong><span>' + desc + '</span></div></div>';
+    }
+
+    if (isIOS) {
+      if (sub) sub.textContent = 'Install MJ HUB for the best experience on iPhone';
+      stepsEl.innerHTML =
+        step(1, 'Open Safari', 'Ensure you\'re using the Safari browser') +
+        step(2, 'Tap Share', 'Hit the share icon at the bottom of Safari') +
+        step(3, 'Add to Home Screen', 'Scroll down and choose "Add to Home Screen"') +
+        step(4, 'Confirm', 'Tap "Add" in the top-right corner — done!');
+    } else if (isAndroid) {
+      if (sub) sub.textContent = 'Install MJ HUB for the best experience on Android';
+      stepsEl.innerHTML =
+        step(1, 'Open the menu', 'Tap the ⋮ menu in Chrome (top right)') +
+        step(2, 'Install app', 'Choose "Install app" or "Add to Home screen"') +
+        step(3, 'Confirm', 'Tap Install / Add — MJ HUB appears on your home screen');
+    } else {
+      if (sub) sub.textContent = 'Install MJ HUB on your home screen for quick access';
+      stepsEl.innerHTML =
+        step(1, 'Browser menu', 'Open your browser menu') +
+        step(2, 'Add to Home Screen', 'Choose "Add to Home Screen" or "Install app"') +
+        step(3, 'Confirm', 'Follow the prompts — done!');
+    }
+
+    var overlay = document.getElementById('a2hsOverlay');
+    if (!overlay) return;
+
+    function open() {
+      overlay.hidden = false;
+      overlay.classList.add('open');
+    }
+    function close(mode) {
+      overlay.classList.remove('open');
+      overlay.hidden = true;
+      try {
+        if (mode === 'forever') localStorage.setItem(KEY, 'forever');
+        else localStorage.setItem(KEY, String(Date.now() + 14 * 24 * 60 * 60 * 1000)); // Later = 14 days
+      } catch (e) {}
+    }
+
+    var later = document.getElementById('a2hsLater');
+    var got = document.getElementById('a2hsGot');
+    if (later) later.addEventListener('click', function () { close('later'); });
+    if (got) got.addEventListener('click', function () { close('forever'); });
+    overlay.addEventListener('click', function (e) {
+      if (e.target === overlay) close('later');
+    });
+
+    // Slight delay so landing paints first
+    setTimeout(open, 1200);
+  } catch (e) {}
+})();
+</script>
+
 </body>
 </html>
