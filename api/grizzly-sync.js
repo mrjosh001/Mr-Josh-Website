@@ -607,6 +607,39 @@ async function handleOrder(req, res) {
     originalBalance = Number(profile.balance || 0);
     customerId = profile.customer_id;
 
+    const idempotencyKey =
+      (external_order_id && String(external_order_id).trim()) ||
+      `MJ-GZ-${String(user_id).slice(0, 8)}-${Date.now()}`;
+
+    // Replay: same external_order_id already bought a number → return that order, no second charge
+    if (external_order_id) {
+      const { data: existing } = await supabase
+        .from('number_orders')
+        .select('order_id, phone_number, status, price, service_name, country_name, created_at')
+        .eq('source', 'grizzlysms')
+        .eq('user_id', user_id)
+        .eq('idempotency_key', idempotencyKey)
+        .maybeSingle();
+      if (existing && existing.order_id) {
+        const { data: balRow } = await supabase.from('profiles').select('balance').eq('id', user_id).maybeSingle();
+        return res.status(200).json({
+          success: true,
+          replayed: true,
+          message: 'Order already completed',
+          data: {
+            order_id: existing.order_id,
+            number: existing.phone_number,
+            status: existing.status || 'waiting_for_code',
+            service_name: existing.service_name || serviceName,
+            country_name: existing.country_name || countryName,
+            price: existing.price != null ? Number(existing.price) : price,
+            new_balance: Number(balRow?.balance || 0),
+            created_at: existing.created_at || new Date().toISOString()
+          }
+        });
+      }
+    }
+
     if (originalBalance < price) {
       return res.status(402).json({
         success: false,
@@ -616,21 +649,37 @@ async function handleOrder(req, res) {
       });
     }
 
-    const newBalance = originalBalance - price;
-    const { error: deductErr } = await supabase
-      .from('profiles')
-      .update({ balance: newBalance })
-      .eq('id', user_id);
+    // Atomic debit — concurrent double-clicks cannot both succeed if balance only covers one
+    let newBalance = originalBalance - price;
+    const { data: debited, error: deductErr } = await supabase.rpc('debit_balance_if_sufficient', {
+      p_user_id: user_id,
+      p_amount: price
+    });
     if (deductErr) {
-      return res.status(500).json({
+      console.error('[grizzly order] debit_balance_if_sufficient', deductErr.message);
+      // Fallback only if RPC missing; still prefer single-flight client lock
+      const { data: p2 } = await supabase.from('profiles').select('balance').eq('id', user_id).single();
+      const b2 = Number(p2?.balance || 0);
+      if (b2 < price) {
+        return res.status(402).json({ success: false, message: 'Insufficient balance', required: price, available: b2 });
+      }
+      const { error: upErr } = await supabase.from('profiles').update({ balance: b2 - price }).eq('id', user_id).gte('balance', price);
+      if (upErr) {
+        return res.status(500).json({ success: false, message: 'Could not debit your balance. Try again or contact support.' });
+      }
+      newBalance = b2 - price;
+    } else if (debited === false || debited === null || debited === 0) {
+      return res.status(402).json({
         success: false,
-        message: 'Could not debit your balance. Try again or contact support.'
+        message: 'Insufficient balance',
+        required: price,
+        available: originalBalance
       });
+    } else {
+      const { data: pAfter } = await supabase.from('profiles').select('balance').eq('id', user_id).maybeSingle();
+      if (pAfter) newBalance = Number(pAfter.balance);
     }
     deducted = true;
-
-    const idempotencyKey =
-      external_order_id || `MJ-GZ-${String(user_id).slice(0, 8)}-${Date.now()}`;
     const qs = new URLSearchParams({
       api_key: GRIZZLY_KEY,
       action: 'getNumberV2',

@@ -807,6 +807,39 @@ export default async function handler(req, res) {
         });
       }
 
+      // Client-supplied idempotency key (same key on double-click = one purchase)
+      const clientIdem =
+        (body.external_order_id && String(body.external_order_id).trim()) ||
+        (body.idempotency_key && String(body.idempotency_key).trim()) ||
+        '';
+      if (clientIdem) {
+        const { data: existing } = await supabase
+          .from('number_orders')
+          .select('order_id, phone_number, status, price, service_name, country_name')
+          .eq('source', 'smsbus')
+          .eq('user_id', auth.userId)
+          .eq('idempotency_key', clientIdem)
+          .maybeSingle();
+        if (existing && existing.order_id) {
+          const { data: balRow } = await supabase.from('profiles').select('balance').eq('id', auth.userId).maybeSingle();
+          return json(res, 200, {
+            success: true,
+            replayed: true,
+            data: {
+              order_id: existing.order_id,
+              number: existing.phone_number,
+              phone_number: existing.phone_number,
+              price: existing.price != null ? Number(existing.price) : price,
+              new_balance: Number(balRow?.balance || 0),
+              service_name: existing.service_name || serviceName,
+              country_name: existing.country_name || countryName,
+              source: 'smsbus',
+              status: existing.status || 'waiting_for_code'
+            }
+          });
+        }
+      }
+
       // Block purchase when supplier wallet cannot cover cost
       try {
         const { data: sBal } = await smsbusGet(OTP_BASE, '/get/balance');
@@ -823,8 +856,40 @@ export default async function handler(req, res) {
       } catch (_) {}
 
       const originalBalance = bal;
-      const newBalance = bal - price;
-      await supabase.from('profiles').update({ balance: newBalance }).eq('id', auth.userId);
+      let newBalance = bal - price;
+      // Atomic debit — only one concurrent buy can succeed when balance covers a single number
+      const { data: debited, error: debErr } = await supabase.rpc('debit_balance_if_sufficient', {
+        p_user_id: auth.userId,
+        p_amount: price
+      });
+      if (debErr) {
+        console.error('[sms-bus order] debit_balance_if_sufficient', debErr.message);
+        const { data: p2 } = await supabase.from('profiles').select('balance').eq('id', auth.userId).single();
+        const b2 = Number(p2?.balance || 0);
+        if (b2 < price) {
+          return json(res, 400, {
+            success: false,
+            message: `Insufficient balance. Need ₦${price.toLocaleString()}, you have ₦${b2.toLocaleString()}`
+          });
+        }
+        const { error: upErr } = await supabase
+          .from('profiles')
+          .update({ balance: b2 - price })
+          .eq('id', auth.userId)
+          .gte('balance', price);
+        if (upErr) {
+          return json(res, 500, { success: false, message: 'Could not debit balance. Try again.' });
+        }
+        newBalance = b2 - price;
+      } else if (debited === false || debited === null || debited === 0) {
+        return json(res, 400, {
+          success: false,
+          message: `Insufficient balance. Need ₦${price.toLocaleString()}, you have ₦${bal.toLocaleString()}`
+        });
+      } else {
+        const { data: pAfter } = await supabase.from('profiles').select('balance').eq('id', auth.userId).maybeSingle();
+        if (pAfter) newBalance = Number(pAfter.balance);
+      }
 
       const params = {
         country_id: String(country_id),
@@ -836,12 +901,12 @@ export default async function handler(req, res) {
       try {
         bus = await smsbusGet(OTP_BASE, '/get/number', params);
       } catch (e) {
-        await supabase.from('profiles').update({ balance: originalBalance }).eq('id', auth.userId);
+        try { await supabase.rpc('credit_balance', { p_user_id: auth.userId, p_amount: price }); } catch (_) { await supabase.from('profiles').update({ balance: originalBalance }).eq('id', auth.userId); }
         return json(res, 502, { success: false, message: 'This SMS server is busy. Try again in a moment, or contact support.' });
       }
 
       if (!busOk(bus.data) || !bus.data?.data?.request_id) {
-        await supabase.from('profiles').update({ balance: originalBalance }).eq('id', auth.userId);
+        try { await supabase.rpc('credit_balance', { p_user_id: auth.userId, p_amount: price }); } catch (_) { await supabase.from('profiles').update({ balance: originalBalance }).eq('id', auth.userId); }
         const code = bus.data?.code;
         const msg = String(bus.data?.message || '');
         if (code === 50201 || /balance not enough/i.test(msg)) {
@@ -865,6 +930,7 @@ export default async function handler(req, res) {
         user_id: auth.userId,
         customer_id: profile.customer_id || null,
         order_id: requestId,
+        idempotency_key: clientIdem || `smsbus-${requestId}`,
         country_id: Number(country_id) || null,
         country_name: countryName || String(country_id),
         service_id: String(project_id),
