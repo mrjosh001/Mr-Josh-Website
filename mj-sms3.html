@@ -505,6 +505,7 @@ const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
     document.getElementById('psCountry').innerHTML = flagHtml(currentCountry.country_name) + esc(currentCountry.country_name);
     document.getElementById('psTotal').textContent = money(svc.price);
     document.getElementById('psReuseNote').style.display = document.getElementById('reusePref').checked ? 'flex' : 'none';
+    window.__mjSms3BuyId = null;
     document.getElementById('purchaseModal').classList.add('active');
   }
   function closePurchaseModal(){
@@ -515,10 +516,18 @@ const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
   document.getElementById('purchaseCloseBtn').addEventListener('click', closePurchaseModal);
   document.getElementById('purchaseModal').addEventListener('click', function(e){ if(e.target===this) closePurchaseModal(); });
   document.getElementById('psBuyBtn').addEventListener('click', function(){
-    if(!activeService) return;
-    const svc = activeService, btn = activeBtn;
+    if(!activeService || isBuying) return;
+    const svc = activeService, btn = document.getElementById('psBuyBtn');
+    // Lock in the modal before closing so double-taps cannot fire twice
+    isBuying = true;
+    btn.disabled = true;
+    const prevHtml = btn.innerHTML;
+    btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Purchasing...';
+    if(!window.__mjSms3BuyId){
+      window.__mjSms3BuyId = 'MJ-SB-' + Date.now() + '-' + Math.random().toString(36).slice(2,9);
+    }
     closePurchaseModal();
-    buy(svc.project_id, btn || document.getElementById('psBuyBtn'));
+    buy(svc.project_id, btn, prevHtml, window.__mjSms3BuyId);
   });
 
   serviceSearch.addEventListener('input', () => {
@@ -533,24 +542,29 @@ const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
     allServices = [];
   };
 
-  async function buy(projectId, btn){
+  async function buy(projectId, btn, prevHtml, idemKey){
     if(!accessToken){
       toast('Please sign in to buy a number', 'error');
+      isBuying = false;
+      if(btn){ btn.disabled = false; if(prevHtml) btn.innerHTML = prevHtml; }
       setTimeout(function(){ location.href = 'auth.html?next=' + encodeURIComponent('mj-sms3.html'); }, 600);
       return;
     }
-    if(isBuying || !currentCountry) return;
-    isBuying = true;
-    btn.disabled = true;
-    const prev = btn.textContent;
-    btn.textContent = 'Processing…';
+    if(!currentCountry){
+      isBuying = false;
+      if(btn){ btn.disabled = false; if(prevHtml) btn.innerHTML = prevHtml; }
+      return;
+    }
+    // isBuying already true from Confirm click
+    if(btn){ btn.disabled = true; }
     try{
       const j = await api('order', {
         method: 'POST',
         body: {
           country_id: currentCountry.country_id,
           project_id: projectId,
-          reuse: document.getElementById('reusePref').checked
+          reuse: document.getElementById('reusePref').checked,
+          external_order_id: idemKey || window.__mjSms3BuyId || undefined
         }
       });
       const oid = j.data && j.data.order_id;
@@ -563,11 +577,12 @@ const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
       if(j.data&&j.data.service_name) q.set('service_name',j.data.service_name);
       if(j.data&&j.data.country_name) q.set('country_name',j.data.country_name);
       if(j.data&&j.data.price!=null) q.set('price',String(j.data.price));
+      // Keep locked; navigate away
       location.href='mj-sms3-number.html?'+q.toString();
     }catch(e){
       toast(e.message || 'Purchase failed', 'error');
-      btn.disabled = false;
-      btn.textContent = prev;
+      window.__mjSms3BuyId = null;
+      if(btn){ btn.disabled = false; btn.innerHTML = prevHtml || 'Confirm Purchase'; }
       isBuying = false;
     }
   }

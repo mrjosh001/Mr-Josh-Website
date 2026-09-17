@@ -499,6 +499,7 @@ function openPurchaseModal(s){
   document.getElementById('psStock').textContent = (s.available_quantity ?? '—') + ' available';
   document.getElementById('psCountry').innerHTML = `<span class="flag">${countryFlag(currentCountry.country_name)}</span>${escapeHtml(currentCountry.country_name)}`;
   document.getElementById('psTotal').textContent = money(s.price);
+  window.__mjSmsBuyId = null;
   document.getElementById('purchaseModal').classList.add('active');
 }
 function closePurchaseModal(){
@@ -515,25 +516,34 @@ document.getElementById('psBuyBtn').addEventListener('click', async function(){
     setTimeout(() => window.location.href = 'auth.html', 900);
     return;
   }
-  const price = parseFloat(activeService.price) || 0;
-  const balCheck = await refreshBalance();
-  if(!balCheck.ok){
-    showToast('Could not verify your balance: ' + balCheck.reason, 'error');
-    return;
-  }
-  if(currentBalanceNgn < price){
-    showToast('Insufficient balance. Redirecting to deposit...', 'error');
-    setTimeout(() => window.location.href = 'deposit.html', 900);
-    return;
-  }
-
-  const btn = this;
+  // Lock immediately — before any await — so rapid taps cannot start a second buy
   isBuying = true;
+  const btn = this;
   btn.disabled = true;
   const originalLabel = btn.innerHTML;
   btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Purchasing...';
 
+  const price = parseFloat(activeService.price) || 0;
+  // Stable id for this confirmation attempt (reused if network retries)
+  if(!window.__mjSmsBuyId){
+    window.__mjSmsBuyId = 'MJ-GZ-' + Date.now() + '-' + Math.random().toString(36).slice(2,9);
+  }
+  const externalOrderId = window.__mjSmsBuyId;
+
   try{
+    const balCheck = await refreshBalance();
+    if(!balCheck.ok){
+      showToast('Could not verify your balance: ' + balCheck.reason, 'error');
+      isBuying = false; btn.disabled = false; btn.innerHTML = originalLabel;
+      return;
+    }
+    if(currentBalanceNgn < price){
+      showToast('Insufficient balance. Redirecting to deposit...', 'error');
+      isBuying = false; btn.disabled = false; btn.innerHTML = originalLabel;
+      setTimeout(() => window.location.href = 'deposit.html', 900);
+      return;
+    }
+
     const res = await fetch('/api/grizzly-sync?action=order', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -541,24 +551,26 @@ document.getElementById('psBuyBtn').addEventListener('click', async function(){
         country_id: currentCountry.country_id,
         service_id: activeService.service_id,
         user_id: currentUserId,
-        external_order_id: 'MJ-GZ-' + Date.now() + '-' + Math.random().toString(36).slice(2,7)
+        external_order_id: externalOrderId
       })
     });
     const data = await res.json();
     if(!res.ok || !data.success){
       showToast(data.message || 'Purchase failed. Please try again.', 'error');
+      window.__mjSmsBuyId = null;
+      isBuying = false; btn.disabled = false; btn.innerHTML = originalLabel;
       return;
     }
+    // Success: keep locked and navigate — do not re-enable (prevents second buy)
     showToast('Number purchased! Redirecting...', 'success');
+    const oid = data.data && data.data.order_id;
     setTimeout(() => {
-      window.location.href = 'mj-sms-number.html?order_id=' + encodeURIComponent(data.data.order_id);
-    }, 600);
+      window.location.href = 'mj-sms-number.html?order_id=' + encodeURIComponent(oid);
+    }, 500);
   }catch(err){
     showToast('Network error: ' + (err.message || err), 'error');
-  }finally{
-    isBuying = false;
-    btn.disabled = false;
-    btn.innerHTML = originalLabel;
+    window.__mjSmsBuyId = null;
+    isBuying = false; btn.disabled = false; btn.innerHTML = originalLabel;
   }
 });
 
