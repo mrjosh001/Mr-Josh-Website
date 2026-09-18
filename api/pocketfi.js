@@ -96,14 +96,18 @@ function isWebhookRequest(req, hasAnySignature) {
 }
 
 function extractAmount(data) {
+  // Prefer GROSS paid by customer — never use settlement/net (that is after PocketFi fees)
   const raw =
     data?.order?.amount ??
-    data?.order?.settlement_amount ??
     data?.data?.amount ??
-    data?.data?.settlement_amount ??
     data?.transaction?.amount ??
     data?.amount ??
     data?.data?.order?.amount ??
+    data?.payment?.amount ??
+    data?.data?.payment?.amount ??
+    // settlement only as last resort if provider omits gross
+    data?.order?.settlement_amount ??
+    data?.data?.settlement_amount ??
     data?.data?.order?.settlement_amount ??
     0;
   let n = Number(raw) || 0;
@@ -1053,12 +1057,15 @@ async function handleWebhook(req, res, raw, secret, publicKey) {
     }
   }
 
-  // Permanent VA — works even if user never opened Fund Wallet / set an amount
-  if (!userId && accountNumber) {
+  // Permanent VA — ALWAYS mark viaVa when account_number is one of ours.
+  // Previously viaVa only set when userId was still empty; if another lookup
+  // set userId first, VA payments fell through to "full gross credit".
+  if (accountNumber) {
     const uid = await findUserByVirtualAccount(accountNumber);
     if (uid) {
-      userId = uid;
+      userId = userId || uid;
       viaVa = true;
+      viaCheckout = false; // VA fee rules win over checkout-style full credit
       console.log('PocketFi webhook: matched by virtual account number', { accountNumber, userId });
     }
   }
@@ -1163,9 +1170,15 @@ async function handleWebhook(req, res, raw, secret, publicKey) {
         // Direct transfer with no open session: still credit net if webhook is solid
         console.log('VA direct credit (no open session)', { gross: creditAmount, creditNet, reference });
       }
-    } else {
+    } else if (!viaVa) {
+      // Checkout only: customer already paid provider fees; credit full selected amount
       creditNet = Math.round(creditAmount);
       console.log('Checkout-style full credit', { creditNet, reference });
+    } else {
+      // Safety: never credit raw webhook gross on VA
+      const net = netDepositFromGross(creditAmount);
+      creditNet = net > 0 ? net : 0;
+      console.log('VA fallback net credit', { gross: creditAmount, creditNet, reference });
     }
   } catch (e) {
     console.warn('credit resolve failed', e?.message || e);
