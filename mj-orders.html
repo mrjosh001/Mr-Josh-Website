@@ -1001,7 +1001,7 @@ function parseCredentialFields(details, description) {
   if (combo) return [combo];
 
   function looksAlreadyFormatted(t) {
-    return /^(?:\d+\s*[.):-]\s*)?(Username|Password|Email Password|Recovery Email|Email|Phone|Number|2FA\s*\/\s*Token|Extra)\s*:/im.test(t);
+    return /^(?:\d+\s*[.):-]\s*)?(Username|Password|Email Password|Recovery Email|Email|Phone|Number|2FA\s*\/\s*Token|Cookie\s*\/\s*Token|Cookie|Token|Extra)\s*:/im.test(t);
   }
 
   function stripLogNumberPrefix(s) {
@@ -1015,7 +1015,7 @@ function parseCredentialFields(details, description) {
       if (!lineT) continue;
       // "1. Email: x@y.com" or "2) Password: secret"
       lineT = lineT.replace(/^\d+\s*[.):-]\s*/, '');
-      const m = lineT.match(/^(Username|Password|Email Password|Recovery Email|Email|Phone|Number|2FA\s*\/\s*Token|Extra)\s*:\s*(.+)$/i);
+      const m = lineT.match(/^(Username|Password|Email Password|Recovery Email|Email|Phone|Number|2FA\s*\/\s*Token|Cookie\s*\/\s*Token|Cookie|Token|Extra)\s*:\s*(.+)$/i);
       if (!m) continue;
       const label = m[1].toLowerCase();
       const val = m[2].trim();
@@ -1124,8 +1124,7 @@ function normalizeAccountFields(f) {
   return out;
 }
 
-function fieldLabel(key) {
-  // Match fieldsToText() labels in lib/formatCredentials.js + access link
+function fieldLabel(key, val) {
   const map = {
     username: 'Username',
     password: 'Password',
@@ -1134,9 +1133,13 @@ function fieldLabel(key) {
     recovery: 'Recovery Email',
     phone: 'Number',
     token: '2FA / Token',
+    cookie: 'Cookie / Token',
     link: 'Access link',
     extra: 'Extra'
   };
+  if (key === 'token' && val && /c_user=|xs=|datr=|sb=|sessionid=|;.*=/.test(String(val))) {
+    return 'Cookie / Token';
+  }
   return map[key] || key;
 }
 
@@ -1577,18 +1580,29 @@ async function openModal(kind, i) {
       const view = String(it.login_credentials || g.login_credentials || '').trim();
       const raw = String(
         it.login_credentials_raw ||
-        view ||
-        [it.credentials_id, it.credentials_pass].filter(Boolean).join(':') ||
         ''
       ).trim();
-      const itemDesc = it.description || desc;
+      // SAME RULE AS ADMIN: if login_credentials is already labeled, use it only.
+      // Do not re-run formatters or raw re-parse (that scrambled Cookie / Token orders).
+      const labeled =
+        /^(Email|Username|Password)\s*:/im.test(view);
+      if (labeled) {
+        const accounts = parseCredentialFields(view, '');
+        // Strict line parse only — if empty, fall back to single raw block of the view text
+        if (accounts.length && (accounts[0].username || accounts[0].password || accounts[0].email || accounts[0].token || accounts[0].phone)) {
+          accounts.forEach((f) => allAccounts.push(f));
+        } else {
+          allAccounts.push({ _raw: view });
+        }
+        return;
+      }
+      // Unlabeled: try raw colon patterns, then last-resort parse
       const combo = parseUserPass2faCookie(raw) || parseUserPass2faCookie(view.replace(/\s+/g, ' '));
       if (combo) {
         allAccounts.push(combo);
         return;
       }
-      const cleanView = /^Username:/im.test(view) && /2FA\s*\/\s*Token:/i.test(view) && !/\n\s*2\.\s*Username:/i.test(view);
-      const accounts = parseCredentialFields(cleanView ? view : (raw || view), itemDesc);
+      const accounts = parseCredentialFields(raw || view, it.description || desc);
       if (qty === 1 && accounts.length > 1) {
         allAccounts.push(accounts[0]);
         return;
@@ -1607,7 +1621,7 @@ async function openModal(kind, i) {
           '</div>'
         );
       }
-      const keys = ['phone', 'password', 'email', 'email_password', 'recovery', 'username', 'token', 'link', 'extra'].filter((k) => f[k]);
+      const keys = ['phone', 'username', 'password', 'email', 'email_password', 'recovery', 'token', 'link', 'extra'].filter((k) => f[k]);
       if (!keys.length) {
         const raw = f._raw || f.username || '';
         return (
@@ -1620,7 +1634,7 @@ async function openModal(kind, i) {
         const passClass = k === 'password' || k === 'email_password' ? ' pass' : '';
         if (k === 'link') {
           return (
-            '<div class="cred-line cred-link-line"><span class="cred-k">' + fieldLabel(k) + '</span>' +
+            '<div class="cred-line cred-link-line"><span class="cred-k">' + fieldLabel(k, f[k]) + '</span>' +
             '<span class="cred-v link-row">' +
             '<a class="link-url" href="' + esc(val) + '" target="_blank" rel="noopener">' + esc(val) + '</a>' +
             '<span style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px">' +
@@ -1630,7 +1644,7 @@ async function openModal(kind, i) {
           );
         }
         return (
-          '<div class="cred-line"><span class="cred-k' + passClass + '">' + fieldLabel(k) + '</span>' +
+          '<div class="cred-line"><span class="cred-k' + passClass + '">' + fieldLabel(k, f[k]) + '</span>' +
           '<span class="cred-v">' + esc(val) +
           ' <button type="button" class="copy-one" data-copy="' + esc(val).replace(/"/g, '&quot;') + '">Copy</button>' +
           '</span></div>'
@@ -1645,8 +1659,8 @@ async function openModal(kind, i) {
     }).join('');
 
     const allText = allAccounts.map((f, idx) => {
-      const keys = ['phone', 'password', 'email', 'email_password', 'recovery', 'username', 'token', 'link', 'extra'].filter((k) => f[k]);
-      const body = keys.map((k) => fieldLabel(k) + ': ' + f[k]).join('\n');
+      const keys = ['phone', 'username', 'password', 'email', 'email_password', 'recovery', 'token', 'link', 'extra'].filter((k) => f[k]);
+      const body = keys.map((k) => fieldLabel(k, f[k]) + ': ' + f[k]).join('\n');
       return (allAccounts.length > 1 ? '#' + (idx + 1) + '\n' : '') + body;
     }).join('\n\n');
 
