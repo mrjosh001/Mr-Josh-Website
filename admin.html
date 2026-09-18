@@ -1911,7 +1911,17 @@ async function loadSupplierBalances() {
 
 async function loadProducts() {
  try {
- const { data, error } = await sb.from('products').select('id, product_key, name, category, price, supplier_price, stock_quantity, is_available, source, description, display_description, admin_hidden, created_at, updated_at').order('name');
+ // Lean select — avoid columns that may not exist (admin_hidden, created_at).
+ // Fall back so a missing column never blanks the whole catalog.
+ let data = null, error = null;
+ const lean = 'id, product_key, name, category, price, supplier_price, stock_quantity, is_available, source, description, display_description, updated_at';
+ ({ data, error } = await sb.from('products').select(lean).order('name'));
+ if (error && /column|schema cache|Could not find/i.test(error.message || '')) {
+ ({ data, error } = await sb.from('products').select('id, product_key, name, category, price, stock_quantity, is_available, source, description').order('name'));
+ }
+ if (error && /column|schema cache|Could not find/i.test(error.message || '')) {
+ ({ data, error } = await sb.from('products').select('*').order('name'));
+ }
  allProducts = error ? [] : (data || []);
  if (error) console.error('Products error:', error.message);
  } catch (e) {
