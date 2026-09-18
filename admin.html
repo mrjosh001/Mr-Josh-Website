@@ -1911,7 +1911,7 @@ async function loadSupplierBalances() {
 
 async function loadProducts() {
  try {
- const { data, error } = await sb.from('products').select('*').order('name');
+ const { data, error } = await sb.from('products').select('id, product_key, name, category, price, supplier_price, stock_quantity, is_available, source, description, display_description, admin_hidden, created_at, updated_at').order('name');
  allProducts = error ? [] : (data || []);
  if (error) console.error('Products error:', error.message);
  } catch (e) {
@@ -2538,7 +2538,7 @@ async function tryLoadOrders() {
   }
   console.warn('orders API:', json.message || res.status);
  } catch (e) { console.warn('orders API error', e); }
- const { data, error } = await sb.from('orders').select('*').order('created_at', { ascending: false }).limit(5000);
+ const { data, error } = await sb.from('orders').select('id, order_id, user_id, customer_id, customer_email, product_name, product_code, amount, quantity, status, created_at, source, is_manual, description, login_credentials, login_credentials_raw').order('created_at', { ascending: false }).limit(400);
  if (!error && data) {
  window._cachedOrders = data;
  const empty = document.getElementById('ordersEmpty');
@@ -2616,9 +2616,9 @@ async function tryLoadSmsOrders() {
  } catch (e) { console.warn('sms_orders API error', e); }
  const { data, error } = await sb
  .from('number_orders')
- .select('*')
+ .select('id, order_id, user_id, customer_id, service_name, service_id, country_name, phone_number, price, status, source, created_at, sms_code, code')
  .order('created_at', { ascending: false })
- .limit(500);
+ .limit(300);
  if (error) {
  console.error('SMS orders load error:', error.message);
  window._cachedSmsOrders = [];

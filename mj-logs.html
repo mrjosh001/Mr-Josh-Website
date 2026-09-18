@@ -558,7 +558,7 @@ if(!sbClient) sbClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANO
 });
 const sb = sbClient;
 setStatus('Fetching products...');
-const {data:products,error} = await sb.from('products').select('*').eq('is_available',true).order('category',{ascending:true});
+const {data:products,error} = await sb.from('products').select('id, product_key, name, category, price, stock_quantity, is_available, source, description, display_description').eq('is_available',true).order('category',{ascending:true});
 if(error){showError('Database error: '+error.message);return}
 if(!products||!products.length){
 productGrid.innerHTML='<div class="empty-state"><div class="empty-state-icon">📦</div><h4>No Products</h4><p>Check back later</p></div>';

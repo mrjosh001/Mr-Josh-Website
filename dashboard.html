@@ -5316,27 +5316,14 @@ async function fetchUserTransactions(userId) {
     if (!supabaseClient) return;
     try {
         await expireStaleSmsEverywhere();
+        // Egress: named columns only; single query (boosters included via type)
         let { data } = await supabaseClient
             .from('transactions')
-            .select('*')
+            .select('id, user_id, type, category, title, subtitle, amount, amount_ngn, status, channel, payment_provider, created_at')
             .eq('user_id', userId)
             .order('created_at', { ascending: false })
-            .limit(200);
+            .limit(100);
         if (!data) data = [];
-        try {
-            const boostOnly = await supabaseClient
-                .from('transactions')
-                .select('*')
-                .eq('user_id', userId)
-                .in('type', ['booster', 'boost'])
-                .order('created_at', { ascending: false })
-                .limit(200);
-            const extraBoost = boostOnly.error ? [] : (boostOnly.data || []);
-            const have = new Set(data.map((r) => String(r.id)));
-            for (const row of extraBoost) {
-                if (!have.has(String(row.id))) data.push(row);
-            }
-        } catch (_) {}
         data = await expireStalePocketFiDeposits(data);
         const fromTx = data.map(tx => {
             let title = tx.title || 'Transaction';
