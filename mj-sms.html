@@ -560,12 +560,15 @@ function serviceCatalogSkeleton(){
 
 
 
-async function loadServiceCatalog(){
+
+var __smsCatalogLoading = false;
+var __smsCatalogComplete = false;
+var __smsSearchTimer = null;
+
+async function loadServiceCatalog(opts){
+  opts = opts || {};
+  var force = !!opts.force;
   try{
-    if(serviceGrid){
-      serviceGrid.innerHTML = serviceCatalogSkeleton();
-      serviceGrid.dataset.skelReady = '1';
-    }
     if(!sbClient){
       if(!window.supabase) throw new Error('Supabase not loaded — refresh the page');
       sbClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
@@ -573,9 +576,8 @@ async function loadServiceCatalog(){
       });
     }
 
-    var CACHE_KEY = 'mj_sms1_catalog_v2';
-    var CACHE_MS = 8 * 60 * 1000; // 8 min
-    serviceCountryIndex = serviceCountryIndex || {};
+    // Cache while logged in / same browser tab session — do not reload from scratch
+    var CACHE_KEY = 'mj_sms1_catalog_v3';
     var catalogMap = new Map();
 
     function ingest(rows, countryId, countryName){
@@ -587,7 +589,6 @@ async function loadServiceCatalog(){
           catalogMap.set(key, { service_id: row.service_id, service_name: name, key: key });
         }
         if(!serviceCountryIndex[key]) serviceCountryIndex[key] = [];
-        // avoid duplicate country rows
         var cid = countryId != null ? countryId : row.country_id;
         var exists = serviceCountryIndex[key].some(function(x){ return String(x.country_id) === String(cid); });
         if(exists) return;
@@ -602,6 +603,13 @@ async function loadServiceCatalog(){
       });
     }
 
+    function rebuildMapFromCatalog(){
+      catalogMap = new Map();
+      (allServiceCatalog || []).forEach(function(s){
+        if(s && s.key) catalogMap.set(s.key, s);
+      });
+    }
+
     function paintProgress(){
       allServiceCatalog = Array.from(catalogMap.values()).sort(function(a,b){
         var ra = popularRank(a.service_name), rb = popularRank(b.service_name);
@@ -611,40 +619,57 @@ async function loadServiceCatalog(){
       renderServiceCatalog(allServiceCatalog);
     }
 
-    function saveCache(){
+    function saveCache(complete){
       try{
         sessionStorage.setItem(CACHE_KEY, JSON.stringify({
           t: Date.now(),
+          complete: !!complete,
           catalog: allServiceCatalog,
           index: serviceCountryIndex
         }));
       }catch(e){}
     }
 
-    // Instant paint from session cache
-    try{
-      var raw = sessionStorage.getItem(CACHE_KEY);
-      if(raw){
-        var cached = JSON.parse(raw);
-        if(cached && cached.t && (Date.now() - cached.t) < CACHE_MS && cached.catalog && cached.catalog.length){
-          allServiceCatalog = cached.catalog;
-          serviceCountryIndex = cached.index || {};
-          cached.catalog.forEach(function(s){
-            if(s && s.key) catalogMap.set(s.key, s);
-          });
-          paintProgress();
-        }
-      }
-    }catch(e){}
+    function loadCache(){
+      try{
+        var raw = sessionStorage.getItem(CACHE_KEY);
+        if(!raw) return null;
+        return JSON.parse(raw);
+      }catch(e){ return null; }
+    }
 
-    // Countries (RPC — already fast on your site)
+    // --- Instant restore: stay loaded while user is in this session ---
+    var cached = loadCache();
+    if(!force && cached && cached.catalog && cached.catalog.length){
+      allServiceCatalog = cached.catalog;
+      serviceCountryIndex = cached.index || {};
+      __smsCatalogComplete = !!cached.complete;
+      rebuildMapFromCatalog();
+      paintProgress();
+      // If already complete, soft-refresh in background only (no skeleton, no wait)
+      if(cached.complete){
+        softRefreshCatalogFull();
+        return;
+      }
+      // Incomplete cache: continue filling in background without blocking UI
+    } else if(serviceGrid && !(allServiceCatalog && allServiceCatalog.length)){
+      serviceGrid.innerHTML = serviceCatalogSkeleton();
+      serviceGrid.dataset.skelReady = '1';
+    }
+
+    if(__smsCatalogLoading && !force) return;
+    __smsCatalogLoading = true;
+
     const { data: countries, error: cErr } = await sbClient.rpc('grizzly_countries');
     if(cErr) throw new Error(cErr.message || 'Could not load countries');
     allCountriesMaster = countries || [];
-    if(!allCountriesMaster.length && !allServiceCatalog.length){
-      serviceGrid.innerHTML = '<div class="empty-state"><h4>No countries</h4><p>Catalog may still be syncing.</p><button type="button" class="btn btn-primary" style="margin-top:12px;width:auto;padding:10px 16px" onclick="loadServiceCatalog()">Retry</button></div>';
+    if(!allCountriesMaster.length && !(allServiceCatalog && allServiceCatalog.length)){
+      serviceGrid.innerHTML = '<div class="empty-state"><h4>No countries</h4><p>Catalog may still be syncing.</p><button type="button" class="btn btn-primary" style="margin-top:12px;width:auto;padding:10px 16px" onclick="loadServiceCatalog({force:true})">Retry</button></div>';
+      __smsCatalogLoading = false;
       return;
     }
+
+    rebuildMapFromCatalog();
 
     var ids = allCountriesMaster.map(function(c){ return c.country_id; }).filter(function(id){ return id != null; });
     var PRIORITY_NAMES = /united states|usa|nigeria|united kingdom|england|india|indonesia|philippines|russia|ukraine|brazil|germany|france|turkey|mexico|pakistan|bangladesh|vietnam|thailand|south africa|kenya|ghana|china|egypt|uae|united arab|canada|australia|poland|spain|italy|netherlands/i;
@@ -656,90 +681,144 @@ async function loadServiceCatalog(){
       return pa - pb;
     });
 
-    // ONE request for top countries (much faster than 8–16 round trips)
-    var priorityIds = ids.slice(0, 14);
-    if(priorityIds.length){
+    var nameById = {};
+    allCountriesMaster.forEach(function(c){ nameById[c.country_id] = c.country_name; });
+
+    async function fetchByCountryIds(countryIds){
+      if(!countryIds.length) return [];
       var res = await sbClient
         .from('number_services')
         .select('service_id, service_name, price, available_quantity, country_id, country_name')
         .eq('source', 'grizzlysms')
         .eq('is_available', true)
-        .in('country_id', priorityIds)
+        .in('country_id', countryIds)
         .gt('price', 0)
-        .limit(2000);
+        .limit(3000);
       if(res.error){
-        // fallback without gt(price)
         res = await sbClient
           .from('number_services')
           .select('service_id, service_name, price, available_quantity, country_id, country_name')
           .eq('source', 'grizzlysms')
           .eq('is_available', true)
-          .in('country_id', priorityIds)
-          .limit(2000);
+          .in('country_id', countryIds)
+          .limit(3000);
       }
-      if(res.data && res.data.length){
-        var nameById = {};
-        allCountriesMaster.forEach(function(c){ nameById[c.country_id] = c.country_name; });
-        res.data.forEach(function(row){
-          ingest([row], row.country_id, row.country_name || nameById[row.country_id]);
+      return (res && res.data) ? res.data : [];
+    }
+
+    // Phase 1 — one fast request for priority countries
+    var priorityIds = ids.slice(0, 16);
+    if(priorityIds.length && !opts.skipPriority){
+      var rows = await fetchByCountryIds(priorityIds);
+      rows.forEach(function(row){
+        ingest([row], row.country_id, row.country_name || nameById[row.country_id]);
+      });
+      paintProgress();
+      saveCache(false);
+    }
+
+    // Phase 2 — load ALL remaining countries fast: parallel batches of 25
+    var rest = ids.slice(16);
+    var bgBatch = 25;
+    var parallel = 3; // 3 batches at once
+    for(var j = 0; j < rest.length; j += bgBatch * parallel){
+      var chunkJobs = [];
+      for(var p = 0; p < parallel; p++){
+        var start = j + p * bgBatch;
+        if(start >= rest.length) break;
+        chunkJobs.push(fetchByCountryIds(rest.slice(start, start + bgBatch)));
+      }
+      try{
+        var parts = await Promise.all(chunkJobs);
+        parts.forEach(function(rows){
+          (rows || []).forEach(function(row){
+            ingest([row], row.country_id, row.country_name || nameById[row.country_id]);
+          });
         });
         paintProgress();
-        saveCache();
-      }
+        saveCache(false);
+      }catch(e){ console.warn('catalog batch', e); }
     }
 
-    // Background: remaining countries in larger .in() batches — does not block UI
-    var rest = ids.slice(14);
-    if(rest.length){
-      (async function backgroundLoad(){
-        var nameById = {};
-        allCountriesMaster.forEach(function(c){ nameById[c.country_id] = c.country_name; });
-        var bgBatch = 20;
-        var paints = 0;
-        for(var j = 0; j < rest.length; j += bgBatch){
-          var batchIds = rest.slice(j, j + bgBatch);
-          try{
-            var r2 = await sbClient
-              .from('number_services')
-              .select('service_id, service_name, price, available_quantity, country_id, country_name')
-              .eq('source', 'grizzlysms')
-              .eq('is_available', true)
-              .in('country_id', batchIds)
-              .gt('price', 0)
-              .limit(2500);
-            if(r2.error){
-              r2 = await sbClient
-                .from('number_services')
-                .select('service_id, service_name, price, available_quantity, country_id, country_name')
-                .eq('source', 'grizzlysms')
-                .eq('is_available', true)
-                .in('country_id', batchIds)
-                .limit(2500);
-            }
-            if(r2.data && r2.data.length){
-              r2.data.forEach(function(row){
-                ingest([row], row.country_id, row.country_name || nameById[row.country_id]);
-              });
-              paints++;
-              // re-render every 2 batches to stay smooth (less DOM thrash)
-              if(paints % 2 === 0) paintProgress();
-            }
-          }catch(e){ console.warn('bg catalog', e); }
-        }
-        paintProgress();
-        saveCache();
-      })();
-    }
+    __smsCatalogComplete = true;
+    paintProgress();
+    saveCache(true);
+    __smsCatalogLoading = false;
 
-    if(!catalogMap.size && !allServiceCatalog.length){
-      serviceGrid.innerHTML = '<div class="empty-state"><div class="empty-state-icon">📵</div><h4>No Services Found</h4><p>Try Retry — catalog may still be syncing.</p><button type="button" class="btn btn-primary" style="margin-top:12px;width:auto;padding:10px 16px" onclick="loadServiceCatalog()">Retry</button></div>';
+    if(!catalogMap.size && !(allServiceCatalog && allServiceCatalog.length)){
+      serviceGrid.innerHTML = '<div class="empty-state"><div class="empty-state-icon">📵</div><h4>No Services Found</h4><p>Try Retry — catalog may still be syncing.</p><button type="button" class="btn btn-primary" style="margin-top:12px;width:auto;padding:10px 16px" onclick="loadServiceCatalog({force:true})">Retry</button></div>';
     }
   }catch(err){
+    __smsCatalogLoading = false;
     console.error('loadServiceCatalog', err);
     if(serviceGrid && !(allServiceCatalog && allServiceCatalog.length)){
-      serviceGrid.innerHTML = '<div class="empty-state"><div class="empty-state-icon">⚠️</div><h4>Failed to load</h4><p>'+escapeHtml(err.message||String(err))+'</p><button type="button" class="btn btn-primary" style="margin-top:12px;width:auto;padding:10px 16px" onclick="loadServiceCatalog()">Retry</button></div>';
+      serviceGrid.innerHTML = '<div class="empty-state"><div class="empty-state-icon">⚠️</div><h4>Failed to load</h4><p>'+escapeHtml(err.message||String(err))+'</p><button type="button" class="btn btn-primary" style="margin-top:12px;width:auto;padding:10px 16px" onclick="loadServiceCatalog({force:true})">Retry</button></div>';
     }
   }
+}
+
+// Soft refresh after a complete cache — no skeleton, silent
+async function softRefreshCatalogFull(){
+  try{
+    if(__smsCatalogLoading) return;
+    // Re-run full load forced but without clearing current grid
+    await loadServiceCatalog({ force: true, skipPriority: false });
+  }catch(e){ console.warn('soft refresh', e); }
+}
+
+// Search hits DB even while catalog is still filling
+async function searchServicesInDb(q){
+  q = String(q || '').trim();
+  if(q.length < 2 || !sbClient) return;
+  try{
+    var res = await sbClient
+      .from('number_services')
+      .select('service_id, service_name, price, available_quantity, country_id, country_name')
+      .eq('source', 'grizzlysms')
+      .eq('is_available', true)
+      .ilike('service_name', '%' + q + '%')
+      .gt('price', 0)
+      .limit(150);
+    if(res.error || !(res.data && res.data.length)){
+      res = await sbClient
+        .from('number_services')
+        .select('service_id, service_name, price, available_quantity, country_id, country_name')
+        .eq('source', 'grizzlysms')
+        .eq('is_available', true)
+        .ilike('service_name', '%' + q + '%')
+        .limit(150);
+    }
+    var rows = (res && res.data) || [];
+    if(!rows.length) return;
+    var map = new Map();
+    (allServiceCatalog || []).forEach(function(s){ if(s && s.key) map.set(s.key, s); });
+    rows.forEach(function(row){
+      var name = String(row.service_name || row.service_id || '').replace(/_/g,' ').trim();
+      if(!name) return;
+      var key = name.toLowerCase();
+      if(!map.has(key)) map.set(key, { service_id: row.service_id, service_name: name, key: key });
+      if(!serviceCountryIndex[key]) serviceCountryIndex[key] = [];
+      var exists = serviceCountryIndex[key].some(function(x){ return String(x.country_id) === String(row.country_id); });
+      if(!exists){
+        serviceCountryIndex[key].push({
+          country_id: row.country_id,
+          country_name: row.country_name || ('Country ' + row.country_id),
+          price: row.price,
+          available_quantity: row.available_quantity,
+          service_id: row.service_id,
+          service_name: name
+        });
+      }
+    });
+    allServiceCatalog = Array.from(map.values()).sort(function(a,b){
+      var ra = popularRank(a.service_name), rb = popularRank(b.service_name);
+      if(ra !== rb) return ra - rb;
+      return a.service_name.localeCompare(b.service_name);
+    });
+    // Only update UI if search box still has same query
+    var currentQ = (serviceSearch && serviceSearch.value || '').trim().toLowerCase();
+    if(currentQ === q.toLowerCase()) renderServiceCatalog(allServiceCatalog, currentQ);
+  }catch(e){ console.warn('searchServicesInDb', e); }
 }
 
 function renderServiceCatalog(list, searchQ){
@@ -755,8 +834,8 @@ function renderServiceCatalog(list, searchQ){
     return true;
   });
   // Cap default grid so UI stays usable (search still finds everything in allServiceCatalog)
-  if(!q && filtered.length > 120){
-    filtered = filtered.slice(0, 120);
+  if(!q && filtered.length > 400){
+    filtered = filtered.slice(0, 400);
   }
   if(!filtered.length){
     serviceGrid.innerHTML = '<div class="empty-state"><div class="empty-state-icon">📵</div><h4>No Services Found</h4><p>Try a different search</p></div>';
@@ -1034,7 +1113,13 @@ document.getElementById('psBuyBtn').addEventListener('click', async function(){
 
 serviceSearch.addEventListener('input', () => {
   const q = serviceSearch.value.trim().toLowerCase();
+  // Instant local filter from whatever is already loaded
   renderServiceCatalog(allServiceCatalog, q);
+  // Also query DB so results appear even before full catalog finishes
+  clearTimeout(__smsSearchTimer);
+  if(q.length >= 2){
+    __smsSearchTimer = setTimeout(function(){ searchServicesInDb(q); }, 180);
+  }
 });
 countrySearch.addEventListener('input', () => {
   const q = countrySearch.value.trim().toLowerCase();
