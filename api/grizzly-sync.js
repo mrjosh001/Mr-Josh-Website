@@ -605,7 +605,7 @@ async function handleOrder(req, res) {
   try {
     const { data: svc, error: svcErr } = await supabase
       .from('number_services')
-      .select('service_name, country_name, price, supplier_price, is_available, providers_raw')
+      .select('service_name, country_name, price, supplier_price, is_available, providers_raw, pool_price_overrides')
       .eq('source', 'grizzlysms')
       .eq('country_id', countryId)
       .eq('service_id', serviceId)
@@ -646,8 +646,19 @@ async function handleOrder(req, res) {
         return res.status(409).json({ success: false, message: 'This pool has no valid price right now.' });
       }
       supplierPriceUsd = Math.min(...nums);
-      price = salePriceFromUsd(supplierPriceUsd);
       resolvedProviderId = String(pInfo.provider_id != null ? pInfo.provider_id : providerId);
+
+      // Admin's custom price for this exact pool wins over the fixed-formula
+      // price whenever one has been set — this is what actually makes
+      // "edit this pool's price" mean something at checkout, not just on
+      // the storefront display.
+      const overrides = svc.pool_price_overrides && typeof svc.pool_price_overrides === 'object'
+        ? svc.pool_price_overrides
+        : {};
+      const overridden = Number(overrides[resolvedProviderId] ?? overrides[providerId]);
+      price = Number.isFinite(overridden) && overridden > 0
+        ? overridden
+        : salePriceFromUsd(supplierPriceUsd);
     } else if (providerId && !svc.providers_raw) {
       // Client asked for a pool but we have no provider map — fall back to catalog price
       resolvedProviderId = providerId;
