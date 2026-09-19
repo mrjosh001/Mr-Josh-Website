@@ -62,6 +62,13 @@ body::before{content:'';position:fixed;inset:0;pointer-events:none;z-index:0;bac
 .product-count-badge{display:inline-block;background:var(--primary-glow);color:var(--primary);padding:5px 12px;border-radius:20px;font-size:11px;font-weight:700;margin-bottom:14px}
 
 /* Service-first icon grid (VirtualSMS style) */
+
+/* Icon-grid skeleton matching final service tiles */
+.sk-svc-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px 10px;margin-top:8px}
+.sk-svc-tile{display:flex;flex-direction:column;align-items:center;gap:8px;padding:10px 4px}
+.sk-svc-icon{width:52px;height:52px;border-radius:14px;background:linear-gradient(90deg,rgba(148,163,184,.12),rgba(148,163,184,.22),rgba(148,163,184,.12));background-size:200% 100%;animation:skShimmer 1.2s ease-in-out infinite}
+.sk-svc-label{width:56px;height:10px;border-radius:6px;background:linear-gradient(90deg,rgba(148,163,184,.12),rgba(148,163,184,.22),rgba(148,163,184,.12));background-size:200% 100%;animation:skShimmer 1.2s ease-in-out infinite}
+@keyframes skShimmer{0%{background-position:100% 0}100%{background-position:-100% 0}}
 .svc-icon-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px 10px;margin-top:8px}
 @media(min-width:520px){.svc-icon-grid{grid-template-columns:repeat(5,1fr)}}
 .svc-tile{display:flex;flex-direction:column;align-items:center;gap:8px;padding:10px 4px;border-radius:16px;border:1px solid transparent;background:transparent;cursor:pointer;font-family:inherit;color:var(--text);transition:background .15s,border-color .15s}
@@ -207,7 +214,8 @@ body::before{content:'';position:fixed;inset:0;pointer-events:none;z-index:0;bac
 <div class="search-bar"><i class="fa-solid fa-magnifying-glass"></i><input type="text" id="serviceSearch" placeholder="Search services (WhatsApp, Telegram...)"></div>
 <div id="serviceCountBadge"></div>
 <div id="serviceGrid">
-<div class="sk-grid" aria-hidden="true" aria-busy="true"><div class="sk-grid-item"><div class="sk-bone sk-thumb"></div><div class="sk-bone sk-line w90"></div></div><div class="sk-grid-item"><div class="sk-bone sk-thumb"></div><div class="sk-bone sk-line w90"></div></div><div class="sk-grid-item"><div class="sk-bone sk-thumb"></div><div class="sk-bone sk-line w90"></div></div><div class="sk-grid-item"><div class="sk-bone sk-thumb"></div><div class="sk-bone sk-line w90"></div></div></div>
+<div class="sk-svc-grid" aria-hidden="true" aria-busy="true"><div class="sk-svc-tile"><div class="sk-svc-icon"></div><div class="sk-svc-label"></div></div><div class="sk-svc-tile"><div class="sk-svc-icon"></div><div class="sk-svc-label"></div></div><div class="sk-svc-tile"><div class="sk-svc-icon"></div><div class="sk-svc-label"></div></div><div class="sk-svc-tile"><div class="sk-svc-icon"></div><div class="sk-svc-label"></div></div><div class="sk-svc-tile"><div class="sk-svc-icon"></div><div class="sk-svc-label"></div></div><div class="sk-svc-tile"><div class="sk-svc-icon"></div><div class="sk-svc-label"></div></div><div class="sk-svc-tile"><div class="sk-svc-icon"></div><div class="sk-svc-label"></div></div><div class="sk-svc-tile"><div class="sk-svc-icon"></div><div class="sk-svc-label"></div></div><div class="sk-svc-tile"><div class="sk-svc-icon"></div><div class="sk-svc-label"></div></div><div class="sk-svc-tile"><div class="sk-svc-icon"></div><div class="sk-svc-label"></div></div><div class="sk-svc-tile"><div class="sk-svc-icon"></div><div class="sk-svc-label"></div></div><div class="sk-svc-tile"><div class="sk-svc-icon"></div><div class="sk-svc-label"></div></div></div>
+</div><div class="sk-grid-item"><div class="sk-bone sk-thumb"></div><div class="sk-bone sk-line w90"></div></div><div class="sk-grid-item"><div class="sk-bone sk-thumb"></div><div class="sk-bone sk-line w90"></div></div><div class="sk-grid-item"><div class="sk-bone sk-thumb"></div><div class="sk-bone sk-line w90"></div></div></div>
 </div>
 </div>
 
@@ -423,17 +431,49 @@ function countryMatchesQuery(name, q){
   return false;
 }
 
+
+function serviceCatalogSkeleton(){
+  return `<div class="sk-svc-grid" aria-hidden="true" aria-busy="true"><div class="sk-svc-tile"><div class="sk-svc-icon"></div><div class="sk-svc-label"></div></div><div class="sk-svc-tile"><div class="sk-svc-icon"></div><div class="sk-svc-label"></div></div><div class="sk-svc-tile"><div class="sk-svc-icon"></div><div class="sk-svc-label"></div></div><div class="sk-svc-tile"><div class="sk-svc-icon"></div><div class="sk-svc-label"></div></div><div class="sk-svc-tile"><div class="sk-svc-icon"></div><div class="sk-svc-label"></div></div><div class="sk-svc-tile"><div class="sk-svc-icon"></div><div class="sk-svc-label"></div></div><div class="sk-svc-tile"><div class="sk-svc-icon"></div><div class="sk-svc-label"></div></div><div class="sk-svc-tile"><div class="sk-svc-icon"></div><div class="sk-svc-label"></div></div><div class="sk-svc-tile"><div class="sk-svc-icon"></div><div class="sk-svc-label"></div></div><div class="sk-svc-tile"><div class="sk-svc-icon"></div><div class="sk-svc-label"></div></div><div class="sk-svc-tile"><div class="sk-svc-icon"></div><div class="sk-svc-label"></div></div><div class="sk-svc-tile"><div class="sk-svc-icon"></div><div class="sk-svc-label"></div></div></div>`;
+}
+
+async function ensureSb(){
+  if(sbClient) return sbClient;
+  if(!window.supabase) throw new Error('Supabase library not loaded');
+  sbClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+    auth: { persistSession: true, autoRefreshToken: true, storage: window.sessionStorage }
+  });
+  return sbClient;
+}
+
 async function loadServiceCatalog(){
   try{
-    serviceGrid.innerHTML = '<div class="sk-grid" aria-hidden="true"><div class="sk-grid-item"><div class="sk-bone sk-thumb"></div><div class="sk-bone sk-line w90"></div></div><div class="sk-grid-item"><div class="sk-bone sk-thumb"></div><div class="sk-bone sk-line w90"></div></div><div class="sk-grid-item"><div class="sk-bone sk-thumb"></div><div class="sk-bone sk-line w90"></div></div><div class="sk-grid-item"><div class="sk-bone sk-thumb"></div><div class="sk-bone sk-line w90"></div></div></div>';
-    const { data, error } = await sbClient
+    if(serviceGrid){
+      serviceGrid.innerHTML = serviceCatalogSkeleton();
+      serviceGrid.dataset.skelReady = '1';
+    }
+    const sb = await ensureSb();
+    // Prefer lean query; avoid huge payloads that hang on mobile
+    let data = null, error = null;
+    ({ data, error } = await sb
       .from('number_services')
       .select('service_id, service_name')
       .eq('source', 'grizzlysms')
       .eq('is_available', true)
-      .gt('price', 0)
-      .limit(5000);
-    if(error){ serviceGrid.innerHTML = '<div class="empty-state"><h4>Failed to load</h4><p>'+escapeHtml(error.message)+'</p></div>'; return; }
+      .order('service_name', { ascending: true })
+      .range(0, 1499));
+    if(error){
+      // fallback without is_available filter
+      ({ data, error } = await sb
+        .from('number_services')
+        .select('service_id, service_name')
+        .eq('source', 'grizzlysms')
+        .order('service_name', { ascending: true })
+        .range(0, 999));
+    }
+    if(error){
+      serviceGrid.innerHTML = '<div class="empty-state"><h4>Failed to load</h4><p>'+escapeHtml(error.message)+'</p><button type="button" class="btn btn-primary" style="margin-top:12px;width:auto;padding:10px 16px" onclick="loadServiceCatalog()">Retry</button></div>';
+      return;
+    }
     const map = new Map();
     (data||[]).forEach(row => {
       const name = (row.service_name || row.service_id || '').replace(/_/g,' ').trim();
@@ -446,9 +486,13 @@ async function loadServiceCatalog(){
       if(ra !== rb) return ra - rb;
       return a.service_name.localeCompare(b.service_name);
     });
+    if(!allServiceCatalog.length){
+      serviceGrid.innerHTML = '<div class="empty-state"><div class="empty-state-icon">📵</div><h4>No Services Found</h4><p>Catalog may be empty. Try again shortly.</p><button type="button" class="btn btn-primary" style="margin-top:12px;width:auto;padding:10px 16px" onclick="loadServiceCatalog()">Retry</button></div>';
+      return;
+    }
     renderServiceCatalog(allServiceCatalog);
   }catch(err){
-    serviceGrid.innerHTML = '<div class="empty-state"><h4>Failed to load</h4><p>'+escapeHtml(err.message||String(err))+'</p></div>';
+    if(serviceGrid) serviceGrid.innerHTML = '<div class="empty-state"><h4>Failed to load</h4><p>'+escapeHtml(err.message||String(err))+'</p><button type="button" class="btn btn-primary" style="margin-top:12px;width:auto;padding:10px 16px" onclick="loadServiceCatalog()">Retry</button></div>';
   }
 }
 
@@ -492,15 +536,15 @@ async function selectService(svc){
   try{
     // Match by service_name (IDs can differ per country on some catalogs)
     const name = svc.service_name;
-    let { data, error } = await sbClient
+    const sb = await ensureSb();
+    let { data, error } = await sb
       .from('number_services')
       .select('service_id, service_name, country_id, country_name, price, available_quantity')
       .eq('source', 'grizzlysms')
       .eq('is_available', true)
-      .gt('price', 0)
       .ilike('service_name', name)
       .order('price', { ascending: true })
-      .limit(500);
+      .limit(300);
     if(error){
       // fallback without ilike
       const r2 = await sbClient
@@ -681,8 +725,12 @@ countrySearch.addEventListener('input', () => {
 });
 document.getElementById('changeServiceBtn')?.addEventListener('click', backToServices);
 
-initSession();
-loadServiceCatalog();
+(async function bootSms(){
+  try { await initSession(); } catch(e) {}
+  try { await loadServiceCatalog(); } catch(e) {
+    if(serviceGrid) serviceGrid.innerHTML = '<div class="empty-state"><h4>Failed to load</h4><p>'+escapeHtml(e.message||String(e))+'</p></div>';
+  }
+})();
 
 </script>
 
@@ -694,6 +742,11 @@ loadServiceCatalog();
     var nodes = document.querySelectorAll('[data-skel], #countryList, #serviceGrid, #list, #catalog, #servicesGrid, #productsGrid, #orderList');
     nodes.forEach(function(el){
       if(el.dataset.skelReady) return;
+      if(el.id === 'serviceGrid'){
+        el.innerHTML = serviceCatalogSkeleton ? serviceCatalogSkeleton() : el.innerHTML;
+        el.dataset.skelReady = '1';
+        return;
+      }
       var type = el.getAttribute('data-skel') || (el.id && /list|order/i.test(el.id) ? 'cards' : 'grid');
       el.innerHTML = (mjSkeleton[type] || mjSkeleton.grid)(type === 'cards' ? 3 : 6);
       el.dataset.skelReady = '1';
