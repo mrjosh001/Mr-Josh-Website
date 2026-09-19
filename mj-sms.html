@@ -445,54 +445,107 @@ async function ensureSb(){
   return sbClient;
 }
 
+
+function serviceCatalogSkeleton(){
+  var tiles = '';
+  for (var i = 0; i < 12; i++) tiles += '<div class="sk-svc-tile"><div class="sk-svc-icon"></div><div class="sk-svc-label"></div></div>';
+  return '<div class="sk-svc-grid" aria-hidden="true" aria-busy="true">' + tiles + '</div>';
+}
+
+async function ensureSb(){
+  if (sbClient) return sbClient;
+  if (!window.supabase) throw new Error('Supabase library not loaded — refresh the page');
+  sbClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+    auth: { persistSession: true, autoRefreshToken: true, storage: window.sessionStorage }
+  });
+  return sbClient;
+}
+
 async function loadServiceCatalog(){
-  try{
-    if(serviceGrid){
+  try {
+    if (serviceGrid) {
       serviceGrid.innerHTML = serviceCatalogSkeleton();
       serviceGrid.dataset.skelReady = '1';
     }
     const sb = await ensureSb();
-    // Prefer lean query; avoid huge payloads that hang on mobile
-    let data = null, error = null;
-    ({ data, error } = await sb
-      .from('number_services')
-      .select('service_id, service_name')
-      .eq('source', 'grizzlysms')
-      .eq('is_available', true)
-      .order('service_name', { ascending: true })
-      .range(0, 1499));
-    if(error){
-      // fallback without is_available filter
-      ({ data, error } = await sb
-        .from('number_services')
+
+    // Proven path (same as old country-first page): RPC countries, then services
+    // filtered by country_id. Scanning the whole number_services table hangs.
+    var countries = [];
+    try {
+      var rpc = await sb.rpc('grizzly_countries');
+      if (!rpc.error && rpc.data && rpc.data.length) countries = rpc.data;
+    } catch (e1) {}
+
+    if (!countries.length) {
+      // fallback: distinct country rows from a small services sample
+      var fb = await sb.from('number_services')
+        .select('country_id, country_name')
+        .eq('source', 'grizzlysms')
+        .limit(80);
+      if (fb.data) {
+        var seenC = {};
+        fb.data.forEach(function(r){
+          if (r.country_id != null && !seenC[r.country_id]) {
+            seenC[r.country_id] = 1;
+            countries.push({ country_id: r.country_id, country_name: r.country_name || ('Country ' + r.country_id) });
+          }
+        });
+      }
+    }
+
+    allCountriesMaster = countries || [];
+
+    var map = new Map();
+    // Pull services from up to 12 countries (batched) — matches old working filter
+    var ids = allCountriesMaster.map(function(c){ return c.country_id; }).filter(function(id){ return id != null; });
+    var batchSize = 8;
+    for (var i = 0; i < ids.length && i < 40; i += batchSize) {
+      var batch = ids.slice(i, i + batchSize);
+      var res = await sb.from('number_services')
         .select('service_id, service_name')
         .eq('source', 'grizzlysms')
-        .order('service_name', { ascending: true })
-        .range(0, 999));
+        .eq('is_available', true)
+        .in('country_id', batch)
+        .limit(400);
+      if (res.error) {
+        // retry batch without is_available
+        res = await sb.from('number_services')
+          .select('service_id, service_name')
+          .eq('source', 'grizzlysms')
+          .in('country_id', batch)
+          .limit(400);
+      }
+      if (res.error) {
+        console.error('services batch', res.error);
+        continue;
+      }
+      (res.data || []).forEach(function(row){
+        var name = String(row.service_name || row.service_id || '').replace(/_/g, ' ').trim();
+        if (!name) return;
+        var key = name.toLowerCase();
+        if (!map.has(key)) map.set(key, { service_id: row.service_id, service_name: name, key: key });
+      });
+      // enough unique services for a usable grid
+      if (map.size >= 80) break;
     }
-    if(error){
-      serviceGrid.innerHTML = '<div class="empty-state"><h4>Failed to load</h4><p>'+escapeHtml(error.message)+'</p><button type="button" class="btn btn-primary" style="margin-top:12px;width:auto;padding:10px 16px" onclick="loadServiceCatalog()">Retry</button></div>';
-      return;
-    }
-    const map = new Map();
-    (data||[]).forEach(row => {
-      const name = (row.service_name || row.service_id || '').replace(/_/g,' ').trim();
-      if(!name) return;
-      const key = name.toLowerCase();
-      if(!map.has(key)) map.set(key, { service_id: row.service_id, service_name: name, key });
-    });
-    allServiceCatalog = Array.from(map.values()).sort((a,b) => {
-      const ra = popularRank(a.service_name), rb = popularRank(b.service_name);
-      if(ra !== rb) return ra - rb;
+
+    allServiceCatalog = Array.from(map.values()).sort(function(a, b){
+      var ra = popularRank(a.service_name), rb = popularRank(b.service_name);
+      if (ra !== rb) return ra - rb;
       return a.service_name.localeCompare(b.service_name);
     });
-    if(!allServiceCatalog.length){
-      serviceGrid.innerHTML = '<div class="empty-state"><div class="empty-state-icon">📵</div><h4>No Services Found</h4><p>Catalog may be empty. Try again shortly.</p><button type="button" class="btn btn-primary" style="margin-top:12px;width:auto;padding:10px 16px" onclick="loadServiceCatalog()">Retry</button></div>';
+
+    if (!allServiceCatalog.length) {
+      serviceGrid.innerHTML = '<div class="empty-state"><div class="empty-state-icon">📵</div><h4>No Services Found</h4><p>Could not load the catalog. Check your connection and try again.</p><button type="button" class="btn btn-primary" style="margin-top:12px;width:auto;padding:10px 16px" onclick="loadServiceCatalog()">Retry</button></div>';
       return;
     }
     renderServiceCatalog(allServiceCatalog);
-  }catch(err){
-    if(serviceGrid) serviceGrid.innerHTML = '<div class="empty-state"><h4>Failed to load</h4><p>'+escapeHtml(err.message||String(err))+'</p><button type="button" class="btn btn-primary" style="margin-top:12px;width:auto;padding:10px 16px" onclick="loadServiceCatalog()">Retry</button></div>';
+  } catch (err) {
+    console.error('loadServiceCatalog', err);
+    if (serviceGrid) {
+      serviceGrid.innerHTML = '<div class="empty-state"><h4>Failed to load</h4><p>' + escapeHtml(err.message || String(err)) + '</p><button type="button" class="btn btn-primary" style="margin-top:12px;width:auto;padding:10px 16px" onclick="loadServiceCatalog()">Retry</button></div>';
+    }
   }
 }
 
@@ -519,89 +572,96 @@ function renderServiceCatalog(list){
   });
 }
 
+
 async function selectService(svc){
   currentServicePick = svc;
   currentCountry = null;
   activeService = null;
   serviceStep.style.display = 'none';
   countryStep.style.display = 'block';
-  const icon = serviceIcon(svc.service_name);
-  const mini = icon
-    ? '<span class="mini-icon" style="background:'+icon.color+'"><i class="'+icon.cls+'"></i></span>'
+  var icon = serviceIcon(svc.service_name);
+  var mini = icon
+    ? '<span class="mini-icon" style="background:' + icon.color + '"><i class="' + icon.cls + '"></i></span>'
     : '';
   document.getElementById('selectedServiceName').innerHTML = mini + escapeHtml(svc.service_name);
   countrySearch.value = '';
   countryList.innerHTML = '<div class="loading-spinner"><div class="spinner"></div><div class="loading-text">Loading countries…</div></div>';
 
-  try{
-    // Match by service_name (IDs can differ per country on some catalogs)
-    const name = svc.service_name;
-    const sb = await ensureSb();
-    let { data, error } = await sb
-      .from('number_services')
+  try {
+    var sb = await ensureSb();
+    var name = svc.service_name;
+    var sid = svc.service_id;
+
+    // Prefer service_id match (stable across countries on Grizzly)
+    var res = await sb.from('number_services')
       .select('service_id, service_name, country_id, country_name, price, available_quantity')
       .eq('source', 'grizzlysms')
       .eq('is_available', true)
-      .ilike('service_name', name)
+      .eq('service_id', sid)
       .order('price', { ascending: true })
       .limit(300);
-    if(error){
-      // fallback without ilike
-      const r2 = await sbClient
-        .from('number_services')
+
+    if (res.error || !(res.data && res.data.length)) {
+      res = await sb.from('number_services')
+        .select('service_id, service_name, country_id, country_name, price, available_quantity')
+        .eq('source', 'grizzlysms')
+        .eq('service_id', sid)
+        .order('price', { ascending: true })
+        .limit(300);
+    }
+    // name fallback
+    if (!(res.data && res.data.length)) {
+      res = await sb.from('number_services')
         .select('service_id, service_name, country_id, country_name, price, available_quantity')
         .eq('source', 'grizzlysms')
         .eq('is_available', true)
-        .gt('price', 0)
-        .eq('service_id', svc.service_id)
+        .ilike('service_name', name)
         .order('price', { ascending: true })
-        .limit(500);
-      data = r2.data; error = r2.error;
+        .limit(300);
     }
-    if(error){ countryList.innerHTML = '<div class="empty-state"><h4>Failed</h4><p>'+escapeHtml(error.message)+'</p></div>'; return; }
-    allCountries = (data||[]).map(r => ({
-      country_id: r.country_id,
-      country_name: r.country_name || ('Country '+r.country_id),
-      price: r.price,
-      available_quantity: r.available_quantity,
-      service_id: r.service_id,
-      service_name: r.service_name || name
-    }));
-    // dedupe by country_id keep cheapest
-    const byC = new Map();
-    allCountries.forEach(c => {
-      const id = String(c.country_id);
-      if(!byC.has(id) || Number(c.price) < Number(byC.get(id).price)) byC.set(id, c);
-    });
-    allCountries = Array.from(byC.values()).sort((a,b) => Number(a.price)-Number(b.price));
-    renderCountryPrices(allCountries);
-  }catch(e){
-    countryList.innerHTML = '<div class="empty-state"><h4>Failed</h4><p>'+escapeHtml(e.message||String(e))+'</p></div>';
-  }
-}
 
-function renderCountryPrices(list){
-  if(!list.length){
-    countryList.innerHTML = '<div class="empty-state"><h4>No countries for this service</h4><p>Try another service</p></div>';
-    return;
-  }
-  countryList.innerHTML = list.map((c, i) => {
-    const flag = countryFlag(c.country_name);
-    return '<div class="country-price-row" data-index="'+i+'"><div class="left"><span class="flag">'+flag+'</span><span class="cname">'+escapeHtml(c.country_name)+'</span></div><div class="right"><span class="cprice">'+money(c.price)+'</span><span class="chev"><i class="fa-solid fa-chevron-right"></i></span></div></div>';
-  }).join('');
-  countryList.querySelectorAll('.country-price-row').forEach(row => {
-    row.addEventListener('click', () => {
-      const c = list[Number(row.dataset.index)];
-      if(!c) return;
-      currentCountry = c;
-      openPurchaseModal({
-        service_id: c.service_id,
-        service_name: c.service_name || currentServicePick.service_name,
-        price: c.price,
-        available_quantity: c.available_quantity
-      });
+    if (res.error) {
+      countryList.innerHTML = '<div class="empty-state"><h4>Failed</h4><p>' + escapeHtml(res.error.message) + '</p></div>';
+      return;
+    }
+
+    var rows = res.data || [];
+    // If still empty, walk country batches (same reliable pattern)
+    if (!rows.length && allCountriesMaster && allCountriesMaster.length) {
+      var ids = allCountriesMaster.map(function(c){ return c.country_id; }).filter(Boolean);
+      for (var i = 0; i < ids.length; i += 10) {
+        var batch = ids.slice(i, i + 10);
+        var r2 = await sb.from('number_services')
+          .select('service_id, service_name, country_id, country_name, price, available_quantity')
+          .eq('source', 'grizzlysms')
+          .eq('service_id', sid)
+          .in('country_id', batch)
+          .limit(100);
+        if (r2.data && r2.data.length) rows = rows.concat(r2.data);
+        if (rows.length >= 50) break;
+      }
+    }
+
+    allCountries = rows.map(function(r){
+      return {
+        country_id: r.country_id,
+        country_name: r.country_name || ('Country ' + r.country_id),
+        price: r.price,
+        available_quantity: r.available_quantity,
+        service_id: r.service_id,
+        service_name: r.service_name || name
+      };
     });
-  });
+    var byC = new Map();
+    allCountries.forEach(function(c){
+      var id = String(c.country_id);
+      if (!byC.has(id) || Number(c.price) < Number(byC.get(id).price)) byC.set(id, c);
+    });
+    allCountries = Array.from(byC.values()).sort(function(a, b){ return Number(a.price) - Number(b.price); });
+    renderCountryPrices(allCountries);
+  } catch (e) {
+    countryList.innerHTML = '<div class="empty-state"><h4>Failed</h4><p>' + escapeHtml(e.message || String(e)) + '</p></div>';
+  }
 }
 
 function backToServices(){
