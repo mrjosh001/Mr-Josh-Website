@@ -61,32 +61,31 @@ body::before{content:'';position:fixed;inset:0;pointer-events:none;z-index:0;bac
 .selected-country-bar button{background:none;border:1px solid var(--primary);color:var(--primary);font-size:11px;font-weight:700;padding:6px 12px;border-radius:8px;cursor:pointer;font-family:inherit;}
 .product-count-badge{display:inline-block;background:var(--primary-glow);color:var(--primary);padding:5px 12px;border-radius:20px;font-size:11px;font-weight:700;margin-bottom:14px}
 
-/* Service-first icon grid (VirtualSMS style) */
-
-/* Icon-grid skeleton matching final service tiles */
-.sk-svc-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px 10px;margin-top:8px}
-.sk-svc-tile{display:flex;flex-direction:column;align-items:center;gap:8px;padding:10px 4px}
-.sk-svc-icon{width:52px;height:52px;border-radius:14px;background:linear-gradient(90deg,rgba(148,163,184,.12),rgba(148,163,184,.22),rgba(148,163,184,.12));background-size:200% 100%;animation:skShimmer 1.2s ease-in-out infinite}
-.sk-svc-label{width:56px;height:10px;border-radius:6px;background:linear-gradient(90deg,rgba(148,163,184,.12),rgba(148,163,184,.22),rgba(148,163,184,.12));background-size:200% 100%;animation:skShimmer 1.2s ease-in-out infinite}
-@keyframes skShimmer{0%{background-position:100% 0}100%{background-position:-100% 0}}
+/* Service-first icon grid */
 .svc-icon-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px 10px;margin-top:8px}
 @media(min-width:520px){.svc-icon-grid{grid-template-columns:repeat(5,1fr)}}
-.svc-tile{display:flex;flex-direction:column;align-items:center;gap:8px;padding:10px 4px;border-radius:16px;border:1px solid transparent;background:transparent;cursor:pointer;font-family:inherit;color:var(--text);transition:background .15s,border-color .15s}
-.svc-tile:active,.svc-tile:hover{background:var(--primary-glow);border-color:rgba(59,130,246,.25)}
+.svc-tile{display:flex;flex-direction:column;align-items:center;gap:8px;padding:10px 4px;border-radius:16px;border:1px solid transparent;background:transparent;cursor:pointer;font-family:inherit;color:var(--text)}
+.svc-tile:active,.svc-tile:hover{background:var(--primary-glow);border-color:rgba(91,138,245,.25)}
 .svc-tile .svc-icon{width:52px;height:52px;border-radius:14px;display:flex;align-items:center;justify-content:center;color:#fff;font-size:22px;box-shadow:0 4px 12px rgba(0,0,0,.15)}
-.svc-tile .svc-icon-fallback{background:linear-gradient(135deg,#3b82f6,#2563eb)}
-.svc-tile .svc-label{font-size:11px;font-weight:700;text-align:center;line-height:1.25;max-width:72px;overflow:hidden;text-overflow:ellipsis;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
+.svc-tile .svc-icon-fallback{background:linear-gradient(135deg,var(--primary),var(--primary-strong));color:#fff}
+.svc-tile .svc-label{font-size:11px;font-weight:700;text-align:center;line-height:1.25;max-width:72px;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
 .selected-service-bar{display:flex;align-items:center;justify-content:space-between;gap:10px;background:var(--primary-glow);border-radius:12px;padding:12px 14px;margin-bottom:14px}
 .selected-service-bar .name{font-weight:800;font-size:14px;color:var(--primary);display:flex;align-items:center;gap:10px}
-.selected-service-bar .name .mini-icon{width:28px;height:28px;border-radius:8px;display:inline-flex;align-items:center;justify-content:center;color:#fff;font-size:13px}
+.selected-service-bar .mini-icon{width:28px;height:28px;border-radius:8px;display:inline-flex;align-items:center;justify-content:center;color:#fff;font-size:13px}
 .selected-service-bar button{background:none;border:1px solid var(--primary);color:var(--primary);font-size:11px;font-weight:700;padding:6px 12px;border-radius:8px;cursor:pointer;font-family:inherit;flex-shrink:0}
-.country-price-row{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:14px 14px;border-radius:12px;background:var(--bg);border:1px solid var(--border);cursor:pointer;transition:background .12s,border-color .12s}
-.country-price-row:active,.country-price-row:hover{background:var(--primary-glow);border-color:rgba(59,130,246,.3)}
+.country-price-row{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:14px;border-radius:12px;background:var(--bg);border:1px solid var(--border);cursor:pointer}
+.country-price-row:active{background:var(--primary-glow)}
 .country-price-row .left{display:flex;align-items:center;gap:12px;min-width:0;flex:1}
 .country-price-row .cname{font-weight:700;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .country-price-row .right{display:flex;align-items:center;gap:8px;flex-shrink:0}
 .country-price-row .cprice{font-weight:800;font-size:15px;color:var(--primary)}
 .country-price-row .chev{color:var(--muted);font-size:12px}
+.sk-svc-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px 10px;margin-top:8px}
+.sk-svc-tile{display:flex;flex-direction:column;align-items:center;gap:8px;padding:10px 4px}
+.sk-svc-icon{width:52px;height:52px;border-radius:14px;background:linear-gradient(90deg,rgba(148,163,184,.12),rgba(148,163,184,.22),rgba(148,163,184,.12));background-size:200% 100%;animation:skShimmer 1.2s ease-in-out infinite}
+.sk-svc-label{width:56px;height:10px;border-radius:6px;background:linear-gradient(90deg,rgba(148,163,184,.12),rgba(148,163,184,.22),rgba(148,163,184,.12));background-size:200% 100%;animation:skShimmer 1.2s ease-in-out infinite}
+@keyframes skShimmer{0%{background-position:100% 0}100%{background-position:-100% 0}}
+
 .product-grid{display:grid;grid-template-columns:1fr;gap:12px}
 @media(min-width:600px){.product-grid{grid-template-columns:repeat(2,1fr)}}
 .product-card{background:var(--bg);border:1px solid var(--border);border-radius:16px;padding:14px;display:flex;flex-direction:column;gap:10px}
@@ -215,7 +214,6 @@ body::before{content:'';position:fixed;inset:0;pointer-events:none;z-index:0;bac
 <div id="serviceCountBadge"></div>
 <div id="serviceGrid">
 <div class="sk-svc-grid" aria-hidden="true" aria-busy="true"><div class="sk-svc-tile"><div class="sk-svc-icon"></div><div class="sk-svc-label"></div></div><div class="sk-svc-tile"><div class="sk-svc-icon"></div><div class="sk-svc-label"></div></div><div class="sk-svc-tile"><div class="sk-svc-icon"></div><div class="sk-svc-label"></div></div><div class="sk-svc-tile"><div class="sk-svc-icon"></div><div class="sk-svc-label"></div></div><div class="sk-svc-tile"><div class="sk-svc-icon"></div><div class="sk-svc-label"></div></div><div class="sk-svc-tile"><div class="sk-svc-icon"></div><div class="sk-svc-label"></div></div><div class="sk-svc-tile"><div class="sk-svc-icon"></div><div class="sk-svc-label"></div></div><div class="sk-svc-tile"><div class="sk-svc-icon"></div><div class="sk-svc-label"></div></div><div class="sk-svc-tile"><div class="sk-svc-icon"></div><div class="sk-svc-label"></div></div><div class="sk-svc-tile"><div class="sk-svc-icon"></div><div class="sk-svc-label"></div></div><div class="sk-svc-tile"><div class="sk-svc-icon"></div><div class="sk-svc-label"></div></div><div class="sk-svc-tile"><div class="sk-svc-icon"></div><div class="sk-svc-label"></div></div></div>
-</div><div class="sk-grid-item"><div class="sk-bone sk-thumb"></div><div class="sk-bone sk-line w90"></div></div><div class="sk-grid-item"><div class="sk-bone sk-thumb"></div><div class="sk-bone sk-line w90"></div></div><div class="sk-grid-item"><div class="sk-bone sk-thumb"></div><div class="sk-bone sk-line w90"></div></div></div>
 </div>
 </div>
 
@@ -280,9 +278,26 @@ let allCountries = [];
 let currentCountry = null;
 let allServices = [];
 let allServiceCatalog = [];
+let serviceCountryIndex = {}; // key -> [{country_id, country_name, price, service_id, service_name, available_quantity}]
 let currentServicePick = null;
 let activeService = null;
 let isBuying = false;
+
+const POPULAR_SERVICES = ['whatsapp','telegram','facebook','instagram','tiktok','google','gmail','twitter','x','discord','snapchat','microsoft','amazon','netflix','spotify','uber','paypal','linkedin','signal','viber','wechat'];
+function popularRank(name){
+  const n = String(name||'').toLowerCase();
+  for(let i=0;i<POPULAR_SERVICES.length;i++){ if(n.includes(POPULAR_SERVICES[i])) return i; }
+  return 1000;
+}
+function countryMatchesQuery(name, q){
+  if(!q) return true;
+  const n = String(name||'').toLowerCase();
+  if(n.includes(q)) return true;
+  if(/^(usa|us|u\.s\.?a?\.?|america)$/i.test(q) || q.indexOf('united st')===0){
+    if(/united states|usa|\bu\.?s\.?a\.?\b|america/i.test(n)) return true;
+  }
+  return false;
+}
 
 function escapeHtml(str){if(!str)return'';return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;')}
 function money(n){return '₦'+Number(n||0).toLocaleString()}
@@ -408,41 +423,7 @@ async function refreshBalance(){
     if(error) return { ok:false, reason: error.message };
     if(data) currentBalanceNgn = parseFloat(data.balance) || 0;
     return { ok:true };
-  }catch(e){
-const POPULAR_SERVICES = ['whatsapp','telegram','facebook','instagram','tiktok','google','gmail','twitter','x','discord','snapchat','microsoft','amazon','netflix','spotify','uber','paypal','linkedin','signal','viber','wechat'];
-
-function popularRank(name){
-  const n = String(name||'').toLowerCase();
-  for(let i=0;i<POPULAR_SERVICES.length;i++){
-    if(n.includes(POPULAR_SERVICES[i]) || n === POPULAR_SERVICES[i]) return i;
-  }
-  return 1000;
-}
-
-function countryMatchesQuery(name, q){
-  if(!q) return true;
-  const n = String(name||'').toLowerCase();
-  if(n.includes(q)) return true;
-  // USA aliases
-  if(/^(usa|us|u\.s\.?a?\.?|america)$/i.test(q) || q === 'united states' || q.startsWith('united st')){
-    if(/united states|usa|\bu\.?s\.?a\.?\b|\bamerica\b/i.test(n)) return true;
-  }
-  if(/united states|usa/i.test(n) && (q.includes('us') || q.includes('america') || q.includes('united'))) return true;
-  return false;
-}
-
-
-function serviceCatalogSkeleton(){
-  return `<div class="sk-svc-grid" aria-hidden="true" aria-busy="true"><div class="sk-svc-tile"><div class="sk-svc-icon"></div><div class="sk-svc-label"></div></div><div class="sk-svc-tile"><div class="sk-svc-icon"></div><div class="sk-svc-label"></div></div><div class="sk-svc-tile"><div class="sk-svc-icon"></div><div class="sk-svc-label"></div></div><div class="sk-svc-tile"><div class="sk-svc-icon"></div><div class="sk-svc-label"></div></div><div class="sk-svc-tile"><div class="sk-svc-icon"></div><div class="sk-svc-label"></div></div><div class="sk-svc-tile"><div class="sk-svc-icon"></div><div class="sk-svc-label"></div></div><div class="sk-svc-tile"><div class="sk-svc-icon"></div><div class="sk-svc-label"></div></div><div class="sk-svc-tile"><div class="sk-svc-icon"></div><div class="sk-svc-label"></div></div><div class="sk-svc-tile"><div class="sk-svc-icon"></div><div class="sk-svc-label"></div></div><div class="sk-svc-tile"><div class="sk-svc-icon"></div><div class="sk-svc-label"></div></div><div class="sk-svc-tile"><div class="sk-svc-icon"></div><div class="sk-svc-label"></div></div><div class="sk-svc-tile"><div class="sk-svc-icon"></div><div class="sk-svc-label"></div></div></div>`;
-}
-
-async function ensureSb(){
-  if(sbClient) return sbClient;
-  if(!window.supabase) throw new Error('Supabase library not loaded');
-  sbClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
-    auth: { persistSession: true, autoRefreshToken: true, storage: window.sessionStorage }
-  });
-  return sbClient;
+  }catch(e){ return { ok:false, reason: e.message || String(e) }; }
 }
 
 
@@ -452,100 +433,87 @@ function serviceCatalogSkeleton(){
   return '<div class="sk-svc-grid" aria-hidden="true" aria-busy="true">' + tiles + '</div>';
 }
 
-async function ensureSb(){
-  if (sbClient) return sbClient;
-  if (!window.supabase) throw new Error('Supabase library not loaded — refresh the page');
-  sbClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
-    auth: { persistSession: true, autoRefreshToken: true, storage: window.sessionStorage }
-  });
-  return sbClient;
-}
-
 async function loadServiceCatalog(){
-  try {
-    if (serviceGrid) {
+  try{
+    if(serviceGrid){
       serviceGrid.innerHTML = serviceCatalogSkeleton();
       serviceGrid.dataset.skelReady = '1';
     }
-    const sb = await ensureSb();
-
-    // Proven path (same as old country-first page): RPC countries, then services
-    // filtered by country_id. Scanning the whole number_services table hangs.
-    var countries = [];
-    try {
-      var rpc = await sb.rpc('grizzly_countries');
-      if (!rpc.error && rpc.data && rpc.data.length) countries = rpc.data;
-    } catch (e1) {}
-
-    if (!countries.length) {
-      // fallback: distinct country rows from a small services sample
-      var fb = await sb.from('number_services')
-        .select('country_id, country_name')
-        .eq('source', 'grizzlysms')
-        .limit(80);
-      if (fb.data) {
-        var seenC = {};
-        fb.data.forEach(function(r){
-          if (r.country_id != null && !seenC[r.country_id]) {
-            seenC[r.country_id] = 1;
-            countries.push({ country_id: r.country_id, country_name: r.country_name || ('Country ' + r.country_id) });
-          }
-        });
-      }
-    }
-
-    allCountriesMaster = countries || [];
-
-    var map = new Map();
-    // Pull services from up to 12 countries (batched) — matches old working filter
-    var ids = allCountriesMaster.map(function(c){ return c.country_id; }).filter(function(id){ return id != null; });
-    var batchSize = 8;
-    for (var i = 0; i < ids.length && i < 40; i += batchSize) {
-      var batch = ids.slice(i, i + batchSize);
-      var res = await sb.from('number_services')
-        .select('service_id, service_name')
-        .eq('source', 'grizzlysms')
-        .eq('is_available', true)
-        .in('country_id', batch)
-        .limit(400);
-      if (res.error) {
-        // retry batch without is_available
-        res = await sb.from('number_services')
-          .select('service_id, service_name')
-          .eq('source', 'grizzlysms')
-          .in('country_id', batch)
-          .limit(400);
-      }
-      if (res.error) {
-        console.error('services batch', res.error);
-        continue;
-      }
-      (res.data || []).forEach(function(row){
-        var name = String(row.service_name || row.service_id || '').replace(/_/g, ' ').trim();
-        if (!name) return;
-        var key = name.toLowerCase();
-        if (!map.has(key)) map.set(key, { service_id: row.service_id, service_name: name, key: key });
+    if(!sbClient){
+      if(!window.supabase) throw new Error('Supabase not loaded');
+      sbClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+        auth: { persistSession: true, autoRefreshToken: true, storage: window.sessionStorage }
       });
-      // enough unique services for a usable grid
-      if (map.size >= 80) break;
     }
 
-    allServiceCatalog = Array.from(map.values()).sort(function(a, b){
-      var ra = popularRank(a.service_name), rb = popularRank(b.service_name);
-      if (ra !== rb) return ra - rb;
+    // SAME as old working page: countries via RPC
+    const { data: countries, error: cErr } = await sbClient.rpc('grizzly_countries');
+    if(cErr) throw new Error(cErr.message || 'Countries failed');
+    allCountries = countries || [];
+
+    // Build service catalog using the EXACT per-country query that already worked
+    serviceCountryIndex = {};
+    const catalogMap = new Map();
+    const ids = allCountries.map(c => c.country_id).filter(id => id != null);
+    const batchSize = 6;
+    // Cap countries scanned so mobile does not stall; 30 countries is plenty for a full service list
+    const maxCountries = Math.min(ids.length, 36);
+
+    for(let i = 0; i < maxCountries; i += batchSize){
+      const batch = ids.slice(i, i + batchSize);
+      const results = await Promise.all(batch.map(async (countryId) => {
+        const cmeta = allCountries.find(c => c.country_id === countryId) || {};
+        // identical filters to old selectCountry()
+        const { data, error } = await sbClient
+          .from('number_services')
+          .select('service_id, service_name, category, price, available_quantity')
+          .eq('source', 'grizzlysms')
+          .eq('is_available', true)
+          .eq('country_id', countryId)
+          .gt('price', 0)
+          .order('service_name', { ascending: true });
+        if(error){
+          console.warn('country services', countryId, error.message);
+          return { countryId, cmeta, rows: [] };
+        }
+        return { countryId, cmeta, rows: data || [] };
+      }));
+
+      results.forEach(({ countryId, cmeta, rows }) => {
+        rows.forEach(row => {
+          const name = String(row.service_name || row.service_id || '').replace(/_/g, ' ').trim();
+          if(!name) return;
+          const key = name.toLowerCase();
+          if(!catalogMap.has(key)){
+            catalogMap.set(key, { service_id: row.service_id, service_name: name, key: key });
+          }
+          if(!serviceCountryIndex[key]) serviceCountryIndex[key] = [];
+          serviceCountryIndex[key].push({
+            country_id: countryId,
+            country_name: cmeta.country_name || ('Country ' + countryId),
+            price: row.price,
+            available_quantity: row.available_quantity,
+            service_id: row.service_id,
+            service_name: name
+          });
+        });
+      });
+    }
+
+    allServiceCatalog = Array.from(catalogMap.values()).sort((a, b) => {
+      const ra = popularRank(a.service_name), rb = popularRank(b.service_name);
+      if(ra !== rb) return ra - rb;
       return a.service_name.localeCompare(b.service_name);
     });
 
-    if (!allServiceCatalog.length) {
-      serviceGrid.innerHTML = '<div class="empty-state"><div class="empty-state-icon">📵</div><h4>No Services Found</h4><p>Could not load the catalog. Check your connection and try again.</p><button type="button" class="btn btn-primary" style="margin-top:12px;width:auto;padding:10px 16px" onclick="loadServiceCatalog()">Retry</button></div>';
+    if(!allServiceCatalog.length){
+      serviceGrid.innerHTML = '<div class="empty-state"><div class="empty-state-icon">📵</div><h4>No Services Found</h4><p>Catalog may still be syncing. Try again in a moment.</p><button type="button" class="btn btn-primary" style="margin-top:12px;width:auto;padding:10px 16px" onclick="loadServiceCatalog()">Retry</button></div>';
       return;
     }
     renderServiceCatalog(allServiceCatalog);
-  } catch (err) {
+  }catch(err){
     console.error('loadServiceCatalog', err);
-    if (serviceGrid) {
-      serviceGrid.innerHTML = '<div class="empty-state"><h4>Failed to load</h4><p>' + escapeHtml(err.message || String(err)) + '</p><button type="button" class="btn btn-primary" style="margin-top:12px;width:auto;padding:10px 16px" onclick="loadServiceCatalog()">Retry</button></div>';
-    }
+    serviceGrid.innerHTML = '<div class="empty-state"><div class="empty-state-icon">⚠️</div><h4>Failed to load</h4><p>'+escapeHtml(err.message||String(err))+'</p><button type="button" class="btn btn-primary" style="margin-top:12px;width:auto;padding:10px 16px" onclick="loadServiceCatalog()">Retry</button></div>';
   }
 }
 
@@ -572,96 +540,52 @@ function renderServiceCatalog(list){
   });
 }
 
-
-async function selectService(svc){
+function selectService(svc){
   currentServicePick = svc;
   currentCountry = null;
   activeService = null;
   serviceStep.style.display = 'none';
   countryStep.style.display = 'block';
-  var icon = serviceIcon(svc.service_name);
-  var mini = icon
-    ? '<span class="mini-icon" style="background:' + icon.color + '"><i class="' + icon.cls + '"></i></span>'
+  const icon = serviceIcon(svc.service_name);
+  const mini = icon
+    ? '<span class="mini-icon" style="background:'+icon.color+'"><i class="'+icon.cls+'"></i></span>'
     : '';
   document.getElementById('selectedServiceName').innerHTML = mini + escapeHtml(svc.service_name);
   countrySearch.value = '';
-  countryList.innerHTML = '<div class="loading-spinner"><div class="spinner"></div><div class="loading-text">Loading countries…</div></div>';
 
-  try {
-    var sb = await ensureSb();
-    var name = svc.service_name;
-    var sid = svc.service_id;
+  const key = (svc.key || svc.service_name || '').toLowerCase();
+  let rows = (serviceCountryIndex[key] || []).slice();
+  // dedupe by country keep cheapest
+  const byC = new Map();
+  rows.forEach(c => {
+    const id = String(c.country_id);
+    if(!byC.has(id) || Number(c.price) < Number(byC.get(id).price)) byC.set(id, c);
+  });
+  allCountries = Array.from(byC.values()).sort((a,b) => Number(a.price) - Number(b.price));
+  renderCountryPrices(allCountries);
+}
 
-    // Prefer service_id match (stable across countries on Grizzly)
-    var res = await sb.from('number_services')
-      .select('service_id, service_name, country_id, country_name, price, available_quantity')
-      .eq('source', 'grizzlysms')
-      .eq('is_available', true)
-      .eq('service_id', sid)
-      .order('price', { ascending: true })
-      .limit(300);
-
-    if (res.error || !(res.data && res.data.length)) {
-      res = await sb.from('number_services')
-        .select('service_id, service_name, country_id, country_name, price, available_quantity')
-        .eq('source', 'grizzlysms')
-        .eq('service_id', sid)
-        .order('price', { ascending: true })
-        .limit(300);
-    }
-    // name fallback
-    if (!(res.data && res.data.length)) {
-      res = await sb.from('number_services')
-        .select('service_id, service_name, country_id, country_name, price, available_quantity')
-        .eq('source', 'grizzlysms')
-        .eq('is_available', true)
-        .ilike('service_name', name)
-        .order('price', { ascending: true })
-        .limit(300);
-    }
-
-    if (res.error) {
-      countryList.innerHTML = '<div class="empty-state"><h4>Failed</h4><p>' + escapeHtml(res.error.message) + '</p></div>';
-      return;
-    }
-
-    var rows = res.data || [];
-    // If still empty, walk country batches (same reliable pattern)
-    if (!rows.length && allCountriesMaster && allCountriesMaster.length) {
-      var ids = allCountriesMaster.map(function(c){ return c.country_id; }).filter(Boolean);
-      for (var i = 0; i < ids.length; i += 10) {
-        var batch = ids.slice(i, i + 10);
-        var r2 = await sb.from('number_services')
-          .select('service_id, service_name, country_id, country_name, price, available_quantity')
-          .eq('source', 'grizzlysms')
-          .eq('service_id', sid)
-          .in('country_id', batch)
-          .limit(100);
-        if (r2.data && r2.data.length) rows = rows.concat(r2.data);
-        if (rows.length >= 50) break;
-      }
-    }
-
-    allCountries = rows.map(function(r){
-      return {
-        country_id: r.country_id,
-        country_name: r.country_name || ('Country ' + r.country_id),
-        price: r.price,
-        available_quantity: r.available_quantity,
-        service_id: r.service_id,
-        service_name: r.service_name || name
-      };
-    });
-    var byC = new Map();
-    allCountries.forEach(function(c){
-      var id = String(c.country_id);
-      if (!byC.has(id) || Number(c.price) < Number(byC.get(id).price)) byC.set(id, c);
-    });
-    allCountries = Array.from(byC.values()).sort(function(a, b){ return Number(a.price) - Number(b.price); });
-    renderCountryPrices(allCountries);
-  } catch (e) {
-    countryList.innerHTML = '<div class="empty-state"><h4>Failed</h4><p>' + escapeHtml(e.message || String(e)) + '</p></div>';
+function renderCountryPrices(list){
+  if(!list.length){
+    countryList.innerHTML = '<div class="empty-state"><div class="empty-state-icon">🔍</div><h4>No countries for this service</h4></div>';
+    return;
   }
+  countryList.innerHTML = list.map((c, i) => {
+    return '<div class="country-price-row" data-index="'+i+'"><div class="left"><span class="flag">'+countryFlag(c.country_name)+'</span><span class="cname">'+escapeHtml(c.country_name)+'</span></div><div class="right"><span class="cprice">'+money(c.price)+'</span><span class="chev"><i class="fa-solid fa-chevron-right"></i></span></div></div>';
+  }).join('');
+  countryList.querySelectorAll('.country-price-row').forEach(row => {
+    row.addEventListener('click', () => {
+      const c = list[Number(row.dataset.index)];
+      if(!c) return;
+      currentCountry = { country_id: c.country_id, country_name: c.country_name };
+      openPurchaseModal({
+        service_id: c.service_id,
+        service_name: c.service_name,
+        price: c.price,
+        available_quantity: c.available_quantity
+      });
+    });
+  });
 }
 
 function backToServices(){
@@ -669,18 +593,14 @@ function backToServices(){
   serviceStep.style.display = 'block';
   currentCountry = null;
   currentServicePick = null;
-  allCountries = [];
 }
-
-// legacy name kept for any leftover refs
 function backToCountries(){ backToServices(); }
+
+// legacy stubs (avoid breakage if something still calls them)
 async function loadCountries(){ return loadServiceCatalog(); }
 function renderCountries(){}
-function selectCountry(){}
+async function selectCountry(){}
 function renderServices(){}
-
-ce_id||'').toLowerCase().includes(q)) : allServices);
-});
 
 function openPurchaseModal(s){
   activeService = s;
@@ -774,6 +694,13 @@ document.getElementById('psBuyBtn').addEventListener('click', async function(){
   }
 });
 
+(async function bootSms(){
+  try { await initSession(); } catch(e){ console.warn(e); }
+  try { await loadServiceCatalog(); } catch(e){
+    console.error(e);
+    if(serviceGrid) serviceGrid.innerHTML = '<div class="empty-state"><h4>Failed to load</h4><p>'+escapeHtml(e.message||String(e))+'</p></div>';
+  }
+})();
 
 serviceSearch.addEventListener('input', () => {
   const q = serviceSearch.value.trim().toLowerCase();
@@ -784,13 +711,6 @@ countrySearch.addEventListener('input', () => {
   renderCountryPrices(q ? allCountries.filter(c => countryMatchesQuery(c.country_name, q)) : allCountries);
 });
 document.getElementById('changeServiceBtn')?.addEventListener('click', backToServices);
-
-(async function bootSms(){
-  try { await initSession(); } catch(e) {}
-  try { await loadServiceCatalog(); } catch(e) {
-    if(serviceGrid) serviceGrid.innerHTML = '<div class="empty-state"><h4>Failed to load</h4><p>'+escapeHtml(e.message||String(e))+'</p></div>';
-  }
-})();
 
 </script>
 
@@ -803,10 +723,11 @@ document.getElementById('changeServiceBtn')?.addEventListener('click', backToSer
     nodes.forEach(function(el){
       if(el.dataset.skelReady) return;
       if(el.id === 'serviceGrid'){
-        el.innerHTML = serviceCatalogSkeleton ? serviceCatalogSkeleton() : el.innerHTML;
+        if(typeof serviceCatalogSkeleton === 'function') el.innerHTML = serviceCatalogSkeleton();
         el.dataset.skelReady = '1';
         return;
       }
+      if(el.id === 'countryList'){ el.dataset.skelReady = '1'; return; }
       var type = el.getAttribute('data-skel') || (el.id && /list|order/i.test(el.id) ? 'cards' : 'grid');
       el.innerHTML = (mjSkeleton[type] || mjSkeleton.grid)(type === 'cards' ? 3 : 6);
       el.dataset.skelReady = '1';
