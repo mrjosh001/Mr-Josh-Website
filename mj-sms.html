@@ -242,6 +242,16 @@ body::before{content:'';position:fixed;inset:0;pointer-events:none;z-index:0;bac
 <div id="countryList" class="country-list"></div>
 </div>
 
+<div class="content-card" id="poolStep" style="display:none;">
+<h2><i class="fa-solid fa-layer-group" style="color:var(--primary)"></i> Choose a Pool</h2>
+<p class="helper-text">This country has more than one number pool — each has its own price and stock. Pick one below.</p>
+<div class="selected-service-bar">
+<span class="name" id="selectedPoolContext"></span>
+<button type="button" id="changePoolCountryBtn">Change</button>
+</div>
+<div id="poolList" class="country-list"></div>
+</div>
+
 <!-- Purchase modal -->
 <div class="purchase-modal" id="purchaseModal">
 <div class="purchase-sheet">
@@ -1117,7 +1127,11 @@ function backToServices(){
   currentServicePick = null;
   selectedProviderId = null;
 }
-function backToCountries(){ backToServices(); }
+function backToCountries(){
+  if(poolStep) poolStep.style.display = 'none';
+  countryStep.style.display = 'block';
+  selectedProviderId = null;
+}
 
 // legacy stubs (avoid breakage if something still calls them)
 async function loadCountries(){ return loadServiceCatalog(); }
@@ -1275,6 +1289,7 @@ countrySearch.addEventListener('input', () => {
   renderCountryPrices(q ? allCountries.filter(c => countryMatchesQuery(c.country_name, q)) : allCountries);
 });
 document.getElementById('changeServiceBtn')?.addEventListener('click', backToServices);
+document.getElementById('changePoolCountryBtn')?.addEventListener('click', backToCountries);
 document.getElementById('changePoolCountryBtn')?.addEventListener('click', function(){
   if(poolStep) poolStep.style.display = 'none';
   countryStep.style.display = 'block';
