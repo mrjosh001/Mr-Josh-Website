@@ -577,7 +577,36 @@ async function loadServiceCatalog(opts){
     }
 
     // Cache while logged in / same browser tab session — do not reload from scratch
-    var CACHE_KEY = 'mj_sms1_catalog_v3';
+    var CACHE_KEY = 'mj_sms1_catalog_v4';
+    function lagosDay(){
+      try{ return new Date().toLocaleDateString('en-CA', { timeZone: 'Africa/Lagos' }); }
+      catch(e){ return new Date().toISOString().slice(0,10); }
+    }
+    function cacheGet(){
+      try{
+        var raw = localStorage.getItem(CACHE_KEY) || sessionStorage.getItem(CACHE_KEY);
+        if(!raw) return null;
+        var o = JSON.parse(raw);
+        if(!o || o.day !== lagosDay()) return null; // new day → reload
+        if(!(o.catalog && o.catalog.length)) return null;
+        return o;
+      }catch(e){ return null; }
+    }
+    function cacheSet(complete){
+      try{
+        var payload = JSON.stringify({
+          day: lagosDay(),
+          t: Date.now(),
+          complete: !!complete,
+          catalog: allServiceCatalog,
+          index: serviceCountryIndex
+        });
+        try{ localStorage.setItem(CACHE_KEY, payload); }catch(e1){
+          try{ sessionStorage.setItem(CACHE_KEY, payload); }catch(e2){}
+        }
+      }catch(e){}
+    }
+
     var catalogMap = new Map();
 
     function ingest(rows, countryId, countryName){
@@ -619,24 +648,8 @@ async function loadServiceCatalog(opts){
       renderServiceCatalog(allServiceCatalog);
     }
 
-    function saveCache(complete){
-      try{
-        sessionStorage.setItem(CACHE_KEY, JSON.stringify({
-          t: Date.now(),
-          complete: !!complete,
-          catalog: allServiceCatalog,
-          index: serviceCountryIndex
-        }));
-      }catch(e){}
-    }
-
-    function loadCache(){
-      try{
-        var raw = sessionStorage.getItem(CACHE_KEY);
-        if(!raw) return null;
-        return JSON.parse(raw);
-      }catch(e){ return null; }
-    }
+    function saveCache(complete){ cacheSet(complete); }
+    function loadCache(){ return cacheGet(); }
 
     // --- Instant restore: stay loaded while user is in this session ---
     var cached = loadCache();
@@ -648,11 +661,8 @@ async function loadServiceCatalog(opts){
       paintProgress();
       // If already complete, soft-refresh in background only (no skeleton, no wait)
       if(cached.complete){
-        var age = Date.now() - (cached.t || 0);
-        // Only quiet refresh if cache is older than 15 minutes — keep UI instant
-        if(age > 15 * 60 * 1000){
-          setTimeout(function(){ softRefreshCatalogFull(); }, 50);
-        }
+        // Stays for the rest of the Lagos calendar day — no egress reload
+        __smsCatalogComplete = true;
         __smsCatalogLoading = false;
         return;
       }
@@ -789,11 +799,9 @@ async function loadServiceCatalog(opts){
 
 // Soft refresh after a complete cache — no skeleton, silent
 async function softRefreshCatalogFull(){
-  try{
-    if(__smsCatalogLoading) return;
-    // Re-run full load forced but without clearing current grid
-    await loadServiceCatalog({ force: true, skipPriority: false });
-  }catch(e){ console.warn('soft refresh', e); }
+  // Intentionally no automatic refresh same day (saves egress).
+  // Pass loadServiceCatalog({ force: true }) only on explicit Retry.
+  return;
 }
 
 // Search hits DB even while catalog is still filling

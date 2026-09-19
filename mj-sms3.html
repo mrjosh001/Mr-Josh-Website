@@ -449,27 +449,51 @@ const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
     return '<div class="svc-icon" style="background:'+fa.color+'"><i class="'+fa.cls+'"></i></div>';
   }
 
+
+  function lagosDayS2(){
+    try{ return new Date().toLocaleDateString('en-CA', { timeZone: 'Africa/Lagos' }); }
+    catch(e){ return new Date().toISOString().slice(0,10); }
+  }
+  function s2CacheGet(){
+    try{
+      var raw = localStorage.getItem('mj_sms2_catalog_v2') || sessionStorage.getItem('mj_sms2_catalog_v2');
+      if(!raw) return null;
+      var o = JSON.parse(raw);
+      if(!o || o.day !== lagosDayS2()) return null;
+      if(!(o.catalog && o.catalog.length)) return null;
+      return o;
+    }catch(e){ return null; }
+  }
+  function s2CacheSet(complete){
+    try{
+      var payload = JSON.stringify({
+        day: lagosDayS2(), t: Date.now(), complete: !!complete,
+        catalog: allServiceCatalog, index: serviceCountryIndex
+      });
+      try{ localStorage.setItem('mj_sms2_catalog_v2', payload); }catch(e1){
+        try{ sessionStorage.setItem('mj_sms2_catalog_v2', payload); }catch(e2){}
+      }
+    }catch(e){}
+  }
+
   async function loadCountries(){ return loadServiceCatalogS2(); }
 
   async function loadServiceCatalogS2(opts){
     opts = opts || {};
     try{
       if(!opts.force){
-        try{
-          var raw = sessionStorage.getItem('mj_sms2_catalog_v1');
-          if(raw){
-            var cached = JSON.parse(raw);
-            if(cached && cached.catalog && cached.catalog.length){
-              allServiceCatalog = cached.catalog;
-              serviceCountryIndex = cached.index || {};
-              renderServiceCatalogS2(allServiceCatalog);
-              if(cached.complete && (Date.now() - (cached.t||0)) < 15*60*1000){
-                return;
-              }
-              // soft continue fill below
-            }
+        var cached = s2CacheGet();
+        if(cached){
+          allServiceCatalog = cached.catalog;
+          serviceCountryIndex = cached.index || {};
+          renderServiceCatalogS2(allServiceCatalog);
+          // Complete cache lasts the rest of the Lagos day — no reload
+          if(cached.complete){
+            __s2CatalogLoading = false;
+            return;
           }
-        }catch(e){}
+          // Incomplete: keep filling in background
+        }
       }
 
       if(serviceGrid && !(allServiceCatalog && allServiceCatalog.length)){
@@ -512,11 +536,7 @@ const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
           return String(a.title||'').localeCompare(String(b.title||''));
         });
         renderServiceCatalogS2(allServiceCatalog);
-        try{
-          sessionStorage.setItem('mj_sms2_catalog_v1', JSON.stringify({
-            t: Date.now(), complete: false, catalog: allServiceCatalog, index: serviceCountryIndex
-          }));
-        }catch(e){}
+        s2CacheSet(false);
       }
 
       // 1+2 parallel: projects API + first DB page (faster first paint)
@@ -579,11 +599,7 @@ const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
         });
       }catch(e){}
 
-      try{
-        sessionStorage.setItem('mj_sms2_catalog_v1', JSON.stringify({
-          t: Date.now(), complete: true, catalog: allServiceCatalog, index: serviceCountryIndex
-        }));
-      }catch(e){}
+      s2CacheSet(true);
 
       __s2CatalogLoading = false;
       if(!allServiceCatalog.length){
