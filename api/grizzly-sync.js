@@ -28,6 +28,37 @@ import { applyMarkup } from '../lib/pricing.js';
  */
 
 const BASE = 'https://api.grizzlysms.com/stubs/handler_api.php';
+
+/** Deterministic customer NGN price from supplier USD (no random) — used for provider pools */
+function salePriceFromUsd(supplierPriceUsd) {
+  const rate =
+    Number(process.env.USD_TO_NGN_RATE) ||
+    Number(process.env.USD_TO_NGN) ||
+    1500;
+  const percent = 80; // mid-band of 60–100 markup
+  const minProfit = Number(process.env.MIN_PROFIT_NGN) || 500;
+  const minSale = Number(process.env.MIN_NUMBER_PRICE_NGN) || 1000;
+  const supplierNgn = Number(supplierPriceUsd) * rate;
+  if (!Number.isFinite(supplierNgn) || supplierNgn <= 0) return minSale;
+  const percentPrice = Math.ceil(supplierNgn * (1 + percent / 100));
+  const floorPrice = Math.ceil(supplierNgn + minProfit);
+  const finalPrice = Math.max(percentPrice, floorPrice, minSale);
+  return Math.ceil(finalPrice / 50) * 50;
+}
+
+function lowestProviderUsd(providersObj) {
+  if (!providersObj || typeof providersObj !== 'object') return null;
+  let min = null;
+  for (const p of Object.values(providersObj)) {
+    const arr = Array.isArray(p?.price) ? p.price : [p?.price];
+    for (const x of arr) {
+      const n = Number(x);
+      if (Number.isFinite(n) && n > 0 && (min == null || n < min)) min = n;
+    }
+  }
+  return min;
+}
+
 const GRIZZLY_KEY = process.env.GRIZZLYSMS_API_KEY;
 const JOB_SOURCE = 'grizzlysms';
 
@@ -546,10 +577,13 @@ async function handleSync(req, res) {
 
 async function handleOrder(req, res) {
   const body = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : (req.body || {});
-  const { country_id, service_id, external_order_id, user_id } = body;
+  const { country_id, service_id, external_order_id, user_id, provider_id } = body;
 
   const countryId = parseInt(country_id, 10);
   const serviceId = service_id != null ? String(service_id) : null;
+  const providerId = provider_id != null && String(provider_id).trim() !== ''
+    ? String(provider_id).trim()
+    : null;
 
   if (!Number.isFinite(countryId) || !serviceId || !user_id) {
     return res.status(400).json({
@@ -571,7 +605,7 @@ async function handleOrder(req, res) {
   try {
     const { data: svc, error: svcErr } = await supabase
       .from('number_services')
-      .select('service_name, country_name, price, supplier_price, is_available')
+      .select('service_name, country_name, price, supplier_price, is_available, providers_raw')
       .eq('source', 'grizzlysms')
       .eq('country_id', countryId)
       .eq('service_id', serviceId)
@@ -590,10 +624,34 @@ async function handleOrder(req, res) {
       });
     }
 
-    price = Number(svc.price) || 0;
-    const supplierPriceUsd = Number(svc.supplier_price) || null;
     serviceName = svc.service_name;
     countryName = svc.country_name;
+
+    // Provider pool (getPricesV3): charge the selected tier, not a forged client price
+    let supplierPriceUsd = Number(svc.supplier_price) || null;
+    let resolvedProviderId = providerId;
+    price = Number(svc.price) || 0;
+
+    if (providerId && svc.providers_raw && typeof svc.providers_raw === 'object') {
+      const pInfo = svc.providers_raw[providerId] || svc.providers_raw[String(providerId)];
+      if (!pInfo) {
+        return res.status(400).json({
+          success: false,
+          message: 'That number pool is no longer available. Pick another option.'
+        });
+      }
+      const priceArr = Array.isArray(pInfo.price) ? pInfo.price : [pInfo.price];
+      const nums = priceArr.map(Number).filter((n) => Number.isFinite(n) && n > 0);
+      if (!nums.length) {
+        return res.status(409).json({ success: false, message: 'This pool has no valid price right now.' });
+      }
+      supplierPriceUsd = Math.min(...nums);
+      price = salePriceFromUsd(supplierPriceUsd);
+      resolvedProviderId = String(pInfo.provider_id != null ? pInfo.provider_id : providerId);
+    } else if (providerId && !svc.providers_raw) {
+      // Client asked for a pool but we have no provider map — fall back to catalog price
+      resolvedProviderId = providerId;
+    }
 
     const { data: profile, error: profErr } = await supabase
       .from('profiles')
@@ -686,6 +744,14 @@ async function handleOrder(req, res) {
       service: serviceId,
       country: String(countryId)
     });
+    // Pin to selected Grizzly provider pool when user chose a tier
+    if (resolvedProviderId) {
+      qs.set('providerIds', String(resolvedProviderId));
+    }
+    if (supplierPriceUsd != null && Number.isFinite(Number(supplierPriceUsd)) && Number(supplierPriceUsd) > 0) {
+      // maxPrice in USD per Grizzly docs — helps match the pool the user paid for
+      qs.set('maxPrice', String(Number(supplierPriceUsd)));
+    }
 
     const supplierRes = await fetch(`${BASE}?${qs.toString()}`, { method: 'GET' });
     const rawText = await supplierRes.text();
