@@ -339,25 +339,36 @@ function serviceDomain(name){
   const slug = n.replace(/[^a-z0-9]+/g,'').slice(0,24);
   return slug ? (slug + '.com') : null;
 }
+
 function brandfetchUrl(domain){
   if(!domain) return '';
-  // Brandfetch public CDN — square icon
   return 'https://cdn.brandfetch.io/' + domain + '/w/128/h/128/icon';
 }
 function serviceLogoHtml(name, sizeClass){
-  const icon = serviceIconFa(name); // FA meta for fallback color
+  const icon = serviceIconFa(name);
   const domain = serviceDomain(name);
   const url = brandfetchUrl(domain);
   const bg = (icon && icon.color) ? icon.color : '#3b82f6';
   const fa = (icon && icon.cls) ? icon.cls : 'fa-solid fa-mobile-screen';
+  const cls = 'svc-icon' + (sizeClass ? (' ' + sizeClass) : '');
   if(!url){
-    return '<div class="svc-icon '+(sizeClass||'')+'" style="background:'+bg+'"><i class="'+fa+'"></i></div>';
+    return '<div class="' + cls + '" style="background:' + bg + '"><i class="' + fa + '"></i></div>';
   }
-  // white tile + brand logo; on error swap to FA
-  const fallback = (icon && icon.cls)
-    ? ("this.onerror=null;this.parentNode.style.background=\\'"+bg+"\\';this.parentNode.innerHTML=\\'<i class=\\'"+fa+"\\'></i>\\';")
-    : ("this.onerror=null;this.parentNode.style.background=\\'"+bg+"\\';this.parentNode.innerHTML=\\'<i class=\\'fa-solid fa-mobile-screen\\'></i>\\';");
-  return '<div class="svc-icon '+(sizeClass||'')+'" style="background:#fff"><img src="'+url+'" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="'+fallback+'"/></div>';
+  // onerror uses double-quoted attr; escape carefully — no nested broken backslashes
+  return '<div class="' + cls + '" style="background:#fff" data-fa="' + fa + '" data-bg="' + bg + '">' +
+    '<img src="' + url + '" alt="" loading="lazy" referrerpolicy="no-referrer" ' +
+    'onerror="mjLogoFallback(this)"/>' +
+    '</div>';
+}
+function mjLogoFallback(img){
+  try{
+    var p = img.parentNode;
+    if(!p) return;
+    var fa = p.getAttribute('data-fa') || 'fa-solid fa-mobile-screen';
+    var bg = p.getAttribute('data-bg') || '#3b82f6';
+    p.style.background = bg;
+    p.innerHTML = '<i class="' + fa + '"></i>';
+  }catch(e){}
 }
 
 const SERVICE_ICON_MAP = [
@@ -487,6 +498,7 @@ function serviceCatalogSkeleton(){
 }
 
 
+
 async function loadServiceCatalog(){
   try{
     if(serviceGrid){
@@ -494,92 +506,45 @@ async function loadServiceCatalog(){
       serviceGrid.dataset.skelReady = '1';
     }
     if(!sbClient){
-      if(!window.supabase) throw new Error('Supabase not loaded');
+      if(!window.supabase) throw new Error('Supabase not loaded — refresh the page');
       sbClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
         auth: { persistSession: true, autoRefreshToken: true, storage: window.sessionStorage }
       });
     }
 
-    // Countries list (fast RPC) — used for names + fallback
-    try {
-      const { data: countries } = await sbClient.rpc('grizzly_countries');
-      allCountriesMaster = countries || [];
-    } catch(_) { allCountriesMaster = []; }
+    // Proven path from last working page
+    const { data: countries, error: cErr } = await sbClient.rpc('grizzly_countries');
+    if(cErr) throw new Error(cErr.message || 'Could not load countries');
+    allCountriesMaster = countries || [];
+    if(!allCountriesMaster.length){
+      serviceGrid.innerHTML = '<div class="empty-state"><h4>No countries</h4><p>Catalog may still be syncing.</p><button type="button" class="btn btn-primary" style="margin-top:12px;width:auto;padding:10px 16px" onclick="loadServiceCatalog()">Retry</button></div>';
+      return;
+    }
 
     serviceCountryIndex = {};
     const catalogMap = new Map();
+    var ids = allCountriesMaster.map(function(c){ return c.country_id; }).filter(function(id){ return id != null; });
+    var PRIORITY_NAMES = /united states|usa|nigeria|united kingdom|england|india|indonesia|philippines|russia|ukraine|brazil|germany|france|turkey|mexico|pakistan|bangladesh|vietnam|thailand|south africa|kenya|ghana/i;
+    ids = ids.slice().sort(function(a,b){
+      var ca = allCountriesMaster.find(function(c){ return c.country_id === a; });
+      var cb = allCountriesMaster.find(function(c){ return c.country_id === b; });
+      var pa = PRIORITY_NAMES.test((ca && ca.country_name) || '') ? 0 : 1;
+      var pb = PRIORITY_NAMES.test((cb && cb.country_name) || '') ? 0 : 1;
+      return pa - pb;
+    });
 
-    // FAST PATH: one (or few) bulk reads — not 36 round-trips
-    let rows = [];
-    let page = 0;
-    const pageSize = 1000;
-    while(page < 5){ // max 5000 rows
-      const from = page * pageSize;
-      const to = from + pageSize - 1;
-      const { data, error } = await sbClient
-        .from('number_services')
-        .select('service_id, service_name, country_id, country_name, price, available_quantity')
-        .eq('source', 'grizzlysms')
-        .eq('is_available', true)
-        .gt('price', 0)
-        .range(from, to);
-      if(error){
-        console.warn('bulk services page', page, error.message);
-        break;
-      }
-      if(!data || !data.length) break;
-      rows = rows.concat(data);
-      if(data.length < pageSize) break;
-      page++;
-    }
-
-    // Fallback if bulk empty: sample countries (old style) but parallel and progressive
-    if(!rows.length && allCountriesMaster.length){
-      const ids = allCountriesMaster.map(c => c.country_id).filter(Boolean);
-      for(let i = 0; i < ids.length; i += 10){
-        const batch = ids.slice(i, i + 10);
-        const parts = await Promise.all(batch.map(async (countryId) => {
-          const { data } = await sbClient
-            .from('number_services')
-            .select('service_id, service_name, country_id, country_name, price, available_quantity')
-            .eq('source', 'grizzlysms')
-            .eq('is_available', true)
-            .eq('country_id', countryId)
-            .gt('price', 0);
-          return data || [];
-        }));
-        parts.forEach(p => { rows = rows.concat(p); });
-        // Progressive: show icons as soon as we have some services
-        if(rows.length && catalogMap.size < 5){
-          rows.forEach(function(row){
-            const name = String(row.service_name || row.service_id || '').replace(/_/g,' ').trim();
-            if(!name) return;
-            const key = name.toLowerCase();
-            if(!catalogMap.has(key)) catalogMap.set(key, { service_id: row.service_id, service_name: name, key: key });
-            if(!serviceCountryIndex[key]) serviceCountryIndex[key] = [];
-            serviceCountryIndex[key].push({
-              country_id: row.country_id,
-              country_name: row.country_name || ('Country ' + row.country_id),
-              price: row.price,
-              available_quantity: row.available_quantity,
-              service_id: row.service_id,
-              service_name: name
-            });
-          });
-          allServiceCatalog = Array.from(catalogMap.values()).sort((a,b) => popularRank(a.service_name) - popularRank(b.service_name) || a.service_name.localeCompare(b.service_name));
-          if(allServiceCatalog.length) renderServiceCatalog(allServiceCatalog);
-        }
-      }
-    } else {
-      rows.forEach(function(row){
-        const name = String(row.service_name || row.service_id || '').replace(/_/g,' ').trim();
+    function ingest(rows, countryId, countryName){
+      (rows || []).forEach(function(row){
+        var name = String(row.service_name || row.service_id || '').replace(/_/g, ' ').trim();
         if(!name) return;
-        const key = name.toLowerCase();
-        if(!catalogMap.has(key)) catalogMap.set(key, { service_id: row.service_id, service_name: name, key: key });
+        var key = name.toLowerCase();
+        if(!catalogMap.has(key)){
+          catalogMap.set(key, { service_id: row.service_id, service_name: name, key: key });
+        }
         if(!serviceCountryIndex[key]) serviceCountryIndex[key] = [];
         serviceCountryIndex[key].push({
-          country_id: row.country_id,
-          country_name: row.country_name || ('Country ' + row.country_id),
+          country_id: countryId != null ? countryId : row.country_id,
+          country_name: countryName || row.country_name || ('Country ' + (countryId != null ? countryId : row.country_id)),
           price: row.price,
           available_quantity: row.available_quantity,
           service_id: row.service_id,
@@ -588,20 +553,65 @@ async function loadServiceCatalog(){
       });
     }
 
-    allServiceCatalog = Array.from(catalogMap.values()).sort((a,b) => {
-      const ra = popularRank(a.service_name), rb = popularRank(b.service_name);
-      if(ra !== rb) return ra - rb;
-      return a.service_name.localeCompare(b.service_name);
-    });
+    function paintProgress(){
+      allServiceCatalog = Array.from(catalogMap.values()).sort(function(a, b){
+        var ra = popularRank(a.service_name), rb = popularRank(b.service_name);
+        if(ra !== rb) return ra - rb;
+        return a.service_name.localeCompare(b.service_name);
+      });
+      if(allServiceCatalog.length) renderServiceCatalog(allServiceCatalog);
+    }
+
+    // Parallel batches — same query as old selectCountry (known working)
+    // Show icons after the FIRST successful batch so it feels fast
+    var batchSize = 10;
+    var painted = false;
+    for(var i = 0; i < ids.length; i += batchSize){
+      var batch = ids.slice(i, i + batchSize);
+      var results = await Promise.all(batch.map(async function(countryId){
+        var cmeta = allCountriesMaster.find(function(c){ return c.country_id === countryId; }) || {};
+        try {
+          var res = await sbClient
+            .from('number_services')
+            .select('service_id, service_name, category, price, available_quantity, country_id, country_name')
+            .eq('source', 'grizzlysms')
+            .eq('is_available', true)
+            .eq('country_id', countryId)
+            .gt('price', 0);
+          if(res.error){
+            // retry without gt(price) — some rows may use null edge cases
+            res = await sbClient
+              .from('number_services')
+              .select('service_id, service_name, category, price, available_quantity, country_id, country_name')
+              .eq('source', 'grizzlysms')
+              .eq('is_available', true)
+              .eq('country_id', countryId);
+          }
+          return { countryId: countryId, name: cmeta.country_name, rows: (res && res.data) ? res.data : [] };
+        } catch(e){
+          return { countryId: countryId, name: cmeta.country_name, rows: [] };
+        }
+      }));
+
+      results.forEach(function(r){ ingest(r.rows, r.countryId, r.name); });
+
+      // Progressive: show/update grid after each batch so it feels fast
+      if(catalogMap.size > 0){
+        painted = true;
+        paintProgress();
+      }
+    }
+
+    paintProgress();
 
     if(!allServiceCatalog.length){
-      serviceGrid.innerHTML = '<div class="empty-state"><div class="empty-state-icon">📵</div><h4>No Services Found</h4><p>Catalog may still be syncing.</p><button type="button" class="btn btn-primary" style="margin-top:12px;width:auto;padding:10px 16px" onclick="loadServiceCatalog()">Retry</button></div>';
-      return;
+      serviceGrid.innerHTML = '<div class="empty-state"><div class="empty-state-icon">📵</div><h4>No Services Found</h4><p>Try Retry — catalog may still be syncing.</p><button type="button" class="btn btn-primary" style="margin-top:12px;width:auto;padding:10px 16px" onclick="loadServiceCatalog()">Retry</button></div>';
     }
-    renderServiceCatalog(allServiceCatalog);
   }catch(err){
     console.error('loadServiceCatalog', err);
-    serviceGrid.innerHTML = '<div class="empty-state"><div class="empty-state-icon">⚠️</div><h4>Failed to load</h4><p>'+escapeHtml(err.message||String(err))+'</p><button type="button" class="btn btn-primary" style="margin-top:12px;width:auto;padding:10px 16px" onclick="loadServiceCatalog()">Retry</button></div>';
+    if(serviceGrid){
+      serviceGrid.innerHTML = '<div class="empty-state"><div class="empty-state-icon">⚠️</div><h4>Failed to load</h4><p>'+escapeHtml(err.message||String(err))+'</p><button type="button" class="btn btn-primary" style="margin-top:12px;width:auto;padding:10px 16px" onclick="loadServiceCatalog()">Retry</button></div>';
+    }
   }
 }
 
@@ -637,11 +647,14 @@ async function selectService(svc){
   const fa = serviceIconFa(svc.service_name);
   let miniHtml = '';
   if(url){
-    miniHtml = '<span class="mini-icon"><img src="'+url+'" alt="" onerror="this.parentNode.innerHTML=\\'\\'"/></span>';
+    var fcls = (fa && fa.cls) ? fa.cls : 'fa-solid fa-mobile-screen';
+    var fbg = (fa && fa.color) ? fa.color : '#3b82f6';
+    miniHtml = '<span class="mini-icon" data-fa="'+fcls+'" data-bg="'+fbg+'"><img src="'+url+'" alt="" onerror="mjLogoFallback(this)"/></span>';
   } else if(fa){
     miniHtml = '<span class="mini-icon" style="background:'+fa.color+'"><i class="'+fa.cls+'"></i></span>';
   }
   document.getElementById('selectedServiceName').innerHTML = miniHtml + escapeHtml(svc.service_name);
+
   countrySearch.value = '';
   countryList.innerHTML = '<div class="loading-spinner"><div class="spinner"></div><div class="loading-text">Loading all countries…</div></div>';
 
@@ -733,13 +746,18 @@ function renderServices(){}
 function openPurchaseModal(s){
   activeService = s;
   const name = (s.service_name || s.service_id || 'Service').replace(/_/g,' ');
+
   const icon = serviceIconFa(name);
   const iconEl = document.getElementById('psIcon');
   const domain = serviceDomain(name);
   const logoUrl = brandfetchUrl(domain);
   if(logoUrl){
+    var fcls = (icon && icon.cls) ? icon.cls : 'fa-solid fa-mobile-screen';
+    var fbg = (icon && icon.color) ? icon.color : '#1877f2';
     iconEl.style.background = '#fff';
-    iconEl.innerHTML = '<img src="'+logoUrl+'" alt="" style="width:100%;height:100%;object-fit:contain;border-radius:12px" onerror="this.onerror=null;this.parentNode.style.background=\'#1877f2\';this.parentNode.textContent=\''+(name.charAt(0)||'M').toUpperCase()+'\';"/>';
+    iconEl.setAttribute('data-fa', fcls);
+    iconEl.setAttribute('data-bg', fbg);
+    iconEl.innerHTML = '<img src="'+logoUrl+'" alt="" style="width:100%;height:100%;object-fit:contain;border-radius:12px" onerror="mjLogoFallback(this)"/>';
   } else if(icon){
     iconEl.innerHTML = '<i class="'+icon.cls+'"></i>';
     iconEl.style.background = icon.color;
@@ -747,6 +765,7 @@ function openPurchaseModal(s){
     iconEl.textContent = (name.charAt(0)||'M').toUpperCase();
     iconEl.style.background = '#1877f2';
   }
+
   document.getElementById('psName').textContent = name;
   document.getElementById('psUnitPrice').textContent = money(s.price);
   document.getElementById('psStock').textContent = (s.available_quantity ?? '—') + ' available';
