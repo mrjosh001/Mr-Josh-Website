@@ -780,6 +780,46 @@ async function smsUpdate(body) {
 }
 
 /**
+ * Per-provider price override within a pooled SMS number listing.
+ * number_services.pool_price_overrides is a jsonb map of { [provider_id]: price }.
+ * Passing price as null/''/undefined clears that provider's override, which
+ * makes it fall back to the listing's normal auto/manual price again — this
+ * mirrors how smsUpdate's own price_source:'manual' tagging works, just
+ * scoped to one provider inside a pool instead of the whole listing.
+ */
+async function smsUpdatePoolPrice(body) {
+  const { id, provider_id, price } = body;
+  if (!id) return { status: 400, body: { success: false, message: 'id is required' } };
+  const providerId = provider_id != null ? String(provider_id).trim() : '';
+  if (!providerId) return { status: 400, body: { success: false, message: 'provider_id is required' } };
+  const priceNum = Number(price);
+  const clearing = price === null || price === '' || price === undefined;
+  if (!clearing && (!Number.isFinite(priceNum) || priceNum < 0)) {
+    return { status: 400, body: { success: false, message: 'A valid price is required (or omit/blank it to clear the override and go back to the auto price)' } };
+  }
+  const { data: row, error: fetchErr } = await supabase
+    .from('number_services')
+    .select('pool_price_overrides')
+    .eq('id', id)
+    .single();
+  if (fetchErr || !row) return { status: 404, body: { success: false, message: 'SMS number listing not found' } };
+  const overrides = { ...(row.pool_price_overrides && typeof row.pool_price_overrides === 'object' ? row.pool_price_overrides : {}) };
+  if (clearing) {
+    delete overrides[providerId];
+  } else {
+    overrides[providerId] = priceNum;
+  }
+  const { data, error } = await supabase
+    .from('number_services')
+    .update({ pool_price_overrides: overrides })
+    .eq('id', id)
+    .select('id, pool_price_overrides')
+    .maybeSingle();
+  if (error) return { status: 500, body: { success: false, message: 'Update failed: ' + error.message } };
+  return { status: 200, body: { success: true, data } };
+}
+
+/**
  * Bulk-apply the standard markup to number_services rows in one pass —
  * for when there are too many country/service combos to reprice by hand.
  *
@@ -2350,7 +2390,8 @@ export default async function handler(req, res) {
     } else if (resource === 'sms') {
       if (action === 'update') result = await smsUpdate(body);
       else if (action === 'bulk_reprice') result = await smsBulkReprice(body);
-      else result = { status: 400, body: { success: false, message: 'Unknown sms action. Use "update" or "bulk_reprice".' } };
+      else if (action === 'update_pool_price') result = await smsUpdatePoolPrice(body);
+      else result = { status: 400, body: { success: false, message: 'Unknown sms action. Use "update", "bulk_reprice", or "update_pool_price".' } };
     } else if (resource === 'profiles' && (action === 'list' || !action)) {
       result = await listProfilesHandle();
     } else if (resource === 'orders' && (action === 'list' || !action)) {
