@@ -295,15 +295,33 @@ const POPULAR_SERVICES = ['whatsapp','telegram','facebook','instagram','tiktok',
 function isJunkService(name){
   const n = String(name||'').trim();
   if(!n) return true;
-  // short code noise like abx, acx, adx from supplier dumps
-  if(/^[a-z]{2,4}x$/i.test(n)) return true;
-  if(/^[a-z0-9]{1,3}$/i.test(n)) return true;
+  const low = n.toLowerCase();
+  // supplier internal codes: abx, acx, axa, a1b, etc.
+  if(/^[a-z]{1,4}x$/i.test(n)) return true;
+  if(/^[a-z]{2,4}$/i.test(n) && !/sms|otp|app|pay|tik|tok|ok/i.test(low)) return true;
+  if(/^[a-z]{2,3}[a-z0-9]$/i.test(n) && n.length <= 4) return true;
   if(/^[0-9]+$/.test(n)) return true;
+  if(/^[a-z0-9]{1,3}$/i.test(n)) return true;
+  // mostly consonants short codes
+  if(n.length <= 4 && !/[aeiou]/i.test(n) && /^[a-z]+$/i.test(n)) return true;
   return false;
 }
 function popularRank(name){
-  const n = String(name||'').toLowerCase();
-  for(let i=0;i<POPULAR_SERVICES.length;i++){ if(n.includes(POPULAR_SERVICES[i])) return i; }
+  const n = String(name||'').toLowerCase().trim();
+  // Prefer exact / word-boundary matches so "abx" does not match "x" (Twitter)
+  for(let i=0;i<POPULAR_SERVICES.length;i++){
+    const k = POPULAR_SERVICES[i];
+    if(k.length <= 1) continue; // skip single-letter keys
+    if(n === k) return i;
+    // word boundary style: key as whole token or clear brand substring for long keys
+    if(k.length >= 4 && n.includes(k)) return i;
+    if(k.length >= 2 && (n === k || n.startsWith(k + ' ') || n.endsWith(' ' + k) || n.includes(' ' + k + ' '))) return i;
+  }
+  // special short brands
+  if(n === 'x' || n === 'x / twitter' || n === 'x/twitter' || n === 'twitter') {
+    const i = POPULAR_SERVICES.indexOf('twitter');
+    return i >= 0 ? i : 0;
+  }
   return 1000;
 }
 function countryMatchesQuery(name, q){
@@ -342,31 +360,33 @@ const SERVICE_DOMAIN = {
 };
 function serviceDomain(name){
   const n = String(name||'').toLowerCase().trim();
+  if(!n) return null;
+  // exact key first
   if(SERVICE_DOMAIN[n]) return SERVICE_DOMAIN[n];
-  for(const key of Object.keys(SERVICE_DOMAIN)){
-    if(n.includes(key)) return SERVICE_DOMAIN[key];
+  // longer keys first so "twitter" wins before "x"
+  const keys = Object.keys(SERVICE_DOMAIN).sort(function(a,b){ return b.length - a.length; });
+  for(let i=0;i<keys.length;i++){
+    const key = keys[i];
+    if(key.length <= 1) continue;
+    if(n === key) return SERVICE_DOMAIN[key];
+    if(key.length >= 4 && n.includes(key)) return SERVICE_DOMAIN[key];
   }
-  // last resort: name.com
-  const slug = n.replace(/[^a-z0-9]+/g,'').slice(0,24);
-  return slug ? (slug + '.com') : null;
+  // twitter / x exact only
+  if(n === 'x' || n === 'twitter' || /^x\s*\/?\s*twitter/i.test(n)) return 'x.com';
+  // do NOT guess domain from junk codes like abx
+  if(isJunkService(n)) return null;
+  const slug = n.replace(/[^a-z0-9]+/g,' ').trim().split(/\s+/)[0];
+  if(slug && slug.length >= 4 && !isJunkService(slug)) return slug + '.com';
+  return null;
 }
 
 
 
 function serviceLogo(name){
-  // Same as Server 2 (mj-sms3): Google favicon by domain
-  const n = String(name||'').toLowerCase();
-  let domain = null;
-  if(typeof serviceDomain === 'function') domain = serviceDomain(name);
-  if(!domain){
-    for(const k of Object.keys(SERVICE_DOMAIN || {})){
-      if(n.includes(k)){ domain = SERVICE_DOMAIN[k]; break; }
-    }
-  }
-  if(!domain){
-    const w = n.replace(/[^a-z0-9]+/g,' ').trim().split(' ')[0];
-    if(w && w.length > 2) domain = w + '.com';
-  }
+  // Same as Server 2 — Google favicon — but never map junk codes to x.com
+  const n = String(name||'').toLowerCase().trim();
+  if(isJunkService(n)) return null;
+  let domain = serviceDomain(name);
   if(!domain) return null;
   return 'https://www.google.com/s2/favicons?domain=' + encodeURIComponent(domain) + '&sz=128';
 }
@@ -422,8 +442,16 @@ const SERVICE_ICON_MAP = [
 const SERVICE_ICON_EXACT = { line:['fa-brands fa-line','#00C300'], vk:['fa-brands fa-vk','#0077FF'], x:['fa-brands fa-x-twitter','#000000'] };
 function serviceIconFa(name){
   const n = (name||'').toLowerCase().trim();
+  if(!n || isJunkService(n)) return null;
   if(SERVICE_ICON_EXACT[n]) return { cls: SERVICE_ICON_EXACT[n][0], color: SERVICE_ICON_EXACT[n][1] };
-  for(const [key, cls, color] of SERVICE_ICON_MAP){ if(n.includes(key)) return { cls, color }; }
+  // longer keys first
+  const pairs = SERVICE_ICON_MAP.slice().sort(function(a,b){ return b[0].length - a[0].length; });
+  for(const [key, cls, color] of pairs){
+    if(key.length <= 1) continue;
+    if(n === key) return { cls, color };
+    if(key.length >= 4 && n.includes(key)) return { cls, color };
+  }
+  if(n === 'x' || n === 'twitter' || /^x\s*\/?\s*twitter/i.test(n)) return { cls: 'fa-brands fa-x-twitter', color: '#000000' };
   return null;
 }
 
@@ -663,10 +691,12 @@ function renderServiceCatalog(list, searchQ){
   var q = (searchQ != null ? searchQ : (serviceSearch && serviceSearch.value) || '').trim().toLowerCase();
   var filtered = (list || []).filter(function(s){
     var name = s.service_name || '';
+    if(isJunkService(name)){
+      // only show junk if user explicitly searched that exact/partial code
+      if(q && name.toLowerCase().includes(q) && q.length >= 2) return true;
+      return false;
+    }
     if(q) return name.toLowerCase().includes(q);
-    // Default view: hide supplier junk codes; always keep popular-ranked apps
-    if(popularRank(name) < 1000) return true;
-    if(isJunkService(name)) return false;
     return true;
   });
   // Cap default grid so UI stays usable (search still finds everything in allServiceCatalog)
