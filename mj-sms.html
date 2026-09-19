@@ -659,15 +659,15 @@ async function loadServiceCatalog(opts){
       __smsCatalogComplete = !!cached.complete;
       rebuildMapFromCatalog();
       paintProgress();
-      // If already complete, soft-refresh in background only (no skeleton, no wait)
+      if(serviceGrid){ serviceGrid.dataset.skelReady = '1'; serviceGrid.dataset.loaded = '1'; }
+      // Complete = rest of Lagos day, no network reload
       if(cached.complete){
-        // Stays for the rest of the Lagos calendar day — no egress reload
         __smsCatalogComplete = true;
         __smsCatalogLoading = false;
         return;
       }
       // Incomplete cache: continue filling in background without blocking UI
-    } else if(serviceGrid && !(allServiceCatalog && allServiceCatalog.length)){
+    } else if(serviceGrid && !(allServiceCatalog && allServiceCatalog.length) && serviceGrid.dataset.loaded !== '1'){
       serviceGrid.innerHTML = serviceCatalogSkeleton();
       serviceGrid.dataset.skelReady = '1';
     }
@@ -864,20 +864,21 @@ function renderServiceCatalog(list, searchQ){
   var filtered = (list || []).filter(function(s){
     var name = s.service_name || '';
     if(isJunkService(name)){
-      // only show junk if user explicitly searched that exact/partial code
       if(q && name.toLowerCase().includes(q) && q.length >= 2) return true;
       return false;
     }
     if(q) return name.toLowerCase().includes(q);
     return true;
   });
-  // Cap default grid so UI stays usable (search still finds everything in allServiceCatalog)
-  if(!q && filtered.length > 400){
-    filtered = filtered.slice(0, 400);
+  // Default grid: popular-first, capped so UI paints instantly (search finds the rest)
+  if(!q && filtered.length > 80){
+    filtered = filtered.slice(0, 80);
   }
   if(!filtered.length){
     serviceGrid.innerHTML = '<div class="empty-state"><div class="empty-state-icon">📵</div><h4>No Services Found</h4><p>Try a different search</p></div>';
     if(serviceCountBadge) serviceCountBadge.innerHTML = '';
+    serviceGrid.dataset.skelReady = '1';
+    serviceGrid.dataset.loaded = '1';
     return;
   }
   var total = (list || []).length;
@@ -885,18 +886,20 @@ function renderServiceCatalog(list, searchQ){
     serviceCountBadge.innerHTML = '<span class="product-count-badge">' + filtered.length + (q || filtered.length === total ? '' : '+') + ' service' + (filtered.length!==1?'s':'') + (total > filtered.length ? ' · ' + total + ' total' : '') + '</span>';
   }
   var html = '<div class="svc-icon-grid">';
-  filtered.forEach(function(s, index){
-    // index into filtered list for click
+  filtered.forEach(function(s){
     var name = s.service_name || 'Service';
     var iconHtml = serviceLogoHtml(name);
     html += '<button type="button" class="svc-tile" data-key="'+escapeHtml(s.key || name.toLowerCase())+'">'+iconHtml+'<span class="svc-label">'+escapeHtml(name)+'</span></button>';
   });
   html += '</div>';
   serviceGrid.innerHTML = html;
+  // Prevent global skeleton paint() from wiping real tiles
+  serviceGrid.dataset.skelReady = '1';
+  serviceGrid.dataset.loaded = '1';
   serviceGrid.querySelectorAll('.svc-tile').forEach(function(btn){
     btn.addEventListener('click', function(){
       var key = btn.getAttribute('data-key');
-      var svc = (list || []).find(function(x){ return (x.key || x.service_name.toLowerCase()) === key; });
+      var svc = (list || []).find(function(x){ return (x.key || (x.service_name||'').toLowerCase()) === key; });
       if(svc) selectService(svc);
     });
   });
@@ -1151,13 +1154,18 @@ document.getElementById('psBuyBtn').addEventListener('click', async function(){
 
 serviceSearch.addEventListener('input', () => {
   const q = serviceSearch.value.trim().toLowerCase();
-  // Instant local filter from whatever is already loaded
+  // 1) Instant filter from local / memory cache
   renderServiceCatalog(allServiceCatalog, q);
-  // Also query DB so results appear even before full catalog finishes
   clearTimeout(__smsSearchTimer);
-  if(q.length >= 2){
-    __smsSearchTimer = setTimeout(function(){ searchServicesInDb(q); }, 180);
-  }
+  if(q.length < 2) return;
+  // 2) Only hit DB if local has no matches for this query
+  var localHits = (allServiceCatalog || []).filter(function(s){
+    var name = (s.service_name || '').toLowerCase();
+    if(isJunkService(s.service_name || '') && !name.includes(q)) return false;
+    return name.includes(q);
+  });
+  if(localHits.length > 0) return; // already available locally
+  __smsSearchTimer = setTimeout(function(){ searchServicesInDb(q); }, 200);
 });
 countrySearch.addEventListener('input', () => {
   const q = countrySearch.value.trim().toLowerCase();
@@ -1174,8 +1182,14 @@ document.getElementById('changeServiceBtn')?.addEventListener('click', backToSer
     var mjSkeleton = window.mjSkeleton || window.MJSkeleton;
     var nodes = document.querySelectorAll('[data-skel], #countryList, #serviceGrid, #list, #catalog, #servicesGrid, #productsGrid, #orderList');
     nodes.forEach(function(el){
-      if(el.dataset.skelReady) return;
+      if(el.dataset.skelReady || el.dataset.loaded === '1') return;
       if(el.id === 'serviceGrid'){
+        // Do not wipe if tiles or catalog already present
+        if(el.querySelector('.svc-icon-grid') || el.querySelector('.svc-tile') || (typeof allServiceCatalog !== 'undefined' && allServiceCatalog && allServiceCatalog.length)){
+          el.dataset.skelReady = '1';
+          el.dataset.loaded = '1';
+          return;
+        }
         if(typeof serviceCatalogSkeleton === 'function') el.innerHTML = serviceCatalogSkeleton();
         el.dataset.skelReady = '1';
         return;
