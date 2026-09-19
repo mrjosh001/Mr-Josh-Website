@@ -88,6 +88,13 @@ body::before{content:'';position:fixed;inset:0;pointer-events:none;z-index:0;bac
 .country-price-row .right{display:flex;align-items:center;gap:8px;flex-shrink:0}
 .country-price-row .cprice{font-weight:800;font-size:15px;color:var(--primary)}
 .country-price-row .chev{color:var(--muted);font-size:12px}
+.pool-price-row{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:14px;border-radius:12px;background:var(--bg);border:1px solid var(--border);cursor:pointer;margin-bottom:8px}
+.pool-price-row:active{background:var(--primary-glow)}
+.pool-price-row .pool-meta{font-size:12px;color:var(--muted);font-weight:600}
+.pool-price-row .pool-title{font-weight:800;font-size:14px}
+.pool-price-row .cprice{font-weight:800;font-size:15px;color:var(--primary)}
+#poolStep{display:none}
+
 .sk-svc-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px 10px;margin-top:8px}
 .sk-svc-tile{display:flex;flex-direction:column;align-items:center;gap:8px;padding:10px 4px}
 .sk-svc-icon{width:52px;height:52px;border-radius:14px;background:linear-gradient(90deg,rgba(148,163,184,.12),rgba(148,163,184,.22),rgba(148,163,184,.12));background-size:200% 100%;animation:skShimmer 1.2s ease-in-out infinite}
@@ -272,6 +279,7 @@ const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
 
 const countryList = document.getElementById('countryList');
 const countryStep = document.getElementById('countryStep');
+const poolStep = document.getElementById('poolStep');
 const serviceStep = document.getElementById('serviceStep');
 const serviceGrid = document.getElementById('serviceGrid');
 const serviceCountBadge = document.getElementById('serviceCountBadge');
@@ -563,7 +571,46 @@ function serviceCatalogSkeleton(){
 
 var __smsCatalogLoading = false;
 var __smsCatalogComplete = false;
+
 var __smsSearchTimer = null;
+var currentPoolList = [];
+var selectedProviderId = null;
+
+/** Match server salePriceFromUsd (fixed 80% band) for display only — server re-prices on order */
+function salePriceFromUsdClient(usd){
+  var rate = 1500;
+  var percent = 80;
+  var minProfit = 500;
+  var minSale = 1000;
+  var supplierNgn = Number(usd) * rate;
+  if(!Number.isFinite(supplierNgn) || supplierNgn <= 0) return minSale;
+  var percentPrice = Math.ceil(supplierNgn * (1 + percent / 100));
+  var floorPrice = Math.ceil(supplierNgn + minProfit);
+  var finalPrice = Math.max(percentPrice, floorPrice, minSale);
+  return Math.ceil(finalPrice / 50) * 50;
+}
+function providersToPoolOptions(providersRaw){
+  if(!providersRaw || typeof providersRaw !== 'object') return [];
+  var out = [];
+  Object.keys(providersRaw).forEach(function(key){
+    var p = providersRaw[key];
+    if(!p) return;
+    var arr = Array.isArray(p.price) ? p.price : [p.price];
+    var nums = arr.map(Number).filter(function(n){ return Number.isFinite(n) && n > 0; });
+    if(!nums.length) return;
+    var usd = Math.min.apply(null, nums);
+    var pid = p.provider_id != null ? p.provider_id : key;
+    out.push({
+      provider_id: String(pid),
+      count: Number(p.count) || 0,
+      supplier_usd: usd,
+      price_ngn: salePriceFromUsdClient(usd)
+    });
+  });
+  out.sort(function(a,b){ return a.price_ngn - b.price_ngn; });
+  return out;
+}
+
 
 async function loadServiceCatalog(opts){
   opts = opts || {};
@@ -948,7 +995,7 @@ async function selectService(svc){
     if(!sbClient) await loadServiceCatalog();
     let res = await sbClient
       .from('number_services')
-      .select('service_id, service_name, country_id, country_name, price, available_quantity')
+      .select('service_id, service_name, country_id, country_name, price, available_quantity, providers_raw, supplier_price')
       .eq('source', 'grizzlysms')
       .eq('is_available', true)
       .eq('service_id', svc.service_id)
@@ -958,7 +1005,7 @@ async function selectService(svc){
     if((!res.data || !res.data.length) && svc.service_name){
       res = await sbClient
         .from('number_services')
-        .select('service_id, service_name, country_id, country_name, price, available_quantity')
+        .select('service_id, service_name, country_id, country_name, price, available_quantity, providers_raw, supplier_price')
         .eq('source', 'grizzlysms')
         .eq('is_available', true)
         .ilike('service_name', svc.service_name)
@@ -973,7 +1020,9 @@ async function selectService(svc){
         price: r.price,
         available_quantity: r.available_quantity,
         service_id: r.service_id,
-        service_name: r.service_name || svc.service_name
+        service_name: r.service_name || svc.service_name,
+        providers_raw: r.providers_raw || null,
+        supplier_price: r.supplier_price
       }));
       serviceCountryIndex[key] = rows;
     }
@@ -990,32 +1039,83 @@ async function selectService(svc){
 
 function renderCountryPrices(list){
   if(!list.length){
-    countryList.innerHTML = '<div class="empty-state"><div class="empty-state-icon">🔍</div><h4>No countries for this service</h4></div>';
+    countryList.innerHTML = '<div class="empty-state"><h4>No countries for this service</h4><p>Try another service</p></div>';
     return;
   }
-  countryList.innerHTML = list.map((c, i) => {
-    return '<div class="country-price-row" data-index="'+i+'"><div class="left"><span class="flag">'+countryFlag(c.country_name)+'</span><span class="cname">'+escapeHtml(c.country_name)+'</span></div><div class="right"><span class="cprice">'+money(c.price)+'</span><span class="chev"><i class="fa-solid fa-chevron-right"></i></span></div></div>';
+  countryList.innerHTML = list.map(function(c,i){
+    var pools = providersToPoolOptions(c.providers_raw);
+    var showPrice = c.price;
+    if(pools.length){
+      showPrice = Math.min.apply(null, pools.map(function(p){ return p.price_ngn; }));
+    }
+    var extra = pools.length > 1 ? (' · ' + pools.length + ' pools') : '';
+    return '<div class="country-price-row" data-index="'+i+'"><div class="left"><span class="flag">'+countryFlag(c.country_name)+'</span><span class="cname">'+escapeHtml(c.country_name)+extra+'</span></div><div class="right"><span class="cprice">from '+money(showPrice)+'</span><span class="chev"><i class="fa-solid fa-chevron-right"></i></span></div></div>';
   }).join('');
-  countryList.querySelectorAll('.country-price-row').forEach(row => {
-    row.addEventListener('click', () => {
-      const c = list[Number(row.dataset.index)];
+  countryList.querySelectorAll('.country-price-row').forEach(function(row){
+    row.addEventListener('click', function(){
+      var c = list[Number(row.getAttribute('data-index'))];
       if(!c) return;
       currentCountry = { country_id: c.country_id, country_name: c.country_name };
+      selectedProviderId = null;
+      var pools = providersToPoolOptions(c.providers_raw);
+      if(pools.length > 1){
+        openPoolStep(c, pools);
+      } else {
+        if(pools.length === 1) selectedProviderId = pools[0].provider_id;
+        openPurchaseModal({
+          service_id: c.service_id,
+          service_name: c.service_name || (currentServicePick && currentServicePick.service_name),
+          price: pools.length === 1 ? pools[0].price_ngn : c.price,
+          available_quantity: pools.length === 1 ? pools[0].count : c.available_quantity,
+          provider_id: selectedProviderId
+        });
+      }
+    });
+  });
+}
+
+function openPoolStep(countryRow, pools){
+  currentPoolList = pools || [];
+  countryStep.style.display = 'none';
+  poolStep.style.display = 'block';
+  var ctx = document.getElementById('selectedPoolContext');
+  if(ctx){
+    ctx.textContent = (currentServicePick && currentServicePick.service_name ? currentServicePick.service_name + ' · ' : '') + (countryRow.country_name || 'Country');
+  }
+  var poolList = document.getElementById('poolList');
+  if(!poolList) return;
+  if(!currentPoolList.length){
+    poolList.innerHTML = '<div class="empty-state"><h4>No pools available</h4></div>';
+    return;
+  }
+  poolList.innerHTML = currentPoolList.map(function(p, i){
+    var stock = p.count > 0 ? (p.count.toLocaleString() + ' available') : 'Limited stock';
+    return '<div class="pool-price-row" data-i="'+i+'"><div><div class="pool-title">Option ' + (i+1) + '</div><div class="pool-meta">'+escapeHtml(stock)+'</div></div><div class="cprice">'+money(p.price_ngn)+'</div></div>';
+  }).join('');
+  poolList.querySelectorAll('.pool-price-row').forEach(function(row){
+    row.addEventListener('click', function(){
+      var p = currentPoolList[Number(row.getAttribute('data-i'))];
+      if(!p) return;
+      selectedProviderId = p.provider_id;
       openPurchaseModal({
-        service_id: c.service_id,
-        service_name: c.service_name,
-        price: c.price,
-        available_quantity: c.available_quantity
+        service_id: countryRow.service_id,
+        service_name: countryRow.service_name || (currentServicePick && currentServicePick.service_name),
+        price: p.price_ngn,
+        available_quantity: p.count,
+        provider_id: p.provider_id
       });
     });
   });
 }
 
+
 function backToServices(){
   countryStep.style.display = 'none';
+  if(poolStep) poolStep.style.display = 'none';
   serviceStep.style.display = 'block';
   currentCountry = null;
   currentServicePick = null;
+  selectedProviderId = null;
 }
 function backToCountries(){ backToServices(); }
 
@@ -1028,6 +1128,8 @@ function renderServices(){}
 
 function openPurchaseModal(s){
   activeService = s;
+  if(s && s.provider_id) selectedProviderId = s.provider_id;
+
   const name = (s.service_name || s.service_id || 'Service').replace(/_/g,' ');
   const icon = serviceIconFa(name);
   const iconEl = document.getElementById('psIcon');
@@ -1109,7 +1211,8 @@ document.getElementById('psBuyBtn').addEventListener('click', async function(){
         country_id: currentCountry.country_id,
         service_id: activeService.service_id,
         user_id: currentUserId,
-        external_order_id: externalOrderId
+        external_order_id: externalOrderId,
+        provider_id: selectedProviderId || activeService.provider_id || undefined
       })
     });
     const data = await res.json();
@@ -1172,6 +1275,11 @@ countrySearch.addEventListener('input', () => {
   renderCountryPrices(q ? allCountries.filter(c => countryMatchesQuery(c.country_name, q)) : allCountries);
 });
 document.getElementById('changeServiceBtn')?.addEventListener('click', backToServices);
+document.getElementById('changePoolCountryBtn')?.addEventListener('click', function(){
+  if(poolStep) poolStep.style.display = 'none';
+  countryStep.style.display = 'block';
+  selectedProviderId = null;
+});
 
 </script>
 
