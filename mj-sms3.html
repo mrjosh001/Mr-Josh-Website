@@ -77,9 +77,10 @@ body{font-family:'Plus Jakarta Sans',system-ui,sans-serif;background:var(--bg);c
 .btn-buy{width:100%;padding:12px;border:none;border-radius:11px;font:700 13px inherit;cursor:pointer;background:linear-gradient(135deg,var(--primary),var(--primary-strong));color:#fff}
 .btn-buy:disabled{opacity:.5;cursor:not-allowed}
 .reuse-row{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--muted);margin:8px 0 4px}
-.toast-c{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);z-index:200;display:flex;flex-direction:column;gap:8px}
-.toast{background:var(--card);border:1px solid var(--success);border-radius:12px;padding:12px 14px;font-size:12px;font-weight:600;box-shadow:var(--shadow);color:var(--text);max-width:300px}
-.toast.error{border-color:#f87171}
+.toast-c{position:fixed;top:76px;right:12px;left:auto;transform:none;z-index:5000;display:flex;flex-direction:column;gap:8px;pointer-events:none}
+.toast{background:var(--card);border:1px solid var(--success);border-radius:12px;padding:12px 14px;font-size:13px;font-weight:700;box-shadow:var(--shadow);color:var(--text);max-width:320px;pointer-events:all;display:flex;align-items:center;gap:8px}
+.toast.error{border-color:#f87171;color:var(--text)}
+.toast.success{border-color:var(--success)}
 .empty-state{text-align:center;padding:40px 16px;color:var(--muted)}
 .server-tag{display:inline-flex;align-items:center;gap:6px;font-size:11px;font-weight:700;color:var(--primary);background:var(--primary-glow);padding:4px 10px;border-radius:20px;margin-bottom:10px}
 
@@ -194,11 +195,14 @@ const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
   function esc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
   function money(n){ return '₦' + Number(n||0).toLocaleString(); }
   function toast(msg, type){
-    const t = document.createElement('div');
-    t.className = 'toast' + (type==='error'?' error':'');
-    t.textContent = msg;
-    toastContainer.appendChild(t);
-    setTimeout(()=>t.remove(), 3500);
+    if(!toastContainer) return;
+    const el = document.createElement('div');
+    var kind = type === 'error' ? 'error' : (type === 'success' ? 'success' : 'success');
+    el.className = 'toast ' + kind;
+    el.innerHTML = '<span>' + (kind === 'error' ? '❌' : '✅') + '</span><span></span>';
+    el.querySelectorAll('span')[1].textContent = String(msg || '');
+    toastContainer.appendChild(el);
+    setTimeout(function(){ try{ el.remove(); }catch(e){} }, kind === 'error' ? 5500 : 3500);
   }
 
   const COUNTRY_ISO = {
@@ -515,24 +519,36 @@ const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
         }catch(e){}
       }
 
-      // 1) Live projects list (existing API — fast service names)
+      // 1+2 parallel: projects API + first DB page (faster first paint)
       try{
-        var j = await api('projects');
-        var list = (j && j.data) ? j.data : (Array.isArray(j) ? j : []);
-        list.forEach(function(p){
-          ingestRow({
-            service_id: p.id || p.project_id,
-            service_name: p.title || p.name || String(p.id),
-            title: p.title || p.name
+        var jobs = [api('projects').catch(function(e){ return null; })];
+        if(sbClient){
+          jobs.push(sbClient.from('number_services')
+            .select('service_id, service_name, price, available_quantity, country_id, country_name')
+            .eq('source', 'smsbus').eq('is_available', true).gt('price', 0).range(0, 999));
+        }
+        var settled = await Promise.all(jobs);
+        var j = settled[0];
+        if(j){
+          var list = (j && j.data) ? j.data : (Array.isArray(j) ? j : []);
+          list.forEach(function(p){
+            ingestRow({
+              service_id: p.id || p.project_id,
+              service_name: p.title || p.name || String(p.id),
+              title: p.title || p.name
+            });
           });
-        });
+        }
+        if(settled[1] && settled[1].data){
+          settled[1].data.forEach(ingestRow);
+        }
         paint();
-      }catch(e){ console.warn('projects', e); }
+      }catch(e){ console.warn('fast catalog', e); }
 
-      // 2) DB catalog for prices + countries (source smsbus) — same table sync already uses
+      // More DB pages in background (non-blocking feel — still awaited but after first paint)
       if(sbClient){
         try{
-          for(var pg = 0; pg < 5; pg++){
+          for(var pg = 1; pg < 5; pg++){
             var from = pg * 1000, to = from + 999;
             var res = await sbClient
               .from('number_services')
@@ -541,19 +557,12 @@ const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
               .eq('is_available', true)
               .gt('price', 0)
               .range(from, to);
-            if(res.error){
-              res = await sbClient
-                .from('number_services')
-                .select('service_id, service_name, price, available_quantity, country_id, country_name')
-                .eq('source', 'smsbus')
-                .eq('is_available', true)
-                .range(from, to);
-            }
             if(res.error || !(res.data && res.data.length)) break;
             res.data.forEach(ingestRow);
-            paint();
+            if(pg % 2 === 0) paint();
             if(res.data.length < 1000) break;
           }
+          paint();
         }catch(e){ console.warn('smsbus catalog', e); }
       }
 
@@ -793,8 +802,11 @@ const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
   document.getElementById('purchaseModal').addEventListener('click', function(e){ if(e.target===this) closePurchaseModal(); });
   document.getElementById('psBuyBtn').addEventListener('click', function(){
     if(!activeService || isBuying) return;
+    if(!currentCountry){
+      toast('Please select a country first', 'error');
+      return;
+    }
     const svc = activeService, btn = document.getElementById('psBuyBtn');
-    // Lock in the modal before closing so double-taps cannot fire twice
     isBuying = true;
     btn.disabled = true;
     const prevHtml = btn.innerHTML;
@@ -802,7 +814,7 @@ const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
     if(!window.__mjSms3BuyId){
       window.__mjSms3BuyId = 'MJ-SB-' + Date.now() + '-' + Math.random().toString(36).slice(2,9);
     }
-    closePurchaseModal();
+    // Keep modal open so user sees progress; close on success right before redirect
     buy(svc.project_id, btn, prevHtml, window.__mjSms3BuyId);
   });
 
@@ -852,42 +864,64 @@ const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
       toast('Please sign in to buy a number', 'error');
       isBuying = false;
       if(btn){ btn.disabled = false; if(prevHtml) btn.innerHTML = prevHtml; }
-      setTimeout(function(){ location.href = 'auth.html?next=' + encodeURIComponent('mj-sms3.html'); }, 600);
+      setTimeout(function(){ location.href = 'auth.html?next=' + encodeURIComponent('mj-sms3.html'); }, 700);
       return;
     }
     if(!currentCountry){
+      toast('Country missing — go back and pick a country', 'error');
       isBuying = false;
       if(btn){ btn.disabled = false; if(prevHtml) btn.innerHTML = prevHtml; }
       return;
     }
-    // isBuying already true from Confirm click
     if(btn){ btn.disabled = true; }
     try{
+      toast('Placing your order…', 'success');
       const j = await api('order', {
         method: 'POST',
         body: {
           country_id: currentCountry.country_id,
           project_id: projectId,
-          reuse: document.getElementById('reusePref').checked,
+          reuse: !!(document.getElementById('reusePref') && document.getElementById('reusePref').checked),
           external_order_id: idemKey || window.__mjSms3BuyId || undefined
         }
       });
-      const oid = j.data && j.data.order_id;
-      if(!oid) throw new Error('No order id returned');
-      const num=(j.data&&(j.data.number||j.data.phone_number))||'';
-      const payload={order_id:oid,number:num,phone_number:num,price:j.data&&j.data.price,service_name:j.data&&j.data.service_name,country_name:j.data&&j.data.country_name,ts:Date.now()};
-      try{sessionStorage.setItem('mj_sms3_last_order',JSON.stringify(payload));localStorage.setItem('mj_sms3_last_order',JSON.stringify(payload));}catch(_){}
-      const q=new URLSearchParams({order_id:oid});
-      if(num) q.set('number',num);
-      if(j.data&&j.data.service_name) q.set('service_name',j.data.service_name);
-      if(j.data&&j.data.country_name) q.set('country_name',j.data.country_name);
-      if(j.data&&j.data.price!=null) q.set('price',String(j.data.price));
-      // Keep locked; navigate away
-      location.href='mj-sms3-number.html?'+q.toString();
+      const oid = j && j.data && j.data.order_id;
+      if(!oid) throw new Error((j && j.message) || 'Purchase failed — no order id returned. Try again.');
+      const num = (j.data && (j.data.number || j.data.phone_number)) || '';
+      const payload = {
+        order_id: oid, number: num, phone_number: num,
+        price: j.data && j.data.price,
+        service_name: j.data && j.data.service_name,
+        country_name: j.data && j.data.country_name,
+        ts: Date.now()
+      };
+      try{
+        sessionStorage.setItem('mj_sms3_last_order', JSON.stringify(payload));
+        localStorage.setItem('mj_sms3_last_order', JSON.stringify(payload));
+      }catch(_){}
+      const q = new URLSearchParams({ order_id: String(oid) });
+      if(num) q.set('number', num);
+      if(j.data && j.data.service_name) q.set('service_name', j.data.service_name);
+      if(j.data && j.data.country_name) q.set('country_name', j.data.country_name);
+      if(j.data && j.data.price != null) q.set('price', String(j.data.price));
+      toast('Number purchased! Redirecting…', 'success');
+      closePurchaseModal();
+      // Short delay so user can read success toast
+      setTimeout(function(){
+        location.href = 'mj-sms3-number.html?' + q.toString();
+      }, 450);
     }catch(e){
-      toast(e.message || 'Purchase failed', 'error');
+      var msg = (e && e.message) ? e.message : 'Purchase failed. Please try again.';
+      if(/insufficient|balance/i.test(msg)){
+        toast(msg + ' — redirecting to deposit…', 'error');
+        isBuying = false;
+        if(btn){ btn.disabled = false; btn.innerHTML = prevHtml || '<i class="fa-solid fa-mobile-screen"></i> Confirm Purchase'; }
+        setTimeout(function(){ location.href = 'deposit.html'; }, 900);
+        return;
+      }
+      toast(msg, 'error');
       window.__mjSms3BuyId = null;
-      if(btn){ btn.disabled = false; btn.innerHTML = prevHtml || 'Confirm Purchase'; }
+      if(btn){ btn.disabled = false; btn.innerHTML = prevHtml || '<i class="fa-solid fa-mobile-screen"></i> Confirm Purchase'; }
       isBuying = false;
     }
   }

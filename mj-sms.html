@@ -336,7 +336,7 @@ function countryMatchesQuery(name, q){
 
 function escapeHtml(str){if(!str)return'';return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;')}
 function money(n){return '₦'+Number(n||0).toLocaleString()}
-function showToast(msg,type){const t=document.createElement('div');t.className='toast'+(type==='error'?' error':'');t.innerHTML='<span>'+(type==='error'?'❌':'✅')+'</span><span>'+escapeHtml(msg)+'</span>';toastContainer.appendChild(t);setTimeout(()=>t.remove(),3500)}
+function showToast(msg,type){const t=document.createElement('div');t.className='toast'+(type==='error'?' error':'');t.innerHTML='<span>'+(type==='error'?'❌':'✅')+'</span><span>'+escapeHtml(msg)+'</span>';toastContainer.appendChild(t);setTimeout(()=>t.remove(), type==='error'?5500:3500)}
 
 // --- Service icons (Grizzly's own site shows brand logos; their reseller
 // API doesn't return icon URLs, so this maps common service names to
@@ -714,23 +714,25 @@ async function loadServiceCatalog(opts){
     // Phase 1a — ultra-fast: up to 2 pages without per-country loops
     if(!opts.skipPriority){
       try{
-        for(var pg = 0; pg < 2; pg++){
+        var fastJobs = [0,1].map(function(pg){
           var from = pg * 1000, to = from + 999;
-          var fast = await sbClient
+          return sbClient
             .from('number_services')
             .select('service_id, service_name, price, available_quantity, country_id, country_name')
             .eq('source', 'grizzlysms')
             .eq('is_available', true)
             .gt('price', 0)
             .range(from, to);
-          if(fast.error || !(fast.data && fast.data.length)) break;
-          fast.data.forEach(function(row){
-            ingest([row], row.country_id, row.country_name || nameById[row.country_id]);
-          });
-          paintProgress();
-          saveCache(false);
-          if(fast.data.length < 1000) break;
-        }
+        });
+        var fastParts = await Promise.all(fastJobs);
+        fastParts.forEach(function(fast){
+          if(fast && fast.data && fast.data.length){
+            fast.data.forEach(function(row){
+              ingest([row], row.country_id, row.country_name || nameById[row.country_id]);
+            });
+          }
+        });
+        if(catalogMap.size){ paintProgress(); saveCache(false); }
       }catch(e){ console.warn('fast path', e); }
     }
 
@@ -1107,7 +1109,7 @@ document.getElementById('psBuyBtn').addEventListener('click', async function(){
       return;
     }
     // Success: keep locked and navigate — do not re-enable (prevents second buy)
-    showToast('Number purchased! Redirecting...', 'success');
+    showToast('Number purchased! Redirecting…', 'success');
     const oid = data.data && data.data.order_id;
     setTimeout(() => {
       window.location.href = 'mj-sms-number.html?order_id=' + encodeURIComponent(oid);
