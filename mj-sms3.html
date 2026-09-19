@@ -39,6 +39,32 @@ body{font-family:'Plus Jakarta Sans',system-ui,sans-serif;background:var(--bg);c
 .selected-country-bar .name{font-weight:800;font-size:14px;color:var(--primary);display:flex;align-items:center;gap:8px}
 .selected-country-bar button{background:none;border:1px solid var(--primary);color:var(--primary);font-size:11px;font-weight:700;padding:6px 12px;border-radius:8px;cursor:pointer;font-family:inherit}
 .product-count-badge{display:inline-block;font-size:11px;font-weight:700;color:var(--primary);background:var(--primary-glow);padding:4px 10px;border-radius:20px;margin-bottom:12px}
+
+.svc-icon-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px 10px;margin-top:8px}
+@media(min-width:520px){.svc-icon-grid{grid-template-columns:repeat(5,1fr)}}
+.svc-tile{display:flex;flex-direction:column;align-items:center;gap:8px;padding:10px 4px;border-radius:16px;border:1px solid transparent;background:transparent;cursor:pointer;font-family:inherit;color:var(--text)}
+.svc-tile:active,.svc-tile:hover{background:var(--primary-glow)}
+.svc-icon-wrap{width:52px;height:52px;position:relative;flex-shrink:0}
+.svc-tile .svc-logo{width:52px;height:52px;border-radius:14px;object-fit:contain;background:#fff;padding:6px;display:block;box-shadow:0 4px 12px rgba(0,0,0,.12)}
+.svc-tile .svc-icon{width:52px;height:52px;border-radius:14px;display:flex;align-items:center;justify-content:center;color:#fff;font-size:22px}
+.svc-tile .svc-label{font-size:11px;font-weight:700;text-align:center;line-height:1.25;max-width:72px;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
+.selected-service-bar{display:flex;align-items:center;justify-content:space-between;gap:10px;background:var(--primary-glow);border-radius:12px;padding:12px 14px;margin-bottom:14px}
+.selected-service-bar .name{font-weight:800;font-size:14px;color:var(--primary);display:flex;align-items:center;gap:10px}
+.selected-service-bar .mini-icon{width:28px;height:28px;border-radius:8px;overflow:hidden;background:#fff;display:inline-flex;align-items:center;justify-content:center}
+.selected-service-bar .mini-icon img{width:100%;height:100%;object-fit:contain}
+.selected-service-bar button{background:none;border:1px solid var(--primary);color:var(--primary);font-size:11px;font-weight:700;padding:6px 12px;border-radius:8px;cursor:pointer;font-family:inherit}
+.country-price-row{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:14px;border-radius:12px;background:var(--bg);border:1px solid var(--border);cursor:pointer}
+.country-price-row:active{background:var(--primary-glow)}
+.country-price-row .left{display:flex;align-items:center;gap:12px;min-width:0;flex:1}
+.country-price-row .cname{font-weight:700;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.country-price-row .right{display:flex;align-items:center;gap:8px}
+.country-price-row .cprice{font-weight:800;font-size:15px;color:var(--primary)}
+.country-price-row .chev{color:var(--muted);font-size:12px}
+.sk-svc-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px 10px;margin-top:8px}
+.sk-svc-tile{display:flex;flex-direction:column;align-items:center;gap:8px;padding:10px 4px}
+.sk-svc-icon{width:52px;height:52px;border-radius:14px;background:linear-gradient(90deg,rgba(148,163,184,.12),rgba(148,163,184,.22),rgba(148,163,184,.12));background-size:200% 100%;animation:skShimmer 1.2s ease-in-out infinite}
+.sk-svc-label{width:56px;height:10px;border-radius:6px;background:linear-gradient(90deg,rgba(148,163,184,.12),rgba(148,163,184,.22),rgba(148,163,184,.12));background-size:200% 100%;animation:skShimmer 1.2s ease-in-out infinite}
+@keyframes skShimmer{0%{background-position:100% 0}100%{background-position:-100% 0}}
 .product-grid{display:flex;flex-direction:column;gap:10px}
 .svc-card{background:var(--bg);border:1px solid var(--border);border-radius:14px;padding:14px;display:flex;flex-direction:column;gap:10px}
 .svc-top{display:flex;align-items:center;gap:12px}
@@ -92,27 +118,25 @@ body{font-family:'Plus Jakarta Sans',system-ui,sans-serif;background:var(--bg);c
   <a class="hist-btn" href="mj-sms-history.html"><i class="fa-solid fa-clock-rotate-left"></i> History</a>
 </div>
 <div class="main">
-  <div class="content-card" id="countryStep">
+  <div class="content-card" id="serviceStep">
     <span class="server-tag"><i class="fa-solid fa-server"></i> Server 2</span>
-    <h2><i class="fa-solid fa-earth-americas" style="color:var(--primary)"></i> Choose a Country</h2>
-    <p class="helper-text">Pick the country your number should come from. Prices vary by country and service.</p>
-    <div class="search-bar"><i class="fa-solid fa-magnifying-glass"></i><input type="text" id="countrySearch" placeholder="Search countries..."></div>
-    <div id="countryList" class="country-list">
-      <div class="sk-cards" aria-busy="true"></div>
-    </div>
-  </div>
-  <div class="content-card" id="serviceStep" style="display:none">
     <h2><i class="fa-solid fa-mobile-screen" style="color:var(--primary)"></i> Choose a Service</h2>
-    <div class="selected-country-bar">
-      <span class="name" id="selectedCountryName"></span>
-      <button type="button" id="changeCountryBtn">Change</button>
-    </div>
-    <div class="search-bar"><i class="fa-solid fa-magnifying-glass"></i><input type="text" id="serviceSearch" placeholder="Search services (Telegram, WhatsApp...)"></div>
+    <p class="helper-text">Pick the app you need. Popular services show first.</p>
+    <div class="search-bar"><i class="fa-solid fa-magnifying-glass"></i><input type="text" id="serviceSearch" placeholder="Search services (WhatsApp, Telegram...)"></div>
     <label class="reuse-row"><input type="checkbox" id="reusePref"> Prefer reusable number when available</label>
     <div id="serviceCountBadge"></div>
-    <div id="serviceGrid"></div>
+    <div id="serviceGrid"><div class="sk-svc-grid" aria-busy="true"><div class="sk-svc-tile"><div class="sk-svc-icon"></div><div class="sk-svc-label"></div></div><div class="sk-svc-tile"><div class="sk-svc-icon"></div><div class="sk-svc-label"></div></div><div class="sk-svc-tile"><div class="sk-svc-icon"></div><div class="sk-svc-label"></div></div><div class="sk-svc-tile"><div class="sk-svc-icon"></div><div class="sk-svc-label"></div></div><div class="sk-svc-tile"><div class="sk-svc-icon"></div><div class="sk-svc-label"></div></div><div class="sk-svc-tile"><div class="sk-svc-icon"></div><div class="sk-svc-label"></div></div><div class="sk-svc-tile"><div class="sk-svc-icon"></div><div class="sk-svc-label"></div></div><div class="sk-svc-tile"><div class="sk-svc-icon"></div><div class="sk-svc-label"></div></div><div class="sk-svc-tile"><div class="sk-svc-icon"></div><div class="sk-svc-label"></div></div><div class="sk-svc-tile"><div class="sk-svc-icon"></div><div class="sk-svc-label"></div></div><div class="sk-svc-tile"><div class="sk-svc-icon"></div><div class="sk-svc-label"></div></div><div class="sk-svc-tile"><div class="sk-svc-icon"></div><div class="sk-svc-label"></div></div></div></div>
   </div>
-</div>
+
+  <div class="content-card" id="countryStep" style="display:none">
+    <h2><i class="fa-solid fa-earth-americas" style="color:var(--primary)"></i> Choose a Country</h2>
+    <div class="selected-service-bar">
+      <span class="name" id="selectedServiceName"></span>
+      <button type="button" id="changeServiceBtn">Change</button>
+    </div>
+    <div class="search-bar"><i class="fa-solid fa-magnifying-glass"></i><input type="text" id="countrySearch" placeholder="Search countries (USA, Nigeria...)"></div>
+    <div id="countryList" class="country-list"></div>
+  </div>
 
 <!-- Purchase modal -->
 <div class="purchase-modal" id="purchaseModal">
@@ -165,7 +189,7 @@ const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
   const countrySearch = document.getElementById('countrySearch');
   const serviceSearch = document.getElementById('serviceSearch');
 
-  let sbClient, accessToken, allCountries = [], currentCountry = null, allServices = [], isBuying = false;
+  let sbClient, accessToken, allCountries = [], currentCountry = null, allServices = [], activeService = null, isBuying = false;
 
   function esc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
   function money(n){ return '₦' + Number(n||0).toLocaleString(); }
@@ -376,115 +400,367 @@ const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
     await loadCountries();
   }
 
-  async function loadCountries(){
-    countryList.innerHTML = skCountries();
+
+  var allServiceCatalog = [];
+  var serviceCountryIndex = {};
+  var currentServicePick = null;
+  var allCountriesForService = [];
+  var __s2CatalogLoading = false;
+  var __s2SearchTimer = null;
+  var POPULAR = ['whatsapp','telegram','facebook','instagram','tiktok','google','gmail','twitter','discord','snapchat','microsoft','amazon','netflix','spotify','uber','paypal','linkedin','signal','viber','wechat'];
+
+  function popularRank(name){
+    var n = String(name||'').toLowerCase().trim();
+    for(var i=0;i<POPULAR.length;i++){
+      var k = POPULAR[i];
+      if(k.length >= 4 && n.indexOf(k) !== -1) return i;
+      if(n === k) return i;
+    }
+    if(n === 'x' || n.indexOf('twitter') !== -1) return POPULAR.indexOf('twitter');
+    return 1000;
+  }
+  function isJunkService(name){
+    var n = String(name||'').trim();
+    if(!n) return true;
+    if(/^[a-z]{1,4}x$/i.test(n)) return true;
+    if(/^[a-z0-9]{1,3}$/i.test(n)) return true;
+    if(/^[0-9]+$/.test(n)) return true;
+    return false;
+  }
+  function countryMatchesQuery(name, q){
+    if(!q) return true;
+    var n = String(name||'').toLowerCase();
+    if(n.indexOf(q) !== -1) return true;
+    if(/^(usa|us|america)$/i.test(q) || q.indexOf('united st') === 0){
+      if(/united states|usa|america/i.test(n)) return true;
+    }
+    return false;
+  }
+  function serviceTileHtml(name){
+    var logo = serviceLogo(name);
+    var fa = serviceFa(name);
+    if(logo){
+      return '<div class="svc-icon-wrap"><img class="svc-logo" src="'+logo+'" alt="" loading="lazy" onerror="this.style.display=\'none\';var n=this.nextElementSibling;if(n)n.style.display=\'flex\'"/><div class="svc-icon" style="display:none;background:'+fa.color+'"><i class="'+fa.cls+'"></i></div></div>';
+    }
+    return '<div class="svc-icon" style="background:'+fa.color+'"><i class="'+fa.cls+'"></i></div>';
+  }
+
+  async function loadCountries(){ return loadServiceCatalogS2(); }
+
+  async function loadServiceCatalogS2(opts){
+    opts = opts || {};
     try{
-      const j = await api('countries');
-      // data may be object map or array
-      let rows = [];
-      const d = j.data;
-      if(Array.isArray(d)){
-        rows = d.map(c => ({
-          country_id: c.country_id || c.id || c.code,
-          country_name: c.country_name || c.title || c.name || String(c.country_id||c.id),
-          service_count: c.service_count || c.projects || c.count || null
-        }));
-      } else if(d && typeof d === 'object'){
-        rows = Object.keys(d).map(k => {
-          const v = d[k];
-          if(v && typeof v === 'object'){
-            return {
-              country_id: v.country_id || v.id || k,
-              country_name: v.country_name || v.title || v.name || String(k),
-              service_count: v.service_count || v.count || null
-            };
+      if(!opts.force){
+        try{
+          var raw = sessionStorage.getItem('mj_sms2_catalog_v1');
+          if(raw){
+            var cached = JSON.parse(raw);
+            if(cached && cached.catalog && cached.catalog.length){
+              allServiceCatalog = cached.catalog;
+              serviceCountryIndex = cached.index || {};
+              renderServiceCatalogS2(allServiceCatalog);
+              if(cached.complete && (Date.now() - (cached.t||0)) < 15*60*1000){
+                return;
+              }
+              // soft continue fill below
+            }
           }
-          return { country_id: k, country_name: String(v || k), service_count: null };
-        });
+        }catch(e){}
       }
-      rows.sort((a,b)=>String(a.country_name).localeCompare(String(b.country_name)));
-      allCountries = rows;
-      renderCountries(allCountries);
-    }catch(e){
-      countryList.innerHTML = '<div class="empty-state"><h4>Failed to load</h4><p>'+esc(e.message)+'</p>'+
-        (/session|sign in/i.test(String(e.message||''))
-          ? '<a href="auth.html?next='+encodeURIComponent('mj-sms3.html')+'" class="btn-buy" style="display:inline-block;margin-top:12px;text-decoration:none;text-align:center">Sign in again</a>'
-          : '<button type="button" class="btn-buy" style="margin-top:12px" id="retryCountries">Try again</button>')+
-        '</div>';
-      var rb=document.getElementById('retryCountries');
-      if(rb) rb.onclick=function(){ loadCountries(); };
+
+      if(serviceGrid && !(allServiceCatalog && allServiceCatalog.length)){
+        serviceGrid.innerHTML = '<div class="sk-svc-grid">'+Array.from({length:12}).map(function(){return '<div class="sk-svc-tile"><div class="sk-svc-icon"></div><div class="sk-svc-label"></div></div>';}).join('')+'</div>';
+      }
+
+      if(__s2CatalogLoading && !opts.force) return;
+      __s2CatalogLoading = true;
+
+      var map = new Map();
+      (allServiceCatalog||[]).forEach(function(s){ if(s && s.key) map.set(s.key, s); });
+
+      function ingestRow(row){
+        var name = String(row.service_name || row.title || row.service_id || row.id || '').replace(/_/g,' ').trim();
+        if(!name) return;
+        var sid = row.service_id || row.project_id || row.id;
+        var key = name.toLowerCase();
+        if(!map.has(key)) map.set(key, { project_id: sid, service_id: sid, title: name, service_name: name, key: key });
+        if(row.country_id != null){
+          if(!serviceCountryIndex[key]) serviceCountryIndex[key] = [];
+          var exists = serviceCountryIndex[key].some(function(x){ return String(x.country_id) === String(row.country_id); });
+          if(!exists){
+            serviceCountryIndex[key].push({
+              country_id: row.country_id,
+              country_name: row.country_name || ('Country '+row.country_id),
+              price: row.price,
+              available_quantity: row.available_quantity,
+              project_id: sid,
+              service_id: sid,
+              title: name
+            });
+          }
+        }
+      }
+
+      function paint(){
+        allServiceCatalog = Array.from(map.values()).sort(function(a,b){
+          var ra = popularRank(a.title||a.service_name), rb = popularRank(b.title||b.service_name);
+          if(ra !== rb) return ra - rb;
+          return String(a.title||'').localeCompare(String(b.title||''));
+        });
+        renderServiceCatalogS2(allServiceCatalog);
+        try{
+          sessionStorage.setItem('mj_sms2_catalog_v1', JSON.stringify({
+            t: Date.now(), complete: false, catalog: allServiceCatalog, index: serviceCountryIndex
+          }));
+        }catch(e){}
+      }
+
+      // 1) Live projects list (existing API — fast service names)
+      try{
+        var j = await api('projects');
+        var list = (j && j.data) ? j.data : (Array.isArray(j) ? j : []);
+        list.forEach(function(p){
+          ingestRow({
+            service_id: p.id || p.project_id,
+            service_name: p.title || p.name || String(p.id),
+            title: p.title || p.name
+          });
+        });
+        paint();
+      }catch(e){ console.warn('projects', e); }
+
+      // 2) DB catalog for prices + countries (source smsbus) — same table sync already uses
+      if(sbClient){
+        try{
+          for(var pg = 0; pg < 5; pg++){
+            var from = pg * 1000, to = from + 999;
+            var res = await sbClient
+              .from('number_services')
+              .select('service_id, service_name, price, available_quantity, country_id, country_name')
+              .eq('source', 'smsbus')
+              .eq('is_available', true)
+              .gt('price', 0)
+              .range(from, to);
+            if(res.error){
+              res = await sbClient
+                .from('number_services')
+                .select('service_id, service_name, price, available_quantity, country_id, country_name')
+                .eq('source', 'smsbus')
+                .eq('is_available', true)
+                .range(from, to);
+            }
+            if(res.error || !(res.data && res.data.length)) break;
+            res.data.forEach(ingestRow);
+            paint();
+            if(res.data.length < 1000) break;
+          }
+        }catch(e){ console.warn('smsbus catalog', e); }
+      }
+
+      // 3) Countries list kept available for fallback names
+      try{
+        var cj = await api('countries');
+        var clist = (cj && cj.data) ? cj.data : [];
+        allCountries = clist.map(function(c){
+          return {
+            country_id: c.id || c.country_id,
+            country_name: c.title || c.name || c.country_name || String(c.id),
+            service_count: c.service_count || null
+          };
+        });
+      }catch(e){}
+
+      try{
+        sessionStorage.setItem('mj_sms2_catalog_v1', JSON.stringify({
+          t: Date.now(), complete: true, catalog: allServiceCatalog, index: serviceCountryIndex
+        }));
+      }catch(e){}
+
+      __s2CatalogLoading = false;
+      if(!allServiceCatalog.length){
+        serviceGrid.innerHTML = '<div class="empty-state"><h4>No services</h4><button type="button" class="btn-buy" style="margin-top:12px" onclick="loadServiceCatalogS2({force:true})">Retry</button></div>';
+      }
+    }catch(err){
+      __s2CatalogLoading = false;
+      console.error(err);
+      if(serviceGrid && !allServiceCatalog.length){
+        serviceGrid.innerHTML = '<div class="empty-state"><h4>Failed to load</h4><p>'+esc(err.message||String(err))+'</p></div>';
+      }
     }
   }
 
-  function renderCountries(list){
-    if(!list.length){
-      countryList.innerHTML = '<div class="empty-state"><h4>No countries found</h4></div>';
+  function renderServiceCatalogS2(list, searchQ){
+    var q = (searchQ != null ? searchQ : (serviceSearch && serviceSearch.value) || '').trim().toLowerCase();
+    var filtered = (list || []).filter(function(s){
+      var name = s.title || s.service_name || '';
+      if(isJunkService(name)){
+        if(q && name.toLowerCase().indexOf(q) !== -1 && q.length >= 2) return true;
+        return false;
+      }
+      if(q) return name.toLowerCase().indexOf(q) !== -1;
+      return true;
+    });
+    if(!q && filtered.length > 400) filtered = filtered.slice(0, 400);
+    if(!filtered.length){
+      serviceGrid.innerHTML = '<div class="empty-state"><h4>No services</h4></div>';
+      if(serviceCountBadge) serviceCountBadge.innerHTML = '';
       return;
     }
-    countryList.innerHTML = list.map(c => {
-      const count = c.service_count != null ? ('<span class="count">'+c.service_count+' services</span>') : '<span class="count">View</span>';
-      return '<div class="country-row" data-id="'+esc(c.country_id)+'"><span class="left">'+flagHtml(c.country_name)+'<span>'+esc(c.country_name)+'</span></span>'+count+'</div>';
-    }).join('');
-    countryList.querySelectorAll('.country-row').forEach(row => {
-      row.addEventListener('click', () => selectCountry(row.getAttribute('data-id')));
+    if(serviceCountBadge){
+      serviceCountBadge.innerHTML = '<span class="product-count-badge">'+filtered.length+' service'+(filtered.length!==1?'s':'')+'</span>';
+    }
+    serviceGrid.innerHTML = '<div class="svc-icon-grid">'+filtered.map(function(s){
+      var name = s.title || s.service_name || 'Service';
+      var key = s.key || name.toLowerCase();
+      return '<button type="button" class="svc-tile" data-key="'+esc(key)+'">'+serviceTileHtml(name)+'<span class="svc-label">'+esc(name)+'</span></button>';
+    }).join('')+'</div>';
+    serviceGrid.querySelectorAll('.svc-tile').forEach(function(btn){
+      btn.addEventListener('click', function(){
+        var key = btn.getAttribute('data-key');
+        var svc = (list || []).find(function(x){ return (x.key || (x.title||x.service_name||'').toLowerCase()) === key; });
+        if(svc) selectServiceS2(svc);
+      });
     });
   }
 
-  countrySearch.addEventListener('input', () => {
-    const q = countrySearch.value.trim().toLowerCase();
-    renderCountries(q ? allCountries.filter(c => String(c.country_name).toLowerCase().includes(q)) : allCountries);
-  });
+  async function selectServiceS2(svc){
+    currentServicePick = svc;
+    currentCountry = null;
+    activeService = null;
+    serviceStep.style.display = 'none';
+    countryStep.style.display = 'block';
+    var name = svc.title || svc.service_name || 'Service';
+    var nameEl = document.getElementById('selectedServiceName');
+    nameEl.innerHTML = '';
+    var mini = document.createElement('span');
+    mini.className = 'mini-icon';
+    var logo = serviceLogo(name);
+    var fa = serviceFa(name);
+    if(logo){
+      var im = document.createElement('img');
+      im.src = logo;
+      im.alt = '';
+      im.onerror = function(){ mini.style.background = fa.color; mini.innerHTML = '<i class="'+fa.cls+'"></i>'; };
+      mini.appendChild(im);
+    } else {
+      mini.style.background = fa.color;
+      mini.innerHTML = '<i class="'+fa.cls+'"></i>';
+    }
+    nameEl.appendChild(mini);
+    nameEl.appendChild(document.createTextNode(name));
+    countrySearch.value = '';
+    countryList.innerHTML = '<div class="loading-text">Loading countries…</div>';
 
-  async function selectCountry(id){
-    currentCountry = allCountries.find(c => String(c.country_id) === String(id));
-    if(!currentCountry) return;
+    var key = (svc.key || name).toLowerCase();
+    var rows = (serviceCountryIndex[key] || []).slice();
+
+    // Refresh from DB for full country list (existing number_services / smsbus)
+    try{
+      if(sbClient){
+        var res = await sbClient
+          .from('number_services')
+          .select('service_id, service_name, country_id, country_name, price, available_quantity')
+          .eq('source', 'smsbus')
+          .eq('is_available', true)
+          .eq('service_id', String(svc.project_id || svc.service_id))
+          .gt('price', 0)
+          .order('price', { ascending: true })
+          .limit(500);
+        if(!(res.data && res.data.length)){
+          res = await sbClient
+            .from('number_services')
+            .select('service_id, service_name, country_id, country_name, price, available_quantity')
+            .eq('source', 'smsbus')
+            .eq('is_available', true)
+            .ilike('service_name', name)
+            .gt('price', 0)
+            .order('price', { ascending: true })
+            .limit(500);
+        }
+        if(res.data && res.data.length){
+          rows = res.data.map(function(r){
+            return {
+              country_id: r.country_id,
+              country_name: r.country_name || ('Country '+r.country_id),
+              price: r.price,
+              available_quantity: r.available_quantity,
+              project_id: r.service_id,
+              service_id: r.service_id,
+              title: r.service_name || name
+            };
+          });
+          serviceCountryIndex[key] = rows;
+        }
+      }
+    }catch(e){ console.warn(e); }
+
+    // Fallback: if still empty, use live prices API for a few countries (existing endpoint)
+    if(!rows.length && allCountries && allCountries.length && accessToken){
+      var sample = allCountries.slice(0, 12);
+      for(var i=0;i<sample.length;i++){
+        try{
+          var pj = await api('prices', { qs: '&country_id='+encodeURIComponent(sample[i].country_id) });
+          var plist = (pj && pj.data) ? pj.data : [];
+          plist.forEach(function(s){
+            var tname = String(s.title || s.name || '').toLowerCase();
+            if(tname === name.toLowerCase() || tname.indexOf(name.toLowerCase()) !== -1){
+              rows.push({
+                country_id: sample[i].country_id,
+                country_name: sample[i].country_name,
+                price: s.price,
+                available_quantity: s.stock || s.count,
+                project_id: s.project_id || s.id,
+                service_id: s.project_id || s.id,
+                title: s.title || name
+              });
+            }
+          });
+        }catch(e){}
+      }
+    }
+
+    var byC = new Map();
+    rows.forEach(function(c){
+      var id = String(c.country_id);
+      if(!byC.has(id) || Number(c.price) < Number(byC.get(id).price)) byC.set(id, c);
+    });
+    allCountriesForService = Array.from(byC.values()).sort(function(a,b){ return Number(a.price)-Number(b.price); });
+    renderCountryPricesS2(allCountriesForService);
+  }
+
+  function renderCountryPricesS2(list){
+    if(!list.length){
+      countryList.innerHTML = '<div class="empty-state"><h4>No countries for this service</h4><p>Try another service or sync catalog</p></div>';
+      return;
+    }
+    countryList.innerHTML = list.map(function(c,i){
+      return '<div class="country-price-row" data-i="'+i+'"><div class="left">'+flagHtml(c.country_name)+'<span class="cname">'+esc(c.country_name)+'</span></div><div class="right"><span class="cprice">'+money(c.price)+'</span><span class="chev"><i class="fa-solid fa-chevron-right"></i></span></div></div>';
+    }).join('');
+    countryList.querySelectorAll('.country-price-row').forEach(function(row){
+      row.addEventListener('click', function(){
+        var c = list[Number(row.getAttribute('data-i'))];
+        if(!c) return;
+        currentCountry = { country_id: c.country_id, country_name: c.country_name };
+        openPurchaseModal({
+          project_id: c.project_id || c.service_id,
+          title: c.title || (currentServicePick && (currentServicePick.title || currentServicePick.service_name)),
+          price: c.price,
+          stock: c.available_quantity
+        });
+      });
+    });
+  }
+
+  function backToServicesS2(){
     countryStep.style.display = 'none';
     serviceStep.style.display = 'block';
-    document.getElementById('selectedCountryName').innerHTML = flagHtml(currentCountry.country_name)+'<span>'+esc(currentCountry.country_name)+'</span>';
-    serviceGrid.innerHTML = skServices();
-    serviceCountBadge.innerHTML = '';
-    serviceSearch.value = '';
-    try{
-      const j = await api('prices', { qs: '&country_id='+encodeURIComponent(id) });
-      let list = Array.isArray(j.data) ? j.data : [];
-      allServices = list.map(r => ({
-        project_id: r.project_id || r.id,
-        title: r.title || r.name || r.service_name || ('Service '+ (r.project_id||r.id)),
-        price: r.price,
-        stock: r.stock != null ? r.stock : r.available_quantity
-      })).filter(s => s.project_id != null);
-      // update service count on country if missing
-      if(currentCountry.service_count == null) currentCountry.service_count = allServices.length;
-      renderServices(allServices);
-    }catch(e){
-      serviceGrid.innerHTML = '<div class="empty-state"><h4>Failed to load services</h4><p>'+esc(e.message)+'</p></div>';
-    }
+    currentCountry = null;
+    currentServicePick = null;
   }
 
-  function renderServices(list){
-    if(!list.length){
-      serviceGrid.innerHTML = '<div class="empty-state"><h4>No services</h4></div>';
-      serviceCountBadge.innerHTML = '';
-      return;
-    }
-    serviceCountBadge.innerHTML = '<span class="product-count-badge">'+list.length+' service'+(list.length!==1?'s':'')+' available</span>';
-    serviceGrid.innerHTML = '<div class="product-grid">'+list.map(s => {
-      const logo = serviceLogo(s.title);
-      const fa = serviceFa(s.title);
-      const icon = logo
-        ? '<img class="svc-logo" src="'+logo+'" alt="" loading="lazy" onerror="this.style.display=\'none\';this.nextElementSibling.style.display=\'flex\'"><div class="svc-icon" style="display:none;background:'+fa.color+'"><i class="'+fa.cls+'"></i></div>'
-        : '<div class="svc-icon" style="background:'+fa.color+'"><i class="'+fa.cls+'"></i></div>';
-      const stock = (s.stock != null && s.stock !== '') ? ('<span class="badge-stock">'+esc(s.stock)+' available</span>') : '';
-      return '<div class="svc-card"><div class="svc-top">'+icon+'<div class="svc-meta"><div class="svc-name">'+esc(s.title)+'</div>'+stock+'</div><div class="svc-price">'+money(s.price)+'</div></div><button type="button" class="btn-buy" data-id="'+esc(s.project_id)+'">Buy Number</button></div>';
-    }).join('')+'</div>';
-    serviceGrid.querySelectorAll('.btn-buy').forEach(btn => {
-      const svc = list.find(s => String(s.project_id) === btn.getAttribute('data-id'));
-      btn.addEventListener('click', () => openPurchaseModal(svc, btn));
-    });
-  }
-
-  let activeService = null;
-  let activeBtn = null;
+  function renderCountries(){}
+  function selectCountry(){}
+  function renderServices(){}
 
   function openPurchaseModal(svc, btn){
     if(!svc || !currentCountry) return;
@@ -530,17 +806,46 @@ const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
     buy(svc.project_id, btn, prevHtml, window.__mjSms3BuyId);
   });
 
-  serviceSearch.addEventListener('input', () => {
-    const q = serviceSearch.value.trim().toLowerCase();
-    renderServices(q ? allServices.filter(s => String(s.title).toLowerCase().includes(q)) : allServices);
+  serviceSearch.addEventListener('input', function(){
+    var q = serviceSearch.value.trim().toLowerCase();
+    renderServiceCatalogS2(allServiceCatalog, q);
+    clearTimeout(__s2SearchTimer);
+    if(q.length >= 2 && sbClient){
+      __s2SearchTimer = setTimeout(async function(){
+        try{
+          var res = await sbClient.from('number_services')
+            .select('service_id, service_name, price, available_quantity, country_id, country_name')
+            .eq('source', 'smsbus').eq('is_available', true)
+            .ilike('service_name', '%'+q+'%').limit(120);
+          if(res.data && res.data.length){
+            res.data.forEach(function(row){
+              var name = String(row.service_name||'').replace(/_/g,' ').trim();
+              if(!name) return;
+              var key = name.toLowerCase();
+              if(!allServiceCatalog.some(function(s){ return s.key === key; })){
+                allServiceCatalog.push({ project_id: row.service_id, service_id: row.service_id, title: name, service_name: name, key: key });
+              }
+              if(!serviceCountryIndex[key]) serviceCountryIndex[key] = [];
+              if(!serviceCountryIndex[key].some(function(x){ return String(x.country_id)===String(row.country_id); })){
+                serviceCountryIndex[key].push({
+                  country_id: row.country_id, country_name: row.country_name, price: row.price,
+                  available_quantity: row.available_quantity, project_id: row.service_id, service_id: row.service_id, title: name
+                });
+              }
+            });
+            if((serviceSearch.value||'').trim().toLowerCase() === q) renderServiceCatalogS2(allServiceCatalog, q);
+          }
+        }catch(e){}
+      }, 180);
+    }
   });
+  countrySearch.addEventListener('input', function(){
+    var q = countrySearch.value.trim().toLowerCase();
+    renderCountryPricesS2(q ? allCountriesForService.filter(function(c){ return countryMatchesQuery(c.country_name, q); }) : allCountriesForService);
+  });
+  var chg = document.getElementById('changeServiceBtn');
+  if(chg) chg.onclick = backToServicesS2;
 
-  document.getElementById('changeCountryBtn').onclick = function(){
-    serviceStep.style.display = 'none';
-    countryStep.style.display = 'block';
-    currentCountry = null;
-    allServices = [];
-  };
 
   async function buy(projectId, btn, prevHtml, idemKey){
     if(!accessToken){

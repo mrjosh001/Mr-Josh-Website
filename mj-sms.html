@@ -648,7 +648,12 @@ async function loadServiceCatalog(opts){
       paintProgress();
       // If already complete, soft-refresh in background only (no skeleton, no wait)
       if(cached.complete){
-        softRefreshCatalogFull();
+        var age = Date.now() - (cached.t || 0);
+        // Only quiet refresh if cache is older than 15 minutes — keep UI instant
+        if(age > 15 * 60 * 1000){
+          setTimeout(function(){ softRefreshCatalogFull(); }, 50);
+        }
+        __smsCatalogLoading = false;
         return;
       }
       // Incomplete cache: continue filling in background without blocking UI
@@ -706,7 +711,30 @@ async function loadServiceCatalog(opts){
       return (res && res.data) ? res.data : [];
     }
 
-    // Phase 1 — one fast request for priority countries
+    // Phase 1a — ultra-fast: up to 2 pages without per-country loops
+    if(!opts.skipPriority){
+      try{
+        for(var pg = 0; pg < 2; pg++){
+          var from = pg * 1000, to = from + 999;
+          var fast = await sbClient
+            .from('number_services')
+            .select('service_id, service_name, price, available_quantity, country_id, country_name')
+            .eq('source', 'grizzlysms')
+            .eq('is_available', true)
+            .gt('price', 0)
+            .range(from, to);
+          if(fast.error || !(fast.data && fast.data.length)) break;
+          fast.data.forEach(function(row){
+            ingest([row], row.country_id, row.country_name || nameById[row.country_id]);
+          });
+          paintProgress();
+          saveCache(false);
+          if(fast.data.length < 1000) break;
+        }
+      }catch(e){ console.warn('fast path', e); }
+    }
+
+    // Phase 1b — priority countries fill gaps (still one .in() call)
     var priorityIds = ids.slice(0, 16);
     if(priorityIds.length && !opts.skipPriority){
       var rows = await fetchByCountryIds(priorityIds);
@@ -719,8 +747,8 @@ async function loadServiceCatalog(opts){
 
     // Phase 2 — load ALL remaining countries fast: parallel batches of 25
     var rest = ids.slice(16);
-    var bgBatch = 25;
-    var parallel = 3; // 3 batches at once
+    var bgBatch = 30;
+    var parallel = 5; // more parallel = faster full load
     for(var j = 0; j < rest.length; j += bgBatch * parallel){
       var chunkJobs = [];
       for(var p = 0; p < parallel; p++){
