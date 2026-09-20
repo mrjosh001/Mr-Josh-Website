@@ -1286,8 +1286,70 @@ async function ensureAuth() {
 /** Server-side load (same approach as boosters / owlet) — avoids browser anon-key failures */
 let _myOrdersCache = null;
 
+function ordersCacheKey() {
+  const uid = session && session.user && session.user.id;
+  return uid ? ('mjhub_my_orders_v1_' + uid) : null;
+}
+function readOrdersDiskCache() {
+  try {
+    const key = ordersCacheKey();
+    if (!key) return null;
+    const raw = sessionStorage.getItem(key) || localStorage.getItem(key);
+    if (!raw) return null;
+    const o = JSON.parse(raw);
+    if (!o || !o.t || !o.data) return null;
+    // Keep for the rest of the browser session day (max 12h) — avoids re-downloading credentials
+    if (Date.now() - o.t > 12 * 60 * 60 * 1000) return null;
+    return o.data;
+  } catch (e) { return null; }
+}
+function writeOrdersDiskCache(data) {
+  try {
+    const key = ordersCacheKey();
+    if (!key || !data) return;
+    const payload = JSON.stringify({ t: Date.now(), data: data });
+    try { sessionStorage.setItem(key, payload); } catch (e1) {}
+    try { localStorage.setItem(key, payload); } catch (e2) {}
+  } catch (e) {}
+}
+function mergeOrdersPayload(prev, next) {
+  if (!prev) return next;
+  if (!next) return prev;
+  function mergeArr(a, b, idKey) {
+    const map = new Map();
+    (a || []).forEach(function (row) {
+      const id = row && (row[idKey] || row.order_id || row.id);
+      if (id != null) map.set(String(id), row);
+    });
+    (b || []).forEach(function (row) {
+      const id = row && (row[idKey] || row.order_id || row.id);
+      if (id != null) map.set(String(id), Object.assign({}, map.get(String(id)) || {}, row));
+      else map.set('anon_' + map.size, row);
+    });
+    return Array.from(map.values());
+  }
+  return {
+    success: true,
+    customer_id: next.customer_id || prev.customer_id,
+    full_name: next.full_name || prev.full_name,
+    logs: mergeArr(prev.logs, next.logs, 'order_id'),
+    sms: mergeArr(prev.sms, next.sms, 'order_id'),
+    boosters: mergeArr(prev.boosters, next.boosters, 'order_id')
+  };
+}
 async function fetchMyOrdersFromApi(force) {
+  // 1) Memory cache
   if (_myOrdersCache && !force) return _myOrdersCache;
+  // 2) Disk cache (same session / same day) — do not hit API again for the same data
+  if (!force) {
+    const disk = readOrdersDiskCache();
+    if (disk && (disk.logs || disk.sms || disk.success)) {
+      _myOrdersCache = disk;
+      if (disk.customer_id) window.__customerId = String(disk.customer_id);
+      if (disk.full_name) window.__customerName = String(disk.full_name);
+      return disk;
+    }
+  }
   const token = session && session.access_token;
   if (!token) throw new Error('Please sign in');
   const headers = { Authorization: 'Bearer ' + token };
@@ -1297,12 +1359,19 @@ async function fetchMyOrdersFromApi(force) {
     throw new Error('Session expired. Please sign out and sign in again.');
   }
   if (!res.ok || !json.success) {
+    // On failure, fall back to last good cache if any
+    const disk = readOrdersDiskCache();
+    if (disk) {
+      _myOrdersCache = disk;
+      return disk;
+    }
     throw new Error(json.message || 'Could not load orders');
   }
-  _myOrdersCache = json;
+  _myOrdersCache = force && _myOrdersCache ? mergeOrdersPayload(_myOrdersCache, json) : json;
+  writeOrdersDiskCache(_myOrdersCache);
   if (json.customer_id) window.__customerId = String(json.customer_id);
   if (json.full_name) window.__customerName = String(json.full_name);
-  return json;
+  return _myOrdersCache;
 }
 
 async function loadLogs() {
@@ -1313,7 +1382,7 @@ async function loadLogs() {
     return;
   }
   try {
-    const json = await fetchMyOrdersFromApi(true);
+    const json = await fetchMyOrdersFromApi(false);
     let rows = json.logs || [];
     if (!rows.length) {
       try {
@@ -1340,7 +1409,7 @@ async function loadSms() {
     return;
   }
   try {
-    const json = await fetchMyOrdersFromApi(true);
+    const json = await fetchMyOrdersFromApi(false);
     smsRows = (json.sms || []).slice().sort((a, b) => {
       return new Date(b.created_at || 0) - new Date(a.created_at || 0);
     });
@@ -2245,16 +2314,18 @@ async function boot() {
     return;
   }
   session = s;
-  _myOrdersCache = null;
-  await loadCustomerProfile();
+  // Do NOT clear _myOrdersCache here — reuse memory/disk so orders do not reload every visit
+  try { await loadCustomerProfile(); } catch (e) {}
   const list = document.getElementById('list');
-  if (list) list.innerHTML = '<div class="empty"><p>Loading your orders…</p></div>';
+  if (list && !_myOrdersCache && !readOrdersDiskCache()) {
+    list.innerHTML = '<div class="empty"><p>Loading your orders…</p></div>';
+  }
   await Promise.all([loadLogs(), loadSms(), loadBoosters()]);
   try {
     const q = new URLSearchParams(location.search).get('tab');
     if (q === 'sms' || q === 'boosters' || q === 'logs') {
       tab = q;
-      document.querySelectorAll('.type-tab').forEach((b) => {
+      document.querySelectorAll('.type-tab').forEach(function (b) {
         b.classList.toggle('active', b.getAttribute('data-tab') === tab);
       });
     }
@@ -2263,6 +2334,7 @@ async function boot() {
   bindSendButton();
   render();
 }
+
 boot();
 
 </script>
