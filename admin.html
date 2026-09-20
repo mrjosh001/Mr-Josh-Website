@@ -1971,7 +1971,7 @@ async function loadSmsRowsForCurrentFilter() {
  const country = document.getElementById('smsCountryFilter')?.value || '';
  const q = (document.getElementById('smsSearch')?.value || '').trim();
  const hideZero = document.getElementById('smsHideZeroStock')?.checked !== false;
- const cols = 'id,source,country_id,country_name,service_id,service_name,supplier_price,price,available_quantity,is_available,currency,updated_at';
+ const cols = 'id,source,country_id,country_name,service_id,service_name,supplier_price,price,available_quantity,is_available,currency,updated_at,providers_raw,pool_price_overrides';
 
  allNumberServices = [];
 
@@ -2033,6 +2033,121 @@ function filterNumberServices() {
 
 function usdFmt(n) { return '$' + Number(n || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
 
+/** Mirrors salePriceFromUsd() in api/grizzly-sync.js and salePriceFromUsdClient()
+ * in mj-sms.html — same fixed 80% markup band — so the "auto" price shown
+ * here for an un-overridden pool matches what a customer would actually be
+ * charged if the admin leaves it alone. */
+function grizzlyAutoPriceFromUsd(usd) {
+ const rate = 1500, percent = 80, minProfit = 500, minSale = 1000;
+ const supplierNgn = Number(usd) * rate;
+ if (!Number.isFinite(supplierNgn) || supplierNgn <= 0) return minSale;
+ const percentPrice = Math.ceil(supplierNgn * (1 + percent / 100));
+ const floorPrice = Math.ceil(supplierNgn + minProfit);
+ const finalPrice = Math.max(percentPrice, floorPrice, minSale);
+ return Math.ceil(finalPrice / 50) * 50;
+}
+
+/** One row's providers_raw (keyed object) → sorted array of pools, each with
+ * the admin's custom price if one is set (pool_price_overrides) or the
+ * live auto-computed price otherwise. A row with 0 or 1 pool renders with
+ * the plain single-price UI unchanged — this only kicks in for rows that
+ * actually have multiple provider pools worth telling apart. */
+function getPoolsForRow(s) {
+ const raw = s.providers_raw;
+ if (!raw || typeof raw !== 'object') return [];
+ const overrides = (s.pool_price_overrides && typeof s.pool_price_overrides === 'object') ? s.pool_price_overrides : {};
+ const out = [];
+ Object.keys(raw).forEach(key => {
+ const p = raw[key];
+ if (!p) return;
+ const arr = Array.isArray(p.price) ? p.price : [p.price];
+ const nums = arr.map(Number).filter(n => Number.isFinite(n) && n > 0);
+ if (!nums.length) return;
+ const usd = Math.min(...nums);
+ const providerId = String(p.provider_id != null ? p.provider_id : key);
+ const hasOverride = Object.prototype.hasOwnProperty.call(overrides, providerId);
+ out.push({
+ provider_id: providerId,
+ count: Number(p.count) || 0,
+ supplier_usd: usd,
+ auto_price_ngn: grizzlyAutoPriceFromUsd(usd),
+ override_ngn: hasOverride ? Number(overrides[providerId]) : null
+ });
+ });
+ out.sort((a, b) => a.supplier_usd - b.supplier_usd);
+ return out;
+}
+
+function poolRowHtml(rowId, pool, idx) {
+ const effective = pool.override_ngn != null ? pool.override_ngn : pool.auto_price_ngn;
+ const priceTag = pool.override_ngn != null
+ ? '<span class="badge badge-admin" style="margin-left:6px;">Custom</span>'
+ : '<span class="badge" style="margin-left:6px;">Auto</span>';
+ return `
+ <div style="padding:10px 12px;border:1px solid var(--border);border-radius:10px;background:rgba(255,255,255,0.02);margin-top:8px;">
+ <div style="display:flex;justify-content:space-between;align-items:center;font-size:12px;font-weight:700;color:var(--muted);margin-bottom:6px;">
+ <span>Pool ${idx + 1} · ID ${escapeHtml(pool.provider_id)}</span>
+ </div>
+ <div class="row-line"><span>Supplier</span><span class="supplier-price">${usdFmt(pool.supplier_usd)}</span></div>
+ <div class="row-line"><span>Your Price</span><strong class="price">₦${effective.toLocaleString()}${priceTag}</strong></div>
+ <div class="row-line"><span>Stock</span><span>${pool.count.toLocaleString()}</span></div>
+ <div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap;">
+ <button class="btn btn-ghost btn-sm" onclick="editPoolPrice('${rowId}','${pool.provider_id}', ${effective})"><i class="fas fa-edit"></i> Set Price</button>
+ ${pool.override_ngn != null ? `<button class="btn btn-ghost btn-sm" onclick="clearPoolPriceOverride('${rowId}','${pool.provider_id}')" style="color:#f87171;"><i class="fas fa-rotate-left"></i> Reset to Auto</button>` : ''}
+ </div>
+ </div>`;
+}
+
+async function editPoolPrice(rowId, providerId, currentPrice) {
+ const next = prompt('Set your selling price (₦) for this pool:', String(currentPrice != null ? currentPrice : ''));
+ if (next === null) return; // cancelled
+ const price = parseFloat(next);
+ if (isNaN(price) || price < 0) {
+ showAdminToast('Enter a valid price', 'error');
+ return;
+ }
+ try {
+ const headers = await authHeaders();
+ headers['Content-Type'] = 'application/json';
+ const res = await fetch('/api/admin', {
+ method: 'POST',
+ headers,
+ body: JSON.stringify({ resource: 'sms', action: 'update_pool_price', id: rowId, provider_id: providerId, price })
+ });
+ const data = await res.json();
+ if (!res.ok || !data.success) {
+ showAdminToast(data.message || 'Could not save pool price', 'error');
+ return;
+ }
+ showAdminToast('Pool price updated', 'success');
+ await loadSmsRowsForCurrentFilter();
+ } catch (e) {
+ showAdminToast('Network error: ' + (e.message || e), 'error');
+ }
+}
+
+async function clearPoolPriceOverride(rowId, providerId) {
+ if (!confirm('Reset this pool back to the automatic price?')) return;
+ try {
+ const headers = await authHeaders();
+ headers['Content-Type'] = 'application/json';
+ const res = await fetch('/api/admin', {
+ method: 'POST',
+ headers,
+ body: JSON.stringify({ resource: 'sms', action: 'update_pool_price', id: rowId, provider_id: providerId, price: null })
+ });
+ const data = await res.json();
+ if (!res.ok || !data.success) {
+ showAdminToast(data.message || 'Could not reset pool price', 'error');
+ return;
+ }
+ showAdminToast('Pool reset to auto price', 'success');
+ await loadSmsRowsForCurrentFilter();
+ } catch (e) {
+ showAdminToast('Network error: ' + (e.message || e), 'error');
+ }
+}
+
 function renderNumberServices(list) {
  const items = list || allNumberServices;
  const tbody = document.getElementById('smsTableBody');
@@ -2052,20 +2167,33 @@ function renderNumberServices(list) {
  const stockDisplay = stock == null ? ' ' : stock;
  const available = s.is_available !== false && (stock == null || stock > 0);
  const statusLabel = s.is_available === false ? 'Hidden' : (available ? 'Active' : 'Out of stock');
- return `
+ const pools = getPoolsForRow(s);
+ const multiPool = pools.length > 1;
+ const priceCell = multiPool
+ ? `<span class="badge">${pools.length} pools — see below</span>`
+ : `₦${Number(s.price || 0).toLocaleString()}`;
+ const mainRow = `
  <tr>
  <td style="font-weight:600;">${escapeHtml(s.country_name || ' ')}</td>
  <td>${escapeHtml(s.service_name || s.service_id || ' ')}</td>
  <td><span class="badge">${sourceLabel(s.source)}</span></td>
  <td class="supplier-price">${usdFmt(s.supplier_price)}</td>
- <td class="price">₦${Number(s.price || 0).toLocaleString()}</td>
+ <td class="price">${priceCell}</td>
  <td>${stockDisplay}</td>
  <td><span class="badge ${available ? 'badge-on' : 'badge-off'}">${statusLabel}</span></td>
  <td style="white-space:nowrap;">
- <button class="btn btn-ghost btn-sm" onclick="editNumberService('${s.id}')" title="Edit price"><i class="fas fa-edit"></i></button>
+ ${multiPool ? '' : `<button class="btn btn-ghost btn-sm" onclick="editNumberService('${s.id}')" title="Edit price"><i class="fas fa-edit"></i></button>`}
  <button class="btn btn-ghost btn-sm" onclick="deleteNumberService('${s.id}')" title="Delete" style="color:#f87171;"><i class="fas fa-trash"></i></button>
  </td>
  </tr>`;
+ if (!multiPool) return mainRow;
+ const poolsRow = `
+ <tr>
+ <td colspan="8" style="background:rgba(255,255,255,0.015);">
+ ${pools.map((p, i) => poolRowHtml(s.id, p, i)).join('')}
+ </td>
+ </tr>`;
+ return mainRow + poolsRow;
  }).join('');
  }
 
@@ -2075,10 +2203,21 @@ function renderNumberServices(list) {
  const stockDisplay = stock == null ? ' ' : stock;
  const available = s.is_available !== false && (stock == null || stock > 0);
  const statusLabel = s.is_available === false ? 'Hidden' : (available ? 'Active' : 'Out of stock');
+ const pools = getPoolsForRow(s);
+ const multiPool = pools.length > 1;
  return `
  <div class="product-card">
  <h4>${escapeHtml(s.country_name || ' ')}</h4>
  <div class="meta">${escapeHtml(s.service_name || s.service_id || ' ')} · <span class="badge">${sourceLabel(s.source)}</span></div>
+ ${multiPool ? `
+ <div class="row-line"><span>Pools</span><span class="badge">${pools.length}</span></div>
+ <div class="row-line"><span>Stock (total)</span><span>${pools.reduce((sum, p) => sum + p.count, 0).toLocaleString()}</span></div>
+ <div class="row-line"><span>Status</span><span class="badge ${available ? 'badge-on' : 'badge-off'}">${statusLabel}</span></div>
+ ${pools.map((p, i) => poolRowHtml(s.id, p, i)).join('')}
+ <div style="margin-top:10px;">
+ <button class="btn btn-ghost btn-sm" onclick="deleteNumberService('${s.id}')" style="color:#f87171;"><i class="fas fa-trash"></i> Delete Listing</button>
+ </div>
+ ` : `
  <div class="row-line"><span>Supplier Price</span><span class="supplier-price">${usdFmt(s.supplier_price)}</span></div>
  <div class="row-line"><span>Your Price</span><strong class="price">₦${Number(s.price || 0).toLocaleString()}</strong></div>
  <div class="row-line"><span>Stock</span><span>${stockDisplay}</span></div>
@@ -2087,6 +2226,7 @@ function renderNumberServices(list) {
  <button class="btn btn-ghost btn-sm" onclick="editNumberService('${s.id}')"><i class="fas fa-edit"></i> Edit Price</button>
  <button class="btn btn-ghost btn-sm" onclick="deleteNumberService('${s.id}')" style="color:#f87171;"><i class="fas fa-trash"></i> Delete</button>
  </div>
+ `}
  </div>`;
  }).join('');
  }
