@@ -1,5 +1,9 @@
 import { createClient } from '@supabase/supabase-js';
-import { joinRawLogDetails } from '../lib/formatCredentials.js';
+import {
+  joinRawLogDetails,
+  formatCredentials,
+  formatMultiLogCredentials
+} from '../lib/formatCredentials.js';
 
 /**
  * POST /api/order-manual
@@ -377,13 +381,19 @@ export default async function handler(req, res) {
         .filter(Boolean)
         .join('\n\n');
     const combinedRaw = detailsText || null;
-    // Customer view = formatted for readability
-    const combinedCreds =
-      formatMultiLogCredentials(itemsForFmt, formatHint) ||
-      (claimedRows[0]
-        ? formatCredentials(claimedRows[0].credential, formatHint) || claimedRows[0].credential
-        : null) ||
-      detailsText;
+    // Customer view = formatted for readability (never fail the sale if formatter errors)
+    let combinedCreds = detailsText;
+    try {
+      combinedCreds =
+        formatMultiLogCredentials(itemsForFmt, formatHint) ||
+        (claimedRows[0]
+          ? formatCredentials(claimedRows[0].credential, formatHint) || claimedRows[0].credential
+          : null) ||
+        detailsText;
+    } catch (fmtErr) {
+      console.error('[order-manual] formatCredentials failed, using raw', fmtErr.message);
+      combinedCreds = detailsText;
+    }
     const supplierRefs = claimedRows
       .map((r) => r.id)
       .filter(Boolean)
@@ -441,13 +451,17 @@ export default async function handler(req, res) {
       success: true,
       message: 'Order fulfilled successfully',
       data: {
-        items: claimedRows.map((r) => ({
-          details:
-            formatCredentials(
-              r.credential,
-              product.display_description || product.description || product.name
-            ) || r.credential
-        })),
+        items: claimedRows.map((r) => {
+          let d = r.credential;
+          try {
+            d =
+              formatCredentials(
+                r.credential,
+                product.display_description || product.description || product.name
+              ) || r.credential;
+          } catch (_) {}
+          return { details: d };
+        }),
         login_credentials: combinedCreds || detailsText,
         total_amount: total,
         new_balance: newBalance,
