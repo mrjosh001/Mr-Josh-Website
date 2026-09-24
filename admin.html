@@ -1101,7 +1101,13 @@ function withLagos(opts) { return Object.assign({ timeZone: 'Africa/Lagos' }, op
 
  <div id="tab-orders" class="tab-content">
  <div class="panel">
- <div class="panel-title" style="margin-bottom:10px;">LOGS Orders</div>
+ <div class="panel-header" style="margin-bottom:10px;flex-wrap:wrap;gap:8px;">
+ <div class="panel-title" style="margin:0;">LOGS Orders</div>
+ <div class="search-row" style="display:flex;flex:1;flex-wrap:wrap;gap:8px;align-items:center;min-width:200px;">
+ <input type="search" id="logsOrderSearch" placeholder="Search customer ID, order ID, product…" style="flex:1;min-width:180px;" oninput="onLogsOrderSearch()" onkeydown="if(event.key==='Enter'){onLogsOrderSearch()}">
+ <button type="button" class="btn btn-ghost btn-sm" onclick="clearLogsOrderSearch()" title="Clear filter">Clear</button>
+ </div>
+ </div>
  <div class="empty-state" id="ordersEmpty">No orders table connected yet.</div>
  <div class="table-wrap hidden" id="ordersTableWrap">
  <table>
@@ -4121,14 +4127,52 @@ function adminTurnPage(kind, dir) {
   }
 }
 
+
+function getLogsOrderSearchQ() {
+  const el = document.getElementById('logsOrderSearch');
+  return String(el && el.value || '').trim().toLowerCase();
+}
+
+function filterLogsOrdersList(orders) {
+  const q = getLogsOrderSearchQ();
+  if (!q) return orders || [];
+  return (orders || []).filter(function (o) {
+    const cid = String(o.customer_id || '').toLowerCase();
+    const oid = String(o.order_id || '').toLowerCase();
+    const name = String(o.product_name || o.item || '').toLowerCase();
+    const email = String(o.customer_email || o.email || '').toLowerCase();
+    const uid = String(o.user_id || '').toLowerCase();
+    return cid.includes(q) || oid.includes(q) || name.includes(q) || email.includes(q) || uid.includes(q);
+  });
+}
+
+function onLogsOrderSearch() {
+  window._logOrderPage = 1;
+  renderOrders(window._cachedOrders || []);
+}
+
+function clearLogsOrderSearch() {
+  const el = document.getElementById('logsOrderSearch');
+  if (el) el.value = '';
+  window._logOrderPage = 1;
+  renderOrders(window._cachedOrders || []);
+}
+
 function renderOrders(orders) {
  const tbody = document.getElementById('ordersTableBody');
- if (!orders?.length) {
- tbody.innerHTML = `<tr><td colspan="8" class="empty-state">No orders yet.</td></tr>`;
+ // Keep full list in memory so customer-ID search can re-filter without re-fetch
+ if (Array.isArray(orders)) window._cachedOrders = orders;
+ const source = window._cachedOrders || orders || [];
+ const filtered = filterLogsOrdersList(source);
+ if (!filtered.length) {
+ const q = getLogsOrderSearchQ();
+ tbody.innerHTML = `<tr><td colspan="8" class="empty-state">${q ? 'No LOGS orders match “' + escapeHtml(q) + '”.' : 'No orders yet.'}</td></tr>`;
+ const pager = document.getElementById('ordersPager');
+ if (pager) pager.innerHTML = '';
  return;
  }
 
- const orderGroups = groupOrdersById(orders);
+ const orderGroups = groupOrdersById(filtered);
  window._cachedOrderGroups = orderGroups;
 
  // Group by calendar day (using created_at; orders with no date fall into
