@@ -1,0 +1,527 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>USA Physical Rental · MJ HUB</title>
+<script>(function(){try{var t=localStorage.getItem('mjhub-theme');document.documentElement.setAttribute('data-theme',(t==='light'||t==='dark')?t:'dark');}catch(e){document.documentElement.setAttribute('data-theme','dark');}})();</script>
+<script src="/js/mj-page-loader.js" defer></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap" rel="stylesheet">
+<style>
+:root,html[data-theme="dark"]{
+  --bg:#0b1220;--card:#111827;--text:#f1f5f9;--muted:#94a3b8;--border:#1e293b;
+  --primary:#3b82f6;--accent:#60a5fa;--soft:rgba(59,130,246,.12);--ok:#22c55e;--danger:#ef4444;
+}
+html[data-theme="light"]{
+  --bg:#f8fafc;--card:#fff;--text:#0f172a;--muted:#64748b;--border:#e2e8f0;
+  --primary:#2563eb;--accent:#3b82f6;--soft:rgba(37,99,235,.1);--ok:#16a34a;--danger:#dc2626;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Plus Jakarta Sans',system-ui,sans-serif;background:var(--bg);color:var(--text);min-height:100dvh}
+.header{padding:14px 16px;display:flex;align-items:center;gap:12px;position:sticky;top:0;z-index:50;
+  background:color-mix(in srgb,var(--bg) 88%,transparent);backdrop-filter:blur(16px);border-bottom:1px solid var(--border)}
+.back{width:40px;height:40px;border-radius:12px;border:1px solid var(--border);background:var(--card);
+  display:flex;align-items:center;justify-content:center;color:var(--text);text-decoration:none}
+.page-title{font-size:18px;font-weight:800;background:linear-gradient(135deg,var(--primary),var(--accent));
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent}
+.tabs{display:flex;gap:8px;padding:12px 16px;overflow-x:auto}
+.tab{flex:0 0 auto;padding:10px 16px;border-radius:999px;border:1px solid var(--border);background:var(--card);
+  font:700 13px inherit;color:var(--muted);cursor:pointer}
+.tab.active{background:var(--primary);color:#fff;border-color:var(--primary)}
+.main{padding:0 16px 100px;max-width:560px;margin:0 auto}
+.search{display:flex;align-items:center;gap:10px;padding:12px 14px;border-radius:14px;border:1.5px solid var(--border);
+  background:var(--card);margin-bottom:14px}
+.search input{flex:1;border:none;background:transparent;color:var(--text);font:600 14px inherit;outline:none}
+.svc-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+.svc-tile{display:flex;flex-direction:column;align-items:center;gap:8px;padding:14px 8px;border-radius:16px;
+  border:1px solid var(--border);background:var(--card);cursor:pointer;font:700 12px inherit;color:var(--text);text-align:center}
+.svc-tile:active{transform:scale(.98)}
+.svc-tile .ico{width:44px;height:44px;border-radius:12px;background:var(--soft);display:flex;align-items:center;justify-content:center;
+  font-size:18px;font-weight:800;color:var(--primary);overflow:hidden}
+.svc-tile .ico img{width:100%;height:100%;object-fit:contain}
+.plan-list{display:flex;flex-direction:column;gap:10px}
+.plan-card{border:1.5px solid var(--border);border-radius:16px;padding:14px;background:var(--card);cursor:pointer}
+.plan-card.selected{border-color:var(--primary);box-shadow:0 0 0 3px var(--soft)}
+.plan-card .row{display:flex;justify-content:space-between;align-items:center;gap:10px}
+.plan-card .dur{font-weight:800;font-size:15px}
+.plan-card .price{font-weight:800;color:var(--primary);font-size:16px}
+.plan-card .meta{font-size:12px;color:var(--muted);margin-top:6px}
+.extras{margin-top:16px;display:flex;flex-direction:column;gap:12px}
+label.field{font-size:12px;font-weight:700;color:var(--muted);display:block;margin-bottom:6px}
+input.field,select.field{width:100%;padding:12px 14px;border-radius:12px;border:1.5px solid var(--border);
+  background:var(--bg);color:var(--text);font:600 14px inherit}
+.qty{display:flex;align-items:center;gap:12px}
+.qty button{width:40px;height:40px;border-radius:12px;border:none;background:var(--soft);color:var(--primary);font-size:18px;font-weight:800;cursor:pointer}
+.total{margin-top:16px;padding:16px;border-radius:16px;background:var(--soft);border:1px solid color-mix(in srgb,var(--primary) 30%,var(--border))}
+.total .lbl{font-size:12px;font-weight:700;color:var(--muted)}
+.total .amt{font-size:24px;font-weight:800;color:var(--primary);margin-top:4px}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;width:100%;padding:14px;border-radius:14px;
+  border:none;font:800 15px inherit;cursor:pointer}
+.btn-primary{background:linear-gradient(135deg,var(--primary),#2563eb);color:#fff}
+.btn-ghost{background:var(--card);border:1px solid var(--border);color:var(--text)}
+.btn-danger{background:color-mix(in srgb,var(--danger) 15%,var(--card));color:var(--danger);border:1px solid color-mix(in srgb,var(--danger) 30%,var(--border))}
+.btn:disabled{opacity:.55;cursor:not-allowed}
+.rent-card{border:1px solid var(--border);border-radius:16px;padding:14px;background:var(--card);margin-bottom:10px}
+.rent-card .phone{font-weight:800;font-size:16px;letter-spacing:.02em}
+.rent-card .svc{font-size:13px;color:var(--muted);margin-top:2px}
+.badge{display:inline-block;padding:3px 8px;border-radius:999px;font-size:11px;font-weight:800}
+.badge.on{background:color-mix(in srgb,var(--ok) 18%,transparent);color:var(--ok)}
+.badge.off{background:color-mix(in srgb,var(--muted) 18%,transparent);color:var(--muted)}
+.msg{border-left:3px solid var(--primary);padding:10px 12px;margin:8px 0;background:var(--soft);border-radius:0 12px 12px 0}
+.msg .code{font-size:20px;font-weight:800;letter-spacing:.08em;margin:4px 0}
+.msg .body{font-size:13px;color:var(--muted);word-break:break-word}
+.err{color:var(--danger);font-size:13px;font-weight:700;margin-top:10px}
+.ok{color:var(--ok);font-size:13px;font-weight:700;margin-top:10px}
+.empty{text-align:center;padding:40px 16px;color:var(--muted);font-weight:600}
+.sk{height:72px;border-radius:16px;background:linear-gradient(90deg,var(--border),transparent,var(--border));background-size:200% 100%;animation:sk 1.2s infinite;margin-bottom:10px}
+@keyframes sk{0%{background-position:200% 0}100%{background-position:-200% 0}}
+.back-link{display:inline-flex;align-items:center;gap:6px;font-size:13px;font-weight:700;color:var(--primary);margin-bottom:12px;cursor:pointer;background:none;border:none}
+.hint{font-size:12px;color:var(--muted);line-height:1.45;margin:8px 0 0}
+.actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}
+.actions .btn{width:auto;flex:1;min-width:120px;padding:10px 12px;font-size:13px}
+</style>
+</head>
+<body>
+<header class="header">
+  <a href="mj-sms-choose-server.html" class="back"><i class="fa-solid fa-arrow-left"></i></a>
+  <h1 class="page-title">USA Physical Rental</h1>
+</header>
+
+<div class="tabs" role="tablist">
+  <button type="button" class="tab active" data-tab="rent" id="tabRent">Rent</button>
+  <button type="button" class="tab" data-tab="mine" id="tabMine">My numbers</button>
+</div>
+
+<main class="main">
+  <!-- RENT FLOW -->
+  <section id="panelRent">
+    <div id="stepServices">
+      <div class="search">
+        <i class="fa-solid fa-magnifying-glass" style="color:var(--muted)"></i>
+        <input type="search" id="svcSearch" placeholder="Search WhatsApp, Telegram, Google…" autocomplete="off">
+      </div>
+      <p class="hint" style="margin-bottom:12px">Physical USA lines · pick a service, then a duration. Optional carrier &amp; area code.</p>
+      <div id="svcGrid" class="svc-grid"></div>
+      <div id="svcEmpty" class="empty" style="display:none">No services match</div>
+    </div>
+
+    <div id="stepPlans" style="display:none">
+      <button type="button" class="back-link" id="backToSvc"><i class="fa-solid fa-arrow-left"></i> All services</button>
+      <h2 id="planTitle" style="font-size:18px;font-weight:800;margin-bottom:12px"></h2>
+      <div id="planList" class="plan-list"></div>
+      <div class="extras" id="extras" style="display:none">
+        <div>
+          <label class="field">Quantity (1–25)</label>
+          <div class="qty">
+            <button type="button" id="qtyMinus">−</button>
+            <span id="qtyVal" style="font-weight:800;min-width:28px;text-align:center">1</span>
+            <button type="button" id="qtyPlus">+</button>
+          </div>
+        </div>
+        <div>
+          <label class="field">Preferred carrier (optional)</label>
+          <select class="field" id="carrierSel"><option value="">Any US carrier</option></select>
+        </div>
+        <div>
+          <label class="field">Area code (optional)</label>
+          <input class="field" id="areaCode" inputmode="numeric" placeholder="e.g. 212, 305" maxlength="6">
+        </div>
+        <div class="total">
+          <div class="lbl">Total</div>
+          <div class="amt" id="totalAmt">₦0</div>
+        </div>
+        <button type="button" class="btn btn-primary" id="rentBtn"><i class="fa-solid fa-cart-shopping"></i> Rent now</button>
+        <div class="err" id="rentErr"></div>
+        <div class="ok" id="rentOk"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- MY NUMBERS -->
+  <section id="panelMine" style="display:none">
+    <div id="mineList"></div>
+    <div id="mineDetail" style="display:none"></div>
+  </section>
+</main>
+
+<script>
+(function(){
+  const SUPABASE_URL = 'https://atczodlljmlayvldxfmv.supabase.co';
+  const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImF0Y3pvZGxsam1sYXl2bGR4Zm12Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODUwNzUyMzgsImV4cCI6MjEwMDY1MTIzOH0.ufthD-p7BmeD_B7xyuMM6PNPL8DmcL4AtRYgg-MuoLI';
+  const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+    auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true }
+  });
+
+  let accessToken = null;
+  let allServices = [];
+  let selectedService = null;
+  let plans = [];
+  let selectedPlan = null;
+  let carriers = [];
+  let qty = 1;
+  let rentBusy = false;
+
+  const POPULAR = ['whatsapp','telegram','google','facebook','instagram','tiktok','twitter','x','discord','openai','chatgpt','paypal','tinder'];
+
+  async function headers() {
+    const { data: { session } } = await sb.auth.getSession();
+    if (!session) { location.href = 'auth.html?next=' + encodeURIComponent(location.pathname); return null; }
+    accessToken = session.access_token;
+    return { Authorization: 'Bearer ' + accessToken, 'Content-Type': 'application/json', Accept: 'application/json' };
+  }
+
+  async function api(action, opts) {
+    const h = await headers();
+    if (!h) return { success: false, message: 'Sign in required' };
+    const method = (opts && opts.method) || 'GET';
+    let url = '/api/sms-bus?action=gotsms_' + encodeURIComponent(action);
+    if (opts && opts.query) url += '&' + opts.query;
+    const res = await fetch(url, {
+      method,
+      headers: h,
+      body: opts && opts.body ? JSON.stringify(opts.body) : undefined
+    });
+    return res.json().catch(function(){ return { success: false, message: 'Bad response' }; });
+  }
+
+  function esc(s) {
+    return String(s == null ? '' : s).replace(/[&<>"']/g, function(c){
+      return ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c];
+    });
+  }
+  function fmtNgn(n){ return '₦' + Number(n || 0).toLocaleString('en-NG'); }
+  function logoLetter(name){ return String(name || 'S').charAt(0).toUpperCase(); }
+
+  // Tabs
+  document.querySelectorAll('.tab').forEach(function(btn){
+    btn.onclick = function(){
+      document.querySelectorAll('.tab').forEach(function(b){ b.classList.remove('active'); });
+      btn.classList.add('active');
+      const t = btn.getAttribute('data-tab');
+      document.getElementById('panelRent').style.display = t === 'rent' ? '' : 'none';
+      document.getElementById('panelMine').style.display = t === 'mine' ? '' : 'none';
+      if (t === 'mine') loadMine();
+    };
+  });
+
+  async function loadServices() {
+    const grid = document.getElementById('svcGrid');
+    grid.innerHTML = Array.from({length:9}).map(function(){ return '<div class="sk"></div>'; }).join('');
+    const j = await api('services', { query: 'per_page=100' });
+    if (!j.success) {
+      grid.innerHTML = '<div class="empty">' + esc(j.message || 'Could not load services') + '</div>';
+      return;
+    }
+    allServices = j.data || [];
+    // Prefer popular first
+    allServices.sort(function(a, b){
+      const an = String(a.name || '').toLowerCase();
+      const bn = String(b.name || '').toLowerCase();
+      const ai = POPULAR.findIndex(function(p){ return an.includes(p); });
+      const bi = POPULAR.findIndex(function(p){ return bn.includes(p); });
+      if (ai === -1 && bi === -1) return an.localeCompare(bn);
+      if (ai === -1) return 1;
+      if (bi === -1) return -1;
+      return ai - bi;
+    });
+    renderServices();
+  }
+
+  function renderServices() {
+    const q = String(document.getElementById('svcSearch').value || '').toLowerCase().trim();
+    let list = allServices;
+    if (q) list = list.filter(function(s){ return String(s.name || '').toLowerCase().includes(q); });
+    const grid = document.getElementById('svcGrid');
+    document.getElementById('svcEmpty').style.display = list.length ? 'none' : '';
+    grid.innerHTML = list.slice(0, 120).map(function(s){
+      const avail = s.is_available !== false;
+      return '<button type="button" class="svc-tile" data-id="' + esc(s.id) + '" data-name="' + esc(s.name) + '"' +
+        (avail ? '' : ' style="opacity:.5"') + '>' +
+        '<div class="ico">' + esc(logoLetter(s.name)) + '</div>' +
+        '<span>' + esc(s.name) + '</span></button>';
+    }).join('');
+    grid.querySelectorAll('.svc-tile').forEach(function(el){
+      el.onclick = function(){ openPlans(el.getAttribute('data-id'), el.getAttribute('data-name')); };
+    });
+  }
+
+  document.getElementById('svcSearch').oninput = function(){ renderServices(); };
+
+  async function openPlans(serviceId, serviceName) {
+    selectedService = { id: serviceId, name: serviceName };
+    selectedPlan = null;
+    qty = 1;
+    document.getElementById('qtyVal').textContent = '1';
+    document.getElementById('stepServices').style.display = 'none';
+    document.getElementById('stepPlans').style.display = '';
+    document.getElementById('planTitle').textContent = serviceName;
+    document.getElementById('planList').innerHTML = '<div class="sk"></div><div class="sk"></div>';
+    document.getElementById('extras').style.display = 'none';
+    document.getElementById('rentErr').textContent = '';
+    document.getElementById('rentOk').textContent = '';
+
+    const j = await api('plans', {
+      query: 'service_id=' + encodeURIComponent(serviceId) + '&per_page=100'
+    });
+    if (!j.success) {
+      document.getElementById('planList').innerHTML = '<div class="empty">' + esc(j.message || 'No plans') + '</div>';
+      return;
+    }
+    plans = (j.data || []).filter(function(p){ return p.is_available !== false; });
+    if (!plans.length) {
+      document.getElementById('planList').innerHTML = '<div class="empty">No stock for this service right now</div>';
+      return;
+    }
+    // Sort: day first, then week, month, year
+    const order = { min:0, hour:1, day:2, week:3, month:4, year:5 };
+    plans.sort(function(a,b){
+      const da = order[a.duration_type] ?? 9;
+      const db = order[b.duration_type] ?? 9;
+      if (da !== db) return da - db;
+      return (a.duration_in_type || 0) - (b.duration_in_type || 0);
+    });
+    document.getElementById('planList').innerHTML = plans.map(function(p, i){
+      return '<div class="plan-card" data-i="' + i + '">' +
+        '<div class="row"><span class="dur">' + esc(p.duration_translation || (p.duration_in_type + ' ' + p.duration_type)) + '</span>' +
+        '<span class="price">' + fmtNgn(p.price_ngn) + '</span></div>' +
+        '<div class="meta">USA · renew ' + fmtNgn(p.renew_price_ngn) + '</div></div>';
+    }).join('');
+    document.getElementById('planList').querySelectorAll('.plan-card').forEach(function(card){
+      card.onclick = function(){
+        document.querySelectorAll('.plan-card').forEach(function(c){ c.classList.remove('selected'); });
+        card.classList.add('selected');
+        selectedPlan = plans[Number(card.getAttribute('data-i'))];
+        document.getElementById('extras').style.display = '';
+        updateTotal();
+      };
+    });
+    loadCarriers();
+  }
+
+  document.getElementById('backToSvc').onclick = function(){
+    document.getElementById('stepPlans').style.display = 'none';
+    document.getElementById('stepServices').style.display = '';
+    selectedPlan = null;
+  };
+
+  async function loadCarriers() {
+    const j = await api('carriers');
+    carriers = j.data || [];
+    const sel = document.getElementById('carrierSel');
+    sel.innerHTML = '<option value="">Any US carrier</option>' +
+      carriers.map(function(c){ return '<option value="' + esc(c.id) + '">' + esc(c.name) + '</option>'; }).join('');
+  }
+
+  function updateTotal() {
+    if (!selectedPlan) return;
+    document.getElementById('totalAmt').textContent = fmtNgn(selectedPlan.price_ngn * qty);
+  }
+  document.getElementById('qtyMinus').onclick = function(){ if (qty > 1) { qty--; document.getElementById('qtyVal').textContent = qty; updateTotal(); } };
+  document.getElementById('qtyPlus').onclick = function(){ if (qty < 25) { qty++; document.getElementById('qtyVal').textContent = qty; updateTotal(); } };
+
+  document.getElementById('rentBtn').onclick = async function(){
+    if (rentBusy || !selectedPlan) return;
+    rentBusy = true;
+    const btn = this;
+    btn.disabled = true;
+    btn.textContent = 'Processing…';
+    document.getElementById('rentErr').textContent = '';
+    document.getElementById('rentOk').textContent = '';
+
+    const body = {
+      plan_id: selectedPlan.id,
+      quoted_price_ngn: selectedPlan.price_ngn
+    };
+    const area = String(document.getElementById('areaCode').value || '').replace(/\D/g, '');
+    if (area) body.area_code = area;
+    const car = document.getElementById('carrierSel').value;
+    if (car) body.cellular_carrier_id = car;
+
+    let j;
+    if (qty > 1) {
+      body.quantity = qty;
+      j = await api('rent_bulk', { method: 'POST', body: body });
+    } else {
+      j = await api('rent', { method: 'POST', body: body });
+    }
+
+    rentBusy = false;
+    btn.disabled = false;
+    btn.innerHTML = '<i class="fa-solid fa-cart-shopping"></i> Rent now';
+
+    if (!j.success) {
+      document.getElementById('rentErr').textContent = j.message || 'Rental failed';
+      if (j.data && j.data.price_ngn) {
+        selectedPlan.price_ngn = j.data.price_ngn;
+        updateTotal();
+      }
+      return;
+    }
+
+    const phone = qty > 1
+      ? ((j.data && j.data[0] && j.data[0].phone) || '')
+      : (j.data && j.data.phone) || '';
+    document.getElementById('rentOk').textContent =
+      (j.message || 'Success') + (phone ? (' · ' + phone) : '');
+    // Switch to my numbers
+    setTimeout(function(){
+      document.getElementById('tabMine').click();
+      if (j.data && j.data.id) openDetail(j.data.id);
+      else if (Array.isArray(j.data) && j.data[0] && j.data[0].id) openDetail(j.data[0].id);
+    }, 600);
+  };
+
+  async function loadMine() {
+    const box = document.getElementById('mineList');
+    document.getElementById('mineDetail').style.display = 'none';
+    box.style.display = '';
+    box.innerHTML = '<div class="sk"></div><div class="sk"></div>';
+    const j = await api('my_orders');
+    if (!j.success) {
+      box.innerHTML = '<div class="empty">' + esc(j.message || 'Could not load') + '</div>';
+      return;
+    }
+    const rows = j.data || [];
+    if (!rows.length) {
+      box.innerHTML = '<div class="empty">No USA rentals yet. Rent a number from the Rent tab.</div>';
+      return;
+    }
+    box.innerHTML = rows.map(function(o){
+      const st = o.refunded ? 'Refunded' : (o.status || 'active');
+      const on = !o.refunded && String(st).toLowerCase() !== 'finished' && String(st).toLowerCase() !== 'refunded';
+      return '<div class="rent-card" data-rid="' + esc(o.rent_id) + '">' +
+        '<div class="row" style="display:flex;justify-content:space-between;align-items:flex-start">' +
+        '<div><div class="phone">' + esc(o.phone || '—') + '</div>' +
+        '<div class="svc">' + esc(o.service_name || 'USA rental') + ' · ' + fmtNgn(o.price_ngn) + '</div></div>' +
+        '<span class="badge ' + (on ? 'on' : 'off') + '">' + esc(st) + '</span></div>' +
+        (o.active_till ? '<div class="hint">Until ' + esc(new Date(o.active_till).toLocaleString()) + '</div>' : '') +
+        '</div>';
+    }).join('');
+    box.querySelectorAll('.rent-card').forEach(function(card){
+      card.style.cursor = 'pointer';
+      card.onclick = function(){
+        const rid = card.getAttribute('data-rid');
+        if (rid) openDetail(rid);
+      };
+    });
+  }
+
+  async function openDetail(rentId) {
+    const list = document.getElementById('mineList');
+    const det = document.getElementById('mineDetail');
+    list.style.display = 'none';
+    det.style.display = '';
+    det.innerHTML = '<div class="sk"></div>';
+
+    // Find rent from supplier list
+    const rents = await api('rents', { query: 'status=active' });
+    let rent = (rents.data || []).find(function(r){ return String(r.id) === String(rentId); });
+    if (!rent) {
+      const fin = await api('rents', { query: 'status=finished' });
+      rent = (fin.data || []).find(function(r){ return String(r.id) === String(rentId); });
+    }
+
+    const msgs = await api('messages', { query: 'rent_id=' + encodeURIComponent(rentId) });
+    const addable = await api('addable_services', { query: 'rent_id=' + encodeURIComponent(rentId) });
+
+    const phone = (rent && rent.phone) || '—';
+    const svc = (rent && rent.service && rent.service.name) || 'Rental';
+    const till = rent && rent.active_till ? new Date(rent.active_till).toLocaleString() : '';
+    const auto = rent && rent.is_included_for_next_renewal;
+
+    let html = '<button type="button" class="back-link" id="backMine"><i class="fa-solid fa-arrow-left"></i> All numbers</button>';
+    html += '<div class="rent-card">';
+    html += '<div class="phone" id="detailPhone">' + esc(phone) + '</div>';
+    html += '<div class="svc">' + esc(svc);
+    if (till) html += ' · until ' + esc(till);
+    html += '</div>';
+    html += '<div class="actions">';
+    html += '<button type="button" class="btn btn-primary" id="btnCopy"><i class="fa-solid fa-copy"></i> Copy number</button>';
+    if (rent && rent.can_wake_up) {
+      html += '<button type="button" class="btn btn-ghost" id="btnWake"><i class="fa-solid fa-bolt"></i> Wake up</button>';
+    }
+    html += '<button type="button" class="btn btn-ghost" id="btnRefreshMsg"><i class="fa-solid fa-rotate"></i> Refresh SMS</button>';
+    html += '<button type="button" class="btn btn-ghost" id="btnAuto">' + (auto ? 'Auto-renew ON' : 'Auto-renew OFF') + '</button>';
+    html += '<button type="button" class="btn btn-danger" id="btnRefund">Cancel / refund</button>';
+    html += '</div><div class="err" id="detErr"></div><div class="ok" id="detOk"></div></div>';
+
+    html += '<h3 style="font-size:14px;font-weight:800;margin:18px 0 8px">SMS inbox</h3>';
+    const mlist = msgs.data || [];
+    if (!mlist.length) {
+      html += '<div class="empty" style="padding:20px">No messages yet. Wake the number, then request the OTP on the app.</div>';
+    } else {
+      mlist.forEach(function(m){
+        html += '<div class="msg">';
+        if (m.code) html += '<div class="code">' + esc(m.code) + ' <button type="button" class="btn btn-ghost" style="width:auto;padding:4px 10px;font-size:12px;display:inline-flex" data-copy="' + esc(m.code) + '">Copy</button></div>';
+        html += '<div class="body">' + esc(m.body || '') + '</div>';
+        if (m.received_at) html += '<div class="hint">' + esc(new Date(m.received_at).toLocaleString()) + '</div>';
+        html += '</div>';
+      });
+    }
+
+    const addList = (addable.data || []).filter(function(s){ return s.is_available; });
+    if (addList.length) {
+      html += '<h3 style="font-size:14px;font-weight:800;margin:18px 0 8px">Add service to this number</h3>';
+      html += '<select class="field" id="addSvcSel">' + addList.map(function(s){
+        return '<option value="' + esc(s.service_id) + '">' + esc(s.name) + ' · ' + fmtNgn(s.price_ngn) + '</option>';
+      }).join('') + '</select>';
+      html += '<button type="button" class="btn btn-primary" style="margin-top:10px" id="btnAddSvc">Add service</button>';
+    }
+
+    det.innerHTML = html;
+    document.getElementById('backMine').onclick = function(){ loadMine(); };
+    document.getElementById('btnCopy').onclick = function(){
+      navigator.clipboard.writeText(String(phone).replace(/\s/g, '')).catch(function(){});
+      document.getElementById('detOk').textContent = 'Number copied';
+    };
+    det.querySelectorAll('[data-copy]').forEach(function(b){
+      b.onclick = function(){
+        navigator.clipboard.writeText(b.getAttribute('data-copy')).catch(function(){});
+        document.getElementById('detOk').textContent = 'Code copied';
+      };
+    });
+    const wakeBtn = document.getElementById('btnWake');
+    if (wakeBtn) {
+      wakeBtn.onclick = async function(){
+        wakeBtn.disabled = true;
+        const j = await api('wake', { method: 'POST', body: { rent_id: rentId } });
+        wakeBtn.disabled = false;
+        document.getElementById('detErr').textContent = j.success ? '' : (j.message || 'Wake failed');
+        document.getElementById('detOk').textContent = j.success ? (j.message || 'Number is awake') : '';
+      };
+    }
+    document.getElementById('btnRefreshMsg').onclick = function(){ openDetail(rentId); };
+    document.getElementById('btnAuto').onclick = async function(){
+      const j = await api('toggle_renewal', { method: 'POST', body: { rent_id: rentId } });
+      document.getElementById('detErr').textContent = j.success ? '' : (j.message || 'Failed');
+      document.getElementById('detOk').textContent = j.success ? (j.message || 'Updated') : '';
+      if (j.success) openDetail(rentId);
+    };
+    document.getElementById('btnRefund').onclick = async function(){
+      if (!confirm('Cancel this rental and request a refund if eligible?')) return;
+      const j = await api('refund', { method: 'POST', body: { rent_id: rentId } });
+      document.getElementById('detErr').textContent = j.success ? '' : (j.message || 'Refund not available');
+      document.getElementById('detOk').textContent = j.success ? (j.message || 'Cancelled') : '';
+      if (j.success) setTimeout(loadMine, 800);
+    };
+    const addBtn = document.getElementById('btnAddSvc');
+    if (addBtn) {
+      addBtn.onclick = async function(){
+        const sid = document.getElementById('addSvcSel').value;
+        addBtn.disabled = true;
+        const j = await api('add_service', { method: 'POST', body: { rent_id: rentId, service_id: sid } });
+        addBtn.disabled = false;
+        document.getElementById('detErr').textContent = j.success ? '' : (j.message || 'Failed');
+        document.getElementById('detOk').textContent = j.success ? (j.message || 'Service added') : '';
+      };
+    }
+  }
+
+  // Boot
+  loadServices();
+})();
+</script>
+</body>
+</html>

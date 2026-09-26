@@ -786,6 +786,7 @@ function withLagos(opts) { return Object.assign({ timeZone: 'Africa/Lagos' }, op
  <button class="nav-item" data-tab="sms" onclick="switchTab('sms')"><i class="fas fa-sim-card"></i> SMS Server 1 (GrizzlySMS)</button>
  <button class="nav-item" data-tab="sms-orders" onclick="switchTab('sms-orders')"><i class="fas fa-comment-sms"></i> SMS Orders</button>
  <button class="nav-item" data-tab="sms-server2" onclick="switchTab('sms-server2')"><i class="fas fa-server"></i> SMS Server 2</button>
+ <button class="nav-item" data-tab="sms-gotsms" onclick="switchTab('sms-gotsms')"><i class="fas fa-flag-usa"></i> USA Rental (GotSMS)</button>
  <button class="nav-item" data-tab="boosters" onclick="switchTab('boosters')"><i class="fas fa-bolt"></i> MJ Boosters (Owlet)</button>
  <button class="nav-item" data-tab="booster-orders" onclick="switchTab('booster-orders')"><i class="fas fa-receipt"></i> Booster Orders</button>
  <button class="nav-item" data-tab="notify" onclick="switchTab('notify')"><i class="fas fa-bullhorn"></i> Notifications</button>
@@ -891,6 +892,7 @@ function withLagos(opts) { return Object.assign({ timeZone: 'Africa/Lagos' }, op
  <div class="metric-card"><div class="metric-label">ClassyTee</div><div class="metric-value" id="balClassy"> </div><div class="metric-sub" id="balClassySub">Loading…</div></div>
  <div class="metric-card"><div class="metric-label">Owlet (Boosters)</div><div class="metric-value" id="balOwlet"> </div><div class="metric-sub" id="balOwletSub">Loading…</div></div>
  <div class="metric-card"><div class="metric-label">SMS-Bus (Server 2)</div><div class="metric-value" id="balSmsbus"> </div><div class="metric-sub" id="balSmsbusSub">Loading…</div></div>
+ <div class="metric-card"><div class="metric-label">GotSMS (USA rental)</div><div class="metric-value" id="balGotsms"> </div><div class="metric-sub" id="balGotsmsSub">Loading…</div></div>
  </div>
  </div>
  <div class="panel">
@@ -1024,6 +1026,30 @@ function withLagos(opts) { return Object.assign({ timeZone: 'Africa/Lagos' }, op
  </div>
  <div id="smsOrdersMobileCards" class="mobile-only mobile-cards"></div>
  <div id="smsOrdersPager" class="admin-pager"></div>
+ </div>
+ </div>
+
+
+ <div id="tab-sms-gotsms" class="tab-content">
+ <div class="panel">
+ <div class="panel-title" style="margin-bottom:10px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;">
+ <span>USA Physical Rental (GotSMS)</span>
+ </div>
+ <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-bottom:16px;">
+ <button class="btn btn-primary btn-sm" id="btnSyncGotsms" onclick="syncGotsmsNow()"><i class="fas fa-sync"></i> Sync GotSMS</button>
+ <button class="btn btn-ghost btn-sm" onclick="loadGotsmsServices()"><i class="fas fa-list"></i> Refresh list</button>
+ </div>
+ <p id="gotsmsSyncProgress" style="color:var(--primary,#3b82f6);font-size:12px;font-weight:700;margin:0 0 14px;min-height:16px;"></p>
+ <div class="search-row" style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:12px;">
+ <input type="text" id="gotsmsSearch" placeholder="Search service…" oninput="filterGotsmsServices()" style="flex:1;min-width:160px;" />
+ </div>
+ <div class="desktop-only desktop-table table-wrap">
+ <table>
+ <thead><tr><th>Service / plan</th><th>Country</th><th>Supplier USD</th><th>Sell ₦</th><th>Stock</th></tr></thead>
+ <tbody id="gotsmsTableBody"><tr><td colspan="5" class="empty-state">Click Sync GotSMS to pull catalog.</td></tr></tbody>
+ </table>
+ </div>
+ <div id="gotsmsMobileCards" class="mobile-only mobile-cards"></div>
  </div>
  </div>
 
@@ -1523,6 +1549,7 @@ const tabTitles = {
  sms: 'SMS Server 1 (GrizzlySMS)',
  'sms-orders': 'SMS Orders',
  'sms-server2': 'SMS Server 2',
+ 'sms-gotsms': 'USA Rental (GotSMS)',
  'boosters': 'MJ Boosters (Owlet)',
  'booster-orders': 'Booster Orders',
  orders: 'LOGS Orders',
@@ -1865,10 +1892,76 @@ async function bulkRepriceNumbers(mode) {
  }
 }
 
+
+// ---------- GotSMS USA rental (catalog in number_services source=gotsms) ----------
+window._gotsmsRows = [];
+async function syncGotsmsNow() {
+  const btn = document.getElementById('btnSyncGotsms');
+  const idle = '<i class="fas fa-sync"></i> Sync GotSMS';
+  setBtnBusy(btn, true, 'Syncing…');
+  const prog = document.getElementById('gotsmsSyncProgress');
+  try {
+    const headers = await authHeaders();
+    const res = await fetch('/api/sms-bus?action=gotsms_sync', { method: 'GET', headers });
+    const data = await res.json();
+    if (data.success) {
+      const d = data.data || {};
+      showAdminToast(`GotSMS synced · Plans ${d.plans||0} · New ${d.new_products||0} · Updated ${d.updated_products||0}`, 'success');
+      if (prog) prog.textContent = `GotSMS live: ${d.plans||0} plans · balance ${d.balance != null ? d.balance + ' USD' : '—'} · ${d.synced_at ? new Date(d.synced_at).toLocaleString() : ''}`;
+      await loadGotsmsServices();
+      try { if (typeof loadSupplierBalances === 'function') loadSupplierBalances(); } catch (_) {}
+    } else {
+      showAdminToast(data.message || 'GotSMS sync failed', 'error');
+      if (prog) prog.textContent = data.message || 'Sync failed';
+    }
+  } catch (e) {
+    showAdminToast('GotSMS sync failed: ' + (e.message || e), 'error');
+  } finally {
+    setBtnBusy(btn, false, idle);
+  }
+}
+async function loadGotsmsServices() {
+  try {
+    const cols = 'id, service_name, service_id, country_name, supplier_price, price, is_available, updated_at';
+    const { data, error } = await sb.from('number_services').select(cols).eq('source', 'gotsms').order('service_name', { ascending: true }).limit(500);
+    if (error) throw error;
+    window._gotsmsRows = data || [];
+    filterGotsmsServices();
+  } catch (e) {
+    console.error(e);
+    showAdminToast('GotSMS list failed: ' + (e.message || e), 'error');
+  }
+}
+function filterGotsmsServices() {
+  const q = String(document.getElementById('gotsmsSearch')?.value || '').toLowerCase().trim();
+  let rows = window._gotsmsRows || [];
+  if (q) rows = rows.filter(r => String(r.service_name||'').toLowerCase().includes(q));
+  const tbody = document.getElementById('gotsmsTableBody');
+  const cards = document.getElementById('gotsmsMobileCards');
+  if (!rows.length) {
+    if (tbody) tbody.innerHTML = '<tr><td colspan="5" class="empty-state">No GotSMS rows. Click Sync GotSMS.</td></tr>';
+    if (cards) cards.innerHTML = '<div class="empty-state">No GotSMS rows.</div>';
+    return;
+  }
+  if (tbody) {
+    tbody.innerHTML = rows.map(r => `<tr>
+      <td>${escapeHtml(r.service_name||'')}</td>
+      <td>${escapeHtml(r.country_name||'USA')}</td>
+      <td>$${Number(r.supplier_price||0).toFixed(2)}</td>
+      <td class="price">₦${Number(r.price||0).toLocaleString()}</td>
+      <td>${r.is_available ? '<span style="color:#34d399;font-weight:700">In stock</span>' : '<span style="color:#94a3b8">Out</span>'}</td>
+    </tr>`).join('');
+  }
+  if (cards) {
+    cards.innerHTML = rows.map(r => `<div class="m-card"><div class="m-title">${escapeHtml(r.service_name||'')}</div>
+      <div class="m-sub">${escapeHtml(r.country_name||'USA')} · $${Number(r.supplier_price||0).toFixed(2)} → ₦${Number(r.price||0).toLocaleString()}</div></div>`).join('');
+  }
+}
+
 async function loadSupplierBalances() {
  const btn = document.getElementById('btnRefreshSupplierBalances');
  setBtnBusy(btn, true, 'Refreshing...');
- ['Fadded', 'Logsdomain', 'Grizzly', 'Sujan', 'Classy', 'Owlet', 'Smsbus'].forEach(p => {
+ ['Fadded', 'Logsdomain', 'Grizzly', 'Sujan', 'Classy', 'Owlet', 'Smsbus', 'Gotsms'].forEach(p => {
  const sub = document.getElementById('bal' + p + 'Sub');
  if (sub) sub.textContent = 'Loading…';
  });
@@ -1907,6 +2000,7 @@ async function loadSupplierBalances() {
  renderSupplierBalance('Classy', data.suppliers.classy);
  renderSupplierBalance('Owlet', data.suppliers.owlet);
  renderSupplierBalance('Smsbus', data.suppliers.smsbus);
+ renderSupplierBalance('Gotsms', data.suppliers.gotsms);
  } catch (err) {
  console.error('Supplier balance error at step:', step, err.name, err.message, err.stack);
  showAdminToast(`Supplier balance check failed while ${step}: ` + (err.message || 'network error'), 'error');
@@ -4642,6 +4736,9 @@ function switchTab(name) {
  if (name === 'sms' && !smsTabLoaded) {
  smsTabLoaded = true;
  loadNumberServices();
+ }
+ if (name === 'sms-gotsms') {
+ try { if (typeof loadGotsmsServices === 'function') loadGotsmsServices(); } catch (e) {}
  }
  // initLdNumTab() removed from here — it called /api/logsdomain-numbers,
  // which no longer exists (replaced by api/sms-bus.js). The working
