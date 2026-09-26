@@ -27,7 +27,9 @@ body{font-family:'Plus Jakarta Sans',system-ui,sans-serif;background:var(--bg);c
 .svc-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px 10px}
 .svc-tile{display:flex;flex-direction:column;align-items:center;gap:8px;padding:10px 4px;cursor:pointer;border-radius:14px;border:1px solid transparent}
 .svc-tile:active,.svc-tile:hover{background:var(--primary-glow);border-color:color-mix(in srgb,var(--primary) 25%,transparent)}
-.svc-icon{width:52px;height:52px;border-radius:14px;background:linear-gradient(135deg,var(--primary),#1d4ed8);color:#fff;display:flex;align-items:center;justify-content:center;font-size:18px;font-weight:800}
+.svc-icon{width:52px;height:52px;border-radius:14px;background:linear-gradient(135deg,var(--primary),#1d4ed8);color:#fff;display:flex;align-items:center;justify-content:center;font-size:18px;font-weight:800;overflow:hidden;position:relative}
+.svc-icon img{width:100%;height:100%;object-fit:contain;background:#fff;padding:6px;border-radius:14px;display:block}
+.svc-icon .fallback{display:flex;align-items:center;justify-content:center;width:100%;height:100%}
 .svc-label{font-size:11px;font-weight:700;text-align:center;line-height:1.2;max-width:100%;overflow:hidden;text-overflow:ellipsis;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
 .sk-svc-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px 10px}
 .sk-svc-tile{display:flex;flex-direction:column;align-items:center;gap:8px;padding:10px 4px}
@@ -36,13 +38,12 @@ body{font-family:'Plus Jakarta Sans',system-ui,sans-serif;background:var(--bg);c
 .sk-line{height:48px;border-radius:12px;margin-bottom:10px;background:linear-gradient(90deg,rgba(148,163,184,.12),rgba(148,163,184,.22),rgba(148,163,184,.12));background-size:200% 100%;animation:sk 1.2s ease-in-out infinite}
 @keyframes sk{0%{background-position:200% 0}100%{background-position:-200% 0}}
 .selected-service-bar{display:flex;align-items:center;justify-content:space-between;gap:10px;background:var(--primary-glow);border-radius:12px;padding:12px 14px;margin-bottom:14px}
-.selected-service-bar .name{font-weight:800;font-size:14px;color:var(--primary)}
+.selected-service-bar .name{font-weight:800;font-size:14px;color:var(--primary);display:flex;align-items:center;gap:10px}
+.selected-service-bar .mini-icon{width:28px;height:28px;border-radius:8px;overflow:hidden;background:#fff;flex-shrink:0}
+.selected-service-bar .mini-icon img{width:100%;height:100%;object-fit:contain;padding:3px}
 .selected-service-bar button{background:none;border:1px solid var(--primary);color:var(--primary);font-size:11px;font-weight:700;padding:6px 12px;border-radius:8px;cursor:pointer;font-family:inherit}
 label.f{font-size:12px;font-weight:700;color:var(--muted);display:block;margin:12px 0 6px}
 input.f,select.f{width:100%;padding:13px 14px;border-radius:12px;border:1.5px solid var(--border);background:var(--bg);color:var(--text);font:600 14px inherit}
-.plan{border:1.5px solid var(--border);border-radius:14px;padding:12px 14px;cursor:pointer;background:var(--bg);margin-bottom:8px}
-.plan.on{border-color:var(--primary);box-shadow:0 0 0 3px var(--primary-glow)}
-.plan .row{display:flex;justify-content:space-between;gap:10px}.plan .dur{font-weight:800}.plan .price{font-weight:800;color:var(--primary)}
 .qty{display:flex;align-items:center;gap:12px}.qty button{width:40px;height:40px;border-radius:12px;border:none;background:var(--primary-glow);color:var(--primary);font-size:18px;font-weight:800;cursor:pointer}
 .total{margin-top:14px;padding:14px;border-radius:14px;background:var(--primary-glow)}.total .lbl{font-size:12px;font-weight:700;color:var(--muted)}.total .amt{font-size:22px;font-weight:800;color:var(--primary)}
 .btn-buy{width:100%;margin-top:14px;padding:14px;border:none;border-radius:14px;background:linear-gradient(135deg,var(--primary),#1d4ed8);color:#fff;font:800 15px inherit;cursor:pointer}
@@ -100,6 +101,30 @@ const SUPABASE_ANON_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYm
 const sb=window.supabase.createClient(SUPABASE_URL,SUPABASE_ANON_KEY,{auth:{persistSession:true,autoRefreshToken:true,storage:window.sessionStorage}});
 let allServices=[],selectedService=null,plans=[],selectedPlan=null,qty=1,rentBusy=false,carriers=[];
 const POPULAR=['whatsapp','telegram','google','facebook','instagram','tiktok','twitter','x','discord','paypal','amazon','apple','microsoft'];
+
+/* Same logo approach used on Server 1 / Server 2 pages */
+const LOGO_DOMAIN={
+  whatsapp:'whatsapp.com',telegram:'telegram.org',google:'google.com',facebook:'facebook.com',
+  instagram:'instagram.com',tiktok:'tiktok.com',twitter:'twitter.com',x:'x.com',discord:'discord.com',
+  paypal:'paypal.com',amazon:'amazon.com',apple:'apple.com',microsoft:'microsoft.com',
+  airwallex:'airwallex.com',banxa:'banxa.com',axos:'axos.com',aarp:'aarp.org',
+  adidas:'adidas.com',netflix:'netflix.com',uber:'uber.com',lyft:'lyft.com',
+  tinder:'tinder.com',binance:'binance.com',coinbase:'coinbase.com',openai:'openai.com',
+  chatgpt:'openai.com',snapchat:'snapchat.com',linkedin:'linkedin.com',spotify:'spotify.com'
+};
+function logoDomain(name){
+  var n=String(name||'').toLowerCase().replace(/[^a-z0-9]/g,'');
+  for(var k in LOGO_DOMAIN){if(n.indexOf(k)>=0)return LOGO_DOMAIN[k];}
+  // best-effort: first word as domain
+  var first=String(name||'').toLowerCase().split(/[\s\/\-\|]+/)[0].replace(/[^a-z0-9]/g,'');
+  if(first&&first.length>2)return first+'.com';
+  return null;
+}
+function logoUrl(name){
+  var d=logoDomain(name);
+  if(!d)return null;
+  return 'https://logo.clearbit.com/'+d+'?size=128';
+}
 function esc(s){return String(s==null?'':s).replace(/[&<>"']/g,function(c){return({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c];});}
 function fmtNgn(n){return '₦'+Number(n||0).toLocaleString('en-NG');}
 function initial(name){var n=String(name||'?').trim();return (n[0]||'?').toUpperCase();}
@@ -111,9 +136,18 @@ function skGrid(){var h='';for(var i=0;i<8;i++)h+='<div class="sk-svc-tile"><div
 async function loadServices(){
   var grid=document.getElementById('svcGrid');
   grid.className='sk-svc-grid';grid.setAttribute('aria-busy','true');grid.innerHTML=skGrid();
-  var j=await api('services',{query:'per_page=100'});
-  if(!j.success){grid.className='';grid.innerHTML='<div class="empty">'+esc(j.message||'Could not load services')+'</div>';return;}
-  allServices=j.data||[];
+  // Pull more pages so we show what the supplier actually has
+  var all=[];
+  for(var page=1;page<=15;page++){
+    var j=await api('services',{query:'per_page=100&page='+page});
+    if(!j.success){if(page===1){grid.className='';grid.innerHTML='<div class="empty">'+esc(j.message||'Could not load services')+'</div>';return;}break;}
+    var chunk=j.data||[];
+    if(!chunk.length)break;
+    all=all.concat(chunk);
+    var last=Number((j.meta&&j.meta.last_page)||page);
+    if(page>=last)break;
+  }
+  allServices=all;
   allServices.sort(function(a,b){var an=String(a.name||'').toLowerCase(),bn=String(b.name||'').toLowerCase();var ai=POPULAR.findIndex(function(p){return an.indexOf(p)>=0;});var bi=POPULAR.findIndex(function(p){return bn.indexOf(p)>=0;});if(ai===-1&&bi===-1)return an.localeCompare(bn);if(ai===-1)return 1;if(bi===-1)return -1;return ai-bi;});
   renderServices();
   api('carriers').then(function(c){carriers=c.data||[];});
@@ -124,8 +158,12 @@ function renderServices(){
   var grid=document.getElementById('svcGrid');
   grid.className='svc-grid';grid.removeAttribute('aria-busy');
   if(!list.length){grid.innerHTML='<div class="empty" style="grid-column:1/-1">No match</div>';return;}
-  grid.innerHTML=list.slice(0,120).map(function(s){
-    return '<div class="svc-tile" data-id="'+esc(s.id)+'" data-name="'+esc(s.name)+'"><div class="svc-icon">'+esc(initial(s.name))+'</div><div class="svc-label">'+esc(s.name)+'</div></div>';
+  grid.innerHTML=list.slice(0,200).map(function(s){
+    var logo=logoUrl(s.name);
+    var iconHtml=logo
+      ? '<img src="'+esc(logo)+'" alt="" loading="lazy" onerror="this.style.display=\'none\';this.nextElementSibling.style.display=\'flex\'"><span class="fallback" style="display:none">'+esc(initial(s.name))+'</span>'
+      : '<span class="fallback">'+esc(initial(s.name))+'</span>';
+    return '<div class="svc-tile" data-id="'+esc(s.id)+'" data-name="'+esc(s.name)+'"><div class="svc-icon">'+iconHtml+'</div><div class="svc-label">'+esc(s.name)+'</div></div>';
   }).join('');
   grid.querySelectorAll('.svc-tile').forEach(function(tile){
     tile.onclick=function(){
@@ -139,7 +177,9 @@ document.getElementById('svcSearch').oninput=renderServices;
 function openDetail(){
   document.getElementById('serviceStep').style.display='none';
   document.getElementById('detailStep').style.display='block';
-  document.getElementById('selectedServiceName').textContent=selectedService.name;
+  var logo=logoUrl(selectedService.name);
+  var nameEl=document.getElementById('selectedServiceName');
+  nameEl.innerHTML=(logo?'<span class="mini-icon"><img src="'+esc(logo)+'" alt="" onerror="this.parentNode.style.display=\'none\'"></span>':'')+esc(selectedService.name);
   document.getElementById('detailBody').innerHTML='<div class="sk-line"></div><div class="sk-line"></div><div class="sk-line"></div>';
   selectedPlan=null;qty=1;
   loadPlans();
@@ -161,27 +201,28 @@ async function loadPlans(){
 function renderDetailForm(){
   var body=document.getElementById('detailBody');
   if(!plans.length){body.innerHTML='<div class="empty">No plans in stock for this service</div>';return;}
-  var planHtml=plans.map(function(p,i){
-    return '<div class="plan" data-i="'+i+'"><div class="row"><span class="dur">'+esc(p.duration_translation||(p.duration_in_type+' '+p.duration_type))+'</span><span class="price">'+fmtNgn(p.price_ngn)+'</span></div></div>';
+
+  // Duration as dropdown (same pattern as supplier + other servers)
+  var planOpts='<option value="">Select duration…</option>'+plans.map(function(p,i){
+    return '<option value="'+i+'">'+esc(p.duration_translation||(p.duration_in_type+' '+p.duration_type))+' — '+fmtNgn(p.price_ngn)+'</option>';
   }).join('');
   var carHtml='<option value="">Any US carrier</option>'+carriers.map(function(c){return '<option value="'+esc(c.id)+'">'+esc(c.name)+'</option>';}).join('');
+
   body.innerHTML=
-    '<label class="f">Duration plan</label><div id="planList">'+planHtml+'</div>'+
+    '<label class="f">Duration plan</label><select class="f" id="durationSel">'+planOpts+'</select>'+
     '<label class="f">Preferred carrier (optional)</label><select class="f" id="carrierSel">'+carHtml+'</select>'+
     '<label class="f">Area code (optional)</label><input class="f" id="areaCode" inputmode="numeric" placeholder="e.g. 212, 305" maxlength="6">'+
     '<label class="f">Quantity (1–25)</label><div class="qty"><button type="button" id="qtyMinus">−</button><span id="qtyVal" style="font-weight:800;min-width:28px;text-align:center">1</span><button type="button" id="qtyPlus">+</button></div>'+
     '<div class="total"><div class="lbl">Total</div><div class="amt" id="totalAmt">₦0</div></div>'+
     '<button type="button" class="btn-buy" id="rentBtn" disabled>Rent number</button>'+
     '<div class="err" id="rentErr"></div><div class="ok" id="rentOk"></div>';
-  body.querySelectorAll('.plan').forEach(function(card){
-    card.onclick=function(){
-      body.querySelectorAll('.plan').forEach(function(c){c.classList.remove('on');});
-      card.classList.add('on');
-      selectedPlan=plans[Number(card.getAttribute('data-i'))];
-      document.getElementById('rentBtn').disabled=false;
-      updateTotal();
-    };
-  });
+
+  document.getElementById('durationSel').onchange=function(){
+    var i=Number(this.value);
+    selectedPlan=(this.value!==''&&plans[i])?plans[i]:null;
+    document.getElementById('rentBtn').disabled=!selectedPlan;
+    updateTotal();
+  };
   document.getElementById('qtyMinus').onclick=function(){if(qty>1){qty--;document.getElementById('qtyVal').textContent=qty;updateTotal();}};
   document.getElementById('qtyPlus').onclick=function(){if(qty<25){qty++;document.getElementById('qtyVal').textContent=qty;updateTotal();}};
   document.getElementById('rentBtn').onclick=doRent;
