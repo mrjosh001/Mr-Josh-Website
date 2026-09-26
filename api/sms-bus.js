@@ -2360,164 +2360,176 @@ export default async function handler(req, res) {
           return json(res, 403, { success: false, message: 'Admin only' });
         }
 
-        const page = Math.max(1, Number(url.searchParams.get('page') || 1));
+        // full=1 → keep paging until every plan is processed (never stop early)
+        const full = url.searchParams.get('full') === '1' || url.searchParams.get('full') === 'true';
+        let page = Math.max(1, Number(url.searchParams.get('page') || 1));
         const perPage = Math.min(100, Math.max(20, Number(url.searchParams.get('per_page') || 100)));
+        const maxPages = full ? 200 : 1; // safety cap
 
-        const g = await gotsmsFetch(
-          `/api/rents/plans?per_page=${perPage}&page=${page}&include_unavailable=1`
-        );
-        if (!g.ok) {
-          return json(res, g.status || 400, {
-            success: false,
-            message: g.data?.message || 'GotSMS plans request failed — check token',
-            data: { page, resume: true }
-          });
-        }
-
-        let chunk = [];
-        const rawData = g.data?.data;
-        if (Array.isArray(rawData)) chunk = rawData;
-        else if (rawData && Array.isArray(rawData.data)) chunk = rawData.data;
-        else if (Array.isArray(g.data)) chunk = g.data;
-
-        const meta = g.data?.meta || {};
-        const lastPage = Math.max(1, Number(meta.last_page || page));
+        let totalNew = 0;
+        let totalUpdated = 0;
+        const dbErrors = [];
+        let lastPage = page;
+        let pagesDone = 0;
+        let lastChunkSize = 0;
         const now = new Date().toISOString();
 
-        const ids = chunk.map((pl) => String(pl.id || pl.plan_id || '')).filter(Boolean);
-        let existingMap = new Map();
-        if (ids.length) {
-          const { data: existingRows, error: exErr } = await supabase
-            .from('number_services')
-            .select('id, service_id, price, price_source')
-            .eq('source', 'gotsms')
-            .in('service_id', ids);
-          if (exErr) {
-            return json(res, 400, {
+        while (pagesDone < maxPages) {
+          const g = await gotsmsFetch(
+            `/api/rents/plans?per_page=${perPage}&page=${page}&include_unavailable=1`
+          );
+          if (!g.ok) {
+            return json(res, g.status || 400, {
               success: false,
-              message: 'DB read failed: ' + exErr.message,
-              data: { page, resume: true }
+              message: g.data?.message || 'GotSMS plans request failed — check token',
+              data: { page, resume: true, new_products: totalNew, updated_products: totalUpdated }
             });
           }
-          existingMap = new Map((existingRows || []).map((r) => [String(r.service_id), r]));
-        }
 
-        let newCount = 0;
-        let updatedCount = 0;
-        const dbErrors = [];
-        const toInsert = [];
+          let chunk = [];
+          const rawData = g.data?.data;
+          if (Array.isArray(rawData)) chunk = rawData;
+          else if (rawData && Array.isArray(rawData.data)) chunk = rawData.data;
+          else if (Array.isArray(g.data)) chunk = g.data;
 
-        for (const pl of chunk) {
-          const planId = pl.id || pl.plan_id;
-          if (!planId) continue;
-          const sid = String(planId);
-          const usd = Number(pl.price || 0);
-          const priceNgn = gotsmsSellPriceNgn(usd);
-          const serviceName = pl.service?.name
-            ? `${pl.service.name} · ${pl.duration_translation || pl.duration_type || ''}`.trim()
-            : (pl.duration_translation || pl.service_name || 'USA rental');
-          // Match Grizzly schema: country_id is numeric (USA = 12)
-          const countryId = 12;
-          const countryName = String((pl.country && (pl.country.name || pl.country)) || 'United States');
-          const avail = pl.is_available !== false;
-          const existing = existingMap.get(sid);
+          const meta = g.data?.meta || {};
+          lastPage = Math.max(1, Number(meta.last_page || page));
+          lastChunkSize = chunk.length;
+          pagesDone += 1;
 
-          if (existing) {
-            const patch = {
-              service_name: serviceName,
-              country_id: countryId,
-              country_name: countryName,
-              supplier_price: usd,
-              is_available: avail,
-              available_quantity: avail ? 1 : 0,
-              updated_at: now
-            };
-            if (existing.price_source === 'system' || existing.price_source == null) {
-              patch.price = priceNgn;
-              patch.price_source = 'system';
+          if (!chunk.length) break;
+
+          const ids = chunk.map((pl) => String(pl.id || pl.plan_id || '')).filter(Boolean);
+          let existingMap = new Map();
+          if (ids.length) {
+            const { data: existingRows, error: exErr } = await supabase
+              .from('number_services')
+              .select('id, service_id, price, price_source, is_available')
+              .eq('source', 'gotsms')
+              .in('service_id', ids);
+            if (exErr) {
+              dbErrors.push(exErr.message);
+            } else {
+              existingMap = new Map((existingRows || []).map((r) => [String(r.service_id), r]));
             }
-            const { error } = await supabase.from('number_services').update(patch).eq('id', existing.id);
-            if (error) dbErrors.push(error.message);
-            else updatedCount += 1;
-          } else {
-            toInsert.push({
-              source: 'gotsms',
-              service_id: sid,
-              service_name: serviceName,
-              country_id: countryId,
-              country_name: countryName,
-              supplier_price: usd,
-              price: priceNgn,
-              price_source: 'system',
-              currency: 'NGN',
-              available_quantity: avail ? 1 : 0,
-              is_available: avail,
-              updated_at: now
-            });
           }
-        }
 
-        if (toInsert.length) {
-          const { error } = await supabase.from('number_services').insert(toInsert);
-          if (error) {
-            for (const row of toInsert) {
-              // Minimal row — drop columns that may not exist on older schemas
-              const minimal = {
-                source: 'gotsms',
-                service_id: row.service_id,
-                service_name: row.service_name,
-                country_id: 12,
-                country_name: row.country_name,
-                supplier_price: row.supplier_price,
-                price: row.price,
-                is_available: row.is_available,
-                available_quantity: row.available_quantity,
+          const toInsert = [];
+          for (const pl of chunk) {
+            const planId = pl.id || pl.plan_id;
+            if (!planId) continue;
+            const sid = String(planId);
+            const usd = Number(pl.price || 0);
+            const priceNgn = gotsmsSellPriceNgn(usd);
+            const serviceName = pl.service?.name
+              ? `${pl.service.name} · ${pl.duration_translation || pl.duration_type || ''}`.trim()
+              : (pl.duration_translation || pl.service_name || 'USA rental');
+            const countryId = 12;
+            const countryName = String((pl.country && (pl.country.name || pl.country)) || 'United States');
+            const avail = pl.is_available !== false;
+            const existing = existingMap.get(sid);
+
+            if (existing) {
+              // NEVER overwrite admin-set selling price (same rule as other suppliers)
+              const patch = {
+                service_name: serviceName,
+                country_id: countryId,
+                country_name: countryName,
+                supplier_price: usd,
+                is_available: avail,
+                available_quantity: avail ? 1 : 0,
                 updated_at: now
               };
-              const { error: e2 } = await supabase.from('number_services').insert(minimal);
-              if (e2) {
-                // Last resort: omit country_id entirely
-                const bare = {
+              if (existing.price_source === 'system' || existing.price_source == null) {
+                patch.price = priceNgn;
+                patch.price_source = 'system';
+              }
+              const { error } = await supabase.from('number_services').update(patch).eq('id', existing.id);
+              if (error) dbErrors.push(error.message);
+              else totalUpdated += 1;
+            } else {
+              toInsert.push({
+                source: 'gotsms',
+                service_id: sid,
+                service_name: serviceName,
+                country_id: countryId,
+                country_name: countryName,
+                supplier_price: usd,
+                price: priceNgn,
+                price_source: 'system',
+                currency: 'NGN',
+                available_quantity: avail ? 1 : 0,
+                is_available: avail,
+                updated_at: now
+              });
+            }
+          }
+
+          if (toInsert.length) {
+            const { error } = await supabase.from('number_services').insert(toInsert);
+            if (error) {
+              for (const row of toInsert) {
+                const minimal = {
                   source: 'gotsms',
                   service_id: row.service_id,
                   service_name: row.service_name,
+                  country_id: 12,
                   country_name: row.country_name,
                   supplier_price: row.supplier_price,
                   price: row.price,
+                  price_source: 'system',
                   is_available: row.is_available,
+                  available_quantity: row.available_quantity,
                   updated_at: now
                 };
-                const { error: e3 } = await supabase.from('number_services').insert(bare);
-                if (e3) dbErrors.push(e3.message);
-                else newCount += 1;
-              } else newCount += 1;
+                const { error: e2 } = await supabase.from('number_services').insert(minimal);
+                if (e2) {
+                  const bare = {
+                    source: 'gotsms',
+                    service_id: row.service_id,
+                    service_name: row.service_name,
+                    country_name: row.country_name,
+                    supplier_price: row.supplier_price,
+                    price: row.price,
+                    is_available: row.is_available,
+                    updated_at: now
+                  };
+                  const { error: e3 } = await supabase.from('number_services').insert(bare);
+                  if (e3) dbErrors.push(e3.message);
+                  else totalNew += 1;
+                } else totalNew += 1;
+              }
+            } else {
+              totalNew += toInsert.length;
             }
-          } else {
-            newCount = toInsert.length;
           }
+
+          if (!full || page >= lastPage) break;
+          page += 1;
         }
 
-        // Stop looping on empty pages (prevents fake "94 pages, 0 new")
-        const empty = chunk.length === 0;
-        const forceDone = empty || page >= lastPage;
+        const done = !full || page >= lastPage || lastChunkSize === 0;
 
         return json(res, 200, {
           success: true,
           data: {
             page,
-            next_page: forceDone ? null : page + 1,
+            next_page: done ? null : page + 1,
             last_page: lastPage,
-            done: forceDone,
-            plans_on_page: chunk.length,
-            new_products: newCount,
-            updated_products: updatedCount,
-            db_errors: dbErrors.slice(0, 5),
-            sample_ids: ids.slice(0, 3),
+            done,
+            full,
+            pages_processed: pagesDone,
+            plans_on_last_page: lastChunkSize,
+            new_products: totalNew,
+            updated_products: totalUpdated,
+            db_errors: dbErrors.slice(0, 8),
             synced_at: now
           },
           message: dbErrors.length
             ? ('DB write error: ' + dbErrors[0])
-            : (empty ? 'Empty page from GotSMS (token OK, no plans on this page)' : undefined)
+            : (done
+              ? `GotSMS sync complete · ${totalNew} new · ${totalUpdated} updated · page ${page}/${lastPage}`
+              : `Page ${page}/${lastPage} done — continue with ?page=${page + 1} or ?full=1`)
         });
       }
 
