@@ -151,7 +151,7 @@ input.field,select.field{width:100%;padding:12px 14px;border-radius:12px;border:
   const SUPABASE_URL = 'https://atczodlljmlayvldxfmv.supabase.co';
   const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImF0Y3pvZGxsam1sYXl2bGR4Zm12Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODUwNzUyMzgsImV4cCI6MjEwMDY1MTIzOH0.ufthD-p7BmeD_B7xyuMM6PNPL8DmcL4AtRYgg-MuoLI';
   const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
-    auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true }
+    auth: { persistSession: true, autoRefreshToken: true, storage: window.sessionStorage }
   });
 
   let accessToken = null;
@@ -167,7 +167,7 @@ input.field,select.field{width:100%;padding:12px 14px;border-radius:12px;border:
 
   async function headers() {
     const { data: { session } } = await sb.auth.getSession();
-    if (!session) { location.href = 'auth.html?next=' + encodeURIComponent(location.pathname); return null; }
+    if (!session) { location.href = 'auth.html'; return null; }
     accessToken = session.access_token;
     return { Authorization: 'Bearer ' + accessToken, 'Content-Type': 'application/json', Accept: 'application/json' };
   }
