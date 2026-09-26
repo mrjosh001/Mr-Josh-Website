@@ -145,7 +145,7 @@ async function gotsmsSaveOrder({ userId, customerId, rentId, phone, serviceName,
     customer_id: customerId || null,
     order_id: orderId,
     idempotency_key: `gotsms-${rentId}`,
-    country_id: 'US',
+    country_id: 12,
     country_name: 'United States',
     service_id: serviceId || 'gotsms',
     service_name: serviceName || planLabel || 'USA rental',
@@ -157,7 +157,15 @@ async function gotsmsSaveOrder({ userId, customerId, rentId, phone, serviceName,
     code: activeTill || null,
     refunded: false
   };
-  try { await supabase.from('number_orders').insert(row); } catch (e) {
+  try {
+    if (typeof insertNumberOrder === 'function') {
+      const r = await insertNumberOrder(row);
+      if (r.error) console.error('[gotsms] number_orders', r.error.message);
+    } else {
+      const { error } = await supabase.from('number_orders').insert(row);
+      if (error) console.error('[gotsms] number_orders', error.message);
+    }
+  } catch (e) {
     console.error('[gotsms] number_orders', e.message || e);
   }
   return orderId;
@@ -2342,7 +2350,7 @@ export default async function handler(req, res) {
         if (!GOTSMS_TOKEN) {
           return json(res, 503, {
             success: false,
-            message: 'GotSMS not configured. Add GOTSMS_API_TOKEN in Vercel env, then Redeploy.'
+            message: 'GotSMS not configured. Add GOTSMS_API_TOKEN in Vercel → Environment Variables, then Redeploy.'
           });
         }
 
@@ -2352,8 +2360,6 @@ export default async function handler(req, res) {
           return json(res, 403, { success: false, message: 'Admin only' });
         }
 
-        // Page batch — one GotSMS page per request so Vercel does not time out
-        // and a failure can resume from the same page without wiping progress.
         const page = Math.max(1, Number(url.searchParams.get('page') || 1));
         const perPage = Math.min(100, Math.max(20, Number(url.searchParams.get('per_page') || 100)));
 
@@ -2363,16 +2369,22 @@ export default async function handler(req, res) {
         if (!g.ok) {
           return json(res, g.status || 400, {
             success: false,
-            message: g.data?.message || 'GotSMS plans request failed',
+            message: g.data?.message || 'GotSMS plans request failed — check token',
             data: { page, resume: true }
           });
         }
 
-        const chunk = Array.isArray(g.data?.data) ? g.data.data : [];
-        const lastPage = Math.max(1, Number(g.data?.meta?.last_page || page));
+        let chunk = [];
+        const rawData = g.data?.data;
+        if (Array.isArray(rawData)) chunk = rawData;
+        else if (rawData && Array.isArray(rawData.data)) chunk = rawData.data;
+        else if (Array.isArray(g.data)) chunk = g.data;
 
-        // Prefetch existing keys for this source (lightweight) for this page's ids
-        const ids = chunk.map((pl) => String(pl.id)).filter(Boolean);
+        const meta = g.data?.meta || {};
+        const lastPage = Math.max(1, Number(meta.last_page || page));
+        const now = new Date().toISOString();
+
+        const ids = chunk.map((pl) => String(pl.id || pl.plan_id || '')).filter(Boolean);
         let existingMap = new Map();
         if (ids.length) {
           const { data: existingRows, error: exErr } = await supabase
@@ -2396,27 +2408,29 @@ export default async function handler(req, res) {
         const toInsert = [];
 
         for (const pl of chunk) {
-          const planId = pl.id;
+          const planId = pl.id || pl.plan_id;
           if (!planId) continue;
           const sid = String(planId);
           const usd = Number(pl.price || 0);
           const priceNgn = gotsmsSellPriceNgn(usd);
           const serviceName = pl.service?.name
             ? `${pl.service.name} · ${pl.duration_translation || pl.duration_type || ''}`.trim()
-            : (pl.duration_translation || 'USA rental');
-          const countryName = (pl.country && pl.country.name) || 'United States';
+            : (pl.duration_translation || pl.service_name || 'USA rental');
+          // Match Grizzly schema: country_id is numeric (USA = 12)
+          const countryId = 12;
+          const countryName = String((pl.country && (pl.country.name || pl.country)) || 'United States');
           const avail = pl.is_available !== false;
           const existing = existingMap.get(sid);
 
           if (existing) {
             const patch = {
               service_name: serviceName,
-              country_id: 'US',
+              country_id: countryId,
               country_name: countryName,
               supplier_price: usd,
               is_available: avail,
               available_quantity: avail ? 1 : 0,
-              updated_at: new Date().toISOString()
+              updated_at: now
             };
             if (existing.price_source === 'system' || existing.price_source == null) {
               patch.price = priceNgn;
@@ -2430,7 +2444,7 @@ export default async function handler(req, res) {
               source: 'gotsms',
               service_id: sid,
               service_name: serviceName,
-              country_id: 'US',
+              country_id: countryId,
               country_name: countryName,
               supplier_price: usd,
               price: priceNgn,
@@ -2438,7 +2452,7 @@ export default async function handler(req, res) {
               currency: 'NGN',
               available_quantity: avail ? 1 : 0,
               is_available: avail,
-              updated_at: new Date().toISOString()
+              updated_at: now
             });
           }
         }
@@ -2446,34 +2460,67 @@ export default async function handler(req, res) {
         if (toInsert.length) {
           const { error } = await supabase.from('number_services').insert(toInsert);
           if (error) {
-            // fallback one-by-one so one bad row does not kill the batch
             for (const row of toInsert) {
-              const { error: e2 } = await supabase.from('number_services').insert(row);
-              if (e2) dbErrors.push(e2.message);
-              else newCount += 1;
+              // Minimal row — drop columns that may not exist on older schemas
+              const minimal = {
+                source: 'gotsms',
+                service_id: row.service_id,
+                service_name: row.service_name,
+                country_id: 12,
+                country_name: row.country_name,
+                supplier_price: row.supplier_price,
+                price: row.price,
+                is_available: row.is_available,
+                available_quantity: row.available_quantity,
+                updated_at: now
+              };
+              const { error: e2 } = await supabase.from('number_services').insert(minimal);
+              if (e2) {
+                // Last resort: omit country_id entirely
+                const bare = {
+                  source: 'gotsms',
+                  service_id: row.service_id,
+                  service_name: row.service_name,
+                  country_name: row.country_name,
+                  supplier_price: row.supplier_price,
+                  price: row.price,
+                  is_available: row.is_available,
+                  updated_at: now
+                };
+                const { error: e3 } = await supabase.from('number_services').insert(bare);
+                if (e3) dbErrors.push(e3.message);
+                else newCount += 1;
+              } else newCount += 1;
             }
           } else {
             newCount = toInsert.length;
           }
         }
 
-        const done = page >= lastPage;
+        // Stop looping on empty pages (prevents fake "94 pages, 0 new")
+        const empty = chunk.length === 0;
+        const forceDone = empty || page >= lastPage;
+
         return json(res, 200, {
           success: true,
           data: {
             page,
-            next_page: done ? null : page + 1,
+            next_page: forceDone ? null : page + 1,
             last_page: lastPage,
-            done,
+            done: forceDone,
             plans_on_page: chunk.length,
             new_products: newCount,
             updated_products: updatedCount,
-            db_errors: dbErrors.slice(0, 3),
-            synced_at: new Date().toISOString()
+            db_errors: dbErrors.slice(0, 5),
+            sample_ids: ids.slice(0, 3),
+            synced_at: now
           },
-          message: dbErrors.length ? ('Partial page: ' + dbErrors[0]) : undefined
+          message: dbErrors.length
+            ? ('DB write error: ' + dbErrors[0])
+            : (empty ? 'Empty page from GotSMS (token OK, no plans on this page)' : undefined)
         });
       }
+
 
       return json(res, 400, {
         success: false,
