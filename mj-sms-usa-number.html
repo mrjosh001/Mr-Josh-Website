@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>USA rental inbox · MJ HUB</title>
+<script>(function(){try{var t=localStorage.getItem('mjhub-theme');document.documentElement.setAttribute('data-theme',(t==='light'||t==='dark')?t:'dark');}catch(e){document.documentElement.setAttribute('data-theme','dark');}})();</script>
+<script src="/js/mj-page-loader.js" defer></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap" rel="stylesheet">
+<style>
+:root,html[data-theme="dark"]{--bg:#0b1220;--card:#111827;--text:#f1f5f9;--muted:#94a3b8;--border:#1e293b;--primary:#3b82f6;--ok:#22c55e;--danger:#ef4444;--soft:rgba(59,130,246,.12)}
+html[data-theme="light"]{--bg:#f8fafc;--card:#fff;--text:#0f172a;--muted:#64748b;--border:#e2e8f0;--primary:#2563eb;--ok:#16a34a;--danger:#dc2626;--soft:rgba(37,99,235,.1)}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Plus Jakarta Sans',system-ui,sans-serif;background:var(--bg);color:var(--text);min-height:100dvh}
+.header{padding:14px 16px;display:flex;align-items:center;gap:12px;position:sticky;top:0;z-index:50;background:color-mix(in srgb,var(--bg) 88%,transparent);backdrop-filter:blur(16px);border-bottom:1px solid var(--border)}
+.back{width:40px;height:40px;border-radius:12px;border:1px solid var(--border);background:var(--card);display:flex;align-items:center;justify-content:center;color:var(--text);text-decoration:none}
+h1{font-size:18px;font-weight:800}
+.main{padding:16px;max-width:560px;margin:0 auto}
+.card{background:var(--card);border:1px solid var(--border);border-radius:18px;padding:16px;margin-bottom:14px}
+.phone{font-size:22px;font-weight:800;letter-spacing:.02em}
+.meta{font-size:13px;color:var(--muted);margin-top:4px}
+.countdown{font-size:28px;font-weight:800;color:var(--primary);margin:10px 0 4px;letter-spacing:.06em}
+.lbl{font-size:12px;font-weight:700;color:var(--muted)}
+.actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;flex:1;min-width:120px;padding:12px;border-radius:12px;border:none;font:800 13px inherit;cursor:pointer}
+.btn-primary{background:linear-gradient(135deg,var(--primary),#2563eb);color:#fff}
+.btn-ghost{background:var(--bg);border:1px solid var(--border);color:var(--text)}
+.btn-danger{background:color-mix(in srgb,var(--danger) 15%,var(--card));color:var(--danger);border:1px solid color-mix(in srgb,var(--danger) 30%,var(--border))}
+.btn:disabled{opacity:.55}
+.msg{border-left:3px solid var(--primary);padding:10px 12px;margin:8px 0;background:var(--soft);border-radius:0 12px 12px 0}
+.msg .code{font-size:22px;font-weight:800;letter-spacing:.1em;margin:4px 0}
+.msg .body{font-size:13px;color:var(--muted);word-break:break-word}
+.err{color:var(--danger);font-weight:700;font-size:13px;margin-top:8px}
+.ok{color:var(--ok);font-weight:700;font-size:13px;margin-top:8px}
+.empty{text-align:center;padding:24px;color:var(--muted);font-weight:600}
+</style>
+</head>
+<body>
+<header class="header">
+  <a class="back" href="mj-sms-usa-rent.html"><i class="fa-solid fa-arrow-left"></i></a>
+  <h1>Rental inbox</h1>
+</header>
+<main class="main" id="main">
+  <div class="empty">Loading…</div>
+</main>
+<script>
+(function(){
+  const SUPABASE_URL = 'https://atczodlljmlayvldxfmv.supabase.co';
+  const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImF0Y3pvZGxsam1sYXl2bGR4Zm12Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODUwNzUyMzgsImV4cCI6MjEwMDY1MTIzOH0.ufthD-p7BmeD_B7xyuMM6PNPL8DmcL4AtRYgg-MuoLI';
+  const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+    auth: { persistSession: true, autoRefreshToken: true, storage: window.sessionStorage }
+  });
+  const params = new URLSearchParams(location.search);
+  const rentId = params.get('rent_id') || '';
+  function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g,function(c){return({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c];}); }
+
+  async function headers(){
+    const { data: { session } } = await sb.auth.getSession();
+    if(!session){ location.href='auth.html'; return null; }
+    return { Authorization:'Bearer '+session.access_token, 'Content-Type':'application/json', Accept:'application/json' };
+  }
+  async function api(action, opts){
+    const h = await headers();
+    if(!h) return { success:false, message:'Sign in required' };
+    const method = (opts&&opts.method)||'GET';
+    let url = '/api/sms-bus?action=gotsms_'+encodeURIComponent(action);
+    if(opts&&opts.query) url += '&'+opts.query;
+    const res = await fetch(url,{ method:method, headers:h, body: opts&&opts.body?JSON.stringify(opts.body):undefined });
+    const raw = await res.text();
+    try { return raw?JSON.parse(raw):{}; } catch(e){ return { success:false, message:'Bad response' }; }
+  }
+
+  if(!rentId){
+    document.getElementById('main').innerHTML = '<div class="empty">Missing rental. <a href="mj-sms-usa-rent.html">Back</a></div>';
+    return;
+  }
+
+  let rent = null;
+  let pollTimer = null;
+
+  function render(){
+    const main = document.getElementById('main');
+    if(!rent){
+      main.innerHTML = '<div class="empty">Rental not found for your account</div>';
+      return;
+    }
+    const till = rent.active_till ? new Date(rent.active_till).getTime() : 0;
+    const canCancel = String(rent.status||'').toLowerCase()==='active' && !rent.refunded;
+    main.innerHTML =
+      '<div class="card">'+
+        '<div class="phone" id="phoneEl">'+esc(rent.phone||'—')+'</div>'+
+        '<div class="meta">'+esc((rent.service&&rent.service.name)||'USA rental')+
+          (rent.plan&&rent.plan.duration_translation ? ' · '+esc(rent.plan.duration_translation) : '')+
+        '</div>'+
+        '<div class="lbl" style="margin-top:12px">Time remaining</div>'+
+        '<div class="countdown" id="cd">—</div>'+
+        '<div class="actions">'+
+          '<button type="button" class="btn btn-ghost" id="btnCopy"><i class="fa-solid fa-copy"></i> Copy</button>'+
+          (rent.can_wake_up ? '<button type="button" class="btn btn-primary" id="btnWake"><i class="fa-solid fa-bolt"></i> Wake up</button>' : '')+
+          '<button type="button" class="btn btn-ghost" id="btnRefresh"><i class="fa-solid fa-rotate"></i> Refresh SMS</button>'+
+          (canCancel ? '<button type="button" class="btn btn-danger" id="btnCancel"><i class="fa-solid fa-ban"></i> Cancel & refund</button>' : '')+
+        '</div>'+
+        '<div class="err" id="err"></div><div class="ok" id="ok"></div>'+
+      '</div>'+
+      '<div class="card"><div style="font-weight:800;margin-bottom:8px">SMS inbox</div><div id="inbox"><div class="empty">Loading messages…</div></div></div>';
+
+    document.getElementById('btnCopy').onclick = function(){
+      navigator.clipboard.writeText(String(rent.phone||'').replace(/\s/g,'')).catch(function(){});
+      document.getElementById('ok').textContent = 'Number copied';
+    };
+    var wake = document.getElementById('btnWake');
+    if(wake) wake.onclick = async function(){
+      wake.disabled = true;
+      var j = await api('wake', { method:'POST', body:{ rent_id: rentId } });
+      wake.disabled = false;
+      document.getElementById('err').textContent = j.success ? '' : (j.message||'Wake failed');
+      document.getElementById('ok').textContent = j.success ? (j.message||'Number is awake — request OTP on the app') : '';
+    };
+    document.getElementById('btnRefresh').onclick = function(){ loadMessages(); };
+    var cancel = document.getElementById('btnCancel');
+    if(cancel) cancel.onclick = async function(){
+      if(!confirm('Cancel this rental? If the supplier allows a refund, your wallet will be credited.')) return;
+      cancel.disabled = true;
+      var j = await api('refund', { method:'POST', body:{ rent_id: rentId } });
+      cancel.disabled = false;
+      document.getElementById('err').textContent = j.success ? '' : (j.message||'Cancel not available');
+      document.getElementById('ok').textContent = j.success ? (j.message||'Cancelled') : '';
+      if(j.success) setTimeout(function(){ location.href='mj-sms-usa-rent.html'; }, 900);
+    };
+
+    function tick(){
+      var el = document.getElementById('cd');
+      if(!el) return;
+      if(!till){ el.textContent = '—'; return; }
+      var left = till - Date.now();
+      if(left<=0){ el.textContent = 'Expired'; return; }
+      var d = Math.floor(left/86400000);
+      var h = Math.floor((left%86400000)/3600000);
+      var m = Math.floor((left%3600000)/60000);
+      var s = Math.floor((left%60000)/1000);
+      el.textContent = (d>0?(d+'d '):'')+String(h).padStart(2,'0')+':'+String(m).padStart(2,'0')+':'+String(s).padStart(2,'0');
+      setTimeout(tick, 1000);
+    }
+    tick();
+    loadMessages();
+  }
+
+  async function loadMessages(){
+    var box = document.getElementById('inbox');
+    if(!box) return;
+    var j = await api('messages', { query: 'rent_id='+encodeURIComponent(rentId) });
+    var list = j.data || [];
+    if(!list.length){
+      box.innerHTML = '<div class="empty">No SMS yet. Wake the number if needed, then trigger the code on the app.</div>';
+      return;
+    }
+    box.innerHTML = list.map(function(m){
+      return '<div class="msg">'+
+        (m.code ? '<div class="code">'+esc(m.code)+' <button type="button" class="btn btn-ghost" style="flex:0;padding:4px 10px;font-size:11px" data-c="'+esc(m.code)+'">Copy</button></div>' : '')+
+        '<div class="body">'+esc(m.body||'')+'</div>'+
+        (m.received_at ? '<div class="meta">'+esc(new Date(m.received_at).toLocaleString())+'</div>' : '')+
+      '</div>';
+    }).join('');
+    box.querySelectorAll('[data-c]').forEach(function(b){
+      b.onclick = function(){ navigator.clipboard.writeText(b.getAttribute('data-c')).catch(function(){}); };
+    });
+  }
+
+  async function boot(){
+    // Prefer active list, then finished
+    var j = await api('rents', { query: 'status=active' });
+    rent = (j.data||[]).find(function(r){ return String(r.id)===String(rentId); }) || null;
+    if(!rent){
+      var j2 = await api('rents', { query: 'status=finished' });
+      rent = (j2.data||[]).find(function(r){ return String(r.id)===String(rentId); }) || null;
+    }
+    // Fallback from my_orders DB
+    if(!rent){
+      var mine = await api('my_orders');
+      var o = (mine.data||[]).find(function(x){ return String(x.rent_id)===String(rentId); });
+      if(o){
+        rent = { id: o.rent_id, phone: o.phone, status: o.status, active_till: o.active_till, service: { name: o.service_name }, can_wake_up: true };
+      }
+    }
+    render();
+    if(pollTimer) clearInterval(pollTimer);
+    pollTimer = setInterval(loadMessages, 12000);
+  }
+  boot();
+})();
+</script>
+</body>
+</html>

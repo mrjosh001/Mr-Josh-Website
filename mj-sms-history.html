@@ -72,7 +72,7 @@ body{font-family:'Plus Jakarta Sans',system-ui,sans-serif;background:var(--bg);c
   </header>
   <div class="tabs">
     <button type="button" class="tab on" data-view="otp">OTP numbers</button>
-    <button type="button" class="tab" data-view="rent">Rented numbers</button>
+    <button type="button" class="tab" data-view="rent">USA &amp; long rentals</button>
   </div>
   <div id="otpFilters" class="filters">
     <button type="button" class="chip on" data-filter="all">All</button>
@@ -94,10 +94,11 @@ let allOrders=[], view='otp', filter='all';
 function esc(s){if(!s)return'';return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;')}
 function money(n){return '₦'+Number(n||0).toLocaleString()}
 function bucket(status){const s=String(status||'').toLowerCase();if(s==='completed'||s==='success')return'completed';if(s==='expired')return'expired';if(s==='refunded'||s==='cancelled'||s==='canceled')return'cancelled';if(s==='waiting_for_code'||s==='pending'||s==='waiting')return'waiting';return'other'}
-function isRent(o){return String(o.source||'')==='smsbus_rent'||String(o.service_id||'')==='rent'||/rental/i.test(String(o.service_name||''))}
+function isRent(o){var s=String(o.source||'').toLowerCase();return s==='smsbus_rent'||s==='gotsms'||String(o.service_id||'')==='rent'||/rental|usa physical/i.test(String(o.service_name||''))}
 function serverLabel(o){
   // Customer-facing labels only — never show supplier names
   const src=String(o.source||'').toLowerCase();
+  if(src==='gotsms') return 'USA rental';
   if(src==='smsbus_rent'||src.indexOf('rent')>=0) return 'Rental';
   if(src==='smsbus'||src==='logsdomain') return 'Server 2';
   return 'Server 1';
@@ -106,8 +107,8 @@ function updateHistCta(){
   var a=document.getElementById('histPrimaryCta');
   if(!a) return;
   if(view==='rent'){
-    a.href='mj-sms-rent.html';
-    a.textContent='+ Rent a Number';
+    a.href='mj-sms-usa-rent.html';
+    a.textContent='+ USA rental';
   } else {
     a.href='mj-sms-choose-server.html';
     a.textContent='Get OTP';
@@ -159,6 +160,9 @@ function render(){
           '<div class="reuse-hint">Same number · about '+mins+' min left to reuse</div>';
       }
     }
+    const isGotsms=String(o.source||'').toLowerCase()==='gotsms';
+    const rentId=String(o.idempotency_key||'').replace(/^gotsms-/,'');
+    const gotsmsBtn=(isGotsms&&rentId)?('<div style="margin-top:10px"><a class="reuse-btn" style="display:block;text-align:center;text-decoration:none" href="mj-sms-usa-number.html?rent_id='+encodeURIComponent(rentId)+'">Open inbox &amp; countdown</a></div>'):'';
     const expire=(isRent(o)&&o.code)?('<div class="row"><span class="l">Expires</span><span class="v">'+esc(o.code)+'</span></div>'):'';
     return '<div class="card"><div class="card-head"><div class="name">'+esc(name)+'</div><div class="price">'+money(o.price)+'</div></div>'+
       '<div class="pills"><span class="pill '+pillCls+'">'+statusLabel+'</span><span class="pill muted">'+esc(serverLabel(o))+'</span></div>'+
@@ -239,6 +243,8 @@ document.getElementById('list').addEventListener('click',function(e){
 });
 
 async function init(){
+  try{var _v=new URLSearchParams(location.search).get('view');if(_v==='rent'){view='rent';document.querySelectorAll('.tab').forEach(function(x){x.classList.toggle('on',x.getAttribute('data-view')==='rent');});document.getElementById('otpFilters').style.display='none';}}catch(_){}
+
   const sb=window.supabase.createClient(SUPABASE_URL,SUPABASE_ANON_KEY,{auth:{persistSession:true,autoRefreshToken:true,storage:window.sessionStorage}});
   const {data:{session}}=await sb.auth.getSession();
   if(!session){location.href='auth.html';return}

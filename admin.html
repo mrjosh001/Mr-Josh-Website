@@ -783,10 +783,10 @@ function withLagos(opts) { return Object.assign({ timeZone: 'Africa/Lagos' }, op
  <button class="nav-item" data-tab="lookup" onclick="switchTab('lookup')"><i class="fas fa-search"></i> Customer Lookup</button>
  <button class="nav-item" data-tab="products" onclick="switchTab('products')"><i class="fas fa-box"></i> Products & Stock</button>
  <button class="nav-item" data-tab="orders" onclick="switchTab('orders')"><i class="fas fa-receipt"></i> LOGS Orders</button>
- <button class="nav-item" data-tab="sms" onclick="switchTab('sms')"><i class="fas fa-sim-card"></i> SMS Server 1 (GrizzlySMS)</button>
- <button class="nav-item" data-tab="sms-orders" onclick="switchTab('sms-orders')"><i class="fas fa-comment-sms"></i> SMS Orders</button>
+ <button class="nav-item" data-tab="sms" onclick="switchTab('sms')"><i class="fas fa-sim-card"></i> SMS Server 1 (Grizzly)</button>
  <button class="nav-item" data-tab="sms-server2" onclick="switchTab('sms-server2')"><i class="fas fa-server"></i> SMS Server 2</button>
  <button class="nav-item" data-tab="sms-gotsms" onclick="switchTab('sms-gotsms')"><i class="fas fa-flag-usa"></i> USA Rental (GotSMS)</button>
+ <button class="nav-item" data-tab="sms-orders" onclick="switchTab('sms-orders')"><i class="fas fa-comment-sms"></i> SMS Orders</button>
  <button class="nav-item" data-tab="boosters" onclick="switchTab('boosters')"><i class="fas fa-bolt"></i> MJ Boosters (Owlet)</button>
  <button class="nav-item" data-tab="booster-orders" onclick="switchTab('booster-orders')"><i class="fas fa-receipt"></i> Booster Orders</button>
  <button class="nav-item" data-tab="notify" onclick="switchTab('notify')"><i class="fas fa-bullhorn"></i> Notifications</button>
@@ -1002,11 +1002,13 @@ function withLagos(opts) { return Object.assign({ timeZone: 'Africa/Lagos' }, op
  <select id="smsOrdersTypeFilter" onchange="filterSmsOrders()" style="min-width:140px;">
  <option value="">All types</option>
  <option value="otp">OTP</option>
- <option value="rental">Rental</option>
+ <option value="rental">Long rental</option>
+ <option value="usa">USA Rental</option>
  </select>
  <select id="smsOrdersStatusFilter" onchange="filterSmsOrders()" style="min-width:160px;">
- <option value="completed" selected>Completed</option>
+ <option value="completed" selected>Completed / Active</option>
  <option value="">All statuses</option>
+ <option value="active">Active (USA rental)</option>
  <option value="waiting_for_code">Waiting for code</option>
  <option value="expired">Expired</option>
                 <option value="refunded">Cancelled &amp; refunded</option>
@@ -1018,7 +1020,7 @@ function withLagos(opts) { return Object.assign({ timeZone: 'Africa/Lagos' }, op
  <table>
  <thead>
  <tr>
- <th>Customer ID</th><th>Service</th><th>Country</th><th>Number</th><th>Price</th><th>Code</th><th>Status</th><th>Date</th>
+ <th>Customer ID</th><th>Server</th><th>Service</th><th>Country</th><th>Number</th><th>Price</th><th>Code / SMS</th><th>Status</th><th>Date</th>
  </tr>
  </thead>
  <tbody id="smsOrdersTableBody"></tbody>
@@ -2951,10 +2953,11 @@ function isSmsRentalOrder(o) {
  const src = String(o.source || '').toLowerCase();
  const sid = String(o.service_id || '').toLowerCase();
  const sname = String(o.service_name || '').toLowerCase();
- return src === 'smsbus_rent' || src.includes('rent') || sid === 'rent' || sname.includes('rental');
+ return src === 'smsbus_rent' || src === 'gotsms' || src.includes('rent') || sid === 'rent' || sname.includes('rental');
 }
 function smsOrderServerLabel(o) {
  const src = String(o.source || '').toLowerCase();
+ if (src === 'gotsms') return 'USA Rental';
  if (isSmsRentalOrder(o)) return 'Rental';
  if (src === 'smsbus' || src === 'logsdomain') return 'Server 2';
  if (src === 'grizzlysms') return 'Server 1';
@@ -2968,7 +2971,13 @@ function filterSmsOrders() {
  const type = document.getElementById('smsOrdersTypeFilter')?.value || '';
  const all = window._cachedSmsOrders || [];
  const filtered = all.filter(o => {
- if (status && o.status !== status) return false;
+ if (status) {
+   if (status === 'completed') {
+     const st = String(o.status || '');
+     if (!(st === 'completed' || st === 'active')) return false;
+   } else if (o.status !== status) return false;
+ }
+ if (type === 'usa' && String(o.source||'').toLowerCase() !== 'gotsms') return false;
  if (type === 'rental' && !isSmsRentalOrder(o)) return false;
  if (type === 'otp' && isSmsRentalOrder(o)) return false;
  if (!q) return true;
@@ -3001,7 +3010,7 @@ function renderSmsOrders(orders) {
  if (pEl) pEl.innerHTML = adminPagerHtml('sms', pg.page, pg.pages, pg.total);
 
  const statusBadge = (s) => {
- if (s === 'completed') return '<span class="badge badge-on">Completed</span>';
+ if (s === 'completed' || s === 'active') return '<span class="badge badge-on">' + (s === 'active' ? 'Active' : 'Completed') + '</span>';
  if (s === 'waiting_for_code') return '<span class="badge" style="background:rgba(251,191,36,.15);color:#fbbf24;">Waiting</span>';
     if (s === 'expired') return '<span class="badge badge-off">Expired</span>';
  return `<span class="badge badge-off">${escapeHtml(SMS_ORDER_STATUS_LABELS[s] || s || ' ')}</span>`;
@@ -3009,20 +3018,23 @@ function renderSmsOrders(orders) {
 
  tbody.innerHTML = orders.map(o => {
  const name = (o.service_name || o.service_id || ' ').replace(/_/g, ' ');
- const typeLabel = isSmsRentalOrder(o) ? 'Rental' : 'OTP';
- const typeBadge = isSmsRentalOrder(o)
- ? '<span class="badge" style="background:rgba(167,139,250,.2);color:#a78bfa;">Rental</span>'
- : '<span class="badge" style="background:rgba(59,130,246,.15);color:#60a5fa;">OTP</span>';
  const date = o.created_at ? ngWhen(o.created_at) : ' ';
+ const code = o.sms_code || o.code || '';
+ const isUsa = String(o.source || '').toLowerCase() === 'gotsms';
+ const serverBadge = isUsa
+   ? '<span class="badge" style="background:rgba(34,197,94,.18);color:#4ade80;">USA Rental</span>'
+   : (isSmsRentalOrder(o)
+     ? '<span class="badge" style="background:rgba(167,139,250,.2);color:#a78bfa;">Rental</span>'
+     : '<span class="badge" style="background:rgba(59,130,246,.15);color:#60a5fa;">' + escapeHtml(smsOrderServerLabel(o)) + '</span>');
  return `<tr>
- <td style="font-size:11px;">${escapeHtml(o.order_id || ' ')}</td>
- <td>${typeBadge}</td>
- <td>${escapeHtml(smsOrderServerLabel(o))}</td>
- <td>${escapeHtml(o.customer_id || ' ')}</td>
- <td>${escapeHtml(name)}${o.country_name ? '<div class="meta">' + escapeHtml(o.country_name) + '</div>' : ''}</td>
- <td>${escapeHtml(o.phone_number || ' ')}</td>
+ <td>${escapeHtml(o.customer_id || '—')}</td>
+ <td>${serverBadge}</td>
+ <td>${escapeHtml(name)}</td>
+ <td>${escapeHtml(o.country_name || (isUsa ? 'United States' : '—'))}</td>
+ <td style="font-weight:700;">${escapeHtml(o.phone_number || '—')}</td>
  <td><strong class="price">₦${Number(o.price || 0).toLocaleString()}</strong></td>
- <td>${statusBadge(o.status)}</td>
+ <td style="font-size:12px;max-width:140px;word-break:break-all;">${code ? escapeHtml(String(code)) : (isUsa ? '<span class="meta">See inbox</span>' : '—')}</td>
+ <td>${statusBadge(o.status === 'active' ? 'completed' : o.status)}</td>
  <td style="font-size:12px;color:var(--muted);">${escapeHtml(date)}</td>
  </tr>`;
  }).join('');
