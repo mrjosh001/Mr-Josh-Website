@@ -2005,13 +2005,39 @@ export default async function handler(req, res) {
       if (method === 'GET' && ga === 'gotsms_services') {
         const auth = await requireAuth(req);
         if (!auth.ok) return json(res, auth.status, { success: false, message: auth.message });
-        const search = url.searchParams.get('search') || '';
-        const per_page = Math.min(100, Number(url.searchParams.get('per_page') || 100));
-        const qs = new URLSearchParams({ per_page: String(per_page) });
+        const search = String(url.searchParams.get('search') || '').trim();
+        const per_page = Math.min(100, Math.max(1, Number(url.searchParams.get('per_page') || 100)));
+        const page = Math.max(1, Number(url.searchParams.get('page') || 1));
+        const qs = new URLSearchParams({
+          per_page: String(per_page),
+          page: String(page)
+        });
         if (search) qs.set('search', search);
         const g = await gotsmsFetch(`/api/services?${qs}`);
         if (!g.ok) return json(res, g.status || 400, { success: false, message: g.data?.message || 'Could not load services' });
-        return json(res, 200, { success: true, data: g.data.data || [], meta: g.data.meta });
+        // Normalize list (GotSMS may nest under data.data)
+        let list = [];
+        const raw = g.data;
+        if (Array.isArray(raw?.data)) list = raw.data;
+        else if (Array.isArray(raw)) list = raw;
+        // Deduplicate by id within this page
+        const seen = new Set();
+        const unique = [];
+        for (const s of list) {
+          const id = String(s?.id || s?.service_id || '');
+          if (!id || seen.has(id)) continue;
+          seen.add(id);
+          unique.push({
+            id,
+            name: s.name || s.service_name || 'Service',
+            logo: s.logo || s.image || s.icon || null
+          });
+        }
+        return json(res, 200, {
+          success: true,
+          data: unique,
+          meta: raw?.meta || { current_page: page, last_page: page, per_page }
+        });
       }
 
       if (method === 'GET' && ga === 'gotsms_plans') {
@@ -2045,14 +2071,52 @@ export default async function handler(req, res) {
         const plan_id = String(body.plan_id || '').trim();
         if (!plan_id) return json(res, 400, { success: false, message: 'Select a rental plan' });
 
-        const plansRes = await gotsmsFetch(`/api/rents/plans?per_page=100`);
-        let plan = (plansRes.data?.data || []).find((p) => String(p.id) === plan_id) || null;
+        // Resolve plan from supplier — never only the first global page (that caused false "out of stock")
+        let plan = null;
+        const service_id = String(body.service_id || '').trim();
+        // 1) Direct plan endpoint if supported
+        {
+          const one = await gotsmsFetch(`/api/rents/plans/${encodeURIComponent(plan_id)}`);
+          if (one.ok && one.data) {
+            plan = one.data.data || one.data;
+            if (Array.isArray(plan)) plan = plan.find((p) => String(p.id) === plan_id) || plan[0] || null;
+          }
+        }
+        // 2) Filter by service_id and paginate until found
+        if (!plan && service_id) {
+          for (let page = 1; page <= 10 && !plan; page++) {
+            const qs = new URLSearchParams({
+              service_id,
+              per_page: '100',
+              page: String(page),
+              include_unavailable: '1'
+            });
+            const g = await gotsmsFetch(`/api/rents/plans?${qs}`);
+            if (!g.ok) break;
+            const chunk = g.data?.data || [];
+            plan = chunk.find((p) => String(p.id) === plan_id) || null;
+            const last = Number(g.data?.meta?.last_page || 1);
+            if (page >= last) break;
+          }
+        }
+        // 3) Fallback: search plans by plan id across a few pages
         if (!plan) {
-          const g2 = await gotsmsFetch(`/api/rents/plans?per_page=100&include_unavailable=1`);
-          plan = (g2.data?.data || []).find((p) => String(p.id) === plan_id) || null;
+          for (let page = 1; page <= 5 && !plan; page++) {
+            const g = await gotsmsFetch(`/api/rents/plans?per_page=100&page=${page}&include_unavailable=1`);
+            if (!g.ok) break;
+            const chunk = g.data?.data || [];
+            plan = chunk.find((p) => String(p.id) === plan_id) || null;
+            if (page >= Number(g.data?.meta?.last_page || 1)) break;
+          }
         }
         const supplierUsd = Number(plan?.price || body.quoted_usd || 0);
-        if (!(supplierUsd > 0)) return json(res, 400, { success: false, message: 'Plan unavailable or out of stock' });
+        if (!(supplierUsd > 0)) {
+          return json(res, 400, {
+            success: false,
+            message: 'Plan unavailable or out of stock. Pick the service again and choose a duration.',
+            data: { plan_id, service_id: service_id || null, found: !!plan }
+          });
+        }
         const price = gotsmsSellPriceNgn(supplierUsd);
         if (body.quoted_price_ngn != null) {
           const q = Number(body.quoted_price_ngn);
@@ -2126,10 +2190,34 @@ export default async function handler(req, res) {
         if (!plan_id) return json(res, 400, { success: false, message: 'Select a rental plan' });
         if (!(quantity >= 1 && quantity <= 25)) return json(res, 400, { success: false, message: 'Quantity must be between 1 and 25' });
 
-        const plansRes = await gotsmsFetch(`/api/rents/plans?per_page=100`);
-        const plan = (plansRes.data?.data || []).find((p) => String(p.id) === plan_id);
-        const unitUsd = Number(plan?.price || 0);
-        if (!(unitUsd > 0)) return json(res, 400, { success: false, message: 'Plan unavailable' });
+        let plan = null;
+        const service_id = String(body.service_id || '').trim();
+        {
+          const one = await gotsmsFetch(`/api/rents/plans/${encodeURIComponent(plan_id)}`);
+          if (one.ok && one.data) {
+            plan = one.data.data || one.data;
+            if (Array.isArray(plan)) plan = plan.find((p) => String(p.id) === plan_id) || plan[0] || null;
+          }
+        }
+        if (!plan && service_id) {
+          for (let page = 1; page <= 10 && !plan; page++) {
+            const qs = new URLSearchParams({ service_id, per_page: '100', page: String(page), include_unavailable: '1' });
+            const g = await gotsmsFetch(`/api/rents/plans?${qs}`);
+            if (!g.ok) break;
+            plan = (g.data?.data || []).find((p) => String(p.id) === plan_id) || null;
+            if (page >= Number(g.data?.meta?.last_page || 1)) break;
+          }
+        }
+        if (!plan) {
+          for (let page = 1; page <= 5 && !plan; page++) {
+            const g = await gotsmsFetch(`/api/rents/plans?per_page=100&page=${page}&include_unavailable=1`);
+            if (!g.ok) break;
+            plan = (g.data?.data || []).find((p) => String(p.id) === plan_id) || null;
+            if (page >= Number(g.data?.meta?.last_page || 1)) break;
+          }
+        }
+        const unitUsd = Number(plan?.price || body.quoted_usd || 0);
+        if (!(unitUsd > 0)) return json(res, 400, { success: false, message: 'Plan unavailable or out of stock. Pick the service again.' });
         const unitNgn = gotsmsSellPriceNgn(unitUsd);
         const totalNgn = unitNgn * quantity;
 
