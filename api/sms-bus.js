@@ -33,6 +33,137 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY
 );
 
+
+// ---------- GotSMS (USA physical SIM rentals) — folded in to stay within Vercel 12-function limit ----------
+const GOTSMS_BASE = 'https://app.gotsms.org';
+const GOTSMS_TOKEN = process.env.GOTSMS_API_TOKEN || process.env.GOT_SMS_TOKEN || '';
+
+function gotsmsSellPriceNgn(supplierUsd) {
+  const rate =
+    Number(process.env.USD_TO_NGN_RATE) ||
+    Number(process.env.USD_TO_NGN) ||
+    1500;
+  const pct = Number(process.env.GOTSMS_MARKUP_PERCENT) || 80;
+  const minProfit = Number(process.env.MIN_PROFIT_NGN) || 500;
+  const minSale = Number(process.env.MIN_NUMBER_PRICE_NGN) || 1000;
+  const supplierNgn = Number(supplierUsd || 0) * rate;
+  const percentPrice = Math.ceil(supplierNgn * (1 + pct / 100));
+  const floorPrice = Math.ceil(supplierNgn + minProfit);
+  const finalPrice = Math.max(percentPrice, floorPrice, minSale);
+  return Math.ceil(finalPrice / 50) * 50;
+}
+
+async function gotsmsFetch(path, { method = 'GET', body } = {}) {
+  if (!GOTSMS_TOKEN) {
+    return { ok: false, status: 503, data: { success: false, message: 'GotSMS is not configured (set GOTSMS_API_TOKEN)' } };
+  }
+  const opts = {
+    method,
+    headers: {
+      Authorization: `Bearer ${GOTSMS_TOKEN}`,
+      'Content-Type': 'application/json',
+      Accept: 'application/json'
+    }
+  };
+  if (body != null) opts.body = JSON.stringify(body);
+  try {
+    const res = await fetch(`${GOTSMS_BASE}${path}`, opts);
+    let data = null;
+    try { data = await res.json(); } catch { data = { success: false, message: 'Invalid supplier response' }; }
+    return { ok: res.ok, status: res.status, data };
+  } catch (e) {
+    return { ok: false, status: 502, data: { success: false, message: 'Could not reach GotSMS' } };
+  }
+}
+
+function gotsmsPublicRent(r) {
+  if (!r || typeof r !== 'object') return r;
+  return {
+    id: r.id,
+    service: r.service,
+    plan: r.plan
+      ? {
+          id: r.plan.id,
+          billing_type: r.plan.billing_type,
+          duration_type: r.plan.duration_type,
+          duration_in_type: r.plan.duration_in_type,
+          duration_translation: r.plan.duration_translation,
+          price_usd: r.plan.price,
+          renew_price_usd: r.plan.renew_price
+        }
+      : null,
+    phone: r.phone,
+    price_usd: r.price,
+    status: r.status,
+    is_included_for_next_renewal: r.is_included_for_next_renewal,
+    active_from: r.active_from,
+    active_till: r.active_till,
+    wake_from: r.wake_from,
+    wake_till: r.wake_till,
+    can_wake_up: r.can_wake_up,
+    notes: r.notes,
+    transition_options: r.transition_options || []
+  };
+}
+
+function gotsmsEnrichPlan(p) {
+  const usd = Number(p.price || 0);
+  return {
+    id: p.id,
+    service: p.service,
+    country: p.country,
+    billing_type: p.billing_type,
+    duration_type: p.duration_type,
+    duration_in_type: p.duration_in_type,
+    duration_in_minutes: p.duration_in_minutes,
+    duration_translation: p.duration_translation,
+    price_usd: usd,
+    renew_price_usd: Number(p.renew_price || usd),
+    price_ngn: gotsmsSellPriceNgn(usd),
+    renew_price_ngn: gotsmsSellPriceNgn(Number(p.renew_price || usd)),
+    is_monthly_supported: p.is_monthly_supported,
+    is_available: p.is_available !== false
+  };
+}
+
+async function gotsmsAssertOwns(userId, rentId) {
+  const { data } = await supabase
+    .from('number_orders')
+    .select('id')
+    .eq('user_id', userId)
+    .eq('source', 'gotsms')
+    .eq('idempotency_key', `gotsms-${rentId}`)
+    .maybeSingle();
+  return !!data;
+}
+
+async function gotsmsSaveOrder({ userId, customerId, rentId, phone, serviceName, serviceId, priceNgn, supplierUsd, status, activeTill, planLabel }) {
+  const orderId = `GS-${String(rentId || '').slice(0, 8)}-${Date.now().toString(36)}`;
+  const row = {
+    source: 'gotsms',
+    user_id: userId,
+    customer_id: customerId || null,
+    order_id: orderId,
+    idempotency_key: `gotsms-${rentId}`,
+    country_id: 'US',
+    country_name: 'United States',
+    service_id: serviceId || 'gotsms',
+    service_name: serviceName || planLabel || 'USA rental',
+    phone_number: phone || null,
+    price: priceNgn,
+    supplier_price: supplierUsd,
+    currency: 'NGN',
+    status: status || 'active',
+    code: activeTill || null,
+    refunded: false
+  };
+  try { await supabase.from('number_orders').insert(row); } catch (e) {
+    console.error('[gotsms] number_orders', e.message || e);
+  }
+  return orderId;
+}
+
+
 function json(res, status, body) {
   res.statusCode = status;
   res.setHeader('Content-Type', 'application/json');
@@ -1839,6 +1970,469 @@ export default async function handler(req, res) {
       });
     }
 
+
+    // ===================== GotSMS USA rentals (gotsms_*) =====================
+    if (String(action).startsWith('gotsms_')) {
+      const ga = action;
+
+      if (method === 'GET' && ga === 'gotsms_balance') {
+        const auth = await requireAuth(req);
+        if (!auth.ok) return json(res, auth.status, { success: false, message: auth.message });
+        const g = await gotsmsFetch('/api/account');
+        const { data: profile } = await supabase.from('profiles').select('balance').eq('id', auth.userId).single();
+        return json(res, 200, {
+          success: true,
+          data: { wallet_ngn: Number(profile?.balance || 0), supplier_ok: g.ok }
+        });
+      }
+
+      if (method === 'GET' && ga === 'gotsms_carriers') {
+        const auth = await requireAuth(req);
+        if (!auth.ok) return json(res, auth.status, { success: false, message: auth.message });
+        const r = await fetch(`${GOTSMS_BASE}/api/carriers`, { headers: { Accept: 'application/json' } });
+        const data = await r.json().catch(() => ({}));
+        return json(res, r.ok ? 200 : 400, { success: !!data.success, data: data.data || [], message: data.message });
+      }
+
+      if (method === 'GET' && ga === 'gotsms_services') {
+        const auth = await requireAuth(req);
+        if (!auth.ok) return json(res, auth.status, { success: false, message: auth.message });
+        const search = url.searchParams.get('search') || '';
+        const per_page = Math.min(100, Number(url.searchParams.get('per_page') || 100));
+        const qs = new URLSearchParams({ per_page: String(per_page) });
+        if (search) qs.set('search', search);
+        const g = await gotsmsFetch(`/api/services?${qs}`);
+        if (!g.ok) return json(res, g.status || 400, { success: false, message: g.data?.message || 'Could not load services' });
+        return json(res, 200, { success: true, data: g.data.data || [], meta: g.data.meta });
+      }
+
+      if (method === 'GET' && ga === 'gotsms_plans') {
+        const auth = await requireAuth(req);
+        if (!auth.ok) return json(res, auth.status, { success: false, message: auth.message });
+        const qs = new URLSearchParams();
+        ['service_id', 'country_id', 'duration_type', 'billing_type', 'search'].forEach((k) => {
+          const v = url.searchParams.get(k);
+          if (v) qs.set(k, v);
+        });
+        qs.set('per_page', String(Math.min(100, Number(url.searchParams.get('per_page') || 100))));
+        if (url.searchParams.get('include_unavailable') === '1') qs.set('include_unavailable', '1');
+        let page = 1;
+        const all = [];
+        let lastPage = 1;
+        do {
+          qs.set('page', String(page));
+          const g = await gotsmsFetch(`/api/rents/plans?${qs}`);
+          if (!g.ok) return json(res, g.status || 400, { success: false, message: g.data?.message || 'Could not load plans' });
+          all.push(...(g.data.data || []));
+          lastPage = Number(g.data.meta?.last_page || 1);
+          page += 1;
+        } while (page <= lastPage && page <= 8);
+        return json(res, 200, { success: true, data: all.map(gotsmsEnrichPlan) });
+      }
+
+      if (method === 'POST' && ga === 'gotsms_rent') {
+        const auth = await requireAuth(req);
+        if (!auth.ok) return json(res, auth.status, { success: false, message: auth.message });
+        const body = await readBody(req);
+        const plan_id = String(body.plan_id || '').trim();
+        if (!plan_id) return json(res, 400, { success: false, message: 'Select a rental plan' });
+
+        const plansRes = await gotsmsFetch(`/api/rents/plans?per_page=100`);
+        let plan = (plansRes.data?.data || []).find((p) => String(p.id) === plan_id) || null;
+        if (!plan) {
+          const g2 = await gotsmsFetch(`/api/rents/plans?per_page=100&include_unavailable=1`);
+          plan = (g2.data?.data || []).find((p) => String(p.id) === plan_id) || null;
+        }
+        const supplierUsd = Number(plan?.price || body.quoted_usd || 0);
+        if (!(supplierUsd > 0)) return json(res, 400, { success: false, message: 'Plan unavailable or out of stock' });
+        const price = gotsmsSellPriceNgn(supplierUsd);
+        if (body.quoted_price_ngn != null) {
+          const q = Number(body.quoted_price_ngn);
+          if (Number.isFinite(q) && Math.abs(q - price) > 50) {
+            return json(res, 409, { success: false, message: 'Price updated. Refresh and try again.', data: { price_ngn: price } });
+          }
+        }
+
+        const { data: profile } = await supabase.from('profiles').select('id, balance, customer_id').eq('id', auth.userId).single();
+        if (!profile) return json(res, 400, { success: false, message: 'Profile not found' });
+
+        const { data: debited, error: debErr } = await supabase.rpc('debit_balance_if_sufficient', {
+          p_user_id: auth.userId,
+          p_amount: price
+        });
+        if (debErr || debited === false || debited === null) {
+          return json(res, 400, { success: false, message: 'Insufficient wallet balance. Fund your wallet and try again.' });
+        }
+
+        const payload = { plan_id };
+        if (body.area_code) payload.area_code = String(body.area_code).replace(/\D/g, '').slice(0, 6);
+        if (body.cellular_carrier_id) payload.cellular_carrier_id = String(body.cellular_carrier_id);
+
+        const g = await gotsmsFetch('/api/rents', { method: 'POST', body: payload });
+        if (!g.ok || !g.data?.success || !g.data?.data) {
+          try { await supabase.rpc('credit_balance', { p_user_id: auth.userId, p_amount: price }); } catch (e) { console.error('[gotsms] restore', e); }
+          return json(res, g.status || 400, { success: false, message: g.data?.message || 'Rental failed. Balance restored.' });
+        }
+
+        const rent = g.data.data;
+        const orderId = await gotsmsSaveOrder({
+          userId: auth.userId,
+          customerId: profile.customer_id,
+          rentId: rent.id,
+          phone: rent.phone,
+          serviceName: rent.service?.name || plan?.service?.name,
+          serviceId: rent.service?.id || plan?.service?.id,
+          priceNgn: price,
+          supplierUsd,
+          status: rent.status || 'active',
+          activeTill: rent.active_till,
+          planLabel: rent.plan?.duration_translation || plan?.duration_translation
+        });
+        try {
+          await supabase.from('transactions').insert({
+            user_id: auth.userId,
+            customer_id: profile.customer_id,
+            type: 'purchase',
+            category: 'MJ SMS',
+            title: `USA number rental · ${rent.service?.name || 'SMS'}`,
+            subtitle: `${rent.phone || ''} · ${rent.plan?.duration_translation || ''}`.trim(),
+            amount: `₦${price.toLocaleString()}`,
+            amount_ngn: price,
+            status: 'completed'
+          });
+        } catch (_) {}
+        const { data: fresh } = await supabase.from('profiles').select('balance').eq('id', auth.userId).single();
+        return json(res, 201, {
+          success: true,
+          message: g.data.message || 'Number rented successfully',
+          data: { ...gotsmsPublicRent(rent), order_id: orderId, price_ngn: price, new_balance: Number(fresh?.balance ?? profile.balance - price) }
+        });
+      }
+
+      if (method === 'POST' && ga === 'gotsms_rent_bulk') {
+        const auth = await requireAuth(req);
+        if (!auth.ok) return json(res, auth.status, { success: false, message: auth.message });
+        const body = await readBody(req);
+        const plan_id = String(body.plan_id || '').trim();
+        let quantity = Math.floor(Number(body.quantity || 1));
+        if (!plan_id) return json(res, 400, { success: false, message: 'Select a rental plan' });
+        if (!(quantity >= 1 && quantity <= 25)) return json(res, 400, { success: false, message: 'Quantity must be between 1 and 25' });
+
+        const plansRes = await gotsmsFetch(`/api/rents/plans?per_page=100`);
+        const plan = (plansRes.data?.data || []).find((p) => String(p.id) === plan_id);
+        const unitUsd = Number(plan?.price || 0);
+        if (!(unitUsd > 0)) return json(res, 400, { success: false, message: 'Plan unavailable' });
+        const unitNgn = gotsmsSellPriceNgn(unitUsd);
+        const totalNgn = unitNgn * quantity;
+
+        const { data: profile } = await supabase.from('profiles').select('id, balance, customer_id').eq('id', auth.userId).single();
+        if (!profile) return json(res, 400, { success: false, message: 'Profile not found' });
+
+        const { data: debited, error: debErr } = await supabase.rpc('debit_balance_if_sufficient', {
+          p_user_id: auth.userId,
+          p_amount: totalNgn
+        });
+        if (debErr || debited === false || debited === null) {
+          return json(res, 400, { success: false, message: `Need ₦${totalNgn.toLocaleString()} for ${quantity} number(s).` });
+        }
+
+        const payload = { plan_id, quantity };
+        if (body.area_code) payload.area_code = String(body.area_code).replace(/\D/g, '').slice(0, 6);
+        if (body.cellular_carrier_id) payload.cellular_carrier_id = String(body.cellular_carrier_id);
+
+        const g = await gotsmsFetch('/api/rents/bulk', { method: 'POST', body: payload });
+        const rentedList = Array.isArray(g.data?.data) ? g.data.data : [];
+        const rented = Number(g.data?.meta?.rented || rentedList.length || 0);
+        if (!g.ok || rented < 1) {
+          try { await supabase.rpc('credit_balance', { p_user_id: auth.userId, p_amount: totalNgn }); } catch (_) {}
+          return json(res, g.status || 400, { success: false, message: g.data?.message || 'No numbers available' });
+        }
+        if (rented < quantity) {
+          try { await supabase.rpc('credit_balance', { p_user_id: auth.userId, p_amount: unitNgn * (quantity - rented) }); } catch (_) {}
+        }
+        const charged = unitNgn * rented;
+        const out = [];
+        for (const rent of rentedList) {
+          const oid = await gotsmsSaveOrder({
+            userId: auth.userId,
+            customerId: profile.customer_id,
+            rentId: rent.id,
+            phone: rent.phone,
+            serviceName: rent.service?.name || plan?.service?.name,
+            serviceId: rent.service?.id,
+            priceNgn: unitNgn,
+            supplierUsd: unitUsd,
+            status: rent.status || 'active',
+            activeTill: rent.active_till,
+            planLabel: plan?.duration_translation
+          });
+          out.push({ ...gotsmsPublicRent(rent), order_id: oid, price_ngn: unitNgn });
+        }
+        try {
+          await supabase.from('transactions').insert({
+            user_id: auth.userId,
+            customer_id: profile.customer_id,
+            type: 'purchase',
+            category: 'MJ SMS',
+            title: `USA rental ×${rented}`,
+            subtitle: plan?.service?.name || 'GotSMS',
+            amount: `₦${charged.toLocaleString()}`,
+            amount_ngn: charged,
+            status: 'completed'
+          });
+        } catch (_) {}
+        return json(res, 201, {
+          success: true,
+          message: g.data?.message || `Rented ${rented} of ${quantity}`,
+          data: out,
+          meta: { requested: quantity, rented, charged_ngn: charged }
+        });
+      }
+
+      if (method === 'GET' && ga === 'gotsms_rents') {
+        const auth = await requireAuth(req);
+        if (!auth.ok) return json(res, auth.status, { success: false, message: auth.message });
+        const qs = new URLSearchParams();
+        const status = url.searchParams.get('status');
+        if (status) qs.set('status', status);
+        qs.set('per_page', '50');
+        const g = await gotsmsFetch(`/api/rents?${qs}`);
+        if (!g.ok) return json(res, g.status || 400, { success: false, message: g.data?.message || 'Could not load rentals' });
+        const { data: mine } = await supabase.from('number_orders').select('idempotency_key, phone_number').eq('user_id', auth.userId).eq('source', 'gotsms').limit(200);
+        const mineRentIds = new Set((mine || []).map((m) => String(m.idempotency_key || '').replace(/^gotsms-/, '')).filter(Boolean));
+        const minePhones = new Set((mine || []).map((m) => String(m.phone_number || '').replace(/\s/g, '')));
+        const filtered = (g.data.data || []).filter((r) => mineRentIds.has(String(r.id)) || minePhones.has(String(r.phone || '').replace(/\s/g, '')));
+        return json(res, 200, { success: true, data: filtered.map(gotsmsPublicRent), meta: g.data.meta });
+      }
+
+      if (method === 'POST' && ga === 'gotsms_wake') {
+        const auth = await requireAuth(req);
+        if (!auth.ok) return json(res, auth.status, { success: false, message: auth.message });
+        const body = await readBody(req);
+        const rent_id = String(body.rent_id || '').trim();
+        if (!rent_id) return json(res, 400, { success: false, message: 'rent_id required' });
+        if (!(await gotsmsAssertOwns(auth.userId, rent_id))) return json(res, 403, { success: false, message: 'Rental not found' });
+        const g = await gotsmsFetch(`/api/numbers/${encodeURIComponent(rent_id)}/wake-up`, { method: 'POST' });
+        return json(res, g.ok ? 200 : g.status || 400, { success: !!g.data?.success, message: g.data?.message || (g.ok ? 'Number woken up' : 'Wake up failed'), data: g.data?.data || null });
+      }
+
+      if (method === 'GET' && ga === 'gotsms_messages') {
+        const auth = await requireAuth(req);
+        if (!auth.ok) return json(res, auth.status, { success: false, message: auth.message });
+        const rent_id = String(url.searchParams.get('rent_id') || '').trim();
+        if (!rent_id) return json(res, 400, { success: false, message: 'rent_id required' });
+        if (!(await gotsmsAssertOwns(auth.userId, rent_id))) return json(res, 403, { success: false, message: 'Rental not found' });
+        const g = await gotsmsFetch(`/api/numbers/${encodeURIComponent(rent_id)}/messages`);
+        return json(res, g.ok ? 200 : g.status || 400, { success: !!g.data?.success, data: g.data?.data || [], message: g.data?.message });
+      }
+
+      if (method === 'GET' && ga === 'gotsms_addable_services') {
+        const auth = await requireAuth(req);
+        if (!auth.ok) return json(res, auth.status, { success: false, message: auth.message });
+        const rent_id = String(url.searchParams.get('rent_id') || '').trim();
+        if (!rent_id) return json(res, 400, { success: false, message: 'rent_id required' });
+        if (!(await gotsmsAssertOwns(auth.userId, rent_id))) return json(res, 403, { success: false, message: 'Rental not found' });
+        const g = await gotsmsFetch(`/api/rents/${encodeURIComponent(rent_id)}/services`);
+        const list = (g.data?.data || []).map((s) => ({
+          service_id: s.service_id,
+          name: s.name,
+          price_usd: Number(s.price || 0),
+          price_ngn: gotsmsSellPriceNgn(s.price),
+          is_available: s.is_available !== false
+        }));
+        return json(res, g.ok ? 200 : g.status || 400, { success: !!g.data?.success, data: list, message: g.data?.message });
+      }
+
+      if (method === 'POST' && ga === 'gotsms_add_service') {
+        const auth = await requireAuth(req);
+        if (!auth.ok) return json(res, auth.status, { success: false, message: auth.message });
+        const body = await readBody(req);
+        const rent_id = String(body.rent_id || '').trim();
+        const service_id = String(body.service_id || '').trim();
+        if (!rent_id || !service_id) return json(res, 400, { success: false, message: 'rent_id and service_id required' });
+        if (!(await gotsmsAssertOwns(auth.userId, rent_id))) return json(res, 403, { success: false, message: 'Rental not found' });
+        const listG = await gotsmsFetch(`/api/rents/${encodeURIComponent(rent_id)}/services`);
+        const svc = (listG.data?.data || []).find((s) => String(s.service_id) === service_id);
+        const price = gotsmsSellPriceNgn(svc?.price || 0);
+        if (!(price > 0)) return json(res, 400, { success: false, message: 'Service not available on this number' });
+        const { data: debited } = await supabase.rpc('debit_balance_if_sufficient', { p_user_id: auth.userId, p_amount: price });
+        if (debited === false || debited === null) return json(res, 400, { success: false, message: 'Insufficient wallet balance' });
+        const g = await gotsmsFetch(`/api/rents/${encodeURIComponent(rent_id)}/services`, { method: 'POST', body: { service_id } });
+        if (!g.ok || !g.data?.success) {
+          try { await supabase.rpc('credit_balance', { p_user_id: auth.userId, p_amount: price }); } catch (_) {}
+          return json(res, g.status || 400, { success: false, message: g.data?.message || 'Could not add service' });
+        }
+        return json(res, 201, { success: true, message: g.data.message || 'Service added', data: { ...g.data.data, price_ngn: price } });
+      }
+
+      if (method === 'POST' && ga === 'gotsms_toggle_renewal') {
+        const auth = await requireAuth(req);
+        if (!auth.ok) return json(res, auth.status, { success: false, message: auth.message });
+        const body = await readBody(req);
+        const rent_id = String(body.rent_id || '').trim();
+        if (!rent_id) return json(res, 400, { success: false, message: 'rent_id required' });
+        if (!(await gotsmsAssertOwns(auth.userId, rent_id))) return json(res, 403, { success: false, message: 'Rental not found' });
+        const g = await gotsmsFetch(`/api/rents/${encodeURIComponent(rent_id)}/renewal/toggle`, { method: 'POST' });
+        return json(res, g.ok ? 200 : g.status || 400, { success: !!g.data?.success, message: g.data?.message || 'Update failed', data: g.data?.data || null });
+      }
+
+      if (method === 'POST' && ga === 'gotsms_refund') {
+        const auth = await requireAuth(req);
+        if (!auth.ok) return json(res, auth.status, { success: false, message: auth.message });
+        const body = await readBody(req);
+        const rent_id = String(body.rent_id || '').trim();
+        if (!rent_id) return json(res, 400, { success: false, message: 'rent_id required' });
+        if (!(await gotsmsAssertOwns(auth.userId, rent_id))) return json(res, 403, { success: false, message: 'Rental not found' });
+        const g = await gotsmsFetch(`/api/rents/${encodeURIComponent(rent_id)}/refund`, { method: 'POST' });
+        if (!g.ok || !g.data?.success) {
+          return json(res, g.status || 400, { success: false, message: g.data?.message || 'Refund not available for this rental' });
+        }
+        const { data: ord } = await supabase.from('number_orders').select('id, price, refunded').eq('user_id', auth.userId).eq('idempotency_key', `gotsms-${rent_id}`).maybeSingle();
+        if (ord && !ord.refunded && Number(ord.price) > 0) {
+          try {
+            await supabase.rpc('credit_balance', { p_user_id: auth.userId, p_amount: Number(ord.price) });
+            await supabase.from('number_orders').update({ refunded: true, status: 'refunded' }).eq('id', ord.id);
+          } catch (e) { console.error('[gotsms] user refund', e); }
+        }
+        return json(res, 200, { success: true, message: 'Rental cancelled. Balance restored if eligible.', data: g.data.data || null });
+      }
+
+      if (method === 'GET' && ga === 'gotsms_my_orders') {
+        const auth = await requireAuth(req);
+        if (!auth.ok) return json(res, auth.status, { success: false, message: auth.message });
+        const { data, error } = await supabase
+          .from('number_orders')
+          .select('order_id, phone_number, service_name, price, status, code, created_at, idempotency_key, refunded')
+          .eq('user_id', auth.userId)
+          .eq('source', 'gotsms')
+          .order('created_at', { ascending: false })
+          .limit(100);
+        if (error) return json(res, 400, { success: false, message: error.message });
+        return json(res, 200, {
+          success: true,
+          data: (data || []).map((o) => ({
+            order_id: o.order_id,
+            rent_id: String(o.idempotency_key || '').replace(/^gotsms-/, ''),
+            phone: o.phone_number,
+            service_name: o.service_name,
+            price_ngn: o.price,
+            status: o.status,
+            active_till: o.code,
+            refunded: o.refunded,
+            created_at: o.created_at
+          }))
+        });
+      }
+
+      // Admin-oriented: supplier balance + catalog sync into number_services
+      if (method === 'GET' && ga === 'gotsms_supplier_balance') {
+        const auth = await requireAuth(req);
+        if (!auth.ok) return json(res, auth.status, { success: false, message: auth.message });
+        const { data: prof } = await supabase.from('profiles').select('is_admin').eq('id', auth.userId).single();
+        if (!prof?.is_admin) return json(res, 403, { success: false, message: 'Admin only' });
+        const g = await gotsmsFetch('/api/account');
+        if (!g.ok) return json(res, 400, { success: false, message: g.data?.message || 'GotSMS balance failed' });
+        return json(res, 200, { success: true, balance: g.data?.data?.balance, currency: 'USD' });
+      }
+
+      if ((method === 'GET' || method === 'POST') && ga === 'gotsms_sync') {
+        const auth = await requireAuth(req);
+        if (!auth.ok) return json(res, auth.status, { success: false, message: auth.message });
+        const { data: prof } = await supabase.from('profiles').select('is_admin').eq('id', auth.userId).single();
+        if (!prof?.is_admin) return json(res, 403, { success: false, message: 'Admin only' });
+
+        let page = 1;
+        let lastPage = 1;
+        const all = [];
+        do {
+          const g = await gotsmsFetch(`/api/rents/plans?per_page=100&page=${page}&include_unavailable=1`);
+          if (!g.ok) return json(res, g.status || 400, { success: false, message: g.data?.message || 'GotSMS plans failed' });
+          all.push(...(g.data.data || []));
+          lastPage = Number(g.data.meta?.last_page || 1);
+          page += 1;
+        } while (page <= lastPage && page <= 15);
+
+        let newCount = 0;
+        let updatedCount = 0;
+        for (const pl of all) {
+          const planId = pl.id;
+          if (!planId) continue;
+          const sid = String(planId); // one row per plan
+          const usd = Number(pl.price || 0);
+          const priceNgn = gotsmsSellPriceNgn(usd);
+          const serviceName = pl.service?.name
+            ? `${pl.service.name} · ${pl.duration_translation || pl.duration_type || ''}`.trim()
+            : (pl.duration_translation || 'USA rental');
+          const { data: existing } = await supabase
+            .from('number_services')
+            .select('id, price, price_source')
+            .eq('source', 'gotsms')
+            .eq('service_id', sid)
+            .maybeSingle();
+          if (existing) {
+            const patch = {
+              service_name: serviceName,
+              country_id: 'US',
+              country_name: pl.country?.name || 'United States',
+              supplier_price: usd,
+              is_available: pl.is_available !== false,
+              available_quantity: pl.is_available !== false ? 1 : 0,
+              updated_at: new Date().toISOString()
+            };
+            // Keep admin-set selling price
+            if (existing.price_source === 'system' || existing.price_source == null) {
+              patch.price = priceNgn;
+              patch.price_source = 'system';
+            }
+            const { error } = await supabase.from('number_services').update(patch).eq('id', existing.id);
+            if (!error) updatedCount += 1;
+          } else {
+            const row = {
+              source: 'gotsms',
+              service_id: sid,
+              service_name: serviceName,
+              country_id: 'US',
+              country_name: pl.country?.name || 'United States',
+              supplier_price: usd,
+              price: priceNgn,
+              price_source: 'system',
+              currency: 'NGN',
+              available_quantity: pl.is_available !== false ? 1 : 0,
+              is_available: pl.is_available !== false,
+              updated_at: new Date().toISOString()
+            };
+            const { error } = await supabase.from('number_services').insert(row);
+            if (!error) newCount += 1;
+          }
+        }
+
+        const bal = await gotsmsFetch('/api/account');
+        return json(res, 200, {
+          success: true,
+          data: {
+            plans: all.length,
+            new_products: newCount,
+            updated_products: updatedCount,
+            balance: bal.data?.data?.balance ?? null,
+            synced_at: new Date().toISOString()
+          }
+        });
+      }
+
+      return json(res, 400, {
+        success: false,
+        message: `Unknown GotSMS action: ${ga}`,
+        actions: [
+          'gotsms_balance', 'gotsms_carriers', 'gotsms_services', 'gotsms_plans',
+          'gotsms_rent', 'gotsms_rent_bulk', 'gotsms_rents', 'gotsms_wake',
+          'gotsms_messages', 'gotsms_addable_services', 'gotsms_add_service',
+          'gotsms_toggle_renewal', 'gotsms_refund', 'gotsms_my_orders',
+          'gotsms_supplier_balance', 'gotsms_sync'
+        ]
+      });
+    }
+
+
     return json(res, 400, {
       success: false,
       message: `Unknown action: ${action}`,
@@ -1856,7 +2450,8 @@ export default async function handler(req, res) {
         'rent_order',
         'rent_renew',
         'sync',
-        'expire_stale'
+        'expire_stale',
+        'gotsms_*'
       ]
     });
   } catch (err) {

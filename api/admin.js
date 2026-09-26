@@ -1440,19 +1440,44 @@ async function getClassyBalance() {
   );
 }
 
+
+async function getGotsmsBalance() {
+  const token = process.env.GOTSMS_API_TOKEN || process.env.GOT_SMS_TOKEN;
+  if (!token) return { ok: false, error: 'Missing GOTSMS_API_TOKEN' };
+  try {
+    const res = await fetch('https://app.gotsms.org/api/account', {
+      headers: {
+        Authorization: 'Bearer ' + token,
+        Accept: 'application/json',
+        'Content-Type': 'application/json'
+      }
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || data.success === false) {
+      return { ok: false, error: data.message || ('HTTP ' + res.status), raw: safeSlice(JSON.stringify(data), 200) };
+    }
+    const bal = data?.data?.balance ?? data?.balance;
+    if (bal == null) return { ok: false, error: 'No balance field', raw: safeSlice(JSON.stringify(data), 200) };
+    return { ok: true, balance: bal, currency: 'USD' };
+  } catch (err) {
+    return { ok: false, error: safeSlice(String(err.message || err), 500) };
+  }
+}
+
 async function supplierBalancesFetch() {
-  const [fadded, logsdomain, grizzly, sujan, owlet, classy, smsbus] = await Promise.all([
+  const [fadded, logsdomain, grizzly, sujan, owlet, classy, smsbus, gotsms] = await Promise.all([
     getFaddedBalance(),
     getLogsDomainBalance(),
     getGrizzlyBalance(),
     getSujanBalance(),
     fetchOwletBalance(),
     getClassyBalance(),
-    getSmsBusBalance()
+    getSmsBusBalance(),
+    getGotsmsBalance()
   ]);
   return {
     status: 200,
-    body: { success: true, suppliers: { fadded, logsdomain, grizzly, sujan, owlet, classy, smsbus }, fetched_at: new Date().toISOString() }
+    body: { success: true, suppliers: { fadded, logsdomain, grizzly, sujan, owlet, classy, smsbus, gotsms }, fetched_at: new Date().toISOString() }
   };
 }
 
