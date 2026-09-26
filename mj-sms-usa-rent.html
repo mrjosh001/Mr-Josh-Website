@@ -66,6 +66,27 @@ select.f{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.or
 .actions a.primary{background:var(--primary);color:#fff;border-color:var(--primary)}
 .empty{text-align:center;padding:28px;color:var(--muted);font-weight:600}
 .cache-note{font-size:11px;color:var(--muted);margin-top:8px;text-align:center}
+
+/* Confirm purchase modal (OTP-style) */
+.purchase-modal{position:fixed;inset:0;z-index:200;display:none;align-items:flex-end;justify-content:center;background:rgba(0,0,0,.55);padding:0;backdrop-filter:blur(4px)}
+.purchase-modal.open{display:flex}
+.purchase-sheet{width:100%;max-width:560px;background:var(--card);border:1px solid var(--border);border-radius:20px 20px 0 0;padding:18px 18px calc(18px + env(safe-area-inset-bottom,0px));max-height:90dvh;overflow-y:auto;animation:sheetUp .28s ease}
+@keyframes sheetUp{from{transform:translateY(40px);opacity:.6}to{transform:translateY(0);opacity:1}}
+.ps-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px}
+.ps-header span{font-weight:800;font-size:16px}
+.ps-close{width:36px;height:36px;border-radius:10px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:16px;cursor:pointer}
+.ps-block{margin-bottom:10px;padding:12px 14px;border-radius:12px;background:var(--bg);border:1px solid var(--border)}
+.ps-block-label{font-size:11px;font-weight:700;color:var(--muted);margin-bottom:4px}
+.ps-block-text{font-size:14px;font-weight:700}
+.ps-total-row{display:flex;align-items:center;justify-content:space-between;padding:14px;border-radius:14px;background:var(--primary-glow);margin:12px 0}
+.ps-total-label{font-size:13px;font-weight:700;color:var(--muted)}
+.ps-total-price{font-size:22px;font-weight:800;color:var(--primary)}
+.ps-buy{width:100%;padding:14px;border:none;border-radius:14px;background:linear-gradient(135deg,var(--primary),#1d4ed8);color:#fff;font:800 15px inherit;cursor:pointer}
+.ps-buy:disabled{opacity:.55}
+.ps-err{color:var(--danger);font-size:13px;font-weight:700;margin-top:10px;text-align:center}
+
+
+
 </style>
 </head>
 <body>
@@ -96,7 +117,30 @@ select.f{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.or
     </div>
     <div id="detailBody"><div class="sk-line"></div><div class="sk-line"></div><div class="sk-line"></div></div>
   </div>
+
+<div class="purchase-modal" id="purchaseModal" aria-hidden="true">
+  <div class="purchase-sheet" role="dialog" aria-labelledby="psTitle">
+    <div class="ps-header">
+      <span id="psTitle">Confirm rental</span>
+      <button type="button" class="ps-close" id="purchaseCloseBtn" aria-label="Close">✕</button>
+    </div>
+    <div class="ps-block"><div class="ps-block-label">Service</div><div class="ps-block-text" id="psService">—</div></div>
+    <div class="ps-block"><div class="ps-block-label">Duration</div><div class="ps-block-text" id="psDuration">—</div></div>
+    <div class="ps-block"><div class="ps-block-label">Carrier</div><div class="ps-block-text" id="psCarrier">Any carrier</div></div>
+    <div class="ps-block"><div class="ps-block-label">Area code</div><div class="ps-block-text" id="psArea">Any</div></div>
+    <div class="ps-block"><div class="ps-block-label">Quantity</div><div class="ps-block-text" id="psQty">1</div></div>
+    <div class="ps-total-row">
+      <span class="ps-total-label">Total to debit</span>
+      <span class="ps-total-price" id="psTotal">₦0</span>
+    </div>
+    <button type="button" class="ps-buy" id="confirmBuyBtn">Buy number</button>
+    <div class="ps-err" id="psErr"></div>
+  </div>
+</div>
+
 </main>
+
+
 <script>
 (function(){
 const SUPABASE_URL='https://atczodlljmlayvldxfmv.supabase.co';
@@ -350,13 +394,13 @@ function renderDetailForm(){
       body.querySelectorAll('.plan').forEach(function(c){c.classList.remove('on');});
       card.classList.add('on');
       selectedPlan=plans[Number(card.getAttribute('data-i'))];
-      document.getElementById('rentBtn').disabled=false;updateTotal();
+      var rb=document.getElementById('rentBtn');rb.disabled=false;rb.onclick=openPurchaseModal;updateTotal();
     };
   });
   var first=body.querySelector('.plan');if(first)first.click();
   document.getElementById('qtyMinus').onclick=function(){if(qty>1){qty--;document.getElementById('qtyVal').textContent=qty;updateTotal();}};
   document.getElementById('qtyPlus').onclick=function(){if(qty<25){qty++;document.getElementById('qtyVal').textContent=qty;updateTotal();}};
-  document.getElementById('rentBtn').onclick=doRent;
+  document.getElementById('rentBtn').onclick=openPurchaseModal;
 }
 function updateTotal(){var el=document.getElementById('totalAmt');if(!el)return;el.textContent=selectedPlan?fmtNgn(selectedPlan.price_ngn*qty):'₦0';}
 function resolveAreaCode(){
@@ -379,20 +423,77 @@ function showSuccess(rent){
   if(till){(function tick(){var left=till-Date.now();var el=document.getElementById('cdMain');if(!el)return;if(left<=0){el.textContent='Expired';return;}var h=Math.floor(left/3600000),m=Math.floor((left%3600000)/60000),s=Math.floor((left%60000)/1000);el.textContent=String(h).padStart(2,'0')+':'+String(m).padStart(2,'0')+':'+String(s).padStart(2,'0');setTimeout(tick,1000);})();}
   try{box.scrollIntoView({behavior:'smooth',block:'start'});}catch(e){}
 }
+
+function openPurchaseModal(){
+  if(!selectedPlan||!selectedService)return;
+  document.getElementById('psService').textContent=selectedService.name||'—';
+  document.getElementById('psDuration').textContent=selectedPlan.duration_translation||((selectedPlan.duration_in_type||'')+' '+(selectedPlan.duration_type||''))||'—';
+  var carSel=document.getElementById('carrierSel');
+  var carTxt='Any carrier';
+  if(carSel&&carSel.value){
+    var opt=carSel.options[carSel.selectedIndex];
+    carTxt=opt?opt.textContent:'Selected carrier';
+  }
+  document.getElementById('psCarrier').textContent=carTxt;
+  var area=resolveAreaCode();
+  var areaSel=document.getElementById('areaCode');
+  var areaTxt='Any';
+  if(area) areaTxt=area;
+  else if(areaSel&&areaSel.tagName==='SELECT'&&areaSel.value){
+    var ao=areaSel.options[areaSel.selectedIndex];
+    areaTxt=ao?ao.textContent:areaSel.value;
+  }
+  document.getElementById('psArea').textContent=areaTxt;
+  document.getElementById('psQty').textContent=String(qty);
+  document.getElementById('psTotal').textContent=fmtNgn(selectedPlan.price_ngn*qty);
+  document.getElementById('psErr').textContent='';
+  var modal=document.getElementById('purchaseModal');
+  modal.classList.add('open');
+  modal.setAttribute('aria-hidden','false');
+}
+function closePurchaseModal(){
+  var modal=document.getElementById('purchaseModal');
+  modal.classList.remove('open');
+  modal.setAttribute('aria-hidden','true');
+  var btn=document.getElementById('confirmBuyBtn');
+  if(btn){btn.disabled=false;btn.textContent='Buy number';}
+}
+document.getElementById('purchaseCloseBtn').onclick=closePurchaseModal;
+document.getElementById('purchaseModal').addEventListener('click',function(e){
+  if(e.target===this) closePurchaseModal();
+});
+document.getElementById('confirmBuyBtn').onclick=function(){ doRent(); };
+
 async function doRent(){
   if(rentBusy||!selectedPlan)return;rentBusy=true;
-  var btn=document.getElementById('rentBtn');btn.disabled=true;btn.textContent='Processing…';
-  document.getElementById('rentErr').textContent='';document.getElementById('rentOk').textContent='';
+  var btn=document.getElementById('confirmBuyBtn')||document.getElementById('rentBtn');
+  var rentBtn=document.getElementById('rentBtn');
+  if(btn){btn.disabled=true;btn.textContent='Processing…';}
+  if(rentBtn){rentBtn.disabled=true;}
+  document.getElementById('psErr').textContent='';
+  var errEl=document.getElementById('rentErr');if(errEl)errEl.textContent='';
+  var okEl=document.getElementById('rentOk');if(okEl)okEl.textContent='';
   var body={plan_id:selectedPlan.id,service_id:selectedService&&selectedService.id,quoted_price_ngn:selectedPlan.price_ngn,quoted_usd:selectedPlan.price_usd||selectedPlan.price||null};
   var area=resolveAreaCode();if(area)body.area_code=area;
   var car=document.getElementById('carrierSel').value;if(car)body.cellular_carrier_id=car;
   var j;if(qty>1){body.quantity=qty;j=await api('rent_bulk',{method:'POST',body:body});}else{j=await api('rent',{method:'POST',body:body});}
-  rentBusy=false;btn.disabled=false;btn.textContent='Rent number';
-  if(!j.success){document.getElementById('rentErr').textContent=j.message||'Rental failed';if(j.data&&j.data.price_ngn){selectedPlan.price_ngn=j.data.price_ngn;updateTotal();}return;}
+  rentBusy=false;
+  if(btn){btn.disabled=false;btn.textContent='Buy number';}
+  if(rentBtn){rentBtn.disabled=false;rentBtn.textContent='Rent number';}
+  if(!j.success){
+    var msg=j.message||'Rental failed';
+    document.getElementById('psErr').textContent=msg;
+    if(errEl)errEl.textContent=msg;
+    if(j.data&&j.data.price_ngn){selectedPlan.price_ngn=j.data.price_ngn;updateTotal();document.getElementById('psTotal').textContent=fmtNgn(selectedPlan.price_ngn*qty);}
+    return;
+  }
+  closePurchaseModal();
   var rent=Array.isArray(j.data)?j.data[0]:j.data;
-  document.getElementById('rentOk').textContent=j.message||'Success';
+  if(okEl)okEl.textContent=j.message||'Success';
   if(rent)showSuccess(rent);
 }
+
+
 loadServices();
 })();
 </script>
