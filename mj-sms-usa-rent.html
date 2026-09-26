@@ -104,7 +104,7 @@ const SUPABASE_ANON_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYm
 const sb=window.supabase.createClient(SUPABASE_URL,SUPABASE_ANON_KEY,{auth:{persistSession:true,autoRefreshToken:true,storage:window.sessionStorage}});
 let allServices=[],selectedService=null,plans=[],selectedPlan=null,qty=1,rentBusy=false,carriers=[];
 const POPULAR=['whatsapp','telegram','google','facebook','instagram','tiktok','twitter','x','discord','paypal','amazon','apple','microsoft'];
-const CACHE_KEY='mj_gotsms_services_v1';
+const CACHE_KEY='mj_gotsms_services_v2';
 const CACHE_TTL_MS=2*24*60*60*1000;
 
 const SERVICE_DOMAIN={
@@ -195,18 +195,30 @@ async function api(action,opts){const h=await headers();if(!h)return{success:fal
 function readCache(){try{var raw=localStorage.getItem(CACHE_KEY);if(!raw)return null;var o=JSON.parse(raw);if(!o||!Array.isArray(o.services)||!o.ts)return null;if(Date.now()-o.ts>CACHE_TTL_MS)return null;return o;}catch(e){return null;}}
 function writeCache(services){try{localStorage.setItem(CACHE_KEY,JSON.stringify({ts:Date.now(),services:services}));}catch(e){}}
 
-async function fetchAllServices(){
-  var all=[];
-  for(var page=1;page<=20;page++){
-    var j=await api('services',{query:'per_page=100&page='+page});
+function dedupeServices(list){
+  var seen={}, out=[];
+  (list||[]).forEach(function(s){
+    var id=String(s&&s.id||'');
+    if(!id||seen[id])return;
+    seen[id]=1;
+    out.push({id:id,name:s.name||s.service_name||'Service',logo:s.logo||null});
+  });
+  return out;
+}
+async function fetchAllServices(search){
+  var all=[], q=String(search||'').trim();
+  for(var page=1;page<=30;page++){
+    var qs='per_page=100&page='+page;
+    if(q) qs+='&search='+encodeURIComponent(q);
+    var j=await api('services',{query:qs});
     if(!j.success){if(page===1)return{ok:false,message:j.message||'Could not load services'};break;}
-    var chunk=j.data||[];
+    var chunk=Array.isArray(j.data)?j.data:[];
     if(!chunk.length)break;
     all=all.concat(chunk);
     var last=Number((j.meta&&j.meta.last_page)||page);
     if(page>=last)break;
   }
-  return{ok:true,services:all};
+  return{ok:true,services:dedupeServices(all)};
 }
 function sortServices(){
   allServices.sort(function(a,b){
@@ -217,9 +229,7 @@ function sortServices(){
     if(ai===-1)return 1;if(bi===-1)return -1;return ai-bi;
   });
 }
-function renderServices(){
-  var q=String(document.getElementById('svcSearch').value||'').toLowerCase().trim();
-  var list=allServices;if(q)list=list.filter(function(s){return String(s.name||'').toLowerCase().indexOf(q)>=0;});
+function paintServices(list){
   var grid=document.getElementById('svcGrid');
   grid.className='svc-grid';grid.removeAttribute('aria-busy');
   if(!list.length){grid.innerHTML='<div class="empty" style="grid-column:1/-1">No match</div>';return;}
@@ -234,16 +244,43 @@ function renderServices(){
     };
   });
 }
+var _searchTimer=null;
+function renderServices(){
+  var q=String(document.getElementById('svcSearch').value||'').trim();
+  var ql=q.toLowerCase();
+  var list=allServices;
+  if(ql) list=allServices.filter(function(s){return String(s.name||'').toLowerCase().indexOf(ql)>=0;});
+  paintServices(list);
+  // If local list has no match, search supplier API (WhatsApp may not be on first pages)
+  if(ql && !list.length){
+    clearTimeout(_searchTimer);
+    _searchTimer=setTimeout(async function(){
+      var grid=document.getElementById('svcGrid');
+      grid.innerHTML='<div class="empty" style="grid-column:1/-1">Searching…</div>';
+      var r=await fetchAllServices(q);
+      if(!r.ok){grid.innerHTML='<div class="empty" style="grid-column:1/-1">'+esc(r.message||'Search failed')+'</div>';return;}
+      // merge into allServices for next time
+      var map={};allServices.forEach(function(s){map[s.id]=s;});
+      r.services.forEach(function(s){map[s.id]=s;});
+      allServices=Object.keys(map).map(function(k){return map[k];});
+      sortServices();writeCache(allServices);
+      var still=allServices.filter(function(s){return String(s.name||'').toLowerCase().indexOf(ql)>=0;});
+      paintServices(still);
+      var note=document.getElementById('cacheNote');
+      if(note) note.textContent=allServices.length+' services';
+    },350);
+  }
+}
 async function loadServices(){
   var grid=document.getElementById('svcGrid');
   var note=document.getElementById('cacheNote');
   var cached=readCache();
   if(cached&&cached.services.length){
-    allServices=cached.services;sortServices();renderServices();
+    allServices=dedupeServices(cached.services);sortServices();renderServices();
     if(note)note.textContent='Cached · '+allServices.length+' services · refreshes in background';
     fetchAllServices().then(function(r){
       if(r.ok&&r.services.length){
-        allServices=r.services;writeCache(allServices);sortServices();renderServices();
+        allServices=dedupeServices(r.services);writeCache(allServices);sortServices();renderServices();
         if(note)note.textContent=allServices.length+' services';
       }
     });
@@ -252,7 +289,7 @@ async function loadServices(){
     grid.innerHTML='';for(var i=0;i<8;i++)grid.innerHTML+='<div class="sk-svc-tile"><div class="sk-svc-icon"></div><div class="sk-svc-label"></div></div>';
     var r=await fetchAllServices();
     if(!r.ok){grid.className='';grid.innerHTML='<div class="empty">'+esc(r.message)+'</div>';return;}
-    allServices=r.services;writeCache(allServices);sortServices();renderServices();
+    allServices=dedupeServices(r.services);writeCache(allServices);sortServices();renderServices();
     if(note)note.textContent=allServices.length+' services';
   }
   api('carriers').then(function(c){carriers=c.data||[];});
@@ -346,7 +383,7 @@ async function doRent(){
   if(rentBusy||!selectedPlan)return;rentBusy=true;
   var btn=document.getElementById('rentBtn');btn.disabled=true;btn.textContent='Processing…';
   document.getElementById('rentErr').textContent='';document.getElementById('rentOk').textContent='';
-  var body={plan_id:selectedPlan.id,quoted_price_ngn:selectedPlan.price_ngn};
+  var body={plan_id:selectedPlan.id,service_id:selectedService&&selectedService.id,quoted_price_ngn:selectedPlan.price_ngn,quoted_usd:selectedPlan.price_usd||selectedPlan.price||null};
   var area=resolveAreaCode();if(area)body.area_code=area;
   var car=document.getElementById('carrierSel').value;if(car)body.cellular_carrier_id=car;
   var j;if(qty>1){body.quantity=qty;j=await api('rent_bulk',{method:'POST',body:body});}else{j=await api('rent',{method:'POST',body:body});}
