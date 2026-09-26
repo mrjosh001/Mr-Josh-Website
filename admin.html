@@ -1900,22 +1900,91 @@ async function syncGotsmsNow() {
   const idle = '<i class="fas fa-sync"></i> Sync GotSMS';
   setBtnBusy(btn, true, 'Syncing…');
   const prog = document.getElementById('gotsmsSyncProgress');
+  const RESUME_KEY = 'mj_gotsms_sync_page';
+  let page = 1;
   try {
-    const headers = await authHeaders();
-    const res = await fetch('/api/sms-bus?action=gotsms_sync', { method: 'GET', headers });
-    const data = await res.json();
-    if (data.success) {
+    const saved = Number(sessionStorage.getItem(RESUME_KEY) || '1');
+    if (saved >= 1) page = saved;
+  } catch (_) {}
+
+  let totalNew = 0;
+  let totalUpdated = 0;
+  let lastPage = 1;
+
+  try {
+    // Resume-friendly loop: each request is one GotSMS page. On failure we keep RESUME_KEY
+    // so the next click continues from the same page (does not wipe already-saved rows).
+    while (true) {
+      if (prog) prog.textContent = 'Syncing GotSMS page ' + page + (lastPage > 1 ? (' / ' + lastPage) : '') + '…';
+
+      const headers = await authHeaders();
+      // Build URL without relying on anything that can trip Safari header rules
+      const url = '/api/sms-bus?action=gotsms_sync&page=' + encodeURIComponent(String(page)) + '&per_page=100';
+      let res;
+      try {
+        res = await fetch(url, { method: 'GET', headers: headers || {} });
+      } catch (netErr) {
+        try { sessionStorage.setItem(RESUME_KEY, String(page)); } catch (_) {}
+        showAdminToast('Network error on page ' + page + '. Click Sync again to resume.', 'error');
+        if (prog) prog.textContent = 'Paused at page ' + page + ' — click Sync to continue';
+        return;
+      }
+
+      // Safari-safe body parse (avoids "string did not match the expected pattern" on res.json())
+      let data = {};
+      try {
+        const raw = await res.text();
+        const clean = String(raw || '').replace(/[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?:[^\uD800-\uDBFF]|^)[\uDC00-\uDFFF]/g, '');
+        data = clean ? JSON.parse(clean) : {};
+      } catch (parseErr) {
+        try { sessionStorage.setItem(RESUME_KEY, String(page)); } catch (_) {}
+        showAdminToast('Bad response on page ' + page + '. Click Sync to resume.', 'error');
+        if (prog) prog.textContent = 'Paused at page ' + page;
+        return;
+      }
+
+      if (!data.success) {
+        try { sessionStorage.setItem(RESUME_KEY, String(page)); } catch (_) {}
+        showAdminToast(data.message || ('GotSMS sync failed on page ' + page), 'error');
+        if (prog) prog.textContent = (data.message || 'Failed') + ' · resume page ' + page;
+        return;
+      }
+
       const d = data.data || {};
-      showAdminToast(`GotSMS synced · Plans ${d.plans||0} · New ${d.new_products||0} · Updated ${d.updated_products||0}`, 'success');
-      if (prog) prog.textContent = `GotSMS live: ${d.plans||0} plans · balance ${d.balance != null ? d.balance + ' USD' : '—'} · ${d.synced_at ? new Date(d.synced_at).toLocaleString() : ''}`;
-      await loadGotsmsServices();
-      try { if (typeof loadSupplierBalances === 'function') loadSupplierBalances(); } catch (_) {}
-    } else {
-      showAdminToast(data.message || 'GotSMS sync failed', 'error');
-      if (prog) prog.textContent = data.message || 'Sync failed';
+      lastPage = Number(d.last_page || lastPage || 1);
+      totalNew += Number(d.new_products || 0);
+      totalUpdated += Number(d.updated_products || 0);
+
+      if (prog) {
+        prog.textContent = 'Page ' + page + '/' + lastPage +
+          ' · +' + totalNew + ' new · ' + totalUpdated + ' updated' +
+          (d.db_errors && d.db_errors.length ? (' · warn: ' + d.db_errors[0]) : '');
+      }
+
+      if (d.done || !d.next_page) {
+        try { sessionStorage.removeItem(RESUME_KEY); } catch (_) {}
+        showAdminToast('GotSMS sync complete · New ' + totalNew + ' · Updated ' + totalUpdated + ' · Pages ' + lastPage, 'success');
+        if (prog) prog.textContent = 'Done · ' + lastPage + ' pages · New ' + totalNew + ' · Updated ' + totalUpdated;
+        await loadGotsmsServices();
+        try { if (typeof loadSupplierBalances === 'function') loadSupplierBalances(); } catch (_) {}
+        return;
+      }
+
+      page = Number(d.next_page || (page + 1));
+      try { sessionStorage.setItem(RESUME_KEY, String(page)); } catch (_) {}
+      // tiny yield so UI stays responsive
+      await new Promise(function(r){ setTimeout(r, 30); });
     }
   } catch (e) {
-    showAdminToast('GotSMS sync failed: ' + (e.message || e), 'error');
+    try { sessionStorage.setItem(RESUME_KEY, String(page)); } catch (_) {}
+    const msg = (e && e.message) ? String(e.message) : String(e);
+    // Map Safari's opaque pattern error to something actionable
+    if (/expected pattern/i.test(msg)) {
+      showAdminToast('Session/header glitch on Safari. Tap Sync again — it will resume page ' + page + '.', 'error');
+    } else {
+      showAdminToast('GotSMS sync failed: ' + msg + ' (resume page ' + page + ')', 'error');
+    }
+    if (prog) prog.textContent = 'Paused at page ' + page + ' — click Sync to continue (rows already saved stay)';
   } finally {
     setBtnBusy(btn, false, idle);
   }
