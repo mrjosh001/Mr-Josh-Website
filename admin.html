@@ -1047,7 +1047,7 @@ function withLagos(opts) { return Object.assign({ timeZone: 'Africa/Lagos' }, op
  </div>
  <div class="desktop-only desktop-table table-wrap">
  <table>
- <thead><tr><th>Service / plan</th><th>Country</th><th>Supplier USD</th><th>Sell ₦</th><th>Stock</th></tr></thead>
+ <thead><tr><th>Service / plan</th><th>Country</th><th>Supplier USD</th><th>Sell ₦ (editable)</th><th>Stock</th><th>Updated</th></tr></thead>
  <tbody id="gotsmsTableBody"><tr><td colspan="5" class="empty-state">Click Sync GotSMS to pull catalog.</td></tr></tbody>
  </table>
  </div>
@@ -1993,10 +1993,28 @@ async function syncGotsmsNow() {
 }
 async function loadGotsmsServices() {
   try {
-    const cols = 'id, service_name, service_id, country_name, supplier_price, price, is_available, updated_at';
-    const { data, error } = await sb.from('number_services').select(cols).eq('source', 'gotsms').order('service_name', { ascending: true }).limit(500);
-    if (error) throw error;
-    window._gotsmsRows = data || [];
+    const cols = 'id, service_name, service_id, country_name, supplier_price, price, price_source, is_available, updated_at';
+    // Pull in pages so all ~1176 plans are visible (Supabase default max is high enough)
+    let all = [];
+    let from = 0;
+    const pageSize = 1000;
+    while (true) {
+      const { data, error } = await sb.from('number_services')
+        .select(cols)
+        .eq('source', 'gotsms')
+        .order('service_name', { ascending: true })
+        .range(from, from + pageSize - 1);
+      if (error) throw error;
+      const chunk = data || [];
+      all = all.concat(chunk);
+      if (chunk.length < pageSize) break;
+      from += pageSize;
+    }
+    window._gotsmsRows = all;
+    const prog = document.getElementById('gotsmsSyncProgress');
+    if (prog && !prog.textContent.includes('Syncing')) {
+      prog.textContent = all.length + ' GotSMS rows in bank';
+    }
     filterGotsmsServices();
   } catch (e) {
     console.error(e);
@@ -2010,22 +2028,57 @@ function filterGotsmsServices() {
   const tbody = document.getElementById('gotsmsTableBody');
   const cards = document.getElementById('gotsmsMobileCards');
   if (!rows.length) {
-    if (tbody) tbody.innerHTML = '<tr><td colspan="5" class="empty-state">No GotSMS rows. Click Sync GotSMS.</td></tr>';
+    if (tbody) tbody.innerHTML = '<tr><td colspan="6" class="empty-state">No GotSMS rows. Click Sync GotSMS.</td></tr>';
     if (cards) cards.innerHTML = '<div class="empty-state">No GotSMS rows.</div>';
     return;
   }
   if (tbody) {
-    tbody.innerHTML = rows.map(r => `<tr>
+    tbody.innerHTML = rows.map(r => {
+      const admin = r.price_source === 'admin';
+      return `<tr data-id="${escapeHtml(r.id)}">
       <td>${escapeHtml(r.service_name||'')}</td>
       <td>${escapeHtml(r.country_name||'USA')}</td>
       <td>$${Number(r.supplier_price||0).toFixed(2)}</td>
-      <td class="price">₦${Number(r.price||0).toLocaleString()}</td>
+      <td>
+        <input type="number" min="0" step="50" value="${Number(r.price||0)}"
+          style="width:110px;padding:6px 8px;border-radius:8px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-weight:700;"
+          onchange="saveGotsmsPrice('${escapeHtml(r.id)}', this.value)"
+          title="${admin ? 'Admin price (sync will not overwrite)' : 'System price — edit to lock as admin'}" />
+        ${admin ? '<span style="font-size:10px;color:#fbbf24;margin-left:4px;">admin</span>' : ''}
+      </td>
       <td>${r.is_available ? '<span style="color:#34d399;font-weight:700">In stock</span>' : '<span style="color:#94a3b8">Out</span>'}</td>
-    </tr>`).join('');
+      <td style="font-size:11px;color:var(--muted)">${r.updated_at ? ngWhen(r.updated_at) : ''}</td>
+    </tr>`;
+    }).join('');
   }
   if (cards) {
     cards.innerHTML = rows.map(r => `<div class="m-card"><div class="m-title">${escapeHtml(r.service_name||'')}</div>
-      <div class="m-sub">${escapeHtml(r.country_name||'USA')} · $${Number(r.supplier_price||0).toFixed(2)} → ₦${Number(r.price||0).toLocaleString()}</div></div>`).join('');
+      <div class="m-sub">${escapeHtml(r.country_name||'USA')} · $${Number(r.supplier_price||0).toFixed(2)}</div>
+      <div style="margin-top:8px;display:flex;gap:8px;align-items:center;">
+        <input type="number" min="0" step="50" value="${Number(r.price||0)}"
+          style="width:110px;padding:8px;border-radius:8px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-weight:700;"
+          onchange="saveGotsmsPrice('${escapeHtml(r.id)}', this.value)" />
+        <span style="font-size:11px;color:var(--muted)">NGN sell</span>
+      </div></div>`).join('');
+  }
+}
+async function saveGotsmsPrice(id, value) {
+  const price = Math.max(0, Math.round(Number(value) || 0));
+  if (!id) return;
+  try {
+    const { error } = await sb.from('number_services').update({
+      price: price,
+      price_source: 'admin',
+      updated_at: new Date().toISOString()
+    }).eq('id', id).eq('source', 'gotsms');
+    if (error) throw error;
+    // keep local cache in sync
+    const row = (window._gotsmsRows || []).find(r => r.id === id);
+    if (row) { row.price = price; row.price_source = 'admin'; }
+    showAdminToast('Price saved · ₦' + price.toLocaleString() + ' (admin — sync will not overwrite)', 'success');
+    filterGotsmsServices();
+  } catch (e) {
+    showAdminToast('Could not save price: ' + (e.message || e), 'error');
   }
 }
 
