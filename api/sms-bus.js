@@ -2344,9 +2344,6 @@ export default async function handler(req, res) {
       }
 
       if ((method === 'GET' || method === 'POST') && ga === 'gotsms_sync') {
-        const auth = await requireAuth(req);
-        if (!auth.ok) return json(res, auth.status, { success: false, message: auth.message });
-
         if (!GOTSMS_TOKEN) {
           return json(res, 503, {
             success: false,
@@ -2354,10 +2351,25 @@ export default async function handler(req, res) {
           });
         }
 
-        const { data: prof } = await supabase.from('profiles').select('is_admin').eq('id', auth.userId).maybeSingle();
-        const adminOk = !!(prof && (prof.is_admin === true || prof.is_admin === 'true' || prof.is_admin === 1 || prof.is_admin === '1'));
-        if (!adminOk) {
-          return json(res, 403, { success: false, message: 'Admin only' });
+        // Allow Vercel cron / CRON_SECRET the same way as action=sync for other suppliers
+        const cronSecret = process.env.CRON_SECRET;
+        const authHeader = req.headers.authorization || '';
+        const isCron =
+          (cronSecret && authHeader === `Bearer ${cronSecret}`) ||
+          req.headers['x-vercel-cron'] === '1';
+        if (!isCron) {
+          const auth = await requireAuth(req);
+          if (!auth.ok) return json(res, auth.status, { success: false, message: auth.message });
+          const { data: prof } = await supabase.from('profiles').select('is_admin').eq('id', auth.userId).maybeSingle();
+          const adminOk = !!(prof && (prof.is_admin === true || prof.is_admin === 'true' || prof.is_admin === 1 || prof.is_admin === '1'));
+          if (!adminOk) {
+            return json(res, 403, { success: false, message: 'Admin only' });
+          }
+        }
+
+        // Cron always does a full sync
+        if (isCron && !url.searchParams.get('full')) {
+          url.searchParams.set('full', '1');
         }
 
         // full=1 → keep paging until every plan is processed (never stop early)
