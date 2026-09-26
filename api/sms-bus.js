@@ -2061,7 +2061,35 @@ export default async function handler(req, res) {
           lastPage = Number(g.data.meta?.last_page || 1);
           page += 1;
         } while (page <= lastPage && page <= 8);
-        return json(res, 200, { success: true, data: all.map(gotsmsEnrichPlan) });
+
+        // Overlay admin prices / hidden flags from number_services (source=gotsms, service_id = plan id)
+        let enriched = all.map(gotsmsEnrichPlan);
+        const planIds = enriched.map((p) => String(p.id)).filter(Boolean);
+        if (planIds.length) {
+          const { data: dbRows } = await supabase
+            .from('number_services')
+            .select('service_id, price, price_source, is_available')
+            .eq('source', 'gotsms')
+            .in('service_id', planIds);
+          const bySid = new Map((dbRows || []).map((r) => [String(r.service_id), r]));
+          enriched = enriched.map((p) => {
+            const db = bySid.get(String(p.id));
+            if (!db) return p;
+            const out = { ...p };
+            if (db.price_source === 'admin' && db.price != null && Number(db.price) > 0) {
+              out.price_ngn = Number(db.price);
+              out.price_source = 'admin';
+            }
+            if (db.is_available === false) {
+              out.is_available = false;
+            }
+            return out;
+          });
+        }
+        // Drop admin-hidden plans from customer view
+        enriched = enriched.filter((p) => p.is_available !== false);
+
+        return json(res, 200, { success: true, data: enriched });
       }
 
       if (method === 'POST' && ga === 'gotsms_rent') {
@@ -2117,7 +2145,22 @@ export default async function handler(req, res) {
             data: { plan_id, service_id: service_id || null, found: !!plan }
           });
         }
-        const price = gotsmsSellPriceNgn(supplierUsd);
+        let price = gotsmsSellPriceNgn(supplierUsd);
+        // Admin override wins (same row sync uses service_id = plan id)
+        try {
+          const { data: dbPlan } = await supabase
+            .from('number_services')
+            .select('price, price_source, is_available')
+            .eq('source', 'gotsms')
+            .eq('service_id', plan_id)
+            .maybeSingle();
+          if (dbPlan && dbPlan.is_available === false) {
+            return json(res, 400, { success: false, message: 'This plan is not available' });
+          }
+          if (dbPlan && dbPlan.price_source === 'admin' && Number(dbPlan.price) > 0) {
+            price = Number(dbPlan.price);
+          }
+        } catch (_) {}
         if (body.quoted_price_ngn != null) {
           const q = Number(body.quoted_price_ngn);
           if (Number.isFinite(q) && Math.abs(q - price) > 50) {
@@ -2218,7 +2261,21 @@ export default async function handler(req, res) {
         }
         const unitUsd = Number(plan?.price || body.quoted_usd || 0);
         if (!(unitUsd > 0)) return json(res, 400, { success: false, message: 'Plan unavailable or out of stock. Pick the service again.' });
-        const unitNgn = gotsmsSellPriceNgn(unitUsd);
+        let unitNgn = gotsmsSellPriceNgn(unitUsd);
+        try {
+          const { data: dbPlan } = await supabase
+            .from('number_services')
+            .select('price, price_source, is_available')
+            .eq('source', 'gotsms')
+            .eq('service_id', plan_id)
+            .maybeSingle();
+          if (dbPlan && dbPlan.is_available === false) {
+            return json(res, 400, { success: false, message: 'This plan is not available' });
+          }
+          if (dbPlan && dbPlan.price_source === 'admin' && Number(dbPlan.price) > 0) {
+            unitNgn = Number(dbPlan.price);
+          }
+        } catch (_) {}
         const totalNgn = unitNgn * quantity;
 
         const { data: profile } = await supabase.from('profiles').select('id, balance, customer_id').eq('id', auth.userId).single();
