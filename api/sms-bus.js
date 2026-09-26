@@ -2338,84 +2338,140 @@ export default async function handler(req, res) {
       if ((method === 'GET' || method === 'POST') && ga === 'gotsms_sync') {
         const auth = await requireAuth(req);
         if (!auth.ok) return json(res, auth.status, { success: false, message: auth.message });
-        const { data: prof } = await supabase.from('profiles').select('is_admin').eq('id', auth.userId).single();
-        if (!prof?.is_admin) return json(res, 403, { success: false, message: 'Admin only' });
 
-        let page = 1;
-        let lastPage = 1;
-        const all = [];
-        do {
-          const g = await gotsmsFetch(`/api/rents/plans?per_page=100&page=${page}&include_unavailable=1`);
-          if (!g.ok) return json(res, g.status || 400, { success: false, message: g.data?.message || 'GotSMS plans failed' });
-          all.push(...(g.data.data || []));
-          lastPage = Number(g.data.meta?.last_page || 1);
-          page += 1;
-        } while (page <= lastPage && page <= 15);
+        if (!GOTSMS_TOKEN) {
+          return json(res, 503, {
+            success: false,
+            message: 'GotSMS not configured. Add GOTSMS_API_TOKEN in Vercel env, then Redeploy.'
+          });
+        }
+
+        const { data: prof } = await supabase.from('profiles').select('is_admin').eq('id', auth.userId).maybeSingle();
+        const adminOk = !!(prof && (prof.is_admin === true || prof.is_admin === 'true' || prof.is_admin === 1 || prof.is_admin === '1'));
+        if (!adminOk) {
+          return json(res, 403, { success: false, message: 'Admin only' });
+        }
+
+        // Page batch — one GotSMS page per request so Vercel does not time out
+        // and a failure can resume from the same page without wiping progress.
+        const page = Math.max(1, Number(url.searchParams.get('page') || 1));
+        const perPage = Math.min(100, Math.max(20, Number(url.searchParams.get('per_page') || 100)));
+
+        const g = await gotsmsFetch(
+          `/api/rents/plans?per_page=${perPage}&page=${page}&include_unavailable=1`
+        );
+        if (!g.ok) {
+          return json(res, g.status || 400, {
+            success: false,
+            message: g.data?.message || 'GotSMS plans request failed',
+            data: { page, resume: true }
+          });
+        }
+
+        const chunk = Array.isArray(g.data?.data) ? g.data.data : [];
+        const lastPage = Math.max(1, Number(g.data?.meta?.last_page || page));
+
+        // Prefetch existing keys for this source (lightweight) for this page's ids
+        const ids = chunk.map((pl) => String(pl.id)).filter(Boolean);
+        let existingMap = new Map();
+        if (ids.length) {
+          const { data: existingRows, error: exErr } = await supabase
+            .from('number_services')
+            .select('id, service_id, price, price_source')
+            .eq('source', 'gotsms')
+            .in('service_id', ids);
+          if (exErr) {
+            return json(res, 400, {
+              success: false,
+              message: 'DB read failed: ' + exErr.message,
+              data: { page, resume: true }
+            });
+          }
+          existingMap = new Map((existingRows || []).map((r) => [String(r.service_id), r]));
+        }
 
         let newCount = 0;
         let updatedCount = 0;
-        for (const pl of all) {
+        const dbErrors = [];
+        const toInsert = [];
+
+        for (const pl of chunk) {
           const planId = pl.id;
           if (!planId) continue;
-          const sid = String(planId); // one row per plan
+          const sid = String(planId);
           const usd = Number(pl.price || 0);
           const priceNgn = gotsmsSellPriceNgn(usd);
           const serviceName = pl.service?.name
             ? `${pl.service.name} · ${pl.duration_translation || pl.duration_type || ''}`.trim()
             : (pl.duration_translation || 'USA rental');
-          const { data: existing } = await supabase
-            .from('number_services')
-            .select('id, price, price_source')
-            .eq('source', 'gotsms')
-            .eq('service_id', sid)
-            .maybeSingle();
+          const countryName = (pl.country && pl.country.name) || 'United States';
+          const avail = pl.is_available !== false;
+          const existing = existingMap.get(sid);
+
           if (existing) {
             const patch = {
               service_name: serviceName,
               country_id: 'US',
-              country_name: pl.country?.name || 'United States',
+              country_name: countryName,
               supplier_price: usd,
-              is_available: pl.is_available !== false,
-              available_quantity: pl.is_available !== false ? 1 : 0,
+              is_available: avail,
+              available_quantity: avail ? 1 : 0,
               updated_at: new Date().toISOString()
             };
-            // Keep admin-set selling price
             if (existing.price_source === 'system' || existing.price_source == null) {
               patch.price = priceNgn;
               patch.price_source = 'system';
             }
             const { error } = await supabase.from('number_services').update(patch).eq('id', existing.id);
-            if (!error) updatedCount += 1;
+            if (error) dbErrors.push(error.message);
+            else updatedCount += 1;
           } else {
-            const row = {
+            toInsert.push({
               source: 'gotsms',
               service_id: sid,
               service_name: serviceName,
               country_id: 'US',
-              country_name: pl.country?.name || 'United States',
+              country_name: countryName,
               supplier_price: usd,
               price: priceNgn,
               price_source: 'system',
               currency: 'NGN',
-              available_quantity: pl.is_available !== false ? 1 : 0,
-              is_available: pl.is_available !== false,
+              available_quantity: avail ? 1 : 0,
+              is_available: avail,
               updated_at: new Date().toISOString()
-            };
-            const { error } = await supabase.from('number_services').insert(row);
-            if (!error) newCount += 1;
+            });
           }
         }
 
-        const bal = await gotsmsFetch('/api/account');
+        if (toInsert.length) {
+          const { error } = await supabase.from('number_services').insert(toInsert);
+          if (error) {
+            // fallback one-by-one so one bad row does not kill the batch
+            for (const row of toInsert) {
+              const { error: e2 } = await supabase.from('number_services').insert(row);
+              if (e2) dbErrors.push(e2.message);
+              else newCount += 1;
+            }
+          } else {
+            newCount = toInsert.length;
+          }
+        }
+
+        const done = page >= lastPage;
         return json(res, 200, {
           success: true,
           data: {
-            plans: all.length,
+            page,
+            next_page: done ? null : page + 1,
+            last_page: lastPage,
+            done,
+            plans_on_page: chunk.length,
             new_products: newCount,
             updated_products: updatedCount,
-            balance: bal.data?.data?.balance ?? null,
+            db_errors: dbErrors.slice(0, 3),
             synced_at: new Date().toISOString()
-          }
+          },
+          message: dbErrors.length ? ('Partial page: ' + dbErrors[0]) : undefined
         });
       }
 
