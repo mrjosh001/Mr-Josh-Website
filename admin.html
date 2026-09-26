@@ -2032,34 +2032,69 @@ function filterGotsmsServices() {
     if (cards) cards.innerHTML = '<div class="empty-state">No GotSMS rows.</div>';
     return;
   }
+  // Card layout (same pattern as other SMS admin cards — Edit Price / Delete)
+  const cardHtml = rows.map(r => {
+    const admin = r.price_source === 'admin';
+    const avail = r.is_available;
+    return `<div class="m-card" style="margin-bottom:12px;padding:14px;border:1px solid var(--border);border-radius:14px;background:var(--card);">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;margin-bottom:10px;">
+        <div style="min-width:0;">
+          <div style="font-weight:800;font-size:15px;margin-bottom:2px;">${escapeHtml(r.country_name||'USA')}</div>
+          <div style="font-size:13px;color:var(--muted);font-weight:600;">${escapeHtml(r.service_name||'')}</div>
+        </div>
+        <span style="flex-shrink:0;font-size:11px;font-weight:800;padding:4px 10px;border-radius:999px;${avail?'background:rgba(52,211,153,.15);color:#34d399;':'background:rgba(148,163,184,.12);color:#94a3b8;'}">${avail?'ACTIVE':'OUT'}</span>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr auto;gap:6px 12px;font-size:13px;margin-bottom:12px;">
+        <span style="color:var(--muted);">Supplier Price</span>
+        <span style="font-weight:700;color:#fbbf24;text-align:right;">$${Number(r.supplier_price||0).toFixed(2)}</span>
+        <span style="color:var(--muted);">Your Price</span>
+        <span style="font-weight:800;color:#34d399;text-align:right;">₦${Number(r.price||0).toLocaleString()}${admin?' <span style="font-size:10px;color:#fbbf24;">admin</span>':''}</span>
+        <span style="color:var(--muted);">Stock</span>
+        <span style="font-weight:700;text-align:right;">${avail?1:0}</span>
+      </div>
+      <div style="display:flex;gap:8px;">
+        <button type="button" class="btn btn-ghost btn-sm" onclick="openGotsmsEditPrice('${escapeHtml(r.id)}', ${Number(r.price||0)})"><i class="fas fa-pen"></i> Edit Price</button>
+        <button type="button" class="btn btn-ghost btn-sm" style="color:#f87171;" onclick="deleteGotsmsRow('${escapeHtml(r.id)}')"><i class="fas fa-trash"></i> Delete</button>
+      </div>
+    </div>`;
+  }).join('');
+
+  if (cards) {
+    cards.innerHTML = cardHtml;
+    cards.classList.remove('mobile-only'); // show on all sizes for this tab
+  }
   if (tbody) {
+    // keep a compact table for wide screens
     tbody.innerHTML = rows.map(r => {
       const admin = r.price_source === 'admin';
       return `<tr data-id="${escapeHtml(r.id)}">
-      <td>${escapeHtml(r.service_name||'')}</td>
-      <td>${escapeHtml(r.country_name||'USA')}</td>
-      <td>$${Number(r.supplier_price||0).toFixed(2)}</td>
-      <td>
-        <input type="number" min="0" step="50" value="${Number(r.price||0)}"
-          style="width:110px;padding:6px 8px;border-radius:8px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-weight:700;"
-          onchange="saveGotsmsPrice('${escapeHtml(r.id)}', this.value)"
-          title="${admin ? 'Admin price (sync will not overwrite)' : 'System price — edit to lock as admin'}" />
-        ${admin ? '<span style="font-size:10px;color:#fbbf24;margin-left:4px;">admin</span>' : ''}
-      </td>
-      <td>${r.is_available ? '<span style="color:#34d399;font-weight:700">In stock</span>' : '<span style="color:#94a3b8">Out</span>'}</td>
-      <td style="font-size:11px;color:var(--muted)">${r.updated_at ? ngWhen(r.updated_at) : ''}</td>
-    </tr>`;
+        <td>${escapeHtml(r.service_name||'')}</td>
+        <td>${escapeHtml(r.country_name||'USA')}</td>
+        <td>$${Number(r.supplier_price||0).toFixed(2)}</td>
+        <td>₦${Number(r.price||0).toLocaleString()}${admin?' <span style="font-size:10px;color:#fbbf24;">admin</span>':''}</td>
+        <td>${r.is_available?'<span style="color:#34d399;font-weight:700">ACTIVE</span>':'OUT'}</td>
+        <td>
+          <button type="button" class="btn btn-ghost btn-sm" onclick="openGotsmsEditPrice('${escapeHtml(r.id)}', ${Number(r.price||0)})">Edit</button>
+        </td>
+      </tr>`;
     }).join('');
   }
-  if (cards) {
-    cards.innerHTML = rows.map(r => `<div class="m-card"><div class="m-title">${escapeHtml(r.service_name||'')}</div>
-      <div class="m-sub">${escapeHtml(r.country_name||'USA')} · $${Number(r.supplier_price||0).toFixed(2)}</div>
-      <div style="margin-top:8px;display:flex;gap:8px;align-items:center;">
-        <input type="number" min="0" step="50" value="${Number(r.price||0)}"
-          style="width:110px;padding:8px;border-radius:8px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-weight:700;"
-          onchange="saveGotsmsPrice('${escapeHtml(r.id)}', this.value)" />
-        <span style="font-size:11px;color:var(--muted)">NGN sell</span>
-      </div></div>`).join('');
+}
+function openGotsmsEditPrice(id, current) {
+  const next = prompt('Your sell price (NGN)', String(current || 0));
+  if (next === null) return;
+  saveGotsmsPrice(id, next);
+}
+async function deleteGotsmsRow(id) {
+  if (!id || !confirm('Remove this GotSMS plan from the bank?')) return;
+  try {
+    const { error } = await sb.from('number_services').delete().eq('id', id).eq('source', 'gotsms');
+    if (error) throw error;
+    window._gotsmsRows = (window._gotsmsRows || []).filter(r => r.id !== id);
+    filterGotsmsServices();
+    showAdminToast('Removed', 'success');
+  } catch (e) {
+    showAdminToast('Delete failed: ' + (e.message || e), 'error');
   }
 }
 async function saveGotsmsPrice(id, value) {
@@ -2072,7 +2107,6 @@ async function saveGotsmsPrice(id, value) {
       updated_at: new Date().toISOString()
     }).eq('id', id).eq('source', 'gotsms');
     if (error) throw error;
-    // keep local cache in sync
     const row = (window._gotsmsRows || []).find(r => r.id === id);
     if (row) { row.price = price; row.price_source = 'admin'; }
     showAdminToast('Price saved · ₦' + price.toLocaleString() + ' (admin — sync will not overwrite)', 'success');
