@@ -42,7 +42,13 @@ body{font-family:'Plus Jakarta Sans',system-ui,sans-serif;background:var(--bg);c
 .act a,.act button{flex:1;min-width:120px;text-align:center;padding:10px 12px;border-radius:12px;font:700 12px inherit;text-decoration:none;border:none;cursor:pointer}
 .act a{background:rgba(59,130,246,.15);color:var(--primary)}
 .btn-reuse{background:linear-gradient(135deg,#0d9488,#0891b2)!important;color:#fff!important}
-.cd-val{font-weight:800;color:var(--primary);font-variant-numeric:tabular-nums;letter-spacing:.04em}
+.cd-val{font-weight:800;font-size:18px;color:var(--primary);font-variant-numeric:tabular-nums;letter-spacing:.05em}
+.cd-row .l{font-weight:800;color:var(--text)}
+.cd-row .v{font-weight:800}
+.rent-filters{display:flex;align-items:center;gap:10px;margin-bottom:14px}
+.rent-filter-label{font-size:12px;font-weight:800;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
+.rent-filter-select{flex:1;padding:12px 14px;border-radius:12px;border:1px solid var(--border);background:var(--card);color:var(--text);font:700 14px inherit;appearance:none;-webkit-appearance:none;
+background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath fill='%2394a3b8' d='M1 1l5 5 5-5'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 14px center;padding-right:36px}
 .btn-inbox{background:linear-gradient(135deg,#3b82f6,#2563eb)!important;color:#fff!important;display:inline-flex!important;align-items:center;justify-content:center;gap:8px;text-decoration:none!important;padding:12px!important;border-radius:12px!important;font:800 12px inherit!important}
 .reuse-hint{font-size:11px;color:var(--muted);margin-top:6px;font-weight:600}
 
@@ -82,6 +88,14 @@ body{font-family:'Plus Jakarta Sans',system-ui,sans-serif;background:var(--bg);c
     <button type="button" class="chip" data-filter="cancelled">Cancelled</button>
     <button type="button" class="chip" data-filter="waiting">Waiting</button>
   </div>
+  <div id="rentFilters" class="rent-filters" style="display:none">
+    <label class="rent-filter-label">Show</label>
+    <select id="rentFilter" class="rent-filter-select">
+      <option value="active" selected>Active</option>
+      <option value="ended">Expired or cancelled</option>
+      <option value="all">All numbers</option>
+    </select>
+  </div>
   <div style="display:flex;gap:8px;margin:0 0 14px;flex-wrap:wrap;align-items:center">
     <input id="histSearch" type="search" placeholder="Search number, country, order id…" style="flex:1;min-width:160px;padding:10px 12px;border-radius:12px;border:1px solid var(--border);background:var(--card);color:var(--text);font:600 13px inherit">
     <a id="histPrimaryCta" href="mj-sms-choose-server.html" style="padding:10px 14px;border-radius:12px;background:var(--primary,#3b82f6);color:#fff;font:800 12px inherit;text-decoration:none;white-space:nowrap">Get OTP</a>
@@ -92,11 +106,20 @@ body{font-family:'Plus Jakarta Sans',system-ui,sans-serif;background:var(--bg);c
 const SUPABASE_URL='https://atczodlljmlayvldxfmv.supabase.co';
 const SUPABASE_ANON_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImF0Y3pvZGxsam1sYXl2bGR4Zm12Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODUwNzUyMzgsImV4cCI6MjEwMDY1MTIzOH0.ufthD-p7BmeD_B7xyuMM6PNPL8DmcL4AtRYgg-MuoLI';
 const listEl=document.getElementById('list');
-let allOrders=[], view='otp', filter='all';
+let allOrders=[], view='otp', filter='all', rentFilter='active';
 function esc(s){if(!s)return'';return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;')}
 function money(n){return '₦'+Number(n||0).toLocaleString()}
 function bucket(status){const s=String(status||'').toLowerCase();if(s==='completed'||s==='success')return'completed';if(s==='expired')return'expired';if(s==='refunded'||s==='cancelled'||s==='canceled')return'cancelled';if(s==='waiting_for_code'||s==='pending'||s==='waiting')return'waiting';return'other'}
 
+function isUsaActiveRow(o){
+  if(String(o.source||'').toLowerCase()!=='gotsms') return false;
+  if(o.refunded===true) return false;
+  var st=String(o.status||'').toLowerCase();
+  if(st==='refunded'||st==='cancelled'||st==='canceled') return false;
+  var till=parseUsaExpiry(o);
+  if(till) return till>Date.now();
+  return st!=='expired'&&st!=='finished'&&st!=='ended';
+}
 function parseUsaExpiry(o){
   // Expiry stored in active_till or in code as ISO (gotsms rentals)
   var raw=o.active_till||o.code||null;
@@ -141,8 +164,10 @@ function matchesSearch(o){
 function render(){
   let rows=allOrders.filter(function(o){return matchesSearch(o)&&(view==='rent'?isRent(o):!isRent(o))});
   if(view==='otp'&&filter!=='all')rows=rows.filter(function(o){return bucket(o.status)===filter});
+  if(view==='rent'&&rentFilter==='active')rows=rows.filter(function(o){return isUsaActiveRow(o);});
+  if(view==='rent'&&rentFilter==='ended')rows=rows.filter(function(o){return !isUsaActiveRow(o);});
   if(!rows.length){
-    listEl.innerHTML='<div class="empty">'+(view==='rent'?'No USA rentals yet. Open USA rental to get a number.':'No OTP numbers yet. Tap Get OTP to choose a server.')+'</div>';
+    listEl.innerHTML='<div class="empty">'+(view==='rent'?(rentFilter==='active'?'No active USA rentals right now.<br><a href="mj-sms-usa-rent.html" style="color:var(--primary)">Rent a number</a>':(rentFilter==='ended'?'No expired or cancelled rentals.':'No USA rentals yet. Open USA rental to get a number.')):'No OTP numbers yet. Tap Get OTP to choose a server.')+'</div>';
     return;
   }
   listEl.innerHTML=rows.map(function(o){
@@ -234,10 +259,14 @@ document.querySelectorAll('.tab').forEach(function(t){
     view=t.getAttribute('data-view');
     document.querySelectorAll('.tab').forEach(function(x){x.classList.toggle('on',x===t)});
     document.getElementById('otpFilters').style.display=view==='otp'?'flex':'none';
+    var rf=document.getElementById('rentFilters');
+    if(rf) rf.style.display=view==='rent'?'flex':'none';
     updateHistCta();
     render();
   };
 });
+var _rf=document.getElementById('rentFilter');
+if(_rf){ _rf.onchange=function(){ rentFilter=_rf.value||'active'; render(); }; }
 document.getElementById('otpFilters').onclick=function(e){
   const c=e.target.closest('.chip');if(!c)return;
   filter=c.getAttribute('data-filter')||'all';
@@ -297,7 +326,7 @@ document.getElementById('list').addEventListener('click',function(e){
 });
 
 async function init(){
-  try{var _v=new URLSearchParams(location.search).get('view');if(_v==='rent'){view='rent';document.querySelectorAll('.tab').forEach(function(x){x.classList.toggle('on',x.getAttribute('data-view')==='rent');});document.getElementById('otpFilters').style.display='none';}}catch(_){}
+  try{var _v=new URLSearchParams(location.search).get('view');if(_v==='rent'){view='rent';document.querySelectorAll('.tab').forEach(function(x){x.classList.toggle('on',x.getAttribute('data-view')==='rent');});document.getElementById('otpFilters').style.display='none';var _rf0=document.getElementById('rentFilters');if(_rf0)_rf0.style.display='flex';}}catch(_){}
 
   const sb=window.supabase.createClient(SUPABASE_URL,SUPABASE_ANON_KEY,{auth:{persistSession:true,autoRefreshToken:true,storage:window.sessionStorage}});
   const {data:{session}}=await sb.auth.getSession();
