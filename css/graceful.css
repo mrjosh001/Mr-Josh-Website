@@ -231,3 +231,16 @@ a.hero-btn:active,
   transition: transform var(--mj-press-ms, 90ms) ease-out;
   opacity: 0.92;
 }
+
+/* --- Mobile scale lock: stop iOS zoom-on-focus / zoom-out after inputs --- */
+html {
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+@media screen and (max-width: 900px) {
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="file"]),
+  select,
+  textarea {
+    font-size: 16px !important;
+  }
+}
