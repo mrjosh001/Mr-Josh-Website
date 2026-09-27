@@ -628,11 +628,15 @@ async function doRent(){
   rentBusy=false;
   if(btn){btn.disabled=false;btn.textContent='Confirm Purchase';}
   if(rentBtn){rentBtn.disabled=false;rentBtn.textContent='Rent number';}
-  if(!j.success){
+    if(!j.success){
     var msg=j.message||'Rental failed';
     document.getElementById('psErr').textContent=msg;
     if(errEl)errEl.textContent=msg;
-    if(j.data&&j.data.price_ngn){selectedPlan.price_ngn=j.data.price_ngn;updateTotal();updateTotal(); var ta=document.getElementById('totalAmt'); document.getElementById('psTotal').textContent=ta?ta.textContent:fmtNgn(selectedPlan.price_ngn*qty);}
+    if(j.data&&j.data.price_ngn){selectedPlan.price_ngn=j.data.price_ngn;updateTotal(); var ta=document.getElementById('totalAmt'); if(document.getElementById('psTotal')) document.getElementById('psTotal').textContent=ta?ta.textContent:fmtNgn(selectedPlan.price_ngn*qty);}
+    if(/insufficient|fund your wallet|not enough/i.test(msg)){
+      try{ if(typeof showToast==='function') showToast('Insufficient balance. Redirecting to deposit…','error'); }catch(e){}
+      setTimeout(function(){ location.href='deposit.html'; }, 900);
+    }
     return;
   }
   closePurchaseModal();
