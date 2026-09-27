@@ -133,6 +133,18 @@ async function gotsmsFetch(path, { method = 'GET', body } = {}) {
 
 function gotsmsPublicRent(r) {
   if (!r || typeof r !== 'object') return r;
+  const carrierObj = r.cellular_carrier || r.carrier || null;
+  const carrierName =
+    (carrierObj && (carrierObj.name || carrierObj.title || carrierObj.label)) ||
+    r.cellular_carrier_name ||
+    r.carrier_name ||
+    (typeof r.cellular_carrier === 'string' ? r.cellular_carrier : null) ||
+    null;
+  const area =
+    r.area_code ||
+    (r.area && (r.area.code || r.area.area_code || r.area.name)) ||
+    r.npa ||
+    null;
   return {
     id: r.id,
     service: r.service,
@@ -151,13 +163,17 @@ function gotsmsPublicRent(r) {
     price_usd: r.price,
     status: r.status,
     is_included_for_next_renewal: r.is_included_for_next_renewal,
+    auto_renew: !!(r.is_included_for_next_renewal),
     active_from: r.active_from,
     active_till: r.active_till,
     wake_from: r.wake_from,
     wake_till: r.wake_till,
     can_wake_up: r.can_wake_up,
     notes: r.notes,
-    transition_options: r.transition_options || []
+    transition_options: r.transition_options || [],
+    cellular_carrier: carrierObj || (carrierName ? { name: carrierName } : null),
+    carrier_name: carrierName,
+    area_code: area ? String(area).replace(/\D/g, '').slice(0, 6) || String(area) : null
   };
 }
 
