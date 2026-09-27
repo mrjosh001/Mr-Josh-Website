@@ -104,14 +104,24 @@ h1{font-size:17px;font-weight:800;letter-spacing:-.02em}
 .inbox-head .live{font-size:11px;font-weight:700;color:var(--ok);display:flex;align-items:center;gap:6px}
 .inbox-head .live::before{content:'';width:7px;height:7px;border-radius:50%;background:var(--ok);animation:pulse 1.6s ease infinite}
 @keyframes pulse{0%,100%{opacity:1}50%{opacity:.35}}
-.msg{padding:12px;border-radius:14px;background:var(--input);border:1px solid var(--border);margin-bottom:8px}
+.msg{
+  padding:0;border-radius:16px;background:var(--card);border:1px solid var(--border);
+  margin-bottom:12px;overflow:hidden;box-shadow:0 4px 16px rgba(0,0,0,.06);
+}
 .msg:last-child{margin-bottom:0}
-.msg .code-row{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:6px}
-.msg .code{font-size:20px;font-weight:800;letter-spacing:.12em;color:var(--primary);font-variant-numeric:tabular-nums}
-.msg .copy-code{font-size:11px;font-weight:800;padding:6px 12px;border-radius:8px;border:1px solid var(--border);
+.msg-top{display:grid;grid-template-columns:1fr 1fr;gap:8px 16px;padding:14px 16px 10px;border-bottom:1px solid var(--border)}
+.msg-k{font-size:10px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin-bottom:3px}
+.msg-v{font-size:14px;font-weight:800;color:var(--text);word-break:break-word}
+.msg-phone{grid-column:1/-1}
+.msg-body{padding:14px 16px;font-size:14px;font-weight:600;line-height:1.5;color:var(--text2)}
+.msg-foot{display:flex;align-items:flex-end;justify-content:space-between;gap:12px;padding:12px 16px;background:var(--input);border-top:1px solid var(--border)}
+.msg .code-pill{display:inline-flex;align-items:center;gap:8px;padding:8px 12px;border-radius:10px;background:var(--card);border:1px solid var(--border)}
+.msg .code{font-size:18px;font-weight:800;letter-spacing:.1em;color:var(--primary);font-variant-numeric:tabular-nums}
+.msg .copy-code{font-size:11px;font-weight:800;padding:6px 10px;border-radius:8px;border:1px solid var(--border);
   background:var(--card);color:var(--primary);cursor:pointer;font-family:inherit}
-.msg .body{font-size:13px;font-weight:600;line-height:1.45;color:var(--text)}
-.msg .when{font-size:11px;color:var(--muted);margin-top:6px;font-weight:600}
+.msg .when-block{text-align:right}
+.msg .when-label{font-size:10px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.msg .when{font-size:12px;color:var(--muted);font-weight:700;margin-top:2px}
 .empty{text-align:center;padding:28px 16px;color:var(--muted);font-size:13px;font-weight:600;line-height:1.5}
 
 /* Modal */
@@ -425,11 +435,24 @@ h1{font-size:17px;font-weight:800;letter-spacing:-.02em}
       box.innerHTML = '<div class="empty">No SMS yet.<br>Wake the number if needed, then request the code in the app.</div>';
       return;
     }
+    var svcName=(rent&&rent.service&&rent.service.name)||(rent&&rent.service_name)||'SMS';
+    var phoneShow=fmtPhone((rent&&(rent.phone||rent.number))||'');
     box.innerHTML = list.map(function(m){
+      var when=m.received_at?new Date(m.received_at):null;
+      var whenStr=when?when.toLocaleString():'';
+      var from=m.from||m.sender||m.originator||'—';
+      var code=m.code?String(m.code).trim():'';
       return '<div class="msg">'+
-        (m.code ? '<div class="code-row"><span class="code">'+esc(m.code)+'</span><button type="button" class="copy-code" data-c="'+esc(m.code)+'">Copy</button></div>' : '')+
-        '<div class="body">'+esc(m.body||'')+'</div>'+
-        (m.received_at ? '<div class="when">'+esc(new Date(m.received_at).toLocaleString())+'</div>' : '')+
+        '<div class="msg-top">'+
+          '<div><div class="msg-k">Service</div><div class="msg-v">'+esc(m.service_name||svcName)+'</div></div>'+
+          '<div><div class="msg-k">From</div><div class="msg-v">'+esc(from)+'</div></div>'+
+          '<div class="msg-phone"><div class="msg-k">Phone</div><div class="msg-v">'+esc(phoneShow)+'</div></div>'+
+        '</div>'+
+        (m.body?'<div class="msg-body">'+esc(m.body)+'</div>':'')+
+        '<div class="msg-foot">'+
+          '<div>'+(code?'<div class="msg-k">Code</div><div class="code-pill"><span class="code">'+esc(code)+'</span><button type="button" class="copy-code" data-c="'+esc(code)+'">Copy</button></div>':'<div class="msg-k">Code</div><div class="msg-v">—</div>')+'</div>'+
+          (whenStr?'<div class="when-block"><div class="when-label">Received at</div><div class="when">'+esc(whenStr)+'</div></div>':'')+
+        '</div>'+
       '</div>';
     }).join('');
     box.querySelectorAll('[data-c]').forEach(function(b){

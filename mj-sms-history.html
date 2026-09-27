@@ -109,20 +109,41 @@ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/sv
 const SUPABASE_URL='https://atczodlljmlayvldxfmv.supabase.co';
 const SUPABASE_ANON_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImF0Y3pvZGxsam1sYXl2bGR4Zm12Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODUwNzUyMzgsImV4cCI6MjEwMDY1MTIzOH0.ufthD-p7BmeD_B7xyuMM6PNPL8DmcL4AtRYgg-MuoLI';
 const listEl=document.getElementById('list');
-let allOrders=[], view='otp', filter='completed', rentFilter='active';
+let allOrders=[], view='otp', filter='completed', rentFilter='active', liveActiveRentIds=new Set(), liveActiveMeta={};
 function esc(s){if(!s)return'';return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;')}
 function money(n){return '₦'+Number(n||0).toLocaleString()}
 function bucket(status){const s=String(status||'').toLowerCase();if(s==='completed'||s==='success')return'completed';if(s==='expired')return'expired';if(s==='refunded'||s==='cancelled'||s==='canceled')return'cancelled';if(s==='waiting_for_code'||s==='pending'||s==='waiting')return'waiting';return'other'}
 
+function usaRentId(o){
+  return String(o.idempotency_key||'').replace(/^gotsms-/,'')||String(o.rent_id||'');
+}
 function isUsaActiveRow(o){
   if(String(o.source||'').toLowerCase()!=='gotsms') return false;
-  if(o.refunded===true) return false;
+  var rid=usaRentId(o);
+  if(rid && liveActiveRentIds.has(String(rid))) return true;
   var st=String(o.status||'').toLowerCase();
-  if(st==='refunded'||st==='cancelled'||st==='canceled') return false;
+  if(o.refunded===true||st==='refunded'||st==='cancelled'||st==='canceled') return false;
   var till=parseUsaExpiry(o);
   if(till) return till>Date.now();
   return st!=='expired'&&st!=='finished'&&st!=='ended';
 }
+async function refreshLiveUsaActive(accessToken){
+  liveActiveRentIds=new Set();
+  liveActiveMeta={};
+  try{
+    var res=await fetch('/api/sms-bus?action=gotsms_rents&status=active',{
+      headers:{Authorization:'Bearer '+accessToken,Accept:'application/json'}
+    });
+    var j=await res.json().catch(function(){return {};});
+    (j&&j.success&&Array.isArray(j.data)?j.data:[]).forEach(function(r){
+      if(!r||r.id==null) return;
+      var id=String(r.id);
+      liveActiveRentIds.add(id);
+      liveActiveMeta[id]=r;
+    });
+  }catch(_){}
+}
+
 function parseUsaExpiry(o){
   // Expiry stored in active_till or in code as ISO (gotsms rentals)
   var raw=o.active_till||o.code||null;
@@ -230,17 +251,24 @@ function render(){
     // Only mark expired if past active_till OR status is refunded/cancelled — never expire just because code field is odd
     // Trust countdown first: if active_till is still in the future, treat as Active even if DB status lagged
     var liveByTime=!!(tillMs&&tillMs>Date.now());
-    var isActiveUsa=!!(isGotsms&&rentId&&stLow!=='refunded'&&!o.refunded&&(liveByTime||(!tillMs&&stLow!=='expired'&&stLow!=='finished'&&stLow!=='ended'&&stLow!=='cancelled'&&stLow!=='canceled')));
+    var onSupplier=!!(rentId&&liveActiveRentIds.has(String(rentId)));
+    var isActiveUsa=!!(isGotsms&&rentId&&(onSupplier||(stLow!=='refunded'&&!o.refunded&&(liveByTime||(!tillMs&&stLow!=='expired'&&stLow!=='finished'&&stLow!=='ended'&&stLow!=='cancelled'&&stLow!=='canceled')))));
+    if(onSupplier&&liveActiveMeta[String(rentId)]&&liveActiveMeta[String(rentId)].active_till){
+      var lm=new Date(liveActiveMeta[String(rentId)].active_till).getTime();
+      if(lm){ tillMs=lm; liveByTime=lm>Date.now(); }
+      isActiveUsa=true;
+    }
     const meta=isGotsms?usaMetaFromName(o.service_name||name):null;
     if(isGotsms){
-      if(stLow==='refunded'||o.refunded){ statusLabel='Refunded'; pillCls='bad'; isActiveUsa=false; }
-      else if(liveByTime){ statusLabel='Active'; pillCls='ok'; isActiveUsa=true; }
+      if(isActiveUsa||onSupplier){ statusLabel='Active'; pillCls='ok'; isActiveUsa=true; }
+      else if(stLow==='refunded'||o.refunded){ statusLabel='Refunded'; pillCls='bad'; isActiveUsa=false; }
       else if(tillMs&&tillMs<=Date.now()){ statusLabel='Expired'; pillCls='bad'; isActiveUsa=false; }
       else if(stLow==='expired'||stLow==='finished'||stLow==='ended'){ statusLabel='Ended'; pillCls='muted'; isActiveUsa=false; }
-      else if(isActiveUsa){ statusLabel='Active'; pillCls='ok'; }
-      else { statusLabel='Ended'; pillCls='muted'; }
+      else { statusLabel='Ended'; pillCls='muted'; isActiveUsa=false; }
     }
-    const gotsmsBtn=(isGotsms&&rentId)?('<div class="act"><a class="btn-inbox" href="mj-sms-usa-number.html?rent_id='+encodeURIComponent(rentId)+'"><i class="fa-solid fa-inbox"></i> '+(isActiveUsa?'Check inbox':'View inbox')+'</a></div>'):'';
+    // View inbox: active only, or OTP-style completed with code (handled above for OTP)
+    var showUsaInbox=isGotsms&&rentId&&isActiveUsa;
+    const gotsmsBtn=showUsaInbox?('<div class="act"><a class="btn-inbox" href="mj-sms-usa-number.html?rent_id='+encodeURIComponent(rentId)+'"><i class="fa-solid fa-inbox"></i> Check inbox</a></div>'):'';
     const cdId=isActiveUsa?('cd-'+esc(String(o.order_id||rentId).replace(/[^a-zA-Z0-9_-]/g,''))):'';
     const countdownRow=(isActiveUsa&&tillMs)?('<div class="row cd-row"><span class="l">Time left</span><span class="v cd-val" id="'+cdId+'" data-till="'+tillMs+'">—</span></div>'):((isGotsms&&tillMs)?('<div class="row"><span class="l">Ended</span><span class="v">'+esc(new Date(tillMs).toLocaleString())+'</span></div>'):'');
     const durRow=(meta&&(meta.duration||meta.carrier))?('<div class="row"><span class="l">Plan</span><span class="v">'+esc([meta.duration,meta.carrier,meta.extra].filter(Boolean).join(' · ')||'—')+'</span></div>'):'';
@@ -350,9 +378,12 @@ async function init(){
     const headers = { Authorization: 'Bearer ' + session.access_token };
     await Promise.all([
       fetch('/api/grizzly-sync?action=expire_stale', { headers }).catch(function(){ return null; }),
-      fetch('/api/sms-bus?action=expire_stale', { headers }).catch(function(){ return null; })
+      fetch('/api/sms-bus?action=expire_stale', { headers }).catch(function(){ return null; }),
+      refreshLiveUsaActive(session.access_token)
     ]);
-  } catch (_) {}
+  } catch (_) {
+    try { await refreshLiveUsaActive(session.access_token); } catch(__){}
+  }
   try{
     const res=await fetch('/api/order?action=my_orders',{headers:{Authorization:'Bearer '+session.access_token,Accept:'application/json'}});
     const json=await res.json().catch(function(){return {}});
