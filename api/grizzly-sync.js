@@ -912,6 +912,11 @@ const EXPIRY_MS = 20 * 60 * 1000;
  * Only the first caller that flips refunded=false→true may add balance.
  */
 async function claimAndRefundOrder(order, userId, opts = {}) {
+  // Hard guard: never auto-refund GotSMS USA rentals or SMS-Bus long rentals via this path
+  const srcGuard = String(order && order.source || '').toLowerCase();
+  if (srcGuard === 'gotsms' || srcGuard === 'smsbus_rent') {
+    return { refunded: false, reason: 'wrong_source' };
+  }
   if (!order || !order.id) {
     return { refunded: false, reason: 'missing_order' };
   }
@@ -1632,7 +1637,9 @@ async function handleExpireStale(req, res) {
     const stale = (rows || []).filter((o) => {
     if (o.refunded === true) return false;
     const src = String(o.source || '').toLowerCase();
-    if (src === 'smsbus' || src === 'smsbus_rent') return false;
+    // ONLY Server 1 OTP (grizzlysms). Never touch SMS-Bus OTP, long rentals, or GotSMS USA rentals.
+    if (src === 'smsbus' || src === 'smsbus_rent' || src === 'gotsms') return false;
+    if (src && src !== 'grizzlysms') return false;
     return true;
   }); let expired = 0;
   let skipped = 0;

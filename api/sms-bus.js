@@ -360,6 +360,10 @@ function busOk(data) {
  * Prevents double-credit when Cancel + auto-expiry race.
  */
 async function claimAndRefundSmsBusOrder(order, userId, opts = {}) {
+  const srcGuard = String(order && order.source || '').toLowerCase();
+  if (srcGuard === 'gotsms' || srcGuard === 'smsbus_rent') {
+    return { refunded: false, reason: 'wrong_source' };
+  }
   if (!order || !order.id) return { refunded: false, reason: 'missing_order' };
   if (order.refunded || ['refunded', 'completed', 'expired', 'cancelled', 'canceled'].includes(String(order.status || '').toLowerCase())) {
     return { refunded: false, reason: 'already_final' };
@@ -2601,6 +2605,20 @@ export default async function handler(req, res) {
         const mineRentIds = new Set((mine || []).map((m) => String(m.idempotency_key || '').replace(/^gotsms-/, '')).filter(Boolean));
         const minePhones = new Set((mine || []).map((m) => String(m.phone_number || '').replace(/\s/g, '')));
         const filtered = (g.data.data || []).filter((r) => mineRentIds.has(String(r.id)) || minePhones.has(String(r.phone || '').replace(/\s/g, '')));
+        // Heal rows wrongly marked refunded/expired by OTP expire sweeps
+        if (String(status || '') === 'active' && filtered.length) {
+          try {
+            const keys = filtered.map((r) => `gotsms-${r.id}`);
+            await supabase
+              .from('number_orders')
+              .update({ status: 'active', refunded: false })
+              .eq('user_id', auth.userId)
+              .eq('source', 'gotsms')
+              .in('idempotency_key', keys);
+          } catch (e) {
+            console.warn('[gotsms_rents] heal', e.message || e);
+          }
+        }
         return json(res, 200, { success: true, data: filtered.map(gotsmsPublicRent), meta: g.data.meta });
       }
 
