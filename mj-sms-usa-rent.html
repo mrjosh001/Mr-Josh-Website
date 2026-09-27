@@ -107,6 +107,12 @@ select.f{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.or
 .switch .slider:before{position:absolute;content:"";height:22px;width:22px;left:3px;bottom:3px;background:#fff;border-radius:50%;transition:.2s}
 .switch input:checked+.slider{background:var(--primary)}
 .switch input:checked+.slider:before{transform:translateX(20px)}
+
+.total-break{margin-top:10px;padding-top:10px;border-top:1px solid color-mix(in srgb,var(--border) 80%,transparent);display:none}
+.total-break.on{display:block}
+.total-break .tb-row{display:flex;justify-content:space-between;gap:10px;font-size:12px;font-weight:600;color:var(--muted);margin:4px 0}
+.total-break .tb-row span:last-child{color:var(--text);font-weight:700;white-space:nowrap}
+.total-break .tb-row.base span:last-child{color:var(--primary)}
 </style>
 </head>
 <body>
@@ -439,7 +445,7 @@ function renderDetailForm(){
     '<label class="f">Area code (optional)</label><select class="f" id="areaCode">'+buildAreaOptions()+'</select>'+
     '<label class="f">Quantity (1–25)</label><div class="qty"><button type="button" id="qtyMinus">−</button><span id="qtyVal" style="font-weight:800;min-width:28px;text-align:center">1</span><button type="button" id="qtyPlus">+</button></div>'+
     '<div class="toggle-row"><div><div class="t-label">Auto-renew</div><div class="t-hint">Renew automatically when this period ends (wallet charged)</div></div><label class="switch"><input type="checkbox" id="autoRenewChk"><span class="slider"></span></label></div>'+
-    '<div class="total"><div class="lbl">Total</div><div class="amt" id="totalAmt">₦0</div></div>'+
+    '<div class="total"><div class="lbl">Total</div><div class="amt" id="totalAmt">₦0</div><div class="total-break" id="totalBreak"><div class="tb-row base" id="tbBase" style="display:none"><span>Rental duration</span><span></span></div><div class="tb-row" id="tbCarrier" style="display:none"><span>Preferred carrier</span><span></span></div><div class="tb-row" id="tbArea" style="display:none"><span>Area code preference</span><span></span></div></div></div>'+
     '<button type="button" class="btn-buy" id="rentBtn" disabled>Rent number</button>'+
     '<div class="err" id="rentErr"></div><div class="ok" id="rentOk"></div>';
   body.querySelectorAll('.plan').forEach(function(card){
@@ -455,21 +461,71 @@ function renderDetailForm(){
   document.getElementById('qtyPlus').onclick=function(){if(qty<25){qty++;document.getElementById('qtyVal').textContent=qty;updateTotal();}};
   document.getElementById('rentBtn').onclick=openPurchaseModal;
 }
+function getAddonState(){
+  var carrierAmt=0, areaAmt=0, carrierLabel='', areaLabel='';
+  var car=document.getElementById('carrierSel');
+  if(car&&car.value){
+    carrierAmt=Number((selectedPlan&&selectedPlan.carrier_addon_ngn)||CARRIER_ADDON_NGN);
+    var opt=car.options[car.selectedIndex];
+    carrierLabel=opt?String(opt.textContent||'').trim():'Preferred carrier';
+  }
+  var area='';
+  var areaSel=document.getElementById('areaCode')||document.getElementById('areaCodeSel');
+  try{if(typeof resolveAreaCode==='function') area=resolveAreaCode()||'';}catch(e){}
+  if(areaSel){
+    if(areaSel.tagName==='SELECT'&&areaSel.value){
+      // any real selection (not empty / "any") counts as paid preference
+      var v=String(areaSel.value||'').trim();
+      var t=areaSel.options[areaSel.selectedIndex]?String(areaSel.options[areaSel.selectedIndex].textContent||'').trim():v;
+      if(v && !/^any/i.test(v) && !/^any/i.test(t)){
+        areaAmt=Number((selectedPlan&&selectedPlan.area_addon_ngn)||AREA_ADDON_NGN);
+        areaLabel=t||v;
+        if(!area) area=v;
+      }
+    } else if(String(areaSel.value||'').replace(/\D/g,'').length>=3){
+      areaAmt=Number((selectedPlan&&selectedPlan.area_addon_ngn)||AREA_ADDON_NGN);
+      areaLabel=String(areaSel.value).replace(/\D/g,'');
+      area=areaLabel;
+    }
+  } else if(area&&String(area).replace(/\D/g,'').length>=3){
+    areaAmt=Number((selectedPlan&&selectedPlan.area_addon_ngn)||AREA_ADDON_NGN);
+    areaLabel=String(area).replace(/\D/g,'');
+  }
+  return {carrierAmt:carrierAmt, areaAmt:areaAmt, carrierLabel:carrierLabel, areaLabel:areaLabel, areaCode:area};
+}
 function updateTotal(){
   var el=document.getElementById('totalAmt');
   if(!el)return;
-  if(!selectedPlan){el.textContent='₦0';return;}
+  if(!selectedPlan){
+    el.textContent='₦0';
+    var br0=document.getElementById('totalBreak');
+    if(br0) br0.classList.remove('on');
+    return;
+  }
   var base=Number(selectedPlan.price_ngn||0)*qty;
-  var add=0;
-  var car=document.getElementById('carrierSel');
-  if(car&&car.value) add+=Number(selectedPlan.carrier_addon_ngn||CARRIER_ADDON_NGN);
-  var area='';
-  try{area=typeof resolveAreaCode==='function'?resolveAreaCode():'';}catch(e){}
-  if(!area){var ae=document.getElementById('areaCode');if(ae)area=String(ae.value||'').replace(/\D/g,'');}
-  if(area&&String(area).replace(/\D/g,'').length>=3) add+=Number(selectedPlan.area_addon_ngn||AREA_ADDON_NGN);
-  el.textContent=fmtNgn(base+add);
-  var note=document.getElementById('addonNote');
-  if(note) note.textContent=add>0?('Includes add-ons: '+(car&&car.value?'carrier ₦'+Number(selectedPlan.carrier_addon_ngn||CARRIER_ADDON_NGN).toLocaleString():'')+(car&&car.value&&area?', ':'')+(area?'area ₦'+Number(selectedPlan.area_addon_ngn||AREA_ADDON_NGN).toLocaleString():'')):'';
+  var ad=getAddonState();
+  var total=base+ad.carrierAmt+ad.areaAmt;
+  el.textContent=fmtNgn(total);
+  var br=document.getElementById('totalBreak');
+  var hasAdd=ad.carrierAmt>0||ad.areaAmt>0;
+  if(br){
+    br.classList.toggle('on', hasAdd);
+    var tb=document.getElementById('tbBase');
+    if(tb){
+      tb.style.display=hasAdd?'flex':'none';
+      if(hasAdd){ tb.querySelector('span:first-child').textContent='Rental · '+(selectedPlan.duration_translation||'duration')+(qty>1?' ×'+qty:''); tb.querySelector('span:last-child').textContent=fmtNgn(base); }
+    }
+    var tc=document.getElementById('tbCarrier');
+    if(tc){
+      tc.style.display=ad.carrierAmt>0?'flex':'none';
+      if(ad.carrierAmt>0){ tc.querySelector('span:first-child').textContent='Carrier · '+(ad.carrierLabel||'Preferred'); tc.querySelector('span:last-child').textContent='+'+fmtNgn(ad.carrierAmt); }
+    }
+    var ta=document.getElementById('tbArea');
+    if(ta){
+      ta.style.display=ad.areaAmt>0?'flex':'none';
+      if(ad.areaAmt>0){ ta.querySelector('span:first-child').textContent='Area code · '+(ad.areaLabel||'Preference'); ta.querySelector('span:last-child').textContent='+'+fmtNgn(ad.areaAmt); }
+    }
+  }
 }
 function resolveAreaCode(){
   var v=String(document.getElementById('areaCode').value||'');
@@ -502,7 +558,7 @@ function openPurchaseModal(){
     var opt=carSel.options[carSel.selectedIndex];
     carTxt=opt?opt.textContent:'Selected carrier';
   }
-  document.getElementById('psCarrier').textContent=carTxt;
+  var _ad=getAddonState(); document.getElementById('psCarrier').textContent=_ad.carrierAmt? (carTxt+' · +'+fmtNgn(_ad.carrierAmt)) : carTxt;
   var area='';
   try{area=typeof resolveAreaCode==='function'?resolveAreaCode():'';}catch(e){}
   if(!area){
@@ -514,7 +570,7 @@ function openPurchaseModal(){
       } else area=String(areaSel.value||'').trim();
     }
   }
-  document.getElementById('psArea').textContent=area||'Any';
+  var _ad2=(typeof getAddonState==='function'?getAddonState():{areaAmt:0}); var _areaTxt=area||'Any'; document.getElementById('psArea').textContent=_ad2.areaAmt?(_areaTxt+' · +'+fmtNgn(_ad2.areaAmt)):_areaTxt;
   document.getElementById('psQty').textContent=String(qty);
   var ar=document.getElementById('autoRenewChk');
   var arEl=document.getElementById('psAutoRenew');
@@ -588,7 +644,7 @@ async function doRent(){
 
 
 document.addEventListener('change',function(e){
-  if(e.target&&(e.target.id==='carrierSel'||e.target.id==='areaCode'||e.target.id==='areaCodeSel')) updateTotal();
+  if(e.target&&(e.target.id==='carrierSel'||e.target.id==='areaCode'||e.target.id==='areaCodeSel'||e.target.id==='areaSelect')) updateTotal();
 });
 
 loadServices();
