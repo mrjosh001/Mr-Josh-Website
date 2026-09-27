@@ -2,49 +2,151 @@
 <html lang="en" data-theme="dark">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-<title>USA rental inbox · MJ HUB</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, viewport-fit=cover">
+<title>Rental inbox · MJ HUB</title>
 <script>(function(){try{var t=localStorage.getItem('mjhub-theme');document.documentElement.setAttribute('data-theme',(t==='light'||t==='dark')?t:'dark');}catch(e){document.documentElement.setAttribute('data-theme','dark');}})();</script>
 <script src="/js/mj-page-loader.js" defer></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap" rel="stylesheet">
 <style>
-:root,html[data-theme="dark"]{--bg:#0b1220;--card:#111827;--text:#f1f5f9;--muted:#94a3b8;--border:#1e293b;--primary:#3b82f6;--ok:#22c55e;--danger:#ef4444;--soft:rgba(59,130,246,.12)}
-html[data-theme="light"]{--bg:#f8fafc;--card:#fff;--text:#0f172a;--muted:#64748b;--border:#e2e8f0;--primary:#2563eb;--ok:#16a34a;--danger:#dc2626;--soft:rgba(37,99,235,.1)}
+:root,html[data-theme="dark"]{
+  --bg:#06080f;--card:#0f1524;--text:#f1f5f9;--muted:#94a3b8;--border:rgba(148,163,184,.14);
+  --primary:#5b8af5;--primary2:#3b6ef5;--ok:#34d399;--danger:#f87171;
+  --soft:rgba(91,138,245,.12);--ok-soft:rgba(52,211,153,.12);--danger-soft:rgba(248,113,113,.12);
+  --header:rgba(6,8,15,.92);--input:#0a0e18;--sheet:#111827;
+}
+html[data-theme="light"]{
+  --bg:#f0f4ff;--card:#fff;--text:#0f172a;--muted:#64748b;--border:rgba(59,110,245,.12);
+  --primary:#3b6ef5;--primary2:#2563eb;--ok:#059669;--danger:#dc2626;
+  --soft:rgba(59,110,245,.1);--ok-soft:rgba(5,150,105,.1);--danger-soft:rgba(220,38,38,.08);
+  --header:rgba(255,255,255,.94);--input:#f8fafc;--sheet:#fff;
+}
 *{box-sizing:border-box;margin:0;padding:0}
+html{-webkit-text-size-adjust:100%;text-size-adjust:100%}
 body{font-family:'Plus Jakarta Sans',system-ui,sans-serif;background:var(--bg);color:var(--text);min-height:100dvh}
-.header{padding:14px 16px;display:flex;align-items:center;gap:12px;position:sticky;top:0;z-index:50;background:color-mix(in srgb,var(--bg) 88%,transparent);backdrop-filter:blur(16px);border-bottom:1px solid var(--border)}
-.back{width:40px;height:40px;border-radius:12px;border:1px solid var(--border);background:var(--card);display:flex;align-items:center;justify-content:center;color:var(--text);text-decoration:none}
-h1{font-size:18px;font-weight:800}
-.main{padding:16px;max-width:560px;margin:0 auto}
-.card{background:var(--card);border:1px solid var(--border);border-radius:18px;padding:16px;margin-bottom:14px}
-.phone{font-size:22px;font-weight:800;letter-spacing:.02em}
-.meta{font-size:13px;color:var(--muted);margin-top:4px}
-.countdown{font-size:28px;font-weight:800;color:var(--primary);margin:10px 0 4px;letter-spacing:.06em}
-.lbl{font-size:12px;font-weight:700;color:var(--muted)}
-.actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}
-.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;flex:1;min-width:120px;padding:12px;border-radius:12px;border:none;font:800 13px inherit;cursor:pointer}
-.btn-primary{background:linear-gradient(135deg,var(--primary),#2563eb);color:#fff}
-.btn-ghost{background:var(--bg);border:1px solid var(--border);color:var(--text)}
-.btn-danger{background:color-mix(in srgb,var(--danger) 15%,var(--card));color:var(--danger);border:1px solid color-mix(in srgb,var(--danger) 30%,var(--border))}
-.btn:disabled{opacity:.55}
-.msg{border-left:3px solid var(--primary);padding:10px 12px;margin:8px 0;background:var(--soft);border-radius:0 12px 12px 0}
-.msg .code{font-size:22px;font-weight:800;letter-spacing:.1em;margin:4px 0}
-.msg .body{font-size:13px;color:var(--muted);word-break:break-word}
-.err{color:var(--danger);font-weight:700;font-size:13px;margin-top:8px}
-.ok{color:var(--ok);font-weight:700;font-size:13px;margin-top:8px}
-.empty{text-align:center;padding:24px;color:var(--muted);font-weight:600}
+.header{padding:12px 16px;display:flex;align-items:center;gap:12px;position:sticky;top:0;z-index:40;
+  background:var(--header);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);border-bottom:1px solid var(--border)}
+.back{width:40px;height:40px;border-radius:12px;border:1px solid var(--border);background:var(--card);
+  display:flex;align-items:center;justify-content:center;color:var(--text);text-decoration:none;flex-shrink:0}
+h1{font-size:17px;font-weight:800;letter-spacing:-.02em}
+.main{padding:16px;max-width:520px;margin:0 auto;padding-bottom:40px}
+
+/* Hero phone card */
+.hero{background:var(--card);border:1px solid var(--border);border-radius:20px;padding:18px;margin-bottom:14px;
+  box-shadow:0 8px 28px rgba(0,0,0,.12)}
+.hero-top{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:14px}
+.phone{font-size:22px;font-weight:800;letter-spacing:.02em;line-height:1.2}
+.phone-row{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.copy-icon{width:34px;height:34px;border-radius:10px;border:1px solid var(--border);background:var(--input);
+  color:var(--muted);display:inline-flex;align-items:center;justify-content:center;cursor:pointer;font-size:13px}
+.copy-icon:active{transform:scale(.96)}
+.svc{font-size:13px;color:var(--muted);font-weight:600;margin-top:4px}
+.badge{display:inline-flex;align-items:center;gap:6px;font-size:11px;font-weight:800;padding:5px 10px;border-radius:999px;
+  background:var(--ok-soft);color:var(--ok);white-space:nowrap}
+.badge.expired{background:var(--danger-soft);color:var(--danger)}
+.badge.dot::before{content:'';width:7px;height:7px;border-radius:50%;background:currentColor}
+
+.stats{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px}
+.stat{background:var(--input);border:1px solid var(--border);border-radius:14px;padding:12px 14px}
+.stat .lbl{font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
+.stat .val{font-size:20px;font-weight:800;color:var(--primary);margin-top:4px;letter-spacing:.04em;font-variant-numeric:tabular-nums}
+.stat .sub{font-size:11px;color:var(--muted);margin-top:2px;font-weight:600}
+
+/* Toggle row */
+.toggle-card{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:14px;border-radius:14px;
+  background:var(--input);border:1px solid var(--border);margin-bottom:14px}
+.toggle-card .t-title{font-size:14px;font-weight:800}
+.toggle-card .t-hint{font-size:11px;color:var(--muted);font-weight:600;margin-top:2px;line-height:1.35}
+.switch{position:relative;width:50px;height:30px;flex-shrink:0}
+.switch input{opacity:0;width:0;height:0;position:absolute}
+.slider{position:absolute;inset:0;background:#334155;border-radius:999px;cursor:pointer;transition:.2s}
+.slider:before{content:'';position:absolute;width:24px;height:24px;left:3px;top:3px;background:#fff;border-radius:50%;
+  transition:.2s;box-shadow:0 1px 4px rgba(0,0,0,.25)}
+.switch input:checked+.slider{background:var(--primary)}
+.switch input:checked+.slider:before{transform:translateX(20px)}
+.switch input:disabled+.slider{opacity:.5;cursor:not-allowed}
+
+.actions{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;padding:13px 12px;border-radius:12px;
+  border:none;font:800 13px inherit;cursor:pointer;font-family:inherit;transition:opacity .15s}
+.btn:disabled{opacity:.55;cursor:not-allowed}
+.btn-primary{background:linear-gradient(135deg,var(--primary),var(--primary2));color:#fff}
+.btn-ghost{background:var(--card);color:var(--text);border:1px solid var(--border)}
+.btn-danger-outline{width:100%;background:var(--danger-soft);color:var(--danger);border:1px solid color-mix(in srgb,var(--danger) 35%,transparent);
+  margin-top:4px;padding:13px;border-radius:12px;font:800 13px inherit;cursor:pointer;font-family:inherit;
+  display:flex;align-items:center;justify-content:center;gap:8px}
+.hint{font-size:11px;color:var(--muted);line-height:1.45;margin-top:10px;font-weight:600}
+.flash{font-size:13px;font-weight:700;margin-top:10px;min-height:1.2em}
+.flash.err{color:var(--danger)}.flash.ok{color:var(--ok)}
+
+/* Inbox */
+.inbox-card{background:var(--card);border:1px solid var(--border);border-radius:20px;padding:16px;
+  box-shadow:0 8px 28px rgba(0,0,0,.08)}
+.inbox-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px}
+.inbox-head h2{font-size:15px;font-weight:800}
+.inbox-head .live{font-size:11px;font-weight:700;color:var(--ok);display:flex;align-items:center;gap:6px}
+.inbox-head .live::before{content:'';width:7px;height:7px;border-radius:50%;background:var(--ok);animation:pulse 1.6s ease infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.35}}
+.msg{padding:12px;border-radius:14px;background:var(--input);border:1px solid var(--border);margin-bottom:8px}
+.msg:last-child{margin-bottom:0}
+.msg .code-row{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:6px}
+.msg .code{font-size:20px;font-weight:800;letter-spacing:.12em;color:var(--primary);font-variant-numeric:tabular-nums}
+.msg .copy-code{font-size:11px;font-weight:800;padding:6px 12px;border-radius:8px;border:1px solid var(--border);
+  background:var(--card);color:var(--primary);cursor:pointer;font-family:inherit}
+.msg .body{font-size:13px;font-weight:600;line-height:1.45;color:var(--text)}
+.msg .when{font-size:11px;color:var(--muted);margin-top:6px;font-weight:600}
+.empty{text-align:center;padding:28px 16px;color:var(--muted);font-size:13px;font-weight:600;line-height:1.5}
+
+/* Modal */
+.modal-bg{position:fixed;inset:0;z-index:100;background:rgba(0,0,0,.55);display:none;align-items:flex-end;justify-content:center;
+  padding:16px;backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px)}
+.modal-bg.on{display:flex}
+.modal{background:var(--sheet);border:1px solid var(--border);border-radius:20px 20px 16px 16px;width:100%;max-width:420px;
+  padding:20px 18px 18px;box-shadow:0 -8px 40px rgba(0,0,0,.25);animation:up .22s ease}
+@keyframes up{from{transform:translateY(24px);opacity:0}to{transform:none;opacity:1}}
+.modal h3{font-size:17px;font-weight:800;margin-bottom:14px}
+.modal-rows{background:var(--input);border:1px solid var(--border);border-radius:14px;padding:4px 0;margin-bottom:14px}
+.modal-row{display:flex;justify-content:space-between;gap:12px;padding:10px 14px;font-size:13px;font-weight:600}
+.modal-row span:first-child{color:var(--muted)}.modal-row span:last-child{color:var(--text);text-align:right}
+.modal-note{font-size:13px;color:var(--muted);line-height:1.5;font-weight:600;margin-bottom:12px}
+.modal-warn{border-left:3px solid var(--primary);padding:12px 14px;background:var(--soft);border-radius:0 12px 12px 0;
+  font-size:12px;font-weight:600;color:var(--text);line-height:1.5;margin-bottom:16px}
+.modal-actions{display:flex;gap:10px}
+.modal-actions .btn{flex:1}
+.modal-actions .btn-ghost{border:1px solid var(--border)}
+.modal-actions .btn-refund{background:var(--primary);color:#fff}
+
+@media (min-width:520px){
+  .modal-bg{align-items:center}
+  .modal{border-radius:20px}
+}
 </style>
 </head>
 <body>
 <header class="header">
-  <a class="back" href="mj-sms-usa-rent.html"><i class="fa-solid fa-arrow-left"></i></a>
+  <a class="back" href="mj-sms-history.html?view=rent" aria-label="Back"><i class="fa-solid fa-arrow-left"></i></a>
   <h1>Rental inbox</h1>
 </header>
-<main class="main" id="main">
-  <div class="empty">Loading…</div>
-</main>
+<main class="main" id="main"><div class="empty">Loading…</div></main>
+
+<div class="modal-bg" id="refundModal" role="dialog" aria-modal="true">
+  <div class="modal">
+    <h3>Refund this number?</h3>
+    <div class="modal-rows">
+      <div class="modal-row"><span>Number</span><span id="rfPhone">—</span></div>
+      <div class="modal-row"><span>Service</span><span id="rfService">—</span></div>
+      <div class="modal-row"><span>Status</span><span id="rfStatus">Active</span></div>
+    </div>
+    <p class="modal-note">The rental ends now and the number is retired. Renting again always gives you a brand-new number.</p>
+    <div class="modal-warn">Any SMS sent to this number afterwards will not reach you. Codes already received stay in your inbox, but the number cannot be reclaimed.</div>
+    <div class="modal-actions">
+      <button type="button" class="btn btn-ghost" id="rfCancel">Keep number</button>
+      <button type="button" class="btn btn-refund" id="rfConfirm">Refund</button>
+    </div>
+  </div>
+</div>
+
 <script>
 (function(){
   const SUPABASE_URL = 'https://atczodlljmlayvldxfmv.supabase.co';
@@ -54,109 +156,158 @@ h1{font-size:18px;font-weight:800}
   });
   const params = new URLSearchParams(location.search);
   const rentId = params.get('rent_id') || '';
-  function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g,function(c){return({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c];}); }
+  let rent = null, pollTimer = null, cdTimer = null, renewBusy = false;
 
+  function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g,function(c){return({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c];}); }
+  function fmtPhone(p){
+    var d = String(p||'').replace(/\D/g,'');
+    if(d.length===11 && d[0]==='1') return '+1 '+d.slice(1,4)+'-'+d.slice(4,7)+'-'+d.slice(7);
+    if(d.length===10) return '+1 '+d.slice(0,3)+'-'+d.slice(3,6)+'-'+d.slice(6);
+    return p || '—';
+  }
   async function headers(){
     const { data: { session } } = await sb.auth.getSession();
-    if(!session){ location.href='auth.html'; return null; }
-    return { Authorization:'Bearer '+session.access_token, 'Content-Type':'application/json', Accept:'application/json' };
+    if(!session){ location.href = 'auth.html?next='+encodeURIComponent(location.pathname+location.search); return null; }
+    return { Authorization: 'Bearer '+session.access_token, 'Content-Type': 'application/json', Accept: 'application/json' };
   }
   async function api(action, opts){
-    const h = await headers();
-    if(!h) return { success:false, message:'Sign in required' };
-    const method = (opts&&opts.method)||'GET';
-    let url = '/api/sms-bus?action=gotsms_'+encodeURIComponent(action);
-    if(opts&&opts.query) url += '&'+opts.query;
-    const res = await fetch(url,{ method:method, headers:h, body: opts&&opts.body?JSON.stringify(opts.body):undefined });
-    const raw = await res.text();
-    try { return raw?JSON.parse(raw):{}; } catch(e){ return { success:false, message:'Bad response' }; }
+    opts = opts || {};
+    var h = await headers(); if(!h) return { success:false, message:'Not signed in' };
+    var url = '/api/sms-bus?action=gotsms_'+action + (opts.query ? '&'+opts.query : '');
+    var r = await fetch(url, { method: opts.method||'GET', headers: h, body: opts.body ? JSON.stringify(opts.body) : undefined });
+    try { return await r.json(); } catch(e){ return { success:false, message:'Bad response' }; }
   }
-
-  if(!rentId){
-    document.getElementById('main').innerHTML = '<div class="empty">Missing rental. <a href="mj-sms-usa-rent.html">Back</a></div>';
-    return;
+  function setFlash(msg, ok){
+    var el = document.getElementById('flash');
+    if(!el) return;
+    el.className = 'flash '+(ok?'ok':'err');
+    el.textContent = msg || '';
   }
-
-  let rent = null;
-  let pollTimer = null;
 
   function render(){
-    const main = document.getElementById('main');
+    var main = document.getElementById('main');
     if(!rent){
-      main.innerHTML = '<div class="empty">Rental not found for your account</div>';
+      main.innerHTML = '<div class="empty">Rental not found for your account.<br><a href="mj-sms-history.html?view=rent" style="color:var(--primary)">Back to history</a></div>';
       return;
     }
-    const till = rent.active_till ? new Date(rent.active_till).getTime() : 0;
-    const canCancel = String(rent.status||'').toLowerCase()==='active' && !rent.refunded;
+    var svc = (rent.service && rent.service.name) || rent.service_name || 'USA rental';
+    var dur = rent.duration_translation || rent.duration || '';
+    var status = String(rent.status||'active').toLowerCase();
+    var active = status === 'active' && !rent.refunded;
+    var canCancel = active;
+    var autoOn = !!(rent.auto_renew || rent.renewal || rent.is_auto_renew);
+    var phone = fmtPhone(rent.phone || rent.number);
+
     main.innerHTML =
-      '<div class="card">'+
-        '<div class="phone" id="phoneEl">'+esc(rent.phone||'—')+'</div>'+
-        '<div class="meta">'+esc((rent.service&&rent.service.name)||'USA rental')+
-          (rent.plan&&rent.plan.duration_translation ? ' · '+esc(rent.plan.duration_translation) : '')+
+      '<div class="hero">'+
+        '<div class="hero-top">'+
+          '<div>'+
+            '<div class="phone-row"><span class="phone" id="phoneEl">'+esc(phone)+'</span>'+
+              '<button type="button" class="copy-icon" id="btnCopy" title="Copy number"><i class="fa-regular fa-copy"></i></button></div>'+
+            '<div class="svc">'+esc(svc)+(dur?' · '+esc(dur):'')+'</div>'+
+          '</div>'+
+          '<span class="badge dot '+(active?'':'expired')+'" id="statusBadge">'+(active?'Active':'Ended')+'</span>'+
         '</div>'+
-        '<div class="lbl" style="margin-top:12px">Time remaining</div>'+
-        '<div class="countdown" id="cd">—</div>'+
+        '<div class="stats">'+
+          '<div class="stat"><div class="lbl">Time remaining</div><div class="val" id="cd">—</div><div class="sub" id="cdSub">Until expiry</div></div>'+
+          '<div class="stat"><div class="lbl">Last code</div><div class="val" id="lastCode" style="font-size:18px;letter-spacing:.08em">—</div><div class="sub" id="lastCodeSub">From SMS inbox</div></div>'+
+        '</div>'+
+        (active ?
+          '<div class="toggle-card">'+
+            '<div><div class="t-title">Auto-renew</div><div class="t-hint">Renew automatically when this period ends (wallet charged)</div></div>'+
+            '<label class="switch"><input type="checkbox" id="autoRenew" '+(autoOn?'checked':'')+'><span class="slider"></span></label>'+
+          '</div>' : '')+
         '<div class="actions">'+
-          '<button type="button" class="btn btn-ghost" id="btnCopy"><i class="fa-solid fa-copy"></i> Copy</button>'+
-          (rent.can_wake_up ? '<button type="button" class="btn btn-primary" id="btnWake"><i class="fa-solid fa-bolt"></i> Wake up</button>' : '')+
+          (rent.can_wake_up !== false && active ? '<button type="button" class="btn btn-primary" id="btnWake"><i class="fa-solid fa-bolt"></i> Wake up</button>' : '')+
           '<button type="button" class="btn btn-ghost" id="btnRefresh"><i class="fa-solid fa-rotate"></i> Refresh SMS</button>'+
-          '<button type="button" class="btn btn-ghost" id="btnRenew"><i class="fa-solid fa-rotate"></i> Toggle auto-renew</button>'+
-          (canCancel ? '<button type="button" class="btn btn-danger" id="btnCancel"><i class="fa-solid fa-ban"></i> Cancel & refund</button>' : '')+
         '</div>'+
-        (canCancel ? '<div class="meta" style="margin-top:8px">Cancel only works if the supplier still allows a refund (usually early in the rental).</div>' : '')+
-        '<div class="err" id="err"></div><div class="ok" id="ok"></div>'+
+        (canCancel ? '<button type="button" class="btn-danger-outline" id="btnCancel"><i class="fa-solid fa-ban"></i> Cancel &amp; refund</button>' : '')+
+        (canCancel ? '<p class="hint">Refund is only available while the supplier still allows it — usually early in the rental, and often only if the number was unused.</p>' : '')+
+        '<div class="flash" id="flash"></div>'+
       '</div>'+
-      '<div class="card"><div style="font-weight:800;margin-bottom:8px">SMS inbox</div><div id="inbox"><div class="empty">Loading messages…</div></div></div>';
+      '<div class="inbox-card">'+
+        '<div class="inbox-head"><h2>SMS inbox</h2><span class="live">Live</span></div>'+
+        '<div id="inbox"><div class="empty">Loading messages…</div></div>'+
+      '</div>';
 
     document.getElementById('btnCopy').onclick = function(){
-      navigator.clipboard.writeText(String(rent.phone||'').replace(/\s/g,'')).catch(function(){});
-      document.getElementById('ok').textContent = 'Number copied';
+      var raw = String(rent.phone||'').replace(/\D/g,'') || rent.phone;
+      navigator.clipboard.writeText(raw).then(function(){ setFlash('Number copied', true); }).catch(function(){});
     };
     var wake = document.getElementById('btnWake');
     if(wake) wake.onclick = async function(){
-      wake.disabled = true;
+      wake.disabled = true; setFlash('Waking number…', true);
       var j = await api('wake', { method:'POST', body:{ rent_id: rentId } });
       wake.disabled = false;
-      document.getElementById('err').textContent = j.success ? '' : (j.message||'Wake failed');
-      document.getElementById('ok').textContent = j.success ? (j.message||'Number is awake — request OTP on the app') : '';
+      setFlash(j.message || (j.success ? 'Number is ready for SMS' : 'Wake failed'), !!j.success);
+      if(j.success) loadMessages();
     };
-    document.getElementById('btnRefresh').onclick = function(){ loadMessages(); };
+    document.getElementById('btnRefresh').onclick = function(){ loadMessages(); setFlash('Inbox refreshed', true); };
+    var ar = document.getElementById('autoRenew');
+    if(ar) ar.onchange = async function(){
+      if(renewBusy) return;
+      renewBusy = true; ar.disabled = true;
+      var want = !!ar.checked;
+      var j = await api('renewal_toggle', { method:'POST', body:{ rent_id: rentId, enabled: want } });
+      renewBusy = false; ar.disabled = false;
+      if(!j.success){
+        ar.checked = !want;
+        setFlash(j.message || 'Could not update auto-renew', false);
+      } else {
+        rent.auto_renew = want;
+        setFlash(want ? 'Auto-renew is on' : 'Auto-renew is off', true);
+      }
+    };
     var cancel = document.getElementById('btnCancel');
-    
-    var renewBtn = document.getElementById('btnRenew');
-    if(renewBtn) renewBtn.onclick = async function(){
-      renewBtn.disabled = true;
-      var j = await api('renewal_toggle', { method:'POST', body:{ rent_id: rentId } });
-      renewBtn.disabled = false;
-      document.getElementById('err').textContent = j.success ? '' : (j.message||'Could not update auto-renew');
-      document.getElementById('ok').textContent = j.success ? (j.message||'Auto-renewal updated') : '';
-    };
+    if(cancel) cancel.onclick = function(){ openRefundModal(); };
 
-    if(cancel) cancel.onclick = async function(){
-      if(!confirm('Request cancel/refund for this rental?\n\nRefund is only granted when the supplier allows it (often if the number was unused or within their window). If approved, your wallet is credited automatically.')) return;
-      cancel.disabled = true;
-      var j = await api('refund', { method:'POST', body:{ rent_id: rentId } });
-      cancel.disabled = false;
-      document.getElementById('err').textContent = j.success ? '' : (j.message||'Cancel not available');
-      document.getElementById('ok').textContent = j.success ? (j.message||'Cancelled') : '';
-      if(j.success) setTimeout(function(){ location.href='mj-sms-usa-rent.html'; }, 900);
-    };
+    startCountdown();
+    loadMessages();
+  }
 
+  function openRefundModal(){
+    document.getElementById('rfPhone').textContent = fmtPhone(rent.phone);
+    document.getElementById('rfService').textContent = (rent.service && rent.service.name) || rent.service_name || 'USA rental';
+    document.getElementById('rfStatus').textContent = String(rent.status||'active');
+    document.getElementById('refundModal').classList.add('on');
+  }
+  document.getElementById('rfCancel').onclick = function(){ document.getElementById('refundModal').classList.remove('on'); };
+  document.getElementById('refundModal').addEventListener('click', function(e){
+    if(e.target === this) this.classList.remove('on');
+  });
+  document.getElementById('rfConfirm').onclick = async function(){
+    var btn = document.getElementById('rfConfirm');
+    btn.disabled = true; btn.textContent = 'Refunding…';
+    var j = await api('refund', { method:'POST', body:{ rent_id: rentId } });
+    btn.disabled = false; btn.textContent = 'Refund';
+    document.getElementById('refundModal').classList.remove('on');
+    if(j.success){
+      rent.status = 'refunded'; rent.refunded = true;
+      setFlash(j.message || 'Refund requested — wallet will update if approved', true);
+      render();
+    } else {
+      setFlash(j.message || 'Refund not available for this number', false);
+    }
+  };
+
+  function startCountdown(){
+    if(cdTimer) clearTimeout(cdTimer);
+    var till = rent && rent.active_till ? new Date(rent.active_till).getTime() : 0;
     function tick(){
       var el = document.getElementById('cd');
       if(!el) return;
       if(!till){ el.textContent = '—'; return; }
       var left = till - Date.now();
-      if(left<=0){ el.textContent = 'Expired'; return; }
+      if(left <= 0){ el.textContent = 'Expired'; var b=document.getElementById('statusBadge'); if(b){ b.textContent='Ended'; b.classList.add('expired'); } return; }
       var d = Math.floor(left/86400000);
       var h = Math.floor((left%86400000)/3600000);
       var m = Math.floor((left%3600000)/60000);
       var s = Math.floor((left%60000)/1000);
-      el.textContent = (d>0?(d+'d '):'')+String(h).padStart(2,'0')+':'+String(m).padStart(2,'0')+':'+String(s).padStart(2,'0');
-      setTimeout(tick, 1000);
+      if(d > 0) el.textContent = d+'d '+String(h).padStart(2,'0')+':'+String(m).padStart(2,'0');
+      else el.textContent = String(h).padStart(2,'0')+':'+String(m).padStart(2,'0')+':'+String(s).padStart(2,'0');
+      cdTimer = setTimeout(tick, 1000);
     }
     tick();
-    loadMessages();
   }
 
   async function loadMessages(){
@@ -164,36 +315,44 @@ h1{font-size:18px;font-weight:800}
     if(!box) return;
     var j = await api('messages', { query: 'rent_id='+encodeURIComponent(rentId) });
     var list = j.data || [];
+    var last = document.getElementById('lastCode');
+    var lastSub = document.getElementById('lastCodeSub');
+    if(list.length && list[0].code && last){
+      last.textContent = list[0].code;
+      if(lastSub) lastSub.textContent = list[0].received_at ? new Date(list[0].received_at).toLocaleString() : 'Latest';
+    }
     if(!list.length){
-      box.innerHTML = '<div class="empty">No SMS yet. Wake the number if needed, then trigger the code on the app.</div>';
+      box.innerHTML = '<div class="empty">No SMS yet.<br>Wake the number if needed, then request the code in the app.</div>';
       return;
     }
     box.innerHTML = list.map(function(m){
       return '<div class="msg">'+
-        (m.code ? '<div class="code">'+esc(m.code)+' <button type="button" class="btn btn-ghost" style="flex:0;padding:4px 10px;font-size:11px" data-c="'+esc(m.code)+'">Copy</button></div>' : '')+
+        (m.code ? '<div class="code-row"><span class="code">'+esc(m.code)+'</span><button type="button" class="copy-code" data-c="'+esc(m.code)+'">Copy</button></div>' : '')+
         '<div class="body">'+esc(m.body||'')+'</div>'+
-        (m.received_at ? '<div class="meta">'+esc(new Date(m.received_at).toLocaleString())+'</div>' : '')+
+        (m.received_at ? '<div class="when">'+esc(new Date(m.received_at).toLocaleString())+'</div>' : '')+
       '</div>';
     }).join('');
     box.querySelectorAll('[data-c]').forEach(function(b){
-      b.onclick = function(){ navigator.clipboard.writeText(b.getAttribute('data-c')).catch(function(){}); };
+      b.onclick = function(){ navigator.clipboard.writeText(b.getAttribute('data-c')).then(function(){ setFlash('Code copied', true); }).catch(function(){}); };
     });
   }
 
   async function boot(){
-    // Prefer active list, then finished
+    if(!rentId){
+      document.getElementById('main').innerHTML = '<div class="empty">Missing rental. <a href="mj-sms-usa-rent.html" style="color:var(--primary)">Rent a number</a></div>';
+      return;
+    }
     var j = await api('rents', { query: 'status=active' });
     rent = (j.data||[]).find(function(r){ return String(r.id)===String(rentId); }) || null;
     if(!rent){
       var j2 = await api('rents', { query: 'status=finished' });
       rent = (j2.data||[]).find(function(r){ return String(r.id)===String(rentId); }) || null;
     }
-    // Fallback from my_orders DB
     if(!rent){
       var mine = await api('my_orders');
-      var o = (mine.data||[]).find(function(x){ return String(x.rent_id)===String(rentId); });
+      var o = (mine.data||[]).find(function(x){ return String(x.rent_id)===String(rentId) || String(x.idempotency_key||'')==='gotsms-'+rentId; });
       if(o){
-        rent = { id: o.rent_id, phone: o.phone, status: o.status, active_till: o.active_till, service: { name: o.service_name }, can_wake_up: true };
+        rent = { id: o.rent_id||rentId, phone: o.phone, status: o.status, active_till: o.active_till, service: { name: o.service_name }, can_wake_up: true, auto_renew: o.auto_renew };
       }
     }
     render();
