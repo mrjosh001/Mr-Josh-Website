@@ -136,12 +136,12 @@ h1{font-size:17px;font-weight:800;letter-spacing:-.02em}
     <div class="modal-rows">
       <div class="modal-row"><span>Number</span><span id="rfPhone">—</span></div>
       <div class="modal-row"><span>Service</span><span id="rfService">—</span></div>
-      <div class="modal-row"><span>Status</span><span id="rfStatus">Active</span></div>
+      <div class="modal-row"><span>Back to wallet</span><span id="rfRefundAmt">If approved</span></div>
     </div>
-    <p class="modal-note">The rental ends now and the number is retired. Renting again always gives you a brand-new number.</p>
-    <div class="modal-warn">Any SMS sent to this number afterwards will not reach you. Codes already received stay in your inbox, but the number cannot be reclaimed.</div>
+    <p class="modal-note">The rental ends now and the number is retired for good. Renting again always gives you a brand-new number.</p>
+    <div class="modal-warn">Any SMS sent to this number afterwards will not reach you, and the codes it already received stay in Messages but the number cannot be reclaimed.</div>
     <div class="modal-actions">
-      <button type="button" class="btn btn-ghost" id="rfCancel">Keep number</button>
+      <button type="button" class="btn btn-ghost" id="rfCancel">Cancel</button>
       <button type="button" class="btn btn-refund" id="rfConfirm">Refund</button>
     </div>
   </div>
@@ -221,8 +221,8 @@ h1{font-size:17px;font-weight:800;letter-spacing:-.02em}
           (rent.can_wake_up !== false && active ? '<button type="button" class="btn btn-primary" id="btnWake"><i class="fa-solid fa-bolt"></i> Wake up</button>' : '')+
           '<button type="button" class="btn btn-ghost" id="btnRefresh"><i class="fa-solid fa-rotate"></i> Refresh SMS</button>'+
         '</div>'+
-        (canCancel ? '<button type="button" class="btn-danger-outline" id="btnCancel"><i class="fa-solid fa-ban"></i> Cancel &amp; refund</button>' : '')+
-        (canCancel ? '<p class="hint">Refund is only available while the supplier still allows it — usually early in the rental, and often only if the number was unused.</p>' : '')+
+        (canCancel ? '<button type="button" class="btn-danger-outline" id="btnCancel"><i class="fa-solid fa-ban"></i> Refund number</button>' : '')+
+        (canCancel ? '<p class="hint">Refund only works if the supplier still allows it (usually early in the rental, and often only if the number was unused).</p>' : '')+
         '<div class="flash" id="flash"></div>'+
       '</div>'+
       '<div class="inbox-card">'+
@@ -268,7 +268,11 @@ h1{font-size:17px;font-weight:800;letter-spacing:-.02em}
   function openRefundModal(){
     document.getElementById('rfPhone').textContent = fmtPhone(rent.phone);
     document.getElementById('rfService').textContent = (rent.service && rent.service.name) || rent.service_name || 'USA rental';
-    document.getElementById('rfStatus').textContent = String(rent.status||'active');
+    var amtEl = document.getElementById('rfRefundAmt');
+    var paid = Number(rent.price_ngn || rent.price || 0);
+    if(amtEl) amtEl.textContent = paid > 0 ? ('₦' + paid.toLocaleString()) : 'If supplier approves';
+    var conf = document.getElementById('rfConfirm');
+    if(conf) conf.textContent = paid > 0 ? ('Refund ₦' + paid.toLocaleString()) : 'Refund';
     document.getElementById('refundModal').classList.add('on');
   }
   document.getElementById('rfCancel').onclick = function(){ document.getElementById('refundModal').classList.remove('on'); };
@@ -283,7 +287,7 @@ h1{font-size:17px;font-weight:800;letter-spacing:-.02em}
     document.getElementById('refundModal').classList.remove('on');
     if(j.success){
       rent.status = 'refunded'; rent.refunded = true;
-      setFlash(j.message || 'Refund requested — wallet will update if approved', true);
+      setFlash(j.message || 'Refund submitted. If approved, your wallet is credited automatically.', true);
       render();
     } else {
       setFlash(j.message || 'Refund not available for this number', false);
