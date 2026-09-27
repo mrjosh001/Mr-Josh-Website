@@ -26,6 +26,45 @@ import { applyMarkup } from '../lib/pricing.js';
 
 const OTP_BASE = 'https://sms-bus.com/api/control';
 const RENT_BASE = 'https://api.sms-bus.com';
+
+/** Default monthly rental sell prices (NGN) by country — admin can override via number_services source=smsbus_rent */
+const RENT_DEFAULT_MONTHLY_NGN = {
+  US: 11000, USA: 11000, 'UNITED STATES': 11000,
+  CA: 10000, CANADA: 10000,
+  GB: 15000, UK: 15000, GBR: 15000, 'UNITED KINGDOM': 15000, 'GREAT BRITAIN': 15000
+};
+function rentDefaultMonthlyNgn(areaCode, title) {
+  const code = String(areaCode || '').trim().toUpperCase();
+  const name = String(title || '').trim().toUpperCase();
+  if (RENT_DEFAULT_MONTHLY_NGN[code] != null) return RENT_DEFAULT_MONTHLY_NGN[code];
+  if (RENT_DEFAULT_MONTHLY_NGN[name] != null) return RENT_DEFAULT_MONTHLY_NGN[name];
+  // fuzzy title match
+  if (/\bUNITED STATES\b|\bUSA\b/.test(name)) return 11000;
+  if (/\bCANADA\b/.test(name)) return 10000;
+  if (/\bUNITED KINGDOM\b|\bGREAT BRITAIN\b|\bUK\b|\bENGLAND\b/.test(name)) return 15000;
+  if (code === '1' || code.startsWith('US')) return 11000;
+  return null;
+}
+async function rentAdminMonthlyOverrides() {
+  try {
+    const { data } = await supabase
+      .from('number_services')
+      .select('service_id, sell_price, price, price_ngn, hidden, admin_hidden')
+      .eq('source', 'smsbus_rent')
+      .limit(500);
+    const map = {};
+    for (const row of data || []) {
+      const id = String(row.service_id || '').toUpperCase();
+      if (!id) continue;
+      const p = Number(row.sell_price ?? row.price_ngn ?? row.price);
+      if (p > 0) map[id] = Math.round(p);
+    }
+    return map;
+  } catch (_) {
+    return {};
+  }
+}
+
 const TOKEN = process.env.SMSBUS_API_TOKEN || process.env.SMS_BUS_TOKEN || '';
 
 const supabase = createClient(
@@ -1839,18 +1878,28 @@ export default async function handler(req, res) {
       const raw = data.data;
       const list = Array.isArray(raw) ? raw : Object.values(raw || {});
       // unit_price is monthly price in cents (API docs)
+      const adminMap = await rentAdminMonthlyOverrides();
       const normalized = list.map((a) => {
         const unitCents = Number(a.unit_price || 0);
         const unitUsd = unitCents / 100;
         const minMonth = Number(a.min_month || 1);
+        const title = a.area_title || a.area_name || a.area_code;
+        const code = String(a.area_code || '').toUpperCase();
+        const adminPrice = adminMap[code];
+        const defaultPrice = rentDefaultMonthlyNgn(code, title);
+        // Admin override > fixed country default > supplier markup fallback
+        let price1mo;
+        if (adminPrice > 0) price1mo = adminPrice;
+        else if (defaultPrice > 0) price1mo = defaultPrice;
+        else price1mo = applyMarkup(unitUsd);
         return {
           area_code: a.area_code,
-          title: a.area_title || a.area_name || a.area_code,
+          title,
           unit_usd: unitUsd,
           min_month: minMonth,
           stock: Number(a.total || 0),
-          // customer price for 1 month (marked up NGN)
-          price_1mo: applyMarkup(unitUsd)
+          price_1mo: price1mo,
+          price_mode: adminPrice > 0 ? 'admin' : (defaultPrice > 0 ? 'default' : 'markup')
         };
       });
       return json(res, 200, { success: true, data: normalized });
@@ -1883,23 +1932,36 @@ export default async function handler(req, res) {
         .single();
       if (!profile) return json(res, 400, { success: false, message: 'Profile not found' });
 
-      // Live monthly unit from area list (cents → USD × months)
+      // Monthly sell price: admin override > country default > supplier markup
       let unitUsd = Number(body.quoted_usd || 0);
-      if (!unitUsd) {
-        try {
-          const areasRes = await smsbusGet(RENT_BASE, '/v1/rent/list/area');
-          if (busOk(areasRes.data)) {
-            const list = Array.isArray(areasRes.data.data)
-              ? areasRes.data.data
-              : Object.values(areasRes.data.data || {});
-            const hit = list.find((a) => String(a.area_code).toUpperCase() === area_code);
-            if (hit) unitUsd = Number(hit.unit_price || 0) / 100;
+      let areaTitle = '';
+      try {
+        const areasRes = await smsbusGet(RENT_BASE, '/v1/rent/list/area');
+        if (busOk(areasRes.data)) {
+          const list = Array.isArray(areasRes.data.data)
+            ? areasRes.data.data
+            : Object.values(areasRes.data.data || {});
+          const hit = list.find((a) => String(a.area_code).toUpperCase() === area_code);
+          if (hit) {
+            if (!unitUsd) unitUsd = Number(hit.unit_price || 0) / 100;
+            areaTitle = hit.area_title || hit.area_name || '';
           }
-        } catch (_) {}
-      }
+        }
+      } catch (_) {}
       if (!unitUsd) unitUsd = 3.5;
       const supplierUsd = unitUsd * time;
-      const price = applyMarkup(supplierUsd);
+      const adminMap = await rentAdminMonthlyOverrides();
+      const adminMonthly = adminMap[area_code];
+      const defaultMonthly = rentDefaultMonthlyNgn(area_code, areaTitle);
+      let monthlyNgn;
+      if (adminMonthly > 0) monthlyNgn = adminMonthly;
+      else if (defaultMonthly > 0) monthlyNgn = defaultMonthly;
+      else monthlyNgn = applyMarkup(unitUsd);
+      // Prefer client quoted total if it matches our monthly * months (prevents UI mismatch)
+      const expected = Math.round(monthlyNgn * time);
+      let price = expected;
+      const quoted = Number(body.quoted_price_ngn || 0);
+      if (quoted > 0 && Math.abs(quoted - expected) <= 50) price = Math.round(quoted);
       const bal = Number(profile.balance) || 0;
       if (bal < price) {
         return json(res, 400, {
@@ -1994,8 +2056,31 @@ export default async function handler(req, res) {
         .select('balance, customer_id')
         .eq('id', auth.userId)
         .single();
-      const supplierUsd = Number(body.quoted_usd || 3.5) * time;
-      const price = applyMarkup(supplierUsd);
+      let unitUsd = Number(body.quoted_usd || 0);
+      let areaTitle = '';
+      try {
+        const areasRes = await smsbusGet(RENT_BASE, '/v1/rent/list/area');
+        if (busOk(areasRes.data)) {
+          const list = Array.isArray(areasRes.data.data)
+            ? areasRes.data.data
+            : Object.values(areasRes.data.data || {});
+          const hit = list.find((a) => String(a.area_code).toUpperCase() === area_code);
+          if (hit) {
+            if (!unitUsd) unitUsd = Number(hit.unit_price || 0) / 100;
+            areaTitle = hit.area_title || hit.area_name || '';
+          }
+        }
+      } catch (_) {}
+      if (!unitUsd) unitUsd = 3.5;
+      const supplierUsd = unitUsd * time;
+      const adminMap = await rentAdminMonthlyOverrides();
+      const adminMonthly = adminMap[area_code];
+      const defaultMonthly = rentDefaultMonthlyNgn(area_code, areaTitle);
+      let monthlyNgn;
+      if (adminMonthly > 0) monthlyNgn = adminMonthly;
+      else if (defaultMonthly > 0) monthlyNgn = defaultMonthly;
+      else monthlyNgn = applyMarkup(unitUsd);
+      const price = Math.round(monthlyNgn * time);
       const bal = Number(profile?.balance) || 0;
       if (bal < price) return json(res, 400, { success: false, message: 'Insufficient balance' });
 
