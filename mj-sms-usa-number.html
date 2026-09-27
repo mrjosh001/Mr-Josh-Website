@@ -197,8 +197,21 @@ h1{font-size:17px;font-weight:800;letter-spacing:-.02em}
       return;
     }
     var svc = (rent.service && rent.service.name) || rent.service_name || 'USA rental';
-    var dur = rent.duration_translation || rent.duration || rent.plan_duration || '';
-    var carrier = rent.carrier_name || rent.cellular_carrier || rent.carrier || (rent.meta && (rent.meta.carrier || rent.meta.cellular_carrier)) || '';
+    var dur = rent.duration_translation || rent.duration || rent.plan_duration || (rent.plan && rent.plan.duration_translation) || '';
+    var carrier = '';
+    if (rent.cellular_carrier && rent.cellular_carrier.name) carrier = rent.cellular_carrier.name;
+    else if (rent.carrier && rent.carrier.name) carrier = rent.carrier.name;
+    else if (typeof rent.cellular_carrier === 'string') carrier = rent.cellular_carrier;
+    else carrier = rent.carrier_name || rent.carrier || (rent.meta && (rent.meta.carrier || rent.meta.cellular_carrier)) || '';
+    var area = rent.area_code || (rent.meta && rent.meta.area_code) || '';
+    // Parse "WhatsApp · 1 day · T-Mobile · Area 214" from stored service_name
+    if ((!dur || !carrier) && rent.service_name && String(rent.service_name).indexOf('·')>=0) {
+      var parts=String(rent.service_name).split('·').map(function(x){return x.trim();});
+      if(parts[0]) svc=parts[0];
+      if(!dur && parts[1]) dur=parts[1];
+      if(!carrier && parts[2] && !/^Area /i.test(parts[2])) carrier=parts[2];
+      if(!area){ var ap=parts.filter(function(p){return /^Area /i.test(p);})[0]; if(ap) area=ap.replace(/^Area /i,''); }
+    }
     var status = String(rent.status||'active').toLowerCase();
     var active = status === 'active' && !rent.refunded;
     // Supplier rule: once first code arrives, refund is no longer available
@@ -212,7 +225,7 @@ h1{font-size:17px;font-weight:800;letter-spacing:-.02em}
           '<div>'+
             '<div class="phone-row"><span class="phone" id="phoneEl">'+esc(phone)+'</span>'+
               '<button type="button" class="copy-icon" id="btnCopy" title="Copy number"><i class="fa-regular fa-copy"></i></button></div>'+
-            '<div class="svc">'+esc(svc)+'</div>'+'<div class="svc-meta" id="svcMeta">'+(dur?'<span class="chip-mini">'+esc(dur)+'</span>':'')+(carrier?'<span class="chip-mini">'+esc(carrier)+'</span>':'')+'</div>'+
+            '<div class="svc">'+esc(svc)+'</div>'+'<div class="svc-meta" id="svcMeta">'+(dur?'<span class="chip-mini">'+esc(dur)+'</span>':'')+(carrier?'<span class="chip-mini">'+esc(carrier)+'</span>':'')+(area?'<span class="chip-mini">Area '+esc(area)+'</span>':'')+'</div>'+
           '</div>'+
           '<span class="badge dot '+(active?'':'expired')+'" id="statusBadge">'+(active?'Active':'Ended')+'</span>'+
         '</div>'+
@@ -230,7 +243,7 @@ h1{font-size:17px;font-weight:800;letter-spacing:-.02em}
           '<button type="button" class="btn btn-ghost" id="btnRefresh"><i class="fa-solid fa-rotate"></i> Refresh SMS</button>'+
         '</div>'+
         (canCancel ? '<button type="button" class="btn-danger-outline" id="btnCancel"><i class="fa-solid fa-ban"></i> Refund number</button>' : '')+
-        (canCancel ? '<p class="hint">Refund only works if the supplier still allows it — usually within about 12 hours, and only if the number was unused (no SMS code yet).</p>' : (active && hasReceivedCode ? '<p class="refund-locked">Refund unavailable — an SMS code was already received on this number.</p>' : ''))+
+        (canCancel ? '' : (active && hasReceivedCode ? '<p class="refund-locked">Refund unavailable — a message was already received on this number.</p>' : ''))+
         '<div class="flash" id="flash"></div>'+
       '</div>'+
       '<div class="inbox-card">'+
@@ -308,7 +321,7 @@ h1{font-size:17px;font-weight:800;letter-spacing:-.02em}
   document.getElementById('rfConfirm').onclick = async function(){
     if(hasReceivedCode){
       document.getElementById('refundModal').classList.remove('on');
-      setFlash('Refund unavailable — an SMS was already received on this number.', false);
+      setFlash('Refund unavailable — a message was already received on this number.', false);
       return;
     }
     var btn = document.getElementById('rfConfirm');
@@ -377,7 +390,7 @@ h1{font-size:17px;font-weight:800;letter-spacing:-.02em}
       if(!document.querySelector('.refund-locked')){
         var lock = document.createElement('p');
         lock.className = 'refund-locked';
-        lock.textContent = 'Refund unavailable — an SMS was already received on this number.';
+        lock.textContent = 'Refund unavailable — a message was already received on this number.';
         var flash = document.getElementById('flash');
         if(flash && flash.parentNode) flash.parentNode.insertBefore(lock, flash);
       }
