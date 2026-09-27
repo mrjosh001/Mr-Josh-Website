@@ -2217,10 +2217,28 @@ export default async function handler(req, res) {
           });
         } catch (_) {}
         const { data: fresh } = await supabase.from('profiles').select('balance').eq('id', auth.userId).single();
+        // Optional auto-renew (GotSMS toggle after rent)
+        let autoRenew = false;
+        if (body.auto_renew && rent && rent.id) {
+          try {
+            const tg = await gotsmsFetch(
+              `/api/rents/${encodeURIComponent(rent.id)}/renewal/toggle`,
+              { method: 'POST' }
+            );
+            autoRenew = !!(tg.ok && tg.data?.success && (tg.data?.data?.is_included_for_next_renewal !== false));
+          } catch (_) {}
+        }
+
         return json(res, 201, {
           success: true,
           message: g.data.message || 'Number rented successfully',
-          data: { ...gotsmsPublicRent(rent), order_id: orderId, price_ngn: price, new_balance: Number(fresh?.balance ?? profile.balance - price) }
+          data: {
+            ...gotsmsPublicRent(rent),
+            order_id: orderId,
+            price_ngn: price,
+            auto_renew: autoRenew,
+            new_balance: Number(fresh?.balance ?? profile.balance - price)
+          }
         });
       }
 
@@ -2448,6 +2466,26 @@ export default async function handler(req, res) {
           } catch (e) { console.error('[gotsms] user refund', e); }
         }
         return json(res, 200, { success: true, message: 'Rental cancelled. Balance restored if eligible.', data: g.data.data || null });
+      }
+
+      if (method === 'POST' && ga === 'gotsms_renewal_toggle') {
+        const auth = await requireAuth(req);
+        if (!auth.ok) return json(res, auth.status, { success: false, message: auth.message });
+        const body = await readBody(req);
+        const rent_id = String(body.rent_id || '').trim();
+        if (!rent_id) return json(res, 400, { success: false, message: 'rent_id required' });
+        if (!(await gotsmsAssertOwns(auth.userId, rent_id))) {
+          return json(res, 403, { success: false, message: 'Rental not found' });
+        }
+        const g = await gotsmsFetch(
+          `/api/rents/${encodeURIComponent(rent_id)}/renewal/toggle`,
+          { method: 'POST' }
+        );
+        return json(res, g.ok ? 200 : g.status || 400, {
+          success: !!g.data?.success,
+          message: g.data?.message || (g.ok ? 'Auto-renewal updated' : 'Could not update auto-renewal'),
+          data: g.data?.data || null
+        });
       }
 
       if (method === 'GET' && ga === 'gotsms_my_orders') {
