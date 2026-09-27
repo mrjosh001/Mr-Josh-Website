@@ -198,6 +198,7 @@ const SUPABASE_URL='https://atczodlljmlayvldxfmv.supabase.co';
 const SUPABASE_ANON_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImF0Y3pvZGxsam1sYXl2bGR4Zm12Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODUwNzUyMzgsImV4cCI6MjEwMDY1MTIzOH0.ufthD-p7BmeD_B7xyuMM6PNPL8DmcL4AtRYgg-MuoLI';
 const sb=window.supabase.createClient(SUPABASE_URL,SUPABASE_ANON_KEY,{auth:{persistSession:true,autoRefreshToken:true,storage:window.sessionStorage}});
 let allServices=[],selectedService=null,plans=[],selectedPlan=null,qty=1,rentBusy=false,carriers=[];
+const CARRIER_ADDON_NGN=800, AREA_ADDON_NGN=1000;
 const POPULAR=['whatsapp','telegram','google','facebook','instagram','tiktok','twitter','x','discord','paypal','amazon','apple','microsoft'];
 const CACHE_KEY='mj_gotsms_services_v2';
 const CACHE_TTL_MS=2*24*60*60*1000;
@@ -454,7 +455,22 @@ function renderDetailForm(){
   document.getElementById('qtyPlus').onclick=function(){if(qty<25){qty++;document.getElementById('qtyVal').textContent=qty;updateTotal();}};
   document.getElementById('rentBtn').onclick=openPurchaseModal;
 }
-function updateTotal(){var el=document.getElementById('totalAmt');if(!el)return;el.textContent=selectedPlan?fmtNgn(selectedPlan.price_ngn*qty):'₦0';}
+function updateTotal(){
+  var el=document.getElementById('totalAmt');
+  if(!el)return;
+  if(!selectedPlan){el.textContent='₦0';return;}
+  var base=Number(selectedPlan.price_ngn||0)*qty;
+  var add=0;
+  var car=document.getElementById('carrierSel');
+  if(car&&car.value) add+=Number(selectedPlan.carrier_addon_ngn||CARRIER_ADDON_NGN);
+  var area='';
+  try{area=typeof resolveAreaCode==='function'?resolveAreaCode():'';}catch(e){}
+  if(!area){var ae=document.getElementById('areaCode');if(ae)area=String(ae.value||'').replace(/\D/g,'');}
+  if(area&&String(area).replace(/\D/g,'').length>=3) add+=Number(selectedPlan.area_addon_ngn||AREA_ADDON_NGN);
+  el.textContent=fmtNgn(base+add);
+  var note=document.getElementById('addonNote');
+  if(note) note.textContent=add>0?('Includes add-ons: '+(car&&car.value?'carrier ₦'+Number(selectedPlan.carrier_addon_ngn||CARRIER_ADDON_NGN).toLocaleString():'')+(car&&car.value&&area?', ':'')+(area?'area ₦'+Number(selectedPlan.area_addon_ngn||AREA_ADDON_NGN).toLocaleString():'')):'';
+}
 function resolveAreaCode(){
   var v=String(document.getElementById('areaCode').value||'');
   if(!v)return '';
@@ -504,7 +520,7 @@ function openPurchaseModal(){
   var arEl=document.getElementById('psAutoRenew');
   if(arEl) arEl.textContent=(ar&&ar.checked)?'On — renews when period ends':'Off';
   document.getElementById('psUnitPrice').textContent=fmtNgn(selectedPlan.price_ngn);
-  document.getElementById('psTotal').textContent=fmtNgn(selectedPlan.price_ngn*qty);
+  updateTotal(); var ta=document.getElementById('totalAmt'); document.getElementById('psTotal').textContent=ta?ta.textContent:fmtNgn(selectedPlan.price_ngn*qty);
   document.getElementById('psErr').textContent='';
   var icon=document.getElementById('psIcon');
   if(icon){
@@ -549,7 +565,7 @@ async function doRent(){
   document.getElementById('psErr').textContent='';
   var errEl=document.getElementById('rentErr');if(errEl)errEl.textContent='';
   var okEl=document.getElementById('rentOk');if(okEl)okEl.textContent='';
-  var body={plan_id:selectedPlan.id,service_id:selectedService&&selectedService.id,quoted_price_ngn:selectedPlan.price_ngn,quoted_usd:selectedPlan.price_usd||selectedPlan.price||null,auto_renew:!!(document.getElementById("autoRenewChk")&&document.getElementById("autoRenewChk").checked)};
+  var body={plan_id:selectedPlan.id,service_id:selectedService&&selectedService.id,quoted_price_ngn:(function(){var b=Number(selectedPlan.price_ngn||0)*qty;var a=0;var c=document.getElementById("carrierSel");if(c&&c.value)a+=Number(selectedPlan.carrier_addon_ngn||CARRIER_ADDON_NGN);var ar="";try{ar=typeof resolveAreaCode==="function"?resolveAreaCode():"";}catch(e){}if(!ar){var ae=document.getElementById("areaCode");if(ae)ar=String(ae.value||"").replace(/\D/g,"");}if(ar&&String(ar).replace(/\D/g,"").length>=3)a+=Number(selectedPlan.area_addon_ngn||AREA_ADDON_NGN);return b+a;})(),quoted_usd:selectedPlan.price_usd||selectedPlan.price||null,auto_renew:!!(document.getElementById("autoRenewChk")&&document.getElementById("autoRenewChk").checked)};
   var area=resolveAreaCode();if(area)body.area_code=area;
   var car=document.getElementById('carrierSel').value;if(car)body.cellular_carrier_id=car;
   var j;if(qty>1){body.quantity=qty;j=await api('rent_bulk',{method:'POST',body:body});}else{j=await api('rent',{method:'POST',body:body});}
@@ -560,7 +576,7 @@ async function doRent(){
     var msg=j.message||'Rental failed';
     document.getElementById('psErr').textContent=msg;
     if(errEl)errEl.textContent=msg;
-    if(j.data&&j.data.price_ngn){selectedPlan.price_ngn=j.data.price_ngn;updateTotal();document.getElementById('psTotal').textContent=fmtNgn(selectedPlan.price_ngn*qty);}
+    if(j.data&&j.data.price_ngn){selectedPlan.price_ngn=j.data.price_ngn;updateTotal();updateTotal(); var ta=document.getElementById('totalAmt'); document.getElementById('psTotal').textContent=ta?ta.textContent:fmtNgn(selectedPlan.price_ngn*qty);}
     return;
   }
   closePurchaseModal();
@@ -569,6 +585,11 @@ async function doRent(){
   if(rent)showSuccess(rent);
 }
 
+
+
+document.addEventListener('change',function(e){
+  if(e.target&&(e.target.id==='carrierSel'||e.target.id==='areaCode'||e.target.id==='areaCodeSel')) updateTotal();
+});
 
 loadServices();
 })();
