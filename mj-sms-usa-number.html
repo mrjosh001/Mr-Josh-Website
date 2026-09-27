@@ -100,8 +100,10 @@ h1{font-size:18px;font-weight:800}
           '<button type="button" class="btn btn-ghost" id="btnCopy"><i class="fa-solid fa-copy"></i> Copy</button>'+
           (rent.can_wake_up ? '<button type="button" class="btn btn-primary" id="btnWake"><i class="fa-solid fa-bolt"></i> Wake up</button>' : '')+
           '<button type="button" class="btn btn-ghost" id="btnRefresh"><i class="fa-solid fa-rotate"></i> Refresh SMS</button>'+
+          '<button type="button" class="btn btn-ghost" id="btnRenew"><i class="fa-solid fa-rotate"></i> Toggle auto-renew</button>'+
           (canCancel ? '<button type="button" class="btn btn-danger" id="btnCancel"><i class="fa-solid fa-ban"></i> Cancel & refund</button>' : '')+
         '</div>'+
+        (canCancel ? '<div class="meta" style="margin-top:8px">Cancel only works if the supplier still allows a refund (usually early in the rental).</div>' : '')+
         '<div class="err" id="err"></div><div class="ok" id="ok"></div>'+
       '</div>'+
       '<div class="card"><div style="font-weight:800;margin-bottom:8px">SMS inbox</div><div id="inbox"><div class="empty">Loading messages…</div></div></div>';
@@ -120,8 +122,18 @@ h1{font-size:18px;font-weight:800}
     };
     document.getElementById('btnRefresh').onclick = function(){ loadMessages(); };
     var cancel = document.getElementById('btnCancel');
+    
+    var renewBtn = document.getElementById('btnRenew');
+    if(renewBtn) renewBtn.onclick = async function(){
+      renewBtn.disabled = true;
+      var j = await api('renewal_toggle', { method:'POST', body:{ rent_id: rentId } });
+      renewBtn.disabled = false;
+      document.getElementById('err').textContent = j.success ? '' : (j.message||'Could not update auto-renew');
+      document.getElementById('ok').textContent = j.success ? (j.message||'Auto-renewal updated') : '';
+    };
+
     if(cancel) cancel.onclick = async function(){
-      if(!confirm('Cancel this rental? If the supplier allows a refund, your wallet will be credited.')) return;
+      if(!confirm('Request cancel/refund for this rental?\n\nRefund is only granted when the supplier allows it (often if the number was unused or within their window). If approved, your wallet is credited automatically.')) return;
       cancel.disabled = true;
       var j = await api('refund', { method:'POST', body:{ rent_id: rentId } });
       cancel.disabled = false;
@@ -186,7 +198,7 @@ h1{font-size:18px;font-weight:800}
     }
     render();
     if(pollTimer) clearInterval(pollTimer);
-    pollTimer = setInterval(loadMessages, 12000);
+    pollTimer = setInterval(loadMessages, 8000);
   }
   boot();
 })();
