@@ -253,14 +253,14 @@ body[data-theme="dark"] .logo-word {
   backdrop-filter: blur(8px);
 }
 .kinetic-panel {
-  position: absolute; top: 0; right: 0; bottom: 0; left: auto;
+  position: absolute; top: 0; left: 0; bottom: 0; right: auto;
   width: min(300px, 84vw);
   overflow: auto;
   padding: 22px 0 20px;
   background: #1d3fa8;
   color: #e8eeff;
   box-shadow: 18px 0 50px rgba(15,23,42,.28);
-  transform: translateX(105%);
+  transform: translateX(-105%);
   transition: transform .32s cubic-bezier(.22,1,.36,1);
   display: flex;
   flex-direction: column;
@@ -288,14 +288,49 @@ body[data-theme="dark"] .logo-word {
 .kinetic-links a {
   position: relative;
   display: flex; align-items: center; gap: 12px;
-  margin-left: 0; margin-right: 14px;
-  padding: 13px 16px 13px 18px;
-  border-radius: 0 22px 22px 0;
+  margin-left: 14px; margin-right: 0;
+  padding: 13px 18px 13px 16px;
+  border-radius: 22px 0 0 22px;
   color: #d7e3ff; text-decoration: none;
   font-size: 15px; font-weight: 650;
   background: transparent; border: 0;
 }
 .kinetic-links a svg { width: 18px; height: 18px; flex: 0 0 auto; opacity: .9; }
+
+.nav-sub { margin: 0; }
+.nav-sub-toggle {
+  position: relative;
+  display: flex; align-items: center; gap: 12px;
+  margin-left: 14px; margin-right: 0;
+  padding: 13px 18px 13px 16px;
+  border-radius: 22px 0 0 22px;
+  color: #d7e3ff; text-decoration: none;
+  font-size: 15px; font-weight: 650;
+  background: transparent; border: 0;
+  width: calc(100% - 14px);
+  cursor: pointer; font-family: inherit; text-align: left;
+}
+.nav-sub-toggle svg.icon { width: 18px; height: 18px; flex: 0 0 auto; opacity: .9; }
+.nav-sub-toggle .chev {
+  margin-left: auto; width: 16px; height: 16px; opacity: .85;
+  transition: transform .2s ease;
+}
+.nav-sub.open .nav-sub-toggle .chev { transform: rotate(180deg); }
+.nav-sub-panel {
+  display: none;
+  flex-direction: column;
+  gap: 2px;
+  padding: 4px 0 8px 0;
+}
+.nav-sub.open .nav-sub-panel { display: flex; }
+.nav-sub-panel a {
+  margin-left: 28px !important;
+  padding: 11px 18px 11px 16px !important;
+  font-size: 14px !important;
+  font-weight: 600 !important;
+  opacity: .95;
+}
+
 .kinetic-links a.on {
   background: #fff;
   color: #1d3fa8;
@@ -1817,14 +1852,23 @@ html[data-theme="dark"] .logo-word, body[data-theme="dark"] .logo-word { color:#
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 15a8 8 0 1 1 16 0"/><path d="M4 15v3a2 2 0 0 0 2 2h1v-5H4zM20 15v3a2 2 0 0 1-2 2h-1v-5h3z"/></svg>
           Support
         </a>
-        <a href="/vendor">
+        <a href="/vendor" data-close-menu>
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 7h18l-2 11H5L3 7z"/><path d="M8 7V5a4 4 0 0 1 8 0v2"/></svg>
-          Vendors
+          Become a Vendor
         </a>
-        <a href="terms.html">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M7 3h8l4 4v14H7z"/><path d="M15 3v4h4"/></svg>
-          Terms
-        </a>
+        <div class="nav-sub" id="termsSub">
+          <button type="button" class="nav-sub-toggle" id="termsToggle" aria-expanded="false" aria-controls="termsPanel">
+            <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M7 3h8l4 4v14H7z"/><path d="M15 3v4h4"/></svg>
+            Terms
+            <svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M6 9l6 6 6-6"/></svg>
+          </button>
+          <div class="nav-sub-panel" id="termsPanel">
+            <a href="terms.html" data-close-menu>Terms of Service</a>
+            <a href="privacy.html" data-close-menu>Privacy</a>
+            <a href="acceptable-use.html" data-close-menu>Acceptable use</a>
+            <a href="refund.html" data-close-menu>Refunds</a>
+          </div>
+        </div>
         <a href="#" id="apiLinkMobile">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 9l-3 3 3 3M16 9l3 3-3 3M13 7l-2 10"/></svg>
           API · Coming soon
@@ -1855,6 +1899,16 @@ html[data-theme="dark"] .logo-word, body[data-theme="dark"] .logo-word { color:#
     setOpen(!(menu.classList.contains('active') || menu.getAttribute('data-nav')==='open'));
   };
   btn.onclick=window.toggleLandingMenu;
+  var termsToggle=document.getElementById('termsToggle');
+  var termsSub=document.getElementById('termsSub');
+  if(termsToggle&&termsSub){
+    termsToggle.addEventListener('click', function(e){
+      e.preventDefault();
+      e.stopPropagation();
+      var open=termsSub.classList.toggle('open');
+      termsToggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+    });
+  }
   menu.addEventListener('click', function(e){
     var link=e.target.closest('.kinetic-links a');
     if(link){
