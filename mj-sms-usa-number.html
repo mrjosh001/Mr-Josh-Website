@@ -213,8 +213,11 @@ h1{font-size:17px;font-weight:800;letter-spacing:-.02em}
       if(!area){ var ap=parts.filter(function(p){return /^Area /i.test(p);})[0]; if(ap) area=ap.replace(/^Area /i,''); }
     }
     var status = String(rent.status||'active').toLowerCase();
-    var active = status === 'active' && !rent.refunded;
-    // Supplier rule: once first code arrives, refund is no longer available
+    var tillMs = rent.active_till ? new Date(rent.active_till).getTime() : 0;
+    var liveByTime = !tillMs || (tillMs > Date.now());
+    var deadStatus = ['refunded','cancelled','canceled','expired','finished','ended'].indexOf(status) >= 0;
+    var active = !rent.refunded && !deadStatus && liveByTime && status !== 'refunded';
+    // Once first code arrives, refund is no longer available
     var canCancel = active && !hasReceivedCode && !rent.refunded;
     var autoOn = !!(rent.auto_renew || rent.renewal || rent.is_auto_renew);
     var phone = fmtPhone(rent.phone || rent.number);
@@ -309,7 +312,7 @@ h1{font-size:17px;font-weight:800;letter-spacing:-.02em}
     document.getElementById('rfService').textContent = (rent.service && rent.service.name) || rent.service_name || 'USA rental';
     var amtEl = document.getElementById('rfRefundAmt');
     var paid = Number(rent.price_ngn || rent.price || 0);
-    if(amtEl) amtEl.textContent = paid > 0 ? ('₦' + paid.toLocaleString()) : 'If supplier approves';
+    if(amtEl) amtEl.textContent = paid > 0 ? ('₦' + paid.toLocaleString()) : 'If approved';
     var conf = document.getElementById('rfConfirm');
     if(conf) conf.textContent = paid > 0 ? ('Refund ₦' + paid.toLocaleString()) : 'Refund';
     document.getElementById('refundModal').classList.add('on');
@@ -336,6 +339,7 @@ h1{font-size:17px;font-weight:800;letter-spacing:-.02em}
       rent.status = 'refunded'; rent.refunded = true;
       setFlash(j.message || 'Refund submitted. If approved, your wallet is credited automatically.', true);
       render();
+      setTimeout(function(){ location.href = 'mj-sms-usa-rent.html'; }, 1200);
     } else {
       setFlash(j.message || 'Refund not available for this number', false);
     }
