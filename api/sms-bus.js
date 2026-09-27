@@ -2300,16 +2300,38 @@ export default async function handler(req, res) {
           });
         } catch (_) {}
         const { data: fresh } = await supabase.from('profiles').select('balance').eq('id', auth.userId).single();
-        // Optional auto-renew (GotSMS toggle after rent)
+        // Optional auto-renew (GotSMS: POST renewal/toggle flips state; default is off)
         let autoRenew = false;
-        if (body.auto_renew && rent && rent.id) {
+        const wantRenew = body.auto_renew === true || body.auto_renew === 1 || body.auto_renew === '1' || body.auto_renew === 'true';
+        if (wantRenew && rent && rent.id) {
           try {
+            // Toggle once (off → on)
             const tg = await gotsmsFetch(
               `/api/rents/${encodeURIComponent(rent.id)}/renewal/toggle`,
               { method: 'POST' }
             );
-            autoRenew = !!(tg.ok && tg.data?.success && (tg.data?.data?.is_included_for_next_renewal !== false));
-          } catch (_) {}
+            autoRenew = !!(tg.ok && tg.data && (tg.data.success !== false) && (
+              (tg.data.data && tg.data.data.is_included_for_next_renewal === true) ||
+              /enabled/i.test(String(tg.data.message || ''))
+            ));
+            // If response shape unclear, verify with GET rent
+            if (!autoRenew) {
+              const check = await gotsmsFetch(`/api/rents/${encodeURIComponent(rent.id)}`);
+              const r = check.data?.data || check.data;
+              if (r && r.is_included_for_next_renewal === true) autoRenew = true;
+              else if (r && r.is_included_for_next_renewal === false) {
+                // still off — toggle again once
+                const tg2 = await gotsmsFetch(
+                  `/api/rents/${encodeURIComponent(rent.id)}/renewal/toggle`,
+                  { method: 'POST' }
+                );
+                const r2 = tg2.data?.data;
+                autoRenew = !!(r2 && r2.is_included_for_next_renewal === true) || /enabled/i.test(String(tg2.data?.message || ''));
+              }
+            }
+          } catch (e) {
+            console.error('[gotsms] auto_renew', e.message || e);
+          }
         }
 
         return json(res, 201, {
@@ -2442,6 +2464,21 @@ export default async function handler(req, res) {
             status: 'completed'
           });
         } catch (_) {}
+        // Enable auto-renew on each rented number if requested
+        const wantRenewBulk = body.auto_renew === true || body.auto_renew === 1 || body.auto_renew === '1' || body.auto_renew === 'true';
+        if (wantRenewBulk && out.length) {
+          for (const item of out) {
+            const rid = item && item.id;
+            if (!rid) continue;
+            try {
+              const tg = await gotsmsFetch(`/api/rents/${encodeURIComponent(rid)}/renewal/toggle`, { method: 'POST' });
+              const on = !!(tg.data?.data?.is_included_for_next_renewal === true || /enabled/i.test(String(tg.data?.message || '')));
+              item.auto_renew = on;
+            } catch (_) {
+              item.auto_renew = false;
+            }
+          }
+        }
         return json(res, 201, {
           success: true,
           message: g.data?.message || `Rented ${rented} of ${quantity}`,
