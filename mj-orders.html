@@ -47,7 +47,9 @@
     .wrap{max-width:560px;margin:0 auto;padding:16px 16px 24px}
 
     /* Type tabs at top */
-    .type-tabs{
+    .type-tabs.logs-only{grid-template-columns:1fr}
+.type-tabs.logs-only .type-tab{cursor:default}
+.type-tabs{
       display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:14px;
       padding:6px;border-radius:16px;background:var(--card);border:1px solid var(--border);
     }
@@ -580,25 +582,17 @@
     <a class="back" href="dashboard.html" aria-label="Back"><i class="fa-solid fa-arrow-left"></i></a>
     <div>
       <h1>My Orders</h1>
-      <p>Logs · SMS · Boosters</p>
+      <p>Account logins &amp; digital deliveries</p>
     </div>
   </header>
 
   <main class="wrap">
-    <div class="type-tabs" role="tablist">
+    <div class="type-tabs logs-only" style="display:none" role="tablist">
       <button type="button" class="type-tab active" data-tab="logs" id="tabLogs">
         <i class="fa-solid fa-box"></i> Logs
         <span class="count" id="countLogs">—</span>
       </button>
-      <button type="button" class="type-tab" data-tab="sms" id="tabSms">
-        <i class="fa-solid fa-comment-sms"></i> SMS
-        <span class="count" id="countSms">—</span>
-      </button>
-      <button type="button" class="type-tab" data-tab="boosters" id="tabBoost">
-        <i class="fa-solid fa-bolt"></i> Boosters
-        <span class="count" id="countBoost">—</span>
-      </button>
-    </div>
+      </div>
 
     <section class="hero">
       <h2 id="heroTitle">MJ Logs</h2>
@@ -2231,10 +2225,9 @@ function downloadText() {
 }
 
 function render() {
+  tab = 'logs';
   setHero();
-  if (tab === 'logs') renderLogs();
-  else if (tab === 'sms') renderSms();
-  else renderBoosters();
+  renderLogs();
 }
 
 document.addEventListener('click', function (e) {
@@ -2320,15 +2313,10 @@ async function boot() {
   if (list && !_myOrdersCache && !readOrdersDiskCache()) {
     list.innerHTML = '<div class="empty"><p>Loading your orders…</p></div>';
   }
-  await Promise.all([loadLogs(), loadSms(), loadBoosters()]);
+  await loadLogs();
   try {
     const q = new URLSearchParams(location.search).get('tab');
-    if (q === 'sms' || q === 'boosters' || q === 'logs') {
-      tab = q;
-      document.querySelectorAll('.type-tab').forEach(function (b) {
-        b.classList.toggle('active', b.getAttribute('data-tab') === tab);
-      });
-    }
+    tab = 'logs';
   } catch (e) {}
   bindViewButtons();
   bindSendButton();

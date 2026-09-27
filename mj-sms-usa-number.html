@@ -85,6 +85,16 @@ h1{font-size:17px;font-weight:800;letter-spacing:-.02em}
 .hint{font-size:11px;color:var(--muted);line-height:1.45;margin-top:10px;font-weight:600}
 .flash{font-size:13px;font-weight:700;margin-top:10px;min-height:1.2em}
 .flash.err{color:var(--danger)}.flash.ok{color:var(--ok)}
+.toast-pop{
+  position:fixed;left:50%;bottom:28px;transform:translateX(-50%) translateY(120%);
+  z-index:9999;max-width:min(420px,92vw);padding:14px 18px;border-radius:14px;
+  font:700 14px/1.4 inherit;box-shadow:0 12px 40px rgba(0,0,0,.35);
+  background:#0f172a;color:#fff;border:1px solid rgba(148,163,184,.25);
+  transition:transform .28s ease,opacity .28s ease;opacity:0;pointer-events:none;
+}
+.toast-pop.on{transform:translateX(-50%) translateY(0);opacity:1}
+.toast-pop.ok{background:#065f46;border-color:rgba(52,211,153,.35)}
+.toast-pop.err{background:#7f1d1d;border-color:rgba(248,113,113,.35)}
 
 /* Inbox */
 .inbox-card{background:var(--card);border:1px solid var(--border);border-radius:20px;padding:16px;
@@ -185,9 +195,21 @@ h1{font-size:17px;font-weight:800;letter-spacing:-.02em}
   }
   function setFlash(msg, ok){
     var el = document.getElementById('flash');
-    if(!el) return;
-    el.className = 'flash '+(ok?'ok':'err');
-    el.textContent = msg || '';
+    if(el){
+      el.textContent = msg||'';
+      el.className = 'flash '+(ok?'ok':'err');
+    }
+    var t = document.getElementById('toastPop');
+    if(!t){
+      t = document.createElement('div');
+      t.id = 'toastPop';
+      t.className = 'toast-pop';
+      document.body.appendChild(t);
+    }
+    t.textContent = msg||'';
+    t.className = 'toast-pop on '+(ok?'ok':'err');
+    clearTimeout(window.__toastT);
+    window.__toastT = setTimeout(function(){ t.classList.remove('on'); }, 3200);
   }
 
   function render(){
@@ -339,7 +361,7 @@ h1{font-size:17px;font-weight:800;letter-spacing:-.02em}
       rent.status = 'refunded'; rent.refunded = true;
       setFlash(j.message || 'Refund submitted. If approved, your wallet is credited automatically.', true);
       render();
-      setTimeout(function(){ location.href = 'mj-sms-usa-rent.html'; }, 1200);
+      setTimeout(function(){ location.href = 'mj-sms-usa-rent.html'; }, 2200);
     } else {
       setFlash(j.message || 'Refund not available for this number', false);
     }

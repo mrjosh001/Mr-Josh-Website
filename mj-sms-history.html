@@ -82,11 +82,14 @@ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/sv
     <button type="button" class="tab on" data-view="otp">OTP numbers</button>
     <button type="button" class="tab" data-view="rent">USA &amp; long rentals</button>
   </div>
-  <div id="otpFilters" class="filters">
-    <button type="button" class="chip on" data-filter="all">All</button>
-    <button type="button" class="chip" data-filter="completed">Completed</button>
-    <button type="button" class="chip" data-filter="cancelled">Cancelled</button>
-    <button type="button" class="chip" data-filter="waiting">Waiting</button>
+  <div id="otpFilters" class="rent-filters">
+    <label class="rent-filter-label">Show</label>
+    <select id="otpFilter" class="rent-filter-select">
+      <option value="completed" selected>Completed</option>
+      <option value="waiting">Waiting</option>
+      <option value="cancelled">Cancelled / expired</option>
+      <option value="all">All numbers</option>
+    </select>
   </div>
   <div id="rentFilters" class="rent-filters" style="display:none">
     <label class="rent-filter-label">Show</label>
@@ -106,7 +109,7 @@ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/sv
 const SUPABASE_URL='https://atczodlljmlayvldxfmv.supabase.co';
 const SUPABASE_ANON_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImF0Y3pvZGxsam1sYXl2bGR4Zm12Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODUwNzUyMzgsImV4cCI6MjEwMDY1MTIzOH0.ufthD-p7BmeD_B7xyuMM6PNPL8DmcL4AtRYgg-MuoLI';
 const listEl=document.getElementById('list');
-let allOrders=[], view='otp', filter='all', rentFilter='active';
+let allOrders=[], view='otp', filter='completed', rentFilter='active';
 function esc(s){if(!s)return'';return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;')}
 function money(n){return '₦'+Number(n||0).toLocaleString()}
 function bucket(status){const s=String(status||'').toLowerCase();if(s==='completed'||s==='success')return'completed';if(s==='expired')return'expired';if(s==='refunded'||s==='cancelled'||s==='canceled')return'cancelled';if(s==='waiting_for_code'||s==='pending'||s==='waiting')return'waiting';return'other'}
@@ -163,17 +166,24 @@ function matchesSearch(o){
 }
 function render(){
   let rows=allOrders.filter(function(o){return matchesSearch(o)&&(view==='rent'?isRent(o):!isRent(o))});
-  if(view==='otp'&&filter!=='all')rows=rows.filter(function(o){return bucket(o.status)===filter});
+  if(view==='otp'&&filter!=='all')rows=rows.filter(function(o){
+    var bkt=bucket(o.status);
+    if(filter==='completed') return bkt==='completed' || !!(o.code && String(o.code).trim());
+    if(filter==='waiting') return bkt==='waiting' || String(o.status||'').toLowerCase()==='waiting_for_code';
+    if(filter==='cancelled') return bkt==='cancelled' || bkt==='expired';
+    return bkt===filter;
+  });
   if(view==='rent'&&rentFilter==='active')rows=rows.filter(function(o){return isUsaActiveRow(o);});
   if(view==='rent'&&rentFilter==='ended')rows=rows.filter(function(o){return !isUsaActiveRow(o);});
   if(!rows.length){
-    listEl.innerHTML='<div class="empty">'+(view==='rent'?(rentFilter==='active'?'No active USA rentals right now.<br><a href="mj-sms-usa-rent.html" style="color:var(--primary)">Rent a number</a>':(rentFilter==='ended'?'No expired or cancelled rentals.':'No USA rentals yet. Open USA rental to get a number.')):'No OTP numbers yet. Tap Get OTP to choose a server.')+'</div>';
+    listEl.innerHTML='<div class="empty">'+(view==='rent'?(rentFilter==='active'?'No active USA rentals right now.<br><a href="mj-sms-usa-rent.html" style="color:var(--primary)">Rent a number</a>':(rentFilter==='ended'?'No expired or cancelled rentals.':'No USA rentals yet. Open USA rental to get a number.')):(filter==='completed'?'No completed OTP numbers yet.<br>Numbers with a successful code will show here.':(filter==='waiting'?'No numbers waiting for a code.':'No OTP numbers yet. Tap Get OTP to choose a server.')))+'</div>';
     return;
   }
   listEl.innerHTML=rows.map(function(o){
     const name=(o.service_name||o.service||'SMS').replace(/_/g,' ');
     const date=o.created_at?new Date(o.created_at).toLocaleString():'—';
-    const b=bucket(o.status);
+    let b=bucket(o.status);
+    if(!isRent(o)&&o.code&&String(o.code).trim()&&b!=='cancelled') b='completed';
     let pillCls=b==='completed'?'ok':b==='waiting'?'wait':b==='cancelled'?'bad':'muted';
     let statusLabel=b==='completed'?(isRent(o)?'Active / completed':'Code received'):b==='waiting'?'Waiting for code':b==='expired'?'Expired':b==='cancelled'?'Cancelled':'—';
     let action='';
@@ -181,8 +191,9 @@ function render(){
     const isS2=src==='smsbus'||src==='sms-bus';
     if(!isRent(o)&&String(o.status)==='waiting_for_code'){
       const page=isS2?'mj-sms3-number.html':'mj-sms-number.html';
-      action='<div class="act"><a href="'+page+'?order_id='+encodeURIComponent(o.order_id||'')+'">Verify SMS</a></div>';
+      action='<div class="act"><a class="btn-inbox" href="'+page+'?order_id='+encodeURIComponent(o.order_id||'')+'"><i class="fa-solid fa-inbox"></i> Verify SMS</a></div>';
     }
+
     // Server 2 only: Reuse for 20 minutes after code received (SMS-Bus rule)
     const REUSE_MS=20*60*1000;
     if(!isRent(o)&&isS2&&b==='completed'&&o.code&&(o.is_reusable===true||o.is_reusable===1||o.is_reusable==='true')){
@@ -203,6 +214,13 @@ function render(){
           '<div class="reuse-hint">Same number · about '+mins+' min left to reuse</div>';
       }
     }
+    // Completed OTP — always allow opening the number page to re-read the code
+    if(!isRent(o)&&(b==='completed'||(o.code&&String(o.code).trim()))&&String(o.status)!=='waiting_for_code'){
+      const page=isS2?'mj-sms3-number.html':'mj-sms-number.html';
+      const oid=encodeURIComponent(o.order_id||'');
+      const inboxBtn='<div class="act"><a class="btn-inbox" href="'+page+'?order_id='+oid+'"><i class="fa-solid fa-inbox"></i> View inbox</a></div>';
+      action=(action||'')+inboxBtn;
+    }
     const isGotsms=String(o.source||'').toLowerCase()==='gotsms';
     const rentId=String(o.idempotency_key||'').replace(/^gotsms-/,'')||String(o.rent_id||'');
     const stLow=String(o.status||'').toLowerCase();
@@ -222,7 +240,7 @@ function render(){
       else if(isActiveUsa){ statusLabel='Active'; pillCls='ok'; }
       else { statusLabel='Ended'; pillCls='muted'; }
     }
-    const gotsmsBtn=isActiveUsa?('<div class="act"><a class="btn-inbox" href="mj-sms-usa-number.html?rent_id='+encodeURIComponent(rentId)+'"><i class="fa-solid fa-inbox"></i> Check inbox</a></div>'):'';
+    const gotsmsBtn=(isGotsms&&rentId)?('<div class="act"><a class="btn-inbox" href="mj-sms-usa-number.html?rent_id='+encodeURIComponent(rentId)+'"><i class="fa-solid fa-inbox"></i> '+(isActiveUsa?'Check inbox':'View inbox')+'</a></div>'):'';
     const cdId=isActiveUsa?('cd-'+esc(String(o.order_id||rentId).replace(/[^a-zA-Z0-9_-]/g,''))):'';
     const countdownRow=(isActiveUsa&&tillMs)?('<div class="row cd-row"><span class="l">Time left</span><span class="v cd-val" id="'+cdId+'" data-till="'+tillMs+'">—</span></div>'):((isGotsms&&tillMs)?('<div class="row"><span class="l">Ended</span><span class="v">'+esc(new Date(tillMs).toLocaleString())+'</span></div>'):'');
     const durRow=(meta&&(meta.duration||meta.carrier))?('<div class="row"><span class="l">Plan</span><span class="v">'+esc([meta.duration,meta.carrier,meta.extra].filter(Boolean).join(' · ')||'—')+'</span></div>'):'';
@@ -267,12 +285,8 @@ document.querySelectorAll('.tab').forEach(function(t){
 });
 var _rf=document.getElementById('rentFilter');
 if(_rf){ _rf.onchange=function(){ rentFilter=_rf.value||'active'; render(); }; }
-document.getElementById('otpFilters').onclick=function(e){
-  const c=e.target.closest('.chip');if(!c)return;
-  filter=c.getAttribute('data-filter')||'all';
-  document.querySelectorAll('#otpFilters .chip').forEach(function(x){x.classList.toggle('on',x===c)});
-  render();
-};
+var _of=document.getElementById('otpFilter');
+if(_of){ _of.value=filter||'completed'; _of.onchange=function(){ filter=_of.value||'completed'; render(); }; }
 document.getElementById('histSearch').addEventListener('input',function(){render()});
 
 let reusing=false;
