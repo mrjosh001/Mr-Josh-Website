@@ -38,6 +38,61 @@ const supabase = createClient(
 const GOTSMS_BASE = 'https://app.gotsms.org';
 const GOTSMS_TOKEN = process.env.GOTSMS_API_TOKEN || process.env.GOT_SMS_TOKEN || '';
 
+
+/** Fixed customer prices by duration (NGN). Admin override still wins per plan. */
+const GOTSMS_DURATION_PRICE_NGN = {
+  '1_day': 2500,
+  '3_day': 3500,
+  '7_day': 4500,
+  '14_day': 8000,
+  '1_month': 12000,
+  '3_month': 31000,
+  '6_month': 65000,
+  '1_year': 102000,
+  // aliases
+  '1_days': 2500,
+  '3_days': 3500,
+  '7_days': 4500,
+  '14_days': 8000,
+  '1_months': 12000,
+  '3_months': 31000,
+  '6_months': 65000,
+  '1_years': 102000
+};
+
+/** One-time add-ons when user picks carrier / area code (GotSMS ~$0.30 / $0.60). */
+const GOTSMS_CARRIER_ADDON_NGN = Math.max(0, Number(process.env.GOTSMS_CARRIER_ADDON_NGN) || 800);
+const GOTSMS_AREA_ADDON_NGN = Math.max(0, Number(process.env.GOTSMS_AREA_ADDON_NGN) || 1000);
+
+function gotsmsDurationKey(plan) {
+  if (!plan) return '';
+  const t = String(plan.duration_type || '').toLowerCase().replace(/s$/, ''); // day, month, year
+  const n = Number(plan.duration_in_type || 0);
+  if (!(n > 0) || !t) {
+    // parse "1 day", "3 days", "1 month" from translation
+    const tr = String(plan.duration_translation || '').toLowerCase();
+    const m = tr.match(/(\d+)\s*(day|days|month|months|year|years|week|weeks)/);
+    if (m) return `${m[1]}_${m[2].replace(/s$/, '')}`;
+    return '';
+  }
+  return `${n}_${t}`;
+}
+
+function gotsmsFixedDurationPriceNgn(plan) {
+  const key = gotsmsDurationKey(plan);
+  if (key && GOTSMS_DURATION_PRICE_NGN[key] != null) return GOTSMS_DURATION_PRICE_NGN[key];
+  // try with trailing s
+  if (key && GOTSMS_DURATION_PRICE_NGN[key + 's'] != null) return GOTSMS_DURATION_PRICE_NGN[key + 's'];
+  return null;
+}
+
+function gotsmsAddonsNgn({ area_code, cellular_carrier_id } = {}) {
+  let add = 0;
+  if (cellular_carrier_id) add += GOTSMS_CARRIER_ADDON_NGN;
+  if (area_code && String(area_code).replace(/\D/g, '').length >= 3) add += GOTSMS_AREA_ADDON_NGN;
+  return add;
+}
+
 function gotsmsSellPriceNgn(supplierUsd) {
   const rate =
     Number(process.env.USD_TO_NGN_RATE) ||
@@ -119,8 +174,14 @@ function gotsmsEnrichPlan(p) {
     duration_translation: p.duration_translation,
     price_usd: usd,
     renew_price_usd: Number(p.renew_price || usd),
-    price_ngn: gotsmsSellPriceNgn(usd),
-    renew_price_ngn: gotsmsSellPriceNgn(Number(p.renew_price || usd)),
+    // Fixed duration price for all services; USD markup only as fallback
+    price_ngn: (gotsmsFixedDurationPriceNgn(p) != null ? gotsmsFixedDurationPriceNgn(p) : gotsmsSellPriceNgn(usd)),
+    renew_price_ngn: (gotsmsFixedDurationPriceNgn({ ...p, duration_translation: p.duration_translation }) != null
+      ? gotsmsFixedDurationPriceNgn(p)
+      : gotsmsSellPriceNgn(Number(p.renew_price || usd))),
+    price_mode: gotsmsFixedDurationPriceNgn(p) != null ? 'fixed_duration' : 'markup',
+    carrier_addon_ngn: GOTSMS_CARRIER_ADDON_NGN,
+    area_addon_ngn: GOTSMS_AREA_ADDON_NGN,
     is_monthly_supported: p.is_monthly_supported,
     is_available: p.is_available !== false
   };
@@ -2145,8 +2206,11 @@ export default async function handler(req, res) {
             data: { plan_id, service_id: service_id || null, found: !!plan }
           });
         }
-        let price = gotsmsSellPriceNgn(supplierUsd);
-        // Admin override wins (same row sync uses service_id = plan id)
+        // Base: fixed duration table → else USD markup
+        let price = gotsmsFixedDurationPriceNgn(plan) != null
+          ? gotsmsFixedDurationPriceNgn(plan)
+          : gotsmsSellPriceNgn(supplierUsd);
+        // Admin override on plan row wins (base only — addons still apply)
         try {
           const { data: dbPlan } = await supabase
             .from('number_services')
@@ -2161,10 +2225,19 @@ export default async function handler(req, res) {
             price = Number(dbPlan.price);
           }
         } catch (_) {}
+        const areaCode = body.area_code ? String(body.area_code).replace(/\D/g, '').slice(0, 6) : '';
+        const carrierId = body.cellular_carrier_id ? String(body.cellular_carrier_id) : '';
+        const addons = gotsmsAddonsNgn({ area_code: areaCode, cellular_carrier_id: carrierId });
+        price = price + addons;
         if (body.quoted_price_ngn != null) {
           const q = Number(body.quoted_price_ngn);
-          if (Number.isFinite(q) && Math.abs(q - price) > 50) {
-            return json(res, 409, { success: false, message: 'Price updated. Refresh and try again.', data: { price_ngn: price } });
+          // allow small drift; quoted should include addons from client
+          if (Number.isFinite(q) && Math.abs(q - price) > 100) {
+            return json(res, 409, {
+              success: false,
+              message: 'Price updated. Refresh and try again.',
+              data: { price_ngn: price, base_addons: addons }
+            });
           }
         }
 
@@ -2279,7 +2352,9 @@ export default async function handler(req, res) {
         }
         const unitUsd = Number(plan?.price || body.quoted_usd || 0);
         if (!(unitUsd > 0)) return json(res, 400, { success: false, message: 'Plan unavailable or out of stock. Pick the service again.' });
-        let unitNgn = gotsmsSellPriceNgn(unitUsd);
+        let unitNgn = gotsmsFixedDurationPriceNgn(plan) != null
+          ? gotsmsFixedDurationPriceNgn(plan)
+          : gotsmsSellPriceNgn(unitUsd);
         try {
           const { data: dbPlan } = await supabase
             .from('number_services')
@@ -2294,6 +2369,9 @@ export default async function handler(req, res) {
             unitNgn = Number(dbPlan.price);
           }
         } catch (_) {}
+        const areaCode = body.area_code ? String(body.area_code).replace(/\D/g, '').slice(0, 6) : '';
+        const carrierId = body.cellular_carrier_id ? String(body.cellular_carrier_id) : '';
+        unitNgn = unitNgn + gotsmsAddonsNgn({ area_code: areaCode, cellular_carrier_id: carrierId });
         const totalNgn = unitNgn * quantity;
 
         const { data: profile } = await supabase.from('profiles').select('id, balance, customer_id').eq('id', auth.userId).single();
@@ -2615,7 +2693,7 @@ export default async function handler(req, res) {
             if (!planId) continue;
             const sid = String(planId);
             const usd = Number(pl.price || 0);
-            const priceNgn = gotsmsSellPriceNgn(usd);
+            const priceNgn = gotsmsFixedDurationPriceNgn(pl) != null ? gotsmsFixedDurationPriceNgn(pl) : gotsmsSellPriceNgn(usd);
             const serviceName = pl.service?.name
               ? `${pl.service.name} · ${pl.duration_translation || pl.duration_type || ''}`.trim()
               : (pl.duration_translation || pl.service_name || 'USA rental');
