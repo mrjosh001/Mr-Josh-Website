@@ -104,24 +104,51 @@ h1{font-size:17px;font-weight:800;letter-spacing:-.02em}
 .inbox-head .live{font-size:11px;font-weight:700;color:var(--ok);display:flex;align-items:center;gap:6px}
 .inbox-head .live::before{content:'';width:7px;height:7px;border-radius:50%;background:var(--ok);animation:pulse 1.6s ease infinite}
 @keyframes pulse{0%,100%{opacity:1}50%{opacity:.35}}
+/* Professional SMS inbox cards (supplier-style) */
 .msg{
-  padding:0;border-radius:16px;background:var(--card);border:1px solid var(--border);
-  margin-bottom:12px;overflow:hidden;box-shadow:0 4px 16px rgba(0,0,0,.06);
+  padding:0;border-radius:18px;background:var(--card);border:1px solid var(--border);
+  margin-bottom:14px;overflow:hidden;
+  box-shadow:0 8px 28px rgba(15,23,42,.08);
 }
 .msg:last-child{margin-bottom:0}
-.msg-top{display:grid;grid-template-columns:1fr 1fr;gap:8px 16px;padding:14px 16px 10px;border-bottom:1px solid var(--border)}
-.msg-k{font-size:10px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin-bottom:3px}
-.msg-v{font-size:14px;font-weight:800;color:var(--text);word-break:break-word}
+.msg-top{
+  display:grid;grid-template-columns:1fr 1fr;gap:12px 20px;
+  padding:16px 18px 12px;
+}
+.msg-k{
+  font-size:10px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;
+  color:var(--muted);margin-bottom:4px;
+}
+.msg-v{font-size:15px;font-weight:800;color:var(--text);word-break:break-word;line-height:1.25}
 .msg-phone{grid-column:1/-1}
-.msg-body{padding:14px 16px;font-size:14px;font-weight:600;line-height:1.5;color:var(--text2)}
-.msg-foot{display:flex;align-items:flex-end;justify-content:space-between;gap:12px;padding:12px 16px;background:var(--input);border-top:1px solid var(--border)}
-.msg .code-pill{display:inline-flex;align-items:center;gap:8px;padding:8px 12px;border-radius:10px;background:var(--card);border:1px solid var(--border)}
-.msg .code{font-size:18px;font-weight:800;letter-spacing:.1em;color:var(--primary);font-variant-numeric:tabular-nums}
-.msg .copy-code{font-size:11px;font-weight:800;padding:6px 10px;border-radius:8px;border:1px solid var(--border);
-  background:var(--card);color:var(--primary);cursor:pointer;font-family:inherit}
-.msg .when-block{text-align:right}
-.msg .when-label{font-size:10px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
-.msg .when{font-size:12px;color:var(--muted);font-weight:700;margin-top:2px}
+.msg-body{
+  padding:4px 18px 14px;font-size:14px;font-weight:550;line-height:1.55;
+  color:var(--text2);border-top:1px solid transparent;
+}
+.msg-foot{
+  display:flex;align-items:flex-end;justify-content:space-between;gap:14px;
+  padding:14px 18px;background:color-mix(in srgb,var(--input) 88%,var(--primary) 4%);
+  border-top:1px solid var(--border);
+}
+.msg .code-pill{
+  display:inline-flex;align-items:center;gap:10px;padding:8px 12px;border-radius:12px;
+  background:var(--card);border:1px solid color-mix(in srgb,var(--primary) 35%,var(--border));
+  box-shadow:0 2px 8px rgba(59,130,246,.12);
+}
+.msg .code{
+  font-size:20px;font-weight:800;letter-spacing:.14em;color:var(--primary);
+  font-variant-numeric:tabular-nums;
+}
+.msg .copy-code,.msg .copy-inline{
+  font-size:11px;font-weight:800;padding:6px 10px;border-radius:8px;border:1px solid var(--border);
+  background:var(--card);color:var(--primary);cursor:pointer;font-family:inherit;
+}
+.msg .copy-inline{padding:2px 6px;margin-left:6px;vertical-align:middle;display:inline-flex}
+.msg .when-block{text-align:right;flex-shrink:0}
+.msg .when-label{font-size:10px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
+.msg .when-rel{font-size:13px;font-weight:800;color:var(--text);margin-top:2px}
+.msg .when{font-size:11px;color:var(--muted);font-weight:600;margin-top:2px}
+#inbox{display:flex;flex-direction:column;gap:0}
 .empty{text-align:center;padding:28px 16px;color:var(--muted);font-size:13px;font-weight:600;line-height:1.5}
 
 /* Modal */
@@ -184,7 +211,18 @@ h1{font-size:17px;font-weight:800;letter-spacing:-.02em}
   const rentId = params.get('rent_id') || '';
   let rent = null, pollTimer = null, cdTimer = null, renewBusy = false, hasReceivedCode = false;
 
-  function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g,function(c){return({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c];}); }
+  function relTime(d){
+  try{
+    var t=new Date(d).getTime(); if(!t) return '';
+    var sec=Math.round((Date.now()-t)/1000);
+    if(sec<60) return 'Just now';
+    if(sec<3600) return Math.floor(sec/60)+' min ago';
+    if(sec<86400) return Math.floor(sec/3600)+' hour'+(Math.floor(sec/3600)===1?'':'s')+' ago';
+    if(sec<604800) return Math.floor(sec/86400)+' day'+(Math.floor(sec/86400)===1?'':'s')+' ago';
+    return new Date(t).toLocaleDateString();
+  }catch(_){return '';}
+}
+function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g,function(c){return({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c];}); }
   function fmtPhone(p){
     var d = String(p||'').replace(/\D/g,'');
     if(d.length===11 && d[0]==='1') return '+1 '+d.slice(1,4)+'-'+d.slice(4,7)+'-'+d.slice(7);
@@ -440,18 +478,27 @@ h1{font-size:17px;font-weight:800;letter-spacing:-.02em}
     box.innerHTML = list.map(function(m){
       var when=m.received_at?new Date(m.received_at):null;
       var whenStr=when?when.toLocaleString():'';
+      var whenRel=when?relTime(when):'';
       var from=m.from||m.sender||m.originator||'—';
       var code=m.code?String(m.code).trim():'';
+      var body=m.body?String(m.body).trim():'';
       return '<div class="msg">'+
         '<div class="msg-top">'+
           '<div><div class="msg-k">Service</div><div class="msg-v">'+esc(m.service_name||svcName)+'</div></div>'+
           '<div><div class="msg-k">From</div><div class="msg-v">'+esc(from)+'</div></div>'+
           '<div class="msg-phone"><div class="msg-k">Phone</div><div class="msg-v">'+esc(phoneShow)+'</div></div>'+
         '</div>'+
-        (m.body?'<div class="msg-body">'+esc(m.body)+'</div>':'')+
+        (body?'<div class="msg-body">'+esc(body)+(code?'':' <button type="button" class="copy-inline" data-c="'+esc(body)+'" title="Copy message">⎘</button>')+'</div>':'')+
         '<div class="msg-foot">'+
-          '<div>'+(code?'<div class="msg-k">Code</div><div class="code-pill"><span class="code">'+esc(code)+'</span><button type="button" class="copy-code" data-c="'+esc(code)+'">Copy</button></div>':'<div class="msg-k">Code</div><div class="msg-v">—</div>')+'</div>'+
-          (whenStr?'<div class="when-block"><div class="when-label">Received at</div><div class="when">'+esc(whenStr)+'</div></div>':'')+
+          '<div>'+
+            '<div class="msg-k">Code</div>'+
+            (code
+              ? '<div class="code-pill"><span class="code">'+esc(code)+'</span><button type="button" class="copy-code" data-c="'+esc(code)+'">Copy</button></div>'
+              : '<div class="msg-v">—</div>')+
+          '</div>'+
+          (whenStr
+            ? '<div class="when-block"><div class="when-label">Received at</div>'+(whenRel?'<div class="when-rel">'+esc(whenRel)+'</div>':'')+'<div class="when">'+esc(whenStr)+'</div></div>'
+            : '')+
         '</div>'+
       '</div>';
     }).join('');
