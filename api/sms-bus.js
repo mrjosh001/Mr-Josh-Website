@@ -198,8 +198,15 @@ async function gotsmsAssertOwns(userId, rentId) {
   return !!data;
 }
 
-async function gotsmsSaveOrder({ userId, customerId, rentId, phone, serviceName, serviceId, priceNgn, supplierUsd, status, activeTill, planLabel }) {
+async function gotsmsSaveOrder({ userId, customerId, rentId, phone, serviceName, serviceId, priceNgn, supplierUsd, status, activeTill, planLabel, carrierName, areaCode }) {
   const orderId = `GS-${String(rentId || '').slice(0, 8)}-${Date.now().toString(36)}`;
+  // number_orders has no dedicated active_till/carrier columns on all envs —
+  // store expiry ISO in `code` (rental marker) and extras in service_name suffix.
+  const bits = [serviceName || 'USA rental'];
+  if (planLabel) bits.push(String(planLabel));
+  if (carrierName) bits.push(String(carrierName));
+  if (areaCode) bits.push('Area ' + String(areaCode));
+  const displayName = bits.filter(Boolean).join(' · ');
   const row = {
     source: 'gotsms',
     user_id: userId,
@@ -209,13 +216,14 @@ async function gotsmsSaveOrder({ userId, customerId, rentId, phone, serviceName,
     country_id: 12,
     country_name: 'United States',
     service_id: serviceId || 'gotsms',
-    service_name: serviceName || planLabel || 'USA rental',
+    service_name: displayName,
     phone_number: phone || null,
     price: priceNgn,
     supplier_price: supplierUsd,
     currency: 'NGN',
     status: status || 'active',
-    code: activeTill || null,
+    // ISO expiry for countdown (not an SMS code — rentals use inbox API for codes)
+    code: activeTill ? String(activeTill) : null,
     refunded: false
   };
   try {
@@ -2274,7 +2282,9 @@ export default async function handler(req, res) {
           supplierUsd,
           status: rent.status || 'active',
           activeTill: rent.active_till,
-          planLabel: rent.plan?.duration_translation || plan?.duration_translation
+          planLabel: rent.plan?.duration_translation || plan?.duration_translation,
+          carrierName: rent.cellular_carrier?.name || rent.carrier?.name || body.carrier_name || null,
+          areaCode: body.area_code || rent.area_code || null
         });
         try {
           await supabase.from('transactions').insert({
@@ -2413,7 +2423,9 @@ export default async function handler(req, res) {
             supplierUsd: unitUsd,
             status: rent.status || 'active',
             activeTill: rent.active_till,
-            planLabel: plan?.duration_translation
+            planLabel: plan?.duration_translation,
+            carrierName: body.carrier_name || null,
+            areaCode: body.area_code || null
           });
           out.push({ ...gotsmsPublicRent(rent), order_id: oid, price_ngn: unitNgn });
         }
@@ -2586,7 +2598,8 @@ export default async function handler(req, res) {
             service_name: o.service_name,
             price_ngn: o.price,
             status: o.status,
-            active_till: o.code,
+            active_till: (o.active_till || (o.code && !isNaN(Date.parse(o.code)) ? o.code : null)),
+            duration_label: o.service_name,
             refunded: o.refunded,
             created_at: o.created_at
           }))
