@@ -358,8 +358,8 @@ h1{font-size:17px;font-weight:800;letter-spacing:-.02em}
       var h = Math.floor((left%86400000)/3600000);
       var m = Math.floor((left%3600000)/60000);
       var s = Math.floor((left%60000)/1000);
-      if(d > 0) el.textContent = d+'d '+String(h).padStart(2,'0')+':'+String(m).padStart(2,'0');
-      else el.textContent = String(h).padStart(2,'0')+':'+String(m).padStart(2,'0')+':'+String(s).padStart(2,'0');
+      var hh=String(h).padStart(2,'0'), mm=String(m).padStart(2,'0'), ss=String(s).padStart(2,'0');
+      el.textContent = (d > 0 ? (d+'d ') : '') + hh+':'+mm+':'+ss;
       cdTimer = setTimeout(tick, 1000);
     }
     tick();
@@ -426,13 +426,43 @@ h1{font-size:17px;font-weight:800;letter-spacing:-.02em}
       var j2 = await api('rents', { query: 'status=finished' });
       rent = (j2.data||[]).find(function(r){ return String(r.id)===String(rentId); }) || null;
     }
-    if(!rent){
+    // Always merge our order label (duration · carrier · area) when available
+    try {
       var mine = await api('my_orders');
       var o = (mine.data||[]).find(function(x){ return String(x.rent_id)===String(rentId) || String(x.idempotency_key||'')==='gotsms-'+rentId; });
       if(o){
-        rent = { id: o.rent_id||rentId, phone: o.phone||o.phone_number, status: o.status, active_till: o.active_till, service: { name: o.service_name }, can_wake_up: true, auto_renew: o.auto_renew, duration_translation: o.duration_translation||o.duration||o.service_name&&String(o.service_name), carrier_name: o.carrier_name||o.carrier, price_ngn: o.price };
+        if(!rent){
+          rent = {
+            id: o.rent_id||rentId,
+            phone: o.phone||o.phone_number,
+            status: o.status,
+            active_till: o.active_till || (o.code && !isNaN(Date.parse(o.code)) ? o.code : null),
+            service: { name: o.service_name },
+            service_name: o.service_name,
+            can_wake_up: true,
+            auto_renew: o.auto_renew,
+            duration_translation: o.duration_translation||o.duration,
+            carrier_name: o.carrier_name||o.carrier,
+            price_ngn: o.price || o.price_ngn
+          };
+        } else {
+          rent.service_name = rent.service_name || o.service_name;
+          if(o.service_name) rent.service = rent.service || { name: o.service_name };
+          if(!rent.carrier_name && o.carrier_name) rent.carrier_name = o.carrier_name;
+          if(!rent.active_till && o.active_till) rent.active_till = o.active_till;
+          if(!rent.price_ngn && (o.price||o.price_ngn)) rent.price_ngn = o.price||o.price_ngn;
+          // Parse chips from stored "Service · duration · carrier · Area XXX"
+          if(o.service_name && String(o.service_name).indexOf('·')>=0){
+            var parts=String(o.service_name).split('·').map(function(x){return x.trim();});
+            if(parts[0] && (!rent.service || !rent.service.name)) rent.service = { name: parts[0] };
+            if(parts[1] && !rent.duration_translation) rent.duration_translation = parts[1];
+            if(parts[2] && !/^Area /i.test(parts[2]) && !rent.carrier_name) rent.carrier_name = parts[2];
+            var ap=parts.filter(function(p){return /^Area /i.test(p);})[0];
+            if(ap && !rent.area_code) rent.area_code = ap.replace(/^Area /i,'');
+          }
+        }
       }
-    }
+    } catch(_){}
     render();
     if(pollTimer) clearInterval(pollTimer);
     pollTimer = setInterval(loadMessages, 8000);
