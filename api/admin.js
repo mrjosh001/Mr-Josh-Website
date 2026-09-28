@@ -1414,7 +1414,7 @@ async function fetchOwletBalance() {
   if (!key) return { ok: false, error: 'OWLET_API_KEY not set', balance: null };
   try {
     const body = new URLSearchParams({ key, action: 'balance' });
-    const res = await fetch('https://theowlet.com/api/v2', {
+    const res = await fetch((process.env.OWLET_API_URL || 'https://the-owlet.com/api/v2').replace(/\/$/, ''), {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded', Accept: 'application/json' },
       body: body.toString()

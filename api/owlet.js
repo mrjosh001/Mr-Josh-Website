@@ -3,8 +3,9 @@ import { rateLimit, applyRateLimitHeaders } from '../lib/rateLimit.js';
 
 /**
  * /api/owlet — MJ Boosters supplier (The Owlet SMM panel v2 API)
- * Docs: https://theowlet.com/api
- * Base: POST https://theowlet.com/api/v2
+ * Docs: https://the-owlet.com/api
+ * Base: POST https://the-owlet.com/api/v2
+ * (migrated from theowlet.com — same Perfect Panel v2 API)
  *
  * Admin-only for interactive use. Cron may call ?action=sync with CRON_SECRET.
  *
@@ -18,7 +19,7 @@ import { rateLimit, applyRateLimitHeaders } from '../lib/rateLimit.js';
  * Markup random 35%–70% (or fixed via OWLET_MARKUP_PERCENT). Rate currency AUTO/USD/NGN via OWLET_RATE_CURRENCY.
  */
 
-const OWLET_URL = 'https://theowlet.com/api/v2';
+const OWLET_URL = (process.env.OWLET_API_URL || 'https://the-owlet.com/api/v2').replace(/\/$/, '');
 const OWLET_KEY = process.env.OWLET_API_KEY;
 const USD_TO_NGN = Number(process.env.USD_TO_NGN_RATE) || 1450;
 /** No booster service / order is sold below this (NGN). Override with OWLET_MIN_SELL_NGN */
