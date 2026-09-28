@@ -109,20 +109,52 @@ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/sv
 const SUPABASE_URL='https://atczodlljmlayvldxfmv.supabase.co';
 const SUPABASE_ANON_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImF0Y3pvZGxsam1sYXl2bGR4Zm12Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODUwNzUyMzgsImV4cCI6MjEwMDY1MTIzOH0.ufthD-p7BmeD_B7xyuMM6PNPL8DmcL4AtRYgg-MuoLI';
 const listEl=document.getElementById('list');
-let allOrders=[], view='otp', filter='completed', rentFilter='active';
+let allOrders=[], view='otp', filter='completed', rentFilter='active', liveActiveRentIds=new Set(), liveActiveMeta={};
 function esc(s){if(!s)return'';return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;')}
 function money(n){return '₦'+Number(n||0).toLocaleString()}
 function bucket(status){const s=String(status||'').toLowerCase();if(s==='completed'||s==='success')return'completed';if(s==='expired')return'expired';if(s==='refunded'||s==='cancelled'||s==='canceled')return'cancelled';if(s==='waiting_for_code'||s==='pending'||s==='waiting')return'waiting';return'other'}
 
+function usaRentId(o){
+  return String(o.idempotency_key||'').replace(/^gotsms-/,'')||String(o.rent_id||'');
+}
 function isUsaActiveRow(o){
   if(String(o.source||'').toLowerCase()!=='gotsms') return false;
-  if(o.refunded===true) return false;
+  var rid=usaRentId(o);
+  if(rid && liveActiveRentIds.has(String(rid))) return true;
   var st=String(o.status||'').toLowerCase();
-  if(st==='refunded'||st==='cancelled'||st==='canceled') return false;
+  if(o.refunded===true||st==='refunded'||st==='cancelled'||st==='canceled') return false;
   var till=parseUsaExpiry(o);
   if(till) return till>Date.now();
-  return st!=='expired'&&st!=='finished'&&st!=='ended';
+  return st==='active'||st==='waiting'||st==='waiting_for_code'||st==='pending';
 }
+function isRentActiveRow(o){
+  var s=String(o.source||'').toLowerCase();
+  if(s==='gotsms') return isUsaActiveRow(o);
+  if(s!=='smsbus_rent') return false;
+  if(o.refunded===true) return false;
+  var st=String(o.status||'').toLowerCase();
+  if(st==='refunded'||st==='cancelled'||st==='canceled'||st==='expired'||st==='ended') return false;
+  var till=parseUsaExpiry(o);
+  if(till) return till>Date.now();
+  return st==='completed'||st==='active'||st==='waiting'||st==='pending';
+}
+async function refreshLiveUsaActive(accessToken){
+  liveActiveRentIds=new Set();
+  liveActiveMeta={};
+  try{
+    var res=await fetch('/api/sms-bus?action=gotsms_rents&status=active',{
+      headers:{Authorization:'Bearer '+accessToken,Accept:'application/json'}
+    });
+    var j=await res.json().catch(function(){return {};});
+    (j&&j.success&&Array.isArray(j.data)?j.data:[]).forEach(function(r){
+      if(!r||r.id==null) return;
+      var id=String(r.id);
+      liveActiveRentIds.add(id);
+      liveActiveMeta[id]=r;
+    });
+  }catch(_){}
+}
+
 function parseUsaExpiry(o){
   // Expiry stored in active_till or in code as ISO (gotsms rentals)
   var raw=o.active_till||o.code||null;
@@ -138,7 +170,7 @@ function usaMetaFromName(name){
   return { service: parts[0]||name||'USA rental', duration: parts[1]||'', carrier: parts[2]||'', extra: parts.slice(3).join(' · ') };
 }
 
-function isRent(o){var s=String(o.source||'').toLowerCase();return s==='smsbus_rent'||s==='gotsms'||String(o.service_id||'')==='rent'||/rental|usa physical/i.test(String(o.service_name||''))}
+function isRent(o){var s=String(o.source||'').toLowerCase();return s==='gotsms'||s==='smsbus_rent';}
 function serverLabel(o){
   // Customer-facing labels only — never show supplier names
   const src=String(o.source||'').toLowerCase();
@@ -173,8 +205,8 @@ function render(){
     if(filter==='cancelled') return bkt==='cancelled' || bkt==='expired';
     return bkt===filter;
   });
-  if(view==='rent'&&rentFilter==='active')rows=rows.filter(function(o){return isUsaActiveRow(o);});
-  if(view==='rent'&&rentFilter==='ended')rows=rows.filter(function(o){return !isUsaActiveRow(o);});
+  if(view==='rent'&&rentFilter==='active')rows=rows.filter(function(o){return (typeof isRentActiveRow==='function'?isRentActiveRow:isUsaActiveRow)(o);});
+  if(view==='rent'&&rentFilter==='ended')rows=rows.filter(function(o){return !(typeof isRentActiveRow==='function'?isRentActiveRow:isUsaActiveRow)(o);});
   if(!rows.length){
     listEl.innerHTML='<div class="empty">'+(view==='rent'?(rentFilter==='active'?'No active USA rentals right now.<br><a href="mj-sms-usa-rent.html" style="color:var(--primary)">Rent a number</a>':(rentFilter==='ended'?'No expired or cancelled rentals.':'No USA rentals yet. Open USA rental to get a number.')):(filter==='completed'?'No completed OTP numbers yet.<br>Numbers with a successful code will show here.':(filter==='waiting'?'No numbers waiting for a code.':'No OTP numbers yet. Tap Get OTP to choose a server.')))+'</div>';
     return;
@@ -299,6 +331,7 @@ async function reuseNumber(btn){
   try{
     const session=(await window.supabase.createClient(SUPABASE_URL,SUPABASE_ANON_KEY,{auth:{persistSession:true,autoRefreshToken:true,storage:window.sessionStorage}}).auth.getSession()).data.session;
     if(!session){location.href='auth.html';return}
+  try{ startHistoryRealtime(sb, session.user.id); }catch(_rt){}
     const res=await fetch('/api/sms-bus?action=reuse',{
       method:'POST',
       headers:{'Content-Type':'application/json','Authorization':'Bearer '+session.access_token},
@@ -342,28 +375,100 @@ document.getElementById('list').addEventListener('click',function(e){
 async function init(){
   try{var _v=new URLSearchParams(location.search).get('view');if(_v==='rent'){view='rent';document.querySelectorAll('.tab').forEach(function(x){x.classList.toggle('on',x.getAttribute('data-view')==='rent');});document.getElementById('otpFilters').style.display='none';var _rf0=document.getElementById('rentFilters');if(_rf0)_rf0.style.display='flex';}}catch(_){}
 
-  const sb=window.supabase.createClient(SUPABASE_URL,SUPABASE_ANON_KEY,{auth:{persistSession:true,autoRefreshToken:true,storage:window.sessionStorage}});
+  
+var _histCacheKey=null,_histMem=null;
+function histCacheKey(uid){ return uid ? ('mjhub_hist_sms_v1_'+uid) : null; }
+function readHistCache(uid){
+  try{
+    var k=histCacheKey(uid); if(!k) return null;
+    if(_histMem && _histMem._fetchedAt && (Date.now()-_histMem._fetchedAt) < 2*24*60*60*1000) return _histMem;
+    var raw=sessionStorage.getItem(k)||localStorage.getItem(k);
+    if(!raw) return null;
+    var o=JSON.parse(raw);
+    if(!o||!o.t||!o.data) return null;
+    if(Date.now()-o.t > 2*24*60*60*1000) return null;
+    _histMem=o.data; if(_histMem) _histMem._fetchedAt=o.t;
+    return o.data;
+  }catch(e){ return null; }
+}
+function writeHistCache(uid, data){
+  try{
+    var k=histCacheKey(uid); if(!k||!data) return;
+    data._fetchedAt=Date.now();
+    _histMem=data;
+    var payload=JSON.stringify({t:Date.now(),data:data});
+    try{ sessionStorage.setItem(k,payload); }catch(e1){}
+    try{ localStorage.setItem(k,payload); }catch(e2){}
+  }catch(e){}
+}
+function invalidateHistCache(uid){
+  _histMem=null;
+  try{
+    var k=histCacheKey(uid);
+    if(k){ sessionStorage.removeItem(k); localStorage.removeItem(k); }
+  }catch(e){}
+}
+
+const sb=window.supabase.createClient(SUPABASE_URL,SUPABASE_ANON_KEY,{auth:{persistSession:true,autoRefreshToken:true,storage:window.sessionStorage}});
+
+var _histRt=null,_histRtT=null;
+function startHistoryRealtime(sbClient, userId){
+  if(!sbClient||!userId||_histRt) return;
+  function bump(){
+    if(_histRtT) clearTimeout(_histRtT);
+    _histRtT=setTimeout(function(){
+      try{ invalidateHistCache(userId); init(); }catch(e){}
+    }, 500);
+  }
+  try{
+    _histRt=sbClient.channel('mj-hist-'+userId)
+      .on('postgres_changes',{event:'*',schema:'public',table:'number_orders',filter:'user_id=eq.'+userId},bump)
+      .subscribe();
+  }catch(e){}
+}
+
   const {data:{session}}=await sb.auth.getSession();
   if(!session){location.href='auth.html';return}
-  // Expire past-window OTP on both servers before showing history
+  try{ startHistoryRealtime(sb, session.user.id); }catch(_rt){}
   try {
     const headers = { Authorization: 'Bearer ' + session.access_token };
     await Promise.all([
       fetch('/api/grizzly-sync?action=expire_stale', { headers }).catch(function(){ return null; }),
-      fetch('/api/sms-bus?action=expire_stale', { headers }).catch(function(){ return null; })
+      fetch('/api/sms-bus?action=expire_stale', { headers }).catch(function(){ return null; }),
+      (typeof refreshLiveUsaActive==='function' ? refreshLiveUsaActive(session.access_token) : Promise.resolve())
     ]);
-  } catch (_) {}
+  } catch (_) {
+    try { if (typeof refreshLiveUsaActive==='function') await refreshLiveUsaActive(session.access_token); } catch(__){}
+  }
+  // 2-day cache first (egress). Realtime clears cache when number_orders change.
+  try {
+    var cached = (typeof readHistCache==='function') ? readHistCache(session.user.id) : null;
+    if (cached && Array.isArray(cached) && cached.length) {
+      allOrders = cached;
+      updateHistCta();
+      render();
+      return;
+    }
+  } catch (_c) {}
   try{
-    const res=await fetch('/api/order?action=my_orders',{headers:{Authorization:'Bearer '+session.access_token,Accept:'application/json'}});
+    const res=await fetch('/api/order?action=my_orders',{
+      headers:{Authorization:'Bearer '+session.access_token,Accept:'application/json'}
+    });
     const json=await res.json().catch(function(){return {}});
     if(res.ok&&json&&json.success&&Array.isArray(json.sms)){
-      allOrders=json.sms;updateHistCta();render();return;
+      allOrders=json.sms;
+      try { if (typeof writeHistCache==='function') writeHistCache(session.user.id, json.sms); } catch(_w){}
+      updateHistCta();render();
+      return;
     }
   }catch(e){console.warn('history api',e)}
-  const {data,error}=await sb.from('number_orders').select('*').eq('user_id',session.user.id).order('created_at',{ascending:false});
+  const {data,error}=await sb.from('number_orders').select('*').eq('user_id',session.user.id).order('created_at',{ascending:false}).limit(200);
   if(error){listEl.innerHTML='<div class="empty">Failed to load</div>';return}
-  allOrders=data||[];updateHistCta();render();
+  allOrders=data||[];
+  try { if (typeof writeHistCache==='function') writeHistCache(session.user.id, allOrders); } catch(_w2){}
+  updateHistCta();render();
 }
+
 init();
 </script>
 </body>

@@ -1274,6 +1274,7 @@ async function ensureAuth() {
   }
   if (!s || !s.user) return null;
   session = s;
+  try { startOrdersRealtime(); } catch (e) {}
   return s;
 }
 
@@ -1292,8 +1293,8 @@ function readOrdersDiskCache() {
     if (!raw) return null;
     const o = JSON.parse(raw);
     if (!o || !o.t || !o.data) return null;
-    // Keep for the rest of the browser session day (max 12h) — avoids re-downloading credentials
-    if (Date.now() - o.t > 12 * 60 * 60 * 1000) return null;
+    // Keep cached orders up to 2 days to cut egress. Realtime / force clears on DB change.
+    if (Date.now() - o.t > 2 * 24 * 60 * 60 * 1000) return null;
     return o.data;
   } catch (e) { return null; }
 }
@@ -1306,6 +1307,57 @@ function writeOrdersDiskCache(data) {
     try { localStorage.setItem(key, payload); } catch (e2) {}
   } catch (e) {}
 }
+
+function invalidateOrdersCache() {
+  _myOrdersCache = null;
+  try {
+    var key = ordersCacheKey();
+    if (key) {
+      try { sessionStorage.removeItem(key); } catch (e1) {}
+      try { localStorage.removeItem(key); } catch (e2) {}
+    }
+  } catch (e) {}
+}
+
+async function refreshOrdersFromDb(reason) {
+  try {
+    invalidateOrdersCache();
+    var json = await fetchMyOrdersFromApi(true);
+    if (!json) return;
+    if (typeof loadLogs === 'function') { try { await loadLogs(); } catch (e) {} }
+    else if (typeof renderLogs === 'function' && json.logs) { try { renderLogs(json.logs); } catch (e) {} }
+    if (typeof loadSms === 'function') { try { await loadSms(); } catch (e) {} }
+    else if (typeof renderSms === 'function' && json.sms) { try { renderSms(json.sms); } catch (e) {} }
+    if (typeof loadBoosts === 'function') { try { await loadBoosts(); } catch (e) {} }
+    else if (typeof renderBoosts === 'function' && json.boosters) { try { renderBoosts(json.boosters); } catch (e) {} }
+  } catch (e) {
+    console.warn('[orders realtime]', reason || 'refresh', e);
+  }
+}
+
+var _ordersRtChannel = null;
+var _ordersRtTimer = null;
+function startOrdersRealtime() {
+  if (!session || !session.user || !sb || _ordersRtChannel) return;
+  var uid = session.user.id;
+  function onDbChange(payload) {
+    if (_ordersRtTimer) clearTimeout(_ordersRtTimer);
+    _ordersRtTimer = setTimeout(function () {
+      refreshOrdersFromDb((payload && payload.eventType) || 'change');
+    }, 500);
+  }
+  try {
+    _ordersRtChannel = sb
+      .channel('mj-orders-live-' + uid)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'orders', filter: 'user_id=eq.' + uid }, onDbChange)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'number_orders', filter: 'user_id=eq.' + uid }, onDbChange)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'booster_orders', filter: 'user_id=eq.' + uid }, onDbChange)
+      .subscribe();
+  } catch (e) {
+    console.warn('[orders] realtime unavailable', e);
+  }
+}
+
 function mergeOrdersPayload(prev, next) {
   if (!prev) return next;
   if (!next) return prev;
@@ -1332,16 +1384,21 @@ function mergeOrdersPayload(prev, next) {
   };
 }
 async function fetchMyOrdersFromApi(force) {
-  // 1) Memory cache
-  if (_myOrdersCache && !force) return _myOrdersCache;
-  // 2) Disk cache (same session / same day) — do not hit API again for the same data
+  // 2-day cache to save Supabase/API egress. force=true only on Realtime DB change or explicit refresh.
+  var CACHE_MS = 2 * 24 * 60 * 60 * 1000;
+  if (_myOrdersCache && !force && _myOrdersCache._fetchedAt && (Date.now() - _myOrdersCache._fetchedAt) < CACHE_MS) {
+    return _myOrdersCache;
+  }
   if (!force) {
     const disk = readOrdersDiskCache();
     if (disk && (disk.logs || disk.sms || disk.success)) {
-      _myOrdersCache = disk;
-      if (disk.customer_id) window.__customerId = String(disk.customer_id);
-      if (disk.full_name) window.__customerName = String(disk.full_name);
-      return disk;
+      // Prefer stamped age; fall back to disk wrapper time via readOrdersDiskCache TTL
+      if (!disk._fetchedAt || (Date.now() - disk._fetchedAt) < CACHE_MS) {
+        _myOrdersCache = disk;
+        if (disk.customer_id) window.__customerId = String(disk.customer_id);
+        if (disk.full_name) window.__customerName = String(disk.full_name);
+        return disk;
+      }
     }
   }
   const token = session && session.access_token;
@@ -1361,7 +1418,9 @@ async function fetchMyOrdersFromApi(force) {
     }
     throw new Error(json.message || 'Could not load orders');
   }
+  json._fetchedAt = Date.now();
   _myOrdersCache = force && _myOrdersCache ? mergeOrdersPayload(_myOrdersCache, json) : json;
+  _myOrdersCache._fetchedAt = json._fetchedAt;
   writeOrdersDiskCache(_myOrdersCache);
   if (json.customer_id) window.__customerId = String(json.customer_id);
   if (json.full_name) window.__customerName = String(json.full_name);
@@ -2307,6 +2366,7 @@ async function boot() {
     return;
   }
   session = s;
+  try { startOrdersRealtime(); } catch (e) {}
   // Do NOT clear _myOrdersCache here — reuse memory/disk so orders do not reload every visit
   try { await loadCustomerProfile(); } catch (e) {}
   const list = document.getElementById('list');
