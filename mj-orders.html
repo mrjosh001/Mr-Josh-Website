@@ -1383,49 +1383,113 @@ function mergeOrdersPayload(prev, next) {
     boosters: mergeArr(prev.boosters, next.boosters, 'order_id')
   };
 }
-async function fetchMyOrdersFromApi(force) {
-  // 2-day cache to save Supabase/API egress. force=true only on Realtime DB change or explicit refresh.
-  var CACHE_MS = 2 * 24 * 60 * 60 * 1000;
-  if (_myOrdersCache && !force && _myOrdersCache._fetchedAt && (Date.now() - _myOrdersCache._fetchedAt) < CACHE_MS) {
-    return _myOrdersCache;
+async function ordersWatermark(data) {
+  var max = 0;
+  var rows = [].concat((data && data.logs) || [], (data && data.sms) || []);
+  for (var i = 0; i < rows.length; i++) {
+    var t = new Date(rows[i] && rows[i].created_at || 0).getTime();
+    if (t > max) max = t;
   }
-  if (!force) {
-    const disk = readOrdersDiskCache();
-    if (disk && (disk.logs || disk.sms || disk.success)) {
-      // Prefer stamped age; fall back to disk wrapper time via readOrdersDiskCache TTL
-      if (!disk._fetchedAt || (Date.now() - disk._fetchedAt) < CACHE_MS) {
-        _myOrdersCache = disk;
-        if (disk.customer_id) window.__customerId = String(disk.customer_id);
-        if (disk.full_name) window.__customerName = String(disk.full_name);
-        return disk;
+  return max ? new Date(max).toISOString() : null;
+}
+function mergeOrdersIncremental(base, inc) {
+  if (!base) return inc;
+  if (!inc) return base;
+  function keyOf(r) {
+    return String((r && (r.id || r.order_id)) || '');
+  }
+  function mergeArr(a, b) {
+    var map = new Map();
+    (a || []).forEach(function (r) {
+      var k = keyOf(r);
+      if (k) map.set(k, r);
+    });
+    (b || []).forEach(function (r) {
+      var k = keyOf(r);
+      if (!k) return;
+      map.set(k, Object.assign({}, map.get(k) || {}, r));
+    });
+    return Array.from(map.values()).sort(function (x, y) {
+      return new Date(y.created_at || 0) - new Date(x.created_at || 0);
+    });
+  }
+  return {
+    success: true,
+    logs: mergeArr(base.logs, inc.logs),
+    sms: mergeArr(base.sms, inc.sms),
+    boosters: base.boosters || inc.boosters,
+    customer_id: inc.customer_id || base.customer_id,
+    full_name: inc.full_name || base.full_name,
+    incremental: true
+  };
+}
+async function fetchMyOrdersFromApi(force) {
+  // Strategy:
+  //  - Cache up to 2 days (or until browser storage cleared)
+  //  - On open: if cache exists, only pull NEW rows since watermark (+ open SMS status) — small egress
+  //  - force=true / full=1: full snapshot (Refresh button / first visit)
+  var CACHE_MS = 2 * 24 * 60 * 60 * 1000;
+  var token = session && session.access_token;
+  if (!token) throw new Error('Please sign in');
+  var headers = { Authorization: 'Bearer ' + token, Accept: 'application/json' };
+
+  var disk = null;
+  try { disk = readOrdersDiskCache(); } catch (e) {}
+  var base = _myOrdersCache || disk;
+
+  // Use long-lived cache as base for incremental (unless force full)
+  if (!force && base && (base.logs || base.sms || base.success)) {
+    var ageOk = true;
+    if (base._fetchedAt && Date.now() - base._fetchedAt > CACHE_MS) ageOk = false;
+    var since = base._watermark || null;
+    try { since = since || ordersWatermark(base); } catch (e) {}
+    if (ageOk && since) {
+      try {
+        var incRes = await fetch('/api/order?action=my_orders&since=' + encodeURIComponent(since), { headers });
+        var inc = await incRes.json().catch(function () { return {}; });
+        if (incRes.status === 401 || incRes.status === 403) {
+          throw new Error('Session expired. Please sign out and sign in again.');
+        }
+        if (incRes.ok && inc && inc.success) {
+          var merged = inc.incremental ? mergeOrdersIncremental(base, inc) : inc;
+          merged._fetchedAt = Date.now();
+          merged._watermark = ordersWatermark(merged);
+          _myOrdersCache = merged;
+          writeOrdersDiskCache(merged);
+          if (merged.customer_id) window.__customerId = String(merged.customer_id);
+          if (merged.full_name) window.__customerName = String(merged.full_name);
+          return merged;
+        }
+      } catch (e) {
+        // Fall through to full if incremental fails
+        if (e && e.message && e.message.indexOf('Session') >= 0) throw e;
+        console.warn('[orders] incremental failed, full fetch', e);
       }
     }
   }
-  const token = session && session.access_token;
-  if (!token) throw new Error('Please sign in');
-  const headers = { Authorization: 'Bearer ' + token };
-  const res = await fetch('/api/order?action=my_orders', { headers });
-  const json = await res.json().catch(() => ({}));
+
+  // Full snapshot (first visit, force, or cache expired)
+  var res = await fetch('/api/order?action=my_orders&full=1', { headers });
+  var json = await res.json().catch(function () { return {}; });
   if (res.status === 401 || res.status === 403) {
     throw new Error('Session expired. Please sign out and sign in again.');
   }
   if (!res.ok || !json.success) {
-    // On failure, fall back to last good cache if any
-    const disk = readOrdersDiskCache();
-    if (disk) {
-      _myOrdersCache = disk;
-      return disk;
+    if (base && (base.logs || base.sms)) {
+      _myOrdersCache = base;
+      return base;
     }
     throw new Error(json.message || 'Could not load orders');
   }
   json._fetchedAt = Date.now();
-  _myOrdersCache = force && _myOrdersCache ? mergeOrdersPayload(_myOrdersCache, json) : json;
-  _myOrdersCache._fetchedAt = json._fetchedAt;
+  json._watermark = ordersWatermark(json);
+  _myOrdersCache = json;
   writeOrdersDiskCache(_myOrdersCache);
   if (json.customer_id) window.__customerId = String(json.customer_id);
   if (json.full_name) window.__customerName = String(json.full_name);
   return _myOrdersCache;
 }
+
 
 async function loadLogs() {
   loadErrors.logs = null;

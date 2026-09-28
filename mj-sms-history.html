@@ -117,26 +117,35 @@ function bucket(status){const s=String(status||'').toLowerCase();if(s==='complet
 function usaRentId(o){
   return String(o.idempotency_key||'').replace(/^gotsms-/,'')||String(o.rent_id||'');
 }
+function isTerminalRentStatus(o){
+  if(o.refunded===true) return true;
+  var st=String(o.status||'').toLowerCase();
+  return ['refunded','cancelled','canceled','expired','ended','finished'].indexOf(st)>=0;
+}
 function isUsaActiveRow(o){
   if(String(o.source||'').toLowerCase()!=='gotsms') return false;
-  var rid=usaRentId(o);
-  if(rid && liveActiveRentIds.has(String(rid))) return true;
-  var st=String(o.status||'').toLowerCase();
-  if(o.refunded===true||st==='refunded'||st==='cancelled'||st==='canceled') return false;
+  if(isTerminalRentStatus(o)) return false;
   var till=parseUsaExpiry(o);
+  if(till && till<=Date.now()) return false;
+  var st=String(o.status||'').toLowerCase();
+  var open=(!st||st==='active'||st==='waiting'||st==='waiting_for_code'||st==='pending'||st==='processing'||st==='completed');
+  if(!open) return false;
+  var rid=usaRentId(o);
+  if(liveActiveRentIds && liveActiveRentIds.size>0){
+    return !!(rid && liveActiveRentIds.has(String(rid)));
+  }
   if(till) return till>Date.now();
-  return st==='active'||st==='waiting'||st==='waiting_for_code'||st==='pending';
+  return st==='active'||st==='pending'||st==='processing'||st==='waiting'||st==='waiting_for_code';
 }
 function isRentActiveRow(o){
   var s=String(o.source||'').toLowerCase();
   if(s==='gotsms') return isUsaActiveRow(o);
   if(s!=='smsbus_rent') return false;
-  if(o.refunded===true) return false;
-  var st=String(o.status||'').toLowerCase();
-  if(st==='refunded'||st==='cancelled'||st==='canceled'||st==='expired'||st==='ended') return false;
+  if(isTerminalRentStatus(o)) return false;
   var till=parseUsaExpiry(o);
   if(till) return till>Date.now();
-  return st==='completed'||st==='active'||st==='waiting'||st==='pending';
+  var st=String(o.status||'').toLowerCase();
+  return st==='active'||st==='pending'||st==='processing';
 }
 async function refreshLiveUsaActive(accessToken){
   liveActiveRentIds=new Set();
@@ -440,28 +449,58 @@ function startHistoryRealtime(sbClient, userId){
   } catch (_) {
     try { if (typeof refreshLiveUsaActive==='function') await refreshLiveUsaActive(session.access_token); } catch(__){}
   }
-  // 2-day cache first (egress). Realtime clears cache when number_orders change.
+  // 2-day cache + incremental: only pull new SMS rows / open statuses (not full table every time)
   try {
     var cached = (typeof readHistCache==='function') ? readHistCache(session.user.id) : null;
-    if (cached && Array.isArray(cached) && cached.length) {
+    var headers = { Authorization: 'Bearer ' + session.access_token, Accept: 'application/json' };
+    var maxCreated = 0;
+    if (cached && Array.isArray(cached)) {
+      for (var ci = 0; ci < cached.length; ci++) {
+        var ct = new Date(cached[ci] && cached[ci].created_at || 0).getTime();
+        if (ct > maxCreated) maxCreated = ct;
+      }
+    }
+    var url = '/api/order?action=my_orders';
+    if (cached && cached.length && maxCreated) {
+      url += '&since=' + encodeURIComponent(new Date(maxCreated).toISOString());
+    } else {
+      url += '&full=1';
+    }
+    const res = await fetch(url, { headers: headers });
+    const json = await res.json().catch(function () { return {}; });
+    if (res.ok && json && json.success && Array.isArray(json.sms)) {
+      var sms = json.sms;
+      if (json.incremental && cached && cached.length) {
+        var map = new Map();
+        cached.forEach(function (r) {
+          var k = String((r && (r.id || r.order_id)) || '');
+          if (k) map.set(k, r);
+        });
+        sms.forEach(function (r) {
+          var k = String((r && (r.id || r.order_id)) || '');
+          if (k) map.set(k, Object.assign({}, map.get(k) || {}, r));
+        });
+        // Drop terminal rows that are no longer in open set if we got open status updates:
+        // keep all merged; UI filters Active separately
+        allOrders = Array.from(map.values()).sort(function (a, b) {
+          return new Date(b.created_at || 0) - new Date(a.created_at || 0);
+        });
+      } else {
+        allOrders = sms;
+      }
+      try { if (typeof writeHistCache === 'function') writeHistCache(session.user.id, allOrders); } catch (_w) {}
+      updateHistCta();
+      render();
+      return;
+    }
+    // If incremental failed but we have cache, show cache
+    if (cached && cached.length) {
       allOrders = cached;
       updateHistCta();
       render();
       return;
     }
-  } catch (_c) {}
-  try{
-    const res=await fetch('/api/order?action=my_orders',{
-      headers:{Authorization:'Bearer '+session.access_token,Accept:'application/json'}
-    });
-    const json=await res.json().catch(function(){return {}});
-    if(res.ok&&json&&json.success&&Array.isArray(json.sms)){
-      allOrders=json.sms;
-      try { if (typeof writeHistCache==='function') writeHistCache(session.user.id, json.sms); } catch(_w){}
-      updateHistCta();render();
-      return;
-    }
-  }catch(e){console.warn('history api',e)}
+  } catch (e) { console.warn('history api', e); }
   const {data,error}=await sb.from('number_orders').select('*').eq('user_id',session.user.id).order('created_at',{ascending:false}).limit(200);
   if(error){listEl.innerHTML='<div class="empty">Failed to load</div>';return}
   allOrders=data||[];
