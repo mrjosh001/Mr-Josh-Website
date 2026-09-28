@@ -1884,7 +1884,7 @@ function buildBroadcastEmailHtml({ name, subject, message }) {
 
   const WA_CHANNEL = process.env.WHATSAPP_CHANNEL_URL || 'https://chat.whatsapp.com/LVjbslHLHXh5zj7Os5plYb';
   const TG_CHANNEL = process.env.TELEGRAM_CHANNEL_URL || 'https://t.me/mj_hub_tg';
-  const SUPPORT_WA = process.env.SUPPORT_WHATSAPP_URL || 'https://wa.me/14305583021?text=Hello%20Admin%2C%20I%27ve%20a%20complain%20/%20enquiry%20on%20MJ%20Hub';
+  const SUPPORT_WA = process.env.SUPPORT_WHATSAPP_URL || 'https://wa.me/2347026502927?text=Hello%20Admin%2C%20I%27ve%20a%20complain%20/%20enquiry%20on%20MJ%20Hub';
 
   return `<!DOCTYPE html>
 <html lang="en" xmlns="http://www.w3.org/1999/xhtml">
