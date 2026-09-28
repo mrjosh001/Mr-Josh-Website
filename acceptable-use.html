@@ -33,6 +33,28 @@ a { color: var(--primary); }
 .footer { text-align: center; padding: 24px; color: var(--muted); font-size: 13px; border-top: 1px solid var(--border); }
 .footer a { margin: 0 8px; text-decoration: none; }
 
+.back-dash {
+  display:inline-flex; align-items:center; gap:8px;
+  font-size:14px; font-weight:700; text-decoration:none;
+  color:var(--primary); padding:8px 12px; border-radius:10px;
+  border:1px solid var(--border); background:var(--card);
+}
+.back-dash:hover { background: color-mix(in srgb, var(--primary) 12%, var(--card)); }
+.legal-bottom-bar {
+  position:sticky; bottom:0; left:0; right:0; z-index:40;
+  padding:14px 20px calc(14px + env(safe-area-inset-bottom, 0px));
+  background: color-mix(in srgb, var(--elevated) 92%, transparent);
+  backdrop-filter: blur(10px);
+  border-top:1px solid var(--border);
+  text-align:center;
+}
+.legal-bottom-bar a {
+  display:inline-flex; align-items:center; justify-content:center; gap:8px;
+  width:100%; max-width:420px; padding:14px 18px; border-radius:14px;
+  background:#2563eb; color:#fff; font-weight:700; font-size:15px; text-decoration:none;
+}
+
+
 .logo { display:inline-flex !important; align-items:center !important; gap:8px !important; line-height:1 !important; text-decoration:none !important; }
 .logo img { height:36px !important; width:auto !important; max-width:48px !important; object-fit:contain !important; object-position:center !important; border-radius:8px !important; background:transparent !important; flex:0 0 auto !important; }
 .logo-word { font-family:"Plus Jakarta Sans", Inter, system-ui, sans-serif !important; font-size:17px !important; font-weight:800 !important; letter-spacing:-.02em !important; line-height:32px !important; background:none !important; -webkit-background-clip:unset !important; color:#1e3a8a !important; -webkit-text-fill-color:#1e3a8a !important; }
@@ -102,7 +124,7 @@ html[data-theme="dark"] .logo-word, body[data-theme="dark"] .logo-word { color:#
 
 <header class="header"><div class="header-inner">
   <a href="landing.html" class="logo"><img class="brandLogo" src="/img/IMG_3027.png" alt=""><span class="logo-word">HUB</span></a>
-  <a href="dashboard.html" style="font-size:14px;font-weight:600;text-decoration:none;color:var(--text2);">Dashboard</a>
+  <a href="dashboard.html" class="back-dash" aria-label="Back to Dashboard">← Back to Dashboard</a>
 </div></header>
 <main class="wrap"><div class="card">
 

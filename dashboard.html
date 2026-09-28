@@ -3062,6 +3062,18 @@ html[data-theme="light"] .logo-word, :root[data-theme="light"] .logo-word{color:
             <li><a href="referral.html"><i class="fa-solid fa-handshake"></i> <span>Refer & Earn 3%</span></a></li>
             <li><a href="#" class="sidebar-link" data-target="cart"><i class="fa-solid fa-bag-shopping"></i> <span>Cart</span></a></li>
             <li><a href="mj-orders.html" class="sidebar-link" data-external="orders"><i class="fa-solid fa-receipt"></i> <span>My Orders</span></a></li>
+            <li>
+                <a href="#" class="sidebar-link" onclick="toggleTermsMenu(event)" style="display:flex;align-items:center;justify-content:space-between;">
+                    <span style="display:flex;align-items:center;gap:12px;"><i class="fa-solid fa-scale-balanced"></i> <span>Terms</span></span>
+                    <i class="fa-solid fa-chevron-down" id="termsMenuChevron" style="font-size:11px;transition:transform .2s;"></i>
+                </a>
+                <ul id="termsSubmenu" style="list-style:none;max-height:0;overflow:hidden;transition:max-height .25s ease;padding:0;">
+                    <li><a href="terms.html" style="padding-left:34px;display:flex;align-items:center;gap:10px;"><i class="fa-solid fa-file-contract"></i> <span>Terms of Service</span></a></li>
+                    <li><a href="privacy.html" style="padding-left:34px;display:flex;align-items:center;gap:10px;"><i class="fa-solid fa-user-shield"></i> <span>Privacy Policy</span></a></li>
+                    <li><a href="acceptable-use.html" style="padding-left:34px;display:flex;align-items:center;gap:10px;"><i class="fa-solid fa-ban"></i> <span>Acceptable Use</span></a></li>
+                    <li><a href="refund.html" style="padding-left:34px;display:flex;align-items:center;gap:10px;"><i class="fa-solid fa-rotate-left"></i> <span>Refund Policy</span></a></li>
+                </ul>
+            </li>
             <li><a href="#" onclick="handleLogout();return false;" class="logout" style="color:#dc2626 !important;"><i class="fa-solid fa-right-from-bracket"></i> <span>Logout</span></a></li>
         </ul>
     </div>
@@ -7760,6 +7772,15 @@ function toggleBoosterMenu(e) {
   if (!menu) return;
   const open = menu.style.maxHeight && menu.style.maxHeight !== '0px';
   menu.style.maxHeight = open ? '0' : '120px';
+  if (chev) chev.style.transform = open ? '' : 'rotate(180deg)';
+}
+function toggleTermsMenu(e) {
+  if (e) e.preventDefault();
+  const menu = document.getElementById('termsSubmenu');
+  const chev = document.getElementById('termsMenuChevron');
+  if (!menu) return;
+  const open = menu.style.maxHeight && menu.style.maxHeight !== '0px';
+  menu.style.maxHeight = open ? '0' : '220px';
   if (chev) chev.style.transform = open ? '' : 'rotate(180deg)';
 }
 </script>

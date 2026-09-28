@@ -35,6 +35,28 @@ a { color: var(--primary); }
 .footer { text-align: center; padding: 24px; color: var(--muted); font-size: 13px; border-top: 1px solid var(--border); }
 .footer a { margin: 0 8px; text-decoration: none; }
 
+.back-dash {
+  display:inline-flex; align-items:center; gap:8px;
+  font-size:14px; font-weight:700; text-decoration:none;
+  color:var(--primary); padding:8px 12px; border-radius:10px;
+  border:1px solid var(--border); background:var(--card);
+}
+.back-dash:hover { background: color-mix(in srgb, var(--primary) 12%, var(--card)); }
+.legal-bottom-bar {
+  position:sticky; bottom:0; left:0; right:0; z-index:40;
+  padding:14px 20px calc(14px + env(safe-area-inset-bottom, 0px));
+  background: color-mix(in srgb, var(--elevated) 92%, transparent);
+  backdrop-filter: blur(10px);
+  border-top:1px solid var(--border);
+  text-align:center;
+}
+.legal-bottom-bar a {
+  display:inline-flex; align-items:center; justify-content:center; gap:8px;
+  width:100%; max-width:420px; padding:14px 18px; border-radius:14px;
+  background:#2563eb; color:#fff; font-weight:700; font-size:15px; text-decoration:none;
+}
+
+
 .mobile-menu {
   display: none; position: fixed; inset: 0; z-index: 400;
 }
@@ -140,10 +162,7 @@ html[data-theme="dark"] .logo-word, body[data-theme="dark"] .logo-word { color:#
 <div id="headerSpacer" style="height:72px"></div>
 <header class="header"><div class="header-inner">
   <a href="landing.html" class="logo"><img class="brandLogo" src="/img/IMG_3027.png" alt=""><span class="logo-word">HUB</span></a>
-  <div style="display:flex;align-items:center;gap:8px;">
-    <a href="auth.html?mode=signup" class="btn" style="font-size:13px;padding:8px 12px;border-radius:10px;background:#3b82f6;color:#fff;text-decoration:none;font-weight:700;">Get started</a>
-    <button type="button" class="icon-btn" id="menuToggle" aria-label="Menu" style="width:40px;height:40px;border-radius:10px;border:1px solid var(--border);background:var(--card);color:var(--text);">☰</button>
-  </div>
+  <a href="dashboard.html" class="back-dash" aria-label="Back to Dashboard">← Back to Dashboard</a>
 </div></header>
 <div class="mobile-menu" id="mobileMenu" hidden>
     <div class="kinetic-overlay" data-close-menu></div>
