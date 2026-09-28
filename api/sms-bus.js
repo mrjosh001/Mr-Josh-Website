@@ -2633,14 +2633,50 @@ export default async function handler(req, res) {
         return json(res, g.ok ? 200 : g.status || 400, { success: !!g.data?.success, message: g.data?.message || (g.ok ? 'Number woken up' : 'Wake up failed'), data: g.data?.data || null });
       }
 
-      if (method === 'GET' && ga === 'gotsms_messages') {
+      
+      if ((method === 'POST' || method === 'GET') && ga === 'gotsms_mark_sms') {
+        const auth = await requireAuth(req);
+        if (!auth.ok) return json(res, auth.status, { success: false, message: auth.message });
+        let rent_id = String(url.searchParams.get('rent_id') || '').trim();
+        if (!rent_id && method === 'POST') {
+          try {
+            const b = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : (req.body || {});
+            rent_id = String(b.rent_id || '').trim();
+          } catch (_) {}
+        }
+        if (!rent_id) return json(res, 400, { success: false, message: 'rent_id required' });
+        if (!(await gotsmsAssertOwns(auth.userId, rent_id))) return json(res, 403, { success: false, message: 'Rental not found' });
+        const key = `gotsms-${rent_id}`;
+        const { data: row } = await supabase.from('number_orders').select('id, service_name, status').eq('user_id', auth.userId).eq('source', 'gotsms').eq('idempotency_key', key).maybeSingle();
+        if (!row) return json(res, 404, { success: false, message: 'Order not found' });
+        const name = String(row.service_name || '');
+        if (!/sms\s*received/i.test(name)) {
+          const next = (name || 'USA rental') + ' · SMS received';
+          await supabase.from('number_orders').update({ service_name: next }).eq('id', row.id);
+        }
+        return json(res, 200, { success: true, marked: true });
+      }
+
+if (method === 'GET' && ga === 'gotsms_messages') {
         const auth = await requireAuth(req);
         if (!auth.ok) return json(res, auth.status, { success: false, message: auth.message });
         const rent_id = String(url.searchParams.get('rent_id') || '').trim();
         if (!rent_id) return json(res, 400, { success: false, message: 'rent_id required' });
         if (!(await gotsmsAssertOwns(auth.userId, rent_id))) return json(res, 403, { success: false, message: 'Rental not found' });
         const g = await gotsmsFetch(`/api/numbers/${encodeURIComponent(rent_id)}/messages`);
-        return json(res, g.ok ? 200 : g.status || 400, { success: !!g.data?.success, data: g.data?.data || [], message: g.data?.message });
+        const msgs = Array.isArray(g.data?.data) ? g.data.data : [];
+        if (g.ok && msgs.length > 0) {
+          try {
+            const key = `gotsms-${rent_id}`;
+            const { data: row } = await supabase.from('number_orders').select('id, service_name').eq('user_id', auth.userId).eq('source', 'gotsms').eq('idempotency_key', key).maybeSingle();
+            if (row && !/sms\s*received/i.test(String(row.service_name || ''))) {
+              await supabase.from('number_orders').update({ service_name: (row.service_name || 'USA rental') + ' · SMS received' }).eq('id', row.id);
+            }
+          } catch (e) {
+            console.warn('[gotsms] mark sms received', e.message || e);
+          }
+        }
+        return json(res, g.ok ? 200 : g.status || 400, { success: !!g.data?.success, data: msgs, message: g.data?.message });
       }
 
       if (method === 'GET' && ga === 'gotsms_addable_services') {
