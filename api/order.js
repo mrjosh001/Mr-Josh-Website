@@ -270,6 +270,89 @@ async function handleUpdateProfile(req, res, user) {
 
 async function handleMyOrders(req, res, userId) {
   try {
+    // Incremental mode: ?since=ISO&action=my_orders → only new rows (+ open SMS for status)
+    // Full mode: default or ?full=1
+    let since = null;
+    let wantFull = false;
+    try {
+      const q = req.query || {};
+      since = q.since || null;
+      wantFull = q.full === '1' || q.force === '1' || q.full === 1;
+      if (!since || !wantFull) {
+        const u = new URL(req.url || '', 'http://localhost');
+        if (!since) since = u.searchParams.get('since');
+        if (u.searchParams.get('full') === '1' || u.searchParams.get('force') === '1') wantFull = true;
+      }
+    } catch (_) {}
+
+    let customer_id = null;
+    let full_name = null;
+    try {
+      const { data: prof } = await supabase
+        .from('profiles')
+        .select('customer_id, full_name')
+        .eq('id', userId)
+        .maybeSingle();
+      customer_id = (prof && prof.customer_id) || null;
+      full_name = (prof && prof.full_name) || null;
+    } catch (e) {}
+
+    // --- Incremental: small egress ---
+    if (since && !wantFull) {
+      const sinceIso = new Date(since).toISOString();
+      if (Number.isNaN(new Date(sinceIso).getTime())) {
+        return res.status(400).json({ success: false, message: 'Invalid since timestamp' });
+      }
+      const openStatuses = ['active', 'waiting', 'waiting_for_code', 'pending', 'processing'];
+      const [logsRes, smsNewRes, smsOpenRes] = await Promise.all([
+        supabase
+          .from('orders')
+          .select('*')
+          .eq('user_id', userId)
+          .gt('created_at', sinceIso)
+          .order('created_at', { ascending: false })
+          .limit(50),
+        supabase
+          .from('number_orders')
+          .select('*')
+          .eq('user_id', userId)
+          .gt('created_at', sinceIso)
+          .order('created_at', { ascending: false })
+          .limit(50),
+        // Re-sync status for still-open numbers only (tiny set)
+        supabase
+          .from('number_orders')
+          .select('*')
+          .eq('user_id', userId)
+          .in('status', openStatuses)
+          .order('created_at', { ascending: false })
+          .limit(40)
+      ]);
+      if (logsRes.error) console.warn('[order my_orders incremental] logs', logsRes.error.message);
+      if (smsNewRes.error) console.warn('[order my_orders incremental] sms new', smsNewRes.error.message);
+      if (smsOpenRes.error) console.warn('[order my_orders incremental] sms open', smsOpenRes.error.message);
+
+      const logs = logsRes.error ? [] : logsRes.data || [];
+      const smsMap = new Map();
+      for (const row of [...(smsOpenRes.data || []), ...(smsNewRes.data || [])]) {
+        if (!row) continue;
+        const k = String(row.id || row.order_id || '');
+        if (k) smsMap.set(k, row);
+      }
+      const sms = Array.from(smsMap.values());
+      return res.status(200).json({
+        success: true,
+        incremental: true,
+        since: sinceIso,
+        logs,
+        sms,
+        customer_id,
+        full_name,
+        counts: { logs: logs.length, sms: sms.length }
+      });
+    }
+
+    // --- Full snapshot ---
     const [logsRes, smsRes] = await Promise.all([
       supabase
         .from('orders')
@@ -290,20 +373,9 @@ async function handleMyOrders(req, res, userId) {
     if (logsRes.error) console.warn('[order my_orders] logs', logsRes.error.message);
     if (smsRes.error) console.warn('[order my_orders] sms', smsRes.error.message);
 
-    let customer_id = null;
-    let full_name = null;
-    try {
-      const { data: prof } = await supabase
-        .from('profiles')
-        .select('customer_id, full_name')
-        .eq('id', userId)
-        .maybeSingle();
-      customer_id = (prof && prof.customer_id) || null;
-      full_name = (prof && prof.full_name) || null;
-    } catch (e) {}
-
     return res.status(200).json({
       success: true,
+      incremental: false,
       logs,
       sms,
       customer_id,
