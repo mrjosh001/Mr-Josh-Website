@@ -237,6 +237,7 @@ function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g,function(c){retu
   async function api(action, opts){
     opts = opts || {};
     var h = await headers(); if(!h) return { success:false, message:'Not signed in' };
+    if(opts.body && !h['Content-Type']) h['Content-Type']='application/json';
     var url = '/api/sms-bus?action=gotsms_'+action + (opts.query ? '&'+opts.query : '');
     var r = await fetch(url, { method: opts.method||'GET', headers: h, body: opts.body ? JSON.stringify(opts.body) : undefined });
     try { return await r.json(); } catch(e){ return { success:false, message:'Bad response' }; }
@@ -456,7 +457,14 @@ function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g,function(c){retu
       if(lastSub) lastSub.textContent = withCode.received_at ? new Date(withCode.received_at).toLocaleString() : 'Latest';
     }
     // Hide refund button as soon as first code/SMS arrives
+    if(hasReceivedCode){
+      try{ localStorage.setItem('mjhub_rent_sms_'+rentId, '1'); }catch(e){}
+    }
     if(hasReceivedCode && !hadCode){
+      // Tell history page / DB this rental got SMS (for Completed filter after timer ends)
+      try{
+        api('mark_sms', { method:'POST', body:{ rent_id: rentId } }).catch(function(){});
+      }catch(e){}
       var cancelBtn = document.getElementById('btnCancel');
       if(cancelBtn) cancelBtn.remove();
       var hint = document.querySelector('.hint');
