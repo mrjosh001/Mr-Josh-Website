@@ -1,0 +1,333 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, viewport-fit=cover">
+<title>Rental inbox · MJ HUB</title>
+<script>(function(){try{var t=localStorage.getItem('mjhub-theme');document.documentElement.setAttribute('data-theme',(t==='light'||t==='dark')?t:'dark');}catch(e){document.documentElement.setAttribute('data-theme','dark');}})();</script>
+<script src="/js/mj-page-loader.js" defer></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap" rel="stylesheet">
+<style>
+:root,html[data-theme="dark"]{
+  --bg:#06080f;--card:#0f1524;--text:#f1f5f9;--muted:#94a3b8;--border:rgba(148,163,184,.14);
+  --primary:#5b8af5;--primary2:#3b6ef5;--ok:#34d399;--danger:#f87171;
+  --soft:rgba(91,138,245,.12);--ok-soft:rgba(52,211,153,.12);--danger-soft:rgba(248,113,113,.12);
+  --header:rgba(6,8,15,.92);--input:#0a0e18;--sheet:#111827;
+}
+html[data-theme="light"]{
+  --bg:#f0f4ff;--card:#fff;--text:#0f172a;--muted:#64748b;--border:rgba(59,110,245,.12);
+  --primary:#3b6ef5;--primary2:#2563eb;--ok:#059669;--danger:#dc2626;
+  --soft:rgba(59,110,245,.1);--ok-soft:rgba(5,150,105,.1);--danger-soft:rgba(220,38,38,.08);
+  --header:rgba(255,255,255,.94);--input:#f8fafc;--sheet:#fff;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html{-webkit-text-size-adjust:100%;text-size-adjust:100%}
+body{font-family:'Plus Jakarta Sans',system-ui,sans-serif;background:var(--bg);color:var(--text);min-height:100dvh}
+.header{padding:12px 16px;display:flex;align-items:center;gap:12px;position:sticky;top:0;z-index:40;
+  background:var(--header);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);border-bottom:1px solid var(--border)}
+.back{width:40px;height:40px;border-radius:12px;border:1px solid var(--border);background:var(--card);
+  display:flex;align-items:center;justify-content:center;color:var(--text);text-decoration:none;flex-shrink:0}
+h1{font-size:17px;font-weight:800;letter-spacing:-.02em}
+.main{padding:16px;max-width:520px;margin:0 auto;padding-bottom:40px}
+
+/* Hero phone card */
+.hero{background:var(--card);border:1px solid var(--border);border-radius:20px;padding:18px;margin-bottom:14px;
+  box-shadow:0 8px 28px rgba(0,0,0,.12)}
+.hero-top{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:14px}
+.phone{font-size:22px;font-weight:800;letter-spacing:.02em;line-height:1.2}
+.phone-row{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.copy-icon{width:34px;height:34px;border-radius:10px;border:1px solid var(--border);background:var(--input);
+  color:var(--muted);display:inline-flex;align-items:center;justify-content:center;cursor:pointer;font-size:13px}
+.copy-icon:active{transform:scale(.96)}
+.svc{font-size:13px;color:var(--muted);font-weight:600;margin-top:4px}
+.svc-meta{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+.chip-mini{font-size:11px;font-weight:800;padding:4px 10px;border-radius:999px;background:var(--input);border:1px solid var(--border);color:var(--text)}
+.btn.is-busy{opacity:.7;pointer-events:none}
+.btn .spin,.btn-danger-outline .spin{animation:spin .7s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.refund-locked{font-size:12px;font-weight:600;color:var(--muted);margin-top:10px;line-height:1.45;padding:10px 12px;border-radius:12px;background:var(--input);border:1px solid var(--border)}
+.badge{display:inline-flex;align-items:center;gap:6px;font-size:11px;font-weight:800;padding:5px 10px;border-radius:999px;
+  background:var(--ok-soft);color:var(--ok);white-space:nowrap}
+.badge.expired{background:var(--danger-soft);color:var(--danger)}
+.badge.dot::before{content:'';width:7px;height:7px;border-radius:50%;background:currentColor}
+
+.stats{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px}
+.stat{background:var(--input);border:1px solid var(--border);border-radius:14px;padding:12px 14px}
+.stat .lbl{font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
+.stat .val{font-size:20px;font-weight:800;color:var(--primary);margin-top:4px;letter-spacing:.04em;font-variant-numeric:tabular-nums}
+.stat .sub{font-size:11px;color:var(--muted);margin-top:2px;font-weight:600}
+
+/* Toggle row */
+.toggle-card{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:14px;border-radius:14px;
+  background:var(--input);border:1px solid var(--border);margin-bottom:14px}
+.toggle-card .t-title{font-size:14px;font-weight:800}
+.toggle-card .t-hint{font-size:11px;color:var(--muted);font-weight:600;margin-top:2px;line-height:1.35}
+.switch{position:relative;width:50px;height:30px;flex-shrink:0}
+.switch input{opacity:0;width:0;height:0;position:absolute}
+.slider{position:absolute;inset:0;background:#334155;border-radius:999px;cursor:pointer;transition:.2s}
+.slider:before{content:'';position:absolute;width:24px;height:24px;left:3px;top:3px;background:#fff;border-radius:50%;
+  transition:.2s;box-shadow:0 1px 4px rgba(0,0,0,.25)}
+.switch input:checked+.slider{background:var(--primary)}
+.switch input:checked+.slider:before{transform:translateX(20px)}
+.switch input:disabled+.slider{opacity:.5;cursor:not-allowed}
+
+.actions{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;padding:13px 12px;border-radius:12px;
+  border:none;font:800 13px inherit;cursor:pointer;font-family:inherit;transition:opacity .15s}
+.btn:disabled{opacity:.55;cursor:not-allowed}
+.btn-primary{background:linear-gradient(135deg,var(--primary),var(--primary2));color:#fff}
+.btn-ghost{background:var(--card);color:var(--text);border:1px solid var(--border)}
+.btn-danger-outline{width:100%;background:var(--danger-soft);color:var(--danger);border:1px solid color-mix(in srgb,var(--danger) 35%,transparent);
+  margin-top:4px;padding:13px;border-radius:12px;font:800 13px inherit;cursor:pointer;font-family:inherit;
+  display:flex;align-items:center;justify-content:center;gap:8px}
+.hint{font-size:11px;color:var(--muted);line-height:1.45;margin-top:10px;font-weight:600}
+.flash{font-size:13px;font-weight:700;margin-top:10px;min-height:1.2em}
+.flash.err{color:var(--danger)}.flash.ok{color:var(--ok)}
+.toast-pop{
+  position:fixed;left:50%;bottom:28px;transform:translateX(-50%) translateY(120%);
+  z-index:9999;max-width:min(420px,92vw);padding:14px 18px;border-radius:14px;
+  font:700 14px/1.4 inherit;box-shadow:0 12px 40px rgba(0,0,0,.35);
+  background:#0f172a;color:#fff;border:1px solid rgba(148,163,184,.25);
+  transition:transform .28s ease,opacity .28s ease;opacity:0;pointer-events:none;
+}
+.toast-pop.on{transform:translateX(-50%) translateY(0);opacity:1}
+.toast-pop.ok{background:#065f46;border-color:rgba(52,211,153,.35)}
+.toast-pop.err{background:#7f1d1d;border-color:rgba(248,113,113,.35)}
+
+/* Inbox */
+.inbox-card{background:var(--card);border:1px solid var(--border);border-radius:20px;padding:16px;
+  box-shadow:0 8px 28px rgba(0,0,0,.08)}
+.inbox-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px}
+.inbox-head h2{font-size:15px;font-weight:800}
+.inbox-head .live{font-size:11px;font-weight:700;color:var(--ok);display:flex;align-items:center;gap:6px}
+.inbox-head .live::before{content:'';width:7px;height:7px;border-radius:50%;background:var(--ok);animation:pulse 1.6s ease infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.35}}
+/* Professional SMS inbox cards (supplier-style) */
+.msg{
+  padding:0;border-radius:18px;background:var(--card);border:1px solid var(--border);
+  margin-bottom:14px;overflow:hidden;
+  box-shadow:0 8px 28px rgba(15,23,42,.08);
+}
+.msg:last-child{margin-bottom:0}
+.msg-top{
+  display:grid;grid-template-columns:1fr 1fr;gap:12px 20px;
+  padding:16px 18px 12px;
+}
+.msg-k{
+  font-size:10px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;
+  color:var(--muted);margin-bottom:4px;
+}
+.msg-v{font-size:15px;font-weight:800;color:var(--text);word-break:break-word;line-height:1.25}
+.msg-phone{grid-column:1/-1}
+.msg-body{
+  padding:4px 18px 14px;font-size:14px;font-weight:550;line-height:1.55;
+  color:var(--text2);border-top:1px solid transparent;
+}
+.msg-foot{
+  display:flex;align-items:flex-end;justify-content:space-between;gap:14px;
+  padding:14px 18px;background:color-mix(in srgb,var(--input) 88%,var(--primary) 4%);
+  border-top:1px solid var(--border);
+}
+.msg .code-pill{
+  display:inline-flex;align-items:center;gap:10px;padding:8px 12px;border-radius:12px;
+  background:var(--card);border:1px solid color-mix(in srgb,var(--primary) 35%,var(--border));
+  box-shadow:0 2px 8px rgba(59,130,246,.12);
+}
+.msg .code{
+  font-size:20px;font-weight:800;letter-spacing:.14em;color:var(--primary);
+  font-variant-numeric:tabular-nums;
+}
+.msg .copy-code,.msg .copy-inline{
+  font-size:11px;font-weight:800;padding:6px 10px;border-radius:8px;border:1px solid var(--border);
+  background:var(--card);color:var(--primary);cursor:pointer;font-family:inherit;
+}
+.msg .copy-inline{padding:2px 6px;margin-left:6px;vertical-align:middle;display:inline-flex}
+.msg .when-block{text-align:right;flex-shrink:0}
+.msg .when-label{font-size:10px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
+.msg .when-rel{font-size:13px;font-weight:800;color:var(--text);margin-top:2px}
+.msg .when{font-size:11px;color:var(--muted);font-weight:600;margin-top:2px}
+#inbox{display:flex;flex-direction:column;gap:0}
+.empty{text-align:center;padding:28px 16px;color:var(--muted);font-size:13px;font-weight:600;line-height:1.5}
+
+/* Modal */
+.modal-bg{position:fixed;inset:0;z-index:100;background:rgba(0,0,0,.55);display:none;align-items:flex-end;justify-content:center;
+  padding:16px;backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px)}
+.modal-bg.on{display:flex}
+.modal{background:var(--sheet);border:1px solid var(--border);border-radius:20px 20px 16px 16px;width:100%;max-width:420px;
+  padding:20px 18px 18px;box-shadow:0 -8px 40px rgba(0,0,0,.25);animation:up .22s ease}
+@keyframes up{from{transform:translateY(24px);opacity:0}to{transform:none;opacity:1}}
+.modal h3{font-size:17px;font-weight:800;margin-bottom:14px}
+.modal-rows{background:var(--input);border:1px solid var(--border);border-radius:14px;padding:4px 0;margin-bottom:14px}
+.modal-row{display:flex;justify-content:space-between;gap:12px;padding:10px 14px;font-size:13px;font-weight:600}
+.modal-row span:first-child{color:var(--muted)}.modal-row span:last-child{color:var(--text);text-align:right}
+.modal-note{font-size:13px;color:var(--muted);line-height:1.5;font-weight:600;margin-bottom:12px}
+.modal-warn{border-left:3px solid var(--primary);padding:12px 14px;background:var(--soft);border-radius:0 12px 12px 0;
+  font-size:12px;font-weight:600;color:var(--text);line-height:1.5;margin-bottom:16px}
+.modal-actions{display:flex;gap:10px}
+.modal-actions .btn{flex:1}
+.modal-actions .btn-ghost{border:1px solid var(--border)}
+.modal-actions .btn-refund{background:var(--primary);color:#fff}
+
+@media (min-width:520px){
+  .modal-bg{align-items:center}
+  .modal{border-radius:20px}
+}
+</style>
+</head>
+<body>
+<header class="header">
+  <a class="back" href="mj-sms-history.html?view=rent" aria-label="Back"><i class="fa-solid fa-arrow-left"></i></a>
+  <h1>Rental inbox</h1>
+</header>
+<main class="main" id="main"><div class="empty">Loading…</div></main>
+<div id="successBanner" style="display:none;max-width:560px;margin:12px auto 0;padding:0 16px;">
+  <div style="background:rgba(52,211,153,.12);border:1px solid rgba(52,211,153,.35);color:#34d399;border-radius:14px;padding:12px 14px;font-weight:700;font-size:13px;">
+    Number rented successfully. Your inbox is live below.
+  </div>
+</div>
+<script>
+(function(){
+  const SUPABASE_URL = 'https://atczodlljmlayvldxfmv.supabase.co';
+  const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImF0Y3pvZGxsam1sYXl2bGR4Zm12Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODUwNzUyMzgsImV4cCI6MjEwMDY1MTIzOH0.ufthD-p7BmeD_B7xyuMM6PNPL8DmcL4AtRYgg-MuoLI';
+  const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+    auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true }
+  });
+  const params = new URLSearchParams(location.search);
+  const orderId = (params.get('order_id') || '').trim();
+  if(params.get('ok') === '1' || params.get('success') === '1'){
+    var sbanner = document.getElementById('successBanner');
+    if(sbanner){ sbanner.style.display = 'block'; setTimeout(function(){ sbanner.style.display='none'; }, 7000); }
+  }
+  let rent = null, pollTimer = null, cdTimer = null;
+
+  function toast(msg){
+    var t = document.getElementById('toastPop');
+    if(!t){ t=document.createElement('div'); t.id='toastPop'; t.className='toast-pop'; document.body.appendChild(t); }
+    t.textContent = msg||''; t.classList.add('show');
+    clearTimeout(t._tm); t._tm=setTimeout(function(){ t.classList.remove('show'); }, 2500);
+  }
+  function setFlash(msg, ok){ toast(msg||''); }
+  function pad(n){ return String(n).padStart(2,'0'); }
+  function formatLeft(ms){
+    if(!ms || ms<=0) return 'Ended';
+    var sec=Math.floor(ms/1000), d=Math.floor(sec/86400); sec%=86400;
+    var h=Math.floor(sec/3600); sec%=3600; var m=Math.floor(sec/60), s=sec%60;
+    if(d>0) return d+'d '+pad(h)+':'+pad(m)+':'+pad(s);
+    return pad(h)+':'+pad(m)+':'+pad(s);
+  }
+  function parseExpire(r){
+    var raw=r&&(r.expire_at||r.code||r.active_till);
+    if(!raw) return 0;
+    var ms=Date.parse(String(raw));
+    return isNaN(ms)?0:ms;
+  }
+  function esc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+  function copyText(txt){
+    if(!txt) return;
+    if(navigator.clipboard&&navigator.clipboard.writeText) navigator.clipboard.writeText(txt).then(function(){ toast('Copied'); }).catch(function(){ toast('Copy failed'); });
+    else { var a=document.createElement('textarea'); a.value=txt; document.body.appendChild(a); a.select(); try{document.execCommand('copy');toast('Copied');}catch(e){toast('Copy failed');} document.body.removeChild(a); }
+  }
+  async function headers(){
+    const { data: { session } } = await sb.auth.getSession();
+    if(!session){ location.href='auth.html?next='+encodeURIComponent(location.pathname+location.search); return null; }
+    return { Authorization:'Bearer '+session.access_token, 'Content-Type':'application/json', Accept:'application/json' };
+  }
+  async function api(action, opts){
+    opts=opts||{};
+    var h=await headers(); if(!h) return { success:false, message:'Not signed in' };
+    var url='/api/sms-bus?action='+action+(opts.query?'&'+opts.query:'');
+    var r=await fetch(url,{ method:opts.method||'GET', headers:h, body:opts.body?JSON.stringify(opts.body):undefined });
+    try{ return await r.json(); }catch(e){ return { success:false, message:'Bad response' }; }
+  }
+
+  function renderShell(){
+    var main=document.getElementById('main');
+    if(!main||!rent) return;
+    var till=parseExpire(rent);
+    var active = rent.active!==false && (!till || till>Date.now());
+    if(rent.refunded) active=false;
+    var st=String(rent.status||'').toLowerCase();
+    if(['refunded','cancelled','canceled','expired','ended'].indexOf(st)>=0) active=false;
+    var phone=rent.phone_number||rent.number||'—';
+    var area=rent.area_code||rent.country_name||'';
+    var name=String(rent.service_name||'').replace(/\s*·\s*SMS\s*received/ig,'').trim()||'Long rental';
+    main.innerHTML =
+      '<div class="hero">'+
+        '<div class="hero-top">'+
+          '<div><div class="phone">'+esc(phone)+'</div><div class="svc-meta">'+esc(name)+(area?' · '+esc(area):'')+'</div></div>'+
+          '<span class="badge '+(active?'ok':'expired')+'" id="statusBadge">'+(active?'Active':'Ended')+'</span>'+
+        '</div>'+
+        '<div class="stats">'+
+          '<div class="stat"><div class="lbl">Time left</div><div class="val" id="cdVal">'+formatLeft(till?till-Date.now():0)+'</div></div>'+
+          '<div class="stat"><div class="lbl">Last code</div><div class="val" id="lastCode">—</div></div>'+
+        '</div>'+
+        '<div class="actions">'+
+          '<button type="button" class="btn btn-ghost" id="btnCopy">Copy number</button>'+
+          '<button type="button" class="btn btn-ghost" id="btnRefresh">Refresh inbox</button>'+
+          (active?'<button type="button" class="btn btn-primary" id="btnRenew">Renew</button>':'')+
+        '</div>'+
+      '</div>'+
+      '<div class="inbox-card">'+
+        '<div class="inbox-head"><h2>SMS inbox</h2><span class="live">Live</span></div>'+
+        '<div id="inbox"><div class="empty">Loading messages…</div></div>'+
+      '</div>';
+    document.getElementById('btnCopy').onclick=function(){ copyText(phone); };
+    document.getElementById('btnRefresh').onclick=async function(){ toast('Refreshing…'); await loadMessages(); toast('Inbox updated'); };
+    var br=document.getElementById('btnRenew');
+    if(br) br.onclick=renew;
+    if(cdTimer) clearInterval(cdTimer);
+    cdTimer=setInterval(function(){
+      var el=document.getElementById('cdVal'); if(!el) return;
+      var left=till-Date.now(); el.textContent=formatLeft(left);
+      if(left<=0){ var b=document.getElementById('statusBadge'); if(b){ b.textContent='Ended'; b.className='badge expired'; } }
+    },1000);
+  }
+
+  async function loadMessages(){
+    var box=document.getElementById('inbox'); if(!box||!orderId) return;
+    var j=await api('rent_sms',{ query:'order_id='+encodeURIComponent(orderId) });
+    var list=(j&&j.success&&Array.isArray(j.data))?j.data:[];
+    var last=document.getElementById('lastCode');
+    var withCode=list.filter(function(m){ return m&&m.code; })[0];
+    if(withCode&&last) last.textContent=withCode.code;
+    if(!list.length){ box.innerHTML='<div class="empty">No SMS yet.<br>New messages appear here automatically.</div>'; return; }
+    box.innerHTML=list.map(function(m){
+      var body=m.body||''; var code=m.code||'';
+      return '<div class="msg">'+
+        '<div class="msg-top"><span>'+esc(m.from||'SMS')+'</span><span>'+esc(m.received_at?new Date(m.received_at).toLocaleString():'')+'</span></div>'+
+        (code?'<div class="code">'+esc(code)+'</div><button type="button" class="btn btn-ghost" data-c="'+esc(code)+'">Copy code</button>':'')+
+        '<div class="msg-body">'+esc(body)+'</div></div>';
+    }).join('');
+    box.querySelectorAll('[data-c]').forEach(function(btn){ btn.onclick=function(){ copyText(btn.getAttribute('data-c')); }; });
+  }
+
+  async function renew(){
+    if(!rent) return;
+    var months=prompt('Renew for how many months?','1');
+    if(!months) return;
+    months=Math.max(1, parseInt(months,10)||1);
+    var area=rent.area_code||rent.country_name||'';
+    var mobile=String(rent.phone_number||'').replace(/\D/g,'');
+    if(mobile.length>10 && mobile.startsWith('1')) mobile=mobile.slice(1);
+    toast('Renewing…');
+    var j=await api('rent_renew',{ method:'POST', body:{ area_code:area, mobile_number:mobile, time:months }});
+    if(!j.success){ toast(j.message||'Renew failed'); return; }
+    toast('Renewed successfully');
+    await loadDetail();
+  }
+
+  async function loadDetail(){
+    if(!orderId){ document.getElementById('main').innerHTML='<div class="empty">Missing order. Open from Number history.</div>'; return; }
+    var j=await api('rent_detail',{ query:'order_id='+encodeURIComponent(orderId) });
+    if(!j.success||!j.data){ document.getElementById('main').innerHTML='<div class="empty">'+(j.message||'Rental not found')+'</div>'; return; }
+    rent=j.data; renderShell(); await loadMessages();
+    if(pollTimer) clearInterval(pollTimer);
+    pollTimer=setInterval(loadMessages, 8000);
+  }
+  loadDetail();
+})();
+</script>
+</body>
+</html>

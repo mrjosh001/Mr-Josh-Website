@@ -217,9 +217,22 @@ document.getElementById('rentBtn').onclick = async function() {
     document.getElementById('err').textContent = j.message || 'Could not complete rental';
     return;
   }
+  var oid = (j.data && (j.data.order_id || j.data.id)) || '';
+  var num = (j.data && j.data.number) || '';
   document.getElementById('ok').textContent =
-    'Number ' + (j.data.number || '') +
-    (j.data.expire_at ? (' · active until ' + new Date(j.data.expire_at).toLocaleDateString()) : '');
+    'Success! Number ' + num + ' is ready. Opening inbox…';
+  try {
+    // toast-style brief feedback
+    var t = document.createElement('div');
+    t.textContent = 'Rental successful · ' + num;
+    t.style.cssText = 'position:fixed;left:50%;bottom:28px;transform:translateX(-50%);background:#0f172a;color:#fff;padding:12px 18px;border-radius:14px;font-weight:700;z-index:99;font-size:13px';
+    document.body.appendChild(t);
+  } catch (e) {}
+  if (oid) {
+    location.href = 'mj-sms-rent-number.html?order_id=' + encodeURIComponent(oid) + '&ok=1';
+  } else {
+    location.href = 'mj-sms-history.html?view=rent';
+  }
 };
 loadAreas();
 </script>
