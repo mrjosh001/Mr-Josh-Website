@@ -156,25 +156,19 @@ function isRentCancelledOrRefunded(o){
   var st=String(o.status||'').toLowerCase();
   return st==='refunded'||st==='cancelled'||st==='canceled';
 }
-/** True only if this rental actually got SMS (not just timer ended). */
 function rentReceivedSms(o){
   if(!o) return false;
+  if(o._sms_received===true) return true;
   var st=String(o.status||'').toLowerCase();
-  // Explicit completed status means code path already ran for OTP-style rows
   if(st==='completed'||st==='success') return true;
-  // Marker written when inbox first sees a message
   if(/sms\s*received/i.test(String(o.service_name||''))) return true;
   if(o.sms_received===true||o.has_messages===true||Number(o.message_count||0)>0) return true;
   var rid=typeof usaRentId==='function'?usaRentId(o):'';
   if(rid){
     try{ if(localStorage.getItem('mjhub_rent_sms_'+rid)==='1') return true; }catch(e){}
   }
-  // OTP rentals sometimes store short numeric code; gotsms stores ISO expiry in code — ignore ISO
   var c=String(o.code||'').trim();
   if(c && /^\d{4,8}$/.test(c)) return true;
-  if(c && !/^\d{4}-\d{2}-\d{2}/.test(c) && c.indexOf('T')<0 && c.length>=4 && c.length<=32 && !/^[0-9.]+$/.test(c)){
-    // non-date text payload unlikely for gotsms expiry
-  }
   return false;
 }
 /** Completed = received SMS/code AND countdown finished (not cancelled/refunded). */
@@ -187,6 +181,7 @@ function isRentCompletedRow(o){
   var till=typeof parseUsaExpiry==='function'?parseUsaExpiry(o):0;
   if(till && till<=Date.now()) return true;
   if(st==='expired'||st==='ended'||st==='finished'||st==='completed') return true;
+  if(!till && !isRentActiveRow(o)) return true;
   return false;
 }
 async function refreshLiveUsaActive(accessToken){
@@ -205,6 +200,47 @@ async function refreshLiveUsaActive(accessToken){
     });
   }catch(_){}
 }
+var _smsEnrichDone=false;
+async function enrichPastRentSms(accessToken){
+  if(_smsEnrichDone||!accessToken) return;
+  _smsEnrichDone=true;
+  var candidates=(allOrders||[]).filter(function(o){
+    if(!isRent(o)) return false;
+    if(String(o.source||'').toLowerCase()!=='gotsms') return false;
+    if(isRentActiveRow(o)) return false;
+    if(isRentCancelledOrRefunded(o)) return false;
+    if(rentReceivedSms(o)) return false;
+    return !!usaRentId(o);
+  }).slice(0, 20);
+  if(!candidates.length) return;
+  await Promise.all(candidates.map(async function(o){
+    var rid=usaRentId(o);
+    if(!rid) return;
+    try{
+      var res=await fetch('/api/sms-bus?action=gotsms_messages&rent_id='+encodeURIComponent(rid),{
+        headers:{Authorization:'Bearer '+accessToken,Accept:'application/json'}
+      });
+      var j=await res.json().catch(function(){return {};});
+      var list=(j&&Array.isArray(j.data))?j.data:[];
+      var got=list.some(function(m){ return m && (String(m.code||'').trim()||String(m.body||'').trim()); });
+      if(got){
+        o._sms_received=true;
+        try{ localStorage.setItem('mjhub_rent_sms_'+rid,'1'); }catch(e){}
+        if(!/sms\s*received/i.test(String(o.service_name||''))){
+          o.service_name=(o.service_name||'USA rental')+' · SMS received';
+        }
+        try{
+          fetch('/api/sms-bus?action=gotsms_mark_sms',{
+            method:'POST',
+            headers:{Authorization:'Bearer '+accessToken,Accept:'application/json','Content-Type':'application/json'},
+            body:JSON.stringify({rent_id:rid})
+          }).catch(function(){});
+        }catch(e){}
+      }
+    }catch(e){}
+  }));
+}
+
 
 function parseUsaExpiry(o){
   // Expiry stored in active_till or in code as ISO (gotsms rentals)
@@ -260,11 +296,13 @@ function render(){
   if(view==='rent'&&rentFilter==='active')rows=rows.filter(function(o){return (typeof isRentActiveRow==='function'?isRentActiveRow:isUsaActiveRow)(o);});
   if(view==='rent'&&rentFilter==='completed')rows=rows.filter(function(o){return typeof isRentCompletedRow==='function'?isRentCompletedRow(o):false;});
   if(view==='rent'&&rentFilter==='ended')rows=rows.filter(function(o){
-    if(typeof isRentCancelledOrRefunded==='function') return isRent(o)&&isRentCancelledOrRefunded(o);
-    return typeof isRentEndedRow==='function'?isRentEndedRow(o):!isRentActiveRow(o);
+    if(!isRent(o)) return false;
+    if(typeof isRentActiveRow==='function' && isRentActiveRow(o)) return false;
+    if(typeof isRentCompletedRow==='function' && isRentCompletedRow(o)) return false;
+    return true;
   });
   if(!rows.length){
-    listEl.innerHTML='<div class="empty">'+(view==='rent'?(rentFilter==='active'?'No active USA rentals right now.<br><a href="mj-sms-usa-rent.html" style="color:var(--primary)">Rent a number</a>':(rentFilter==='completed'?'No completed rentals yet.<br>Only numbers that received an SMS and whose timer finished appear here.':(rentFilter==='ended'?'No expired or cancelled rentals.':'No USA rentals yet. Open USA rental to get a number.'))):(filter==='completed'?'No completed OTP numbers yet.<br>Numbers with a successful code will show here.':(filter==='waiting'?'No numbers waiting for a code.':'No OTP numbers yet. Tap Get OTP to choose a server.')))+'</div>';
+    listEl.innerHTML='<div class="empty">'+(view==='rent'?(rentFilter==='active'?'No active USA rentals right now.<br><a href="mj-sms-usa-rent.html" style="color:var(--primary)">Rent a number</a>':(rentFilter==='completed'?'No completed rentals yet.<br>Only numbers that received an SMS and whose timer finished appear here.':(rentFilter==='ended'?'No expired or cancelled rentals.<br>Timer-ended numbers without SMS and cancelled/refunded show here.':'No USA rentals yet. Open USA rental to get a number.'))):(filter==='completed'?'No completed OTP numbers yet.<br>Numbers with a successful code will show here.':(filter==='waiting'?'No numbers waiting for a code.':'No OTP numbers yet. Tap Get OTP to choose a server.')))+'</div>';
     return;
   }
   listEl.innerHTML=rows.map(function(o){
@@ -541,6 +579,12 @@ function startHistoryRealtime(sbClient, userId){
       try { if (typeof writeHistCache === 'function') writeHistCache(session.user.id, allOrders); } catch (_w) {}
       updateHistCta();
       render();
+      try {
+        if (typeof enrichPastRentSms==='function') {
+          await enrichPastRentSms(session.access_token);
+          render();
+        }
+      } catch (_e) {}
       return;
     }
     // If incremental failed but we have cache, show cache
@@ -548,6 +592,12 @@ function startHistoryRealtime(sbClient, userId){
       allOrders = cached;
       updateHistCta();
       render();
+      try {
+        if (typeof enrichPastRentSms==='function') {
+          await enrichPastRentSms(session.access_token);
+          render();
+        }
+      } catch (_e) {}
       return;
     }
   } catch (e) { console.warn('history api', e); }
@@ -556,6 +606,14 @@ function startHistoryRealtime(sbClient, userId){
   allOrders=data||[];
   try { if (typeof writeHistCache==='function') writeHistCache(session.user.id, allOrders); } catch(_w2){}
   updateHistCta();render();
+  // After list is on screen, force-check past USA rentals for inbox SMS → Completed filter
+  try {
+    if (typeof enrichPastRentSms==='function') {
+      await enrichPastRentSms(session.access_token);
+      updateHistCta();
+      render();
+    }
+  } catch (_en) {}
 }
 
 init();
