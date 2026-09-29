@@ -22,6 +22,7 @@ import { applyMarkup } from '../lib/pricing.js';
  *   POST ?action=rent_order  { area_code, time }  // time = months
  *   GET  ?action=rent_sms&order_id= | mobile_number=
  *   POST ?action=rent_renew  { area_code, mobile_number, time }
+ *   POST ?action=rent_cancel { order_id }  // provider must accept; then wallet credit
  */
 
 const OTP_BASE = 'https://sms-bus.com/api/control';
@@ -2170,6 +2171,160 @@ export default async function handler(req, res) {
           active: !!active,
           time_left_ms: till && till > Date.now() ? till - Date.now() : 0
         }
+      });
+    }
+
+
+    // POST rent_cancel — supplier must accept first; only then credit wallet
+    // Rules (provider): within ~20 min of purchase, and only if no SMS received.
+    if (method === 'POST' && action === 'rent_cancel') {
+      const auth = await requireAuth(req);
+      if (!auth.ok) return json(res, auth.status, { success: false, message: auth.message });
+      const body = await readBody(req);
+      const order_id = String(body.order_id || url.searchParams.get('order_id') || '').trim();
+      if (!order_id) return json(res, 400, { success: false, message: 'order_id required' });
+
+      const { data: row, error: rowErr } = await supabase
+        .from('number_orders')
+        .select('*')
+        .eq('user_id', auth.userId)
+        .eq('source', 'smsbus_rent')
+        .eq('order_id', order_id)
+        .maybeSingle();
+      if (rowErr || !row) return json(res, 404, { success: false, message: 'Rental not found' });
+      if (row.refunded === true || ['refunded', 'cancelled', 'canceled'].includes(String(row.status || '').toLowerCase())) {
+        return json(res, 400, { success: false, message: 'This rental was already cancelled' });
+      }
+
+      // Hard block if we already know SMS arrived
+      if (/sms\s*received/i.test(String(row.service_name || ''))) {
+        return json(res, 400, {
+          success: false,
+          message: 'Cancel is unavailable — a message was already received on this number.'
+        });
+      }
+
+      // 20-minute window from purchase
+      const createdMs = row.created_at ? Date.parse(String(row.created_at)) : 0;
+      if (createdMs && Date.now() - createdMs > 20 * 60 * 1000) {
+        return json(res, 400, {
+          success: false,
+          message: 'Cancel window has closed. Numbers can only be cancelled within 20 minutes of purchase if no SMS was received.'
+        });
+      }
+
+      // Re-check live inbox before asking provider to cancel
+      try {
+        let mobile = String(row.phone_number || '').replace(/\D/g, '');
+        if (mobile.length > 10 && mobile.startsWith('1')) mobile = mobile.slice(1);
+        const area = String(row.country_name || '').toUpperCase();
+        if (area && mobile) {
+          const smsCheck = await smsbusGet(RENT_BASE, '/v1/rent/get/sms', {
+            area_code: area,
+            mobile_number: mobile
+          });
+          const d = smsCheck.data && smsCheck.data.data;
+          let hasSms = false;
+          if (d) {
+            if (Array.isArray(d) && d.length) hasSms = true;
+            else if (typeof d === 'object' && (d.content || d.body || d.text || d.message)) hasSms = true;
+            else if (typeof d === 'string' && d.trim()) hasSms = true;
+          }
+          if (hasSms) {
+            try {
+              const name = String(row.service_name || '');
+              if (!/sms\s*received/i.test(name)) {
+                await supabase.from('number_orders').update({
+                  service_name: (name || 'Rental') + ' · SMS received'
+                }).eq('id', row.id);
+              }
+            } catch (_) {}
+            return json(res, 400, {
+              success: false,
+              message: 'Cancel is unavailable — a message was already received on this number.'
+            });
+          }
+        }
+      } catch (e) {
+        console.warn('[rent_cancel] sms precheck', e.message || e);
+      }
+
+      // Provider cancel FIRST — never refund unless this succeeds
+      const cancelRes = await smsbusGet(RENT_BASE, '/v1/rent/cancel/order', { order_id });
+      if (!busOk(cancelRes.data)) {
+        const rawMsg = String(
+          (cancelRes.data && (cancelRes.data.message || cancelRes.data.msg)) || 'Cancel was not approved'
+        );
+        // Map known provider messages to safe customer copy (never name the provider)
+        let message = 'Cancel was not approved. No refund was issued.';
+        const low = rawMsg.toLowerCase();
+        if (low.includes('sms') && (low.includes('received') || low.includes('receive'))) {
+          message = 'Cancel is unavailable — a message was already received on this number.';
+        } else if (low.includes('3 times') || low.includes('can not continue') || low.includes('cannot continue')) {
+          message = 'This number can no longer be cancelled.';
+        } else if (low.includes('time') || low.includes('minute') || low.includes('expired') || low.includes('window')) {
+          message = 'Cancel window has closed. No refund was issued.';
+        }
+        return json(res, 400, { success: false, message, provider_ok: false });
+      }
+
+      // Claim order as refunded once (idempotent)
+      const { data: claimed, error: claimErr } = await supabase
+        .from('number_orders')
+        .update({ status: 'refunded', refunded: true })
+        .eq('id', row.id)
+        .eq('user_id', auth.userId)
+        .or('refunded.is.null,refunded.eq.false')
+        .select('id, price')
+        .maybeSingle();
+
+      if (claimErr || !claimed) {
+        // Provider already cancelled — do not double-credit if already claimed
+        return json(res, 200, {
+          success: true,
+          message: 'Rental cancelled. If a refund was due it is already on your wallet.',
+          already: true
+        });
+      }
+
+      const refundAmount = Math.round(Number(row.price) || 0);
+      if (refundAmount > 0) {
+        const { error: credErr } = await supabase.rpc('credit_balance', {
+          p_user_id: auth.userId,
+          p_amount: refundAmount
+        });
+        if (credErr) {
+          console.error('[rent_cancel] credit_balance', credErr.message);
+          // Provider cancel succeeded — leave status refunded, support can fix wallet
+          return json(res, 500, {
+            success: false,
+            message: 'Rental was cancelled but wallet credit needs support review. Contact support with your order ID.'
+          });
+        }
+        try {
+          const { data: profile } = await supabase
+            .from('profiles')
+            .select('customer_id')
+            .eq('id', auth.userId)
+            .maybeSingle();
+          await supabase.from('transactions').insert({
+            user_id: auth.userId,
+            customer_id: profile && profile.customer_id,
+            type: 'refund',
+            category: 'MJ SMS',
+            title: 'Rental cancelled — balance restored',
+            subtitle: String(row.phone_number || order_id),
+            amount: `₦${refundAmount.toLocaleString()}`,
+            amount_ngn: refundAmount,
+            status: 'completed'
+          });
+        } catch (_) {}
+      }
+
+      return json(res, 200, {
+        success: true,
+        message: 'Rental cancelled. ₦' + refundAmount.toLocaleString() + ' returned to your wallet.',
+        refunded: refundAmount
       });
     }
 
