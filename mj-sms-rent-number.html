@@ -192,7 +192,7 @@ h1{font-size:17px;font-weight:800;letter-spacing:-.02em}
   const SUPABASE_URL = 'https://atczodlljmlayvldxfmv.supabase.co';
   const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImF0Y3pvZGxsam1sYXl2bGR4Zm12Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODUwNzUyMzgsImV4cCI6MjEwMDY1MTIzOH0.ufthD-p7BmeD_B7xyuMM6PNPL8DmcL4AtRYgg-MuoLI';
   const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
-    auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true }
+    auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true, storage: window.sessionStorage }
   });
   const params = new URLSearchParams(location.search);
   const orderId = (params.get('order_id') || '').trim();
@@ -230,7 +230,19 @@ h1{font-size:17px;font-weight:800;letter-spacing:-.02em}
     else { var a=document.createElement('textarea'); a.value=txt; document.body.appendChild(a); a.select(); try{document.execCommand('copy');toast('Copied');}catch(e){toast('Copy failed');} document.body.removeChild(a); }
   }
   async function headers(){
-    const { data: { session } } = await sb.auth.getSession();
+    var session = null;
+    try {
+      var r1 = await sb.auth.getSession();
+      session = r1 && r1.data && r1.data.session;
+    } catch (e) {}
+    if(!session){
+      // Session may still be hydrating from sessionStorage — retry once
+      await new Promise(function(res){ setTimeout(res, 250); });
+      try {
+        var r2 = await sb.auth.getSession();
+        session = r2 && r2.data && r2.data.session;
+      } catch (e2) {}
+    }
     if(!session){ location.href='auth.html?next='+encodeURIComponent(location.pathname+location.search); return null; }
     return { Authorization:'Bearer '+session.access_token, 'Content-Type':'application/json', Accept:'application/json' };
   }
