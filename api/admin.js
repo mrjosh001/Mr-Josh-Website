@@ -1154,19 +1154,35 @@ async function listSmsOrdersHandle() {
 
 /** Admin: inbox message count for a GotSMS rent (service-role path, no user ownership check). */
 async function smsOrdersInboxCountHandle(body = {}) {
-  const rentId = String(body.rent_id || '').trim();
-  if (!rentId) return { status: 400, body: { success: false, message: 'rent_id required' } };
+  const rentId = String(body.rent_id || body.rentId || '').trim();
+  if (!rentId) return { status: 400, body: { success: false, message: 'rent_id required', count: 0 } };
   const token = process.env.GOTSMS_API_TOKEN || process.env.GOT_SMS_TOKEN || '';
-  if (!token) return { status: 503, body: { success: false, message: 'GotSMS not configured', count: 0 } };
+  if (!token) {
+    return { status: 503, body: { success: false, message: 'GotSMS is not configured (set GOTSMS_API_TOKEN)', count: 0 } };
+  }
   try {
-    const res = await fetch('https://app.gotsms.org/api/numbers/' + encodeURIComponent(rentId) + '/messages', {
+    const url = 'https://app.gotsms.org/api/numbers/' + encodeURIComponent(rentId) + '/messages';
+    const res = await fetch(url, {
       method: 'GET',
-      headers: { Authorization: 'Bearer ' + token, Accept: 'application/json' },
+      headers: {
+        Authorization: 'Bearer ' + token,
+        Accept: 'application/json',
+        'Content-Type': 'application/json',
+      },
     });
     const json = await res.json().catch(() => ({}));
-    const list = Array.isArray(json?.data) ? json.data : (Array.isArray(json) ? json : []);
-    const count = list.filter((m) => m && (String(m.code || '').trim() || String(m.body || '').trim())).length;
-    // Persist SMS-received marker for history/admin filters when count > 0
+    // Accept several GotSMS response shapes
+    let list = [];
+    if (Array.isArray(json?.data)) list = json.data;
+    else if (Array.isArray(json?.messages)) list = json.messages;
+    else if (Array.isArray(json?.data?.messages)) list = json.data.messages;
+    else if (Array.isArray(json)) list = json;
+    const count = list.filter((m) => {
+      if (!m) return false;
+      const code = String(m.code || m.otp || m.sms_code || '').trim();
+      const bodyTxt = String(m.body || m.text || m.message || m.content || '').trim();
+      return !!(code || bodyTxt);
+    }).length;
     if (count > 0) {
       try {
         const key = 'gotsms-' + rentId;
@@ -1184,12 +1200,20 @@ async function smsOrdersInboxCountHandle(body = {}) {
         }
       } catch (_) {}
     }
-    return { status: 200, body: { success: true, count, rent_id: rentId } };
+    return {
+      status: 200,
+      body: {
+        success: true,
+        count,
+        rent_id: rentId,
+        supplier_ok: res.ok,
+        supplier_status: res.status,
+      },
+    };
   } catch (e) {
     return { status: 502, body: { success: false, message: e.message || 'GotSMS messages failed', count: 0 } };
   }
 }
-
 
 async function wipeUnusedSmsNumbersHandle() {
   // Remove cancelled/expired SMS number orders older than 15 days with no received code.
