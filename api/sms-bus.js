@@ -2010,7 +2010,7 @@ export default async function handler(req, res) {
         price,
         supplier_price: supplierUsd,
         currency: 'NGN',
-        status: 'completed',
+        status: 'active',
         code: d.expire_at || d.keep_at || null,
         refunded: false
       });
@@ -2040,6 +2040,135 @@ export default async function handler(req, res) {
           price,
           new_balance: bal - price,
           source: 'smsbus_rent'
+        }
+      });
+    }
+
+
+    // GET rent_sms — latest SMS on a long-term rented number (SMS-Bus)
+    if (method === 'GET' && action === 'rent_sms') {
+      const auth = await requireAuth(req);
+      if (!auth.ok) return json(res, auth.status, { success: false, message: auth.message });
+      let order_id = String(url.searchParams.get('order_id') || '').trim();
+      let area_code = String(url.searchParams.get('area_code') || '').toUpperCase().trim();
+      let mobile_number = String(url.searchParams.get('mobile_number') || '').replace(/\D/g, '');
+
+      // Resolve from our order when order_id is provided
+      let orderRow = null;
+      if (order_id) {
+        const { data: row } = await supabase
+          .from('number_orders')
+          .select('*')
+          .eq('user_id', auth.userId)
+          .eq('source', 'smsbus_rent')
+          .eq('order_id', order_id)
+          .maybeSingle();
+        if (!row) return json(res, 404, { success: false, message: 'Rental not found' });
+        orderRow = row;
+        if (!area_code) area_code = String(row.country_name || '').toUpperCase();
+        if (!mobile_number) {
+          // Prefer national number without dialing code for SMS-Bus
+          mobile_number = String(row.phone_number || '').replace(/\D/g, '');
+        }
+      }
+      if (!area_code || !mobile_number) {
+        return json(res, 400, { success: false, message: 'area_code and mobile_number (or order_id) required' });
+      }
+
+      // Strip leading country dial codes if still present (1 for US/CA, etc.)
+      let national = mobile_number;
+      if (national.length > 10 && national.startsWith('1')) national = national.slice(1);
+
+      const busSms = await smsbusGet(RENT_BASE, '/v1/rent/get/sms', {
+        area_code,
+        mobile_number: national
+      });
+      // 50101 style / empty = no SMS yet — still success with empty list
+      const raw = busSms.data;
+      const ok = busOk(raw);
+      let messages = [];
+      if (ok && raw && raw.data) {
+        const d = raw.data;
+        if (Array.isArray(d)) {
+          messages = d.map((m) => ({
+            body: m.content || m.body || m.text || m.message || '',
+            code: m.code || '',
+            received_at: m.receive_at || m.received_at || m.time || null,
+            from: m.from || m.sender || ''
+          }));
+        } else if (typeof d === 'object') {
+          const body = d.content || d.body || d.text || d.message || '';
+          if (body) {
+            messages = [{
+              body,
+              code: d.code || '',
+              received_at: d.receive_at || d.received_at || null,
+              from: d.from || d.sender || ''
+            }];
+          }
+        } else if (typeof d === 'string' && d.trim()) {
+          messages = [{ body: d, code: '', received_at: null, from: '' }];
+        }
+      }
+      // Extract obvious OTP codes for display
+      messages = messages.map((m) => {
+        if (!m.code && m.body) {
+          const hit = String(m.body).match(/\b(\d{4,8})\b/);
+          if (hit) m.code = hit[1];
+        }
+        return m;
+      });
+      // Mark SMS received on order for history Completed filter
+      if (messages.length && orderRow) {
+        try {
+          const name = String(orderRow.service_name || '');
+          if (!/sms\s*received/i.test(name)) {
+            await supabase.from('number_orders').update({
+              service_name: (name || 'Rental') + ' · SMS received'
+            }).eq('id', orderRow.id);
+          }
+        } catch (_) {}
+      }
+      return json(res, 200, {
+        success: true,
+        data: messages,
+        message: messages.length ? 'OK' : 'No SMS yet',
+        order: orderRow ? {
+          order_id: orderRow.order_id,
+          phone_number: orderRow.phone_number,
+          area_code,
+          expire_at: orderRow.code,
+          service_name: orderRow.service_name,
+          status: orderRow.status,
+          price: orderRow.price
+        } : null
+      });
+    }
+
+    // GET rent_detail — load one smsbus_rent order for the number page
+    if (method === 'GET' && action === 'rent_detail') {
+      const auth = await requireAuth(req);
+      if (!auth.ok) return json(res, auth.status, { success: false, message: auth.message });
+      const order_id = String(url.searchParams.get('order_id') || '').trim();
+      if (!order_id) return json(res, 400, { success: false, message: 'order_id required' });
+      const { data: row, error } = await supabase
+        .from('number_orders')
+        .select('*')
+        .eq('user_id', auth.userId)
+        .eq('source', 'smsbus_rent')
+        .eq('order_id', order_id)
+        .maybeSingle();
+      if (error || !row) return json(res, 404, { success: false, message: 'Rental not found' });
+      const till = row.code ? Date.parse(String(row.code)) : 0;
+      const active = !(row.refunded) && (!till || till > Date.now()) && !['refunded','cancelled','canceled','expired'].includes(String(row.status||'').toLowerCase());
+      return json(res, 200, {
+        success: true,
+        data: {
+          ...row,
+          area_code: row.country_name,
+          expire_at: row.code,
+          active: !!active,
+          time_left_ms: till && till > Date.now() ? till - Date.now() : 0
         }
       });
     }
