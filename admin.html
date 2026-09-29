@@ -1006,12 +1006,13 @@ function withLagos(opts) { return Object.assign({ timeZone: 'Africa/Lagos' }, op
  <option value="usa">USA Rental</option>
  </select>
  <select id="smsOrdersStatusFilter" onchange="filterSmsOrders()" style="min-width:160px;">
- <option value="completed" selected>Completed / Active</option>
+ <option value="active_rental" selected>Active rental</option>
+ <option value="completed_rental">Completed rental</option>
+ <option value="completed_otp">Completed OTP</option>
  <option value="">All statuses</option>
- <option value="active">Active (USA rental)</option>
  <option value="waiting_for_code">Waiting for code</option>
  <option value="expired">Expired</option>
-                <option value="refunded">Cancelled &amp; refunded</option>
+ <option value="refunded">Cancelled &amp; refunded</option>
  <option value="failed">Failed</option>
  </select>
  </div>
@@ -1020,7 +1021,7 @@ function withLagos(opts) { return Object.assign({ timeZone: 'Africa/Lagos' }, op
  <table>
  <thead>
  <tr>
- <th>Customer ID</th><th>Server</th><th>Service</th><th>Country</th><th>Number</th><th>Price</th><th>Code / SMS</th><th>Status</th><th>Date</th>
+ <th>Customer ID</th><th>Server</th><th>Service</th><th>Country</th><th>Number</th><th>Price</th><th>Inbox</th><th>Time left</th><th>Status</th><th>Date</th>
  </tr>
  </thead>
  <tbody id="smsOrdersTableBody"></tbody>
@@ -3050,6 +3051,108 @@ function smsOrderServerLabel(o) {
  if (src === 'grizzlysms') return 'Server 1';
  return 'Server 1';
 }
+
+function adminUsaRentId(o){
+  return String(o.idempotency_key||'').replace(/^gotsms-/,'') || String(o.rent_id||'');
+}
+function adminParseUsaExpiry(o){
+  var raw = o.active_till || o.code || null;
+  if(!raw) return 0;
+  var s = String(raw);
+  if(/^\d{4,8}$/.test(s)) return 0; // OTP code, not date
+  var ms = Date.parse(s);
+  return isNaN(ms) ? 0 : ms;
+}
+function adminRentReceivedSms(o){
+  if(!o) return false;
+  if(o._inbox_count > 0) return true;
+  if(/sms\s*received/i.test(String(o.service_name||''))) return true;
+  if(o.sms_received===true || Number(o.message_count||0)>0) return true;
+  var st = String(o.status||'').toLowerCase();
+  if(st==='completed'||st==='success') return true;
+  return false;
+}
+function adminIsActiveRental(o){
+  if(!isSmsRentalOrder(o)) return false;
+  if(o.refunded===true) return false;
+  var st = String(o.status||'').toLowerCase();
+  if(['refunded','cancelled','canceled'].indexOf(st)>=0) return false;
+  var till = adminParseUsaExpiry(o);
+  if(till && till <= Date.now()) return false;
+  if(st==='expired'||st==='ended'||st==='finished') return false;
+  if(till && till > Date.now()) return true;
+  return st==='active'||st==='pending'||st==='processing'||st==='waiting'||st==='waiting_for_code'||!st;
+}
+function adminIsCompletedRental(o){
+  if(!isSmsRentalOrder(o)) return false;
+  if(adminIsActiveRental(o)) return false;
+  if(o.refunded===true) return false;
+  var st = String(o.status||'').toLowerCase();
+  if(['refunded','cancelled','canceled'].indexOf(st)>=0) return false;
+  if(!adminRentReceivedSms(o)) return false;
+  var till = adminParseUsaExpiry(o);
+  if(till && till <= Date.now()) return true;
+  if(['expired','ended','finished','completed'].indexOf(st)>=0) return true;
+  if(!till) return true;
+  return false;
+}
+function adminDisplayServiceName(o){
+  return String(o.service_name||o.service_id||'SMS').replace(/\s*·\s*SMS\s*received/ig,'').replace(/_/g,' ').trim() || 'SMS';
+}
+function adminFormatTimeLeft(tillMs){
+  if(!tillMs || tillMs <= Date.now()) return 'Ended';
+  var sec = Math.max(0, Math.floor((tillMs - Date.now())/1000));
+  var d = Math.floor(sec/86400); sec %= 86400;
+  var h = Math.floor(sec/3600); sec %= 3600;
+  var m = Math.floor(sec/60); var s = sec % 60;
+  var pad = function(n){ return String(n).padStart(2,'0'); };
+  if(d > 0) return d + 'd ' + pad(h) + ':' + pad(m) + ':' + pad(s);
+  return pad(h) + ':' + pad(m) + ':' + pad(s);
+}
+function adminStartSmsCountdowns(){
+  if(window._adminSmsCdTimer) clearInterval(window._adminSmsCdTimer);
+  function tick(){
+    document.querySelectorAll('[data-admin-sms-till]').forEach(function(el){
+      var till = Number(el.getAttribute('data-admin-sms-till')||0);
+      el.textContent = adminFormatTimeLeft(till);
+      if(till && till <= Date.now()) el.style.color = '#f87171';
+      else el.style.color = '';
+    });
+  }
+  tick();
+  window._adminSmsCdTimer = setInterval(tick, 1000);
+}
+async function adminEnrichInboxCounts(orders){
+  var list = (orders||[]).filter(function(o){ return String(o.source||'').toLowerCase()==='gotsms' && adminUsaRentId(o); }).slice(0, 12);
+  if(!list.length) return;
+  await Promise.all(list.map(async function(o){
+    var rid = adminUsaRentId(o);
+    try{
+      var headers = await authHeaders();
+      headers['Content-Type'] = 'application/json';
+      var res = await fetch('/api/admin', {
+        method: 'POST', headers,
+        body: JSON.stringify({ resource: 'sms_orders', action: 'inbox_count', rent_id: rid })
+      });
+      var j = await res.json().catch(function(){ return {}; });
+      if(j && j.success){
+        o._inbox_count = Number(j.count||0);
+        if(o._inbox_count > 0) o._sms_received = true;
+        var el = document.querySelector('[data-admin-inbox-rid="'+CSS.escape(rid)+'"]');
+        if(el){
+          if(o._inbox_count > 0){
+            el.innerHTML = '<span class="badge" style="background:rgba(34,197,94,.18);color:#4ade80;">'+o._inbox_count+' SMS in inbox</span>';
+          } else {
+            el.textContent = 'No SMS yet';
+            el.style.color = 'var(--muted)';
+          }
+        }
+      }
+    }catch(e){}
+  }));
+}
+
+
 function filterSmsOrders() {
  if (!window._smsKeepPage) window._smsOrderPage = 1;
  window._smsKeepPage = false;
@@ -3059,9 +3162,29 @@ function filterSmsOrders() {
  const all = window._cachedSmsOrders || [];
  const filtered = all.filter(o => {
  if (status) {
-   if (status === 'completed') {
+   if (status === 'active_rental' || status === 'active') {
+     if (!adminIsActiveRental(o)) return false;
+   } else if (status === 'completed_rental') {
+     if (!adminIsCompletedRental(o)) return false;
+   } else if (status === 'completed_otp') {
+     if (isSmsRentalOrder(o)) return false;
      const st = String(o.status || '');
-     if (!(st === 'completed' || st === 'active')) return false;
+     if (st !== 'completed' && !(o.code && String(o.code).trim())) return false;
+   } else if (status === 'completed') {
+     // legacy: OTP completed OR active/completed rental
+     if (isSmsRentalOrder(o)) {
+       if (!(adminIsActiveRental(o) || adminIsCompletedRental(o))) return false;
+     } else {
+       const st = String(o.status || '');
+       if (st !== 'completed' && !(o.code && String(o.code).trim())) return false;
+     }
+   } else if (status === 'expired') {
+     if (adminIsActiveRental(o) || adminIsCompletedRental(o)) return false;
+     const st = String(o.status || '').toLowerCase();
+     const till = adminParseUsaExpiry(o);
+     const timeUp = till && till <= Date.now();
+     if (!(st === 'expired' || st === 'ended' || st === 'finished' || timeUp)) return false;
+     if (o.refunded || st === 'refunded' || st === 'cancelled' || st === 'canceled') return false;
    } else if (o.status !== status) return false;
  }
  if (type === 'usa' && String(o.source||'').toLowerCase() !== 'gotsms') return false;
@@ -3084,7 +3207,7 @@ function renderSmsOrders(orders) {
  if (!tbody || !cards) return;
 
  if (!orders?.length) {
- tbody.innerHTML = `<tr><td colspan="9" class="empty-state">No SMS orders found.</td></tr>`;
+ tbody.innerHTML = `<tr><td colspan="10" class="empty-state">No SMS orders found.</td></tr>`;
  cards.innerHTML = `<div class="empty-state">No SMS orders found.</div>`;
  const p0 = document.getElementById('smsOrdersPager');
  if (p0) p0.innerHTML = '';
@@ -3096,17 +3219,41 @@ function renderSmsOrders(orders) {
  const pEl = document.getElementById('smsOrdersPager');
  if (pEl) pEl.innerHTML = adminPagerHtml('sms', pg.page, pg.pages, pg.total);
 
- const statusBadge = (s) => {
- if (s === 'completed' || s === 'active') return '<span class="badge badge-on">' + (s === 'active' ? 'Active' : 'Completed') + '</span>';
- if (s === 'waiting_for_code') return '<span class="badge" style="background:rgba(251,191,36,.15);color:#fbbf24;">Waiting</span>';
-    if (s === 'expired') return '<span class="badge badge-off">Expired</span>';
- return `<span class="badge badge-off">${escapeHtml(SMS_ORDER_STATUS_LABELS[s] || s || ' ')}</span>`;
+ const statusBadge = (o) => {
+ const st = String((o && o.status) || o || '').toLowerCase();
+ if (o && typeof o === 'object') {
+   if (adminIsActiveRental(o)) return '<span class="badge badge-on">ACTIVE</span>';
+   if (adminIsCompletedRental(o)) return '<span class="badge badge-on">COMPLETED</span>';
+   if (o.refunded || st === 'refunded') return '<span class="badge badge-off">REFUNDED</span>';
+   if (st === 'cancelled' || st === 'canceled') return '<span class="badge badge-off">CANCELLED</span>';
+ }
+ if (st === 'completed' || st === 'active') return '<span class="badge badge-on">' + (st === 'active' ? 'ACTIVE' : 'COMPLETED') + '</span>';
+ if (st === 'waiting_for_code') return '<span class="badge" style="background:rgba(251,191,36,.15);color:#fbbf24;">Waiting</span>';
+ if (st === 'expired') return '<span class="badge badge-off">Expired</span>';
+ return `<span class="badge badge-off">${escapeHtml(SMS_ORDER_STATUS_LABELS[st] || st || '—')}</span>`;
+ };
+ const inboxCell = (o) => {
+   const isUsa = String(o.source||'').toLowerCase() === 'gotsms';
+   if (!isUsa) {
+     const code = o.code || o.sms_code || '';
+     return code ? escapeHtml(String(code)) : '—';
+   }
+   const rid = adminUsaRentId(o);
+   const cnt = Number(o._inbox_count||0);
+   if (cnt > 0) return '<span data-admin-inbox-rid="'+escapeHtml(rid)+'"><span class="badge" style="background:rgba(34,197,94,.18);color:#4ade80;">'+cnt+' SMS in inbox</span></span>';
+   if (adminRentReceivedSms(o)) return '<span data-admin-inbox-rid="'+escapeHtml(rid)+'"><span class="badge" style="background:rgba(34,197,94,.18);color:#4ade80;">SMS received</span></span>';
+   return '<span data-admin-inbox-rid="'+escapeHtml(rid)+'" style="color:var(--muted);font-size:12px;">No SMS yet</span>';
+ };
+ const timeLeftCell = (o) => {
+   if (!isSmsRentalOrder(o)) return '—';
+   const till = adminParseUsaExpiry(o);
+   if (!till) return '—';
+   return '<span data-admin-sms-till="'+till+'" style="font-weight:800;font-variant-numeric:tabular-nums;">'+adminFormatTimeLeft(till)+'</span>';
  };
 
  tbody.innerHTML = orders.map(o => {
- const name = (o.service_name || o.service_id || ' ').replace(/_/g, ' ');
- const date = o.created_at ? ngWhen(o.created_at) : ' ';
- const code = o.sms_code || o.code || '';
+ const name = adminDisplayServiceName(o);
+ const date = o.created_at ? ngWhen(o.created_at) : '—';
  const isUsa = String(o.source || '').toLowerCase() === 'gotsms';
  const serverBadge = isUsa
    ? '<span class="badge" style="background:rgba(34,197,94,.18);color:#4ade80;">USA Rental</span>'
@@ -3120,27 +3267,39 @@ function renderSmsOrders(orders) {
  <td>${escapeHtml(o.country_name || (isUsa ? 'United States' : '—'))}</td>
  <td style="font-weight:700;">${escapeHtml(o.phone_number || '—')}</td>
  <td><strong class="price">₦${Number(o.price || 0).toLocaleString()}</strong></td>
- <td style="font-size:12px;max-width:140px;word-break:break-all;">${code ? escapeHtml(String(code)) : (isUsa ? '<span class="meta">See inbox</span>' : '—')}</td>
- <td>${statusBadge(o.status === 'active' ? 'completed' : o.status)}</td>
+ <td style="font-size:12px;max-width:160px;word-break:break-all;">${inboxCell(o)}</td>
+ <td style="font-size:12px;">${timeLeftCell(o)}</td>
+ <td>${statusBadge(o)}</td>
  <td style="font-size:12px;color:var(--muted);">${escapeHtml(date)}</td>
  </tr>`;
  }).join('');
 
  cards.innerHTML = orders.map(o => {
- const name = (o.service_name || o.service_id || ' ').replace(/_/g, ' ');
+ const name = adminDisplayServiceName(o);
  const typeLabel = isSmsRentalOrder(o) ? 'Rental' : 'OTP';
- const date = o.created_at ? ngWhen(o.created_at) : ' ';
+ const date = o.created_at ? ngWhen(o.created_at) : '—';
+ const till = adminParseUsaExpiry(o);
+ const timeRow = isSmsRentalOrder(o) && till
+   ? `<div class="row-line"><span>Time left</span><span data-admin-sms-till="${till}" style="font-weight:800;font-variant-numeric:tabular-nums;">${adminFormatTimeLeft(till)}</span></div>`
+   : '';
+ const inboxRow = String(o.source||'').toLowerCase()==='gotsms'
+   ? `<div class="row-line"><span>Inbox</span><span>${inboxCell(o)}</span></div>`
+   : (o.code ? `<div class="row-line"><span>Code</span><span>${escapeHtml(String(o.code))}</span></div>` : '');
  return `<div class="product-card">
  <h4>${escapeHtml(name)}</h4>
  <div class="meta">${typeLabel} · ${escapeHtml(smsOrderServerLabel(o))} · ${escapeHtml(o.order_id || '')}</div>
- <div class="row-line"><span>Customer</span><span>${escapeHtml(o.customer_id || ' ')}</span></div>
- <div class="row-line"><span>Number</span><span>${escapeHtml(o.phone_number || ' ')}</span></div>
- <div class="row-line"><span>Country</span><span>${escapeHtml(o.country_name || ' ')}</span></div>
+ <div class="row-line"><span>Customer</span><span>${escapeHtml(o.customer_id || '—')}</span></div>
+ <div class="row-line"><span>Number</span><span>${escapeHtml(o.phone_number || '—')}</span></div>
+ <div class="row-line"><span>Country</span><span>${escapeHtml(o.country_name || '—')}</span></div>
  <div class="row-line"><span>Amount</span><strong class="price">₦${Number(o.price || 0).toLocaleString()}</strong></div>
- <div class="row-line"><span>Status</span>${statusBadge(o.status)}</div>
+ ${inboxRow}
+ ${timeRow}
+ <div class="row-line"><span>Status</span>${statusBadge(o)}</div>
  <div class="row-line"><span>Date</span><span>${escapeHtml(date)}</span></div>
  </div>`;
  }).join('');
+ try { adminStartSmsCountdowns(); } catch (e) {}
+ try { adminEnrichInboxCounts(orders); } catch (e) {}
 }
 
 function updateMetrics() {
