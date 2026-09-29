@@ -1152,6 +1152,44 @@ async function listSmsOrdersHandle() {
   return { status: 200, body: { success: true, data: data || [] } };
 }
 
+/** Admin: inbox message count for a GotSMS rent (service-role path, no user ownership check). */
+async function smsOrdersInboxCountHandle(body = {}) {
+  const rentId = String(body.rent_id || '').trim();
+  if (!rentId) return { status: 400, body: { success: false, message: 'rent_id required' } };
+  const token = process.env.GOTSMS_API_TOKEN || process.env.GOT_SMS_TOKEN || '';
+  if (!token) return { status: 503, body: { success: false, message: 'GotSMS not configured', count: 0 } };
+  try {
+    const res = await fetch('https://app.gotsms.org/api/numbers/' + encodeURIComponent(rentId) + '/messages', {
+      method: 'GET',
+      headers: { Authorization: 'Bearer ' + token, Accept: 'application/json' },
+    });
+    const json = await res.json().catch(() => ({}));
+    const list = Array.isArray(json?.data) ? json.data : (Array.isArray(json) ? json : []);
+    const count = list.filter((m) => m && (String(m.code || '').trim() || String(m.body || '').trim())).length;
+    // Persist SMS-received marker for history/admin filters when count > 0
+    if (count > 0) {
+      try {
+        const key = 'gotsms-' + rentId;
+        const { data: row } = await supabase
+          .from('number_orders')
+          .select('id, service_name')
+          .eq('source', 'gotsms')
+          .eq('idempotency_key', key)
+          .maybeSingle();
+        if (row && !/sms\s*received/i.test(String(row.service_name || ''))) {
+          await supabase
+            .from('number_orders')
+            .update({ service_name: (row.service_name || 'USA rental') + ' · SMS received' })
+            .eq('id', row.id);
+        }
+      } catch (_) {}
+    }
+    return { status: 200, body: { success: true, count, rent_id: rentId } };
+  } catch (e) {
+    return { status: 502, body: { success: false, message: e.message || 'GotSMS messages failed', count: 0 } };
+  }
+}
+
 
 async function wipeUnusedSmsNumbersHandle() {
   // Remove cancelled/expired SMS number orders older than 15 days with no received code.
@@ -2424,7 +2462,8 @@ export default async function handler(req, res) {
     } else if (resource === 'sms_orders') {
       if (action === 'list' || !action) result = await listSmsOrdersHandle();
       else if (action === 'wipe_unused_numbers') result = await wipeUnusedSmsNumbersHandle();
-      else result = { status: 400, body: { success: false, message: 'Unknown sms_orders action. Use "list" or "wipe_unused_numbers".' } };
+      else if (action === 'inbox_count') result = await smsOrdersInboxCountHandle(body);
+      else result = { status: 400, body: { success: false, message: 'Unknown sms_orders action. Use "list", "wipe_unused_numbers", or "inbox_count".' } };
     } else if (resource === 'booster_orders' && (action === 'list' || !action)) {
       result = await listBoosterOrdersHandle();
     } else if (resource === 'supplier_balances') {
