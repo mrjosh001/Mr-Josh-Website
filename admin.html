@@ -3123,10 +3123,22 @@ function adminStartSmsCountdowns(){
   window._adminSmsCdTimer = setInterval(tick, 1000);
 }
 async function adminEnrichInboxCounts(orders){
-  var list = (orders||[]).filter(function(o){ return String(o.source||'').toLowerCase()==='gotsms' && adminUsaRentId(o); }).slice(0, 12);
+  var list = (orders||[]).filter(function(o){
+    return String(o.source||'').toLowerCase()==='gotsms' && adminUsaRentId(o);
+  }).slice(0, 15);
   if(!list.length) return;
+  // Show loading state immediately
+  list.forEach(function(o){
+    var rid = adminUsaRentId(o);
+    document.querySelectorAll('[data-admin-inbox-rid]').forEach(function(el){
+      if(el.getAttribute('data-admin-inbox-rid')===rid && !o._inbox_count){
+        el.innerHTML = '<span style="color:var(--muted);font-size:12px;">Checking inbox…</span>';
+      }
+    });
+  });
   await Promise.all(list.map(async function(o){
     var rid = adminUsaRentId(o);
+    if(!rid) return;
     try{
       var headers = await authHeaders();
       headers['Content-Type'] = 'application/json';
@@ -3135,23 +3147,37 @@ async function adminEnrichInboxCounts(orders){
         body: JSON.stringify({ resource: 'sms_orders', action: 'inbox_count', rent_id: rid })
       });
       var j = await res.json().catch(function(){ return {}; });
-      if(j && j.success){
-        o._inbox_count = Number(j.count||0);
-        if(o._inbox_count > 0) o._sms_received = true;
-        var el = document.querySelector('[data-admin-inbox-rid="'+CSS.escape(rid)+'"]');
-        if(el){
-          if(o._inbox_count > 0){
-            el.innerHTML = '<span class="badge" style="background:rgba(34,197,94,.18);color:#4ade80;">'+o._inbox_count+' SMS in inbox</span>';
-          } else {
-            el.textContent = 'No SMS yet';
-            el.style.color = 'var(--muted)';
-          }
-        }
+      var cnt = (j && j.success) ? Number(j.count||0) : -1;
+      if(cnt >= 0){
+        o._inbox_count = cnt;
+        if(cnt > 0) o._sms_received = true;
       }
-    }catch(e){}
+      var label;
+      if(cnt > 0){
+        label = '<span class="badge" style="background:rgba(34,197,94,.18);color:#4ade80;font-weight:800;">'+cnt+' SMS in inbox</span>';
+      } else if(cnt === 0){
+        label = '<span style="color:var(--muted);font-size:12px;">0 SMS in inbox</span>';
+      } else if(adminRentReceivedSms(o)){
+        label = '<span class="badge" style="background:rgba(34,197,94,.18);color:#4ade80;">SMS received</span>';
+      } else {
+        label = '<span style="color:var(--muted);font-size:12px;">No SMS yet</span>';
+      }
+      document.querySelectorAll('[data-admin-inbox-rid]').forEach(function(el){
+        if(el.getAttribute('data-admin-inbox-rid')===String(rid)){
+          el.innerHTML = label;
+        }
+      });
+    }catch(e){
+      document.querySelectorAll('[data-admin-inbox-rid]').forEach(function(el){
+        if(el.getAttribute('data-admin-inbox-rid')===String(rid)){
+          el.innerHTML = adminRentReceivedSms(o)
+            ? '<span class="badge" style="background:rgba(34,197,94,.18);color:#4ade80;">SMS received</span>'
+            : '<span style="color:var(--muted);font-size:12px;">Inbox unavailable</span>';
+        }
+      });
+    }
   }));
 }
-
 
 function filterSmsOrders() {
  if (!window._smsKeepPage) window._smsOrderPage = 1;
@@ -3239,10 +3265,13 @@ function renderSmsOrders(orders) {
      return code ? escapeHtml(String(code)) : '—';
    }
    const rid = adminUsaRentId(o);
+   const hasCnt = o._inbox_count != null && o._inbox_count !== '' && !isNaN(Number(o._inbox_count));
    const cnt = Number(o._inbox_count||0);
-   if (cnt > 0) return '<span data-admin-inbox-rid="'+escapeHtml(rid)+'"><span class="badge" style="background:rgba(34,197,94,.18);color:#4ade80;">'+cnt+' SMS in inbox</span></span>';
+   if (hasCnt && cnt > 0) return '<span data-admin-inbox-rid="'+escapeHtml(rid)+'"><span class="badge" style="background:rgba(34,197,94,.18);color:#4ade80;font-weight:800;">'+cnt+' SMS in inbox</span></span>';
+   if (hasCnt && cnt === 0) return '<span data-admin-inbox-rid="'+escapeHtml(rid)+'" style="color:var(--muted);font-size:12px;">0 SMS in inbox</span>';
+   // Before count loads — placeholder; enrich will replace with number
    if (adminRentReceivedSms(o)) return '<span data-admin-inbox-rid="'+escapeHtml(rid)+'"><span class="badge" style="background:rgba(34,197,94,.18);color:#4ade80;">SMS received</span></span>';
-   return '<span data-admin-inbox-rid="'+escapeHtml(rid)+'" style="color:var(--muted);font-size:12px;">No SMS yet</span>';
+   return '<span data-admin-inbox-rid="'+escapeHtml(rid)+'" style="color:var(--muted);font-size:12px;">Checking inbox…</span>';
  };
  const timeLeftCell = (o) => {
    if (!isSmsRentalOrder(o)) return '—';
