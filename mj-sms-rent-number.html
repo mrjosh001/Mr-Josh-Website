@@ -174,6 +174,11 @@ h1{font-size:17px;font-weight:800;letter-spacing:-.02em}
   .modal-bg{align-items:center}
   .modal{border-radius:20px}
 }
+
+.cancel-window{margin-top:10px;padding:10px 12px;border-radius:12px;background:rgba(251,191,36,.1);border:1px solid rgba(251,191,36,.35);font-size:12px;font-weight:700;color:#fbbf24;line-height:1.45}
+.cancel-window .cw-time{font-size:16px;font-weight:800;font-variant-numeric:tabular-nums;letter-spacing:.04em;color:#fde68a;margin-top:4px}
+.cancel-window.gone{background:rgba(148,163,184,.08);border-color:rgba(148,163,184,.2);color:var(--muted)}
+.cancel-window.urgent .cw-time{color:#f87171}
 </style>
 </head>
 <body>
@@ -200,7 +205,7 @@ h1{font-size:17px;font-weight:800;letter-spacing:-.02em}
     var sbanner = document.getElementById('successBanner');
     if(sbanner){ sbanner.style.display = 'block'; setTimeout(function(){ sbanner.style.display='none'; }, 7000); }
   }
-  let rent = null, pollTimer = null, cdTimer = null;
+  let rent = null, pollTimer = null, cdTimer = null, hasSms = false, cancelBusy = false, cancelEndsAt = 0;
 
   function toast(msg){
     var t = document.getElementById('toastPop');
@@ -262,6 +267,24 @@ h1{font-size:17px;font-weight:800;letter-spacing:-.02em}
     if(rent.refunded) active=false;
     var st=String(rent.status||'').toLowerCase();
     if(['refunded','cancelled','canceled','expired','ended'].indexOf(st)>=0) active=false;
+    if(/sms\s*received/i.test(String(rent.service_name||''))) hasSms = true;
+    var createdMs = rent.created_at ? Date.parse(String(rent.created_at)) : 0;
+    var withinCancelWindow = !createdMs || (Date.now() - createdMs) <= 20 * 60 * 1000;
+    var canCancel = active && !hasSms && withinCancelWindow && !cancelBusy;
+    cancelEndsAt = createdMs ? (createdMs + 20 * 60 * 1000) : 0;
+    var cancelInfoHtml = '';
+    if(active && hasSms){
+      cancelInfoHtml = '<p class="hint refund-locked">Cancel unavailable — a message was already received on this number. No refund can be issued.</p>';
+    } else if(active && canCancel && cancelEndsAt){
+      cancelInfoHtml =
+        '<div class="cancel-window" id="cancelWindowBox">'+
+          '<div>Cancel &amp; refund available for a limited time</div>'+
+          '<div class="cw-time" id="cancelWindowCd">—</div>'+
+          '<div style="margin-top:4px;font-weight:600;opacity:.9">Only if no SMS arrives. After this timer ends, cancel closes permanently.</div>'+
+        '</div>';
+    } else if(active && !hasSms && !withinCancelWindow){
+      cancelInfoHtml = '<div class="cancel-window gone">Cancel window closed (20 minutes after purchase). This number can no longer be cancelled or refunded.</div>';
+    }
     var phone=rent.phone_number||rent.number||'—';
     var area=rent.area_code||rent.country_name||'';
     var name=String(rent.service_name||'').replace(/\s*·\s*SMS\s*received/ig,'').trim()||'Long rental';
@@ -279,7 +302,9 @@ h1{font-size:17px;font-weight:800;letter-spacing:-.02em}
           '<button type="button" class="btn btn-ghost" id="btnCopy">Copy number</button>'+
           '<button type="button" class="btn btn-ghost" id="btnRefresh">Refresh inbox</button>'+
           (active?'<button type="button" class="btn btn-primary" id="btnRenew">Renew</button>':'')+
+          (canCancel?'<button type="button" class="btn btn-danger-outline" id="btnCancel">Cancel &amp; refund</button>':'')+
         '</div>'+
+        cancelInfoHtml+
       '</div>'+
       '<div class="inbox-card">'+
         '<div class="inbox-head"><h2>SMS inbox</h2><span class="live">Live</span></div>'+
@@ -289,11 +314,36 @@ h1{font-size:17px;font-weight:800;letter-spacing:-.02em}
     document.getElementById('btnRefresh').onclick=async function(){ toast('Refreshing…'); await loadMessages(); toast('Inbox updated'); };
     var br=document.getElementById('btnRenew');
     if(br) br.onclick=renew;
+    var bc=document.getElementById('btnCancel');
+    if(bc) bc.onclick=doCancel;
     if(cdTimer) clearInterval(cdTimer);
     cdTimer=setInterval(function(){
-      var el=document.getElementById('cdVal'); if(!el) return;
-      var left=till-Date.now(); el.textContent=formatLeft(left);
-      if(left<=0){ var b=document.getElementById('statusBadge'); if(b){ b.textContent='Ended'; b.className='badge expired'; } }
+      var el=document.getElementById('cdVal');
+      if(el){
+        var left=till-Date.now(); el.textContent=formatLeft(left);
+        if(left<=0){ var b=document.getElementById('statusBadge'); if(b){ b.textContent='Ended'; b.className='badge expired'; } }
+      }
+      var cw=document.getElementById('cancelWindowCd');
+      if(cw && cancelEndsAt){
+        var leftC = cancelEndsAt - Date.now();
+        if(leftC <= 0){
+          cw.textContent = '0:00';
+          var box=document.getElementById('cancelWindowBox');
+          if(box){ box.className='cancel-window gone'; box.innerHTML='Cancel window closed (20 minutes after purchase). This number can no longer be cancelled or refunded.'; }
+          var bc=document.getElementById('btnCancel');
+          if(bc) bc.remove();
+          cancelEndsAt = 0;
+        } else {
+          var sec=Math.floor(leftC/1000);
+          var m=Math.floor(sec/60), s=sec%60;
+          cw.textContent = m + ':' + String(s).padStart(2,'0') + ' left to cancel';
+          var box=document.getElementById('cancelWindowBox');
+          if(box){
+            if(leftC <= 60*1000) box.classList.add('urgent');
+            else box.classList.remove('urgent');
+          }
+        }
+      }
     },1000);
   }
 
@@ -304,6 +354,21 @@ h1{font-size:17px;font-weight:800;letter-spacing:-.02em}
     var last=document.getElementById('lastCode');
     var withCode=list.filter(function(m){ return m&&m.code; })[0];
     if(withCode&&last) last.textContent=withCode.code;
+    if(list.length){
+      hasSms = true;
+      var bc = document.getElementById('btnCancel');
+      if(bc) bc.remove();
+      var hint = document.querySelector('.refund-locked');
+      if(!hint){
+        var actions = document.querySelector('.actions');
+        if(actions){
+          var pEl = document.createElement('p');
+          pEl.className = 'hint refund-locked';
+          pEl.textContent = 'Cancel unavailable — a message was already received on this number.';
+          actions.insertAdjacentElement('afterend', pEl);
+        }
+      }
+    }
     if(!list.length){ box.innerHTML='<div class="empty">No SMS yet.<br>New messages appear here automatically.</div>'; return; }
     box.innerHTML=list.map(function(m){
       var body=m.body||''; var code=m.code||'';
@@ -330,7 +395,37 @@ h1{font-size:17px;font-weight:800;letter-spacing:-.02em}
     await loadDetail();
   }
 
-  async function loadDetail(){
+  
+  async function doCancel(){
+    if(cancelBusy || !orderId) return;
+    if(hasSms){
+      toast('Cancel unavailable — a message was already received on this number.');
+      return;
+    }
+    var ok = confirm('Cancel this rental and return the fee to your wallet?\n\nOnly possible within 20 minutes of purchase if no SMS was received.\nRefund is issued only after cancel is confirmed.');
+    if(!ok) return;
+    cancelBusy = true;
+    var btn = document.getElementById('btnCancel');
+    if(btn){ btn.disabled = true; btn.textContent = 'Cancelling…'; }
+    toast('Cancelling…');
+    var j = await api('rent_cancel', { method:'POST', body:{ order_id: orderId } });
+    cancelBusy = false;
+    if(!j.success){
+      toast(j.message || 'Cancel failed. No refund was issued.');
+      if(btn){ btn.disabled = false; btn.textContent = 'Cancel & refund'; }
+      // If SMS blocked cancel, refresh inbox
+      if(j.message && /message was already received/i.test(j.message)){
+        hasSms = true;
+        if(btn) btn.remove();
+        await loadMessages();
+      }
+      return;
+    }
+    toast(j.message || 'Cancelled. Balance restored.');
+    setTimeout(function(){ location.href = 'mj-sms-history.html?view=rent'; }, 1200);
+  }
+
+async function loadDetail(){
     if(!orderId){ document.getElementById('main').innerHTML='<div class="empty">Missing order. Open from Number history.</div>'; return; }
     var j=await api('rent_detail',{ query:'order_id='+encodeURIComponent(orderId) });
     if(!j.success||!j.data){ document.getElementById('main').innerHTML='<div class="empty">'+(j.message||'Rental not found')+'</div>'; return; }
