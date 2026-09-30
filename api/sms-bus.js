@@ -2089,6 +2089,12 @@ export default async function handler(req, res) {
         if (!row) return json(res, 404, { success: false, message: 'Rental not found' });
         orderRow = row;
         if (!area_code) area_code = String(row.country_name || '').toUpperCase();
+        // Provider needs 2-letter area (CA), not "CANADA"
+        if (area_code.length > 3) {
+          const rev = { CANADA:'CA', 'UNITED STATES':'US', USA:'US', 'UNITED KINGDOM':'GB', UK:'GB' };
+          area_code = rev[area_code] || (String(row.service_name||'').match(/\b([A-Z]{2})\b/)||[])[1] || area_code.slice(0,2);
+        }
+        area_code = String(area_code||'').toUpperCase();
         if (!mobile_number) {
           // Prefer national number without dialing code for SMS-Bus
           mobile_number = String(row.phone_number || '').replace(/\D/g, '');
@@ -2136,8 +2142,18 @@ export default async function handler(req, res) {
       // Extract obvious OTP codes for display
       messages = messages.map((m) => {
         if (!m.code && m.body) {
-          const hit = String(m.body).match(/\b(\d{4,8})\b/);
-          if (hit) m.code = hit[1];
+          const body = String(m.body);
+          // WhatsApp / hyphenated: 897-787 or 897 787
+          let hit = body.match(/\b(\d{3}[-\s]\d{3})\b/);
+          if (hit) m.code = hit[1].replace(/\s+/g, '-');
+          if (!m.code) {
+            hit = body.match(/(?:code|otp|pin)[:\s]*([0-9][0-9\-\s]{3,14})/i);
+            if (hit) m.code = hit[1].replace(/\s+/g, '').replace(/(\d{3})(\d{3})/, '$1-$2');
+          }
+          if (!m.code) {
+            hit = body.match(/\b(\d{4,8})\b/);
+            if (hit) m.code = hit[1];
+          }
         }
         return m;
       });
