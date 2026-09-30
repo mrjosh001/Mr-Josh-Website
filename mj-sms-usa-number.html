@@ -309,7 +309,13 @@ function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g,function(c){retu
         '</div>'+
         (active ?
           '<div class="toggle-card">'+
-            '<div><div class="t-title">Auto-renew</div><div class="t-hint">Renew automatically when this period ends (wallet charged)</div></div>'+
+            '<div><div class="t-title">Auto-renew</div><div class="t-hint" id="autoRenewHint">'+
+            (function(){
+              var p = Math.round(Number(rent.price_ngn||rent.price||0));
+              if(p>0) return 'When this period ends, ₦'+p.toLocaleString()+' is charged from your wallet (same as this rental). Requires enough balance.';
+              return 'Renew automatically when this period ends. Same wallet price as this rental. Requires enough balance.';
+            })()+
+          '</div></div>'+
             '<label class="switch"><input type="checkbox" id="autoRenew" '+(autoOn?'checked':'')+'><span class="slider"></span></label>'+
           '</div>' : '')+
         '<div class="actions">'+
@@ -366,9 +372,17 @@ function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g,function(c){retu
       if(!j.success){
         ar.checked = !want;
         setFlash(j.message || 'Could not update auto-renew', false);
+         ar.checked = !want; // revert UI if server rejected (e.g. insufficient balance)
       } else {
         rent.auto_renew = want;
-        setFlash(want ? 'Auto-renew is on' : 'Auto-renew is off', true);
+         if(j.data && j.data.renew_price_ngn) rent.price_ngn = j.data.renew_price_ngn;
+         var hint = document.getElementById('autoRenewHint');
+         if(hint && rent.price_ngn){
+           hint.textContent = want
+             ? ('When this period ends, ₦'+Math.round(Number(rent.price_ngn)).toLocaleString()+' is charged from your wallet (same as this rental). Requires enough balance.')
+             : 'Auto-renew is off.';
+         }
+         setFlash(j.message || (want ? 'Auto-renew is on' : 'Auto-renew is off'), true);
       }
     };
     var cancel = document.getElementById('btnCancel');
@@ -547,6 +561,7 @@ function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g,function(c){retu
           };
         } else {
           rent.service_name = rent.service_name || o.service_name;
+          if(o.price||o.price_ngn) rent.price_ngn = o.price||o.price_ngn;
           if(o.service_name) rent.service = rent.service || { name: o.service_name };
           if(!rent.carrier_name && o.carrier_name) rent.carrier_name = o.carrier_name;
           if(!rent.active_till && o.active_till) rent.active_till = o.active_till;
