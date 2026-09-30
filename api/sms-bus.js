@@ -346,16 +346,110 @@ function gotsmsEnrichPlan(p) {
   };
 }
 
-async function gotsmsAssertOwns(userId, rentId) {
+async async function gotsmsAssertOwns(userId, rentId) {
   const { data } = await supabase
     .from('number_orders')
-    .select('id')
+    .select('id, price, code, status, notes, phone_number, service_name, user_id, customer_id, order_id, refunded')
     .eq('user_id', userId)
     .eq('source', 'gotsms')
     .eq('idempotency_key', `gotsms-${rentId}`)
     .maybeSingle();
-  return !!data;
+  return data || null;
 }
+
+function gotsmsRenewPriceNgn(orderRow) {
+  const p = Math.round(Number(orderRow && orderRow.price) || 0);
+  return p > 0 ? p : 0;
+}
+
+async function gotsmsSyncAutorenewCharges(userId, rentId, liveRent) {
+  if (!userId || !rentId || !liveRent) return { charged: false, disabled: false };
+  const order = await gotsmsAssertOwns(userId, rentId);
+  if (!order) return { charged: false, disabled: false };
+
+  const price = gotsmsRenewPriceNgn(order);
+  const liveTill = liveRent.active_till ? Date.parse(String(liveRent.active_till)) : 0;
+  const storedTill = order.code && !isNaN(Date.parse(String(order.code))) ? Date.parse(String(order.code)) : 0;
+  const autoOn = !!(liveRent.is_included_for_next_renewal || liveRent.auto_renew);
+
+  if (autoOn && price > 0) {
+    try {
+      const { data: prof } = await supabase.from('profiles').select('balance').eq('id', userId).maybeSingle();
+      const bal = Number(prof && prof.balance) || 0;
+      if (bal + 0.0001 < price) {
+        try {
+          await gotsmsFetch(`/api/rents/${encodeURIComponent(rentId)}/renewal/toggle`, { method: 'POST' });
+        } catch (_) {}
+        return {
+          charged: false,
+          disabled: true,
+          message: 'Auto-renew turned off — need ₦' + price.toLocaleString() + ' in wallet (same as this rental).'
+        };
+      }
+    } catch (_) {}
+  }
+
+  if (liveTill && storedTill && liveTill > storedTill + 60 * 1000 && price > 0) {
+    const idem = 'gotsms-renew-' + rentId + '-' + liveTill;
+    try {
+      const { data: prior } = await supabase
+        .from('transactions')
+        .select('id')
+        .eq('user_id', userId)
+        .eq('subtitle', idem)
+        .maybeSingle();
+      if (prior) {
+        await supabase.from('number_orders').update({ code: new Date(liveTill).toISOString(), status: 'active' }).eq('id', order.id);
+        return { charged: false, disabled: false, already: true };
+      }
+    } catch (_) {}
+
+    const { data: debited, error: debErr } = await supabase.rpc('debit_balance_if_sufficient', {
+      p_user_id: userId,
+      p_amount: price
+    });
+    if (debErr || debited === false || debited === null) {
+      try {
+        if (autoOn) await gotsmsFetch(`/api/rents/${encodeURIComponent(rentId)}/renewal/toggle`, { method: 'POST' });
+      } catch (_) {}
+      return {
+        charged: false,
+        disabled: true,
+        message: 'Renewal blocked — insufficient balance (₦' + price.toLocaleString() + ' required). Auto-renew is off.'
+      };
+    }
+    try {
+      await supabase.from('transactions').insert({
+        user_id: userId,
+        customer_id: order.customer_id,
+        type: 'debit',
+        category: 'MJ SMS',
+        title: 'USA rental auto-renew',
+        subtitle: idem,
+        amount: '₦' + price.toLocaleString(),
+        amount_ngn: price,
+        status: 'completed'
+      });
+    } catch (e) {
+      console.warn('[gotsms renew] tx', e.message || e);
+    }
+    try {
+      await supabase.from('number_orders').update({
+        code: new Date(liveTill).toISOString(),
+        status: 'active'
+      }).eq('id', order.id);
+    } catch (_) {}
+    return { charged: true, disabled: false, amount: price };
+  }
+
+  if (liveTill && (!storedTill || Math.abs(liveTill - storedTill) > 60000)) {
+    try {
+      await supabase.from('number_orders').update({ code: new Date(liveTill).toISOString() }).eq('id', order.id);
+    } catch (_) {}
+  }
+  return { charged: false, disabled: false };
+}
+
 
 async function gotsmsSaveOrder({ userId, customerId, rentId, phone, serviceName, serviceId, priceNgn, supplierUsd, status, activeTill, planLabel, carrierName, areaCode }) {
   const orderId = `GS-${String(rentId || '').slice(0, 8)}-${Date.now().toString(36)}`;
@@ -2999,6 +3093,13 @@ export default async function handler(req, res) {
         const mineRentIds = new Set((mine || []).map((m) => String(m.idempotency_key || '').replace(/^gotsms-/, '')).filter(Boolean));
         const minePhones = new Set((mine || []).map((m) => String(m.phone_number || '').replace(/\s/g, '')));
         const filtered = (g.data.data || []).filter((r) => mineRentIds.has(String(r.id)) || minePhones.has(String(r.phone || '').replace(/\s/g, '')));
+        // Auto-renew: charge same NGN as original rental when period extends; disable if wallet too low
+        try {
+          for (const r of filtered.slice(0, 30)) {
+            await gotsmsSyncAutorenewCharges(auth.userId, r.id, r);
+          }
+        } catch (e) { console.warn('[gotsms_rents] autorenew sync', e.message || e); }
+        // Heal rows wrongly marked refunded/expired by OTP expire sweeps
         // Heal rows wrongly marked refunded/expired by OTP expire sweeps
         if (String(status || '') === 'active' && filtered.length) {
           try {
@@ -3115,12 +3216,78 @@ if (method === 'GET' && ga === 'gotsms_messages') {
       if (method === 'POST' && ga === 'gotsms_toggle_renewal') {
         const auth = await requireAuth(req);
         if (!auth.ok) return json(res, auth.status, { success: false, message: auth.message });
+
         const body = await readBody(req);
         const rent_id = String(body.rent_id || '').trim();
         if (!rent_id) return json(res, 400, { success: false, message: 'rent_id required' });
-        if (!(await gotsmsAssertOwns(auth.userId, rent_id))) return json(res, 403, { success: false, message: 'Rental not found' });
-        const g = await gotsmsFetch(`/api/rents/${encodeURIComponent(rent_id)}/renewal/toggle`, { method: 'POST' });
-        return json(res, g.ok ? 200 : g.status || 400, { success: !!g.data?.success, message: g.data?.message || 'Update failed', data: g.data?.data || null });
+        const order = await gotsmsAssertOwns(auth.userId, rent_id);
+        if (!order) return json(res, 403, { success: false, message: 'Rental not found' });
+
+        let live = null;
+        try {
+          const cur = await gotsmsFetch(`/api/rents/${encodeURIComponent(rent_id)}`);
+          live = (cur.data && (cur.data.data || cur.data)) || null;
+        } catch (_) {}
+        const currentlyOn = !!(live && (live.is_included_for_next_renewal || live.auto_renew));
+        let wantOn = body.enabled;
+        if (wantOn === undefined || wantOn === null || wantOn === '') {
+          wantOn = !currentlyOn;
+        } else {
+          wantOn = wantOn === true || wantOn === 'true' || wantOn === 1 || wantOn === '1';
+        }
+
+        const renewPrice = gotsmsRenewPriceNgn(order);
+        if (wantOn && !currentlyOn) {
+          if (!(renewPrice > 0)) {
+            return json(res, 400, { success: false, message: 'Cannot enable auto-renew: rental price missing on order.' });
+          }
+          const { data: prof } = await supabase.from('profiles').select('balance').eq('id', auth.userId).maybeSingle();
+          const bal = Number(prof && prof.balance) || 0;
+          if (bal + 0.0001 < renewPrice) {
+            return json(res, 400, {
+              success: false,
+              message: 'Insufficient balance to enable auto-renew. You need ₦' + renewPrice.toLocaleString() + ' (same as this rental). Fund your wallet and try again.',
+              data: { required_ngn: renewPrice, balance: bal }
+            });
+          }
+        }
+
+        if (wantOn === currentlyOn) {
+          return json(res, 200, {
+            success: true,
+            message: wantOn
+              ? ('Auto-renew is on. ₦' + renewPrice.toLocaleString() + ' will be charged from your wallet each renewal (same as this rental).')
+              : 'Auto-renew is off',
+            data: { auto_renew: wantOn, renew_price_ngn: renewPrice }
+          });
+        }
+
+        const g = await gotsmsFetch(
+          `/api/rents/${encodeURIComponent(rent_id)}/renewal/toggle`,
+          { method: 'POST' }
+        );
+        if (!g.ok) {
+          return json(res, g.status || 400, {
+            success: false,
+            message: (g.data && g.data.message) || 'Could not update auto-renewal',
+            data: (g.data && g.data.data) || null
+          });
+        }
+        let afterOn = !currentlyOn;
+        try {
+          const again = await gotsmsFetch(`/api/rents/${encodeURIComponent(rent_id)}`);
+          const d = again.data && (again.data.data || again.data);
+          if (d) afterOn = !!(d.is_included_for_next_renewal || d.auto_renew);
+        } catch (_) {}
+
+        return json(res, 200, {
+          success: true,
+          message: afterOn
+            ? ('Auto-renew is on. ₦' + renewPrice.toLocaleString() + ' will be charged from your wallet when the period renews (same price as this rental).')
+            : 'Auto-renew is off',
+          data: { auto_renew: afterOn, renew_price_ngn: renewPrice }
+        });
+
       }
 
       if (method === 'POST' && ga === 'gotsms_refund') {
@@ -3147,21 +3314,78 @@ if (method === 'GET' && ga === 'gotsms_messages') {
       if (method === 'POST' && ga === 'gotsms_renewal_toggle') {
         const auth = await requireAuth(req);
         if (!auth.ok) return json(res, auth.status, { success: false, message: auth.message });
+
         const body = await readBody(req);
         const rent_id = String(body.rent_id || '').trim();
         if (!rent_id) return json(res, 400, { success: false, message: 'rent_id required' });
-        if (!(await gotsmsAssertOwns(auth.userId, rent_id))) {
-          return json(res, 403, { success: false, message: 'Rental not found' });
+        const order = await gotsmsAssertOwns(auth.userId, rent_id);
+        if (!order) return json(res, 403, { success: false, message: 'Rental not found' });
+
+        let live = null;
+        try {
+          const cur = await gotsmsFetch(`/api/rents/${encodeURIComponent(rent_id)}`);
+          live = (cur.data && (cur.data.data || cur.data)) || null;
+        } catch (_) {}
+        const currentlyOn = !!(live && (live.is_included_for_next_renewal || live.auto_renew));
+        let wantOn = body.enabled;
+        if (wantOn === undefined || wantOn === null || wantOn === '') {
+          wantOn = !currentlyOn;
+        } else {
+          wantOn = wantOn === true || wantOn === 'true' || wantOn === 1 || wantOn === '1';
         }
+
+        const renewPrice = gotsmsRenewPriceNgn(order);
+        if (wantOn && !currentlyOn) {
+          if (!(renewPrice > 0)) {
+            return json(res, 400, { success: false, message: 'Cannot enable auto-renew: rental price missing on order.' });
+          }
+          const { data: prof } = await supabase.from('profiles').select('balance').eq('id', auth.userId).maybeSingle();
+          const bal = Number(prof && prof.balance) || 0;
+          if (bal + 0.0001 < renewPrice) {
+            return json(res, 400, {
+              success: false,
+              message: 'Insufficient balance to enable auto-renew. You need ₦' + renewPrice.toLocaleString() + ' (same as this rental). Fund your wallet and try again.',
+              data: { required_ngn: renewPrice, balance: bal }
+            });
+          }
+        }
+
+        if (wantOn === currentlyOn) {
+          return json(res, 200, {
+            success: true,
+            message: wantOn
+              ? ('Auto-renew is on. ₦' + renewPrice.toLocaleString() + ' will be charged from your wallet each renewal (same as this rental).')
+              : 'Auto-renew is off',
+            data: { auto_renew: wantOn, renew_price_ngn: renewPrice }
+          });
+        }
+
         const g = await gotsmsFetch(
           `/api/rents/${encodeURIComponent(rent_id)}/renewal/toggle`,
           { method: 'POST' }
         );
-        return json(res, g.ok ? 200 : g.status || 400, {
-          success: !!g.data?.success,
-          message: g.data?.message || (g.ok ? 'Auto-renewal updated' : 'Could not update auto-renewal'),
-          data: g.data?.data || null
+        if (!g.ok) {
+          return json(res, g.status || 400, {
+            success: false,
+            message: (g.data && g.data.message) || 'Could not update auto-renewal',
+            data: (g.data && g.data.data) || null
+          });
+        }
+        let afterOn = !currentlyOn;
+        try {
+          const again = await gotsmsFetch(`/api/rents/${encodeURIComponent(rent_id)}`);
+          const d = again.data && (again.data.data || again.data);
+          if (d) afterOn = !!(d.is_included_for_next_renewal || d.auto_renew);
+        } catch (_) {}
+
+        return json(res, 200, {
+          success: true,
+          message: afterOn
+            ? ('Auto-renew is on. ₦' + renewPrice.toLocaleString() + ' will be charged from your wallet when the period renews (same price as this rental).')
+            : 'Auto-renew is off',
+          data: { auto_renew: afterOn, renew_price_ngn: renewPrice }
         });
+
       }
 
       if (method === 'GET' && ga === 'gotsms_my_orders') {
