@@ -94,10 +94,10 @@ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/sv
   <div id="rentFilters" class="rent-filters" style="display:none">
     <label class="rent-filter-label">Show</label>
     <select id="rentFilter" class="rent-filter-select">
-      <option value="active" selected>Active</option>
+      <option value="all" selected>Active</option>
       <option value="completed">Completed</option>
       <option value="ended">Expired or cancelled</option>
-      <option value="all">All numbers</option>
+      <option value="all" selected>All numbers</option>
     </select>
   </div>
   <div style="display:flex;gap:8px;margin:0 0 14px;flex-wrap:wrap;align-items:center">
@@ -110,7 +110,7 @@ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/sv
 const SUPABASE_URL='https://atczodlljmlayvldxfmv.supabase.co';
 const SUPABASE_ANON_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImF0Y3pvZGxsam1sYXl2bGR4Zm12Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODUwNzUyMzgsImV4cCI6MjEwMDY1MTIzOH0.ufthD-p7BmeD_B7xyuMM6PNPL8DmcL4AtRYgg-MuoLI';
 const listEl=document.getElementById('list');
-let allOrders=[], view='otp', filter='completed', rentFilter='active', liveActiveRentIds=new Set(), liveActiveMeta={};
+let allOrders=[], view='otp', filter='completed', rentFilter='all', liveActiveRentIds=new Set(), liveActiveMeta={};
 function esc(s){if(!s)return'';return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;')}
 function money(n){return '₦'+Number(n||0).toLocaleString()}
 function bucket(status){const s=String(status||'').toLowerCase();if(s==='completed'||s==='success')return'completed';if(s==='expired')return'expired';if(s==='refunded'||s==='cancelled'||s==='canceled')return'cancelled';if(s==='waiting_for_code'||s==='pending'||s==='waiting')return'waiting';return'other'}
@@ -452,7 +452,6 @@ async function reuseNumber(btn){
   try{
     const session=(await window.supabase.createClient(SUPABASE_URL,SUPABASE_ANON_KEY,{auth:{persistSession:true,autoRefreshToken:true,storage:window.sessionStorage}}).auth.getSession()).data.session;
     if(!session){location.href='auth.html';return}
-  try{ startHistoryRealtime(sb, session.user.id); }catch(_rt){}
     const res=await fetch('/api/sms-bus?action=reuse',{
       method:'POST',
       headers:{'Content-Type':'application/json','Authorization':'Bearer '+session.access_token},
@@ -561,78 +560,54 @@ function startHistoryRealtime(sbClient, userId){
   } catch (_) {
     try { if (typeof refreshLiveUsaActive==='function') await refreshLiveUsaActive(session.access_token); } catch(__){}
   }
-  // 2-day cache + incremental: only pull new SMS rows / open statuses (not full table every time)
+  // Reliable history load (full list first — avoids empty cache / incremental blanking the page)
+  allOrders = [];
   try {
-    var cached = (typeof readHistCache==='function') ? readHistCache(session.user.id) : null;
     var headers = { Authorization: 'Bearer ' + session.access_token, Accept: 'application/json' };
-    var maxCreated = 0;
-    if (cached && Array.isArray(cached)) {
-      for (var ci = 0; ci < cached.length; ci++) {
-        var ct = new Date(cached[ci] && cached[ci].created_at || 0).getTime();
-        if (ct > maxCreated) maxCreated = ct;
-      }
-    }
-    var url = '/api/order?action=my_orders';
-    if (cached && cached.length && maxCreated) {
-      url += '&since=' + encodeURIComponent(new Date(maxCreated).toISOString());
-    } else {
-      url += '&full=1';
-    }
-    const res = await fetch(url, { headers: headers });
-    const json = await res.json().catch(function () { return {}; });
-    if (res.ok && json && json.success && Array.isArray(json.sms)) {
-      var sms = json.sms;
-      if (json.incremental && cached && cached.length) {
-        var map = new Map();
-        cached.forEach(function (r) {
-          var k = String((r && (r.id || r.order_id)) || '');
-          if (k) map.set(k, r);
-        });
-        sms.forEach(function (r) {
-          var k = String((r && (r.id || r.order_id)) || '');
-          if (k) map.set(k, Object.assign({}, map.get(k) || {}, r));
-        });
-        // Drop terminal rows that are no longer in open set if we got open status updates:
-        // keep all merged; UI filters Active separately
-        allOrders = Array.from(map.values()).sort(function (a, b) {
-          return new Date(b.created_at || 0) - new Date(a.created_at || 0);
-        });
-      } else {
-        allOrders = sms;
-      }
+    var res = await fetch('/api/order?action=my_orders&full=1', { headers: headers });
+    var json = await res.json().catch(function () { return {}; });
+    if (res.ok && json && json.success && Array.isArray(json.sms) && json.sms.length) {
+      allOrders = json.sms;
       try { if (typeof writeHistCache === 'function') writeHistCache(session.user.id, allOrders); } catch (_w) {}
-      updateHistCta();
-      render();
-      try {
-        if (typeof enrichPastRentSms==='function') {
-          await enrichPastRentSms(session.access_token);
-          render();
-        }
-      } catch (_e) {}
-      return;
-    }
-    // If incremental failed but we have cache, show cache
-    if (cached && cached.length) {
-      allOrders = cached;
-      updateHistCta();
-      render();
-      try {
-        if (typeof enrichPastRentSms==='function') {
-          await enrichPastRentSms(session.access_token);
-          render();
-        }
-      } catch (_e) {}
-      return;
     }
   } catch (e) { console.warn('history api', e); }
-  const {data,error}=await sb.from('number_orders').select('*').eq('user_id',session.user.id).order('created_at',{ascending:false}).limit(200);
-  if(error){listEl.innerHTML='<div class="empty">Failed to load</div>';return}
-  allOrders=data||[];
-  try { if (typeof writeHistCache==='function') writeHistCache(session.user.id, allOrders); } catch(_w2){}
-  updateHistCta();render();
-  // After list is on screen, force-check past USA rentals for inbox SMS → Completed filter
+
+  if (!allOrders.length) {
+    try {
+      var cached = (typeof readHistCache === 'function') ? readHistCache(session.user.id) : null;
+      if (cached && Array.isArray(cached) && cached.length) {
+        allOrders = cached.filter(function (r) { return r && (r.id || r.order_id || r.phone_number); });
+      }
+    } catch (_c) {}
+  }
+
+  if (!allOrders.length) {
+    try {
+      var q = await sb.from('number_orders').select('*').eq('user_id', session.user.id).order('created_at', { ascending: false }).limit(200);
+      if (q.error) {
+        console.warn('history db', q.error.message || q.error);
+        if (listEl) listEl.innerHTML = '<div class="empty">Failed to load history. Close the app and open Number history again.</div>';
+      } else {
+        allOrders = q.data || [];
+        try { if (typeof writeHistCache === 'function' && allOrders.length) writeHistCache(session.user.id, allOrders); } catch (_w2) {}
+      }
+    } catch (_db) {
+      console.warn('history db', _db);
+      if (listEl) listEl.innerHTML = '<div class="empty">Failed to load history.</div>';
+    }
+  }
+
+  // Clear a previously saved empty cache so it cannot trap the UI
+  if (allOrders.length) {
+    try { if (typeof writeHistCache === 'function') writeHistCache(session.user.id, allOrders); } catch (_w3) {}
+  } else {
+    try { if (typeof invalidateHistCache === 'function') invalidateHistCache(session.user.id); } catch (_inv) {}
+  }
+
+  updateHistCta();
+  render();
   try {
-    if (typeof enrichPastRentSms==='function') {
+    if (typeof enrichPastRentSms === 'function' && session.access_token) {
       await enrichPastRentSms(session.access_token);
       updateHistCta();
       render();
