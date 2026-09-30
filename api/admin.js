@@ -1155,6 +1155,61 @@ async function listSmsOrdersHandle() {
 /** Admin: inbox message count for a GotSMS rent (service-role path, no user ownership check). */
 async function smsOrdersInboxCountHandle(body = {}) {
   const rentId = String(body.rent_id || body.rentId || '').trim();
+  const orderId = String(body.order_id || body.orderId || '').trim();
+  const source = String(body.source || '').toLowerCase();
+
+  // SMS-Bus long rental: count via rent get/sms
+  if (source === 'smsbus_rent' || (orderId && !rentId)) {
+    if (!orderId) return { status: 400, body: { success: false, message: 'order_id required', count: 0 } };
+    const token = process.env.SMSBUS_API_TOKEN || process.env.SMS_BUS_TOKEN || '';
+    if (!token) return { status: 503, body: { success: false, message: 'SMS rental not configured', count: 0 } };
+    try {
+      const { data: row } = await supabase
+        .from('number_orders')
+        .select('id, phone_number, country_name, service_name')
+        .eq('source', 'smsbus_rent')
+        .eq('order_id', orderId)
+        .maybeSingle();
+      if (!row) return { status: 404, body: { success: false, message: 'Order not found', count: 0 } };
+      let mobile = String(row.phone_number || '').replace(/\D/g, '');
+      if (mobile.length > 10 && mobile.startsWith('1')) mobile = mobile.slice(1);
+      // area_code: prefer 2-letter from service/country
+      let area = String(row.country_name || '').trim();
+      const areaMap = { Canada: 'CA', 'United States': 'US', 'United Kingdom': 'GB' };
+      if (areaMap[area]) area = areaMap[area];
+      if (area.length > 3) {
+        // try extract from service_name
+        const m = String(row.service_name || '').match(/\b([A-Z]{2})\b/);
+        area = m ? m[1] : area.slice(0, 2).toUpperCase();
+      }
+      area = String(area || 'CA').toUpperCase();
+      const q = new URLSearchParams({ token, area_code: area, mobile_number: mobile });
+      const res = await fetch('https://api.sms-bus.com/v1/rent/get/sms?' + q.toString(), {
+        method: 'GET', headers: { Accept: 'application/json' }
+      });
+      const json = await res.json().catch(() => ({}));
+      let list = [];
+      const d = json && json.data;
+      if (Array.isArray(d)) list = d;
+      else if (d && typeof d === 'object' && (d.content || d.body || d.text || d.message)) list = [d];
+      else if (typeof d === 'string' && d.trim()) list = [{ content: d }];
+      const count = list.filter((m) => m && (String(m.content || m.body || m.text || m.message || m.code || '').trim())).length;
+      if (count > 0 && row.id) {
+        try {
+          if (!/sms\s*received/i.test(String(row.service_name || ''))) {
+            await supabase.from('number_orders').update({
+              service_name: (row.service_name || 'Rental') + ' · SMS received'
+            }).eq('id', row.id);
+          }
+        } catch (_) {}
+      }
+      return { status: 200, body: { success: true, count, order_id: orderId } };
+    } catch (e) {
+      return { status: 502, body: { success: false, message: e.message || 'Inbox check failed', count: 0 } };
+    }
+  }
+
+  // GotSMS path
   if (!rentId) return { status: 400, body: { success: false, message: 'rent_id required', count: 0 } };
   const token = process.env.GOTSMS_API_TOKEN || process.env.GOT_SMS_TOKEN || '';
   if (!token) {
@@ -1171,7 +1226,6 @@ async function smsOrdersInboxCountHandle(body = {}) {
       },
     });
     const json = await res.json().catch(() => ({}));
-    // Accept several GotSMS response shapes
     let list = [];
     if (Array.isArray(json?.data)) list = json.data;
     else if (Array.isArray(json?.messages)) list = json.messages;
@@ -1202,13 +1256,7 @@ async function smsOrdersInboxCountHandle(body = {}) {
     }
     return {
       status: 200,
-      body: {
-        success: true,
-        count,
-        rent_id: rentId,
-        supplier_ok: res.ok,
-        supplier_status: res.status,
-      },
+      body: { success: true, count, rent_id: rentId, supplier_ok: res.ok, supplier_status: res.status },
     };
   } catch (e) {
     return { status: 502, body: { success: false, message: e.message || 'GotSMS messages failed', count: 0 } };

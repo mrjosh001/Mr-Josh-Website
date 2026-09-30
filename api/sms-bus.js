@@ -28,6 +28,27 @@ import { applyMarkup } from '../lib/pricing.js';
 const OTP_BASE = 'https://sms-bus.com/api/control';
 const RENT_BASE = 'https://api.sms-bus.com';
 
+const RENT_AREA_COUNTRY = {
+  US: 'United States', USA: 'United States', CA: 'Canada', GB: 'United Kingdom', UK: 'United Kingdom',
+  AU: 'Australia', DE: 'Germany', FR: 'France', NL: 'Netherlands', SE: 'Sweden', NO: 'Norway',
+  FI: 'Finland', DK: 'Denmark', PL: 'Poland', ES: 'Spain', IT: 'Italy', IE: 'Ireland',
+  NZ: 'New Zealand', PH: 'Philippines', ID: 'Indonesia', MY: 'Malaysia', SG: 'Singapore',
+  TH: 'Thailand', VN: 'Vietnam', IN: 'India', PK: 'Pakistan', BD: 'Bangladesh', NG: 'Nigeria',
+  ZA: 'South Africa', KE: 'Kenya', GH: 'Ghana', BR: 'Brazil', MX: 'Mexico', AR: 'Argentina',
+  CL: 'Chile', CO: 'Colombia', PE: 'Peru', RU: 'Russia', UA: 'Ukraine', TR: 'Turkey',
+  AE: 'United Arab Emirates', SA: 'Saudi Arabia', IL: 'Israel', JP: 'Japan', KR: 'South Korea',
+  CN: 'China', HK: 'Hong Kong', TW: 'Taiwan'
+};
+function rentCountryName(areaCode, fallback) {
+  const a = String(areaCode || '').toUpperCase().trim();
+  if (RENT_AREA_COUNTRY[a]) return RENT_AREA_COUNTRY[a];
+  const f = String(fallback || '').trim();
+  if (f && f.length > 3) return f; // already a full name
+  return a || f || 'Unknown';
+}
+
+
+
 /** Default monthly rental sell prices (NGN) by country — admin can override via number_services source=smsbus_rent */
 const RENT_DEFAULT_MONTHLY_NGN = {
   US: 11000, USA: 11000, 'UNITED STATES': 11000,
@@ -2004,9 +2025,9 @@ export default async function handler(req, res) {
         order_id: orderId,
         idempotency_key: `smsbus_rent-${orderId}`,
         country_id: null,
-        country_name: d.area_code || area_code,
+        country_name: rentCountryName(d.area_code || area_code, d.area_title || d.area_name),
         service_id: 'rent',
-        service_name: `Rental ${time} mo · ${area_code}`,
+        service_name: `Rental ${time} mo · ${rentCountryName(d.area_code || area_code, d.area_title || d.area_name)}`,
         phone_number: fullPhone || phone,
         price,
         supplier_price: supplierUsd,
@@ -2036,6 +2057,7 @@ export default async function handler(req, res) {
           order_id: orderId,
           number: fullPhone || phone,
           area_code: d.area_code || area_code,
+          country_name: rentCountryName(d.area_code || area_code, d.area_title || d.area_name),
           expire_at: d.expire_at,
           keep_at: d.keep_at,
           price,
