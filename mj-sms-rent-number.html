@@ -381,7 +381,7 @@ html[data-theme="light"] .empty{color:var(--muted)}
         cancelInfoHtml+
       '</div>'+
       '<div class="inbox-card">'+
-        '<div class="inbox-head"><h2>SMS inbox</h2><span class="live">Live</span></div>'+
+        '<div class="inbox-head"><h2>SMS inbox</h2><span class="live" id="inboxLive">Live</span></div>'+
         '<div id="inbox"><div class="empty">Loading messages…</div></div>'+
       '</div>';
     
@@ -461,7 +461,48 @@ html[data-theme="light"] .empty{color:var(--muted)}
   }
 
   
-  function extractCodeFromText(text){
+  
+  function inboxStoreKey(){ return orderId ? ('mjhub_rent_inbox_'+orderId) : null; }
+  function readLocalInbox(){
+    try{
+      var k=inboxStoreKey(); if(!k) return [];
+      var raw=sessionStorage.getItem(k)||localStorage.getItem(k);
+      if(!raw) return [];
+      var a=JSON.parse(raw);
+      return Array.isArray(a)?a:[];
+    }catch(e){ return []; }
+  }
+  function writeLocalInbox(list){
+    try{
+      var k=inboxStoreKey(); if(!k||!list) return;
+      var payload=JSON.stringify(list.slice(0,100));
+      try{ sessionStorage.setItem(k,payload); }catch(e1){}
+      try{ localStorage.setItem(k,payload); }catch(e2){}
+    }catch(e){}
+  }
+  function mergeLocalInbox(existing, incoming){
+    var map={};
+    function add(m){
+      if(!m) return;
+      var body=String(m.body||m.text||m.content||'').trim();
+      if(!body) return;
+      var key=body.replace(/\s+/g,' ').toLowerCase();
+      var code=String(m.code||'').trim()||extractCodeFromText(body);
+      var row={ body:body, code:code, received_at:m.received_at||m.receive_at||null, from:m.from||m.sender||'SMS' };
+      if(!map[key]) map[key]=row;
+      else {
+        if(!map[key].code && row.code) map[key].code=row.code;
+        if(row.received_at && !map[key].received_at) map[key].received_at=row.received_at;
+      }
+    }
+    (existing||[]).forEach(add);
+    (incoming||[]).forEach(add);
+    return Object.keys(map).map(function(k){ return map[k]; }).sort(function(a,b){
+      var tb=Date.parse(b.received_at||0)||0, ta=Date.parse(a.received_at||0)||0;
+      return tb-ta;
+    });
+  }
+function extractCodeFromText(text){
     var body = String(text||'');
     if(!body) return '';
     var hit = body.match(/\b(\d{3}[-\s]\d{3})\b/);
@@ -488,6 +529,8 @@ async function loadMessages(){
     var box=document.getElementById('inbox'); if(!box||!orderId) return;
     var j=await api('rent_sms',{ query:'order_id='+encodeURIComponent(orderId) });
     var list=(j&&j.success&&Array.isArray(j.data))?j.data:[];
+    list = mergeLocalInbox(readLocalInbox(), list);
+    writeLocalInbox(list);
     // Prefer newest message with a code (WhatsApp 897-787 etc.)
     var bestCode = '';
     for (var i = 0; i < list.length; i++) {
@@ -505,6 +548,8 @@ async function loadMessages(){
       }
     }
     setLastCode(bestCode);
+    var liveEl=document.getElementById('inboxLive');
+    if(liveEl) liveEl.textContent = list.length ? (list.length+' msg'+(list.length>1?'s':'')) : 'Live';
     if(list.length){
       hasSms = true;
       var bc = document.getElementById('btnCancel');
