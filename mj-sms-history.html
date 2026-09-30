@@ -94,10 +94,10 @@ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/sv
   <div id="rentFilters" class="rent-filters" style="display:none">
     <label class="rent-filter-label">Show</label>
     <select id="rentFilter" class="rent-filter-select">
-      <option value="all" selected>Active</option>
+      <option value="active" selected>Active</option>
       <option value="completed">Completed</option>
       <option value="ended">Expired or cancelled</option>
-      <option value="all" selected>All numbers</option>
+      <option value="all">All numbers</option>
     </select>
   </div>
   <div style="display:flex;gap:8px;margin:0 0 14px;flex-wrap:wrap;align-items:center">
@@ -110,7 +110,7 @@ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/sv
 const SUPABASE_URL='https://atczodlljmlayvldxfmv.supabase.co';
 const SUPABASE_ANON_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImF0Y3pvZGxsam1sYXl2bGR4Zm12Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODUwNzUyMzgsImV4cCI6MjEwMDY1MTIzOH0.ufthD-p7BmeD_B7xyuMM6PNPL8DmcL4AtRYgg-MuoLI';
 const listEl=document.getElementById('list');
-let allOrders=[], view='otp', filter='completed', rentFilter='all', liveActiveRentIds=new Set(), liveActiveMeta={};
+let allOrders=[], view='otp', filter='completed', rentFilter='active', liveActiveRentIds=new Set(), liveActiveMeta={};
 function esc(s){if(!s)return'';return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;')}
 function money(n){return '₦'+Number(n||0).toLocaleString()}
 function bucket(status){const s=String(status||'').toLowerCase();if(s==='completed'||s==='success')return'completed';if(s==='expired')return'expired';if(s==='refunded'||s==='cancelled'||s==='canceled')return'cancelled';if(s==='waiting_for_code'||s==='pending'||s==='waiting')return'waiting';return'other'}
@@ -242,26 +242,6 @@ async function enrichPastRentSms(accessToken){
 }
 
 
-function formatExpireAt(ms){
-  try{
-    var d = new Date(Number(ms)||0);
-    if(!d || isNaN(d.getTime())) return '—';
-    var dd = String(d.getDate()).padStart(2,'0');
-    var mm = String(d.getMonth()+1).padStart(2,'0');
-    var yyyy = d.getFullYear();
-    var hh = String(d.getHours()).padStart(2,'0');
-    var mi = String(d.getMinutes()).padStart(2,'0');
-    return dd + '/' + mm + '/' + yyyy + ', ' + hh + ':' + mi;
-  }catch(e){ return '—'; }
-}
-function rentCountryLabel(o){
-  try{
-    var c=String((o&&o.country_name)||'').trim();
-    var map={CA:'Canada',US:'United States',USA:'United States',GB:'United Kingdom',UK:'United Kingdom',AU:'Australia',DE:'Germany',FR:'France',NL:'Netherlands',NG:'Nigeria',SE:'Sweden',IE:'Ireland'};
-    if(c && map[c.toUpperCase()]) return map[c.toUpperCase()];
-    return c||'—';
-  }catch(e){ return '—'; }
-}
 function parseUsaExpiry(o){
   // Expiry stored in active_till or in code as ISO (gotsms rentals)
   var raw=o.active_till||o.code||null;
@@ -322,10 +302,10 @@ function render(){
     return true;
   });
   if(!rows.length){
-    listEl.innerHTML='<div class="empty">'+(view==='rent'?(rentFilter==='active'?'No active rentals right now.<br><a href="mj-sms-usa-rent.html" style="color:var(--primary)">USA rental</a> · <a href="mj-sms-rent.html" style="color:var(--primary)">Long rental</a>':(rentFilter==='completed'?'No completed rentals yet.<br>Only numbers that received an SMS and whose timer finished appear here.':(rentFilter==='ended'?'No expired or cancelled rentals.<br>Timer-ended numbers without SMS and cancelled/refunded show here.':'No USA rentals yet. Open USA rental to get a number.'))):(filter==='completed'?'No completed OTP numbers yet.<br>Numbers with a successful code will show here.':(filter==='waiting'?'No numbers waiting for a code.':'No OTP numbers yet. Tap Get OTP to choose a server.')))+'</div>';
+    listEl.innerHTML='<div class="empty">'+(view==='rent'?(rentFilter==='active'?'No active USA rentals right now.<br><a href="mj-sms-usa-rent.html" style="color:var(--primary)">Rent a number</a>':(rentFilter==='completed'?'No completed rentals yet.<br>Only numbers that received an SMS and whose timer finished appear here.':(rentFilter==='ended'?'No expired or cancelled rentals.<br>Timer-ended numbers without SMS and cancelled/refunded show here.':'No USA rentals yet. Open USA rental to get a number.'))):(filter==='completed'?'No completed OTP numbers yet.<br>Numbers with a successful code will show here.':(filter==='waiting'?'No numbers waiting for a code.':'No OTP numbers yet. Tap Get OTP to choose a server.')))+'</div>';
     return;
   }
-  listEl.innerHTML=rows.map(function(o){ try {
+  listEl.innerHTML=rows.map(function(o){
     const name=(o.service_name||o.service||'SMS').replace(/_/g,' ');
     const date=o.created_at?new Date(o.created_at).toLocaleString():'—';
     let b=bucket(o.status);
@@ -353,7 +333,7 @@ function render(){
               'data-country="'+esc(String(o.country_id))+'" '+
               'data-service="'+esc(String(o.service_id))+'" '+
               'data-phone="'+esc(String(o.phone_number).replace(/\D/g,''))+'" '+
-              'data-cname="'+esc(rentCountryLabel(o))+'" '+
+              'data-cname="'+esc(o.country_name||'')+'" '+
               'data-sname="'+esc(o.service_name||'')+'">'+
               'Reuse number</button>'+
           '</div>'+
@@ -395,12 +375,12 @@ function render(){
     if(isBusRent&&o.order_id&&!(o.refunded||stLow==='refunded'||stLow==='cancelled'||stLow==='canceled')) showBusInbox=true;
     const gotsmsBtn=showUsaInbox?('<div class="act"><a class="btn-inbox" href="mj-sms-usa-number.html?rent_id='+encodeURIComponent(rentId)+'"><i class="fa-solid fa-inbox"></i> View inbox</a></div>'):(showBusInbox?('<div class="act"><a class="btn-inbox" href="mj-sms-rent-number.html?order_id='+encodeURIComponent(o.order_id)+'"><i class="fa-solid fa-inbox"></i> View inbox</a></div>'):'');
     const cdId=isActiveUsa?('cd-'+esc(String(o.order_id||rentId).replace(/[^a-zA-Z0-9_-]/g,''))):'';
-    const expLabel=tillMs?formatExpireAt(tillMs):'';
-    const countdownRow=(isActiveUsa&&tillMs)?('<div class="row cd-row"><span class="l">Time left</span><span class="v cd-val" id="'+cdId+'" data-till="'+tillMs+'">—</span></div><div class="row"><span class="l">Expires</span><span class="v">'+esc(expLabel)+'</span></div>'):((tillMs)?('<div class="row"><span class="l">Ended</span><span class="v">'+esc(formatExpireAt(tillMs))+'</span></div>'):'');
+    const countdownRow=(isActiveUsa&&tillMs)?('<div class="row cd-row"><span class="l">Time left</span><span class="v cd-val" id="'+cdId+'" data-till="'+tillMs+'">—</span></div>'):((isGotsms&&tillMs)?('<div class="row"><span class="l">Ended</span><span class="v">'+esc(new Date(tillMs).toLocaleString())+'</span></div>'):'');
+    const durRow=(meta&&(meta.duration||meta.carrier))?('<div class="row"><span class="l">Plan</span><span class="v">'+esc([meta.duration,meta.carrier,meta.extra].filter(Boolean).join(' · ')||'—')+'</span></div>'):'';
     const displayName=meta?meta.service:name;
     return '<div class="card"><div class="card-head"><div class="name">'+esc(displayName)+'</div><div class="price">'+money(o.price)+'</div></div>'+
       '<div class="pills"><span class="pill '+pillCls+'">'+statusLabel+'</span><span class="pill muted">'+esc(serverLabel(o))+'</span></div>'+
-      '<div class="row"><span class="l">Country</span><span class="v">'+esc(rentCountryLabel(o))+'</span></div>'+
+      '<div class="row"><span class="l">Country</span><span class="v">'+esc(o.country_name||'—')+'</span></div>'+
       '<div class="row"><span class="l">Number</span><span class="v">'+esc(o.phone_number||'—')+'</span></div>'+
       durRow+
       (isRent(o)?'':('<div class="row"><span class="l">Code</span><span class="v">'+(o.code&&!parseUsaExpiry({code:o.code})?esc(o.code):'—')+'</span></div>'))+
@@ -408,7 +388,7 @@ function render(){
       '<div class="row"><span class="l">Date</span><span class="v">'+esc(date)+'</span></div>'+
       '<div class="row"><span class="l">Order ID</span><span class="v" style="font-size:11px">'+esc(o.order_id||'—')+'</span></div>'+
       action+gotsmsBtn+'</div>';
-  }catch(__e){console.warn("history card",__e);return "";}}).join('');
+  }).join('');
   tickCountdowns();
 }
 function tickCountdowns(){
@@ -452,6 +432,7 @@ async function reuseNumber(btn){
   try{
     const session=(await window.supabase.createClient(SUPABASE_URL,SUPABASE_ANON_KEY,{auth:{persistSession:true,autoRefreshToken:true,storage:window.sessionStorage}}).auth.getSession()).data.session;
     if(!session){location.href='auth.html';return}
+  try{ startHistoryRealtime(sb, session.user.id); }catch(_rt){}
     const res=await fetch('/api/sms-bus?action=reuse',{
       method:'POST',
       headers:{'Content-Type':'application/json','Authorization':'Bearer '+session.access_token},
@@ -560,54 +541,78 @@ function startHistoryRealtime(sbClient, userId){
   } catch (_) {
     try { if (typeof refreshLiveUsaActive==='function') await refreshLiveUsaActive(session.access_token); } catch(__){}
   }
-  // Reliable history load (full list first — avoids empty cache / incremental blanking the page)
-  allOrders = [];
+  // 2-day cache + incremental: only pull new SMS rows / open statuses (not full table every time)
   try {
+    var cached = (typeof readHistCache==='function') ? readHistCache(session.user.id) : null;
     var headers = { Authorization: 'Bearer ' + session.access_token, Accept: 'application/json' };
-    var res = await fetch('/api/order?action=my_orders&full=1', { headers: headers });
-    var json = await res.json().catch(function () { return {}; });
-    if (res.ok && json && json.success && Array.isArray(json.sms) && json.sms.length) {
-      allOrders = json.sms;
+    var maxCreated = 0;
+    if (cached && Array.isArray(cached)) {
+      for (var ci = 0; ci < cached.length; ci++) {
+        var ct = new Date(cached[ci] && cached[ci].created_at || 0).getTime();
+        if (ct > maxCreated) maxCreated = ct;
+      }
+    }
+    var url = '/api/order?action=my_orders';
+    if (cached && cached.length && maxCreated) {
+      url += '&since=' + encodeURIComponent(new Date(maxCreated).toISOString());
+    } else {
+      url += '&full=1';
+    }
+    const res = await fetch(url, { headers: headers });
+    const json = await res.json().catch(function () { return {}; });
+    if (res.ok && json && json.success && Array.isArray(json.sms)) {
+      var sms = json.sms;
+      if (json.incremental && cached && cached.length) {
+        var map = new Map();
+        cached.forEach(function (r) {
+          var k = String((r && (r.id || r.order_id)) || '');
+          if (k) map.set(k, r);
+        });
+        sms.forEach(function (r) {
+          var k = String((r && (r.id || r.order_id)) || '');
+          if (k) map.set(k, Object.assign({}, map.get(k) || {}, r));
+        });
+        // Drop terminal rows that are no longer in open set if we got open status updates:
+        // keep all merged; UI filters Active separately
+        allOrders = Array.from(map.values()).sort(function (a, b) {
+          return new Date(b.created_at || 0) - new Date(a.created_at || 0);
+        });
+      } else {
+        allOrders = sms;
+      }
       try { if (typeof writeHistCache === 'function') writeHistCache(session.user.id, allOrders); } catch (_w) {}
+      updateHistCta();
+      render();
+      try {
+        if (typeof enrichPastRentSms==='function') {
+          await enrichPastRentSms(session.access_token);
+          render();
+        }
+      } catch (_e) {}
+      return;
+    }
+    // If incremental failed but we have cache, show cache
+    if (cached && cached.length) {
+      allOrders = cached;
+      updateHistCta();
+      render();
+      try {
+        if (typeof enrichPastRentSms==='function') {
+          await enrichPastRentSms(session.access_token);
+          render();
+        }
+      } catch (_e) {}
+      return;
     }
   } catch (e) { console.warn('history api', e); }
-
-  if (!allOrders.length) {
-    try {
-      var cached = (typeof readHistCache === 'function') ? readHistCache(session.user.id) : null;
-      if (cached && Array.isArray(cached) && cached.length) {
-        allOrders = cached.filter(function (r) { return r && (r.id || r.order_id || r.phone_number); });
-      }
-    } catch (_c) {}
-  }
-
-  if (!allOrders.length) {
-    try {
-      var q = await sb.from('number_orders').select('*').eq('user_id', session.user.id).order('created_at', { ascending: false }).limit(200);
-      if (q.error) {
-        console.warn('history db', q.error.message || q.error);
-        if (listEl) listEl.innerHTML = '<div class="empty">Failed to load history. Close the app and open Number history again.</div>';
-      } else {
-        allOrders = q.data || [];
-        try { if (typeof writeHistCache === 'function' && allOrders.length) writeHistCache(session.user.id, allOrders); } catch (_w2) {}
-      }
-    } catch (_db) {
-      console.warn('history db', _db);
-      if (listEl) listEl.innerHTML = '<div class="empty">Failed to load history.</div>';
-    }
-  }
-
-  // Clear a previously saved empty cache so it cannot trap the UI
-  if (allOrders.length) {
-    try { if (typeof writeHistCache === 'function') writeHistCache(session.user.id, allOrders); } catch (_w3) {}
-  } else {
-    try { if (typeof invalidateHistCache === 'function') invalidateHistCache(session.user.id); } catch (_inv) {}
-  }
-
-  updateHistCta();
-  render();
+  const {data,error}=await sb.from('number_orders').select('*').eq('user_id',session.user.id).order('created_at',{ascending:false}).limit(200);
+  if(error){listEl.innerHTML='<div class="empty">Failed to load</div>';return}
+  allOrders=data||[];
+  try { if (typeof writeHistCache==='function') writeHistCache(session.user.id, allOrders); } catch(_w2){}
+  updateHistCta();render();
+  // After list is on screen, force-check past USA rentals for inbox SMS → Completed filter
   try {
-    if (typeof enrichPastRentSms === 'function' && session.access_token) {
+    if (typeof enrichPastRentSms==='function') {
       await enrichPastRentSms(session.access_token);
       updateHistCta();
       render();
