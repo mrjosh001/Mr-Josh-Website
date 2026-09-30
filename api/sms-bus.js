@@ -39,6 +39,88 @@ const RENT_AREA_COUNTRY = {
   AE: 'United Arab Emirates', SA: 'Saudi Arabia', IL: 'Israel', JP: 'Japan', KR: 'South Korea',
   CN: 'China', HK: 'Hong Kong', TW: 'Taiwan'
 };
+
+function extractRentOtp(body) {
+  const s = String(body || '');
+  if (!s) return '';
+  let hit = s.match(/\b(\d{3}[-\s]\d{3})\b/);
+  if (hit) return hit[1].replace(/\s+/g, '-');
+  hit = s.match(/(?:code|otp|pin|confirmation)[:\s]*([0-9][0-9\-\s]{3,14})/i);
+  if (hit) {
+    let v = hit[1].replace(/\s+/g, '');
+    if (/^\d{6}$/.test(v)) v = v.slice(0, 3) + '-' + v.slice(3);
+    return v;
+  }
+  hit = s.match(/\b(\d{4,8})\b/);
+  return hit ? hit[1] : '';
+}
+function normalizeRentMsg(m) {
+  if (!m) return null;
+  const body = String(m.body || m.content || m.text || m.message || '').trim();
+  if (!body) return null;
+  let code = String(m.code || '').trim() || extractRentOtp(body);
+  return {
+    body,
+    code,
+    received_at: m.received_at || m.receive_at || m.time || m.created_at || new Date().toISOString(),
+    from: m.from || m.sender || 'SMS'
+  };
+}
+function mergeRentInbox(existing, incoming) {
+  const map = new Map();
+  const add = (m) => {
+    const n = normalizeRentMsg(m);
+    if (!n) return;
+    const key = n.body.replace(/\s+/g, ' ').toLowerCase();
+    const prev = map.get(key);
+    if (!prev) map.set(key, n);
+    else {
+      if (!prev.code && n.code) prev.code = n.code;
+      if (n.received_at && prev.received_at) {
+        if (Date.parse(n.received_at) < Date.parse(prev.received_at)) prev.received_at = n.received_at;
+      } else if (n.received_at && !prev.received_at) prev.received_at = n.received_at;
+      map.set(key, prev);
+    }
+  };
+  (existing || []).forEach(add);
+  (incoming || []).forEach(add);
+  return Array.from(map.values()).sort((a, b) => {
+    const tb = Date.parse(b.received_at || 0) || 0;
+    const ta = Date.parse(a.received_at || 0) || 0;
+    if (tb !== ta) return tb - ta;
+    return String(b.body).localeCompare(String(a.body));
+  });
+}
+function parseRentInboxNotes(notes) {
+  try {
+    const s = String(notes || '').trim();
+    if (!s) return [];
+    if (s.startsWith('{') && s.includes('"inbox"')) {
+      const o = JSON.parse(s);
+      return Array.isArray(o.inbox) ? o.inbox : [];
+    }
+    if (s.startsWith('[')) {
+      const a = JSON.parse(s);
+      return Array.isArray(a) ? a : [];
+    }
+    const m = s.match(/\{"inbox"\s*:\s*\[[\s\S]*\]\s*\}/);
+    if (m) {
+      const o = JSON.parse(m[0]);
+      return Array.isArray(o.inbox) ? o.inbox : [];
+    }
+  } catch (_) {}
+  return [];
+}
+function packRentInboxNotes(messages, prevNotes) {
+  const inbox = mergeRentInbox([], messages).slice(0, 100);
+  const payload = JSON.stringify({ inbox });
+  const prev = String(prevNotes || '').trim();
+  if (prev && !prev.startsWith('{') && !prev.startsWith('[')) {
+    return prev.split('\n')[0].slice(0, 200) + '\n' + payload;
+  }
+  return payload;
+}
+
 function rentCountryName(areaCode, fallback) {
   const a = String(areaCode || '').toUpperCase().trim();
   if (RENT_AREA_COUNTRY[a]) return RENT_AREA_COUNTRY[a];
@@ -2139,34 +2221,24 @@ export default async function handler(req, res) {
           messages = [{ body: d, code: '', received_at: null, from: '' }];
         }
       }
-      // Extract obvious OTP codes for display
-      messages = messages.map((m) => {
-        if (!m.code && m.body) {
-          const body = String(m.body);
-          // WhatsApp / hyphenated: 897-787 or 897 787
-          let hit = body.match(/\b(\d{3}[-\s]\d{3})\b/);
-          if (hit) m.code = hit[1].replace(/\s+/g, '-');
-          if (!m.code) {
-            hit = body.match(/(?:code|otp|pin)[:\s]*([0-9][0-9\-\s]{3,14})/i);
-            if (hit) m.code = hit[1].replace(/\s+/g, '').replace(/(\d{3})(\d{3})/, '$1-$2');
-          }
-          if (!m.code) {
-            hit = body.match(/\b(\d{4,8})\b/);
-            if (hit) m.code = hit[1];
-          }
-        }
-        return m;
-      });
-      // Mark SMS received on order for history Completed filter
-      if (messages.length && orderRow) {
+            // Normalize, merge with stored inbox history (provider often returns only latest SMS)
+      messages = mergeRentInbox([], messages);
+      if (orderRow) {
         try {
+          const stored = parseRentInboxNotes(orderRow.notes);
+          messages = mergeRentInbox(stored, messages);
+          const packed = packRentInboxNotes(messages, orderRow.notes);
+          const patch = { notes: packed };
           const name = String(orderRow.service_name || '');
-          if (!/sms\s*received/i.test(name)) {
-            await supabase.from('number_orders').update({
-              service_name: (name || 'Rental') + ' · SMS received'
-            }).eq('id', orderRow.id);
+          if (messages.length && !/sms\s*received/i.test(name)) {
+            patch.service_name = (name || 'Rental') + ' · SMS received';
           }
-        } catch (_) {}
+          await supabase.from('number_orders').update(patch).eq('id', orderRow.id);
+          orderRow.notes = packed;
+        } catch (persistErr) {
+          console.warn('[rent_sms] inbox persist', persistErr && persistErr.message ? persistErr.message : persistErr);
+          // If notes column missing, still return merged in-memory (frontend also caches)
+        }
       }
       return json(res, 200, {
         success: true,
