@@ -179,6 +179,16 @@ h1{font-size:17px;font-weight:800;letter-spacing:-.02em}
 .cancel-window .cw-time{font-size:16px;font-weight:800;font-variant-numeric:tabular-nums;letter-spacing:.04em;color:#fde68a;margin-top:4px}
 .cancel-window.gone{background:rgba(148,163,184,.08);border-color:rgba(148,163,184,.2);color:var(--muted)}
 .cancel-window.urgent .cw-time{color:#f87171}
+
+.toast-pop.on,.toast-pop.show{transform:translateX(-50%) translateY(0)!important;opacity:1!important;pointer-events:auto}
+.btn .spin{display:inline-block;width:14px;height:14px;border:2px solid rgba(255,255,255,.25);border-top-color:currentColor;border-radius:50%;animation:mjspin .7s linear infinite;vertical-align:-2px;margin-right:8px}
+.btn-ghost .spin{border-color:rgba(148,163,184,.25);border-top-color:var(--primary,#5b8af5)}
+@keyframes mjspin{to{transform:rotate(360deg)}}
+.btn.is-busy{opacity:.75;pointer-events:none}
+.btn:active{transform:scale(.97)}
+.inbox-loading{display:flex;align-items:center;justify-content:center;gap:10px;padding:28px 12px;color:var(--muted);font-size:14px;font-weight:700}
+.inbox-loading .spin{width:18px;height:18px;border-width:2.5px}
+
 </style>
 </head>
 <body>
@@ -207,11 +217,18 @@ h1{font-size:17px;font-weight:800;letter-spacing:-.02em}
   }
   let rent = null, pollTimer = null, cdTimer = null, hasSms = false, cancelBusy = false, cancelEndsAt = 0;
 
-  function toast(msg){
+  function toast(msg, kind){
     var t = document.getElementById('toastPop');
-    if(!t){ t=document.createElement('div'); t.id='toastPop'; t.className='toast-pop'; document.body.appendChild(t); }
-    t.textContent = msg||''; t.classList.add('show');
-    clearTimeout(t._tm); t._tm=setTimeout(function(){ t.classList.remove('show'); }, 2500);
+    if(!t){
+      t = document.createElement('div');
+      t.id = 'toastPop';
+      document.body.appendChild(t);
+    }
+    t.className = 'toast-pop on' + (kind === 'err' ? ' err' : ' ok');
+    t.textContent = msg || '';
+    t.setAttribute('role', 'status');
+    clearTimeout(t._tm);
+    t._tm = setTimeout(function(){ t.className = 'toast-pop'; }, 3000);
   }
   function setFlash(msg, ok){ toast(msg||''); }
   function pad(n){ return String(n).padStart(2,'0'); }
@@ -229,10 +246,21 @@ h1{font-size:17px;font-weight:800;letter-spacing:-.02em}
     return isNaN(ms)?0:ms;
   }
   function esc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
-  function copyText(txt){
-    if(!txt) return;
-    if(navigator.clipboard&&navigator.clipboard.writeText) navigator.clipboard.writeText(txt).then(function(){ toast('Copied'); }).catch(function(){ toast('Copy failed'); });
-    else { var a=document.createElement('textarea'); a.value=txt; document.body.appendChild(a); a.select(); try{document.execCommand('copy');toast('Copied');}catch(e){toast('Copy failed');} document.body.removeChild(a); }
+  function copyText(txt, cb){
+    if(!txt){ if(cb) cb(false); return; }
+    function done(ok){ if(cb) cb(!!ok); }
+    function fallback(){
+      try{
+        var a=document.createElement('textarea');
+        a.value=String(txt); a.setAttribute('readonly','');
+        a.style.cssText='position:fixed;left:-9999px;top:0';
+        document.body.appendChild(a); a.focus(); a.select(); a.setSelectionRange(0,a.value.length);
+        var ok=document.execCommand('copy'); document.body.removeChild(a); done(ok);
+      }catch(e){ done(false); }
+    }
+    if(navigator.clipboard && navigator.clipboard.writeText){
+      navigator.clipboard.writeText(String(txt)).then(function(){ done(true); }).catch(function(){ fallback(); });
+    } else fallback();
   }
   async function headers(){
     var session = null;
@@ -310,10 +338,49 @@ h1{font-size:17px;font-weight:800;letter-spacing:-.02em}
         '<div class="inbox-head"><h2>SMS inbox</h2><span class="live">Live</span></div>'+
         '<div id="inbox"><div class="empty">Loading messages…</div></div>'+
       '</div>';
-    document.getElementById('btnCopy').onclick=function(){ copyText(phone); };
-    document.getElementById('btnRefresh').onclick=async function(){ toast('Refreshing…'); await loadMessages(); toast('Inbox updated'); };
-    var br=document.getElementById('btnRenew');
-    if(br) br.onclick=renew;
+    
+    (function bindActions(){
+      var btnCopy = document.getElementById('btnCopy');
+      if(btnCopy){
+        btnCopy.onclick = function(){
+          if(btnCopy.classList.contains('is-busy')) return;
+          btnCopy.classList.add('is-busy');
+          var prev = btnCopy.innerHTML;
+          btnCopy.innerHTML = '<span class="spin"></span>Copying…';
+          copyText(phone, function(ok){
+            btnCopy.innerHTML = ok ? 'Copied!' : prev;
+            toast(ok ? 'Number copied to clipboard' : 'Could not copy number', ok ? 'ok' : 'err');
+            setTimeout(function(){ btnCopy.innerHTML = prev; btnCopy.classList.remove('is-busy'); }, 1400);
+          });
+        };
+      }
+      var btnRefresh = document.getElementById('btnRefresh');
+      if(btnRefresh){
+        btnRefresh.onclick = async function(){
+          if(btnRefresh.classList.contains('is-busy')) return;
+          btnRefresh.classList.add('is-busy');
+          var prev = btnRefresh.innerHTML;
+          btnRefresh.innerHTML = '<span class="spin"></span>Checking…';
+          var box = document.getElementById('inbox');
+          if(box) box.innerHTML = '<div class="inbox-loading"><span class="spin"></span>Checking for SMS…</div>';
+          toast('Checking inbox…', 'ok');
+          try {
+            await loadMessages();
+            toast(hasSms ? 'Inbox updated' : 'No SMS yet — still waiting', hasSms ? 'ok' : 'ok');
+          } catch (e) {
+            toast('Could not check SMS', 'err');
+            if(box) box.innerHTML = '<div class="empty">Could not load messages. Tap Checking again.</div>';
+          }
+          btnRefresh.innerHTML = prev;
+          btnRefresh.classList.remove('is-busy');
+        };
+      }
+      var br = document.getElementById('btnRenew');
+      if(br) br.onclick = renew;
+      var bc = document.getElementById('btnCancel');
+      if(bc) bc.onclick = doCancel;
+    })();
+
     var bc=document.getElementById('btnCancel');
     if(bc) bc.onclick=doCancel;
     if(cdTimer) clearInterval(cdTimer);
