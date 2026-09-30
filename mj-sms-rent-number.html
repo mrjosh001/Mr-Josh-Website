@@ -196,6 +196,11 @@ h1{font-size:17px;font-weight:800;letter-spacing:-.02em}
 .inbox-card{margin-top:14px}
 .msg{transition:border-color .2s}
 .msg:hover{border-color:rgba(91,138,245,.35)}
+
+.stat .val.has-code{color:#4ade80;font-size:22px;letter-spacing:.05em;font-weight:800}
+.msg .otp-chip{display:inline-flex;align-items:center;gap:10px;margin:10px 0 6px;padding:10px 14px;border-radius:12px;background:rgba(74,222,128,.12);border:1px solid rgba(74,222,128,.4);color:#4ade80;font-weight:800;font-size:18px;letter-spacing:.08em}
+.msg .otp-chip button{border:0;background:rgba(255,255,255,.1);color:#e2e8f0;border-radius:8px;padding:6px 10px;font-size:12px;font-weight:700;cursor:pointer}
+.msg .otp-chip button:active{transform:scale(.96)}
 </style>
 </head>
 <body>
@@ -427,13 +432,51 @@ h1{font-size:17px;font-weight:800;letter-spacing:-.02em}
     },1000);
   }
 
-  async function loadMessages(){
+  
+  function extractCodeFromText(text){
+    var body = String(text||'');
+    if(!body) return '';
+    var hit = body.match(/\b(\d{3}[-\s]\d{3})\b/);
+    if(hit) return hit[1].replace(/\s+/g,'-');
+    hit = body.match(/(?:code|otp|pin)[:\s]*([0-9][0-9\-\s]{3,14})/i);
+    if(hit){
+      var v = String(hit[1]).replace(/\s+/g,'');
+      if(/^\d{6}$/.test(v)) v = v.slice(0,3)+'-'+v.slice(3);
+      return v;
+    }
+    hit = body.match(/\b(\d{4,8})\b/);
+    if(hit) return hit[1];
+    return '';
+  }
+  function setLastCode(code){
+    var last = document.getElementById('lastCode');
+    if(!last) return;
+    var c = String(code||'').trim();
+    if(!c){ last.textContent = '—'; last.classList.remove('has-code'); return; }
+    last.textContent = c;
+    last.classList.add('has-code');
+  }
+async function loadMessages(){
     var box=document.getElementById('inbox'); if(!box||!orderId) return;
     var j=await api('rent_sms',{ query:'order_id='+encodeURIComponent(orderId) });
     var list=(j&&j.success&&Array.isArray(j.data))?j.data:[];
-    var last=document.getElementById('lastCode');
-    var withCode=list.filter(function(m){ return m&&m.code; })[0];
-    if(withCode&&last) last.textContent=withCode.code;
+    // Prefer newest message with a code (WhatsApp 897-787 etc.)
+    var bestCode = '';
+    for (var i = 0; i < list.length; i++) {
+      var m = list[i];
+      if (!m) continue;
+      var c = String(m.code || '').trim() || extractCodeFromText(m.body || m.text || m.content || '');
+      if (c) { bestCode = c; if (!m.code) m.code = c; break; }
+    }
+    if (!bestCode) {
+      for (var j = 0; j < list.length; j++) {
+        var m2 = list[j];
+        if (!m2) continue;
+        var c2 = String(m2.code || '').trim() || extractCodeFromText(m2.body || '');
+        if (c2) { bestCode = c2; if (!m2.code) m2.code = c2; }
+      }
+    }
+    setLastCode(bestCode);
     if(list.length){
       hasSms = true;
       var bc = document.getElementById('btnCancel');
@@ -451,13 +494,23 @@ h1{font-size:17px;font-weight:800;letter-spacing:-.02em}
     }
     if(!list.length){ box.innerHTML='<div class="empty">No SMS yet.<br>New messages appear here automatically.</div>'; return; }
     box.innerHTML=list.map(function(m){
-      var body=m.body||''; var code=m.code||'';
+      var body=m.body||m.text||m.content||'';
+      var code=String(m.code||'').trim() || extractCodeFromText(body);
+      var when='';
+      try{ if(m.received_at) when=new Date(m.received_at).toLocaleString(); }catch(e){}
       return '<div class="msg">'+
-        '<div class="msg-top"><span>'+esc(m.from||'SMS')+'</span><span>'+esc(m.received_at?new Date(m.received_at).toLocaleString():'')+'</span></div>'+
-        (code?'<div class="code">'+esc(code)+'</div><button type="button" class="btn btn-ghost" data-c="'+esc(code)+'">Copy code</button>':'')+
-        '<div class="msg-body">'+esc(body)+'</div></div>';
+        '<div class="msg-top"><span>'+esc(m.from||'SMS')+'</span><span>'+esc(when)+'</span></div>'+
+        (code?('<div class="otp-chip"><span>'+esc(code)+'</span><button type="button" data-c="'+esc(code)+'">Copy</button></div>'):'')+
+        (body?'<div class="msg-body">'+esc(body)+'</div>':'')+
+      '</div>';
     }).join('');
-    box.querySelectorAll('[data-c]').forEach(function(btn){ btn.onclick=function(){ copyText(btn.getAttribute('data-c')); }; });
+    box.querySelectorAll('[data-c]').forEach(function(btn){
+      btn.onclick=function(){
+        copyText(btn.getAttribute('data-c'), function(ok){
+          toast(ok?'Code copied':'Could not copy', ok?'ok':'err');
+        });
+      };
+    });
   }
 
   async function renew(){
