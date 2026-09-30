@@ -242,7 +242,6 @@ async function enrichPastRentSms(accessToken){
 }
 
 
-
 function formatExpireAt(ms){
   try{
     var d = new Date(Number(ms)||0);
@@ -255,7 +254,6 @@ function formatExpireAt(ms){
     return dd + '/' + mm + '/' + yyyy + ', ' + hh + ':' + mi;
   }catch(e){ return '—'; }
 }
-
 function rentCountryLabel(o){
   try{
     var c=String((o&&o.country_name)||'').trim();
@@ -324,10 +322,10 @@ function render(){
     return true;
   });
   if(!rows.length){
-    listEl.innerHTML='<div class="empty">'+(view==='rent'?(rentFilter==='active'?'No active USA rentals right now.<br><a href="mj-sms-usa-rent.html" style="color:var(--primary)">Rent a number</a>':(rentFilter==='completed'?'No completed rentals yet.<br>Only numbers that received an SMS and whose timer finished appear here.':(rentFilter==='ended'?'No expired or cancelled rentals.<br>Timer-ended numbers without SMS and cancelled/refunded show here.':'No USA rentals yet. Open USA rental to get a number.'))):(filter==='completed'?'No completed OTP numbers yet.<br>Numbers with a successful code will show here.':(filter==='waiting'?'No numbers waiting for a code.':'No OTP numbers yet. Tap Get OTP to choose a server.')))+'</div>';
+    listEl.innerHTML='<div class="empty">'+(view==='rent'?(rentFilter==='active'?'No active rentals right now.<br><a href="mj-sms-usa-rent.html" style="color:var(--primary)">USA rental</a> · <a href="mj-sms-rent.html" style="color:var(--primary)">Long rental</a>':(rentFilter==='completed'?'No completed rentals yet.<br>Only numbers that received an SMS and whose timer finished appear here.':(rentFilter==='ended'?'No expired or cancelled rentals.<br>Timer-ended numbers without SMS and cancelled/refunded show here.':'No USA rentals yet. Open USA rental to get a number.'))):(filter==='completed'?'No completed OTP numbers yet.<br>Numbers with a successful code will show here.':(filter==='waiting'?'No numbers waiting for a code.':'No OTP numbers yet. Tap Get OTP to choose a server.')))+'</div>';
     return;
   }
-  listEl.innerHTML=rows.map(function(o){
+  listEl.innerHTML=rows.map(function(o){ try {
     const name=(o.service_name||o.service||'SMS').replace(/_/g,' ');
     const date=o.created_at?new Date(o.created_at).toLocaleString():'—';
     let b=bucket(o.status);
@@ -410,7 +408,7 @@ function render(){
       '<div class="row"><span class="l">Date</span><span class="v">'+esc(date)+'</span></div>'+
       '<div class="row"><span class="l">Order ID</span><span class="v" style="font-size:11px">'+esc(o.order_id||'—')+'</span></div>'+
       action+gotsmsBtn+'</div>';
-  }).join('');
+  }catch(__e){console.warn("history card",__e);return "";}}).join('');
   tickCountdowns();
 }
 function tickCountdowns(){
