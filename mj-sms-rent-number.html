@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, viewport-fit=cover">
 <title>Rental inbox · MJ HUB</title>
-<script>(function(){try{var t=localStorage.getItem('mjhub-theme');document.documentElement.setAttribute('data-theme',(t==='light'||t==='dark')?t:'dark');}catch(e){document.documentElement.setAttribute('data-theme','dark');}})();</script>
+<script>(function(){try{var p=localStorage.getItem('mjhub-theme-pref')||localStorage.getItem('mjhub-theme')||localStorage.getItem('mjhub_theme')||'system';var t=(p==='light'||p==='dark')?p:(window.matchMedia&&window.matchMedia('(prefers-color-scheme: light)').matches?'light':'dark');document.documentElement.setAttribute('data-theme',t);}catch(e){document.documentElement.setAttribute('data-theme','dark');}})();</script>
 <script src="/js/mj-page-loader.js" defer></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
@@ -197,11 +197,39 @@ h1{font-size:17px;font-weight:800;letter-spacing:-.02em}
 .msg{transition:border-color .2s}
 .msg:hover{border-color:rgba(91,138,245,.35)}
 
-.stat .val.has-code{color:#4ade80;font-size:22px;letter-spacing:.05em;font-weight:800}
-.msg .otp-chip{display:inline-flex;align-items:center;gap:10px;margin:10px 0 6px;padding:10px 14px;border-radius:12px;background:rgba(74,222,128,.12);border:1px solid rgba(74,222,128,.4);color:#4ade80;font-weight:800;font-size:18px;letter-spacing:.08em}
-.msg .otp-chip button{border:0;background:rgba(255,255,255,.1);color:#e2e8f0;border-radius:8px;padding:6px 10px;font-size:12px;font-weight:700;cursor:pointer}
+.stat .val.has-code{color:var(--ok,#059669);font-size:22px;letter-spacing:.05em;font-weight:800}
+.msg .otp-chip{display:inline-flex;align-items:center;gap:10px;margin:10px 0 6px;padding:10px 14px;border-radius:12px;background:rgba(74,222,128,.12);border:1px solid rgba(74,222,128,.4);color:var(--ok,#059669);font-weight:800;font-size:18px;letter-spacing:.08em}
+.msg .otp-chip button{border:0;background:rgba(255,255,255,.1);color:var(--text);border-radius:8px;padding:6px 10px;font-size:12px;font-weight:700;cursor:pointer}
 .msg .otp-chip button:active{transform:scale(.96)}
+
+/* Light mode: force readable text (no dark-only hardcoded colors) */
+html[data-theme="light"] body{color:var(--text)}
+html[data-theme="light"] .muted,
+html[data-theme="light"] .hint,
+html[data-theme="light"] .lbl,
+html[data-theme="light"] .svc-meta,
+html[data-theme="light"] .msg-top span:last-child{color:var(--muted)!important}
+html[data-theme="light"] .phone,
+html[data-theme="light"] .name,
+html[data-theme="light"] h1,
+html[data-theme="light"] h2,
+html[data-theme="light"] .msg-body,
+html[data-theme="light"] .msg-top span:first-child{color:var(--text)!important}
+html[data-theme="light"] .btn-ghost{background:var(--card);color:var(--text);border-color:var(--border)}
+html[data-theme="light"] .stat .val.has-code{color:#047857!important}
+html[data-theme="light"] .msg .otp-chip{background:rgba(5,150,105,.12);border-color:rgba(5,150,105,.35);color:#047857}
+html[data-theme="light"] .msg .otp-chip button{background:rgba(15,23,42,.06);color:#0f172a}
+html[data-theme="light"] .cancel-window{color:#b45309;background:rgba(245,158,11,.12);border-color:rgba(245,158,11,.35)}
+html[data-theme="light"] .cancel-window .cw-time{color:#92400e}
+html[data-theme="light"] .cancel-window.gone{color:var(--muted);background:rgba(15,23,42,.04);border-color:var(--border)}
+html[data-theme="light"] .refund-locked{color:#b91c1c}
+html[data-theme="light"] .toast-pop{background:#0f172a;color:#fff}
+html[data-theme="light"] .live{color:#047857}
+html[data-theme="light"] .badge.active{background:rgba(5,150,105,.12);color:#047857}
+html[data-theme="light"] .empty{color:var(--muted)}
+
 </style>
+<script src="/js/mj-theme.js" defer></script>
 </head>
 <body>
 <header class="header">

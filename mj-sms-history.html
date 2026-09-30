@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <title>Number History · MJ HUB</title>
 <script>
-(function(){try{var t=localStorage.getItem('mjhub-theme');document.documentElement.setAttribute('data-theme',(t==='light'||t==='dark')?t:'dark');}catch(e){document.documentElement.setAttribute('data-theme','dark');}})();
+(function(){try{var p=localStorage.getItem('mjhub-theme-pref')||localStorage.getItem('mjhub-theme')||localStorage.getItem('mjhub_theme')||'system';var t=(p==='light'||p==='dark')?p:(window.matchMedia&&window.matchMedia('(prefers-color-scheme: light)').matches?'light':'dark');document.documentElement.setAttribute('data-theme',t);}catch(e){document.documentElement.setAttribute('data-theme','dark');}})();
 </script>
 <script src="/js/mj-page-loader.js" defer></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -68,9 +68,45 @@ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/sv
 .act a,.act button{display:inline-flex;align-items:center;gap:8px;font-size:13px;font-weight:700;color:#fff;background:var(--primary);border:none;text-decoration:none;padding:10px 14px;border-radius:12px;cursor:pointer}
 .empty{text-align:center;padding:40px 16px;color:var(--muted);font-size:14px}
 .section-title{font-size:13px;font-weight:800;color:var(--muted);margin:8px 0 10px;text-transform:uppercase;letter-spacing:.04em}
+
+/* Light mode: force readable text (no dark-only hardcoded colors) */
+html[data-theme="light"] body{color:var(--text)}
+html[data-theme="light"] .muted,
+html[data-theme="light"] .hint,
+html[data-theme="light"] .lbl,
+html[data-theme="light"] .svc-meta,
+html[data-theme="light"] .msg-top span:last-child{color:var(--muted)!important}
+html[data-theme="light"] .phone,
+html[data-theme="light"] .name,
+html[data-theme="light"] h1,
+html[data-theme="light"] h2,
+html[data-theme="light"] .msg-body,
+html[data-theme="light"] .msg-top span:first-child{color:var(--text)!important}
+html[data-theme="light"] .btn-ghost{background:var(--card);color:var(--text);border-color:var(--border)}
+html[data-theme="light"] .stat .val.has-code{color:#047857!important}
+html[data-theme="light"] .msg .otp-chip{background:rgba(5,150,105,.12);border-color:rgba(5,150,105,.35);color:#047857}
+html[data-theme="light"] .msg .otp-chip button{background:rgba(15,23,42,.06);color:#0f172a}
+html[data-theme="light"] .cancel-window{color:#b45309;background:rgba(245,158,11,.12);border-color:rgba(245,158,11,.35)}
+html[data-theme="light"] .cancel-window .cw-time{color:#92400e}
+html[data-theme="light"] .cancel-window.gone{color:var(--muted);background:rgba(15,23,42,.04);border-color:var(--border)}
+html[data-theme="light"] .refund-locked{color:#b91c1c}
+html[data-theme="light"] .toast-pop{background:#0f172a;color:#fff}
+html[data-theme="light"] .live{color:#047857}
+html[data-theme="light"] .badge.active{background:rgba(5,150,105,.12);color:#047857}
+html[data-theme="light"] .empty{color:var(--muted)}
+
+
+html[data-theme="light"] .card{background:var(--card);color:var(--text)}
+html[data-theme="light"] .card .name,
+html[data-theme="light"] .card .v{color:var(--text)!important}
+html[data-theme="light"] .card .l{color:var(--muted)!important}
+html[data-theme="light"] .tab{color:var(--muted)}
+html[data-theme="light"] .tab.on{color:#fff}
+html[data-theme="light"] .cd-val{color:var(--primary)!important}
 </style>
 <link rel="stylesheet" href="/css/graceful.css">
 <link rel="stylesheet" href="/css/mj-motion.css">
+<script src="/js/mj-theme.js" defer></script>
 </head>
 <body>
 <div class="shell">
