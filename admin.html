@@ -3096,6 +3096,12 @@ function adminIsCompletedRental(o){
   if(!till) return true;
   return false;
 }
+function adminRentCountry(o){
+  var c = String(o.country_name||'').trim();
+  var map = {CA:'Canada',US:'United States',USA:'United States',GB:'United Kingdom',UK:'United Kingdom',AU:'Australia',DE:'Germany',FR:'France',NL:'Netherlands',NG:'Nigeria'};
+  if(map[c.toUpperCase()]) return map[c.toUpperCase()];
+  return c || '—';
+}
 function adminDisplayServiceName(o){
   return String(o.service_name||o.service_id||'SMS').replace(/\s*·\s*SMS\s*received/ig,'').replace(/_/g,' ').trim() || 'SMS';
 }
@@ -3124,27 +3130,35 @@ function adminStartSmsCountdowns(){
 }
 async function adminEnrichInboxCounts(orders){
   var list = (orders||[]).filter(function(o){
-    return String(o.source||'').toLowerCase()==='gotsms' && adminUsaRentId(o);
+    var src=String(o.source||'').toLowerCase();
+    return (src==='gotsms' && adminUsaRentId(o)) || (src==='smsbus_rent' && o.order_id);
   }).slice(0, 15);
   if(!list.length) return;
   // Show loading state immediately
   list.forEach(function(o){
-    var rid = adminUsaRentId(o);
+    var src=String(o.source||'').toLowerCase();
+    var key = src==='gotsms' ? adminUsaRentId(o) : String(o.order_id||'');
     document.querySelectorAll('[data-admin-inbox-rid]').forEach(function(el){
-      if(el.getAttribute('data-admin-inbox-rid')===rid && !o._inbox_count){
+      if(el.getAttribute('data-admin-inbox-rid')===key && o._inbox_count==null){
         el.innerHTML = '<span style="color:var(--muted);font-size:12px;">Checking inbox…</span>';
       }
     });
   });
   await Promise.all(list.map(async function(o){
-    var rid = adminUsaRentId(o);
-    if(!rid) return;
+    var src = String(o.source||'').toLowerCase();
+    var rid = src==='gotsms' ? adminUsaRentId(o) : '';
+    var oid = o.order_id || '';
+    var key = src==='gotsms' ? rid : oid;
+    if(!key) return;
     try{
       var headers = await authHeaders();
       headers['Content-Type'] = 'application/json';
+      var payload = { resource: 'sms_orders', action: 'inbox_count', source: src };
+      if(src==='gotsms') payload.rent_id = rid;
+      else payload.order_id = oid;
       var res = await fetch('/api/admin', {
         method: 'POST', headers,
-        body: JSON.stringify({ resource: 'sms_orders', action: 'inbox_count', rent_id: rid })
+        body: JSON.stringify(payload)
       });
       var j = await res.json().catch(function(){ return {}; });
       var cnt = (j && j.success) ? Number(j.count||0) : -1;
@@ -3163,19 +3177,11 @@ async function adminEnrichInboxCounts(orders){
         label = '<span style="color:var(--muted);font-size:12px;">No SMS yet</span>';
       }
       document.querySelectorAll('[data-admin-inbox-rid]').forEach(function(el){
-        if(el.getAttribute('data-admin-inbox-rid')===String(rid)){
+        if(el.getAttribute('data-admin-inbox-rid')===String(key)){
           el.innerHTML = label;
         }
       });
-    }catch(e){
-      document.querySelectorAll('[data-admin-inbox-rid]').forEach(function(el){
-        if(el.getAttribute('data-admin-inbox-rid')===String(rid)){
-          el.innerHTML = adminRentReceivedSms(o)
-            ? '<span class="badge" style="background:rgba(34,197,94,.18);color:#4ade80;">SMS received</span>'
-            : '<span style="color:var(--muted);font-size:12px;">Inbox unavailable</span>';
-        }
-      });
-    }
+    }catch(e){}
   }));
 }
 
@@ -3259,12 +3265,16 @@ function renderSmsOrders(orders) {
  return `<span class="badge badge-off">${escapeHtml(SMS_ORDER_STATUS_LABELS[st] || st || '—')}</span>`;
  };
  const inboxCell = (o) => {
-   const isUsa = String(o.source||'').toLowerCase() === 'gotsms';
-   if (!isUsa) {
+   const src = String(o.source||'').toLowerCase();
+   const isRent = src === 'gotsms' || src === 'smsbus_rent';
+   if (!isRent) {
      const code = o.code || o.sms_code || '';
-     return code ? escapeHtml(String(code)) : '—';
+     // Don't show ISO expiry as "code" for OTP confusion - only short codes
+     if(code && !/^\d{4}-\d{2}-\d{2}/.test(String(code)) && String(code).indexOf('T')<0)
+       return escapeHtml(String(code));
+     return '—';
    }
-   const rid = adminUsaRentId(o);
+   const rid = src==='gotsms' ? adminUsaRentId(o) : String(o.order_id||'');
    const hasCnt = o._inbox_count != null && o._inbox_count !== '' && !isNaN(Number(o._inbox_count));
    const cnt = Number(o._inbox_count||0);
    if (hasCnt && cnt > 0) return '<span data-admin-inbox-rid="'+escapeHtml(rid)+'"><span class="badge" style="background:rgba(34,197,94,.18);color:#4ade80;font-weight:800;">'+cnt+' SMS in inbox</span></span>';
@@ -3277,7 +3287,8 @@ function renderSmsOrders(orders) {
    if (!isSmsRentalOrder(o)) return '—';
    const till = adminParseUsaExpiry(o);
    if (!till) return '—';
-   return '<span data-admin-sms-till="'+till+'" style="font-weight:800;font-variant-numeric:tabular-nums;">'+adminFormatTimeLeft(till)+'</span>';
+   const expStr = new Date(till).toLocaleString(undefined,{ dateStyle:'medium', timeStyle:'short' });
+   return '<div><span data-admin-sms-till="'+till+'" style="font-weight:800;font-variant-numeric:tabular-nums;">'+adminFormatTimeLeft(till)+'</span><div style="font-size:11px;color:var(--muted);margin-top:2px;">Expires '+escapeHtml(expStr)+'</div></div>';
  };
 
  tbody.innerHTML = orders.map(o => {
@@ -3293,7 +3304,7 @@ function renderSmsOrders(orders) {
  <td>${escapeHtml(o.customer_id || '—')}</td>
  <td>${serverBadge}</td>
  <td>${escapeHtml(name)}</td>
- <td>${escapeHtml(o.country_name || (isUsa ? 'United States' : '—'))}</td>
+ <td>${escapeHtml(adminRentCountry(o))}</td>
  <td style="font-weight:700;">${escapeHtml(o.phone_number || '—')}</td>
  <td><strong class="price">₦${Number(o.price || 0).toLocaleString()}</strong></td>
  <td style="font-size:12px;max-width:160px;word-break:break-all;">${inboxCell(o)}</td>
@@ -3311,7 +3322,7 @@ function renderSmsOrders(orders) {
  const timeRow = isSmsRentalOrder(o) && till
    ? `<div class="row-line"><span>Time left</span><span data-admin-sms-till="${till}" style="font-weight:800;font-variant-numeric:tabular-nums;">${adminFormatTimeLeft(till)}</span></div>`
    : '';
- const inboxRow = String(o.source||'').toLowerCase()==='gotsms'
+ const inboxRow = (String(o.source||'').toLowerCase()==='gotsms'||String(o.source||'').toLowerCase()==='smsbus_rent')
    ? `<div class="row-line"><span>Inbox</span><span>${inboxCell(o)}</span></div>`
    : (o.code ? `<div class="row-line"><span>Code</span><span>${escapeHtml(String(o.code))}</span></div>` : '');
  return `<div class="product-card">
@@ -3319,7 +3330,7 @@ function renderSmsOrders(orders) {
  <div class="meta">${typeLabel} · ${escapeHtml(smsOrderServerLabel(o))} · ${escapeHtml(o.order_id || '')}</div>
  <div class="row-line"><span>Customer</span><span>${escapeHtml(o.customer_id || '—')}</span></div>
  <div class="row-line"><span>Number</span><span>${escapeHtml(o.phone_number || '—')}</span></div>
- <div class="row-line"><span>Country</span><span>${escapeHtml(o.country_name || '—')}</span></div>
+ <div class="row-line"><span>Country</span><span>${escapeHtml(adminRentCountry(o))}</span></div>
  <div class="row-line"><span>Amount</span><strong class="price">₦${Number(o.price || 0).toLocaleString()}</strong></div>
  ${inboxRow}
  ${timeRow}
@@ -3819,9 +3830,9 @@ async function saveProduct() {
  return;
  }
  if (body.is_shared) {
- // Keep unlimited stock for shared listings, but respect Active/Hidden from admin.
- // Previously is_available was forced true, so Hidden never stuck for shared products.
- if (body.is_available) body.stock_quantity = 99999;
+ // Shared listings: no fake 99999 stock. Null/omitted = unlimited when available.
+ if (body.is_available) body.stock_quantity = null;
+ else body.stock_quantity = 0;
  }
 
  const btn = document.getElementById('saveProductBtn');
@@ -4071,7 +4082,12 @@ function updateRestockCurrentStock() {
  const box = document.getElementById('rsSharedBox');
  if (box && p.shared_credential) box.value = p.shared_credential;
  } else {
- el.value = `${p.stock_quantity || 0} available`;
+ const n = Number(p.stock_quantity);
+ if (p.stock_quantity == null || n === 99999) {
+ el.value = 'Stock not set — upload logs to set real quantity';
+ } else {
+ el.value = n + ' available (real inventory)';
+ }
  }
 }
 
