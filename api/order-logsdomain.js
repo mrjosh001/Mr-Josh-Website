@@ -66,7 +66,7 @@ function applyLdMarkup(supplierPrice) {
 }
 
 function readLdStock(item) {
-  const keys = ['stock', 'stock_quantity', 'quantity', 'available', 'qty', 'count'];
+  const keys = ['available_quantity', 'stock', 'stock_quantity', 'quantity', 'available', 'qty', 'count'];
   for (const k of keys) {
     if (item[k] != null && !Number.isNaN(Number(item[k]))) return Math.max(0, Number(item[k]));
   }
@@ -79,7 +79,7 @@ async function fetchLdCategories() {
   let page = 1;
   const perPage = 100;
   for (;;) {
-    const url = `${LD_BASE}/categories?page=${page}&per_page=${perPage}`;
+    const url = `${LD_BASE}/logs/categories?per_page=${perPage}&page=${page}`;
     const res = await fetch(url, {
       method: 'GET',
       headers: { Accept: 'application/json', Authorization: `Bearer ${LD_KEY}` }
