@@ -419,8 +419,15 @@ document.getElementById('changeServiceBtn').onclick=function(){
   selectedService=null;selectedPlan=null;
 };
 async function loadPlans(){
+  var body=document.getElementById('detailBody');
+  if(body) body.innerHTML='<div class="sk-line"></div><div class="sk-line"></div><div class="sk-line"></div>';
   var j=await api('plans',{query:'service_id='+encodeURIComponent(selectedService.id)+'&per_page=100'});
-  plans=(j.success?(j.data||[]):[]).filter(function(p){return p.is_available!==false;});
+  if(!j||j.success===false){
+    plans=[];
+    if(body) body.innerHTML='<div class="empty">'+(j&&j.message?String(j.message):'Could not load plans. Pull to refresh or try again.')+'</div>';
+    return;
+  }
+  plans=(j.data||[]).filter(function(p){return p.is_available!==false;});
   var order={min:0,hour:1,day:2,week:3,month:4,year:5};
   plans.sort(function(a,b){var da=order[a.duration_type]??9,db=order[b.duration_type]??9;if(da!==db)return da-db;return(a.duration_in_type||0)-(b.duration_in_type||0);});
   renderDetailForm();
@@ -439,7 +446,7 @@ function buildAreaOptions(){
 }
 function renderDetailForm(){
   var body=document.getElementById('detailBody');
-  if(!plans.length){body.innerHTML='<div class="empty">No plans in stock for this service</div>';return;}
+  if(!plans.length){body.innerHTML='<div class="empty">No plans in stock for this service right now.<br><span style="opacity:.7;font-size:12px">Try another service or check back shortly.</span></div>';return;}
   var planHtml=plans.map(function(p,i){
     return '<div class="plan" data-i="'+i+'"><div class="dur">'+esc(p.duration_translation||(p.duration_in_type+' '+p.duration_type))+'</div><div class="price">'+fmtNgn(p.price_ngn)+'</div></div>';
   }).join('');
