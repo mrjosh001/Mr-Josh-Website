@@ -1,18 +1,4 @@
-/**
- * /api/order-logsdomain — everything for Logs Domain in ONE file (Sujan-style).
- *
- *   GET  /api/order-logsdomain           → sync categories/products into Supabase
- *   GET  /api/order-logsdomain?action=sync
- *   POST /api/order-logsdomain           → purchase (JWT) — body unchanged
- *
- * Backward compatible: vercel rewrite /api/products-logsdomain → this file GET sync.
- *
- * Env: LOGSDOMAIN_API_KEY, SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY
- */
-
 import { createClient } from '@supabase/supabase-js';
-import { formatCredentials, formatMultiLogCredentials, joinRawLogDetails } from '../lib/formatCredentials.js';
-import { readSupplierStock } from '../lib/supplierStock.js';
 
 /**
  * POST /api/order-logsdomain
@@ -39,163 +25,6 @@ function categoryIdFromKey(productKey) {
   return Number.isFinite(n) ? n : null;
 }
 
-
-/** Normalize one supplier item → { details, serial } with full email + password */
-function normalizeLdItem(raw, index = 0) {
-  if (raw == null) return null;
-  if (typeof raw === 'string') {
-    const details = raw.trim();
-    return details ? { details, serial: String(index + 1) } : null;
-  }
-  if (typeof raw !== 'object') return null;
-
-  const email = String(
-    raw.email || raw.mail || raw.Email || raw.e_mail || ''
-  ).trim();
-  const username = String(
-    raw.username || raw.user || raw.account || raw.Username || raw.User || ''
-  ).trim();
-  // "login" is often the email/username only — never treat it as the full credential blob alone
-  const loginOnly = String(raw.login || raw.Login || '').trim();
-  const password = String(
-    raw.password || raw.pass || raw.pwd || raw.Password || raw.pass_word || raw.passwd || ''
-  ).trim();
-  const emailPassword = String(
-    raw.email_password || raw.emailPassword || raw.mail_password || ''
-  ).trim();
-  const token = String(
-    raw.token || raw['2fa'] || raw.otp || raw.cookie || raw.auth || ''
-  ).trim();
-
-  let details = String(
-    raw.details || raw.credentials || raw.credential || raw.log || raw.content || raw.data || ''
-  ).trim();
-  // Avoid treating a bare login/email field as the entire log
-  if (!details && typeof raw.data === 'object' && raw.data) {
-    try { details = ''; } catch (_) {}
-  }
-
-  if (!details) {
-    const lines = [];
-    const idEmail = email || (loginOnly.includes('@') ? loginOnly : '');
-    const idUser = username || (loginOnly && !loginOnly.includes('@') ? loginOnly : '');
-    if (idEmail) lines.push('Email: ' + idEmail);
-    if (idUser && idUser !== idEmail) lines.push('Username: ' + idUser);
-    if (password) lines.push('Password: ' + password);
-    if (emailPassword) lines.push('Email Password: ' + emailPassword);
-    if (token) lines.push('2FA / Token: ' + token);
-    details = lines.join('\n');
-  } else {
-    // Blob present but password only in sibling fields — append so nothing is lost
-    const hasPassInBlob = /password\s*[:=]/i.test(details) || /\|[^|\n]{4,}/.test(details);
-    if (password && !hasPassInBlob) {
-      details = details + '\nPassword: ' + password;
-    }
-    if (email && !/@/.test(details)) {
-      details = 'Email: ' + email + '\n' + details;
-    }
-  }
-
-  if (!details) {
-    try {
-      const copy = { ...raw };
-      details = JSON.stringify(copy);
-    } catch (_) {
-      details = '';
-    }
-  }
-  if (!details || details === '{}' || details === 'null') return null;
-
-  const serial =
-    raw.serial != null
-      ? String(raw.serial)
-      : raw.id != null
-        ? String(raw.id)
-        : String(index + 1);
-  return { details, serial };
-}
-
-/**
- * Logs Domain sometimes returns:
- *  - data.items[]
- *  - data as array
- *  - data.logs / data.accounts
- *  - a single details blob with multiple accounts separated by blank lines
- */
-function extractLdItems(orderData) {
-  const d = orderData && orderData.data;
-  let rawList = [];
-  if (!d) {
-    // rare: top-level items
-    if (Array.isArray(orderData?.items)) rawList = orderData.items;
-  } else if (Array.isArray(d)) {
-    rawList = d;
-  } else if (Array.isArray(d.items)) {
-    rawList = d.items;
-  } else if (Array.isArray(d.logs)) {
-    rawList = d.logs;
-  } else if (Array.isArray(d.accounts)) {
-    rawList = d.accounts;
-  } else if (d.details || d.credentials || d.log) {
-    rawList = [d];
-  }
-
-  const normalized = [];
-  rawList.forEach((raw, i) => {
-    const n = normalizeLdItem(raw, i);
-    if (n) normalized.push(n);
-  });
-
-  // Split multi-account blobs (blank-line separated) into separate logs
-  const expanded = [];
-  for (const item of normalized) {
-    const parts = String(item.details)
-      .split(/\n\s*\n+/)
-      .map((p) => p.trim())
-      .filter((p) => p.length > 8);
-    if (parts.length > 1) {
-      parts.forEach((p, j) => {
-        expanded.push({
-          details: p,
-          serial: `${item.serial || 'x'}-${j + 1}`
-        });
-      });
-    } else {
-      expanded.push(item);
-    }
-  }
-  return expanded;
-}
-
-async function fetchLdOrderById(orderId) {
-  if (!orderId || !LD_KEY) return null;
-  try {
-    // Try direct GET by id (some panels support this)
-    let res = await fetch(`${LD_BASE}/logs/orders/${encodeURIComponent(orderId)}`, {
-      method: 'GET',
-      headers: { Authorization: `Bearer ${LD_KEY}`, Accept: 'application/json' }
-    });
-    if (res.ok) {
-      const json = await res.json().catch(() => null);
-      if (json) return json;
-    }
-    // Fallback: list recent orders and find match
-    res = await fetch(`${LD_BASE}/logs/orders?per_page=50`, {
-      method: 'GET',
-      headers: { Authorization: `Bearer ${LD_KEY}`, Accept: 'application/json' }
-    });
-    if (!res.ok) return null;
-    const json = await res.json().catch(() => null);
-    const list = Array.isArray(json?.data) ? json.data : (json?.data?.data || []);
-    const hit = list.find((o) => String(o.order_id || o.id) === String(orderId));
-    if (hit) return { success: true, data: hit };
-  } catch (e) {
-    console.warn('[order-logsdomain] fetchLdOrderById', e.message || e);
-  }
-  return null;
-}
-
-
 // NOTE: the "orders" table only has a single "login_credentials" text column —
 // that's what api/order.js (Fadded) and api/order-manual.js (Manual) both write
 // to, and it's the only column index.html and admin.html actually read from.
@@ -205,522 +34,38 @@ async function fetchLdOrderById(orderId) {
 // fulfilled and charged, but never actually saved — which is why it never
 // showed up in "My Orders" or the admin Orders tab. Keeping this function
 // around only to build one clean login_credentials string.
-/* formatCredentials from lib */
-
-
-async function requireAuthUser(req) {
-  const authHeader = req.headers.authorization || req.headers.Authorization || '';
-  const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7).trim() : '';
-  if (!token || token.includes('service_role')) {
-    return { error: { status: 401, message: 'Not signed in' } };
-  }
-  const { data: { user }, error } = await supabase.auth.getUser(token);
-  if (error || !user) {
-    return { error: { status: 401, message: 'Invalid or expired session' } };
-  }
-  return { user };
-}
-
-
-async function insertLogOrder(row) {
-  let { error } = await supabase.from('orders').insert(row);
-  if (error && /login_credentials_raw|schema cache|column/i.test(String(error.message || ''))) {
-    const { login_credentials_raw, ...rest } = row;
-    ({ error } = await supabase.from('orders').insert(rest));
-  }
-  return error;
-}
-
-
-// ===== Catalog sync (formerly products-logsdomain.js) =====
-
-/**
- * Sync Logs Domain categories into Supabase products.
- * Manual trigger: GET /api/products-logsdomain (from Admin button)
- *
- * Env: LOGSDOMAIN_API_KEY, SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY
- */
-
-const BASE = 'https://logsdomain.com/api/v1';
-
-function readLdStock(item) {
-  return readSupplierStock(item);
-}
-
-function stripHtml(html) {
-  if (!html) return '';
-  let text = String(html);
-  text = text
-    .replace(/&nbsp;/gi, ' ')
-    .replace(/&amp;/gi, '&')
-    .replace(/&lt;/gi, '<')
-    .replace(/&gt;/gi, '>')
-    .replace(/&quot;/gi, '"')
-    .replace(/&#39;/gi, "'");
-  text = text.replace(/<br\s*\/?>/gi, ' ').replace(/<\/(div|p|li)>/gi, ' ');
-  text = text.replace(/<[^>]*>/g, '');
-  text = text.replace(/\s+/g, ' ').trim();
+function formatCredentials(details) {
+  if (!details) return '';
+  const text = String(details);
+  const userMatch = text.match(/(?:Username|User|ID|Email|Login)\s*[:=]\s*([^\s|]+)/i);
+  const passMatch = text.match(/(?:Password|Pass)\s*[:=]\s*([^\s|]+)/i);
+  const credId = userMatch ? userMatch[1].trim() : null;
+  const credPass = passMatch ? passMatch[1].trim() : null;
+  if (credId && credPass) return `${credId}:${credPass}`;
   return text;
-}
-
-/** Match Fadded-style markup: 50–100%, rounded up to nearest 50 */
-function applyRandomMarkup(supplierPrice) {
-  const percent = 50 + Math.random() * 50;
-  const finalPrice = Math.ceil(Number(supplierPrice) * (1 + percent / 100));
-  return Math.ceil(finalPrice / 50) * 50;
-}
-
-// Kept in sync with api/products.js (Fadded) and api/sujan.js — all three
-// suppliers must sort a given kind of product into the SAME category name.
-// If you add a rule here, add it to the other two as well. The parentName
-// fallback below is LogsDomain-specific (their own category hierarchy) and
-// only applies after every shared rule has already had a chance to match.
-function categorize(name, parentName) {
-  const n = `${name || ''} ${parentName || ''}`.toUpperCase();
-  if (n.includes('PROXY')) return '9PROXY (IPS)';
-  if (n.includes('VPN') && n.includes('PHONE')) return 'PREMIUM VPN FOR PHONE';
-  if (n.includes('VPN')) return 'PREMIUM VPN FOR PC';
-  if (n.includes('CHATGPT') || n.includes('CHAT GPT') || n.includes('DEEPSEEK') || n.includes('DEEP SEEK') || n.includes('AI ACCOUNT')) return 'AI';
-  if (n.includes('ONLYFANS') || n.includes('ONLY FANS')) return 'SOCIAL NETWORKS ACCOUNTS';
-  if (n.includes('INSTAGRAM') && n.includes('FOLLOWER')) return 'INSTAGRAM / HIGH FOLLOWERS';
-  if (n.includes('INSTAGRAM')) return 'ALL COUNTRIES INSTAGRAM';
-  if (n.includes('TIKTOK') || n.includes('TITKOK') || n.includes('TIK TOK')) {
-    if (n.includes('FOLLOWER')) return 'TIKTOK/HIGH FOLLOWERS';
-    return 'ALL COUNTRIES TIKTOK';
-  }
-  if (n.includes('DATING')) return 'DATING SITES';
-  const isFacebookStyle = n.includes('FACEBOOK') || n.includes('MARKETPLACE') || n.includes('2FA') || n.includes('FRIENDS') || n.includes('PROFILE & COVER') || n.includes('REGISTERED FROM');
-  if (isFacebookStyle) {
-    if (n.includes('RANDOM')) return 'RANDOM COUNTRY FACEBOOK';
-    if (n.includes('0-5') || n.includes('0-30') || n.includes('MARKETPLACE + 2FA') || (n.includes('MARKETPLACE') && !n.includes('30+'))) {
-      return 'COUNTRIES FACEBOOK (0-5 FRIENDS)';
-    }
-    return 'COUNTRIES FACEBOOK (30+ FRIENDS)';
-  }
-  if (n.includes('TWITTER') || n.includes(' X ') || n.startsWith('X ')) return 'X / TWITTER';
-  if (n.includes('REDDIT')) return 'REDDIT';
-  if (n.includes('SNAPCHAT')) return 'SNAPCHAT';
-  if (n.includes('LINKEDIN')) return 'LINKEDIN';
-  if (n.includes('GMAIL') || n.includes('HOTMAIL') || n.includes('GMX') || n.includes('MAIL.RU') || n.includes('TEXPLUS')) return 'MAILS';
-  if (n.includes('NETFLIX') || n.includes('DISNEY') || n.includes('PRIME VIDEO') || n.includes('APPLE MUSIC')) return 'STREAMING SITE';
-  if (n.includes('STEAM')) return 'GAME ACCOUNTS';
-  if (n.includes('GOOGLE VOICE') || n.includes('TEXT FREE') || n.includes('TALKATONE')) return 'TEXTING APP';
-  if (n.includes('TWITCH') || n.includes('DISCORD') || n.includes('PINTEREST') || n.includes('QUORA') || n.includes('CANVA')) return 'SOCIAL NETWORKS ACCOUNTS';
-  if (parentName) return String(parentName).toUpperCase();
-  return 'OTHER';
-}
-
-async function fetchAllCategories(apiKey) {
-  const all = [];
-  let page = 1;
-  const perPage = 100;
-
-  // API may return a flat array or paginated object — handle both
-  while (page <= 50) {
-    const url = `${BASE}/logs/categories?per_page=${perPage}&page=${page}`;
-    const res = await fetch(url, {
-      method: 'GET',
-      headers: {
-        Accept: 'application/json',
-        Authorization: `Bearer ${apiKey}`
-      }
-    });
-
-    if (!res.ok) {
-      const text = await res.text();
-      throw new Error(`Logs Domain categories error ${res.status}: ${text.slice(0, 300)}`);
-    }
-
-    const json = await res.json();
-    if (!json.success) {
-      throw new Error(json.message || 'Logs Domain reported failure');
-    }
-
-    const batch = Array.isArray(json.data)
-      ? json.data
-      : (json.data?.data || json.data?.items || json.data?.categories || []);
-
-    if (!Array.isArray(batch) || !batch.length) break;
-    all.push(...batch);
-
-    const lastPage = Number(
-      json.last_page || json.data?.last_page || json.meta?.last_page || json.data?.meta?.last_page || 0
-    );
-    const nextUrl = json.next_page_url || json.data?.next_page_url || json.links?.next;
-    if (lastPage && page >= lastPage) break;
-    if (!lastPage && !nextUrl && batch.length < perPage) break;
-    page += 1;
-  }
-
-  return all;
-}
-
-
-async function handleLogsDomainSync(req, res) {
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
-  res.setHeader('Content-Type', 'application/json');
-
-  if (req.method === 'OPTIONS') return res.status(200).end();
-
-  try {
-    if (!process.env.SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
-      return res.status(500).json({
-        success: false,
-        message: 'Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY'
-      });
-    }
-    if (!process.env.LOGSDOMAIN_API_KEY) {
-      return res.status(500).json({
-        success: false,
-        message: 'Missing LOGSDOMAIN_API_KEY'
-      });
-    }
-
-    const supabase = createClient(
-      process.env.SUPABASE_URL,
-      process.env.SUPABASE_SERVICE_ROLE_KEY
-    );
-
-    const categories = await fetchAllCategories(process.env.LOGSDOMAIN_API_KEY);
-    let newCount = 0;
-    let updatedCount = 0;
-    let withStock = 0;
-
-    for (const item of categories) {
-      const id = item.id;
-      if (id == null) continue;
-
-      const productKey = `ld_${id}`;
-      const name = item.name || `Category ${id}`;
-      const parentName = item.parent_category?.name || '';
-      const cleanDescription = stripHtml(item.description || '');
-      const supplierPrice = Number(item.price) || 0;
-      const stock = readLdStock(item);
-      if (stock > 0) withStock += 1;
-
-      const { data: existing } = await supabase
-        .from('products')
-        .select('product_key, price, name, admin_hidden')
-        .eq('product_key', productKey)
-        .maybeSingle();
-
-      if (existing) {
-        // Logs Domain's numeric category id is what actually gets ordered
-        // (see api/order-logsdomain.js), so if they ever reassign/recycle an
-        // id to a different category, the ONLY way to stay correct is to keep
-        // this product's name/description in lockstep with whatever that id
-        // currently means to them — otherwise the storefront shows one thing
-        // while orders fulfill as another. This log line is kept so a rename
-        // is still visible in the sync output, even though it's now applied
-        // automatically instead of silently going stale.
-        if (existing.name && name && existing.name.trim() !== String(name).trim()) {
-          console.warn(
-            `[products-logsdomain] ${productKey} renamed by supplier: "${existing.name}" → "${name}". Catalog updated to match.`
-          );
-        }
-        // EXISTING: refresh name/description + supplier cost + stock.
-        // Your resale price and category are still never touched here — those
-        // stay exactly as you set them in the admin panel. `source` IS
-        // re-set here (even though it never changes) specifically to
-        // backfill it on rows synced before this field existed — without
-        // this, only brand-new products ever got tagged and the admin
-        // dashboard's supplier badge silently stayed blank for the rest of
-        // an existing catalog forever.
-        updatedCount += 1;
-        const { error } = await supabase
-          .from('products')
-          .update({
-            name,
-            description: cleanDescription,
-            display_description: cleanDescription,
-            supplier_price: supplierPrice,
-            stock_quantity: stock,
-            is_available: existing.admin_hidden ? false : stock > 0,
-            source: 'logsdomain',
-            updated_at: new Date().toISOString()
-          })
-          .eq('product_key', productKey);
-
-        if (error) {
-          console.error(`Logs Domain update ${productKey}:`, error.message);
-        }
-      } else {
-        const { error } = await supabase
-          .from('products')
-          .insert({
-            product_key: productKey,
-            name,
-            description: cleanDescription,
-            display_description: cleanDescription,
-            supplier_price: supplierPrice,
-            price: applyRandomMarkup(supplierPrice),
-            stock_quantity: stock,
-            is_available: stock > 0,
-            category: 'OTHER',
-            source: 'logsdomain',
-            updated_at: new Date().toISOString()
-          });
-
-        if (error) {
-          console.error(`Logs Domain insert ${productKey}:`, error.message);
-        } else {
-          newCount += 1;
-        }
-      }
-    }
-
-    return res.status(200).json({
-      success: true,
-      synced: categories.length,
-      new_products: newCount,
-      updated_products: updatedCount,
-      in_stock_from_api: withStock,
-      source: 'logsdomain',
-      note: 'Walks every LogsDomain category page so new uploads are included'
-    });
-  } catch (error) {
-    console.error('products-logsdomain error:', error);
-    return res.status(500).json({
-      success: false,
-      message: error.message || 'Internal server error'
-    });
-  }
-}
-
-// ===== Order dispatcher =====
-
-// ----- Catalog sync (admin-safe): GET ?action=sync -----
-function applyRandomMarkupLd(supplierPrice) {
-  const percent = 50 + Math.random() * 50;
-  const finalPrice = Math.ceil(Number(supplierPrice) * (1 + percent / 100));
-  return Math.ceil(finalPrice / 50) * 50;
-}
-
-function categorizeLd(name) {
-  const n = (name || '').toUpperCase();
-  if (n.includes('TWITTER') || n.includes(' X ') || n.startsWith('X ')) return 'X / TWITTER';
-  if (n.includes('INSTAGRAM')) return 'INSTAGRAM';
-  if (n.includes('TIKTOK') || n.includes('TIK TOK')) return 'TIKTOK';
-  if (n.includes('FACEBOOK')) return 'FACEBOOK';
-  if (n.includes('DISCORD')) return 'DISCORD';
-  if (n.includes('TELEGRAM')) return 'TELEGRAM';
-  if (n.includes('SNAPCHAT')) return 'SNAPCHAT';
-  if (n.includes('YOUTUBE')) return 'YOUTUBE';
-  return 'LOGS';
-}
-
-async function fetchLdPaged(path) {
-  const all = [];
-  let page = 1;
-  const perPage = 50;
-  while (page <= 6) {
-    const url = `${LD_BASE}${path}${path.includes('?') ? '&' : '?'}per_page=${perPage}&page=${page}`;
-    const res = await fetch(url, {
-      method: 'GET',
-      headers: { Accept: 'application/json', Authorization: `Bearer ${LD_KEY}` },
-      signal: AbortSignal.timeout(12000)
-    });
-    if (!res.ok) {
-      if (page === 1 && res.status === 404) return [];
-      if (page === 1) {
-        const text = await res.text();
-        throw new Error(`Logs Domain ${path} error ${res.status}: ${text.slice(0, 300)}`);
-      }
-      break;
-    }
-    const json = await res.json();
-    if (json && json.success === false && page === 1) return [];
-    const batch = Array.isArray(json.data)
-      ? json.data
-      : (json.data?.data || json.data?.categories || json.data?.products || json.data?.items || json.products || json.categories || []);
-    if (!Array.isArray(batch) || batch.length === 0) break;
-    const batchFirst = String(batch[0]?.id ?? batch[0]?.category_id ?? batch[0]?.product_id ?? '');
-    if (page > 1 && all[0] && String(all[0].id ?? all[0].category_id ?? '') === batchFirst) break;
-    all.push(...batch);
-    const lastPage = Number(
-      json.last_page || json.data?.last_page || json.meta?.last_page || json.data?.meta?.last_page || 0
-    );
-    const nextUrl = json.next_page_url || json.data?.next_page_url || json.links?.next;
-    if (lastPage && page >= lastPage) break;
-    if (!lastPage && !nextUrl && batch.length < perPage) break;
-    page += 1;
-  }
-  return all;
-}
-
-async function fetchAllLdCategories() {
-  const fromCats = await fetchLdPaged('/logs/categories');
-  let fromProducts = [];
-  try {
-    fromProducts = await fetchLdPaged('/logs/products');
-  } catch (e) {
-    console.warn('[ld sync] /logs/products', e.message || e);
-  }
-  const byId = new Map();
-  for (const row of [...fromCats, ...fromProducts]) {
-    const id = row && (row.id ?? row.category_id ?? row.product_id);
-    if (id == null) continue;
-    const prev = byId.get(String(id));
-    if (!prev) {
-      byId.set(String(id), row);
-      continue;
-    }
-    if (readLdStock(row) > readLdStock(prev)) byId.set(String(id), { ...prev, ...row });
-  }
-  return Array.from(byId.values());
-}
-
-async function handleLdProductSync(req, res) {
-  if (!LD_KEY) {
-    return res.status(500).json({ success: false, message: 'LOGSDOMAIN_API_KEY not configured' });
-  }
-  try {
-    const categories = await fetchAllLdCategories();
-    let newCount = 0;
-    let updatedCount = 0;
-    const keys = categories
-      .map((c) => {
-        const id = c.id ?? c.category_id;
-        return id != null ? `ld_${id}` : null;
-      })
-      .filter(Boolean);
-
-    const existingKeySet = new Set();
-    const adminHiddenSet = new Set();
-    for (let i = 0; i < keys.length; i += 200) {
-      const batch = keys.slice(i, i + 200);
-      const { data } = await supabase.from('products').select('product_key, admin_hidden').in('product_key', batch);
-      (data || []).forEach((r) => {
-        if (r.product_key) existingKeySet.add(String(r.product_key));
-        if (r.admin_hidden) adminHiddenSet.add(String(r.product_key));
-      });
-    }
-
-    for (const c of categories) {
-      const id = c.id ?? c.category_id;
-      if (id == null) continue;
-      const product_key = `ld_${id}`;
-      const name = String(c.name || c.category_name || `Log ${id}`).trim();
-      const supplierPrice = Number(c.price ?? c.unit_price ?? c.rate ?? 0) || 0;
-      const stock = readLdStock(c);
-      const now = new Date().toISOString();
-
-      if (existingKeySet.has(product_key)) {
-        const patch = {
-          supplier_price: supplierPrice,
-          stock_quantity: stock,
-          source: 'logsdomain',
-          updated_at: now
-        };
-        if (stock <= 0) patch.is_available = false;
-        else if (adminHiddenSet.has(product_key)) { /* admin hid — stay hidden */ }
-        else patch.is_available = true;
-        const { error } = await supabase.from('products').update(patch).eq('product_key', product_key);
-        if (error) console.error('[ld sync] update', product_key, error.message);
-        else updatedCount++;
-      } else {
-        const { error } = await supabase.from('products').insert({
-          product_key,
-          name,
-          description: c.description || null,
-          display_description: c.description || null,
-          supplier_price: supplierPrice,
-          price: applyRandomMarkupLd(supplierPrice || 100),
-          stock_quantity: stock,
-          is_available: stock > 0,
-          category: 'OTHER',
-          source: 'logsdomain',
-          updated_at: now
-        });
-        if (error) console.error('[ld sync] insert', product_key, error.message);
-        else newCount += 1;
-      }
-    }
-
-    const sample = categories[0] ? Object.keys(categories[0]) : [];
-    const withStock = categories.filter((c) => readLdStock(c) > 0).length;
-    return res.status(200).json({
-      success: true,
-      source: 'logsdomain',
-      synced: categories.length,
-      new_products: newCount,
-      updated_products: updatedCount,
-      in_stock_from_api: withStock,
-      sample_fields: sample
-    });
-  } catch (err) {
-    console.error('[ld product sync]', err);
-    return res.status(500).json({ success: false, message: err.message || 'Logs Domain sync failed' });
-  }
-}
-
-
-
-/** Idempotency: same external_order_id for same user → return existing order, no second charge/delivery */
-async function findExistingLogOrder(userId, orderRef) {
-  if (!orderRef || !userId) return null;
-  try {
-    const { data } = await supabase
-      .from('orders')
-      .select('order_id, product_name, quantity, amount, status, login_credentials, supplier_ref, created_at')
-      .eq('order_id', String(orderRef))
-      .eq('user_id', userId)
-      .maybeSingle();
-    if (data && String(data.status || '').toLowerCase() !== 'failed') return data;
-  } catch (_) {}
-  return null;
 }
 
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
   res.setHeader('Content-Type', 'application/json');
 
   if (req.method === 'OPTIONS') return res.status(200).end();
-  // Catalog sync (cron / manual) — does not overwrite admin price/category
-  const syncAction = String((req.query && req.query.action) || '') === 'sync';
-  if (syncAction && (req.method === 'GET' || req.method === 'POST')) {
-    return handleLdProductSync(req, res);
-  }
-
-
-  // Catalog sync (formerly api/products-logsdomain.js)
-  // GET /api/order-logsdomain  |  GET/POST ?action=sync
-  const q = req.query || {};
-  let bodyPeek = {};
-  try {
-    if (req.method === 'POST' && req.body) {
-      bodyPeek = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : (req.body || {});
-    }
-  } catch (_) {}
-  const action = String(q.action || bodyPeek.action || '').toLowerCase();
-  if (req.method === 'GET' || action === 'sync') {
-    return handleLogsDomainSync(req, res);
-  }
-
   if (req.method !== 'POST') {
     return res.status(405).json({ success: false, message: 'Method not allowed' });
   }
-
-  // IDOR protection: never trust body.user_id — bind to JWT only
-  const auth = await requireAuthUser(req);
-  if (auth.error) {
-    return res.status(auth.error.status).json({ success: false, message: auth.error.message });
-  }
-  const user_id = auth.user.id;
 
   const body = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : (req.body || {});
   const {
     product_key,
     quantity = 1,
-    external_order_id
+    external_order_id,
+    user_id
   } = body;
 
-  if (!product_key) {
-    return res.status(400).json({ success: false, message: 'product_key is required' });
+  if (!product_key || !user_id) {
+    return res.status(400).json({ success: false, message: 'product_key and user_id are required' });
   }
 
   if (!LD_KEY) {
@@ -735,38 +80,19 @@ export default async function handler(req, res) {
     });
   }
 
-  const qty = Math.max(1, Math.min(10, parseInt(quantity, 10) || 1));
+  const qty = Math.max(1, Math.min(100, parseInt(quantity, 10) || 1));
   let originalBalance = 0;
   let total = 0;
   let productName = '';
   let customerId = null;
   let deducted = false;
-    if (external_order_id) {
-      const existing = await findExistingLogOrder(user_id, external_order_id);
-      if (existing) {
-        const { data: balRow } = await supabase.from('profiles').select('balance').eq('id', user_id).maybeSingle();
-        return res.status(200).json({
-          success: true,
-          replayed: true,
-          message: 'Order already completed',
-          data: {
-            order_id: existing.order_id,
-            login_credentials: existing.login_credentials,
-            items: existing.login_credentials ? [{ details: existing.login_credentials }] : [],
-            quantity: existing.quantity,
-            new_balance: Number(balRow?.balance || 0)
-          }
-        });
-      }
-    }
-
   let balanceColumn = 'balance_ngn';
 
   try {
     // 1. Product from DB
     const { data: product, error: prodErr } = await supabase
       .from('products')
-      .select('id, product_key, name, price, stock_quantity, source, description, display_description')
+      .select('id, product_key, name, price, stock_quantity, source')
       .eq('product_key', product_key)
       .single();
 
@@ -784,39 +110,12 @@ export default async function handler(req, res) {
         .from('profiles')
         .select('balance, customer_id')
         .eq('id', user_id)
-        .maybeSingle();
+        .single();
       if (r1.error || !r1.data) {
         console.error('[order-logsdomain] profile lookup failed:', r1.error);
-        const email = auth.user.email || null;
-        const name =
-          auth.user.user_metadata?.full_name ||
-          auth.user.user_metadata?.name ||
-          (email ? String(email).split('@')[0] : 'User');
-        const customer_id = 'MJ' + String(Date.now()).slice(-8) + Math.random().toString(36).slice(2, 5).toUpperCase();
-        const { error: upErr } = await supabase.from('profiles').upsert({
-          id: user_id,
-          email,
-          full_name: name,
-          customer_id,
-          balance: 0,
-          updated_at: new Date().toISOString()
-        }, { onConflict: 'id' });
-        if (upErr) {
-          console.error('[order-logsdomain] profile upsert', upErr.message);
-          return res.status(400).json({ success: false, message: 'User profile not found' });
-        }
-        const again = await supabase
-          .from('profiles')
-          .select('balance, customer_id')
-          .eq('id', user_id)
-          .maybeSingle();
-        if (!again.data) {
-          return res.status(400).json({ success: false, message: 'User profile not found' });
-        }
-        profile = again.data;
-      } else {
-        profile = r1.data;
+        return res.status(400).json({ success: false, message: 'User profile not found' });
       }
+      profile = r1.data;
       balanceColumn = 'balance';
       originalBalance = Number(profile.balance || 0);
       customerId = profile.customer_id;
@@ -832,7 +131,7 @@ export default async function handler(req, res) {
     }
 
     // 3. Debit customer
-    let newBalance = originalBalance - total;
+    const newBalance = originalBalance - total;
     const { error: deductErr } = await supabase
       .from('profiles')
       .update({ [balanceColumn]: newBalance })
@@ -903,20 +202,9 @@ export default async function handler(req, res) {
       });
     }
 
-    // 6. Success → save orders (normalize every response shape)
-    let items = extractLdItems(orderData);
-    const supplierOrderId = orderData.data?.order_id || orderData.data?.id || orderRef;
-    const supplierQty = Number(orderData.data?.quantity) || qty;
-
-    // If supplier says qty>1 but we only got 1 item blob, try re-fetch order
-    if (items.length < supplierQty || items.length < qty) {
-      const refetch = await fetchLdOrderById(supplierOrderId);
-      if (refetch) {
-        const more = extractLdItems(refetch);
-        if (more.length > items.length) items = more;
-      }
-    }
-
+    // 6. Success → save orders
+    const items = orderData.data?.items || [];
+    const supplierOrderId = orderData.data?.order_id || orderRef;
     const detailsText = items.map((i) => i.details).filter(Boolean).join('\n\n');
 
     // Traceability for the "wrong product delivered" class of bug: log exactly
@@ -933,102 +221,47 @@ export default async function handler(req, res) {
       supplier_items_raw: items
     });
 
-    // ONE orders row for the whole purchase — all logs under supplierOrderId.
-    // Numbered 1. 2. 3. … so user/admin see every log without N database rows.
-    const deliveredCount = items.length;
-    const formatHint = product.display_description || product.description || product.name || '';
-    let savedCount = 0;
-
-    if (deliveredCount > 0) {
-      const combinedCreds =
-        formatMultiLogCredentials(items, formatHint) ||
-        formatCredentials(items[0].details, formatHint) ||
-        String(items[0].details || '').trim() ||
-        null;
-      const combinedRaw = joinRawLogDetails(items) || detailsText || null;
-      const supplierRefs = items
-        .map((it) => it.serial || it.id)
-        .filter(Boolean)
-        .map(String)
-        .join(', ');
-      const insertErr = await insertLogOrder({
-        // Customer-facing MJ id — never the supplier's logs-api-… id
-        order_id: String(orderRef),
-        user_id,
-        product_id: product.id,
-        product_code: product_key,
-        product_name: productName,
-        product_type: 'log',
-        description: (product.display_description || product.description || '').trim() || null,
-        quantity: deliveredCount,
-        amount: total,
-        status: 'completed',
-        login_credentials: combinedCreds,
-        login_credentials_raw: combinedRaw,
-        supplier_ref: [String(supplierOrderId), supplierRefs].filter(Boolean).join(' | ') || String(supplierOrderId),
-        guide_url: 'https://t.me/mj_hub_tg'
-      });
-      if (insertErr) {
-        console.error('[order-logsdomain] FAILED to save order row:', insertErr.message, {
-          order_id: orderRef,
-        supplier_order_id: supplierOrderId, user_id, product_key, qty: deliveredCount
+    if (items.length) {
+      for (const item of items) {
+        const { error: insertErr } = await supabase.from('orders').insert({
+          order_id: supplierOrderId,
+          user_id,
+          product_id: product.id,
+          product_code: product_key,
+          product_name: productName,
+          product_type: 'log',
+          description: (product.display_description || product.description || '').trim() || null,
+          quantity: 1,
+          amount: product.price,
+          status: 'completed',
+          login_credentials: formatCredentials(item.details),
+          supplier_ref: String(item.serial || ''),
+          guide_url: 'https://t.me/mj_hub_tg'
         });
-      } else {
-        savedCount = deliveredCount;
+        if (insertErr) {
+          console.error('[order-logsdomain] FAILED to save order row — customer was charged and delivered credentials, but this will not appear in My Orders / admin Orders:', insertErr.message, { order_id: supplierOrderId, user_id, product_key });
+        }
       }
     } else {
       // fallback single row if API returns no items array
-      const insertErr = await insertLogOrder({
-        order_id: String(orderRef),
+      const { error: insertErr } = await supabase.from('orders').insert({
+        order_id: supplierOrderId,
         user_id,
         product_id: product.id,
         product_code: product_key,
         product_name: productName,
         product_type: 'log',
-        description: (product.display_description || product.description || '').trim() || null,
+        description: JSON.stringify(orderData.data || {}),
         quantity: qty,
         amount: total,
         status: 'completed',
-        login_credentials: formatCredentials(detailsText, formatHint) || detailsText || 'Delivered — see order for details',
-        login_credentials_raw: detailsText || null,
-        supplier_ref: String(supplierOrderId),
+        login_credentials: detailsText || 'Delivered — see order for details',
         guide_url: 'https://t.me/mj_hub_tg'
       });
       if (insertErr) {
         console.error('[order-logsdomain] FAILED to save order row (fallback branch):', insertErr.message, { order_id: supplierOrderId, user_id, product_key });
-      } else {
-        savedCount = 1;
       }
     }
-
-    // If supplier delivered fewer items than paid quantity, refund the shortfall
-    const shortfall = Math.max(0, qty - Math.max(deliveredCount, savedCount > 0 && deliveredCount === 0 ? 1 : deliveredCount));
-    let refundedShortfall = 0;
-    if (shortfall > 0) {
-      refundedShortfall = shortfall * Number(product.price || 0);
-      const balanceAfterShortfall = Number(newBalance) + refundedShortfall;
-      await supabase
-        .from('profiles')
-        .update({ [balanceColumn]: balanceAfterShortfall })
-        .eq('id', user_id);
-      newBalance = balanceAfterShortfall;
-      await supabase.from('transactions').insert({
-        user_id,
-        customer_id: customerId,
-        type: 'refund',
-        category: productName,
-        title: 'Automatic Refund',
-        subtitle: `Partial delivery: paid qty ${qty}, received ${deliveredCount} — shortfall refunded`,
-        amount: `₦${refundedShortfall.toLocaleString()}`,
-        amount_ngn: refundedShortfall,
-        status: 'refunded',
-        notes: JSON.stringify({ requested: qty, delivered: deliveredCount, supplierOrderId })
-      });
-      console.warn('[order-logsdomain] partial delivery refund', { qty, deliveredCount, refundedShortfall, supplierOrderId });
-    }
-
-    const chargedQty = Math.max(deliveredCount, savedCount > 0 && deliveredCount === 0 ? 1 : deliveredCount);
-    const chargedTotal = Math.max(0, total - refundedShortfall);
 
     await supabase.from('transactions').insert({
       user_id,
@@ -1036,9 +269,9 @@ export default async function handler(req, res) {
       type: 'purchase',
       category: productName,
       title: productName,
-      subtitle: `Qty: ${chargedQty}${shortfall ? ` of ${qty} requested` : ''} · Logs Domain`,
-      amount: `₦${chargedTotal.toLocaleString()}`,
-      amount_ngn: chargedTotal,
+      subtitle: `Qty: ${qty} · Logs Domain`,
+      amount: `₦${total.toLocaleString()}`,
+      amount_ngn: total,
       status: 'completed',
       product_details: detailsText,
       supplier_order: orderData.data
@@ -1047,38 +280,21 @@ export default async function handler(req, res) {
     await supabase
       .from('products')
       .update({
-        stock_quantity: Math.max(0, (product.stock_quantity || 0) - chargedQty),
-        is_available: (product.stock_quantity || 0) - chargedQty > 0
+        stock_quantity: Math.max(0, (product.stock_quantity || 0) - qty),
+        is_available: (product.stock_quantity || 0) - qty > 0
       })
       .eq('product_key', product_key);
 
-    const formattedItems = items.length
-      ? items.map((i) => ({
-          details: formatCredentials(i.details, formatHint) || String(i.details || '').trim(),
-          serial: i.serial
-        }))
-      : [{ details: formatCredentials(detailsText, formatHint) || detailsText || 'Order completed' }];
-    const loginCredentials =
-      formatMultiLogCredentials(items.length ? items : [{ details: detailsText }], formatHint) ||
-      formattedItems.map((i) => i.details).filter(Boolean).join('\n\n') ||
-      detailsText ||
-      '';
-
     return res.status(200).json({
       success: true,
-      message: shortfall > 0
-        ? `Delivered ${deliveredCount} of ${qty}. Shortfall of ${shortfall} was refunded to your wallet.`
-        : 'Order fulfilled successfully',
+      message: 'Order fulfilled successfully',
       data: {
-        items: formattedItems,
-        login_credentials: loginCredentials,
-        total_amount: chargedTotal,
+        items: items.length
+          ? items.map((i) => ({ details: i.details, serial: i.serial }))
+          : [{ details: detailsText || 'Order completed' }],
+        total_amount: total,
         new_balance: newBalance,
-        order_id: orderRef,
-        supplier_order_id: supplierOrderId,
-        quantity_requested: qty,
-        quantity_delivered: deliveredCount,
-        quantity_saved: savedCount,
+        order_id: supplierOrderId,
         source: 'logsdomain'
       }
     });
