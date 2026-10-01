@@ -893,6 +893,7 @@ function withLagos(opts) { return Object.assign({ timeZone: 'Africa/Lagos' }, op
  <div class="metric-card"><div class="metric-label">Owlet (Boosters)</div><div class="metric-value" id="balOwlet"> </div><div class="metric-sub" id="balOwletSub">Loading…</div></div>
  <div class="metric-card"><div class="metric-label">SMS-Bus (Server 2)</div><div class="metric-value" id="balSmsbus"> </div><div class="metric-sub" id="balSmsbusSub">Loading…</div></div>
  <div class="metric-card"><div class="metric-label">GotSMS (USA rental)</div><div class="metric-value" id="balGotsms"> </div><div class="metric-sub" id="balGotsmsSub">Loading…</div></div>
+ <div class="metric-card"><div class="metric-label">BulkMail</div><div class="metric-value" id="balBulkmail">—</div><div class="metric-sub" id="balBulkmailSub">Loading…</div></div>
  </div>
  </div>
  <div class="panel">
@@ -2161,6 +2162,7 @@ async function loadSupplierBalances() {
  renderSupplierBalance('Owlet', data.suppliers.owlet);
  renderSupplierBalance('Smsbus', data.suppliers.smsbus);
  renderSupplierBalance('Gotsms', data.suppliers.gotsms);
+ renderSupplierBalance('Bulkmail', data.suppliers.bulkmail);
  } catch (err) {
  console.error('Supplier balance error at step:', step, err.name, err.message, err.stack);
  showAdminToast(`Supplier balance check failed while ${step}: ` + (err.message || 'network error'), 'error');
@@ -4003,7 +4005,7 @@ async function syncAllSuppliersNow() {
  setSyncButtonLoading(sBtn, true, '<i class="fas fa-sync"></i> Sync Sujan Dept.');
  setSyncButtonLoading(cBtn, true, '<i class="fas fa-sync"></i> Sync ClassyTee');
  try {
- const [fRes, lRes, sRes, cRes] = await Promise.all([
+ const [fRes, lRes, bmRes, sRes, cRes] = await Promise.all([
  fetch('/api/order?action=sync'),
  fetch('/api/order-logsdomain?action=sync'),
  fetch('/api/order-logsdomain?action=bulkmail_sync'),
@@ -4013,6 +4015,7 @@ async function syncAllSuppliersNow() {
  const [fadded, ld, bm, sujan, classy] = await Promise.all([
  fRes.json().catch(() => ({})),
  lRes.json().catch(() => ({})),
+ bmRes.json().catch(() => ({})),
  sRes.json().catch(() => ({})),
  cRes.json().catch(() => ({}))
  ]);
