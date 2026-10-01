@@ -2823,21 +2823,24 @@ async function pollGrizzlySync() {
 
 
 async function syncBulkmailCatalog() {
-  const prog = document.getElementById('logsdomainSyncProgress') || document.getElementById('logsdomainSyncProgress2');
-  if (prog) prog.textContent = 'Syncing BulkMail…';
+  const btn = document.getElementById('btnSyncBulkmail');
+  const idle = '<i class="fas fa-sync"></i> Sync BulkMail';
+  if (typeof setSyncButtonLoading === 'function') setSyncButtonLoading(btn, true, idle);
+  else if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-sync fa-spin"></i> Syncing…'; }
   try {
-    const res = await fetch('/api/order-logsdomain?action=bulkmail_sync');
-    const data = await res.json();
+    const res = await fetch('/api/order-logsdomain?action=bulkmail_sync', { method: 'GET', headers: { 'Accept': 'application/json' } });
+    const data = await res.json().catch(() => ({}));
     if (data.success) {
-      if (prog) prog.textContent = `BulkMail OK — synced ${data.synced || 0}, new ${data.new_products || 0}, updated ${data.updated_products || 0}`;
-      if (typeof showToast === 'function') showToast('BulkMail sync complete', 'success');
+      alert(`BulkMail sync complete\nSynced: ${data.synced || 0}\nNew: ${data.new_products || 0}\nUpdated: ${data.updated_products || 0}`);
+      try { await loadProducts(); } catch (_) {}
     } else {
-      if (prog) prog.textContent = 'BulkMail failed: ' + (data.message || 'error');
-      if (typeof showToast === 'function') showToast(data.message || 'BulkMail sync failed', 'error');
+      alert('BulkMail sync failed: ' + (data.message || ('HTTP ' + res.status)));
     }
   } catch (e) {
-    if (prog) prog.textContent = 'BulkMail error';
-    if (typeof showToast === 'function') showToast(e.message || 'BulkMail sync error', 'error');
+    alert('BulkMail sync failed: ' + (e.message || e));
+  } finally {
+    if (typeof setSyncButtonLoading === 'function') setSyncButtonLoading(btn, false, idle);
+    else if (btn) { btn.disabled = false; btn.innerHTML = idle; }
   }
 }
 
@@ -3940,7 +3943,7 @@ async function syncLogsDomainNow() {
  const idle = '<i class="fas fa-sync"></i> Sync Logs Domain';
  setSyncButtonLoading(btn, true, idle);
  try {
- const res = await fetch('/api/order-logsdomain?action=sync');
+ const res = await fetch('/api/order-logsdomain?action=sync', { method: 'GET', headers: { 'Accept': 'application/json' } });
  const data = await res.json();
  alert(
  data.success
@@ -3999,16 +4002,18 @@ async function syncAllSuppliersNow() {
  const lBtn = document.getElementById('btnSyncLogsDomain');
  const sBtn = document.getElementById('btnSyncSujan');
  const cBtn = document.getElementById('btnSyncClassy');
+ const bmBtn = document.getElementById('btnSyncBulkmail');
  setSyncButtonLoading(btn, true, idle);
  setSyncButtonLoading(fBtn, true, '<i class="fas fa-sync"></i> Sync Fadded');
  setSyncButtonLoading(lBtn, true, '<i class="fas fa-sync"></i> Sync Logs Domain');
+ setSyncButtonLoading(bmBtn, true, '<i class="fas fa-sync"></i> Sync BulkMail');
  setSyncButtonLoading(sBtn, true, '<i class="fas fa-sync"></i> Sync Sujan Dept.');
  setSyncButtonLoading(cBtn, true, '<i class="fas fa-sync"></i> Sync ClassyTee');
  try {
  const [fRes, lRes, bmRes, sRes, cRes] = await Promise.all([
  fetch('/api/order?action=sync'),
- fetch('/api/order-logsdomain?action=sync'),
- fetch('/api/order-logsdomain?action=bulkmail_sync'),
+ fetch('/api/order-logsdomain?action=sync', { method: 'GET', headers: { 'Accept': 'application/json' } }),
+ fetch('/api/order-logsdomain?action=bulkmail_sync', { method: 'GET', headers: { 'Accept': 'application/json' } }),
  fetch('/api/sujan'),
  fetch('/api/classy')
  ]);
@@ -4046,6 +4051,7 @@ async function syncAllSuppliersNow() {
  setSyncButtonLoading(fBtn, false, '<i class="fas fa-sync"></i> Sync Fadded');
  setSyncButtonLoading(lBtn, false, '<i class="fas fa-sync"></i> Sync Logs Domain');
  setSyncButtonLoading(sBtn, false, '<i class="fas fa-sync"></i> Sync Sujan Dept.');
+ setSyncButtonLoading(bmBtn, false, '<i class="fas fa-sync"></i> Sync BulkMail');
  setSyncButtonLoading(cBtn, false, '<i class="fas fa-sync"></i> Sync ClassyTee');
  }
 }
