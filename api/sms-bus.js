@@ -1,0 +1,3672 @@
+import { createClient } from '@supabase/supabase-js';
+import { applyMarkup } from '../lib/pricing.js';
+
+/**
+ * SMS-BUS integration — OTP (with reuse) + long-term rentals.
+ *
+ * Env: SMSBUS_API_TOKEN (or SMS_BUS_TOKEN), SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY
+ *
+ * OTP (https://sms-bus.com/api/control):
+ *   GET  ?action=balance
+ *   GET  ?action=countries
+ *   GET  ?action=projects
+ *   GET  ?action=prices&country_id=
+ *   POST ?action=order   { country_id, project_id, reuse? }
+ *   POST ?action=check   { order_id }          // request_id
+ *   POST ?action=cancel  { order_id }
+ *   POST ?action=reuse   { country_id, project_id, mobile_number }
+ *
+ * Rent (https://api.sms-bus.com):
+ *   GET  ?action=rent_areas
+ *   GET  ?action=rent_prices&area_code=
+ *   POST ?action=rent_order  { area_code, time }  // time = months
+ *   GET  ?action=rent_sms&order_id= | mobile_number=
+ *   POST ?action=rent_renew  { area_code, mobile_number, time }
+ *   POST ?action=rent_cancel { order_id }  // provider must accept; then wallet credit
+ */
+
+const OTP_BASE = 'https://sms-bus.com/api/control';
+const RENT_BASE = 'https://api.sms-bus.com';
+
+const RENT_AREA_COUNTRY = {
+  US: 'United States', USA: 'United States', CA: 'Canada', GB: 'United Kingdom', UK: 'United Kingdom',
+  AU: 'Australia', DE: 'Germany', FR: 'France', NL: 'Netherlands', SE: 'Sweden', NO: 'Norway',
+  FI: 'Finland', DK: 'Denmark', PL: 'Poland', ES: 'Spain', IT: 'Italy', IE: 'Ireland',
+  NZ: 'New Zealand', PH: 'Philippines', ID: 'Indonesia', MY: 'Malaysia', SG: 'Singapore',
+  TH: 'Thailand', VN: 'Vietnam', IN: 'India', PK: 'Pakistan', BD: 'Bangladesh', NG: 'Nigeria',
+  ZA: 'South Africa', KE: 'Kenya', GH: 'Ghana', BR: 'Brazil', MX: 'Mexico', AR: 'Argentina',
+  CL: 'Chile', CO: 'Colombia', PE: 'Peru', RU: 'Russia', UA: 'Ukraine', TR: 'Turkey',
+  AE: 'United Arab Emirates', SA: 'Saudi Arabia', IL: 'Israel', JP: 'Japan', KR: 'South Korea',
+  CN: 'China', HK: 'Hong Kong', TW: 'Taiwan'
+};
+
+function extractRentOtp(body) {
+  const s = String(body || '');
+  if (!s) return '';
+  let hit = s.match(/\b(\d{3}[-\s]\d{3})\b/);
+  if (hit) return hit[1].replace(/\s+/g, '-');
+  hit = s.match(/(?:code|otp|pin|confirmation)[:\s]*([0-9][0-9\-\s]{3,14})/i);
+  if (hit) {
+    let v = hit[1].replace(/\s+/g, '');
+    if (/^\d{6}$/.test(v)) v = v.slice(0, 3) + '-' + v.slice(3);
+    return v;
+  }
+  hit = s.match(/\b(\d{4,8})\b/);
+  return hit ? hit[1] : '';
+}
+function normalizeRentMsg(m) {
+  if (!m) return null;
+  const body = String(m.body || m.content || m.text || m.message || '').trim();
+  if (!body) return null;
+  let code = String(m.code || '').trim() || extractRentOtp(body);
+  return {
+    body,
+    code,
+    received_at: m.received_at || m.receive_at || m.time || m.created_at || new Date().toISOString(),
+    from: m.from || m.sender || 'SMS'
+  };
+}
+function mergeRentInbox(existing, incoming) {
+  const map = new Map();
+  const add = (m) => {
+    const n = normalizeRentMsg(m);
+    if (!n) return;
+    const key = n.body.replace(/\s+/g, ' ').toLowerCase();
+    const prev = map.get(key);
+    if (!prev) map.set(key, n);
+    else {
+      if (!prev.code && n.code) prev.code = n.code;
+      if (n.received_at && prev.received_at) {
+        if (Date.parse(n.received_at) < Date.parse(prev.received_at)) prev.received_at = n.received_at;
+      } else if (n.received_at && !prev.received_at) prev.received_at = n.received_at;
+      map.set(key, prev);
+    }
+  };
+  (existing || []).forEach(add);
+  (incoming || []).forEach(add);
+  return Array.from(map.values()).sort((a, b) => {
+    const tb = Date.parse(b.received_at || 0) || 0;
+    const ta = Date.parse(a.received_at || 0) || 0;
+    if (tb !== ta) return tb - ta;
+    return String(b.body).localeCompare(String(a.body));
+  });
+}
+function parseRentInboxNotes(notes) {
+  try {
+    const s = String(notes || '').trim();
+    if (!s) return [];
+    if (s.startsWith('{') && s.includes('"inbox"')) {
+      const o = JSON.parse(s);
+      return Array.isArray(o.inbox) ? o.inbox : [];
+    }
+    if (s.startsWith('[')) {
+      const a = JSON.parse(s);
+      return Array.isArray(a) ? a : [];
+    }
+    const m = s.match(/\{"inbox"\s*:\s*\[[\s\S]*\]\s*\}/);
+    if (m) {
+      const o = JSON.parse(m[0]);
+      return Array.isArray(o.inbox) ? o.inbox : [];
+    }
+  } catch (_) {}
+  return [];
+}
+function packRentInboxNotes(messages, prevNotes) {
+  const inbox = mergeRentInbox([], messages).slice(0, 100);
+  const payload = JSON.stringify({ inbox });
+  const prev = String(prevNotes || '').trim();
+  if (prev && !prev.startsWith('{') && !prev.startsWith('[')) {
+    return prev.split('\n')[0].slice(0, 200) + '\n' + payload;
+  }
+  return payload;
+}
+
+function rentCountryName(areaCode, fallback) {
+  const a = String(areaCode || '').toUpperCase().trim();
+  if (RENT_AREA_COUNTRY[a]) return RENT_AREA_COUNTRY[a];
+  const f = String(fallback || '').trim();
+  if (f && f.length > 3) return f; // already a full name
+  return a || f || 'Unknown';
+}
+
+
+
+/** Default monthly rental sell prices (NGN) by country — admin can override via number_services source=smsbus_rent */
+const RENT_DEFAULT_MONTHLY_NGN = {
+  US: 11000, USA: 11000, 'UNITED STATES': 11000,
+  CA: 10000, CANADA: 10000,
+  GB: 15000, UK: 15000, GBR: 15000, 'UNITED KINGDOM': 15000, 'GREAT BRITAIN': 15000
+};
+function rentDefaultMonthlyNgn(areaCode, title) {
+  const code = String(areaCode || '').trim().toUpperCase();
+  const name = String(title || '').trim().toUpperCase();
+  if (RENT_DEFAULT_MONTHLY_NGN[code] != null) return RENT_DEFAULT_MONTHLY_NGN[code];
+  if (RENT_DEFAULT_MONTHLY_NGN[name] != null) return RENT_DEFAULT_MONTHLY_NGN[name];
+  // fuzzy title match
+  if (/\bUNITED STATES\b|\bUSA\b/.test(name)) return 11000;
+  if (/\bCANADA\b/.test(name)) return 10000;
+  if (/\bUNITED KINGDOM\b|\bGREAT BRITAIN\b|\bUK\b|\bENGLAND\b/.test(name)) return 15000;
+  if (code === '1' || code.startsWith('US')) return 11000;
+  return null;
+}
+async function rentAdminMonthlyOverrides() {
+  try {
+    const { data } = await supabase
+      .from('number_services')
+      .select('service_id, sell_price, price, price_ngn, hidden, admin_hidden')
+      .eq('source', 'smsbus_rent')
+      .limit(500);
+    const map = {};
+    for (const row of data || []) {
+      const id = String(row.service_id || '').toUpperCase();
+      if (!id) continue;
+      const p = Number(row.sell_price ?? row.price_ngn ?? row.price);
+      if (p > 0) map[id] = Math.round(p);
+    }
+    return map;
+  } catch (_) {
+    return {};
+  }
+}
+
+const TOKEN = process.env.SMSBUS_API_TOKEN || process.env.SMS_BUS_TOKEN || '';
+
+const supabase = createClient(
+  process.env.SUPABASE_URL,
+  process.env.SUPABASE_SERVICE_ROLE_KEY
+);
+
+
+// ---------- GotSMS (USA physical SIM rentals) — folded in to stay within Vercel 12-function limit ----------
+const GOTSMS_BASE = 'https://app.gotsms.org';
+const GOTSMS_TOKEN = process.env.GOTSMS_API_TOKEN || process.env.GOT_SMS_TOKEN || '';
+
+
+/** Fixed customer prices by duration (NGN). Admin override still wins per plan. */
+const GOTSMS_DURATION_PRICE_NGN = {
+  '1_day': 2500,
+  '3_day': 3500,
+  '7_day': 4500,
+  '14_day': 8000,
+  '1_month': 12000,
+  '3_month': 31000,
+  '6_month': 65000,
+  '1_year': 102000,
+  // aliases
+  '1_days': 2500,
+  '3_days': 3500,
+  '7_days': 4500,
+  '14_days': 8000,
+  '1_months': 12000,
+  '3_months': 31000,
+  '6_months': 65000,
+  '1_years': 102000
+};
+
+/** One-time add-ons when user picks carrier / area code (GotSMS ~$0.30 / $0.60). */
+const GOTSMS_CARRIER_ADDON_NGN = Math.max(0, Number(process.env.GOTSMS_CARRIER_ADDON_NGN) || 800);
+const GOTSMS_AREA_ADDON_NGN = Math.max(0, Number(process.env.GOTSMS_AREA_ADDON_NGN) || 1000);
+
+function gotsmsDurationKey(plan) {
+  if (!plan) return '';
+  const t = String(plan.duration_type || '').toLowerCase().replace(/s$/, ''); // day, month, year
+  const n = Number(plan.duration_in_type || 0);
+  if (!(n > 0) || !t) {
+    // parse "1 day", "3 days", "1 month" from translation
+    const tr = String(plan.duration_translation || '').toLowerCase();
+    const m = tr.match(/(\d+)\s*(day|days|month|months|year|years|week|weeks)/);
+    if (m) return `${m[1]}_${m[2].replace(/s$/, '')}`;
+    return '';
+  }
+  return `${n}_${t}`;
+}
+
+function gotsmsFixedDurationPriceNgn(plan) {
+  const key = gotsmsDurationKey(plan);
+  if (key && GOTSMS_DURATION_PRICE_NGN[key] != null) return GOTSMS_DURATION_PRICE_NGN[key];
+  // try with trailing s
+  if (key && GOTSMS_DURATION_PRICE_NGN[key + 's'] != null) return GOTSMS_DURATION_PRICE_NGN[key + 's'];
+  return null;
+}
+
+function gotsmsAddonsNgn({ area_code, cellular_carrier_id } = {}) {
+  let add = 0;
+  if (cellular_carrier_id) add += GOTSMS_CARRIER_ADDON_NGN;
+  if (area_code && String(area_code).replace(/\D/g, '').length >= 3) add += GOTSMS_AREA_ADDON_NGN;
+  return add;
+}
+
+function gotsmsSellPriceNgn(supplierUsd) {
+  const rate =
+    Number(process.env.USD_TO_NGN_RATE) ||
+    Number(process.env.USD_TO_NGN) ||
+    1500;
+  const pct = Number(process.env.GOTSMS_MARKUP_PERCENT) || 80;
+  const minProfit = Number(process.env.MIN_PROFIT_NGN) || 500;
+  const minSale = Number(process.env.MIN_NUMBER_PRICE_NGN) || 1000;
+  const supplierNgn = Number(supplierUsd || 0) * rate;
+  const percentPrice = Math.ceil(supplierNgn * (1 + pct / 100));
+  const floorPrice = Math.ceil(supplierNgn + minProfit);
+  const finalPrice = Math.max(percentPrice, floorPrice, minSale);
+  return Math.ceil(finalPrice / 50) * 50;
+}
+
+async function gotsmsFetch(path, { method = 'GET', body } = {}) {
+  if (!GOTSMS_TOKEN) {
+    return { ok: false, status: 503, data: { success: false, message: 'GotSMS is not configured (set GOTSMS_API_TOKEN)' } };
+  }
+  const opts = {
+    method,
+    headers: {
+      Authorization: `Bearer ${GOTSMS_TOKEN}`,
+      'Content-Type': 'application/json',
+      Accept: 'application/json'
+    }
+  };
+  if (body != null) opts.body = JSON.stringify(body);
+  try {
+    const res = await fetch(`${GOTSMS_BASE}${path}`, opts);
+    let data = null;
+    try { data = await res.json(); } catch { data = { success: false, message: 'Invalid supplier response' }; }
+    return { ok: res.ok, status: res.status, data };
+  } catch (e) {
+    return { ok: false, status: 502, data: { success: false, message: 'Could not reach GotSMS' } };
+  }
+}
+
+function gotsmsPublicRent(r) {
+  if (!r || typeof r !== 'object') return r;
+  const carrierObj = r.cellular_carrier || r.carrier || null;
+  const carrierName =
+    (carrierObj && (carrierObj.name || carrierObj.title || carrierObj.label)) ||
+    r.cellular_carrier_name ||
+    r.carrier_name ||
+    (typeof r.cellular_carrier === 'string' ? r.cellular_carrier : null) ||
+    null;
+  const area =
+    r.area_code ||
+    (r.area && (r.area.code || r.area.area_code || r.area.name)) ||
+    r.npa ||
+    null;
+  return {
+    id: r.id,
+    service: r.service,
+    plan: r.plan
+      ? {
+          id: r.plan.id,
+          billing_type: r.plan.billing_type,
+          duration_type: r.plan.duration_type,
+          duration_in_type: r.plan.duration_in_type,
+          duration_translation: r.plan.duration_translation,
+          price_usd: r.plan.price,
+          renew_price_usd: r.plan.renew_price
+        }
+      : null,
+    phone: r.phone,
+    price_usd: r.price,
+    status: r.status,
+    is_included_for_next_renewal: r.is_included_for_next_renewal,
+    auto_renew: !!(r.is_included_for_next_renewal),
+    active_from: r.active_from,
+    active_till: r.active_till,
+    wake_from: r.wake_from,
+    wake_till: r.wake_till,
+    can_wake_up: r.can_wake_up,
+    notes: r.notes,
+    transition_options: r.transition_options || [],
+    cellular_carrier: carrierObj || (carrierName ? { name: carrierName } : null),
+    carrier_name: carrierName,
+    area_code: area ? String(area).replace(/\D/g, '').slice(0, 6) || String(area) : null
+  };
+}
+
+function gotsmsEnrichPlan(p) {
+  const usd = Number(p.price || 0);
+  return {
+    id: p.id,
+    service: p.service,
+    country: p.country,
+    billing_type: p.billing_type,
+    duration_type: p.duration_type,
+    duration_in_type: p.duration_in_type,
+    duration_in_minutes: p.duration_in_minutes,
+    duration_translation: p.duration_translation,
+    price_usd: usd,
+    renew_price_usd: Number(p.renew_price || usd),
+    // Fixed duration price for all services; USD markup only as fallback
+    price_ngn: (gotsmsFixedDurationPriceNgn(p) != null ? gotsmsFixedDurationPriceNgn(p) : gotsmsSellPriceNgn(usd)),
+    renew_price_ngn: (gotsmsFixedDurationPriceNgn({ ...p, duration_translation: p.duration_translation }) != null
+      ? gotsmsFixedDurationPriceNgn(p)
+      : gotsmsSellPriceNgn(Number(p.renew_price || usd))),
+    price_mode: gotsmsFixedDurationPriceNgn(p) != null ? 'fixed_duration' : 'markup',
+    carrier_addon_ngn: GOTSMS_CARRIER_ADDON_NGN,
+    area_addon_ngn: GOTSMS_AREA_ADDON_NGN,
+    is_monthly_supported: p.is_monthly_supported,
+    is_available: p.is_available !== false
+  };
+}
+
+async async function gotsmsAssertOwns(userId, rentId) {
+  const { data } = await supabase
+    .from('number_orders')
+    .select('id, price, code, status, notes, phone_number, service_name, user_id, customer_id, order_id, refunded')
+    .eq('user_id', userId)
+    .eq('source', 'gotsms')
+    .eq('idempotency_key', `gotsms-${rentId}`)
+    .maybeSingle();
+  return data || null;
+}
+
+function gotsmsRenewPriceNgn(orderRow) {
+  const p = Math.round(Number(orderRow && orderRow.price) || 0);
+  return p > 0 ? p : 0;
+}
+
+async function gotsmsSyncAutorenewCharges(userId, rentId, liveRent) {
+  if (!userId || !rentId || !liveRent) return { charged: false, disabled: false };
+  const order = await gotsmsAssertOwns(userId, rentId);
+  if (!order) return { charged: false, disabled: false };
+
+  const price = gotsmsRenewPriceNgn(order);
+  const liveTill = liveRent.active_till ? Date.parse(String(liveRent.active_till)) : 0;
+  const storedTill = order.code && !isNaN(Date.parse(String(order.code))) ? Date.parse(String(order.code)) : 0;
+  const autoOn = !!(liveRent.is_included_for_next_renewal || liveRent.auto_renew);
+
+  if (autoOn && price > 0) {
+    try {
+      const { data: prof } = await supabase.from('profiles').select('balance').eq('id', userId).maybeSingle();
+      const bal = Number(prof && prof.balance) || 0;
+      if (bal + 0.0001 < price) {
+        try {
+          await gotsmsFetch(`/api/rents/${encodeURIComponent(rentId)}/renewal/toggle`, { method: 'POST' });
+        } catch (_) {}
+        return {
+          charged: false,
+          disabled: true,
+          message: 'Auto-renew turned off — need ₦' + price.toLocaleString() + ' in wallet (same as this rental).'
+        };
+      }
+    } catch (_) {}
+  }
+
+  if (liveTill && storedTill && liveTill > storedTill + 60 * 1000 && price > 0) {
+    const idem = 'gotsms-renew-' + rentId + '-' + liveTill;
+    try {
+      const { data: prior } = await supabase
+        .from('transactions')
+        .select('id')
+        .eq('user_id', userId)
+        .eq('subtitle', idem)
+        .maybeSingle();
+      if (prior) {
+        await supabase.from('number_orders').update({ code: new Date(liveTill).toISOString(), status: 'active' }).eq('id', order.id);
+        return { charged: false, disabled: false, already: true };
+      }
+    } catch (_) {}
+
+    const { data: debited, error: debErr } = await supabase.rpc('debit_balance_if_sufficient', {
+      p_user_id: userId,
+      p_amount: price
+    });
+    if (debErr || debited === false || debited === null) {
+      try {
+        if (autoOn) await gotsmsFetch(`/api/rents/${encodeURIComponent(rentId)}/renewal/toggle`, { method: 'POST' });
+      } catch (_) {}
+      return {
+        charged: false,
+        disabled: true,
+        message: 'Renewal blocked — insufficient balance (₦' + price.toLocaleString() + ' required). Auto-renew is off.'
+      };
+    }
+    try {
+      await supabase.from('transactions').insert({
+        user_id: userId,
+        customer_id: order.customer_id,
+        type: 'debit',
+        category: 'MJ SMS',
+        title: 'USA rental auto-renew',
+        subtitle: idem,
+        amount: '₦' + price.toLocaleString(),
+        amount_ngn: price,
+        status: 'completed'
+      });
+    } catch (e) {
+      console.warn('[gotsms renew] tx', e.message || e);
+    }
+    try {
+      await supabase.from('number_orders').update({
+        code: new Date(liveTill).toISOString(),
+        status: 'active'
+      }).eq('id', order.id);
+    } catch (_) {}
+    return { charged: true, disabled: false, amount: price };
+  }
+
+  if (liveTill && (!storedTill || Math.abs(liveTill - storedTill) > 60000)) {
+    try {
+      await supabase.from('number_orders').update({ code: new Date(liveTill).toISOString() }).eq('id', order.id);
+    } catch (_) {}
+  }
+  return { charged: false, disabled: false };
+}
+
+
+async function gotsmsSaveOrder({ userId, customerId, rentId, phone, serviceName, serviceId, priceNgn, supplierUsd, status, activeTill, planLabel, carrierName, areaCode }) {
+  const orderId = `GS-${String(rentId || '').slice(0, 8)}-${Date.now().toString(36)}`;
+  // number_orders has no dedicated active_till/carrier columns on all envs —
+  // store expiry ISO in `code` (rental marker) and extras in service_name suffix.
+  const bits = [serviceName || 'USA rental'];
+  if (planLabel) bits.push(String(planLabel));
+  if (carrierName) bits.push(String(carrierName));
+  if (areaCode) bits.push('Area ' + String(areaCode));
+  const displayName = bits.filter(Boolean).join(' · ');
+  const row = {
+    source: 'gotsms',
+    user_id: userId,
+    customer_id: customerId || null,
+    order_id: orderId,
+    idempotency_key: `gotsms-${rentId}`,
+    country_id: 12,
+    country_name: 'United States',
+    service_id: serviceId || 'gotsms',
+    service_name: displayName,
+    phone_number: phone || null,
+    price: priceNgn,
+    supplier_price: supplierUsd,
+    currency: 'NGN',
+    status: status || 'active',
+    // ISO expiry for countdown (not an SMS code — rentals use inbox API for codes)
+    code: activeTill ? String(activeTill) : null,
+    refunded: false
+  };
+  try {
+    if (typeof insertNumberOrder === 'function') {
+      const r = await insertNumberOrder(row);
+      if (r.error) console.error('[gotsms] number_orders', r.error.message);
+    } else {
+      const { error } = await supabase.from('number_orders').insert(row);
+      if (error) console.error('[gotsms] number_orders', error.message);
+    }
+  } catch (e) {
+    console.error('[gotsms] number_orders', e.message || e);
+  }
+  return orderId;
+}
+
+
+function json(res, status, body) {
+  res.statusCode = status;
+  res.setHeader('Content-Type', 'application/json');
+  res.end(JSON.stringify(body));
+}
+
+async function readBody(req) {
+  if (req.body && typeof req.body === 'object') return req.body;
+  const chunks = [];
+  for await (const c of req) chunks.push(c);
+  const raw = Buffer.concat(chunks).toString('utf8');
+  if (!raw) return {};
+  try {
+    return JSON.parse(raw);
+  } catch {
+    return {};
+  }
+}
+
+
+/** Fields safe to send to the browser — never cost, tokens, or provider names */
+function publicOrderPayload(data) {
+  if (!data || typeof data !== 'object') return data;
+  const out = { ...data };
+  delete out.supplier_price;
+  delete out.supplier_usd;
+  delete out.cost;
+  delete out.cost_usd;
+  delete out.token;
+  delete out.api_key;
+  return out;
+}
+
+async function requireAuth(req) {
+  const authHeader = req.headers.authorization || '';
+  const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : null;
+  if (!token) return { ok: false, status: 401, message: 'Please sign in to continue' };
+  const {
+    data: { user },
+    error
+  } = await supabase.auth.getUser(token);
+  if (error || !user) return { ok: false, status: 401, message: 'Session expired. Sign in again.' };
+  return { ok: true, userId: user.id };
+}
+
+async function smsbusGet(base, path, params = {}) {
+  if (!TOKEN) throw new Error('SMSBUS_API_TOKEN is not configured');
+  const q = new URLSearchParams({ token: TOKEN, ...params });
+  const url = `${base}${path}?${q.toString()}`;
+  const r = await fetch(url, { method: 'GET', headers: { Accept: 'application/json' } });
+  const data = await r.json().catch(() => ({}));
+  return { http: r.status, data };
+}
+
+function busOk(data) {
+  return data && (data.code === 200 || data.code === '200');
+}
+
+
+/**
+ * Claim order for refund once, then credit wallet (idempotent).
+ * Prevents double-credit when Cancel + auto-expiry race.
+ */
+async function claimAndRefundSmsBusOrder(order, userId, opts = {}) {
+  const srcGuard = String(order && order.source || '').toLowerCase();
+  if (srcGuard === 'gotsms' || srcGuard === 'smsbus_rent') {
+    return { refunded: false, reason: 'wrong_source' };
+  }
+  if (!order || !order.id) return { refunded: false, reason: 'missing_order' };
+  if (order.refunded || ['refunded', 'completed', 'expired', 'cancelled', 'canceled'].includes(String(order.status || '').toLowerCase())) {
+    return { refunded: false, reason: 'already_final' };
+  }
+
+  const subtitle = opts.subtitle || 'No SMS — balance restored';
+  const finalStatus = opts.status || 'refunded';
+  // Only refund open orders (not completed with a code)
+  if (order.status === 'completed' && order.code) {
+    return { refunded: false, reason: 'already_final' };
+  }
+  async function tryClaim(statusValue) {
+    // BUG FIX (was the root cause of a 27x duplicate refund incident):
+    // this only excluded status='completed', not status='refunded' — so
+    // once the FIRST call successfully refunded an order (setting its
+    // status to 'refunded'), that row still matched .neq('status',
+    // 'completed') and could be refunded again by every subsequent call,
+    // unlimited times. Repeated/rapid retries (e.g. a user tapping Cancel
+    // many times while seeing errors) each independently won this "atomic"
+    // claim because it was never actually excluding already-refunded rows
+    // at the database level — only via a single in-memory check up top,
+    // which isn't reliable under concurrent or rapid-fire requests. Adding
+    // .eq('refunded', false) here means the database itself only lets ONE
+    // of any number of simultaneous/rapid calls actually win this update —
+    // every other one matches zero rows and returns claimed=null below.
+    return supabase
+      .from('number_orders')
+      .update({
+        status: statusValue,
+        refunded: true,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', order.id)
+      .eq('refunded', false)
+      .in('status', ['waiting_for_code', 'pending', 'active', 'waiting', 'processing'])
+      .select('id, price')
+      .maybeSingle();
+  }
+
+  let claimed = null;
+  let claimErr = null;
+  ({ data: claimed, error: claimErr } = await tryClaim(finalStatus));
+  if (claimErr && finalStatus !== 'refunded') {
+    console.warn('[smsbus claimAndRefund] status', finalStatus, 'rejected, retry refunded:', claimErr.message);
+    ({ data: claimed, error: claimErr } = await tryClaim('refunded'));
+  }
+
+  if (claimErr) {
+    console.error('[smsbus claimAndRefund]', claimErr.message);
+    return { refunded: false, reason: 'claim_error', error: claimErr.message };
+  }
+  if (!claimed) return { refunded: false, reason: 'already_final' };
+
+  const refundAmount = Number(order.price != null ? order.price : claimed.price) || 0;
+  let newBalance = null;
+  if (refundAmount > 0) {
+    const { data: credited, error: credErr } = await supabase.rpc('credit_balance', {
+      p_user_id: userId,
+      p_amount: refundAmount
+    });
+    if (credErr) {
+      console.error('[smsbus claimAndRefund] credit_balance', credErr.message);
+      const { data: profileFb } = await supabase.from('profiles').select('balance, customer_id').eq('id', userId).maybeSingle();
+      if (profileFb) {
+        newBalance = Number(profileFb.balance || 0) + refundAmount;
+        await supabase.from('profiles').update({ balance: newBalance }).eq('id', userId);
+      }
+    } else if (credited != null && typeof credited === 'object' && credited.new_balance != null) {
+      newBalance = Number(credited.new_balance);
+    } else if (typeof credited === 'number') {
+      newBalance = credited;
+    }
+    const { data: profile } = await supabase.from('profiles').select('customer_id, balance').eq('id', userId).maybeSingle();
+    if (newBalance == null && profile) newBalance = Number(profile.balance || 0);
+    try {
+      await supabase.from('transactions').insert({
+        user_id: userId,
+        customer_id: (profile && profile.customer_id) || order.customer_id,
+        type: 'refund',
+        category: 'MJ SMS',
+        title: /expir/i.test(String(subtitle || '')) ? 'SMS expired' : 'SMS canceled',
+        subtitle: subtitle,
+        amount: `₦${refundAmount.toLocaleString()}`,
+        amount_ngn: refundAmount,
+        status: 'refunded'
+      });
+    } catch (_) {}
+  }
+  try {
+    await markTxStatus(userId, order.order_id, order.phone_number, 'cancelled');
+  } catch (_) {}
+  return { refunded: true, amount: refundAmount, new_balance: newBalance };
+}
+
+function parseSupplierBalance(data) {
+  if (data == null) return null;
+  if (typeof data === 'number') return data;
+  if (typeof data === 'string' && /^-?\d+(\.\d+)?$/.test(data.trim())) return Number(data);
+  if (typeof data === 'object') {
+    const v = data.balance ?? data.amount ?? data.credit ?? data.funds ?? data.money;
+    if (v != null) return Number(v);
+  }
+  return null;
+}
+
+const SMSBUS_CANCEL_COOLDOWN_MS = 60 * 1000; // 1 minute (supplier min is ~30s)
+const SMSBUS_EXPIRY_MS = 5 * 60 * 1000; // Server 2 numbers last 5 minutes
+
+
+/** Persist Server 2 catalog. Never overwrites admin selling price or forced hide. */
+async function syncSmsBusCatalog() {
+  const usdToNgn =
+    Number(process.env.USD_TO_NGN_RATE) ||
+    Number(process.env.USD_TO_NGN) ||
+    1500;
+  const [countriesRes, projectsRes] = await Promise.all([
+    smsbusGet(OTP_BASE, '/list/countries'),
+    smsbusGet(OTP_BASE, '/list/projects')
+  ]);
+  if (!busOk(countriesRes.data)) {
+    throw new Error(countriesRes.data?.message || 'Could not load countries');
+  }
+  if (!busOk(projectsRes.data)) {
+    throw new Error(projectsRes.data?.message || 'Could not load projects');
+  }
+
+  const countries = Object.values(countriesRes.data.data || {}).map((c) => ({
+    id: String(c.id),
+    name: c.title || c.name || String(c.id)
+  }));
+  const nameById = {};
+  Object.values(projectsRes.data.data || {}).forEach((pr) => {
+    nameById[String(pr.id)] = pr.title || pr.name || String(pr.id);
+  });
+
+  let newCount = 0;
+  let updatedCount = 0;
+  let errors = 0;
+
+  // Concurrency-limited country price pulls
+  const queue = 4;
+  for (let i = 0; i < countries.length; i += queue) {
+    const slice = countries.slice(i, i + queue);
+    await Promise.all(
+      slice.map(async (country) => {
+        try {
+          const { data: priceData } = await smsbusGet(OTP_BASE, '/list/prices', {
+            country_id: country.id
+          });
+          if (!busOk(priceData)) return;
+
+          const entries = Object.values(priceData.data || {});
+          if (!entries.length) return;
+
+          const { data: existingRows } = await supabase
+            .from('number_services')
+            .select('id, service_id, price, is_available, price_source')
+            .eq('source', 'smsbus')
+            .eq('country_id', country.id);
+
+          const existingMap = new Map(
+            (existingRows || []).map((r) => [String(r.service_id), r])
+          );
+          const now = new Date().toISOString();
+          const toInsert = [];
+          const toUpdate = [];
+
+          for (const row of entries) {
+            const sid = String(row.project_id);
+            if (!sid || sid === 'undefined') continue;
+            const costUsd = Number(row.cost || row.price || 0);
+            const stock = Number(row.total_count || row.count || 0);
+            const serviceName =
+              nameById[sid] ||
+              (row.title && !/united|russia|state|country/i.test(String(row.title))
+                ? row.title
+                : '') ||
+              `Service ${sid}`;
+            const prev = existingMap.get(sid);
+
+            if (prev) {
+              // NEVER touch selling price (admin). Always refresh supplier USD cost for profit math.
+              const fields = {
+                country_name: country.name,
+                service_name: serviceName,
+                available_quantity: stock,
+                updated_at: now
+              };
+              if (costUsd > 0) fields.supplier_price = costUsd;
+              if (prev.is_available === false) {
+                fields.is_available = false;
+              } else {
+                fields.is_available = stock > 0;
+              }
+              toUpdate.push({ id: prev.id, ...fields });
+            } else {
+              toInsert.push({
+                source: 'smsbus',
+                country_id: country.id,
+                country_name: country.name,
+                service_id: sid,
+                service_name: serviceName,
+                supplier_price: costUsd > 0 ? costUsd : null,
+                price: applyMarkup(costUsd || 0.01, usdToNgn),
+                price_source: 'system',
+                currency: 'NGN',
+                available_quantity: stock,
+                is_available: stock > 0,
+                updated_at: now
+              });
+            }
+          }
+
+          for (const u of toUpdate) {
+            const { id, ...fields } = u;
+            const { error } = await supabase.from('number_services').update(fields).eq('id', id);
+            if (error) errors += 1;
+            else updatedCount += 1;
+          }
+          if (toInsert.length) {
+            const { error } = await supabase.from('number_services').insert(toInsert);
+            if (error) {
+              // fallback one-by-one
+              for (const row of toInsert) {
+                const { error: e2 } = await supabase.from('number_services').insert(row);
+                if (e2) errors += 1;
+                else newCount += 1;
+              }
+            } else {
+              newCount += toInsert.length;
+            }
+          }
+        } catch (e) {
+          console.error('[smsbus catalog]', country.id, e.message);
+          errors += 1;
+        }
+      })
+    );
+  }
+
+  return { newCount, updatedCount, errors, countries: countries.length };
+}
+
+
+
+
+async function insertNumberOrder(row) {
+  const lastErrors = [];
+
+  // idempotency_key is NOT NULL with a UNIQUE(source, idempotency_key)
+  // index — every insert attempt below was missing it entirely, so every
+  // single one was failing that constraint silently. Derive a stable,
+  // per-order value from order_id (already unique per purchase from the
+  // supplier) so this can never collide across real orders.
+  const idemKey = row.idempotency_key || `${row.source || 'smsbus'}-${row.order_id}`;
+  row = { ...row, idempotency_key: idemKey };
+
+  // Build progressive payloads — strip fields that often break older schemas
+  const variants = [];
+  const full = { ...row };
+  variants.push(full);
+
+  const asStringCountry = { ...row, country_id: row.country_id != null ? String(row.country_id) : null };
+  variants.push(asStringCountry);
+
+  // Keep supplier_price (USD) on as many variants as possible — admin profit needs it
+  const noOptional = { ...row };
+  for (const k of ['currency', 'refunded', 'time_left', 'customer_id', 'code']) {
+    delete noOptional[k];
+  }
+  variants.push(noOptional);
+  variants.push({ ...noOptional, country_id: row.country_id != null ? String(row.country_id) : null });
+
+  // Without source (if CHECK constraint only allows grizzlysms)
+  const noSource = { ...noOptional };
+  delete noSource.source;
+  variants.push(noSource);
+
+  // Absolute minimum — still keep supplier USD when present
+  variants.push({
+    user_id: row.user_id,
+    order_id: String(row.order_id),
+    idempotency_key: idemKey,
+    phone_number: row.phone_number || null,
+    status: row.status || 'waiting_for_code',
+    price: row.price != null ? row.price : null,
+    supplier_price: row.supplier_price != null ? row.supplier_price : null,
+    service_name: row.service_name || null,
+    country_name: row.country_name || null,
+    source: row.source || 'smsbus'
+  });
+  variants.push({
+    user_id: row.user_id,
+    order_id: String(row.order_id),
+    idempotency_key: idemKey,
+    phone_number: row.phone_number || null,
+    status: 'waiting_for_code',
+    price: row.price,
+    supplier_price: row.supplier_price != null ? row.supplier_price : null
+  });
+
+  for (const attempt of variants) {
+    // drop undefined keys
+    const payload = {};
+    for (const [k, v] of Object.entries(attempt)) {
+      if (v !== undefined) payload[k] = v;
+    }
+    const { data, error } = await supabase.from('number_orders').insert(payload).select('id, order_id').maybeSingle();
+    if (!error) return { error: null, row: payload, id: data && data.id };
+    const msg = String(error.message || error.code || '');
+    lastErrors.push(msg);
+    if (/duplicate|unique/i.test(msg)) {
+      return { error: null, row: payload, duplicate: true };
+    }
+  }
+
+  return {
+    error: { message: lastErrors.filter(Boolean).slice(-3).join(' | ') || 'insert failed' }
+  };
+}
+
+
+/** Code after refund: re-debit and complete (supplier delivered). Idempotent. */
+async function reclaimAndCompleteSmsBus(order, userId, code) {
+  if (!order?.id || !code) return { ok: false, reason: 'missing' };
+  if (order.status === 'completed' && order.code) {
+    return { ok: true, already: true, order };
+  }
+
+  const { data: claimed, error: claimErr } = await supabase
+    .from('number_orders')
+    .update({
+      status: 'completed',
+      code: String(code),
+      refunded: false,
+      updated_at: new Date().toISOString()
+    })
+    .eq('id', order.id)
+    .eq('refunded', true)
+    .neq('status', 'completed')
+    .select('id, price, phone_number, service_name, country_name, order_id, customer_id')
+    .maybeSingle();
+
+  if (claimErr) {
+    console.error('[reclaimAndCompleteSmsBus]', claimErr.message);
+    return { ok: false, reason: 'claim_error' };
+  }
+  if (!claimed) {
+    const { data: current } = await supabase.from('number_orders').select('*').eq('id', order.id).single();
+    if (current?.status === 'completed' && current?.code) {
+      return { ok: true, already: true, order: current };
+    }
+    return { ok: false, reason: 'not_reclaimable', order: current };
+  }
+
+  const price = Number(order.price != null ? order.price : claimed.price) || 0;
+  let newBalance = null;
+  if (price > 0) {
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('balance, customer_id')
+      .eq('id', userId)
+      .single();
+    if (profile) {
+      const { data: debited, error: debErr } = await supabase.rpc('debit_balance_if_sufficient', {
+        p_user_id: userId,
+        p_amount: price
+      });
+      if (debErr) {
+        newBalance = Number(profile.balance || 0) - price;
+        await supabase.from('profiles').update({ balance: newBalance }).eq('id', userId);
+      } else if (typeof debited === 'number') newBalance = debited;
+      else if (debited && debited.new_balance != null) newBalance = Number(debited.new_balance);
+      else newBalance = Number(profile.balance || 0) - price;
+      try {
+        await supabase.from('transactions').insert({
+          user_id: userId,
+          customer_id: profile.customer_id || claimed.customer_id || order.customer_id,
+          type: 'purchase',
+          category: 'MJ SMS',
+          title: claimed.service_name || order.service_name || 'SMS',
+          subtitle: 'Code received after refund — recharged',
+          amount: `₦${price.toLocaleString()}`,
+          amount_ngn: price,
+          status: 'completed'
+        });
+      } catch (_) {}
+    }
+  }
+  return {
+    ok: true,
+    recharged: true,
+    amount: price,
+    new_balance: newBalance,
+    code: String(code)
+  };
+}
+
+
+async function markTxStatus(userId, orderId, phone, status) {
+  try {
+    const { data } = await supabase
+      .from('transactions')
+      .select('id, subtitle, notes, status, title')
+      .eq('user_id', userId)
+      .eq('category', 'MJ SMS')
+      .order('created_at', { ascending: false })
+      .limit(25);
+    const hit = (data || []).find((tx) => {
+      const blob = `${tx.subtitle || ''} ${tx.notes || ''}`;
+      return blob.includes(String(orderId)) || (phone && blob.includes(String(phone)));
+    });
+    if (hit) await supabase.from('transactions').update({ status }).eq('id', hit.id);
+  } catch (_) {}
+}
+
+
+
+/** Background / history: expire Server 2 OTP past window without opening number page. */
+async function handleExpireStaleSmsBus(req, res) {
+  const cronSecret = process.env.CRON_SECRET;
+  const authHeader = req.headers.authorization || '';
+  const isCron =
+    (cronSecret && authHeader === `Bearer ${cronSecret}`) ||
+    req.headers['x-vercel-cron'] === '1';
+
+  let scopeUserId = null;
+  if (!isCron) {
+    const auth = await requireAuth(req);
+    if (!auth.ok) return json(res, auth.status, { success: false, message: auth.message });
+    const { data: prof } = await supabase.from('profiles').select('is_admin').eq('id', auth.userId).maybeSingle();
+    if (prof?.is_admin) scopeUserId = null;
+    else scopeUserId = auth.userId;
+  }
+
+  const cutoff = new Date(Date.now() - SMSBUS_EXPIRY_MS).toISOString();
+  let q = supabase
+    .from('number_orders')
+    .select('id, user_id, order_id, price, status, refunded, created_at, phone_number, service_name, customer_id')
+    .eq('source', 'smsbus')
+    .eq('status', 'waiting_for_code')
+    .lt('created_at', cutoff)
+    .order('created_at', { ascending: true })
+    .limit(200);
+  if (scopeUserId) q = q.eq('user_id', scopeUserId);
+  const { data: rows, error } = await q;
+
+  if (error) {
+    console.error('[smsbus expire_stale]', error.message);
+    return json(res, 500, { success: false, message: error.message });
+  }
+
+  const stale = (rows || []).filter((o) => o.refunded !== true);
+  let expired = 0;
+  let skipped = 0;
+  for (const order of stale) {
+    try {
+      if (order.order_id) {
+        try {
+          await smsbusGet(OTP_BASE, '/cancel', { request_id: String(order.order_id) });
+        } catch (_) {}
+      }
+      const result = await claimAndRefundSmsBusOrder(order, order.user_id, {
+        status: 'expired',
+        subtitle: 'Expired — no SMS, balance restored'
+      });
+      if (result.refunded) expired += 1;
+      else skipped += 1;
+    } catch (e) {
+      console.error('[smsbus expire_stale]', order.id, e.message);
+      skipped += 1;
+    }
+  }
+
+  return json(res, 200, {
+    success: true,
+    scanned: (stale || []).length,
+    expired,
+    skipped,
+    cutoff
+  });
+}
+
+
+export default async function handler(req, res) {
+  if (!process.env.SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
+    return json(res, 500, {
+      success: false,
+      message: 'Something went wrong on our side. Please contact support.'
+    });
+  }
+
+  try {
+    const url = new URL(req.url, 'http://localhost');
+    const action = (url.searchParams.get('action') || '').toLowerCase();
+    const method = (req.method || 'GET').toUpperCase();
+
+    if (!TOKEN) {
+      return json(res, 503, {
+        success: false,
+        message: 'This server is temporarily unavailable. Contact support if it keeps happening.'
+      });
+    }
+
+    // ——— Public-ish catalog (still require auth so only customers hit supplier) ———
+    // Supplier wallet balance is never exposed to customers
+    if (method === 'GET' && action === 'balance') {
+      return json(res, 403, {
+        success: false,
+        message: 'Not available'
+      });
+    }
+
+    if (method === 'GET' && action === 'countries') {
+      const { data } = await smsbusGet(OTP_BASE, '/list/countries');
+      if (!busOk(data)) return json(res, 400, { success: false, message: data.message || 'Countries error' });
+      const list = Object.values(data.data || {}).map((c) => ({
+        id: c.id,
+        title: c.title || c.name || String(c.id),
+        code: c.code || ''
+      }));
+      return json(res, 200, { success: true, data: list });
+    }
+
+    if (method === 'GET' && action === 'projects') {
+      const { data } = await smsbusGet(OTP_BASE, '/list/projects');
+      if (!busOk(data)) return json(res, 400, { success: false, message: data.message || 'Projects error' });
+      const list = Object.values(data.data || {}).map((p) => ({
+        id: p.id,
+        title: p.title || p.name || String(p.id),
+        code: p.code || ''
+      }));
+      return json(res, 200, { success: true, data: list });
+    }
+
+    if (method === 'GET' && action === 'prices') {
+      const country_id = url.searchParams.get('country_id');
+      if (!country_id) return json(res, 400, { success: false, message: 'country_id required' });
+
+      let priceRes;
+      let projRes;
+      try {
+        [priceRes, projRes] = await Promise.all([
+          smsbusGet(OTP_BASE, '/list/prices', { country_id: String(country_id) }),
+          smsbusGet(OTP_BASE, '/list/projects')
+        ]);
+      } catch (e) {
+        console.error('[smsbus prices] fetch failed', e.message);
+        return json(res, 502, {
+          success: false,
+          message: e.message && /SMSBUS_API_TOKEN/i.test(e.message)
+            ? 'Server 2 is not configured (missing API token). Contact support.'
+            : 'Could not reach Server 2. Try again in a moment.'
+        });
+      }
+
+      if (priceRes.http === 403 || priceRes.http === 401) {
+        console.error('[smsbus prices] supplier auth', priceRes.http, priceRes.data);
+        return json(res, 502, {
+          success: false,
+          message: 'Server 2 rejected the request (token/account). Check SMSBUS_API_TOKEN and supplier account.'
+        });
+      }
+      if (!busOk(priceRes.data)) {
+        const supplierMsg =
+          (priceRes.data && (priceRes.data.message || priceRes.data.error || priceRes.data.msg)) ||
+          '';
+        console.error('[smsbus prices] bad response', priceRes.http, supplierMsg || priceRes.data);
+        return json(res, 400, {
+          success: false,
+          message: supplierMsg
+            ? String(supplierMsg).slice(0, 160)
+            : 'Unable to load services for this country. Try again or contact support.'
+        });
+      }
+
+      // Map project_id → real service name (WhatsApp, Telegram, …)
+      const nameById = {};
+      const codeById = {};
+      if (busOk(projRes.data)) {
+        Object.values(projRes.data.data || {}).forEach((p) => {
+          nameById[String(p.id)] = p.title || p.name || '';
+          codeById[String(p.id)] = p.code || '';
+        });
+      }
+
+      const live = Object.values(priceRes.data.data || {})
+        .map((row) => {
+          const pid = String(row.project_id);
+          const costUsd = Number(row.cost || row.price || 0);
+          const priceNgn = applyMarkup(costUsd);
+          const title =
+            nameById[pid] ||
+            (row.title && !/united|russia|state|country/i.test(String(row.title)) ? row.title : '') ||
+            codeById[pid] ||
+            '';
+          return {
+            country_id: row.country_id,
+            project_id: row.project_id,
+            title: title || `Service ${pid}`,
+            code: codeById[pid] || row.code || '',
+            stock: Number(row.total_count || row.count || 0),
+            // never expose supplier cost to clients
+            price: priceNgn,
+            price_ngn: priceNgn
+          };
+        })
+        .filter((r) => r.project_id != null);
+
+      // Overlay admin prices / hide flags from DB
+      try {
+        const { data: dbRows } = await supabase
+          .from('number_services')
+          .select('service_id, price, is_available')
+          .eq('source', 'smsbus')
+          .eq('country_id', String(country_id));
+        const bySid = new Map((dbRows || []).map((r) => [String(r.service_id), r]));
+        for (const item of live) {
+          const db = bySid.get(String(item.project_id));
+          if (!db) continue;
+          if (db.is_available === false) item._hidden = true;
+          if (Number(db.price) > 0) {
+            item.price = Number(db.price);
+            item.price_ngn = Number(db.price);
+          }
+        }
+      } catch (_) {}
+
+      const list = live
+        .filter((r) => !r._hidden)
+        .sort((a, b) => String(a.title).localeCompare(String(b.title)));
+
+      return json(res, 200, { success: true, data: list });
+    }
+
+    // ——— OTP order / check / cancel / reuse ———
+    if (method === 'POST' && action === 'order') {
+      const auth = await requireAuth(req);
+      if (!auth.ok) return json(res, auth.status, { success: false, message: auth.message });
+      const body = await readBody(req);
+      const country_id = body.country_id;
+      const project_id = body.project_id;
+      const wantReuse = body.reuse === true || body.reuse === 'true' || body.reuse === 1;
+      if (!country_id || !project_id) {
+        return json(res, 400, { success: false, message: 'country_id and project_id required' });
+      }
+
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('id, balance, customer_id, full_name')
+        .eq('id', auth.userId)
+        .single();
+      if (!profile) return json(res, 400, { success: false, message: 'Profile not found' });
+
+      // Price from live list
+      const { data: priceData } = await smsbusGet(OTP_BASE, '/list/prices', {
+        country_id: String(country_id)
+      });
+      let costUsd = 0;
+      let serviceName = 'SMS';
+      let countryName = '';
+      if (busOk(priceData)) {
+        const hit = Object.values(priceData.data || {}).find(
+          (r) => String(r.project_id) === String(project_id)
+        );
+        if (hit) {
+          costUsd = Number(hit.cost || 0);
+          serviceName = hit.title || serviceName;
+          countryName = hit.title || countryName;
+        }
+      }
+      // Better names
+      try {
+        const [cRes, pRes] = await Promise.all([
+          smsbusGet(OTP_BASE, '/list/countries'),
+          smsbusGet(OTP_BASE, '/list/projects')
+        ]);
+        if (busOk(cRes.data)) {
+          const c = Object.values(cRes.data.data || {}).find((x) => String(x.id) === String(country_id));
+          if (c) countryName = c.title || countryName;
+        }
+        if (busOk(pRes.data)) {
+          const p = Object.values(pRes.data.data || {}).find((x) => String(x.id) === String(project_id));
+          if (p) serviceName = p.title || serviceName;
+        }
+      } catch (_) {}
+
+      // Prefer admin-controlled selling price from DB (never reset by sync)
+      let price = applyMarkup(costUsd || 0.5);
+      try {
+        const { data: dbSvc } = await supabase
+          .from('number_services')
+          .select('price, is_available')
+          .eq('source', 'smsbus')
+          .eq('country_id', String(country_id))
+          .eq('service_id', String(project_id))
+          .maybeSingle();
+        if (dbSvc && dbSvc.is_available === false) {
+          return json(res, 400, { success: false, message: 'This service is not available. Try another or contact support.' });
+        }
+        if (dbSvc && Number(dbSvc.price) > 0) price = Number(dbSvc.price);
+      } catch (_) {}
+      const bal = Number(profile.balance) || 0;
+      if (bal < price) {
+        return json(res, 400, {
+          success: false,
+          message: `Insufficient balance. Need ₦${price.toLocaleString()}, you have ₦${bal.toLocaleString()}`
+        });
+      }
+
+      // Client-supplied idempotency key (same key on double-click = one purchase)
+      const clientIdem =
+        (body.external_order_id && String(body.external_order_id).trim()) ||
+        (body.idempotency_key && String(body.idempotency_key).trim()) ||
+        '';
+      if (clientIdem) {
+        const { data: existing } = await supabase
+          .from('number_orders')
+          .select('order_id, phone_number, status, price, service_name, country_name')
+          .eq('source', 'smsbus')
+          .eq('user_id', auth.userId)
+          .eq('idempotency_key', clientIdem)
+          .maybeSingle();
+        if (existing && existing.order_id) {
+          const { data: balRow } = await supabase.from('profiles').select('balance').eq('id', auth.userId).maybeSingle();
+          return json(res, 200, {
+            success: true,
+            replayed: true,
+            data: {
+              order_id: existing.order_id,
+              number: existing.phone_number,
+              phone_number: existing.phone_number,
+              price: existing.price != null ? Number(existing.price) : price,
+              new_balance: Number(balRow?.balance || 0),
+              service_name: existing.service_name || serviceName,
+              country_name: existing.country_name || countryName,
+              source: 'smsbus',
+              status: existing.status || 'waiting_for_code'
+            }
+          });
+        }
+      }
+
+      // Block purchase when supplier wallet cannot cover cost
+      try {
+        const { data: sBal } = await smsbusGet(OTP_BASE, '/get/balance');
+        if (busOk(sBal)) {
+          const supplierUsd = parseSupplierBalance(sBal.data);
+          if (supplierUsd != null && costUsd > 0 && supplierUsd < costUsd) {
+            return json(res, 503, {
+              success: false,
+              code: 'SERVER_BUSY',
+              message: 'This SMS server is temporarily unavailable. Try the other server, or contact support.'
+            });
+          }
+        }
+      } catch (_) {}
+
+      const originalBalance = bal;
+      let newBalance = bal - price;
+      // Atomic debit — only one concurrent buy can succeed when balance covers a single number
+      const { data: debited, error: debErr } = await supabase.rpc('debit_balance_if_sufficient', {
+        p_user_id: auth.userId,
+        p_amount: price
+      });
+      if (debErr) {
+        console.error('[sms-bus order] debit_balance_if_sufficient', debErr.message);
+        const { data: p2 } = await supabase.from('profiles').select('balance').eq('id', auth.userId).single();
+        const b2 = Number(p2?.balance || 0);
+        if (b2 < price) {
+          return json(res, 400, {
+            success: false,
+            message: `Insufficient balance. Need ₦${price.toLocaleString()}, you have ₦${b2.toLocaleString()}`
+          });
+        }
+        const { error: upErr } = await supabase
+          .from('profiles')
+          .update({ balance: b2 - price })
+          .eq('id', auth.userId)
+          .gte('balance', price);
+        if (upErr) {
+          return json(res, 500, { success: false, message: 'Could not debit balance. Try again.' });
+        }
+        newBalance = b2 - price;
+      } else if (debited === false || debited === null || debited === 0) {
+        return json(res, 400, {
+          success: false,
+          message: `Insufficient balance. Need ₦${price.toLocaleString()}, you have ₦${bal.toLocaleString()}`
+        });
+      } else {
+        const { data: pAfter } = await supabase.from('profiles').select('balance').eq('id', auth.userId).maybeSingle();
+        if (pAfter) newBalance = Number(pAfter.balance);
+      }
+
+      const params = {
+        country_id: String(country_id),
+        project_id: String(project_id)
+      };
+      if (wantReuse) params.reuse = 'true';
+
+      let bus;
+      try {
+        bus = await smsbusGet(OTP_BASE, '/get/number', params);
+      } catch (e) {
+        try { await supabase.rpc('credit_balance', { p_user_id: auth.userId, p_amount: price }); } catch (_) { await supabase.from('profiles').update({ balance: originalBalance }).eq('id', auth.userId); }
+        return json(res, 502, { success: false, message: 'This SMS server is busy. Try again in a moment, or contact support.' });
+      }
+
+      if (!busOk(bus.data) || !bus.data?.data?.request_id) {
+        try { await supabase.rpc('credit_balance', { p_user_id: auth.userId, p_amount: price }); } catch (_) { await supabase.from('profiles').update({ balance: originalBalance }).eq('id', auth.userId); }
+        const code = bus.data?.code;
+        const msg = String(bus.data?.message || '');
+        if (code === 50201 || /balance not enough/i.test(msg)) {
+          return json(res, 503, {
+            success: false,
+            code: 'SERVER_BUSY',
+            message: 'This SMS server is temporarily unavailable. Try the other server, or contact support.'
+          });
+        }
+        return json(res, 400, {
+          success: false,
+          message: 'No number available right now. Try another service or country, or contact support.'
+        });
+      }
+
+      const requestId = String(bus.data.data.request_id);
+      const phone = String(bus.data.data.number || '');
+
+      const row = {
+        source: 'smsbus',
+        user_id: auth.userId,
+        customer_id: profile.customer_id || null,
+        order_id: requestId,
+        idempotency_key: clientIdem || `smsbus-${requestId}`,
+        country_id: Number(country_id) || null,
+        country_name: countryName || String(country_id),
+        service_id: String(project_id),
+        service_name: serviceName,
+        phone_number: phone,
+        price,
+        // Supplier cost in USD — admin overview converts with USD_TO_NGN_RATE
+        supplier_price: costUsd > 0 ? costUsd : null,
+        currency: 'NGN',
+        status: 'waiting_for_code',
+        code: null,
+        refunded: false,
+        // User checked "Prefer reusable number" at buy time
+        is_reusable: !!wantReuse
+      };
+
+      const ins = await insertNumberOrder(row);
+      if (ins.error) {
+        console.error('[sms-bus order] insert failed after retries:', ins.error.message, {
+          requestId,
+          user_id: auth.userId,
+          phone,
+          columns: Object.keys(row)
+        });
+        // CRITICAL: supplier already issued a number. Do NOT cancel yet and do NOT
+        // block the number page — return success so the client can open the waiting
+        // screen. Persist a soft recovery row via raw SQL-like minimal retry once more.
+        const emergency = {
+          user_id: auth.userId,
+          order_id: String(requestId),
+          idempotency_key: `smsbus-${requestId}`,
+          phone_number: phone || null,
+          service_name: serviceName || 'SMS',
+          country_name: countryName || null,
+          price,
+          status: 'waiting_for_code',
+          source: 'smsbus',
+          is_reusable: !!wantReuse
+        };
+        const { error: emErr } = await supabase.from('number_orders').insert(emergency);
+        if (emErr) {
+          console.error('[sms-bus order] emergency insert also failed:', emErr.message);
+          // Still send user to number page with supplier ids — check API can use request_id
+        }
+        try {
+          await supabase.from('transactions').insert({
+            user_id: auth.userId,
+            customer_id: profile.customer_id,
+            type: 'purchase',
+            category: 'MJ SMS',
+            title: serviceName,
+            subtitle: `OTP · ${phone || requestId}`,
+            amount: `₦${price.toLocaleString()}`,
+            amount_ngn: price,
+            status: 'pending',
+            notes: `order_id:${requestId}`
+          });
+        } catch (_) {}
+
+        return json(res, 200, {
+        success: true,
+        data: {
+            order_id: requestId,
+            number: phone,
+            phone_number: phone,
+            price,
+            new_balance: newBalance,
+            service_name: serviceName,
+            country_name: countryName,
+            source: 'smsbus',
+            status: 'waiting_for_code',
+            warning: emErr
+              ? 'Number ready. Open the waiting page to get your code.'
+              : null
+          }
+        });
+      }
+
+      try {
+        await supabase.from('transactions').insert({
+          user_id: auth.userId,
+          customer_id: profile.customer_id,
+          type: 'purchase',
+          category: 'MJ SMS',
+          title: serviceName,
+          subtitle: `OTP · ${phone || requestId}`,
+          amount: `₦${price.toLocaleString()}`,
+          amount_ngn: price,
+          status: 'pending', // pending until SMS code arrives
+          notes: `order_id:${requestId}`
+        });
+      } catch (_) {}
+
+      return json(res, 200, {
+        success: true,
+        data: {
+          order_id: requestId,
+          number: phone,
+          phone_number: phone,
+          price,
+          new_balance: newBalance,
+          service_name: serviceName,
+          country_name: countryName,
+          source: 'smsbus',
+          status: 'waiting_for_code'
+        }
+      });
+    }
+
+    if (method === 'POST' && action === 'check') {
+      const auth = await requireAuth(req);
+      if (!auth.ok) return json(res, auth.status, { success: false, message: auth.message });
+      const body = await readBody(req);
+      const order_id = String(body.order_id || '');
+      if (!order_id) return json(res, 400, { success: false, message: 'order_id required' });
+
+      let { data: order } = await supabase
+        .from('number_orders')
+        .select('*')
+        .eq('order_id', order_id)
+        .eq('user_id', auth.userId)
+        .eq('source', 'smsbus')
+        .maybeSingle();
+      if (!order) {
+        const r2 = await supabase
+          .from('number_orders')
+          .select('*')
+          .eq('order_id', String(order_id))
+          .eq('user_id', auth.userId)
+          .maybeSingle();
+        order = r2.data;
+      }
+      if (!order) {
+        // supplier request_id may be stored differently
+        const r3 = await supabase
+          .from('number_orders')
+          .select('*')
+          .eq('user_id', auth.userId)
+          .eq('source', 'smsbus')
+          .order('created_at', { ascending: false })
+          .limit(5);
+        order = (r3.data || []).find((o) => String(o.order_id) === String(order_id)) || null;
+      }
+
+      if (!order) {
+        // Order row may be missing (insert race) but supplier still has request_id —
+        // poll supplier and still return a waiting payload so the number page works.
+        const { data: live } = await smsbusGet(OTP_BASE, '/get/sms', { request_id: order_id });
+        if (busOk(live) && live.data) {
+          const code = String(live.data);
+          // Best-effort save completed row
+          try {
+            await supabase.from('number_orders').insert({
+              source: 'smsbus',
+              user_id: auth.userId,
+              order_id: order_id,
+              idempotency_key: `smsbus-${order_id}`,
+              status: 'completed',
+              code,
+              phone_number: null
+            });
+          } catch (_) {}
+          return json(res, 200, {
+        success: true,
+        data: { status: 'completed', code, number: null, phone_number: null, order_id }
+          });
+        }
+        return json(res, 200, {
+        success: true,
+        data: {
+            status: 'waiting_for_code',
+            code: null,
+            message: 'Not received yet',
+            number: null,
+            phone_number: null,
+            order_id,
+            orphan: true
+          }
+        });
+      }
+      if (order.status === 'completed' && order.code) {
+        return json(res, 200, {
+        success: true,
+        data: {
+            status: 'completed',
+            code: order.code,
+            number: order.phone_number,
+            phone_number: order.phone_number,
+            service_name: order.service_name,
+            country_name: order.country_name,
+            price: order.price,
+            created_at: order.created_at
+          }
+        });
+      }
+      // Refunded/expired: still poll supplier — if code exists, re-charge + complete
+      const wasRefunded =
+        order.refunded === true ||
+        ['refunded', 'expired', 'cancelled', 'canceled'].includes(String(order.status || '').toLowerCase());
+
+      const { data } = await smsbusGet(OTP_BASE, '/get/sms', { request_id: order_id });
+      if (busOk(data) && data.data) {
+        const code = String(data.data);
+        if (wasRefunded) {
+          const re = await reclaimAndCompleteSmsBus(order, auth.userId, code);
+          if (re.ok) {
+            return json(res, 200, {
+              success: true,
+              data: {
+                status: 'completed',
+                code: re.code || code,
+                number: order.phone_number,
+                refunded: false,
+                recharged: !!re.recharged,
+                recharged_amount: re.amount,
+                new_balance: re.new_balance,
+                message: re.recharged
+                  ? 'Code received — balance charged for this number'
+                  : 'Code received'
+              }
+            });
+          }
+        }
+        // Normal complete (not refunded)
+        const { data: updatedRows } = await supabase
+          .from('number_orders')
+          .update({ status: 'completed', code })
+          .eq('id', order.id)
+          .eq('refunded', false)
+          .select();
+        if (!updatedRows || updatedRows.length === 0) {
+          // Concurrent refund mid-flight → try reclaim
+          const re = await reclaimAndCompleteSmsBus(
+            { ...order, refunded: true },
+            auth.userId,
+            code
+          );
+          if (re.ok) {
+            return json(res, 200, {
+              success: true,
+              data: {
+                status: 'completed',
+                code: re.code || code,
+                number: order.phone_number,
+                refunded: false,
+                recharged: !!re.recharged,
+                recharged_amount: re.amount,
+                new_balance: re.new_balance,
+                message: 'Code received — balance charged for this number'
+              }
+            });
+          }
+          const { data: current } = await supabase.from('number_orders').select('*').eq('id', order.id).single();
+          return json(res, 200, {
+            success: true,
+            data: {
+              status: current ? current.status : 'refunded',
+              code: current ? current.code : null,
+              number: order.phone_number,
+              refunded: current ? current.refunded : true
+            }
+          });
+        }
+        await markTxStatus(auth.userId, order_id, order.phone_number, 'completed');
+        return json(res, 200, {
+          success: true,
+          data: { status: 'completed', code, number: order.phone_number }
+        });
+      }
+      if (wasRefunded) {
+        return json(res, 200, {
+          success: true,
+          data: {
+            status: order.status || 'refunded',
+            code: null,
+            number: order.phone_number,
+            message: 'Already refunded'
+          }
+        });
+      }
+      // SMS-Bus: 50101 = not received yet (still waiting); 50102 = released/timeout
+      const msg = data?.message || '';
+      const scode = data?.code;
+      if (scode === 50101 || /not received sms yet/i.test(msg)) {
+        // Explicit waiting — do not treat as error
+        return json(res, 200, {
+          success: true,
+          data: {
+            status: 'waiting_for_code',
+            code: null,
+            message: 'Not received yet',
+            number: order.phone_number,
+            phone_number: order.phone_number,
+            service_name: order.service_name,
+            country_name: order.country_name,
+            price: order.price,
+            created_at: order.created_at,
+            time_left: order.created_at
+              ? Math.max(0, Math.floor((SMSBUS_EXPIRY_MS - (Date.now() - new Date(order.created_at).getTime())) / 1000))
+              : null
+          }
+        });
+      }
+      if (/released|timeout/i.test(msg) || scode === 50102) {
+        // Supplier released — refund once if still open
+        const refundResult = await claimAndRefundSmsBusOrder(order, auth.userId, {
+          subtitle: 'Expired — no SMS, balance restored',
+          status: 'expired'
+        });
+        if (refundResult.refunded) {
+          return json(res, 200, {
+            success: true,
+            data: {
+              status: 'refunded',
+              code: null,
+              message: 'Time expired — balance restored',
+              refunded: true,
+              new_balance: refundResult.new_balance
+            }
+          });
+        }
+        return json(res, 200, {
+          success: true,
+          data: { status: 'expired', code: null, message: 'Number expired' }
+        });
+      }
+
+      // Local 20-minute expiry (matches Server 1 UX)
+      if (order.created_at) {
+        const age = Date.now() - new Date(order.created_at).getTime();
+        if (age >= SMSBUS_EXPIRY_MS) {
+          try {
+            await smsbusGet(OTP_BASE, '/cancel', { request_id: order_id });
+          } catch (_) {}
+          const refundResult = await claimAndRefundSmsBusOrder(order, auth.userId, {
+            subtitle: 'Expired — no SMS, balance restored',
+            status: 'expired'
+          });
+          if (refundResult.refunded) {
+            return json(res, 200, {
+        success: true,
+        data: {
+                status: 'refunded',
+                code: null,
+                message: 'Time expired — balance restored',
+                refunded: true,
+                new_balance: refundResult.new_balance
+              }
+            });
+          }
+        }
+      }
+
+      return json(res, 200, {
+        success: true,
+        data: {
+          status: 'waiting_for_code',
+          code: null,
+          message: msg || 'Not received yet',
+          number: order.phone_number,
+          phone_number: order.phone_number,
+          service_name: order.service_name,
+          country_name: order.country_name,
+          price: order.price,
+          created_at: order.created_at,
+          time_left: order.created_at
+            ? Math.max(0, Math.floor((SMSBUS_EXPIRY_MS - (Date.now() - new Date(order.created_at).getTime())) / 1000))
+            : null
+        }
+      });
+    }
+
+    if (method === 'POST' && action === 'cancel') {
+      const auth = await requireAuth(req);
+      if (!auth.ok) return json(res, auth.status, { success: false, message: auth.message });
+      const body = await readBody(req);
+      const order_id = String(body.order_id || '');
+      if (!order_id) return json(res, 400, { success: false, message: 'order_id required' });
+
+      const { data: order } = await supabase
+        .from('number_orders')
+        .select('*')
+        .eq('order_id', order_id)
+        .eq('user_id', auth.userId)
+        .eq('source', 'smsbus')
+        .maybeSingle();
+      if (!order) return json(res, 404, { success: false, message: 'Order not found' });
+      if (order.status === 'completed' && order.code) {
+        return json(res, 400, {
+          success: false,
+          code: 'CODE_ALREADY_RECEIVED',
+          message: 'A code was already received — this order cannot be cancelled.'
+        });
+      }
+      if (order.refunded || order.status === 'refunded') {
+        return json(res, 200, { success: true, message: 'Already refunded', refunded: 0 });
+      }
+
+      // 1-minute cancel cooldown (above supplier 30s minimum)
+      if (order.created_at) {
+        const age = Date.now() - new Date(order.created_at).getTime();
+        if (age < SMSBUS_CANCEL_COOLDOWN_MS) {
+          const waitSec = Math.ceil((SMSBUS_CANCEL_COOLDOWN_MS - age) / 1000);
+          return json(res, 400, {
+            success: false,
+            code: 'EARLY_CANCEL_DENIED',
+            wait_seconds: waitSec,
+            message: `Cancel available in ${waitSec}s. Please wait a moment.`
+          });
+        }
+      }
+
+      // Last look: if SMS arrived, never refund
+      try {
+        const smsRes = await smsbusGet(OTP_BASE, '/get/sms', { request_id: order_id });
+        if (busOk(smsRes.data) && smsRes.data.data) {
+          const code = String(smsRes.data.data);
+          const { data: updatedRows } = await supabase
+            .from('number_orders')
+            .update({ status: 'completed', code })
+            .eq('id', order.id)
+            .eq('refunded', false)
+            .select();
+          if (updatedRows && updatedRows.length > 0) {
+            return json(res, 400, {
+              success: false,
+              code: 'CODE_ALREADY_RECEIVED',
+              message: 'A code was received — cancel is not available.'
+            });
+          }
+        }
+      } catch (_) {}
+
+      // Ask supplier to cancel (docs: 200 ok, 50103 already closed, 401 bad token)
+      let cancelOk = false;
+      let cancelMsg = '';
+      try {
+        const cancelRes = await smsbusGet(OTP_BASE, '/cancel', { request_id: order_id });
+        cancelOk = busOk(cancelRes.data);
+        cancelMsg = String(cancelRes.data?.message || cancelRes.data?.code || '');
+        const ccode = cancelRes.data?.code;
+        // Already closed / released / timeout — safe to refund if we never got a code
+        if (
+          !cancelOk &&
+          (ccode === 50103 ||
+            ccode === 50102 ||
+            /already closed|closed|timeout|released|not received/i.test(cancelMsg))
+        ) {
+          cancelOk = true;
+        }
+        // Token/account issues must not trap the customer's money after cooldown
+        if (!cancelOk && (ccode === 401 || /wrong token/i.test(cancelMsg))) {
+          cancelOk = true;
+          cancelMsg = 'supplier unavailable — refunding locally';
+        }
+      } catch (e) {
+        // Network failure talking to supplier — after cooldown, still refund if no code
+        cancelOk = true;
+        cancelMsg = 'supplier unreachable — refunding locally';
+      }
+
+      // After 1-minute cooldown with no code: always refund the user
+      if (!cancelOk) {
+        cancelOk = true;
+      }
+
+      const refundResult = await claimAndRefundSmsBusOrder(order, auth.userId, {
+        status: 'cancelled',
+        subtitle: 'Cancelled — balance restored'
+      });
+      if (!refundResult.refunded && refundResult.reason === 'already_final') {
+        return json(res, 200, { success: true, message: 'Already refunded', refunded: 0 });
+      }
+      if (!refundResult.refunded) {
+        return json(res, 500, {
+          success: false,
+          message: 'Could not restore balance automatically. Please contact support with your order ID.'
+        });
+      }
+      return json(res, 200, {
+        success: true,
+        message: 'Cancelled and refunded',
+        refunded: refundResult.amount,
+        new_balance: refundResult.new_balance
+      });
+    }
+
+    if (method === 'POST' && action === 'reuse') {
+      // SMS-Bus: reuse same mobile for same country/project within ~20 min of a successful SMS.
+      // GET /api/control/reuse?country_id&project_id&mobile_number
+      const auth = await requireAuth(req);
+      if (!auth.ok) return json(res, auth.status, { success: false, message: auth.message });
+      const body = await readBody(req);
+      const country_id = body.country_id;
+      const project_id = body.project_id || body.service_id;
+      let mobile_number = String(body.mobile_number || body.phone_number || '').replace(/\D/g, '');
+      const countryNameHint = body.country_name || '';
+      const serviceNameHint = body.service_name || '';
+      if (!country_id || !project_id || !mobile_number) {
+        return json(res, 400, {
+          success: false,
+          message: 'country, service and number are required to reuse'
+        });
+      }
+
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('id, balance, customer_id')
+        .eq('id', auth.userId)
+        .single();
+      if (!profile) return json(res, 400, { success: false, message: 'Profile not found' });
+
+      // Selling price: prefer DB catalog, else supplier + markup (same as order)
+      let costUsd = 0.3;
+      let serviceName = serviceNameHint || 'SMS';
+      let countryName = countryNameHint || String(country_id);
+      let price = 0;
+      try {
+        const { data: dbSvc } = await supabase
+          .from('number_services')
+          .select('price, supplier_price, service_name, country_name')
+          .eq('source', 'smsbus')
+          .eq('country_id', String(country_id))
+          .eq('service_id', String(project_id))
+          .maybeSingle();
+        if (dbSvc && Number(dbSvc.price) > 0) {
+          price = Number(dbSvc.price);
+          costUsd = Number(dbSvc.supplier_price) || costUsd;
+          serviceName = dbSvc.service_name || serviceName;
+          countryName = dbSvc.country_name || countryName;
+        }
+      } catch (_) {}
+      if (!(price > 0)) {
+        try {
+          const { data: priceData } = await smsbusGet(OTP_BASE, '/list/prices', {
+            country_id: String(country_id)
+          });
+          if (busOk(priceData)) {
+            const hit = Object.values(priceData.data || {}).find(
+              (r) => String(r.project_id) === String(project_id)
+            );
+            if (hit) {
+              costUsd = Number(hit.cost || costUsd);
+              serviceName = hit.title || serviceName;
+              price = applyMarkup(costUsd);
+            }
+          }
+        } catch (_) {}
+      }
+      if (!(price > 0)) price = applyMarkup(costUsd);
+
+      const bal = Number(profile.balance) || 0;
+      if (bal < price) {
+        return json(res, 400, {
+          success: false,
+          message: `Need ₦${price.toLocaleString()} to reuse this number`,
+          required: price,
+          available: bal
+        });
+      }
+
+      const originalBalance = bal;
+      const newBalance = bal - price;
+      await supabase.from('profiles').update({ balance: newBalance }).eq('id', auth.userId);
+
+      let bus;
+      try {
+        bus = await smsbusGet(OTP_BASE, '/reuse', {
+          country_id: String(country_id),
+          project_id: String(project_id),
+          mobile_number
+        });
+      } catch (e) {
+        await supabase.from('profiles').update({ balance: originalBalance }).eq('id', auth.userId);
+        return json(res, 502, { success: false, message: 'Could not reach the SMS server. Try again or contact support.' });
+      }
+
+      if (!busOk(bus.data) || !bus.data?.data?.request_id) {
+        await supabase.from('profiles').update({ balance: originalBalance }).eq('id', auth.userId);
+        const code = bus.data?.code;
+        const msg = String(bus.data?.message || '');
+        if (code === 50109 || /expired/i.test(msg)) {
+          return json(res, 400, {
+            success: false,
+            message: 'Reuse window ended. Buy a new number, or contact support if you need help.'
+          });
+        }
+        if (code === 50107 || code === 50108 || /cannot be reused/i.test(msg)) {
+          return json(res, 400, {
+            success: false,
+            message: 'This number cannot be reused right now. Contact support if you need help.'
+          });
+        }
+        return json(res, 400, {
+          success: false,
+          message: 'This number cannot be reused right now. Try a new number or contact support.'
+        });
+      }
+
+      const dNum = bus.data.data || {};
+      const requestId = String(dNum.request_id || '');
+      const phone = String(dNum.number || dNum.phone || mobile_number).replace(/\D/g, '') || mobile_number;
+
+      const row = {
+        source: 'smsbus',
+        user_id: auth.userId,
+        customer_id: profile.customer_id != null ? String(profile.customer_id) : null,
+        order_id: requestId,
+        country_id: String(country_id),
+        country_name: countryName,
+        service_id: String(project_id),
+        service_name: serviceName,
+        phone_number: phone,
+        price,
+        currency: 'NGN',
+        status: 'waiting_for_code',
+        code: null,
+        refunded: false,
+        is_reusable: true
+      };
+      let { error: insertErr } = await supabase.from('number_orders').insert(row);
+      if (insertErr) {
+        const slim = {
+          source: 'smsbus',
+          user_id: auth.userId,
+          order_id: requestId,
+          phone_number: phone,
+          service_name: serviceName,
+          country_name: countryName,
+          service_id: String(project_id),
+          country_id: String(country_id),
+          price,
+          status: 'waiting_for_code'
+        };
+        ({ error: insertErr } = await supabase.from('number_orders').insert(slim));
+      }
+      if (insertErr) {
+        console.error('[sms-bus reuse] insert failed', insertErr.message);
+      }
+
+      try {
+        await supabase.from('transactions').insert({
+          user_id: auth.userId,
+          customer_id: profile.customer_id,
+          type: 'purchase',
+          category: 'MJ SMS',
+          title: serviceName,
+          subtitle: `${countryName} · reuse · waiting for SMS`,
+          amount: `₦${price.toLocaleString()}`,
+          amount_ngn: price,
+          status: 'pending',
+          notes: `order_id:${requestId}`
+        });
+      } catch (_) {}
+
+      return json(res, 200, {
+        success: true,
+        message: 'Number reused successfully',
+        data: {
+          order_id: requestId,
+          number: phone,
+          phone_number: phone,
+          price,
+          new_balance: newBalance,
+          service_name: serviceName,
+          country_name: countryName,
+          source: 'smsbus',
+          status: 'waiting_for_code',
+          created_at: new Date().toISOString()
+        }
+      });
+    }
+
+    // ——— Rentals ———
+    if (method === 'GET' && action === 'rent_areas') {
+      const auth = await requireAuth(req);
+      if (!auth.ok) return json(res, auth.status, { success: false, message: auth.message });
+      const { data } = await smsbusGet(RENT_BASE, '/v1/rent/list/area');
+      if (!busOk(data)) {
+        return json(res, 400, { success: false, message: 'Unable to load rental areas. Try again or contact support.' });
+      }
+      const raw = data.data;
+      const list = Array.isArray(raw) ? raw : Object.values(raw || {});
+      // unit_price is monthly price in cents (API docs)
+      const adminMap = await rentAdminMonthlyOverrides();
+      const normalized = list.map((a) => {
+        const unitCents = Number(a.unit_price || 0);
+        const unitUsd = unitCents / 100;
+        const minMonth = Number(a.min_month || 1);
+        const title = a.area_title || a.area_name || a.area_code;
+        const code = String(a.area_code || '').toUpperCase();
+        const adminPrice = adminMap[code];
+        const defaultPrice = rentDefaultMonthlyNgn(code, title);
+        // Admin override > fixed country default > supplier markup fallback
+        let price1mo;
+        if (adminPrice > 0) price1mo = adminPrice;
+        else if (defaultPrice > 0) price1mo = defaultPrice;
+        else price1mo = applyMarkup(unitUsd);
+        return {
+          area_code: a.area_code,
+          title,
+          unit_usd: unitUsd,
+          min_month: minMonth,
+          stock: Number(a.total || 0),
+          price_1mo: price1mo,
+          price_mode: adminPrice > 0 ? 'admin' : (defaultPrice > 0 ? 'default' : 'markup')
+        };
+      });
+      return json(res, 200, { success: true, data: normalized });
+    }
+
+    if (method === 'GET' && action === 'rent_prices') {
+      const auth = await requireAuth(req);
+      if (!auth.ok) return json(res, auth.status, { success: false, message: auth.message });
+      const area_code = url.searchParams.get('area_code');
+      if (!area_code) return json(res, 400, { success: false, message: 'area_code required' });
+      // Try common path — docs vary; attempt list
+      const { data } = await smsbusGet(RENT_BASE, '/v1/rent/list/area');
+      return json(res, 200, { success: true, data: data.data, area_code });
+    }
+
+    if (method === 'POST' && action === 'rent_order') {
+      const auth = await requireAuth(req);
+      if (!auth.ok) return json(res, auth.status, { success: false, message: auth.message });
+      const body = await readBody(req);
+      const area_code = String(body.area_code || '').toUpperCase();
+      const time = Number(body.time || 1); // months
+      if (!area_code || !time) {
+        return json(res, 400, { success: false, message: 'area_code and time (months) required' });
+      }
+
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('id, balance, customer_id')
+        .eq('id', auth.userId)
+        .single();
+      if (!profile) return json(res, 400, { success: false, message: 'Profile not found' });
+
+      // Monthly sell price: admin override > country default > supplier markup
+      let unitUsd = Number(body.quoted_usd || 0);
+      let areaTitle = '';
+      try {
+        const areasRes = await smsbusGet(RENT_BASE, '/v1/rent/list/area');
+        if (busOk(areasRes.data)) {
+          const list = Array.isArray(areasRes.data.data)
+            ? areasRes.data.data
+            : Object.values(areasRes.data.data || {});
+          const hit = list.find((a) => String(a.area_code).toUpperCase() === area_code);
+          if (hit) {
+            if (!unitUsd) unitUsd = Number(hit.unit_price || 0) / 100;
+            areaTitle = hit.area_title || hit.area_name || '';
+          }
+        }
+      } catch (_) {}
+      if (!unitUsd) unitUsd = 3.5;
+      const supplierUsd = unitUsd * time;
+      const adminMap = await rentAdminMonthlyOverrides();
+      const adminMonthly = adminMap[area_code];
+      const defaultMonthly = rentDefaultMonthlyNgn(area_code, areaTitle);
+      let monthlyNgn;
+      if (adminMonthly > 0) monthlyNgn = adminMonthly;
+      else if (defaultMonthly > 0) monthlyNgn = defaultMonthly;
+      else monthlyNgn = applyMarkup(unitUsd);
+      // Prefer client quoted total if it matches our monthly * months (prevents UI mismatch)
+      const expected = Math.round(monthlyNgn * time);
+      let price = expected;
+      const quoted = Number(body.quoted_price_ngn || 0);
+      if (quoted > 0 && Math.abs(quoted - expected) <= 50) price = Math.round(quoted);
+      const bal = Number(profile.balance) || 0;
+      if (bal < price) {
+        return json(res, 400, {
+          success: false,
+          message: `Insufficient balance. Need ₦${price.toLocaleString()}`
+        });
+      }
+
+      const originalBalance = bal;
+      await supabase.from('profiles').update({ balance: bal - price }).eq('id', auth.userId);
+
+      const bus = await smsbusGet(RENT_BASE, '/v1/rent/get/number', {
+        area_code,
+        time: String(time)
+      });
+
+      if (!busOk(bus.data) || !bus.data?.data) {
+        await supabase.from('profiles').update({ balance: originalBalance }).eq('id', auth.userId);
+        return json(res, 400, {
+          success: false,
+          message: 'Rental is unavailable for this area right now. Contact support if you need help.'
+        });
+      }
+
+      const d = bus.data.data;
+      const orderId = String(d.order_id || d.id || `RENT-${Date.now()}`);
+      const phone = String(d.mobile_number || d.number || '');
+      const dial = String(d.dialing_code || '');
+      const fullPhone = dial && phone && !phone.startsWith(dial) ? `${dial}${phone}` : phone;
+
+      await supabase.from('number_orders').insert({
+        source: 'smsbus_rent',
+        user_id: auth.userId,
+        customer_id: profile.customer_id,
+        order_id: orderId,
+        idempotency_key: `smsbus_rent-${orderId}`,
+        country_id: null,
+        country_name: rentCountryName(d.area_code || area_code, d.area_title || d.area_name),
+        service_id: 'rent',
+        service_name: `Rental ${time} mo · ${rentCountryName(d.area_code || area_code, d.area_title || d.area_name)}`,
+        phone_number: fullPhone || phone,
+        price,
+        supplier_price: supplierUsd,
+        currency: 'NGN',
+        status: 'active',
+        code: d.expire_at || d.keep_at || null,
+        refunded: false
+      });
+
+      try {
+        await supabase.from('transactions').insert({
+          user_id: auth.userId,
+          customer_id: profile.customer_id,
+          type: 'purchase',
+          category: 'MJ SMS',
+          title: `Number rental ${area_code}`,
+          subtitle: `${fullPhone || phone} · ${time} month(s)`,
+          amount: `₦${price.toLocaleString()}`,
+          amount_ngn: price,
+          status: 'completed'
+        });
+      } catch (_) {}
+
+      return json(res, 200, {
+        success: true,
+        data: {
+          order_id: orderId,
+          number: fullPhone || phone,
+          area_code: d.area_code || area_code,
+          country_name: rentCountryName(d.area_code || area_code, d.area_title || d.area_name),
+          expire_at: d.expire_at,
+          keep_at: d.keep_at,
+          price,
+          new_balance: bal - price,
+          source: 'smsbus_rent'
+        }
+      });
+    }
+
+
+    // GET rent_sms — latest SMS on a long-term rented number (SMS-Bus)
+    if (method === 'GET' && action === 'rent_sms') {
+      const auth = await requireAuth(req);
+      if (!auth.ok) return json(res, auth.status, { success: false, message: auth.message });
+      let order_id = String(url.searchParams.get('order_id') || '').trim();
+      let area_code = String(url.searchParams.get('area_code') || '').toUpperCase().trim();
+      let mobile_number = String(url.searchParams.get('mobile_number') || '').replace(/\D/g, '');
+
+      // Resolve from our order when order_id is provided
+      let orderRow = null;
+      if (order_id) {
+        const { data: row } = await supabase
+          .from('number_orders')
+          .select('*')
+          .eq('user_id', auth.userId)
+          .eq('source', 'smsbus_rent')
+          .eq('order_id', order_id)
+          .maybeSingle();
+        if (!row) return json(res, 404, { success: false, message: 'Rental not found' });
+        orderRow = row;
+        if (!area_code) area_code = String(row.country_name || '').toUpperCase();
+        // Provider needs 2-letter area (CA), not "CANADA"
+        if (area_code.length > 3) {
+          const rev = { CANADA:'CA', 'UNITED STATES':'US', USA:'US', 'UNITED KINGDOM':'GB', UK:'GB' };
+          area_code = rev[area_code] || (String(row.service_name||'').match(/\b([A-Z]{2})\b/)||[])[1] || area_code.slice(0,2);
+        }
+        area_code = String(area_code||'').toUpperCase();
+        if (!mobile_number) {
+          // Prefer national number without dialing code for SMS-Bus
+          mobile_number = String(row.phone_number || '').replace(/\D/g, '');
+        }
+      }
+      if (!area_code || !mobile_number) {
+        return json(res, 400, { success: false, message: 'area_code and mobile_number (or order_id) required' });
+      }
+
+      // Strip leading country dial codes if still present (1 for US/CA, etc.)
+      let national = mobile_number;
+      if (national.length > 10 && national.startsWith('1')) national = national.slice(1);
+
+      const busSms = await smsbusGet(RENT_BASE, '/v1/rent/get/sms', {
+        area_code,
+        mobile_number: national
+      });
+      // 50101 style / empty = no SMS yet — still success with empty list
+      const raw = busSms.data;
+      const ok = busOk(raw);
+      let messages = [];
+      if (ok && raw && raw.data) {
+        const d = raw.data;
+        if (Array.isArray(d)) {
+          messages = d.map((m) => ({
+            body: m.content || m.body || m.text || m.message || '',
+            code: m.code || '',
+            received_at: m.receive_at || m.received_at || m.time || null,
+            from: m.from || m.sender || ''
+          }));
+        } else if (typeof d === 'object') {
+          const body = d.content || d.body || d.text || d.message || '';
+          if (body) {
+            messages = [{
+              body,
+              code: d.code || '',
+              received_at: d.receive_at || d.received_at || null,
+              from: d.from || d.sender || ''
+            }];
+          }
+        } else if (typeof d === 'string' && d.trim()) {
+          messages = [{ body: d, code: '', received_at: null, from: '' }];
+        }
+      }
+            // Normalize, merge with stored inbox history (provider often returns only latest SMS)
+      messages = mergeRentInbox([], messages);
+      if (orderRow) {
+        try {
+          const stored = parseRentInboxNotes(orderRow.notes);
+          messages = mergeRentInbox(stored, messages);
+          const packed = packRentInboxNotes(messages, orderRow.notes);
+          const patch = { notes: packed };
+          const name = String(orderRow.service_name || '');
+          if (messages.length && !/sms\s*received/i.test(name)) {
+            patch.service_name = (name || 'Rental') + ' · SMS received';
+          }
+          await supabase.from('number_orders').update(patch).eq('id', orderRow.id);
+          orderRow.notes = packed;
+        } catch (persistErr) {
+          console.warn('[rent_sms] inbox persist', persistErr && persistErr.message ? persistErr.message : persistErr);
+          // If notes column missing, still return merged in-memory (frontend also caches)
+        }
+      }
+      return json(res, 200, {
+        success: true,
+        data: messages,
+        message: messages.length ? 'OK' : 'No SMS yet',
+        order: orderRow ? {
+          order_id: orderRow.order_id,
+          phone_number: orderRow.phone_number,
+          area_code,
+          expire_at: orderRow.code,
+          service_name: orderRow.service_name,
+          status: orderRow.status,
+          price: orderRow.price
+        } : null
+      });
+    }
+
+    // GET rent_detail — load one smsbus_rent order for the number page
+    if (method === 'GET' && action === 'rent_detail') {
+      const auth = await requireAuth(req);
+      if (!auth.ok) return json(res, auth.status, { success: false, message: auth.message });
+      const order_id = String(url.searchParams.get('order_id') || '').trim();
+      if (!order_id) return json(res, 400, { success: false, message: 'order_id required' });
+      const { data: row, error } = await supabase
+        .from('number_orders')
+        .select('*')
+        .eq('user_id', auth.userId)
+        .eq('source', 'smsbus_rent')
+        .eq('order_id', order_id)
+        .maybeSingle();
+      if (error || !row) return json(res, 404, { success: false, message: 'Rental not found' });
+      const till = row.code ? Date.parse(String(row.code)) : 0;
+      const active = !(row.refunded) && (!till || till > Date.now()) && !['refunded','cancelled','canceled','expired'].includes(String(row.status||'').toLowerCase());
+      return json(res, 200, {
+        success: true,
+        data: {
+          ...row,
+          area_code: row.country_name,
+          expire_at: row.code,
+          active: !!active,
+          time_left_ms: till && till > Date.now() ? till - Date.now() : 0
+        }
+      });
+    }
+
+
+    // POST rent_cancel — supplier must accept first; only then credit wallet
+    // Rules (provider): within ~20 min of purchase, and only if no SMS received.
+    if (method === 'POST' && action === 'rent_cancel') {
+      const auth = await requireAuth(req);
+      if (!auth.ok) return json(res, auth.status, { success: false, message: auth.message });
+      const body = await readBody(req);
+      const order_id = String(body.order_id || url.searchParams.get('order_id') || '').trim();
+      if (!order_id) return json(res, 400, { success: false, message: 'order_id required' });
+
+      const { data: row, error: rowErr } = await supabase
+        .from('number_orders')
+        .select('*')
+        .eq('user_id', auth.userId)
+        .eq('source', 'smsbus_rent')
+        .eq('order_id', order_id)
+        .maybeSingle();
+      if (rowErr || !row) return json(res, 404, { success: false, message: 'Rental not found' });
+      if (row.refunded === true || ['refunded', 'cancelled', 'canceled'].includes(String(row.status || '').toLowerCase())) {
+        return json(res, 400, { success: false, message: 'This rental was already cancelled' });
+      }
+
+      // Hard block if we already know SMS arrived
+      if (/sms\s*received/i.test(String(row.service_name || ''))) {
+        return json(res, 400, {
+          success: false,
+          message: 'Cancel is unavailable — a message was already received on this number.'
+        });
+      }
+
+      // 20-minute window from purchase
+      const createdMs = row.created_at ? Date.parse(String(row.created_at)) : 0;
+      if (createdMs && Date.now() - createdMs > 20 * 60 * 1000) {
+        return json(res, 400, {
+          success: false,
+          message: 'Cancel window has closed. Numbers can only be cancelled within 20 minutes of purchase if no SMS was received.'
+        });
+      }
+
+      // Re-check live inbox before asking provider to cancel
+      try {
+        let mobile = String(row.phone_number || '').replace(/\D/g, '');
+        if (mobile.length > 10 && mobile.startsWith('1')) mobile = mobile.slice(1);
+        const area = String(row.country_name || '').toUpperCase();
+        if (area && mobile) {
+          const smsCheck = await smsbusGet(RENT_BASE, '/v1/rent/get/sms', {
+            area_code: area,
+            mobile_number: mobile
+          });
+          const d = smsCheck.data && smsCheck.data.data;
+          let hasSms = false;
+          if (d) {
+            if (Array.isArray(d) && d.length) hasSms = true;
+            else if (typeof d === 'object' && (d.content || d.body || d.text || d.message)) hasSms = true;
+            else if (typeof d === 'string' && d.trim()) hasSms = true;
+          }
+          if (hasSms) {
+            try {
+              const name = String(row.service_name || '');
+              if (!/sms\s*received/i.test(name)) {
+                await supabase.from('number_orders').update({
+                  service_name: (name || 'Rental') + ' · SMS received'
+                }).eq('id', row.id);
+              }
+            } catch (_) {}
+            return json(res, 400, {
+              success: false,
+              message: 'Cancel is unavailable — a message was already received on this number.'
+            });
+          }
+        }
+      } catch (e) {
+        console.warn('[rent_cancel] sms precheck', e.message || e);
+      }
+
+      // Provider cancel FIRST — never refund unless this succeeds
+      const cancelRes = await smsbusGet(RENT_BASE, '/v1/rent/cancel/order', { order_id });
+      if (!busOk(cancelRes.data)) {
+        const rawMsg = String(
+          (cancelRes.data && (cancelRes.data.message || cancelRes.data.msg)) || 'Cancel was not approved'
+        );
+        // Map known provider messages to safe customer copy (never name the provider)
+        let message = 'Cancel was not approved. No refund was issued.';
+        const low = rawMsg.toLowerCase();
+        if (low.includes('sms') && (low.includes('received') || low.includes('receive'))) {
+          message = 'Cancel is unavailable — a message was already received on this number.';
+        } else if (low.includes('3 times') || low.includes('can not continue') || low.includes('cannot continue')) {
+          message = 'This number can no longer be cancelled.';
+        } else if (low.includes('time') || low.includes('minute') || low.includes('expired') || low.includes('window')) {
+          message = 'Cancel window has closed. No refund was issued.';
+        }
+        return json(res, 400, { success: false, message, provider_ok: false });
+      }
+
+      // Claim order as refunded once (idempotent)
+      const { data: claimed, error: claimErr } = await supabase
+        .from('number_orders')
+        .update({ status: 'refunded', refunded: true })
+        .eq('id', row.id)
+        .eq('user_id', auth.userId)
+        .or('refunded.is.null,refunded.eq.false')
+        .select('id, price')
+        .maybeSingle();
+
+      if (claimErr || !claimed) {
+        // Provider already cancelled — do not double-credit if already claimed
+        return json(res, 200, {
+          success: true,
+          message: 'Rental cancelled. If a refund was due it is already on your wallet.',
+          already: true
+        });
+      }
+
+      const refundAmount = Math.round(Number(row.price) || 0);
+      if (refundAmount > 0) {
+        const { error: credErr } = await supabase.rpc('credit_balance', {
+          p_user_id: auth.userId,
+          p_amount: refundAmount
+        });
+        if (credErr) {
+          console.error('[rent_cancel] credit_balance', credErr.message);
+          // Provider cancel succeeded — leave status refunded, support can fix wallet
+          return json(res, 500, {
+            success: false,
+            message: 'Rental was cancelled but wallet credit needs support review. Contact support with your order ID.'
+          });
+        }
+        try {
+          const { data: profile } = await supabase
+            .from('profiles')
+            .select('customer_id')
+            .eq('id', auth.userId)
+            .maybeSingle();
+          await supabase.from('transactions').insert({
+            user_id: auth.userId,
+            customer_id: profile && profile.customer_id,
+            type: 'refund',
+            category: 'MJ SMS',
+            title: 'Rental cancelled — balance restored',
+            subtitle: String(row.phone_number || order_id),
+            amount: `₦${refundAmount.toLocaleString()}`,
+            amount_ngn: refundAmount,
+            status: 'completed'
+          });
+        } catch (_) {}
+      }
+
+      return json(res, 200, {
+        success: true,
+        message: 'Rental cancelled. ₦' + refundAmount.toLocaleString() + ' returned to your wallet.',
+        refunded: refundAmount
+      });
+    }
+
+    if (method === 'POST' && action === 'rent_renew') {
+      const auth = await requireAuth(req);
+      if (!auth.ok) return json(res, auth.status, { success: false, message: auth.message });
+      const body = await readBody(req);
+      const area_code = String(body.area_code || '').toUpperCase();
+      const mobile_number = String(body.mobile_number || '').replace(/\D/g, '');
+      const time = Number(body.time || 1);
+      if (!area_code || !mobile_number) {
+        return json(res, 400, { success: false, message: 'area_code and mobile_number required' });
+      }
+
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('balance, customer_id')
+        .eq('id', auth.userId)
+        .single();
+      let unitUsd = Number(body.quoted_usd || 0);
+      let areaTitle = '';
+      try {
+        const areasRes = await smsbusGet(RENT_BASE, '/v1/rent/list/area');
+        if (busOk(areasRes.data)) {
+          const list = Array.isArray(areasRes.data.data)
+            ? areasRes.data.data
+            : Object.values(areasRes.data.data || {});
+          const hit = list.find((a) => String(a.area_code).toUpperCase() === area_code);
+          if (hit) {
+            if (!unitUsd) unitUsd = Number(hit.unit_price || 0) / 100;
+            areaTitle = hit.area_title || hit.area_name || '';
+          }
+        }
+      } catch (_) {}
+      if (!unitUsd) unitUsd = 3.5;
+      const supplierUsd = unitUsd * time;
+      const adminMap = await rentAdminMonthlyOverrides();
+      const adminMonthly = adminMap[area_code];
+      const defaultMonthly = rentDefaultMonthlyNgn(area_code, areaTitle);
+      let monthlyNgn;
+      if (adminMonthly > 0) monthlyNgn = adminMonthly;
+      else if (defaultMonthly > 0) monthlyNgn = defaultMonthly;
+      else monthlyNgn = applyMarkup(unitUsd);
+      const price = Math.round(monthlyNgn * time);
+      const bal = Number(profile?.balance) || 0;
+      if (bal < price) return json(res, 400, { success: false, message: 'Insufficient balance' });
+
+      await supabase.from('profiles').update({ balance: bal - price }).eq('id', auth.userId);
+      const bus = await smsbusGet(RENT_BASE, '/v1/rent/renew/number', {
+        area_code,
+        mobile_number,
+        time: String(time)
+      });
+      if (!busOk(bus.data)) {
+        await supabase.from('profiles').update({ balance: bal }).eq('id', auth.userId);
+        return json(res, 400, { success: false, message: 'Renew failed. Try again later or contact support.' });
+      }
+      return json(res, 200, { success: true, data: bus.data.data, price });
+    }
+
+    
+    if ((method === 'GET' || method === 'POST') && (action === 'expire_stale' || action === 'expire-stale')) {
+      return handleExpireStaleSmsBus(req, res);
+    }
+
+    if ((method === 'GET' || method === 'POST') && action === 'sync') {
+      const cronSecret = process.env.CRON_SECRET;
+      const authHeader = req.headers.authorization || '';
+      const isCron =
+        (cronSecret && authHeader === `Bearer ${cronSecret}`) ||
+        req.headers['x-vercel-cron'] === '1';
+      if (!isCron) {
+        const auth = await requireAuth(req);
+        if (!auth.ok) return json(res, auth.status, { success: false, message: auth.message });
+        const { data: prof } = await supabase.from('profiles').select('is_admin').eq('id', auth.userId).maybeSingle();
+        if (!prof?.is_admin) {
+          return json(res, 403, { success: false, message: 'Admin only' });
+        }
+      }
+      const [bal, areas] = await Promise.all([
+        smsbusGet(OTP_BASE, '/get/balance'),
+        smsbusGet(RENT_BASE, '/v1/rent/list/area')
+      ]);
+      let areaCount = 0;
+      if (busOk(areas.data)) {
+        const d = areas.data.data;
+        areaCount = Array.isArray(d) ? d.length : Object.keys(d || {}).length;
+      }
+      let catalog = { newCount: 0, updatedCount: 0, errors: 0, countries: 0 };
+      try {
+        catalog = await syncSmsBusCatalog();
+      } catch (e) {
+        console.error('[smsbus] catalog sync failed', e);
+        return json(res, 500, { success: false, message: e.message || 'Catalog sync failed' });
+      }
+      return json(res, 200, {
+        success: true,
+        data: {
+          balance: busOk(bal.data) ? bal.data.data : null,
+          countries: catalog.countries,
+          projects: catalog.newCount + catalog.updatedCount,
+          new_products: catalog.newCount,
+          updated_products: catalog.updatedCount,
+          errors: catalog.errors,
+          rent_areas: areaCount,
+          synced_at: new Date().toISOString(),
+          saved_to_db: true
+        }
+      });
+    }
+
+
+    // ===================== GotSMS USA rentals (gotsms_*) =====================
+    if (String(action).startsWith('gotsms_')) {
+      const ga = action;
+
+      if (method === 'GET' && ga === 'gotsms_balance') {
+        const auth = await requireAuth(req);
+        if (!auth.ok) return json(res, auth.status, { success: false, message: auth.message });
+        const g = await gotsmsFetch('/api/account');
+        const { data: profile } = await supabase.from('profiles').select('balance').eq('id', auth.userId).single();
+        return json(res, 200, {
+          success: true,
+          data: { wallet_ngn: Number(profile?.balance || 0), supplier_ok: g.ok }
+        });
+      }
+
+      if (method === 'GET' && ga === 'gotsms_carriers') {
+        const auth = await requireAuth(req);
+        if (!auth.ok) return json(res, auth.status, { success: false, message: auth.message });
+        const r = await fetch(`${GOTSMS_BASE}/api/carriers`, { headers: { Accept: 'application/json' } });
+        const data = await r.json().catch(() => ({}));
+        return json(res, r.ok ? 200 : 400, { success: !!data.success, data: data.data || [], message: data.message });
+      }
+
+      if (method === 'GET' && ga === 'gotsms_services') {
+        const auth = await requireAuth(req);
+        if (!auth.ok) return json(res, auth.status, { success: false, message: auth.message });
+        const search = String(url.searchParams.get('search') || '').trim();
+        const per_page = Math.min(100, Math.max(1, Number(url.searchParams.get('per_page') || 100)));
+        const page = Math.max(1, Number(url.searchParams.get('page') || 1));
+        const qs = new URLSearchParams({
+          per_page: String(per_page),
+          page: String(page)
+        });
+        if (search) qs.set('search', search);
+        const g = await gotsmsFetch(`/api/services?${qs}`);
+        if (!g.ok) return json(res, g.status || 400, { success: false, message: g.data?.message || 'Could not load services' });
+        // Normalize list (GotSMS may nest under data.data)
+        let list = [];
+        const raw = g.data;
+        if (Array.isArray(raw?.data)) list = raw.data;
+        else if (Array.isArray(raw)) list = raw;
+        // Deduplicate by id within this page
+        const seen = new Set();
+        const unique = [];
+        for (const s of list) {
+          const id = String(s?.id || s?.service_id || '');
+          if (!id || seen.has(id)) continue;
+          seen.add(id);
+          unique.push({
+            id,
+            name: s.name || s.service_name || 'Service',
+            logo: s.logo || s.image || s.icon || null
+          });
+        }
+        return json(res, 200, {
+          success: true,
+          data: unique,
+          meta: raw?.meta || { current_page: page, last_page: page, per_page }
+        });
+      }
+
+      if (method === 'GET' && ga === 'gotsms_plans') {
+        const auth = await requireAuth(req);
+        if (!auth.ok) return json(res, auth.status, { success: false, message: auth.message });
+        const qs = new URLSearchParams();
+        ['service_id', 'country_id', 'duration_type', 'billing_type', 'search'].forEach((k) => {
+          const v = url.searchParams.get(k);
+          if (v) qs.set(k, v);
+        });
+        qs.set('per_page', String(Math.min(100, Number(url.searchParams.get('per_page') || 100))));
+        if (url.searchParams.get('include_unavailable') === '1') qs.set('include_unavailable', '1');
+        let page = 1;
+        const all = [];
+        let lastPage = 1;
+        do {
+          qs.set('page', String(page));
+          const g = await gotsmsFetch(`/api/rents/plans?${qs}`);
+          if (!g.ok) return json(res, g.status || 400, { success: false, message: g.data?.message || 'Could not load plans' });
+          all.push(...(g.data.data || []));
+          lastPage = Number(g.data.meta?.last_page || 1);
+          page += 1;
+        } while (page <= lastPage && page <= 8);
+
+        // Overlay admin prices / hidden flags from number_services (source=gotsms, service_id = plan id)
+        let enriched = all.map(gotsmsEnrichPlan);
+        const planIds = enriched.map((p) => String(p.id)).filter(Boolean);
+        if (planIds.length) {
+          const { data: dbRows } = await supabase
+            .from('number_services')
+            .select('service_id, price, price_source, is_available')
+            .eq('source', 'gotsms')
+            .in('service_id', planIds);
+          const bySid = new Map((dbRows || []).map((r) => [String(r.service_id), r]));
+          enriched = enriched.map((p) => {
+            const db = bySid.get(String(p.id));
+            if (!db) return p;
+            const out = { ...p };
+            if (db.price_source === 'admin' && db.price != null && Number(db.price) > 0) {
+              out.price_ngn = Number(db.price);
+              out.price_source = 'admin';
+            }
+            if (db.is_available === false) {
+              out.is_available = false;
+            }
+            return out;
+          });
+        }
+        // Drop admin-hidden plans from customer view
+        enriched = enriched.filter((p) => p.is_available !== false);
+
+        return json(res, 200, { success: true, data: enriched });
+      }
+
+      if (method === 'POST' && ga === 'gotsms_rent') {
+        const auth = await requireAuth(req);
+        if (!auth.ok) return json(res, auth.status, { success: false, message: auth.message });
+        const body = await readBody(req);
+        const plan_id = String(body.plan_id || '').trim();
+        if (!plan_id) return json(res, 400, { success: false, message: 'Select a rental plan' });
+
+        // Resolve plan from supplier — never only the first global page (that caused false "out of stock")
+        let plan = null;
+        const service_id = String(body.service_id || '').trim();
+        // 1) Direct plan endpoint if supported
+        {
+          const one = await gotsmsFetch(`/api/rents/plans/${encodeURIComponent(plan_id)}`);
+          if (one.ok && one.data) {
+            plan = one.data.data || one.data;
+            if (Array.isArray(plan)) plan = plan.find((p) => String(p.id) === plan_id) || plan[0] || null;
+          }
+        }
+        // 2) Filter by service_id and paginate until found
+        if (!plan && service_id) {
+          for (let page = 1; page <= 10 && !plan; page++) {
+            const qs = new URLSearchParams({
+              service_id,
+              per_page: '100',
+              page: String(page),
+              include_unavailable: '1'
+            });
+            const g = await gotsmsFetch(`/api/rents/plans?${qs}`);
+            if (!g.ok) break;
+            const chunk = g.data?.data || [];
+            plan = chunk.find((p) => String(p.id) === plan_id) || null;
+            const last = Number(g.data?.meta?.last_page || 1);
+            if (page >= last) break;
+          }
+        }
+        // 3) Fallback: search plans by plan id across a few pages
+        if (!plan) {
+          for (let page = 1; page <= 5 && !plan; page++) {
+            const g = await gotsmsFetch(`/api/rents/plans?per_page=100&page=${page}&include_unavailable=1`);
+            if (!g.ok) break;
+            const chunk = g.data?.data || [];
+            plan = chunk.find((p) => String(p.id) === plan_id) || null;
+            if (page >= Number(g.data?.meta?.last_page || 1)) break;
+          }
+        }
+        const supplierUsd = Number(plan?.price || body.quoted_usd || 0);
+        if (!(supplierUsd > 0)) {
+          return json(res, 400, {
+            success: false,
+            message: 'Plan unavailable or out of stock. Pick the service again and choose a duration.',
+            data: { plan_id, service_id: service_id || null, found: !!plan }
+          });
+        }
+        // Base: fixed duration table → else USD markup
+        let price = gotsmsFixedDurationPriceNgn(plan) != null
+          ? gotsmsFixedDurationPriceNgn(plan)
+          : gotsmsSellPriceNgn(supplierUsd);
+        // Admin override on plan row wins (base only — addons still apply)
+        try {
+          const { data: dbPlan } = await supabase
+            .from('number_services')
+            .select('price, price_source, is_available')
+            .eq('source', 'gotsms')
+            .eq('service_id', plan_id)
+            .maybeSingle();
+          if (dbPlan && dbPlan.is_available === false) {
+            return json(res, 400, { success: false, message: 'This plan is not available' });
+          }
+          if (dbPlan && dbPlan.price_source === 'admin' && Number(dbPlan.price) > 0) {
+            price = Number(dbPlan.price);
+          }
+        } catch (_) {}
+        const areaCode = body.area_code ? String(body.area_code).replace(/\D/g, '').slice(0, 6) : '';
+        const carrierId = body.cellular_carrier_id ? String(body.cellular_carrier_id) : '';
+        const addons = gotsmsAddonsNgn({ area_code: areaCode, cellular_carrier_id: carrierId });
+        price = price + addons;
+        if (body.quoted_price_ngn != null) {
+          const q = Number(body.quoted_price_ngn);
+          // allow small drift; quoted should include addons from client
+          if (Number.isFinite(q) && Math.abs(q - price) > 100) {
+            return json(res, 409, {
+              success: false,
+              message: 'Price updated. Refresh and try again.',
+              data: { price_ngn: price, base_addons: addons }
+            });
+          }
+        }
+
+        const { data: profile } = await supabase.from('profiles').select('id, balance, customer_id').eq('id', auth.userId).single();
+        if (!profile) return json(res, 400, { success: false, message: 'Profile not found' });
+
+        const { data: debited, error: debErr } = await supabase.rpc('debit_balance_if_sufficient', {
+          p_user_id: auth.userId,
+          p_amount: price
+        });
+        if (debErr || debited === false || debited === null) {
+          return json(res, 400, { success: false, message: 'Insufficient wallet balance. Fund your wallet and try again.' });
+        }
+
+        const payload = { plan_id };
+        if (body.area_code) payload.area_code = String(body.area_code).replace(/\D/g, '').slice(0, 6);
+        if (body.cellular_carrier_id) payload.cellular_carrier_id = String(body.cellular_carrier_id);
+
+        const g = await gotsmsFetch('/api/rents', { method: 'POST', body: payload });
+        if (!g.ok || !g.data?.success || !g.data?.data) {
+          try { await supabase.rpc('credit_balance', { p_user_id: auth.userId, p_amount: price }); } catch (e) { console.error('[gotsms] restore', e); }
+          return json(res, g.status || 400, { success: false, message: g.data?.message || 'Rental failed. Balance restored.' });
+        }
+
+        const rent = g.data.data;
+        const orderId = await gotsmsSaveOrder({
+          userId: auth.userId,
+          customerId: profile.customer_id,
+          rentId: rent.id,
+          phone: rent.phone,
+          serviceName: rent.service?.name || plan?.service?.name,
+          serviceId: rent.service?.id || plan?.service?.id,
+          priceNgn: price,
+          supplierUsd,
+          status: rent.status || 'active',
+          activeTill: rent.active_till,
+          planLabel: rent.plan?.duration_translation || plan?.duration_translation,
+          carrierName: rent.cellular_carrier?.name || rent.carrier?.name || body.carrier_name || null,
+          areaCode: body.area_code || rent.area_code || null
+        });
+        try {
+          await supabase.from('transactions').insert({
+            user_id: auth.userId,
+            customer_id: profile.customer_id,
+            type: 'purchase',
+            category: 'MJ SMS',
+            title: `USA number rental · ${rent.service?.name || 'SMS'}`,
+            subtitle: `${rent.phone || ''} · ${rent.plan?.duration_translation || ''}`.trim(),
+            amount: `₦${price.toLocaleString()}`,
+            amount_ngn: price,
+            status: 'completed'
+          });
+        } catch (_) {}
+        const { data: fresh } = await supabase.from('profiles').select('balance').eq('id', auth.userId).single();
+        // Optional auto-renew (GotSMS: POST renewal/toggle flips state; default is off)
+        let autoRenew = false;
+        const wantRenew = body.auto_renew === true || body.auto_renew === 1 || body.auto_renew === '1' || body.auto_renew === 'true';
+        if (wantRenew && rent && rent.id) {
+          try {
+            // Toggle once (off → on)
+            const tg = await gotsmsFetch(
+              `/api/rents/${encodeURIComponent(rent.id)}/renewal/toggle`,
+              { method: 'POST' }
+            );
+            autoRenew = !!(tg.ok && tg.data && (tg.data.success !== false) && (
+              (tg.data.data && tg.data.data.is_included_for_next_renewal === true) ||
+              /enabled/i.test(String(tg.data.message || ''))
+            ));
+            // If response shape unclear, verify with GET rent
+            if (!autoRenew) {
+              const check = await gotsmsFetch(`/api/rents/${encodeURIComponent(rent.id)}`);
+              const r = check.data?.data || check.data;
+              if (r && r.is_included_for_next_renewal === true) autoRenew = true;
+              else if (r && r.is_included_for_next_renewal === false) {
+                // still off — toggle again once
+                const tg2 = await gotsmsFetch(
+                  `/api/rents/${encodeURIComponent(rent.id)}/renewal/toggle`,
+                  { method: 'POST' }
+                );
+                const r2 = tg2.data?.data;
+                autoRenew = !!(r2 && r2.is_included_for_next_renewal === true) || /enabled/i.test(String(tg2.data?.message || ''));
+              }
+            }
+          } catch (e) {
+            console.error('[gotsms] auto_renew', e.message || e);
+          }
+        }
+
+        return json(res, 201, {
+          success: true,
+          message: g.data.message || 'Number rented successfully',
+          data: {
+            ...gotsmsPublicRent(rent),
+            order_id: orderId,
+            price_ngn: price,
+            auto_renew: autoRenew,
+            new_balance: Number(fresh?.balance ?? profile.balance - price)
+          }
+        });
+      }
+
+      if (method === 'POST' && ga === 'gotsms_rent_bulk') {
+        const auth = await requireAuth(req);
+        if (!auth.ok) return json(res, auth.status, { success: false, message: auth.message });
+        const body = await readBody(req);
+        const plan_id = String(body.plan_id || '').trim();
+        let quantity = Math.floor(Number(body.quantity || 1));
+        if (!plan_id) return json(res, 400, { success: false, message: 'Select a rental plan' });
+        if (!(quantity >= 1 && quantity <= 25)) return json(res, 400, { success: false, message: 'Quantity must be between 1 and 25' });
+
+        let plan = null;
+        const service_id = String(body.service_id || '').trim();
+        {
+          const one = await gotsmsFetch(`/api/rents/plans/${encodeURIComponent(plan_id)}`);
+          if (one.ok && one.data) {
+            plan = one.data.data || one.data;
+            if (Array.isArray(plan)) plan = plan.find((p) => String(p.id) === plan_id) || plan[0] || null;
+          }
+        }
+        if (!plan && service_id) {
+          for (let page = 1; page <= 10 && !plan; page++) {
+            const qs = new URLSearchParams({ service_id, per_page: '100', page: String(page), include_unavailable: '1' });
+            const g = await gotsmsFetch(`/api/rents/plans?${qs}`);
+            if (!g.ok) break;
+            plan = (g.data?.data || []).find((p) => String(p.id) === plan_id) || null;
+            if (page >= Number(g.data?.meta?.last_page || 1)) break;
+          }
+        }
+        if (!plan) {
+          for (let page = 1; page <= 5 && !plan; page++) {
+            const g = await gotsmsFetch(`/api/rents/plans?per_page=100&page=${page}&include_unavailable=1`);
+            if (!g.ok) break;
+            plan = (g.data?.data || []).find((p) => String(p.id) === plan_id) || null;
+            if (page >= Number(g.data?.meta?.last_page || 1)) break;
+          }
+        }
+        const unitUsd = Number(plan?.price || body.quoted_usd || 0);
+        if (!(unitUsd > 0)) return json(res, 400, { success: false, message: 'Plan unavailable or out of stock. Pick the service again.' });
+        let unitNgn = gotsmsFixedDurationPriceNgn(plan) != null
+          ? gotsmsFixedDurationPriceNgn(plan)
+          : gotsmsSellPriceNgn(unitUsd);
+        try {
+          const { data: dbPlan } = await supabase
+            .from('number_services')
+            .select('price, price_source, is_available')
+            .eq('source', 'gotsms')
+            .eq('service_id', plan_id)
+            .maybeSingle();
+          if (dbPlan && dbPlan.is_available === false) {
+            return json(res, 400, { success: false, message: 'This plan is not available' });
+          }
+          if (dbPlan && dbPlan.price_source === 'admin' && Number(dbPlan.price) > 0) {
+            unitNgn = Number(dbPlan.price);
+          }
+        } catch (_) {}
+        const areaCode = body.area_code ? String(body.area_code).replace(/\D/g, '').slice(0, 6) : '';
+        const carrierId = body.cellular_carrier_id ? String(body.cellular_carrier_id) : '';
+        unitNgn = unitNgn + gotsmsAddonsNgn({ area_code: areaCode, cellular_carrier_id: carrierId });
+        const totalNgn = unitNgn * quantity;
+
+        const { data: profile } = await supabase.from('profiles').select('id, balance, customer_id').eq('id', auth.userId).single();
+        if (!profile) return json(res, 400, { success: false, message: 'Profile not found' });
+
+        const { data: debited, error: debErr } = await supabase.rpc('debit_balance_if_sufficient', {
+          p_user_id: auth.userId,
+          p_amount: totalNgn
+        });
+        if (debErr || debited === false || debited === null) {
+          return json(res, 400, { success: false, message: `Need ₦${totalNgn.toLocaleString()} for ${quantity} number(s).` });
+        }
+
+        const payload = { plan_id, quantity };
+        if (body.area_code) payload.area_code = String(body.area_code).replace(/\D/g, '').slice(0, 6);
+        if (body.cellular_carrier_id) payload.cellular_carrier_id = String(body.cellular_carrier_id);
+
+        const g = await gotsmsFetch('/api/rents/bulk', { method: 'POST', body: payload });
+        const rentedList = Array.isArray(g.data?.data) ? g.data.data : [];
+        const rented = Number(g.data?.meta?.rented || rentedList.length || 0);
+        if (!g.ok || rented < 1) {
+          try { await supabase.rpc('credit_balance', { p_user_id: auth.userId, p_amount: totalNgn }); } catch (_) {}
+          return json(res, g.status || 400, { success: false, message: g.data?.message || 'No numbers available' });
+        }
+        if (rented < quantity) {
+          try { await supabase.rpc('credit_balance', { p_user_id: auth.userId, p_amount: unitNgn * (quantity - rented) }); } catch (_) {}
+        }
+        const charged = unitNgn * rented;
+        const out = [];
+        for (const rent of rentedList) {
+          const oid = await gotsmsSaveOrder({
+            userId: auth.userId,
+            customerId: profile.customer_id,
+            rentId: rent.id,
+            phone: rent.phone,
+            serviceName: rent.service?.name || plan?.service?.name,
+            serviceId: rent.service?.id,
+            priceNgn: unitNgn,
+            supplierUsd: unitUsd,
+            status: rent.status || 'active',
+            activeTill: rent.active_till,
+            planLabel: plan?.duration_translation,
+            carrierName: body.carrier_name || null,
+            areaCode: body.area_code || null
+          });
+          out.push({ ...gotsmsPublicRent(rent), order_id: oid, price_ngn: unitNgn });
+        }
+        try {
+          await supabase.from('transactions').insert({
+            user_id: auth.userId,
+            customer_id: profile.customer_id,
+            type: 'purchase',
+            category: 'MJ SMS',
+            title: `USA rental ×${rented}`,
+            subtitle: plan?.service?.name || 'GotSMS',
+            amount: `₦${charged.toLocaleString()}`,
+            amount_ngn: charged,
+            status: 'completed'
+          });
+        } catch (_) {}
+        // Enable auto-renew on each rented number if requested
+        const wantRenewBulk = body.auto_renew === true || body.auto_renew === 1 || body.auto_renew === '1' || body.auto_renew === 'true';
+        if (wantRenewBulk && out.length) {
+          for (const item of out) {
+            const rid = item && item.id;
+            if (!rid) continue;
+            try {
+              const tg = await gotsmsFetch(`/api/rents/${encodeURIComponent(rid)}/renewal/toggle`, { method: 'POST' });
+              const on = !!(tg.data?.data?.is_included_for_next_renewal === true || /enabled/i.test(String(tg.data?.message || '')));
+              item.auto_renew = on;
+            } catch (_) {
+              item.auto_renew = false;
+            }
+          }
+        }
+        return json(res, 201, {
+          success: true,
+          message: g.data?.message || `Rented ${rented} of ${quantity}`,
+          data: out,
+          meta: { requested: quantity, rented, charged_ngn: charged }
+        });
+      }
+
+      if (method === 'GET' && ga === 'gotsms_rents') {
+        const auth = await requireAuth(req);
+        if (!auth.ok) return json(res, auth.status, { success: false, message: auth.message });
+        const qs = new URLSearchParams();
+        const status = url.searchParams.get('status');
+        if (status) qs.set('status', status);
+        qs.set('per_page', '50');
+        const g = await gotsmsFetch(`/api/rents?${qs}`);
+        if (!g.ok) return json(res, g.status || 400, { success: false, message: g.data?.message || 'Could not load rentals' });
+        const { data: mine } = await supabase.from('number_orders').select('idempotency_key, phone_number').eq('user_id', auth.userId).eq('source', 'gotsms').limit(200);
+        const mineRentIds = new Set((mine || []).map((m) => String(m.idempotency_key || '').replace(/^gotsms-/, '')).filter(Boolean));
+        const minePhones = new Set((mine || []).map((m) => String(m.phone_number || '').replace(/\s/g, '')));
+        const filtered = (g.data.data || []).filter((r) => mineRentIds.has(String(r.id)) || minePhones.has(String(r.phone || '').replace(/\s/g, '')));
+        // Auto-renew: charge same NGN as original rental when period extends; disable if wallet too low
+        try {
+          for (const r of filtered.slice(0, 30)) {
+            await gotsmsSyncAutorenewCharges(auth.userId, r.id, r);
+          }
+        } catch (e) { console.warn('[gotsms_rents] autorenew sync', e.message || e); }
+        // Heal rows wrongly marked refunded/expired by OTP expire sweeps
+        // Heal rows wrongly marked refunded/expired by OTP expire sweeps
+        if (String(status || '') === 'active' && filtered.length) {
+          try {
+            const keys = filtered.map((r) => `gotsms-${r.id}`);
+            await supabase
+              .from('number_orders')
+              .update({ status: 'active', refunded: false })
+              .eq('user_id', auth.userId)
+              .eq('source', 'gotsms')
+              .in('idempotency_key', keys);
+          } catch (e) {
+            console.warn('[gotsms_rents] heal', e.message || e);
+          }
+        }
+        return json(res, 200, { success: true, data: filtered.map(gotsmsPublicRent), meta: g.data.meta });
+      }
+
+      if (method === 'POST' && ga === 'gotsms_wake') {
+        const auth = await requireAuth(req);
+        if (!auth.ok) return json(res, auth.status, { success: false, message: auth.message });
+        const body = await readBody(req);
+        const rent_id = String(body.rent_id || '').trim();
+        if (!rent_id) return json(res, 400, { success: false, message: 'rent_id required' });
+        if (!(await gotsmsAssertOwns(auth.userId, rent_id))) return json(res, 403, { success: false, message: 'Rental not found' });
+        const g = await gotsmsFetch(`/api/numbers/${encodeURIComponent(rent_id)}/wake-up`, { method: 'POST' });
+        return json(res, g.ok ? 200 : g.status || 400, { success: !!g.data?.success, message: g.data?.message || (g.ok ? 'Number woken up' : 'Wake up failed'), data: g.data?.data || null });
+      }
+
+      
+      if ((method === 'POST' || method === 'GET') && ga === 'gotsms_mark_sms') {
+        const auth = await requireAuth(req);
+        if (!auth.ok) return json(res, auth.status, { success: false, message: auth.message });
+        let rent_id = String(url.searchParams.get('rent_id') || '').trim();
+        if (!rent_id && method === 'POST') {
+          try {
+            const b = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : (req.body || {});
+            rent_id = String(b.rent_id || '').trim();
+          } catch (_) {}
+        }
+        if (!rent_id) return json(res, 400, { success: false, message: 'rent_id required' });
+        if (!(await gotsmsAssertOwns(auth.userId, rent_id))) return json(res, 403, { success: false, message: 'Rental not found' });
+        const key = `gotsms-${rent_id}`;
+        const { data: row } = await supabase.from('number_orders').select('id, service_name, status').eq('user_id', auth.userId).eq('source', 'gotsms').eq('idempotency_key', key).maybeSingle();
+        if (!row) return json(res, 404, { success: false, message: 'Order not found' });
+        const name = String(row.service_name || '');
+        if (!/sms\s*received/i.test(name)) {
+          const next = (name || 'USA rental') + ' · SMS received';
+          await supabase.from('number_orders').update({ service_name: next }).eq('id', row.id);
+        }
+        return json(res, 200, { success: true, marked: true });
+      }
+
+if (method === 'GET' && ga === 'gotsms_messages') {
+        const auth = await requireAuth(req);
+        if (!auth.ok) return json(res, auth.status, { success: false, message: auth.message });
+        const rent_id = String(url.searchParams.get('rent_id') || '').trim();
+        if (!rent_id) return json(res, 400, { success: false, message: 'rent_id required' });
+        if (!(await gotsmsAssertOwns(auth.userId, rent_id))) return json(res, 403, { success: false, message: 'Rental not found' });
+        const g = await gotsmsFetch(`/api/numbers/${encodeURIComponent(rent_id)}/messages`);
+        const msgs = Array.isArray(g.data?.data) ? g.data.data : [];
+        if (g.ok && msgs.length > 0) {
+          try {
+            const key = `gotsms-${rent_id}`;
+            const { data: row } = await supabase.from('number_orders').select('id, service_name').eq('user_id', auth.userId).eq('source', 'gotsms').eq('idempotency_key', key).maybeSingle();
+            if (row && !/sms\s*received/i.test(String(row.service_name || ''))) {
+              await supabase.from('number_orders').update({ service_name: (row.service_name || 'USA rental') + ' · SMS received' }).eq('id', row.id);
+            }
+          } catch (e) {
+            console.warn('[gotsms] mark sms received', e.message || e);
+          }
+        }
+        return json(res, g.ok ? 200 : g.status || 400, { success: !!g.data?.success, data: msgs, message: g.data?.message });
+      }
+
+      if (method === 'GET' && ga === 'gotsms_addable_services') {
+        const auth = await requireAuth(req);
+        if (!auth.ok) return json(res, auth.status, { success: false, message: auth.message });
+        const rent_id = String(url.searchParams.get('rent_id') || '').trim();
+        if (!rent_id) return json(res, 400, { success: false, message: 'rent_id required' });
+        if (!(await gotsmsAssertOwns(auth.userId, rent_id))) return json(res, 403, { success: false, message: 'Rental not found' });
+        const g = await gotsmsFetch(`/api/rents/${encodeURIComponent(rent_id)}/services`);
+        const list = (g.data?.data || []).map((s) => ({
+          service_id: s.service_id,
+          name: s.name,
+          price_usd: Number(s.price || 0),
+          price_ngn: gotsmsSellPriceNgn(s.price),
+          is_available: s.is_available !== false
+        }));
+        return json(res, g.ok ? 200 : g.status || 400, { success: !!g.data?.success, data: list, message: g.data?.message });
+      }
+
+      if (method === 'POST' && ga === 'gotsms_add_service') {
+        const auth = await requireAuth(req);
+        if (!auth.ok) return json(res, auth.status, { success: false, message: auth.message });
+        const body = await readBody(req);
+        const rent_id = String(body.rent_id || '').trim();
+        const service_id = String(body.service_id || '').trim();
+        if (!rent_id || !service_id) return json(res, 400, { success: false, message: 'rent_id and service_id required' });
+        if (!(await gotsmsAssertOwns(auth.userId, rent_id))) return json(res, 403, { success: false, message: 'Rental not found' });
+        const listG = await gotsmsFetch(`/api/rents/${encodeURIComponent(rent_id)}/services`);
+        const svc = (listG.data?.data || []).find((s) => String(s.service_id) === service_id);
+        const price = gotsmsSellPriceNgn(svc?.price || 0);
+        if (!(price > 0)) return json(res, 400, { success: false, message: 'Service not available on this number' });
+        const { data: debited } = await supabase.rpc('debit_balance_if_sufficient', { p_user_id: auth.userId, p_amount: price });
+        if (debited === false || debited === null) return json(res, 400, { success: false, message: 'Insufficient wallet balance' });
+        const g = await gotsmsFetch(`/api/rents/${encodeURIComponent(rent_id)}/services`, { method: 'POST', body: { service_id } });
+        if (!g.ok || !g.data?.success) {
+          try { await supabase.rpc('credit_balance', { p_user_id: auth.userId, p_amount: price }); } catch (_) {}
+          return json(res, g.status || 400, { success: false, message: g.data?.message || 'Could not add service' });
+        }
+        return json(res, 201, { success: true, message: g.data.message || 'Service added', data: { ...g.data.data, price_ngn: price } });
+      }
+
+      if (method === 'POST' && ga === 'gotsms_toggle_renewal') {
+        const auth = await requireAuth(req);
+        if (!auth.ok) return json(res, auth.status, { success: false, message: auth.message });
+
+        const body = await readBody(req);
+        const rent_id = String(body.rent_id || '').trim();
+        if (!rent_id) return json(res, 400, { success: false, message: 'rent_id required' });
+        const order = await gotsmsAssertOwns(auth.userId, rent_id);
+        if (!order) return json(res, 403, { success: false, message: 'Rental not found' });
+
+        let live = null;
+        try {
+          const cur = await gotsmsFetch(`/api/rents/${encodeURIComponent(rent_id)}`);
+          live = (cur.data && (cur.data.data || cur.data)) || null;
+        } catch (_) {}
+        const currentlyOn = !!(live && (live.is_included_for_next_renewal || live.auto_renew));
+        let wantOn = body.enabled;
+        if (wantOn === undefined || wantOn === null || wantOn === '') {
+          wantOn = !currentlyOn;
+        } else {
+          wantOn = wantOn === true || wantOn === 'true' || wantOn === 1 || wantOn === '1';
+        }
+
+        const renewPrice = gotsmsRenewPriceNgn(order);
+        if (wantOn && !currentlyOn) {
+          if (!(renewPrice > 0)) {
+            return json(res, 400, { success: false, message: 'Cannot enable auto-renew: rental price missing on order.' });
+          }
+          const { data: prof } = await supabase.from('profiles').select('balance').eq('id', auth.userId).maybeSingle();
+          const bal = Number(prof && prof.balance) || 0;
+          if (bal + 0.0001 < renewPrice) {
+            return json(res, 400, {
+              success: false,
+              message: 'Insufficient balance to enable auto-renew. You need ₦' + renewPrice.toLocaleString() + ' (same as this rental). Fund your wallet and try again.',
+              data: { required_ngn: renewPrice, balance: bal }
+            });
+          }
+        }
+
+        if (wantOn === currentlyOn) {
+          return json(res, 200, {
+            success: true,
+            message: wantOn
+              ? ('Auto-renew is on. ₦' + renewPrice.toLocaleString() + ' will be charged from your wallet each renewal (same as this rental).')
+              : 'Auto-renew is off',
+            data: { auto_renew: wantOn, renew_price_ngn: renewPrice }
+          });
+        }
+
+        const g = await gotsmsFetch(
+          `/api/rents/${encodeURIComponent(rent_id)}/renewal/toggle`,
+          { method: 'POST' }
+        );
+        if (!g.ok) {
+          return json(res, g.status || 400, {
+            success: false,
+            message: (g.data && g.data.message) || 'Could not update auto-renewal',
+            data: (g.data && g.data.data) || null
+          });
+        }
+        let afterOn = !currentlyOn;
+        try {
+          const again = await gotsmsFetch(`/api/rents/${encodeURIComponent(rent_id)}`);
+          const d = again.data && (again.data.data || again.data);
+          if (d) afterOn = !!(d.is_included_for_next_renewal || d.auto_renew);
+        } catch (_) {}
+
+        return json(res, 200, {
+          success: true,
+          message: afterOn
+            ? ('Auto-renew is on. ₦' + renewPrice.toLocaleString() + ' will be charged from your wallet when the period renews (same price as this rental).')
+            : 'Auto-renew is off',
+          data: { auto_renew: afterOn, renew_price_ngn: renewPrice }
+        });
+
+      }
+
+      if (method === 'POST' && ga === 'gotsms_refund') {
+        const auth = await requireAuth(req);
+        if (!auth.ok) return json(res, auth.status, { success: false, message: auth.message });
+        const body = await readBody(req);
+        const rent_id = String(body.rent_id || '').trim();
+        if (!rent_id) return json(res, 400, { success: false, message: 'rent_id required' });
+        if (!(await gotsmsAssertOwns(auth.userId, rent_id))) return json(res, 403, { success: false, message: 'Rental not found' });
+        const g = await gotsmsFetch(`/api/rents/${encodeURIComponent(rent_id)}/refund`, { method: 'POST' });
+        if (!g.ok || !g.data?.success) {
+          return json(res, g.status || 400, { success: false, message: g.data?.message || 'Refund not available for this rental' });
+        }
+        const { data: ord } = await supabase.from('number_orders').select('id, price, refunded').eq('user_id', auth.userId).eq('idempotency_key', `gotsms-${rent_id}`).maybeSingle();
+        if (ord && !ord.refunded && Number(ord.price) > 0) {
+          try {
+            await supabase.rpc('credit_balance', { p_user_id: auth.userId, p_amount: Number(ord.price) });
+            await supabase.from('number_orders').update({ refunded: true, status: 'refunded' }).eq('id', ord.id);
+          } catch (e) { console.error('[gotsms] user refund', e); }
+        }
+        return json(res, 200, { success: true, message: 'Rental cancelled. Balance restored if eligible.', data: g.data.data || null });
+      }
+
+      if (method === 'POST' && ga === 'gotsms_renewal_toggle') {
+        const auth = await requireAuth(req);
+        if (!auth.ok) return json(res, auth.status, { success: false, message: auth.message });
+
+        const body = await readBody(req);
+        const rent_id = String(body.rent_id || '').trim();
+        if (!rent_id) return json(res, 400, { success: false, message: 'rent_id required' });
+        const order = await gotsmsAssertOwns(auth.userId, rent_id);
+        if (!order) return json(res, 403, { success: false, message: 'Rental not found' });
+
+        let live = null;
+        try {
+          const cur = await gotsmsFetch(`/api/rents/${encodeURIComponent(rent_id)}`);
+          live = (cur.data && (cur.data.data || cur.data)) || null;
+        } catch (_) {}
+        const currentlyOn = !!(live && (live.is_included_for_next_renewal || live.auto_renew));
+        let wantOn = body.enabled;
+        if (wantOn === undefined || wantOn === null || wantOn === '') {
+          wantOn = !currentlyOn;
+        } else {
+          wantOn = wantOn === true || wantOn === 'true' || wantOn === 1 || wantOn === '1';
+        }
+
+        const renewPrice = gotsmsRenewPriceNgn(order);
+        if (wantOn && !currentlyOn) {
+          if (!(renewPrice > 0)) {
+            return json(res, 400, { success: false, message: 'Cannot enable auto-renew: rental price missing on order.' });
+          }
+          const { data: prof } = await supabase.from('profiles').select('balance').eq('id', auth.userId).maybeSingle();
+          const bal = Number(prof && prof.balance) || 0;
+          if (bal + 0.0001 < renewPrice) {
+            return json(res, 400, {
+              success: false,
+              message: 'Insufficient balance to enable auto-renew. You need ₦' + renewPrice.toLocaleString() + ' (same as this rental). Fund your wallet and try again.',
+              data: { required_ngn: renewPrice, balance: bal }
+            });
+          }
+        }
+
+        if (wantOn === currentlyOn) {
+          return json(res, 200, {
+            success: true,
+            message: wantOn
+              ? ('Auto-renew is on. ₦' + renewPrice.toLocaleString() + ' will be charged from your wallet each renewal (same as this rental).')
+              : 'Auto-renew is off',
+            data: { auto_renew: wantOn, renew_price_ngn: renewPrice }
+          });
+        }
+
+        const g = await gotsmsFetch(
+          `/api/rents/${encodeURIComponent(rent_id)}/renewal/toggle`,
+          { method: 'POST' }
+        );
+        if (!g.ok) {
+          return json(res, g.status || 400, {
+            success: false,
+            message: (g.data && g.data.message) || 'Could not update auto-renewal',
+            data: (g.data && g.data.data) || null
+          });
+        }
+        let afterOn = !currentlyOn;
+        try {
+          const again = await gotsmsFetch(`/api/rents/${encodeURIComponent(rent_id)}`);
+          const d = again.data && (again.data.data || again.data);
+          if (d) afterOn = !!(d.is_included_for_next_renewal || d.auto_renew);
+        } catch (_) {}
+
+        return json(res, 200, {
+          success: true,
+          message: afterOn
+            ? ('Auto-renew is on. ₦' + renewPrice.toLocaleString() + ' will be charged from your wallet when the period renews (same price as this rental).')
+            : 'Auto-renew is off',
+          data: { auto_renew: afterOn, renew_price_ngn: renewPrice }
+        });
+
+      }
+
+      if (method === 'GET' && ga === 'gotsms_my_orders') {
+        const auth = await requireAuth(req);
+        if (!auth.ok) return json(res, auth.status, { success: false, message: auth.message });
+        const { data, error } = await supabase
+          .from('number_orders')
+          .select('order_id, phone_number, service_name, price, status, code, created_at, idempotency_key, refunded')
+          .eq('user_id', auth.userId)
+          .eq('source', 'gotsms')
+          .order('created_at', { ascending: false })
+          .limit(100);
+        if (error) return json(res, 400, { success: false, message: error.message });
+        return json(res, 200, {
+          success: true,
+          data: (data || []).map((o) => ({
+            order_id: o.order_id,
+            rent_id: String(o.idempotency_key || '').replace(/^gotsms-/, ''),
+            phone: o.phone_number,
+            service_name: o.service_name,
+            price_ngn: o.price,
+            status: o.status,
+            active_till: (o.active_till || (o.code && !isNaN(Date.parse(o.code)) ? o.code : null)),
+            duration_label: o.service_name,
+            refunded: o.refunded,
+            created_at: o.created_at
+          }))
+        });
+      }
+
+      // Admin-oriented: supplier balance + catalog sync into number_services
+      if (method === 'GET' && ga === 'gotsms_supplier_balance') {
+        const auth = await requireAuth(req);
+        if (!auth.ok) return json(res, auth.status, { success: false, message: auth.message });
+        const { data: prof } = await supabase.from('profiles').select('is_admin').eq('id', auth.userId).single();
+        if (!prof?.is_admin) return json(res, 403, { success: false, message: 'Admin only' });
+        const g = await gotsmsFetch('/api/account');
+        if (!g.ok) return json(res, 400, { success: false, message: g.data?.message || 'GotSMS balance failed' });
+        return json(res, 200, { success: true, balance: g.data?.data?.balance, currency: 'USD' });
+      }
+
+      if ((method === 'GET' || method === 'POST') && ga === 'gotsms_sync') {
+        if (!GOTSMS_TOKEN) {
+          return json(res, 503, {
+            success: false,
+            message: 'GotSMS not configured. Add GOTSMS_API_TOKEN in Vercel → Environment Variables, then Redeploy.'
+          });
+        }
+
+        // Allow Vercel cron / CRON_SECRET the same way as action=sync for other suppliers
+        const cronSecret = process.env.CRON_SECRET;
+        const authHeader = req.headers.authorization || '';
+        const isCron =
+          (cronSecret && authHeader === `Bearer ${cronSecret}`) ||
+          req.headers['x-vercel-cron'] === '1';
+        if (!isCron) {
+          const auth = await requireAuth(req);
+          if (!auth.ok) return json(res, auth.status, { success: false, message: auth.message });
+          const { data: prof } = await supabase.from('profiles').select('is_admin').eq('id', auth.userId).maybeSingle();
+          const adminOk = !!(prof && (prof.is_admin === true || prof.is_admin === 'true' || prof.is_admin === 1 || prof.is_admin === '1'));
+          if (!adminOk) {
+            return json(res, 403, { success: false, message: 'Admin only' });
+          }
+        }
+
+        // Cron always does a full sync
+        if (isCron && !url.searchParams.get('full')) {
+          url.searchParams.set('full', '1');
+        }
+
+        // full=1 → keep paging until every plan is processed (never stop early)
+        const full = url.searchParams.get('full') === '1' || url.searchParams.get('full') === 'true';
+        let page = Math.max(1, Number(url.searchParams.get('page') || 1));
+        const perPage = Math.min(100, Math.max(20, Number(url.searchParams.get('per_page') || 100)));
+        const maxPages = full ? 200 : 1; // safety cap
+
+        let totalNew = 0;
+        let totalUpdated = 0;
+        const dbErrors = [];
+        let lastPage = page;
+        let pagesDone = 0;
+        let lastChunkSize = 0;
+        const now = new Date().toISOString();
+
+        while (pagesDone < maxPages) {
+          const g = await gotsmsFetch(
+            `/api/rents/plans?per_page=${perPage}&page=${page}&include_unavailable=1`
+          );
+          if (!g.ok) {
+            return json(res, g.status || 400, {
+              success: false,
+              message: g.data?.message || 'GotSMS plans request failed — check token',
+              data: { page, resume: true, new_products: totalNew, updated_products: totalUpdated }
+            });
+          }
+
+          let chunk = [];
+          const rawData = g.data?.data;
+          if (Array.isArray(rawData)) chunk = rawData;
+          else if (rawData && Array.isArray(rawData.data)) chunk = rawData.data;
+          else if (Array.isArray(g.data)) chunk = g.data;
+
+          const meta = g.data?.meta || {};
+          lastPage = Math.max(1, Number(meta.last_page || page));
+          lastChunkSize = chunk.length;
+          pagesDone += 1;
+
+          if (!chunk.length) break;
+
+          const ids = chunk.map((pl) => String(pl.id || pl.plan_id || '')).filter(Boolean);
+          let existingMap = new Map();
+          if (ids.length) {
+            const { data: existingRows, error: exErr } = await supabase
+              .from('number_services')
+              .select('id, service_id, price, price_source, is_available')
+              .eq('source', 'gotsms')
+              .in('service_id', ids);
+            if (exErr) {
+              dbErrors.push(exErr.message);
+            } else {
+              existingMap = new Map((existingRows || []).map((r) => [String(r.service_id), r]));
+            }
+          }
+
+          const toInsert = [];
+          for (const pl of chunk) {
+            const planId = pl.id || pl.plan_id;
+            if (!planId) continue;
+            const sid = String(planId);
+            const usd = Number(pl.price || 0);
+            const priceNgn = gotsmsFixedDurationPriceNgn(pl) != null ? gotsmsFixedDurationPriceNgn(pl) : gotsmsSellPriceNgn(usd);
+            const serviceName = pl.service?.name
+              ? `${pl.service.name} · ${pl.duration_translation || pl.duration_type || ''}`.trim()
+              : (pl.duration_translation || pl.service_name || 'USA rental');
+            const countryId = 12;
+            const countryName = String((pl.country && (pl.country.name || pl.country)) || 'United States');
+            const avail = pl.is_available !== false;
+            const existing = existingMap.get(sid);
+
+            if (existing) {
+              // NEVER overwrite admin-set selling price (same rule as other suppliers)
+              const patch = {
+                service_name: serviceName,
+                country_id: countryId,
+                country_name: countryName,
+                supplier_price: usd,
+                is_available: avail,
+                available_quantity: avail ? 1 : 0,
+                updated_at: now
+              };
+              if (existing.price_source === 'system' || existing.price_source == null) {
+                patch.price = priceNgn;
+                patch.price_source = 'system';
+              }
+              const { error } = await supabase.from('number_services').update(patch).eq('id', existing.id);
+              if (error) dbErrors.push(error.message);
+              else totalUpdated += 1;
+            } else {
+              toInsert.push({
+                source: 'gotsms',
+                service_id: sid,
+                service_name: serviceName,
+                country_id: countryId,
+                country_name: countryName,
+                supplier_price: usd,
+                price: priceNgn,
+                price_source: 'system',
+                currency: 'NGN',
+                available_quantity: avail ? 1 : 0,
+                is_available: avail,
+                updated_at: now
+              });
+            }
+          }
+
+          if (toInsert.length) {
+            const { error } = await supabase.from('number_services').insert(toInsert);
+            if (error) {
+              for (const row of toInsert) {
+                const minimal = {
+                  source: 'gotsms',
+                  service_id: row.service_id,
+                  service_name: row.service_name,
+                  country_id: 12,
+                  country_name: row.country_name,
+                  supplier_price: row.supplier_price,
+                  price: row.price,
+                  price_source: 'system',
+                  is_available: row.is_available,
+                  available_quantity: row.available_quantity,
+                  updated_at: now
+                };
+                const { error: e2 } = await supabase.from('number_services').insert(minimal);
+                if (e2) {
+                  const bare = {
+                    source: 'gotsms',
+                    service_id: row.service_id,
+                    service_name: row.service_name,
+                    country_name: row.country_name,
+                    supplier_price: row.supplier_price,
+                    price: row.price,
+                    is_available: row.is_available,
+                    updated_at: now
+                  };
+                  const { error: e3 } = await supabase.from('number_services').insert(bare);
+                  if (e3) dbErrors.push(e3.message);
+                  else totalNew += 1;
+                } else totalNew += 1;
+              }
+            } else {
+              totalNew += toInsert.length;
+            }
+          }
+
+          if (!full || page >= lastPage) break;
+          page += 1;
+        }
+
+        const done = !full || page >= lastPage || lastChunkSize === 0;
+
+        return json(res, 200, {
+          success: true,
+          data: {
+            page,
+            next_page: done ? null : page + 1,
+            last_page: lastPage,
+            done,
+            full,
+            pages_processed: pagesDone,
+            plans_on_last_page: lastChunkSize,
+            new_products: totalNew,
+            updated_products: totalUpdated,
+            db_errors: dbErrors.slice(0, 8),
+            synced_at: now
+          },
+          message: dbErrors.length
+            ? ('DB write error: ' + dbErrors[0])
+            : (done
+              ? `GotSMS sync complete · ${totalNew} new · ${totalUpdated} updated · page ${page}/${lastPage}`
+              : `Page ${page}/${lastPage} done — continue with ?page=${page + 1} or ?full=1`)
+        });
+      }
+
+
+      return json(res, 400, {
+        success: false,
+        message: `Unknown GotSMS action: ${ga}`,
+        actions: [
+          'gotsms_balance', 'gotsms_carriers', 'gotsms_services', 'gotsms_plans',
+          'gotsms_rent', 'gotsms_rent_bulk', 'gotsms_rents', 'gotsms_wake',
+          'gotsms_messages', 'gotsms_addable_services', 'gotsms_add_service',
+          'gotsms_toggle_renewal', 'gotsms_refund', 'gotsms_my_orders',
+          'gotsms_supplier_balance', 'gotsms_sync'
+        ]
+      });
+    }
+
+
+    return json(res, 400, {
+      success: false,
+      message: `Unknown action: ${action}`,
+      actions: [
+        'balance',
+        'countries',
+        'projects',
+        'prices',
+        'order',
+        'check',
+        'cancel',
+        'reuse',
+        'rent_areas',
+        'rent_prices',
+        'rent_order',
+        'rent_renew',
+        'sync',
+        'expire_stale',
+        'gotsms_*'
+      ]
+    });
+  } catch (err) {
+    console.error('sms-bus error', err);
+    return json(res, 500, { success: false, message: err.message || 'Server error' });
+  }
+}
