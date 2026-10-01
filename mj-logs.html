@@ -913,12 +913,14 @@ return;
 }
 const productSource = purchasedProduct.source
 || (String(purchasedProduct.product_key || '').startsWith('ld_') ? 'logsdomain'
+: String(purchasedProduct.product_key || '').startsWith('bm_') ? 'bulkmail'
 : String(purchasedProduct.product_key || '').startsWith('manual_') ? 'manual'
 : String(purchasedProduct.product_key || '').startsWith('sj_') ? 'sujandepartment'
 : String(purchasedProduct.product_key || '').startsWith('ct_') ? 'classy'
 : 'fadded');
 const orderEndpoint = productSource === 'manual' ? '/api/order-manual'
 : productSource === 'logsdomain' ? '/api/order-logsdomain'
+: productSource === 'bulkmail' ? '/api/order-logsdomain?supplier=bulkmail'
 : productSource === 'sujandepartment' ? '/api/sujan'
 : productSource === 'classy' ? '/api/classy'
 : '/api/order';

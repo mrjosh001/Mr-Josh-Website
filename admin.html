@@ -930,6 +930,7 @@ function withLagos(opts) { return Object.assign({ timeZone: 'Africa/Lagos' }, op
  <div style="display:flex;gap:8px;flex-wrap:wrap;">
  <button class="btn btn-ghost btn-sm" id="btnSyncFadded" onclick="syncProductsNow()"><i class="fas fa-sync"></i> Sync Fadded</button>
  <button class="btn btn-ghost btn-sm" id="btnSyncLogsDomain" onclick="syncLogsDomainNow()"><i class="fas fa-sync"></i> Sync Logs Domain</button>
+<button type="button" class="btn btn-ghost btn-sm" id="btnSyncBulkmail" onclick="syncBulkmailCatalog()"><i class="fas fa-sync"></i> Sync BulkMail</button>
  <button class="btn btn-ghost btn-sm" id="btnSyncSujan" onclick="syncSujanNow()"><i class="fas fa-sync"></i> Sync Sujan Dept.</button>
  <button class="btn btn-ghost btn-sm" id="btnSyncClassy" onclick="syncClassyNow()"><i class="fas fa-sync"></i> Sync ClassyTee</button>
  <button class="btn btn-primary btn-sm" id="btnSyncAll" onclick="syncAllSuppliersNow()"><i class="fas fa-sync"></i> Sync All</button>
@@ -2818,6 +2819,26 @@ async function pollGrizzlySync() {
  }
 }
 
+
+async function syncBulkmailCatalog() {
+  const prog = document.getElementById('logsdomainSyncProgress') || document.getElementById('logsdomainSyncProgress2');
+  if (prog) prog.textContent = 'Syncing BulkMail…';
+  try {
+    const res = await fetch('/api/order-logsdomain?action=bulkmail_sync');
+    const data = await res.json();
+    if (data.success) {
+      if (prog) prog.textContent = `BulkMail OK — synced ${data.synced || 0}, new ${data.new_products || 0}, updated ${data.updated_products || 0}`;
+      if (typeof showToast === 'function') showToast('BulkMail sync complete', 'success');
+    } else {
+      if (prog) prog.textContent = 'BulkMail failed: ' + (data.message || 'error');
+      if (typeof showToast === 'function') showToast(data.message || 'BulkMail sync failed', 'error');
+    }
+  } catch (e) {
+    if (prog) prog.textContent = 'BulkMail error';
+    if (typeof showToast === 'function') showToast(e.message || 'BulkMail sync error', 'error');
+  }
+}
+
 async function syncGrizzlyNow() {
  try {
  const headers = await authHeaders();
@@ -3985,10 +4006,11 @@ async function syncAllSuppliersNow() {
  const [fRes, lRes, sRes, cRes] = await Promise.all([
  fetch('/api/order?action=sync'),
  fetch('/api/order-logsdomain?action=sync'),
+ fetch('/api/order-logsdomain?action=bulkmail_sync'),
  fetch('/api/sujan'),
  fetch('/api/classy')
  ]);
- const [fadded, ld, sujan, classy] = await Promise.all([
+ const [fadded, ld, bm, sujan, classy] = await Promise.all([
  fRes.json().catch(() => ({})),
  lRes.json().catch(() => ({})),
  sRes.json().catch(() => ({})),
@@ -3999,6 +4021,11 @@ async function syncAllSuppliersNow() {
  else lines.push('Fadded failed: ' + (fadded.message || 'error'));
  if (ld.success) lines.push(`Logs Domain OK (synced ${ld.synced || 0}, new ${ld.new_products || 0}, updated ${ld.updated_products || 0})`);
  else lines.push('Logs Domain failed: ' + (ld.message || 'error'));
+ if (bm && bm.success) {
+ lines.push(`BulkMail OK (synced ${bm.synced || 0}, new ${bm.new_products || 0}, updated ${bm.updated_products || 0})`);
+ } else if (bm) {
+ lines.push('BulkMail failed: ' + (bm.message || 'error'));
+ }
  if (sujan.success) {
  lines.push(`Sujan Dept. OK (synced ${sujan.synced || 0}, new ${sujan.new_products || 0}, updated ${sujan.updated_products || 0})`);
  if (sujan.zero_price_count > 0) lines.push(` ⚠️ ${sujan.zero_price_count} came back at ₦0: check Vercel logs`);
