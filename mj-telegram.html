@@ -21,24 +21,25 @@ body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;bac
 .top{display:flex;align-items:center;gap:12px;padding:14px 16px;position:sticky;top:0;background:var(--bg);z-index:5;border-bottom:1px solid var(--line)}
 .back{width:40px;height:40px;border-radius:12px;border:1px solid var(--line);background:var(--card);color:var(--text);display:grid;place-items:center;text-decoration:none}
 .top h1{margin:0;font-size:17px;font-weight:700}
-main{padding:16px;max-width:520px;margin:0 auto;padding-bottom:40px}
-.hero{background:linear-gradient(160deg, #0f172a 0%, #1e3a5f 100%);border:1px solid var(--line);border-radius:18px;padding:18px;margin-bottom:14px;position:relative;overflow:hidden}
+main{padding:16px;max-width:520px;margin:0 auto;padding-bottom:48px}
+.hero{background:linear-gradient(160deg,#0f172a,#1e3a5f);border:1px solid var(--line);border-radius:18px;padding:18px;margin-bottom:14px}
 [data-theme="light"] .hero{background:linear-gradient(160deg,#eff6ff,#dbeafe)}
 .hero .badge{display:inline-flex;align-items:center;gap:6px;font-size:11px;font-weight:700;letter-spacing:.04em;color:#93c5fd;text-transform:uppercase;margin-bottom:8px}
 .hero h2{margin:0 0 8px;font-size:20px;line-height:1.25}
 .hero p{margin:0;color:var(--muted);font-size:13.5px;line-height:1.45}
 .panel{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:14px;margin-bottom:14px}
-.tabs{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;background:var(--card2);padding:6px;border-radius:14px;margin-bottom:16px}
+.tabs{display:grid;grid-template-columns:1fr 1fr;gap:8px;background:var(--card2);padding:6px;border-radius:14px;margin-bottom:16px}
 .tab{border:0;background:transparent;color:var(--muted);padding:12px 8px;border-radius:10px;font-weight:700;font-size:13px;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px}
 .tab.on{background:var(--blue);color:#fff;box-shadow:0 6px 16px rgba(37,99,235,.35)}
 .lbl{font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin:0 0 10px}
 .pills{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px;min-height:44px}
 .pill{border:1px solid var(--line);background:var(--pill);color:var(--text);padding:11px 16px;border-radius:999px;font-weight:700;font-size:14px;cursor:pointer}
 .pill.on{background:linear-gradient(135deg,#3b82f6,#2563eb);border-color:transparent;color:#fff;box-shadow:0 4px 14px rgba(37,99,235,.4)}
-.pill:disabled{opacity:.4;cursor:not-allowed}
+.hint{font-size:12.5px;color:var(--muted);line-height:1.45;margin:0 0 12px;padding:10px 12px;background:var(--card2);border-radius:12px;border:1px dashed var(--line)}
+.hint b{color:var(--text)}
 .field{margin-bottom:14px}
 .field label{display:block;font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin-bottom:8px}
-.input{width:100%;padding:14px 14px;border-radius:12px;border:1px solid var(--line);background:var(--card2);color:var(--text);font-size:15px;outline:none}
+.input{width:100%;padding:14px;border-radius:12px;border:1px solid var(--line);background:var(--card2);color:var(--text);font-size:15px;outline:none}
 .input:focus{border-color:var(--blue2)}
 .price-row{display:flex;align-items:center;justify-content:space-between;padding:12px 0 4px;margin-bottom:8px}
 .price-row span{color:var(--muted);font-size:13px}
@@ -46,14 +47,22 @@ main{padding:16px;max-width:520px;margin:0 auto;padding-bottom:40px}
 .btn{width:100%;border:0;border-radius:14px;padding:15px;font-weight:800;font-size:15px;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px}
 .btn-primary{background:linear-gradient(135deg,#3b82f6,#1d4ed8);color:#fff;box-shadow:0 8px 22px rgba(37,99,235,.35)}
 .btn-primary:disabled{opacity:.55;cursor:not-allowed}
-.btn-ghost{background:var(--card2);color:var(--text);border:1px solid var(--line);margin-top:10px}
-.err{color:var(--err);font-size:13px;min-height:18px;margin:6px 0 0;text-align:center}
-.howto{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:16px}
+.err{color:var(--err);font-size:13px;min-height:18px;margin:6px 0 8px;text-align:center}
+.howto{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:16px;margin-bottom:14px}
 .howto h3{margin:0 0 12px;font-size:15px;display:flex;align-items:center;gap:8px}
 .steps{display:grid;grid-template-columns:1fr 1fr;gap:10px}
 .step{background:var(--card2);border-radius:12px;padding:12px;font-size:12.5px;color:var(--muted);line-height:1.4}
 .step b{display:block;color:var(--text);margin-bottom:4px;font-size:13px}
 .empty{padding:18px;text-align:center;color:var(--muted);font-size:13.5px;line-height:1.45}
+.recent{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:16px}
+.recent h3{margin:0 0 12px;font-size:15px;display:flex;align-items:center;justify-content:space-between}
+.recent h3 a{font-size:12px;color:var(--blue2);text-decoration:none;font-weight:600}
+.ro{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;padding:12px 0;border-bottom:1px solid var(--line)}
+.ro:last-child{border-bottom:0}
+.ro .t{font-weight:700;font-size:13.5px}
+.ro .s{font-size:12px;color:var(--muted);margin-top:3px}
+.ro .p{font-weight:800;font-size:13.5px;white-space:nowrap}
+.badge-st{display:inline-block;margin-top:4px;font-size:11px;font-weight:700;padding:2px 8px;border-radius:999px;background:rgba(37,99,235,.15);color:#93c5fd}
 .toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%) translateY(20px);opacity:0;background:#0f172a;color:#fff;padding:12px 16px;border-radius:12px;font-size:13px;font-weight:600;pointer-events:none;transition:.25s;z-index:50;max-width:90vw}
 .toast.on{opacity:1;transform:translateX(-50%) translateY(0)}
 .toast.ok{background:#14532d}.toast.err{background:#7f1d1d}
@@ -62,28 +71,32 @@ main{padding:16px;max-width:520px;margin:0 auto;padding-bottom:40px}
 <body>
 <header class="top">
   <a class="back" href="dashboard.html" aria-label="Back"><i class="fa-solid fa-arrow-left"></i></a>
-  <h1>Telegram Verification &amp; Stars</h1>
+  <h1>Telegram Premium &amp; Stars</h1>
 </header>
 <main>
   <section class="hero">
     <div class="badge"><i class="fa-solid fa-bolt"></i> Instant digital delivery</div>
-    <h2>Telegram Premium, Stars &amp; Boost</h2>
-    <p>Send Premium or Stars to an eligible account, or boost a channel. Confirm the recipient, pay from your wallet, and track delivery in history.</p>
+    <h2>Telegram Premium &amp; Stars</h2>
+    <p>Send Premium or Stars to an eligible account. Confirm the recipient, pay from your wallet, and track delivery below.</p>
   </section>
 
   <section class="panel">
     <div class="tabs" role="tablist">
       <button type="button" class="tab on" data-k="premium"><i class="fa-solid fa-certificate"></i> Premium</button>
       <button type="button" class="tab" data-k="stars"><i class="fa-solid fa-star"></i> Stars</button>
-      <button type="button" class="tab" data-k="boost"><i class="fa-solid fa-rocket"></i> Boost</button>
     </div>
 
     <p class="lbl" id="packLabel">Subscription duration</p>
     <div class="pills" id="packPills"><div class="empty">Loading packages…</div></div>
 
+    <p class="hint" id="linkHint">
+      <b>How to copy your link:</b> Open Telegram → your profile → <b>Share</b> / copy username.
+      Paste <b>@username</b> or <b>https://t.me/username</b>. Wrong links cause failed delivery.
+    </p>
+
     <div class="field">
-      <label id="linkLabel" for="username">Recipient username</label>
-      <input class="input" id="username" placeholder="@username" autocomplete="off" inputmode="text"/>
+      <label for="username">Telegram username or profile link</label>
+      <input class="input" id="username" placeholder="@username or https://t.me/username" autocomplete="off" inputmode="text"/>
     </div>
 
     <div class="price-row">
@@ -94,17 +107,24 @@ main{padding:16px;max-width:520px;margin:0 auto;padding-bottom:40px}
     <button type="button" class="btn btn-primary" id="btnBuy" disabled>
       <i class="fa-solid fa-paper-plane"></i> Pay &amp; send
     </button>
-    <button type="button" class="btn btn-ghost" onclick="location.href='mj-boosters-history.html'">Recent orders</button>
   </section>
 
   <section class="howto">
     <h3><i class="fa-solid fa-shield-halved"></i> How it works</h3>
     <div class="steps">
-      <div class="step"><b>1. Choose type</b>Premium, Stars, or Channel Boost.</div>
-      <div class="step"><b>2. Pick package</b>Duration or star amount.</div>
-      <div class="step"><b>3. Enter @user</b>Public Telegram username (or channel for boost).</div>
-      <div class="step"><b>4. Pay</b>Wallet is charged; track delivery in history.</div>
+      <div class="step"><b>1. Choose type</b>Premium subscription or Stars.</div>
+      <div class="step"><b>2. Pick package</b>3 / 6 / 12 months or star amount.</div>
+      <div class="step"><b>3. Paste correctly</b>@username or t.me link only.</div>
+      <div class="step"><b>4. Pay</b>Wallet is charged; track status in recent orders.</div>
     </div>
+  </section>
+
+  <section class="recent">
+    <h3>
+      <span><i class="fa-solid fa-clock-rotate-left"></i> Recent orders</span>
+      <a href="mj-boosters-history.html">See all</a>
+    </h3>
+    <div id="recentList"><div class="empty">Loading…</div></div>
   </section>
 </main>
 <div class="toast" id="toast"></div>
@@ -122,22 +142,18 @@ main{padding:16px;max-width:520px;margin:0 auto;padding-bottom:40px}
   });
 
   let kind = 'premium';
-  let catalog = { premium: [], stars: [], boost: [] };
-  let service = null;   // active service row for current kind
-  let qty = 1;
+  let catalog = { premium: [], stars: [] };
+  let selected = null; // premium package or stars service
+  let starsQty = 50;
   let busy = false;
-
-  // ActiveStore-style package chips
-  const PREMIUM_QTY = [3, 6, 12];
   const STARS_QTY = [50, 100, 250, 500, 1000, 2500, 5000];
-  const BOOST_QTY = [1, 5, 10, 25, 50];
 
   function toast(msg, ok){
     const t = document.getElementById('toast');
     t.textContent = msg || '';
     t.className = 'toast on ' + (ok ? 'ok' : 'err');
     clearTimeout(window.__tt);
-    window.__tt = setTimeout(() => t.classList.remove('on'), 3200);
+    window.__tt = setTimeout(() => t.classList.remove('on'), 3600);
   }
   function fmt(n){ return '₦' + Number(n||0).toLocaleString(); }
 
@@ -147,85 +163,74 @@ main{padding:16px;max-width:520px;margin:0 auto;padding-bottom:40px}
     return { Authorization: 'Bearer ' + session.access_token, 'Content-Type': 'application/json', Accept: 'application/json' };
   }
 
-  function priceFor(q){
-    if (!service) return 0;
-    const rate = Number(service.price_ngn) || 0;
-    if (service.pricing === 'package' || kind === 'premium' || kind === 'boost') {
-      // package: price_ngn is sell price per 1 unit (month / boost unit)
-      return Math.ceil(rate * q);
+  function totalNow(){
+    if (!selected) return 0;
+    if (kind === 'premium' || selected.pricing === 'fixed') {
+      return Math.ceil(Number(selected.price_ngn) || 0);
     }
-    // stars often priced per 1000
-    return Math.ceil((rate / 1000) * q);
-  }
-
-  function allowedQtyList(){
-    if (!service) return [];
-    const min = Math.max(1, Number(service.min_quantity) || 1);
-    const max = Math.max(min, Number(service.max_quantity) || min);
-    let base = PREMIUM_QTY;
-    if (kind === 'stars') base = STARS_QTY;
-    if (kind === 'boost') base = BOOST_QTY;
-    let list = base.filter(q => q >= min && q <= max);
-    if (!list.length) {
-      // fallback: min, mid, max
-      list = [min];
-      if (max > min) list.push(Math.min(max, min * 2));
-      if (max > min) list.push(max);
-      list = [...new Set(list)].sort((a,b)=>a-b);
-    }
-    return list;
+    // stars: price_ngn = rate per 1000
+    return Math.ceil(((Number(selected.price_ngn) || 0) / 1000) * starsQty);
   }
 
   function paintPills(){
     const el = document.getElementById('packPills');
     const label = document.getElementById('packLabel');
     const rows = catalog[kind] || [];
-    service = rows[0] || null;
 
-    if (!service) {
+    if (!rows.length) {
+      selected = null;
       el.innerHTML = '<div class="empty">No packages available for this option right now. Please try again later or contact support.</div>';
       document.getElementById('btnBuy').disabled = true;
       document.getElementById('totalPrice').textContent = '₦0';
       return;
     }
 
-    if (kind === 'premium') label.textContent = 'Subscription duration';
-    else if (kind === 'stars') label.textContent = 'Stars amount';
-    else label.textContent = 'Boost units';
+    if (kind === 'premium') {
+      label.textContent = 'Subscription duration';
+      if (!selected || selected.kind !== 'premium' || !rows.find(r => r.service_id === selected.service_id)) {
+        selected = rows[0];
+      }
+      el.innerHTML = rows.map(r => {
+        const on = selected && selected.service_id === r.service_id;
+        const text = (r.months || '?') + ' mos';
+        return '<button type="button" class="pill'+(on?' on':'')+'" data-id="'+r.service_id+'">'+text+'</button>';
+      }).join('');
+      el.querySelectorAll('.pill').forEach(btn => {
+        btn.onclick = () => {
+          selected = rows.find(r => r.service_id === btn.getAttribute('data-id'));
+          paintPills();
+        };
+      });
+    } else {
+      label.textContent = 'Stars amount';
+      selected = rows[0];
+      const min = Math.max(1, Number(selected.min_quantity)||1);
+      const max = Math.max(min, Number(selected.max_quantity)||min);
+      let list = STARS_QTY.filter(q => q >= min && q <= max);
+      if (!list.length) list = [min, max].filter((v,i,a)=>a.indexOf(v)===i);
+      if (!list.includes(starsQty)) starsQty = list[0];
+      el.innerHTML = list.map(q => {
+        const on = q === starsQty;
+        return '<button type="button" class="pill'+(on?' on':'')+'" data-q="'+q+'">'+q.toLocaleString()+' ★</button>';
+      }).join('');
+      el.querySelectorAll('.pill').forEach(btn => {
+        btn.onclick = () => {
+          starsQty = Number(btn.getAttribute('data-q'));
+          paintPills();
+        };
+      });
+    }
 
-    const list = allowedQtyList();
-    qty = list.includes(qty) ? qty : list[0];
-    el.innerHTML = list.map(q => {
-      let text = String(q);
-      if (kind === 'premium') text = q + ' mos';
-      if (kind === 'stars') text = q.toLocaleString() + ' ★';
-      if (kind === 'boost') text = q + (q === 1 ? ' boost' : ' boosts');
-      return '<button type="button" class="pill'+(q===qty?' on':'')+'" data-q="'+q+'">'+text+'</button>';
-    }).join('');
-
-    el.querySelectorAll('.pill').forEach(btn => {
-      btn.onclick = () => {
-        qty = Number(btn.getAttribute('data-q'));
-        paintPills();
-      };
-    });
-
-    document.getElementById('totalPrice').textContent = fmt(priceFor(qty));
+    document.getElementById('totalPrice').textContent = fmt(totalNow());
     document.getElementById('btnBuy').disabled = false;
   }
 
   function setKind(k){
     kind = k;
     document.querySelectorAll('.tab').forEach(t => t.classList.toggle('on', t.getAttribute('data-k') === k));
-    const isBoost = k === 'boost';
-    document.getElementById('linkLabel').textContent = isBoost ? 'Channel link or username' : 'Recipient username';
-    document.getElementById('username').placeholder = isBoost ? 'https://t.me/channel or @channel' : '@username';
     paintPills();
   }
-
-  document.querySelectorAll('.tab').forEach(t => {
-    t.onclick = () => setKind(t.getAttribute('data-k'));
-  });
+  document.querySelectorAll('.tab').forEach(t => { t.onclick = () => setKind(t.getAttribute('data-k')); });
 
   function normalizeLink(raw){
     let u = String(raw||'').trim();
@@ -233,7 +238,7 @@ main{padding:16px;max-width:520px;margin:0 auto;padding-bottom:40px}
     if (/^https?:\/\//i.test(u)) return u;
     if (/^(t\.me|telegram\.me)\//i.test(u)) return 'https://' + u;
     u = u.replace(/^@/, '');
-    if (!u) return '';
+    if (!u || /\s/.test(u)) return '';
     return 'https://t.me/' + u;
   }
 
@@ -247,22 +252,49 @@ main{padding:16px;max-width:520px;margin:0 auto;padding-bottom:40px}
         document.getElementById('packPills').innerHTML = '<div class="empty">'+(data.message||'Could not load shop')+'</div>';
         return;
       }
-      catalog = data.data || { premium:[], stars:[], boost:[] };
+      catalog = data.data || { premium: [], stars: [] };
       paintPills();
     } catch(e) {
       document.getElementById('packPills').innerHTML = '<div class="empty">'+(e.message||e)+'</div>';
     }
   }
 
+  async function loadRecent(){
+    const box = document.getElementById('recentList');
+    try {
+      const { data: { session } } = await sb.auth.getSession();
+      if (!session) return;
+      const { data, error } = await sb.from('booster_orders')
+        .select('id,service_name,quantity,price_ngn,status,link,created_at,source')
+        .eq('user_id', session.user.id)
+        .eq('source', 'smmkings')
+        .order('created_at', { ascending: false })
+        .limit(8);
+      if (error) throw error;
+      const rows = data || [];
+      if (!rows.length) {
+        box.innerHTML = '<div class="empty">No Telegram orders yet.</div>';
+        return;
+      }
+      box.innerHTML = rows.map(r => {
+        const dt = r.created_at ? new Date(r.created_at).toLocaleString() : '';
+        return '<div class="ro"><div><div class="t">'+(r.service_name||'Telegram')+'</div><div class="s">'+dt+(r.link?(' · '+r.link):'')+'</div><span class="badge-st">'+(r.status||'Pending')+'</span></div><div class="p">'+fmt(r.price_ngn)+'</div></div>';
+      }).join('');
+    } catch(e) {
+      box.innerHTML = '<div class="empty">Could not load recent orders.</div>';
+    }
+  }
+
   document.getElementById('btnBuy').onclick = async function(){
-    if (busy || !service) return;
+    if (busy || !selected) return;
     const err = document.getElementById('err');
     err.textContent = '';
     const link = normalizeLink(document.getElementById('username').value);
     if (!link) {
-      err.textContent = 'Enter a Telegram username or link';
+      err.textContent = 'Paste a valid @username or https://t.me/… link';
       return;
     }
+    const qty = kind === 'premium' ? 1 : starsQty;
     busy = true;
     const btn = document.getElementById('btnBuy');
     btn.disabled = true; btn.textContent = 'Processing…';
@@ -274,7 +306,7 @@ main{padding:16px;max-width:520px;margin:0 auto;padding-bottom:40px}
         headers: h,
         body: JSON.stringify({
           source: 'smmkings',
-          service_id: service.service_id,
+          service_id: selected.service_id,
           link: link,
           quantity: qty
         })
@@ -287,8 +319,9 @@ main{padding:16px;max-width:520px;margin:0 auto;padding-bottom:40px}
         if (/insufficient|fund/i.test(msg)) setTimeout(()=> location.href='deposit.html', 900);
         return;
       }
-      toast(data.message || 'Order placed', true);
-      setTimeout(()=> location.href='mj-boosters-history.html', 900);
+      toast(data.message || 'Order placed successfully', true);
+      loadRecent();
+      setTimeout(()=> location.href='mj-boosters-history.html', 1200);
     } catch(e) {
       err.textContent = e.message || String(e);
       toast(err.textContent, false);
@@ -300,6 +333,7 @@ main{padding:16px;max-width:520px;margin:0 auto;padding-bottom:40px}
   };
 
   loadShop();
+  loadRecent();
 })();
 </script>
 </body>

@@ -3996,6 +3996,7 @@ html[data-theme="light"] .logo-word, :root[data-theme="light"] .logo-word{color:
             <button class="filter-tab" onclick="filterTransactions('sms',this)"><i class="fa-solid fa-phone"></i> SMS Numbers</button>
             <button class="filter-tab" onclick="filterTransactions('deposit',this)"><i class="fa-solid fa-arrow-down"></i> Deposits</button>
             <button class="filter-tab" onclick="filterTransactions('booster',this)"><i class="fa-solid fa-bolt"></i> Social Boost</button>
+            <button class="filter-tab" onclick="filterTransactions('telegram',this)"><i class="fa-brands fa-telegram"></i> Telegram</button>
             
             <button class="filter-tab" onclick="filterTransactions('conversion',this)"><i class="fa-solid fa-right-left"></i> Convert</button>
         </div>
@@ -5220,6 +5221,7 @@ function normalizeTxType(tx) {
     const channel = String(tx.channel || '').toLowerCase();
     const title = String(tx.title || '').toLowerCase();
     const blob = type + ' ' + cat + ' ' + title + ' ' + channel;
+    if (/telegram\s*(premium|stars)|smmkings/i.test(title + ' ' + cat + ' ' + type) || type === 'telegram') return 'telegram';
     if (type === 'booster' || type === 'boost' || cat === 'booster' || cat.includes('mj boost')) return 'booster';
     if (type === 'deposit' || cat.includes('deposit') || channel.includes('pocketfi') || channel.includes('paystack')) return 'deposit';
     if (type === 'conversion') return 'conversion';
@@ -5274,7 +5276,7 @@ async function fetchActivityFromOrders(userId) {
                 .limit(200),
             supabaseClient
                 .from('booster_orders')
-                .select('id, order_id, service_name, link, price_ngn, charge, price, status, created_at')
+                .select('id, order_id, service_name, link, price_ngn, charge, price, status, created_at, source')
                 .eq('user_id', userId)
                 .order('created_at', { ascending: false })
                 .limit(200)
@@ -5348,11 +5350,13 @@ async function fetchActivityFromOrders(userId) {
                 o.price_ngn != null ? o.price_ngn
                     : (o.charge != null ? o.charge : o.price)
             ) || 0;
+            const isTg = String(o.source || '').toLowerCase() === 'smmkings'
+              || /telegram\s*(premium|stars)/i.test(String(o.service_name || ''));
             extra.push({
                 id: 'boost-' + (o.id || o.order_id),
-                type: 'booster',
-                category: 'MJ Boosters',
-                title: o.service_name || 'Social boost',
+                type: isTg ? 'telegram' : 'booster',
+                category: isTg ? 'Telegram' : 'MJ Boosters',
+                title: o.service_name || (isTg ? 'Telegram' : 'Social boost'),
                 subtitle: o.link ? String(o.link).slice(0, 40) : '',
                 amount: fmtNgnAmount(price),
                 amount_ngn: price,
@@ -7389,6 +7393,7 @@ function renderHistoryList(filterType = 'all') {
         const kind = normalizeTxType(t);
         if (kind === 'deposit') { iconClass = 'fa-arrow-down'; boxClass = 'tx-green'; }
         else if (kind === 'sms') { iconClass = 'fa-phone'; boxClass = 'tx-orange'; }
+        else if (kind === 'telegram') { iconClass = 'fa-paper-plane'; boxClass = 'tx-blue'; }
         else if (kind === 'booster') { iconClass = 'fa-bolt'; boxClass = 'tx-blue'; }
         else if (kind === 'conversion') { iconClass = 'fa-right-left'; boxClass = 'tx-purple'; }
 
