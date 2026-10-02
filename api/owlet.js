@@ -20,6 +20,102 @@ import { rateLimit, applyRateLimitHeaders } from '../lib/rateLimit.js';
 
 const OWLET_URL = (process.env.OWLET_API_URL || 'https://theowlet.com/api/v2').replace(/\/$/, '');
 const OWLET_KEY = String(process.env.OWLET_API_KEY || '').trim().replace(/^["']+|["']+$/g, '');
+
+const PROVIDERS = {
+  owlet: {
+    source: 'owlet',
+    url: OWLET_URL,
+    keyEnv: 'OWLET_API_KEY',
+    key: OWLET_KEY,
+    label: 'Owlet',
+    telegramOnly: false,
+    defaultVisible: true
+  },
+  jap: {
+    source: 'jap',
+    url: String(process.env.JAP_API_URL || 'https://justanotherpanel.com/api/v2').replace(/\/$/, ''),
+    keyEnv: 'JAP_API_KEY',
+    key: String(process.env.JAP_API_KEY || '').trim().replace(/^["']+|["']+$/g, ''),
+    label: 'JAP',
+    telegramOnly: false,
+    defaultVisible: false
+  },
+  smmkings: {
+    source: 'smmkings',
+    url: String(process.env.SMMKINGS_API_URL || 'https://smmkings.com/api/v2').replace(/\/$/, ''),
+    keyEnv: 'SMMKINGS_API_KEY',
+    key: String(process.env.SMMKINGS_API_KEY || '').trim().replace(/^["']+|["']+$/g, ''),
+    label: 'SMMKings',
+    telegramOnly: true,
+    defaultVisible: false
+  }
+};
+
+function resolveProvider(req) {
+  let p = '';
+  try {
+    if (req.query && req.query.provider) p = String(req.query.provider);
+    else if (req.url) p = new URL(req.url, 'http://localhost').searchParams.get('provider') || '';
+  } catch (_) {}
+  p = String(p || 'owlet').toLowerCase().trim();
+  if (!PROVIDERS[p]) p = 'owlet';
+  return PROVIDERS[p];
+}
+
+function isTelegramService(s) {
+  const cat = String(s.category || '').toLowerCase();
+  const name = String(s.name || '').toLowerCase();
+  return (
+    cat.includes('telegram') ||
+    name.includes('telegram') ||
+    /\btg\b/i.test(cat) ||
+    /\btg\b/i.test(name) ||
+    cat.includes('телеграм')
+  );
+}
+
+async function panelCall(providerCfg, params, timeoutMs = 20000) {
+  const key = providerCfg.key || '';
+  if (!key) {
+    return { ok: false, status: 500, json: { error: (providerCfg.keyEnv || 'API_KEY') + ' not configured' } };
+  }
+  const body = new URLSearchParams({ key, ...params });
+  const ac = typeof AbortController !== 'undefined' ? new AbortController() : null;
+  const timer = ac ? setTimeout(() => ac.abort(), timeoutMs) : null;
+  try {
+    const res = await fetch(providerCfg.url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+        Accept: 'application/json'
+      },
+      body: body.toString(),
+      signal: ac ? ac.signal : undefined
+    });
+    const text = await res.text();
+    let json;
+    try {
+      json = JSON.parse(text);
+    } catch {
+      return {
+        ok: false,
+        status: res.status || 502,
+        json: { error: 'Invalid JSON from ' + providerCfg.label, raw: text.slice(0, 300) }
+      };
+    }
+    return { ok: res.ok, status: res.status, json };
+  } catch (e) {
+    const msg =
+      e && e.name === 'AbortError'
+        ? providerCfg.label + ' timeout'
+        : e.message || providerCfg.label + ' request failed';
+    return { ok: false, status: 504, json: { error: msg } };
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+}
+
+
 const USD_TO_NGN = Number(process.env.USD_TO_NGN_RATE) || 1450;
 /** No booster service / order is sold below this (NGN). Override with OWLET_MIN_SELL_NGN */
 const MIN_SELL_PRICE_NGN = Math.max(0, Number(process.env.OWLET_MIN_SELL_NGN) || 200);
@@ -169,15 +265,20 @@ async function owletCall(params, timeoutMs = 12000) {
 
 
 async function handleBalance(req, res) {
-  const { ok, status, json } = await owletCall({ action: 'balance' });
+  const cfg = resolveProvider(req);
+  const call = cfg.source === 'owlet'
+    ? await owletCall({ action: 'balance' })
+    : await panelCall(cfg, { action: 'balance' });
+  const { ok, status, json } = call;
   if (!ok || json?.error) {
     return res.status(status || 502).json({
       success: false,
-      message: 'Could not load booster balance right now'
+      message: 'Could not load ' + cfg.label + ' balance right now' + (json?.error ? (': ' + json.error) : '')
     });
   }
   return res.status(200).json({
     success: true,
+    provider: cfg.source,
     balance: json.balance,
     currency: json.currency || 'USD',
     raw: json
@@ -214,7 +315,8 @@ async function handleServices(req, res) {
 }
 
 async function handleSync(req, res) {
-  const SYNC_SOURCE = 'owlet';
+  const cfg = resolveProvider(req);
+  const SYNC_SOURCE = cfg.source;
   const TIME_BUDGET_MS = 250000;
   const BATCH = 80;
   const startedAt = Date.now();
@@ -226,7 +328,7 @@ async function handleSync(req, res) {
   {
     const { data, error } = await supabase.from('sync_jobs').select('*').eq('source', SYNC_SOURCE).maybeSingle();
     if (error && !/does not exist|relation/i.test(error.message || '')) {
-      console.warn('[owlet sync] sync_jobs read:', error.message);
+      console.warn('[' + SYNC_SOURCE + ' sync] sync_jobs read:', error.message);
     }
     job = data;
   }
@@ -244,22 +346,29 @@ async function handleSync(req, res) {
     };
   }
 
-  const { ok, status, json } = await owletCall({ action: 'services' });
+  const call = SYNC_SOURCE === 'owlet'
+    ? await owletCall({ action: 'services' })
+    : await panelCall(cfg, { action: 'services' });
+  const { ok, status, json } = call;
   if (!ok || json?.error || !Array.isArray(json)) {
     return res.status(status || 502).json({
       success: false,
-      message: 'Could not sync booster services right now'
+      message: 'Could not sync ' + cfg.label + ' services right now' + (json?.error ? (': ' + json.error) : '')
     });
   }
 
-  const services = json;
+  let services = json;
+  if (cfg.telegramOnly) {
+    services = services.filter(isTelegramService);
+  }
+
   let cursor = Number(job.cursor_index) || 0;
   if (cursor >= services.length) cursor = 0;
 
   const { data: existing, error: exErr } = await supabase
     .from('booster_services')
-    .select('service_id, price_ngn, price_source')
-    .eq('source', 'owlet');
+    .select('service_id, price_ngn, price_source, is_available')
+    .eq('source', SYNC_SOURCE);
 
   if (exErr) {
     return res.status(500).json({
@@ -289,10 +398,16 @@ async function handleSync(req, res) {
 
       const prev = map.get(serviceId);
       const manual = prev && prev.price_source === 'manual';
-      // Manual admin prices kept, but never below site minimum ₦200
       const listed = manual ? floorSellNgn(prev.price_ngn, serviceId) : floorSellNgn(defaultNgn, serviceId);
+      // Sticky availability: keep admin hide; new JAP/SMMKings stay hidden from customers
+      let available;
+      if (prev && typeof prev.is_available === 'boolean') {
+        available = prev.is_available;
+      } else {
+        available = !!cfg.defaultVisible;
+      }
       return {
-        source: 'owlet',
+        source: SYNC_SOURCE,
         service_id: serviceId,
         name: s.name || serviceId,
         category: s.category || 'Other',
@@ -304,7 +419,7 @@ async function handleSync(req, res) {
         max_quantity: Number(s.max) || 0,
         refill: !!s.refill,
         cancel: !!s.cancel,
-        is_available: true,
+        is_available: available,
         updated_at: now
       };
     });
@@ -342,26 +457,30 @@ async function handleSync(req, res) {
   try {
     await supabase.from('sync_jobs').upsert(jobFields, { onConflict: 'source' });
   } catch (e) {
-    console.warn('[owlet sync] sync_jobs write failed', e?.message || e);
+    console.warn('[' + SYNC_SOURCE + ' sync] sync_jobs write failed', e?.message || e);
   }
 
+  const tgNote = cfg.telegramOnly ? ' (Telegram only)' : '';
   return res.status(200).json({
     success: true,
     done,
+    provider: SYNC_SOURCE,
     message: done
-      ? `Owlet sync complete — ${services.length} services`
-      : `Owlet sync progress ${cursor}/${services.length} — run Sync again to continue`,
+      ? (cfg.label + ' sync complete — ' + services.length + ' services' + tgNote)
+      : (cfg.label + ' sync progress ' + cursor + '/' + services.length + ' — run Sync again to continue'),
     total: services.length,
     cursor,
     upserted_this_run: upserted,
     rate_currency_mode: getRateCurrency(),
     markup_range: '35%–70% (random per service)',
     usd_to_ngn: USD_TO_NGN,
+    telegram_only: !!cfg.telegramOnly,
     errors: errors.slice(0, 5)
   });
 }
 
 async function handleList(req, res) {
+  const listSource = (resolveProvider(req).source) || 'owlet';
   const q = (req.query?.q || '').toString().trim().toLowerCase();
   const category = (req.query?.category || '').toString().trim();
   const hideUnavailable = String(req.query?.hide_unavailable || '1') !== '0';
@@ -376,7 +495,7 @@ async function handleList(req, res) {
       'id,source,service_id,name,category,service_type,supplier_rate_usd,price_ngn,price_source,min_quantity,max_quantity,refill,cancel,is_available,updated_at',
       { count: 'exact' }
     )
-    .eq('source', 'owlet')
+    .eq('source', listSource)
     .order('category', { ascending: true })
     .order('name', { ascending: true })
     .range(from, to);
@@ -406,7 +525,7 @@ async function handleList(req, res) {
   const { data: catRows } = await supabase
     .from('booster_services')
     .select('category')
-    .eq('source', 'owlet')
+    .eq('source', listSource)
     .limit(5000);
   const categories = [...new Set((catRows || []).map(r => r.category).filter(Boolean))].sort();
 

@@ -1575,6 +1575,49 @@ async function getGotsmsBalance() {
 }
 
 
+
+async function getJapBalance() {
+  const key = String(process.env.JAP_API_KEY || '').trim().replace(/^["']+|["']+$/g, '');
+  const url = String(process.env.JAP_API_URL || 'https://justanotherpanel.com/api/v2').replace(/\/$/, '');
+  if (!key) return { ok: false, error: 'Missing JAP_API_KEY' };
+  try {
+    const body = new URLSearchParams({ key, action: 'balance' });
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded', Accept: 'application/json' },
+      body: body.toString()
+    });
+    const data = await res.json().catch(() => ({}));
+    if (data.error) return { ok: false, error: String(data.error), raw: safeSlice(JSON.stringify(data), 200) };
+    const bal = data.balance ?? data?.data?.balance;
+    if (bal == null) return { ok: false, error: 'No balance field', raw: safeSlice(JSON.stringify(data), 200) };
+    return { ok: true, balance: bal, currency: data.currency || 'USD' };
+  } catch (err) {
+    return { ok: false, error: safeSlice(String(err.message || err), 500) };
+  }
+}
+
+async function getSmmkingsBalance() {
+  const key = String(process.env.SMMKINGS_API_KEY || '').trim().replace(/^["']+|["']+$/g, '');
+  const url = String(process.env.SMMKINGS_API_URL || 'https://smmkings.com/api/v2').replace(/\/$/, '');
+  if (!key) return { ok: false, error: 'Missing SMMKINGS_API_KEY' };
+  try {
+    const body = new URLSearchParams({ key, action: 'balance' });
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded', Accept: 'application/json' },
+      body: body.toString()
+    });
+    const data = await res.json().catch(() => ({}));
+    if (data.error) return { ok: false, error: String(data.error), raw: safeSlice(JSON.stringify(data), 200) };
+    const bal = data.balance ?? data?.data?.balance;
+    if (bal == null) return { ok: false, error: 'No balance field', raw: safeSlice(JSON.stringify(data), 200) };
+    return { ok: true, balance: bal, currency: data.currency || 'USD' };
+  } catch (err) {
+    return { ok: false, error: safeSlice(String(err.message || err), 500) };
+  }
+}
+
 async function getBulkmailBalance() {
   const apiKey = process.env.BULKMAIL_API_KEY || process.env.BULK_MAIL_API_KEY;
   if (!apiKey) return { ok: false, error: 'Missing BULKMAIL_API_KEY' };
@@ -1600,7 +1643,7 @@ async function getBulkmailBalance() {
 }
 
 async function supplierBalancesFetch() {
-  const [fadded, logsdomain, grizzly, sujan, owlet, classy, smsbus, gotsms, bulkmail] = await Promise.all([
+  const [fadded, logsdomain, grizzly, sujan, owlet, classy, smsbus, gotsms, bulkmail, jap, smmkings] = await Promise.all([
     getFaddedBalance(),
     getLogsDomainBalance(),
     getGrizzlyBalance(),
@@ -1609,11 +1652,17 @@ async function supplierBalancesFetch() {
     getClassyBalance(),
     getSmsBusBalance(),
     getGotsmsBalance(),
-    getBulkmailBalance()
+    getBulkmailBalance(),
+    getJapBalance(),
+    getSmmkingsBalance()
   ]);
   return {
     status: 200,
-    body: { success: true, suppliers: { fadded, logsdomain, grizzly, sujan, owlet, classy, smsbus, gotsms, bulkmail }, fetched_at: new Date().toISOString() }
+    body: {
+      success: true,
+      suppliers: { fadded, logsdomain, grizzly, sujan, owlet, classy, smsbus, gotsms, bulkmail, jap, smmkings },
+      fetched_at: new Date().toISOString()
+    }
   };
 }
 
