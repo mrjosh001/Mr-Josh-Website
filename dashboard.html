@@ -1154,13 +1154,47 @@ body::after {
   opacity: 0.88;
   margin-bottom: 6px;
 }
+
+#home.home-v2 .bal-pair {
+  display: flex;
+  align-items: stretch;
+  gap: 0;
+  margin: 4px 0 4px;
+}
+#home.home-v2 .bal-col {
+  flex: 1;
+  min-width: 0;
+}
+#home.home-v2 .bal-divider {
+  width: 1px;
+  align-self: stretch;
+  margin: 4px 12px;
+  background: rgba(255, 255, 255, 0.22);
+  flex-shrink: 0;
+}
+#home.home-v2 .bal-ngn .bal-col .lbl {
+  font-size: 11px;
+  font-weight: 700;
+  opacity: 0.88;
+  margin-bottom: 8px;
+  letter-spacing: 0.02em;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
 #home.home-v2 .bal-ngn .amt {
-  font-size: clamp(34px, 10vw, 40px);
+  font-size: clamp(22px, 6.5vw, 28px);
   font-weight: 800;
-  letter-spacing: -0.05em;
-  line-height: 1;
+  letter-spacing: -0.04em;
+  line-height: 1.1;
   font-variant-numeric: tabular-nums;
 }
+#home.home-v2 .bal-ngn .amt-usd {
+  font-size: clamp(22px, 6.5vw, 28px);
+}
+/* standalone USD strip removed — kept for safety if any leftover */
+#home.home-v2 .bal-usd { display: none !important; }
+
 #home.home-v2 .bal-ngn .stats {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -3099,13 +3133,22 @@ html[data-theme="light"] .logo-word, :root[data-theme="light"] .logo-word{color:
         <div class="bal-ngn" id="homeWalletCard">
             <div class="inner">
                 <div class="top">
-                    <span class="badge"><i class="fa-solid fa-naira-sign"></i> NGN wallet</span>
+                    <span class="badge"><i class="fa-solid fa-wallet"></i> Wallets</span>
                     <button type="button" class="eye-btn" onclick="toggleHomeBalanceHide()" aria-label="Hide balances">
                         <i class="fa-solid fa-eye" id="balanceEyeIcon"></i>
                     </button>
                 </div>
-                <div class="lbl">Available balance</div>
-                <div class="amt" id="homeNgnBalance">₦0.00</div>
+                <div class="bal-pair">
+                    <div class="bal-col">
+                        <div class="lbl"><i class="fa-solid fa-naira-sign"></i> NGN balance</div>
+                        <div class="amt" id="homeNgnBalance">₦0.00</div>
+                    </div>
+                    <div class="bal-divider" aria-hidden="true"></div>
+                    <div class="bal-col">
+                        <div class="lbl"><i class="fa-solid fa-dollar-sign"></i> USD balance</div>
+                        <div class="amt amt-usd" id="homeUsdBalance">$0.00</div>
+                    </div>
+                </div>
                 <div class="stats">
                     <div>
                         <span>Orders</span>
@@ -3123,15 +3166,6 @@ html[data-theme="light"] .logo-word, :root[data-theme="light"] .logo-word{color:
             </div>
         </div>
 
-        <div class="bal-usd">
-            <div class="uico"><i class="fa-solid fa-dollar-sign"></i></div>
-            <div class="ubody">
-                <div class="ulbl">USD wallet</div>
-                <div class="uamt" id="homeUsdBalance">$0.00</div>
-            </div>
-            <span class="uflag">USD</span>
-        </div>
-
         <div class="section-label">
             <strong>Explore</strong>
             <a href="mj-orders.html">Orders</a>
@@ -3140,22 +3174,22 @@ html[data-theme="light"] .logo-word, :root[data-theme="light"] .logo-word{color:
             <a class="hv-tile logs" href="mj-logs.html" id="logsPromoCard">
                 <div class="tico"><i class="fa-solid fa-box-archive"></i></div>
                 <div>
-                    <b>Logs</b>
-                    <em>Accounts &amp; products</em>
+                    <b>MJ Logs</b>
+                    <em>Buy logs &amp; accounts</em>
                 </div>
             </a>
             <a class="hv-tile sms" href="mj-sms-choose-server.html" id="smsPromoCard">
                 <div class="tico"><i class="fa-solid fa-comment-sms"></i></div>
                 <div>
-                    <b>SMS</b>
-                    <em>Verification numbers</em>
+                    <b>MJ SMS</b>
+                    <em>Real numbers for verification</em>
                 </div>
             </a>
             <a class="hv-tile boost" href="mj-boosters.html" id="boostersPromoBanner">
                 <div class="tico"><i class="fa-solid fa-bolt"></i></div>
                 <div>
-                    <b>Boost</b>
-                    <em>Followers &amp; views</em>
+                    <b>MJ Boosters</b>
+                    <em>Boost your social media</em>
                 </div>
             </a>
             <a class="hv-tile refer" href="referral.html" id="referralContestBanner">
