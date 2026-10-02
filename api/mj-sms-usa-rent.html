@@ -1,0 +1,694 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, viewport-fit=cover">
+<title>USA Physical Rental · MJ HUB</title>
+<script>(function(){try{var t=localStorage.getItem('mjhub-theme');document.documentElement.setAttribute('data-theme',(t==='light'||t==='dark')?t:'dark');}catch(e){document.documentElement.setAttribute('data-theme','dark');}})();</script>
+<script src="/js/mj-page-loader.js" defer></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap" rel="stylesheet">
+<style>
+:root,html[data-theme="dark"]{--bg:#0b1220;--card:#111827;--text:#f1f5f9;--muted:#94a3b8;--border:#1e293b;--primary:#3b82f6;--primary-glow:rgba(59,130,246,.14);--ok:#22c55e;--danger:#ef4444}
+html[data-theme="light"]{--bg:#f8fafc;--card:#fff;--text:#0f172a;--muted:#64748b;--border:#e2e8f0;--primary:#2563eb;--primary-glow:rgba(37,99,235,.1);--ok:#16a34a;--danger:#dc2626}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Plus Jakarta Sans',system-ui,sans-serif;background:var(--bg);color:var(--text);min-height:100dvh;overflow-x:hidden}
+.header{padding:14px 16px;display:flex;align-items:center;gap:12px;position:sticky;top:0;z-index:50;background:color-mix(in srgb,var(--bg) 90%,transparent);backdrop-filter:blur(14px);border-bottom:1px solid var(--border)}
+.back{width:40px;height:40px;border-radius:12px;border:1px solid var(--border);background:var(--card);display:flex;align-items:center;justify-content:center;color:var(--text);text-decoration:none;flex-shrink:0}
+.page-title{font-size:17px;font-weight:800;flex:1;min-width:0}
+.hist-link{font-size:12px;font-weight:800;color:var(--primary);text-decoration:none;padding:8px 12px;border-radius:10px;border:1px solid color-mix(in srgb,var(--primary) 35%,var(--border));background:var(--primary-glow);white-space:nowrap;flex-shrink:0}
+.main{padding:16px;max-width:560px;margin:0 auto;padding-bottom:100px;width:100%}
+.content-card{background:var(--card);border:1px solid var(--border);border-radius:18px;padding:16px;margin-bottom:14px;overflow:hidden}
+.content-card h2{font-size:16px;font-weight:800;margin-bottom:12px;display:flex;align-items:center;gap:8px}
+.helper-text{font-size:12px;color:var(--muted);line-height:1.45;margin:-4px 0 12px}
+.search-bar{display:flex;align-items:center;gap:10px;padding:12px 14px;border-radius:12px;border:1.5px solid var(--border);background:var(--bg);margin-bottom:12px}
+.search-bar input{flex:1;min-width:0;border:none;background:transparent;color:var(--text);font:600 14px inherit;outline:none}
+.svc-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px 8px;width:100%}
+@media(min-width:420px){.svc-grid{grid-template-columns:repeat(5,minmax(0,1fr))}}
+.svc-tile{display:flex;flex-direction:column;align-items:center;gap:6px;padding:8px 2px;cursor:pointer;border-radius:14px;border:1px solid transparent;min-width:0;width:100%}
+.svc-tile:active,.svc-tile:hover{background:var(--primary-glow);border-color:color-mix(in srgb,var(--primary) 25%,transparent)}
+.svc-icon-wrap{width:48px;height:48px;position:relative;flex-shrink:0}
+.svc-logo{width:48px;height:48px;border-radius:12px;object-fit:contain;background:#fff;padding:5px;display:block;box-shadow:0 2px 8px rgba(0,0,0,.12)}
+.svc-icon{width:48px;height:48px;border-radius:12px;display:flex;align-items:center;justify-content:center;color:#fff;font-size:18px;background:linear-gradient(135deg,var(--primary),#1d4ed8)}
+.svc-label{font-size:10px;font-weight:700;text-align:center;line-height:1.2;max-width:100%;width:100%;overflow:hidden;text-overflow:ellipsis;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;word-break:break-word}
+.sk-svc-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px 8px}
+.sk-svc-tile{display:flex;flex-direction:column;align-items:center;gap:6px;padding:8px 2px}
+.sk-svc-icon{width:48px;height:48px;border-radius:12px;background:linear-gradient(90deg,rgba(148,163,184,.12),rgba(148,163,184,.22),rgba(148,163,184,.12));background-size:200% 100%;animation:sk 1.2s ease-in-out infinite}
+.sk-svc-label{width:48px;height:9px;border-radius:6px;background:linear-gradient(90deg,rgba(148,163,184,.12),rgba(148,163,184,.22),rgba(148,163,184,.12));background-size:200% 100%;animation:sk 1.2s ease-in-out infinite}
+.sk-line{height:48px;border-radius:12px;margin-bottom:10px;background:linear-gradient(90deg,rgba(148,163,184,.12),rgba(148,163,184,.22),rgba(148,163,184,.12));background-size:200% 100%;animation:sk 1.2s ease-in-out infinite}
+@keyframes sk{0%{background-position:200% 0}100%{background-position:-200% 0}}
+.selected-service-bar{display:flex;align-items:center;justify-content:space-between;gap:10px;background:var(--primary-glow);border-radius:12px;padding:12px 14px;margin-bottom:14px}
+.selected-service-bar .name{font-weight:800;font-size:14px;color:var(--primary);display:flex;align-items:center;gap:10px;min-width:0}
+.selected-service-bar .mini-logo{width:28px;height:28px;border-radius:8px;object-fit:contain;background:#fff;padding:3px;flex-shrink:0}
+.selected-service-bar button{background:none;border:1px solid var(--primary);color:var(--primary);font-size:11px;font-weight:700;padding:6px 12px;border-radius:8px;cursor:pointer;font-family:inherit;flex-shrink:0}
+label.f{font-size:12px;font-weight:700;color:var(--muted);display:block;margin:12px 0 6px}
+input.f,select.f{width:100%;padding:13px 14px;border-radius:12px;border:1.5px solid var(--border);background:var(--bg);color:var(--text);font:600 14px inherit;appearance:none;-webkit-appearance:none}
+select.f{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath fill='%2394a3b8' d='M1 1l5 5 5-5'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 14px center;padding-right:36px}
+.plan-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+.plan{border:1.5px solid var(--border);border-radius:12px;padding:10px 8px;cursor:pointer;background:var(--bg);text-align:center;min-width:0}
+.plan.on{border-color:var(--primary);box-shadow:0 0 0 3px var(--primary-glow);background:var(--primary-glow)}
+.plan .dur{font-weight:800;font-size:12px;line-height:1.2;word-break:break-word}
+.plan .price{font-weight:800;font-size:13px;color:var(--primary);margin-top:4px}
+.qty{display:flex;align-items:center;gap:12px}
+.qty button{width:40px;height:40px;border-radius:12px;border:none;background:var(--primary-glow);color:var(--primary);font-size:18px;font-weight:800;cursor:pointer}
+.total{margin-top:14px;padding:14px;border-radius:14px;background:var(--primary-glow)}
+.total .lbl{font-size:12px;font-weight:700;color:var(--muted)}
+.total .amt{font-size:22px;font-weight:800;color:var(--primary)}
+.btn-buy{width:100%;margin-top:14px;padding:14px;border:none;border-radius:14px;background:linear-gradient(135deg,var(--primary),#1d4ed8);color:#fff;font:800 15px inherit;cursor:pointer}
+.btn-buy:disabled{opacity:.5}
+.err{color:var(--danger);font-weight:700;font-size:13px;margin-top:10px}
+.ok{color:var(--ok);font-weight:700;font-size:13px;margin-top:10px}
+.success-banner{border:1px solid color-mix(in srgb,var(--ok) 40%,var(--border));background:color-mix(in srgb,var(--ok) 12%,var(--card));border-radius:16px;padding:16px;margin-bottom:14px}
+.countdown{font-size:22px;font-weight:800;color:var(--primary);margin:8px 0}
+.actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}
+.actions a{flex:1;min-width:120px;padding:11px;border-radius:12px;font:800 13px inherit;text-align:center;text-decoration:none;border:1px solid var(--border);background:var(--bg);color:var(--text)}
+.actions a.primary{background:var(--primary);color:#fff;border-color:var(--primary)}
+.empty{text-align:center;padding:28px;color:var(--muted);font-weight:600}
+.cache-note{font-size:11px;color:var(--muted);margin-top:8px;text-align:center}
+
+/* Confirm purchase modal (OTP-style) */
+
+
+
+
+
+/* Purchase modal — same style as Server 1 / Server 2 */
+.purchase-modal{display:none;position:fixed;inset:0;z-index:2000;align-items:flex-end;justify-content:center;background:rgba(0,0,0,.55);backdrop-filter:blur(8px);padding:12px}
+.purchase-modal.open,.purchase-modal.active{display:flex}
+.purchase-sheet{background:#fff;color:#0f172a;width:100%;max-width:420px;border-radius:24px;max-height:92vh;overflow-y:auto;box-shadow:0 24px 60px rgba(0,0,0,.35);animation:sheetUp .28s ease;padding-bottom:8px}
+@keyframes sheetUp{from{transform:translateY(40px);opacity:0}to{transform:none;opacity:1}}
+.ps-header{display:flex;justify-content:space-between;align-items:center;padding:16px 18px;border-bottom:1px solid #eef2f7;font-weight:800;font-size:17px;color:#0f172a}
+.ps-close{background:none;border:none;font-size:18px;cursor:pointer;color:#64748b;width:32px;height:32px}
+.ps-body{padding:16px 18px 20px}
+.ps-title-row{display:flex;gap:12px;align-items:flex-start;margin-bottom:14px}
+.ps-icon{width:48px;height:48px;border-radius:14px;background:#25D366;color:#fff;display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0;overflow:hidden}
+.ps-icon img{width:100%;height:100%;object-fit:cover}
+.ps-name{font-size:16px;font-weight:800;margin-bottom:6px;color:#0f172a}
+.ps-meta{display:flex;gap:8px;flex-wrap:wrap}
+.ps-pill{font-size:11px;font-weight:700;padding:4px 10px;border-radius:20px}
+.ps-pill-stock{background:#d1fae5;color:#059669}
+.ps-pill-price{background:#fef3c7;color:#b45309}
+.ps-block{background:#f8fafc;border-radius:14px;padding:12px 14px;margin-bottom:10px}
+.ps-block-label{font-size:11px;font-weight:700;color:#64748b;margin-bottom:6px;text-transform:uppercase;letter-spacing:.03em}
+.ps-block-text{font-size:13px;color:#334155;line-height:1.55;font-weight:600}
+.ps-total-row{display:flex;justify-content:space-between;align-items:center;background:linear-gradient(135deg,#eef2ff,#e0e7ff);border-radius:14px;padding:14px 16px;margin:12px 0 14px}
+.ps-total-label{font-size:14px;font-weight:700;color:#4338ca}
+.ps-total-price{font-size:18px;font-weight:800;color:#312e81}
+.ps-buy{width:100%;border:none;border-radius:14px;padding:15px;font-size:15px;font-weight:800;color:#fff;cursor:pointer;font-family:inherit;background:linear-gradient(135deg,#4f46e5,#2563eb);display:flex;align-items:center;justify-content:center;gap:8px}
+.ps-buy:disabled{opacity:.5;cursor:not-allowed}
+.ps-err{color:#dc2626;font-size:13px;font-weight:700;margin-top:10px;text-align:center}
+
+.toggle-row{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 14px;border-radius:12px;border:1.5px solid var(--border);background:var(--bg);margin-top:12px}
+.toggle-row .t-label{font-size:13px;font-weight:700}.toggle-row .t-hint{font-size:11px;color:var(--muted);font-weight:600;margin-top:2px}
+.switch{position:relative;width:48px;height:28px;flex-shrink:0}
+.switch input{opacity:0;width:0;height:0}
+.switch .slider{position:absolute;cursor:pointer;inset:0;background:#334155;border-radius:999px;transition:.2s}
+.switch .slider:before{position:absolute;content:"";height:22px;width:22px;left:3px;bottom:3px;background:#fff;border-radius:50%;transition:.2s}
+.switch input:checked+.slider{background:var(--primary)}
+.switch input:checked+.slider:before{transform:translateX(20px)}
+
+.total-break{margin-top:10px;padding-top:10px;border-top:1px solid color-mix(in srgb,var(--border) 80%,transparent);display:none}
+.total-break.on{display:block}
+.total-break .tb-row{display:flex;justify-content:space-between;gap:10px;font-size:12px;font-weight:600;color:var(--muted);margin:4px 0}
+.total-break .tb-row span:last-child{color:var(--text);font-weight:700;white-space:nowrap}
+.total-break .tb-row.base span:last-child{color:var(--primary)}
+
+.toast-pop{position:fixed;left:50%;bottom:28px;transform:translateX(-50%) translateY(120%);z-index:9999;max-width:min(420px,92vw);padding:14px 18px;border-radius:14px;font:700 14px/1.4 inherit;box-shadow:0 12px 40px rgba(0,0,0,.35);background:#0f172a;color:#fff;border:1px solid rgba(148,163,184,.25);transition:transform .28s ease,opacity .28s ease;opacity:0;pointer-events:none}
+.toast-pop.on{transform:translateX(-50%) translateY(0);opacity:1}
+.toast-pop.ok{background:#065f46;border-color:rgba(52,211,153,.35)}
+.toast-pop.err{background:#7f1d1d;border-color:rgba(248,113,113,.35)}
+</style>
+</head>
+<body>
+<header class="header">
+  <a href="mj-sms-choose-server.html" class="back"><i class="fa-solid fa-arrow-left"></i></a>
+  <h1 class="page-title">USA Physical Rental</h1>
+  <a class="hist-link" href="mj-sms-history.html?view=rent">My numbers</a>
+</header>
+<main class="main">
+  <div id="successBox" class="success-banner" style="display:none"></div>
+  <div class="content-card" id="serviceStep">
+    <h2><i class="fa-solid fa-grid-2" style="color:var(--primary)"></i> Choose a service</h2>
+    <p class="helper-text">Pick the app you need a USA number for. Next screen lets you set duration, carrier, and area code.</p>
+    <div class="search-bar"><i class="fa-solid fa-magnifying-glass" style="color:var(--muted)"></i><input type="search" id="svcSearch" placeholder="Search WhatsApp, Telegram…" autocomplete="off"></div>
+    <div id="svcGrid" class="sk-svc-grid" aria-busy="true">
+      <div class="sk-svc-tile"><div class="sk-svc-icon"></div><div class="sk-svc-label"></div></div>
+      <div class="sk-svc-tile"><div class="sk-svc-icon"></div><div class="sk-svc-label"></div></div>
+      <div class="sk-svc-tile"><div class="sk-svc-icon"></div><div class="sk-svc-label"></div></div>
+      <div class="sk-svc-tile"><div class="sk-svc-icon"></div><div class="sk-svc-label"></div></div>
+    </div>
+    <p class="cache-note" id="cacheNote"></p>
+  </div>
+  <div class="content-card" id="detailStep" style="display:none">
+    <h2><i class="fa-solid fa-sliders" style="color:var(--primary)"></i> Rental details</h2>
+    <div class="selected-service-bar">
+      <span class="name" id="selectedServiceName">—</span>
+      <button type="button" id="changeServiceBtn">Change</button>
+    </div>
+    <div id="detailBody"><div class="sk-line"></div><div class="sk-line"></div><div class="sk-line"></div></div>
+  </div>
+
+<div class="purchase-modal" id="purchaseModal" aria-hidden="true">
+  <div class="purchase-sheet" role="dialog" aria-labelledby="psTitle">
+    <div class="ps-header">
+      <span id="psTitle">Buy Number</span>
+      <button type="button" class="ps-close" id="purchaseCloseBtn" aria-label="Close">✕</button>
+    </div>
+    <div class="ps-body">
+      <div class="ps-title-row">
+        <div class="ps-icon" id="psIcon"><i class="fa-brands fa-whatsapp"></i></div>
+        <div style="flex:1;min-width:0">
+          <div class="ps-name" id="psService">Service</div>
+          <div class="ps-meta">
+            <span class="ps-pill ps-pill-stock" id="psStock">USA physical</span>
+            <span class="ps-pill ps-pill-price" id="psUnitPrice">₦0</span>
+          </div>
+        </div>
+      </div>
+      <div class="ps-block">
+        <div class="ps-block-label">Country</div>
+        <div class="ps-block-text">🇺🇸 United States</div>
+      </div>
+      <div class="ps-block">
+        <div class="ps-block-label">Duration</div>
+        <div class="ps-block-text" id="psDuration">—</div>
+      </div>
+      <div class="ps-block">
+        <div class="ps-block-label">Carrier</div>
+        <div class="ps-block-text" id="psCarrier">Any carrier</div>
+      </div>
+      <div class="ps-block">
+        <div class="ps-block-label">Area code</div>
+        <div class="ps-block-text" id="psArea">Any</div>
+      </div>
+      <div class="ps-block">
+        <div class="ps-block-label">Quantity</div>
+        <div class="ps-block-text" id="psQty">1</div>
+      </div>
+      <div class="ps-block">
+        <div class="ps-block-label">Auto-renew</div>
+        <div class="ps-block-text" id="psAutoRenew">Off</div>
+      </div>
+      <div class="ps-total-row">
+        <span class="ps-total-label">Total</span>
+        <span class="ps-total-price" id="psTotal">₦0</span>
+      </div>
+      <button type="button" class="ps-buy" id="confirmBuyBtn"><i class="fa-solid fa-mobile-screen"></i> Confirm Purchase</button>
+      <div class="ps-err" id="psErr"></div>
+    </div>
+  </div>
+</div>
+
+</main>
+
+
+<script>
+(function(){
+const SUPABASE_URL='https://atczodlljmlayvldxfmv.supabase.co';
+const SUPABASE_ANON_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImF0Y3pvZGxsam1sYXl2bGR4Zm12Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODUwNzUyMzgsImV4cCI6MjEwMDY1MTIzOH0.ufthD-p7BmeD_B7xyuMM6PNPL8DmcL4AtRYgg-MuoLI';
+const sb=window.supabase.createClient(SUPABASE_URL,SUPABASE_ANON_KEY,{auth:{persistSession:true,autoRefreshToken:true,storage:window.sessionStorage}});
+let allServices=[],selectedService=null,plans=[],selectedPlan=null,qty=1,rentBusy=false,carriers=[];
+const CARRIER_ADDON_NGN=800, AREA_ADDON_NGN=1000;
+const POPULAR=['whatsapp','telegram','google','facebook','instagram','tiktok','twitter','x','discord','paypal','amazon','apple','microsoft'];
+const CACHE_KEY='mj_gotsms_services_v2';
+const CACHE_TTL_MS=2*24*60*60*1000;
+
+const SERVICE_DOMAIN={
+  whatsapp:'whatsapp.com',telegram:'telegram.org',facebook:'facebook.com',instagram:'instagram.com',
+  tiktok:'tiktok.com',twitter:'x.com',x:'x.com',google:'google.com',gmail:'gmail.com',
+  discord:'discord.com',snapchat:'snapchat.com',linkedin:'linkedin.com',pinterest:'pinterest.com',
+  reddit:'reddit.com',spotify:'spotify.com',uber:'uber.com',airbnb:'airbnb.com',amazon:'amazon.com',
+  apple:'apple.com',microsoft:'microsoft.com',paypal:'paypal.com',steam:'steampowered.com',
+  twitch:'twitch.tv',youtube:'youtube.com',tinder:'tinder.com',netflix:'netflix.com',
+  signal:'signal.org',ebay:'ebay.com',openai:'openai.com',chatgpt:'openai.com',binance:'binance.com',
+  coinbase:'coinbase.com',airwallex:'airwallex.com',banxa:'banxa.com',axos:'axosbank.com',
+  americanexpress:'americanexpress.com',amex:'americanexpress.com',axs:'axs.com',aarp:'aarp.org',
+  adidas:'adidas.com',lyft:'lyft.com'
+};
+const SERVICE_ICON_MAP=[
+  ['whatsapp','fa-brands fa-whatsapp','#25D366'],['telegram','fa-brands fa-telegram','#26A5E4'],
+  ['facebook','fa-brands fa-facebook-f','#1877F2'],['instagram','fa-brands fa-instagram','#E1306C'],
+  ['tiktok','fa-brands fa-tiktok','#000000'],['twitter','fa-brands fa-x-twitter','#000000'],
+  ['google','fa-brands fa-google','#4285F4'],['discord','fa-brands fa-discord','#5865F2'],
+  ['amazon','fa-brands fa-amazon','#FF9900'],['apple','fa-brands fa-apple','#000000'],
+  ['microsoft','fa-brands fa-microsoft','#00A4EF'],['paypal','fa-brands fa-paypal','#003087'],
+  ['airbnb','fa-brands fa-airbnb','#FF5A5F'],['spotify','fa-brands fa-spotify','#1DB954']
+];
+function isJunkService(n){return !n||n.length<=2||/^[a-z0-9]{1,3}$/.test(n);}
+function serviceDomain(name){
+  var n=String(name||'').toLowerCase().trim();
+  if(!n)return null;
+  if(SERVICE_DOMAIN[n])return SERVICE_DOMAIN[n];
+  var keys=Object.keys(SERVICE_DOMAIN).sort(function(a,b){return b.length-a.length;});
+  for(var i=0;i<keys.length;i++){
+    var key=keys[i];
+    if(key.length<=1)continue;
+    if(n===key||(key.length>=4&&n.indexOf(key)>=0))return SERVICE_DOMAIN[key];
+  }
+  if(n==='x'||n==='twitter')return 'x.com';
+  if(isJunkService(n))return null;
+  var slug=n.replace(/[^a-z0-9]+/g,' ').trim().split(/\s+/)[0];
+  if(slug&&slug.length>=4&&!isJunkService(slug))return slug+'.com';
+  return null;
+}
+function serviceLogo(name){
+  var domain=serviceDomain(name);
+  if(!domain)return null;
+  return 'https://www.google.com/s2/favicons?domain='+encodeURIComponent(domain)+'&sz=128';
+}
+function serviceIconFa(name){
+  var n=String(name||'').toLowerCase();
+  for(var i=0;i<SERVICE_ICON_MAP.length;i++){
+    if(n.indexOf(SERVICE_ICON_MAP[i][0])>=0)return{cls:SERVICE_ICON_MAP[i][1],color:SERVICE_ICON_MAP[i][2]};
+  }
+  return null;
+}
+function serviceLogoHtml(name){
+  var icon=serviceIconFa(name);
+  var logo=serviceLogo(name);
+  var bg=(icon&&icon.color)?icon.color:'#3b82f6';
+  var fa=(icon&&icon.cls)?icon.cls:'fa-solid fa-mobile-screen';
+  if(logo){
+    return '<div class="svc-icon-wrap">'+
+      '<img class="svc-logo" src="'+logo+'" alt="" loading="lazy" '+
+      'onerror="this.style.display=\'none\';var n=this.nextElementSibling;if(n)n.style.display=\'flex\'"/>'+
+      '<div class="svc-icon" style="display:none;background:'+bg+'"><i class="'+fa+'"></i></div></div>';
+  }
+  return '<div class="svc-icon" style="background:'+bg+'"><i class="'+fa+'"></i></div>';
+}
+
+const US_AREA_CODES=[
+  {state:'Alabama',codes:[{c:'256',carrier:'T-Mobile'},{c:'938',carrier:'T-Mobile'},{c:'205',carrier:''},{c:'251',carrier:''}]},
+  {state:'Arizona',codes:[{c:'480',carrier:'T-Mobile'},{c:'623',carrier:'T-Mobile'},{c:'602',carrier:''},{c:'520',carrier:''}]},
+  {state:'California',codes:[{c:'213',carrier:''},{c:'310',carrier:''},{c:'415',carrier:''},{c:'619',carrier:''},{c:'818',carrier:''}]},
+  {state:'Colorado',codes:[{c:'303',carrier:''},{c:'720',carrier:''}]},
+  {state:'Florida',codes:[{c:'305',carrier:''},{c:'786',carrier:''},{c:'407',carrier:''},{c:'954',carrier:''}]},
+  {state:'Georgia',codes:[{c:'404',carrier:''},{c:'678',carrier:''},{c:'770',carrier:''}]},
+  {state:'Illinois',codes:[{c:'312',carrier:''},{c:'773',carrier:''},{c:'847',carrier:''}]},
+  {state:'Massachusetts',codes:[{c:'617',carrier:''},{c:'857',carrier:''}]},
+  {state:'New York',codes:[{c:'212',carrier:''},{c:'646',carrier:''},{c:'718',carrier:''},{c:'917',carrier:''}]},
+  {state:'Ohio',codes:[{c:'216',carrier:''},{c:'614',carrier:''}]},
+  {state:'Pennsylvania',codes:[{c:'215',carrier:''},{c:'412',carrier:''},{c:'610',carrier:''}]},
+  {state:'Texas',codes:[{c:'214',carrier:''},{c:'281',carrier:''},{c:'512',carrier:''},{c:'713',carrier:''},{c:'832',carrier:''}]},
+  {state:'Washington',codes:[{c:'206',carrier:''},{c:'253',carrier:''},{c:'425',carrier:''}]}
+];
+
+function esc(s){return String(s==null?'':s).replace(/[&<>"']/g,function(c){return({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c];});}
+function fmtNgn(n){return '₦'+Number(n||0).toLocaleString('en-NG');}
+async function headers(){const{data:{session}}=await sb.auth.getSession();if(!session){location.href='auth.html';return null;}return{Authorization:'Bearer '+session.access_token,'Content-Type':'application/json',Accept:'application/json'};}
+async function api(action,opts){const h=await headers();if(!h)return{success:false,message:'Sign in required'};const method=(opts&&opts.method)||'GET';let url='/api/sms-bus?action=gotsms_'+encodeURIComponent(action);if(opts&&opts.query)url+='&'+opts.query;const res=await fetch(url,{method:method,headers:h,body:opts&&opts.body?JSON.stringify(opts.body):undefined});const raw=await res.text();try{const clean=String(raw||'').replace(/[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?:[^\uD800-\uDBFF]|^)[\uDC00-\uDFFF]/g,'');return clean?JSON.parse(clean):{};}catch(e){return{success:false,message:'Bad server response'};}}
+
+function readCache(){try{var raw=localStorage.getItem(CACHE_KEY);if(!raw)return null;var o=JSON.parse(raw);if(!o||!Array.isArray(o.services)||!o.ts)return null;if(Date.now()-o.ts>CACHE_TTL_MS)return null;return o;}catch(e){return null;}}
+function writeCache(services){try{localStorage.setItem(CACHE_KEY,JSON.stringify({ts:Date.now(),services:services}));}catch(e){}}
+
+function dedupeServices(list){
+  var seen={}, out=[];
+  (list||[]).forEach(function(s){
+    var id=String(s&&s.id||'');
+    if(!id||seen[id])return;
+    seen[id]=1;
+    out.push({id:id,name:s.name||s.service_name||'Service',logo:s.logo||null});
+  });
+  return out;
+}
+async function fetchAllServices(search){
+  var all=[], q=String(search||'').trim();
+  for(var page=1;page<=30;page++){
+    var qs='per_page=100&page='+page;
+    if(q) qs+='&search='+encodeURIComponent(q);
+    var j=await api('services',{query:qs});
+    if(!j.success){if(page===1)return{ok:false,message:j.message||'Could not load services'};break;}
+    var chunk=Array.isArray(j.data)?j.data:[];
+    if(!chunk.length)break;
+    all=all.concat(chunk);
+    var last=Number((j.meta&&j.meta.last_page)||page);
+    if(page>=last)break;
+  }
+  return{ok:true,services:dedupeServices(all)};
+}
+function sortServices(){
+  allServices.sort(function(a,b){
+    var an=String(a.name||'').toLowerCase(),bn=String(b.name||'').toLowerCase();
+    var ai=POPULAR.findIndex(function(p){return an.indexOf(p)>=0;});
+    var bi=POPULAR.findIndex(function(p){return bn.indexOf(p)>=0;});
+    if(ai===-1&&bi===-1)return an.localeCompare(bn);
+    if(ai===-1)return 1;if(bi===-1)return -1;return ai-bi;
+  });
+}
+function paintServices(list){
+  var grid=document.getElementById('svcGrid');
+  grid.className='svc-grid';grid.removeAttribute('aria-busy');
+  if(!list.length){grid.innerHTML='<div class="empty" style="grid-column:1/-1">No match</div>';return;}
+  grid.innerHTML=list.map(function(s){
+    return '<div class="svc-tile" data-id="'+esc(s.id)+'" data-name="'+esc(s.name)+'">'+
+      serviceLogoHtml(s.name)+'<div class="svc-label">'+esc(s.name)+'</div></div>';
+  }).join('');
+  grid.querySelectorAll('.svc-tile').forEach(function(tile){
+    tile.onclick=function(){
+      selectedService={id:tile.getAttribute('data-id'),name:tile.getAttribute('data-name')};
+      openDetail();
+    };
+  });
+}
+var _searchTimer=null;
+function renderServices(){
+  var q=String(document.getElementById('svcSearch').value||'').trim();
+  var ql=q.toLowerCase();
+  var list=allServices;
+  if(ql) list=allServices.filter(function(s){return String(s.name||'').toLowerCase().indexOf(ql)>=0;});
+  paintServices(list);
+  // If local list has no match, search supplier API (WhatsApp may not be on first pages)
+  if(ql && !list.length){
+    clearTimeout(_searchTimer);
+    _searchTimer=setTimeout(async function(){
+      var grid=document.getElementById('svcGrid');
+      grid.innerHTML='<div class="empty" style="grid-column:1/-1">Searching…</div>';
+      var r=await fetchAllServices(q);
+      if(!r.ok){grid.innerHTML='<div class="empty" style="grid-column:1/-1">'+esc(r.message||'Search failed')+'</div>';return;}
+      // merge into allServices for next time
+      var map={};allServices.forEach(function(s){map[s.id]=s;});
+      r.services.forEach(function(s){map[s.id]=s;});
+      allServices=Object.keys(map).map(function(k){return map[k];});
+      sortServices();writeCache(allServices);
+      var still=allServices.filter(function(s){return String(s.name||'').toLowerCase().indexOf(ql)>=0;});
+      paintServices(still);
+      var note=document.getElementById('cacheNote');
+      if(note) note.textContent=allServices.length+' services';
+    },350);
+  }
+}
+async function loadServices(){
+  var grid=document.getElementById('svcGrid');
+  var note=document.getElementById('cacheNote');
+  var cached=readCache();
+  if(cached&&cached.services.length){
+    allServices=dedupeServices(cached.services);sortServices();renderServices();
+    if(note)note.textContent='Cached · '+allServices.length+' services · refreshes in background';
+    fetchAllServices().then(function(r){
+      if(r.ok&&r.services.length){
+        allServices=dedupeServices(r.services);writeCache(allServices);sortServices();renderServices();
+        if(note)note.textContent=allServices.length+' services';
+      }
+    });
+  }else{
+    grid.className='sk-svc-grid';grid.setAttribute('aria-busy','true');
+    grid.innerHTML='';for(var i=0;i<8;i++)grid.innerHTML+='<div class="sk-svc-tile"><div class="sk-svc-icon"></div><div class="sk-svc-label"></div></div>';
+    var r=await fetchAllServices();
+    if(!r.ok){grid.className='';grid.innerHTML='<div class="empty">'+esc(r.message)+'</div>';return;}
+    allServices=dedupeServices(r.services);writeCache(allServices);sortServices();renderServices();
+    if(note)note.textContent=allServices.length+' services';
+  }
+  api('carriers').then(function(c){carriers=c.data||[];});
+}
+document.getElementById('svcSearch').oninput=renderServices;
+
+function openDetail(){
+  document.getElementById('serviceStep').style.display='none';
+  document.getElementById('detailStep').style.display='block';
+  var logo=serviceLogo(selectedService.name);
+  var nameEl=document.getElementById('selectedServiceName');
+  if(logo)nameEl.innerHTML='<img class="mini-logo" src="'+esc(logo)+'" alt="" onerror="this.style.display=\'none\'">'+esc(selectedService.name);
+  else nameEl.textContent=selectedService.name;
+  document.getElementById('detailBody').innerHTML='<div class="sk-line"></div><div class="sk-line"></div><div class="sk-line"></div>';
+  selectedPlan=null;qty=1;loadPlans();
+}
+document.getElementById('changeServiceBtn').onclick=function(){
+  document.getElementById('detailStep').style.display='none';
+  document.getElementById('serviceStep').style.display='block';
+  selectedService=null;selectedPlan=null;
+};
+async function loadPlans(){
+  var body=document.getElementById('detailBody');
+  if(body) body.innerHTML='<div class="sk-line"></div><div class="sk-line"></div><div class="sk-line"></div>';
+  var j=await api('plans',{query:'service_id='+encodeURIComponent(selectedService.id)+'&per_page=100'});
+  if(!j||j.success===false){
+    plans=[];
+    if(body) body.innerHTML='<div class="empty">'+(j&&j.message?String(j.message):'Could not load plans. Pull to refresh or try again.')+'</div>';
+    return;
+  }
+  plans=(j.data||[]).filter(function(p){return p.is_available!==false;});
+  var order={min:0,hour:1,day:2,week:3,month:4,year:5};
+  plans.sort(function(a,b){var da=order[a.duration_type]??9,db=order[b.duration_type]??9;if(da!==db)return da-db;return(a.duration_in_type||0)-(b.duration_in_type||0);});
+  renderDetailForm();
+}
+function buildAreaOptions(){
+  var html='<option value="">Any Area Code</option>';
+  US_AREA_CODES.forEach(function(st){
+    html+='<optgroup label="'+esc(st.state)+'">';
+    html+='<option value="__random_'+esc(st.state)+'">'+esc(st.state)+' (random area code)</option>';
+    st.codes.forEach(function(x){
+      html+='<option value="'+esc(x.c)+'">'+esc(x.c)+(x.carrier?' ('+x.carrier+')':'')+'</option>';
+    });
+    html+='</optgroup>';
+  });
+  return html;
+}
+function renderDetailForm(){
+  var body=document.getElementById('detailBody');
+  if(!plans.length){body.innerHTML='<div class="empty">No plans in stock for this service right now.<br><span style="opacity:.7;font-size:12px">Try another service or check back shortly.</span></div>';return;}
+  var planHtml=plans.map(function(p,i){
+    return '<div class="plan" data-i="'+i+'"><div class="dur">'+esc(p.duration_translation||(p.duration_in_type+' '+p.duration_type))+'</div><div class="price">'+fmtNgn(p.price_ngn)+'</div></div>';
+  }).join('');
+  var carHtml='<option value="">Any Carrier</option>'+carriers.map(function(c){return '<option value="'+esc(c.id)+'">'+esc(c.name)+'</option>';}).join('');
+  body.innerHTML=
+    '<label class="f">Duration</label><div class="plan-grid" id="planList">'+planHtml+'</div>'+
+    '<label class="f">Carrier (optional)</label><select class="f" id="carrierSel">'+carHtml+'</select>'+
+    '<label class="f">Area code (optional)</label><select class="f" id="areaCode">'+buildAreaOptions()+'</select>'+
+    '<label class="f">Quantity (1–25)</label><div class="qty"><button type="button" id="qtyMinus">−</button><span id="qtyVal" style="font-weight:800;min-width:28px;text-align:center">1</span><button type="button" id="qtyPlus">+</button></div>'+
+    '<div class="toggle-row"><div><div class="t-label">Auto-renew</div><div class="t-hint">Renew automatically when this period ends (wallet charged)</div></div><label class="switch"><input type="checkbox" id="autoRenewChk"><span class="slider"></span></label></div>'+
+    '<div class="total"><div class="lbl">Total</div><div class="amt" id="totalAmt">₦0</div><div class="total-break" id="totalBreak"><div class="tb-row base" id="tbBase" style="display:none"><span>Rental duration</span><span></span></div><div class="tb-row" id="tbCarrier" style="display:none"><span>Preferred carrier</span><span></span></div><div class="tb-row" id="tbArea" style="display:none"><span>Area code preference</span><span></span></div></div></div>'+
+    '<button type="button" class="btn-buy" id="rentBtn" disabled>Rent number</button>'+
+    '<div class="err" id="rentErr"></div><div class="ok" id="rentOk"></div>';
+  body.querySelectorAll('.plan').forEach(function(card){
+    card.onclick=function(){
+      body.querySelectorAll('.plan').forEach(function(c){c.classList.remove('on');});
+      card.classList.add('on');
+      selectedPlan=plans[Number(card.getAttribute('data-i'))];
+      var rb=document.getElementById('rentBtn');rb.disabled=false;rb.onclick=openPurchaseModal;updateTotal();
+    };
+  });
+  var first=body.querySelector('.plan');if(first)first.click();
+  document.getElementById('qtyMinus').onclick=function(){if(qty>1){qty--;document.getElementById('qtyVal').textContent=qty;updateTotal();}};
+  document.getElementById('qtyPlus').onclick=function(){if(qty<25){qty++;document.getElementById('qtyVal').textContent=qty;updateTotal();}};
+  document.getElementById('rentBtn').onclick=openPurchaseModal;
+}
+function getAddonState(){
+  var carrierAmt=0, areaAmt=0, carrierLabel='', areaLabel='';
+  var car=document.getElementById('carrierSel');
+  if(car&&car.value){
+    carrierAmt=Number((selectedPlan&&selectedPlan.carrier_addon_ngn)||CARRIER_ADDON_NGN);
+    var opt=car.options[car.selectedIndex];
+    carrierLabel=opt?String(opt.textContent||'').trim():'Preferred carrier';
+  }
+  var area='';
+  var areaSel=document.getElementById('areaCode')||document.getElementById('areaCodeSel');
+  try{if(typeof resolveAreaCode==='function') area=resolveAreaCode()||'';}catch(e){}
+  if(areaSel){
+    if(areaSel.tagName==='SELECT'&&areaSel.value){
+      // any real selection (not empty / "any") counts as paid preference
+      var v=String(areaSel.value||'').trim();
+      var t=areaSel.options[areaSel.selectedIndex]?String(areaSel.options[areaSel.selectedIndex].textContent||'').trim():v;
+      if(v && !/^any/i.test(v) && !/^any/i.test(t)){
+        areaAmt=Number((selectedPlan&&selectedPlan.area_addon_ngn)||AREA_ADDON_NGN);
+        areaLabel=t||v;
+        if(!area) area=v;
+      }
+    } else if(String(areaSel.value||'').replace(/\D/g,'').length>=3){
+      areaAmt=Number((selectedPlan&&selectedPlan.area_addon_ngn)||AREA_ADDON_NGN);
+      areaLabel=String(areaSel.value).replace(/\D/g,'');
+      area=areaLabel;
+    }
+  } else if(area&&String(area).replace(/\D/g,'').length>=3){
+    areaAmt=Number((selectedPlan&&selectedPlan.area_addon_ngn)||AREA_ADDON_NGN);
+    areaLabel=String(area).replace(/\D/g,'');
+  }
+  return {carrierAmt:carrierAmt, areaAmt:areaAmt, carrierLabel:carrierLabel, areaLabel:areaLabel, areaCode:area};
+}
+function updateTotal(){
+  var el=document.getElementById('totalAmt');
+  if(!el)return;
+  if(!selectedPlan){
+    el.textContent='₦0';
+    var br0=document.getElementById('totalBreak');
+    if(br0) br0.classList.remove('on');
+    return;
+  }
+  var base=Number(selectedPlan.price_ngn||0)*qty;
+  var ad=getAddonState();
+  var total=base+ad.carrierAmt+ad.areaAmt;
+  el.textContent=fmtNgn(total);
+  var br=document.getElementById('totalBreak');
+  var hasAdd=ad.carrierAmt>0||ad.areaAmt>0;
+  if(br){
+    br.classList.toggle('on', hasAdd);
+    var tb=document.getElementById('tbBase');
+    if(tb){
+      tb.style.display=hasAdd?'flex':'none';
+      if(hasAdd){ tb.querySelector('span:first-child').textContent='Rental · '+(selectedPlan.duration_translation||'duration')+(qty>1?' ×'+qty:''); tb.querySelector('span:last-child').textContent=fmtNgn(base); }
+    }
+    var tc=document.getElementById('tbCarrier');
+    if(tc){
+      tc.style.display=ad.carrierAmt>0?'flex':'none';
+      if(ad.carrierAmt>0){ tc.querySelector('span:first-child').textContent='Carrier · '+(ad.carrierLabel||'Preferred'); tc.querySelector('span:last-child').textContent='+'+fmtNgn(ad.carrierAmt); }
+    }
+    var ta=document.getElementById('tbArea');
+    if(ta){
+      ta.style.display=ad.areaAmt>0?'flex':'none';
+      if(ad.areaAmt>0){ ta.querySelector('span:first-child').textContent='Area code · '+(ad.areaLabel||'Preference'); ta.querySelector('span:last-child').textContent='+'+fmtNgn(ad.areaAmt); }
+    }
+  }
+}
+function resolveAreaCode(){
+  var v=String(document.getElementById('areaCode').value||'');
+  if(!v)return '';
+  if(v.indexOf('__random_')===0){
+    var state=v.replace('__random_','');
+    var st=US_AREA_CODES.find(function(s){return s.state===state;});
+    if(st&&st.codes.length)return st.codes[Math.floor(Math.random()*st.codes.length)].c;
+    return '';
+  }
+  return v.replace(/\D/g,'').slice(0,6);
+}
+function showSuccess(rent){
+  var box=document.getElementById('successBox');
+  var till=rent.active_till?new Date(rent.active_till).getTime():0;
+  var rid=rent.id||rent.rent_id;
+  box.style.display='';
+  box.innerHTML='<div style="font-weight:800;margin-bottom:6px">Number ready</div><div style="font-size:20px;font-weight:800">'+esc(rent.phone||'')+'</div><div class="helper-text">'+esc((rent.service&&rent.service.name)||selectedService.name)+'</div>'+(till?'<div class="helper-text">Time remaining</div><div class="countdown" id="cdMain">—</div>':'')+(rent.auto_renew?'<div class="helper-text" style="color:var(--ok);font-weight:700">Auto-renew is on</div>':(document.getElementById('autoRenewChk')&&document.getElementById('autoRenewChk').checked?'<div class="helper-text" style="color:var(--danger);font-weight:700">Auto-renew could not be enabled — turn it on in the inbox</div>':''))+'<div class="actions"><a class="primary" href="mj-sms-usa-number.html?rent_id='+encodeURIComponent(rid)+'">Open inbox</a><a href="mj-sms-history.html?view=rent">My numbers</a></div>';
+  if(till){(function tick(){var left=till-Date.now();var el=document.getElementById('cdMain');if(!el)return;if(left<=0){el.textContent='Expired';return;}var h=Math.floor(left/3600000),m=Math.floor((left%3600000)/60000),s=Math.floor((left%60000)/1000);el.textContent=String(h).padStart(2,'0')+':'+String(m).padStart(2,'0')+':'+String(s).padStart(2,'0');setTimeout(tick,1000);})();}
+  try{box.scrollIntoView({behavior:'smooth',block:'start'});}catch(e){}
+}
+
+function openPurchaseModal(){
+  if(!selectedPlan||!selectedService)return;
+  document.getElementById('psService').textContent=selectedService.name||'—';
+  document.getElementById('psDuration').textContent=selectedPlan.duration_translation||((selectedPlan.duration_in_type||'')+' '+(selectedPlan.duration_type||''))||'—';
+  var carSel=document.getElementById('carrierSel');
+  var carTxt='Any carrier';
+  if(carSel&&carSel.value){
+    var opt=carSel.options[carSel.selectedIndex];
+    carTxt=opt?opt.textContent:'Selected carrier';
+  }
+  var _ad=getAddonState(); document.getElementById('psCarrier').textContent=_ad.carrierAmt? (carTxt+' · +'+fmtNgn(_ad.carrierAmt)) : carTxt;
+  var area='';
+  try{area=typeof resolveAreaCode==='function'?resolveAreaCode():'';}catch(e){}
+  if(!area){
+    var areaSel=document.getElementById('areaCode');
+    if(areaSel){
+      if(areaSel.tagName==='SELECT'&&areaSel.value){
+        var ao=areaSel.options[areaSel.selectedIndex];
+        area=ao?ao.textContent:areaSel.value;
+      } else area=String(areaSel.value||'').trim();
+    }
+  }
+  var _ad2=(typeof getAddonState==='function'?getAddonState():{areaAmt:0}); var _areaTxt=area||'Any'; document.getElementById('psArea').textContent=_ad2.areaAmt?(_areaTxt+' · +'+fmtNgn(_ad2.areaAmt)):_areaTxt;
+  document.getElementById('psQty').textContent=String(qty);
+  var ar=document.getElementById('autoRenewChk');
+  var arEl=document.getElementById('psAutoRenew');
+  if(arEl) arEl.textContent=(ar&&ar.checked)?'On — renews when period ends':'Off';
+  document.getElementById('psUnitPrice').textContent=fmtNgn(selectedPlan.price_ngn);
+  updateTotal(); var ta=document.getElementById('totalAmt'); document.getElementById('psTotal').textContent=ta?ta.textContent:fmtNgn(selectedPlan.price_ngn*qty);
+  document.getElementById('psErr').textContent='';
+  var icon=document.getElementById('psIcon');
+  if(icon){
+    var logo=typeof serviceLogo==='function'?serviceLogo(selectedService.name):null;
+    if(logo) icon.innerHTML='<img src="'+esc(logo)+'" alt="" onerror="this.parentNode.innerHTML=\'<i class=\\\'fa-solid fa-sim-card\\\'></i>\'">';
+    else {
+      var n=String(selectedService.name||'').toLowerCase();
+      var ic='fa-solid fa-sim-card';
+      if(n.indexOf('whatsapp')>=0) ic='fa-brands fa-whatsapp';
+      else if(n.indexOf('telegram')>=0) ic='fa-brands fa-telegram';
+      else if(n.indexOf('facebook')>=0||n.indexOf('messenger')>=0) ic='fa-brands fa-facebook';
+      else if(n.indexOf('instagram')>=0) ic='fa-brands fa-instagram';
+      else if(n.indexOf('tiktok')>=0) ic='fa-brands fa-tiktok';
+      else if(n.indexOf('twitter')>=0||n==='x'||n.indexOf(' x ')>=0) ic='fa-brands fa-x-twitter';
+      icon.innerHTML='<i class="'+ic+'"></i>';
+    }
+  }
+  var modal=document.getElementById('purchaseModal');
+  modal.classList.add('open');
+  modal.classList.add('active');
+  modal.setAttribute('aria-hidden','false');
+}
+function closePurchaseModal(){
+  var modal=document.getElementById('purchaseModal');
+  modal.classList.remove('open');modal.classList.remove('active');
+  modal.setAttribute('aria-hidden','true');
+  var btn=document.getElementById('confirmBuyBtn');
+  if(btn){btn.disabled=false;btn.textContent='Confirm Purchase';}
+}
+document.getElementById('purchaseCloseBtn').onclick=closePurchaseModal;
+document.getElementById('purchaseModal').addEventListener('click',function(e){
+  if(e.target===this) closePurchaseModal();
+});
+document.getElementById('confirmBuyBtn').onclick=function(){ doRent(); };
+
+function showRentToast(msg, ok){
+  var t=document.getElementById('toastPop');
+  if(!t){ t=document.createElement('div'); t.id='toastPop'; t.className='toast-pop'; document.body.appendChild(t); }
+  t.textContent=msg||'';
+  t.className='toast-pop on '+(ok?'ok':'err');
+  clearTimeout(window.__toastT);
+  window.__toastT=setTimeout(function(){ t.classList.remove('on'); }, 3500);
+}
+async function doRent(){
+  if(rentBusy||!selectedPlan)return;rentBusy=true;
+  var btn=document.getElementById('confirmBuyBtn')||document.getElementById('rentBtn');
+  var rentBtn=document.getElementById('rentBtn');
+  if(btn){btn.disabled=true;btn.textContent='Processing…';}
+  if(rentBtn){rentBtn.disabled=true;}
+  document.getElementById('psErr').textContent='';
+  var errEl=document.getElementById('rentErr');if(errEl)errEl.textContent='';
+  var okEl=document.getElementById('rentOk');if(okEl)okEl.textContent='';
+  var body={plan_id:selectedPlan.id,service_id:selectedService&&selectedService.id,quoted_price_ngn:(function(){var b=Number(selectedPlan.price_ngn||0)*qty;var a=0;var c=document.getElementById("carrierSel");if(c&&c.value)a+=Number(selectedPlan.carrier_addon_ngn||CARRIER_ADDON_NGN);var ar="";try{ar=typeof resolveAreaCode==="function"?resolveAreaCode():"";}catch(e){}if(!ar){var ae=document.getElementById("areaCode");if(ae)ar=String(ae.value||"").replace(/\D/g,"");}if(ar&&String(ar).replace(/\D/g,"").length>=3)a+=Number(selectedPlan.area_addon_ngn||AREA_ADDON_NGN);return b+a;})(),quoted_usd:selectedPlan.price_usd||selectedPlan.price||null,auto_renew:(function(){var c=document.getElementById("autoRenewChk");return !!(c&&c.checked);})()};
+  var area=resolveAreaCode();if(area)body.area_code=area;
+  var car=document.getElementById('carrierSel').value;if(car)body.cellular_carrier_id=car;
+  var j;if(qty>1){body.quantity=qty;j=await api('rent_bulk',{method:'POST',body:body});}else{j=await api('rent',{method:'POST',body:body});}
+  rentBusy=false;
+  if(btn){btn.disabled=false;btn.textContent='Confirm Purchase';}
+  if(rentBtn){rentBtn.disabled=false;rentBtn.textContent='Rent number';}
+    if(!j.success){
+    var msg=j.message||'Rental failed';
+    document.getElementById('psErr').textContent=msg;
+    if(errEl)errEl.textContent=msg;
+    showRentToast(msg, false);
+    if(j.data&&j.data.price_ngn){selectedPlan.price_ngn=j.data.price_ngn;updateTotal(); var ta=document.getElementById('totalAmt'); if(document.getElementById('psTotal')) document.getElementById('psTotal').textContent=ta?ta.textContent:fmtNgn(selectedPlan.price_ngn*qty);}
+    if(/insufficient|fund your wallet|not enough/i.test(msg)){
+      try{ if(typeof showToast==='function') showToast('Insufficient balance. Redirecting to deposit…','error'); }catch(e){}
+      setTimeout(function(){ location.href='deposit.html'; }, 900);
+    }
+    return;
+  }
+  closePurchaseModal();
+  var rent=Array.isArray(j.data)?j.data[0]:j.data;
+  var rid=rent&&(rent.id||rent.rent_id||(j.data&&j.data.id));
+  if(okEl)okEl.textContent=j.message||'Number rented successfully';
+  showRentToast(j.message||('Number ready'+(rent&&rent.phone?': '+rent.phone:'')), true);
+  // Always open rental inbox after a successful purchase
+  if(rid){
+    setTimeout(function(){
+      location.href='mj-sms-usa-number.html?rent_id='+encodeURIComponent(String(rid));
+    }, 700);
+    return;
+  }
+  // Bulk / missing id — go to rental history (inbox list)
+  if(Array.isArray(j.data)&&j.data.length){
+    setTimeout(function(){ location.href='mj-sms-history.html?view=rent'; }, 700);
+    return;
+  }
+  if(rent)showSuccess(rent);
+  else showRentToast(j.message||'Rental completed', true);
+}
+
+
+
+document.addEventListener('change',function(e){
+  if(e.target&&(e.target.id==='carrierSel'||e.target.id==='areaCode'||e.target.id==='areaCodeSel'||e.target.id==='areaSelect')) updateTotal();
+});
+
+loadServices();
+})();
+</script>
+</body>
+</html>
