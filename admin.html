@@ -701,6 +701,30 @@ function withLagos(opts) { return Object.assign({ timeZone: 'Africa/Lagos' }, op
 
 </style>
  <script src="/js/mj-page-loader.js"></script>
+
+<style id="supplier-bal-grid-fix">
+#supplierBalanceGrid.metrics,
+#supplierBalanceGrid {
+  display: grid !important;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+@media (max-width: 720px) {
+  #supplierBalanceGrid.metrics,
+  #supplierBalanceGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@media (max-width: 420px) {
+  #supplierBalanceGrid.metrics,
+  #supplierBalanceGrid {
+    grid-template-columns: 1fr;
+  }
+}
+#supplierBalanceGrid .metric-card {
+  min-width: 0;
+}
+</style>
 </head>
 <body>
 
@@ -1218,7 +1242,7 @@ function withLagos(opts) { return Object.assign({ timeZone: 'Africa/Lagos' }, op
  <option value="">All categories</option>
  </select>
  <label style="font-size:12px;display:flex;align-items:center;gap:6px;color:var(--muted);white-space:nowrap;">
- <input type="checkbox" id="japHideUnavailable" checked onchange="japPage=1;loadBoosterSourceFromDb('jap')"> Hide unavailable
+ <input type="checkbox" id="japHideUnavailable" onchange="japPage=1;loadBoosterSourceFromDb('jap')"> Hide unavailable
  </label>
  </div>
  <div class="desktop-only desktop-table table-wrap">
@@ -1254,7 +1278,7 @@ function withLagos(opts) { return Object.assign({ timeZone: 'Africa/Lagos' }, op
  <option value="">All categories</option>
  </select>
  <label style="font-size:12px;display:flex;align-items:center;gap:6px;color:var(--muted);white-space:nowrap;">
- <input type="checkbox" id="smmkingsHideUnavailable" checked onchange="smmkingsPage=1;loadBoosterSourceFromDb('smmkings')"> Hide unavailable
+ <input type="checkbox" id="smmkingsHideUnavailable" onchange="smmkingsPage=1;loadBoosterSourceFromDb('smmkings')"> Hide unavailable
  </label>
  </div>
  <div class="desktop-only desktop-table table-wrap">
@@ -5395,7 +5419,8 @@ async function loadBoosterSourceFromDb(provider) {
     }
     const q = (document.getElementById(cfg.search)?.value || '').trim();
     const cat = document.getElementById(cfg.cat)?.value || '';
-    const hide = document.getElementById(cfg.hide)?.checked !== false ? '1' : '0';
+    const hideEl = document.getElementById(cfg.hide);
+    const hide = (hideEl && hideEl.checked) ? '1' : '0';
     const page = cfg.page() || 1;
     const url = '/api/owlet?action=list&provider=' + encodeURIComponent(provider)
       + '&page=' + page + '&page_size=100&hide_unavailable=' + hide
@@ -5410,17 +5435,22 @@ async function loadBoosterSourceFromDb(provider) {
     const rows = data.data || [];
     // categories
     const catSel = document.getElementById(cfg.cat);
-    if (catSel && Array.isArray(data.categories) && catSel.options.length <= 1) {
+    if (catSel && Array.isArray(data.categories)) {
+      const prev = catSel.value || '';
+      catSel.innerHTML = '<option value="">All categories</option>';
       data.categories.forEach(c => {
         if (!c) return;
         const o = document.createElement('option');
-        o.value = c; o.textContent = c;
+        o.value = c;
+        o.textContent = c.length > 48 ? (c.slice(0, 46) + '…') : c;
+        if (c === prev) o.selected = true;
         catSel.appendChild(o);
       });
+      if (prev) catSel.value = prev;
     }
     if (!rows.length) {
-      if (tbody) tbody.innerHTML = '<tr><td colspan="9" class="empty-state">No services yet. Click Sync.</td></tr>';
-      if (cards) cards.innerHTML = '<div class="empty-state">No services yet.</div>';
+      if (tbody) tbody.innerHTML = '<tr><td colspan="9" class="empty-state">No services match this filter. Uncheck <strong>Hide unavailable</strong> to see synced (admin-hidden) services, or click Sync.</td></tr>';
+      if (cards) cards.innerHTML = '<div class="empty-state">No services match. Uncheck Hide unavailable to see synced services.</div>';
       return;
     }
     // Reuse Owlet row renderer if present
