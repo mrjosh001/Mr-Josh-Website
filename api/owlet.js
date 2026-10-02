@@ -669,18 +669,29 @@ async function resolveOwletServiceId(storedId, name) {
 
 
 /** Customer Telegram shop — SMMKings Premium / Stars / Channel Boost only (must be is_available). */
-/** Only the 3 shop products — not members, views, post stars, etc. */
+/** Shop allowlist only: Premium 3/6/12 packages + Stars-to-user. No boost, no members. */
 function classifyTgService(s) {
   const n = String(s.name || '').replace(/\s+/g, ' ').trim();
-  // "Buy Telegram Premium to any @user"
-  if (/buy\s+telegram\s+premium\s+to\s+any/i.test(n)) return 'premium';
-  if (/telegram\s+premium\s+to\s+any\s*@?\s*user/i.test(n) && !/member|view|group|channel\s+member/i.test(n)) return 'premium';
-  // "Buy Telegram Stars to any @user" (not Post Stars)
-  if (/buy\s+telegram\s+stars\s+to\s+any/i.test(n)) return 'stars';
-  if (/telegram\s+stars\s+to\s+any\s*@?\s*user/i.test(n) && !/post\s+stars/i.test(n)) return 'stars';
-  // "Telegram Channel Boost" — exact product, not members
-  if (/telegram\s+channel\s+boost/i.test(n) && !/member|view|star|premium\s+member/i.test(n)) return 'boost';
+  const c = String(s.category || '').replace(/\s+/g, ' ').trim();
+  const blob = (n + ' ' + c).toLowerCase();
+  // Reject members / views / post stars / channel boost
+  if (/member|view|post\s*stars|channel\s*boost|group\s*member/i.test(n) && !/subscription\s+for/i.test(n)) {
+    // still allow pure stars-to-user name
+    if (!/stars\s+to\s+any/i.test(blob)) return null;
+  }
+  // Premium: "Telegram Premium Subscription for N Months" OR category/name "Buy Telegram Premium to any"
+  if (/telegram\s+premium\s+subscription\s+for\s+\d+\s*months?/i.test(n)) return 'premium';
+  if (/buy\s+telegram\s+premium\s+to\s+any/i.test(blob) && !/member|view/i.test(n)) return 'premium';
+  if (/telegram\s+premium\s+to\s+any/i.test(blob) && !/member|view|subscription/i.test(n)) return 'premium';
+  // Stars: "Telegram Stars to any @user" / Buy Telegram Stars…
+  if (/buy\s+telegram\s+stars\s+to\s+any/i.test(blob)) return 'stars';
+  if (/telegram\s+stars\s+to\s+any/i.test(blob) && !/post\s*stars/i.test(n)) return 'stars';
   return null;
+}
+
+function premiumMonthsFromName(name) {
+  const m = String(name || '').match(/for\s+(\d+)\s*months?/i);
+  return m ? Number(m[1]) : null;
 }
 
 async function handleTelegramShop(req, res) {
@@ -705,38 +716,48 @@ async function handleTelegramShop(req, res) {
     ? available
     : matched.filter((s) => Number(s.price_ngn) > 0);
 
-  const groups = { premium: [], stars: [], boost: [] };
+  const groups = { premium: [], stars: [] };
   for (const s of pool) {
     const kind = classifyTgService(s);
-    if (!kind) continue;
+    if (!kind || kind === 'boost') continue;
     const minQ = Math.max(1, Number(s.min_quantity) || 1);
     const maxQ = Math.max(minQ, Number(s.max_quantity) || minQ);
-    // Premium months + channel boost are fixed packages; stars scale by quantity
-    const isPackage = kind === 'premium' || kind === 'boost' || maxQ <= 24;
-    let displayName = 'Telegram Premium';
-    if (kind === 'stars') displayName = 'Telegram Stars';
-    if (kind === 'boost') displayName = 'Channel Boost';
-    groups[kind].push({
-      service_id: String(s.service_id),
-      name: displayName,
-      category: s.category,
-      min_quantity: minQ,
-      max_quantity: maxQ,
-      price_ngn: floorSellNgn(s.price_ngn, s.service_id),
-      pricing: isPackage ? 'package' : 'per_1k',
-      refill: !!s.refill,
-      kind
-    });
+    const months = premiumMonthsFromName(s.name);
+    const price = floorSellNgn(s.price_ngn, s.service_id);
+    if (kind === 'premium') {
+      // Each row is a fixed package (3 / 6 / 12 months) — price_ngn is full package price
+      groups.premium.push({
+        service_id: String(s.service_id),
+        name: months ? (months + ' months Premium') : 'Telegram Premium',
+        months: months || 1,
+        category: s.category,
+        min_quantity: 1,
+        max_quantity: 1,
+        price_ngn: price,
+        pricing: 'fixed',
+        kind: 'premium'
+      });
+    } else {
+      // Stars: price_ngn = sell rate per 1,000 stars
+      groups.stars.push({
+        service_id: String(s.service_id),
+        name: 'Telegram Stars',
+        category: s.category,
+        min_quantity: minQ,
+        max_quantity: maxQ,
+        price_ngn: price,
+        pricing: 'per_1k',
+        kind: 'stars'
+      });
+    }
   }
+  // Sort premium by months ascending
+  groups.premium.sort((a, b) => (a.months || 0) - (b.months || 0));
 
   return res.status(200).json({
     success: true,
     data: groups,
-    counts: {
-      premium: groups.premium.length,
-      stars: groups.stars.length,
-      boost: groups.boost.length
-    }
+    counts: { premium: groups.premium.length, stars: groups.stars.length }
   });
 }
 
@@ -798,14 +819,20 @@ async function handleOrder(req, res) {
   if (ratePer1k <= 0) {
     return res.status(400).json({ success: false, message: 'Service price not configured' });
   }
+  const svcName = String(service.name || '');
   const typeStr = String(service.service_type || service.type || '').toLowerCase();
+  const isPremiumFixed = isTgShop && classifyTgService(service) === 'premium';
   const isPackage =
-    isTgShop &&
-    (typeStr.includes('package') || maxQ <= 12 || /premium|month|boost/i.test(svcName));
+    isPremiumFixed ||
+    (isTgShop && (typeStr.includes('package') || /subscription\s+for\s+\d+\s*months?/i.test(svcName)));
   let totalNgn;
-  if (isPackage) {
+  if (isPremiumFixed) {
+    // Full package price once (3/6/12 month products) — ignore qty multiplier beyond 1
+    totalNgn = Math.max(MIN_SELL_PRICE_NGN, Math.ceil(ratePer1k));
+  } else if (isPackage) {
     totalNgn = Math.max(MIN_SELL_PRICE_NGN, Math.ceil(ratePer1k * quantity));
   } else {
+    // Stars (and default SMM): price_ngn is rate per 1,000 units
     totalNgn = Math.max(MIN_SELL_PRICE_NGN, Math.ceil((ratePer1k / 1000) * quantity));
   }
   if (totalNgn < 1) {
@@ -853,12 +880,13 @@ async function handleOrder(req, res) {
     try { liveServiceId = await resolveOwletServiceId(serviceId, service.name); } catch (_) {}
   }
   let ok, status, json;
+  const panelQty = isPremiumFixed ? Math.max(1, Number(service.min_quantity) || 1) : quantity;
   if (orderSource === 'smmkings') {
     const call = await panelCall(PROVIDERS.smmkings, {
       action: 'add',
       service: String(liveServiceId || serviceId),
       link,
-      quantity: String(quantity)
+      quantity: String(panelQty)
     });
     ok = call.ok; status = call.status; json = call.json;
   } else {
@@ -874,12 +902,15 @@ async function handleOrder(req, res) {
   if (!ok || json?.error || !json?.order) {
     // refund
     await supabase.from('profiles').update({ balance: originalBalance }).eq('id', user.id);
-    const rawErr = json?.error || json?.message || '';
-    const errMsg = /incorrect service/i.test(String(rawErr))
-      ? 'This package is no longer available. Go back and pick another one. Your balance was restored.'
-      : /supplier|owlet|panel/i.test(String(rawErr))
-      ? 'This order could not be placed right now. Your balance was restored.'
-      : (rawErr || 'This order could not be placed right now. Your balance was restored.');
+    const rawErr = String(json?.error || json?.message || status || '');
+    let errMsg = rawErr || 'This order could not be placed right now. Your balance was restored.';
+    if (/incorrect service/i.test(rawErr)) {
+      errMsg = 'This package is no longer available. Pick another one. Your balance was restored.';
+    } else if (/not enough|balance|funds/i.test(rawErr)) {
+      errMsg = 'Service temporarily unavailable. Your balance was restored. Try again shortly.';
+    } else if (rawErr) {
+      errMsg = rawErr + ' Your balance was restored.';
+    }
     return res.status(502).json({ success: false, message: errMsg });
   }
 
