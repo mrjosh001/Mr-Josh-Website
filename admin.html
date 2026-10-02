@@ -1153,12 +1153,22 @@ function withLagos(opts) { return Object.assign({ timeZone: 'Africa/Lagos' }, op
  
  <div id="tab-boosters" class="tab-content">
  <div class="panel">
- <div class="panel-header">
+ <div class="panel-header" style="flex-wrap:wrap;gap:8px;">
  <div class="panel-title">MJ Boosters Catalog</div>
- <button class="btn btn-primary btn-sm" id="btnOwletSync" onclick="syncOwletServices()"><i class="fas fa-sync"></i> Sync Services</button>
+ <div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center;">
+ <button class="btn btn-primary btn-sm" id="btnOwletSync" onclick="syncBoosterProvider('owlet')"><i class="fas fa-sync"></i> Sync Owlet</button>
+ <button class="btn btn-ghost btn-sm" id="btnJapSync" onclick="syncBoosterProvider('jap')"><i class="fas fa-sync"></i> Sync JAP</button>
+ <button class="btn btn-ghost btn-sm" id="btnSmmkingsSync" onclick="syncBoosterProvider('smmkings')"><i class="fas fa-sync"></i> Sync SMMKings (TG)</button>
  </div>
+ </div>
+ <p style="font-size:12px;color:var(--muted);margin:0 0 10px;">JAP &amp; SMMKings sync into admin catalog but stay <strong>hidden from customers</strong> until you enable each service. SMMKings imports <strong>Telegram only</strong>.</p>
  <div id="owletSyncProgress" style="font-size:12px;color:var(--muted);margin-bottom:12px;min-height:16px;"></div>
  <div class="search-row" style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;">
+ <select id="owletProviderFilter" onchange="owletPage=1;loadOwletServicesFromDb()" style="min-width:140px;">
+ <option value="owlet">Source: Owlet</option>
+ <option value="jap">Source: JAP</option>
+ <option value="smmkings">Source: SMMKings (TG)</option>
+ </select>
  <input type="search" id="owletSearch" placeholder="Search service name or category…" style="flex:1;min-width:180px;" onkeydown="if(event.key==='Enter'){owletPage=1;loadOwletServicesFromDb()}">
  <select id="owletCategoryFilter" onchange="owletPage=1;loadOwletServicesFromDb()">
  <option value="">All categories</option>
@@ -5283,11 +5293,15 @@ async function loadOwletBalance() {
  }
 }
 
-async function syncOwletServices() {
- const btn = document.getElementById('btnOwletSync');
+async function syncBoosterProvider(provider) {
+ provider = provider || 'owlet';
+ const labels = { owlet: 'Owlet', jap: 'JustAnotherPanel (JAP)', smmkings: 'SMMKings (Telegram only)' };
+ const label = labels[provider] || provider;
+ const btnMap = { owlet: 'btnOwletSync', jap: 'btnJapSync', smmkings: 'btnSmmkingsSync' };
+ const btn = document.getElementById(btnMap[provider] || 'btnOwletSync');
  const prog = document.getElementById('owletSyncProgress');
  setBtnBusy(btn, true, 'Syncing…');
- if (prog) prog.textContent = 'Pulling services from The Owlet…';
+ if (prog) prog.textContent = 'Pulling services from ' + label + '…';
  try {
  const headers = await authHeaders();
  if (!headers.Authorization) {
@@ -5298,55 +5312,42 @@ async function syncOwletServices() {
 
  let done = false;
  let rounds = 0;
- const maxRounds = 40; // safety cap
+ const maxRounds = 40;
 
  while (!done && rounds < maxRounds) {
  rounds += 1;
  if (prog) prog.textContent = rounds === 1
- ? 'Syncing Owlet catalog…'
- : `Continuing sync (round ${rounds})…`;
+ ? ('Syncing ' + label + '…')
+ : ('Continuing ' + label + ' sync (round ' + rounds + ')…');
 
- const res = await fetch('/api/owlet?action=sync', { method: 'GET', headers });
+ const res = await fetch('/api/owlet?action=sync&provider=' + encodeURIComponent(provider), { method: 'GET', headers });
  let data = null;
- try {
- data = await res.json();
- } catch (parseErr) {
- showAdminToast('Sync failed: bad response (' + res.status + ')', 'error');
- if (prog) prog.textContent = 'HTTP ' + res.status;
- return;
- }
-
- if (!res.ok || data.success === false) {
- const msg = data.message || ('HTTP ' + res.status);
+ try { data = await res.json(); } catch (_) { data = {}; }
+ if (!res.ok || !data.success) {
+ const msg = (data && data.message) || ('Sync failed (' + res.status + ')');
  showAdminToast(msg, 'error');
  if (prog) prog.textContent = msg;
  return;
  }
-
  done = !!data.done;
- if (prog) {
- prog.textContent = data.message || (done ? 'Done' : `Progress ${data.cursor}/${data.total}`);
- }
- if (!done) {
- // brief pause so UI can paint; next chunk continues from cursor
- await new Promise(r => setTimeout(r, 400));
- } else {
- showAdminToast(data.message || 'Owlet services synced', 'success');
- }
+ if (prog) prog.textContent = data.message || (done ? (label + ' sync complete') : 'In progress…');
+ if (!done) await new Promise(r => setTimeout(r, 400));
  }
 
- if (!done) {
- showAdminToast('Sync still running: click Sync again to continue', 'info');
- }
+ // Switch filter to this provider and reload
+ const pf = document.getElementById('owletProviderFilter');
+ if (pf) pf.value = provider;
+ owletPage = 1;
  await loadOwletServicesFromDb();
+ showAdminToast(label + ' sync finished', 'success');
  } catch (e) {
- const msg = e.message || String(e);
- showAdminToast('Sync failed: ' + msg, 'error');
- if (prog) prog.textContent = msg + ': check OWLET_API_KEY and booster_services SQL';
+ showAdminToast(e.message || String(e), 'error');
+ if (prog) prog.textContent = e.message || 'Sync error';
  } finally {
- setBtnBusy(btn, false, '<i class="fas fa-sync"></i> Sync Services');
+ setBtnBusy(btn, false);
  }
 }
+async function syncOwletServices() { return syncBoosterProvider('owlet'); }
 
 
 let owletPage = 1;
@@ -5364,8 +5365,10 @@ async function loadOwletServicesFromDb() {
  const q = (document.getElementById('owletSearch')?.value || '').trim();
  const cat = document.getElementById('owletCategoryFilter')?.value || '';
  const hide = document.getElementById('owletHideUnavailable')?.checked !== false ? '1' : '0';
+ const provider = (document.getElementById('owletProviderFilter')?.value || 'owlet');
  const params = new URLSearchParams({
  action: 'list',
+ provider: provider,
  page: String(owletPage),
  page_size: '100',
  hide_unavailable: hide
