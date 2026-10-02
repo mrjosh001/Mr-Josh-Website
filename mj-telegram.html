@@ -1,0 +1,303 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover"/>
+<title>Telegram Premium & Stars · MJ HUB</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css"/>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+:root{
+  --bg:#07090e;--card:#0f141c;--border:rgba(255,255,255,.08);--text:#f1f5f9;--muted:#94a3b8;
+  --primary:#3b82f6;--primary2:#1d4ed8;--ok:#34d399;--warn:#fbbf24;
+}
+:root[data-theme="light"]{
+  --bg:#f4f7fb;--card:#fff;--border:rgba(15,23,42,.1);--text:#0f172a;--muted:#64748b;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;background:var(--bg);color:var(--text);min-height:100dvh}
+.top{display:flex;align-items:center;gap:12px;padding:14px 16px;border-bottom:1px solid var(--border);position:sticky;top:0;background:color-mix(in srgb,var(--bg) 92%,transparent);backdrop-filter:blur(12px);z-index:20}
+.back{width:40px;height:40px;border-radius:12px;border:1px solid var(--border);background:var(--card);color:var(--text);display:flex;align-items:center;justify-content:center;text-decoration:none}
+.top h1{font-size:16px;font-weight:800}
+.wrap{max-width:480px;margin:0 auto;padding:16px 16px 40px}
+.hero{border:1px solid var(--border);background:linear-gradient(145deg,rgba(59,130,246,.18),rgba(15,20,28,.6));border-radius:20px;padding:16px;margin-bottom:14px}
+.hero .badge{display:inline-flex;align-items:center;gap:6px;font-size:10px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:#93c5fd;margin-bottom:8px}
+.hero h2{font-size:18px;font-weight:800;margin-bottom:6px}
+.hero p{font-size:13px;color:var(--muted);line-height:1.45}
+.tabs{display:flex;gap:8px;margin:14px 0;padding:4px;background:var(--card);border:1px solid var(--border);border-radius:16px}
+.tab{flex:1;border:none;border-radius:12px;padding:12px 8px;font-weight:800;font-size:13px;cursor:pointer;background:transparent;color:var(--muted);font-family:inherit}
+.tab.on{background:linear-gradient(135deg,var(--primary),var(--primary2));color:#fff}
+.tab.on.stars{background:linear-gradient(135deg,#b45309,#f59e0b);color:#111}
+.tab.on.boost{background:linear-gradient(135deg,#4f46e5,#7c3aed);color:#fff}
+.section-label{font-size:11px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin:12px 0 8px}
+.chips{display:flex;flex-wrap:wrap;gap:8px}
+.chip{border:1px solid var(--border);background:var(--card);color:var(--text);border-radius:12px;padding:10px 12px;font-weight:700;font-size:13px;cursor:pointer;font-family:inherit}
+.chip.on{border-color:transparent;background:linear-gradient(135deg,var(--primary),var(--primary2));color:#fff}
+.field{margin-top:12px}
+.field label{display:block;font-size:11px;font-weight:800;letter-spacing:.05em;text-transform:uppercase;color:var(--muted);margin-bottom:6px}
+.input{width:100%;padding:14px 14px;border-radius:14px;border:1px solid var(--border);background:var(--card);color:var(--text);font-size:15px;font-family:inherit;outline:none}
+.input:focus{border-color:var(--primary)}
+.btn{width:100%;margin-top:14px;padding:15px;border:none;border-radius:14px;font-weight:800;font-size:15px;cursor:pointer;font-family:inherit;color:#fff;background:linear-gradient(135deg,var(--primary),var(--primary2));display:flex;align-items:center;justify-content:center;gap:8px}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+.btn-ghost{background:transparent;border:1px solid var(--border);color:var(--text);margin-top:8px}
+.price-box{margin-top:12px;padding:14px;border-radius:14px;border:1px solid var(--border);background:var(--card);display:none}
+.price-box.on{display:block}
+.price-box .amt{font-size:22px;font-weight:900;color:#60a5fa}
+.price-box .sub{font-size:12px;color:var(--muted);margin-top:4px}
+.help{margin-top:16px;border:1px solid var(--border);border-radius:16px;background:var(--card);padding:14px}
+.help h3{font-size:13px;font-weight:800;margin-bottom:10px}
+.steps{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.step{padding:10px;border-radius:12px;background:color-mix(in srgb,var(--bg) 70%,transparent);font-size:12px;color:var(--muted);line-height:1.35}
+.step b{display:block;color:var(--text);margin-bottom:4px}
+.err{color:#f87171;font-size:13px;font-weight:700;margin-top:10px;min-height:18px}
+.toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%) translateY(120%);background:#0f172a;color:#fff;padding:12px 16px;border-radius:12px;font-size:13px;font-weight:700;z-index:50;transition:.25s;max-width:90%}
+.toast.on{transform:translateX(-50%) translateY(0)}
+.toast.ok{background:#065f46}.toast.err{background:#7f1d1d}
+.empty{text-align:center;padding:24px;color:var(--muted);font-size:13px}
+.svc-list{display:flex;flex-direction:column;gap:8px;margin-top:8px}
+.svc{border:1px solid var(--border);background:var(--card);border-radius:14px;padding:12px;cursor:pointer;text-align:left}
+.svc.on{border-color:var(--primary);box-shadow:0 0 0 1px var(--primary)}
+.svc .n{font-weight:800;font-size:13px;line-height:1.3}
+.svc .p{margin-top:6px;font-weight:900;color:#60a5fa;font-size:14px}
+</style>
+</head>
+<body>
+<header class="top">
+  <a class="back" href="dashboard.html" aria-label="Back"><i class="fa-solid fa-arrow-left"></i></a>
+  <h1>Telegram Verification & Stars</h1>
+</header>
+<main class="wrap">
+  <div class="hero">
+    <div class="badge"><i class="fa-solid fa-bolt"></i> Instant digital delivery</div>
+    <h2>Telegram Premium, Stars & Boost</h2>
+    <p>Send Premium or Stars to an eligible @username, or boost a channel. Confirm the recipient, pay from your MJ HUB wallet, and track delivery in booster history.</p>
+  </div>
+
+  <div class="tabs" role="tablist">
+    <button type="button" class="tab on" data-kind="premium" id="tabPremium"><i class="fa-solid fa-certificate"></i> Premium</button>
+    <button type="button" class="tab" data-kind="stars" id="tabStars"><i class="fa-solid fa-star"></i> Stars</button>
+    <button type="button" class="tab" data-kind="boost" id="tabBoost"><i class="fa-solid fa-rocket"></i> Boost</button>
+  </div>
+
+  <div id="panelPremium">
+    <div class="section-label">Subscription duration</div>
+    <div class="svc-list" id="premiumList"><div class="empty">Loading packages…</div></div>
+  </div>
+  <div id="panelStars" style="display:none">
+    <div class="section-label">Number of stars</div>
+    <div class="svc-list" id="starsList"><div class="empty">Loading packages…</div></div>
+  </div>
+  <div id="panelBoost" style="display:none">
+    <div class="section-label">Channel boost packages</div>
+    <div class="svc-list" id="boostList"><div class="empty">Loading packages…</div></div>
+  </div>
+
+  <div class="field">
+    <label id="linkLabel">Recipient username</label>
+    <input class="input" id="username" placeholder="@username" autocomplete="off" inputmode="text"/>
+  </div>
+
+  <div class="price-box" id="priceBox">
+    <div class="amt" id="priceAmt">₦0</div>
+    <div class="sub" id="priceSub">Select a package</div>
+  </div>
+  <div class="err" id="err"></div>
+
+  <button type="button" class="btn" id="btnBuy" disabled><i class="fa-solid fa-paper-plane"></i> Pay & send</button>
+  <button type="button" class="btn btn-ghost" onclick="location.href='mj-boosters-history.html'">Recent orders</button>
+
+  <div class="help">
+    <h3><i class="fa-solid fa-shield-halved"></i> How it works</h3>
+    <div class="steps">
+      <div class="step"><b>1. Choose type</b>Premium, Stars, or Channel Boost.</div>
+      <div class="step"><b>2. Pick package</b>Duration or star amount from the list.</div>
+      <div class="step"><b>3. Enter @user</b>Public Telegram username (or channel link for boost).</div>
+      <div class="step"><b>4. Pay</b>Wallet is charged; delivery tracks in history.</div>
+    </div>
+  </div>
+</main>
+<div class="toast" id="toast"></div>
+
+<script>
+(function(){
+  try {
+    const dark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+    document.documentElement.setAttribute('data-theme', dark ? 'dark' : 'light');
+  } catch(_){}
+
+  const SUPABASE_URL = 'https://atczodlljmlayvldxfmv.supabase.co';
+  const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImF0Y3pvZGxsam1sYXl2bGR4Zm12Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODUwNzUyMzgsImV4cCI6MjEwMDY1MTIzOH0.ufthD-p7BmeD_B7xyuMM6PNPL8DmcL4AtRYgg-MuoLI';
+  const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+  let kind = 'premium';
+  let catalog = { premium: [], stars: [], boost: [] };
+  let selected = null;
+  let busy = false;
+
+  function toast(msg, ok){
+    const t = document.getElementById('toast');
+    t.textContent = msg || '';
+    t.className = 'toast on ' + (ok ? 'ok' : 'err');
+    clearTimeout(window.__tt);
+    window.__tt = setTimeout(() => t.classList.remove('on'), 3200);
+  }
+  function fmt(n){ return '₦' + Number(n||0).toLocaleString(); }
+
+  async function headers(){
+    const { data: { session } } = await sb.auth.getSession();
+    if (!session) { location.href = 'auth.html'; return null; }
+    return { Authorization: 'Bearer ' + session.access_token, 'Content-Type': 'application/json', Accept: 'application/json' };
+  }
+
+  function estimatePrice(svc){
+    if (!svc) return 0;
+    const q = Math.max(1, Number(svc.min_quantity)||1);
+    if (svc.pricing === 'package') return Math.ceil(Number(svc.price_ngn||0) * q);
+    return Math.ceil((Number(svc.price_ngn||0)/1000) * q);
+  }
+
+  function paintList(kindKey, elId){
+    const el = document.getElementById(elId);
+    const rows = catalog[kindKey] || [];
+    if (!rows.length) {
+      el.innerHTML = '<div class="empty">No packages enabled yet. Ask admin to enable Telegram ' + kindKey + ' services on SMMKings and set prices.</div>';
+      return;
+    }
+    el.innerHTML = rows.map((s,i) => {
+      const on = selected && selected.kind===kindKey && String(selected.service_id)===String(s.service_id);
+      return '<button type="button" class="svc'+(on?' on':'')+'" data-kind="'+kindKey+'" data-i="'+i+'">'
+        + '<div class="n">'+escapeHtml(s.name)+'</div>'
+        + '<div class="p">'+fmt(estimatePrice(s))+'</div>'
+        + '</button>';
+    }).join('');
+    el.querySelectorAll('.svc').forEach(btn => {
+      btn.onclick = function(){
+        const k = btn.getAttribute('data-kind');
+        const i = Number(btn.getAttribute('data-i'));
+        selected = Object.assign({}, catalog[k][i], { kind: k });
+        paintAll();
+      };
+    });
+  }
+
+  function escapeHtml(s){
+    return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+
+  function paintAll(){
+    paintList('premium','premiumList');
+    paintList('stars','starsList');
+    paintList('boost','boostList');
+    const box = document.getElementById('priceBox');
+    const btn = document.getElementById('btnBuy');
+    if (selected) {
+      box.classList.add('on');
+      document.getElementById('priceAmt').textContent = fmt(estimatePrice(selected));
+      document.getElementById('priceSub').textContent = selected.name;
+      btn.disabled = false;
+    } else {
+      box.classList.remove('on');
+      btn.disabled = true;
+    }
+  }
+
+  function setKind(k){
+    kind = k;
+    selected = null;
+    document.querySelectorAll('.tab').forEach(t => {
+      t.classList.toggle('on', t.getAttribute('data-kind')===k);
+      t.classList.toggle('stars', t.getAttribute('data-kind')==='stars' && k==='stars');
+      t.classList.toggle('boost', t.getAttribute('data-kind')==='boost' && k==='boost');
+    });
+    document.getElementById('panelPremium').style.display = k==='premium'?'block':'none';
+    document.getElementById('panelStars').style.display = k==='stars'?'block':'none';
+    document.getElementById('panelBoost').style.display = k==='boost'?'block':'none';
+    document.getElementById('linkLabel').textContent = k==='boost' ? 'Channel username or link' : 'Recipient username';
+    document.getElementById('username').placeholder = k==='boost' ? '@channel or t.me/…' : '@username';
+    paintAll();
+  }
+
+  document.querySelectorAll('.tab').forEach(t => t.onclick = () => setKind(t.getAttribute('data-kind')));
+
+  async function loadShop(){
+    const h = await headers();
+    if (!h) return;
+    try {
+      const res = await fetch('/api/owlet?action=telegram_shop', { headers: h });
+      const data = await res.json().catch(()=>({}));
+      if (!res.ok || !data.success) {
+        document.getElementById('premiumList').innerHTML = '<div class="empty">'+(data.message||'Could not load shop')+'</div>';
+        return;
+      }
+      catalog = data.data || { premium:[], stars:[], boost:[] };
+      paintAll();
+    } catch(e) {
+      document.getElementById('premiumList').innerHTML = '<div class="empty">'+(e.message||e)+'</div>';
+    }
+  }
+
+  function normalizeLink(raw, k){
+    let u = String(raw||'').trim();
+    if (!u) return '';
+    if (k === 'boost') {
+      if (/^https?:\/\//i.test(u) || u.includes('t.me/')) return u;
+      u = u.replace(/^@/,'');
+      return 'https://t.me/' + u;
+    }
+    u = u.replace(/^@/,'');
+    return '@' + u;
+  }
+
+  document.getElementById('btnBuy').onclick = async function(){
+    if (busy || !selected) return;
+    const err = document.getElementById('err');
+    err.textContent = '';
+    const link = normalizeLink(document.getElementById('username').value, selected.kind);
+    if (!link || link === '@') {
+      err.textContent = 'Enter a valid Telegram username';
+      return;
+    }
+    const qty = Math.max(1, Number(selected.min_quantity)||1);
+    busy = true;
+    const btn = document.getElementById('btnBuy');
+    btn.disabled = true; btn.textContent = 'Processing…';
+    try {
+      const h = await headers();
+      if (!h) return;
+      const res = await fetch('/api/owlet?action=order', {
+        method: 'POST',
+        headers: h,
+        body: JSON.stringify({
+          source: 'smmkings',
+          service_id: selected.service_id,
+          link: link,
+          quantity: qty
+        })
+      });
+      const data = await res.json().catch(()=>({}));
+      if (!res.ok || !data.success) {
+        const msg = data.message || 'Order failed';
+        err.textContent = msg;
+        toast(msg, false);
+        if (/insufficient|fund/i.test(msg)) {
+          setTimeout(()=> location.href='deposit.html', 900);
+        }
+        return;
+      }
+      toast(data.message || 'Order placed', true);
+      setTimeout(()=> location.href='mj-boosters-history.html', 900);
+    } catch(e) {
+      err.textContent = e.message||String(e);
+      toast(err.textContent, false);
+    } finally {
+      busy = false;
+      btn.disabled = false;
+      btn.innerHTML = '<i class="fa-solid fa-paper-plane"></i> Pay & send';
+    }
+  };
+
+  loadShop();
+})();
+</script>
+</body>
+</html>
