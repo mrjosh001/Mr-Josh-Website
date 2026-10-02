@@ -1208,6 +1208,7 @@ function withLagos(opts) { return Object.assign({ timeZone: 'Africa/Lagos' }, op
  <th>Category</th>
  <th>Supplier USD</th>
  <th>Sell ₦</th>
+ <th>Profit ₦</th>
  <th>Min-Max</th>
  <th>Refill</th>
  <th>Status</th>
@@ -1249,7 +1250,7 @@ function withLagos(opts) { return Object.assign({ timeZone: 'Africa/Lagos' }, op
  <table>
  <thead>
  <tr>
- <th>ID</th><th>Name</th><th>Category</th><th>Supplier USD</th><th>Sell ₦</th><th>Min-Max</th><th>Refill</th><th>Status</th><th></th>
+ <th>ID</th><th>Name</th><th>Category</th><th>Supplier USD</th><th>Sell ₦</th><th>Profit ₦</th><th>Min-Max</th><th>Refill</th><th>Status</th><th></th>
  </tr>
  </thead>
  <tbody id="japTableBody">
@@ -1285,7 +1286,7 @@ function withLagos(opts) { return Object.assign({ timeZone: 'Africa/Lagos' }, op
  <table>
  <thead>
  <tr>
- <th>ID</th><th>Name</th><th>Category</th><th>Supplier USD</th><th>Sell ₦</th><th>Min-Max</th><th>Refill</th><th>Status</th><th></th>
+ <th>ID</th><th>Name</th><th>Category</th><th>Supplier USD</th><th>Sell ₦</th><th>Profit ₦</th><th>Min-Max</th><th>Refill</th><th>Status</th><th></th>
  </tr>
  </thead>
  <tbody id="smmkingsTableBody">
@@ -5459,17 +5460,38 @@ async function loadBoosterSourceFromDb(provider) {
     } else if (typeof window._renderBoosterRows === 'function') {
       window._renderBoosterRows(rows, tbody, cards);
     } else {
-      // minimal table
+      window._boosterRowsByProvider[provider] = rows;
       if (tbody) {
         tbody.innerHTML = rows.map(r => {
           const usd = Number(r.supplier_rate_usd || 0).toFixed(4);
           const ngn = Number(r.price_ngn || 0).toLocaleString();
-          const st = r.is_available === false ? 'Hidden' : 'Visible';
-          return '<tr><td>' + (r.service_id||'') + '</td><td>' + (r.name||'') + '</td><td>' + (r.category||'') + '</td><td>$' + usd + '</td><td>₦' + ngn + '</td><td>' + (r.min_quantity||0) + '-' + (r.max_quantity||0) + '</td><td>' + (r.refill?'Yes':'No') + '</td><td>' + st + '</td><td></td></tr>';
+          const st = r.is_available === false ? 'Hidden' : 'Active';
+          const badge = r.is_available === false ? 'badge-off' : 'badge-on';
+          return '<tr>'
+            + '<td>' + escapeHtml(String(r.service_id||'')) + '</td>'
+            + '<td style="font-weight:600;">' + escapeHtml(r.name||'') + '</td>'
+            + '<td>' + escapeHtml(r.category||'') + '</td>'
+            + '<td class="supplier-price">$' + usd + '</td>'
+            + '<td class="price">₦' + ngn + '</td>'
+            + '<td>' + boosterProfitHtml(r) + '</td>'
+            + '<td>' + (r.min_quantity||0) + ' – ' + (r.max_quantity||0) + '</td>'
+            + '<td>' + (r.refill?'Yes':'No') + '</td>'
+            + '<td><span class="badge ' + badge + '">' + st + '</span></td>'
+            + '<td><button class="btn btn-ghost btn-sm" onclick="editBoosterService(\'' + r.id + '\',\'' + provider + '\')" title="Edit sell price"><i class="fas fa-edit"></i></button></td>'
+            + '</tr>';
         }).join('');
       }
       if (cards) {
-        cards.innerHTML = rows.map(r => '<div class="mobile-card"><div style="font-weight:700">' + (r.name||'') + '</div><div class="meta">' + (r.category||'') + ' · ₦' + Number(r.price_ngn||0).toLocaleString() + '</div></div>').join('');
+        cards.innerHTML = rows.map(r => {
+          return '<div class="mobile-card">'
+            + '<div style="font-weight:700;">' + escapeHtml(r.name||'') + '</div>'
+            + '<div class="row-line"><span>Category</span><span>' + escapeHtml(r.category||'') + '</span></div>'
+            + '<div class="row-line"><span>Supplier</span><span class="supplier-price">$' + Number(r.supplier_rate_usd||0).toFixed(4) + '</span></div>'
+            + '<div class="row-line"><span>Sell</span><span class="price">₦' + Number(r.price_ngn||0).toLocaleString() + '</span></div>'
+            + '<div class="row-line"><span>Profit</span>' + boosterProfitHtml(r) + '</div>'
+            + '<button class="btn btn-ghost btn-sm" style="margin-top:8px;" onclick="editBoosterService(\'' + r.id + '\',\'' + provider + '\')"><i class="fas fa-edit"></i> Edit Price</button>'
+            + '</div>';
+        }).join('');
       }
     }
   } catch (e) {
@@ -5588,6 +5610,23 @@ async function loadOwletServicesFromDb() {
  }
 }
 
+
+function boosterUsdRate() {
+  return Number(liveRate) || Number(window.USD_TO_NGN_RATE) || Number(localStorage.getItem('mj_usd_ngn')) || 1500;
+}
+function boosterCostNgn(s) {
+  return (Number(s.supplier_rate_usd) || 0) * boosterUsdRate();
+}
+function boosterProfitNgn(s) {
+  return (Number(s.price_ngn) || 0) - boosterCostNgn(s);
+}
+function boosterProfitHtml(s) {
+  const p = boosterProfitNgn(s);
+  const color = p >= 0 ? '#34d399' : '#f87171';
+  return '<span style="color:' + color + ';font-weight:700;">₦' + Math.round(p).toLocaleString() + '</span>';
+}
+window._boosterRowsByProvider = window._boosterRowsByProvider || { owlet: [], jap: [], smmkings: [] };
+
 function renderOwletServices() {
  const list = allOwletServices || [];
  const tbody = document.getElementById('owletTableBody');
@@ -5617,6 +5656,7 @@ function renderOwletServices() {
  if (cards) cards.innerHTML = '<div class="empty-state">No services on this page.</div>';
  return;
  }
+ window._boosterRowsByProvider.owlet = list;
  if (tbody) {
  tbody.innerHTML = list.map(s => `
  <tr>
@@ -5625,10 +5665,11 @@ function renderOwletServices() {
  <td>${escapeHtml(s.category || ' ')}</td>
  <td class="supplier-price">$${Number(s.supplier_rate_usd || 0).toFixed(4)}</td>
  <td class="price">₦${Number(s.price_ngn || 0).toLocaleString()}</td>
+ <td>${boosterProfitHtml(s)}</td>
  <td>${s.min_quantity ?? ' '} – ${s.max_quantity ?? ' '}</td>
  <td>${s.refill ? 'Yes' : 'No'}</td>
  <td><span class="badge ${s.is_available !== false ? 'badge-on' : 'badge-off'}">${s.is_available !== false ? 'Active' : 'Hidden'}</span></td>
- <td><button class="btn btn-ghost btn-sm" onclick="editOwletService('${s.id}')" title="Edit sell price"><i class="fas fa-edit"></i></button></td>
+ <td><button class="btn btn-ghost btn-sm" onclick="editBoosterService('${s.id}','owlet')" title="Edit sell price"><i class="fas fa-edit"></i></button></td>
  </tr>`).join('');
  }
  if (cards) {
@@ -5638,7 +5679,8 @@ function renderOwletServices() {
  <div class="row-line"><span>Category</span><span>${escapeHtml(s.category || ' ')}</span></div>
  <div class="row-line"><span>Supplier</span><span class="supplier-price">$${Number(s.supplier_rate_usd || 0).toFixed(4)}</span></div>
  <div class="row-line"><span>Sell</span><span class="price">₦${Number(s.price_ngn || 0).toLocaleString()}</span></div>
- <button class="btn btn-ghost btn-sm" style="margin-top:8px;" onclick="editOwletService('${s.id}')"><i class="fas fa-edit"></i> Edit Price</button>
+ <div class="row-line"><span>Profit</span>${boosterProfitHtml(s)}</div>
+ <button class="btn btn-ghost btn-sm" style="margin-top:8px;" onclick="editBoosterService('${s.id}','owlet')"><i class="fas fa-edit"></i> Edit Price</button>
  </div>`).join('');
  }
 }
@@ -5646,42 +5688,59 @@ function renderOwletServices() {
 
 
 
-async function editOwletService(id) {
- const s = allOwletServices.find(x => String(x.id) === String(id));
- if (!s) return;
- const next = prompt(`Selling price (₦) for:\n${s.name}\n\nSupplier: $${Number(s.supplier_rate_usd || 0).toFixed(4)} USD`, String(s.price_ngn ?? ''));
- if (next === null) return;
- const price = parseFloat(next);
- if (isNaN(price) || price < 0) {
- showAdminToast('Enter a valid price', 'error');
- return;
- }
- const { error } = await sb.from('booster_services').update({
- price_ngn: price,
- price_source: 'manual',
- updated_at: new Date().toISOString()
- }).eq('id', id);
- if (error) {
- // retry without price_source if column missing
- if (/price_source/i.test(error.message || '')) {
- const r2 = await sb.from('booster_services').update({ price_ngn: price, updated_at: new Date().toISOString() }).eq('id', id);
- if (r2.error) {
- showAdminToast(r2.error.message, 'error');
- return;
- }
- } else {
- showAdminToast(error.message, 'error');
- return;
- }
- }
- s.price_ngn = price;
- s.price_source = 'manual';
- renderOwletServices();
- showAdminToast('Booster price updated', 'success');
+
+async function editBoosterService(id, provider) {
+  provider = provider || 'owlet';
+  let s = null;
+  if (provider === 'owlet') {
+    s = (allOwletServices || []).find(x => String(x.id) === String(id));
+  }
+  if (!s) {
+    const bag = (window._boosterRowsByProvider && window._boosterRowsByProvider[provider]) || [];
+    s = bag.find(x => String(x.id) === String(id));
+  }
+  if (!s) {
+    showAdminToast('Service not found on this page — reload and try again', 'error');
+    return;
+  }
+  const cost = boosterCostNgn(s);
+  const next = prompt(
+    'Selling price (₦) for:\\n' + (s.name || '') +
+    '\\n\\nSupplier: $' + Number(s.supplier_rate_usd || 0).toFixed(4) +
+    ' (≈ ₦' + Math.round(cost).toLocaleString() + ' at rate ' + Math.round(boosterUsdRate()) + ')' +
+    '\\nCurrent profit: ₦' + Math.round(boosterProfitNgn(s)).toLocaleString(),
+    String(s.price_ngn ?? '')
+  );
+  if (next === null) return;
+  const price = parseFloat(next);
+  if (isNaN(price) || price < 0) {
+    showAdminToast('Enter a valid price', 'error');
+    return;
+  }
+  const { error } = await sb.from('booster_services').update({
+    price_ngn: price,
+    price_source: 'manual',
+    updated_at: new Date().toISOString()
+  }).eq('id', id);
+  if (error) {
+    if (/price_source/i.test(error.message || '')) {
+      const r2 = await sb.from('booster_services').update({ price_ngn: price, updated_at: new Date().toISOString() }).eq('id', id);
+      if (r2.error) {
+        showAdminToast(r2.error.message, 'error');
+        return;
+      }
+    } else {
+      showAdminToast(error.message, 'error');
+      return;
+    }
+  }
+  s.price_ngn = price;
+  s.price_source = 'manual';
+  if (provider === 'owlet') renderOwletServices();
+  else loadBoosterSourceFromDb(provider);
+  showAdminToast('Price updated · profit ₦' + Math.round(boosterProfitNgn(s)).toLocaleString(), 'success');
 }
-
-
-
+async function editOwletService(id) { return editBoosterService(id, 'owlet'); }
 
 function boosterStatusBadge(status) {
  const s = String(status || 'Pending');
