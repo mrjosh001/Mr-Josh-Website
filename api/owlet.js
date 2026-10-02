@@ -399,10 +399,13 @@ async function handleSync(req, res) {
       const prev = map.get(serviceId);
       const manual = prev && prev.price_source === 'manual';
       const listed = manual ? floorSellNgn(prev.price_ngn, serviceId) : floorSellNgn(defaultNgn, serviceId);
-      // Sticky availability: keep admin hide; new JAP/SMMKings stay hidden from customers
+      // Sticky availability: keep admin hide; new JAP stay hidden; new SMMKings
+      // Premium/Stars/Channel Boost default ON so Telegram shop is live after sync.
       let available;
       if (prev && typeof prev.is_available === 'boolean') {
         available = prev.is_available;
+      } else if (cfg.source === 'smmkings' && classifyTgService({ name: s.name, category: s.category })) {
+        available = true;
       } else {
         available = !!cfg.defaultVisible;
       }
@@ -668,35 +671,47 @@ async function resolveOwletServiceId(storedId, name) {
 /** Customer Telegram shop — SMMKings Premium / Stars / Channel Boost only (must be is_available). */
 function classifyTgService(s) {
   const n = String(s.name || '') + ' ' + String(s.category || '');
-  if (/premium.*@?user|telegram premium|buy telegram premium/i.test(n) && !/stars/i.test(n)) return 'premium';
-  if (/stars.*@?user|buy telegram stars|telegram stars to/i.test(n)) return 'stars';
-  if (/channel boost|telegram channel boost/i.test(n)) return 'boost';
+  if (/premium/i.test(n) && /telegram|@user/i.test(n) && !/stars/i.test(n)) return 'premium';
+  if (/stars/i.test(n) && /telegram|@user/i.test(n)) return 'stars';
+  if (/channel\s*boost|telegram\s*channel\s*boost/i.test(n)) return 'boost';
   return null;
 }
 
 async function handleTelegramShop(req, res) {
+  // Prefer rows admin left available. If none yet (post-sync sticky hide), surface
+  // classified Telegram packages that still have a sell price so the shop is usable.
   const { data, error } = await supabase
     .from('booster_services')
     .select('id,service_id,name,category,service_type,supplier_rate_usd,price_ngn,min_quantity,max_quantity,refill,cancel,is_available')
     .eq('source', 'smmkings')
-    .eq('is_available', true)
     .order('price_ngn', { ascending: true })
-    .limit(500);
+    .limit(800);
 
   if (error) {
     return res.status(500).json({ success: false, message: error.message });
   }
 
+  const rows = data || [];
+  const available = rows.filter((s) => s.is_available === true);
+  const pool = available.length
+    ? available
+    : rows.filter((s) => classifyTgService(s) && Number(s.price_ngn) > 0);
+
   const groups = { premium: [], stars: [], boost: [] };
-  for (const s of data || []) {
+  for (const s of pool) {
     const kind = classifyTgService(s);
     if (!kind) continue;
     const typeStr = String(s.service_type || '').toLowerCase();
     const maxQ = Number(s.max_quantity) || 0;
     const isPackage = typeStr.includes('package') || maxQ <= 12 || kind === 'premium' || kind === 'boost';
+    // Customer-facing name: never leak panel brand words
+    let displayName = String(s.name || '').replace(/smm\s*kings/ig, '').replace(/\s{2,}/g, ' ').trim();
+    if (kind === 'premium') displayName = displayName || 'Telegram Premium';
+    if (kind === 'stars') displayName = displayName || 'Telegram Stars';
+    if (kind === 'boost') displayName = displayName || 'Channel Boost';
     groups[kind].push({
       service_id: String(s.service_id),
-      name: s.name,
+      name: displayName,
       category: s.category,
       min_quantity: Number(s.min_quantity) || 1,
       max_quantity: Number(s.max_quantity) || 1,
@@ -709,7 +724,6 @@ async function handleTelegramShop(req, res) {
 
   return res.status(200).json({
     success: true,
-    source: 'smmkings',
     data: groups,
     counts: {
       premium: groups.premium.length,
