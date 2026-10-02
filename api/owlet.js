@@ -669,11 +669,17 @@ async function resolveOwletServiceId(storedId, name) {
 
 
 /** Customer Telegram shop — SMMKings Premium / Stars / Channel Boost only (must be is_available). */
+/** Only the 3 shop products — not members, views, post stars, etc. */
 function classifyTgService(s) {
-  const n = String(s.name || '') + ' ' + String(s.category || '');
-  if (/premium/i.test(n) && /telegram|@user/i.test(n) && !/stars/i.test(n)) return 'premium';
-  if (/stars/i.test(n) && /telegram|@user/i.test(n)) return 'stars';
-  if (/channel\s*boost|telegram\s*channel\s*boost/i.test(n)) return 'boost';
+  const n = String(s.name || '').replace(/\s+/g, ' ').trim();
+  // "Buy Telegram Premium to any @user"
+  if (/buy\s+telegram\s+premium\s+to\s+any/i.test(n)) return 'premium';
+  if (/telegram\s+premium\s+to\s+any\s*@?\s*user/i.test(n) && !/member|view|group|channel\s+member/i.test(n)) return 'premium';
+  // "Buy Telegram Stars to any @user" (not Post Stars)
+  if (/buy\s+telegram\s+stars\s+to\s+any/i.test(n)) return 'stars';
+  if (/telegram\s+stars\s+to\s+any\s*@?\s*user/i.test(n) && !/post\s+stars/i.test(n)) return 'stars';
+  // "Telegram Channel Boost" — exact product, not members
+  if (/telegram\s+channel\s+boost/i.test(n) && !/member|view|star|premium\s+member/i.test(n)) return 'boost';
   return null;
 }
 
@@ -692,29 +698,30 @@ async function handleTelegramShop(req, res) {
   }
 
   const rows = data || [];
-  const available = rows.filter((s) => s.is_available === true);
+  // Strict allowlist first — never dump the whole Telegram catalog
+  const matched = rows.filter((s) => classifyTgService(s));
+  const available = matched.filter((s) => s.is_available === true);
   const pool = available.length
     ? available
-    : rows.filter((s) => classifyTgService(s) && Number(s.price_ngn) > 0);
+    : matched.filter((s) => Number(s.price_ngn) > 0);
 
   const groups = { premium: [], stars: [], boost: [] };
   for (const s of pool) {
     const kind = classifyTgService(s);
     if (!kind) continue;
-    const typeStr = String(s.service_type || '').toLowerCase();
-    const maxQ = Number(s.max_quantity) || 0;
-    const isPackage = typeStr.includes('package') || maxQ <= 12 || kind === 'premium' || kind === 'boost';
-    // Customer-facing name: never leak panel brand words
-    let displayName = String(s.name || '').replace(/smm\s*kings/ig, '').replace(/\s{2,}/g, ' ').trim();
-    if (kind === 'premium') displayName = displayName || 'Telegram Premium';
-    if (kind === 'stars') displayName = displayName || 'Telegram Stars';
-    if (kind === 'boost') displayName = displayName || 'Channel Boost';
+    const minQ = Math.max(1, Number(s.min_quantity) || 1);
+    const maxQ = Math.max(minQ, Number(s.max_quantity) || minQ);
+    // Premium months + channel boost are fixed packages; stars scale by quantity
+    const isPackage = kind === 'premium' || kind === 'boost' || maxQ <= 24;
+    let displayName = 'Telegram Premium';
+    if (kind === 'stars') displayName = 'Telegram Stars';
+    if (kind === 'boost') displayName = 'Channel Boost';
     groups[kind].push({
       service_id: String(s.service_id),
       name: displayName,
       category: s.category,
-      min_quantity: Number(s.min_quantity) || 1,
-      max_quantity: Number(s.max_quantity) || 1,
+      min_quantity: minQ,
+      max_quantity: maxQ,
       price_ngn: floorSellNgn(s.price_ngn, s.service_id),
       pricing: isPackage ? 'package' : 'per_1k',
       refill: !!s.refill,
@@ -764,19 +771,10 @@ async function handleOrder(req, res) {
   if (sErr || !service) {
     return res.status(404).json({ success: false, message: 'Service not found or unavailable' });
   }
-  if (service.is_available === false) {
+  const isTgShop = orderSource === 'smmkings' && !!classifyTgService(service);
+  if (service.is_available === false && !isTgShop) {
     return res.status(400).json({ success: false, message: 'This service is temporarily unavailable' });
   }
-
-  const svcName = String(service.name || '');
-  const svcCat = String(service.category || '');
-  const isTgShop =
-    orderSource === 'smmkings' &&
-    (
-      /premium.*@?user|telegram premium|buy telegram premium/i.test(svcName + ' ' + svcCat) ||
-      /stars.*@?user|buy telegram stars|telegram stars to/i.test(svcName + ' ' + svcCat) ||
-      /channel boost|telegram channel boost/i.test(svcName + ' ' + svcCat)
-    );
   if (orderSource === 'smmkings' && !isTgShop) {
     return res.status(403).json({
       success: false,
