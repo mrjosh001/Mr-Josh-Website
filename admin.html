@@ -3572,6 +3572,25 @@ function supplierBadgeHtml(source) {
  return `<span style="display:inline-block;font-size:10px;font-weight:700;letter-spacing:0.03em;padding:2px 7px;border-radius:6px;background:${info.color}22;color:${info.color};white-space:nowrap;">${escapeHtml(info.label)}</span>`;
 }
 
+
+function productSupplierIsUsd(source) {
+  const s = String(source || '').toLowerCase();
+  return s === 'bulkmail' || s === 'gotsms' || s === 'grizzlysms' || s === 'smsbus' || s === 'sms-bus';
+}
+function productSupplierCostNgn(p) {
+  const supplier = Number(p.supplier_price || 0);
+  if (!productSupplierIsUsd(p.source)) return supplier;
+  const rate = Number(window.USD_TO_NGN_RATE) || Number(localStorage.getItem('mj_usd_ngn')) || 1500;
+  return supplier * rate;
+}
+function formatProductSupplier(p) {
+  const supplier = Number(p.supplier_price || 0);
+  if (productSupplierIsUsd(p.source)) {
+    return '$' + (supplier < 1 ? supplier.toFixed(4).replace(/\.?0+$/, '') : supplier.toFixed(2));
+  }
+  return '₦' + supplier.toLocaleString();
+}
+
 function renderProducts(list) {
  const items = list || allProducts;
  const tbody = document.getElementById('productsTableBody');
@@ -3583,9 +3602,9 @@ function renderProducts(list) {
  }
 
  tbody.innerHTML = items.map(p => {
- const supplier = Number(p.supplier_price || 0);
+ const supplierCost = productSupplierCostNgn(p);
  const price = Number(p.price || 0);
- const profit = price - supplier;
+ const profit = price - supplierCost;
  const stock = p.is_shared ? 'Shared ∞' : (p.stock_quantity != null ? p.stock_quantity : ' ');
  const available = p.is_available !== false;
  const category = p.category || 'OTHER';
@@ -3597,9 +3616,9 @@ function renderProducts(list) {
  <div style="margin-top:4px;">${supplierBadgeHtml(p.source)}</div>
  </td>
  <td>${escapeHtml(category)}</td>
- <td class="supplier-price">₦${supplier.toLocaleString()}</td>
+ <td class="supplier-price">${formatProductSupplier(p)}</td>
  <td class="price">₦${price.toLocaleString()}</td>
- <td class="profit">₦${profit.toLocaleString()}</td>
+ <td class="profit">₦${Math.round(profit).toLocaleString()}</td>
  <td>${stock}</td>
  <td><button type="button" class="badge ${available ? 'badge-on' : 'badge-off'}" style="cursor:pointer;border:none;font:inherit;" title="Click to show/hide" onclick="event.stopPropagation();toggleProductAvailability('${rowId}', ${available})">${available ? 'Active' : 'Hidden'}</button></td>
  <td>
@@ -3620,9 +3639,9 @@ function renderProductCards(items) {
  return;
  }
  wrap.innerHTML = items.map(p => {
- const supplier = Number(p.supplier_price || 0);
+ const supplierCost = productSupplierCostNgn(p);
  const price = Number(p.price || 0);
- const profit = price - supplier;
+ const profit = price - supplierCost;
  const stock = p.is_shared ? 'Shared ∞' : (p.stock_quantity != null ? p.stock_quantity : ' ');
  const available = p.is_available !== false;
  const rowId = p.id || p.product_key;
@@ -3631,8 +3650,8 @@ function renderProductCards(items) {
  <h4>${escapeHtml(p.name || 'Unnamed')} ${supplierBadgeHtml(p.source)}</h4>
  <div class="meta">${escapeHtml(p.category || 'OTHER')}</div>
  <div class="row-line"><span>Your Price</span><strong class="price">₦${price.toLocaleString()}</strong></div>
- <div class="row-line"><span>Supplier</span><span class="supplier-price">₦${supplier.toLocaleString()}</span></div>
- <div class="row-line"><span>Profit</span><span class="profit">₦${profit.toLocaleString()}</span></div>
+ <div class="row-line"><span>Supplier</span><span class="supplier-price">${formatProductSupplier(p)}</span></div>
+ <div class="row-line"><span>Profit</span><span class="profit">₦${Math.round(profit).toLocaleString()}</span></div>
  <div class="row-line"><span>Stock</span><span>${stock}</span></div>
  <div class="row-line"><span>Status</span><button type="button" class="badge ${available ? 'badge-on' : 'badge-off'}" style="cursor:pointer;border:none;font:inherit;" title="Click to show/hide" onclick="event.stopPropagation();toggleProductAvailability('${rowId}', ${available})">${available ? 'Active' : 'Hidden'}</button></div>
  <div style="margin-top:10px;display:flex;gap:8px;">
