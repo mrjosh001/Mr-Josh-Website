@@ -662,8 +662,21 @@ async function doRent(){
   }
   closePurchaseModal();
   var rent=Array.isArray(j.data)?j.data[0]:j.data;
+  var rid=rent&&(rent.id||rent.rent_id||(j.data&&j.data.id));
   if(okEl)okEl.textContent=j.message||'Number rented successfully';
   showRentToast(j.message||('Number ready'+(rent&&rent.phone?': '+rent.phone:'')), true);
+  // Always open rental inbox after a successful purchase
+  if(rid){
+    setTimeout(function(){
+      location.href='mj-sms-usa-number.html?rent_id='+encodeURIComponent(String(rid));
+    }, 700);
+    return;
+  }
+  // Bulk / missing id — go to rental history (inbox list)
+  if(Array.isArray(j.data)&&j.data.length){
+    setTimeout(function(){ location.href='mj-sms-history.html?view=rent'; }, 700);
+    return;
+  }
   if(rent)showSuccess(rent);
   else showRentToast(j.message||'Rental completed', true);
 }
