@@ -251,6 +251,95 @@ function gotsmsSellPriceNgn(supplierUsd) {
   return Math.ceil(finalPrice / 50) * 50;
 }
 
+
+/** Strict wallet debit result — fail closed (never call supplier if unclear). */
+function isDebitOk(debited, debErr) {
+  if (debErr) return false;
+  if (debited === true || debited === 1) return true;
+  if (debited === false || debited === 0 || debited == null) return false;
+  if (typeof debited === 'object') {
+    if (debited.success === false || debited.ok === false || debited.error || debited.insufficient === true) return false;
+    if (debited.success === true || debited.ok === true) return true;
+    if (Number.isFinite(Number(debited.new_balance)) || Number.isFinite(Number(debited.balance))) return true;
+    return false;
+  }
+  return false;
+}
+
+/**
+ * Debit wallet atomically. Returns { ok, balance_before, new_balance, message }.
+ * Never returns ok:true unless balance actually covers amount and RPC confirms.
+ */
+async function debitWalletStrict(userId, amount, label) {
+  const amt = Math.round(Number(amount) * 100) / 100;
+  if (!(amt > 0)) {
+    return { ok: false, message: 'Invalid charge amount' };
+  }
+  const { data: profile, error: pErr } = await supabase
+    .from('profiles')
+    .select('balance, customer_id')
+    .eq('id', userId)
+    .single();
+  if (pErr || !profile) {
+    return { ok: false, message: 'Profile not found' };
+  }
+  const bal = Number(profile.balance) || 0;
+  if (bal + 1e-9 < amt) {
+    return {
+      ok: false,
+      message: 'Insufficient wallet balance. Need ₦' + amt.toLocaleString() + ', you have ₦' + bal.toLocaleString() + '.',
+      balance_before: bal
+    };
+  }
+  const { data: debited, error: debErr } = await supabase.rpc('debit_balance_if_sufficient', {
+    p_user_id: userId,
+    p_amount: amt
+  });
+  if (!isDebitOk(debited, debErr)) {
+    console.error('[debitWalletStrict]', label || '', debErr?.message || debited);
+    return {
+      ok: false,
+      message: 'Insufficient wallet balance. Fund your wallet and try again.',
+      balance_before: bal
+    };
+  }
+  // Verify row actually dropped (guards broken RPCs that return success without debiting)
+  const { data: after } = await supabase.from('profiles').select('balance').eq('id', userId).maybeSingle();
+  const newBal = after != null ? Number(after.balance) : NaN;
+  if (Number.isFinite(newBal) && newBal > bal - amt + 0.5) {
+    console.error('[debitWalletStrict] balance did not decrease', { label, bal, newBal, amt, debited });
+    return { ok: false, message: 'Could not charge wallet. Try again.' };
+  }
+  const resolved =
+    (typeof debited === 'object' && debited != null && Number.isFinite(Number(debited.new_balance)))
+      ? Number(debited.new_balance)
+      : (Number.isFinite(newBal) ? newBal : bal - amt);
+  return {
+    ok: true,
+    balance_before: bal,
+    new_balance: resolved,
+    customer_id: profile.customer_id,
+    amount: amt
+  };
+}
+
+/** Claim order for refund once — prevents double credit. */
+async function claimGotsmsRefund(orderId) {
+  const { data, error } = await supabase
+    .from('number_orders')
+    .update({ refunded: true, status: 'refunded' })
+    .eq('id', orderId)
+    .eq('refunded', false)
+    .neq('status', 'refunded')
+    .select('id, price, user_id')
+    .maybeSingle();
+  if (error) {
+    console.error('[claimGotsmsRefund]', error.message);
+    return null;
+  }
+  return data || null;
+}
+
 async function gotsmsFetch(path, { method = 'GET', body } = {}) {
   if (!GOTSMS_TOKEN) {
     return { ok: false, status: 503, data: { success: false, message: 'GotSMS is not configured (set GOTSMS_API_TOKEN)' } };
@@ -2843,16 +2932,16 @@ export default async function handler(req, res) {
           }
         }
 
-        const { data: profile } = await supabase.from('profiles').select('id, balance, customer_id').eq('id', auth.userId).single();
-        if (!profile) return json(res, 400, { success: false, message: 'Profile not found' });
-
-        const { data: debited, error: debErr } = await supabase.rpc('debit_balance_if_sufficient', {
-          p_user_id: auth.userId,
-          p_amount: price
-        });
-        if (debErr || debited === false || debited === null) {
-          return json(res, 400, { success: false, message: 'Insufficient wallet balance. Fund your wallet and try again.' });
+        if (!(price > 0)) {
+          return json(res, 400, { success: false, message: 'Invalid rental price. Refresh and try again.' });
         }
+
+        // STRICT: wallet must cover full price BEFORE supplier is called
+        const debit = await debitWalletStrict(auth.userId, price, 'gotsms_rent');
+        if (!debit.ok) {
+          return json(res, 400, { success: false, message: debit.message || 'Insufficient wallet balance' });
+        }
+        const profile = { id: auth.userId, balance: debit.balance_before, customer_id: debit.customer_id };
 
         const payload = { plan_id };
         if (body.area_code) payload.area_code = String(body.area_code).replace(/\D/g, '').slice(0, 6);
@@ -2936,7 +3025,7 @@ export default async function handler(req, res) {
             order_id: orderId,
             price_ngn: price,
             auto_renew: autoRenew,
-            new_balance: Number(fresh?.balance ?? profile.balance - price)
+            new_balance: Number(fresh?.balance ?? debit.new_balance)
           }
         });
       }
@@ -2999,17 +3088,18 @@ export default async function handler(req, res) {
         const carrierId = body.cellular_carrier_id ? String(body.cellular_carrier_id) : '';
         unitNgn = unitNgn + gotsmsAddonsNgn({ area_code: areaCode, cellular_carrier_id: carrierId });
         const totalNgn = unitNgn * quantity;
-
-        const { data: profile } = await supabase.from('profiles').select('id, balance, customer_id').eq('id', auth.userId).single();
-        if (!profile) return json(res, 400, { success: false, message: 'Profile not found' });
-
-        const { data: debited, error: debErr } = await supabase.rpc('debit_balance_if_sufficient', {
-          p_user_id: auth.userId,
-          p_amount: totalNgn
-        });
-        if (debErr || debited === false || debited === null) {
-          return json(res, 400, { success: false, message: `Need ₦${totalNgn.toLocaleString()} for ${quantity} number(s).` });
+        if (!(unitNgn > 0) || !(totalNgn > 0)) {
+          return json(res, 400, { success: false, message: 'Invalid rental price. Refresh and try again.' });
         }
+
+        const debit = await debitWalletStrict(auth.userId, totalNgn, 'gotsms_rent_bulk');
+        if (!debit.ok) {
+          return json(res, 400, {
+            success: false,
+            message: debit.message || ('Need ₦' + totalNgn.toLocaleString() + ' for ' + quantity + ' number(s).')
+          });
+        }
+        const profile = { id: auth.userId, balance: debit.balance_before, customer_id: debit.customer_id };
 
         const payload = { plan_id, quantity };
         if (body.area_code) payload.area_code = String(body.area_code).replace(/\D/g, '').slice(0, 6);
@@ -3204,8 +3294,9 @@ if (method === 'GET' && ga === 'gotsms_messages') {
         const svc = (listG.data?.data || []).find((s) => String(s.service_id) === service_id);
         const price = gotsmsSellPriceNgn(svc?.price || 0);
         if (!(price > 0)) return json(res, 400, { success: false, message: 'Service not available on this number' });
-        const { data: debited } = await supabase.rpc('debit_balance_if_sufficient', { p_user_id: auth.userId, p_amount: price });
-        if (debited === false || debited === null) return json(res, 400, { success: false, message: 'Insufficient wallet balance' });
+        if (!(price > 0)) return json(res, 400, { success: false, message: 'Invalid service price' });
+        const debitAdd = await debitWalletStrict(auth.userId, price, 'gotsms_add_service');
+        if (!debitAdd.ok) return json(res, 400, { success: false, message: debitAdd.message || 'Insufficient wallet balance' });
         const g = await gotsmsFetch(`/api/rents/${encodeURIComponent(rent_id)}/services`, { method: 'POST', body: { service_id } });
         if (!g.ok || !g.data?.success) {
           try { await supabase.rpc('credit_balance', { p_user_id: auth.userId, p_amount: price }); } catch (_) {}
@@ -3297,19 +3388,76 @@ if (method === 'GET' && ga === 'gotsms_messages') {
         const body = await readBody(req);
         const rent_id = String(body.rent_id || '').trim();
         if (!rent_id) return json(res, 400, { success: false, message: 'rent_id required' });
-        if (!(await gotsmsAssertOwns(auth.userId, rent_id))) return json(res, 403, { success: false, message: 'Rental not found' });
+        const order = await gotsmsAssertOwns(auth.userId, rent_id);
+        if (!order) return json(res, 403, { success: false, message: 'Rental not found' });
+        if (order.refunded || order.status === 'refunded' || order.status === 'cancelled') {
+          return json(res, 400, { success: false, message: 'This rental was already cancelled or refunded.' });
+        }
+        // Block cancel/refund after first SMS received (matches supplier rules)
+        const smsCount = Number(order.sms_count || order.message_count || 0);
+        if (smsCount > 0 || order.status === 'completed' || order.code) {
+          // still allow if supplier explicitly accepts — check live first below
+        }
+        try {
+          const msgG = await gotsmsFetch(`/api/numbers/${encodeURIComponent(rent_id)}/messages`);
+          const msgs = (msgG.data && (msgG.data.data || msgG.data.messages || msgG.data)) || [];
+          const list = Array.isArray(msgs) ? msgs : [];
+          if (list.length > 0) {
+            return json(res, 400, {
+              success: false,
+              message: 'Cancel is not available after an SMS has been received on this number.'
+            });
+          }
+        } catch (_) {}
+
+        // Supplier must accept refund first — never credit if provider rejects
         const g = await gotsmsFetch(`/api/rents/${encodeURIComponent(rent_id)}/refund`, { method: 'POST' });
         if (!g.ok || !g.data?.success) {
-          return json(res, g.status || 400, { success: false, message: g.data?.message || 'Refund not available for this rental' });
+          return json(res, g.status || 400, {
+            success: false,
+            message: g.data?.message || 'Cancel/refund was not approved. No balance change.'
+          });
         }
-        const { data: ord } = await supabase.from('number_orders').select('id, price, refunded').eq('user_id', auth.userId).eq('idempotency_key', `gotsms-${rent_id}`).maybeSingle();
-        if (ord && !ord.refunded && Number(ord.price) > 0) {
+
+        // Atomic claim — only one concurrent refund credits once
+        const claimed = await claimGotsmsRefund(order.id);
+        if (!claimed) {
+          return json(res, 200, {
+            success: true,
+            message: 'Rental cancelled. Wallet was already adjusted if eligible.',
+            data: g.data.data || null
+          });
+        }
+        const refundAmt = Number(claimed.price) || 0;
+        if (refundAmt > 0) {
           try {
-            await supabase.rpc('credit_balance', { p_user_id: auth.userId, p_amount: Number(ord.price) });
-            await supabase.from('number_orders').update({ refunded: true, status: 'refunded' }).eq('id', ord.id);
-          } catch (e) { console.error('[gotsms] user refund', e); }
+            await supabase.rpc('credit_balance', { p_user_id: auth.userId, p_amount: refundAmt });
+            try {
+              await supabase.from('transactions').insert({
+                user_id: auth.userId,
+                type: 'refund',
+                category: 'MJ SMS',
+                title: 'USA rental cancelled',
+                subtitle: 'Balance restored',
+                amount: '₦' + refundAmt.toLocaleString(),
+                amount_ngn: refundAmt,
+                status: 'completed'
+              });
+            } catch (_) {}
+          } catch (e) {
+            console.error('[gotsms] user refund credit', e);
+            // Roll claim flag back so admin can retry credit
+            try {
+              await supabase.from('number_orders').update({ refunded: false, status: 'active' }).eq('id', order.id);
+            } catch (_) {}
+            return json(res, 500, { success: false, message: 'Cancelled with provider but wallet credit failed. Contact support with your order ID.' });
+          }
         }
-        return json(res, 200, { success: true, message: 'Rental cancelled. Balance restored if eligible.', data: g.data.data || null });
+        return json(res, 200, {
+          success: true,
+          message: refundAmt > 0 ? 'Rental cancelled. Balance restored.' : 'Rental cancelled.',
+          data: g.data.data || null
+        });
       }
 
       if (method === 'POST' && ga === 'gotsms_renewal_toggle') {
