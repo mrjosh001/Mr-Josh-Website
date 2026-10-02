@@ -682,13 +682,17 @@ async function getAccessToken() {
   const { data: { session } } = await sb.auth.getSession();
   return session?.access_token || null;
 }
-async function checkVirtualAccount() {
-  showVaState('loading');
+async function checkVirtualAccount(opts) {
+  opts = opts || {};
+  const silent = !!opts.silent;
+  if (!silent) showVaState('loading');
   try {
     const accessToken = await getAccessToken();
     if (!accessToken) {
-      toast('Session expired. Please sign in again.');
-      setTimeout(() => { location.href = 'auth.html?next=deposit.html'; }, 1200);
+      if (!silent) {
+        toast('Session expired. Please sign in again.');
+        setTimeout(() => { location.href = 'auth.html?next=deposit.html'; }, 1200);
+      }
       return;
     }
     const res = await fetch('/api/pocketfi?action=virtual_account', {
@@ -699,15 +703,18 @@ async function checkVirtualAccount() {
     let data = {};
     try { data = await res.json(); } catch (_) {}
     if (!res.ok) throw new Error(data.message || ('Could not load account (' + res.status + ')'));
-    if (data.has_account && data.data?.account_number) {
+    if (data.has_account && data.data && data.data.account_number) {
       vaDetails = data.data;
-      showVaState('amount');
     } else {
       vaDetails = null;
-      // Do not force generate UI on load — only when user picks Bank Transfer
-      showVaState('amount');
     }
+    // Never show generate/loading on entry — amount first; Bank Transfer handles account
+    if (!silent) showVaState('amount');
   } catch (err) {
+    if (silent) {
+      vaDetails = null;
+      return;
+    }
     document.getElementById('vaErrorText').textContent = err.message || 'Something went wrong';
     showVaState('error');
   }
@@ -901,7 +908,10 @@ document.addEventListener('visibilitychange', async () => {
   syncThemeUi();
   if (!(await ensureAuth())) return;
   await handleDepositReturn();
-  await checkVirtualAccount();
+  // Show amount form immediately — do not block on bank account check
+  showVaState('amount');
+  // Warm VA in background for Bank Transfer (no spinner)
+  checkVirtualAccount({ silent: true }).catch(function () {});
 })();
 </script>
 </body>
