@@ -71,6 +71,26 @@
     return cards(count);
   }
 
+  /** Full-width product cards (MJ Logs style) */
+  function productList(count) {
+    count = Math.max(1, Math.min(8, count || 4));
+    var h = '<div class="sk-product-list" aria-hidden="true" aria-busy="true">';
+    for (var i = 0; i < count; i++) {
+      h +=
+        '<div class="sk-product-card">' +
+        '<div class="sk-row"><div class="sk-left">' +
+        '<div class="sk-bone sk-icon"></div><div class="sk-bone sk-name"></div>' +
+        '</div><div class="sk-bone sk-price"></div></div>' +
+        '<div class="sk-bone sk-desc"></div>' +
+        '<div class="sk-badges"><div class="sk-bone sk-badge"></div><div class="sk-bone sk-badge"></div></div>' +
+        '<div class="sk-actions"><div class="sk-bone sk-btn"></div><div class="sk-bone sk-btn"></div></div>' +
+        '</div>';
+    }
+    h += '</div>';
+    return h;
+  }
+
+
   var api = {
     show: show,
     hide: hide,
@@ -79,6 +99,7 @@
     grid: grid,
     cards: cards,
     list: list,
+    productList: productList,
     reduce: !!reduce
   };
   w.MJSkeleton = api;
