@@ -70,7 +70,7 @@ body{font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;background:v
   <div class="hero">
     <div class="badge"><i class="fa-solid fa-bolt"></i> Instant digital delivery</div>
     <h2>Telegram Premium, Stars & Boost</h2>
-    <p>Send Premium or Stars to an eligible @username, or boost a channel. Confirm the recipient, pay from your MJ HUB wallet, and track delivery in booster history.</p>
+    <p>Send Premium or Stars, or boost a channel. Paste the Telegram profile or channel link, pay from your wallet, and track delivery in order history.</p>
   </div>
 
   <div class="tabs" role="tablist">
@@ -93,8 +93,8 @@ body{font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;background:v
   </div>
 
   <div class="field">
-    <label id="linkLabel">Recipient username</label>
-    <input class="input" id="username" placeholder="@username" autocomplete="off" inputmode="text"/>
+    <label id="linkLabel">Telegram link or username</label>
+    <input class="input" id="username" placeholder="https://t.me/username or @username" autocomplete="off" inputmode="url"/>
   </div>
 
   <div class="price-box" id="priceBox">
@@ -111,7 +111,7 @@ body{font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;background:v
     <div class="steps">
       <div class="step"><b>1. Choose type</b>Premium, Stars, or Channel Boost.</div>
       <div class="step"><b>2. Pick package</b>Duration or star amount from the list.</div>
-      <div class="step"><b>3. Enter @user</b>Public Telegram username (or channel link for boost).</div>
+      <div class="step"><b>3. Paste link</b>Profile or channel URL (t.me/…) — username also accepted.</div>
       <div class="step"><b>4. Pay</b>Wallet is charged; delivery tracks in history.</div>
     </div>
   </div>
@@ -167,7 +167,7 @@ body{font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;background:v
     const el = document.getElementById(elId);
     const rows = catalog[kindKey] || [];
     if (!rows.length) {
-      el.innerHTML = '<div class="empty">No packages enabled yet. Ask admin to enable Telegram ' + kindKey + ' services on SMMKings and set prices.</div>';
+      el.innerHTML = '<div class="empty">No packages available for this option right now. Please try again later or contact support.</div>';
       return;
     }
     el.innerHTML = rows.map((s,i) => {
@@ -219,8 +219,8 @@ body{font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;background:v
     document.getElementById('panelPremium').style.display = k==='premium'?'block':'none';
     document.getElementById('panelStars').style.display = k==='stars'?'block':'none';
     document.getElementById('panelBoost').style.display = k==='boost'?'block':'none';
-    document.getElementById('linkLabel').textContent = k==='boost' ? 'Channel username or link' : 'Recipient username';
-    document.getElementById('username').placeholder = k==='boost' ? '@channel or t.me/…' : '@username';
+    document.getElementById('linkLabel').textContent = k==='boost' ? 'Channel link' : 'Telegram link or username';
+    document.getElementById('username').placeholder = k==='boost' ? 'https://t.me/channel' : 'https://t.me/username or @username';
     paintAll();
   }
 
@@ -246,13 +246,12 @@ body{font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;background:v
   function normalizeLink(raw, k){
     let u = String(raw||'').trim();
     if (!u) return '';
-    if (k === 'boost') {
-      if (/^https?:\/\//i.test(u) || u.includes('t.me/')) return u;
-      u = u.replace(/^@/,'');
-      return 'https://t.me/' + u;
-    }
-    u = u.replace(/^@/,'');
-    return '@' + u;
+    // Supplier accepts profile/channel URL — prefer full t.me link
+    if (/^https?:\/\//i.test(u)) return u;
+    if (/^(t\.me|telegram\.me)\//i.test(u)) return 'https://' + u;
+    u = u.replace(/^@/, '');
+    if (!u) return '';
+    return 'https://t.me/' + u;
   }
 
   document.getElementById('btnBuy').onclick = async function(){
@@ -261,7 +260,7 @@ body{font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;background:v
     err.textContent = '';
     const link = normalizeLink(document.getElementById('username').value, selected.kind);
     if (!link || link === '@') {
-      err.textContent = 'Enter a valid Telegram username';
+      err.textContent = 'Enter a Telegram link or username';
       return;
     }
     const qty = Math.max(1, Number(selected.min_quantity)||1);
