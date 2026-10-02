@@ -1,123 +1,113 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="dark">
 <head>
 <meta charset="UTF-8"/>
-<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover"/>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"/>
 <title>Telegram Premium & Stars · MJ HUB</title>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css"/>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
-:root{
-  --bg:#07090e;--card:#0f141c;--border:rgba(255,255,255,.08);--text:#f1f5f9;--muted:#94a3b8;
-  --primary:#3b82f6;--primary2:#1d4ed8;--ok:#34d399;--warn:#fbbf24;
+:root {
+  --bg:#0b1220; --card:#121a2b; --card2:#182234; --line:rgba(148,163,184,.14);
+  --text:#f1f5f9; --muted:#94a3b8; --blue:#2563eb; --blue2:#3b82f6;
+  --pill:#1e293b; --ok:#22c55e; --err:#ef4444;
 }
-:root[data-theme="light"]{
-  --bg:#f4f7fb;--card:#fff;--border:rgba(15,23,42,.1);--text:#0f172a;--muted:#64748b;
+[data-theme="light"] {
+  --bg:#f1f5f9; --card:#ffffff; --card2:#f8fafc; --line:rgba(15,23,42,.1);
+  --text:#0f172a; --muted:#64748b; --pill:#e2e8f0;
 }
-*{box-sizing:border-box;margin:0;padding:0}
-body{font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;background:var(--bg);color:var(--text);min-height:100dvh}
-.top{display:flex;align-items:center;gap:12px;padding:14px 16px;border-bottom:1px solid var(--border);position:sticky;top:0;background:color-mix(in srgb,var(--bg) 92%,transparent);backdrop-filter:blur(12px);z-index:20}
-.back{width:40px;height:40px;border-radius:12px;border:1px solid var(--border);background:var(--card);color:var(--text);display:flex;align-items:center;justify-content:center;text-decoration:none}
-.top h1{font-size:16px;font-weight:800}
-.wrap{max-width:480px;margin:0 auto;padding:16px 16px 40px}
-.hero{border:1px solid var(--border);background:linear-gradient(145deg,rgba(59,130,246,.18),rgba(15,20,28,.6));border-radius:20px;padding:16px;margin-bottom:14px}
-.hero .badge{display:inline-flex;align-items:center;gap:6px;font-size:10px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:#93c5fd;margin-bottom:8px}
-.hero h2{font-size:18px;font-weight:800;margin-bottom:6px}
-.hero p{font-size:13px;color:var(--muted);line-height:1.45}
-.tabs{display:flex;gap:8px;margin:14px 0;padding:4px;background:var(--card);border:1px solid var(--border);border-radius:16px}
-.tab{flex:1;border:none;border-radius:12px;padding:12px 8px;font-weight:800;font-size:13px;cursor:pointer;background:transparent;color:var(--muted);font-family:inherit}
-.tab.on{background:linear-gradient(135deg,var(--primary),var(--primary2));color:#fff}
-.tab.on.stars{background:linear-gradient(135deg,#b45309,#f59e0b);color:#111}
-.tab.on.boost{background:linear-gradient(135deg,#4f46e5,#7c3aed);color:#fff}
-.section-label{font-size:11px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin:12px 0 8px}
-.chips{display:flex;flex-wrap:wrap;gap:8px}
-.chip{border:1px solid var(--border);background:var(--card);color:var(--text);border-radius:12px;padding:10px 12px;font-weight:700;font-size:13px;cursor:pointer;font-family:inherit}
-.chip.on{border-color:transparent;background:linear-gradient(135deg,var(--primary),var(--primary2));color:#fff}
-.field{margin-top:12px}
-.field label{display:block;font-size:11px;font-weight:800;letter-spacing:.05em;text-transform:uppercase;color:var(--muted);margin-bottom:6px}
-.input{width:100%;padding:14px 14px;border-radius:14px;border:1px solid var(--border);background:var(--card);color:var(--text);font-size:15px;font-family:inherit;outline:none}
-.input:focus{border-color:var(--primary)}
-.btn{width:100%;margin-top:14px;padding:15px;border:none;border-radius:14px;font-weight:800;font-size:15px;cursor:pointer;font-family:inherit;color:#fff;background:linear-gradient(135deg,var(--primary),var(--primary2));display:flex;align-items:center;justify-content:center;gap:8px}
-.btn:disabled{opacity:.5;cursor:not-allowed}
-.btn-ghost{background:transparent;border:1px solid var(--border);color:var(--text);margin-top:8px}
-.price-box{margin-top:12px;padding:14px;border-radius:14px;border:1px solid var(--border);background:var(--card);display:none}
-.price-box.on{display:block}
-.price-box .amt{font-size:22px;font-weight:900;color:#60a5fa}
-.price-box .sub{font-size:12px;color:var(--muted);margin-top:4px}
-.help{margin-top:16px;border:1px solid var(--border);border-radius:16px;background:var(--card);padding:14px}
-.help h3{font-size:13px;font-weight:800;margin-bottom:10px}
-.steps{display:grid;grid-template-columns:1fr 1fr;gap:8px}
-.step{padding:10px;border-radius:12px;background:color-mix(in srgb,var(--bg) 70%,transparent);font-size:12px;color:var(--muted);line-height:1.35}
-.step b{display:block;color:var(--text);margin-bottom:4px}
-.err{color:#f87171;font-size:13px;font-weight:700;margin-top:10px;min-height:18px}
-.toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%) translateY(120%);background:#0f172a;color:#fff;padding:12px 16px;border-radius:12px;font-size:13px;font-weight:700;z-index:50;transition:.25s;max-width:90%}
-.toast.on{transform:translateX(-50%) translateY(0)}
-.toast.ok{background:#065f46}.toast.err{background:#7f1d1d}
-.empty{text-align:center;padding:24px;color:var(--muted);font-size:13px}
-.svc-list{display:flex;flex-direction:column;gap:8px;margin-top:8px}
-.svc{border:1px solid var(--border);background:var(--card);border-radius:14px;padding:12px;cursor:pointer;text-align:left}
-.svc.on{border-color:var(--primary);box-shadow:0 0 0 1px var(--primary)}
-.svc .n{font-weight:800;font-size:13px;line-height:1.3}
-.svc .p{margin-top:6px;font-weight:900;color:#60a5fa;font-size:14px}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;background:var(--bg);color:var(--text);min-height:100dvh}
+.top{display:flex;align-items:center;gap:12px;padding:14px 16px;position:sticky;top:0;background:var(--bg);z-index:5;border-bottom:1px solid var(--line)}
+.back{width:40px;height:40px;border-radius:12px;border:1px solid var(--line);background:var(--card);color:var(--text);display:grid;place-items:center;text-decoration:none}
+.top h1{margin:0;font-size:17px;font-weight:700}
+main{padding:16px;max-width:520px;margin:0 auto;padding-bottom:40px}
+.hero{background:linear-gradient(160deg, #0f172a 0%, #1e3a5f 100%);border:1px solid var(--line);border-radius:18px;padding:18px;margin-bottom:14px;position:relative;overflow:hidden}
+[data-theme="light"] .hero{background:linear-gradient(160deg,#eff6ff,#dbeafe)}
+.hero .badge{display:inline-flex;align-items:center;gap:6px;font-size:11px;font-weight:700;letter-spacing:.04em;color:#93c5fd;text-transform:uppercase;margin-bottom:8px}
+.hero h2{margin:0 0 8px;font-size:20px;line-height:1.25}
+.hero p{margin:0;color:var(--muted);font-size:13.5px;line-height:1.45}
+.panel{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:14px;margin-bottom:14px}
+.tabs{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;background:var(--card2);padding:6px;border-radius:14px;margin-bottom:16px}
+.tab{border:0;background:transparent;color:var(--muted);padding:12px 8px;border-radius:10px;font-weight:700;font-size:13px;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px}
+.tab.on{background:var(--blue);color:#fff;box-shadow:0 6px 16px rgba(37,99,235,.35)}
+.lbl{font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin:0 0 10px}
+.pills{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px;min-height:44px}
+.pill{border:1px solid var(--line);background:var(--pill);color:var(--text);padding:11px 16px;border-radius:999px;font-weight:700;font-size:14px;cursor:pointer}
+.pill.on{background:linear-gradient(135deg,#3b82f6,#2563eb);border-color:transparent;color:#fff;box-shadow:0 4px 14px rgba(37,99,235,.4)}
+.pill:disabled{opacity:.4;cursor:not-allowed}
+.field{margin-bottom:14px}
+.field label{display:block;font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin-bottom:8px}
+.input{width:100%;padding:14px 14px;border-radius:12px;border:1px solid var(--line);background:var(--card2);color:var(--text);font-size:15px;outline:none}
+.input:focus{border-color:var(--blue2)}
+.price-row{display:flex;align-items:center;justify-content:space-between;padding:12px 0 4px;margin-bottom:8px}
+.price-row span{color:var(--muted);font-size:13px}
+.price-row strong{font-size:20px;font-weight:800}
+.btn{width:100%;border:0;border-radius:14px;padding:15px;font-weight:800;font-size:15px;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px}
+.btn-primary{background:linear-gradient(135deg,#3b82f6,#1d4ed8);color:#fff;box-shadow:0 8px 22px rgba(37,99,235,.35)}
+.btn-primary:disabled{opacity:.55;cursor:not-allowed}
+.btn-ghost{background:var(--card2);color:var(--text);border:1px solid var(--line);margin-top:10px}
+.err{color:var(--err);font-size:13px;min-height:18px;margin:6px 0 0;text-align:center}
+.howto{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:16px}
+.howto h3{margin:0 0 12px;font-size:15px;display:flex;align-items:center;gap:8px}
+.steps{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.step{background:var(--card2);border-radius:12px;padding:12px;font-size:12.5px;color:var(--muted);line-height:1.4}
+.step b{display:block;color:var(--text);margin-bottom:4px;font-size:13px}
+.empty{padding:18px;text-align:center;color:var(--muted);font-size:13.5px;line-height:1.45}
+.toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%) translateY(20px);opacity:0;background:#0f172a;color:#fff;padding:12px 16px;border-radius:12px;font-size:13px;font-weight:600;pointer-events:none;transition:.25s;z-index:50;max-width:90vw}
+.toast.on{opacity:1;transform:translateX(-50%) translateY(0)}
+.toast.ok{background:#14532d}.toast.err{background:#7f1d1d}
 </style>
 </head>
 <body>
 <header class="top">
   <a class="back" href="dashboard.html" aria-label="Back"><i class="fa-solid fa-arrow-left"></i></a>
-  <h1>Telegram Verification & Stars</h1>
+  <h1>Telegram Verification &amp; Stars</h1>
 </header>
-<main class="wrap">
-  <div class="hero">
+<main>
+  <section class="hero">
     <div class="badge"><i class="fa-solid fa-bolt"></i> Instant digital delivery</div>
-    <h2>Telegram Premium, Stars & Boost</h2>
-    <p>Send Premium or Stars, or boost a channel. Paste the Telegram profile or channel link, pay from your wallet, and track delivery in order history.</p>
-  </div>
+    <h2>Telegram Premium, Stars &amp; Boost</h2>
+    <p>Send Premium or Stars to an eligible account, or boost a channel. Confirm the recipient, pay from your wallet, and track delivery in history.</p>
+  </section>
 
-  <div class="tabs" role="tablist">
-    <button type="button" class="tab on" data-kind="premium" id="tabPremium"><i class="fa-solid fa-certificate"></i> Premium</button>
-    <button type="button" class="tab" data-kind="stars" id="tabStars"><i class="fa-solid fa-star"></i> Stars</button>
-    <button type="button" class="tab" data-kind="boost" id="tabBoost"><i class="fa-solid fa-rocket"></i> Boost</button>
-  </div>
+  <section class="panel">
+    <div class="tabs" role="tablist">
+      <button type="button" class="tab on" data-k="premium"><i class="fa-solid fa-certificate"></i> Premium</button>
+      <button type="button" class="tab" data-k="stars"><i class="fa-solid fa-star"></i> Stars</button>
+      <button type="button" class="tab" data-k="boost"><i class="fa-solid fa-rocket"></i> Boost</button>
+    </div>
 
-  <div id="panelPremium">
-    <div class="section-label">Subscription duration</div>
-    <div class="svc-list" id="premiumList"><div class="empty">Loading packages…</div></div>
-  </div>
-  <div id="panelStars" style="display:none">
-    <div class="section-label">Number of stars</div>
-    <div class="svc-list" id="starsList"><div class="empty">Loading packages…</div></div>
-  </div>
-  <div id="panelBoost" style="display:none">
-    <div class="section-label">Channel boost packages</div>
-    <div class="svc-list" id="boostList"><div class="empty">Loading packages…</div></div>
-  </div>
+    <p class="lbl" id="packLabel">Subscription duration</p>
+    <div class="pills" id="packPills"><div class="empty">Loading packages…</div></div>
 
-  <div class="field">
-    <label id="linkLabel">Telegram link or username</label>
-    <input class="input" id="username" placeholder="https://t.me/username or @username" autocomplete="off" inputmode="url"/>
-  </div>
+    <div class="field">
+      <label id="linkLabel" for="username">Recipient username</label>
+      <input class="input" id="username" placeholder="@username" autocomplete="off" inputmode="text"/>
+    </div>
 
-  <div class="price-box" id="priceBox">
-    <div class="amt" id="priceAmt">₦0</div>
-    <div class="sub" id="priceSub">Select a package</div>
-  </div>
-  <div class="err" id="err"></div>
+    <div class="price-row">
+      <span>Total</span>
+      <strong id="totalPrice">₦0</strong>
+    </div>
+    <div class="err" id="err"></div>
+    <button type="button" class="btn btn-primary" id="btnBuy" disabled>
+      <i class="fa-solid fa-paper-plane"></i> Pay &amp; send
+    </button>
+    <button type="button" class="btn btn-ghost" onclick="location.href='mj-boosters-history.html'">Recent orders</button>
+  </section>
 
-  <button type="button" class="btn" id="btnBuy" disabled><i class="fa-solid fa-paper-plane"></i> Pay & send</button>
-  <button type="button" class="btn btn-ghost" onclick="location.href='mj-boosters-history.html'">Recent orders</button>
-
-  <div class="help">
+  <section class="howto">
     <h3><i class="fa-solid fa-shield-halved"></i> How it works</h3>
     <div class="steps">
       <div class="step"><b>1. Choose type</b>Premium, Stars, or Channel Boost.</div>
-      <div class="step"><b>2. Pick package</b>Duration or star amount from the list.</div>
-      <div class="step"><b>3. Paste link</b>Profile or channel URL (t.me/…) — username also accepted.</div>
-      <div class="step"><b>4. Pay</b>Wallet is charged; delivery tracks in history.</div>
+      <div class="step"><b>2. Pick package</b>Duration or star amount.</div>
+      <div class="step"><b>3. Enter @user</b>Public Telegram username (or channel for boost).</div>
+      <div class="step"><b>4. Pay</b>Wallet is charged; track delivery in history.</div>
     </div>
-  </div>
+  </section>
 </main>
 <div class="toast" id="toast"></div>
-
 <script>
 (function(){
   try {
@@ -128,18 +118,19 @@ body{font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;background:v
   const SUPABASE_URL = 'https://atczodlljmlayvldxfmv.supabase.co';
   const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImF0Y3pvZGxsam1sYXl2bGR4Zm12Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODUwNzUyMzgsImV4cCI6MjEwMDY1MTIzOH0.ufthD-p7BmeD_B7xyuMM6PNPL8DmcL4AtRYgg-MuoLI';
   const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
-    auth: {
-      persistSession: true,
-      autoRefreshToken: true,
-      detectSessionInUrl: true,
-      storage: window.sessionStorage
-    }
+    auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true, storage: window.sessionStorage }
   });
 
   let kind = 'premium';
   let catalog = { premium: [], stars: [], boost: [] };
-  let selected = null;
+  let service = null;   // active service row for current kind
+  let qty = 1;
   let busy = false;
+
+  // ActiveStore-style package chips
+  const PREMIUM_QTY = [3, 6, 12];
+  const STARS_QTY = [50, 100, 250, 500, 1000, 2500, 5000];
+  const BOOST_QTY = [1, 5, 10, 25, 50];
 
   function toast(msg, ok){
     const t = document.getElementById('toast');
@@ -156,97 +147,89 @@ body{font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;background:v
     return { Authorization: 'Bearer ' + session.access_token, 'Content-Type': 'application/json', Accept: 'application/json' };
   }
 
-  function estimatePrice(svc){
-    if (!svc) return 0;
-    const q = Math.max(1, Number(svc.min_quantity)||1);
-    if (svc.pricing === 'package') return Math.ceil(Number(svc.price_ngn||0) * q);
-    return Math.ceil((Number(svc.price_ngn||0)/1000) * q);
+  function priceFor(q){
+    if (!service) return 0;
+    const rate = Number(service.price_ngn) || 0;
+    if (service.pricing === 'package' || kind === 'premium' || kind === 'boost') {
+      // package: price_ngn is sell price per 1 unit (month / boost unit)
+      return Math.ceil(rate * q);
+    }
+    // stars often priced per 1000
+    return Math.ceil((rate / 1000) * q);
   }
 
-  function paintList(kindKey, elId){
-    const el = document.getElementById(elId);
-    const rows = catalog[kindKey] || [];
-    if (!rows.length) {
+  function allowedQtyList(){
+    if (!service) return [];
+    const min = Math.max(1, Number(service.min_quantity) || 1);
+    const max = Math.max(min, Number(service.max_quantity) || min);
+    let base = PREMIUM_QTY;
+    if (kind === 'stars') base = STARS_QTY;
+    if (kind === 'boost') base = BOOST_QTY;
+    let list = base.filter(q => q >= min && q <= max);
+    if (!list.length) {
+      // fallback: min, mid, max
+      list = [min];
+      if (max > min) list.push(Math.min(max, min * 2));
+      if (max > min) list.push(max);
+      list = [...new Set(list)].sort((a,b)=>a-b);
+    }
+    return list;
+  }
+
+  function paintPills(){
+    const el = document.getElementById('packPills');
+    const label = document.getElementById('packLabel');
+    const rows = catalog[kind] || [];
+    service = rows[0] || null;
+
+    if (!service) {
       el.innerHTML = '<div class="empty">No packages available for this option right now. Please try again later or contact support.</div>';
+      document.getElementById('btnBuy').disabled = true;
+      document.getElementById('totalPrice').textContent = '₦0';
       return;
     }
-    el.innerHTML = rows.map((s,i) => {
-      const on = selected && selected.kind===kindKey && String(selected.service_id)===String(s.service_id);
-      return '<button type="button" class="svc'+(on?' on':'')+'" data-kind="'+kindKey+'" data-i="'+i+'">'
-        + '<div class="n">'+escapeHtml(s.name)+'</div>'
-        + '<div class="p">'+fmt(estimatePrice(s))+'</div>'
-        + '</button>';
+
+    if (kind === 'premium') label.textContent = 'Subscription duration';
+    else if (kind === 'stars') label.textContent = 'Stars amount';
+    else label.textContent = 'Boost units';
+
+    const list = allowedQtyList();
+    qty = list.includes(qty) ? qty : list[0];
+    el.innerHTML = list.map(q => {
+      let text = String(q);
+      if (kind === 'premium') text = q + ' mos';
+      if (kind === 'stars') text = q.toLocaleString() + ' ★';
+      if (kind === 'boost') text = q + (q === 1 ? ' boost' : ' boosts');
+      return '<button type="button" class="pill'+(q===qty?' on':'')+'" data-q="'+q+'">'+text+'</button>';
     }).join('');
-    el.querySelectorAll('.svc').forEach(btn => {
-      btn.onclick = function(){
-        const k = btn.getAttribute('data-kind');
-        const i = Number(btn.getAttribute('data-i'));
-        selected = Object.assign({}, catalog[k][i], { kind: k });
-        paintAll();
+
+    el.querySelectorAll('.pill').forEach(btn => {
+      btn.onclick = () => {
+        qty = Number(btn.getAttribute('data-q'));
+        paintPills();
       };
     });
-  }
 
-  function escapeHtml(s){
-    return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-  }
-
-  function paintAll(){
-    paintList('premium','premiumList');
-    paintList('stars','starsList');
-    paintList('boost','boostList');
-    const box = document.getElementById('priceBox');
-    const btn = document.getElementById('btnBuy');
-    if (selected) {
-      box.classList.add('on');
-      document.getElementById('priceAmt').textContent = fmt(estimatePrice(selected));
-      document.getElementById('priceSub').textContent = selected.name;
-      btn.disabled = false;
-    } else {
-      box.classList.remove('on');
-      btn.disabled = true;
-    }
+    document.getElementById('totalPrice').textContent = fmt(priceFor(qty));
+    document.getElementById('btnBuy').disabled = false;
   }
 
   function setKind(k){
     kind = k;
-    selected = null;
-    document.querySelectorAll('.tab').forEach(t => {
-      t.classList.toggle('on', t.getAttribute('data-kind')===k);
-      t.classList.toggle('stars', t.getAttribute('data-kind')==='stars' && k==='stars');
-      t.classList.toggle('boost', t.getAttribute('data-kind')==='boost' && k==='boost');
-    });
-    document.getElementById('panelPremium').style.display = k==='premium'?'block':'none';
-    document.getElementById('panelStars').style.display = k==='stars'?'block':'none';
-    document.getElementById('panelBoost').style.display = k==='boost'?'block':'none';
-    document.getElementById('linkLabel').textContent = k==='boost' ? 'Channel link' : 'Telegram link or username';
-    document.getElementById('username').placeholder = k==='boost' ? 'https://t.me/channel' : 'https://t.me/username or @username';
-    paintAll();
+    document.querySelectorAll('.tab').forEach(t => t.classList.toggle('on', t.getAttribute('data-k') === k));
+    const isBoost = k === 'boost';
+    document.getElementById('linkLabel').textContent = isBoost ? 'Channel link or username' : 'Recipient username';
+    document.getElementById('username').placeholder = isBoost ? 'https://t.me/channel or @channel' : '@username';
+    paintPills();
   }
 
-  document.querySelectorAll('.tab').forEach(t => t.onclick = () => setKind(t.getAttribute('data-kind')));
+  document.querySelectorAll('.tab').forEach(t => {
+    t.onclick = () => setKind(t.getAttribute('data-k'));
+  });
 
-  async function loadShop(){
-    const h = await headers();
-    if (!h) return;
-    try {
-      const res = await fetch('/api/owlet?action=telegram_shop', { headers: h });
-      const data = await res.json().catch(()=>({}));
-      if (!res.ok || !data.success) {
-        document.getElementById('premiumList').innerHTML = '<div class="empty">'+(data.message||'Could not load shop')+'</div>';
-        return;
-      }
-      catalog = data.data || { premium:[], stars:[], boost:[] };
-      paintAll();
-    } catch(e) {
-      document.getElementById('premiumList').innerHTML = '<div class="empty">'+(e.message||e)+'</div>';
-    }
-  }
-
-  function normalizeLink(raw, k){
+  function normalizeLink(raw){
     let u = String(raw||'').trim();
     if (!u) return '';
-    // Supplier accepts profile/channel URL — prefer full t.me link
     if (/^https?:\/\//i.test(u)) return u;
     if (/^(t\.me|telegram\.me)\//i.test(u)) return 'https://' + u;
     u = u.replace(/^@/, '');
@@ -254,16 +237,32 @@ body{font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;background:v
     return 'https://t.me/' + u;
   }
 
+  async function loadShop(){
+    try {
+      const h = await headers();
+      if (!h) return;
+      const res = await fetch('/api/owlet?action=telegram_shop', { headers: h });
+      const data = await res.json().catch(()=>({}));
+      if (!res.ok || !data.success) {
+        document.getElementById('packPills').innerHTML = '<div class="empty">'+(data.message||'Could not load shop')+'</div>';
+        return;
+      }
+      catalog = data.data || { premium:[], stars:[], boost:[] };
+      paintPills();
+    } catch(e) {
+      document.getElementById('packPills').innerHTML = '<div class="empty">'+(e.message||e)+'</div>';
+    }
+  }
+
   document.getElementById('btnBuy').onclick = async function(){
-    if (busy || !selected) return;
+    if (busy || !service) return;
     const err = document.getElementById('err');
     err.textContent = '';
-    const link = normalizeLink(document.getElementById('username').value, selected.kind);
-    if (!link || link === '@') {
-      err.textContent = 'Enter a Telegram link or username';
+    const link = normalizeLink(document.getElementById('username').value);
+    if (!link) {
+      err.textContent = 'Enter a Telegram username or link';
       return;
     }
-    const qty = Math.max(1, Number(selected.min_quantity)||1);
     busy = true;
     const btn = document.getElementById('btnBuy');
     btn.disabled = true; btn.textContent = 'Processing…';
@@ -275,7 +274,7 @@ body{font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;background:v
         headers: h,
         body: JSON.stringify({
           source: 'smmkings',
-          service_id: selected.service_id,
+          service_id: service.service_id,
           link: link,
           quantity: qty
         })
@@ -285,15 +284,13 @@ body{font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;background:v
         const msg = data.message || 'Order failed';
         err.textContent = msg;
         toast(msg, false);
-        if (/insufficient|fund/i.test(msg)) {
-          setTimeout(()=> location.href='deposit.html', 900);
-        }
+        if (/insufficient|fund/i.test(msg)) setTimeout(()=> location.href='deposit.html', 900);
         return;
       }
       toast(data.message || 'Order placed', true);
       setTimeout(()=> location.href='mj-boosters-history.html', 900);
     } catch(e) {
-      err.textContent = e.message||String(e);
+      err.textContent = e.message || String(e);
       toast(err.textContent, false);
     } finally {
       busy = false;
