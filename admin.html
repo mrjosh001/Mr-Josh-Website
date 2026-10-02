@@ -788,6 +788,8 @@ function withLagos(opts) { return Object.assign({ timeZone: 'Africa/Lagos' }, op
  <button class="nav-item" data-tab="sms-gotsms" onclick="switchTab('sms-gotsms')"><i class="fas fa-flag-usa"></i> USA Rental (GotSMS)</button>
  <button class="nav-item" data-tab="sms-orders" onclick="switchTab('sms-orders')"><i class="fas fa-comment-sms"></i> SMS Orders</button>
  <button class="nav-item" data-tab="boosters" onclick="switchTab('boosters')"><i class="fas fa-bolt"></i> MJ Boosters (Owlet)</button>
+ <button class="nav-item" data-tab="boosters-jap" onclick="switchTab('boosters-jap')"><i class="fas fa-bolt"></i> JAP Boosters</button>
+ <button class="nav-item" data-tab="boosters-smmkings" onclick="switchTab('boosters-smmkings')"><i class="fas fa-paper-plane"></i> SMMKings (Telegram)</button>
  <button class="nav-item" data-tab="booster-orders" onclick="switchTab('booster-orders')"><i class="fas fa-receipt"></i> Booster Orders</button>
  <button class="nav-item" data-tab="notify" onclick="switchTab('notify')"><i class="fas fa-bullhorn"></i> Notifications</button>
  <a class="nav-item" href="admin-support.html" id="navSupportDesk" style="text-decoration:none;position:relative;"><i class="fas fa-headset"></i> Support Desk <span id="supportNavBadge" style="display:none;margin-left:6px;background:#ef4444;color:#fff;font-size:10px;font-weight:800;padding:2px 7px;border-radius:999px;min-width:18px;text-align:center;">0</span></a>
@@ -891,6 +893,8 @@ function withLagos(opts) { return Object.assign({ timeZone: 'Africa/Lagos' }, op
  <div class="metric-card"><div class="metric-label">Sujan Dept.</div><div class="metric-value" id="balSujan"> </div><div class="metric-sub" id="balSujanSub">Loading…</div></div>
  <div class="metric-card"><div class="metric-label">ClassyTee</div><div class="metric-value" id="balClassy"> </div><div class="metric-sub" id="balClassySub">Loading…</div></div>
  <div class="metric-card"><div class="metric-label">Owlet (Boosters)</div><div class="metric-value" id="balOwlet"> </div><div class="metric-sub" id="balOwletSub">Loading…</div></div>
+ <div class="metric-card"><div class="metric-label">JAP (Boosters)</div><div class="metric-value" id="balJap">—</div><div class="metric-sub" id="balJapSub">Loading…</div></div>
+ <div class="metric-card"><div class="metric-label">SMMKings (Telegram)</div><div class="metric-value" id="balSmmkings">—</div><div class="metric-sub" id="balSmmkingsSub">Loading…</div></div>
  <div class="metric-card"><div class="metric-label">SMS-Bus (Server 2)</div><div class="metric-value" id="balSmsbus"> </div><div class="metric-sub" id="balSmsbusSub">Loading…</div></div>
  <div class="metric-card"><div class="metric-label">GotSMS (USA rental)</div><div class="metric-value" id="balGotsms"> </div><div class="metric-sub" id="balGotsmsSub">Loading…</div></div>
  <div class="metric-card"><div class="metric-label">BulkMail</div><div class="metric-value" id="balBulkmail">—</div><div class="metric-sub" id="balBulkmailSub">Loading…</div></div>
@@ -1157,18 +1161,12 @@ function withLagos(opts) { return Object.assign({ timeZone: 'Africa/Lagos' }, op
  <div class="panel-title">MJ Boosters Catalog</div>
  <div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center;">
  <button class="btn btn-primary btn-sm" id="btnOwletSync" onclick="syncBoosterProvider('owlet')"><i class="fas fa-sync"></i> Sync Owlet</button>
- <button class="btn btn-ghost btn-sm" id="btnJapSync" onclick="syncBoosterProvider('jap')"><i class="fas fa-sync"></i> Sync JAP</button>
- <button class="btn btn-ghost btn-sm" id="btnSmmkingsSync" onclick="syncBoosterProvider('smmkings')"><i class="fas fa-sync"></i> Sync SMMKings (TG)</button>
  </div>
  </div>
- <p style="font-size:12px;color:var(--muted);margin:0 0 10px;">JAP &amp; SMMKings sync into admin catalog but stay <strong>hidden from customers</strong> until you enable each service. SMMKings imports <strong>Telegram only</strong>.</p>
+ <p style="font-size:12px;color:var(--muted);margin:0 0 10px;">Owlet catalog is live on the customer booster page. Use the <strong>JAP</strong> and <strong>SMMKings</strong> tabs for the other panels (customer store stays Owlet-only until you enable).</p>
  <div id="owletSyncProgress" style="font-size:12px;color:var(--muted);margin-bottom:12px;min-height:16px;"></div>
  <div class="search-row" style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;">
- <select id="owletProviderFilter" onchange="owletPage=1;loadOwletServicesFromDb()" style="min-width:140px;">
- <option value="owlet">Source: Owlet</option>
- <option value="jap">Source: JAP</option>
- <option value="smmkings">Source: SMMKings (TG)</option>
- </select>
+ <input type="hidden" id="owletProviderFilter" value="owlet" />
  <input type="search" id="owletSearch" placeholder="Search service name or category…" style="flex:1;min-width:180px;" onkeydown="if(event.key==='Enter'){owletPage=1;loadOwletServicesFromDb()}">
  <select id="owletCategoryFilter" onchange="owletPage=1;loadOwletServicesFromDb()">
  <option value="">All categories</option>
@@ -1202,6 +1200,79 @@ function withLagos(opts) { return Object.assign({ timeZone: 'Africa/Lagos' }, op
  </div>
 
  
+
+ <div id="tab-boosters-jap" class="tab-content">
+ <div class="panel">
+ <div class="panel-header">
+ <div class="panel-title">JAP Boosters Catalog</div>
+ <div style="display:flex;gap:8px;flex-wrap:wrap;">
+ <button class="btn btn-primary btn-sm" id="btnJapSync" onclick="syncBoosterProvider('jap')"><i class="fas fa-sync"></i> Sync JAP</button>
+ </div>
+ </div>
+ <p style="font-size:12px;color:var(--muted);margin:0 0 10px;">Synced services stay <strong>hidden from customers</strong> until you enable each one. User dashboard still uses Owlet only.</p>
+ <div id="japSyncProgress" style="font-size:12px;color:var(--muted);margin-bottom:12px;min-height:16px;"></div>
+ <div class="search-row" style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;">
+ <input type="hidden" id="japProviderFilter" value="jap" />
+ <input type="search" id="japSearch" placeholder="Search service name or category…" style="flex:1;min-width:180px;" onkeydown="if(event.key==='Enter'){japPage=1;loadBoosterSourceFromDb('jap')}">
+ <select id="japCategoryFilter" onchange="japPage=1;loadBoosterSourceFromDb('jap')">
+ <option value="">All categories</option>
+ </select>
+ <label style="font-size:12px;display:flex;align-items:center;gap:6px;color:var(--muted);white-space:nowrap;">
+ <input type="checkbox" id="japHideUnavailable" checked onchange="japPage=1;loadBoosterSourceFromDb('jap')"> Hide unavailable
+ </label>
+ </div>
+ <div class="desktop-only desktop-table table-wrap">
+ <table>
+ <thead>
+ <tr>
+ <th>ID</th><th>Name</th><th>Category</th><th>Supplier USD</th><th>Sell ₦</th><th>Min-Max</th><th>Refill</th><th>Status</th><th></th>
+ </tr>
+ </thead>
+ <tbody id="japTableBody">
+ <tr><td colspan="9" class="empty-state">Click <strong>Sync JAP</strong> to pull catalog.</td></tr>
+ </tbody>
+ </table>
+ </div>
+ <div id="japMobileCards" class="mobile-only mobile-cards"></div>
+ </div>
+ </div>
+
+ <div id="tab-boosters-smmkings" class="tab-content">
+ <div class="panel">
+ <div class="panel-header">
+ <div class="panel-title">SMMKings · Telegram only</div>
+ <div style="display:flex;gap:8px;flex-wrap:wrap;">
+ <button class="btn btn-primary btn-sm" id="btnSmmkingsSync" onclick="syncBoosterProvider('smmkings')"><i class="fas fa-sync"></i> Sync SMMKings (TG)</button>
+ </div>
+ </div>
+ <p style="font-size:12px;color:var(--muted);margin:0 0 10px;">Only <strong>Telegram</strong> services are imported. Stay hidden from customers until enabled. Customer store remains Owlet-only.</p>
+ <div id="smmkingsSyncProgress" style="font-size:12px;color:var(--muted);margin-bottom:12px;min-height:16px;"></div>
+ <div class="search-row" style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;">
+ <input type="hidden" id="smmkingsProviderFilter" value="smmkings" />
+ <input type="search" id="smmkingsSearch" placeholder="Search Telegram service…" style="flex:1;min-width:180px;" onkeydown="if(event.key==='Enter'){smmkingsPage=1;loadBoosterSourceFromDb('smmkings')}">
+ <select id="smmkingsCategoryFilter" onchange="smmkingsPage=1;loadBoosterSourceFromDb('smmkings')">
+ <option value="">All categories</option>
+ </select>
+ <label style="font-size:12px;display:flex;align-items:center;gap:6px;color:var(--muted);white-space:nowrap;">
+ <input type="checkbox" id="smmkingsHideUnavailable" checked onchange="smmkingsPage=1;loadBoosterSourceFromDb('smmkings')"> Hide unavailable
+ </label>
+ </div>
+ <div class="desktop-only desktop-table table-wrap">
+ <table>
+ <thead>
+ <tr>
+ <th>ID</th><th>Name</th><th>Category</th><th>Supplier USD</th><th>Sell ₦</th><th>Min-Max</th><th>Refill</th><th>Status</th><th></th>
+ </tr>
+ </thead>
+ <tbody id="smmkingsTableBody">
+ <tr><td colspan="9" class="empty-state">Click <strong>Sync SMMKings (TG)</strong> to pull Telegram services.</td></tr>
+ </tbody>
+ </table>
+ </div>
+ <div id="smmkingsMobileCards" class="mobile-only mobile-cards"></div>
+ </div>
+ </div>
+
  <div id="tab-booster-orders" class="tab-content">
  <div class="panel">
  <div class="panel-header">
@@ -2170,6 +2241,8 @@ async function loadSupplierBalances() {
  renderSupplierBalance('Sujan', data.suppliers.sujan);
  renderSupplierBalance('Classy', data.suppliers.classy);
  renderSupplierBalance('Owlet', data.suppliers.owlet);
+ renderSupplierBalance('Jap', data.suppliers.jap);
+ renderSupplierBalance('Smmkings', data.suppliers.smmkings);
  renderSupplierBalance('Smsbus', data.suppliers.smsbus);
  renderSupplierBalance('Gotsms', data.suppliers.gotsms);
  renderSupplierBalance('Bulkmail', data.suppliers.bulkmail);
@@ -5252,7 +5325,8 @@ window.addEventListener('DOMContentLoaded', async () => {
  }
  } catch (e) {}
  document.getElementById('adminPassword')?.addEventListener('keydown', e => { if (e.key === 'Enter') handleLogin(); });
- document.getElementById('lookupCustomerId')?.addEventListener('keydown', e => { if (e.key === 'Enter') loo
+ document.getElementById('lookupCustomerId')?.addEventListener('keydown', e => { if (e.key === 'Enter') lookupByCustomerId(); });
+});
 
 (function patchBoostersTab(){
  const _st = window.switchTab;
@@ -5262,13 +5336,20 @@ window.addEventListener('DOMContentLoaded', async () => {
  if (tab === 'boosters') {
  const t = document.getElementById('pageTitle');
  if (t) t.textContent = 'MJ Boosters (Owlet)';
- loadOwletServicesFromDb();
+ try { loadOwletServicesFromDb(); } catch (e) {}
+ }
+ if (tab === 'boosters-jap') {
+ const t = document.getElementById('pageTitle');
+ if (t) t.textContent = 'JAP Boosters';
+ try { loadBoosterSourceFromDb('jap'); } catch (e) {}
+ }
+ if (tab === 'boosters-smmkings') {
+ const t = document.getElementById('pageTitle');
+ if (t) t.textContent = 'SMMKings (Telegram)';
+ try { loadBoosterSourceFromDb('smmkings'); } catch (e) {}
  }
  };
 })();
-
-kupByCustomerId(); });
-});
 
 
 // ---------- MJ Boosters (The Owlet): admin only ----------
@@ -5293,13 +5374,87 @@ async function loadOwletBalance() {
  }
 }
 
+
+let japPage = 1, smmkingsPage = 1;
+
+async function loadBoosterSourceFromDb(provider) {
+  provider = provider || 'jap';
+  const ids = {
+    jap: { tbody: 'japTableBody', cards: 'japMobileCards', search: 'japSearch', cat: 'japCategoryFilter', hide: 'japHideUnavailable', page: () => japPage, setPage: (n) => { japPage = n; } },
+    smmkings: { tbody: 'smmkingsTableBody', cards: 'smmkingsMobileCards', search: 'smmkingsSearch', cat: 'smmkingsCategoryFilter', hide: 'smmkingsHideUnavailable', page: () => smmkingsPage, setPage: (n) => { smmkingsPage = n; } }
+  };
+  const cfg = ids[provider];
+  if (!cfg) return loadOwletServicesFromDb();
+  const tbody = document.getElementById(cfg.tbody);
+  const cards = document.getElementById(cfg.cards);
+  try {
+    const headers = await authHeaders();
+    if (!headers.Authorization) {
+      if (tbody) tbody.innerHTML = '<tr><td colspan="9" class="empty-state">Sign in again to load services.</td></tr>';
+      return;
+    }
+    const q = (document.getElementById(cfg.search)?.value || '').trim();
+    const cat = document.getElementById(cfg.cat)?.value || '';
+    const hide = document.getElementById(cfg.hide)?.checked !== false ? '1' : '0';
+    const page = cfg.page() || 1;
+    const url = '/api/owlet?action=list&provider=' + encodeURIComponent(provider)
+      + '&page=' + page + '&page_size=100&hide_unavailable=' + hide
+      + (q ? '&q=' + encodeURIComponent(q) : '')
+      + (cat ? '&category=' + encodeURIComponent(cat) : '');
+    const res = await fetch(url, { headers });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || !data.success) {
+      if (tbody) tbody.innerHTML = '<tr><td colspan="9" class="empty-state">' + (data.message || 'Failed to load') + '</td></tr>';
+      return;
+    }
+    const rows = data.data || [];
+    // categories
+    const catSel = document.getElementById(cfg.cat);
+    if (catSel && Array.isArray(data.categories) && catSel.options.length <= 1) {
+      data.categories.forEach(c => {
+        if (!c) return;
+        const o = document.createElement('option');
+        o.value = c; o.textContent = c;
+        catSel.appendChild(o);
+      });
+    }
+    if (!rows.length) {
+      if (tbody) tbody.innerHTML = '<tr><td colspan="9" class="empty-state">No services yet. Click Sync.</td></tr>';
+      if (cards) cards.innerHTML = '<div class="empty-state">No services yet.</div>';
+      return;
+    }
+    // Reuse Owlet row renderer if present
+    if (typeof renderOwletRows === 'function') {
+      renderOwletRows(rows, tbody, cards);
+    } else if (typeof window._renderBoosterRows === 'function') {
+      window._renderBoosterRows(rows, tbody, cards);
+    } else {
+      // minimal table
+      if (tbody) {
+        tbody.innerHTML = rows.map(r => {
+          const usd = Number(r.supplier_rate_usd || 0).toFixed(4);
+          const ngn = Number(r.price_ngn || 0).toLocaleString();
+          const st = r.is_available === false ? 'Hidden' : 'Visible';
+          return '<tr><td>' + (r.service_id||'') + '</td><td>' + (r.name||'') + '</td><td>' + (r.category||'') + '</td><td>$' + usd + '</td><td>₦' + ngn + '</td><td>' + (r.min_quantity||0) + '-' + (r.max_quantity||0) + '</td><td>' + (r.refill?'Yes':'No') + '</td><td>' + st + '</td><td></td></tr>';
+        }).join('');
+      }
+      if (cards) {
+        cards.innerHTML = rows.map(r => '<div class="mobile-card"><div style="font-weight:700">' + (r.name||'') + '</div><div class="meta">' + (r.category||'') + ' · ₦' + Number(r.price_ngn||0).toLocaleString() + '</div></div>').join('');
+      }
+    }
+  } catch (e) {
+    if (tbody) tbody.innerHTML = '<tr><td colspan="9" class="empty-state">' + (e.message||e) + '</td></tr>';
+  }
+}
+
 async function syncBoosterProvider(provider) {
  provider = provider || 'owlet';
  const labels = { owlet: 'Owlet', jap: 'JustAnotherPanel (JAP)', smmkings: 'SMMKings (Telegram only)' };
  const label = labels[provider] || provider;
  const btnMap = { owlet: 'btnOwletSync', jap: 'btnJapSync', smmkings: 'btnSmmkingsSync' };
  const btn = document.getElementById(btnMap[provider] || 'btnOwletSync');
- const prog = document.getElementById('owletSyncProgress');
+ const progMap = { owlet: 'owletSyncProgress', jap: 'japSyncProgress', smmkings: 'smmkingsSyncProgress' };
+ const prog = document.getElementById(progMap[provider] || 'owletSyncProgress');
  setBtnBusy(btn, true, 'Syncing…');
  if (prog) prog.textContent = 'Pulling services from ' + label + '…';
  try {
@@ -5334,11 +5489,14 @@ async function syncBoosterProvider(provider) {
  if (!done) await new Promise(r => setTimeout(r, 400));
  }
 
- // Switch filter to this provider and reload
- const pf = document.getElementById('owletProviderFilter');
- if (pf) pf.value = provider;
- owletPage = 1;
- await loadOwletServicesFromDb();
+ // Reload the matching catalog tab
+ if (provider === 'owlet') {
+   owletPage = 1;
+   await loadOwletServicesFromDb();
+ } else {
+   window[provider + 'Page'] = 1;
+   await loadBoosterSourceFromDb(provider);
+ }
  showAdminToast(label + ' sync finished', 'success');
  } catch (e) {
  showAdminToast(e.message || String(e), 'error');
