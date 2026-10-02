@@ -225,8 +225,7 @@ details[open] .product-description-toggle::before{transform:rotate(90deg);displa
 </div>
 <select class="filter-dropdown" id="categoryFilter"><option value="all">All Categories</option></select>
 <div id="productCountBadge"></div>
-<div id="productGrid" data-skel="productList" data-skel-ready="1"><div class="sk-product-list" aria-hidden="true" aria-busy="true"><div class="sk-product-card" aria-hidden="true"><div class="sk-row"><div class="sk-left"><div class="sk-bone sk-icon"></div><div class="sk-bone sk-name"></div></div><div class="sk-bone sk-price"></div></div><div class="sk-bone sk-desc"></div><div class="sk-badges"><div class="sk-bone sk-badge"></div><div class="sk-bone sk-badge"></div></div><div class="sk-actions"><div class="sk-bone sk-btn"></div><div class="sk-bone sk-btn"></div></div></div><div class="sk-product-card" aria-hidden="true"><div class="sk-row"><div class="sk-left"><div class="sk-bone sk-icon"></div><div class="sk-bone sk-name"></div></div><div class="sk-bone sk-price"></div></div><div class="sk-bone sk-desc"></div><div class="sk-badges"><div class="sk-bone sk-badge"></div><div class="sk-bone sk-badge"></div></div><div class="sk-actions"><div class="sk-bone sk-btn"></div><div class="sk-bone sk-btn"></div></div></div><div class="sk-product-card" aria-hidden="true"><div class="sk-row"><div class="sk-left"><div class="sk-bone sk-icon"></div><div class="sk-bone sk-name"></div></div><div class="sk-bone sk-price"></div></div><div class="sk-bone sk-desc"></div><div class="sk-badges"><div class="sk-bone sk-badge"></div><div class="sk-bone sk-badge"></div></div><div class="sk-actions"><div class="sk-bone sk-btn"></div><div class="sk-bone sk-btn"></div></div></div><div class="sk-product-card" aria-hidden="true"><div class="sk-row"><div class="sk-left"><div class="sk-bone sk-icon"></div><div class="sk-bone sk-name"></div></div><div class="sk-bone sk-price"></div></div><div class="sk-bone sk-desc"></div><div class="sk-badges"><div class="sk-bone sk-badge"></div><div class="sk-bone sk-badge"></div></div><div class="sk-actions"><div class="sk-bone sk-btn"></div><div class="sk-bone sk-btn"></div></div></div></div></div><div class="sk-grid-item"><div class="sk-bone sk-thumb"></div><div class="sk-bone sk-line w90"></div><div class="sk-bone sk-line w60"></div><div class="sk-bone sk-line w40"></div></div><div class="sk-grid-item"><div class="sk-bone sk-thumb"></div><div class="sk-bone sk-line w90"></div><div class="sk-bone sk-line w60"></div><div class="sk-bone sk-line w40"></div></div><div class="sk-grid-item"><div class="sk-bone sk-thumb"></div><div class="sk-bone sk-line w90"></div><div class="sk-bone sk-line w60"></div><div class="sk-bone sk-line w40"></div></div><div class="sk-grid-item"><div class="sk-bone sk-thumb"></div><div class="sk-bone sk-line w90"></div><div class="sk-bone sk-line w60"></div><div class="sk-bone sk-line w40"></div></div><div class="sk-grid-item"><div class="sk-bone sk-thumb"></div><div class="sk-bone sk-line w90"></div><div class="sk-bone sk-line w60"></div><div class="sk-bone sk-line w40"></div></div></div>
-</div>
+<div id="productGrid" data-skel="productList" data-skel-ready="1"><div class="sk-product-list" aria-hidden="true" aria-busy="true"><div class="sk-product-card" aria-hidden="true"><div class="sk-row"><div class="sk-left"><div class="sk-bone sk-icon"></div><div class="sk-bone sk-name"></div></div><div class="sk-bone sk-price"></div></div><div class="sk-bone sk-desc"></div><div class="sk-badges"><div class="sk-bone sk-badge"></div><div class="sk-bone sk-badge"></div></div><div class="sk-actions"><div class="sk-bone sk-btn"></div><div class="sk-bone sk-btn"></div></div></div><div class="sk-product-card" aria-hidden="true"><div class="sk-row"><div class="sk-left"><div class="sk-bone sk-icon"></div><div class="sk-bone sk-name"></div></div><div class="sk-bone sk-price"></div></div><div class="sk-bone sk-desc"></div><div class="sk-badges"><div class="sk-bone sk-badge"></div><div class="sk-bone sk-badge"></div></div><div class="sk-actions"><div class="sk-bone sk-btn"></div><div class="sk-bone sk-btn"></div></div></div><div class="sk-product-card" aria-hidden="true"><div class="sk-row"><div class="sk-left"><div class="sk-bone sk-icon"></div><div class="sk-bone sk-name"></div></div><div class="sk-bone sk-price"></div></div><div class="sk-bone sk-desc"></div><div class="sk-badges"><div class="sk-bone sk-badge"></div><div class="sk-bone sk-badge"></div></div><div class="sk-actions"><div class="sk-bone sk-btn"></div><div class="sk-bone sk-btn"></div></div></div><div class="sk-product-card" aria-hidden="true"><div class="sk-row"><div class="sk-left"><div class="sk-bone sk-icon"></div><div class="sk-bone sk-name"></div></div><div class="sk-bone sk-price"></div></div><div class="sk-bone sk-desc"></div><div class="sk-badges"><div class="sk-bone sk-badge"></div><div class="sk-bone sk-badge"></div></div><div class="sk-actions"><div class="sk-bone sk-btn"></div><div class="sk-bone sk-btn"></div></div></div></div></div>
 </div>
 </main>
 
@@ -647,6 +646,17 @@ html+='</div></div>';
 });
 html+='</div>';
 productGrid.innerHTML=html;
+try {
+  productGrid.querySelectorAll('.sk-grid, .sk-grid-item, .sk-product-list, .sk-product-card, [aria-busy="true"]').forEach(function(n){
+    if (!n.closest('.product-card')) n.remove();
+  });
+  // Remove stray skeleton nodes that sat outside productGrid due to bad markup
+  var parent = productGrid.parentNode;
+  if (parent) {
+    parent.querySelectorAll(':scope > .sk-grid-item, :scope > .sk-grid, :scope > .sk-product-list').forEach(function(n){ n.remove(); });
+  }
+} catch (e) {}
+
 window._logsVisibleList = products;
 if(!productGrid._buyBound){
 productGrid._buyBound = true;
@@ -1083,7 +1093,7 @@ loadProducts();
   function paint(){
     if(!window.mjSkeleton && !window.MJSkeleton) return;
     var mjSkeleton = window.mjSkeleton || window.MJSkeleton;
-    var nodes = document.querySelectorAll('[data-skel], #productGrid, #list, #catalog, #servicesGrid, #productsGrid, #orderList');
+    var nodes = document.querySelectorAll('[data-skel]:not([data-skel-ready="1"]), #list, #catalog, #servicesGrid, #productsGrid, #orderList');
     nodes.forEach(function(el){
       if(el.dataset.skelReady) return;
       // Keep page-authored skeletons (list product cards) — do not swap for generic grid
