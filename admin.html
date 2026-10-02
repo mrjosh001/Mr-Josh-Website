@@ -5402,6 +5402,71 @@ async function loadOwletBalance() {
 
 let japPage = 1, smmkingsPage = 1;
 
+
+/** Shared booster catalog cards/table — same UX for Owlet, JAP, SMMKings */
+function boosterUsdRate() {
+  return Number(typeof liveRate !== 'undefined' ? liveRate : 0) || Number(window.USD_TO_NGN_RATE) || Number(localStorage.getItem('mj_usd_ngn')) || 1500;
+}
+function boosterCostNgn(s) {
+  return (Number(s && s.supplier_rate_usd) || 0) * boosterUsdRate();
+}
+function boosterProfitNgn(s) {
+  return (Number(s && s.price_ngn) || 0) - boosterCostNgn(s);
+}
+function boosterProfitHtml(s) {
+  const p = boosterProfitNgn(s);
+  const color = p >= 0 ? '#34d399' : '#f87171';
+  return '<span style="color:' + color + ';font-weight:700;">₦' + Math.round(p).toLocaleString() + '</span>';
+}
+window._boosterRowsByProvider = window._boosterRowsByProvider || { owlet: [], jap: [], smmkings: [] };
+
+function paintBoosterCatalog(rows, tbody, cards, provider) {
+  provider = provider || 'owlet';
+  rows = Array.isArray(rows) ? rows : [];
+  window._boosterRowsByProvider[provider] = rows;
+  const esc = (typeof escapeHtml === 'function') ? escapeHtml : function(t) {
+    return String(t == null ? '' : t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  };
+  if (tbody) {
+    if (!rows.length) {
+      tbody.innerHTML = '<tr><td colspan="10" class="empty-state">No services on this page.</td></tr>';
+    } else {
+      tbody.innerHTML = rows.map(function(s) {
+        const st = s.is_available === false ? 'Hidden' : 'Active';
+        const badge = s.is_available === false ? 'badge-off' : 'badge-on';
+        return '<tr>'
+          + '<td>' + esc(String(s.service_id || '')) + '</td>'
+          + '<td style="font-weight:600;">' + esc(s.name || '') + '</td>'
+          + '<td>' + esc(s.category || '') + '</td>'
+          + '<td class="supplier-price">$' + Number(s.supplier_rate_usd || 0).toFixed(4) + '</td>'
+          + '<td class="price">₦' + Number(s.price_ngn || 0).toLocaleString() + '</td>'
+          + '<td>' + boosterProfitHtml(s) + '</td>'
+          + '<td>' + (s.min_quantity != null ? s.min_quantity : '—') + ' – ' + (s.max_quantity != null ? s.max_quantity : '—') + '</td>'
+          + '<td>' + (s.refill ? 'Yes' : 'No') + '</td>'
+          + '<td><span class="badge ' + badge + '">' + st + '</span></td>'
+          + '<td><button type="button" class="btn btn-ghost btn-sm" onclick="editBoosterService(\'' + String(s.id).replace(/'/g, '') + '\',\'' + provider + '\')" title="Edit sell price"><i class="fas fa-edit"></i></button></td>'
+          + '</tr>';
+      }).join('');
+    }
+  }
+  if (cards) {
+    if (!rows.length) {
+      cards.innerHTML = '<div class="empty-state">No services on this page.</div>';
+    } else {
+      cards.innerHTML = rows.map(function(s) {
+        return '<div class="mobile-card">'
+          + '<div style="font-weight:700;margin-bottom:8px;">' + esc(s.name || '') + '</div>'
+          + '<div class="row-line"><span>Category</span><span>' + esc(s.category || '') + '</span></div>'
+          + '<div class="row-line"><span>Supplier</span><span class="supplier-price">$' + Number(s.supplier_rate_usd || 0).toFixed(4) + '</span></div>'
+          + '<div class="row-line"><span>Sell</span><span class="price">₦' + Number(s.price_ngn || 0).toLocaleString() + '</span></div>'
+          + '<div class="row-line"><span>Profit</span>' + boosterProfitHtml(s) + '</div>'
+          + '<button type="button" class="btn btn-ghost btn-sm" style="margin-top:10px;" onclick="editBoosterService(\'' + String(s.id).replace(/'/g, '') + '\',\'' + provider + '\')"><i class="fas fa-edit"></i> Edit Price</button>'
+          + '</div>';
+      }).join('');
+    }
+  }
+}
+
 async function loadBoosterSourceFromDb(provider) {
   provider = provider || 'jap';
   const ids = {
@@ -5454,46 +5519,8 @@ async function loadBoosterSourceFromDb(provider) {
       if (cards) cards.innerHTML = '<div class="empty-state">No services match. Uncheck Hide unavailable to see synced services.</div>';
       return;
     }
-    // Reuse Owlet row renderer if present
-    if (typeof renderOwletRows === 'function') {
-      renderOwletRows(rows, tbody, cards);
-    } else if (typeof window._renderBoosterRows === 'function') {
-      window._renderBoosterRows(rows, tbody, cards);
-    } else {
-      window._boosterRowsByProvider[provider] = rows;
-      if (tbody) {
-        tbody.innerHTML = rows.map(r => {
-          const usd = Number(r.supplier_rate_usd || 0).toFixed(4);
-          const ngn = Number(r.price_ngn || 0).toLocaleString();
-          const st = r.is_available === false ? 'Hidden' : 'Active';
-          const badge = r.is_available === false ? 'badge-off' : 'badge-on';
-          return '<tr>'
-            + '<td>' + escapeHtml(String(r.service_id||'')) + '</td>'
-            + '<td style="font-weight:600;">' + escapeHtml(r.name||'') + '</td>'
-            + '<td>' + escapeHtml(r.category||'') + '</td>'
-            + '<td class="supplier-price">$' + usd + '</td>'
-            + '<td class="price">₦' + ngn + '</td>'
-            + '<td>' + boosterProfitHtml(r) + '</td>'
-            + '<td>' + (r.min_quantity||0) + ' – ' + (r.max_quantity||0) + '</td>'
-            + '<td>' + (r.refill?'Yes':'No') + '</td>'
-            + '<td><span class="badge ' + badge + '">' + st + '</span></td>'
-            + '<td><button class="btn btn-ghost btn-sm" onclick="editBoosterService(\'' + r.id + '\',\'' + provider + '\')" title="Edit sell price"><i class="fas fa-edit"></i></button></td>'
-            + '</tr>';
-        }).join('');
-      }
-      if (cards) {
-        cards.innerHTML = rows.map(r => {
-          return '<div class="mobile-card">'
-            + '<div style="font-weight:700;">' + escapeHtml(r.name||'') + '</div>'
-            + '<div class="row-line"><span>Category</span><span>' + escapeHtml(r.category||'') + '</span></div>'
-            + '<div class="row-line"><span>Supplier</span><span class="supplier-price">$' + Number(r.supplier_rate_usd||0).toFixed(4) + '</span></div>'
-            + '<div class="row-line"><span>Sell</span><span class="price">₦' + Number(r.price_ngn||0).toLocaleString() + '</span></div>'
-            + '<div class="row-line"><span>Profit</span>' + boosterProfitHtml(r) + '</div>'
-            + '<button class="btn btn-ghost btn-sm" style="margin-top:8px;" onclick="editBoosterService(\'' + r.id + '\',\'' + provider + '\')"><i class="fas fa-edit"></i> Edit Price</button>'
-            + '</div>';
-        }).join('');
-      }
-    }
+    // Always same layout as Owlet (Supplier / Sell / Profit / Edit)
+    paintBoosterCatalog(rows, tbody, cards, provider);
   } catch (e) {
     if (tbody) tbody.innerHTML = '<tr><td colspan="9" class="empty-state">' + (e.message||e) + '</td></tr>';
   }
@@ -5611,22 +5638,6 @@ async function loadOwletServicesFromDb() {
 }
 
 
-function boosterUsdRate() {
-  return Number(liveRate) || Number(window.USD_TO_NGN_RATE) || Number(localStorage.getItem('mj_usd_ngn')) || 1500;
-}
-function boosterCostNgn(s) {
-  return (Number(s.supplier_rate_usd) || 0) * boosterUsdRate();
-}
-function boosterProfitNgn(s) {
-  return (Number(s.price_ngn) || 0) - boosterCostNgn(s);
-}
-function boosterProfitHtml(s) {
-  const p = boosterProfitNgn(s);
-  const color = p >= 0 ? '#34d399' : '#f87171';
-  return '<span style="color:' + color + ';font-weight:700;">₦' + Math.round(p).toLocaleString() + '</span>';
-}
-window._boosterRowsByProvider = window._boosterRowsByProvider || { owlet: [], jap: [], smmkings: [] };
-
 function renderOwletServices() {
  const list = allOwletServices || [];
  const tbody = document.getElementById('owletTableBody');
@@ -5656,33 +5667,7 @@ function renderOwletServices() {
  if (cards) cards.innerHTML = '<div class="empty-state">No services on this page.</div>';
  return;
  }
- window._boosterRowsByProvider.owlet = list;
- if (tbody) {
- tbody.innerHTML = list.map(s => `
- <tr>
- <td>${escapeHtml(String(s.service_id))}</td>
- <td style="font-weight:600;">${escapeHtml(s.name || ' ')}</td>
- <td>${escapeHtml(s.category || ' ')}</td>
- <td class="supplier-price">$${Number(s.supplier_rate_usd || 0).toFixed(4)}</td>
- <td class="price">₦${Number(s.price_ngn || 0).toLocaleString()}</td>
- <td>${boosterProfitHtml(s)}</td>
- <td>${s.min_quantity ?? ' '} – ${s.max_quantity ?? ' '}</td>
- <td>${s.refill ? 'Yes' : 'No'}</td>
- <td><span class="badge ${s.is_available !== false ? 'badge-on' : 'badge-off'}">${s.is_available !== false ? 'Active' : 'Hidden'}</span></td>
- <td><button class="btn btn-ghost btn-sm" onclick="editBoosterService('${s.id}','owlet')" title="Edit sell price"><i class="fas fa-edit"></i></button></td>
- </tr>`).join('');
- }
- if (cards) {
- cards.innerHTML = list.map(s => `
- <div class="mobile-card">
- <div style="font-weight:700;">${escapeHtml(s.name || ' ')}</div>
- <div class="row-line"><span>Category</span><span>${escapeHtml(s.category || ' ')}</span></div>
- <div class="row-line"><span>Supplier</span><span class="supplier-price">$${Number(s.supplier_rate_usd || 0).toFixed(4)}</span></div>
- <div class="row-line"><span>Sell</span><span class="price">₦${Number(s.price_ngn || 0).toLocaleString()}</span></div>
- <div class="row-line"><span>Profit</span>${boosterProfitHtml(s)}</div>
- <button class="btn btn-ghost btn-sm" style="margin-top:8px;" onclick="editBoosterService('${s.id}','owlet')"><i class="fas fa-edit"></i> Edit Price</button>
- </div>`).join('');
- }
+ paintBoosterCatalog(list, tbody, cards, 'owlet');
 }
 
 
