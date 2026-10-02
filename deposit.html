@@ -238,9 +238,10 @@ document.addEventListener('click', function(e){
     <div id="vaLoadingState" class="loading-inline"><i class="fa-solid fa-spinner fa-spin"></i> Checking your account…</div>
 
     <div id="vaEmptyState" style="display:none;">
+      <button type="button" class="step-back" onclick="backToProviderFromEmpty()"><i class="fa-solid fa-arrow-left"></i> Back</button>
       <div class="va-empty">
         <i class="fa-solid fa-circle-plus"></i>
-        <p>Generate your permanent bank account once. You need it for Bank Transfer. The account name matches your MJ HUB profile name.</p>
+        <p>You need a permanent transfer account for Bank Transfer. Generate it once — the name matches your MJ HUB profile.</p>
       </div>
       <div class="bank-choice">
         <label><input type="radio" name="vaBank" value="paga" checked><span>Paga</span></label>
@@ -249,7 +250,7 @@ document.addEventListener('click', function(e){
       <button type="button" class="btn" id="vaGenerateBtn" onclick="generateVirtualAccount()">
         <i class="fa-solid fa-wand-magic-sparkles"></i> Generate account details
       </button>
-      <p class="hint">One account per customer. It stays the same.</p>
+      <p class="hint">One account per customer. It stays the same for every top up.</p>
     </div>
 
     <div id="vaAmountState" style="display:none;">
@@ -284,7 +285,7 @@ document.addEventListener('click', function(e){
       </div>
       <p style="font-size:13px;font-weight:700;margin:0 0 10px;color:var(--text)">Choose Provider</p>
       <div class="provider-list">
-        <button type="button" class="provider-card" onclick="chooseBankTransfer()">
+        <button type="button" class="provider-card" id="providerBankBtn" onclick="chooseBankTransfer()">
           <div class="provider-icon bank"><i class="fa-solid fa-building-columns"></i></div>
           <div class="provider-body">
             <strong>Bank Transfer</strong>
@@ -331,7 +332,7 @@ document.addEventListener('click', function(e){
         </div>
         <div class="instruct" id="vaInstruct">Transfer the exact amount above. Your wallet credits automatically once the payment is confirmed.</div>
         <div class="waiting" id="vaWaiting"><i class="fa-solid fa-rotate fa-spin"></i> Waiting for confirmation…</div>
-        <button type="button" class="btn btn-soft" onclick="checkVaPaymentNow()"><i class="fa-solid fa-rotate"></i> Check status</button>
+        <button type="button" class="btn btn-soft" id="vaCheckStatusBtn" onclick="checkVaPaymentNow()"><i class="fa-solid fa-rotate"></i> Check status</button>
         <button type="button" class="btn btn-outline" style="margin-top:10px;" onclick="backToProviderFromPay()">Change method</button>
       </div>
     </div>
@@ -417,7 +418,7 @@ function showVaState(which) {
   var pill = document.querySelector('#vaCard > .va-pill');
   var h2 = document.querySelector('#vaCard > h2');
   var sub = document.querySelector('#vaCard > p.sub');
-  var hideHead = (which === 'amount' || which === 'provider' || which === 'pay');
+  var hideHead = (which === 'amount' || which === 'provider' || which === 'pay' || which === 'empty' || which === 'loading');
   if (pill) pill.style.display = hideHead ? 'none' : '';
   if (h2) h2.style.display = hideHead ? 'none' : '';
   if (sub) sub.style.display = hideHead ? 'none' : '';
@@ -439,13 +440,58 @@ function backToProviderFromPay() {
   stopBalanceWatch();
   showVaState('provider');
 }
-function chooseBankTransfer() {
-  if (!vaDetails || !vaDetails.account_number) {
-    toast('Generate your permanent account first');
-    showVaState('empty');
-    return;
+function backToProviderFromEmpty() {
+  window.__pendingBankPay = false;
+  showVaState('provider');
+}
+async function chooseBankTransfer() {
+  var btn = document.getElementById('providerBankBtn');
+  if (btn) {
+    btn.disabled = true;
+    btn.style.opacity = '0.7';
+    var body = btn.querySelector('.provider-body');
+    if (body) {
+      btn.dataset._html = btn.innerHTML;
+      btn.innerHTML = '<div class="provider-icon bank"><i class="fa-solid fa-spinner fa-spin"></i></div><div class="provider-body"><strong>Loading account…</strong><span>Please wait</span></div>';
+    }
   }
-  return continueVaPay();
+  try {
+    // Refresh account from server so details are not stale
+    try {
+      var accessToken = await getAccessToken();
+      if (accessToken) {
+        var res = await fetch('/api/pocketfi?action=virtual_account', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + accessToken },
+          body: JSON.stringify({ create: false })
+        });
+        var data = await res.json().catch(function () { return {}; });
+        if (res.ok && data.has_account && data.data && data.data.account_number) {
+          vaDetails = data.data;
+        } else if (res.ok) {
+          vaDetails = null;
+        }
+      }
+    } catch (_) {}
+
+    if (!vaDetails || !vaDetails.account_number) {
+      window.__pendingBankPay = true;
+      toast('Generate your transfer account to continue');
+      showVaState('empty');
+      return;
+    }
+    window.__pendingBankPay = true;
+    await continueVaPay();
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.style.opacity = '';
+      if (btn.dataset._html) {
+        btn.innerHTML = btn.dataset._html;
+        delete btn.dataset._html;
+      }
+    }
+  }
 }
 function chooseManualWhatsApp() {
   var amount = Math.round(parseFloat(document.getElementById('vaAmountInput').value) || 0);
@@ -479,18 +525,21 @@ function pickVaAmount(n) {
 }
 async function continueVaPay() {
   if (!vaDetails || !vaDetails.account_number) {
-    toast('Generate your account first');
+    window.__pendingBankPay = true;
+    toast('Generate your transfer account to continue');
+    showVaState('empty');
     return;
   }
   const amount = Math.round(parseFloat(document.getElementById('vaAmountInput').value) || 0);
   if (amount < VA_MIN) return toast('Minimum is ₦' + VA_MIN.toLocaleString());
   if (amount > VA_MAX) return toast('Maximum is ₦' + VA_MAX.toLocaleString());
 
-  // Register THIS expected payment before showing account details (webhook binds to it)
+  showVaState('loading');
   try {
     const accessToken = await getAccessToken();
     if (!accessToken) {
       toast('Session expired. Please sign in again.');
+      showVaState('provider');
       return;
     }
     const reg = await fetch('/api/pocketfi?action=va_begin', {
@@ -501,27 +550,29 @@ async function continueVaPay() {
     const regData = await reg.json().catch(function () { return {}; });
     if (!reg.ok || !regData.success) {
       toast(regData.message || 'Could not start deposit session');
+      showVaState('provider');
       return;
     }
     window.__vaSessionId = regData.data && regData.data.session_id;
+
+    vaChosenAmount = amount;
+    window.__vaDesire = amount;
+    vaExactToSend = calcExactToSend(amount);
+    window.__vaExpectAmount = amount;
+    window.__vaWaitSince = Date.now();
+    window.__pendingBankPay = false;
+    document.getElementById('vaExactAmount').textContent = fmtNgn(vaExactToSend);
+    document.getElementById('vaAccountNumber').textContent = vaDetails.account_number;
+    document.getElementById('vaAccountName').textContent = vaDetails.account_name || '—';
+    document.getElementById('vaBankName').textContent = vaDetails.bank || '—';
+    document.getElementById('vaInstruct').innerHTML =
+      'Transfer exactly <strong>' + fmtNgn(vaExactToSend) + '</strong> to the account above. Your wallet receives <strong>' + fmtNgn(amount) + '</strong> after confirmation.';
+    showVaState('pay');
+    startBalanceWatch();
   } catch (e) {
     toast(e.message || 'Could not start deposit session');
-    return;
+    showVaState('provider');
   }
-
-  vaChosenAmount = amount;
-  window.__vaDesire = amount;
-  vaExactToSend = calcExactToSend(amount);
-  window.__vaExpectAmount = amount; // wallet credit target
-  window.__vaWaitSince = Date.now();
-  document.getElementById('vaExactAmount').textContent = fmtNgn(vaExactToSend);
-  document.getElementById('vaAccountNumber').textContent = vaDetails.account_number;
-  document.getElementById('vaAccountName').textContent = vaDetails.account_name || '—';
-  document.getElementById('vaBankName').textContent = vaDetails.bank || '—';
-  document.getElementById('vaInstruct').innerHTML =
-    'Transfer exactly <strong>' + fmtNgn(vaExactToSend) + '</strong> to the account above. Your wallet receives <strong>' + fmtNgn(amount) + '</strong> after confirmation.';
-  showVaState('pay');
-  startBalanceWatch();
 }
 function backToVaAmount() {
   stopBalanceWatch();
@@ -538,7 +589,11 @@ function showVaSuccessAndGoHome(creditedAmount){
   setTimeout(function(){ location.href = 'dashboard.html#home'; }, 4000);
 }
 async function checkVaPaymentNow() {
-  toast('Checking payment…');
+  var btn = document.getElementById('vaCheckStatusBtn');
+  if (btn) {
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Checking…';
+  }
   try {
     const accessToken = await getAccessToken();
     if (!accessToken) {
@@ -574,6 +629,11 @@ async function checkVaPaymentNow() {
     }
   } catch (e) {
     toast(e.message || 'Could not check payment');
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.innerHTML = '<i class="fa-solid fa-rotate"></i> Check status';
+    }
   }
 }
 function startBalanceWatch() {
@@ -644,7 +704,8 @@ async function checkVirtualAccount() {
       showVaState('amount');
     } else {
       vaDetails = null;
-      showVaState('empty');
+      // Do not force generate UI on load — only when user picks Bank Transfer
+      showVaState('amount');
     }
   } catch (err) {
     document.getElementById('vaErrorText').textContent = err.message || 'Something went wrong';
@@ -677,8 +738,13 @@ async function generateVirtualAccount() {
       throw new Error(data.message || 'Could not generate account details');
     }
     vaDetails = data.data;
-    showVaState('amount');
-    toast('Account ready. Enter the amount to fund.');
+    if (window.__pendingBankPay) {
+      toast('Account ready. Opening transfer details…');
+      await continueVaPay();
+    } else {
+      showVaState('amount');
+      toast('Account ready. Enter the amount to fund.');
+    }
   } catch (err) {
     document.getElementById('vaErrorText').textContent = err.message || 'Something went wrong';
     showVaState('error');
