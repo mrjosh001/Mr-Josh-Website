@@ -13,234 +13,158 @@
 </script>
 <meta name="theme-color" content="#2563eb">
 <style>
-
 :root[data-theme="dark"] {
-  --bg: #06080f;
-  --title: #f8fafc;
-  --bg-soft: #0f1524;
-  --card: #ffffff;
-  --card-ink: #0f172a;
-  --muted: #64748b;
-  --line: #e2e8f0;
-  --blue: #2563eb;
-  --blue-2: #1d4ed8;
-  --blue-soft: #eff6ff;
-  --blue-ring: rgba(37, 99, 235, 0.2);
-  --ok: #059669;
-  --ok-soft: #ecfdf5;
-  --warn: #d97706;
-  --warn-soft: #fffbeb;
-  --bad: #dc2626;
-  --bad-soft: #fef2f2;
-  --shadow: 0 10px 30px rgba(15, 23, 42, 0.12);
+  --bg: #070b14;
+  --surface: #0e1524;
+  --surface2: #141c2e;
+  --title: #f1f5f9;
+  --muted: #94a3b8;
+  --line: rgba(148,163,184,.12);
+  --blue: #3b82f6;
+  --blue-2: #2563eb;
+  --ok: #34d399;
+  --ok-bg: rgba(52,211,153,.12);
+  --warn: #fbbf24;
+  --warn-bg: rgba(251,191,36,.12);
+  --bad: #f87171;
+  --bad-bg: rgba(248,113,113,.12);
+  --chip: rgba(255,255,255,.04);
+  --shadow: 0 12px 40px rgba(0,0,0,.4);
 }
 :root[data-theme="light"] {
-  --bg: #f4f6fb;
+  --bg: #f1f5f9;
+  --surface: #ffffff;
+  --surface2: #f8fafc;
   --title: #0f172a;
-  --bg-soft: #eef2f7;
-  --card: #ffffff;
-  --card-ink: #0f172a;
   --muted: #64748b;
   --line: #e2e8f0;
   --blue: #2563eb;
   --blue-2: #1d4ed8;
-  --blue-soft: #eff6ff;
-  --blue-ring: rgba(37, 99, 235, 0.18);
   --ok: #059669;
-  --ok-soft: #ecfdf5;
+  --ok-bg: #ecfdf5;
   --warn: #d97706;
-  --warn-soft: #fffbeb;
+  --warn-bg: #fffbeb;
   --bad: #dc2626;
-  --bad-soft: #fef2f2;
-  --shadow: 0 10px 28px rgba(37, 99, 235, 0.08);
+  --bad-bg: #fef2f2;
+  --chip: #f1f5f9;
+  --shadow: 0 10px 28px rgba(37,99,235,.08);
 }
-/* Cards always white + dark text for brand clarity on both themes */
-* { box-sizing: border-box; margin: 0; padding: 0; }
-body {
-  font-family: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
-  background: var(--bg);
-  color: var(--card-ink);
-  min-height: 100vh;
-  -webkit-font-smoothing: antialiased;
+*{box-sizing:border-box;margin:0;padding:0}
+body{
+  font-family:'Plus Jakarta Sans',system-ui,sans-serif;
+  background:var(--bg); color:var(--title); min-height:100vh;
+  -webkit-font-smoothing:antialiased;
 }
-body::before {
-  content: '';
-  position: fixed; inset: 0; z-index: 0; pointer-events: none;
-  background: transparent;
+.shell{max-width:540px;margin:0 auto;padding:0 16px 72px;position:relative;z-index:1}
+.topbar{
+  display:flex;align-items:center;gap:12px;
+  padding:16px 0 18px;position:sticky;top:0;z-index:20;
+  background:linear-gradient(to bottom,var(--bg) 65%,transparent);
 }
-
-.shell { position: relative; z-index: 1; max-width: 540px; margin: 0 auto; padding: 0 16px 72px; }
-.topbar {
-  display: flex; align-items: center; gap: 12px;
-  padding: 16px 0 12px;
-  position: sticky; top: 0; z-index: 50;
-  background: color-mix(in srgb, var(--bg) 92%, transparent);
-  backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
+.back,.icon-btn{
+  width:44px;height:44px;border-radius:14px;border:1px solid var(--line);
+  background:var(--surface);color:var(--title);display:grid;place-items:center;
+  text-decoration:none;cursor:pointer;font-size:15px;flex-shrink:0;
 }
-.btn-icon {
-  width: 44px; height: 44px; border-radius: 14px;
-  border: 1.5px solid #bfdbfe; background: #fff; color: var(--blue);
-  display: inline-flex; align-items: center; justify-content: center;
-  text-decoration: none; cursor: pointer; font-size: 15px; flex-shrink: 0;
-  box-shadow: var(--shadow);
+.topbar-copy{flex:1;min-width:0}
+.topbar-copy h1{font-size:18px;font-weight:800;letter-spacing:-.02em}
+.topbar-copy p{font-size:12px;color:var(--muted);margin-top:2px;font-weight:500}
+.list{display:flex;flex-direction:column;gap:14px}
+.card{
+  background:var(--surface);
+  border:1px solid var(--line);
+  border-radius:20px;
+  padding:16px;
+  box-shadow:var(--shadow);
 }
-.btn-icon:active { transform: scale(.97); }
-.topbar-copy { flex: 1; min-width: 0; }
-.topbar-copy h1 {
-  font-size: 18px; font-weight: 800; letter-spacing: -0.03em;
-  color: var(--title);
+.card .head{
+  display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:14px;
 }
-.topbar-copy p { font-size: 12px; font-weight: 500; margin-top: 2px; color: var(--muted); }
-.brand-bar { display: none; }
-
-.list { display: flex; flex-direction: column; gap: 14px; }
-.card {
-  background: var(--card); color: var(--card-ink);
-  border: 1.5px solid #dbeafe; border-radius: 20px;
-  padding: 16px; box-shadow: var(--shadow);
+.card .title{font-size:15px;font-weight:800;line-height:1.3;letter-spacing:-.01em}
+.pill{
+  font-size:10px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;
+  padding:6px 10px;border-radius:999px;white-space:nowrap;
 }
-.top { display: flex; justify-content: space-between; gap: 10px; align-items: flex-start; margin-bottom: 10px; }
-.title { font-size: 15px; font-weight: 800; letter-spacing: -0.02em; line-height: 1.35; color: #0f172a; }
-.status {
-  font-size: 10px; font-weight: 800; padding: 6px 10px; border-radius: 999px;
-  background: var(--blue-soft); color: var(--blue); text-transform: uppercase; letter-spacing: .04em; white-space: nowrap;
+.pill.ok{background:var(--ok-bg);color:var(--ok)}
+.pill.warn{background:var(--warn-bg);color:var(--warn)}
+.pill.bad{background:var(--bad-bg);color:var(--bad)}
+.pill.pending{background:rgba(59,130,246,.12);color:var(--blue)}
+.link-bar{
+  display:flex;align-items:center;gap:10px;
+  background:var(--chip);border:1px solid var(--line);
+  border-radius:14px;padding:11px 12px;margin-bottom:14px;
 }
-.status.Completed, .status.completed { background: var(--ok-soft); color: var(--ok); }
-.status.Partial, .status.partial { background: var(--warn-soft); color: var(--warn); }
-.status.Canceled, .status.Cancelled, .status.canceled, .status.cancelled,
-.status.Refunded, .status.refunded { background: var(--bad-soft); color: var(--bad); }
-.link-row {
-  display: flex; gap: 10px; align-items: flex-start;
-  background: var(--blue-soft); border: 1px solid #bfdbfe;
-  border-radius: 14px; padding: 11px 12px; margin-bottom: 12px;
+.link-bar .txt{
+  flex:1;min-width:0;font-size:12px;font-weight:600;color:var(--muted);
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
 }
-.link-text { flex: 1; min-width: 0; font-size: 12.5px; font-weight: 600; color: #1e3a8a; word-break: break-all; line-height: 1.4; }
-.link-text.muted { color: var(--muted); }
-.btn-open {
-  flex-shrink: 0; border: none; cursor: pointer;
-  display: inline-flex; align-items: center; gap: 6px;
-  font: 800 11px/1 'Plus Jakarta Sans', system-ui, sans-serif;
-  padding: 10px 12px; border-radius: 11px;
-  background: linear-gradient(135deg, var(--blue), var(--blue-2)); color: #fff;
-  box-shadow: 0 8px 18px var(--blue-ring);
+.link-bar .open{
+  flex-shrink:0;border:0;cursor:pointer;
+  display:inline-flex;align-items:center;gap:6px;
+  font:800 11px/1 'Plus Jakarta Sans',system-ui,sans-serif;
+  padding:9px 12px;border-radius:11px;
+  background:linear-gradient(135deg,var(--blue),var(--blue-2));color:#fff;
 }
-.row { display: flex; justify-content: space-between; gap: 10px; font-size: 12.5px; font-weight: 600; color: var(--muted); margin: 6px 0; }
-.row span:last-child { color: #0f172a; font-weight: 700; }
-.prog { margin: 12px 0 4px; }
-.prog-meta { display: flex; justify-content: space-between; gap: 8px; font-size: 12px; font-weight: 600; color: var(--muted); margin-bottom: 8px; }
-.prog-meta strong { color: #0f172a; font-weight: 800; }
-.bar { height: 10px; border-radius: 999px; background: #e2e8f0; overflow: hidden; }
-.bar-fill { height: 100%; border-radius: 999px; background: linear-gradient(90deg, #60a5fa, var(--blue), var(--blue-2)); transition: width .35s ease; }
-.bar-fill.done { background: linear-gradient(90deg, #34d399, var(--ok)); }
-.bar-fill.partial { background: linear-gradient(90deg, #fbbf24, var(--warn)); }
-.prog-detail { font-size: 11px; font-weight: 600; color: var(--muted); margin-top: 6px; }
-.btn-row { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--line); }
-.btn-mini {
-  border: 1.5px solid #bfdbfe; background: #fff; color: var(--blue);
-  font: 700 12px/1 'Plus Jakarta Sans', system-ui, sans-serif;
-  padding: 10px 14px; border-radius: 12px; cursor: pointer;
+.stats{
+  display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px;
 }
-.btn-mini.primary { background: var(--blue); border-color: var(--blue); color: #fff; }
-.btn-mini.danger { border-color: #fecaca; color: var(--bad); background: var(--bad-soft); }
-.empty {
-  text-align: center; padding: 48px 20px; background: #fff; border: 1.5px solid #dbeafe;
-  border-radius: 20px; box-shadow: var(--shadow); color: #0f172a;
+.stat{
+  background:var(--surface2);border:1px solid var(--line);
+  border-radius:14px;padding:12px;
 }
-.empty h3 { font-size: 17px; font-weight: 800; margin: 10px 0 8px; }
-.empty p { font-size: 13px; color: var(--muted); margin-bottom: 16px; }
-.empty a {
-  display: inline-flex; font-size: 13px; font-weight: 800; color: #fff;
-  background: linear-gradient(135deg, var(--blue), var(--blue-2));
-  text-decoration: none; padding: 12px 18px; border-radius: 12px;
+.stat .lbl{font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;margin-bottom:4px}
+.stat .val{font-size:15px;font-weight:800;color:var(--title)}
+.prog{margin-bottom:6px}
+.prog-top{display:flex;justify-content:space-between;font-size:12px;font-weight:600;color:var(--muted);margin-bottom:8px}
+.prog-top strong{color:var(--title);font-weight:800}
+.track{height:8px;border-radius:999px;background:var(--chip);border:1px solid var(--line);overflow:hidden}
+.fill{height:100%;border-radius:999px;background:linear-gradient(90deg,#60a5fa,var(--blue));transition:width .35s ease}
+.fill.done{background:linear-gradient(90deg,#34d399,var(--ok))}
+.fill.partial{background:linear-gradient(90deg,#fbbf24,var(--warn))}
+.prog-note{font-size:11px;color:var(--muted);margin-top:6px;font-weight:600}
+.foot{display:flex;justify-content:space-between;gap:8px;font-size:11px;color:var(--muted);margin-top:12px;padding-top:12px;border-top:1px solid var(--line)}
+.actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}
+.actions button{
+  border:1px solid var(--line);background:var(--surface2);color:var(--title);
+  font:700 12px/1 'Plus Jakarta Sans',system-ui,sans-serif;
+  padding:11px 14px;border-radius:12px;cursor:pointer;
 }
-#toast {
-  position: fixed; left: 50%; bottom: 28px; transform: translateX(-50%) translateY(80px);
-  background: var(--blue); color: #fff; padding: 12px 16px; border-radius: 12px;
-  font-size: 13px; font-weight: 700; opacity: 0; transition: .25s; z-index: 60;
+.actions button.primary{background:linear-gradient(135deg,var(--blue),var(--blue-2));border-color:transparent;color:#fff}
+.actions button.danger{color:var(--bad);border-color:var(--bad-bg);background:var(--bad-bg)}
+.empty{
+  text-align:center;padding:52px 20px;background:var(--surface);
+  border:1px solid var(--line);border-radius:20px;
 }
-#toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
-
-/* link-bar-upgrade */
-.link-row {
-  display: flex; align-items: center; gap: 8px;
-  background: #f8fafc; border: 1.5px solid #e2e8f0;
-  border-radius: 12px; padding: 10px 10px; margin: 8px 0 10px;
+.empty .ico{font-size:40px;margin-bottom:10px}
+.empty h3{font-size:17px;font-weight:800;margin-bottom:8px}
+.empty p{font-size:13px;color:var(--muted);margin-bottom:16px}
+.empty a{
+  display:inline-flex;padding:12px 18px;border-radius:12px;
+  background:linear-gradient(135deg,var(--blue),var(--blue-2));
+  color:#fff;text-decoration:none;font-weight:800;font-size:13px;
 }
-.link-row .link-text {
-  flex: 1; min-width: 0; font-size: 12px; font-weight: 600; color: #64748b;
-  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+#toast{
+  position:fixed;left:50%;bottom:28px;transform:translateX(-50%) translateY(80px);
+  background:var(--blue);color:#fff;padding:12px 16px;border-radius:12px;
+  font-size:13px;font-weight:700;z-index:50;transition:.25s;opacity:0;pointer-events:none;
 }
-.link-row .btn-open {
-  flex-shrink: 0; border: none; cursor: pointer;
-  display: inline-flex; align-items: center; gap: 6px;
-  font: 800 11px/1 'Plus Jakarta Sans', system-ui, sans-serif;
-  padding: 10px 12px; border-radius: 11px;
-  background: linear-gradient(135deg, var(--blue), var(--blue-2)); color: #fff;
-  box-shadow: 0 8px 18px var(--blue-ring);
-}
-:root[data-theme="dark"] .link-row {
-  background: rgba(15,23,42,.55); border-color: rgba(148,163,184,.18);
-}
-:root[data-theme="dark"] .link-row .link-text { color: #94a3b8; }
-
-
-/* advanced booster cards */
-.card { border-radius: 22px; padding: 16px 16px 14px; border: 1.5px solid #dbeafe; }
-.card .top { margin-bottom: 12px; }
-.card .title { font-size: 15.5px; letter-spacing: -0.01em; }
-.status {
-  font-size: 10.5px; font-weight: 800; letter-spacing: 0.04em;
-  padding: 6px 11px; border-radius: 999px; text-transform: uppercase;
-}
-.link-row {
-  display: flex; align-items: center; gap: 8px;
-  background: #f1f5f9; border: 1.5px solid #e2e8f0;
-  border-radius: 14px; padding: 11px 10px; margin: 4px 0 12px;
-}
-.link-row .link-text {
-  flex: 1; min-width: 0; font-size: 12px; font-weight: 600; color: #64748b;
-  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-}
-.btn-open {
-  flex-shrink: 0; border: none; cursor: pointer;
-  display: inline-flex; align-items: center; gap: 6px;
-  font: 800 11px/1 'Plus Jakarta Sans', system-ui, sans-serif;
-  padding: 10px 13px; border-radius: 12px;
-  background: linear-gradient(135deg, var(--blue), var(--blue-2)); color: #fff;
-  box-shadow: 0 8px 18px var(--blue-ring);
-}
-.prog { margin: 14px 0 6px; }
-.bar { height: 11px; border-radius: 999px; background: #e2e8f0; overflow: hidden; }
-.btn-row { margin-top: 12px; padding-top: 12px; }
-.btn-mini {
-  border-radius: 12px; padding: 11px 15px; font-weight: 800;
-  transition: transform .15s ease, box-shadow .15s ease;
-}
-.btn-mini.primary { box-shadow: 0 8px 16px var(--blue-ring); }
-.btn-mini:active { transform: scale(0.98); }
-
+#toast.on{opacity:1;transform:translateX(-50%) translateY(0)}
 </style>
-<link rel="stylesheet" href="/css/graceful.css">
-<link rel="stylesheet" href="/css/mj-motion.css">
 </head>
 <body>
 <div class="shell">
   <header class="topbar">
-    <a class="btn-icon" href="mj-boosters.html" aria-label="Back"><i class="fa-solid fa-arrow-left"></i></a>
+    <a class="back" href="mj-boosters.html" aria-label="Back"><i class="fa-solid fa-arrow-left"></i></a>
     <div class="topbar-copy">
       <h1>Booster orders</h1>
       <p>Live progress · open target link</p>
     </div>
-    <button type="button" class="btn-icon" id="refreshBtn" aria-label="Refresh"><i class="fa-solid fa-rotate-right"></i></button>
+    <button type="button" class="icon-btn" id="refreshBtn" aria-label="Refresh"><i class="fa-solid fa-rotate-right"></i></button>
   </header>
-  <div class="brand-bar"></div>
   <div class="list" id="list"></div>
 </div>
 <div id="toast"></div>
 <script>
-
-
-
 const SUPABASE_URL = 'https://atczodlljmlayvldxfmv.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImF0Y3pvZGxsam1sYXl2bGR4Zm12Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODUwNzUyMzgsImV4cCI6MjEwMDY1MTIzOH0.ufthD-p7BmeD_B7xyuMM6PNPL8DmcL4AtRYgg-MuoLI';
 const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
@@ -266,8 +190,8 @@ function esc(s){
 function fmt(n){ return '₦' + Number(n || 0).toLocaleString(); }
 
 function progressHtml(o){
-  const qty = Number(o.quantity) || 0;
   const st = String(o.status || '').toLowerCase();
+  const qty = Math.max(0, Number(o.quantity) || 0);
   let remains = o.remains == null || o.remains === '' ? null : Number(o.remains);
   let start = o.start_count == null || o.start_count === '' ? null : Number(o.start_count);
   if (remains != null && Number.isNaN(remains)) remains = null;
@@ -276,9 +200,7 @@ function progressHtml(o){
   let done = 0;
   let pct = 0;
   if (/completed|complete/.test(st)) {
-    done = qty;
-    remains = 0;
-    pct = 100;
+    done = qty; remains = 0; pct = 100;
   } else if (remains != null && qty > 0) {
     done = Math.max(0, Math.min(qty, qty - remains));
     pct = Math.round((done / qty) * 100);
@@ -287,9 +209,7 @@ function progressHtml(o){
     remains = Math.max(0, qty - done);
     pct = Math.round((done / qty) * 100);
   } else if (/pending|awaiting/.test(st)) {
-    done = 0;
-    remains = qty || 0;
-    pct = 0;
+    done = 0; remains = qty || 0; pct = 0;
   } else if (/progress|processing|waiting/.test(st)) {
     pct = Math.max(pct, 2);
   }
@@ -298,12 +218,12 @@ function progressHtml(o){
   const fillClass = pct >= 100 ? 'done' : (/partial/.test(st) ? 'partial' : '');
 
   return `<div class="prog">
-    <div class="prog-meta">
-      <span class="left"><strong style="color:var(--text)">${done.toLocaleString()}</strong> of <strong style="color:var(--text)">${qty.toLocaleString()}</strong> complete</span>
-      <span class="right">${remains != null ? remains.toLocaleString() + ' left' : ''}</span>
+    <div class="prog-top">
+      <span><strong>${done.toLocaleString()}</strong> of <strong>${qty.toLocaleString()}</strong> complete</span>
+      <span>${remains != null ? remains.toLocaleString() + ' left' : ''}</span>
     </div>
-    <div class="bar"><div class="bar-fill ${fillClass}" style="width:${Math.max(0, Math.min(100, pct))}%"></div></div>
-    <div class="prog-detail">${pct}% done${start != null ? ' · was at ' + start.toLocaleString() + ' when order started' : ''}</div>
+    <div class="track"><div class="fill ${fillClass}" style="width:${Math.max(0, Math.min(100, pct))}%"></div></div>
+    <div class="prog-note">${pct}% done${start != null ? ' · started at ' + start.toLocaleString() : ''}</div>
   </div>`;
 }
 
@@ -407,24 +327,39 @@ function isActive(o){
 
 function renderRows(rows){
     if (!rows.length) {
-      el.innerHTML = `<div class="empty"><div style="font-size:40px;margin-bottom:8px">⚡</div><h3>No boost orders yet</h3><p>Your growth orders will show here with live progress.</p><a href="mj-boosters.html">Place first boost</a></div>`;
+      el.innerHTML = `<div class="empty"><div class="ico">⚡</div><h3>No boost orders yet</h3><p>Your growth orders will show here with live progress.</p><a href="mj-boosters.html">Place first boost</a></div>`;
       return;
     }
     el.innerHTML = rows.map(o => {
       const oid = o.supplier_order_id || '';
+      const st = String(o.status || 'Pending');
+      let pill = 'pending';
+      if (/complete/i.test(st)) pill = 'ok';
+      else if (/cancel|fail|refund/i.test(st)) pill = 'bad';
+      else if (/partial|progress|process/i.test(st)) pill = 'warn';
       const actions = [];
-      if (canCancel(o) && oid) actions.push(`<button type="button" class="btn-mini danger" onclick="cancelOrder('${esc(oid)}')">Cancel</button>`);
-      if (canRefill(o) && oid) actions.push(`<button type="button" class="btn-mini primary" onclick="refillOrder('${esc(oid)}')">Request refill</button>`);
+      if (canCancel(o) && oid) actions.push(`<button type="button" class="danger" onclick="cancelOrder('${esc(oid)}')">Cancel</button>`);
+      if (canRefill(o) && oid) actions.push(`<button type="button" class="primary" onclick="refillOrder('${esc(oid)}')">Request refill</button>`);
+      const link = o.link || '';
       return `<div class="card" data-order="${esc(oid)}">
-        <div class="top">
+        <div class="head">
           <div class="title">${esc(o.service_name || 'Boost')}</div>
-          <span class="status ${esc(o.status || '')}">${esc(o.status || 'Pending')}</span>
+          <span class="pill ${pill}">${esc(st)}</span>
         </div>
-        <div class="link-row">${o.link ? `<span class="link-text">${esc(o.link)}</span><button type="button" class="btn-open" onclick='openSocialLink(${JSON.stringify(String(o.link||""))})'><i class="fa-solid fa-arrow-up-right-from-square"></i> Open</button>` : `<span class="link-text muted">No link provided</span>`}</div>
-        <div class="row"><span>Ordered ${Number(o.quantity || 0).toLocaleString()}</span><span>${fmt(o.price_ngn)}</span></div>
+        <div class="link-bar">
+          <span class="txt">${link ? esc(link) : 'No link provided'}</span>
+          ${link ? `<button type="button" class="open" onclick='openSocialLink(${JSON.stringify(String(link))})'><i class="fa-solid fa-arrow-up-right-from-square"></i> Open</button>` : ''}
+        </div>
+        <div class="stats">
+          <div class="stat"><div class="lbl">Ordered</div><div class="val">${Number(o.quantity || 0).toLocaleString()}</div></div>
+          <div class="stat"><div class="lbl">Paid</div><div class="val">${fmt(o.price_ngn)}</div></div>
+        </div>
         ${progressHtml(o)}
-        <div class="row"><span>Order #${esc(oid || o.id || '')}</span><span>${o.created_at ? new Date(o.created_at).toLocaleString() : ''}</span></div>
-        ${actions.length ? `<div class="btn-row">${actions.join('')}</div>` : ''}
+        <div class="foot">
+          <span>Order #${esc(oid || o.id || '')}</span>
+          <span>${o.created_at ? new Date(o.created_at).toLocaleString() : ''}</span>
+        </div>
+        ${actions.length ? `<div class="actions">${actions.join('')}</div>` : ''}
       </div>`;
     }).join('');
   }
@@ -454,7 +389,7 @@ function renderRows(rows){
         el.innerHTML = `<div class="empty"><h3>Could not load orders</h3><p>${esc(jsonFast.message || resFast.statusText || 'Error')}</p><a href="auth.html">Sign in again</a></div>`;
         return;
       }
-      let rows = jsonFast.data || [];
+      let rows = (jsonFast.data || []).filter(o => String(o.source||'owlet').toLowerCase() !== 'smmkings');
       if (window.__mjSkelDone) {
         var _rows = rows;
         window.__mjSkelDone(function(){ renderRows(_rows); });
@@ -492,6 +427,7 @@ function renderRows(rows){
     if (!document.hidden) loadOrders(true);
   });
 })();
+
 
 
 

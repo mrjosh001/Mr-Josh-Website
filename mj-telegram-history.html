@@ -123,7 +123,8 @@ window.openTg=openTg;
         el.innerHTML=`<div class="empty"><h3>Could not load</h3><p>${esc(json.message||'Error')}</p><a href="auth.html?next=mj-telegram-history.html">Sign in again</a></div>`;
         return;
       }
-      const rows=Array.isArray(json.data)?json.data:[];
+      let rows=Array.isArray(json.data)?json.data:[];
+      rows=rows.filter(o => String(o.source||'').toLowerCase()==='smmkings');
       if(!rows.length){
         el.innerHTML='<div class="empty"><div style="font-size:40px;margin-bottom:8px">✈️</div><h3>No orders yet</h3><p>Your Premium and Stars deliveries will show here.</p><a href="mj-telegram.html">Send now</a></div>';
         return;
