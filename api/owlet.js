@@ -29,90 +29,6 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY
 );
 
-const SMMKINGS_URL = (process.env.SMMKINGS_API_URL || 'https://smmkings.com/api/v2').replace(/\/$/, '');
-const SMMKINGS_KEY = String(process.env.SMMKINGS_API_KEY || '').trim().replace(/^["']+|["']+$/g, '');
-const TG_SHOP_SERVICE_IDS = { '6104': 'premium', '6106': 'premium', '6105': 'premium', '6260': 'stars' };
-
-async function panelCall(url, key, params, timeoutMs = 20000) {
-  if (!key) return { ok: false, status: 500, json: { error: 'Panel API key not configured' } };
-  const body = new URLSearchParams({ key, ...params });
-  const ac = typeof AbortController !== 'undefined' ? new AbortController() : null;
-  const timer = ac ? setTimeout(() => ac.abort(), timeoutMs) : null;
-  try {
-    const res = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded', Accept: 'application/json' },
-      body: body.toString(),
-      signal: ac ? ac.signal : undefined
-    });
-    const text = await res.text();
-    let json;
-    try { json = JSON.parse(text); } catch {
-      return { ok: false, status: res.status || 502, json: { error: 'Invalid JSON from panel', raw: text.slice(0, 300) } };
-    }
-    return { ok: res.ok, status: res.status, json };
-  } catch (e) {
-    const msg = e && e.name === 'AbortError' ? 'Panel timeout' : (e.message || 'Panel request failed');
-    return { ok: false, status: 504, json: { error: msg } };
-  } finally { if (timer) clearTimeout(timer); }
-}
-
-function classifyTgService(s) {
-  const id = String(s.service_id || s.service || '').trim();
-  if (TG_SHOP_SERVICE_IDS[id]) return TG_SHOP_SERVICE_IDS[id];
-  return null;
-}
-
-function premiumMonthsFromName(name) {
-  const m = String(name || '').match(/for\s+(\d+)\s*months?/i);
-  return m ? Number(m[1]) : null;
-}
-
-async function handleTelegramShop(req, res) {
-  const ids = Object.keys(TG_SHOP_SERVICE_IDS);
-  let { data, error } = await supabase
-    .from('booster_services')
-    .select('id,service_id,name,category,service_type,supplier_rate_usd,price_ngn,min_quantity,max_quantity,is_available')
-    .eq('source', 'smmkings')
-    .in('service_id', ids)
-    .order('price_ngn', { ascending: true });
-  if (error) return res.status(500).json({ success: false, message: error.message });
-  let rows = data || [];
-  if (!rows.length) {
-    const alt = await supabase.from('booster_services')
-      .select('id,service_id,name,category,service_type,supplier_rate_usd,price_ngn,min_quantity,max_quantity,is_available')
-      .eq('source', 'smmkings').limit(800);
-    rows = (alt.data || []).filter((s) => classifyTgService(s));
-  }
-  const available = rows.filter((s) => s.is_available !== false);
-  const pool = available.length ? available : rows.filter((s) => Number(s.price_ngn) > 0);
-  const groups = { premium: [], stars: [] };
-  for (const s of pool) {
-    const kind = classifyTgService(s) || TG_SHOP_SERVICE_IDS[String(s.service_id)];
-    if (!kind) continue;
-    const minQ = Math.max(1, Number(s.min_quantity) || 1);
-    const maxQ = Math.max(minQ, Number(s.max_quantity) || minQ);
-    const months = premiumMonthsFromName(s.name);
-    const price = floorSellNgn(s.price_ngn, s.service_id);
-    if (kind === 'premium') {
-      groups.premium.push({
-        service_id: String(s.service_id),
-        name: months ? (months + ' months Premium') : 'Telegram Premium',
-        months: months || 1, category: s.category,
-        min_quantity: 1, max_quantity: 1, price_ngn: price, pricing: 'fixed', kind: 'premium'
-      });
-    } else {
-      groups.stars.push({
-        service_id: String(s.service_id), name: 'Telegram Stars', category: s.category,
-        min_quantity: minQ, max_quantity: maxQ, price_ngn: price, pricing: 'per_1k', kind: 'stars'
-      });
-    }
-  }
-  groups.premium.sort((a, b) => (a.months || 0) - (b.months || 0));
-  return res.status(200).json({ success: true, data: groups, counts: { premium: groups.premium.length, stars: groups.stars.length } });
-}
-
-
 // Markup: random 35%–70% per service (override with OWLET_MARKUP_PERCENT env for fixed)
 // Owlet rate currency depends on the panel wallet.
 // Docs examples use USD, but Naira accounts often return rate already in NGN.
@@ -632,19 +548,14 @@ async function resolveOwletServiceId(storedId, name) {
 async function handleOrder(req, res) {
   const body = typeof req.body === 'string' ? (() => { try { return JSON.parse(req.body || '{}'); } catch { return {}; } })() : (req.body || {});
   const serviceId = String(body.service_id || body.service || '').trim();
-  const linkRaw = String(body.link || '').trim();
+  const link = String(body.link || '').trim();
   const quantity = Math.max(1, parseInt(body.quantity, 10) || 0);
-  const orderSource = String(body.source || body.provider || 'owlet').toLowerCase().trim() === 'smmkings' ? 'smmkings' : 'owlet';
 
-  if (!serviceId || !linkRaw) {
-    return res.status(400).json({ success: false, message: 'service_id and link are required' });
+  if (!serviceId || !link || !quantity) {
+    return res.status(400).json({ success: false, message: 'service_id, link, and quantity are required' });
   }
-
-  let link = linkRaw;
-  if (link.startsWith('@')) {
-    link = 'https://t.me/' + link.slice(1).replace(/^@+/, '');
-  } else if (/^(t\.me|telegram\.me)\//i.test(link)) {
-    link = 'https://' + link.replace(/^https?:\/\//i, '');
+  if (!/^https?:\/\//i.test(link) && !link.includes('.') && !link.startsWith('@')) {
+    // allow @handles and bare domains/usernames common for SMM
   }
 
   const userGate = await requireUser(req);
@@ -654,7 +565,7 @@ async function handleOrder(req, res) {
   const { data: service, error: sErr } = await supabase
     .from('booster_services')
     .select('*')
-    .eq('source', orderSource)
+    .eq('source', 'owlet')
     .eq('service_id', serviceId)
     .maybeSingle();
 
@@ -665,50 +576,26 @@ async function handleOrder(req, res) {
     return res.status(400).json({ success: false, message: 'This service is temporarily unavailable' });
   }
 
-  const tgKind = orderSource === 'smmkings' ? (TG_SHOP_SERVICE_IDS[String(serviceId)] || classifyTgService(service)) : null;
-  const isPackage = tgKind === 'premium';
-  const isStars = tgKind === 'stars';
-
-  const supplierMin = Math.max(1, Number(service.min_quantity) || 1);
+  // Site rule: never sell below 300 units. Supplier min wins if higher.
+  const supplierMin = Number(service.min_quantity) || 1;
   let maxQ = Number(service.max_quantity) || 1000000;
   if (maxQ < 1) maxQ = 1000000;
-
-  let minQ, orderQty, totalNgn, ratePer1k;
-
-  if (isPackage) {
-    minQ = 1;
-    maxQ = 1;
-    orderQty = 1;
-    ratePer1k = floorSellNgn(service.price_ngn, service.service_id);
-    totalNgn = Math.max(MIN_SELL_PRICE_NGN, ratePer1k);
-  } else if (isStars) {
-    minQ = supplierMin;
-    orderQty = quantity;
-    if (orderQty < minQ || orderQty > maxQ) {
-      return res.status(400).json({
-        success: false,
-        message: `Star amount must be between ${minQ.toLocaleString()} and ${maxQ.toLocaleString()}`
-      });
-    }
-    ratePer1k = floorSellNgn(service.price_ngn, service.service_id);
-    totalNgn = Math.max(MIN_SELL_PRICE_NGN, Math.ceil((ratePer1k / 1000) * orderQty));
-  } else {
-    minQ = Math.max(300, supplierMin);
-    if (minQ > maxQ) minQ = maxQ;
-    orderQty = quantity;
-    if (orderQty < minQ || orderQty > maxQ) {
-      return res.status(400).json({
-        success: false,
-        message: `Quantity must be between ${minQ.toLocaleString()} and ${maxQ.toLocaleString()}`
-      });
-    }
-    ratePer1k = floorSellNgn(service.price_ngn, service.service_id);
-    if (ratePer1k <= 0) {
-      return res.status(400).json({ success: false, message: 'Service price not configured' });
-    }
-    totalNgn = Math.max(MIN_SELL_PRICE_NGN, Math.ceil((ratePer1k / 1000) * orderQty));
+  let minQ = Math.max(300, supplierMin);
+  if (minQ > maxQ) minQ = maxQ;
+  if (quantity < minQ || quantity > maxQ) {
+    return res.status(400).json({
+      success: false,
+      message: `Quantity must be between ${minQ.toLocaleString()} and ${maxQ.toLocaleString()}`
+    });
   }
 
+  // price_ngn is selling rate per 1000 units (SMM standard)
+  // Listed rate never below ₦200 even if DB still has old cheap rows
+  const ratePer1k = floorSellNgn(service.price_ngn, service.service_id);
+  if (ratePer1k <= 0) {
+    return res.status(400).json({ success: false, message: 'Service price not configured' });
+  }
+  const totalNgn = Math.max(MIN_SELL_PRICE_NGN, Math.ceil((ratePer1k / 1000) * quantity));
   if (totalNgn < 1) {
     return res.status(400).json({ success: false, message: 'Order total too low' });
   }
@@ -738,102 +625,63 @@ async function handleOrder(req, res) {
     .from('profiles')
     .update({ balance: newBalance })
     .eq('id', user.id)
-    .eq('balance', originalBalance);
+    .eq('balance', originalBalance); // optimistic lock
 
   if (deductErr) {
+    // retry without eq balance
     const { error: d2 } = await supabase.from('profiles').update({ balance: newBalance }).eq('id', user.id);
     if (d2) {
       return res.status(500).json({ success: false, message: 'Could not debit wallet. Try again.' });
     }
   }
 
-  async function restoreBalance() {
+  // Place order with Owlet — use live panel ID if our catalog ID is stale
+  const liveServiceId = await resolveOwletServiceId(serviceId, service.name);
+  const { ok, status, json } = await owletCall({
+    action: 'add',
+    service: liveServiceId,
+    link,
+    quantity: String(quantity)
+  });
+
+  if (!ok || json?.error || !json?.order) {
+    // refund
     await supabase.from('profiles').update({ balance: originalBalance }).eq('id', user.id);
+    const rawErr = json?.error || json?.message || '';
+    const errMsg = /incorrect service/i.test(String(rawErr))
+      ? 'This package is no longer available. Go back and pick another one. Your balance was restored.'
+      : /supplier|owlet|panel/i.test(String(rawErr))
+      ? 'This order could not be placed right now. Your balance was restored.'
+      : (rawErr || 'This order could not be placed right now. Your balance was restored.');
+    return res.status(502).json({ success: false, message: errMsg });
   }
 
-  let supplierOrderId = null;
-  let panelJson = null;
-  let liveServiceId = serviceId;
-
-  if (orderSource === 'smmkings') {
-    if (!SMMKINGS_KEY) {
-      await restoreBalance();
-      return res.status(500).json({
-        success: false,
-        message: 'Error. Take a screenshot and message support. Your balance was restored.'
-      });
-    }
-    const addParams = isPackage
-      ? { action: 'add', service: String(serviceId), link }
-      : { action: 'add', service: String(serviceId), link, quantity: String(orderQty) };
-
-    let call = await panelCall(SMMKINGS_URL, SMMKINGS_KEY, addParams);
-    if ((!call.ok || call.json?.error || !call.json?.order) && link.includes('t.me/')) {
-      const handle = link.replace(/^https?:\/\/(t\.me|telegram\.me)\//i, '').replace(/^@/, '').split(/[/?#]/)[0];
-      if (handle) {
-        const retryParams = isPackage
-          ? { action: 'add', service: String(serviceId), link: '@' + handle }
-          : { action: 'add', service: String(serviceId), link: '@' + handle, quantity: String(orderQty) };
-        call = await panelCall(SMMKINGS_URL, SMMKINGS_KEY, retryParams);
-      }
-    }
-    panelJson = call.json || {};
-    if (!call.ok || panelJson.error || !panelJson.order) {
-      await restoreBalance();
-      const rawErr = String(panelJson.error || panelJson.message || '');
-      console.error('[owlet order] panel reject', { source: orderSource, service: serviceId, rawErr: rawErr.slice(0, 200) });
-      let errMsg = 'Error. Take a screenshot and message support. Your balance was restored.';
-      if (/incorrect service|service.*(not|invalid)|unknown service/i.test(rawErr)) {
-        errMsg = 'This package is no longer available. Pick another one. Your balance was restored.';
-      } else if (/link|url|username|user/i.test(rawErr)) {
-        errMsg = 'Check the Telegram username or profile link and try again. Your balance was restored.';
-      }
-      return res.status(502).json({ success: false, message: errMsg });
-    }
-    supplierOrderId = String(panelJson.order);
-  } else {
-    liveServiceId = await resolveOwletServiceId(serviceId, service.name);
-    const { ok, json } = await owletCall({
-      action: 'add',
-      service: liveServiceId,
-      link,
-      quantity: String(orderQty)
-    });
-    panelJson = json || {};
-    if (!ok || panelJson.error || !panelJson.order) {
-      await restoreBalance();
-      const rawErr = String(panelJson.error || panelJson.message || '');
-      const errMsg = /incorrect service/i.test(rawErr)
-        ? 'This package is no longer available. Go back and pick another one. Your balance was restored.'
-        : 'This order could not be placed right now. Your balance was restored.';
-      return res.status(502).json({ success: false, message: errMsg });
-    }
-    supplierOrderId = String(panelJson.order);
-  }
-
+  const supplierOrderId = String(json.order);
   const nowIso = new Date().toISOString();
   const orderRow = {
     user_id: user.id,
     customer_id: profile.customer_id || null,
-    source: orderSource,
+    source: 'owlet',
     supplier_order_id: supplierOrderId,
     service_id: liveServiceId,
     service_name: service.name,
     category: service.category || null,
     link,
-    quantity: orderQty,
+    quantity,
     charge_usd: null,
     price_ngn: totalNgn,
     rate_per_1k: ratePer1k,
     status: 'Pending',
     start_count: null,
     remains: null,
-    raw: panelJson,
+    raw: json,
     created_at: nowIso,
     updated_at: nowIso
   };
 
+  // MUST persist — history depends on this. Retry with fewer columns if schema is thin.
   let saved = null;
+  let saveErrMsg = null;
   {
     let ins = await supabase
       .from('booster_orders')
@@ -843,15 +691,16 @@ async function handleOrder(req, res) {
 
     if (ins.error) {
       console.error('[owlet order] booster_orders insert failed:', ins.error.message);
+      // Minimal fallback (table may lack optional columns)
       const minimal = {
         user_id: user.id,
         customer_id: profile.customer_id || null,
-        source: orderSource,
+        source: 'owlet',
         supplier_order_id: supplierOrderId,
         service_id: serviceId,
         service_name: service.name,
         link,
-        quantity: orderQty,
+        quantity,
         price_ngn: totalNgn,
         status: 'Pending',
         created_at: nowIso
@@ -861,42 +710,181 @@ async function handleOrder(req, res) {
         .insert(minimal)
         .select('id, supplier_order_id, service_name, quantity, price_ngn, status, link, created_at, user_id, customer_id')
         .maybeSingle();
-      if (!ins.error) saved = ins.data;
+      if (ins.error) {
+        saveErrMsg = ins.error.message;
+        console.error('[owlet order] minimal insert also failed:', ins.error.message);
+      } else {
+        saved = ins.data;
+      }
     } else {
       saved = ins.data;
     }
   }
 
+  // If DB save failed after supplier accepted, still return success but flag it —
+  // do NOT refund (supplier already charged). Admin can reconcile via supplier_order_id.
   try {
     await supabase.from('transactions').insert({
       user_id: user.id,
       customer_id: profile.customer_id || null,
-      type: 'debit',
-      amount: totalNgn,
-      balance_after: newBalance,
-      title: isPackage ? 'Telegram Premium' : (isStars ? 'Telegram Stars' : 'Booster order'),
-      subtitle: String(orderQty) + ' · ' + link.slice(0, 60),
-      meta: { source: orderSource, service_id: serviceId, supplier_order_id: supplierOrderId }
+      type: 'booster',
+      category: 'booster',
+      title: service.name || 'MJ Booster',
+      subtitle: `${quantity.toLocaleString()} · ${link.slice(0, 60)}`,
+      amount: `₦${totalNgn.toLocaleString()}`,
+      amount_ngn: totalNgn,
+      status: 'completed',
+      created_at: nowIso
     });
   } catch (e) {
-    console.warn('[owlet order] tx insert skip', e?.message || e);
+    console.warn('[owlet order] transactions insert:', e?.message || e);
+  }
+
+  // Best-effort status pull
+  let statusData = null;
+  try {
+    const st = await owletCall({ action: 'status', order: supplierOrderId });
+    if (st.ok && st.json && !st.json.error) {
+      statusData = st.json;
+      if (saved?.id || supplierOrderId) {
+        await supabase.from('booster_orders').update({
+          status: st.json.status || 'Pending',
+          start_count: st.json.start_count != null ? String(st.json.start_count) : null,
+          remains: st.json.remains != null ? String(st.json.remains) : null,
+          charge_usd: st.json.charge ? Number(st.json.charge) : null,
+          updated_at: new Date().toISOString()
+        }).eq('supplier_order_id', supplierOrderId);
+      }
+    }
+  } catch (_) {}
+
+  if (saveErrMsg) {
+    return res.status(200).json({
+      success: true,
+      message: 'Boost order placed. History may take a moment to appear.',
+      warning: saveErrMsg,
+      order: { supplier_order_id: supplierOrderId, service_name: service.name, quantity, price_ngn: totalNgn, status: 'Pending', link },
+      supplier_order_id: supplierOrderId,
+      new_balance: newBalance,
+      status: statusData,
+      history_saved: false
+    });
   }
 
   return res.status(200).json({
     success: true,
-    message: 'Order placed',
-    order: saved || {
-      supplier_order_id: supplierOrderId,
-      service_name: service.name,
-      quantity: orderQty,
-      price_ngn: totalNgn,
-      status: 'Pending',
-      link
-    },
-    new_balance: newBalance
+    message: 'Boost order placed successfully',
+    order: saved || orderRow,
+    supplier_order_id: supplierOrderId,
+    new_balance: newBalance,
+    status: statusData,
+    history_saved: true
   });
 }
 
+// If Owlet's own status for an order flips to Canceled/Refunded/Failed
+// *after* it was already accepted (discovered here, during a later status
+// poll — not via the customer manually cancelling, which is handled
+// separately in handleCancel), the customer's wallet was never being
+// credited back — only the status text updated. This is the fix: refund
+// automatically the first time we observe that transition, and never
+// again for the same order (guarded by only firing when the OLD status
+// wasn't already terminal, so re-polling an already-refunded order is a
+// no-op instead of a double-refund).
+/**
+ * Credit the user when Owlet cancels/fails OR ends as Partial.
+ * Partial: refund only the undelivered share (remains / quantity * price_ngn),
+ * matching supplier behaviour. Idempotent via refund_ngn on the order row.
+ */
+async function refundIfSupplierFailed(order, oldStatus, newStatus) {
+  const oldS = String(oldStatus || '');
+  const newS = String(newStatus || '');
+  const wasDone = /completed|canceled|cancelled|refunded|failed/i.test(oldS);
+  // Partial can be re-checked; skip only if we already stored a refund
+  const alreadyRefunded = Number(order.refund_ngn) > 0;
+  if (alreadyRefunded) return 0;
+
+  const isFailed = /canceled|cancelled|refunded|failed/i.test(newS);
+  const isPartial = /partial/i.test(newS);
+  if (!isFailed && !isPartial) return 0;
+  // Don't full-refund if we already treated old status as terminal cancel
+  if (wasDone && isFailed) return 0;
+  if (!order.user_id || !(Number(order.price_ngn) > 0)) return 0;
+
+  const qty = Math.max(0, Number(order.quantity) || 0);
+  const price = Number(order.price_ngn) || 0;
+  let remains = order.remains != null && order.remains !== '' ? Number(order.remains) : NaN;
+  if (Number.isNaN(remains) && isPartial && qty > 0) {
+    // Fallback: if delivered was derived earlier
+    if (order.delivered != null) remains = Math.max(0, qty - Number(order.delivered));
+  }
+
+  let refunded = 0;
+  let subtitle = '';
+  if (isPartial && qty > 0 && !Number.isNaN(remains) && remains > 0) {
+    // Undelivered portion only (same idea as supplier)
+    remains = Math.min(qty, Math.max(0, remains));
+    refunded = Math.round((remains / qty) * price);
+    if (refunded < 1 && remains > 0 && price > 0) refunded = 1;
+    if (refunded > price) refunded = price;
+    const delivered = qty - remains;
+    subtitle = `Order #${order.supplier_order_id} partial · ${delivered}/${qty} delivered · ₦${refunded.toLocaleString()} refunded`;
+  } else if (isFailed) {
+    refunded = price;
+    subtitle = `Order #${order.supplier_order_id} cancelled · full balance restored`;
+  } else if (isPartial) {
+    // Partial but no remains data — do not guess full refund
+    console.warn('[owlet refund] Partial without remains, skip auto refund', order.supplier_order_id);
+    return 0;
+  }
+
+  if (!(refunded > 0)) return 0;
+
+  const { data: prof } = await supabase
+    .from('profiles')
+    .select('balance, customer_id')
+    .eq('id', order.user_id)
+    .maybeSingle();
+  if (!prof) return 0;
+
+  const bal = Number(prof.balance) || 0;
+  const { error: balErr } = await supabase
+    .from('profiles')
+    .update({ balance: bal + refunded })
+    .eq('id', order.user_id);
+  if (balErr) {
+    console.error('[owlet refund] balance update failed', balErr.message);
+    return 0;
+  }
+
+  // Mark on order so we never double-pay (column may be missing — ignore error)
+  try {
+    await supabase.from('booster_orders').update({
+      refund_ngn: refunded,
+      updated_at: new Date().toISOString()
+    }).eq('id', order.id);
+  } catch (_) {}
+
+  try {
+    await supabase.from('transactions').insert({
+      user_id: order.user_id,
+      customer_id: order.customer_id || prof.customer_id || null,
+      type: 'deposit',
+      category: 'deposit',
+      title: isPartial ? 'Booster partial refund' : 'Booster order refund',
+      subtitle: subtitle,
+      amount: '₦' + refunded.toLocaleString(),
+      amount_ngn: refunded,
+      status: 'completed',
+      created_at: new Date().toISOString()
+    });
+  } catch (txErr) {
+    console.warn('[owlet refund] transaction row', txErr.message || txErr);
+  }
+
+  order.refund_ngn = refunded;
+  return refunded;
+}
 
 async function handleMyOrders(req, res) {
   const userGate = await requireUser(req);
@@ -1344,11 +1332,6 @@ export default async function handler(req, res) {
   }
 
   // User-facing (any signed-in user)
-  if (action === 'telegram_shop') {
-    const u = await requireUser(req);
-    if (!u.ok) return res.status(u.status).json({ success: false, message: u.message });
-    return handleTelegramShop(req, res);
-  }
   if (action === 'catalog') {
     const u = await requireUser(req);
     if (!u.ok) return res.status(u.status).json({ success: false, message: u.message });
@@ -1383,7 +1366,7 @@ export default async function handler(req, res) {
 
   return res.status(400).json({
     success: false,
-    message: 'action required: telegram_shop | catalog | order | my_orders | cancel | refill | refill_status | balance | services | sync | list | status | admin_orders'
+    message: 'action required: catalog | order | my_orders | cancel | refill | refill_status | balance | services | sync | list | status | admin_orders'
   });
   } catch (err) {
     console.error('[owlet] handler error', err);
