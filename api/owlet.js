@@ -103,7 +103,12 @@ async function panelCall(providerCfg, params, timeoutMs = 20000) {
         json: { error: 'Invalid JSON from ' + providerCfg.label, raw: text.slice(0, 300) }
       };
     }
-    return { ok: res.ok, status: res.status, json };
+    // Many SMM panels return HTTP 200 with {error} or HTTP 400 with body —
+    // treat presence of order id as success regardless of status code.
+    const hasOrder = json && (json.order != null || json.order_id != null);
+    const hasError = json && (json.error != null || json.message === 'error');
+    const ok = hasOrder ? true : (res.ok && !hasError);
+    return { ok, status: res.status, json };
   } catch (e) {
     const msg =
       e && e.name === 'AbortError'
@@ -803,12 +808,17 @@ async function handleOrder(req, res) {
     });
   }
 
+  const svcName = String(service.name || '');
+  const typeStr = String(service.service_type || service.type || '').toLowerCase();
+  const isPremiumFixed = isTgShop && classifyTgService(service) === 'premium';
+
   const supplierMin = Number(service.min_quantity) || 1;
   let maxQ = Number(service.max_quantity) || 1000000;
   if (maxQ < 1) maxQ = 1000000;
   let minQ = isTgShop ? supplierMin : Math.max(300, supplierMin);
   if (minQ > maxQ) minQ = maxQ;
-  if (quantity < minQ || quantity > maxQ) {
+  // Fixed Premium packages are 1 unit each — do not enforce supplier month-as-min quirks
+  if (!isPremiumFixed && (quantity < minQ || quantity > maxQ)) {
     return res.status(400).json({
       success: false,
       message: `Quantity must be between ${minQ.toLocaleString()} and ${maxQ.toLocaleString()}`
@@ -819,9 +829,6 @@ async function handleOrder(req, res) {
   if (ratePer1k <= 0) {
     return res.status(400).json({ success: false, message: 'Service price not configured' });
   }
-  const svcName = String(service.name || '');
-  const typeStr = String(service.service_type || service.type || '').toLowerCase();
-  const isPremiumFixed = isTgShop && classifyTgService(service) === 'premium';
   const isPackage =
     isPremiumFixed ||
     (isTgShop && (typeStr.includes('package') || /subscription\s+for\s+\d+\s*months?/i.test(svcName)));
@@ -875,20 +882,65 @@ async function handleOrder(req, res) {
   }
 
   // Place order with supplier — use live panel ID if catalog ID is stale (Owlet only)
-  let liveServiceId = serviceId;
+  let liveServiceId = String(service.service_id || serviceId).trim();
   if (orderSource === 'owlet') {
     try { liveServiceId = await resolveOwletServiceId(serviceId, service.name); } catch (_) {}
   }
+
+  // SMM panel docs: Package type = service + link only (no quantity).
+  // Default type = service + link + quantity within min/max.
+  const isPackageType =
+    isPremiumFixed ||
+    typeStr.includes('package') ||
+    /subscription\s+for\s+\d+\s*months?/i.test(svcName);
+
   let ok, status, json;
-  const panelQty = isPremiumFixed ? Math.max(1, Number(service.min_quantity) || 1) : quantity;
   if (orderSource === 'smmkings') {
-    const call = await panelCall(PROVIDERS.smmkings, {
+    const cfg = PROVIDERS.smmkings;
+    if (!cfg.key) {
+      await supabase.from('profiles').update({ balance: originalBalance }).eq('id', user.id);
+      return res.status(500).json({
+        success: false,
+        message: 'Telegram shop is not configured yet. Your balance was restored.'
+      });
+    }
+    // Normalize link for Telegram: always https://t.me/handle
+    let panelLink = String(link || '').trim();
+    if (panelLink.startsWith('@')) panelLink = 'https://t.me/' + panelLink.slice(1);
+    else if (!/^https?:\/\//i.test(panelLink) && panelLink) {
+      panelLink = 'https://t.me/' + panelLink.replace(/^(t\.me|telegram\.me)\//i, '');
+    }
+
+    const addParams = {
       action: 'add',
-      service: String(liveServiceId || serviceId),
-      link,
-      quantity: String(panelQty)
-    });
-    ok = call.ok; status = call.status; json = call.json;
+      service: liveServiceId, // must be panel numeric/string service id from sync
+      link: panelLink
+    };
+    if (!isPackageType) {
+      addParams.quantity = String(quantity);
+    }
+
+    const call = await panelCall(cfg, addParams);
+    ok = call.ok;
+    status = call.status;
+    json = call.json || {};
+
+    // One retry with bare @username if URL form failed (some TG services want handle only)
+    if ((!ok || json.error || !(json.order || json.order_id)) && panelLink.includes('t.me/')) {
+      const handle = panelLink.split('t.me/')[1].split(/[/?#]/)[0];
+      if (handle) {
+        const retryParams = { ...addParams, link: '@' + handle };
+        const retry = await panelCall(cfg, retryParams);
+        if (retry.ok || retry.json?.order || retry.json?.order_id) {
+          ok = true;
+          status = retry.status;
+          json = retry.json || {};
+        } else {
+          json = retry.json || json;
+          status = retry.status;
+        }
+      }
+    }
   } else {
     const call = await owletCall({
       action: 'add',
@@ -899,22 +951,41 @@ async function handleOrder(req, res) {
     ok = call.ok; status = call.status; json = call.json;
   }
 
-  if (!ok || json?.error || !json?.order) {
-    // refund
+  const orderIdRaw = json?.order ?? json?.order_id ?? null;
+  if (!ok || json?.error || orderIdRaw == null || orderIdRaw === '') {
+    // refund user — supplier did not accept
     await supabase.from('profiles').update({ balance: originalBalance }).eq('id', user.id);
-    const rawErr = String(json?.error || json?.message || status || '');
-    let errMsg = rawErr || 'This order could not be placed right now. Your balance was restored.';
-    if (/incorrect service/i.test(rawErr)) {
+    const rawErr = String(
+      (typeof json?.error === 'string' && json.error) ||
+      (typeof json?.message === 'string' && json.message) ||
+      (json?.error && typeof json.error === 'object' && (json.error.message || JSON.stringify(json.error))) ||
+      ''
+    ).trim();
+    console.error('[owlet order] panel reject', {
+      source: orderSource,
+      service: liveServiceId,
+      package: isPackageType,
+      status,
+      rawErr: rawErr.slice(0, 200),
+      jsonKeys: json ? Object.keys(json) : []
+    });
+    let errMsg = 'This order could not be placed right now. Your balance was restored.';
+    if (/incorrect service|service.*(not|invalid)|unknown service/i.test(rawErr)) {
       errMsg = 'This package is no longer available. Pick another one. Your balance was restored.';
-    } else if (/not enough|balance|funds/i.test(rawErr)) {
-      errMsg = 'Service temporarily unavailable. Your balance was restored. Try again shortly.';
-    } else if (rawErr) {
+    } else if (/not enough funds|insufficient (funds|balance)|no enough/i.test(rawErr)) {
+      // Supplier wallet — not the customer wallet (customer already refunded)
+      errMsg = 'This service is temporarily unavailable. Your balance was restored. Please try again later.';
+    } else if (/quantity|min|max/i.test(rawErr)) {
       errMsg = rawErr + ' Your balance was restored.';
+    } else if (/link|url|username|user/i.test(rawErr)) {
+      errMsg = 'Check the Telegram username or profile link and try again. Your balance was restored.';
+    } else if (rawErr) {
+      errMsg = 'Order could not be completed. Your balance was restored. Please try again.';
     }
     return res.status(502).json({ success: false, message: errMsg });
   }
 
-  const supplierOrderId = String(json.order);
+  const supplierOrderId = String(orderIdRaw);
   const nowIso = new Date().toISOString();
   const orderRow = {
     user_id: user.id,
