@@ -67,7 +67,10 @@ body::before{content:'';position:fixed;inset:0;pointer-events:none;z-index:0;bac
 .product-description-toggle::-webkit-details-marker{display:none}
 .product-description-toggle::before{content:'▸';font-size:10px}
 details[open] .product-description-toggle::before{transform:rotate(90deg);display:inline-block}
-.product-description-body{font-size:12px;color:var(--muted);line-height:1.6;padding-top:8px;border-top:1px solid var(--border);margin-top:4px}
+.product-description-body{font-size:12.5px;color:var(--muted);line-height:1.55;padding-top:8px;border-top:1px solid var(--border);margin-top:4px}
+.product-description-body .desc-line{margin:0 0 8px;white-space:pre-wrap;word-break:break-word}
+.product-description-body .desc-line:last-child{margin-bottom:0}
+#psDesc{white-space:pre-wrap;word-break:break-word;line-height:1.55;font-size:13px}
 .product-badges{display:flex;gap:6px;flex-wrap:wrap}
 .badge{display:inline-block;padding:4px 10px;border-radius:6px;font-size:10px;font-weight:700}
 .badge-stock{background:rgba(52,211,153,.15);color:var(--success)}
@@ -512,9 +515,26 @@ function renderLogIconHtml(category, name, sizeClass){
   return '<div class="'+cls+'" style="'+bg+'">'+logIconInnerHtml(icon)+'</div>';
 }
 
-/* Always prefer display_description for customers */
+/* Prefer display_description; keep line breaks so admin formatting matches the store */
 function getDisplayDescription(p){
-return cleanText(p.display_description || p.description || '');
+  const raw = (p && (p.display_description || p.description)) || '';
+  if (!raw) return '';
+  const t = document.createElement('div');
+  t.innerHTML = String(raw);
+  return (t.textContent || t.innerText || '')
+    .replace(/\r\n/g, '\n')
+    .replace(/\r/g, '\n')
+    .replace(/[ \t]+\n/g, '\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+}
+function formatDescriptionHtml(p){
+  const text = getDisplayDescription(p);
+  if (!text) return '';
+  return text.split('\n').map(function(line){
+    if (!String(line).trim()) return '<div class="desc-line" style="height:6px;margin:0"></div>';
+    return '<div class="desc-line">' + escapeHtml(line) + '</div>';
+  }).join('');
 }
 function getAccountFormat(p){
 return p.account_format || p.accountFormat || p.format || p.delivery_format || p.product_format || '';
@@ -531,7 +551,7 @@ title: cleanText(p.name || 'Product'),
 price: (parseFloat(p.price)||0) * qty,
 unit_price: parseFloat(p.price)||0,
 type: 'log',
-subtitle: getDisplayDescription(p).slice(0,120),
+subtitle: getDisplayDescription(p).replace(/\s+/g,' ').slice(0,120),
 category: p.category || 'Others',
 quantity: qty,
 account_format: getAccountFormat(p) || null,
@@ -547,7 +567,7 @@ if(searchQuery){
 const q = searchQuery.toLowerCase();
 list = list.filter(p=>
 cleanText(p.name||'').toLowerCase().includes(q) ||
-getDisplayDescription(p).toLowerCase().includes(q) ||
+getDisplayDescription(p).replace(/\s+/g,' ').toLowerCase().includes(q) ||
 (p.category||'').toLowerCase().includes(q)
 );
 }
@@ -624,7 +644,7 @@ const cart=getCart();
 let html='<div class="product-grid">';
 products.forEach((p,index)=>{
 const name=escapeHtml(cleanText(p.name||'Product'));
-const desc=escapeHtml(getDisplayDescription(p));
+const descHtml=formatDescriptionHtml(p);
 const price=parseFloat(p.price)||0;
 const stock=parseInt(p.stock_quantity,10);
 const hasStock=!Number.isNaN(stock);
@@ -633,7 +653,7 @@ const cat=escapeHtml(p.category||'');
 const inCart=cart.some(i=>(p.id&&i.product_id===p.id)||i.title===cleanText(p.name||''));
 html+='<div class="product-card">';
 html+='<div class="product-header"><div class="product-header-left">'+renderLogIconHtml(p.category, cleanText(p.name||''))+'<div class="product-name">'+name+'</div></div><div class="product-price">'+money(price)+'</div></div>';
-if(desc) html+='<details><summary class="product-description-toggle">Description</summary><div class="product-description-body">'+desc+'</div></details>';
+if(descHtml) html+='<details><summary class="product-description-toggle">Description</summary><div class="product-description-body">'+descHtml+'</div></details>';
 html+='<div class="product-badges">';
 if(cat) html+='<span class="badge badge-cat">'+cat+'</span>';
 if(hasStock) html+=inStock?'<span class="badge badge-stock">In Stock ('+stock+')</span>':'<span class="badge badge-out">Out of Stock</span>';
