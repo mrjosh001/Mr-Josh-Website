@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Telegram Orders · MJ HUB</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="/js/mj-page-loader.js" defer></script>
+<script>
+(function(){try{var t=localStorage.getItem('mjhub-theme');document.documentElement.setAttribute('data-theme',(t==='light'||t==='dark')?t:'dark');}catch(e){document.documentElement.setAttribute('data-theme','dark');}})();
+</script>
+<meta name="theme-color" content="#2563eb">
+<style>
+:root[data-theme="dark"] {
+  --bg:#06080f; --title:#f8fafc; --muted:#94a3b8; --card:#0f172a; --card-border:rgba(148,163,184,.14);
+  --line:rgba(148,163,184,.14); --blue:#2563eb; --blue-2:#1d4ed8; --ink:#e2e8f0;
+  --ok:#34d399; --ok-bg:rgba(16,185,129,.14); --warn:#fbbf24; --warn-bg:rgba(245,158,11,.14);
+  --bad:#f87171; --bad-bg:rgba(239,68,68,.14); --chip:rgba(15,23,42,.9); --shadow:0 12px 32px rgba(0,0,0,.35);
+}
+:root[data-theme="light"] {
+  --bg:#f1f5f9; --title:#0f172a; --muted:#64748b; --card:#ffffff; --card-border:#e2e8f0;
+  --line:#e2e8f0; --blue:#2563eb; --blue-2:#1d4ed8; --ink:#0f172a;
+  --ok:#059669; --ok-bg:#ecfdf5; --warn:#d97706; --warn-bg:#fffbeb;
+  --bad:#dc2626; --bad-bg:#fef2f2; --chip:#f8fafc; --shadow:0 10px 28px rgba(37,99,235,.08);
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Plus Jakarta Sans',system-ui,sans-serif;background:var(--bg);color:var(--ink);min-height:100vh;-webkit-font-smoothing:antialiased}
+.shell{max-width:540px;margin:0 auto;padding:0 16px calc(88px + env(safe-area-inset-bottom))}
+.topbar{display:flex;align-items:center;gap:12px;padding:16px 0 12px;position:sticky;top:0;z-index:20;backdrop-filter:blur(12px);background:color-mix(in srgb, var(--bg) 88%, transparent)}
+.back,.icon-btn{width:42px;height:42px;border-radius:14px;border:1px solid var(--line);background:var(--card);color:var(--title);display:grid;place-items:center;text-decoration:none;cursor:pointer;font-size:15px}
+.topbar h1{flex:1;font-size:17px;font-weight:800;color:var(--title)}
+.hero{
+  background:linear-gradient(135deg,#1d4ed8 0%,#2563eb 50%,#38bdf8 120%);
+  border-radius:22px;padding:18px;color:#fff;margin-bottom:16px;box-shadow:0 14px 36px rgba(37,99,235,.3);
+}
+.hero .k{font-size:11px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;opacity:.9;margin-bottom:6px}
+.hero h2{font-size:19px;font-weight:800;margin-bottom:4px}
+.hero p{font-size:13px;line-height:1.45;opacity:.92}
+.tabs{display:flex;gap:8px;margin-bottom:14px;overflow-x:auto}
+.tab{border:1px solid var(--line);background:var(--card);color:var(--muted);border-radius:999px;padding:9px 14px;font-size:12px;font-weight:800;cursor:pointer;white-space:nowrap}
+.tab.on{background:var(--blue);border-color:var(--blue);color:#fff}
+.list{display:flex;flex-direction:column;gap:12px}
+.card{background:var(--card);border:1px solid var(--card-border);border-radius:18px;padding:14px;box-shadow:var(--shadow)}
+.top{display:flex;justify-content:space-between;gap:10px;align-items:flex-start;margin-bottom:10px}
+.title{font-size:14px;font-weight:800;color:var(--title);line-height:1.35}
+.badge{font-size:11px;font-weight:800;padding:5px 10px;border-radius:999px;text-transform:capitalize;white-space:nowrap}
+.badge.ok{background:var(--ok-bg);color:var(--ok)}
+.badge.warn{background:var(--warn-bg);color:var(--warn)}
+.badge.bad{background:var(--bad-bg);color:var(--bad)}
+.link-bar{display:flex;align-items:center;gap:8px;background:var(--chip);border:1px solid var(--line);border-radius:12px;padding:10px;margin-bottom:10px}
+.link-bar .txt{flex:1;min-width:0;font-size:12px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.link-bar .open{border:0;background:linear-gradient(135deg,var(--blue),var(--blue-2));color:#fff;border-radius:10px;padding:8px 11px;font-size:11px;font-weight:800;cursor:pointer;display:inline-flex;align-items:center;gap:6px;flex-shrink:0}
+.meta{display:flex;justify-content:space-between;gap:8px;font-size:12px;color:var(--muted)}
+.meta b{color:var(--title);font-weight:800}
+.empty{text-align:center;padding:48px 18px;background:var(--card);border:1px solid var(--card-border);border-radius:20px}
+.empty .ico{font-size:40px;margin-bottom:10px}
+.empty h3{color:var(--title);font-size:16px;font-weight:800;margin-bottom:6px}
+.empty p{color:var(--muted);font-size:13px;margin-bottom:16px}
+.empty a{display:inline-flex;padding:12px 18px;border-radius:12px;background:linear-gradient(135deg,var(--blue),var(--blue-2));color:#fff;text-decoration:none;font-weight:800;font-size:13px}
+.bottom-nav{position:fixed;left:0;right:0;bottom:0;z-index:40;background:var(--card);border-top:1px solid var(--line);padding:8px 10px calc(10px + env(safe-area-inset-bottom));display:flex;justify-content:space-around}
+.bottom-nav a{text-decoration:none;color:var(--muted);font-size:10px;font-weight:700;text-align:center}
+.bottom-nav a i{display:block;font-size:16px;margin-bottom:3px}
+.bottom-nav a.on{color:var(--blue)}
+#toast{position:fixed;left:50%;bottom:90px;transform:translateX(-50%) translateY(20px);opacity:0;pointer-events:none;background:var(--blue);color:#fff;padding:12px 16px;border-radius:12px;font-size:13px;font-weight:700;z-index:50;transition:.25s}
+#toast.on{opacity:1;transform:translateX(-50%) translateY(0)}
+</style>
+</head>
+<body>
+<div class="shell">
+  <div class="topbar">
+    <a class="back" href="mj-telegram.html" aria-label="Back"><i class="fa-solid fa-arrow-left"></i></a>
+    <h1>Telegram orders</h1>
+    <button type="button" class="icon-btn" id="refreshBtn" aria-label="Refresh"><i class="fa-solid fa-rotate-right"></i></button>
+  </div>
+
+  <div class="hero">
+    <div class="k"><i class="fa-brands fa-telegram"></i> Premium &amp; Stars only</div>
+    <h2>Delivery history</h2>
+    <p>Separate from MJ Boosters. Track every Premium and Stars order sent to a Telegram account.</p>
+  </div>
+
+  <div class="tabs" id="tabs">
+    <button type="button" class="tab on" data-f="all">All</button>
+    <button type="button" class="tab" data-f="active">Active</button>
+    <button type="button" class="tab" data-f="completed">Completed</button>
+  </div>
+
+  <div class="list" id="list"></div>
+</div>
+
+<nav class="bottom-nav">
+  <a href="mj-telegram.html"><i class="fa-brands fa-telegram"></i>Shop</a>
+  <a href="mj-telegram-history.html" class="on"><i class="fa-solid fa-clock-rotate-left"></i>Orders</a>
+  <a href="dashboard.html"><i class="fa-solid fa-house"></i>Home</a>
+</nav>
+<div id="toast"></div>
+
+<script>
+const SUPABASE_URL = 'https://atczodlljmlayvldxfmv.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImF0Y3pvZGxsam1sYXl2bGR4Zm12Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODUwNzUyMzgsImV4cCI6MjEwMDY1MTIzOH0.ufthD-p7BmeD_B7xyuMM6PNPL8DmcL4AtRYgg-MuoLI';
+const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+  auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true, storage: window.localStorage }
+});
+
+function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+function fmt(n){ return '₦' + Number(n||0).toLocaleString(); }
+function toast(msg){
+  const t = document.getElementById('toast');
+  t.textContent = msg || '';
+  t.classList.add('on');
+  clearTimeout(window.__tt);
+  window.__tt = setTimeout(() => t.classList.remove('on'), 3200);
+}
+function badgeClass(st){
+  const s = String(st||'');
+  if (/complete/i.test(s)) return 'ok';
+  if (/cancel|fail|refund/i.test(s)) return 'bad';
+  return 'warn';
+}
+function isActive(o){
+  const s = String(o.status||'').toLowerCase();
+  return /pending|progress|processing|awaiting|waiting|partial/.test(s) && !/completed|canceled|cancelled|refunded|failed/.test(s);
+}
+function openTg(link){
+  let href = String(link||'').trim();
+  if (!href) return;
+  if (href.startsWith('@')) href = 'https://t.me/' + href.slice(1);
+  else if (/^(t\.me|telegram\.me)\//i.test(href)) href = 'https://' + href;
+  else if (!/^https?:\/\//i.test(href)) href = 'https://t.me/' + href.replace(/^@/,'');
+  window.open(href, '_blank', 'noopener,noreferrer');
+}
+window.openTg = openTg;
+
+(async function main(){
+  const el = document.getElementById('list');
+  let filter = 'all';
+  let allRows = [];
+
+  function render(){
+    let rows = allRows.slice();
+    if (filter === 'active') rows = rows.filter(isActive);
+    if (filter === 'completed') rows = rows.filter(o => /complete/i.test(String(o.status||'')));
+    if (!rows.length) {
+      el.innerHTML = '<div class="empty"><div class="ico">✈️</div><h3>No Telegram orders yet</h3><p>Premium and Stars deliveries will show up here — not mixed with boosters.</p><a href="mj-telegram.html">Send Premium or Stars</a></div>';
+      return;
+    }
+    el.innerHTML = rows.map(o => {
+      const link = o.link || '';
+      const bc = badgeClass(o.status);
+      return `<div class="card">
+        <div class="top">
+          <div class="title">${esc(o.service_name || 'Telegram')}</div>
+          <span class="badge ${bc}">${esc(o.status || 'Pending')}</span>
+        </div>
+        <div class="link-bar">
+          <span class="txt">${link ? esc(link) : 'No recipient link'}</span>
+          ${link ? `<button type="button" class="open" onclick='openTg(${JSON.stringify(String(link))})'><i class="fa-solid fa-arrow-up-right-from-square"></i> Open</button>` : ''}
+        </div>
+        <div class="meta"><span>Qty <b>${Number(o.quantity||1).toLocaleString()}</b></span><span><b>${fmt(o.price_ngn)}</b></span></div>
+        <div class="meta" style="margin-top:6px"><span>#${esc(o.supplier_order_id || o.id || '')}</span><span>${o.created_at ? new Date(o.created_at).toLocaleString() : ''}</span></div>
+      </div>`;
+    }).join('');
+  }
+
+  document.getElementById('tabs').addEventListener('click', (e) => {
+    const btn = e.target.closest('.tab');
+    if (!btn) return;
+    filter = btn.getAttribute('data-f');
+    document.querySelectorAll('.tab').forEach(t => t.classList.toggle('on', t === btn));
+    render();
+  });
+
+  async function loadOrders(){
+    el.innerHTML = ((window.mjSkeleton||window.MJSkeleton)?(window.mjSkeleton||window.MJSkeleton).cards(3):'<div class="empty"><p>Loading…</p></div>');
+    const { data: { session } } = await sb.auth.getSession();
+    if (!session || !session.access_token) {
+      el.innerHTML = '<div class="empty"><h3>Please sign in</h3><p>Sign in to see your Telegram orders.</p><a href="auth.html?next=mj-telegram-history.html">Sign in</a></div>';
+      return;
+    }
+    try {
+      const res = await fetch('/api/owlet?action=my_orders&page_size=50&live=0&source=smmkings', {
+        headers: { Authorization: 'Bearer ' + session.access_token }
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!json.success) {
+        el.innerHTML = `<div class="empty"><h3>Could not load</h3><p>${esc(json.message||'Error')}</p><a href="auth.html">Sign in again</a></div>`;
+        return;
+      }
+      allRows = Array.isArray(json.data) ? json.data : [];
+      render();
+    } catch (e) {
+      el.innerHTML = `<div class="empty"><h3>Could not load</h3><p>${esc(e.message||'Network error')}</p><button type="button" class="tab on" onclick="location.reload()">Retry</button></div>`;
+    }
+  }
+
+  document.getElementById('refreshBtn').onclick = () => { toast('Refreshing…'); loadOrders(); };
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) loadOrders(); });
+  await loadOrders();
+})();
+</script>
+</body>
+</html>

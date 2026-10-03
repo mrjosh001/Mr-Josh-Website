@@ -159,6 +159,30 @@ body::before {
   font-size: 13px; font-weight: 700; opacity: 0; transition: .25s; z-index: 60;
 }
 #toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+/* link-bar-upgrade */
+.link-row {
+  display: flex; align-items: center; gap: 8px;
+  background: #f8fafc; border: 1.5px solid #e2e8f0;
+  border-radius: 12px; padding: 10px 10px; margin: 8px 0 10px;
+}
+.link-row .link-text {
+  flex: 1; min-width: 0; font-size: 12px; font-weight: 600; color: #64748b;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.link-row .btn-open {
+  flex-shrink: 0; border: none; cursor: pointer;
+  display: inline-flex; align-items: center; gap: 6px;
+  font: 800 11px/1 'Plus Jakarta Sans', system-ui, sans-serif;
+  padding: 10px 12px; border-radius: 11px;
+  background: linear-gradient(135deg, var(--blue), var(--blue-2)); color: #fff;
+  box-shadow: 0 8px 18px var(--blue-ring);
+}
+:root[data-theme="dark"] .link-row {
+  background: rgba(15,23,42,.55); border-color: rgba(148,163,184,.18);
+}
+:root[data-theme="dark"] .link-row .link-text { color: #94a3b8; }
+
 </style>
 <link rel="stylesheet" href="/css/graceful.css">
 <link rel="stylesheet" href="/css/mj-motion.css">
@@ -174,6 +198,7 @@ body::before {
     <button type="button" class="btn-icon" id="refreshBtn" aria-label="Refresh"><i class="fa-solid fa-rotate-right"></i></button>
   </header>
   <div class="brand-bar"></div>
+  <p id="pageSub" style="font-size:12px;font-weight:600;color:var(--muted,#64748b);margin:0 0 14px;line-height:1.4">MJ Boosters only. Telegram orders live under Telegram → Orders.</p>
   <div class="list" id="list"></div>
 </div>
 <div id="toast"></div>
@@ -347,7 +372,7 @@ function isActive(o){
 
 function renderRows(rows){
     if (!rows.length) {
-      el.innerHTML = `<div class="empty"><div style="font-size:40px;margin-bottom:8px">⚡</div><h3>No boost orders yet</h3><p>Your growth orders will show here with live progress.</p><a href="mj-boosters.html">Place first boost</a></div>`;
+      el.innerHTML = `<div class="empty"><div style="font-size:40px;margin-bottom:8px">⚡</div><h3>No boost orders yet</h3><p>MJ Boosters only — Telegram Premium &amp; Stars have their own order page.</p><a href="mj-boosters.html">Place first boost</a></div>`;
       return;
     }
     el.innerHTML = rows.map(o => {
@@ -382,8 +407,8 @@ function renderRows(rows){
       const controller = new AbortController();
       const t = setTimeout(() => controller.abort(), 20000);
       const url = silent
-        ? '/api/owlet?action=my_orders&page_size=50'
-        : '/api/owlet?action=my_orders&page_size=50&live=0';
+        ? '/api/owlet?action=my_orders&page_size=50&source=owlet'
+        : '/api/owlet?action=my_orders&page_size=50&live=0&source=owlet';
       const resFast = await fetch(url, {
         headers,
         signal: controller.signal
@@ -406,7 +431,7 @@ function renderRows(rows){
       const hasActive = rows.some(isActive);
       if (hasActive) {
         // Background live update (do not block UI)
-        fetch('/api/owlet?action=my_orders&page_size=50', { headers })
+        fetch('/api/owlet?action=my_orders&page_size=50&source=owlet', { headers })
           .then(r => r.json())
           .then(json => {
             if (json && json.success && Array.isArray(json.data)) renderRows(json.data);
