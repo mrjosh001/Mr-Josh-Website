@@ -5208,26 +5208,70 @@ async function expireStalePocketFiDeposits(rows) {
 }
 
 function normalizeTxType(tx) {
-    const type = String(tx.type || '').toLowerCase();
-    const cat = String(tx.category || '').toLowerCase();
-    const channel = String(tx.channel || '').toLowerCase();
-    const title = String(tx.title || '').toLowerCase();
-    const blob = type + ' ' + cat + ' ' + title + ' ' + channel;
-    if (/telegram\s*(premium|stars)|smmkings/i.test(title + ' ' + cat + ' ' + type) || type === 'telegram') return 'telegram';
-    if (type === 'booster' || type === 'boost' || cat === 'booster' || cat.includes('mj boost')) return 'booster';
-    if (type === 'deposit' || cat.includes('deposit') || channel.includes('pocketfi') || channel.includes('paystack')) return 'deposit';
-    if (type === 'conversion') return 'conversion';
-    if (cat.includes('boost') || /owlet/.test(blob)) return 'booster';
+    const type = String(tx.type || '').toLowerCase().trim();
+    const cat = String(tx.category || '').toLowerCase().trim();
+    const channel = String(tx.channel || '').toLowerCase().trim();
+    const title = String(tx.title || '').toLowerCase().trim();
+    const blob = (type + ' ' + cat + ' ' + title + ' ' + channel).trim();
+
+    // Order matters — most specific first. Never let conversion/SMS fall into Telegram.
+
+    // Currency convert
+    if (type === 'conversion' || cat === 'conversion' || /currency\s*conversion|converter/i.test(title + ' ' + channel)) {
+      return 'conversion';
+    }
+
+    // Deposits
+    if (type === 'deposit' || cat.includes('deposit') || channel.includes('pocketfi') || channel.includes('paystack') || channel.includes('bank transfer')) {
+      return 'deposit';
+    }
+
+    // Telegram Premium & Stars ONLY (strict)
     if (
-        type === 'log' || type === 'logs' || cat.includes('log') ||
-        /mj logs|logs domain|fadded|sujan|classy|hotmail|tiktok|facebook|instagram|premade|google voice|\bvpn\b/i.test(title + ' ' + cat)
-    ) return 'log';
+      type === 'telegram' ||
+      cat === 'telegram' ||
+      /\btelegram\s*(premium|stars)\b/i.test(title) ||
+      /\b(premium|stars)\b/i.test(title) && /telegram/i.test(title + ' ' + cat) ||
+      (type === 'smmkings' || cat === 'smmkings')
+    ) {
+      return 'telegram';
+    }
+
+    // SMS / number rentals (OTP + USA rental + long-term)
     if (
-        type === 'sms' || cat.includes('mj sms') ||
-        /otp\s*·|waiting for sms|sms expired|sms canceled|whatsapp\s*·/i.test(title + ' ' + cat)
-    ) return 'sms';
+      type === 'sms' ||
+      cat.includes('mj sms') ||
+      cat.includes('sms') ||
+      /otp\s*·|waiting for sms|sms expired|sms canceled/i.test(title) ||
+      /number\s*rental|usa\s*number|long\s*term|whatsapp|telegram.*number|sms\s*bus|gotsms|grizzly/i.test(title + ' ' + cat) ||
+      /\b(day|days|month|months)\b.*\b(united states|usa|canada|uk)\b/i.test(title)
+    ) {
+      return 'sms';
+    }
     if (type === 'purchase' && cat.includes('sms')) return 'sms';
+
+    // Social boost (Owlet) — never Telegram
+    if (
+      type === 'booster' || type === 'boost' ||
+      cat === 'booster' || cat.includes('mj boost') ||
+      /owlet/i.test(blob) ||
+      /tiktok|instagram|youtube|facebook|followers?|likes?|views?|subscribers?/i.test(title) && !/telegram/i.test(title)
+    ) {
+      return 'booster';
+    }
+
+    // Logs
+    if (
+      type === 'log' || type === 'logs' || cat.includes('log') ||
+      /mj logs|logs domain|fadded|sujan|classy|hotmail|premade|google voice|\bvpn\b/i.test(title + ' ' + cat)
+    ) {
+      return 'log';
+    }
     if (type === 'purchase' || type === 'order') return 'log';
+
+    // Already-normalized kinds from a prior pass
+    if (['telegram','booster','deposit','conversion','sms','log','logs'].includes(type)) return type;
+
     return type || 'log';
 }
 
@@ -7370,6 +7414,8 @@ function renderHistoryList(filterType = 'all') {
             if (filterType === 'sms') return kind === 'sms';
             if (filterType === 'deposit') return kind === 'deposit';
             if (filterType === 'booster') return kind === 'booster';
+            if (filterType === 'conversion') return kind === 'conversion';
+            if (filterType === 'telegram') return kind === 'telegram';
             return kind === filterType;
         });
     }
