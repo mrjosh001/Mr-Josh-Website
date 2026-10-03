@@ -35,8 +35,6 @@ main{padding:16px;max-width:520px;margin:0 auto;padding-bottom:48px}
 .pills{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px;min-height:44px}
 .pill{border:1px solid var(--line);background:var(--pill);color:var(--text);padding:11px 16px;border-radius:999px;font-weight:700;font-size:14px;cursor:pointer}
 .pill.on{background:linear-gradient(135deg,#3b82f6,#2563eb);border-color:transparent;color:#fff;box-shadow:0 4px 14px rgba(37,99,235,.4)}
-.hint{font-size:12.5px;color:var(--muted);line-height:1.45;margin:0 0 12px;padding:10px 12px;background:var(--card2);border-radius:12px;border:1px dashed var(--line)}
-.hint b{color:var(--text)}
 .field{margin-bottom:14px}
 .field label{display:block;font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin-bottom:8px}
 .input{width:100%;padding:14px;border-radius:12px;border:1px solid var(--line);background:var(--card2);color:var(--text);font-size:15px;outline:none}
@@ -71,12 +69,12 @@ main{padding:16px;max-width:520px;margin:0 auto;padding-bottom:48px}
 <body>
 <header class="top">
   <a class="back" href="dashboard.html" aria-label="Back"><i class="fa-solid fa-arrow-left"></i></a>
-  <h1>Telegram Premium &amp; Stars</h1>
+  <h1>Telegram Premium & Stars</h1>
 </header>
 <main>
   <section class="hero">
     <div class="badge"><i class="fa-solid fa-bolt"></i> Instant digital delivery</div>
-    <h2>Telegram Premium &amp; Stars</h2>
+    <h2>Telegram Premium & Stars</h2>
     <p>Send Premium or Stars to an eligible account. Confirm the recipient, pay from your wallet, and track delivery below.</p>
   </section>
 
@@ -100,7 +98,7 @@ main{padding:16px;max-width:520px;margin:0 auto;padding-bottom:48px}
     </div>
     <div class="err" id="err"></div>
     <button type="button" class="btn btn-primary" id="btnBuy" disabled>
-      <i class="fa-solid fa-paper-plane"></i> Pay &amp; send
+      <i class="fa-solid fa-paper-plane"></i> Pay & send
     </button>
   </section>
 
@@ -138,7 +136,7 @@ main{padding:16px;max-width:520px;margin:0 auto;padding-bottom:48px}
 
   let kind = 'premium';
   let catalog = { premium: [], stars: [] };
-  let selected = null; // premium package or stars service
+  let selected = null;
   let starsQty = 50;
   let busy = false;
   const STARS_QTY = [50, 100, 250, 500, 1000, 2500, 5000];
@@ -163,7 +161,6 @@ main{padding:16px;max-width:520px;margin:0 auto;padding-bottom:48px}
     if (kind === 'premium' || selected.pricing === 'fixed') {
       return Math.ceil(Number(selected.price_ngn) || 0);
     }
-    // stars: price_ngn = rate per 1000
     return Math.ceil(((Number(selected.price_ngn) || 0) / 1000) * starsQty);
   }
 
@@ -239,15 +236,68 @@ main{padding:16px;max-width:520px;margin:0 auto;padding-bottom:48px}
 
   async function loadShop(){
     try {
-      const h = await headers();
-      if (!h) return;
-      const res = await fetch('/api/owlet?action=telegram_shop', { headers: h });
-      const data = await res.json().catch(()=>({}));
-      if (!res.ok || !data.success) {
-        document.getElementById('packPills').innerHTML = '<div class="empty">'+(data.message||'Could not load shop')+'</div>';
-        return;
+      const { data: { session } } = await sb.auth.getSession();
+      if (!session) return;
+
+      const IDS = ['6104','6105','6106','6260'];
+      let { data: rows, error } = await sb
+        .from('booster_services')
+        .select('service_id,name,category,service_type,price_ngn,min_quantity,max_quantity,is_available')
+        .eq('source', 'smmkings')
+        .in('service_id', IDS);
+
+      if (error || !rows || !rows.length) {
+        try {
+          const h = await headers();
+          if (h) {
+            const res = await fetch('/api/owlet?action=telegram_shop', { headers: h });
+            const data = await res.json().catch(()=>({}));
+            if (res.ok && data.success && data.data) {
+              catalog = data.data;
+              paintPills();
+              return;
+            }
+          }
+        } catch (_) {}
+        if (error) {
+          document.getElementById('packPills').innerHTML = '<div class="empty">Could not load packages. Please try again.</div>';
+          return;
+        }
       }
-      catalog = data.data || { premium: [], stars: [] };
+
+      const groups = { premium: [], stars: [] };
+      for (const s of (rows || [])) {
+        const id = String(s.service_id);
+        const price = Math.ceil(Number(s.price_ngn) || 0);
+        if (price <= 0) continue;
+        const name = String(s.name || '');
+        const m = name.match(/for\s+(\d+)\s*months?/i);
+        if (id === '6260' || /stars\s+to\s+any/i.test(name)) {
+          groups.stars.push({
+            service_id: id,
+            name: 'Telegram Stars',
+            min_quantity: Math.max(1, Number(s.min_quantity) || 50),
+            max_quantity: Math.max(50, Number(s.max_quantity) || 1000000),
+            price_ngn: price,
+            pricing: 'per_1k',
+            kind: 'stars'
+          });
+        } else if (['6104','6105','6106'].includes(id) || /premium\s+subscription/i.test(name)) {
+          const months = m ? Number(m[1]) : (id === '6104' ? 3 : id === '6106' ? 6 : 12);
+          groups.premium.push({
+            service_id: id,
+            name: months + ' months Premium',
+            months: months,
+            min_quantity: 1,
+            max_quantity: 1,
+            price_ngn: price,
+            pricing: 'fixed',
+            kind: 'premium'
+          });
+        }
+      }
+      groups.premium.sort((a,b) => (a.months||0) - (b.months||0));
+      catalog = groups;
       paintPills();
     } catch(e) {
       document.getElementById('packPills').innerHTML = '<div class="empty">'+(e.message||e)+'</div>';
