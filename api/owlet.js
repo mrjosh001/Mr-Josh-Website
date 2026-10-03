@@ -20,107 +20,6 @@ import { rateLimit, applyRateLimitHeaders } from '../lib/rateLimit.js';
 
 const OWLET_URL = (process.env.OWLET_API_URL || 'https://theowlet.com/api/v2').replace(/\/$/, '');
 const OWLET_KEY = String(process.env.OWLET_API_KEY || '').trim().replace(/^["']+|["']+$/g, '');
-
-const PROVIDERS = {
-  owlet: {
-    source: 'owlet',
-    url: OWLET_URL,
-    keyEnv: 'OWLET_API_KEY',
-    key: OWLET_KEY,
-    label: 'Owlet',
-    telegramOnly: false,
-    defaultVisible: true
-  },
-  jap: {
-    source: 'jap',
-    url: String(process.env.JAP_API_URL || 'https://justanotherpanel.com/api/v2').replace(/\/$/, ''),
-    keyEnv: 'JAP_API_KEY',
-    key: String(process.env.JAP_API_KEY || '').trim().replace(/^["']+|["']+$/g, ''),
-    label: 'JAP',
-    telegramOnly: false,
-    defaultVisible: false
-  },
-  smmkings: {
-    source: 'smmkings',
-    url: String(process.env.SMMKINGS_API_URL || 'https://smmkings.com/api/v2').replace(/\/$/, ''),
-    keyEnv: 'SMMKINGS_API_KEY',
-    key: String(process.env.SMMKINGS_API_KEY || '').trim().replace(/^["']+|["']+$/g, ''),
-    label: 'SMMKings',
-    telegramOnly: true,
-    defaultVisible: false
-  }
-};
-
-function resolveProvider(req) {
-  let p = '';
-  try {
-    if (req.query && req.query.provider) p = String(req.query.provider);
-    else if (req.url) p = new URL(req.url, 'http://localhost').searchParams.get('provider') || '';
-  } catch (_) {}
-  p = String(p || 'owlet').toLowerCase().trim();
-  if (!PROVIDERS[p]) p = 'owlet';
-  return PROVIDERS[p];
-}
-
-function isTelegramService(s) {
-  const cat = String(s.category || '').toLowerCase();
-  const name = String(s.name || '').toLowerCase();
-  return (
-    cat.includes('telegram') ||
-    name.includes('telegram') ||
-    /\btg\b/i.test(cat) ||
-    /\btg\b/i.test(name) ||
-    cat.includes('телеграм')
-  );
-}
-
-async function panelCall(providerCfg, params, timeoutMs = 20000) {
-  const key = providerCfg.key || '';
-  if (!key) {
-    return { ok: false, status: 500, json: { error: (providerCfg.keyEnv || 'API_KEY') + ' not configured' } };
-  }
-  const body = new URLSearchParams({ key, ...params });
-  const ac = typeof AbortController !== 'undefined' ? new AbortController() : null;
-  const timer = ac ? setTimeout(() => ac.abort(), timeoutMs) : null;
-  try {
-    const res = await fetch(providerCfg.url, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/x-www-form-urlencoded',
-        Accept: 'application/json'
-      },
-      body: body.toString(),
-      signal: ac ? ac.signal : undefined
-    });
-    const text = await res.text();
-    let json;
-    try {
-      json = JSON.parse(text);
-    } catch {
-      return {
-        ok: false,
-        status: res.status || 502,
-        json: { error: 'Invalid JSON from ' + providerCfg.label, raw: text.slice(0, 300) }
-      };
-    }
-    // Many SMM panels return HTTP 200 with {error} or HTTP 400 with body —
-    // treat presence of order id as success regardless of status code.
-    const hasOrder = json && (json.order != null || json.order_id != null);
-    const hasError = json && (json.error != null || json.message === 'error');
-    const ok = hasOrder ? true : (res.ok && !hasError);
-    return { ok, status: res.status, json };
-  } catch (e) {
-    const msg =
-      e && e.name === 'AbortError'
-        ? providerCfg.label + ' timeout'
-        : e.message || providerCfg.label + ' request failed';
-    return { ok: false, status: 504, json: { error: msg } };
-  } finally {
-    if (timer) clearTimeout(timer);
-  }
-}
-
-
 const USD_TO_NGN = Number(process.env.USD_TO_NGN_RATE) || 1450;
 /** No booster service / order is sold below this (NGN). Override with OWLET_MIN_SELL_NGN */
 const MIN_SELL_PRICE_NGN = Math.max(0, Number(process.env.OWLET_MIN_SELL_NGN) || 200);
@@ -270,20 +169,15 @@ async function owletCall(params, timeoutMs = 12000) {
 
 
 async function handleBalance(req, res) {
-  const cfg = resolveProvider(req);
-  const call = cfg.source === 'owlet'
-    ? await owletCall({ action: 'balance' })
-    : await panelCall(cfg, { action: 'balance' });
-  const { ok, status, json } = call;
+  const { ok, status, json } = await owletCall({ action: 'balance' });
   if (!ok || json?.error) {
     return res.status(status || 502).json({
       success: false,
-      message: 'Could not load ' + cfg.label + ' balance right now' + (json?.error ? (': ' + json.error) : '')
+      message: 'Could not load booster balance right now'
     });
   }
   return res.status(200).json({
     success: true,
-    provider: cfg.source,
     balance: json.balance,
     currency: json.currency || 'USD',
     raw: json
@@ -320,8 +214,7 @@ async function handleServices(req, res) {
 }
 
 async function handleSync(req, res) {
-  const cfg = resolveProvider(req);
-  const SYNC_SOURCE = cfg.source;
+  const SYNC_SOURCE = 'owlet';
   const TIME_BUDGET_MS = 250000;
   const BATCH = 80;
   const startedAt = Date.now();
@@ -333,7 +226,7 @@ async function handleSync(req, res) {
   {
     const { data, error } = await supabase.from('sync_jobs').select('*').eq('source', SYNC_SOURCE).maybeSingle();
     if (error && !/does not exist|relation/i.test(error.message || '')) {
-      console.warn('[' + SYNC_SOURCE + ' sync] sync_jobs read:', error.message);
+      console.warn('[owlet sync] sync_jobs read:', error.message);
     }
     job = data;
   }
@@ -351,29 +244,22 @@ async function handleSync(req, res) {
     };
   }
 
-  const call = SYNC_SOURCE === 'owlet'
-    ? await owletCall({ action: 'services' })
-    : await panelCall(cfg, { action: 'services' });
-  const { ok, status, json } = call;
+  const { ok, status, json } = await owletCall({ action: 'services' });
   if (!ok || json?.error || !Array.isArray(json)) {
     return res.status(status || 502).json({
       success: false,
-      message: 'Could not sync ' + cfg.label + ' services right now' + (json?.error ? (': ' + json.error) : '')
+      message: 'Could not sync booster services right now'
     });
   }
 
-  let services = json;
-  if (cfg.telegramOnly) {
-    services = services.filter(isTelegramService);
-  }
-
+  const services = json;
   let cursor = Number(job.cursor_index) || 0;
   if (cursor >= services.length) cursor = 0;
 
   const { data: existing, error: exErr } = await supabase
     .from('booster_services')
-    .select('service_id, price_ngn, price_source, is_available')
-    .eq('source', SYNC_SOURCE);
+    .select('service_id, price_ngn, price_source')
+    .eq('source', 'owlet');
 
   if (exErr) {
     return res.status(500).json({
@@ -403,19 +289,10 @@ async function handleSync(req, res) {
 
       const prev = map.get(serviceId);
       const manual = prev && prev.price_source === 'manual';
+      // Manual admin prices kept, but never below site minimum ₦200
       const listed = manual ? floorSellNgn(prev.price_ngn, serviceId) : floorSellNgn(defaultNgn, serviceId);
-      // Sticky availability: keep admin hide; new JAP stay hidden; new SMMKings
-      // Premium/Stars/Channel Boost default ON so Telegram shop is live after sync.
-      let available;
-      if (prev && typeof prev.is_available === 'boolean') {
-        available = prev.is_available;
-      } else if (cfg.source === 'smmkings' && classifyTgService({ name: s.name, category: s.category })) {
-        available = true;
-      } else {
-        available = !!cfg.defaultVisible;
-      }
       return {
-        source: SYNC_SOURCE,
+        source: 'owlet',
         service_id: serviceId,
         name: s.name || serviceId,
         category: s.category || 'Other',
@@ -427,7 +304,7 @@ async function handleSync(req, res) {
         max_quantity: Number(s.max) || 0,
         refill: !!s.refill,
         cancel: !!s.cancel,
-        is_available: available,
+        is_available: true,
         updated_at: now
       };
     });
@@ -465,30 +342,26 @@ async function handleSync(req, res) {
   try {
     await supabase.from('sync_jobs').upsert(jobFields, { onConflict: 'source' });
   } catch (e) {
-    console.warn('[' + SYNC_SOURCE + ' sync] sync_jobs write failed', e?.message || e);
+    console.warn('[owlet sync] sync_jobs write failed', e?.message || e);
   }
 
-  const tgNote = cfg.telegramOnly ? ' (Telegram only)' : '';
   return res.status(200).json({
     success: true,
     done,
-    provider: SYNC_SOURCE,
     message: done
-      ? (cfg.label + ' sync complete — ' + services.length + ' services' + tgNote)
-      : (cfg.label + ' sync progress ' + cursor + '/' + services.length + ' — run Sync again to continue'),
+      ? `Owlet sync complete — ${services.length} services`
+      : `Owlet sync progress ${cursor}/${services.length} — run Sync again to continue`,
     total: services.length,
     cursor,
     upserted_this_run: upserted,
     rate_currency_mode: getRateCurrency(),
     markup_range: '35%–70% (random per service)',
     usd_to_ngn: USD_TO_NGN,
-    telegram_only: !!cfg.telegramOnly,
     errors: errors.slice(0, 5)
   });
 }
 
 async function handleList(req, res) {
-  const listSource = (resolveProvider(req).source) || 'owlet';
   const q = (req.query?.q || '').toString().trim().toLowerCase();
   const category = (req.query?.category || '').toString().trim();
   const hideUnavailable = String(req.query?.hide_unavailable || '1') !== '0';
@@ -503,7 +376,7 @@ async function handleList(req, res) {
       'id,source,service_id,name,category,service_type,supplier_rate_usd,price_ngn,price_source,min_quantity,max_quantity,refill,cancel,is_available,updated_at',
       { count: 'exact' }
     )
-    .eq('source', listSource)
+    .eq('source', 'owlet')
     .order('category', { ascending: true })
     .order('name', { ascending: true })
     .range(from, to);
@@ -533,7 +406,7 @@ async function handleList(req, res) {
   const { data: catRows } = await supabase
     .from('booster_services')
     .select('category')
-    .eq('source', listSource)
+    .eq('source', 'owlet')
     .limit(5000);
   const categories = [...new Set((catRows || []).map(r => r.category).filter(Boolean))].sort();
 
@@ -672,100 +545,6 @@ async function resolveOwletServiceId(storedId, name) {
   return id;
 }
 
-
-/** Customer Telegram shop — SMMKings Premium / Stars / Channel Boost only (must be is_available). */
-/** Shop allowlist only: Premium 3/6/12 packages + Stars-to-user. No boost, no members. */
-function classifyTgService(s) {
-  const n = String(s.name || '').replace(/\s+/g, ' ').trim();
-  const c = String(s.category || '').replace(/\s+/g, ' ').trim();
-  const blob = (n + ' ' + c).toLowerCase();
-  // Reject members / views / post stars / channel boost
-  if (/member|view|post\s*stars|channel\s*boost|group\s*member/i.test(n) && !/subscription\s+for/i.test(n)) {
-    // still allow pure stars-to-user name
-    if (!/stars\s+to\s+any/i.test(blob)) return null;
-  }
-  // Premium: "Telegram Premium Subscription for N Months" OR category/name "Buy Telegram Premium to any"
-  if (/telegram\s+premium\s+subscription\s+for\s+\d+\s*months?/i.test(n)) return 'premium';
-  if (/buy\s+telegram\s+premium\s+to\s+any/i.test(blob) && !/member|view/i.test(n)) return 'premium';
-  if (/telegram\s+premium\s+to\s+any/i.test(blob) && !/member|view|subscription/i.test(n)) return 'premium';
-  // Stars: "Telegram Stars to any @user" / Buy Telegram Stars…
-  if (/buy\s+telegram\s+stars\s+to\s+any/i.test(blob)) return 'stars';
-  if (/telegram\s+stars\s+to\s+any/i.test(blob) && !/post\s*stars/i.test(n)) return 'stars';
-  return null;
-}
-
-function premiumMonthsFromName(name) {
-  const m = String(name || '').match(/for\s+(\d+)\s*months?/i);
-  return m ? Number(m[1]) : null;
-}
-
-async function handleTelegramShop(req, res) {
-  // Prefer rows admin left available. If none yet (post-sync sticky hide), surface
-  // classified Telegram packages that still have a sell price so the shop is usable.
-  const { data, error } = await supabase
-    .from('booster_services')
-    .select('id,service_id,name,category,service_type,supplier_rate_usd,price_ngn,min_quantity,max_quantity,refill,cancel,is_available')
-    .eq('source', 'smmkings')
-    .order('price_ngn', { ascending: true })
-    .limit(800);
-
-  if (error) {
-    return res.status(500).json({ success: false, message: error.message });
-  }
-
-  const rows = data || [];
-  // Strict allowlist first — never dump the whole Telegram catalog
-  const matched = rows.filter((s) => classifyTgService(s));
-  const available = matched.filter((s) => s.is_available === true);
-  const pool = available.length
-    ? available
-    : matched.filter((s) => Number(s.price_ngn) > 0);
-
-  const groups = { premium: [], stars: [] };
-  for (const s of pool) {
-    const kind = classifyTgService(s);
-    if (!kind || kind === 'boost') continue;
-    const minQ = Math.max(1, Number(s.min_quantity) || 1);
-    const maxQ = Math.max(minQ, Number(s.max_quantity) || minQ);
-    const months = premiumMonthsFromName(s.name);
-    const price = floorSellNgn(s.price_ngn, s.service_id);
-    if (kind === 'premium') {
-      // Each row is a fixed package (3 / 6 / 12 months) — price_ngn is full package price
-      groups.premium.push({
-        service_id: String(s.service_id),
-        name: months ? (months + ' months Premium') : 'Telegram Premium',
-        months: months || 1,
-        category: s.category,
-        min_quantity: 1,
-        max_quantity: 1,
-        price_ngn: price,
-        pricing: 'fixed',
-        kind: 'premium'
-      });
-    } else {
-      // Stars: price_ngn = sell rate per 1,000 stars
-      groups.stars.push({
-        service_id: String(s.service_id),
-        name: 'Telegram Stars',
-        category: s.category,
-        min_quantity: minQ,
-        max_quantity: maxQ,
-        price_ngn: price,
-        pricing: 'per_1k',
-        kind: 'stars'
-      });
-    }
-  }
-  // Sort premium by months ascending
-  groups.premium.sort((a, b) => (a.months || 0) - (b.months || 0));
-
-  return res.status(200).json({
-    success: true,
-    data: groups,
-    counts: { premium: groups.premium.length, stars: groups.stars.length }
-  });
-}
-
 async function handleOrder(req, res) {
   const body = typeof req.body === 'string' ? (() => { try { return JSON.parse(req.body || '{}'); } catch { return {}; } })() : (req.body || {});
   const serviceId = String(body.service_id || body.service || '').trim();
@@ -783,65 +562,40 @@ async function handleOrder(req, res) {
   if (!userGate.ok) return res.status(userGate.status).json({ success: false, message: userGate.message });
   const user = userGate.user;
 
-  const orderSource = String(body.source || body.provider || 'owlet').toLowerCase().trim() === 'smmkings'
-    ? 'smmkings'
-    : 'owlet';
-
   const { data: service, error: sErr } = await supabase
     .from('booster_services')
     .select('*')
-    .eq('source', orderSource)
+    .eq('source', 'owlet')
     .eq('service_id', serviceId)
     .maybeSingle();
 
   if (sErr || !service) {
     return res.status(404).json({ success: false, message: 'Service not found or unavailable' });
   }
-  const isTgShop = orderSource === 'smmkings' && !!classifyTgService(service);
-  if (service.is_available === false && !isTgShop) {
+  if (service.is_available === false) {
     return res.status(400).json({ success: false, message: 'This service is temporarily unavailable' });
   }
-  if (orderSource === 'smmkings' && !isTgShop) {
-    return res.status(403).json({
-      success: false,
-      message: 'This service is not available on the customer shop yet'
-    });
-  }
 
-  const svcName = String(service.name || '');
-  const typeStr = String(service.service_type || service.type || '').toLowerCase();
-  const isPremiumFixed = isTgShop && classifyTgService(service) === 'premium';
-
+  // Site rule: never sell below 300 units. Supplier min wins if higher.
   const supplierMin = Number(service.min_quantity) || 1;
   let maxQ = Number(service.max_quantity) || 1000000;
   if (maxQ < 1) maxQ = 1000000;
-  let minQ = isTgShop ? supplierMin : Math.max(300, supplierMin);
+  let minQ = Math.max(300, supplierMin);
   if (minQ > maxQ) minQ = maxQ;
-  // Fixed Premium packages are 1 unit each — do not enforce supplier month-as-min quirks
-  if (!isPremiumFixed && (quantity < minQ || quantity > maxQ)) {
+  if (quantity < minQ || quantity > maxQ) {
     return res.status(400).json({
       success: false,
       message: `Quantity must be between ${minQ.toLocaleString()} and ${maxQ.toLocaleString()}`
     });
   }
 
+  // price_ngn is selling rate per 1000 units (SMM standard)
+  // Listed rate never below ₦200 even if DB still has old cheap rows
   const ratePer1k = floorSellNgn(service.price_ngn, service.service_id);
   if (ratePer1k <= 0) {
     return res.status(400).json({ success: false, message: 'Service price not configured' });
   }
-  const isPackage =
-    isPremiumFixed ||
-    (isTgShop && (typeStr.includes('package') || /subscription\s+for\s+\d+\s*months?/i.test(svcName)));
-  let totalNgn;
-  if (isPremiumFixed) {
-    // Full package price once (3/6/12 month products) — ignore qty multiplier beyond 1
-    totalNgn = Math.max(MIN_SELL_PRICE_NGN, Math.ceil(ratePer1k));
-  } else if (isPackage) {
-    totalNgn = Math.max(MIN_SELL_PRICE_NGN, Math.ceil(ratePer1k * quantity));
-  } else {
-    // Stars (and default SMM): price_ngn is rate per 1,000 units
-    totalNgn = Math.max(MIN_SELL_PRICE_NGN, Math.ceil((ratePer1k / 1000) * quantity));
-  }
+  const totalNgn = Math.max(MIN_SELL_PRICE_NGN, Math.ceil((ratePer1k / 1000) * quantity));
   if (totalNgn < 1) {
     return res.status(400).json({ success: false, message: 'Order total too low' });
   }
@@ -881,116 +635,33 @@ async function handleOrder(req, res) {
     }
   }
 
-  // Place order with supplier — use live panel ID if catalog ID is stale (Owlet only)
-  let liveServiceId = String(service.service_id || serviceId).trim();
-  if (orderSource === 'owlet') {
-    try { liveServiceId = await resolveOwletServiceId(serviceId, service.name); } catch (_) {}
-  }
+  // Place order with Owlet — use live panel ID if our catalog ID is stale
+  const liveServiceId = await resolveOwletServiceId(serviceId, service.name);
+  const { ok, status, json } = await owletCall({
+    action: 'add',
+    service: liveServiceId,
+    link,
+    quantity: String(quantity)
+  });
 
-  // SMM panel docs: Package type = service + link only (no quantity).
-  // Default type = service + link + quantity within min/max.
-  const isPackageType =
-    isPremiumFixed ||
-    typeStr.includes('package') ||
-    /subscription\s+for\s+\d+\s*months?/i.test(svcName);
-
-  let ok, status, json;
-  if (orderSource === 'smmkings') {
-    const cfg = PROVIDERS.smmkings;
-    if (!cfg.key) {
-      await supabase.from('profiles').update({ balance: originalBalance }).eq('id', user.id);
-      return res.status(500).json({
-        success: false,
-        message: 'Telegram shop is not configured yet. Your balance was restored.'
-      });
-    }
-    // Normalize link for Telegram: always https://t.me/handle
-    let panelLink = String(link || '').trim();
-    if (panelLink.startsWith('@')) panelLink = 'https://t.me/' + panelLink.slice(1);
-    else if (!/^https?:\/\//i.test(panelLink) && panelLink) {
-      panelLink = 'https://t.me/' + panelLink.replace(/^(t\.me|telegram\.me)\//i, '');
-    }
-
-    const addParams = {
-      action: 'add',
-      service: liveServiceId, // must be panel numeric/string service id from sync
-      link: panelLink
-    };
-    if (!isPackageType) {
-      addParams.quantity = String(quantity);
-    }
-
-    const call = await panelCall(cfg, addParams);
-    ok = call.ok;
-    status = call.status;
-    json = call.json || {};
-
-    // One retry with bare @username if URL form failed (some TG services want handle only)
-    if ((!ok || json.error || !(json.order || json.order_id)) && panelLink.includes('t.me/')) {
-      const handle = panelLink.split('t.me/')[1].split(/[/?#]/)[0];
-      if (handle) {
-        const retryParams = { ...addParams, link: '@' + handle };
-        const retry = await panelCall(cfg, retryParams);
-        if (retry.ok || retry.json?.order || retry.json?.order_id) {
-          ok = true;
-          status = retry.status;
-          json = retry.json || {};
-        } else {
-          json = retry.json || json;
-          status = retry.status;
-        }
-      }
-    }
-  } else {
-    const call = await owletCall({
-      action: 'add',
-      service: liveServiceId || serviceId,
-      link,
-      quantity: String(quantity)
-    });
-    ok = call.ok; status = call.status; json = call.json;
-  }
-
-  const orderIdRaw = json?.order ?? json?.order_id ?? null;
-  if (!ok || json?.error || orderIdRaw == null || orderIdRaw === '') {
-    // refund user — supplier did not accept
+  if (!ok || json?.error || !json?.order) {
+    // refund
     await supabase.from('profiles').update({ balance: originalBalance }).eq('id', user.id);
-    const rawErr = String(
-      (typeof json?.error === 'string' && json.error) ||
-      (typeof json?.message === 'string' && json.message) ||
-      (json?.error && typeof json.error === 'object' && (json.error.message || JSON.stringify(json.error))) ||
-      ''
-    ).trim();
-    console.error('[owlet order] panel reject', {
-      source: orderSource,
-      service: liveServiceId,
-      package: isPackageType,
-      status,
-      rawErr: rawErr.slice(0, 200),
-      jsonKeys: json ? Object.keys(json) : []
-    });
-    let errMsg = 'This order could not be placed right now. Your balance was restored.';
-    if (/incorrect service|service.*(not|invalid)|unknown service/i.test(rawErr)) {
-      errMsg = 'This package is no longer available. Pick another one. Your balance was restored.';
-    } else if (/not enough funds|insufficient (funds|balance)|no enough/i.test(rawErr)) {
-      // Supplier wallet — not the customer wallet (customer already refunded)
-      errMsg = 'This service is temporarily unavailable. Your balance was restored. Please try again later.';
-    } else if (/quantity|min|max/i.test(rawErr)) {
-      errMsg = rawErr + ' Your balance was restored.';
-    } else if (/link|url|username|user/i.test(rawErr)) {
-      errMsg = 'Check the Telegram username or profile link and try again. Your balance was restored.';
-    } else if (rawErr) {
-      errMsg = 'Order could not be completed. Your balance was restored. Please try again.';
-    }
+    const rawErr = json?.error || json?.message || '';
+    const errMsg = /incorrect service/i.test(String(rawErr))
+      ? 'This package is no longer available. Go back and pick another one. Your balance was restored.'
+      : /supplier|owlet|panel/i.test(String(rawErr))
+      ? 'This order could not be placed right now. Your balance was restored.'
+      : (rawErr || 'This order could not be placed right now. Your balance was restored.');
     return res.status(502).json({ success: false, message: errMsg });
   }
 
-  const supplierOrderId = String(orderIdRaw);
+  const supplierOrderId = String(json.order);
   const nowIso = new Date().toISOString();
   const orderRow = {
     user_id: user.id,
     customer_id: profile.customer_id || null,
-    source: orderSource,
+    source: 'owlet',
     supplier_order_id: supplierOrderId,
     service_id: liveServiceId,
     service_name: service.name,
@@ -1024,7 +695,7 @@ async function handleOrder(req, res) {
       const minimal = {
         user_id: user.id,
         customer_id: profile.customer_id || null,
-        source: orderSource,
+        source: 'owlet',
         supplier_order_id: supplierOrderId,
         service_id: serviceId,
         service_name: service.name,
@@ -1665,11 +1336,6 @@ export default async function handler(req, res) {
     const u = await requireUser(req);
     if (!u.ok) return res.status(u.status).json({ success: false, message: u.message });
     return handleCatalog(req, res);
-  }
-  if (action === 'telegram_shop') {
-    const u = await requireUser(req);
-    if (!u.ok) return res.status(u.status).json({ success: false, message: u.message });
-    return handleTelegramShop(req, res);
   }
   if (action === 'order') {
     return handleOrder(req, res);
