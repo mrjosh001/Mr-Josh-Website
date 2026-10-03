@@ -228,7 +228,12 @@ button,input{font:inherit}
 .details-toggle.open i{transform:rotate(180deg)}
 .desc-box{display:none}
 .desc-box.open{display:block}
-.desc-box{background:var(--bg);border:1px solid var(--border);border-radius:14px;padding:12px 14px;margin-bottom:14px}
+.desc-box{background:var(--bg);border:1px solid var(--border);border-radius:14px;padding:12px 14px;margin-bottom:12px;display:block}
+.supplier-name-box{font-size:12.5px;line-height:1.5;font-weight:600;color:var(--text);padding:10px 12px;border-radius:12px;border:1px solid var(--border);background:rgba(91,138,245,.07);margin:0 0 10px;word-break:break-word}
+.spec-chips{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 12px}
+.spec-chip{font-size:11px;font-weight:800;padding:5px 10px;border-radius:999px;border:1px solid var(--border);background:var(--card);color:var(--muted)}
+.spec-chip.on{color:var(--success);border-color:rgba(52,211,153,.35);background:rgba(52,211,153,.1)}
+.spec-chip.off{color:var(--warn);border-color:rgba(251,191,36,.3);background:rgba(251,191,36,.08)}
 .desc-title{font-size:11px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin-bottom:8px}
 .desc-box ul{list-style:none;display:flex;flex-direction:column;gap:7px}
 .desc-box li{font-size:12.5px;line-height:1.4;color:var(--text);font-weight:600;display:flex;gap:8px}
@@ -271,14 +276,9 @@ button,input{font:inherit}
 </header>
 
 <section class="hero">
-  <div class="eyebrow"><i class="fa-solid fa-bolt"></i> Live boosts</div>
-  <h2>Grow any platform in minutes</h2>
-  <p>Choose a network, pick a service, paste your link. Paid from your wallet and tracked in Orders.</p>
-  <div class="trust-row">
-    <span class="trust-pill">Min qty 300</span>
-    <span class="trust-pill">Wallet checkout</span>
-    <span class="trust-pill">Live order status</span>
-  </div>
+  <div class="eyebrow"><i class="fa-solid fa-bolt"></i> MJ Boosters</div>
+  <h2>Pick a platform. Place your boost.</h2>
+  <p>Wallet checkout · Min quantity 300 · Track progress in Orders</p>
 </section>
 
 <div class="section-label">Platforms</div>
@@ -337,12 +337,10 @@ button,input{font:inherit}
         <span class="meta-pill" id="mMinMax">Min 300</span>
         <span class="badge" id="mRefill" style="display:none">Refill</span>
       </div>
-      <button type="button" class="details-toggle" id="detailsToggle" onclick="toggleDetails()">
-        <span><i class="fa-solid fa-circle-info" style="color:var(--primary);margin-right:6px"></i> Service details & rules</span>
-        <i class="fa-solid fa-chevron-down"></i>
-      </button>
+      <div class="supplier-name-box" id="mFullName"></div>
+      <div class="spec-chips" id="mChips"></div>
       <div class="desc-box" id="mDesc">
-        <div class="desc-title">What you get</div>
+        <div class="desc-title">Service info & rules</div>
         <ul id="mDescList"></ul>
       </div>
       <div class="link-warning-box">
@@ -355,7 +353,7 @@ button,input{font:inherit}
           <input id="mLink" placeholder="https://…" autocomplete="off" inputmode="url">
           <button type="button" class="paste-btn" onclick="pasteLink()">Paste</button>
         </div>
-        <div class="hint-text">Profile, post, reel, video or channel URL</div>
+        <div class="hint-text">Public profile, post, reel, video or channel URL only</div>
       </div>
       <div class="field">
         <label>Quantity</label>
@@ -682,65 +680,84 @@ function openOrderFromEl(el){
   else toast('Service data missing — refresh list');
 }
 
+function parseServiceTags(name){
+  const raw = String(name || '');
+  const tags = [];
+  const re = /\[([^\]]+)\]/g;
+  let m;
+  while ((m = re.exec(raw))) {
+    const t = String(m[1] || '').replace(/\s+/g, ' ').trim();
+    if (t) tags.push(t);
+  }
+  return tags;
+}
+function shortServiceTitle(name){
+  const raw = String(name || 'Service');
+  const cut = raw.split('[')[0].replace(/\s+/g, ' ').trim();
+  return cut || raw;
+}
 function openOrder(s){
   selected = s;
   const min = effectiveMin(s);
   const max = Number(s.max_quantity) || 1000000;
+  const fullName = String(s.name || 'Service');
+  const tags = parseServiceTags(fullName);
 
-  document.getElementById('mTitle').textContent = s.name || 'Service';
-  document.getElementById('mSub').textContent = s.category || '';
+  document.getElementById('mTitle').textContent = shortServiceTitle(fullName);
+  document.getElementById('mSub').textContent = (s.category || '') + (s.service_type ? ' · ' + s.service_type : '');
   document.getElementById('mPrice').textContent = fmt(s.price_ngn) + ' / 1k';
   document.getElementById('mMinMax').textContent = 'Min ' + min.toLocaleString() + (max < 2000000000 ? ' · Max ' + max.toLocaleString() : '');
 
   const refillEl = document.getElementById('mRefill');
-  refillEl.style.display = s.refill ? 'inline-flex' : 'none';
+  if (refillEl) refillEl.style.display = s.refill ? 'inline-flex' : 'none';
 
-  // Build description / notes (matches style of supplier panels)
-  const list = document.getElementById('mDescList');
-  const items = [];
-  items.push({ ico: '⏱️', text: 'Start time: usually within 0–60 minutes', cls: '' });
-  items.push({ ico: '🌍', text: 'Worldwide delivery · High quality profiles', cls: '' });
-  items.push({ ico: '✅', text: 'Safe & gradual delivery for better retention', cls: 'ok' });
-  items.push({ ico: '📦', text: 'Minimum: ' + min.toLocaleString() + (max < 2000000000 ? ' · Maximum: ' + max.toLocaleString() : ''), cls: '' });
-  if (s.refill) {
-    items.push({ ico: '🔄', text: 'Refill available on this service', cls: 'ok' });
-  } else {
-    items.push({ ico: '⚠️', text: 'Refills are not available for this service', cls: 'warn' });
+  const fullEl = document.getElementById('mFullName');
+  if (fullEl) fullEl.textContent = fullName;
+
+  const chips = document.getElementById('mChips');
+  if (chips) {
+    const chipHtml = [];
+    if (s.refill) chipHtml.push('<span class="spec-chip on">Refill available</span>');
+    else chipHtml.push('<span class="spec-chip off">No refill</span>');
+    if (s.cancel) chipHtml.push('<span class="spec-chip on">Cancel supported</span>');
+    if (s.service_type) chipHtml.push('<span class="spec-chip">' + esc(s.service_type) + '</span>');
+    tags.slice(0, 8).forEach(function(tag){
+      chipHtml.push('<span class="spec-chip">' + esc(tag) + '</span>');
+    });
+    chips.innerHTML = chipHtml.join('');
   }
-  items.push({ ico: '⚠️', text: 'Do not place another order on the same link while one is still active', cls: 'warn' });
-  items.push({ ico: '⚠️', text: 'Make sure the account is public and the link is correct', cls: 'warn' });
-  items.push({ ico: 'ℹ️', text: 'Use the exact profile, post, reel, video or channel link', cls: '' });
 
-  list.innerHTML = items.map(it =>
-    '<li class="' + (it.cls || '') + '"><span class="ico">' + it.ico + '</span><span>' + it.text + '</span></li>'
-  ).join('');
+  const list = document.getElementById('mDescList');
+  if (list) {
+    const items = [];
+    const startTag = tags.find(function(x){ return /start|instant|0-\d|mins?/i.test(x); });
+    const speedTag = tags.find(function(x){ return /\d+k\/?day|speed|fast|drop/i.test(x); });
+    if (startTag) items.push({ ico: '⏱️', text: 'Start: ' + startTag, cls: '' });
+    else items.push({ ico: '⏱️', text: 'Start time: usually within 0–60 minutes', cls: '' });
+    if (speedTag) items.push({ ico: '⚡', text: speedTag, cls: '' });
+    items.push({ ico: '📦', text: 'Quantity range: ' + min.toLocaleString() + (max < 2000000000 ? ' – ' + max.toLocaleString() : ''), cls: '' });
+    if (s.refill) items.push({ ico: '🔄', text: 'Refill available on this service', cls: 'ok' });
+    else items.push({ ico: '⚠️', text: 'Refills are not available for this service', cls: 'warn' });
+    if (s.cancel) items.push({ ico: '🛑', text: 'Cancel may be available before completion', cls: '' });
+    items.push({ ico: '⚠️', text: 'Do not place another order on the same link while one is still active', cls: 'warn' });
+    items.push({ ico: '⚠️', text: 'Account must be public and the link must be correct', cls: 'warn' });
+    items.push({ ico: 'ℹ️', text: 'Use the exact profile, post, reel, video or channel link', cls: '' });
+    list.innerHTML = items.map(function(it){
+      return '<li class="' + (it.cls || '') + '"><span class="ico">' + it.ico + '</span><span>' + esc(it.text) + '</span></li>';
+    }).join('');
+  }
 
   document.getElementById('mQty').value = min;
   document.getElementById('mQty').min = min;
   document.getElementById('mQty').max = max;
   document.getElementById('mLink').value = '';
   updateTotal();
-  const det = document.getElementById('mDesc');
-  const detBtn = document.getElementById('detailsToggle');
-  if (det) det.classList.remove('open');
-  if (detBtn) detBtn.classList.remove('open');
   document.getElementById('modalBg').classList.add('open');
-  setTimeout(() => document.getElementById('mLink').focus(), 180);
+  setTimeout(function(){ document.getElementById('mLink').focus(); }, 180);
 }
 
-function toggleDetails(){
-  const box = document.getElementById('mDesc');
-  const btn = document.getElementById('detailsToggle');
-  if (!box || !btn) return;
-  const open = box.classList.toggle('open');
-  btn.classList.toggle('open', open);
-}
 function closeModal(){
   document.getElementById('modalBg').classList.remove('open');
-  const det = document.getElementById('mDesc');
-  const detBtn = document.getElementById('detailsToggle');
-  if (det) det.classList.remove('open');
-  if (detBtn) detBtn.classList.remove('open');
   selected = null;
 }
 
