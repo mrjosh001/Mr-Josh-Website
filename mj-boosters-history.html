@@ -183,6 +183,42 @@ body::before {
 }
 :root[data-theme="dark"] .link-row .link-text { color: #94a3b8; }
 
+
+/* advanced booster cards */
+.card { border-radius: 22px; padding: 16px 16px 14px; border: 1.5px solid #dbeafe; }
+.card .top { margin-bottom: 12px; }
+.card .title { font-size: 15.5px; letter-spacing: -0.01em; }
+.status {
+  font-size: 10.5px; font-weight: 800; letter-spacing: 0.04em;
+  padding: 6px 11px; border-radius: 999px; text-transform: uppercase;
+}
+.link-row {
+  display: flex; align-items: center; gap: 8px;
+  background: #f1f5f9; border: 1.5px solid #e2e8f0;
+  border-radius: 14px; padding: 11px 10px; margin: 4px 0 12px;
+}
+.link-row .link-text {
+  flex: 1; min-width: 0; font-size: 12px; font-weight: 600; color: #64748b;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.btn-open {
+  flex-shrink: 0; border: none; cursor: pointer;
+  display: inline-flex; align-items: center; gap: 6px;
+  font: 800 11px/1 'Plus Jakarta Sans', system-ui, sans-serif;
+  padding: 10px 13px; border-radius: 12px;
+  background: linear-gradient(135deg, var(--blue), var(--blue-2)); color: #fff;
+  box-shadow: 0 8px 18px var(--blue-ring);
+}
+.prog { margin: 14px 0 6px; }
+.bar { height: 11px; border-radius: 999px; background: #e2e8f0; overflow: hidden; }
+.btn-row { margin-top: 12px; padding-top: 12px; }
+.btn-mini {
+  border-radius: 12px; padding: 11px 15px; font-weight: 800;
+  transition: transform .15s ease, box-shadow .15s ease;
+}
+.btn-mini.primary { box-shadow: 0 8px 16px var(--blue-ring); }
+.btn-mini:active { transform: scale(0.98); }
+
 </style>
 <link rel="stylesheet" href="/css/graceful.css">
 <link rel="stylesheet" href="/css/mj-motion.css">
@@ -198,7 +234,6 @@ body::before {
     <button type="button" class="btn-icon" id="refreshBtn" aria-label="Refresh"><i class="fa-solid fa-rotate-right"></i></button>
   </header>
   <div class="brand-bar"></div>
-  <p id="pageSub" style="font-size:12px;font-weight:600;color:var(--muted,#64748b);margin:0 0 14px;line-height:1.4">MJ Boosters only. Telegram orders live under Telegram → Orders.</p>
   <div class="list" id="list"></div>
 </div>
 <div id="toast"></div>
@@ -372,7 +407,7 @@ function isActive(o){
 
 function renderRows(rows){
     if (!rows.length) {
-      el.innerHTML = `<div class="empty"><div style="font-size:40px;margin-bottom:8px">⚡</div><h3>No boost orders yet</h3><p>MJ Boosters only — Telegram Premium &amp; Stars have their own order page.</p><a href="mj-boosters.html">Place first boost</a></div>`;
+      el.innerHTML = `<div class="empty"><div style="font-size:40px;margin-bottom:8px">⚡</div><h3>No boost orders yet</h3><p>Your growth orders will show here with live progress.</p><a href="mj-boosters.html">Place first boost</a></div>`;
       return;
     }
     el.innerHTML = rows.map(o => {
