@@ -185,18 +185,49 @@ button,input{font:inherit}
   border:1px solid rgba(255,255,255,.08);box-shadow:0 12px 32px rgba(0,0,0,.4);
 }
 .toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
-.modal-bg{position:fixed;inset:0;background:rgba(0,0,0,.55);backdrop-filter:blur(8px);z-index:80;display:none;align-items:flex-end;justify-content:center}
+.modal-bg{position:fixed;inset:0;background:rgba(2,6,18,.72);backdrop-filter:blur(12px) saturate(1.1);z-index:80;display:none;align-items:flex-end;justify-content:center;animation:fadeIn .2s ease}
 .modal-bg.open{display:flex}
+@keyframes fadeIn{from{opacity:0}to{opacity:1}}
 .modal{
-  width:100%;max-width:520px;background:var(--card-solid);border-radius:24px 24px 0 0;border:1px solid var(--border);
-  padding:12px 18px 28px;max-height:92vh;overflow:auto;box-shadow:0 -20px 60px rgba(0,0,0,.4);
+  width:100%;max-width:520px;background:var(--card-solid);border-radius:26px 26px 0 0;border:1px solid var(--border);
+  padding:0;max-height:94vh;display:flex;flex-direction:column;box-shadow:0 -24px 80px rgba(0,0,0,.55);
+  animation:sheetUp .28s cubic-bezier(.22,1,.36,1);
 }
-.modal-handle{width:40px;height:4px;border-radius:99px;background:var(--border);margin:4px auto 14px}
-.modal h3{font-size:17px;font-weight:900;margin-bottom:4px;line-height:1.3;letter-spacing:-.02em}
-.modal .sub{color:var(--muted);font-size:12.5px;margin-bottom:12px;line-height:1.45}
-.modal .price-row{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:14px}
-.modal .price-pill{font-size:13px;font-weight:900;color:var(--primary);background:var(--primary-soft);padding:6px 12px;border-radius:10px;border:1px solid rgba(91,138,245,.2)}
-.modal .meta-pill{font-size:11px;font-weight:700;color:var(--muted);background:var(--bg);padding:5px 10px;border-radius:8px;border:1px solid var(--border)}
+@keyframes sheetUp{from{transform:translateY(24px);opacity:.6}to{transform:translateY(0);opacity:1}}
+.modal-handle{width:36px;height:4px;border-radius:99px;background:var(--border);margin:10px auto 0;flex-shrink:0}
+.modal-top{
+  display:flex;align-items:flex-start;gap:12px;padding:12px 16px 10px;position:sticky;top:0;z-index:2;
+  background:linear-gradient(180deg,var(--card-solid) 70%,transparent);
+}
+.modal-back{
+  width:40px;height:40px;border-radius:12px;border:1px solid var(--border);background:var(--bg);
+  color:var(--text);display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0;font-size:15px;
+}
+.modal-back:active{transform:scale(.96)}
+.modal-top-text{flex:1;min-width:0;padding-top:2px}
+.modal-top-text h3{font-size:16px;font-weight:900;margin:0 0 4px;line-height:1.3;letter-spacing:-.02em;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.modal .sub{color:var(--muted);font-size:12px;margin:0;line-height:1.4;font-weight:600}
+.modal-body{padding:4px 16px 12px;overflow:auto;flex:1;-webkit-overflow-scrolling:touch}
+.modal .price-row{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:10px 0 12px}
+.modal .price-pill{
+  font-size:14px;font-weight:900;color:#fff;padding:7px 12px;border-radius:12px;
+  background:linear-gradient(135deg,var(--primary),#7c5cfc);box-shadow:0 8px 20px var(--glow);
+}
+.modal .meta-pill{font-size:11px;font-weight:700;color:var(--muted);background:var(--bg);padding:6px 10px;border-radius:10px;border:1px solid var(--border)}
+.modal-foot{
+  padding:12px 16px calc(14px + env(safe-area-inset-bottom));border-top:1px solid var(--border);
+  background:var(--card-solid);flex-shrink:0;
+}
+.modal-foot .total-box{margin:0 0 10px}
+.details-toggle{
+  width:100%;display:flex;align-items:center;justify-content:space-between;gap:8px;
+  border:1px solid var(--border);background:var(--bg);color:var(--text);border-radius:14px;
+  padding:12px 14px;font-size:13px;font-weight:800;cursor:pointer;margin-bottom:10px;
+}
+.details-toggle i{color:var(--muted);transition:transform .2s}
+.details-toggle.open i{transform:rotate(180deg)}
+.desc-box{display:none}
+.desc-box.open{display:block}
 .desc-box{background:var(--bg);border:1px solid var(--border);border-radius:14px;padding:12px 14px;margin-bottom:14px}
 .desc-title{font-size:11px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin-bottom:8px}
 .desc-box ul{list-style:none;display:flex;flex-direction:column;gap:7px}
@@ -289,53 +320,68 @@ button,input{font:inherit}
 <div class="toast" id="toast"></div>
 
 <div class="modal-bg" id="modalBg" onclick="if(event.target===this)closeModal()">
-  <div class="modal">
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="mTitle">
     <div class="modal-handle"></div>
-    <h3 id="mTitle">Service</h3>
-    <div class="sub" id="mSub"></div>
-    <div class="price-row">
-      <span class="price-pill" id="mPrice">₦0 / 1k</span>
-      <span class="meta-pill" id="mMinMax">Min 300</span>
-      <span class="badge" id="mRefill" style="display:none">Refill</span>
-    </div>
-    <div class="desc-box" id="mDesc">
-      <div class="desc-title">What you get</div>
-      <ul id="mDescList"></ul>
-    </div>
-    <div class="link-warning-box">
-      <i class="fas fa-circle-info"></i>
-      <div>Use a public profile, post, reel or video link. Private accounts usually fail delivery.</div>
-    </div>
-    <div class="field">
-      <label>Link</label>
-      <div class="field-row">
-        <input id="mLink" placeholder="Paste profile, post, reel or video link" autocomplete="off">
-        <button type="button" class="paste-btn" onclick="pasteLink()">Paste</button>
-      </div>
-      <div class="hint-text">Exact public URL works best.</div>
-    </div>
-    <div class="field">
-      <label>Quantity</label>
-      <div class="qty-row">
-        <button type="button" class="qty-step" onclick="qtyStep(-100)" aria-label="Decrease">−</button>
-        <input id="mQty" type="number" min="300" value="300" inputmode="numeric">
-        <button type="button" class="qty-step" onclick="qtyStep(100)" aria-label="Increase">+</button>
-      </div>
-      <div class="qty-chips">
-        <button type="button" class="qty-chip" onclick="qtyChip(100)">+100</button>
-        <button type="button" class="qty-chip" onclick="qtyChip(1000)">+1,000</button>
-        <button type="button" class="qty-chip" onclick="qtyChip(5000)">+5,000</button>
-        <button type="button" class="qty-chip" onclick="qtyChip(10000)">+10,000</button>
-        <button type="button" class="qty-chip clear" onclick="qtyClear()">Reset</button>
+    <div class="modal-top">
+      <button type="button" class="modal-back" onclick="closeModal()" aria-label="Back">
+        <i class="fa-solid fa-arrow-left"></i>
+      </button>
+      <div class="modal-top-text">
+        <h3 id="mTitle">Service</h3>
+        <div class="sub" id="mSub"></div>
       </div>
     </div>
-    <div class="total-box">
-      <span>Total</span>
-      <strong id="mTotal">₦0</strong>
+    <div class="modal-body">
+      <div class="price-row">
+        <span class="price-pill" id="mPrice">₦0 / 1k</span>
+        <span class="meta-pill" id="mMinMax">Min 300</span>
+        <span class="badge" id="mRefill" style="display:none">Refill</span>
+      </div>
+      <button type="button" class="details-toggle" id="detailsToggle" onclick="toggleDetails()">
+        <span><i class="fa-solid fa-circle-info" style="color:var(--primary);margin-right:6px"></i> Service details & rules</span>
+        <i class="fa-solid fa-chevron-down"></i>
+      </button>
+      <div class="desc-box" id="mDesc">
+        <div class="desc-title">What you get</div>
+        <ul id="mDescList"></ul>
+      </div>
+      <div class="link-warning-box">
+        <i class="fas fa-circle-info"></i>
+        <div>Public links only. Private accounts usually fail delivery.</div>
+      </div>
+      <div class="field">
+        <label>Target link</label>
+        <div class="field-row">
+          <input id="mLink" placeholder="https://…" autocomplete="off" inputmode="url">
+          <button type="button" class="paste-btn" onclick="pasteLink()">Paste</button>
+        </div>
+        <div class="hint-text">Profile, post, reel, video or channel URL</div>
+      </div>
+      <div class="field">
+        <label>Quantity</label>
+        <div class="qty-row">
+          <button type="button" class="qty-step" onclick="qtyStep(-100)" aria-label="Decrease">−</button>
+          <input id="mQty" type="number" min="300" value="300" inputmode="numeric">
+          <button type="button" class="qty-step" onclick="qtyStep(100)" aria-label="Increase">+</button>
+        </div>
+        <div class="qty-chips">
+          <button type="button" class="qty-chip" onclick="qtyChip(100)">+100</button>
+          <button type="button" class="qty-chip" onclick="qtyChip(1000)">+1,000</button>
+          <button type="button" class="qty-chip" onclick="qtyChip(5000)">+5,000</button>
+          <button type="button" class="qty-chip" onclick="qtyChip(10000)">+10,000</button>
+          <button type="button" class="qty-chip clear" onclick="qtyClear()">Reset</button>
+        </div>
+      </div>
     </div>
-    <button class="btn btn-primary" id="mBuy" onclick="placeOrder()">
-      <i class="fa-solid fa-bolt"></i> Confirm boost
-    </button>
+    <div class="modal-foot">
+      <div class="total-box">
+        <span>You pay</span>
+        <strong id="mTotal">₦0</strong>
+      </div>
+      <button class="btn btn-primary" id="mBuy" onclick="placeOrder()">
+        <i class="fa-solid fa-bolt"></i> Confirm boost
+      </button>
+    </div>
   </div>
 </div>
 
@@ -674,12 +720,27 @@ function openOrder(s){
   document.getElementById('mQty').max = max;
   document.getElementById('mLink').value = '';
   updateTotal();
+  const det = document.getElementById('mDesc');
+  const detBtn = document.getElementById('detailsToggle');
+  if (det) det.classList.remove('open');
+  if (detBtn) detBtn.classList.remove('open');
   document.getElementById('modalBg').classList.add('open');
   setTimeout(() => document.getElementById('mLink').focus(), 180);
 }
 
+function toggleDetails(){
+  const box = document.getElementById('mDesc');
+  const btn = document.getElementById('detailsToggle');
+  if (!box || !btn) return;
+  const open = box.classList.toggle('open');
+  btn.classList.toggle('open', open);
+}
 function closeModal(){
   document.getElementById('modalBg').classList.remove('open');
+  const det = document.getElementById('mDesc');
+  const detBtn = document.getElementById('detailsToggle');
+  if (det) det.classList.remove('open');
+  if (detBtn) detBtn.classList.remove('open');
   selected = null;
 }
 
