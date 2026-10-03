@@ -106,6 +106,95 @@ function sellPriceUsd(rate, markupPercent) {
   return Math.round((sellNgn / USD_TO_NGN) * 10000) / 10000;
 }
 
+
+const SMMKINGS_URL = (process.env.SMMKINGS_API_URL || 'https://smmkings.com/api/v2').replace(/\/$/, '');
+const SMMKINGS_KEY = String(process.env.SMMKINGS_API_KEY || '').trim().replace(/^["']+|["']+$/g, '');
+const TG_SHOP_SERVICE_IDS = { '6104': 'premium', '6106': 'premium', '6105': 'premium', '6260': 'stars' };
+
+async function panelCall(url, key, params, timeoutMs = 20000) {
+  if (!key) return { ok: false, status: 500, json: { error: 'Panel API key not configured' } };
+  const body = new URLSearchParams({ key, ...params });
+  const ac = typeof AbortController !== 'undefined' ? new AbortController() : null;
+  const timer = ac ? setTimeout(() => ac.abort(), timeoutMs) : null;
+  try {
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded', Accept: 'application/json' },
+      body: body.toString(),
+      signal: ac ? ac.signal : undefined
+    });
+    const text = await res.text();
+    let json;
+    try { json = JSON.parse(text); } catch {
+      return { ok: false, status: res.status || 502, json: { error: 'Invalid JSON from panel', raw: text.slice(0, 300) } };
+    }
+    return { ok: res.ok, status: res.status, json };
+  } catch (e) {
+    const msg = e && e.name === 'AbortError' ? 'Panel timeout' : (e.message || 'Panel request failed');
+    return { ok: false, status: 504, json: { error: msg } };
+  } finally { if (timer) clearTimeout(timer); }
+}
+
+function classifyTgService(s) {
+  const id = String(s.service_id || s.service || '').trim();
+  if (TG_SHOP_SERVICE_IDS[id]) return TG_SHOP_SERVICE_IDS[id];
+  const n = String(s.name || '').replace(/\s+/g, ' ').trim();
+  const blob = (n + ' ' + String(s.category || '')).toLowerCase();
+  if (/telegram\s+premium\s+subscription\s+for\s+\d+\s*months?/i.test(n)) return 'premium';
+  if (/telegram\s+stars\s+to\s+any/i.test(blob) && !/post\s*stars/i.test(n)) return 'stars';
+  return null;
+}
+
+function premiumMonthsFromName(name) {
+  const m = String(name || '').match(/for\s+(\d+)\s*months?/i);
+  return m ? Number(m[1]) : null;
+}
+
+async function handleTelegramShop(req, res) {
+  const ids = Object.keys(TG_SHOP_SERVICE_IDS);
+  let { data, error } = await supabase
+    .from('booster_services')
+    .select('id,service_id,name,category,service_type,supplier_rate_usd,price_ngn,min_quantity,max_quantity,is_available')
+    .eq('source', 'smmkings')
+    .in('service_id', ids)
+    .order('price_ngn', { ascending: true });
+  if (error) return res.status(500).json({ success: false, message: error.message });
+  let rows = data || [];
+  if (!rows.length) {
+    const alt = await supabase.from('booster_services')
+      .select('id,service_id,name,category,service_type,supplier_rate_usd,price_ngn,min_quantity,max_quantity,is_available')
+      .eq('source', 'smmkings').limit(800);
+    rows = (alt.data || []).filter((s) => classifyTgService(s));
+  }
+  const available = rows.filter((s) => s.is_available !== false);
+  const pool = available.length ? available : rows.filter((s) => Number(s.price_ngn) > 0);
+  const groups = { premium: [], stars: [] };
+  for (const s of pool) {
+    const kind = classifyTgService(s) || TG_SHOP_SERVICE_IDS[String(s.service_id)];
+    if (!kind) continue;
+    const minQ = Math.max(1, Number(s.min_quantity) || 1);
+    const maxQ = Math.max(minQ, Number(s.max_quantity) || minQ);
+    const months = premiumMonthsFromName(s.name);
+    const price = floorSellNgn(s.price_ngn, s.service_id);
+    if (kind === 'premium') {
+      groups.premium.push({
+        service_id: String(s.service_id),
+        name: months ? (months + ' months Premium') : 'Telegram Premium',
+        months: months || 1, category: s.category,
+        min_quantity: 1, max_quantity: 1, price_ngn: price, pricing: 'fixed', kind: 'premium'
+      });
+    } else {
+      groups.stars.push({
+        service_id: String(s.service_id), name: 'Telegram Stars', category: s.category,
+        min_quantity: minQ, max_quantity: maxQ, price_ngn: price, pricing: 'per_1k', kind: 'stars'
+      });
+    }
+  }
+  groups.premium.sort((a, b) => (a.months || 0) - (b.months || 0));
+  return res.status(200).json({ success: true, data: groups, counts: { premium: groups.premium.length, stars: groups.stars.length } });
+}
+
+
 async function requireUser(req) {
   const authHeader = req.headers.authorization || '';
   const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : null;
@@ -369,6 +458,7 @@ async function handleList(req, res) {
   const pageSize = Math.min(200, Math.max(20, parseInt(req.query?.page_size || '100', 10) || 100));
   const from = (page - 1) * pageSize;
   const to = from + pageSize - 1;
+  const provider = String(req.query?.provider || req.query?.source || 'owlet').toLowerCase().trim() || 'owlet';
 
   let query = supabase
     .from('booster_services')
@@ -376,7 +466,7 @@ async function handleList(req, res) {
       'id,source,service_id,name,category,service_type,supplier_rate_usd,price_ngn,price_source,min_quantity,max_quantity,refill,cancel,is_available,updated_at',
       { count: 'exact' }
     )
-    .eq('source', 'owlet')
+    .eq('source', provider)
     .order('category', { ascending: true })
     .order('name', { ascending: true })
     .range(from, to);
@@ -406,7 +496,7 @@ async function handleList(req, res) {
   const { data: catRows } = await supabase
     .from('booster_services')
     .select('category')
-    .eq('source', 'owlet')
+    .eq('source', provider)
     .limit(5000);
   const categories = [...new Set((catRows || []).map(r => r.category).filter(Boolean))].sort();
 
@@ -550,6 +640,7 @@ async function handleOrder(req, res) {
   const serviceId = String(body.service_id || body.service || '').trim();
   const link = String(body.link || '').trim();
   const quantity = Math.max(1, parseInt(body.quantity, 10) || 0);
+  const orderSource = String(body.source || body.provider || 'owlet').toLowerCase().trim() === 'smmkings' ? 'smmkings' : 'owlet';
 
   if (!serviceId || !link || !quantity) {
     return res.status(400).json({ success: false, message: 'service_id, link, and quantity are required' });
@@ -565,22 +656,27 @@ async function handleOrder(req, res) {
   const { data: service, error: sErr } = await supabase
     .from('booster_services')
     .select('*')
-    .eq('source', 'owlet')
+    .eq('source', orderSource)
     .eq('service_id', serviceId)
     .maybeSingle();
 
   if (sErr || !service) {
     return res.status(404).json({ success: false, message: 'Service not found or unavailable' });
   }
-  if (service.is_available === false) {
+  const isTgShop = orderSource === 'smmkings' && !!classifyTgService(service);
+  if (service.is_available === false && !isTgShop) {
     return res.status(400).json({ success: false, message: 'This service is temporarily unavailable' });
   }
+  if (orderSource === 'smmkings' && !isTgShop) {
+    return res.status(403).json({ success: false, message: 'This service is not available on the customer shop yet' });
+  }
 
-  // Site rule: never sell below 300 units. Supplier min wins if higher.
+  const isPremiumPkg = isTgShop && classifyTgService(service) === 'premium';
+  const isStars = isTgShop && classifyTgService(service) === 'stars';
   const supplierMin = Number(service.min_quantity) || 1;
   let maxQ = Number(service.max_quantity) || 1000000;
   if (maxQ < 1) maxQ = 1000000;
-  let minQ = Math.max(300, supplierMin);
+  let minQ = isPremiumPkg ? 1 : (isStars ? supplierMin : Math.max(300, supplierMin));
   if (minQ > maxQ) minQ = maxQ;
   if (quantity < minQ || quantity > maxQ) {
     return res.status(400).json({
@@ -588,14 +684,11 @@ async function handleOrder(req, res) {
       message: `Quantity must be between ${minQ.toLocaleString()} and ${maxQ.toLocaleString()}`
     });
   }
-
-  // price_ngn is selling rate per 1000 units (SMM standard)
-  // Listed rate never below ₦200 even if DB still has old cheap rows
   const ratePer1k = floorSellNgn(service.price_ngn, service.service_id);
   if (ratePer1k <= 0) {
     return res.status(400).json({ success: false, message: 'Service price not configured' });
   }
-  const totalNgn = Math.max(MIN_SELL_PRICE_NGN, Math.ceil((ratePer1k / 1000) * quantity));
+  let totalNgn = isPremiumPkg ? ratePer1k : Math.max(MIN_SELL_PRICE_NGN, Math.ceil((ratePer1k / 1000) * quantity));
   if (totalNgn < 1) {
     return res.status(400).json({ success: false, message: 'Order total too low' });
   }
@@ -635,33 +728,55 @@ async function handleOrder(req, res) {
     }
   }
 
-  // Place order with Owlet — use live panel ID if our catalog ID is stale
-  const liveServiceId = await resolveOwletServiceId(serviceId, service.name);
-  const { ok, status, json } = await owletCall({
-    action: 'add',
-    service: liveServiceId,
-    link,
-    quantity: String(quantity)
-  });
-
-  if (!ok || json?.error || !json?.order) {
-    // refund
+  let liveServiceId = String(service.service_id || serviceId).trim();
+  let ok, status, json;
+  if (orderSource === 'smmkings') {
+    if (!SMMKINGS_KEY) {
+      await supabase.from('profiles').update({ balance: originalBalance }).eq('id', user.id);
+      return res.status(500).json({ success: false, message: 'This service is temporarily unavailable. Your balance was restored. Please try again later.' });
+    }
+    let panelLink = String(link || '').trim();
+    if (panelLink.startsWith('@')) panelLink = 'https://t.me/' + panelLink.slice(1);
+    else if (!/^https?:\/\//i.test(panelLink) && panelLink) {
+      panelLink = 'https://t.me/' + panelLink.replace(/^(t\.me|telegram\.me)\//i, '');
+    }
+    const isPackage = isPremiumPkg || String(service.service_type || '').toLowerCase().includes('package');
+    const addParams = { action: 'add', service: liveServiceId, link: panelLink };
+    if (!isPackage) addParams.quantity = String(quantity);
+    const call = await panelCall(SMMKINGS_URL, SMMKINGS_KEY, addParams);
+    ok = call.ok; status = call.status; json = call.json || {};
+    if ((!ok || json.error || !(json.order || json.order_id)) && panelLink.includes('t.me/')) {
+      const handle = panelLink.split('t.me/')[1].split(/[/?#]/)[0];
+      if (handle) {
+        const retry = await panelCall(SMMKINGS_URL, SMMKINGS_KEY, Object.assign({}, addParams, { link: '@' + handle }));
+        if (retry.ok || (retry.json && (retry.json.order || retry.json.order_id))) {
+          ok = true; status = retry.status; json = retry.json || {};
+        } else { json = retry.json || json; status = retry.status; }
+      }
+    }
+  } else {
+    liveServiceId = await resolveOwletServiceId(serviceId, service.name);
+    const call = await owletCall({ action: 'add', service: liveServiceId, link, quantity: String(quantity) });
+    ok = call.ok; status = call.status; json = call.json || {};
+  }
+  const orderIdRaw = json && (json.order != null ? json.order : json.order_id);
+  if (!ok || (json && json.error) || orderIdRaw == null || orderIdRaw === '') {
     await supabase.from('profiles').update({ balance: originalBalance }).eq('id', user.id);
-    const rawErr = json?.error || json?.message || '';
-    const errMsg = /incorrect service/i.test(String(rawErr))
-      ? 'This package is no longer available. Go back and pick another one. Your balance was restored.'
-      : /supplier|owlet|panel/i.test(String(rawErr))
-      ? 'This order could not be placed right now. Your balance was restored.'
-      : (rawErr || 'This order could not be placed right now. Your balance was restored.');
+    const rawErr = String((json && typeof json.error === 'string' && json.error) || (json && typeof json.message === 'string' && json.message) || '').trim();
+    console.error('[owlet order] panel reject', { source: orderSource, service: liveServiceId, rawErr: rawErr.slice(0, 200) });
+    let errMsg = 'This order could not be placed right now. Your balance was restored.';
+    if (/incorrect service|service.*(not|invalid)|unknown service/i.test(rawErr)) errMsg = 'This package is no longer available. Pick another one. Your balance was restored.';
+    else if (/not enough funds|insufficient (funds|balance)|no enough/i.test(rawErr)) errMsg = 'This service is temporarily unavailable. Your balance was restored. Please try again later.';
+    else if (/link|url|username|user/i.test(rawErr)) errMsg = 'Check the Telegram username or profile link and try again. Your balance was restored.';
+    else if (rawErr) errMsg = 'Order could not be completed. Your balance was restored. Please try again.';
     return res.status(502).json({ success: false, message: errMsg });
   }
-
-  const supplierOrderId = String(json.order);
+  const supplierOrderId = String(orderIdRaw);
   const nowIso = new Date().toISOString();
   const orderRow = {
     user_id: user.id,
     customer_id: profile.customer_id || null,
-    source: 'owlet',
+    source: orderSource,
     supplier_order_id: supplierOrderId,
     service_id: liveServiceId,
     service_name: service.name,
@@ -695,7 +810,7 @@ async function handleOrder(req, res) {
       const minimal = {
         user_id: user.id,
         customer_id: profile.customer_id || null,
-        source: 'owlet',
+        source: orderSource,
         supplier_order_id: supplierOrderId,
         service_id: serviceId,
         service_name: service.name,
@@ -1332,6 +1447,11 @@ export default async function handler(req, res) {
   }
 
   // User-facing (any signed-in user)
+  if (action === 'telegram_shop') {
+    const u = await requireUser(req);
+    if (!u.ok) return res.status(u.status).json({ success: false, message: u.message });
+    return handleTelegramShop(req, res);
+  }
   if (action === 'catalog') {
     const u = await requireUser(req);
     if (!u.ok) return res.status(u.status).json({ success: false, message: u.message });
@@ -1366,7 +1486,7 @@ export default async function handler(req, res) {
 
   return res.status(400).json({
     success: false,
-    message: 'action required: catalog | order | my_orders | cancel | refill | refill_status | balance | services | sync | list | status | admin_orders'
+    message: 'action required: telegram_shop | catalog | order | my_orders | cancel | refill | refill_status | balance | services | sync | list | status | admin_orders'
   });
   } catch (err) {
     console.error('[owlet] handler error', err);
