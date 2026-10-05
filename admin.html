@@ -1353,10 +1353,9 @@ function withLagos(opts) { return Object.assign({ timeZone: 'Africa/Lagos' }, op
  </select>
  </div>
  <div id="notifSendError" class="error-msg"></div>
- <button class="btn btn-primary btn-sm" onclick="sendBroadcastNotification()">Send to All Users</button>
- <button class="btn btn-secondary btn-sm" onclick="sendPushBroadcast()" title="Lock-screen push to users who enabled phone alerts"><i class="fas fa-mobile-screen"></i> Send phone push</button>
+ <button class="btn btn-primary btn-sm" onclick="sendBroadcastNotification()"><i class="fas fa-paper-plane"></i> Send to All Users</button>
  <div id="pushBroadcastMsg" style="font-size:12px;margin-top:8px;opacity:.85;"></div>
- <div class="price-note" style="margin-top:6px;">Every user will see this in their notification bell next time they load the app. It disappears from their view 24 hours after they open it.</div>
+ <div class="price-note" style="margin-top:6px;">Sends to everyone's in-app notification bell. Users who turned on <b>Phone lock-screen alerts</b> also get the same Title + Message on their phone immediately.</div>
 
  <div class="panel-title" style="margin:24px 0 10px;">Recently Sent</div>
  <div id="notifHistoryList" style="font-size:13px;color:var(--muted);">Loading…</div>
@@ -4973,55 +4972,56 @@ function closeOrderModal() { document.getElementById('orderModal').classList.add
 
 /* NOTIFICATIONS (broadcast to all users) */
 
-async function sendPushBroadcast() {
-  const msgEl = document.getElementById('pushBroadcastMsg');
-  // Phone push: message only (app name already shows). Title field is not used on lock screen.
-  const body = (document.getElementById('notifBody') && document.getElementById('notifBody').value.trim())
-    || (document.getElementById('broadcastBody') && document.getElementById('broadcastBody').value.trim())
-    || (document.getElementById('emailBroadcastBody') && document.getElementById('emailBroadcastBody').value.trim())
-    || 'You have a new update on MJ HUB. Log in to your dashboard.';
-  const title = ''; // intentionally empty — SW hides redundant title
-  if (msgEl) msgEl.textContent = 'Sending phone push…';
-  try {
-    const { data: { session } } = await sb.auth.getSession();
-    if (!session) throw new Error('Sign in as admin');
-    const res = await fetch('/api/admin', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + session.access_token },
-      body: JSON.stringify({ resource: 'push', action: 'send', title, body, url: '/dashboard.html' })
-    });
-    const json = await res.json();
-    if (!res.ok || !json.success) throw new Error(json.message || 'Push failed');
-    if (msgEl) msgEl.textContent = 'Push sent: ' + (json.sent || 0) + ' device(s), failed ' + (json.failed || 0);
-  } catch (e) {
-    if (msgEl) msgEl.textContent = e.message || 'Push failed';
-  }
-}
-
 async function sendBroadcastNotification() {
  const errEl = document.getElementById('notifSendError');
- errEl.textContent = '';
+ const msgEl = document.getElementById('pushBroadcastMsg');
+ if (errEl) errEl.textContent = '';
+ if (msgEl) msgEl.textContent = '';
 
- const title = document.getElementById('notifTitle').value.trim();
- const body = document.getElementById('notifBody').value.trim();
- const type = document.getElementById('notifType').value;
+ const title = (document.getElementById('notifTitle') && document.getElementById('notifTitle').value.trim()) || '';
+ const body = (document.getElementById('notifBody') && document.getElementById('notifBody').value.trim()) || '';
+ const type = (document.getElementById('notifType') && document.getElementById('notifType').value) || 'activity';
 
- if (!title) { errEl.textContent = 'Title is required.'; return; }
+ if (!title) { if (errEl) errEl.textContent = 'Title is required.'; return; }
+ if (!body) { if (errEl) errEl.textContent = 'Message is required.'; return; }
 
+ // 1) In-app broadcast → every user's notification bell
  const { error } = await sb.from('notifications').insert({
- user_id: null, // null = broadcast to every user
- title,
- body: body || null,
- type
+  user_id: null,
+  title,
+  body: body || null,
+  type
  });
-
  if (error) {
- errEl.textContent = error.message || 'Failed to send notification.';
- return;
+  if (errEl) errEl.textContent = error.message || 'Failed to send notification.';
+  return;
+ }
+
+ // 2) Phone lock-screen push → only users who enabled Phone lock-screen alerts
+ let pushLine = '';
+ try {
+  const { data: { session } } = await sb.auth.getSession();
+  if (session) {
+   if (msgEl) msgEl.textContent = 'Sending phone push…';
+   const res = await fetch('/api/admin', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + session.access_token },
+    body: JSON.stringify({ resource: 'push', action: 'send', title, body, url: '/dashboard.html' })
+   });
+   const json = await res.json().catch(function(){ return {}; });
+   if (res.ok && json.success) {
+    pushLine = 'Phone push: ' + (json.sent || 0) + ' device(s)' + (json.failed ? ', failed ' + json.failed : '');
+   } else {
+    pushLine = 'Phone push skipped: ' + (json.message || 'no subscribers or not configured');
+   }
+  }
+ } catch (e) {
+  pushLine = 'Phone push skipped: ' + (e.message || 'error');
  }
 
  document.getElementById('notifTitle').value = '';
  document.getElementById('notifBody').value = '';
+ if (msgEl) msgEl.textContent = 'In-app sent to all users. ' + pushLine;
  await loadNotificationHistory();
 }
 

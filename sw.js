@@ -8,8 +8,9 @@ self.addEventListener('activate', (event) => {
 });
 
 self.addEventListener('push', (event) => {
+  var DEFAULT_TITLE = 'Update';
   var DEFAULT_BODY = 'You have a new update on MJ HUB. Log in to your dashboard.';
-  var data = { body: DEFAULT_BODY, url: '/dashboard.html' };
+  var data = { title: DEFAULT_TITLE, body: DEFAULT_BODY, url: '/dashboard.html' };
   try {
     if (event.data) {
       var parsed = event.data.json();
@@ -22,11 +23,12 @@ self.addEventListener('push', (event) => {
     } catch (_) {}
   }
 
-  // App name already shows as "MJ HUB" — do not repeat a title.
-  // Put the full message in body only (single clean line under the app name).
+  // Lagos Life style: TITLE (bold) + body. iOS shows "from MJ HUB" under the title.
+  var title = (data.title && String(data.title).trim()) || DEFAULT_TITLE;
+  // Never use bare app name as title — looks like "MJ HUB from MJ HUB"
+  if (/^mj\s*hub$/i.test(title)) title = DEFAULT_TITLE;
+
   var body = (data.body && String(data.body).trim()) || DEFAULT_BODY;
-  // Zero-width title so iOS/Android don't invent "MJ HUB" / "from MJ HUB"
-  var title = '​';
 
   var options = {
     body: body,
