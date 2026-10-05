@@ -2612,8 +2612,9 @@ async function pushSend(body) {
   }
   webpush.setVapidDetails(subject, publicKey, privateKey);
 
-  // Title unused on lock screen (app name already shows). Message is body only.
-  const title = '';
+  // Lagos Life style: real title + body. Never default title to "MJ HUB" (looks like MJ HUB from MJ HUB).
+  let title = String(body.title || '').trim().slice(0, 80);
+  if (!title || /^mj\s*hub$/i.test(title)) title = 'Update';
   const msgBody = String(body.body || body.message || 'You have a new update on MJ HUB. Log in to your dashboard.').slice(0, 200);
   const url = String(body.url || '/dashboard.html').slice(0, 300);
   const payload = JSON.stringify({ title, body: msgBody, url, icon: '/img/IMG_3027.png' });
