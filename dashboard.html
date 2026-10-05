@@ -34,6 +34,7 @@
     <link rel="apple-touch-icon" sizes="152x152" href="/img/IMG_3027.png">
     <link rel="apple-touch-icon" sizes="120x120" href="/img/IMG_3027.png">
     <link rel="manifest" href="manifest.json">
+    <script src="/js/mj-push.js" defer></script>
     <script>
     (function() {
         try {
@@ -3535,6 +3536,13 @@ html[data-theme="light"] .logo-word, :root[data-theme="light"] .logo-word{color:
             </div>
             <div class="content-card">
                 <div class="notif-pref-row">
+                    <div>
+                        <div class="np-title">Phone lock-screen alerts</div>
+                        <div class="np-sub" id="pushNotifHint">Allow MJ HUB to notify you when the app is closed (install to Home Screen on iPhone)</div>
+                    </div>
+                    <label class="mj-switch"><input type="checkbox" id="prefPushPhone" onchange="togglePhonePush(this)"><span class="slider"></span></label>
+                </div>
+                <div class="notif-pref-row">
                     <div><div class="np-title">Order updates</div><div class="np-sub">When orders complete or fail</div></div>
                     <label class="mj-switch"><input type="checkbox" id="prefNotifOrders" checked onchange="saveNotifPrefs()"><span class="slider"></span></label>
                 </div>
@@ -6411,7 +6419,53 @@ window.saveNotifPrefs = function() {
     };
     try { localStorage.setItem('mjhub_notif_prefs', JSON.stringify(prefs)); } catch (e) {}
 };
+
+window.togglePhonePush = async function(el) {
+  const on = !!(el && el.checked);
+  const hint = document.getElementById('pushNotifHint');
+  try {
+    if (!window.MJHubPush) throw new Error('Push module not loaded');
+    if (on) {
+      if (hint) hint.textContent = 'Requesting permission…';
+      await MJHubPush.enable();
+      if (hint) hint.textContent = 'On — you will get lock-screen alerts from MJ HUB';
+      if (typeof showToast === 'function') showToast('Phone notifications enabled');
+    } else {
+      await MJHubPush.disable();
+      if (hint) hint.textContent = 'Off — enable to get alerts when the app is closed';
+      if (typeof showToast === 'function') showToast('Phone notifications disabled');
+    }
+  } catch (e) {
+    if (el) el.checked = false;
+    if (hint) hint.textContent = (e && e.message) ? e.message : 'Could not enable notifications';
+    if (typeof showToast === 'function') showToast(hint.textContent);
+  }
+};
+
+async function refreshPushToggle() {
+  const el = document.getElementById('prefPushPhone');
+  const hint = document.getElementById('pushNotifHint');
+  if (!el || !window.MJHubPush) return;
+  try {
+    const st = await MJHubPush.status();
+    el.checked = !!(st.subscribed && st.permission === 'granted');
+    if (!st.supported) {
+      el.disabled = true;
+      if (hint) hint.textContent = 'Not supported here. On iPhone: Share → Add to Home Screen, then open MJ HUB from the icon.';
+    } else if (st.permission === 'denied') {
+      el.disabled = true;
+      if (hint) hint.textContent = 'Blocked in browser settings. Allow notifications for mjhub.store.';
+    } else if (el.checked) {
+      if (hint) hint.textContent = 'On — lock-screen alerts enabled';
+    } else {
+      if (hint) hint.textContent = 'Allow MJ HUB to notify you when the app is closed';
+    }
+  } catch (_) {}
+}
+
 function loadNotifPrefs() {
+    try { refreshPushToggle(); } catch (e) {}
+
     let prefs = { orders: true, wallet: true, promo: false };
     try {
         const raw = localStorage.getItem('mjhub_notif_prefs');
@@ -8036,5 +8090,19 @@ window.toggleHomeBalanceHide = function () {
   fillHomeDate();
 })();
 </script>
+
+/* Web Push: register service worker early (permission only when user toggles) */
+(function(){
+  function bootPush(){
+    try {
+      if (window.MJHubPush && MJHubPush.ensureServiceWorker) {
+        MJHubPush.ensureServiceWorker().catch(function(){});
+      }
+    } catch(e){}
+  }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', bootPush);
+  else bootPush();
+})();
+
 </body>
 </html>
