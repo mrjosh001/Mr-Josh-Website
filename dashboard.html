@@ -4105,6 +4105,8 @@ html[data-theme="light"] .logo-word, :root[data-theme="light"] .logo-word{color:
 <script>
 const SUPABASE_URL = 'https://atczodlljmlayvldxfmv.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImF0Y3pvZGxsam1sYXl2bGR4Zm12Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODUwNzUyMzgsImV4cCI6MjEwMDY1MTIzOH0.ufthD-p7BmeD_B7xyuMM6PNPL8DmcL4AtRYgg-MuoLI';
+window.SUPABASE_URL = SUPABASE_URL;
+window.SUPABASE_ANON_KEY = SUPABASE_ANON_KEY;
 
 let supabaseClient = null;
 if (window.supabase) {
@@ -4117,6 +4119,8 @@ if (window.supabase) {
         }
     });
 }
+if (supabaseClient) { window.supabaseClient = supabaseClient; }
+
 
 
 /* Easy to extend: add mj-sms.html / mj-boosters.html paths when ready */
