@@ -4975,10 +4975,13 @@ function closeOrderModal() { document.getElementById('orderModal').classList.add
 
 async function sendPushBroadcast() {
   const msgEl = document.getElementById('pushBroadcastMsg');
-  const title = (document.getElementById('broadcastTitle') && document.getElementById('broadcastTitle').value.trim())
+  // Same fields as "Send to All Users" (in-app broadcast)
+  const title = (document.getElementById('notifTitle') && document.getElementById('notifTitle').value.trim())
+    || (document.getElementById('broadcastTitle') && document.getElementById('broadcastTitle').value.trim())
     || (document.getElementById('emailBroadcastSubject') && document.getElementById('emailBroadcastSubject').value.trim())
     || 'MJ HUB';
-  const body = (document.getElementById('broadcastBody') && document.getElementById('broadcastBody').value.trim())
+  const body = (document.getElementById('notifBody') && document.getElementById('notifBody').value.trim())
+    || (document.getElementById('broadcastBody') && document.getElementById('broadcastBody').value.trim())
     || (document.getElementById('emailBroadcastBody') && document.getElementById('emailBroadcastBody').value.trim())
     || 'You have a new update on MJ HUB';
   if (msgEl) msgEl.textContent = 'Sending phone push…';
