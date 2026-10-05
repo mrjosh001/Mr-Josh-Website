@@ -1574,8 +1574,76 @@ async function getGotsmsBalance() {
   }
 }
 
+
+
+async function getJapBalance() {
+  const key = String(process.env.JAP_API_KEY || '').trim().replace(/^["']+|["']+$/g, '');
+  const url = String(process.env.JAP_API_URL || 'https://justanotherpanel.com/api/v2').replace(/\/$/, '');
+  if (!key) return { ok: false, error: 'Missing JAP_API_KEY' };
+  try {
+    const body = new URLSearchParams({ key, action: 'balance' });
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded', Accept: 'application/json' },
+      body: body.toString()
+    });
+    const data = await res.json().catch(() => ({}));
+    if (data.error) return { ok: false, error: String(data.error), raw: safeSlice(JSON.stringify(data), 200) };
+    const bal = data.balance ?? data?.data?.balance;
+    if (bal == null) return { ok: false, error: 'No balance field', raw: safeSlice(JSON.stringify(data), 200) };
+    return { ok: true, balance: bal, currency: data.currency || 'USD' };
+  } catch (err) {
+    return { ok: false, error: safeSlice(String(err.message || err), 500) };
+  }
+}
+
+async function getSmmkingsBalance() {
+  const key = String(process.env.SMMKINGS_API_KEY || '').trim().replace(/^["']+|["']+$/g, '');
+  const url = String(process.env.SMMKINGS_API_URL || 'https://smmkings.com/api/v2').replace(/\/$/, '');
+  if (!key) return { ok: false, error: 'Missing SMMKINGS_API_KEY' };
+  try {
+    const body = new URLSearchParams({ key, action: 'balance' });
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded', Accept: 'application/json' },
+      body: body.toString()
+    });
+    const data = await res.json().catch(() => ({}));
+    if (data.error) return { ok: false, error: String(data.error), raw: safeSlice(JSON.stringify(data), 200) };
+    const bal = data.balance ?? data?.data?.balance;
+    if (bal == null) return { ok: false, error: 'No balance field', raw: safeSlice(JSON.stringify(data), 200) };
+    return { ok: true, balance: bal, currency: data.currency || 'USD' };
+  } catch (err) {
+    return { ok: false, error: safeSlice(String(err.message || err), 500) };
+  }
+}
+
+async function getBulkmailBalance() {
+  const apiKey = process.env.BULKMAIL_API_KEY || process.env.BULK_MAIL_API_KEY;
+  if (!apiKey) return { ok: false, error: 'Missing BULKMAIL_API_KEY' };
+  try {
+    const res = await fetch('https://bulkmail.shop/api/v2/wallet/balance', {
+      headers: {
+        'X-API-Key': apiKey,
+        Accept: 'application/json',
+        'Content-Type': 'application/json'
+      }
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || data.success === false) {
+      return { ok: false, error: data.error || data.message || ('HTTP ' + res.status), raw: safeSlice(JSON.stringify(data), 200) };
+    }
+    const bal = data?.data?.balance ?? data?.balance;
+    if (bal == null) return { ok: false, error: 'No balance field', raw: safeSlice(JSON.stringify(data), 200) };
+    const currency = (data?.data?.currency || data?.currency || 'USD');
+    return { ok: true, balance: bal, currency: String(currency).toUpperCase() };
+  } catch (err) {
+    return { ok: false, error: safeSlice(String(err.message || err), 500) };
+  }
+}
+
 async function supplierBalancesFetch() {
-  const [fadded, logsdomain, grizzly, sujan, owlet, classy, smsbus, gotsms] = await Promise.all([
+  const [fadded, logsdomain, grizzly, sujan, owlet, classy, smsbus, gotsms, bulkmail, jap, smmkings] = await Promise.all([
     getFaddedBalance(),
     getLogsDomainBalance(),
     getGrizzlyBalance(),
@@ -1583,11 +1651,18 @@ async function supplierBalancesFetch() {
     fetchOwletBalance(),
     getClassyBalance(),
     getSmsBusBalance(),
-    getGotsmsBalance()
+    getGotsmsBalance(),
+    getBulkmailBalance(),
+    getJapBalance(),
+    getSmmkingsBalance()
   ]);
   return {
     status: 200,
-    body: { success: true, suppliers: { fadded, logsdomain, grizzly, sujan, owlet, classy, smsbus, gotsms }, fetched_at: new Date().toISOString() }
+    body: {
+      success: true,
+      suppliers: { fadded, logsdomain, grizzly, sujan, owlet, classy, smsbus, gotsms, bulkmail, jap, smmkings },
+      fetched_at: new Date().toISOString()
+    }
   };
 }
 
@@ -2464,6 +2539,115 @@ async function saveBroadcastProgress({ subject, message, next_index, sent, faile
   }
 }
 
+
+/** ---- Web Push (phone lock-screen notifications for installed PWA) ---- */
+async function requireUser(req) {
+  const authHeader = req.headers.authorization || '';
+  const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : null;
+  if (!token) return { ok: false, status: 401, message: 'Sign in required' };
+  const { data: { user }, error: authErr } = await supabase.auth.getUser(token);
+  if (authErr || !user) return { ok: false, status: 401, message: 'Invalid session' };
+  return { ok: true, user };
+}
+
+function getVapidKeys() {
+  const publicKey = (process.env.VAPID_PUBLIC_KEY || '').trim();
+  const privateKey = (process.env.VAPID_PRIVATE_KEY || '').trim();
+  const subject = (process.env.VAPID_SUBJECT || 'mailto:support@mjhub.store').trim();
+  return { publicKey, privateKey, subject };
+}
+
+async function pushVapidPublic() {
+  const { publicKey } = getVapidKeys();
+  if (!publicKey) {
+    return { status: 503, body: { success: false, message: 'Push not configured. Set VAPID_PUBLIC_KEY and VAPID_PRIVATE_KEY in Vercel env.' } };
+  }
+  return { status: 200, body: { success: true, publicKey } };
+}
+
+async function pushSubscribe(req, body) {
+  const gate = await requireUser(req);
+  if (!gate.ok) return { status: gate.status, body: { success: false, message: gate.message } };
+  const endpoint = String(body.endpoint || '').trim();
+  const keys = body.keys || {};
+  const p256dh = String(keys.p256dh || body.p256dh || '').trim();
+  const auth = String(keys.auth || body.auth || '').trim();
+  if (!endpoint || !p256dh || !auth) {
+    return { status: 400, body: { success: false, message: 'endpoint and keys.p256dh / keys.auth required' } };
+  }
+  const row = {
+    user_id: gate.user.id,
+    endpoint,
+    p256dh,
+    auth,
+    user_agent: String(body.user_agent || '').slice(0, 400) || null,
+    updated_at: new Date().toISOString()
+  };
+  const { error } = await supabase.from('push_subscriptions').upsert(row, { onConflict: 'endpoint' });
+  if (error) {
+    return { status: 500, body: { success: false, message: error.message + (/relation|does not exist/i.test(error.message) ? ' — run push_subscriptions SQL first' : '') } };
+  }
+  return { status: 200, body: { success: true } };
+}
+
+async function pushUnsubscribe(req, body) {
+  const gate = await requireUser(req);
+  if (!gate.ok) return { status: gate.status, body: { success: false, message: gate.message } };
+  const endpoint = String(body.endpoint || '').trim();
+  if (!endpoint) return { status: 400, body: { success: false, message: 'endpoint required' } };
+  await supabase.from('push_subscriptions').delete().eq('user_id', gate.user.id).eq('endpoint', endpoint);
+  return { status: 200, body: { success: true } };
+}
+
+async function pushSend(body) {
+  const { publicKey, privateKey, subject } = getVapidKeys();
+  if (!publicKey || !privateKey) {
+    return { status: 503, body: { success: false, message: 'VAPID keys not set on server' } };
+  }
+  let webpush;
+  try {
+    webpush = (await import('web-push')).default;
+  } catch (e) {
+    return { status: 500, body: { success: false, message: 'web-push package missing — add dependency and redeploy' } };
+  }
+  webpush.setVapidDetails(subject, publicKey, privateKey);
+
+  const title = String(body.title || 'MJ HUB').slice(0, 80);
+  const msgBody = String(body.body || body.message || '').slice(0, 200);
+  const url = String(body.url || '/dashboard.html').slice(0, 300);
+  const payload = JSON.stringify({ title, body: msgBody, url, icon: '/img/IMG_3027.png' });
+
+  let q = supabase.from('push_subscriptions').select('id, endpoint, p256dh, auth, user_id');
+  if (body.user_id) q = q.eq('user_id', body.user_id);
+  const { data: subs, error } = await q.limit(2000);
+  if (error) return { status: 500, body: { success: false, message: error.message } };
+  if (!subs || !subs.length) {
+    return { status: 200, body: { success: true, sent: 0, failed: 0, message: 'No push subscribers yet' } };
+  }
+
+  let sent = 0, failed = 0;
+  const stale = [];
+  for (const s of subs) {
+    try {
+      await webpush.sendNotification(
+        { endpoint: s.endpoint, keys: { p256dh: s.p256dh, auth: s.auth } },
+        payload,
+        { TTL: 60 * 60 * 12 }
+      );
+      sent++;
+    } catch (e) {
+      failed++;
+      const code = e?.statusCode || e?.status;
+      if (code === 404 || code === 410) stale.push(s.id);
+    }
+  }
+  if (stale.length) {
+    try { await supabase.from('push_subscriptions').delete().in('id', stale); } catch (_) {}
+  }
+  return { status: 200, body: { success: true, sent, failed, total: subs.length } };
+}
+
+
 export default async function handler(req, res) {
   applyApiCors(req, res, { methods: 'POST, OPTIONS' });
   setNoStore(res);
@@ -2497,6 +2681,15 @@ export default async function handler(req, res) {
       } else {
         result = { status: 400, body: { success: false, message: 'Unknown vendor action' } };
       }
+      return res.status(result.status).json(result.body);
+    }
+
+    // Web Push: any signed-in user can get VAPID key / subscribe / unsubscribe
+    if (resource === 'push' && (action === 'vapid_public' || action === 'subscribe' || action === 'unsubscribe')) {
+      let result;
+      if (action === 'vapid_public') result = await pushVapidPublic();
+      else if (action === 'subscribe') result = await pushSubscribe(req, body);
+      else result = await pushUnsubscribe(req, body);
       return res.status(result.status).json(result.body);
     }
 
@@ -2551,8 +2744,11 @@ export default async function handler(req, res) {
       else if (action === 'send') result = await emailBroadcastSend(body);
       else if (action === 'test') result = await emailBroadcastTest(body, admin);
       else result = { status: 400, body: { success: false, message: 'Unknown email_broadcast action. Use "preview", "test", or "send".' } };
+    } else if (resource === 'push') {
+      if (action === 'send') result = await pushSend(body);
+      else result = { status: 400, body: { success: false, message: 'Unknown push action for admin. Use "send".' } };
     } else {
-      result = { status: 400, body: { success: false, message: 'Unknown resource. Use "user", "product", "inventory", "sms", "profiles", "orders", "sms_orders", "booster_orders", "supplier_balances", "overview", "user_join_dates", "secrets_status", "sub_admin", "email_broadcast", or "vendor".' } };
+      result = { status: 400, body: { success: false, message: 'Unknown resource. Use "user", "product", "inventory", "sms", "profiles", "orders", "sms_orders", "booster_orders", "supplier_balances", "overview", "user_join_dates", "secrets_status", "sub_admin", "email_broadcast", "push", or "vendor".' } };
     }
 
     return res.status(result.status).json(result.body);
