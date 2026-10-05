@@ -6424,6 +6424,56 @@ window.saveNotifPrefs = function() {
     try { localStorage.setItem('mjhub_notif_prefs', JSON.stringify(prefs)); } catch (e) {}
 };
 
+
+/* Soft opt-in for phone push — once until dismissed or enabled */
+window.mjPushOptInDismiss = function (days) {
+  try {
+    var until = Date.now() + (Number(days) || 7) * 24 * 60 * 60 * 1000;
+    localStorage.setItem('mj_push_optin_dismiss_until', String(until));
+  } catch (e) {}
+  var el = document.getElementById('mjPushOptInModal');
+  if (el) { el.classList.add('hidden'); el.setAttribute('aria-hidden', 'true'); }
+};
+window.mjPushOptInEnable = async function () {
+  var el = document.getElementById('mjPushOptInModal');
+  if (el) { el.classList.add('hidden'); el.setAttribute('aria-hidden', 'true'); }
+  try {
+    // Go to Notifications settings so user sees the toggle
+    if (typeof switchSection === 'function') switchSection('profile');
+    if (typeof openProfileSubview === 'function') openProfileSubview('notifications');
+    // Try enable immediately (user gesture — required by browsers)
+    if (window.MJHubPush && MJHubPush.enable) {
+      await MJHubPush.enable();
+      try { localStorage.setItem('mj_push_optin_dismiss_until', String(Date.now() + 365 * 24 * 60 * 60 * 1000)); } catch (e) {}
+      var box = document.getElementById('prefPushPhone');
+      if (box) box.checked = true;
+      if (typeof showToast === 'function') showToast('Phone alerts enabled', 'success');
+    }
+  } catch (err) {
+    if (typeof showToast === 'function') showToast(err.message || 'Could not enable alerts', 'error');
+  }
+};
+window.mjPushOptInMaybeShow = async function () {
+  try {
+    var until = parseInt(localStorage.getItem('mj_push_optin_dismiss_until') || '0', 10);
+    if (until && Date.now() < until) return;
+    // Already subscribed?
+    if (window.MJHubPush && MJHubPush.status) {
+      var st = await MJHubPush.status();
+      if (st && st.subscribed) return;
+      if (st && st.permission === 'denied') return;
+    }
+    // Small delay so dashboard finishes loading
+    setTimeout(function () {
+      var modal = document.getElementById('mjPushOptInModal');
+      if (!modal) return;
+      // Don't show if still on a critical flow
+      modal.classList.remove('hidden');
+      modal.setAttribute('aria-hidden', 'false');
+    }, 1800);
+  } catch (e) {}
+};
+
 window.togglePhonePush = async function(el) {
   const on = !!(el && el.checked);
   const hint = document.getElementById('pushNotifHint');
@@ -8103,12 +8153,41 @@ window.toggleHomeBalanceHide = function () {
       if (window.MJHubPush && MJHubPush.ensureServiceWorker) {
         MJHubPush.ensureServiceWorker().catch(function(){});
       }
+      if (window.mjPushOptInMaybeShow) mjPushOptInMaybeShow();
     } catch(e){}
   }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', bootPush);
   else bootPush();
 })();
 </script>
+
+
+<!-- Soft prompt: enable phone lock-screen alerts (once / until dismissed) -->
+<div id="mjPushOptInModal" class="mj-push-optin hidden" aria-hidden="true">
+  <div class="mj-push-optin-backdrop" onclick="mjPushOptInDismiss(7)"></div>
+  <div class="mj-push-optin-card" role="dialog" aria-labelledby="mjPushOptInTitle">
+    <div class="mj-push-optin-icon"><i class="fa-solid fa-bell"></i></div>
+    <h3 id="mjPushOptInTitle">Don’t miss updates</h3>
+    <p>Turn on <b>phone alerts</b> so you get order, deposit, and stock news even when the app is closed.</p>
+    <button type="button" class="mj-push-optin-primary" onclick="mjPushOptInEnable()">Turn on alerts</button>
+    <button type="button" class="mj-push-optin-secondary" onclick="mjPushOptInDismiss(7)">Not now</button>
+  </div>
+</div>
+<style>
+.mj-push-optin{position:fixed;inset:0;z-index:99999;display:flex;align-items:flex-end;justify-content:center;padding:16px;padding-bottom:max(16px,env(safe-area-inset-bottom));}
+.mj-push-optin.hidden{display:none!important;}
+.mj-push-optin-backdrop{position:absolute;inset:0;background:rgba(0,0,0,.45);backdrop-filter:blur(4px);}
+.mj-push-optin-card{position:relative;width:100%;max-width:400px;background:var(--card-bg,#12141c);border:1px solid rgba(37,99,235,.35);border-radius:20px;padding:22px 20px 18px;box-shadow:0 20px 50px rgba(0,0,0,.45);text-align:center;color:var(--text-color,#fff);}
+.mj-push-optin-icon{width:52px;height:52px;margin:0 auto 12px;border-radius:16px;background:linear-gradient(135deg,#2563eb,#1d4ed8);display:flex;align-items:center;justify-content:center;font-size:22px;color:#fff;}
+.mj-push-optin-card h3{margin:0 0 8px;font-size:18px;font-weight:800;}
+.mj-push-optin-card p{margin:0 0 16px;font-size:14px;line-height:1.5;opacity:.88;}
+.mj-push-optin-primary{width:100%;border:0;border-radius:12px;padding:13px 16px;font-weight:700;font-size:15px;background:#2563eb;color:#fff;cursor:pointer;margin-bottom:8px;}
+.mj-push-optin-primary:active{transform:scale(.98);}
+.mj-push-optin-secondary{width:100%;border:0;background:transparent;color:var(--text-color,#fff);opacity:.65;font-size:14px;padding:10px;cursor:pointer;}
+@media (min-width:600px){
+  .mj-push-optin{align-items:center;}
+}
+</style>
 
 </body>
 </html>
