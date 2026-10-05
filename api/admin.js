@@ -2612,8 +2612,9 @@ async function pushSend(body) {
   }
   webpush.setVapidDetails(subject, publicKey, privateKey);
 
-  const title = String(body.title || 'MJ HUB').slice(0, 80);
-  const msgBody = String(body.body || body.message || '').slice(0, 200);
+  // Title unused on lock screen (app name already shows). Message is body only.
+  const title = '';
+  const msgBody = String(body.body || body.message || 'You have a new update on MJ HUB. Log in to your dashboard.').slice(0, 200);
   const url = String(body.url || '/dashboard.html').slice(0, 300);
   const payload = JSON.stringify({ title, body: msgBody, url, icon: '/img/IMG_3027.png' });
 
