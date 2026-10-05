@@ -8,21 +8,28 @@ self.addEventListener('activate', (event) => {
 });
 
 self.addEventListener('push', (event) => {
-  let data = { title: 'MJ HUB', body: 'You have an update', url: '/dashboard.html' };
+  var DEFAULT_BODY = 'You have a new update on MJ HUB. Log in to your dashboard.';
+  var data = { body: DEFAULT_BODY, url: '/dashboard.html' };
   try {
     if (event.data) {
-      const parsed = event.data.json();
-      data = Object.assign(data, parsed || {});
+      var parsed = event.data.json();
+      if (parsed) data = Object.assign(data, parsed);
     }
   } catch (_) {
     try {
-      const t = event.data && event.data.text();
+      var t = event.data && event.data.text();
       if (t) data.body = t;
     } catch (_) {}
   }
-  const title = data.title || 'MJ HUB';
-  const options = {
-    body: data.body || '',
+
+  // App name already shows as "MJ HUB" — do not repeat a title.
+  // Put the full message in body only (single clean line under the app name).
+  var body = (data.body && String(data.body).trim()) || DEFAULT_BODY;
+  // Zero-width title so iOS/Android don't invent "MJ HUB" / "from MJ HUB"
+  var title = '​';
+
+  var options = {
+    body: body,
     icon: data.icon || '/img/IMG_3027.png',
     badge: data.badge || '/img/IMG_3027.png',
     data: { url: data.url || '/dashboard.html' },
@@ -34,10 +41,11 @@ self.addEventListener('push', (event) => {
 
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
-  const url = (event.notification.data && event.notification.data.url) || '/dashboard.html';
+  var url = (event.notification.data && event.notification.data.url) || '/dashboard.html';
   event.waitUntil(
-    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clientList) => {
-      for (const client of clientList) {
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then(function (clientList) {
+      for (var i = 0; i < clientList.length; i++) {
+        var client = clientList[i];
         if (client.url && 'focus' in client) {
           client.navigate(url);
           return client.focus();
