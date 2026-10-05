@@ -16,8 +16,17 @@
 
   async function getAccessToken() {
     try {
-      if (global.supabaseClient) {
-        const { data: { session } } = await global.supabaseClient.auth.getSession();
+      // Dashboard uses `let supabaseClient` — expose via window when available
+      var client = global.supabaseClient || global.__mjSupabase || null;
+      if (!client && global.supabase && global.SUPABASE_URL && global.SUPABASE_ANON_KEY) {
+        try {
+          client = global.supabase.createClient(global.SUPABASE_URL, global.SUPABASE_ANON_KEY, {
+            auth: { persistSession: true, storage: global.sessionStorage, autoRefreshToken: true }
+          });
+        } catch (_) {}
+      }
+      if (client && client.auth) {
+        const { data: { session } } = await client.auth.getSession();
         if (session && session.access_token) return session.access_token;
       }
     } catch (_) {}
