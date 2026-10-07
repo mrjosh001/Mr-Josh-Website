@@ -362,14 +362,17 @@ async function handleSync(req, res) {
 }
 
 async function handleList(req, res) {
-  const q = (req.query?.q || '').toString().trim().toLowerCase();
+  const qRaw = (req.query?.q || '').toString().trim();
+  const q = qRaw.toLowerCase();
+  const tokens = q.split(/[^a-z0-9]+/).filter(t => t.length > 0);
   const category = (req.query?.category || '').toString().trim();
   const hideUnavailable = String(req.query?.hide_unavailable || '1') !== '0';
   const page = Math.max(1, parseInt(req.query?.page || '1', 10) || 1);
   const pageSize = Math.min(200, Math.max(20, parseInt(req.query?.page_size || '100', 10) || 100));
-  const from = (page - 1) * pageSize;
-  const to = from + pageSize - 1;
 
+  // When searching, pull a wide set first so we match across the whole catalog
+  // (old code paginated first, then filtered — so "Non Drop FB" never found
+  // services that lived on later pages).
   let query = supabase
     .from('booster_services')
     .select(
@@ -378,11 +381,32 @@ async function handleList(req, res) {
     )
     .eq('source', 'owlet')
     .order('category', { ascending: true })
-    .order('name', { ascending: true })
-    .range(from, to);
+    .order('name', { ascending: true });
 
   if (hideUnavailable) query = query.neq('is_available', false);
   if (category) query = query.eq('category', category);
+
+  // Broad DB pre-filter: any token in name/category/service_id
+  if (tokens.length) {
+    const orParts = [];
+    for (const t of tokens.slice(0, 6)) {
+      const safe = t.replace(/[%_,]/g, '');
+      if (!safe) continue;
+      orParts.push(`name.ilike.%${safe}%`);
+      orParts.push(`category.ilike.%${safe}%`);
+      orParts.push(`service_id.eq.${safe}`);
+    }
+    if (orParts.length) query = query.or(orParts.join(','));
+  }
+
+  // Cap fetch when searching; normal browse still pages at DB level
+  if (tokens.length) {
+    query = query.limit(5000);
+  } else {
+    const from = (page - 1) * pageSize;
+    const to = from + pageSize - 1;
+    query = query.range(from, to);
+  }
 
   const { data, error, count } = await query;
   if (error) {
@@ -395,12 +419,28 @@ async function handleList(req, res) {
   }
 
   let rows = data || [];
-  if (q) {
-    rows = rows.filter(s =>
-      (s.name || '').toLowerCase().includes(q) ||
-      (s.category || '').toLowerCase().includes(q) ||
-      String(s.service_id).includes(q)
-    );
+
+  // Token AND: every word must appear somewhere in name, category, or id
+  if (tokens.length) {
+    rows = rows.filter(s => {
+      const hay = `${s.name || ''} ${s.category || ''} ${s.service_id || ''}`.toLowerCase();
+      return tokens.every(t => hay.includes(t));
+    });
+    // Prefer stronger matches (more tokens hit in name) then alphabetical
+    rows.sort((a, b) => {
+      const an = (a.name || '').toLowerCase();
+      const bn = (b.name || '').toLowerCase();
+      const as = tokens.reduce((n, t) => n + (an.includes(t) ? 1 : 0), 0);
+      const bs = tokens.reduce((n, t) => n + (bn.includes(t) ? 1 : 0), 0);
+      if (bs !== as) return bs - as;
+      return an.localeCompare(bn);
+    });
+  }
+
+  const totalMatched = tokens.length ? rows.length : (count ?? rows.length);
+  if (tokens.length) {
+    const from = (page - 1) * pageSize;
+    rows = rows.slice(from, from + pageSize);
   }
 
   const { data: catRows } = await supabase
@@ -420,7 +460,7 @@ async function handleList(req, res) {
     data: rows,
     page,
     page_size: pageSize,
-    total: count ?? rows.length,
+    total: totalMatched,
     categories
   });
 }
@@ -472,6 +512,8 @@ async function handleCatalog(req, res) {
     return res.status(200).json({ success: true, mode: 'categories', categories: cards, total_services: (catRows || []).length });
   }
 
+  const tokens = q.split(/[^a-z0-9]+/).filter(t => t.length > 0);
+
   let query = supabase
     .from('booster_services')
     .select(
@@ -480,10 +522,24 @@ async function handleCatalog(req, res) {
     )
     .eq('source', 'owlet')
     .eq('is_available', true)
-    .order('price_ngn', { ascending: true })
-    .range(from, to);
+    .order('price_ngn', { ascending: true });
 
   if (category) query = query.eq('category', category);
+
+  if (tokens.length) {
+    const orParts = [];
+    for (const t of tokens.slice(0, 6)) {
+      const safe = t.replace(/[%_,]/g, '');
+      if (!safe) continue;
+      orParts.push(`name.ilike.%${safe}%`);
+      orParts.push(`category.ilike.%${safe}%`);
+      orParts.push(`service_id.eq.${safe}`);
+    }
+    if (orParts.length) query = query.or(orParts.join(','));
+    query = query.limit(5000);
+  } else {
+    query = query.range(from, to);
+  }
 
   const { data, error, count } = await query;
   if (error) {
@@ -491,12 +547,27 @@ async function handleCatalog(req, res) {
   }
 
   let rows = data || [];
-  if (q) {
-    rows = rows.filter(s =>
-      (s.name || '').toLowerCase().includes(q) ||
-      (s.category || '').toLowerCase().includes(q) ||
-      String(s.service_id).includes(q)
-    );
+  if (tokens.length) {
+    rows = rows.filter(s => {
+      const hay = `${s.name || ''} ${s.category || ''} ${s.service_id || ''}`.toLowerCase();
+      return tokens.every(t => hay.includes(t));
+    });
+    const totalMatched = rows.length;
+    rows = rows.slice(from, from + pageSize);
+    rows = rows.map(s => ({
+      ...s,
+      price_ngn: floorSellNgn(s.price_ngn, s.service_id)
+    }));
+    return res.status(200).json({
+      success: true,
+      mode: 'services',
+      category: category || null,
+      categories,
+      data: rows,
+      page,
+      page_size: pageSize,
+      total: totalMatched
+    });
   }
 
   // Enforce ₦200 floor on every service shown to users (old DB rows included)
@@ -1068,13 +1139,51 @@ async function handleAdminOrders(req, res) {
     .range(from, to);
 
   if (q) {
-    query = query.or(`supplier_order_id.ilike.%${q}%,service_name.ilike.%${q}%,customer_id.ilike.%${q}%,link.ilike.%${q}%`);
+    const safe = q.replace(/[%_,]/g, ' ').trim();
+    const tokens = safe.toLowerCase().split(/\s+/).filter(t => t.length > 0).slice(0, 6);
+    // Exact-ish match on supplier order id / customer id first (digits or MJ- codes)
+    if (/^[0-9]+$/.test(safe) || /^MJ-/i.test(safe)) {
+      query = query.or(
+        `supplier_order_id.eq.${safe},` +
+        `supplier_order_id.ilike.%${safe}%,` +
+        `customer_id.ilike.%${safe}%,` +
+        `id.eq.${safe}`
+      );
+    } else if (tokens.length) {
+      const orParts = [];
+      for (const t of tokens) {
+        const s = t.replace(/[%_,]/g, '');
+        if (!s) continue;
+        orParts.push(`supplier_order_id.ilike.%${s}%`);
+        orParts.push(`service_name.ilike.%${s}%`);
+        orParts.push(`customer_id.ilike.%${s}%`);
+        orParts.push(`link.ilike.%${s}%`);
+      }
+      if (orParts.length) query = query.or(orParts.join(','));
+    } else {
+      query = query.or(
+        `supplier_order_id.ilike.%${safe}%,service_name.ilike.%${safe}%,customer_id.ilike.%${safe}%,link.ilike.%${safe}%`
+      );
+    }
   }
 
   const { data, error, count } = await query;
   if (error) {
     return res.status(500).json({ success: false, message: error.message });
   }
+
+  // Multi-token AND filter so "FB non drop" doesn't return unrelated rows
+  let rowsOut = data || [];
+  if (q) {
+    const tokens = q.toLowerCase().split(/[^a-z0-9]+/).filter(t => t.length > 0);
+    if (tokens.length > 1) {
+      rowsOut = rowsOut.filter(o => {
+        const hay = `${o.supplier_order_id || ''} ${o.service_name || ''} ${o.customer_id || ''} ${o.link || ''}`.toLowerCase();
+        return tokens.every(t => hay.includes(t));
+      });
+    }
+  }
+
 
   // Same live-status-pull the customer's My Orders page already does —
   // the admin "Refresh" button previously only re-read whatever status
@@ -1083,7 +1192,7 @@ async function handleAdminOrders(req, res) {
   // place this existed until now). Capped to this page's non-terminal
   // orders so Refresh stays fast instead of hammering Owlet for the
   // entire order history on every click.
-  const pending = (data || []).filter(o => /pending|progress|processing|in progress/i.test(String(o.status || '')));
+  const pending = (rowsOut || []).filter(o => /pending|progress|processing|in progress/i.test(String(o.status || '')));
   for (const o of pending) {
     if (!o.supplier_order_id) continue;
     try {
@@ -1105,7 +1214,7 @@ async function handleAdminOrders(req, res) {
     } catch (_) {}
   }
 
-  return res.status(200).json({ success: true, data: data || [], total: count || 0, page, page_size: pageSize });
+  return res.status(200).json({ success: true, data: rowsOut || [], total: count || 0, page, page_size: pageSize });
 }
 
 
