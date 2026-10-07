@@ -5807,10 +5807,11 @@ async function loadBoosterOrders() {
  if (cards) cards.innerHTML = rows.map(o => `
  <div class="mobile-card">
  <div style="font-weight:700;">${escapeHtml(o.service_name || 'Boost')}</div>
+ <div class="row-line"><span>Date</span><span>${o.created_at ? ngWhen(o.created_at) : '—'}</span></div>
  <div class="row-line"><span>Status</span>${boosterStatusBadge(o.status)}</div>
  <div class="row-line"><span>Paid</span><span class="price">₦${Number(o.price_ngn || 0).toLocaleString()}</span></div>
  <div class="row-line"><span>Qty</span><span>${Number(o.quantity || 0).toLocaleString()}</span></div>
- <div class="row-line"><span>Customer</span><span>${escapeHtml(o.customer_id || ' ')}</span></div>
+ <div class="row-line"><span>Customer</span><span>${escapeHtml(o.customer_id || '—')}</span></div>
  <div style="font-size:11px;color:var(--muted);margin-top:6px;word-break:break-all;">${escapeHtml(o.link || '')}</div>
  </div>`).join('');
  }
