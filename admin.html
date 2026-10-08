@@ -2664,9 +2664,9 @@ async function syncSmsBusNow() {
  if (bal != null && typeof bal === 'object') {
  bal = bal.balance ?? bal.amount ?? bal.credit ?? bal.funds ?? JSON.stringify(bal);
  }
- showAdminToast(`Server 2 saved · Countries ${d.countries||0} · Rows ${d.projects||0} · New ${d.new_products||0} · Updated ${d.updated_products||0}`, 'success');
+ showAdminToast('Server 2 done · New ' + (d.new_products||0) + ' · Updated ' + (d.updated_products||0) + ' · Countries ' + (d.countries||0), 'success');
  const prog = document.getElementById('logsdomainSyncProgress2');
- if (prog) prog.textContent = `Server 2 live: ${d.countries||0} countries · ${d.projects||0} services · balance ${bal != null ? bal : ' '}`;
+ if (prog) prog.textContent = 'Done · New ' + (d.new_products||0) + ' · Updated ' + (d.updated_products||0) + ' · Countries ' + (d.countries||0) + (bal != null ? (' · bal ' + bal) : '');
  } else {
  showAdminToast(data.message || 'Server 2 sync failed', 'error');
  }
@@ -2933,11 +2933,18 @@ async function pollGrizzlySync() {
  setGrizzlySyncProgress('');
  break;
  }
- setGrizzlySyncProgress(`Syncing ${data.cursor_index}/${data.total_countries} countries: ${data.new_services} new, ${data.updated_services} updated`);
+ setGrizzlySyncProgress(
+   'Syncing · ' + (data.cursor_index || 0) + '/' + (data.total_countries || 0) +
+   ' countries · New ' + (data.new_services || 0) + ' · Updated ' + (data.updated_services || 0) +
+   (data.services_seen != null ? (' · Seen ' + data.services_seen) : '')
+ );
  if (data.done) {
  await loadNumberServices();
- showAdminToast(`Grizzly synced: ${data.new_services} new, ${data.updated_services} updated`, 'success');
- setGrizzlySyncProgress('');
+ showAdminToast('Server 1 done · New ' + (data.new_services || 0) + ' · Updated ' + (data.updated_services || 0), 'success');
+ setGrizzlySyncProgress(
+   'Done · New ' + (data.new_services || 0) + ' · Updated ' + (data.updated_services || 0) +
+   (data.services_seen != null ? (' · Seen ' + data.services_seen) : '')
+ );
  break;
  }
  // Do not reload the full table every chunk (that was a major slowdown).
