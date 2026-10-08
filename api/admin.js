@@ -1781,7 +1781,9 @@ async function getOverviewStats(body) {
     const cid = s.country_id != null ? String(s.country_id).trim() : '';
     let src = String(s.source || '').toLowerCase().trim();
     if (src.includes('grizzly')) src = 'grizzlysms';
-    if (src.includes('smsbus') || src.includes('sms_bus') || src.includes('sms-bus')) src = 'smsbus';
+    if (src.includes('gotsms') || src.includes('got_sms')) src = 'gotsms';
+    if (src.includes('smsbus_rent') || src.includes('sms_bus_rent')) src = 'smsbus_rent';
+    else if (src.includes('smsbus') || src.includes('sms_bus') || src.includes('sms-bus')) src = 'smsbus';
     const usd = Number(s.supplier_price || 0);
     if (!(usd > 0) || !sid) continue;
     putSvcCost(src + ':' + cid + ':' + sid, usd);
@@ -1799,7 +1801,9 @@ async function getOverviewStats(body) {
     const cid = r.country_id != null ? String(r.country_id).trim() : '';
     let src = String(r.source || '').toLowerCase().trim();
     if (src.includes('grizzly')) src = 'grizzlysms';
-    if (src.includes('smsbus') || src.includes('sms_bus') || src.includes('sms-bus')) src = 'smsbus';
+    if (src.includes('gotsms') || src.includes('got_sms')) src = 'gotsms';
+    if (src.includes('smsbus_rent') || src.includes('sms_bus_rent')) src = 'smsbus_rent';
+    else if (src.includes('smsbus') || src.includes('sms_bus') || src.includes('sms-bus')) src = 'smsbus';
 
     for (const k of [
       src && cid && sid ? src + ':' + cid + ':' + sid : null,
@@ -1815,13 +1819,22 @@ async function getOverviewStats(body) {
     return 0;
   }
 
-  // ----- SMS: Server 1 + Server 2 -----
+  // ----- SMS: Server 1 + Server 2 + USA rental (gotsms) + global rental (smsbus_rent) -----
   // supplier cost ₦ = supplier USD × rate (1500)
   // profit ₦        = customer paid ₦ − supplier cost ₦
+  // OTP orders end as completed; rentals stay active for the plan duration —
+  // both must count once paid (exclude only cancelled / refunded / expired).
   const smsRows = (smsRes.data || []).filter((r) => {
     const st = String(r.status || '').toLowerCase();
     if (r.refunded === true) return false;
     if (['cancelled', 'canceled', 'expired', 'refunded', 'failed'].includes(st)) return false;
+    const src = String(r.source || '').toLowerCase();
+    const isRental = src.includes('gotsms') || src.includes('smsbus_rent') || src.includes('rent');
+    if (isRental) {
+      // Paid rental inventory: active plans + finished plans
+      return ['active', 'completed', 'complete', 'success', 'waiting_for_code', 'pending', 'processing'].includes(st) || !st;
+    }
+    // OTP (grizzlysms / smsbus): only successful code deliveries
     return st === 'completed' || st === 'complete' || st === 'success';
   });
   const smsAmountSpent = smsRows.reduce((s, r) => s + Number(r.price || 0), 0);
