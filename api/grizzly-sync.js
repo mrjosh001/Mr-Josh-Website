@@ -314,9 +314,11 @@ async function syncOneCountry(apiKey, country, usdToNgn, counters, serviceNames)
   if (!entries.length) return;
 
   // One query for all existing services in this country
+  // Incremental: only INSERT brand-new service_ids and UPDATE rows whose
+  // stock / supplier cost / name actually changed (GotSMS-style — never wipe + rewrite).
   const { data: existingRows, error: existErr } = await supabase
     .from('number_services')
-    .select('id, service_id')
+    .select('id, service_id, supplier_price, available_quantity, service_name, is_available, country_name')
     .eq('source', 'grizzlysms')
     .eq('country_id', countryId);
 
@@ -326,7 +328,7 @@ async function syncOneCountry(apiKey, country, usdToNgn, counters, serviceNames)
   }
 
   const existingMap = new Map(
-    (existingRows || []).map((r) => [String(r.service_id), r.id])
+    (existingRows || []).map((r) => [String(r.service_id), r])
   );
 
   const toInsert = [];
@@ -346,17 +348,27 @@ async function syncOneCountry(apiKey, country, usdToNgn, counters, serviceNames)
       (serviceNames && (serviceNames[serviceCode] || serviceNames[String(serviceCode).toLowerCase()])) ||
       serviceCode;
 
-    const existingId = existingMap.get(String(serviceCode));
-    if (existingId) {
+    const prev = existingMap.get(String(serviceCode));
+    if (prev) {
+      // Admin hid this row — keep hidden even if supplier has stock again
+      const nextAvail = prev.is_available === false ? false : availableQty > 0;
+      const sameCost = Number(prev.supplier_price || 0) === supplierPriceUsd;
+      const sameQty = Number(prev.available_quantity || 0) === availableQty;
+      const sameName = String(prev.service_name || '') === String(friendlyName);
+      const sameCountry = String(prev.country_name || '') === String(countryName);
+      const sameAvail = !!prev.is_available === !!nextAvail;
+      if (sameCost && sameQty && sameName && sameCountry && sameAvail) {
+        continue; // nothing changed — skip write
+      }
       counters.updatedCount += 1;
       toUpdate.push({
-        id: existingId,
+        id: prev.id,
         country_name: countryName,
         service_name: friendlyName,
         supplier_price: supplierPriceUsd,
         available_quantity: availableQty,
         providers_raw: providersRaw,
-        is_available: availableQty > 0,
+        is_available: nextAvail,
         updated_at: now
       });
     } else {
