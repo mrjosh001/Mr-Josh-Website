@@ -703,21 +703,36 @@ function withLagos(opts) { return Object.assign({ timeZone: 'Africa/Lagos' }, op
  <script src="/js/mj-page-loader.js"></script>
 
 <style id="supplier-bal-grid-fix">
-#supplierBalanceGrid.metrics,
 #supplierBalanceGrid {
+  display: block;
+}
+#supplierBalanceGrid .supplier-group-label {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted, #94a3b8);
+  margin: 4px 0 8px;
+  padding-left: 2px;
+}
+#supplierBalanceGrid .supplier-group-label:not(:first-child) {
+  margin-top: 6px;
+}
+#supplierBalanceGrid .supplier-balance-metrics,
+#supplierBalanceGrid .metrics {
   display: grid !important;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 12px;
 }
 @media (max-width: 720px) {
-  #supplierBalanceGrid.metrics,
-  #supplierBalanceGrid {
+  #supplierBalanceGrid .supplier-balance-metrics,
+  #supplierBalanceGrid .metrics {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 @media (max-width: 420px) {
-  #supplierBalanceGrid.metrics,
-  #supplierBalanceGrid {
+  #supplierBalanceGrid .supplier-balance-metrics,
+  #supplierBalanceGrid .metrics {
     grid-template-columns: 1fr;
   }
 }
@@ -910,18 +925,27 @@ function withLagos(opts) { return Object.assign({ timeZone: 'Africa/Lagos' }, op
  <div class="panel-title">Supplier Balances</div>
  <button class="btn btn-ghost btn-sm" id="btnRefreshSupplierBalances" onclick="loadSupplierBalances()"><i class="fas fa-sync"></i> Refresh</button>
  </div>
- <div class="metrics" style="margin-bottom:0;" id="supplierBalanceGrid">
+ <div id="supplierBalanceGrid">
+ <div class="supplier-group-label">Log suppliers</div>
+ <div class="metrics supplier-balance-metrics" style="margin-bottom:14px;">
  <div class="metric-card"><div class="metric-label">FADDED</div><div class="metric-value" id="balFadded"> </div><div class="metric-sub" id="balFaddedSub">Loading…</div></div>
  <div class="metric-card"><div class="metric-label">Logs Domain</div><div class="metric-value" id="balLogsdomain"> </div><div class="metric-sub" id="balLogsdomainSub">Loading…</div></div>
- <div class="metric-card"><div class="metric-label">GrizzlySMS</div><div class="metric-value" id="balGrizzly"> </div><div class="metric-sub" id="balGrizzlySub">Loading…</div></div>
  <div class="metric-card"><div class="metric-label">Sujan Dept.</div><div class="metric-value" id="balSujan"> </div><div class="metric-sub" id="balSujanSub">Loading…</div></div>
  <div class="metric-card"><div class="metric-label">ClassyTee</div><div class="metric-value" id="balClassy"> </div><div class="metric-sub" id="balClassySub">Loading…</div></div>
+ <div class="metric-card"><div class="metric-label">BulkMail</div><div class="metric-value" id="balBulkmail">—</div><div class="metric-sub" id="balBulkmailSub">Loading…</div></div>
+ </div>
+ <div class="supplier-group-label">SMS providers</div>
+ <div class="metrics supplier-balance-metrics" style="margin-bottom:14px;">
+ <div class="metric-card"><div class="metric-label">GrizzlySMS (Server 1)</div><div class="metric-value" id="balGrizzly"> </div><div class="metric-sub" id="balGrizzlySub">Loading…</div></div>
+ <div class="metric-card"><div class="metric-label">SMS-Bus (Server 2)</div><div class="metric-value" id="balSmsbus"> </div><div class="metric-sub" id="balSmsbusSub">Loading…</div></div>
+ <div class="metric-card"><div class="metric-label">GotSMS (USA rental)</div><div class="metric-value" id="balGotsms"> </div><div class="metric-sub" id="balGotsmsSub">Loading…</div></div>
+ </div>
+ <div class="supplier-group-label">SMM providers</div>
+ <div class="metrics supplier-balance-metrics" style="margin-bottom:0;">
  <div class="metric-card"><div class="metric-label">Owlet (Boosters)</div><div class="metric-value" id="balOwlet"> </div><div class="metric-sub" id="balOwletSub">Loading…</div></div>
  <div class="metric-card"><div class="metric-label">JAP (Boosters)</div><div class="metric-value" id="balJap">—</div><div class="metric-sub" id="balJapSub">Loading…</div></div>
  <div class="metric-card"><div class="metric-label">SMMKings (Telegram)</div><div class="metric-value" id="balSmmkings">—</div><div class="metric-sub" id="balSmmkingsSub">Loading…</div></div>
- <div class="metric-card"><div class="metric-label">SMS-Bus (Server 2)</div><div class="metric-value" id="balSmsbus"> </div><div class="metric-sub" id="balSmsbusSub">Loading…</div></div>
- <div class="metric-card"><div class="metric-label">GotSMS (USA rental)</div><div class="metric-value" id="balGotsms"> </div><div class="metric-sub" id="balGotsmsSub">Loading…</div></div>
- <div class="metric-card"><div class="metric-label">BulkMail</div><div class="metric-value" id="balBulkmail">—</div><div class="metric-sub" id="balBulkmailSub">Loading…</div></div>
+ </div>
  </div>
  </div>
  <div class="panel">
@@ -2229,7 +2253,7 @@ async function saveGotsmsPrice(id, value) {
 async function loadSupplierBalances() {
  const btn = document.getElementById('btnRefreshSupplierBalances');
  setBtnBusy(btn, true, 'Refreshing...');
- ['Fadded', 'Logsdomain', 'Grizzly', 'Sujan', 'Classy', 'Owlet', 'Smsbus', 'Gotsms'].forEach(p => {
+ ['Fadded', 'Logsdomain', 'Grizzly', 'Sujan', 'Classy', 'Owlet', 'Jap', 'Smmkings', 'Smsbus', 'Gotsms', 'Bulkmail'].forEach(p => {
  const sub = document.getElementById('bal' + p + 'Sub');
  if (sub) sub.textContent = 'Loading…';
  });
