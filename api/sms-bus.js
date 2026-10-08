@@ -807,7 +807,7 @@ async function syncSmsBusCatalog() {
 
           const { data: existingRows } = await supabase
             .from('number_services')
-            .select('id, service_id, price, is_available, price_source')
+            .select('id, service_id, price, is_available, price_source, supplier_price, available_quantity, service_name')
             .eq('source', 'smsbus')
             .eq('country_id', country.id);
 
@@ -832,19 +832,24 @@ async function syncSmsBusCatalog() {
             const prev = existingMap.get(sid);
 
             if (prev) {
-              // NEVER touch selling price (admin). Always refresh supplier USD cost for profit math.
+              // NEVER touch selling price (admin). Only write when supplier data actually changed.
+              const nextAvail = prev.is_available === false ? false : stock > 0;
+              const nextCost = costUsd > 0 ? costUsd : Number(prev.supplier_price || 0);
+              const sameCost = Number(prev.supplier_price || 0) === Number(nextCost || 0);
+              const sameQty = Number(prev.available_quantity || 0) === stock;
+              const sameName = String(prev.service_name || '') === String(serviceName);
+              const sameAvail = !!prev.is_available === !!nextAvail;
+              if (sameCost && sameQty && sameName && sameAvail) {
+                continue; // unchanged — skip DB write
+              }
               const fields = {
                 country_name: country.name,
                 service_name: serviceName,
                 available_quantity: stock,
+                is_available: nextAvail,
                 updated_at: now
               };
               if (costUsd > 0) fields.supplier_price = costUsd;
-              if (prev.is_available === false) {
-                fields.is_available = false;
-              } else {
-                fields.is_available = stock > 0;
-              }
               toUpdate.push({ id: prev.id, ...fields });
             } else {
               toInsert.push({
