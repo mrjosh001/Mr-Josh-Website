@@ -1668,6 +1668,49 @@ async function supplierBalancesFetch() {
 
 const PERIOD_DAYS = { today: 1, '7days': 7, month: 30, '3months': 90, '6months': 180, '12months': 365 };
 
+/** Nigeria (Africa/Lagos, WAT = UTC+1, no DST) calendar helpers for overview periods */
+function lagosYmd(d = new Date()) {
+  return d.toLocaleDateString('en-CA', { timeZone: 'Africa/Lagos' }); // YYYY-MM-DD
+}
+function shiftYmd(ymd, days) {
+  const [y, m, d] = String(ymd).split('-').map(Number);
+  const utc = Date.UTC(y, (m || 1) - 1, d || 1) + (Number(days) || 0) * 86400000;
+  const x = new Date(utc);
+  const yy = x.getUTCFullYear();
+  const mm = String(x.getUTCMonth() + 1).padStart(2, '0');
+  const dd = String(x.getUTCDate()).padStart(2, '0');
+  return yy + '-' + mm + '-' + dd;
+}
+function lagosDayStartIso(ymd) {
+  // 00:00:00 WAT
+  return new Date(String(ymd) + 'T00:00:00+01:00').toISOString();
+}
+function lagosDayEndIso(ymd) {
+  // 23:59:59.999 WAT
+  return new Date(String(ymd) + 'T23:59:59.999+01:00').toISOString();
+}
+function overviewRangeLagos(period, body = {}) {
+  const today = lagosYmd();
+  if (period === 'custom') {
+    const from = String(body.from || '').trim() || shiftYmd(today, -6);
+    const to = String(body.to || '').trim() || today;
+    return { cutoff: lagosDayStartIso(from), endAt: lagosDayEndIso(to), fromYmd: from, toYmd: to };
+  }
+  if (period === 'today') {
+    return { cutoff: lagosDayStartIso(today), endAt: lagosDayEndIso(today), fromYmd: today, toYmd: today };
+  }
+  if (period === 'month') {
+    const start = today.slice(0, 8) + '01';
+    return { cutoff: lagosDayStartIso(start), endAt: lagosDayEndIso(today), fromYmd: start, toYmd: today };
+  }
+  // Rolling calendar days inclusive of today (7days = today + previous 6)
+  const days = PERIOD_DAYS[period] || 7;
+  const from = shiftYmd(today, -(days - 1));
+  return { cutoff: lagosDayStartIso(from), endAt: lagosDayEndIso(today), fromYmd: from, toYmd: today };
+}
+
+
+
 /**
  * Real account signup dates, for the admin Customers table's "Joined"
  * column. Deliberately NOT reading profiles.created_at — that column is
@@ -1718,15 +1761,10 @@ async function getOverviewStats(body) {
   const period = body.period === 'custom'
     ? 'custom'
     : (PERIOD_DAYS[body.period] ? body.period : '7days');
-  let cutoff = new Date(Date.now() - (PERIOD_DAYS[period] || 7) * 86400000).toISOString();
-  let endAt = null;
-  if (period === 'custom') {
-    const from = String(body.from || '').trim();
-    const to = String(body.to || '').trim();
-    if (from) cutoff = new Date(from + 'T00:00:00.000Z').toISOString();
-    else cutoff = new Date(Date.now() - 7 * 86400000).toISOString();
-    if (to) endAt = new Date(to + 'T23:59:59.999Z').toISOString();
-  }
+  // Inclusive Lagos calendar window (WAT), not rolling UTC hours
+  const range = overviewRangeLagos(period, body);
+  let cutoff = range.cutoff;
+  let endAt = range.endAt;
   // Prefer USD_TO_NGN_RATE, fall back to USD_TO_NGN (same rate used when pricing numbers)
   const usdToNgn =
     Number(process.env.USD_TO_NGN_RATE) ||
