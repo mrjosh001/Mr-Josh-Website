@@ -25,7 +25,10 @@ const JAP_URL = (process.env.JAP_API_URL || 'https://justanotherpanel.com/api/v2
 const JAP_KEY = String(process.env.JAP_API_KEY || '').trim().replace(/^["']+|["']+$/g, '');
 /** Customer catalog + new purchases */
 const STORE_SOURCE = 'jap';
-const USD_TO_NGN = Number(process.env.USD_TO_NGN_RATE) || 1450;
+/** JAP rates are USD. $1 → ₦1500 (override with USD_TO_NGN_RATE). */
+const USD_TO_NGN = Number(process.env.USD_TO_NGN_RATE) || 1500;
+/** Flat ₦ buffer added on top of converted cost before markup. */
+const COST_BUFFER_NGN = Math.max(0, Number(process.env.BOOSTER_COST_BUFFER_NGN) || 1000);
 
 function panelCreds(source) {
   if (String(source || '').toLowerCase() === 'owlet') {
@@ -41,37 +44,28 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY
 );
 
-// Markup: random 35%–70% per service (override with OWLET_MARKUP_PERCENT env for fixed)
-// Owlet rate currency depends on the panel wallet.
-// Docs examples use USD, but Naira accounts often return rate already in NGN.
-// Force with env OWLET_RATE_CURRENCY=USD or NGN.
+/**
+ * Markup 50%–80% random per service (system prices).
+ * Override with OWLET_MARKUP_PERCENT for a fixed % (0–200).
+ */
 function getMarkupPercent() {
   const env = Number(process.env.OWLET_MARKUP_PERCENT);
   if (Number.isFinite(env) && env >= 0 && env <= 200) return env;
-  // Random profit margin between 35% and 70%
-  return Math.floor(Math.random() * (70 - 35 + 1)) + 35;
+  return Math.floor(Math.random() * (80 - 50 + 1)) + 50;
 }
 
+/** JAP prices are always USD — never treat rate as NGN. */
 function getRateCurrency() {
-  const env = String(process.env.OWLET_RATE_CURRENCY || '').trim().toUpperCase();
-  if (env === 'USD' || env === 'NGN') return env;
-  return 'AUTO';
+  return 'USD';
 }
 
 /**
- * Resolve supplier cost in NGN from Owlet `rate`.
- * AUTO: rate < 100 → treat as USD; rate >= 100 → already NGN
- * (avoids ₦millions when NGN rates were wrongly × 1450)
+ * Supplier cost in ₦: rate_usd × 1500
  */
 function costNgnFromRate(rate) {
   const r = Number(rate) || 0;
   if (r <= 0) return 0;
-  const mode = getRateCurrency();
-  if (mode === 'USD') return r * USD_TO_NGN;
-  if (mode === 'NGN') return r;
-  // AUTO
-  if (r < 100) return r * USD_TO_NGN; // typical USD SMM rates
-  return r; // already NGN-scale
+  return r * USD_TO_NGN;
 }
 
 /**
@@ -90,22 +84,24 @@ function floorSellNgn(n, serviceId) {
   return MIN_SELL_PRICE_NGN + (h % 150);
 }
 
+/**
+ * Selling rate per 1k (₦):
+ *   (rate_usd × 1500 + ₦1000) × (1 + markup%)
+ * markup default random 50–80%
+ */
 function sellPriceNgnFromRate(rate, markupPercent, serviceId) {
-  const cost = costNgnFromRate(rate);
+  const cost = costNgnFromRate(rate); // $ × 1500
+  const base = cost + COST_BUFFER_NGN; // + ₦1000
   const markup = markupPercent ?? getMarkupPercent();
-  const raw = Math.ceil(cost * (1 + markup / 100));
-  // Under ₦200 → stable 200–349 band (not a flat 200 for every cheap service)
+  const raw = Math.ceil(base * (1 + markup / 100));
   return floorSellNgn(raw, serviceId != null ? serviceId : rate);
 }
 
 function supplierUsdFromRate(rate) {
   const r = Number(rate) || 0;
-  const mode = getRateCurrency();
-  if (mode === 'USD' || (mode === 'AUTO' && r > 0 && r < 100)) {
-    return Math.round(r * 10000) / 10000;
-  }
-  // NGN → approximate USD
-  return Math.round((r / USD_TO_NGN) * 10000) / 10000;
+  if (r <= 0) return 0;
+  // JAP rate is always USD
+  return Math.round(r * 10000) / 10000;
 }
 
 // Back-compat names used across handlers
@@ -376,7 +372,8 @@ async function handleSync(req, res) {
     cursor,
     upserted_this_run: upserted,
     rate_currency_mode: getRateCurrency(),
-    markup_range: '35%–70% (random per service)',
+    markup_range: '50%–80% (random per service)',
+    cost_buffer_ngn: COST_BUFFER_NGN,
     usd_to_ngn: USD_TO_NGN,
     errors: errors.slice(0, 5)
   });
@@ -513,6 +510,28 @@ async function handleStatus(req, res) {
 }
 
 
+
+async function handleEnableAllJap(req, res) {
+  // Admin: unhide every JAP service so customer store is not empty after first sync
+  const { data, error, count } = await supabase
+    .from('booster_services')
+    .update({ is_available: true, updated_at: new Date().toISOString() })
+    .eq('source', 'jap')
+    .select('id', { count: 'exact' });
+
+  if (error) {
+    return res.status(500).json({ success: false, message: error.message });
+  }
+  const n = Array.isArray(data) ? data.length : (count || 0);
+  return res.status(200).json({
+    success: true,
+    message: n
+      ? ('Turned on ' + n + ' JAP services for customers')
+      : 'No JAP services in DB yet — run Sync JAP first',
+    enabled: n
+  });
+}
+
 async function handleCatalog(req, res) {
   // Public to signed-in users — categories + optional services
   const category = (req.query?.category || '').toString().trim();
@@ -527,7 +546,7 @@ async function handleCatalog(req, res) {
     .from('booster_services')
     .select('category')
     .eq('source', STORE_SOURCE)
-    .eq('is_available', true)
+    .or('is_available.eq.true,is_available.is.null')
     .limit(8000);
   const categories = [...new Set((catRows || []).map(r => r.category).filter(Boolean))].sort();
 
@@ -553,7 +572,7 @@ async function handleCatalog(req, res) {
       { count: 'exact' }
     )
     .eq('source', STORE_SOURCE)
-    .eq('is_available', true)
+    .or('is_available.eq.true,is_available.is.null')
     .order('price_ngn', { ascending: true });
 
   if (category) query = query.eq('category', category);
@@ -1507,10 +1526,11 @@ export default async function handler(req, res) {
   if (action === 'list') return handleList(req, res);
   if (action === 'status') return handleStatus(req, res);
   if (action === 'admin_orders') return handleAdminOrders(req, res);
+  if (action === 'enable_all_jap') return handleEnableAllJap(req, res);
 
   return res.status(400).json({
     success: false,
-    message: 'action required: catalog | order | my_orders | cancel | refill | refill_status | balance | services | sync | list | status | admin_orders'
+    message: 'action required: catalog | order | my_orders | cancel | refill | refill_status | balance | services | sync | list | status | admin_orders | enable_all_jap'
   });
   } catch (err) {
     console.error('[owlet] handler error', err);
