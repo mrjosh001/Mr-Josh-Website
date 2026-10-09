@@ -1211,7 +1211,7 @@ function withLagos(opts) { return Object.assign({ timeZone: 'Africa/Lagos' }, op
  <button class="btn btn-primary btn-sm" id="btnOwletSync" onclick="syncBoosterProvider('owlet')"><i class="fas fa-sync"></i> Sync Owlet</button>
  </div>
  </div>
- <p style="font-size:12px;color:var(--muted);margin:0 0 10px;">Owlet catalog is live on the customer booster page. Use the <strong>JAP</strong> and <strong>SMMKings</strong> tabs for the other panels (customer store stays Owlet-only until you enable).</p>
+ <p style="font-size:12px;color:var(--muted);margin:0 0 10px;">Customer booster store is on <strong>JAP</strong>. Sync JAP before customers buy. Owlet remains for admin / old order status only. SMMKings stays Telegram-only.</p>
  <div id="owletSyncProgress" style="font-size:12px;color:var(--muted);margin-bottom:12px;min-height:16px;"></div>
  <div class="search-row" style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;">
  <input type="hidden" id="owletProviderFilter" value="owlet" />
@@ -1693,6 +1693,42 @@ const tabTitles = {
  settings: 'Settings'
 };
 
+
+/** Lagos (WAT) calendar range for overview filters — matches api/admin.js */
+function lagosYmdAdmin(d) {
+  d = d || new Date();
+  return d.toLocaleDateString('en-CA', { timeZone: 'Africa/Lagos' });
+}
+function shiftYmdAdmin(ymd, days) {
+  var parts = String(ymd).split('-').map(Number);
+  var utc = Date.UTC(parts[0], (parts[1] || 1) - 1, parts[2] || 1) + (Number(days) || 0) * 86400000;
+  var x = new Date(utc);
+  return x.getUTCFullYear() + '-' + String(x.getUTCMonth() + 1).padStart(2, '0') + '-' + String(x.getUTCDate()).padStart(2, '0');
+}
+function lagosRangeMs(period) {
+  var today = lagosYmdAdmin();
+  var fromYmd, toYmd;
+  if (period === 'today') {
+    fromYmd = toYmd = today;
+  } else if (period === 'month') {
+    fromYmd = today.slice(0, 8) + '01';
+    toYmd = today;
+  } else if (period === 'custom') {
+    fromYmd = document.getElementById('customFrom') && document.getElementById('customFrom').value || shiftYmdAdmin(today, -6);
+    toYmd = document.getElementById('customTo') && document.getElementById('customTo').value || today;
+  } else {
+    var daysMap = { '7days': 7, '3months': 90, '6months': 180, '12months': 365 };
+    var days = daysMap[period] || 7;
+    fromYmd = shiftYmdAdmin(today, -(days - 1));
+    toYmd = today;
+  }
+  // WAT = UTC+1
+  var fromMs = new Date(fromYmd + 'T00:00:00+01:00').getTime();
+  var toMs = new Date(toYmd + 'T23:59:59.999+01:00').getTime();
+  return { fromMs: fromMs, toMs: toMs, fromYmd: fromYmd, toYmd: toYmd };
+}
+
+
 const revenueLabels = {
  today: 'Today',
  '7days': 'Last 7 Days',
@@ -1719,13 +1755,12 @@ function onRevenuePeriodChange() {
   if (period === 'custom') {
     const toEl = document.getElementById('customTo');
     const fromEl = document.getElementById('customFrom');
+    const todayL = lagosYmdAdmin();
     if (toEl && !toEl.value) {
-      toEl.value = new Date().toISOString().slice(0, 10);
+      toEl.value = todayL;
     }
     if (fromEl && !fromEl.value) {
-      const d = new Date();
-      d.setDate(d.getDate() - 6);
-      fromEl.value = d.toISOString().slice(0, 10);
+      fromEl.value = shiftYmdAdmin(todayL, -6);
     }
     return;
   }
@@ -3528,17 +3563,9 @@ function updateRevenueDisplay() {
  let sales = 0;
  let profit = 0;
  if (window._cachedOrders?.length) {
- const ranges = { today:1, '7days':7, month:30, '3months':90, '6months':180, '12months':365 };
- let fromMs = null;
- let toMs = null;
- if (period === 'custom') {
-   const fromVal = document.getElementById('customFrom')?.value;
-   const toVal = document.getElementById('customTo')?.value;
-   if (fromVal) fromMs = new Date(fromVal + 'T00:00:00').getTime();
-   if (toVal) toMs = new Date(toVal + 'T23:59:59.999').getTime();
- } else {
-   fromMs = Date.now() - ((ranges[period] || 7) * 86400000);
- }
+ const lr = lagosRangeMs(period);
+ const fromMs = lr.fromMs;
+ const toMs = lr.toMs;
  const periodOrders = window._cachedOrders.filter(o => {
  const d = o.created_at ? new Date(o.created_at).getTime() : 0;
  const st = String(o.status || '').toLowerCase();
@@ -3648,17 +3675,9 @@ async function loadBoosterOverviewFallback(period) {
  const set = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
  try {
  const headers = await authHeaders();
- const ranges = { today:1, '7days':7, month:30, '3months':90, '6months':180, '12months':365 };
- let fromMs = null;
- let toMs = null;
- if (period === 'custom') {
-   const fromVal = document.getElementById('customFrom')?.value;
-   const toVal = document.getElementById('customTo')?.value;
-   if (fromVal) fromMs = new Date(fromVal + 'T00:00:00').getTime();
-   if (toVal) toMs = new Date(toVal + 'T23:59:59.999').getTime();
- } else {
-   fromMs = Date.now() - ((ranges[period] || 7) * 86400000);
- }
+ const lr = lagosRangeMs(period);
+ let fromMs = lr.fromMs;
+ let toMs = lr.toMs;
  // Pull recent booster orders via admin endpoint (same path used by Booster Orders tab)
  const params = new URLSearchParams({ action: 'admin_orders', page: '1', page_size: '200' });
  const res = await fetch('/api/owlet?' + params.toString(), { headers });
