@@ -314,6 +314,8 @@ function isJunkService(name){
   const n = String(name||'').trim();
   if(!n) return true;
   const low = n.toLowerCase();
+  // "Any other" is a real Grizzly catch-all — never treat as junk
+  if(/^any\s*other$/i.test(n) || low === 'other') return false;
   // supplier internal codes: abx, acx, axa, a1b, etc.
   if(/^[a-z]{1,4}x$/i.test(n)) return true;
   if(/^[a-z]{2,4}$/i.test(n) && !/sms|otp|app|pay|tik|tok|ok/i.test(low)) return true;
@@ -323,6 +325,13 @@ function isJunkService(name){
   // mostly consonants short codes
   if(n.length <= 4 && !/[aeiou]/i.test(n) && /^[a-z]+$/i.test(n)) return true;
   return false;
+}
+function isAnyOtherService(name){
+  const low = String(name||'').toLowerCase().trim();
+  return low === 'any other' || low === 'other' || /^any\s*other/.test(low);
+}
+function findAnyOtherService(list){
+  return (list || []).find(function(s){ return isAnyOtherService(s.service_name || s.title || ''); }) || null;
 }
 function popularRank(name){
   const n = String(name||'').toLowerCase().trim();
@@ -926,6 +935,7 @@ function renderServiceCatalog(list, searchQ){
   var q = (searchQ != null ? searchQ : (serviceSearch && serviceSearch.value) || '').trim().toLowerCase();
   var filtered = (list || []).filter(function(s){
     var name = s.service_name || '';
+    if(isAnyOtherService(name)) return false; // inject separately when needed
     if(isJunkService(name)){
       if(q && name.toLowerCase().includes(q) && q.length >= 2) return true;
       return false;
@@ -933,16 +943,35 @@ function renderServiceCatalog(list, searchQ){
     if(q) return name.toLowerCase().includes(q);
     return true;
   });
+  // When user searches for something we don't list, offer Grizzly "Any other"
+  if(q){
+    var anyOther = findAnyOtherService(list);
+    var hasRealMatch = filtered.some(function(s){
+      var n = String(s.service_name || '').toLowerCase();
+      return n === q || n.indexOf(q) === 0 || n.split(/\s|\/|-/).indexOf(q) !== -1;
+    });
+    if(anyOther && (!filtered.length || !hasRealMatch)){
+      // Put Any other first so it's obvious
+      filtered = [anyOther].concat(filtered.filter(function(s){ return !isAnyOtherService(s.service_name); }));
+    } else if(anyOther && filtered.length && !filtered.some(function(s){ return isAnyOtherService(s.service_name); }) && q.length >= 2 && !hasRealMatch){
+      filtered = [anyOther].concat(filtered);
+    }
+  }
   // Default grid: popular-first, capped so UI paints instantly (search finds the rest)
   if(!q && filtered.length > 80){
     filtered = filtered.slice(0, 80);
   }
   if(!filtered.length){
-    serviceGrid.innerHTML = '<div class="empty-state"><div class="empty-state-icon">📵</div><h4>No Services Found</h4><p>Try a different search</p></div>';
-    if(serviceCountBadge) serviceCountBadge.innerHTML = '';
-    serviceGrid.dataset.skelReady = '1';
-    serviceGrid.dataset.loaded = '1';
-    return;
+    var fallback = q ? findAnyOtherService(list) : null;
+    if(fallback){
+      filtered = [fallback];
+    } else {
+      serviceGrid.innerHTML = '<div class="empty-state"><div class="empty-state-icon">📵</div><h4>No Services Found</h4><p>Try a different search</p></div>';
+      if(serviceCountBadge) serviceCountBadge.innerHTML = '';
+      serviceGrid.dataset.skelReady = '1';
+      serviceGrid.dataset.loaded = '1';
+      return;
+    }
   }
   var total = (list || []).length;
   if(serviceCountBadge){

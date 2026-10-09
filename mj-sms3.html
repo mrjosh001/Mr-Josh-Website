@@ -426,10 +426,18 @@ const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
   function isJunkService(name){
     var n = String(name||'').trim();
     if(!n) return true;
+    if(/^any\s*other$/i.test(n) || n.toLowerCase() === 'other') return false;
     if(/^[a-z]{1,4}x$/i.test(n)) return true;
     if(/^[a-z0-9]{1,3}$/i.test(n)) return true;
     if(/^[0-9]+$/.test(n)) return true;
     return false;
+  }
+  function isAnyOtherService(name){
+    var low = String(name||'').toLowerCase().trim();
+    return low === 'any other' || low === 'other' || /^any\s*other/.test(low);
+  }
+  function findAnyOtherService(list){
+    return (list || []).find(function(s){ return isAnyOtherService(s.title || s.service_name || ''); }) || null;
   }
   function countryMatchesQuery(name, q){
     if(!q) return true;
@@ -618,6 +626,7 @@ const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
     var q = (searchQ != null ? searchQ : (serviceSearch && serviceSearch.value) || '').trim().toLowerCase();
     var filtered = (list || []).filter(function(s){
       var name = s.title || s.service_name || '';
+      if(isAnyOtherService(name)) return false;
       if(isJunkService(name)){
         if(q && name.toLowerCase().indexOf(q) !== -1 && q.length >= 2) return true;
         return false;
@@ -625,11 +634,27 @@ const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
       if(q) return name.toLowerCase().indexOf(q) !== -1;
       return true;
     });
+    // Search for an app we don't list → always offer "Any other" when present in catalog
+    if(q){
+      var anyOther = findAnyOtherService(list);
+      var hasRealMatch = filtered.some(function(s){
+        var n = String(s.title || s.service_name || '').toLowerCase();
+        return n === q || n.indexOf(q) === 0 || n.split(/\s|\/|-/).indexOf(q) !== -1;
+      });
+      if(anyOther && (!filtered.length || !hasRealMatch)){
+        filtered = [anyOther].concat(filtered);
+      }
+    }
     if(!q && filtered.length > 400) filtered = filtered.slice(0, 400);
     if(!filtered.length){
-      serviceGrid.innerHTML = '<div class="empty-state"><h4>No services</h4></div>';
-      if(serviceCountBadge) serviceCountBadge.innerHTML = '';
-      return;
+      var fallback = q ? findAnyOtherService(list) : null;
+      if(fallback){
+        filtered = [fallback];
+      } else {
+        serviceGrid.innerHTML = '<div class="empty-state"><h4>No services</h4></div>';
+        if(serviceCountBadge) serviceCountBadge.innerHTML = '';
+        return;
+      }
     }
     if(serviceCountBadge){
       serviceCountBadge.innerHTML = '<span class="product-count-badge">'+filtered.length+' service'+(filtered.length!==1?'s':'')+'</span>';
