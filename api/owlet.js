@@ -742,22 +742,55 @@ async function handleOrder(req, res) {
     });
   }
 
-  const newBalance = originalBalance - totalNgn;
-  const { error: deductErr } = await supabase
-    .from('profiles')
-    .update({ balance: newBalance })
-    .eq('id', user.id)
-    .eq('balance', originalBalance); // optimistic lock
-
-  if (deductErr) {
-    // retry without eq balance
-    const { error: d2 } = await supabase.from('profiles').update({ balance: newBalance }).eq('id', user.id);
-    if (d2) {
+  // Atomic debit — blocks double-click races (same RPC as SMS)
+  let newBalance = originalBalance - totalNgn;
+  const { data: debited, error: debErr } = await supabase.rpc('debit_balance_if_sufficient', {
+    p_user_id: user.id,
+    p_amount: totalNgn
+  });
+  if (debErr) {
+    console.error('[booster order] debit_balance_if_sufficient', debErr.message);
+    // Fallback optimistic lock only if RPC missing
+    if (/function|does not exist|schema cache/i.test(debErr.message || '')) {
+      const { error: d1 } = await supabase
+        .from('profiles')
+        .update({ balance: newBalance })
+        .eq('id', user.id)
+        .eq('balance', originalBalance);
+      if (d1) {
+        return res.status(400).json({ success: false, message: 'Insufficient balance or concurrent debit. Try again.' });
+      }
+    } else {
       return res.status(500).json({ success: false, message: 'Could not debit wallet. Try again.' });
+    }
+  } else if (debited === false || debited === null) {
+    return res.status(400).json({
+      success: false,
+      message: `Insufficient balance. Need ₦${totalNgn.toLocaleString()}, you have ₦${originalBalance.toLocaleString()}`,
+      required: totalNgn,
+      available: originalBalance
+    });
+  } else {
+    try {
+      const { data: pb } = await supabase.from('profiles').select('balance').eq('id', user.id).maybeSingle();
+      if (pb && pb.balance != null) newBalance = Number(pb.balance);
+    } catch (_) {}
+  }
+
+  async function restoreWallet() {
+    try {
+      const { error: cErr } = await supabase.rpc('credit_balance', { p_user_id: user.id, p_amount: totalNgn });
+      if (cErr) {
+        console.error('[booster order] credit_balance restore', cErr.message);
+        await supabase.from('profiles').update({ balance: originalBalance }).eq('id', user.id);
+      }
+    } catch (e) {
+      console.error('[booster order] restore', e);
+      try { await supabase.from('profiles').update({ balance: originalBalance }).eq('id', user.id); } catch (_) {}
     }
   }
 
-  // Place order with Owlet — use live panel ID if our catalog ID is stale
+  // Place order with JAP — resolve live service id if catalog is stale
   const liveServiceId = await resolveOwletServiceId(serviceId, service.name);
   const { ok, status, json } = await owletCall({
     action: 'add',
@@ -767,12 +800,11 @@ async function handleOrder(req, res) {
   });
 
   if (!ok || json?.error || !json?.order) {
-    // refund
-    await supabase.from('profiles').update({ balance: originalBalance }).eq('id', user.id);
+    await restoreWallet();
     const rawErr = json?.error || json?.message || '';
     const errMsg = /incorrect service/i.test(String(rawErr))
       ? 'This package is no longer available. Go back and pick another one. Your balance was restored.'
-      : /supplier|owlet|panel/i.test(String(rawErr))
+      : /supplier|owlet|panel|jap/i.test(String(rawErr))
       ? 'This order could not be placed right now. Your balance was restored.'
       : (rawErr || 'This order could not be placed right now. Your balance was restored.');
     return res.status(502).json({ success: false, message: errMsg });
@@ -962,6 +994,28 @@ async function refundIfSupplierFailed(order, oldStatus, newStatus) {
 
   if (!(refunded > 0)) return 0;
 
+  // Claim first so concurrent status polls cannot double-refund
+  let claimed = false;
+  try {
+    const { data: claimRows, error: claimErr } = await supabase
+      .from('booster_orders')
+      .update({
+        refund_ngn: refunded,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', order.id)
+      .or('refund_ngn.is.null,refund_ngn.eq.0')
+      .select('id');
+    if (claimErr) {
+      // Column missing or filter unsupported — fall through with best effort
+      console.warn('[booster refund] claim', claimErr.message);
+    } else if (!(claimRows && claimRows.length)) {
+      return 0; // already claimed
+    } else {
+      claimed = true;
+    }
+  } catch (_) {}
+
   const { data: prof } = await supabase
     .from('profiles')
     .select('balance, customer_id')
@@ -969,23 +1023,31 @@ async function refundIfSupplierFailed(order, oldStatus, newStatus) {
     .maybeSingle();
   if (!prof) return 0;
 
-  const bal = Number(prof.balance) || 0;
-  const { error: balErr } = await supabase
-    .from('profiles')
-    .update({ balance: bal + refunded })
-    .eq('id', order.user_id);
-  if (balErr) {
-    console.error('[owlet refund] balance update failed', balErr.message);
-    return 0;
+  const { error: credErr } = await supabase.rpc('credit_balance', {
+    p_user_id: order.user_id,
+    p_amount: refunded
+  });
+  if (credErr) {
+    console.error('[booster refund] credit_balance', credErr.message);
+    const bal = Number(prof.balance) || 0;
+    const { error: balErr } = await supabase
+      .from('profiles')
+      .update({ balance: bal + refunded })
+      .eq('id', order.user_id);
+    if (balErr) {
+      console.error('[booster refund] balance update failed', balErr.message);
+      return 0;
+    }
   }
 
-  // Mark on order so we never double-pay (column may be missing — ignore error)
-  try {
-    await supabase.from('booster_orders').update({
-      refund_ngn: refunded,
-      updated_at: new Date().toISOString()
-    }).eq('id', order.id);
-  } catch (_) {}
+  if (!claimed) {
+    try {
+      await supabase.from('booster_orders').update({
+        refund_ngn: refunded,
+        updated_at: new Date().toISOString()
+      }).eq('id', order.id);
+    } catch (_) {}
+  }
 
   try {
     await supabase.from('transactions').insert({
@@ -1001,7 +1063,7 @@ async function refundIfSupplierFailed(order, oldStatus, newStatus) {
       created_at: new Date().toISOString()
     });
   } catch (txErr) {
-    console.warn('[owlet refund] transaction row', txErr.message || txErr);
+    console.warn('[booster refund] transaction row', txErr.message || txErr);
   }
 
   order.refund_ngn = refunded;
@@ -1355,17 +1417,57 @@ async function handleCancel(req, res) {
     });
   }
 
-  await supabase.from('booster_orders').update({
-    status: 'Canceled',
-    updated_at: new Date().toISOString()
-  }).eq('id', row.id);
+  // Claim cancel + refund once (blocks double cancel refund)
+  const refundAmt = Number(row.price_ngn) || 0;
+  if (Number(row.refund_ngn) > 0) {
+    return res.status(200).json({
+      success: true,
+      message: 'Order already cancelled and refunded.',
+      refunded: Number(row.refund_ngn) || 0,
+      order_id: orderId
+    });
+  }
+
+  const { data: claimCancel, error: claimCancelErr } = await supabase
+    .from('booster_orders')
+    .update({
+      status: 'Canceled',
+      refund_ngn: refundAmt > 0 ? refundAmt : 0,
+      updated_at: new Date().toISOString()
+    })
+    .eq('id', row.id)
+    .not('status', 'ilike', '%cancel%')
+    .select('id');
+
+  if (claimCancelErr) {
+    // Fallback without status filter
+    await supabase.from('booster_orders').update({
+      status: 'Canceled',
+      refund_ngn: refundAmt > 0 ? refundAmt : 0,
+      updated_at: new Date().toISOString()
+    }).eq('id', row.id);
+  } else if (!(claimCancel && claimCancel.length)) {
+    return res.status(200).json({
+      success: true,
+      message: 'Order already cancelled.',
+      refunded: 0,
+      order_id: orderId
+    });
+  }
 
   let refunded = 0;
-  if (Number(row.price_ngn) > 0) {
-    const { data: prof } = await supabase.from('profiles').select('balance').eq('id', userGate.user.id).maybeSingle();
-    const bal = Number(prof?.balance) || 0;
-    refunded = Number(row.price_ngn) || 0;
-    await supabase.from('profiles').update({ balance: bal + refunded }).eq('id', userGate.user.id);
+  if (refundAmt > 0) {
+    refunded = refundAmt;
+    const { error: credErr } = await supabase.rpc('credit_balance', {
+      p_user_id: userGate.user.id,
+      p_amount: refunded
+    });
+    if (credErr) {
+      console.error('[booster cancel] credit_balance', credErr.message);
+      const { data: prof } = await supabase.from('profiles').select('balance').eq('id', userGate.user.id).maybeSingle();
+      const bal = Number(prof?.balance) || 0;
+      await supabase.from('profiles').update({ balance: bal + refunded }).eq('id', userGate.user.id);
+    }
     try {
       await supabase.from('transactions').insert({
         user_id: userGate.user.id,
