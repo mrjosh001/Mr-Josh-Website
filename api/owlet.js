@@ -20,7 +20,19 @@ import { rateLimit, applyRateLimitHeaders } from '../lib/rateLimit.js';
 
 const OWLET_URL = (process.env.OWLET_API_URL || 'https://theowlet.com/api/v2').replace(/\/$/, '');
 const OWLET_KEY = String(process.env.OWLET_API_KEY || '').trim().replace(/^["']+|["']+$/g, '');
+// Customer store uses JAP (JustAnotherPanel) — same Perfect Panel v2 API shape
+const JAP_URL = (process.env.JAP_API_URL || 'https://justanotherpanel.com/api/v2').replace(/\/$/, '');
+const JAP_KEY = String(process.env.JAP_API_KEY || '').trim().replace(/^["']+|["']+$/g, '');
+/** Customer catalog + new purchases */
+const STORE_SOURCE = 'jap';
 const USD_TO_NGN = Number(process.env.USD_TO_NGN_RATE) || 1450;
+
+function panelCreds(source) {
+  if (String(source || '').toLowerCase() === 'owlet') {
+    return { url: OWLET_URL, key: OWLET_KEY, label: 'Owlet' };
+  }
+  return { url: JAP_URL, key: JAP_KEY, label: 'JAP' };
+}
 /** No booster service / order is sold below this (NGN). Override with OWLET_MIN_SELL_NGN */
 const MIN_SELL_PRICE_NGN = Math.max(0, Number(process.env.OWLET_MIN_SELL_NGN) || 200);
 
@@ -134,15 +146,20 @@ async function requireAdmin(req) {
   return { ok: true, adminId: user.id };
 }
 
-async function owletCall(params, timeoutMs = 12000) {
-  if (!OWLET_KEY) {
-    return { ok: false, status: 500, json: { error: 'OWLET_API_KEY not configured' } };
+/**
+ * Perfect Panel v2 call. Default source = jap (customer store).
+ * Pass source 'owlet' only for legacy order status if needed.
+ */
+async function owletCall(params, timeoutMs = 12000, source = STORE_SOURCE) {
+  const { url, key, label } = panelCreds(source);
+  if (!key) {
+    return { ok: false, status: 500, json: { error: label + ' API key not configured' } };
   }
-  const body = new URLSearchParams({ key: OWLET_KEY, ...params });
+  const body = new URLSearchParams({ key, ...params });
   const ac = typeof AbortController !== 'undefined' ? new AbortController() : null;
   const timer = ac ? setTimeout(() => ac.abort(), timeoutMs) : null;
   try {
-    const res = await fetch(OWLET_URL, {
+    const res = await fetch(url, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/x-www-form-urlencoded',
@@ -156,11 +173,11 @@ async function owletCall(params, timeoutMs = 12000) {
     try {
       json = JSON.parse(text);
     } catch {
-      return { ok: false, status: res.status || 502, json: { error: 'Invalid JSON from Owlet', raw: text.slice(0, 300) } };
+      return { ok: false, status: res.status || 502, json: { error: 'Invalid JSON from ' + label, raw: text.slice(0, 300) } };
     }
     return { ok: res.ok, status: res.status, json };
   } catch (e) {
-    const msg = e && e.name === 'AbortError' ? 'Owlet timeout' : (e.message || 'Owlet request failed');
+    const msg = e && e.name === 'AbortError' ? (label + ' timeout') : (e.message || (label + ' request failed'));
     return { ok: false, status: 504, json: { error: msg } };
   } finally {
     if (timer) clearTimeout(timer);
@@ -169,7 +186,8 @@ async function owletCall(params, timeoutMs = 12000) {
 
 
 async function handleBalance(req, res) {
-  const { ok, status, json } = await owletCall({ action: 'balance' });
+  const balSrc = String(req.query?.provider || 'jap').toLowerCase() === 'owlet' ? 'owlet' : 'jap';
+  const { ok, status, json } = await owletCall({ action: 'balance' }, 12000, balSrc);
   if (!ok || json?.error) {
     return res.status(status || 502).json({
       success: false,
@@ -214,12 +232,14 @@ async function handleServices(req, res) {
 }
 
 async function handleSync(req, res) {
-  const SYNC_SOURCE = 'owlet';
+  const body = typeof req.body === 'string' ? (() => { try { return JSON.parse(req.body || '{}'); } catch { return {}; } })() : (req.body || {});
+  let provider = String(req.query?.provider || body.provider || 'jap').trim().toLowerCase();
+  if (provider !== 'owlet' && provider !== 'jap') provider = 'jap';
+  const SYNC_SOURCE = provider;
   const TIME_BUDGET_MS = 250000;
   const BATCH = 80;
   const startedAt = Date.now();
 
-  const body = typeof req.body === 'string' ? (() => { try { return JSON.parse(req.body || '{}'); } catch { return {}; } })() : (req.body || {});
   const forceRestart = !!(body.restart || req.query?.restart === '1');
 
   let job = null;
@@ -244,11 +264,11 @@ async function handleSync(req, res) {
     };
   }
 
-  const { ok, status, json } = await owletCall({ action: 'services' });
+  const { ok, status, json } = await owletCall({ action: 'services' }, 12000, SYNC_SOURCE);
   if (!ok || json?.error || !Array.isArray(json)) {
     return res.status(status || 502).json({
       success: false,
-      message: 'Could not sync booster services right now'
+      message: 'Could not sync ' + SYNC_SOURCE + ' services right now. Check API key.'
     });
   }
 
@@ -259,7 +279,7 @@ async function handleSync(req, res) {
   const { data: existing, error: exErr } = await supabase
     .from('booster_services')
     .select('service_id, price_ngn, price_source')
-    .eq('source', 'owlet');
+    .eq('source', SYNC_SOURCE);
 
   if (exErr) {
     return res.status(500).json({
@@ -292,7 +312,7 @@ async function handleSync(req, res) {
       // Manual admin prices kept, but never below site minimum ₦200
       const listed = manual ? floorSellNgn(prev.price_ngn, serviceId) : floorSellNgn(defaultNgn, serviceId);
       return {
-        source: 'owlet',
+        source: SYNC_SOURCE,
         service_id: serviceId,
         name: s.name || serviceId,
         category: s.category || 'Other',
@@ -349,8 +369,9 @@ async function handleSync(req, res) {
     success: true,
     done,
     message: done
-      ? `Owlet sync complete — ${services.length} services`
-      : `Owlet sync progress ${cursor}/${services.length} — run Sync again to continue`,
+      ? `${SYNC_SOURCE} sync complete — ${services.length} services`
+      : `${SYNC_SOURCE} sync progress ${cursor}/${services.length} — run Sync again to continue`,
+    provider: SYNC_SOURCE,
     total: services.length,
     cursor,
     upserted_this_run: upserted,
@@ -379,7 +400,7 @@ async function handleList(req, res) {
       'id,source,service_id,name,category,service_type,supplier_rate_usd,price_ngn,price_source,min_quantity,max_quantity,refill,cancel,is_available,updated_at',
       { count: 'exact' }
     )
-    .eq('source', 'owlet')
+    .eq('source', (String(req.query?.provider || 'jap').toLowerCase() === 'owlet' ? 'owlet' : 'jap'))
     .order('category', { ascending: true })
     .order('name', { ascending: true });
 
@@ -443,10 +464,11 @@ async function handleList(req, res) {
     rows = rows.slice(from, from + pageSize);
   }
 
+  const listSrc = String(req.query?.provider || 'jap').toLowerCase() === 'owlet' ? 'owlet' : 'jap';
   const { data: catRows } = await supabase
     .from('booster_services')
     .select('category')
-    .eq('source', 'owlet')
+    .eq('source', listSrc)
     .limit(5000);
   const categories = [...new Set((catRows || []).map(r => r.category).filter(Boolean))].sort();
 
@@ -466,11 +488,21 @@ async function handleList(req, res) {
 }
 
 async function handleStatus(req, res) {
-  const body = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : (req.body || {});
+  const body = typeof req.body === 'string' ? (() => { try { return JSON.parse(req.body || '{}'); } catch { return {}; } })() : (req.body || {});
   const order = body.order || req.query?.order;
   if (!order) return res.status(400).json({ success: false, message: 'order is required' });
 
-  const { ok, status, json } = await owletCall({ action: 'status', order: String(order) });
+  let src = STORE_SOURCE;
+  try {
+    const { data: row } = await supabase
+      .from('booster_orders')
+      .select('source')
+      .eq('supplier_order_id', String(order))
+      .maybeSingle();
+    if (row && row.source) src = String(row.source).toLowerCase() === 'owlet' ? 'owlet' : 'jap';
+  } catch (_) {}
+
+  const { ok, status, json } = await owletCall({ action: 'status', order: String(order) }, 12000, src);
   if (!ok || json?.error) {
     return res.status(status || 502).json({
       success: false,
@@ -494,7 +526,7 @@ async function handleCatalog(req, res) {
   const { data: catRows } = await supabase
     .from('booster_services')
     .select('category')
-    .eq('source', 'owlet')
+    .eq('source', STORE_SOURCE)
     .eq('is_available', true)
     .limit(8000);
   const categories = [...new Set((catRows || []).map(r => r.category).filter(Boolean))].sort();
@@ -520,7 +552,7 @@ async function handleCatalog(req, res) {
       'id,service_id,name,category,service_type,supplier_rate_usd,price_ngn,min_quantity,max_quantity,refill,cancel,is_available',
       { count: 'exact' }
     )
-    .eq('source', 'owlet')
+    .eq('source', STORE_SOURCE)
     .eq('is_available', true)
     .order('price_ngn', { ascending: true });
 
@@ -636,7 +668,7 @@ async function handleOrder(req, res) {
   const { data: service, error: sErr } = await supabase
     .from('booster_services')
     .select('*')
-    .eq('source', 'owlet')
+    .eq('source', STORE_SOURCE)
     .eq('service_id', serviceId)
     .maybeSingle();
 
@@ -732,7 +764,7 @@ async function handleOrder(req, res) {
   const orderRow = {
     user_id: user.id,
     customer_id: profile.customer_id || null,
-    source: 'owlet',
+    source: STORE_SOURCE,
     supplier_order_id: supplierOrderId,
     service_id: liveServiceId,
     service_name: service.name,
@@ -766,7 +798,7 @@ async function handleOrder(req, res) {
       const minimal = {
         user_id: user.id,
         customer_id: profile.customer_id || null,
-        source: 'owlet',
+        source: STORE_SOURCE,
         supplier_order_id: supplierOrderId,
         service_id: serviceId,
         service_name: service.name,
@@ -1049,9 +1081,10 @@ async function handleMyOrders(req, res) {
     try {
       let j = batchMap ? pickStatusPayload(batchMap, o.supplier_order_id) : null;
       if (!j) {
-        let st = await owletCall({ action: 'status', order: String(o.supplier_order_id) }, 8000);
+        const oSrc = String(o.source || 'jap').toLowerCase() === 'owlet' ? 'owlet' : 'jap';
+        let st = await owletCall({ action: 'status', order: String(o.supplier_order_id) }, 8000, oSrc);
         if (!st.ok || !st.json || (st.json.error && !st.json.status)) {
-          st = await owletCall({ action: 'status', orders: String(o.supplier_order_id) }, 8000);
+          st = await owletCall({ action: 'status', orders: String(o.supplier_order_id) }, 8000, oSrc);
         }
         j = pickStatusPayload(st.json, o.supplier_order_id);
       }
@@ -1251,7 +1284,8 @@ async function handleCancel(req, res) {
   }
 
   // Ask supplier to cancel first. Never refund until supplier confirms.
-  const { ok, status, json } = await owletCall({ action: 'cancel', orders: orderId });
+  const cancelSrc = String(row.source || STORE_SOURCE).toLowerCase() === 'owlet' ? 'owlet' : 'jap';
+  const { ok, status, json } = await owletCall({ action: 'cancel', orders: orderId }, 12000, cancelSrc);
 
   // PerfectPanel-style: [{ order: "123", cancel: 1 }] success; cancel: 0 or { error } = fail
   let cancelOk = false;
@@ -1284,7 +1318,7 @@ async function handleCancel(req, res) {
   // Double-check status on supplier so we never refund a still-running order
   let supplierStatus = '';
   try {
-    const stRes = await owletCall({ action: 'status', order: orderId });
+    const stRes = await owletCall({ action: 'status', order: orderId }, 12000, cancelSrc);
     if (stRes.ok && stRes.json) {
       supplierStatus = String(stRes.json.status || stRes.json.order_status || '').toLowerCase();
     }
@@ -1361,7 +1395,8 @@ async function handleRefill(req, res) {
     return res.status(404).json({ success: false, message: 'Order not found' });
   }
 
-  const { ok, status, json } = await owletCall({ action: 'refill', order: orderId });
+  const refillSrc = String(row.source || STORE_SOURCE).toLowerCase() === 'owlet' ? 'owlet' : 'jap';
+  const { ok, status, json } = await owletCall({ action: 'refill', order: orderId }, 12000, refillSrc);
   if (!ok || json?.error || (json?.refill && typeof json.refill === 'object' && json.refill.error)) {
     const msg = json?.error || json?.refill?.error || json?.message || 'Refill not available for this order';
     return res.status(status || 502).json({ success: false, message: msg });
