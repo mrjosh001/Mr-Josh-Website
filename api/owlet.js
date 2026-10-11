@@ -667,14 +667,47 @@ async function resolveOwletServiceId(storedId, name) {
   return id;
 }
 
+function japCustomFieldSpec(type) {
+  const t = String(type || '').trim().toLowerCase();
+  if (/custom comments?|comments package|comment replies/.test(t)) {
+    return { key: 'comments', label: 'Custom comments', placeholder: 'Enter one comment per line', lineBased: true };
+  }
+  if (/custom list mentions|custom usernames|username list/.test(t)) {
+    return { key: 'usernames', label: 'Usernames', placeholder: 'Enter one username per line', lineBased: true };
+  }
+  if (/mentions with hashtags|hashtags list/.test(t)) {
+    return { key: 'hashtags', label: 'Hashtags', placeholder: 'Enter one hashtag per line', lineBased: true };
+  }
+  if (/groups mentions|groups list/.test(t)) {
+    return { key: 'groups', label: 'Groups', placeholder: 'Enter one group per line', lineBased: true };
+  }
+  if (/custom keywords|keywords list/.test(t)) {
+    return { key: 'keywords', label: 'Keywords', placeholder: 'Enter one keyword per line', lineBased: true };
+  }
+  if (/custom hashtag|mentions hashtag/.test(t)) {
+    return { key: 'hashtag', label: 'Hashtag', placeholder: 'Enter the hashtag', lineBased: false };
+  }
+  if (/custom username|username required|mentions user followers/.test(t)) {
+    return { key: 'username', label: 'Username', placeholder: 'Enter the username or profile URL', lineBased: false };
+  }
+  if (/custom/.test(t)) {
+    return { key: 'comments', label: 'Custom message', placeholder: 'Enter the required custom text', lineBased: true };
+  }
+  return null;
+}
+
+function japCustomLines(value) {
+  return String(value || '').split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
+}
+
 async function handleOrder(req, res) {
   const body = typeof req.body === 'string' ? (() => { try { return JSON.parse(req.body || '{}'); } catch { return {}; } })() : (req.body || {});
   const serviceId = String(body.service_id || body.service || '').trim();
   const link = String(body.link || '').trim();
-  const quantity = Math.max(1, parseInt(body.quantity, 10) || 0);
+  let quantity = Math.max(0, parseInt(body.quantity, 10) || 0);
 
-  if (!serviceId || !link || !quantity) {
-    return res.status(400).json({ success: false, message: 'service_id, link, and quantity are required' });
+  if (!serviceId || !link) {
+    return res.status(400).json({ success: false, message: 'service_id and link are required' });
   }
   if (!/^https?:\/\//i.test(link) && !link.includes('.') && !link.startsWith('@')) {
     // allow @handles and bare domains/usernames common for SMM
@@ -698,11 +731,26 @@ async function handleOrder(req, res) {
     return res.status(400).json({ success: false, message: 'This service is temporarily unavailable' });
   }
 
-  // Site rule: never sell below 300 units. Supplier min wins if higher.
+  // JAP service types such as Custom Comments require their own payload field.
+  // For line-based custom services, derive quantity from the submitted non-empty lines.
+  const customSpec = japCustomFieldSpec((service.service_type || service.type || '') + ' ' + (service.name || ''));
+  const customValue = String(body.custom_value != null ? body.custom_value : (customSpec ? body[customSpec.key] : '') || '').trim();
+  if (customSpec && !customValue) {
+    return res.status(400).json({ success: false, message: customSpec.label + ' are required for this service' });
+  }
+  if (customSpec && customSpec.lineBased) {
+    quantity = japCustomLines(customValue).length;
+    if (!quantity) return res.status(400).json({ success: false, message: 'Enter at least one non-empty line in ' + customSpec.label.toLowerCase() });
+  }
+  if (!(quantity > 0)) {
+    return res.status(400).json({ success: false, message: 'Enter a valid quantity' });
+  }
+
   const supplierMin = Number(service.min_quantity) || 1;
   let maxQ = Number(service.max_quantity) || 1000000;
   if (maxQ < 1) maxQ = 1000000;
-  let minQ = Math.max(300, supplierMin);
+  // The 300-unit store minimum applies to standard quantity services, not custom comment/user lists.
+  let minQ = customSpec ? supplierMin : Math.max(300, supplierMin);
   if (minQ > maxQ) minQ = maxQ;
   if (quantity < minQ || quantity > maxQ) {
     return res.status(400).json({
@@ -792,12 +840,16 @@ async function handleOrder(req, res) {
 
   // Place order with JAP — resolve live service id if catalog is stale
   const liveServiceId = await resolveOwletServiceId(serviceId, service.name);
-  const { ok, status, json } = await owletCall({
+  const supplierParams = {
     action: 'add',
     service: liveServiceId,
     link,
     quantity: String(quantity)
-  });
+  };
+  // JAP expects the exact field name for each custom service type (comments,
+  // usernames, hashtags, groups, keywords, hashtag, or username).
+  if (customSpec) supplierParams[customSpec.key] = customValue;
+  const { ok, status, json } = await owletCall(supplierParams);
 
   if (!ok || json?.error || !json?.order) {
     await restoreWallet();

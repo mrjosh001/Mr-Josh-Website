@@ -456,7 +456,7 @@ function gotsmsEnrichPlan(p) {
     carrier_addon_ngn: GOTSMS_CARRIER_ADDON_NGN,
     area_addon_ngn: GOTSMS_AREA_ADDON_NGN,
     is_monthly_supported: p.is_monthly_supported,
-    is_available: p.is_available !== false
+    is_available: !gotsmsPlanUnavailable(p)
   };
 }
 
@@ -2866,8 +2866,14 @@ export default async function handler(req, res) {
             return out;
           });
         }
-        // Drop admin-hidden plans from customer view
-        enriched = enriched.filter((p) => p.is_available !== false);
+        // Preserve supplier stock state so the customer UI can show sold-out durations
+        // before checkout. Admin-hidden plans remain hidden regardless of this flag.
+        enriched = enriched.map((p, i) => ({
+          ...p,
+          is_available: !gotsmsPlanUnavailable(all[i]) && p.is_available !== false
+        }));
+        const includeUnavailable = url.searchParams.get('include_unavailable') === '1';
+        enriched = enriched.filter((p) => !p.admin_hidden && (includeUnavailable || p.is_available !== false));
 
         return json(res, 200, { success: true, data: enriched });
       }
