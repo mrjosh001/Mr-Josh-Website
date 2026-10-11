@@ -48,6 +48,8 @@ select.f{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.or
 .plan-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
 .plan{border:1.5px solid var(--border);border-radius:12px;padding:10px 8px;cursor:pointer;background:var(--bg);text-align:center;min-width:0}
 .plan.on{border-color:var(--primary);box-shadow:0 0 0 3px var(--primary-glow);background:var(--primary-glow)}
+.plan.sold-out{opacity:.55;cursor:not-allowed;border-style:dashed;background:var(--card);box-shadow:none}
+.plan .stock-status{display:block;margin-top:5px;font-size:10px;font-weight:900;letter-spacing:.04em;color:var(--danger);text-transform:uppercase}
 .plan .dur{font-weight:800;font-size:12px;line-height:1.2;word-break:break-word}
 .plan .price{font-weight:800;font-size:13px;color:var(--primary);margin-top:4px}
 .qty{display:flex;align-items:center;gap:12px}
@@ -421,13 +423,14 @@ document.getElementById('changeServiceBtn').onclick=function(){
 async function loadPlans(){
   var body=document.getElementById('detailBody');
   if(body) body.innerHTML='<div class="sk-line"></div><div class="sk-line"></div><div class="sk-line"></div>';
-  var j=await api('plans',{query:'service_id='+encodeURIComponent(selectedService.id)+'&per_page=100'});
+  var j=await api('plans',{query:'service_id='+encodeURIComponent(selectedService.id)+'&per_page=100&include_unavailable=1'});
   if(!j||j.success===false){
     plans=[];
     if(body) body.innerHTML='<div class="empty">'+(j&&j.message?String(j.message):'Could not load plans. Pull to refresh or try again.')+'</div>';
     return;
   }
-  plans=(j.data||[]).filter(function(p){return p.is_available!==false;});
+  // Request supplier-unavailable plans too so sold-out durations can be shown before checkout.
+  plans=(j.data||[]);
   var order={min:0,hour:1,day:2,week:3,month:4,year:5};
   plans.sort(function(a,b){var da=order[a.duration_type]??9,db=order[b.duration_type]??9;if(da!==db)return da-db;return(a.duration_in_type||0)-(b.duration_in_type||0);});
   renderDetailForm();
@@ -448,7 +451,9 @@ function renderDetailForm(){
   var body=document.getElementById('detailBody');
   if(!plans.length){body.innerHTML='<div class="empty">No plans in stock for this service right now.<br><span style="opacity:.7;font-size:12px">Try another service or check back shortly.</span></div>';return;}
   var planHtml=plans.map(function(p,i){
-    return '<div class="plan" data-i="'+i+'"><div class="dur">'+esc(p.duration_translation||(p.duration_in_type+' '+p.duration_type))+'</div><div class="price">'+fmtNgn(p.price_ngn)+'</div></div>';
+    var available=p.is_available!==false;
+    var label=p.duration_translation||(p.duration_in_type+' '+p.duration_type);
+    return '<div class="plan'+(available?'':' sold-out')+'" data-i="'+i+'"'+(available?'':' aria-disabled="true" title="This duration is sold out"')+'><div class="dur">'+esc(label)+'</div><div class="price">'+fmtNgn(p.price_ngn)+'</div>'+(available?'':'<span class="stock-status">Sold out</span>')+'</div>';
   }).join('');
   var carHtml='<option value="">Any Carrier</option>'+carriers.map(function(c){return '<option value="'+esc(c.id)+'">'+esc(c.name)+'</option>';}).join('');
   body.innerHTML=
@@ -462,13 +467,26 @@ function renderDetailForm(){
     '<div class="err" id="rentErr"></div><div class="ok" id="rentOk"></div>';
   body.querySelectorAll('.plan').forEach(function(card){
     card.onclick=function(){
+      if(card.classList.contains('sold-out')) return;
       body.querySelectorAll('.plan').forEach(function(c){c.classList.remove('on');});
       card.classList.add('on');
       selectedPlan=plans[Number(card.getAttribute('data-i'))];
-      var rb=document.getElementById('rentBtn');rb.disabled=false;rb.onclick=openPurchaseModal;updateTotal();
+      var rb=document.getElementById('rentBtn');rb.disabled=false;rb.textContent='Rent number';rb.onclick=openPurchaseModal;updateTotal();
     };
   });
-  var first=body.querySelector('.plan');if(first)first.click();
+  var first=body.querySelector('.plan:not(.sold-out)');
+  if(first) first.click();
+  else {
+    selectedPlan=null;
+    var rb=document.getElementById('rentBtn');
+    if(rb){rb.disabled=true;rb.textContent='No plans in stock';}
+    var note=document.createElement('div');
+    note.className='empty';
+    note.style.marginTop='10px';
+    note.textContent='All durations for this service are currently sold out. Choose another service or check back later.';
+    var grid=document.getElementById('planList');
+    if(grid) grid.insertAdjacentElement('afterend',note);
+  }
   document.getElementById('qtyMinus').onclick=function(){if(qty>1){qty--;document.getElementById('qtyVal').textContent=qty;updateTotal();}};
   document.getElementById('qtyPlus').onclick=function(){if(qty<25){qty++;document.getElementById('qtyVal').textContent=qty;updateTotal();}};
   document.getElementById('rentBtn').onclick=openPurchaseModal;
