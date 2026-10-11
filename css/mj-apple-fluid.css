@@ -1,0 +1,155 @@
+/* MJ Hub – Apple-style fluid layer
+   Blue/white brand preserved. Safe to load after existing styles.
+   Additive only — does not break layout, auth, wallet, or API flows.
+*/
+
+:root {
+  --mj-blue: #3b82f6;
+  --mj-blue-hover: #2563eb;
+  --mj-blue-glow: rgba(59, 130, 246, 0.35);
+  --mj-radius: 16px;
+  --mj-radius-lg: 22px;
+  --mj-spring: cubic-bezier(0.32, 0.72, 0, 1); /* Apple-like */
+  --mj-press: 0.97;
+}
+
+/* Instant press feedback – fires on pointer-down via :active */
+.btn,
+.primary-btn,
+.secondary-btn,
+.icon-btn,
+.quick-action-item,
+.stat-card,
+.card,
+[data-press],
+button:not(:disabled):not([disabled]),
+a.btn {
+  transition: transform 120ms var(--mj-spring),
+              box-shadow 180ms var(--mj-spring),
+              background 180ms ease;
+  will-change: transform;
+}
+
+.btn:active,
+.primary-btn:active,
+.secondary-btn:active,
+.icon-btn:active,
+.quick-action-item:active,
+[data-press]:active,
+button:not(:disabled):active,
+a.btn:active {
+  transform: scale(var(--mj-press));
+}
+
+/* Avoid scaling structural chrome */
+.navbar:active,
+.header:active,
+.bottom-nav:active,
+header:active,
+main:active,
+.sidebar:active,
+.panel:active {
+  transform: none !important;
+}
+
+/* Primary CTA keeps brand blue + soft glow */
+.btn-primary,
+.primary-btn {
+  background: var(--mj-blue);
+  box-shadow: 0 4px 20px var(--mj-blue-glow);
+}
+.btn-primary:hover,
+.primary-btn:hover {
+  background: var(--mj-blue-hover);
+  box-shadow: 0 8px 28px var(--mj-blue-glow);
+}
+
+/* Translucent materials (light & dark) */
+.header,
+.navbar,
+.toolbar,
+.sheet,
+.modal-content,
+.kinetic-panel {
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+}
+
+[data-theme="light"] .header,
+[data-theme="light"] .navbar {
+  background: rgba(255, 255, 255, 0.72);
+  border-bottom: 1px solid rgba(15, 23, 42, 0.06);
+}
+
+[data-theme="dark"] .header,
+[data-theme="dark"] .navbar {
+  background: rgba(11, 15, 25, 0.72);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+/* Cards – clearer hierarchy */
+.stat-card,
+.content-card,
+.welcome-box,
+.card {
+  border-radius: var(--mj-radius);
+  transition: transform 200ms var(--mj-spring), box-shadow 200ms ease;
+}
+
+.stat-card:hover,
+.card:hover {
+  transform: translateY(-2px);
+}
+
+/* Typography refinements */
+h1, .display {
+  letter-spacing: -0.025em;
+  line-height: 1.08;
+}
+h2 {
+  letter-spacing: -0.02em;
+  line-height: 1.15;
+}
+body {
+  font-feature-settings: "ss01", "ss02";
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Smooth sheets / modals */
+.sheet,
+.modal,
+.mobile-menu .kinetic-panel,
+.purchase-sheet,
+.bottom-sheet,
+.modal-sheet {
+  transition: transform 320ms var(--mj-spring),
+              opacity 240ms ease;
+  will-change: transform;
+}
+
+/* Clear keyboard focus */
+button:focus-visible,
+a:focus-visible,
+[role="button"]:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  outline: 2px solid var(--mj-blue);
+  outline-offset: 2px;
+}
+
+/* Reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+  }
+  .btn:active,
+  [data-press]:active,
+  button:active,
+  a.btn:active {
+    transform: none !important;
+  }
+}
