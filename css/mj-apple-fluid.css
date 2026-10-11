@@ -1,4 +1,4 @@
-/* MJ Hub – Apple-style fluid layer (v4 – bottom nav)
+/* MJ Hub – Apple-style fluid layer (v5 – home tiles)
    Blue/white brand preserved. Safe to load after existing styles.
    Additive only — does not break layout, auth, wallet, or API flows.
 */
@@ -28,7 +28,12 @@ a.btn,
 .btn-primary,
 .btn-ghost,
 .nav-item,
-.bottom-nav-item {
+.bottom-nav-item,
+.logs-shortcut,
+.contest-banner,
+.promo-grid > *,
+.hv-grid > *,
+.home-duo-grid > * {
   transition:
     transform 100ms var(--mj-spring),
     box-shadow 160ms var(--mj-spring),
@@ -49,7 +54,12 @@ a.btn:active,
 .btn-primary:active,
 .btn-ghost:active,
 .nav-item:active,
-.bottom-nav-item:active {
+.bottom-nav-item:active,
+.logs-shortcut:active,
+.contest-banner:active,
+.promo-grid > *:active,
+.hv-grid > *:active,
+.home-duo-grid > *:active {
   transform: scale(var(--mj-press)) !important;
   filter: brightness(0.97);
 }
@@ -107,7 +117,7 @@ html:not([data-theme="dark"]) .navbar {
   border-bottom: 1px solid rgba(255, 255, 255, 0.1) !important;
 }
 
-/* ========== Bottom nav (iOS-style) ========== */
+/* ========== Bottom nav ========== */
 .bottom-nav {
   background: rgba(255, 255, 255, 0.82) !important;
   border-top: 1px solid rgba(15, 23, 42, 0.08) !important;
@@ -139,13 +149,15 @@ html:not([data-theme="dark"]) .navbar {
   transform: scale(0.92) !important;
 }
 
-/* ========== Cards ========== */
+/* ========== Cards & home tiles ========== */
 .stat-card,
 .content-card,
 .welcome-box,
 .card,
 .product-card,
-.service-card {
+.service-card,
+.logs-shortcut,
+.contest-banner {
   border-radius: var(--mj-radius) !important;
   transition:
     transform 200ms var(--mj-spring),
@@ -155,14 +167,18 @@ html:not([data-theme="dark"]) .navbar {
 .stat-card:hover,
 .card:hover,
 .product-card:hover,
-.service-card:hover {
+.service-card:hover,
+.logs-shortcut:hover,
+.contest-banner:hover {
   transform: translateY(-3px);
   box-shadow: 0 12px 28px rgba(15, 23, 42, 0.12);
 }
 
 [data-theme="dark"] .stat-card:hover,
 [data-theme="dark"] .card:hover,
-[data-theme="dark"] .product-card:hover {
+[data-theme="dark"] .product-card:hover,
+[data-theme="dark"] .logs-shortcut:hover,
+[data-theme="dark"] .contest-banner:hover {
   box-shadow: 0 12px 28px rgba(0, 0, 0, 0.35);
 }
 
@@ -251,13 +267,17 @@ textarea:focus-visible {
   .btn-primary:active,
   .primary-btn:active,
   .nav-item:active,
-  .bottom-nav-item:active {
+  .bottom-nav-item:active,
+  .logs-shortcut:active,
+  .contest-banner:active {
     transform: none !important;
     filter: none !important;
   }
   .stat-card:hover,
   .card:hover,
-  .product-card:hover {
+  .product-card:hover,
+  .logs-shortcut:hover,
+  .contest-banner:hover {
     transform: none !important;
   }
 }
