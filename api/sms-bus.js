@@ -363,6 +363,26 @@ async function gotsmsFetch(path, { method = 'GET', body } = {}) {
   }
 }
 
+function gotsmsPlanUnavailable(plan) {
+  if (!plan || typeof plan !== 'object') return true;
+  const falseValues = new Set([false, 0, '0', 'false', 'no', 'unavailable', 'out_of_stock', 'out of stock', 'sold_out', 'sold out']);
+  const trueValues = new Set([true, 1, '1', 'true', 'yes', 'available', 'in_stock', 'in stock']);
+  for (const key of ['is_available', 'available', 'in_stock', 'has_stock', 'stock_available']) {
+    if (Object.prototype.hasOwnProperty.call(plan, key) && falseValues.has(
+      typeof plan[key] === 'string' ? plan[key].trim().toLowerCase() : plan[key]
+    )) return true;
+  }
+  for (const key of ['status', 'stock_status', 'availability']) {
+    const value = plan[key];
+    if (typeof value === 'string' && falseValues.has(value.trim().toLowerCase())) return true;
+  }
+  for (const key of ['stock', 'quantity', 'available_count', 'remaining']) {
+    if (Object.prototype.hasOwnProperty.call(plan, key) && plan[key] != null &&
+        Number.isFinite(Number(plan[key])) && Number(plan[key]) <= 0) return true;
+  }
+  return false;
+}
+
 function gotsmsPublicRent(r) {
   if (!r || typeof r !== 'object') return r;
   const carrierObj = r.cellular_carrier || r.carrier || null;
@@ -568,18 +588,16 @@ async function gotsmsSaveOrder({ userId, customerId, rentId, phone, serviceName,
     code: activeTill ? String(activeTill) : null,
     refunded: false
   };
-  try {
-    if (typeof insertNumberOrder === 'function') {
-      const r = await insertNumberOrder(row);
-      if (r.error) console.error('[gotsms] number_orders', r.error.message);
-    } else {
-      const { error } = await supabase.from('number_orders').insert(row);
-      if (error) console.error('[gotsms] number_orders', error.message);
-    }
-  } catch (e) {
-    console.error('[gotsms] number_orders', e.message || e);
+  if (typeof insertNumberOrder === 'function') {
+    const r = await insertNumberOrder(row);
+    if (r?.error) throw new Error('Could not save GotSMS rental order: ' + r.error.message);
+    if (r?.data?.id) return { orderId, rowId: r.data.id };
+  } else {
+    const { data, error } = await supabase.from('number_orders').insert(row).select('id').single();
+    if (error) throw new Error('Could not save GotSMS rental order: ' + error.message);
+    return { orderId, rowId: data?.id || null };
   }
-  return orderId;
+  return { orderId, rowId: null };
 }
 
 
@@ -2894,6 +2912,13 @@ export default async function handler(req, res) {
             if (page >= Number(g.data?.meta?.last_page || 1)) break;
           }
         }
+        if (plan && gotsmsPlanUnavailable(plan)) {
+          return json(res, 409, {
+            success: false,
+            message: 'This rental plan is currently out of stock. Your wallet has not been charged.',
+            data: { plan_id, service_id: service_id || null, out_of_stock: true }
+          });
+        }
         const supplierUsd = Number(plan?.price || body.quoted_usd || 0);
         if (!(supplierUsd > 0)) {
           return json(res, 400, {
@@ -2954,12 +2979,35 @@ export default async function handler(req, res) {
 
         const g = await gotsmsFetch('/api/rents', { method: 'POST', body: payload });
         if (!g.ok || !g.data?.success || !g.data?.data) {
-          try { await supabase.rpc('credit_balance', { p_user_id: auth.userId, p_amount: price }); } catch (e) { console.error('[gotsms] restore', e); }
-          return json(res, g.status || 400, { success: false, message: g.data?.message || 'Rental failed. Balance restored.' });
+          let restored = false;
+          try {
+            const before = await supabase.from('profiles').select('balance').eq('id', auth.userId).single();
+            const credit = await supabase.rpc('credit_balance', { p_user_id: auth.userId, p_amount: price });
+            const after = await supabase.from('profiles').select('balance').eq('id', auth.userId).single();
+            restored = !credit.error && !!before.data && !!after.data &&
+              Number(after.data.balance) >= Number(before.data.balance) + price - 0.5;
+            if (!restored) console.error('[gotsms] wallet restore not verified', {
+              userId: auth.userId, amount: price, rpcError: credit.error?.message,
+              before: before.data?.balance, after: after.data?.balance
+            });
+          } catch (e) {
+            console.error('[gotsms] restore failed', e.message || e);
+          }
+          const supplierMessage = String(g.data?.message || '');
+          const outOfStock = /out.?of.?stock|no stock|unavailable|sold.?out|not available|insufficient stock/i.test(supplierMessage);
+          return json(res, restored ? (outOfStock ? 409 : (g.status || 400)) : 500, {
+            success: false,
+            message: restored
+              ? (outOfStock ? 'This rental plan is out of stock. Your wallet has been refunded.' : (supplierMessage || 'Rental failed. Your wallet has been refunded.'))
+              : 'The supplier rejected the rental and wallet restoration could not be verified. Do not retry yet. Support has been alerted.',
+            data: { refunded: restored, refund_pending: !restored, out_of_stock: outOfStock }
+          });
         }
 
         const rent = g.data.data;
-        const orderId = await gotsmsSaveOrder({
+        let savedOrder;
+        try {
+          savedOrder = await gotsmsSaveOrder({
           userId: auth.userId,
           customerId: profile.customer_id,
           rentId: rent.id,
@@ -2973,9 +3021,22 @@ export default async function handler(req, res) {
           planLabel: rent.plan?.duration_translation || plan?.duration_translation,
           carrierName: rent.cellular_carrier?.name || rent.carrier?.name || body.carrier_name || null,
           areaCode: body.area_code || rent.area_code || null
-        });
-        try {
-          await supabase.from('transactions').insert({
+          });
+        } catch (orderError) {
+          console.error('[gotsms] rental provisioned but order persistence failed', {
+            rentId: rent.id, userId: auth.userId, error: orderError.message || orderError
+          });
+          return json(res, 500, {
+            success: false,
+            message: 'The supplier created the rental, but the order record could not be saved. Do not purchase again. Contact support with rental reference ' + String(rent.id),
+            data: { supplier_rent_id: rent.id, persistence_error: true }
+          });
+        }
+        const orderId = savedOrder.orderId;
+        let transactionSaved = false;
+        let transactionError = null;
+        for (let attempt = 0; attempt < 2 && !transactionSaved; attempt++) {
+          const tx = await supabase.from('transactions').insert({
             user_id: auth.userId,
             customer_id: profile.customer_id,
             type: 'purchase',
@@ -2984,9 +3045,19 @@ export default async function handler(req, res) {
             subtitle: `${rent.phone || ''} · ${rent.plan?.duration_translation || ''}`.trim(),
             amount: `₦${price.toLocaleString()}`,
             amount_ngn: price,
-            status: 'completed'
+            status: 'completed',
+            external_reference: String(rent.id),
+            supplier_order: { provider: 'gotsms', rent_id: String(rent.id), order_id: orderId }
           });
-        } catch (_) {}
+          transactionSaved = !tx.error;
+          transactionError = tx.error || null;
+          if (tx.error) console.error('[gotsms] rental transaction insert attempt ' + (attempt + 1), tx.error.message);
+        }
+        if (!transactionSaved) {
+          console.error('[gotsms] rental transaction persistence failed after retry', {
+            rentId: rent.id, userId: auth.userId, amount: price, error: transactionError?.message
+          });
+        }
         const { data: fresh } = await supabase.from('profiles').select('balance').eq('id', auth.userId).single();
         // Optional auto-renew (GotSMS: POST renewal/toggle flips state; default is off)
         let autoRenew = false;
@@ -3028,6 +3099,7 @@ export default async function handler(req, res) {
           data: {
             ...gotsmsPublicRent(rent),
             order_id: orderId,
+            transaction_recorded: transactionSaved,
             price_ngn: price,
             auto_renew: autoRenew,
             new_balance: Number(fresh?.balance ?? debit.new_balance)
