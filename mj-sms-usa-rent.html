@@ -343,16 +343,20 @@ function paintServices(list){
   grid.className='svc-grid';grid.removeAttribute('aria-busy');
   if(!list.length){
     var q=String(document.getElementById('svcSearch').value||'').trim();
-    grid.innerHTML='<div class="empty" style="grid-column:1/-1">No matching service in the list.'+
-      (q?'<br><button type="button" class="btn-buy" id="verifyAnyServiceBtn" style="margin-top:12px;width:auto">Service not listed? Verify any service</button>':'')+
-      '</div>';
-    var verifyBtn=document.getElementById('verifyAnyServiceBtn');
-    if(verifyBtn) verifyBtn.onclick=function(){verifyAnyService(q);};
+    // If the search has no exact catalogue match, show the actual supplier service
+    // named "Service Not Listed" as the fallback option.
+    var fallback=q?allServices.find(function(s){return /service\\s+not\\s+listed/i.test(String(s.name||''));}):null;
+    if(fallback) list=[fallback];
+  }
+  if(!list.length){
+    grid.innerHTML='<div class="empty" style="grid-column:1/-1">No matching service found. Try another search.</div>';
     return;
   }
   grid.innerHTML=list.map(function(s){
+    var isFallback=/service\\s+not\\s+listed/i.test(String(s.name||''));
+    var displayName=isFallback?'Service Not Listed':s.name;
     return '<div class="svc-tile" data-id="'+esc(s.id)+'" data-name="'+esc(s.name)+'">'+
-      serviceLogoHtml(s.name)+'<div class="svc-label">'+esc(s.name)+'</div></div>';
+      serviceLogoHtml(s.name)+'<div class="svc-label">'+esc(displayName)+'</div></div>';
   }).join('');
   grid.querySelectorAll('.svc-tile').forEach(function(tile){
     tile.onclick=function(){
