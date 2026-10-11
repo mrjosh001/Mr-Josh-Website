@@ -698,7 +698,7 @@ async function handleOrder(req, res) {
   const body = typeof req.body === 'string' ? (() => { try { return JSON.parse(req.body || '{}'); } catch { return {}; } })() : (req.body || {});
   const serviceId = String(body.service_id || body.service || '').trim();
   const link = String(body.link || '').trim();
-  const quantity = Math.max(1, parseInt(body.quantity, 10) || 0);
+  let quantity = Math.max(1, parseInt(body.quantity, 10) || 0);
 
   if (!serviceId || !link || !quantity) {
     return res.status(400).json({ success: false, message: 'service_id, link, and quantity are required' });
@@ -736,15 +736,25 @@ async function handleOrder(req, res) {
       required_field: customField.key
     });
   }
-  if (customField && customField.key === 'answer_number' && !/^\\d+$/.test(customValue)) {
+  // Custom-comment orders use the count of non-empty lines as quantity.
+  if (customField && customField.key === 'comments') {
+    quantity = customValue.split(/\r?\n/).map((line) => line.trim()).filter(Boolean).length;
+    if (quantity < 1) {
+      return res.status(400).json({ success: false, message: 'Enter at least one non-empty comment.', required_field: 'comments' });
+    }
+  }
+  if (customField && customField.key === 'answer_number' && !/^d+$/.test(customValue)) {
     return res.status(400).json({ success: false, message: 'Enter a valid poll answer number.', required_field: customField.key });
   }
 
-  // Site rule: never sell below 300 units. Supplier min wins if higher.
+  // Standard services have a site minimum of 300. Custom comments are counted
+  // by lines, so only the supplier's own minimum applies to those orders.
   const supplierMin = Number(service.min_quantity) || 1;
   let maxQ = Number(service.max_quantity) || 1000000;
   if (maxQ < 1) maxQ = 1000000;
-  let minQ = Math.max(300, supplierMin);
+  let minQ = customField && customField.key === 'comments'
+    ? Math.max(1, supplierMin)
+    : Math.max(300, supplierMin);
   if (minQ > maxQ) minQ = maxQ;
   if (quantity < minQ || quantity > maxQ) {
     return res.status(400).json({
