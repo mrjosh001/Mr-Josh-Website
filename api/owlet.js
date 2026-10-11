@@ -671,7 +671,8 @@ async function resolveOwletServiceId(storedId, name) {
 function japCustomFieldsForService(service){
   const descriptor=(String(service?.service_type||'')+' '+String(service?.name||'')).toLowerCase(),fields=[];
   const add=(key,label,required=true)=>fields.push({key,label,required});
-  if(/subscription|comment likes|likes.*comments?/.test(descriptor)){add('username','username');add('min','minimum quantity');add('max','maximum quantity');add('posts','posts per cycle');add('delay','delay');add('expiry','expiry',false);}
+  if(/subscription/.test(descriptor)){add('username','username');add('min','minimum quantity');add('max','maximum quantity');add('posts','posts per cycle');add('delay','delay');add('expiry','expiry',false);}
+  if(/comment likes|likes.*comments?/.test(descriptor))add('username','username');
   if(/drip.?feed/.test(descriptor)){add('runs','runs');add('interval','interval');}
   if(/custom.?comments?|comments?.?custom/.test(descriptor)||(/\bcustom\b/.test(descriptor)&&/comment/.test(descriptor)))add('comments','custom comments');
   if(/custom list mentions|custom usernames|usernames list/.test(descriptor))add('usernames','usernames');
