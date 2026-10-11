@@ -343,11 +343,7 @@ button,input{font:inherit}
         </div>
         <div class="hint-text">Public profile, post, reel, video or channel URL only</div>
       </div>
-      <div class="field" id="mCustomFieldWrap" style="display:none">
-        <label id="mCustomFieldLabel" for="mCustomField">Service details</label>
-        <textarea id="mCustomField" rows="4" placeholder="" autocomplete="off"></textarea>
-        <div class="hint-text" id="mCustomFieldHint"></div>
-      </div>
+      <div id="mCustomFieldWrap" style="display:none"></div>
       <div class="field" id="mQuantityField">
         <label>Quantity</label>
         <div class="qty-row">
@@ -734,30 +730,33 @@ function shortServiceTitle(name){
   const cut = raw.split('[')[0].replace(/\s+/g, ' ').trim();
   return cut || raw;
 }
-function customFieldForService(s){
-  const descriptor = (String(s.service_type || '') + ' ' + String(s.name || '')).toLowerCase();
-  if (/custom.?comments?|comments?.?custom/.test(descriptor) || (/\bcustom\b/.test(descriptor) && /comment/.test(descriptor))) {
-    return {key:'comments',label:'Custom comments',placeholder:'Enter one comment per line. Each line is sent as a separate comment.',hint:'Enter one comment per line.',multiline:true,countLines:true};
-  }
-  if (/custom list mentions|custom usernames|usernames list/.test(descriptor)) {
-    return {key:'usernames',label:'Usernames',placeholder:'Enter one username per line.',hint:'Enter each username on a separate line.',multiline:true};
-  }
-  if (/mentions with hashtags|hashtags list/.test(descriptor)) {
-    return {key:'hashtags',label:'Hashtags',placeholder:'Enter one hashtag per line.',hint:'Enter each hashtag on a separate line.',multiline:true};
-  }
-  if (/\bkeywords?\b/.test(descriptor)) {
-    return {key:'keywords',label:'Keywords',placeholder:'Enter one keyword per line.',hint:'Enter each keyword on a separate line.',multiline:true};
-  }
-  if (/mentions? hashtag|hashtag to scrape|hashtag service/.test(descriptor)) {
-    return {key:'hashtag',label:'Hashtag',placeholder:'Enter the hashtag to use.',hint:'JAP receives this as the hashtag field.',multiline:false};
-  }
-  if (/media likers|likers from media/.test(descriptor)) {
-    return {key:'media',label:'Media URL',placeholder:'Paste the media URL.',hint:'JAP uses this media URL to identify likers.',multiline:false};
-  }
-  if (/poll comment replies|poll replies|answer number/.test(descriptor)) {
-    return {key:'answer_number',label:'Poll answer number',placeholder:'Enter the answer number.',hint:'Enter the numeric answer option required by the service.',multiline:false,inputType:'number'};
-  }
-  return null;
+function customFieldsForService(s){
+  const descriptor=(String(s.service_type||'')+' '+String(s.name||'')).toLowerCase(),fields=[];
+  const add=(key,label,placeholder,hint,opts={})=>fields.push({key,label,placeholder,hint,multiline:!!opts.multiline,countLines:!!opts.countLines,inputType:opts.inputType||'text',required:opts.required!==false});
+  if(/subscription/.test(descriptor)){add('username','Username','Enter the account username.','Enter the username for this subscription.');add('min','Minimum quantity','e.g. 100','Minimum actions per cycle.',{inputType:'number'});add('max','Maximum quantity','e.g. 500','Maximum actions per cycle.',{inputType:'number'});add('posts','Posts per cycle','e.g. 1','Number of posts to process per cycle.',{inputType:'number'});add('delay','Delay between cycles (hours)','e.g. 24','Delay required by this service.',{inputType:'number'});add('expiry','Expiry date (optional)','YYYY-MM-DD','Leave blank if no expiry is required.',{required:false});}
+  if(/drip.?feed/.test(descriptor)){add('runs','Runs','Number of runs','How many times the order should repeat.',{inputType:'number'});add('interval','Interval (minutes)','Minutes between runs','Time between each run.',{inputType:'number'});}
+  if(/custom.?comments?|comments?.?custom/.test(descriptor)||(/\bcustom\b/.test(descriptor)&&/comment/.test(descriptor)))add('comments','Comments','Enter one comment per line.','Each non-empty line counts as one comment.',{multiline:true,countLines:true});
+  if(/custom list mentions|custom usernames|usernames list/.test(descriptor))add('usernames','Usernames','Enter one username per line.','Enter each username on a separate line.',{multiline:true});
+  if(/mentions with hashtags|hashtags list/.test(descriptor))add('hashtags','Hashtags','Enter one hashtag per line.','Enter each hashtag on a separate line.',{multiline:true});
+  if(/\bkeywords?\b/.test(descriptor))add('keywords','Keywords','Enter one keyword per line.','Enter each keyword on a separate line.',{multiline:true});
+  if(/mentions? hashtag|hashtag to scrape|hashtag service/.test(descriptor))add('hashtag','Hashtag','Enter the hashtag to use.','Enter the hashtag required by this service.');
+  if(/media likers|likers from media/.test(descriptor))add('media','Media URL','Paste the media URL.','Use the post or media URL to identify likers.');
+  if(/poll comment replies|poll replies|answer number/.test(descriptor))add('answer_number','Poll answer number','Enter the answer number.','Enter the numeric poll answer option.',{inputType:'number'});
+  if(!fields.some(f=>f.key==='username')&&/\busername\b/.test(descriptor)&&!/usernames|custom username/.test(descriptor))add('username','Username','Enter the account username.','Enter the username required by this service.');
+  return fields;
+}
+function customFieldForService(s){return customFieldsForService(s).find(f=>f.countLines)||customFieldsForService(s)[0]||null;}
+function usesUsernameInsteadOfLink(s){return /subscription/.test((String(s.service_type||'')+' '+String(s.name||'')).toLowerCase());}
+function customFieldValue(key){const el=document.querySelector('[data-custom-key="'+key+'"]');return el?String(el.value||'').trim():'';}
+function renderCustomFields(s){
+  const wrap=document.getElementById('mCustomFieldWrap');if(!wrap)return;
+  const fields=customFieldsForService(s);
+  wrap.innerHTML=fields.map(function(f){
+    const input=f.multiline?'<textarea data-custom-key="'+esc(f.key)+'" rows="4" placeholder="'+esc(f.placeholder)+'" autocomplete="off"></textarea>':'<input data-custom-key="'+esc(f.key)+'" type="'+esc(f.inputType)+'" placeholder="'+esc(f.placeholder)+'" autocomplete="off" '+(f.required?'required':'')+'>';
+    return '<div class="field dynamic-custom-field"><label for="custom-'+esc(f.key)+'">'+esc(f.label)+'</label>'+input+'<div class="hint-text">'+esc(f.hint||'')+'</div></div>';
+  }).join('');
+  wrap.style.display=fields.length?'block':'none';
+  wrap.querySelectorAll('[data-custom-key]').forEach(function(el){el.id='custom-'+el.getAttribute('data-custom-key');el.addEventListener('input',updateTotal);});
 }
 function openOrder(s){
   selected = s;
@@ -810,25 +809,20 @@ function openOrder(s){
     }).join('');
   }
 
-  const custom = customFieldForService(s);
-  const customWrap = document.getElementById('mCustomFieldWrap');
-  const customInput = document.getElementById('mCustomField');
-  if (customWrap && customInput) {
-    customWrap.style.display = custom ? 'block' : 'none';
-    customInput.value = '';
-    customInput.required = !!custom;
-    customInput.placeholder = custom ? custom.placeholder : '';
-    customInput.rows = custom && custom.multiline ? 4 : 1;
-    customInput.type = custom && custom.inputType ? custom.inputType : 'text';
-    document.getElementById('mCustomFieldLabel').textContent = custom ? custom.label : 'Service details';
-    document.getElementById('mCustomFieldHint').textContent = custom ? custom.hint : '';
-  }
+  const fields=customFieldsForService(s);
+  renderCustomFields(s);
+  const commentField=fields.find(function(f){return f.countLines;});
+  const quantityInput=document.getElementById('mQty');
+  quantityInput.readOnly=!!commentField;
+  quantityInput.setAttribute('aria-label',commentField?'Comment count, calculated from non-empty lines':'Quantity');
   const quantityField = document.getElementById('mQuantityField');
-  if (quantityField) quantityField.style.display = custom && custom.countLines ? 'none' : 'block';
+  if (quantityField) quantityField.style.display = 'block';
   document.getElementById('mQty').value = min;
   document.getElementById('mQty').min = min;
   document.getElementById('mQty').max = max;
   document.getElementById('mLink').value = '';
+  const linkField=document.getElementById('mLink').closest('.field');
+  if(linkField)linkField.style.display=usesUsernameInsteadOfLink(s)?'none':'block';
   updateTotal();
   document.getElementById('modalBg').classList.add('open');
   setTimeout(function(){ document.getElementById('mLink').focus(); }, 180);
@@ -840,25 +834,19 @@ function closeModal(){
 }
 
 function updateTotal(){
-  if (!selected) return;
-  const custom = customFieldForService(selected);
+  if(!selected)return;
+  const fields=customFieldsForService(selected),commentField=fields.find(function(f){return f.countLines;});
   let qty;
-  if (custom && custom.countLines) {
-    qty = String(document.getElementById('mCustomField').value || '').split(/\r?\n/).map(function(line){return line.trim();}).filter(Boolean).length;
-  } else {
-    qty = Math.max(1, parseInt(document.getElementById('mQty').value, 10) || 0);
-    const min = effectiveMin(selected);
-    if (qty < min) qty = min;
-  }
-  const perUnit = Math.max(200, Math.ceil((Number(selected.price_ngn) || 0) / 1000));
-  const total = qty > 0
-    ? (custom && custom.countLines ? perUnit * qty : Math.max(200, Math.ceil((Number(selected.price_ngn) || 0) / 1000 * qty)))
-    : 0;
-  document.getElementById('mTotal').textContent = fmt(total);
-  const minMax = document.getElementById('mMinMax');
-  if (custom && custom.countLines && minMax) minMax.textContent = qty + ' custom comment' + (qty === 1 ? '' : 's');
+  if(commentField){
+    const value=customFieldValue(commentField.key);
+    qty=value.split(/\r?\n/).map(function(line){return line.trim();}).filter(Boolean).length;
+    document.getElementById('mQty').value=qty;
+    const minMax=document.getElementById('mMinMax');if(minMax)minMax.textContent=qty+' comment'+(qty===1?'':'s');
+  }else{qty=Math.max(1,parseInt(document.getElementById('mQty').value,10)||0);const min=effectiveMin(selected);if(qty<min)qty=min;}
+  const perUnit=Math.max(200,Math.ceil((Number(selected.price_ngn)||0)/1000));
+  const total=qty>0?(commentField?perUnit*qty:Math.max(200,Math.ceil((Number(selected.price_ngn||0)/1000)*qty))):0;
+  document.getElementById('mTotal').textContent=fmt(total);
 }
-
 function qtyStep(delta){
   if (!selected) return;
   const input = document.getElementById('mQty');
@@ -899,19 +887,10 @@ async function pasteLink(){
 }
 
 document.getElementById('mQty').addEventListener('input', updateTotal);
-document.getElementById('mCustomField').addEventListener('input', function(){
-  if (!selected) return;
-  const custom = customFieldForService(selected);
-  if (custom && custom.countLines) {
-    const qty = String(this.value || '').split(/\r?\n/).map(function(line){return line.trim();}).filter(Boolean).length;
-    const minMax = document.getElementById('mMinMax');
-    if (minMax) minMax.textContent = qty + ' custom comment' + (qty === 1 ? '' : 's');
-  }
-  updateTotal();
-});
 document.getElementById('mQty').addEventListener('change', () => {
   if (!selected) return;
   const min = effectiveMin(selected);
+  if (document.getElementById('mQty').readOnly) return;
   let qty = parseInt(document.getElementById('mQty').value, 10) || 0;
   if (qty < min) {
     document.getElementById('mQty').value = min;
@@ -921,64 +900,25 @@ document.getElementById('mQty').addEventListener('change', () => {
 });
 
 async function placeOrder(){
-  if (!selected) return;
-  const link = document.getElementById('mLink').value.trim();
-  const custom = customFieldForService(selected);
-  const customValue = custom ? document.getElementById('mCustomField').value.trim() : '';
-  let quantity = custom && custom.countLines
-    ? customValue.split(/\r?\n/).map(function(line){return line.trim();}).filter(Boolean).length
-    : (parseInt(document.getElementById('mQty').value, 10) || 0);
-  const min = custom && custom.countLines ? Math.max(1, Number(selected.min_quantity) || 1) : effectiveMin(selected);
-  if (custom && !customValue) {
-    toast('Enter ' + custom.label.toLowerCase() + ' first');
-    document.getElementById('mCustomField').focus();
-    return;
-  }
-  if (quantity < min) {
-    if (custom && custom.countLines) {
-      toast('Enter at least ' + min + ' non-empty comments');
-      document.getElementById('mCustomField').focus();
-      return;
-    }
-    quantity = min;
-    document.getElementById('mQty').value = min;
-  }
-  if (!link) {
-    toast('Paste the link first');
-    document.getElementById('mLink').focus();
-    return;
-  }
-  const orderPayload = { service_id: selected.service_id, link, quantity };
-  if (custom && customValue) orderPayload[custom.key] = customValue;
-  const btn = document.getElementById('mBuy');
-  btn.disabled = true;
-  btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Placing order…';
-  try {
-    const headers = await authHeaders();
-    const res = await fetch('/api/owlet?action=order', {
-      method: 'POST',
-      headers,
-      body: JSON.stringify(orderPayload)
-    });
-    const data = await res.json();
-    if (!data.success) {
-      toast(data.message || 'Order failed');
-      if (/insufficient/i.test(data.message || '')) setTimeout(() => location.href = 'deposit.html', 1200);
-      return;
-    }
-    if (data.new_balance != null) {
-      balance = Number(data.new_balance);
-      document.getElementById('walletBal').textContent = fmt(balance);
-    }
-    toast(data.history_saved === false ? (data.message || 'Ordered — history save issue') : '🔥 Boost ordered! Track in Orders');
-    closeModal();
-    setTimeout(() => location.href = 'mj-boosters-history.html', 900);
-  } catch (e) {
-    toast(e.message || 'Network error');
-  } finally {
-    btn.disabled = false;
-    btn.innerHTML = '<i class="fa-solid fa-bolt"></i> Confirm boost';
-  }
+  if(!selected)return;
+  const link=document.getElementById('mLink').value.trim(),fields=customFieldsForService(selected),values={};
+  for(const field of fields){const value=customFieldValue(field.key);if(field.required&&!value){toast('Enter '+field.label.toLowerCase()+' first');document.querySelector('[data-custom-key="'+field.key+'"]')?.focus();return;}if(value)values[field.key]=value;}
+  const commentField=fields.find(function(f){return f.countLines;});
+  let quantity=commentField?String(values[commentField.key]||'').split(/\r?\n/).map(function(line){return line.trim();}).filter(Boolean).length:(parseInt(document.getElementById('mQty').value,10)||0);
+  const min=commentField?Math.max(1,Number(selected.min_quantity)||1):effectiveMin(selected),max=Number(selected.max_quantity)||1000000;
+  if(commentField&&quantity<min){toast('Enter at least '+min+' non-empty comments');document.querySelector('[data-custom-key="'+commentField.key+'"]')?.focus();return;}
+  if(!commentField&&(quantity<min||quantity>max)){toast('Quantity must be between '+min.toLocaleString()+' and '+max.toLocaleString());return;}
+  if(!link&&!(usesUsernameInsteadOfLink(selected)&&values.username)){toast('Enter the link first');document.getElementById('mLink').focus();return;}
+  const orderPayload={service_id:selected.service_id,link:link,quantity:quantity,...values};
+  const btn=document.getElementById('mBuy');btn.disabled=true;btn.innerHTML='<i class="fa-solid fa-spinner fa-spin"></i> Placing order…';
+  try{
+    const headers=await authHeaders(),res=await fetch('/api/owlet?action=order',{method:'POST',headers,body:JSON.stringify(orderPayload)}),data=await res.json();
+    if(!data.success){toast(data.message||'We could not place this order. Please check your details and try again.');if(/insufficient/i.test(data.message||''))setTimeout(()=>location.href='deposit.html',1200);return;}
+    if(data.new_balance!=null){balance=Number(data.new_balance);document.getElementById('walletBal').textContent=fmt(balance);}
+    toast(data.history_saved===false?(data.message||'Order placed. Order history may take a moment to update.'):'🔥 Boost ordered! Track in Orders');
+    closeModal();setTimeout(()=>location.href='mj-boosters-history.html',900);
+  }catch(e){toast('Network error. Please try again.');}
+  finally{btn.disabled=false;btn.innerHTML='<i class="fa-solid fa-bolt"></i> Confirm boost';}
 }
 
 (async () => {
