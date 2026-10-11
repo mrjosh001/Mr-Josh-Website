@@ -668,40 +668,31 @@ async function resolveOwletServiceId(storedId, name) {
 }
 
 
-function japCustomFieldForService(service) {
-  const descriptor = (String(service?.service_type || '') + ' ' + String(service?.name || '')).toLowerCase();
-  if (/custom.?comments?|comments?.?custom/.test(descriptor) || /\bcustom\b/.test(descriptor) && /comment/.test(descriptor)) {
-    return { key: 'comments', label: 'Custom comments', placeholder: 'Enter one comment per line. Each line is sent as a separate comment.', multiline: true };
-  }
-  if (/custom list mentions|custom usernames|usernames list/.test(descriptor)) {
-    return { key: 'usernames', label: 'Usernames', placeholder: 'Enter one username per line.', multiline: true };
-  }
-  if (/mentions with hashtags|hashtags list/.test(descriptor)) {
-    return { key: 'hashtags', label: 'Hashtags', placeholder: 'Enter one hashtag per line.', multiline: true };
-  }
-  if (/\bkeywords?\b/.test(descriptor)) {
-    return { key: 'keywords', label: 'Keywords', placeholder: 'Enter one keyword per line.', multiline: true };
-  }
-  if (/mentions? hashtag|hashtag to scrape|hashtag service/.test(descriptor)) {
-    return { key: 'hashtag', label: 'Hashtag', placeholder: 'Enter the hashtag to use (without or with #).', multiline: false };
-  }
-  if (/media likers|likers from media/.test(descriptor)) {
-    return { key: 'media', label: 'Media URL', placeholder: 'Paste the media URL to scrape likers from.', multiline: false };
-  }
-  if (/poll comment replies|poll replies|answer number/.test(descriptor)) {
-    return { key: 'answer_number', label: 'Poll answer number', placeholder: 'Enter the answer number.', multiline: false, inputType: 'number' };
-  }
-  return null;
+function japCustomFieldsForService(service){
+  const descriptor=(String(service?.service_type||'')+' '+String(service?.name||'')).toLowerCase(),fields=[];
+  const add=(key,label,required=true)=>fields.push({key,label,required});
+  if(/subscription/.test(descriptor)){add('username','username');add('min','minimum quantity');add('max','maximum quantity');add('posts','posts per cycle');add('delay','delay');add('expiry','expiry',false);}
+  if(/drip.?feed/.test(descriptor)){add('runs','runs');add('interval','interval');}
+  if(/custom.?comments?|comments?.?custom/.test(descriptor)||(/\bcustom\b/.test(descriptor)&&/comment/.test(descriptor)))add('comments','custom comments');
+  if(/custom list mentions|custom usernames|usernames list/.test(descriptor))add('usernames','usernames');
+  if(/mentions with hashtags|hashtags list/.test(descriptor))add('hashtags','hashtags');
+  if(/\bkeywords?\b/.test(descriptor))add('keywords','keywords');
+  if(/mentions? hashtag|hashtag to scrape|hashtag service/.test(descriptor))add('hashtag','hashtag');
+  if(/media likers|likers from media/.test(descriptor))add('media','media URL');
+  if(/poll comment replies|poll replies|answer number/.test(descriptor))add('answer_number','poll answer number');
+  if(!fields.some(f=>f.key==='username')&&/\busername\b/.test(descriptor)&&!/usernames|custom username/.test(descriptor))add('username','username');
+  return fields;
 }
+function japCustomFieldForService(service){return japCustomFieldsForService(service).find(f=>f.key==='comments')||japCustomFieldsForService(service)[0]||null;}
 
 async function handleOrder(req, res) {
   const body = typeof req.body === 'string' ? (() => { try { return JSON.parse(req.body || '{}'); } catch { return {}; } })() : (req.body || {});
   const serviceId = String(body.service_id || body.service || '').trim();
-  const link = String(body.link || '').trim();
+  let link = String(body.link || '').trim();
   let quantity = Math.max(1, parseInt(body.quantity, 10) || 0);
 
-  if (!serviceId || !link || !quantity) {
-    return res.status(400).json({ success: false, message: 'service_id, link, and quantity are required' });
+  if (!serviceId || !quantity) {
+    return res.status(400).json({ success: false, message: 'Please select a service and enter a valid quantity.' });
   }
   if (!/^https?:\/\//i.test(link) && !link.includes('.') && !link.startsWith('@')) {
     // allow @handles and bare domains/usernames common for SMM
@@ -725,43 +716,18 @@ async function handleOrder(req, res) {
     return res.status(400).json({ success: false, message: 'This service is temporarily unavailable' });
   }
 
-  const customField = japCustomFieldForService(service);
-  const customValue = customField ? String(body[customField.key] || '').trim() : '';
-  if (customField && !customValue) {
-    return res.status(400).json({
-      success: false,
-      message: customField.key === 'comments'
-        ? 'Enter the custom comments before placing this order.'
-        : 'Enter ' + customField.label.toLowerCase() + ' before placing this order.',
-      required_field: customField.key
-    });
-  }
-  // Custom-comment orders use the count of non-empty lines as quantity.
-  if (customField && customField.key === 'comments') {
-    quantity = customValue.split(/\r?\n/).map((line) => line.trim()).filter(Boolean).length;
-    if (quantity < 1) {
-      return res.status(400).json({ success: false, message: 'Enter at least one non-empty comment.', required_field: 'comments' });
-    }
-  }
-  if (customField && customField.key === 'answer_number' && !/^\d+$/.test(customValue)) {
-    return res.status(400).json({ success: false, message: 'Enter a valid poll answer number.', required_field: customField.key });
-  }
-
-  // Standard services have a site minimum of 300. Custom comments are counted
-  // by lines, so only the supplier's own minimum applies to those orders.
-  const supplierMin = Number(service.min_quantity) || 1;
-  let maxQ = Number(service.max_quantity) || 1000000;
-  if (maxQ < 1) maxQ = 1000000;
-  let minQ = customField && customField.key === 'comments'
-    ? Math.max(1, supplierMin)
-    : Math.max(300, supplierMin);
-  if (minQ > maxQ) minQ = maxQ;
-  if (quantity < minQ || quantity > maxQ) {
-    return res.status(400).json({
-      success: false,
-      message: `Quantity must be between ${minQ.toLocaleString()} and ${maxQ.toLocaleString()}`
-    });
-  }
+  const customFields=japCustomFieldsForService(service),customValues={};
+  for(const field of customFields){const value=String(body[field.key]||'').trim();if(field.required&&!value)return res.status(400).json({success:false,message:'Please enter '+field.label+' before placing this order.'});if(value)customValues[field.key]=value;}
+  if(!link&&customValues.username)link=customValues.username;
+  if(!link)return res.status(400).json({success:false,message:'Please enter the profile or content link.'});
+  if(Object.prototype.hasOwnProperty.call(customValues,'comments')){quantity=String(customValues.comments).split(/\r?\n/).map(line=>line.trim()).filter(Boolean).length;if(quantity<1)return res.status(400).json({success:false,message:'Enter at least one non-empty comment.'});}
+  if(customValues.answer_number&&!/^\d+$/.test(customValues.answer_number))return res.status(400).json({success:false,message:'Enter a valid poll answer number.'});
+  for(const key of ['min','max','posts','delay','runs','interval'])if(customValues[key]&&(!/^\d+$/.test(customValues[key])||Number(customValues[key])<1))return res.status(400).json({success:false,message:'Check the '+key+' value and try again.'});
+  if(customValues.min&&customValues.max&&Number(customValues.min)>Number(customValues.max))return res.status(400).json({success:false,message:'Minimum quantity cannot exceed maximum quantity.'});
+  const supplierMin=Number(service.min_quantity)||1;let maxQ=Number(service.max_quantity)||1000000;if(maxQ<1)maxQ=1000000;
+  const isCustomCommentsOrder=Object.prototype.hasOwnProperty.call(customValues,'comments');
+  let minQ=isCustomCommentsOrder?Math.max(1,supplierMin):Math.max(300,supplierMin);if(minQ>maxQ)minQ=maxQ;
+  if(quantity<minQ||quantity>maxQ)return res.status(400).json({success:false,message:'Quantity must be between '+minQ.toLocaleString()+' and '+maxQ.toLocaleString()});
 
   // price_ngn is selling rate per 1000 units (SMM standard)
   // Listed rate never below ₦200 even if DB still has old cheap rows
@@ -769,7 +735,7 @@ async function handleOrder(req, res) {
   if (ratePer1k <= 0) {
     return res.status(400).json({ success: false, message: 'Service price not configured' });
   }
-  const isCustomCommentsOrder = !!(customField && customField.key === 'comments');
+  const isCustomCommentsOrder = Object.prototype.hasOwnProperty.call(customValues, 'comments');
   const perUnitNgn = Math.max(MIN_SELL_PRICE_NGN, Math.ceil(ratePer1k / 1000));
   const totalNgn = isCustomCommentsOrder
     ? perUnitNgn * quantity
@@ -848,24 +814,18 @@ async function handleOrder(req, res) {
 
   // Place order with JAP — resolve live service id if catalog is stale
   const liveServiceId = await resolveOwletServiceId(serviceId, service.name);
-  const supplierPayload = {
-    action: 'add',
-    service: liveServiceId,
-    link,
-    quantity: String(quantity)
-  };
-  // JAP's API requires the service-specific parameter name, not a generic "message" field.
-  if (customField && customValue) supplierPayload[customField.key] = customValue;
+  const supplierPayload = { action: 'add', service: liveServiceId, link, quantity: String(quantity) };
+  // Forward only recognized service-specific fields to the order provider.
+  for (const field of customFields) if (customValues[field.key]) supplierPayload[field.key] = customValues[field.key];
   const { ok, status, json } = await owletCall(supplierPayload);
 
   if (!ok || json?.error || !json?.order) {
     await restoreWallet();
-    const rawErr = json?.error || json?.message || '';
-    const errMsg = /incorrect service/i.test(String(rawErr))
-      ? 'This package is no longer available. Go back and pick another one. Your balance was restored.'
-      : /supplier|owlet|panel|jap/i.test(String(rawErr))
-      ? 'This order could not be placed right now. Your balance was restored.'
-      : (rawErr || 'This order could not be placed right now. Your balance was restored.');
+    const rawErr = String(json?.error || json?.message || '');
+    console.error('[booster order] provider rejected order', { serviceId, reason: rawErr.slice(0, 300) });
+    const errMsg = /incorrect service|service.*not found|invalid service/i.test(rawErr)
+      ? 'This package is temporarily unavailable. Your balance was restored.'
+      : 'We could not place this order right now. Your balance was restored. Please try again or choose another package.';
     return res.status(502).json({ success: false, message: errMsg });
   }
 
