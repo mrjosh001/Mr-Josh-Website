@@ -532,7 +532,7 @@ function effectiveMin(s){
   const supplierMin = Number(s?.min_quantity)||1;
   let maxQ = Number(s?.max_quantity)||1000000;
   if (maxQ < 1) maxQ = 1000000;
-  const spec=customFieldSpec(s?.service_type||s?.type||'');
+  const spec=customFieldSpec((s?.service_type||s?.type||'')+' '+(s?.name||''));
   let minQ = spec ? supplierMin : Math.max(SITE_MIN, supplierMin);
   if (minQ > maxQ) minQ = maxQ;
   return minQ;
@@ -808,7 +808,7 @@ function openOrder(s){
   document.getElementById('mQty').min = min;
   document.getElementById('mQty').max = max;
   document.getElementById('mLink').value = '';
-  const spec=customFieldSpec(s.service_type||s.type||'');
+  const spec=customFieldSpec((s.service_type||s.type||'')+' '+(s.name||''));
   const customWrap=document.getElementById('mCustomField');
   const customInput=document.getElementById('mCustomValue');
   const qtyInput=document.getElementById('mQty');
@@ -831,7 +831,7 @@ function closeModal(){
 
 function updateTotal(){
   if (!selected) return;
-  const spec=customFieldSpec(selected.service_type||selected.type||'');
+  const spec=customFieldSpec((selected.service_type||selected.type||'')+' '+(selected.name||''));
   const qtyInput=document.getElementById('mQty');
   let qty = Math.max(0, parseInt(qtyInput.value, 10) || 0);
   if(spec&&spec.lineBased){
@@ -903,7 +903,7 @@ async function placeOrder(){
   const link = document.getElementById('mLink').value.trim();
   let quantity = parseInt(document.getElementById('mQty').value, 10) || 0;
   const min = effectiveMin(selected);
-  const spec=customFieldSpec(selected.service_type||selected.type||'');
+  const spec=customFieldSpec((selected.service_type||selected.type||'')+' '+(selected.name||''));
   const customValue=customInputValue();
   if(spec && !customValue){
     toast('Enter '+spec.label.toLowerCase()+' for this service');
