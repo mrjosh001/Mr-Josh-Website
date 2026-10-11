@@ -733,7 +733,7 @@ async function handleOrder(req, res) {
 
   // JAP service types such as Custom Comments require their own payload field.
   // For line-based custom services, derive quantity from the submitted non-empty lines.
-  const customSpec = japCustomFieldSpec(service.service_type || service.type || '');
+  const customSpec = japCustomFieldSpec((service.service_type || service.type || '') + ' ' + (service.name || ''));
   const customValue = String(body.custom_value != null ? body.custom_value : (customSpec ? body[customSpec.key] : '') || '').trim();
   if (customSpec && !customValue) {
     return res.status(400).json({ success: false, message: customSpec.label + ' are required for this service' });
