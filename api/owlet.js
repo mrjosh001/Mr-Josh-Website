@@ -736,7 +736,7 @@ async function handleOrder(req, res) {
   if (ratePer1k <= 0) {
     return res.status(400).json({ success: false, message: 'Service price not configured' });
   }
-  const isCustomCommentsOrder = Object.prototype.hasOwnProperty.call(customValues, 'comments');
+  // The comment-order flag was calculated above and is reused for pricing.
   const perUnitNgn = Math.max(MIN_SELL_PRICE_NGN, Math.ceil(ratePer1k / 1000));
   const dripRuns = Math.max(1, parseInt(customValues.runs, 10) || 1);
   const totalNgn = isCustomCommentsOrder
