@@ -341,7 +341,15 @@ function sortServices(){
 function paintServices(list){
   var grid=document.getElementById('svcGrid');
   grid.className='svc-grid';grid.removeAttribute('aria-busy');
-  if(!list.length){grid.innerHTML='<div class="empty" style="grid-column:1/-1">No match</div>';return;}
+  if(!list.length){
+    var q=String(document.getElementById('svcSearch').value||'').trim();
+    grid.innerHTML='<div class="empty" style="grid-column:1/-1">No matching service in the list.'+
+      (q?'<br><button type="button" class="btn-buy" id="verifyAnyServiceBtn" style="margin-top:12px;width:auto">Service not listed? Verify any service</button>':'')+
+      '</div>';
+    var verifyBtn=document.getElementById('verifyAnyServiceBtn');
+    if(verifyBtn) verifyBtn.onclick=function(){verifyAnyService(q);};
+    return;
+  }
   grid.innerHTML=list.map(function(s){
     return '<div class="svc-tile" data-id="'+esc(s.id)+'" data-name="'+esc(s.name)+'">'+
       serviceLogoHtml(s.name)+'<div class="svc-label">'+esc(s.name)+'</div></div>';
@@ -354,6 +362,50 @@ function paintServices(list){
   });
 }
 var _searchTimer=null;
+var _verifySearchSeq=0;
+async function verifyAnyService(query){
+  var q=String(query||'').trim();
+  if(!q) return;
+  var grid=document.getElementById('svcGrid');
+  var seq=++_verifySearchSeq;
+  grid.innerHTML='<div class="empty" style="grid-column:1/-1">Checking availability…</div>';
+  try{
+    // Search GotSMS's plan catalogue as well as its service list. This catches services
+    // that have plans but are not present in the first service catalogue pages.
+    var result=await api('plans',{query:'search='+encodeURIComponent(q)+'&per_page=100&include_unavailable=1'});
+    if(seq!==_verifySearchSeq) return;
+    var found=(result&&result.success&&Array.isArray(result.data))?result.data:[];
+    var services={}, matching=[];
+    found.forEach(function(p){
+      var svc=p&&p.service;
+      var id=String((svc&&svc.id)||p.service_id||'');
+      var name=String((svc&&svc.name)||p.service_name||p.name||'').trim();
+      if(!id||!name) return;
+      var key=id;
+      if(!services[key]) services[key]={id:id,name:name,logo:(svc&&svc.logo)||null};
+      matching.push(p);
+    });
+    var serviceList=Object.keys(services).map(function(k){return services[k];});
+    if(serviceList.length){
+      var map={};allServices.forEach(function(s){map[String(s.id)]=s;});
+      serviceList.forEach(function(s){map[String(s.id)]=s;});
+      allServices=Object.keys(map).map(function(k){return map[k];});
+      sortServices();writeCache(allServices);
+      paintServices(serviceList);
+      var note=document.getElementById('cacheNote');
+      if(note) note.textContent='Verified against available rental plans';
+      return;
+    }
+    grid.innerHTML='<div class="empty" style="grid-column:1/-1">We could not find an available rental plan matching “'+esc(q)+'”. Try another service name or check again later.<br><button type="button" class="btn-buy" id="verifyRetryBtn" style="margin-top:12px;width:auto">Check again</button></div>';
+    var retry=document.getElementById('verifyRetryBtn');
+    if(retry) retry.onclick=function(){verifyAnyService(q);};
+  }catch(e){
+    if(seq!==_verifySearchSeq) return;
+    grid.innerHTML='<div class="empty" style="grid-column:1/-1">Could not check that service right now. Please try again.<br><button type="button" class="btn-buy" id="verifyRetryBtn" style="margin-top:12px;width:auto">Try again</button></div>';
+    var retry=document.getElementById('verifyRetryBtn');
+    if(retry) retry.onclick=function(){verifyAnyService(q);};
+  }
+}
 function renderServices(){
   var q=String(document.getElementById('svcSearch').value||'').trim();
   var ql=q.toLowerCase();
