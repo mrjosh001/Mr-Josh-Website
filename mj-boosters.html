@@ -283,22 +283,9 @@ button,input{font:inherit}
 
 <div class="section-label">Platforms</div>
 <div class="platforms" id="platforms">
+  <!-- Filled from supplier catalog after load — only platforms with services -->
   <button class="plat active" data-p="all" title="All" onclick="selectPlatform('all')"><span class="plat-ico"><i class="fa-solid fa-border-all" style="color:#93c5fd"></i></span><span class="plat-name">All</span></button>
-  <button class="plat" data-p="instagram" title="Instagram" onclick="selectPlatform('instagram')"><span class="plat-ico"><img src="https://cdn.simpleicons.org/instagram/E4405F" alt="IG"></span><span class="plat-name">Instagram</span></button>
-  <button type="button" class="plat" data-p="tiktok" title="TikTok" onclick="selectPlatform('tiktok')"><span class="plat-ico"><img class="theme-mono-icon" data-icon="tiktok" src="https://cdn.simpleicons.org/tiktok/000000" alt="TT"></span><span class="plat-name">TikTok</span></button>
-  <button type="button" class="plat" data-p="x" title="X / Twitter" onclick="selectPlatform('x')"><span class="plat-ico"><img class="theme-mono-icon" data-icon="x" src="https://cdn.simpleicons.org/x/000000" alt="X"></span><span class="plat-name">X</span></button>
-  <button class="plat" data-p="youtube" title="YouTube" onclick="selectPlatform('youtube')"><span class="plat-ico"><img src="https://cdn.simpleicons.org/youtube/FF0000" alt="YT"></span><span class="plat-name">YouTube</span></button>
-  <button class="plat" data-p="facebook" title="Facebook" onclick="selectPlatform('facebook')"><span class="plat-ico"><img src="https://cdn.simpleicons.org/facebook/1877F2" alt="FB"></span><span class="plat-name">Facebook</span></button>
-  <button class="plat" data-p="telegram" title="Telegram" onclick="selectPlatform('telegram')"><span class="plat-ico"><img src="https://cdn.simpleicons.org/telegram/26A5E4" alt="TG"></span><span class="plat-name">Telegram</span></button>
-  <button class="plat" data-p="spotify" title="Spotify" onclick="selectPlatform('spotify')"><span class="plat-ico"><img src="https://cdn.simpleicons.org/spotify/1DB954" alt="SP"></span><span class="plat-name">Spotify</span></button>
-  <button class="plat" data-p="whatsapp" title="WhatsApp" onclick="selectPlatform('whatsapp')"><span class="plat-ico"><img src="https://cdn.simpleicons.org/whatsapp/25D366" alt="WA"></span><span class="plat-name">WhatsApp</span></button>
-  <button class="plat" data-p="snapchat" title="Snapchat" onclick="selectPlatform('snapchat')"><span class="plat-ico"><img src="https://cdn.simpleicons.org/snapchat/FFFC00" alt="SC"></span><span class="plat-name">Snapchat</span></button>
-  <button class="plat" data-p="google" title="Google" onclick="selectPlatform('google')"><span class="plat-ico"><img src="https://cdn.simpleicons.org/google/4285F4" alt="G"></span><span class="plat-name">Google</span></button>
-  <button class="plat" data-p="twitch" title="Twitch" onclick="selectPlatform('twitch')"><span class="plat-ico"><img src="https://cdn.simpleicons.org/twitch/9146FF" alt="TW"></span><span class="plat-name">Twitch</span></button>
-  <button class="plat" data-p="discord" title="Discord" onclick="selectPlatform('discord')"><span class="plat-ico"><img src="https://cdn.simpleicons.org/discord/5865F2" alt="DC"></span><span class="plat-name">Discord</span></button>
-  <button class="plat" data-p="linkedin" title="LinkedIn" onclick="selectPlatform('linkedin')"><span class="plat-ico"><img src="https://cdn.simpleicons.org/linkedin/0A66C2" alt="LI"></span><span class="plat-name">LinkedIn</span></button>
 </div>
-
 <div class="section-label" id="catLabel">Categories</div>
 <div class="tabs" id="cats"></div>
 <div class="hint" id="hint">Select a platform or category to browse services.</div>
@@ -407,6 +394,49 @@ const PLATFORM_KEYS = {
   discord: ['discord'],
   linkedin: ['linkedin']
 };
+
+/** Display order + icons — only shown if catalog has matching categories */
+const PLATFORM_META = [
+  { id: 'instagram', name: 'Instagram', icon: 'https://cdn.simpleicons.org/instagram/E4405F' },
+  { id: 'tiktok', name: 'TikTok', icon: 'https://cdn.simpleicons.org/tiktok/000000', mono: true },
+  { id: 'x', name: 'X', icon: 'https://cdn.simpleicons.org/x/000000', mono: true },
+  { id: 'youtube', name: 'YouTube', icon: 'https://cdn.simpleicons.org/youtube/FF0000' },
+  { id: 'facebook', name: 'Facebook', icon: 'https://cdn.simpleicons.org/facebook/1877F2' },
+  { id: 'telegram', name: 'Telegram', icon: 'https://cdn.simpleicons.org/telegram/26A5E4' },
+  { id: 'spotify', name: 'Spotify', icon: 'https://cdn.simpleicons.org/spotify/1DB954' },
+  { id: 'whatsapp', name: 'WhatsApp', icon: 'https://cdn.simpleicons.org/whatsapp/25D366' },
+  { id: 'snapchat', name: 'Snapchat', icon: 'https://cdn.simpleicons.org/snapchat/FFFC00' },
+  { id: 'google', name: 'Google', icon: 'https://cdn.simpleicons.org/google/4285F4' },
+  { id: 'twitch', name: 'Twitch', icon: 'https://cdn.simpleicons.org/twitch/9146FF' },
+  { id: 'discord', name: 'Discord', icon: 'https://cdn.simpleicons.org/discord/5865F2' },
+  { id: 'linkedin', name: 'LinkedIn', icon: 'https://cdn.simpleicons.org/linkedin/0A66C2' }
+];
+
+function platformHasServices(platformId) {
+  const keys = PLATFORM_KEYS[platformId];
+  if (!keys || !allCategories.length) return false;
+  return allCategories.some(c => matchesPlatform(c.name || '', platformId));
+}
+
+/** Rebuild platform chips from supplier catalog only */
+function renderPlatforms() {
+  const el = document.getElementById('platforms');
+  if (!el) return;
+  const available = PLATFORM_META.filter(p => platformHasServices(p.id));
+  let html = '<button type="button" class="plat' + (activePlatform === 'all' ? ' active' : '') + '" data-p="all" title="All" onclick="selectPlatform(\'all\')"><span class="plat-ico"><i class="fa-solid fa-border-all" style="color:#93c5fd"></i></span><span class="plat-name">All</span></button>';
+  for (const p of available) {
+    const mono = p.mono ? ' class="theme-mono-icon" data-icon="' + p.id + '"' : '';
+    const act = activePlatform === p.id ? ' active' : '';
+    html += '<button type="button" class="plat' + act + '" data-p="' + p.id + '" title="' + p.name + '" onclick="selectPlatform(\'' + p.id + '\')"><span class="plat-ico"><img' + mono + ' src="' + p.icon + '" alt="' + p.name + '"></span><span class="plat-name">' + p.name + '</span></button>';
+  }
+  el.innerHTML = html;
+  if (typeof syncThemeUi === 'function') syncThemeUi();
+  // If current filter has no services, fall back to All
+  if (activePlatform !== 'all' && !available.some(p => p.id === activePlatform)) {
+    activePlatform = 'all';
+    el.querySelector('[data-p="all"]')?.classList.add('active');
+  }
+}
 
 let session=null, balance=0, page=1, selected=null;
 const serviceMap = new Map();
@@ -603,6 +633,7 @@ async function loadCatalog(){
     return;
   }
   allCategories = data.categories || [];
+  renderPlatforms();
   selectPlatform('all');
 }
 
@@ -634,6 +665,7 @@ async function loadServices(){
   }
   if(data.mode==='categories'){
     allCategories=data.categories||[];
+    renderPlatforms();
     showCategoryCards(filteredCategories());
     return;
   }
