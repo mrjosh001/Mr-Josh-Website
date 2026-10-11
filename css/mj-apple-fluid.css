@@ -1,4 +1,4 @@
-/* MJ Hub – Apple-style fluid layer (v3 – sheets)
+/* MJ Hub – Apple-style fluid layer (v4 – bottom nav)
    Blue/white brand preserved. Safe to load after existing styles.
    Additive only — does not break layout, auth, wallet, or API flows.
 */
@@ -26,12 +26,15 @@
 button:not(:disabled):not([disabled]),
 a.btn,
 .btn-primary,
-.btn-ghost {
+.btn-ghost,
+.nav-item,
+.bottom-nav-item {
   transition:
     transform 100ms var(--mj-spring),
     box-shadow 160ms var(--mj-spring),
     background 160ms ease,
-    filter 160ms ease !important;
+    filter 160ms ease,
+    color 160ms ease !important;
   will-change: transform;
 }
 
@@ -44,7 +47,9 @@ a.btn,
 button:not(:disabled):active,
 a.btn:active,
 .btn-primary:active,
-.btn-ghost:active {
+.btn-ghost:active,
+.nav-item:active,
+.bottom-nav-item:active {
   transform: scale(var(--mj-press)) !important;
   filter: brightness(0.97);
 }
@@ -82,7 +87,8 @@ main:active,
 /* ========== Translucent materials ========== */
 .header,
 .navbar,
-.toolbar {
+.toolbar,
+.bottom-nav {
   backdrop-filter: blur(24px) saturate(180%) !important;
   -webkit-backdrop-filter: blur(24px) saturate(180%) !important;
 }
@@ -99,6 +105,38 @@ html:not([data-theme="dark"]) .navbar {
 [data-theme="dark"] .navbar {
   background: rgba(11, 15, 25, 0.78) !important;
   border-bottom: 1px solid rgba(255, 255, 255, 0.1) !important;
+}
+
+/* ========== Bottom nav (iOS-style) ========== */
+.bottom-nav {
+  background: rgba(255, 255, 255, 0.82) !important;
+  border-top: 1px solid rgba(15, 23, 42, 0.08) !important;
+  box-shadow: 0 -4px 24px rgba(15, 23, 42, 0.06) !important;
+}
+
+[data-theme="dark"] .bottom-nav {
+  background: rgba(11, 15, 25, 0.82) !important;
+  border-top: 1px solid rgba(255, 255, 255, 0.1) !important;
+  box-shadow: 0 -4px 24px rgba(0, 0, 0, 0.35) !important;
+}
+
+.bottom-nav .nav-item,
+.bottom-nav-item {
+  border-radius: 12px !important;
+  transition:
+    transform 100ms var(--mj-spring),
+    color 160ms ease,
+    background 160ms ease !important;
+}
+
+.bottom-nav .nav-item.active,
+.bottom-nav-item.active {
+  color: var(--mj-blue) !important;
+}
+
+.bottom-nav .nav-item:active,
+.bottom-nav-item:active {
+  transform: scale(0.92) !important;
 }
 
 /* ========== Cards ========== */
@@ -142,7 +180,7 @@ body {
   -moz-osx-font-smoothing: grayscale;
 }
 
-/* ========== Sheets / modals – stronger physical feel ========== */
+/* ========== Sheets / modals ========== */
 .sheet,
 .modal,
 .mobile-menu .kinetic-panel,
@@ -159,7 +197,6 @@ body {
   will-change: transform, opacity;
 }
 
-/* Backdrop that fades with the sheet */
 .kinetic-overlay,
 .overlay,
 .modal-backdrop,
@@ -168,7 +205,6 @@ body {
   transition: opacity 280ms ease !important;
 }
 
-/* Rounded top corners + soft shadow for bottom sheets */
 .purchase-sheet,
 .bottom-sheet,
 .modal-sheet,
@@ -184,7 +220,6 @@ body {
   box-shadow: 0 -8px 40px rgba(0, 0, 0, 0.45) !important;
 }
 
-/* Mobile menu panel – smoother slide */
 .mobile-menu .kinetic-panel,
 .kinetic-panel {
   transition: transform 360ms var(--mj-spring-soft) !important;
@@ -214,7 +249,9 @@ textarea:focus-visible {
   button:active,
   a.btn:active,
   .btn-primary:active,
-  .primary-btn:active {
+  .primary-btn:active,
+  .nav-item:active,
+  .bottom-nav-item:active {
     transform: none !important;
     filter: none !important;
   }
