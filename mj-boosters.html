@@ -348,7 +348,7 @@ button,input{font:inherit}
         <textarea id="mCustomField" rows="4" placeholder="" autocomplete="off"></textarea>
         <div class="hint-text" id="mCustomFieldHint"></div>
       </div>
-      <div class="field">
+      <div class="field" id="mQuantityField">
         <label>Quantity</label>
         <div class="qty-row">
           <button type="button" class="qty-step" onclick="qtyStep(-100)" aria-label="Decrease">−</button>
@@ -737,7 +737,7 @@ function shortServiceTitle(name){
 function customFieldForService(s){
   const descriptor = (String(s.service_type || '') + ' ' + String(s.name || '')).toLowerCase();
   if (/custom.?comments?|comments?.?custom/.test(descriptor) || (/\bcustom\b/.test(descriptor) && /comment/.test(descriptor))) {
-    return {key:'comments',label:'Custom comments',placeholder:'Enter one comment per line. Each line is sent as a separate comment.',hint:'Use one comment per line. JAP receives this as the comments field.',multiline:true};
+    return {key:'comments',label:'Custom comments',placeholder:'Enter one comment per line. Each line is sent as a separate comment.',hint:'Use one comment per line. JAP receives this as the comments field. The number of non-empty lines is your order quantity.',multiline:true,countLines:true};
   }
   if (/custom list mentions|custom usernames|usernames list/.test(descriptor)) {
     return {key:'usernames',label:'Usernames',placeholder:'Enter one username per line.',hint:'Enter each username on a separate line.',multiline:true};
@@ -823,6 +823,8 @@ function openOrder(s){
     document.getElementById('mCustomFieldLabel').textContent = custom ? custom.label : 'Service details';
     document.getElementById('mCustomFieldHint').textContent = custom ? custom.hint : '';
   }
+  const quantityField = document.getElementById('mQuantityField');
+  if (quantityField) quantityField.style.display = custom && custom.countLines ? 'none' : 'block';
   document.getElementById('mQty').value = min;
   document.getElementById('mQty').min = min;
   document.getElementById('mQty').max = max;
@@ -839,11 +841,19 @@ function closeModal(){
 
 function updateTotal(){
   if (!selected) return;
-  let qty = Math.max(1, parseInt(document.getElementById('mQty').value, 10) || 0);
-  const min = effectiveMin(selected);
-  if (qty < min) qty = min;
-  const total = Math.ceil((Number(selected.price_ngn) || 0) / 1000 * qty);
+  const custom = customFieldForService(selected);
+  let qty;
+  if (custom && custom.countLines) {
+    qty = String(document.getElementById('mCustomField').value || '').split(/\r?\n/).map(function(line){return line.trim();}).filter(Boolean).length;
+  } else {
+    qty = Math.max(1, parseInt(document.getElementById('mQty').value, 10) || 0);
+    const min = effectiveMin(selected);
+    if (qty < min) qty = min;
+  }
+  const total = qty > 0 ? Math.max(200, Math.ceil((Number(selected.price_ngn) || 0) / 1000 * qty)) : 0;
   document.getElementById('mTotal').textContent = fmt(total);
+  const minMax = document.getElementById('mMinMax');
+  if (custom && custom.countLines && minMax) minMax.textContent = qty + ' custom comment' + (qty === 1 ? '' : 's');
 }
 
 function qtyStep(delta){
@@ -886,6 +896,16 @@ async function pasteLink(){
 }
 
 document.getElementById('mQty').addEventListener('input', updateTotal);
+document.getElementById('mCustomField').addEventListener('input', function(){
+  if (!selected) return;
+  const custom = customFieldForService(selected);
+  if (custom && custom.countLines) {
+    const qty = String(this.value || '').split(/\r?\n/).map(function(line){return line.trim();}).filter(Boolean).length;
+    const minMax = document.getElementById('mMinMax');
+    if (minMax) minMax.textContent = qty + ' custom comment' + (qty === 1 ? '' : 's');
+  }
+  updateTotal();
+});
 document.getElementById('mQty').addEventListener('change', () => {
   if (!selected) return;
   const min = effectiveMin(selected);
@@ -900,22 +920,29 @@ document.getElementById('mQty').addEventListener('change', () => {
 async function placeOrder(){
   if (!selected) return;
   const link = document.getElementById('mLink').value.trim();
-  let quantity = parseInt(document.getElementById('mQty').value, 10) || 0;
-  const min = effectiveMin(selected);
+  const custom = customFieldForService(selected);
+  const customValue = custom ? document.getElementById('mCustomField').value.trim() : '';
+  let quantity = custom && custom.countLines
+    ? customValue.split(/\r?\n/).map(function(line){return line.trim();}).filter(Boolean).length
+    : (parseInt(document.getElementById('mQty').value, 10) || 0);
+  const min = custom && custom.countLines ? Math.max(1, Number(selected.min_quantity) || 1) : effectiveMin(selected);
+  if (custom && !customValue) {
+    toast('Enter ' + custom.label.toLowerCase() + ' first');
+    document.getElementById('mCustomField').focus();
+    return;
+  }
   if (quantity < min) {
+    if (custom && custom.countLines) {
+      toast('Enter at least ' + min + ' non-empty comments');
+      document.getElementById('mCustomField').focus();
+      return;
+    }
     quantity = min;
     document.getElementById('mQty').value = min;
   }
   if (!link) {
     toast('Paste the link first');
     document.getElementById('mLink').focus();
-    return;
-  }
-  const custom = customFieldForService(selected);
-  const customValue = custom ? document.getElementById('mCustomField').value.trim() : '';
-  if (custom && !customValue) {
-    toast('Enter ' + custom.label.toLowerCase() + ' first');
-    document.getElementById('mCustomField').focus();
     return;
   }
   const orderPayload = { service_id: selected.service_id, link, quantity };
