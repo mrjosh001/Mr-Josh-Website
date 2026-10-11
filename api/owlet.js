@@ -697,7 +697,7 @@ function japCustomFieldSpec(type) {
 }
 
 function japCustomLines(value) {
-  return String(value || '').split(/\\r?\\n/).map((line) => line.trim()).filter(Boolean);
+  return String(value || '').split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
 }
 
 async function handleOrder(req, res) {
