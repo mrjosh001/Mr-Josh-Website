@@ -667,6 +667,33 @@ async function resolveOwletServiceId(storedId, name) {
   return id;
 }
 
+
+function japCustomFieldForService(service) {
+  const descriptor = (String(service?.service_type || '') + ' ' + String(service?.name || '')).toLowerCase();
+  if (/custom.?comments?|comments?.?custom|comment replies/.test(descriptor) || /\bcustom\b/.test(descriptor) && /comment/.test(descriptor)) {
+    return { key: 'comments', label: 'Custom comments', placeholder: 'Enter one comment per line. Each line is sent as a separate comment.', multiline: true };
+  }
+  if (/custom list mentions|custom usernames|usernames list/.test(descriptor)) {
+    return { key: 'usernames', label: 'Usernames', placeholder: 'Enter one username per line.', multiline: true };
+  }
+  if (/mentions with hashtags|hashtags list/.test(descriptor)) {
+    return { key: 'hashtags', label: 'Hashtags', placeholder: 'Enter one hashtag per line.', multiline: true };
+  }
+  if (/\bkeywords?\b/.test(descriptor)) {
+    return { key: 'keywords', label: 'Keywords', placeholder: 'Enter one keyword per line.', multiline: true };
+  }
+  if (/mentions? hashtag|hashtag to scrape|hashtag service/.test(descriptor)) {
+    return { key: 'hashtag', label: 'Hashtag', placeholder: 'Enter the hashtag to use (without or with #).', multiline: false };
+  }
+  if (/media likers|likers from media/.test(descriptor)) {
+    return { key: 'media', label: 'Media URL', placeholder: 'Paste the media URL to scrape likers from.', multiline: false };
+  }
+  if (/poll comment replies|poll replies|answer number/.test(descriptor)) {
+    return { key: 'answer_number', label: 'Poll answer number', placeholder: 'Enter the answer number.', multiline: false, inputType: 'number' };
+  }
+  return null;
+}
+
 async function handleOrder(req, res) {
   const body = typeof req.body === 'string' ? (() => { try { return JSON.parse(req.body || '{}'); } catch { return {}; } })() : (req.body || {});
   const serviceId = String(body.service_id || body.service || '').trim();
@@ -696,6 +723,21 @@ async function handleOrder(req, res) {
   }
   if (service.is_available === false) {
     return res.status(400).json({ success: false, message: 'This service is temporarily unavailable' });
+  }
+
+  const customField = japCustomFieldForService(service);
+  const customValue = customField ? String(body[customField.key] || '').trim() : '';
+  if (customField && !customValue) {
+    return res.status(400).json({
+      success: false,
+      message: customField.key === 'comments'
+        ? 'Enter the custom comments before placing this order.'
+        : 'Enter ' + customField.label.toLowerCase() + ' before placing this order.',
+      required_field: customField.key
+    });
+  }
+  if (customField && customField.key === 'answer_number' && !/^\\d+$/.test(customValue)) {
+    return res.status(400).json({ success: false, message: 'Enter a valid poll answer number.', required_field: customField.key });
   }
 
   // Site rule: never sell below 300 units. Supplier min wins if higher.
@@ -792,12 +834,15 @@ async function handleOrder(req, res) {
 
   // Place order with JAP — resolve live service id if catalog is stale
   const liveServiceId = await resolveOwletServiceId(serviceId, service.name);
-  const { ok, status, json } = await owletCall({
+  const supplierPayload = {
     action: 'add',
     service: liveServiceId,
     link,
     quantity: String(quantity)
-  });
+  };
+  // JAP's API requires the service-specific parameter name, not a generic "message" field.
+  if (customField && customValue) supplierPayload[customField.key] = customValue;
+  const { ok, status, json } = await owletCall(supplierPayload);
 
   if (!ok || json?.error || !json?.order) {
     await restoreWallet();
