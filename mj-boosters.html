@@ -733,7 +733,7 @@ function shortServiceTitle(name){
 function customFieldsForService(s){
   const descriptor=(String(s.service_type||'')+' '+String(s.name||'')).toLowerCase(),fields=[];
   const add=(key,label,placeholder,hint,opts={})=>fields.push({key,label,placeholder,hint,multiline:!!opts.multiline,countLines:!!opts.countLines,inputType:opts.inputType||'text',required:opts.required!==false});
-  if(/subscription/.test(descriptor)){add('username','Username','Enter the account username.','Enter the username for this subscription.');add('min','Minimum quantity','e.g. 100','Minimum actions per cycle.',{inputType:'number'});add('max','Maximum quantity','e.g. 500','Maximum actions per cycle.',{inputType:'number'});add('posts','Posts per cycle','e.g. 1','Number of posts to process per cycle.',{inputType:'number'});add('delay','Delay between cycles (hours)','e.g. 24','Delay required by this service.',{inputType:'number'});add('expiry','Expiry date (optional)','YYYY-MM-DD','Leave blank if no expiry is required.',{required:false});}
+  if(/subscription|comment likes|likes.*comments?/.test(descriptor)){add('username','Username','Enter the account username.','Enter the username for this subscription.');add('min','Minimum quantity','e.g. 100','Minimum actions per cycle.',{inputType:'number'});add('max','Maximum quantity','e.g. 500','Maximum actions per cycle.',{inputType:'number'});add('posts','Posts per cycle','e.g. 1','Number of posts to process per cycle.',{inputType:'number'});add('delay','Delay between cycles (hours)','e.g. 24','Delay required by this service.',{inputType:'number'});add('expiry','Expiry date (optional)','YYYY-MM-DD','Leave blank if no expiry is required.',{required:false});}
   if(/drip.?feed/.test(descriptor)){add('runs','Runs','Number of runs','How many times the order should repeat.',{inputType:'number'});add('interval','Interval (minutes)','Minutes between runs','Time between each run.',{inputType:'number'});}
   if(/custom.?comments?|comments?.?custom/.test(descriptor)||(/\bcustom\b/.test(descriptor)&&/comment/.test(descriptor)))add('comments','Comments','Enter one comment per line.','Each non-empty line counts as one comment.',{multiline:true,countLines:true});
   if(/custom list mentions|custom usernames|usernames list/.test(descriptor))add('usernames','Usernames','Enter one username per line.','Enter each username on a separate line.',{multiline:true});
@@ -815,6 +815,7 @@ function openOrder(s){
   const quantityInput=document.getElementById('mQty');
   quantityInput.readOnly=!!commentField;
   quantityInput.setAttribute('aria-label',commentField?'Comment count, calculated from non-empty lines':'Quantity');
+  document.querySelectorAll('#mQuantityField .qty-step, #mQuantityField .qty-chips').forEach(function(el){el.style.display=commentField?'none':'';});
   const quantityField = document.getElementById('mQuantityField');
   if (quantityField) quantityField.style.display = 'block';
   document.getElementById('mQty').value = min;
@@ -844,11 +845,12 @@ function updateTotal(){
     const minMax=document.getElementById('mMinMax');if(minMax)minMax.textContent=qty+' comment'+(qty===1?'':'s');
   }else{qty=Math.max(1,parseInt(document.getElementById('mQty').value,10)||0);const min=effectiveMin(selected);if(qty<min)qty=min;}
   const perUnit=Math.max(200,Math.ceil((Number(selected.price_ngn)||0)/1000));
-  const total=qty>0?(commentField?perUnit*qty:Math.max(200,Math.ceil((Number(selected.price_ngn||0)/1000)*qty))):0;
+  const runs=Math.max(1,parseInt(customFieldValue('runs'),10)||1);
+  const total=qty>0?(commentField?perUnit*qty:Math.max(200,Math.ceil((Number(selected.price_ngn||0)/1000)*qty*runs))):0;
   document.getElementById('mTotal').textContent=fmt(total);
 }
 function qtyStep(delta){
-  if (!selected) return;
+  if (!selected || document.getElementById('mQty').readOnly) return;
   const input = document.getElementById('mQty');
   let qty = parseInt(input.value, 10) || 0;
   const min = effectiveMin(selected);
@@ -858,7 +860,7 @@ function qtyStep(delta){
   updateTotal();
 }
 function qtyChip(add){
-  if (!selected) return;
+  if (!selected || document.getElementById('mQty').readOnly) return;
   const input = document.getElementById('mQty');
   let qty = parseInt(input.value, 10) || 0;
   const min = effectiveMin(selected);
