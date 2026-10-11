@@ -342,6 +342,11 @@ button,input{font:inherit}
         </div>
         <div class="hint-text">Public profile, post, reel, video or channel URL only</div>
       </div>
+      <div class="field" id="mCustomField" style="display:none">
+        <label id="mCustomLabel" for="mCustomValue">Custom input</label>
+        <textarea id="mCustomValue" rows="5" maxlength="20000" placeholder="Enter the required custom details, one per line" style="width:100%;box-sizing:border-box;resize:vertical;padding:12px;border:1px solid var(--border,#ddd);border-radius:12px;font:inherit;min-height:110px"></textarea>
+        <div class="hint-text" id="mCustomHint">Enter the exact custom details required by this service.</div>
+      </div>
       <div class="field">
         <label>Quantity</label>
         <div class="qty-row">
@@ -504,11 +509,31 @@ let activeCategory='';
 function toast(msg, ms=3200){const t=document.getElementById('toast');t.textContent=msg;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),ms)}
 function esc(s){return String(s||'').replace(/[&<>"']/g,c=>({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]))}
 function fmt(n){return '₦'+Number(n||0).toLocaleString()}
+function customFieldSpec(type){
+  const t=String(type||'').trim().toLowerCase();
+  if(/custom comments?|comments package|comment replies/.test(t)) return {key:'comments',label:'Custom comments',placeholder:'Enter one comment per line',lineBased:true};
+  if(/custom list mentions|custom usernames|username list/.test(t)) return {key:'usernames',label:'Usernames',placeholder:'Enter one username per line',lineBased:true};
+  if(/mentions with hashtags|hashtags list/.test(t)) return {key:'hashtags',label:'Hashtags',placeholder:'Enter one hashtag per line',lineBased:true};
+  if(/groups mentions|groups list/.test(t)) return {key:'groups',label:'Groups',placeholder:'Enter one group per line',lineBased:true};
+  if(/custom keywords|keywords list/.test(t)) return {key:'keywords',label:'Keywords',placeholder:'Enter one keyword per line',lineBased:true};
+  if(/custom hashtag|mentions hashtag/.test(t)) return {key:'hashtag',label:'Hashtag',placeholder:'Enter the hashtag',lineBased:false};
+  if(/custom username|username required|mentions user followers/.test(t)) return {key:'username',label:'Username',placeholder:'Enter the username or profile URL',lineBased:false};
+  if(/custom/.test(t)) return {key:'comments',label:'Custom message',placeholder:'Enter the required custom text',lineBased:true};
+  return null;
+}
+function customInputValue(){
+  const el=document.getElementById('mCustomValue');
+  return el?String(el.value||'').trim():'';
+}
+function customInputLines(value){
+  return String(value||'').split(/\\r?\\n/).map(function(line){return line.trim();}).filter(Boolean);
+}
 function effectiveMin(s){
   const supplierMin = Number(s?.min_quantity)||1;
   let maxQ = Number(s?.max_quantity)||1000000;
   if (maxQ < 1) maxQ = 1000000;
-  let minQ = Math.max(SITE_MIN, supplierMin);
+  const spec=customFieldSpec(s?.service_type||s?.type||'');
+  let minQ = spec ? supplierMin : Math.max(SITE_MIN, supplierMin);
   if (minQ > maxQ) minQ = maxQ;
   return minQ;
 }
@@ -783,6 +808,17 @@ function openOrder(s){
   document.getElementById('mQty').min = min;
   document.getElementById('mQty').max = max;
   document.getElementById('mLink').value = '';
+  const spec=customFieldSpec(s.service_type||s.type||'');
+  const customWrap=document.getElementById('mCustomField');
+  const customInput=document.getElementById('mCustomValue');
+  const qtyInput=document.getElementById('mQty');
+  if(customWrap) customWrap.style.display=spec?'block':'none';
+  if(customInput){customInput.value='';customInput.placeholder=spec?spec.placeholder:'Enter custom details';}
+  const customLabel=document.getElementById('mCustomLabel');
+  if(customLabel) customLabel.textContent=spec?spec.label:'Custom input';
+  const customHint=document.getElementById('mCustomHint');
+  if(customHint) customHint.textContent=spec?(spec.lineBased?'Enter one item per line. Quantity and price are calculated from the number of non-empty lines.':'Enter the required value for this service.'):'';
+  if(qtyInput) qtyInput.disabled=!!(spec&&spec.lineBased);
   updateTotal();
   document.getElementById('modalBg').classList.add('open');
   setTimeout(function(){ document.getElementById('mLink').focus(); }, 180);
@@ -795,9 +831,17 @@ function closeModal(){
 
 function updateTotal(){
   if (!selected) return;
-  let qty = Math.max(1, parseInt(document.getElementById('mQty').value, 10) || 0);
-  const min = effectiveMin(selected);
-  if (qty < min) qty = min;
+  const spec=customFieldSpec(selected.service_type||selected.type||'');
+  const qtyInput=document.getElementById('mQty');
+  let qty = Math.max(0, parseInt(qtyInput.value, 10) || 0);
+  if(spec&&spec.lineBased){
+    qty=customInputLines(customInputValue()).length;
+    qtyInput.value=String(qty);
+  }else{
+    const min = effectiveMin(selected);
+    if (qty < min) qty = min;
+    qtyInput.value=String(qty);
+  }
   const total = Math.ceil((Number(selected.price_ngn) || 0) / 1000 * qty);
   document.getElementById('mTotal').textContent = fmt(total);
 }
@@ -842,6 +886,7 @@ async function pasteLink(){
 }
 
 document.getElementById('mQty').addEventListener('input', updateTotal);
+document.getElementById('mCustomValue').addEventListener('input', updateTotal);
 document.getElementById('mQty').addEventListener('change', () => {
   if (!selected) return;
   const min = effectiveMin(selected);
@@ -858,9 +903,21 @@ async function placeOrder(){
   const link = document.getElementById('mLink').value.trim();
   let quantity = parseInt(document.getElementById('mQty').value, 10) || 0;
   const min = effectiveMin(selected);
-  if (quantity < min) {
+  const spec=customFieldSpec(selected.service_type||selected.type||'');
+  const customValue=customInputValue();
+  if(spec && !customValue){
+    toast('Enter '+spec.label.toLowerCase()+' for this service');
+    document.getElementById('mCustomValue').focus();
+    return;
+  }
+  if(spec&&spec.lineBased) quantity=customInputLines(customValue).length;
+  else if (quantity < min) {
     quantity = min;
     document.getElementById('mQty').value = min;
+  }
+  if(quantity < min){
+    toast('This service requires at least '+min.toLocaleString()+(spec&&spec.lineBased?' non-empty lines':' units'));
+    return;
   }
   if (!link) {
     toast('Paste the link first');
@@ -875,7 +932,7 @@ async function placeOrder(){
     const res = await fetch('/api/owlet?action=order', {
       method: 'POST',
       headers,
-      body: JSON.stringify({ service_id: selected.service_id, link, quantity })
+      body: JSON.stringify({ service_id: selected.service_id, link, quantity, ...(spec ? { custom_value: customValue } : {}) })
     });
     const data = await res.json();
     if (!data.success) {
