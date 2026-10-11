@@ -255,6 +255,12 @@ function gotsmsSellPriceNgn(supplierUsd) {
 /** Strict wallet debit result — fail closed (never call supplier if unclear). */
 function isDebitOk(debited, debErr) {
   if (debErr) return false;
+  // Postgres RPCs that return SETOF/table rows arrive from supabase-js as arrays.
+  // The debit may already have happened even when the caller rejects that shape.
+  if (Array.isArray(debited)) {
+    if (debited.length !== 1 || debited[0] == null) return false;
+    return isDebitOk(debited[0], null);
+  }
   if (debited === true || debited === 1) return true;
   if (debited === false || debited === 0 || debited == null) return false;
   if (typeof debited === 'object') {
