@@ -733,7 +733,8 @@ function shortServiceTitle(name){
 function customFieldsForService(s){
   const descriptor=(String(s.service_type||'')+' '+String(s.name||'')).toLowerCase(),fields=[];
   const add=(key,label,placeholder,hint,opts={})=>fields.push({key,label,placeholder,hint,multiline:!!opts.multiline,countLines:!!opts.countLines,inputType:opts.inputType||'text',required:opts.required!==false});
-  if(/subscription|comment likes|likes.*comments?/.test(descriptor)){add('username','Username','Enter the account username.','Enter the username for this subscription.');add('min','Minimum quantity','e.g. 100','Minimum actions per cycle.',{inputType:'number'});add('max','Maximum quantity','e.g. 500','Maximum actions per cycle.',{inputType:'number'});add('posts','Posts per cycle','e.g. 1','Number of posts to process per cycle.',{inputType:'number'});add('delay','Delay between cycles (hours)','e.g. 24','Delay required by this service.',{inputType:'number'});add('expiry','Expiry date (optional)','YYYY-MM-DD','Leave blank if no expiry is required.',{required:false});}
+  if(/subscription/.test(descriptor)){add('username','Username','Enter the account username.','Enter the username for this subscription.');add('min','Minimum quantity','e.g. 100','Minimum actions per cycle.',{inputType:'number'});add('max','Maximum quantity','e.g. 500','Maximum actions per cycle.',{inputType:'number'});add('posts','Posts per cycle','e.g. 1','Number of posts to process per cycle.',{inputType:'number'});add('delay','Delay between cycles (hours)','e.g. 24','Delay required by this service.',{inputType:'number'});add('expiry','Expiry date (optional)','YYYY-MM-DD','Leave blank if no expiry is required.',{required:false});}
+  if(/comment likes|likes.*comments?/.test(descriptor))add('username','Username','Enter the account username.','Enter the username required by this service.');
   if(/drip.?feed/.test(descriptor)){add('runs','Runs','Number of runs','How many times the order should repeat.',{inputType:'number'});add('interval','Interval (minutes)','Minutes between runs','Time between each run.',{inputType:'number'});}
   if(/custom.?comments?|comments?.?custom/.test(descriptor)||(/\bcustom\b/.test(descriptor)&&/comment/.test(descriptor)))add('comments','Comments','Enter one comment per line.','Each non-empty line counts as one comment.',{multiline:true,countLines:true});
   if(/custom list mentions|custom usernames|usernames list/.test(descriptor))add('usernames','Usernames','Enter one username per line.','Enter each username on a separate line.',{multiline:true});
@@ -826,7 +827,7 @@ function openOrder(s){
   if(linkField)linkField.style.display=usesUsernameInsteadOfLink(s)?'none':'block';
   updateTotal();
   document.getElementById('modalBg').classList.add('open');
-  setTimeout(function(){ document.getElementById('mLink').focus(); }, 180);
+  setTimeout(function(){ const target=usesUsernameInsteadOfLink(s)?document.querySelector('[data-custom-key="username"]'):document.getElementById('mLink');if(target)target.focus(); }, 180);
 }
 
 function closeModal(){
