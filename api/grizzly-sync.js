@@ -985,25 +985,46 @@ async function claimAndRefundOrder(order, userId, opts = {}) {
       p_user_id: userId,
       p_amount: refundAmount
     });
+
     if (credErr) {
-      console.error('[claimAndRefundOrder] credit_balance', credErr.message);
-      const { data: profile, error: profErr } = await supabase
-        .from('profiles')
-        .select('balance')
-        .eq('id', userId)
-        .single();
-      if (!profErr && profile) {
-        newBalance = Number(profile.balance || 0) + refundAmount;
-        const { error: balErr } = await supabase
-          .from('profiles')
-          .update({ balance: newBalance })
-          .eq('id', userId);
-        if (balErr) console.error('[claimAndRefundOrder] balance credit failed', balErr);
+      // Never leave an order marked refunded when the wallet credit failed.
+      // The refund must remain retryable. Avoid a read-then-write balance fallback:
+      // it can overwrite concurrent wallet changes and cannot guarantee idempotency.
+      console.error('[claimAndRefundOrder] credit_balance failed; releasing refund claim', {
+        order_id: order.id,
+        user_id: userId,
+        amount: refundAmount,
+        error: credErr.message
+      });
+      const { error: releaseErr } = await supabase
+        .from('number_orders')
+        .update({
+          status: order.status || 'waiting_for_code',
+          refunded: false,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', order.id)
+        .eq('refunded', true);
+      if (releaseErr) {
+        console.error('[claimAndRefundOrder] failed to release refund claim', {
+          order_id: order.id,
+          error: releaseErr.message
+        });
       }
-    } else if (credited != null && typeof credited === 'object' && credited.new_balance != null) {
-      newBalance = Number(credited.new_balance);
-    } else if (typeof credited === 'number') {
-      newBalance = credited;
+      return {
+        refunded: false,
+        reason: 'credit_error',
+        error: credErr.message,
+        retryable: !releaseErr
+      };
+    }
+
+    // credit_balance returns TABLE(new_balance), which Supabase normally exposes as an array.
+    const balanceRow = Array.isArray(credited) ? credited[0] : credited;
+    if (balanceRow && balanceRow.new_balance != null) {
+      newBalance = Number(balanceRow.new_balance);
+    } else if (typeof balanceRow === 'number') {
+      newBalance = balanceRow;
     }
   }
 
