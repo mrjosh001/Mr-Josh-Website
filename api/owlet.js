@@ -743,7 +743,7 @@ async function handleOrder(req, res) {
       return res.status(400).json({ success: false, message: 'Enter at least one non-empty comment.', required_field: 'comments' });
     }
   }
-  if (customField && customField.key === 'answer_number' && !/^d+$/.test(customValue)) {
+  if (customField && customField.key === 'answer_number' && !/^\d+$/.test(customValue)) {
     return res.status(400).json({ success: false, message: 'Enter a valid poll answer number.', required_field: customField.key });
   }
 
