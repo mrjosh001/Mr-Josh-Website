@@ -736,7 +736,7 @@ function shortServiceTitle(name){
 }
 function customFieldForService(s){
   const descriptor = (String(s.service_type || '') + ' ' + String(s.name || '')).toLowerCase();
-  if (/custom.?comments?|comments?.?custom|comment replies/.test(descriptor) || (/\bcustom\b/.test(descriptor) && /comment/.test(descriptor))) {
+  if (/custom.?comments?|comments?.?custom/.test(descriptor) || (/\bcustom\b/.test(descriptor) && /comment/.test(descriptor))) {
     return {key:'comments',label:'Custom comments',placeholder:'Enter one comment per line. Each line is sent as a separate comment.',hint:'Use one comment per line. JAP receives this as the comments field.',multiline:true};
   }
   if (/custom list mentions|custom usernames|usernames list/.test(descriptor)) {
