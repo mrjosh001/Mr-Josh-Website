@@ -769,7 +769,11 @@ async function handleOrder(req, res) {
   if (ratePer1k <= 0) {
     return res.status(400).json({ success: false, message: 'Service price not configured' });
   }
-  const totalNgn = Math.max(MIN_SELL_PRICE_NGN, Math.ceil((ratePer1k / 1000) * quantity));
+  const isCustomCommentsOrder = !!(customField && customField.key === 'comments');
+  const perUnitNgn = Math.max(MIN_SELL_PRICE_NGN, Math.ceil(ratePer1k / 1000));
+  const totalNgn = isCustomCommentsOrder
+    ? perUnitNgn * quantity
+    : Math.max(MIN_SELL_PRICE_NGN, Math.ceil((ratePer1k / 1000) * quantity));
   if (totalNgn < 1) {
     return res.status(400).json({ success: false, message: 'Order total too low' });
   }

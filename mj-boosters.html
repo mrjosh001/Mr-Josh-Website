@@ -737,7 +737,7 @@ function shortServiceTitle(name){
 function customFieldForService(s){
   const descriptor = (String(s.service_type || '') + ' ' + String(s.name || '')).toLowerCase();
   if (/custom.?comments?|comments?.?custom/.test(descriptor) || (/\bcustom\b/.test(descriptor) && /comment/.test(descriptor))) {
-    return {key:'comments',label:'Custom comments',placeholder:'Enter one comment per line. Each line is sent as a separate comment.',hint:'Use one comment per line. JAP receives this as the comments field. The number of non-empty lines is your order quantity.',multiline:true,countLines:true};
+    return {key:'comments',label:'Custom comments',placeholder:'Enter one comment per line. Each line is sent as a separate comment.',hint:'Enter one comment per line.',multiline:true,countLines:true};
   }
   if (/custom list mentions|custom usernames|usernames list/.test(descriptor)) {
     return {key:'usernames',label:'Usernames',placeholder:'Enter one username per line.',hint:'Enter each username on a separate line.',multiline:true};
@@ -850,7 +850,10 @@ function updateTotal(){
     const min = effectiveMin(selected);
     if (qty < min) qty = min;
   }
-  const total = qty > 0 ? Math.max(200, Math.ceil((Number(selected.price_ngn) || 0) / 1000 * qty)) : 0;
+  const perUnit = Math.max(200, Math.ceil((Number(selected.price_ngn) || 0) / 1000));
+  const total = qty > 0
+    ? (custom && custom.countLines ? perUnit * qty : Math.max(200, Math.ceil((Number(selected.price_ngn) || 0) / 1000 * qty)))
+    : 0;
   document.getElementById('mTotal').textContent = fmt(total);
   const minMax = document.getElementById('mMinMax');
   if (custom && custom.countLines && minMax) minMax.textContent = qty + ' custom comment' + (qty === 1 ? '' : 's');
