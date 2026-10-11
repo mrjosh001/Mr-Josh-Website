@@ -1,4 +1,4 @@
-/* MJ Hub – Apple-style fluid layer (v2 – stronger)
+/* MJ Hub – Apple-style fluid layer (v3 – sheets)
    Blue/white brand preserved. Safe to load after existing styles.
    Additive only — does not break layout, auth, wallet, or API flows.
 */
@@ -10,10 +10,11 @@
   --mj-radius: 16px;
   --mj-radius-lg: 22px;
   --mj-spring: cubic-bezier(0.32, 0.72, 0, 1);
+  --mj-spring-soft: cubic-bezier(0.22, 1, 0.36, 1);
   --mj-press: 0.96;
 }
 
-/* ========== Instant press feedback (more noticeable) ========== */
+/* ========== Instant press feedback ========== */
 .btn,
 .primary-btn,
 .secondary-btn,
@@ -48,7 +49,6 @@ a.btn:active,
   filter: brightness(0.97);
 }
 
-/* Never scale structural chrome */
 .navbar:active,
 .header:active,
 .bottom-nav:active,
@@ -61,7 +61,7 @@ main:active,
   filter: none !important;
 }
 
-/* ========== Primary CTA – stronger brand glow ========== */
+/* ========== Primary CTA ========== */
 .btn-primary,
 .primary-btn {
   background: var(--mj-blue) !important;
@@ -79,7 +79,7 @@ main:active,
   box-shadow: 0 3px 14px var(--mj-blue-glow) !important;
 }
 
-/* ========== Translucent materials (clearer) ========== */
+/* ========== Translucent materials ========== */
 .header,
 .navbar,
 .toolbar {
@@ -101,7 +101,7 @@ html:not([data-theme="dark"]) .navbar {
   border-bottom: 1px solid rgba(255, 255, 255, 0.1) !important;
 }
 
-/* ========== Cards – clearer hierarchy + lift ========== */
+/* ========== Cards ========== */
 .stat-card,
 .content-card,
 .welcome-box,
@@ -128,7 +128,7 @@ html:not([data-theme="dark"]) .navbar {
   box-shadow: 0 12px 28px rgba(0, 0, 0, 0.35);
 }
 
-/* ========== Typography refinements ========== */
+/* ========== Typography ========== */
 h1, .display, .hero h1 {
   letter-spacing: -0.03em !important;
   line-height: 1.08 !important;
@@ -142,21 +142,55 @@ body {
   -moz-osx-font-smoothing: grayscale;
 }
 
-/* ========== Sheets / modals – spring settle ========== */
+/* ========== Sheets / modals – stronger physical feel ========== */
 .sheet,
 .modal,
 .mobile-menu .kinetic-panel,
 .purchase-sheet,
 .bottom-sheet,
 .modal-sheet,
-.kinetic-panel {
+.kinetic-panel,
+.mj-push-optin-card,
+.dropdown-menu,
+.sidebar {
   transition:
-    transform 340ms var(--mj-spring),
-    opacity 240ms ease !important;
-  will-change: transform;
+    transform 380ms var(--mj-spring-soft),
+    opacity 260ms ease !important;
+  will-change: transform, opacity;
 }
 
-/* ========== Focus rings (brand blue) ========== */
+/* Backdrop that fades with the sheet */
+.kinetic-overlay,
+.overlay,
+.modal-backdrop,
+.sheet-backdrop,
+.mj-push-optin-backdrop {
+  transition: opacity 280ms ease !important;
+}
+
+/* Rounded top corners + soft shadow for bottom sheets */
+.purchase-sheet,
+.bottom-sheet,
+.modal-sheet,
+.sheet {
+  border-radius: 20px 20px 0 0 !important;
+  box-shadow: 0 -8px 40px rgba(15, 23, 42, 0.18) !important;
+}
+
+[data-theme="dark"] .purchase-sheet,
+[data-theme="dark"] .bottom-sheet,
+[data-theme="dark"] .modal-sheet,
+[data-theme="dark"] .sheet {
+  box-shadow: 0 -8px 40px rgba(0, 0, 0, 0.45) !important;
+}
+
+/* Mobile menu panel – smoother slide */
+.mobile-menu .kinetic-panel,
+.kinetic-panel {
+  transition: transform 360ms var(--mj-spring-soft) !important;
+}
+
+/* ========== Focus rings ========== */
 button:focus-visible,
 a:focus-visible,
 [role="button"]:focus-visible,
