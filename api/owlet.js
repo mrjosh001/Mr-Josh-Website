@@ -670,7 +670,7 @@ async function resolveOwletServiceId(storedId, name) {
 
 function japCustomFieldForService(service) {
   const descriptor = (String(service?.service_type || '') + ' ' + String(service?.name || '')).toLowerCase();
-  if (/custom.?comments?|comments?.?custom|comment replies/.test(descriptor) || /\bcustom\b/.test(descriptor) && /comment/.test(descriptor)) {
+  if (/custom.?comments?|comments?.?custom/.test(descriptor) || /\bcustom\b/.test(descriptor) && /comment/.test(descriptor)) {
     return { key: 'comments', label: 'Custom comments', placeholder: 'Enter one comment per line. Each line is sent as a separate comment.', multiline: true };
   }
   if (/custom list mentions|custom usernames|usernames list/.test(descriptor)) {
