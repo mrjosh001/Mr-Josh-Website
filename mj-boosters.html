@@ -526,7 +526,7 @@ function customInputValue(){
   return el?String(el.value||'').trim():'';
 }
 function customInputLines(value){
-  return String(value||'').split(/\\r?\\n/).map(function(line){return line.trim();}).filter(Boolean);
+  return String(value||'').split(/\r?\n/).map(function(line){return line.trim();}).filter(Boolean);
 }
 function effectiveMin(s){
   const supplierMin = Number(s?.min_quantity)||1;
