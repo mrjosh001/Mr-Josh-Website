@@ -345,7 +345,7 @@ function paintServices(list){
     var q=String(document.getElementById('svcSearch').value||'').trim();
     // If the search has no exact catalogue match, show the actual supplier service
     // named "Service Not Listed" as the fallback option.
-    var fallback=q?allServices.find(function(s){return /service\\s+not\\s+listed/i.test(String(s.name||''));}):null;
+    var fallback=q?allServices.find(function(s){return /service\s+not\s+listed/i.test(String(s.name||''));}):null;
     if(fallback) list=[fallback];
   }
   if(!list.length){
@@ -353,7 +353,7 @@ function paintServices(list){
     return;
   }
   grid.innerHTML=list.map(function(s){
-    var isFallback=/service\\s+not\\s+listed/i.test(String(s.name||''));
+    var isFallback=/service\s+not\s+listed/i.test(String(s.name||''));
     var displayName=isFallback?'Service Not Listed':s.name;
     return '<div class="svc-tile" data-id="'+esc(s.id)+'" data-name="'+esc(s.name)+'">'+
       serviceLogoHtml(s.name)+'<div class="svc-label">'+esc(displayName)+'</div></div>';
