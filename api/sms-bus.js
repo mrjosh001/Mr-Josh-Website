@@ -2861,7 +2861,9 @@ export default async function handler(req, res) {
               out.price_ngn = Number(db.price);
               out.price_source = 'admin';
             }
-            if (db.is_available === false && String(db.price_source || '') === 'admin') {
+            if (db.is_available === false && String(db.price_source || '') === 'admin' && p.is_available !== false) {
+              // Only treat this as an admin hide when the supplier itself says the plan is available.
+              // If the supplier says sold out, preserve that status for the customer-facing stock label.
               out.is_available = false;
               out.admin_hidden = true;
             }
