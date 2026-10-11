@@ -245,7 +245,8 @@ button,input{font:inherit}
 .field label{display:block;font-size:12px;font-weight:800;margin-bottom:7px;color:var(--text)}
 .field-row{display:flex;gap:8px}
 .field input{width:100%;border:1px solid var(--border);background:var(--bg);color:var(--text);border-radius:12px;padding:13px 14px;font-size:15px;font-weight:600;outline:none}
-.field input:focus{border-color:var(--primary);box-shadow:0 0 0 3px var(--ring)}
+.field input:focus,.field textarea:focus{border-color:var(--primary);box-shadow:0 0 0 3px var(--ring)}
+.field textarea{width:100%;resize:vertical;min-height:96px;border:1px solid var(--border);background:var(--bg);color:var(--text);border-radius:12px;padding:13px 14px;font-size:14px;font-weight:600;line-height:1.5;outline:none;font-family:inherit}
 .paste-btn{border:1px solid var(--border);background:var(--card);color:var(--text);border-radius:12px;padding:0 14px;font-weight:800;font-size:12px;cursor:pointer;white-space:nowrap}
 .hint-text{font-size:11px;color:var(--muted);margin-top:6px;font-weight:600}
 .qty-row{display:flex;align-items:center;gap:10px}
@@ -341,6 +342,11 @@ button,input{font:inherit}
           <button type="button" class="paste-btn" onclick="pasteLink()">Paste</button>
         </div>
         <div class="hint-text">Public profile, post, reel, video or channel URL only</div>
+      </div>
+      <div class="field" id="mCustomFieldWrap" style="display:none">
+        <label id="mCustomFieldLabel" for="mCustomField">Service details</label>
+        <textarea id="mCustomField" rows="4" placeholder="" autocomplete="off"></textarea>
+        <div class="hint-text" id="mCustomFieldHint"></div>
       </div>
       <div class="field">
         <label>Quantity</label>
@@ -728,6 +734,31 @@ function shortServiceTitle(name){
   const cut = raw.split('[')[0].replace(/\s+/g, ' ').trim();
   return cut || raw;
 }
+function customFieldForService(s){
+  const descriptor = (String(s.service_type || '') + ' ' + String(s.name || '')).toLowerCase();
+  if (/custom.?comments?|comments?.?custom|comment replies/.test(descriptor) || (/\bcustom\b/.test(descriptor) && /comment/.test(descriptor))) {
+    return {key:'comments',label:'Custom comments',placeholder:'Enter one comment per line. Each line is sent as a separate comment.',hint:'Use one comment per line. JAP receives this as the comments field.',multiline:true};
+  }
+  if (/custom list mentions|custom usernames|usernames list/.test(descriptor)) {
+    return {key:'usernames',label:'Usernames',placeholder:'Enter one username per line.',hint:'Enter each username on a separate line.',multiline:true};
+  }
+  if (/mentions with hashtags|hashtags list/.test(descriptor)) {
+    return {key:'hashtags',label:'Hashtags',placeholder:'Enter one hashtag per line.',hint:'Enter each hashtag on a separate line.',multiline:true};
+  }
+  if (/\bkeywords?\b/.test(descriptor)) {
+    return {key:'keywords',label:'Keywords',placeholder:'Enter one keyword per line.',hint:'Enter each keyword on a separate line.',multiline:true};
+  }
+  if (/mentions? hashtag|hashtag to scrape|hashtag service/.test(descriptor)) {
+    return {key:'hashtag',label:'Hashtag',placeholder:'Enter the hashtag to use.',hint:'JAP receives this as the hashtag field.',multiline:false};
+  }
+  if (/media likers|likers from media/.test(descriptor)) {
+    return {key:'media',label:'Media URL',placeholder:'Paste the media URL.',hint:'JAP uses this media URL to identify likers.',multiline:false};
+  }
+  if (/poll comment replies|poll replies|answer number/.test(descriptor)) {
+    return {key:'answer_number',label:'Poll answer number',placeholder:'Enter the answer number.',hint:'Enter the numeric answer option required by the service.',multiline:false,inputType:'number'};
+  }
+  return null;
+}
 function openOrder(s){
   selected = s;
   const min = effectiveMin(s);
@@ -779,6 +810,19 @@ function openOrder(s){
     }).join('');
   }
 
+  const custom = customFieldForService(s);
+  const customWrap = document.getElementById('mCustomFieldWrap');
+  const customInput = document.getElementById('mCustomField');
+  if (customWrap && customInput) {
+    customWrap.style.display = custom ? 'block' : 'none';
+    customInput.value = '';
+    customInput.required = !!custom;
+    customInput.placeholder = custom ? custom.placeholder : '';
+    customInput.rows = custom && custom.multiline ? 4 : 1;
+    customInput.type = custom && custom.inputType ? custom.inputType : 'text';
+    document.getElementById('mCustomFieldLabel').textContent = custom ? custom.label : 'Service details';
+    document.getElementById('mCustomFieldHint').textContent = custom ? custom.hint : '';
+  }
   document.getElementById('mQty').value = min;
   document.getElementById('mQty').min = min;
   document.getElementById('mQty').max = max;
@@ -867,6 +911,15 @@ async function placeOrder(){
     document.getElementById('mLink').focus();
     return;
   }
+  const custom = customFieldForService(selected);
+  const customValue = custom ? document.getElementById('mCustomField').value.trim() : '';
+  if (custom && !customValue) {
+    toast('Enter ' + custom.label.toLowerCase() + ' first');
+    document.getElementById('mCustomField').focus();
+    return;
+  }
+  const orderPayload = { service_id: selected.service_id, link, quantity };
+  if (custom && customValue) orderPayload[custom.key] = customValue;
   const btn = document.getElementById('mBuy');
   btn.disabled = true;
   btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Placing order…';
@@ -875,7 +928,7 @@ async function placeOrder(){
     const res = await fetch('/api/owlet?action=order', {
       method: 'POST',
       headers,
-      body: JSON.stringify({ service_id: selected.service_id, link, quantity })
+      body: JSON.stringify(orderPayload)
     });
     const data = await res.json();
     if (!data.success) {
