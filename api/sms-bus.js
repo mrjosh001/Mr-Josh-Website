@@ -456,7 +456,8 @@ function gotsmsEnrichPlan(p) {
     carrier_addon_ngn: GOTSMS_CARRIER_ADDON_NGN,
     area_addon_ngn: GOTSMS_AREA_ADDON_NGN,
     is_monthly_supported: p.is_monthly_supported,
-    is_available: p.is_available !== false
+    is_available: !gotsmsPlanUnavailable(p),
+    stock_status: gotsmsPlanUnavailable(p) ? 'sold_out' : 'available'
   };
 }
 
@@ -2828,7 +2829,8 @@ export default async function handler(req, res) {
           if (v) qs.set(k, v);
         });
         qs.set('per_page', String(Math.min(100, Number(url.searchParams.get('per_page') || 100))));
-        if (url.searchParams.get('include_unavailable') === '1') qs.set('include_unavailable', '1');
+        const includeUnavailable = url.searchParams.get('include_unavailable') === '1';
+        if (includeUnavailable) qs.set('include_unavailable', '1');
         let page = 1;
         const all = [];
         let lastPage = 1;
@@ -2866,8 +2868,10 @@ export default async function handler(req, res) {
             return out;
           });
         }
-        // Drop admin-hidden plans from customer view
-        enriched = enriched.filter((p) => p.is_available !== false);
+        // Always omit plans explicitly hidden by admin. When requested, retain
+        // supplier-marked sold-out plans so the UI can label them before purchase.
+        enriched = enriched.filter((p) => p.admin_hidden !== true);
+        if (!includeUnavailable) enriched = enriched.filter((p) => p.is_available !== false);
 
         return json(res, 200, { success: true, data: enriched });
       }
