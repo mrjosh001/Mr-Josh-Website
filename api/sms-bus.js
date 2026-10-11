@@ -366,8 +366,7 @@ async function gotsmsFetch(path, { method = 'GET', body } = {}) {
 function gotsmsPlanUnavailable(plan) {
   if (!plan || typeof plan !== 'object') return true;
   const falseValues = new Set([false, 0, '0', 'false', 'no', 'unavailable', 'out_of_stock', 'out of stock', 'sold_out', 'sold out']);
-  const trueValues = new Set([true, 1, '1', 'true', 'yes', 'available', 'in_stock', 'in stock']);
-  for (const key of ['is_available', 'available', 'in_stock', 'has_stock', 'stock_available']) {
+    for (const key of ['is_available', 'available', 'in_stock', 'has_stock', 'stock_available']) {
     if (Object.prototype.hasOwnProperty.call(plan, key) && falseValues.has(
       typeof plan[key] === 'string' ? plan[key].trim().toLowerCase() : plan[key]
     )) return true;
@@ -591,13 +590,13 @@ async function gotsmsSaveOrder({ userId, customerId, rentId, phone, serviceName,
   if (typeof insertNumberOrder === 'function') {
     const r = await insertNumberOrder(row);
     if (r?.error) throw new Error('Could not save GotSMS rental order: ' + r.error.message);
-    if (r?.data?.id) return { orderId, rowId: r.data.id };
+    if (r?.data?.id) return orderId;
   } else {
     const { data, error } = await supabase.from('number_orders').insert(row).select('id').single();
     if (error) throw new Error('Could not save GotSMS rental order: ' + error.message);
-    return { orderId, rowId: data?.id || null };
+    return orderId;
   }
-  return { orderId, rowId: null };
+  return orderId;
 }
 
 
@@ -2912,7 +2911,7 @@ export default async function handler(req, res) {
             if (page >= Number(g.data?.meta?.last_page || 1)) break;
           }
         }
-        if (plan && gotsmsPlanUnavailable(plan)) {
+        if (!plan || gotsmsPlanUnavailable(plan)) {
           return json(res, 409, {
             success: false,
             message: 'This rental plan is currently out of stock. Your wallet has not been charged.',
@@ -3032,7 +3031,7 @@ export default async function handler(req, res) {
             data: { supplier_rent_id: rent.id, persistence_error: true }
           });
         }
-        const orderId = savedOrder.orderId;
+        const orderId = savedOrder;
         let transactionSaved = false;
         let transactionError = null;
         for (let attempt = 0; attempt < 2 && !transactionSaved; attempt++) {
