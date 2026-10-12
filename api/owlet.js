@@ -2,7 +2,7 @@ import { createClient } from '@supabase/supabase-js';
 import { rateLimit, applyRateLimitHeaders } from '../lib/rateLimit.js';
 
 /**
- * /api/owlet — MJ Boosters supplier (The Owlet SMM panel v2 API)
+ * /api/owlet — MJ Boosters (JAP + CasperSMM Perfect Panel v2). Customer catalog shows both.
  * Docs: https://theowlet.com/api
  * Base: POST https://theowlet.com/api/v2
  *
@@ -23,17 +23,31 @@ const OWLET_KEY = String(process.env.OWLET_API_KEY || '').trim().replace(/^["']+
 // Customer store uses JAP (JustAnotherPanel) — same Perfect Panel v2 API shape
 const JAP_URL = (process.env.JAP_API_URL || 'https://justanotherpanel.com/api/v2').replace(/\/$/, '');
 const JAP_KEY = String(process.env.JAP_API_KEY || '').trim().replace(/^["']+|["']+$/g, '');
-/** Customer catalog + new purchases */
+// CasperSMM — same Perfect Panel v2 shape (https://caspersmm.com/api/v2)
+const CASPER_URL = (process.env.CASPER_API_URL || 'https://caspersmm.com/api/v2').replace(/\/$/, '');
+const CASPER_KEY = String(process.env.CASPER_API_KEY || '').trim().replace(/^["']+|["']+$/g, '');
+/** Default source when unspecified (legacy). Customer catalog shows BOTH jap + casper. */
 const STORE_SOURCE = 'jap';
+const CUSTOMER_SOURCES = ['jap', 'casper'];
+function normalizePanelSource(src) {
+  const s = String(src || '').toLowerCase().trim();
+  if (s === 'owlet') return 'owlet';
+  if (s === 'casper' || s === 'caspersmm') return 'casper';
+  if (s === 'jap' || s === 'justanotherpanel') return 'jap';
+  return 'jap';
+}
+function isCustomerSource(src) {
+  return CUSTOMER_SOURCES.includes(normalizePanelSource(src));
+}
 /** JAP rates are USD. $1 → ₦1500 (override with USD_TO_NGN_RATE). */
 const USD_TO_NGN = Number(process.env.USD_TO_NGN_RATE) || 1500;
 /** Flat ₦ buffer added on top of converted cost before markup. */
 const COST_BUFFER_NGN = Math.max(0, Number(process.env.BOOSTER_COST_BUFFER_NGN) || 1000);
 
 function panelCreds(source) {
-  if (String(source || '').toLowerCase() === 'owlet') {
-    return { url: OWLET_URL, key: OWLET_KEY, label: 'Owlet' };
-  }
+  const s = normalizePanelSource(source);
+  if (s === 'owlet') return { url: OWLET_URL, key: OWLET_KEY, label: 'Owlet' };
+  if (s === 'casper') return { url: CASPER_URL, key: CASPER_KEY, label: 'Casper' };
   return { url: JAP_URL, key: JAP_KEY, label: 'JAP' };
 }
 /** No booster service / order is sold below this (NGN). Override with OWLET_MIN_SELL_NGN */
@@ -182,7 +196,7 @@ async function owletCall(params, timeoutMs = 12000, source = STORE_SOURCE) {
 
 
 async function handleBalance(req, res) {
-  const balSrc = String(req.query?.provider || 'jap').toLowerCase() === 'owlet' ? 'owlet' : 'jap';
+  const balSrc = normalizePanelSource(req.query?.provider || 'jap');
   const { ok, status, json } = await owletCall({ action: 'balance' }, 12000, balSrc);
   if (!ok || json?.error) {
     return res.status(status || 502).json({
@@ -229,8 +243,8 @@ async function handleServices(req, res) {
 
 async function handleSync(req, res) {
   const body = typeof req.body === 'string' ? (() => { try { return JSON.parse(req.body || '{}'); } catch { return {}; } })() : (req.body || {});
-  let provider = String(req.query?.provider || body.provider || 'jap').trim().toLowerCase();
-  if (provider !== 'owlet' && provider !== 'jap') provider = 'jap';
+  let provider = normalizePanelSource(req.query?.provider || body.provider || 'jap');
+  if (provider === 'owlet') provider = 'jap'; // customer sync targets jap|casper only
   const SYNC_SOURCE = provider;
   const TIME_BUDGET_MS = 250000;
   const BATCH = 80;
@@ -397,7 +411,7 @@ async function handleList(req, res) {
       'id,source,service_id,name,category,service_type,supplier_rate_usd,price_ngn,price_source,min_quantity,max_quantity,refill,cancel,is_available,updated_at',
       { count: 'exact' }
     )
-    .eq('source', (String(req.query?.provider || 'jap').toLowerCase() === 'owlet' ? 'owlet' : 'jap'))
+    .eq('source', (normalizePanelSource(req.query?.provider || 'jap')))
     .order('category', { ascending: true })
     .order('name', { ascending: true });
 
@@ -461,7 +475,7 @@ async function handleList(req, res) {
     rows = rows.slice(from, from + pageSize);
   }
 
-  const listSrc = String(req.query?.provider || 'jap').toLowerCase() === 'owlet' ? 'owlet' : 'jap';
+  const listSrc = normalizePanelSource(req.query?.provider || 'jap');
   const { data: catRows } = await supabase
     .from('booster_services')
     .select('category')
@@ -516,7 +530,7 @@ async function handleEnableAllJap(req, res) {
   const { data, error, count } = await supabase
     .from('booster_services')
     .update({ is_available: true, updated_at: new Date().toISOString() })
-    .eq('source', 'jap')
+    .in('source', CUSTOMER_SOURCES)
     .select('id', { count: 'exact' });
 
   if (error) {
@@ -545,7 +559,7 @@ async function handleCatalog(req, res) {
   const { data: catRows } = await supabase
     .from('booster_services')
     .select('category')
-    .eq('source', STORE_SOURCE)
+    .in('source', CUSTOMER_SOURCES)
     .or('is_available.eq.true,is_available.is.null')
     .limit(8000);
   const categories = [...new Set((catRows || []).map(r => r.category).filter(Boolean))].sort();
@@ -568,10 +582,10 @@ async function handleCatalog(req, res) {
   let query = supabase
     .from('booster_services')
     .select(
-      'id,service_id,name,category,service_type,supplier_rate_usd,price_ngn,min_quantity,max_quantity,refill,cancel,is_available',
+      'id,service_id,name,category,service_type,supplier_rate_usd,price_ngn,min_quantity,max_quantity,refill,cancel,is_available,source',
       { count: 'exact' }
     )
-    .eq('source', STORE_SOURCE)
+    .in('source', CUSTOMER_SOURCES)
     .or('is_available.eq.true,is_available.is.null')
     .order('price_ngn', { ascending: true });
 
@@ -641,20 +655,24 @@ async function handleCatalog(req, res) {
 
 let owletServiceCache = { at: 0, list: [] };
 
-async function loadOwletServicesLive() {
+const panelServiceCaches = {};
+async function loadPanelServicesLive(source = STORE_SOURCE) {
+  const src = normalizePanelSource(source);
   const now = Date.now();
-  if (owletServiceCache.list.length && now - owletServiceCache.at < 10 * 60 * 1000) {
-    return owletServiceCache.list;
-  }
-  const live = await owletCall({ action: 'services' }, 25000);
+  const cached = panelServiceCaches[src] || { at: 0, list: [] };
+  if (cached.list.length && now - cached.at < 10 * 60 * 1000) return cached.list;
+  const live = await owletCall({ action: 'services' }, 25000, src);
   const list = Array.isArray(live.json) ? live.json : [];
-  if (list.length) owletServiceCache = { at: now, list };
+  if (list.length) panelServiceCaches[src] = { at: now, list };
   return list;
 }
+async function loadOwletServicesLive() {
+  return loadPanelServicesLive(STORE_SOURCE);
+}
 
-async function resolveOwletServiceId(storedId, name) {
+async function resolveOwletServiceId(storedId, name, source = STORE_SOURCE) {
   const id = String(storedId || '').trim();
-  const list = await loadOwletServicesLive();
+  const list = await loadPanelServicesLive(source);
   if (!list.length) return id;
   if (list.some((s) => String(s.service) === id)) return id;
   const want = String(name || '').trim().toLowerCase();
@@ -703,12 +721,21 @@ async function handleOrder(req, res) {
   if (!userGate.ok) return res.status(userGate.status).json({ success: false, message: userGate.message });
   const user = userGate.user;
 
-  const { data: service, error: sErr } = await supabase
+  // Prefer explicit source from client (avoids jap/casper service_id collisions)
+  const requestedSource = body.source ? normalizePanelSource(body.source) : null;
+  let svcQuery = supabase
     .from('booster_services')
     .select('*')
-    .eq('source', STORE_SOURCE)
-    .eq('service_id', serviceId)
-    .maybeSingle();
+    .eq('service_id', serviceId);
+  if (requestedSource && isCustomerSource(requestedSource)) {
+    svcQuery = svcQuery.eq('source', requestedSource);
+  } else {
+    svcQuery = svcQuery.in('source', CUSTOMER_SOURCES);
+  }
+  const { data: svcRows, error: sErr } = await svcQuery.limit(5);
+  const service = Array.isArray(svcRows)
+    ? (svcRows.find(r => r.is_available !== false) || svcRows[0])
+    : null;
 
   if (sErr || !service) {
     return res.status(404).json({ success: false, message: 'Service not found or unavailable' });
@@ -717,6 +744,10 @@ async function handleOrder(req, res) {
     return res.status(400).json({ success: false, message: 'This service is temporarily unavailable' });
   }
 
+  const orderSource = normalizePanelSource(service.source || STORE_SOURCE);
+  if (!isCustomerSource(orderSource)) {
+    return res.status(400).json({ success: false, message: 'This package is unavailable.' });
+  }
   const customFields=japCustomFieldsForService(service),customValues={};
   for(const field of customFields){const value=String(body[field.key]||'').trim();if(field.required&&!value)return res.status(400).json({success:false,message:'Please enter '+field.label+' before placing this order.'});if(value)customValues[field.key]=value;}
   if(!link&&customValues.username)link=customValues.username;
@@ -815,11 +846,11 @@ async function handleOrder(req, res) {
   }
 
   // Place order with JAP — resolve live service id if catalog is stale
-  const liveServiceId = await resolveOwletServiceId(serviceId, service.name);
+  const liveServiceId = await resolveOwletServiceId(serviceId, service.name, orderSource);
   const supplierPayload = { action: 'add', service: liveServiceId, link, quantity: String(quantity) };
   // Forward only recognized service-specific fields to the order provider.
   for (const field of customFields) if (customValues[field.key]) supplierPayload[field.key] = customValues[field.key];
-  const { ok, status, json } = await owletCall(supplierPayload);
+  const { ok, status, json } = await owletCall(supplierPayload, 25000, orderSource);
 
   if (!ok || json?.error || !json?.order) {
     await restoreWallet();
@@ -836,7 +867,7 @@ async function handleOrder(req, res) {
   const orderRow = {
     user_id: user.id,
     customer_id: profile.customer_id || null,
-    source: STORE_SOURCE,
+    source: orderSource,
     supplier_order_id: supplierOrderId,
     service_id: liveServiceId,
     service_name: service.name,
@@ -870,7 +901,7 @@ async function handleOrder(req, res) {
       const minimal = {
         user_id: user.id,
         customer_id: profile.customer_id || null,
-        source: STORE_SOURCE,
+        source: orderSource,
         supplier_order_id: supplierOrderId,
         service_id: serviceId,
         service_name: service.name,
@@ -918,7 +949,7 @@ async function handleOrder(req, res) {
   // Best-effort status pull
   let statusData = null;
   try {
-    const st = await owletCall({ action: 'status', order: supplierOrderId });
+    const st = await owletCall({ action: 'status', order: supplierOrderId }, 12000, orderSource);
     if (st.ok && st.json && !st.json.error) {
       statusData = st.json;
       if (saved?.id || supplierOrderId) {
@@ -1183,7 +1214,7 @@ async function handleMyOrders(req, res) {
     try {
       let j = batchMap ? pickStatusPayload(batchMap, o.supplier_order_id) : null;
       if (!j) {
-        const oSrc = String(o.source || 'jap').toLowerCase() === 'owlet' ? 'owlet' : 'jap';
+        const oSrc = normalizePanelSource(o.source || 'jap');
         let st = await owletCall({ action: 'status', order: String(o.supplier_order_id) }, 8000, oSrc);
         if (!st.ok || !st.json || (st.json.error && !st.json.status)) {
           st = await owletCall({ action: 'status', orders: String(o.supplier_order_id) }, 8000, oSrc);
@@ -1386,7 +1417,7 @@ async function handleCancel(req, res) {
   }
 
   // Ask supplier to cancel first. Never refund until supplier confirms.
-  const cancelSrc = String(row.source || STORE_SOURCE).toLowerCase() === 'owlet' ? 'owlet' : 'jap';
+  const cancelSrc = normalizePanelSource(row.source || STORE_SOURCE);
   const { ok, status, json } = await owletCall({ action: 'cancel', orders: orderId }, 12000, cancelSrc);
 
   // PerfectPanel-style: [{ order: "123", cancel: 1 }] success; cancel: 0 or { error } = fail
@@ -1537,7 +1568,7 @@ async function handleRefill(req, res) {
     return res.status(404).json({ success: false, message: 'Order not found' });
   }
 
-  const refillSrc = String(row.source || STORE_SOURCE).toLowerCase() === 'owlet' ? 'owlet' : 'jap';
+  const refillSrc = normalizePanelSource(row.source || STORE_SOURCE);
   const { ok, status, json } = await owletCall({ action: 'refill', order: orderId }, 12000, refillSrc);
   if (!ok || json?.error || (json?.refill && typeof json.refill === 'object' && json.refill.error)) {
     const msg = json?.error || json?.refill?.error || json?.message || 'Refill not available for this order';
@@ -1653,7 +1684,7 @@ export default async function handler(req, res) {
 
   return res.status(400).json({
     success: false,
-    message: 'action required: catalog | order | my_orders | cancel | refill | refill_status | balance | services | sync | list | status | admin_orders | enable_all_jap'
+    message: 'action required: catalog | order | my_orders | cancel | refill | refill_status | balance | services | sync | list | status | admin_orders | enable_all_jap (sync?provider=jap|casper)'
   });
   } catch (err) {
     console.error('[owlet] handler error', err);
