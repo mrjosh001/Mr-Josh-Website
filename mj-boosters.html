@@ -681,11 +681,11 @@ async function loadServices(){
     document.getElementById('content').innerHTML='<div class="empty">No services here. Try another category.</div>';
   } else {
     serviceMap.clear();
-    rows.forEach(s => serviceMap.set(String(s.service_id), s));
+    rows.forEach(s => serviceMap.set(String(s.source||'jap')+'|'+String(s.service_id), s));
     document.getElementById('content').innerHTML=rows.map(s=>{
       const min=effectiveMin(s);
       return `
-      <div class="card" data-sid="${esc(String(s.service_id))}" onclick="openOrderFromEl(this)">
+      <div class="card" data-sid="${esc(String(s.service_id))}" data-source="${esc(String(s.source||'jap'))}" onclick="openOrderFromEl(this)">
         <div class="card-top">
           <div class="icon">${iconFor(s.category,s.name)}</div>
           <div class="card-body">
@@ -709,7 +709,8 @@ async function loadServices(){
 
 function openOrderFromEl(el){
   const sid = el.getAttribute('data-sid');
-  const s = serviceMap.get(String(sid));
+  const src = el.getAttribute('data-source') || 'jap';
+  const s = serviceMap.get(String(src)+'|'+String(sid)) || serviceMap.get(String(sid));
   if (s) openOrder(s);
   else toast('Service data missing — refresh list');
 }
@@ -912,7 +913,7 @@ async function placeOrder(){
   if(commentField&&quantity<min){toast('Enter at least '+min+' non-empty comments');document.querySelector('[data-custom-key="'+commentField.key+'"]')?.focus();return;}
   if(!commentField&&(quantity<min||quantity>max)){toast('Quantity must be between '+min.toLocaleString()+' and '+max.toLocaleString());return;}
   if(!link&&!(usesUsernameInsteadOfLink(selected)&&values.username)){toast('Enter the link first');document.getElementById('mLink').focus();return;}
-  const orderPayload={service_id:selected.service_id,link:link,quantity:quantity,...values};
+  const orderPayload={service_id:selected.service_id,source:selected.source||'jap',link:link,quantity:quantity,...values};
   const btn=document.getElementById('mBuy');btn.disabled=true;btn.innerHTML='<i class="fa-solid fa-spinner fa-spin"></i> Placing order…';
   try{
     const headers=await authHeaders(),res=await fetch('/api/owlet?action=order',{method:'POST',headers,body:JSON.stringify(orderPayload)}),data=await res.json();
