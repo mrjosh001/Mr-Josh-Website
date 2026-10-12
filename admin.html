@@ -828,6 +828,7 @@ function withLagos(opts) { return Object.assign({ timeZone: 'Africa/Lagos' }, op
  <button class="nav-item" data-tab="sms-orders" onclick="switchTab('sms-orders')"><i class="fas fa-comment-sms"></i> SMS Orders</button>
  <button class="nav-item" data-tab="boosters" onclick="switchTab('boosters')"><i class="fas fa-bolt"></i> MJ Boosters (Owlet)</button>
  <button class="nav-item" data-tab="boosters-jap" onclick="switchTab('boosters-jap')"><i class="fas fa-bolt"></i> JAP Boosters</button>
+ <button class="nav-item" data-tab="boosters-casper" onclick="switchTab('boosters-casper')"><i class="fas fa-bolt"></i> Casper Boosters</button>
  <button class="nav-item" data-tab="boosters-smmkings" onclick="switchTab('boosters-smmkings')"><i class="fas fa-paper-plane"></i> SMMKings (Telegram)</button>
  <button class="nav-item" data-tab="booster-orders" onclick="switchTab('booster-orders')"><i class="fas fa-receipt"></i> Booster Orders</button>
  <button class="nav-item" data-tab="notify" onclick="switchTab('notify')"><i class="fas fa-bullhorn"></i> Notifications</button>
@@ -944,6 +945,7 @@ function withLagos(opts) { return Object.assign({ timeZone: 'Africa/Lagos' }, op
  <div class="metrics supplier-balance-metrics" style="margin-bottom:0;">
  <div class="metric-card"><div class="metric-label">Owlet (Boosters)</div><div class="metric-value" id="balOwlet"> </div><div class="metric-sub" id="balOwletSub">Loading…</div></div>
  <div class="metric-card"><div class="metric-label">JAP (Boosters)</div><div class="metric-value" id="balJap">—</div><div class="metric-sub" id="balJapSub">Loading…</div></div>
+ <div class="metric-card"><div class="metric-label">Casper (Boosters)</div><div class="metric-value" id="balCasper">—</div><div class="metric-sub" id="balCasperSub">Loading…</div></div>
  <div class="metric-card"><div class="metric-label">SMMKings (Telegram)</div><div class="metric-value" id="balSmmkings">—</div><div class="metric-sub" id="balSmmkingsSub">Loading…</div></div>
  </div>
  </div>
@@ -1283,6 +1285,42 @@ function withLagos(opts) { return Object.assign({ timeZone: 'Africa/Lagos' }, op
  </table>
  </div>
  <div id="japMobileCards" class="mobile-only mobile-cards"></div>
+ </div>
+ </div>
+
+ <div id="tab-boosters-casper" class="tab-content">
+ <div class="panel">
+ <div class="panel-header">
+ <div class="panel-title">Casper Boosters Catalog</div>
+ <div style="display:flex;gap:8px;flex-wrap:wrap;">
+ <button class="btn btn-primary btn-sm" id="btnCasperSync" onclick="syncBoosterProvider('casper')"><i class="fas fa-sync"></i> Sync Casper</button>
+ </div>
+ </div>
+ <p style="font-size:12px;color:var(--muted);margin:0 0 10px;">CasperSMM catalog (Perfect Panel v2). Customer store shows <strong>JAP + Casper</strong> after services are enabled. Admin prices are not overwritten by sync.</p>
+ <div id="casperSyncProgress" style="font-size:12px;color:var(--muted);margin-bottom:12px;min-height:16px;"></div>
+ <div class="search-row" style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;">
+ <input type="hidden" id="casperProviderFilter" value="casper" />
+ <input type="search" id="casperSearch" placeholder="Search service name or category…" style="flex:1;min-width:180px;" onkeydown="if(event.key==='Enter'){casperPage=1;loadBoosterSourceFromDb('casper')}">
+ <select id="casperCategoryFilter" onchange="casperPage=1;loadBoosterSourceFromDb('casper')">
+ <option value="">All categories</option>
+ </select>
+ <label style="font-size:12px;display:flex;align-items:center;gap:6px;color:var(--muted);white-space:nowrap;">
+ <input type="checkbox" id="casperHideUnavailable" onchange="casperPage=1;loadBoosterSourceFromDb('casper')"> Hide unavailable
+ </label>
+ </div>
+ <div class="desktop-only desktop-table table-wrap">
+ <table>
+ <thead>
+ <tr>
+ <th>ID</th><th>Name</th><th>Category</th><th>Supplier USD</th><th>Sell ₦</th><th>Profit ₦</th><th>Min-Max</th><th>Refill</th><th>Status</th><th></th>
+ </tr>
+ </thead>
+ <tbody id="casperTableBody">
+ <tr><td colspan="9" class="empty-state">Click <strong>Sync Casper</strong> to pull catalog.</td></tr>
+ </tbody>
+ </table>
+ </div>
+ <div id="casperMobileCards" class="mobile-only mobile-cards"></div>
  </div>
  </div>
 
@@ -2327,6 +2365,7 @@ async function loadSupplierBalances() {
  renderSupplierBalance('Classy', data.suppliers.classy);
  renderSupplierBalance('Owlet', data.suppliers.owlet);
  renderSupplierBalance('Jap', data.suppliers.jap);
+ renderSupplierBalance('Casper', data.suppliers.casper);
  renderSupplierBalance('Smmkings', data.suppliers.smmkings);
  renderSupplierBalance('Smsbus', data.suppliers.smsbus);
  renderSupplierBalance('Gotsms', data.suppliers.gotsms);
@@ -5446,6 +5485,11 @@ window.addEventListener('DOMContentLoaded', async () => {
  if (t) t.textContent = 'JAP Boosters';
  try { loadBoosterSourceFromDb('jap'); } catch (e) {}
  }
+ if (tab === 'boosters-casper') {
+ const t = document.getElementById('pageTitle');
+ if (t) t.textContent = 'Casper Boosters';
+ try { loadBoosterSourceFromDb('casper'); } catch (e) {}
+ }
  if (tab === 'boosters-smmkings') {
  const t = document.getElementById('pageTitle');
  if (t) t.textContent = 'SMMKings (Telegram)';
@@ -5478,7 +5522,7 @@ async function loadOwletBalance() {
 }
 
 
-let japPage = 1, smmkingsPage = 1;
+let japPage = 1, casperPage = 1, smmkingsPage = 1;
 
 
 /** Shared booster catalog cards/table — same UX for Owlet, JAP, SMMKings */
@@ -5496,7 +5540,7 @@ function boosterProfitHtml(s) {
   const color = p >= 0 ? '#34d399' : '#f87171';
   return '<span style="color:' + color + ';font-weight:700;">₦' + Math.round(p).toLocaleString() + '</span>';
 }
-window._boosterRowsByProvider = window._boosterRowsByProvider || { owlet: [], jap: [], smmkings: [] };
+window._boosterRowsByProvider = window._boosterRowsByProvider || { owlet: [], jap: [], casper: [], smmkings: [] };
 
 function paintBoosterCatalog(rows, tbody, cards, provider) {
   provider = provider || 'owlet';
@@ -5549,6 +5593,7 @@ async function loadBoosterSourceFromDb(provider) {
   provider = provider || 'jap';
   const ids = {
     jap: { tbody: 'japTableBody', cards: 'japMobileCards', search: 'japSearch', cat: 'japCategoryFilter', hide: 'japHideUnavailable', page: () => japPage, setPage: (n) => { japPage = n; } },
+    casper: { tbody: 'casperTableBody', cards: 'casperMobileCards', search: 'casperSearch', cat: 'casperCategoryFilter', hide: 'casperHideUnavailable', page: () => casperPage, setPage: (n) => { casperPage = n; } },
     smmkings: { tbody: 'smmkingsTableBody', cards: 'smmkingsMobileCards', search: 'smmkingsSearch', cat: 'smmkingsCategoryFilter', hide: 'smmkingsHideUnavailable', page: () => smmkingsPage, setPage: (n) => { smmkingsPage = n; } }
   };
   const cfg = ids[provider];
@@ -5606,11 +5651,11 @@ async function loadBoosterSourceFromDb(provider) {
 
 async function syncBoosterProvider(provider) {
  provider = provider || 'owlet';
- const labels = { owlet: 'Owlet', jap: 'JustAnotherPanel (JAP)', smmkings: 'SMMKings (Telegram only)' };
+ const labels = { owlet: 'Owlet', jap: 'JustAnotherPanel (JAP)', casper: 'CasperSMM', smmkings: 'SMMKings (Telegram only)' };
  const label = labels[provider] || provider;
- const btnMap = { owlet: 'btnOwletSync', jap: 'btnJapSync', smmkings: 'btnSmmkingsSync' };
+ const btnMap = { owlet: 'btnOwletSync', jap: 'btnJapSync', casper: 'btnCasperSync', smmkings: 'btnSmmkingsSync' };
  const btn = document.getElementById(btnMap[provider] || 'btnOwletSync');
- const progMap = { owlet: 'owletSyncProgress', jap: 'japSyncProgress', smmkings: 'smmkingsSyncProgress' };
+ const progMap = { owlet: 'owletSyncProgress', jap: 'japSyncProgress', casper: 'casperSyncProgress', smmkings: 'smmkingsSyncProgress' };
  const prog = document.getElementById(progMap[provider] || 'owletSyncProgress');
  setBtnBusy(btn, true, 'Syncing…');
  if (prog) prog.textContent = 'Pulling services from ' + label + '…';
