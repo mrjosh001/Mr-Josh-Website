@@ -1429,16 +1429,29 @@ async function handleAdminOrders(req, res) {
     for (const o of (sumRows || [])) {
       const qty = Math.max(0, Number(o.quantity) || 0);
       const st = String(o.status || '').toLowerCase();
+      const isPartial = /partial/i.test(st);
+      const isTerminal = /completed|success|done|cancel|fail|refund|error|partial/i.test(st);
       let remains = o.remains != null && o.remains !== '' ? Number(o.remains) : NaN;
-      if (Number.isNaN(remains) && /completed|success|done/i.test(st)) remains = 0;
-      if (Number.isNaN(remains) && /cancel|fail|refund|error/i.test(st)) remains = 0;
-      if (Number.isNaN(remains)) remains = qty; // treat unknown as still outstanding
+      // Completed / cancelled: nothing left to deliver
+      if (Number.isNaN(remains) && /completed|success|done|cancel|fail|refund|error/i.test(st)) remains = 0;
+      // Partial = finished job: only the delivered share counts; remainder is NOT "left to deliver"
+      if (isPartial) {
+        if (Number.isNaN(remains)) remains = 0; // no remains data → count as fully settled for pipeline
+        remains = Math.min(qty, Math.max(0, remains));
+        const del = Math.max(0, qty - remains);
+        ordered += qty;
+        delivered += del;
+        // left stays 0 for partials — undelivered was closed/refunded, not still in queue
+        continue;
+      }
+      if (Number.isNaN(remains)) remains = isTerminal ? 0 : qty;
       remains = Math.min(qty, Math.max(0, remains));
       const del = Math.max(0, qty - remains);
       ordered += qty;
       delivered += del;
       left += remains;
-      if (/pending|progress|processing|in progress|partial/i.test(st)) open_orders += 1;
+      // Open = still actively delivering (not partial — partial is closed)
+      if (/pending|progress|processing|in progress/i.test(st)) open_orders += 1;
     }
     delivery_summary = {
       ordered,
@@ -1483,12 +1496,28 @@ async function handleCancel(req, res) {
   }
 
   const st = String(row.status || '').toLowerCase();
-  // Only allow cancel while truly pending. Once supplier has started, cancel
-  // often fails on Owlet while we still refunded locally — that loses money.
-  if (!/pending|awaiting|waiting/i.test(st)) {
+  // Allow cancel while pending OR still processing with nothing delivered yet.
+  // Casper/JAP often keep Cancel active during "Processing" when remains === qty.
+  // Never allow after completed / partial / canceled (partial is already closed).
+  if (/completed|partial|cancel|refund|fail|error/i.test(st)) {
     return res.status(400).json({
       success: false,
       message: 'Cancel not available for this order right now.'
+    });
+  }
+  if (!/pending|awaiting|waiting|progress|processing/i.test(st)) {
+    return res.status(400).json({
+      success: false,
+      message: 'Cancel not available for this order right now.'
+    });
+  }
+  // If supplier already reported progress (remains < qty), block full cancel refund
+  const qty = Math.max(0, Number(row.quantity) || 0);
+  let remainsNum = row.remains != null && row.remains !== '' ? Number(row.remains) : NaN;
+  if (!Number.isNaN(remainsNum) && qty > 0 && remainsNum < qty) {
+    return res.status(400).json({
+      success: false,
+      message: 'Cancel not available — delivery already started on this order.'
     });
   }
 
@@ -1533,17 +1562,22 @@ async function handleCancel(req, res) {
     }
   } catch (_) {}
 
-  const supplierStopped = !supplierStatus
-    || /cancel|refund|fail|error|stop/i.test(supplierStatus);
-
-  if (supplierStatus && !supplierStopped) {
-    // Supplier still running — do not mark local cancel / do not refund
+  // After panel accepted cancel, treat as stopped unless status is clearly still active
+  // with no cancel confirmation (some panels lag status update by a few seconds).
+  const supplierStillActive = /progress|processing|pending|in progress/i.test(supplierStatus)
+    && !/cancel|refund|fail|error|stop/i.test(supplierStatus);
+  // cancelOk already true from panel cancel response — only block if status
+  // explicitly says completed/partial (money/work already done).
+  if (/completed|partial/i.test(supplierStatus)) {
     return res.status(409).json({
       success: false,
-      message: 'Cancel not available for this order right now.',
+      message: 'Cancel not available — order already finished on the provider.',
       supplier_status: supplierStatus
     });
   }
+  // If status still says processing right after cancel:1, proceed with refund
+  // (panel accepted cancel). Do not require status to flip first.
+  void supplierStillActive;
 
   // Claim cancel + refund once (blocks double cancel refund)
   const refundAmt = Number(row.price_ngn) || 0;
