@@ -389,17 +389,30 @@ const SITE_MIN = 300;
 const PLATFORM_KEYS = {
   instagram: ['instagram', 'insta'],
   tiktok: ['tiktok', 'tik tok', 'tik-tok'],
-  x: ['twitter', '(x)', 'tweet views', 'tweet likes', 'x followers', 'x views'],
+  x: ['twitter', '(x)', 'tweet views', 'tweet likes', 'x followers', 'x views', 'x (twitter)', 'twitter (x)'],
   youtube: ['youtube', 'youtuber'],
   facebook: ['facebook'],
   telegram: ['telegram'],
+  website: ['website', 'web traffic', 'website traffic', 'traffic from', 'seo traffic', 'hit traffic', 'referrer'],
   spotify: ['spotify'],
   whatsapp: ['whatsapp', 'whats app'],
-  snapchat: ['snapchat', 'snap chat', 'snapchat services', 'spotlight', 'snap'],
-  google: ['google'],
+  snapchat: ['snapchat', 'snap chat', 'snapchat services', 'spotlight'],
+  google: ['google maps', 'google reviews', 'google my business', 'gmb', 'google'],
   twitch: ['twitch'],
   discord: ['discord'],
-  linkedin: ['linkedin']
+  linkedin: ['linkedin'],
+  threads: ['threads'],
+  reddit: ['reddit'],
+  pinterest: ['pinterest'],
+  soundcloud: ['soundcloud'],
+  rumble: ['rumble'],
+  kick: ['kick.com', 'kick live', 'kick followers', 'kick views'],
+  vk: ['vkontakte', 'vk.com', 'vk likes', 'vk followers', 'vk groups'],
+  likee: ['likee'],
+  tumblr: ['tumblr'],
+  quora: ['quora'],
+  onlyfans: ['onlyfans', 'only fans'],
+  other: []
 };
 
 /** Display order + icons — only shown if catalog has matching categories */
@@ -410,13 +423,26 @@ const PLATFORM_META = [
   { id: 'youtube', name: 'YouTube', icon: 'https://cdn.simpleicons.org/youtube/FF0000' },
   { id: 'facebook', name: 'Facebook', icon: 'https://cdn.simpleicons.org/facebook/1877F2' },
   { id: 'telegram', name: 'Telegram', icon: 'https://cdn.simpleicons.org/telegram/26A5E4' },
+  { id: 'website', name: 'Website', icon: '', fa: 'fa-solid fa-globe', faColor: '#38bdf8' },
   { id: 'spotify', name: 'Spotify', icon: 'https://cdn.simpleicons.org/spotify/1DB954' },
   { id: 'whatsapp', name: 'WhatsApp', icon: 'https://cdn.simpleicons.org/whatsapp/25D366' },
   { id: 'snapchat', name: 'Snapchat', icon: 'https://cdn.simpleicons.org/snapchat/FFFC00' },
   { id: 'google', name: 'Google', icon: 'https://cdn.simpleicons.org/google/4285F4' },
   { id: 'twitch', name: 'Twitch', icon: 'https://cdn.simpleicons.org/twitch/9146FF' },
   { id: 'discord', name: 'Discord', icon: 'https://cdn.simpleicons.org/discord/5865F2' },
-  { id: 'linkedin', name: 'LinkedIn', icon: 'https://cdn.simpleicons.org/linkedin/0A66C2' }
+  { id: 'linkedin', name: 'LinkedIn', icon: 'https://cdn.simpleicons.org/linkedin/0A66C2' },
+  { id: 'threads', name: 'Threads', icon: 'https://cdn.simpleicons.org/threads/000000', mono: true },
+  { id: 'reddit', name: 'Reddit', icon: 'https://cdn.simpleicons.org/reddit/FF4500' },
+  { id: 'pinterest', name: 'Pinterest', icon: 'https://cdn.simpleicons.org/pinterest/E60023' },
+  { id: 'soundcloud', name: 'SoundCloud', icon: 'https://cdn.simpleicons.org/soundcloud/FF3300' },
+  { id: 'rumble', name: 'Rumble', icon: '', fa: 'fa-solid fa-play', faColor: '#85c742' },
+  { id: 'kick', name: 'Kick', icon: 'https://cdn.simpleicons.org/kick/53FC18' },
+  { id: 'vk', name: 'VK', icon: 'https://cdn.simpleicons.org/vk/0077FF' },
+  { id: 'likee', name: 'Likee', icon: '', fa: 'fa-solid fa-video', faColor: '#fe2c55' },
+  { id: 'tumblr', name: 'Tumblr', icon: 'https://cdn.simpleicons.org/tumblr/36465D' },
+  { id: 'quora', name: 'Quora', icon: 'https://cdn.simpleicons.org/quora/B92B27' },
+  { id: 'onlyfans', name: 'OnlyFans', icon: '', fa: 'fa-solid fa-lock', faColor: '#00aff0' },
+  { id: 'other', name: 'Other', icon: '', fa: 'fa-solid fa-ellipsis', faColor: '#94a3b8' }
 ];
 
 function platformHasServices(platformId) {
@@ -434,7 +460,13 @@ function renderPlatforms() {
   for (const p of available) {
     const mono = p.mono ? ' class="theme-mono-icon" data-icon="' + p.id + '"' : '';
     const act = activePlatform === p.id ? ' active' : '';
-    html += '<button type="button" class="plat' + act + '" data-p="' + p.id + '" title="' + p.name + '" onclick="selectPlatform(\'' + p.id + '\')"><span class="plat-ico"><img' + mono + ' src="' + p.icon + '" alt="' + p.name + '"></span><span class="plat-name">' + p.name + '</span></button>';
+    let ico;
+    if (p.icon) {
+      ico = '<img' + mono + ' src="' + p.icon + '" alt="' + p.name + '">';
+    } else {
+      ico = '<i class="' + (p.fa || 'fa-solid fa-circle') + '" style="color:' + (p.faColor || '#93c5fd') + '"></i>';
+    }
+    html += '<button type="button" class="plat' + act + '" data-p="' + p.id + '" title="' + p.name + '" onclick="selectPlatform(\'' + p.id + '\')"><span class="plat-ico">' + ico + '</span><span class="plat-name">' + p.name + '</span></button>';
   }
   el.innerHTML = html;
   if (typeof syncThemeUi === 'function') syncThemeUi();
@@ -522,9 +554,20 @@ function effectiveMin(s){
 
 function matchesPlatform(text, platform){
   if(!platform || platform==='all') return true;
-  const keys = PLATFORM_KEYS[platform] || [platform];
   const raw = String(text || '').toLowerCase();
   const cleaned = raw.replace(/[^a-z0-9\s+.-]/g, ' ').replace(/\s+/g, ' ');
+  if (platform === 'other') {
+    const known = Object.keys(PLATFORM_KEYS).filter(function(id){ return id !== 'other'; });
+    return !known.some(function(id){
+      const keys = PLATFORM_KEYS[id] || [];
+      return keys.some(function(k){
+        const kk = String(k).toLowerCase().trim();
+        if (!kk) return false;
+        return cleaned.includes(kk) || raw.includes(kk);
+      });
+    });
+  }
+  const keys = PLATFORM_KEYS[platform] || [platform];
   return keys.some(k => {
     const kk = String(k).toLowerCase().trim();
     if (!kk) return false;
@@ -547,6 +590,13 @@ function iconFor(cat,name){
   if(s.includes('twitch')) return '🎮';
   if(s.includes('discord')) return '🎧';
   if(s.includes('linkedin')) return '💼';
+  if(s.includes('website')||s.includes('traffic')||s.includes('referrer')) return '🌐';
+  if(s.includes('threads')) return '🧵';
+  if(s.includes('reddit')) return '👽';
+  if(s.includes('pinterest')) return '📌';
+  if(s.includes('soundcloud')) return '☁️';
+  if(s.includes('rumble')) return '▶️';
+  if(s.includes('onlyfans')) return '🔒';
   return '⚡';
 }
 
@@ -576,7 +626,7 @@ function renderCategoryTabs(){
   const el = document.getElementById('cats');
   el.innerHTML =
     '<button type="button" class="tab' + (activeCategory ? '' : ' active') + '" data-idx="-1">All in platform</button>' +
-    list.slice(0, 50).map((c, i) =>
+    list.map((c, i) =>
       '<button type="button" class="tab' + (activeCategory === c.name ? ' active' : '') + '" data-idx="' + i + '">' + esc(c.name) + '</button>'
     ).join('');
   el.querySelectorAll('.tab').forEach(btn => {
