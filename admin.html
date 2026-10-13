@@ -699,6 +699,158 @@ function withLagos(opts) { return Object.assign({ timeZone: 'Africa/Lagos' }, op
   border-color:#e2e8f0 !important;
 }
 
+/* —— Light mode: force readable text everywhere —— */
+:root[data-theme="light"] {
+  --text: #0f172a !important;
+  --muted: #475569 !important;
+  --text-muted: #475569 !important;
+}
+:root[data-theme="light"] body,
+:root[data-theme="light"] .main,
+:root[data-theme="light"] .content,
+:root[data-theme="light"] .tab-content,
+:root[data-theme="light"] .panel,
+:root[data-theme="light"] .panel * {
+  color: inherit;
+}
+:root[data-theme="light"] .tab-content,
+:root[data-theme="light"] .panel {
+  color: #0f172a !important;
+}
+:root[data-theme="light"] .panel-title,
+:root[data-theme="light"] .topbar h2,
+:root[data-theme="light"] #pageTitle,
+:root[data-theme="light"] h1,
+:root[data-theme="light"] h2,
+:root[data-theme="light"] h3,
+:root[data-theme="light"] h4,
+:root[data-theme="light"] label,
+:root[data-theme="light"] .field label,
+:root[data-theme="light"] .search-row label,
+:root[data-theme="light"] p,
+:root[data-theme="light"] .row-line,
+:root[data-theme="light"] .row-line span,
+:root[data-theme="light"] .mobile-card,
+:root[data-theme="light"] .mobile-card div,
+:root[data-theme="light"] .hint,
+:root[data-theme="light"] .price-note,
+:root[data-theme="light"] .supplier-group-label,
+:root[data-theme="light"] #supplierBalanceGrid .supplier-group-label,
+:root[data-theme="light"] .empty-state,
+:root[data-theme="light"] .meta,
+:root[data-theme="light"] .metric-label,
+:root[data-theme="light"] .metric-sub,
+:root[data-theme="light"] .metric-card,
+:root[data-theme="light"] .brand-text,
+:root[data-theme="light"] .brand-text span,
+:root[data-theme="light"] .nav-item,
+:root[data-theme="light"] .nav-item i,
+:root[data-theme="light"] table,
+:root[data-theme="light"] th,
+:root[data-theme="light"] td,
+:root[data-theme="light"] .desc-cell,
+:root[data-theme="light"] .login-card,
+:root[data-theme="light"] .login-card p,
+:root[data-theme="light"] .logout-confirm-card,
+:root[data-theme="light"] .logout-confirm-card p {
+  color: #0f172a !important;
+}
+:root[data-theme="light"] .metric-label,
+:root[data-theme="light"] .metric-sub,
+:root[data-theme="light"] .meta,
+:root[data-theme="light"] .empty-state,
+:root[data-theme="light"] .price-note,
+:root[data-theme="light"] .hint,
+:root[data-theme="light"] .supplier-group-label,
+:root[data-theme="light"] #supplierBalanceGrid .supplier-group-label,
+:root[data-theme="light"] .brand-text span,
+:root[data-theme="light"] p[style*="color:var(--muted)"],
+:root[data-theme="light"] div[style*="color:var(--muted)"],
+:root[data-theme="light"] span[style*="color:var(--muted)"],
+:root[data-theme="light"] label[style*="color:var(--muted)"],
+:root[data-theme="light"] [style*="color:var(--muted)"] {
+  color: #475569 !important;
+}
+:root[data-theme="light"] .metric-value,
+:root[data-theme="light"] .metric-card .metric-value {
+  color: #0f172a !important;
+}
+/* Keep intentional status colors readable on white */
+:root[data-theme="light"] .metric-value[style*="color:#34d399"],
+:root[data-theme="light"] [style*="color:#34d399"] {
+  color: #15803d !important;
+}
+:root[data-theme="light"] [style*="color:#f87171"],
+:root[data-theme="light"] [style*="color:#fbbf24"] {
+  color: #b45309 !important;
+}
+:root[data-theme="light"] [style*="color:#f87171"] {
+  color: #b91c1c !important;
+}
+:root[data-theme="light"] [style*="color:#38bdf8"],
+:root[data-theme="light"] [style*="color:#60a5fa"],
+:root[data-theme="light"] [style*="color:#93c5fd"],
+:root[data-theme="light"] [style*="color:#c7d2fe"] {
+  color: #1d4ed8 !important;
+}
+:root[data-theme="light"] [style*="color:#a1a1aa"],
+:root[data-theme="light"] [style*="color:#94a3b8"],
+:root[data-theme="light"] [style*="color:#71717a"],
+:root[data-theme="light"] [style*="color:#9ca3af"] {
+  color: #475569 !important;
+}
+/* Dark inline backgrounds → light */
+:root[data-theme="light"] [style*="background:#07090e"],
+:root[data-theme="light"] [style*="background: #07090e"],
+:root[data-theme="light"] [style*="background:#0a0a0f"],
+:root[data-theme="light"] [style*="background:#121216"] {
+  background: #f8fafc !important;
+  color: #0f172a !important;
+  border-color: #e2e8f0 !important;
+}
+:root[data-theme="light"] input,
+:root[data-theme="light"] select,
+:root[data-theme="light"] textarea,
+:root[data-theme="light"] input[style],
+:root[data-theme="light"] select[style],
+:root[data-theme="light"] textarea[style] {
+  background: #ffffff !important;
+  color: #0f172a !important;
+  border-color: #e2e8f0 !important;
+  -webkit-text-fill-color: #0f172a;
+}
+:root[data-theme="light"] .btn-ghost,
+:root[data-theme="light"] .btn-secondary {
+  color: #334155 !important;
+}
+:root[data-theme="light"] .btn-primary,
+:root[data-theme="light"] .btn-primary * {
+  color: #ffffff !important;
+}
+:root[data-theme="light"] .badge,
+:root[data-theme="light"] .badge-on,
+:root[data-theme="light"] .badge-off,
+:root[data-theme="light"] .badge-pending,
+:root[data-theme="light"] .badge-admin {
+  /* keep badge rules from earlier block */
+}
+:root[data-theme="light"] a:not(.btn):not(.nav-item):not(.btn-primary) {
+  color: #1d4ed8 !important;
+}
+:root[data-theme="light"] .price {
+  color: #15803d !important;
+}
+:root[data-theme="light"] #boosterOrdersPager,
+:root[data-theme="light"] [id$="Pager"],
+:root[data-theme="light"] [id$="SyncProgress"],
+:root[data-theme="light"] [id*="Progress"] {
+  color: #475569 !important;
+}
+:root[data-theme="light"] .nav-item.active,
+:root[data-theme="light"] .nav-item.active i {
+  color: #1d4ed8 !important;
+}
+
 </style>
  <script src="/js/mj-page-loader.js"></script>
 
