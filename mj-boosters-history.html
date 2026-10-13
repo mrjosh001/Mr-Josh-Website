@@ -229,7 +229,13 @@ function progressHtml(o){
 
 function canCancel(o){
   const s = String(o.status || '').toLowerCase();
-  return /pending|awaiting|waiting/.test(s);
+  if (/completed|partial|cancel|refund|fail|error/.test(s)) return false;
+  if (!/pending|awaiting|waiting|progress|processing/.test(s)) return false;
+  // Hide cancel once units have started landing
+  const qty = Math.max(0, Number(o.quantity) || 0);
+  const remains = o.remains != null && o.remains !== '' ? Number(o.remains) : NaN;
+  if (!Number.isNaN(remains) && qty > 0 && remains < qty) return false;
+  return true;
 }
 function canRefill(o){
   const s = String(o.status || '').toLowerCase();
