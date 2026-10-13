@@ -1366,6 +1366,12 @@ function withLagos(opts) { return Object.assign({ timeZone: 'Africa/Lagos' }, op
  <div class="panel-title">Booster Orders</div>
  <button class="btn btn-ghost btn-sm" id="btnRefreshBoosterOrders" onclick="loadBoosterOrders()"><i class="fas fa-sync"></i> Refresh</button>
  </div>
+ <div class="metrics" id="boosterOrderMetrics" style="margin:0 0 14px;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));">
+ <div class="metric-card"><div class="metric-label">Ordered (units)</div><div class="metric-value" id="boBoostOrdered">—</div><div class="metric-sub">Qty customers paid for</div></div>
+ <div class="metric-card"><div class="metric-label">Delivered</div><div class="metric-value" id="boBoostDelivered" style="color:#34d399;">—</div><div class="metric-sub">Units already delivered</div></div>
+ <div class="metric-card"><div class="metric-label">Left to deliver</div><div class="metric-value" id="boBoostLeft" style="color:#fbbf24;">—</div><div class="metric-sub">Still in progress</div></div>
+ <div class="metric-card"><div class="metric-label">Orders · open</div><div class="metric-value" id="boBoostOpen">—</div><div class="metric-sub" id="boBoostOpenSub">Pending / in progress</div></div>
+ </div>
  <div class="search-row" style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;">
  <input type="search" id="boosterOrderSearch" placeholder="Search order ID, service, customer ID or link…" style="flex:1;min-width:200px;" onkeydown="if(event.key==='Enter'){boosterOrderPage=1;loadBoosterOrders()}">
  <button class="btn btn-primary btn-sm" style="width:auto;" onclick="boosterOrderPage=1;loadBoosterOrders()"><i class="fas fa-search"></i> Search</button>
@@ -1379,13 +1385,14 @@ function withLagos(opts) { return Object.assign({ timeZone: 'Africa/Lagos' }, op
  <th>Service</th>
  <th>Link</th>
  <th>Qty</th>
+ <th>Progress</th>
  <th>Paid</th>
  <th>Status</th>
  <th>Supplier #</th>
  </tr>
  </thead>
  <tbody id="boosterOrdersBody">
- <tr><td colspan="8" class="empty-state">Loading…</td></tr>
+ <tr><td colspan="9" class="empty-state">Loading…</td></tr>
  </tbody>
  </table>
  </div>
@@ -5860,6 +5867,53 @@ function boosterStatusBadge(status) {
  return `<span class="badge ${cls}">${escapeHtml(s)}</span>`;
 }
 
+
+function boosterDeliveryProgress(o) {
+  const qty = Math.max(0, Number(o && o.quantity) || 0);
+  const status = String((o && o.status) || '').toLowerCase();
+  let remains = (o && o.remains != null && o.remains !== '') ? Number(o.remains) : NaN;
+  if (Number.isNaN(remains) && /completed|success|done/i.test(status)) remains = 0;
+  if (!Number.isNaN(remains)) {
+    remains = Math.min(qty, Math.max(0, remains));
+    const delivered = Math.max(0, qty - remains);
+    return { qty, delivered, left: remains, known: true };
+  }
+  // No remains yet — still pending / waiting on supplier
+  if (/cancel|fail|refund|error/i.test(status)) {
+    return { qty, delivered: 0, left: 0, known: true };
+  }
+  return { qty, delivered: 0, left: qty, known: false };
+}
+function boosterProgressHtml(o) {
+  const p = boosterDeliveryProgress(o);
+  if (!p.qty) return '<span style="color:var(--muted)">—</span>';
+  if (!p.known && /pending/i.test(String(o.status || ''))) {
+    return '<span style="font-size:12px;font-weight:700;">0 / ' + p.qty.toLocaleString() +
+      '</span><div style="font-size:10px;color:var(--muted);">waiting</div>';
+  }
+  const pct = p.qty ? Math.min(100, Math.round((p.delivered / p.qty) * 100)) : 0;
+  return '<span style="font-size:12px;font-weight:800;">' + p.delivered.toLocaleString() + ' / ' + p.qty.toLocaleString() + '</span>' +
+    '<div style="font-size:10px;color:' + (p.left > 0 ? '#fbbf24' : '#34d399') + ';font-weight:700;">' +
+    (p.left > 0 ? (p.left.toLocaleString() + ' left') : 'fully delivered') +
+    (p.known ? ' · ' + pct + '%' : '') + '</div>';
+}
+function updateBoosterOrderMetrics(rows, totalOrders) {
+  let ordered = 0, delivered = 0, left = 0, openOrders = 0;
+  (rows || []).forEach(function(o) {
+    const p = boosterDeliveryProgress(o);
+    ordered += p.qty;
+    delivered += p.delivered;
+    left += p.left;
+    if (/pending|progress|processing|in progress|partial/i.test(String(o.status || ''))) openOrders += 1;
+  });
+  const el = function(id){ return document.getElementById(id); };
+  if (el('boBoostOrdered')) el('boBoostOrdered').textContent = ordered.toLocaleString();
+  if (el('boBoostDelivered')) el('boBoostDelivered').textContent = delivered.toLocaleString();
+  if (el('boBoostLeft')) el('boBoostLeft').textContent = left.toLocaleString();
+  if (el('boBoostOpen')) el('boBoostOpen').textContent = String(openOrders);
+  if (el('boBoostOpenSub')) el('boBoostOpenSub').textContent = 'On this page · ' + (totalOrders || 0) + ' total orders';
+}
+
 let boosterOrderPage = 1;
 async function loadBoosterOrders() {
  const tbody = document.getElementById('boosterOrdersBody');
@@ -5879,15 +5933,26 @@ async function loadBoosterOrders() {
  const res = await fetch('/api/owlet?' + params.toString(), { headers });
  const data = await res.json();
  if (!data.success) {
- if (tbody) tbody.innerHTML = `<tr><td colspan="8" class="empty-state">${escapeHtml(data.message || 'Failed')}</td></tr>`;
+ if (tbody) tbody.innerHTML = `<tr><td colspan="9" class="empty-state">${escapeHtml(data.message || 'Failed')}</td></tr>`;
  if (cards) cards.innerHTML = `<div class="empty-state">${escapeHtml(data.message || 'Failed')}</div>`;
  return;
  }
  const rows = data.data || [];
  if (!rows.length) {
- if (tbody) tbody.innerHTML = '<tr><td colspan="8" class="empty-state">No booster orders yet.</td></tr>';
+ if (tbody) tbody.innerHTML = '<tr><td colspan="9" class="empty-state">No booster orders yet.</td></tr>';
  if (cards) cards.innerHTML = '<div class="empty-state">No booster orders yet.</div>';
  } else {
+ if (data.delivery_summary) {
+  const s = data.delivery_summary;
+  const el = function(id){ return document.getElementById(id); };
+  if (el('boBoostOrdered')) el('boBoostOrdered').textContent = Number(s.ordered||0).toLocaleString();
+  if (el('boBoostDelivered')) el('boBoostDelivered').textContent = Number(s.delivered||0).toLocaleString();
+  if (el('boBoostLeft')) el('boBoostLeft').textContent = Number(s.left||0).toLocaleString();
+  if (el('boBoostOpen')) el('boBoostOpen').textContent = String(s.open_orders||0);
+  if (el('boBoostOpenSub')) el('boBoostOpenSub').textContent = 'Open orders · ' + (data.total||0) + ' total in DB';
+ } else {
+  updateBoosterOrderMetrics(rows, data.total);
+ }
  if (tbody) tbody.innerHTML = rows.map(o => `
  <tr>
  <td>${o.created_at ? ngWhen(o.created_at) : ' '}</td>
@@ -5895,6 +5960,7 @@ async function loadBoosterOrders() {
  <td style="font-weight:600;">${escapeHtml(o.service_name || o.service_id || ' ')}</td>
  <td style="max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${escapeHtml(o.link || '')}">${escapeHtml(o.link || ' ')}</td>
  <td>${Number(o.quantity || 0).toLocaleString()}</td>
+ <td>${boosterProgressHtml(o)}</td>
  <td class="price">₦${Number(o.price_ngn || 0).toLocaleString()}</td>
  <td>${boosterStatusBadge(o.status)}</td>
  <td>${escapeHtml(o.supplier_order_id || ' ')}</td>
@@ -5904,19 +5970,20 @@ async function loadBoosterOrders() {
  <div style="font-weight:700;">${escapeHtml(o.service_name || 'Boost')}</div>
  <div class="row-line"><span>Date</span><span>${o.created_at ? ngWhen(o.created_at) : '—'}</span></div>
  <div class="row-line"><span>Status</span>${boosterStatusBadge(o.status)}</div>
+ <div class="row-line"><span>Progress</span><span>${boosterProgressHtml(o)}</span></div>
  <div class="row-line"><span>Paid</span><span class="price">₦${Number(o.price_ngn || 0).toLocaleString()}</span></div>
  <div class="row-line"><span>Qty</span><span>${Number(o.quantity || 0).toLocaleString()}</span></div>
  <div class="row-line"><span>Customer</span><span>${escapeHtml(o.customer_id || '—')}</span></div>
  <div style="font-size:11px;color:var(--muted);margin-top:6px;word-break:break-all;">${escapeHtml(o.link || '')}</div>
  </div>`).join('');
  }
- const maxPage = Math.max(1, Math.ceil((data.total || 0) / 50));
+ const maxPage = Math.max(1, Math.ceil((data.total || 0) / 10));
  if (pager) pager.innerHTML = `
  <button class="btn btn-ghost btn-sm" ${boosterOrderPage<=1?'disabled':''} onclick="boosterOrderPage=Math.max(1,boosterOrderPage-1);loadBoosterOrders()">Prev</button>
  <span>Page ${boosterOrderPage}/${maxPage} · ${data.total||0} orders</span>
  <button class="btn btn-ghost btn-sm" ${boosterOrderPage>=maxPage?'disabled':''} onclick="boosterOrderPage++;loadBoosterOrders()">Next</button>`;
  } catch (e) {
- if (tbody) tbody.innerHTML = `<tr><td colspan="8" class="empty-state">${escapeHtml(e.message || String(e))}</td></tr>`;
+ if (tbody) tbody.innerHTML = `<tr><td colspan="9" class="empty-state">${escapeHtml(e.message || String(e))}</td></tr>`;
  } finally {
  setBtnBusy(btn, false, '<i class="fas fa-sync"></i> Refresh');
  }
