@@ -546,6 +546,31 @@ async function handleEnableAllJap(req, res) {
   });
 }
 
+
+/** Pull every available category+source row (paginate — never truncate supplier catalog). */
+async function fetchAllCategoryRows() {
+  const pageSize = 1000;
+  const maxRows = 60000;
+  const all = [];
+  let from = 0;
+  while (from < maxRows) {
+    const to = from + pageSize - 1;
+    const { data, error } = await supabase
+      .from('booster_services')
+      .select('category, source')
+      .in('source', CUSTOMER_SOURCES)
+      .or('is_available.eq.true,is_available.is.null')
+      .order('category', { ascending: true })
+      .range(from, to);
+    if (error) throw error;
+    if (!data || !data.length) break;
+    all.push(...data);
+    if (data.length < pageSize) break;
+    from += pageSize;
+  }
+  return all;
+}
+
 async function handleCatalog(req, res) {
   // Public to signed-in users — categories + optional services
   const category = (req.query?.category || '').toString().trim();
@@ -555,26 +580,40 @@ async function handleCatalog(req, res) {
   const from = (page - 1) * pageSize;
   const to = from + pageSize - 1;
 
-  // Distinct categories
-  const { data: catRows } = await supabase
-    .from('booster_services')
-    .select('category')
-    .in('source', CUSTOMER_SOURCES)
-    .or('is_available.eq.true,is_available.is.null')
-    .limit(8000);
+  // Full category set from JAP + Casper (paginated — no 8k cutoff)
+  let catRows = [];
+  try {
+    catRows = await fetchAllCategoryRows();
+  } catch (e) {
+    return res.status(500).json({ success: false, message: e.message || 'Could not load categories' });
+  }
   const categories = [...new Set((catRows || []).map(r => r.category).filter(Boolean))].sort();
 
   if (!category && !q) {
-    // Overview: return category cards with counts only (fast)
     const counts = {};
+    const srcMap = {};
     for (const c of (catRows || [])) {
       const k = c.category || 'Other';
       counts[k] = (counts[k] || 0) + 1;
+      if (!srcMap[k]) srcMap[k] = new Set();
+      const src = String(c.source || '').toLowerCase();
+      if (src === 'casper' || src === 'caspersmm') srcMap[k].add('casper');
+      else if (src === 'jap') srcMap[k].add('jap');
     }
     const cards = Object.entries(counts)
-      .map(([name, count]) => ({ name, count }))
+      .map(([name, count]) => ({
+        name,
+        count,
+        sources: Array.from(srcMap[name] || []).sort()
+      }))
       .sort((a, b) => b.count - a.count);
-    return res.status(200).json({ success: true, mode: 'categories', categories: cards, total_services: (catRows || []).length });
+    return res.status(200).json({
+      success: true,
+      mode: 'categories',
+      categories: cards,
+      total_services: (catRows || []).length,
+      total_categories: cards.length
+    });
   }
 
   const tokens = q.split(/[^a-z0-9]+/).filter(t => t.length > 0);
