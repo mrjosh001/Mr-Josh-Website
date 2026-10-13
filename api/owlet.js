@@ -549,24 +549,22 @@ async function handleEnableAllJap(req, res) {
 
 /** Pull every available category+source row (paginate — never truncate supplier catalog). */
 async function fetchAllCategoryRows() {
-  const pageSize = 1000;
-  const maxRows = 60000;
+  // One (or two) reads — never N sequential page round-trips (that made user dash crawl).
+  // Parallel per source keeps payload smaller and usually faster on Supabase.
+  const results = await Promise.all(
+    CUSTOMER_SOURCES.map((src) =>
+      supabase
+        .from('booster_services')
+        .select('category, source')
+        .eq('source', src)
+        .or('is_available.eq.true,is_available.is.null')
+        .limit(20000)
+    )
+  );
   const all = [];
-  let from = 0;
-  while (from < maxRows) {
-    const to = from + pageSize - 1;
-    const { data, error } = await supabase
-      .from('booster_services')
-      .select('category, source')
-      .in('source', CUSTOMER_SOURCES)
-      .or('is_available.eq.true,is_available.is.null')
-      .order('category', { ascending: true })
-      .range(from, to);
-    if (error) throw error;
-    if (!data || !data.length) break;
-    all.push(...data);
-    if (data.length < pageSize) break;
-    from += pageSize;
+  for (const r of results) {
+    if (r.error) throw r.error;
+    if (Array.isArray(r.data)) all.push(...r.data);
   }
   return all;
 }
@@ -1419,7 +1417,46 @@ async function handleAdminOrders(req, res) {
     } catch (_) {}
   }
 
-  return res.status(200).json({ success: true, data: rowsOut || [], total: count || 0, page, page_size: pageSize });
+  // Global delivery summary (units) for admin metrics
+  let delivery_summary = null;
+  try {
+    const { data: sumRows } = await supabase
+      .from('booster_orders')
+      .select('status, quantity, remains')
+      .order('created_at', { ascending: false })
+      .limit(15000);
+    let ordered = 0, delivered = 0, left = 0, open_orders = 0;
+    for (const o of (sumRows || [])) {
+      const qty = Math.max(0, Number(o.quantity) || 0);
+      const st = String(o.status || '').toLowerCase();
+      let remains = o.remains != null && o.remains !== '' ? Number(o.remains) : NaN;
+      if (Number.isNaN(remains) && /completed|success|done/i.test(st)) remains = 0;
+      if (Number.isNaN(remains) && /cancel|fail|refund|error/i.test(st)) remains = 0;
+      if (Number.isNaN(remains)) remains = qty; // treat unknown as still outstanding
+      remains = Math.min(qty, Math.max(0, remains));
+      const del = Math.max(0, qty - remains);
+      ordered += qty;
+      delivered += del;
+      left += remains;
+      if (/pending|progress|processing|in progress|partial/i.test(st)) open_orders += 1;
+    }
+    delivery_summary = {
+      ordered,
+      delivered,
+      left,
+      open_orders,
+      sampled: (sumRows || []).length
+    };
+  } catch (_) {}
+
+  return res.status(200).json({
+    success: true,
+    data: rowsOut || [],
+    total: count || 0,
+    page,
+    page_size: pageSize,
+    delivery_summary
+  });
 }
 
 
