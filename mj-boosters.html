@@ -598,21 +598,26 @@ function showCategoryCards(list){
     document.getElementById('pager').innerHTML='';
     return;
   }
-  content.innerHTML = list.map((c, i) =>
-    '<div class="card cat-card" data-idx="' + i + '" role="button" tabindex="0">' +
+  content.innerHTML = list.map((c, i) => {
+    const srcs = Array.isArray(c.sources) ? c.sources : [];
+    const pills = (srcs.length ? srcs : ['jap']).map(function(s){ return sourcePillHtml(s); }).join('');
+    return '<div class="card cat-card" data-idx="' + i + '" role="button" tabindex="0">' +
       '<div class="card-top">' +
         '<div class="icon">' + iconFor(c.name, '') + '</div>' +
         '<div class="card-body">' +
           '<h3>' + esc(c.name) + '</h3>' +
-          '<div class="meta">' + c.count + ' services available</div>' +
+          '<div class="meta" style="display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin-top:6px">' +
+            pills +
+            '<span>' + c.count + ' services available</span>' +
+          '</div>' +
         '</div>' +
       '</div>' +
       '<div class="card-foot">' +
         '<div class="price" style="font-size:13px;font-weight:800;color:var(--muted)">Browse</div>' +
         '<span class="cta">Open →</span>' +
       '</div>' +
-    '</div>'
-  ).join('');
+    '</div>';
+  }).join('');
   content.querySelectorAll('.cat-card').forEach(card => {
     const idx = parseInt(card.getAttribute('data-idx'), 10);
     const cat = list[idx];
