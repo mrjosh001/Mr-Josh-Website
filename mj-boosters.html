@@ -163,6 +163,11 @@ button,input{font:inherit}
 .card .price span{font-size:11px;color:var(--muted);font-weight:700}
 .card .cta{font-size:11px;font-weight:800;padding:7px 12px;border-radius:999px;background:var(--primary-soft);color:var(--primary);border:1px solid rgba(91,138,245,.25)}
 .badge{display:inline-flex;font-size:10px;font-weight:800;padding:3px 8px;border-radius:999px;background:rgba(52,211,153,.12);color:var(--success);border:1px solid rgba(52,211,153,.25);margin-left:6px;vertical-align:middle}
+.src-pill{display:inline-flex;align-items:center;font-size:9px;font-weight:800;letter-spacing:.04em;padding:2px 7px;border-radius:999px;margin-left:6px;vertical-align:middle;text-transform:uppercase;border:1px solid transparent}
+.src-pill.jp{background:rgba(59,130,246,.14);color:#60a5fa;border-color:rgba(59,130,246,.28)}
+.src-pill.casp{background:rgba(168,85,247,.14);color:#c084fc;border-color:rgba(168,85,247,.28)}
+:root[data-theme="light"] .src-pill.jp{background:rgba(37,99,235,.1);color:#2563eb;border-color:rgba(37,99,235,.22)}
+:root[data-theme="light"] .src-pill.casp{background:rgba(126,34,206,.1);color:#7c3aed;border-color:rgba(126,34,206,.22)}
 .empty{grid-column:1/-1;text-align:center;padding:40px 20px;color:var(--muted);font-size:13.5px;font-weight:600;line-height:1.5}
 .empty .spinner{width:28px;height:28px;border:3px solid var(--border);border-top-color:var(--primary);border-radius:50%;margin:0 auto 12px;animation:spin .7s linear infinite}
 @keyframes spin{to{transform:rotate(360deg)}}
@@ -689,7 +694,7 @@ async function loadServices(){
         <div class="card-top">
           <div class="icon">${iconFor(s.category,s.name)}</div>
           <div class="card-body">
-            <h3>${esc(s.name)}${s.refill ? '<span class="badge">Refill</span>' : ''}</h3>
+            <h3>${esc(s.name)}${s.refill ? '<span class="badge">Refill</span>' : ''}${sourcePillHtml(s.source)}</h3>
             <div class="meta">Min ${min.toLocaleString()} · Instant start</div>
           </div>
         </div>
@@ -707,6 +712,15 @@ async function loadServices(){
     <button class="btn btn-ghost" style="width:auto;margin:0" ${page>=maxPage?'disabled':''} onclick="page=page+1;loadServices()">Next</button>`;
 }
 
+function sourceLabel(src){
+  const s = String(src || 'jap').toLowerCase();
+  if (s === 'casper' || s === 'caspersmm') return { text: 'CASP', cls: 'casp' };
+  return { text: 'JP', cls: 'jp' };
+}
+function sourcePillHtml(src){
+  const p = sourceLabel(src);
+  return '<span class="src-pill ' + p.cls + '" title="' + (p.cls === 'casp' ? 'Server B' : 'Server A') + '">' + p.text + '</span>';
+}
 function openOrderFromEl(el){
   const sid = el.getAttribute('data-sid');
   const src = el.getAttribute('data-source') || 'jap';
@@ -767,7 +781,7 @@ function openOrder(s){
   const fullName = String(s.name || 'Service');
   const tags = parseServiceTags(fullName);
 
-  document.getElementById('mTitle').textContent = shortServiceTitle(fullName);
+  document.getElementById('mTitle').innerHTML = esc(shortServiceTitle(fullName)) + sourcePillHtml(s.source);
   document.getElementById('mSub').textContent = (s.category || '') + (s.service_type ? ' · ' + s.service_type : '');
   document.getElementById('mPrice').textContent = fmt(s.price_ngn) + ' / 1k';
   document.getElementById('mMinMax').textContent = 'Min ' + min.toLocaleString() + (max < 2000000000 ? ' · Max ' + max.toLocaleString() : '');
