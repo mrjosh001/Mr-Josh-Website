@@ -6024,13 +6024,19 @@ function boosterDeliveryProgress(o) {
   const qty = Math.max(0, Number(o && o.quantity) || 0);
   const status = String((o && o.status) || '').toLowerCase();
   let remains = (o && o.remains != null && o.remains !== '') ? Number(o.remains) : NaN;
+  // Partial = closed: delivered only what landed; remainder is not "left to deliver"
+  if (/partial/i.test(status)) {
+    if (Number.isNaN(remains)) remains = 0;
+    remains = Math.min(qty, Math.max(0, remains));
+    const delivered = Math.max(0, qty - remains);
+    return { qty, delivered, left: 0, known: true, partial: true };
+  }
   if (Number.isNaN(remains) && /completed|success|done/i.test(status)) remains = 0;
   if (!Number.isNaN(remains)) {
     remains = Math.min(qty, Math.max(0, remains));
     const delivered = Math.max(0, qty - remains);
     return { qty, delivered, left: remains, known: true };
   }
-  // No remains yet — still pending / waiting on supplier
   if (/cancel|fail|refund|error/i.test(status)) {
     return { qty, delivered: 0, left: 0, known: true };
   }
@@ -6044,6 +6050,10 @@ function boosterProgressHtml(o) {
       '</span><div style="font-size:10px;color:var(--muted);">waiting</div>';
   }
   const pct = p.qty ? Math.min(100, Math.round((p.delivered / p.qty) * 100)) : 0;
+  if (p.partial) {
+    return '<span style="font-size:12px;font-weight:800;">' + p.delivered.toLocaleString() + ' / ' + p.qty.toLocaleString() + '</span>' +
+      '<div style="font-size:10px;color:#fbbf24;font-weight:700;">partial · closed · ' + pct + '%</div>';
+  }
   return '<span style="font-size:12px;font-weight:800;">' + p.delivered.toLocaleString() + ' / ' + p.qty.toLocaleString() + '</span>' +
     '<div style="font-size:10px;color:' + (p.left > 0 ? '#fbbf24' : '#34d399') + ';font-weight:700;">' +
     (p.left > 0 ? (p.left.toLocaleString() + ' left') : 'fully delivered') +
@@ -6056,7 +6066,7 @@ function updateBoosterOrderMetrics(rows, totalOrders) {
     ordered += p.qty;
     delivered += p.delivered;
     left += p.left;
-    if (/pending|progress|processing|in progress|partial/i.test(String(o.status || ''))) openOrders += 1;
+    if (/pending|progress|processing|in progress/i.test(String(o.status || ''))) openOrders += 1;
   });
   const el = function(id){ return document.getElementById(id); };
   if (el('boBoostOrdered')) el('boBoostOrdered').textContent = ordered.toLocaleString();
