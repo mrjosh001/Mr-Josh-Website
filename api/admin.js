@@ -1198,7 +1198,7 @@ async function smsOrdersInboxCountHandle(body = {}) {
         try {
           if (!/sms\s*received/i.test(String(row.service_name || ''))) {
             await supabase.from('number_orders').update({
-              service_name: (row.service_name || 'Rental') + ' · SMS received'
+              service_name: (row.service_name || 'Rental') + ' · SMS received', status: 'completed', status: 'completed'
             }).eq('id', row.id);
           }
         } catch (_) {}
@@ -1249,7 +1249,7 @@ async function smsOrdersInboxCountHandle(body = {}) {
         if (row && !/sms\s*received/i.test(String(row.service_name || ''))) {
           await supabase
             .from('number_orders')
-            .update({ service_name: (row.service_name || 'USA rental') + ' · SMS received' })
+            .update({ service_name: (row.service_name || 'USA rental') + ' · SMS received', status: 'completed', status: 'completed' })
             .eq('id', row.id);
         }
       } catch (_) {}
@@ -1810,7 +1810,7 @@ async function getOverviewStats(body) {
   }
 
   let smsQuery = supabase.from('number_orders')
-    .select('price, supplier_price, source, status, refunded, service_id, country_id')
+    .select('price, supplier_price, source, status, refunded, service_id, country_id, service_name')
     .gte('created_at', cutoff);
   if (endAt) smsQuery = smsQuery.lte('created_at', endAt);
   let boostQuery = supabase.from('booster_orders')
@@ -1890,13 +1890,18 @@ async function getOverviewStats(body) {
     if (r.refunded === true) return false;
     if (['cancelled', 'canceled', 'refunded', 'failed'].includes(st)) return false;
     const src = String(r.source || '').toLowerCase();
-    // USA rental (gotsms) + global long rental (smsbus_rent)
+    // USA real (gotsms) + global long rental (smsbus_rent)
     const isRental = src.includes('gotsms') || src.includes('smsbus_rent') ||
       (src.includes('rent') && !src.includes('grizzly'));
     if (isRental) {
-      // Count every paid rental once: active, finished, expired, completed, pending…
-      // Only true voids (cancel / refund / failed) are excluded — customer already paid.
-      return true;
+      // Only count when a code/SMS was received
+      const name = String(r.service_name || '');
+      const gotCode =
+        /sms\s*received/i.test(name) ||
+        st === 'completed' ||
+        st === 'complete' ||
+        st === 'success';
+      return gotCode;
     }
     // OTP (grizzlysms / smsbus): only successful code deliveries
     return st === 'completed' || st === 'complete' || st === 'success';

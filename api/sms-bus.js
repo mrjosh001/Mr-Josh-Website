@@ -2557,7 +2557,7 @@ export default async function handler(req, res) {
               const name = String(row.service_name || '');
               if (!/sms\s*received/i.test(name)) {
                 await supabase.from('number_orders').update({
-                  service_name: (name || 'Rental') + ' · SMS received'
+                  status: 'completed', service_name: (name || 'Rental') + ' · SMS received'
                 }).eq('id', row.id);
               }
             } catch (_) {}
@@ -3326,7 +3326,7 @@ export default async function handler(req, res) {
         const name = String(row.service_name || '');
         if (!/sms\s*received/i.test(name)) {
           const next = (name || 'USA rental') + ' · SMS received';
-          await supabase.from('number_orders').update({ service_name: next }).eq('id', row.id);
+          await supabase.from('number_orders').update({ service_name: next, status: 'completed' }).eq('id', row.id);
         }
         return json(res, 200, { success: true, marked: true });
       }
@@ -3344,7 +3344,7 @@ if (method === 'GET' && ga === 'gotsms_messages') {
             const key = `gotsms-${rent_id}`;
             const { data: row } = await supabase.from('number_orders').select('id, service_name').eq('user_id', auth.userId).eq('source', 'gotsms').eq('idempotency_key', key).maybeSingle();
             if (row && !/sms\s*received/i.test(String(row.service_name || ''))) {
-              await supabase.from('number_orders').update({ service_name: (row.service_name || 'USA rental') + ' · SMS received' }).eq('id', row.id);
+              await supabase.from('number_orders').update({ status: 'completed', service_name: (row.service_name || 'USA rental') + ' · SMS received' }).eq('id', row.id);
             }
           } catch (e) {
             console.warn('[gotsms] mark sms received', e.message || e);
