@@ -3384,13 +3384,28 @@ if (method === 'GET' && ga === 'gotsms_messages') {
         if (!rent_id) return json(res, 400, { success: false, message: 'rent_id required' });
         if (!(await gotsmsAssertOwns(auth.userId, rent_id))) return json(res, 403, { success: false, message: 'Rental not found' });
         const g = await gotsmsFetch(`/api/rents/${encodeURIComponent(rent_id)}/services`);
-        const list = (g.data?.data || []).map((s) => ({
-          service_id: s.service_id,
-          name: s.name,
-          price_usd: Number(s.price || 0),
-          price_ngn: gotsmsSellPriceNgn(s.price),
-          is_available: s.is_available !== false
-        }));
+        const services = g.data?.data || [];
+        let priceById = new Map();
+        try {
+          const ids = services.map((s) => String(s.service_id || '')).filter(Boolean);
+          if (ids.length) {
+            const { data: rows } = await supabase.from('number_services')
+              .select('service_id, price, is_available')
+              .eq('source', 'gotsms').in('service_id', ids);
+            priceById = new Map((rows || []).map((row) => [String(row.service_id), row]));
+          }
+        } catch (e) { console.warn('[gotsms addable services] DB price lookup', e.message || e); }
+        const list = services.map((s) => {
+          const db = priceById.get(String(s.service_id || ''));
+          const price = db && Number(db.price) > 0 ? Math.round(Number(db.price)) : gotsmsSellPriceNgn(s.price);
+          return {
+            service_id: s.service_id,
+            name: s.name,
+            price_usd: Number(s.price || 0),
+            price_ngn: price,
+            is_available: s.is_available !== false && !(db && db.is_available === false)
+          };
+        });
         return json(res, g.ok ? 200 : g.status || 400, { success: !!g.data?.success, data: list, message: g.data?.message });
       }
 
@@ -3403,16 +3418,8 @@ if (method === 'GET' && ga === 'gotsms_messages') {
         if (!rent_id || !service_id) return json(res, 400, { success: false, message: 'rent_id and service_id required' });
         const parentOrder = await gotsmsAssertOwns(auth.userId, rent_id);
         if (!parentOrder) return json(res, 403, { success: false, message: 'Rental not found' });
-        // Only after the number has received at least one SMS/code
-        try {
-          const msgRes = await gotsmsFetch('/api/messages?rent_id=' + encodeURIComponent(rent_id) + '&per_page=5');
-          const msgs = (msgRes.data && (msgRes.data.data || msgRes.data)) || [];
-          if (!Array.isArray(msgs) || msgs.length < 1) {
-            return json(res, 400, { success: false, message: 'Add service is available after this number has received at least one code.' });
-          }
-        } catch (_) {
-          return json(res, 400, { success: false, message: 'Could not verify SMS history for this number.' });
-        }
+        // GotSMS documents eligibility on GET /api/rents/{rent_id}/services;
+        // let the supplier validate it instead of blocking with an unrelated messages endpoint.
         const listG = await gotsmsFetch(`/api/rents/${encodeURIComponent(rent_id)}/services`);
         const svc = (listG.data?.data || []).find((s) => String(s.service_id) === service_id && s.is_available !== false);
         if (!svc) return json(res, 400, { success: false, message: 'Service not available on this number' });
@@ -3487,8 +3494,10 @@ if (method === 'GET' && ga === 'gotsms_messages') {
         } catch (e) {
           console.warn('[gotsms transition] DB price lookup failed', e.message || e);
         }
-        const price = dbPrice != null ? dbPrice : gotsmsSellPriceNgn(plan.price || 0);
-        if (!(price > 0)) return json(res, 400, { success: false, message: 'Invalid plan price' });
+        if (dbPrice == null || !(dbPrice > 0)) {
+          return json(res, 400, { success: false, message: 'This plan has no normal selling price in the MJ HUB database yet. Please contact support; no wallet charge was made.' });
+        }
+        const price = dbPrice;
         const debit = await debitWalletStrict(auth.userId, price, 'gotsms_transition');
         if (!debit.ok) return json(res, 400, { success: false, message: debit.message || 'Insufficient wallet balance' });
         const g = await gotsmsFetch('/api/rents/' + encodeURIComponent(rent_id) + '/transition', { method: 'POST', body: { plan_id } });
