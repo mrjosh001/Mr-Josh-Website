@@ -423,6 +423,10 @@ function gotsmsPublicRent(r) {
     auto_renew: !!(r.is_included_for_next_renewal),
     active_from: r.active_from,
     active_till: r.active_till,
+    online_till: r.online_till,
+    online_time_left_seconds: r.online_time_left_seconds,
+    wakeup_time_left_seconds: r.wakeup_time_left_seconds,
+    time_left_seconds: r.time_left_seconds,
     wake_from: r.wake_from,
     wake_till: r.wake_till,
     can_wake_up: r.can_wake_up,
@@ -3293,7 +3297,27 @@ export default async function handler(req, res) {
             console.warn('[gotsms_rents] heal', e.message || e);
           }
         }
-        return json(res, 200, { success: true, data: filtered.map(gotsmsPublicRent), meta: g.data.meta });
+        // Attach the normal database selling prices to eligible plan switches.
+        const publicRents = filtered.map(gotsmsPublicRent);
+        const transitionIds = [...new Set(publicRents.flatMap((r) => (r.transition_options || []).map((o) => String(o.plan_id || o.id || '')).filter(Boolean)))];
+        if (transitionIds.length) {
+          try {
+            const { data: priceRows } = await supabase
+              .from('number_services')
+              .select('service_id, price, price_source, is_available')
+              .eq('source', 'gotsms')
+              .in('service_id', transitionIds);
+            const priceById = new Map((priceRows || []).filter((x) => Number(x.price) > 0).map((x) => [String(x.service_id), x]));
+            for (const rent of publicRents) {
+              rent.transition_options = (rent.transition_options || []).map((opt) => {
+                const id = String(opt.plan_id || opt.id || '');
+                const db = priceById.get(id);
+                return db ? { ...opt, plan_id: id, price_ngn: Math.round(Number(db.price)), is_available: db.is_available !== false } : opt;
+              });
+            }
+          } catch (e) { console.warn('[gotsms_rents] transition prices', e.message || e); }
+        }
+        return json(res, 200, { success: true, data: publicRents, meta: g.data.meta });
       }
 
       if (method === 'POST' && ga === 'gotsms_wake') {
