@@ -2155,24 +2155,27 @@ async function confirmLogout() {
 }
 
 let _adminDataLoading = false;
+let _productsLoaded = false;
+let _profilesLoaded = false;
+let _ordersLoaded = false;
 let _smsOrdersLoaded = false;
 let _boosterOrdersLoaded = false;
 let _notificationHistoryLoaded = false;
 let _supplierBalancesLoaded = false;
+let _overviewStatsLoaded = false;
 
 async function loadAllData() {
  if (_adminDataLoading) return;
  _adminDataLoading = true;
  try {
- // Load only the data needed for the first dashboard view. Large, rarely
- // used panels are fetched when opened so they don't delay the initial view.
- const tasks = [];
- if (typeof loadProducts === 'function') tasks.push(loadProducts().catch(function(e){ console.error('products', e); }));
- if (typeof loadProfiles === 'function') tasks.push(loadProfiles().catch(function(e){ console.error('profiles', e); }));
- if (typeof tryLoadOrders === 'function') tasks.push(tryLoadOrders().catch(function(e){ console.error('orders', e); }));
- await Promise.all(tasks);
+ // Prioritize the visible overview. Defer large lists until their tab is
+ // opened; this avoids fetching and rendering thousands of rows at sign-in.
+ if (typeof loadOverviewStats === 'function' && !_overviewStatsLoaded) {
+   _overviewStatsLoaded = true;
+   loadOverviewStats('7days').catch(function(e){ _overviewStatsLoaded = false; console.error('overview stats', e); });
+ }
+ // Keep supplier sync status recovery non-blocking.
  try { if (typeof resumeGrizzlySyncIfRunning === 'function') resumeGrizzlySyncIfRunning(); } catch (e) {}
- try { if (typeof updateMetrics === 'function') updateMetrics(); } catch (e) {}
  } finally {
  _adminDataLoading = false;
  }
@@ -5546,6 +5549,34 @@ function switchTab(name) {
  document.getElementById('pageTitle').textContent = tabTitles[name] || name;
  if (name === 'sub-admins') loadSubAdmins();
  closeSidebar();
+ // Load large datasets only when the matching section is opened.
+ if (name === 'products' && !_productsLoaded) {
+   _productsLoaded = true;
+   loadProducts().catch(function(e){ _productsLoaded = false; console.error('products', e); });
+ }
+ if (name === 'users' && !_profilesLoaded) {
+   _profilesLoaded = true;
+   loadProfiles().catch(function(e){ _profilesLoaded = false; console.error('profiles', e); });
+ }
+ if (name === 'orders' && !_ordersLoaded) {
+   _ordersLoaded = true;
+   tryLoadOrders().catch(function(e){ _ordersLoaded = false; console.error('orders', e); });
+ }
+ if (name === 'overview') {
+   if (!_overviewStatsLoaded) {
+     _overviewStatsLoaded = true;
+     loadOverviewStats(document.getElementById('revenuePeriod')?.value || '7days')
+       .catch(function(e){ _overviewStatsLoaded = false; console.error('overview stats', e); });
+   }
+   if (!_profilesLoaded) {
+     _profilesLoaded = true;
+     loadProfiles().catch(function(e){ _profilesLoaded = false; console.error('profiles', e); });
+   }
+   if (!_ordersLoaded) {
+     _ordersLoaded = true;
+     tryLoadOrders().catch(function(e){ _ordersLoaded = false; console.error('orders', e); });
+   }
+ }
  // Lazy-load expensive datasets only when their tab is opened.
  if (name === 'sms-orders' && !_smsOrdersLoaded) {
    _smsOrdersLoaded = true;
