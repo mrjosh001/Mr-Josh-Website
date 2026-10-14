@@ -399,17 +399,24 @@ async function saveGotsmsPurchaseTransaction({ userId, customerId, rentId, order
 }
 
 /** Update the same purchase row instead of creating a second refund transaction. */
-async function updateGotsmsPurchaseTransaction({ userId, rentId, status, subtitle }) {
-  if (!userId || !rentId || !status) return;
+async function updateGotsmsPurchaseTransaction({ userId, rentId, status, subtitle, amountNgn }) {
+  if (!userId || !rentId) return;
   try {
-    const { error } = await supabase.from('transactions').update({
-      status,
-      ...(subtitle ? { subtitle } : {})
-    }).eq('user_id', userId).eq('category', 'MJ SMS').eq('type', 'purchase')
+    const patch = {};
+    if (status) patch.status = status;
+    if (subtitle) patch.subtitle = subtitle;
+    if (amountNgn != null && Number.isFinite(Number(amountNgn))) {
+      const total = Math.max(0, Math.round(Number(amountNgn)));
+      patch.amount_ngn = total;
+      patch.amount = '₦' + total.toLocaleString();
+    }
+    if (!Object.keys(patch).length) return;
+    const { error } = await supabase.from('transactions').update(patch)
+      .eq('user_id', userId).eq('category', 'MJ SMS').eq('type', 'purchase')
       .eq('external_reference', String(rentId));
     if (error) throw error;
   } catch (e) {
-    console.warn('[gotsms transaction status]', e.message || e, { rentId, userId, status });
+    console.warn('[gotsms transaction update]', e.message || e, { rentId, userId, status });
   }
 }
 
@@ -3681,6 +3688,11 @@ if (method === 'POST' && ga === 'gotsms_add_service') {
             price: Math.round(Number(currentRow.price || 0) + price), notes: JSON.stringify(meta)
           }).eq('id', currentRow.id);
           if (updateError) throw updateError;
+          await updateGotsmsPurchaseTransaction({
+            userId: auth.userId, rentId: rent_id,
+            amountNgn: Math.round(Number(currentRow.price || 0) + price),
+            subtitle: 'Rental with added service(s)'
+          });
           if (!childRentId) console.error('[gotsms add_service] supplier response omitted linked rent ID', supplierResult.data);
         } catch (e) {
           console.error('[gotsms add_service] persist linked service', e.message || e);
@@ -3789,6 +3801,11 @@ if (method === 'POST' && ga === 'gotsms_transition') {
             if (expiry) patch.code = String(expiry);
             const { error: updateError } = await supabase.from('number_orders').update(patch).eq('id', currentRow.id);
             if (updateError) throw updateError;
+            await updateGotsmsPurchaseTransaction({
+              userId: auth.userId, rentId: rent_id,
+              amountNgn: Math.round(Number(currentRow.price || 0) + price),
+              subtitle: 'Rental plan updated'
+            });
           }
         } catch (e) { console.warn('[gotsms transition] update existing rental row', e.message || e); }
         return json(res, 200, {
@@ -3952,7 +3969,7 @@ if (method === 'POST' && ga === 'gotsms_toggle_renewal') {
         // Keep one history row: the original purchase becomes Refunded.
         await updateGotsmsPurchaseTransaction({
           userId: auth.userId, rentId: rent_id, status: 'refunded',
-          subtitle: 'Rental and paid add-ons refunded to wallet'
+          subtitle: 'Rental and paid add-ons refunded to wallet', amountNgn: refundAmt
         });
         return json(res, 200, { success: true,
           message: refundAmt > 0 ? 'Rental and all paid add-ons refunded to your wallet.' : 'Rental cancelled.',
