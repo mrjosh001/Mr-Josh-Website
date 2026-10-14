@@ -254,12 +254,13 @@ document.addEventListener('click', function(e){
       <p class="hint">One account per customer. It stays the same for every top up.</p>
     </div>
 
-    <div id="vaAmountState" style="display:none;">
+        <div id="vaAmountState" style="display:none;">
+      <button type="button" class="step-back" onclick="backToProviderFromAmount()"><i class="fa-solid fa-arrow-left"></i> Back</button>
       <div class="fund-hero">
         <div class="fund-hero-icon"><i class="fa-solid fa-wallet"></i></div>
         <div>
-          <h2>Fund Wallet</h2>
-          <p>Top up your wallet instantly</p>
+          <h2 id="amountStepTitle">Enter amount</h2>
+          <p id="amountStepSub">How much do you want to add?</p>
         </div>
       </div>
       <div class="form-group" style="margin-bottom:8px;">
@@ -275,16 +276,18 @@ document.addEventListener('click', function(e){
         <button type="button" class="chip" data-amt="50000" onclick="pickVaAmount(50000)">₦50,000</button>
       </div>
       <p class="fee-line" id="vaFeeLine">Min ₦1,000 · Max ₦700,000 · A 1% payment processing fee applies</p>
-      <button type="button" class="btn" id="vaContinueBtn" onclick="goToProviderStep()">Continue</button>
+      <button type="button" class="btn" id="vaContinueBtn" onclick="continueFromAmount()">Continue</button>
     </div>
 
     <div id="vaProviderState" style="display:none;">
-      <button type="button" class="step-back" onclick="backToAmountFromProvider()"><i class="fa-solid fa-arrow-left"></i> Back</button>
-      <div class="amount-summary">
-        <span style="color:var(--muted)">Amount</span>
-        <strong id="providerAmountLabel">₦0</strong>
+      <div class="fund-hero">
+        <div class="fund-hero-icon"><i class="fa-solid fa-wallet"></i></div>
+        <div>
+          <h2>Fund Wallet</h2>
+          <p>Choose how you want to pay</p>
+        </div>
       </div>
-      <p style="font-size:13px;font-weight:700;margin:0 0 10px;color:var(--text)">Choose Provider</p>
+      <p style="font-size:13px;font-weight:700;margin:0 0 10px;color:var(--text)">Payment method</p>
       <div class="provider-list">
         <button type="button" class="provider-card" id="providerBankBtn" onclick="chooseBankTransfer()">
           <div class="provider-icon bank"><i class="fa-solid fa-building-columns"></i></div>
@@ -418,20 +421,12 @@ function setOtherMethod(method) {
 
 function headerDepositBack(e) {
   if (e) e.preventDefault();
-  var step = window.__depositStep || 'amount';
-  if (step === 'pay') {
-    backToProviderFromPay();
-    return false;
-  }
-  if (step === 'provider' || step === 'empty') {
-    backToAmountFromProvider();
-    return false;
-  }
-  if (step === 'loading' || step === 'error') {
-    showVaState('amount');
-    return false;
-  }
-  // amount (first step) → dashboard home
+  var step = window.__depositStep || 'provider';
+  if (step === 'pay') { backToProviderFromPay(); return false; }
+  if (step === 'crypto') { showVaState('provider'); return false; }
+  if (step === 'empty') { showVaState('provider'); return false; }
+  if (step === 'amount') { showVaState('provider'); return false; }
+  if (step === 'loading' || step === 'error') { showVaState('provider'); return false; }
   location.href = 'dashboard.html#home';
   return false;
 }
@@ -461,18 +456,23 @@ function showVaState(which) {
   if (h2) h2.style.display = hideHead ? 'none' : '';
   if (sub) sub.style.display = hideHead ? 'none' : '';
 }
-function goToProviderStep() {
-  var amount = Math.round(parseFloat(document.getElementById('vaAmountInput').value) || 0);
-  if (amount < VA_MIN) return toast('Minimum is ₦' + VA_MIN.toLocaleString());
-  if (amount > VA_MAX) return toast('Maximum is ₦' + VA_MAX.toLocaleString());
-  var lab = document.getElementById('providerAmountLabel');
-  if (lab) lab.textContent = fmtNgn(amount);
-  var di = document.getElementById('depositInput');
-  if (di) di.value = String(amount);
-  showVaState('provider');
-}
-function backToAmountFromProvider() {
+function selectDepositMethod(method) {
+  window.__depositMethod = method; // bank | crypto | manual
+  var titles = {
+    bank: ['Bank transfer', 'Enter amount to transfer'],
+    crypto: ['Crypto', 'Enter amount · 1% fee · rate ₦1,450/$'],
+    manual: ['Manual deposit', 'Enter amount, then message support']
+  };
+  var t = titles[method] || titles.bank;
+  var ht = document.getElementById('amountStepTitle');
+  var hs = document.getElementById('amountStepSub');
+  if (ht) ht.textContent = t[0];
+  if (hs) hs.textContent = t[1];
+  onVaAmountInput();
   showVaState('amount');
+}
+function backToProviderFromAmount() {
+  showVaState('provider');
 }
 function backToProviderFromPay() {
   stopBalanceWatch();
@@ -480,9 +480,27 @@ function backToProviderFromPay() {
 }
 function backToProviderFromEmpty() {
   window.__pendingBankPay = false;
-  showVaState('provider');
+  showVaState('amount');
 }
-async function chooseBankTransfer() {
+function continueFromAmount() {
+  var amount = Math.round(parseFloat(document.getElementById('vaAmountInput').value) || 0);
+  var method = window.__depositMethod || 'bank';
+  var minA = method === 'bank' ? VA_MIN : MIN;
+  var maxA = method === 'bank' ? VA_MAX : MAX;
+  if (amount < minA) return toast('Minimum is ₦' + minA.toLocaleString());
+  if (amount > maxA) return toast('Maximum is ₦' + maxA.toLocaleString());
+  var di = document.getElementById('depositInput');
+  if (di) di.value = String(amount);
+  if (method === 'bank') return proceedBankTransfer();
+  if (method === 'crypto') return proceedCryptoFromAmount();
+  if (method === 'manual') return proceedManualFromAmount();
+  return proceedBankTransfer();
+}
+
+function chooseBankTransfer() { selectDepositMethod('bank'); }
+function chooseCryptoDeposit() { selectDepositMethod('crypto'); }
+function chooseManualWhatsApp() { selectDepositMethod('manual'); }
+async function proceedBankTransfer() {
   var btn = document.getElementById('providerBankBtn');
   if (btn) {
     btn.disabled = true;
@@ -532,51 +550,7 @@ async function chooseBankTransfer() {
   }
 }
 
-async function chooseCryptoDeposit() {
-  var amount = Math.round(parseFloat(document.getElementById('vaAmountInput').value) || 0);
-  if (amount < MIN) return toast('Minimum deposit is ₦' + MIN.toLocaleString());
-  if (amount > MAX) return toast('Maximum deposit is ₦' + MAX.toLocaleString());
-  var btn = document.getElementById('providerCryptoBtn');
-  if (btn) { btn.disabled = true; btn.style.opacity = '0.7'; }
-  try {
-    var accessToken = await getAccessToken();
-    if (!accessToken) { toast('Please sign in again'); return; }
-    toast('Opening crypto checkout…');
-    var res = await fetch('/api/deposit?action=heleket_create', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + accessToken },
-      body: JSON.stringify({ amount: amount })
-    });
-    var data = await res.json().catch(function () { return {}; });
-    if (!res.ok || !data.success || !data.url) {
-      toast(data.message || 'Crypto payment unavailable. Check Heleket keys or try again.');
-      return;
-    }
-    try {
-      sessionStorage.setItem('mjhub_pending_heleket', JSON.stringify({
-        amount: amount,
-        amount_usd: data.amount_usd,
-        order_id: data.order_id,
-        rate: data.rate || DEPOSIT_USD_RATE,
-        ts: Date.now()
-      }));
-    } catch (e) {}
-    window.location.href = data.url;
-  } catch (e) {
-    toast(e.message || 'Network error');
-  } finally {
-    if (btn) { btn.disabled = false; btn.style.opacity = ''; }
-  }
-}
 
-function chooseManualWhatsApp() {
-  var amount = Math.round(parseFloat(document.getElementById('vaAmountInput').value) || 0);
-  if (amount < MIN) return toast('Minimum deposit is ₦' + MIN.toLocaleString());
-  if (amount > MAX) return toast('Maximum deposit is ₦' + MAX.toLocaleString());
-  var di = document.getElementById('depositInput');
-  if (di) di.value = String(amount);
-  messageAdminForDeposit();
-}
 function calcExactToSend(desired) {
   const d = Math.round(Number(desired) || 0);
   if (d <= 0) return 0;
@@ -652,7 +626,7 @@ async function continueVaPay() {
 }
 function backToVaAmount() {
   stopBalanceWatch();
-  showVaState('amount');
+  showVaState('provider');
 }
 
 function showVaSuccessAndGoHome(creditedAmount){
@@ -785,7 +759,7 @@ async function checkVirtualAccount(opts) {
       vaDetails = null;
     }
     // Never show generate/loading on entry — amount first; Bank Transfer handles account
-    if (!silent) showVaState('amount');
+    if (!silent) showVaState('provider');
   } catch (err) {
     if (silent) {
       vaDetails = null;
@@ -980,12 +954,12 @@ document.addEventListener('visibilitychange', async () => {
     localStorage.removeItem('mjhub_pending_pocketfi');
   } catch (_) {}
 });
-(async () => {
+((async () => {
   syncThemeUi();
   if (!(await ensureAuth())) return;
   await handleDepositReturn();
-  // Show amount form immediately — do not block on bank account check
-  showVaState('amount');
+  // Methods first, then amount, then payment details
+  showVaState('provider');
   // Warm VA in background for Bank Transfer (no spinner)
   checkVirtualAccount({ silent: true }).catch(function () {});
 })();
