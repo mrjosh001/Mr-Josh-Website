@@ -2593,6 +2593,14 @@ body::after {
 }
 .metric-pill-box span { display: block; font-size: 9px; font-weight: 700; color: var(--muted); text-transform: uppercase; margin-bottom: 2px; letter-spacing: 0.04em; }
 .metric-pill-box strong { font-size: 11px; font-weight: 800; }
+.converter-pro-card { max-width: 480px !important; }
+.converter-helper-row { display:flex; justify-content:space-between; align-items:center; gap:10px; margin-top:8px; color:var(--muted); font-size:11px; }
+.converter-max-btn { border:0; background:var(--primary-glow); color:var(--primary); border-radius:8px; padding:5px 9px; font-weight:800; cursor:pointer; }
+.converter-quick-amounts { display:flex; gap:7px; margin-top:10px; flex-wrap:wrap; }
+.converter-quick-amounts button { flex:1; min-width:70px; border:1px solid var(--border); background:var(--card); color:var(--text); border-radius:10px; padding:8px 6px; font-size:11px; font-weight:800; cursor:pointer; }
+.converter-quick-amounts button:active, .converter-max-btn:active { transform:scale(.98); }
+.converter-swap-vector-btn { cursor:pointer; border:1px solid var(--border); }
+#executeConversionBtn:disabled { opacity:.65; cursor:wait; }
 .conversion-loading-box {
     display: none; align-items: center; gap: 10px; background: var(--primary-glow);
     padding: 12px 14px; border-radius: 12px; font-size: 13px; color: var(--primary); font-weight: 700; margin-bottom: 12px;
@@ -4003,40 +4011,54 @@ html[data-theme="light"] .logo-word, :root[data-theme="light"] .logo-word{color:
 </div>
 
 <div class="currency-modal" id="currencyConverterModal">
-    <div class="currency-modal-card">
+    <div class="currency-modal-card converter-pro-card" role="dialog" aria-modal="true" aria-labelledby="converterDialogTitle">
         <div class="converter-pro-header">
-            <div class="converter-pro-title"><span><i class="fa-solid fa-right-left"></i></span> Converter</div>
-            <button onclick="closeCurrencyModal()" style="background:var(--bg-main);border:1px solid var(--border-color);width:34px;height:34px;border-radius:50%;cursor:pointer;color:var(--text-main);">✕</button>
+            <div>
+                <div class="converter-pro-title" id="converterDialogTitle"><span><i class="fa-solid fa-right-left"></i></span> Currency converter</div>
+                <p style="margin:5px 0 0 44px;color:var(--muted);font-size:12px;">Preview the rate before moving funds between your MJ HUB wallets.</p>
+            </div>
+            <button type="button" onclick="closeCurrencyModal()" aria-label="Close converter" style="background:var(--bg-main);border:1px solid var(--border-color);width:34px;height:34px;border-radius:50%;cursor:pointer;color:var(--text-main);">✕</button>
         </div>
         <div class="converter-grid-layout">
             <div class="converter-panel-card">
                 <div class="converter-panel-top">
-                    <span class="converter-field-label">You Send</span>
+                    <label class="converter-field-label" for="baseConvertInput">You send</label>
                     <div class="currency-selector-badge"><span id="fromCurrencySymbol">₦</span> <strong id="fromCurrencyCode">NGN</strong></div>
                 </div>
-                <input type="number" id="baseConvertInput" class="converter-input-field" placeholder="0.00" oninput="executeConversion()">
+                <input type="number" id="baseConvertInput" class="converter-input-field" placeholder="₦0.00" inputmode="decimal" min="0" step="0.01" autocomplete="off" oninput="executeConversion()" aria-label="Amount to convert">
+                <div class="converter-helper-row">
+                    <span id="converterBalanceInfo">Available: ₦0.00</span>
+                    <button type="button" class="converter-max-btn" onclick="setConverterMax()">Use max</button>
+                </div>
+                <div class="converter-quick-amounts" aria-label="Quick amount presets">
+                    <button type="button" data-converter-preset onclick="setConverterPreset(1000)">₦1,000</button>
+                    <button type="button" data-converter-preset onclick="setConverterPreset(5000)">₦5,000</button>
+                    <button type="button" data-converter-preset onclick="setConverterPreset(10000)">₦10,000</button>
+                </div>
             </div>
             <div class="converter-swap-vector-wrap">
-                <div class="converter-swap-vector-btn" onclick="invertCurrencies()"><i class="fa-solid fa-arrow-down-up"></i></div>
+                <button type="button" class="converter-swap-vector-btn" onclick="invertCurrencies()" aria-label="Swap conversion direction"><i class="fa-solid fa-arrow-down-up"></i></button>
             </div>
             <div class="converter-panel-card">
                 <div class="converter-panel-top">
-                    <span class="converter-field-label">You Receive</span>
+                    <span class="converter-field-label">You receive (estimate)</span>
                     <div class="currency-selector-badge"><span id="toCurrencySymbol">$</span> <strong id="toCurrencyCode">USD</strong></div>
                 </div>
-                <input type="text" id="targetConvertOutput" class="converter-input-field" placeholder="0.00" readonly style="color:var(--primary-color);">
+                <input type="text" id="targetConvertOutput" class="converter-input-field" placeholder="0.00" readonly aria-label="Estimated converted amount">
             </div>
         </div>
         <div class="quantum-metrics-grid">
-            <div class="metric-pill-box"><span>Rate</span><strong id="rateDisplay">1 USD = ₦1,420</strong></div>
-            <div class="metric-pill-box"><span>Speed</span><strong>Instant</strong></div>
-            <div class="metric-pill-box"><span>Fee</span><strong style="color:var(--success-color);">Free</strong></div>
+            <div class="metric-pill-box"><span>Exchange rate</span><strong id="rateDisplay">Loading rate…</strong></div>
+            <div class="metric-pill-box"><span>Processing</span><strong>Instant</strong></div>
+            <div class="metric-pill-box"><span>Conversion fee</span><strong style="color:var(--success-color);">No extra fee</strong></div>
         </div>
-        <div class="conversion-loading-box" id="conversionLoadingBox">
+        <p id="converterUpdatedAt" style="margin:8px 0 14px;color:var(--muted);font-size:11px;">Loading current MJ HUB rate…</p>
+        <div class="conversion-loading-box" id="conversionLoadingBox" role="status" aria-live="polite">
             <div class="spinner-icon"></div>
-            <span id="conversionStatusText">Converting...</span>
+            <span id="conversionStatusText">Verifying balance…</span>
         </div>
-        <button class="btn-sm-primary" id="executeConversionBtn" style="width:100%;padding:15px;" onclick="commitSwapTransaction()">Convert</button>
+        <button class="btn-sm-primary" id="executeConversionBtn" style="width:100%;padding:15px;" onclick="commitSwapTransaction()">Convert funds securely</button>
+        <p style="margin:10px 0 0;color:var(--muted);font-size:11px;line-height:1.5;">Conversions are final once confirmed. Your balance and transaction history update after the server confirms success.</p>
     </div>
 </div>
 
