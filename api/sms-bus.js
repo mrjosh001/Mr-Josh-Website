@@ -1855,6 +1855,12 @@ export default async function handler(req, res) {
               phone_number: null
             });
           } catch (_) {}
+          await sendPushToUser(supabase, auth.userId, {
+            title: 'Verification code received',
+            body: 'Your SMS verification code has arrived. Open MJ HUB to view it.',
+            url: '/mj-sms-history.html',
+            type: 'sms_received'
+          });
           return json(res, 200, {
         success: true,
         data: { status: 'completed', code, number: null, phone_number: null, order_id }
@@ -1957,6 +1963,14 @@ export default async function handler(req, res) {
           });
         }
         await markTxStatus(auth.userId, order_id, order.phone_number, 'completed');
+        if (!order.code || String(order.status || '').toLowerCase() !== 'completed') {
+          await sendPushToUser(supabase, auth.userId, {
+            title: 'Verification code received',
+            body: 'Your SMS verification code has arrived. Open MJ HUB to view it.',
+            url: '/mj-sms-history.html',
+            type: 'sms_received'
+          });
+        }
         return json(res, 200, {
           success: true,
           data: { status: 'completed', code, number: order.phone_number }
@@ -2525,6 +2539,12 @@ export default async function handler(req, res) {
           supplier_order: { provider: 'smsbus_rent', order_id: String(orderId) }
         });
       } catch (_) {}
+      await sendPushToUser(supabase, auth.userId, {
+        title: 'Number rental ready',
+        body: 'Your rented number is ready. Open MJ HUB to view its inbox.',
+        url: '/mj-sms-history.html?view=rent',
+        type: 'purchase'
+      });
 
       return json(res, 200, {
         success: true,
@@ -2830,6 +2850,14 @@ export default async function handler(req, res) {
         } catch (_) {}
       }
 
+      await sendPushToUser(supabase, auth.userId, {
+        title: 'Rental cancelled',
+        body: refundAmount > 0
+          ? 'Your number rental was cancelled and ₦' + refundAmount.toLocaleString() + ' was returned to your wallet.'
+          : 'Your number rental was cancelled.',
+        url: '/mj-sms-history.html?view=rent',
+        type: 'refund'
+      });
       return json(res, 200, {
         success: true,
         message: 'Rental cancelled. ₦' + refundAmount.toLocaleString() + ' returned to your wallet.',
@@ -3279,6 +3307,12 @@ export default async function handler(req, res) {
           }
         }
 
+        await sendPushToUser(supabase, auth.userId, {
+          title: 'USA number rental ready',
+          body: 'Your USA number has been rented successfully. Open MJ HUB to view the inbox.',
+          url: '/mj-sms-history.html?view=rent',
+          type: 'purchase'
+        });
         return json(res, 201, {
           success: true,
           message: g.data.message || 'Number rented successfully',
@@ -3431,6 +3465,14 @@ export default async function handler(req, res) {
             }
           }
         }
+        await sendPushToUser(supabase, auth.userId, {
+          title: 'USA number rental ready',
+          body: rented === 1
+            ? 'Your USA number has been rented successfully. Open MJ HUB to view the inbox.'
+            : rented + ' USA numbers have been rented successfully. Open MJ HUB to view them.',
+          url: '/mj-sms-history.html?view=rent',
+          type: 'purchase'
+        });
         return json(res, 201, {
           success: true,
           message: g.data?.message || `Rented ${rented} of ${quantity}`,
