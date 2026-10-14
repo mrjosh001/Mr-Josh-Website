@@ -3948,12 +3948,15 @@ if (method === 'POST' && ga === 'gotsms_toggle_renewal') {
         const auth = await requireAuth(req);
         if (!auth.ok) return json(res, auth.status, { success: false, message: auth.message });
         const body = await readBody(req);
-        const rent_id = String(body.rent_id || '').trim();
+        let rent_id = String(body.rent_id || '').trim();
         if (!rent_id) return json(res, 400, { success: false, message: 'rent_id required' });
         const order = await gotsmsAssertOwns(auth.userId, rent_id);
-        if (!order) return json(res, 403, { success: false, message: 'Rental not found' });
-        if (order.refunded || order.status === 'refunded' || order.status === 'cancelled') {
-          return json(res, 400, { success: false, message: 'This rental was already cancelled or refunded.' });
+        if (!order) return json(res, 404, { success: false, message: 'Rental not found' });
+        // Resolve the customer-facing GS-... order reference to the supplier rent ID.
+        rent_id = String(order.idempotency_key || '').replace(/^gotsms-/, '') || rent_id;
+        const currentStatus = String(order.status || '').toLowerCase();
+        if (order.refunded || ['refunded', 'cancelled', 'canceled'].includes(currentStatus)) {
+          return json(res, 200, { success: true, message: 'Canceled', data: null });
         }
         const meta = gotsmsOrderMeta(order.notes);
         const children = Array.isArray(meta.service_rents) ? meta.service_rents : [];
