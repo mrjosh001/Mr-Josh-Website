@@ -349,6 +349,70 @@ async function claimGotsmsRefund(orderId) {
   return data || null;
 }
 
+/** Keep exactly one purchase transaction per GotSMS rent; status changes update that row. */
+async function saveGotsmsPurchaseTransaction({ userId, customerId, rentId, orderId, title, subtitle, amount, amountNgn, status = 'completed', supplierOrder }) {
+  const externalRef = String(rentId || '');
+  if (!userId || !externalRef) return { saved: false, reason: 'missing_reference' };
+  try {
+    const { data: existing, error: findError } = await supabase
+      .from('transactions')
+      .select('id')
+      .eq('user_id', userId)
+      .eq('category', 'MJ SMS')
+      .eq('type', 'purchase')
+      .eq('external_reference', externalRef)
+      .limit(1)
+      .maybeSingle();
+    if (findError) throw findError;
+    if (existing) {
+      const { error: updateError } = await supabase.from('transactions').update({
+        customer_id: customerId || null,
+        title: title || 'USA number rental',
+        subtitle: subtitle || '',
+        amount: amount || ('₦' + Number(amountNgn || 0).toLocaleString()),
+        amount_ngn: Math.round(Number(amountNgn) || 0),
+        status,
+        supplier_order: supplierOrder || { provider: 'gotsms', rent_id: externalRef, order_id: orderId }
+      }).eq('id', existing.id);
+      if (updateError) throw updateError;
+      return { saved: true, existing: true };
+    }
+    const { error: insertError } = await supabase.from('transactions').insert({
+      user_id: userId,
+      customer_id: customerId || null,
+      type: 'purchase',
+      category: 'MJ SMS',
+      title: title || 'USA number rental',
+      subtitle: subtitle || '',
+      amount: amount || ('₦' + Number(amountNgn || 0).toLocaleString()),
+      amount_ngn: Math.round(Number(amountNgn) || 0),
+      status,
+      external_reference: externalRef,
+      supplier_order: supplierOrder || { provider: 'gotsms', rent_id: externalRef, order_id: orderId }
+    });
+    if (insertError) throw insertError;
+    return { saved: true, existing: false };
+  } catch (e) {
+    console.error('[gotsms transaction]', e.message || e, { rentId: externalRef, userId });
+    return { saved: false, reason: e.message || String(e) };
+  }
+}
+
+/** Update the same purchase row instead of creating a second refund transaction. */
+async function updateGotsmsPurchaseTransaction({ userId, rentId, status, subtitle }) {
+  if (!userId || !rentId || !status) return;
+  try {
+    const { error } = await supabase.from('transactions').update({
+      status,
+      ...(subtitle ? { subtitle } : {})
+    }).eq('user_id', userId).eq('category', 'MJ SMS').eq('type', 'purchase')
+      .eq('external_reference', String(rentId));
+    if (error) throw error;
+  } catch (e) {
+    console.warn('[gotsms transaction status]', e.message || e, { rentId, userId, status });
+  }
+}
+
 async function gotsmsFetch(path, { method = 'GET', body } = {}) {
   if (!GOTSMS_TOKEN) {
     return { ok: false, status: 503, data: { success: false, message: 'GotSMS is not configured (set GOTSMS_API_TOKEN)' } };
@@ -3122,31 +3186,19 @@ export default async function handler(req, res) {
           });
         }
         const orderId = savedOrder;
-        let transactionSaved = false;
-        let transactionError = null;
-        for (let attempt = 0; attempt < 2 && !transactionSaved; attempt++) {
-          const tx = await supabase.from('transactions').insert({
-            user_id: auth.userId,
-            customer_id: profile.customer_id,
-            type: 'purchase',
-            category: 'MJ SMS',
-            title: `USA number rental · ${rent.service?.name || 'SMS'}`,
-            subtitle: `${rent.phone || ''} · ${rent.plan?.duration_translation || ''}`.trim(),
-            amount: `₦${price.toLocaleString()}`,
-            amount_ngn: price,
-            status: 'completed',
-            external_reference: String(rent.id),
-            supplier_order: { provider: 'gotsms', rent_id: String(rent.id), order_id: orderId }
-          });
-          transactionSaved = !tx.error;
-          transactionError = tx.error || null;
-          if (tx.error) console.error('[gotsms] rental transaction insert attempt ' + (attempt + 1), tx.error.message);
-        }
-        if (!transactionSaved) {
-          console.error('[gotsms] rental transaction persistence failed after retry', {
-            rentId: rent.id, userId: auth.userId, amount: price, error: transactionError?.message
-          });
-        }
+        // One idempotent transaction row per supplier rental; never blind-retry INSERT.
+        await saveGotsmsPurchaseTransaction({
+          userId: auth.userId,
+          customerId: profile.customer_id,
+          rentId: rent.id,
+          orderId,
+          title: `USA number rental · ${rent.service?.name || 'SMS'}`,
+          subtitle: `${rent.phone || ''} · ${rent.plan?.duration_translation || ''}`.trim(),
+          amount: `₦${price.toLocaleString()}`,
+          amountNgn: price,
+          status: 'completed',
+          supplierOrder: { provider: 'gotsms', rent_id: String(rent.id), order_id: orderId }
+        });
         const { data: fresh } = await supabase.from('profiles').select('balance').eq('id', auth.userId).single();
         // Optional auto-renew (GotSMS: POST renewal/toggle flips state; default is off)
         let autoRenew = false;
@@ -3301,19 +3353,24 @@ export default async function handler(req, res) {
           });
           out.push({ ...gotsmsPublicRent(rent), order_id: oid, price_ngn: unitNgn });
         }
-        try {
-          await supabase.from('transactions').insert({
-            user_id: auth.userId,
-            customer_id: profile.customer_id,
-            type: 'purchase',
-            category: 'MJ SMS',
-            title: `USA rental ×${rented}`,
-            subtitle: plan?.service?.name || 'GotSMS',
-            amount: `₦${charged.toLocaleString()}`,
-            amount_ngn: charged,
-            status: 'completed'
+        // Each number gets one transaction linked to its own rental ID.
+        // Do not add a second aggregate transaction for the same bulk purchase.
+        for (let i = 0; i < rentedList.length; i++) {
+          const rent = rentedList[i];
+          const saved = out[i];
+          await saveGotsmsPurchaseTransaction({
+            userId: auth.userId,
+            customerId: profile.customer_id,
+            rentId: rent.id,
+            orderId: saved && saved.order_id,
+            title: `USA number rental · ${rent.service?.name || plan?.service?.name || 'SMS'}`,
+            subtitle: `${rent.phone || ''} · ${plan?.duration_translation || ''}`.trim(),
+            amount: `₦${unitNgn.toLocaleString()}`,
+            amountNgn: unitNgn,
+            status: 'completed',
+            supplierOrder: { provider: 'gotsms', rent_id: String(rent.id), order_id: saved && saved.order_id }
           });
-        } catch (_) {}
+        }
         // Enable auto-renew on each rented number if requested
         const wantRenewBulk = body.auto_renew === true || body.auto_renew === 1 || body.auto_renew === '1' || body.auto_renew === 'true';
         if (wantRenewBulk && out.length) {
@@ -3878,18 +3935,17 @@ if (method === 'POST' && ga === 'gotsms_toggle_renewal') {
           try {
             const credit = await supabase.rpc('credit_balance', { p_user_id: auth.userId, p_amount: refundAmt });
             if (credit && credit.error) throw credit.error;
-            await supabase.from('transactions').insert({
-              user_id: auth.userId, type: 'refund', category: 'MJ SMS',
-              title: 'USA rental and add-ons refunded',
-              subtitle: 'Original rental plus all paid add-ons and plan changes',
-              amount: '₦' + refundAmt.toLocaleString(), amount_ngn: refundAmt, status: 'completed'
-            });
           } catch (e) {
             console.error('[gotsms] user refund credit', e);
             try { await supabase.from('number_orders').update({ refunded: false, status: 'active' }).eq('id', order.id); } catch (_) {}
             return json(res, 500, { success: false, message: 'Supplier approved the refund but wallet credit failed. Contact support with your rental ID.' });
           }
         }
+        // Keep one history row: the original purchase becomes Refunded.
+        await updateGotsmsPurchaseTransaction({
+          userId: auth.userId, rentId: rent_id, status: 'refunded',
+          subtitle: 'Rental and paid add-ons refunded to wallet'
+        });
         return json(res, 200, { success: true,
           message: refundAmt > 0 ? 'Rental and all paid add-ons refunded to your wallet.' : 'Rental cancelled.',
           data: parentRefundData });
