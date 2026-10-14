@@ -3489,7 +3489,8 @@ if (method === 'GET' && ga === 'gotsms_addable_services') {
         const parentRent = await gotsmsLiveRent(rent_id);
         const storedDuration = String(order.service_name || '').split('·').map((part) => part.trim())
           .find((part) => /^\d+\s*(day|days|week|weeks|month|months|year|years)$/i.test(part)) || '';
-        const parentPlan = (parentRent && parentRent.plan) || { duration_translation: storedDuration };
+        const priceRent = parentRent ? { ...parentRent, plan: parentRent.plan || { duration_translation: storedDuration } } : { plan: { duration_translation: storedDuration } };
+        const parentPlan = priceRent.plan;
         const parentDuration = gotsmsDurationKey(parentPlan);
         const meta = gotsmsOrderMeta(order.notes);
         const alreadyAdded = new Set((Array.isArray(meta.service_rents) ? meta.service_rents : []).map((item) => String(item.service_id || '')));
@@ -3498,7 +3499,7 @@ if (method === 'GET' && ga === 'gotsms_addable_services') {
           if (!serviceId || alreadyAdded.has(serviceId)) return null;
           if (service.is_available === false) return { service_id: serviceId, name: service.name || 'Service', price_ngn: 0,
             duration: parentPlan.duration_translation || '', is_available: false };
-          const priced = await gotsmsAddServiceSellPrice(serviceId, parentRent);
+          const priced = await gotsmsAddServiceSellPrice(serviceId, priceRent);
           const sameDuration = !!parentDuration && !!priced.plan && gotsmsDurationKey(priced.plan) === parentDuration;
           const price = Math.round(Number(priced.price) || 0);
           return { service_id: serviceId, name: service.name || 'Service', price_ngn: price,
@@ -3525,7 +3526,7 @@ if (method === 'POST' && ga === 'gotsms_add_service') {
         const parentRent = await gotsmsLiveRent(rent_id);
         const storedDuration = String(parentOrder.service_name || '').split('·').map((part) => part.trim())
           .find((part) => /^\d+\s*(day|days|week|weeks|month|months|year|years)$/i.test(part)) || '';
-        const priceRent = parentRent || { plan: { duration_translation: storedDuration } };
+        const priceRent = parentRent ? { ...parentRent, plan: parentRent.plan || { duration_translation: storedDuration } } : { plan: { duration_translation: storedDuration } };
         const priced = await gotsmsAddServiceSellPrice(service_id, priceRent);
         const price = Math.round(Number(priced.price) || 0);
         if (priced.unavailable || !(price > 0)) return json(res, 400, { success: false,
@@ -3789,13 +3790,26 @@ if (method === 'POST' && ga === 'gotsms_toggle_renewal') {
             return json(res, 500, { success: false, message: 'Supplier approved a service refund but its status could not be saved. Contact support before retrying.' });
           }
         }
-        const parentRefund = await gotsmsFetch('/api/rents/' + encodeURIComponent(rent_id) + '/refund', { method: 'POST' });
-        if (!parentRefund.ok || !parentRefund.data?.success) return json(res, parentRefund.status || 400, {
-          success: false, message: parentRefund.data?.message || 'The original rental refund was not approved. No wallet credit has been issued.'
-        });
+        let parentRefundData = meta.parent_refund_data || null;
+        if (!meta.parent_refund_approved) {
+          const parentRefund = await gotsmsFetch('/api/rents/' + encodeURIComponent(rent_id) + '/refund', { method: 'POST' });
+          if (!parentRefund.ok || !parentRefund.data?.success) return json(res, parentRefund.status || 400, {
+            success: false, message: parentRefund.data?.message || 'The original rental refund was not approved. No wallet credit has been issued.'
+          });
+          meta.parent_refund_approved = true;
+          parentRefundData = parentRefund.data.data || null;
+          meta.parent_refund_data = parentRefundData;
+          try {
+            const { error } = await supabase.from('number_orders').update({ notes: JSON.stringify(meta) }).eq('id', order.id);
+            if (error) throw error;
+          } catch (e) {
+            console.error('[gotsms] persist parent refund approval', e.message || e);
+            return json(res, 500, { success: false, message: 'Supplier approved the refund but its approval could not be saved. Contact support before retrying.' });
+          }
+        }
         const claimed = await claimGotsmsRefund(order.id);
         if (!claimed) return json(res, 200, { success: true,
-          message: 'Supplier refund was approved. The wallet refund has already been processed.', data: parentRefund.data.data || null });
+          message: 'Supplier refund was approved. The wallet refund has already been processed.', data: parentRefundData });
         const refundAmt = Math.max(0, Math.round(Number(claimed.price) || 0));
         if (refundAmt > 0) {
           try {
@@ -3815,7 +3829,7 @@ if (method === 'POST' && ga === 'gotsms_toggle_renewal') {
         }
         return json(res, 200, { success: true,
           message: refundAmt > 0 ? 'Rental and all paid add-ons refunded to your wallet.' : 'Rental cancelled.',
-          data: parentRefund.data.data || null });
+          data: parentRefundData });
       }
 
 if (method === 'POST' && ga === 'gotsms_renewal_toggle') {
