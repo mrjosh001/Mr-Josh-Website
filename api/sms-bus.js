@@ -3593,7 +3593,9 @@ if (method === 'GET' && ga === 'gotsms_messages') {
             .eq('idempotency_key', 'gotsms-' + rent_id).maybeSingle();
           if (currentRow) {
             const priorName = String(currentRow.service_name || 'USA rental');
-            const baseName = priorName.split(' · Add-on: ')[0].split(' · Plan: ')[0];
+            const priorParts = priorName.split(' · Add-on: ');
+            const addOnLabel = priorParts.length > 1 ? ' · Add-on: ' + priorParts.slice(1).join(' · Add-on: ') : '';
+            const baseName = priorParts[0].split(' · Plan: ')[0];
             const duration = String(
               switchedRent.plan?.duration_translation ||
               switchedRent.duration_translation ||
@@ -3605,7 +3607,7 @@ if (method === 'GET' && ga === 'gotsms_messages') {
             const serviceName = switchedRent.service?.name || plan.service?.name || baseName;
             const phone = switchedRent.phone || switchedRent.phone_number || currentRow.phone_number;
             const patch = {
-              service_name: String(serviceName || baseName).split(' · Plan: ')[0].split(' · Add-on: ')[0] + ' · Plan: ' + duration,
+              service_name: String(serviceName || baseName).split(' · Plan: ')[0].split(' · Add-on: ')[0] + ' · Plan: ' + duration + addOnLabel,
               status: switchedRent.status || 'active',
               price: Math.round(Number(currentRow.price || 0) + price)
             };
