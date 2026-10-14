@@ -1343,6 +1343,183 @@ async function handleExpireStaleSmsBus(req, res) {
 }
 
 
+async function handlePushPollCodes(req, res) {
+  const cronSecret = String(process.env.CRON_SECRET || '');
+  if (!cronSecret || String(req.headers.authorization || '') !== 'Bearer ' + cronSecret) {
+    return json(res, 401, { success: false, message: 'Unauthorized' });
+  }
+
+  const stats = { otp_checked: 0, rent_checked: 0, usa_checked: 0, notifications: 0, errors: 0 };
+
+  // Short-lived SMS-Bus OTP orders: check codes without requiring the user to keep the page open.
+  const { data: otpRows, error: otpError } = await supabase
+    .from('number_orders')
+    .select('id, user_id, order_id, status, refunded')
+    .eq('source', 'smsbus')
+    .eq('status', 'waiting_for_code')
+    .or('refunded.is.null,refunded.eq.false')
+    .order('created_at', { ascending: true })
+    .limit(80);
+  if (otpError) {
+    console.warn('[push_poll] SMS-Bus OTP query', otpError.message);
+    stats.errors++;
+  }
+  for (const row of otpRows || []) {
+    if (!row.order_id || !row.user_id) continue;
+    stats.otp_checked++;
+    try {
+      const result = await smsbusGet(OTP_BASE, '/get/sms', { request_id: row.order_id });
+      if (!busOk(result.data) || !result.data.data) continue;
+      const code = String(result.data.data);
+      const { data: changed, error } = await supabase.from('number_orders')
+        .update({ status: 'completed', code })
+        .eq('id', row.id).eq('status', 'waiting_for_code').select('id');
+      if (error) throw error;
+      if (changed && changed.length) {
+        await sendPushToUser(supabase, row.user_id, {
+          title: 'Verification code received',
+          body: 'Your SMS verification code has arrived. Open MJ HUB to view it.',
+          url: '/mj-sms-history.html',
+          type: 'sms_received'
+        });
+        stats.notifications++;
+      }
+    } catch (e) {
+      stats.errors++;
+      console.warn('[push_poll] OTP check failed', e.message || e);
+    }
+  }
+
+  // Long-term SMS-Bus rentals. Poll only rentals still marked active.
+  const { data: rentRows, error: rentError } = await supabase
+    .from('number_orders')
+    .select('id, user_id, order_id, phone_number, country_name, service_name, notes, status, refunded')
+    .eq('source', 'smsbus_rent')
+    .eq('status', 'active')
+    .or('refunded.is.null,refunded.eq.false')
+    .order('created_at', { ascending: true })
+    .limit(40);
+  if (rentError) {
+    console.warn('[push_poll] SMS-Bus rental query', rentError.message);
+    stats.errors++;
+  }
+  for (const row of rentRows || []) {
+    if (!row.user_id || !row.order_id || !row.phone_number) continue;
+    stats.rent_checked++;
+    try {
+      const country = String(row.country_name || '').trim().toLowerCase();
+      const areaCode = Object.keys(RENT_AREA_COUNTRY).find((k) => String(RENT_AREA_COUNTRY[k]).toLowerCase() === country)
+        || (/^[a-z]{2,3}$/i.test(country) ? country.toUpperCase() : '');
+      let mobile = String(row.phone_number).replace(/\D/g, '');
+      if (mobile.length > 10 && mobile.startsWith('1')) mobile = mobile.slice(1);
+      if (!areaCode || !mobile) continue;
+      const response = await smsbusGet(RENT_BASE, '/v1/rent/get/sms', { area_code: areaCode, mobile_number: mobile });
+      if (!busOk(response.data)) continue;
+      const raw = response.data && response.data.data;
+      let incoming = [];
+      if (Array.isArray(raw)) incoming = raw.map((m) => ({
+        body: m.content || m.body || m.text || m.message || '',
+        code: m.code || '', received_at: m.receive_at || m.received_at || m.time || null,
+        from: m.from || m.sender || ''
+      }));
+      else if (raw && typeof raw === 'object') {
+        const body = raw.content || raw.body || raw.text || raw.message || '';
+        if (body) incoming = [{ body, code: raw.code || '', received_at: raw.receive_at || raw.received_at || null, from: raw.from || raw.sender || '' }];
+      } else if (typeof raw === 'string' && raw.trim()) incoming = [{ body: raw, code: '', received_at: null, from: '' }];
+      if (!incoming.length) continue;
+      const stored = parseRentInboxNotes(row.notes);
+      const known = new Map(stored.map((m) => [String(m.body || '').replace(/\s+/g, ' ').trim().toLowerCase(), m]));
+      const normalized = mergeRentInbox([], incoming);
+      const fresh = normalized.some((m) => {
+        const key = String(m.body || '').replace(/\s+/g, ' ').trim().toLowerCase();
+        const old = known.get(key);
+        return !!key && (!old || (!String(old.code || '').trim() && !!String(m.code || '').trim()));
+      });
+      const merged = mergeRentInbox(stored, normalized);
+      const patch = { notes: packRentInboxNotes(merged, row.notes) };
+      if (!/sms\s*received/i.test(String(row.service_name || ''))) patch.service_name = (row.service_name || 'Rental') + ' · SMS received';
+      const { error } = await supabase.from('number_orders').update(patch).eq('id', row.id).eq('user_id', row.user_id);
+      if (error) throw error;
+      if (fresh) {
+        await sendPushToUser(supabase, row.user_id, {
+          title: 'SMS received',
+          body: 'A new message arrived on your rented number. Open MJ HUB to read it.',
+          url: '/mj-sms-history.html?view=rent',
+          type: 'sms_received'
+        });
+        stats.notifications++;
+      }
+    } catch (e) {
+      stats.errors++;
+      console.warn('[push_poll] SMS-Bus rental check failed', e.message || e);
+    }
+  }
+
+  // GotSMS USA rentals can receive messages after the customer closes MJ HUB.
+  const { data: usaRows, error: usaError } = await supabase
+    .from('number_orders')
+    .select('id, user_id, order_id, idempotency_key, phone_number, service_name, notes, code, status, refunded')
+    .eq('source', 'gotsms')
+    .in('status', ['active', 'completed'])
+    .or('refunded.is.null,refunded.eq.false')
+    .order('created_at', { ascending: true })
+    .limit(60);
+  if (usaError) {
+    console.warn('[push_poll] GotSMS rental query', usaError.message);
+    stats.errors++;
+  }
+  for (const row of usaRows || []) {
+    if (!row.user_id || !row.idempotency_key || row.refunded) continue;
+    const expires = row.code ? Date.parse(String(row.code)) : NaN;
+    if (Number.isFinite(expires) && expires <= Date.now()) continue;
+    const supplierRentId = String(row.idempotency_key).replace(/^gotsms-/, '');
+    if (!supplierRentId) continue;
+    stats.usa_checked++;
+    try {
+      const response = await gotsmsFetch('/api/numbers/' + encodeURIComponent(supplierRentId) + '/messages');
+      if (!response.ok) continue;
+      const raw = Array.isArray(response.data && response.data.data) ? response.data.data
+        : Array.isArray(response.data && response.data.messages) ? response.data.messages : [];
+      if (!raw.length) continue;
+      const incoming = raw.map((m) => ({
+        ...m,
+        body: m.body || m.content || m.text || m.message || '',
+        code: m.code || '',
+        received_at: m.received_at || m.receive_at || m.time || m.created_at || null,
+        from: m.from || m.sender || m.originator || 'SMS',
+        service_name: row.service_name || '',
+        service_rent_id: supplierRentId
+      }));
+      const messages = mergeRentInbox([], incoming);
+      const meta = gotsmsOrderMeta(row.notes);
+      const previous = Array.isArray(meta.inbox) ? meta.inbox : [];
+      const keys = new Set(previous.map((m) => String(m.service_rent_id || m.service_name || '') + '|' + String(m.body || '').replace(/\s+/g, ' ').trim().toLowerCase()));
+      const fresh = messages.some((m) => {
+        const key = String(m.service_rent_id || m.service_name || '') + '|' + String(m.body || '').replace(/\s+/g, ' ').trim().toLowerCase();
+        return !!String(m.body || m.code || '').trim() && !keys.has(key);
+      });
+      if (!fresh) continue;
+      meta.inbox = mergeRentInbox(previous, messages).slice(0, 100);
+      const patch = { notes: JSON.stringify(meta), status: 'completed' };
+      if (!/sms\s*received/i.test(String(row.service_name || ''))) patch.service_name = (row.service_name || 'USA rental') + ' · SMS received';
+      const { error } = await supabase.from('number_orders').update(patch).eq('id', row.id).eq('user_id', row.user_id).eq('source', 'gotsms');
+      if (error) throw error;
+      await sendPushToUser(supabase, row.user_id, {
+        title: 'Verification message received',
+        body: 'A new SMS arrived for your USA number. Open MJ HUB to view the code.',
+        url: '/mj-sms-usa-number.html?rent_id=' + encodeURIComponent(supplierRentId),
+        type: 'sms_received'
+      });
+      stats.notifications++;
+    } catch (e) {
+      stats.errors++;
+      console.warn('[push_poll] GotSMS rental check failed', e.message || e);
+    }
+  }
+
+  return json(res, 200, { success: true, ...stats });
+}
+
 export default async function handler(req, res) {
   if (!process.env.SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
     return json(res, 500, {
@@ -1361,6 +1538,10 @@ export default async function handler(req, res) {
         success: false,
         message: 'This server is temporarily unavailable. Contact support if it keeps happening.'
       });
+    }
+
+    if (method === 'GET' && action === 'push_poll_codes') {
+      return handlePushPollCodes(req, res);
     }
 
     // ——— Public-ish catalog (still require auth so only customers hit supplier) ———
