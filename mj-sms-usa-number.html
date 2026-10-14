@@ -151,6 +151,37 @@ h1{font-size:17px;font-weight:800;letter-spacing:-.02em}
 #inbox{display:flex;flex-direction:column;gap:0}
 .empty{text-align:center;padding:28px 16px;color:var(--muted);font-size:13px;font-weight:600;line-height:1.5}
 
+/* Refined responsive inbox layout */
+.header{position:sticky;top:0;z-index:30;backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px)}
+.main{width:min(100% - 28px,680px);margin:18px auto 40px}
+.inbox-card{padding:clamp(14px,3vw,20px);border-radius:22px}
+.msg{transition:border-color .18s ease,transform .18s ease;box-shadow:0 8px 26px rgba(0,0,0,.07)}
+.msg:hover{border-color:color-mix(in srgb,var(--primary) 38%,var(--border))}
+.msg-top{align-items:start}
+.msg-v{overflow-wrap:anywhere}
+.msg-body{white-space:pre-wrap;overflow-wrap:anywhere}
+.msg .code-pill{max-width:100%;flex-wrap:wrap}
+.msg .code{overflow-wrap:anywhere}
+.msg .copy-code,.msg .copy-inline{min-height:32px;transition:background .15s ease,border-color .15s ease}
+.msg .copy-code:hover,.msg .copy-inline:hover{background:var(--soft);border-color:var(--primary)}
+.modal{max-height:min(88vh,680px);overflow:auto}
+.modal-actions .btn{min-height:44px;font-weight:800}
+@media(max-width:480px){
+  .main{width:calc(100% - 20px);margin:12px auto 28px}
+  .msg{border-radius:16px;margin-bottom:10px}
+  .msg-top{grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:10px;padding:14px}
+  .msg-v{font-size:13px}
+  .msg-body{padding:8px 14px 13px;font-size:13px}
+  .msg-foot{align-items:flex-start;padding:12px 14px;gap:8px}
+  .msg .code{font-size:18px;letter-spacing:.08em}
+  .msg .code-pill{gap:6px;padding:7px 9px}
+  .msg .when-block{max-width:45%;overflow-wrap:anywhere}
+}
+@media(prefers-reduced-motion:reduce){
+  .msg,.msg .copy-code,.msg .copy-inline{transition:none}
+  .inbox-head .live::before{animation:none}
+}
+
 /* Modal */
 .modal-bg{position:fixed;inset:0;z-index:100;background:rgba(0,0,0,.55);display:none;align-items:flex-end;justify-content:center;
   padding:16px;backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px)}
@@ -194,7 +225,7 @@ h1{font-size:17px;font-weight:800;letter-spacing:-.02em}
       <div class="modal-row"><span>Service</span><span id="rfService">—</span></div>
       <div class="modal-row"><span>Back to wallet</span><span id="rfRefundAmt">If approved</span></div>
     </div>
-    <p class="modal-note">The rental ends now and the number is retired for good. Renting again always gives you a brand-new number.</p>
+    <p class="modal-note">If GotSMS approves the refund for the original rental and every added service, MJ HUB returns the full amount you paid for this rental, including paid add-ons and plan changes, to your wallet. The number will be retired.</p>
     <div class="modal-warn">Any SMS sent to this number afterwards will not reach you, and the codes it already received stay in Messages but the number cannot be reclaimed.</div>
     <div class="modal-actions">
       <button type="button" class="btn btn-ghost" id="rfCancel">Cancel</button>
