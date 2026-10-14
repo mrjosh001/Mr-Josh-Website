@@ -606,7 +606,10 @@ function startHistoryRealtime(sbClient, userId){
   } catch (_) {
     try { if (typeof refreshLiveUsaActive==='function') await refreshLiveUsaActive(session.access_token); } catch(__){}
   }
-  // 2-day cache + incremental: only pull new SMS rows / open statuses (not full table every time)
+  // Rental status can change without a new purchase row. Drop cached data after
+  // supplier reconciliation so canceled rentals cannot remain Active in history.
+  try { if (typeof invalidateHistCache==='function') invalidateHistCache(session.user.id); } catch(__){}
+  // Load a fresh snapshot after syncing supplier-side rental statuses.
   try {
     var cached = (typeof readHistCache==='function') ? readHistCache(session.user.id) : null;
     var headers = { Authorization: 'Bearer ' + session.access_token, Accept: 'application/json' };
