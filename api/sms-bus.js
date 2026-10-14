@@ -3487,8 +3487,9 @@ if (method === 'GET' && ga === 'gotsms_addable_services') {
             is_available: item.is_available !== false, _catalog_fallback: true }));
         }
         const parentRent = await gotsmsLiveRent(rent_id);
-        const storedDuration = String(order.service_name || '').split('·').map((part) => part.trim())
-          .find((part) => /^\d+\s*(day|days|week|weeks|month|months|year|years)$/i.test(part)) || '';
+        const storedDurationPart = String(order.service_name || '').split('·').map((part) => part.trim())
+          .find((part) => /^(?:Plan:\s*)?\d+\s*(day|days|week|weeks|month|months|year|years)$/i.test(part)) || '';
+        const storedDuration = storedDurationPart.replace(/^Plan:\s*/i, '');
         const priceRent = parentRent ? { ...parentRent, plan: parentRent.plan || { duration_translation: storedDuration } } : { plan: { duration_translation: storedDuration } };
         const parentPlan = priceRent.plan;
         const parentDuration = gotsmsDurationKey(parentPlan);
@@ -3524,8 +3525,9 @@ if (method === 'POST' && ga === 'gotsms_add_service') {
         if (!svc) return json(res, 400, { success: false, message: listG.data && listG.data.message ||
           'This service is not currently available for this number. Refresh the list and try again.' });
         const parentRent = await gotsmsLiveRent(rent_id);
-        const storedDuration = String(parentOrder.service_name || '').split('·').map((part) => part.trim())
-          .find((part) => /^\d+\s*(day|days|week|weeks|month|months|year|years)$/i.test(part)) || '';
+        const storedDurationPart = String(parentOrder.service_name || '').split('·').map((part) => part.trim())
+          .find((part) => /^(?:Plan:\s*)?\d+\s*(day|days|week|weeks|month|months|year|years)$/i.test(part)) || '';
+        const storedDuration = storedDurationPart.replace(/^Plan:\s*/i, '');
         const priceRent = parentRent ? { ...parentRent, plan: parentRent.plan || { duration_translation: storedDuration } } : { plan: { duration_translation: storedDuration } };
         const priced = await gotsmsAddServiceSellPrice(service_id, priceRent);
         const price = Math.round(Number(priced.price) || 0);
