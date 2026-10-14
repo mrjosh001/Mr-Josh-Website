@@ -3208,7 +3208,7 @@ export default async function handler(req, res) {
         }
         const orderId = savedOrder;
         // One idempotent transaction row per supplier rental; never blind-retry INSERT.
-        await saveGotsmsPurchaseTransaction({
+        const transactionSaved = await saveGotsmsPurchaseTransaction({
           userId: auth.userId,
           customerId: profile.customer_id,
           rentId: rent.id,
