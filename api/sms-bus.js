@@ -1220,13 +1220,13 @@ async function markTxStatus(userId, orderId, phone, status) {
   try {
     const { data } = await supabase
       .from('transactions')
-      .select('id, subtitle, notes, status, title')
+      .select('id, subtitle, notes, status, title, external_reference')
       .eq('user_id', userId)
       .eq('category', 'MJ SMS')
       .order('created_at', { ascending: false })
       .limit(25);
     const hit = (data || []).find((tx) => {
-      const blob = `${tx.subtitle || ''} ${tx.notes || ''}`;
+      const blob = `${tx.subtitle || ''} ${tx.notes || ''} ${tx.external_reference || ''}`;
       return blob.includes(String(orderId)) || (phone && blob.includes(String(phone)));
     });
     if (hit) await supabase.from('transactions').update({ status }).eq('id', hit.id);
@@ -1291,10 +1291,42 @@ async function handleExpireStaleSmsBus(req, res) {
     }
   }
 
+  // Also synchronize expired long-term SMS-Bus rentals when history is refreshed.
+  let rentExpired = 0;
+  try {
+    let rentQuery = supabase.from('number_orders')
+      .select('id, user_id, order_id, phone_number, code, status, refunded')
+      .eq('source', 'smsbus_rent')
+      .in('status', ['active', 'pending', 'processing', 'completed'])
+      .not('code', 'is', null)
+      .order('created_at', { ascending: true })
+      .limit(300);
+    if (scopeUserId) rentQuery = rentQuery.eq('user_id', scopeUserId);
+    const { data: rentRows, error: rentError } = await rentQuery;
+    if (rentError) throw rentError;
+    for (const rent of rentRows || []) {
+      const expiresAt = Date.parse(String(rent.code || ''));
+      if (!Number.isFinite(expiresAt) || expiresAt > Date.now()) continue;
+      const { error: updateError } = await supabase.from('number_orders')
+        .update({ status: 'expired' })
+        .eq('id', rent.id).eq('source', 'smsbus_rent')
+        .not('refunded', 'is', true);
+      if (updateError) {
+        console.warn('[smsbus rent expiry] order update', updateError.message);
+        continue;
+      }
+      await markTxStatus(rent.user_id, rent.order_id, rent.phone_number, 'refunded');
+      rentExpired += 1;
+    }
+  } catch (e) {
+    console.warn('[smsbus rent expiry] sync', e.message || e);
+  }
+
   return json(res, 200, {
     success: true,
     scanned: (stale || []).length,
     expired,
+    rent_expired: rentExpired,
     skipped,
     cutoff
   });
