@@ -846,7 +846,8 @@ async function creditUser(userId, amountNgn, reference) {
   await sendPushToUser(supabase, userId, {
     title: 'Deposit received',
     body: '₦' + amountNgn.toLocaleString() + ' has been added to your NGN wallet.',
-    url: '/dashboard.html'
+    url: '/dashboard.html',
+    type: 'deposit'
   });
   return { balance: next, wallet: 'ngn' };
 }
