@@ -2575,9 +2575,14 @@ body::after {
     font-size: 12px; font-weight: 700;
 }
 .converter-input-field {
-    background: transparent; border: none; font-size: 26px; font-weight: 800;
-    color: var(--text); width: 100%; outline: none; font-family: inherit;
+    display:block; box-sizing:border-box; background:var(--card); border:1px solid var(--border);
+    border-radius:12px; padding:13px 14px; min-height:58px; font-size:25px; font-weight:800;
+    color:var(--text); width:100%; outline:none; font-family:inherit; transition:border-color .18s, box-shadow .18s;
 }
+.converter-input-field:focus { border-color:var(--primary); box-shadow:0 0 0 3px var(--primary-glow); }
+.converter-input-field[readonly] { background:var(--bg); color:var(--text); cursor:default; }
+.converter-amount-entry-label { display:block; font-size:12px; font-weight:800; color:var(--text); margin:0 0 7px; }
+.converter-input-hint { margin:6px 0 0; color:var(--muted); font-size:11px; line-height:1.4; }
 .converter-swap-vector-wrap {
     position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); z-index: 10;
 }
@@ -4035,10 +4040,11 @@ html[data-theme="light"] .logo-word, :root[data-theme="light"] .logo-word{color:
         <div class="converter-grid-layout">
             <div class="converter-panel-card">
                 <div class="converter-panel-top">
-                    <label class="converter-field-label" for="baseConvertInput">You send</label>
+                    <label class="converter-amount-entry-label" for="baseConvertInput">Amount to convert · You send</label>
                     <div class="currency-selector-badge"><span id="fromCurrencySymbol">₦</span> <strong id="fromCurrencyCode">NGN</strong></div>
                 </div>
-                <input type="number" id="baseConvertInput" class="converter-input-field" placeholder="₦0.00" inputmode="decimal" min="0" step="0.01" autocomplete="off" oninput="executeConversion()" aria-label="Amount to convert">
+                <input type="number" id="baseConvertInput" class="converter-input-field" placeholder="Type amount (e.g. 5000)" inputmode="decimal" min="0.01" step="0.01" autocomplete="off" oninput="executeConversion()" aria-label="Enter the amount you want to convert" required>
+                <p class="converter-input-hint">Enter the exact amount you want to move. The converted amount appears below before you confirm.</p>
                 <div class="converter-helper-row">
                     <span id="converterBalanceInfo">Available: ₦0.00</span>
                     <button type="button" class="converter-max-btn" onclick="setConverterMax()">Use max</button>
@@ -6938,128 +6944,177 @@ window.copyIdToClipboard = function() {
     showToast('ID copied!', 'success');
 };
 
+
+// Single wallet-converter implementation. Uses the authenticated server endpoint;
+// the server validates the amount, updates the wallet, and records the transaction.
+let currentConverterRate = Number(exchangeRateUsdToNgn) || 1450;
+let converterBusy = false;
+
+function updateConverterUI() {
+    const isNgn = currentFromCurrency === 'NGN';
+    safeSet('fromCurrencySymbol', isNgn ? '₦' : '$');
+    safeSet('fromCurrencyCode', isNgn ? 'NGN' : 'USD');
+    safeSet('toCurrencySymbol', isNgn ? '$' : '₦');
+    safeSet('toCurrencyCode', isNgn ? 'USD' : 'NGN');
+    safeSet('converterBalanceInfo', 'Available: ' + (isNgn
+        ? '₦' + (Number(currentBalanceNgn) || 0).toLocaleString('en-NG', {minimumFractionDigits:2, maximumFractionDigits:2})
+        : '$' + (Number(currentBalanceUsd) || 0).toLocaleString('en-US', {minimumFractionDigits:2, maximumFractionDigits:2})));
+    safeSet('rateDisplay', isNgn
+        ? '₦' + Number(currentConverterRate).toLocaleString('en-NG', {maximumFractionDigits:2}) + ' = $1'
+        : '$1 = ₦' + Number(currentConverterRate).toLocaleString('en-NG', {maximumFractionDigits:2}));
+    document.querySelectorAll('[data-converter-preset]').forEach((button, index) => {
+        const values = isNgn ? [1000, 5000, 10000] : [1, 5, 10];
+        const amount = values[index];
+        if (amount != null) button.textContent = (isNgn ? '₦' : '$') + amount.toLocaleString(isNgn ? 'en-NG' : 'en-US');
+        button.onclick = () => setConverterPreset(amount);
+    });
+}
+
 window.openCurrencyModal = function() {
     currentFromCurrency = 'NGN';
+    const input = document.getElementById('baseConvertInput');
+    const output = document.getElementById('targetConvertOutput');
+    if (input) input.value = '';
+    if (output) output.value = '';
+    const status = document.getElementById('conversionStatusText');
+    if (status) status.textContent = 'Ready to convert';
+    const modal = document.getElementById('currencyConverterModal');
+    if (modal) modal.classList.add('active');
     updateConverterUI();
-    document.getElementById('baseConvertInput').value = '';
-    document.getElementById('targetConvertOutput').value = '';
-    document.getElementById('currencyConverterModal').classList.add('active');
+    executeConversion();
+    refreshConverterRate();
 };
-window.closeCurrencyModal = function() { document.getElementById('currencyConverterModal').classList.remove('active'); };
+window.closeCurrencyModal = function() {
+    const modal = document.getElementById('currencyConverterModal');
+    if (modal) modal.classList.remove('active');
+};
 window.invertCurrencies = function() {
     currentFromCurrency = currentFromCurrency === 'NGN' ? 'USD' : 'NGN';
+    const input = document.getElementById('baseConvertInput');
+    const output = document.getElementById('targetConvertOutput');
+    if (input) input.value = '';
+    if (output) output.value = '';
     updateConverterUI();
-    document.getElementById('baseConvertInput').value = '';
-    document.getElementById('targetConvertOutput').value = '';
+    executeConversion();
 };
-function updateConverterUI() {
-    const isNGN = currentFromCurrency === 'NGN';
-    safeSet('fromCurrencySymbol', isNGN ? '₦' : '$');
-    safeSet('fromCurrencyCode', isNGN ? 'NGN' : 'USD');
-    safeSet('toCurrencySymbol', isNGN ? '$' : '₦');
-    safeSet('toCurrencyCode', isNGN ? 'USD' : 'NGN');
-    safeSet('rateDisplay', `1 USD = ₦${exchangeRateUsdToNgn.toLocaleString()}`);
-}
+window.setConverterPreset = function(amount) {
+    const input = document.getElementById('baseConvertInput');
+    if (!input) return;
+    input.value = String(amount);
+    executeConversion();
+};
+window.setConverterMax = function() {
+    const available = currentFromCurrency === 'NGN' ? currentBalanceNgn : currentBalanceUsd;
+    window.setConverterPreset(Math.max(0, Number(available) || 0).toFixed(2));
+};
 window.executeConversion = function() {
-    const val = parseFloat(document.getElementById('baseConvertInput').value) || 0;
-    const converted = currentFromCurrency === 'NGN' ? val / exchangeRateUsdToNgn : val * exchangeRateUsdToNgn;
-    document.getElementById('targetConvertOutput').value = converted.toLocaleString(undefined, {minimumFractionDigits:2});
+    const input = document.getElementById('baseConvertInput');
+    const output = document.getElementById('targetConvertOutput');
+    const feedback = document.getElementById('converterAmountFeedback');
+    if (!output) return;
+    const amount = Number(input && input.value);
+    const isNgn = currentFromCurrency === 'NGN';
+    const available = Number(isNgn ? currentBalanceNgn : currentBalanceUsd) || 0;
+    if (!Number.isFinite(amount) || amount <= 0) {
+        output.value = '';
+        if (feedback) {
+            feedback.className = 'converter-amount-feedback';
+            feedback.textContent = 'Type an amount above to see how much you will receive.';
+        }
+        return;
+    }
+    const converted = isNgn ? amount / currentConverterRate : amount * currentConverterRate;
+    output.value = (isNgn ? '$' : '₦') + converted.toLocaleString(isNgn ? 'en-US' : 'en-NG', {minimumFractionDigits:2, maximumFractionDigits:2});
+    if (feedback) {
+        if (amount > available + 0.000001) {
+            feedback.className = 'converter-amount-feedback is-error';
+            feedback.textContent = 'Not enough ' + (isNgn ? 'NGN' : 'USD') + ' in your wallet. Reduce the amount or add funds.';
+        } else {
+            feedback.className = 'converter-amount-feedback is-valid';
+            feedback.textContent = 'You will receive approximately ' + output.value + '. Check the rate, then confirm below.';
+        }
+    }
+};
+window.refreshConverterRate = async function() {
+    const status = document.getElementById('converterUpdatedAt');
+    const button = document.querySelector('.converter-refresh-btn');
+    if (button) { button.disabled = true; button.innerHTML = '<i class="fa-solid fa-rotate fa-spin"></i> Updating'; }
+    try {
+        const response = await fetch('/api/deposit?action=convert_rate', {cache:'no-store'});
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok || !data.success || !(Number(data.rate) > 0)) throw new Error(data.message || 'Rate unavailable');
+        currentConverterRate = Number(data.rate);
+        if (status) status.textContent = 'MJ HUB wallet rate · updated ' + new Date().toLocaleTimeString();
+    } catch (error) {
+        if (status) status.textContent = 'Using the last available wallet rate (' + currentConverterRate.toLocaleString() + ' NGN per USD).';
+    } finally {
+        if (button) { button.disabled = false; button.innerHTML = '<i class="fa-solid fa-rotate"></i> Refresh rate'; }
+        updateConverterUI();
+        executeConversion();
+    }
 };
 window.commitSwapTransaction = async function() {
-    const val = parseFloat(document.getElementById('baseConvertInput').value) || 0;
-    if (val <= 0) return showToast('Enter valid amount', 'error');
-    if (currentFromCurrency === 'NGN' && currentBalanceNgn < val) return showToast('Insufficient NGN', 'error');
-    if (currentFromCurrency === 'USD' && currentBalanceUsd < val) return showToast('Insufficient USD', 'error');
-    if (!supabaseClient || !currentUserId) {
-        return showToast('Please sign in again to convert', 'error');
+    if (converterBusy) return;
+    const input = document.getElementById('baseConvertInput');
+    const button = document.getElementById('executeConversionBtn');
+    const loading = document.getElementById('conversionLoadingBox');
+    const status = document.getElementById('conversionStatusText');
+    const amount = Number(input && input.value);
+    const isNgn = currentFromCurrency === 'NGN';
+    const available = Number(isNgn ? currentBalanceNgn : currentBalanceUsd) || 0;
+    if (!Number.isFinite(amount) || amount <= 0) {
+        showToast('Enter an amount greater than zero.', 'error');
+        if (input) input.focus();
+        return;
     }
+    if (amount > available + 0.000001) {
+        showToast('Insufficient ' + (isNgn ? 'NGN' : 'USD') + ' wallet balance.', 'error');
+        if (input) input.focus();
+        return;
+    }
+    if (!supabaseClient) return showToast('Wallet service unavailable. Refresh and sign in again.', 'error');
+    const { data: sessionData, error: sessionError } = await supabaseClient.auth.getSession();
+    let accessToken = sessionData && sessionData.session && sessionData.session.access_token;
+    if (!accessToken || sessionError) {
+        const refreshed = await supabaseClient.auth.refreshSession();
+        accessToken = refreshed && refreshed.data && refreshed.data.session && refreshed.data.session.access_token;
+    }
+    if (!accessToken) return showToast('Your session has expired. Please sign in again.', 'error');
 
-    const box = document.getElementById('conversionLoadingBox');
-    const btn = document.getElementById('executeConversionBtn');
-    if (box) box.classList.add('active');
-    if (btn) { btn.disabled = true; btn.textContent = 'Converting…'; }
-
-    const direction = currentFromCurrency === 'NGN' ? 'ngn_to_usd' : 'usd_to_ngn';
-    let converted = currentFromCurrency === 'NGN'
-        ? val / (exchangeRateUsdToNgn || 1450)
-        : val * (exchangeRateUsdToNgn || 1450);
-
+    converterBusy = true;
+    if (button) { button.disabled = true; button.textContent = 'Converting…'; }
+    if (loading) loading.classList.add('active');
+    if (status) status.textContent = 'Verifying your balance and recording the conversion…';
     try {
-        const { data: sessWrap } = await supabaseClient.auth.getSession();
-        let accessToken = sessWrap?.session?.access_token;
-        if (!accessToken) {
-            const { data: refreshed } = await supabaseClient.auth.refreshSession();
-            accessToken = refreshed?.session?.access_token;
-        }
-        if (!accessToken) throw new Error('Session expired. Please sign in again.');
-
-        // Uses existing /api/pocketfi (no new serverless file). Service role updates balances (RLS-safe).
-        const res = await fetch('/api/pocketfi?action=convert', {
+        const response = await fetch('/api/deposit?action=convert', {
             method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': 'Bearer ' + accessToken
-            },
-            body: JSON.stringify({ action: 'convert', direction, amount: val })
+            headers: {'Content-Type':'application/json', 'Authorization':'Bearer ' + accessToken},
+            body: JSON.stringify({direction: isNgn ? 'ngn_to_usd' : 'usd_to_ngn', amount})
         });
-        let payload = {};
-        try { payload = await res.json(); } catch (_) {}
-        if (!res.ok || !payload.success) {
-            throw new Error(payload.message || 'Conversion failed');
-        }
-
-        if (payload.balance != null) currentBalanceNgn = Number(payload.balance) || 0;
-        if (payload.balance_usd != null) currentBalanceUsd = Number(payload.balance_usd) || 0;
-        if (payload.converted != null) converted = Number(payload.converted) || converted;
-
-        try {
-            const { data: prof } = await supabaseClient
-                .from('profiles')
-                .select('balance, balance_usd')
-                .eq('id', currentUserId)
-                .single();
-            if (prof) {
-                if (prof.balance != null) currentBalanceNgn = Number(prof.balance) || 0;
-                if (prof.balance_usd != null) currentBalanceUsd = Number(prof.balance_usd) || 0;
-            }
-        } catch (e) {}
-
-        updateBalanceDisplay();
-
-        const outLabel = currentFromCurrency === 'NGN'
-            ? ('$' + Number(converted).toFixed(2))
-            : ('₦' + Number(converted).toLocaleString(undefined, { maximumFractionDigits: 2 }));
-        const inLabel = currentFromCurrency === 'NGN'
-            ? ('₦' + val.toLocaleString())
-            : ('$' + val.toFixed(2));
-
-        transactions.unshift({
-            id: Date.now(),
-            type: 'conversion',
-            category: 'conversion',
-            title: 'Currency Conversion',
-            subtitle: inLabel + ' to ' + outLabel,
-            amount: outLabel,
-            date: new Date().toLocaleString(),
-            status: 'Success',
-            paymentProvider: 'MJ HUB',
-            channel: 'Converter'
-        });
-        renderRecentActivity();
-        if (typeof fetchUserTransactions === 'function') {
+        const result = await response.json().catch(() => ({}));
+        if (!response.ok || !result.success) throw new Error(result.message || 'Conversion could not be completed.');
+        currentBalanceNgn = Number(result.balance) || 0;
+        currentBalanceUsd = Number(result.balance_usd) || 0;
+        currentConverterRate = Number(result.rate) || currentConverterRate;
+        if (typeof updateBalanceDisplay === 'function') updateBalanceDisplay();
+        if (typeof fetchUserTransactions === 'function' && currentUserId) {
             try { await fetchUserTransactions(currentUserId); } catch (_) {}
         }
-
+        if (typeof renderRecentActivity === 'function') renderRecentActivity();
+        if (status) status.textContent = 'Conversion completed successfully.';
         closeCurrencyModal();
-        showToast('Converted successfully!', 'success');
-    } catch (err) {
-        console.error('commitSwapTransaction', err);
-        showToast(err.message || 'Conversion failed', 'error');
+        showToast('Conversion complete. Wallet balances and transaction history updated.', 'success');
+    } catch (error) {
+        if (status) status.textContent = error.message || 'Conversion failed. Try again.';
+        showToast(error.message || 'Conversion failed. Try again.', 'error');
     } finally {
-        if (box) box.classList.remove('active');
-        if (btn) { btn.disabled = false; btn.textContent = 'Convert'; }
+        converterBusy = false;
+        if (button) { button.disabled = false; button.textContent = 'Convert funds securely'; }
+        if (loading) loading.classList.remove('active');
+        updateConverterUI();
     }
 };
+
 
 function cartUnitPrice(item){
     const q = Math.max(1, parseInt(item && item.quantity, 10) || 1);
