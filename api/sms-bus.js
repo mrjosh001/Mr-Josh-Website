@@ -337,9 +337,10 @@ async function claimGotsmsRefund(orderId) {
     .from('number_orders')
     .update({ refunded: true, status: 'refunded' })
     .eq('id', orderId)
-    .eq('refunded', false)
+    .eq('source', 'gotsms')
+    .or('refunded.is.null,refunded.eq.false')
     .neq('status', 'refunded')
-    .select('id, price, user_id')
+    .select('id, price, user_id, notes')
     .maybeSingle();
   if (error) {
     console.error('[claimGotsmsRefund]', error.message);
@@ -491,11 +492,21 @@ function gotsmsRentIds(order, rentId) {
   }))).filter((x, i, all) => x.id && all.findIndex((y) => y.id === x.id) === i);
 }
 async function gotsmsLiveRent(rentId) {
+  // Prefer the supplier's direct rent lookup; list endpoints are paginated and can
+  // otherwise make an existing number look as though it has no active plan.
+  try {
+    const direct = await gotsmsFetch('/api/rents/' + encodeURIComponent(rentId));
+    const candidate = direct.data && (direct.data.data || direct.data);
+    if (direct.ok && candidate && String(candidate.id || '') === String(rentId)) return candidate;
+  } catch (_) {}
   for (const status of ['active', 'finished']) {
-    const response = await gotsmsFetch('/api/rents?status=' + status + '&per_page=100');
-    const rows = Array.isArray(response.data && response.data.data) ? response.data.data : [];
-    const match = rows.find((row) => String(row.id) === String(rentId));
-    if (match) return match;
+    for (let page = 1; page <= 10; page++) {
+      const response = await gotsmsFetch('/api/rents?status=' + status + '&per_page=100&page=' + page);
+      const rows = Array.isArray(response.data && response.data.data) ? response.data.data : [];
+      const match = rows.find((row) => String(row.id) === String(rentId));
+      if (match) return match;
+      if (page >= Number(response.data && response.data.meta && response.data.meta.last_page || 1)) break;
+    }
   }
   return null;
 }
@@ -503,23 +514,39 @@ async function gotsmsAddServiceSellPrice(serviceId, parentRent) {
   const durationPlan = (parentRent && parentRent.plan) || parentRent || {};
   const durationKey = gotsmsDurationKey(durationPlan);
   let matchingPlan = null;
+  // Find this service's plan for the exact duration of the already-purchased number.
+  // Include unavailable plans so a stock/price lookup failure is distinguishable
+  // from a genuinely unsupported duration.
   try {
-    const response = await gotsmsFetch('/api/rents/plans?service_id=' + encodeURIComponent(serviceId) + '&per_page=100');
-    const plans = Array.isArray(response.data && response.data.data) ? response.data.data : [];
-    matchingPlan = plans.find((plan) => gotsmsDurationKey(plan) === durationKey && !gotsmsPlanUnavailable(plan)) || null;
+    const qs = new URLSearchParams({ service_id: String(serviceId), per_page: '100', include_unavailable: '1' });
+    for (let page = 1; page <= 10 && !matchingPlan; page++) {
+      qs.set('page', String(page));
+      const response = await gotsmsFetch('/api/rents/plans?' + qs.toString());
+      const plans = Array.isArray(response.data && response.data.data) ? response.data.data : [];
+      matchingPlan = plans.find((plan) => gotsmsDurationKey(plan) === durationKey) || null;
+      if (page >= Number(response.data && response.data.meta && response.data.meta.last_page || 1)) break;
+    }
   } catch (_) {}
-  if (matchingPlan) {
-    try {
-      const { data: row } = await supabase.from('number_services').select('price, is_available, price_source')
-        .eq('source', 'gotsms').eq('service_id', String(matchingPlan.id)).maybeSingle();
-      if (row && Number(row.price) > 0) {
-        if (row.is_available === false && row.price_source === 'admin') return { price: 0, plan: matchingPlan, unavailable: true };
-        return { price: Math.round(Number(row.price)), plan: matchingPlan, unavailable: false };
-      }
-    } catch (e) { console.warn('[gotsms add-service price]', e.message || e); }
+  if (!matchingPlan || gotsmsPlanUnavailable(matchingPlan)) {
+    return { price: 0, plan: matchingPlan, unavailable: true };
   }
-  const fixed = gotsmsFixedDurationPriceNgn(durationPlan);
-  return { price: fixed == null ? 0 : fixed, plan: matchingPlan, unavailable: fixed == null };
+
+  // Match the exact price precedence used for a new rental: hardcoded duration
+  // price first, then an explicit admin override, then the existing USD-markup fallback.
+  const fixed = gotsmsFixedDurationPriceNgn(matchingPlan);
+  try {
+    const { data: row } = await supabase.from('number_services')
+      .select('price, is_available, price_source')
+      .eq('source', 'gotsms').eq('service_id', String(matchingPlan.id)).maybeSingle();
+    if (row && row.price_source === 'admin' && row.is_available === false) {
+      return { price: 0, plan: matchingPlan, unavailable: true };
+    }
+    if (row && row.price_source === 'admin' && Number(row.price) > 0) {
+      return { price: Math.round(Number(row.price)), plan: matchingPlan, unavailable: false };
+    }
+  } catch (e) { console.warn('[gotsms add-service price]', e.message || e); }
+  const price = fixed != null ? fixed : gotsmsSellPriceNgn(Number(matchingPlan.price || 0));
+  return { price: Math.round(Number(price) || 0), plan: matchingPlan, unavailable: !(price > 0) };
 }
 
 function gotsmsRenewPriceNgn(orderRow) {
@@ -642,7 +669,8 @@ async function gotsmsSaveOrder({ userId, customerId, rentId, phone, serviceName,
     status: status || 'active',
     // ISO expiry for countdown (not an SMS code — rentals use inbox API for codes)
     code: activeTill ? String(activeTill) : null,
-    refunded: false
+    refunded: false,
+    notes: JSON.stringify({ inbox: [], service_rents: [], paid_total_ngn: Math.round(Number(priceNgn) || 0), plan_charges: [] })
   };
   if (typeof insertNumberOrder === 'function') {
     const r = await insertNumberOrder(row);
@@ -3562,6 +3590,7 @@ if (method === 'POST' && ga === 'gotsms_add_service') {
           if (!currentRow) throw new Error('Existing rental history row not found after supplier accepted service');
           const meta = gotsmsOrderMeta(currentRow.notes);
           if (!Array.isArray(meta.service_rents)) meta.service_rents = [];
+          meta.paid_total_ngn = Math.round(Number(meta.paid_total_ngn || currentRow.price || 0) + price);
           if (childRentId && !meta.service_rents.some((item) => String(item.id) === childRentId)) {
             meta.service_rents.push({ id: childRentId, service_id, name: String(svc.name || 'Added service'),
               price_ngn: price, refund_approved: false, added_at: new Date().toISOString() });
@@ -3649,7 +3678,7 @@ if (method === 'POST' && ga === 'gotsms_transition') {
         try {
           const switchedRent = (g.data && (g.data.data || g.data)) || {};
           const { data: currentRow } = await supabase.from('number_orders')
-            .select('id, service_name, code, price, phone_number, status')
+            .select('id, service_name, code, price, phone_number, status, notes')
             .eq('user_id', auth.userId).eq('source', 'gotsms')
             .eq('idempotency_key', 'gotsms-' + rent_id).maybeSingle();
           if (currentRow) {
@@ -3667,10 +3696,15 @@ if (method === 'POST' && ga === 'gotsms_transition') {
             const expiry = switchedRent.active_till || switchedRent.expires_at || switchedRent.expiry || switchedRent.ends_at || currentRow.code || null;
             const serviceName = switchedRent.service?.name || plan.service?.name || baseName;
             const phone = switchedRent.phone || switchedRent.phone_number || currentRow.phone_number;
+            const meta = gotsmsOrderMeta(currentRow.notes);
+            if (!Array.isArray(meta.plan_charges)) meta.plan_charges = [];
+            meta.plan_charges.push({ plan_id, duration, price_ngn: price, charged_at: new Date().toISOString() });
+            meta.paid_total_ngn = Math.round(Number(meta.paid_total_ngn || currentRow.price || 0) + price);
             const patch = {
               service_name: String(serviceName || baseName).split(' · Plan: ')[0].split(' · Add-on: ')[0] + ' · Plan: ' + duration + addOnLabel,
               status: switchedRent.status || 'active',
-              price: Math.round(Number(currentRow.price || 0) + price)
+              price: Math.round(Number(currentRow.price || 0) + price),
+              notes: JSON.stringify(meta)
             };
             if (phone) patch.phone_number = String(phone);
             if (expiry) patch.code = String(expiry);
@@ -3821,7 +3855,11 @@ if (method === 'POST' && ga === 'gotsms_toggle_renewal') {
         const claimed = await claimGotsmsRefund(order.id);
         if (!claimed) return json(res, 200, { success: true,
           message: 'Supplier refund was approved. The wallet refund has already been processed.', data: parentRefundData });
-        const refundAmt = Math.max(0, Math.round(Number(claimed.price) || 0));
+        const refundMeta = gotsmsOrderMeta(claimed.notes);
+        const refundAmt = Math.max(0,
+          Math.round(Number(claimed.price) || 0),
+          Math.round(Number(refundMeta.paid_total_ngn) || 0)
+        );
         if (refundAmt > 0) {
           try {
             const credit = await supabase.rpc('credit_balance', { p_user_id: auth.userId, p_amount: refundAmt });
