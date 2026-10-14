@@ -414,7 +414,7 @@ function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g,function(c){retu
         b1.onclick = openAddServiceModal;
         host.appendChild(b1);
         var opts = Array.isArray(rent.transition_options) ? rent.transition_options : [];
-        if(opts.length){
+        {
           var b2 = document.createElement('button');
           b2.type='button'; b2.className='btn btn-ghost'; b2.id='btnSwitchPlan';
           b2.innerHTML='<i class="fa-solid fa-arrow-right-arrow-left"></i> Switch plan';
@@ -643,7 +643,7 @@ function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g,function(c){retu
     draw('');
     var search = document.getElementById('addSvcSearch');
     if (search) search.oninput = function() { draw(search.value); };
-    if (hint) hint.textContent = 'The supplier requires at least one SMS on this number before another service can be added.';
+    if (hint) hint.textContent = 'Only services currently supported by GotSMS for this active number are listed.';
   }
   async function openPlanModal() {
     var list = document.getElementById('planList');
@@ -660,7 +660,7 @@ function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g,function(c){retu
     if (fresh) rent = Object.assign({}, rent || {}, fresh);
     var opts = (rent && rent.transition_options) || [];
     if (!opts.length) {
-      list.innerHTML = '<div class="empty">GotSMS has not enabled any plan transitions for this rental right now.</div>';
+      list.innerHTML = '<div class="empty">No plan changes are currently offered by GotSMS for this rental. Refresh and try again later.</div>';
       return;
     }
     list.innerHTML = opts.map(function(p) {
@@ -761,7 +761,7 @@ function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g,function(c){retu
       <strong>Add a service to this number</strong>
       <button type="button" class="btn-ghost" id="addSvcClose" style="padding:6px 10px;">✕</button>
     </div>
-    <p style="font-size:12px;color:var(--muted);margin:8px 0 12px;">Same number starts receiving codes for a second service. One-time fee applies. Requires at least one code already received.</p>
+    <p style="font-size:12px;color:var(--muted);margin:8px 0 12px;">Add another service to the same number. One-time fee applies; GotSMS confirms eligibility and availability.</p>
     <input type="search" id="addSvcSearch" placeholder="Search services…" style="width:100%;padding:10px 12px;border-radius:10px;border:1px solid var(--border);background:var(--bg);color:var(--text);margin-bottom:10px;">
     <div id="addSvcList" style="display:flex;flex-direction:column;gap:6px;max-height:40vh;overflow:auto;"></div>
     <p id="addSvcHint" style="font-size:11px;color:var(--muted);margin-top:10px;"></p>
