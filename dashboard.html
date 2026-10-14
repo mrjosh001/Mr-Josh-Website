@@ -4033,18 +4033,18 @@ html[data-theme="light"] .logo-word, :root[data-theme="light"] .logo-word{color:
         <div class="converter-pro-header">
             <div>
                 <div class="converter-pro-title" id="converterDialogTitle"><span><i class="fa-solid fa-right-left"></i></span> Currency converter</div>
-                <p style="margin:5px 0 0 44px;color:var(--muted);font-size:12px;">Preview the rate before moving funds between your MJ HUB wallets.</p>
+                <p style="margin:5px 0 0 44px;color:var(--muted);font-size:12px;">Choose an amount, review what you will receive, then confirm to move funds between your wallets.</p>
             </div>
             <button type="button" onclick="closeCurrencyModal()" aria-label="Close converter" style="background:var(--bg-main);border:1px solid var(--border-color);width:34px;height:34px;border-radius:50%;cursor:pointer;color:var(--text-main);">✕</button>
         </div>
         <div class="converter-grid-layout">
             <div class="converter-panel-card">
                 <div class="converter-panel-top">
-                    <label class="converter-amount-entry-label" for="baseConvertInput">Amount to convert · You send</label>
+                    <label class="converter-amount-entry-label" for="baseConvertInput">STEP 1 · ENTER AMOUNT TO CONVERT</label>
                     <div class="currency-selector-badge"><span id="fromCurrencySymbol">₦</span> <strong id="fromCurrencyCode">NGN</strong></div>
                 </div>
-                <input type="number" id="baseConvertInput" class="converter-input-field" placeholder="Type amount (e.g. 5000)" inputmode="decimal" min="0.01" step="0.01" autocomplete="off" oninput="executeConversion()" aria-label="Enter the amount you want to convert" required>
-                <p class="converter-input-hint">Enter the exact amount you want to move. The converted amount appears below before you confirm.</p>
+                <input type="number" id="baseConvertInput" class="converter-input-field" placeholder="Enter amount here (e.g. 5000)" inputmode="decimal" min="0.01" step="0.01" autocomplete="off" oninput="executeConversion()" aria-label="Step 1: enter the amount you want to convert" aria-describedby="converterAmountEntryHelp converterAmountFeedback" required>
+                <p class="converter-input-hint" id="converterAmountEntryHelp" style="font-size:12px;">Tap this box and type the amount you want to convert. The result updates automatically below.</p>
                 <div class="converter-helper-row">
                     <span id="converterBalanceInfo">Available: ₦0.00</span>
                     <button type="button" class="converter-max-btn" onclick="setConverterMax()">Use max</button>
@@ -4061,7 +4061,7 @@ html[data-theme="light"] .logo-word, :root[data-theme="light"] .logo-word{color:
             </div>
             <div class="converter-panel-card">
                 <div class="converter-panel-top">
-                    <span class="converter-field-label">You receive (estimate)</span>
+                    <span class="converter-field-label">STEP 2 · YOU WILL RECEIVE (ESTIMATE)</span>
                     <div class="currency-selector-badge"><span id="toCurrencySymbol">$</span> <strong id="toCurrencyCode">USD</strong></div>
                 </div>
                 <input type="text" id="targetConvertOutput" class="converter-input-field" placeholder="0.00" readonly aria-label="Estimated converted amount">
