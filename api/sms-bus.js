@@ -3266,16 +3266,48 @@ export default async function handler(req, res) {
       if (method === 'GET' && ga === 'gotsms_rents') {
         const auth = await requireAuth(req);
         if (!auth.ok) return json(res, auth.status, { success: false, message: auth.message });
+        const requestedStatus = url.searchParams.get('status');
+        // Fetch all statuses so manual cancellations in GotSMS are synced to MJ HUB.
         const qs = new URLSearchParams();
-        const status = url.searchParams.get('status');
-        if (status) qs.set('status', status);
-        qs.set('per_page', '50');
+        qs.set('per_page', '100');
         const g = await gotsmsFetch(`/api/rents?${qs}`);
         if (!g.ok) return json(res, g.status || 400, { success: false, message: g.data?.message || 'Could not load rentals' });
-        const { data: mine } = await supabase.from('number_orders').select('idempotency_key, phone_number').eq('user_id', auth.userId).eq('source', 'gotsms').limit(200);
+        const { data: mine } = await supabase.from('number_orders').select('id, idempotency_key, phone_number, status, refunded').eq('user_id', auth.userId).eq('source', 'gotsms').limit(300);
         const mineRentIds = new Set((mine || []).map((m) => String(m.idempotency_key || '').replace(/^gotsms-/, '')).filter(Boolean));
         const minePhones = new Set((mine || []).map((m) => String(m.phone_number || '').replace(/\s/g, '')));
-        const filtered = (g.data.data || []).filter((r) => mineRentIds.has(String(r.id)) || minePhones.has(String(r.phone || '').replace(/\s/g, '')));
+        const supplierRents = (g.data.data || []).filter((r) => mineRentIds.has(String(r.id)) || minePhones.has(String(r.phone || '').replace(/\s/g, '')));
+        const terminalSupplierStatus = (value) => {
+          const s = String(value || '').toLowerCase();
+          if (['cancelled','canceled','refunded','deleted'].includes(s)) return 'cancelled';
+          if (['expired','finished','ended','completed'].includes(s)) return 'expired';
+          return null;
+        };
+        // Persist supplier-side cancellations/expiry. Do not issue an automatic wallet refund.
+        for (const r of supplierRents) {
+          const terminal = terminalSupplierStatus(r.status);
+          if (!terminal) continue;
+          const row = (mine || []).find((m) =>
+            String(m.idempotency_key || '').replace(/^gotsms-/, '') === String(r.id) ||
+            (m.phone_number && String(m.phone_number).replace(/\s/g, '') === String(r.phone || '').replace(/\s/g, ''))
+          );
+          if (row && (String(row.status || '').toLowerCase() !== terminal || (terminal === 'cancelled' && !row.refunded))) {
+            try {
+              await supabase.from('number_orders').update({
+                status: terminal,
+                ...(terminal === 'cancelled' ? { refunded: false } : {})
+              }).eq('id', row.id).eq('user_id', auth.userId).eq('source', 'gotsms');
+            } catch (e) { console.warn('[gotsms_rents] supplier status sync', e.message || e); }
+          }
+        }
+        const filtered = requestedStatus
+          ? supplierRents.filter((r) => {
+              const terminal = terminalSupplierStatus(r.status);
+              if (requestedStatus === 'active') return !terminal && !['cancelled','canceled','expired','finished','ended','completed'].includes(String(r.status || '').toLowerCase());
+              if (requestedStatus === 'cancelled') return terminal === 'cancelled';
+              if (requestedStatus === 'expired') return terminal === 'expired';
+              return String(r.status || '').toLowerCase() === requestedStatus.toLowerCase();
+            })
+          : supplierRents;
         // Auto-renew: charge same NGN as original rental when period extends; disable if wallet too low
         try {
           for (const r of filtered.slice(0, 30)) {
@@ -3284,7 +3316,7 @@ export default async function handler(req, res) {
         } catch (e) { console.warn('[gotsms_rents] autorenew sync', e.message || e); }
         // Heal rows wrongly marked refunded/expired by OTP expire sweeps
         // Heal rows wrongly marked refunded/expired by OTP expire sweeps
-        if (String(status || '') === 'active' && filtered.length) {
+        if (String(requestedStatus || '') === 'active' && filtered.length) {
           try {
             const keys = filtered.map((r) => `gotsms-${r.id}`);
             await supabase
