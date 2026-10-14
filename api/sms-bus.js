@@ -3410,7 +3410,7 @@ export default async function handler(req, res) {
         qs.set('per_page', '100');
         const g = await gotsmsFetch(`/api/rents?${qs}`);
         if (!g.ok) return json(res, g.status || 400, { success: false, message: g.data?.message || 'Could not load rentals' });
-        const { data: mine } = await supabase.from('number_orders').select('id, idempotency_key, phone_number, status, refunded').eq('user_id', auth.userId).eq('source', 'gotsms').limit(300);
+        const { data: mine } = await supabase.from('number_orders').select('id, idempotency_key, phone_number, status, refunded, code').eq('user_id', auth.userId).eq('source', 'gotsms').limit(300);
         const mineRentIds = new Set((mine || []).map((m) => String(m.idempotency_key || '').replace(/^gotsms-/, '')).filter(Boolean));
         const minePhones = new Set((mine || []).map((m) => String(m.phone_number || '').replace(/\s/g, '')));
         const supplierRents = (g.data.data || []).filter((r) => mineRentIds.has(String(r.id)) || minePhones.has(String(r.phone || '').replace(/\s/g, '')));
@@ -3443,6 +3443,29 @@ export default async function handler(req, res) {
             rentId: r.id,
             status: 'refunded',
             subtitle: terminal === 'expired' ? 'Number expired' : 'Number cancelled or refunded'
+          });
+        }
+        // Local expiry fallback: supplier lists can omit old rentals. The expiry
+        // timestamp is stored in the code field for GotSMS rental rows.
+        for (const row of mine || []) {
+          const statusNow = String(row.status || '').toLowerCase();
+          const expiresAt = row.code ? Date.parse(String(row.code)) : NaN;
+          if (!Number.isFinite(expiresAt) || expiresAt > Date.now()) continue;
+          const rentId = String(row.idempotency_key || '').replace(/^gotsms-/, '');
+          if (['expired', 'cancelled', 'canceled', 'refunded'].includes(statusNow)) {
+            await updateGotsmsPurchaseTransaction({
+              userId: auth.userId, rentId, status: 'refunded',
+              subtitle: statusNow === 'expired' ? 'Number expired' : 'Number cancelled or refunded'
+            });
+            continue;
+          }
+          try {
+            await supabase.from('number_orders').update({ status: 'expired' })
+              .eq('id', row.id).eq('user_id', auth.userId).eq('source', 'gotsms')
+              .not('refunded', 'is', true);
+          } catch (e) { console.warn('[gotsms_rents] local expiry sync', e.message || e); }
+          await updateGotsmsPurchaseTransaction({
+            userId: auth.userId, rentId, status: 'refunded', subtitle: 'Number expired'
           });
         }
         const filtered = requestedStatus
