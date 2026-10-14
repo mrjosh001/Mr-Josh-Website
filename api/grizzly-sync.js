@@ -1,5 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
 import { applyMarkup } from '../lib/pricing.js';
+import { sendPushToUser } from '../lib/push.js';
 
 /**
  * /api/grizzly-sync — all GrizzlySMS operations, merged into one file.
@@ -1439,6 +1440,12 @@ async function handleCheck(req, res) {
         });
         await fetch(`${BASE}?${doneQs.toString()}`, { method: 'GET' });
       } catch (_) {}
+      await sendPushToUser(supabase, user_id, {
+        title: 'Verification code received',
+        body: 'Your SMS verification code has arrived. Open MJ HUB to view it.',
+        url: '/mj-sms-number.html?order_id=' + encodeURIComponent(String(order_id)),
+        type: 'sms_received'
+      });
     }
 
     return res.status(200).json({
@@ -1588,6 +1595,77 @@ async function handleCancel(req, res) {
   }
 }
 
+// Poll pending GrizzlySMS orders when MJ HUB is closed, then send phone push alerts.
+async function handlePushPollCodes(req, res) {
+  const cronSecret = String(process.env.CRON_SECRET || '');
+  const suppliedSecret = String(req.headers['x-mjhub-cron-secret'] || req.headers.authorization || '')
+    .replace(/^Bearer\s+/i, '').trim();
+  if (!cronSecret || !suppliedSecret || suppliedSecret !== cronSecret) {
+    return res.status(401).json({ success: false, message: 'Unauthorized' });
+  }
+  if (!GRIZZLY_KEY) return res.status(503).json({ success: false, message: 'GrizzlySMS is not configured' });
+
+  const staleBefore = new Date(Date.now() - 2 * 60 * 1000).toISOString();
+  const { data: rows, error } = await supabase
+    .from('number_orders')
+    .select('id, user_id, order_id, price, status, refunded, updated_at')
+    .eq('source', 'grizzlysms')
+    .eq('status', 'waiting_for_code')
+    .or('refunded.is.null,refunded.eq.false')
+    .lt('updated_at', staleBefore)
+    .order('created_at', { ascending: true })
+    .limit(80);
+  if (error) {
+    console.error('[grizzly push poll] query failed', error.message);
+    return res.status(500).json({ success: false, message: 'Could not load pending SMS orders' });
+  }
+
+  const stats = { checked: 0, notifications: 0, errors: 0 };
+  for (const row of rows || []) {
+    if (!row.user_id || !row.order_id) continue;
+    stats.checked++;
+    try {
+      let result = await callGrizzly(GRIZZLY_KEY, { action: 'getStatusV2', id: String(row.order_id) });
+      let raw = String(result.text || '').trim();
+      let parsed = null;
+      try { parsed = JSON.parse(raw); } catch (_) {}
+      let code = parsed && parsed.sms && parsed.sms.code ? String(parsed.sms.code) : '';
+      if (!code && raw.startsWith('STATUS_OK:')) code = raw.slice('STATUS_OK:'.length).trim();
+      if (!code && raw === 'BAD_ACTION') {
+        result = await callGrizzly(GRIZZLY_KEY, { action: 'getStatus', id: String(row.order_id) });
+        raw = String(result.text || '').trim();
+        if (raw.startsWith('STATUS_OK:')) code = raw.slice('STATUS_OK:'.length).trim();
+      }
+      if (!code) continue;
+
+      const { data: updated, error: updateError } = await supabase
+        .from('number_orders')
+        .update({ status: 'completed', code, updated_at: new Date().toISOString() })
+        .eq('id', row.id)
+        .eq('status', 'waiting_for_code')
+        .or('refunded.is.null,refunded.eq.false')
+        .select('id');
+      if (updateError) throw updateError;
+      if (!updated || !updated.length) continue;
+
+      try {
+        await callGrizzly(GRIZZLY_KEY, { action: 'setStatus', id: String(row.order_id), status: '6' });
+      } catch (_) {}
+      await sendPushToUser(supabase, row.user_id, {
+        title: 'Verification code received',
+        body: 'Your SMS verification code has arrived. Open MJ HUB to view it.',
+        url: '/mj-sms-number.html?order_id=' + encodeURIComponent(String(row.order_id)),
+        type: 'sms_received'
+      });
+      stats.notifications++;
+    } catch (e) {
+      stats.errors++;
+      console.warn('[grizzly push poll] order check failed', e.message || e);
+    }
+  }
+  return res.status(200).json({ success: true, ...stats });
+}
+
 // ===========================================================================
 // DISPATCHER
 // ===========================================================================
@@ -1702,9 +1780,13 @@ export default async function handler(req, res) {
   }
 
   const action = req.query?.action || null;
+  const dispatchAction = String(action || '').toLowerCase();
+  if ((req.method === 'GET' || req.method === 'POST') && dispatchAction === 'push_poll_codes') {
+    return handlePushPollCodes(req, res);
+  }
 
   if (req.method === 'GET') {
-    const getAction = String(action || '').toLowerCase();
+    const getAction = dispatchAction;
     if (getAction === 'expire_stale' || getAction === 'expire-stale') {
       return handleExpireStale(req, res);
     }
