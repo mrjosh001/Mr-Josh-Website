@@ -493,6 +493,7 @@ function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g,function(c){retu
     var till = expiry ? new Date(expiry).getTime() : 0;
     // GotSMS also provides remaining time in seconds; use it if the timestamp
     // is absent so the timer remains visible on normalized/stored rental data.
+    if (!till && rent && rent.code && !isNaN(Date.parse(String(rent.code)))) till = new Date(String(rent.code)).getTime();
     if (!till && rent) {
       var secondsLeft = Number(rent.online_time_left_seconds || rent.time_left_seconds || 0);
       if (secondsLeft > 0) till = Date.now() + secondsLeft * 1000;
@@ -663,11 +664,12 @@ function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g,function(c){retu
       return;
     }
     list.innerHTML = opts.map(function(p) {
-      var price = Number(p.price_ngn || p.sell_price_ngn || p.price || 0);
+      var price = Number(p.price_ngn || p.sell_price_ngn || 0);
       var label = p.duration_translation || ((p.duration_in_type || '') + ' ' + (p.duration_type || 'plan'));
-      return '<button type="button" class="btn btn-ghost" data-plan-id="' + esc(p.plan_id) + '" style="display:flex;justify-content:space-between;align-items:center;gap:10px;text-align:left;">' +
+      var unavailable = p.is_available === false || !(price > 0);
+      return '<button type="button" class="btn btn-ghost" data-plan-id="' + esc(p.plan_id) + '" ' + (unavailable ? 'disabled' : '') + ' style="display:flex;justify-content:space-between;align-items:center;gap:10px;text-align:left;">' +
         '<span><strong>' + esc(label) + '</strong><small style="display:block;color:var(--muted)">Fresh plan charge — no credit for the previous plan</small></span>' +
-        '<strong>' + (price > 0 ? '₦' + price.toLocaleString() : 'Price at checkout') + '</strong></button>';
+        '<strong>' + (price > 0 ? '₦' + price.toLocaleString() : 'Price unavailable in database') + '</strong></button>';
     }).join('');
     list.querySelectorAll('[data-plan-id]').forEach(function(btn) {
       btn.onclick = async function() {
@@ -731,7 +733,7 @@ function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g,function(c){retu
           if(o.price||o.price_ngn) rent.price_ngn = o.price||o.price_ngn;
           if(o.service_name) rent.service = rent.service || { name: o.service_name };
           if(!rent.carrier_name && o.carrier_name) rent.carrier_name = o.carrier_name;
-          if(!rent.active_till && o.active_till) rent.active_till = o.active_till;
+          if(!rent.active_till && (o.active_till || (o.code && !isNaN(Date.parse(String(o.code))) ? o.code : null))) rent.active_till = o.active_till || o.code;
           if(!rent.price_ngn && (o.price||o.price_ngn)) rent.price_ngn = o.price||o.price_ngn;
           // Parse chips from stored "Service · duration · carrier · Area XXX"
           if(o.service_name && String(o.service_name).indexOf('·')>=0){
