@@ -102,7 +102,19 @@
     navTimer = setTimeout(leave, 80); /* never hang if rAF stalls */
   }
 
+  // Site-wide click press animation only. No vibration/haptics are triggered.
+  var PRESS_SELECTOR = 'button:not(:disabled), a, [role="button"], .product-card, .country-card, .service-card, .server-card, .card, .quick-action, .action-btn, .menu-item, .list-item, .order-card, .sms-card, .server-option, .country-item, .service-item';
   document.addEventListener('click', function (e) {
+    var target = e.target && e.target.closest ? e.target.closest(PRESS_SELECTOR) : null;
+    if (target && !target.hasAttribute('disabled') && !target.getAttribute('aria-disabled') && !target.closest('#'+OVERLAY_ID)) {
+      target.classList.remove('mj-click-press');
+      void target.offsetWidth;
+      target.classList.add('mj-click-press');
+      target.addEventListener('animationend', function done() {
+        target.classList.remove('mj-click-press');
+        target.removeEventListener('animationend', done);
+      });
+    }
     if (e.defaultPrevented || e.button !== 0) return;
     if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
     var a = e.target && e.target.closest ? e.target.closest('a') : null;
