@@ -480,7 +480,8 @@ function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g,function(c){retu
 
   function startCountdown(){
     if(cdTimer) clearTimeout(cdTimer);
-    var expiry = rent && (rent.active_till || rent.online_till || rent.activeTill || rent.expires_at);\n    var till = expiry ? new Date(expiry).getTime() : 0;
+    var expiry = rent && (rent.active_till || rent.online_till || rent.activeTill || rent.expires_at);
+    var till = expiry ? new Date(expiry).getTime() : 0;
     function tick(){
       var el = document.getElementById('cd');
       if(!el) return;
