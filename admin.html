@@ -2174,6 +2174,20 @@ async function loadAllData() {
    _overviewStatsLoaded = true;
    loadOverviewStats('7days').catch(function(e){ _overviewStatsLoaded = false; console.error('overview stats', e); });
  }
+ // Let the overview paint before fetching its supporting summary data.
+ // Mark requests before scheduling to avoid duplicate loads from tab clicks.
+ if (!_profilesLoaded) {
+   _profilesLoaded = true;
+   setTimeout(function(){
+     loadProfiles().catch(function(e){ _profilesLoaded = false; console.error('profiles', e); });
+   }, 700);
+ }
+ if (!_ordersLoaded) {
+   _ordersLoaded = true;
+   setTimeout(function(){
+     tryLoadOrders().catch(function(e){ _ordersLoaded = false; console.error('orders', e); });
+   }, 900);
+ }
  // Keep supplier sync status recovery non-blocking.
  try { if (typeof resumeGrizzlySyncIfRunning === 'function') resumeGrizzlySyncIfRunning(); } catch (e) {}
  } finally {
