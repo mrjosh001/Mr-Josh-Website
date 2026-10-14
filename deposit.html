@@ -500,6 +500,48 @@ function continueFromAmount() {
 function chooseBankTransfer() { selectDepositMethod('bank'); }
 function chooseCryptoDeposit() { selectDepositMethod('crypto'); }
 function chooseManualWhatsApp() { selectDepositMethod('manual'); }
+
+async function proceedCryptoFromAmount() {
+  var amount = Math.round(parseFloat(document.getElementById('vaAmountInput').value) || 0);
+  if (amount < MIN) return toast('Minimum deposit is ₦' + MIN.toLocaleString());
+  if (amount > MAX) return toast('Maximum deposit is ₦' + MAX.toLocaleString());
+  var btn = document.getElementById('vaContinueBtn');
+  if (btn) { btn.disabled = true; btn.dataset._html = btn.innerHTML; btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Starting crypto payment…'; }
+  try {
+    var accessToken = await getAccessToken();
+    if (!accessToken) { toast('Session expired. Please sign in again.'); return; }
+    var res = await fetch('/api/deposit?action=heleket_create', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + accessToken },
+      body: JSON.stringify({ amount: amount })
+    });
+    var data = await res.json().catch(function () { return {}; });
+    if (!res.ok || !data.success || !data.url) { toast(data.message || 'Crypto payment unavailable. Please try again.'); return; }
+    try {
+      sessionStorage.setItem('mjhub_pending_heleket', JSON.stringify({
+        amount: amount, amount_usd: data.amount_usd, order_id: data.order_id,
+        rate: data.rate || DEPOSIT_USD_RATE, ts: Date.now()
+      }));
+    } catch (_) {}
+    window.location.href = data.url;
+  } catch (e) {
+    toast(e.message || 'Network error starting crypto payment');
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      if (btn.dataset._html) { btn.innerHTML = btn.dataset._html; delete btn.dataset._html; }
+    }
+  }
+}
+
+function proceedManualFromAmount() {
+  var amount = Math.round(parseFloat(document.getElementById('vaAmountInput').value) || 0);
+  if (amount < MIN) return toast('Minimum deposit is ₦' + MIN.toLocaleString());
+  if (amount > MAX) return toast('Maximum deposit is ₦' + MAX.toLocaleString());
+  var input = document.getElementById('depositInput');
+  if (input) input.value = String(amount);
+  messageAdminForDeposit();
+}
 async function proceedBankTransfer() {
   var btn = document.getElementById('providerBankBtn');
   if (btn) {
@@ -956,7 +998,7 @@ document.addEventListener('visibilitychange', async () => {
 });
 // First paint: payment methods only (never leave loading visible)
 try { showVaState('provider'); } catch (e) {}
-((async () => {
+(async () => {
   try { syncThemeUi(); } catch (e) {}
   try { showVaState('provider'); } catch (e) {}
   if (!(await ensureAuth())) return;
