@@ -2594,6 +2594,19 @@ body::after {
 .metric-pill-box span { display: block; font-size: 9px; font-weight: 700; color: var(--muted); text-transform: uppercase; margin-bottom: 2px; letter-spacing: 0.04em; }
 .metric-pill-box strong { font-size: 11px; font-weight: 800; }
 .converter-pro-card { max-width: 480px !important; }
+.converter-rate-footer { display:flex; align-items:center; justify-content:space-between; gap:10px; }
+.converter-refresh-btn { flex-shrink:0; border:1px solid var(--border); background:var(--bg); color:var(--primary); padding:7px 10px; border-radius:9px; font-size:11px; font-weight:800; cursor:pointer; white-space:nowrap; }
+.converter-refresh-btn:disabled { opacity:.55; cursor:wait; }
+.converter-amount-feedback { min-height:15px; margin:8px 0 0; color:var(--muted); font-size:11px; line-height:1.4; }
+.converter-amount-feedback.is-error { color:var(--danger, #dc2626); }
+.converter-amount-feedback.is-valid { color:var(--success-color, #16a34a); }
+.converter-swap-vector-wrap { position:static; top:auto; left:auto; transform:none; margin:-1px auto; z-index:10; }
+.converter-swap-vector-btn { width:38px; height:38px; }
+@media (max-width:420px) {
+ .currency-modal .currency-modal-card.converter-pro-card { padding:18px; }
+ .converter-rate-footer { align-items:flex-start; }
+ .converter-refresh-btn { padding:7px 8px; }
+}
 .converter-helper-row { display:flex; justify-content:space-between; align-items:center; gap:10px; margin-top:8px; color:var(--muted); font-size:11px; }
 .converter-max-btn { border:0; background:var(--primary-glow); color:var(--primary); border-radius:8px; padding:5px 9px; font-weight:800; cursor:pointer; }
 .converter-quick-amounts { display:flex; gap:7px; margin-top:10px; flex-wrap:wrap; }
@@ -4030,6 +4043,7 @@ html[data-theme="light"] .logo-word, :root[data-theme="light"] .logo-word{color:
                     <span id="converterBalanceInfo">Available: ₦0.00</span>
                     <button type="button" class="converter-max-btn" onclick="setConverterMax()">Use max</button>
                 </div>
+                <p id="converterAmountFeedback" class="converter-amount-feedback" aria-live="polite">Enter an amount to preview the conversion.</p>
                 <div class="converter-quick-amounts" aria-label="Quick amount presets">
                     <button type="button" data-converter-preset onclick="setConverterPreset(1000)">₦1,000</button>
                     <button type="button" data-converter-preset onclick="setConverterPreset(5000)">₦5,000</button>
@@ -4052,7 +4066,10 @@ html[data-theme="light"] .logo-word, :root[data-theme="light"] .logo-word{color:
             <div class="metric-pill-box"><span>Processing</span><strong>Instant</strong></div>
             <div class="metric-pill-box"><span>Conversion fee</span><strong style="color:var(--success-color);">No extra fee</strong></div>
         </div>
-        <p id="converterUpdatedAt" style="margin:8px 0 14px;color:var(--muted);font-size:11px;">Loading current MJ HUB rate…</p>
+        <div class="converter-rate-footer">
+            <p id="converterUpdatedAt" role="status" style="margin:8px 0 14px;color:var(--muted);font-size:11px;">Loading current MJ HUB rate…</p>
+            <button type="button" class="converter-refresh-btn" onclick="refreshConverterRate()" aria-label="Refresh exchange rate"><i class="fa-solid fa-rotate"></i> Refresh rate</button>
+        </div>
         <div class="conversion-loading-box" id="conversionLoadingBox" role="status" aria-live="polite">
             <div class="spinner-icon"></div>
             <span id="conversionStatusText">Verifying balance…</span>
