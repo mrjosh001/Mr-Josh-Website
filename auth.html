@@ -874,7 +874,8 @@ html[data-theme="dark"] .logo-word, body[data-theme="dark"] .logo-word { color:#
               try {
                 if (!supabaseClient) return;
                 const hasAuthHash = /access_token=|refresh_token=|type=signup|type=email/i.test(window.location.hash || '');
-                if (!hasAuthHash && urlParams.get('verified') !== '1') return;
+                const isGoogleOAuthCallback = urlParams.get('oauth') === 'google';
+                if (!hasAuthHash && urlParams.get('verified') !== '1' && !isGoogleOAuthCallback) return;
                 const { data: { session } } = await supabaseClient.auth.getSession();
                 if (session && session.user) {
                   try { sessionStorage.setItem('mjhub-fresh-login', '1'); } catch (e) {}
@@ -883,7 +884,7 @@ html[data-theme="dark"] .logo-word, body[data-theme="dark"] .logo-word { color:#
                   setTimeout(function () {
                     window.location.href = 'dashboard.html';
                   }, 900);
-                } else if (hasAuthHash || urlParams.get('verified') === '1') {
+                } else if (hasAuthHash || urlParams.get('verified') === '1' || isGoogleOAuthCallback) {
                   // Tokens missing/expired but user landed from confirm link → stay on sign-in
                   switchTab('signin');
                   showSuccess('✅ Your email has been verified! Please sign in below.');
@@ -1316,7 +1317,7 @@ html[data-theme="dark"] .logo-word, body[data-theme="dark"] .logo-word { color:#
             ].filter(Boolean);
             btns.forEach((b) => { b.disabled = true; });
             try {
-                const redirectTo = (window.location.origin || 'https://www.mjhub.store').replace(/\/$/, '') + '/dashboard.html';
+                const redirectTo = (window.location.origin || 'https://www.mjhub.store').replace(/\/$/, '') + '/auth.html?oauth=google';
                 const { data, error } = await supabaseClient.auth.signInWithOAuth({
                     provider: 'google',
                     options: {
