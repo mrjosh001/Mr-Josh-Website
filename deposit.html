@@ -267,6 +267,21 @@ document.addEventListener('click', function(e){
         <label>Enter amount (NGN)</label>
         <input type="number" class="amount-field" id="vaAmountInput" min="1000" max="700000" step="100" placeholder="₦0.00" inputmode="numeric" oninput="onVaAmountInput()">
       </div>
+      <div class="form-group" id="cryptoCoinGroup" style="margin:12px 0 8px;display:none;">
+        <label for="cryptoCoinSelect">Cryptocurrency and network</label>
+        <select id="cryptoCoinSelect" class="amount-field" style="width:100%;padding:14px;border-radius:12px;" onchange="onCryptoCoinChange()">
+          <option value="USDT_TRON">USDT — TRON (TRC20)</option>
+          <option value="USDT_BSC">USDT — BNB Smart Chain (BEP20)</option>
+          <option value="USDT_ETH">USDT — Ethereum (ERC20)</option>
+          <option value="BTC">Bitcoin (BTC)</option>
+          <option value="ETH">Ethereum (ETH)</option>
+          <option value="TRX">TRON (TRX)</option>
+          <option value="BNB">BNB — BNB Smart Chain</option>
+          <option value="USDC_ETH">USDC — Ethereum</option>
+          <option value="USDC_SOL">USDC — Solana</option>
+        </select>
+        <p style="font-size:12px;color:var(--muted,#64748b);margin:6px 0 0;">Choose the same coin and network in your wallet when paying.</p>
+      </div>
       <div class="chips" id="vaChips">
         <button type="button" class="chip" data-amt="1000" onclick="pickVaAmount(1000)">₦1,000</button>
         <button type="button" class="chip" data-amt="2000" onclick="pickVaAmount(2000)">₦2,000</button>
@@ -300,10 +315,10 @@ document.addEventListener('click', function(e){
         <button type="button" class="provider-card" id="providerCryptoBtn" onclick="chooseCryptoDeposit()">
           <div class="provider-icon crypto"><i class="fa-solid fa-coins"></i></div>
           <div class="provider-body">
-            <strong>Crypto</strong>
-            <span>USDT / BTC · auto credit at ₦1,450/$</span>
+            <strong>Cryptocurrency payment</strong>
+            <span>Pay with USDT, BTC and supported coins · automatic credit</span>
           </div>
-          <span class="provider-badge" style="background:rgba(245,158,11,.15);color:#d97706">Crypto</span>
+          <span class="provider-badge" style="background:rgba(245,158,11,.15);color:#d97706">Crypto payment</span>
         </button>
         <button type="button" class="provider-card" onclick="chooseManualWhatsApp()">
           <div class="provider-icon manual"><i class="fa-brands fa-whatsapp"></i></div>
@@ -460,7 +475,7 @@ function selectDepositMethod(method) {
   window.__depositMethod = method; // bank | crypto | manual
   var titles = {
     bank: ['Bank transfer', 'Enter amount to transfer'],
-    crypto: ['Crypto', 'Enter amount · 1% fee · rate ₦1,450/$'],
+    crypto: ['Crypto payment', 'Enter amount and choose your coin/network'],
     manual: ['Manual deposit', 'Enter amount, then message support']
   };
   var t = titles[method] || titles.bank;
@@ -468,6 +483,8 @@ function selectDepositMethod(method) {
   var hs = document.getElementById('amountStepSub');
   if (ht) ht.textContent = t[0];
   if (hs) hs.textContent = t[1];
+  var cryptoGroup = document.getElementById('cryptoCoinGroup');
+  if (cryptoGroup) cryptoGroup.style.display = method === 'crypto' ? 'block' : 'none';
   onVaAmountInput();
   showVaState('amount');
 }
@@ -497,6 +514,14 @@ function continueFromAmount() {
   return proceedBankTransfer();
 }
 
+function onCryptoCoinChange() {
+  var coin = document.getElementById('cryptoCoinSelect')?.value || 'USDT_TRON';
+  var amountInput = document.getElementById('vaAmountInput');
+  if (amountInput) {
+    var minUsd = ({ USDT_BSC: 0.5, USDT_POLYGON: 0.5, BTC: 1, USDT_TRON: 1, USDT_ETH: 1, USDT_ARBITRUM: 1, USDT_AVALANCHE: 1, USDT_SOL: 1, USDT_TON: 1, USDC_ETH: 1, USDC_BSC: 1, USDC_SOL: 1, USDC_ARBITRUM: 1, USDC_AVALANCHE: 1, TRX: 1, ETH: 3, ETH_ARBITRUM: 3, BNB: 3 })[coin] || 1;
+    amountInput.min = String(Math.max(MIN, Math.ceil(minUsd * DEPOSIT_USD_RATE)));
+  }
+}
 function chooseBankTransfer() { selectDepositMethod('bank'); }
 function chooseCryptoDeposit() { selectDepositMethod('crypto'); }
 function chooseManualWhatsApp() { selectDepositMethod('manual'); }
@@ -513,7 +538,7 @@ async function proceedCryptoFromAmount() {
     var res = await fetch('/api/deposit?action=heleket_create', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + accessToken },
-      body: JSON.stringify({ amount: amount })
+      body: JSON.stringify({ amount: amount, coin: (document.getElementById('cryptoCoinSelect')?.value || 'USDT_TRON') })
     });
     var data = await res.json().catch(function () { return {}; });
     if (!res.ok || !data.success || !data.url) { toast(data.message || 'Crypto payment unavailable. Please try again.'); return; }
