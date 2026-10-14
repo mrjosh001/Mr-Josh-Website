@@ -3498,27 +3498,28 @@ if (method === 'GET' && ga === 'gotsms_messages') {
           try { await supabase.rpc('credit_balance', { p_user_id: auth.userId, p_amount: price }); } catch (_) {}
           return json(res, g.status || 400, { success: false, message: g.data?.message || 'Could not add service' });
         }
-        const newRentId = g.data?.data?.id || null;
+        // Add-ons belong to the existing number/inbox. Update its existing
+        // order row instead of creating a second number_orders row.
         try {
-          await gotsmsSaveOrder({
-            userId: auth.userId,
-            customerId: parentOrder.customer_id,
-            rentId: newRentId || (rent_id + '-add-' + service_id.slice(0, 8)),
-            phone: parentOrder.phone_number,
-            serviceName: svc.name || 'Added service',
-            serviceId: service_id,
-            priceNgn: price,
-            supplierUsd: Number(svc.price || 0),
-            status: 'active',
-            activeTill: parentOrder.code || null,
-            planLabel: 'Add-on',
-            carrierName: null,
-            areaCode: null
-          });
+          const { data: currentRow } = await supabase.from('number_orders')
+            .select('id, service_name, code, status')
+            .eq('user_id', auth.userId).eq('source', 'gotsms')
+            .eq('idempotency_key', 'gotsms-' + rent_id).maybeSingle();
+          if (currentRow) {
+            const currentName = String(currentRow.service_name || 'USA rental');
+            const cleanName = currentName.split(' · Add-on: ')[0];
+            const addOns = currentName.includes(' · Add-on: ')
+              ? currentName.slice(currentName.indexOf(' · Add-on: ') + ' · Add-on: '.length).split(' + ').filter(Boolean)
+              : [];
+            if (!addOns.includes(String(svc.name || 'Added service'))) addOns.push(String(svc.name || 'Added service'));
+            const patch = { service_name: cleanName + (addOns.length ? ' · Add-on: ' + addOns.join(' + ') : ''), status: 'active' };
+            const { error: updateError } = await supabase.from('number_orders').update(patch).eq('id', currentRow.id);
+            if (updateError) throw updateError;
+          }
         } catch (e) {
-          console.warn('[gotsms add_service] save order', e.message || e);
+          console.warn('[gotsms add_service] update parent inbox row', e.message || e);
         }
-        return json(res, 201, { success: true, message: g.data.message || 'Service added to this number', data: { ...(g.data.data || {}), price_ngn: price, service_name: svc.name } });
+        return json(res, 201, { success: true, message: g.data.message || 'Service added to this number. Its SMS will appear in the existing inbox.', data: { ...(g.data.data || {}), rent_id, price_ngn: price, service_name: svc.name } });
       }
 
       
@@ -3577,27 +3578,30 @@ if (method === 'GET' && ga === 'gotsms_messages') {
           try { await supabase.rpc('credit_balance', { p_user_id: auth.userId, p_amount: price }); } catch (_) {}
           return json(res, g.status || 400, { success: false, message: g.data?.message || 'Could not switch plan' });
         }
+        // A plan switch changes the existing rental; preserve the original
+        // rent ID/inbox and update its displayed plan/expiry rather than inserting
+        // a second number order for the same phone number.
         try {
-          await gotsmsSaveOrder({
-            userId: auth.userId,
-            customerId: order.customer_id,
-            rentId: rent_id + '-tr-' + plan_id.slice(0, 8) + '-' + Date.now().toString(36),
-            phone: order.phone_number,
-            serviceName: (order.service_name || 'USA rental').split(' · ')[0],
-            serviceId: order.service_id,
-            priceNgn: price,
-            supplierUsd: Number(plan.price || 0),
-            status: 'active',
-            activeTill: null,
-            planLabel: plan.duration_translation || 'Plan switch',
-            carrierName: null,
-            areaCode: null
-          });
-        } catch (e) { console.warn('[gotsms transition] save', e.message || e); }
+          const switchedRent = (g.data && (g.data.data || g.data)) || {};
+          const { data: currentRow } = await supabase.from('number_orders')
+            .select('id, service_name, code')
+            .eq('user_id', auth.userId).eq('source', 'gotsms')
+            .eq('idempotency_key', 'gotsms-' + rent_id).maybeSingle();
+          if (currentRow) {
+            const priorName = String(currentRow.service_name || 'USA rental');
+            const baseName = priorName.split(' · Add-on: ')[0].split(' · Plan: ')[0];
+            const duration = String(plan.duration_translation || plan.name || 'Updated plan');
+            const expiry = switchedRent.expires_at || switchedRent.expiry || switchedRent.ends_at || switchedRent.active_till || currentRow.code || null;
+            const patch = { service_name: baseName + ' · Plan: ' + duration, status: 'active' };
+            if (expiry) patch.code = String(expiry);
+            const { error: updateError } = await supabase.from('number_orders').update(patch).eq('id', currentRow.id);
+            if (updateError) throw updateError;
+          }
+        } catch (e) { console.warn('[gotsms transition] update existing rental row', e.message || e); }
         return json(res, 200, {
           success: true,
-          message: g.data.message || 'Plan switched successfully',
-          data: { ...(g.data.data || {}), price_ngn: price, plan_label: plan.duration_translation }
+          message: g.data.message || 'Plan switched successfully. The existing inbox has been updated.',
+          data: { ...(g.data.data || {}), rent_id, price_ngn: price, plan_label: plan.duration_translation }
         });
       }
 
