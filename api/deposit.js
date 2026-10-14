@@ -784,7 +784,11 @@ async function creditUser(userId, amountNgn, reference) {
     await tryPayReferral(userId, amountNgn, reference);
     await sendPushToUser(supabase, userId, {
       title: 'Deposit received',
-      body: '
+      body: '$' + amountUsd.toFixed(2) + ' has been added to your USD wallet.',
+      url: '/dashboard.html',
+      type: 'deposit'
+    });
+    return { balance_usd: nextUsd, wallet: 'usd', amount_usd: amountUsd };
   }
 
   const current = Number(profile?.balance ?? 0) || 0;
