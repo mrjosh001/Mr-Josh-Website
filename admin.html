@@ -2155,21 +2155,24 @@ async function confirmLogout() {
 }
 
 let _adminDataLoading = false;
+let _smsOrdersLoaded = false;
+let _boosterOrdersLoaded = false;
+let _notificationHistoryLoaded = false;
+let _supplierBalancesLoaded = false;
+
 async function loadAllData() {
  if (_adminDataLoading) return;
  _adminDataLoading = true;
  try {
+ // Load only the data needed for the first dashboard view. Large, rarely
+ // used panels are fetched when opened so they don't delay the initial view.
  const tasks = [];
  if (typeof loadProducts === 'function') tasks.push(loadProducts().catch(function(e){ console.error('products', e); }));
  if (typeof loadProfiles === 'function') tasks.push(loadProfiles().catch(function(e){ console.error('profiles', e); }));
  if (typeof tryLoadOrders === 'function') tasks.push(tryLoadOrders().catch(function(e){ console.error('orders', e); }));
- if (typeof tryLoadSmsOrders === 'function') tasks.push(tryLoadSmsOrders().catch(function(e){ console.error('sms orders', e); }));
- if (typeof loadNotificationHistory === 'function') tasks.push(loadNotificationHistory().catch(function(e){ console.error('notifs', e); }));
- if (typeof loadBoosterOrders === 'function') tasks.push(Promise.resolve().then(function(){ return loadBoosterOrders(); }).catch(function(e){ console.error('boosters', e); }));
  await Promise.all(tasks);
  try { if (typeof resumeGrizzlySyncIfRunning === 'function') resumeGrizzlySyncIfRunning(); } catch (e) {}
  try { if (typeof updateMetrics === 'function') updateMetrics(); } catch (e) {}
- try { if (typeof loadSupplierBalances === 'function') loadSupplierBalances(); } catch (e) {}
  } finally {
  _adminDataLoading = false;
  }
@@ -3400,13 +3403,12 @@ async function wipeUnusedSmsNumbers() {
 async function tryLoadSmsOrders() {
  try {
   const headers = await authHeaders();
-  // Expire ALL past-window OTP (admin JWT → full sweep) before listing
-  try {
-    await Promise.all([
-      fetch('/api/grizzly-sync?action=expire_stale', { headers }).catch(() => null),
-      fetch('/api/sms-bus?action=expire_stale', { headers }).catch(() => null)
-    ]);
-  } catch (_) {}
+  // Run provider expiry sweeps in the background; don't make opening the
+  // transaction list wait for two full provider-sync requests.
+  Promise.all([
+    fetch('/api/grizzly-sync?action=expire_stale', { headers }).catch(() => null),
+    fetch('/api/sms-bus?action=expire_stale', { headers }).catch(() => null)
+  ]).catch(function(){});
   headers['Content-Type'] = 'application/json';
   const res = await fetch('/api/admin', {
     method: 'POST', headers,
@@ -5544,6 +5546,23 @@ function switchTab(name) {
  document.getElementById('pageTitle').textContent = tabTitles[name] || name;
  if (name === 'sub-admins') loadSubAdmins();
  closeSidebar();
+ // Lazy-load expensive datasets only when their tab is opened.
+ if (name === 'sms-orders' && !_smsOrdersLoaded) {
+   _smsOrdersLoaded = true;
+   tryLoadSmsOrders().catch(function(e){ _smsOrdersLoaded = false; console.error('sms orders', e); });
+ }
+ if (name === 'booster-orders' && !_boosterOrdersLoaded) {
+   _boosterOrdersLoaded = true;
+   Promise.resolve().then(function(){ return loadBoosterOrders(); }).catch(function(e){ _boosterOrdersLoaded = false; console.error('booster orders', e); });
+ }
+ if (name === 'notify' && !_notificationHistoryLoaded) {
+   _notificationHistoryLoaded = true;
+   loadNotificationHistory().catch(function(e){ _notificationHistoryLoaded = false; console.error('notifications', e); });
+ }
+ if (name === 'settings' && !_supplierBalancesLoaded) {
+   _supplierBalancesLoaded = true;
+   loadSupplierBalances().catch(function(e){ _supplierBalancesLoaded = false; console.error('supplier balances', e); });
+ }
  if (name === 'sms' && !smsTabLoaded) {
  smsTabLoaded = true;
  loadNumberServices();
