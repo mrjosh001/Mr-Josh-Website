@@ -3870,10 +3870,12 @@ if (method === 'POST' && ga === 'gotsms_toggle_renewal') {
         if (!auth.ok) return json(res, auth.status, { success: false, message: auth.message });
 
         const body = await readBody(req);
-        const rent_id = String(body.rent_id || '').trim();
+        let rent_id = String(body.rent_id || '').trim();
         if (!rent_id) return json(res, 400, { success: false, message: 'rent_id required' });
         const order = await gotsmsAssertOwns(auth.userId, rent_id);
-        if (!order) return json(res, 403, { success: false, message: 'Rental not found' });
+        if (!order) return json(res, 404, { success: false, message: 'Rental not found' });
+        // Supplier endpoints require the supplier rent ID, not the GS display order ID.
+        if (order.idempotency_key) rent_id = String(order.idempotency_key).replace(/^gotsms-/, '');
 
         let live = null;
         try {
