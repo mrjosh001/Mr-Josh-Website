@@ -204,7 +204,7 @@ document.addEventListener('click', function(e){
 </script>
 
 <header class="header">
-  <a class="back" href="dashboard.html#home" aria-label="Back"><i class="fa-solid fa-arrow-left"></i></a>
+  <a class="back" href="dashboard.html#home" id="headerBackBtn" aria-label="Back"><i class="fa-solid fa-arrow-left"></i></a>
   <h1>Fund Wallet</h1>
   <div class="header-right">
     <a class="deposit-guide-chip" href="https://t.me/mj_hub_tg/44" target="_blank" rel="noopener noreferrer" title="How to deposit">
@@ -279,7 +279,7 @@ document.addEventListener('click', function(e){
     </div>
 
     <div id="vaProviderState" style="display:none;">
-      <button type="button" class="step-back" onclick="backToAmountFromProvider()"><i class="fa-solid fa-arrow-left"></i> Select Payment Method</button>
+      <button type="button" class="step-back" onclick="backToAmountFromProvider()"><i class="fa-solid fa-arrow-left"></i> Back</button>
       <div class="amount-summary">
         <span style="color:var(--muted)">Amount</span>
         <strong id="providerAmountLabel">₦0</strong>
@@ -294,14 +294,6 @@ document.addEventListener('click', function(e){
           </div>
           <span class="provider-badge">Auto</span>
         </button>
-        <button type="button" class="provider-card" onclick="chooseManualWhatsApp()">
-          <div class="provider-icon manual"><i class="fa-brands fa-whatsapp"></i></div>
-          <div class="provider-body">
-            <strong>Manual Deposit</strong>
-            <span>Message admin on WhatsApp</span>
-          </div>
-          <span class="provider-badge" style="background:rgba(37,211,102,.15);color:#25d366">WhatsApp</span>
-        </button>
         <button type="button" class="provider-card" id="providerCryptoBtn" onclick="chooseCryptoDeposit()">
           <div class="provider-icon crypto"><i class="fa-solid fa-coins"></i></div>
           <div class="provider-body">
@@ -309,6 +301,14 @@ document.addEventListener('click', function(e){
             <span>USDT / BTC · auto credit at ₦1,450/$</span>
           </div>
           <span class="provider-badge" style="background:rgba(245,158,11,.15);color:#d97706">Crypto</span>
+        </button>
+        <button type="button" class="provider-card" onclick="chooseManualWhatsApp()">
+          <div class="provider-icon manual"><i class="fa-brands fa-whatsapp"></i></div>
+          <div class="provider-body">
+            <strong>Manual Deposit</strong>
+            <span>Message admin on WhatsApp</span>
+          </div>
+          <span class="provider-badge" style="background:rgba(37,211,102,.15);color:#25d366">WhatsApp</span>
         </button>
       </div>
       <input type="hidden" id="depositCustomerId" value="">
@@ -415,7 +415,36 @@ function setOtherMethod(method) {
   const box = document.getElementById('manualDepositBox');
   if (box) box.style.display = '';
 }
+
+function headerDepositBack(e) {
+  if (e) e.preventDefault();
+  var step = window.__depositStep || 'amount';
+  if (step === 'pay') {
+    backToProviderFromPay();
+    return false;
+  }
+  if (step === 'provider' || step === 'empty') {
+    backToAmountFromProvider();
+    return false;
+  }
+  if (step === 'loading' || step === 'error') {
+    showVaState('amount');
+    return false;
+  }
+  // amount (first step) → dashboard home
+  location.href = 'dashboard.html#home';
+  return false;
+}
+document.addEventListener('DOMContentLoaded', function () {
+  var hb = document.getElementById('headerBackBtn');
+  if (hb) {
+    hb.setAttribute('href', '#');
+    hb.addEventListener('click', headerDepositBack);
+  }
+});
+
 function showVaState(which) {
+  window.__depositStep = which || 'amount';
   document.getElementById('vaLoadingState').style.display = which === 'loading' ? '' : 'none';
   document.getElementById('vaEmptyState').style.display = which === 'empty' ? '' : 'none';
   document.getElementById('vaAmountState').style.display = which === 'amount' ? '' : 'none';
