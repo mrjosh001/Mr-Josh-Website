@@ -1951,17 +1951,54 @@ async function handleHeleketCreate(req, res, raw) {
     return res.status(400).json({ success: false, message: `Amount must be between ₦${MIN.toLocaleString()} and ₦${MAX.toLocaleString()}` });
   }
 
+  // MJ Hub rate: NGN → USD for Heleket invoice (wallet still credited in NGN)
+  const cryptoRate = Number(process.env.DEPOSIT_USD_RATE) || Number(process.env.USD_TO_NGN_RATE) || USD_RATE || 1450;
+  const amountUsd = Math.round((amount / cryptoRate) * 100) / 100;
+  if (!(amountUsd >= 0.01)) {
+    return res.status(400).json({ success: false, message: 'Amount too small for crypto at current rate' });
+  }
+
   const orderId = `hk_${user.id.replace(/-/g, '').slice(0, 12)}_${amount}_${Date.now()}`;
   const appUrl = (process.env.APP_URL || 'https://www.mjhub.store').replace(/\/$/, '');
+
+  // Allowed coins: env HELEKET_CURRENCIES="USDT:tron,USDT:eth,USDT:bsc,BTC"
+  // or JSON array. Default = USDT (TRON/ETH/BSC) + BTC only.
+  function parseHeleketCurrencies() {
+    const raw = (process.env.HELEKET_CURRENCIES || process.env.HELEKET_ALLOWED_COINS || '').trim();
+    if (raw.startsWith('[')) {
+      try { return JSON.parse(raw); } catch (_) {}
+    }
+    if (raw) {
+      return raw.split(',').map((p) => {
+        const [c, n] = p.trim().split(':');
+        const o = { currency: String(c || '').toUpperCase() };
+        if (n) o.network = String(n).toLowerCase();
+        return o;
+      }).filter((x) => x.currency);
+    }
+    return [
+      { currency: 'USDT', network: 'tron' },
+      { currency: 'USDT', network: 'eth' },
+      { currency: 'USDT', network: 'bsc' },
+      { currency: 'BTC' }
+    ];
+  }
+
   const payload = {
-    amount: String(amount),
-    currency: String(body.currency || process.env.HELEKET_INVOICE_CURRENCY || 'NGN').toUpperCase(),
+    amount: String(amountUsd),
+    currency: 'USD',
     order_id: orderId,
     url_callback: appUrl + '/api/deposit?action=heleket_webhook',
     url_success: appUrl + '/dashboard.html?deposit=success&provider=heleket',
     url_return: appUrl + '/deposit.html',
     lifetime: Number(body.lifetime) || 3600,
-    additional_data: JSON.stringify({ user_id: user.id, amount_ngn: amount })
+    currencies: parseHeleketCurrencies(),
+    additional_data: JSON.stringify({
+      user_id: user.id,
+      amount_ngn: amount,
+      amount_usd: amountUsd,
+      rate: cryptoRate
+    })
   };
 
   // Remember intent for webhook credit
@@ -1995,6 +2032,8 @@ async function handleHeleketCreate(req, res, raw) {
     uuid: inv.uuid,
     url: inv.url,
     amount_ngn: amount,
+    amount_usd: amountUsd,
+    rate: cryptoRate,
     payment_status: inv.payment_status || inv.status || 'check'
   });
 }
