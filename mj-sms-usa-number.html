@@ -397,11 +397,12 @@ function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g,function(c){retu
         host = document.createElement('div');
         host.id = 'extraRentActions';
         host.style.cssText = 'display:flex;flex-direction:column;gap:8px;margin-top:10px;';
-        if(cancelBtn && cancelBtn.parentNode) cancelBtn.parentNode.insertBefore(host, cancelBtn);
-        else {
-          var card = document.querySelector('.card') || document.body;
-          card.appendChild(host);
-        }
+        var hero = document.querySelector('.hero');
+        var flash = document.getElementById('flash');
+        if (hero && flash && flash.parentNode === hero) hero.insertBefore(host, flash);
+        else if (hero) hero.appendChild(host);
+        else if (cancelBtn && cancelBtn.parentNode) cancelBtn.parentNode.insertBefore(host, cancelBtn);
+        else document.getElementById('main').appendChild(host);
       }
       host.innerHTML = '';
       var st = String(rent.status||'active').toLowerCase();
@@ -412,7 +413,7 @@ function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g,function(c){retu
         b1.innerHTML='<i class="fa-solid fa-plus"></i> Add service to this number';
         b1.onclick = openAddServiceModal;
         host.appendChild(b1);
-        var opts = rent.transition_options || [];
+        var opts = Array.isArray(rent.transition_options) ? rent.transition_options : [];
         if(opts.length){
           var b2 = document.createElement('button');
           b2.type='button'; b2.className='btn btn-ghost'; b2.id='btnSwitchPlan';
@@ -455,6 +456,7 @@ function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g,function(c){retu
     if(e.target === this) this.classList.remove('on');
   });
   document.getElementById('rfConfirm').onclick = async function(){
+    if (this.disabled) return;
     if(hasReceivedCode){
       document.getElementById('refundModal').classList.remove('on');
       setFlash('Refund unavailable — a message was already received on this number.', false);
@@ -465,10 +467,17 @@ function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g,function(c){retu
     btn.disabled = true;
     var prev = btn.textContent;
     btn.textContent = 'Refunding…';
-    var j = await api('refund', { method:'POST', body:{ rent_id: rentId } });
-    btn.disabled = false; btn.textContent = prev;
+    var j;
+    try {
+      j = await api('refund', { method:'POST', body:{ rent_id: rentId } });
+    } catch (e) {
+      j = { success:false, message: e && e.message ? e.message : 'Network error. Please try again.' };
+    } finally {
+      btn.disabled = false;
+      btn.textContent = prev;
+    }
     document.getElementById('refundModal').classList.remove('on');
-    if(j.success){
+    if(j && j.success){
       rent.status = 'refunded'; rent.refunded = true;
       setFlash(j.message || 'Refund submitted. If approved, your wallet is credited automatically.', true);
       render();
@@ -482,6 +491,12 @@ function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g,function(c){retu
     if(cdTimer) clearTimeout(cdTimer);
     var expiry = rent && (rent.active_till || rent.online_till || rent.activeTill || rent.expires_at);
     var till = expiry ? new Date(expiry).getTime() : 0;
+    // GotSMS also provides remaining time in seconds; use it if the timestamp
+    // is absent so the timer remains visible on normalized/stored rental data.
+    if (!till && rent) {
+      var secondsLeft = Number(rent.online_time_left_seconds || rent.time_left_seconds || 0);
+      if (secondsLeft > 0) till = Date.now() + secondsLeft * 1000;
+    }
     function tick(){
       var el = document.getElementById('cd');
       if(!el) return;
