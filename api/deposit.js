@@ -1953,11 +1953,57 @@ async function handleHeleketCreate(req, res, raw) {
       message: (amountParsed && amountParsed.message) || `Amount must be between ₦${MIN.toLocaleString()} and ₦${MAX.toLocaleString()}`
     });
   }
-  const amount = amountParsed.value;
+  const amount = amountParsed.value; // NGN to credit to wallet
 
-  // MJ Hub rate: NGN → USD for Heleket invoice (wallet still credited in NGN)
+  // User fee 1% (Heleket is ~2%; MJ HUB absorbs the rest — do not show Heleket fee)
+  const CRYPTO_USER_FEE = Number(process.env.CRYPTO_USER_FEE_RATE);
+  const feeRate = Number.isFinite(CRYPTO_USER_FEE) && CRYPTO_USER_FEE >= 0 ? CRYPTO_USER_FEE : 0.01;
+  const feeNgn = Math.ceil(amount * feeRate);
+  const chargeNgn = amount + feeNgn;
+
   const cryptoRate = Number(process.env.DEPOSIT_USD_RATE) || Number(process.env.USD_TO_NGN_RATE) || USD_RATE || 1450;
-  const amountUsd = Math.round((amount / cryptoRate) * 100) / 100;
+
+  // coin|network from Heleket merchant (payment-enabled only)
+  // minUsd ≈ Heleket min receival for stables; higher floors for volatile coins
+  const ALLOWED = {
+    BTC:            { to_currency: 'BTC',  network: 'btc',       label: 'Bitcoin (BTC)',           minUsd: 1 },
+    USDT_TRON:      { to_currency: 'USDT', network: 'tron',      label: 'USDT · Tron (TRC20)',     minUsd: 1 },
+    USDT_ETH:       { to_currency: 'USDT', network: 'eth',       label: 'USDT · Ethereum (ERC20)', minUsd: 1 },
+    USDT_BSC:       { to_currency: 'USDT', network: 'bsc',       label: 'USDT · BSC (BEP20)',      minUsd: 0.5 },
+    USDT_POLYGON:   { to_currency: 'USDT', network: 'polygon',   label: 'USDT · Polygon',          minUsd: 0.5 },
+    USDT_ARBITRUM:  { to_currency: 'USDT', network: 'arbitrum',  label: 'USDT · Arbitrum',         minUsd: 1 },
+    USDT_AVALANCHE: { to_currency: 'USDT', network: 'avalanche', label: 'USDT · Avalanche',        minUsd: 1 },
+    USDT_SOL:       { to_currency: 'USDT', network: 'sol',       label: 'USDT · Solana',           minUsd: 1 },
+    USDT_TON:       { to_currency: 'USDT', network: 'ton',       label: 'USDT · TON',              minUsd: 1 },
+    USDC_ETH:       { to_currency: 'USDC', network: 'eth',       label: 'USDC · Ethereum',         minUsd: 1 },
+    USDC_BSC:       { to_currency: 'USDC', network: 'bsc',       label: 'USDC · BSC',              minUsd: 1 },
+    USDC_SOL:       { to_currency: 'USDC', network: 'sol',       label: 'USDC · Solana',           minUsd: 1 },
+    USDC_ARBITRUM:  { to_currency: 'USDC', network: 'arbitrum',  label: 'USDC · Arbitrum',         minUsd: 1 },
+    USDC_AVALANCHE: { to_currency: 'USDC', network: 'avalanche', label: 'USDC · Avalanche',        minUsd: 1 },
+    TRX:            { to_currency: 'TRX',  network: 'tron',      label: 'TRX · Tron',              minUsd: 1 },
+    ETH:            { to_currency: 'ETH',  network: 'eth',       label: 'ETH · Ethereum',          minUsd: 3 },
+    ETH_ARBITRUM:   { to_currency: 'ETH',  network: 'arbitrum',  label: 'ETH · Arbitrum',          minUsd: 3 },
+    BNB:            { to_currency: 'BNB',  network: 'bsc',       label: 'BNB · BSC',               minUsd: 3 }
+  };
+
+  let coinKey = String(body.coin || body.crypto || '').toUpperCase().replace(/[^A-Z0-9_]/g, '');
+  if (!ALLOWED[coinKey]) {
+    return res.status(400).json({
+      success: false,
+      message: 'Select a supported coin and network',
+      allowed: Object.keys(ALLOWED)
+    });
+  }
+  const pick = ALLOWED[coinKey];
+  const minNgn = Math.max(MIN, Math.ceil(pick.minUsd * cryptoRate));
+  if (amount < minNgn) {
+    return res.status(400).json({
+      success: false,
+      message: `${pick.label} minimum is ₦${minNgn.toLocaleString()} (about $${pick.minUsd})`
+    });
+  }
+
+  const amountUsd = Math.round((chargeNgn / cryptoRate) * 100) / 100;
   if (!(amountUsd >= 0.01)) {
     return res.status(400).json({ success: false, message: 'Amount too small for crypto at current rate' });
   }
@@ -1965,47 +2011,27 @@ async function handleHeleketCreate(req, res, raw) {
   const orderId = `hk_${user.id.replace(/-/g, '').slice(0, 12)}_${amount}_${Date.now()}`;
   const appUrl = (process.env.APP_URL || 'https://www.mjhub.store').replace(/\/$/, '');
 
-  // Allowed coins: env HELEKET_CURRENCIES="USDT:tron,USDT:eth,USDT:bsc,BTC"
-  // or JSON array. Default = USDT (TRON/ETH/BSC) + BTC only.
-  function parseHeleketCurrencies() {
-    const raw = (process.env.HELEKET_CURRENCIES || process.env.HELEKET_ALLOWED_COINS || '').trim();
-    if (raw.startsWith('[')) {
-      try { return JSON.parse(raw); } catch (_) {}
-    }
-    if (raw) {
-      return raw.split(',').map((p) => {
-        const [c, n] = p.trim().split(':');
-        const o = { currency: String(c || '').toUpperCase() };
-        if (n) o.network = String(n).toLowerCase();
-        return o;
-      }).filter((x) => x.currency);
-    }
-    return [
-      { currency: 'USDT', network: 'tron' },
-      { currency: 'USDT', network: 'eth' },
-      { currency: 'USDT', network: 'bsc' },
-      { currency: 'BTC' }
-    ];
-  }
-
   const payload = {
     amount: String(amountUsd),
     currency: 'USD',
     order_id: orderId,
+    to_currency: pick.to_currency,
+    network: pick.network,
     url_callback: appUrl + '/api/deposit?action=heleket_webhook',
     url_success: appUrl + '/dashboard.html?deposit=success&provider=heleket',
     url_return: appUrl + '/deposit.html',
     lifetime: Number(body.lifetime) || 3600,
-    currencies: parseHeleketCurrencies(),
     additional_data: JSON.stringify({
       user_id: user.id,
       amount_ngn: amount,
+      fee_ngn: feeNgn,
+      charge_ngn: chargeNgn,
       amount_usd: amountUsd,
-      rate: cryptoRate
+      rate: cryptoRate,
+      coin: coinKey
     })
   };
 
-  // Remember intent for webhook credit
   try {
     await supabase.from('deposit_intents').upsert({
       reference: orderId,
@@ -2022,11 +2048,9 @@ async function handleHeleketCreate(req, res, raw) {
 
   const { ok, status, json, text } = await heleketApi('/v1/payment', payload, apiKey, merchantId);
   if (!ok || !json || json.state !== 0 || !json.result) {
-    console.error('[heleket] create failed', status, text && text.slice(0, 400));
-    return res.status(502).json({
-      success: false,
-      message: (json && (json.message || json.error)) || 'Could not start crypto payment. Try again.'
-    });
+    console.error('[heleket] create failed', status, text && text.slice(0, 500));
+    const msg = (json && (json.message || (json.errors && JSON.stringify(json.errors)))) || 'Could not start crypto payment. Try another network.';
+    return res.status(502).json({ success: false, message: String(msg).slice(0, 200) });
   }
   const inv = json.result;
   return res.status(200).json({
@@ -2036,8 +2060,12 @@ async function handleHeleketCreate(req, res, raw) {
     uuid: inv.uuid,
     url: inv.url,
     amount_ngn: amount,
+    fee_ngn: feeNgn,
+    charge_ngn: chargeNgn,
     amount_usd: amountUsd,
     rate: cryptoRate,
+    coin: coinKey,
+    label: pick.label,
     payment_status: inv.payment_status || inv.status || 'check'
   });
 }
