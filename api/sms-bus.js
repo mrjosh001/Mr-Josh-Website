@@ -3413,12 +3413,23 @@ export default async function handler(req, res) {
               .select('service_id, price, price_source, is_available')
               .eq('source', 'gotsms')
               .in('service_id', transitionIds);
-            const priceById = new Map((priceRows || []).filter((x) => Number(x.price) > 0).map((x) => [String(x.service_id), x]));
+            const priceById = new Map((priceRows || []).map((x) => [String(x.service_id), x]));
             for (const rent of publicRents) {
               rent.transition_options = (rent.transition_options || []).map((opt) => {
                 const id = String(opt.plan_id || opt.id || '');
                 const db = priceById.get(id);
-                return db ? { ...opt, plan_id: id, price_ngn: Math.round(Number(db.price)), is_available: db.is_available !== false } : opt;
+                const fixed = gotsmsFixedDurationPriceNgn(opt);
+                let priceNgn = fixed != null ? fixed : gotsmsSellPriceNgn(Number(opt.price || opt.plan?.price || 0));
+                if (db && db.price_source === 'admin' && db.is_available === false) {
+                  return { ...opt, plan_id: id, price_ngn: 0, is_available: false };
+                }
+                if (db && db.price_source === 'admin' && Number(db.price) > 0) priceNgn = Math.round(Number(db.price));
+                return {
+                  ...opt,
+                  plan_id: id,
+                  price_ngn: Math.round(Number(priceNgn) || 0),
+                  is_available: opt.is_available !== false && Number(priceNgn) > 0
+                };
               });
             }
           } catch (e) { console.warn('[gotsms_rents] transition prices', e.message || e); }
@@ -3642,9 +3653,13 @@ if (method === 'POST' && ga === 'gotsms_transition') {
         const plan = opts.find((o) => String(o.plan_id || o.id || o.plan?.id || '') === plan_id);
         if (!plan) return json(res, 400, { success: false, message: 'GotSMS did not return this plan as an available switch for this rental. Refresh the rental list and try again; no wallet charge was made.' });
 
-        // Charge the current customer-facing price stored for the target plan.
-        // Do not prorate, discount, or credit the previously purchased plan.
-        let dbPrice = null;
+        // Match the same customer price rules as a new rental: hardcoded duration
+        // first, then an explicit admin override, then the established USD markup.
+        // Do not prorate or credit the previously purchased plan.
+        const fixedPlanPrice = gotsmsFixedDurationPriceNgn(plan);
+        let price = fixedPlanPrice != null
+          ? fixedPlanPrice
+          : gotsmsSellPriceNgn(Number(plan.price || plan.plan?.price || 0));
         try {
           const { data: priceRow } = await supabase
             .from('number_services')
@@ -3652,19 +3667,18 @@ if (method === 'POST' && ga === 'gotsms_transition') {
             .eq('source', 'gotsms')
             .eq('service_id', plan_id)
             .maybeSingle();
-          if (priceRow && Number(priceRow.price) > 0) {
-            if (priceRow.is_available === false && priceRow.price_source === 'admin') {
-              return json(res, 400, { success: false, message: 'This plan is currently unavailable.' });
-            }
-            dbPrice = Math.round(Number(priceRow.price));
+          if (priceRow && priceRow.price_source === 'admin' && priceRow.is_available === false) {
+            return json(res, 400, { success: false, message: 'This plan is currently unavailable.' });
+          }
+          if (priceRow && priceRow.price_source === 'admin' && Number(priceRow.price) > 0) {
+            price = Math.round(Number(priceRow.price));
           }
         } catch (e) {
           console.warn('[gotsms transition] DB price lookup failed', e.message || e);
         }
-        if (dbPrice == null || !(dbPrice > 0)) {
-          return json(res, 400, { success: false, message: 'This plan has no normal selling price in the MJ HUB database yet. Please contact support; no wallet charge was made.' });
+        if (!(price > 0)) {
+          return json(res, 400, { success: false, message: 'This plan has no valid selling price. No wallet charge was made.' });
         }
-        const price = dbPrice;
         const debit = await debitWalletStrict(auth.userId, price, 'gotsms_transition');
         if (!debit.ok) return json(res, 400, { success: false, message: debit.message || 'Insufficient wallet balance' });
         const g = await gotsmsFetch('/api/rents/' + encodeURIComponent(rent_id) + '/transition', { method: 'POST', body: { plan_id } });
