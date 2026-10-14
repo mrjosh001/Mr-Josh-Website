@@ -14,6 +14,7 @@
  */
 
 import { createClient } from '@supabase/supabase-js';
+import { sendPushToUser } from '../lib/push.js';
 import { formatCredentials, formatMultiLogCredentials, joinRawLogDetails } from '../lib/formatCredentials.js';
 import { readSupplierStock } from '../lib/supplierStock.js';
 import { rateLimit, applyRateLimitHeaders } from '../lib/rateLimit.js';
@@ -1330,6 +1331,12 @@ export default async function handler(req, res) {
       details: formatCredentials(i.details, formatHint) || String(i.details || '').trim(),
       serial: i.serial || i.product_detail_id || i.id || null
     }));
+    await sendPushToUser(supabase, user_id, {
+      title: 'Order completed',
+      body: 'Your ' + productName + ' order has been fulfilled successfully.',
+      url: '/dashboard.html',
+      type: 'purchase'
+    });
     return res.status(200).json({
       success: true,
       message: 'Order fulfilled successfully',
