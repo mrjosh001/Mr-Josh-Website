@@ -3415,8 +3415,22 @@ if (method === 'GET' && ga === 'gotsms_messages') {
         const rent_id = String(url.searchParams.get('rent_id') || '').trim();
         if (!rent_id) return json(res, 400, { success: false, message: 'rent_id required' });
         if (!(await gotsmsAssertOwns(auth.userId, rent_id))) return json(res, 403, { success: false, message: 'Rental not found' });
-        const g = await gotsmsFetch(`/api/rents/${encodeURIComponent(rent_id)}/services`);
-        const services = g.data?.data || [];
+        let g = await gotsmsFetch(`/api/rents/${encodeURIComponent(rent_id)}/services`);
+        let services = g.data?.data || [];
+        // If GotSMS withholds the add-on list before the first SMS, still show
+        // the account's known services so the customer can attempt the documented
+        // POST. GotSMS remains authoritative and may reject the add-on itself.
+        if (!g.ok || !services.length) {
+          const fallback = await gotsmsFetch('/api/services?per_page=100');
+          if (fallback.ok && Array.isArray(fallback.data?.data)) {
+            services = fallback.data.data.map((s) => ({
+              service_id: s.id,
+              name: s.name,
+              price: 0,
+              is_available: s.is_available !== false
+            }));
+          }
+        }
         let priceById = new Map();
         try {
           const ids = services.map((s) => String(s.service_id || '')).filter(Boolean);
@@ -3435,10 +3449,10 @@ if (method === 'GET' && ga === 'gotsms_messages') {
             name: s.name,
             price_usd: Number(s.price || 0),
             price_ngn: price,
-            is_available: s.is_available !== false && !(db && db.is_available === false)
+            is_available: s.is_available !== false && !(db && db.is_available === false) && price > 0
           };
         });
-        return json(res, g.ok ? 200 : g.status || 400, { success: !!g.data?.success, data: list, message: g.data?.message });
+        return json(res, 200, { success: true, data: list, message: g.data?.message });
       }
 
       if (method === 'POST' && ga === 'gotsms_add_service') {
