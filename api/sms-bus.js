@@ -1540,7 +1540,7 @@ export default async function handler(req, res) {
       });
     }
 
-    if (method === 'GET' && action === 'push_poll_codes') {
+    if ((method === 'GET' || method === 'POST') && action === 'push_poll_codes') {
       return handlePushPollCodes(req, res);
     }
 
