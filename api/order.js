@@ -300,10 +300,12 @@ async function handleMyOrders(req, res, userId) {
 
     // --- Incremental: small egress ---
     if (since && !wantFull) {
-      const sinceIso = new Date(since).toISOString();
-      if (Number.isNaN(new Date(sinceIso).getTime())) {
+      // Validate before calling toISOString(); invalid dates throw RangeError.
+      const parsedSince = new Date(since);
+      if (Number.isNaN(parsedSince.getTime())) {
         return res.status(400).json({ success: false, message: 'Invalid since timestamp' });
       }
+      const sinceIso = parsedSince.toISOString();
       const openStatuses = ['active', 'waiting', 'waiting_for_code', 'pending', 'processing'];
       const [logsRes, smsNewRes, smsOpenRes] = await Promise.all([
         supabase
