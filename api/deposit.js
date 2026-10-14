@@ -2222,6 +2222,10 @@ export default async function handler(req, res) {
       if (!gate.ok) return res.status(gate.status).json({ success: false, message: gate.message });
       return handleReferralAttach(req, res, gate.user);
     }
+    if (_act === 'convert_rate') {
+      const rate = Number(process.env.DEPOSIT_USD_RATE) || Number(process.env.USD_TO_NGN_RATE) || USD_RATE || 1450;
+      return res.status(200).json({ success: true, rate, base: 'USD', quote: 'NGN', source: 'MJ HUB wallet conversion rate' });
+    }
     if (_act === 'convert' || _act === 'currency_convert') {
       const gate = await requireUserToken(req);
       if (!gate.ok) return res.status(gate.status).json({ success: false, message: gate.message });
