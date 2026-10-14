@@ -1121,7 +1121,7 @@ export default async function handler(req, res) {
     // -------------------------------------------------
     let { data: profile, error: profileErr } = await supabase
       .from('profiles')
-      .select('balance, customer_id')
+      .select('balance, balance_usd, customer_id')
       .eq('id', user_id)
       .maybeSingle();
 
@@ -1138,6 +1138,7 @@ export default async function handler(req, res) {
         full_name: name,
         customer_id,
         balance: 0,
+        balance_usd: 0,
         updated_at: new Date().toISOString()
       }, { onConflict: 'id' });
       if (upErr) {
@@ -1146,7 +1147,7 @@ export default async function handler(req, res) {
       }
       const again = await supabase
         .from('profiles')
-        .select('balance, customer_id')
+        .select('balance, balance_usd, customer_id')
         .eq('id', user_id)
         .maybeSingle();
       profile = again.data;
@@ -1156,25 +1157,39 @@ export default async function handler(req, res) {
     }
 
     originalBalance = Number(profile.balance || 0);
+    const originalBalanceUsd = Number(profile.balance_usd || 0);
     customerId = profile.customer_id;
 
-    if (originalBalance < total) {
+    // Purchases are priced in NGN. Spend the NGN wallet first, then cover
+    // any remainder from USD at the configured wallet conversion rate.
+    const walletUsdRate = Number(process.env.WALLET_USD_RATE) || 1450;
+    const ngnFromWallet = Math.min(originalBalance, total);
+    const remainingNgn = Math.max(0, total - ngnFromWallet);
+    const usdToDebit = remainingNgn > 0
+      ? Math.ceil((remainingNgn / walletUsdRate) * 100) / 100
+      : 0;
+    const convertedUsdValue = usdToDebit * walletUsdRate;
+    const newBalance = Math.max(0, originalBalance - ngnFromWallet);
+    const newBalanceUsd = Math.max(0, Math.round((originalBalanceUsd - usdToDebit) * 100) / 100);
+
+    if (originalBalance + (originalBalanceUsd * walletUsdRate) + 0.000001 < total || originalBalanceUsd + 0.000001 < usdToDebit) {
       return res.status(402).json({
         success: false,
-        message: 'Insufficient balance',
-        required: total,
-        available: originalBalance
+        message: 'Insufficient combined wallet balance',
+        required_ngn: total,
+        available_ngn_equivalent: Math.round((originalBalance + originalBalanceUsd * walletUsdRate) * 100) / 100,
+        balance_ngn: originalBalance,
+        balance_usd: originalBalanceUsd,
+        usd_ngn_rate: walletUsdRate
       });
     }
 
     // -------------------------------------------------
-    // 3. Debit user immediately
+    // 3. Debit both wallets as one purchase
     // -------------------------------------------------
-    const newBalance = originalBalance - total;
-
     const { error: deductErr } = await supabase
       .from('profiles')
-      .update({ balance: newBalance })
+      .update({ balance: newBalance, balance_usd: newBalanceUsd })
       .eq('id', user_id);
 
     if (deductErr) {
@@ -1216,7 +1231,7 @@ export default async function handler(req, res) {
       // Refund user
       await supabase
         .from('profiles')
-        .update({ balance: originalBalance })
+        .update({ balance: originalBalance, balance_usd: originalBalanceUsd })
         .eq('id', user_id);
 
       // Record failed purchase → Log Orders tab
@@ -1345,6 +1360,8 @@ export default async function handler(req, res) {
         login_credentials: combinedCreds || null,
         total_amount: total,
         new_balance: newBalance,
+        new_balance_usd: newBalanceUsd,
+        amount_ngn: total,
         order_id: orderRef,
         source: 'fadded'
       }
@@ -1358,7 +1375,7 @@ export default async function handler(req, res) {
       try {
         await supabase
           .from('profiles')
-          .update({ balance: originalBalance })
+          .update({ balance: originalBalance, balance_usd: originalBalanceUsd })
           .eq('id', user_id);
 
         await supabase.from('transactions').insert({
