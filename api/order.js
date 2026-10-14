@@ -1074,6 +1074,7 @@ export default async function handler(req, res) {
   const safeQty = qtyCheck.value;
 
   let originalBalance = 0;
+  let originalBalanceUsd = 0;
   let total = 0;
   let productName = '';
   let customerId = null;
@@ -1157,7 +1158,7 @@ export default async function handler(req, res) {
     }
 
     originalBalance = Number(profile.balance || 0);
-    const originalBalanceUsd = Number(profile.balance_usd || 0);
+    originalBalanceUsd = Number(profile.balance_usd || 0);
     customerId = profile.customer_id;
 
     // Purchases are priced in NGN. Spend the NGN wallet first, then cover
