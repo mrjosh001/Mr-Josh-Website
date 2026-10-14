@@ -32,6 +32,8 @@ const supabase = createClient(
 
 const MIN = 1000;
 const MAX = 500000;
+/** Minimum crypto deposit in NGN (about $3.45 at 1450) */
+const CRYPTO_MIN_NGN = 5000;
 /** NGN per 1 USD when user funds USD wallet via bank transfer */
 const USD_RATE = Number(process.env.DEPOSIT_USD_RATE) || 1450;
 
@@ -1999,11 +2001,11 @@ async function handleHeleketCreate(req, res, raw) {
   const pick = coinKey
     ? ALLOWED[coinKey]
     : { to_currency: null, network: null, label: 'Crypto', minUsd: 3 };
-  const minNgn = Math.max(MIN, Math.ceil(pick.minUsd * cryptoRate));
+  const minNgn = Math.max(MIN, CRYPTO_MIN_NGN, Math.ceil(pick.minUsd * cryptoRate));
   if (amount < minNgn) {
     return res.status(400).json({
       success: false,
-      message: `${pick.label} minimum is ₦${minNgn.toLocaleString()} (about $${pick.minUsd})`
+      message: `Minimum crypto deposit is ₦${minNgn.toLocaleString()} (about $${(minNgn / cryptoRate).toFixed(2)})`
     });
   }
 
@@ -2021,7 +2023,8 @@ async function handleHeleketCreate(req, res, raw) {
     order_id: orderId,
     ...(pick.to_currency ? { to_currency: pick.to_currency, network: pick.network } : {}),
     url_callback: appUrl + '/api/deposit?action=heleket_webhook',
-    url_success: appUrl + '/dashboard.html?deposit=success&provider=heleket',
+    // Land on the deposit page first: it waits for the webhook to credit the NGN wallet, then sends the user to the dashboard
+    url_success: appUrl + '/deposit.html?deposit=success&provider=heleket',
     url_return: appUrl + '/deposit.html',
     lifetime: Number(body.lifetime) || 3600,
     additional_data: JSON.stringify({
