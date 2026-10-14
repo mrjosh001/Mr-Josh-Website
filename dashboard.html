@@ -1439,8 +1439,7 @@ body::after {
 .activity-history-drawer,
 .currency-modal .currency-modal-card,
 .confirm-modal-card,
-.floating-action-modal .popup-panel,
-.floating-action-modal [class*="popup"] {
+.floating-action-modal .floating-action-sheet {
   background: var(--card-solid) !important;
   border: 1px solid var(--glass-border) !important;
   backdrop-filter: blur(48px) saturate(1.9) !important;
@@ -2277,35 +2276,76 @@ body::after {
 .channel-info h4 { font-size: 13px; font-weight: 700; margin-bottom: 1px; }
 .channel-info p { font-size: 11px; color: var(--muted); }
 
-/* FLOATING + MODAL */
+/* FLOATING + QUICK ACTIONS — polished mobile bottom sheet */
 .floating-action-modal {
-    display: none; position: fixed; bottom: 84px; left: 50%; transform: translateX(-50%);
-    width: 92%; max-width: 400px; background: var(--card); border: 1px solid var(--border);
-    border-radius: 24px; z-index: 1500; padding: 20px; box-shadow: var(--shadow);
-    animation: fadeUp .25s ease;
+    position: fixed; inset: 0; z-index: 1500;
+    display: none; align-items: flex-end; justify-content: center;
+    padding: 18px 14px calc(88px + env(safe-area-inset-bottom, 0px));
+    box-sizing: border-box;
+    background: rgba(5, 10, 22, .48);
+    -webkit-backdrop-filter: blur(7px);
+    backdrop-filter: blur(7px);
+    opacity: 0;
+    transition: opacity .2s ease;
 }
-.floating-action-modal.active { display: block; }
+.floating-action-modal.active { display: flex; opacity: 1; }
+.floating-action-sheet {
+    width: 100%; max-width: 440px; max-height: min(72vh, 560px);
+    overflow-y: auto; overscroll-behavior: contain;
+    padding: 20px; box-sizing: border-box;
+    background: var(--card-solid, var(--card));
+    color: var(--text); border: 1px solid var(--glass-border, var(--border));
+    border-radius: 26px;
+    box-shadow: 0 24px 70px rgba(0,0,0,.3), inset 0 1px 0 rgba(255,255,255,.08);
+    transform: translateY(18px);
+    animation: mjQuickSheetIn .24s cubic-bezier(.2,.8,.2,1) forwards;
+}
+@keyframes mjQuickSheetIn { to { transform: translateY(0); } }
 .popup-header-row {
     display: flex; justify-content: space-between; align-items: center;
-    margin-bottom: 14px; padding-bottom: 10px; border-bottom: 1px solid var(--border);
+    gap: 12px; margin-bottom: 18px; padding-bottom: 15px;
+    border-bottom: 1px solid var(--border);
 }
-.popup-title { font-size: 15px; font-weight: 800; display: flex; align-items: center; gap: 8px; }
+.popup-title { font-size: 17px; line-height: 1.25; letter-spacing: -.025em; font-weight: 850; display: flex; align-items: center; gap: 10px; }
+.popup-title > i {
+    width: 38px; height: 38px; display: grid; place-items: center; flex: 0 0 38px;
+    border-radius: 13px; color: #fff; background: linear-gradient(145deg,#3b82f6,#1d4ed8);
+    box-shadow: 0 7px 18px rgba(37,99,235,.25); font-size: 16px;
+}
 .popup-close {
-    background: var(--bg); border: 1px solid var(--border); width: 30px; height: 30px;
-    border-radius: 50%; cursor: pointer; color: var(--text);
-    display: flex; align-items: center; justify-content: center;
+    flex: 0 0 36px; width: 36px; height: 36px;
+    background: var(--bg); border: 1px solid var(--border);
+    border-radius: 12px; cursor: pointer; color: var(--muted);
+    display: flex; align-items: center; justify-content: center; font-size: 15px;
+    transition: background .15s ease, color .15s ease, transform .15s ease;
 }
-.popup-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
+.popup-close:hover { color: var(--text); background: var(--card-hover); }
+.popup-close:active { transform: scale(.96); }
+.popup-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 11px; }
 .popup-item {
-    background: var(--bg); border: 1px solid var(--border); border-radius: 16px;
-    padding: 16px 10px; display: flex; flex-direction: column; align-items: center; gap: 8px;
+    min-width: 0; min-height: 108px; box-sizing: border-box;
+    background: var(--bg); border: 1px solid var(--border); border-radius: 18px;
+    padding: 16px 12px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px;
     text-decoration: none; color: var(--text); cursor: pointer; text-align: center;
-    font-size: 12px; font-weight: 700; transition: border-color .15s, background .15s;
+    font-size: 13px; font-weight: 750; transition: border-color .16s ease, background .16s ease, transform .16s ease, box-shadow .16s ease;
 }
-.popup-item:hover { border-color: var(--primary); background: var(--card-hover); }
+.popup-item:hover { border-color: color-mix(in srgb, var(--primary) 60%, var(--border)); background: var(--card-hover); box-shadow: 0 8px 22px rgba(37,99,235,.08); }
+.popup-item:active { transform: scale(.98); }
 .popup-icon-badge {
-    width: 44px; height: 44px; background: var(--card); border: 1px solid var(--border);
-    border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 18px;
+    width: 46px; height: 46px; flex: 0 0 46px;
+    background: color-mix(in srgb, var(--primary) 11%, var(--card));
+    border: 1px solid color-mix(in srgb, var(--primary) 18%, var(--border));
+    color: var(--primary); border-radius: 15px;
+    display: flex; align-items: center; justify-content: center; font-size: 19px;
+}
+@media (min-width: 768px) {
+  .floating-action-modal { align-items: center; padding: 24px; }
+  .floating-action-sheet { max-height: min(76vh, 560px); }
+}
+@media (max-width: 360px) {
+  .floating-action-sheet { padding: 16px; border-radius: 22px; }
+  .popup-grid { gap: 8px; }
+  .popup-item { min-height: 98px; padding: 12px 8px; }
 }
 
 /* HISTORY DRAWER */
@@ -4029,28 +4069,30 @@ html[data-theme="light"] .logo-word, :root[data-theme="light"] .logo-word{color:
     </div>
 </div>
 
-<div class="floating-action-modal" id="floatingPopupModal">
-    <div class="popup-header-row">
-        <div class="popup-title"><i class="fa-solid fa-bolt"></i> Quick Actions</div>
-        <button class="popup-close" onclick="toggleFloatingPopup()"><i class="fa-solid fa-xmark"></i></button>
-    </div>
-    <div class="popup-grid">
-        <div class="popup-item" onclick="location.href='deposit.html';toggleFloatingPopup();">
-            <div class="popup-icon-badge"><i class="fa-solid fa-credit-card"></i></div>
-            <span>Deposit</span>
+<div class="floating-action-modal" id="floatingPopupModal" onclick="if(event.target===this)toggleFloatingPopup()" aria-hidden="true">
+    <div class="floating-action-sheet" role="dialog" aria-modal="true" aria-label="Quick actions">
+        <div class="popup-header-row">
+            <div class="popup-title"><i class="fa-solid fa-bolt"></i><span>Quick Actions</span></div>
+            <button type="button" class="popup-close" onclick="toggleFloatingPopup()" aria-label="Close quick actions"><i class="fa-solid fa-xmark"></i></button>
         </div>
-        <div class="popup-item" onclick="location.href='mj-boosters.html';">
-            <div class="popup-icon-badge"><i class="fa-solid fa-bolt"></i></div>
-            <span>Boosters</span>
+        <div class="popup-grid">
+            <a href="deposit.html" class="popup-item">
+                <div class="popup-icon-badge"><i class="fa-solid fa-credit-card"></i></div>
+                <span>Deposit</span>
+            </a>
+            <a href="mj-boosters.html" class="popup-item">
+                <div class="popup-icon-badge"><i class="fa-solid fa-bolt"></i></div>
+                <span>Boosters</span>
+            </a>
+            <a href="mj-sms-choose-server.html" class="popup-item">
+                <div class="popup-icon-badge"><i class="fa-solid fa-mobile-screen"></i></div>
+                <span>MJ SMS</span>
+            </a>
+            <a href="mj-logs.html" class="popup-item">
+                <div class="popup-icon-badge"><i class="fa-solid fa-box-archive"></i></div>
+                <span>MJ Logs</span>
+            </a>
         </div>
-        <a href="mj-sms-choose-server.html" class="popup-item">
-            <div class="popup-icon-badge"><i class="fa-solid fa-mobile-screen"></i></div>
-            <span>MJ SMS</span>
-        </a>
-        <a href="mj-logs.html" class="popup-item">
-            <div class="popup-icon-badge"><i class="fa-solid fa-box-archive"></i></div>
-            <span>MJ Logs</span>
-        </a>
     </div>
 </div>
 
@@ -4929,7 +4971,12 @@ function initDropdowns() {
 }
 
 window.toggleFloatingPopup = function() {
-    document.getElementById('floatingPopupModal').classList.toggle('active');
+    const modal = document.getElementById('floatingPopupModal');
+    if (!modal) return;
+    const opening = !modal.classList.contains('active');
+    modal.classList.toggle('active', opening);
+    modal.setAttribute('aria-hidden', opening ? 'false' : 'true');
+    document.body.classList.toggle('mj-quick-actions-open', opening);
 };
 
 window.toggleSmsMenu = function(e) {
