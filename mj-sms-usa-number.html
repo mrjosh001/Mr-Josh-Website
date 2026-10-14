@@ -508,7 +508,7 @@ function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g,function(c){retu
     document.getElementById('refundModal').classList.remove('on');
     if(j && j.success){
       rent.status = 'refunded'; rent.refunded = true;
-      setFlash(j.message || 'Refund submitted. If approved, your wallet is credited automatically.', true);
+      setFlash('Canceled', true);
       render();
       setTimeout(function(){ location.href = 'mj-sms-usa-rent.html'; }, 2200);
     } else {
