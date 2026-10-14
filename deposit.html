@@ -232,11 +232,11 @@ document.addEventListener('click', function(e){
 </div>
 
   <div class="card" id="vaCard">
-    <div class="va-pill"><i class="fa-solid fa-building-columns"></i> Permanent account</div>
-    <h2>Bank transfer</h2>
-    <p class="sub">One account number for every top up. Your NGN wallet credits when the transfer is confirmed.</p>
+    <div class="va-pill" style="display:none;"><i class="fa-solid fa-building-columns"></i> Permanent account</div>
+    <h2 style="display:none;">Bank transfer</h2>
+    <p class="sub" style="display:none;">One account number for every top up. Your NGN wallet credits when the transfer is confirmed.</p>
 
-    <div id="vaLoadingState" class="loading-inline"><i class="fa-solid fa-spinner fa-spin"></i> Checking your account…</div>
+    <div id="vaLoadingState" class="loading-inline" style="display:none;"><i class="fa-solid fa-spinner fa-spin"></i> Checking your account…</div>
 
     <div id="vaEmptyState" style="display:none;">
       <button type="button" class="step-back" onclick="backToProviderFromEmpty()"><i class="fa-solid fa-arrow-left"></i> Back</button>
@@ -279,7 +279,7 @@ document.addEventListener('click', function(e){
       <button type="button" class="btn" id="vaContinueBtn" onclick="continueFromAmount()">Continue</button>
     </div>
 
-    <div id="vaProviderState" style="display:none;">
+    <div id="vaProviderState">
       <div class="fund-hero">
         <div class="fund-hero-icon"><i class="fa-solid fa-wallet"></i></div>
         <div>
@@ -589,7 +589,7 @@ async function continueVaPay() {
     const accessToken = await getAccessToken();
     if (!accessToken) {
       toast('Session expired. Please sign in again.');
-      showVaState('provider');
+      showVaState('amount');
       return;
     }
     const reg = await fetch('/api/deposit?action=va_begin', {
@@ -600,7 +600,7 @@ async function continueVaPay() {
     const regData = await reg.json().catch(function () { return {}; });
     if (!reg.ok || !regData.success) {
       toast(regData.message || 'Could not start deposit session');
-      showVaState('provider');
+      showVaState('amount');
       return;
     }
     window.__vaSessionId = regData.data && regData.data.session_id;
@@ -621,12 +621,12 @@ async function continueVaPay() {
     startBalanceWatch();
   } catch (e) {
     toast(e.message || 'Could not start deposit session');
-    showVaState('provider');
+    showVaState('amount');
   }
 }
 function backToVaAmount() {
   stopBalanceWatch();
-  showVaState('provider');
+  showVaState('amount');
 }
 
 function showVaSuccessAndGoHome(creditedAmount){
@@ -735,6 +735,7 @@ async function getAccessToken() {
 async function checkVirtualAccount(opts) {
   opts = opts || {};
   const silent = !!opts.silent;
+  // Silent = background warm only. Never show "Checking your account…"
   if (!silent) showVaState('loading');
   try {
     const accessToken = await getAccessToken();
@@ -758,8 +759,7 @@ async function checkVirtualAccount(opts) {
     } else {
       vaDetails = null;
     }
-    // Never show generate/loading on entry — amount first; Bank Transfer handles account
-    if (!silent) showVaState('provider');
+    if (!silent) showVaState(window.__depositMethod ? 'amount' : 'provider');
   } catch (err) {
     if (silent) {
       vaDetails = null;
@@ -954,13 +954,17 @@ document.addEventListener('visibilitychange', async () => {
     localStorage.removeItem('mjhub_pending_pocketfi');
   } catch (_) {}
 });
+// First paint: payment methods only (never leave loading visible)
+try { showVaState('provider'); } catch (e) {}
 ((async () => {
-  syncThemeUi();
+  try { syncThemeUi(); } catch (e) {}
+  try { showVaState('provider'); } catch (e) {}
   if (!(await ensureAuth())) return;
-  await handleDepositReturn();
-  // Methods first, then amount, then payment details
-  showVaState('provider');
-  // Warm VA in background for Bank Transfer (no spinner)
+  try { showVaState('provider'); } catch (e) {}
+  try { await handleDepositReturn(); } catch (e) {}
+  // Always land on methods unless return handler moved us
+  if (!window.__depositStep || window.__depositStep === 'loading') showVaState('provider');
+  // Warm VA in background — must stay silent (no spinner)
   checkVirtualAccount({ silent: true }).catch(function () {});
 })();
 </script>
