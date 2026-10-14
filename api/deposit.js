@@ -1987,14 +1987,18 @@ async function handleHeleketCreate(req, res, raw) {
   };
 
   let coinKey = String(body.coin || body.crypto || '').toUpperCase().replace(/[^A-Z0-9_]/g, '');
-  if (!ALLOWED[coinKey]) {
+  // No coin sent → customer picks coin + network on Heleket's hosted page
+  // (same flow as the other brands on this supplier).
+  if (coinKey && !ALLOWED[coinKey]) {
     return res.status(400).json({
       success: false,
       message: 'Select a supported coin and network',
       allowed: Object.keys(ALLOWED)
     });
   }
-  const pick = ALLOWED[coinKey];
+  const pick = coinKey
+    ? ALLOWED[coinKey]
+    : { to_currency: null, network: null, label: 'Crypto', minUsd: 3 };
   const minNgn = Math.max(MIN, Math.ceil(pick.minUsd * cryptoRate));
   if (amount < minNgn) {
     return res.status(400).json({
@@ -2015,8 +2019,7 @@ async function handleHeleketCreate(req, res, raw) {
     amount: String(amountUsd),
     currency: 'USD',
     order_id: orderId,
-    to_currency: pick.to_currency,
-    network: pick.network,
+    ...(pick.to_currency ? { to_currency: pick.to_currency, network: pick.network } : {}),
     url_callback: appUrl + '/api/deposit?action=heleket_webhook',
     url_success: appUrl + '/dashboard.html?deposit=success&provider=heleket',
     url_return: appUrl + '/deposit.html',
@@ -2028,7 +2031,7 @@ async function handleHeleketCreate(req, res, raw) {
       charge_ngn: chargeNgn,
       amount_usd: amountUsd,
       rate: cryptoRate,
-      coin: coinKey
+      coin: coinKey || 'auto'
     })
   };
 
