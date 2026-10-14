@@ -701,11 +701,10 @@ async function runInactiveNudges(supabase) {
   // Candidates: registered long enough, not unsubscribed, under max weeks
   let q = supabase
     .from('profiles')
-    .select('id, email, full_name, nudge_week, last_nudge_at, email_unsubscribed, created_at')
+    .select('id, email, full_name, nudge_week, last_nudge_at, email_unsubscribed')
     .or('email_unsubscribed.is.null,email_unsubscribed.eq.false')
     .lt('nudge_week', NUDGE_MAX_WEEK)
     .not('email', 'is', null)
-    .order('created_at', { ascending: true })
     .limit(80);
 
   const { data: rows, error } = await q;
@@ -723,13 +722,20 @@ async function runInactiveNudges(supabase) {
     const email = String(row.email || '').trim();
     if (!email || !email.includes('@')) continue;
 
-    const created = row.created_at ? new Date(row.created_at).getTime() : 0;
-    if (!created || created > Date.now() - NUDGE_INTERVAL_MS) continue; // need 7+ days since signup
-
     const week = Number(row.nudge_week) || 0;
     const last = row.last_nudge_at ? new Date(row.last_nudge_at).getTime() : 0;
     if (week === 0) {
-      // first nudge: only signup age matters (already checked)
+      // profiles.created_at is not part of this database schema. Read the authoritative
+      // signup timestamp from Supabase Auth only for users who have not been nudged yet.
+      let signupCreatedAt = null;
+      try {
+        const authLookup = await supabase.auth.admin.getUserById(row.id);
+        signupCreatedAt = authLookup.data?.user?.created_at || null;
+      } catch (lookupError) {
+        console.warn('[nudge] signup timestamp lookup failed', lookupError?.message || lookupError);
+      }
+      const created = signupCreatedAt ? new Date(signupCreatedAt).getTime() : 0;
+      if (!created || Number.isNaN(created) || created > Date.now() - NUDGE_INTERVAL_MS) continue;
     } else if (last && Date.now() - last < NUDGE_INTERVAL_MS) {
       continue; // wait another week between nudges
     }
