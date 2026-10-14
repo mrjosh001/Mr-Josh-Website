@@ -898,22 +898,10 @@ async function claimAndRefundSmsBusOrder(order, userId, opts = {}) {
     }
     const { data: profile } = await supabase.from('profiles').select('customer_id, balance').eq('id', userId).maybeSingle();
     if (newBalance == null && profile) newBalance = Number(profile.balance || 0);
-    try {
-      await supabase.from('transactions').insert({
-        user_id: userId,
-        customer_id: (profile && profile.customer_id) || order.customer_id,
-        type: 'refund',
-        category: 'MJ SMS',
-        title: /expir/i.test(String(subtitle || '')) ? 'SMS expired' : 'SMS canceled',
-        subtitle: subtitle,
-        amount: `₦${refundAmount.toLocaleString()}`,
-        amount_ngn: refundAmount,
-        status: 'refunded'
-      });
-    } catch (_) {}
   }
+  // Reuse the original purchase row; do not create a second refund transaction.
   try {
-    await markTxStatus(userId, order.order_id, order.phone_number, 'cancelled');
+    await markTxStatus(userId, order.order_id, order.phone_number, 'refunded');
   } catch (_) {}
   return { refunded: true, amount: refundAmount, new_balance: newBalance };
 }
