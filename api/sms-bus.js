@@ -2478,7 +2478,9 @@ export default async function handler(req, res) {
           subtitle: `${fullPhone || phone} · ${time} month(s)`,
           amount: `₦${price.toLocaleString()}`,
           amount_ngn: price,
-          status: 'completed'
+          status: 'completed',
+          external_reference: String(orderId),
+          supplier_order: { provider: 'smsbus_rent', order_id: String(orderId) }
         });
       } catch (_) {}
 
@@ -2760,23 +2762,15 @@ export default async function handler(req, res) {
             message: 'Rental was cancelled but wallet credit needs support review. Contact support with your order ID.'
           });
         }
+        // Update the existing purchase transaction; do not create a second refund row.
+        await markTxStatus(auth.userId, order_id, row.phone_number, 'refunded');
         try {
-          const { data: profile } = await supabase
-            .from('profiles')
-            .select('customer_id')
-            .eq('id', auth.userId)
-            .maybeSingle();
-          await supabase.from('transactions').insert({
-            user_id: auth.userId,
-            customer_id: profile && profile.customer_id,
-            type: 'refund',
-            category: 'MJ SMS',
-            title: 'Rental cancelled — balance restored',
-            subtitle: String(row.phone_number || order_id),
+          await supabase.from('transactions').update({
+            subtitle: 'Rental cancelled — balance restored',
             amount: `₦${refundAmount.toLocaleString()}`,
-            amount_ngn: refundAmount,
-            status: 'completed'
-          });
+            amount_ngn: refundAmount
+          }).eq('user_id', auth.userId).eq('category', 'MJ SMS')
+            .eq('type', 'purchase').eq('external_reference', String(order_id));
         } catch (_) {}
       }
 
