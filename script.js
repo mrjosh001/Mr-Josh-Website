@@ -422,122 +422,198 @@ async function saveProfileSettingsData() {
     alert('Complete profile settings, BVN, NIN, and bio saved successfully to Supabase!');
 }
 
+function formatCurrencyValue(value, currency) {
+    const n = Number(value) || 0;
+    return (currency === 'NGN' ? '₦' : '$') + n.toLocaleString('en-NG', {
+        minimumFractionDigits: currency === 'NGN' ? 2 : 2,
+        maximumFractionDigits: 2
+    });
+}
+
+function converterDirectionIsNgnToUsd() {
+    return conversionDirection === 'ngn_to_usd';
+}
+
+function syncConverterDirectionUI() {
+    const ngnToUsd = converterDirectionIsNgnToUsd();
+    const fromCode = ngnToUsd ? 'NGN' : 'USD';
+    const toCode = ngnToUsd ? 'USD' : 'NGN';
+    const fromSymbol = ngnToUsd ? '₦' : '$';
+    const toSymbol = ngnToUsd ? '$' : '₦';
+    const fromEl = document.getElementById('fromCurrencyCode');
+    const toEl = document.getElementById('toCurrencyCode');
+    const fromSymbolEl = document.getElementById('fromCurrencySymbol');
+    const toSymbolEl = document.getElementById('toCurrencySymbol');
+    if (fromEl) fromEl.textContent = fromCode;
+    if (toEl) toEl.textContent = toCode;
+    if (fromSymbolEl) fromSymbolEl.textContent = fromSymbol;
+    if (toSymbolEl) toSymbolEl.textContent = toSymbol;
+    const input = document.getElementById('baseConvertInput');
+    if (input) input.placeholder = ngnToUsd ? '₦0.00' : '$0.00';
+    const rate = document.getElementById('rateDisplay');
+    if (rate) rate.textContent = ngnToUsd
+        ? '₦' + Number(exchangeRate).toLocaleString('en-NG', { maximumFractionDigits: 2 }) + ' = $1'
+        : '$1 = ₦' + Number(exchangeRate).toLocaleString('en-NG', { maximumFractionDigits: 2 });
+    const balanceInfo = document.getElementById('converterBalanceInfo');
+    if (balanceInfo) balanceInfo.textContent = ngnToUsd
+        ? 'Available: ' + formatCurrencyValue(currentBalanceNgn, 'NGN')
+        : 'Available: ' + formatCurrencyValue(currentBalanceUsd, 'USD');
+    const quick = document.querySelectorAll('[data-converter-preset]');
+    quick.forEach((btn, index) => {
+        const ngnValues = [1000, 5000, 10000];
+        const usdValues = [1, 5, 10];
+        const amount = (ngnToUsd ? ngnValues : usdValues)[index];
+        if (amount != null) btn.textContent = ngnToUsd
+            ? '₦' + amount.toLocaleString('en-NG')
+            : '$' + amount.toLocaleString('en-US');
+    });
+}
+
+async function refreshConverterRate() {
+    const rateEl = document.getElementById('rateDisplay');
+    const statusEl = document.getElementById('converterUpdatedAt');
+    try {
+        const response = await fetch('/api/deposit?action=convert_rate', { cache: 'no-store' });
+        const data = await response.json();
+        if (response.ok && data && data.success && Number(data.rate) > 0) {
+            exchangeRate = Number(data.rate);
+            if (statusEl) statusEl.textContent = 'Rate supplied by MJ HUB · updated just now';
+        } else if (statusEl) {
+            statusEl.textContent = 'Estimated rate · refresh before converting';
+        }
+    } catch (_) {
+        if (statusEl) statusEl.textContent = 'Estimated rate · refresh before converting';
+    }
+    syncConverterDirectionUI();
+    executeConversion();
+}
+
 function openCurrencyModal() {
-    document.getElementById('baseConvertInput').value = '';
-    document.getElementById('targetConvertOutput').value = '';
-    document.getElementById('currencyConverterModal').classList.add('active');
+    const input = document.getElementById('baseConvertInput');
+    const output = document.getElementById('targetConvertOutput');
+    if (input) input.value = '';
+    if (output) output.value = '';
+    const status = document.getElementById('conversionStatusText');
+    const loading = document.getElementById('conversionLoadingBox');
+    if (status) status.textContent = 'Submitting secure conversion…';
+    if (loading) loading.classList.remove('active');
+    const modal = document.getElementById('currencyConverterModal');
+    if (modal) modal.classList.add('active');
+    syncConverterDirectionUI();
+    refreshConverterRate();
 }
 
 function closeCurrencyModal() {
-    document.getElementById('currencyConverterModal').classList.remove('active');
+    const modal = document.getElementById('currencyConverterModal');
+    if (modal) modal.classList.remove('active');
+}
+
+function invertCurrencies() {
+    conversionDirection = converterDirectionIsNgnToUsd() ? 'usd_to_ngn' : 'ngn_to_usd';
+    const input = document.getElementById('baseConvertInput');
+    const output = document.getElementById('targetConvertOutput');
+    if (input) input.value = '';
+    if (output) output.value = '';
+    syncConverterDirectionUI();
+    executeConversion();
 }
 
 function toggleConversionDirection() {
-    if (conversionDirection === 'usdtongn') {
-        conversionDirection = 'ngntousd';
-        document.getElementById('toggleDirectionBtn').textContent = '🔄 Convert from: NGN (₦) to USD ($)';
-        document.getElementById('convertInputLabel').textContent = 'Amount in NGN (₦)';
-        document.getElementById('convertOutputLabel').textContent = 'Equivalent in USD ($)';
-    } else {
-        conversionDirection = 'usdtongn';
-        document.getElementById('toggleDirectionBtn').textContent = '🔄 Convert from: USD ($) to NGN (₦)';
-        document.getElementById('convertInputLabel').textContent = 'Amount in USD ($)';
-        document.getElementById('convertOutputLabel').textContent = 'Equivalent in NGN (₦)';
+    invertCurrencies();
+}
+
+function setConverterPreset(amount) {
+    const input = document.getElementById('baseConvertInput');
+    if (!input) return;
+    input.value = String(amount);
+    executeConversion();
+}
+
+function setConverterMax() {
+    const max = converterDirectionIsNgnToUsd() ? currentBalanceNgn : currentBalanceUsd;
+    setConverterPreset(Math.max(0, Number(max) || 0).toFixed(2));
+}
+
+function executeConversion() {
+    const input = document.getElementById('baseConvertInput');
+    const output = document.getElementById('targetConvertOutput');
+    const amount = Number(input && input.value);
+    if (!output) return;
+    if (!Number.isFinite(amount) || amount <= 0) {
+        output.value = '';
+        return;
     }
-    document.getElementById('baseConvertInput').value = '';
-    document.getElementById('targetConvertOutput').value = '';
+    const result = converterDirectionIsNgnToUsd() ? amount / exchangeRate : amount * exchangeRate;
+    output.value = formatCurrencyValue(result, converterDirectionIsNgnToUsd() ? 'USD' : 'NGN');
 }
 
 function performCurrencyConversion() {
-    let inputVal = parseFloat(document.getElementById('baseConvertInput').value) || 0;
-    if (conversionDirection === 'usdtongn') {
-        let res = inputVal * exchangeRate;
-        document.getElementById('targetConvertOutput').value = '₦' + res.toLocaleString(undefined, {minimumFractionDigits: 2});
-    } else {
-        let res = inputVal / exchangeRate;
-        document.getElementById('targetConvertOutput').value = '$' + res.toLocaleString(undefined, {minimumFractionDigits: 2});
-    }
+    executeConversion();
 }
 
-async function applyCurrencyConversion() {
-    let inputVal = parseFloat(document.getElementById('baseConvertInput').value) || 0;
-    if (inputVal <= 0) {
-        dashboardCurrencyMode = (conversionDirection === 'usdtongn') ? 'usd' : 'ngn';
-        updateBalanceDisplay();
-        closeCurrencyModal();
-        alert('Dashboard currency updated successfully!');
+async function commitSwapTransaction() {
+    const input = document.getElementById('baseConvertInput');
+    const button = document.getElementById('executeConversionBtn');
+    const loading = document.getElementById('conversionLoadingBox');
+    const status = document.getElementById('conversionStatusText');
+    const amount = Number(input && input.value);
+    if (!Number.isFinite(amount) || amount <= 0) {
+        alert('Enter an amount greater than zero.');
+        if (input) input.focus();
+        return;
+    }
+    const available = converterDirectionIsNgnToUsd() ? currentBalanceNgn : currentBalanceUsd;
+    if (amount > available + 0.000001) {
+        alert('Insufficient ' + (converterDirectionIsNgnToUsd() ? 'NGN' : 'USD') + ' wallet balance.');
+        return;
+    }
+    if (!supabaseClient) {
+        alert('Secure wallet service is unavailable. Please refresh and try again.');
         return;
     }
 
-    let newNgn = currentBalanceNgn;
-    let newUsd = currentBalanceUsd;
-    let conversionDesc = '';
-    let convertedAmountStr = '';
-    let amountUsdVal = 0;
-    let amountNgnVal = 0;
-
-    if (conversionDirection === 'ngntousd') {
-        if (currentBalanceNgn < inputVal) {
-            alert('Insufficient Naira (NGN) balance for this conversion.');
-            return;
-        }
-        let usdGained = inputVal / exchangeRate;
-        newNgn -= inputVal;
-        newUsd += usdGained;
-        conversionDesc = `Converted ₦${inputVal.toLocaleString()} to $${usdGained.toFixed(2)}`;
-        convertedAmountStr = '$' + usdGained.toFixed(2);
-        amountNgnVal = inputVal;
-        amountUsdVal = usdGained;
-    } else {
-        if (currentBalanceUsd < inputVal) {
-            alert('Insufficient USD balance for this conversion.');
-            return;
-        }
-        let ngnGained = inputVal * exchangeRate;
-        newUsd -= inputVal;
-        newNgn += ngnGained;
-        conversionDesc = `Converted $${inputVal.toLocaleString()} to ₦${ngnGained.toLocaleString()}`;
-        convertedAmountStr = '₦' + ngnGained.toLocaleString();
-        amountUsdVal = inputVal;
-        amountNgnVal = ngnGained;
+    const { data: { session }, error: sessionError } = await supabaseClient.auth.getSession();
+    if (sessionError || !session) {
+        alert('Your session has expired. Please sign in again.');
+        return;
     }
 
-    if (supabaseClient) {
-        const { data: { session } } = await supabaseClient.auth.getSession();
-        if (session) {
-            const { error: profileError } = await supabaseClient.from('profiles').update({ balance: newNgn, balance_usd: newUsd }).eq('id', session.user.id);
-            if (profileError) {
-                alert("Profile Update Error: " + profileError.message);
-                return;
-            }
-            
-            const { error: txError } = await supabaseClient.from('transactions').insert({
-                user_id: session.user.id,
-                customer_id: userData.customerId || null,
-                type: 'conversion',
-                category: 'deposit',
-                title: 'Currency Conversion',
-                subtitle: conversionDesc,
-                amount: convertedAmountStr,
-                amount_ngn: amountNgnVal,
-                amount_usd: amountUsdVal,
-                status: 'Success'
-            });
-
-            if (txError) {
-                alert("Database Insert Error: " + txError.message);
-                return;
-            }
-
-            await fetchUserTransactions(session.user.id);
+    if (button) button.disabled = true;
+    if (loading) loading.classList.add('active');
+    if (status) status.textContent = 'Verifying balance and completing conversion…';
+    try {
+        const response = await fetch('/api/deposit?action=convert', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': 'Bearer ' + session.access_token
+            },
+            body: JSON.stringify({
+                direction: conversionDirection,
+                amount: amount
+            })
+        });
+        const result = await response.json().catch(() => ({}));
+        if (!response.ok || !result.success) {
+            throw new Error(result.message || 'Conversion could not be completed.');
         }
+        currentBalanceNgn = Number(result.balance) || 0;
+        currentBalanceUsd = Number(result.balance_usd) || 0;
+        updateBalanceDisplay();
+        await fetchUserTransactions(session.user.id);
+        if (input) input.value = '';
+        const output = document.getElementById('targetConvertOutput');
+        if (output) output.value = '';
+        if (status) status.textContent = 'Conversion completed securely.';
+        closeCurrencyModal();
+        alert('Conversion successful. Your wallet balances and transaction history have been updated.');
+    } catch (err) {
+        if (status) status.textContent = err.message || 'Conversion failed. Please try again.';
+        alert(err.message || 'Conversion failed. Please try again.');
+    } finally {
+        if (button) button.disabled = false;
+        if (loading) loading.classList.remove('active');
     }
-
-    currentBalanceNgn = newNgn;
-    currentBalanceUsd = newUsd;
-    updateBalanceDisplay();
-    closeCurrencyModal();
-    alert('Currency converted and logged successfully!');
 }
 
 function openChangePasswordModal() {
@@ -597,7 +673,7 @@ async function fetchUserProfileAndBalance(userId) {
 
         if (data && !error) {
             currentBalanceNgn = parseFloat(data.balance) || 0.00;
-            currentBalanceUsd = parseFloat(data.balance_usd) || (currentBalanceNgn / exchangeRate);
+            currentBalanceUsd = Number(data.balance_usd) || 0;
             if (data.customer_id) {
                 userData.customerId = data.customer_id;
             }
@@ -620,7 +696,7 @@ function listenToBalanceChanges(userId) {
         }, payload => {
             if (payload.new) {
                 currentBalanceNgn = parseFloat(payload.new.balance) || 0.00;
-                currentBalanceUsd = parseFloat(payload.new.balance_usd) || (currentBalanceNgn / exchangeRate);
+                currentBalanceUsd = Number(payload.new.balance_usd) || 0;
                 if (payload.new.customer_id) {
                     userData.customerId = payload.new.customer_id;
                 }
@@ -920,7 +996,6 @@ async function processDeposit() {
 }
 
 function updateBalanceDisplay() {
-    currentBalanceUsd = currentBalanceNgn / exchangeRate;
     
     const navBadge = document.getElementById('navWalletBadge');
     if (navBadge) navBadge.textContent = 'NGN ₦' + currentBalanceNgn.toLocaleString(undefined, {minimumFractionDigits: 2});
