@@ -540,14 +540,23 @@ function gotsmsEnrichPlan(p) {
 }
 
 async function gotsmsAssertOwns(userId, rentId) {
+  const fields = 'id, price, code, status, notes, phone_number, service_name, user_id, customer_id, order_id, idempotency_key, refunded';
   const { data } = await supabase
     .from('number_orders')
-    .select('id, price, code, status, notes, phone_number, service_name, user_id, customer_id, order_id, refunded')
+    .select(fields)
     .eq('user_id', userId)
     .eq('source', 'gotsms')
     .eq('idempotency_key', `gotsms-${rentId}`)
     .maybeSingle();
-  return data || null;
+  if (data) return data;
+  const { data: byOrder } = await supabase
+    .from('number_orders')
+    .select(fields)
+    .eq('user_id', userId)
+    .eq('source', 'gotsms')
+    .eq('order_id', String(rentId || ''))
+    .maybeSingle();
+  return byOrder || null;
 }
 
 function gotsmsOrderMeta(notes) {
