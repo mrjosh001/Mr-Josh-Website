@@ -99,9 +99,13 @@ h1{font-size:17px;font-weight:800;letter-spacing:-.02em}
 /* Inbox */
 .inbox-card{background:var(--card);border:1px solid var(--border);border-radius:20px;padding:16px;
   box-shadow:0 8px 28px rgba(0,0,0,.08)}
-.inbox-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px}
-.inbox-head h2{font-size:15px;font-weight:800}
-.inbox-head .live{font-size:11px;font-weight:700;color:var(--ok);display:flex;align-items:center;gap:6px}
+.inbox-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:16px}
+.inbox-heading{min-width:0}
+.inbox-head h2{font-size:16px;font-weight:800;letter-spacing:-.02em}
+.inbox-subtitle{font-size:11px;color:var(--muted);font-weight:600;line-height:1.45;margin-top:4px;max-width:260px}
+.inbox-head-right{display:flex;align-items:center;justify-content:flex-end;flex-wrap:wrap;gap:9px}
+.message-count{font-size:10px;font-weight:800;color:var(--text);background:var(--input);border:1px solid var(--border);padding:6px 9px;border-radius:999px;white-space:nowrap;font-variant-numeric:tabular-nums}
+.inbox-head .live{font-size:10px;font-weight:800;color:var(--ok);display:flex;align-items:center;gap:6px;background:var(--ok-soft);border:1px solid color-mix(in srgb,var(--ok) 22%,transparent);padding:6px 9px;border-radius:999px;white-space:nowrap}
 .inbox-head .live::before{content:'';width:7px;height:7px;border-radius:50%;background:var(--ok);animation:pulse 1.6s ease infinite}
 @keyframes pulse{0%,100%{opacity:1}50%{opacity:.35}}
 /* Professional SMS rental inbox cards */
@@ -176,6 +180,10 @@ h1{font-size:17px;font-weight:800;letter-spacing:-.02em}
   .msg .code{font-size:18px;letter-spacing:.08em}
   .msg .code-pill{gap:6px;padding:7px 9px}
   .msg .when-block{max-width:45%;overflow-wrap:anywhere}
+  .inbox-head{gap:8px}
+  .inbox-head-right{gap:5px}
+  .message-count,.inbox-head .live{padding:5px 7px;font-size:9px}
+  .inbox-subtitle{max-width:190px}
 }
 @media(prefers-reduced-motion:reduce){
   .msg,.msg .copy-code,.msg .copy-inline{transition:none}
@@ -361,7 +369,10 @@ function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g,function(c){retu
         '<div class="flash" id="flash"></div>'+
       '</div>'+
       '<div class="inbox-card">'+
-        '<div class="inbox-head"><h2>SMS inbox</h2><span class="live">Live</span></div>'+
+        '<div class="inbox-head">'+
+          '<div class="inbox-heading"><h2>SMS inbox</h2><p class="inbox-subtitle">Messages for this number, including added services</p></div>'+
+          '<div class="inbox-head-right"><span class="message-count" id="messageCount">0 messages</span><span class="live">Live</span></div>'+
+        '</div>'+
         '<div id="inbox"><div class="empty">Loading messages…</div></div>'+
       '</div>';
 
@@ -537,7 +548,9 @@ function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g,function(c){retu
     var box = document.getElementById('inbox');
     if(!box) return;
     var j = await api('messages', { query: 'rent_id='+encodeURIComponent(rentId) });
-    var list = j.data || [];
+    var list = Array.isArray(j.data) ? j.data : [];
+    var countEl = document.getElementById('messageCount');
+    if (countEl) countEl.textContent = list.length + (list.length === 1 ? ' message' : ' messages');
     var hadCode = hasReceivedCode;
     hasReceivedCode = list.some(function(m){ return !!(m && m.code); }) || list.length > 0 && list.some(function(m){ return !!(m && (m.code || m.body)); });
     // Prefer explicit code field; also treat any inbound SMS as "used" for refund lock
