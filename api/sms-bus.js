@@ -1,5 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
 import { applyMarkup } from '../lib/pricing.js';
+import { sendPushToUser } from '../lib/push.js';
 
 /**
  * SMS-BUS integration — OTP (with reuse) + long-term rentals.
@@ -2618,6 +2619,12 @@ export default async function handler(req, res) {
       if (orderRow) {
         try {
           const stored = parseRentInboxNotes(orderRow.notes);
+          const knownByBody = new Map(stored.map((m) => [String(m.body || '').replace(/\s+/g, ' ').trim().toLowerCase(), m]));
+          const newMessageArrived = messages.some((m) => {
+            const key = String(m.body || '').replace(/\s+/g, ' ').trim().toLowerCase();
+            const prior = knownByBody.get(key);
+            return !!key && (!prior || (!String(prior.code || '').trim() && !!String(m.code || '').trim()));
+          });
           messages = mergeRentInbox(stored, messages);
           const packed = packRentInboxNotes(messages, orderRow.notes);
           const patch = { notes: packed };
@@ -2627,6 +2634,14 @@ export default async function handler(req, res) {
           }
           await supabase.from('number_orders').update(patch).eq('id', orderRow.id);
           orderRow.notes = packed;
+          if (newMessageArrived) {
+            await sendPushToUser(supabase, auth.userId, {
+              title: 'SMS received',
+              body: 'A new message arrived on your rented number. Open MJ HUB to read it.',
+              url: '/mj-sms-history.html?view=rent',
+              type: 'sms_received'
+            });
+          }
         } catch (persistErr) {
           console.warn('[rent_sms] inbox persist', persistErr && persistErr.message ? persistErr.message : persistErr);
           // If notes column missing, still return merged in-memory (frontend also caches)
@@ -3616,13 +3631,28 @@ if (method === 'GET' && ga === 'gotsms_messages') {
         const msgs = mergeRentInbox([], results.flatMap((result) => result.messages));
         if (msgs.length) {
           try {
-            const { data: row } = await supabase.from('number_orders').select('id, service_name, notes')
-              .eq('user_id', auth.userId).eq('source', 'gotsms').eq('idempotency_key', 'gotsms-' + rent_id).maybeSingle();
-            if (row) {
-              const meta = gotsmsOrderMeta(row.notes); meta.inbox = msgs.slice(0, 100);
-              const patch = { notes: JSON.stringify(meta), status: 'completed' };
-              if (!/sms\s*received/i.test(String(row.service_name || ''))) patch.service_name = (row.service_name || 'USA rental') + ' · SMS received';
-              await supabase.from('number_orders').update(patch).eq('id', row.id);
+            const meta = gotsmsOrderMeta(order.notes);
+            const previous = Array.isArray(meta.inbox) ? meta.inbox : [];
+            const previousKeys = new Set(previous.map((m) =>
+              String(m.service_rent_id || m.service_name || '') + '|' +
+              String(m.body || '').replace(/\s+/g, ' ').trim().toLowerCase()
+            ));
+            const newMessageArrived = msgs.some((m) => {
+              const key = String(m.service_rent_id || m.service_name || '') + '|' +
+                String(m.body || '').replace(/\s+/g, ' ').trim().toLowerCase();
+              return !!String(m.body || m.code || '').trim() && !previousKeys.has(key);
+            });
+            meta.inbox = msgs.slice(0, 100);
+            const patch = { notes: JSON.stringify(meta), status: 'completed' };
+            if (!/sms\s*received/i.test(String(order.service_name || ''))) patch.service_name = (order.service_name || 'USA rental') + ' · SMS received';
+            await supabase.from('number_orders').update(patch).eq('id', order.id).eq('user_id', auth.userId).eq('source', 'gotsms');
+            if (newMessageArrived) {
+              await sendPushToUser(supabase, auth.userId, {
+                title: 'Verification message received',
+                body: 'A new SMS arrived for your USA number. Open MJ HUB to view the code.',
+                url: '/mj-sms-usa-number.html?rent_id=' + encodeURIComponent(String(order.idempotency_key || '').replace(/^gotsms-/, '') || rent_id),
+                type: 'sms_received'
+              });
             }
           } catch (e) { console.warn('[gotsms] save combined inbox', e.message || e); }
         }
