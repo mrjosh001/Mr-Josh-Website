@@ -63,7 +63,9 @@ function normalizeRentMsg(m) {
     body,
     code,
     received_at: m.received_at || m.receive_at || m.time || m.created_at || new Date().toISOString(),
-    from: m.from || m.sender || 'SMS'
+    from: m.from || m.sender || 'SMS',
+    service_name: m.service_name || '',
+    service_rent_id: m.service_rent_id || ''
   };
 }
 function mergeRentInbox(existing, incoming) {
@@ -71,7 +73,7 @@ function mergeRentInbox(existing, incoming) {
   const add = (m) => {
     const n = normalizeRentMsg(m);
     if (!n) return;
-    const key = n.body.replace(/\s+/g, ' ').toLowerCase();
+    const key = String(n.service_rent_id || n.service_name || '') + '|' + n.body.replace(/\s+/g, ' ').toLowerCase();
     const prev = map.get(key);
     if (!prev) map.set(key, n);
     else {
@@ -474,6 +476,50 @@ async function gotsmsAssertOwns(userId, rentId) {
     .eq('idempotency_key', `gotsms-${rentId}`)
     .maybeSingle();
   return data || null;
+}
+
+function gotsmsOrderMeta(notes) {
+  try { const value = JSON.parse(String(notes || '')); if (value && typeof value === 'object' && !Array.isArray(value)) return value; } catch (_) {}
+  return { inbox: [], service_rents: [] };
+}
+function gotsmsRentIds(order, rentId) {
+  const meta = gotsmsOrderMeta(order && order.notes);
+  const children = Array.isArray(meta.service_rents) ? meta.service_rents : [];
+  return [{ id: String(rentId || ''), name: '' }].concat(children.filter((x) => x && x.id).map((x) => ({
+    id: String(x.id), name: String(x.name || x.service_name || 'Added service'),
+    service_id: String(x.service_id || ''), refund_approved: !!x.refund_approved
+  }))).filter((x, i, all) => x.id && all.findIndex((y) => y.id === x.id) === i);
+}
+async function gotsmsLiveRent(rentId) {
+  for (const status of ['active', 'finished']) {
+    const response = await gotsmsFetch('/api/rents?status=' + status + '&per_page=100');
+    const rows = Array.isArray(response.data && response.data.data) ? response.data.data : [];
+    const match = rows.find((row) => String(row.id) === String(rentId));
+    if (match) return match;
+  }
+  return null;
+}
+async function gotsmsAddServiceSellPrice(serviceId, parentRent) {
+  const durationPlan = (parentRent && parentRent.plan) || parentRent || {};
+  const durationKey = gotsmsDurationKey(durationPlan);
+  let matchingPlan = null;
+  try {
+    const response = await gotsmsFetch('/api/rents/plans?service_id=' + encodeURIComponent(serviceId) + '&per_page=100');
+    const plans = Array.isArray(response.data && response.data.data) ? response.data.data : [];
+    matchingPlan = plans.find((plan) => gotsmsDurationKey(plan) === durationKey && !gotsmsPlanUnavailable(plan)) || null;
+  } catch (_) {}
+  if (matchingPlan) {
+    try {
+      const { data: row } = await supabase.from('number_services').select('price, is_available, price_source')
+        .eq('source', 'gotsms').eq('service_id', String(matchingPlan.id)).maybeSingle();
+      if (row && Number(row.price) > 0) {
+        if (row.is_available === false && row.price_source === 'admin') return { price: 0, plan: matchingPlan, unavailable: true };
+        return { price: Math.round(Number(row.price)), plan: matchingPlan, unavailable: false };
+      }
+    } catch (e) { console.warn('[gotsms add-service price]', e.message || e); }
+  }
+  const fixed = gotsmsFixedDurationPriceNgn(durationPlan);
+  return { price: fixed == null ? 0 : fixed, plan: matchingPlan, unavailable: fixed == null };
 }
 
 function gotsmsRenewPriceNgn(orderRow) {
@@ -3392,70 +3438,75 @@ if (method === 'GET' && ga === 'gotsms_messages') {
         if (!auth.ok) return json(res, auth.status, { success: false, message: auth.message });
         const rent_id = String(url.searchParams.get('rent_id') || '').trim();
         if (!rent_id) return json(res, 400, { success: false, message: 'rent_id required' });
-        if (!(await gotsmsAssertOwns(auth.userId, rent_id))) return json(res, 403, { success: false, message: 'Rental not found' });
-        const g = await gotsmsFetch(`/api/numbers/${encodeURIComponent(rent_id)}/messages`);
-        const msgs = Array.isArray(g.data?.data) ? g.data.data : [];
-        if (g.ok && msgs.length > 0) {
+        const order = await gotsmsAssertOwns(auth.userId, rent_id);
+        if (!order) return json(res, 403, { success: false, message: 'Rental not found' });
+        const linkedRents = gotsmsRentIds(order, rent_id);
+        const results = await Promise.all(linkedRents.map(async (linked) => {
+          const response = await gotsmsFetch('/api/numbers/' + encodeURIComponent(linked.id) + '/messages');
+          const raw = Array.isArray(response.data && response.data.data) ? response.data.data
+            : Array.isArray(response.data && response.data.messages) ? response.data.messages : [];
+          return { linked, ok: response.ok, status: response.status, messages: raw.map((message) => ({
+            ...message, body: message.body || message.content || message.text || message.message || '',
+            code: message.code || '', received_at: message.received_at || message.receive_at || message.time || message.created_at || null,
+            from: message.from || message.sender || message.originator || 'SMS',
+            service_name: linked.name || '', service_rent_id: linked.id
+          })) };
+        }));
+        const msgs = mergeRentInbox([], results.flatMap((result) => result.messages));
+        if (msgs.length) {
           try {
-            const key = `gotsms-${rent_id}`;
-            const { data: row } = await supabase.from('number_orders').select('id, service_name').eq('user_id', auth.userId).eq('source', 'gotsms').eq('idempotency_key', key).maybeSingle();
-            if (row && !/sms\s*received/i.test(String(row.service_name || ''))) {
-              await supabase.from('number_orders').update({ status: 'completed', service_name: (row.service_name || 'USA rental') + ' · SMS received' }).eq('id', row.id);
+            const { data: row } = await supabase.from('number_orders').select('id, service_name, notes')
+              .eq('user_id', auth.userId).eq('source', 'gotsms').eq('idempotency_key', 'gotsms-' + rent_id).maybeSingle();
+            if (row) {
+              const meta = gotsmsOrderMeta(row.notes); meta.inbox = msgs.slice(0, 100);
+              const patch = { notes: JSON.stringify(meta), status: 'completed' };
+              if (!/sms\s*received/i.test(String(row.service_name || ''))) patch.service_name = (row.service_name || 'USA rental') + ' · SMS received';
+              await supabase.from('number_orders').update(patch).eq('id', row.id);
             }
-          } catch (e) {
-            console.warn('[gotsms] mark sms received', e.message || e);
-          }
+          } catch (e) { console.warn('[gotsms] save combined inbox', e.message || e); }
         }
-        return json(res, g.ok ? 200 : g.status || 400, { success: !!g.data?.success, data: msgs, message: g.data?.message });
+        const anyOk = results.some((result) => result.ok);
+        return json(res, anyOk ? 200 : ((results[0] && results[0].status) || 400), {
+          success: anyOk, data: msgs, message: msgs.length ? 'OK' : 'No SMS yet'
+        });
       }
 
-      if (method === 'GET' && ga === 'gotsms_addable_services') {
+if (method === 'GET' && ga === 'gotsms_addable_services') {
         const auth = await requireAuth(req);
         if (!auth.ok) return json(res, auth.status, { success: false, message: auth.message });
         const rent_id = String(url.searchParams.get('rent_id') || '').trim();
         if (!rent_id) return json(res, 400, { success: false, message: 'rent_id required' });
-        if (!(await gotsmsAssertOwns(auth.userId, rent_id))) return json(res, 403, { success: false, message: 'Rental not found' });
-        let g = await gotsmsFetch(`/api/rents/${encodeURIComponent(rent_id)}/services`);
-        let services = g.data?.data || [];
-        // If GotSMS withholds the add-on list before the first SMS, still show
-        // the account's known services so the customer can attempt the documented
-        // POST. GotSMS remains authoritative and may reject the add-on itself.
+        const order = await gotsmsAssertOwns(auth.userId, rent_id);
+        if (!order) return json(res, 403, { success: false, message: 'Rental not found' });
+        const g = await gotsmsFetch('/api/rents/' + encodeURIComponent(rent_id) + '/services');
+        let services = Array.isArray(g.data && g.data.data) ? g.data.data : [];
         if (!g.ok || !services.length) {
-          const fallback = await gotsmsFetch('/api/services?per_page=100');
-          if (fallback.ok && Array.isArray(fallback.data?.data)) {
-            services = fallback.data.data.map((s) => ({
-              service_id: s.id,
-              name: s.name,
-              price: 0,
-              is_available: s.is_available !== false
-            }));
-          }
+          const catalog = await gotsmsFetch('/api/services?per_page=100');
+          const rows = Array.isArray(catalog.data && catalog.data.data) ? catalog.data.data : [];
+          services = rows.map((item) => ({ service_id: item.id || item.service_id, name: item.name, price: 0,
+            is_available: item.is_available !== false, _catalog_fallback: true }));
         }
-        let priceById = new Map();
-        try {
-          const ids = services.map((s) => String(s.service_id || '')).filter(Boolean);
-          if (ids.length) {
-            const { data: rows } = await supabase.from('number_services')
-              .select('service_id, price, is_available')
-              .eq('source', 'gotsms').in('service_id', ids);
-            priceById = new Map((rows || []).map((row) => [String(row.service_id), row]));
-          }
-        } catch (e) { console.warn('[gotsms addable services] DB price lookup', e.message || e); }
-        const list = services.map((s) => {
-          const db = priceById.get(String(s.service_id || ''));
-          const price = db && Number(db.price) > 0 ? Math.round(Number(db.price)) : gotsmsSellPriceNgn(s.price);
-          return {
-            service_id: s.service_id,
-            name: s.name,
-            price_usd: Number(s.price || 0),
-            price_ngn: price,
-            is_available: s.is_available !== false && !(db && db.is_available === false) && price > 0
-          };
-        });
-        return json(res, 200, { success: true, data: list, message: g.data?.message });
+        const parentRent = await gotsmsLiveRent(rent_id);
+        const parentPlan = (parentRent && parentRent.plan) || {};
+        const parentDuration = gotsmsDurationKey(parentPlan);
+        const meta = gotsmsOrderMeta(order.notes);
+        const alreadyAdded = new Set((Array.isArray(meta.service_rents) ? meta.service_rents : []).map((item) => String(item.service_id || '')));
+        const list = await Promise.all(services.map(async (service) => {
+          const serviceId = String(service.service_id || service.id || '');
+          if (!serviceId || alreadyAdded.has(serviceId)) return null;
+          if (service.is_available === false) return { service_id: serviceId, name: service.name || 'Service', price_ngn: 0,
+            duration: parentPlan.duration_translation || '', is_available: false };
+          const priced = await gotsmsAddServiceSellPrice(serviceId, parentRent);
+          const sameDuration = !!parentDuration && !!priced.plan && gotsmsDurationKey(priced.plan) === parentDuration;
+          const price = Math.round(Number(priced.price) || 0);
+          return { service_id: serviceId, name: service.name || 'Service', price_ngn: price,
+            duration: parentPlan.duration_translation || '',
+            is_available: service.is_available !== false && !priced.unavailable && price > 0 && (!service._catalog_fallback || sameDuration) };
+        }));
+        return json(res, 200, { success: true, data: list.filter(Boolean), message: g.data && g.data.message });
       }
 
-      if (method === 'POST' && ga === 'gotsms_add_service') {
+if (method === 'POST' && ga === 'gotsms_add_service') {
         const auth = await requireAuth(req);
         if (!auth.ok) return json(res, auth.status, { success: false, message: auth.message });
         const body = await readBody(req);
@@ -3464,70 +3515,63 @@ if (method === 'GET' && ga === 'gotsms_messages') {
         if (!rent_id || !service_id) return json(res, 400, { success: false, message: 'rent_id and service_id required' });
         const parentOrder = await gotsmsAssertOwns(auth.userId, rent_id);
         if (!parentOrder) return json(res, 403, { success: false, message: 'Rental not found' });
-        // Prefer the number-specific add-on list. If GotSMS withholds it
-        // before the first SMS, resolve the service from its public catalog and
-        // let the supplier's POST remain the final eligibility check.
-        const listG = await gotsmsFetch(`/api/rents/${encodeURIComponent(rent_id)}/services`);
-        let svc = (listG.data?.data || []).find((s) => String(s.service_id) === service_id && s.is_available !== false);
-        if (!svc) {
-          const catalog = await gotsmsFetch('/api/services?per_page=100');
-          const item = (Array.isArray(catalog.data?.data) ? catalog.data.data : []).find((s) => String(s.id || s.service_id) === service_id && s.is_available !== false);
-          if (item) svc = { service_id, name: item.name, price: Number(item.price || 0), is_available: item.is_available !== false };
-        }
-        if (!svc) return json(res, 400, { success: false, message: 'GotSMS did not list this service as available. Refresh the add-service list and try again.' });
-        // Use exactly the same customer price source as the list endpoint:
-        // admin/database selling price first, supplier-cost formula only as fallback.
-        let dbPrice = null;
-        try {
-          const { data: priceRow } = await supabase.from('number_services')
-            .select('price, is_available')
-            .eq('source', 'gotsms')
-            .eq('service_id', service_id)
-            .maybeSingle();
-          if (priceRow && Number(priceRow.price) > 0) {
-            if (priceRow.is_available === false) return json(res, 400, { success: false, message: 'This service is currently unavailable.' });
-            dbPrice = Math.round(Number(priceRow.price));
-          }
-        } catch (e) { console.warn('[gotsms add_service] DB price lookup', e.message || e); }
-        const price = dbPrice != null ? dbPrice : gotsmsSellPriceNgn(svc.price || 0);
-        if (!(price > 0)) return json(res, 400, { success: false, message: 'This service has no valid selling price; no wallet charge was made.' });
-        const debitAdd = await debitWalletStrict(auth.userId, price, 'gotsms_add_service');
-        if (!debitAdd.ok) return json(res, 400, { success: false, message: debitAdd.message || 'Insufficient wallet balance' });
-        const g = await gotsmsFetch(`/api/rents/${encodeURIComponent(rent_id)}/services`, { method: 'POST', body: { service_id } });
-        if (!g.ok || !g.data?.success) {
+        const listG = await gotsmsFetch('/api/rents/' + encodeURIComponent(rent_id) + '/services');
+        const svc = (Array.isArray(listG.data && listG.data.data) ? listG.data.data : [])
+          .find((item) => String(item.service_id) === service_id && item.is_available !== false);
+        if (!svc) return json(res, 400, { success: false, message: listG.data && listG.data.message ||
+          'This service is not currently available for this number. Refresh the list and try again.' });
+        const parentRent = await gotsmsLiveRent(rent_id);
+        const priced = await gotsmsAddServiceSellPrice(service_id, parentRent);
+        const price = Math.round(Number(priced.price) || 0);
+        if (priced.unavailable || !(price > 0)) return json(res, 400, { success: false,
+          message: 'No selling price is configured for this service at the current rental duration. No wallet charge was made.' });
+        const debit = await debitWalletStrict(auth.userId, price, 'gotsms_add_service');
+        if (!debit.ok) return json(res, 400, { success: false, message: debit.message || 'Insufficient wallet balance' });
+        const supplierResult = await gotsmsFetch('/api/rents/' + encodeURIComponent(rent_id) + '/services', {
+          method: 'POST', body: { service_id }
+        });
+        if (!supplierResult.ok || !supplierResult.data?.success) {
           try { await supabase.rpc('credit_balance', { p_user_id: auth.userId, p_amount: price }); } catch (_) {}
-          return json(res, g.status || 400, { success: false, message: g.data?.message || 'Could not add service' });
+          return json(res, supplierResult.status || 400, { success: false,
+            message: supplierResult.data?.message || 'The service could not be added. Your wallet charge has been reversed.' });
         }
-        // Add-ons belong to the existing number/inbox. Update its existing
-        // order row instead of creating a second number_orders row.
+        const child = supplierResult.data.data || {};
+        const childRentId = String(child.id || child.rent_id || '');
         try {
-          const { data: currentRow } = await supabase.from('number_orders')
-            .select('id, service_name, code, status, price')
-            .eq('user_id', auth.userId).eq('source', 'gotsms')
-            .eq('idempotency_key', 'gotsms-' + rent_id).maybeSingle();
-          if (currentRow) {
-            const currentName = String(currentRow.service_name || 'USA rental');
-            const cleanName = currentName.split(' · Add-on: ')[0];
-            const addOns = currentName.includes(' · Add-on: ')
-              ? currentName.slice(currentName.indexOf(' · Add-on: ') + ' · Add-on: '.length).split(' + ').filter(Boolean)
-              : [];
-            if (!addOns.includes(String(svc.name || 'Added service'))) addOns.push(String(svc.name || 'Added service'));
-            const patch = {
-              service_name: cleanName + (addOns.length ? ' · Add-on: ' + addOns.join(' + ') : ''),
-              status: 'active',
-              price: Math.round(Number(currentRow.price || 0) + price)
-            };
-            const { error: updateError } = await supabase.from('number_orders').update(patch).eq('id', currentRow.id);
-            if (updateError) throw updateError;
+          const { data: currentRow, error: readError } = await supabase.from('number_orders')
+            .select('id, service_name, code, status, price, notes')
+            .eq('user_id', auth.userId).eq('source', 'gotsms').eq('idempotency_key', 'gotsms-' + rent_id).maybeSingle();
+          if (readError) throw readError;
+          if (!currentRow) throw new Error('Existing rental history row not found after supplier accepted service');
+          const meta = gotsmsOrderMeta(currentRow.notes);
+          if (!Array.isArray(meta.service_rents)) meta.service_rents = [];
+          if (childRentId && !meta.service_rents.some((item) => String(item.id) === childRentId)) {
+            meta.service_rents.push({ id: childRentId, service_id, name: String(svc.name || 'Added service'),
+              price_ngn: price, refund_approved: false, added_at: new Date().toISOString() });
           }
+          const currentName = String(currentRow.service_name || 'USA rental');
+          const baseName = currentName.split(' · Add-on: ')[0];
+          const addOns = currentName.includes(' · Add-on: ')
+            ? currentName.slice(currentName.indexOf(' · Add-on: ') + ' · Add-on: '.length).split(' + ').filter(Boolean) : [];
+          if (!addOns.includes(String(svc.name || 'Added service'))) addOns.push(String(svc.name || 'Added service'));
+          const { error: updateError } = await supabase.from('number_orders').update({
+            service_name: baseName + ' · Add-on: ' + addOns.join(' + '), status: 'active',
+            price: Math.round(Number(currentRow.price || 0) + price), notes: JSON.stringify(meta)
+          }).eq('id', currentRow.id);
+          if (updateError) throw updateError;
+          if (!childRentId) console.error('[gotsms add_service] supplier response omitted linked rent ID', supplierResult.data);
         } catch (e) {
-          console.warn('[gotsms add_service] update parent inbox row', e.message || e);
+          console.error('[gotsms add_service] persist linked service', e.message || e);
+          return json(res, 200, { success: true,
+            message: 'The supplier added the service, but MJ HUB could not save its inbox link automatically. Contact support before adding it again.',
+            data: { ...child, rent_id, price_ngn: price, service_name: svc.name, inbox_sync_warning: true } });
         }
-        return json(res, 201, { success: true, message: g.data.message || 'Service added to this number. Its SMS will appear in the existing inbox.', data: { ...(g.data.data || {}), rent_id, price_ngn: price, service_name: svc.name } });
+        return json(res, 201, { success: true,
+          message: 'Service added to the same number. Its SMS will appear in this rental inbox and the rental history total has been updated.',
+          data: { ...child, rent_id, service_rent_id: childRentId, price_ngn: price, service_name: svc.name } });
       }
 
-      
-      if (method === 'POST' && ga === 'gotsms_transition') {
+if (method === 'POST' && ga === 'gotsms_transition') {
         const auth = await requireAuth(req);
         if (!auth.ok) return json(res, auth.status, { success: false, message: auth.message });
         const body = await readBody(req);
@@ -3712,74 +3756,64 @@ if (method === 'POST' && ga === 'gotsms_toggle_renewal') {
         if (order.refunded || order.status === 'refunded' || order.status === 'cancelled') {
           return json(res, 400, { success: false, message: 'This rental was already cancelled or refunded.' });
         }
-        // Block cancel/refund after first SMS received (matches supplier rules)
-        const smsCount = Number(order.sms_count || order.message_count || 0);
-        if (smsCount > 0 || order.status === 'completed' || order.code) {
-          // still allow if supplier explicitly accepts — check live first below
-        }
-        try {
-          const msgG = await gotsmsFetch(`/api/numbers/${encodeURIComponent(rent_id)}/messages`);
-          const msgs = (msgG.data && (msgG.data.data || msgG.data.messages || msgG.data)) || [];
-          const list = Array.isArray(msgs) ? msgs : [];
-          if (list.length > 0) {
-            return json(res, 400, {
-              success: false,
-              message: 'Cancel is not available after an SMS has been received on this number.'
+        const meta = gotsmsOrderMeta(order.notes);
+        const children = Array.isArray(meta.service_rents) ? meta.service_rents : [];
+        const linkedRents = [{ id: rent_id, name: 'Original rental', parent: true }]
+          .concat(children.filter((item) => item && item.id).map((item) => ({ ...item, id: String(item.id), parent: false })));
+        for (const linked of linkedRents) {
+          try {
+            const messageResponse = await gotsmsFetch('/api/numbers/' + encodeURIComponent(linked.id) + '/messages');
+            const raw = messageResponse.data && (messageResponse.data.data || messageResponse.data.messages || messageResponse.data);
+            if (Array.isArray(raw) && raw.length) return json(res, 400, {
+              success: false, message: 'Refund is unavailable because a message was received for one of this number’s services.'
             });
+          } catch (_) {}
+        }
+        for (const child of children) {
+          if (!child || !child.id || child.refund_approved) continue;
+          const childRefund = await gotsmsFetch('/api/rents/' + encodeURIComponent(child.id) + '/refund', { method: 'POST' });
+          if (!childRefund.ok || !childRefund.data?.success) return json(res, childRefund.status || 400, {
+            success: false, message: childRefund.data?.message || 'A service refund was not approved. No wallet credit has been issued.'
+          });
+          child.refund_approved = true;
+          try {
+            const { error } = await supabase.from('number_orders').update({ notes: JSON.stringify(meta) }).eq('id', order.id);
+            if (error) throw error;
+          } catch (e) {
+            console.error('[gotsms] persist child refund approval', e.message || e);
+            return json(res, 500, { success: false, message: 'Supplier approved a service refund but its status could not be saved. Contact support before retrying.' });
           }
-        } catch (_) {}
-
-        // Supplier must accept refund first — never credit if provider rejects
-        const g = await gotsmsFetch(`/api/rents/${encodeURIComponent(rent_id)}/refund`, { method: 'POST' });
-        if (!g.ok || !g.data?.success) {
-          return json(res, g.status || 400, {
-            success: false,
-            message: g.data?.message || 'Cancel/refund was not approved. No balance change.'
-          });
         }
-
-        // Atomic claim — only one concurrent refund credits once
+        const parentRefund = await gotsmsFetch('/api/rents/' + encodeURIComponent(rent_id) + '/refund', { method: 'POST' });
+        if (!parentRefund.ok || !parentRefund.data?.success) return json(res, parentRefund.status || 400, {
+          success: false, message: parentRefund.data?.message || 'The original rental refund was not approved. No wallet credit has been issued.'
+        });
         const claimed = await claimGotsmsRefund(order.id);
-        if (!claimed) {
-          return json(res, 200, {
-            success: true,
-            message: 'Rental cancelled. Wallet was already adjusted if eligible.',
-            data: g.data.data || null
-          });
-        }
-        const refundAmt = Number(claimed.price) || 0;
+        if (!claimed) return json(res, 200, { success: true,
+          message: 'Supplier refund was approved. The wallet refund has already been processed.', data: parentRefund.data.data || null });
+        const refundAmt = Math.max(0, Math.round(Number(claimed.price) || 0));
         if (refundAmt > 0) {
           try {
-            await supabase.rpc('credit_balance', { p_user_id: auth.userId, p_amount: refundAmt });
-            try {
-              await supabase.from('transactions').insert({
-                user_id: auth.userId,
-                type: 'refund',
-                category: 'MJ SMS',
-                title: 'USA rental cancelled',
-                subtitle: 'Balance restored',
-                amount: '₦' + refundAmt.toLocaleString(),
-                amount_ngn: refundAmt,
-                status: 'completed'
-              });
-            } catch (_) {}
+            const credit = await supabase.rpc('credit_balance', { p_user_id: auth.userId, p_amount: refundAmt });
+            if (credit && credit.error) throw credit.error;
+            await supabase.from('transactions').insert({
+              user_id: auth.userId, type: 'refund', category: 'MJ SMS',
+              title: 'USA rental and add-ons refunded',
+              subtitle: 'Original rental plus all paid add-ons and plan changes',
+              amount: '₦' + refundAmt.toLocaleString(), amount_ngn: refundAmt, status: 'completed'
+            });
           } catch (e) {
             console.error('[gotsms] user refund credit', e);
-            // Roll claim flag back so admin can retry credit
-            try {
-              await supabase.from('number_orders').update({ refunded: false, status: 'active' }).eq('id', order.id);
-            } catch (_) {}
-            return json(res, 500, { success: false, message: 'Cancelled with provider but wallet credit failed. Contact support with your order ID.' });
+            try { await supabase.from('number_orders').update({ refunded: false, status: 'active' }).eq('id', order.id); } catch (_) {}
+            return json(res, 500, { success: false, message: 'Supplier approved the refund but wallet credit failed. Contact support with your rental ID.' });
           }
         }
-        return json(res, 200, {
-          success: true,
-          message: refundAmt > 0 ? 'Rental cancelled. Balance restored.' : 'Rental cancelled.',
-          data: g.data.data || null
-        });
+        return json(res, 200, { success: true,
+          message: refundAmt > 0 ? 'Rental and all paid add-ons refunded to your wallet.' : 'Rental cancelled.',
+          data: parentRefund.data.data || null });
       }
 
-      if (method === 'POST' && ga === 'gotsms_renewal_toggle') {
+if (method === 'POST' && ga === 'gotsms_renewal_toggle') {
         const auth = await requireAuth(req);
         if (!auth.ok) return json(res, auth.status, { success: false, message: auth.message });
 
