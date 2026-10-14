@@ -1946,10 +1946,14 @@ async function handleHeleketCreate(req, res, raw) {
     body = raw ? JSON.parse(raw) : (typeof req.body === 'string' ? JSON.parse(req.body || '{}') : (req.body || {}));
   } catch (_) { body = {}; }
 
-  const amount = parseAmountNgn(body.amount != null ? body.amount : body.ngn);
-  if (!(amount >= MIN && amount <= MAX)) {
-    return res.status(400).json({ success: false, message: `Amount must be between ₦${MIN.toLocaleString()} and ₦${MAX.toLocaleString()}` });
+  const amountParsed = parseAmountNgn(body.amount != null ? body.amount : body.ngn, { min: MIN, max: MAX });
+  if (!amountParsed || !amountParsed.ok) {
+    return res.status(400).json({
+      success: false,
+      message: (amountParsed && amountParsed.message) || `Amount must be between ₦${MIN.toLocaleString()} and ₦${MAX.toLocaleString()}`
+    });
   }
+  const amount = amountParsed.value;
 
   // MJ Hub rate: NGN → USD for Heleket invoice (wallet still credited in NGN)
   const cryptoRate = Number(process.env.DEPOSIT_USD_RATE) || Number(process.env.USD_TO_NGN_RATE) || USD_RATE || 1450;
