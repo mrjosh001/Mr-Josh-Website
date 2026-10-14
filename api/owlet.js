@@ -1315,6 +1315,66 @@ async function handleMyOrders(req, res) {
     }
   }
 
+  // Attach sticky cancel/refill from service catalog (panel flags) so UI
+  // only shows buttons when the provider actually supports them.
+  const rows = data || [];
+  try {
+    const pairs = [];
+    const seen = new Set();
+    for (const o of rows) {
+      const sid = String(o.service_id || '').trim();
+      const src = String(o.source || STORE_SOURCE || 'jap').toLowerCase();
+      if (!sid) continue;
+      const k = src + '|' + sid;
+      if (seen.has(k)) continue;
+      seen.add(k);
+      pairs.push({ sid, src });
+    }
+    const flagMap = {};
+    if (pairs.length) {
+      // Fetch in one query per source for speed
+      const bySrc = {};
+      for (const p of pairs) {
+        if (!bySrc[p.src]) bySrc[p.src] = [];
+        bySrc[p.src].push(p.sid);
+      }
+      for (const [src, ids] of Object.entries(bySrc)) {
+        const { data: svcs } = await supabase
+          .from('booster_services')
+          .select('service_id, source, cancel, refill')
+          .eq('source', src)
+          .in('service_id', ids);
+        for (const s of (svcs || [])) {
+          flagMap[String(s.source || src).toLowerCase() + '|' + String(s.service_id)] = {
+            cancel: s.cancel === true || s.cancel === 1 || s.cancel === '1',
+            refill: s.refill === true || s.refill === 1 || s.refill === '1'
+          };
+        }
+      }
+    }
+    for (const o of rows) {
+      const sid = String(o.service_id || '').trim();
+      const src = String(o.source || STORE_SOURCE || 'jap').toLowerCase();
+      const flags = flagMap[src + '|' + sid] || {};
+      const st = String(o.status || '').toLowerCase();
+      const qty = Math.max(0, Number(o.quantity) || 0);
+      let remains = o.remains != null && o.remains !== '' ? Number(o.remains) : NaN;
+      const deliveredStarted = !Number.isNaN(remains) && qty > 0 && remains < qty;
+      // Cancel: service allows + order still open + nothing delivered yet
+      o.service_cancel = !!flags.cancel;
+      o.cancel_allowed = !!flags.cancel
+        && !/completed|partial|cancel|refund|fail|error/i.test(st)
+        && /pending|awaiting|waiting|progress|processing/i.test(st)
+        && !deliveredStarted;
+      // Refill: service allows + order completed only (not partial / not in progress)
+      o.service_refill = !!flags.refill;
+      o.refill_allowed = !!flags.refill && /completed|success|done/i.test(st)
+        && !/partial|cancel|fail|error/i.test(st);
+    }
+  } catch (e) {
+    console.warn('[owlet my_orders] cancel/refill flags', e.message || e);
+  }
+
   return res.status(200).json({
     success: true,
     data: data || [],
@@ -1677,6 +1737,30 @@ async function handleRefill(req, res) {
   if (!row) {
     return res.status(404).json({ success: false, message: 'Order not found' });
   }
+
+  const stRef = String(row.status || '').toLowerCase();
+  if (!/completed|success|done/i.test(stRef) || /partial/i.test(stRef)) {
+    return res.status(400).json({
+      success: false,
+      message: 'Refill is only available after the order is fully completed.'
+    });
+  }
+  // Sticky: only if catalog says this service supports refill
+  try {
+    const { data: svcRow } = await supabase
+      .from('booster_services')
+      .select('refill')
+      .eq('source', normalizePanelSource(row.source || STORE_SOURCE))
+      .eq('service_id', String(row.service_id || ''))
+      .maybeSingle();
+    const refillOn = svcRow && (svcRow.refill === true || svcRow.refill === 1 || svcRow.refill === '1');
+    if (svcRow && !refillOn) {
+      return res.status(400).json({
+        success: false,
+        message: 'Refill is not available for this package.'
+      });
+    }
+  } catch (_) {}
 
   const refillSrc = normalizePanelSource(row.source || STORE_SOURCE);
   const { ok, status, json } = await owletCall({ action: 'refill', order: orderId }, 12000, refillSrc);
