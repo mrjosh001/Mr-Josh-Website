@@ -932,9 +932,20 @@ async function handleOrder(req, res) {
       .select('id, supplier_order_id, service_name, quantity, price_ngn, status, link, created_at, user_id, customer_id')
       .maybeSingle();
 
+    if (ins.error && /category.*column|column.*category/i.test(ins.error.message || '')) {
+      // Existing booster_orders schema does not expose category. Retry without that
+      // optional field before falling back to a reduced legacy row.
+      const compatibleRow = { ...orderRow };
+      delete compatibleRow.category;
+      ins = await supabase
+        .from('booster_orders')
+        .insert(compatibleRow)
+        .select('id, supplier_order_id, service_name, quantity, price_ngn, status, link, created_at, user_id, customer_id')
+        .maybeSingle();
+    }
+
     if (ins.error) {
-      console.error('[owlet order] booster_orders insert failed:', ins.error.message);
-      // Minimal fallback (table may lack optional columns)
+      console.error('[owlet order] booster_orders insert failed; retrying with compatible columns:', ins.error.message);
       const minimal = {
         user_id: user.id,
         customer_id: profile.customer_id || null,
