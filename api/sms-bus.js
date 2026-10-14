@@ -3504,9 +3504,13 @@ export default async function handler(req, res) {
             const keys = filtered.map((r) => `gotsms-${r.id}`);
             await supabase
               .from('number_orders')
-              .update({ status: 'active', refunded: false })
+              .update({ status: 'active' })
               .eq('user_id', auth.userId)
               .eq('source', 'gotsms')
+              // Never resurrect a user-cancelled or refunded rental if the supplier
+              // temporarily returns stale active data.
+              .or('refunded.is.null,refunded.eq.false')
+              .not('status', 'in', '("cancelled","canceled","refunded")')
               .in('idempotency_key', keys);
           } catch (e) {
             console.warn('[gotsms_rents] heal', e.message || e);
@@ -3987,7 +3991,7 @@ if (method === 'POST' && ga === 'gotsms_toggle_renewal') {
         }
         const claimed = await claimGotsmsRefund(order.id);
         if (!claimed) return json(res, 200, { success: true,
-          message: 'Supplier refund was approved. The wallet refund has already been processed.', data: parentRefundData });
+          message: 'Canceled', data: parentRefundData });
         const refundMeta = gotsmsOrderMeta(claimed.notes);
         const refundAmt = Math.max(0,
           Math.round(Number(claimed.price) || 0),
@@ -4008,9 +4012,11 @@ if (method === 'POST' && ga === 'gotsms_toggle_renewal') {
           userId: auth.userId, rentId: rent_id, status: 'refunded',
           subtitle: 'Rental and paid add-ons refunded to wallet', amountNgn: refundAmt
         });
-        return json(res, 200, { success: true,
-          message: refundAmt > 0 ? 'Rental and all paid add-ons refunded to your wallet.' : 'Rental cancelled.',
-          data: parentRefundData });
+        return json(res, 200, {
+          success: true,
+          message: 'Canceled',
+          data: parentRefundData
+        });
       }
 
 if (method === 'POST' && ga === 'gotsms_renewal_toggle') {
