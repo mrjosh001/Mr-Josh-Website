@@ -470,22 +470,30 @@ function syncConverterDirectionUI() {
 }
 
 async function refreshConverterRate() {
-    const rateEl = document.getElementById('rateDisplay');
     const statusEl = document.getElementById('converterUpdatedAt');
+    const refreshBtn = document.querySelector('.converter-refresh-btn');
+    if (refreshBtn) {
+        refreshBtn.disabled = true;
+        refreshBtn.innerHTML = '<i class="fa-solid fa-rotate fa-spin"></i> Updating';
+    }
     try {
         const response = await fetch('/api/deposit?action=convert_rate', { cache: 'no-store' });
-        const data = await response.json();
-        if (response.ok && data && data.success && Number(data.rate) > 0) {
-            exchangeRate = Number(data.rate);
-            if (statusEl) statusEl.textContent = 'Rate supplied by MJ HUB · updated just now';
-        } else if (statusEl) {
-            statusEl.textContent = 'Estimated rate · refresh before converting';
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok || !data || !data.success || !(Number(data.rate) > 0)) {
+            throw new Error(data.message || 'Rate is temporarily unavailable');
         }
+        exchangeRate = Number(data.rate);
+        if (statusEl) statusEl.textContent = 'MJ HUB rate confirmed · just updated';
     } catch (_) {
-        if (statusEl) statusEl.textContent = 'Estimated rate · refresh before converting';
+        if (statusEl) statusEl.textContent = 'Could not refresh rate · showing last known rate';
+    } finally {
+        if (refreshBtn) {
+            refreshBtn.disabled = false;
+            refreshBtn.innerHTML = '<i class="fa-solid fa-rotate"></i> Refresh rate';
+        }
+        syncConverterDirectionUI();
+        executeConversion();
     }
-    syncConverterDirectionUI();
-    executeConversion();
 }
 
 function openCurrencyModal() {
@@ -537,14 +545,30 @@ function setConverterMax() {
 function executeConversion() {
     const input = document.getElementById('baseConvertInput');
     const output = document.getElementById('targetConvertOutput');
+    const feedback = document.getElementById('converterAmountFeedback');
     const amount = Number(input && input.value);
     if (!output) return;
+    const isNgnToUsd = converterDirectionIsNgnToUsd();
+    const available = isNgnToUsd ? Number(currentBalanceNgn) || 0 : Number(currentBalanceUsd) || 0;
     if (!Number.isFinite(amount) || amount <= 0) {
         output.value = '';
+        if (feedback) {
+            feedback.className = 'converter-amount-feedback';
+            feedback.textContent = 'Enter an amount to preview the conversion.';
+        }
         return;
     }
-    const result = converterDirectionIsNgnToUsd() ? amount / exchangeRate : amount * exchangeRate;
-    output.value = formatCurrencyValue(result, converterDirectionIsNgnToUsd() ? 'USD' : 'NGN');
+    const result = isNgnToUsd ? amount / exchangeRate : amount * exchangeRate;
+    output.value = formatCurrencyValue(result, isNgnToUsd ? 'USD' : 'NGN');
+    if (feedback) {
+        if (amount > available + 0.000001) {
+            feedback.className = 'converter-amount-feedback is-error';
+            feedback.textContent = 'Insufficient ' + (isNgnToUsd ? 'NGN' : 'USD') + ' balance. Reduce the amount or fund your wallet.';
+        } else {
+            feedback.className = 'converter-amount-feedback is-valid';
+            feedback.textContent = 'You will receive approximately ' + formatCurrencyValue(result, isNgnToUsd ? 'USD' : 'NGN') + '. Final conversion is confirmed securely.';
+        }
+    }
 }
 
 function performCurrencyConversion() {
