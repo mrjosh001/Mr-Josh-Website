@@ -3464,13 +3464,33 @@ if (method === 'GET' && ga === 'gotsms_messages') {
         if (!rent_id || !service_id) return json(res, 400, { success: false, message: 'rent_id and service_id required' });
         const parentOrder = await gotsmsAssertOwns(auth.userId, rent_id);
         if (!parentOrder) return json(res, 403, { success: false, message: 'Rental not found' });
-        // GotSMS documents eligibility on GET /api/rents/{rent_id}/services;
-        // let the supplier validate it instead of blocking with an unrelated messages endpoint.
+        // Prefer the number-specific add-on list. If GotSMS withholds it
+        // before the first SMS, resolve the service from its public catalog and
+        // let the supplier's POST remain the final eligibility check.
         const listG = await gotsmsFetch(`/api/rents/${encodeURIComponent(rent_id)}/services`);
-        const svc = (listG.data?.data || []).find((s) => String(s.service_id) === service_id && s.is_available !== false);
-        if (!svc) return json(res, 400, { success: false, message: 'Service not available on this number' });
-        const price = gotsmsSellPriceNgn(svc.price || 0);
-        if (!(price > 0)) return json(res, 400, { success: false, message: 'Invalid service price' });
+        let svc = (listG.data?.data || []).find((s) => String(s.service_id) === service_id && s.is_available !== false);
+        if (!svc) {
+          const catalog = await gotsmsFetch('/api/services?per_page=100');
+          const item = (Array.isArray(catalog.data?.data) ? catalog.data.data : []).find((s) => String(s.id || s.service_id) === service_id && s.is_available !== false);
+          if (item) svc = { service_id, name: item.name, price: Number(item.price || 0), is_available: item.is_available !== false };
+        }
+        if (!svc) return json(res, 400, { success: false, message: 'GotSMS did not list this service as available. Refresh the add-service list and try again.' });
+        // Use exactly the same customer price source as the list endpoint:
+        // admin/database selling price first, supplier-cost formula only as fallback.
+        let dbPrice = null;
+        try {
+          const { data: priceRow } = await supabase.from('number_services')
+            .select('price, is_available')
+            .eq('source', 'gotsms')
+            .eq('service_id', service_id)
+            .maybeSingle();
+          if (priceRow && Number(priceRow.price) > 0) {
+            if (priceRow.is_available === false) return json(res, 400, { success: false, message: 'This service is currently unavailable.' });
+            dbPrice = Math.round(Number(priceRow.price));
+          }
+        } catch (e) { console.warn('[gotsms add_service] DB price lookup', e.message || e); }
+        const price = dbPrice != null ? dbPrice : gotsmsSellPriceNgn(svc.price || 0);
+        if (!(price > 0)) return json(res, 400, { success: false, message: 'This service has no valid selling price; no wallet charge was made.' });
         const debitAdd = await debitWalletStrict(auth.userId, price, 'gotsms_add_service');
         if (!debitAdd.ok) return json(res, 400, { success: false, message: debitAdd.message || 'Insufficient wallet balance' });
         const g = await gotsmsFetch(`/api/rents/${encodeURIComponent(rent_id)}/services`, { method: 'POST', body: { service_id } });
@@ -3511,15 +3531,21 @@ if (method === 'GET' && ga === 'gotsms_messages') {
         if (!rent_id || !plan_id) return json(res, 400, { success: false, message: 'rent_id and plan_id required' });
         const order = await gotsmsAssertOwns(auth.userId, rent_id);
         if (!order) return json(res, 403, { success: false, message: 'Rental not found' });
-        // Resolve price from live transition_options
+        // Resolve transition options from the supplier's rent collections. The
+        // single-rent endpoint may omit transition_options even when the rent
+        // collection advertises valid switches.
         let live = null;
-        try {
-          const cur = await gotsmsFetch('/api/rents/' + encodeURIComponent(rent_id));
-          live = (cur.data && (cur.data.data || cur.data)) || null;
-        } catch (_) {}
+        for (const status of ['active', 'finished']) {
+          try {
+            const cur = await gotsmsFetch('/api/rents?status=' + status + '&per_page=100');
+            const rows = Array.isArray(cur.data?.data) ? cur.data.data : [];
+            live = rows.find((r) => String(r.id) === rent_id) || live;
+            if (live && Array.isArray(live.transition_options) && live.transition_options.length) break;
+          } catch (_) {}
+        }
         const opts = (live && live.transition_options) || [];
-        const plan = opts.find((o) => String(o.plan_id || o.id) === plan_id);
-        if (!plan) return json(res, 400, { success: false, message: 'That plan switch is not available for this number.' });
+        const plan = opts.find((o) => String(o.plan_id || o.id || o.plan?.id || '') === plan_id);
+        if (!plan) return json(res, 400, { success: false, message: 'GotSMS did not return this plan as an available switch for this rental. Refresh the rental list and try again; no wallet charge was made.' });
 
         // Charge the current customer-facing price stored for the target plan.
         // Do not prorate, discount, or credit the previously purchased plan.
