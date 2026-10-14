@@ -1,43 +1,38 @@
-// MJ HUB subtle press animation and optional vibration only. No click confirmation UI.
+// MJ HUB click-triggered press animation only. No vibration/haptic feedback.
 (function () {
-  if (window.__mjHapticBound) return;
-  window.__mjHapticBound = true;
+  'use strict';
+  if (window.__mjPressFeedbackBound) return;
+  window.__mjPressFeedbackBound = true;
 
-  function findControl(el) {
-    if (!el || !el.closest) return null;
-    return el.closest(
-      'button, a[href], [role="button"], [onclick], input[type="button"], input[type="submit"], input[type="reset"], input[type="checkbox"], input[type="radio"], summary, select, .nav-item, .filter-tab, .promo-card, .ps-buy, .sidebar-link, .btn, .icon-btn, [data-click-feedback]'
-    );
+  var selector = [
+    'button', 'a[href]', '[role="button"]', '[onclick]',
+    'input[type="button"]', 'input[type="submit"]', 'input[type="reset"]',
+    'input[type="checkbox"]', 'input[type="radio"]', 'summary', 'select',
+    '.nav-item', '.filter-tab', '.promo-card', '.ps-buy', '.sidebar-link',
+    '.btn', '.icon-btn', '[data-click-feedback]', '[data-press]'
+  ].join(',');
+
+  function findControl(target) {
+    return target && target.closest ? target.closest(selector) : null;
   }
 
-  function vibrate() {
-    try {
-      if (navigator.vibrate) navigator.vibrate(12);
-    } catch (e) {}
-  }
-
-  function press(e) {
-    var control = findControl(e.target);
+  function press(event) {
+    var control = findControl(event.target);
     if (!control || control.disabled || control.getAttribute('aria-disabled') === 'true') return;
-    vibrate();
-
     if (control.dataset.mjPressAnimating === 'true') return;
+
     control.dataset.mjPressAnimating = 'true';
+    var previousTransform = control.style.transform;
+    var previousTransition = control.style.transition;
+    control.style.transition = (previousTransition ? previousTransition + ', ' : '') + 'transform 110ms ease';
+    control.style.transform = (previousTransform && previousTransform !== 'none' ? previousTransform + ' ' : '') + 'scale(.975)';
 
-    var hadTransform = control.style.transform;
-    var hadTransition = control.style.transition;
-    control.style.transition = (hadTransition ? hadTransition + ', ' : '') + 'transform 100ms ease';
-    control.style.transform = (hadTransform && hadTransform !== 'none' ? hadTransform + ' ' : '') + 'scale(.98)';
-
-    setTimeout(function () {
-      control.style.transform = hadTransform;
-      control.style.transition = hadTransition;
+    window.setTimeout(function () {
+      control.style.transform = previousTransform;
+      control.style.transition = previousTransition;
       delete control.dataset.mjPressAnimating;
-    }, 110);
+    }, 120);
   }
 
   document.addEventListener('click', press, true);
-  document.addEventListener('touchstart', function (e) {
-    if (findControl(e.target)) vibrate();
-  }, { passive: true });
 })();
