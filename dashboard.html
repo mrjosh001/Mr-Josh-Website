@@ -4487,44 +4487,70 @@ async function handleDepositReturn() {
    Webhook is the fast path; this asks Heleket directly so a late/missed webhook
    can never leave a paid order uncredited. Safe to repeat (server is idempotent). */
 let watchingHeleket = false;
+let heleketToastShown = false;
+const HELEKET_TTL_MS = 30 * 60 * 1000; // stale markers are dropped after 30 min
+function clearHeleketPending() {
+    try { localStorage.removeItem('mjhub_pending_heleket'); sessionStorage.removeItem('mjhub_pending_heleket'); } catch (_) {}
+}
 async function watchHeleketPayment() {
     if (watchingHeleket) return;
     let pending = null;
     try { pending = JSON.parse(localStorage.getItem('mjhub_pending_heleket') || sessionStorage.getItem('mjhub_pending_heleket') || 'null'); } catch (_) {}
-    if (!pending || !pending.order_id) return;
-    if (!pending.ts || (Date.now() - pending.ts) > 6 * 60 * 60 * 1000) {
-        try { localStorage.removeItem('mjhub_pending_heleket'); sessionStorage.removeItem('mjhub_pending_heleket'); } catch (_) {}
-        return;
-    }
+    if (!pending || !pending.order_id) { if (pending) clearHeleketPending(); return; }
+    if (!pending.ts || (Date.now() - pending.ts) > HELEKET_TTL_MS) { clearHeleketPending(); return; }
     watchingHeleket = true;
+    let failures = 0;
     try {
-        if (typeof showToast === 'function') showToast('Confirming your crypto payment…', 'info', 4000);
+        // No toast up front: an unpaid invoice must stay silent.
         for (let i = 0; i < 60; i++) {           // ~5 minutes per visit
             if (!currentUserId) { await sleep(1000); continue; }
-            let credited = false;
+            if ((Date.now() - pending.ts) > HELEKET_TTL_MS) { clearHeleketPending(); return; }
             try {
                 const { data: { session } } = await supabaseClient.auth.getSession();
-                if (session && session.access_token) {
-                    const r = await fetch('/api/deposit?action=heleket_verify', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + session.access_token },
-                        body: JSON.stringify({ order_id: pending.order_id })
-                    });
+                if (!session || !session.access_token) { await sleep(2000); continue; }
+                const r = await fetch('/api/deposit?action=heleket_verify', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + session.access_token },
+                    body: JSON.stringify({ order_id: pending.order_id })
+                });
+                // Unknown order / not allowed: this marker can never succeed, drop it.
+                if (r.status === 401 || r.status === 403 || r.status === 404 || r.status === 400) { clearHeleketPending(); return; }
+                if (!r.ok) {
+                    if (++failures >= 3) { clearHeleketPending(); return; }
+                } else {
+                    failures = 0;
                     const d = await r.json().catch(() => ({}));
-                    credited = !!d.credited;
-                    if (d.status && /cancel|fail|expire|system_fail/.test(String(d.status))) {
-                        try { localStorage.removeItem('mjhub_pending_heleket'); sessionStorage.removeItem('mjhub_pending_heleket'); } catch (_) {}
+                    const st = String(d.status || '').toLowerCase();
+
+                    if (d.credited === true) {
+                        clearHeleketPending();
+                        await fetchUserBalance(currentUserId);
+                        try { await fetchUserTransactions(currentUserId); } catch (_) {}
+                        const amt = Number(d.amount_ngn || d.amount || 0);
+                        if (typeof showToast === 'function') {
+                            showToast(amt > 0 ? 'Crypto payment received: wallet funded ₦' + amt.toLocaleString()
+                                              : 'Crypto payment received: wallet funded', 'success', 5000);
+                        }
+                        return;
+                    }
+                    if (/cancel|fail|expire|refund|locked/.test(st)) {
+                        clearHeleketPending();
                         if (typeof showToast === 'function') showToast('Crypto payment was not completed.', 'error');
                         return;
                     }
+                    if (/wrong_amount/.test(st)) {
+                        clearHeleketPending();
+                        if (typeof showToast === 'function') showToast('Crypto payment amount did not match. Please contact support.', 'error', 6000);
+                        return;
+                    }
+                    // Only say "confirming" once the provider reports an actual payment in progress.
+                    if (!heleketToastShown && /^(process|confirm_check|paid|paid_over)$/.test(st)) {
+                        heleketToastShown = true;
+                        if (typeof showToast === 'function') showToast('Confirming your crypto payment…', 'info', 4000);
+                    }
                 }
-            } catch (_) {}
-            if (credited) {
-                try { localStorage.removeItem('mjhub_pending_heleket'); sessionStorage.removeItem('mjhub_pending_heleket'); } catch (_) {}
-                await fetchUserBalance(currentUserId);
-                try { await fetchUserTransactions(currentUserId); } catch (_) {}
-                if (typeof showToast === 'function') showToast('Wallet funded: ₦' + Number(pending.amount || 0).toLocaleString(), 'success', 5000);
-                return;
+            } catch (_) {
+                if (++failures >= 3) { clearHeleketPending(); return; }
             }
             await sleep(5000);
         }
