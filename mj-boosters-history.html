@@ -193,38 +193,41 @@ function progressHtml(o){
   const st = String(o.status || '').toLowerCase();
   const qty = Math.max(0, Number(o.quantity) || 0);
   let remains = o.remains == null || o.remains === '' ? null : Number(o.remains);
-  let start = o.start_count == null || o.start_count === '' ? null : Number(o.start_count);
+  const start = o.start_count == null || o.start_count === '' ? null : Number(o.start_count);
   if (remains != null && Number.isNaN(remains)) remains = null;
-  if (start != null && Number.isNaN(start)) start = null;
-
-  let done = 0;
-  let pct = 0;
-  if (/completed|complete/.test(st)) {
+  let done = 0, pct = 0;
+  if (/completed|success|done/.test(st) && !/partial/.test(st)) {
     done = qty; remains = 0; pct = 100;
   } else if (remains != null && qty > 0) {
     done = Math.max(0, Math.min(qty, qty - remains));
     pct = Math.round((done / qty) * 100);
+    remains = Math.max(0, qty - done);
   } else if (o.delivered != null && qty > 0) {
     done = Math.max(0, Math.min(qty, Number(o.delivered) || 0));
-    remains = Math.max(0, qty - done);
     pct = Math.round((done / qty) * 100);
-  } else if (/pending|awaiting/.test(st)) {
+    remains = Math.max(0, qty - done);
+  } else if (/pending|awaiting|waiting/.test(st)) {
     done = 0; remains = qty || 0; pct = 0;
-  } else if (/progress|processing|waiting/.test(st)) {
-    pct = Math.max(pct, 2);
+  } else if (/progress|processing/.test(st)) {
+    done = 0; remains = qty || 0; pct = 0;
   }
   if (remains == null && qty > 0) remains = Math.max(0, qty - done);
-
   const fillClass = pct >= 100 ? 'done' : (/partial/.test(st) ? 'partial' : '');
-
+  const refundN = Number(o.refund_ngn) || Number(o.auto_refunded) || 0;
+  let extra = '';
+  if (/partial/.test(st)) {
+    extra = `<div class="prog-meta" style="color:var(--warn);font-weight:700;margin-top:4px">Partial · ${done.toLocaleString()} delivered · ${(remains||0).toLocaleString()} not delivered` +
+      (refundN > 0 ? ` · ₦${refundN.toLocaleString()} returned to wallet` : ' · refund processing…') + `</div>`;
+  } else if (refundN > 0) {
+    extra = `<div class="prog-meta" style="color:#34d399;font-weight:700;margin-top:4px">₦${refundN.toLocaleString()} returned to wallet</div>`;
+  }
   return `<div class="prog">
-    <div class="prog-top">
-      <span><strong>${done.toLocaleString()}</strong> of <strong>${qty.toLocaleString()}</strong> complete</span>
-      <span>${remains != null ? remains.toLocaleString() + ' left' : ''}</span>
-    </div>
-    <div class="track"><div class="fill ${fillClass}" style="width:${Math.max(0, Math.min(100, pct))}%"></div></div>
-    <div class="prog-note">${pct}% done${start != null ? ' · started at ' + start.toLocaleString() : ''}</div>
-  </div>`;
+      <div class="prog-top"><span>${done.toLocaleString()} of ${qty.toLocaleString()} complete</span>
+      <span>${remains != null ? remains.toLocaleString() + ' left' : ''}</span></div>
+      <div class="bar"><div class="fill ${fillClass}" style="width:${pct}%"></div></div>
+      <div class="prog-meta">${pct}% done${start != null && !Number.isNaN(start) ? ' · started at ' + Number(start).toLocaleString() : ''}</div>
+      ${extra}
+    </div>`;
 }
 
 function canCancel(o){
@@ -415,7 +418,7 @@ function renderRows(rows){
       const hasActive = rows.some(isActive);
       if (hasActive) {
         // Background live update (do not block UI)
-        fetch('/api/owlet?action=my_orders&page_size=50&source=owlet', { headers })
+        fetch('/api/owlet?action=my_orders&page_size=50&live=1', { headers })
           .then(r => r.json())
           .then(json => {
             if (json && json.success && Array.isArray(json.data)) renderRows(json.data);
@@ -424,7 +427,7 @@ function renderRows(rows){
       }
 
       if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
-      if (hasActive) pollTimer = setInterval(() => loadOrders(true), 12000);
+      if (hasActive) pollTimer = setInterval(() => loadOrders(true), 5000);
     } catch (e) {
       const msg = e.name === 'AbortError' ? 'Request timed out. Try refresh.' : (e.message || 'Network error');
       if (!silent) el.innerHTML = `<div class="empty"><h3>Could not load</h3><p>${esc(msg)}</p><button type="button" class="btn-mini primary" onclick="location.reload()">Retry</button></div>`;
