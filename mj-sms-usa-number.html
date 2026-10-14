@@ -104,7 +104,7 @@ h1{font-size:17px;font-weight:800;letter-spacing:-.02em}
 .inbox-head .live{font-size:11px;font-weight:700;color:var(--ok);display:flex;align-items:center;gap:6px}
 .inbox-head .live::before{content:'';width:7px;height:7px;border-radius:50%;background:var(--ok);animation:pulse 1.6s ease infinite}
 @keyframes pulse{0%,100%{opacity:1}50%{opacity:.35}}
-/* Professional SMS inbox cards (supplier-style) */
+/* Professional SMS rental inbox cards */
 .msg{
   padding:0;border-radius:18px;background:var(--card);border:1px solid var(--border);
   margin-bottom:14px;overflow:hidden;
@@ -389,7 +389,7 @@ function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g,function(c){retu
       }
     };
     
-    // Extra: Add service + Switch plan (GotSMS)
+    // Extra: Add service + switch rental plan
     (function wireExtraActions(){
       var host = document.getElementById('extraRentActions');
       if(!host){
@@ -478,7 +478,7 @@ function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g,function(c){retu
     if(cdTimer) clearTimeout(cdTimer);
     var expiry = rent && (rent.active_till || rent.online_till || rent.activeTill || rent.expires_at);
     var till = expiry ? new Date(expiry).getTime() : 0;
-    // GotSMS also provides remaining time in seconds; use it if the timestamp
+    // The rental service may provide remaining time in seconds; use it if the timestamp
     // is absent so the timer remains visible on normalized/stored rental data.
     if (!till && rent && rent.code && !isNaN(Date.parse(String(rent.code)))) till = new Date(String(rent.code)).getTime();
     if (!till && rent) {
@@ -630,14 +630,14 @@ function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g,function(c){retu
     draw('');
     var search = document.getElementById('addSvcSearch');
     if (search) search.oninput = function() { draw(search.value); };
-    if (hint) hint.textContent = 'Only services currently supported by GotSMS for this active number are listed.';
+    if (hint) hint.textContent = 'Available services for this number are shown here.';
   }
   async function openPlanModal() {
     var list = document.getElementById('planList');
     if (!list) return;
     list.innerHTML = '<div class="empty">Loading available plans…</div>';
     showModal('planModal');
-    // Refresh the rent from GotSMS so current transition options and prices are authoritative.
+    // Refresh the rental so the available plan changes and prices are current.
     var j = await api('rents', { query:'status=active' });
     var fresh = (j.data || []).find(function(r) { return String(r.id) === String(rentId); });
     if (!fresh) {
@@ -647,7 +647,7 @@ function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g,function(c){retu
     if (fresh) rent = Object.assign({}, rent || {}, fresh);
     var opts = (rent && rent.transition_options) || [];
     if (!opts.length) {
-      list.innerHTML = '<div class="empty">No plan changes are currently offered by GotSMS for this rental. Refresh and try again later.</div>';
+      list.innerHTML = '<div class="empty">No plan changes are currently available for this rental. Refresh and try again later.</div>';
       return;
     }
     list.innerHTML = opts.map(function(p) {
@@ -748,7 +748,7 @@ function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g,function(c){retu
       <strong>Add a service to this number</strong>
       <button type="button" class="btn-ghost" id="addSvcClose" style="padding:6px 10px;">✕</button>
     </div>
-    <p style="font-size:12px;color:var(--muted);margin:8px 0 12px;">Add another service to the same number. One-time fee applies; GotSMS confirms eligibility and availability.</p>
+    <p style="font-size:12px;color:var(--muted);margin:8px 0 12px;">Add another service to the same number. A one-time fee applies, and availability is checked before the service is added.</p>
     <input type="search" id="addSvcSearch" placeholder="Search services…" style="width:100%;padding:10px 12px;border-radius:10px;border:1px solid var(--border);background:var(--bg);color:var(--text);margin-bottom:10px;">
     <div id="addSvcList" style="display:flex;flex-direction:column;gap:6px;max-height:40vh;overflow:auto;"></div>
     <p id="addSvcHint" style="font-size:11px;color:var(--muted);margin-top:10px;"></p>
