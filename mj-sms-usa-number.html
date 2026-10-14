@@ -406,31 +406,18 @@ function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g,function(c){retu
       }
       host.innerHTML = '';
       var st = String(rent.status||'active').toLowerCase();
-      var dead = ['refunded','cancelled','canceled','expired','finished','ended'].indexOf(st)>=0;
-      if(!dead){
+      var terminal = ['refunded','cancelled','canceled'].indexOf(st)>=0;
+      if(!terminal){
         var b1 = document.createElement('button');
         b1.type='button'; b1.className='btn btn-ghost'; b1.id='btnAddService';
         b1.innerHTML='<i class="fa-solid fa-plus"></i> Add service to this number';
         b1.onclick = openAddServiceModal;
         host.appendChild(b1);
-        var opts = Array.isArray(rent.transition_options) ? rent.transition_options : [];
-        {
-          var b2 = document.createElement('button');
-          b2.type='button'; b2.className='btn btn-ghost'; b2.id='btnSwitchPlan';
-          b2.innerHTML='<i class="fa-solid fa-arrow-right-arrow-left"></i> Switch plan';
-          b2.onclick = openPlanModal;
-          host.appendChild(b2);
-        }
-      } else {
-        // finished/expired — Reactivate = switch/transition when options exist
-        var opts2 = rent.transition_options || [];
-        if(opts2.length){
-          var b3 = document.createElement('button');
-          b3.type='button'; b3.className='btn btn-primary'; b3.id='btnReactivate';
-          b3.innerHTML='<i class="fa-solid fa-rotate"></i> Reactivate / change plan';
-          b3.onclick = openPlanModal;
-          host.appendChild(b3);
-        }
+        var b2 = document.createElement('button');
+        b2.type='button'; b2.className='btn btn-ghost'; b2.id='btnSwitchPlan';
+        b2.innerHTML='<i class="fa-solid fa-arrow-right-arrow-left"></i> Switch plan';
+        b2.onclick = openPlanModal;
+        host.appendChild(b2);
       }
     })();
 
