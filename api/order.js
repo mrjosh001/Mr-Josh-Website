@@ -316,9 +316,10 @@ async function handleMyOrders(req, res, userId) {
           .from('number_orders')
           .select('*')
           .eq('user_id', userId)
-          .gt('created_at', sinceIso)
+          // Include existing rentals whose status changed after the history cache watermark.
+          .or('created_at.gt.' + sinceIso + ',updated_at.gt.' + sinceIso)
           .order('created_at', { ascending: false })
-          .limit(50),
+          .limit(100),
         // Re-sync status for still-open numbers only (tiny set)
         supabase
           .from('number_orders')
