@@ -1,0 +1,30 @@
+name: MJ HUB SMS push polling
+
+on:
+  schedule:
+    - cron: '*/5 * * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: mjhub-push-poll
+  cancel-in-progress: true
+
+jobs:
+  poll:
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Poll pending SMS rentals securely
+        env:
+          CRON_SECRET: ${{ secrets.MJHUB_CRON_SECRET }}
+        run: |
+          if [ -z "$CRON_SECRET" ]; then
+            echo "Missing repository secret MJHUB_CRON_SECRET" >&2
+            exit 1
+          fi
+          curl --fail --silent --show-error --max-time 90 \
+            -H "Authorization: Bearer ${CRON_SECRET}" \
+            "https://mjhub.store/api/sms-bus?action=push_poll_codes"
