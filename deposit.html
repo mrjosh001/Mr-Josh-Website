@@ -84,6 +84,7 @@ a{color:inherit;text-decoration:none}
 .amount-field{width:100%;padding:22px 16px;border-radius:16px;border:1px solid var(--border);background:var(--input-bg);color:var(--text);font-size:28px;font-weight:800;text-align:center;outline:none}
 .amount-field::placeholder{color:var(--amount-placeholder);font-weight:700}
 .amount-field:focus{border-color:var(--primary)}
+.crypto-notice{border:1px solid #e8802e;background:rgba(232,128,46,.12);color:var(--text);border-radius:14px;padding:14px;font-size:13px;line-height:1.5;margin:12px 0}
 .chips{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;margin:14px 0 4px}
 .chip{border:1px solid var(--border);background:var(--chip-bg);color:var(--text);border-radius:999px;padding:10px 14px;font-size:13px;font-weight:700;cursor:pointer}
 .chip:hover,.chip.active{border-color:var(--primary);background:var(--primary-soft);color:var(--primary)}
@@ -267,20 +268,16 @@ document.addEventListener('click', function(e){
         <label>Enter amount (NGN)</label>
         <input type="number" class="amount-field" id="vaAmountInput" min="1000" max="700000" step="100" placeholder="₦0.00" inputmode="numeric" oninput="onVaAmountInput()">
       </div>
-      <div class="form-group" id="cryptoCoinGroup" style="margin:12px 0 8px;display:none;">
-        <label for="cryptoCoinSelect">Cryptocurrency and network</label>
-        <select id="cryptoCoinSelect" class="amount-field" style="width:100%;padding:14px;border-radius:12px;" onchange="onCryptoCoinChange()">
-          <option value="USDT_TRON">USDT — TRON (TRC20)</option>
-          <option value="USDT_BSC">USDT — BNB Smart Chain (BEP20)</option>
-          <option value="USDT_ETH">USDT — Ethereum (ERC20)</option>
-          <option value="BTC">Bitcoin (BTC)</option>
-          <option value="ETH">Ethereum (ETH)</option>
-          <option value="TRX">TRON (TRX)</option>
-          <option value="BNB">BNB — BNB Smart Chain</option>
-          <option value="USDC_ETH">USDC — Ethereum</option>
-          <option value="USDC_SOL">USDC — Solana</option>
-        </select>
-        <p style="font-size:12px;color:var(--muted,#64748b);margin:6px 0 0;">Choose the same coin and network in your wallet when paying.</p>
+      <div id="cryptoCoinGroup" style="display:none;">
+        <div class="crypto-notice">Select the coin and network on the next page, then send the exact amount shown for this order to the one-time address.<br>Do not reuse this address for future deposits.</div>
+        <div class="form-group" style="margin-bottom:8px;">
+          <label>Amount to be paid including fee, NGN</label>
+          <input type="text" class="amount-field" id="cryptoPayAmount" value="0" readonly>
+        </div>
+        <div class="form-group" style="margin-bottom:8px;">
+          <label>Will be credited, NGN</label>
+          <input type="text" class="amount-field" id="cryptoCreditAmount" value="0" readonly>
+        </div>
       </div>
       <div class="chips" id="vaChips">
         <button type="button" class="chip" data-amt="1000" onclick="pickVaAmount(1000)">₦1,000</button>
@@ -386,6 +383,7 @@ const DEPOSIT_USD_RATE = 1450;
 const MIN = 1000;
 const MAX = 500000;
 const VA_MIN = 1000;
+const CRYPTO_MIN = Math.ceil(3 * DEPOSIT_USD_RATE); /* ~$3, same floor as the supplier's pricier coins */
 const VA_MAX = 700000;
 const VA_FEE_RATE = 0.01;
 const ADMIN_WA = '2347026502927';
@@ -475,7 +473,7 @@ function selectDepositMethod(method) {
   window.__depositMethod = method; // bank | crypto | manual
   var titles = {
     bank: ['Bank transfer', 'Enter amount to transfer'],
-    crypto: ['Crypto payment', 'Enter amount and choose your coin/network'],
+    crypto: ['Crypto payment', 'Enter amount, then choose your coin and network on the payment page'],
     manual: ['Manual deposit', 'Enter amount, then message support']
   };
   var t = titles[method] || titles.bank;
@@ -502,7 +500,7 @@ function backToProviderFromEmpty() {
 function continueFromAmount() {
   var amount = Math.round(parseFloat(document.getElementById('vaAmountInput').value) || 0);
   var method = window.__depositMethod || 'bank';
-  var minA = method === 'bank' ? VA_MIN : MIN;
+  var minA = method === 'bank' ? VA_MIN : (method === 'crypto' ? CRYPTO_MIN : MIN);
   var maxA = method === 'bank' ? VA_MAX : MAX;
   if (amount < minA) return toast('Minimum is ₦' + minA.toLocaleString());
   if (amount > maxA) return toast('Maximum is ₦' + maxA.toLocaleString());
@@ -514,21 +512,13 @@ function continueFromAmount() {
   return proceedBankTransfer();
 }
 
-function onCryptoCoinChange() {
-  var coin = document.getElementById('cryptoCoinSelect')?.value || 'USDT_TRON';
-  var amountInput = document.getElementById('vaAmountInput');
-  if (amountInput) {
-    var minUsd = ({ USDT_BSC: 0.5, USDT_POLYGON: 0.5, BTC: 1, USDT_TRON: 1, USDT_ETH: 1, USDT_ARBITRUM: 1, USDT_AVALANCHE: 1, USDT_SOL: 1, USDT_TON: 1, USDC_ETH: 1, USDC_BSC: 1, USDC_SOL: 1, USDC_ARBITRUM: 1, USDC_AVALANCHE: 1, TRX: 1, ETH: 3, ETH_ARBITRUM: 3, BNB: 3 })[coin] || 1;
-    amountInput.min = String(Math.max(MIN, Math.ceil(minUsd * DEPOSIT_USD_RATE)));
-  }
-}
 function chooseBankTransfer() { selectDepositMethod('bank'); }
 function chooseCryptoDeposit() { selectDepositMethod('crypto'); }
 function chooseManualWhatsApp() { selectDepositMethod('manual'); }
 
 async function proceedCryptoFromAmount() {
   var amount = Math.round(parseFloat(document.getElementById('vaAmountInput').value) || 0);
-  if (amount < MIN) return toast('Minimum deposit is ₦' + MIN.toLocaleString());
+  if (amount < CRYPTO_MIN) return toast('Minimum crypto deposit is ₦' + CRYPTO_MIN.toLocaleString());
   if (amount > MAX) return toast('Maximum deposit is ₦' + MAX.toLocaleString());
   var btn = document.getElementById('vaContinueBtn');
   if (btn) { btn.disabled = true; btn.dataset._html = btn.innerHTML; btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Starting crypto payment…'; }
@@ -538,7 +528,7 @@ async function proceedCryptoFromAmount() {
     var res = await fetch('/api/deposit?action=heleket_create', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + accessToken },
-      body: JSON.stringify({ amount: amount, coin: (document.getElementById('cryptoCoinSelect')?.value || 'USDT_TRON') })
+      body: JSON.stringify({ amount: amount })
     });
     var data = await res.json().catch(function () { return {}; });
     if (!res.ok || !data.success || !data.url) { toast(data.message || 'Crypto payment unavailable. Please try again.'); return; }
@@ -625,15 +615,28 @@ function calcExactToSend(desired) {
 }
 function onVaAmountInput() {
   const raw = parseFloat(document.getElementById('vaAmountInput').value) || 0;
-  const exact = calcExactToSend(raw);
   const line = document.getElementById('vaFeeLine');
-  if (raw >= VA_MIN) {
-    line.textContent = 'Send ' + fmtNgn(exact) + '. Includes a 1% payment processing fee. Your wallet receives ' + fmtNgn(Math.round(raw)) + '.';
+  const isCrypto = window.__depositMethod === 'crypto';
+  if (isCrypto) {
+    const fee = Math.ceil(Math.round(raw) * VA_FEE_RATE);
+    const pay = Math.round(raw) > 0 ? Math.round(raw) + fee : 0;
+    const p = document.getElementById('cryptoPayAmount');
+    const c = document.getElementById('cryptoCreditAmount');
+    if (p) p.value = pay ? pay.toLocaleString() : '0';
+    if (c) c.value = raw > 0 ? Math.round(raw).toLocaleString() : '0';
+    line.textContent = 'Min ' + fmtNgn(CRYPTO_MIN) + ' · Max ' + fmtNgn(MAX) + ' · Includes a 1% processing fee';
   } else {
-    line.textContent = 'Min ₦1,000 · Max ₦700,000 · A 1% payment processing fee applies';
+    const exact = calcExactToSend(raw);
+    if (raw >= VA_MIN) {
+      line.textContent = 'Send ' + fmtNgn(exact) + '. Includes a 1% payment processing fee. Your wallet receives ' + fmtNgn(Math.round(raw)) + '.';
+    } else {
+      line.textContent = 'Min ₦1,000 · Max ₦700,000 · A 1% payment processing fee applies';
+    }
   }
   document.querySelectorAll('#vaChips .chip').forEach(function (c) {
-    c.classList.toggle('active', Number(c.getAttribute('data-amt')) === Math.round(raw));
+    var amt = Number(c.getAttribute('data-amt'));
+    c.style.display = (isCrypto && amt < CRYPTO_MIN) ? 'none' : '';
+    c.classList.toggle('active', amt === Math.round(raw));
   });
 }
 function pickVaAmount(n) {
