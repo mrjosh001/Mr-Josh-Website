@@ -1252,6 +1252,27 @@ body::after {
   border: 1px solid rgba(255,255,255,0.24) !important;
 }
 
+/* ── Compact wallet hero (override) ── */
+#home.home-v2 .hv-hello { margin-bottom: 12px; }
+#home.home-v2 .hv-hello .name { font-size: 24px; margin-top: 1px; }
+#home.home-v2 .hv-date { padding: 6px 10px; border-radius: 12px; min-width: 50px; }
+#home.home-v2 .bal-ngn { border-radius: 20px; padding: 14px 16px; margin-bottom: 10px; box-shadow: 0 12px 26px rgba(29,78,216,0.28), inset 0 1px 0 rgba(255,255,255,0.22); }
+#home.home-v2 .bal-ngn::before { width: 140px; height: 140px; right: -50px; top: -60px; }
+#home.home-v2 .bal-ngn::after { width: 90px; height: 90px; left: -35px; bottom: -45px; }
+#home.home-v2 .bal-ngn .top { margin-bottom: 10px; }
+#home.home-v2 .bal-ngn .badge { padding: 5px 10px; font-size: 10px; }
+#home.home-v2 .bal-ngn .eye-btn { width: 32px; height: 32px; border-radius: 10px; font-size: 12px; }
+#home.home-v2 .bal-pair { margin: 0; }
+#home.home-v2 .bal-ngn .bal-col .lbl { font-size: 10px; margin-bottom: 4px; }
+#home.home-v2 .bal-ngn .amt,
+#home.home-v2 .bal-ngn .amt-usd { font-size: clamp(19px, 5.6vw, 23px); }
+#home.home-v2 .bal-ngn .stats { margin-top: 10px; padding: 8px 12px; border-radius: 12px; gap: 8px; }
+#home.home-v2 .bal-ngn .stats span { font-size: 9px; margin-bottom: 1px; }
+#home.home-v2 .bal-ngn .stats b { font-size: 13px; }
+#home.home-v2 .bal-ngn .cta { margin-top: 10px; gap: 8px; }
+#home.home-v2 .bal-ngn .cta a,
+#home.home-v2 .bal-ngn .cta button { height: 38px; border-radius: 12px; font-size: 12px; box-shadow: none; }
+
 /* USD secondary card */
 #home.home-v2 .bal-usd {
   display: flex;
@@ -4391,6 +4412,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Deposit return + pending payment checks (non-critical path)
     try { await handleDepositReturn(); } catch (e) { console.warn('deposit return', e); }
     try { checkPendingPocketFiPayment(); } catch (e) {}
+    try { watchHeleketPayment(); } catch (e) {}
 });
 
 /** After PocketFi (or other) checkout, user lands on dashboard.html?deposit=success */
@@ -4425,6 +4447,11 @@ async function handleDepositReturn() {
         const hash = window.location.hash || '#home';
         history.replaceState(null, '', window.location.pathname + hash);
 
+        if (deposit === 'success' && params.get('provider') === 'heleket') {
+            if (typeof switchSection === 'function') switchSection('home');
+            watchHeleketPayment();
+            return;
+        }
         if (deposit === 'success' || deposit === 'pocketfi') {
             if (typeof switchSection === 'function') switchSection('home');
             if (currentUserId) {
@@ -4456,6 +4483,59 @@ async function handleDepositReturn() {
 // running underneath, untouched, the whole time. Dismissing that window
 // never triggers a page load/URL change here, only a visibilitychange —
 // so that's what this listens for instead.
+/* ── Crypto (Heleket): confirm with the server, credit, refresh balance ──
+   Webhook is the fast path; this asks Heleket directly so a late/missed webhook
+   can never leave a paid order uncredited. Safe to repeat (server is idempotent). */
+let watchingHeleket = false;
+async function watchHeleketPayment() {
+    if (watchingHeleket) return;
+    let pending = null;
+    try { pending = JSON.parse(localStorage.getItem('mjhub_pending_heleket') || sessionStorage.getItem('mjhub_pending_heleket') || 'null'); } catch (_) {}
+    if (!pending || !pending.order_id) return;
+    if (!pending.ts || (Date.now() - pending.ts) > 6 * 60 * 60 * 1000) {
+        try { localStorage.removeItem('mjhub_pending_heleket'); sessionStorage.removeItem('mjhub_pending_heleket'); } catch (_) {}
+        return;
+    }
+    watchingHeleket = true;
+    try {
+        if (typeof showToast === 'function') showToast('Confirming your crypto payment…', 'info', 4000);
+        for (let i = 0; i < 60; i++) {           // ~5 minutes per visit
+            if (!currentUserId) { await sleep(1000); continue; }
+            let credited = false;
+            try {
+                const { data: { session } } = await supabaseClient.auth.getSession();
+                if (session && session.access_token) {
+                    const r = await fetch('/api/deposit?action=heleket_verify', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + session.access_token },
+                        body: JSON.stringify({ order_id: pending.order_id })
+                    });
+                    const d = await r.json().catch(() => ({}));
+                    credited = !!d.credited;
+                    if (d.status && /cancel|fail|expire|system_fail/.test(String(d.status))) {
+                        try { localStorage.removeItem('mjhub_pending_heleket'); sessionStorage.removeItem('mjhub_pending_heleket'); } catch (_) {}
+                        if (typeof showToast === 'function') showToast('Crypto payment was not completed.', 'error');
+                        return;
+                    }
+                }
+            } catch (_) {}
+            if (credited) {
+                try { localStorage.removeItem('mjhub_pending_heleket'); sessionStorage.removeItem('mjhub_pending_heleket'); } catch (_) {}
+                await fetchUserBalance(currentUserId);
+                try { await fetchUserTransactions(currentUserId); } catch (_) {}
+                if (typeof showToast === 'function') showToast('Wallet funded: ₦' + Number(pending.amount || 0).toLocaleString(), 'success', 5000);
+                return;
+            }
+            await sleep(5000);
+        }
+    } finally {
+        watchingHeleket = false;
+    }
+}
+document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') watchHeleketPayment();
+});
+
 let checkingPocketFiReturn = false;
 document.addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'visible') checkPendingPocketFiPayment();

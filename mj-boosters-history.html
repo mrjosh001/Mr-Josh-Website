@@ -114,14 +114,23 @@ body{
 }
 .stat .lbl{font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;margin-bottom:4px}
 .stat .val{font-size:15px;font-weight:800;color:var(--title)}
-.prog{margin-bottom:6px}
-.prog-top{display:flex;justify-content:space-between;font-size:12px;font-weight:600;color:var(--muted);margin-bottom:8px}
+.prog{margin:2px 0 6px;padding:12px;border-radius:14px;background:var(--surface2);border:1px solid var(--line)}
+.prog-top{display:flex;justify-content:space-between;align-items:baseline;gap:8px;font-size:12px;font-weight:600;color:var(--muted);margin-bottom:9px}
 .prog-top strong{color:var(--title);font-weight:800}
-.track{height:8px;border-radius:999px;background:var(--chip);border:1px solid var(--line);overflow:hidden}
-.fill{height:100%;border-radius:999px;background:linear-gradient(90deg,#60a5fa,var(--blue));transition:width .35s ease}
+.prog-pct{font-size:18px;font-weight:800;color:var(--title);letter-spacing:-.02em;font-variant-numeric:tabular-nums}
+.prog-pct.done{color:var(--ok)}.prog-pct.partial{color:var(--warn)}
+.track{height:10px;border-radius:999px;background:var(--chip);border:1px solid var(--line);overflow:hidden;position:relative}
+.fill{height:100%;border-radius:999px;background:linear-gradient(90deg,#60a5fa,var(--blue));transition:width .5s ease;position:relative;overflow:hidden}
 .fill.done{background:linear-gradient(90deg,#34d399,var(--ok))}
 .fill.partial{background:linear-gradient(90deg,#fbbf24,var(--warn))}
-.prog-note{font-size:11px;color:var(--muted);margin-top:6px;font-weight:600}
+.fill.live::after{content:"";position:absolute;inset:0;background:linear-gradient(90deg,transparent,rgba(255,255,255,.35),transparent);transform:translateX(-100%);animation:shine 1.6s infinite}
+.track.idle{background-image:repeating-linear-gradient(45deg,transparent 0 8px,rgba(148,163,184,.12) 8px 16px)}
+@keyframes shine{to{transform:translateX(100%)}}
+.prog-meta{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:10px}
+.prog-meta .m{min-width:0}
+.prog-meta .m span{display:block;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--muted)}
+.prog-meta .m b{display:block;font-size:13px;font-weight:800;color:var(--title);font-variant-numeric:tabular-nums;margin-top:2px}
+.prog-note{font-size:11px;font-weight:700;margin-top:8px}
 .foot{display:flex;justify-content:space-between;gap:8px;font-size:11px;color:var(--muted);margin-top:12px;padding-top:12px;border-top:1px solid var(--line)}
 .actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}
 .actions button{
@@ -192,41 +201,46 @@ function fmt(n){ return '₦' + Number(n || 0).toLocaleString(); }
 function progressHtml(o){
   const st = String(o.status || '').toLowerCase();
   const qty = Math.max(0, Number(o.quantity) || 0);
-  let remains = o.remains == null || o.remains === '' ? null : Number(o.remains);
-  const start = o.start_count == null || o.start_count === '' ? null : Number(o.start_count);
-  if (remains != null && Number.isNaN(remains)) remains = null;
-  let done = 0, pct = 0;
-  if (/completed|success|done/.test(st) && !/partial/.test(st)) {
-    done = qty; remains = 0; pct = 100;
-  } else if (remains != null && qty > 0) {
-    done = Math.max(0, Math.min(qty, qty - remains));
-    pct = Math.round((done / qty) * 100);
-    remains = Math.max(0, qty - done);
-  } else if (o.delivered != null && qty > 0) {
-    done = Math.max(0, Math.min(qty, Number(o.delivered) || 0));
-    pct = Math.round((done / qty) * 100);
-    remains = Math.max(0, qty - done);
-  } else if (/pending|awaiting|waiting/.test(st)) {
-    done = 0; remains = qty || 0; pct = 0;
-  } else if (/progress|processing/.test(st)) {
-    done = 0; remains = qty || 0; pct = 0;
-  }
-  if (remains == null && qty > 0) remains = Math.max(0, qty - done);
-  const fillClass = pct >= 100 ? 'done' : (/partial/.test(st) ? 'partial' : '');
+  const num = v => (v == null || v === '' || Number.isNaN(Number(v))) ? null : Number(v);
+  const start = num(o.start_count);
+  let remains = num(o.remains);
+  const isPartial = /partial/.test(st);
+  const isDone = /completed|success|done/.test(st) && !isPartial;
+  const isDead = /cancel|fail|refund/.test(st) && !isPartial;
+  const isLive = /progress|processing|pending|awaiting|waiting/.test(st);
+  let done = 0;
+  if (isDone) { done = qty; remains = 0; }
+  else if (remains != null && qty > 0) { done = Math.max(0, Math.min(qty, qty - remains)); }
+  else if (num(o.delivered) != null) { done = Math.max(0, Math.min(qty, num(o.delivered))); }
+  remains = qty > 0 ? Math.max(0, qty - done) : (remains || 0);
+  const pct = qty > 0 ? Math.min(100, Math.floor((done / qty) * 100)) : 0;
+  const cls = isDone ? 'done' : (isPartial ? 'partial' : '');
+  const shown = (done > 0 && pct === 0) ? 1 : pct;
+  const current = start != null ? (start + done).toLocaleString() : '—';
   const refundN = Number(o.refund_ngn) || Number(o.auto_refunded) || 0;
-  let extra = '';
-  if (/partial/.test(st)) {
-    extra = `<div class="prog-meta" style="color:var(--warn);font-weight:700;margin-top:4px">Partial · ${done.toLocaleString()} delivered · ${(remains||0).toLocaleString()} not delivered` +
+  let note = '';
+  if (isPartial) {
+    note = `<div class="prog-note" style="color:var(--warn)">Partial · ${remains.toLocaleString()} not delivered` +
       (refundN > 0 ? ` · ₦${refundN.toLocaleString()} returned to wallet` : ' · refund processing…') + `</div>`;
   } else if (refundN > 0) {
-    extra = `<div class="prog-meta" style="color:#34d399;font-weight:700;margin-top:4px">₦${refundN.toLocaleString()} returned to wallet</div>`;
+    note = `<div class="prog-note" style="color:#34d399">₦${refundN.toLocaleString()} returned to wallet</div>`;
+  } else if (isLive && done === 0) {
+    note = `<div class="prog-note" style="color:var(--muted)">Waiting for delivery to start…</div>`;
   }
   return `<div class="prog">
-      <div class="prog-top"><span>${done.toLocaleString()} of ${qty.toLocaleString()} complete</span>
-      <span>${remains != null ? remains.toLocaleString() + ' left' : ''}</span></div>
-      <div class="bar"><div class="fill ${fillClass}" style="width:${pct}%"></div></div>
-      <div class="prog-meta">${pct}% done${start != null && !Number.isNaN(start) ? ' · started at ' + Number(start).toLocaleString() : ''}</div>
-      ${extra}
+      <div class="prog-top">
+        <span><strong>${done.toLocaleString()}</strong> / ${qty.toLocaleString()} delivered</span>
+        <span class="prog-pct ${cls}">${pct}%</span>
+      </div>
+      <div class="track ${done === 0 && !isDead ? 'idle' : ''}" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${pct}">
+        <div class="fill ${cls} ${isLive && !isDone ? 'live' : ''}" style="width:${shown}%"></div>
+      </div>
+      <div class="prog-meta">
+        <div class="m"><span>Start</span><b>${start != null ? start.toLocaleString() : '—'}</b></div>
+        <div class="m"><span>Current</span><b>${current}</b></div>
+        <div class="m"><span>Remaining</span><b>${remains.toLocaleString()}</b></div>
+      </div>
+      ${note}
     </div>`;
 }
 
