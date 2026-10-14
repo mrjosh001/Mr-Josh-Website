@@ -1888,12 +1888,15 @@ async function getOverviewStats(body) {
   const smsRows = (smsRes.data || []).filter((r) => {
     const st = String(r.status || '').toLowerCase();
     if (r.refunded === true) return false;
-    if (['cancelled', 'canceled', 'expired', 'refunded', 'failed'].includes(st)) return false;
+    if (['cancelled', 'canceled', 'refunded', 'failed'].includes(st)) return false;
     const src = String(r.source || '').toLowerCase();
-    const isRental = src.includes('gotsms') || src.includes('smsbus_rent') || src.includes('rent');
+    // USA rental (gotsms) + global long rental (smsbus_rent)
+    const isRental = src.includes('gotsms') || src.includes('smsbus_rent') ||
+      (src.includes('rent') && !src.includes('grizzly'));
     if (isRental) {
-      // Paid rental inventory: active plans + finished plans
-      return ['active', 'completed', 'complete', 'success', 'waiting_for_code', 'pending', 'processing'].includes(st) || !st;
+      // Count every paid rental once: active, finished, expired, completed, pending…
+      // Only true voids (cancel / refund / failed) are excluded — customer already paid.
+      return true;
     }
     // OTP (grizzlysms / smsbus): only successful code deliveries
     return st === 'completed' || st === 'complete' || st === 'success';
