@@ -84,27 +84,45 @@ a{color:inherit;text-decoration:none}
 .amount-field{width:100%;padding:22px 16px;border-radius:16px;border:1px solid var(--border);background:var(--input-bg);color:var(--text);font-size:28px;font-weight:800;text-align:center;outline:none}
 .amount-field::placeholder{color:var(--amount-placeholder);font-weight:700}
 .amount-field:focus{border-color:var(--primary)}
-.crypto-notice{border:1px solid #e8802e;background:rgba(232,128,46,.12);color:var(--text);border-radius:14px;padding:14px;font-size:13px;line-height:1.5;margin:12px 0}
-.chips{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;margin:14px 0 4px}
-.chip{border:1px solid var(--border);background:var(--chip-bg);color:var(--text);border-radius:999px;padding:10px 14px;font-size:13px;font-weight:700;cursor:pointer}
+.usd-card{border:1px solid var(--border);background:var(--input-bg);border-radius:18px;padding:16px;margin:14px 0 10px}
+.usd-head{display:flex;justify-content:space-between;align-items:center;font-size:13px;color:var(--muted);font-weight:600}
+.usd-rate{font-size:12px;font-weight:700;color:var(--muted);background:var(--primary-soft);padding:4px 10px;border-radius:999px}
+.usd-amount{font-size:36px;font-weight:900;letter-spacing:-.02em;margin:8px 0 2px;color:var(--text);font-variant-numeric:tabular-nums}
+.usd-sub{font-size:12px;color:var(--muted)}
+.usd-rows{margin-top:14px;padding-top:12px;border-top:1px solid var(--border);display:grid;gap:8px}
+.usd-row{display:flex;justify-content:space-between;font-size:13px;color:var(--muted)}
+.usd-row strong{color:var(--text);font-weight:700;font-variant-numeric:tabular-nums}
+.usd-row.total{padding-top:8px;border-top:1px dashed var(--border);color:var(--text);font-weight:700}
+.crypto-note{display:flex;gap:10px;align-items:flex-start;padding:12px 14px;border-radius:14px;background:rgba(232,128,46,.1);border:1px solid rgba(232,128,46,.35);font-size:12.5px;line-height:1.5;color:var(--text);margin-bottom:6px}
+.crypto-note i{color:#e8802e;margin-top:2px}
+.chips{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:14px 0 4px}
+.chips.crypto{grid-template-columns:repeat(4,1fr)}
+.chip{border:1px solid var(--border);background:var(--chip-bg);color:var(--text);border-radius:14px;padding:9px 4px;font-size:13px;font-weight:700;cursor:pointer;line-height:1.25;font-family:inherit}
+.chip small{display:none;font-size:10.5px;font-weight:600;color:var(--muted);margin-top:1px}
+.chips.crypto .chip small{display:block}
 .chip:hover,.chip.active{border-color:var(--primary);background:var(--primary-soft);color:var(--primary)}
 .fee-line{font-size:12px;color:var(--muted);text-align:center;margin:10px 0 14px;line-height:1.45}
 .fund-hero{display:flex;align-items:center;gap:14px;padding:16px 18px;border-radius:18px;margin-bottom:16px;background:linear-gradient(135deg,var(--primary),var(--primary2));color:#fff;box-shadow:0 12px 28px rgba(91,138,245,.28)}
 .fund-hero-icon{width:48px;height:48px;border-radius:14px;background:rgba(255,255,255,.18);display:grid;place-items:center;font-size:20px;flex-shrink:0}
 .fund-hero h2{font-size:18px;font-weight:800;margin:0 0 2px}
 .fund-hero p{font-size:12px;opacity:.9;margin:0}
-.provider-list{display:flex;flex-direction:column;gap:12px;margin-top:8px}
-.provider-card{display:flex;align-items:center;gap:14px;padding:16px;border-radius:16px;border:1px solid var(--border);background:var(--card);cursor:pointer;text-align:left;width:100%;color:inherit;font:inherit;transition:border-color .15s,transform .12s}
-.provider-card:active{transform:scale(.98)}
-.provider-card:hover{border-color:var(--primary)}
-.provider-icon{width:44px;height:44px;border-radius:12px;display:grid;place-items:center;color:#fff;font-size:18px;flex-shrink:0}
+.provider-list{display:flex;flex-direction:column;gap:10px;margin-top:8px}
+.provider-card{display:grid;grid-template-columns:44px minmax(0,1fr) 76px;align-items:center;column-gap:14px;min-height:76px;padding:14px 16px;border-radius:16px;border:1px solid var(--border);background:var(--input-bg);cursor:pointer;text-align:left;width:100%;color:inherit;font:inherit;transition:border-color .15s,transform .12s,background .15s}
+.provider-card:active{transform:scale(.985)}
+.provider-card:hover{border-color:var(--primary);background:var(--primary-soft)}
+.provider-card:focus-visible{outline:2px solid var(--primary);outline-offset:2px}
+.provider-icon{width:44px;height:44px;border-radius:12px;display:grid;place-items:center;color:#fff;font-size:18px}
 .provider-icon.bank{background:linear-gradient(135deg,var(--primary),#2563eb)}
 .provider-icon.manual{background:linear-gradient(135deg,#25d366,#128c7e)}
 .provider-icon.crypto{background:linear-gradient(135deg,#f59e0b,#d97706)}
 .provider-body{flex:1;min-width:0}
-.provider-body strong{display:block;font-size:15px;font-weight:800}
-.provider-body span{font-size:12px;color:var(--muted)}
-.provider-badge{font-size:10px;font-weight:800;padding:4px 10px;border-radius:20px;background:rgba(52,211,153,.15);color:var(--success);flex-shrink:0}
+.provider-body strong{display:block;font-size:15px;font-weight:800;line-height:1.25;white-space:nowrap}
+.provider-body span{display:block;font-size:12px;color:var(--muted);margin-top:3px;line-height:1.35}
+.provider-badge{justify-self:end;width:76px;text-align:center;font-size:11px;font-weight:800;padding:5px 0;border-radius:20px;background:rgba(52,211,153,.15);color:var(--success);white-space:nowrap}
+.provider-badge.crypto{background:rgba(245,158,11,.15);color:#d97706}
+.provider-badge.wa{background:rgba(37,211,102,.15);color:#25d366}
+.provider-foot{display:flex;align-items:center;justify-content:center;gap:8px;margin-top:16px;font-size:12px;color:var(--muted)}
+.method-label{font-size:13px;font-weight:700;margin:0 0 10px;color:var(--text)}
 .step-back{display:inline-flex;align-items:center;gap:6px;background:none;border:none;color:var(--muted);font-size:13px;font-weight:700;cursor:pointer;padding:0;margin-bottom:12px;font-family:inherit}
 .step-back:hover{color:var(--primary)}
 .amount-summary{display:flex;justify-content:space-between;align-items:center;padding:12px 14px;border-radius:12px;border:1px solid var(--border);background:var(--input-bg);margin-bottom:16px;font-size:14px}
@@ -223,11 +241,11 @@ document.addEventListener('click', function(e){
   <div class="success-box" id="successBox"></div>
 <div class="va-success-modal" id="vaSuccessModal">
   <div class="va-success-card">
-    <div class="va-success-icon">✓</div>
-    <h3>Wallet credited</h3>
-    <p>This amount has been confirmed and added to your NGN wallet.</p>
+    <div class="va-success-icon" id="vaSuccessIcon">✓</div>
+    <h3 id="vaSuccessTitle">Wallet credited</h3>
+    <p id="vaSuccessText">This amount has been confirmed and added to your NGN wallet.</p>
     <div class="va-success-amt" id="vaSuccessAmt">₦0</div>
-    <p style="font-size:12px;color:#94a3b8;">Taking you home in a few seconds</p>
+    <p style="font-size:12px;color:#94a3b8;" id="vaSuccessNote">Taking you to your dashboard in a few seconds</p>
     <button type="button" id="vaSuccessDone">Done</button>
   </div>
 </div>
@@ -269,23 +287,25 @@ document.addEventListener('click', function(e){
         <input type="number" class="amount-field" id="vaAmountInput" min="1000" max="700000" step="100" placeholder="₦0.00" inputmode="numeric" oninput="onVaAmountInput()">
       </div>
       <div id="cryptoCoinGroup" style="display:none;">
-        <div class="crypto-notice">Select the coin and network on the next page, then send the exact amount shown for this order to the one-time address.<br>Do not reuse this address for future deposits.</div>
-        <div class="form-group" style="margin-bottom:8px;">
-          <label>Amount to be paid including fee, NGN</label>
-          <input type="text" class="amount-field" id="cryptoPayAmount" value="0" readonly>
+        <div class="usd-card">
+          <div class="usd-head"><span>You'll pay</span><span class="usd-rate" id="cryptoRateTxt">₦1,450 = $1</span></div>
+          <div class="usd-amount" id="cryptoUsdAmount">$0.00</div>
+          <div class="usd-sub">USD equivalent, paid in the coin you choose next</div>
+          <div class="usd-rows">
+            <div class="usd-row"><span>Wallet credit</span><strong id="cryptoCreditAmount">₦0</strong></div>
+            <div class="usd-row"><span>Processing fee (1%)</span><strong id="cryptoFeeAmount">₦0</strong></div>
+            <div class="usd-row total"><span>Total in naira</span><strong id="cryptoPayAmount">₦0</strong></div>
+          </div>
         </div>
-        <div class="form-group" style="margin-bottom:8px;">
-          <label>Will be credited, NGN</label>
-          <input type="text" class="amount-field" id="cryptoCreditAmount" value="0" readonly>
-        </div>
+        <div class="crypto-note"><i class="fa-solid fa-circle-info"></i><span>Pick your coin and network on the next page, then send the exact amount to the one-time address. Don't reuse that address for later deposits.</span></div>
       </div>
       <div class="chips" id="vaChips">
-        <button type="button" class="chip" data-amt="1000" onclick="pickVaAmount(1000)">₦1,000</button>
-        <button type="button" class="chip" data-amt="2000" onclick="pickVaAmount(2000)">₦2,000</button>
-        <button type="button" class="chip" data-amt="5000" onclick="pickVaAmount(5000)">₦5,000</button>
-        <button type="button" class="chip" data-amt="10000" onclick="pickVaAmount(10000)">₦10,000</button>
-        <button type="button" class="chip" data-amt="20000" onclick="pickVaAmount(20000)">₦20,000</button>
-        <button type="button" class="chip" data-amt="50000" onclick="pickVaAmount(50000)">₦50,000</button>
+        <button type="button" class="chip" data-amt="1000" onclick="pickVaAmount(1000)">₦1,000<small></small></button>
+        <button type="button" class="chip" data-amt="2000" onclick="pickVaAmount(2000)">₦2,000<small></small></button>
+        <button type="button" class="chip" data-amt="5000" onclick="pickVaAmount(5000)">₦5,000<small></small></button>
+        <button type="button" class="chip" data-amt="10000" onclick="pickVaAmount(10000)">₦10,000<small></small></button>
+        <button type="button" class="chip" data-amt="20000" onclick="pickVaAmount(20000)">₦20,000<small></small></button>
+        <button type="button" class="chip" data-amt="50000" onclick="pickVaAmount(50000)">₦50,000<small></small></button>
       </div>
       <p class="fee-line" id="vaFeeLine">Min ₦1,000 · Max ₦700,000 · A 1% payment processing fee applies</p>
       <button type="button" class="btn" id="vaContinueBtn" onclick="continueFromAmount()">Continue</button>
@@ -299,23 +319,23 @@ document.addEventListener('click', function(e){
           <p>Choose how you want to pay</p>
         </div>
       </div>
-      <p style="font-size:13px;font-weight:700;margin:0 0 10px;color:var(--text)">Payment method</p>
+      <p class="method-label">Payment method</p>
       <div class="provider-list">
         <button type="button" class="provider-card" id="providerBankBtn" onclick="chooseBankTransfer()">
           <div class="provider-icon bank"><i class="fa-solid fa-building-columns"></i></div>
           <div class="provider-body">
             <strong>Bank Transfer</strong>
-            <span>Transfer from any bank · auto credit</span>
+            <span>Any Nigerian bank, credited automatically</span>
           </div>
           <span class="provider-badge">Auto</span>
         </button>
         <button type="button" class="provider-card" id="providerCryptoBtn" onclick="chooseCryptoDeposit()">
           <div class="provider-icon crypto"><i class="fa-solid fa-coins"></i></div>
           <div class="provider-body">
-            <strong>Cryptocurrency payment</strong>
-            <span>Pay with USDT, BTC and supported coins · automatic credit</span>
+            <strong>Crypto</strong>
+            <span>USDT, BTC and more, credited automatically</span>
           </div>
-          <span class="provider-badge" style="background:rgba(245,158,11,.15);color:#d97706">Crypto payment</span>
+          <span class="provider-badge crypto">Auto</span>
         </button>
         <button type="button" class="provider-card" onclick="chooseManualWhatsApp()">
           <div class="provider-icon manual"><i class="fa-brands fa-whatsapp"></i></div>
@@ -323,9 +343,10 @@ document.addEventListener('click', function(e){
             <strong>Manual Deposit</strong>
             <span>Message admin on WhatsApp</span>
           </div>
-          <span class="provider-badge" style="background:rgba(37,211,102,.15);color:#25d366">WhatsApp</span>
+          <span class="provider-badge wa">WhatsApp</span>
         </button>
       </div>
+      <div class="provider-foot"><i class="fa-solid fa-shield-halved"></i> Your wallet is credited in naira once payment is confirmed</div>
       <input type="hidden" id="depositCustomerId" value="">
       <input type="hidden" id="depositInput" value="">
     </div>
@@ -383,7 +404,8 @@ const DEPOSIT_USD_RATE = 1450;
 const MIN = 1000;
 const MAX = 500000;
 const VA_MIN = 1000;
-const CRYPTO_MIN = Math.ceil(3 * DEPOSIT_USD_RATE); /* ~$3, same floor as the supplier's pricier coins */
+const CRYPTO_MIN = 5000; /* ₦5,000 floor (about $3.45), above the supplier's $3 minimum */
+function usdFor(ngn) { return Math.round((Number(ngn || 0) / DEPOSIT_USD_RATE) * 100) / 100; }
 const VA_MAX = 700000;
 const VA_FEE_RATE = 0.01;
 const ADMIN_WA = '2347026502927';
@@ -473,7 +495,7 @@ function selectDepositMethod(method) {
   window.__depositMethod = method; // bank | crypto | manual
   var titles = {
     bank: ['Bank transfer', 'Enter amount to transfer'],
-    crypto: ['Crypto payment', 'Enter amount, then choose your coin and network on the payment page'],
+    crypto: ['Crypto payment', 'Pay with USDT, BTC and more'],
     manual: ['Manual deposit', 'Enter amount, then message support']
   };
   var t = titles[method] || titles.bank;
@@ -533,10 +555,12 @@ async function proceedCryptoFromAmount() {
     var data = await res.json().catch(function () { return {}; });
     if (!res.ok || !data.success || !data.url) { toast(data.message || 'Crypto payment unavailable. Please try again.'); return; }
     try {
-      sessionStorage.setItem('mjhub_pending_heleket', JSON.stringify({
+      var pendingCrypto = JSON.stringify({
         amount: amount, amount_usd: data.amount_usd, order_id: data.order_id,
-        rate: data.rate || DEPOSIT_USD_RATE, ts: Date.now()
-      }));
+        rate: data.rate || DEPOSIT_USD_RATE, balance_before: window.__balNgn, ts: Date.now()
+      });
+      sessionStorage.setItem('mjhub_pending_heleket', pendingCrypto);
+      localStorage.setItem('mjhub_pending_heleket', pendingCrypto);
     } catch (_) {}
     window.location.href = data.url;
   } catch (e) {
@@ -614,29 +638,42 @@ function calcExactToSend(desired) {
   return d + Math.ceil(d * VA_FEE_RATE);
 }
 function onVaAmountInput() {
-  const raw = parseFloat(document.getElementById('vaAmountInput').value) || 0;
+  const raw = Math.round(parseFloat(document.getElementById('vaAmountInput').value) || 0);
   const line = document.getElementById('vaFeeLine');
+  const btn = document.getElementById('vaContinueBtn');
   const isCrypto = window.__depositMethod === 'crypto';
+  const chipBox = document.getElementById('vaChips');
+  if (chipBox) chipBox.classList.toggle('crypto', isCrypto);
   if (isCrypto) {
-    const fee = Math.ceil(Math.round(raw) * VA_FEE_RATE);
-    const pay = Math.round(raw) > 0 ? Math.round(raw) + fee : 0;
-    const p = document.getElementById('cryptoPayAmount');
-    const c = document.getElementById('cryptoCreditAmount');
-    if (p) p.value = pay ? pay.toLocaleString() : '0';
-    if (c) c.value = raw > 0 ? Math.round(raw).toLocaleString() : '0';
-    line.textContent = 'Min ' + fmtNgn(CRYPTO_MIN) + ' · Max ' + fmtNgn(MAX) + ' · Includes a 1% processing fee';
+    const fee = raw > 0 ? Math.ceil(raw * VA_FEE_RATE) : 0;
+    const pay = raw > 0 ? raw + fee : 0;
+    const set = function (id, v) { var el = document.getElementById(id); if (el) el.textContent = v; };
+    set('cryptoUsdAmount', fmtUsd(usdFor(pay)));
+    set('cryptoCreditAmount', fmtNgn(raw));
+    set('cryptoFeeAmount', fmtNgn(fee));
+    set('cryptoPayAmount', fmtNgn(pay));
+    set('cryptoRateTxt', fmtNgn(DEPOSIT_USD_RATE) + ' = $1');
+    line.textContent = 'Min ' + fmtNgn(CRYPTO_MIN) + ' (about ' + fmtUsd(usdFor(CRYPTO_MIN)) + ') · Max ' + fmtNgn(MAX);
+    if (btn && !btn.disabled) {
+      btn.innerHTML = raw >= CRYPTO_MIN
+        ? '<i class="fa-solid fa-lock"></i> Pay ' + fmtUsd(usdFor(pay)) + ' with crypto'
+        : 'Continue';
+    }
   } else {
     const exact = calcExactToSend(raw);
     if (raw >= VA_MIN) {
-      line.textContent = 'Send ' + fmtNgn(exact) + '. Includes a 1% payment processing fee. Your wallet receives ' + fmtNgn(Math.round(raw)) + '.';
+      line.textContent = 'Send ' + fmtNgn(exact) + '. Includes a 1% payment processing fee. Your wallet receives ' + fmtNgn(raw) + '.';
     } else {
       line.textContent = 'Min ₦1,000 · Max ₦700,000 · A 1% payment processing fee applies';
     }
+    if (btn && !btn.disabled) btn.innerHTML = 'Continue';
   }
   document.querySelectorAll('#vaChips .chip').forEach(function (c) {
     var amt = Number(c.getAttribute('data-amt'));
     c.style.display = (isCrypto && amt < CRYPTO_MIN) ? 'none' : '';
-    c.classList.toggle('active', amt === Math.round(raw));
+    c.classList.toggle('active', amt === raw);
+    var sm = c.querySelector('small');
+    if (sm) sm.textContent = '≈ ' + fmtUsd(usdFor(calcExactToSend(amt)));
   });
 }
 function pickVaAmount(n) {
@@ -702,11 +739,40 @@ function backToVaAmount() {
 function showVaSuccessAndGoHome(creditedAmount){
   stopBalanceWatch();
   var amt = Number(creditedAmount || window.__vaExpectAmount || 0) || 0;
-  var modal = document.getElementById('vaSuccessModal');
-  var el = document.getElementById('vaSuccessAmt');
-  if (el) el.textContent = fmtNgn(amt);
-  if (modal) modal.classList.add('show');
-  setTimeout(function(){ location.href = 'dashboard.html#home'; }, 4000);
+  setSuccessModal({ icon: '✓', title: 'Wallet credited', text: 'This amount has been confirmed and added to your NGN wallet.', amount: fmtNgn(amt), note: 'Taking you to your dashboard in a few seconds' });
+  setTimeout(function(){ location.href = 'dashboard.html#home'; }, 3500);
+}
+function setSuccessModal(o) {
+  var set = function (id, v) { var el = document.getElementById(id); if (el) el.textContent = v; };
+  set('vaSuccessIcon', o.icon); set('vaSuccessTitle', o.title); set('vaSuccessText', o.text);
+  set('vaSuccessAmt', o.amount); set('vaSuccessNote', o.note);
+  var m = document.getElementById('vaSuccessModal');
+  if (m) m.classList.add('show');
+}
+/* After the crypto page sends the user back: wait for the webhook to credit the NGN wallet, then go to the dashboard */
+async function watchCryptoCredit() {
+  var pending = null;
+  try { pending = JSON.parse(sessionStorage.getItem('mjhub_pending_heleket') || localStorage.getItem('mjhub_pending_heleket') || 'null'); } catch (_) {}
+  var amount = pending && Number(pending.amount) || 0;
+  var before = pending && Number(pending.balance_before);
+  var fresh = pending && pending.ts && (Date.now() - pending.ts) < 6 * 60 * 60 * 1000;
+  var clear = function () { try { sessionStorage.removeItem('mjhub_pending_heleket'); localStorage.removeItem('mjhub_pending_heleket'); } catch (_) {} };
+  setSuccessModal({ icon: '⏳', title: 'Payment received', text: 'We are confirming your crypto payment and crediting your NGN wallet.', amount: amount ? fmtNgn(amount) : '', note: 'Please keep this page open' });
+  var credited = false;
+  for (var i = 0; i < 40; i++) {
+    await loadProfile();
+    var bal = window.__balNgn || 0;
+    if (fresh && amount > 0 && Number.isFinite(before) && bal >= before + amount * 0.99) { credited = true; break; }
+    await new Promise(function (r) { setTimeout(r, 3000); });
+  }
+  if (credited) {
+    clear();
+    setSuccessModal({ icon: '✓', title: 'Wallet credited', text: 'Your crypto payment is confirmed and added to your NGN wallet.', amount: fmtNgn(amount), note: 'Taking you to your dashboard in a few seconds' });
+    setTimeout(function () { location.href = 'dashboard.html#home'; }, 3000);
+  } else {
+    setSuccessModal({ icon: '✓', title: 'Payment received', text: 'Crypto payments can take a few minutes to confirm. Your NGN wallet updates automatically as soon as it does.', amount: amount ? fmtNgn(amount) : '', note: 'Taking you to your dashboard' });
+    setTimeout(function () { location.href = 'dashboard.html#home'; }, 4000);
+  }
 }
 async function checkVaPaymentNow() {
   var btn = document.getElementById('vaCheckStatusBtn');
@@ -922,7 +988,8 @@ async function loadProfile() {
     .select('balance, balance_usd, customer_id')
     .eq('id', currentUserId)
     .maybeSingle();
-  document.getElementById('balNgn').textContent = fmtNgn2(Number(prof?.balance) || 0);
+  window.__balNgn = Number(prof?.balance) || 0;
+  document.getElementById('balNgn').textContent = fmtNgn2(window.__balNgn);
   document.getElementById('balUsd').textContent = fmtUsd(Number(prof?.balance_usd) || 0);
   customerId = (prof?.customer_id || '').toString();
   const cidEl = document.getElementById('depositCustomerId');
@@ -990,6 +1057,10 @@ async function handleDepositReturn() {
     const deposit = params.get('deposit');
     if (!deposit) return;
     history.replaceState(null, '', window.location.pathname);
+    if (deposit === 'success' && params.get('provider') === 'heleket') {
+      watchCryptoCredit();
+      return;
+    }
     if (deposit === 'success' || deposit === 'pocketfi') {
       document.getElementById('successBox').classList.add('show');
       toast('Payment received. Updating balance…');
