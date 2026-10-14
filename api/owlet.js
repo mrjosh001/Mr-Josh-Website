@@ -1043,7 +1043,7 @@ async function refundIfSupplierFailed(order, oldStatus, newStatus) {
   const oldS = String(oldStatus || '');
   const newS = String(newStatus || '');
   const wasDone = /completed|canceled|cancelled|refunded|failed/i.test(oldS);
-  // Partial can be re-checked; skip only if we already stored a refund
+  // Idempotent: never refund twice
   const alreadyRefunded = Number(order.refund_ngn) > 0;
   if (alreadyRefunded) return 0;
 
@@ -1058,25 +1058,35 @@ async function refundIfSupplierFailed(order, oldStatus, newStatus) {
   const price = Number(order.price_ngn) || 0;
   let remains = order.remains != null && order.remains !== '' ? Number(order.remains) : NaN;
   if (Number.isNaN(remains) && isPartial && qty > 0) {
-    // Fallback: if delivered was derived earlier
     if (order.delivered != null) remains = Math.max(0, qty - Number(order.delivered));
   }
 
   let refunded = 0;
   let subtitle = '';
-  if (isPartial && qty > 0 && !Number.isNaN(remains) && remains > 0) {
-    // Undelivered portion only (same idea as supplier)
+  if (isPartial && qty > 0) {
+    // Partial = closed: pay only for delivered units; refund the rest of wallet charge
+    if (Number.isNaN(remains)) {
+      console.warn('[owlet refund] Partial without remains, skip auto refund', order.supplier_order_id);
+      return 0;
+    }
     remains = Math.min(qty, Math.max(0, remains));
+    const delivered = Math.max(0, qty - remains);
+    if (remains <= 0) {
+      // Fully delivered under partial label — nothing to refund
+      return 0;
+    }
+    // Exact share of what was NOT delivered
     refunded = Math.round((remains / qty) * price);
     if (refunded < 1 && remains > 0 && price > 0) refunded = 1;
     if (refunded > price) refunded = price;
-    const delivered = qty - remains;
-    subtitle = `Order #${order.supplier_order_id} partial · ${delivered}/${qty} delivered · ₦${refunded.toLocaleString()} refunded`;
+    // Never refund more than undelivered share (guard float edge)
+    const maxUndeliveredShare = price - Math.floor((delivered / qty) * price);
+    if (maxUndeliveredShare >= 0 && refunded > maxUndeliveredShare + 1) refunded = Math.max(0, maxUndeliveredShare);
+    subtitle = `Order #${order.supplier_order_id} partial · ${delivered.toLocaleString()}/${qty.toLocaleString()} delivered · ${remains.toLocaleString()} left · ₦${refunded.toLocaleString()} refunded`;
   } else if (isFailed) {
     refunded = price;
     subtitle = `Order #${order.supplier_order_id} cancelled · full balance restored`;
   } else if (isPartial) {
-    // Partial but no remains data — do not guess full refund
     console.warn('[owlet refund] Partial without remains, skip auto refund', order.supplier_order_id);
     return 0;
   }
@@ -1194,11 +1204,15 @@ async function handleMyOrders(req, res) {
     try { liveParam = new URL(req.url, 'http://localhost').searchParams.get('live') || ''; } catch (_) {}
   }
   const skipLive = String(liveParam) === '0';
+  // Include partial so we can finalize remains + auto-refund undelivered share
   const active = skipLive ? [] : (data || []).filter((o) => {
     const s = String(o.status || '').toLowerCase();
-    return /pending|progress|processing|awaiting|waiting|partial/i.test(s)
-      && !/completed|canceled|cancelled|refunded|failed/i.test(s);
-  }).slice(0, 5); // max 5 per request to avoid gateway timeouts
+    const needsRefund = /partial/i.test(s) && !(Number(o.refund_ngn) > 0);
+    return needsRefund || (
+      /pending|progress|processing|awaiting|waiting/i.test(s)
+      && !/completed|canceled|cancelled|refunded|failed/i.test(s)
+    );
+  }).slice(0, 20); // more active pulls for snappy progress
 
   // Normalize Owlet status payload (field names vary by panel version)
   function pickStatusPayload(json, orderId) {
@@ -1231,27 +1245,35 @@ async function handleMyOrders(req, res) {
   }
 
   // Batch status (Perfect Panel): one request for many order IDs
-  let batchMap = null;
+  // Batch status per panel (JAP vs Casper) so IDs never hit the wrong API
+  const batchMap = Object.create(null);
   if (active.length > 0) {
-    const ids = active.map(o => String(o.supplier_order_id || '')).filter(Boolean);
-    if (ids.length) {
+    const bySrc = {};
+    for (const o of active) {
+      const src = normalizePanelSource(o.source || 'jap');
+      if (!bySrc[src]) bySrc[src] = [];
+      if (o.supplier_order_id) bySrc[src].push(String(o.supplier_order_id));
+    }
+    await Promise.all(Object.keys(bySrc).map(async (src) => {
+      const ids = bySrc[src];
+      if (!ids.length) return;
       try {
-        const batch = await owletCall({ action: 'status', orders: ids.join(',') }, 15000);
+        const batch = await owletCall({ action: 'status', orders: ids.join(',') }, 15000, src);
         if (batch.ok && batch.json && typeof batch.json === 'object' && !batch.json.error) {
-          batchMap = batch.json;
+          batchMap[src] = batch.json;
         }
       } catch (e) {
-        console.warn('[owlet] batch status', e.message || e);
+        console.warn('[owlet] batch status', src, e.message || e);
       }
-    }
+    }));
   }
 
   for (const o of active) {
     if (!o.supplier_order_id) continue;
     try {
-      let j = batchMap ? pickStatusPayload(batchMap, o.supplier_order_id) : null;
+      const oSrc = normalizePanelSource(o.source || 'jap');
+      let j = batchMap[oSrc] ? pickStatusPayload(batchMap[oSrc], o.supplier_order_id) : null;
       if (!j) {
-        const oSrc = normalizePanelSource(o.source || 'jap');
         let st = await owletCall({ action: 'status', order: String(o.supplier_order_id) }, 8000, oSrc);
         if (!st.ok || !st.json || (st.json.error && !st.json.status)) {
           st = await owletCall({ action: 'status', orders: String(o.supplier_order_id) }, 8000, oSrc);
