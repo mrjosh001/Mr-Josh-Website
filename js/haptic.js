@@ -60,7 +60,7 @@
       (document.body || document.documentElement).appendChild(toast);
     }
     var text = document.getElementById('mj-click-feedback-text');
-    if (text) text.textContent = 'Click registered · ' + controlLabel(el);
+    if (text) text.textContent = controlLabel(el);
     toast.style.opacity = '1';
     toast.style.transform = 'translate(-50%, 0)';
     if (toastTimer) clearTimeout(toastTimer);
