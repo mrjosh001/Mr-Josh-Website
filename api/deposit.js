@@ -1,28 +1,19 @@
 /**
- * POST /api/pocketfi
+ * POST /api/deposit  — unified deposits (PocketFi + Heleket crypto)
  *
- * Checkout:        Authorization Bearer (user JWT) + JSON { amount }
- * Virtual account: Authorization Bearer (user JWT), ?action=virtual_account
- *                  (get-or-create a dedicated reusable bank account per
- *                  customer — see handleVirtualAccount below)
- * Webhook:         PocketFi signature header + raw body (handles both a
- *                  checkout payment AND a transfer into a dedicated
- *                  virtual account — see handleWebhook below)
+ * PocketFi (same actions as legacy /api/pocketfi):
+ *   Checkout, virtual_account, va_begin, verify_deposit, convert, referral_*, webhook
+ * Heleket crypto:
+ *   ?action=heleket_create  — Bearer JWT + { amount } → invoice URL
+ *   ?action=heleket_webhook or path contains heleket — signed webhook → credit wallet
  *
- * Rewrites (vercel.json):
- *   /api/pocketfi-checkout → /api/pocketfi
- *   /api/pocketfi-webhook  → /api/pocketfi
+ * vercel.json rewrites:
+ *   /api/pocketfi, /api/pocketfi-webhook, /api/pocketfi-checkout → /api/deposit
+ *   /api/heleket → /api/deposit
  *
- * Env:
- *   POCKETFI_SECRET_KEY, POCKETFI_PUBLIC_KEY, POCKETFI_BUSINESS_ID
- *   SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY
- *   Optional: POCKETFI_WEBHOOK_SECRET, POCKETFI_API_BASE, APP_URL
- *   Optional: POCKETFI_VA_BANK (paga|saveheaven only, default paga)
- *   RESEND_API_KEY, RESEND_FROM_EMAIL (e.g. "MJ Hub <noreply@yourdomain.com>")
- *
- * Webhook URL in PocketFi dashboard:
- *   https://app.mjhub.store/api/pocketfi
- *   (or https://app.mjhub.store/api/pocketfi-webhook)
+ * Env (PocketFi): POCKETFI_SECRET_KEY, POCKETFI_PUBLIC_KEY, POCKETFI_BUSINESS_ID, ...
+ * Env (Heleket):  HELEKET_MERCHANT_ID, HELEKET_PAYMENT_KEY
+ * Shared: SUPABASE_*, APP_URL, RESEND_*
  */
 
 import crypto from 'crypto';
@@ -1878,7 +1869,246 @@ async function handleVaBegin(req, res) {
 }
 
 
+
+// ═══════════════════════════════════════════════════════════
+// Heleket (crypto) — invoice + webhook
+// Docs: https://doc.heleket.com/
+// ═══════════════════════════════════════════════════════════
+
+const HELEKET_API = (process.env.HELEKET_API_BASE || 'https://api.heleket.com').replace(/\/$/, '');
+
+function heleketMd5Sign(jsonString, apiKey) {
+  const b64 = Buffer.from(String(jsonString || ''), 'utf8').toString('base64');
+  return crypto.createHash('md5').update(b64 + String(apiKey || '')).digest('hex');
+}
+
+async function heleketApi(path, bodyObj, apiKey, merchantId) {
+  const body = bodyObj == null ? '' : JSON.stringify(bodyObj);
+  const sign = heleketMd5Sign(body === '' ? '' : body, apiKey);
+  const res = await fetch(HELEKET_API + path, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      merchant: String(merchantId),
+      sign
+    },
+    body: body === '' ? '{}' : body
+  });
+  const text = await res.text();
+  let json = null;
+  try { json = JSON.parse(text); } catch (_) {}
+  return { ok: res.ok, status: res.status, json, text };
+}
+
+function verifyHeleketWebhookRaw(raw, apiKey) {
+  let parsed;
+  try { parsed = JSON.parse(raw); } catch (_) { return { ok: false, reason: 'invalid_json' }; }
+  const their = String(parsed.sign || '');
+  if (!their) return { ok: false, reason: 'missing_sign' };
+  // Method A: strip sign field from object and re-serialize (works for many payloads)
+  const copy = { ...parsed };
+  delete copy.sign;
+  const bodyA = JSON.stringify(copy);
+  const signA = heleketMd5Sign(bodyA, apiKey);
+  if (signA === their) return { ok: true, payload: parsed };
+  // Method B: remove "sign":"..." from raw string (closer to PHP byte order in some cases)
+  let rawB = String(raw || '');
+  rawB = rawB.replace(/,?\s*"sign"\s*:\s*"[0-9a-fA-F]+"\s*/g, (m) => (m.startsWith(',') ? '' : ''));
+  rawB = rawB.replace(/\{\s*,/, '{').replace(/,\s*\}/, '}').replace(/,\s*,/g, ',');
+  const signB = heleketMd5Sign(rawB, apiKey);
+  if (signB === their) return { ok: true, payload: parsed };
+  return { ok: false, reason: 'bad_sign' };
+}
+
+function isHeleketPath(req) {
+  const u = String(req.url || '');
+  if (/heleket/i.test(u)) return true;
+  let act = (req.query && req.query.action) || '';
+  if (!act && req.url) {
+    try { act = new URL(req.url, 'http://x').searchParams.get('action') || ''; } catch (_) {}
+  }
+  act = String(act || '').toLowerCase();
+  return act === 'heleket_create' || act === 'heleket_webhook' || act === 'crypto' || act === 'crypto_create';
+}
+
+async function handleHeleketCreate(req, res, raw) {
+  const merchantId = process.env.HELEKET_MERCHANT_ID;
+  const apiKey = process.env.HELEKET_PAYMENT_KEY;
+  if (!merchantId || !apiKey) {
+    return res.status(500).json({ success: false, message: 'Crypto payments are not configured yet.' });
+  }
+  const gate = await requireUserToken(req);
+  if (!gate.ok) return res.status(gate.status).json({ success: false, message: gate.message });
+  const user = gate.user;
+
+  let body = {};
+  try {
+    body = raw ? JSON.parse(raw) : (typeof req.body === 'string' ? JSON.parse(req.body || '{}') : (req.body || {}));
+  } catch (_) { body = {}; }
+
+  const amount = parseAmountNgn(body.amount != null ? body.amount : body.ngn);
+  if (!(amount >= MIN && amount <= MAX)) {
+    return res.status(400).json({ success: false, message: `Amount must be between ₦${MIN.toLocaleString()} and ₦${MAX.toLocaleString()}` });
+  }
+
+  const orderId = `hk_${user.id.replace(/-/g, '').slice(0, 12)}_${amount}_${Date.now()}`;
+  const appUrl = (process.env.APP_URL || 'https://www.mjhub.store').replace(/\/$/, '');
+  const payload = {
+    amount: String(amount),
+    currency: String(body.currency || process.env.HELEKET_INVOICE_CURRENCY || 'NGN').toUpperCase(),
+    order_id: orderId,
+    url_callback: appUrl + '/api/deposit?action=heleket_webhook',
+    url_success: appUrl + '/dashboard.html?deposit=success&provider=heleket',
+    url_return: appUrl + '/deposit.html',
+    lifetime: Number(body.lifetime) || 3600,
+    additional_data: JSON.stringify({ user_id: user.id, amount_ngn: amount })
+  };
+
+  // Remember intent for webhook credit
+  try {
+    await supabase.from('deposit_intents').upsert({
+      reference: orderId,
+      user_id: user.id,
+      amount_ngn: amount,
+      provider: 'heleket',
+      status: 'pending',
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString()
+    }, { onConflict: 'reference' });
+  } catch (e) {
+    console.warn('[heleket] deposit_intents upsert', e.message || e);
+  }
+
+  const { ok, status, json, text } = await heleketApi('/v1/payment', payload, apiKey, merchantId);
+  if (!ok || !json || json.state !== 0 || !json.result) {
+    console.error('[heleket] create failed', status, text && text.slice(0, 400));
+    return res.status(502).json({
+      success: false,
+      message: (json && (json.message || json.error)) || 'Could not start crypto payment. Try again.'
+    });
+  }
+  const inv = json.result;
+  return res.status(200).json({
+    success: true,
+    provider: 'heleket',
+    order_id: orderId,
+    uuid: inv.uuid,
+    url: inv.url,
+    amount_ngn: amount,
+    payment_status: inv.payment_status || inv.status || 'check'
+  });
+}
+
+async function handleHeleketWebhook(req, res, raw) {
+  const apiKey = process.env.HELEKET_PAYMENT_KEY;
+  if (!apiKey) return res.status(500).json({ success: false, message: 'not configured' });
+
+  const verified = verifyHeleketWebhookRaw(raw || '', apiKey);
+  if (!verified.ok) {
+    console.warn('[heleket] webhook reject', verified.reason);
+    return res.status(400).json({ success: false, message: 'invalid signature' });
+  }
+  const p = verified.payload;
+  const status = String(p.status || p.payment_status || '').toLowerCase();
+  const orderId = String(p.order_id || '');
+  const uuid = String(p.uuid || '');
+
+  // Only credit final successful payments
+  const success = status === 'paid' || status === 'paid_over';
+  if (!success) {
+    return res.status(200).json({ success: true, ignored: true, status });
+  }
+
+  // Resolve user + amount
+  let userId = null;
+  let amountNgn = 0;
+  try {
+    const { data: intent } = await supabase
+      .from('deposit_intents')
+      .select('user_id, amount_ngn, status')
+      .eq('reference', orderId)
+      .maybeSingle();
+    if (intent) {
+      userId = intent.user_id;
+      amountNgn = Number(intent.amount_ngn) || 0;
+      if (String(intent.status || '').toLowerCase() === 'credited') {
+        return res.status(200).json({ success: true, duplicate: true });
+      }
+    }
+  } catch (_) {}
+
+  if (!userId && p.additional_data) {
+    try {
+      const ad = typeof p.additional_data === 'string' ? JSON.parse(p.additional_data) : p.additional_data;
+      if (ad && ad.user_id) userId = ad.user_id;
+      if (ad && ad.amount_ngn) amountNgn = Number(ad.amount_ngn) || amountNgn;
+    } catch (_) {}
+  }
+
+  // Fallback amount from invoice amount when currency is NGN
+  if (!(amountNgn > 0) && p.amount != null) {
+    const n = Number(p.amount);
+    if (!Number.isNaN(n) && n > 0) amountNgn = Math.round(n);
+  }
+
+  if (!userId || !(amountNgn >= MIN)) {
+    console.error('[heleket] webhook missing user/amount', orderId, uuid);
+    return res.status(200).json({ success: false, message: 'missing user or amount' });
+  }
+
+  const reference = 'heleket_' + (uuid || orderId);
+  try {
+    const credited = await creditUser(userId, amountNgn, reference);
+    if (credited) {
+      try {
+        await supabase.from('deposit_intents').update({
+          status: 'credited',
+          updated_at: new Date().toISOString()
+        }).eq('reference', orderId);
+      } catch (_) {}
+      try {
+        const { data: prof } = await supabase.from('profiles').select('email, full_name, username').eq('id', userId).maybeSingle();
+        if (prof && prof.email) {
+          await sendDepositEmail({
+            to: prof.email,
+            name: prof.full_name || prof.username || 'Customer',
+            amountLabel: '₦' + Number(amountNgn).toLocaleString(),
+            walletLabel: 'NGN wallet',
+            reference
+          });
+        }
+      } catch (e) {
+        console.warn('[heleket] email', e.message || e);
+      }
+      try { await tryPayReferral(userId, amountNgn, reference); } catch (_) {}
+    }
+  } catch (e) {
+    console.error('[heleket] credit', e.message || e);
+    return res.status(500).json({ success: false, message: 'credit failed' });
+  }
+
+  return res.status(200).json({ success: true, credited: true, reference });
+}
+
+
 export default async function handler(req, res) {
+  // --- Heleket crypto (before PocketFi raw-body branch) ---
+  {
+    let _act = (req.query && req.query.action) || '';
+    if (!_act && req.url) {
+      try { _act = new URL(req.url, 'http://x').searchParams.get('action') || ''; } catch (_) {}
+    }
+    _act = String(_act || '').toLowerCase();
+    if (_act === 'heleket_create' || _act === 'crypto' || _act === 'crypto_create') {
+      if (handleOptions(req, res)) return;
+      applyApiCors(req, res, { methods: 'POST, OPTIONS' });
+      setNoStore(res);
+      if (req.method !== 'POST') return res.status(405).json({ success: false, message: 'POST only' });
+      const rawHk = await readRawBody(req);
+      return handleHeleketCreate(req, res, rawHk);
+    }
+  }
+
   // --- Referral (no extra serverless file) ---
   {
     let _act = (req.query && req.query.action) || '';
@@ -1950,6 +2180,16 @@ export default async function handler(req, res) {
   }
 
   const raw = await readRawBody(req);
+
+  // Heleket webhook (signed in body, not PocketFi headers)
+  if (isHeleketPath(req) || (raw && /"order_id"\s*:\s*"hk_/.test(raw) && /"sign"\s*:/.test(raw) && !getSignatureCandidates(req).length)) {
+    let act = '';
+    try { act = new URL(req.url, 'http://x').searchParams.get('action') || ''; } catch (_) {}
+    if (String(act).toLowerCase() === 'heleket_webhook' || isHeleketPath(req) || (raw && /"order_id"\s*:\s*"hk_/.test(raw))) {
+      return handleHeleketWebhook(req, res, raw);
+    }
+  }
+
   const hasAnySignature = getSignatureCandidates(req).length > 0;
 
   if (isWebhookRequest(req, hasAnySignature)) {
