@@ -480,7 +480,7 @@ function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g,function(c){retu
 
   function startCountdown(){
     if(cdTimer) clearTimeout(cdTimer);
-    var till = rent && rent.active_till ? new Date(rent.active_till).getTime() : 0;
+    var expiry = rent && (rent.active_till || rent.online_till || rent.activeTill || rent.expires_at);\n    var till = expiry ? new Date(expiry).getTime() : 0;
     function tick(){
       var el = document.getElementById('cd');
       if(!el) return;
@@ -576,6 +576,109 @@ function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g,function(c){retu
       b.onclick = function(){ navigator.clipboard.writeText(b.getAttribute('data-c')).then(function(){ setFlash('Code copied', true); }).catch(function(){}); };
     });
   }
+
+  function showModal(id) {
+    var el = document.getElementById(id);
+    if (el) { el.style.display = 'flex'; el.classList.add('on'); }
+  }
+  function hideModal(id) {
+    var el = document.getElementById(id);
+    if (el) { el.classList.remove('on'); el.style.display = 'none'; }
+  }
+  async function openAddServiceModal() {
+    var list = document.getElementById('addSvcList');
+    var hint = document.getElementById('addSvcHint');
+    if (list) list.innerHTML = '<div class="empty">Loading available services…</div>';
+    if (hint) hint.textContent = '';
+    showModal('addSvcModal');
+    var j = await api('addable_services', { query: 'rent_id=' + encodeURIComponent(rentId) });
+    if (!j.success || !Array.isArray(j.data)) {
+      if (list) list.innerHTML = '<div class="empty">' + esc(j.message || 'Could not load services.') + '</div>';
+      return;
+    }
+    function draw(filter) {
+      if (!list) return;
+      var q = String(filter || '').toLowerCase().trim();
+      var rows = j.data.filter(function(s) { return (!q || String(s.name || '').toLowerCase().includes(q)); });
+      list.innerHTML = rows.length ? rows.map(function(s) {
+        var price = Number(s.price_ngn || 0);
+        return '<button type="button" class="btn btn-ghost" data-service-id="' + esc(s.service_id) + '" ' + (s.is_available === false ? 'disabled' : '') + ' style="display:flex;justify-content:space-between;align-items:center;gap:10px;text-align:left;">' +
+          '<span>' + esc(s.name || 'Service') + '<small style="display:block;color:var(--muted)">' + (s.is_available === false ? 'Unavailable' : 'Add to same number') + '</small></span>' +
+          '<strong>' + (price > 0 ? '₦' + price.toLocaleString() : '—') + '</strong></button>';
+      }).join('') : '<div class="empty">No matching services available.</div>';
+      list.querySelectorAll('[data-service-id]').forEach(function(btn) {
+        btn.onclick = async function() {
+          if (btn.disabled || btn.dataset.busy === '1') return;
+          btn.dataset.busy = '1'; btn.disabled = true;
+          var old = btn.innerHTML; btn.innerHTML = 'Adding service…';
+          var result = await api('add_service', { method:'POST', body:{ rent_id:rentId, service_id:btn.getAttribute('data-service-id') } });
+          if (result.success) {
+            hideModal('addSvcModal');
+            setFlash(result.message || 'Service added to this number.', true);
+            await boot();
+          } else {
+            btn.disabled = false; btn.dataset.busy = '0'; btn.innerHTML = old;
+            setFlash(result.message || 'Could not add service.', false);
+          }
+        };
+      });
+    }
+    draw('');
+    var search = document.getElementById('addSvcSearch');
+    if (search) search.oninput = function() { draw(search.value); };
+    if (hint) hint.textContent = 'The supplier requires at least one SMS on this number before another service can be added.';
+  }
+  async function openPlanModal() {
+    var list = document.getElementById('planList');
+    if (!list) return;
+    list.innerHTML = '<div class="empty">Loading available plans…</div>';
+    showModal('planModal');
+    // Refresh the rent from GotSMS so current transition options and prices are authoritative.
+    var j = await api('rents', { query:'status=active' });
+    var fresh = (j.data || []).find(function(r) { return String(r.id) === String(rentId); });
+    if (!fresh) {
+      var jf = await api('rents', { query:'status=finished' });
+      fresh = (jf.data || []).find(function(r) { return String(r.id) === String(rentId); });
+    }
+    if (fresh) rent = Object.assign({}, rent || {}, fresh);
+    var opts = (rent && rent.transition_options) || [];
+    if (!opts.length) {
+      list.innerHTML = '<div class="empty">GotSMS has not enabled any plan transitions for this rental right now.</div>';
+      return;
+    }
+    list.innerHTML = opts.map(function(p) {
+      var price = Number(p.price_ngn || p.sell_price_ngn || p.price || 0);
+      var label = p.duration_translation || ((p.duration_in_type || '') + ' ' + (p.duration_type || 'plan'));
+      return '<button type="button" class="btn btn-ghost" data-plan-id="' + esc(p.plan_id) + '" style="display:flex;justify-content:space-between;align-items:center;gap:10px;text-align:left;">' +
+        '<span><strong>' + esc(label) + '</strong><small style="display:block;color:var(--muted)">Fresh plan charge — no credit for the previous plan</small></span>' +
+        '<strong>' + (price > 0 ? '₦' + price.toLocaleString() : 'Price at checkout') + '</strong></button>';
+    }).join('');
+    list.querySelectorAll('[data-plan-id]').forEach(function(btn) {
+      btn.onclick = async function() {
+        if (btn.disabled) return;
+        btn.disabled = true; var old = btn.innerHTML; btn.innerHTML = 'Switching plan…';
+        var result = await api('transition', { method:'POST', body:{ rent_id:rentId, plan_id:btn.getAttribute('data-plan-id') } });
+        if (result.success) {
+          hideModal('planModal');
+          setFlash(result.message || 'Plan switched successfully.', true);
+          await boot();
+        } else {
+          btn.disabled = false; btn.innerHTML = old;
+          setFlash(result.message || 'Could not switch plan.', false);
+        }
+      };
+    });
+  }
+  document.addEventListener('DOMContentLoaded', function() {
+    var addClose = document.getElementById('addSvcClose');
+    if (addClose) addClose.onclick = function() { hideModal('addSvcModal'); };
+    var planClose = document.getElementById('planClose');
+    if (planClose) planClose.onclick = function() { hideModal('planModal'); };
+    ['addSvcModal','planModal'].forEach(function(id) {
+      var modal = document.getElementById(id);
+      if (modal) modal.addEventListener('click', function(e) { if (e.target === modal) hideModal(id); });
+    });
+  });
 
   async function boot(){
     if(!rentId){
