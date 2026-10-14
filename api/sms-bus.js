@@ -3441,9 +3441,29 @@ if (method === 'GET' && ga === 'gotsms_messages') {
           live = (cur.data && (cur.data.data || cur.data)) || null;
         } catch (_) {}
         const opts = (live && live.transition_options) || [];
-        const plan = opts.find((o) => String(o.plan_id) === plan_id);
+        const plan = opts.find((o) => String(o.plan_id || o.id) === plan_id);
         if (!plan) return json(res, 400, { success: false, message: 'That plan switch is not available for this number.' });
-        const price = gotsmsSellPriceNgn(plan.price || 0);
+
+        // Charge the current customer-facing price stored for the target plan.
+        // Do not prorate, discount, or credit the previously purchased plan.
+        let dbPrice = null;
+        try {
+          const { data: priceRow } = await supabase
+            .from('number_services')
+            .select('price, price_source, is_available')
+            .eq('source', 'gotsms')
+            .eq('service_id', plan_id)
+            .maybeSingle();
+          if (priceRow && Number(priceRow.price) > 0) {
+            if (priceRow.is_available === false && priceRow.price_source === 'admin') {
+              return json(res, 400, { success: false, message: 'This plan is currently unavailable.' });
+            }
+            dbPrice = Math.round(Number(priceRow.price));
+          }
+        } catch (e) {
+          console.warn('[gotsms transition] DB price lookup failed', e.message || e);
+        }
+        const price = dbPrice != null ? dbPrice : gotsmsSellPriceNgn(plan.price || 0);
         if (!(price > 0)) return json(res, 400, { success: false, message: 'Invalid plan price' });
         const debit = await debitWalletStrict(auth.userId, price, 'gotsms_transition');
         if (!debit.ok) return json(res, 400, { success: false, message: debit.message || 'Insufficient wallet balance' });
