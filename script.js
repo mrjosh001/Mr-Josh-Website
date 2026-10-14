@@ -15,7 +15,7 @@ if (window.supabase && SUPABASE_URL !== 'https://YOUR_PROJECT_ID.supabase.co') {
 let currentBalanceNgn = 0.00;
 let currentBalanceUsd = 0.00;
 let dashboardCurrencyMode = 'ngn'; 
-let conversionDirection = 'usdtongn'; 
+let conversionDirection = 'ngn_to_usd'; 
 let exchangeRate = 1420; 
 
 let cartItems = [];
