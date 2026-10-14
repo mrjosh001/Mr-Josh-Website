@@ -3487,7 +3487,9 @@ if (method === 'GET' && ga === 'gotsms_addable_services') {
             is_available: item.is_available !== false, _catalog_fallback: true }));
         }
         const parentRent = await gotsmsLiveRent(rent_id);
-        const parentPlan = (parentRent && parentRent.plan) || {};
+        const storedDuration = String(order.service_name || '').split('·').map((part) => part.trim())
+          .find((part) => /^\d+\s*(day|days|week|weeks|month|months|year|years)$/i.test(part)) || '';
+        const parentPlan = (parentRent && parentRent.plan) || { duration_translation: storedDuration };
         const parentDuration = gotsmsDurationKey(parentPlan);
         const meta = gotsmsOrderMeta(order.notes);
         const alreadyAdded = new Set((Array.isArray(meta.service_rents) ? meta.service_rents : []).map((item) => String(item.service_id || '')));
@@ -3521,7 +3523,10 @@ if (method === 'POST' && ga === 'gotsms_add_service') {
         if (!svc) return json(res, 400, { success: false, message: listG.data && listG.data.message ||
           'This service is not currently available for this number. Refresh the list and try again.' });
         const parentRent = await gotsmsLiveRent(rent_id);
-        const priced = await gotsmsAddServiceSellPrice(service_id, parentRent);
+        const storedDuration = String(parentOrder.service_name || '').split('·').map((part) => part.trim())
+          .find((part) => /^\d+\s*(day|days|week|weeks|month|months|year|years)$/i.test(part)) || '';
+        const priceRent = parentRent || { plan: { duration_translation: storedDuration } };
+        const priced = await gotsmsAddServiceSellPrice(service_id, priceRent);
         const price = Math.round(Number(priced.price) || 0);
         if (priced.unavailable || !(price > 0)) return json(res, 400, { success: false,
           message: 'No selling price is configured for this service at the current rental duration. No wallet charge was made.' });
