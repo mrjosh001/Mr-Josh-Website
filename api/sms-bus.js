@@ -3520,8 +3520,17 @@ if (method === 'POST' && ga === 'gotsms_add_service') {
         const parentOrder = await gotsmsAssertOwns(auth.userId, rent_id);
         if (!parentOrder) return json(res, 403, { success: false, message: 'Rental not found' });
         const listG = await gotsmsFetch('/api/rents/' + encodeURIComponent(rent_id) + '/services');
-        const svc = (Array.isArray(listG.data && listG.data.data) ? listG.data.data : [])
+        let svc = (Array.isArray(listG.data && listG.data.data) ? listG.data.data : [])
           .find((item) => String(item.service_id) === service_id && item.is_available !== false);
+        if (!svc) {
+          // If the supplier's rent-specific list is temporarily empty, permit a
+          // catalog candidate through to the supplier POST as the final check.
+          // The supplier can still reject it; in that case the wallet is reversed.
+          const catalog = await gotsmsFetch('/api/services?per_page=100');
+          const item = (Array.isArray(catalog.data && catalog.data.data) ? catalog.data.data : [])
+            .find((candidate) => String(candidate.id || candidate.service_id) === service_id && candidate.is_available !== false);
+          if (item) svc = { service_id, name: item.name, is_available: item.is_available !== false };
+        }
         if (!svc) return json(res, 400, { success: false, message: listG.data && listG.data.message ||
           'This service is not currently available for this number. Refresh the list and try again.' });
         const parentRent = await gotsmsLiveRent(rent_id);
