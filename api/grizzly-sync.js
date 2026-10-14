@@ -874,6 +874,7 @@ async function handleOrder(req, res) {
       amount: `₦${price.toLocaleString()}`,
       amount_ngn: price,
       status: 'pending',
+      external_reference: String(orderData.activationId),
       supplier_order: orderData
     });
 
@@ -1032,16 +1033,18 @@ async function claimAndRefundOrder(order, userId, opts = {}) {
     let q = supabase
       .from('transactions')
       .update({
-        status: (String(finalStatus).toLowerCase() === 'expired' ? 'expired' : 'cancelled'),
+        status: 'refunded',
         subtitle,
         ...(notes ? { notes } : {})
       })
       .eq('user_id', userId)
       .eq('category', category)
       .eq('type', 'purchase')
-      .in('status', ['pending', 'completed', 'success'])
-      .eq('amount_ngn', refundAmount);
-    await q;
+      .in('status', ['pending', 'completed', 'success']);
+    if (order.order_id) q = q.eq('external_reference', String(order.order_id));
+    else q = q.eq('amount_ngn', refundAmount);
+    const { error: txError } = await q;
+    if (txError) throw txError;
   } catch (e) {
     console.warn('[claimAndRefundOrder] tx update', e.message || e);
   }
@@ -1564,36 +1567,7 @@ async function handleCancel(req, res) {
       });
     }
 
-    // Keep secondary tx match for service title when claim path already updated by amount
-    try {
-      await supabase
-        .from('transactions')
-        .update({
-          status: 'cancelled',
-          subtitle: 'Cancelled — balance restored',
-          notes: 'SMS number cancelled; wallet credited without separate refund row'
-        })
-        .eq('user_id', user_id)
-        .eq('category', 'MJ SMS')
-        .eq('type', 'purchase')
-        .in('status', ['pending', 'completed', 'success'])
-        .ilike('title', order.service_name || '%');
-    } catch (e) {
-      console.warn('tx status update skipped', e.message || e);
-    }
-
-    // Broader match: any pending MJ SMS purchase for this user around this order price
-    try {
-      const refundAmount = Number(order.price || 0);
-      await supabase
-        .from('transactions')
-        .update({ status: 'cancelled', subtitle: 'Cancelled — balance restored' })
-        .eq('user_id', user_id)
-        .eq('category', 'MJ SMS')
-        .eq('type', 'purchase')
-        .eq('status', 'pending')
-        .eq('amount_ngn', refundAmount);
-    } catch (_) {}
+    // claimAndRefundOrder updates the single linked purchase transaction to Refunded.
 
     return res.status(200).json({
       success: true,
