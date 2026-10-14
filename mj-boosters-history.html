@@ -228,18 +228,26 @@ function progressHtml(o){
 }
 
 function canCancel(o){
+  // Sticky: API sets cancel_allowed from supplier service flag + live status
+  if (typeof o.cancel_allowed === 'boolean') return o.cancel_allowed;
+  // Fallback if older API response
+  if (o.service_cancel === false) return false;
   const s = String(o.status || '').toLowerCase();
   if (/completed|partial|cancel|refund|fail|error/.test(s)) return false;
   if (!/pending|awaiting|waiting|progress|processing/.test(s)) return false;
-  // Hide cancel once units have started landing
   const qty = Math.max(0, Number(o.quantity) || 0);
   const remains = o.remains != null && o.remains !== '' ? Number(o.remains) : NaN;
   if (!Number.isNaN(remains) && qty > 0 && remains < qty) return false;
   return true;
 }
 function canRefill(o){
+  // Sticky: only when supplier marks service refill=true AND order is fully completed
+  if (typeof o.refill_allowed === 'boolean') return o.refill_allowed;
+  if (o.service_refill === false) return false;
   const s = String(o.status || '').toLowerCase();
-  return /completed|partial/.test(s);
+  // Partial is closed — not eligible for refill button
+  if (/partial/.test(s)) return false;
+  return /completed|success|done/.test(s);
 }
 function isActive(o){
   const s = String(o.status || '').toLowerCase();
