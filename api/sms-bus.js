@@ -3502,7 +3502,7 @@ if (method === 'GET' && ga === 'gotsms_messages') {
         // order row instead of creating a second number_orders row.
         try {
           const { data: currentRow } = await supabase.from('number_orders')
-            .select('id, service_name, code, status')
+            .select('id, service_name, code, status, price')
             .eq('user_id', auth.userId).eq('source', 'gotsms')
             .eq('idempotency_key', 'gotsms-' + rent_id).maybeSingle();
           if (currentRow) {
@@ -3512,7 +3512,11 @@ if (method === 'GET' && ga === 'gotsms_messages') {
               ? currentName.slice(currentName.indexOf(' · Add-on: ') + ' · Add-on: '.length).split(' + ').filter(Boolean)
               : [];
             if (!addOns.includes(String(svc.name || 'Added service'))) addOns.push(String(svc.name || 'Added service'));
-            const patch = { service_name: cleanName + (addOns.length ? ' · Add-on: ' + addOns.join(' + ') : ''), status: 'active' };
+            const patch = {
+              service_name: cleanName + (addOns.length ? ' · Add-on: ' + addOns.join(' + ') : ''),
+              status: 'active',
+              price: Math.round(Number(currentRow.price || 0) + price)
+            };
             const { error: updateError } = await supabase.from('number_orders').update(patch).eq('id', currentRow.id);
             if (updateError) throw updateError;
           }
@@ -3584,15 +3588,28 @@ if (method === 'GET' && ga === 'gotsms_messages') {
         try {
           const switchedRent = (g.data && (g.data.data || g.data)) || {};
           const { data: currentRow } = await supabase.from('number_orders')
-            .select('id, service_name, code')
+            .select('id, service_name, code, price, phone_number, status')
             .eq('user_id', auth.userId).eq('source', 'gotsms')
             .eq('idempotency_key', 'gotsms-' + rent_id).maybeSingle();
           if (currentRow) {
             const priorName = String(currentRow.service_name || 'USA rental');
             const baseName = priorName.split(' · Add-on: ')[0].split(' · Plan: ')[0];
-            const duration = String(plan.duration_translation || plan.name || 'Updated plan');
-            const expiry = switchedRent.expires_at || switchedRent.expiry || switchedRent.ends_at || switchedRent.active_till || currentRow.code || null;
-            const patch = { service_name: baseName + ' · Plan: ' + duration, status: 'active' };
+            const duration = String(
+              switchedRent.plan?.duration_translation ||
+              switchedRent.duration_translation ||
+              plan.duration_translation ||
+              plan.name ||
+              'Updated plan'
+            );
+            const expiry = switchedRent.active_till || switchedRent.expires_at || switchedRent.expiry || switchedRent.ends_at || currentRow.code || null;
+            const serviceName = switchedRent.service?.name || plan.service?.name || baseName;
+            const phone = switchedRent.phone || switchedRent.phone_number || currentRow.phone_number;
+            const patch = {
+              service_name: String(serviceName || baseName).split(' · Plan: ')[0].split(' · Add-on: ')[0] + ' · Plan: ' + duration,
+              status: switchedRent.status || 'active',
+              price: Math.round(Number(currentRow.price || 0) + price)
+            };
+            if (phone) patch.phone_number = String(phone);
             if (expiry) patch.code = String(expiry);
             const { error: updateError } = await supabase.from('number_orders').update(patch).eq('id', currentRow.id);
             if (updateError) throw updateError;
