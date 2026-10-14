@@ -3429,6 +3429,14 @@ export default async function handler(req, res) {
               }).eq('id', row.id).eq('user_id', auth.userId).eq('source', 'gotsms');
             } catch (e) { console.warn('[gotsms_rents] supplier status sync', e.message || e); }
           }
+          // In transaction history, an expired/cancelled/refunded rental updates its
+          // original purchase row instead of leaving it marked Completed.
+          await updateGotsmsPurchaseTransaction({
+            userId: auth.userId,
+            rentId: r.id,
+            status: 'refunded',
+            subtitle: terminal === 'expired' ? 'Number expired' : 'Number cancelled or refunded'
+          });
         }
         const filtered = requestedStatus
           ? supplierRents.filter((r) => {
