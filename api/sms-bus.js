@@ -1345,7 +1345,9 @@ async function handleExpireStaleSmsBus(req, res) {
 
 async function handlePushPollCodes(req, res) {
   const cronSecret = String(process.env.CRON_SECRET || '');
-  if (!cronSecret || String(req.headers.authorization || '') !== 'Bearer ' + cronSecret) {
+  const suppliedSecret = String(req.headers['x-mjhub-cron-secret'] || req.headers.authorization || '')
+    .replace(/^Bearer\s+/i, '').trim();
+  if (!cronSecret || !suppliedSecret || suppliedSecret !== cronSecret) {
     return json(res, 401, { success: false, message: 'Unauthorized' });
   }
 
