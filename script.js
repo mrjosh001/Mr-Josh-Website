@@ -507,6 +507,10 @@ function openCurrencyModal() {
     if (loading) loading.classList.remove('active');
     const modal = document.getElementById('currencyConverterModal');
     if (modal) modal.classList.add('active');
+    if (input) {
+        input.setAttribute('inputmode', 'decimal');
+        input.focus({ preventScroll: true });
+    }
     syncConverterDirectionUI();
     refreshConverterRate();
 }
