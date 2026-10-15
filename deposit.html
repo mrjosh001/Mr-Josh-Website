@@ -553,7 +553,7 @@ async function proceedCryptoFromAmount() {
       body: JSON.stringify({ amount: amount })
     });
     var data = await res.json().catch(function () { return {}; });
-    if (!res.ok || !data.success || !data.url) { toast(data.message || 'Crypto payment unavailable. Please try again.'); return; }
+    if (!res.ok || !data.success || !data.url) { console.error('[deposit] crypto invoice failed', res.status, data); toast(data.message || ('Crypto payment could not start (HTTP ' + res.status + '). Please try again or contact support.')); return; }
     try {
       var pendingCrypto = JSON.stringify({
         amount: amount, amount_usd: data.amount_usd, order_id: data.order_id,
