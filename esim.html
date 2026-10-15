@@ -120,9 +120,10 @@ button{font-family:inherit}
 .toast.show{opacity:1}
 
 .modal{display:none;position:fixed;inset:0;z-index:80;align-items:center;justify-content:center;padding:18px;background:rgba(6,8,15,.62);backdrop-filter:blur(10px)}
-.order-hero{position:relative;max-width:410px;max-height:90vh;overflow:auto;text-align:left;padding:0;background:var(--card);color:var(--text);border:1px solid var(--border);border-radius:26px}
+.order-hero{position:relative;max-width:410px;max-height:90vh;overflow:auto;text-align:left;padding:0;background:var(--card);color:var(--text);border:1px solid var(--border);border-radius:20px}
 .modal-close{position:absolute;right:14px;top:14px;width:36px;height:36px;border:1px solid var(--border)!important;border-radius:12px!important;margin:0!important;padding:0!important;background:var(--input-bg)!important;color:var(--text)!important;display:grid;place-items:center}
-.order-hero-top{padding:25px 22px 18px;background:linear-gradient(140deg,rgba(37,99,235,.16),rgba(99,102,241,.04));border-bottom:1px solid var(--border)}
+.modal-card.order-hero{width:100%;max-width:410px;padding:0;background:var(--card);color:var(--text);border:1px solid var(--border);border-radius:20px;text-align:left;box-shadow:0 24px 60px rgba(0,0,0,.28)}
+.order-hero-top{padding:25px 22px 18px;background:linear-gradient(140deg,var(--primary-soft),var(--card));border-bottom:1px solid var(--border)}
 .order-icon{margin:0 0 14px;width:48px;height:48px;border-radius:15px;background:var(--primary-soft);color:var(--primary);font-size:21px}
 .order-hero .eyebrow{font-size:10px;font-weight:850;letter-spacing:.15em;color:var(--primary);margin:0 0 5px}
 .order-hero h3{font-size:21px;margin:0 0 5px;color:var(--text)}
@@ -153,7 +154,6 @@ button{font-family:inherit}
 
 /* Refined original eSIM design */
 .fund-hero{position:relative;overflow:hidden}
-.fund-hero:after{content:"";position:absolute;width:150px;height:150px;right:-55px;top:-65px;border-radius:50%;background:rgba(255,255,255,.09);pointer-events:none}
 .feature-card{box-shadow:0 8px 24px rgba(0,0,0,.035)}
 .plan{min-height:124px}
 .plan .price{margin-top:10px}
@@ -164,7 +164,10 @@ button{font-family:inherit}
 .delivery-strip i{color:var(--success);margin-top:2px}
 .delivery-strip strong{display:block;font-size:12px;margin-bottom:2px}
 .delivery-strip span{color:var(--muted)}
-.order-hero-details .delivery-value{color:var(--success)}
+.order-hero-details .delivery-value{color:var(--primary)}
+.order-delivery-note{display:flex;align-items:flex-start;gap:10px;margin:14px 18px 0;padding:12px 13px;border:1px solid rgba(91,138,245,.24);border-radius:13px;background:var(--primary-soft);color:var(--text);font-size:12px;line-height:1.5}
+.order-delivery-note i{color:var(--primary);margin-top:2px;flex:none}
+.order-delivery-note strong{display:block;margin-bottom:2px;font-size:12px;color:var(--primary)}
 .btn{transition:transform .15s ease,filter .15s ease}
 .btn:not(:disabled):active{transform:scale(.99);filter:brightness(.97)}
 @media(max-width:360px){.plan{min-height:118px;padding:12px 10px}.plan .price{font-size:18px}.delivery-strip{font-size:11.5px}}
@@ -246,7 +249,6 @@ button{font-family:inherit}
         <span><i class="fa-solid fa-wifi"></i> Wi-Fi Calling</span>
       </div>
     </div>
-    <div class="delivery-strip"><i class="fa-solid fa-envelope-circle-check"></i><div><strong>Automatic delivery</strong><span>After successful payment, your eSIM is processed automatically and sent to your registered email within 30 minutes.</span></div></div>
     <div class="card">
       <p class="method-label">Choose your plan</p>
       <div class="plans" role="group" aria-label="eSIM plan duration">
@@ -317,6 +319,7 @@ button{font-family:inherit}
       <h3 id="confirmTitle">Confirm your eSIM plan</h3>
       <p class="order-subtitle">Check everything before proceeding.</p>
     </div>
+    <div class="order-delivery-note"><i class="fa-solid fa-envelope-circle-check"></i><div><strong>Automatic delivery</strong>After successful payment, your eSIM is processed automatically and sent to your registered email within 30 minutes.</div></div>
     <div class="order-hero-plan">
       <span class="plan-kicker">SELECTED PLAN</span>
       <strong id="confirmPlan">—</strong>
