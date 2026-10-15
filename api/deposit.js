@@ -1478,11 +1478,20 @@ async function handleVirtualAccount(req, res, publicKey, businessId) {
   } catch (_) {}
 
   // Already have one on file — one account per customer
-  const { data: existingVa } = await supabase
+  const { data: existingVa, error: existingVaError } = await supabase
     .from('virtual_accounts')
     .select('bank, account_number, account_name')
     .eq('user_id', user.id)
+    .limit(1)
     .maybeSingle();
+
+  if (existingVaError) {
+    console.error('[virtual-account] saved-account lookup failed', existingVaError.message);
+    return res.status(500).json({
+      success: false,
+      message: 'We could not load your saved transfer account. Please retry in a moment.'
+    });
+  }
 
   if (existingVa?.account_number) {
     return res.status(200).json({
@@ -1613,11 +1622,16 @@ async function handleVirtualAccount(req, res, publicKey, businessId) {
       .from('virtual_accounts')
       .select('bank, account_number, account_name')
       .eq('user_id', user.id)
+      .limit(1)
       .maybeSingle();
     if (raceRow) {
       return res.status(200).json({ success: true, data: raceRow, created: true, has_account: true });
     }
     console.error('[virtual-account] insert failed', insErr.message);
+    return res.status(500).json({
+      success: false,
+      message: 'The account provider responded, but we could not save the account details. Please retry or contact support.'
+    });
   }
 
   return res.status(200).json({
@@ -2066,18 +2080,29 @@ async function handleHeleketCreate(req, res, raw) {
   }
 
   const { ok, status, json, text } = await heleketApi('/v1/payment', payload, apiKey, merchantId);
-  if (!ok || !json || json.state !== 0 || !json.result) {
+  if (!ok || !json || Number(json.state) !== 0 || !json.result) {
     console.error('[heleket] create failed', status, text && text.slice(0, 500));
     const msg = (json && (json.message || (json.errors && JSON.stringify(json.errors)))) || 'Could not start crypto payment. Try another network.';
     return res.status(502).json({ success: false, message: String(msg).slice(0, 200) });
   }
   const inv = json.result;
+  const invoiceUrl = typeof inv.url === 'string' ? inv.url : '';
+  if (!invoiceUrl || !/^https:\/\//i.test(invoiceUrl)) {
+    console.error('[heleket] invoice missing valid checkout URL', {
+      hasUuid: !!inv.uuid,
+      resultKeys: Object.keys(inv || {})
+    });
+    return res.status(502).json({
+      success: false,
+      message: 'Crypto provider did not return a valid checkout link. No payment was started; please retry later.'
+    });
+  }
   return res.status(200).json({
     success: true,
     provider: 'heleket',
     order_id: orderId,
     uuid: inv.uuid,
-    url: inv.url,
+    url: invoiceUrl,
     amount_ngn: amount,
     fee_ngn: feeNgn,
     charge_ngn: chargeNgn,
