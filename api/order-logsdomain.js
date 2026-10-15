@@ -6,6 +6,12 @@ const LD_KEY = process.env.LOGSDOMAIN_API_KEY;
 const BM_BASE = 'https://bulkmail.shop/api/v2';
 const BM_KEY = process.env.BULKMAIL_API_KEY || process.env.BULK_MAIL_API_KEY || '';
 
+async function refundWallet(userId, amount) {
+  const { error } = await supabase.rpc('credit_balance', { p_user_id: userId, p_amount: amount });
+  if (error) console.error('CRITICAL: wallet refund failed', userId, amount, error.message);
+  return !error;
+}
+
 function categoryIdFromKey(pk) {
   if (!pk) return null;
   const m = String(pk).match(/^ld_(\d+)$/i);
@@ -204,17 +210,22 @@ export default async function handler(req, res) {
     total = Number(product.price) * qty;
     productName = product.name;
 
-    const r1 = await supabase.from('profiles').select('balance, customer_id').eq('id', user_id).single();
-    if (r1.error || !r1.data) return res.status(400).json({ success: false, message: 'User profile not found' });
-    originalBalance = Number(r1.data.balance || 0);
-    customerId = r1.data.customer_id;
-    if (originalBalance < total) {
-      return res.status(402).json({ success: false, message: 'Insufficient balance', required: total, available: originalBalance });
+    if (!(total > 0)) {
+      return res.status(400).json({ success: false, message: 'This product has no price set yet' });
     }
+    const r1 = await supabase.from('profiles').select('customer_id').eq('id', user_id).single();
+    if (r1.error || !r1.data) return res.status(400).json({ success: false, message: 'User profile not found' });
+    customerId = r1.data.customer_id;
 
-    const newBalance = originalBalance - total;
-    const { error: deductErr } = await supabase.from('profiles').update({ balance: newBalance }).eq('id', user_id);
+    const { data: debit, error: deductErr } = await supabase
+      .rpc('debit_balance_if_sufficient', { p_user_id: user_id, p_amount: total })
+      .single();
     if (deductErr) return res.status(500).json({ success: false, message: 'Could not debit your balance. Please try again.' });
+    if (!debit || !debit.success) {
+      return res.status(402).json({ success: false, message: 'Insufficient combined wallet balance', required: total, available: Number(debit?.new_balance || 0) });
+    }
+    const newBalance = Number(debit.new_balance);
+    const newBalanceUsd = Number(debit.new_balance_usd || 0);
     deducted = true;
 
     const orderRef = external_order_id || ('MJ-LD-' + String(user_id).slice(0, 8) + '-' + Date.now());
@@ -226,7 +237,7 @@ export default async function handler(req, res) {
     const orderData = await supplierRes.json().catch(function(){ return {}; });
 
     if (!supplierRes.ok || orderData.success === false) {
-      await supabase.from('profiles').update({ balance: originalBalance }).eq('id', user_id);
+      await refundWallet(user_id, total);
       await supabase.from('transactions').insert({
         user_id: user_id, customer_id: customerId, type: 'refund', category: productName, title: 'Automatic Refund',
         subtitle: 'Logs Domain order failed – balance restored', amount: '₦' + total.toLocaleString(), amount_ngn: total, status: 'refunded'
@@ -270,14 +281,14 @@ export default async function handler(req, res) {
       success: true, message: 'Order fulfilled successfully',
       data: {
         items: items.length ? items.map(function(it){ return { details: it.details, serial: it.serial }; }) : [{ details: detailsText || 'Order completed' }],
-        total_amount: total, new_balance: newBalance, order_id: supplierOrderId, source: 'logsdomain'
+        total_amount: total, new_balance: newBalance, new_balance_usd: newBalanceUsd, order_id: supplierOrderId, source: 'logsdomain'
       }
     });
   } catch (err) {
     console.error('order-logsdomain error:', err);
     if (deducted) {
       try {
-        await supabase.from('profiles').update({ balance: originalBalance }).eq('id', user_id);
+        await refundWallet(user_id, total);
         await supabase.from('transactions').insert({
           user_id: user_id, customer_id: customerId, type: 'refund', category: productName || 'Unknown', title: 'Automatic Refund',
           subtitle: 'System error – ' + err.message, amount: '₦' + total.toLocaleString(), amount_ngn: total, status: 'refunded'
