@@ -2574,6 +2574,16 @@ body::after {
     border: 1px solid var(--border); padding: 5px 10px; border-radius: 16px;
     font-size: 12px; font-weight: 700;
 }
+.converter-step-label { display:flex; align-items:flex-start; gap:10px; margin:4px 0 12px; color:var(--text); }
+.converter-step-label > span { display:flex; flex:0 0 27px; width:27px; height:27px; align-items:center; justify-content:center; border-radius:50%; background:var(--primary); color:#fff; font-size:13px; font-weight:900; }
+.converter-step-label strong { display:block; font-size:14px; line-height:1.35; }
+.converter-step-label small { display:block; margin-top:3px; color:var(--muted); font-size:11px; line-height:1.45; }
+.converter-source-card { border:2px solid var(--primary) !important; box-shadow:0 0 0 4px var(--primary-glow); }
+.converter-amount-input { min-height:76px !important; font-size:30px !important; border:2px solid var(--primary) !important; background:var(--card) !important; }
+.converter-amount-input::placeholder { font-size:15px !important; font-weight:600 !important; }
+.converter-result-input { min-height:68px; font-size:22px; }
+.converter-result-step { margin-bottom:14px; }
+.sr-only { position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden; clip:rect(0,0,0,0); white-space:nowrap; border:0; }
 .converter-input-field {
     display:block; box-sizing:border-box; background:var(--card); border:1px solid var(--border);
     border-radius:12px; padding:13px 14px; min-height:58px; font-size:25px; font-weight:800;
@@ -4096,19 +4106,20 @@ html[data-theme="light"] .logo-word, :root[data-theme="light"] .logo-word{color:
             </div>
             <button type="button" onclick="closeCurrencyModal()" aria-label="Close converter" style="background:var(--bg-main);border:1px solid var(--border-color);width:34px;height:34px;border-radius:50%;cursor:pointer;color:var(--text-main);">✕</button>
         </div>
+        <div class="converter-step-label"><span>1</span><div><strong>Enter the amount to convert</strong><small>This is the amount that will be deducted from your selected wallet.</small></div></div>
         <div class="converter-grid-layout">
-            <div class="converter-panel-card">
+            <div class="converter-panel-card converter-source-card">
                 <div class="converter-panel-top">
-                    <label class="converter-amount-entry-label" for="baseConvertInput">AMOUNT YOU WANT TO CONVERT</label>
+                    <label class="converter-amount-entry-label" for="baseConvertInput">YOU ARE CONVERTING</label>
                     <div class="currency-selector-badge"><span id="fromCurrencySymbol">₦</span> <strong id="fromCurrencyCode">NGN</strong></div>
                 </div>
-                <input type="number" id="baseConvertInput" class="converter-input-field" placeholder="Tap here and enter an amount" inputmode="decimal" min="0.01" step="0.01" autocomplete="off" oninput="executeConversion()" aria-label="Enter the amount you want to convert" aria-describedby="converterAmountEntryHelp converterAmountFeedback" required>
-                <p class="converter-input-hint" id="converterAmountEntryHelp" style="font-size:12px;">Tap the large amount field above and type how much you want to move from this wallet. Your estimate updates automatically.</p>
+                <input type="number" id="baseConvertInput" class="converter-input-field converter-amount-input" placeholder="Type amount here (e.g. 5000)" inputmode="decimal" min="0.01" step="0.01" autocomplete="off" oninput="executeConversion()" aria-label="Type the amount you want to convert here" aria-describedby="converterAmountEntryHelp converterAmountFeedback" required>
+                <p class="converter-input-hint" id="converterAmountEntryHelp">Tap this box and type your amount. The amount you will receive appears below automatically.</p>
                 <div class="converter-helper-row">
                     <span id="converterBalanceInfo">Available: ₦0.00</span>
-                    <button type="button" class="converter-max-btn" onclick="setConverterMax()">Use max</button>
+                    <button type="button" class="converter-max-btn" onclick="setConverterMax()">Use full balance</button>
                 </div>
-                <p id="converterAmountFeedback" class="converter-amount-feedback" aria-live="polite">Enter an amount to preview the conversion.</p>
+                <p id="converterAmountFeedback" class="converter-amount-feedback" aria-live="polite">Enter an amount above to see your estimate.</p>
                 <div class="converter-quick-amounts" aria-label="Quick amount presets">
                     <button type="button" data-converter-preset onclick="setConverterPreset(1000)">₦1,000</button>
                     <button type="button" data-converter-preset onclick="setConverterPreset(5000)">₦5,000</button>
@@ -4116,14 +4127,15 @@ html[data-theme="light"] .logo-word, :root[data-theme="light"] .logo-word{color:
                 </div>
             </div>
             <div class="converter-swap-vector-wrap">
-                <button type="button" class="converter-swap-vector-btn" onclick="invertCurrencies()" aria-label="Swap conversion direction"><i class="fa-solid fa-arrow-down-up"></i></button>
+                <button type="button" class="converter-swap-vector-btn" onclick="invertCurrencies()" aria-label="Switch currencies">⇅ <span class="sr-only">Switch currencies</span></button>
             </div>
-            <div class="converter-panel-card">
+            <div class="converter-panel-card converter-result-card">
+                <div class="converter-step-label converter-result-step"><span>2</span><div><strong>Estimated amount you will receive</strong><small>This is a preview. Nothing moves until you confirm.</small></div></div>
                 <div class="converter-panel-top">
-                    <span class="converter-field-label">ESTIMATED AMOUNT YOU WILL RECEIVE</span>
+                    <span class="converter-field-label">YOU WILL RECEIVE</span>
                     <div class="currency-selector-badge"><span id="toCurrencySymbol">$</span> <strong id="toCurrencyCode">USD</strong></div>
                 </div>
-                <input type="text" id="targetConvertOutput" class="converter-input-field" placeholder="0.00" readonly aria-label="Estimated converted amount">
+                <input type="text" id="targetConvertOutput" class="converter-input-field converter-result-input" placeholder="Your converted amount appears here" readonly aria-label="Estimated converted amount">
             </div>
         </div>
         <div class="quantum-metrics-grid">
