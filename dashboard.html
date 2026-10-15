@@ -7039,6 +7039,10 @@ window.openCurrencyModal = function() {
     if (status) status.textContent = 'Ready to convert';
     const modal = document.getElementById('currencyConverterModal');
     if (modal) modal.classList.add('active');
+    if (input) {
+        input.setAttribute('inputmode', 'decimal');
+        input.focus({ preventScroll: true });
+    }
     updateConverterUI();
     executeConversion();
     refreshConverterRate();
