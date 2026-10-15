@@ -621,9 +621,15 @@ async function commitSwapTransaction() {
                 amount: amount
             })
         });
-        const result = await response.json().catch(() => ({}));
+        const responseText = await response.text();
+        let result = {};
+        try { result = responseText ? JSON.parse(responseText) : {}; } catch (_) {}
         if (!response.ok || !result.success) {
-            throw new Error(result.message || 'Conversion could not be completed.');
+            const serverMessage = result.message || result.error;
+            if (serverMessage) throw new Error(serverMessage);
+            if (response.status === 401 || response.status === 403) throw new Error('Your session has expired. Sign in again and retry.');
+            if (response.status >= 500) throw new Error('The conversion service is temporarily unavailable. Refresh and check your wallet before retrying.');
+            throw new Error('Conversion request failed (HTTP ' + response.status + '). Refresh and try again.');
         }
         currentBalanceNgn = Number(result.balance) || 0;
         currentBalanceUsd = Number(result.balance_usd) || 0;
