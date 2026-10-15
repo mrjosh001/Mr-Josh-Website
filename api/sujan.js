@@ -30,34 +30,17 @@ import { readSupplierStock } from '../lib/supplierStock.js';
 const BASE = 'https://api.sujandepartment.com';
 const SUJAN_KEY = process.env.SUJAN_API_KEY;
 
-/** Restore a failed purchase to the user's NGN wallet. Amount is NGN-equivalent. */
+/** Refund a failed purchase: returns the exact NGN and USD that the debit took (atomic, once only). */
 async function refundWallet(userId, amount) {
   const refundAmount = Number(amount);
   if (!userId || !Number.isFinite(refundAmount) || refundAmount <= 0) {
     throw new Error('Invalid wallet refund arguments');
   }
-
-  // Read the latest balance immediately before crediting; fail loudly rather
-  // than silently claiming a refund was completed if Supabase rejects it.
-  const { data: profile, error: readErr } = await supabase
-    .from('profiles')
-    .select('balance')
-    .eq('id', userId)
-    .maybeSingle();
-
-  if (readErr || !profile) {
-    throw new Error(readErr?.message || 'Could not find wallet for refund');
-  }
-
-  const { error: refundErr } = await supabase
-    .from('profiles')
-    .update({
-      balance: Number(profile.balance || 0) + refundAmount,
-      updated_at: new Date().toISOString()
-    })
-    .eq('id', userId);
-
-  if (refundErr) throw new Error(refundErr.message || 'Wallet refund failed');
+  const { error } = await supabase.rpc('credit_balance', {
+    p_user_id: userId,
+    p_amount: refundAmount
+  });
+  if (error) throw new Error(error.message || 'Wallet refund failed');
 }
 
 const supabase = createClient(
