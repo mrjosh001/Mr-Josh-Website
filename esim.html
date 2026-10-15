@@ -325,17 +325,18 @@ button{font-family:inherit}
       <div class="form-group">
         <label for="email">Email address</label>
         <input id="email" type="email" autocomplete="email" placeholder="Loading your account email…" readonly aria-readonly="true" aria-describedby="emailHint">
-        <p class="field-hint" id="emailHint">Your registered MJ HUB email will be used for order updates and eSIM delivery. This field cannot be edited here.</p>
+        <p class="field-hint" id="emailHint">Your registered MJ HUB email will receive your eSIM order receipt. This field cannot be edited here.</p>
         <p class="field-err" id="emailErr"></p>
       </div>
       <div class="instruct"><i class="fa-solid fa-circle-info"></i><span>Your phone must support eSIM and be network unlocked. If it shows two IMEI numbers, use the first one.</span></div>
+      <div class="delivery-strip" style="margin-top:12px"><i class="fa-solid fa-wallet"></i><div><strong>Automatic MJ HUB wallet payment</strong><span>NGN is used if it covers the plan; otherwise USD is used if it covers the plan. If neither wallet covers the full price alone, both are combined. Orders are rejected if the combined balance is insufficient.</span></div></div>
     </div>
 
     <div class="card">
       <p class="method-label">Ready to review?</p>
       <p class="field-hint" style="margin:0 0 14px">Review your plan and details in a confirmation popup before continuing to payment.</p>
       <button type="button" class="btn" id="payBtn"><i class="fa-solid fa-receipt"></i> Review order</button>
-      <div class="preview-note" id="previewNote"><i class="fa-solid fa-screwdriver-wrench"></i>Payment is not connected yet. Nothing will be charged.</div>
+      <div class="preview-note" id="previewNote"><i class="fa-solid fa-wallet"></i>Pay securely from your MJ HUB wallet. Your balance is checked before any deduction.</div>
     </div>
   </section>
 </div>
@@ -376,7 +377,7 @@ button{font-family:inherit}
       </div>
       <button type="button" id="confirmPayBtn" class="ps-buy"><i class="fa-solid fa-lock"></i> <span id="confirmPayLabel">Confirm and pay</span></button>
       <button type="button" id="editOrderBtn" class="ps-secondary">Go back and edit</button>
-      <div class="ps-err" id="checkoutDisclaimer">Your eSIM is automatically processed after successful payment. Checkout on this page is not active yet, so no order or payment will be created here.</div>
+      <div class="ps-err" id="checkoutDisclaimer">Confirming will deduct the plan price from your MJ HUB wallet and create an eSIM order. Your receipt and an order alert will be emailed after payment succeeds.</div>
     </div>
   </div>
 </div>
@@ -389,8 +390,19 @@ button{font-family:inherit}
   var plans = Array.prototype.slice.call(document.querySelectorAll('.plan'));
   var selected = null;
   var step = 1;
-  var PAYMENT_CONNECTED = false; /* flip to true once api/esim.js is live */
+  var PAYMENT_CONNECTED = true;
   var accountEmailReady = false;
+  var checkoutInProgress = false;
+  var completedOrder = false;
+  var pendingRequestId = null;
+  var pendingFingerprint = null;
+  try {
+    var savedPending = JSON.parse(sessionStorage.getItem('mjhub-esim-pending') || 'null');
+    if (savedPending && savedPending.id && savedPending.fingerprint) {
+      pendingRequestId = savedPending.id;
+      pendingFingerprint = savedPending.fingerprint;
+    }
+  } catch (e) {}
   var SUPABASE_URL = 'https://atczodlljmlayvldxfmv.supabase.co';
   var SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImF0Y3pvZGxsam1sYXl2bGR4Zm12IiwiaWF0IjoxNzg1MDc1MjM4LCJleHAiOjIxMDA2NTEyMzh9.ufthD-p7BmeD_B7xyuMM6PNPL8DmcL4AtRYgg-MuoLI';
   var sb = window.supabase && window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:true,storage:window.sessionStorage}});
@@ -519,6 +531,9 @@ button{font-family:inherit}
     $('confirmImei').textContent = imei;
     $('confirmEmail').textContent = email;
     $('confirmPayLabel').textContent = PAYMENT_CONNECTED ? 'Confirm and pay ' + price : 'Checkout unavailable';
+    completedOrder = false;
+    $('confirmPayBtn').disabled = false;
+    $('confirmPayBtn').style.display = '';
     previousFocus = document.activeElement;
     $('confirmModal').classList.add('show');
     document.body.style.overflow = 'hidden';
@@ -534,14 +549,106 @@ button{font-family:inherit}
   document.addEventListener('keydown', function(e){ if (e.key === 'Escape' && $('confirmModal').classList.contains('show')) closeConfirm(); });
   $('editOrderBtn').addEventListener('click', closeConfirm);
   $('confirmModal').addEventListener('click', function(e){ if (e.target === this) closeConfirm(); });
-  $('confirmPayBtn').addEventListener('click', function(){
+  $('confirmPayBtn').addEventListener('click', async function(){
     if (!PAYMENT_CONNECTED) {
-      $('checkoutDisclaimer').textContent = 'Checkout is not connected on this page yet. No order has been created and no payment has been taken.';
-      toast('Payment is not connected yet');
+      $('checkoutDisclaimer').textContent = 'eSIM checkout is currently unavailable. No payment has been taken.';
+      toast('Checkout is unavailable');
       return;
     }
-    /* TODO: POST { plan: selected.dataset.id, imei: $('imei').value.trim(), email: $('email').value.trim() }
-       to /api/esim with the user's access token. Server must validate plan and set price. */
+    if (checkoutInProgress || completedOrder) return;
+    if (!selected || !accountEmailReady) {
+      toast('Choose a plan and wait for your account email to load');
+      return;
+    }
+
+    var imei = String($('imei').value || '').replace(/\\D/g, '');
+    if (!/^\\d{15}$/.test(imei)) {
+      closeConfirm();
+      showErr('imei', 'imeiErr', 'Enter all 15 digits of your IMEI.');
+      return;
+    }
+
+    var fingerprint = selected.dataset.id + ':' + imei;
+    if (!pendingRequestId || pendingFingerprint !== fingerprint) {
+      pendingRequestId = (window.crypto && typeof window.crypto.randomUUID === 'function')
+        ? window.crypto.randomUUID()
+        : 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c){
+            var r = Math.random() * 16 | 0;
+            return (c === 'x' ? r : (r & 3 | 8)).toString(16);
+          });
+      pendingFingerprint = fingerprint;
+      try { sessionStorage.setItem('mjhub-esim-pending', JSON.stringify({id:pendingRequestId,fingerprint:fingerprint})); } catch (e) {}
+    }
+
+    checkoutInProgress = true;
+    var btn = $('confirmPayBtn');
+    btn.disabled = true;
+    $('confirmPayLabel').textContent = 'Processing wallet payment…';
+    $('checkoutDisclaimer').textContent = 'Verifying your session and wallet balance. Do not close this page while the order is being confirmed.';
+
+    try {
+      var sessionResult = await sb.auth.getSession();
+      var session = sessionResult && sessionResult.data && sessionResult.data.session;
+      if (!session || !session.access_token) {
+        location.href = 'auth.html?redirect=' + encodeURIComponent('esim.html');
+        return;
+      }
+
+      var response = await fetch('/api/esim', {
+        method: 'POST',
+        headers: {
+          'Authorization': 'Bearer ' + session.access_token,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          plan_id: selected.dataset.id,
+          imei: imei,
+          request_id: pendingRequestId
+        })
+      });
+      var result = await response.json().catch(function(){ return {}; });
+      if (!response.ok || !result.success) {
+        throw new Error(result.message || 'Could not complete your eSIM wallet payment.');
+      }
+
+      completedOrder = true;
+      try { sessionStorage.removeItem('mjhub-esim-pending'); } catch (e) {}
+      pendingRequestId = null;
+      pendingFingerprint = null;
+      $('confirmTitle').textContent = 'Order placed successfully';
+      $('confirmPayLabel').textContent = 'Payment successful';
+      btn.disabled = true;
+      $('editOrderBtn').textContent = 'Close';
+      var wallet = result.wallet || {};
+      var debitText = [];
+      if (Number(wallet.ngn_debited || 0) > 0) debitText.push(money(wallet.ngn_debited) + ' from NGN');
+      if (Number(wallet.usd_debited || 0) > 0) debitText.push('
+
+  $('previewNote').style.display = PAYMENT_CONNECTED ? 'none' : '';
+  syncThemeUi();
+})();
+</script>
+<script src="/js/haptic.js" defer></script>
+</body>
+</html>
+ + Number(wallet.usd_debited).toFixed(2) + ' from USD');
+      var emailText = result.email_status && result.email_status.customer && result.email_status.admin
+        ? 'Receipt sent to your email; MJ HUB support has been notified.'
+        : 'Your order is paid. One or more emails may be delayed; your order reference is saved.';
+      $('checkoutDisclaimer').textContent = 'Order reference: ' + result.order.order_ref + '. ' +
+        'Charged ' + (debitText.join(' + ') || 'your MJ HUB wallet') + '. ' + emailText;
+      $('confirmPayBtn').innerHTML = '<i class="fa-solid fa-check"></i> <span id="confirmPayLabel">Payment successful</span>';
+      toast('eSIM order placed successfully');
+    } catch (error) {
+      $('checkoutDisclaimer').textContent = error && error.message
+        ? error.message
+        : 'Could not confirm the payment. Please retry using the same order details.';
+      $('confirmPayLabel').textContent = 'Retry wallet payment';
+      toast(error && error.message ? error.message : 'Wallet payment failed');
+    } finally {
+      checkoutInProgress = false;
+      if (!completedOrder) btn.disabled = false;
+    }
   });
 
   $('previewNote').style.display = PAYMENT_CONNECTED ? 'none' : '';
