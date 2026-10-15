@@ -1,183 +1,366 @@
 <!DOCTYPE html>
 <html lang="en" data-theme="dark">
 <head>
-<meta charset="UTF-8"/>
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"/>
-<meta name="theme-color" content="#0b1220"/>
-<meta name="description" content="Choose an MJ HUB eSIM plan powered by T-Mobile."/>
-<title>eSIM Plans · MJ HUB</title>
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css"/>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, viewport-fit=cover">
+<title>eSIM — MJ HUB</title>
+<meta name="description" content="Buy an MJ HUB eSIM plan powered by T-Mobile.">
+<meta name="theme-color" content="#06080f">
+<link rel="icon" href="https://atczodlljmlayvldxfmv.supabase.co/storage/v1/object/public/avatars/dark%20background%20log">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+<script>
+(function(){try{var t=localStorage.getItem('mjhub-theme');document.documentElement.setAttribute('data-theme',(t==='light'||t==='dark')?t:'dark');}catch(e){document.documentElement.setAttribute('data-theme','dark');}})();
+</script>
 <style>
-:root{--bg:#0b1220;--card:#121a2b;--card2:#182234;--line:rgba(148,163,184,.14);--text:#f1f5f9;--muted:#94a3b8;--blue:#2563eb;--blue2:#3b82f6;--pill:#1e293b;--ok:#22c55e;--err:#ef4444;--shadow:rgba(37,99,235,.25)}
-[data-theme="light"]{--bg:#f1f5f9;--card:#fff;--card2:#f8fafc;--line:rgba(15,23,42,.1);--text:#0f172a;--muted:#64748b;--pill:#e2e8f0;--shadow:rgba(37,99,235,.12)}
-*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
-body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;background:var(--bg);color:var(--text);min-height:100dvh}
-.top{display:flex;align-items:center;gap:12px;padding:14px 16px;position:sticky;top:0;background:var(--bg);z-index:5;border-bottom:1px solid var(--line)}
-.back{width:40px;height:40px;border-radius:12px;border:1px solid var(--line);background:var(--card);color:var(--text);display:grid;place-items:center;text-decoration:none;flex:none}
-.top h1{margin:0;font-size:17px;font-weight:750;letter-spacing:-.02em}
-.top small{display:block;font-size:11px;color:var(--muted);font-weight:500;margin-top:2px}
-main{padding:16px;max-width:560px;margin:0 auto;padding-bottom:44px}
-.hero{background:linear-gradient(160deg,#0f172a,#1e3a5f);border:1px solid var(--line);border-radius:18px;padding:19px;margin-bottom:14px;overflow:hidden;position:relative}
-[data-theme="light"] .hero{background:linear-gradient(160deg,#eff6ff,#dbeafe)}
-.hero:after{content:"";position:absolute;right:-28px;top:-36px;width:145px;height:145px;border:1px solid #60a5fa33;border-radius:50%;box-shadow:0 0 0 20px #60a5fa0d,0 0 0 42px #60a5fa08;pointer-events:none}
-.hero .badge{display:inline-flex;align-items:center;gap:7px;font-size:11px;font-weight:800;letter-spacing:.055em;color:#93c5fd;text-transform:uppercase;margin-bottom:9px}
-.hero h2{margin:0 0 8px;font-size:24px;line-height:1.18;letter-spacing:-.04em;max-width:360px}
-.hero p{margin:0;color:var(--muted);font-size:13.5px;line-height:1.5;max-width:390px}
-.trust-row{display:flex;gap:8px;flex-wrap:wrap;margin-top:15px}
-.trust{display:inline-flex;align-items:center;gap:6px;border:1px solid #93c5fd26;background:#0b122044;color:#dbeafe;border-radius:999px;padding:6px 9px;font-size:10.5px;font-weight:700}
-[data-theme="light"] .trust{color:#1d4ed8;background:#ffffffa8;border-color:#2563eb20}
-.panel,.howto{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:16px;margin-bottom:14px}
-.panelhead{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:15px}
-.panelhead h3,.howto h3{font-size:15px;margin:0 0 4px;letter-spacing:-.015em}
-.sub{color:var(--muted);font-size:12.5px;line-height:1.45;margin:0}
-.stepno{display:grid;place-items:center;width:30px;height:30px;border-radius:10px;background:var(--card2);border:1px solid var(--line);color:var(--blue2);font-size:12px;font-weight:850;flex:none}
-.plans{display:grid;grid-template-columns:1fr 1fr;gap:9px}
-.plan{position:relative;display:flex;flex-direction:column;align-items:flex-start;text-align:left;min-height:116px;padding:14px 13px;border-radius:15px;border:1px solid var(--line);background:var(--card2);color:var(--text);cursor:pointer;transition:border-color .18s,background .18s,transform .18s}
-.plan:active{transform:scale(.99)}
-.plan[aria-pressed="true"]{border:1.5px solid var(--blue2);background:linear-gradient(150deg,#1d4ed81c,var(--card2));box-shadow:0 0 0 2px #3b82f60d}
-.plan .radio{position:absolute;right:11px;top:12px;width:17px;height:17px;border-radius:50%;border:1.5px solid var(--muted);display:grid;place-items:center;font-size:9px;color:#fff}
-.plan[aria-pressed="true"] .radio{background:var(--blue);border-color:var(--blue)}
-.plan .duration{font-size:13px;font-weight:750;padding-right:20px}
-.plan .price{font-size:21px;font-weight:850;letter-spacing:-.045em;margin-top:13px;line-height:1.1}
-.plan .period{font-size:11px;color:var(--muted);margin-top:5px}
-.plan .tag{position:absolute;left:10px;top:-8px;background:var(--blue);color:#fff;padding:3px 7px;border-radius:999px;font-size:9px;font-weight:850;letter-spacing:.04em}
-.section-sep{height:1px;background:var(--line);margin:19px 0}
-.field{margin-bottom:14px}
-.field:last-child{margin-bottom:0}
-.field label{display:block;font-size:11px;font-weight:800;letter-spacing:.055em;text-transform:uppercase;color:var(--muted);margin-bottom:8px}
-.input{width:100%;padding:13px 14px;border-radius:12px;border:1px solid var(--line);background:var(--card2);color:var(--text);font-size:15px;outline:none;font-family:inherit;transition:border-color .15s,box-shadow .15s}
-.input:focus{border-color:var(--blue2);box-shadow:0 0 0 3px #3b82f61a}
-.input::placeholder{color:var(--muted);opacity:.8}
-.hint{font-size:12px;color:var(--muted);line-height:1.5;margin:7px 0 0}
-.hint strong{color:var(--text)}
-.device-note{display:flex;gap:11px;align-items:flex-start;padding:12px;border-radius:13px;background:var(--card2);border:1px solid var(--line);margin-top:13px}
-.device-note .symbol{display:grid;place-items:center;width:30px;height:30px;border-radius:10px;background:#2563eb1c;color:var(--blue2);flex:none}
-.device-note p{font-size:12px;line-height:1.45;color:var(--muted);margin:0}
-.device-note b{display:block;color:var(--text);font-size:12.5px;margin-bottom:3px}
-.summary-network{display:flex;align-items:center;gap:11px;padding:12px;border-radius:14px;background:var(--card2);border:1px solid var(--line);margin-bottom:15px}
-.networkmark{width:43px;height:43px;border-radius:12px;background:#e7f2ff;color:#153c84;display:grid;place-items:center;font-size:10px;font-weight:950;letter-spacing:-.05em;flex:none}
-.summary-network b{display:block;font-size:13px}
-.summary-network small{display:block;color:var(--muted);font-size:11.5px;margin-top:3px}
-.summary-row{display:flex;justify-content:space-between;gap:14px;padding:10px 0;border-bottom:1px solid var(--line);font-size:12.5px}
-.summary-row span{color:var(--muted)}
-.summary-row strong{text-align:right;font-weight:750}
-.total{display:flex;align-items:center;justify-content:space-between;gap:12px;padding-top:17px;margin-top:3px}
-.total span{color:var(--muted);font-size:12.5px}
-.total strong{font-size:26px;letter-spacing:-.045em;line-height:1.1}
-.btn{width:100%;border:0;border-radius:14px;padding:15px;font-weight:850;font-size:14.5px;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:9px;font-family:inherit}
-.btn-primary{background:linear-gradient(135deg,#3b82f6,#1d4ed8);color:#fff;box-shadow:0 8px 22px var(--shadow);margin-top:17px}
-.btn-primary:active{transform:translateY(1px)}
-.btn-primary:focus-visible,.plan:focus-visible,.back:focus-visible{outline:3px solid #60a5fa;outline-offset:3px}
-.secure{display:flex;justify-content:center;gap:7px;align-items:center;text-align:center;color:var(--muted);font-size:10.5px;margin-top:12px}
-.howto h3{display:flex;align-items:center;gap:8px;margin-bottom:13px}
-.howto h3 i{color:var(--blue2)}
-.steps{display:grid;grid-template-columns:1fr 1fr;gap:9px}
-.step{background:var(--card2);border:1px solid var(--line);border-radius:12px;padding:12px;font-size:11.5px;color:var(--muted);line-height:1.45}
-.step b{display:block;color:var(--text);margin-bottom:4px;font-size:12px}
-.notice{display:none;margin-top:13px;padding:12px;border-radius:12px;background:#78350f1c;border:1px solid #f59e0b55;color:#fbbf24;font-size:12.5px;line-height:1.5}
-.notice.show{display:block}
-.footer{text-align:center;color:var(--muted);font-size:11px;line-height:1.6;padding:7px 12px 25px}
-.prototype{margin-top:13px;padding:11px 12px;border-radius:12px;background:#f59e0b0d;border:1px solid #f59e0b38;color:var(--muted);font-size:11.5px;line-height:1.5}
-.prototype b{display:block;color:#f59e0b;margin-bottom:3px}
-[data-theme="light"] .prototype{color:#854d0e;background:#fffbeb;border-color:#fcd34d}
-[data-theme="light"] .prototype b{color:#92400e}
-@media(min-width:560px){main{padding-top:20px}.hero{padding:22px}.hero h2{font-size:27px}.panel,.howto{padding:18px}}
-@media(max-width:360px){main{padding:12px}.hero{padding:16px}.plan{padding:12px 10px}.plan .price{font-size:19px}.steps{grid-template-columns:1fr}}
+:root[data-theme="dark"]{
+  --bg:#06080f;--card:#0f1524;--border:rgba(148,163,184,.14);--text:#f1f5f9;--muted:#94a3b8;
+  --primary:#5b8af5;--primary2:#3b6ef5;--primary-soft:rgba(91,138,245,.14);
+  --success:#34d399;--success-soft:rgba(52,211,153,.12);--danger:#f87171;
+  --header-bg:rgba(6,8,15,.94);--input-bg:#0a0e18;
+}
+:root[data-theme="light"]{
+  --bg:#f0f4ff;--card:#ffffff;--border:rgba(59,110,245,.12);--text:#0f172a;--muted:#475569;
+  --primary:#3b6ef5;--primary2:#5b8af5;--primary-soft:rgba(59,110,245,.08);
+  --success:#059669;--success-soft:rgba(5,150,105,.1);--danger:#dc2626;
+  --header-bg:rgba(255,255,255,.96);--input-bg:#f8fafc;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html{-webkit-tap-highlight-color:transparent}
+body{font-family:Inter,system-ui,-apple-system,sans-serif;background:var(--bg);color:var(--text);min-height:100vh}
+a{color:inherit;text-decoration:none}
+button{font-family:inherit}
+.header{position:sticky;top:0;z-index:20;display:flex;align-items:center;gap:12px;padding:14px 16px;background:var(--header-bg);backdrop-filter:blur(14px);border-bottom:1px solid var(--border)}
+.back,.theme-btn{width:40px;height:40px;border-radius:12px;border:1px solid var(--border);background:var(--card);display:flex;align-items:center;justify-content:center;cursor:pointer;color:var(--text);font-size:16px}
+.header h1{font-size:17px;font-weight:800;flex:1}
+.wrap{max-width:480px;margin:0 auto;padding:16px 16px 48px}
+
+.progress{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:14px}
+.pstep{display:flex;align-items:center;gap:8px;font-size:12px;font-weight:800;color:var(--muted)}
+.pstep .dot{width:22px;height:22px;border-radius:50%;display:grid;place-items:center;font-size:11px;background:var(--card);border:1px solid var(--border)}
+.pstep.active{color:var(--text)}
+.pstep.active .dot,.pstep.done .dot{background:var(--primary);border-color:var(--primary);color:#fff}
+.pbar{grid-column:1/-1;display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.pbar i{height:4px;border-radius:4px;background:var(--border)}
+.pbar i.on{background:linear-gradient(90deg,var(--primary),var(--primary2))}
+
+.fund-hero{display:flex;align-items:center;gap:14px;padding:16px 18px;border-radius:18px;margin-bottom:16px;background:linear-gradient(135deg,var(--primary),var(--primary2));color:#fff;box-shadow:0 12px 28px rgba(91,138,245,.28)}
+.fund-hero-icon{width:48px;height:48px;border-radius:14px;background:rgba(255,255,255,.18);display:grid;place-items:center;font-size:20px;flex-shrink:0}
+.fund-hero h2{font-size:18px;font-weight:800;margin:0 0 2px}
+.fund-hero p{font-size:12px;opacity:.9;margin:0}
+
+.card{background:var(--card);border:1px solid var(--border);border-radius:20px;padding:18px 16px;margin-bottom:14px}
+.method-label{font-size:13px;font-weight:700;margin:0 0 10px;color:var(--text)}
+.sub{font-size:13px;color:var(--muted);line-height:1.5}
+
+.plans{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.plan{position:relative;display:flex;flex-direction:column;align-items:flex-start;text-align:left;min-height:112px;padding:14px 13px;border-radius:16px;border:1px solid var(--border);background:var(--input-bg);color:var(--text);cursor:pointer;transition:border-color .15s,background .15s,transform .12s}
+.plan:active{transform:scale(.985)}
+.plan:hover{border-color:var(--primary)}
+.plan:focus-visible,.btn:focus-visible,.back:focus-visible,.theme-btn:focus-visible{outline:2px solid var(--primary);outline-offset:2px}
+.plan[aria-pressed="true"]{border-color:var(--primary);background:var(--primary-soft)}
+.plan .radio{position:absolute;right:11px;top:12px;width:18px;height:18px;border-radius:50%;border:1.5px solid var(--muted);display:grid;place-items:center;font-size:9px;color:transparent}
+.plan[aria-pressed="true"] .radio{background:var(--primary);border-color:var(--primary);color:#fff}
+.plan .duration{font-size:14px;font-weight:800;padding-right:22px}
+.plan .price{font-size:20px;font-weight:900;letter-spacing:-.02em;margin-top:12px;font-variant-numeric:tabular-nums}
+.plan .period{font-size:11.5px;color:var(--muted);margin-top:4px}
+.plan .tag{position:absolute;left:12px;top:-9px;background:var(--success);color:#fff;padding:3px 8px;border-radius:999px;font-size:10px;font-weight:800}
+[data-theme="dark"] .plan .tag{color:#06080f}
+
+.pickbar{display:flex;justify-content:space-between;align-items:center;padding:12px 14px;border-radius:12px;border:1px solid var(--border);background:var(--input-bg);margin:14px 0;font-size:14px;color:var(--muted)}
+.pickbar strong{font-weight:800;color:var(--text);font-variant-numeric:tabular-nums}
+
+.btn{width:100%;border:0;cursor:pointer;border-radius:14px;padding:14px 16px;font-weight:800;font-size:14px;display:inline-flex;align-items:center;justify-content:center;gap:8px;background:linear-gradient(135deg,var(--primary),var(--primary2));color:#fff;box-shadow:0 10px 28px rgba(91,138,245,.28)}
+.btn:disabled{opacity:.5;cursor:not-allowed;box-shadow:none}
+.btn-outline{background:transparent;color:var(--text);border:1px solid var(--border);box-shadow:none}
+.hint{font-size:12px;color:var(--muted);margin-top:12px;line-height:1.5;text-align:center}
+
+.step-back{display:inline-flex;align-items:center;gap:6px;background:none;border:none;color:var(--muted);font-size:13px;font-weight:700;cursor:pointer;padding:0;margin-bottom:12px}
+.step-back:hover{color:var(--primary)}
+.amount-summary{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:12px 14px;border-radius:12px;border:1px solid var(--border);background:var(--input-bg);margin-bottom:16px;font-size:14px}
+.amount-summary strong{font-weight:800;color:var(--text)}
+.amount-summary button{background:none;border:0;color:var(--primary);font-weight:800;font-size:13px;cursor:pointer}
+
+.form-group{margin-bottom:14px}
+.form-group label{display:block;font-size:11px;font-weight:800;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;margin-bottom:6px}
+.form-group input{width:100%;padding:13px 14px;border-radius:12px;border:1px solid var(--border);background:var(--input-bg);color:var(--text);font-size:15px;font-weight:600;outline:none}
+.form-group input:focus{border-color:var(--primary)}
+.form-group input.bad{border-color:var(--danger)}
+.form-group input::placeholder{color:var(--muted);opacity:.7;font-weight:500}
+.field-hint{font-size:12px;color:var(--muted);margin-top:6px;line-height:1.5}
+.field-hint strong{color:var(--text)}
+.field-err{display:none;font-size:12px;color:var(--danger);margin-top:6px;font-weight:600}
+.field-err.show{display:block}
+
+.instruct{display:flex;gap:10px;align-items:flex-start;padding:12px 14px;border-radius:12px;background:var(--primary-soft);border:1px solid rgba(91,138,245,.22);font-size:12.5px;line-height:1.5;color:var(--text);font-weight:600}
+.instruct i{color:var(--primary);margin-top:2px}
+
+.sum-row{display:flex;justify-content:space-between;gap:14px;padding:10px 0;border-bottom:1px solid var(--border);font-size:13px;color:var(--muted)}
+.sum-row strong{color:var(--text);font-weight:700;text-align:right}
+.sum-total{display:flex;justify-content:space-between;align-items:center;padding-top:14px;font-size:14px;font-weight:700}
+.sum-total strong{font-size:24px;font-weight:900;letter-spacing:-.02em;font-variant-numeric:tabular-nums}
+.provider-foot{display:flex;align-items:center;justify-content:center;gap:8px;margin-top:14px;font-size:12px;color:var(--muted);text-align:center}
+.preview-note{margin-top:12px;padding:11px 12px;border-radius:12px;background:rgba(245,158,11,.1);border:1px solid rgba(245,158,11,.35);font-size:12px;line-height:1.5;color:var(--text)}
+.preview-note i{color:#f59e0b;margin-right:6px}
+
+.view{display:none}
+.view.show{display:block}
+
+.toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:#111827;color:#fff;padding:12px 16px;border-radius:12px;font-size:13px;font-weight:700;z-index:100;opacity:0;pointer-events:none;transition:.2s;max-width:90%}
+:root[data-theme="light"] .toast{background:#0f172a}
+.toast.show{opacity:1}
+
+.modal{display:none;position:fixed;inset:0;z-index:80;align-items:center;justify-content:center;padding:18px;background:rgba(6,8,15,.62);backdrop-filter:blur(10px)}
+.modal.show{display:flex}
+.modal-card{width:100%;max-width:360px;background:#fff;color:#0f172a;border-radius:24px;padding:28px 22px 22px;text-align:center;box-shadow:0 24px 60px rgba(0,0,0,.35)}
+.modal-icon{width:64px;height:64px;border-radius:18px;margin:0 auto 14px;background:#d1fae5;color:#059669;display:flex;align-items:center;justify-content:center;font-size:28px}
+.modal-card h3{font-size:22px;font-weight:800;margin:0 0 8px}
+.modal-card p{font-size:14px;line-height:1.5;color:#475569;margin:0 0 6px}
+.modal-card button{width:100%;margin-top:16px;border:none;border-radius:14px;padding:13px;font-weight:800;background:#2563eb;color:#fff;cursor:pointer}
+
+@media(max-width:360px){.wrap{padding:12px 12px 40px}.plan .price{font-size:18px}}
+@media(prefers-reduced-motion:reduce){*{transition:none!important}}
 </style>
+<link rel="stylesheet" href="/css/mj-motion.css">
+<script src="/js/mj-page-loader.js"></script>
 </head>
 <body>
-<header class="top">
-  <a class="back" href="dashboard.html" aria-label="Back to dashboard"><i class="fa-solid fa-arrow-left"></i></a>
-  <div><h1>eSIM Plans</h1><small>MJ HUB · T-Mobile</small></div>
-</header>
-<main>
-  <section class="hero">
-    <div class="badge"><i class="fa-solid fa-signal"></i> Stay connected</div>
-    <h2>Your next connection, made simple.</h2>
-    <p>Choose your eSIM duration, add your device details, and review your plan before checkout.</p>
-    <div class="trust-row"><span class="trust"><i class="fa-solid fa-mobile-screen-button"></i> Device-ready setup</span><span class="trust"><i class="fa-solid fa-user-shield"></i> Manual order review</span></div>
-  </section>
-
-  <section class="panel">
-    <div class="panelhead"><div><h3>1. Choose your plan</h3><p class="sub">Select the duration that fits your needs.</p></div><span class="stepno">01</span></div>
-    <div class="plans" role="group" aria-label="Choose eSIM plan duration">
-      <button class="plan" type="button" data-months="1" data-price="26000" aria-pressed="false"><span class="radio"><i class="fa-solid fa-check"></i></span><span class="duration">1 month</span><span class="price">₦26,000</span><span class="period">30-day plan</span></button>
-      <button class="plan" type="button" data-months="3" data-price="47000" aria-pressed="false"><span class="tag">POPULAR</span><span class="radio"><i class="fa-solid fa-check"></i></span><span class="duration">3 months</span><span class="price">₦47,000</span><span class="period">90-day plan</span></button>
-      <button class="plan" type="button" data-months="6" data-price="68000" aria-pressed="false"><span class="radio"><i class="fa-solid fa-check"></i></span><span class="duration">6 months</span><span class="price">₦68,000</span><span class="period">180-day plan</span></button>
-      <button class="plan" type="button" data-months="12" data-price="90000" aria-pressed="true"><span class="radio"><i class="fa-solid fa-check"></i></span><span class="duration">1 year</span><span class="price">₦90,000</span><span class="period">365-day plan</span></button>
-    </div>
-
-    <div class="section-sep"></div>
-    <div class="panelhead"><div><h3>2. Device details</h3><p class="sub">Enter the details used to prepare your order.</p></div><span class="stepno">02</span></div>
-    <div class="field">
-      <label for="imei">Device IMEI</label>
-      <input class="input" id="imei" name="imei" inputmode="numeric" autocomplete="off" maxlength="15" placeholder="Enter your 15-digit IMEI" aria-describedby="imei-hint"/>
-      <p class="hint" id="imei-hint">On your phone, dial <strong>*#06#</strong> to find your IMEI number.</p>
-    </div>
-    <div class="field">
-      <label for="email">Email address</label>
-      <input class="input" id="email" name="email" type="email" autocomplete="email" placeholder="you@example.com"/>
-      <p class="hint">Use an email address you can access for order updates and activation instructions.</p>
-    </div>
-    <div class="device-note"><span class="symbol"><i class="fa-solid fa-circle-info"></i></span><p><b>Check compatibility first</b>Your phone must support eSIM and be compatible with the intended T-Mobile service. If your device shows IMEI and IMEI2, use the identifier requested for your device.</p></div>
-  </section>
-
-  <section class="panel">
-    <div class="panelhead"><div><h3>3. Order summary</h3><p class="sub">Check the plan and total before proceeding.</p></div><span class="stepno">03</span></div>
-    <div class="summary-network"><div class="networkmark">T-Mobile</div><div><b>T-Mobile eSIM</b><small>eSIM plan · Manual fulfillment</small></div></div>
-    <div class="summary-row"><span>Selected plan</span><strong id="summary-plan">1 year</strong></div>
-    <div class="summary-row"><span>Network</span><strong>T-Mobile</strong></div>
-    <div class="summary-row"><span>Fulfillment</span><strong>Manual processing</strong></div>
-    <div class="total"><span>Total due</span><strong id="summary-price">₦90,000</strong></div>
-    <button class="btn btn-primary" id="checkout" type="button"><i class="fa-solid fa-lock"></i> Continue to checkout <i class="fa-solid fa-arrow-right"></i></button>
-    <div class="secure"><i class="fa-solid fa-shield-halved"></i> Review your details before continuing</div>
-    <div class="notice" id="notice" role="status" aria-live="polite"></div>
-    <div class="prototype"><b><i class="fa-solid fa-screwdriver-wrench"></i> Checkout connection pending</b>This page is currently a design preview. Payment, order creation, admin fulfillment, and email delivery are not connected yet. No payment will be taken from this page.</div>
-  </section>
-
-  <section class="howto">
-    <h3><i class="fa-solid fa-list-check"></i> How it works</h3>
-    <div class="steps">
-      <div class="step"><b>1. Choose a duration</b>Select 1, 3, 6, or 12 months.</div>
-      <div class="step"><b>2. Enter your details</b>Find your IMEI by dialing *#06# and add your email.</div>
-      <div class="step"><b>3. Review the total</b>Confirm the plan and contact details are correct.</div>
-      <div class="step"><b>4. Supplier setup</b>After the checkout workflow is connected, the team will process your order manually.</div>
-    </div>
-  </section>
-</main>
-<footer class="footer">© MJ HUB · eSIM services<br>Plan prices shown are current page defaults and are not yet connected to admin-controlled pricing.</footer>
+<style id="mj-boot-style">
+#mj-boot{position:fixed;inset:0;z-index:2147483646;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:18px;background:rgba(5,7,13,.55);-webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px);color:rgba(226,232,240,.85);font:500 12px/1.2 system-ui,sans-serif;letter-spacing:.2em;text-transform:lowercase;transition:opacity .25s ease}
+#mj-boot.is-done{opacity:0;pointer-events:none}
+#mj-boot .mj-inf{position:relative;width:120px;height:64px}
+#mj-boot .mj-inf svg{position:relative;z-index:1;display:block;width:120px;height:64px;overflow:visible}
+#mj-boot .mj-track{fill:none;stroke:rgba(167,139,250,.25);stroke-width:3.5;stroke-linecap:round;stroke-linejoin:round}
+#mj-boot .mj-beam{fill:none;stroke:#e9d5ff;stroke-width:3.5;stroke-linecap:round;stroke-linejoin:round;stroke-dasharray:28 200;filter:drop-shadow(0 0 4px #c084fc) drop-shadow(0 0 12px #22d3ee);animation:mjBeam 1.6s linear infinite}
+@keyframes mjBeam{to{stroke-dashoffset:-228}}
+@media(prefers-reduced-motion:reduce){#mj-boot .mj-beam{animation:none;stroke-dasharray:none}}
+</style>
+<div id="mj-boot" role="status" aria-live="polite" aria-busy="true">
+  <div class="mj-inf" aria-hidden="true">
+    <svg viewBox="0 0 96 64" width="120" height="64">
+      <path class="mj-track" d="M 16 32 C 16 16, 36 16, 48 32 C 60 48, 80 48, 80 32 C 80 16, 60 16, 48 32 C 36 48, 16 48, 16 32"/>
+      <path class="mj-beam" d="M 16 32 C 16 16, 36 16, 48 32 C 60 48, 80 48, 80 32 C 80 16, 60 16, 48 32 C 36 48, 16 48, 16 32"/>
+    </svg>
+  </div>
+  <div>loading</div>
+</div>
 <script>
 (function(){
-  try {
-    const dark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
-    document.documentElement.setAttribute('data-theme', dark ? 'dark' : 'light');
-  } catch(_){}
-  const plans=[...document.querySelectorAll('.plan')];
-  const summaryPlan=document.getElementById('summary-plan');
-  const summaryPrice=document.getElementById('summary-price');
-  const imei=document.getElementById('imei');
-  const email=document.getElementById('email');
-  const notice=document.getElementById('notice');
-  let selected=plans.find(p=>p.getAttribute('aria-pressed')==='true')||plans[0];
-  const money=n=>'₦'+Number(n).toLocaleString('en-NG');
-  function choose(plan){
-    selected=plan;
-    plans.forEach(p=>p.setAttribute('aria-pressed',String(p===plan)));
-    summaryPlan.textContent=plan.dataset.months==='12'?'1 year':plan.dataset.months+' months';
-    summaryPrice.textContent=money(plan.dataset.price);
-    notice.classList.remove('show');
+  function done(){
+    var el=document.getElementById('mj-boot');
+    if(!el||el.classList.contains('is-done'))return;
+    el.classList.add('is-done');
+    el.setAttribute('aria-busy','false');
+    setTimeout(function(){try{el.remove();var s=document.getElementById('mj-boot-style');if(s)s.remove();}catch(e){}},280);
+    try{sessionStorage.removeItem('mj_nav_loading');}catch(e){}
+    if(window.mjHidePageLoader)try{window.mjHidePageLoader();}catch(e){}
   }
-  plans.forEach(p=>p.addEventListener('click',()=>choose(p)));
-  imei.addEventListener('input',()=>{imei.value=imei.value.replace(/\D/g,'').slice(0,15);});
-  document.getElementById('checkout').addEventListener('click',()=>{
-    notice.classList.remove('show');
-    if(!selected){notice.textContent='Choose a plan to continue.';notice.classList.add('show');return;}
-    if(!/^\d{15}$/.test(imei.value)){notice.textContent='Enter a valid 15-digit IMEI. Dial *#06# on your phone to find it.';notice.classList.add('show');imei.focus();return;}
-    if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.value.trim())){notice.textContent='Enter a valid email address for order updates.';notice.classList.add('show');email.focus();return;}
-    notice.textContent='Design preview only: your details passed the form checks, but checkout is not connected. No payment or order has been created.';
-    notice.classList.add('show');
-  });
+  if(document.readyState==='complete')setTimeout(done,60);
+  else{
+    window.addEventListener('load',function(){setTimeout(done,60);});
+    setTimeout(done,12000);
+  }
 })();
 </script>
+
+<header class="header">
+  <a class="back" href="dashboard.html#home" id="headerBackBtn" aria-label="Back"><i class="fa-solid fa-arrow-left"></i></a>
+  <h1>eSIM</h1>
+  <button type="button" class="theme-btn" id="themeBtn" onclick="toggleTheme()" aria-label="Toggle theme">🌙</button>
+</header>
+
+<div class="wrap">
+  <div class="progress" aria-label="Progress">
+    <div class="pstep active" id="pstep1"><span class="dot">1</span> Choose plan</div>
+    <div class="pstep" id="pstep2"><span class="dot">2</span> Your details</div>
+    <div class="pbar"><i class="on" id="pbar1"></i><i id="pbar2"></i></div>
+  </div>
+
+  <!-- PAGE 1: choose plan -->
+  <section class="view show" id="viewPlan">
+    <div class="fund-hero">
+      <div class="fund-hero-icon"><i class="fa-solid fa-sim-card"></i></div>
+      <div>
+        <h2>T-Mobile eSIM</h2>
+        <p>Pick how long you want to stay connected</p>
+      </div>
+    </div>
+    <div class="card">
+      <p class="method-label">Plan duration</p>
+      <div class="plans" role="group" aria-label="eSIM plan duration">
+        <button class="plan" type="button" data-id="1m" data-label="1 month" data-price="26000" aria-pressed="false">
+          <span class="radio"><i class="fa-solid fa-check"></i></span>
+          <span class="duration">1 month</span><span class="price">₦26,000</span><span class="period">30 days</span>
+        </button>
+        <button class="plan" type="button" data-id="3m" data-label="3 months" data-price="47000" aria-pressed="false">
+          <span class="tag">Popular</span>
+          <span class="radio"><i class="fa-solid fa-check"></i></span>
+          <span class="duration">3 months</span><span class="price">₦47,000</span><span class="period">90 days</span>
+        </button>
+        <button class="plan" type="button" data-id="6m" data-label="6 months" data-price="68000" aria-pressed="false">
+          <span class="radio"><i class="fa-solid fa-check"></i></span>
+          <span class="duration">6 months</span><span class="price">₦68,000</span><span class="period">180 days</span>
+        </button>
+        <button class="plan" type="button" data-id="12m" data-label="1 year" data-price="90000" aria-pressed="false">
+          <span class="radio"><i class="fa-solid fa-check"></i></span>
+          <span class="duration">1 year</span><span class="price">₦90,000</span><span class="period">365 days</span>
+        </button>
+      </div>
+      <div class="pickbar"><span id="pickLabel">Select a plan to continue</span><strong id="pickPrice"></strong></div>
+      <button type="button" class="btn" id="nextBtn" disabled>Next <i class="fa-solid fa-arrow-right"></i></button>
+    </div>
+    <div class="provider-foot"><i class="fa-solid fa-shield-halved"></i> Powered by T-Mobile</div>
+  </section>
+
+  <!-- PAGE 2: details + pay -->
+  <section class="view" id="viewDetails">
+    <button type="button" class="step-back" id="stepBack"><i class="fa-solid fa-arrow-left"></i> Back</button>
+    <div class="amount-summary">
+      <span>Plan: <strong id="dPlan">—</strong></span>
+      <button type="button" id="changePlan">Change</button>
+    </div>
+
+    <div class="card">
+      <p class="method-label">Your details</p>
+      <div class="form-group">
+        <label for="imei">Phone IMEI</label>
+        <input id="imei" inputmode="numeric" autocomplete="off" maxlength="15" placeholder="15-digit IMEI">
+        <p class="field-hint">Dial <strong>*#06#</strong> on your phone, then copy and paste your IMEI here.</p>
+        <p class="field-err" id="imeiErr"></p>
+      </div>
+      <div class="form-group">
+        <label for="email">Email address</label>
+        <input id="email" type="email" autocomplete="email" placeholder="you@example.com">
+        <p class="field-hint">We email your order confirmation and your eSIM QR code here.</p>
+        <p class="field-err" id="emailErr"></p>
+      </div>
+      <div class="instruct"><i class="fa-solid fa-circle-info"></i><span>Your phone must support eSIM and be network unlocked. If it shows two IMEI numbers, use the first one.</span></div>
+    </div>
+
+    <div class="card">
+      <p class="method-label">Order summary</p>
+      <div class="sum-row"><span>Plan</span><strong id="sPlan">—</strong></div>
+      <div class="sum-row"><span>Network</span><strong>T-Mobile</strong></div>
+      <div class="sum-row"><span>Delivery</span><strong>About 30 minutes, by email</strong></div>
+      <div class="sum-total"><span>Total</span><strong id="sTotal">₦0</strong></div>
+      <button type="button" class="btn" id="payBtn" style="margin-top:16px"><i class="fa-solid fa-lock"></i> <span id="payLabel">Pay</span></button>
+      <p class="hint">Your eSIM is prepared after payment and sent to your email.</p>
+      <div class="preview-note" id="previewNote"><i class="fa-solid fa-screwdriver-wrench"></i>Payment is not connected yet. Nothing will be charged.</div>
+    </div>
+  </section>
+</div>
+
+<div class="modal" id="doneModal">
+  <div class="modal-card">
+    <div class="modal-icon"><i class="fa-solid fa-check"></i></div>
+    <h3>Order received</h3>
+    <p>Your eSIM takes about 30 minutes to process.</p>
+    <p>We'll send it to your email as soon as it's ready.</p>
+    <button type="button" id="doneBtn">Done</button>
+  </div>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+(function(){
+  var $ = function(id){ return document.getElementById(id); };
+  var plans = Array.prototype.slice.call(document.querySelectorAll('.plan'));
+  var selected = null;
+  var step = 1;
+  var PAYMENT_CONNECTED = false; /* flip to true once api/esim.js is live */
+
+  function money(n){ return '₦' + Number(n).toLocaleString('en-NG'); }
+  function toast(msg){
+    var t = $('toast'); t.textContent = msg; t.classList.add('show');
+    setTimeout(function(){ t.classList.remove('show'); }, 3200);
+  }
+  function syncThemeUi(){
+    var dark = document.documentElement.getAttribute('data-theme') !== 'light';
+    $('themeBtn').textContent = dark ? '🌙' : '☀️';
+    var meta = document.querySelector('meta[name="theme-color"]');
+    if (meta) meta.setAttribute('content', dark ? '#06080f' : '#f0f4ff');
+  }
+  window.toggleTheme = function(){
+    var next = document.documentElement.getAttribute('data-theme') === 'light' ? 'dark' : 'light';
+    document.documentElement.setAttribute('data-theme', next);
+    try { localStorage.setItem('mjhub-theme', next); } catch (e) {}
+    syncThemeUi();
+  };
+
+  function go(n){
+    step = n;
+    $('viewPlan').classList.toggle('show', n === 1);
+    $('viewDetails').classList.toggle('show', n === 2);
+    $('pstep1').classList.toggle('active', n === 1);
+    $('pstep1').classList.toggle('done', n === 2);
+    $('pstep2').classList.toggle('active', n === 2);
+    $('pbar2').classList.toggle('on', n === 2);
+    window.scrollTo({ top: 0 });
+  }
+
+  function choose(p){
+    selected = p;
+    plans.forEach(function(x){ x.setAttribute('aria-pressed', String(x === p)); });
+    $('pickLabel').textContent = p.dataset.label + ' plan';
+    $('pickPrice').textContent = money(p.dataset.price);
+    $('nextBtn').disabled = false;
+  }
+  plans.forEach(function(p){ p.addEventListener('click', function(){ choose(p); }); });
+
+  $('nextBtn').addEventListener('click', function(){
+    if (!selected) return toast('Choose a plan to continue');
+    var price = money(selected.dataset.price);
+    $('dPlan').textContent = selected.dataset.label + ' · ' + price;
+    $('sPlan').textContent = selected.dataset.label;
+    $('sTotal').textContent = price;
+    $('payLabel').textContent = 'Pay ' + price;
+    go(2);
+  });
+  $('changePlan').addEventListener('click', function(){ go(1); });
+  $('stepBack').addEventListener('click', function(){ go(1); });
+  $('headerBackBtn').addEventListener('click', function(e){
+    if (step === 2) { e.preventDefault(); go(1); }
+  });
+
+  /* IMEI: digits only, 15 long, passes the Luhn check */
+  function luhn(s){
+    var sum = 0, alt = false;
+    for (var i = s.length - 1; i >= 0; i--) {
+      var d = +s[i];
+      if (alt) { d *= 2; if (d > 9) d -= 9; }
+      sum += d; alt = !alt;
+    }
+    return sum % 10 === 0;
+  }
+  function showErr(inputId, errId, msg){
+    var el = $(errId), inp = $(inputId);
+    el.textContent = msg || '';
+    el.classList.toggle('show', !!msg);
+    inp.classList.toggle('bad', !!msg);
+  }
+  $('imei').addEventListener('input', function(){
+    this.value = this.value.replace(/\D/g, '').slice(0, 15);
+    showErr('imei', 'imeiErr', '');
+  });
+  $('email').addEventListener('input', function(){ showErr('email', 'emailErr', ''); });
+
+  $('payBtn').addEventListener('click', function(){
+    var imei = $('imei').value.trim();
+    var email = $('email').value.trim();
+    var ok = true;
+    if (!/^\d{15}$/.test(imei)) { showErr('imei', 'imeiErr', 'Enter your 15-digit IMEI. Dial *#06# to find it.'); ok = false; }
+    else if (!luhn(imei)) { showErr('imei', 'imeiErr', 'This IMEI looks wrong. Check it and try again.'); ok = false; }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { showErr('email', 'emailErr', 'Enter a valid email address.'); ok = false; }
+    if (!ok) return;
+    if (!PAYMENT_CONNECTED) return toast('Payment is not connected yet');
+    /* TODO: POST { plan: selected.dataset.id, imei, email } to /api/esim with the user's access token.
+       The server must set the price from the plan id. On success: $('doneModal').classList.add('show'); */
+  });
+  $('doneBtn').addEventListener('click', function(){ location.href = 'dashboard.html#home'; });
+
+  $('previewNote').style.display = PAYMENT_CONNECTED ? 'none' : '';
+  syncThemeUi();
+})();
+</script>
+<script src="/js/haptic.js" defer></script>
 </body>
 </html>
