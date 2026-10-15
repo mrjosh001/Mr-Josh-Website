@@ -623,16 +623,7 @@ button{font-family:inherit}
       var wallet = result.wallet || {};
       var debitText = [];
       if (Number(wallet.ngn_debited || 0) > 0) debitText.push(money(wallet.ngn_debited) + ' from NGN');
-      if (Number(wallet.usd_debited || 0) > 0) debitText.push('
-
-  $('previewNote').style.display = PAYMENT_CONNECTED ? 'none' : '';
-  syncThemeUi();
-})();
-</script>
-<script src="/js/haptic.js" defer></script>
-</body>
-</html>
- + Number(wallet.usd_debited).toFixed(2) + ' from USD');
+      if (Number(wallet.usd_debited || 0) > 0) debitText.push(Number(wallet.usd_debited).toFixed(2) + ' from USD');
       var emailText = result.email_status && result.email_status.customer && result.email_status.admin
         ? 'Receipt sent to your email; MJ HUB support has been notified.'
         : 'Your order is paid. One or more emails may be delayed; your order reference is saved.';
