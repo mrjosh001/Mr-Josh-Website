@@ -120,6 +120,29 @@ button{font-family:inherit}
 .toast.show{opacity:1}
 
 .modal{display:none;position:fixed;inset:0;z-index:80;align-items:center;justify-content:center;padding:18px;background:rgba(6,8,15,.62);backdrop-filter:blur(10px)}
+.order-hero{position:relative;max-width:410px;max-height:90vh;overflow:auto;text-align:left;padding:0;background:var(--card);color:var(--text);border:1px solid var(--border);border-radius:26px}
+.modal-close{position:absolute;right:14px;top:14px;width:36px;height:36px;border:1px solid var(--border)!important;border-radius:12px!important;margin:0!important;padding:0!important;background:var(--input-bg)!important;color:var(--text)!important;display:grid;place-items:center}
+.order-hero-top{padding:25px 22px 18px;background:linear-gradient(140deg,rgba(37,99,235,.16),rgba(99,102,241,.04));border-bottom:1px solid var(--border)}
+.order-icon{margin:0 0 14px;width:48px;height:48px;border-radius:15px;background:var(--primary-soft);color:var(--primary);font-size:21px}
+.order-hero .eyebrow{font-size:10px;font-weight:850;letter-spacing:.15em;color:var(--primary);margin:0 0 5px}
+.order-hero h3{font-size:21px;margin:0 0 5px;color:var(--text)}
+.order-hero .order-subtitle{font-size:12px;color:var(--muted);margin:0}
+.order-hero-plan{margin:16px 18px 0;padding:17px;border:1px solid var(--border);border-radius:18px;background:var(--input-bg);display:flex;flex-direction:column;gap:5px}
+.plan-kicker{font-size:10px;letter-spacing:.12em;font-weight:850;color:var(--muted)}
+.order-hero-plan>strong{font-size:20px;font-weight:850}
+.hero-price{font-size:27px;font-weight:900;letter-spacing:-.04em;color:var(--primary)}
+.order-hero-details{padding:17px 22px 10px}
+.order-hero-details>div{display:flex;justify-content:space-between;align-items:flex-start;gap:14px;padding:10px 0;border-bottom:1px solid var(--border)}
+.order-hero-details>div:last-child{border-bottom:0}
+.order-hero-details span,.order-hero-total span{font-size:12px;color:var(--muted)}
+.order-hero-details strong{font-size:12px;text-align:right;max-width:65%;overflow-wrap:anywhere}
+.order-hero-details .confirm-email{font-size:11px}
+.order-hero-total{display:flex;justify-content:space-between;align-items:center;gap:12px;margin:0 18px;padding:15px 0;border-top:1px solid var(--border)}
+.order-hero-total strong{font-size:21px;font-weight:900}
+.order-hero .confirm-pay{margin:0 18px;width:calc(100% - 36px)}
+.order-hero .secondary-btn{width:calc(100% - 36px);margin:9px 18px 0;padding:12px;border:1px solid var(--border);border-radius:13px;background:transparent;color:var(--text);font-weight:800;cursor:pointer}
+.checkout-disclaimer{padding:12px 22px 18px!important;margin:0!important;font-size:11px!important;color:var(--muted)!important;text-align:center}
+
 .modal.show{display:flex}
 .modal-card{width:100%;max-width:360px;background:#fff;color:#0f172a;border-radius:24px;padding:28px 22px 22px;text-align:center;box-shadow:0 24px 60px rgba(0,0,0,.35)}
 .modal-icon{width:64px;height:64px;border-radius:18px;margin:0 auto 14px;background:#d1fae5;color:#059669;display:flex;align-items:center;justify-content:center;font-size:28px}
@@ -257,25 +280,38 @@ button{font-family:inherit}
     </div>
 
     <div class="card">
-      <p class="method-label">Order summary</p>
-      <div class="sum-row"><span>Plan</span><strong id="sPlan">—</strong></div>
-      <div class="sum-row"><span>Network</span><strong>T-Mobile</strong></div>
-      <div class="sum-row"><span>Delivery</span><strong>About 30 minutes, by email</strong></div>
-      <div class="sum-total"><span>Total</span><strong id="sTotal">₦0</strong></div>
-      <button type="button" class="btn" id="payBtn" style="margin-top:16px"><i class="fa-solid fa-lock"></i> <span id="payLabel">Pay</span></button>
-      <p class="hint">Your eSIM is prepared after payment and sent to your email.</p>
+      <p class="method-label">Ready to review?</p>
+      <p class="field-hint" style="margin:0 0 14px">Review your plan and details in a confirmation popup before continuing to payment.</p>
+      <button type="button" class="btn" id="payBtn"><i class="fa-solid fa-receipt"></i> Review order</button>
       <div class="preview-note" id="previewNote"><i class="fa-solid fa-screwdriver-wrench"></i>Payment is not connected yet. Nothing will be charged.</div>
     </div>
   </section>
 </div>
 
-<div class="modal" id="doneModal">
-  <div class="modal-card">
-    <div class="modal-icon"><i class="fa-solid fa-check"></i></div>
-    <h3>Order received</h3>
-    <p>Your eSIM takes about 30 minutes to process.</p>
-    <p>We'll send it to your email as soon as it's ready.</p>
-    <button type="button" id="doneBtn">Done</button>
+<div class="modal" id="confirmModal" role="dialog" aria-modal="true" aria-labelledby="confirmTitle">
+  <div class="modal-card order-hero">
+    <button type="button" class="modal-close" id="closeConfirm" aria-label="Close order summary"><i class="fa-solid fa-xmark"></i></button>
+    <div class="order-hero-top">
+      <div class="modal-icon order-icon"><i class="fa-solid fa-sim-card"></i></div>
+      <p class="eyebrow">ORDER SUMMARY</p>
+      <h3 id="confirmTitle">Confirm your eSIM plan</h3>
+      <p class="order-subtitle">Check everything before proceeding.</p>
+    </div>
+    <div class="order-hero-plan">
+      <span class="plan-kicker">SELECTED PLAN</span>
+      <strong id="confirmPlan">—</strong>
+      <span id="confirmPrice" class="hero-price">₦0</span>
+    </div>
+    <div class="order-hero-details">
+      <div><span>Network</span><strong>T-Mobile</strong></div>
+      <div><span>Delivery</span><strong>About 30 minutes, by email</strong></div>
+      <div><span>IMEI</span><strong id="confirmImei">—</strong></div>
+      <div><span>Email</span><strong id="confirmEmail" class="confirm-email">—</strong></div>
+    </div>
+    <div class="order-hero-total"><span>Total to pay</span><strong id="confirmTotal">₦0</strong></div>
+    <button type="button" id="confirmPayBtn" class="btn confirm-pay"><i class="fa-solid fa-lock"></i> <span id="confirmPayLabel">Confirm and pay</span></button>
+    <button type="button" id="editOrderBtn" class="secondary-btn">Go back and edit</button>
+    <p class="checkout-disclaimer" id="checkoutDisclaimer">Payment is not connected yet. Nothing will be charged.</p>
   </div>
 </div>
 <div class="toast" id="toast"></div>
@@ -335,9 +371,6 @@ button{font-family:inherit}
     if (!selected) return toast('Choose a plan to continue');
     var price = money(selected.dataset.price);
     $('dPlan').textContent = selected.dataset.label + ' · ' + price;
-    $('sPlan').textContent = selected.dataset.label;
-    $('sTotal').textContent = price;
-    $('payLabel').textContent = 'Pay ' + price;
     go(2);
   });
   $('changePlan').addEventListener('click', function(){ go(1); });
@@ -407,11 +440,28 @@ button{font-family:inherit}
     else if (!luhn(imei)) { showErr('imei', 'imeiErr', 'This IMEI looks wrong. Check it and try again.'); ok = false; }
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { showErr('email', 'emailErr', 'Enter a valid email address.'); ok = false; }
     if (!ok) return;
-    if (!PAYMENT_CONNECTED) return toast('Payment is not connected yet');
-    /* TODO: POST { plan: selected.dataset.id, imei, email } to /api/esim with the user's access token.
-       The server must set the price from the plan id. On success: $('doneModal').classList.add('show'); */
+    var price = money(selected.dataset.price);
+    $('confirmPlan').textContent = selected.dataset.label;
+    $('confirmPrice').textContent = price;
+    $('confirmTotal').textContent = price;
+    $('confirmImei').textContent = imei;
+    $('confirmEmail').textContent = email;
+    $('confirmPayLabel').textContent = 'Confirm and pay ' + price;
+    $('confirmModal').classList.add('show');
   });
-  $('doneBtn').addEventListener('click', function(){ location.href = 'dashboard.html#home'; });
+  function closeConfirm(){ $('confirmModal').classList.remove('show'); }
+  $('closeConfirm').addEventListener('click', closeConfirm);
+  $('editOrderBtn').addEventListener('click', closeConfirm);
+  $('confirmModal').addEventListener('click', function(e){ if (e.target === this) closeConfirm(); });
+  $('confirmPayBtn').addEventListener('click', function(){
+    if (!PAYMENT_CONNECTED) {
+      $('checkoutDisclaimer').textContent = 'Checkout is not available yet. No payment has been taken.';
+      toast('Payment is not connected yet');
+      return;
+    }
+    /* TODO: POST { plan: selected.dataset.id, imei: $('imei').value.trim(), email: $('email').value.trim() }
+       to /api/esim with the user's access token. Server must validate plan and set price. */
+  });
 
   $('previewNote').style.display = PAYMENT_CONNECTED ? 'none' : '';
   syncThemeUi();
