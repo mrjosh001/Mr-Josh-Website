@@ -119,37 +119,31 @@ button{font-family:inherit}
 :root[data-theme="light"] .toast{background:#0f172a}
 .toast.show{opacity:1}
 
-.modal{display:none;position:fixed;inset:0;z-index:80;align-items:center;justify-content:center;padding:18px;background:rgba(6,8,15,.62);backdrop-filter:blur(10px)}
-.order-hero{position:relative;max-width:410px;max-height:90vh;overflow:auto;text-align:left;padding:0;background:var(--card);color:var(--text);border:1px solid var(--border);border-radius:26px}
-.modal-close{position:absolute;right:14px;top:14px;width:36px;height:36px;border:1px solid var(--border)!important;border-radius:12px!important;margin:0!important;padding:0!important;background:var(--input-bg)!important;color:var(--text)!important;display:grid;place-items:center}
-.order-hero-top{padding:25px 22px 18px;background:linear-gradient(140deg,rgba(37,99,235,.16),rgba(99,102,241,.04));border-bottom:1px solid var(--border)}
-.order-icon{margin:0 0 14px;width:48px;height:48px;border-radius:15px;background:var(--primary-soft);color:var(--primary);font-size:21px}
-.order-hero .eyebrow{font-size:10px;font-weight:850;letter-spacing:.15em;color:var(--primary);margin:0 0 5px}
-.order-hero h3{font-size:21px;margin:0 0 5px;color:var(--text)}
-.order-hero .order-subtitle{font-size:12px;color:var(--muted);margin:0}
-.order-hero-plan{margin:16px 18px 0;padding:17px;border:1px solid var(--border);border-radius:18px;background:var(--input-bg);display:flex;flex-direction:column;gap:5px}
-.plan-kicker{font-size:10px;letter-spacing:.12em;font-weight:850;color:var(--muted)}
-.order-hero-plan>strong{font-size:20px;font-weight:850}
-.hero-price{font-size:27px;font-weight:900;letter-spacing:-.04em;color:var(--primary)}
-.order-hero-details{padding:17px 22px 10px}
-.order-hero-details>div{display:flex;justify-content:space-between;align-items:flex-start;gap:14px;padding:10px 0;border-bottom:1px solid var(--border)}
-.order-hero-details>div:last-child{border-bottom:0}
-.order-hero-details span,.order-hero-total span{font-size:12px;color:var(--muted)}
-.order-hero-details strong{font-size:12px;text-align:right;max-width:65%;overflow-wrap:anywhere}
-.order-hero-details .confirm-email{font-size:11px}
-.order-hero-total{display:flex;justify-content:space-between;align-items:center;gap:12px;margin:0 18px;padding:15px 0;border-top:1px solid var(--border)}
-.order-hero-total strong{font-size:21px;font-weight:900}
-.order-hero .confirm-pay{margin:0 18px;width:calc(100% - 36px)}
-.order-hero .secondary-btn{width:calc(100% - 36px);margin:9px 18px 0;padding:12px;border:1px solid var(--border);border-radius:13px;background:transparent;color:var(--text);font-weight:800;cursor:pointer}
-.checkout-disclaimer{padding:12px 22px 18px!important;margin:0!important;font-size:11px!important;color:var(--muted)!important;text-align:center}
-
-.modal.show{display:flex}
-.modal-card{width:100%;max-width:360px;background:#fff;color:#0f172a;border-radius:24px;padding:28px 22px 22px;text-align:center;box-shadow:0 24px 60px rgba(0,0,0,.35)}
-.modal-icon{width:64px;height:64px;border-radius:18px;margin:0 auto 14px;background:#d1fae5;color:#059669;display:flex;align-items:center;justify-content:center;font-size:28px}
-.modal-card h3{font-size:22px;font-weight:800;margin:0 0 8px}
-.modal-card p{font-size:14px;line-height:1.5;color:#475569;margin:0 0 6px}
-.modal-card button{width:100%;margin-top:16px;border:none;border-radius:14px;padding:13px;font-weight:800;background:#2563eb;color:#fff;cursor:pointer}
-
+/* Confirm order sheet — matched to the existing MJ HUB purchase modal */
+.purchase-modal{display:none;position:fixed;inset:0;z-index:2000;align-items:flex-end;justify-content:center;background:rgba(0,0,0,.55);backdrop-filter:blur(8px);padding:12px}
+.purchase-modal.open,.purchase-modal.active{display:flex}
+.purchase-sheet{background:#fff;color:#0f172a;width:100%;max-width:420px;border-radius:24px;max-height:92vh;overflow-y:auto;box-shadow:0 24px 60px rgba(0,0,0,.35);animation:sheetUp .28s ease;padding-bottom:8px}
+@keyframes sheetUp{from{transform:translateY(40px);opacity:0}to{transform:none;opacity:1}}
+.ps-header{display:flex;justify-content:space-between;align-items:center;padding:16px 18px;border-bottom:1px solid #eef2f7;font-weight:800;font-size:17px;color:#0f172a}
+.ps-close{background:none;border:none;font-size:18px;cursor:pointer;color:#64748b;width:32px;height:32px}
+.ps-body{padding:16px 18px 20px}
+.ps-title-row{display:flex;gap:12px;align-items:flex-start;margin-bottom:14px}
+.ps-icon{width:48px;height:48px;border-radius:14px;background:#4f46e5;color:#fff;display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0;overflow:hidden}
+.ps-name{font-size:16px;font-weight:800;margin-bottom:6px;color:#0f172a}
+.ps-meta{display:flex;gap:8px;flex-wrap:wrap}
+.ps-pill{font-size:11px;font-weight:700;padding:4px 10px;border-radius:20px}
+.ps-pill-stock{background:#d1fae5;color:#059669}
+.ps-pill-price{background:#fef3c7;color:#b45309}
+.ps-block{background:#f8fafc;border-radius:14px;padding:12px 14px;margin-bottom:10px}
+.ps-block-label{font-size:11px;font-weight:700;color:#64748b;margin-bottom:6px;text-transform:uppercase;letter-spacing:.03em}
+.ps-block-text{font-size:13px;color:#334155;line-height:1.55;font-weight:600;overflow-wrap:anywhere}
+.ps-total-row{display:flex;justify-content:space-between;align-items:center;background:linear-gradient(135deg,#eef2ff,#e0e7ff);border-radius:14px;padding:14px 16px;margin:12px 0 14px}
+.ps-total-label{font-size:14px;font-weight:700;color:#4338ca}
+.ps-total-price{font-size:18px;font-weight:800;color:#312e81}
+.ps-buy{width:100%;border:none;border-radius:14px;padding:15px;font-size:15px;font-weight:800;color:#fff;cursor:pointer;font-family:inherit;background:linear-gradient(135deg,#4f46e5,#2563eb);display:flex;align-items:center;justify-content:center;gap:8px}
+.ps-buy:disabled{opacity:.5;cursor:not-allowed}
+.ps-secondary{width:100%;margin-top:10px;border:1px solid #e2e8f0;border-radius:14px;padding:13px;font-size:14px;font-weight:800;color:#334155;cursor:pointer;background:#fff;font-family:inherit}
+.ps-err{color:#b45309;background:#fffbeb;border:1px solid #fde68a;border-radius:12px;padding:10px 12px;font-size:12px;line-height:1.5;font-weight:700;margin-top:12px;text-align:center}
 @media(max-width:360px){.wrap{padding:12px 12px 40px}.plan .price{font-size:18px}}
 @media(prefers-reduced-motion:reduce){*{transition:none!important}}
 </style>
@@ -288,30 +282,47 @@ button{font-family:inherit}
   </section>
 </div>
 
-<div class="modal" id="confirmModal" role="dialog" aria-modal="true" aria-labelledby="confirmTitle">
-  <div class="modal-card order-hero">
-    <button type="button" class="modal-close" id="closeConfirm" aria-label="Close order summary"><i class="fa-solid fa-xmark"></i></button>
-    <div class="order-hero-top">
-      <div class="modal-icon order-icon"><i class="fa-solid fa-sim-card"></i></div>
-      <p class="eyebrow">ORDER SUMMARY</p>
-      <h3 id="confirmTitle">Confirm your eSIM plan</h3>
-      <p class="order-subtitle">Check everything before proceeding.</p>
+<div class="purchase-modal" id="confirmModal" aria-hidden="true">
+  <div class="purchase-sheet" role="dialog" aria-modal="true" aria-labelledby="confirmTitle">
+    <div class="ps-header">
+      <span id="confirmTitle">Confirm Order</span>
+      <button type="button" class="ps-close" id="closeConfirm" aria-label="Close order summary">✕</button>
     </div>
-    <div class="order-hero-plan">
-      <span class="plan-kicker">SELECTED PLAN</span>
-      <strong id="confirmPlan">—</strong>
-      <span id="confirmPrice" class="hero-price">₦0</span>
+    <div class="ps-body">
+      <div class="ps-title-row">
+        <div class="ps-icon"><i class="fa-solid fa-sim-card"></i></div>
+        <div style="flex:1;min-width:0">
+          <div class="ps-name" id="confirmPlan">eSIM plan</div>
+          <div class="ps-meta">
+            <span class="ps-pill ps-pill-stock">T-Mobile eSIM</span>
+            <span class="ps-pill ps-pill-price" id="confirmPrice">₦0</span>
+          </div>
+        </div>
+      </div>
+      <div class="ps-block">
+        <div class="ps-block-label">Network</div>
+        <div class="ps-block-text">T-Mobile</div>
+      </div>
+      <div class="ps-block">
+        <div class="ps-block-label">Delivery</div>
+        <div class="ps-block-text">About 30 minutes, by email</div>
+      </div>
+      <div class="ps-block">
+        <div class="ps-block-label">Phone IMEI</div>
+        <div class="ps-block-text" id="confirmImei">—</div>
+      </div>
+      <div class="ps-block">
+        <div class="ps-block-label">Registered email</div>
+        <div class="ps-block-text" id="confirmEmail">—</div>
+      </div>
+      <div class="ps-total-row">
+        <span class="ps-total-label">Total</span>
+        <span class="ps-total-price" id="confirmTotal">₦0</span>
+      </div>
+      <button type="button" id="confirmPayBtn" class="ps-buy"><i class="fa-solid fa-lock"></i> <span id="confirmPayLabel">Confirm Purchase</span></button>
+      <button type="button" id="editOrderBtn" class="ps-secondary">Go back and edit</button>
+      <div class="ps-err" id="checkoutDisclaimer">Payment is not connected yet. Nothing will be charged.</div>
     </div>
-    <div class="order-hero-details">
-      <div><span>Network</span><strong>T-Mobile</strong></div>
-      <div><span>Delivery</span><strong>About 30 minutes, by email</strong></div>
-      <div><span>IMEI</span><strong id="confirmImei">—</strong></div>
-      <div><span>Email</span><strong id="confirmEmail" class="confirm-email">—</strong></div>
-    </div>
-    <div class="order-hero-total"><span>Total to pay</span><strong id="confirmTotal">₦0</strong></div>
-    <button type="button" id="confirmPayBtn" class="btn confirm-pay"><i class="fa-solid fa-lock"></i> <span id="confirmPayLabel">Confirm and pay</span></button>
-    <button type="button" id="editOrderBtn" class="secondary-btn">Go back and edit</button>
-    <p class="checkout-disclaimer" id="checkoutDisclaimer">Payment is not connected yet. Nothing will be charged.</p>
   </div>
 </div>
 <div class="toast" id="toast"></div>
@@ -447,9 +458,9 @@ button{font-family:inherit}
     $('confirmImei').textContent = imei;
     $('confirmEmail').textContent = email;
     $('confirmPayLabel').textContent = 'Confirm and pay ' + price;
-    $('confirmModal').classList.add('show');
+    $('confirmModal').classList.add('open');\n    $('confirmModal').classList.add('active');\n    $('confirmModal').setAttribute('aria-hidden', 'false');
   });
-  function closeConfirm(){ $('confirmModal').classList.remove('show'); }
+  function closeConfirm(){ $('confirmModal').classList.remove('open'); $('confirmModal').classList.remove('active'); $('confirmModal').setAttribute('aria-hidden', 'true'); }
   $('closeConfirm').addEventListener('click', closeConfirm);
   $('editOrderBtn').addEventListener('click', closeConfirm);
   $('confirmModal').addEventListener('click', function(e){ if (e.target === this) closeConfirm(); });
