@@ -631,6 +631,7 @@ button{font-family:inherit}
         'Charged ' + (debitText.join(' + ') || 'your MJ HUB wallet') + '. ' + emailText;
       $('confirmPayBtn').innerHTML = '<i class="fa-solid fa-check"></i> <span id="confirmPayLabel">Payment successful</span>';
       toast('eSIM order placed successfully');
+      setTimeout(function(){ location.href = 'esim-orders.html?order_ref=' + encodeURIComponent(result.order.order_ref); }, 700);
     } catch (error) {
       $('checkoutDisclaimer').textContent = error && error.message
         ? error.message

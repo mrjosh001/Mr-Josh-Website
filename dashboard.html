@@ -3264,6 +3264,7 @@ html[data-theme="light"] .logo-word, :root[data-theme="light"] .logo-word{color:
                     <li><a href="mj-telegram-history.html" style="padding-left:34px;display:flex;align-items:center;gap:10px;"><i class="fa-solid fa-clock-rotate-left"></i> <span>Telegram Orders</span></a></li>
                 </ul>
             </li>
+            <li><a href="esim-orders.html"><i class="fa-solid fa-sim-card"></i> <span>eSIM Orders</span></a></li>
             <li><a href="deposit.html"><i class="fa-solid fa-credit-card"></i> <span>Deposit</span></a></li>
             <li><a href="referral.html"><i class="fa-solid fa-handshake"></i> <span>Refer & Earn 3%</span></a></li>
             <li><a href="#" class="sidebar-link" data-target="cart"><i class="fa-solid fa-bag-shopping"></i> <span>Cart</span></a></li>
@@ -5505,6 +5506,11 @@ function normalizeTxType(tx) {
       return 'conversion';
     }
 
+    // eSIM orders
+    if (type === 'esim' || cat.includes('esim') || /\besim\b/i.test(title + ' ' + channel)) {
+      return 'esim';
+    }
+
     // Deposits
     if (type === 'deposit' || cat.includes('deposit') || channel.includes('pocketfi') || channel.includes('paystack') || channel.includes('bank transfer')) {
       return 'deposit';
@@ -5581,7 +5587,7 @@ async function fetchActivityFromOrders(userId) {
     const extra = [];
     if (!supabaseClient || !userId) return extra;
     try {
-        const [logsRes, smsRes, boostRes] = await Promise.all([
+        const [logsRes, smsRes, boostRes, esimRes] = await Promise.all([
             supabaseClient
                 .from('orders')
                 .select('id, order_id, product_name, amount, status, created_at, quantity')
@@ -5599,10 +5605,17 @@ async function fetchActivityFromOrders(userId) {
                 .select('id, order_id, service_name, link, price_ngn, charge, price, status, created_at, source')
                 .eq('user_id', userId)
                 .order('created_at', { ascending: false })
+                .limit(200),
+            supabaseClient
+                .from('esim_orders')
+                .select('id, order_ref, plan_id, plan_name, amount_ngn, imei, wallet_ngn_debited, wallet_usd_debited, status, created_at')
+                .eq('user_id', userId)
+                .order('created_at', { ascending: false })
                 .limit(200)
         ]);
 
         const logRows = logsRes.error ? [] : (logsRes.data || []);
+        const esimRows = esimRes.error ? [] : (esimRes.data || []);
         // Group multi-qty log purchases by base order_id
         const logMap = new Map();
         for (const o of logRows) {
@@ -5643,6 +5656,29 @@ async function fetchActivityFromOrders(userId) {
                 paymentProvider: 'MJ HUB',
                 channel: 'Wallet',
                 _source: 'orders'
+            });
+        }
+
+        for (const o of esimRows) {
+            const amount = Number(o.amount_ngn) || 0;
+            extra.push({
+                id: 'esim-' + (o.id || o.order_ref),
+                type: 'esim',
+                category: 'eSIM',
+                title: 'eSIM · ' + (o.plan_name || o.plan_id || 'Plan'),
+                subtitle: 'Order ' + (o.order_ref || '') + (o.imei ? ' · IMEI ' + o.imei : ''),
+                amount: fmtNgnAmount(amount),
+                amount_ngn: amount,
+                date: o.created_at ? new Date(o.created_at).toLocaleString() : '',
+                created_at: o.created_at,
+                status: o.status || 'completed',
+                paymentProvider: 'MJ HUB Wallet',
+                channel: 'Wallet',
+                _source: 'esim_orders',
+                order_ref: o.order_ref,
+                imei: o.imei,
+                wallet_ngn_debited: Number(o.wallet_ngn_debited || 0),
+                wallet_usd_debited: Number(o.wallet_usd_debited || 0)
             });
         }
 
@@ -7558,7 +7594,7 @@ async function fetchUserSpendingSummary(userId) {
               }).then((r) => r.json().catch(() => ({}))).catch(() => ({}))
             : Promise.resolve({});
 
-        const [logsRes, smsRes, boostJson] = await Promise.all([
+        const [logsRes, smsRes, boostJson, esimRes] = await Promise.all([
             supabaseClient.from('orders')
                 .select('amount, quantity, status')
                 .eq('user_id', userId)
@@ -7567,7 +7603,11 @@ async function fetchUserSpendingSummary(userId) {
                 .select('price, status', { count: 'exact' })
                 .eq('user_id', userId)
                 .eq('status', 'completed'),
-            boostFetch
+            boostFetch,
+            supabaseClient.from('esim_orders')
+                .select('amount_ngn, status')
+                .eq('user_id', userId)
+                .in('status', ['completed', 'paid', 'success'])
         ]);
 
         let boostRows = [];
@@ -7586,11 +7626,14 @@ async function fetchUserSpendingSummary(userId) {
         const logCount = logRows.reduce((s, o) => s + Math.max(1, Number(o.quantity) || 1), 0);
         const smsCount = smsRes.error ? 0 : (smsRes.count ?? smsRows.length);
         const boostCount = boostRows.length;
-        const totalOrders = logCount + smsCount + boostCount;
+        const esimRows = esimRes.error ? [] : (esimRes.data || []);
+        const esimCount = esimRows.length;
+        const totalOrders = logCount + smsCount + boostCount + esimCount;
         const totalSpent =
             logRows.reduce((s, o) => s + (Number(o.amount) || 0), 0) +
             smsRows.reduce((s, o) => s + (Number(o.price) || 0), 0) +
-            boostRows.reduce((s, o) => s + boostPrice(o), 0);
+            boostRows.reduce((s, o) => s + boostPrice(o), 0) +
+            esimRows.reduce((s, o) => s + (Number(o.amount_ngn) || 0), 0);
 
         safeSet('homeTotalOrders', totalOrders.toLocaleString());
         safeSet('homeTotalSpent', '₦' + totalSpent.toLocaleString(undefined, { minimumFractionDigits: 2 }));
@@ -7867,6 +7910,7 @@ function renderHistoryList(filterType = 'all') {
         else if (kind === 'telegram') { iconClass = 'fa-paper-plane'; boxClass = 'tx-blue'; }
         else if (kind === 'booster') { iconClass = 'fa-bolt'; boxClass = 'tx-blue'; }
         else if (kind === 'conversion') { iconClass = 'fa-right-left'; boxClass = 'tx-purple'; }
+        else if (kind === 'esim') { iconClass = 'fa-sim-card'; boxClass = 'tx-blue'; }
 
         const st = String(t.status || 'Success').toLowerCase().replace('completed', 'success');
         let badgeClass = 'badge-success';
