@@ -561,8 +561,8 @@ button{font-family:inherit}
       return;
     }
 
-    var imei = String($('imei').value || '').replace(/\D/g, '');
-    if (!/^\d{15}$/.test(imei)) {
+    var imei = String($('imei').value || '').replace(/[^0-9]/g, '');
+    if (imei.length !== 15) {
       closeConfirm();
       showErr('imei', 'imeiErr', 'Enter all 15 digits of your IMEI.');
       return;
