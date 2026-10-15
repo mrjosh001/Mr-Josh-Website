@@ -84,6 +84,7 @@ button{font-family:inherit}
 .form-group label{display:block;font-size:11px;font-weight:800;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;margin-bottom:6px}
 .form-group input{width:100%;padding:13px 14px;border-radius:12px;border:1px solid var(--border);background:var(--input-bg);color:var(--text);font-size:15px;font-weight:600;outline:none}
 .form-group input:focus{border-color:var(--primary)}
+.form-group input[readonly]{opacity:.88;cursor:not-allowed;border-style:dashed}
 .form-group input.bad{border-color:var(--danger)}
 .form-group input::placeholder{color:var(--muted);opacity:.7;font-weight:500}
 .field-hint{font-size:12px;color:var(--muted);margin-top:6px;line-height:1.5}
@@ -229,8 +230,8 @@ button{font-family:inherit}
       </div>
       <div class="form-group">
         <label for="email">Email address</label>
-        <input id="email" type="email" autocomplete="email" placeholder="you@example.com">
-        <p class="field-hint">We email your order confirmation and your eSIM QR code here.</p>
+        <input id="email" type="email" autocomplete="email" placeholder="Loading your account email…" readonly aria-readonly="true" aria-describedby="emailHint">
+        <p class="field-hint" id="emailHint">Your registered MJ HUB email will be used for order updates and eSIM delivery. This field cannot be edited here.</p>
         <p class="field-err" id="emailErr"></p>
       </div>
       <div class="instruct"><i class="fa-solid fa-circle-info"></i><span>Your phone must support eSIM and be network unlocked. If it shows two IMEI numbers, use the first one.</span></div>
@@ -260,6 +261,7 @@ button{font-family:inherit}
 </div>
 <div class="toast" id="toast"></div>
 
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
 (function(){
   var $ = function(id){ return document.getElementById(id); };
@@ -267,6 +269,10 @@ button{font-family:inherit}
   var selected = null;
   var step = 1;
   var PAYMENT_CONNECTED = false; /* flip to true once api/esim.js is live */
+  var accountEmailReady = false;
+  var SUPABASE_URL = 'https://atczodlljmlayvldxfmv.supabase.co';
+  var SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJIUzI1NiIsInJlZiI6ImF0Y3pvZGxsam1sYXl2bGR4Zm12IiwiaWF0IjoxNzg1MDc1MjM4LCJleHAiOjIxMDA2NTEyMzB9.ufthD-p7BmeD_B7xyuMM6PNPL8DmcL4AtRYgg-MuoLI';
+  var sb = window.supabase && window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:true,storage:window.sessionStorage}});
 
   function money(n){ return '₦' + Number(n).toLocaleString('en-NG'); }
   function toast(msg){
@@ -343,10 +349,41 @@ button{font-family:inherit}
   });
   $('email').addEventListener('input', function(){ showErr('email', 'emailErr', ''); });
 
+  async function loadRegisteredEmail(){
+    var field = $('email');
+    field.value = '';
+    field.placeholder = 'Loading your account email…';
+    $('payBtn').disabled = true;
+    try {
+      if (!sb) throw new Error('Authentication service is unavailable. Please refresh and try again.');
+      var result = await sb.auth.getSession();
+      var session = result && result.data && result.data.session;
+      if (!session || !session.user) {
+        location.href = 'auth.html?redirect=' + encodeURIComponent('esim.html');
+        return;
+      }
+      var registeredEmail = String(session.user.email || '').trim();
+      if (!registeredEmail) {
+        showErr('email', 'emailErr', 'No email is attached to your MJ HUB account. Please contact support.');
+        field.placeholder = 'No registered email found';
+        return;
+      }
+      field.value = registeredEmail;
+      field.placeholder = '';
+      accountEmailReady = true;
+      $('payBtn').disabled = false;
+    } catch (e) {
+      showErr('email', 'emailErr', 'Could not load your registered email. Refresh the page and try again.');
+      field.placeholder = 'Unable to load account email';
+    }
+  }
+  loadRegisteredEmail();
+
   $('payBtn').addEventListener('click', function(){
     var imei = $('imei').value.trim();
     var email = $('email').value.trim();
     var ok = true;
+    if (!accountEmailReady || !email) { showErr('email', 'emailErr', 'Your registered account email has not loaded yet. Please wait or refresh.'); return; }
     if (!/^\d{15}$/.test(imei)) { showErr('imei', 'imeiErr', 'Enter your 15-digit IMEI. Dial *#06# to find it.'); ok = false; }
     else if (!luhn(imei)) { showErr('imei', 'imeiErr', 'This IMEI looks wrong. Check it and try again.'); ok = false; }
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { showErr('email', 'emailErr', 'Enter a valid email address.'); ok = false; }
