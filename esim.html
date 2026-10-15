@@ -119,64 +119,55 @@ button{font-family:inherit}
 :root[data-theme="light"] .toast{background:#0f172a}
 .toast.show{opacity:1}
 
-/* Confirm order sheet — matched to the existing MJ HUB purchase modal */
-.purchase-modal{display:none;position:fixed;inset:0;z-index:2000;align-items:flex-end;justify-content:center;background:rgba(0,0,0,.55);backdrop-filter:blur(8px);padding:12px}
-.purchase-modal.open,.purchase-modal.active{display:flex}
-.purchase-sheet{background:#fff;color:#0f172a;width:100%;max-width:420px;border-radius:24px;max-height:92vh;overflow-y:auto;box-shadow:0 24px 60px rgba(0,0,0,.35);animation:sheetUp .28s ease;padding-bottom:8px}
-@keyframes sheetUp{from{transform:translateY(40px);opacity:0}to{transform:none;opacity:1}}
-.ps-header{display:flex;justify-content:space-between;align-items:center;padding:16px 18px;border-bottom:1px solid #eef2f7;font-weight:800;font-size:17px;color:#0f172a}
-.ps-close{background:none;border:none;font-size:18px;cursor:pointer;color:#64748b;width:32px;height:32px}
-.ps-body{padding:16px 18px 20px}
-.ps-title-row{display:flex;gap:12px;align-items:flex-start;margin-bottom:14px}
-.ps-icon{width:48px;height:48px;border-radius:14px;background:#4f46e5;color:#fff;display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0;overflow:hidden}
-.ps-name{font-size:16px;font-weight:800;margin-bottom:6px;color:#0f172a}
-.ps-meta{display:flex;gap:8px;flex-wrap:wrap}
-.ps-pill{font-size:11px;font-weight:700;padding:4px 10px;border-radius:20px}
-.ps-pill-stock{background:#d1fae5;color:#059669}
-.ps-pill-price{background:#fef3c7;color:#b45309}
-.ps-block{background:#f8fafc;border-radius:14px;padding:12px 14px;margin-bottom:10px}
-.ps-block-label{font-size:11px;font-weight:700;color:#64748b;margin-bottom:6px;text-transform:uppercase;letter-spacing:.03em}
-.ps-block-text{font-size:13px;color:#334155;line-height:1.55;font-weight:600;overflow-wrap:anywhere}
-.ps-total-row{display:flex;justify-content:space-between;align-items:center;background:linear-gradient(135deg,#eef2ff,#e0e7ff);border-radius:14px;padding:14px 16px;margin:12px 0 14px}
-.ps-total-label{font-size:14px;font-weight:700;color:#4338ca}
-.ps-total-price{font-size:18px;font-weight:800;color:#312e81}
-.ps-buy{width:100%;border:none;border-radius:14px;padding:15px;font-size:15px;font-weight:800;color:#fff;cursor:pointer;font-family:inherit;background:linear-gradient(135deg,#4f46e5,#2563eb);display:flex;align-items:center;justify-content:center;gap:8px}
-.ps-buy:disabled{opacity:.5;cursor:not-allowed}
-.ps-secondary{width:100%;margin-top:10px;border:1px solid #e2e8f0;border-radius:14px;padding:13px;font-size:14px;font-weight:800;color:#334155;cursor:pointer;background:#fff;font-family:inherit}
-.ps-err{color:#b45309;background:#fffbeb;border:1px solid #fde68a;border-radius:12px;padding:10px 12px;font-size:12px;line-height:1.5;font-weight:700;margin-top:12px;text-align:center}
+.modal{display:none;position:fixed;inset:0;z-index:80;align-items:center;justify-content:center;padding:18px;background:rgba(6,8,15,.62);backdrop-filter:blur(10px)}
+.order-hero{position:relative;max-width:410px;max-height:90vh;overflow:auto;text-align:left;padding:0;background:var(--card);color:var(--text);border:1px solid var(--border);border-radius:26px}
+.modal-close{position:absolute;right:14px;top:14px;width:36px;height:36px;border:1px solid var(--border)!important;border-radius:12px!important;margin:0!important;padding:0!important;background:var(--input-bg)!important;color:var(--text)!important;display:grid;place-items:center}
+.order-hero-top{padding:25px 22px 18px;background:linear-gradient(140deg,rgba(37,99,235,.16),rgba(99,102,241,.04));border-bottom:1px solid var(--border)}
+.order-icon{margin:0 0 14px;width:48px;height:48px;border-radius:15px;background:var(--primary-soft);color:var(--primary);font-size:21px}
+.order-hero .eyebrow{font-size:10px;font-weight:850;letter-spacing:.15em;color:var(--primary);margin:0 0 5px}
+.order-hero h3{font-size:21px;margin:0 0 5px;color:var(--text)}
+.order-hero .order-subtitle{font-size:12px;color:var(--muted);margin:0}
+.order-hero-plan{margin:16px 18px 0;padding:17px;border:1px solid var(--border);border-radius:18px;background:var(--input-bg);display:flex;flex-direction:column;gap:5px}
+.plan-kicker{font-size:10px;letter-spacing:.12em;font-weight:850;color:var(--muted)}
+.order-hero-plan>strong{font-size:20px;font-weight:850}
+.hero-price{font-size:27px;font-weight:900;letter-spacing:-.04em;color:var(--primary)}
+.order-hero-details{padding:17px 22px 10px}
+.order-hero-details>div{display:flex;justify-content:space-between;align-items:flex-start;gap:14px;padding:10px 0;border-bottom:1px solid var(--border)}
+.order-hero-details>div:last-child{border-bottom:0}
+.order-hero-details span,.order-hero-total span{font-size:12px;color:var(--muted)}
+.order-hero-details strong{font-size:12px;text-align:right;max-width:65%;overflow-wrap:anywhere}
+.order-hero-details .confirm-email{font-size:11px}
+.order-hero-total{display:flex;justify-content:space-between;align-items:center;gap:12px;margin:0 18px;padding:15px 0;border-top:1px solid var(--border)}
+.order-hero-total strong{font-size:21px;font-weight:900}
+.order-hero .confirm-pay{margin:0 18px;width:calc(100% - 36px)}
+.order-hero .secondary-btn{width:calc(100% - 36px);margin:9px 18px 0;padding:12px;border:1px solid var(--border);border-radius:13px;background:transparent;color:var(--text);font-weight:800;cursor:pointer}
+.checkout-disclaimer{padding:12px 22px 18px!important;margin:0!important;font-size:11px!important;color:var(--muted)!important;text-align:center}
 
-/* eSIM page refinements */
-.eyebrow{display:inline-flex;align-items:center;gap:7px;font-size:10px;letter-spacing:.09em;text-transform:uppercase;font-weight:850;opacity:.9;margin-bottom:6px}
-.hero-copy{min-width:0}
-.hero-status{display:flex;flex-wrap:wrap;gap:6px;margin-top:9px}
-.hero-status span{font-size:10px;font-weight:750;padding:5px 8px;border-radius:999px;background:rgba(255,255,255,.16);border:1px solid rgba(255,255,255,.2)}
-.section-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:12px}
-.section-head h3{font-size:14px;font-weight:850}
-.section-head p{font-size:12px;color:var(--muted);line-height:1.5;margin-top:4px}
-.section-icon{width:34px;height:34px;display:grid;place-items:center;border-radius:11px;background:var(--primary-soft);color:var(--primary);flex:none}
-.plan{min-height:146px}.plan .per-month{font-size:11px;color:var(--muted);margin-top:7px;font-weight:650}.plan .save-tag{position:static;margin-top:6px;align-self:flex-end}
-.plan .save-tag{position:absolute;right:10px;bottom:10px;font-size:9px;font-weight:850;color:var(--success)}
-.plan .tag{z-index:1}
-.trust-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
-.trust-item{display:flex;gap:10px;align-items:flex-start;padding:12px;border:1px solid var(--border);border-radius:13px;background:var(--input-bg)}
-.trust-item i{color:var(--primary);margin-top:2px}
-.trust-item strong{display:block;font-size:12px;margin-bottom:4px}
-.trust-item span{display:block;font-size:11px;color:var(--muted);line-height:1.45}
-.steps-list{display:grid;gap:12px}
-.setup-step{display:grid;grid-template-columns:30px 1fr;gap:10px;align-items:start}
-.setup-number{width:28px;height:28px;border-radius:9px;background:var(--primary-soft);color:var(--primary);display:grid;place-items:center;font-size:12px;font-weight:900}
-.setup-step strong{font-size:12.5px;display:block;margin-bottom:3px}
-.setup-step p{font-size:12px;line-height:1.5;color:var(--muted)}
-.faq-list{display:grid;gap:8px}
-.faq-list details{border:1px solid var(--border);border-radius:12px;background:var(--input-bg);padding:12px 13px}
-.faq-list summary{cursor:pointer;list-style:none;font-size:12.5px;font-weight:800;display:flex;align-items:center;justify-content:space-between;gap:10px}
-.faq-list summary::-webkit-details-marker{display:none}
-.faq-list summary:after{content:'+';font-size:18px;color:var(--primary);line-height:1}
-.faq-list details[open] summary:after{content:'−'}
-.faq-list details p{font-size:12px;line-height:1.55;color:var(--muted);padding-top:9px}
-.support-note{font-size:11.5px;line-height:1.55;color:var(--muted);text-align:center;padding:2px 8px 8px}
-.plan-disclaimer{font-size:11px;line-height:1.5;color:var(--muted);margin-top:10px}
-@media(max-width:360px){.trust-grid{grid-template-columns:1fr}.hero-status span{font-size:9px}}
+.modal.show{display:flex}
+.modal-card{width:100%;max-width:360px;background:#fff;color:#0f172a;border-radius:24px;padding:28px 22px 22px;text-align:center;box-shadow:0 24px 60px rgba(0,0,0,.35)}
+.modal-icon{width:64px;height:64px;border-radius:18px;margin:0 auto 14px;background:#d1fae5;color:#059669;display:flex;align-items:center;justify-content:center;font-size:28px}
+.modal-card h3{font-size:22px;font-weight:800;margin:0 0 8px}
+.modal-card p{font-size:14px;line-height:1.5;color:#475569;margin:0 0 6px}
+.modal-card button{width:100%;margin-top:16px;border:none;border-radius:14px;padding:13px;font-weight:800;background:#2563eb;color:#fff;cursor:pointer}
+
+
+/* Refined original eSIM design */
+.fund-hero{position:relative;overflow:hidden}
+.fund-hero:after{content:"";position:absolute;width:150px;height:150px;right:-55px;top:-65px;border-radius:50%;background:rgba(255,255,255,.09);pointer-events:none}
+.feature-card{box-shadow:0 8px 24px rgba(0,0,0,.035)}
+.plan{min-height:124px}
+.plan .price{margin-top:10px}
+.plan .monthly{font-size:10.5px;color:var(--muted);margin-top:5px;font-weight:650}
+.plan .saving{font-size:9px;color:var(--success);font-weight:850;margin-top:5px}
+.plan[aria-pressed="true"]{box-shadow:0 0 0 1px var(--primary),0 8px 22px rgba(59,110,245,.10)}
+.delivery-strip{display:flex;align-items:flex-start;gap:10px;padding:12px 13px;margin:0 0 14px;border:1px solid rgba(5,150,105,.22);border-radius:14px;background:var(--success-soft);font-size:12px;line-height:1.45}
+.delivery-strip i{color:var(--success);margin-top:2px}
+.delivery-strip strong{display:block;font-size:12px;margin-bottom:2px}
+.delivery-strip span{color:var(--muted)}
+.order-hero-details .delivery-value{color:var(--success)}
+.btn{transition:transform .15s ease,filter .15s ease}
+.btn:not(:disabled):active{transform:scale(.99);filter:brightness(.97)}
+@media(max-width:360px){.plan{min-height:118px;padding:12px 10px}.plan .price{font-size:18px}.delivery-strip{font-size:11.5px}}
 
 @media(max-width:360px){.wrap{padding:12px 12px 40px}.plan .price{font-size:18px}}
 @media(prefers-reduced-motion:reduce){*{transition:none!important}}
@@ -240,11 +231,9 @@ button{font-family:inherit}
   <section class="view show" id="viewPlan">
     <div class="fund-hero">
       <div class="fund-hero-icon"><i class="fa-solid fa-sim-card"></i></div>
-      <div class="hero-copy">
-        <div class="eyebrow"><i class="fa-solid fa-bolt"></i> Digital SIM · No physical card</div>
+      <div>
         <h2>T-Mobile eSIM</h2>
-        <p>Choose a duration, confirm your device details, and review your order.</p>
-        <div class="hero-status"><span><i class="fa-solid fa-mobile-screen-button"></i> eSIM-compatible phone</span><span><i class="fa-solid fa-lock"></i> Account email verified</span></div>
+        <p>Choose your eSIM duration and get connected with T-Mobile.</p>
       </div>
     </div>
     <div class="feature-card" aria-label="eSIM features">
@@ -257,59 +246,32 @@ button{font-family:inherit}
         <span><i class="fa-solid fa-wifi"></i> Wi-Fi Calling</span>
       </div>
     </div>
+    <div class="delivery-strip"><i class="fa-solid fa-envelope-circle-check"></i><div><strong>Automatic delivery</strong><span>After successful payment, your eSIM is processed automatically and sent to your registered email within 30 minutes.</span></div></div>
     <div class="card">
-      <p class="method-label">Plan duration</p>
+      <p class="method-label">Choose your plan</p>
       <div class="plans" role="group" aria-label="eSIM plan duration">
         <button class="plan" type="button" data-id="1m" data-label="1 month" data-price="26000" aria-pressed="false">
           <span class="radio"><i class="fa-solid fa-check"></i></span>
-          <span class="duration">1 month</span><span class="price">₦26,000</span><span class="period">30 days</span><span class="per-month">₦26,000 / month</span>
+          <span class="duration">1 month</span><span class="price">₦26,000</span><span class="period">30 days</span><span class="monthly">₦26,000 per month</span>
         </button>
         <button class="plan" type="button" data-id="3m" data-label="3 months" data-price="47000" aria-pressed="false">
           <span class="tag">Popular</span>
           <span class="radio"><i class="fa-solid fa-check"></i></span>
-          <span class="duration">3 months</span><span class="price">₦47,000</span><span class="period">90 days</span><span class="per-month">≈ ₦15,667 / month</span><span class="save-tag">Save ~40%</span>
+          <span class="duration">3 months</span><span class="price">₦47,000</span><span class="period">90 days</span><span class="monthly">≈ ₦15,667 per month</span><span class="saving">Save about 40%</span>
         </button>
         <button class="plan" type="button" data-id="6m" data-label="6 months" data-price="68000" aria-pressed="false">
           <span class="radio"><i class="fa-solid fa-check"></i></span>
-          <span class="duration">6 months</span><span class="price">₦68,000</span><span class="period">180 days</span><span class="per-month">≈ ₦11,333 / month</span><span class="save-tag">Save ~56%</span>
+          <span class="duration">6 months</span><span class="price">₦68,000</span><span class="period">180 days</span><span class="monthly">≈ ₦11,333 per month</span><span class="saving">Save about 56%</span>
         </button>
         <button class="plan" type="button" data-id="12m" data-label="1 year" data-price="90000" aria-pressed="false">
           <span class="radio"><i class="fa-solid fa-check"></i></span>
-          <span class="duration">1 year</span><span class="price">₦90,000</span><span class="period">365 days</span><span class="per-month">₦7,500 / month</span><span class="save-tag">Save ~71%</span>
+          <span class="duration">1 year</span><span class="price">₦90,000</span><span class="period">365 days</span><span class="monthly">₦7,500 per month</span><span class="saving">Save about 71%</span>
         </button>
       </div>
       <div class="pickbar"><span id="pickLabel">Select a plan to continue</span><strong id="pickPrice"></strong></div>
       <button type="button" class="btn" id="nextBtn" disabled>Next <i class="fa-solid fa-arrow-right"></i></button>
     </div>
     <div class="provider-foot"><i class="fa-solid fa-shield-halved"></i> Powered by T-Mobile</div>
-    <p class="plan-disclaimer">Monthly equivalents and savings are calculated against renewing the 1-month plan at ₦26,000 per month. Device eligibility and service availability must be confirmed before purchase.</p>
-    <div class="card">
-      <div class="section-head"><div><h3>Before you order</h3><p>Check these details first to avoid activation issues.</p></div><span class="section-icon"><i class="fa-solid fa-clipboard-check"></i></span></div>
-      <div class="trust-grid">
-        <div class="trust-item"><i class="fa-solid fa-mobile-screen"></i><div><strong>eSIM support</strong><span>Your phone must support eSIM and be network-unlocked.</span></div></div>
-        <div class="trust-item"><i class="fa-solid fa-fingerprint"></i><div><strong>Correct IMEI</strong><span>Use the first IMEI shown when you dial *#06#.</span></div></div>
-        <div class="trust-item"><i class="fa-solid fa-envelope-circle-check"></i><div><strong>Account email</strong><span>Delivery details will use your registered MJ HUB email.</span></div></div>
-        <div class="trust-item"><i class="fa-solid fa-headset"></i><div><strong>Manual processing</strong><span>Order handling and delivery timing will be confirmed after checkout is connected.</span></div></div>
-      </div>
-    </div>
-    <div class="card">
-      <div class="section-head"><div><h3>How it works</h3><p>A simple path from plan selection to setup.</p></div><span class="section-icon"><i class="fa-solid fa-route"></i></span></div>
-      <div class="steps-list">
-        <div class="setup-step"><span class="setup-number">1</span><div><strong>Choose your duration</strong><p>Select the plan that fits how long you need service.</p></div></div>
-        <div class="setup-step"><span class="setup-number">2</span><div><strong>Enter and review your IMEI</strong><p>Dial *#06#, enter the 15-digit IMEI, and check the order summary carefully.</p></div></div>
-        <div class="setup-step"><span class="setup-number">3</span><div><strong>Complete purchase when checkout is available</strong><p>Payment and order processing are not active on this page yet. Do not treat the review popup as a completed order.</p></div></div>
-      </div>
-    </div>
-    <div class="card">
-      <div class="section-head"><div><h3>Frequently asked questions</h3><p>Important details before you continue.</p></div><span class="section-icon"><i class="fa-regular fa-circle-question"></i></span></div>
-      <div class="faq-list">
-        <details><summary>How do I find my IMEI?</summary><p>Open your phone dialler and enter *#06#. Copy the first 15-digit IMEI shown. Check every digit before reviewing your order.</p></details>
-        <details><summary>Will every phone work?</summary><p>No. Your phone must support eSIM and be network-unlocked. Compatibility can vary by model, region, and carrier status, so confirm before buying.</p></details>
-        <details><summary>When will I receive my eSIM?</summary><p>Delivery timing is not guaranteed on this page. Orders are intended for manual processing, and a confirmed delivery estimate should be provided once the order workflow is active.</p></details>
-        <details><summary>Will I be charged when I tap Review order?</summary><p>No. Review order only opens the summary. Payment integration is not active, so this page cannot charge you or confirm a completed purchase.</p></details>
-      </div>
-    </div>
-    <p class="support-note">Please review your plan, IMEI, email, and device compatibility carefully before proceeding.</p>
   </section>
 
   <!-- PAGE 2: details + pay -->
@@ -341,52 +303,35 @@ button{font-family:inherit}
       <p class="method-label">Ready to review?</p>
       <p class="field-hint" style="margin:0 0 14px">Review your plan and details in a confirmation popup before continuing to payment.</p>
       <button type="button" class="btn" id="payBtn"><i class="fa-solid fa-receipt"></i> Review order</button>
-      <div class="preview-note" id="previewNote"><i class="fa-solid fa-screwdriver-wrench"></i>Payment integration is not active. This review does not create an order or take payment.</div>
+      <div class="preview-note" id="previewNote"><i class="fa-solid fa-screwdriver-wrench"></i>Payment is not connected yet. Nothing will be charged.</div>
     </div>
   </section>
 </div>
 
-<div class="purchase-modal" id="confirmModal" aria-hidden="true">
-  <div class="purchase-sheet" role="dialog" aria-modal="true" aria-labelledby="confirmTitle">
-    <div class="ps-header">
-      <span id="confirmTitle">Confirm Order</span>
-      <button type="button" class="ps-close" id="closeConfirm" aria-label="Close order summary">✕</button>
+<div class="modal" id="confirmModal" role="dialog" aria-modal="true" aria-labelledby="confirmTitle">
+  <div class="modal-card order-hero">
+    <button type="button" class="modal-close" id="closeConfirm" aria-label="Close order summary"><i class="fa-solid fa-xmark"></i></button>
+    <div class="order-hero-top">
+      <div class="modal-icon order-icon"><i class="fa-solid fa-sim-card"></i></div>
+      <p class="eyebrow">ORDER SUMMARY</p>
+      <h3 id="confirmTitle">Confirm your eSIM plan</h3>
+      <p class="order-subtitle">Check everything before proceeding.</p>
     </div>
-    <div class="ps-body">
-      <div class="ps-title-row">
-        <div class="ps-icon"><i class="fa-solid fa-sim-card"></i></div>
-        <div style="flex:1;min-width:0">
-          <div class="ps-name" id="confirmPlan">eSIM plan</div>
-          <div class="ps-meta">
-            <span class="ps-pill ps-pill-stock">T-Mobile eSIM</span>
-            <span class="ps-pill ps-pill-price" id="confirmPrice">₦0</span>
-          </div>
-        </div>
-      </div>
-      <div class="ps-block">
-        <div class="ps-block-label">Network</div>
-        <div class="ps-block-text">T-Mobile</div>
-      </div>
-      <div class="ps-block">
-        <div class="ps-block-label">Order handling</div>
-        <div class="ps-block-text">Manual processing · delivery timing to be confirmed</div>
-      </div>
-      <div class="ps-block">
-        <div class="ps-block-label">Phone IMEI</div>
-        <div class="ps-block-text" id="confirmImei">—</div>
-      </div>
-      <div class="ps-block">
-        <div class="ps-block-label">Registered email</div>
-        <div class="ps-block-text" id="confirmEmail">—</div>
-      </div>
-      <div class="ps-total-row">
-        <span class="ps-total-label">Total</span>
-        <span class="ps-total-price" id="confirmTotal">₦0</span>
-      </div>
-      <button type="button" id="confirmPayBtn" class="ps-buy"><i class="fa-solid fa-lock"></i> <span id="confirmPayLabel">Confirm Purchase</span></button>
-      <button type="button" id="editOrderBtn" class="ps-secondary">Go back and edit</button>
-      <div class="ps-err" id="checkoutDisclaimer">Payment is not connected yet. Nothing will be charged.</div>
+    <div class="order-hero-plan">
+      <span class="plan-kicker">SELECTED PLAN</span>
+      <strong id="confirmPlan">—</strong>
+      <span id="confirmPrice" class="hero-price">₦0</span>
     </div>
+    <div class="order-hero-details">
+      <div><span>Network</span><strong>T-Mobile</strong></div>
+      <div><span>Delivery</span><strong class="delivery-value">Automatic · within 30 minutes by email</strong></div>
+      <div><span>IMEI</span><strong id="confirmImei">—</strong></div>
+      <div><span>Email</span><strong id="confirmEmail" class="confirm-email">—</strong></div>
+    </div>
+    <div class="order-hero-total"><span>Total to pay</span><strong id="confirmTotal">₦0</strong></div>
+    <button type="button" id="confirmPayBtn" class="btn confirm-pay"><i class="fa-solid fa-lock"></i> <span id="confirmPayLabel">Confirm and pay</span></button>
+    <button type="button" id="editOrderBtn" class="secondary-btn">Go back and edit</button>
+    <p class="checkout-disclaimer" id="checkoutDisclaimer">Your eSIM is automatically processed after successful payment. Checkout on this page is not active yet, so no order or payment will be created here.</p>
   </div>
 </div>
 <div class="toast" id="toast"></div>
@@ -523,29 +468,23 @@ button{font-family:inherit}
     $('confirmEmail').textContent = email;
     $('confirmPayLabel').textContent = PAYMENT_CONNECTED ? 'Confirm and pay ' + price : 'Checkout unavailable';
     previousFocus = document.activeElement;
-    $('confirmModal').classList.add('open');
-    $('confirmModal').classList.add('active');
-    $('confirmModal').setAttribute('aria-hidden', 'false');
+    $('confirmModal').classList.add('show');
     document.body.style.overflow = 'hidden';
     $('closeConfirm').focus();
   });
   var previousFocus = null;
   function closeConfirm(){
-    $('confirmModal').classList.remove('open');
-    $('confirmModal').classList.remove('active');
-    $('confirmModal').setAttribute('aria-hidden', 'true');
+    $('confirmModal').classList.remove('show');
     document.body.style.overflow = '';
     if (previousFocus && typeof previousFocus.focus === 'function') previousFocus.focus();
   }
   $('closeConfirm').addEventListener('click', closeConfirm);
-  document.addEventListener('keydown', function(e){
-    if (e.key === 'Escape' && $('confirmModal').classList.contains('open')) closeConfirm();
-  });
+  document.addEventListener('keydown', function(e){ if (e.key === 'Escape' && $('confirmModal').classList.contains('show')) closeConfirm(); });
   $('editOrderBtn').addEventListener('click', closeConfirm);
   $('confirmModal').addEventListener('click', function(e){ if (e.target === this) closeConfirm(); });
   $('confirmPayBtn').addEventListener('click', function(){
     if (!PAYMENT_CONNECTED) {
-      $('checkoutDisclaimer').textContent = 'Checkout is not available yet. No order has been created and no payment has been taken.';
+      $('checkoutDisclaimer').textContent = 'Checkout is not connected on this page yet. No order has been created and no payment has been taken.';
       toast('Payment is not connected yet');
       return;
     }
