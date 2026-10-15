@@ -4097,7 +4097,64 @@ html[data-theme="light"] .logo-word, :root[data-theme="light"] .logo-word{color:
     </div>
 </div>
 
-<div class="currency-modal" id="currencyConverterModal"><div class="currency-modal-card converter-compact-card" role="dialog" aria-modal="true" aria-labelledby="converterDialogTitle"><div class="converter-compact-head"><div><h2 id="converterDialogTitle"><i class="fa-solid fa-right-left"></i> Convert currency</h2><p>Move funds between your NGN and USD wallets.</p></div><button type="button" class="converter-close" onclick="closeCurrencyModal()" aria-label="Close converter">×</button></div><div class="converter-compact-rate"><span id="rateDisplay">Loading rate…</span><button type="button" class="converter-refresh-btn" onclick="refreshConverterRate()" aria-label="Refresh exchange rate"><i class="fa-solid fa-rotate"></i></button></div><label class="converter-compact-label" for="baseConvertInput">You convert</label><div class="converter-compact-field"><span><b id="fromCurrencySymbol">₦</b> <strong id="fromCurrencyCode">NGN</strong></span><input type="number" id="baseConvertInput" placeholder="0.00" inputmode="decimal" min="0.01" step="0.01" autocomplete="off" oninput="executeConversion()" aria-label="Amount to convert" aria-describedby="converterAmountFeedback" required></div><div class="converter-compact-between"><span id="converterBalanceInfo">Available: ₦0.00</span><button type="button" class="converter-max-btn" onclick="setConverterMax()">Max</button><button type="button" class="converter-swap-vector-btn" onclick="invertCurrencies()" aria-label="Switch currencies">⇅</button></div><label class="converter-compact-label" for="targetConvertOutput">You receive (estimated)</label><div class="converter-compact-field converter-compact-output"><span><b id="toCurrencySymbol">$</b> <strong id="toCurrencyCode">USD</strong></span><input type="text" id="targetConvertOutput" placeholder="0.00" readonly aria-label="Estimated converted amount"></div><p id="converterAmountFeedback" class="converter-amount-feedback" aria-live="polite">Enter an amount to preview.</p><p id="converterUpdatedAt" class="converter-compact-updated" role="status">Rate provided by MJ HUB</p><div class="conversion-loading-box" id="conversionLoadingBox" role="status" aria-live="polite"><div class="spinner-icon"></div><span id="conversionStatusText">Verifying balance…</span></div><button class="btn-sm-primary converter-confirm-btn" id="executeConversionBtn" onclick="commitSwapTransaction()">Convert</button><p class="converter-compact-note">Review the amount before confirming. Conversions are final.</p></div></div>
+<div class="currency-modal" id="currencyConverterModal">
+    <div class="currency-modal-card converter-pro-card" role="dialog" aria-modal="true" aria-labelledby="converterDialogTitle">
+        <div class="converter-pro-header">
+            <div>
+                <div class="converter-pro-title" id="converterDialogTitle"><span><i class="fa-solid fa-right-left"></i></span> Currency converter</div>
+                <p style="margin:5px 0 0 44px;color:var(--muted);font-size:12px;">Choose an amount, review what you will receive, then confirm to move funds between your wallets.</p>
+            </div>
+            <button type="button" onclick="closeCurrencyModal()" aria-label="Close converter" style="background:var(--bg-main);border:1px solid var(--border-color);width:34px;height:34px;border-radius:50%;cursor:pointer;color:var(--text-main);">✕</button>
+        </div>
+        <div class="converter-step-label"><span>1</span><div><strong>Enter the amount to convert</strong><small>This is the amount that will be deducted from your selected wallet.</small></div></div>
+        <div class="converter-grid-layout">
+            <div class="converter-panel-card converter-source-card">
+                <div class="converter-panel-top">
+                    <label class="converter-amount-entry-label" for="baseConvertInput">YOU ARE CONVERTING</label>
+                    <div class="currency-selector-badge"><span id="fromCurrencySymbol">₦</span> <strong id="fromCurrencyCode">NGN</strong></div>
+                </div>
+                <input type="number" id="baseConvertInput" class="converter-input-field converter-amount-input" placeholder="Type amount here (e.g. 5000)" inputmode="decimal" min="0.01" step="0.01" autocomplete="off" oninput="executeConversion()" aria-label="Type the amount you want to convert here" aria-describedby="converterAmountEntryHelp converterAmountFeedback" required>
+                <p class="converter-input-hint" id="converterAmountEntryHelp">Tap this box and type your amount. The amount you will receive appears below automatically.</p>
+                <div class="converter-helper-row">
+                    <span id="converterBalanceInfo">Available: ₦0.00</span>
+                    <button type="button" class="converter-max-btn" onclick="setConverterMax()">Use full balance</button>
+                </div>
+                <p id="converterAmountFeedback" class="converter-amount-feedback" aria-live="polite">Enter an amount above to see your estimate.</p>
+                <div class="converter-quick-amounts" aria-label="Quick amount presets">
+                    <button type="button" data-converter-preset onclick="setConverterPreset(1000)">₦1,000</button>
+                    <button type="button" data-converter-preset onclick="setConverterPreset(5000)">₦5,000</button>
+                    <button type="button" data-converter-preset onclick="setConverterPreset(10000)">₦10,000</button>
+                </div>
+            </div>
+            <div class="converter-swap-vector-wrap">
+                <button type="button" class="converter-swap-vector-btn" onclick="invertCurrencies()" aria-label="Switch currencies">⇅ <span class="sr-only">Switch currencies</span></button>
+            </div>
+            <div class="converter-panel-card converter-result-card">
+                <div class="converter-step-label converter-result-step"><span>2</span><div><strong>Estimated amount you will receive</strong><small>This is a preview. Nothing moves until you confirm.</small></div></div>
+                <div class="converter-panel-top">
+                    <span class="converter-field-label">YOU WILL RECEIVE</span>
+                    <div class="currency-selector-badge"><span id="toCurrencySymbol">$</span> <strong id="toCurrencyCode">USD</strong></div>
+                </div>
+                <input type="text" id="targetConvertOutput" class="converter-input-field converter-result-input" placeholder="Your converted amount appears here" readonly aria-label="Estimated converted amount">
+            </div>
+        </div>
+        <div class="quantum-metrics-grid">
+            <div class="metric-pill-box"><span>Exchange rate</span><strong id="rateDisplay">Loading rate…</strong></div>
+            <div class="metric-pill-box"><span>Processing</span><strong>Instant</strong></div>
+            <div class="metric-pill-box"><span>Conversion fee</span><strong style="color:var(--success-color);">No extra fee</strong></div>
+        </div>
+        <div class="converter-rate-footer">
+            <p id="converterUpdatedAt" role="status" style="margin:8px 0 14px;color:var(--muted);font-size:11px;">Loading current MJ HUB rate…</p>
+            <button type="button" class="converter-refresh-btn" onclick="refreshConverterRate()" aria-label="Refresh exchange rate"><i class="fa-solid fa-rotate"></i> Refresh rate</button>
+        </div>
+        <div class="conversion-loading-box" id="conversionLoadingBox" role="status" aria-live="polite">
+            <div class="spinner-icon"></div>
+            <span id="conversionStatusText">Verifying balance…</span>
+        </div>
+        <button class="btn-sm-primary" id="executeConversionBtn" style="width:100%;padding:15px;" onclick="commitSwapTransaction()">Confirm conversion</button>
+        <p style="margin:10px 0 0;color:var(--muted);font-size:11px;line-height:1.5;">Conversions are final once confirmed. Your balance and transaction history update after the server confirms success.</p>
+    </div>
+</div>
 
 <div class="activity-history-drawer" id="activityHistoryDrawer">
     <div class="drawer-hero">
@@ -8454,6 +8511,31 @@ window.toggleHomeBalanceHide = function () {
 @media (min-width:600px){
   .mj-push-optin{align-items:center;}
 }
+
+/* MJ HUB compact converter: preserve existing functional controls */
+#currencyConverterModal .converter-pro-card{width:min(92vw,430px)!important;max-width:430px!important;max-height:88dvh;overflow-y:auto;padding:18px!important;gap:12px!important;border-radius:18px!important}
+#currencyConverterModal .converter-pro-header{gap:10px;margin-bottom:2px}
+#currencyConverterModal .converter-pro-title{font-size:18px!important}
+#currencyConverterModal .converter-pro-header p{margin:4px 0 0 0!important;font-size:12px!important;line-height:1.4}
+#currencyConverterModal .converter-step-label{margin:0!important;gap:8px}
+#currencyConverterModal .converter-step-label small{display:none!important}
+#currencyConverterModal .converter-grid-layout{display:flex!important;flex-direction:column!important;gap:9px!important}
+#currencyConverterModal .converter-panel-card{padding:12px!important;border-radius:12px!important}
+#currencyConverterModal .converter-input-hint{display:none!important}
+#currencyConverterModal .converter-quick-amounts{margin-top:8px!important;gap:6px!important}
+#currencyConverterModal .converter-quick-amounts button{padding:7px 9px!important;font-size:11px!important}
+#currencyConverterModal .converter-swap-vector-wrap{height:24px!important;min-height:24px!important;margin:0!important}
+#currencyConverterModal .converter-swap-vector-btn{width:32px!important;height:32px!important}
+#currencyConverterModal .converter-result-step{display:none!important}
+#currencyConverterModal .quantum-metrics-grid{grid-template-columns:1fr!important;gap:6px!important;margin:0!important}
+#currencyConverterModal .quantum-metrics-grid .metric-pill-box:nth-child(2),#currencyConverterModal .quantum-metrics-grid .metric-pill-box:nth-child(3){display:none!important}
+#currencyConverterModal .metric-pill-box{padding:8px 10px!important;display:flex!important;align-items:center;justify-content:space-between;gap:10px}
+#currencyConverterModal .converter-rate-footer{display:flex;align-items:center;justify-content:space-between;gap:8px}
+#currencyConverterModal .converter-rate-footer p{margin:0!important;font-size:10px!important}
+#currencyConverterModal .converter-refresh-btn{white-space:nowrap;padding:7px 9px!important;font-size:11px!important}
+#currencyConverterModal #executeConversionBtn{padding:12px!important;border-radius:11px!important}
+@media(max-width:480px){#currencyConverterModal .converter-pro-card{padding:15px!important;max-height:86dvh}}
+
 </style>
 
   <script src="/js/haptic.js" defer></script>
