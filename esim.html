@@ -594,13 +594,14 @@ button{font-family:inherit}
         return;
       }
 
-      var response = await fetch('/api/esim', {
+      var response = await fetch('/api/order-manual', {
         method: 'POST',
         headers: {
           'Authorization': 'Bearer ' + session.access_token,
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({
+          action: 'esim',
           plan_id: selected.dataset.id,
           imei: imei,
           request_id: pendingRequestId
