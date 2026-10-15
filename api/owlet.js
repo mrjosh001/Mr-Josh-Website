@@ -52,6 +52,21 @@ function telegramMonths(name) {
   if (m) return Number(m[1]) * 12;
   return null;
 }
+/**
+ * Always produce https://t.me/username, whatever the user sent:
+ *   john_doe | @john_doe | t.me/john_doe | http://t.me/john_doe/ | https://t.me/john_doe?start=x
+ * Returns '' when the input is not a valid Telegram username.
+ */
+function normalizeTelegramLink(raw) {
+  let u = String(raw || '').trim();
+  if (!u) return '';
+  u = u.replace(/^https?:\/\//i, '').replace(/^www\./i, '');   // drop protocol
+  u = u.replace(/^(t\.me|telegram\.me|telegram\.dog)\//i, ''); // drop domain
+  u = u.replace(/^@/, '');                                     // drop @
+  u = u.split(/[/?#]/)[0];                                     // drop /extra, ?start=, #
+  if (!/^[A-Za-z][A-Za-z0-9_]{4,31}$/.test(u)) return '';      // valid Telegram username
+  return 'https://t.me/' + u;
+}
 /** Default source when unspecified (legacy). Customer catalog shows BOTH jap + casper. */
 const STORE_SOURCE = 'jap';
 const CUSTOMER_SOURCES = ['jap', 'casper'];
@@ -916,6 +931,15 @@ async function handleOrder(req, res) {
   if (sErr || !service || (isTg && !tgKind)) {
     return res.status(404).json({ success: false, message: 'Service not found or unavailable' });
   }
+
+  // Telegram: always send the supplier https://t.me/username (any input format is normalized)
+  if (isTg) {
+    link = normalizeTelegramLink(link);
+    if (!link) {
+      return res.status(400).json({ success: false, message: 'Enter a valid Telegram username (e.g. @username)' });
+    }
+  }
+
   if (service.is_available === false) {
     return res.status(400).json({ success: false, message: 'This service is temporarily unavailable' });
   }
