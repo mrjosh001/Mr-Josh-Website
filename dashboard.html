@@ -5596,7 +5596,7 @@ async function fetchActivityFromOrders(userId) {
     const extra = [];
     if (!supabaseClient || !userId) return extra;
     try {
-        const [logsRes, smsRes, boostRes, esimRes] = await Promise.all([
+        const [logsRes, smsRes, boostRes] = await Promise.all([
             supabaseClient
                 .from('orders')
                 .select('id, order_id, product_name, amount, status, created_at, quantity')
