@@ -491,12 +491,25 @@ button{font-family:inherit}
   loadRegisteredEmail();
 
   $('payBtn').addEventListener('click', function(){
-    var imei = $('imei').value.trim();
-    var email = $('email').value.trim();
+    /* Normalize again at submit time: mobile keyboards, autofill, and pasted
+       values may not fire the expected input event before the button is tapped. */
+    var imeiField = $('imei');
+    var imei = String(imeiField.value || '').replace(/[^0-9]/g, '').slice(0, 15);
+    imeiField.value = imei;
+    var email = String($('email').value || '').trim();
     var ok = true;
-    if (!accountEmailReady || !email) { showErr('email', 'emailErr', 'Your registered account email has not loaded yet. Please wait or refresh.'); return; }
     if (!selected) { toast('Choose a plan before reviewing your order'); go(1); return; }
-    if (!/^\d{15}$/.test(imei)) { showErr('imei', 'imeiErr', 'Enter all 15 digits of your IMEI. Dial *#06# to find it.'); ok = false; }
+    if (imei.length !== 15) {
+      showErr('imei', 'imeiErr', 'Enter all 15 digits of your IMEI. Dial *#06# to find it.');
+      imeiField.focus();
+      ok = false;
+    } else {
+      showErr('imei', 'imeiErr', '');
+    }
+    if (!accountEmailReady || !email) {
+      showErr('email', 'emailErr', 'Your registered account email has not loaded yet. Please wait or refresh.');
+      return;
+    }
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { showErr('email', 'emailErr', 'Enter a valid email address.'); ok = false; }
     if (!ok) return;
     var price = money(selected.dataset.price);
