@@ -445,16 +445,9 @@ button{font-family:inherit}
     if (step === 2) { e.preventDefault(); go(1); }
   });
 
-  /* IMEI: digits only, 15 long, passes the Luhn check */
-  function luhn(s){
-    var sum = 0, alt = false;
-    for (var i = s.length - 1; i >= 0; i--) {
-      var d = +s[i];
-      if (alt) { d *= 2; if (d > 9) d -= 9; }
-      sum += d; alt = !alt;
-    }
-    return sum % 10 === 0;
-  }
+  /* IMEI entry: normalize to digits and require the full 15-digit value.
+     Avoid a client-side Luhn rejection here because device/provider IMEI formats
+     can vary; the server/provider should perform authoritative compatibility checks. */
   function showErr(inputId, errId, msg){
     var el = $(errId), inp = $(inputId);
     el.textContent = msg || '';
@@ -502,8 +495,8 @@ button{font-family:inherit}
     var email = $('email').value.trim();
     var ok = true;
     if (!accountEmailReady || !email) { showErr('email', 'emailErr', 'Your registered account email has not loaded yet. Please wait or refresh.'); return; }
-    if (!/^\d{15}$/.test(imei)) { showErr('imei', 'imeiErr', 'Enter your 15-digit IMEI. Dial *#06# to find it.'); ok = false; }
-    else if (!luhn(imei)) { showErr('imei', 'imeiErr', 'This IMEI looks wrong. Check it and try again.'); ok = false; }
+    if (!selected) { toast('Choose a plan before reviewing your order'); go(1); return; }
+    if (!/^\d{15}$/.test(imei)) { showErr('imei', 'imeiErr', 'Enter all 15 digits of your IMEI. Dial *#06# to find it.'); ok = false; }
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { showErr('email', 'emailErr', 'Enter a valid email address.'); ok = false; }
     if (!ok) return;
     var price = money(selected.dataset.price);
