@@ -1,0 +1,74 @@
+name: Apply Telegram username normalization
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: github.event.head_commit.message != 'Apply Telegram username normalization'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+      - name: Patch Telegram normalization
+        shell: python
+        run: |
+          from pathlib import Path
+
+          normalize = '''function normalizeTelegramLink(raw) {
+            let u = String(raw || '').trim();
+            if (!u) return '';
+            u = u.replace(/^https?:\\/\\//i, '').replace(/^www\\./i, '');   // drop protocol
+            u = u.replace(/^(t\\.me|telegram\\.me|telegram\\.dog)\\//i, ''); // drop domain
+            u = u.replace(/^@/, '');                                     // drop @
+            u = u.split(/[/?#]/)[0];                                     // drop /extra, ?start=, #
+            if (!/^[A-Za-z][A-Za-z0-9_]{4,31}$/.test(u)) return '';      // valid Telegram username
+            return 'https://t.me/' + u;
+          }'''
+
+          p = Path('mj-telegram.html')
+          s = p.read_text()
+          old = '''  function normalizeLink(raw){
+    let u = String(raw||'').trim();
+    if (!u) return '';
+    if (/^https?:\\/\\//i.test(u)) return u;
+    if (/^(t\\.me|telegram\\.me)\\//i.test(u)) return 'https://' + u;
+    u = u.replace(/^@/, '');
+    if (!u || /\\s/.test(u)) return '';
+    return 'https://t.me/' + u;
+  }'''
+          assert old in s, 'mj-telegram normalizeLink block not found'
+          s = s.replace(old, '  ' + normalize, 1)
+          old_call = """    const link = normalizeLink(document.getElementById('username').value);\n    if (!link) {\n      err.textContent = 'Paste a valid @username or https://t.me/… link';\n      return;\n    }"""
+          new_call = """    const link = normalizeTelegramLink(document.getElementById('username').value);\n    if (!link) {\n      err.textContent = 'Enter a valid Telegram username (e.g. @username)';\n      return;\n    }"""
+          assert old_call in s, 'mj-telegram buy handler block not found'
+          s = s.replace(old_call, new_call, 1)
+          p.write_text(s)
+
+          p = Path('api/owlet.js')
+          s = p.read_text()
+          anchor = 'function telegramMonths(name) {'
+          assert anchor in s, 'telegramMonths anchor not found'
+          assert 'function normalizeTelegramLink(raw)' not in s, 'normalizeTelegramLink already present'
+          s = s.replace(anchor, normalize + '\n\n' + anchor, 1)
+          block = """  if (sErr || !service || (isTg && !tgKind)) {\n    return res.status(404).json({ success: false, message: 'Service not found or unavailable' });\n  }"""
+          addition = block + """\n  if (isTg) {\n    link = normalizeTelegramLink(link);\n    if (!link) {\n      return res.status(400).json({ success: false, message: 'Enter a valid Telegram username (e.g. @username)' });\n    }\n  }"""
+          assert block in s, 'handleOrder validation block not found'
+          s = s.replace(block, addition, 1)
+          p.write_text(s)
+
+          print('Patched mj-telegram.html and api/owlet.js')
+      - name: Commit patch
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add mj-telegram.html api/owlet.js
+          git diff --cached --quiet && exit 0
+          git commit -m "Normalize Telegram links at client and server"
+          git push origin main
