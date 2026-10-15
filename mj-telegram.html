@@ -141,6 +141,11 @@ main{padding:16px;max-width:520px;margin:0 auto;padding-bottom:48px}
   let busy = false;
   const STARS_QTY = [50, 100, 250, 500, 1000, 2500, 5000];
 
+  // Only these two SMMKings categories are sold here:
+  //   "Buy Telegram Premium to any @user"  and  "Buy Telegram Stars to any @user"
+  const TG_PREMIUM_RE = /telegram\s+premium\s+to\s+any/i;
+  const TG_STARS_RE = /telegram\s+stars\s+to\s+any/i;
+
   function toast(msg, ok){
     const t = document.getElementById('toast');
     t.textContent = msg || '';
@@ -184,7 +189,7 @@ main{padding:16px;max-width:520px;margin:0 auto;padding-bottom:48px}
       }
       el.innerHTML = rows.map(r => {
         const on = selected && selected.service_id === r.service_id;
-        const text = (r.months || '?') + ' mos';
+        const text = r.months ? (r.months + ' mos') : (r.name || 'Premium');
         return '<button type="button" class="pill'+(on?' on':'')+'" data-id="'+r.service_id+'">'+text+'</button>';
       }).join('');
       el.querySelectorAll('.pill').forEach(btn => {
@@ -234,47 +239,55 @@ main{padding:16px;max-width:520px;margin:0 auto;padding-bottom:48px}
     return 'https://t.me/' + u;
   }
 
+  function tgMonths(name){
+    const n = String(name || '');
+    let m = n.match(/(\d+)\s*(?:months?|mos?)\b/i);
+    if (m) return Number(m[1]);
+    m = n.match(/(\d+)\s*(?:years?|yrs?)\b/i);
+    if (m) return Number(m[1]) * 12;
+    return null;
+  }
+
   async function loadShop(){
     try {
       const { data: { session } } = await sb.auth.getSession();
       if (!session) return;
 
-      const IDS = ['6104','6105','6106','6260'];
-      let { data: rows, error } = await sb
-        .from('booster_services')
-        .select('service_id,name,category,service_type,price_ngn,min_quantity,max_quantity,is_available')
-        .eq('source', 'smmkings')
-        .in('service_id', IDS);
-
-      if (error || !rows || !rows.length) {
-        try {
-          const h = await headers();
-          if (h) {
-            const res = await fetch('/api/owlet?action=telegram_shop', { headers: h });
-            const data = await res.json().catch(()=>({}));
-            if (res.ok && data.success && data.data) {
-              catalog = data.data;
-              paintPills();
-              return;
-            }
+      // 1) Preferred: server-side catalog (already limited to the two Telegram categories)
+      try {
+        const h = await headers();
+        if (h) {
+          const res = await fetch('/api/owlet?action=telegram_shop', { headers: h });
+          const data = await res.json().catch(()=>({}));
+          if (res.ok && data.success && data.data && ((data.data.premium||[]).length || (data.data.stars||[]).length)) {
+            catalog = { premium: data.data.premium || [], stars: data.data.stars || [] };
+            paintPills();
+            return;
           }
-        } catch (_) {}
-        if (error) {
-          document.getElementById('packPills').innerHTML = '<div class="empty">Could not load packages. Please try again.</div>';
-          return;
         }
+      } catch (_) {}
+
+      // 2) Fallback: read the smmkings rows directly and keep only the two categories
+      const { data: rows, error } = await sb
+        .from('booster_services')
+        .select('service_id,name,category,price_ngn,min_quantity,max_quantity,is_available')
+        .eq('source', 'smmkings')
+        .limit(2000);
+
+      if (error) {
+        document.getElementById('packPills').innerHTML = '<div class="empty">Could not load packages. Please try again.</div>';
+        return;
       }
 
       const groups = { premium: [], stars: [] };
       for (const s of (rows || [])) {
-        const id = String(s.service_id);
+        if (s.is_available === false) continue;
         const price = Math.ceil(Number(s.price_ngn) || 0);
         if (price <= 0) continue;
-        const name = String(s.name || '');
-        const m = name.match(/for\s+(\d+)\s*months?/i);
-        if (id === '6260' || /stars\s+to\s+any/i.test(name)) {
+        const cat = String(s.category || '');
+        if (TG_STARS_RE.test(cat)) {
           groups.stars.push({
-            service_id: id,
+            service_id: String(s.service_id),
             name: 'Telegram Stars',
             min_quantity: Math.max(1, Number(s.min_quantity) || 1),
             max_quantity: Math.max(50, Number(s.max_quantity) || 1000000),
@@ -282,12 +295,11 @@ main{padding:16px;max-width:520px;margin:0 auto;padding-bottom:48px}
             pricing: 'per_1k',
             kind: 'stars'
           });
-        } else if (['6104','6105','6106'].includes(id) || /premium\s+subscription/i.test(name)) {
-          const months = m ? Number(m[1]) : (id === '6104' ? 3 : id === '6106' ? 6 : 12);
+        } else if (TG_PREMIUM_RE.test(cat)) {
           groups.premium.push({
-            service_id: id,
-            name: months + ' months Premium',
-            months: months,
+            service_id: String(s.service_id),
+            name: s.name,
+            months: tgMonths(s.name),
             min_quantity: 1,
             max_quantity: 1,
             price_ngn: price,
@@ -296,7 +308,8 @@ main{padding:16px;max-width:520px;margin:0 auto;padding-bottom:48px}
           });
         }
       }
-      groups.premium.sort((a,b) => (a.months||0) - (b.months||0));
+      groups.premium.sort((a,b) => (a.months == null ? 999 : a.months) - (b.months == null ? 999 : b.months) || a.price_ngn - b.price_ngn);
+      groups.stars.sort((a,b) => a.price_ngn - b.price_ngn);
       catalog = groups;
       paintPills();
     } catch(e) {
