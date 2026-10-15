@@ -3,6 +3,8 @@ import { rateLimit, applyRateLimitHeaders } from '../lib/rateLimit.js';
 
 /**
  * /api/owlet — MJ Boosters (JAP + CasperSMM Perfect Panel v2). Customer catalog shows both.
+ * Also serves Telegram Premium & Stars via SMMKings (source 'smmkings'), limited to the two
+ * supplier categories "Buy Telegram Premium to any @user" and "Buy Telegram Stars to any @user".
  * Docs: https://theowlet.com/api
  * Base: POST https://theowlet.com/api/v2
  *
@@ -26,12 +28,37 @@ const JAP_KEY = String(process.env.JAP_API_KEY || '').trim().replace(/^["']+|["'
 // CasperSMM — same Perfect Panel v2 shape (https://caspersmm.com/api/v2)
 const CASPER_URL = (process.env.CASPER_API_URL || 'https://caspersmm.com/api/v2').replace(/\/$/, '');
 const CASPER_KEY = String(process.env.CASPER_API_KEY || '').trim().replace(/^["']+|["']+$/g, '');
+// SMMKings — Telegram Premium & Stars only (same Perfect Panel v2 shape)
+const SMMKINGS_URL = (process.env.SMMKINGS_API_URL || 'https://smmkings.com/api/v2').replace(/\/$/, '');
+const SMMKINGS_KEY = String(process.env.SMMKINGS_API_KEY || '').trim().replace(/^["']+|["']+$/g, '');
+const TELEGRAM_SOURCE = 'smmkings';
+/**
+ * Only these two SMMKings categories are sold:
+ *   "Buy Telegram Premium to any @user"  -> premium (fixed price, quantity 1)
+ *   "Buy Telegram Stars to any @user"    -> stars   (price per 1k, quantity = stars)
+ * Anything else from SMMKings is ignored on sync, hidden, and rejected on order.
+ */
+function telegramKind(s) {
+  const cat = String((s && s.category) || '');
+  if (/telegram\s+premium\s+to\s+any/i.test(cat)) return 'premium';
+  if (/telegram\s+stars\s+to\s+any/i.test(cat)) return 'stars';
+  return null;
+}
+function telegramMonths(name) {
+  const n = String(name || '');
+  let m = n.match(/(\d+)\s*(?:months?|mos?)\b/i);
+  if (m) return Number(m[1]);
+  m = n.match(/(\d+)\s*(?:years?|yrs?)\b/i);
+  if (m) return Number(m[1]) * 12;
+  return null;
+}
 /** Default source when unspecified (legacy). Customer catalog shows BOTH jap + casper. */
 const STORE_SOURCE = 'jap';
 const CUSTOMER_SOURCES = ['jap', 'casper'];
 function normalizePanelSource(src) {
   const s = String(src || '').toLowerCase().trim();
   if (s === 'owlet') return 'owlet';
+  if (s === 'smmkings' || s === 'smmking') return 'smmkings';
   if (s === 'casper' || s === 'caspersmm') return 'casper';
   if (s === 'jap' || s === 'justanotherpanel') return 'jap';
   return 'jap';
@@ -47,6 +74,7 @@ const COST_BUFFER_NGN = Math.max(0, Number(process.env.BOOSTER_COST_BUFFER_NGN) 
 function panelCreds(source) {
   const s = normalizePanelSource(source);
   if (s === 'owlet') return { url: OWLET_URL, key: OWLET_KEY, label: 'Owlet' };
+  if (s === 'smmkings') return { url: SMMKINGS_URL, key: SMMKINGS_KEY, label: 'SMMKings' };
   if (s === 'casper') return { url: CASPER_URL, key: CASPER_KEY, label: 'Casper' };
   return { url: JAP_URL, key: JAP_KEY, label: 'JAP' };
 }
@@ -109,6 +137,20 @@ function sellPriceNgnFromRate(rate, markupPercent, serviceId) {
   const markup = markupPercent ?? getMarkupPercent();
   const raw = Math.ceil(base * (1 + markup / 100));
   return floorSellNgn(raw, serviceId != null ? serviceId : rate);
+}
+
+/**
+ * Telegram sell price (₦) from the supplier rate (USD per 1000, Perfect Panel standard).
+ *   premium: price for ONE subscription  = rate / 1000
+ *   stars:   price per 1000 stars        = rate
+ * Same conversion + buffer + markup as boosters.
+ */
+function telegramSellNgn(rate, kind) {
+  const usd = Number(rate) || 0;
+  if (usd <= 0) return 0;
+  const costUsd = kind === 'premium' ? usd / 1000 : usd;
+  const base = costUsd * USD_TO_NGN + COST_BUFFER_NGN;
+  return Math.ceil(base * (1 + getMarkupPercent() / 100));
 }
 
 function supplierUsdFromRate(rate) {
@@ -244,8 +286,9 @@ async function handleServices(req, res) {
 async function handleSync(req, res) {
   const body = typeof req.body === 'string' ? (() => { try { return JSON.parse(req.body || '{}'); } catch { return {}; } })() : (req.body || {});
   let provider = normalizePanelSource(req.query?.provider || body.provider || 'jap');
-  if (provider === 'owlet') provider = 'jap'; // customer sync targets jap|casper only
+  if (provider === 'owlet') provider = 'jap'; // customer sync targets jap|casper|smmkings only
   const SYNC_SOURCE = provider;
+  const IS_TG_SYNC = SYNC_SOURCE === TELEGRAM_SOURCE;
   const TIME_BUDGET_MS = 250000;
   const BATCH = 80;
   const startedAt = Date.now();
@@ -282,7 +325,14 @@ async function handleSync(req, res) {
     });
   }
 
-  const services = json;
+  // SMMKings: keep ONLY the two Telegram categories (Premium / Stars to any @user)
+  const services = IS_TG_SYNC ? json.filter((s) => telegramKind(s)) : json;
+  if (IS_TG_SYNC && !services.length) {
+    return res.status(200).json({
+      success: false,
+      message: 'No services found in the categories "Buy Telegram Premium to any @user" or "Buy Telegram Stars to any @user". Check the category names on SMMKings.'
+    });
+  }
   let cursor = Number(job.cursor_index) || 0;
   if (cursor >= services.length) cursor = 0;
 
@@ -315,12 +365,20 @@ async function handleSync(req, res) {
       const serviceId = String(s.service);
       const rateRaw = Number(s.rate) || 0;
       const supplierUsdVal = supplierUsdFromRate(rateRaw);
-      const defaultNgn = sellPriceNgnFromRate(rateRaw, null, serviceId);
+      const tgKind = IS_TG_SYNC ? telegramKind(s) : null;
 
       const prev = map.get(serviceId);
       const manual = prev && prev.price_source === 'manual';
-      // Manual admin prices kept, but never below site minimum ₦200
-      const listed = manual ? floorSellNgn(prev.price_ngn, serviceId) : floorSellNgn(defaultNgn, serviceId);
+      let listed;
+      if (tgKind) {
+        // Telegram: never change the price users already see; only price brand-new services
+        const prevPrice = prev ? Math.ceil(Number(prev.price_ngn) || 0) : 0;
+        listed = prevPrice > 0 ? prevPrice : telegramSellNgn(rateRaw, tgKind);
+      } else {
+        const defaultNgn = sellPriceNgnFromRate(rateRaw, null, serviceId);
+        // Manual admin prices kept, but never below site minimum ₦200
+        listed = manual ? floorSellNgn(prev.price_ngn, serviceId) : floorSellNgn(defaultNgn, serviceId);
+      }
       return {
         source: SYNC_SOURCE,
         service_id: serviceId,
@@ -358,6 +416,26 @@ async function handleSync(req, res) {
   }
 
   const done = cursor >= services.length && !ranOutOfTime;
+
+  // SMMKings: hide anything outside the two Telegram categories (old/stray rows)
+  let hiddenStray = 0;
+  if (IS_TG_SYNC && done) {
+    try {
+      const keep = services.map((s) => String(s.service)).filter((id) => /^[A-Za-z0-9_-]+$/.test(id));
+      if (keep.length) {
+        const { data: hidden } = await supabase
+          .from('booster_services')
+          .update({ is_available: false, updated_at: new Date().toISOString() })
+          .eq('source', TELEGRAM_SOURCE)
+          .not('service_id', 'in', '(' + keep.join(',') + ')')
+          .select('id');
+        hiddenStray = Array.isArray(hidden) ? hidden.length : 0;
+      }
+    } catch (e) {
+      console.warn('[owlet sync] hide stray smmkings rows failed', e?.message || e);
+    }
+  }
+
   const jobFields = {
     source: SYNC_SOURCE,
     status: done ? 'completed' : 'running',
@@ -379,12 +457,15 @@ async function handleSync(req, res) {
     success: true,
     done,
     message: done
-      ? `${SYNC_SOURCE} sync complete — ${services.length} services`
+      ? (IS_TG_SYNC
+          ? `smmkings sync complete — ${services.length} Telegram services (Premium + Stars only)`
+          : `${SYNC_SOURCE} sync complete — ${services.length} services`)
       : `${SYNC_SOURCE} sync progress ${cursor}/${services.length} — run Sync again to continue`,
     provider: SYNC_SOURCE,
     total: services.length,
     cursor,
     upserted_this_run: upserted,
+    hidden_other_services: hiddenStray,
     rate_currency_mode: getRateCurrency(),
     markup_range: '50%–80% (random per service)',
     cost_buffer_ngn: COST_BUFFER_NGN,
@@ -510,7 +591,7 @@ async function handleStatus(req, res) {
       .select('source')
       .eq('supplier_order_id', String(order))
       .maybeSingle();
-    if (row && row.source) src = String(row.source).toLowerCase() === 'owlet' ? 'owlet' : 'jap';
+    if (row && row.source) src = normalizePanelSource(row.source);
   } catch (_) {}
 
   const { ok, status, json } = await owletCall({ action: 'status', order: String(order) }, 12000, src);
@@ -690,6 +771,59 @@ async function handleCatalog(req, res) {
   });
 }
 
+/**
+ * Telegram shop catalog (SMMKings). Returns ONLY the two supported categories:
+ *   "Buy Telegram Premium to any @user" -> premium[]  (fixed price per subscription)
+ *   "Buy Telegram Stars to any @user"   -> stars[]    (price per 1k stars)
+ */
+async function handleTelegramShop(req, res) {
+  const userGate = await requireUser(req);
+  if (!userGate.ok) return res.status(userGate.status).json({ success: false, message: userGate.message });
+
+  const { data, error } = await supabase
+    .from('booster_services')
+    .select('service_id,name,category,price_ngn,min_quantity,max_quantity,is_available')
+    .eq('source', TELEGRAM_SOURCE)
+    .limit(2000);
+  if (error) {
+    return res.status(500).json({ success: false, message: 'Could not load Telegram packages' });
+  }
+
+  const out = { premium: [], stars: [] };
+  for (const s of (data || [])) {
+    if (s.is_available === false) continue;
+    const kind = telegramKind(s);
+    if (!kind) continue;
+    const price = Math.ceil(Number(s.price_ngn) || 0);
+    if (price <= 0) continue;
+    if (kind === 'premium') {
+      out.premium.push({
+        service_id: String(s.service_id),
+        name: s.name,
+        months: telegramMonths(s.name),
+        min_quantity: 1,
+        max_quantity: 1,
+        price_ngn: price,
+        pricing: 'fixed',
+        kind: 'premium'
+      });
+    } else {
+      out.stars.push({
+        service_id: String(s.service_id),
+        name: 'Telegram Stars',
+        min_quantity: Math.max(1, Number(s.min_quantity) || 1),
+        max_quantity: Math.max(50, Number(s.max_quantity) || 1000000),
+        price_ngn: price,
+        pricing: 'per_1k',
+        kind: 'stars'
+      });
+    }
+  }
+  out.premium.sort((a, b) => (a.months ?? 999) - (b.months ?? 999) || a.price_ngn - b.price_ngn);
+  out.stars.sort((a, b) => a.price_ngn - b.price_ngn);
+  return res.status(200).json({ success: true, data: out });
+}
+
 let owletServiceCache = { at: 0, list: [] };
 
 const panelServiceCaches = {};
@@ -760,11 +894,14 @@ async function handleOrder(req, res) {
 
   // Prefer explicit source from client (avoids jap/casper service_id collisions)
   const requestedSource = body.source ? normalizePanelSource(body.source) : null;
+  const isTg = requestedSource === TELEGRAM_SOURCE;
   let svcQuery = supabase
     .from('booster_services')
     .select('*')
     .eq('service_id', serviceId);
-  if (requestedSource && isCustomerSource(requestedSource)) {
+  if (isTg) {
+    svcQuery = svcQuery.eq('source', TELEGRAM_SOURCE);
+  } else if (requestedSource && isCustomerSource(requestedSource)) {
     svcQuery = svcQuery.eq('source', requestedSource);
   } else {
     svcQuery = svcQuery.in('source', CUSTOMER_SOURCES);
@@ -774,7 +911,9 @@ async function handleOrder(req, res) {
     ? (svcRows.find(r => r.is_available !== false) || svcRows[0])
     : null;
 
-  if (sErr || !service) {
+  // Telegram orders are only allowed for the two supported SMMKings categories
+  const tgKind = isTg && service ? telegramKind(service) : null;
+  if (sErr || !service || (isTg && !tgKind)) {
     return res.status(404).json({ success: false, message: 'Service not found or unavailable' });
   }
   if (service.is_available === false) {
@@ -782,10 +921,11 @@ async function handleOrder(req, res) {
   }
 
   const orderSource = normalizePanelSource(service.source || STORE_SOURCE);
-  if (!isCustomerSource(orderSource)) {
+  if (!isCustomerSource(orderSource) && orderSource !== TELEGRAM_SOURCE) {
     return res.status(400).json({ success: false, message: 'This package is unavailable.' });
   }
-  const customFields=japCustomFieldsForService(service),customValues={};
+  // Telegram has no service-specific fields (the "subscription" regex must not trigger on Premium)
+  const customFields=isTg?[]:japCustomFieldsForService(service),customValues={};
   for(const field of customFields){const value=String(body[field.key]||'').trim();if(field.required&&!value)return res.status(400).json({success:false,message:'Please enter '+field.label+' before placing this order.'});if(value)customValues[field.key]=value;}
   if(!link&&customValues.username)link=customValues.username;
   if(!link)return res.status(400).json({success:false,message:'Please enter the profile or content link.'});
@@ -793,9 +933,11 @@ async function handleOrder(req, res) {
   if(customValues.answer_number&&!/^\d+$/.test(customValues.answer_number))return res.status(400).json({success:false,message:'Enter a valid poll answer number.'});
   for(const key of ['min','max','posts','delay','runs','interval'])if(customValues[key]&&(!/^\d+$/.test(customValues[key])||Number(customValues[key])<1))return res.status(400).json({success:false,message:'Check the '+key+' value and try again.'});
   if(customValues.min&&customValues.max&&Number(customValues.min)>Number(customValues.max))return res.status(400).json({success:false,message:'Minimum quantity cannot exceed maximum quantity.'});
+  // Telegram Premium is always exactly one subscription
+  if (tgKind === 'premium') quantity = 1;
   const supplierMin=Number(service.min_quantity)||1;let maxQ=Number(service.max_quantity)||1000000;if(maxQ<1)maxQ=1000000;
   const isCustomCommentsOrder=Object.prototype.hasOwnProperty.call(customValues,'comments');
-  let minQ=isCustomCommentsOrder?Math.max(1,supplierMin):Math.max(300,supplierMin);if(minQ>maxQ)minQ=maxQ;
+  let minQ=(isCustomCommentsOrder||isTg)?Math.max(1,supplierMin):Math.max(300,supplierMin);if(minQ>maxQ)minQ=maxQ;
   if(quantity<minQ||quantity>maxQ)return res.status(400).json({success:false,message:'Quantity must be between '+minQ.toLocaleString()+' and '+maxQ.toLocaleString()});
 
   // price_ngn is selling rate per 1000 units (SMM standard)
@@ -807,9 +949,12 @@ async function handleOrder(req, res) {
   // The comment-order flag was calculated above and is reused for pricing.
   const perUnitNgn = Math.max(MIN_SELL_PRICE_NGN, Math.ceil(ratePer1k / 1000));
   const dripRuns = Math.max(1, parseInt(customValues.runs, 10) || 1);
-  const totalNgn = isCustomCommentsOrder
-    ? perUnitNgn * quantity
-    : Math.max(MIN_SELL_PRICE_NGN, Math.ceil((ratePer1k / 1000) * quantity * dripRuns));
+  // Telegram Premium: price_ngn is the price of one subscription (not per 1k)
+  const totalNgn = tgKind === 'premium'
+    ? Math.max(MIN_SELL_PRICE_NGN, Math.ceil(Number(service.price_ngn) || 0))
+    : isCustomCommentsOrder
+      ? perUnitNgn * quantity
+      : Math.max(MIN_SELL_PRICE_NGN, Math.ceil((ratePer1k / 1000) * quantity * dripRuns));
   if (totalNgn < 1) {
     return res.status(400).json({ success: false, message: 'Order total too low' });
   }
@@ -892,7 +1037,7 @@ async function handleOrder(req, res) {
   if (!ok || json?.error || !json?.order) {
     await restoreWallet();
     const rawErr = String(json?.error || json?.message || '');
-    console.error('[booster order] provider rejected order', { serviceId, reason: rawErr.slice(0, 300) });
+    console.error('[booster order] provider rejected order', { serviceId, source: orderSource, reason: rawErr.slice(0, 300) });
     const errMsg = /incorrect service|service.*not found|invalid service/i.test(rawErr)
       ? 'This package is temporarily unavailable. Your balance was restored.'
       : 'We could not place this order right now. Your balance was restored. Please try again or choose another package.';
@@ -1492,7 +1637,7 @@ async function handleAdminOrders(req, res) {
   for (const o of pending) {
     if (!o.supplier_order_id) continue;
     try {
-      const st = await owletCall({ action: 'status', order: String(o.supplier_order_id) });
+      const st = await owletCall({ action: 'status', order: String(o.supplier_order_id) }, 12000, normalizePanelSource(o.source || 'jap'));
       if (st.ok && st.json && !st.json.error) {
         const oldStatus = o.status;
         o.status = st.json.status || o.status;
@@ -1881,6 +2026,9 @@ export default async function handler(req, res) {
     if (!u.ok) return res.status(u.status).json({ success: false, message: u.message });
     return handleCatalog(req, res);
   }
+  if (action === 'telegram_shop') {
+    return handleTelegramShop(req, res);
+  }
   if (action === 'order') {
     return handleOrder(req, res);
   }
@@ -1911,7 +2059,7 @@ export default async function handler(req, res) {
 
   return res.status(400).json({
     success: false,
-    message: 'action required: catalog | order | my_orders | cancel | refill | refill_status | balance | services | sync | list | status | admin_orders | enable_all_jap (sync?provider=jap|casper)'
+    message: 'action required: catalog | telegram_shop | order | my_orders | cancel | refill | refill_status | balance | services | sync | list | status | admin_orders | enable_all_jap (sync?provider=jap|casper|smmkings)'
   });
   } catch (err) {
     console.error('[owlet] handler error', err);
