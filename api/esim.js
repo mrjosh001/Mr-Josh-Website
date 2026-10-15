@@ -169,6 +169,49 @@ export default async function handler(req, res) {
     }
 
     const body = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : (req.body || {});
+
+    // ---- Admin: list eSIM orders (read-only) — used by the admin dashboard "eSIM Orders" page ----
+    if (String(body.action || '') === 'admin_orders') {
+      const { data: adminProfile } = await supabase.from('profiles')
+        .select('is_admin')
+        .eq('id', user.id)
+        .maybeSingle();
+      const flag = adminProfile && adminProfile.is_admin;
+      const isAdmin = flag === true || flag === 'true' || flag === 1
+        || String(user.email || '').toLowerCase() === ADMIN_EMAIL;
+      if (!isAdmin) {
+        return res.status(403).json({ success: false, message: 'Admin privileges required' });
+      }
+
+      const page = Math.max(1, parseInt(body.page, 10) || 1);
+      const pageSize = Math.min(100, Math.max(10, parseInt(body.page_size, 10) || 50));
+      const from = (page - 1) * pageSize;
+      const to = from + pageSize - 1;
+      const q = String(body.q || '').replace(/[%_,()]/g, ' ').trim();
+
+      let query = supabase.from('esim_orders')
+        .select('*', { count: 'exact' })
+        .order('created_at', { ascending: false })
+        .range(from, to);
+      if (q) {
+        query = query.or(
+          'order_ref.ilike.%' + q + '%,customer_email.ilike.%' + q + '%,imei.ilike.%' + q + '%,plan_name.ilike.%' + q + '%'
+        );
+      }
+      const { data, error, count } = await query;
+      if (error) {
+        console.error('[esim admin] list failed:', error.message);
+        return res.status(500).json({ success: false, message: 'Could not load eSIM orders' });
+      }
+      return res.status(200).json({
+        success: true,
+        data: data || [],
+        total: count || 0,
+        page,
+        page_size: pageSize
+      });
+    }
+
     const planId = String(body.plan_id || '');
     const plan = PLANS[planId];
     const imei = String(body.imei || '').replace(/\D/g, '');

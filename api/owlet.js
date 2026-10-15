@@ -1603,6 +1603,10 @@ async function handleAdminOrders(req, res) {
     .order('created_at', { ascending: false })
     .range(from, to);
 
+  // Optional panel filter, e.g. ?source=smmkings for the admin Telegram orders page
+  const srcFilter = (req.query?.source || '').toString().trim();
+  if (srcFilter) query = query.eq('source', normalizePanelSource(srcFilter));
+
   if (q) {
     const safe = q.replace(/[%_,]/g, ' ').trim();
     const tokens = safe.toLowerCase().split(/\s+/).filter(t => t.length > 0).slice(0, 6);
