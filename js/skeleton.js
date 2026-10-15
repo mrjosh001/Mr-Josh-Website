@@ -90,7 +90,6 @@
     return h;
   }
 
-
   var api = {
     show: show,
     hide: hide,
@@ -104,4 +103,13 @@
   };
   w.MJSkeleton = api;
   w.mjSkeleton = api; // pages call lowercase
+
+  // Dashboard-only eSIM navigation/history integration. Loaded dynamically so
+  // other pages that share skeleton.js are unaffected.
+  if (String(w.location && w.location.pathname || '').toLowerCase().match(/(^|\/)dashboard(?:\.html)?$/)) {
+    var s = document.createElement('script');
+    s.src = '/js/dashboard-esim.js';
+    s.defer = false;
+    document.head.appendChild(s);
+  }
 })(window);
