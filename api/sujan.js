@@ -30,6 +30,36 @@ import { readSupplierStock } from '../lib/supplierStock.js';
 const BASE = 'https://api.sujandepartment.com';
 const SUJAN_KEY = process.env.SUJAN_API_KEY;
 
+/** Restore a failed purchase to the user's NGN wallet. Amount is NGN-equivalent. */
+async function refundWallet(userId, amount) {
+  const refundAmount = Number(amount);
+  if (!userId || !Number.isFinite(refundAmount) || refundAmount <= 0) {
+    throw new Error('Invalid wallet refund arguments');
+  }
+
+  // Read the latest balance immediately before crediting; fail loudly rather
+  // than silently claiming a refund was completed if Supabase rejects it.
+  const { data: profile, error: readErr } = await supabase
+    .from('profiles')
+    .select('balance')
+    .eq('id', userId)
+    .maybeSingle();
+
+  if (readErr || !profile) {
+    throw new Error(readErr?.message || 'Could not find wallet for refund');
+  }
+
+  const { error: refundErr } = await supabase
+    .from('profiles')
+    .update({
+      balance: Number(profile.balance || 0) + refundAmount,
+      updated_at: new Date().toISOString()
+    })
+    .eq('id', userId);
+
+  if (refundErr) throw new Error(refundErr.message || 'Wallet refund failed');
+}
+
 const supabase = createClient(
   process.env.SUPABASE_URL,
   process.env.SUPABASE_SERVICE_ROLE_KEY
@@ -441,28 +471,27 @@ async function handleOrder(req, res) {
     originalBalance = Number(profile.balance || 0);
     customerId = profile.customer_id;
 
-    if (originalBalance < total) {
+    if (!(total > 0)) {
+      return res.status(400).json({ success: false, message: 'This product has no price set yet' });
+    }
+
+    // 3. Debit: NGN wallet first, then USD wallet at 1450 (atomic)
+    const { data: debit, error: deductErr } = await supabase
+      .rpc('debit_balance_if_sufficient', { p_user_id: user_id, p_amount: total })
+      .single();
+    if (deductErr) {
+      return res.status(500).json({ success: false, message: 'Could not debit your balance. Please try again.' });
+    }
+    if (!debit || !debit.success) {
       return res.status(402).json({
         success: false,
-        message: 'Insufficient balance',
+        message: 'Insufficient combined wallet balance',
         required: total,
-        available: originalBalance
+        available: Number(debit?.new_balance || 0)
       });
     }
-
-    // 3. Debit customer
-    const newBalance = originalBalance - total;
-    const { error: deductErr } = await supabase
-      .from('profiles')
-      .update({ balance: newBalance })
-      .eq('id', user_id);
-
-    if (deductErr) {
-      return res.status(500).json({
-        success: false,
-        message: 'Could not debit your balance. Please try again.'
-      });
-    }
+    const newBalance = Number(debit.new_balance);
+    const newBalanceUsd = Number(debit.new_balance_usd || 0);
     deducted = true;
 
     // 4. Call Sujan Department
@@ -481,10 +510,7 @@ async function handleOrder(req, res) {
 
     // 5. Supplier failed → refund
     if (!supplierRes.ok || orderData.success === false) {
-      await supabase
-        .from('profiles')
-        .update({ balance: originalBalance })
-        .eq('id', user_id);
+      await refundWallet(user_id, total);
 
       await supabase.from('transactions').insert({
         user_id,
@@ -594,6 +620,7 @@ async function handleOrder(req, res) {
         login_credentials: combinedCreds || null,
         total_amount: total,
         new_balance: newBalance,
+        new_balance_usd: newBalanceUsd,
         order_id: orderRef,
         supplier_order_id: supplierOrderId,
         source: 'sujandepartment'
@@ -604,10 +631,7 @@ async function handleOrder(req, res) {
 
     if (deducted) {
       try {
-        await supabase
-          .from('profiles')
-          .update({ balance: originalBalance })
-          .eq('id', user_id);
+        await refundWallet(user_id, total);
 
         await supabase.from('transactions').insert({
           user_id,
