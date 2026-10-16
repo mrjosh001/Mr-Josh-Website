@@ -5463,33 +5463,65 @@ async function sendBroadcastNotification() {
  await loadNotificationHistory();
 }
 
+const NOTIF_HISTORY_PAGE_SIZE = 7;
+let _notifHistoryRows = [];
+let _notifHistoryPage = 0;
+
 async function loadNotificationHistory() {
  const list = document.getElementById('notifHistoryList');
  if (!list) return;
 
  const { data, error } = await sb
- .from('notifications')
- .select('id, title, body, type, created_at')
- .is('user_id', null)
- .order('created_at', { ascending: false })
- .limit(20);
+  .from('notifications')
+  .select('id, title, body, type, created_at')
+  .is('user_id', null)
+  .order('created_at', { ascending: false })
+  .limit(100);
 
  if (error) {
- list.innerHTML = `<span style="color:var(--danger,#f87171)">${escapeHtml(error.message)}</span>`;
- return;
+  list.innerHTML = `<span style="color:var(--danger,#f87171)">${escapeHtml(error.message)}</span>`;
+  return;
  }
- if (!data || !data.length) {
- list.innerHTML = 'No broadcasts sent yet.';
- return;
+ _notifHistoryRows = data || [];
+ _notifHistoryPage = 0;
+ renderNotificationHistory();
+}
+
+function renderNotificationHistory() {
+ const list = document.getElementById('notifHistoryList');
+ if (!list) return;
+
+ if (!_notifHistoryRows.length) {
+  list.innerHTML = 'No broadcasts sent yet.';
+  return;
  }
 
- list.innerHTML = data.map(n => `
+ const pages = Math.ceil(_notifHistoryRows.length / NOTIF_HISTORY_PAGE_SIZE);
+ _notifHistoryPage = Math.min(Math.max(_notifHistoryPage, 0), pages - 1);
+ const start = _notifHistoryPage * NOTIF_HISTORY_PAGE_SIZE;
+ const rows = _notifHistoryRows.slice(start, start + NOTIF_HISTORY_PAGE_SIZE);
+
+ const items = rows.map(n => `
  <div style="padding:10px 0;border-bottom:1px solid var(--border,#22232b);">
  <div style="font-weight:700;color:var(--text,#fff);">${escapeHtml(n.title)}</div>
  ${n.body ? `<div style="margin-top:2px;">${escapeHtml(n.body)}</div>` : ''}
  <div style="margin-top:4px;font-size:11px;">${ngWhen(n.created_at)} · ${escapeHtml(n.type || 'activity')}</div>
  </div>
  `).join('');
+
+ const pager = pages > 1 ? `
+ <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:12px;">
+ <button class="btn btn-ghost btn-sm" onclick="notifHistoryGo(-1)" ${_notifHistoryPage === 0 ? 'disabled' : ''}>← Previous</button>
+ <span style="font-size:12px;">Page ${_notifHistoryPage + 1} of ${pages}</span>
+ <button class="btn btn-ghost btn-sm" onclick="notifHistoryGo(1)" ${_notifHistoryPage >= pages - 1 ? 'disabled' : ''}>Next →</button>
+ </div>` : '';
+
+ list.innerHTML = items + pager;
+}
+
+function notifHistoryGo(step) {
+ _notifHistoryPage += step;
+ renderNotificationHistory();
 }
 
 /* EMAIL BROADCAST (Resend, real email to all customers) */
