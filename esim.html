@@ -3,8 +3,8 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, viewport-fit=cover">
-<title>eSIM — MJ HUB</title>
-<meta name="description" content="Buy an MJ HUB eSIM plan powered by T-Mobile.">
+<title>eSIM | MJ HUB</title>
+<meta name="description" content="Buy an MJ HUB eSIM plan powered by T-Mobile with unlimited calls and unlimited text.">
 <meta name="theme-color" content="#06080f">
 <link rel="icon" href="https://atczodlljmlayvldxfmv.supabase.co/storage/v1/object/public/avatars/dark%20background%20log">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
@@ -210,6 +210,34 @@ button{font-family:inherit}
 @media(max-width:360px){.plan{min-height:118px;padding:12px 10px}.plan .price{font-size:18px}.delivery-strip{font-size:11.5px}}
 
 @media(max-width:360px){.wrap{padding:12px 12px 40px}.plan .price{font-size:18px}}
+
+/* Light redesign (styling only, no changes to ids, classes used by scripts, or behaviour) */
+.fund-hero{border-radius:22px;padding:20px 18px;background:linear-gradient(135deg,#3b6ef5 0%,#5b8af5 55%,#7c9cf8 100%)}
+.fund-hero::after{content:"";position:absolute;right:-40px;top:-40px;width:150px;height:150px;border-radius:50%;background:rgba(255,255,255,.12);pointer-events:none}
+.fund-hero::before{content:"";position:absolute;right:30px;bottom:-60px;width:110px;height:110px;border-radius:50%;background:rgba(255,255,255,.08);pointer-events:none}
+.fund-hero>*{position:relative;z-index:1}
+.fund-hero h2{font-size:20px;letter-spacing:-.02em}
+.fund-hero p{font-size:12.5px;line-height:1.45;opacity:.95}
+.fund-hero-icon{border-radius:16px;background:rgba(255,255,255,.2);backdrop-filter:blur(6px)}
+.hero-pills{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
+.hero-pills span{display:inline-flex;align-items:center;gap:5px;padding:4px 9px;border-radius:999px;background:rgba(255,255,255,.2);font-size:10.5px;font-weight:800;letter-spacing:.01em}
+.feature-card{border-radius:20px;padding:16px 16px 14px}
+.feature-chips{gap:9px}
+.feature-chips span{padding:10px 11px;border-radius:13px;box-shadow:0 1px 0 rgba(255,255,255,.02)}
+.feature-chips i{width:26px;height:26px;border-radius:8px;display:grid;place-items:center;background:var(--primary-soft);font-size:12px}
+.feature-chips span.hl{border-color:color-mix(in srgb,var(--primary) 45%,var(--border));background:var(--primary-soft)}
+.card{border-radius:22px;padding:18px 16px}
+.method-label{font-size:14px;font-weight:800;letter-spacing:-.01em}
+.plans{gap:11px}
+.plan{border-radius:18px;padding:15px 13px}
+.plan .duration{font-size:13.5px}
+.plan .price{font-size:21px}
+.plan[aria-pressed="true"] .duration{color:var(--primary)}
+.pickbar{border-radius:14px}
+.btn{border-radius:16px;padding:15px 16px}
+.form-group input{border-radius:14px}
+.instruct{border-radius:14px}
+.amount-summary{border-radius:14px}
 @media(prefers-reduced-motion:reduce){*{transition:none!important}}
 </style>
 <link rel="stylesheet" href="/css/mj-motion.css">
@@ -280,7 +308,12 @@ button{font-family:inherit}
       <div class="fund-hero-icon"><i class="fa-solid fa-sim-card"></i></div>
       <div>
         <h2>T-Mobile eSIM</h2>
-        <p>Choose your eSIM duration and get connected with T-Mobile.</p>
+        <p>Choose your eSIM duration and get connected with unlimited calls and unlimited text.</p>
+        <div class="hero-pills">
+          <span><i class="fa-solid fa-infinity"></i> Unlimited text</span>
+          <span><i class="fa-solid fa-phone"></i> Unlimited calls</span>
+          <span><i class="fa-solid fa-wifi"></i> WiFi calling</span>
+        </div>
         <div class="hero-network">
           <span class="tmo-badge"><svg class="tmo-logo" viewBox="0 0 132 32" role="img" aria-label="T-Mobile"><use href="#tmo-logo"/></svg></span>
           <span>Official T-Mobile network</span>
@@ -289,12 +322,12 @@ button{font-family:inherit}
     </div>
     <div class="feature-card" aria-label="eSIM features">
       <p class="feature-title"><i class="fa-solid fa-signal"></i> More than data</p>
-      <p class="feature-copy">Stay connected with talk, text and calls — with support for iMessage and Wi-Fi Calling.</p>
+      <p class="feature-copy">Stay connected with unlimited talk and unlimited text, with support for iMessage and WiFi Calling.</p>
       <div class="feature-chips">
-        <span><i class="fa-solid fa-phone"></i> Talk &amp; calls</span>
-        <span><i class="fa-solid fa-comment-sms"></i> Text messaging</span>
+        <span class="hl"><i class="fa-solid fa-phone"></i> Unlimited calls</span>
+        <span class="hl"><i class="fa-solid fa-comment-sms"></i> Unlimited text</span>
         <span><i class="fa-brands fa-apple"></i> iMessage</span>
-        <span><i class="fa-solid fa-wifi"></i> Wi-Fi Calling</span>
+        <span><i class="fa-solid fa-wifi"></i> WiFi Calling</span>
       </div>
     </div>
     <div class="card">
@@ -329,7 +362,7 @@ button{font-family:inherit}
   <section class="view" id="viewDetails">
     <button type="button" class="step-back" id="stepBack"><i class="fa-solid fa-arrow-left"></i> Back</button>
     <div class="amount-summary">
-      <span>Plan: <strong id="dPlan">—</strong></span>
+      <span>Plan: <strong id="dPlan"></strong></span>
       <button type="button" id="changePlan">Change</button>
     </div>
 
@@ -337,7 +370,7 @@ button{font-family:inherit}
       <p class="method-label">Your details</p>
       <div class="form-group">
         <label for="imei">Phone IMEI</label>
-        <input id="imei" inputmode="numeric" autocomplete="off" maxlength="15" placeholder="15-digit IMEI">
+        <input id="imei" inputmode="numeric" autocomplete="off" maxlength="15" placeholder="Enter your 15 digit IMEI">
         <p class="field-hint">Dial <strong>*#06#</strong> on your phone, then copy and paste your IMEI here.</p>
         <p class="field-err" id="imeiErr"></p>
       </div>
@@ -348,7 +381,6 @@ button{font-family:inherit}
         <p class="field-err" id="emailErr"></p>
       </div>
       <div class="instruct"><i class="fa-solid fa-circle-info"></i><span>Your phone must support eSIM and be network unlocked. If it shows two IMEI numbers, use the first one.</span></div>
-      <div class="delivery-strip" style="margin-top:12px"><i class="fa-solid fa-wallet"></i><div><strong>Automatic MJ HUB wallet payment</strong><span>NGN is used if it covers the plan; otherwise USD is used if it covers the plan. If neither wallet covers the full price alone, both are combined. Orders are rejected if the combined balance is insufficient.</span></div></div>
     </div>
 
     <div class="card">
@@ -373,6 +405,7 @@ button{font-family:inherit}
           <div class="ps-name" id="confirmPlan">eSIM plan</div>
           <div class="ps-meta">
             <span class="ps-pill ps-pill-stock">T-Mobile eSIM</span>
+            <span class="ps-pill ps-pill-stock">Unlimited text</span>
             <span class="ps-pill ps-pill-price" id="confirmPrice">₦0</span>
           </div>
         </div>
@@ -384,11 +417,11 @@ button{font-family:inherit}
       </div>
       <div class="ps-block">
         <div class="ps-block-label">Phone IMEI</div>
-        <div class="ps-block-text" id="confirmImei">—</div>
+        <div class="ps-block-text" id="confirmImei"></div>
       </div>
       <div class="ps-block">
         <div class="ps-block-label">Registered email</div>
-        <div class="ps-block-text" id="confirmEmail">—</div>
+        <div class="ps-block-text" id="confirmEmail"></div>
       </div>
       <div class="ps-total-row">
         <span class="ps-total-label">Total to pay</span>
@@ -469,7 +502,7 @@ button{font-family:inherit}
   bindPlans();
 
   /* Live plan prices. The prices are controlled from the admin dashboard
-     (eSIM Orders → Plan prices). If this request fails for any reason the four
+     (eSIM Orders, Plan prices). If this request fails for any reason the four
      fallback cards in the HTML stay on screen, and the server still refuses to
      charge anything other than the price the customer was shown. */
   var MONTHS = { '1m': 1, '3m': 3, '6m': 6, '12m': 12 };
@@ -541,9 +574,9 @@ button{font-family:inherit}
     if (step === 2) { e.preventDefault(); go(1); }
   });
 
-  /* IMEI entry: normalize to digits and require the full 15-digit value.
-     Avoid a client-side Luhn rejection here because device/provider IMEI formats
-     can vary; the server/provider should perform authoritative compatibility checks. */
+  /* IMEI entry: normalize to digits and require the full 15 digit value.
+     Avoid a client side Luhn rejection here because device and provider IMEI formats
+     can vary; the server or provider should perform authoritative compatibility checks. */
   function showErr(inputId, errId, msg){
     var el = $(errId), inp = $(inputId);
     el.textContent = msg || '';
