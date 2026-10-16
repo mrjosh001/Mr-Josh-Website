@@ -1707,6 +1707,11 @@ function withLagos(opts) { return Object.assign({ timeZone: 'Africa/Lagos' }, op
  </div>
  <div class="price-note" style="margin-top:10px;">Preview counts recipients. Send test to me emails only the signed-in admin. Send to all customers emails everyone subscribed. No mail is sent until you click "Send" and confirm. Skips unsubscribed addresses automatically.</div>
  </div>
+
+ <div class="panel" style="margin-top:14px;">
+ <div class="panel-title" style="margin-bottom:10px;">Recently Sent Emails</div>
+ <div id="emailHistoryList" style="font-size:13px;color:var(--muted);">Loading…</div>
+ </div>
  </div>
 
  
@@ -5476,15 +5481,21 @@ async function loadNotificationHistory() {
   .select('id, title, body, type, created_at')
   .is('user_id', null)
   .order('created_at', { ascending: false })
-  .limit(100);
+  .limit(300);
 
  if (error) {
   list.innerHTML = `<span style="color:var(--danger,#f87171)">${escapeHtml(error.message)}</span>`;
   return;
  }
- _notifHistoryRows = data || [];
+ const all = data || [];
+ // In-app notifications only (emails + internal progress rows are listed separately / hidden)
+ _notifHistoryRows = all.filter(n => n.type !== 'email_log' && n.type !== 'email_broadcast_progress');
  _notifHistoryPage = 0;
  renderNotificationHistory();
+ // Sent emails get their own list, 7 per page
+ _emailHistoryRows = all.filter(n => n.type === 'email_log');
+ _emailHistoryPage = 0;
+ renderEmailHistory();
 }
 
 function renderNotificationHistory() {
@@ -5522,6 +5533,47 @@ function renderNotificationHistory() {
 function notifHistoryGo(step) {
  _notifHistoryPage += step;
  renderNotificationHistory();
+}
+
+/* RECENTLY SENT EMAILS: 7 per page with Previous / Next */
+const EMAIL_HISTORY_PAGE_SIZE = 7;
+let _emailHistoryRows = [];
+let _emailHistoryPage = 0;
+
+function renderEmailHistory() {
+ const list = document.getElementById('emailHistoryList');
+ if (!list) return;
+
+ if (!_emailHistoryRows.length) {
+  list.innerHTML = 'No emails sent yet.';
+  return;
+ }
+
+ const pages = Math.ceil(_emailHistoryRows.length / EMAIL_HISTORY_PAGE_SIZE);
+ _emailHistoryPage = Math.min(Math.max(_emailHistoryPage, 0), pages - 1);
+ const start = _emailHistoryPage * EMAIL_HISTORY_PAGE_SIZE;
+ const rows = _emailHistoryRows.slice(start, start + EMAIL_HISTORY_PAGE_SIZE);
+
+ const items = rows.map(n => `
+  <div style="padding:10px 0;border-bottom:1px solid var(--border,#22232b);">
+   <div style="font-weight:700;color:var(--text,#fff);">${escapeHtml(n.title)}</div>
+   <div style="margin-top:4px;font-size:11px;">${ngWhen(n.created_at)}</div>
+  </div>
+ `).join('');
+
+ const pager = pages > 1 ? `
+  <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:12px;">
+   <button class="btn btn-ghost btn-sm" onclick="emailHistoryGo(-1)" ${_emailHistoryPage === 0 ? 'disabled' : ''}>← Previous</button>
+   <span style="font-size:12px;">Page ${_emailHistoryPage + 1} of ${pages}</span>
+   <button class="btn btn-ghost btn-sm" onclick="emailHistoryGo(1)" ${_emailHistoryPage >= pages - 1 ? 'disabled' : ''}>Next →</button>
+  </div>` : '';
+
+ list.innerHTML = items + pager;
+}
+
+function emailHistoryGo(step) {
+ _emailHistoryPage += step;
+ renderEmailHistory();
 }
 
 /* EMAIL BROADCAST (Resend, real email to all customers) */
@@ -5583,7 +5635,7 @@ async function previewEmailBroadcast() {
  const data = await callEmailBroadcast('preview');
  const sample = (data.sample || []).join(', ');
  msgEl.style.color = 'var(--muted)';
- msgEl.innerHTML = `Would send to <strong style="color:var(--text,#fff);">${data.would_send}</strong> customer(s).` +
+ msgEl.innerHTML = `Would send to <strong style="color:var(--text,#fff);">${(data.total ?? data.would_send ?? 0)}</strong> customer(s).` +
  (sample ? ` Sample: ${escapeHtml(sample)}` : '') +
  ' No mail sent by this preview.';
  } catch (e) {
