@@ -4,18 +4,50 @@ const ESIM_URL = process.env.ESIM_SUPABASE_URL;
 const ESIM_SERVICE_KEY = process.env.ESIM_SUPABASE_SERVICE_ROLE_KEY;
 const ADMIN_EMAIL = 'mjhubhelp@gmail.com';
 const MAX_QR_BYTES = 3 * 1024 * 1024; // 3 MB
-const PLANS = {
-  '1m': { name: '1 month', amount: 26000 },
-  '3m': { name: '3 months', amount: 47000 },
-  '6m': { name: '6 months', amount: 68000 },
-  '12m': { name: '1 year', amount: 90000 }
-};
+
+/**
+ * Default plans. These are ALSO the safety net: if the `esim_plans` table does
+ * not exist yet (or is empty / unreachable) the site keeps working with these
+ * exact prices. Once the table exists, prices are edited from the admin
+ * dashboard (eSIM Orders → Plan prices) and this file never needs editing.
+ *   amount        = what the customer pays (₦)
+ *   supplier_cost = what MJ HUB pays the supplier (₦), used for profit only
+ */
+const DEFAULT_PLANS = [
+  { id: '1m',  name: '1 month',  amount: 26000, supplier_cost: 20000, days: 30,  sort: 1, active: true },
+  { id: '3m',  name: '3 months', amount: 47000, supplier_cost: 40000, days: 90,  sort: 2, active: true },
+  { id: '6m',  name: '6 months', amount: 68000, supplier_cost: 60000, days: 180, sort: 3, active: true },
+  { id: '12m', name: '1 year',   amount: 90000, supplier_cost: 80000, days: 365, sort: 4, active: true }
+];
 
 const supabase = ESIM_URL && ESIM_SERVICE_KEY
   ? createClient(ESIM_URL, ESIM_SERVICE_KEY, {
       auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false }
     })
   : null;
+
+/** Plans = defaults, overridden by whatever is saved in the esim_plans table. */
+async function getPlans() {
+  const defaults = DEFAULT_PLANS.map((p) => ({ ...p }));
+  try {
+    const { data, error } = await supabase.from('esim_plans').select('*');
+    if (error || !Array.isArray(data) || !data.length) return defaults;
+    const byId = new Map(defaults.map((p) => [p.id, p]));
+    for (const row of data) {
+      const base = byId.get(String(row.id));
+      if (!base) continue;
+      const amount = Number(row.amount_ngn);
+      const cost = Number(row.supplier_cost_ngn);
+      if (Number.isFinite(amount) && amount > 0) base.amount = amount;
+      if (Number.isFinite(cost) && cost >= 0) base.supplier_cost = cost;
+      base.active = row.is_active !== false;
+    }
+    return defaults;
+  } catch (e) {
+    console.error('[esim plans] falling back to defaults:', e?.message || e);
+    return defaults;
+  }
+}
 
 function escapeHtml(value) {
   return String(value ?? '').replace(/[&<>"']/g, (char) => ({
@@ -338,6 +370,81 @@ export default async function handler(req, res) {
 
     const body = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : (req.body || {});
 
+    // ---- Customer: live plan list for the eSIM page (selling prices only — never supplier cost) ----
+    if (String(body.action || '') === 'plans') {
+      const plans = await getPlans();
+      return res.status(200).json({
+        success: true,
+        plans: plans
+          .filter((p) => p.active)
+          .map((p) => ({ id: p.id, name: p.name, amount_ngn: p.amount, days: p.days }))
+      });
+    }
+
+    // ---- Admin: plan prices incl. supplier cost (drives the "Plan prices" editor + profit) ----
+    if (String(body.action || '') === 'admin_plans') {
+      if (!(await isAdminUser(user))) {
+        return res.status(403).json({ success: false, message: 'Admin privileges required' });
+      }
+      const plans = await getPlans();
+      const { error: tableError } = await supabase.from('esim_plans').select('id').limit(1);
+      return res.status(200).json({
+        success: true,
+        table_ready: !tableError,
+        plans: plans.map((p) => ({
+          id: p.id,
+          name: p.name,
+          days: p.days,
+          amount_ngn: p.amount,
+          supplier_cost_ngn: p.supplier_cost,
+          is_active: p.active
+        }))
+      });
+    }
+
+    // ---- Admin: save plan prices ----
+    if (String(body.action || '') === 'admin_save_plans') {
+      if (!(await isAdminUser(user))) {
+        return res.status(403).json({ success: false, message: 'Admin privileges required' });
+      }
+      const incoming = Array.isArray(body.plans) ? body.plans : [];
+      const rows = [];
+      for (const item of incoming) {
+        const base = DEFAULT_PLANS.find((p) => p.id === String(item && item.id));
+        if (!base) continue;
+        const amount = Math.round(Number(item.amount_ngn));
+        const cost = Math.round(Number(item.supplier_cost_ngn));
+        if (!Number.isFinite(amount) || amount < 1000 || amount > 5000000) {
+          return res.status(400).json({ success: false, message: 'Enter a valid selling price for ' + base.name + '.' });
+        }
+        if (!Number.isFinite(cost) || cost < 0 || cost > 5000000) {
+          return res.status(400).json({ success: false, message: 'Enter a valid supplier price for ' + base.name + '.' });
+        }
+        rows.push({
+          id: base.id,
+          name: base.name,
+          days: base.days,
+          sort_order: base.sort,
+          amount_ngn: amount,
+          supplier_cost_ngn: cost,
+          is_active: item.is_active !== false,
+          updated_at: new Date().toISOString()
+        });
+      }
+      if (!rows.length) {
+        return res.status(400).json({ success: false, message: 'No plans to save.' });
+      }
+      const { error: saveError } = await supabase.from('esim_plans').upsert(rows, { onConflict: 'id' });
+      if (saveError) {
+        console.error('[esim plans] save failed:', saveError.message);
+        return res.status(500).json({
+          success: false,
+          message: 'Could not save prices: ' + saveError.message + ' (If the esim_plans table does not exist yet, run the SQL in esim-plans.sql in the eSIM Supabase project first.)'
+        });
+      }
+      return res.status(200).json({ success: true, message: 'Plan prices saved. The eSIM page now shows them.' });
+    }
+
     // ---- Admin: list eSIM orders (read-only) — used by the admin dashboard "eSIM Orders" page ----
     if (String(body.action || '') === 'admin_orders') {
       if (!(await isAdminUser(user))) {
@@ -395,13 +502,24 @@ export default async function handler(req, res) {
     }
 
     const planId = String(body.plan_id || '');
-    const plan = PLANS[planId];
+    const plans = await getPlans();
+    const plan = plans.find((p) => p.id === planId && p.active);
     const imei = String(body.imei || '').replace(/\D/g, '');
     const requestId = String(body.request_id || '');
     if (!plan) return res.status(400).json({ success: false, message: 'Choose a valid eSIM plan.' });
     if (!/^\d{15}$/.test(imei)) return res.status(400).json({ success: false, message: 'Enter a valid 15-digit IMEI.' });
     if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(requestId)) {
       return res.status(400).json({ success: false, message: 'Invalid checkout request. Refresh and try again.' });
+    }
+    // If the admin changed the price after the customer loaded the page, never charge a
+    // different amount than the one the customer saw: stop and ask them to review it.
+    const expectedAmount = Number(body.expected_amount);
+    if (Number.isFinite(expectedAmount) && expectedAmount > 0 && expectedAmount !== plan.amount) {
+      return res.status(409).json({
+        success: false,
+        code: 'PRICE_CHANGED',
+        message: 'The price of this plan has just changed to ' + formatNgn(plan.amount) + '. Nothing was charged. Please refresh the page and review the new price.'
+      });
     }
     const customerEmail = String(user.email || '').trim().toLowerCase();
     if (!customerEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(customerEmail)) {
