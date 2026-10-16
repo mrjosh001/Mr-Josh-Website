@@ -983,6 +983,8 @@ function withLagos(opts) { return Object.assign({ timeZone: 'Africa/Lagos' }, op
  <button class="nav-item" data-tab="boosters-casper" onclick="switchTab('boosters-casper')"><i class="fas fa-bolt"></i> Casper Boosters</button>
  <button class="nav-item" data-tab="boosters-smmkings" onclick="switchTab('boosters-smmkings')"><i class="fas fa-paper-plane"></i> SMMKings (Telegram)</button>
  <button class="nav-item" data-tab="booster-orders" onclick="switchTab('booster-orders')"><i class="fas fa-receipt"></i> Booster Orders</button>
+ <button class="nav-item" data-tab="telegram-orders" onclick="switchTab('telegram-orders')"><i class="fab fa-telegram"></i> Telegram Orders</button>
+ <button class="nav-item" data-tab="esim-orders" onclick="switchTab('esim-orders')"><i class="fas fa-sim-card"></i> eSIM Orders <span id="esimNavBadge" style="display:none;margin-left:6px;background:#f59e0b;color:#111;font-size:10px;font-weight:800;padding:2px 7px;border-radius:999px;min-width:18px;text-align:center;">0</span></button>
  <button class="nav-item" data-tab="notify" onclick="switchTab('notify')"><i class="fas fa-bullhorn"></i> Notifications</button>
  <a class="nav-item" href="admin-support.html" id="navSupportDesk" style="text-decoration:none;position:relative;"><i class="fas fa-headset"></i> Support Desk <span id="supportNavBadge" style="display:none;margin-left:6px;background:#ef4444;color:#fff;font-size:10px;font-weight:800;padding:2px 7px;border-radius:999px;min-width:18px;text-align:center;">0</span></a>
  <button class="nav-item" data-tab="sub-admins" onclick="switchTab('sub-admins')"><i class="fas fa-user-shield"></i> Sub-Admins</button>
@@ -1553,6 +1555,69 @@ function withLagos(opts) { return Object.assign({ timeZone: 'Africa/Lagos' }, op
  </div>
  </div>
 
+ <div id="tab-telegram-orders" class="tab-content">
+ <div class="panel">
+ <div class="panel-header">
+ <div class="panel-title">Telegram Orders <span style="font-weight:500;color:var(--muted);font-size:12px;">Premium &amp; Stars (SMMKings)</span></div>
+ <button class="btn btn-ghost btn-sm" id="btnRefreshTgOrders" onclick="loadTelegramOrders()"><i class="fas fa-sync"></i> Refresh</button>
+ </div>
+ <div class="metrics" style="margin:0 0 14px;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));">
+ <div class="metric-card"><div class="metric-label">Orders</div><div class="metric-value" id="tgMetTotal">—</div><div class="metric-sub">All Telegram orders</div></div>
+ <div class="metric-card"><div class="metric-label">Open</div><div class="metric-value" id="tgMetOpen" style="color:#fbbf24;">—</div><div class="metric-sub">Pending / in progress (this page)</div></div>
+ <div class="metric-card"><div class="metric-label">Completed</div><div class="metric-value" id="tgMetDone" style="color:#34d399;">—</div><div class="metric-sub">Delivered (this page)</div></div>
+ <div class="metric-card"><div class="metric-label">Revenue</div><div class="metric-value" id="tgMetRev">—</div><div class="metric-sub">Paid on this page</div></div>
+ </div>
+ <div class="search-row" style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;">
+ <input type="search" id="tgOrderSearch" placeholder="Search @username, order ID, customer ID or package…" style="flex:1;min-width:200px;" onkeydown="if(event.key==='Enter'){tgOrderPage=1;loadTelegramOrders()}">
+ <button class="btn btn-primary btn-sm" style="width:auto;" onclick="tgOrderPage=1;loadTelegramOrders()"><i class="fas fa-search"></i> Search</button>
+ </div>
+ <div class="desktop-only desktop-table table-wrap">
+ <table>
+ <thead>
+ <tr><th>When</th><th>Customer</th><th>Package</th><th>Recipient</th><th>Qty</th><th>Paid</th><th>Status</th><th>Supplier #</th></tr>
+ </thead>
+ <tbody id="tgOrdersBody"><tr><td colspan="8" class="empty-state">Loading…</td></tr></tbody>
+ </table>
+ </div>
+ <div id="tgOrdersCards" class="mobile-only mobile-cards"></div>
+ <div id="tgOrdersPager" style="display:flex;gap:8px;justify-content:center;align-items:center;margin-top:14px;font-size:12px;color:var(--muted);"></div>
+ </div>
+ </div>
+
+ <div id="tab-esim-orders" class="tab-content">
+ <div class="panel">
+ <div class="panel-header">
+ <div class="panel-title">eSIM Orders <span style="font-weight:500;color:var(--muted);font-size:12px;">Deliver the QR code by email</span></div>
+ <button class="btn btn-ghost btn-sm" id="btnRefreshEsimOrders" onclick="loadEsimOrders()"><i class="fas fa-sync"></i> Refresh</button>
+ </div>
+ <div class="metrics" style="margin:0 0 14px;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));">
+ <div class="metric-card"><div class="metric-label">Orders</div><div class="metric-value" id="esimMetTotal">—</div><div class="metric-sub">All eSIM orders</div></div>
+ <div class="metric-card"><div class="metric-label">Awaiting delivery</div><div class="metric-value" id="esimMetWait" style="color:#fbbf24;">—</div><div class="metric-sub">Paid, QR not sent (this page)</div></div>
+ <div class="metric-card"><div class="metric-label">Delivered</div><div class="metric-value" id="esimMetDone" style="color:#34d399;">—</div><div class="metric-sub">QR emailed (this page)</div></div>
+ <div class="metric-card"><div class="metric-label">Revenue</div><div class="metric-value" id="esimMetRev">—</div><div class="metric-sub">Paid on this page</div></div>
+ </div>
+ <div class="search-row" style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;">
+ <input type="search" id="esimOrderSearch" placeholder="Search order ref, email, IMEI or plan…" style="flex:1;min-width:200px;" onkeydown="if(event.key==='Enter'){esimOrderPage=1;loadEsimOrders()}">
+ <select id="esimOrderFilter" onchange="renderEsimOrders()" style="width:auto;">
+ <option value="all">All</option>
+ <option value="waiting" selected>Awaiting delivery</option>
+ <option value="done">Delivered</option>
+ </select>
+ <button class="btn btn-primary btn-sm" style="width:auto;" onclick="esimOrderPage=1;loadEsimOrders()"><i class="fas fa-search"></i> Search</button>
+ </div>
+ <div class="desktop-only desktop-table table-wrap">
+ <table>
+ <thead>
+ <tr><th>When</th><th>Customer</th><th>Plan</th><th>IMEI</th><th>Paid</th><th>Ref</th><th>Status</th><th></th></tr>
+ </thead>
+ <tbody id="esimOrdersBody"><tr><td colspan="8" class="empty-state">Loading…</td></tr></tbody>
+ </table>
+ </div>
+ <div id="esimOrdersCards" class="mobile-only mobile-cards"></div>
+ <div id="esimOrdersPager" style="display:flex;gap:8px;justify-content:center;align-items:center;margin-top:14px;font-size:12px;color:var(--muted);"></div>
+ </div>
+ </div>
+
  <div id="tab-notify" class="tab-content">
  <div class="panel">
  <div class="panel-title" style="margin-bottom:10px;">Send Notification to All Users</div>
@@ -1668,6 +1733,30 @@ function withLagos(opts) { return Object.assign({ timeZone: 'Africa/Lagos' }, op
  </div>
  </div>
  </div>
+ </div>
+ </div>
+ </div>
+
+ <div id="esimDeliverModal" class="modal-backdrop hidden">
+ <div class="modal" style="max-width:480px;">
+ <h3 id="esimDeliverTitle">Deliver eSIM</h3>
+ <div id="esimDeliverSummary" style="font-size:13px;margin-bottom:14px;"></div>
+ <div class="field">
+ <label>eSIM QR code image</label>
+ <input type="file" id="esimQrFile" accept="image/png,image/jpeg,image/webp" onchange="esimQrPicked(this)">
+ <div id="esimQrHint" style="font-size:11px;color:var(--muted);margin-top:6px;">PNG, JPG or WEBP, up to 2 MB.</div>
+ <div id="esimQrPreviewWrap" class="hidden" style="margin-top:10px;text-align:center;">
+ <img id="esimQrPreview" alt="QR preview" style="width:200px;max-width:100%;border-radius:10px;background:#fff;padding:6px;">
+ </div>
+ </div>
+ <div class="field">
+ <label>eSIM phone number (optional)</label>
+ <input type="text" id="esimPhoneInput" placeholder="e.g. 2344568015" inputmode="tel" autocomplete="off" maxlength="24">
+ </div>
+ <div id="esimDeliverNote" style="font-size:12px;color:var(--muted);line-height:1.5;"></div>
+ <div class="modal-actions">
+ <button class="btn btn-ghost btn-sm" type="button" onclick="closeEsimDeliver()">Cancel</button>
+ <button class="btn btn-primary btn-sm" type="button" id="esimDeliverSend" onclick="submitEsimDeliver()"><i class="fas fa-paper-plane"></i> Send eSIM email</button>
  </div>
  </div>
  </div>
@@ -1885,6 +1974,8 @@ const tabTitles = {
  'sms-gotsms': 'USA Rental (GotSMS)',
  'boosters': 'MJ Boosters (Owlet)',
  'booster-orders': 'Booster Orders',
+ 'telegram-orders': 'Telegram Orders',
+ 'esim-orders': 'eSIM Orders',
  orders: 'LOGS Orders',
  'sub-admins': 'Sub-Admins',
  settings: 'Settings'
@@ -5555,6 +5646,262 @@ function escSub(s) {
  });
 }
 
+
+/* ===================== Telegram Orders (separate admin page) ===================== */
+let tgOrderPage = 1;
+async function loadTelegramOrders() {
+ const tbody = document.getElementById('tgOrdersBody');
+ const cards = document.getElementById('tgOrdersCards');
+ const pager = document.getElementById('tgOrdersPager');
+ const btn = document.getElementById('btnRefreshTgOrders');
+ setBtnBusy(btn, true, 'Refreshing…');
+ try {
+ const headers = await authHeaders();
+ const q = (document.getElementById('tgOrderSearch')?.value || '').trim();
+ // Same endpoint as Booster Orders, filtered to the Telegram supplier only.
+ const params = new URLSearchParams({ action: 'admin_orders', source: 'smmkings', page: String(tgOrderPage), page_size: '15' });
+ if (q) params.set('q', q);
+ const res = await fetch('/api/owlet?' + params.toString(), { headers });
+ const data = await res.json();
+ if (!data.success) {
+ const msg = escapeHtml(data.message || 'Failed');
+ if (tbody) tbody.innerHTML = `<tr><td colspan="8" class="empty-state">${msg}</td></tr>`;
+ if (cards) cards.innerHTML = `<div class="empty-state">${msg}</div>`;
+ return;
+ }
+ const rows = data.data || [];
+ const open = rows.filter(o => /pending|progress|processing/i.test(String(o.status || ''))).length;
+ const done = rows.filter(o => /completed|success|done/i.test(String(o.status || ''))).length;
+ const rev = rows.filter(o => !/cancel|refund|fail|error/i.test(String(o.status || ''))).reduce((n, o) => n + (Number(o.price_ngn) || 0), 0);
+ const set = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
+ set('tgMetTotal', Number(data.total || 0).toLocaleString());
+ set('tgMetOpen', String(open));
+ set('tgMetDone', String(done));
+ set('tgMetRev', '₦' + rev.toLocaleString());
+ if (!rows.length) {
+ if (tbody) tbody.innerHTML = '<tr><td colspan="8" class="empty-state">No Telegram orders yet.</td></tr>';
+ if (cards) cards.innerHTML = '<div class="empty-state">No Telegram orders yet.</div>';
+ if (pager) pager.innerHTML = '';
+ return;
+ }
+ const tgUser = (link) => String(link || '').replace(/^https?:\/\/t\.me\//i, '@');
+ if (tbody) tbody.innerHTML = rows.map(o => `
+ <tr>
+ <td>${o.created_at ? ngWhen(o.created_at) : ''}</td>
+ <td>${escapeHtml(o.customer_id || (o.user_id || '').slice(0,8) || '')}</td>
+ <td style="font-weight:600;">${escapeHtml(o.service_name || o.service_id || '')}</td>
+ <td><a href="${escapeHtml(o.link || '#')}" target="_blank" rel="noopener" style="color:var(--primary);">${escapeHtml(tgUser(o.link))}</a></td>
+ <td>${Number(o.quantity || 0).toLocaleString()}</td>
+ <td class="price">₦${Number(o.price_ngn || 0).toLocaleString()}</td>
+ <td>${boosterStatusBadge(o.status)}</td>
+ <td>${escapeHtml(o.supplier_order_id || '')}</td>
+ </tr>`).join('');
+ if (cards) cards.innerHTML = rows.map(o => `
+ <div class="mobile-card">
+ <div style="font-weight:700;">${escapeHtml(o.service_name || 'Telegram')}</div>
+ <div class="row-line"><span>Date</span><span>${o.created_at ? ngWhen(o.created_at) : '—'}</span></div>
+ <div class="row-line"><span>Recipient</span><span>${escapeHtml(tgUser(o.link))}</span></div>
+ <div class="row-line"><span>Status</span>${boosterStatusBadge(o.status)}</div>
+ <div class="row-line"><span>Qty</span><span>${Number(o.quantity || 0).toLocaleString()}</span></div>
+ <div class="row-line"><span>Paid</span><span class="price">₦${Number(o.price_ngn || 0).toLocaleString()}</span></div>
+ <div class="row-line"><span>Customer</span><span>${escapeHtml(o.customer_id || '—')}</span></div>
+ <div class="row-line"><span>Supplier #</span><span>${escapeHtml(o.supplier_order_id || '—')}</span></div>
+ </div>`).join('');
+ const maxPage = Math.max(1, Math.ceil((data.total || 0) / 15));
+ if (pager) pager.innerHTML = `
+ <button class="btn btn-ghost btn-sm" ${tgOrderPage<=1?'disabled':''} onclick="tgOrderPage=Math.max(1,tgOrderPage-1);loadTelegramOrders()">Prev</button>
+ <span>Page ${tgOrderPage}/${maxPage} · ${data.total||0} orders</span>
+ <button class="btn btn-ghost btn-sm" ${tgOrderPage>=maxPage?'disabled':''} onclick="tgOrderPage++;loadTelegramOrders()">Next</button>`;
+ } catch (e) {
+ if (tbody) tbody.innerHTML = `<tr><td colspan="8" class="empty-state">${escapeHtml(e.message || String(e))}</td></tr>`;
+ } finally {
+ setBtnBusy(btn, false, '<i class="fas fa-sync"></i> Refresh');
+ }
+}
+
+/* ===================== eSIM Orders (separate admin page + delivery) ===================== */
+let esimOrderPage = 1;
+let esimOrdersCache = [];
+let esimDeliverCurrent = null;
+let esimQrDataUrl = '';
+let esimDeliverBusy = false;
+
+async function esimAdminCall(body) {
+ const headers = await authHeaders();
+ headers['Content-Type'] = 'application/json';
+ const res = await fetch('/api/esim', { method: 'POST', headers, body: JSON.stringify(body) });
+ const data = await res.json().catch(() => ({}));
+ return { res, data };
+}
+function esimIsDelivered(o) { return /^completed$/i.test(String(o.status || '')); }
+function esimIsClosed(o) { return /^(failed|cancelled|canceled|expired|refunded)$/i.test(String(o.status || '')); }
+function esimStatusBadge(o) {
+ if (esimIsClosed(o)) return `<span class="badge badge-off">${escapeHtml(String(o.status))}</span>`;
+ if (esimIsDelivered(o)) return '<span class="badge badge-on">Delivered</span>';
+ return '<span class="badge badge-pending">Awaiting delivery</span>';
+}
+function esimActionBtn(o) {
+ if (esimIsClosed(o)) return '';
+ if (esimIsDelivered(o)) return `<button class="btn btn-ghost btn-sm" style="width:auto;" onclick="openEsimDeliver('${escapeHtml(o.id)}')"><i class="fas fa-rotate-right"></i> Resend</button>`;
+ return `<button class="btn btn-primary btn-sm" style="width:auto;" onclick="openEsimDeliver('${escapeHtml(o.id)}')"><i class="fas fa-paper-plane"></i> Deliver</button>`;
+}
+async function loadEsimOrders() {
+ const tbody = document.getElementById('esimOrdersBody');
+ const cards = document.getElementById('esimOrdersCards');
+ const btn = document.getElementById('btnRefreshEsimOrders');
+ setBtnBusy(btn, true, 'Refreshing…');
+ try {
+ const q = (document.getElementById('esimOrderSearch')?.value || '').trim();
+ const { data } = await esimAdminCall({ action: 'admin_orders', page: esimOrderPage, page_size: 20, q });
+ if (!data.success) {
+ const msg = escapeHtml(data.message || 'Failed');
+ if (tbody) tbody.innerHTML = `<tr><td colspan="8" class="empty-state">${msg}</td></tr>`;
+ if (cards) cards.innerHTML = `<div class="empty-state">${msg}</div>`;
+ return;
+ }
+ esimOrdersCache = data.data || [];
+ esimOrdersCache._total = data.total || 0;
+ renderEsimOrders();
+ } catch (e) {
+ if (tbody) tbody.innerHTML = `<tr><td colspan="8" class="empty-state">${escapeHtml(e.message || String(e))}</td></tr>`;
+ } finally {
+ setBtnBusy(btn, false, '<i class="fas fa-sync"></i> Refresh');
+ }
+}
+function renderEsimOrders() {
+ const tbody = document.getElementById('esimOrdersBody');
+ const cards = document.getElementById('esimOrdersCards');
+ const pager = document.getElementById('esimOrdersPager');
+ const all = esimOrdersCache || [];
+ const total = all._total || all.length;
+ const waiting = all.filter(o => !esimIsClosed(o) && !esimIsDelivered(o));
+ const done = all.filter(o => esimIsDelivered(o));
+ const rev = all.filter(o => !esimIsClosed(o)).reduce((n, o) => n + (Number(o.amount_ngn) || 0), 0);
+ const set = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
+ set('esimMetTotal', Number(total).toLocaleString());
+ set('esimMetWait', String(waiting.length));
+ set('esimMetDone', String(done.length));
+ set('esimMetRev', '₦' + rev.toLocaleString());
+ const badge = document.getElementById('esimNavBadge');
+ if (badge) { badge.textContent = String(waiting.length); badge.style.display = waiting.length ? 'inline-block' : 'none'; }
+
+ const f = document.getElementById('esimOrderFilter')?.value || 'all';
+ const rows = f === 'waiting' ? waiting : f === 'done' ? done : all;
+ if (!rows.length) {
+ const msg = f === 'waiting' ? 'No eSIM orders waiting for delivery.' : 'No eSIM orders found.';
+ if (tbody) tbody.innerHTML = `<tr><td colspan="8" class="empty-state">${msg}</td></tr>`;
+ if (cards) cards.innerHTML = `<div class="empty-state">${msg}</div>`;
+ } else {
+ const who = (o) => `<div style="font-weight:600;">${escapeHtml(o.full_name || 'No name on file')}</div><div style="font-size:11px;color:var(--muted);">${escapeHtml(o.customer_email || '')}</div>`;
+ if (tbody) tbody.innerHTML = rows.map(o => `
+ <tr>
+ <td>${o.created_at ? ngWhen(o.created_at) : ''}</td>
+ <td>${who(o)}</td>
+ <td>${escapeHtml(o.plan_name || o.plan_id || '')}</td>
+ <td style="font-family:ui-monospace,monospace;font-size:12px;">${escapeHtml(o.imei || '')}</td>
+ <td class="price">₦${Number(o.amount_ngn || 0).toLocaleString()}</td>
+ <td style="font-size:12px;">${escapeHtml(o.order_ref || '')}</td>
+ <td>${esimStatusBadge(o)}</td>
+ <td>${esimActionBtn(o)}</td>
+ </tr>`).join('');
+ if (cards) cards.innerHTML = rows.map(o => `
+ <div class="mobile-card">
+ <div style="font-weight:700;">${escapeHtml(o.full_name || 'No name on file')}</div>
+ <div class="meta">${escapeHtml(o.customer_email || '')}</div>
+ <div class="row-line"><span>Plan</span><span>${escapeHtml(o.plan_name || '')}</span></div>
+ <div class="row-line"><span>IMEI</span><span style="font-family:ui-monospace,monospace;">${escapeHtml(o.imei || '')}</span></div>
+ <div class="row-line"><span>Paid</span><span class="price">₦${Number(o.amount_ngn || 0).toLocaleString()}</span></div>
+ <div class="row-line"><span>Date</span><span>${o.created_at ? ngWhen(o.created_at) : '—'}</span></div>
+ <div class="row-line"><span>Ref</span><span>${escapeHtml(o.order_ref || '')}</span></div>
+ <div class="row-line"><span>Status</span>${esimStatusBadge(o)}</div>
+ <div style="margin-top:10px;">${esimActionBtn(o)}</div>
+ </div>`).join('');
+ }
+ const maxPage = Math.max(1, Math.ceil(total / 20));
+ if (pager) pager.innerHTML = `
+ <button class="btn btn-ghost btn-sm" ${esimOrderPage<=1?'disabled':''} onclick="esimOrderPage=Math.max(1,esimOrderPage-1);loadEsimOrders()">Prev</button>
+ <span>Page ${esimOrderPage}/${maxPage} · ${total} orders</span>
+ <button class="btn btn-ghost btn-sm" ${esimOrderPage>=maxPage?'disabled':''} onclick="esimOrderPage++;loadEsimOrders()">Next</button>`;
+}
+function openEsimDeliver(id) {
+ const o = (esimOrdersCache || []).find(x => String(x.id) === String(id));
+ if (!o) return;
+ esimDeliverCurrent = o;
+ esimQrDataUrl = '';
+ const resend = esimIsDelivered(o);
+ document.getElementById('esimDeliverTitle').textContent = resend ? 'Resend eSIM' : 'Deliver eSIM';
+ document.getElementById('esimDeliverSummary').innerHTML = `
+ <div class="row-line"><span>Customer</span><strong>${escapeHtml(o.full_name || 'No name on file')}</strong></div>
+ <div class="row-line"><span>Email</span><span>${escapeHtml(o.customer_email || '')}</span></div>
+ <div class="row-line"><span>Plan</span><span>${escapeHtml(o.plan_name || '')}</span></div>
+ <div class="row-line"><span>Order ref</span><span>${escapeHtml(o.order_ref || '')}</span></div>`;
+ document.getElementById('esimQrFile').value = '';
+ document.getElementById('esimQrPreviewWrap').classList.add('hidden');
+ document.getElementById('esimPhoneInput').value = '';
+ document.getElementById('esimQrHint').textContent = resend
+ ? 'Upload the QR image again to resend it. It is emailed directly and never saved.'
+ : 'PNG, JPG or WEBP, up to 2 MB. It is emailed directly and never saved.';
+ document.getElementById('esimDeliverNote').innerHTML = (o.full_name
+ ? `The email will greet them as <strong>Hi ${escapeHtml(o.full_name)},</strong> with the setup steps, the QR code in the middle of the message, and the QR attached as a file.`
+ : '<span style="color:#fbbf24;">This customer has no name saved on their account, so the email will say “Hi there,”.</span>');
+ document.getElementById('esimDeliverModal').classList.remove('hidden');
+}
+function closeEsimDeliver() {
+ if (esimDeliverBusy) return;
+ document.getElementById('esimDeliverModal').classList.add('hidden');
+ esimDeliverCurrent = null;
+ esimQrDataUrl = '';
+}
+function esimQrPicked(input) {
+ const file = input.files && input.files[0];
+ esimQrDataUrl = '';
+ document.getElementById('esimQrPreviewWrap').classList.add('hidden');
+ if (!file) return;
+ if (!/^image\/(png|jpeg|webp)$/.test(file.type)) { showAdminToast('Use a PNG, JPG or WEBP image', 'error'); input.value = ''; return; }
+ if (file.size > 2 * 1024 * 1024) { showAdminToast('Image is over 2 MB — crop or compress it', 'error'); input.value = ''; return; }
+ const reader = new FileReader();
+ reader.onload = () => {
+ esimQrDataUrl = String(reader.result || '');
+ document.getElementById('esimQrPreview').src = esimQrDataUrl;
+ document.getElementById('esimQrPreviewWrap').classList.remove('hidden');
+ };
+ reader.readAsDataURL(file);
+}
+async function submitEsimDeliver() {
+ const o = esimDeliverCurrent;
+ if (!o || esimDeliverBusy) return;
+ const resend = esimIsDelivered(o);
+ if (!esimQrDataUrl) { showAdminToast('Upload the eSIM QR code image first', 'error'); return; }
+ const msg = (resend ? 'Resend' : 'Send') + ' the eSIM QR email to ' + (o.customer_email || 'the customer') + '?';
+ if (!window.confirm(msg)) return;
+ const btn = document.getElementById('esimDeliverSend');
+ esimDeliverBusy = true;
+ setBtnBusy(btn, true, 'Sending…');
+ try {
+ const { data } = await esimAdminCall({
+ action: 'deliver',
+ order_id: o.id,
+ phone: document.getElementById('esimPhoneInput').value.trim(),
+ qr_image: esimQrDataUrl || undefined,
+ resend
+ });
+ if (!data.success) { showAdminToast(data.message || 'Delivery failed', 'error'); return; }
+ showAdminToast(data.message || 'eSIM delivered', 'success');
+ if (data.warning) showAdminToast(data.warning, 'info');
+ esimDeliverBusy = false;
+ closeEsimDeliver();
+ await loadEsimOrders();
+ } catch (e) {
+ showAdminToast(e.message || 'Delivery failed', 'error');
+ } finally {
+ esimDeliverBusy = false;
+ setBtnBusy(btn, false, '<i class="fas fa-paper-plane"></i> Send eSIM email');
+ }
+}
+
+let _tgOrdersLoaded = false;
+let _esimOrdersLoaded = false;
+
 function switchTab(name) {
  document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
  document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
@@ -5599,6 +5946,14 @@ function switchTab(name) {
  if (name === 'booster-orders' && !_boosterOrdersLoaded) {
    _boosterOrdersLoaded = true;
    Promise.resolve().then(function(){ return loadBoosterOrders(); }).catch(function(e){ _boosterOrdersLoaded = false; console.error('booster orders', e); });
+ }
+ if (name === 'telegram-orders' && !_tgOrdersLoaded) {
+   _tgOrdersLoaded = true;
+   Promise.resolve().then(function(){ return loadTelegramOrders(); }).catch(function(e){ _tgOrdersLoaded = false; console.error('telegram orders', e); });
+ }
+ if (name === 'esim-orders' && !_esimOrdersLoaded) {
+   _esimOrdersLoaded = true;
+   Promise.resolve().then(function(){ return loadEsimOrders(); }).catch(function(e){ _esimOrdersLoaded = false; console.error('esim orders', e); });
  }
  if (name === 'notify' && !_notificationHistoryLoaded) {
    _notificationHistoryLoaded = true;
