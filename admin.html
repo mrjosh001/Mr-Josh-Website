@@ -6509,7 +6509,7 @@ async function loadBoosterOrders() {
  try {
  const headers = await authHeaders();
  const q = (document.getElementById('boosterOrderSearch')?.value || '').trim();
- const params = new URLSearchParams({ action: 'admin_orders', page: String(boosterOrderPage), page_size: '10' });
+ const params = new URLSearchParams({ action: 'admin_orders', page: String(boosterOrderPage), page_size: '10', exclude_source: 'smmkings' });
  if (q) params.set('q', q);
  const res = await fetch('/api/owlet?' + params.toString(), { headers });
  const data = await res.json();
@@ -6518,7 +6518,8 @@ async function loadBoosterOrders() {
  if (cards) cards.innerHTML = `<div class="empty-state">${escapeHtml(data.message || 'Failed')}</div>`;
  return;
  }
- const rows = data.data || [];
+ // Telegram orders have their own tab; never list them here (also covers a server that ignores exclude_source)
+ const rows = (data.data || []).filter(function(o){ return String(o.source || '').toLowerCase() !== 'smmkings'; });
  if (!rows.length) {
  if (tbody) tbody.innerHTML = '<tr><td colspan="9" class="empty-state">No booster orders yet.</td></tr>';
  if (cards) cards.innerHTML = '<div class="empty-state">No booster orders yet.</div>';
