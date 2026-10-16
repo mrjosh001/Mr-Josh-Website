@@ -3,6 +3,7 @@ import { createClient } from '@supabase/supabase-js';
 const ESIM_URL = process.env.ESIM_SUPABASE_URL;
 const ESIM_SERVICE_KEY = process.env.ESIM_SUPABASE_SERVICE_ROLE_KEY;
 const ADMIN_EMAIL = 'mjhubhelp@gmail.com';
+const MAX_QR_BYTES = 3 * 1024 * 1024; // 3 MB
 const PLANS = {
   '1m': { name: '1 month', amount: 26000 },
   '3m': { name: '3 months', amount: 47000 },
@@ -26,28 +27,36 @@ function formatNgn(value) {
   return '₦' + Number(value || 0).toLocaleString('en-NG', { maximumFractionDigits: 2 });
 }
 
-async function sendEmail({ to, subject, html }) {
+/**
+ * Send through Resend. `attachments` is optional:
+ *   [{ filename, content (base64), content_id? }]
+ * An attachment with content_id is embedded in the body via <img src="cid:...">.
+ */
+async function sendEmail({ to, subject, html, attachments, replyTo }) {
   if (!process.env.RESEND_API_KEY || !process.env.RESEND_FROM_EMAIL) {
     throw new Error('Resend is not configured for this deployment');
   }
+  const payload = {
+    from: process.env.RESEND_FROM_EMAIL,
+    to: [to],
+    subject,
+    html
+  };
+  if (Array.isArray(attachments) && attachments.length) payload.attachments = attachments;
+  if (replyTo) payload.reply_to = replyTo;
   const response = await fetch('https://api.resend.com/emails', {
     method: 'POST',
     headers: {
       Authorization: 'Bearer ' + process.env.RESEND_API_KEY,
       'Content-Type': 'application/json'
     },
-    body: JSON.stringify({
-      from: process.env.RESEND_FROM_EMAIL,
-      to: [to],
-      subject,
-      html
-    })
+    body: JSON.stringify(payload)
   });
-  const payload = await response.json().catch(() => ({}));
+  const result = await response.json().catch(() => ({}));
   if (!response.ok) {
-    throw new Error(payload.message || 'Resend rejected the email (' + response.status + ')');
+    throw new Error(result.message || 'Resend rejected the email (' + response.status + ')');
   }
-  return payload;
+  return result;
 }
 
 async function sendOrderEmails(order) {
@@ -89,6 +98,7 @@ async function sendOrderEmails(order) {
         <tr><td style="padding:9px;border-bottom:1px solid #e5e7eb">Order date</td><td style="padding:9px;border-bottom:1px solid #e5e7eb">${createdAtSafe}</td></tr>
         <tr><td style="padding:9px;border-bottom:1px solid #e5e7eb">Status</td><td style="padding:9px;border-bottom:1px solid #e5e7eb">Paid — processing</td></tr>
       </table>
+      <p style="margin-top:14px">Open the admin dashboard → <strong>eSIM Orders</strong> to deliver this order once the eSIM is ready.</p>
     </div>`;
 
   const tasks = [];
@@ -139,6 +149,164 @@ async function sendOrderEmails(order) {
   };
 }
 
+/* ------------------------------------------------------------------ */
+/* eSIM delivery email (sent manually from the admin dashboard)        */
+/* ------------------------------------------------------------------ */
+
+/**
+ * The premade eSIM delivery template. The QR code is embedded in the middle of
+ * the message through a CID reference (<img src="cid:esim-qr">), which every
+ * major mail client renders. (Gmail blocks base64 data: images, so CID is the
+ * reliable way.) The same image is also attached as a normal file.
+ */
+function buildDeliveryEmail({ fullName, orderRef, planName, phone }) {
+  const name = escapeHtml(String(fullName || '').trim());
+  const greeting = name ? 'Hi ' + name + ',' : 'Hi there,';
+  const ref = escapeHtml(orderRef);
+  const plan = escapeHtml(planName);
+  const phoneBlock = phone
+    ? `<p style="margin:0 0 4px;font-size:16px;text-align:center">Phone Number: <strong style="color:#1d4ed8">${escapeHtml(phone)}</strong></p>`
+    : '';
+  return `<!doctype html>
+<html>
+<body style="margin:0;padding:0;background:#f3f5f9">
+  <div style="max-width:600px;margin:0 auto;padding:24px 12px;font-family:Arial,Helvetica,sans-serif;color:#111827">
+    <div style="background:#ffffff;border-radius:14px;padding:30px 26px;border:1px solid #e5e7eb">
+      <p style="margin:0 0 18px;font-size:17px;font-weight:bold">${greeting}</p>
+      <p style="margin:0 0 22px;font-size:16px;line-height:1.6">Congratulations! Your eSIM is here and ready to be activated! Please find the essential information for your eSIM below:</p>
+      ${phoneBlock}
+      <p style="margin:10px 0 12px;font-size:16px;font-weight:bold;text-align:center">eSIM QR Code:</p>
+      <div style="text-align:center;margin:0 0 26px">
+        <img src="cid:esim-qr" alt="eSIM QR code" width="240" style="width:240px;max-width:100%;height:auto;border:0;display:inline-block">
+      </div>
+      <div style="background:#f3f5f9;border-radius:10px;padding:16px 18px;font-size:15px;line-height:1.8">
+        <strong>How to install</strong><br>
+        1. Connect VPN<br>
+        2. Go to Settings &rarr; Cellular &rarr; Add eSIM<br>
+        3. Click &lsquo;Use QR code&rsquo; and scan this QR code
+      </div>
+      <p style="margin:22px 0 0;font-size:12px;color:#6b7280;line-height:1.6">Order reference: <strong>${ref}</strong> &middot; Plan: ${plan}<br>
+      This QR code is for you only &mdash; please don&rsquo;t share it. A copy of the QR code is also attached to this email. Need help? Just reply to this email.</p>
+      <p style="margin:16px 0 0;font-size:13px;color:#374151">MJ HUB Support</p>
+    </div>
+  </div>
+</body>
+</html>`;
+}
+
+/** Decode a data URL (png / jpeg / webp only) and verify the bytes really are that image type. */
+function decodeQrDataUrl(dataUrl) {
+  const match = /^data:(image\/(?:png|jpeg|jpg|webp));base64,([A-Za-z0-9+/=\r\n]+)$/i.exec(String(dataUrl || '').trim());
+  if (!match) return null;
+  const buffer = Buffer.from(match[2].replace(/\s+/g, ''), 'base64');
+  if (!buffer.length || buffer.length > MAX_QR_BYTES) return null;
+  const isPng = buffer.length > 8 && buffer[0] === 0x89 && buffer[1] === 0x50 && buffer[2] === 0x4e && buffer[3] === 0x47;
+  const isJpeg = buffer.length > 3 && buffer[0] === 0xff && buffer[1] === 0xd8 && buffer[2] === 0xff;
+  const isWebp = buffer.length > 12 && buffer.slice(0, 4).toString('ascii') === 'RIFF' && buffer.slice(8, 12).toString('ascii') === 'WEBP';
+  if (isPng) return { buffer, ext: 'png', type: 'image/png' };
+  if (isJpeg) return { buffer, ext: 'jpg', type: 'image/jpeg' };
+  if (isWebp) return { buffer, ext: 'webp', type: 'image/webp' };
+  return null;
+}
+
+async function isAdminUser(user) {
+  const { data: adminProfile } = await supabase.from('profiles')
+    .select('is_admin')
+    .eq('id', user.id)
+    .maybeSingle();
+  const flag = adminProfile && adminProfile.is_admin;
+  return flag === true || flag === 'true' || flag === 1
+    || String(user.email || '').toLowerCase() === ADMIN_EMAIL;
+}
+
+async function handleDeliver(body, adminUser, res) {
+  const orderId = String(body.order_id || '').trim();
+  if (!/^[0-9a-f-]{8,40}$/i.test(orderId)) {
+    return res.status(400).json({ success: false, message: 'Missing or invalid order.' });
+  }
+  const resend = body.resend === true;
+  const phone = String(body.phone || '').replace(/[^0-9+ ()-]/g, '').trim().slice(0, 24);
+
+  const { data: order, error: orderError } = await supabase.from('esim_orders')
+    .select('*')
+    .eq('id', orderId)
+    .maybeSingle();
+  if (orderError || !order) {
+    return res.status(404).json({ success: false, message: 'eSIM order not found.' });
+  }
+  if (/^(failed|cancelled|canceled|expired|refunded)$/i.test(String(order.status || ''))) {
+    return res.status(400).json({ success: false, message: 'This order is ' + order.status + ' and cannot be delivered.' });
+  }
+  if (/^completed$/i.test(String(order.status || '')) && !resend) {
+    return res.status(409).json({ success: false, message: 'This eSIM was already delivered. Use Resend if you need to send it again.' });
+  }
+  const customerEmail = String(order.customer_email || '').trim();
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(customerEmail)) {
+    return res.status(400).json({ success: false, message: 'This order has no valid customer email.' });
+  }
+
+  // The QR image comes straight from the admin dashboard upload; it is emailed and never stored.
+  const qr = decodeQrDataUrl(body.qr_image);
+  if (!qr) {
+    return res.status(400).json({ success: false, message: 'Upload the eSIM QR code image first (PNG, JPG or WEBP under 3 MB).' });
+  }
+
+  // The customer's exact name as saved on their MJ HUB account.
+  let fullName = '';
+  if (order.user_id) {
+    const { data: profile } = await supabase.from('profiles')
+      .select('full_name')
+      .eq('id', order.user_id)
+      .maybeSingle();
+    fullName = String(profile?.full_name || '').trim();
+  }
+
+  const base64 = qr.buffer.toString('base64');
+  const html = buildDeliveryEmail({
+    fullName,
+    orderRef: order.order_ref,
+    planName: order.plan_name,
+    phone
+  });
+
+  try {
+    await sendEmail({
+      to: customerEmail,
+      subject: 'Your MJ HUB eSIM is ready · ' + order.order_ref,
+      html,
+      replyTo: ADMIN_EMAIL,
+      attachments: [
+        // embedded in the middle of the email body
+        { filename: 'esim-qr-inline.' + qr.ext, content: base64, content_id: 'esim-qr' },
+        // the same QR as a normal attachment the customer can save
+        { filename: 'esim-qr-code.' + qr.ext, content: base64 }
+      ]
+    });
+  } catch (error) {
+    console.error('[esim deliver] email failed for ' + order.order_ref + ':', error?.message || error);
+    await supabase.from('esim_orders').update({ email_error: String(error?.message || error).slice(0, 1000) }).eq('id', order.id);
+    return res.status(502).json({ success: false, message: 'The email could not be sent: ' + (error?.message || 'unknown error') + '. Nothing was marked as delivered.' });
+  }
+
+  // Only the existing status column is touched, so no database migration is needed.
+  const { error: updateError } = await supabase.from('esim_orders')
+    .update({ status: 'completed', email_error: null })
+    .eq('id', order.id);
+  if (updateError) {
+    return res.status(200).json({
+      success: true,
+      emailed: true,
+      warning: 'Email sent to the customer, but the order status could not be updated: ' + updateError.message
+    });
+  }
+
+  return res.status(200).json({
+    success: true,
+    emailed: true,
+    message: 'eSIM delivered to ' + customerEmail
+  });
+}
+
 export default async function handler(req, res) {
   res.setHeader('Cache-Control', 'no-store');
   res.setHeader('Vary', 'Authorization');
@@ -172,14 +340,7 @@ export default async function handler(req, res) {
 
     // ---- Admin: list eSIM orders (read-only) — used by the admin dashboard "eSIM Orders" page ----
     if (String(body.action || '') === 'admin_orders') {
-      const { data: adminProfile } = await supabase.from('profiles')
-        .select('is_admin')
-        .eq('id', user.id)
-        .maybeSingle();
-      const flag = adminProfile && adminProfile.is_admin;
-      const isAdmin = flag === true || flag === 'true' || flag === 1
-        || String(user.email || '').toLowerCase() === ADMIN_EMAIL;
-      if (!isAdmin) {
+      if (!(await isAdminUser(user))) {
         return res.status(403).json({ success: false, message: 'Admin privileges required' });
       }
 
@@ -203,13 +364,34 @@ export default async function handler(req, res) {
         console.error('[esim admin] list failed:', error.message);
         return res.status(500).json({ success: false, message: 'Could not load eSIM orders' });
       }
+
+      // Attach each customer's saved name so the admin sees who to deliver to.
+      const rows = data || [];
+      const userIds = [...new Set(rows.map((row) => row.user_id).filter(Boolean))];
+      let names = {};
+      if (userIds.length) {
+        const { data: profiles } = await supabase.from('profiles')
+          .select('id, full_name')
+          .in('id', userIds);
+        names = Object.fromEntries((profiles || []).map((p) => [p.id, p.full_name || '']));
+      }
+      const out = rows.map((row) => ({ ...row, full_name: names[row.user_id] || '' }));
+
       return res.status(200).json({
         success: true,
-        data: data || [],
+        data: out,
         total: count || 0,
         page,
         page_size: pageSize
       });
+    }
+
+    // ---- Admin: deliver (or re-send) the eSIM QR email ----
+    if (String(body.action || '') === 'deliver') {
+      if (!(await isAdminUser(user))) {
+        return res.status(403).json({ success: false, message: 'Admin privileges required' });
+      }
+      return handleDeliver(body, user, res);
     }
 
     const planId = String(body.plan_id || '');
