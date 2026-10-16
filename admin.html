@@ -209,6 +209,14 @@ function withLagos(opts) { return Object.assign({ timeZone: 'Africa/Lagos' }, op
  box-shadow: 0 0 20px rgba(59,130,246,.08);
  }
  .nav-item i { width:18px; text-align:center; font-size:14px; opacity:.9; }
+ /* Sidebar dropdown groups (MJ SMS / MJ Boosters) */
+ .nav-group-toggle { width:100%; }
+ .nav-group-toggle .nav-caret { margin-left:auto; width:auto; font-size:11px; transition:transform .2s; }
+ .nav-group.open > .nav-group-toggle .nav-caret { transform:rotate(180deg); }
+ .nav-sub { display:none; padding-left:14px; margin:2px 0 6px 10px; border-left:1px solid var(--border); }
+ .nav-group.open > .nav-sub { display:block; }
+ .nav-sub .nav-item { font-size:13px; }
+
  .sidebar-footer { padding:14px 16px; border-top:1px solid var(--border); }
  .main { flex:1; margin-left:264px; min-height:100vh; display:flex; flex-direction:column; width:calc(100% - 264px); }
  .topbar {
@@ -974,17 +982,27 @@ function withLagos(opts) { return Object.assign({ timeZone: 'Africa/Lagos' }, op
  <button class="nav-item" data-tab="lookup" onclick="switchTab('lookup')"><i class="fas fa-search"></i> Customer Lookup</button>
  <button class="nav-item" data-tab="products" onclick="switchTab('products')"><i class="fas fa-box"></i> Products & Stock</button>
  <button class="nav-item" data-tab="orders" onclick="switchTab('orders')"><i class="fas fa-receipt"></i> LOGS Orders</button>
- <button class="nav-item" data-tab="sms" onclick="switchTab('sms')"><i class="fas fa-sim-card"></i> SMS Server 1 (Grizzly)</button>
- <button class="nav-item" data-tab="sms-server2" onclick="switchTab('sms-server2')"><i class="fas fa-server"></i> SMS Server 2</button>
- <button class="nav-item" data-tab="sms-gotsms" onclick="switchTab('sms-gotsms')"><i class="fas fa-flag-usa"></i> USA Rental (GotSMS)</button>
- <button class="nav-item" data-tab="sms-orders" onclick="switchTab('sms-orders')"><i class="fas fa-comment-sms"></i> SMS Orders</button>
- <button class="nav-item" data-tab="boosters" onclick="switchTab('boosters')"><i class="fas fa-bolt"></i> MJ Boosters (Owlet)</button>
- <button class="nav-item" data-tab="boosters-jap" onclick="switchTab('boosters-jap')"><i class="fas fa-bolt"></i> JAP Boosters</button>
- <button class="nav-item" data-tab="boosters-casper" onclick="switchTab('boosters-casper')"><i class="fas fa-bolt"></i> Casper Boosters</button>
- <button class="nav-item" data-tab="boosters-smmkings" onclick="switchTab('boosters-smmkings')"><i class="fas fa-paper-plane"></i> SMMKings (Telegram)</button>
- <button class="nav-item" data-tab="booster-orders" onclick="switchTab('booster-orders')"><i class="fas fa-receipt"></i> Booster Orders</button>
- <button class="nav-item" data-tab="telegram-orders" onclick="switchTab('telegram-orders')"><i class="fab fa-telegram"></i> Telegram Orders</button>
- <button class="nav-item" data-tab="esim-orders" onclick="switchTab('esim-orders')"><i class="fas fa-sim-card"></i> eSIM Orders <span id="esimNavBadge" style="display:none;margin-left:6px;background:#f59e0b;color:#111;font-size:10px;font-weight:800;padding:2px 7px;border-radius:999px;min-width:18px;text-align:center;">0</span></button>
+<div class="nav-group" id="grpSms">
+<button class="nav-item nav-group-toggle" type="button" onclick="toggleNavGroup('grpSms')"><i class="fas fa-sim-card"></i> MJ SMS <i class="fas fa-chevron-down nav-caret"></i></button>
+<div class="nav-sub">
+<button class="nav-item" data-tab="sms" onclick="switchTab('sms')"><i class="fas fa-sim-card"></i> SMS Server 1 (Grizzly)</button>
+<button class="nav-item" data-tab="sms-server2" onclick="switchTab('sms-server2')"><i class="fas fa-server"></i> SMS Server 2</button>
+<button class="nav-item" data-tab="sms-gotsms" onclick="switchTab('sms-gotsms')"><i class="fas fa-flag-usa"></i> USA Rental (GotSMS)</button>
+<button class="nav-item" data-tab="sms-orders" onclick="switchTab('sms-orders')"><i class="fas fa-comment-sms"></i> SMS Orders</button>
+<button class="nav-item" data-tab="esim-orders" onclick="switchTab('esim-orders')"><i class="fas fa-sim-card"></i> eSIM Orders <span id="esimNavBadge" style="display:none;margin-left:6px;background:#f59e0b;color:#111;font-size:10px;font-weight:800;padding:2px 7px;border-radius:999px;min-width:18px;text-align:center;">0</span></button>
+</div>
+</div>
+<div class="nav-group" id="grpBoost">
+<button class="nav-item nav-group-toggle" type="button" onclick="toggleNavGroup('grpBoost')"><i class="fas fa-bolt"></i> MJ Boosters <i class="fas fa-chevron-down nav-caret"></i></button>
+<div class="nav-sub">
+<button class="nav-item" data-tab="boosters" onclick="switchTab('boosters')"><i class="fas fa-bolt"></i> MJ Boosters (Owlet)</button>
+<button class="nav-item" data-tab="boosters-jap" onclick="switchTab('boosters-jap')"><i class="fas fa-bolt"></i> JAP Boosters</button>
+<button class="nav-item" data-tab="boosters-casper" onclick="switchTab('boosters-casper')"><i class="fas fa-bolt"></i> Casper Boosters</button>
+<button class="nav-item" data-tab="boosters-smmkings" onclick="switchTab('boosters-smmkings')"><i class="fas fa-paper-plane"></i> SMMKings (Telegram)</button>
+<button class="nav-item" data-tab="booster-orders" onclick="switchTab('booster-orders')"><i class="fas fa-receipt"></i> Booster Orders</button>
+<button class="nav-item" data-tab="telegram-orders" onclick="switchTab('telegram-orders')"><i class="fab fa-telegram"></i> Telegram Orders</button>
+</div>
+</div>
  <button class="nav-item" data-tab="notify" onclick="switchTab('notify')"><i class="fas fa-bullhorn"></i> Notifications</button>
  <a class="nav-item" href="admin-support.html" id="navSupportDesk" style="text-decoration:none;position:relative;"><i class="fas fa-headset"></i> Support Desk <span id="supportNavBadge" style="display:none;margin-left:6px;background:#ef4444;color:#fff;font-size:10px;font-weight:800;padding:2px 7px;border-radius:999px;min-width:18px;text-align:center;">0</span></a>
  <button class="nav-item" data-tab="sub-admins" onclick="switchTab('sub-admins')"><i class="fas fa-user-shield"></i> Sub-Admins</button>
@@ -1064,11 +1082,11 @@ function withLagos(opts) { return Object.assign({ timeZone: 'Africa/Lagos' }, op
  <div class="metrics" style="margin-bottom:0;">
  <div class="metric-card"><div class="metric-label">Orders</div><div class="metric-value" id="mSmsOrderCount">0</div><div class="metric-sub" id="mSmsOrderPeriodLabel">Last 7 Days</div></div>
  <div class="metric-card"><div class="metric-label">Amount Spent</div><div class="metric-value" id="mSmsAmountSpent">₦0</div><div class="metric-sub">Customer spend</div></div>
- <div class="metric-card"><div class="metric-label">Profit Made</div><div class="metric-value" id="mSmsProfit" style="color:#34d399;">₦0</div><div class="metric-sub">After supplier cost · Server 1+2 · USA · Global</div></div>
+ <div class="metric-card"><div class="metric-label">Profit Made</div><div class="metric-value" id="mSmsProfit" style="color:#34d399;">₦0</div><div class="metric-sub">After supplier cost · Server 1+2 · USA · Global (eSIM counted in orders &amp; spend)</div></div>
  </div>
  </div>
  <div class="panel">
- <div class="panel-header"><div class="panel-title">MJ Boosters</div></div>
+ <div class="panel-header"><div class="panel-title">MJ Boosters <span style="font-weight:500;color:var(--muted);font-size:12px;">incl. Telegram</span></div></div>
  <div class="metrics" style="margin-bottom:0;">
  <div class="metric-card"><div class="metric-label">Total Orders</div><div class="metric-value" id="mBoostOrderCount">0</div><div class="metric-sub" id="mBoostOrderPeriodLabel">Last 7 Days</div></div>
  <div class="metric-card"><div class="metric-label">Amount Spent</div><div class="metric-value" id="mBoostAmountSpent">₦0</div><div class="metric-sub">Customer spend</div></div>
@@ -3969,6 +3987,22 @@ async function loadOverviewStats(period) {
  const profitEl = document.getElementById('mProfitNgn');
  if (profitEl) profitEl.textContent = '₦' + combinedProfit.toLocaleString(undefined, { maximumFractionDigits: 0 });
 
+ // eSIM orders count under SMS Numbers (and therefore Sales / Revenue).
+ // eSIM lives in its own Supabase project, so it is read via /api/esim.
+ try {
+ const es = await fetchEsimOverviewTotals(period);
+ if (es) {
+ set('mSmsOrderCount', ((data.sms_order_count || 0) + es.count).toLocaleString());
+ set('mSmsAmountSpent', '₦' + (Number(data.sms_amount_spent || 0) + es.amount).toLocaleString());
+ const totalWithEsim = combinedSales + es.amount;
+ set('mSalesNgn', '₦' + totalWithEsim.toLocaleString(undefined, { maximumFractionDigits: 0 }));
+ set('mRevenueNgn', '₦' + totalWithEsim.toLocaleString(undefined, { maximumFractionDigits: 0 }));
+ set('mRevenueUsd', '$' + (totalWithEsim / liveRate).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' USD');
+ }
+ } catch (e) {
+ console.warn('eSIM overview totals failed:', e);
+ }
+
  // Fallback when api/admin.js has not been redeployed yet (no boost_* fields)
  if (data.boost_order_count == null) {
  loadBoosterOverviewFallback(period);
@@ -3977,6 +4011,31 @@ async function loadOverviewStats(period) {
  console.error('Overview stats error:', e);
  loadBoosterOverviewFallback(period);
  }
+}
+
+/** Paid eSIM orders (not failed/cancelled/expired/refunded) inside the selected period. */
+async function fetchEsimOverviewTotals(period) {
+ const lr = lagosRangeMs(period);
+ const fromMs = lr.fromMs;
+ const toMs = lr.toMs;
+ let count = 0;
+ let amount = 0;
+ for (let page = 1; page <= 30; page++) {
+ const { data } = await esimAdminCall({ action: 'admin_orders', page, page_size: 100 });
+ if (!data || !data.success) return null;
+ const rows = data.data || [];
+ let reachedOlder = false;
+ for (const o of rows) {
+ const t = o.created_at ? new Date(o.created_at).getTime() : 0;
+ if (fromMs != null && t < fromMs) { reachedOlder = true; continue; }
+ if (toMs != null && t > toMs) continue;
+ if (esimIsClosed(o)) continue;
+ count += 1;
+ amount += Number(o.amount_ngn || 0);
+ }
+ if (reachedOlder || rows.length < 100) break;
+ }
+ return { count, amount };
 }
 
 async function loadBoosterOverviewFallback(period) {
@@ -5902,11 +5961,13 @@ async function submitEsimDeliver() {
 let _tgOrdersLoaded = false;
 let _esimOrdersLoaded = false;
 
+function toggleNavGroup(id){ const g=document.getElementById(id); if(!g) return; const open=!g.classList.contains('open'); g.classList.toggle('open',open); g.dataset.pinned=open?'1':'0'; }
 function switchTab(name) {
  document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
  document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
  document.getElementById('tab-' + name).classList.add('active');
  document.querySelector(`.nav-item[data-tab="${name}"]`).classList.add('active');
+ document.querySelectorAll('.nav-group').forEach(g => g.classList.toggle('open', !!g.querySelector(`.nav-item[data-tab="${name}"]`) || (g.classList.contains('open') && g.dataset.pinned==='1')));
  document.getElementById('pageTitle').textContent = tabTitles[name] || name;
  if (name === 'sub-admins') loadSubAdmins();
  closeSidebar();
