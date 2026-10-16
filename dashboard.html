@@ -1342,18 +1342,18 @@ body::after {
 #home.home-v2 .hv-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 12px;
-  margin-bottom: 12px;
+  gap: 10px;
+  margin-bottom: 10px;
 }
 #home.home-v2 .hv-tile {
   position: relative;
   display: flex;
   flex-direction: column;
   align-items: flex-start;
-  gap: 14px;
-  min-height: 118px;
-  padding: 16px;
-  border-radius: 22px;
+  gap: 10px;
+  min-height: 92px;
+  padding: 12px;
+  border-radius: 18px;
   text-decoration: none;
   color: var(--text);
   background: var(--card) !important;
@@ -1363,30 +1363,34 @@ body::after {
 }
 #home.home-v2 .hv-tile:active { transform: scale(0.98); }
 #home.home-v2 .hv-tile .tico {
-  width: 44px; height: 44px;
-  border-radius: 14px;
+  width: 36px; height: 36px;
+  border-radius: 12px;
   display: grid;
   place-items: center;
   color: #fff;
-  font-size: 17px;
+  font-size: 15px;
 }
 #home.home-v2 .hv-tile.logs .tico { background: linear-gradient(145deg, #1d4ed8, #60a5fa); }
 #home.home-v2 .hv-tile.sms .tico { background: linear-gradient(145deg, #0369a1, #38bdf8); }
 #home.home-v2 .hv-tile.boost .tico { background: linear-gradient(145deg, #6d28d9, #c4b5fd); }
 #home.home-v2 .hv-tile.refer .tico { background: linear-gradient(145deg, #047857, #34d399); }
 #home.home-v2 .hv-tile.telegram .tico { background: linear-gradient(145deg, #0ea5e9, #0288d1); }
+#home.home-v2 .hv-tile.esim .tico { background: linear-gradient(145deg, #be185d, #f472b6); }
+#home.home-v2 .hv-tile.wide { grid-column: 1 / -1; }
+#home.home-v2 .hv-orders.calls .oico { background: linear-gradient(145deg, #ea580c, #fb923c); color: #fff; }
+#home.home-v2 .hv-orders + .hv-orders { margin-top: 10px; }
 
 #home.home-v2 .hv-tile b {
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 800;
   letter-spacing: -0.02em;
 }
 #home.home-v2 .hv-tile em {
   display: block;
-  margin-top: 3px;
+  margin-top: 2px;
   font-style: normal;
-  font-size: 11px;
-  line-height: 1.35;
+  font-size: 10.5px;
+  line-height: 1.3;
   color: var(--muted);
   font-weight: 600;
 }
@@ -1394,9 +1398,9 @@ body::after {
 #home.home-v2 .hv-orders {
   display: flex;
   align-items: center;
-  gap: 14px;
-  padding: 16px;
-  border-radius: 20px;
+  gap: 12px;
+  padding: 12px;
+  border-radius: 18px;
   background: var(--card) !important;
   border: 1px solid var(--border) !important;
   text-decoration: none;
@@ -1404,8 +1408,8 @@ body::after {
   box-shadow: 0 8px 22px rgba(15, 23, 42, 0.04);
 }
 #home.home-v2 .hv-orders .oico {
-  width: 46px; height: 46px;
-  border-radius: 15px;
+  width: 38px; height: 38px;
+  border-radius: 12px;
   display: grid;
   place-items: center;
   background: color-mix(in srgb, var(--primary) 12%, transparent);
@@ -1415,25 +1419,25 @@ body::after {
 #home.home-v2 .hv-orders .otxt { flex: 1; min-width: 0; }
 #home.home-v2 .hv-orders strong {
   display: block;
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 800;
   letter-spacing: -0.02em;
 }
 #home.home-v2 .hv-orders em {
   display: block;
-  margin-top: 3px;
+  margin-top: 2px;
   font-style: normal;
-  font-size: 12px;
+  font-size: 11px;
   color: var(--muted);
 }
 #home.home-v2 .hv-orders .chev {
-  width: 32px; height: 32px;
-  border-radius: 10px;
+  width: 28px; height: 28px;
+  border-radius: 9px;
   display: grid;
   place-items: center;
   background: color-mix(in srgb, var(--primary) 10%, transparent);
   color: var(--primary);
-  font-size: 12px;
+  font-size: 11px;
 }
 /* Sheets / modals: thicker glass (regular variant) */
 .activity-history-drawer,
@@ -3381,7 +3385,23 @@ html[data-theme="light"] .logo-word, :root[data-theme="light"] .logo-word{color:
                     <em>Earn 3% for life</em>
                 </div>
             </a>
+            <a class="hv-tile esim wide" href="esim.html" id="esimPromoCard">
+                <div class="tico"><i class="fa-solid fa-sim-card"></i></div>
+                <div>
+                    <b>eSIM</b>
+                    <em>Instant data plans, no physical SIM</em>
+                </div>
+            </a>
         </div>
+
+        <a class="hv-orders calls" href="esim.html" id="callsPromoCard">
+            <div class="oico"><i class="fa-solid fa-phone-volume"></i></div>
+            <div class="otxt">
+                <strong>Unlimited Call &amp; Text</strong>
+                <em>Unlimited calls · texts · WiFi calling</em>
+            </div>
+            <span class="chev"><i class="fa-solid fa-chevron-right"></i></span>
+        </a>
 
         <a class="hv-orders hv-telegram-row" href="mj-telegram.html" id="telegramPromoCard">
             <div class="oico" style="background:linear-gradient(145deg,#0ea5e9,#0288d1);"><i class="fa-brands fa-telegram"></i></div>
