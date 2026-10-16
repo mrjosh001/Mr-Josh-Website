@@ -48,6 +48,12 @@ button{font-family:inherit}
 .fund-hero h2{font-size:18px;font-weight:800;margin:0 0 2px}
 .fund-hero p{font-size:12px;opacity:.9;margin:0}
 
+/* T-Mobile network badge (swap the <symbol id="tmo-logo"> below for the official artwork if you have it) */
+.tmo-logo{display:block;width:92px;height:22px}
+.tmo-badge{display:inline-flex;align-items:center;justify-content:center;border-radius:9px;overflow:hidden;flex:none;line-height:0}
+.hero-network{display:flex;align-items:center;gap:10px;margin-top:10px;font-size:11px;font-weight:700;opacity:.95}
+.hero-network .tmo-badge{box-shadow:0 4px 12px rgba(0,0,0,.22)}
+
 .card{background:var(--card);border:1px solid var(--border);border-radius:20px;padding:18px 16px;margin-bottom:14px}
 
 .feature-card{background:linear-gradient(135deg,var(--primary-soft),var(--card));border:1px solid var(--border);border-radius:18px;padding:16px;margin:-2px 0 14px}
@@ -182,6 +188,7 @@ button{font-family:inherit}
 .ps-block{padding:11px 13px;border:1px solid var(--border);background:var(--input-bg);border-radius:12px;margin-top:9px}
 .ps-block-label{font-size:11px;color:var(--muted);font-weight:700;margin-bottom:3px}
 .ps-block-text{font-size:13px;font-weight:750;color:var(--text);overflow-wrap:anywhere}
+.ps-network{display:flex;align-items:center;gap:10px}
 .ps-delivery-note{display:flex;gap:10px;align-items:flex-start;padding:12px 13px;margin:0 0 12px;border:1px solid color-mix(in srgb,var(--primary) 32%,var(--border));border-radius:13px;background:var(--primary-soft);color:var(--text);font-size:12px;line-height:1.5}
 .ps-delivery-note i{color:var(--primary);margin-top:2px;flex:none}
 .ps-delivery-note strong{display:block;color:var(--primary);font-size:12px;margin-bottom:2px}
@@ -209,6 +216,13 @@ button{font-family:inherit}
 <script src="/js/mj-page-loader.js"></script>
 </head>
 <body>
+<!-- T-Mobile network badge, reused in the hero, footer and order summary -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false">
+  <symbol id="tmo-logo" viewBox="0 0 132 32">
+    <rect width="132" height="32" rx="7" fill="#E20074"/>
+    <text x="66" y="22" text-anchor="middle" font-family="Arial,Helvetica,sans-serif" font-size="17" font-weight="800" fill="#ffffff" letter-spacing="-.3">T-Mobile</text>
+  </symbol>
+</svg>
 <style id="mj-boot-style">
 #mj-boot{position:fixed;inset:0;z-index:2147483646;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:18px;background:rgba(5,7,13,.55);-webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px);color:rgba(226,232,240,.85);font:500 12px/1.2 system-ui,sans-serif;letter-spacing:.2em;text-transform:lowercase;transition:opacity .25s ease}
 #mj-boot.is-done{opacity:0;pointer-events:none}
@@ -267,6 +281,10 @@ button{font-family:inherit}
       <div>
         <h2>T-Mobile eSIM</h2>
         <p>Choose your eSIM duration and get connected with T-Mobile.</p>
+        <div class="hero-network">
+          <span class="tmo-badge"><svg class="tmo-logo" viewBox="0 0 132 32" role="img" aria-label="T-Mobile"><use href="#tmo-logo"/></svg></span>
+          <span>Official T-Mobile network</span>
+        </div>
       </div>
     </div>
     <div class="feature-card" aria-label="eSIM features">
@@ -281,7 +299,8 @@ button{font-family:inherit}
     </div>
     <div class="card">
       <p class="method-label">Choose your plan</p>
-      <div class="plans" role="group" aria-label="eSIM plan duration">
+      <!-- These four cards are the safe fallback. As soon as the live prices load from the server they are replaced automatically. -->
+      <div class="plans" id="plansGrid" role="group" aria-label="eSIM plan duration">
         <button class="plan" type="button" data-id="1m" data-label="1 month" data-price="26000" aria-pressed="false">
           <span class="radio"><i class="fa-solid fa-check"></i></span>
           <span class="duration">1 month</span><span class="price">₦26,000</span><span class="period">30 days</span><span class="monthly">₦26,000 per month</span>
@@ -303,7 +322,7 @@ button{font-family:inherit}
       <div class="pickbar"><span id="pickLabel">Select a plan to continue</span><strong id="pickPrice"></strong></div>
       <button type="button" class="btn" id="nextBtn" disabled>Next <i class="fa-solid fa-arrow-right"></i></button>
     </div>
-    <div class="provider-foot"><i class="fa-solid fa-shield-halved"></i> Powered by T-Mobile</div>
+    <div class="provider-foot"><i class="fa-solid fa-shield-halved"></i> Powered by <span class="tmo-badge"><svg class="tmo-logo" style="width:70px;height:17px" viewBox="0 0 132 32" role="img" aria-label="T-Mobile"><use href="#tmo-logo"/></svg></span></div>
   </section>
 
   <!-- PAGE 2: details + pay -->
@@ -361,7 +380,7 @@ button{font-family:inherit}
       <div class="ps-delivery-note"><i class="fa-solid fa-envelope-circle-check"></i><div><strong>Automatic delivery</strong>After successful payment, your eSIM is processed automatically and sent to your registered email within 30 minutes.</div></div>
       <div class="ps-block">
         <div class="ps-block-label">Network</div>
-        <div class="ps-block-text">T-Mobile</div>
+        <div class="ps-block-text ps-network"><span class="tmo-badge"><svg class="tmo-logo" style="width:78px;height:19px" viewBox="0 0 132 32" role="img" aria-label="T-Mobile"><use href="#tmo-logo"/></svg></span></div>
       </div>
       <div class="ps-block">
         <div class="ps-block-label">Phone IMEI</div>
@@ -408,6 +427,7 @@ button{font-family:inherit}
   var sb = window.supabase && window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:true,storage:window.sessionStorage}});
 
   function money(n){ return '₦' + Number(n).toLocaleString('en-NG'); }
+  function esc(s){ return String(s == null ? '' : s).replace(/[&<>"']/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); }
   function toast(msg){
     var t = $('toast'); t.textContent = msg; t.classList.add('show');
     setTimeout(function(){ t.classList.remove('show'); }, 3200);
@@ -443,7 +463,71 @@ button{font-family:inherit}
     $('pickPrice').textContent = money(p.dataset.price);
     $('nextBtn').disabled = false;
   }
-  plans.forEach(function(p){ p.addEventListener('click', function(){ choose(p); }); });
+  function bindPlans(){
+    plans.forEach(function(p){ p.addEventListener('click', function(){ choose(p); }); });
+  }
+  bindPlans();
+
+  /* Live plan prices. The prices are controlled from the admin dashboard
+     (eSIM Orders → Plan prices). If this request fails for any reason the four
+     fallback cards in the HTML stay on screen, and the server still refuses to
+     charge anything other than the price the customer was shown. */
+  var MONTHS = { '1m': 1, '3m': 3, '6m': 6, '12m': 12 };
+  function renderPlans(list){
+    var grid = $('plansGrid');
+    if (!grid || !list || !list.length) return;
+    var prevId = selected ? selected.dataset.id : null;
+    var prevPrice = selected ? Number(selected.dataset.price) : null;
+    var base = list.filter(function(p){ return p.id === '1m'; })[0] || list[0];
+    var baseMonthly = Number(base.amount_ngn) / (MONTHS[base.id] || Math.max(1, Math.round(base.days / 30)));
+    grid.innerHTML = list.map(function(p){
+      var amount = Number(p.amount_ngn);
+      var months = MONTHS[p.id] || Math.max(1, Math.round(p.days / 30));
+      var monthly = amount / months;
+      var saving = (months > 1 && baseMonthly > monthly) ? Math.round((1 - monthly / baseMonthly) * 100) : 0;
+      return '<button class="plan" type="button" data-id="' + esc(p.id) + '" data-label="' + esc(p.name) + '" data-price="' + amount + '" aria-pressed="false">' +
+        (p.id === '3m' ? '<span class="tag">Popular</span>' : '') +
+        '<span class="radio"><i class="fa-solid fa-check"></i></span>' +
+        '<span class="duration">' + esc(p.name) + '</span>' +
+        '<span class="price">' + money(amount) + '</span>' +
+        '<span class="period">' + esc(p.days) + ' days</span>' +
+        '<span class="monthly">' + (Number.isInteger(monthly) ? '' : '≈ ') + money(Math.round(monthly)) + ' per month</span>' +
+        (saving > 0 ? '<span class="saving">Save about ' + saving + '%</span>' : '') +
+      '</button>';
+    }).join('');
+    plans = Array.prototype.slice.call(grid.querySelectorAll('.plan'));
+    bindPlans();
+    selected = null;
+    $('nextBtn').disabled = true;
+    $('pickLabel').textContent = 'Select a plan to continue';
+    $('pickPrice').textContent = '';
+    if (prevId) {
+      var again = plans.filter(function(p){ return p.dataset.id === prevId; })[0];
+      if (again) {
+        choose(again);
+        if (step === 2) $('dPlan').textContent = again.dataset.label + ' · ' + money(again.dataset.price);
+        if (prevPrice !== Number(again.dataset.price)) toast('The price of this plan was updated to ' + money(again.dataset.price));
+      } else if (step === 2) {
+        toast('That plan is no longer available. Please choose another.');
+        go(1);
+      }
+    }
+  }
+  async function loadPlans(){
+    try {
+      if (!sb) return;
+      var r = await sb.auth.getSession();
+      var s = r && r.data && r.data.session;
+      if (!s || !s.access_token) return;
+      var res = await fetch('/api/esim', {
+        method: 'POST',
+        headers: { 'Authorization': 'Bearer ' + s.access_token, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'plans' })
+      });
+      var j = await res.json().catch(function(){ return {}; });
+      if (res.ok && j && j.success && Array.isArray(j.plans) && j.plans.length) renderPlans(j.plans);
+    } catch (e) { /* keep the fallback cards */ }
+  }
 
   $('nextBtn').addEventListener('click', function(){
     if (!selected) return toast('Choose a plan to continue');
@@ -501,6 +585,7 @@ button{font-family:inherit}
     }
   }
   loadRegisteredEmail();
+  loadPlans();
 
   $('payBtn').addEventListener('click', function(){
     /* Normalize again at submit time: mobile keyboards, autofill, and pasted
@@ -604,10 +689,19 @@ button{font-family:inherit}
           action: 'esim',
           plan_id: selected.dataset.id,
           imei: imei,
-          request_id: pendingRequestId
+          request_id: pendingRequestId,
+          expected_amount: Number(selected.dataset.price)
         })
       });
       var result = await response.json().catch(function(){ return {}; });
+      if (result && result.code === 'PRICE_CHANGED') {
+        /* The admin changed the price after this page loaded. Nothing was charged. */
+        closeConfirm();
+        await loadPlans();
+        toast(result.message || 'The plan price changed. Please review the new price.');
+        go(1);
+        return;
+      }
       if (!response.ok || !result.success) {
         throw new Error(result.message || 'Could not complete your eSIM wallet payment.');
       }
