@@ -1812,7 +1812,7 @@ async function handleVsmsSync(req, res) {
             service_name: serviceName,
             supplier_price: supplierUsd,
             price: sale,
-            stock: Number.isFinite(count) ? count : 0,
+            available_quantity: Number.isFinite(count) ? count : 0,
             is_available: (Number.isFinite(count) ? count : 0) > 0 && supplierUsd > 0,
             updated_at: new Date().toISOString()
           });
@@ -1835,7 +1835,7 @@ async function handleVsmsSync(req, res) {
           service_name: serviceName,
           supplier_price: null,
           price: Number(process.env.MIN_NUMBER_PRICE_NGN) || 1000,
-          stock: Number.isFinite(count) ? count : 0,
+          available_quantity: Number.isFinite(count) ? count : 0,
           is_available: (Number.isFinite(count) ? count : 0) > 0,
           updated_at: new Date().toISOString()
         });
@@ -1877,7 +1877,7 @@ async function handleVsmsSync(req, res) {
         try {
           const { data: existing } = await supabase
             .from('number_services')
-            .select('id, price, admin_hidden')
+            .select('id, price')
             .eq('source', 'virtualsms')
             .eq('country_id', row.country_id)
             .eq('service_id', row.service_id)
@@ -1886,8 +1886,8 @@ async function handleVsmsSync(req, res) {
           if (existing && existing.id) {
             const patch = {
               supplier_price: row.supplier_price,
-              stock: row.stock,
-              is_available: existing.admin_hidden ? false : row.is_available,
+              available_quantity: row.available_quantity,
+              is_available: row.is_available,
               country_name: row.country_name,
               service_name: row.service_name,
               updated_at: row.updated_at
@@ -1943,18 +1943,25 @@ export default async function handler(req, res) {
     if (getAction === 'expire_stale' || getAction === 'expire-stale') {
       return handleExpireStale(req, res);
     }
+    if (getAction === 'vsms_sync' || getAction === 'virtualsms_sync' || getAction === 'server3_sync') {
+      return handleVsmsSync(req, res);
+    }
     // action is one of: null (continue/cron), 'start', 'status' — handled inside handleSync
     return handleSync(req, res);
   }
 
   if (req.method === 'POST') {
+    const postAction = String(action || '').toLowerCase();
+    if (postAction === 'vsms_sync' || postAction === 'virtualsms_sync' || postAction === 'server3_sync') {
+      return handleVsmsSync(req, res);
+    }
     if (action === 'order') return handleOrder(req, res);
     if (action === 'check') return handleCheck(req, res);
     if (action === 'expire_stale' || action === 'expire-stale') return handleExpireStale(req, res);
     if (action === 'cancel') return handleCancel(req, res);
     return res.status(400).json({
       success: false,
-      message: "POST requires ?action=order, ?action=check, or ?action=cancel"
+      message: "POST requires ?action=order, ?action=check, ?action=cancel, or ?action=vsms_sync"
     });
   }
 
