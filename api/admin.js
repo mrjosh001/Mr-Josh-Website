@@ -1,3 +1,4 @@
+/* MJHUB_SERVER3_VIRTUALSMS=1 2026-10-17 rebuilt from live + Server 3 balance/overview */
 import { createClient } from '@supabase/supabase-js';
 import { applyMarkup } from '../lib/pricing.js';
 import { rateLimit, applyRateLimitHeaders } from '../lib/rateLimit.js';
@@ -1576,6 +1577,33 @@ async function getGotsmsBalance() {
 
 
 
+
+async function getVirtualsmsBalance() {
+  const key = String(process.env.VIRTUALSMS_API_KEY || '').trim();
+  if (!key) return { ok: false, error: 'Missing VIRTUALSMS_API_KEY' };
+  try {
+    const res = await fetch('https://virtualsms.io/api/v1/customer/balance', {
+      headers: { 'x-api-key': key, Accept: 'application/json' }
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      const qs = new URLSearchParams({ api_key: key, action: 'getBalance' });
+      const res2 = await fetch('https://virtualsms.io/stubs/handler_api.php?' + qs.toString());
+      const text = (await res2.text()).trim();
+      if (text.startsWith('ACCESS_BALANCE:')) {
+        const bal = Number(text.split(':')[1]);
+        if (Number.isFinite(bal)) return { ok: true, balance: bal, currency: 'USD' };
+      }
+      return { ok: false, error: data.message || data.error || text.slice(0, 120) || ('HTTP ' + res.status) };
+    }
+    const bal = data.balance ?? data?.data?.balance ?? findBalance(data);
+    if (bal == null) return { ok: false, error: 'No balance field', raw: safeSlice(JSON.stringify(data), 200) };
+    return { ok: true, balance: bal, currency: data.currency || 'USD' };
+  } catch (err) {
+    return { ok: false, error: safeSlice(String(err.message || err), 500) };
+  }
+}
+
 async function getJapBalance() {
   const key = String(process.env.JAP_API_KEY || '').trim().replace(/^["']+|["']+$/g, '');
   const url = String(process.env.JAP_API_URL || 'https://justanotherpanel.com/api/v2').replace(/\/$/, '');
@@ -1664,7 +1692,7 @@ async function getBulkmailBalance() {
 }
 
 async function supplierBalancesFetch() {
-  const [fadded, logsdomain, grizzly, sujan, owlet, classy, smsbus, gotsms, bulkmail, jap, smmkings, casper] = await Promise.all([
+  const [fadded, logsdomain, grizzly, sujan, owlet, classy, smsbus, gotsms, bulkmail, jap, smmkings, casper, virtualsms] = await Promise.all([
 
     getFaddedBalance(),
     getLogsDomainBalance(),
@@ -1677,13 +1705,14 @@ async function supplierBalancesFetch() {
     getBulkmailBalance(),
     getJapBalance(),
     getSmmkingsBalance(),
-    getCasperBalance()
+    getCasperBalance(),
+    getVirtualsmsBalance()
   ]);
   return {
     status: 200,
     body: {
       success: true,
-      suppliers: { fadded, logsdomain, grizzly, sujan, owlet, classy, smsbus, gotsms, bulkmail, jap, smmkings, casper },
+      suppliers: { fadded, logsdomain, grizzly, sujan, owlet, classy, smsbus, gotsms, bulkmail, jap, smmkings, casper, virtualsms },
       fetched_at: new Date().toISOString()
     }
   };
@@ -1842,6 +1871,7 @@ async function getOverviewStats(body) {
     const cid = s.country_id != null ? String(s.country_id).trim() : '';
     let src = String(s.source || '').toLowerCase().trim();
     if (src.includes('grizzly')) src = 'grizzlysms';
+    if (src.includes('virtualsms') || src.includes('vsms')) src = 'virtualsms';
     if (src.includes('gotsms') || src.includes('got_sms')) src = 'gotsms';
     if (src.includes('smsbus_rent') || src.includes('sms_bus_rent')) src = 'smsbus_rent';
     else if (src.includes('smsbus') || src.includes('sms_bus') || src.includes('sms-bus')) src = 'smsbus';
@@ -1862,6 +1892,7 @@ async function getOverviewStats(body) {
     const cid = r.country_id != null ? String(r.country_id).trim() : '';
     let src = String(r.source || '').toLowerCase().trim();
     if (src.includes('grizzly')) src = 'grizzlysms';
+    if (src.includes('virtualsms') || src.includes('vsms')) src = 'virtualsms';
     if (src.includes('gotsms') || src.includes('got_sms')) src = 'gotsms';
     if (src.includes('smsbus_rent') || src.includes('sms_bus_rent')) src = 'smsbus_rent';
     else if (src.includes('smsbus') || src.includes('sms_bus') || src.includes('sms-bus')) src = 'smsbus';
@@ -1880,7 +1911,7 @@ async function getOverviewStats(body) {
     return 0;
   }
 
-  // ----- SMS: Server 1 + Server 2 + USA rental (gotsms) + global rental (smsbus_rent) -----
+  // ----- SMS: Server 1 + Server 2 + Server 3 (virtualsms) + USA rental + global rental -----
   // supplier cost ₦ = supplier USD × rate (1500)
   // profit ₦        = customer paid ₦ − supplier cost ₦
   // OTP orders end as completed; rentals stay active for the plan duration —
@@ -1903,7 +1934,7 @@ async function getOverviewStats(body) {
         st === 'success';
       return gotCode;
     }
-    // OTP (grizzlysms / smsbus): only successful code deliveries
+    // OTP (grizzlysms / smsbus / virtualsms): only successful code deliveries
     return st === 'completed' || st === 'complete' || st === 'success';
   });
   const smsAmountSpent = smsRows.reduce((s, r) => s + Number(r.price || 0), 0);
