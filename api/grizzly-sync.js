@@ -27,7 +27,10 @@ import { applyMarkup } from '../lib/pricing.js';
  * Optional: USD_TO_NGN_RATE (default 1500)
  */
 
+/* MJHUB_SERVER3_VIRTUALSMS=1 2026-10-18 rebuilt from live + VirtualSMS Server 3 */
 const BASE = 'https://api.grizzlysms.com/stubs/handler_api.php';
+const VSMS_BASE = 'https://virtualsms.io/stubs/handler_api.php';
+
 
 /** Deterministic customer NGN price from supplier USD (no random) — used for provider pools */
 function salePriceFromUsd(supplierPriceUsd) {
@@ -60,7 +63,40 @@ function lowestProviderUsd(providersObj) {
 }
 
 const GRIZZLY_KEY = process.env.GRIZZLYSMS_API_KEY;
+const VIRTUALSMS_KEY = process.env.VIRTUALSMS_API_KEY || process.env.VIRTUAL_SMS_API_KEY || '';
 const JOB_SOURCE = 'grizzlysms';
+
+/** Server 1 = grizzlysms, Server 3 = virtualsms (same sms-activate legacy protocol) */
+const SUPPLIERS = {
+  grizzlysms: { base: BASE, key: () => GRIZZLY_KEY, source: 'grizzlysms', label: 'Server 1' },
+  virtualsms: { base: VSMS_BASE, key: () => VIRTUALSMS_KEY, source: 'virtualsms', label: 'Server 3' }
+};
+
+function resolveSupplier(req, body) {
+  const q = (req && req.query) || {};
+  const b = body || {};
+  const raw = String(
+    b.provider || b.source || b.server || q.provider || q.source || q.server || ''
+  ).toLowerCase().trim();
+  if (raw === 'virtualsms' || raw === 'vsms' || raw === 'virtual' || raw === '3' || raw === 's3' || raw === 'server3' || raw === 'server_3') {
+    return SUPPLIERS.virtualsms;
+  }
+  return SUPPLIERS.grizzlysms;
+}
+
+async function callSupplier(sup, params) {
+  const key = typeof sup.key === 'function' ? sup.key() : sup.key;
+  if (!key) {
+    const err = new Error('missing_api_key');
+    err.code = 'missing_api_key';
+    throw err;
+  }
+  const qs = new URLSearchParams({ api_key: key, ...params });
+  const res = await fetch(`${sup.base}?${qs.toString()}`, { method: 'GET' });
+  const text = await res.text();
+  return { ok: res.ok, status: res.status, text: String(text || '').trim() };
+}
+
 
 const supabase = createClient(
   process.env.SUPABASE_URL,
@@ -590,6 +626,9 @@ async function handleSync(req, res) {
 async function handleOrder(req, res) {
   const body = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : (req.body || {});
   const { country_id, service_id, external_order_id, user_id, provider_id } = body;
+  const sup = resolveSupplier(req, body);
+  const SOURCE = sup.source;
+  const SUP_KEY = typeof sup.key === 'function' ? sup.key() : sup.key;
 
   const countryId = parseInt(country_id, 10);
   const serviceId = service_id != null ? String(service_id) : null;
@@ -603,7 +642,7 @@ async function handleOrder(req, res) {
       message: 'country_id, service_id and user_id are required'
     });
   }
-  if (!GRIZZLY_KEY) {
+  if (!SUP_KEY) {
     return res.status(500).json({ success: false, message: 'This SMS server is not available right now. Please contact support.' });
   }
 
@@ -618,7 +657,7 @@ async function handleOrder(req, res) {
     const { data: svc, error: svcErr } = await supabase
       .from('number_services')
       .select('service_name, country_name, price, supplier_price, is_available, providers_raw, pool_price_overrides')
-      .eq('source', 'grizzlysms')
+      .eq('source', SOURCE)
       .eq('country_id', countryId)
       .eq('service_id', serviceId)
       .single();
@@ -690,14 +729,14 @@ async function handleOrder(req, res) {
 
     const idempotencyKey =
       (external_order_id && String(external_order_id).trim()) ||
-      `MJ-GZ-${String(user_id).slice(0, 8)}-${Date.now()}`;
+      `MJ-${SOURCE === 'virtualsms' ? 'VS' : 'GZ'}-${String(user_id).slice(0, 8)}-${Date.now()}`;
 
     // Replay: same external_order_id already bought a number → return that order, no second charge
     if (external_order_id) {
       const { data: existing } = await supabase
         .from('number_orders')
         .select('order_id, phone_number, status, price, service_name, country_name, created_at')
-        .eq('source', 'grizzlysms')
+        .eq('source', SOURCE)
         .eq('user_id', user_id)
         .eq('idempotency_key', idempotencyKey)
         .maybeSingle();
@@ -762,7 +801,7 @@ async function handleOrder(req, res) {
     }
     deducted = true;
     const qs = new URLSearchParams({
-      api_key: GRIZZLY_KEY,
+      api_key: SUP_KEY,
       action: 'getNumberV2',
       service: serviceId,
       country: String(countryId)
@@ -776,7 +815,7 @@ async function handleOrder(req, res) {
       qs.set('maxPrice', String(Number(supplierPriceUsd)));
     }
 
-    const supplierRes = await fetch(`${BASE}?${qs.toString()}`, { method: 'GET' });
+    const supplierRes = await fetch(`${sup.base}?${qs.toString()}`, { method: 'GET' });
     const rawText = await supplierRes.text();
 
     let orderData = null;
@@ -821,7 +860,7 @@ async function handleOrder(req, res) {
     }
 
     const numberOrderRow = {
-      source: 'grizzlysms',
+      source: SOURCE,
       user_id,
       customer_id: customerId,
       order_id: String(orderData.activationId),
@@ -1134,23 +1173,27 @@ async function handleCheck(req, res) {
   if (!order_id || !user_id) {
     return res.status(400).json({ success: false, message: 'order_id and user_id are required' });
   }
-  if (!GRIZZLY_KEY) {
-    return res.status(500).json({ success: false, message: 'This SMS server is not available right now. Please contact support.' });
-  }
 
   try {
     const { data: existing, error: findErr } = await supabase
       .from('number_orders')
       .select(
-        'id, status, phone_number, created_at, service_name, country_name, price, order_id, refunded, customer_id'
+        'id, status, phone_number, created_at, service_name, country_name, price, order_id, refunded, customer_id, source'
       )
-      .eq('source', 'grizzlysms')
+      .in('source', ['grizzlysms', 'virtualsms'])
       .eq('order_id', String(order_id))
       .eq('user_id', user_id)
       .single();
 
     if (findErr || !existing) {
       return res.status(404).json({ success: false, message: 'Order not found for this account' });
+    }
+
+    const orderSrc = String(existing.source || 'grizzlysms').toLowerCase();
+    const sup = orderSrc === 'virtualsms' ? SUPPLIERS.virtualsms : SUPPLIERS.grizzlysms;
+    const SUP_KEY = typeof sup.key === 'function' ? sup.key() : sup.key;
+    if (!SUP_KEY) {
+      return res.status(500).json({ success: false, message: 'This SMS server is not available right now. Please contact support.' });
     }
 
     // Final success — no further supplier work
@@ -1167,11 +1210,11 @@ async function handleCheck(req, res) {
     const wasRefunded = existing.refunded === true || ['refunded', 'expired', 'cancelled', 'canceled'].includes(String(existing.status || '').toLowerCase());
 
     const qs = new URLSearchParams({
-      api_key: GRIZZLY_KEY,
+      api_key: SUP_KEY,
       action: 'getStatusV2',
       id: String(order_id)
     });
-    const supplierRes = await fetch(`${BASE}?${qs.toString()}`, { method: 'GET' });
+    const supplierRes = await fetch(`${sup.base}?${qs.toString()}`, { method: 'GET' });
     const raw = (await supplierRes.text()).trim();
 
     let newStatus = existing.status;
@@ -1203,11 +1246,11 @@ async function handleCheck(req, res) {
       newStatus = 'refunded';
     } else if (raw === 'BAD_ACTION') {
       const v1Qs = new URLSearchParams({
-        api_key: GRIZZLY_KEY,
+        api_key: SUP_KEY,
         action: 'getStatus',
         id: String(order_id)
       });
-      const v1Res = await fetch(`${BASE}?${v1Qs.toString()}`, { method: 'GET' });
+      const v1Res = await fetch(`${sup.base}?${v1Qs.toString()}`, { method: 'GET' });
       const v1Raw = (await v1Res.text()).trim();
       if (v1Raw === 'STATUS_WAIT_CODE' || v1Raw === 'STATUS_WAIT_RESEND') {
         newStatus = 'waiting_for_code';
@@ -1251,12 +1294,12 @@ async function handleCheck(req, res) {
         // Try supplier cancel then silent refund
         try {
           const cancelQs = new URLSearchParams({
-            api_key: GRIZZLY_KEY,
+            api_key: SUP_KEY,
             action: 'setStatus',
             id: String(order_id),
             status: '8'
           });
-          await fetch(`${BASE}?${cancelQs.toString()}`, { method: 'GET' });
+          await fetch(`${sup.base}?${cancelQs.toString()}`, { method: 'GET' });
         } catch (_) {}
         newStatus = 'expired';
       }
@@ -1408,12 +1451,12 @@ async function handleCheck(req, res) {
       // Tell supplier activation finished (status 6) when supported
       try {
         const doneQs = new URLSearchParams({
-          api_key: GRIZZLY_KEY,
+          api_key: SUP_KEY,
           action: 'setStatus',
           id: String(order_id),
           status: '6'
         });
-        await fetch(`${BASE}?${doneQs.toString()}`, { method: 'GET' });
+        await fetch(`${sup.base}?${doneQs.toString()}`, { method: 'GET' });
       } catch (_) {}
     }
 
@@ -1454,21 +1497,25 @@ async function handleCancel(req, res) {
   if (!order_id || !user_id) {
     return res.status(400).json({ success: false, message: 'order_id and user_id are required' });
   }
-  if (!GRIZZLY_KEY) {
-    return res.status(500).json({ success: false, message: 'This SMS server is not available right now. Please contact support.' });
-  }
 
   try {
     const { data: order, error: findErr } = await supabase
       .from('number_orders')
-      .select('id, customer_id, price, status, refunded, service_name, created_at, order_id')
-      .eq('source', 'grizzlysms')
+      .select('id, customer_id, price, status, refunded, service_name, created_at, order_id, source')
+      .in('source', ['grizzlysms', 'virtualsms'])
       .eq('order_id', String(order_id))
       .eq('user_id', user_id)
       .single();
 
     if (findErr || !order) {
       return res.status(404).json({ success: false, message: 'Order not found for this account' });
+    }
+
+    const orderSrc = String(order.source || 'grizzlysms').toLowerCase();
+    const sup = orderSrc === 'virtualsms' ? SUPPLIERS.virtualsms : SUPPLIERS.grizzlysms;
+    const SUP_KEY = typeof sup.key === 'function' ? sup.key() : sup.key;
+    if (!SUP_KEY) {
+      return res.status(500).json({ success: false, message: 'This SMS server is not available right now. Please contact support.' });
     }
     if (order.refunded || order.status === 'refunded' || order.status === 'cancelled') {
       return res.status(409).json({ success: false, message: 'This order was already refunded.' });
@@ -1496,12 +1543,12 @@ async function handleCancel(req, res) {
     }
 
     const qs = new URLSearchParams({
-      api_key: GRIZZLY_KEY,
+      api_key: SUP_KEY,
       action: 'setStatus',
       id: String(order_id),
       status: '8'
     });
-    const supplierRes = await fetch(`${BASE}?${qs.toString()}`, { method: 'GET' });
+    const supplierRes = await fetch(`${sup.base}?${qs.toString()}`, { method: 'GET' });
     const raw = (await supplierRes.text()).trim();
 
     if (raw === 'EARLY_CANCEL_DENIED') {
@@ -1649,24 +1696,27 @@ async function handleExpireStale(req, res) {
     const stale = (rows || []).filter((o) => {
     if (o.refunded === true) return false;
     const src = String(o.source || '').toLowerCase();
-    // ONLY Server 1 OTP (grizzlysms). Never touch SMS-Bus OTP, long rentals, or GotSMS USA rentals.
+    // Server 1 OTP (grizzlysms) + Server 3 OTP (virtualsms). Never touch SMS-Bus / GotSMS rentals.
     if (src === 'smsbus' || src === 'smsbus_rent' || src === 'gotsms') return false;
-    if (src && src !== 'grizzlysms') return false;
+    if (src && src !== 'grizzlysms' && src !== 'virtualsms') return false;
     return true;
   }); let expired = 0;
   let skipped = 0;
   for (const order of stale) {
     try {
       // Best-effort supplier cancel
-      if (GRIZZLY_KEY && order.order_id) {
+      const orderSrc = String(order.source || 'grizzlysms').toLowerCase();
+      const sup = orderSrc === 'virtualsms' ? SUPPLIERS.virtualsms : SUPPLIERS.grizzlysms;
+      const k = typeof sup.key === 'function' ? sup.key() : sup.key;
+      if (k && order.order_id) {
         try {
           const cancelQs = new URLSearchParams({
-            api_key: GRIZZLY_KEY,
+            api_key: k,
             action: 'setStatus',
             id: String(order.order_id),
             status: '8'
           });
-          await fetch(`${BASE}?${cancelQs.toString()}`, { method: 'GET' });
+          await fetch(`${sup.base}?${cancelQs.toString()}`, { method: 'GET' });
         } catch (_) {}
       }
       const result = await claimAndRefundOrder(order, order.user_id, {
@@ -1689,6 +1739,186 @@ async function handleExpireStale(req, res) {
     skipped,
     cutoff
   });
+}
+
+
+
+// ===========================================================================
+// Server 3 (VirtualSMS) catalog sync — admin only
+// Writes number_services with source = 'virtualsms'. Does NOT touch Grizzly rows.
+// ===========================================================================
+async function handleVsmsSync(req, res) {
+  const admin = await requireAdmin(req);
+  if (!admin.ok) {
+    return res.status(admin.status || 401).json({ success: false, message: admin.message || 'Unauthorized' });
+  }
+  if (!VIRTUALSMS_KEY) {
+    return res.status(500).json({
+      success: false,
+      message: 'VIRTUALSMS_API_KEY is not set on the server.'
+    });
+  }
+
+  const usdToNgn = Number(process.env.USD_TO_NGN_RATE) || Number(process.env.USD_TO_NGN) || 1500;
+  let upserted = 0;
+  let errors = [];
+
+  try {
+    // Prefer getPrices (sms-activate style) — returns service/country/price/count map
+    const pricesRes = await callSupplier(SUPPLIERS.virtualsms, { action: 'getPrices' });
+    let pricesObj = null;
+    try {
+      pricesObj = JSON.parse(pricesRes.text);
+    } catch (_) {
+      pricesObj = null;
+    }
+
+    // Fallback: getNumbersStatus then getPrices per-service is heavy; try getCountries + getPrices
+    if (!pricesObj || typeof pricesObj !== 'object') {
+      const statusRes = await callSupplier(SUPPLIERS.virtualsms, { action: 'getNumbersStatus' });
+      try {
+        pricesObj = JSON.parse(statusRes.text);
+      } catch (_) {
+        return res.status(502).json({
+          success: false,
+          message: 'Could not load VirtualSMS catalog.',
+          raw: (statusRes.text || '').slice(0, 400)
+        });
+      }
+    }
+
+    // Shape A (getPrices): { "0": { "wa": { "cost": 0.2, "count": 10, ... }, ... }, ... } countryId -> service -> info
+    // Shape B (getNumbersStatus): { "wa_0": 12, "tg_16": 5 } service_country -> count
+    const rows = [];
+    const keys = Object.keys(pricesObj || {});
+    const looksLikePrices = keys.length && typeof pricesObj[keys[0]] === 'object' && pricesObj[keys[0]] !== null && !Array.isArray(pricesObj[keys[0]]);
+
+    if (looksLikePrices) {
+      for (const countryId of keys) {
+        const services = pricesObj[countryId];
+        if (!services || typeof services !== 'object') continue;
+        for (const serviceId of Object.keys(services)) {
+          const info = services[serviceId] || {};
+          const cost = Number(info.cost ?? info.price ?? info.rate ?? 0);
+          const count = Number(info.count ?? info.phones ?? info.numberCount ?? 0);
+          const supplierUsd = Number.isFinite(cost) && cost > 0 ? cost : 0;
+          const sale = supplierUsd > 0 ? salePriceFromUsd(supplierUsd) : (Number(process.env.MIN_NUMBER_PRICE_NGN) || 1000);
+          const serviceName = (GRIZZLY_SERVICE_NAMES && GRIZZLY_SERVICE_NAMES[serviceId]) || String(serviceId).toUpperCase();
+          rows.push({
+            source: 'virtualsms',
+            country_id: parseInt(countryId, 10) || 0,
+            country_name: String(countryId),
+            service_id: String(serviceId),
+            service_name: serviceName,
+            supplier_price: supplierUsd,
+            price: sale,
+            stock: Number.isFinite(count) ? count : 0,
+            is_available: (Number.isFinite(count) ? count : 0) > 0 && supplierUsd > 0,
+            updated_at: new Date().toISOString()
+          });
+        }
+      }
+    } else {
+      // getNumbersStatus flat map
+      for (const k of keys) {
+        const count = Number(pricesObj[k]);
+        const parts = String(k).split('_');
+        if (parts.length < 2) continue;
+        const serviceId = parts[0];
+        const countryId = parts.slice(1).join('_');
+        const serviceName = (GRIZZLY_SERVICE_NAMES && GRIZZLY_SERVICE_NAMES[serviceId]) || String(serviceId).toUpperCase();
+        rows.push({
+          source: 'virtualsms',
+          country_id: parseInt(countryId, 10) || 0,
+          country_name: String(countryId),
+          service_id: String(serviceId),
+          service_name: serviceName,
+          supplier_price: null,
+          price: Number(process.env.MIN_NUMBER_PRICE_NGN) || 1000,
+          stock: Number.isFinite(count) ? count : 0,
+          is_available: (Number.isFinite(count) ? count : 0) > 0,
+          updated_at: new Date().toISOString()
+        });
+      }
+    }
+
+    // Enrich country names via getCountries if available
+    try {
+      const cRes = await callSupplier(SUPPLIERS.virtualsms, { action: 'getCountries' });
+      let countries = [];
+      try { countries = JSON.parse(cRes.text); } catch (_) { countries = []; }
+      const nameById = {};
+      if (Array.isArray(countries)) {
+        for (const c of countries) {
+          const id = c.id ?? c.country_id ?? c.code;
+          const name = c.eng || c.name || c.country_name || c.englishName;
+          if (id != null && name) nameById[String(id)] = String(name);
+        }
+      } else if (countries && typeof countries === 'object') {
+        for (const [id, val] of Object.entries(countries)) {
+          if (typeof val === 'string') nameById[String(id)] = val;
+          else if (val && (val.eng || val.name)) nameById[String(id)] = val.eng || val.name;
+        }
+      }
+      for (const r of rows) {
+        const n = nameById[String(r.country_id)];
+        if (n) r.country_name = n;
+      }
+    } catch (e) {
+      errors.push('countries: ' + (e.message || e));
+    }
+
+    // Upsert in batches — match on source+country_id+service_id if unique constraint exists; else delete+insert pattern avoided (preserve admin price overrides)
+    // Only update stock/supplier_price/is_available/updated_at when row exists; insert new otherwise.
+    const BATCH = 50;
+    for (let i = 0; i < rows.length; i += BATCH) {
+      const chunk = rows.slice(i, i + BATCH);
+      for (const row of chunk) {
+        try {
+          const { data: existing } = await supabase
+            .from('number_services')
+            .select('id, price, admin_hidden')
+            .eq('source', 'virtualsms')
+            .eq('country_id', row.country_id)
+            .eq('service_id', row.service_id)
+            .maybeSingle();
+
+          if (existing && existing.id) {
+            const patch = {
+              supplier_price: row.supplier_price,
+              stock: row.stock,
+              is_available: existing.admin_hidden ? false : row.is_available,
+              country_name: row.country_name,
+              service_name: row.service_name,
+              updated_at: row.updated_at
+            };
+            // Do not overwrite admin-set customer price
+            const { error: uErr } = await supabase.from('number_services').update(patch).eq('id', existing.id);
+            if (uErr) errors.push(uErr.message);
+            else upserted += 1;
+          } else {
+            const { error: iErr } = await supabase.from('number_services').insert(row);
+            if (iErr) errors.push(iErr.message);
+            else upserted += 1;
+          }
+        } catch (e) {
+          errors.push(String(e.message || e));
+        }
+      }
+    }
+
+    return res.status(200).json({
+      success: true,
+      source: 'virtualsms',
+      rows_seen: rows.length,
+      upserted,
+      errors: errors.slice(0, 20),
+      message: `VirtualSMS sync finished. ${upserted} services updated.`
+    });
+  } catch (err) {
+    console.error('[vsms_sync]', err);
+    return res.status(500).json({ success: false, message: err.message || 'VirtualSMS sync failed' });
+  }
 }
 
 
