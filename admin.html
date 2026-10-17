@@ -1111,6 +1111,7 @@ function withLagos(opts) { return Object.assign({ timeZone: 'Africa/Lagos' }, op
  <div class="metrics supplier-balance-metrics" style="margin-bottom:14px;">
  <div class="metric-card"><div class="metric-label">GrizzlySMS (Server 1)</div><div class="metric-value" id="balGrizzly"> </div><div class="metric-sub" id="balGrizzlySub">Loading…</div></div>
  <div class="metric-card"><div class="metric-label">SMS-Bus (Server 2)</div><div class="metric-value" id="balSmsbus"> </div><div class="metric-sub" id="balSmsbusSub">Loading…</div></div>
+ <div class="metric-card"><div class="metric-label">Server 3 (Real SIM)</div><div class="metric-value" id="balVirtualsms"> </div><div class="metric-sub" id="balVirtualsmsSub">Loading…</div></div>
  <div class="metric-card"><div class="metric-label">GotSMS (USA rental)</div><div class="metric-value" id="balGotsms"> </div><div class="metric-sub" id="balGotsmsSub">Loading…</div></div>
  </div>
  <div class="supplier-group-label">SMM providers</div>
@@ -1230,6 +1231,7 @@ function withLagos(opts) { return Object.assign({ timeZone: 'Africa/Lagos' }, op
  <select id="smsOrdersTypeFilter" onchange="filterSmsOrders()" style="min-width:140px;">
  <option value="">All types</option>
  <option value="otp">OTP</option>
+ <option value="server3">Server 3</option>
  <option value="rental">Long rental</option>
  <option value="usa">USA Rental</option>
  </select>
@@ -1261,7 +1263,38 @@ function withLagos(opts) { return Object.assign({ timeZone: 'Africa/Lagos' }, op
  </div>
 
 
- <div id="tab-sms-gotsms" class="tab-content">
+ 
+ <div id="tab-sms-server3" class="tab-content">
+ <div class="panel">
+ <div class="panel-title" style="margin-bottom:10px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;">
+ <span>SMS Server 3 · Real carrier OTP</span>
+ <button class="btn btn-primary btn-sm" id="btnSyncServer3" onclick="syncServer3Now()"><i class="fas fa-sync"></i> Sync Server 3</button>
+ </div>
+ <p id="server3SyncProgress" style="color:var(--primary,#3b82f6);font-size:12px;font-weight:700;margin:0 0 14px;min-height:16px;"></p>
+ <p style="color:#94a3b8;font-size:13px;margin:0 0 14px;line-height:1.5;">Pulls real-SIM services into the catalog. Customer prices use your normal markup. Admin price edits are kept on re-sync.</p>
+ <div class="search-row" style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;">
+ <input type="text" id="smsServer3Search" placeholder="Search service (WhatsApp, Google, tg…)" oninput="filterNumberServicesServer3()" style="flex:1;min-width:160px;" />
+ <input type="text" id="smsServer3CountryFilter" placeholder="Country" oninput="filterNumberServicesServer3()" style="flex:1;min-width:140px;" />
+ <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:#94a3b8;white-space:nowrap;">
+ <input type="checkbox" id="smsServer3HideZeroStock" checked onchange="filterNumberServicesServer3()" />
+ Hide 0 stock
+ </label>
+ </div>
+ <div class="desktop-only desktop-table table-wrap">
+ <table>
+ <thead>
+ <tr>
+ <th>Country</th><th>Service</th><th>Supplier ($)</th><th>Your Price (₦)</th><th>Stock</th><th>Status</th><th>Action</th>
+ </tr>
+ </thead>
+ <tbody id="smsServer3TableBody"><tr><td colspan="7" class="empty-state">Click Sync Server 3 to load catalog.</td></tr></tbody>
+ </table>
+ </div>
+ <div id="smsServer3MobileCards" class="mobile-only mobile-cards"></div>
+ </div>
+ </div>
+
+<div id="tab-sms-gotsms" class="tab-content">
  <div class="panel">
  <div class="panel-title" style="margin-bottom:10px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;">
  <span>USA Physical Rental (GotSMS)</span>
@@ -2619,7 +2652,7 @@ async function saveGotsmsPrice(id, value) {
 async function loadSupplierBalances() {
  const btn = document.getElementById('btnRefreshSupplierBalances');
  setBtnBusy(btn, true, 'Refreshing...');
- ['Fadded', 'Logsdomain', 'Grizzly', 'Sujan', 'Classy', 'Owlet', 'Jap', 'Smmkings', 'Smsbus', 'Gotsms', 'Bulkmail'].forEach(p => {
+ ['Fadded', 'Logsdomain', 'Grizzly', 'Sujan', 'Classy', 'Owlet', 'Jap', 'Smmkings', 'Smsbus', 'Virtualsms', 'Gotsms', 'Bulkmail'].forEach(p => {
  const sub = document.getElementById('bal' + p + 'Sub');
  if (sub) sub.textContent = 'Loading…';
  });
@@ -2661,6 +2694,7 @@ async function loadSupplierBalances() {
  renderSupplierBalance('Casper', data.suppliers.casper);
  renderSupplierBalance('Smmkings', data.suppliers.smmkings);
  renderSupplierBalance('Smsbus', data.suppliers.smsbus);
+ renderSupplierBalance('Virtualsms', data.suppliers.virtualsms);
  renderSupplierBalance('Gotsms', data.suppliers.gotsms);
  renderSupplierBalance('Bulkmail', data.suppliers.bulkmail);
  } catch (err) {
@@ -3580,6 +3614,7 @@ function smsOrderServerLabel(o) {
  if (src === 'gotsms') return 'USA Rental';
  if (isSmsRentalOrder(o)) return 'Rental';
  if (src === 'smsbus' || src === 'logsdomain') return 'Server 2';
+ if (src === 'virtualsms' || src === 'vsms') return 'Server 3';
  if (src === 'grizzlysms') return 'Server 1';
  return 'Server 1';
 }
@@ -3752,6 +3787,7 @@ function filterSmsOrders() {
    } else if (o.status !== status) return false;
  }
  if (type === 'usa' && String(o.source||'').toLowerCase() !== 'gotsms') return false;
+ if (type === 'server3' && String(o.source||'').toLowerCase() !== 'virtualsms') return false;
  if (type === 'rental' && !isSmsRentalOrder(o)) return false;
  if (type === 'otp' && isSmsRentalOrder(o)) return false;
  if (!q) return true;
@@ -6105,6 +6141,7 @@ function switchTab(name) {
    }
  }
  // Lazy-load expensive datasets only when their tab is opened.
+ if (name === 'sms-server3') { try { loadServer3Services(); } catch(e){} }
  if (name === 'sms-orders' && !_smsOrdersLoaded) {
    _smsOrdersLoaded = true;
    tryLoadSmsOrders().catch(function(e){ _smsOrdersLoaded = false; console.error('sms orders', e); });
