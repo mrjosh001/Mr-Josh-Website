@@ -2440,30 +2440,46 @@ async function syncServer3Now() {
   const btn = document.getElementById('btnSyncServer3');
   const prog = document.getElementById('server3SyncProgress');
   setBtnBusy(btn, true, 'Syncing…');
-  if (prog) prog.textContent = 'Syncing VirtualSMS catalog…';
+  if (prog) prog.textContent = 'Syncing VirtualSMS (in-stock only, ~1 min max)…';
+  const ctrl = typeof AbortController !== 'undefined' ? new AbortController() : null;
+  const timer = ctrl ? setTimeout(function(){ try { ctrl.abort(); } catch(_){} }, 90000) : null;
   try {
     const headers = await authHeaders();
-    const res = await fetch('/api/grizzly-sync?action=vsms_sync', { method: 'GET', headers: headers || {} });
+    const res = await fetch('/api/grizzly-sync?action=vsms_sync', {
+      method: 'GET',
+      headers: headers || {},
+      signal: ctrl ? ctrl.signal : undefined
+    });
     let data = {};
     try {
       const raw = await res.text();
       data = raw ? JSON.parse(raw) : {};
     } catch (_) {
-      data = { success: false, message: 'Bad response from Server 3 sync' };
+      data = { success: false, message: 'Bad response from Server 3 sync (HTTP ' + res.status + ')' };
     }
     if (!data.success) {
-      showAdminToast(data.message || 'Server 3 sync failed', 'error');
-      if (prog) prog.textContent = data.message || 'Sync failed';
+      const errMsg = data.message || 'Server 3 sync failed';
+      showAdminToast(errMsg, 'error');
+      if (prog) prog.textContent = errMsg + (data.raw_hint ? (' · ' + data.raw_hint) : '');
       return;
     }
     const msg = data.message || ('Synced ' + (data.upserted || 0) + ' services');
-    showAdminToast(msg, 'success');
-    if (prog) prog.textContent = msg + (data.rows_seen != null ? (' · seen ' + data.rows_seen) : '');
+    showAdminToast(msg, data.partial ? 'info' : 'success');
+    if (prog) {
+      prog.textContent = msg +
+        (data.rows_seen != null ? (' · seen ' + data.rows_seen) : '') +
+        (data.ms != null ? (' · ' + Math.round(data.ms/1000) + 's') : '');
+    }
     await loadServer3Services();
   } catch (e) {
-    showAdminToast('Server 3 sync error: ' + (e.message || e), 'error');
-    if (prog) prog.textContent = 'Error: ' + (e.message || e);
+    const aborted = e && (e.name === 'AbortError' || /abort/i.test(String(e.message || '')));
+    const msg = aborted
+      ? 'Sync timed out on the browser. Click Sync Server 3 again — progress is saved.'
+      : ('Server 3 sync error: ' + (e.message || e));
+    showAdminToast(msg, aborted ? 'info' : 'error');
+    if (prog) prog.textContent = msg;
   } finally {
+    if (timer) clearTimeout(timer);
     setBtnBusy(btn, false, '<i class="fas fa-sync"></i> Sync Server 3');
   }
 }
