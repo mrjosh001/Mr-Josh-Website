@@ -649,7 +649,7 @@ async function loadServiceCatalog(opts){
     }
 
     // Cache while logged in / same browser tab session — do not reload from scratch
-    var CACHE_KEY = 'mj_sms1_catalog_v4';
+    var CACHE_KEY = 'mj_sms3_virtualsms_catalog_v1';
     function lagosDay(){
       try{ return new Date().toLocaleDateString('en-CA', { timeZone: 'Africa/Lagos' }); }
       catch(e){ return new Date().toISOString().slice(0,10); }
@@ -747,11 +747,24 @@ async function loadServiceCatalog(opts){
     if(__smsCatalogLoading && !force) return;
     __smsCatalogLoading = true;
 
-    const { data: countries, error: cErr } = await sbClient.rpc('grizzly_countries');
-    if(cErr) throw new Error(cErr.message || 'Could not load countries');
-    allCountriesMaster = countries || [];
+    // Server 3 ONLY — countries from virtualsms catalog (never Grizzly RPC)
+    const { data: countryRows, error: cErr } = await sbClient
+      .from('number_services')
+      .select('country_id, country_name')
+      .eq('source', 'virtualsms')
+      .limit(8000);
+    if(cErr) throw new Error(cErr.message || 'Could not load Server 3 countries');
+    var _cmap = new Map();
+    (countryRows || []).forEach(function(r){
+      if(r == null || r.country_id == null) return;
+      var id = r.country_id;
+      if(!_cmap.has(String(id))){
+        _cmap.set(String(id), { country_id: id, country_name: r.country_name || ('Country ' + id) });
+      }
+    });
+    allCountriesMaster = Array.from(_cmap.values());
     if(!allCountriesMaster.length && !(allServiceCatalog && allServiceCatalog.length)){
-      serviceGrid.innerHTML = '<div class="empty-state"><h4>No countries</h4><p>Catalog may still be syncing.</p><button type="button" class="btn btn-primary" style="margin-top:12px;width:auto;padding:10px 16px" onclick="loadServiceCatalog({force:true})">Retry</button></div>';
+      serviceGrid.innerHTML = '<div class="empty-state"><h4>Server 3 catalog empty</h4><p>Admin must run <b>Sync Server 3</b> first. Do not use Server 1 data here.</p><button type="button" class="btn btn-primary" style="margin-top:12px;width:auto;padding:10px 16px" onclick="loadServiceCatalog({force:true})">Retry</button></div>';
       __smsCatalogLoading = false;
       return;
     }
