@@ -987,6 +987,7 @@ function withLagos(opts) { return Object.assign({ timeZone: 'Africa/Lagos' }, op
 <div class="nav-sub">
 <button class="nav-item" data-tab="sms" onclick="switchTab('sms')"><i class="fas fa-sim-card"></i> SMS Server 1 (Grizzly)</button>
 <button class="nav-item" data-tab="sms-server2" onclick="switchTab('sms-server2')"><i class="fas fa-server"></i> SMS Server 2</button>
+<button class="nav-item" data-tab="sms-server3" onclick="switchTab('sms-server3')"><i class="fas fa-satellite-dish"></i> SMS Server 3 (VirtualSMS)</button>
 <button class="nav-item" data-tab="sms-gotsms" onclick="switchTab('sms-gotsms')"><i class="fas fa-flag-usa"></i> USA Rental (GotSMS)</button>
 <button class="nav-item" data-tab="sms-orders" onclick="switchTab('sms-orders')"><i class="fas fa-comment-sms"></i> SMS Orders</button>
 <button class="nav-item" data-tab="esim-orders" onclick="switchTab('esim-orders')"><i class="fas fa-sim-card"></i> eSIM Orders <span id="esimNavBadge" style="display:none;margin-left:6px;background:#f59e0b;color:#111;font-size:10px;font-weight:800;padding:2px 7px;border-radius:999px;min-width:18px;text-align:center;">0</span></button>
@@ -2027,6 +2028,7 @@ const tabTitles = {
  sms: 'SMS Server 1 (GrizzlySMS)',
  'sms-orders': 'SMS Orders',
  'sms-server2': 'SMS Server 2',
+ 'sms-server3': 'SMS Server 3 (VirtualSMS)',
  'sms-gotsms': 'USA Rental (GotSMS)',
  'boosters': 'MJ Boosters (Owlet)',
  'booster-orders': 'Booster Orders',
@@ -2430,6 +2432,184 @@ async function bulkRepriceNumbers(mode) {
 
 // ---------- GotSMS USA rental (catalog in number_services source=gotsms) ----------
 window._gotsmsRows = [];
+
+// ---------- SMS Server 3 (VirtualSMS) ----------
+window._server3Rows = window._server3Rows || [];
+
+async function syncServer3Now() {
+  const btn = document.getElementById('btnSyncServer3');
+  const prog = document.getElementById('server3SyncProgress');
+  setBtnBusy(btn, true, 'Syncing…');
+  if (prog) prog.textContent = 'Syncing VirtualSMS catalog…';
+  try {
+    const headers = await authHeaders();
+    const res = await fetch('/api/grizzly-sync?action=vsms_sync', { method: 'GET', headers: headers || {} });
+    let data = {};
+    try {
+      const raw = await res.text();
+      data = raw ? JSON.parse(raw) : {};
+    } catch (_) {
+      data = { success: false, message: 'Bad response from Server 3 sync' };
+    }
+    if (!data.success) {
+      showAdminToast(data.message || 'Server 3 sync failed', 'error');
+      if (prog) prog.textContent = data.message || 'Sync failed';
+      return;
+    }
+    const msg = data.message || ('Synced ' + (data.upserted || 0) + ' services');
+    showAdminToast(msg, 'success');
+    if (prog) prog.textContent = msg + (data.rows_seen != null ? (' · seen ' + data.rows_seen) : '');
+    await loadServer3Services();
+  } catch (e) {
+    showAdminToast('Server 3 sync error: ' + (e.message || e), 'error');
+    if (prog) prog.textContent = 'Error: ' + (e.message || e);
+  } finally {
+    setBtnBusy(btn, false, '<i class="fas fa-sync"></i> Sync Server 3');
+  }
+}
+
+async function loadServer3Services() {
+  const tbody = document.getElementById('smsServer3TableBody');
+  const cards = document.getElementById('smsServer3MobileCards');
+  try {
+    const cols = 'id, country_id, country_name, service_id, service_name, supplier_price, price, stock, is_available, updated_at, admin_hidden';
+    let all = [];
+    let from = 0;
+    const page = 1000;
+    while (true) {
+      const { data, error } = await sb
+        .from('number_services')
+        .select(cols)
+        .eq('source', 'virtualsms')
+        .order('country_name', { ascending: true })
+        .order('service_name', { ascending: true })
+        .range(from, from + page - 1);
+      if (error) throw error;
+      const batch = data || [];
+      all = all.concat(batch);
+      if (batch.length < page) break;
+      from += page;
+      if (from > 50000) break;
+    }
+    window._server3Rows = all;
+    filterNumberServicesServer3();
+  } catch (e) {
+    console.error('loadServer3Services', e);
+    if (tbody) tbody.innerHTML = '<tr><td colspan="7" class="empty-state">Could not load Server 3 catalog.</td></tr>';
+    if (cards) cards.innerHTML = '<div class="empty-state">Could not load Server 3 catalog.</div>';
+    showAdminToast('Could not load Server 3 services', 'error');
+  }
+}
+
+function filterNumberServicesServer3() {
+  const q = String(document.getElementById('smsServer3Search')?.value || '').toLowerCase().trim();
+  const cq = String(document.getElementById('smsServer3CountryFilter')?.value || '').toLowerCase().trim();
+  const hideZero = !!(document.getElementById('smsServer3HideZeroStock')?.checked);
+  let rows = window._server3Rows || [];
+  if (q) {
+    rows = rows.filter(r =>
+      String(r.service_name || '').toLowerCase().includes(q) ||
+      String(r.service_id || '').toLowerCase().includes(q)
+    );
+  }
+  if (cq) {
+    rows = rows.filter(r =>
+      String(r.country_name || '').toLowerCase().includes(cq) ||
+      String(r.country_id || '').toLowerCase().includes(cq)
+    );
+  }
+  if (hideZero) {
+    rows = rows.filter(r => Number(r.stock || 0) > 0 && r.is_available !== false);
+  }
+  const tbody = document.getElementById('smsServer3TableBody');
+  const cards = document.getElementById('smsServer3MobileCards');
+  if (!rows.length) {
+    if (tbody) tbody.innerHTML = '<tr><td colspan="7" class="empty-state">No Server 3 rows. Click Sync Server 3.</td></tr>';
+    if (cards) cards.innerHTML = '<div class="empty-state">No Server 3 rows. Click Sync Server 3.</div>';
+    return;
+  }
+  if (tbody) {
+    tbody.innerHTML = rows.map(r => {
+      const stock = Number(r.stock || 0);
+      const usd = r.supplier_price != null ? Number(r.supplier_price) : null;
+      const price = r.price != null ? Number(r.price) : 0;
+      const status = r.admin_hidden ? 'Hidden' : (r.is_available === false || stock <= 0 ? 'Out' : 'Live');
+      const statusColor = status === 'Live' ? '#34d399' : (status === 'Hidden' ? '#94a3b8' : '#f87171');
+      return `<tr>
+        <td>${escapeHtml(r.country_name || r.country_id || '—')}</td>
+        <td>${escapeHtml(r.service_name || r.service_id || '—')}</td>
+        <td>${usd != null && Number.isFinite(usd) ? ('$' + usd.toFixed(2)) : '—'}</td>
+        <td>₦${Number(price).toLocaleString()}</td>
+        <td>${stock}</td>
+        <td style="color:${statusColor};font-weight:700;">${status}</td>
+        <td>
+          <button type="button" class="btn btn-ghost btn-sm" onclick="openServer3EditPrice('${escapeHtml(String(r.id))}', ${price})"><i class="fas fa-pen"></i> Price</button>
+          <button type="button" class="btn btn-ghost btn-sm" onclick="toggleServer3Visibility('${escapeHtml(String(r.id))}', ${r.admin_hidden ? 'false' : 'true'})">${r.admin_hidden ? 'Show' : 'Hide'}</button>
+        </td>
+      </tr>`;
+    }).join('');
+  }
+  if (cards) {
+    cards.innerHTML = rows.slice(0, 80).map(r => {
+      const stock = Number(r.stock || 0);
+      const price = r.price != null ? Number(r.price) : 0;
+      return `<div class="mobile-card">
+        <div style="font-weight:700;">${escapeHtml(r.service_name || r.service_id || '—')}</div>
+        <div style="font-size:12px;color:#94a3b8;">${escapeHtml(r.country_name || '')} · Stock ${stock}</div>
+        <div style="margin-top:6px;font-weight:800;">₦${Number(price).toLocaleString()}</div>
+        <div style="margin-top:8px;display:flex;gap:6px;">
+          <button type="button" class="btn btn-ghost btn-sm" onclick="openServer3EditPrice('${escapeHtml(String(r.id))}', ${price})">Edit</button>
+        </div>
+      </div>`;
+    }).join('');
+  }
+}
+
+async function openServer3EditPrice(id, current) {
+  const next = prompt('Sell price (₦)', String(current || 0));
+  if (next == null) return;
+  const val = Number(String(next).replace(/[^0-9.]/g, ''));
+  if (!Number.isFinite(val) || val < 0) {
+    showAdminToast('Invalid price', 'error');
+    return;
+  }
+  try {
+    const { error } = await sb.from('number_services').update({
+      price: val,
+      price_source: 'admin'
+    }).eq('id', id).eq('source', 'virtualsms');
+    if (error) throw error;
+    const row = (window._server3Rows || []).find(r => String(r.id) === String(id));
+    if (row) row.price = val;
+    filterNumberServicesServer3();
+    showAdminToast('Price updated', 'success');
+  } catch (e) {
+    showAdminToast('Could not update price: ' + (e.message || e), 'error');
+  }
+}
+
+async function toggleServer3Visibility(id, hide) {
+  const admin_hidden = hide === true || hide === 'true';
+  try {
+    const patch = {
+      admin_hidden,
+      is_available: admin_hidden ? false : true
+    };
+    const { error } = await sb.from('number_services').update(patch).eq('id', id).eq('source', 'virtualsms');
+    if (error) throw error;
+    const row = (window._server3Rows || []).find(r => String(r.id) === String(id));
+    if (row) {
+      row.admin_hidden = admin_hidden;
+      if (admin_hidden) row.is_available = false;
+    }
+    filterNumberServicesServer3();
+    showAdminToast(admin_hidden ? 'Hidden from customers' : 'Visible to customers', 'success');
+  } catch (e) {
+    showAdminToast('Update failed: ' + (e.message || e), 'error');
+  }
+}
+
+
 async function syncGotsmsNow() {
   const btn = document.getElementById('btnSyncGotsms');
   const idle = '<i class="fas fa-sync"></i> Sync GotSMS';
