@@ -2472,18 +2472,19 @@ async function loadServer3Services() {
   const tbody = document.getElementById('smsServer3TableBody');
   const cards = document.getElementById('smsServer3MobileCards');
   try {
-    const cols = 'id, country_id, country_name, service_id, service_name, supplier_price, price, stock, is_available, updated_at, admin_hidden';
+    // Match Server 1 columns — no stock/admin_hidden (those break the query on this schema)
+    const cols = 'id, country_id, country_name, service_id, service_name, supplier_price, price, available_quantity, is_available, updated_at, price_source';
     let all = [];
     let from = 0;
     const page = 1000;
     while (true) {
-      const { data, error } = await sb
+      let q = sb
         .from('number_services')
         .select(cols)
         .eq('source', 'virtualsms')
-        .order('country_name', { ascending: true })
         .order('service_name', { ascending: true })
         .range(from, from + page - 1);
+      const { data, error } = await q;
       if (error) throw error;
       const batch = data || [];
       all = all.concat(batch);
@@ -2495,7 +2496,8 @@ async function loadServer3Services() {
     filterNumberServicesServer3();
   } catch (e) {
     console.error('loadServer3Services', e);
-    if (tbody) tbody.innerHTML = '<tr><td colspan="7" class="empty-state">Could not load Server 3 catalog.</td></tr>';
+    const msg = (e && e.message) ? e.message : String(e);
+    if (tbody) tbody.innerHTML = '<tr><td colspan="7" class="empty-state">Could not load Server 3 catalog. ' + (typeof escapeHtml==='function'?escapeHtml(msg):msg) + '</td></tr>';
     if (cards) cards.innerHTML = '<div class="empty-state">Could not load Server 3 catalog.</div>';
     showAdminToast('Could not load Server 3 services', 'error');
   }
@@ -2519,7 +2521,11 @@ function filterNumberServicesServer3() {
     );
   }
   if (hideZero) {
-    rows = rows.filter(r => Number(r.stock || 0) > 0 && r.is_available !== false);
+    rows = rows.filter(r => {
+      const qty = r.available_quantity;
+      if (qty == null) return r.is_available !== false;
+      return Number(qty) > 0 && r.is_available !== false;
+    });
   }
   const tbody = document.getElementById('smsServer3TableBody');
   const cards = document.getElementById('smsServer3MobileCards');
@@ -2530,11 +2536,12 @@ function filterNumberServicesServer3() {
   }
   if (tbody) {
     tbody.innerHTML = rows.map(r => {
-      const stock = Number(r.stock || 0);
+      const stock = r.available_quantity == null ? '—' : Number(r.available_quantity);
       const usd = r.supplier_price != null ? Number(r.supplier_price) : null;
       const price = r.price != null ? Number(r.price) : 0;
-      const status = r.admin_hidden ? 'Hidden' : (r.is_available === false || stock <= 0 ? 'Out' : 'Live');
-      const statusColor = status === 'Live' ? '#34d399' : (status === 'Hidden' ? '#94a3b8' : '#f87171');
+      const out = r.is_available === false || (r.available_quantity != null && Number(r.available_quantity) <= 0);
+      const status = out ? 'Out' : 'Live';
+      const statusColor = status === 'Live' ? '#34d399' : '#f87171';
       return `<tr>
         <td>${escapeHtml(r.country_name || r.country_id || '—')}</td>
         <td>${escapeHtml(r.service_name || r.service_id || '—')}</td>
@@ -2544,14 +2551,13 @@ function filterNumberServicesServer3() {
         <td style="color:${statusColor};font-weight:700;">${status}</td>
         <td>
           <button type="button" class="btn btn-ghost btn-sm" onclick="openServer3EditPrice('${escapeHtml(String(r.id))}', ${price})"><i class="fas fa-pen"></i> Price</button>
-          <button type="button" class="btn btn-ghost btn-sm" onclick="toggleServer3Visibility('${escapeHtml(String(r.id))}', ${r.admin_hidden ? 'false' : 'true'})">${r.admin_hidden ? 'Show' : 'Hide'}</button>
         </td>
       </tr>`;
     }).join('');
   }
   if (cards) {
     cards.innerHTML = rows.slice(0, 80).map(r => {
-      const stock = Number(r.stock || 0);
+      const stock = r.available_quantity == null ? '—' : Number(r.available_quantity);
       const price = r.price != null ? Number(r.price) : 0;
       return `<div class="mobile-card">
         <div style="font-weight:700;">${escapeHtml(r.service_name || r.service_id || '—')}</div>
@@ -2589,21 +2595,15 @@ async function openServer3EditPrice(id, current) {
 }
 
 async function toggleServer3Visibility(id, hide) {
-  const admin_hidden = hide === true || hide === 'true';
+  const hideNow = hide === true || hide === 'true';
   try {
-    const patch = {
-      admin_hidden,
-      is_available: admin_hidden ? false : true
-    };
+    const patch = { is_available: !hideNow };
     const { error } = await sb.from('number_services').update(patch).eq('id', id).eq('source', 'virtualsms');
     if (error) throw error;
     const row = (window._server3Rows || []).find(r => String(r.id) === String(id));
-    if (row) {
-      row.admin_hidden = admin_hidden;
-      if (admin_hidden) row.is_available = false;
-    }
+    if (row) row.is_available = !hideNow;
     filterNumberServicesServer3();
-    showAdminToast(admin_hidden ? 'Hidden from customers' : 'Visible to customers', 'success');
+    showAdminToast(hideNow ? 'Hidden from customers' : 'Visible to customers', 'success');
   } catch (e) {
     showAdminToast('Update failed: ' + (e.message || e), 'error');
   }
