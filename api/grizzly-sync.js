@@ -1755,45 +1755,107 @@ async function handleVsmsSync(req, res) {
   if (!VIRTUALSMS_KEY) {
     return res.status(500).json({
       success: false,
-      message: 'VIRTUALSMS_API_KEY is not set on the server.'
+      message: 'VIRTUALSMS_API_KEY is not set on the server. Add it in Vercel → Environment Variables.'
     });
   }
 
-  const usdToNgn = Number(process.env.USD_TO_NGN_RATE) || Number(process.env.USD_TO_NGN) || 1500;
+  const started = Date.now();
+  const TIME_BUDGET_MS = 50000; // stay under typical function limits
   let upserted = 0;
+  let seen = 0;
   let errors = [];
+  const serviceNames = {};
 
   try {
-    // Prefer getPrices (sms-activate style) — returns service/country/price/count map
-    const pricesRes = await callSupplier(SUPPLIERS.virtualsms, { action: 'getPrices' });
-    let pricesObj = null;
+    // --- 1) Prefer modern REST catalog (fast, JSON) ---
+    let modernServices = null;
+    let modernCountries = null;
     try {
-      pricesObj = JSON.parse(pricesRes.text);
-    } catch (_) {
-      pricesObj = null;
+      const sRes = await fetch('https://virtualsms.io/api/v1/customer/services', {
+        headers: { 'X-API-Key': VIRTUALSMS_KEY, Accept: 'application/json' }
+      });
+      const sText = await sRes.text();
+      const sJson = JSON.parse(sText);
+      modernServices = Array.isArray(sJson) ? sJson : (sJson.services || sJson.data || null);
+    } catch (e) {
+      errors.push('modern services: ' + (e.message || e));
+    }
+    try {
+      const cRes = await fetch('https://virtualsms.io/api/v1/customer/countries', {
+        headers: { 'X-API-Key': VIRTUALSMS_KEY, Accept: 'application/json' }
+      });
+      const cText = await cRes.text();
+      const cJson = JSON.parse(cText);
+      modernCountries = Array.isArray(cJson) ? cJson : (cJson.countries || cJson.data || null);
+    } catch (e) {
+      errors.push('modern countries: ' + (e.message || e));
     }
 
-    // Fallback: getNumbersStatus then getPrices per-service is heavy; try getCountries + getPrices
-    if (!pricesObj || typeof pricesObj !== 'object') {
-      const statusRes = await callSupplier(SUPPLIERS.virtualsms, { action: 'getNumbersStatus' });
+    // --- 2) Legacy getPrices (full price map) with short timeout behaviour ---
+    let pricesObj = null;
+    let pricesRaw = '';
+    try {
+      const pricesRes = await callSupplier(SUPPLIERS.virtualsms, { action: 'getPrices' });
+      pricesRaw = String(pricesRes.text || '').trim();
+      if (pricesRaw && !KNOWN_ERRORS.has(pricesRaw) && pricesRaw !== 'BAD_KEY' && !pricesRaw.startsWith('BAD_')) {
+        try {
+          pricesObj = JSON.parse(pricesRaw);
+        } catch (_) {
+          pricesObj = null;
+        }
+      } else if (pricesRaw) {
+        errors.push('getPrices: ' + pricesRaw.slice(0, 80));
+      }
+    } catch (e) {
+      errors.push('getPrices call: ' + (e.message || e));
+    }
+
+    // Fallback getNumbersStatus only if getPrices empty
+    if (!pricesObj || typeof pricesObj !== 'object' || !Object.keys(pricesObj).length) {
       try {
-        pricesObj = JSON.parse(statusRes.text);
-      } catch (_) {
-        return res.status(502).json({
-          success: false,
-          message: 'Could not load VirtualSMS catalog.',
-          raw: (statusRes.text || '').slice(0, 400)
-        });
+        const statusRes = await callSupplier(SUPPLIERS.virtualsms, { action: 'getNumbersStatus' });
+        const st = String(statusRes.text || '').trim();
+        if (st && !KNOWN_ERRORS.has(st) && !st.startsWith('BAD_')) {
+          try { pricesObj = JSON.parse(st); } catch (_) { pricesObj = null; }
+        } else if (st) {
+          errors.push('getNumbersStatus: ' + st.slice(0, 80));
+        }
+      } catch (e) {
+        errors.push('getNumbersStatus: ' + (e.message || e));
       }
     }
 
-    // Shape A (getPrices): { "0": { "wa": { "cost": 0.2, "count": 10, ... }, ... }, ... } countryId -> service -> info
-    // Shape B (getNumbersStatus): { "wa_0": 12, "tg_16": 5 } service_country -> count
+    // Country name map from modern countries
+    const countryNameById = {};
+    const countryNameByIso = {};
+    if (Array.isArray(modernCountries)) {
+      for (const c of modernCountries) {
+        const id = c.id ?? c.country_id ?? c.code ?? c.country;
+        const name = c.eng || c.name || c.country_name || c.englishName || c.country_code;
+        const iso = c.iso || c.iso2 || c.country_code || c.code;
+        if (id != null && name) countryNameById[String(id)] = String(name);
+        if (iso != null && name) countryNameByIso[String(iso).toUpperCase()] = String(name);
+      }
+    }
+    if (Array.isArray(modernServices)) {
+      for (const s of modernServices) {
+        const code = s.code || s.service || s.service_code || s.id;
+        const name = s.name || s.service_name || s.title;
+        if (code) serviceNames[String(code)] = name || String(code).toUpperCase();
+      }
+    }
+
+    // Build rows from pricesObj
     const rows = [];
     const keys = Object.keys(pricesObj || {});
-    const looksLikePrices = keys.length && typeof pricesObj[keys[0]] === 'object' && pricesObj[keys[0]] !== null && !Array.isArray(pricesObj[keys[0]]);
+    const looksNested =
+      keys.length &&
+      typeof pricesObj[keys[0]] === 'object' &&
+      pricesObj[keys[0]] !== null &&
+      !Array.isArray(pricesObj[keys[0]]);
 
-    if (looksLikePrices) {
+    if (looksNested) {
+      // Shape: { countryId: { serviceId: { cost, count } } }
       for (const countryId of keys) {
         const services = pricesObj[countryId];
         if (!services || typeof services !== 'object') continue;
@@ -1801,123 +1863,194 @@ async function handleVsmsSync(req, res) {
           const info = services[serviceId] || {};
           const cost = Number(info.cost ?? info.price ?? info.rate ?? 0);
           const count = Number(info.count ?? info.phones ?? info.numberCount ?? 0);
-          const supplierUsd = Number.isFinite(cost) && cost > 0 ? cost : 0;
-          const sale = supplierUsd > 0 ? salePriceFromUsd(supplierUsd) : (Number(process.env.MIN_NUMBER_PRICE_NGN) || 1000);
-          const serviceName = (GRIZZLY_SERVICE_NAMES && GRIZZLY_SERVICE_NAMES[serviceId]) || String(serviceId).toUpperCase();
+          // Only stocked rows — keeps payload small and useful
+          if (!Number.isFinite(count) || count <= 0) continue;
+          if (!Number.isFinite(cost) || cost <= 0) continue;
+          const sale = salePriceFromUsd(cost);
+          const serviceName =
+            serviceNames[String(serviceId)] ||
+            (GRIZZLY_SERVICE_NAMES && GRIZZLY_SERVICE_NAMES[serviceId]) ||
+            String(serviceId).toUpperCase();
+          const cName =
+            countryNameById[String(countryId)] ||
+            countryNameByIso[String(countryId).toUpperCase()] ||
+            String(countryId);
           rows.push({
             source: 'virtualsms',
             country_id: parseInt(countryId, 10) || 0,
-            country_name: String(countryId),
+            country_name: cName,
             service_id: String(serviceId),
             service_name: serviceName,
-            supplier_price: supplierUsd,
+            supplier_price: cost,
             price: sale,
-            available_quantity: Number.isFinite(count) ? count : 0,
-            is_available: (Number.isFinite(count) ? count : 0) > 0 && supplierUsd > 0,
+            available_quantity: count,
+            is_available: true,
+            currency: 'NGN',
             updated_at: new Date().toISOString()
           });
         }
       }
-    } else {
-      // getNumbersStatus flat map
+    } else if (keys.length) {
+      // Flat: wa_0: count
       for (const k of keys) {
         const count = Number(pricesObj[k]);
+        if (!Number.isFinite(count) || count <= 0) continue;
         const parts = String(k).split('_');
         if (parts.length < 2) continue;
         const serviceId = parts[0];
         const countryId = parts.slice(1).join('_');
-        const serviceName = (GRIZZLY_SERVICE_NAMES && GRIZZLY_SERVICE_NAMES[serviceId]) || String(serviceId).toUpperCase();
+        const serviceName =
+          serviceNames[String(serviceId)] ||
+          (GRIZZLY_SERVICE_NAMES && GRIZZLY_SERVICE_NAMES[serviceId]) ||
+          String(serviceId).toUpperCase();
+        const cName = countryNameById[String(countryId)] || String(countryId);
+        const minSale = Number(process.env.MIN_NUMBER_PRICE_NGN) || 1000;
         rows.push({
           source: 'virtualsms',
           country_id: parseInt(countryId, 10) || 0,
-          country_name: String(countryId),
+          country_name: cName,
           service_id: String(serviceId),
           service_name: serviceName,
           supplier_price: null,
-          price: Number(process.env.MIN_NUMBER_PRICE_NGN) || 1000,
-          available_quantity: Number.isFinite(count) ? count : 0,
-          is_available: (Number.isFinite(count) ? count : 0) > 0,
+          price: minSale,
+          available_quantity: count,
+          is_available: true,
+          currency: 'NGN',
           updated_at: new Date().toISOString()
         });
       }
     }
 
-    // Enrich country names via getCountries if available
-    try {
-      const cRes = await callSupplier(SUPPLIERS.virtualsms, { action: 'getCountries' });
-      let countries = [];
-      try { countries = JSON.parse(cRes.text); } catch (_) { countries = []; }
-      const nameById = {};
-      if (Array.isArray(countries)) {
-        for (const c of countries) {
-          const id = c.id ?? c.country_id ?? c.code;
-          const name = c.eng || c.name || c.country_name || c.englishName;
-          if (id != null && name) nameById[String(id)] = String(name);
-        }
-      } else if (countries && typeof countries === 'object') {
-        for (const [id, val] of Object.entries(countries)) {
-          if (typeof val === 'string') nameById[String(id)] = val;
-          else if (val && (val.eng || val.name)) nameById[String(id)] = val.eng || val.name;
+    // If legacy prices empty but modern services exist — seed service list with placeholder countries (US/GB/NG) so admin isn't empty
+    if (!rows.length && Array.isArray(modernServices) && modernServices.length) {
+      const seedCountries = [
+        { id: 16, name: 'United Kingdom' },
+        { id: 12, name: 'USA' },
+        { id: 19, name: 'Nigeria' }
+      ];
+      for (const s of modernServices.slice(0, 80)) {
+        const code = String(s.code || s.service || s.service_code || s.id || '').trim();
+        if (!code) continue;
+        const name = s.name || s.service_name || code.toUpperCase();
+        for (const c of seedCountries) {
+          rows.push({
+            source: 'virtualsms',
+            country_id: c.id,
+            country_name: c.name,
+            service_id: code,
+            service_name: name,
+            supplier_price: null,
+            price: Number(process.env.MIN_NUMBER_PRICE_NGN) || 1000,
+            available_quantity: 1,
+            is_available: true,
+            currency: 'NGN',
+            updated_at: new Date().toISOString()
+          });
         }
       }
-      for (const r of rows) {
-        const n = nameById[String(r.country_id)];
-        if (n) r.country_name = n;
-      }
-    } catch (e) {
-      errors.push('countries: ' + (e.message || e));
+      errors.push('Used modern services seed (legacy getPrices empty). Re-sync after top-up if prices missing.');
     }
 
-    // Upsert in batches — match on source+country_id+service_id if unique constraint exists; else delete+insert pattern avoided (preserve admin price overrides)
-    // Only update stock/supplier_price/is_available/updated_at when row exists; insert new otherwise.
-    const BATCH = 50;
-    for (let i = 0; i < rows.length; i += BATCH) {
-      const chunk = rows.slice(i, i + BATCH);
-      for (const row of chunk) {
-        try {
-          const { data: existing } = await supabase
-            .from('number_services')
-            .select('id, price')
-            .eq('source', 'virtualsms')
-            .eq('country_id', row.country_id)
-            .eq('service_id', row.service_id)
-            .maybeSingle();
+    seen = rows.length;
+    if (!rows.length) {
+      return res.status(502).json({
+        success: false,
+        message:
+          'VirtualSMS returned no in-stock services. Check VIRTUALSMS_API_KEY and supplier balance/stock.',
+        errors: errors.slice(0, 10),
+        raw_hint: (pricesRaw || '').slice(0, 120)
+      });
+    }
 
-          if (existing && existing.id) {
-            const patch = {
-              supplier_price: row.supplier_price,
-              available_quantity: row.available_quantity,
-              is_available: row.is_available,
-              country_name: row.country_name,
-              service_name: row.service_name,
-              updated_at: row.updated_at
-            };
-            // Do not overwrite admin-set customer price
-            const { error: uErr } = await supabase.from('number_services').update(patch).eq('id', existing.id);
-            if (uErr) errors.push(uErr.message);
-            else upserted += 1;
-          } else {
-            const { error: iErr } = await supabase.from('number_services').insert(row);
-            if (iErr) errors.push(iErr.message);
-            else upserted += 1;
-          }
-        } catch (e) {
-          errors.push(String(e.message || e));
+    // --- 3) Fast path: load existing virtualsms ids once, then batch update/insert ---
+    const existingMap = new Map(); // key country_id|service_id -> {id, price}
+    {
+      let from = 0;
+      const page = 1000;
+      while (true) {
+        if (Date.now() - started > TIME_BUDGET_MS - 5000) break;
+        const { data, error } = await supabase
+          .from('number_services')
+          .select('id, country_id, service_id, price, price_source')
+          .eq('source', 'virtualsms')
+          .range(from, from + page - 1);
+        if (error) {
+          errors.push('load existing: ' + error.message);
+          break;
         }
+        const batch = data || [];
+        for (const r of batch) {
+          existingMap.set(`${r.country_id}|${r.service_id}`, r);
+        }
+        if (batch.length < page) break;
+        from += page;
       }
     }
 
+    const toInsert = [];
+    const BATCH = 80;
+    for (let i = 0; i < rows.length; i++) {
+      if (Date.now() - started > TIME_BUDGET_MS) {
+        errors.push('Time budget reached — click Sync again to continue (' + upserted + ' saved so far).');
+        break;
+      }
+      const row = rows[i];
+      const key = `${row.country_id}|${row.service_id}`;
+      const prev = existingMap.get(key);
+      if (prev && prev.id) {
+        const patch = {
+          supplier_price: row.supplier_price,
+          available_quantity: row.available_quantity,
+          is_available: row.is_available,
+          country_name: row.country_name,
+          service_name: row.service_name,
+          updated_at: row.updated_at
+        };
+        // Keep admin-set sell price
+        if (prev.price_source === 'admin') {
+          /* leave price */
+        } else if (row.price != null) {
+          patch.price = row.price;
+        }
+        const { error: uErr } = await supabase.from('number_services').update(patch).eq('id', prev.id);
+        if (uErr) errors.push(uErr.message);
+        else upserted += 1;
+      } else {
+        toInsert.push(row);
+        if (toInsert.length >= BATCH) {
+          const chunk = toInsert.splice(0, BATCH);
+          const { error: iErr } = await supabase.from('number_services').insert(chunk);
+          if (iErr) errors.push(iErr.message);
+          else upserted += chunk.length;
+        }
+      }
+    }
+    if (toInsert.length && Date.now() - started <= TIME_BUDGET_MS) {
+      const { error: iErr } = await supabase.from('number_services').insert(toInsert);
+      if (iErr) errors.push(iErr.message);
+      else upserted += toInsert.length;
+    }
+
+    const partial = Date.now() - started > TIME_BUDGET_MS - 1000;
     return res.status(200).json({
       success: true,
       source: 'virtualsms',
-      rows_seen: rows.length,
+      rows_seen: seen,
       upserted,
-      errors: errors.slice(0, 20),
-      message: `VirtualSMS sync finished. ${upserted} services updated.`
+      partial: !!partial,
+      ms: Date.now() - started,
+      errors: errors.slice(0, 15),
+      message: partial
+        ? `Partial sync: ${upserted} of ${seen} saved. Click Sync Server 3 again to continue.`
+        : `VirtualSMS sync done. ${upserted} services updated (${seen} in stock).`
     });
   } catch (err) {
     console.error('[vsms_sync]', err);
-    return res.status(500).json({ success: false, message: err.message || 'VirtualSMS sync failed' });
+    return res.status(500).json({
+      success: false,
+      message: err.message || 'VirtualSMS sync failed',
+      errors: errors.slice(0, 10)
+    });
   }
 }
 
