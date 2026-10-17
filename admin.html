@@ -2459,8 +2459,9 @@ async function syncServer3Now() {
     }
     if (!data.success) {
       const errMsg = data.message || 'Server 3 sync failed';
+      const extra = (data.errors && data.errors[0]) ? (' · ' + data.errors[0]) : (data.raw_hint ? (' · ' + data.raw_hint) : '');
       showAdminToast(errMsg, 'error');
-      if (prog) prog.textContent = errMsg + (data.raw_hint ? (' · ' + data.raw_hint) : '');
+      if (prog) prog.textContent = errMsg + extra;
       return;
     }
     const msg = data.message || ('Synced ' + (data.upserted || 0) + ' services');
