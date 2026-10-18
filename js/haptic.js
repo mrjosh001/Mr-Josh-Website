@@ -35,4 +35,16 @@
   }
 
   document.addEventListener('click', press, true);
+
+  /* Server 3 supplier fallback is loaded here because every MJ SMS page
+   * already includes this tiny common script. It is isolated to mj-sms-s3. */
+  try {
+    if (/\/mj-sms-s3\.html$/i.test(window.location.pathname) && !window.__mjS3LiveFallbackScript) {
+      window.__mjS3LiveFallbackScript = true;
+      var s=document.createElement('script');
+      s.src='/js/mj-sms-s3-live-fallback.js?v=20261018';
+      s.defer=true;
+      document.head.appendChild(s);
+    }
+  } catch(e) {}
 })();
