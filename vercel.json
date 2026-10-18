@@ -25,7 +25,8 @@
   ],
   "crons": [
     { "path": "/api/grizzly-sync", "schedule": "0 3 * * *" },
-    { "path": "/api/grizzly-sync?action=vsms_sync", "schedule": "*/15 * * * *" },
+    { "path": "/api/grizzly-sync?action=expire_stale", "schedule": "0 4 * * *" },
+    { "path": "/api/sms-bus?action=expire_stale", "schedule": "30 4 * * *" },
     { "path": "/api/order-logsdomain?action=sync", "schedule": "0 5 * * *" },
     { "path": "/api/order-logsdomain?action=bulkmail_sync", "schedule": "15 5 * * *" },
     { "path": "/api/classy", "schedule": "30 5 * * *" },
@@ -35,8 +36,12 @@
     { "path": "/api/sms-bus?action=sync", "schedule": "0 9 * * *" },
     { "path": "/api/sms-bus?action=gotsms_sync&full=1", "schedule": "30 9 * * *" },
     { "path": "/api/sms-bus?action=push_poll_codes", "schedule": "45 9 * * *" },
-    { "path": "/api/grizzly-sync?action=expire_stale", "schedule": "0 4 * * *" },
-    { "path": "/api/sms-bus?action=expire_stale", "schedule": "30 4 * * *" }
+    { "path": "/api/grizzly-sync?action=vsms_sync", "schedule": "0 10 * * *" },
+    { "path": "/api/grizzly-sync?action=vsms_sync", "schedule": "0 12 * * *" },
+    { "path": "/api/grizzly-sync?action=vsms_sync", "schedule": "0 14 * * *" },
+    { "path": "/api/grizzly-sync?action=vsms_sync", "schedule": "0 16 * * *" },
+    { "path": "/api/grizzly-sync?action=vsms_sync", "schedule": "0 18 * * *" },
+    { "path": "/api/grizzly-sync?action=vsms_sync", "schedule": "0 20 * * *" }
   ],
   "functions": {
     "api/grizzly-sync.js": { "maxDuration": 300 },
