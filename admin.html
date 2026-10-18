@@ -3467,27 +3467,6 @@ async function saveNumberService() {
  const btn = document.getElementById('saveSmsBtn');
  setBtnBusy(btn, true, 'Saving...');
 
- // Server 3 rows: save straight to the catalog and mark the price as admin-set,
- // so a re-sync keeps your price (same as the note in the popup says).
- if (window._smsModalMode === 'server3') {
- try {
- const { error } = await sb.from('number_services')
- .update({ price, is_available, price_source: 'admin' })
- .eq('id', id).eq('source', 'virtualsms');
- if (error) throw error;
- } catch (e) {
- errEl.textContent = 'Save failed: ' + (e.message || e);
- showAdminToast('Save failed: ' + (e.message || e), 'error');
- setBtnBusy(btn, false);
- return;
- }
- setBtnBusy(btn, false);
- window._smsModalMode = null;
- closeSmsModal();
- await loadServer3Services();
- showAdminToast('Price updated successfully', 'success');
- return;
- }
  try {
  const headers = { 'Content-Type': 'application/json' };
  const { data: { session } } = await sb.auth.getSession();
@@ -3513,7 +3492,7 @@ async function saveNumberService() {
  }
 
  closeSmsModal();
- await Promise.all([loadNumberServices(), loadSmsServer2RowsForCurrentFilter()]);
+ await Promise.all([loadNumberServices(), loadSmsServer2RowsForCurrentFilter(), loadServer3Services()]);
  showAdminToast('Price updated successfully', 'success');
 }
 
