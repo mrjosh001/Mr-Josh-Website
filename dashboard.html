@@ -5768,10 +5768,17 @@ async function fetchUserTransactions(userId) {
         // Fill gaps: real orders that never got a transactions row
         const fromOrders = await fetchActivityFromOrders(userId);
         const seen = new Set();
+        function smsTitleBase(title) {
+            // "Whatsapp · Canada" and "Whatsapp" → same key so order merge does not double SMS rows
+            return String(title || '').toLowerCase().split('·')[0].trim().slice(0, 40);
+        }
         function dedupeKey(t) {
-            // Prefer matching by normalized title + amount + day
             const day = (t.created_at || t.date || '').toString().slice(0, 10);
-            return [t.type, String(t.title || '').toLowerCase().slice(0, 40), String(t.amount_ngn || t.amount || ''), day].join('|');
+            const typ = String(t.type || '').toLowerCase();
+            const title = (typ === 'sms' || /mj sms|sms/i.test(String(t.category || '')))
+              ? smsTitleBase(t.title)
+              : String(t.title || '').toLowerCase().slice(0, 40);
+            return [typ || t.type, title, String(t.amount_ngn || t.amount || ''), day].join('|');
         }
         const merged = [];
         for (const t of fromTx) {
@@ -5784,14 +5791,15 @@ async function fetchUserTransactions(userId) {
             const k = dedupeKey(t);
             // Skip if a transactions row already covers this order
             if (seen.has(k)) continue;
-            // Also skip if same type+title exists within ~same amount
+            // SMS: same service + amount on same day = same purchase lifecycle
             let dup = false;
             for (const m of merged) {
-                if (m.type === t.type && String(m.title).toLowerCase() === String(t.title).toLowerCase()) {
-                    const a = Number(m.amount_ngn) || 0;
-                    const b = Number(t.amount_ngn) || 0;
-                    if (a && b && Math.abs(a - b) < 1) { dup = true; break; }
-                }
+                const sameType = m.type === t.type || (String(m.category||'').toLowerCase().includes('sms') && String(t.category||'').toLowerCase().includes('sms'));
+                if (!sameType) continue;
+                const a = Number(m.amount_ngn) || 0;
+                const b = Number(t.amount_ngn) || 0;
+                if (!(a && b && Math.abs(a - b) < 1)) continue;
+                if (smsTitleBase(m.title) === smsTitleBase(t.title)) { dup = true; break; }
             }
             if (dup) continue;
             seen.add(k);
