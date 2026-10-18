@@ -1,5 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
-import { applyMarkup } from '../lib/pricing.js';
+import { applyMarkup, profitFloorNgn } from '../lib/pricing.js';
 
 /**
  * /api/grizzly-sync — GrizzlySMS (Server 1) + VirtualSMS (Server 3) operations in one file.
@@ -7,25 +7,32 @@ import { applyMarkup } from '../lib/pricing.js';
  * GET  /api/grizzly-sync                  → continue/kick off Server 1 catalog sync (cron + admin "Sync" button)
  * GET  /api/grizzly-sync?action=start      → start a fresh Server 1 sync job
  * GET  /api/grizzly-sync?action=status     → Server 1 sync job progress
- * GET  /api/grizzly-sync?action=vsms_sync  → Server 3 (VirtualSMS) catalog sync (admin / cron)
+ * GET  /api/grizzly-sync?action=vsms_sync  → Server 3 (VirtualSMS) FULL catalog sync (admin / cron)
+ *                                            &force=1 refresh everything · &service=wa re-sync one service
  * GET  /api/grizzly-sync?action=vsms_probe → Server 3: show what VirtualSMS really returns (admin)
+ *                                            &paging=1 also tests which paging parameter the API honours
  * GET  /api/grizzly-sync?action=vsms_purge_legacy → Server 3: delete old broken numeric-id rows (admin)
  * POST /api/grizzly-sync?action=order      → buy a number   (provider=virtualsms → Server 3)
  * POST /api/grizzly-sync?action=check      → poll for SMS code (routes by the order's saved source)
  * POST /api/grizzly-sync?action=cancel     → cancel + refund   (routes by the order's saved source)
  *
- * Server 3 now uses VirtualSMS' documented MODERN REST API (https://virtualsms.io/api/v1, X-API-Key):
+ * Server 3 uses VirtualSMS' documented MODERN REST API (https://virtualsms.io/api/v1, X-API-Key):
  * ISO-2 country codes with real names, real per-country prices, POST /customer/purchase.
  * number_services.country_id is an integer column, so an ISO code is stored as a reversible integer
  * (vsIsoToId / vsIdToIso); the real name goes in country_name.
- * Server 1 code below is unchanged.
+ *
+ * Pricing is wired the same on every server: applyMarkup() the first time a row is seen, hand-set
+ * ('manual' / 'admin') prices are never overwritten, and — safety net — a system-priced row that has
+ * fallen under supplier cost + MIN_PROFIT_NGN is re-priced (profitFloorNgn). Orders are refused if a row
+ * would sell below supplier cost.
  *
  * Env: GRIZZLYSMS_API_KEY, SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, CRON_SECRET?
- * Optional: USD_TO_NGN_RATE (default 1500), VIRTUALSMS_API_KEY (Server 3),
- *           VSMS_SERVICES_PER_RUN (30), VSMS_SERVICE_LIMIT (150), VSMS_STALE_HOURS (5)
+ * Optional: USD_TO_NGN_RATE (default 1500), MIN_PROFIT_NGN (500), VIRTUALSMS_API_KEY (Server 3),
+ *           VSMS_TIME_BUDGET_MS (240000 cron), VSMS_MANUAL_BUDGET_MS (80000 admin button),
+ *           VSMS_MIN_GAP_MS (1100), VSMS_SERVICE_LIMIT (5000), VSMS_STALE_HOURS (3)
  */
 
-/* MJHUB_SERVER3_VIRTUALSMS=4 2026-10-18 Server 3: matched to VirtualSMS docs (stock fallback, country names, safe cancel) */
+/* MJHUB_SERVER3_VIRTUALSMS=5 2026-10-18 Server 3: FULL paged resumable sync, price floor, order cost guard */
 const BASE = 'https://api.grizzlysms.com/stubs/handler_api.php';
 const VSMS_BASE = 'https://virtualsms.io/stubs/handler_api.php'; // legacy: only for old numeric-id Server 3 orders
 
@@ -113,8 +120,16 @@ function humanizeGrizzlyError(code) {
   return map[code] || null;
 }
 
+/** Selling below supplier cost? (price is NGN, supplier_price is USD). Used as an order-time guard. */
+function sellsBelowCost(priceNgn, supplierPriceUsd) {
+  const rate = Number(process.env.USD_TO_NGN_RATE) || Number(process.env.USD_TO_NGN) || 1500;
+  const usd = Number(supplierPriceUsd);
+  if (!(usd > 0)) return false; // unknown cost → can't judge
+  return !(Number(priceNgn) >= usd * rate);
+}
+
 // ===========================================================================
-// SYNC (Server 1) — unchanged
+// SYNC (Server 1)
 // ===========================================================================
 
 // Manual: use most of the 300s function limit so fewer browser polls are needed.
@@ -306,7 +321,16 @@ async function runInBatches(items, size, fn) {
 }
 
 /**
- * Sync one country: 1 Grizzly price call + 1 existing SELECT + batched writes.
+ * Sync one country: 1 Grizzly price call + paged existing SELECT + batched writes.
+ *
+ * Fixes vs the old version:
+ *  - the existing-rows SELECT is paged. PostgREST returns at most 1000 rows per request, so for countries with
+ *    more than 1000 services the rest looked "new", their batch INSERT hit the unique index (see the repeated
+ *    "duplicate key … number_services_source_country_service_key" errors in sync_jobs) and those rows never
+ *    got fresh stock/cost again;
+ *  - new rows go in with upsert(ignoreDuplicates) so one duplicate can no longer sink a whole batch;
+ *  - a system-priced row that has fallen under supplier cost + MIN_PROFIT_NGN is re-priced (hand-set
+ *    'manual' / 'admin' prices are never touched).
  */
 async function syncOneCountry(apiKey, country, usdToNgn, counters, serviceNames) {
   const countryId = parseInt(country.id, 10);
@@ -333,22 +357,28 @@ async function syncOneCountry(apiKey, country, usdToNgn, counters, serviceNames)
   const entries = Object.entries(countryPrices);
   if (!entries.length) return;
 
-  // One query for all existing services in this country
+  // All existing services in this country (paged — see note above).
   // Incremental: only INSERT brand-new service_ids and UPDATE rows whose
   // stock / supplier cost / name actually changed (GotSMS-style — never wipe + rewrite).
-  const { data: existingRows, error: existErr } = await supabase
-    .from('number_services')
-    .select('id, service_id, supplier_price, available_quantity, service_name, is_available, country_name')
-    .eq('source', 'grizzlysms')
-    .eq('country_id', countryId);
-
-  if (existErr) {
-    counters.errors.push(`country ${countryId} select: ${existErr.message}`);
-    return;
+  const existingRows = [];
+  for (let from = 0; ; from += 1000) {
+    const { data, error: existErr } = await supabase
+      .from('number_services')
+      .select('id, service_id, price, price_source, supplier_price, available_quantity, service_name, is_available, country_name')
+      .eq('source', 'grizzlysms')
+      .eq('country_id', countryId)
+      .order('id', { ascending: true })
+      .range(from, from + 999);
+    if (existErr) {
+      counters.errors.push(`country ${countryId} select: ${existErr.message}`);
+      return;
+    }
+    existingRows.push(...(data || []));
+    if (!data || data.length < 1000) break;
   }
 
   const existingMap = new Map(
-    (existingRows || []).map((r) => [String(r.service_id), r])
+    existingRows.map((r) => [String(r.service_id), r])
   );
 
   const toInsert = [];
@@ -377,11 +407,18 @@ async function syncOneCountry(apiKey, country, usdToNgn, counters, serviceNames)
       const sameName = String(prev.service_name || '') === String(friendlyName);
       const sameCountry = String(prev.country_name || '') === String(countryName);
       const sameAvail = !!prev.is_available === !!nextAvail;
-      if (sameCost && sameQty && sameName && sameCountry && sameAvail) {
+      // Safety net: never keep SELLING under supplier cost + MIN_PROFIT_NGN (system prices only)
+      const handPriced = prev.price_source === 'manual' || prev.price_source === 'admin';
+      const prevPrice = Number(prev.price) || 0;
+      const needsPrice =
+        !handPriced &&
+        supplierPriceUsd > 0 &&
+        (!(prevPrice > 0) || prevPrice < profitFloorNgn(supplierPriceUsd, usdToNgn));
+      if (sameCost && sameQty && sameName && sameCountry && sameAvail && !needsPrice) {
         continue; // nothing changed — skip write
       }
       counters.updatedCount += 1;
-      toUpdate.push({
+      const upd = {
         id: prev.id,
         country_name: countryName,
         service_name: friendlyName,
@@ -390,7 +427,13 @@ async function syncOneCountry(apiKey, country, usdToNgn, counters, serviceNames)
         providers_raw: providersRaw,
         is_available: nextAvail,
         updated_at: now
-      });
+      };
+      if (needsPrice) {
+        upd.price = applyMarkup(supplierPriceUsd, usdToNgn);
+        upd.price_source = 'system';
+        counters.repriced = (counters.repriced || 0) + 1;
+      }
+      toUpdate.push(upd);
     } else {
       counters.newCount += 1;
       toInsert.push({
@@ -411,7 +454,7 @@ async function syncOneCountry(apiKey, country, usdToNgn, counters, serviceNames)
     }
   }
 
-  // Parallel updates (does NOT touch customer selling price)
+  // Parallel updates (hand-set prices are never touched; system prices only move via the safety net above)
   await runInBatches(toUpdate, UPDATE_CONCURRENCY, async (row) => {
     const { id, ...fields } = row;
     const { error } = await supabase
@@ -421,10 +464,12 @@ async function syncOneCountry(apiKey, country, usdToNgn, counters, serviceNames)
     if (error) counters.errors.push(`update ${id}: ${error.message}`);
   });
 
-  // Multi-row inserts in batches of 100
+  // Multi-row inserts in batches of 100 (upsert + ignoreDuplicates: a row that already exists can't fail the batch)
   for (let i = 0; i < toInsert.length; i += 100) {
     const batch = toInsert.slice(i, i + 100);
-    const { error } = await supabase.from('number_services').insert(batch);
+    const { error } = await supabase
+      .from('number_services')
+      .upsert(batch, { onConflict: 'source,country_id,service_id', ignoreDuplicates: true });
     if (error) counters.errors.push(`insert batch country ${countryId}: ${error.message}`);
   }
 }
@@ -559,6 +604,7 @@ async function handleSync(req, res) {
       newCount: job.new_count || 0,
       updatedCount: job.updated_count || 0,
       servicesSeen: job.services_seen || 0,
+      repriced: 0,
       errors: Array.isArray(job.errors) ? [...job.errors] : []
     };
 
@@ -589,6 +635,7 @@ async function handleSync(req, res) {
       total_countries: countryList.length,
       new_services: counters.newCount,
       updated_services: counters.updatedCount,
+      repriced_below_floor: counters.repriced,
       services_seen: counters.servicesSeen,
       errors: counters.errors.slice(-20)
     });
@@ -604,7 +651,7 @@ async function handleSync(req, res) {
 }
 
 // ===========================================================================
-// ORDER (Server 1) — unchanged
+// ORDER (Server 1)
 // ===========================================================================
 
 async function handleOrder(req, res) {
@@ -697,6 +744,17 @@ async function handleOrder(req, res) {
     } else if (providerId && !svc.providers_raw) {
       // Client asked for a pool but we have no provider map — fall back to catalog price
       resolvedProviderId = providerId;
+    }
+
+    // Never sell below supplier cost (supplier raised its price since the last sync, or a hand-set price is too low)
+    if (!(price > 0) || sellsBelowCost(price, supplierPriceUsd)) {
+      console.error('[grizzly order] blocked: price below supplier cost', {
+        country_id: countryId, service_id: serviceId, price, supplierPriceUsd
+      });
+      return res.status(409).json({
+        success: false,
+        message: 'This number service is temporarily unavailable. Please try another country or service.'
+      });
     }
 
     const { data: profile, error: profErr } = await supabase
@@ -1745,10 +1803,14 @@ const VS_REST = 'https://virtualsms.io/api/v1';
 const VS_SOURCE = 'virtualsms';
 const VS_ID_BASE = 1000;
 const VS_CANCEL_COOLDOWN_MS = 120 * 1000;
-const VS_TIME_BUDGET_MS = 55000;
-const VS_SERVICES_PER_RUN = Number(process.env.VSMS_SERVICES_PER_RUN) || 30; // stay well under 60 requests/min
-const VS_SERVICE_LIMIT = Number(process.env.VSMS_SERVICE_LIMIT) || 150;
-const VS_STALE_MS = (Number(process.env.VSMS_STALE_HOURS) || 5) * 3600 * 1000;
+// Cron gets the long budget; the admin "Sync Server 3" button gets one that fits inside the browser's 90 s timeout.
+const VS_TIME_BUDGET_MS = Number(process.env.VSMS_TIME_BUDGET_MS) || 240000;
+const VS_MANUAL_BUDGET_MS = Number(process.env.VSMS_MANUAL_BUDGET_MS) || 80000;
+const VS_MIN_GAP_MS = Number(process.env.VSMS_MIN_GAP_MS) || 1100; // ~54 requests/minute, under the 60/min limit
+const VS_SERVICE_LIMIT = Number(process.env.VSMS_SERVICE_LIMIT) || 5000; // was 150 → only 150 services ever priced
+const VS_STALE_MS = (Number(process.env.VSMS_STALE_HOURS) || 3) * 3600 * 1000;
+const VS_MAX_PAGES = 25;
+const VS_LOCK_MS = 6 * 60 * 1000;
 const VS_POPULAR_RE = /whatsapp|telegram|google|gmail|facebook|instagram|twitter|^x$|discord|tiktok|snapchat|microsoft|amazon|uber|netflix|paypal|tinder|linkedin|viber|wechat|apple|line|bumble|yahoo|openai|chatgpt|signal|vk|binance/i;
 const VS_POPULAR_CODES = ['wa', 'tg', 'go', 'fb', 'ig', 'tw', 'ds', 'lf', 'tt', 'fu', 'mm', 'am', 'ub', 'nf', 'ts', 'oi', 'tn', 'vi', 'we', 'wx'];
 
@@ -1866,7 +1928,35 @@ async function vsAdminOrCron(req, res) {
 }
 const vsBody = (req) => (typeof req.body === 'string' ? JSON.parse(req.body || '{}') : (req.body || {}));
 
-// ---------------------------------------------------------------- catalog sync
+// ---------------------------------------------------------------- catalog sync (FULL, paged, resumable)
+const VS_PRICE_PROTECTED = new Set(['manual', 'admin']); // hand-set prices — the sync never overwrites these
+const vsSleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+/** Pagination info if the API sends any ({pagination:{…}}, {meta:{…}}, or top-level fields). */
+function vsPageMeta(j) {
+  const base = j && typeof j === 'object' && !Array.isArray(j) ? j : {};
+  const m = base.pagination || base.meta || base.paging || {};
+  const src = Object.assign({}, base, m);
+  return {
+    total: vsNum(src.total ?? src.total_count ?? src.totalItems ?? src.count_total),
+    pages: vsNum(src.total_pages ?? src.pages ?? src.last_page ?? src.pageCount),
+    hasMore: src.has_more === true || src.hasMore === true || src.next_page != null ||
+      (src.next != null && src.next !== false && src.next !== '')
+  };
+}
+
+/** The ways a supplier might page a list. The first one that returns NEW countries is remembered for the run. */
+function vsPageUrl(mode, base, page, got) {
+  switch (mode) {
+    case 'page': return `${base}&page=${page}`;
+    case 'offset': return `${base}&offset=${got}`;
+    case 'limit': return `${base}&limit=1000&page=${page}`;
+    case 'per_page': return `${base}&per_page=1000&page=${page}`;
+    default: return `${base}&page_size=1000&page=${page}`;
+  }
+}
+const VS_PAGE_MODES = ['limit', 'per_page', 'page_size', 'page', 'offset'];
+
 async function vsLoadExisting() {
   const map = new Map();
   let from = 0;
@@ -1886,156 +1976,237 @@ async function vsLoadExisting() {
   return map;
 }
 
-async function vsHandleSync(req, res) {
-  if (!(await vsAdminOrCron(req, res))) return;
-  if (!vsApiKey()) {
-    return res.status(500).json({ success: false, message: 'VIRTUALSMS_API_KEY is not set on the server (Vercel → Environment Variables).' });
+/**
+ * ONE service, ALL countries. VirtualSMS caps a single answer (~54 countries), which is why the USA, Russia,
+ * Turkey, … never arrived. We compare the answer with the supplier's own country list and, when it looks cut
+ * off (or the API says there is more), page / enlarge the request until nothing new comes back.
+ */
+async function vsFetchServiceCountries(code, expectedCount, pace, deadline, paging) {
+  const base = '/customer/countries?service=' + encodeURIComponent(code);
+  const KEYS = ['countries', 'data', 'items', 'results'];
+  const seen = new Set();
+  const items = [];
+  let pages = 0;
+  let incomplete = false;
+  let firstKeys = null;
+  let curPage = 1;
+
+  const take = (list) => {
+    let fresh = 0;
+    for (const c of list) {
+      const iso = vsCountryIso(c);
+      if (iso) { if (seen.has(iso)) continue; seen.add(iso); }
+      items.push(c);
+      fresh += 1;
+    }
+    return fresh;
+  };
+  const get = async (path) => { await pace(); pages += 1; return vsReq(path, { timeoutMs: 15000 }); };
+
+  const r1 = await get(base);
+  if (r1.status === 429) return { rateLimited: true, items, incomplete: true, pages };
+  if (!r1.ok) return { error: `HTTP ${r1.status || 'no reply'}`, items, incomplete: true, pages };
+  if (r1.json && typeof r1.json === 'object') firstKeys = Object.keys(r1.json).slice(0, 12);
+  const list1 = vsAsList(r1.json, KEYS);
+  take(list1);
+  let meta = vsPageMeta(r1.json);
+
+  const apiSaysMore = () => meta.hasMore || (meta.pages && curPage < meta.pages) || (meta.total && seen.size < meta.total);
+  // looks cut off compared with the supplier's own country list (only trust that for big answers)
+  const looksCapped = () => !!expectedCount && list1.length >= 20 && seen.size < expectedCount * 0.9;
+
+  if (list1.length && (apiSaysMore() || looksCapped())) {
+    const hinted = apiSaysMore();
+    let modes = paging.mode ? [paging.mode] : (paging.failed && !hinted ? [] : (hinted ? ['page', 'offset', 'limit', 'per_page', 'page_size'] : VS_PAGE_MODES));
+    for (const mode of modes) {
+      let progressed = false;
+      curPage = (mode === 'page' || mode === 'offset') ? 2 : 1;
+      for (let guard = 0; guard < VS_MAX_PAGES; guard++) {
+        if (Date.now() > deadline) { incomplete = true; break; }
+        const r = await get(vsPageUrl(mode, base, curPage, seen.size));
+        if (r.status === 429) return { rateLimited: true, items, incomplete: true, pages, seen };
+        if (!r.ok) break;
+        const fresh = take(vsAsList(r.json, KEYS));
+        if (!fresh) break;
+        progressed = true;
+        curPage += 1;
+        meta = vsPageMeta(r.json);
+        if (!apiSaysMore() && !looksCapped()) break;
+      }
+      if (progressed) { paging.mode = mode; paging.failed = false; break; }
+      if (incomplete) break;
+    }
+    if (!paging.mode && !hinted && modes.length) paging.failed = true; // nothing worked: stop trying for this run
   }
+  if (apiSaysMore() || looksCapped()) incomplete = true; // never delist on a partial answer
+  return { items, incomplete, pages, seen, firstKeys };
+}
+
+// ---------------------------------------------------------------- the sync
+async function vsRunSync(req, budgetMs) {
+  const q = req.query || {};
+  const force = q.force === '1' || q.force === 'true';
+  const onlyService = String(q.service || '').trim();
   const started = Date.now();
+  const deadline = started + budgetMs - 6000;
   const rate = Number(process.env.USD_TO_NGN_RATE) || Number(process.env.USD_TO_NGN) || 1500;
   const errors = [];
-  const note = (m) => { if (errors.length < 15) errors.push(m); };
+  const note = (m) => { if (errors.length < 20) errors.push(m); };
 
-  // 1) service list + country list (2 calls)
+  // 1) service list + country list
   const [svcRes, ctyRes] = await Promise.all([vsReq('/customer/services'), vsReq('/customer/countries')]);
   if (!svcRes.ok) {
-    return res.status(502).json({
+    return { status: 502, body: {
       success: false,
       message: `VirtualSMS services call failed (HTTP ${svcRes.status || 'no reply'}). ${svcRes.status === 401 ? 'Check VIRTUALSMS_API_KEY.' : ''}`,
       raw_hint: (svcRes.err || svcRes.text || '').slice(0, 160)
-    });
+    } };
   }
   const services = vsAsList(svcRes.json, ['services', 'data', 'items', 'results'])
     .map((s) => { const code = vsServiceCode(s); return code ? { code, name: vsServiceNameOf(s, code) } : null; })
     .filter(Boolean);
   if (!services.length) {
-    return res.status(502).json({ success: false, message: 'VirtualSMS returned no services.', raw_hint: svcRes.text.slice(0, 200) });
+    return { status: 502, body: { success: false, message: 'VirtualSMS returned no services.', raw_hint: svcRes.text.slice(0, 200) } };
   }
   const svcName = new Map(services.map((s) => [s.code, s.name]));
 
+  // the supplier's own country list: which countries carry which services (the "services" field is "tg,wa,ig")
   const countryList = ctyRes.ok ? vsAsList(ctyRes.json, ['countries', 'data', 'items', 'results']) : [];
   const isoName = new Map();
+  const expected = new Map(); // service code -> Set(ISO)
   for (const c of countryList) {
     const iso = vsCountryIso(c);
-    if (iso) isoName.set(iso, vsCountryNameOf(c, iso));
-  }
-
-  const entries = new Map();      // "ISO|code" -> {iso, code, usd, count}
-  const processed = new Set();    // service codes we got a complete answer for
-  const addEntry = (iso, code, usd, count) => {
-    if (!iso || !code) return;
-    const prev = entries.get(`${iso}|${code}`);
-    if (prev) { if (usd > 0 && (prev.usd <= 0 || usd < prev.usd)) prev.usd = usd; if (count > prev.count) prev.count = count; return; }
-    entries.set(`${iso}|${code}`, { iso, code, usd, count });
-  };
-
-  // 2a) best case: the country list already carries per-service prices
-  // (docs: without ?service= the list only has a comma string "tg,wa,ig" + min_price, so this normally finds nothing)
-  let embedded = 0;
-  for (const c of countryList) {
-    const iso = vsCountryIso(c);
-    const emb = c.services || c.available_services || c.service_prices || c.prices;
-    if (!iso || !emb || typeof emb !== 'object') continue;
-    const arr = Array.isArray(emb) ? emb : Object.entries(emb).map(([k, v]) => (v && typeof v === 'object' ? { _key: k, ...v } : { _key: k, price: v }));
-    for (const s of arr) {
-      const code = typeof s === 'string' ? s : vsServiceCode(s);
-      const usd = typeof s === 'object' ? vsPriceOf(s) : 0;
-      if (code && usd > 0) { addEntry(iso, code, usd, typeof s === 'object' ? (vsStockOf(s) || 1) : 1); embedded += 1; }
+    if (!iso) continue;
+    isoName.set(iso, vsCountryNameOf(c, iso));
+    const raw = c.services || c.available_services;
+    const codes = Array.isArray(raw)
+      ? raw.map((x) => (typeof x === 'string' ? x : vsServiceCode(x || {})))
+      : String(raw || '').split(/[,\s]+/);
+    for (const code of codes) {
+      const k = String(code || '').trim();
+      if (!k) continue;
+      if (!expected.has(k)) expected.set(k, new Set());
+      expected.get(k).add(iso);
     }
   }
+
   const existing = await vsLoadExisting();
-  let servicesDone = 0;
-  let servicesTotal = 0;
-  let stoppedEarly = false;
+
+  // 2) which services to do now: never-synced / oldest first, popular first on ties
+  const rank = (s) => {
+    const pi = VS_POPULAR_CODES.indexOf(s.code);
+    if (pi >= 0) return pi;
+    return VS_POPULAR_RE.test(s.name) ? 100 : 1000;
+  };
+  const lastSeen = new Map();
+  for (const r of existing.values()) {
+    const t = r.updated_at ? new Date(r.updated_at).getTime() : 0;
+    if (t > (lastSeen.get(r.service_id) || 0)) lastSeen.set(r.service_id, t);
+  }
+  const ordered = services.slice(0, VS_SERVICE_LIMIT);
+  const now = Date.now();
+  let todo = onlyService
+    ? ordered.filter((s) => s.code === onlyService)
+    : ordered.filter((s) => force || now - (lastSeen.get(s.code) || 0) >= VS_STALE_MS);
+  todo = todo.sort((a, b) => (lastSeen.get(a.code) || 0) - (lastSeen.get(b.code) || 0) || rank(a) - rank(b));
+  const servicesTotal = ordered.length;
+  let servicesDone = servicesTotal - todo.length;
+
+  // 3) fetch (paced + sequential: stays under VirtualSMS' 60 requests/minute)
+  let lastCall = 0;
+  const pace = async () => {
+    const wait = lastCall + VS_MIN_GAP_MS - Date.now();
+    if (wait > 0) await vsSleep(wait);
+    lastCall = Date.now();
+  };
+  const paging = { mode: null, failed: false };
+  const entries = new Map(); // "ISO|code" -> {iso, code, usd, count}
+  const processed = new Set(); // services with a COMPLETE answer (the only ones where "missing" may be delisted)
   let rateLimited = false;
+  let stoppedEarly = false;
+  let requests = 0;
+  let paginated = 0;
+  let incompleteServices = 0;
+  let firstKeys = null;
+  const gapSample = [];
+  let gapTotal = 0;
 
-  if (embedded > 0) {
-    for (const s of services) processed.add(s.code);
-    servicesDone = servicesTotal = services.length;
-  } else {
-    // 2b) price services one by one: /customer/countries?service=CODE (exact price per country)
-    const rank = (s) => {
-      const pi = VS_POPULAR_CODES.indexOf(s.code);
-      if (pi >= 0) return pi;
-      return VS_POPULAR_RE.test(s.name) ? 100 : 1000;
-    };
-    const ordered = services.map((s, i) => ({ ...s, i })).sort((a, b) => rank(a) - rank(b) || a.i - b.i).slice(0, VS_SERVICE_LIMIT);
-    servicesTotal = ordered.length;
-    const lastSeen = new Map();
-    for (const r of existing.values()) {
-      const t = r.updated_at ? new Date(r.updated_at).getTime() : 0;
-      if (t > (lastSeen.get(r.service_id) || 0)) lastSeen.set(r.service_id, t);
-    }
-    const now = Date.now();
-    servicesDone = ordered.filter((s) => now - (lastSeen.get(s.code) || 0) < VS_STALE_MS).length;
-    const todo = ordered
-      .filter((s) => now - (lastSeen.get(s.code) || 0) >= VS_STALE_MS)
-      .sort((a, b) => (lastSeen.get(a.code) || 0) - (lastSeen.get(b.code) || 0) || rank(a) - rank(b))
-      .slice(0, VS_SERVICES_PER_RUN);
+  for (const s of todo) {
+    if (Date.now() > deadline) { stoppedEarly = true; break; }
+    const out = await vsFetchServiceCountries(s.code, (expected.get(s.code) || new Set()).size, pace, deadline, paging);
+    requests += out.pages || 0;
+    if (out.pages > 1) paginated += 1;
+    if (out.rateLimited) { rateLimited = true; break; }
+    if (out.error) { note(`${s.code}: ${out.error}`); continue; }
+    if (!firstKeys && out.firstKeys) firstKeys = out.firstKeys;
 
-    let idx = 0;
-    const worker = async () => {
-      while (idx < todo.length && Date.now() - started < VS_TIME_BUDGET_MS && !rateLimited) {
-        const s = todo[idx]; idx += 1;
-        const r = await vsReq('/customer/countries?service=' + encodeURIComponent(s.code), { timeoutMs: 15000 });
-        if (r.status === 429) { rateLimited = true; return; }
-        if (!r.ok) { note(`${s.code}: HTTP ${r.status || 'no reply'}`); continue; }
-        const list = vsAsList(r.json, ['countries', 'data', 'items', 'results']);
-        let priced = 0;
-        for (const c of list) {
-          const iso = vsCountryIso(c);
-          if (!iso) continue;
-          if (!isoName.has(iso)) isoName.set(iso, vsCountryNameOf(c, iso));
-          const usd = vsPriceOf(c);
-          // The docs say this call only lists countries that HAVE the service, and the sample reply has no
-          // stock field. So: a real stock number wins; an explicit 0 means out of stock; if the API sends no
-          // stock field at all, a listed price means "in stock" (this was why every row used to be dropped).
-          const count = vsStockOf(c) || (vsStockKnown(c) ? 0 : (usd > 0 ? 1 : 0));
-          if (usd > 0 && count > 0) { addEntry(iso, s.code, usd, count); priced += 1; }
-        }
-        if (list.length && !priced) note(`${s.code}: countries came back without a usable price`);
-        processed.add(s.code);
-        servicesDone += 1;
+    let priced = 0;
+    for (const c of out.items) {
+      const iso = vsCountryIso(c);
+      if (!iso) continue;
+      if (!isoName.has(iso)) isoName.set(iso, vsCountryNameOf(c, iso));
+      const usd = vsPriceOf(c);
+      // docs: this call only lists countries that HAVE the service; with no stock field a listed price = in stock
+      const count = vsStockOf(c) || (vsStockKnown(c) ? 0 : (usd > 0 ? 1 : 0));
+      if (usd > 0 && count > 0) {
+        const key = `${iso}|${s.code}`;
+        const prev = entries.get(key);
+        if (!prev) entries.set(key, { iso, code: s.code, usd, count });
+        else { if (usd < prev.usd) prev.usd = usd; if (count > prev.count) prev.count = count; }
+        priced += 1;
       }
-    };
-    // 2 workers (not 4) so one run stays far below the 60 requests/minute limit
-    await Promise.all(Array.from({ length: 2 }, worker));
-    stoppedEarly = idx < todo.length;
+    }
+    if (out.items.length && !priced) note(`${s.code}: countries came back without a usable price`);
+
+    const exp = expected.get(s.code);
+    if (exp && out.seen) {
+      const missing = [...exp].filter((iso) => !out.seen.has(iso));
+      if (missing.length) {
+        gapTotal += missing.length;
+        if (gapSample.length < 8) gapSample.push(`${s.code}: ${missing.slice(0, 6).join(',')}${missing.length > 6 ? ' +' + (missing.length - 6) : ''}`);
+      }
+    }
+    if (out.incomplete) incompleteServices += 1; else processed.add(s.code);
+    servicesDone += 1;
   }
 
   if (!entries.size && !processed.size) {
-    return res.status(200).json({
-      success: true, partial: false, done: true, rows_seen: 0, upserted: 0,
-      message: rateLimited ? 'VirtualSMS rate limit hit (60/min). Wait a minute and click Sync again.' : 'Nothing to refresh right now — every service was synced recently.',
+    return { status: 200, body: {
+      success: true, partial: rateLimited || stoppedEarly, done: !rateLimited && !stoppedEarly && !todo.length, rows_seen: 0, upserted: 0,
+      message: rateLimited
+        ? 'VirtualSMS rate limit hit (60/min). It will continue on the next run.'
+        : (todo.length ? 'VirtualSMS answered but nothing could be read. Open /api/grizzly-sync?action=vsms_probe and check the sample.' : 'Everything was synced recently — nothing to refresh. Add &force=1 to refresh all anyway.'),
       services_done: servicesDone, services_total: servicesTotal, errors, ms: Date.now() - started
-    });
+    } };
   }
 
-  // 3) build rows
+  // 4) build rows
   const nowIso = new Date().toISOString();
   const rows = [];
   for (const e of entries.values()) {
-    if (!(e.usd > 0) || !(e.count > 0)) continue;
     const cid = vsIsoToId(e.iso);
     if (cid == null) continue;
     const sell = Number(applyMarkup(e.usd, rate));
     rows.push({
       key: `${cid}|${e.code}`, country_id: cid,
-      // our own region-name list first (Ireland, Canada…), then whatever VirtualSMS sent, never the bare code if avoidable
       country_name: vsRegionName(e.iso) || isoName.get(e.iso) || e.iso,
       service_id: e.code, service_name: svcName.get(e.code) || e.code.toUpperCase(),
-      supplier_price: e.usd, price: Number.isFinite(sell) && sell > 0 ? sell : salePriceFromUsd(e.usd),
+      supplier_price: e.usd, price: Number.isFinite(sell) && sell > 0 ? sell : Math.max(profitFloorNgn(e.usd, rate), 1000),
       available_quantity: e.count
     });
   }
 
-  // 4) write: insert new, update changed (never overwrite an admin-set price), delist sold-out
+  // 5) write: insert new, update changed, touch unchanged (batched), delist sold-out
+  //    Pricing = same wiring as Server 1 / 2: applyMarkup on first sight, hand-set prices never overwritten,
+  //    PLUS a safety net — a system price that has fallen under supplier cost + MIN_PROFIT_NGN is re-priced.
   const inserts = [];
   const updates = [];
-  const seen = new Set();
-  let unchanged = 0;
+  const touchIds = [];
+  const seenKeys = new Set();
+  let manualBelowCost = 0;
+  let repriced = 0;
   for (const r of rows) {
-    seen.add(r.key);
+    seenKeys.add(r.key);
     const prev = existing.get(r.key);
     if (!prev) {
       inserts.push({
@@ -2045,21 +2216,27 @@ async function vsHandleSync(req, res) {
       });
       continue;
     }
-    const admin = prev.price_source === 'admin';
+    const protectedPrice = VS_PRICE_PROTECTED.has(prev.price_source);
+    const prevPrice = Number(prev.price) || 0;
     const costMoved = Math.abs(Number(prev.supplier_price || 0) - r.supplier_price) > 0.0001;
-    const changed = costMoved || Number(prev.available_quantity || 0) !== r.available_quantity ||
-      String(prev.country_name || '') !== r.country_name || String(prev.service_name || '') !== r.service_name || prev.is_available === false;
-    if (!changed) { updates.push({ id: prev.id, updated_at: nowIso, _touch: true }); unchanged += 1; continue; }
+    if (protectedPrice && prevPrice < r.supplier_price * rate) manualBelowCost += 1;
+    const needsPrice = !protectedPrice && (!(prevPrice > 0) || prevPrice < profitFloorNgn(r.supplier_price, rate));
+    // an admin-hidden row (hidden but still has stock) stays hidden; sold-out rows (qty 0) come back
+    const adminHidden = prev.is_available === false && Number(prev.available_quantity || 0) > 0;
+    const changed = needsPrice || costMoved || Number(prev.available_quantity || 0) !== r.available_quantity ||
+      String(prev.country_name || '') !== r.country_name || String(prev.service_name || '') !== r.service_name ||
+      (prev.is_available === false && !adminHidden);
+    if (!changed) { touchIds.push(prev.id); continue; }
     const f = {
       country_name: r.country_name, service_name: r.service_name, supplier_price: r.supplier_price,
-      available_quantity: r.available_quantity, is_available: true, updated_at: nowIso
+      available_quantity: r.available_quantity, is_available: !adminHidden, updated_at: nowIso
     };
-    if (!admin && costMoved) { f.price = r.price; f.price_source = 'system'; }
+    if (needsPrice) { f.price = r.price; f.price_source = 'system'; repriced += 1; }
     updates.push({ id: prev.id, ...f });
   }
   const goneIds = [];
   for (const [key, prev] of existing) {
-    if (seen.has(key) || !processed.has(prev.service_id)) continue;
+    if (seenKeys.has(key) || !processed.has(prev.service_id)) continue;
     if (prev.is_available === false && Number(prev.available_quantity || 0) <= 0) continue;
     goneIds.push(prev.id);
   }
@@ -2067,52 +2244,93 @@ async function vsHandleSync(req, res) {
   const stats = { inserted: 0, updated: 0, delisted: 0 };
   for (let i = 0; i < updates.length; i += 20) {
     await Promise.all(updates.slice(i, i + 20).map(async (u) => {
-      const { id, _touch, ...f } = u;
+      const { id, ...f } = u;
       const { error } = await supabase.from('number_services').update(f).eq('id', id);
-      if (error) note('update: ' + error.message); else if (!_touch) stats.updated += 1;
+      if (error) note('update: ' + error.message); else stats.updated += 1;
     }));
   }
+  for (let i = 0; i < touchIds.length; i += 200) {
+    const { error } = await supabase.from('number_services').update({ updated_at: nowIso }).in('id', touchIds.slice(i, i + 200));
+    if (error) note('touch: ' + error.message);
+  }
   for (let i = 0; i < inserts.length; i += 100) {
-    const batch = inserts.slice(i, i + 100);
-    const { error } = await supabase.from('number_services').insert(batch);
-    if (!error) { stats.inserted += batch.length; continue; }
-    note('batch insert: ' + error.message);
-    for (const row of batch) {
-      const { error: e2 } = await supabase.from('number_services').insert(row);
-      if (e2) note(`row ${row.service_id}/${row.country_name}: ${e2.message}`); else stats.inserted += 1;
-    }
+    // upsert + ignoreDuplicates: a row that already exists (overlapping run) can no longer sink the whole batch
+    const { data, error } = await supabase.from('number_services')
+      .upsert(inserts.slice(i, i + 100), { onConflict: 'source,country_id,service_id', ignoreDuplicates: true }).select('id');
+    if (error) note('insert: ' + error.message); else stats.inserted += (data || []).length;
   }
   for (let i = 0; i < goneIds.length; i += 200) {
+    const slice = goneIds.slice(i, i + 200);
     const { error } = await supabase.from('number_services')
-      .update({ available_quantity: 0, is_available: false, updated_at: nowIso }).in('id', goneIds.slice(i, i + 200));
-    if (error) note('sold-out: ' + error.message); else stats.delisted += Math.min(200, goneIds.length - i);
+      .update({ available_quantity: 0, is_available: false, updated_at: nowIso }).in('id', slice);
+    if (error) note('sold-out: ' + error.message); else stats.delisted += slice.length;
   }
 
-  const written = stats.inserted + stats.updated;
-  if (inserts.length + updates.length - unchanged > 0 && written === 0 && !unchanged) {
-    return res.status(500).json({
+  if (inserts.length + updates.length > 0 && stats.inserted + stats.updated === 0) {
+    return { status: 500, body: {
       success: false, message: 'VirtualSMS data was read but nothing could be saved. ' + (errors[0] || ''), errors, rows_seen: rows.length
-    });
-  }
-  // old numeric-id rows from the broken legacy sync: hide them once real rows exist
-  let legacyHidden = 0;
-  if (rows.length >= 20) {
-    const { data: lg } = await supabase.from('number_services')
-      .update({ available_quantity: 0, is_available: false }).eq('source', VS_SOURCE).lt('country_id', VS_ID_BASE).eq('is_available', true).select('id');
-    legacyHidden = (lg || []).length;
+    } };
   }
 
+  const countriesInRun = new Set(rows.map((r) => r.country_id)).size;
   const partial = stoppedEarly || rateLimited || servicesDone < servicesTotal;
-  let message = `VirtualSMS sync: ${rows.length} in-stock offers across ${processed.size} services (${stats.inserted} new, ${stats.updated} updated${stats.delisted ? ', ' + stats.delisted + ' sold out' : ''}).`;
-  if (embedded === 0) message += ` Services priced: ${Math.min(servicesDone, servicesTotal)}/${servicesTotal}.`;
-  if (partial) message += rateLimited ? ' Rate limit hit — wait ~1 min, then Sync again.' : ' Click Sync Server 3 again to continue.';
-  if (legacyHidden) message += ` Hid ${legacyHidden} old broken rows.`;
-  if (!rows.length && errors.length) message += ' ' + errors[0];
-  return res.status(200).json({
-    success: true, source: VS_SOURCE, partial, done: !partial, rate_limited: rateLimited, rows_seen: rows.length,
-    upserted: written, inserted: stats.inserted, updated: stats.updated, delisted: stats.delisted,
-    services_done: servicesDone, services_total: servicesTotal, ms: Date.now() - started, errors, message
-  });
+  let message = `Server 3 sync: ${rows.length} in-stock offers from ${processed.size} services this run (${stats.inserted} new, ${stats.updated} updated, ${stats.delisted} sold out). Services up to date: ${Math.min(servicesDone, servicesTotal)}/${servicesTotal}.`;
+  if (partial) message += rateLimited ? ' Rate limit hit — it will continue on the next run.' : ' Not finished — run Sync again (or let the cron continue).';
+  if (gapTotal) message += ` Coverage gap: supplier lists ${gapTotal} country/service pairs the API did not return — see "coverage" in the response.`;
+  if (manualBelowCost) message += ` ${manualBelowCost} hand-priced rows are below supplier cost (orders for them are blocked).`;
+
+  return { status: 200, body: {
+    success: true, source: VS_SOURCE, partial, done: !partial, rate_limited: rateLimited,
+    rows_seen: rows.length, upserted: stats.inserted + stats.updated, inserted: stats.inserted, updated: stats.updated,
+    delisted: stats.delisted, repriced, manual_below_cost: manualBelowCost,
+    services_done: servicesDone, services_total: servicesTotal, supplier_requests: requests, ms: Date.now() - started,
+    coverage: {
+      supplier_countries: countryList.length, countries_in_this_run: countriesInRun,
+      services_paginated: paginated, services_incomplete: incompleteServices, paging_mode: paging.mode,
+      missing_pairs: gapTotal, missing_sample: gapSample, response_keys: firstKeys
+    },
+    errors, message
+  } };
+}
+
+// ---------------------------------------------------------------- run lock (best effort, sync_jobs row source='virtualsms')
+async function vsGetLock() {
+  try {
+    const { data } = await supabase.from('sync_jobs').select('status, updated_at').eq('source', VS_SOURCE).maybeSingle();
+    if (data && data.status === 'running' && data.updated_at && Date.now() - new Date(data.updated_at).getTime() < VS_LOCK_MS) return true;
+  } catch (_) { /* table/row missing → no lock */ }
+  return false;
+}
+async function vsSetJob(fields) {
+  try { await supabase.from('sync_jobs').upsert({ source: VS_SOURCE, updated_at: new Date().toISOString(), ...fields }); } catch (_) { /* best effort */ }
+}
+
+/**
+ * GET|POST /api/grizzly-sync?action=vsms_sync   (admin button + cron)
+ *   &force=1      ignore "recently synced" and refresh everything
+ *   &service=wa   re-sync one service only
+ * Cron gets the long budget; the admin button gets one that fits inside the browser's 90 s timeout.
+ */
+async function vsHandleSync(req, res) {
+  if (!(await vsAdminOrCron(req, res))) return;
+  if (!vsApiKey()) {
+    return res.status(500).json({ success: false, message: 'VIRTUALSMS_API_KEY is not set on the server (Vercel → Environment Variables).' });
+  }
+  const force = String((req.query || {}).force || '') === '1';
+  if (!force && await vsGetLock()) {
+    return res.status(200).json({ success: true, busy: true, partial: true, done: false, message: 'A Server 3 sync is already running. Wait a minute and check again.' });
+  }
+  await vsSetJob({ status: 'running', started_at: new Date().toISOString(), errors: [] });
+  let out;
+  try {
+    out = await vsRunSync(req, vsIsCron(req) ? VS_TIME_BUDGET_MS : VS_MANUAL_BUDGET_MS);
+  } catch (err) {
+    console.error('vsms full sync error:', err);
+    out = { status: 500, body: { success: false, message: 'Server 3 sync failed: ' + (err && err.message ? err.message : String(err)) } };
+  }
+  // release the lock BEFORE answering (a serverless function can be frozen the moment the response is sent)
+  await vsSetJob({ status: 'idle' });
+  return res.status(out.status).json(out.body);
 }
 
 async function vsHandleProbe(req, res) {
@@ -2121,7 +2339,28 @@ async function vsHandleProbe(req, res) {
   const [svc, cty, wa, bal] = await Promise.all([
     vsReq('/customer/services'), vsReq('/customer/countries'), vsReq('/customer/countries?service=wa'), vsReq('/customer/balance')
   ]);
-  return res.status(200).json({ success: true, services: cut(svc), countries: cut(cty), countries_for_wa: cut(wa), balance: cut(bal) });
+  const out = { success: true, services: cut(svc), countries: cut(cty), countries_for_wa: cut(wa), balance: cut(bal) };
+
+  // &paging=1 → find out which paging parameter VirtualSMS really honours (&service=xx to test another service)
+  if (String((req.query || {}).paging || '') === '1') {
+    const code = String((req.query || {}).service || 'wa');
+    const base = '/customer/countries?service=' + encodeURIComponent(code);
+    const KEYS = ['countries', 'data', 'items', 'results'];
+    const first = new Set();
+    const tests = {};
+    for (const v of ['', '&page=2', '&offset=50', '&limit=1000', '&per_page=1000', '&page_size=1000']) {
+      const r = await vsReq(base + v);
+      const isos = vsAsList(r.json, KEYS).map(vsCountryIso).filter(Boolean);
+      tests[v || '(plain)'] = {
+        status: r.status, countries: isos.length,
+        new_vs_plain: v ? isos.filter((i) => !first.has(i)).length : isos.length
+      };
+      if (!v) isos.forEach((i) => first.add(i));
+      await vsSleep(VS_MIN_GAP_MS);
+    }
+    out.paging_test = { service: code, tests, hint: 'A variant with new_vs_plain > 0 is the parameter the sync will use.' };
+  }
+  return res.status(200).json(out);
 }
 
 async function vsHandlePurgeLegacy(req, res) {
@@ -2179,6 +2418,12 @@ async function vsHandleOrder(req, res) {
     if (!svc) return res.status(404).json({ success: false, message: 'This service is no longer available. Refresh, try another, or contact support.' });
     if (!svc.is_available) return res.status(409).json({ success: false, message: 'This number service is currently out of stock.' });
     serviceName = svc.service_name; countryName = svc.country_name; price = Number(svc.price) || 0;
+
+    // Never sell below supplier cost (also blocks hand-priced rows that are under cost)
+    if (!(price > 0) || sellsBelowCost(price, svc.supplier_price)) {
+      console.error('[vsms order] blocked: price below supplier cost', { country_id, service_id: serviceId, price, supplier_price: svc.supplier_price });
+      return res.status(409).json({ success: false, message: 'This number service is temporarily unavailable. Please try another country or service.' });
+    }
 
     const { data: profile } = await supabase.from('profiles').select('balance, customer_id').eq('id', user_id).single();
     if (!profile) return res.status(400).json({ success: false, message: 'User profile not found' });
@@ -2242,10 +2487,16 @@ async function vsHandleOrder(req, res) {
       });
     }
 
+    // What VirtualSMS actually charged us vs what we charged the customer (cost moved since the last sync?)
+    const paidUsd = vsNum(j.price ?? (j.order && j.order.price));
+    if (paidUsd > 0 && sellsBelowCost(price, paidUsd)) {
+      console.error('[vsms order] SOLD BELOW COST — supplier charged more than the stored price covers', { orderId, price, paidUsd, supplier_price: svc.supplier_price });
+    }
+
     const row = {
       source: VS_SOURCE, user_id, customer_id: customerId, order_id: String(orderId), idempotency_key: idem,
       country_id: Number(country_id), country_name: countryName, service_id: serviceId, service_name: serviceName,
-      phone_number: phone, price, supplier_price: Number(svc.supplier_price) || null, currency: 'NGN',
+      phone_number: phone, price, supplier_price: paidUsd > 0 ? paidUsd : (Number(svc.supplier_price) || null), currency: 'NGN',
       status: 'waiting_for_code', code: null, time_left: null, refunded: false
     };
     let { error: insErr } = await supabase.from('number_orders').insert(row);
