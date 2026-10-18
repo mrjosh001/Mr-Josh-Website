@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+successfully downloaded text file (SHA: 5aea0b05435c8168ba71bebef27f2298fc5adfd8)<!DOCTYPE html>
 <html lang="en" data-theme="dark">
 <head>
 <script>
@@ -1211,7 +1211,7 @@ function withLagos(opts) { return Object.assign({ timeZone: 'Africa/Lagos' }, op
  <table>
  <thead>
  <tr>
- <th>Country</th><th>Service</th><th>Source</th><th>Supplier ($)</th><th>Your Price (₦)</th><th>Stock</th><th>Status</th><th>Action</th>
+ <th>Country</th><th>Service</th><th>Source</th><th>Supplier ($)</th><th>Your Price (₦)</th><th>Profit (₦)</th><th>Stock</th><th>Status</th><th>Action</th>
  </tr>
  </thead>
  <tbody id="smsTableBody"></tbody>
@@ -1248,11 +1248,12 @@ function withLagos(opts) { return Object.assign({ timeZone: 'Africa/Lagos' }, op
  </select>
  </div>
 
+ <div id="smsProfitSummary" style="display:none;margin:0 0 12px;padding:12px 14px;border-radius:14px;border:1px solid rgba(52,211,153,.35);background:rgba(52,211,153,.08);font-size:13px;font-weight:700;"></div>
  <div class="desktop-only desktop-table table-wrap">
  <table>
  <thead>
  <tr>
- <th>Customer ID</th><th>Server</th><th>Service</th><th>Country</th><th>Number</th><th>Price</th><th>Inbox</th><th>Time left</th><th>Status</th><th>Date</th>
+ <th>Customer ID</th><th>Server</th><th>Service</th><th>Country</th><th>Number</th><th>Price</th><th>Profit (₦)</th><th>Inbox</th><th>Time left</th><th>Status</th><th>Date</th>
  </tr>
  </thead>
  <tbody id="smsOrdersTableBody"></tbody>
@@ -1285,10 +1286,10 @@ function withLagos(opts) { return Object.assign({ timeZone: 'Africa/Lagos' }, op
  <table>
  <thead>
  <tr>
- <th>Country</th><th>Service</th><th>Supplier ($)</th><th>Your Price (₦)</th><th>Stock</th><th>Status</th><th>Action</th>
+ <th>Country</th><th>Service</th><th>Supplier ($)</th><th>Your Price (₦)</th><th>Profit (₦)</th><th>Stock</th><th>Status</th><th>Action</th>
  </tr>
  </thead>
- <tbody id="smsServer3TableBody"><tr><td colspan="7" class="empty-state">Click Sync Server 3 to load catalog.</td></tr></tbody>
+ <tbody id="smsServer3TableBody"><tr><td colspan="8" class="empty-state">Click Sync Server 3 to load catalog.</td></tr></tbody>
  </table>
  </div>
  <div id="smsServer3MobileCards" class="mobile-only mobile-cards"></div>
@@ -1310,8 +1311,8 @@ function withLagos(opts) { return Object.assign({ timeZone: 'Africa/Lagos' }, op
  </div>
  <div class="desktop-only desktop-table table-wrap">
  <table>
- <thead><tr><th>Service / plan</th><th>Country</th><th>Supplier USD</th><th>Sell ₦ (editable)</th><th>Stock</th><th>Updated</th></tr></thead>
- <tbody id="gotsmsTableBody"><tr><td colspan="5" class="empty-state">Click Sync GotSMS to pull catalog.</td></tr></tbody>
+ <thead><tr><th>Service / plan</th><th>Country</th><th>Supplier USD</th><th>Sell ₦</th><th>Profit ₦</th><th>Status</th><th>Action</th></tr></thead>
+ <tbody id="gotsmsTableBody"><tr><td colspan="7" class="empty-state">Click Sync GotSMS to pull catalog.</td></tr></tbody>
  </table>
  </div>
  <div id="gotsmsMobileCards" class="mobile-only mobile-cards"></div>
@@ -1380,7 +1381,7 @@ function withLagos(opts) { return Object.assign({ timeZone: 'Africa/Lagos' }, op
  <table>
  <thead>
  <tr>
- <th>Country</th><th>Service</th><th>Supplier ($)</th><th>Your Price (₦)</th><th>Stock</th><th>Status</th><th>Action</th>
+ <th>Country</th><th>Service</th><th>Supplier ($)</th><th>Your Price (₦)</th><th>Profit (₦)</th><th>Stock</th><th>Status</th><th>Action</th>
  </tr>
  </thead>
  <tbody id="smsServer2TableBody"></tbody>
@@ -2439,49 +2440,40 @@ window._server3Rows = window._server3Rows || [];
 async function syncServer3Now() {
   const btn = document.getElementById('btnSyncServer3');
   const prog = document.getElementById('server3SyncProgress');
+  const idle = '<i class="fas fa-sync"></i> Sync Server 3';
   setBtnBusy(btn, true, 'Syncing…');
-  if (prog) prog.textContent = 'Syncing VirtualSMS (in-stock only, ~1 min max)…';
-  const ctrl = typeof AbortController !== 'undefined' ? new AbortController() : null;
-  const timer = ctrl ? setTimeout(function(){ try { ctrl.abort(); } catch(_){} }, 90000) : null;
   try {
-    const headers = await authHeaders();
-    const res = await fetch('/api/grizzly-sync?action=vsms_sync', {
-      method: 'GET',
-      headers: headers || {},
-      signal: ctrl ? ctrl.signal : undefined
-    });
-    let data = {};
-    try {
-      const raw = await res.text();
-      data = raw ? JSON.parse(raw) : {};
-    } catch (_) {
-      data = { success: false, message: 'Bad response from Server 3 sync (HTTP ' + res.status + ')' };
+    // force=1 walks every service (not just stale ones) so no country is skipped; progress is saved server-side.
+    for (let round = 1; round <= 24; round++) {
+      if (prog) prog.textContent = 'VirtualSMS full catalog sync · batch ' + round + ' / 24';
+      const ctl = new AbortController();
+      const tm = setTimeout(function () { try { ctl.abort(); } catch (_) {} }, 55000);
+      const headers = await authHeaders();
+      let res;
+      try {
+        res = await fetch('/api/grizzly-sync?action=vsms_sync&force=1', { method: 'GET', headers: headers || {}, signal: ctl.signal, cache: 'no-store' });
+      } finally { clearTimeout(tm); }
+      const text = await res.text();
+      let data = {};
+      try { data = text ? JSON.parse(text) : {}; } catch (e) { data = { success: false, message: 'Invalid sync response (HTTP ' + res.status + ')' }; }
+      if (!res.ok || data.success === false) throw new Error(data.message || ('Server 3 sync failed (HTTP ' + res.status + ')'));
+      if (prog) prog.textContent = data.message || ('Server 3 batch ' + round + ' complete');
+      await loadServer3Services();
+      if (data.done === true) {
+        showAdminToast('Server 3 full catalog sync complete', 'success');
+        if (prog) prog.textContent = (data.message || 'Server 3 full catalog sync complete') + ' · ' + (window._server3Rows || []).length + ' DB rows';
+        return;
+      }
+      if (data.rate_limited) { showAdminToast('VirtualSMS rate limit reached. Saved progress will continue on the next sync.', 'info'); return; }
+      await new Promise(function (r) { setTimeout(r, 500); });
     }
-    if (!data.success) {
-      const errMsg = data.message || 'Server 3 sync failed';
-      const extra = (data.errors && data.errors[0]) ? (' · ' + data.errors[0]) : (data.raw_hint ? (' · ' + data.raw_hint) : '');
-      showAdminToast(errMsg, 'error');
-      if (prog) prog.textContent = errMsg + extra;
-      return;
-    }
-    const msg = data.message || ('Synced ' + (data.upserted || 0) + ' services');
-    showAdminToast(msg, data.partial ? 'info' : 'success');
-    if (prog) {
-      prog.textContent = msg +
-        (data.rows_seen != null ? (' · seen ' + data.rows_seen) : '') +
-        (data.ms != null ? (' · ' + Math.round(data.ms/1000) + 's') : '');
-    }
-    await loadServer3Services();
+    showAdminToast('Server 3 sync is still in progress. Saved progress is preserved; click Sync Server 3 again to continue.', 'info');
   } catch (e) {
-    const aborted = e && (e.name === 'AbortError' || /abort/i.test(String(e.message || '')));
-    const msg = aborted
-      ? 'Sync timed out on the browser. Click Sync Server 3 again — progress is saved.'
-      : ('Server 3 sync error: ' + (e.message || e));
-    showAdminToast(msg, aborted ? 'info' : 'error');
+    const msg = (e && e.name === 'AbortError') ? 'Sync batch timed out. The Server 3 cursor is preserved.' : ('Server 3 sync error: ' + (e.message || e));
     if (prog) prog.textContent = msg;
+    showAdminToast(msg, 'error');
   } finally {
-    if (timer) clearTimeout(timer);
-    setBtnBusy(btn, false, '<i class="fas fa-sync"></i> Sync Server 3');
+    setBtnBusy(btn, false, idle);
   }
 }
 
@@ -2519,37 +2511,48 @@ function s3RowStatus(r) {
 async function loadServer3Services() {
   const tbody = document.getElementById('smsServer3TableBody');
   const cards = document.getElementById('smsServer3MobileCards');
+  // 13k+ rows: load in small concurrent pages without server-side ORDER BY (Safari timed out on the old loader), sort once in memory.
+  const cols = 'id, source, country_id, country_name, service_id, service_name, supplier_price, price, available_quantity, is_available, currency, updated_at, price_source';
   try {
-    // Same columns Server 1/2 use. country_id >= 1000 = real VirtualSMS rows;
-    // older rows (< 1000) are the broken "Country 73 / AAA" leftovers — never show them.
-    const cols = 'id, source, country_id, country_name, service_id, service_name, supplier_price, price, available_quantity, is_available, currency, updated_at, price_source';
+    const pageSize = 750, maxRows = 50000;
+    const first = await sb.from('number_services').select('id', { count: 'exact', head: true }).eq('source', 'virtualsms').gte('country_id', 1000);
+    if (first.error) throw first.error;
+    const total = Math.min(Number(first.count || 0), maxRows);
+    const pages = Math.ceil(total / pageSize);
     let all = [];
-    let from = 0;
-    const page = 1000;
-    while (true) {
-      let q = sb
-        .from('number_services')
-        .select(cols)
-        .eq('source', 'virtualsms')
-        .gte('country_id', 1000)
-        .order('service_name', { ascending: true })
-        .range(from, from + page - 1);
-      const { data, error } = await q;
-      if (error) throw error;
-      const batch = data || [];
-      all = all.concat(batch);
-      if (batch.length < page) break;
-      from += page;
-      if (from > 50000) break;
+    for (let start = 0; start < pages; start += 4) {
+      const jobs = [];
+      for (let p = start; p < Math.min(start + 4, pages); p++) {
+        jobs.push((async function (page) {
+          let lastErr = null;
+          for (let attempt = 1; attempt <= 3; attempt++) {
+            try {
+              const q = await sb.from('number_services').select(cols).eq('source', 'virtualsms').gte('country_id', 1000).range(page * pageSize, page * pageSize + pageSize - 1);
+              if (q.error) throw q.error;
+              return q.data || [];
+            } catch (e) { lastErr = e; await new Promise(function (r) { setTimeout(r, 250 * attempt); }); }
+          }
+          throw lastErr || new Error('Server 3 catalog page ' + (page + 1) + ' failed');
+        })(p));
+      }
+      const chunks = await Promise.all(jobs);
+      chunks.forEach(function (c) { all = all.concat(c); });
     }
+    all.sort(function (a, b) {
+      const s = String(a.service_name || a.service_id || '').localeCompare(String(b.service_name || b.service_id || ''));
+      if (s) return s;
+      return String(a.country_name || '').localeCompare(String(b.country_name || ''));
+    });
     window._server3Rows = all;
     filterNumberServicesServer3();
+    const prog = document.getElementById('server3SyncProgress');
+    if (prog && !String(prog.textContent || '').toLowerCase().includes('syncing')) prog.textContent = all.length + ' Server 3 rows in catalog';
   } catch (e) {
     console.error('loadServer3Services', e);
     const msg = (e && e.message) ? e.message : String(e);
-    if (tbody) tbody.innerHTML = '<tr><td colspan="7" class="empty-state">Could not load Server 3 catalog. ' + (typeof escapeHtml==='function'?escapeHtml(msg):msg) + '</td></tr>';
+    if (tbody) tbody.innerHTML = '<tr><td colspan="8" class="empty-state">Could not load Server 3 catalog. ' + (typeof escapeHtml === 'function' ? escapeHtml(msg) : msg) + '</td></tr>';
     if (cards) cards.innerHTML = '<div class="empty-state">Could not load Server 3 catalog.</div>';
-    showAdminToast('Could not load Server 3 services', 'error');
+    showAdminToast('Could not load Server 3 services: ' + msg, 'error');
   }
 }
 
@@ -2580,7 +2583,7 @@ function filterNumberServicesServer3() {
   const tbody = document.getElementById('smsServer3TableBody');
   const cards = document.getElementById('smsServer3MobileCards');
   if (!rows.length) {
-    if (tbody) tbody.innerHTML = '<tr><td colspan="7" class="empty-state">No Server 3 rows. Click Sync Server 3.</td></tr>';
+    if (tbody) tbody.innerHTML = '<tr><td colspan="8" class="empty-state">No Server 3 rows. Click Sync Server 3.</td></tr>';
     if (cards) cards.innerHTML = '<div class="empty-state">No Server 3 rows. Click Sync Server 3.</div>';
     return;
   }
@@ -2594,6 +2597,7 @@ function filterNumberServicesServer3() {
         <td>${escapeHtml(r.service_name || r.service_id || ' ')}</td>
         <td class="supplier-price">${usdFmt(r.supplier_price)}</td>
         <td class="price">₦${Number(r.price || 0).toLocaleString()}</td>
+        <td>${smsProfitHtml(smsProfitOf(r.supplier_price, r.price))}</td>
         <td>${stockDisplay}</td>
         <td><span class="badge ${available ? 'badge-on' : 'badge-off'}">${statusLabel}</span></td>
         <td style="white-space:nowrap;">
@@ -2612,6 +2616,7 @@ function filterNumberServicesServer3() {
         <div class="meta">${escapeHtml(r.service_name || r.service_id || ' ')}</div>
         <div class="row-line"><span>Supplier Price</span><span class="supplier-price">${usdFmt(r.supplier_price)}</span></div>
         <div class="row-line"><span>Your Price</span><strong class="price">₦${Number(r.price || 0).toLocaleString()}</strong></div>
+        <div class="row-line"><span>Profit</span><span>${smsProfitHtml(smsProfitOf(r.supplier_price, r.price))}</span></div>
         <div class="row-line"><span>Stock</span><span>${stockDisplay}</span></div>
         <div class="row-line"><span>Status</span><span class="badge ${available ? 'badge-on' : 'badge-off'}">${statusLabel}</span></div>
         <div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap;">
@@ -2638,6 +2643,9 @@ function editNumberServiceServer3(id) {
   document.getElementById('smsAvailable').value = s.is_available === false ? 'false' : 'true';
   document.getElementById('smsModal').classList.remove('hidden');
 }
+
+// Same popup as Server 1 & 2 (kept as an alias for any page still calling the old name).
+function openServer3EditPrice(id) { return editNumberServiceServer3(id); }
 
 async function toggleServer3Visibility(id, hide) {
   const hideNow = hide === true || hide === 'true';
@@ -2786,7 +2794,7 @@ function filterGotsmsServices() {
   const tbody = document.getElementById('gotsmsTableBody');
   const cards = document.getElementById('gotsmsMobileCards');
   if (!rows.length) {
-    if (tbody) tbody.innerHTML = '<tr><td colspan="6" class="empty-state">No GotSMS rows. Click Sync GotSMS.</td></tr>';
+    if (tbody) tbody.innerHTML = '<tr><td colspan="7" class="empty-state">No GotSMS rows. Click Sync GotSMS.</td></tr>';
     if (cards) cards.innerHTML = '<div class="empty-state">No GotSMS rows.</div>';
     return;
   }
@@ -2807,6 +2815,8 @@ function filterGotsmsServices() {
         <span style="font-weight:700;color:#fbbf24;text-align:right;">$${Number(r.supplier_price||0).toFixed(2)}</span>
         <span style="color:var(--muted);">Your Price</span>
         <span style="font-weight:800;color:#34d399;text-align:right;">₦${Number(r.price||0).toLocaleString()}${admin?' <span style="font-size:10px;color:#fbbf24;">admin</span>':''}</span>
+        <span style="color:var(--muted);">Profit</span>
+        <span style="font-weight:800;text-align:right;">${smsProfitHtml(smsProfitOf(r.supplier_price, r.price))}</span>
         <span style="color:var(--muted);">Stock</span>
         <span style="font-weight:700;text-align:right;">${avail?1:0}</span>
       </div>
@@ -2830,6 +2840,7 @@ function filterGotsmsServices() {
         <td>${escapeHtml(r.country_name||'USA')}</td>
         <td>$${Number(r.supplier_price||0).toFixed(2)}</td>
         <td>₦${Number(r.price||0).toLocaleString()}${admin?' <span style="font-size:10px;color:#fbbf24;">admin</span>':''}</td>
+        <td>${smsProfitHtml(smsProfitOf(r.supplier_price, r.price))}</td>
         <td>${r.is_available?'<span style="color:#34d399;font-weight:700">ACTIVE</span>':'OUT'}</td>
         <td>
           <button type="button" class="btn btn-ghost btn-sm" onclick="openGotsmsEditPrice('${escapeHtml(r.id)}', ${Number(r.price||0)})">Edit</button>
@@ -3054,6 +3065,116 @@ function filterNumberServices() {
 
 function usdFmt(n) { return '$' + Number(n || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
 
+// ---------- SMS profit helpers (shared by Server 1/2/3, USA rental and SMS Orders) ----------
+// Profit = what the customer pays (₦) minus supplier cost (USD x admin exchange rate).
+function smsRate() { try { return boosterUsdRate(); } catch (e) { return Number(window.USD_TO_NGN_RATE) || 1500; } }
+function smsProfitOf(usd, price) {
+  usd = Number(usd); price = Number(price);
+  if (!(usd > 0) || !(price > 0)) return null;
+  return price - usd * smsRate();
+}
+function smsProfitHtml(p) {
+  if (p == null || !isFinite(p)) return '<span style="opacity:.6">—</span>';
+  return '<span style="color:' + (p >= 0 ? '#34d399' : '#f87171') + ';font-weight:800;">' + (p < 0 ? '-' : '') + '₦' + Math.round(Math.abs(p)).toLocaleString() + '</span>';
+}
+function smsSrcKey(s) {
+  s = String(s || '').toLowerCase().trim();
+  if (s.indexOf('grizzly') > -1) return 'grizzlysms';
+  if (s.indexOf('virtualsms') > -1 || s.indexOf('vsms') > -1) return 'virtualsms';
+  if (s.indexOf('gotsms') > -1) return 'gotsms';
+  if (s.indexOf('smsbus_rent') > -1 || s.indexOf('sms_bus_rent') > -1) return 'smsbus_rent';
+  if (s.indexOf('smsbus') > -1 || s.indexOf('sms_bus') > -1 || s.indexOf('sms-bus') > -1) return 'smsbus';
+  return s;
+}
+window._smsCostIdx = window._smsCostIdx || {};
+window._smsCostFetched = window._smsCostFetched || {};
+function smsCostKeys(src, cid, sid) { return [src + ':' + cid + ':' + sid, src + ':' + sid, cid + ':' + sid, sid]; }
+function smsOrderSold(o) {
+  const st = String(o.status || '').toLowerCase();
+  if (o.refunded === true || ['cancelled', 'canceled', 'refunded', 'failed', 'expired'].indexOf(st) > -1) return false;
+  const src = smsSrcKey(o.source);
+  if (src === 'gotsms' || src === 'smsbus_rent') {
+    return /sms\s*received/i.test(String(o.service_name || '')) || st === 'completed' || st === 'complete' || st === 'success';
+  }
+  const code = String(o.code || '').trim();
+  return st === 'completed' || st === 'complete' || st === 'success' || !!(code && !/^\d{4}-\d{2}-\d{2}/.test(code));
+}
+function smsOrderCostUsd(o) {
+  let usd = Number(o.supplier_price || 0);
+  if (usd >= 50) usd = 0; // NGN stored by mistake
+  if (usd > 0) return usd;
+  const sid = String(o.service_id == null ? '' : o.service_id).trim();
+  if (!sid) return 0;
+  const cid = o.country_id == null ? '' : String(o.country_id).trim();
+  const keys = smsCostKeys(smsSrcKey(o.source), cid, sid);
+  for (let i = 0; i < keys.length; i++) if (keys[i] in window._smsCostIdx) return window._smsCostIdx[keys[i]];
+  return 0;
+}
+function smsOrderProfit(o) {
+  if (!smsOrderSold(o)) return { state: 'notsold', value: null };
+  const paid = Number(o.price || 0), usd = smsOrderCostUsd(o);
+  if (!(paid > 0) || !(usd > 0)) return { state: 'nocost', value: null };
+  return { state: 'ok', value: paid - usd * smsRate() };
+}
+function smsOrderProfitHtml(o) {
+  const p = smsOrderProfit(o);
+  return p.state === 'ok' ? smsProfitHtml(p.value) : '<span style="opacity:.6">—</span>';
+}
+// Orders usually store the supplier cost; for older ones, look it up in the catalog (only the services shown).
+async function smsLoadOrderCosts(list) {
+  const need = [];
+  (list || []).forEach(o => {
+    const have = Number(o.supplier_price || 0);
+    if (have > 0 && have < 50) return;
+    if (o.service_id == null) return;
+    const sid = String(o.service_id).trim();
+    if (sid && !window._smsCostFetched[sid] && need.indexOf(sid) < 0) need.push(sid);
+  });
+  if (!need.length) return false;
+  let added = false;
+  for (let i = 0; i < need.length; i += 40) {
+    const ids = need.slice(i, i + 40);
+    ids.forEach(x => { window._smsCostFetched[x] = true; });
+    try {
+      let from = 0;
+      while (from < 5000) {
+        const { data, error } = await sb.from('number_services')
+          .select('service_id, country_id, source, supplier_price')
+          .in('service_id', ids).gt('supplier_price', 0)
+          .range(from, from + 999);
+        if (error) throw error;
+        (data || []).forEach(s => {
+          const usd = Number(s.supplier_price || 0);
+          if (!(usd > 0 && usd < 50)) return;
+          const sid = String(s.service_id == null ? '' : s.service_id).trim();
+          const cid = s.country_id == null ? '' : String(s.country_id).trim();
+          smsCostKeys(smsSrcKey(s.source), cid, sid).forEach(k => { if (!(k in window._smsCostIdx)) { window._smsCostIdx[k] = usd; added = true; } });
+        });
+        if (!data || data.length < 1000) break;
+        from += 1000;
+      }
+    } catch (e) { console.warn('smsLoadOrderCosts', e); }
+  }
+  return added;
+}
+function smsRenderProfitSummary(list) {
+  const el = document.getElementById('smsProfitSummary');
+  if (!el) return;
+  list = list || [];
+  if (!list.length) { el.style.display = 'none'; return; }
+  let total = 0, sold = 0, missing = 0;
+  list.forEach(o => {
+    const p = smsOrderProfit(o);
+    if (p.state === 'ok') { total += p.value; sold++; } else if (p.state === 'nocost') missing++;
+  });
+  el.style.display = '';
+  el.innerHTML = 'Profit on sold numbers (current filter): ' + smsProfitHtml(total) +
+    ' <span style="color:var(--muted);font-weight:600;">· ' + sold + ' sold' + (missing ? ' · ' + missing + ' without supplier cost (shown as —)' : '') + '</span>';
+  smsLoadOrderCosts(list).then(added => {
+    if (added && typeof renderSmsOrders === 'function') renderSmsOrders(window._smsFilterCache || list);
+  }).catch(() => {});
+}
+
 /** Mirrors salePriceFromUsd() in api/grizzly-sync.js and salePriceFromUsdClient()
  * in mj-sms.html — same fixed 80% markup band — so the "auto" price shown
  * here for an un-overridden pool matches what a customer would actually be
@@ -3175,7 +3296,7 @@ function renderNumberServices(list) {
  const cards = document.getElementById('smsMobileCards');
 
  if (!items.length) {
- if (tbody) tbody.innerHTML = `<tr><td colspan="8" class="empty-state">No results. Sync Grizzly, then search a country.</td></tr>`;
+ if (tbody) tbody.innerHTML = `<tr><td colspan="9" class="empty-state">No results. Sync Grizzly, then search a country.</td></tr>`;
  if (cards) cards.innerHTML = `<div class="empty-state">No results. Sync Grizzly, then search a country.</div>`;
  return;
  }
@@ -3200,6 +3321,7 @@ function renderNumberServices(list) {
  <td><span class="badge">${sourceLabel(s.source)}</span></td>
  <td class="supplier-price">${usdFmt(s.supplier_price)}</td>
  <td class="price">${priceCell}</td>
+ <td>${multiPool ? '<span style="opacity:.6">—</span>' : smsProfitHtml(smsProfitOf(s.supplier_price, s.price))}</td>
  <td>${stockDisplay}</td>
  <td><span class="badge ${available ? 'badge-on' : 'badge-off'}">${statusLabel}</span></td>
  <td style="white-space:nowrap;">
@@ -3210,7 +3332,7 @@ function renderNumberServices(list) {
  if (!multiPool) return mainRow;
  const poolsRow = `
  <tr>
- <td colspan="8" style="background:rgba(255,255,255,0.015);">
+ <td colspan="9" style="background:rgba(255,255,255,0.015);">
  ${pools.map((p, i) => poolRowHtml(s.id, p, i)).join('')}
  </td>
  </tr>`;
@@ -3241,6 +3363,7 @@ function renderNumberServices(list) {
  ` : `
  <div class="row-line"><span>Supplier Price</span><span class="supplier-price">${usdFmt(s.supplier_price)}</span></div>
  <div class="row-line"><span>Your Price</span><strong class="price">₦${Number(s.price || 0).toLocaleString()}</strong></div>
+ <div class="row-line"><span>Profit</span><span>${smsProfitHtml(smsProfitOf(s.supplier_price, s.price))}</span></div>
  <div class="row-line"><span>Stock</span><span>${stockDisplay}</span></div>
  <div class="row-line"><span>Status</span><span class="badge ${available ? 'badge-on' : 'badge-off'}">${statusLabel}</span></div>
  <div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap;">
@@ -3363,7 +3486,7 @@ function renderNumberServicesServer2(list) {
  const cards = document.getElementById('smsServer2MobileCards');
 
  if (!items.length) {
- if (tbody) tbody.innerHTML = `<tr><td colspan="7" class="empty-state">No results. Sync Server 2, then search a country.</td></tr>`;
+ if (tbody) tbody.innerHTML = `<tr><td colspan="8" class="empty-state">No results. Sync Server 2, then search a country.</td></tr>`;
  if (cards) cards.innerHTML = `<div class="empty-state">No results. Sync Server 2, then search a country.</div>`;
  return;
  }
@@ -3383,8 +3506,9 @@ function renderNumberServicesServer2(list) {
  <tr>
  <td style="font-weight:600;">${escapeHtml(s.country_name || ' ')}</td>
  <td>${escapeHtml(s.service_name || s.service_id || ' ')}</td>
- <td class="supplier-price">₦${Number(s.supplier_price || 0).toLocaleString()}</td>
+ <td class="supplier-price">${usdFmt(s.supplier_price)}</td>
  <td class="price">₦${Number(s.price || 0).toLocaleString()}</td>
+ <td>${smsProfitHtml(smsProfitOf(s.supplier_price, s.price))}</td>
  <td>${stockDisplay}</td>
  <td><span class="badge ${available ? 'badge-on' : 'badge-off'}">${statusLabel}</span></td>
  <td style="white-space:nowrap;">
@@ -3404,6 +3528,7 @@ function renderNumberServicesServer2(list) {
  <div class="meta">${escapeHtml(s.service_name || s.service_id || ' ')}</div>
  <div class="row-line"><span>Supplier Price</span><span class="supplier-price">${usdFmt(s.supplier_price)}</span></div>
  <div class="row-line"><span>Your Price</span><strong class="price">₦${Number(s.price || 0).toLocaleString()}</strong></div>
+ <div class="row-line"><span>Profit</span><span>${smsProfitHtml(smsProfitOf(s.supplier_price, s.price))}</span></div>
  <div class="row-line"><span>Stock</span><span>${stockDisplay}</span></div>
  <div class="row-line"><span>Status</span><span class="badge ${available ? 'badge-on' : 'badge-off'}">${statusLabel}</span></div>
  <div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap;">
@@ -4034,9 +4159,10 @@ function renderSmsOrders(orders) {
  const tbody = document.getElementById('smsOrdersTableBody');
  const cards = document.getElementById('smsOrdersMobileCards');
  if (!tbody || !cards) return;
+ try { smsRenderProfitSummary(orders || []); } catch (e) {}
 
  if (!orders?.length) {
- tbody.innerHTML = `<tr><td colspan="10" class="empty-state">No SMS orders found.</td></tr>`;
+ tbody.innerHTML = `<tr><td colspan="11" class="empty-state">No SMS orders found.</td></tr>`;
  cards.innerHTML = `<div class="empty-state">No SMS orders found.</div>`;
  const p0 = document.getElementById('smsOrdersPager');
  if (p0) p0.innerHTML = '';
@@ -4104,6 +4230,7 @@ function renderSmsOrders(orders) {
  <td>${escapeHtml(adminRentCountry(o))}</td>
  <td style="font-weight:700;">${escapeHtml(o.phone_number || '—')}</td>
  <td><strong class="price">₦${Number(o.price || 0).toLocaleString()}</strong></td>
+ <td>${smsOrderProfitHtml(o)}</td>
  <td style="font-size:12px;max-width:160px;word-break:break-all;">${inboxCell(o)}</td>
  <td style="font-size:12px;">${timeLeftCell(o)}</td>
  <td>${statusBadge(o)}</td>
@@ -4129,6 +4256,7 @@ function renderSmsOrders(orders) {
  <div class="row-line"><span>Number</span><span>${escapeHtml(o.phone_number || '—')}</span></div>
  <div class="row-line"><span>Country</span><span>${escapeHtml(adminRentCountry(o))}</span></div>
  <div class="row-line"><span>Amount</span><strong class="price">₦${Number(o.price || 0).toLocaleString()}</strong></div>
+ <div class="row-line"><span>Profit</span>${smsOrderProfitHtml(o)}</div>
  ${inboxRow}
  ${timeRow}
  <div class="row-line"><span>Status</span>${statusBadge(o)}</div>
