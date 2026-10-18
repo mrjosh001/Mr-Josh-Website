@@ -15,8 +15,7 @@
     { "source": "/api/heleket", "destination": "/api/deposit" },
     { "source": "/api/heleket-webhook", "destination": "/api/deposit?action=heleket_webhook" },
     { "source": "/api/products", "destination": "/api/order?action=sync" },
-    { "source": "/api/products/", "destination": "/api/order?action=sync" },
-    { "source": "/api/vsms-cancel", "destination": "/api/grizzly-sync?action=cancel" }
+    { "source": "/api/products/", "destination": "/api/order?action=sync" }
   ],
   "redirects": [
     { "source": "/", "destination": "/landing.html", "permanent": false },
@@ -26,6 +25,7 @@
   ],
   "crons": [
     { "path": "/api/grizzly-sync", "schedule": "0 3 * * *" },
+    { "path": "/api/grizzly-sync?action=vsms_sync", "schedule": "*/15 * * * *" },
     { "path": "/api/order-logsdomain?action=sync", "schedule": "0 5 * * *" },
     { "path": "/api/order-logsdomain?action=bulkmail_sync", "schedule": "15 5 * * *" },
     { "path": "/api/classy", "schedule": "30 5 * * *" },
