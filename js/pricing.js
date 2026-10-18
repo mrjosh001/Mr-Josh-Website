@@ -57,13 +57,19 @@ export function applyMarkup(supplierPriceUsd, usdToNgn) {
 }
 
 /**
- * Safety net used by the catalog syncs (Servers 1 and 3): the lowest price a
- * supplier row may sell for without losing money — supplier cost + the flat
- * MIN_PROFIT_NGN floor. A system-priced row whose price has fallen under this
- * (supplier raised its cost after the row was first priced) gets re-priced;
- * hand-set ('manual' / 'admin') prices are never touched.
+ * Lowest NGN price a system-priced row may sell at: supplier cost + MIN_PROFIT_NGN,
+ * rounded up to the nearest ₦50 (same rounding as applyMarkup, so a price produced
+ * by applyMarkup is never below this floor).
  *
- * @returns {number} NGN, or 0 when the supplier cost is unknown
+ * api/grizzly-sync.js imports this to re-price system rows that have fallen under
+ * the floor. It was imported there but never exported from here, which made the
+ * whole /api/grizzly-sync function crash on load (HTTP 500 with a non-JSON body →
+ * "Bad response (HTTP 500)" on Server 3 and "The string did not match the expected
+ * pattern" on Sync Grizzly).
+ *
+ * @param {number} supplierPriceUsd - what the supplier charges us, in USD
+ * @param {number} usdToNgn - exchange rate to apply (defaults to 1500)
+ * @returns {number} minimum NGN sale price (0 when the supplier price is unknown)
  */
 export function profitFloorNgn(supplierPriceUsd, usdToNgn) {
   const rate =
@@ -71,7 +77,7 @@ export function profitFloorNgn(supplierPriceUsd, usdToNgn) {
     Number(process.env.USD_TO_NGN_RATE) ||
     Number(process.env.USD_TO_NGN) ||
     1500;
-  const cost = Number(supplierPriceUsd) * rate;
-  if (!Number.isFinite(cost) || cost <= 0) return 0;
-  return Math.ceil(cost + MIN_PROFIT_NGN);
+  const supplierNgn = Number(supplierPriceUsd) * rate;
+  if (!Number.isFinite(supplierNgn) || supplierNgn <= 0) return 0;
+  return Math.ceil((supplierNgn + MIN_PROFIT_NGN) / 50) * 50;
 }
