@@ -1813,7 +1813,7 @@ function vsCountryNameOf(c, iso) {
   return vsRegionName(iso) || iso;
 }
 function vsServiceCode(s) {
-  return String(s.code || s.service || s.service_code || s.slug || s.id || s._key || '').trim();
+  return String(s.service_id || s.code || s.service || s.service_code || s.slug || s.id || s._key || '').trim();
 }
 function vsServiceNameOf(s, code) {
   const n = s.name || s.service_name || s.title || s.display_name;
