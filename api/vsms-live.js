@@ -1,5 +1,4 @@
 import { createClient } from '@supabase/supabase-js';
-import { applyMarkup } from '../lib/pricing.js';
 
 const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
 const VS_REST = 'https://virtualsms.io/api/v1';
@@ -20,12 +19,7 @@ async function vsReq(path, options = {}) {
   try {
     const r = await fetch(`${VS_REST}${path}`, {
       method: options.method || 'GET',
-      headers: {
-        Authorization: `Bearer ${VS_KEY}`,
-        'X-API-Key': VS_KEY,
-        Accept: 'application/json',
-        ...(options.headers || {})
-      },
+      headers: { Authorization: `Bearer ${VS_KEY}`, 'X-API-Key': VS_KEY, Accept: 'application/json', ...(options.headers || {}) },
       body: options.body ? JSON.stringify(options.body) : undefined,
       signal: controller.signal
     });
@@ -43,7 +37,6 @@ function listOf(json, keys) {
   const entries = Object.entries(json).filter(([, v]) => v && typeof v === 'object' && !Array.isArray(v));
   return entries.length ? entries.map(([key, value]) => ({ _key: key, ...value })) : [];
 }
-
 function serviceCode(s) {
   for (const v of [s.code, s.service_id, s.service, s.id, s.key, s._key]) {
     const x = String(v == null ? '' : v).trim();
@@ -54,7 +47,7 @@ function serviceCode(s) {
 function serviceName(s, code) {
   for (const v of [s.name, s.service_name, s.title, s.label, s.display_name, s.eng]) {
     const x = String(v == null ? '' : v).trim();
-    if (x && x.length > 0) return x;
+    if (x) return x;
   }
   return code;
 }
@@ -99,39 +92,24 @@ function retailPrice(usd) {
   const minSale = Number(process.env.MIN_NUMBER_PRICE_NGN) || 1000;
   const raw = Number(usd) * rate;
   if (!(raw > 0)) return minSale;
-  const floor = Math.max(raw * 1.8, raw + minProfit, minSale);
-  return Math.ceil(floor / 50) * 50;
+  return Math.ceil(Math.max(raw * 1.8, raw + minProfit, minSale) / 50) * 50;
 }
 
 async function upsertLivePairs(serviceId, serviceNameText, countries) {
   const rows = [];
   for (const c of countries) {
-    const iso = countryIso(c);
-    const usd = priceUsd(c);
+    const iso = countryIso(c), usd = priceUsd(c);
     if (!iso || !(usd > 0)) continue;
     const qty = stock(c);
-    const available = qty == null ? true : qty > 0;
     rows.push({
-      source: 'virtualsms',
-      country_id: isoToId(iso),
-      country_name: countryName(c, iso),
-      service_id: serviceId,
-      service_name: serviceNameText,
-      supplier_price: usd,
-      price: retailPrice(usd),
-      price_source: 'system',
-      available_quantity: qty == null ? 1 : qty,
-      is_available: available,
-      currency: 'NGN',
-      updated_at: new Date().toISOString()
+      source: 'virtualsms', country_id: isoToId(iso), country_name: countryName(c, iso),
+      service_id: serviceId, service_name: serviceNameText, supplier_price: usd,
+      price: retailPrice(usd), price_source: 'system', available_quantity: qty == null ? 1 : qty,
+      is_available: qty == null ? true : qty > 0, currency: 'NGN', updated_at: new Date().toISOString()
     });
   }
   for (let i = 0; i < rows.length; i += 100) {
-    const batch = rows.slice(i, i + 100);
-    const { error } = await supabase.from('number_services').upsert(batch, {
-      onConflict: 'source,country_id,service_id',
-      ignoreDuplicates: false
-    });
+    const { error } = await supabase.from('number_services').upsert(rows.slice(i, i + 100), { onConflict: 'source,country_id,service_id', ignoreDuplicates: false });
     if (error) throw error;
   }
   return rows;
@@ -152,27 +130,16 @@ export default async function handler(req, res) {
     if (mode === 'services') {
       const r = await vsReq('/customer/services');
       if (!r.ok) return send(res, 502, { success: false, message: 'VirtualSMS service catalog is unavailable right now.' });
-      const services = listOf(r.json, ['services', 'data', 'items', 'results'])
-        .map(s => { const code = serviceCode(s); return code ? { code, name: serviceName(s, code) } : null; })
-        .filter(Boolean);
-      const filtered = term
-        ? services.filter(s => `${s.code} ${s.name}`.toLowerCase().includes(term))
-        : services;
+      const services = listOf(r.json, ['services', 'data', 'items', 'results']).map(s => { const code = serviceCode(s); return code ? { code, name: serviceName(s, code) } : null; }).filter(Boolean);
+      const filtered = term ? services.filter(s => `${s.code} ${s.name}`.toLowerCase().includes(term)) : services;
       return send(res, 200, { success: true, source: 'live', services: filtered.slice(0, 100), total: filtered.length });
     }
 
     if (mode === 'countries') {
-      const path = service ? `/customer/countries?service=${encodeURIComponent(service)}` : '/customer/countries';
-      const r = await vsReq(path);
+      const r = await vsReq(service ? `/customer/countries?service=${encodeURIComponent(service)}` : '/customer/countries');
       if (!r.ok) return send(res, 502, { success: false, message: 'VirtualSMS country catalog is unavailable right now.' });
-      const countries = listOf(r.json, ['countries', 'data', 'items', 'results'])
-        .map(c => { const iso = countryIso(c); return iso ? { iso, name: countryName(c, iso), price_usd: priceUsd(c), stock: stock(c) } : null; })
-        .filter(Boolean);
-      const filtered = term
-        ? countries.filter(c => `${c.iso} ${c.name}`.toLowerCase().includes(term))
-        : country
-          ? countries.filter(c => c.iso === country)
-          : countries;
+      const countries = listOf(r.json, ['countries', 'data', 'items', 'results']).map(c => { const iso = countryIso(c); return iso ? { iso, name: countryName(c, iso), price_usd: priceUsd(c), stock: stock(c) } : null; }).filter(Boolean);
+      const filtered = term ? countries.filter(c => `${c.iso} ${c.name}`.toLowerCase().includes(term)) : country ? countries.filter(c => c.iso === country) : countries;
       return send(res, 200, { success: true, source: 'live', service: service || null, countries: filtered.slice(0, 200), total: filtered.length });
     }
 
@@ -183,8 +150,7 @@ export default async function handler(req, res) {
       const countries = listOf(r.json, ['countries', 'data', 'items', 'results']);
       const match = countries.find(c => countryIso(c) === country);
       if (!match) return send(res, 404, { success: false, available: false, message: 'That service is not currently available in this country.' });
-      const usd = priceUsd(match);
-      const qty = stock(match);
+      const usd = priceUsd(match), qty = stock(match);
       if (!(usd > 0) || (qty != null && qty <= 0)) return send(res, 404, { success: false, available: false, message: 'No stock is currently available for that service/country pair.' });
       const rows = await upsertLivePairs(service, service, [match]);
       return send(res, 200, { success: true, source: 'live', available: true, row: rows[0] || null });
