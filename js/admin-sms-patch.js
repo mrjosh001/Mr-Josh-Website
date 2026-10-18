@@ -1,5 +1,6 @@
 /* MJ HUB admin patch: Server 3 layout = Server 2 layout, Profit line on Servers 1/2/3, real-country sync button.
- * Loaded by /js/mj-page-loader.js on the admin page only. Everything is guarded; a failure here never breaks admin. */
+ * Loaded by /js/mj-page-loader.js on the admin page only. Everything is guarded; a failure here never breaks admin.
+ * FIX: Server 3 "Edit Price" button now works (openServer3EditPrice was referenced but never defined). */
 (function () {
   'use strict';
   if (window.__mjAdminSmsPatch) return;
@@ -85,6 +86,44 @@
         '<div class="acts"><button type="button" class="btn btn-ghost btn-sm" onclick="openServer3EditPrice(\'' + id + '\',' + Number(r.price || 0) + ')"><i class="fas fa-pen"></i> Edit Price</button>' +
         '<button type="button" class="btn btn-ghost btn-sm" style="color:#f87171" onclick="deleteServer3Row(\'' + id + '\')"><i class="fas fa-trash"></i> Delete</button></div></div>';
     }).join('') + (rows.length > 80 ? '<div class="empty-state">Showing 80 of ' + rows.length + ' \u2014 use search to narrow.</div>' : '');
+  };
+
+  // ---- Edit Price (FIX) ----
+  // The buttons above call openServer3EditPrice(id, price) but that function was never defined anywhere,
+  // so tapping Edit Price did nothing. It now opens the same "Edit SMS Number Pricing" popup Servers 1/2 use
+  // (editNumberServiceServer3 in admin.html). If that popup function is ever missing, a simple prompt
+  // fallback saves through the same /api/admin endpoint so the button can never be dead again.
+  window.openServer3EditPrice = function (id, currentPrice) {
+    try {
+      if (typeof window.editNumberServiceServer3 === 'function') {
+        window.editNumberServiceServer3(id);
+        return;
+      }
+    } catch (e) { console.error('openServer3EditPrice popup failed, using fallback', e); }
+
+    var row = (window._server3Rows || []).filter(function (x) { return String(x.id) === String(id); })[0];
+    if (!row) { showAdminToast('Row not found \u2014 refresh Server 3', 'error'); return; }
+    var label = (row.country_name || '') + ' \u00b7 ' + (row.service_name || row.service_id || '');
+    var v = prompt('New selling price (\u20A6) for ' + label, String(currentPrice != null ? currentPrice : (row.price || 0)));
+    if (v === null) return;
+    var n = parseFloat(String(v).replace(/[^0-9.]/g, ''));
+    if (!isFinite(n) || n < 0) { showAdminToast('Enter a valid price', 'error'); return; }
+    (async function () {
+      try {
+        var headers = (await authHeaders()) || {};
+        headers['Content-Type'] = 'application/json';
+        var res = await fetch('/api/admin', {
+          method: 'POST',
+          headers: headers,
+          body: JSON.stringify({ resource: 'sms', action: 'update', id: row.id, price: n, is_available: row.is_available !== false })
+        });
+        var data = await res.json();
+        if (!res.ok || !data.success) throw new Error(data.message || 'Save failed');
+        row.price = n;
+        window.filterNumberServicesServer3();
+        showAdminToast('Price updated successfully', 'success');
+      } catch (e) { showAdminToast('Update failed: ' + (e.message || e), 'error'); }
+    })();
   };
 
   window.deleteServer3Row = async function (id) {
