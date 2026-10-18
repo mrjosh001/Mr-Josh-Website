@@ -9,9 +9,15 @@ import { applyMarkup, profitFloorNgn } from '../lib/pricing.js';
  * GET  /api/grizzly-sync?action=status     → Server 1 sync job progress
  * GET  /api/grizzly-sync?action=vsms_sync  → Server 3 (VirtualSMS) FULL catalog sync (admin / cron)
  *                                            &force=1 refresh everything · &service=wa re-sync one service
+ *                                            &country=US fill every missing service for one country (USA first!)
+ *                                            &fill=only skip the normal pass and only fill missing pairs
+ *                                            &fill=0 skip the gap-fill pass
  * GET  /api/grizzly-sync?action=vsms_probe → Server 3: show what VirtualSMS really returns (admin)
  *                                            &paging=1 also tests which paging parameter the API honours
  * GET  /api/grizzly-sync?action=vsms_purge_legacy → Server 3: delete old broken numeric-id rows (admin)
+ * POST /api/grizzly-sync?action=vsms_lookup → Server 3: LIVE supplier check for a service / country the
+ *                                            database does not have yet (any signed-in user). Body:
+ *                                            { q: "whatsapp" }  |  { service: "wa", country_q: "usa" }
  * POST /api/grizzly-sync?action=order      → buy a number   (provider=virtualsms → Server 3)
  * POST /api/grizzly-sync?action=check      → poll for SMS code (routes by the order's saved source)
  * POST /api/grizzly-sync?action=cancel     → cancel + refund   (routes by the order's saved source)
@@ -26,13 +32,18 @@ import { applyMarkup, profitFloorNgn } from '../lib/pricing.js';
  * fallen under supplier cost + MIN_PROFIT_NGN is re-priced (profitFloorNgn). Orders are refused if a row
  * would sell below supplier cost.
  *
+ * WALLET SAFETY (v6): every credit goes through creditWalletOnce() — it never credits twice, rolls back a
+ * refund claim if the credit could not be applied, and reverses an exact double credit if something else
+ * (a database trigger, a retry) already credited the same refund. Refunds on Server 3 only happen once the
+ * supplier has CONFIRMED the cancel/expiry.
+ *
  * Env: GRIZZLYSMS_API_KEY, SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, CRON_SECRET?
  * Optional: USD_TO_NGN_RATE (default 1500), MIN_PROFIT_NGN (500), VIRTUALSMS_API_KEY (Server 3),
  *           VSMS_TIME_BUDGET_MS (240000 cron), VSMS_MANUAL_BUDGET_MS (80000 admin button),
  *           VSMS_MIN_GAP_MS (1100), VSMS_SERVICE_LIMIT (5000), VSMS_STALE_HOURS (3)
  */
 
-/* MJHUB_SERVER3_VIRTUALSMS=5 2026-10-18 Server 3: FULL paged resumable sync, price floor, order cost guard */
+/* MJHUB_SERVER3_VIRTUALSMS=6 2026-10-18 Server 3: wallet-safe refunds, supplier-confirmed cancel, gap-fill sync, live lookup */
 const BASE = 'https://api.grizzlysms.com/stubs/handler_api.php';
 const VSMS_BASE = 'https://virtualsms.io/stubs/handler_api.php'; // legacy: only for old numeric-id Server 3 orders
 
@@ -93,6 +104,84 @@ const supabase = createClient(
   process.env.SUPABASE_URL,
   process.env.SUPABASE_SERVICE_ROLE_KEY
 );
+
+// ===========================================================================
+// WALLET SAFETY — one place that credits money, and it can never credit twice
+// ===========================================================================
+
+async function readBalance(userId) {
+  if (!userId) return null;
+  const { data, error } = await supabase.from('profiles').select('balance').eq('id', userId).maybeSingle();
+  if (error || !data) return null;
+  const n = Number(data.balance);
+  return Number.isFinite(n) ? n : 0;
+}
+
+/**
+ * Credit a customer's wallet EXACTLY ONCE.
+ *
+ * Why this exists: the old code called the credit_balance RPC and, if the RPC's answer was not shaped the way
+ * it expected (void / text / array …), it fell through to a second manual "balance + amount" write — so one
+ * refund credited the wallet twice (that is how a ₦5,000 deposit turned into ₦11,000). Rules now:
+ *   1. the RPC ran without an error  → it is DONE, never credit again, whatever it returned;
+ *   2. the RPC errored               → re-read the balance (it may have applied anyway); if not, write
+ *                                       "balance + amount" with a compare-and-set so it can only land once;
+ *   3. after crediting, if the balance moved by exactly 2× the amount (something else — a database trigger
+ *      or a duplicate call — already credited the same refund) the extra copy is reversed and logged.
+ * Returns { ok, newBalance }. ok=false means the money was NOT credited (callers must not mark the order refunded).
+ */
+async function creditWalletOnce(userId, amount, label) {
+  const amt = Number(amount);
+  if (!userId || !(amt > 0)) return { ok: false, reason: 'bad_amount', newBalance: await readBalance(userId) };
+
+  const before = await readBalance(userId);
+  let applied = false;
+
+  const { error: rpcErr } = await supabase.rpc('credit_balance', { p_user_id: userId, p_amount: amt });
+  if (!rpcErr) {
+    applied = true;
+  } else {
+    console.error(`[wallet] credit_balance RPC error (${label || 'credit'}):`, rpcErr.message);
+    const mid = await readBalance(userId);
+    if (before != null && mid != null && mid >= before + amt - 0.005) {
+      applied = true; // it was applied even though the call reported an error
+    } else if (before != null || mid != null) {
+      for (let attempt = 0; attempt < 3 && !applied; attempt++) {
+        const cur = attempt === 0 ? (mid != null ? mid : before) : await readBalance(userId);
+        if (cur == null) break;
+        const { data: upd, error: upErr } = await supabase
+          .from('profiles')
+          .update({ balance: cur + amt })
+          .eq('id', userId)
+          .eq('balance', cur) // compare-and-set: lands only if nobody changed the balance since we read it
+          .select('balance')
+          .maybeSingle();
+        if (!upErr && upd) applied = true;
+      }
+    }
+  }
+
+  if (!applied) {
+    console.error('[wallet] CRITICAL: credit was NOT applied', { userId, amount: amt, label });
+    return { ok: false, reason: 'not_applied', newBalance: await readBalance(userId) };
+  }
+
+  let after = await readBalance(userId);
+  if (before != null && after != null && Math.abs((after - before) - 2 * amt) < 0.01) {
+    const { data: fixed } = await supabase
+      .from('profiles')
+      .update({ balance: after - amt })
+      .eq('id', userId)
+      .eq('balance', after)
+      .select('balance')
+      .maybeSingle();
+    if (fixed) {
+      console.error('[wallet] DOUBLE CREDIT detected and reversed', { userId, amount: amt, label, before, after });
+      after = Number(fixed.balance);
+    }
+  }
+  return { ok: true, newBalance: after };
+}
 
 // ===========================================================================
 // Shared across order/check/cancel
@@ -683,6 +772,7 @@ async function handleOrder(req, res) {
   let countryName = '';
   let customerId = null;
   let deducted = false;
+  let purchased = false;
 
   try {
     const { data: svc, error: svcErr } = await supabase
@@ -872,9 +962,10 @@ async function handleOrder(req, res) {
       }
     }
 
-    // Supplier failed → restore balance only (no refund transaction row)
+    // Supplier failed → give back exactly what was debited (once), no refund transaction row
     if (!supplierRes.ok || failureReason || !orderData?.activationId) {
-      await supabase.from('profiles').update({ balance: originalBalance }).eq('id', user_id);
+      await creditWalletOnce(user_id, price, 'grizzly-order-failed');
+      deducted = false;
 
       // Optional single failed purchase marker (not a refund row)
       try {
@@ -900,6 +991,7 @@ async function handleOrder(req, res) {
           'Purchase failed. Your balance has been restored.'
       });
     }
+    purchased = true; // the supplier now holds a number for this customer — never auto-refund from here on
 
     const numberOrderRow = {
       source: SOURCE,
@@ -975,9 +1067,9 @@ async function handleOrder(req, res) {
   } catch (err) {
     console.error('grizzly order error:', err);
 
-    if (deducted) {
+    if (deducted && !purchased) {
       try {
-        await supabase.from('profiles').update({ balance: originalBalance }).eq('id', user_id);
+        await creditWalletOnce(user_id, price, 'grizzly-order-exception');
         // no refund transaction row
       } catch (refundErr) {
         console.error('CRITICAL: Auto-restore failed (grizzly order)', refundErr);
@@ -986,7 +1078,7 @@ async function handleOrder(req, res) {
 
     return res.status(500).json({
       success: false,
-      message: deducted
+      message: deducted && !purchased
         ? 'Something went wrong. Your balance has been restored.'
         : 'Something went wrong. Please try again.'
     });
@@ -1003,6 +1095,7 @@ const EXPIRY_MS = 20 * 60 * 1000;
  * Claim order for refund once, then credit wallet.
  * Prevents double-credit when Check + Cancel (or two polls) race.
  * Only the first caller that flips refunded=false→true may add balance.
+ * If the wallet credit cannot be applied, the claim is rolled back so a later call can retry.
  */
 async function claimAndRefundOrder(order, userId, opts = {}) {
   // Hard guard: never auto-refund GotSMS USA rentals or SMS-Bus long rentals via this path
@@ -1046,10 +1139,6 @@ async function claimAndRefundOrder(order, userId, opts = {}) {
     console.warn('[claimAndRefundOrder] status', finalStatus, 'rejected, retry refunded:', claimErr.message);
     ({ data: claimed, error: claimErr } = await tryClaim('refunded'));
   }
-  // Re-check claim won (not already refunded by race)
-  if (!claimErr && claimed && claimed.refunded === false) {
-    // update may have matched wrong row in edge cases
-  }
   if (claimErr) {
     console.error('[claimAndRefundOrder] claim failed', claimErr);
     return { refunded: false, reason: 'claim_error', error: claimErr.message };
@@ -1062,30 +1151,22 @@ async function claimAndRefundOrder(order, userId, opts = {}) {
   let newBalance = null;
 
   if (refundAmount > 0) {
-    const { data: credited, error: credErr } = await supabase.rpc('credit_balance', {
-      p_user_id: userId,
-      p_amount: refundAmount
-    });
-    if (credErr) {
-      console.error('[claimAndRefundOrder] credit_balance', credErr.message);
-      const { data: profile, error: profErr } = await supabase
-        .from('profiles')
-        .select('balance')
-        .eq('id', userId)
-        .single();
-      if (!profErr && profile) {
-        newBalance = Number(profile.balance || 0) + refundAmount;
-        const { error: balErr } = await supabase
-          .from('profiles')
-          .update({ balance: newBalance })
-          .eq('id', userId);
-        if (balErr) console.error('[claimAndRefundOrder] balance credit failed', balErr);
-      }
-    } else if (credited != null && typeof credited === 'object' && credited.new_balance != null) {
-      newBalance = Number(credited.new_balance);
-    } else if (typeof credited === 'number') {
-      newBalance = credited;
+    const cr = await creditWalletOnce(userId, refundAmount, 'refund:' + order.id);
+    if (!cr.ok) {
+      // Money was NOT credited → undo the claim so the next check / cancel / cron run can retry.
+      await supabase
+        .from('number_orders')
+        .update({
+          status: order.status || 'waiting_for_code',
+          refunded: false,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', order.id)
+        .eq('refunded', true);
+      console.error('[claimAndRefundOrder] credit failed, claim rolled back', { order: order.id, userId, refundAmount });
+      return { refunded: false, reason: 'credit_failed' };
     }
+    newBalance = cr.newBalance;
   }
 
   try {
@@ -1385,6 +1466,9 @@ async function handleCheck(req, res) {
         subtitle: newStatus === 'expired' ? 'Expired — no SMS, balance restored' : 'No SMS — balance restored',
         category: 'MJ SMS'
       });
+      if (!result.refunded && result.reason !== 'already_final') {
+        return res.status(502).json({ success: false, message: 'Your refund is being processed. Please try again in a moment.' });
+      }
       return res.status(200).json({
         success: true,
         data: {
@@ -1526,7 +1610,7 @@ async function handleCheck(req, res) {
 }
 
 // ===========================================================================
-// CANCEL (Server 1) — unchanged
+// CANCEL (Server 1)
 // ===========================================================================
 
 const CANCEL_COOLDOWN_MS = 5 * 60 * 1000; // 5 minutes before cancel is allowed
@@ -1623,6 +1707,12 @@ async function handleCancel(req, res) {
       return res.status(409).json({
         success: false,
         message: 'This order was already refunded.'
+      });
+    }
+    if (!refundResult.refunded) {
+      return res.status(502).json({
+        success: false,
+        message: 'Your number was cancelled but the refund could not be applied yet. Tap Check again in a moment.'
       });
     }
 
@@ -1794,6 +1884,7 @@ async function handleExpireStale(req, res) {
 // Docs facts this code is built on (https://virtualsms.io/api/v1, header X-API-Key):
 //  - GET  /customer/countries                → { success, countries:[{country_id:"ID", country_name, min_price, services:"tg,wa"}] }
 //  - GET  /customer/countries?service=wa     → countries for that service WITH exact pricing (only countries that have it)
+//  - GET  /price?service=wa&country=US       → price + stock for ONE service/country pair (public endpoint)
 //  - POST /customer/purchase {service,country} → { order_id, phone_number, price, status:"waiting" }
 //  - GET  /customer/order/{id}               → { status: waiting|completed|cancelled|expired, sms_received, messages[] }
 //  - POST /customer/cancel/{id}              → 425 inside the first 120 s; 400 once an SMS arrived; error bodies are { error: "..." }
@@ -1803,6 +1894,8 @@ const VS_REST = 'https://virtualsms.io/api/v1';
 const VS_SOURCE = 'virtualsms';
 const VS_ID_BASE = 1000;
 const VS_CANCEL_COOLDOWN_MS = 120 * 1000;
+// If the supplier will not confirm a cancel/expiry, wait this long past the 20-min window before refunding anyway.
+const VS_HARD_GRACE_MS = 30 * 60 * 1000;
 // Cron gets the long budget; the admin "Sync Server 3" button gets one that fits inside the browser's 90 s timeout.
 const VS_TIME_BUDGET_MS = Number(process.env.VSMS_TIME_BUDGET_MS) || 240000;
 const VS_MANUAL_BUDGET_MS = Number(process.env.VSMS_MANUAL_BUDGET_MS) || 80000;
@@ -1813,6 +1906,8 @@ const VS_MAX_PAGES = 25;
 const VS_LOCK_MS = 6 * 60 * 1000;
 const VS_POPULAR_RE = /whatsapp|telegram|google|gmail|facebook|instagram|twitter|^x$|discord|tiktok|snapchat|microsoft|amazon|uber|netflix|paypal|tinder|linkedin|viber|wechat|apple|line|bumble|yahoo|openai|chatgpt|signal|vk|binance/i;
 const VS_POPULAR_CODES = ['wa', 'tg', 'go', 'fb', 'ig', 'tw', 'ds', 'lf', 'tt', 'fu', 'mm', 'am', 'ub', 'nf', 'ts', 'oi', 'tn', 'vi', 'we', 'wx'];
+// Countries customers ask for most — the gap-fill pass and the live lookup check these first (USA first).
+const VS_PRIORITY_ISO = ['US', 'GB', 'CA', 'DE', 'FR', 'NL', 'ES', 'IT', 'BR', 'IN', 'MX', 'AU', 'PL', 'SE', 'TR', 'ZA', 'NG', 'ID', 'PH', 'VN'];
 
 const vsApiKey = () => String(process.env.VIRTUALSMS_API_KEY || process.env.VIRTUAL_SMS_API_KEY || '').trim();
 
@@ -1928,6 +2023,66 @@ async function vsAdminOrCron(req, res) {
 }
 const vsBody = (req) => (typeof req.body === 'string' ? JSON.parse(req.body || '{}') : (req.body || {}));
 
+/** supplier country list → { isoName: Map(ISO→name), expected: Map(service code → Set(ISO)) } */
+function vsBuildCountryIndex(countryList) {
+  const isoName = new Map();
+  const expected = new Map();
+  for (const c of countryList || []) {
+    const iso = vsCountryIso(c);
+    if (!iso) continue;
+    isoName.set(iso, vsCountryNameOf(c, iso));
+    const raw = c.services || c.available_services;
+    const codes = Array.isArray(raw)
+      ? raw.map((x) => (typeof x === 'string' ? x : vsServiceCode(x || {})))
+      : String(raw || '').split(/[,\s]+/);
+    for (const code of codes) {
+      const k = String(code || '').trim();
+      if (!k) continue;
+      if (!expected.has(k)) expected.set(k, new Set());
+      expected.get(k).add(iso);
+    }
+  }
+  return { isoName, expected };
+}
+
+// ---- free-text country → ISO (usa / america / uk / "united states" / NG …)
+const vsNorm = (s) => String(s || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/&/g, 'and').replace(/[^a-z0-9]+/g, '');
+const VS_ISO_ALIASES = {
+  usa: 'US', us: 'US', america: 'US', unitedstates: 'US', unitedstatesofamerica: 'US', theusa: 'US',
+  uk: 'GB', gb: 'GB', britain: 'GB', greatbritain: 'GB', england: 'GB', unitedkingdom: 'GB',
+  uae: 'AE', emirates: 'AE', unitedarabemirates: 'AE', drc: 'CD', drcongo: 'CD', congokinshasa: 'CD',
+  ivorycoast: 'CI', cotedivoire: 'CI', southkorea: 'KR', korea: 'KR', russia: 'RU', holland: 'NL',
+  netherlands: 'NL', czechia: 'CZ', czechrepublic: 'CZ', vietnam: 'VN', turkiye: 'TR', turkey: 'TR',
+  ksa: 'SA', saudiarabia: 'SA', hongkong: 'HK', southafrica: 'ZA', newzealand: 'NZ'
+};
+let _vsNameIndex = null;
+function vsResolveIso(text, countryList) {
+  const n = vsNorm(text);
+  if (!n) return null;
+  if (VS_ISO_ALIASES[n]) return VS_ISO_ALIASES[n];
+  if (/^[a-z]{2}$/.test(n)) return n.toUpperCase();
+  if (!_vsNameIndex) {
+    _vsNameIndex = new Map();
+    for (let a = 65; a <= 90; a++) {
+      for (let b = 65; b <= 90; b++) {
+        const iso = String.fromCharCode(a) + String.fromCharCode(b);
+        const nm = vsRegionName(iso);
+        if (nm) _vsNameIndex.set(vsNorm(nm), iso);
+      }
+    }
+  }
+  if (_vsNameIndex.has(n)) return _vsNameIndex.get(n);
+  for (const c of countryList || []) {
+    const iso = vsCountryIso(c);
+    if (iso && vsNorm(vsCountryNameOf(c, iso)) === n) return iso;
+  }
+  if (n.length >= 3) {
+    for (const [nm, iso] of _vsNameIndex) if (nm.startsWith(n)) return iso;
+    for (const [nm, iso] of _vsNameIndex) if (nm.includes(n)) return iso;
+  }
+  return null;
+}
+
 // ---------------------------------------------------------------- catalog sync (FULL, paged, resumable)
 const VS_PRICE_PROTECTED = new Set(['manual', 'admin']); // hand-set prices — the sync never overwrites these
 const vsSleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -1977,9 +2132,10 @@ async function vsLoadExisting() {
 }
 
 /**
- * ONE service, ALL countries. VirtualSMS caps a single answer (~54 countries), which is why the USA, Russia,
- * Turkey, … never arrived. We compare the answer with the supplier's own country list and, when it looks cut
- * off (or the API says there is more), page / enlarge the request until nothing new comes back.
+ * ONE service, ALL countries. VirtualSMS caps a single answer (~54 countries, cheapest first — which is why the
+ * USA, Russia, Turkey, … never arrived). We compare the answer with the supplier's own country list and, when it
+ * looks cut off (or the API says there is more), page / enlarge the request until nothing new comes back.
+ * Whatever still cannot be read this way is picked up by the gap-fill pass (GET /price per pair) in vsRunSync.
  */
 async function vsFetchServiceCountries(code, expectedCount, pace, deadline, paging) {
   const base = '/customer/countries?service=' + encodeURIComponent(code);
@@ -2042,11 +2198,24 @@ async function vsFetchServiceCountries(code, expectedCount, pace, deadline, pagi
   return { items, incomplete, pages, seen, firstKeys };
 }
 
+/** ONE service/country pair straight from the supplier (public price endpoint). Never throws. */
+async function vsFetchPair(code, iso, timeoutMs) {
+  const r = await vsReq(`/price?service=${encodeURIComponent(code)}&country=${encodeURIComponent(iso)}`, { timeoutMs: timeoutMs || 10000 });
+  if (r.status === 429) return { rateLimited: true };
+  if (!r.ok) return { none: true, http: r.status };
+  const o = (r.json && (r.json.data || r.json.result)) || r.json || {};
+  const usd = vsPriceOf(o) || vsPriceOf(r.json || {});
+  const count = vsStockKnown(o) ? vsStockOf(o) : (usd > 0 ? 1 : 0);
+  if (usd > 0 && count > 0) return { entry: { iso, code, usd, count } };
+  return { none: true, usd, count };
+}
+
 // ---------------------------------------------------------------- the sync
 async function vsRunSync(req, budgetMs) {
   const q = req.query || {};
   const force = q.force === '1' || q.force === 'true';
   const onlyService = String(q.service || '').trim();
+  const fillMode = String(q.fill == null ? '' : q.fill).toLowerCase(); // '' (normal+fill) | '0' (no fill) | 'only'
   const started = Date.now();
   const deadline = started + budgetMs - 6000;
   const rate = Number(process.env.USD_TO_NGN_RATE) || Number(process.env.USD_TO_NGN) || 1500;
@@ -2072,23 +2241,7 @@ async function vsRunSync(req, budgetMs) {
 
   // the supplier's own country list: which countries carry which services (the "services" field is "tg,wa,ig")
   const countryList = ctyRes.ok ? vsAsList(ctyRes.json, ['countries', 'data', 'items', 'results']) : [];
-  const isoName = new Map();
-  const expected = new Map(); // service code -> Set(ISO)
-  for (const c of countryList) {
-    const iso = vsCountryIso(c);
-    if (!iso) continue;
-    isoName.set(iso, vsCountryNameOf(c, iso));
-    const raw = c.services || c.available_services;
-    const codes = Array.isArray(raw)
-      ? raw.map((x) => (typeof x === 'string' ? x : vsServiceCode(x || {})))
-      : String(raw || '').split(/[,\s]+/);
-    for (const code of codes) {
-      const k = String(code || '').trim();
-      if (!k) continue;
-      if (!expected.has(k)) expected.set(k, new Set());
-      expected.get(k).add(iso);
-    }
-  }
+  const { isoName, expected } = vsBuildCountryIndex(countryList);
 
   const existing = await vsLoadExisting();
 
@@ -2108,6 +2261,7 @@ async function vsRunSync(req, budgetMs) {
   let todo = onlyService
     ? ordered.filter((s) => s.code === onlyService)
     : ordered.filter((s) => force || now - (lastSeen.get(s.code) || 0) >= VS_STALE_MS);
+  if (fillMode === 'only') todo = [];
   todo = todo.sort((a, b) => (lastSeen.get(a.code) || 0) - (lastSeen.get(b.code) || 0) || rank(a) - rank(b));
   const servicesTotal = ordered.length;
   let servicesDone = servicesTotal - todo.length;
@@ -2170,13 +2324,70 @@ async function vsRunSync(req, budgetMs) {
     servicesDone += 1;
   }
 
+  // 3b) GAP FILL — the root cause of "synced, but USA / some countries / some services never show up":
+  //     VirtualSMS caps the per-service country list, and a service that was touched in the last few hours is
+  //     skipped by the normal pass, so the missing countries were never fetched ("fully synced, nothing to do").
+  //     The supplier's own country list tells us which (country, service) pairs exist; every pair we do not have
+  //     is now fetched one by one from the price endpoint (USA and other top countries first).
+  const gap = { missing: 0, checked: 0, added: 0, no_stock: 0, remaining: 0, focus: null };
+  if (fillMode !== '0' && !rateLimited && expected.size) {
+    const focusRaw = String(q.country || '').trim();
+    const focusIso = focusRaw ? vsResolveIso(focusRaw, countryList) : null;
+    gap.focus = focusIso;
+    const pairs = [];
+    for (const [code, set] of expected) {
+      if (!svcName.has(code)) continue;
+      if (onlyService && code !== onlyService) continue;
+      for (const iso of set) {
+        if (focusIso && iso !== focusIso) continue;
+        const cid = vsIsoToId(iso);
+        if (cid == null) continue;
+        if (entries.has(`${iso}|${code}`)) continue;
+        const prev = existing.get(`${cid}|${code}`);
+        if (prev) {
+          // already known: only re-check sold-out rows that have gone stale (stock may be back)
+          const stale = !prev.updated_at || now - new Date(prev.updated_at).getTime() >= VS_STALE_MS;
+          const soldOut = prev.is_available === false && Number(prev.available_quantity || 0) <= 0;
+          if (!(soldOut && stale)) continue;
+        }
+        pairs.push({ iso, code });
+      }
+    }
+    gap.missing = pairs.length;
+    const rankCode = (code) => rank({ code, name: svcName.get(code) || '' });
+    const tier0 = [];
+    const tier1 = [];
+    for (const p of pairs) ((focusIso || VS_PRIORITY_ISO.includes(p.iso)) ? tier0 : tier1).push(p);
+    // popular services first; rotate a little each run so pairs the supplier has no stock for never starve the rest
+    const rot = (arr) => {
+      if (arr.length < 2) return arr;
+      arr.sort((a, b) => rankCode(a.code) - rankCode(b.code) || a.iso.localeCompare(b.iso));
+      const off = (Math.floor(Date.now() / 300000) * 61) % arr.length;
+      return arr.slice(off).concat(arr.slice(0, off));
+    };
+    tier0.sort((a, b) => VS_PRIORITY_ISO.indexOf(a.iso) - VS_PRIORITY_ISO.indexOf(b.iso));
+    const todoPairs = (focusIso ? rot(tier0) : tier0.length ? rot(tier0.filter((p) => p.iso === 'US')).concat(rot(tier0.filter((p) => p.iso !== 'US'))) : []).concat(rot(tier1));
+    for (const g of todoPairs) {
+      if (Date.now() > deadline) { stoppedEarly = true; break; }
+      await pace();
+      requests += 1;
+      gap.checked += 1;
+      const out = await vsFetchPair(g.code, g.iso, 10000);
+      if (out.rateLimited) { rateLimited = true; break; }
+      if (out.entry) { entries.set(`${g.iso}|${g.code}`, out.entry); gap.added += 1; }
+      else gap.no_stock += 1;
+    }
+    gap.remaining = Math.max(0, gap.missing - gap.checked);
+  }
+
   if (!entries.size && !processed.size) {
     return { status: 200, body: {
       success: true, partial: rateLimited || stoppedEarly, done: !rateLimited && !stoppedEarly && !todo.length, rows_seen: 0, upserted: 0,
       message: rateLimited
         ? 'VirtualSMS rate limit hit (60/min). It will continue on the next run.'
-        : (todo.length ? 'VirtualSMS answered but nothing could be read. Open /api/grizzly-sync?action=vsms_probe and check the sample.' : 'Everything was synced recently — nothing to refresh. Add &force=1 to refresh all anyway.'),
-      services_done: servicesDone, services_total: servicesTotal, errors, ms: Date.now() - started
+        : (todo.length ? 'VirtualSMS answered but nothing could be read. Open /api/grizzly-sync?action=vsms_probe and check the sample.'
+          : (gap.missing ? `Main catalog is up to date. Checked ${gap.checked} of ${gap.missing} missing country/service pairs — none had stock yet. Run Sync again to keep checking.` : 'Everything was synced recently — nothing to refresh. Add &force=1 to refresh all anyway.')),
+      services_done: servicesDone, services_total: servicesTotal, gap_fill: gap, errors, ms: Date.now() - started
     } };
   }
 
@@ -2275,8 +2486,11 @@ async function vsRunSync(req, budgetMs) {
   const countriesInRun = new Set(rows.map((r) => r.country_id)).size;
   const partial = stoppedEarly || rateLimited || servicesDone < servicesTotal;
   let message = `Server 3 sync: ${rows.length} in-stock offers from ${processed.size} services this run (${stats.inserted} new, ${stats.updated} updated, ${stats.delisted} sold out). Services up to date: ${Math.min(servicesDone, servicesTotal)}/${servicesTotal}.`;
+  if (gap.missing) {
+    message += ` Missing-country fill${gap.focus ? ' (' + gap.focus + ')' : ''}: checked ${gap.checked} of ${gap.missing} pairs the supplier lists but we did not have — ${gap.added} added${gap.remaining ? ', ' + gap.remaining + ' still to check (run Sync again)' : ''}.`;
+  }
   if (partial) message += rateLimited ? ' Rate limit hit — it will continue on the next run.' : ' Not finished — run Sync again (or let the cron continue).';
-  if (gapTotal) message += ` Coverage gap: supplier lists ${gapTotal} country/service pairs the API did not return — see "coverage" in the response.`;
+  if (gapTotal) message += ` Supplier capped ${gapTotal} country/service pairs in the bulk answer — see "coverage"; the fill pass covers them.`;
   if (manualBelowCost) message += ` ${manualBelowCost} hand-priced rows are below supplier cost (orders for them are blocked).`;
 
   return { status: 200, body: {
@@ -2284,6 +2498,7 @@ async function vsRunSync(req, budgetMs) {
     rows_seen: rows.length, upserted: stats.inserted + stats.updated, inserted: stats.inserted, updated: stats.updated,
     delisted: stats.delisted, repriced, manual_below_cost: manualBelowCost,
     services_done: servicesDone, services_total: servicesTotal, supplier_requests: requests, ms: Date.now() - started,
+    gap_fill: gap,
     coverage: {
       supplier_countries: countryList.length, countries_in_this_run: countriesInRun,
       services_paginated: paginated, services_incomplete: incompleteServices, paging_mode: paging.mode,
@@ -2309,6 +2524,8 @@ async function vsSetJob(fields) {
  * GET|POST /api/grizzly-sync?action=vsms_sync   (admin button + cron)
  *   &force=1      ignore "recently synced" and refresh everything
  *   &service=wa   re-sync one service only
+ *   &country=US   fill every service the supplier lists for that country but we do not have
+ *   &fill=only    skip the normal pass, only fill missing pairs   ·   &fill=0  skip the fill pass
  * Cron gets the long budget; the admin button gets one that fits inside the browser's 90 s timeout.
  */
 async function vsHandleSync(req, res) {
@@ -2336,10 +2553,20 @@ async function vsHandleSync(req, res) {
 async function vsHandleProbe(req, res) {
   if (!(await vsAdminOrCron(req, res))) return;
   const cut = (r) => ({ status: r.status, err: r.err || undefined, sample: (r.text || '').slice(0, 700) });
-  const [svc, cty, wa, bal] = await Promise.all([
-    vsReq('/customer/services'), vsReq('/customer/countries'), vsReq('/customer/countries?service=wa'), vsReq('/customer/balance')
+  const [svc, cty, wa, bal, usWa] = await Promise.all([
+    vsReq('/customer/services'), vsReq('/customer/countries'), vsReq('/customer/countries?service=wa'), vsReq('/customer/balance'),
+    vsReq('/price?service=wa&country=US')
   ]);
-  const out = { success: true, services: cut(svc), countries: cut(cty), countries_for_wa: cut(wa), balance: cut(bal) };
+  const out = { success: true, services: cut(svc), countries: cut(cty), countries_for_wa: cut(wa), balance: cut(bal), price_wa_us: cut(usWa) };
+  // how many countries does the bulk answer really contain, and is the USA in it?
+  try {
+    const waList = vsAsList(wa.json, ['countries', 'data', 'items', 'results']);
+    const waIsos = waList.map(vsCountryIso).filter(Boolean);
+    out.wa_bulk = { countries_returned: waIsos.length, includes_US: waIsos.includes('US') };
+    const ctyList = vsAsList(cty.json, ['countries', 'data', 'items', 'results']);
+    const ctyIsos = ctyList.map(vsCountryIso).filter(Boolean);
+    out.supplier_country_list = { countries: ctyIsos.length, includes_US: ctyIsos.includes('US') };
+  } catch (_) { /* diagnostic only */ }
 
   // &paging=1 → find out which paging parameter VirtualSMS really honours (&service=xx to test another service)
   if (String((req.query || {}).paging || '') === '1') {
@@ -2371,17 +2598,232 @@ async function vsHandlePurgeLegacy(req, res) {
   return res.status(200).json({ success: true, deleted: (data || []).length, message: `Deleted ${(data || []).length} old Server 3 rows.` });
 }
 
-// ---------------------------------------------------------------- orders
-async function vsCreditWallet(userId, amount) {
-  const { data, error } = await supabase.rpc('credit_balance', { p_user_id: userId, p_amount: amount });
-  if (!error) {
-    if (data && typeof data === 'object' && data.new_balance != null) return Number(data.new_balance);
-    if (typeof data === 'number') return data;
+// ---------------------------------------------------------------- LIVE LOOKUP (customer search → ask the supplier)
+// When a customer searches a service or a country that is not in our database, the page calls this. We ask
+// VirtualSMS directly, save whatever is really available (priced with the normal markup, hand-set prices never
+// overwritten) and return it, so the customer sees it immediately and the next customer finds it in the database.
+const VS_LOOKUP_MAX_CALLS = 8;
+const VS_LOOKUP_BUDGET_MS = 14000;
+const VS_LOOKUP_GAP_MS = 800;
+const VS_CACHE_MS = 10 * 60 * 1000;
+const _vsCache = { services: null, countries: null };
+const _vsLookupHits = new Map();
+
+function vsLookupThrottled(userId) {
+  const now = Date.now();
+  const arr = (_vsLookupHits.get(userId) || []).filter((t) => now - t < 60000);
+  if (arr.length >= 12) { _vsLookupHits.set(userId, arr); return true; }
+  arr.push(now);
+  _vsLookupHits.set(userId, arr);
+  if (_vsLookupHits.size > 2000) _vsLookupHits.clear();
+  return false;
+}
+async function vsCachedServices() {
+  if (_vsCache.services && Date.now() - _vsCache.services.t < VS_CACHE_MS) return _vsCache.services.list;
+  const r = await vsReq('/customer/services');
+  if (!r.ok) return _vsCache.services ? _vsCache.services.list : [];
+  const list = vsAsList(r.json, ['services', 'data', 'items', 'results'])
+    .map((s) => { const code = vsServiceCode(s); return code ? { code, name: vsServiceNameOf(s, code) } : null; })
+    .filter(Boolean);
+  _vsCache.services = { t: Date.now(), list };
+  return list;
+}
+async function vsCachedCountries() {
+  if (_vsCache.countries && Date.now() - _vsCache.countries.t < VS_CACHE_MS) return _vsCache.countries.idx;
+  const r = await vsReq('/customer/countries');
+  const list = r.ok ? vsAsList(r.json, ['countries', 'data', 'items', 'results']) : [];
+  const idx = Object.assign({ list }, vsBuildCountryIndex(list));
+  if (list.length) _vsCache.countries = { t: Date.now(), idx };
+  return idx;
+}
+
+/** Save live entries into number_services (new rows inserted, existing ones refreshed) and return client-ready rows. */
+async function vsPersistEntries(list, svcNames, isoNames) {
+  if (!list.length) return [];
+  const rate = Number(process.env.USD_TO_NGN_RATE) || Number(process.env.USD_TO_NGN) || 1500;
+  const nowIso = new Date().toISOString();
+  const cids = [...new Set(list.map((e) => vsIsoToId(e.iso)).filter((x) => x != null))];
+  const codes = [...new Set(list.map((e) => e.code))];
+  const prevMap = new Map();
+  const { data: ex } = await supabase
+    .from('number_services')
+    .select('id, country_id, service_id, price, price_source, supplier_price, available_quantity, is_available')
+    .eq('source', VS_SOURCE).in('country_id', cids).in('service_id', codes).limit(2000);
+  for (const r of ex || []) prevMap.set(`${r.country_id}|${r.service_id}`, r);
+
+  const out = [];
+  const inserts = [];
+  const updates = [];
+  for (const e of list) {
+    const cid = vsIsoToId(e.iso);
+    if (cid == null) continue;
+    const countryName = vsRegionName(e.iso) || (isoNames && isoNames.get(e.iso)) || e.iso;
+    const serviceName = (svcNames && svcNames.get(e.code)) || e.code.toUpperCase();
+    const sell = Number(applyMarkup(e.usd, rate));
+    const sysPrice = Number.isFinite(sell) && sell > 0 ? sell : Math.max(profitFloorNgn(e.usd, rate), 1000);
+    const prev = prevMap.get(`${cid}|${e.code}`);
+    if (!prev) {
+      inserts.push({
+        source: VS_SOURCE, country_id: cid, country_name: countryName, service_id: e.code, service_name: serviceName,
+        supplier_price: e.usd, price: sysPrice, price_source: 'system', currency: 'NGN',
+        available_quantity: e.count, is_available: true, updated_at: nowIso
+      });
+      out.push({ service_id: e.code, service_name: serviceName, country_id: cid, country_name: countryName, price: sysPrice, available_quantity: e.count, supplier_price: e.usd });
+      continue;
+    }
+    const protectedPrice = VS_PRICE_PROTECTED.has(prev.price_source);
+    const prevPrice = Number(prev.price) || 0;
+    const needsPrice = !protectedPrice && (!(prevPrice > 0) || prevPrice < profitFloorNgn(e.usd, rate));
+    const adminHidden = prev.is_available === false && Number(prev.available_quantity || 0) > 0;
+    const f = { country_name: countryName, service_name: serviceName, supplier_price: e.usd, available_quantity: e.count, is_available: !adminHidden, updated_at: nowIso };
+    if (needsPrice) { f.price = sysPrice; f.price_source = 'system'; }
+    updates.push({ id: prev.id, f });
+    if (!adminHidden) {
+      out.push({ service_id: e.code, service_name: serviceName, country_id: cid, country_name: countryName, price: needsPrice ? sysPrice : prevPrice, available_quantity: e.count, supplier_price: e.usd });
+    }
   }
-  const { data: p } = await supabase.from('profiles').select('balance').eq('id', userId).single();
-  const nb = Number((p && p.balance) || 0) + amount;
-  await supabase.from('profiles').update({ balance: nb }).eq('id', userId);
-  return nb;
+  if (inserts.length) {
+    const { error } = await supabase.from('number_services').upsert(inserts, { onConflict: 'source,country_id,service_id', ignoreDuplicates: true });
+    if (error) console.error('[vsms lookup] insert failed:', error.message);
+  }
+  await Promise.all(updates.map(async (u) => {
+    const { error } = await supabase.from('number_services').update(u.f).eq('id', u.id);
+    if (error) console.error('[vsms lookup] update failed:', error.message);
+  }));
+  return out;
+}
+
+/**
+ * POST|GET /api/grizzly-sync?action=vsms_lookup   (needs a signed-in customer's Bearer token)
+ *   { q: "whatsapp" }                          service search that found nothing locally
+ *   { service: "wa", country_q: "usa" }        country search (inside a service) that found nothing locally
+ *   { q: "telegram", country_q: "nigeria" }    both
+ */
+async function vsHandleLookup(req, res) {
+  const authHeader = req.headers.authorization || '';
+  const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : null;
+  if (!token) return res.status(401).json({ success: false, message: 'Please sign in.' });
+  const { data: { user }, error: authErr } = await supabase.auth.getUser(token);
+  if (authErr || !user) return res.status(401).json({ success: false, message: 'Please sign in.' });
+  if (!vsApiKey()) return res.status(500).json({ success: false, message: 'This SMS server is not available right now.' });
+  if (vsLookupThrottled(user.id)) return res.status(429).json({ success: false, message: 'Too many searches. Wait a few seconds and try again.' });
+
+  let b = {};
+  try { b = req.method === 'POST' ? vsBody(req) : (req.query || {}); } catch (_) { b = {}; }
+  const q = String(b.q || '').trim().slice(0, 60);
+  const serviceHint = String(b.service || '').trim().slice(0, 60);
+  const countryQ = String(b.country_q || '').trim().slice(0, 60);
+  if (!q && !serviceHint) return res.status(400).json({ success: false, message: 'Nothing to look up.' });
+
+  try {
+    const started = Date.now();
+    const deadline = started + VS_LOOKUP_BUDGET_MS;
+    let calls = 0;
+    let lastCall = 0;
+    const pace = async () => {
+      const wait = lastCall + VS_LOOKUP_GAP_MS - Date.now();
+      if (wait > 0) await vsSleep(wait);
+      lastCall = Date.now();
+    };
+    const canCall = () => calls < VS_LOOKUP_MAX_CALLS && Date.now() < deadline;
+
+    const [catalog, cidx] = await Promise.all([vsCachedServices(), vsCachedCountries()]);
+    const svcNames = new Map(catalog.map((s) => [s.code, s.name]));
+
+    // 1) which service(s)?
+    let services = [];
+    if (serviceHint) {
+      const nh = vsNorm(serviceHint);
+      services = catalog.filter((s) => s.code === serviceHint || vsNorm(s.name) === nh).slice(0, 1);
+      if (!services.length && /^[a-z0-9_-]{1,40}$/i.test(serviceHint)) services = [{ code: serviceHint, name: serviceHint.toUpperCase() }];
+    } else {
+      const nq = vsNorm(q);
+      if (nq.length >= 2) {
+        const scored = [];
+        for (const s of catalog) {
+          const nn = vsNorm(s.name);
+          let score = -1;
+          if (nn === nq || vsNorm(s.code) === nq) score = 0;
+          else if (nn.startsWith(nq)) score = 1;
+          else if (nn.includes(nq)) score = 2;
+          if (score >= 0) scored.push({ s, score });
+        }
+        scored.sort((a, b2) => a.score - b2.score || a.s.name.length - b2.s.name.length);
+        services = scored.slice(0, 3).map((x) => x.s);
+      }
+    }
+    if (!services.length) {
+      return res.status(200).json({ success: true, found: 0, rows: [], services: [], message: 'This service is not offered by the supplier.' });
+    }
+
+    // 2) which country? (optional)
+    let iso = null;
+    if (countryQ) {
+      iso = vsResolveIso(countryQ, cidx.list);
+      if (!iso) return res.status(200).json({ success: true, found: 0, rows: [], services: services.map((s) => ({ service_id: s.code, service_name: s.name })), message: 'That country is not offered by the supplier.' });
+    }
+
+    const entries = new Map();
+    let rateLimited = false;
+
+    if (iso) {
+      // exact pair(s)
+      for (const s of services) {
+        if (!canCall()) break;
+        await pace(); calls += 1;
+        const out = await vsFetchPair(s.code, iso, 8000);
+        if (out.rateLimited) { rateLimited = true; break; }
+        if (out.entry) entries.set(`${iso}|${s.code}`, out.entry);
+      }
+    } else {
+      // service-only: the supplier's country list for the service, then the top countries it may have cut off
+      for (const s of services.slice(0, 2)) {
+        if (!canCall()) break;
+        await pace(); calls += 1;
+        const r = await vsReq('/customer/countries?service=' + encodeURIComponent(s.code), { timeoutMs: 10000 });
+        if (r.status === 429) { rateLimited = true; break; }
+        if (!r.ok) continue;
+        for (const c of vsAsList(r.json, ['countries', 'data', 'items', 'results'])) {
+          const ciso = vsCountryIso(c);
+          if (!ciso) continue;
+          const usd = vsPriceOf(c);
+          const count = vsStockOf(c) || (vsStockKnown(c) ? 0 : (usd > 0 ? 1 : 0));
+          if (usd > 0 && count > 0) entries.set(`${ciso}|${s.code}`, { iso: ciso, code: s.code, usd, count });
+        }
+        const exp = cidx.expected;
+        for (const p of VS_PRIORITY_ISO) {
+          if (!canCall() || rateLimited) break;
+          if (entries.has(`${p}|${s.code}`)) continue;
+          if (exp.size && !(exp.get(s.code) && exp.get(s.code).has(p))) continue; // supplier does not list it for this country
+          await pace(); calls += 1;
+          const out = await vsFetchPair(s.code, p, 8000);
+          if (out.rateLimited) { rateLimited = true; break; }
+          if (out.entry) entries.set(`${p}|${s.code}`, out.entry);
+        }
+      }
+    }
+
+    const rows = await vsPersistEntries([...entries.values()], svcNames, cidx.isoName);
+    return res.status(200).json({
+      success: true,
+      found: rows.length,
+      rows,
+      services: services.map((s) => ({ service_id: s.code, service_name: s.name })),
+      rate_limited: rateLimited,
+      message: rows.length ? 'Found at the supplier.' : (rateLimited ? 'Supplier is busy — try again in a few seconds.' : 'Not available at the supplier right now.')
+    });
+  } catch (err) {
+    console.error('vsms lookup error:', err);
+    return res.status(500).json({ success: false, message: 'Could not check the supplier right now.' });
+  }
+}
+
+// ---------------------------------------------------------------- orders
+/** Kept for the order path: credits ONCE and returns the new balance (see creditWalletOnce). */
+async function vsCreditWallet(userId, amount) {
+  const r = await creditWalletOnce(userId, amount, 'vsms-order-restore');
+  if (!r.ok) console.error('[vsms] CRITICAL: could not restore wallet', { userId, amount });
+  return r.newBalance;
 }
 
 function vsParseOrder(j) {
@@ -2410,7 +2852,7 @@ async function vsHandleOrder(req, res) {
   }
   if (!vsApiKey()) return res.status(500).json({ success: false, message: 'This SMS server is not available right now. Please contact support.' });
 
-  let originalBalance = 0, price = 0, deducted = false, customerId = null, serviceName = '', countryName = '';
+  let originalBalance = 0, price = 0, deducted = false, purchased = false, customerId = null, serviceName = '', countryName = '';
   try {
     const { data: svc } = await supabase.from('number_services')
       .select('service_name, country_name, price, supplier_price, is_available')
@@ -2469,6 +2911,8 @@ async function vsHandleOrder(req, res) {
     const orderId = j.order_id || j.id || (j.order && (j.order.order_id || j.order.id));
     const phone = j.phone_number || j.number || (j.order && (j.order.phone_number || j.order.number)) || null;
     if (!r.ok || j.success === false || !orderId) {
+      // The purchase failed → give back exactly what we took, ONCE.
+      if (r.status === 0) console.error('[vsms order] UNCERTAIN: no reply from supplier — check supplier history for a charge', { user_id, price, err: r.err });
       await vsCreditWallet(user_id, price);
       deducted = false;
       const code = String(j.error || '').toLowerCase();
@@ -2486,6 +2930,7 @@ async function vsHandleOrder(req, res) {
           : 'Purchase failed. Your balance has been restored.'
       });
     }
+    purchased = true; // the supplier now holds a number for this customer — never auto-refund from here on
 
     // What VirtualSMS actually charged us vs what we charged the customer (cost moved since the last sync?)
     const paidUsd = vsNum(j.price ?? (j.order && j.order.price));
@@ -2516,14 +2961,14 @@ async function vsHandleOrder(req, res) {
     } });
   } catch (err) {
     console.error('vsms order error:', err);
-    if (deducted) { try { await vsCreditWallet(user_id, price); } catch (e) { console.error('CRITICAL vsms auto-restore failed', e); } }
-    return res.status(500).json({ success: false, message: deducted ? 'Something went wrong. Your balance has been restored.' : 'Something went wrong. Please try again.' });
+    if (deducted && !purchased) { try { await vsCreditWallet(user_id, price); } catch (e) { console.error('CRITICAL vsms auto-restore failed', e); } }
+    return res.status(500).json({ success: false, message: (deducted && !purchased) ? 'Something went wrong. Your balance has been restored.' : 'Something went wrong. Please try again.' });
   }
 }
 
 async function vsFindOrder(orderId, userId) {
   const q = supabase.from('number_orders')
-    .select('id, user_id, order_id, status, phone_number, created_at, service_name, country_name, price, refunded, customer_id, code, source')
+    .select('id, user_id, order_id, status, phone_number, created_at, service_name, country_name, country_id, price, refunded, customer_id, code, source')
     .eq('source', VS_SOURCE).eq('order_id', String(orderId));
   if (userId) q.eq('user_id', userId);
   const { data } = await q.maybeSingle();
@@ -2531,7 +2976,8 @@ async function vsFindOrder(orderId, userId) {
 }
 const vsView = (o, extra) => ({
   order_id: o.order_id, status: o.status, number: o.phone_number, code: o.code || null, created_at: o.created_at,
-  service_name: o.service_name, country_name: o.country_name, price: o.price, refunded: !!o.refunded, ...(extra || {})
+  service_name: o.service_name, country_name: o.country_name, country_id: o.country_id != null ? o.country_id : null,
+  price: o.price, refunded: !!o.refunded, ...(extra || {})
 });
 
 async function vsMarkCompleted(order, code) {
@@ -2549,6 +2995,21 @@ async function vsMarkCompleted(order, code) {
   return !!data;
 }
 
+/**
+ * Ask VirtualSMS to cancel an order and classify the answer. A refund to the customer is only allowed
+ * when this says 'cancelled' (the supplier confirmed) — never on 'failed', 'early' or 'received'.
+ */
+async function vsCancelAtSupplier(orderId) {
+  const r = await vsReq('/customer/cancel/' + encodeURIComponent(orderId), { method: 'POST' });
+  const errTxt = String((r.json && (r.json.error || r.json.message)) || r.text || '');
+  if (r.status === 425) return { state: 'early', r };
+  if (r.ok && !(r.json && r.json.success === false)) return { state: 'cancelled', r };
+  if (/sms_received|completed|received/i.test(errTxt)) return { state: 'received', r };
+  if (/status:\s*(cancelled|canceled|expired|refunded)/i.test(errTxt)) return { state: 'cancelled', r };
+  if (r.status === 404) return { state: 'missing', r };
+  return { state: 'failed', r };
+}
+
 /** Shared by check + expire_stale: ask the supplier, then complete / refund / keep waiting. */
 async function vsResolveOrder(order, { allowExpire = true } = {}) {
   const age = order.created_at ? Date.now() - new Date(order.created_at).getTime() : 0;
@@ -2561,8 +3022,21 @@ async function vsResolveOrder(order, { allowExpire = true } = {}) {
     return { kind: 'error', http: r.status };
   }
   if (allowExpire && age >= EXPIRY_MS) {
-    try { await vsReq('/customer/cancel/' + encodeURIComponent(order.order_id), { method: 'POST' }); } catch (_) { /* best effort */ }
-    return { kind: 'expired' };
+    // Past the window and still no code. Refund ONLY once the supplier has confirmed the cancel (otherwise a late
+    // SMS would be paid for by us AND already refunded to the customer).
+    const c = await vsCancelAtSupplier(order.order_id);
+    if (c.state === 'cancelled' || c.state === 'missing') return { kind: 'expired' };
+    if (c.state === 'received') {
+      const peek = await vsReq('/customer/order/' + encodeURIComponent(order.order_id));
+      if (peek.ok) {
+        const { code } = vsParseOrder(peek.json);
+        if (code) { await vsMarkCompleted(order, code); return { kind: 'completed', code, status: 'completed' }; }
+      }
+      return { kind: 'waiting', pendingExpiry: true };
+    }
+    // supplier would not confirm (early / failed): keep trying; give up (refund the customer) only after the hard grace
+    if (age >= EXPIRY_MS + VS_HARD_GRACE_MS) return { kind: 'expired', unconfirmed: true };
+    return { kind: 'waiting', pendingExpiry: true };
   }
   return { kind: 'waiting' };
 }
@@ -2581,6 +3055,9 @@ async function vsHandleCheck(req, res) {
     if (out.kind === 'dead' || out.kind === 'expired') {
       const st = out.kind === 'expired' ? 'expired' : 'refunded';
       const rf = await claimAndRefundOrder(order, user_id, { status: st, subtitle: st === 'expired' ? 'Expired — no SMS, balance restored' : 'No SMS — balance restored' });
+      if (!rf.refunded && rf.reason !== 'already_final') {
+        return res.status(502).json({ success: false, message: 'Your refund is being processed. Please try again in a moment.' });
+      }
       return res.status(200).json({ success: true, data: vsView(order, { status: st, refunded: true, refunded_amount: rf.refunded_amount, new_balance: rf.new_balance }) });
     }
     if (out.kind === 'error') return res.status(502).json({ success: false, message: 'Could not reach the supplier. Try again.' });
@@ -2617,23 +3094,27 @@ async function vsHandleCancel(req, res) {
         return res.status(409).json({ success: false, code: 'NUMBER_CODE_ALREADY_RECEIVED', message: 'A code was already received — this order cannot be cancelled.' });
       }
     }
-    const r = await vsReq('/customer/cancel/' + encodeURIComponent(order.order_id), { method: 'POST' });
-    if (r.status === 425) {
+    // The customer is only refunded after the SUPPLIER confirms the cancel (so we never refund a number we still pay for).
+    const c = await vsCancelAtSupplier(order.order_id);
+    if (c.state === 'early') {
       return res.status(400).json({ success: false, code: 'EARLY_CANCEL_DENIED', wait_seconds: 30, message: 'Cancel is not available yet. Try again in a moment.' });
     }
-    // Docs: errors look like { error: "Cannot cancel order with status: sms_received" }.
-    // Only treat the order as "already cancelled/expired" when the supplier says exactly that —
-    // an SMS that already arrived must NEVER be refunded.
-    const errTxt = String((r.json && (r.json.error || r.json.message)) || r.text || '');
-    if (!r.ok && /sms_received|completed|received/i.test(errTxt)) {
+    if (c.state === 'received') {
       return res.status(409).json({ success: false, code: 'NUMBER_CODE_ALREADY_RECEIVED', message: 'A code was already received — this order cannot be cancelled.' });
     }
-    const already = r.status === 404 || /status:\s*(cancelled|canceled|expired|refunded)/i.test(errTxt);
-    if (!r.ok && !already) {
+    if (c.state === 'missing' && age < EXPIRY_MS) {
+      // supplier does not know this order (yet): do not pay out on a guess inside the live window
+      return res.status(400).json({ success: false, code: 'SUPPLIER_NOT_FOUND', message: 'The supplier could not find this order yet. Try again in a minute, or contact support.' });
+    }
+    if (c.state === 'failed') {
       return res.status(400).json({ success: false, code: 'CANCEL_FAILED', message: 'Could not cancel this order right now. Try again shortly.' });
     }
+    // c.state === 'cancelled' (or 'missing' after the window has passed) → refund exactly once
     const rf = await claimAndRefundOrder(order, user_id, { status: 'refunded', subtitle: 'Cancelled — balance restored' });
     if (!rf.refunded && rf.reason === 'already_final') return res.status(409).json({ success: false, message: 'This order was already refunded.' });
+    if (!rf.refunded) {
+      return res.status(502).json({ success: false, message: 'Your number was cancelled but the refund could not be applied yet. Tap Check again in a moment.' });
+    }
     return res.status(200).json({ success: true, data: { order_id, status: 'refunded', refunded: true, refunded_amount: rf.refunded_amount || Number(order.price || 0), new_balance: rf.new_balance } });
   } catch (err) {
     console.error('vsms cancel error:', err);
@@ -2701,6 +3182,7 @@ export default async function handler(req, res) {
     }
     if (isVsSync) return vsHandleSync(req, res);
     if (act === 'vsms_probe') return vsHandleProbe(req, res);
+    if (act === 'vsms_lookup') return vsHandleLookup(req, res);
     if (act === 'vsms_purge_legacy') return vsHandlePurgeLegacy(req, res);
     // action is one of: null (continue/cron), 'start', 'status' — handled inside handleSync (Server 1)
     return handleSync(req, res);
@@ -2708,6 +3190,7 @@ export default async function handler(req, res) {
 
   if (req.method === 'POST') {
     if (isVsSync) return vsHandleSync(req, res);
+    if (act === 'vsms_lookup') return vsHandleLookup(req, res);
     if (action === 'order') {
       let b = {};
       try { b = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : (req.body || {}); } catch (_) { b = {}; }
@@ -2725,7 +3208,7 @@ export default async function handler(req, res) {
     if (act === 'expire_stale' || act === 'expire-stale') return handleExpireStale(req, res);
     return res.status(400).json({
       success: false,
-      message: "POST requires ?action=order, ?action=check, ?action=cancel, or ?action=vsms_sync"
+      message: "POST requires ?action=order, ?action=check, ?action=cancel, ?action=vsms_lookup, or ?action=vsms_sync"
     });
   }
 
