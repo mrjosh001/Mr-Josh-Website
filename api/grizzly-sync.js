@@ -894,11 +894,14 @@ async function handleOrder(req, res) {
       customer_id: customerId,
       type: 'purchase',
       category: 'MJ SMS',
-      title: serviceName,
-      subtitle: `${countryName} · waiting for SMS`,
+      title: countryName ? `${serviceName} · ${countryName}` : serviceName,
+      subtitle: `${countryName || ''} · waiting for SMS`.trim(),
       amount: `₦${price.toLocaleString()}`,
       amount_ngn: price,
       status: 'pending',
+      notes: orderData && (orderData.activationId || orderData.id)
+        ? ('sms_order:' + String(orderData.activationId || orderData.id))
+        : null,
       supplier_order: orderData
     });
 
@@ -977,7 +980,7 @@ async function claimAndRefundOrder(order, userId, opts = {}) {
         updated_at: new Date().toISOString()
       })
       .eq('id', order.id)
-      .eq('refunded', false)
+      .or('refunded.eq.false,refunded.is.null')
       .in('status', ['waiting_for_code', 'pending', 'active', 'waiting', 'processing'])
       .select('id, price, status, refunded')
       .maybeSingle();
@@ -1002,6 +1005,7 @@ async function claimAndRefundOrder(order, userId, opts = {}) {
     return { refunded: false, reason: 'already_final' };
   }
 
+  // Claim won — credit wallet exactly once for this order
   const refundAmount = Number(order.price != null ? order.price : claimed.price) || 0;
   let newBalance = null;
 
@@ -1012,40 +1016,67 @@ async function claimAndRefundOrder(order, userId, opts = {}) {
     });
     if (credErr) {
       console.error('[claimAndRefundOrder] credit_balance', credErr.message);
-      const { data: profile, error: profErr } = await supabase
-        .from('profiles')
-        .select('balance')
-        .eq('id', userId)
-        .single();
-      if (!profErr && profile) {
-        newBalance = Number(profile.balance || 0) + refundAmount;
-        const { error: balErr } = await supabase
-          .from('profiles')
-          .update({ balance: newBalance })
-          .eq('id', userId);
-        if (balErr) console.error('[claimAndRefundOrder] balance credit failed', balErr);
+      const { data: still } = await supabase
+        .from('number_orders')
+        .select('id, refunded')
+        .eq('id', order.id)
+        .eq('refunded', true)
+        .maybeSingle();
+      if (still && still.id) {
+        const { data: profile } = await supabase.from('profiles').select('balance').eq('id', userId).maybeSingle();
+        if (profile) {
+          const prevBal = Number(profile.balance || 0);
+          const { data: bumped, error: balErr } = await supabase
+            .from('profiles')
+            .update({ balance: prevBal + refundAmount })
+            .eq('id', userId)
+            .eq('balance', prevBal)
+            .select('balance')
+            .maybeSingle();
+          if (balErr) console.error('[claimAndRefundOrder] balance credit failed', balErr);
+          else if (bumped) newBalance = Number(bumped.balance);
+          else {
+            const { data: p2 } = await supabase.from('profiles').select('balance').eq('id', userId).maybeSingle();
+            if (p2) newBalance = Number(p2.balance);
+          }
+        }
       }
     } else if (credited != null && typeof credited === 'object' && credited.new_balance != null) {
       newBalance = Number(credited.new_balance);
     } else if (typeof credited === 'number') {
       newBalance = credited;
+    } else {
+      const { data: p3 } = await supabase.from('profiles').select('balance').eq('id', userId).maybeSingle();
+      if (p3) newBalance = Number(p3.balance);
     }
   }
 
+  // Update the SAME purchase transaction — never insert a second refund row
+  const txStatus = String(finalStatus).toLowerCase() === 'expired' ? 'expired' : 'cancelled';
+  const orderRef = order.order_id ? String(order.order_id) : '';
   try {
-    let q = supabase
+    if (orderRef) {
+      await supabase
+        .from('transactions')
+        .update({ status: txStatus, subtitle, notes: notes || ('sms_order:' + orderRef) })
+        .eq('user_id', userId)
+        .eq('category', category)
+        .eq('type', 'purchase')
+        .in('status', ['pending', 'completed', 'success'])
+        .ilike('notes', '%sms_order:' + orderRef + '%');
+    }
+  } catch (e) {
+    console.warn('[claimAndRefundOrder] tx update by order ref', e.message || e);
+  }
+  try {
+    await supabase
       .from('transactions')
-      .update({
-        status: (String(finalStatus).toLowerCase() === 'expired' ? 'expired' : 'cancelled'),
-        subtitle,
-        ...(notes ? { notes } : {})
-      })
+      .update({ status: txStatus, subtitle, ...(notes ? { notes } : {}) })
       .eq('user_id', userId)
       .eq('category', category)
       .eq('type', 'purchase')
       .in('status', ['pending', 'completed', 'success'])
       .eq('amount_ngn', refundAmount);
-    await q;
   } catch (e) {
     console.warn('[claimAndRefundOrder] tx update', e.message || e);
   }
@@ -2587,9 +2618,13 @@ async function vsHandleOrder(req, res) {
 
     try {
       await supabase.from('transactions').insert({
-        user_id, customer_id: customerId, type: 'purchase', category: 'MJ SMS', title: serviceName,
-        subtitle: `${countryName} · waiting for SMS`, amount: `₦${price.toLocaleString()}`, amount_ngn: price,
-        status: 'pending', supplier_order: j
+        user_id, customer_id: customerId, type: 'purchase', category: 'MJ SMS',
+        title: countryName ? (serviceName + ' · ' + countryName) : serviceName,
+        subtitle: (countryName || '') + ' · waiting for SMS',
+        amount: `₦${price.toLocaleString()}`, amount_ngn: price,
+        status: 'pending',
+        notes: 'sms_order:' + String(orderId),
+        supplier_order: j
       });
     } catch (_) { /* optional */ }
 
