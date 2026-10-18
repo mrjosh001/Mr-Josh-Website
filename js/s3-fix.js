@@ -14,6 +14,31 @@
   function liveServiceSearch(q){if(String(q||'').trim().length<2)return;live('?mode=services&q='+encodeURIComponent(q.trim())).then(function(r){if(r.ok&&r.data&&r.data.success)mergeServices(r.data.services,q.trim().toLowerCase());}).catch(function(){});}
   function isoId(iso){var s=String(iso||'').toUpperCase();return /^[A-Z]{2}$/.test(s)?1000+(s.charCodeAt(0)-65)*26+(s.charCodeAt(1)-65):null;}
   function liveCountrySearch(q){var svc=window.currentServicePick;if(!svc||String(q||'').trim().length<2)return;var code=svc.service_id||svc.code||'';if(!code)return;live('?mode=countries&service='+encodeURIComponent(code)+'&q='+encodeURIComponent(String(q).trim())).then(function(r){if(!r.ok||!r.data||!r.data.success||!Array.isArray(r.data.countries))return;var rows=r.data.countries.map(function(c){return{country_id:isoId(c.iso),country_name:c.name,price:Number(c.price_ngn)||0,available_quantity:c.stock==null?1:Number(c.stock),service_id:code,service_name:svc.service_name||code,live:true};}).filter(function(c){return c.country_id!=null&&c.price>0&&(c.available_quantity==null||c.available_quantity>0);});if(!rows.length)return;window.allCountries=rows;if(typeof window.renderCountryPrices==='function')window.renderCountryPrices(rows);}).catch(function(){});}
+  function recoverServer3Catalog(){
+    if(!/\/mj-sms-s3(\.html)?\/?$/i.test(location.pathname)) return;
+    var tries=0;
+    (function wait(){
+      tries++;
+      if(!window.sbClient || typeof window.loadServiceCatalog!=='function'){
+        if(tries<80) setTimeout(wait,250);
+        return;
+      }
+      Promise.resolve().then(function(){return window.sbClient.auth.getSession();}).then(function(auth){
+        var session=auth&&auth.data&&auth.data.session;
+        if(!session){
+          if(tries<80) setTimeout(wait,500);
+          return;
+        }
+        function retryAfterInitialRun(){
+          if(window.__smsCatalogLoading){setTimeout(retryAfterInitialRun,300);return;}
+          if(window.__smsCatalogComplete && document.querySelector('#serviceGrid .svc-icon-grid')) return;
+          window.loadServiceCatalog({force:true}).catch(function(e){console.warn('Server 3 catalog recovery',e);});
+        }
+        retryAfterInitialRun();
+      }).catch(function(){if(tries<80)setTimeout(wait,500);});
+    })();
+  }
   function bind(){var ss=document.getElementById('serviceSearch'),cs=document.getElementById('countrySearch');if(ss&&!ss.__liveBound){ss.__liveBound=true;ss.addEventListener('input',function(){clearTimeout(svcTimer);var q=ss.value.trim();if(q.length<2)return;var local=(window.allServiceCatalog||[]).some(function(s){return String(s.service_name||'').toLowerCase().indexOf(q.toLowerCase())>-1;});if(local)return;svcTimer=setTimeout(function(){liveServiceSearch(q);},350);});}if(cs&&!cs.__liveBound){cs.__liveBound=true;cs.addEventListener('input',function(){clearTimeout(countryTimer);var q=cs.value.trim();if(q.length<2)return;var local=(window.allCountries||[]).some(function(c){return typeof window.countryMatchesQuery==='function'&&window.countryMatchesQuery(c.country_name,q);});if(local)return;countryTimer=setTimeout(function(){liveCountrySearch(q);},350);});}}
   var tries=0;(function wait(){bind();if(document.getElementById('serviceSearch')||document.getElementById('countrySearch')||++tries>40)return;setTimeout(wait,250);})();
+  recoverServer3Catalog();
 })();
