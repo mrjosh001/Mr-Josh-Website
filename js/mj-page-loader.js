@@ -1,4 +1,14 @@
 (function(){try{var s=document.createElement('script');s.src='/js/mj-theme.js';s.async=false;(document.head||document.documentElement).appendChild(s);}catch(e){}})();
+/* MJHUB_S3_HOOK: Server 3 wiring + admin patch (each file is guarded and no-ops if anything is missing) */
+(function(){try{
+  var p=location.pathname,q=new URLSearchParams(location.search),oid=q.get('order_id')||'';
+  var isUuid=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(oid);
+  // New Server 3 orders must open the Server 3 number page, never Server 1's.
+  if(/\/mj-sms-number(\.html)?$/i.test(p)&&isUuid){location.replace('mj-sms-s3-number.html'+location.search);return;}
+  function load(src){var s=document.createElement('script');s.src=src;s.defer=true;(document.head||document.documentElement).appendChild(s);}
+  if(/\/(admin|sub-admin)(\.html)?\/?$/i.test(p)) load('/js/admin-sms-patch.js');
+  if(/\/mj-sms(-s3|-history)?(\.html)?$/i.test(p)||/\/dashboard(\.html)?$/i.test(p)) load('/js/s3-fix.js');
+}catch(e){}})();
 /**
  * MJ Hub page loader — overlay from click until next page ready
  * Does not hang: navigates after one paint frame (max 80ms fallback).
