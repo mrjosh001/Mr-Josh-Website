@@ -28,6 +28,9 @@
   --soft:rgba(59,130,246,.13);
   --ok:#34d399;
   --ok-soft:rgba(52,211,153,.15);
+  --amber:#fbbf24;
+  --amber-soft:rgba(251,191,36,.14);
+  --chip:rgba(148,163,184,.12);
   --inset:rgba(0,0,0,.35);
 }
 :root[data-theme="light"]{
@@ -46,6 +49,9 @@
   --soft:rgba(37,99,235,.09);
   --ok:#047857;
   --ok-soft:rgba(4,120,87,.12);
+  --amber:#b45309;
+  --amber-soft:rgba(180,83,9,.12);
+  --chip:rgba(15,23,42,.06);
   --inset:rgba(15,23,42,.04);
 }
 *{box-sizing:border-box;margin:0;padding:0}
@@ -54,7 +60,7 @@ body{
   font-family:'Plus Jakarta Sans',system-ui,-apple-system,sans-serif;
   background:var(--bg);color:var(--text);
   min-height:100vh;-webkit-font-smoothing:antialiased;
-  padding-bottom:calc(14px + env(safe-area-inset-bottom));
+  padding-bottom:calc(18px + env(safe-area-inset-bottom));
 }
 .ambient{
   position:fixed;inset:0;z-index:0;pointer-events:none;
@@ -62,7 +68,7 @@ body{
     radial-gradient(70% 45% at 50% -8%,rgba(59,130,246,.22),transparent 60%),
     radial-gradient(40% 30% at 100% 5%,rgba(37,99,235,.1),transparent 55%);
 }
-.app{position:relative;z-index:1;max-width:430px;margin:0 auto;padding:0 14px}
+.app{position:relative;z-index:1;max-width:520px;margin:0 auto;padding:0 14px}
 
 /* Top bar */
 .bar{
@@ -74,78 +80,94 @@ body{
   -webkit-backdrop-filter:blur(18px) saturate(1.15);
   border-bottom:1px solid var(--line);
 }
-.bar a{
+.bar a.back{
   width:32px;height:32px;border-radius:10px;
   display:grid;place-items:center;
   background:var(--surface);border:1px solid var(--line);
   color:var(--text);text-decoration:none;font-size:13px;
 }
-.bar strong{
-  font-size:15px;font-weight:800;letter-spacing:-.02em;color:var(--blue);
+.bar strong{font-size:15px;font-weight:800;letter-spacing:-.02em;color:var(--blue)}
+.bar .hist{
+  margin-left:auto;display:inline-flex;align-items:center;gap:6px;
+  font-size:12px;font-weight:700;color:var(--mute);text-decoration:none;
+  padding:6px 10px;border-radius:10px;border:1px solid var(--line);background:var(--surface);
 }
+.bar .hist:active{color:var(--blue);border-color:var(--line-blue)}
 
 /* Hero (compact) */
-.hero{padding:12px 0 0}
+.hero{padding:14px 0 0}
 .hero h1{
-  font-size:19px;font-weight:800;letter-spacing:-.035em;line-height:1.2;
+  font-size:20px;font-weight:800;letter-spacing:-.035em;line-height:1.2;
   color:var(--text);margin-bottom:3px;
 }
 .hero h1 b{font-weight:800;color:var(--blue)}
-.hero p{
-  font-size:12.5px;line-height:1.4;color:var(--mute);font-weight:500;
-}
+.hero p{font-size:12.5px;line-height:1.4;color:var(--mute);font-weight:500}
 
-/* Section label */
-.lbl{
-  margin:14px 0 7px;
-  font-size:11px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;
-  color:var(--mute);
+/* Section header */
+.sec{
+  display:flex;align-items:center;gap:8px;
+  margin:18px 0 8px;
 }
+.sec .ico{
+  width:22px;height:22px;border-radius:7px;display:grid;place-items:center;
+  font-size:10px;color:var(--blue);background:var(--soft);border:1px solid var(--line-blue);
+}
+.sec h2{
+  font-size:11.5px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--text-2);
+}
+.sec span.sub{margin-left:auto;font-size:11px;font-weight:600;color:var(--mute)}
 
-/* OTP server rows */
-.servers{display:grid;gap:7px}
+/* OTP server cards */
+.servers{display:grid;gap:9px}
 .srv{
-  position:relative;display:flex;align-items:center;gap:11px;
-  padding:10px 12px;
-  border-radius:14px;text-decoration:none;color:inherit;
+  position:relative;display:grid;grid-template-columns:44px 1fr 14px;gap:12px;align-items:center;
+  padding:12px;
+  border-radius:16px;text-decoration:none;color:inherit;
   background:var(--surface);border:1px solid var(--line);
   transition:transform .13s ease,border-color .13s ease;
+  overflow:hidden;
 }
 .srv:active{transform:scale(.985)}
 .srv.focus{
   border-color:var(--line-blue);
-  background:linear-gradient(165deg,var(--soft),var(--surface) 60%);
+  background:linear-gradient(165deg,var(--soft),var(--surface) 62%);
   box-shadow:0 0 0 1px var(--line-blue),0 8px 22px var(--glow);
 }
-.srv .orb{
-  width:34px;height:34px;border-radius:10px;flex-shrink:0;
-  display:grid;place-items:center;font-size:13px;color:#fff;
+.srv .num{
+  width:44px;height:44px;border-radius:13px;flex-shrink:0;
+  display:grid;place-items:center;
+  font-size:20px;font-weight:800;letter-spacing:-.04em;color:#fff;
   background:linear-gradient(145deg,var(--blue-2),var(--blue-3));
   box-shadow:0 6px 14px var(--glow);
 }
-.srv .txt{flex:1;min-width:0}
+.srv .txt{min-width:0}
+.srv .top{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
 .srv h3{
-  display:flex;align-items:center;gap:7px;flex-wrap:wrap;
-  font-size:14.5px;font-weight:800;letter-spacing:-.02em;color:var(--text);
-  line-height:1.25;
+  font-size:15px;font-weight:800;letter-spacing:-.02em;color:var(--text);line-height:1.2;
 }
-.srv h3 em{
-  font-style:normal;font-size:10.5px;font-weight:800;letter-spacing:.02em;
-  padding:2px 8px;border-radius:999px;
+.srv .badge{
+  font-size:10px;font-weight:800;letter-spacing:.03em;
+  padding:2px 8px;border-radius:999px;white-space:nowrap;
 }
-.srv.focus h3 em{background:var(--ok-soft);color:var(--ok)}
-.srv:not(.focus) h3 em{background:var(--soft);color:var(--blue)}
-.srv p{
-  margin-top:2px;font-size:12px;line-height:1.35;color:var(--mute);font-weight:500;
+.badge.pop{background:var(--ok-soft);color:var(--ok)}
+.badge.reuse{background:var(--soft);color:var(--blue)}
+.badge.sim{background:var(--amber-soft);color:var(--amber)}
+.srv p{margin-top:3px;font-size:12px;line-height:1.4;color:var(--mute);font-weight:500}
+.chips{display:flex;flex-wrap:wrap;gap:5px;margin-top:7px}
+.chip{
+  display:inline-flex;align-items:center;gap:5px;
+  font-size:10.5px;font-weight:700;color:var(--text-2);
+  padding:3px 8px;border-radius:8px;background:var(--chip);
 }
-.srv .go{font-size:11px;color:var(--mute);flex-shrink:0}
+.chip i{font-size:9px;color:var(--ok)}
+.srv .go{font-size:11px;color:var(--mute);justify-self:end}
 .srv.focus .go{color:var(--blue)}
 
-/* Rental blocks (compact) */
+/* Rental cards */
+.rentals{display:grid;gap:9px}
 .block{
   display:block;text-decoration:none;color:inherit;
-  border-radius:16px;padding:12px 13px;
-  margin-bottom:8px;
+  border-radius:16px;padding:13px 14px;
   background:var(--surface);
   border:1px solid var(--line);
   position:relative;overflow:hidden;
@@ -164,27 +186,23 @@ body{
 }
 .block .head{
   display:flex;align-items:center;justify-content:space-between;gap:8px;
-  margin-bottom:3px;position:relative;
+  margin-bottom:4px;position:relative;
 }
 .block h3{
-  font-size:15.5px;font-weight:800;letter-spacing:-.025em;color:var(--text);
-  line-height:1.25;
+  font-size:15.5px;font-weight:800;letter-spacing:-.025em;color:var(--text);line-height:1.25;
 }
 .block .tag{
   font-size:10.5px;font-weight:750;padding:2px 9px;border-radius:999px;white-space:nowrap;
   color:var(--blue);background:var(--soft);border:1px solid var(--line-blue);
 }
-.block .desc{
-  font-size:12.5px;line-height:1.4;color:var(--mute);font-weight:500;
-  position:relative;
-}
+.block .desc{font-size:12.5px;line-height:1.4;color:var(--mute);font-weight:500;position:relative}
 .meta{
-  display:flex;flex-wrap:wrap;gap:4px 12px;margin-top:7px;position:relative;
+  display:flex;flex-wrap:wrap;gap:4px 12px;margin-top:8px;position:relative;
   font-size:12px;font-weight:650;color:var(--text-2);
 }
 .meta span{display:inline-flex;align-items:center;gap:6px}
 .meta i{font-size:9px;color:var(--ok)}
-.carriers{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin-top:8px;position:relative}
+.carriers{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin-top:9px;position:relative}
 .carriers .cl{font-size:11px;font-weight:650;color:var(--mute);margin-right:2px}
 .carrier{
   display:inline-flex;align-items:center;gap:6px;
@@ -195,19 +213,14 @@ body{
 }
 .carrier img{width:13px;height:13px;display:block;object-fit:contain}
 .action{
-  display:inline-flex;align-items:center;gap:7px;margin-top:8px;
+  display:inline-flex;align-items:center;gap:7px;margin-top:9px;
   font-size:13px;font-weight:750;color:var(--blue);position:relative;
 }
 .action i{font-size:11px}
 
-.history{margin-top:4px;display:flex;justify-content:center}
-.history a{
-  display:inline-flex;align-items:center;gap:8px;
-  padding:8px 14px;border-radius:12px;
-  font-size:12.5px;font-weight:650;color:var(--mute);
-  text-decoration:none;border:1px solid transparent;
+@media(min-width:640px){
+  .rentals{grid-template-columns:1fr 1fr}
 }
-.history a:active{color:var(--blue);background:var(--soft);border-color:var(--line-blue)}
 </style>
 </head>
 <body>
@@ -215,8 +228,9 @@ body{
 <div class="app">
 
   <header class="bar">
-    <a href="dashboard.html" aria-label="Back"><i class="fa-solid fa-arrow-left"></i></a>
+    <a class="back" href="dashboard.html" aria-label="Back"><i class="fa-solid fa-arrow-left"></i></a>
     <strong>MJ SMS</strong>
+    <a class="hist" href="mj-sms-history.html"><i class="fa-solid fa-clock-rotate-left"></i> History</a>
   </header>
 
   <section class="hero">
@@ -224,73 +238,92 @@ body{
     <p>OTP for quick sign-ups. Rentals when you need the same line longer.</p>
   </section>
 
-  <div class="lbl">One-time OTP</div>
+  <div class="sec">
+    <div class="ico"><i class="fa-solid fa-bolt"></i></div>
+    <h2>One-time OTP</h2>
+    <span class="sub">Pick a server</span>
+  </div>
   <div class="servers">
     <a class="srv focus" href="mj-sms.html">
-      <div class="orb"><i class="fa-solid fa-bolt"></i></div>
+      <div class="num">1</div>
       <div class="txt">
-        <h3>Server 1 <em>Popular</em></h3>
+        <div class="top"><h3>Server 1</h3><span class="badge pop">Popular</span></div>
         <p>Fast OTP across many countries. Best first pick.</p>
+        <div class="chips">
+          <span class="chip"><i class="fa-solid fa-bolt"></i> Fast</span>
+          <span class="chip"><i class="fa-solid fa-earth-americas"></i> Many countries</span>
+        </div>
       </div>
       <i class="fa-solid fa-chevron-right go"></i>
     </a>
     <a class="srv" href="mj-sms3.html">
-      <div class="orb"><i class="fa-solid fa-rotate"></i></div>
+      <div class="num">2</div>
       <div class="txt">
-        <h3>Server 2 <em>Reusable</em></h3>
+        <div class="top"><h3>Server 2</h3><span class="badge reuse">Reusable</span></div>
         <p>Short reuse when available. Strong backup.</p>
+        <div class="chips">
+          <span class="chip"><i class="fa-solid fa-rotate"></i> Short reuse</span>
+          <span class="chip"><i class="fa-solid fa-life-ring"></i> Backup</span>
+        </div>
       </div>
       <i class="fa-solid fa-chevron-right go"></i>
     </a>
     <a class="srv focus" href="mj-sms-s3.html">
-      <div class="orb"><i class="fa-solid fa-sim-card"></i></div>
+      <div class="num">3</div>
       <div class="txt">
-        <h3>Server 3 <em>Real SIM</em></h3>
-        <p>Real carrier SIMs for WhatsApp, Telegram and Google. Auto-refund if no code.</p>
+        <div class="top"><h3>Server 3</h3><span class="badge sim">Real SIM</span></div>
+        <p>Real carrier SIMs for WhatsApp, Telegram and Google.</p>
+        <div class="chips">
+          <span class="chip"><i class="fa-solid fa-sim-card"></i> Real carrier SIMs</span>
+          <span class="chip"><i class="fa-solid fa-rotate-left"></i> Auto-refund if no code</span>
+        </div>
       </div>
       <i class="fa-solid fa-chevron-right go"></i>
     </a>
   </div>
 
-  <div class="lbl">Keep the number</div>
-
-  <a class="block featured" href="mj-sms-usa-rent.html">
-    <div class="shine" aria-hidden="true"></div>
-    <div class="head">
-      <h3>USA real number</h3>
-      <span class="tag">Physical SIM</span>
-    </div>
-    <p class="desc">A genuine US line, best for WhatsApp. Your inbox stays open for the full plan.</p>
-    <div class="carriers">
-      <span class="cl">Carriers</span>
-      <span class="carrier"><img src="https://cdn.simpleicons.org/atandt" alt="" width="14" height="14" loading="lazy" onerror="this.remove()">AT&amp;T</span>
-      <span class="carrier"><img src="https://cdn.simpleicons.org/tmobile" alt="" width="14" height="14" loading="lazy" onerror="this.remove()">T-Mobile</span>
-      <span class="carrier"><img src="https://cdn.simpleicons.org/verizon" alt="" width="14" height="14" loading="lazy" onerror="this.remove()">Verizon</span>
-    </div>
-    <div class="meta">
-      <span><i class="fa-solid fa-check"></i> Live inbox</span>
-      <span><i class="fa-solid fa-check"></i> Optional auto-renew</span>
-    </div>
-    <span class="action">Select duration <i class="fa-solid fa-arrow-right"></i></span>
-  </a>
-
-  <a class="block featured" href="mj-sms-rent.html">
-    <div class="shine" aria-hidden="true"></div>
-    <div class="head">
-      <h3>Global number rental</h3>
-      <span class="tag">20+ countries</span>
-    </div>
-    <p class="desc">Keep a number for 1 month up to 1 year. Ideal for multiple accounts and private use.</p>
-    <div class="meta">
-      <span><i class="fa-solid fa-check"></i> Unlimited SMS</span>
-      <span><i class="fa-solid fa-check"></i> 1 month to 1 year</span>
-    </div>
-    <span class="action">Browse countries <i class="fa-solid fa-arrow-right"></i></span>
-  </a>
-
-  <div class="history">
-    <a href="mj-sms-history.html"><i class="fa-solid fa-clock-rotate-left"></i> Number history</a>
+  <div class="sec">
+    <div class="ico"><i class="fa-solid fa-key"></i></div>
+    <h2>Keep the number</h2>
+    <span class="sub">Rentals</span>
   </div>
+
+  <div class="rentals">
+    <a class="block featured" href="mj-sms-usa-rent.html">
+      <div class="shine" aria-hidden="true"></div>
+      <div class="head">
+        <h3>USA real number</h3>
+        <span class="tag">Physical SIM</span>
+      </div>
+      <p class="desc">A genuine US line, best for WhatsApp. Your inbox stays open for the full plan.</p>
+      <div class="carriers">
+        <span class="cl">Carriers</span>
+        <span class="carrier"><img src="https://cdn.simpleicons.org/atandt" alt="" width="14" height="14" loading="lazy" onerror="this.remove()">AT&amp;T</span>
+        <span class="carrier"><img src="https://cdn.simpleicons.org/tmobile" alt="" width="14" height="14" loading="lazy" onerror="this.remove()">T-Mobile</span>
+        <span class="carrier"><img src="https://cdn.simpleicons.org/verizon" alt="" width="14" height="14" loading="lazy" onerror="this.remove()">Verizon</span>
+      </div>
+      <div class="meta">
+        <span><i class="fa-solid fa-check"></i> Live inbox</span>
+        <span><i class="fa-solid fa-check"></i> Optional auto-renew</span>
+      </div>
+      <span class="action">Select duration <i class="fa-solid fa-arrow-right"></i></span>
+    </a>
+
+    <a class="block featured" href="mj-sms-rent.html">
+      <div class="shine" aria-hidden="true"></div>
+      <div class="head">
+        <h3>Global number rental</h3>
+        <span class="tag">20+ countries</span>
+      </div>
+      <p class="desc">Keep a number for 1 month up to 1 year. Ideal for multiple accounts and private use.</p>
+      <div class="meta">
+        <span><i class="fa-solid fa-check"></i> Unlimited SMS</span>
+        <span><i class="fa-solid fa-check"></i> 1 month to 1 year</span>
+      </div>
+      <span class="action">Browse countries <i class="fa-solid fa-arrow-right"></i></span>
+    </a>
+  </div>
+
 </div>
 </body>
 </html>

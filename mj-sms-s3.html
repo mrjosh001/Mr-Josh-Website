@@ -77,6 +77,9 @@ body::before{content:'';position:fixed;inset:0;pointer-events:none;z-index:0;bac
 .svc-tile .svc-icon{width:52px;height:52px;border-radius:14px;display:flex;align-items:center;justify-content:center;color:#fff;font-size:22px;box-shadow:0 4px 12px rgba(0,0,0,.15)}
 .svc-tile .svc-icon-fallback{background:linear-gradient(135deg,var(--primary),var(--primary-strong));color:#fff}
 .svc-tile .svc-label{font-size:11px;font-weight:700;text-align:center;line-height:1.25;max-width:72px;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
+.show-all-wrap{display:flex;justify-content:center;margin-top:14px}
+.show-all-btn{background:none;border:1px solid var(--primary);color:var(--primary);font-size:12px;font-weight:700;padding:10px 18px;border-radius:12px;cursor:pointer;font-family:inherit}
+.show-all-btn:active{background:var(--primary-glow)}
 .selected-service-bar{display:flex;align-items:center;justify-content:space-between;gap:10px;background:var(--primary-glow);border-radius:12px;padding:12px 14px;margin-bottom:14px}
 .selected-service-bar .name{font-weight:800;font-size:14px;color:var(--primary);display:flex;align-items:center;gap:10px}
 .selected-service-bar .mini-icon{width:28px;height:28px;border-radius:8px;display:inline-flex;align-items:center;justify-content:center;color:#fff;font-size:13px}
@@ -301,6 +304,7 @@ let sbClient = null;
 let currentUserId = null;
 let currentBalanceNgn = 0;
 let allCountries = [];
+let allCountriesMaster = [];
 let currentCountry = null;
 let allServices = [];
 let allServiceCatalog = [];
@@ -308,22 +312,24 @@ let serviceCountryIndex = {}; // key -> [{country_id, country_name, price, servi
 let currentServicePick = null;
 let activeService = null;
 let isBuying = false;
+let __showAllServices = false;
 
 const POPULAR_SERVICES = ['whatsapp','telegram','facebook','instagram','tiktok','google','gmail','twitter','x','discord','snapchat','microsoft','amazon','netflix','spotify','uber','paypal','linkedin','signal','viber','wechat'];
+
+// Short names that ARE real brands (never hide these)
+const SHORT_BRANDS_KEEP = ['vk','ok','qq','imo','olx','hbo','x','ea','mi'];
 function isJunkService(name){
   const n = String(name||'').trim();
   if(!n) return true;
   const low = n.toLowerCase();
-  // "Any other" is a real Grizzly catch-all — never treat as junk
+  // "Any other" is a real catch-all — never treat as junk
   if(/^any\s*other$/i.test(n) || low === 'other') return false;
-  // supplier internal codes: abx, acx, axa, a1b, etc.
-  if(/^[a-z]{1,4}x$/i.test(n)) return true;
-  if(/^[a-z]{2,4}$/i.test(n) && !/sms|otp|app|pay|tik|tok|ok/i.test(low)) return true;
-  if(/^[a-z]{2,3}[a-z0-9]$/i.test(n) && n.length <= 4) return true;
+  if(SHORT_BRANDS_KEEP.indexOf(low) !== -1) return false;
   if(/^[0-9]+$/.test(n)) return true;
-  if(/^[a-z0-9]{1,3}$/i.test(n)) return true;
-  // mostly consonants short codes
-  if(n.length <= 4 && !/[aeiou]/i.test(n) && /^[a-z]+$/i.test(n)) return true;
+  if(n.length <= 1) return true;
+  // Server 3 sends real names. A bare 2–3 letter ALL-CAPS value is just the supplier code
+  // echoed back (e.g. "WA", "ABX") — hide those, but keep real brands like Uber, Line, Bolt, eBay.
+  if(/^[A-Z0-9]{2,3}$/.test(n)) return true;
   return false;
 }
 function isAnyOtherService(name){
@@ -351,12 +357,75 @@ function popularRank(name){
   }
   return 1000;
 }
+
+// --- Country search: works however the person types it -------------------------------
+// "usa", "U.S.A", "u s a", "US", "america", "united states", "United States of America" all find the
+// United States. Same idea for UK, UAE, DR Congo, Ivory Coast, South Korea, etc.
+function normText(s){
+  return String(s||'').toLowerCase()
+    .normalize('NFD').replace(/[\u0300-\u036f]/g,'')
+    .replace(/&/g,'and')
+    .replace(/[^a-z0-9]+/g,'');
+}
+const COUNTRY_ALIAS_GROUPS = [
+  ['unitedstates','unitedstatesofamerica','usa','us','america','american','states','theus','theusa','usavirtual','unitedstatesvirtual'],
+  ['unitedkingdom','uk','gb','greatbritain','britain','british','england','scotland','wales','northernireland'],
+  ['unitedarabemirates','uae','emirates','dubai','abudhabi'],
+  ['congodemocraticrepublic','democraticrepublicofthecongo','drc','drcongo','congokinshasa','zaire','congo'],
+  ['ivorycoast','cotedivoire','civ'],
+  ['southkorea','korea','republicofkorea','korearepublicof','rok'],
+  ['northkorea','dprk'],
+  ['czechia','czechrepublic'],
+  ['myanmar','burma'],
+  ['northmacedonia','macedonia'],
+  ['eswatini','swaziland'],
+  ['turkiye','turkey'],
+  ['netherlands','holland','thenetherlands'],
+  ['russia','russianfederation'],
+  ['vietnam','vietnam'],
+  ['hongkong','hk'],
+  ['saudiarabia','ksa','saudi'],
+  ['southafrica','rsa'],
+  ['newzealand','nz'],
+  ['philippines','filipinas','ph'],
+  ['bosniaandherzegovina','bosnia'],
+  ['trinidadandtobago','trinidad'],
+  ['palestine','palestinianterritories','palestinianterritory'],
+  ['taiwan','chinesetaipei'],
+  ['laos','laopdr','laopeoplesdemocraticrepublic'],
+  ['timorleste','easttimor'],
+  ['capeverde','caboverde']
+];
 function countryMatchesQuery(name, q){
-  if(!q) return true;
-  const n = String(name||'').toLowerCase();
-  if(n.includes(q)) return true;
-  if(/^(usa|us|u\.s\.?a?\.?|america)$/i.test(q) || q.indexOf('united st')===0){
-    if(/united states|usa|\bu\.?s\.?a\.?\b|america/i.test(n)) return true;
+  var nq = normText(q);
+  if(!nq) return true;
+  var nn = normText(name);
+  if(!nn) return false;
+  // 1) alias groups: if what was typed is one of the names for a country, match that country
+  for(var g = 0; g < COUNTRY_ALIAS_GROUPS.length; g++){
+    var grp = COUNTRY_ALIAS_GROUPS[g];
+    if(grp.indexOf(nq) === -1) continue;
+    for(var i = 0; i < grp.length; i++){
+      var t = grp[i];
+      // very short tokens (us, uk, gb, hk…) must match the whole name; longer ones can sit inside it
+      if(t.length <= 2 ? nn === t : nn.indexOf(t) !== -1) return true;
+    }
+  }
+  // 2) normal "contains" search (needs 2+ letters so one letter doesn't match half the list)
+  if(nq.length >= 2 && nn.indexOf(nq) !== -1) return true;
+  if(nq.length === 1) return nn.charAt(0) === nq;
+  // 3) typing a prefix of an alias, e.g. "united st", "unit", "amer"
+  if(nq.length >= 3){
+    for(var g2 = 0; g2 < COUNTRY_ALIAS_GROUPS.length; g2++){
+      var grp2 = COUNTRY_ALIAS_GROUPS[g2];
+      var hit = false;
+      for(var j = 0; j < grp2.length; j++){ if(grp2[j].length > 2 && grp2[j].indexOf(nq) === 0){ hit = true; break; } }
+      if(!hit) continue;
+      for(var k = 0; k < grp2.length; k++){
+        var tt = grp2[k];
+        if(tt.length > 2 && nn.indexOf(tt) !== -1) return true;
+      }
+    }
   }
   return false;
 }
@@ -401,7 +470,7 @@ function serviceDomain(name){
   // twitter / x exact only
   if(n === 'x' || n === 'twitter' || /^x\s*\/?\s*twitter/i.test(n)) return 'x.com';
   // do NOT guess domain from junk codes like abx
-  if(isJunkService(n)) return null;
+  if(isJunkService(name)) return null;
   const slug = n.replace(/[^a-z0-9]+/g,' ').trim().split(/\s+/)[0];
   if(slug && slug.length >= 4 && !isJunkService(slug)) return slug + '.com';
   return null;
@@ -412,7 +481,7 @@ function serviceDomain(name){
 function serviceLogo(name){
   // Same as Server 2 — Google favicon — but never map junk codes to x.com
   const n = String(name||'').toLowerCase().trim();
-  if(isJunkService(n)) return null;
+  if(isJunkService(String(name||'').trim())) return null;
   let domain = serviceDomain(name);
   if(!domain) return null;
   return 'https://www.google.com/s2/favicons?domain=' + encodeURIComponent(domain) + '&sz=128';
@@ -469,7 +538,7 @@ const SERVICE_ICON_MAP = [
 const SERVICE_ICON_EXACT = { line:['fa-brands fa-line','#00C300'], vk:['fa-brands fa-vk','#0077FF'], x:['fa-brands fa-x-twitter','#000000'] };
 function serviceIconFa(name){
   const n = (name||'').toLowerCase().trim();
-  if(!n || isJunkService(n)) return null;
+  if(!n || isJunkService(String(name||'').trim())) return null;
   if(SERVICE_ICON_EXACT[n]) return { cls: SERVICE_ICON_EXACT[n][0], color: SERVICE_ICON_EXACT[n][1] };
   // longer keys first
   const pairs = SERVICE_ICON_MAP.slice().sort(function(a,b){ return b[0].length - a[0].length; });
@@ -482,11 +551,9 @@ function serviceIconFa(name){
   return null;
 }
 
-// --- Country flags. Grizzly's site shows flags too — same story as above,
-// the reseller API only returns country names, not flag images, so this
-// renders a Unicode flag emoji from a name→ISO lookup. Unmatched names
-// (spelling variants we haven't seen) fall back to a globe icon instead of
-// showing a broken/wrong flag. ---
+// --- Country flags. Server 3 stores each country as 1000 + ISO-2 letters (see grizzly-sync.js
+// vsIsoToId), so the exact flag can be decoded straight from country_id — no name guessing.
+// Older rows / unknown ids fall back to a name→ISO lookup, then a globe. ---
 const COUNTRY_ISO = {
   russia:'ru',ukraine:'ua',kazakhstan:'kz',china:'cn',philippines:'ph',myanmar:'mm',indonesia:'id',
   malaysia:'my',kenya:'ke',tanzania:'tz',vietnam:'vn',kyrgyzstan:'kg',usa:'us','usa (virtual)':'us','united states':'us','united states (virtual)':'us',
@@ -514,9 +581,16 @@ function isoToFlagEmoji(iso2){
   if(!iso2 || iso2.length!==2) return '';
   return String.fromCodePoint(...[...iso2.toUpperCase()].map(c => 127397 + c.charCodeAt(0)));
 }
-function countryFlag(name){
-  const iso = COUNTRY_ISO[(name||'').toLowerCase().trim()];
-  return iso ? isoToFlagEmoji(iso) : '🌍';
+function vsIsoFromId(id){
+  var n = Number(id) - 1000;
+  if(!Number.isInteger(n) || n < 0 || n >= 676) return null;
+  return String.fromCharCode(65 + Math.floor(n / 26)) + String.fromCharCode(65 + (n % 26));
+}
+function countryFlag(name, id){
+  var iso = (id != null) ? vsIsoFromId(id) : null;
+  if(iso) return isoToFlagEmoji(iso);
+  const byName = COUNTRY_ISO[(name||'').toLowerCase().trim()];
+  return byName ? isoToFlagEmoji(byName) : '🌍';
 }
 
 async function initSession(){
@@ -637,6 +711,14 @@ function providersToPoolOptions(providersRaw, poolPriceOverrides){
 }
 
 
+// ---------------------------------------------------------------------------------------
+// Server 3 catalog loader.
+// WHY THIS WAS SHOWING "ONLY A FEW SERVICES / COUNTRIES": Supabase returns at most 1000 rows per
+// request no matter what .limit() says, and the old loader asked for "8000 countries" / "3000 rows
+// per batch" in single calls — so every call was silently cut to 1000 rows, and that partial result
+// was then cached as "complete" for the whole day. This loader pages through everything with
+// .range() (1000 rows per page, a few pages in parallel) until a page comes back short.
+// ---------------------------------------------------------------------------------------
 async function loadServiceCatalog(opts){
   opts = opts || {};
   var force = !!opts.force;
@@ -648,8 +730,9 @@ async function loadServiceCatalog(opts){
       });
     }
 
-    // Cache while logged in / same browser tab session — do not reload from scratch
-    var CACHE_KEY = 'mj_sms3_virtualsms_catalog_v1';
+    // v2 key: ignores the old v1 cache that was stuck on a partial list
+    var CACHE_KEY = 'mj_sms3_virtualsms_catalog_v2';
+    try{ localStorage.removeItem('mj_sms3_virtualsms_catalog_v1'); sessionStorage.removeItem('mj_sms3_virtualsms_catalog_v1'); }catch(e){}
     function lagosDay(){
       try{ return new Date().toLocaleDateString('en-CA', { timeZone: 'Africa/Lagos' }); }
       catch(e){ return new Date().toISOString().slice(0,10); }
@@ -664,14 +747,14 @@ async function loadServiceCatalog(opts){
         return o;
       }catch(e){ return null; }
     }
+    // Only the service list is cached (small). Countries per service are always read fresh from the DB when a service is tapped.
     function cacheSet(complete){
       try{
         var payload = JSON.stringify({
           day: lagosDay(),
           t: Date.now(),
           complete: !!complete,
-          catalog: allServiceCatalog,
-          index: serviceCountryIndex
+          catalog: allServiceCatalog
         });
         try{ localStorage.setItem(CACHE_KEY, payload); }catch(e1){
           try{ sessionStorage.setItem(CACHE_KEY, payload); }catch(e2){}
@@ -720,19 +803,15 @@ async function loadServiceCatalog(opts){
       renderServiceCatalog(allServiceCatalog);
     }
 
-    function saveCache(complete){ cacheSet(complete); }
-    function loadCache(){ return cacheGet(); }
-
     // --- Instant restore: stay loaded while user is in this session ---
-    var cached = loadCache();
+    var cached = cacheGet();
     if(!force && cached && cached.catalog && cached.catalog.length){
       allServiceCatalog = cached.catalog;
-      serviceCountryIndex = cached.index || {};
+      serviceCountryIndex = {};
       __smsCatalogComplete = !!cached.complete;
       rebuildMapFromCatalog();
       paintProgress();
       if(serviceGrid){ serviceGrid.dataset.skelReady = '1'; serviceGrid.dataset.loaded = '1'; }
-      // Complete = rest of Lagos day, no network reload
       if(cached.complete){
         __smsCatalogComplete = true;
         __smsCatalogLoading = false;
@@ -746,133 +825,59 @@ async function loadServiceCatalog(opts){
 
     if(__smsCatalogLoading && !force) return;
     __smsCatalogLoading = true;
+    if(force){ catalogMap = new Map(); serviceCountryIndex = {}; }
 
-    // Server 3 ONLY — countries from virtualsms catalog (never Grizzly RPC)
-    const { data: countryRows, error: cErr } = await sbClient
-      .from('number_services')
-      .select('country_id, country_name')
-      .eq('source', 'virtualsms')
-      .limit(8000);
-    if(cErr) throw new Error(cErr.message || 'Could not load Server 3 countries');
-    var _cmap = new Map();
-    (countryRows || []).forEach(function(r){
-      if(r == null || r.country_id == null) return;
-      var id = r.country_id;
-      if(!_cmap.has(String(id))){
-        _cmap.set(String(id), { country_id: id, country_name: r.country_name || ('Country ' + id) });
-      }
-    });
-    allCountriesMaster = Array.from(_cmap.values());
-    if(!allCountriesMaster.length && !(allServiceCatalog && allServiceCatalog.length)){
-      serviceGrid.innerHTML = '<div class="empty-state"><h4>Server 3 catalog empty</h4><p>Admin must run <b>Sync Server 3</b> first. Do not use Server 1 data here.</p><button type="button" class="btn btn-primary" style="margin-top:12px;width:auto;padding:10px 16px" onclick="loadServiceCatalog({force:true})">Retry</button></div>';
-      __smsCatalogLoading = false;
-      return;
-    }
+    var PAGE = 1000;       // Supabase's hard cap per request
+    var PARALLEL = 4;      // pages fetched at the same time
 
-    rebuildMapFromCatalog();
-
-    var ids = allCountriesMaster.map(function(c){ return c.country_id; }).filter(function(id){ return id != null; });
-    var PRIORITY_NAMES = /united states|usa|nigeria|united kingdom|england|india|indonesia|philippines|russia|ukraine|brazil|germany|france|turkey|mexico|pakistan|bangladesh|vietnam|thailand|south africa|kenya|ghana|china|egypt|uae|united arab|canada|australia|poland|spain|italy|netherlands/i;
-    ids = ids.slice().sort(function(a,b){
-      var ca = allCountriesMaster.find(function(c){ return c.country_id === a; });
-      var cb = allCountriesMaster.find(function(c){ return c.country_id === b; });
-      var pa = PRIORITY_NAMES.test((ca && ca.country_name) || '') ? 0 : 1;
-      var pb = PRIORITY_NAMES.test((cb && cb.country_name) || '') ? 0 : 1;
-      return pa - pb;
-    });
-
-    var nameById = {};
-    allCountriesMaster.forEach(function(c){ nameById[c.country_id] = c.country_name; });
-
-    async function fetchByCountryIds(countryIds){
-      if(!countryIds.length) return [];
-      var res = await sbClient
-        .from('number_services')
-        .select('service_id, service_name, price, available_quantity, country_id, country_name')
-        .eq('source', 'virtualsms')
-        .eq('is_available', true)
-        .in('country_id', countryIds)
-        .gt('price', 0)
-        .limit(3000);
-      if(res.error){
-        res = await sbClient
+    async function fetchPage(from){
+      var base = function(){
+        return sbClient
           .from('number_services')
           .select('service_id, service_name, price, available_quantity, country_id, country_name')
           .eq('source', 'virtualsms')
-          .eq('is_available', true)
-          .in('country_id', countryIds)
-          .limit(3000);
+          .eq('is_available', true);
+      };
+      var res = await base().gt('price', 0).order('id', { ascending: true }).range(from, from + PAGE - 1);
+      if(res.error){
+        res = await base().order('id', { ascending: true }).range(from, from + PAGE - 1);
       }
-      return (res && res.data) ? res.data : [];
+      return res;
     }
 
-    // Phase 1a — ultra-fast: up to 2 pages without per-country loops
-    if(!opts.skipPriority){
-      try{
-        var fastJobs = [0,1].map(function(pg){
-          var from = pg * 1000, to = from + 999;
-          return sbClient
-            .from('number_services')
-            .select('service_id, service_name, price, available_quantity, country_id, country_name')
-            .eq('source', 'virtualsms')
-            .eq('is_available', true)
-            .gt('price', 0)
-            .range(from, to);
+    var from = 0;
+    var finished = false;
+    var totalRows = 0;
+    var countryIds = new Set();
+    while(!finished && from < 300000){
+      var jobs = [];
+      for(var k = 0; k < PARALLEL; k++) jobs.push(fetchPage(from + k * PAGE));
+      var parts = await Promise.all(jobs);
+      for(var p = 0; p < parts.length; p++){
+        var part = parts[p];
+        if(part.error) throw new Error(part.error.message || 'Could not load Server 3 catalog');
+        var data = part.data || [];
+        totalRows += data.length;
+        data.forEach(function(row){
+          if(row.country_id != null) countryIds.add(String(row.country_id));
+          ingest([row], row.country_id, row.country_name);
         });
-        var fastParts = await Promise.all(fastJobs);
-        fastParts.forEach(function(fast){
-          if(fast && fast.data && fast.data.length){
-            fast.data.forEach(function(row){
-              ingest([row], row.country_id, row.country_name || nameById[row.country_id]);
-            });
-          }
-        });
-        if(catalogMap.size){ paintProgress(); saveCache(false); }
-      }catch(e){ console.warn('fast path', e); }
-    }
-
-    // Phase 1b — priority countries fill gaps (still one .in() call)
-    var priorityIds = ids.slice(0, 16);
-    if(priorityIds.length && !opts.skipPriority){
-      var rows = await fetchByCountryIds(priorityIds);
-      rows.forEach(function(row){
-        ingest([row], row.country_id, row.country_name || nameById[row.country_id]);
-      });
-      paintProgress();
-      saveCache(false);
-    }
-
-    // Phase 2 — load ALL remaining countries fast: parallel batches of 25
-    var rest = ids.slice(16);
-    var bgBatch = 30;
-    var parallel = 5; // more parallel = faster full load
-    for(var j = 0; j < rest.length; j += bgBatch * parallel){
-      var chunkJobs = [];
-      for(var p = 0; p < parallel; p++){
-        var start = j + p * bgBatch;
-        if(start >= rest.length) break;
-        chunkJobs.push(fetchByCountryIds(rest.slice(start, start + bgBatch)));
+        if(data.length < PAGE){ finished = true; break; }
       }
-      try{
-        var parts = await Promise.all(chunkJobs);
-        parts.forEach(function(rows){
-          (rows || []).forEach(function(row){
-            ingest([row], row.country_id, row.country_name || nameById[row.country_id]);
-          });
-        });
-        paintProgress();
-        saveCache(false);
-      }catch(e){ console.warn('catalog batch', e); }
+      from += PARALLEL * PAGE;
+      if(catalogMap.size){ paintProgress(); cacheSet(false); }
     }
 
+    allCountriesMaster = Array.from(countryIds).map(function(id){ return { country_id: id }; });
     __smsCatalogComplete = true;
-    paintProgress();
-    saveCache(true);
     __smsCatalogLoading = false;
 
-    if(!catalogMap.size && !(allServiceCatalog && allServiceCatalog.length)){
-      serviceGrid.innerHTML = '<div class="empty-state"><div class="empty-state-icon">📵</div><h4>No Services Found</h4><p>Try Retry — catalog may still be syncing.</p><button type="button" class="btn btn-primary" style="margin-top:12px;width:auto;padding:10px 16px" onclick="loadServiceCatalog({force:true})">Retry</button></div>';
+    if(!catalogMap.size){
+      serviceGrid.innerHTML = '<div class="empty-state"><h4>Server 3 catalog empty</h4><p>Admin must run <b>Sync Server 3</b> first. Do not use Server 1 data here.</p><button type="button" class="btn btn-primary" style="margin-top:12px;width:auto;padding:10px 16px" onclick="loadServiceCatalog({force:true})">Retry</button></div>';
+      return;
     }
+    paintProgress();
+    cacheSet(true);
   }catch(err){
     __smsCatalogLoading = false;
     console.error('loadServiceCatalog', err);
@@ -944,6 +949,8 @@ async function searchServicesInDb(q){
   }catch(e){ console.warn('searchServicesInDb', e); }
 }
 
+var SERVICE_GRID_DEFAULT_CAP = 120;
+
 function renderServiceCatalog(list, searchQ){
   var q = (searchQ != null ? searchQ : (serviceSearch && serviceSearch.value) || '').trim().toLowerCase();
   var filtered = (list || []).filter(function(s){
@@ -956,7 +963,7 @@ function renderServiceCatalog(list, searchQ){
     if(q) return name.toLowerCase().includes(q);
     return true;
   });
-  // When user searches for something we don't list, offer Grizzly "Any other"
+  // When user searches for something we don't list, offer "Any other"
   if(q){
     var anyOther = findAnyOtherService(list);
     var hasRealMatch = filtered.some(function(s){
@@ -970,9 +977,12 @@ function renderServiceCatalog(list, searchQ){
       filtered = [anyOther].concat(filtered);
     }
   }
-  // Default grid: popular-first, capped so UI paints instantly (search finds the rest)
-  if(!q && filtered.length > 80){
-    filtered = filtered.slice(0, 80);
+  var matchedTotal = filtered.length;
+  // Default grid: popular-first and capped so the page paints instantly — "Show all" reveals the rest
+  var capped = false;
+  if(!q && !__showAllServices && filtered.length > SERVICE_GRID_DEFAULT_CAP){
+    filtered = filtered.slice(0, SERVICE_GRID_DEFAULT_CAP);
+    capped = true;
   }
   if(!filtered.length){
     var fallback = q ? findAnyOtherService(list) : null;
@@ -986,9 +996,8 @@ function renderServiceCatalog(list, searchQ){
       return;
     }
   }
-  var total = (list || []).length;
   if(serviceCountBadge){
-    serviceCountBadge.innerHTML = '<span class="product-count-badge">' + filtered.length + (q || filtered.length === total ? '' : '+') + ' service' + (filtered.length!==1?'s':'') + (total > filtered.length ? ' · ' + total + ' total' : '') + '</span>';
+    serviceCountBadge.innerHTML = '<span class="product-count-badge">' + (capped ? ('Top ' + filtered.length + ' of ' + matchedTotal) : (filtered.length + ' service' + (filtered.length!==1?'s':''))) + (__smsCatalogComplete ? '' : ' · loading more…') + '</span>';
   }
   var html = '<div class="svc-icon-grid">';
   filtered.forEach(function(s){
@@ -997,6 +1006,9 @@ function renderServiceCatalog(list, searchQ){
     html += '<button type="button" class="svc-tile" data-key="'+escapeHtml(s.key || name.toLowerCase())+'">'+iconHtml+'<span class="svc-label">'+escapeHtml(name)+'</span></button>';
   });
   html += '</div>';
+  if(capped){
+    html += '<div class="show-all-wrap"><button type="button" class="show-all-btn" id="showAllServicesBtn">Show all ' + matchedTotal + ' services</button></div>';
+  }
   serviceGrid.innerHTML = html;
   // Prevent global skeleton paint() from wiping real tiles
   serviceGrid.dataset.skelReady = '1';
@@ -1008,6 +1020,13 @@ function renderServiceCatalog(list, searchQ){
       if(svc) selectService(svc);
     });
   });
+  var showAllBtn = document.getElementById('showAllServicesBtn');
+  if(showAllBtn){
+    showAllBtn.addEventListener('click', function(){
+      __showAllServices = true;
+      renderServiceCatalog(allServiceCatalog, (serviceSearch && serviceSearch.value || '').trim().toLowerCase());
+    });
+  }
 }
 
 async function selectService(svc){
@@ -1051,17 +1070,25 @@ async function selectService(svc){
   // Always refresh from DB so every country for this service is included (not just the bulk page sample)
   try{
     if(!sbClient) await loadServiceCatalog();
-    let res = await sbClient
-      .from('number_services')
-      .select('service_id, service_name, country_id, country_name, price, available_quantity, providers_raw, supplier_price, pool_price_overrides')
-      .eq('source', 'virtualsms')
-      .eq('is_available', true)
-      .eq('service_id', svc.service_id)
-      .gt('price', 0)
-      .order('price', { ascending: true })
-      .limit(500);
-    if((!res.data || !res.data.length) && svc.service_name){
-      res = await sbClient
+    // one service has at most a few hundred countries, but page anyway so nothing is ever cut at 1000
+    const pageSize = 1000;
+    let fetched = [];
+    for(let from = 0; from < 10000; from += pageSize){
+      let res = await sbClient
+        .from('number_services')
+        .select('service_id, service_name, country_id, country_name, price, available_quantity, providers_raw, supplier_price, pool_price_overrides')
+        .eq('source', 'virtualsms')
+        .eq('is_available', true)
+        .eq('service_id', svc.service_id)
+        .gt('price', 0)
+        .order('price', { ascending: true })
+        .range(from, from + pageSize - 1);
+      if(res.error) break;
+      fetched = fetched.concat(res.data || []);
+      if(!res.data || res.data.length < pageSize) break;
+    }
+    if(!fetched.length && svc.service_name){
+      const res2 = await sbClient
         .from('number_services')
         .select('service_id, service_name, country_id, country_name, price, available_quantity, providers_raw, supplier_price, pool_price_overrides')
         .eq('source', 'virtualsms')
@@ -1069,10 +1096,11 @@ async function selectService(svc){
         .ilike('service_name', svc.service_name)
         .gt('price', 0)
         .order('price', { ascending: true })
-        .limit(500);
+        .range(0, 999);
+      fetched = res2.data || [];
     }
-    if(res.data && res.data.length){
-      rows = res.data.map(r => ({
+    if(fetched.length){
+      rows = fetched.map(r => ({
         country_id: r.country_id,
         country_name: r.country_name || ('Country ' + r.country_id),
         price: r.price,
@@ -1098,7 +1126,10 @@ async function selectService(svc){
 
 function renderCountryPrices(list){
   if(!list.length){
-    countryList.innerHTML = '<div class="empty-state"><h4>No countries for this service</h4><p>Try another service</p></div>';
+    var searching = (countrySearch && countrySearch.value || '').trim().length > 0;
+    countryList.innerHTML = searching
+      ? '<div class="empty-state"><h4>No country matches that</h4><p>Check the spelling or clear the search</p></div>'
+      : '<div class="empty-state"><h4>No countries for this service</h4><p>Try another service</p></div>';
     return;
   }
   countryList.innerHTML = list.map(function(c,i){
@@ -1108,7 +1139,7 @@ function renderCountryPrices(list){
       showPrice = Math.min.apply(null, pools.map(function(p){ return p.price_ngn; }));
     }
     var extra = pools.length > 1 ? (' · ' + pools.length + ' pools') : '';
-    return '<div class="country-price-row" data-index="'+i+'"><div class="left"><span class="flag">'+countryFlag(c.country_name)+'</span><span class="cname">'+escapeHtml(c.country_name)+extra+'</span></div><div class="right"><span class="cprice">from '+money(showPrice)+'</span><span class="chev"><i class="fa-solid fa-chevron-right"></i></span></div></div>';
+    return '<div class="country-price-row" data-index="'+i+'"><div class="left"><span class="flag">'+countryFlag(c.country_name, c.country_id)+'</span><span class="cname">'+escapeHtml(c.country_name)+extra+'</span></div><div class="right"><span class="cprice">from '+money(showPrice)+'</span><span class="chev"><i class="fa-solid fa-chevron-right"></i></span></div></div>';
   }).join('');
   countryList.querySelectorAll('.country-price-row').forEach(function(row){
     row.addEventListener('click', function(){
@@ -1220,7 +1251,7 @@ function openPurchaseModal(s){
   document.getElementById('psName').textContent = name;
   document.getElementById('psUnitPrice').textContent = money(s.price);
   document.getElementById('psStock').textContent = (s.available_quantity ?? '—') + ' available';
-  document.getElementById('psCountry').innerHTML = '<span class="flag">'+countryFlag(currentCountry.country_name)+'</span>'+escapeHtml(currentCountry.country_name);
+  document.getElementById('psCountry').innerHTML = '<span class="flag">'+countryFlag(currentCountry.country_name, currentCountry.country_id)+'</span>'+escapeHtml(currentCountry.country_name);
   document.getElementById('psTotal').textContent = money(s.price);
   window.__mjSmsBuyId = null;
   document.getElementById('purchaseModal').classList.add('active');
@@ -1334,7 +1365,7 @@ serviceSearch.addEventListener('input', () => {
   __smsSearchTimer = setTimeout(function(){ searchServicesInDb(q); }, 200);
 });
 countrySearch.addEventListener('input', () => {
-  const q = countrySearch.value.trim().toLowerCase();
+  const q = countrySearch.value.trim();
   renderCountryPrices(q ? allCountries.filter(c => countryMatchesQuery(c.country_name, q)) : allCountries);
 });
 document.getElementById('changeServiceBtn')?.addEventListener('click', backToServices);
