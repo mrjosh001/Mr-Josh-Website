@@ -8,6 +8,8 @@ import { applyMarkup, profitFloorNgn } from '../lib/pricing.js';
  * GET  /api/grizzly-sync?action=start      → start a fresh Server 1 sync job
  * GET  /api/grizzly-sync?action=status     → Server 1 sync job progress
  * GET  /api/grizzly-sync?action=vsms_sync  → Server 3 (VirtualSMS) FULL catalog sync (admin / cron)
+ *                                            The admin "Sync Server 3" button now fills the USA + top countries
+ *                                            FIRST (about 30 s), then continues with the normal pass.
  *                                            &force=1 refresh everything · &service=wa re-sync one service
  *                                            &country=US fill every missing service for one country (USA first!)
  *                                            &fill=only skip the normal pass and only fill missing pairs
@@ -32,10 +34,10 @@ import { applyMarkup, profitFloorNgn } from '../lib/pricing.js';
  * fallen under supplier cost + MIN_PROFIT_NGN is re-priced (profitFloorNgn). Orders are refused if a row
  * would sell below supplier cost.
  *
- * WALLET SAFETY (v6): every credit goes through creditWalletOnce() — it never credits twice, rolls back a
- * refund claim if the credit could not be applied, and reverses an exact double credit if something else
- * (a database trigger, a retry) already credited the same refund. Refunds on Server 3 only happen once the
- * supplier has CONFIRMED the cancel/expiry.
+ * WALLET SAFETY (v7): every credit goes through creditWalletOnce() — it never credits twice, it notices when
+ * the database wallet guard (credit_balance) refused the credit and then rolls the refund claim back instead of
+ * pretending it worked, and it reverses an exact double credit. Refunds on Server 3 only happen once the
+ * supplier has CONFIRMED the cancel/expiry, and always inside the guard's 30-minute window.
  *
  * Env: GRIZZLYSMS_API_KEY, SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, CRON_SECRET?
  * Optional: USD_TO_NGN_RATE (default 1500), MIN_PROFIT_NGN (500), VIRTUALSMS_API_KEY (Server 3),
@@ -43,7 +45,7 @@ import { applyMarkup, profitFloorNgn } from '../lib/pricing.js';
  *           VSMS_MIN_GAP_MS (1100), VSMS_SERVICE_LIMIT (5000), VSMS_STALE_HOURS (3)
  */
 
-/* MJHUB_SERVER3_VIRTUALSMS=6 2026-10-18 Server 3: wallet-safe refunds, supplier-confirmed cancel, gap-fill sync, live lookup */
+/* MJHUB_SERVER3_VIRTUALSMS=7 2026-10-18 Server 3: USA-first fill on the admin button, wallet-guard aware refunds, supplier-confirmed cancel, live lookup */
 const BASE = 'https://api.grizzlysms.com/stubs/handler_api.php';
 const VSMS_BASE = 'https://virtualsms.io/stubs/handler_api.php'; // legacy: only for old numeric-id Server 3 orders
 
@@ -123,7 +125,9 @@ async function readBalance(userId) {
  * Why this exists: the old code called the credit_balance RPC and, if the RPC's answer was not shaped the way
  * it expected (void / text / array …), it fell through to a second manual "balance + amount" write — so one
  * refund credited the wallet twice (that is how a ₦5,000 deposit turned into ₦11,000). Rules now:
- *   1. the RPC ran without an error  → it is DONE, never credit again, whatever it returned;
+ *   1. the RPC ran without an error  → check the balance really went up. If it did, it is DONE (never credit
+ *                                       again). If it did NOT, the database wallet guard refused (no matching
+ *                                       purchase debit) → report ok=false, do NOT bypass the guard;
  *   2. the RPC errored               → re-read the balance (it may have applied anyway); if not, write
  *                                       "balance + amount" with a compare-and-set so it can only land once;
  *   3. after crediting, if the balance moved by exactly 2× the amount (something else — a database trigger
@@ -139,6 +143,12 @@ async function creditWalletOnce(userId, amount, label) {
 
   const { error: rpcErr } = await supabase.rpc('credit_balance', { p_user_id: userId, p_amount: amt });
   if (!rpcErr) {
+    const post = await readBalance(userId);
+    if (before != null && post != null && post < before + amt - 0.005) {
+      // The database guard answered without an error but did not credit (no matching recent purchase debit).
+      console.error('[wallet] credit refused by the database wallet guard', { userId, amount: amt, label, before, post });
+      return { ok: false, reason: 'guard_refused', newBalance: post };
+    }
     applied = true;
   } else {
     console.error(`[wallet] credit_balance RPC error (${label || 'credit'}):`, rpcErr.message);
@@ -1163,7 +1173,7 @@ async function claimAndRefundOrder(order, userId, opts = {}) {
         })
         .eq('id', order.id)
         .eq('refunded', true);
-      console.error('[claimAndRefundOrder] credit failed, claim rolled back', { order: order.id, userId, refundAmount });
+      console.error('[claimAndRefundOrder] credit failed, claim rolled back', { order: order.id, userId, refundAmount, reason: cr.reason });
       return { refunded: false, reason: 'credit_failed' };
     }
     newBalance = cr.newBalance;
@@ -1895,7 +1905,8 @@ const VS_SOURCE = 'virtualsms';
 const VS_ID_BASE = 1000;
 const VS_CANCEL_COOLDOWN_MS = 120 * 1000;
 // If the supplier will not confirm a cancel/expiry, wait this long past the 20-min window before refunding anyway.
-const VS_HARD_GRACE_MS = 30 * 60 * 1000;
+// Kept short on purpose: the database wallet guard only refunds a purchase debit made in the last 30 minutes.
+const VS_HARD_GRACE_MS = 8 * 60 * 1000;
 // Cron gets the long budget; the admin "Sync Server 3" button gets one that fits inside the browser's 90 s timeout.
 const VS_TIME_BUDGET_MS = Number(process.env.VSMS_TIME_BUDGET_MS) || 240000;
 const VS_MANUAL_BUDGET_MS = Number(process.env.VSMS_MANUAL_BUDGET_MS) || 80000;
@@ -1908,6 +1919,8 @@ const VS_POPULAR_RE = /whatsapp|telegram|google|gmail|facebook|instagram|twitter
 const VS_POPULAR_CODES = ['wa', 'tg', 'go', 'fb', 'ig', 'tw', 'ds', 'lf', 'tt', 'fu', 'mm', 'am', 'ub', 'nf', 'ts', 'oi', 'tn', 'vi', 'we', 'wx'];
 // Countries customers ask for most — the gap-fill pass and the live lookup check these first (USA first).
 const VS_PRIORITY_ISO = ['US', 'GB', 'CA', 'DE', 'FR', 'NL', 'ES', 'IT', 'BR', 'IN', 'MX', 'AU', 'PL', 'SE', 'TR', 'ZA', 'NG', 'ID', 'PH', 'VN'];
+// The admin button checks the top countries (USA first) for this long BEFORE the normal pass.
+const VS_QUICK_FILL_MS = 30000;
 
 const vsApiKey = () => String(process.env.VIRTUALSMS_API_KEY || process.env.VIRTUAL_SMS_API_KEY || '').trim();
 
@@ -2285,6 +2298,68 @@ async function vsRunSync(req, budgetMs) {
   const gapSample = [];
   let gapTotal = 0;
 
+  // GAP FILL — the root cause of "synced, but USA / some countries / some services never show up":
+  // VirtualSMS caps the per-service country list (about 50 countries, cheapest first), and a service that was
+  // touched in the last few hours is skipped by the normal pass, so the missing countries were never fetched
+  // ("fully synced, nothing to do"). The supplier's own country list tells us which (country, service) pairs
+  // exist; every pair we do not have is fetched one by one from the price endpoint (USA and top countries first).
+  const gap = { missing: 0, checked: 0, added: 0, no_stock: 0, remaining: 0, focus: null };
+  const focusRaw = String(q.country || '').trim();
+  const focusIso = focusRaw ? vsResolveIso(focusRaw, countryList) : null;
+  gap.focus = focusIso;
+  const runGap = async (dl) => {
+    if (fillMode === '0' || rateLimited || !expected.size) return;
+    const pairs = [];
+    for (const [code, set] of expected) {
+      if (!svcName.has(code)) continue;
+      if (onlyService && code !== onlyService) continue;
+      for (const iso of set) {
+        if (focusIso && iso !== focusIso) continue;
+        const cid = vsIsoToId(iso);
+        if (cid == null) continue;
+        if (entries.has(`${iso}|${code}`)) continue;
+        const prev = existing.get(`${cid}|${code}`);
+        if (prev) {
+          // already known: only re-check sold-out rows that have gone stale (stock may be back)
+          const stale = !prev.updated_at || now - new Date(prev.updated_at).getTime() >= VS_STALE_MS;
+          const soldOut = prev.is_available === false && Number(prev.available_quantity || 0) <= 0;
+          if (!(soldOut && stale)) continue;
+        }
+        pairs.push({ iso, code });
+      }
+    }
+    gap.missing = pairs.length;
+    const rankCode = (code) => rank({ code, name: svcName.get(code) || '' });
+    const tier0 = [];
+    const tier1 = [];
+    for (const p of pairs) ((focusIso || VS_PRIORITY_ISO.includes(p.iso)) ? tier0 : tier1).push(p);
+    // popular services first; rotate a little each run so pairs the supplier has no stock for never starve the rest
+    const rot = (arr) => {
+      if (arr.length < 2) return arr;
+      arr.sort((a, b) => rankCode(a.code) - rankCode(b.code) || a.iso.localeCompare(b.iso));
+      const off = (Math.floor(Date.now() / 300000) * 61) % arr.length;
+      return arr.slice(off).concat(arr.slice(0, off));
+    };
+    const usFirst = focusIso ? rot(tier0) : rot(tier0.filter((p) => p.iso === 'US')).concat(rot(tier0.filter((p) => p.iso !== 'US')));
+    const todoPairs = usFirst.concat(rot(tier1));
+    let checkedNow = 0;
+    for (const g of todoPairs) {
+      if (Date.now() > dl) { if (dl >= deadline) stoppedEarly = true; break; }
+      await pace();
+      requests += 1;
+      gap.checked += 1;
+      checkedNow += 1;
+      const out = await vsFetchPair(g.code, g.iso, 10000);
+      if (out.rateLimited) { rateLimited = true; break; }
+      if (out.entry) { entries.set(`${g.iso}|${g.code}`, out.entry); gap.added += 1; }
+      else gap.no_stock += 1;
+    }
+    gap.remaining = Math.max(0, pairs.length - checkedNow);
+  };
+
+  // The admin "Sync Server 3" button (no extra options): look for the USA + top countries FIRST, then do the normal pass.
+  if (fillMode === '' && !onlyService && !force) await runGap(Math.min(deadline, Date.now() + VS_QUICK_FILL_MS));
+
   for (const s of todo) {
     if (Date.now() > deadline) { stoppedEarly = true; break; }
     const out = await vsFetchServiceCountries(s.code, (expected.get(s.code) || new Set()).size, pace, deadline, paging);
@@ -2324,61 +2399,8 @@ async function vsRunSync(req, budgetMs) {
     servicesDone += 1;
   }
 
-  // 3b) GAP FILL — the root cause of "synced, but USA / some countries / some services never show up":
-  //     VirtualSMS caps the per-service country list, and a service that was touched in the last few hours is
-  //     skipped by the normal pass, so the missing countries were never fetched ("fully synced, nothing to do").
-  //     The supplier's own country list tells us which (country, service) pairs exist; every pair we do not have
-  //     is now fetched one by one from the price endpoint (USA and other top countries first).
-  const gap = { missing: 0, checked: 0, added: 0, no_stock: 0, remaining: 0, focus: null };
-  if (fillMode !== '0' && !rateLimited && expected.size) {
-    const focusRaw = String(q.country || '').trim();
-    const focusIso = focusRaw ? vsResolveIso(focusRaw, countryList) : null;
-    gap.focus = focusIso;
-    const pairs = [];
-    for (const [code, set] of expected) {
-      if (!svcName.has(code)) continue;
-      if (onlyService && code !== onlyService) continue;
-      for (const iso of set) {
-        if (focusIso && iso !== focusIso) continue;
-        const cid = vsIsoToId(iso);
-        if (cid == null) continue;
-        if (entries.has(`${iso}|${code}`)) continue;
-        const prev = existing.get(`${cid}|${code}`);
-        if (prev) {
-          // already known: only re-check sold-out rows that have gone stale (stock may be back)
-          const stale = !prev.updated_at || now - new Date(prev.updated_at).getTime() >= VS_STALE_MS;
-          const soldOut = prev.is_available === false && Number(prev.available_quantity || 0) <= 0;
-          if (!(soldOut && stale)) continue;
-        }
-        pairs.push({ iso, code });
-      }
-    }
-    gap.missing = pairs.length;
-    const rankCode = (code) => rank({ code, name: svcName.get(code) || '' });
-    const tier0 = [];
-    const tier1 = [];
-    for (const p of pairs) ((focusIso || VS_PRIORITY_ISO.includes(p.iso)) ? tier0 : tier1).push(p);
-    // popular services first; rotate a little each run so pairs the supplier has no stock for never starve the rest
-    const rot = (arr) => {
-      if (arr.length < 2) return arr;
-      arr.sort((a, b) => rankCode(a.code) - rankCode(b.code) || a.iso.localeCompare(b.iso));
-      const off = (Math.floor(Date.now() / 300000) * 61) % arr.length;
-      return arr.slice(off).concat(arr.slice(0, off));
-    };
-    tier0.sort((a, b) => VS_PRIORITY_ISO.indexOf(a.iso) - VS_PRIORITY_ISO.indexOf(b.iso));
-    const todoPairs = (focusIso ? rot(tier0) : tier0.length ? rot(tier0.filter((p) => p.iso === 'US')).concat(rot(tier0.filter((p) => p.iso !== 'US'))) : []).concat(rot(tier1));
-    for (const g of todoPairs) {
-      if (Date.now() > deadline) { stoppedEarly = true; break; }
-      await pace();
-      requests += 1;
-      gap.checked += 1;
-      const out = await vsFetchPair(g.code, g.iso, 10000);
-      if (out.rateLimited) { rateLimited = true; break; }
-      if (out.entry) { entries.set(`${g.iso}|${g.code}`, out.entry); gap.added += 1; }
-      else gap.no_stock += 1;
-    }
-    gap.remaining = Math.max(0, gap.missing - gap.checked);
-  }
+  // second gap-fill pass with whatever time is left (explicit &fill=only / &country=XX runs use all of it here)
+  await runGap(deadline);
 
   if (!entries.size && !processed.size) {
     return { status: 200, body: {
@@ -2386,7 +2408,7 @@ async function vsRunSync(req, budgetMs) {
       message: rateLimited
         ? 'VirtualSMS rate limit hit (60/min). It will continue on the next run.'
         : (todo.length ? 'VirtualSMS answered but nothing could be read. Open /api/grizzly-sync?action=vsms_probe and check the sample.'
-          : (gap.missing ? `Main catalog is up to date. Checked ${gap.checked} of ${gap.missing} missing country/service pairs — none had stock yet. Run Sync again to keep checking.` : 'Everything was synced recently — nothing to refresh. Add &force=1 to refresh all anyway.')),
+          : (gap.missing ? `Main catalog is up to date. Checked ${gap.checked} missing country/service pairs — none had stock yet. Tap Sync again to keep checking.` : 'Everything was synced recently — nothing to refresh. Add &force=1 to refresh all anyway.')),
       services_done: servicesDone, services_total: servicesTotal, gap_fill: gap, errors, ms: Date.now() - started
     } };
   }
@@ -2486,8 +2508,8 @@ async function vsRunSync(req, budgetMs) {
   const countriesInRun = new Set(rows.map((r) => r.country_id)).size;
   const partial = stoppedEarly || rateLimited || servicesDone < servicesTotal;
   let message = `Server 3 sync: ${rows.length} in-stock offers from ${processed.size} services this run (${stats.inserted} new, ${stats.updated} updated, ${stats.delisted} sold out). Services up to date: ${Math.min(servicesDone, servicesTotal)}/${servicesTotal}.`;
-  if (gap.missing) {
-    message += ` Missing-country fill${gap.focus ? ' (' + gap.focus + ')' : ''}: checked ${gap.checked} of ${gap.missing} pairs the supplier lists but we did not have — ${gap.added} added${gap.remaining ? ', ' + gap.remaining + ' still to check (run Sync again)' : ''}.`;
+  if (gap.checked) {
+    message += ` Missing-country fill${gap.focus ? ' (' + gap.focus + ')' : ''}: checked ${gap.checked} pairs the supplier lists but we did not have — ${gap.added} added${gap.remaining ? ', about ' + gap.remaining + ' still to check (tap Sync again)' : ''}.`;
   }
   if (partial) message += rateLimited ? ' Rate limit hit — it will continue on the next run.' : ' Not finished — run Sync again (or let the cron continue).';
   if (gapTotal) message += ` Supplier capped ${gapTotal} country/service pairs in the bulk answer — see "coverage"; the fill pass covers them.`;
@@ -2822,7 +2844,7 @@ async function vsHandleLookup(req, res) {
 /** Kept for the order path: credits ONCE and returns the new balance (see creditWalletOnce). */
 async function vsCreditWallet(userId, amount) {
   const r = await creditWalletOnce(userId, amount, 'vsms-order-restore');
-  if (!r.ok) console.error('[vsms] CRITICAL: could not restore wallet', { userId, amount });
+  if (!r.ok) console.error('[vsms] CRITICAL: could not restore wallet', { userId, amount, reason: r.reason });
   return r.newBalance;
 }
 
