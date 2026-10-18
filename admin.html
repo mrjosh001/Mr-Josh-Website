@@ -2485,12 +2485,44 @@ async function syncServer3Now() {
   }
 }
 
+// Server 3 country names: new VirtualSMS rows store an ISO-2 code as a reversible
+// integer id (1000 + letters) with the real name in country_name. Old broken rows
+// (id < 1000) only have "Country 73". Resolve a proper name for every row.
+var _s3RegionNames = null;
+function s3IdToIso(id) {
+  const n = Number(id) - 1000;
+  if (!Number.isInteger(n) || n < 0 || n >= 676) return null;
+  return String.fromCharCode(65 + Math.floor(n / 26)) + String.fromCharCode(65 + (n % 26));
+}
+function s3CountryLabel(r) {
+  const name = String((r && r.country_name) || '').trim();
+  if (name && !/^country\s*\d+$/i.test(name) && !/^\d+$/.test(name)) return name;
+  const iso = s3IdToIso(r && r.country_id);
+  if (iso) {
+    try {
+      if (!_s3RegionNames) _s3RegionNames = new Intl.DisplayNames(['en'], { type: 'region' });
+      const n = _s3RegionNames.of(iso);
+      if (n && n !== iso) return n;
+    } catch (e) {}
+    return iso;
+  }
+  return name || ' ';
+}
+function s3RowStatus(r) {
+  const stock = r.available_quantity;
+  const stockDisplay = stock == null ? ' ' : stock;
+  const available = r.is_available !== false && (stock == null || stock > 0);
+  const statusLabel = r.is_available === false ? 'Hidden' : (available ? 'Active' : 'Out of stock');
+  return { stockDisplay, available, statusLabel };
+}
+
 async function loadServer3Services() {
   const tbody = document.getElementById('smsServer3TableBody');
   const cards = document.getElementById('smsServer3MobileCards');
   try {
-    // Match Server 1 columns — no stock/admin_hidden (those break the query on this schema)
-    const cols = 'id, country_id, country_name, service_id, service_name, supplier_price, price, available_quantity, is_available, updated_at, price_source';
+    // Same columns Server 1/2 use. country_id >= 1000 = real VirtualSMS rows;
+    // older rows (< 1000) are the broken "Country 73 / AAA" leftovers — never show them.
+    const cols = 'id, source, country_id, country_name, service_id, service_name, supplier_price, price, available_quantity, is_available, currency, updated_at, price_source';
     let all = [];
     let from = 0;
     const page = 1000;
@@ -2499,6 +2531,7 @@ async function loadServer3Services() {
         .from('number_services')
         .select(cols)
         .eq('source', 'virtualsms')
+        .gte('country_id', 1000)
         .order('service_name', { ascending: true })
         .range(from, from + page - 1);
       const { data, error } = await q;
@@ -2533,8 +2566,8 @@ function filterNumberServicesServer3() {
   }
   if (cq) {
     rows = rows.filter(r =>
-      String(r.country_name || '').toLowerCase().includes(cq) ||
-      String(r.country_id || '').toLowerCase().includes(cq)
+      s3CountryLabel(r).toLowerCase().includes(cq) ||
+      (s3IdToIso(r.country_id) || '').toLowerCase() === cq
     );
   }
   if (hideZero) {
@@ -2551,64 +2584,59 @@ function filterNumberServicesServer3() {
     if (cards) cards.innerHTML = '<div class="empty-state">No Server 3 rows. Click Sync Server 3.</div>';
     return;
   }
+  // Same layout as Server 1 / Server 2: badge status + Edit + Delete.
   if (tbody) {
-    tbody.innerHTML = rows.map(r => {
-      const stock = r.available_quantity == null ? '—' : Number(r.available_quantity);
-      const usd = r.supplier_price != null ? Number(r.supplier_price) : null;
-      const price = r.price != null ? Number(r.price) : 0;
-      const out = r.is_available === false || (r.available_quantity != null && Number(r.available_quantity) <= 0);
-      const status = out ? 'Out' : 'Live';
-      const statusColor = status === 'Live' ? '#34d399' : '#f87171';
-      return `<tr>
-        <td>${escapeHtml(r.country_name || r.country_id || '—')}</td>
-        <td>${escapeHtml(r.service_name || r.service_id || '—')}</td>
-        <td>${usd != null && Number.isFinite(usd) ? ('$' + usd.toFixed(2)) : '—'}</td>
-        <td>₦${Number(price).toLocaleString()}</td>
-        <td>${stock}</td>
-        <td style="color:${statusColor};font-weight:700;">${status}</td>
-        <td>
-          <button type="button" class="btn btn-ghost btn-sm" onclick="openServer3EditPrice('${escapeHtml(String(r.id))}', ${price})"><i class="fas fa-pen"></i> Price</button>
+    tbody.innerHTML = rows.slice(0, 1500).map(r => {
+      const { stockDisplay, available, statusLabel } = s3RowStatus(r);
+      return `
+      <tr>
+        <td style="font-weight:600;">${escapeHtml(s3CountryLabel(r))}</td>
+        <td>${escapeHtml(r.service_name || r.service_id || ' ')}</td>
+        <td class="supplier-price">${usdFmt(r.supplier_price)}</td>
+        <td class="price">₦${Number(r.price || 0).toLocaleString()}</td>
+        <td>${stockDisplay}</td>
+        <td><span class="badge ${available ? 'badge-on' : 'badge-off'}">${statusLabel}</span></td>
+        <td style="white-space:nowrap;">
+          <button class="btn btn-ghost btn-sm" onclick="editNumberServiceServer3('${r.id}')" title="Edit price"><i class="fas fa-edit"></i></button>
+          <button class="btn btn-ghost btn-sm" onclick="deleteNumberService('${r.id}')" title="Delete" style="color:#f87171;"><i class="fas fa-trash"></i></button>
         </td>
       </tr>`;
     }).join('');
   }
   if (cards) {
-    cards.innerHTML = rows.slice(0, 80).map(r => {
-      const stock = r.available_quantity == null ? '—' : Number(r.available_quantity);
-      const price = r.price != null ? Number(r.price) : 0;
-      return `<div class="mobile-card">
-        <div style="font-weight:700;">${escapeHtml(r.service_name || r.service_id || '—')}</div>
-        <div style="font-size:12px;color:#94a3b8;">${escapeHtml(r.country_name || '')} · Stock ${stock}</div>
-        <div style="margin-top:6px;font-weight:800;">₦${Number(price).toLocaleString()}</div>
-        <div style="margin-top:8px;display:flex;gap:6px;">
-          <button type="button" class="btn btn-ghost btn-sm" onclick="openServer3EditPrice('${escapeHtml(String(r.id))}', ${price})">Edit</button>
+    cards.innerHTML = rows.slice(0, 150).map(r => {
+      const { stockDisplay, available, statusLabel } = s3RowStatus(r);
+      return `
+      <div class="product-card">
+        <h4>${escapeHtml(s3CountryLabel(r))}</h4>
+        <div class="meta">${escapeHtml(r.service_name || r.service_id || ' ')}</div>
+        <div class="row-line"><span>Supplier Price</span><span class="supplier-price">${usdFmt(r.supplier_price)}</span></div>
+        <div class="row-line"><span>Your Price</span><strong class="price">₦${Number(r.price || 0).toLocaleString()}</strong></div>
+        <div class="row-line"><span>Stock</span><span>${stockDisplay}</span></div>
+        <div class="row-line"><span>Status</span><span class="badge ${available ? 'badge-on' : 'badge-off'}">${statusLabel}</span></div>
+        <div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap;">
+          <button class="btn btn-ghost btn-sm" onclick="editNumberServiceServer3('${r.id}')"><i class="fas fa-edit"></i> Edit Price</button>
+          <button class="btn btn-ghost btn-sm" onclick="deleteNumberService('${r.id}')" style="color:#f87171;"><i class="fas fa-trash"></i> Delete</button>
         </div>
       </div>`;
     }).join('');
   }
 }
 
-async function openServer3EditPrice(id, current) {
-  const next = prompt('Sell price (₦)', String(current || 0));
-  if (next == null) return;
-  const val = Number(String(next).replace(/[^0-9.]/g, ''));
-  if (!Number.isFinite(val) || val < 0) {
-    showAdminToast('Invalid price', 'error');
-    return;
-  }
-  try {
-    const { error } = await sb.from('number_services').update({
-      price: val,
-      price_source: 'admin'
-    }).eq('id', id).eq('source', 'virtualsms');
-    if (error) throw error;
-    const row = (window._server3Rows || []).find(r => String(r.id) === String(id));
-    if (row) row.price = val;
-    filterNumberServicesServer3();
-    showAdminToast('Price updated', 'success');
-  } catch (e) {
-    showAdminToast('Could not update price: ' + (e.message || e), 'error');
-  }
+// Opens the SAME "Edit SMS Number Pricing" popup that Server 1 and Server 2 use.
+function editNumberServiceServer3(id) {
+  const s = (window._server3Rows || []).find(x => String(x.id) === String(id));
+  if (!s) return;
+  window._smsModalMode = 'server3';
+  document.getElementById('smsModalError').textContent = '';
+  document.getElementById('editSmsId').value = s.id;
+  document.getElementById('smsCountryDisplay').value = s3CountryLabel(s);
+  document.getElementById('smsServiceDisplay').value = s.service_name || s.service_id || ' ';
+  document.getElementById('smsSupplierPriceDisplay').value = usdFmt(s.supplier_price);
+  document.getElementById('smsStockDisplay').value = s.available_quantity ?? 0;
+  document.getElementById('smsPrice').value = s.price ?? 0;
+  document.getElementById('smsAvailable').value = s.is_available === false ? 'false' : 'true';
+  document.getElementById('smsModal').classList.remove('hidden');
 }
 
 async function toggleServer3Visibility(id, hide) {
@@ -3228,6 +3256,7 @@ function renderNumberServices(list) {
 function editNumberService(id) {
  const s = allNumberServices.find(x => String(x.id) === String(id));
  if (!s) return;
+ window._smsModalMode = null;
  document.getElementById('smsModalError').textContent = '';
  document.getElementById('editSmsId').value = s.id;
  document.getElementById('smsCountryDisplay').value = s.country_name || ' ';
@@ -3389,6 +3418,7 @@ function renderNumberServicesServer2(list) {
 function editNumberServiceServer2(id) {
  const s = allNumberServicesServer2.find(x => String(x.id) === String(id));
  if (!s) return;
+ window._smsModalMode = null;
  document.getElementById('smsModalError').textContent = '';
  document.getElementById('editSmsId').value = s.id;
  document.getElementById('smsCountryDisplay').value = s.country_name || ' ';
@@ -3404,7 +3434,8 @@ function editNumberServiceServer2(id) {
 
 async function deleteNumberService(id) {
  const s = allNumberServices.find(x => String(x.id) === String(id))
- || allNumberServicesServer2.find(x => String(x.id) === String(id));
+ || allNumberServicesServer2.find(x => String(x.id) === String(id))
+ || (window._server3Rows || []).find(x => String(x.id) === String(id));
  const label = s
  ? `${s.country_name || ''}: ${s.service_name || s.service_id || id}`
  : id;
@@ -3419,7 +3450,7 @@ async function deleteNumberService(id) {
  }
  showAdminToast('Deleted from catalog', 'success');
  // Refresh both: the row could have come from either tab's table.
- await Promise.all([loadSmsRowsForCurrentFilter(), loadSmsServer2RowsForCurrentFilter()]);
+ await Promise.all([loadSmsRowsForCurrentFilter(), loadSmsServer2RowsForCurrentFilter(), loadServer3Services()]);
  } catch (e) {
  showAdminToast('Delete failed: ' + (e.message || e), 'error');
  }
@@ -3435,6 +3466,28 @@ async function saveNumberService() {
 
  const btn = document.getElementById('saveSmsBtn');
  setBtnBusy(btn, true, 'Saving...');
+
+ // Server 3 rows: save straight to the catalog and mark the price as admin-set,
+ // so a re-sync keeps your price (same as the note in the popup says).
+ if (window._smsModalMode === 'server3') {
+ try {
+ const { error } = await sb.from('number_services')
+ .update({ price, is_available, price_source: 'admin' })
+ .eq('id', id).eq('source', 'virtualsms');
+ if (error) throw error;
+ } catch (e) {
+ errEl.textContent = 'Save failed: ' + (e.message || e);
+ showAdminToast('Save failed: ' + (e.message || e), 'error');
+ setBtnBusy(btn, false);
+ return;
+ }
+ setBtnBusy(btn, false);
+ window._smsModalMode = null;
+ closeSmsModal();
+ await loadServer3Services();
+ showAdminToast('Price updated successfully', 'success');
+ return;
+ }
  try {
  const headers = { 'Content-Type': 'application/json' };
  const { data: { session } } = await sb.auth.getSession();
