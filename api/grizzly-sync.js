@@ -22,10 +22,10 @@ import { applyMarkup } from '../lib/pricing.js';
  *
  * Env: GRIZZLYSMS_API_KEY, SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, CRON_SECRET?
  * Optional: USD_TO_NGN_RATE (default 1500), VIRTUALSMS_API_KEY (Server 3),
- *           VSMS_SERVICES_PER_RUN (40), VSMS_SERVICE_LIMIT (150), VSMS_STALE_HOURS (5)
+ *           VSMS_SERVICES_PER_RUN (30), VSMS_SERVICE_LIMIT (150), VSMS_STALE_HOURS (5)
  */
 
-/* MJHUB_SERVER3_VIRTUALSMS=3 2026-10-18 Server 3 moved to VirtualSMS REST API: real country names + real prices */
+/* MJHUB_SERVER3_VIRTUALSMS=4 2026-10-18 Server 3: matched to VirtualSMS docs (stock fallback, country names, safe cancel) */
 const BASE = 'https://api.grizzlysms.com/stubs/handler_api.php';
 const VSMS_BASE = 'https://virtualsms.io/stubs/handler_api.php'; // legacy: only for old numeric-id Server 3 orders
 
@@ -1733,13 +1733,20 @@ async function handleExpireStale(req, res) {
 // ===========================================================================
 // SERVER 3 — VirtualSMS (modern REST API). Real country names + real prices.
 // ===========================================================================
+// Docs facts this code is built on (https://virtualsms.io/api/v1, header X-API-Key):
+//  - GET  /customer/countries                → { success, countries:[{country_id:"ID", country_name, min_price, services:"tg,wa"}] }
+//  - GET  /customer/countries?service=wa     → countries for that service WITH exact pricing (only countries that have it)
+//  - POST /customer/purchase {service,country} → { order_id, phone_number, price, status:"waiting" }
+//  - GET  /customer/order/{id}               → { status: waiting|completed|cancelled|expired, sms_received, messages[] }
+//  - POST /customer/cancel/{id}              → 425 inside the first 120 s; 400 once an SMS arrived; error bodies are { error: "..." }
+//  - Rate limit ~60 requests / minute.
 
 const VS_REST = 'https://virtualsms.io/api/v1';
 const VS_SOURCE = 'virtualsms';
 const VS_ID_BASE = 1000;
 const VS_CANCEL_COOLDOWN_MS = 120 * 1000;
 const VS_TIME_BUDGET_MS = 55000;
-const VS_SERVICES_PER_RUN = Number(process.env.VSMS_SERVICES_PER_RUN) || 40;
+const VS_SERVICES_PER_RUN = Number(process.env.VSMS_SERVICES_PER_RUN) || 30; // stay well under 60 requests/min
 const VS_SERVICE_LIMIT = Number(process.env.VSMS_SERVICE_LIMIT) || 150;
 const VS_STALE_MS = (Number(process.env.VSMS_STALE_HOURS) || 5) * 3600 * 1000;
 const VS_POPULAR_RE = /whatsapp|telegram|google|gmail|facebook|instagram|twitter|^x$|discord|tiktok|snapchat|microsoft|amazon|uber|netflix|paypal|tinder|linkedin|viber|wechat|apple|line|bumble|yahoo|openai|chatgpt|signal|vk|binance/i;
@@ -1775,14 +1782,19 @@ function vsFirstNum(o, keys) {
   for (const k of keys) { const n = vsNum(o && o[k]); if (n > 0) return n; }
   return 0;
 }
+const VS_STOCK_KEYS = ['available_phones', 'available_count', 'count', 'stock', 'quantity', 'qty', 'numbers', 'available', 'physical_count'];
 function vsStockOf(o) {
-  const n = vsFirstNum(o, ['available_phones', 'available_count', 'count', 'stock', 'quantity', 'qty', 'numbers', 'available']);
+  const n = vsFirstNum(o, VS_STOCK_KEYS);
   if (n > 0) return Math.floor(n);
   if (o && (o.available === true || o.in_stock === true)) return 1;
   return 0;
 }
+/** True when the API actually sent a stock field (even if it says 0). */
+function vsStockKnown(o) {
+  return !!o && (VS_STOCK_KEYS.some((k) => o[k] != null && typeof o[k] !== 'boolean') || o.available === false || o.in_stock === false);
+}
 function vsPriceOf(o) {
-  return vsFirstNum(o, ['price_usd', 'price', 'cost', 'amount', 'min_price', 'retail']);
+  return vsFirstNum(o, ['price_usd', 'price', 'our_price', 'cost', 'amount', 'min_price', 'retail']);
 }
 /** Pull an array out of whatever wrapper the API uses ({countries:[…]}, {data:[…]}, [..], {GB:{…}}). */
 function vsAsList(j, keys) {
@@ -1800,15 +1812,17 @@ function vsAsList(j, keys) {
   return e.length > 3 ? e.map(([key, x]) => ({ _key: key, ...x })) : [];
 }
 function vsCountryIso(c) {
-  for (const v of [c.iso, c.iso2, c.country_code, c.code, c.country_id, c.country, c._key]) {
+  for (const v of [c.country_id, c.iso, c.iso2, c.country_code, c.code, c.country, c._key]) {
     const s = String(v == null ? '' : v).toUpperCase();
     if (/^[A-Z]{2}$/.test(s)) return s;
   }
   return null;
 }
 function vsCountryNameOf(c, iso) {
-  for (const v of [c.name, c.country_name, c.eng, c.english, c.title, c.label]) {
-    if (v && typeof v === 'string' && v.trim().length > 1) return v.trim();
+  for (const v of [c.country_name, c.name, c.eng, c.english, c.title, c.label, c.country]) {
+    const t = typeof v === 'string' ? v.trim() : '';
+    // skip empty values, 2-letter codes like "IE", and plain numbers
+    if (t.length > 2 && !/^\d+$/.test(t)) return t;
   }
   return vsRegionName(iso) || iso;
 }
@@ -1916,6 +1930,7 @@ async function vsHandleSync(req, res) {
   };
 
   // 2a) best case: the country list already carries per-service prices
+  // (docs: without ?service= the list only has a comma string "tg,wa,ig" + min_price, so this normally finds nothing)
   let embedded = 0;
   for (const c of countryList) {
     const iso = vsCountryIso(c);
@@ -1938,7 +1953,7 @@ async function vsHandleSync(req, res) {
     for (const s of services) processed.add(s.code);
     servicesDone = servicesTotal = services.length;
   } else {
-    // 2b) price services one by one: /customer/countries?service=CODE (exact price + stock per country)
+    // 2b) price services one by one: /customer/countries?service=CODE (exact price per country)
     const rank = (s) => {
       const pi = VS_POPULAR_CODES.indexOf(s.code);
       if (pi >= 0) return pi;
@@ -1972,7 +1987,10 @@ async function vsHandleSync(req, res) {
           if (!iso) continue;
           if (!isoName.has(iso)) isoName.set(iso, vsCountryNameOf(c, iso));
           const usd = vsPriceOf(c);
-          const count = vsStockOf(c);
+          // The docs say this call only lists countries that HAVE the service, and the sample reply has no
+          // stock field. So: a real stock number wins; an explicit 0 means out of stock; if the API sends no
+          // stock field at all, a listed price means "in stock" (this was why every row used to be dropped).
+          const count = vsStockOf(c) || (vsStockKnown(c) ? 0 : (usd > 0 ? 1 : 0));
           if (usd > 0 && count > 0) { addEntry(iso, s.code, usd, count); priced += 1; }
         }
         if (list.length && !priced) note(`${s.code}: countries came back without a usable price`);
@@ -1980,7 +1998,8 @@ async function vsHandleSync(req, res) {
         servicesDone += 1;
       }
     };
-    await Promise.all(Array.from({ length: 4 }, worker));
+    // 2 workers (not 4) so one run stays far below the 60 requests/minute limit
+    await Promise.all(Array.from({ length: 2 }, worker));
     stoppedEarly = idx < todo.length;
   }
 
@@ -2002,7 +2021,8 @@ async function vsHandleSync(req, res) {
     const sell = Number(applyMarkup(e.usd, rate));
     rows.push({
       key: `${cid}|${e.code}`, country_id: cid,
-      country_name: isoName.get(e.iso) || vsRegionName(e.iso) || e.iso,
+      // our own region-name list first (Ireland, Canada…), then whatever VirtualSMS sent, never the bare code if avoidable
+      country_name: vsRegionName(e.iso) || isoName.get(e.iso) || e.iso,
       service_id: e.code, service_name: svcName.get(e.code) || e.code.toUpperCase(),
       supplier_price: e.usd, price: Number.isFinite(sell) && sell > 0 ? sell : salePriceFromUsd(e.usd),
       available_quantity: e.count
@@ -2087,6 +2107,7 @@ async function vsHandleSync(req, res) {
   if (embedded === 0) message += ` Services priced: ${Math.min(servicesDone, servicesTotal)}/${servicesTotal}.`;
   if (partial) message += rateLimited ? ' Rate limit hit — wait ~1 min, then Sync again.' : ' Click Sync Server 3 again to continue.';
   if (legacyHidden) message += ` Hid ${legacyHidden} old broken rows.`;
+  if (!rows.length && errors.length) message += ' ' + errors[0];
   return res.status(200).json({
     success: true, source: VS_SOURCE, partial, done: !partial, rate_limited: rateLimited, rows_seen: rows.length,
     upserted: written, inserted: stats.inserted, updated: stats.updated, delisted: stats.delisted,
@@ -2206,7 +2227,7 @@ async function vsHandleOrder(req, res) {
       await vsCreditWallet(user_id, price);
       deducted = false;
       const code = String(j.error || '').toLowerCase();
-      const noStock = r.status === 404 || r.status === 409 || /no_numbers|not_available|out_of_stock|unavailable/.test(code);
+      const noStock = r.status === 404 || r.status === 409 || /no_numbers|not_available|out_of_stock|unavailable|no numbers/.test(code);
       try {
         await supabase.from('transactions').insert({
           user_id, customer_id: customerId, type: 'purchase', category: 'MJ SMS', title: serviceName,
@@ -2349,7 +2370,14 @@ async function vsHandleCancel(req, res) {
     if (r.status === 425) {
       return res.status(400).json({ success: false, code: 'EARLY_CANCEL_DENIED', wait_seconds: 30, message: 'Cancel is not available yet. Try again in a moment.' });
     }
-    const already = r.status === 404 || r.status === 409 || /already|cancel|expired|refund/i.test(String(r.text || '')) && r.status < 500 && !r.ok;
+    // Docs: errors look like { error: "Cannot cancel order with status: sms_received" }.
+    // Only treat the order as "already cancelled/expired" when the supplier says exactly that —
+    // an SMS that already arrived must NEVER be refunded.
+    const errTxt = String((r.json && (r.json.error || r.json.message)) || r.text || '');
+    if (!r.ok && /sms_received|completed|received/i.test(errTxt)) {
+      return res.status(409).json({ success: false, code: 'NUMBER_CODE_ALREADY_RECEIVED', message: 'A code was already received — this order cannot be cancelled.' });
+    }
+    const already = r.status === 404 || /status:\s*(cancelled|canceled|expired|refunded)/i.test(errTxt);
     if (!r.ok && !already) {
       return res.status(400).json({ success: false, code: 'CANCEL_FAILED', message: 'Could not cancel this order right now. Try again shortly.' });
     }
