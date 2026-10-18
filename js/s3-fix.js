@@ -7,12 +7,9 @@
   function fix(a){try{var h=a.getAttribute('href')||'';if(h.indexOf('mj-sms-number.html')<0)return;var u=new URL(h,location.href),id=u.searchParams.get('order_id');if(id&&UUID.test(id)){u.pathname=u.pathname.replace('mj-sms-number.html','mj-sms-s3-number.html');a.setAttribute('href',u.pathname+u.search);}}catch(e){}}
   function scan(){document.querySelectorAll('a[href*="mj-sms-number.html"]').forEach(fix);}
   new MutationObserver(scan).observe(document.documentElement,{childList:true,subtree:true});scan();
-
-  // DB-first, supplier-second. If the local snapshot misses a service/country, query
-  // VirtualSMS directly and let the API backfill the result into number_services.
   var svcTimer=null,countryTimer=null;
   function token(){try{if(window.sbClient&&window.sbClient.auth)return window.sbClient.auth.getSession().then(function(x){return x.data&&x.data.session?x.data.session.access_token:null;});}catch(e){}return Promise.resolve(null);}
-  function live(path){return token().then(function(t){if(!t)throw new Error('Please sign in first.');return fetch('/api/vsms-live'+path,{headers:{Authorization:'Bearer '+t,Accept:'application/json'}});}).then(function(r){return r.json().then(function(j){return{ok:r.ok,data:j};});});}
+  function live(path){return token().then(function(t){if(!t)throw new Error('Please sign in first.');return fetch('https://atczodlljmlayvldxfmv.supabase.co/functions/v1/virtualsms-live'+path,{headers:{Authorization:'Bearer '+t,Accept:'application/json'}});}).then(function(r){return r.json().then(function(j){return{ok:r.ok,data:j};});});}
   function mergeServices(items,q){if(!Array.isArray(items)||!items.length||typeof window.renderServiceCatalog!=='function')return;var list=Array.isArray(window.allServiceCatalog)?window.allServiceCatalog.slice():[],seen={};list.forEach(function(s){seen[String(s.service_id||s.service_name||'').toLowerCase()]=1;});items.forEach(function(s){var name=s.name||s.code||'Service',id=s.code||name,key=String(name).toLowerCase();if(!seen[String(id).toLowerCase()]&&!seen[key])list.push({service_id:id,service_name:name,key:key,live:true});});window.allServiceCatalog=list;window.renderServiceCatalog(list,q||'');}
   function liveServiceSearch(q){if(String(q||'').trim().length<2)return;live('?mode=services&q='+encodeURIComponent(q.trim())).then(function(r){if(r.ok&&r.data&&r.data.success)mergeServices(r.data.services,q.trim().toLowerCase());}).catch(function(){});}
   function isoId(iso){var s=String(iso||'').toUpperCase();return /^[A-Z]{2}$/.test(s)?1000+(s.charCodeAt(0)-65)*26+(s.charCodeAt(1)-65):null;}
