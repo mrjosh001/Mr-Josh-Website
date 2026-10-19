@@ -349,7 +349,11 @@ function serverLabel(o){
   const src=String(o.source||'').toLowerCase();
   if(src==='gotsms') return 'USA rental';
   if(src==='smsbus_rent'||src.indexOf('rent')>=0) return 'Rental';
-  if(src==='smsbus'||src==='logsdomain') return 'Server 2';
+  if(src==='smsbus'||src==='sms-bus'||src==='logsdomain') return 'Server 2';
+  if(src==='virtualsms'||src==='vsms'||src==='virtual') return 'Server 3';
+  if(src==='grizzlysms'||src==='grizzly') return 'Server 1';
+  // UUID order ids from Server 3 even if source column was wrong
+  if(o.order_id && /^[0-9a-f]{8}-[0-9a-f]{4}-/i.test(String(o.order_id))) return 'Server 3';
   return 'Server 1';
 }
 function updateHistCta(){
@@ -400,8 +404,9 @@ function render(){
     let action='';
     const src=String(o.source||'').toLowerCase();
     const isS2=src==='smsbus'||src==='sms-bus';
-    if(!isRent(o)&&String(o.status)==='waiting_for_code'){
-      const page=isS2?'mj-sms3-number.html':'mj-sms-number.html';
+    const isS3=src==='virtualsms'||src==='vsms'||src==='virtual'||(/^[0-9a-f]{8}-[0-9a-f]{4}-/i.test(String(o.order_id||'')));
+    if(!isRent(o)&&(String(o.status)==='waiting_for_code'||String(o.status||'').toLowerCase()==='waiting')){
+      const page=isS3?'mj-sms-s3-number.html':(isS2?'mj-sms3-number.html':'mj-sms-number.html');
       action='<div class="act"><a class="btn-inbox" href="'+page+'?order_id='+encodeURIComponent(o.order_id||'')+'"><i class="fa-solid fa-inbox"></i> Verify SMS</a></div>';
     }
 
@@ -558,6 +563,39 @@ document.getElementById('list').addEventListener('click',function(e){
   if(btn) reuseNumber(btn);
 });
 
+
+async function refreshWaitingOtpStatuses(session){
+  try{
+    var waiting=(allOrders||[]).filter(function(o){
+      if(isRent(o)) return false;
+      var st=String(o.status||'').toLowerCase();
+      return st==='waiting_for_code'||st==='waiting';
+    }).slice(0,12);
+    if(!waiting.length||!session) return;
+    await Promise.all(waiting.map(async function(o){
+      try{
+        var src=String(o.source||'').toLowerCase();
+        var isS3=src==='virtualsms'||src==='vsms'||/^[0-9a-f]{8}-[0-9a-f]{4}-/i.test(String(o.order_id||''));
+        var isS2=src==='smsbus'||src==='sms-bus';
+        var url=isS2?'/api/sms-bus?action=check':'/api/grizzly-sync?action=check';
+        var body={order_id:o.order_id,user_id:session.user.id};
+        if(isS3) body.provider='virtualsms';
+        var res=await fetch(url,{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+session.access_token},body:JSON.stringify(body)});
+        var j=await res.json().catch(function(){return {};});
+        if(!j||!j.success||!j.data) return;
+        var d=j.data;
+        var idx=allOrders.findIndex(function(x){return String(x.order_id)===String(o.order_id);});
+        if(idx<0) return;
+        if(d.status) allOrders[idx].status=d.status;
+        if(d.code) allOrders[idx].code=d.code;
+        if(d.refunded!=null) allOrders[idx].refunded=d.refunded;
+        if(d.phone_number||d.number) allOrders[idx].phone_number=d.phone_number||d.number;
+      }catch(_e){}
+    }));
+    try{ if(typeof writeHistCache==='function') writeHistCache(session.user.id, allOrders); }catch(_){}
+  }catch(e){ console.warn('refreshWaitingOtpStatuses', e); }
+}
+
 async function init(){
   try{var _v=new URLSearchParams(location.search).get('view');if(_v==='rent'){view='rent';document.querySelectorAll('.tab').forEach(function(x){x.classList.toggle('on',x.getAttribute('data-view')==='rent');});document.getElementById('otpFilters').style.display='none';var _rf0=document.getElementById('rentFilters');if(_rf0)_rf0.style.display='flex';}}catch(_){}
 
@@ -706,6 +744,11 @@ function startHistoryRealtime(sbClient, userId){
       render();
     }
   } catch (_en) {}
+  try {
+    await refreshWaitingOtpStatuses(session);
+    updateHistCta();
+    render();
+  } catch (_rs) {}
 }
 
 init();
