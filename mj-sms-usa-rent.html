@@ -521,21 +521,32 @@ function renderDetailForm(){
     '<div class="total"><div class="lbl">Total</div><div class="amt" id="totalAmt">₦0</div><div class="total-break" id="totalBreak"><div class="tb-row base" id="tbBase" style="display:none"><span>Rental duration</span><span></span></div><div class="tb-row" id="tbCarrier" style="display:none"><span>Preferred carrier</span><span></span></div><div class="tb-row" id="tbArea" style="display:none"><span>Area code preference</span><span></span></div></div></div>'+
     '<button type="button" class="btn-buy" id="rentBtn" disabled>Rent number</button>'+
     '<div class="err" id="rentErr"></div><div class="ok" id="rentOk"></div>';
+  function syncRentButton(){
+    var rb=document.getElementById('rentBtn');
+    if(!rb) return;
+    if(!selectedPlan){ rb.disabled=true; rb.textContent='Select a duration'; return; }
+    if(selectedPlan.is_available===false || selectedPlan.stock_status==='sold_out'){
+      rb.disabled=true; rb.textContent='Sold out'; return;
+    }
+    rb.disabled=false; rb.textContent='Rent number';
+  }
   body.querySelectorAll('.plan').forEach(function(card){
     card.onclick=function(){
       if(card.classList.contains('sold-out')) return;
       body.querySelectorAll('.plan').forEach(function(c){c.classList.remove('on');});
       card.classList.add('on');
       selectedPlan=plans[Number(card.getAttribute('data-i'))];
-      var rb=document.getElementById('rentBtn');rb.disabled=false;rb.textContent='Rent number';rb.onclick=openPurchaseModal;updateTotal();
+      syncRentButton();
+      updateTotal();
     };
   });
   var first=body.querySelector('.plan:not(.sold-out)');
   if(first) first.click();
   else {
     selectedPlan=null;
+    syncRentButton();
     var rb=document.getElementById('rentBtn');
-    if(rb){rb.disabled=true;rb.textContent='No plans in stock';}
+    if(rb){rb.disabled=true;rb.textContent='Sold out';}
     var note=document.createElement('div');
     note.className='empty';
     note.style.marginTop='10px';
@@ -545,7 +556,76 @@ function renderDetailForm(){
   }
   document.getElementById('qtyMinus').onclick=function(){if(qty>1){qty--;document.getElementById('qtyVal').textContent=qty;updateTotal();}};
   document.getElementById('qtyPlus').onclick=function(){if(qty<25){qty++;document.getElementById('qtyVal').textContent=qty;updateTotal();}};
-  document.getElementById('rentBtn').onclick=openPurchaseModal;
+  document.getElementById('rentBtn').onclick=function(){
+    confirmRentAvailability().then(function(ok){ if(ok) openPurchaseModal(); });
+  };
+  syncRentButton();
+}
+/** Re-check GotSMS stock before checkout (no wallet charge). */
+async function confirmRentAvailability(){
+  var err=document.getElementById('rentErr');
+  if(err) err.textContent='';
+  if(!selectedPlan||!selectedService){
+    if(err) err.textContent='Select a duration first.';
+    return false;
+  }
+  if(selectedPlan.is_available===false || selectedPlan.stock_status==='sold_out'){
+    markPlanSoldOutInUi(selectedPlan.id);
+    var rb0=document.getElementById('rentBtn');
+    if(rb0){ rb0.disabled=true; rb0.textContent='Sold out'; }
+    if(err) err.textContent='This duration is sold out right now. Pick another.';
+    return false;
+  }
+  var rb=document.getElementById('rentBtn');
+  if(rb){ rb.disabled=true; rb.textContent='Checking stock…'; }
+  try{
+    var j=await api('plans',{query:'service_id='+encodeURIComponent(selectedService.id)+'&per_page=100&include_unavailable=1'});
+    var list=(j&&j.data)||[];
+    var fresh=list.find(function(p){ return String(p.id)===String(selectedPlan.id); });
+    if(!fresh){
+      markPlanSoldOutInUi(selectedPlan.id);
+      if(rb){ rb.disabled=true; rb.textContent='Sold out'; }
+      if(err) err.textContent='This duration just went out of stock. Choose another.';
+      return false;
+    }
+    var idx=plans.findIndex(function(p){ return String(p.id)===String(fresh.id); });
+    if(idx>=0) plans[idx]=Object.assign({}, plans[idx], fresh);
+    selectedPlan=Object.assign({}, selectedPlan, fresh);
+    if(selectedPlan.is_available===false || selectedPlan.stock_status==='sold_out'){
+      markPlanSoldOutInUi(selectedPlan.id);
+      if(rb){ rb.disabled=true; rb.textContent='Sold out'; }
+      if(err) err.textContent='This duration is sold out right now. Pick another.';
+      return false;
+    }
+    if(rb){ rb.disabled=false; rb.textContent='Rent number'; }
+    return true;
+  }catch(e){
+    if(rb){ rb.disabled=false; rb.textContent='Rent number'; }
+    return true; // network blip — purchase still guards before debit
+  }
+}
+function markPlanSoldOutInUi(planId){
+  document.querySelectorAll('#planList .plan').forEach(function(card){
+    var i=Number(card.getAttribute('data-i'));
+    if(!plans[i]||String(plans[i].id)!==String(planId)) return;
+    card.classList.add('sold-out');
+    card.classList.remove('on');
+    if(!card.querySelector('.stock-status')){
+      var s=document.createElement('span');
+      s.className='stock-status';
+      s.textContent='Sold out';
+      card.appendChild(s);
+    }
+    plans[i].is_available=false;
+    plans[i].stock_status='sold_out';
+  });
+  if(selectedPlan && String(selectedPlan.id)===String(planId)) selectedPlan=null;
+  var next=document.querySelector('#planList .plan:not(.sold-out)');
+  if(next) next.click();
+  else {
+    var rb=document.getElementById('rentBtn');
+    if(rb){ rb.disabled=true; rb.textContent='Sold out'; }
+  }
 }
 function getAddonState(){
   var carrierAmt=0, areaAmt=0, carrierLabel='', areaLabel='';
@@ -727,6 +807,11 @@ async function doRent(){
     document.getElementById('psErr').textContent=msg;
     if(errEl)errEl.textContent=msg;
     showRentToast(msg, false);
+    if((j.data&&j.data.out_of_stock) || /out of stock|sold out|unavailable/i.test(msg)){
+      try{ if(selectedPlan&&selectedPlan.id) markPlanSoldOutInUi(selectedPlan.id); }catch(e){}
+      var rbtn=document.getElementById('rentBtn');
+      if(rbtn){ rbtn.disabled=true; rbtn.textContent='Sold out'; }
+    }
     if(j.data&&j.data.price_ngn){selectedPlan.price_ngn=j.data.price_ngn;updateTotal(); var ta=document.getElementById('totalAmt'); if(document.getElementById('psTotal')) document.getElementById('psTotal').textContent=ta?ta.textContent:fmtNgn(selectedPlan.price_ngn*qty);}
     if(/insufficient|fund your wallet|not enough/i.test(msg)){
       try{ if(typeof showToast==='function') showToast('Insufficient balance. Redirecting to deposit…','error'); }catch(e){}
