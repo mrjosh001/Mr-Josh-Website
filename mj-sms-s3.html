@@ -629,7 +629,7 @@ async function loadRecentActivity(){
 
     const pending = data[0];
     const name = (pending.service_name || 'a service').replace(/_/g,' ');
-    area.innerHTML = `<a class="pending-banner" href="mj-sms-number.html?order_id=${encodeURIComponent(pending.order_id)}">
+    area.innerHTML = `<a class="pending-banner" href="mj-sms-s3-number.html?order_id=${encodeURIComponent(pending.order_id)}">
       <div class="pb-icon"><i class="fa-solid fa-hourglass-half"></i></div>
       <div class="pb-text">
         <div class="pb-title">You have a number waiting for a code</div>
@@ -1320,7 +1320,7 @@ document.getElementById('psBuyBtn').addEventListener('click', async function(){
     showToast('Number purchased! Redirecting…', 'success');
     const oid = data.data && data.data.order_id;
     setTimeout(() => {
-      window.location.href = 'mj-sms-number.html?order_id=' + encodeURIComponent(oid);
+      window.location.href = 'mj-sms-s3-number.html?order_id=' + encodeURIComponent(oid);
     }, 500);
   }catch(err){
     showToast('Network error: ' + (err.message || err), 'error');

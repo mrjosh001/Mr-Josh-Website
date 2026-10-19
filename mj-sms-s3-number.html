@@ -352,11 +352,11 @@ async function autoRefundOnExpiry(){
     }
     showToast(data.message || 'Could not auto-refund yet. Try Cancel or Check again.', 'error');
     autoRefundStarted = false;
-    pollTimer = setTimeout(checkStatus, 5000);
+    pollTimer = setTimeout(checkStatus, 2500);
   }catch(err){
     autoRefundStarted = false;
     showToast('Network error during refund. Try Cancel.', 'error');
-    pollTimer = setTimeout(checkStatus, 6000);
+    pollTimer = setTimeout(checkStatus, 3000);
   }
 }
 
@@ -531,7 +531,7 @@ async function checkStatus(){
     const status = data.data.status;
     if(data.data.created_at) orderCreatedAt = data.data.created_at;
 
-    if(status === 'completed' && data.data.code){
+    if((status === 'completed' || data.data.code) && data.data.code){
       renderCompleted(data.data);
     } else if(isRefundedStatus(data.data)){
       renderCancelled('No SMS received. Your balance has been restored.');
@@ -541,10 +541,10 @@ async function checkStatus(){
       if(!existingCountdown){
         renderWaiting(data.data);
       }
-      pollTimer = setTimeout(checkStatus, 5000);
+      pollTimer = setTimeout(checkStatus, 2500);
     }
   }catch(err){
-    pollTimer = setTimeout(checkStatus, 6000);
+    pollTimer = setTimeout(checkStatus, 3000);
   }
 }
 
@@ -562,25 +562,25 @@ async function checkNow(){
   checkingNow = false;
   if(!res){
     showToast('Network error', 'error');
-    pollTimer = setTimeout(checkStatus, 5000);
+    pollTimer = setTimeout(checkStatus, 2500);
     if(btn){ btn.disabled = false; btn.innerHTML = '<i class="fa-solid fa-rotate"></i> Check for SMS Now'; }
     return;
   }
   const data = await res.json();
   if(!res.ok || !data.success){
     showToast(data.message || 'Check failed', 'error');
-    pollTimer = setTimeout(checkStatus, 5000);
+    pollTimer = setTimeout(checkStatus, 2500);
     if(btn){ btn.disabled = false; btn.innerHTML = '<i class="fa-solid fa-rotate"></i> Check for SMS Now'; }
     return;
   }
   const status = data.data.status;
-  if(status === 'completed' && data.data.code){
+  if((status === 'completed' || data.data.code) && data.data.code){
     renderCompleted(data.data);
   } else if(isRefundedStatus(data.data)){
     renderCancelled('No SMS received. Your balance has been restored.');
   } else {
     renderWaiting(data.data);
-    pollTimer = setTimeout(checkStatus, 5000);
+    pollTimer = setTimeout(checkStatus, 2500);
   }
 }
 
@@ -619,7 +619,7 @@ async function cancelOrder(){
       }
       cancelling = false;
       updateCancelButtonState();
-      pollTimer = setTimeout(checkStatus, 5000);
+      pollTimer = setTimeout(checkStatus, 2500);
       return;
     }
     showToast('Cancelled — balance restored', 'success');
@@ -627,7 +627,7 @@ async function cancelOrder(){
   }catch(err){
     showToast('Network error: ' + (err.message || err), 'error');
     cancelling = false;
-    pollTimer = setTimeout(checkStatus, 5000);
+    pollTimer = setTimeout(checkStatus, 2500);
   }
 }
 
