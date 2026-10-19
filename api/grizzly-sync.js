@@ -2,32 +2,35 @@ import { createClient } from '@supabase/supabase-js';
 import { applyMarkup } from '../lib/pricing.js';
 
 /**
- * /api/grizzly-sync — all GrizzlySMS operations, merged into one file.
+ * /api/grizzly-sync — GrizzlySMS (Server 1) + VirtualSMS (Server 3) operations in one file.
  *
- * This used to be 4 separate files (grizzly-sync.js, grizzly-order.js,
- * grizzly-check.js, grizzly-cancel.js) that all duplicated the same
- * Supabase client setup, BASE url, and GRIZZLY_KEY. They're one supplier's
- * lifecycle (sync catalog → buy number → poll for code → cancel/refund), so
- * they're merged here and routed by method + ?action=, the same pattern this
- * file already used internally for sync (?action=start / ?action=status).
+ * GET  /api/grizzly-sync                  → continue/kick off Server 1 catalog sync (cron + admin "Sync" button)
+ * GET  /api/grizzly-sync?action=start      → start a fresh Server 1 sync job
+ * GET  /api/grizzly-sync?action=status     → Server 1 sync job progress
+ * GET  /api/grizzly-sync?action=vsms_sync  → Server 3 (VirtualSMS) FULL catalog sync (admin / cron)
+ *        &force=1      restart the cycle from the first service and ignore the "already running" lock
+ *        &service=wa   re-sync one service only
+ * GET  /api/grizzly-sync?action=vsms_probe → Server 3: show what VirtualSMS really returns (admin)
+ * GET  /api/grizzly-sync?action=vsms_purge_legacy → Server 3: delete old broken numeric-id rows (admin)
+ * POST /api/grizzly-sync?action=order      → buy a number   (provider=virtualsms → Server 3)
+ * POST /api/grizzly-sync?action=check      → poll for SMS code (routes by the order's saved source)
+ * POST /api/grizzly-sync?action=cancel     → cancel + refund   (routes by the order's saved source)
  *
- * Kept as this exact filename (not renamed) on purpose: vercel.json's cron
- * job and the api/grizzly-sync.js maxDuration:300 override both target this
- * path, and admin.html's sync buttons already call it — none of that needed
- * to change.
+ * Server 3 uses VirtualSMS' documented MODERN REST API (https://virtualsms.io/api/v1, X-API-Key):
+ * ISO-2 country codes with real names, real per-country prices, POST /customer/purchase.
+ * number_services.country_id is an integer column, so an ISO code is stored as a reversible integer
+ * (vsIsoToId / vsIdToIso); the real name goes in country_name.
+ * Server 1 code below is unchanged.
  *
- * GET  /api/grizzly-sync                  → continue/kick off catalog sync (cron + admin "Sync" button)
- * GET  /api/grizzly-sync?action=start      → start a fresh sync job
- * GET  /api/grizzly-sync?action=status     → sync job progress
- * POST /api/grizzly-sync?action=order      → buy a number (was grizzly-order.js)
- * POST /api/grizzly-sync?action=check      → poll for SMS code (was grizzly-check.js)
- * POST /api/grizzly-sync?action=cancel     → cancel + refund (was grizzly-cancel.js)
- *
- * Env: GRIZZLYSMS_API_KEY, SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, CRON_SECRET?
- * Optional: USD_TO_NGN_RATE (default 1500)
+ * Env: GRIZZLYSMS_API_KEY, SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, CRON_SECRET (required for cron calls)
+ * Optional: USD_TO_NGN_RATE (default 1500), MIN_PROFIT_NGN (500), VIRTUALSMS_API_KEY (Server 3),
+ *           VSMS_TIME_BUDGET_MS (200000), VSMS_MIN_GAP_MS (1500), VSMS_SERVICE_LIMIT (5000)
  */
 
+/* MJHUB_SERVER3_VIRTUALSMS=5 2026-10-18 Server 3: FULL resumable catalog sync (all services, all countries, pagination), price guards on order, secure cron auth */
 const BASE = 'https://api.grizzlysms.com/stubs/handler_api.php';
+const VSMS_BASE = 'https://virtualsms.io/stubs/handler_api.php'; // legacy: only for old numeric-id Server 3 orders
+
 
 /** Deterministic customer NGN price from supplier USD (no random) — used for provider pools */
 function salePriceFromUsd(supplierPriceUsd) {
@@ -60,7 +63,26 @@ function lowestProviderUsd(providersObj) {
 }
 
 const GRIZZLY_KEY = process.env.GRIZZLYSMS_API_KEY;
+const VIRTUALSMS_KEY = process.env.VIRTUALSMS_API_KEY || process.env.VIRTUAL_SMS_API_KEY || '';
 const JOB_SOURCE = 'grizzlysms';
+
+/** Server 1 = grizzlysms, Server 3 = virtualsms (legacy entry kept only for old numeric-id orders) */
+const SUPPLIERS = {
+  grizzlysms: { base: BASE, key: () => GRIZZLY_KEY, source: 'grizzlysms', label: 'Server 1' },
+  virtualsms: { base: VSMS_BASE, key: () => VIRTUALSMS_KEY, source: 'virtualsms', label: 'Server 3' }
+};
+
+function resolveSupplier(req, body) {
+  const q = (req && req.query) || {};
+  const b = body || {};
+  const raw = String(
+    b.provider || b.source || b.server || q.provider || q.source || q.server || ''
+  ).toLowerCase().trim();
+  if (raw === 'virtualsms' || raw === 'vsms' || raw === 'virtual' || raw === '3' || raw === 's3' || raw === 'server3' || raw === 'server_3') {
+    return SUPPLIERS.virtualsms;
+  }
+  return SUPPLIERS.grizzlysms;
+}
 
 const supabase = createClient(
   process.env.SUPABASE_URL,
@@ -94,7 +116,7 @@ function humanizeGrizzlyError(code) {
 }
 
 // ===========================================================================
-// SYNC (was grizzly-sync.js) — unchanged
+// SYNC (Server 1) — unchanged
 // ===========================================================================
 
 // Manual: use most of the 300s function limit so fewer browser polls are needed.
@@ -584,12 +606,15 @@ async function handleSync(req, res) {
 }
 
 // ===========================================================================
-// ORDER (was grizzly-order.js) — unchanged
+// ORDER (Server 1) — unchanged
 // ===========================================================================
 
 async function handleOrder(req, res) {
   const body = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : (req.body || {});
   const { country_id, service_id, external_order_id, user_id, provider_id } = body;
+  const sup = resolveSupplier(req, body);
+  const SOURCE = sup.source;
+  const SUP_KEY = typeof sup.key === 'function' ? sup.key() : sup.key;
 
   const countryId = parseInt(country_id, 10);
   const serviceId = service_id != null ? String(service_id) : null;
@@ -603,7 +628,7 @@ async function handleOrder(req, res) {
       message: 'country_id, service_id and user_id are required'
     });
   }
-  if (!GRIZZLY_KEY) {
+  if (!SUP_KEY) {
     return res.status(500).json({ success: false, message: 'This SMS server is not available right now. Please contact support.' });
   }
 
@@ -618,7 +643,7 @@ async function handleOrder(req, res) {
     const { data: svc, error: svcErr } = await supabase
       .from('number_services')
       .select('service_name, country_name, price, supplier_price, is_available, providers_raw, pool_price_overrides')
-      .eq('source', 'grizzlysms')
+      .eq('source', SOURCE)
       .eq('country_id', countryId)
       .eq('service_id', serviceId)
       .single();
@@ -690,14 +715,14 @@ async function handleOrder(req, res) {
 
     const idempotencyKey =
       (external_order_id && String(external_order_id).trim()) ||
-      `MJ-GZ-${String(user_id).slice(0, 8)}-${Date.now()}`;
+      `MJ-${SOURCE === 'virtualsms' ? 'VS' : 'GZ'}-${String(user_id).slice(0, 8)}-${Date.now()}`;
 
     // Replay: same external_order_id already bought a number → return that order, no second charge
     if (external_order_id) {
       const { data: existing } = await supabase
         .from('number_orders')
         .select('order_id, phone_number, status, price, service_name, country_name, created_at')
-        .eq('source', 'grizzlysms')
+        .eq('source', SOURCE)
         .eq('user_id', user_id)
         .eq('idempotency_key', idempotencyKey)
         .maybeSingle();
@@ -762,7 +787,7 @@ async function handleOrder(req, res) {
     }
     deducted = true;
     const qs = new URLSearchParams({
-      api_key: GRIZZLY_KEY,
+      api_key: SUP_KEY,
       action: 'getNumberV2',
       service: serviceId,
       country: String(countryId)
@@ -776,7 +801,7 @@ async function handleOrder(req, res) {
       qs.set('maxPrice', String(Number(supplierPriceUsd)));
     }
 
-    const supplierRes = await fetch(`${BASE}?${qs.toString()}`, { method: 'GET' });
+    const supplierRes = await fetch(`${sup.base}?${qs.toString()}`, { method: 'GET' });
     const rawText = await supplierRes.text();
 
     let orderData = null;
@@ -821,7 +846,7 @@ async function handleOrder(req, res) {
     }
 
     const numberOrderRow = {
-      source: 'grizzlysms',
+      source: SOURCE,
       user_id,
       customer_id: customerId,
       order_id: String(orderData.activationId),
@@ -869,11 +894,14 @@ async function handleOrder(req, res) {
       customer_id: customerId,
       type: 'purchase',
       category: 'MJ SMS',
-      title: serviceName,
-      subtitle: `${countryName} · waiting for SMS`,
+      title: countryName ? `${serviceName} · ${countryName}` : serviceName,
+      subtitle: `${countryName || ''} · waiting for SMS`.trim(),
       amount: `₦${price.toLocaleString()}`,
       amount_ngn: price,
       status: 'pending',
+      notes: orderData && (orderData.activationId || orderData.id)
+        ? ('sms_order:' + String(orderData.activationId || orderData.id))
+        : null,
       supplier_order: orderData
     });
 
@@ -913,7 +941,7 @@ async function handleOrder(req, res) {
 }
 
 // ===========================================================================
-// CHECK (was grizzly-check.js) — unchanged
+// CHECK helpers (shared) — unchanged
 // ===========================================================================
 
 const EXPIRY_MS = 20 * 60 * 1000;
@@ -952,7 +980,7 @@ async function claimAndRefundOrder(order, userId, opts = {}) {
         updated_at: new Date().toISOString()
       })
       .eq('id', order.id)
-      .eq('refunded', false)
+      .or('refunded.eq.false,refunded.is.null')
       .in('status', ['waiting_for_code', 'pending', 'active', 'waiting', 'processing'])
       .select('id, price, status, refunded')
       .maybeSingle();
@@ -977,6 +1005,7 @@ async function claimAndRefundOrder(order, userId, opts = {}) {
     return { refunded: false, reason: 'already_final' };
   }
 
+  // Claim won — credit wallet exactly once for this order
   const refundAmount = Number(order.price != null ? order.price : claimed.price) || 0;
   let newBalance = null;
 
@@ -987,40 +1016,67 @@ async function claimAndRefundOrder(order, userId, opts = {}) {
     });
     if (credErr) {
       console.error('[claimAndRefundOrder] credit_balance', credErr.message);
-      const { data: profile, error: profErr } = await supabase
-        .from('profiles')
-        .select('balance')
-        .eq('id', userId)
-        .single();
-      if (!profErr && profile) {
-        newBalance = Number(profile.balance || 0) + refundAmount;
-        const { error: balErr } = await supabase
-          .from('profiles')
-          .update({ balance: newBalance })
-          .eq('id', userId);
-        if (balErr) console.error('[claimAndRefundOrder] balance credit failed', balErr);
+      const { data: still } = await supabase
+        .from('number_orders')
+        .select('id, refunded')
+        .eq('id', order.id)
+        .eq('refunded', true)
+        .maybeSingle();
+      if (still && still.id) {
+        const { data: profile } = await supabase.from('profiles').select('balance').eq('id', userId).maybeSingle();
+        if (profile) {
+          const prevBal = Number(profile.balance || 0);
+          const { data: bumped, error: balErr } = await supabase
+            .from('profiles')
+            .update({ balance: prevBal + refundAmount })
+            .eq('id', userId)
+            .eq('balance', prevBal)
+            .select('balance')
+            .maybeSingle();
+          if (balErr) console.error('[claimAndRefundOrder] balance credit failed', balErr);
+          else if (bumped) newBalance = Number(bumped.balance);
+          else {
+            const { data: p2 } = await supabase.from('profiles').select('balance').eq('id', userId).maybeSingle();
+            if (p2) newBalance = Number(p2.balance);
+          }
+        }
       }
     } else if (credited != null && typeof credited === 'object' && credited.new_balance != null) {
       newBalance = Number(credited.new_balance);
     } else if (typeof credited === 'number') {
       newBalance = credited;
+    } else {
+      const { data: p3 } = await supabase.from('profiles').select('balance').eq('id', userId).maybeSingle();
+      if (p3) newBalance = Number(p3.balance);
     }
   }
 
+  // Update the SAME purchase transaction — never insert a second refund row
+  const txStatus = String(finalStatus).toLowerCase() === 'expired' ? 'expired' : 'cancelled';
+  const orderRef = order.order_id ? String(order.order_id) : '';
   try {
-    let q = supabase
+    if (orderRef) {
+      await supabase
+        .from('transactions')
+        .update({ status: txStatus, subtitle, notes: notes || ('sms_order:' + orderRef) })
+        .eq('user_id', userId)
+        .eq('category', category)
+        .eq('type', 'purchase')
+        .in('status', ['pending', 'completed', 'success'])
+        .ilike('notes', '%sms_order:' + orderRef + '%');
+    }
+  } catch (e) {
+    console.warn('[claimAndRefundOrder] tx update by order ref', e.message || e);
+  }
+  try {
+    await supabase
       .from('transactions')
-      .update({
-        status: (String(finalStatus).toLowerCase() === 'expired' ? 'expired' : 'cancelled'),
-        subtitle,
-        ...(notes ? { notes } : {})
-      })
+      .update({ status: txStatus, subtitle, ...(notes ? { notes } : {}) })
       .eq('user_id', userId)
       .eq('category', category)
       .eq('type', 'purchase')
       .in('status', ['pending', 'completed', 'success'])
       .eq('amount_ngn', refundAmount);
-    await q;
   } catch (e) {
     console.warn('[claimAndRefundOrder] tx update', e.message || e);
   }
@@ -1126,7 +1182,6 @@ async function reclaimAndCompleteOnCode(order, userId, code) {
 }
 
 
-
 async function handleCheck(req, res) {
   const body = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : (req.body || {});
   const { order_id, user_id } = body;
@@ -1134,23 +1189,27 @@ async function handleCheck(req, res) {
   if (!order_id || !user_id) {
     return res.status(400).json({ success: false, message: 'order_id and user_id are required' });
   }
-  if (!GRIZZLY_KEY) {
-    return res.status(500).json({ success: false, message: 'This SMS server is not available right now. Please contact support.' });
-  }
 
   try {
     const { data: existing, error: findErr } = await supabase
       .from('number_orders')
       .select(
-        'id, status, phone_number, created_at, service_name, country_name, price, order_id, refunded, customer_id'
+        'id, status, phone_number, created_at, service_name, country_name, price, order_id, refunded, customer_id, source'
       )
-      .eq('source', 'grizzlysms')
+      .in('source', ['grizzlysms', 'virtualsms'])
       .eq('order_id', String(order_id))
       .eq('user_id', user_id)
       .single();
 
     if (findErr || !existing) {
       return res.status(404).json({ success: false, message: 'Order not found for this account' });
+    }
+
+    const orderSrc = String(existing.source || 'grizzlysms').toLowerCase();
+    const sup = orderSrc === 'virtualsms' ? SUPPLIERS.virtualsms : SUPPLIERS.grizzlysms;
+    const SUP_KEY = typeof sup.key === 'function' ? sup.key() : sup.key;
+    if (!SUP_KEY) {
+      return res.status(500).json({ success: false, message: 'This SMS server is not available right now. Please contact support.' });
     }
 
     // Final success — no further supplier work
@@ -1167,11 +1226,11 @@ async function handleCheck(req, res) {
     const wasRefunded = existing.refunded === true || ['refunded', 'expired', 'cancelled', 'canceled'].includes(String(existing.status || '').toLowerCase());
 
     const qs = new URLSearchParams({
-      api_key: GRIZZLY_KEY,
+      api_key: SUP_KEY,
       action: 'getStatusV2',
       id: String(order_id)
     });
-    const supplierRes = await fetch(`${BASE}?${qs.toString()}`, { method: 'GET' });
+    const supplierRes = await fetch(`${sup.base}?${qs.toString()}`, { method: 'GET' });
     const raw = (await supplierRes.text()).trim();
 
     let newStatus = existing.status;
@@ -1203,11 +1262,11 @@ async function handleCheck(req, res) {
       newStatus = 'refunded';
     } else if (raw === 'BAD_ACTION') {
       const v1Qs = new URLSearchParams({
-        api_key: GRIZZLY_KEY,
+        api_key: SUP_KEY,
         action: 'getStatus',
         id: String(order_id)
       });
-      const v1Res = await fetch(`${BASE}?${v1Qs.toString()}`, { method: 'GET' });
+      const v1Res = await fetch(`${sup.base}?${v1Qs.toString()}`, { method: 'GET' });
       const v1Raw = (await v1Res.text()).trim();
       if (v1Raw === 'STATUS_WAIT_CODE' || v1Raw === 'STATUS_WAIT_RESEND') {
         newStatus = 'waiting_for_code';
@@ -1251,12 +1310,12 @@ async function handleCheck(req, res) {
         // Try supplier cancel then silent refund
         try {
           const cancelQs = new URLSearchParams({
-            api_key: GRIZZLY_KEY,
+            api_key: SUP_KEY,
             action: 'setStatus',
             id: String(order_id),
             status: '8'
           });
-          await fetch(`${BASE}?${cancelQs.toString()}`, { method: 'GET' });
+          await fetch(`${sup.base}?${cancelQs.toString()}`, { method: 'GET' });
         } catch (_) {}
         newStatus = 'expired';
       }
@@ -1408,12 +1467,12 @@ async function handleCheck(req, res) {
       // Tell supplier activation finished (status 6) when supported
       try {
         const doneQs = new URLSearchParams({
-          api_key: GRIZZLY_KEY,
+          api_key: SUP_KEY,
           action: 'setStatus',
           id: String(order_id),
           status: '6'
         });
-        await fetch(`${BASE}?${doneQs.toString()}`, { method: 'GET' });
+        await fetch(`${sup.base}?${doneQs.toString()}`, { method: 'GET' });
       } catch (_) {}
     }
 
@@ -1442,7 +1501,7 @@ async function handleCheck(req, res) {
 }
 
 // ===========================================================================
-// CANCEL (was grizzly-cancel.js) — unchanged
+// CANCEL (Server 1) — unchanged
 // ===========================================================================
 
 const CANCEL_COOLDOWN_MS = 5 * 60 * 1000; // 5 minutes before cancel is allowed
@@ -1454,21 +1513,25 @@ async function handleCancel(req, res) {
   if (!order_id || !user_id) {
     return res.status(400).json({ success: false, message: 'order_id and user_id are required' });
   }
-  if (!GRIZZLY_KEY) {
-    return res.status(500).json({ success: false, message: 'This SMS server is not available right now. Please contact support.' });
-  }
 
   try {
     const { data: order, error: findErr } = await supabase
       .from('number_orders')
-      .select('id, customer_id, price, status, refunded, service_name, created_at, order_id')
-      .eq('source', 'grizzlysms')
+      .select('id, customer_id, price, status, refunded, service_name, created_at, order_id, source')
+      .in('source', ['grizzlysms', 'virtualsms'])
       .eq('order_id', String(order_id))
       .eq('user_id', user_id)
       .single();
 
     if (findErr || !order) {
       return res.status(404).json({ success: false, message: 'Order not found for this account' });
+    }
+
+    const orderSrc = String(order.source || 'grizzlysms').toLowerCase();
+    const sup = orderSrc === 'virtualsms' ? SUPPLIERS.virtualsms : SUPPLIERS.grizzlysms;
+    const SUP_KEY = typeof sup.key === 'function' ? sup.key() : sup.key;
+    if (!SUP_KEY) {
+      return res.status(500).json({ success: false, message: 'This SMS server is not available right now. Please contact support.' });
     }
     if (order.refunded || order.status === 'refunded' || order.status === 'cancelled') {
       return res.status(409).json({ success: false, message: 'This order was already refunded.' });
@@ -1496,12 +1559,12 @@ async function handleCancel(req, res) {
     }
 
     const qs = new URLSearchParams({
-      api_key: GRIZZLY_KEY,
+      api_key: SUP_KEY,
       action: 'setStatus',
       id: String(order_id),
       status: '8'
     });
-    const supplierRes = await fetch(`${BASE}?${qs.toString()}`, { method: 'GET' });
+    const supplierRes = await fetch(`${sup.base}?${qs.toString()}`, { method: 'GET' });
     const raw = (await supplierRes.text()).trim();
 
     if (raw === 'EARLY_CANCEL_DENIED') {
@@ -1514,11 +1577,6 @@ async function handleCancel(req, res) {
     }
 
     if (raw !== 'ACCESS_CANCEL') {
-      // If supplier already cancelled / expired, still try to refund locally if not refunded
-      if (raw === 'NO_ACTIVATION' || raw === 'BAD_STATUS') {
-        // fall through only if we can still mark refunded — treat as cancelable on our side
-        // Prefer not to refund blindly on NO_ACTIVATION without knowing if they already got value
-      }
       return res.status(400).json({
         success: false,
         code: raw,
@@ -1594,21 +1652,20 @@ async function handleCancel(req, res) {
 }
 
 // ===========================================================================
-// DISPATCHER
+// EXPIRE STALE — Server 1 (unchanged logic) + Server 3 (REST) in the same cron
 // ===========================================================================
 
-
 /**
- * Background job: mark + refund Server 1 numbers past the 20-min window
+ * Background job: mark + refund numbers past the 20-min window
  * without requiring the customer to open the number page.
  * Cron: GET /api/grizzly-sync?action=expire_stale
  */
 async function handleExpireStale(req, res) {
   const cronSecret = process.env.CRON_SECRET;
   const authHeader = req.headers.authorization || '';
-  const isCron =
-    (cronSecret && authHeader === `Bearer ${cronSecret}`) ||
-    req.headers['x-vercel-cron'] === '1';
+  // Only the secret counts as cron. (The old "x-vercel-cron: 1" header check is removed: any client
+  // can send that header, so it let anyone run this job.)
+  const isCron = !!cronSecret && authHeader === `Bearer ${cronSecret}`;
 
   let scopeUserId = null; // null = all users (cron/admin)
   if (!isCron) {
@@ -1646,27 +1703,33 @@ async function handleExpireStale(req, res) {
     return res.status(500).json({ success: false, message: error.message });
   }
 
-    const stale = (rows || []).filter((o) => {
+  // Server 1 (grizzlysms) + old numeric-id Server 3 orders (legacy protocol).
+  // New Server 3 orders (REST ids) are handled by vsExpireStale below. Never touch SMS-Bus / GotSMS rentals.
+  const stale = (rows || []).filter((o) => {
     if (o.refunded === true) return false;
     const src = String(o.source || '').toLowerCase();
-    // ONLY Server 1 OTP (grizzlysms). Never touch SMS-Bus OTP, long rentals, or GotSMS USA rentals.
     if (src === 'smsbus' || src === 'smsbus_rent' || src === 'gotsms') return false;
-    if (src && src !== 'grizzlysms') return false;
+    if (src && src !== 'grizzlysms' && src !== 'virtualsms') return false;
+    if (src === 'virtualsms' && !/^\d+$/.test(String(o.order_id || ''))) return false;
     return true;
-  }); let expired = 0;
+  });
+  let expired = 0;
   let skipped = 0;
   for (const order of stale) {
     try {
       // Best-effort supplier cancel
-      if (GRIZZLY_KEY && order.order_id) {
+      const orderSrc = String(order.source || 'grizzlysms').toLowerCase();
+      const sup = orderSrc === 'virtualsms' ? SUPPLIERS.virtualsms : SUPPLIERS.grizzlysms;
+      const k = typeof sup.key === 'function' ? sup.key() : sup.key;
+      if (k && order.order_id) {
         try {
           const cancelQs = new URLSearchParams({
-            api_key: GRIZZLY_KEY,
+            api_key: k,
             action: 'setStatus',
             id: String(order.order_id),
             status: '8'
           });
-          await fetch(`${BASE}?${cancelQs.toString()}`, { method: 'GET' });
+          await fetch(`${sup.base}?${cancelQs.toString()}`, { method: 'GET' });
         } catch (_) {}
       }
       const result = await claimAndRefundOrder(order, order.user_id, {
@@ -1682,15 +1745,1089 @@ async function handleExpireStale(req, res) {
     }
   }
 
+  let server3 = null;
+  try {
+    server3 = await vsExpireStale(rows || []);
+  } catch (e) {
+    console.error('[vsms expire_stale]', e.message);
+  }
+
   return res.status(200).json({
     success: true,
     scanned: (stale || []).length,
     expired,
     skipped,
+    server3,
     cutoff
   });
 }
 
+
+// ===========================================================================
+// SERVER 3 — VirtualSMS (modern REST API). Real country names + real prices.
+// ===========================================================================
+// Docs facts this code is built on (https://virtualsms.io/api/v1, header X-API-Key):
+//  - GET  /customer/countries                → { success, countries:[{country_id:"ID", country_name, min_price, services:"tg,wa"}] }
+//  - GET  /customer/countries?service=wa     → countries for that service WITH exact pricing (only countries that have it)
+//  - POST /customer/purchase {service,country} → { order_id, phone_number, price, status:"waiting" }
+//  - GET  /customer/order/{id}               → { status: waiting|completed|cancelled|expired, sms_received, messages[] }
+//  - POST /customer/cancel/{id}              → 425 inside the first 120 s; 400 once an SMS arrived; error bodies are { error: "..." }
+//  - Rate limit ~60 requests / minute.
+//
+// What was wrong with the old Server 3 sync (live DB on 2026-10-18: 54 countries, 150 services, nothing else):
+//  - VirtualSMS docs: /customer/services and /customer/countries return PHYSICAL-SIM numbers only unless the
+//    request carries include_voip=true. The old sync never sent it, so everything VoIP-backed that the supplier
+//    dashboard shows (and the 54-country ceiling seen in the DB) was invisible to the site;
+//  - it only ever priced the first 150 services (VS_SERVICE_LIMIT) and then reported "done";
+//  - nothing ran it on a schedule (no cron), so the catalog only grew when someone clicked Sync;
+//  - it protected only price_source='admin', but the admin table saves hand-set prices as 'manual',
+//    so a sync could overwrite them; it also never repriced rows when the supplier cost went up.
+//
+// This version is INCREMENTAL. Every run: (1) 2 cheap calls (services + countries, VoIP included) and a diff against
+// the DB to find services / countries / country-service pairs that are not in the DB yet; (2) price-fetch only those
+// services and insert only the missing rows; (3) with the time left, walk the rest of the catalog with a saved cursor
+// looking for price / stock changes and write ONLY rows that changed. Nothing is rewritten wholesale: unchanged rows
+// are not touched. ?only_new=1 skips step 3.
+
+const VS_REST = 'https://virtualsms.io/api/v1';
+const VS_SOURCE = 'virtualsms';
+const VS_ID_BASE = 1000;
+const VS_CANCEL_COOLDOWN_MS = 120 * 1000;
+const VS_TIME_BUDGET_MS = Number(process.env.VSMS_TIME_BUDGET_MS) || 200000; // function limit is 300 s; rows are written after this
+const VS_MIN_GAP_MS = Number(process.env.VSMS_MIN_GAP_MS) || 1500; // ~40 requests/minute, leaves room for live orders
+const VS_SERVICE_LIMIT = Number(process.env.VSMS_SERVICE_LIMIT) || 5000;
+const VS_MAX_PAGES = 25;
+const VS_DISCOVERY_MAX = 80; // max services price-fetched per run for newly found pairs
+const VS_INCLUDE_VOIP = String(process.env.VSMS_INCLUDE_VOIP || '1') !== '0'; // docs: default is physical SIM only
+const VS_LOCK_MS = 6 * 60 * 1000;
+const VS_JOB_KEY = 'virtualsms';
+const VS_POPULAR_RE = /whatsapp|telegram|google|gmail|facebook|instagram|twitter|^x$|discord|tiktok|snapchat|microsoft|amazon|uber|netflix|paypal|tinder|linkedin|viber|wechat|apple|line|bumble|yahoo|openai|chatgpt|signal|vk|binance/i;
+const VS_POPULAR_CODES = ['wa', 'tg', 'go', 'fb', 'ig', 'tw', 'ds', 'lf', 'tt', 'fu', 'mm', 'am', 'ub', 'nf', 'ts', 'oi', 'tn', 'vi', 'we', 'wx'];
+
+const vsApiKey = () => String(process.env.VIRTUALSMS_API_KEY || process.env.VIRTUAL_SMS_API_KEY || '').trim();
+const vsVoip = (path) => (VS_INCLUDE_VOIP ? path + (path.includes('?') ? '&' : '?') + 'include_voip=true' : path);
+const vsSleep = (ms) => new Promise((r) => setTimeout(r, ms));
+// Same inputs Servers 1 & 2 use for pricing (lib/pricing.js applyMarkup)
+const vsRate = () => Number(process.env.USD_TO_NGN_RATE) || Number(process.env.USD_TO_NGN) || 1500;
+const vsMinProfit = () => Number(process.env.MIN_PROFIT_NGN) || 500;
+const vsFloorNgn = (usd) => Math.ceil(usd * vsRate() + vsMinProfit());
+
+// ---------------------------------------------------------------- helpers
+function vsIsoToId(iso) {
+  const s = String(iso || '').toUpperCase();
+  if (!/^[A-Z]{2}$/.test(s)) return null;
+  return VS_ID_BASE + (s.charCodeAt(0) - 65) * 26 + (s.charCodeAt(1) - 65);
+}
+function vsIdToIso(id) {
+  const n = Number(id) - VS_ID_BASE;
+  if (!Number.isInteger(n) || n < 0 || n >= 676) return null;
+  return String.fromCharCode(65 + Math.floor(n / 26)) + String.fromCharCode(65 + (n % 26));
+}
+let _vsRegionNames = null;
+function vsRegionName(iso) {
+  try {
+    if (!_vsRegionNames) _vsRegionNames = new Intl.DisplayNames(['en'], { type: 'region' });
+    const n = _vsRegionNames.of(iso);
+    return n && n !== iso ? n : null;
+  } catch (_) { return null; }
+}
+function vsNum(v) {
+  if (v == null || typeof v === 'boolean') return 0;
+  const n = typeof v === 'number' ? v : parseFloat(String(v).replace(/[^0-9.]/g, ''));
+  return Number.isFinite(n) && n > 0 ? n : 0;
+}
+function vsFirstNum(o, keys) {
+  for (const k of keys) { const n = vsNum(o && o[k]); if (n > 0) return n; }
+  return 0;
+}
+const VS_STOCK_KEYS = ['available_phones', 'available_count', 'count', 'stock', 'quantity', 'qty', 'numbers', 'available', 'physical_count'];
+function vsStockOf(o) {
+  const n = vsFirstNum(o, VS_STOCK_KEYS);
+  if (n > 0) return Math.floor(n);
+  if (o && (o.available === true || o.in_stock === true)) return 1;
+  return 0;
+}
+/** True when the API actually sent a stock field (even if it says 0). */
+function vsStockKnown(o) {
+  return !!o && (VS_STOCK_KEYS.some((k) => o[k] != null && typeof o[k] !== 'boolean') || o.available === false || o.in_stock === false);
+}
+function vsPriceOf(o) {
+  return vsFirstNum(o, ['price_usd', 'price', 'our_price', 'cost', 'amount', 'min_price', 'retail']);
+}
+/** Pull an array out of whatever wrapper the API uses ({countries:[…]}, {data:[…]}, [..], {GB:{…}}). */
+function vsAsList(j, keys) {
+  if (Array.isArray(j)) return j;
+  if (!j || typeof j !== 'object') return [];
+  for (const k of keys) {
+    const v = j[k];
+    if (Array.isArray(v)) return v;
+    if (v && typeof v === 'object') {
+      const e = Object.entries(v).filter(([, x]) => x && typeof x === 'object');
+      if (e.length) return e.map(([key, x]) => ({ _key: key, ...x }));
+    }
+  }
+  const e = Object.entries(j).filter(([, x]) => x && typeof x === 'object' && !Array.isArray(x));
+  return e.length > 3 ? e.map(([key, x]) => ({ _key: key, ...x })) : [];
+}
+function vsCountryIso(c) {
+  for (const v of [c.country_id, c.iso, c.iso2, c.country_code, c.code, c.country, c._key]) {
+    const s = String(v == null ? '' : v).toUpperCase();
+    if (/^[A-Z]{2}$/.test(s)) return s;
+  }
+  return null;
+}
+function vsCountryNameOf(c, iso) {
+  for (const v of [c.country_name, c.name, c.eng, c.english, c.title, c.label, c.country]) {
+    const t = typeof v === 'string' ? v.trim() : '';
+    // skip empty values, 2-letter codes like "IE", and plain numbers
+    if (t.length > 2 && !/^\d+$/.test(t)) return t;
+  }
+  return vsRegionName(iso) || iso;
+}
+function vsServiceCode(s) {
+  return String(s.service_id || s.code || s.service || s.service_code || s.slug || s.id || s._key || '').trim();
+}
+function vsServiceNameOf(s, code) {
+  const n = s.name || s.service_name || s.title || s.display_name;
+  return n && String(n).trim() ? String(n).trim() : code.toUpperCase();
+}
+/** Pagination hints, wherever the API puts them (top level or in pagination/meta/paging). */
+function vsPageMeta(j) {
+  const base = j && typeof j === 'object' && !Array.isArray(j) ? j : {};
+  const m = base.pagination || base.meta || base.paging || {};
+  const src = Object.assign({}, base, m);
+  return {
+    total: vsNum(src.total ?? src.total_count ?? src.totalItems ?? src.count_total),
+    pages: vsNum(src.total_pages ?? src.pages ?? src.last_page ?? src.pageCount),
+    hasMore: src.has_more === true || src.hasMore === true || src.next_page != null ||
+      (src.next != null && src.next !== false && src.next !== '')
+  };
+}
+/** A 200 reply that is really an error ({success:false}/{error}) or not JSON must never be read as "no data". */
+function vsReplyProblem(r) {
+  if (!r.ok) return `HTTP ${r.status || 'no reply'}`;
+  if (r.json == null) return 'reply was not JSON';
+  if (typeof r.json === 'object' && !Array.isArray(r.json) && (r.json.success === false || r.json.error)) {
+    return String(r.json.error || r.json.message || 'success:false').slice(0, 120);
+  }
+  return null;
+}
+
+async function vsReq(path, opts = {}) {
+  const headers = { Accept: 'application/json', 'X-API-Key': vsApiKey() };
+  if (opts.body) headers['Content-Type'] = 'application/json';
+  try {
+    const res = await fetch(VS_REST + path, {
+      method: opts.method || 'GET',
+      headers,
+      body: opts.body ? JSON.stringify(opts.body) : undefined,
+      signal: AbortSignal.timeout(opts.timeoutMs || 20000)
+    });
+    const text = await res.text();
+    let json = null;
+    try { json = JSON.parse(text); } catch (_) { /* not json */ }
+    return { ok: res.ok, status: res.status, json, text: String(text || '') };
+  } catch (e) {
+    return { ok: false, status: 0, json: null, text: '', err: e && e.message ? e.message : String(e) };
+  }
+}
+
+// Cron = the CRON_SECRET bearer only. (The old "x-vercel-cron: 1" header check is removed: any client can
+// send that header, so it let anyone start a sync and burn the supplier rate limit.)
+function vsIsCron(req) {
+  const h = req.headers.authorization || '';
+  return !!process.env.CRON_SECRET && h === `Bearer ${process.env.CRON_SECRET}`;
+}
+async function vsAdminOrCron(req, res) {
+  if (vsIsCron(req)) return true;
+  const a = await requireAdmin(req);
+  if (a.ok) return true;
+  res.status(a.status).json({ success: false, message: a.message });
+  return false;
+}
+const vsBody = (req) => (typeof req.body === 'string' ? JSON.parse(req.body || '{}') : (req.body || {}));
+
+// ---------------------------------------------------------------- run lock + resume cursor (existing sync_jobs table)
+async function vsGetJob() {
+  try {
+    const { data } = await supabase.from('sync_jobs').select('status, updated_at, cursor_index').eq('source', VS_JOB_KEY).maybeSingle();
+    return data || null;
+  } catch (_) { return null; }
+}
+async function vsSetJob(fields) {
+  try { await supabase.from('sync_jobs').upsert({ source: VS_JOB_KEY, updated_at: new Date().toISOString(), ...fields }); } catch (_) { /* best effort */ }
+}
+function vsIsLocked(job) {
+  return !!job && job.status === 'running' && !!job.updated_at && Date.now() - new Date(job.updated_at).getTime() < VS_LOCK_MS;
+}
+
+async function vsLoadExisting() {
+  const map = new Map();
+  let from = 0;
+  while (true) {
+    const { data, error } = await supabase
+      .from('number_services')
+      .select('id, country_id, service_id, price, price_source, supplier_price, available_quantity, service_name, country_name, is_available, updated_at')
+      .eq('source', VS_SOURCE)
+      .gte('country_id', VS_ID_BASE)
+      .order('id', { ascending: true })
+      .range(from, from + 999);
+    if (error) throw new Error('load existing: ' + error.message);
+    for (const r of data || []) map.set(`${r.country_id}|${r.service_id}`, r);
+    if (!data || data.length < 1000) break;
+    from += 1000;
+  }
+  return map;
+}
+
+// ---------------------------------------------------------------- fetch helpers (paced + paginated)
+/** The global /services and /countries lists (docs show no pagination; only follows it if the reply says there is more). */
+async function vsFetchPagedList(path, keys, idFn, pace) {
+  const sep = path.includes('?') ? '&' : '?';
+  const seen = new Set();
+  const items = [];
+  let first = null;
+  for (let page = 1; page <= VS_MAX_PAGES; page++) {
+    await pace();
+    const r = await vsReq(page === 1 ? path : `${path}${sep}page=${page}`);
+    if (page === 1) first = r;
+    if (r.status === 429) { if (page === 1) return { ok: false, rateLimited: true, status: 429, items, text: r.text }; break; }
+    if (page === 1) { const bad = vsReplyProblem(r); if (bad) return { ok: false, status: r.status, problem: bad, items, text: r.text, err: r.err }; }
+    if (!r.ok) break; // page=N rejected → keep what we have
+    const list = vsAsList(r.json, keys);
+    let fresh = 0;
+    for (const it of list) {
+      const id = idFn(it);
+      if (id) { if (seen.has(id)) continue; seen.add(id); }
+      items.push(it);
+      fresh += 1;
+    }
+    if (!list.length || !fresh) break;
+    const meta = vsPageMeta(r.json);
+    const more = meta.hasMore || (meta.pages && page < meta.pages) || (meta.total && items.length < meta.total);
+    if (!more) break;
+  }
+  return { ok: true, status: first ? first.status : 200, items, text: first ? first.text : '' };
+}
+
+/**
+ * One service → every country that has it, following pagination.
+ * truncated=true means "we cannot be sure we saw everything" (deadline, rate limit, page error while the
+ * supplier said there was more, page limit) — in that case nothing is delisted for this service.
+ */
+async function vsFetchServiceCountries(code, expectedCount, pace, deadline) {
+  const base = vsVoip('/customer/countries?service=' + encodeURIComponent(code));
+  const seen = new Set();
+  const items = [];
+  let pages = 0;
+  let truncated = false;
+  let natural = false;       // the loop ended because the supplier ran out of data
+  let mustHaveMore = false;  // the supplier (or the supplier's own country list) says there is more than we have
+  let firstKeys = null;
+
+  for (let page = 1; page <= VS_MAX_PAGES; page++) {
+    if (Date.now() > deadline) { truncated = true; break; }
+    await pace();
+    const r = await vsReq(page === 1 ? base : `${base}&page=${page}`, { timeoutMs: 15000 });
+    pages += 1;
+    if (r.status === 429) return { rateLimited: true, items, seen, pages, truncated: true };
+    if (page === 1) {
+      const bad = vsReplyProblem(r);
+      if (bad) return { error: bad, items, seen, pages, truncated: true };
+      if (r.json && typeof r.json === 'object') firstKeys = Object.keys(r.json).slice(0, 12);
+    } else if (!r.ok) {
+      natural = !mustHaveMore;
+      if (mustHaveMore) truncated = true;
+      break; // the supplier rejects/ignores page=N → keep what we have
+    }
+    const list = vsAsList(r.json, ['countries', 'data', 'items', 'results']);
+    let fresh = 0;
+    for (const c of list) {
+      const iso = vsCountryIso(c);
+      if (iso) { if (seen.has(iso)) continue; seen.add(iso); }
+      items.push(c);
+      fresh += 1;
+    }
+    if (!list.length || !fresh) {
+      natural = !mustHaveMore;
+      if (mustHaveMore) truncated = true;
+      break;
+    }
+    const meta = vsPageMeta(r.json);
+    const explicitMore = meta.hasMore || (meta.pages && page < meta.pages) || (meta.total && seen.size < meta.total);
+    mustHaveMore = explicitMore;
+    if (!explicitMore) { natural = true; break; }
+  }
+  if (!natural && !truncated) truncated = true; // ran out of pages
+  return { items, seen, pages, truncated, firstKeys };
+}
+
+// ---------------------------------------------------------------- the sync
+async function vsRunSync(req) {
+  const q = req.query || {};
+  const force = q.force === '1' || q.force === 'true';
+  const onlyService = String(q.service || '').trim();
+  const onlyNew = q.only_new === '1' || q.only_new === 'true'; // discovery only: skip the price/stock refresh walk
+  const started = Date.now();
+  const deadline = started + VS_TIME_BUDGET_MS - 6000;
+  const rate = vsRate();
+  const errors = [];
+  const note = (m) => { if (errors.length < 20) errors.push(m); };
+
+  let lastCall = 0;
+  const pace = async () => {
+    const wait = lastCall + VS_MIN_GAP_MS - Date.now();
+    if (wait > 0) await vsSleep(wait);
+    lastCall = Date.now();
+  };
+
+  // 1) service list + country list (both paginated: VirtualSMS caps a single reply at ~54 items)
+  const svcRes = await vsFetchPagedList(vsVoip('/customer/services'), ['services', 'data', 'items', 'results'], (s) => vsServiceCode(s), pace);
+  if (!svcRes.ok) {
+    return { status: svcRes.rateLimited ? 429 : 502, body: {
+      success: false,
+      message: `VirtualSMS services call failed (${svcRes.problem || 'HTTP ' + (svcRes.status || 'no reply')}). ${svcRes.status === 401 ? 'Check VIRTUALSMS_API_KEY.' : ''}`,
+      raw_hint: (svcRes.err || svcRes.text || '').slice(0, 160)
+    } };
+  }
+  const ctyRes = await vsFetchPagedList(vsVoip('/customer/countries'), ['countries', 'data', 'items', 'results'], (c) => vsCountryIso(c), pace);
+
+  const services = svcRes.items
+    .map((s) => { const code = vsServiceCode(s); return code ? { code, name: vsServiceNameOf(s, code) } : null; })
+    .filter(Boolean);
+  if (!services.length) {
+    return { status: 502, body: { success: false, message: 'VirtualSMS returned no services.', raw_hint: (svcRes.text || '').slice(0, 200) } };
+  }
+  const svcName = new Map(services.map((s) => [s.code, s.name]));
+
+  // supplier's own country list: which countries carry which services (the "services" field is "tg,wa,ig")
+  const countryList = ctyRes.ok ? ctyRes.items : [];
+  const isoName = new Map();
+  const expected = new Map(); // service code -> Set(ISO)
+  for (const c of countryList) {
+    const iso = vsCountryIso(c);
+    if (!iso) continue;
+    isoName.set(iso, vsCountryNameOf(c, iso));
+    const raw = c.services || c.available_services;
+    const codes = Array.isArray(raw)
+      ? raw.map((x) => (typeof x === 'string' ? x : vsServiceCode(x || {})))
+      : String(raw || '').split(/[,\s]+/);
+    for (const code of codes) {
+      const k = String(code || '').trim();
+      if (!k) continue;
+      if (!expected.has(k)) expected.set(k, new Set());
+      expected.get(k).add(iso);
+    }
+  }
+
+  const existing = await vsLoadExisting();
+
+  // 2) DISCOVERY — what does the supplier list that the DB does not have yet?
+  //    (from the two cheap list calls above: no per-service price calls needed to know this)
+  const dbServices = new Set();
+  const dbCountries = new Set();
+  for (const r of existing.values()) { dbServices.add(r.service_id); dbCountries.add(r.country_id); }
+  const newServiceCodes = services.filter((s) => !dbServices.has(s.code)).map((s) => s.code);
+  const newCountryIsos = [];
+  for (const c of countryList) {
+    const iso = vsCountryIso(c);
+    const cid = iso ? vsIsoToId(iso) : null;
+    if (cid != null && !dbCountries.has(cid)) newCountryIsos.push(iso);
+  }
+  const newPairsBySvc = new Map(); // service code -> number of (country, service) pairs the DB lacks
+  let newPairsTotal = 0;
+  for (const [code, isos] of expected) {
+    if (!svcName.has(code)) continue;
+    let n = 0;
+    for (const iso of isos) { const cid = vsIsoToId(iso); if (cid != null && !existing.has(`${cid}|${code}`)) n += 1; }
+    if (n) { newPairsBySvc.set(code, n); newPairsTotal += n; }
+  }
+  for (const code of newServiceCodes) if (!newPairsBySvc.has(code)) newPairsBySvc.set(code, 0); // service with no country info yet: still fetch it once
+
+  // 3a) which services to price-fetch now.
+  //     tier 1 = services with missing pairs (new countries / new services), most missing first
+  //     tier 2 = popular services (price/stock check, capped at 40% of the budget)
+  //     tier 3 = everything else, walked with a cursor saved in sync_jobs so each run continues where the last stopped
+  const rank = (s) => {
+    const pi = VS_POPULAR_CODES.indexOf(s.code);
+    if (pi >= 0) return pi;
+    return VS_POPULAR_RE.test(s.name) ? 100 : 1000;
+  };
+  const ordered = services
+    .map((s, i) => ({ ...s, i }))
+    .sort((a, b) => rank(a) - rank(b) || a.i - b.i)
+    .slice(0, VS_SERVICE_LIMIT);
+  const discoveryQueue = ordered
+    .filter((s) => newPairsBySvc.has(s.code))
+    .sort((a, b) => (newPairsBySvc.get(b.code) || 0) - (newPairsBySvc.get(a.code) || 0) || rank(a) - rank(b))
+    .slice(0, VS_DISCOVERY_MAX);
+  const discoverySet = new Set(discoveryQueue.map((s) => s.code));
+  const prioritySet = new Set(VS_POPULAR_CODES);
+  const priority = ordered.filter((s) => prioritySet.has(s.code) && !discoverySet.has(s.code));
+  const rest = ordered.filter((s) => !prioritySet.has(s.code)); // stable order → the saved cursor stays valid between runs
+  const restIndex = new Map(rest.map((s, i) => [s.code, i]));
+  const job = await vsGetJob();
+  let start = 0;
+  if (!force && !onlyService && job && Number.isInteger(job.cursor_index) && job.cursor_index > 0 && job.cursor_index < rest.length) {
+    start = job.cursor_index;
+  }
+  const queue = onlyService
+    ? ordered.filter((s) => s.code === onlyService)
+    : (onlyNew ? [...discoveryQueue] : [...discoveryQueue, ...priority, ...rest.slice(start).filter((s) => !discoverySet.has(s.code))]);
+  const servicesTotal = ordered.length;
+
+  // 3) fetch (paced, sequential — stays under the 60 requests/minute limit)
+  const entries = new Map();   // "ISO|code" -> {iso, code, usd, count}
+  const processed = new Set(); // services with a COMPLETE answer (safe to delist what's missing)
+  let rateLimited = false;
+  let stoppedEarly = false;
+  let requests = 0;
+  let paginated = 0;
+  let incompleteServices = 0;
+  let firstKeys = null;
+  let cursorPos = start;
+  let servicesVisited = 0;
+  const gapSample = [];
+  let gapTotal = 0;
+
+  // the popular tier gets at most 40% of the time budget, so the rotating cursor always makes progress
+  const priorityDeadline = started + Math.floor((deadline - started) * 0.4);
+  for (const s of queue) {
+    if (Date.now() > deadline) { stoppedEarly = true; break; }
+    const isRest = !prioritySet.has(s.code) && !discoverySet.has(s.code);
+    if (!isRest && !discoverySet.has(s.code) && Date.now() > priorityDeadline) { servicesVisited += 1; continue; } // refreshed again next run
+    const out = await vsFetchServiceCountries(s.code, (expected.get(s.code) || new Set()).size, pace, deadline);
+    requests += out.pages || 0;
+    if (out.pages > 1) paginated += 1;
+    if (out.rateLimited) { rateLimited = true; break; }
+    if (out.error) { note(`${s.code}: ${out.error}`); servicesVisited += 1; if (isRest) cursorPos = (restIndex.get(s.code) ?? cursorPos) + 1; continue; }
+    if (!firstKeys && out.firstKeys) firstKeys = out.firstKeys;
+
+    let priced = 0;
+    for (const c of out.items) {
+      const iso = vsCountryIso(c);
+      if (!iso) continue;
+      if (!isoName.has(iso)) isoName.set(iso, vsCountryNameOf(c, iso));
+      const usd = vsPriceOf(c);
+      // docs: this call only lists countries that HAVE the service. A real stock number wins; an explicit 0
+      // means out of stock; if the API sends no stock field at all, a listed price means "in stock".
+      const count = vsStockOf(c) || (vsStockKnown(c) ? 0 : (usd > 0 ? 1 : 0));
+      if (usd > 0 && count > 0) {
+        const key = `${iso}|${s.code}`;
+        const prev = entries.get(key);
+        if (!prev) entries.set(key, { iso, code: s.code, usd, count });
+        else { if (usd < prev.usd) prev.usd = usd; if (count > prev.count) prev.count = count; }
+        priced += 1;
+      }
+    }
+    if (out.items.length && !priced) note(`${s.code}: countries came back without a usable price`);
+
+    const exp = expected.get(s.code);
+    if (exp) {
+      const missing = [...exp].filter((iso) => !out.seen.has(iso));
+      if (missing.length) {
+        gapTotal += missing.length;
+        if (gapSample.length < 8) gapSample.push(`${s.code}: ${missing.slice(0, 6).join(',')}${missing.length > 6 ? ' +' + (missing.length - 6) : ''}`);
+      }
+    }
+    if (out.truncated) {
+      incompleteServices += 1;
+      // cut off by the time budget → not visited yet, picked up again by the next run
+      if (Date.now() > deadline) { stoppedEarly = true; break; }
+    } else {
+      processed.add(s.code);
+    }
+    servicesVisited += 1;
+    if (isRest) cursorPos = (restIndex.get(s.code) ?? cursorPos) + 1;
+  }
+
+  const completedQueue = !stoppedEarly && !rateLimited && servicesVisited >= queue.length;
+  const discoveryBacklog = newPairsBySvc.size > discoveryQueue.length; // more missing services than one run handles
+  const nextCursor = (onlyService || onlyNew) ? null : (completedQueue ? 0 : cursorPos);
+
+  if (!entries.size && !processed.size) {
+    return { status: 200, cursor: nextCursor, body: {
+      success: true, partial: !completedQueue || discoveryBacklog, done: completedQueue && !discoveryBacklog, rate_limited: rateLimited, rows_seen: 0, upserted: 0,
+      message: rateLimited
+        ? 'VirtualSMS rate limit hit (60/min). It will continue on the next run.'
+        : (queue.length ? 'VirtualSMS answered but nothing could be read. Open /api/grizzly-sync?action=vsms_probe and check the sample.'
+          : (onlyService ? 'No matching service to sync.' : 'Nothing new: the DB already has every country and service the supplier lists.')),
+      discovery: { include_voip: VS_INCLUDE_VOIP, supplier_services: services.length, supplier_countries: countryList.length,
+        new_services: newServiceCodes.length, new_countries: newCountryIsos.length, missing_pairs: newPairsTotal },
+      services_done: servicesVisited, services_total: servicesTotal, errors, ms: Date.now() - started
+    } };
+  }
+
+  // 4) build rows
+  const nowIso = new Date().toISOString();
+  const rows = [];
+  for (const e of entries.values()) {
+    const cid = vsIsoToId(e.iso);
+    if (cid == null) continue;
+    const sell = Number(applyMarkup(e.usd, rate)); // same markup function Servers 1 & 2 use
+    rows.push({
+      key: `${cid}|${e.code}`, country_id: cid,
+      // our own region-name list first (Ireland, Canada…), then whatever VirtualSMS sent, never the bare code if avoidable
+      country_name: vsRegionName(e.iso) || isoName.get(e.iso) || e.iso,
+      service_id: e.code, service_name: svcName.get(e.code) || e.code.toUpperCase(),
+      supplier_price: e.usd, price: Number.isFinite(sell) && sell > 0 ? sell : salePriceFromUsd(e.usd),
+      available_quantity: e.count
+    });
+  }
+
+  // 5) write: insert new, update changed, touch unchanged (batched), delist sold-out
+  const inserts = [];
+  const updates = [];
+  const seenKeys = new Set();
+  let manualBelowCost = 0;
+  let repriced = 0;
+  for (const r of rows) {
+    seenKeys.add(r.key);
+    const prev = existing.get(r.key);
+    if (!prev) {
+      inserts.push({
+        source: VS_SOURCE, country_id: r.country_id, country_name: r.country_name, service_id: r.service_id,
+        service_name: r.service_name, supplier_price: r.supplier_price, price: r.price, price_source: 'system',
+        currency: 'NGN', available_quantity: r.available_quantity, is_available: true, updated_at: nowIso
+      });
+      continue;
+    }
+    // hand-set prices ('manual' from the admin table, 'admin' legacy) are never overwritten
+    const protectedPrice = prev.price_source === 'manual' || prev.price_source === 'admin';
+    // admin hid this row (hidden but still has quantity — a sold-out delist always zeroes the quantity): keep it hidden
+    const adminHidden = prev.is_available === false && Number(prev.available_quantity || 0) > 0;
+    const prevPrice = Number(prev.price) || 0;
+    const prevCost = Number(prev.supplier_price || 0);
+    const costMoved = Math.abs(prevCost - r.supplier_price) > 0.0001;
+    const rel = prevCost > 0 ? (r.supplier_price - prevCost) / prevCost : 1;
+    const costUp = rel > 0.0001;        // any rise in what the supplier charges us → reprice
+    const costDownBig = rel <= -0.05;   // a real drop → reprice so we stay competitive
+    const belowFloor = !protectedPrice && prevPrice < vsFloorNgn(r.supplier_price);
+    if (protectedPrice && prevPrice < r.supplier_price * rate) manualBelowCost += 1;
+    const needsPrice = !protectedPrice && (costUp || costDownBig || belowFloor || !(prevPrice > 0));
+    const nextAvail = !adminHidden;
+    const changed = needsPrice || costMoved || Number(prev.available_quantity || 0) !== r.available_quantity ||
+      String(prev.country_name || '') !== r.country_name || String(prev.service_name || '') !== r.service_name ||
+      (prev.is_available === false && nextAvail);
+    if (!changed) continue; // unchanged rows are never rewritten
+    const f = {
+      country_name: r.country_name, service_name: r.service_name, supplier_price: r.supplier_price,
+      available_quantity: r.available_quantity, is_available: nextAvail, updated_at: nowIso
+    };
+    if (needsPrice) { f.price = r.price; f.price_source = 'system'; repriced += 1; }
+    updates.push({ id: prev.id, ...f });
+  }
+  let goneIds = [];
+  let existingLiveForProcessed = 0;
+  for (const [key, prev] of existing) {
+    if (!processed.has(prev.service_id)) continue;
+    if (prev.is_available !== false) existingLiveForProcessed += 1;
+    if (seenKeys.has(key)) continue;
+    if (prev.is_available === false) continue; // already hidden (sold out earlier, or hidden by admin)
+    goneIds.push(prev.id);
+  }
+  // safety net: if one run would delist almost everything, the supplier probably sent a bad answer
+  if (goneIds.length >= 100 && goneIds.length > existingLiveForProcessed * 0.7) {
+    note(`delist skipped: ${goneIds.length} of ${existingLiveForProcessed} live rows would be removed in one run`);
+    goneIds = [];
+  }
+
+  const stats = { inserted: 0, updated: 0, delisted: 0 };
+  for (let i = 0; i < updates.length; i += 20) {
+    await Promise.all(updates.slice(i, i + 20).map(async (u) => {
+      const { id, ...f } = u;
+      const { error } = await supabase.from('number_services').update(f).eq('id', id);
+      if (error) note('update: ' + error.message); else stats.updated += 1;
+    }));
+  }
+  for (let i = 0; i < inserts.length; i += 100) {
+    const batch = inserts.slice(i, i + 100);
+    const { error } = await supabase.from('number_services').insert(batch);
+    if (!error) { stats.inserted += batch.length; continue; }
+    note('batch insert: ' + error.message);
+    for (const row of batch) {
+      const { error: e2 } = await supabase.from('number_services').insert(row);
+      if (e2) note(`row ${row.service_id}/${row.country_name}: ${e2.message}`); else stats.inserted += 1;
+    }
+  }
+  for (let i = 0; i < goneIds.length; i += 200) {
+    const slice = goneIds.slice(i, i + 200);
+    const { error } = await supabase.from('number_services')
+      .update({ available_quantity: 0, is_available: false, updated_at: nowIso }).in('id', slice);
+    if (error) note('sold-out: ' + error.message); else stats.delisted += slice.length;
+  }
+
+  if (inserts.length + updates.length > 0 && stats.inserted + stats.updated === 0) {
+    // nothing saved → do NOT advance the cursor, the same services are retried next run
+    return { status: 500, body: {
+      success: false, message: 'VirtualSMS data was read but nothing could be saved. ' + (errors[0] || ''), errors, rows_seen: rows.length
+    } };
+  }
+
+  // old numeric-id rows from the broken legacy sync: hide them once real rows exist
+  let legacyHidden = 0;
+  if (rows.length >= 20) {
+    const { data: lg } = await supabase.from('number_services')
+      .update({ available_quantity: 0, is_available: false }).eq('source', VS_SOURCE).lt('country_id', VS_ID_BASE).eq('is_available', true).select('id');
+    legacyHidden = (lg || []).length;
+  }
+
+  const countriesInRun = new Set(rows.map((r) => r.country_id)).size;
+  const partial = !completedQueue || discoveryBacklog;
+  const servicesDone = completedQueue ? servicesTotal : Math.min(servicesTotal, discoveryQueue.length + priority.length + cursorPos);
+  let message = `Server 3 sync: found ${newServiceCodes.length} new services, ${newCountryIsos.length} new countries, ${newPairsTotal} missing country/service pairs. Checked ${processed.size} services (${stats.inserted} rows added, ${stats.updated} changed, ${stats.delisted} sold out; unchanged rows untouched). Walk progress: ${servicesDone}/${servicesTotal}.`;
+  if (partial) message += rateLimited ? ' Rate limit hit — it will continue on the next run.' : ' Not finished — run Sync again (or let the cron continue).';
+  if (gapTotal) message += ` Coverage gap: supplier lists ${gapTotal} country/service pairs the API did not return — see "coverage" in the response.`;
+  if (manualBelowCost) message += ` ${manualBelowCost} hand-priced rows are below supplier cost (orders for them are blocked).`;
+  if (legacyHidden) message += ` Hid ${legacyHidden} old broken rows.`;
+
+  return { status: 200, cursor: nextCursor, body: {
+    success: true, source: VS_SOURCE, partial, done: !partial, rate_limited: rateLimited,
+    rows_seen: rows.length, upserted: stats.inserted + stats.updated, inserted: stats.inserted, updated: stats.updated,
+    delisted: stats.delisted, repriced, manual_below_cost: manualBelowCost,
+    discovery: {
+      include_voip: VS_INCLUDE_VOIP, supplier_services: services.length, supplier_countries: countryList.length,
+      new_services: newServiceCodes.length, new_countries: newCountryIsos.length, new_countries_sample: newCountryIsos.slice(0, 15),
+      missing_pairs: newPairsTotal, services_fetched_for_discovery: discoveryQueue.length, backlog: discoveryBacklog
+    },
+    services_done: servicesDone, services_total: servicesTotal, supplier_requests: requests, ms: Date.now() - started,
+    coverage: {
+      supplier_countries: countryList.length, countries_in_this_run: countriesInRun,
+      services_paginated: paginated, services_incomplete: incompleteServices,
+      missing_pairs: gapTotal, missing_sample: gapSample, response_keys: firstKeys
+    },
+    errors, message
+  } };
+}
+
+async function vsHandleSync(req, res) {
+  if (!(await vsAdminOrCron(req, res))) return;
+  if (!vsApiKey()) {
+    return res.status(500).json({ success: false, message: 'VIRTUALSMS_API_KEY is not set on the server (Vercel → Environment Variables).' });
+  }
+  const q = req.query || {};
+  const force = q.force === '1' || q.force === 'true';
+  if (!force && vsIsLocked(await vsGetJob())) {
+    return res.status(200).json({ success: true, busy: true, partial: true, done: false, message: 'A Server 3 sync is already running. Wait a minute and check again.' });
+  }
+  await vsSetJob({ status: 'running', started_at: new Date().toISOString(), errors: [] });
+  let out = null;
+  try {
+    out = await vsRunSync(req);
+  } catch (err) {
+    console.error('vsms full sync error:', err);
+    out = { status: 500, body: { success: false, message: 'Server 3 sync failed: ' + (err && err.message ? err.message : String(err)) } };
+  } finally {
+    // the cursor only moves when the run succeeded, so a failed run retries the same services
+    await vsSetJob({ status: 'idle', ...(out && out.cursor != null ? { cursor_index: out.cursor } : {}) });
+  }
+  return res.status(out.status).json(out.body);
+}
+
+async function vsHandleProbe(req, res) {
+  if (!(await vsAdminOrCron(req, res))) return;
+  const cut = (r) => ({ status: r.status, err: r.err || undefined, sample: (r.text || '').slice(0, 500) });
+  const S = ['services', 'data', 'items', 'results'];
+  const C = ['countries', 'data', 'items', 'results'];
+  const n = (r, keys) => (r.json ? vsAsList(r.json, keys).length : 0);
+  const [svc, svcV, cty, ctyV, wa, waV, bal] = await Promise.all([
+    vsReq('/customer/services'), vsReq('/customer/services?include_voip=true'),
+    vsReq('/customer/countries'), vsReq('/customer/countries?include_voip=true'),
+    vsReq('/customer/countries?service=wa'), vsReq('/customer/countries?service=wa&include_voip=true'),
+    vsReq('/customer/balance')
+  ]);
+  return res.status(200).json({
+    success: true,
+    include_voip_in_sync: VS_INCLUDE_VOIP,
+    counts: {
+      services_physical_only: n(svc, S), services_with_voip: n(svcV, S),
+      countries_physical_only: n(cty, C), countries_with_voip: n(ctyV, C),
+      whatsapp_countries_physical_only: n(wa, C), whatsapp_countries_with_voip: n(waV, C)
+    },
+    samples: { services_with_voip: cut(svcV), countries_with_voip: cut(ctyV), whatsapp_with_voip: cut(waV), balance: cut(bal) }
+  });
+}
+
+async function vsHandlePurgeLegacy(req, res) {
+  const a = await requireAdmin(req);
+  if (!a.ok) return res.status(a.status).json({ success: false, message: a.message });
+  const { data, error } = await supabase.from('number_services').delete().eq('source', VS_SOURCE).lt('country_id', VS_ID_BASE).select('id');
+  if (error) return res.status(500).json({ success: false, message: error.message });
+  return res.status(200).json({ success: true, deleted: (data || []).length, message: `Deleted ${(data || []).length} old Server 3 rows.` });
+}
+
+// ---------------------------------------------------------------- orders
+async function vsCreditWallet(userId, amount) {
+  const { data, error } = await supabase.rpc('credit_balance', { p_user_id: userId, p_amount: amount });
+  if (!error) {
+    if (data && typeof data === 'object' && data.new_balance != null) return Number(data.new_balance);
+    if (typeof data === 'number') return data;
+  }
+  const { data: p } = await supabase.from('profiles').select('balance').eq('id', userId).single();
+  const nb = Number((p && p.balance) || 0) + amount;
+  await supabase.from('profiles').update({ balance: nb }).eq('id', userId);
+  return nb;
+}
+
+function vsExtractSmsCode(text) {
+  if (text == null) return null;
+  const s = String(text);
+  if (!s.trim()) return null;
+  // Explicit "code: 688-069" / "OTP is 123456"
+  let m = s.match(/(?:code|otp|pin|verification)[:\s#]*([0-9]{3,}[-–\s]?[0-9]{2,8})/i);
+  if (m) return m[1].replace(/[\s–]/g, '-').replace(/-+/g, '-');
+  // WhatsApp style 688-069
+  m = s.match(/\b(\d{3}[-–]\d{3,4})\b/);
+  if (m) return m[1].replace('–', '-');
+  // Plain 4–8 digit OTP
+  m = s.match(/\b(\d{4,8})\b/);
+  if (m) return m[1];
+  return null;
+}
+function vsParseOrder(j) {
+  const o = (j && (j.order || j.data || j.result)) || j || {};
+  let status = String(o.status || j?.status || '').toLowerCase();
+  const msgs = o.messages || o.sms || o.sms_list || o.message_list || j?.messages || [];
+  let code = null;
+  if (o.code || o.sms_code || o.otp || o.sms) {
+    const raw = o.code || o.sms_code || o.otp || (typeof o.sms === 'string' ? o.sms : null);
+    if (raw) code = vsExtractSmsCode(raw) || String(raw).trim();
+  }
+  if (!code && Array.isArray(msgs)) {
+    for (const m of msgs) {
+      if (!m) continue;
+      if (m.code || m.otp) { code = String(m.code || m.otp); break; }
+      const t = m.content || m.text || m.message || m.body || m.sms || (typeof m === 'string' ? m : '');
+      code = vsExtractSmsCode(t);
+      if (code) break;
+    }
+  }
+  if (!code && typeof o.last_message === 'string') code = vsExtractSmsCode(o.last_message);
+  if (!code && typeof o.message === 'string') code = vsExtractSmsCode(o.message);
+  // Supplier marked SMS received but code buried in payload
+  if (!code && (o.sms_received === true || status === 'sms_received' || status === 'completed')) {
+    code = vsExtractSmsCode(JSON.stringify(j));
+  }
+  if (code) status = 'completed';
+  return { status, code };
+}
+
+async function vsHandleOrder(req, res) {
+  const b = vsBody(req);
+  const { country_id, service_id, external_order_id, user_id } = b;
+  const iso = vsIdToIso(country_id);
+  const serviceId = service_id != null ? String(service_id) : null;
+  if (!iso || !serviceId || !user_id) {
+    return res.status(400).json({ success: false, message: 'country_id, service_id and user_id are required' });
+  }
+  if (!vsApiKey()) return res.status(500).json({ success: false, message: 'This SMS server is not available right now. Please contact support.' });
+
+  let originalBalance = 0, price = 0, deducted = false, customerId = null, serviceName = '', countryName = '';
+  try {
+    const { data: svc } = await supabase.from('number_services')
+      .select('service_name, country_name, price, supplier_price, price_source, is_available')
+      .eq('source', VS_SOURCE).eq('country_id', Number(country_id)).eq('service_id', serviceId).maybeSingle();
+    if (!svc) return res.status(404).json({ success: false, message: 'This service is no longer available. Refresh, try another, or contact support.' });
+    if (!svc.is_available) return res.status(409).json({ success: false, message: 'This number service is currently out of stock.' });
+    serviceName = svc.service_name; countryName = svc.country_name; price = Number(svc.price) || 0;
+
+    // Money guard: never sell for nothing or below what the supplier charges us.
+    // Hand-set prices ('manual'/'admin') are left alone (just blocked); system-priced rows are repaired.
+    const unitCostUsd = Number(svc.supplier_price) || 0;
+    if (!(price > 0) || (unitCostUsd > 0 && price < unitCostUsd * vsRate())) {
+      if (svc.price_source !== 'manual' && svc.price_source !== 'admin' && unitCostUsd > 0) {
+        try {
+          await supabase.from('number_services')
+            .update({ price: salePriceFromUsd(unitCostUsd), price_source: 'system', updated_at: new Date().toISOString() })
+            .eq('source', VS_SOURCE).eq('country_id', Number(country_id)).eq('service_id', serviceId);
+        } catch (_) { /* best effort */ }
+      }
+      console.error('[vsms order] blocked: price below supplier cost', { country: iso, service: serviceId, price, unitCostUsd, source: svc.price_source });
+      return res.status(409).json({ success: false, code: 'PRICE_CHANGED', message: 'The price for this number just changed. Please refresh and try again.' });
+    }
+
+    const { data: profile } = await supabase.from('profiles').select('balance, customer_id').eq('id', user_id).single();
+    if (!profile) return res.status(400).json({ success: false, message: 'User profile not found' });
+    originalBalance = Number(profile.balance || 0);
+    customerId = profile.customer_id;
+
+    const idem = (external_order_id && String(external_order_id).trim()) || `MJ-VS-${String(user_id).slice(0, 8)}-${Date.now()}`;
+    if (external_order_id) {
+      const { data: ex } = await supabase.from('number_orders')
+        .select('order_id, phone_number, status, price, service_name, country_name, created_at')
+        .eq('source', VS_SOURCE).eq('user_id', user_id).eq('idempotency_key', idem).maybeSingle();
+      if (ex && ex.order_id) {
+        return res.status(200).json({ success: true, replayed: true, message: 'Order already completed', data: {
+          order_id: ex.order_id, number: ex.phone_number, status: ex.status || 'waiting_for_code',
+          service_name: ex.service_name || serviceName, country_name: ex.country_name || countryName,
+          price: ex.price != null ? Number(ex.price) : price, new_balance: originalBalance, created_at: ex.created_at
+        } });
+      }
+    }
+    if (originalBalance < price) {
+      return res.status(402).json({ success: false, message: 'Insufficient balance', required: price, available: originalBalance });
+    }
+
+    let newBalance = originalBalance - price;
+    const { data: debited, error: debErr } = await supabase.rpc('debit_balance_if_sufficient', { p_user_id: user_id, p_amount: price });
+    if (debErr) {
+      const { data: p2 } = await supabase.from('profiles').select('balance').eq('id', user_id).single();
+      const b2 = Number((p2 && p2.balance) || 0);
+      if (b2 < price) return res.status(402).json({ success: false, message: 'Insufficient balance', required: price, available: b2 });
+      const { error: upErr } = await supabase.from('profiles').update({ balance: b2 - price }).eq('id', user_id).gte('balance', price);
+      if (upErr) return res.status(500).json({ success: false, message: 'Could not debit your balance. Try again or contact support.' });
+      newBalance = b2 - price;
+    } else if (debited === false || debited === null || debited === 0) {
+      return res.status(402).json({ success: false, message: 'Insufficient balance', required: price, available: originalBalance });
+    } else {
+      const { data: pa } = await supabase.from('profiles').select('balance').eq('id', user_id).maybeSingle();
+      if (pa) newBalance = Number(pa.balance);
+    }
+    deducted = true;
+
+    let r = await vsReq('/customer/purchase', { method: 'POST', body: { service: serviceId, country: iso }, timeoutMs: 30000 });
+    // The catalog now includes VoIP-backed stock (docs: include_voip=true). If the plain purchase finds no
+    // (physical) number, retry once asking for VoIP too, so a listed VoIP row can actually be bought.
+    if (!r.ok && VS_INCLUDE_VOIP && r.status !== 402 && r.status !== 401 && r.status !== 429) {
+      const r2 = await vsReq('/customer/purchase', { method: 'POST', body: { service: serviceId, country: iso, include_voip: true }, timeoutMs: 30000 });
+      if (r2.ok) r = r2;
+    }
+    const j = r.json || {};
+    const orderId = j.order_id || j.id || (j.order && (j.order.order_id || j.order.id));
+    const phone = j.phone_number || j.number || (j.order && (j.order.phone_number || j.order.number)) || null;
+    if (!r.ok || j.success === false || !orderId) {
+      await vsCreditWallet(user_id, price);
+      deducted = false;
+      const code = String(j.error || '').toLowerCase();
+      const noStock = r.status === 404 || r.status === 409 || /no_numbers|not_available|out_of_stock|unavailable|no numbers/.test(code);
+      try {
+        await supabase.from('transactions').insert({
+          user_id, customer_id: customerId, type: 'purchase', category: 'MJ SMS', title: serviceName,
+          subtitle: `Failed: ${noStock ? 'No stock' : 'Unavailable'}`, amount: `₦${price.toLocaleString()}`,
+          amount_ngn: price, status: 'failed', notes: (r.text || r.err || '').slice(0, 500)
+        });
+      } catch (_) { /* optional */ }
+      return res.status(400).json({
+        success: false, code: j.error || 'SUPPLIER_ERROR',
+        message: noStock ? 'No numbers available for this service/country right now. Try another country or service.'
+          : 'Purchase failed. Your balance has been restored.'
+      });
+    }
+
+    // What the supplier actually charged us (USD). Store the real cost on the order, and if it is higher
+    // than the catalog says, fix the catalog row so the next customer is not sold at a loss.
+    const paidUsd = vsNum(j.price ?? j.cost ?? j.price_usd ?? (j.order && (j.order.price ?? j.order.cost ?? j.order.price_usd)));
+    const costUsd = paidUsd > 0 ? paidUsd : (unitCostUsd || null);
+
+    const row = {
+      source: VS_SOURCE, user_id, customer_id: customerId, order_id: String(orderId), idempotency_key: idem,
+      country_id: Number(country_id), country_name: countryName, service_id: serviceId, service_name: serviceName,
+      phone_number: phone, price, supplier_price: costUsd, currency: 'NGN',
+      status: 'waiting_for_code', code: null, time_left: null, refunded: false
+    };
+    let { error: insErr } = await supabase.from('number_orders').insert(row);
+    if (insErr) { await new Promise((r2) => setTimeout(r2, 400)); ({ error: insErr } = await supabase.from('number_orders').insert(row)); }
+    if (insErr) console.error('[vsms order] number_orders insert failed after charge:', insErr.message, { orderId, user_id });
+
+    if (paidUsd > 0) {
+      if (paidUsd * vsRate() > price) {
+        console.error('[vsms order] SOLD BELOW COST', { orderId, country: iso, service: serviceId, price, paidUsd, rate: vsRate() });
+      }
+      if (paidUsd > unitCostUsd + 0.0001) {
+        try {
+          const fix = { supplier_price: paidUsd, updated_at: new Date().toISOString() };
+          if (svc.price_source !== 'manual' && svc.price_source !== 'admin') { fix.price = salePriceFromUsd(paidUsd); fix.price_source = 'system'; }
+          await supabase.from('number_services').update(fix)
+            .eq('source', VS_SOURCE).eq('country_id', Number(country_id)).eq('service_id', serviceId);
+        } catch (_) { /* best effort */ }
+      }
+    }
+
+    try {
+      await supabase.from('transactions').insert({
+        user_id, customer_id: customerId, type: 'purchase', category: 'MJ SMS',
+        title: countryName ? (serviceName + ' · ' + countryName) : serviceName,
+        subtitle: (countryName || '') + ' · waiting for SMS',
+        amount: `₦${price.toLocaleString()}`, amount_ngn: price,
+        status: 'pending',
+        notes: 'sms_order:' + String(orderId),
+        supplier_order: j
+      });
+    } catch (_) { /* optional */ }
+
+    return res.status(200).json({ success: true, message: 'Number purchased successfully', data: {
+      order_id: String(orderId), number: phone, status: 'waiting_for_code', service_name: serviceName,
+      country_name: countryName, price, new_balance: newBalance, created_at: new Date().toISOString()
+    } });
+  } catch (err) {
+    console.error('vsms order error:', err);
+    if (deducted) { try { await vsCreditWallet(user_id, price); } catch (e) { console.error('CRITICAL vsms auto-restore failed', e); } }
+    return res.status(500).json({ success: false, message: deducted ? 'Something went wrong. Your balance has been restored.' : 'Something went wrong. Please try again.' });
+  }
+}
+
+async function vsFindOrder(orderId, userId) {
+  const q = supabase.from('number_orders')
+    .select('id, user_id, order_id, status, phone_number, created_at, service_name, country_name, price, refunded, customer_id, code, source')
+    .eq('source', VS_SOURCE).eq('order_id', String(orderId));
+  if (userId) q.eq('user_id', userId);
+  const { data } = await q.maybeSingle();
+  return data;
+}
+const vsView = (o, extra) => ({
+  order_id: o.order_id, status: o.status, number: o.phone_number, code: o.code || null, created_at: o.created_at,
+  service_name: o.service_name, country_name: o.country_name, price: o.price, refunded: !!o.refunded, ...(extra || {})
+});
+
+async function vsMarkCompleted(order, code) {
+  let data = null;
+  try {
+    const r = await supabase.from('number_orders')
+      .update({ status: 'completed', code: String(code) })
+      .eq('id', order.id).eq('refunded', false).select('id').maybeSingle();
+    data = r.data;
+    if (r.error) console.warn('[vsms mark completed]', r.error.message);
+  } catch (e) {
+    console.warn('[vsms mark completed]', e.message || e);
+  }
+  if (data) {
+    try {
+      await supabase.from('transactions')
+        .update({ status: 'completed', subtitle: `${order.country_name || ''} · code received`.trim() })
+        .eq('user_id', order.user_id).eq('category', 'MJ SMS').eq('type', 'purchase').eq('status', 'pending')
+        .eq('amount_ngn', Number(order.price || 0));
+    } catch (_) { /* cosmetic */ }
+  }
+  return !!data;
+}
+
+/** Shared by check + expire_stale: ask the supplier, then complete / refund / keep waiting. */
+async function vsResolveOrder(order, { allowExpire = true } = {}) {
+  const age = order.created_at ? Date.now() - new Date(order.created_at).getTime() : 0;
+  const r = await vsReq('/customer/order/' + encodeURIComponent(order.order_id));
+  if (r.ok) {
+    const { status, code } = vsParseOrder(r.json);
+    if (code) { await vsMarkCompleted(order, code); return { kind: 'completed', code, status }; }
+    if (['cancelled', 'canceled', 'expired', 'refunded', 'failed'].includes(status)) return { kind: 'dead', status };
+  } else if (r.status !== 404 && !(allowExpire && age >= EXPIRY_MS)) {
+    return { kind: 'error', http: r.status };
+  }
+  if (allowExpire && age >= EXPIRY_MS) {
+    try { await vsReq('/customer/cancel/' + encodeURIComponent(order.order_id), { method: 'POST' }); } catch (_) { /* best effort */ }
+    return { kind: 'expired' };
+  }
+  return { kind: 'waiting' };
+}
+
+async function vsHandleCheck(req, res) {
+  const { order_id, user_id } = vsBody(req);
+  if (!order_id || !user_id) return res.status(400).json({ success: false, message: 'order_id and user_id are required' });
+  try {
+    const order = await vsFindOrder(order_id, user_id);
+    if (!order) return res.status(404).json({ success: false, message: 'Order not found for this account' });
+    if (order.status === 'completed' || order.refunded || ['refunded', 'expired', 'cancelled'].includes(order.status)) {
+      return res.status(200).json({ success: true, data: vsView(order) });
+    }
+    const out = await vsResolveOrder(order);
+    if (out.kind === 'completed') return res.status(200).json({ success: true, data: vsView(order, { status: 'completed', code: out.code }) });
+    if (out.kind === 'dead' || out.kind === 'expired') {
+      const st = out.kind === 'expired' ? 'expired' : 'refunded';
+      const rf = await claimAndRefundOrder(order, user_id, { status: st, subtitle: st === 'expired' ? 'Expired — no SMS, balance restored' : 'No SMS — balance restored' });
+      return res.status(200).json({ success: true, data: vsView(order, { status: st, refunded: true, refunded_amount: rf.refunded_amount, new_balance: rf.new_balance }) });
+    }
+    if (out.kind === 'error') return res.status(502).json({ success: false, message: 'Could not reach the supplier. Try again.' });
+    return res.status(200).json({ success: true, data: vsView(order, { status: 'waiting_for_code' }) });
+  } catch (err) {
+    console.error('vsms check error:', err);
+    return res.status(500).json({ success: false, message: 'Something went wrong checking this order.' });
+  }
+}
+
+async function vsHandleCancel(req, res) {
+  const { order_id, user_id } = vsBody(req);
+  if (!order_id || !user_id) return res.status(400).json({ success: false, message: 'order_id and user_id are required' });
+  try {
+    const order = await vsFindOrder(order_id, user_id);
+    if (!order) return res.status(404).json({ success: false, message: 'Order not found for this account' });
+    if (order.refunded || ['refunded', 'cancelled', 'expired'].includes(order.status)) {
+      return res.status(409).json({ success: false, message: 'This order was already refunded.' });
+    }
+    if (order.status === 'completed') {
+      return res.status(409).json({ success: false, code: 'NUMBER_CODE_ALREADY_RECEIVED', message: 'A code was already received — this order cannot be cancelled.' });
+    }
+    const age = order.created_at ? Date.now() - new Date(order.created_at).getTime() : VS_CANCEL_COOLDOWN_MS;
+    if (age < VS_CANCEL_COOLDOWN_MS) {
+      const wait = Math.ceil((VS_CANCEL_COOLDOWN_MS - age) / 1000);
+      return res.status(400).json({ success: false, code: 'EARLY_CANCEL_DENIED', wait_seconds: wait, message: `Cancel available in ${wait}s. Please wait a moment.` });
+    }
+    // never cancel a number that already received its SMS
+    const peek = await vsReq('/customer/order/' + encodeURIComponent(order.order_id));
+    if (peek.ok) {
+      const { code } = vsParseOrder(peek.json);
+      if (code) {
+        await vsMarkCompleted(order, code);
+        return res.status(409).json({ success: false, code: 'NUMBER_CODE_ALREADY_RECEIVED', message: 'A code was already received — this order cannot be cancelled.' });
+      }
+    }
+    const r = await vsReq('/customer/cancel/' + encodeURIComponent(order.order_id), { method: 'POST' });
+    if (r.status === 425) {
+      return res.status(400).json({ success: false, code: 'EARLY_CANCEL_DENIED', wait_seconds: 30, message: 'Cancel is not available yet. Try again in a moment.' });
+    }
+    // Docs: errors look like { error: "Cannot cancel order with status: sms_received" }.
+    // Only treat the order as "already cancelled/expired" when the supplier says exactly that —
+    // an SMS that already arrived must NEVER be refunded.
+    const errTxt = String((r.json && (r.json.error || r.json.message)) || r.text || '');
+    if (!r.ok && /sms_received|completed|received/i.test(errTxt)) {
+      return res.status(409).json({ success: false, code: 'NUMBER_CODE_ALREADY_RECEIVED', message: 'A code was already received — this order cannot be cancelled.' });
+    }
+    const already = r.status === 404 || /status:\s*(cancelled|canceled|expired|refunded)/i.test(errTxt);
+    if (!r.ok && !already) {
+      return res.status(400).json({ success: false, code: 'CANCEL_FAILED', message: 'Could not cancel this order right now. Try again shortly.' });
+    }
+    const rf = await claimAndRefundOrder(order, user_id, { status: 'refunded', subtitle: 'Cancelled — balance restored' });
+    if (!rf.refunded && rf.reason === 'already_final') return res.status(409).json({ success: false, message: 'This order was already refunded.' });
+    return res.status(200).json({ success: true, data: { order_id, status: 'refunded', refunded: true, refunded_amount: rf.refunded_amount || Number(order.price || 0), new_balance: rf.new_balance } });
+  } catch (err) {
+    console.error('vsms cancel error:', err);
+    return res.status(500).json({ success: false, message: 'Something went wrong cancelling this order.' });
+  }
+}
+
+
+/** Refund / complete Server 3 (REST) orders older than 20 min. Called from handleExpireStale. */
+async function vsExpireStale(rows) {
+  let expired = 0, completed = 0, skipped = 0;
+  const list = (rows || []).filter((o) =>
+    String(o.source || '').toLowerCase() === VS_SOURCE && o.refunded !== true && !/^\d+$/.test(String(o.order_id || ''))
+  );
+  for (const o of list) {
+    try {
+      const out = await vsResolveOrder(o);
+      if (out.kind === 'completed') { completed += 1; continue; }
+      if (out.kind === 'dead' || out.kind === 'expired') {
+        const rf = await claimAndRefundOrder(o, o.user_id, { status: 'expired', subtitle: 'Expired — no SMS, balance restored' });
+        if (rf.refunded) expired += 1; else skipped += 1;
+      } else skipped += 1;
+    } catch (e) { skipped += 1; }
+  }
+  return { scanned: list.length, expired, completed, skipped };
+}
+
+/** Which server does this order belong to? Used so check/cancel go to the right supplier. */
+async function orderIsServer3Rest(req) {
+  try {
+    const b = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : (req.body || {});
+    if (!b.order_id || !b.user_id) return false;
+    if (/^\d+$/.test(String(b.order_id))) return false; // legacy numeric id → existing handlers
+    const { data } = await supabase.from('number_orders').select('source')
+      .eq('order_id', String(b.order_id)).eq('user_id', b.user_id).maybeSingle();
+    return !!data && String(data.source || '').toLowerCase() === VS_SOURCE;
+  } catch (_) { return false; }
+}
+
+// ===========================================================================
+// DISPATCHER
+// ===========================================================================
 
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -1707,24 +2844,40 @@ export default async function handler(req, res) {
   }
 
   const action = req.query?.action || null;
+  const act = String(action || '').toLowerCase();
+  const isVsSync = act === 'vsms_sync' || act === 'virtualsms_sync' || act === 'server3_sync';
 
   if (req.method === 'GET') {
-    const getAction = String(action || '').toLowerCase();
-    if (getAction === 'expire_stale' || getAction === 'expire-stale') {
+    if (act === 'expire_stale' || act === 'expire-stale') {
       return handleExpireStale(req, res);
     }
-    // action is one of: null (continue/cron), 'start', 'status' — handled inside handleSync
+    if (isVsSync) return vsHandleSync(req, res);
+    if (act === 'vsms_probe') return vsHandleProbe(req, res);
+    if (act === 'vsms_purge_legacy') return vsHandlePurgeLegacy(req, res);
+    // action is one of: null (continue/cron), 'start', 'status' — handled inside handleSync (Server 1)
     return handleSync(req, res);
   }
 
   if (req.method === 'POST') {
-    if (action === 'order') return handleOrder(req, res);
-    if (action === 'check') return handleCheck(req, res);
-    if (action === 'expire_stale' || action === 'expire-stale') return handleExpireStale(req, res);
-    if (action === 'cancel') return handleCancel(req, res);
+    if (isVsSync) return vsHandleSync(req, res);
+    if (action === 'order') {
+      let b = {};
+      try { b = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : (req.body || {}); } catch (_) { b = {}; }
+      if (resolveSupplier(req, b).source === 'virtualsms') return vsHandleOrder(req, res);
+      return handleOrder(req, res);
+    }
+    if (action === 'check') {
+      if (await orderIsServer3Rest(req)) return vsHandleCheck(req, res);
+      return handleCheck(req, res);
+    }
+    if (action === 'cancel') {
+      if (await orderIsServer3Rest(req)) return vsHandleCancel(req, res);
+      return handleCancel(req, res);
+    }
+    if (act === 'expire_stale' || act === 'expire-stale') return handleExpireStale(req, res);
     return res.status(400).json({
       success: false,
-      message: "POST requires ?action=order, ?action=check, or ?action=cancel"
+      message: "POST requires ?action=order, ?action=check, ?action=cancel, or ?action=vsms_sync"
     });
   }
 
