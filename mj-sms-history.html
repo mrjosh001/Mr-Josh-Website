@@ -160,17 +160,15 @@ function isTerminalRentStatus(o){
   return ['refunded','cancelled','canceled','expired','ended','finished'].indexOf(st)>=0;
 }
 function isUsaActiveRow(o){
-  // DB terminal wins. If we have a live supplier active list, only those IDs are Active.
   if(String(o.source||'').toLowerCase()!=='gotsms') return false;
   if(isTerminalRentStatus(o)) return false;
-  var till=parseUsaExpiry(o);
+  var till=typeof inferRentalExpiryMs==='function'?inferRentalExpiryMs(o):parseUsaExpiry(o);
   if(till && till<=Date.now()) return false;
   var st=String(o.status||'').toLowerCase();
   if(st==='expired'||st==='ended'||st==='finished'||st==='cancelled'||st==='canceled'||st==='refunded') return false;
   var rid=usaRentId(o);
-  if(rid && liveActiveRentIds && liveActiveRentIds.size>0) {
-    // Supplier is source of truth when the live list loaded successfully
-    return liveActiveRentIds.has(String(rid));
+  if(rid && window._histLiveUsaLoaded) {
+    return !!(liveActiveRentIds && liveActiveRentIds.has(String(rid)));
   }
   if(till && till>Date.now()) return true;
   return st==='active'||st==='pending'||st==='processing'||st==='waiting'||st==='waiting_for_code';
@@ -180,7 +178,7 @@ function isRentActiveRow(o){
   if(s==='gotsms') return isUsaActiveRow(o);
   if(s!=='smsbus_rent') return false;
   if(isTerminalRentStatus(o)) return false;
-  var till=parseUsaExpiry(o);
+  var till=typeof inferRentalExpiryMs==='function'?inferRentalExpiryMs(o):parseUsaExpiry(o);
   if(till) return till>Date.now();
   var st=String(o.status||'').toLowerCase();
   return st==='active'||st==='pending'||st==='processing';
@@ -225,11 +223,13 @@ function isRentCompletedRow(o){
 async function refreshLiveUsaActive(accessToken){
   liveActiveRentIds=new Set();
   liveActiveMeta={};
+  window._histLiveUsaLoaded=false;
   try{
     var res=await fetch('/api/sms-bus?action=gotsms_rents&status=active',{
       headers:{Authorization:'Bearer '+accessToken,Accept:'application/json'}
     });
     var j=await res.json().catch(function(){return {};});
+    if(j&&j.success){window._histLiveUsaLoaded=true;}
     (j&&j.success&&Array.isArray(j.data)?j.data:[]).forEach(function(r){
       if(!r||r.id==null) return;
       var id=String(r.id);
@@ -319,6 +319,24 @@ function parseUsaExpiry(o){
   var ms=Date.parse(s);
   return isNaN(ms)?0:ms;
 }
+function inferRentalExpiryMs(o){
+  var till=parseUsaExpiry(o);
+  if(till) return till;
+  var created=o&&o.created_at?Date.parse(o.created_at):NaN;
+  if(!created||isNaN(created)) return 0;
+  var name=String((o&&(o.service_name||o.notes||''))||'').toLowerCase();
+  var days=0,m;
+  if((m=name.match(/(\d+)\s*hours?/))) days=Number(m[1])/24;
+  else if((m=name.match(/(\d+)\s*days?/))) days=Number(m[1]);
+  else if((m=name.match(/(\d+)\s*weeks?/))) days=Number(m[1])*7;
+  else if(/\b1\s*mo\b|\b1\s*month\b|monthly/.test(name)) days=30;
+  else if(/\b3\s*mo\b|\b3\s*months?\b/.test(name)) days=90;
+  else if(/\b6\s*mo\b|\b6\s*months?\b/.test(name)) days=180;
+  else if(/\b1\s*year\b|\b12\s*mo\b/.test(name)) days=365;
+  if(!days) return 0;
+  return created+days*86400000;
+}
+
 function usaMetaFromName(name){
   var parts=String(name||'').split('·').map(function(x){return x.trim();}).filter(Boolean)
     .filter(function(x){ return !/^sms\s*received$/i.test(x); });

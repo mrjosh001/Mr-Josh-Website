@@ -1250,12 +1250,12 @@ function withLagos(opts) { return Object.assign({ timeZone: 'Africa/Lagos' }, op
  </select>
  </div>
 
- <div id="smsProfitSummary" style="display:none;margin:0 0 12px;padding:12px 14px;border-radius:14px;border:1px solid rgba(52,211,153,.35);background:rgba(52,211,153,.08);font-size:13px;font-weight:700;"></div>
+ <!-- sms profit summary removed -->
  <div class="desktop-only desktop-table table-wrap">
  <table>
  <thead>
  <tr>
- <th>Customer ID</th><th>Server</th><th>Service</th><th>Country</th><th>Number</th><th>Price</th><th>Profit (₦)</th><th>Inbox</th><th>Time left</th><th>Status</th><th>Date</th>
+ <th>Customer ID</th><th>Server</th><th>Service</th><th>Country</th><th>Number</th><th>Price</th><th>Inbox</th><th>Time left</th><th>Status</th><th>Date</th>
  </tr>
  </thead>
  <tbody id="smsOrdersTableBody"></tbody>
@@ -2320,6 +2320,11 @@ async function loadAllData() {
  if (_adminDataLoading) return;
  _adminDataLoading = true;
  try {
+ // Supplier balances on sign-in (Overview is the first screen)
+ if (typeof loadSupplierBalances === 'function') {
+   _supplierBalancesLoaded = true;
+   loadSupplierBalances().catch(function(e){ _supplierBalancesLoaded = false; console.error('supplier balances', e); });
+ }
  // Prioritize the visible overview. Defer large lists until their tab is
  // opened; this avoids fetching and rendering thousands of rows at sign-in.
  if (typeof loadOverviewStats === 'function' && !_overviewStatsLoaded) {
@@ -3166,36 +3171,8 @@ async function smsLoadOrderCosts(list) {
   }
   return added;
 }
-function smsRenderProfitSummary(list) {
-  const el = document.getElementById('smsProfitSummary');
-  if (!el) return;
-  list = list || [];
-  if (!list.length) { el.style.display = 'none'; return; }
-  let total = 0, sold = 0, missing = 0, openCount = 0;
-  list.forEach(o => {
-    const st = String(o.status || '').toLowerCase();
-    if (o.refunded || ['cancelled','canceled','refunded','failed'].indexOf(st) > -1) return;
-    if (typeof adminIsActiveRental === 'function' && adminIsActiveRental(o) && typeof adminRentReceivedSms === 'function' && !adminRentReceivedSms(o)) {
-      openCount++; return;
-    }
-    const p = smsOrderProfit(o);
-    if (p.state === 'ok') { total += p.value; sold++; }
-    else if (p.state === 'nocost') missing++;
-  });
-  el.style.display = '';
-  el.innerHTML = 'Realized profit (SMS received / completed only): ' + smsProfitHtml(total) +
-    ' <span style="color:var(--muted);font-weight:600;">· ' + sold + ' sold' +
-    (openCount ? ' · ' + openCount + ' active with no SMS yet' : '') +
-    (missing ? ' · ' + missing + ' missing supplier cost (—)' : '') + '</span>';
-  smsLoadOrderCosts(list).then(added => {
-    if (added && typeof renderSmsOrders === 'function') renderSmsOrders(window._smsFilterCache || list);
-  }).catch(() => {});
-}
+function smsRenderProfitSummary(list) { /* profit removed from SMS Orders */ return; }
 
-/** Mirrors salePriceFromUsd() in api/grizzly-sync.js and salePriceFromUsdClient()
- * in mj-sms.html — same fixed 80% markup band — so the "auto" price shown
- * here for an un-overridden pool matches what a customer would actually be
- * charged if the admin leaves it alone. */
 function grizzlyAutoPriceFromUsd(usd) {
  const rate = 1500, percent = 80, minProfit = 500, minSale = 1000;
  const supplierNgn = Number(usd) * rate;
@@ -3938,12 +3915,14 @@ async function wipeUnusedSmsNumbers() {
 
 async function adminRefreshLiveUsaActive() {
   window._adminLiveUsaActiveIds = new Set();
+  window._adminLiveUsaActiveLoaded = false;
   try {
     const headers = await authHeaders();
     const res = await fetch('/api/sms-bus?action=gotsms_rents&status=active', {
       headers: headers || {},
       method: 'GET'
     });
+    if (!res.ok) return;
     const j = await res.json().catch(() => ({}));
     const list = (j && (j.data || j.rents || j.results)) || [];
     const arr = Array.isArray(list) ? list : [];
@@ -3951,8 +3930,11 @@ async function adminRefreshLiveUsaActive() {
       const id = r && (r.id || r.rent_id || r.rentId);
       if (id != null) window._adminLiveUsaActiveIds.add(String(id));
     });
+    // Mark loaded only on successful parse so a network error does not mass-expire rentals
+    window._adminLiveUsaActiveLoaded = true;
   } catch (e) {
     console.warn('adminRefreshLiveUsaActive', e);
+    window._adminLiveUsaActiveLoaded = false;
   }
 }
 
@@ -3977,18 +3959,21 @@ async function tryLoadSmsOrders() {
     try { await adminRefreshLiveUsaActive(); } catch (e) {}
     // Soft-mark DB rows that supplier no longer lists as active (cancelled / finished)
     try {
-      if (window._adminLiveUsaActiveIds && window._adminLiveUsaActiveIds.size > 0) {
-        window._cachedSmsOrders.forEach(function(o) {
-          if (String(o.source||'').toLowerCase() !== 'gotsms') return;
-          if (o.refunded || ['cancelled','canceled','refunded','expired'].indexOf(String(o.status||'').toLowerCase())>=0) return;
+      window._cachedSmsOrders.forEach(function(o) {
+        if (!isSmsRentalOrder(o)) return;
+        if (o.refunded || ['cancelled','canceled','refunded','expired','ended','finished'].indexOf(String(o.status||'').toLowerCase())>=0) return;
+        var till = typeof adminInferRentalExpiryMs === 'function' ? adminInferRentalExpiryMs(o) : adminParseUsaExpiry(o);
+        if (till && till <= Date.now()) {
+          o.status = 'expired';
+          return;
+        }
+        if (String(o.source||'').toLowerCase() === 'gotsms' && window._adminLiveUsaActiveLoaded) {
           var rid = (typeof adminUsaRentId==='function') ? adminUsaRentId(o) : '';
-          if (!rid) return;
-          if (!window._adminLiveUsaActiveIds.has(String(rid))) {
-            // Not on supplier active list — treat as ended for UI (do not invent refunded)
-            o.status = (o.code && String(o.code).trim() && !/^\d{4}-\d{2}-\d{2}/.test(String(o.code))) ? 'completed' : 'cancelled';
+          if (rid && !window._adminLiveUsaActiveIds.has(String(rid))) {
+            o.status = (typeof adminRentReceivedSms === 'function' && adminRentReceivedSms(o)) ? 'completed' : 'cancelled';
           }
-        });
-      }
+        }
+      });
     } catch (e) {}
     if (typeof filterSmsOrders === 'function') { filterSmsOrders(); return; }
     if (typeof renderSmsOrders === 'function') renderSmsOrders(json.data);
@@ -4046,17 +4031,36 @@ function adminRentReceivedSms(o){
   if(st==='completed'||st==='success') return true;
   return false;
 }
+function adminInferRentalExpiryMs(o){
+  // Prefer explicit expiry fields; else infer from plan text + created_at
+  var till = adminParseUsaExpiry(o);
+  if (till) return till;
+  var created = o && o.created_at ? Date.parse(o.created_at) : NaN;
+  if (!created || isNaN(created)) return 0;
+  var name = String((o && (o.service_name || o.notes || '')) || '').toLowerCase();
+  var days = 0, m;
+  if ((m = name.match(/(\d+)\s*hours?/))) days = Number(m[1]) / 24;
+  else if ((m = name.match(/(\d+)\s*days?/))) days = Number(m[1]);
+  else if ((m = name.match(/(\d+)\s*weeks?/))) days = Number(m[1]) * 7;
+  else if (/\b1\s*mo\b|\b1\s*month\b|monthly/.test(name)) days = 30;
+  else if (/\b3\s*mo\b|\b3\s*months?\b/.test(name)) days = 90;
+  else if (/\b6\s*mo\b|\b6\s*months?\b/.test(name)) days = 180;
+  else if (/\b1\s*year\b|\b12\s*mo\b/.test(name)) days = 365;
+  if (!days) return 0;
+  return created + days * 86400000;
+}
 function adminIsActiveRental(o){
   if(!isSmsRentalOrder(o)) return false;
   if(o.refunded===true || o.refunded===1 || o.refunded==='true') return false;
   var st = String(o.status||'').toLowerCase();
   if(['refunded','cancelled','canceled','expired','ended','finished','failed'].indexOf(st)>=0) return false;
-  var till = adminParseUsaExpiry(o);
+  var till = adminInferRentalExpiryMs(o);
   if(till && till <= Date.now()) return false;
   try {
     var rid = (typeof adminUsaRentId === 'function') ? adminUsaRentId(o) : '';
-    if (rid && window._adminLiveUsaActiveIds && window._adminLiveUsaActiveIds.size > 0) {
-      return window._adminLiveUsaActiveIds.has(String(rid));
+    // When live list loaded successfully (even if empty), supplier decides active set
+    if (rid && window._adminLiveUsaActiveLoaded) {
+      return !!(window._adminLiveUsaActiveIds && window._adminLiveUsaActiveIds.has(String(rid)));
     }
   } catch (e) {}
   if(till && till > Date.now()) return true;
@@ -4220,7 +4224,7 @@ function renderSmsOrders(orders) {
  try { smsRenderProfitSummary(orders || []); } catch (e) {}
 
  if (!orders?.length) {
- tbody.innerHTML = `<tr><td colspan="11" class="empty-state">No SMS orders found.</td></tr>`;
+ tbody.innerHTML = `<tr><td colspan="10" class="empty-state">No SMS orders found.</td></tr>`;
  cards.innerHTML = `<div class="empty-state">No SMS orders found.</div>`;
  const p0 = document.getElementById('smsOrdersPager');
  if (p0) p0.innerHTML = '';
@@ -4288,7 +4292,6 @@ function renderSmsOrders(orders) {
  <td>${escapeHtml(adminRentCountry(o))}</td>
  <td style="font-weight:700;">${escapeHtml(o.phone_number || '—')}</td>
  <td><strong class="price">₦${Number(o.price || 0).toLocaleString()}</strong></td>
- <td>${smsOrderProfitHtml(o)}</td>
  <td style="font-size:12px;max-width:160px;word-break:break-all;">${inboxCell(o)}</td>
  <td style="font-size:12px;">${timeLeftCell(o)}</td>
  <td>${statusBadge(o)}</td>
@@ -4300,7 +4303,7 @@ function renderSmsOrders(orders) {
  const name = adminDisplayServiceName(o);
  const typeLabel = isSmsRentalOrder(o) ? 'Rental' : 'OTP';
  const date = o.created_at ? ngWhen(o.created_at) : '—';
- const till = adminParseUsaExpiry(o);
+ const till = (typeof adminInferRentalExpiryMs==='function' ? adminInferRentalExpiryMs(o) : adminParseUsaExpiry(o));
  const timeRow = isSmsRentalOrder(o) && till
    ? `<div class="row-line"><span>Time left</span><span data-admin-sms-till="${till}" style="font-weight:800;font-variant-numeric:tabular-nums;">${adminFormatTimeLeft(till)}</span></div>`
    : '';
@@ -4314,7 +4317,6 @@ function renderSmsOrders(orders) {
  <div class="row-line"><span>Number</span><span>${escapeHtml(o.phone_number || '—')}</span></div>
  <div class="row-line"><span>Country</span><span>${escapeHtml(adminRentCountry(o))}</span></div>
  <div class="row-line"><span>Amount</span><strong class="price">₦${Number(o.price || 0).toLocaleString()}</strong></div>
- <div class="row-line"><span>Profit</span>${smsOrderProfitHtml(o)}</div>
  ${inboxRow}
  ${timeRow}
  <div class="row-line"><span>Status</span>${statusBadge(o)}</div>
