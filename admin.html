@@ -4012,6 +4012,8 @@ function smsOrderServerLabel(o) {
 }
 
 function adminUsaRentId(o){
+  // Only meaningful for GotSMS USA rentals
+  if (o && String(o.source || '').toLowerCase() !== 'gotsms') return '';
   return String(o.idempotency_key||'').replace(/^gotsms-/,'') || String(o.rent_id||'');
 }
 function adminParseUsaExpiry(o){
@@ -4056,13 +4058,16 @@ function adminIsActiveRental(o){
   if(['refunded','cancelled','canceled','expired','ended','finished','failed'].indexOf(st)>=0) return false;
   var till = adminInferRentalExpiryMs(o);
   if(till && till <= Date.now()) return false;
-  try {
-    var rid = (typeof adminUsaRentId === 'function') ? adminUsaRentId(o) : '';
-    // When live list loaded successfully (even if empty), supplier decides active set
-    if (rid && window._adminLiveUsaActiveLoaded) {
-      return !!(window._adminLiveUsaActiveIds && window._adminLiveUsaActiveIds.has(String(rid)));
-    }
-  } catch (e) {}
+  // GotSMS USA live list applies ONLY to USA rentals — never demote Global (smsbus_rent)
+  var src = String(o.source || '').toLowerCase();
+  if (src === 'gotsms') {
+    try {
+      var rid = (typeof adminUsaRentId === 'function') ? adminUsaRentId(o) : '';
+      if (rid && window._adminLiveUsaActiveLoaded) {
+        return !!(window._adminLiveUsaActiveIds && window._adminLiveUsaActiveIds.has(String(rid)));
+      }
+    } catch (e) {}
+  }
   if(till && till > Date.now()) return true;
   return st==='active'||st==='pending'||st==='processing'||st==='waiting'||st==='waiting_for_code';
 }
