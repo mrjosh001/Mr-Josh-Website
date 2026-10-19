@@ -22,91 +22,92 @@ Date.prototype.toLocaleTimeString=function(l,o){return c.call(this,l||'en-NG',w(
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
 body{font-family:'Plus Jakarta Sans',system-ui,-apple-system,sans-serif;background:var(--bg);color:var(--text);min-height:100vh;-webkit-font-smoothing:antialiased;font-variant-numeric:tabular-nums;padding-bottom:calc(40px + env(safe-area-inset-bottom))}
 .header{height:54px;padding:0 16px;display:flex;align-items:center;gap:12px;position:sticky;top:0;z-index:100;background:var(--bg);border-bottom:1px solid var(--line)}
-.back-button{width:36px;height:36px;border-radius:11px;background:var(--card);border:1px solid var(--line);display:flex;align-items:center;justify-content:center;color:var(--text);text-decoration:none;font-size:13px;transition:transform .45s cubic-bezier(.34,1.8,.5,1)}
-.back-button:active{transform:scale(.88);transition-duration:.1s}
+.back-button{width:36px;height:36px;border-radius:11px;background:var(--card);border:1px solid var(--line);display:flex;align-items:center;justify-content:center;color:var(--text);text-decoration:none;font-size:13px}
 .page-title{font-size:17px;font-weight:800;letter-spacing:-.025em}
 .otp-tag{margin-left:auto;font-size:11px;font-weight:800;color:var(--ok);background:var(--ok-soft);padding:4px 10px;border-radius:999px;display:inline-flex;align-items:center;gap:6px}
 .otp-tag::before{content:'';width:7px;height:7px;border-radius:50%;background:currentColor}
 .otp-tag.ended{color:var(--bad);background:var(--bad-soft)}
 .main-content{padding:16px;max-width:520px;margin:0 auto}
-.n3{display:grid;gap:10px}
-.n3-state{display:flex;align-items:center;gap:14px;padding:4px 2px 6px}
-.n3-live{position:relative;width:46px;height:46px;flex-shrink:0;display:grid;place-items:center;border-radius:50%;background:var(--ac-soft);color:var(--ac);font-size:18px}
-.n3-live::before,.n3-live::after{content:"";position:absolute;inset:0;border-radius:50%;border:2px solid var(--ac);opacity:0;animation:n3ring 2s ease-out infinite}
-.n3-live::after{animation-delay:1s}
-.n3-live.off{background:var(--bad-soft);color:var(--bad)}
-.n3-live.off::before,.n3-live.off::after{animation:none;border-color:transparent}
-@keyframes n3ring{0%{transform:scale(.8);opacity:.55}100%{transform:scale(1.55);opacity:0}}
-.n3-st{font-size:21px;font-weight:800;letter-spacing:-.035em;line-height:1.15}
-.n3-ss{font-size:13px;font-weight:600;color:var(--muted);line-height:1.4;margin-top:3px}
-.n3-card{background:var(--card);border:1px solid var(--line);border-radius:20px;padding:15px 16px}
+.n3{display:grid;gap:14px}
+.n3-card{background:var(--card);border:1px solid var(--line);border-radius:20px;padding:16px}
 .n3-lab{font-size:11px;font-weight:800;letter-spacing:.09em;text-transform:uppercase;color:var(--muted)}
-.n3-grid{display:grid;grid-template-columns:1.4fr 1fr;gap:10px}
-.n3-val{margin-top:6px;font-size:17px;font-weight:800;letter-spacing:-.02em;line-height:1.25;overflow-wrap:anywhere}
-.n3-val.ac{color:var(--ac)}
-.n3-sub{margin-top:2px;font-size:12.5px;font-weight:600;color:var(--muted)}
-.chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
-.chip{font-size:11px;font-weight:800;padding:4px 10px;border-radius:999px;background:var(--card-2);border:1px solid var(--line);color:var(--text-2)}
-.n3-num{border-color:var(--ac-line)}
-.n3-phone{display:flex;align-items:center;gap:10px;margin-top:10px;flex-wrap:wrap}
-.dial-code{font-size:15px;font-weight:800;color:var(--ac);background:var(--ac-soft);padding:7px 12px;border-radius:11px}
-.national-num{font-size:29px;font-weight:800;letter-spacing:.02em;line-height:1.1;word-break:break-all}
-.phone-hint{font-size:11.5px;color:var(--muted);margin-top:9px;font-weight:600;text-align:center}
-.n3-time{margin-top:6px;font-size:34px;font-weight:800;letter-spacing:-.03em;line-height:1;white-space:nowrap}
-.n3-track{height:7px;border-radius:999px;background:var(--card-2);margin-top:13px;overflow:hidden;border:1px solid var(--line)}
+.n3-sub{font-size:12.5px;font-weight:600;color:var(--muted)}
+
+/* number + time (one compact card) */
+.hero{border-color:var(--ac-line)}
+.numrow{display:flex;align-items:center;gap:10px;margin-top:8px}
+.dial-code{font-size:14px;font-weight:800;color:var(--ac);background:var(--ac-soft);padding:6px 10px;border-radius:10px}
+.national-num{font-size:28px;font-weight:800;letter-spacing:.01em;line-height:1.1;flex:1;min-width:0;word-break:break-all}
+.copy-icon{width:42px;height:42px;border-radius:13px;border:1px solid var(--ac-line);background:var(--ac-soft);color:var(--ac);font-size:15px;cursor:pointer;flex-shrink:0}
+.chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:12px}
+.chip{font-size:12px;font-weight:700;padding:5px 11px;border-radius:999px;background:var(--card-2);border:1px solid var(--line);color:var(--text-2)}
+.timerow{display:flex;align-items:baseline;justify-content:space-between;gap:10px;margin-top:14px;padding-top:14px;border-top:1px solid var(--line)}
+.n3-time{font-size:22px;font-weight:800;letter-spacing:-.02em;white-space:nowrap}
+.n3-track{height:6px;border-radius:999px;background:var(--card-2);margin-top:10px;overflow:hidden;border:1px solid var(--line)}
 .n3-bar{height:100%;width:100%;border-radius:999px;background:var(--ac);transform-origin:left center;transition:transform 1s linear}
-.n3-btn{width:100%;display:flex;align-items:center;justify-content:center;gap:8px;padding:14px;border-radius:16px;font:inherit;font-size:14.5px;font-weight:800;cursor:pointer;border:1px solid transparent;text-decoration:none;transition:transform .45s cubic-bezier(.34,1.8,.5,1),opacity .2s}
-.n3-btn:active{transform:scale(.96);transition-duration:.1s}
+
+/* buttons */
+.n3-btn{width:100%;display:flex;align-items:center;justify-content:center;gap:8px;padding:14px;border-radius:16px;font:inherit;font-size:14.5px;font-weight:800;cursor:pointer;border:1px solid transparent;text-decoration:none;transition:transform .3s cubic-bezier(.34,1.8,.5,1),opacity .2s}
+.n3-btn:active{transform:scale(.96)}
 .n3-btn:disabled{opacity:.5;cursor:not-allowed}
 .n3-btn.is-busy{opacity:.7;pointer-events:none}
 .n3-primary{background:var(--ac);color:#fff}
 .n3-ghost{background:var(--card);color:var(--text);border-color:var(--line)}
-.n3-soft{background:var(--ac-soft);color:var(--ac);border-color:var(--ac-line)}
 .n3-danger{background:transparent;color:var(--bad);border-color:rgba(255,107,107,.4)}
 .n3-btn.ok{background:var(--ok);color:#06140d}
-.n3-copy{margin-top:13px}
 .spin{animation:spin .7s linear infinite}
 @keyframes spin{to{transform:rotate(360deg)}}
 .n3-two{display:grid;grid-template-columns:1fr 1fr;gap:10px}
 .n3-stack{display:grid;gap:10px}
-.toggle{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.flash{font-size:13px;font-weight:700;text-align:center}
+.flash:empty{display:none}
+.flash.err{color:var(--bad)}.flash.ok{color:var(--ok)}
+
+/* inbox */
+.inbox-head{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:6px}
+.inbox-head h2{font-size:20px;font-weight:800;letter-spacing:-.03em}
+.pills{display:flex;gap:6px}
+.pill{font-size:11px;font-weight:800;padding:5px 10px;border-radius:999px;background:var(--card);border:1px solid var(--line);white-space:nowrap}
+.pill.live{color:var(--ok);background:var(--ok-soft);border-color:var(--ok-line);display:inline-flex;align-items:center;gap:6px}
+.pill.live::before{content:'';width:7px;height:7px;border-radius:50%;background:var(--ok);animation:pulse 1.6s ease infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.35}}
+.msg{background:var(--card);border:1px solid var(--line);border-radius:20px;padding:16px;display:grid;gap:12px}
+.msg-from{font-size:14px;font-weight:800;overflow-wrap:anywhere}
+.msg-from span{color:var(--muted);font-weight:600}
+.msg-code{text-align:center;padding:14px 10px;border-radius:16px;background:var(--ok-soft);border:1px solid var(--ok-line)}
+.n3-digits{display:flex;justify-content:center;gap:7px;flex-wrap:wrap;margin-bottom:12px}
+.n3-digits span{min-width:40px;height:56px;padding:0 6px;display:grid;place-items:center;border-radius:13px;background:var(--card);border:1px solid var(--ok-line);color:var(--ok);font-size:28px;font-weight:800}
+.msg-body{font-size:14px;font-weight:500;line-height:1.55;color:var(--text-2);white-space:pre-wrap;overflow-wrap:anywhere}
+.msg-time{font-size:12px;font-weight:600;color:var(--muted)}
+.wait{text-align:center;padding:30px 20px}
+.wait i{font-size:30px;color:var(--ac);margin-bottom:12px}
+.wait b{display:block;font-size:17px;font-weight:800;letter-spacing:-.02em}
+.wait p{font-size:13.5px;color:var(--muted);font-weight:600;line-height:1.5;margin-top:6px}
+.empty{text-align:center;padding:28px 16px;color:var(--muted);font-size:13px;font-weight:600;line-height:1.5}
+.empty a{color:var(--ac)}
+
+/* more options (collapsed) */
+.more{background:var(--card);border:1px solid var(--line);border-radius:20px;overflow:hidden}
+.more summary{list-style:none;cursor:pointer;display:flex;align-items:center;justify-content:space-between;padding:16px;font-size:15px;font-weight:800}
+.more summary::-webkit-details-marker{display:none}
+.more summary i{color:var(--muted);transition:transform .2s}
+.more[open] summary i{transform:rotate(180deg)}
+.more-body{padding:0 16px 16px;display:grid;gap:12px}
+.toggle{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:14px;border-radius:16px;background:var(--card-2);border:1px solid var(--line)}
 .toggle .t-title{font-size:14px;font-weight:800}
 .toggle .t-hint{font-size:12px;color:var(--muted);font-weight:600;margin-top:3px;line-height:1.4}
 .switch{position:relative;width:50px;height:30px;flex-shrink:0}
 .switch input{opacity:0;width:0;height:0;position:absolute}
-.slider{position:absolute;inset:0;background:var(--card-2);border:1px solid var(--line);border-radius:999px;cursor:pointer;transition:.2s}
+.slider{position:absolute;inset:0;background:var(--card);border:1px solid var(--line);border-radius:999px;cursor:pointer;transition:.2s}
 .slider:before{content:'';position:absolute;width:22px;height:22px;left:3px;top:3px;background:#fff;border-radius:50%;transition:.2s;box-shadow:0 1px 4px rgba(0,0,0,.25)}
 .switch input:checked+.slider{background:var(--ac);border-color:var(--ac)}
 .switch input:checked+.slider:before{transform:translateX(20px)}
 .switch input:disabled+.slider{opacity:.5;cursor:not-allowed}
-.refund-locked{font-size:12.5px;font-weight:600;color:var(--muted);line-height:1.45;padding:12px 14px;border-radius:14px;background:var(--card);border:1px solid var(--line)}
-.flash{font-size:13px;font-weight:700;min-height:0;text-align:center}
-.flash:empty{display:none}
-.flash.err{color:var(--bad)}.flash.ok{color:var(--ok)}
-.n3-tip{display:flex;gap:11px;align-items:flex-start;padding:13px 14px;border-radius:16px;background:var(--warn-soft);border:1px solid var(--warn-line)}
-.n3-tip i{color:var(--warn);font-size:15px;margin-top:2px}
-.n3-tip b{display:block;font-size:12.5px;font-weight:800;color:var(--warn);margin-bottom:2px}
-.n3-tip span{font-size:12.5px;line-height:1.5;color:var(--text-2);font-weight:500}
-.inbox-head{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;margin:8px 2px 2px}
-.inbox-head h2{font-size:17px;font-weight:800;letter-spacing:-.025em}
-.inbox-head p{font-size:12px;color:var(--muted);font-weight:600;margin-top:3px;line-height:1.4}
-.pills{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}
-.pill{font-size:10.5px;font-weight:800;padding:5px 9px;border-radius:999px;background:var(--card);border:1px solid var(--line);white-space:nowrap}
-.pill.live{color:var(--ok);background:var(--ok-soft);border-color:var(--ok-line);display:inline-flex;align-items:center;gap:6px}
-.pill.live::before{content:'';width:7px;height:7px;border-radius:50%;background:var(--ok);animation:pulse 1.6s ease infinite}
-@keyframes pulse{0%,100%{opacity:1}50%{opacity:.35}}
-.msg{background:var(--card);border:1px solid var(--line);border-radius:20px;padding:15px 16px;display:grid;gap:12px}
-.msg-top{display:grid;grid-template-columns:1fr 1fr;gap:10px 16px}
-.msg-v{margin-top:4px;font-size:14px;font-weight:800;overflow-wrap:anywhere;line-height:1.25}
-.msg-body{font-size:13.5px;font-weight:550;line-height:1.55;color:var(--text-2);white-space:pre-wrap;overflow-wrap:anywhere}
-.msg-code{text-align:center;padding:12px;border-radius:16px;background:var(--ok-soft);border:1px solid var(--ok-line)}
-.msg-code .n3-lab{color:var(--ok)}
-.n3-digits{display:flex;justify-content:center;gap:7px;flex-wrap:wrap;margin:10px 0 12px}
-.n3-digits span{min-width:38px;height:52px;padding:0 6px;display:grid;place-items:center;border-radius:13px;background:var(--card);border:1px solid var(--ok-line);color:var(--ok);font-size:26px;font-weight:800}
-.msg-time{display:flex;justify-content:space-between;gap:10px;font-size:12px;font-weight:600;color:var(--muted)}
-.msg-time b{color:var(--text);font-weight:800}
-.empty{text-align:center;padding:28px 16px;color:var(--muted);font-size:13px;font-weight:600;line-height:1.5}
-.empty a{color:var(--ac)}
+.refund-locked{font-size:12.5px;font-weight:600;color:var(--muted);line-height:1.45;padding:12px 14px;border-radius:14px;background:var(--card-2);border:1px solid var(--line)}
+.n3-tip{font-size:12.5px;line-height:1.5;color:var(--text-2);font-weight:500;padding:12px 14px;border-radius:14px;background:var(--warn-soft);border:1px solid var(--warn-line)}
+.n3-tip b{color:var(--warn)}
+
+/* modals + toast */
 .modal-bg{position:fixed;inset:0;z-index:200;background:rgba(0,0,0,.6);display:none;align-items:flex-end;justify-content:center;padding:16px;backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px)}
 .modal-bg.on{display:flex}
 .modal{background:var(--card);border:1px solid var(--line);border-radius:22px;width:100%;max-width:420px;max-height:85vh;overflow:auto;padding:20px 18px;box-shadow:var(--shadow)}
@@ -124,8 +125,8 @@ body{font-family:'Plus Jakarta Sans',system-ui,-apple-system,sans-serif;backgrou
 .toast-pop.on{transform:translateX(-50%) translateY(0);opacity:1}
 .toast-pop.ok{border-color:var(--ok-line)}.toast-pop.err{border-color:var(--bad)}
 @media(min-width:520px){.modal-bg{align-items:center}}
-@media(max-width:360px){.national-num{font-size:25px}.n3-time{font-size:28px}.n3-grid{grid-template-columns:1fr}}
-@media(prefers-reduced-motion:reduce){.n3-live::before,.n3-live::after,.pill.live::before{animation:none}.n3-btn,.back-button{transition:none}}
+@media(max-width:360px){.national-num{font-size:23px}.n3-digits span{min-width:34px;height:50px;font-size:24px}}
+@media(prefers-reduced-motion:reduce){.pill.live::before{animation:none}.n3-btn{transition:none}}
 </style>
 </head>
 <body>
@@ -179,6 +180,7 @@ body{font-family:'Plus Jakarta Sans',system-ui,-apple-system,sans-serif;backgrou
   const params = new URLSearchParams(location.search);
   const rentId = params.get('rent_id') || '';
   let rent = null, pollTimer = null, cdTimer = null, renewBusy = false, hasReceivedCode = false;
+  const LOCKED = '<p class="refund-locked">Refund unavailable — a message was already received on this number.</p>';
 
   function relTime(d){
     try{
@@ -267,41 +269,38 @@ body{font-family:'Plus Jakarta Sans',system-ui,-apple-system,sans-serif;backgrou
 
     main.innerHTML =
       '<div class="n3">'+
-        '<div class="n3-state"><div class="n3-live'+(active?'':' off')+'"><i class="fa-solid '+(active?'fa-mobile-screen':'fa-power-off')+'"></i></div>'+
-          '<div><div class="n3-st" id="stTitle">'+(active?'Rental active':'Rental ended')+'</div>'+
-          '<div class="n3-ss">'+(active?'Codes sent to this number show up in the inbox below the moment they arrive.':'This rental is no longer active. Messages it received stay in the inbox.')+'</div></div></div>'+
-        '<div class="n3-card n3-num">'+
+        /* 1. number + time, one compact card */
+        '<div class="n3-card hero">'+
           '<div class="n3-lab">Your number</div>'+
-          '<div class="n3-phone">'+(ph.dial?'<span class="dial-code">'+ph.dial+'</span>':'')+'<div class="national-num" id="phoneEl">'+esc(ph.shown)+'</div></div>'+
-          '<button type="button" class="n3-btn n3-soft n3-copy" id="btnCopy"><i class="fa-regular fa-copy"></i> Copy number</button>'+
-          (ph.dial?'<div class="phone-hint">Copy uses the number only, without the country code</div>':'')+
+          '<div class="numrow">'+(ph.dial?'<span class="dial-code">'+ph.dial+'</span>':'')+'<div class="national-num" id="phoneEl">'+esc(ph.shown)+'</div>'+
+            '<button type="button" class="copy-icon" id="btnCopy" aria-label="Copy number"><i class="fa-regular fa-copy"></i></button></div>'+
+          '<div class="chips"><span class="chip">'+esc(svc)+'</span>'+(dur?'<span class="chip">'+esc(dur)+'</span>':'')+(carrier?'<span class="chip">'+esc(carrier)+'</span>':'')+(area?'<span class="chip">Area '+esc(area)+'</span>':'')+'</div>'+
+          '<div class="timerow"><span class="n3-lab">Time left</span><span class="n3-time" id="cd">—</span></div>'+
+          '<div class="n3-track" id="cdTrack" aria-hidden="true" style="display:none"><div class="n3-bar" id="cdBar"></div></div>'+
         '</div>'+
-        '<div class="n3-grid">'+
-          '<div class="n3-card"><div class="n3-lab">Service</div><div class="n3-val">'+esc(svc)+'</div>'+
-            '<div class="chips">'+(dur?'<span class="chip">'+esc(dur)+'</span>':'')+(carrier?'<span class="chip">'+esc(carrier)+'</span>':'')+(area?'<span class="chip">Area '+esc(area)+'</span>':'')+'</div></div>'+
-          '<div class="n3-card"><div class="n3-lab">Last code</div><div class="n3-val ac" id="lastCode">—</div><div class="n3-sub" id="lastCodeSub">From SMS inbox</div></div>'+
-        '</div>'+
-        '<div class="n3-card"><div class="n3-lab">Time remaining</div><div class="n3-time" id="cd">—</div>'+
-          '<div class="n3-sub" id="cdSub">Until expiry</div>'+
-          '<div class="n3-track" id="cdTrack" aria-hidden="true" style="display:none"><div class="n3-bar" id="cdBar"></div></div></div>'+
-        (active ?
-          '<div class="n3-card toggle"><div><div class="t-title">Auto-renew</div><div class="t-hint" id="autoRenewHint">'+
-            (paid>0 ? 'When this period ends, ₦'+paid.toLocaleString()+' is charged from your wallet (same as this rental). Requires enough balance.' : 'Renew automatically when this period ends. Same wallet price as this rental. Requires enough balance.')+
-          '</div></div><label class="switch"><input type="checkbox" id="autoRenew" '+(autoOn?'checked':'')+'><span class="slider"></span></label></div>' : '')+
+        /* 2. the two actions people use */
         '<div class="n3-two">'+
           (rent.can_wake_up !== false && active ? '<button type="button" class="n3-btn n3-primary" id="btnWake"><i class="fa-solid fa-bolt"></i> Wake up</button>' : '')+
           '<button type="button" class="n3-btn n3-ghost" id="btnRefresh" style="'+(rent.can_wake_up !== false && active ? '' : 'grid-column:1/-1')+'"><i class="fa-solid fa-rotate"></i> Refresh SMS</button>'+
         '</div>'+
-        (terminal ? '' : '<div class="n3-stack" id="extraRentActions">'+
-          '<button type="button" class="n3-btn n3-ghost" id="btnAddService"><i class="fa-solid fa-plus"></i> Add service to this number</button>'+
-          '<button type="button" class="n3-btn n3-ghost" id="btnSwitchPlan"><i class="fa-solid fa-arrow-right-arrow-left"></i> Switch plan</button></div>')+
-        (canCancel ? '<button type="button" class="n3-btn n3-danger" id="btnCancel"><i class="fa-solid fa-ban"></i> Refund number</button>' : '')+
-        (active && hasReceivedCode ? '<p class="refund-locked">Refund unavailable — a message was already received on this number.</p>' : '')+
         '<div class="flash" id="flash"></div>'+
-        (active ? '<div class="n3-tip"><i class="fa-solid fa-triangle-exclamation"></i><div><b>Important activation advice</b><span>Use a VPN from the USA when verifying with this number. If no SMS arrives, tap Wake up first, then request the code in the app.</span></div></div>' : '')+
-        '<div class="inbox-head"><div><h2>SMS inbox</h2><p>Messages for this number, including added services</p></div>'+
-          '<div class="pills"><span class="pill" id="messageCount">0 messages</span><span class="pill live">Live</span></div></div>'+
+        /* 3. the inbox, right where you can see it */
+        '<div class="inbox-head"><h2>Inbox</h2><div class="pills"><span class="pill" id="messageCount">0 messages</span><span class="pill live">Live</span></div></div>'+
         '<div class="n3" id="inbox"><div class="empty">Loading messages…</div></div>'+
+        /* 4. everything else, tucked away */
+        '<details class="more"><summary>More options <i class="fa-solid fa-chevron-down"></i></summary><div class="more-body">'+
+          (active ?
+            '<div class="toggle"><div><div class="t-title">Auto-renew</div><div class="t-hint" id="autoRenewHint">'+
+              (paid>0 ? 'Charges ₦'+paid.toLocaleString()+' from your wallet when this period ends.' : 'Renews from your wallet when this period ends.')+
+            '</div></div><label class="switch"><input type="checkbox" id="autoRenew" '+(autoOn?'checked':'')+'><span class="slider"></span></label></div>' : '')+
+          (terminal ? '' :
+            '<button type="button" class="n3-btn n3-ghost" id="btnAddService"><i class="fa-solid fa-plus"></i> Add service to this number</button>'+
+            '<button type="button" class="n3-btn n3-ghost" id="btnSwitchPlan"><i class="fa-solid fa-arrow-right-arrow-left"></i> Switch plan</button>')+
+          '<div id="refundSlot">'+
+            (canCancel ? '<button type="button" class="n3-btn n3-danger" id="btnCancel"><i class="fa-solid fa-ban"></i> Refund number</button>' : (active && hasReceivedCode ? LOCKED : ''))+
+          '</div>'+
+          (active ? '<div class="n3-tip"><b>Tip:</b> use a VPN from the USA when verifying. If no SMS arrives, tap Wake up, then request the code in the app.</div>' : '')+
+        '</div></details>'+
       '</div>';
 
     document.getElementById('btnCopy').onclick = function(){
@@ -347,7 +346,7 @@ body{font-family:'Plus Jakarta Sans',system-ui,-apple-system,sans-serif;backgrou
         var hint = document.getElementById('autoRenewHint');
         if(hint && rent.price_ngn){
           hint.textContent = want
-            ? ('When this period ends, ₦'+Math.round(Number(rent.price_ngn)).toLocaleString()+' is charged from your wallet (same as this rental). Requires enough balance.')
+            ? ('Charges ₦'+Math.round(Number(rent.price_ngn)).toLocaleString()+' from your wallet when this period ends.')
             : 'Auto-renew is off.';
         }
         setFlash(j.message || (want ? 'Auto-renew is on' : 'Auto-renew is off'), true);
@@ -433,7 +432,6 @@ body{font-family:'Plus Jakarta Sans',system-ui,-apple-system,sans-serif;backgrou
       if(left <= 0){
         el.textContent = 'Expired';
         var b = document.getElementById('statusBadge'); if(b){ b.textContent='Ended'; b.classList.add('ended'); }
-        var st = document.getElementById('stTitle'); if(st) st.textContent = 'Rental ended';
         return;
       }
       var d = Math.floor(left/86400000);
@@ -456,31 +454,17 @@ body{font-family:'Plus Jakarta Sans',system-ui,-apple-system,sans-serif;backgrou
     var hadCode = hasReceivedCode;
     // Any inbound SMS (code or body) counts as "used" for the refund lock
     hasReceivedCode = list.some(function(m){ return !!(m && (String(m.code||'').trim() || String(m.body||'').trim())); });
-    var last = document.getElementById('lastCode');
-    var lastSub = document.getElementById('lastCodeSub');
-    var withCode = list.filter(function(m){ return m && m.code; })[0];
-    if(withCode && last){
-      last.textContent = withCode.code;
-      if(lastSub) lastSub.textContent = withCode.received_at ? new Date(withCode.received_at).toLocaleString() : 'Latest';
-    }
     if(hasReceivedCode){
       try{ localStorage.setItem('mjhub_rent_sms_'+rentId, '1'); }catch(e){}
     }
     if(hasReceivedCode && !hadCode){
       // Tell history page / DB this rental got SMS (for Completed filter after timer ends)
       try{ api('mark_sms', { method:'POST', body:{ rent_id: rentId } }).catch(function(){}); }catch(e){}
-      var cancelBtn = document.getElementById('btnCancel');
-      if(cancelBtn) cancelBtn.remove();
-      if(!document.querySelector('.refund-locked')){
-        var lock = document.createElement('p');
-        lock.className = 'refund-locked';
-        lock.textContent = 'Refund unavailable — a message was already received on this number.';
-        var flash = document.getElementById('flash');
-        if(flash && flash.parentNode) flash.parentNode.insertBefore(lock, flash);
-      }
+      var slot = document.getElementById('refundSlot');
+      if(slot && rent && !rent.refunded) slot.innerHTML = LOCKED;
     }
     if(!list.length){
-      box.innerHTML = '<div class="n3-card empty">No SMS yet.<br>Wake the number if needed, then request the code in the app.</div>';
+      box.innerHTML = '<div class="n3-card wait"><i class="fa-solid fa-envelope-open-text"></i><b>Waiting for SMS</b><p>Request the code in the app now. It shows up here the moment it arrives.</p></div>';
       return;
     }
     var svcName=(rent&&rent.service&&rent.service.name)||(rent&&rent.service_name)||'SMS';
@@ -488,21 +472,19 @@ body{font-family:'Plus Jakarta Sans',system-ui,-apple-system,sans-serif;backgrou
       var when=m.received_at?new Date(m.received_at):null;
       var whenStr=when?when.toLocaleString():'';
       var whenRel=when?relTime(when):'';
-      var from=m.from||m.sender||m.originator||'—';
+      var from=m.from||m.sender||m.originator||'';
       var code=m.code?String(m.code).trim():'';
       var body=m.body?String(m.body).trim():'';
       var digits=code.split('').map(function(ch){return '<span>'+esc(ch)+'</span>';}).join('');
       return '<div class="msg">'+
-        '<div class="msg-top">'+
-          '<div><div class="n3-lab">Service</div><div class="msg-v">'+esc(m.service_name||svcName)+'</div></div>'+
-          '<div><div class="n3-lab">From</div><div class="msg-v">'+esc(from)+'</div></div>'+
-        '</div>'+
-        (body?'<div class="msg-body">'+esc(body)+'</div>':'')+
+        '<div class="msg-from">'+esc(m.service_name||svcName)+(from?' <span>· from '+esc(from)+'</span>':'')+'</div>'+
         (code
-          ? '<div class="msg-code"><div class="n3-lab">Verification code</div><div class="n3-digits">'+digits+'</div>'+
+          ? '<div class="msg-code"><div class="n3-digits">'+digits+'</div>'+
             '<button type="button" class="n3-btn ok" data-c="'+esc(code)+'"><i class="fa-solid fa-copy"></i> Copy code</button></div>'
-          : (body?'<button type="button" class="n3-btn n3-ghost" data-c="'+esc(body)+'"><i class="fa-regular fa-copy"></i> Copy message</button>':''))+
-        (whenStr?'<div class="msg-time"><span>Received</span><span><b>'+esc(whenRel)+'</b> · '+esc(whenStr)+'</span></div>':'')+
+          : '')+
+        (body?'<div class="msg-body">'+esc(body)+'</div>':'')+
+        (!code && body?'<button type="button" class="n3-btn n3-ghost" data-c="'+esc(body)+'"><i class="fa-regular fa-copy"></i> Copy message</button>':'')+
+        (whenStr?'<div class="msg-time">'+esc(whenRel)+' · '+esc(whenStr)+'</div>':'')+
       '</div>';
     }).join('');
     box.querySelectorAll('[data-c]').forEach(function(b){
