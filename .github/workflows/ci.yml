@@ -14,9 +14,12 @@ jobs:
 
       - name: Ensure API routes exist
         run: |
+          set -e
           test -f api/admin.js
           test -f api/owlet.js
-          test -f api/pocketfi.js
+          # PocketFi was consolidated into the deposit route; Vercel rewrites
+          # /api/pocketfi and related legacy endpoints to /api/deposit.
+          test -f api/deposit.js
           test -f api/order.js
           if [ -f api/products.js ]; then node --check api/products.js; fi
 
