@@ -4071,6 +4071,15 @@ function adminIsActiveRental(o){
   if(till && till > Date.now()) return true;
   return st==='active'||st==='pending'||st==='processing'||st==='waiting'||st==='waiting_for_code';
 }
+/** Label shown instead of a running timer when a rental is no longer live (cancelled/refunded/expired/ended). '' = still live. */
+function adminRentDeadLabel(o){
+  if(!isSmsRentalOrder(o)) return '';
+  var st = String(o.status||'').toLowerCase();
+  if(o.refunded===true || o.refunded===1 || o.refunded==='true' || ['refunded','cancelled','canceled'].indexOf(st)>=0) return 'Cancelled';
+  if(['expired','ended','finished','failed'].indexOf(st)>=0) return 'Ended';
+  if(String(o.source||'').toLowerCase()==='gotsms' && !adminIsActiveRental(o)) return 'Ended';
+  return '';
+}
 function adminIsCompletedRental(o){
   if(!isSmsRentalOrder(o)) return false;
   if(adminIsActiveRental(o)) return false;
@@ -4277,6 +4286,8 @@ function renderSmsOrders(orders) {
    if (!isSmsRentalOrder(o)) return '—';
    const till = adminParseUsaExpiry(o);
    if (!till) return '—';
+   const deadLbl = adminRentDeadLabel(o);
+   if (deadLbl) return '<span style="font-weight:800;color:#f87171;">'+deadLbl+'</span>';
    const expStr = new Date(till).toLocaleString(undefined,{ dateStyle:'medium', timeStyle:'short' });
    return '<div><span data-admin-sms-till="'+till+'" style="font-weight:800;font-variant-numeric:tabular-nums;">'+adminFormatTimeLeft(till)+'</span><div style="font-size:11px;color:var(--muted);margin-top:2px;">Expires '+escapeHtml(expStr)+'</div></div>';
  };
@@ -4309,8 +4320,11 @@ function renderSmsOrders(orders) {
  const typeLabel = isSmsRentalOrder(o) ? 'Rental' : 'OTP';
  const date = o.created_at ? ngWhen(o.created_at) : '—';
  const till = (typeof adminInferRentalExpiryMs==='function' ? adminInferRentalExpiryMs(o) : adminParseUsaExpiry(o));
+ const deadLbl = adminRentDeadLabel(o);
  const timeRow = isSmsRentalOrder(o) && till
-   ? `<div class="row-line"><span>Time left</span><span data-admin-sms-till="${till}" style="font-weight:800;font-variant-numeric:tabular-nums;">${adminFormatTimeLeft(till)}</span></div>`
+   ? (deadLbl
+       ? `<div class="row-line"><span>Time left</span><span style="font-weight:800;color:#f87171;">${deadLbl}</span></div>`
+       : `<div class="row-line"><span>Time left</span><span data-admin-sms-till="${till}" style="font-weight:800;font-variant-numeric:tabular-nums;">${adminFormatTimeLeft(till)}</span></div>`)
    : '';
  const inboxRow = (String(o.source||'').toLowerCase()==='gotsms'||String(o.source||'').toLowerCase()==='smsbus_rent')
    ? `<div class="row-line"><span>Inbox</span><span>${inboxCell(o)}</span></div>`

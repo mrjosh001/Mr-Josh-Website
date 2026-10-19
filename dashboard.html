@@ -5671,6 +5671,8 @@ async function fetchActivityFromOrders(userId) {
         }
 
         for (const o of (smsRes.error ? [] : (smsRes.data || []))) {
+            // Plan-switch bookkeeping rows (gotsms-<rent>-tr-...) are already shown by their "plan switch" transaction.
+            if (String(o.source || '').toLowerCase() === 'gotsms' && /^gotsms-.+-tr-/.test(String(o.idempotency_key || ''))) continue;
             const title = (o.service_name || 'SMS') + (o.country_name ? (' · ' + o.country_name) : '');
             extra.push({
                 id: 'sms-' + (o.id || o.order_id),
