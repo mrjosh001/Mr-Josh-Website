@@ -160,16 +160,18 @@ function isTerminalRentStatus(o){
   return ['refunded','cancelled','canceled','expired','ended','finished'].indexOf(st)>=0;
 }
 function isUsaActiveRow(o){
-  // Single rule for filter + badge: DB terminal wins; else future expiry / open status = Active
+  // DB terminal wins. If we have a live supplier active list, only those IDs are Active.
   if(String(o.source||'').toLowerCase()!=='gotsms') return false;
   if(isTerminalRentStatus(o)) return false;
   var till=parseUsaExpiry(o);
   if(till && till<=Date.now()) return false;
   var st=String(o.status||'').toLowerCase();
-  if(st==='expired'||st==='ended'||st==='finished') return false;
-  // Live supplier list can only CONFIRM active (DB lag), never demote a still-open rental
+  if(st==='expired'||st==='ended'||st==='finished'||st==='cancelled'||st==='canceled'||st==='refunded') return false;
   var rid=usaRentId(o);
-  if(rid && liveActiveRentIds && liveActiveRentIds.size>0 && liveActiveRentIds.has(String(rid))) return true;
+  if(rid && liveActiveRentIds && liveActiveRentIds.size>0) {
+    // Supplier is source of truth when the live list loaded successfully
+    return liveActiveRentIds.has(String(rid));
+  }
   if(till && till>Date.now()) return true;
   return st==='active'||st==='pending'||st==='processing'||st==='waiting'||st==='waiting_for_code';
 }

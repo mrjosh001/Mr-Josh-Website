@@ -3096,11 +3096,18 @@ function smsOrderSold(o) {
   if (o.refunded === true || ['cancelled', 'canceled', 'refunded', 'failed', 'expired'].indexOf(st) > -1) return false;
   const src = smsSrcKey(o.source);
   if (src === 'gotsms' || src === 'smsbus_rent') {
+    // Rentals only count as sold once an SMS landed (or explicitly completed)
+    if (typeof adminRentReceivedSms === 'function') return adminRentReceivedSms(o);
     return /sms\s*received/i.test(String(o.service_name || '')) || st === 'completed' || st === 'complete' || st === 'success';
   }
   const code = String(o.code || '').trim();
-  return st === 'completed' || st === 'complete' || st === 'success' || !!(code && !/^\d{4}-\d{2}-\d{2}/.test(code));
+  // OTP: completed status or a short numeric/text code (never an ISO expiry string)
+  if (st === 'completed' || st === 'complete' || st === 'success') return true;
+  if (!code) return false;
+  if (/^\d{4}-\d{2}-\d{2}/.test(code) || code.indexOf('T') > 0) return false;
+  return true;
 }
+
 function smsOrderCostUsd(o) {
   let usd = Number(o.supplier_price || 0);
   if (usd >= 50) usd = 0; // NGN stored by mistake
@@ -3164,14 +3171,22 @@ function smsRenderProfitSummary(list) {
   if (!el) return;
   list = list || [];
   if (!list.length) { el.style.display = 'none'; return; }
-  let total = 0, sold = 0, missing = 0;
+  let total = 0, sold = 0, missing = 0, openCount = 0;
   list.forEach(o => {
+    const st = String(o.status || '').toLowerCase();
+    if (o.refunded || ['cancelled','canceled','refunded','failed'].indexOf(st) > -1) return;
+    if (typeof adminIsActiveRental === 'function' && adminIsActiveRental(o) && typeof adminRentReceivedSms === 'function' && !adminRentReceivedSms(o)) {
+      openCount++; return;
+    }
     const p = smsOrderProfit(o);
-    if (p.state === 'ok') { total += p.value; sold++; } else if (p.state === 'nocost') missing++;
+    if (p.state === 'ok') { total += p.value; sold++; }
+    else if (p.state === 'nocost') missing++;
   });
   el.style.display = '';
-  el.innerHTML = 'Profit on sold numbers (current filter): ' + smsProfitHtml(total) +
-    ' <span style="color:var(--muted);font-weight:600;">· ' + sold + ' sold' + (missing ? ' · ' + missing + ' without supplier cost (shown as —)' : '') + '</span>';
+  el.innerHTML = 'Realized profit (SMS received / completed only): ' + smsProfitHtml(total) +
+    ' <span style="color:var(--muted);font-weight:600;">· ' + sold + ' sold' +
+    (openCount ? ' · ' + openCount + ' active with no SMS yet' : '') +
+    (missing ? ' · ' + missing + ' missing supplier cost (—)' : '') + '</span>';
   smsLoadOrderCosts(list).then(added => {
     if (added && typeof renderSmsOrders === 'function') renderSmsOrders(window._smsFilterCache || list);
   }).catch(() => {});
@@ -3894,7 +3909,7 @@ const SMS_ORDER_STATUS_LABELS = {
 
 async function wipeUnusedSmsNumbers() {
   const ok = window.confirm(
-    'Remove unused SMS numbers older than 15 days?\n\nOnly cancelled or expired orders with no received code. Newer than 15 days and completed codes stay.\n\nThis deletes those rows from Supabase, so they leave admin SMS orders, the user dashboard, and that order SMS transaction history.'
+    'Remove unused SMS numbers older than 15 days?\n\nApplies to Server 1, 2, 3, USA rental and Global rental.\nOnly cancelled / expired / refunded orders with no received code.\nCompleted codes and recent orders stay.\n\nDeletes those rows from admin, user history, and related transactions.'
   );
   if (!ok) return;
   const btn = document.getElementById('wipeDeadSmsBtn');
@@ -3921,6 +3936,26 @@ async function wipeUnusedSmsNumbers() {
   }
 }
 
+async function adminRefreshLiveUsaActive() {
+  window._adminLiveUsaActiveIds = new Set();
+  try {
+    const headers = await authHeaders();
+    const res = await fetch('/api/sms-bus?action=gotsms_rents&status=active', {
+      headers: headers || {},
+      method: 'GET'
+    });
+    const j = await res.json().catch(() => ({}));
+    const list = (j && (j.data || j.rents || j.results)) || [];
+    const arr = Array.isArray(list) ? list : [];
+    arr.forEach(function(r) {
+      const id = r && (r.id || r.rent_id || r.rentId);
+      if (id != null) window._adminLiveUsaActiveIds.add(String(id));
+    });
+  } catch (e) {
+    console.warn('adminRefreshLiveUsaActive', e);
+  }
+}
+
 async function tryLoadSmsOrders() {
  try {
   const headers = await authHeaders();
@@ -3939,6 +3974,22 @@ async function tryLoadSmsOrders() {
   if (res.ok && json.success && Array.isArray(json.data)) {
     window._cachedSmsOrders = json.data;
     window._smsOrderPage = 1;
+    try { await adminRefreshLiveUsaActive(); } catch (e) {}
+    // Soft-mark DB rows that supplier no longer lists as active (cancelled / finished)
+    try {
+      if (window._adminLiveUsaActiveIds && window._adminLiveUsaActiveIds.size > 0) {
+        window._cachedSmsOrders.forEach(function(o) {
+          if (String(o.source||'').toLowerCase() !== 'gotsms') return;
+          if (o.refunded || ['cancelled','canceled','refunded','expired'].indexOf(String(o.status||'').toLowerCase())>=0) return;
+          var rid = (typeof adminUsaRentId==='function') ? adminUsaRentId(o) : '';
+          if (!rid) return;
+          if (!window._adminLiveUsaActiveIds.has(String(rid))) {
+            // Not on supplier active list — treat as ended for UI (do not invent refunded)
+            o.status = (o.code && String(o.code).trim() && !/^\d{4}-\d{2}-\d{2}/.test(String(o.code))) ? 'completed' : 'cancelled';
+          }
+        });
+      }
+    } catch (e) {}
     if (typeof filterSmsOrders === 'function') { filterSmsOrders(); return; }
     if (typeof renderSmsOrders === 'function') renderSmsOrders(json.data);
     return;
@@ -3997,14 +4048,19 @@ function adminRentReceivedSms(o){
 }
 function adminIsActiveRental(o){
   if(!isSmsRentalOrder(o)) return false;
-  if(o.refunded===true) return false;
+  if(o.refunded===true || o.refunded===1 || o.refunded==='true') return false;
   var st = String(o.status||'').toLowerCase();
-  if(['refunded','cancelled','canceled'].indexOf(st)>=0) return false;
+  if(['refunded','cancelled','canceled','expired','ended','finished','failed'].indexOf(st)>=0) return false;
   var till = adminParseUsaExpiry(o);
   if(till && till <= Date.now()) return false;
-  if(st==='expired'||st==='ended'||st==='finished') return false;
+  try {
+    var rid = (typeof adminUsaRentId === 'function') ? adminUsaRentId(o) : '';
+    if (rid && window._adminLiveUsaActiveIds && window._adminLiveUsaActiveIds.size > 0) {
+      return window._adminLiveUsaActiveIds.has(String(rid));
+    }
+  } catch (e) {}
   if(till && till > Date.now()) return true;
-  return st==='active'||st==='pending'||st==='processing'||st==='waiting'||st==='waiting_for_code'||!st;
+  return st==='active'||st==='pending'||st==='processing'||st==='waiting'||st==='waiting_for_code';
 }
 function adminIsCompletedRental(o){
   if(!isSmsRentalOrder(o)) return false;
@@ -6485,6 +6541,12 @@ function switchTab(name) {
    tryLoadOrders().catch(function(e){ _ordersLoaded = false; console.error('orders', e); });
  }
  if (name === 'overview') {
+   if (!_supplierBalancesLoaded) {
+     _supplierBalancesLoaded = true;
+     loadSupplierBalances().catch(function(e){ _supplierBalancesLoaded = false; console.error('supplier balances', e); });
+   } else {
+     try { loadSupplierBalances(); } catch (e) {}
+   }
    if (!_overviewStatsLoaded) {
      _overviewStatsLoaded = true;
      loadOverviewStats(document.getElementById('revenuePeriod')?.value || '7days')
