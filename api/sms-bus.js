@@ -388,6 +388,24 @@ function gotsmsPlanUnavailable(plan) {
   return false;
 }
 
+/** Switch-plan options live on the rental detail endpoint; the list endpoint may omit them. Short cache keeps polling cheap. */
+const _gotsmsTransCache = new Map();
+async function gotsmsLoadTransitionOptions(rentId, listRent) {
+  const rid = String(rentId || '');
+  if (!rid) return [];
+  if (listRent && Array.isArray(listRent.transition_options) && listRent.transition_options.length) return listRent.transition_options;
+  const hit = _gotsmsTransCache.get(rid);
+  if (hit && Date.now() - hit.t < 60000) return hit.opts;
+  let opts = [];
+  try {
+    const cur = await gotsmsFetch('/api/rents/' + encodeURIComponent(rid));
+    const d = (cur.data && (cur.data.data || cur.data)) || null;
+    if (d && Array.isArray(d.transition_options)) opts = d.transition_options;
+  } catch (_) {}
+  _gotsmsTransCache.set(rid, { t: Date.now(), opts });
+  return opts;
+}
+
 function gotsmsPublicRent(r) {
   if (!r || typeof r !== 'object') return r;
   const carrierObj = r.cellular_carrier || r.carrier || null;
@@ -586,7 +604,15 @@ async function gotsmsSyncAutorenewCharges(userId, rentId, liveRent) {
 function gotsmsSafeMsg(m, fallback) {
   let t = String(m == null ? '' : m).trim();
   if (!t) return fallback || '';
-  t = t.replace(/got\s*-?\s*sms(\.org)?/ig, 'MJ HUB').replace(/https?:\/\/\S*gotsms\S*/ig, '');
+  // Remove any supplier URL/domain first, then every supplier brand we use behind the scenes.
+  t = t.replace(/https?:\/\/\S*(gotsms|got-sms|sms-?bus|smsbus|grizzly|virtualsms)\S*/ig, '')
+       .replace(/\b[a-z0-9.-]*(gotsms|got-sms|smsbus|sms-bus|grizzlysms|virtualsms)[a-z0-9.-]*\.(org|com|io|net)\b/ig, '')
+       .replace(/got\s*-?\s*sms(\.org)?/ig, 'MJ HUB')
+       .replace(/sms\s*-?\s*bus/ig, 'MJ HUB')
+       .replace(/grizzly\s*-?\s*sms/ig, 'MJ HUB')
+       .replace(/virtual\s*-?\s*sms/ig, 'MJ HUB')
+       .replace(/\bsupplier\b/ig, 'provider')
+       .replace(/\s{2,}/g, ' ');
   return t.trim() || fallback || '';
 }
 
@@ -3224,7 +3250,7 @@ export default async function handler(req, res) {
 
         return json(res, 201, {
           success: true,
-          message: g.data.message || 'Number rented successfully',
+          message: gotsmsSafeMsg(g.data.message, 'Number rented successfully'),
           data: {
             ...gotsmsPublicRent(rent),
             order_id: orderId,
@@ -3367,7 +3393,7 @@ export default async function handler(req, res) {
         }
         return json(res, 201, {
           success: true,
-          message: g.data?.message || `Rented ${rented} of ${quantity}`,
+          message: gotsmsSafeMsg(g.data?.message, `Rented ${rented} of ${quantity}`),
           data: out,
           meta: { requested: quantity, rented, charged_ngn: charged }
         });
@@ -3402,10 +3428,23 @@ export default async function handler(req, res) {
               .update({ status: 'active', refunded: false })
               .eq('user_id', auth.userId)
               .eq('source', 'gotsms')
+              // Only repair rows wrongly expired by a sweep. Never touch refunded/cancelled (their timer must stay stopped)
+              // and never touch completed (SMS received) rows.
+              .in('status', ['expired', 'failed'])
               .in('idempotency_key', keys);
           } catch (e) {
             console.warn('[gotsms_rents] heal', e.message || e);
           }
+        }
+        // Make sure every live rental carries its switch-plan options (fetched from the detail endpoint when the list omits them).
+        if (String(status || '') === 'active') {
+          await Promise.all(filtered.slice(0, 30).map(async (r) => {
+            try {
+              if (!Array.isArray(r.transition_options) || !r.transition_options.length) {
+                r.transition_options = await gotsmsLoadTransitionOptions(r.id, r);
+              }
+            } catch (_) {}
+          }));
         }
         const publicRents = filtered.map(gotsmsPublicRent);
         for (const pr of publicRents) {
@@ -3556,7 +3595,7 @@ if (method === 'GET' && ga === 'gotsms_messages') {
             status: 'completed'
           });
         } catch (_) {}
-        return json(res, 201, { success: true, message: g.data.message || 'Service added to this number', data: { ...(g.data.data || {}), price_ngn: price, service_name: svc.name } });
+        return json(res, 201, { success: true, message: gotsmsSafeMsg(g.data.message, 'Service added to this number'), data: { ...(g.data.data || {}), price_ngn: price, service_name: svc.name } });
       }
 
       
@@ -3570,12 +3609,8 @@ if (method === 'GET' && ga === 'gotsms_messages') {
         const order = await gotsmsAssertOwns(auth.userId, rent_id);
         if (!order) return json(res, 403, { success: false, message: 'Rental not found' });
         // Resolve price from live transition_options
-        let live = null;
-        try {
-          const cur = await gotsmsFetch('/api/rents/' + encodeURIComponent(rent_id));
-          live = (cur.data && (cur.data.data || cur.data)) || null;
-        } catch (_) {}
-        const opts = (live && live.transition_options) || [];
+        _gotsmsTransCache.delete(String(rent_id));
+        const opts = await gotsmsLoadTransitionOptions(rent_id, null);
         const plan = opts.find((o) => String(o.plan_id != null ? o.plan_id : o.id) === plan_id);
         if (!plan) return json(res, 400, { success: false, message: 'That plan switch is not available for this number.' });
         const pricedPlan = (await gotsmsApplyAdminPlanPrices([gotsmsPublicTransitionOption(plan)]))[0] || {};
@@ -3585,10 +3620,11 @@ if (method === 'GET' && ga === 'gotsms_messages') {
         const debit = await debitWalletStrict(auth.userId, price, 'gotsms_transition');
         if (!debit.ok) return json(res, 400, { success: false, message: debit.message || 'Insufficient wallet balance' });
         const g = await gotsmsFetch('/api/rents/' + encodeURIComponent(rent_id) + '/transition', { method: 'POST', body: { plan_id } });
-        if (!g.ok || !g.data?.success) {
+        if (!g.ok || g.data?.success === false) {
           try { await supabase.rpc('credit_balance', { p_user_id: auth.userId, p_amount: price }); } catch (_) {}
-          return json(res, g.status || 400, { success: false, message: gotsmsSafeMsg(g.data?.message, 'Could not switch plan') });
+          return json(res, g.status || 400, { success: false, message: gotsmsSafeMsg(g.data?.message, 'Could not switch plan. Your wallet has been refunded.') });
         }
+        _gotsmsTransCache.delete(String(rent_id));
         try {
           await gotsmsSaveOrder({
             userId: auth.userId,
@@ -3958,7 +3994,7 @@ if (method === 'POST' && ga === 'gotsms_toggle_renewal') {
           if (!g.ok) {
             return json(res, g.status || 400, {
               success: false,
-              message: g.data?.message || 'GotSMS plans request failed — check token',
+              message: gotsmsSafeMsg(g.data?.message, 'Plans request failed — check the provider token'),
               data: { page, resume: true, new_products: totalNew, updated_products: totalUpdated }
             });
           }
