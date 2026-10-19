@@ -43,6 +43,7 @@ body{font-family:'Plus Jakarta Sans',system-ui,-apple-system,sans-serif;backgrou
 .chip{font-size:11px;font-weight:700;padding:4px 9px;border-radius:999px;background:var(--card-2);border:1px solid var(--line);color:var(--text-2)}
 .timerow{display:flex;align-items:baseline;justify-content:space-between;gap:10px;margin-top:10px;padding-top:10px;border-top:1px solid var(--line)}
 .n3-time{font-size:19px;font-weight:800;letter-spacing:-.02em;white-space:nowrap}
+.n3-time.ended{color:var(--bad)}
 .n3-track{height:5px;border-radius:999px;background:var(--card-2);margin-top:8px;overflow:hidden;border:1px solid var(--line)}
 .n3-bar{height:100%;width:100%;border-radius:999px;background:var(--ac);transform-origin:left center;transition:transform 1s linear}
 
@@ -177,7 +178,7 @@ body{font-family:'Plus Jakarta Sans',system-ui,-apple-system,sans-serif;backgrou
   });
   const params = new URLSearchParams(location.search);
   const rentId = params.get('rent_id') || '';
-  let rent = null, pollTimer = null, cdTimer = null, renewBusy = false, hasReceivedCode = false;
+  let rent = null, pollTimer = null, cdTimer = null, renewBusy = false, hasReceivedCode = false, syncBusy = false, pollCount = 0;
   const LOCKED = '<p class="refund-locked">Refund unavailable — a message was already received on this number.</p>';
 
   function relTime(d){
@@ -236,6 +237,11 @@ body{font-family:'Plus Jakarta Sans',system-ui,-apple-system,sans-serif;backgrou
     var active = !!rent && !rent.refunded && !deadStatus && liveByTime;
     return { status: status, active: active, terminal: terminal };
   }
+  // Text shown in place of the timer once the rental is no longer live.
+  function endedLabel(){
+    var st = computeState();
+    return st.terminal ? 'Cancelled' : 'Expired';
+  }
   async function headers(){
     const { data: { session } } = await sb.auth.getSession();
     if(!session){ location.href = 'auth.html?next='+encodeURIComponent(location.pathname+location.search); return null; }
@@ -291,7 +297,7 @@ body{font-family:'Plus Jakarta Sans',system-ui,-apple-system,sans-serif;backgrou
     var renewPrice = Math.round(Number(rent.renew_price_ngn || rent.price_ngn || rent.price || 0));
 
     var badge = document.getElementById('statusBadge');
-    if(badge){ badge.textContent = active?'Active':'Ended'; badge.className = 'otp-tag'+(active?'':' ended'); }
+    if(badge){ badge.textContent = active?'Active':(st.terminal?'Cancelled':'Ended'); badge.className = 'otp-tag'+(active?'':' ended'); }
 
     main.innerHTML =
       '<div class="n3">'+
@@ -327,7 +333,7 @@ body{font-family:'Plus Jakarta Sans',system-ui,-apple-system,sans-serif;backgrou
           (active ? '<div class="n3-tip"><b>Tip:</b> use a USA VPN when verifying. If no SMS arrives, tap Wake up, then request the code in the app.</div>' : '')+
         '</div></div>'+
         /* 4. the inbox */
-        '<div class="inbox-head"><h2>Inbox</h2><div class="pills"><span class="pill" id="messageCount">0 messages</span><span class="pill live">Live</span></div></div>'+
+        '<div class="inbox-head"><h2>Inbox</h2><div class="pills"><span class="pill" id="messageCount">0 messages</span>'+(active?'<span class="pill live">Live</span>':'')+'</div></div>'+
         '<div class="n3" id="inbox"><div class="empty">Loading messages…</div></div>'+
       '</div>';
 
@@ -432,7 +438,7 @@ body{font-family:'Plus Jakarta Sans',system-ui,-apple-system,sans-serif;backgrou
     hideModal('refundModal');
     if(j && j.success){
       rent.status = 'refunded'; rent.refunded = true;
-      render();
+      render();   // render() -> startCountdown() sees the rental is dead and stops the timer
       setFlash('Canceled', true);
       setTimeout(function(){ location.href = 'mj-sms-usa-rent.html'; }, 2200);
     } else {
@@ -442,6 +448,14 @@ body{font-family:'Plus Jakarta Sans',system-ui,-apple-system,sans-serif;backgrou
 
   function startCountdown(){
     if(cdTimer) clearTimeout(cdTimer);
+    cdTimer = null;
+    // Cancelled / refunded / expired / finished rentals never get a running timer.
+    if(rent && !computeState().active){
+      var el0 = document.getElementById('cd');
+      if(el0){ el0.textContent = endedLabel(); el0.classList.add('ended'); }
+      var track0 = document.getElementById('cdTrack'); if(track0) track0.style.display = 'none';
+      return;
+    }
     var expiry = rent && (rent.active_till || rent.online_till || rent.activeTill || rent.expires_at);
     var till = expiry ? new Date(expiry).getTime() : 0;
     if (!till && rent && rent.code && !isNaN(Date.parse(String(rent.code)))) till = new Date(String(rent.code)).getTime();
@@ -461,19 +475,29 @@ body{font-family:'Plus Jakarta Sans',system-ui,-apple-system,sans-serif;backgrou
       if(!till){ el.textContent = '—'; return; }
       var left = till - Date.now();
       var bar = document.getElementById('cdBar');
-      if(bar && total) bar.style.transform = 'scaleX(' + Math.max(0, Math.min(1, left/total)) + ')';
       if(left <= 0){
-        el.textContent = 'Expired';
+        el.textContent = endedLabel();
+        el.classList.add('ended');
+        if(bar) bar.style.transform = 'scaleX(0)';
         var b = document.getElementById('statusBadge'); if(b){ b.textContent='Ended'; b.classList.add('ended'); }
         // Re-render once so Wake / Add service / Switch plan / Auto-renew / Refund disappear for an ended rental.
         if(rent && !rent.expired_local){ rent.expired_local = true; render(); }
         return;
       }
+      // Status changed underneath us (cancelled / refunded / finished) — stop ticking right away.
+      if(rent && !computeState().active){
+        el.textContent = endedLabel();
+        el.classList.add('ended');
+        var tr = document.getElementById('cdTrack'); if(tr) tr.style.display = 'none';
+        return;
+      }
+      if(bar && total) bar.style.transform = 'scaleX(' + Math.max(0, Math.min(1, left/total)) + ')';
       var d = Math.floor(left/86400000);
       var h = Math.floor((left%86400000)/3600000);
       var m = Math.floor((left%3600000)/60000);
       var s = Math.floor((left%60000)/1000);
       el.textContent = (d > 0 ? (d+'d ') : '') + String(h).padStart(2,'0')+':'+String(m).padStart(2,'0')+':'+String(s).padStart(2,'0');
+      el.classList.remove('ended');
       cdTimer = setTimeout(tick, 1000);
     }
     tick();
@@ -614,6 +638,37 @@ body{font-family:'Plus Jakarta Sans',system-ui,-apple-system,sans-serif;backgrou
     });
   }
 
+  // Re-check the supplier state so a rental cancelled or finished elsewhere stops the timer here too.
+  async function syncRentState(){
+    if(syncBusy || !rent || !computeState().active) return;
+    syncBusy = true;
+    try{
+      var j = await api('rents', { query:'status=active' });
+      if(!j || !j.success || !Array.isArray(j.data)) return;   // never flip state on an API/network error
+      var live = j.data.find(function(r){ return String(r.id)===String(rentId); });
+      if(live){
+        var prevTill = rent.active_till;
+        rent = Object.assign({}, rent, live);
+        if(prevTill !== rent.active_till){ rent.expired_local = false; startCountdown(); }
+        return;
+      }
+      var j2 = await api('rents', { query:'status=finished' });
+      if(!j2 || !j2.success || !Array.isArray(j2.data)) return;
+      var done = j2.data.find(function(r){ return String(r.id)===String(rentId); });
+      if(done){
+        rent = Object.assign({}, rent, done);
+        var s = String(rent.status||'').toLowerCase();
+        if(!s || s==='active') rent.status = 'finished';
+      } else if(j.data.length < 50 && j2.data.length < 50){
+        rent.status = 'cancelled';   // gone from both supplier lists = cancelled/refunded
+      } else {
+        return;   // list may be truncated; do not guess
+      }
+      render();
+    }catch(e){}
+    finally{ syncBusy = false; }
+  }
+
   // Poll only while the rental is live and the tab is visible.
   function pollTick(){
     if(document.hidden) return;
@@ -621,10 +676,12 @@ body{font-family:'Plus Jakarta Sans',system-ui,-apple-system,sans-serif;backgrou
       if(pollTimer){ clearInterval(pollTimer); pollTimer = null; }
       return;
     }
+    pollCount++;
     loadMessages();
+    if(pollCount % 3 === 0) syncRentState();
   }
   document.addEventListener('visibilitychange', function(){
-    if(!document.hidden && rent && computeState().active) loadMessages();
+    if(!document.hidden && rent && computeState().active){ loadMessages(); syncRentState(); }
   });
 
   async function boot(){
@@ -656,7 +713,8 @@ body{font-family:'Plus Jakarta Sans',system-ui,-apple-system,sans-serif;backgrou
             duration_translation: o.duration_translation||o.duration,
             carrier_name: o.carrier_name||o.carrier,
             price_ngn: o.price || o.price_ngn,
-            created_at: o.created_at
+            created_at: o.created_at,
+            refunded: o.refunded === true
           };
         } else {
           rent.service_name = rent.service_name || o.service_name;
@@ -665,6 +723,11 @@ body{font-family:'Plus Jakarta Sans',system-ui,-apple-system,sans-serif;backgrou
           if(!rent.carrier_name && o.carrier_name) rent.carrier_name = o.carrier_name;
           if(!rent.created_at && o.created_at) rent.created_at = o.created_at;
           if(!rent.active_till && (o.active_till || (o.code && !isNaN(Date.parse(String(o.code))) ? o.code : null))) rent.active_till = o.active_till || o.code;
+          // Our own record says cancelled/refunded: trust it so the timer cannot keep running.
+          var os = String(o.status||'').toLowerCase();
+          if(o.refunded === true || os==='refunded' || os==='cancelled' || os==='canceled'){
+            rent.refunded = true; rent.status = os==='cancelled'||os==='canceled' ? os : 'refunded';
+          }
           if(o.service_name && String(o.service_name).indexOf('·')>=0){
             var parts=String(o.service_name).split('·').map(function(x){return x.trim();});
             if(parts[0] && (!rent.service || !rent.service.name)) rent.service = { name: parts[0] };
@@ -678,6 +741,7 @@ body{font-family:'Plus Jakarta Sans',system-ui,-apple-system,sans-serif;backgrou
     } catch(_){}
     render();
     if(pollTimer) clearInterval(pollTimer);
+    pollCount = 0;
     pollTimer = setInterval(pollTick, 8000);
   }
   boot();
