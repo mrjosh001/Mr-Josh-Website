@@ -2,246 +2,171 @@
 <html lang="en" data-theme="dark">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, viewport-fit=cover">
-<title>Rental inbox · MJ HUB</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Global rental · MJ HUB</title>
 <script>(function(){try{var p=localStorage.getItem('mjhub-theme-pref')||localStorage.getItem('mjhub-theme')||localStorage.getItem('mjhub_theme')||'system';var t=(p==='light'||p==='dark')?p:(window.matchMedia&&window.matchMedia('(prefers-color-scheme: light)').matches?'light':'dark');document.documentElement.setAttribute('data-theme',t);}catch(e){document.documentElement.setAttribute('data-theme','dark');}})();</script>
 <script src="/js/mj-page-loader.js" defer></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script>
+// Show all dates/times in Nigeria time (WAT), same as the other MJ HUB pages.
+(function(){var a=Date.prototype.toLocaleString,b=Date.prototype.toLocaleDateString,c=Date.prototype.toLocaleTimeString;function w(o){return Object.assign({timeZone:'Africa/Lagos'},o||{})}
+Date.prototype.toLocaleString=function(l,o){return a.call(this,l||'en-NG',w(o))};
+Date.prototype.toLocaleDateString=function(l,o){return b.call(this,l||'en-NG',w(o))};
+Date.prototype.toLocaleTimeString=function(l,o){return c.call(this,l||'en-NG',w(o))};})();
+</script>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
-<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <style>
-:root,html[data-theme="dark"]{
-  --bg:#06080f;--card:#0f1524;--text:#f1f5f9;--muted:#94a3b8;--border:rgba(148,163,184,.14);
-  --primary:#5b8af5;--primary2:#3b6ef5;--ok:#34d399;--danger:#f87171;
-  --soft:rgba(91,138,245,.12);--ok-soft:rgba(52,211,153,.12);--danger-soft:rgba(248,113,113,.12);
-  --header:rgba(6,8,15,.92);--input:#0a0e18;--sheet:#111827;
-}
-html[data-theme="light"]{
-  --bg:#f0f4ff;--card:#fff;--text:#0f172a;--muted:#64748b;--border:rgba(59,110,245,.12);
-  --primary:#3b6ef5;--primary2:#2563eb;--ok:#059669;--danger:#dc2626;
-  --soft:rgba(59,110,245,.1);--ok-soft:rgba(5,150,105,.1);--danger-soft:rgba(220,38,38,.08);
-  --header:rgba(255,255,255,.94);--input:#f8fafc;--sheet:#fff;
-}
-*{box-sizing:border-box;margin:0;padding:0}
-html{-webkit-text-size-adjust:100%;text-size-adjust:100%}
-body{font-family:'Plus Jakarta Sans',system-ui,sans-serif;background:var(--bg);color:var(--text);min-height:100dvh}
-.header{padding:12px 16px;display:flex;align-items:center;gap:12px;position:sticky;top:0;z-index:40;
-  background:var(--header);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);border-bottom:1px solid var(--border)}
-.back{width:40px;height:40px;border-radius:12px;border:1px solid var(--border);background:var(--card);
-  display:flex;align-items:center;justify-content:center;color:var(--text);text-decoration:none;flex-shrink:0}
-h1{font-size:17px;font-weight:800;letter-spacing:-.02em}
-.main{padding:16px;max-width:520px;margin:0 auto;padding-bottom:40px}
+:root[data-theme="dark"]{--bg:#07090f;--card:#0f141e;--card-2:#141b28;--text:#f5f7fb;--text-2:#c0cad9;--muted:#8693a7;--line:rgba(255,255,255,.08);--ac:#4f8dff;--ac-soft:rgba(79,141,255,.14);--ac-line:rgba(79,141,255,.45);--ok:#3ddc97;--ok-soft:rgba(61,220,151,.13);--ok-line:rgba(61,220,151,.4);--bad:#ff6b6b;--bad-soft:rgba(255,107,107,.12);--warn:#f5a524;--warn-soft:rgba(245,165,36,.1);--warn-line:rgba(245,165,36,.35);--shadow:0 18px 50px rgba(0,0,0,.45)}
+:root[data-theme="light"]{--bg:#f1f4f9;--card:#fff;--card-2:#f6f8fc;--text:#0e1726;--text-2:#38445a;--muted:#6a768b;--line:rgba(14,23,38,.1);--ac:#2563eb;--ac-soft:rgba(37,99,235,.1);--ac-line:rgba(37,99,235,.4);--ok:#0f9d6a;--ok-soft:rgba(15,157,106,.1);--ok-line:rgba(15,157,106,.4);--bad:#dc2626;--bad-soft:rgba(220,38,38,.09);--warn:#b45309;--warn-soft:rgba(180,83,9,.08);--warn-line:rgba(180,83,9,.3);--shadow:0 16px 40px rgba(15,23,42,.1)}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+body{font-family:'Plus Jakarta Sans',system-ui,-apple-system,sans-serif;background:var(--bg);color:var(--text);min-height:100vh;-webkit-font-smoothing:antialiased;font-variant-numeric:tabular-nums;padding-bottom:calc(32px + env(safe-area-inset-bottom))}
+.header{height:52px;padding:0 14px;display:flex;align-items:center;gap:10px;position:sticky;top:0;z-index:100;background:var(--bg);border-bottom:1px solid var(--line)}
+.back-button{width:36px;height:36px;border-radius:11px;background:var(--card);border:1px solid var(--line);display:flex;align-items:center;justify-content:center;color:var(--text);text-decoration:none;font-size:13px;transition:transform .45s cubic-bezier(.34,1.8,.5,1)}
+.back-button:active{transform:scale(.88);transition-duration:.1s}
+.page-title{font-size:17px;font-weight:800;letter-spacing:-.025em}
+.otp-tag{margin-left:auto;font-size:11px;font-weight:800;color:var(--ok);background:var(--ok-soft);padding:4px 10px;border-radius:999px;display:inline-flex;align-items:center;gap:6px}
+.otp-tag::before{content:'';width:7px;height:7px;border-radius:50%;background:currentColor}
+.otp-tag.ended{color:var(--bad);background:var(--bad-soft)}
+.main-content{padding:12px;max-width:520px;margin:0 auto}
+.n3{display:grid;gap:10px}
+.n3-card{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:14px}
+.n3-lab{font-size:10.5px;font-weight:800;letter-spacing:.09em;text-transform:uppercase;color:var(--muted)}
+.banner{display:flex;align-items:center;gap:10px;padding:11px 14px;border-radius:14px;background:var(--ok-soft);border:1px solid var(--ok-line);color:var(--ok);font-size:13px;font-weight:700}
 
-/* Hero phone card */
-.hero{background:var(--card);border:1px solid var(--border);border-radius:20px;padding:18px;margin-bottom:14px;
-  box-shadow:0 8px 28px rgba(0,0,0,.12)}
-.hero-top{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:14px}
-.phone{font-size:22px;font-weight:800;letter-spacing:.02em;line-height:1.2}
-.phone-row{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
-.copy-icon{width:34px;height:34px;border-radius:10px;border:1px solid var(--border);background:var(--input);
-  color:var(--muted);display:inline-flex;align-items:center;justify-content:center;cursor:pointer;font-size:13px}
-.copy-icon:active{transform:scale(.96)}
-.svc{font-size:13px;color:var(--muted);font-weight:600;margin-top:4px}
-.svc-meta{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
-.chip-mini{font-size:11px;font-weight:800;padding:4px 10px;border-radius:999px;background:var(--input);border:1px solid var(--border);color:var(--text)}
-.btn.is-busy{opacity:.7;pointer-events:none}
-.btn .spin,.btn-danger-outline .spin{animation:spin .7s linear infinite}
+/* number + time hero */
+.hero{border-color:var(--ac-line)}
+.numrow{display:flex;align-items:center;gap:8px;margin-top:8px}
+.dial-code{font-size:13px;font-weight:800;color:var(--ac);background:var(--ac-soft);padding:5px 9px;border-radius:9px}
+.national-num{font-size:25px;font-weight:800;letter-spacing:.01em;line-height:1.1;flex:1;min-width:0;word-break:break-all}
+.copy-icon{width:38px;height:38px;border-radius:12px;border:1px solid var(--ac-line);background:var(--ac-soft);color:var(--ac);font-size:14px;cursor:pointer;flex-shrink:0;transition:transform .3s cubic-bezier(.34,1.8,.5,1)}
+.copy-icon:active{transform:scale(.9)}
+.chips{display:flex;flex-wrap:wrap;gap:5px;margin-top:10px}
+.chip{font-size:11px;font-weight:700;padding:4px 9px;border-radius:999px;background:var(--card-2);border:1px solid var(--line);color:var(--text-2)}
+.chip.ac{color:var(--ac);border-color:var(--ac-line);background:var(--ac-soft)}
+.timerow{display:flex;align-items:baseline;justify-content:space-between;gap:10px;margin-top:12px;padding-top:12px;border-top:1px solid var(--line)}
+.n3-time{font-size:24px;font-weight:800;letter-spacing:-.02em;white-space:nowrap}
+.n3-time.ended{color:var(--bad)}
+.n3-track{height:6px;border-radius:999px;background:var(--card-2);margin-top:9px;overflow:hidden;border:1px solid var(--line)}
+.n3-bar{height:100%;width:100%;border-radius:999px;background:var(--ac);transform-origin:left center;transition:transform 1s linear}
+.expiry{font-size:11.5px;font-weight:600;color:var(--muted);margin-top:7px}
+
+/* last code */
+.lastcode{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.lastcode .val{font-size:24px;font-weight:800;letter-spacing:.08em;color:var(--muted)}
+.lastcode .val.has{color:var(--ok)}
+
+/* buttons */
+.n3-btn{width:100%;display:flex;align-items:center;justify-content:center;gap:7px;padding:12px;border-radius:14px;font:inherit;font-size:13.5px;font-weight:800;cursor:pointer;border:1px solid transparent;text-decoration:none;transition:transform .3s cubic-bezier(.34,1.8,.5,1),opacity .2s}
+.n3-btn:active{transform:scale(.96)}
+.n3-btn:disabled{opacity:.5;cursor:not-allowed}
+.n3-btn.is-busy{opacity:.7;pointer-events:none}
+.n3-sm{padding:9px 12px;font-size:12.5px;border-radius:11px}
+.n3-primary{background:var(--ac);color:#fff}
+.n3-ghost{background:var(--card);color:var(--text);border-color:var(--line)}
+.n3-danger{background:transparent;color:var(--bad);border-color:rgba(255,107,107,.4)}
+.n3-btn.ok{background:var(--ok);color:#06140d}
+.n3-two{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.spin{animation:spin .7s linear infinite}
 @keyframes spin{to{transform:rotate(360deg)}}
-.refund-locked{font-size:12px;font-weight:600;color:var(--muted);margin-top:10px;line-height:1.45;padding:10px 12px;border-radius:12px;background:var(--input);border:1px solid var(--border)}
-.badge{display:inline-flex;align-items:center;gap:6px;font-size:11px;font-weight:800;padding:5px 10px;border-radius:999px;
-  background:var(--ok-soft);color:var(--ok);white-space:nowrap}
-.badge.expired{background:var(--danger-soft);color:var(--danger)}
-.badge.dot::before{content:'';width:7px;height:7px;border-radius:50%;background:currentColor}
 
-.stats{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px}
-.stat{background:var(--input);border:1px solid var(--border);border-radius:14px;padding:12px 14px}
-.stat .lbl{font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
-.stat .val{font-size:20px;font-weight:800;color:var(--primary);margin-top:4px;letter-spacing:.04em;font-variant-numeric:tabular-nums}
-.stat .sub{font-size:11px;color:var(--muted);margin-top:2px;font-weight:600}
+/* cancel window */
+.cw{padding:12px 14px;border-radius:14px;background:var(--warn-soft);border:1px solid var(--warn-line);font-size:12px;font-weight:600;color:var(--text-2);line-height:1.45}
+.cw b{color:var(--warn)}
+.cw .cw-time{font-size:20px;font-weight:800;color:var(--warn);margin:3px 0;letter-spacing:.02em}
+.cw.urgent .cw-time{color:var(--bad)}
+.cw.gone,.locked{background:var(--card-2);border-color:var(--line);color:var(--muted)}
+.locked{padding:11px 14px;border-radius:14px;font-size:12px;font-weight:600;line-height:1.45;border:1px solid var(--line)}
+.n3-tip{font-size:11.5px;line-height:1.45;color:var(--text-2);font-weight:500;padding:9px 12px;border-radius:12px;background:var(--warn-soft);border:1px solid var(--warn-line)}
+.n3-tip b{color:var(--warn)}
 
-/* Toggle row */
-.toggle-card{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:14px;border-radius:14px;
-  background:var(--input);border:1px solid var(--border);margin-bottom:14px}
-.toggle-card .t-title{font-size:14px;font-weight:800}
-.toggle-card .t-hint{font-size:11px;color:var(--muted);font-weight:600;margin-top:2px;line-height:1.35}
-.switch{position:relative;width:50px;height:30px;flex-shrink:0}
-.switch input{opacity:0;width:0;height:0;position:absolute}
-.slider{position:absolute;inset:0;background:#334155;border-radius:999px;cursor:pointer;transition:.2s}
-.slider:before{content:'';position:absolute;width:24px;height:24px;left:3px;top:3px;background:#fff;border-radius:50%;
-  transition:.2s;box-shadow:0 1px 4px rgba(0,0,0,.25)}
-.switch input:checked+.slider{background:var(--primary)}
-.switch input:checked+.slider:before{transform:translateX(20px)}
-.switch input:disabled+.slider{opacity:.5;cursor:not-allowed}
-
-.actions{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px}
-.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;padding:13px 12px;border-radius:12px;
-  border:none;font:800 13px inherit;cursor:pointer;font-family:inherit;transition:opacity .15s}
-.btn:disabled{opacity:.55;cursor:not-allowed}
-.btn-primary{background:linear-gradient(135deg,var(--primary),var(--primary2));color:#fff}
-.btn-ghost{background:var(--card);color:var(--text);border:1px solid var(--border)}
-.btn-danger-outline{width:100%;background:var(--danger-soft);color:var(--danger);border:1px solid color-mix(in srgb,var(--danger) 35%,transparent);
-  margin-top:4px;padding:13px;border-radius:12px;font:800 13px inherit;cursor:pointer;font-family:inherit;
-  display:flex;align-items:center;justify-content:center;gap:8px}
-.hint{font-size:11px;color:var(--muted);line-height:1.45;margin-top:10px;font-weight:600}
-.flash{font-size:13px;font-weight:700;margin-top:10px;min-height:1.2em}
-.flash.err{color:var(--danger)}.flash.ok{color:var(--ok)}
-.toast-pop{
-  position:fixed;left:50%;bottom:28px;transform:translateX(-50%) translateY(120%);
-  z-index:9999;max-width:min(420px,92vw);padding:14px 18px;border-radius:14px;
-  font:700 14px/1.4 inherit;box-shadow:0 12px 40px rgba(0,0,0,.35);
-  background:#0f172a;color:#fff;border:1px solid rgba(148,163,184,.25);
-  transition:transform .28s ease,opacity .28s ease;opacity:0;pointer-events:none;
-}
-.toast-pop.on{transform:translateX(-50%) translateY(0);opacity:1}
-.toast-pop.ok{background:#065f46;border-color:rgba(52,211,153,.35)}
-.toast-pop.err{background:#7f1d1d;border-color:rgba(248,113,113,.35)}
-
-/* Inbox */
-.inbox-card{background:var(--card);border:1px solid var(--border);border-radius:20px;padding:16px;
-  box-shadow:0 8px 28px rgba(0,0,0,.08)}
-.inbox-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px}
-.inbox-head h2{font-size:15px;font-weight:800}
-.inbox-head .live{font-size:11px;font-weight:700;color:var(--ok);display:flex;align-items:center;gap:6px}
-.inbox-head .live::before{content:'';width:7px;height:7px;border-radius:50%;background:var(--ok);animation:pulse 1.6s ease infinite}
+/* inbox */
+.inbox-head{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:2px}
+.inbox-head h2{font-size:17px;font-weight:800;letter-spacing:-.03em}
+.pill{font-size:10.5px;font-weight:800;padding:4px 9px;border-radius:999px;background:var(--card);border:1px solid var(--line);white-space:nowrap}
+.pill.live{color:var(--ok);background:var(--ok-soft);border-color:var(--ok-line);display:inline-flex;align-items:center;gap:6px}
+.pill.live::before{content:'';width:7px;height:7px;border-radius:50%;background:var(--ok);animation:pulse 1.6s ease infinite}
 @keyframes pulse{0%,100%{opacity:1}50%{opacity:.35}}
-/* Professional SMS inbox cards (supplier-style) */
-.msg{
-  padding:0;border-radius:18px;background:var(--card);border:1px solid var(--border);
-  margin-bottom:14px;overflow:hidden;
-  box-shadow:0 8px 28px rgba(15,23,42,.08);
-}
-.msg:last-child{margin-bottom:0}
-.msg-top{
-  display:grid;grid-template-columns:1fr 1fr;gap:12px 20px;
-  padding:16px 18px 12px;
-}
-.msg-k{
-  font-size:10px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;
-  color:var(--muted);margin-bottom:4px;
-}
-.msg-v{font-size:15px;font-weight:800;color:var(--text);word-break:break-word;line-height:1.25}
-.msg-phone{grid-column:1/-1}
-.msg-body{
-  padding:4px 18px 14px;font-size:14px;font-weight:550;line-height:1.55;
-  color:var(--text2);border-top:1px solid transparent;
-}
-.msg-foot{
-  display:flex;align-items:flex-end;justify-content:space-between;gap:14px;
-  padding:14px 18px;background:color-mix(in srgb,var(--input) 88%,var(--primary) 4%);
-  border-top:1px solid var(--border);
-}
-.msg .code-pill{
-  display:inline-flex;align-items:center;gap:10px;padding:8px 12px;border-radius:12px;
-  background:var(--card);border:1px solid color-mix(in srgb,var(--primary) 35%,var(--border));
-  box-shadow:0 2px 8px rgba(59,130,246,.12);
-}
-.msg .code{
-  font-size:20px;font-weight:800;letter-spacing:.14em;color:var(--primary);
-  font-variant-numeric:tabular-nums;
-}
-.msg .copy-code,.msg .copy-inline{
-  font-size:11px;font-weight:800;padding:6px 10px;border-radius:8px;border:1px solid var(--border);
-  background:var(--card);color:var(--primary);cursor:pointer;font-family:inherit;
-}
-.msg .copy-inline{padding:2px 6px;margin-left:6px;vertical-align:middle;display:inline-flex}
-.msg .when-block{text-align:right;flex-shrink:0}
-.msg .when-label{font-size:10px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
-.msg .when-rel{font-size:13px;font-weight:800;color:var(--text);margin-top:2px}
-.msg .when{font-size:11px;color:var(--muted);font-weight:600;margin-top:2px}
-#inbox{display:flex;flex-direction:column;gap:0}
-.empty{text-align:center;padding:28px 16px;color:var(--muted);font-size:13px;font-weight:600;line-height:1.5}
+.msg{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:12px;display:grid;gap:8px}
+.msg-from{font-size:13px;font-weight:800;overflow-wrap:anywhere}
+.msg-code{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;padding:8px 10px;border-radius:13px;background:var(--ok-soft);border:1px solid var(--ok-line)}
+.n3-digits{display:flex;gap:5px;flex-wrap:wrap}
+.n3-digits span{min-width:30px;height:40px;padding:0 5px;display:grid;place-items:center;border-radius:10px;background:var(--card);border:1px solid var(--ok-line);color:var(--ok);font-size:22px;font-weight:800}
+.n3-digits span.sep{min-width:14px;border:0;background:transparent}
+.msg-code .n3-btn{width:auto;flex:0 0 auto;padding:9px 12px;font-size:12.5px}
+.msg-body{font-size:13px;font-weight:500;line-height:1.5;color:var(--text-2);white-space:pre-wrap;overflow-wrap:anywhere}
+.msg-time{font-size:11.5px;font-weight:600;color:var(--muted)}
+.wait{text-align:center;padding:20px 14px}
+.wait i{font-size:24px;color:var(--ac);margin-bottom:8px}
+.wait b{display:block;font-size:15px;font-weight:800;letter-spacing:-.02em}
+.wait p{font-size:12.5px;color:var(--muted);font-weight:600;line-height:1.45;margin-top:4px}
+.empty{text-align:center;padding:22px 14px;color:var(--muted);font-size:13px;font-weight:600;line-height:1.5}
+.empty a{color:var(--ac)}
 
-/* Modal */
-.modal-bg{position:fixed;inset:0;z-index:100;background:rgba(0,0,0,.55);display:none;align-items:flex-end;justify-content:center;
-  padding:16px;backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px)}
+/* modals + toast */
+.modal-bg{position:fixed;inset:0;z-index:200;background:rgba(0,0,0,.6);display:none;align-items:flex-end;justify-content:center;padding:16px;backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px)}
 .modal-bg.on{display:flex}
-.modal{background:var(--sheet);border:1px solid var(--border);border-radius:20px 20px 16px 16px;width:100%;max-width:420px;
-  padding:20px 18px 18px;box-shadow:0 -8px 40px rgba(0,0,0,.25);animation:up .22s ease}
-@keyframes up{from{transform:translateY(24px);opacity:0}to{transform:none;opacity:1}}
-.modal h3{font-size:17px;font-weight:800;margin-bottom:14px}
-.modal-rows{background:var(--input);border:1px solid var(--border);border-radius:14px;padding:4px 0;margin-bottom:14px}
+.modal{background:var(--card);border:1px solid var(--line);border-radius:22px;width:100%;max-width:420px;max-height:85vh;overflow:auto;padding:20px 18px;box-shadow:var(--shadow)}
+.modal h3{font-size:17px;font-weight:800;letter-spacing:-.025em;margin-bottom:12px}
+.modal p.note{font-size:12.5px;color:var(--muted);line-height:1.5;font-weight:600;margin-bottom:12px}
+.modal-rows{background:var(--card-2);border:1px solid var(--line);border-radius:14px;margin-bottom:12px}
 .modal-row{display:flex;justify-content:space-between;gap:12px;padding:10px 14px;font-size:13px;font-weight:600}
-.modal-row span:first-child{color:var(--muted)}.modal-row span:last-child{color:var(--text);text-align:right}
-.modal-note{font-size:13px;color:var(--muted);line-height:1.5;font-weight:600;margin-bottom:12px}
-.modal-warn{border-left:3px solid var(--primary);padding:12px 14px;background:var(--soft);border-radius:0 12px 12px 0;
-  font-size:12px;font-weight:600;color:var(--text);line-height:1.5;margin-bottom:16px}
+.modal-row span:first-child{color:var(--muted)}
+.modal-warn{border-left:3px solid var(--ac);padding:12px 14px;background:var(--ac-soft);border-radius:0 12px 12px 0;font-size:12px;font-weight:600;line-height:1.5;margin-bottom:14px}
 .modal-actions{display:flex;gap:10px}
-.modal-actions .btn{flex:1}
-.modal-actions .btn-ghost{border:1px solid var(--border)}
-.modal-actions .btn-refund{background:var(--primary);color:#fff}
-
-@media (min-width:520px){
-  .modal-bg{align-items:center}
-  .modal{border-radius:20px}
-}
-
-.cancel-window{margin-top:10px;padding:10px 12px;border-radius:12px;background:rgba(251,191,36,.1);border:1px solid rgba(251,191,36,.35);font-size:12px;font-weight:700;color:#fbbf24;line-height:1.45}
-.cancel-window .cw-time{font-size:16px;font-weight:800;font-variant-numeric:tabular-nums;letter-spacing:.04em;color:#fde68a;margin-top:4px}
-.cancel-window.gone{background:rgba(148,163,184,.08);border-color:rgba(148,163,184,.2);color:var(--muted)}
-.cancel-window.urgent .cw-time{color:#f87171}
-
-.toast-pop.on,.toast-pop.show{transform:translateX(-50%) translateY(0)!important;opacity:1!important;pointer-events:auto}
-.btn .spin{display:inline-block;width:14px;height:14px;border:2px solid rgba(255,255,255,.25);border-top-color:currentColor;border-radius:50%;animation:mjspin .7s linear infinite;vertical-align:-2px;margin-right:8px}
-.btn-ghost .spin{border-color:rgba(148,163,184,.25);border-top-color:var(--primary,#5b8af5)}
-@keyframes mjspin{to{transform:rotate(360deg)}}
-.btn.is-busy{opacity:.75;pointer-events:none}
-.btn:active{transform:scale(.97)}
-.inbox-loading{display:flex;align-items:center;justify-content:center;gap:10px;padding:28px 12px;color:var(--muted);font-size:14px;font-weight:700}
-.inbox-loading .spin{width:18px;height:18px;border-width:2.5px}
-
-
-.hero .phone{font-size:24px;letter-spacing:.03em}
-.hero .svc-meta{margin-top:6px;font-size:13px;color:var(--muted)}
-.stat .sub{font-size:11px;color:var(--muted);margin-top:6px;font-weight:600;line-height:1.3}
-.inbox-card{margin-top:14px}
-.msg{transition:border-color .2s}
-.msg:hover{border-color:rgba(91,138,245,.35)}
-
-.stat .val.has-code{color:var(--ok,#059669);font-size:22px;letter-spacing:.05em;font-weight:800}
-.msg .otp-chip{display:inline-flex;align-items:center;gap:10px;margin:10px 0 6px;padding:10px 14px;border-radius:12px;background:rgba(74,222,128,.12);border:1px solid rgba(74,222,128,.4);color:var(--ok,#059669);font-weight:800;font-size:18px;letter-spacing:.08em}
-.msg .otp-chip button{border:0;background:rgba(255,255,255,.1);color:var(--text);border-radius:8px;padding:6px 10px;font-size:12px;font-weight:700;cursor:pointer}
-.msg .otp-chip button:active{transform:scale(.96)}
-
-/* Light mode: force readable text (no dark-only hardcoded colors) */
-html[data-theme="light"] body{color:var(--text)}
-html[data-theme="light"] .muted,
-html[data-theme="light"] .hint,
-html[data-theme="light"] .lbl,
-html[data-theme="light"] .svc-meta,
-html[data-theme="light"] .msg-top span:last-child{color:var(--muted)!important}
-html[data-theme="light"] .phone,
-html[data-theme="light"] .name,
-html[data-theme="light"] h1,
-html[data-theme="light"] h2,
-html[data-theme="light"] .msg-body,
-html[data-theme="light"] .msg-top span:first-child{color:var(--text)!important}
-html[data-theme="light"] .btn-ghost{background:var(--card);color:var(--text);border-color:var(--border)}
-html[data-theme="light"] .stat .val.has-code{color:#047857!important}
-html[data-theme="light"] .msg .otp-chip{background:rgba(5,150,105,.12);border-color:rgba(5,150,105,.35);color:#047857}
-html[data-theme="light"] .msg .otp-chip button{background:rgba(15,23,42,.06);color:#0f172a}
-html[data-theme="light"] .cancel-window{color:#b45309;background:rgba(245,158,11,.12);border-color:rgba(245,158,11,.35)}
-html[data-theme="light"] .cancel-window .cw-time{color:#92400e}
-html[data-theme="light"] .cancel-window.gone{color:var(--muted);background:rgba(15,23,42,.04);border-color:var(--border)}
-html[data-theme="light"] .refund-locked{color:#b91c1c}
-html[data-theme="light"] .toast-pop{background:#0f172a;color:#fff}
-html[data-theme="light"] .live{color:#047857}
-html[data-theme="light"] .badge.active{background:rgba(5,150,105,.12);color:#047857}
-html[data-theme="light"] .empty{color:var(--muted)}
-
+.stepper{display:flex;align-items:center;justify-content:center;gap:18px;margin:6px 0 14px}
+.stepper button{width:46px;height:46px;border-radius:14px;border:1px solid var(--line);background:var(--card-2);color:var(--text);font-size:20px;font-weight:800;cursor:pointer}
+.stepper button:active{transform:scale(.92)}
+.stepper .n{font-size:34px;font-weight:800;min-width:70px;text-align:center}
+.stepper .u{display:block;font-size:11px;font-weight:700;color:var(--muted);text-align:center;margin-top:-4px}
+.toast-pop{position:fixed;left:50%;bottom:calc(24px + env(safe-area-inset-bottom));transform:translateX(-50%) translateY(140%);z-index:9999;max-width:min(420px,92vw);padding:13px 18px;border-radius:14px;font-size:13.5px;font-weight:700;line-height:1.4;box-shadow:var(--shadow);background:var(--card);color:var(--text);border:1px solid var(--line);transition:transform .28s ease,opacity .28s ease;opacity:0;pointer-events:none}
+.toast-pop.on{transform:translateX(-50%) translateY(0);opacity:1}
+.toast-pop.ok{border-color:var(--ok-line)}.toast-pop.err{border-color:var(--bad)}
+@media(min-width:520px){.modal-bg{align-items:center}}
+@media(max-width:360px){.national-num{font-size:21px}.n3-digits span{min-width:26px;height:36px;font-size:19px}}
+@media(prefers-reduced-motion:reduce){.pill.live::before{animation:none}.n3-btn,.copy-icon{transition:none}}
 </style>
 <script src="/js/mj-theme.js" defer></script>
 </head>
 <body>
 <header class="header">
-  <a class="back" href="mj-sms-history.html?view=rent" aria-label="Back"><i class="fa-solid fa-arrow-left"></i></a>
-  <h1>Rental inbox</h1>
+  <a class="back-button" href="mj-sms-history.html?view=rent" aria-label="Back"><i class="fa-solid fa-arrow-left"></i></a>
+  <h1 class="page-title">Global rental</h1>
+  <span class="otp-tag" id="statusBadge">Active</span>
 </header>
-<main class="main" id="main"><div class="empty">Loading…</div></main>
-<div id="successBanner" style="display:none;max-width:560px;margin:12px auto 0;padding:0 16px;">
-  <div style="background:rgba(52,211,153,.12);border:1px solid rgba(52,211,153,.35);color:#34d399;border-radius:14px;padding:12px 14px;font-weight:700;font-size:13px;">
-    Number rented successfully. Your inbox is live below.
+<main class="main-content" id="main"><div class="empty">Loading…</div></main>
+
+<div class="modal-bg" id="cancelModal" role="dialog" aria-modal="true">
+  <div class="modal">
+    <h3>Cancel this rental?</h3>
+    <div class="modal-rows">
+      <div class="modal-row"><span>Number</span><span id="cmPhone">—</span></div>
+      <div class="modal-row"><span>Back to wallet</span><span id="cmAmt">Rental fee</span></div>
+    </div>
+    <p class="note">The rental fee returns to your wallet once the cancellation is confirmed. This only works within 20 minutes of purchase and only if no SMS has arrived.</p>
+    <div class="modal-warn">The number will be retired. Any SMS sent to it afterwards will not reach you.</div>
+    <div class="modal-actions">
+      <button type="button" class="n3-btn n3-ghost" id="cmKeep">Keep number</button>
+      <button type="button" class="n3-btn n3-primary" id="cmConfirm">Cancel &amp; refund</button>
+    </div>
   </div>
 </div>
+<div class="modal-bg" id="renewModal" role="dialog" aria-modal="true">
+  <div class="modal">
+    <h3>Renew this number</h3>
+    <p class="note">Choose how many months to add. The renewal fee is charged from your wallet.</p>
+    <div class="stepper">
+      <button type="button" id="rnMinus" aria-label="Fewer months">−</button>
+      <div><div class="n" id="rnN">1</div><span class="u" id="rnU">month</span></div>
+      <button type="button" id="rnPlus" aria-label="More months">+</button>
+    </div>
+    <div class="modal-actions">
+      <button type="button" class="n3-btn n3-ghost" id="rnCancel">Not now</button>
+      <button type="button" class="n3-btn n3-primary" id="rnConfirm">Renew</button>
+    </div>
+  </div>
+</div>
+
 <script>
 (function(){
   const SUPABASE_URL = 'https://atczodlljmlayvldxfmv.supabase.co';
@@ -251,39 +176,32 @@ html[data-theme="light"] .empty{color:var(--muted)}
   });
   const params = new URLSearchParams(location.search);
   const orderId = (params.get('order_id') || '').trim();
-  if(params.get('ok') === '1' || params.get('success') === '1'){
-    var sbanner = document.getElementById('successBanner');
-    if(sbanner){ sbanner.style.display = 'block'; setTimeout(function(){ sbanner.style.display='none'; }, 7000); }
-  }
-  let rent = null, pollTimer = null, cdTimer = null, hasSms = false, cancelBusy = false, cancelEndsAt = 0;
+  const CANCEL_WINDOW_MS = 20 * 60 * 1000;
+  let rent = null, pollTimer = null, cdTimer = null, hasSms = false, cancelBusy = false, renewBusy = false, renewMonths = 1, lastCodeShown = '';
 
-  function toast(msg, kind){
-    var t = document.getElementById('toastPop');
-    if(!t){
-      t = document.createElement('div');
-      t.id = 'toastPop';
-      document.body.appendChild(t);
-    }
-    t.className = 'toast-pop on' + (kind === 'err' ? ' err' : ' ok');
-    t.textContent = msg || '';
-    t.setAttribute('role', 'status');
-    clearTimeout(t._tm);
-    t._tm = setTimeout(function(){ t.className = 'toast-pop'; }, 3000);
-  }
-  function setFlash(msg, ok){ toast(msg||''); }
+  function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g,function(c){return({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c];}); }
   function pad(n){ return String(n).padStart(2,'0'); }
   function formatLeft(ms){
     if(!ms || ms<=0) return 'Ended';
     var sec=Math.floor(ms/1000), d=Math.floor(sec/86400); sec%=86400;
     var h=Math.floor(sec/3600); sec%=3600; var m=Math.floor(sec/60), s=sec%60;
-    if(d>0) return d+'d '+pad(h)+':'+pad(m)+':'+pad(s);
-    return pad(h)+':'+pad(m)+':'+pad(s);
+    return (d>0 ? d+'d ' : '')+pad(h)+':'+pad(m)+':'+pad(s);
   }
+  function toast(msg, kind){
+    var t = document.getElementById('toastPop');
+    if(!t){ t = document.createElement('div'); t.id = 'toastPop'; document.body.appendChild(t); }
+    t.className = 'toast-pop on ' + (kind === 'err' ? 'err' : 'ok');
+    t.textContent = msg || '';
+    t.setAttribute('role','status');
+    clearTimeout(t._tm);
+    t._tm = setTimeout(function(){ t.classList.remove('on'); }, 3200);
+  }
+  function showModal(id){ var el=document.getElementById(id); if(el) el.classList.add('on'); }
+  function hideModal(id){ var el=document.getElementById(id); if(el) el.classList.remove('on'); }
   function rentCountryLabel(r){
     var c=String((r&&r.country_name)||(r&&r.area_code)||'').trim();
     var map={CA:'Canada',US:'United States',USA:'United States',GB:'United Kingdom',UK:'United Kingdom',AU:'Australia',DE:'Germany',FR:'France',NL:'Netherlands',NG:'Nigeria'};
-    if(map[c.toUpperCase()]) return map[c.toUpperCase()];
-    return c||'';
+    return map[c.toUpperCase()] || c || '';
   }
   function parseExpire(r){
     var raw=r&&(r.expire_at||r.code||r.active_till);
@@ -291,7 +209,6 @@ html[data-theme="light"] .empty{color:var(--muted)}
     var ms=Date.parse(String(raw));
     return isNaN(ms)?0:ms;
   }
-  function esc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
   function copyText(txt, cb){
     if(!txt){ if(cb) cb(false); return; }
     function done(ok){ if(cb) cb(!!ok); }
@@ -299,28 +216,21 @@ html[data-theme="light"] .empty{color:var(--muted)}
       try{
         var a=document.createElement('textarea');
         a.value=String(txt); a.setAttribute('readonly','');
-        a.style.cssText='position:fixed;left:-9999px;top:0';
+        a.style.cssText='position:fixed;left:-9999px;top:0;font-size:16px';
         document.body.appendChild(a); a.focus(); a.select(); a.setSelectionRange(0,a.value.length);
         var ok=document.execCommand('copy'); document.body.removeChild(a); done(ok);
       }catch(e){ done(false); }
     }
-    if(navigator.clipboard && navigator.clipboard.writeText){
-      navigator.clipboard.writeText(String(txt)).then(function(){ done(true); }).catch(function(){ fallback(); });
+    if(navigator.clipboard && navigator.clipboard.writeText && window.isSecureContext){
+      navigator.clipboard.writeText(String(txt)).then(function(){ done(true); }).catch(fallback);
     } else fallback();
   }
   async function headers(){
     var session = null;
-    try {
-      var r1 = await sb.auth.getSession();
-      session = r1 && r1.data && r1.data.session;
-    } catch (e) {}
+    try { var r1 = await sb.auth.getSession(); session = r1 && r1.data && r1.data.session; } catch (e) {}
     if(!session){
-      // Session may still be hydrating from sessionStorage — retry once
       await new Promise(function(res){ setTimeout(res, 250); });
-      try {
-        var r2 = await sb.auth.getSession();
-        session = r2 && r2.data && r2.data.session;
-      } catch (e2) {}
+      try { var r2 = await sb.auth.getSession(); session = r2 && r2.data && r2.data.session; } catch (e2) {}
     }
     if(!session){ location.href='auth.html?next='+encodeURIComponent(location.pathname+location.search); return null; }
     return { Authorization:'Bearer '+session.access_token, 'Content-Type':'application/json', Accept:'application/json' };
@@ -329,139 +239,13 @@ html[data-theme="light"] .empty{color:var(--muted)}
     opts=opts||{};
     var h=await headers(); if(!h) return { success:false, message:'Not signed in' };
     var url='/api/sms-bus?action='+action+(opts.query?'&'+opts.query:'');
-    var r=await fetch(url,{ method:opts.method||'GET', headers:h, body:opts.body?JSON.stringify(opts.body):undefined });
-    try{ return await r.json(); }catch(e){ return { success:false, message:'Bad response' }; }
+    try{
+      var r=await fetch(url,{ method:opts.method||'GET', headers:h, body:opts.body?JSON.stringify(opts.body):undefined });
+      return await r.json();
+    }catch(e){ return { success:false, message:'Network error. Please try again.' }; }
   }
 
-  function renderShell(){
-    var main=document.getElementById('main');
-    if(!main||!rent) return;
-    var till=parseExpire(rent);
-    var active = rent.active!==false && (!till || till>Date.now());
-    if(rent.refunded) active=false;
-    var st=String(rent.status||'').toLowerCase();
-    if(['refunded','cancelled','canceled','expired','ended'].indexOf(st)>=0) active=false;
-    if(/sms\s*received/i.test(String(rent.service_name||''))) hasSms = true;
-    var createdMs = rent.created_at ? Date.parse(String(rent.created_at)) : 0;
-    var withinCancelWindow = !createdMs || (Date.now() - createdMs) <= 20 * 60 * 1000;
-    var canCancel = active && !hasSms && withinCancelWindow && !cancelBusy;
-    cancelEndsAt = createdMs ? (createdMs + 20 * 60 * 1000) : 0;
-    var cancelInfoHtml = '';
-    if(active && hasSms){
-      cancelInfoHtml = '<p class="hint refund-locked">Cancel unavailable — a message was already received on this number. No refund can be issued.</p>';
-    } else if(active && canCancel && cancelEndsAt){
-      cancelInfoHtml =
-        '<div class="cancel-window" id="cancelWindowBox">'+
-          '<div>Cancel &amp; refund available for a limited time</div>'+
-          '<div class="cw-time" id="cancelWindowCd">—</div>'+
-          '<div style="margin-top:4px;font-weight:600;opacity:.9">Only if no SMS arrives. After this timer ends, cancel closes permanently.</div>'+
-        '</div>';
-    } else if(active && !hasSms && !withinCancelWindow){
-      cancelInfoHtml = '<div class="cancel-window gone">Cancel window closed (20 minutes after purchase). This number can no longer be cancelled or refunded.</div>';
-    }
-    var phone=rent.phone_number||rent.number||'—';
-    var area=rent.area_code||rent.country_name||'';
-    var name=String(rent.service_name||'').replace(/\s*·\s*SMS\s*received/ig,'').trim()||'Long rental';
-    main.innerHTML =
-      '<div class="hero">'+
-        '<div class="hero-top">'+
-          '<div><div class="phone">'+esc(phone)+'</div><div class="svc-meta">'+esc(String(name||'').replace(/\s*·\s*SMS\s*received/ig,'').replace(/\s*·\s*CA\b/gi,'').replace(/\s*·\s*US\b/gi,'').trim())+(rentCountryLabel(rent)?' · <span style="color:var(--primary)">'+esc(rentCountryLabel(rent))+'</span>':'')+'</div></div>'+
-          '<span class="badge '+(active?'ok':'expired')+'" id="statusBadge">'+(active?'Active':'Ended')+'</span>'+
-        '</div>'+
-        '<div class="stats">'+
-          '<div class="stat"><div class="lbl">Time left</div><div class="val" id="cdVal">'+formatLeft(till?till-Date.now():0)+'</div><div class="sub" id="expSub">'+(till?('Expires '+new Date(till).toLocaleString(undefined,{dateStyle:'medium',timeStyle:'short'})):'—')+'</div></div>'+
-          '<div class="stat"><div class="lbl">Last code</div><div class="val" id="lastCode">—</div></div>'+
-        '</div>'+
-        '<div class="actions">'+
-          '<button type="button" class="btn btn-ghost" id="btnCopy">Copy number</button>'+
-          '<button type="button" class="btn btn-ghost" id="btnRefresh">Refresh inbox</button>'+
-          (active?'<button type="button" class="btn btn-primary" id="btnRenew">Renew</button>':'')+
-          (canCancel?'<button type="button" class="btn btn-danger-outline" id="btnCancel">Cancel &amp; refund</button>':'')+
-        '</div>'+
-        cancelInfoHtml+
-      '</div>'+
-      '<div class="inbox-card">'+
-        '<div class="inbox-head"><h2>SMS inbox</h2><span class="live" id="inboxLive">Live</span></div>'+
-        '<div id="inbox"><div class="empty">Loading messages…</div></div>'+
-      '</div>';
-    
-    (function bindActions(){
-      var btnCopy = document.getElementById('btnCopy');
-      if(btnCopy){
-        btnCopy.onclick = function(){
-          if(btnCopy.classList.contains('is-busy')) return;
-          btnCopy.classList.add('is-busy');
-          var prev = btnCopy.innerHTML;
-          btnCopy.innerHTML = '<span class="spin"></span>Copying…';
-          copyText(phone, function(ok){
-            btnCopy.innerHTML = ok ? 'Copied!' : prev;
-            toast(ok ? 'Number copied to clipboard' : 'Could not copy number', ok ? 'ok' : 'err');
-            setTimeout(function(){ btnCopy.innerHTML = prev; btnCopy.classList.remove('is-busy'); }, 1400);
-          });
-        };
-      }
-      var btnRefresh = document.getElementById('btnRefresh');
-      if(btnRefresh){
-        btnRefresh.onclick = async function(){
-          if(btnRefresh.classList.contains('is-busy')) return;
-          btnRefresh.classList.add('is-busy');
-          var prev = btnRefresh.innerHTML;
-          btnRefresh.innerHTML = '<span class="spin"></span>Checking…';
-          var box = document.getElementById('inbox');
-          if(box) box.innerHTML = '<div class="inbox-loading"><span class="spin"></span>Checking for SMS…</div>';
-          toast('Checking inbox…', 'ok');
-          try {
-            await loadMessages();
-            toast(hasSms ? 'Inbox updated' : 'No SMS yet — still waiting', hasSms ? 'ok' : 'ok');
-          } catch (e) {
-            toast('Could not check SMS', 'err');
-            if(box) box.innerHTML = '<div class="empty">Could not load messages. Tap Checking again.</div>';
-          }
-          btnRefresh.innerHTML = prev;
-          btnRefresh.classList.remove('is-busy');
-        };
-      }
-      var br = document.getElementById('btnRenew');
-      if(br) br.onclick = renew;
-      var bc = document.getElementById('btnCancel');
-      if(bc) bc.onclick = doCancel;
-    })();
-
-    var bc=document.getElementById('btnCancel');
-    if(bc) bc.onclick=doCancel;
-    if(cdTimer) clearInterval(cdTimer);
-    cdTimer=setInterval(function(){
-      var el=document.getElementById('cdVal');
-      if(el){
-        var left=till-Date.now(); el.textContent=formatLeft(left);
-        if(left<=0){ var b=document.getElementById('statusBadge'); if(b){ b.textContent='Ended'; b.className='badge expired'; } }
-      }
-      var cw=document.getElementById('cancelWindowCd');
-      if(cw && cancelEndsAt){
-        var leftC = cancelEndsAt - Date.now();
-        if(leftC <= 0){
-          cw.textContent = '0:00';
-          var box=document.getElementById('cancelWindowBox');
-          if(box){ box.className='cancel-window gone'; box.innerHTML='Cancel window closed (20 minutes after purchase). This number can no longer be cancelled or refunded.'; }
-          var bc=document.getElementById('btnCancel');
-          if(bc) bc.remove();
-          cancelEndsAt = 0;
-        } else {
-          var sec=Math.floor(leftC/1000);
-          var m=Math.floor(sec/60), s=sec%60;
-          cw.textContent = m + ':' + String(s).padStart(2,'0') + ' left to cancel';
-          var box=document.getElementById('cancelWindowBox');
-          if(box){
-            if(leftC <= 60*1000) box.classList.add('urgent');
-            else box.classList.remove('urgent');
-          }
-        }
-      }
-    },1000);
-  }
-
-  
-  
+  /* ---------- inbox cache + code helpers ---------- */
   function inboxStoreKey(){ return orderId ? ('mjhub_rent_inbox_'+orderId) : null; }
   function readLocalInbox(){
     try{
@@ -479,6 +263,20 @@ html[data-theme="light"] .empty{color:var(--muted)}
       try{ sessionStorage.setItem(k,payload); }catch(e1){}
       try{ localStorage.setItem(k,payload); }catch(e2){}
     }catch(e){}
+  }
+  function extractCodeFromText(text){
+    var body = String(text||'');
+    if(!body) return '';
+    var hit = body.match(/\b(\d{3}[-\s]\d{3})\b/);
+    if(hit) return hit[1].replace(/\s+/g,'-');
+    hit = body.match(/(?:code|otp|pin)[:\s]*([0-9][0-9\-\s]{3,14})/i);
+    if(hit){
+      var v = String(hit[1]).replace(/\s+/g,'');
+      if(/^\d{6}$/.test(v)) v = v.slice(0,3)+'-'+v.slice(3);
+      return v;
+    }
+    hit = body.match(/\b(\d{4,8})\b/);
+    return hit ? hit[1] : '';
   }
   function mergeLocalInbox(existing, incoming){
     var map={};
@@ -498,146 +296,269 @@ html[data-theme="light"] .empty{color:var(--muted)}
     (existing||[]).forEach(add);
     (incoming||[]).forEach(add);
     return Object.keys(map).map(function(k){ return map[k]; }).sort(function(a,b){
-      var tb=Date.parse(b.received_at||0)||0, ta=Date.parse(a.received_at||0)||0;
-      return tb-ta;
+      return (Date.parse(b.received_at||0)||0)-(Date.parse(a.received_at||0)||0);
     });
   }
-function extractCodeFromText(text){
-    var body = String(text||'');
-    if(!body) return '';
-    var hit = body.match(/\b(\d{3}[-\s]\d{3})\b/);
-    if(hit) return hit[1].replace(/\s+/g,'-');
-    hit = body.match(/(?:code|otp|pin)[:\s]*([0-9][0-9\-\s]{3,14})/i);
-    if(hit){
-      var v = String(hit[1]).replace(/\s+/g,'');
-      if(/^\d{6}$/.test(v)) v = v.slice(0,3)+'-'+v.slice(3);
-      return v;
+  function relTime(d){
+    try{
+      var t=new Date(d).getTime(); if(!t) return '';
+      var sec=Math.round((Date.now()-t)/1000);
+      if(sec<60) return 'Just now';
+      if(sec<3600) return Math.floor(sec/60)+' min ago';
+      if(sec<86400) return Math.floor(sec/3600)+' hr ago';
+      if(sec<604800) return Math.floor(sec/86400)+' day'+(Math.floor(sec/86400)===1?'':'s')+' ago';
+      return new Date(t).toLocaleDateString();
+    }catch(_){return '';}
+  }
+  function digitBoxes(code){
+    return String(code).split('').map(function(ch){
+      return ch === '-' || ch === ' ' ? '<span class="sep">–</span>' : '<span>'+esc(ch)+'</span>';
+    }).join('');
+  }
+
+  /* ---------- state ---------- */
+  function isActive(){
+    if(!rent) return false;
+    var till=parseExpire(rent);
+    var active = rent.active!==false && (!till || till>Date.now());
+    if(rent.refunded) active=false;
+    var st=String(rent.status||'').toLowerCase();
+    if(['refunded','cancelled','canceled','expired','ended'].indexOf(st)>=0) active=false;
+    return active;
+  }
+  function cancelEndsAt(){
+    var createdMs = rent && rent.created_at ? Date.parse(String(rent.created_at)) : 0;
+    return createdMs ? createdMs + CANCEL_WINDOW_MS : 0;
+  }
+
+  function renderShell(){
+    var main=document.getElementById('main');
+    if(!main||!rent) return;
+    if(/sms\s*received/i.test(String(rent.service_name||''))) hasSms = true;
+    var till=parseExpire(rent);
+    var active=isActive();
+    var endsAt=cancelEndsAt();
+    var inWindow = !endsAt || Date.now() < endsAt;
+    var canCancel = active && !hasSms && inWindow;
+    var phone=rent.phone_number||rent.number||'—';
+    var digits=String(phone).replace(/\D/g,'');
+    var dial='', national=phone;
+    if(digits.length===11 && digits[0]==='1'){ dial='+1'; national=digits.slice(1,4)+'-'+digits.slice(4,7)+'-'+digits.slice(7); }
+    var name=String(rent.service_name||'').replace(/\s*·\s*SMS\s*received/ig,'').replace(/\s*·\s*(CA|US)\b/gi,'').trim()||'Long rental';
+    var country=rentCountryLabel(rent);
+    var startMs = rent.created_at ? Date.parse(String(rent.created_at)) : 0;
+
+    var badge=document.getElementById('statusBadge');
+    if(badge){ badge.textContent = active ? 'Active' : (rent.refunded ? 'Cancelled' : 'Ended'); badge.className='otp-tag'+(active?'':' ended'); }
+
+    var cancelHtml='';
+    if(active && hasSms){
+      cancelHtml='<div class="locked" id="cancelSlot">Cancel unavailable — a message was already received on this number.</div>';
+    } else if(canCancel && endsAt){
+      cancelHtml='<div id="cancelSlot"><div class="cw" id="cwBox"><div><b>Cancel &amp; refund</b> is open for a limited time</div><div class="cw-time" id="cwTime">—</div><div>Only if no SMS arrives. After the timer ends, cancel closes for good.</div></div>'+
+        '<button type="button" class="n3-btn n3-danger n3-sm" id="btnCancel" style="margin-top:8px"><i class="fa-solid fa-ban"></i> Cancel &amp; refund</button></div>';
+    } else if(canCancel){
+      cancelHtml='<div id="cancelSlot"><button type="button" class="n3-btn n3-danger n3-sm" id="btnCancel"><i class="fa-solid fa-ban"></i> Cancel &amp; refund</button></div>';
+    } else if(active && !hasSms){
+      cancelHtml='<div class="locked" id="cancelSlot">Cancel window closed (20 minutes after purchase). This number can no longer be cancelled or refunded.</div>';
     }
-    hit = body.match(/\b(\d{4,8})\b/);
-    if(hit) return hit[1];
-    return '';
+
+    main.innerHTML =
+      '<div class="n3">'+
+        '<div class="n3-card hero">'+
+          '<div class="n3-lab">Your number</div>'+
+          '<div class="numrow">'+(dial?'<span class="dial-code">'+dial+'</span>':'')+'<div class="national-num">'+esc(national)+'</div>'+
+            '<button type="button" class="copy-icon" id="btnCopy" aria-label="Copy number"><i class="fa-regular fa-copy"></i></button></div>'+
+          '<div class="chips"><span class="chip">'+esc(name)+'</span>'+(country?'<span class="chip ac">'+esc(country)+'</span>':'')+'</div>'+
+          '<div class="timerow"><span class="n3-lab">Time left</span><span class="n3-time" id="cdVal">'+(active?formatLeft(till?till-Date.now():0):'Ended')+'</span></div>'+
+          '<div class="n3-track" id="cdTrack" aria-hidden="true" style="'+(active&&startMs&&till>startMs?'':'display:none')+'"><div class="n3-bar" id="cdBar"></div></div>'+
+          '<div class="expiry">'+(till?('Expires '+new Date(till).toLocaleString(undefined,{dateStyle:'medium',timeStyle:'short'})):'')+'</div>'+
+        '</div>'+
+        '<div class="n3-card"><div class="lastcode"><div><div class="n3-lab">Last code</div></div><div class="val" id="lastCode">—</div></div></div>'+
+        '<div class="n3-two">'+
+          '<button type="button" class="n3-btn n3-ghost" id="btnRefresh" style="'+(active?'':'grid-column:1/-1')+'"><i class="fa-solid fa-rotate"></i> Refresh inbox</button>'+
+          (active?'<button type="button" class="n3-btn n3-primary" id="btnRenew"><i class="fa-solid fa-calendar-plus"></i> Renew</button>':'')+
+        '</div>'+
+        cancelHtml+
+        (active?'<div class="n3-tip"><b>Tip:</b> use a VPN from the same country as this number when verifying. New messages show up below on their own.</div>':'')+
+        '<div class="inbox-head"><h2>Inbox</h2><div><span class="pill" id="msgCount">0 messages</span> '+(active?'<span class="pill live">Live</span>':'')+'</div></div>'+
+        '<div class="n3" id="inbox"><div class="empty">Loading messages…</div></div>'+
+      '</div>';
+
+    document.getElementById('btnCopy').onclick=function(){
+      copyText(digits.length===11&&digits[0]==='1'?digits.slice(1):digits, function(ok){ toast(ok?'Number copied':'Could not copy', ok?'ok':'err'); });
+    };
+    var br=document.getElementById('btnRefresh');
+    br.onclick=async function(){
+      if(br.classList.contains('is-busy')) return;
+      br.classList.add('is-busy'); br.disabled=true;
+      var prev=br.innerHTML; br.innerHTML='<i class="fa-solid fa-spinner spin"></i> Checking…';
+      try{ await loadMessages(); toast(hasSms?'Inbox updated':'No SMS yet — still waiting','ok'); }
+      catch(e){ toast('Could not check SMS','err'); }
+      br.innerHTML=prev; br.classList.remove('is-busy'); br.disabled=false;
+    };
+    var rn=document.getElementById('btnRenew'); if(rn) rn.onclick=openRenew;
+    var bc=document.getElementById('btnCancel'); if(bc) bc.onclick=openCancel;
+
+    if(cdTimer) clearInterval(cdTimer);
+    function tick(){
+      var el=document.getElementById('cdVal'); if(!el) return;
+      if(active){
+        var left=till-Date.now();
+        if(till && left<=0){
+          el.textContent='Ended'; el.classList.add('ended');
+          var b=document.getElementById('statusBadge'); if(b){ b.textContent='Ended'; b.className='otp-tag ended'; }
+          clearInterval(cdTimer);
+          rent.active=false; renderShell(); loadMessages();
+          return;
+        }
+        el.textContent=formatLeft(left);
+        var bar=document.getElementById('cdBar');
+        if(bar && startMs && till>startMs) bar.style.transform='scaleX('+Math.max(0,Math.min(1,left/(till-startMs)))+')';
+      }
+      var cwT=document.getElementById('cwTime');
+      if(cwT && endsAt){
+        var lc=endsAt-Date.now();
+        if(lc<=0){
+          var slot=document.getElementById('cancelSlot');
+          if(slot) slot.outerHTML='<div class="locked" id="cancelSlot">Cancel window closed (20 minutes after purchase). This number can no longer be cancelled or refunded.</div>';
+          return;
+        }
+        var sec=Math.floor(lc/1000);
+        cwT.textContent=Math.floor(sec/60)+':'+pad(sec%60)+' left';
+        var box=document.getElementById('cwBox'); if(box) box.classList.toggle('urgent', lc<=60000);
+      }
+    }
+    tick();
+    cdTimer=setInterval(tick,1000);
   }
+
   function setLastCode(code){
-    var last = document.getElementById('lastCode');
-    if(!last) return;
-    var c = String(code||'').trim();
-    if(!c){ last.textContent = '—'; last.classList.remove('has-code'); return; }
-    last.textContent = c;
-    last.classList.add('has-code');
+    var el=document.getElementById('lastCode'); if(!el) return;
+    var c=String(code||'').trim();
+    el.textContent=c||'—';
+    el.classList.toggle('has', !!c);
   }
-async function loadMessages(){
+
+  async function loadMessages(){
     var box=document.getElementById('inbox'); if(!box||!orderId) return;
     var j=await api('rent_sms',{ query:'order_id='+encodeURIComponent(orderId) });
     var list=(j&&j.success&&Array.isArray(j.data))?j.data:[];
-    list = mergeLocalInbox(readLocalInbox(), list);
+    list=mergeLocalInbox(readLocalInbox(), list);
     writeLocalInbox(list);
-    // Prefer newest message with a code (WhatsApp 897-787 etc.)
-    var bestCode = '';
-    for (var i = 0; i < list.length; i++) {
-      var m = list[i];
-      if (!m) continue;
-      var c = String(m.code || '').trim() || extractCodeFromText(m.body || m.text || m.content || '');
-      if (c) { bestCode = c; if (!m.code) m.code = c; break; }
+    var best='';
+    for(var i=0;i<list.length;i++){
+      var m=list[i]; if(!m) continue;
+      var c=String(m.code||'').trim()||extractCodeFromText(m.body||'');
+      if(c){ best=c; if(!m.code) m.code=c; break; }
     }
-    if (!bestCode) {
-      for (var j = 0; j < list.length; j++) {
-        var m2 = list[j];
-        if (!m2) continue;
-        var c2 = String(m2.code || '').trim() || extractCodeFromText(m2.body || '');
-        if (c2) { bestCode = c2; if (!m2.code) m2.code = c2; }
-      }
+    setLastCode(best);
+    var cnt=document.getElementById('msgCount');
+    if(cnt) cnt.textContent=list.length+(list.length===1?' message':' messages');
+    if(list.length && !hasSms){
+      hasSms=true;
+      var slot=document.getElementById('cancelSlot');
+      if(slot) slot.outerHTML='<div class="locked" id="cancelSlot">Cancel unavailable — a message was already received on this number.</div>';
     }
-    setLastCode(bestCode);
-    var liveEl=document.getElementById('inboxLive');
-    if(liveEl) liveEl.textContent = list.length ? (list.length+' msg'+(list.length>1?'s':'')) : 'Live';
-    if(list.length){
-      hasSms = true;
-      var bc = document.getElementById('btnCancel');
-      if(bc) bc.remove();
-      var hint = document.querySelector('.refund-locked');
-      if(!hint){
-        var actions = document.querySelector('.actions');
-        if(actions){
-          var pEl = document.createElement('p');
-          pEl.className = 'hint refund-locked';
-          pEl.textContent = 'Cancel unavailable — a message was already received on this number.';
-          actions.insertAdjacentElement('afterend', pEl);
-        }
-      }
+    if(best && best!==lastCodeShown){ if(lastCodeShown) toast('New code received','ok'); lastCodeShown=best; }
+    if(!list.length){
+      box.innerHTML='<div class="n3-card wait"><i class="fa-solid fa-envelope-open-text"></i><b>Waiting for SMS</b><p>Request the code in the app now. It appears here the moment it arrives.</p></div>';
+      return;
     }
-    if(!list.length){ box.innerHTML='<div class="empty">No SMS yet.<br>New messages appear here automatically.</div>'; return; }
     box.innerHTML=list.map(function(m){
-      var body=m.body||m.text||m.content||'';
-      var code=String(m.code||'').trim() || extractCodeFromText(body);
-      var when='';
-      try{ if(m.received_at) when=new Date(m.received_at).toLocaleString(); }catch(e){}
+      var body=String(m.body||m.text||m.content||'').trim();
+      var code=String(m.code||'').trim()||extractCodeFromText(body);
+      var when=m.received_at?new Date(m.received_at):null;
+      var ws='', wr='';
+      try{ if(when){ ws=when.toLocaleString(); wr=relTime(when); } }catch(e){}
       return '<div class="msg">'+
-        '<div class="msg-top"><span>'+esc(m.from||'SMS')+'</span><span>'+esc(when)+'</span></div>'+
-        (code?('<div class="otp-chip"><span>'+esc(code)+'</span><button type="button" data-c="'+esc(code)+'">Copy</button></div>'):'')+
+        '<div class="msg-from">'+esc(m.from||'SMS')+'</div>'+
+        (code?'<div class="msg-code"><div class="n3-digits">'+digitBoxes(code)+'</div><button type="button" class="n3-btn ok" data-c="'+esc(code)+'"><i class="fa-solid fa-copy"></i> Copy</button></div>':'')+
         (body?'<div class="msg-body">'+esc(body)+'</div>':'')+
+        (ws?'<div class="msg-time">'+esc(wr)+' · '+esc(ws)+'</div>':'')+
       '</div>';
     }).join('');
     box.querySelectorAll('[data-c]').forEach(function(btn){
-      btn.onclick=function(){
-        copyText(btn.getAttribute('data-c'), function(ok){
-          toast(ok?'Code copied':'Could not copy', ok?'ok':'err');
-        });
-      };
+      btn.onclick=function(){ copyText(btn.getAttribute('data-c').replace(/[-\s]/g,''), function(ok){ toast(ok?'Code copied':'Could not copy', ok?'ok':'err'); }); };
     });
   }
 
-  async function renew(){
-    if(!rent) return;
-    var months=prompt('Renew for how many months?','1');
-    if(!months) return;
-    months=Math.max(1, parseInt(months,10)||1);
+  /* ---------- renew ---------- */
+  function drawRenew(){
+    document.getElementById('rnN').textContent=renewMonths;
+    document.getElementById('rnU').textContent=renewMonths===1?'month':'months';
+  }
+  function openRenew(){ renewMonths=1; drawRenew(); showModal('renewModal'); }
+  async function doRenew(){
+    if(renewBusy||!rent) return;
+    renewBusy=true;
+    var btn=document.getElementById('rnConfirm'); var prev=btn.textContent; btn.disabled=true; btn.textContent='Renewing…';
     var area=rent.area_code||rent.country_name||'';
     var mobile=String(rent.phone_number||'').replace(/\D/g,'');
-    if(mobile.length>10 && mobile.startsWith('1')) mobile=mobile.slice(1);
-    toast('Renewing…');
-    var j=await api('rent_renew',{ method:'POST', body:{ area_code:area, mobile_number:mobile, time:months }});
-    if(!j.success){ toast(j.message||'Renew failed'); return; }
-    toast('Renewed successfully');
+    if(mobile.length>10 && mobile.charAt(0)==='1') mobile=mobile.slice(1);
+    var j=await api('rent_renew',{ method:'POST', body:{ area_code:area, mobile_number:mobile, time:renewMonths }});
+    renewBusy=false; btn.disabled=false; btn.textContent=prev;
+    hideModal('renewModal');
+    if(!j.success){ toast(j.message||'Renew failed','err'); return; }
+    toast('Renewed successfully','ok');
     await loadDetail();
   }
 
-  
+  /* ---------- cancel ---------- */
+  function openCancel(){
+    if(hasSms){ toast('Cancel unavailable — a message was already received on this number.','err'); return; }
+    document.getElementById('cmPhone').textContent=(rent&&(rent.phone_number||rent.number))||'—';
+    var p=Number(rent&&(rent.price||rent.price_ngn)||0);
+    document.getElementById('cmAmt').textContent=p>0?('₦'+p.toLocaleString()):'Rental fee';
+    showModal('cancelModal');
+  }
   async function doCancel(){
-    if(cancelBusy || !orderId) return;
-    if(hasSms){
-      toast('Cancel unavailable — a message was already received on this number.');
-      return;
-    }
-    var ok = confirm('Cancel this rental and return the fee to your wallet?\n\nOnly possible within 20 minutes of purchase if no SMS was received.\nRefund is issued only after cancel is confirmed.');
-    if(!ok) return;
-    cancelBusy = true;
-    var btn = document.getElementById('btnCancel');
-    if(btn){ btn.disabled = true; btn.textContent = 'Cancelling…'; }
-    toast('Cancelling…');
-    var j = await api('rent_cancel', { method:'POST', body:{ order_id: orderId } });
-    cancelBusy = false;
+    if(cancelBusy||!orderId) return;
+    if(hasSms){ hideModal('cancelModal'); toast('Cancel unavailable — a message was already received on this number.','err'); return; }
+    cancelBusy=true;
+    var btn=document.getElementById('cmConfirm'); var prev=btn.textContent; btn.disabled=true; btn.textContent='Cancelling…';
+    var j=await api('rent_cancel',{ method:'POST', body:{ order_id: orderId } });
+    cancelBusy=false; btn.disabled=false; btn.textContent=prev;
+    hideModal('cancelModal');
     if(!j.success){
-      toast(j.message || 'Cancel failed. No refund was issued.');
-      if(btn){ btn.disabled = false; btn.textContent = 'Cancel & refund'; }
-      // If SMS blocked cancel, refresh inbox
-      if(j.message && /message was already received/i.test(j.message)){
-        hasSms = true;
-        if(btn) btn.remove();
-        await loadMessages();
-      }
+      toast(j.message||'Cancel failed. No refund was issued.','err');
+      if(j.message && /message was already received/i.test(j.message)){ hasSms=true; await loadMessages(); }
       return;
     }
-    toast(j.message || 'Cancelled. Balance restored.');
-    setTimeout(function(){ location.href = 'mj-sms-history.html?view=rent'; }, 1200);
+    rent.refunded=true; rent.status='refunded';
+    toast(j.message||'Cancelled. Balance restored.','ok');
+    renderShell(); loadMessages();
+    setTimeout(function(){ location.href='mj-sms-history.html?view=rent'; }, 1800);
   }
 
-async function loadDetail(){
-    if(!orderId){ document.getElementById('main').innerHTML='<div class="empty">Missing order. Open from Number history.</div>'; return; }
+  /* ---------- wiring ---------- */
+  document.getElementById('cmKeep').onclick=function(){ hideModal('cancelModal'); };
+  document.getElementById('cmConfirm').onclick=doCancel;
+  document.getElementById('rnCancel').onclick=function(){ hideModal('renewModal'); };
+  document.getElementById('rnConfirm').onclick=doRenew;
+  document.getElementById('rnMinus').onclick=function(){ renewMonths=Math.max(1,renewMonths-1); drawRenew(); };
+  document.getElementById('rnPlus').onclick=function(){ renewMonths=Math.min(12,renewMonths+1); drawRenew(); };
+  ['cancelModal','renewModal'].forEach(function(id){
+    var m=document.getElementById(id);
+    m.addEventListener('click',function(e){ if(e.target===m) hideModal(id); });
+  });
+  document.addEventListener('keydown',function(e){ if(e.key==='Escape'){ hideModal('cancelModal'); hideModal('renewModal'); } });
+  document.addEventListener('visibilitychange',function(){ if(!document.hidden && rent && isActive()) loadMessages(); });
+
+  async function loadDetail(){
+    var main=document.getElementById('main');
+    if(!orderId){ main.innerHTML='<div class="empty">Missing order. Open it from <a href="mj-sms-history.html?view=rent">your rental history</a>.</div>'; return; }
     var j=await api('rent_detail',{ query:'order_id='+encodeURIComponent(orderId) });
-    if(!j.success||!j.data){ document.getElementById('main').innerHTML='<div class="empty">'+(j.message||'Rental not found')+'</div>'; return; }
-    rent=j.data; renderShell(); await loadMessages();
+    if(!j.success||!j.data){ main.innerHTML='<div class="empty">'+esc(j.message||'Rental not found')+'<br><a href="mj-sms-history.html?view=rent">Back to history</a></div>'; return; }
+    rent=j.data;
+    renderShell();
+    if(params.get('ok')==='1'||params.get('success')==='1'){
+      var n3=document.querySelector('.n3');
+      if(n3){ var b=document.createElement('div'); b.className='banner'; b.innerHTML='<i class="fa-solid fa-circle-check"></i> Number rented successfully. Your inbox is live below.'; n3.insertBefore(b,n3.firstChild); setTimeout(function(){ b.remove(); },7000); }
+    }
+    await loadMessages();
     if(pollTimer) clearInterval(pollTimer);
-    pollTimer=setInterval(loadMessages, 8000);
+    pollTimer=setInterval(function(){ if(!document.hidden && rent && isActive()) loadMessages(); }, 8000);
   }
   loadDetail();
 })();
