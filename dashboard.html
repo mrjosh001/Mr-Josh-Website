@@ -5614,7 +5614,7 @@ async function fetchActivityFromOrders(userId) {
                 .limit(200),
             supabaseClient
                 .from('number_orders')
-                .select('id, order_id, service_name, country_name, price, status, created_at, phone_number, source')
+                .select('id, order_id, service_name, country_name, price, status, created_at, phone_number, source, idempotency_key, refunded')
                 .eq('user_id', userId)
                 .order('created_at', { ascending: false })
                 .limit(200),
@@ -5685,6 +5685,8 @@ async function fetchActivityFromOrders(userId) {
                 status: o.status || 'completed',
                 paymentProvider: 'MJ HUB',
                 channel: 'Wallet',
+                _rentKey: (String(o.source || '').toLowerCase() === 'gotsms' && /^gotsms-/.test(String(o.idempotency_key || ''))) ? String(o.idempotency_key).replace(/^gotsms-/, '') : '',
+                _refunded: o.refunded === true,
                 _source: 'number_orders'
             });
         }
@@ -5725,7 +5727,7 @@ async function fetchUserTransactions(userId) {
         // Egress: named columns only; single query (boosters included via type)
         let { data } = await supabaseClient
             .from('transactions')
-            .select('id, user_id, type, category, title, subtitle, amount, amount_ngn, status, channel, payment_provider, created_at')
+            .select('id, user_id, type, category, title, subtitle, amount, amount_ngn, status, channel, payment_provider, created_at, external_reference')
             .eq('user_id', userId)
             .order('created_at', { ascending: false })
             .limit(100);
@@ -5761,6 +5763,7 @@ async function fetchUserTransactions(userId) {
                 status: tx.status || 'Success',
                 paymentProvider: tx.payment_provider || 'MJ HUB',
                 channel,
+                _ref: tx.external_reference ? String(tx.external_reference) : '',
                 _source: 'transactions'
             };
         });
@@ -5780,14 +5783,31 @@ async function fetchUserTransactions(userId) {
               : String(t.title || '').toLowerCase().slice(0, 40);
             return [typ || t.type, title, String(t.amount_ngn || t.amount || ''), day].join('|');
         }
+        // USA rentals: ONE row per rental. The purchase transaction is the row; its status follows
+        // the rental (pending -> completed when the code arrives -> refunded if cancelled/refunded).
+        const orderByRent = new Map();
+        for (const o of fromOrders) { if (o._rentKey) orderByRent.set(o._rentKey, o); }
+        const txRentRefs = new Set();
+        for (const t of fromTx) { if (t._ref && orderByRent.has(t._ref)) txRentRefs.add(t._ref); }
+        for (const t of fromTx) {
+            const o = t._ref ? orderByRent.get(t._ref) : null;
+            if (!o) continue;
+            const os = String(o.status || '').toLowerCase();
+            if (o._refunded || ['refunded', 'cancelled', 'canceled'].includes(os)) t.status = 'refunded';
+            else if (os === 'completed' && String(t.status || '').toLowerCase() !== 'refunded') t.status = 'completed';
+        }
         const merged = [];
         for (const t of fromTx) {
+            // Older rentals also have a separate "USA rental cancelled" refund row: it is now shown on the rental itself.
+            if (String(t.type || '').toLowerCase() === 'refund' && /^usa rental cancelled$/i.test(String(t.title || '').trim())) continue;
             const k = dedupeKey(t);
             if (seen.has(k)) continue;
             seen.add(k);
             merged.push(t);
         }
         for (const t of fromOrders) {
+            // This rental already has its transaction row above
+            if (t._rentKey && txRentRefs.has(t._rentKey)) continue;
             const k = dedupeKey(t);
             // Skip if a transactions row already covers this order
             if (seen.has(k)) continue;
