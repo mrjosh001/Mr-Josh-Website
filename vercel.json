@@ -1,6 +1,7 @@
 {
   "cleanUrls": true,
   "trailingSlash": false,
+  "buildCommand": "node scripts/patch-server1-dual-wallet.mjs",
   "rewrites": [
     { "source": "/", "destination": "/landing.html" },
     { "source": "/vendor", "destination": "/vendor.html" },
@@ -21,7 +22,7 @@
     { "source": "/", "destination": "/landing.html", "permanent": false },
     { "source": "/index.html", "destination": "/landing.html", "permanent": false },
     { "source": "/home", "destination": "/landing.html", "permanent": true },
-    { "source": "/app", "destination": "/dashboard", "permanent": false }
+    { "source": "/app", "destination": "/landing.html", "permanent": false }
   ],
   "crons": [
     { "path": "/api/grizzly-sync", "schedule": "0 3 * * *" },
