@@ -348,7 +348,7 @@ async function claimGotsmsRefund(orderId) {
 
 async function gotsmsFetch(path, { method = 'GET', body } = {}) {
   if (!GOTSMS_TOKEN) {
-    return { ok: false, status: 503, data: { success: false, message: 'GotSMS is not configured (set GOTSMS_API_TOKEN)' } };
+    return { ok: false, status: 503, data: { success: false, message: 'Service temporarily unavailable. Please try again shortly.' } };
   }
   const opts = {
     method,
@@ -365,7 +365,7 @@ async function gotsmsFetch(path, { method = 'GET', body } = {}) {
     try { data = await res.json(); } catch { data = { success: false, message: 'Invalid supplier response' }; }
     return { ok: res.ok, status: res.status, data };
   } catch (e) {
-    return { ok: false, status: 502, data: { success: false, message: 'Could not reach GotSMS' } };
+    return { ok: false, status: 502, data: { success: false, message: 'Service temporarily unavailable. Please try again shortly.' } };
   }
 }
 
@@ -427,7 +427,7 @@ function gotsmsPublicRent(r) {
     wake_till: r.wake_till,
     can_wake_up: r.can_wake_up,
     notes: r.notes,
-    transition_options: r.transition_options || [],
+    transition_options: (Array.isArray(r.transition_options) ? r.transition_options : []).map(gotsmsPublicTransitionOption),
     cellular_carrier: carrierObj || (carrierName ? { name: carrierName } : null),
     carrier_name: carrierName,
     area_code: area ? String(area).replace(/\D/g, '').slice(0, 6) || String(area) : null
@@ -506,6 +506,21 @@ async function gotsmsSyncAutorenewCharges(userId, rentId, liveRent) {
 
   if (liveTill && storedTill && liveTill > storedTill + 60 * 1000 && price > 0) {
     const idem = 'gotsms-renew-' + rentId + '-' + liveTill;
+    // Atomic claim: only the single request that moves the stored expiry forward may charge.
+    // Without this, every poll (page load, 8s refresh, plan modal, other tabs) raced here and wrote the same renewal several times.
+    try {
+      const claim = await supabase
+        .from('number_orders')
+        .update({ code: new Date(liveTill).toISOString(), status: 'active' })
+        .eq('id', order.id)
+        .eq('code', order.code)
+        .select('id');
+      if (claim.error || !claim.data || !claim.data.length) {
+        return { charged: false, disabled: false, already: true };
+      }
+    } catch (_) {
+      return { charged: false, disabled: false, already: true };
+    }
     try {
       const { data: prior } = await supabase
         .from('transactions')
@@ -565,6 +580,122 @@ async function gotsmsSyncAutorenewCharges(userId, rentId, liveRent) {
   return { charged: false, disabled: false };
 }
 
+
+
+/** Never show the supplier's name (or its raw wording) to customers. */
+function gotsmsSafeMsg(m, fallback) {
+  let t = String(m == null ? '' : m).trim();
+  if (!t) return fallback || '';
+  t = t.replace(/got\s*-?\s*sms(\.org)?/ig, 'MJ HUB').replace(/https?:\/\/\S*gotsms\S*/ig, '');
+  return t.trim() || fallback || '';
+}
+
+/** Customer price (NGN) for one supplier plan-switch option. Fixed duration table first, USD markup as fallback. */
+function gotsmsTransitionPriceNgn(o) {
+  if (!o || typeof o !== 'object') return 0;
+  const fixed = gotsmsFixedDurationPriceNgn(o);
+  if (fixed != null && fixed > 0) return fixed;
+  const usd = Number(o.price != null ? o.price : (o.price_usd != null ? o.price_usd : o.amount)) || 0;
+  return usd > 0 ? gotsmsSellPriceNgn(usd) : 0;
+}
+
+/** Browser-safe plan-switch option: has price_ngn (the old shape had only supplier USD, so the UI showed "Price unavailable"). */
+function gotsmsPublicTransitionOption(o) {
+  if (!o || typeof o !== 'object') return o;
+  const pid = o.plan_id != null ? o.plan_id : o.id;
+  return {
+    plan_id: pid,
+    id: pid,
+    billing_type: o.billing_type,
+    duration_type: o.duration_type,
+    duration_in_type: o.duration_in_type,
+    duration_translation: o.duration_translation,
+    price_ngn: gotsmsTransitionPriceNgn(o),
+    is_available: !gotsmsPlanUnavailable(o)
+  };
+}
+
+/** Admin-set plan prices (number_services) win over the default price, same as gotsms_plans. */
+async function gotsmsApplyAdminPlanPrices(options) {
+  try {
+    const list = Array.isArray(options) ? options : [];
+    const ids = list.map((o) => String(o && (o.plan_id != null ? o.plan_id : o.id) || '')).filter(Boolean);
+    if (!ids.length) return list;
+    const { data: rows } = await supabase
+      .from('number_services')
+      .select('service_id, price, price_source, is_available')
+      .eq('source', 'gotsms')
+      .in('service_id', ids);
+    const by = new Map((rows || []).map((r) => [String(r.service_id), r]));
+    return list.map((o) => {
+      const db = by.get(String(o.plan_id != null ? o.plan_id : o.id));
+      if (!db) return o;
+      const out = { ...o };
+      if (db.price_source === 'admin' && Number(db.price) > 0) out.price_ngn = Number(db.price);
+      if (db.is_available === false && db.price_source === 'admin') out.is_available = false;
+      return out;
+    });
+  } catch (_) { return options; }
+}
+
+/**
+ * ONE transaction row per rental purchase:
+ *   purchase  -> status "pending"
+ *   first SMS -> same row becomes "completed"
+ *   cancel    -> same row becomes "refunded"
+ * Never inserts a second purchase row for the same rental.
+ */
+async function gotsmsRecordPurchaseTx({ userId, customerId, rent, priceNgn, orderId, title, subtitle }) {
+  const ref = String(rent && rent.id != null ? rent.id : '');
+  if (!ref) return false;
+  try {
+    const { data: existing } = await supabase
+      .from('transactions')
+      .select('id')
+      .eq('user_id', userId)
+      .eq('type', 'purchase')
+      .eq('category', 'MJ SMS')
+      .eq('external_reference', ref)
+      .limit(1);
+    if (existing && existing.length) return true;
+  } catch (_) {}
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const tx = await supabase.from('transactions').insert({
+      user_id: userId,
+      customer_id: customerId,
+      type: 'purchase',
+      category: 'MJ SMS',
+      title: title,
+      subtitle: subtitle,
+      amount: `₦${Number(priceNgn).toLocaleString()}`,
+      amount_ngn: priceNgn,
+      status: 'pending',
+      external_reference: ref,
+      notes: orderId ? `order_id:${orderId}` : null,
+      supplier_order: { provider: 'gotsms', rent_id: ref, order_id: orderId || null }
+    });
+    if (!tx.error) return true;
+    console.error('[gotsms] purchase tx insert attempt ' + (attempt + 1), tx.error.message);
+  }
+  return false;
+}
+
+/** Move the rental's single purchase row to a new status. Returns true if a row changed. */
+async function gotsmsSetPurchaseTxStatus(userId, rentId, fromStatuses, toStatus) {
+  try {
+    const { data, error } = await supabase
+      .from('transactions')
+      .update({ status: toStatus })
+      .eq('user_id', userId)
+      .eq('type', 'purchase')
+      .eq('category', 'MJ SMS')
+      .eq('external_reference', String(rentId))
+      .in('status', fromStatuses)
+      .select('id');
+    if (error) { console.warn('[gotsms] tx status', toStatus, error.message); return false; }
+    return !!(data && data.length);
+  } catch (e) { console.warn('[gotsms] tx status', e.message || e); return false; }
+}
 
 async function gotsmsSaveOrder({ userId, customerId, rentId, phone, serviceName, serviceId, priceNgn, supplierUsd, status, activeTill, planLabel, carrierName, areaCode }) {
   const orderId = `GS-${String(rentId || '').slice(0, 8)}-${Date.now().toString(36)}`;
@@ -2794,7 +2925,7 @@ export default async function handler(req, res) {
         });
         if (search) qs.set('search', search);
         const g = await gotsmsFetch(`/api/services?${qs}`);
-        if (!g.ok) return json(res, g.status || 400, { success: false, message: g.data?.message || 'Could not load services' });
+        if (!g.ok) return json(res, g.status || 400, { success: false, message: gotsmsSafeMsg(g.data?.message, 'Could not load services') });
         // Normalize list (GotSMS may nest under data.data)
         let list = [];
         const raw = g.data;
@@ -2837,7 +2968,7 @@ export default async function handler(req, res) {
         do {
           qs.set('page', String(page));
           const g = await gotsmsFetch(`/api/rents/plans?${qs}`);
-          if (!g.ok) return json(res, g.status || 400, { success: false, message: g.data?.message || 'Could not load plans' });
+          if (!g.ok) return json(res, g.status || 400, { success: false, message: gotsmsSafeMsg(g.data?.message, 'Could not load plans') });
           all.push(...(g.data.data || []));
           lastPage = Number(g.data.meta?.last_page || 1);
           page += 1;
@@ -3009,7 +3140,7 @@ export default async function handler(req, res) {
           return json(res, restored ? (outOfStock ? 409 : (g.status || 400)) : 500, {
             success: false,
             message: restored
-              ? (outOfStock ? 'This rental plan is out of stock. Your wallet has been refunded.' : (supplierMessage || 'Rental failed. Your wallet has been refunded.'))
+              ? (outOfStock ? 'This rental plan is out of stock. Your wallet has been refunded.' : (gotsmsSafeMsg(supplierMessage) || 'Rental failed. Your wallet has been refunded.'))
               : 'The supplier rejected the rental and wallet restoration could not be verified. Do not retry yet. Support has been alerted.',
             data: { refunded: restored, refund_pending: !restored, out_of_stock: outOfStock }
           });
@@ -3044,30 +3175,17 @@ export default async function handler(req, res) {
           });
         }
         const orderId = savedOrder;
-        let transactionSaved = false;
-        let transactionError = null;
-        for (let attempt = 0; attempt < 2 && !transactionSaved; attempt++) {
-          const tx = await supabase.from('transactions').insert({
-            user_id: auth.userId,
-            customer_id: profile.customer_id,
-            type: 'purchase',
-            category: 'MJ SMS',
-            title: `USA number rental · ${rent.service?.name || 'SMS'}`,
-            subtitle: `${rent.phone || ''} · ${rent.plan?.duration_translation || ''}`.trim(),
-            amount: `₦${price.toLocaleString()}`,
-            amount_ngn: price,
-            status: 'completed',
-            external_reference: String(rent.id),
-            supplier_order: { provider: 'gotsms', rent_id: String(rent.id), order_id: orderId }
-          });
-          transactionSaved = !tx.error;
-          transactionError = tx.error || null;
-          if (tx.error) console.error('[gotsms] rental transaction insert attempt ' + (attempt + 1), tx.error.message);
-        }
+        const transactionSaved = await gotsmsRecordPurchaseTx({
+          userId: auth.userId,
+          customerId: profile.customer_id,
+          rent,
+          priceNgn: price,
+          orderId,
+          title: `USA number rental · ${rent.service?.name || 'SMS'}`,
+          subtitle: `${rent.phone || ''} · ${rent.plan?.duration_translation || ''}`.trim()
+        });
         if (!transactionSaved) {
-          console.error('[gotsms] rental transaction persistence failed after retry', {
-            rentId: rent.id, userId: auth.userId, amount: price, error: transactionError?.message
-          });
+          console.error('[gotsms] rental transaction persistence failed', { rentId: rent.id, userId: auth.userId, amount: price });
         }
         const { data: fresh } = await supabase.from('profiles').select('balance').eq('id', auth.userId).single();
         // Optional auto-renew (GotSMS: POST renewal/toggle flips state; default is off)
@@ -3198,7 +3316,7 @@ export default async function handler(req, res) {
         const rented = Number(g.data?.meta?.rented || rentedList.length || 0);
         if (!g.ok || rented < 1) {
           try { await supabase.rpc('credit_balance', { p_user_id: auth.userId, p_amount: totalNgn }); } catch (_) {}
-          return json(res, g.status || 400, { success: false, message: g.data?.message || 'No numbers available' });
+          return json(res, g.status || 400, { success: false, message: gotsmsSafeMsg(g.data?.message, 'No numbers available') });
         }
         if (rented < quantity) {
           try { await supabase.rpc('credit_balance', { p_user_id: auth.userId, p_amount: unitNgn * (quantity - rented) }); } catch (_) {}
@@ -3222,20 +3340,16 @@ export default async function handler(req, res) {
             areaCode: body.area_code || null
           });
           out.push({ ...gotsmsPublicRent(rent), order_id: oid, price_ngn: unitNgn });
-        }
-        try {
-          await supabase.from('transactions').insert({
-            user_id: auth.userId,
-            customer_id: profile.customer_id,
-            type: 'purchase',
-            category: 'MJ SMS',
-            title: `USA rental ×${rented}`,
-            subtitle: plan?.service?.name || 'GotSMS',
-            amount: `₦${charged.toLocaleString()}`,
-            amount_ngn: charged,
-            status: 'completed'
+          await gotsmsRecordPurchaseTx({
+            userId: auth.userId,
+            customerId: profile.customer_id,
+            rent,
+            priceNgn: unitNgn,
+            orderId: oid,
+            title: `USA number rental · ${rent.service?.name || plan?.service?.name || 'SMS'}`,
+            subtitle: `${rent.phone || ''} · ${plan?.duration_translation || ''}`.trim()
           });
-        } catch (_) {}
+        }
         // Enable auto-renew on each rented number if requested
         const wantRenewBulk = body.auto_renew === true || body.auto_renew === 1 || body.auto_renew === '1' || body.auto_renew === 'true';
         if (wantRenewBulk && out.length) {
@@ -3267,7 +3381,7 @@ export default async function handler(req, res) {
         if (status) qs.set('status', status);
         qs.set('per_page', '50');
         const g = await gotsmsFetch(`/api/rents?${qs}`);
-        if (!g.ok) return json(res, g.status || 400, { success: false, message: g.data?.message || 'Could not load rentals' });
+        if (!g.ok) return json(res, g.status || 400, { success: false, message: gotsmsSafeMsg(g.data?.message, 'Could not load rentals') });
         const { data: mine } = await supabase.from('number_orders').select('idempotency_key, phone_number').eq('user_id', auth.userId).eq('source', 'gotsms').limit(200);
         const mineRentIds = new Set((mine || []).map((m) => String(m.idempotency_key || '').replace(/^gotsms-/, '')).filter(Boolean));
         const minePhones = new Set((mine || []).map((m) => String(m.phone_number || '').replace(/\s/g, '')));
@@ -3293,7 +3407,13 @@ export default async function handler(req, res) {
             console.warn('[gotsms_rents] heal', e.message || e);
           }
         }
-        return json(res, 200, { success: true, data: filtered.map(gotsmsPublicRent), meta: g.data.meta });
+        const publicRents = filtered.map(gotsmsPublicRent);
+        for (const pr of publicRents) {
+          if (pr && Array.isArray(pr.transition_options) && pr.transition_options.length) {
+            pr.transition_options = await gotsmsApplyAdminPlanPrices(pr.transition_options);
+          }
+        }
+        return json(res, 200, { success: true, data: publicRents, meta: g.data.meta });
       }
 
       if (method === 'POST' && ga === 'gotsms_wake') {
@@ -3304,7 +3424,7 @@ export default async function handler(req, res) {
         if (!rent_id) return json(res, 400, { success: false, message: 'rent_id required' });
         if (!(await gotsmsAssertOwns(auth.userId, rent_id))) return json(res, 403, { success: false, message: 'Rental not found' });
         const g = await gotsmsFetch(`/api/numbers/${encodeURIComponent(rent_id)}/wake-up`, { method: 'POST' });
-        return json(res, g.ok ? 200 : g.status || 400, { success: !!g.data?.success, message: g.data?.message || (g.ok ? 'Number woken up' : 'Wake up failed'), data: g.data?.data || null });
+        return json(res, g.ok ? 200 : g.status || 400, { success: !!g.data?.success, message: gotsmsSafeMsg(g.data?.message, g.ok ? 'Number woken up' : 'Wake up failed'), data: g.data?.data || null });
       }
 
       
@@ -3328,6 +3448,7 @@ export default async function handler(req, res) {
           const next = (name || 'USA rental') + ' · SMS received';
           await supabase.from('number_orders').update({ service_name: next, status: 'completed' }).eq('id', row.id);
         }
+        await gotsmsSetPurchaseTxStatus(auth.userId, rent_id, ['pending'], 'completed');
         return json(res, 200, { success: true, marked: true });
       }
 
@@ -3346,11 +3467,12 @@ if (method === 'GET' && ga === 'gotsms_messages') {
             if (row && !/sms\s*received/i.test(String(row.service_name || ''))) {
               await supabase.from('number_orders').update({ status: 'completed', service_name: (row.service_name || 'USA rental') + ' · SMS received' }).eq('id', row.id);
             }
+            await gotsmsSetPurchaseTxStatus(auth.userId, rent_id, ['pending'], 'completed');
           } catch (e) {
             console.warn('[gotsms] mark sms received', e.message || e);
           }
         }
-        return json(res, g.ok ? 200 : g.status || 400, { success: !!g.data?.success, data: msgs, message: g.data?.message });
+        return json(res, g.ok ? 200 : g.status || 400, { success: !!g.data?.success, data: msgs, message: gotsmsSafeMsg(g.data?.message) });
       }
 
       if (method === 'GET' && ga === 'gotsms_addable_services') {
@@ -3367,7 +3489,7 @@ if (method === 'GET' && ga === 'gotsms_messages') {
           price_ngn: gotsmsSellPriceNgn(s.price),
           is_available: s.is_available !== false
         }));
-        return json(res, g.ok ? 200 : g.status || 400, { success: !!g.data?.success, data: list, message: g.data?.message });
+        return json(res, g.ok ? 200 : g.status || 400, { success: !!g.data?.success, data: list, message: gotsmsSafeMsg(g.data?.message) });
       }
 
       if (method === 'POST' && ga === 'gotsms_add_service') {
@@ -3399,7 +3521,7 @@ if (method === 'GET' && ga === 'gotsms_messages') {
         const g = await gotsmsFetch(`/api/rents/${encodeURIComponent(rent_id)}/services`, { method: 'POST', body: { service_id } });
         if (!g.ok || !g.data?.success) {
           try { await supabase.rpc('credit_balance', { p_user_id: auth.userId, p_amount: price }); } catch (_) {}
-          return json(res, g.status || 400, { success: false, message: g.data?.message || 'Could not add service' });
+          return json(res, g.status || 400, { success: false, message: gotsmsSafeMsg(g.data?.message, 'Could not add service') });
         }
         const newRentId = g.data?.data?.id || null;
         try {
@@ -3421,6 +3543,19 @@ if (method === 'GET' && ga === 'gotsms_messages') {
         } catch (e) {
           console.warn('[gotsms add_service] save order', e.message || e);
         }
+        try {
+          await supabase.from('transactions').insert({
+            user_id: auth.userId,
+            customer_id: parentOrder.customer_id,
+            type: 'debit',
+            category: 'MJ SMS',
+            title: 'USA rental add-on · ' + (svc.name || 'Service'),
+            subtitle: String(parentOrder.phone_number || ''),
+            amount: '₦' + price.toLocaleString(),
+            amount_ngn: price,
+            status: 'completed'
+          });
+        } catch (_) {}
         return json(res, 201, { success: true, message: g.data.message || 'Service added to this number', data: { ...(g.data.data || {}), price_ngn: price, service_name: svc.name } });
       }
 
@@ -3441,16 +3576,18 @@ if (method === 'GET' && ga === 'gotsms_messages') {
           live = (cur.data && (cur.data.data || cur.data)) || null;
         } catch (_) {}
         const opts = (live && live.transition_options) || [];
-        const plan = opts.find((o) => String(o.plan_id) === plan_id);
+        const plan = opts.find((o) => String(o.plan_id != null ? o.plan_id : o.id) === plan_id);
         if (!plan) return json(res, 400, { success: false, message: 'That plan switch is not available for this number.' });
-        const price = gotsmsSellPriceNgn(plan.price || 0);
+        const pricedPlan = (await gotsmsApplyAdminPlanPrices([gotsmsPublicTransitionOption(plan)]))[0] || {};
+        if (pricedPlan.is_available === false) return json(res, 400, { success: false, message: 'That plan is not available right now.' });
+        const price = Number(pricedPlan.price_ngn) || 0;
         if (!(price > 0)) return json(res, 400, { success: false, message: 'Invalid plan price' });
         const debit = await debitWalletStrict(auth.userId, price, 'gotsms_transition');
         if (!debit.ok) return json(res, 400, { success: false, message: debit.message || 'Insufficient wallet balance' });
         const g = await gotsmsFetch('/api/rents/' + encodeURIComponent(rent_id) + '/transition', { method: 'POST', body: { plan_id } });
         if (!g.ok || !g.data?.success) {
           try { await supabase.rpc('credit_balance', { p_user_id: auth.userId, p_amount: price }); } catch (_) {}
-          return json(res, g.status || 400, { success: false, message: g.data?.message || 'Could not switch plan' });
+          return json(res, g.status || 400, { success: false, message: gotsmsSafeMsg(g.data?.message, 'Could not switch plan') });
         }
         try {
           await gotsmsSaveOrder({
@@ -3469,9 +3606,22 @@ if (method === 'GET' && ga === 'gotsms_messages') {
             areaCode: null
           });
         } catch (e) { console.warn('[gotsms transition] save', e.message || e); }
+        try {
+          await supabase.from('transactions').insert({
+            user_id: auth.userId,
+            customer_id: order.customer_id,
+            type: 'debit',
+            category: 'MJ SMS',
+            title: 'USA rental plan switch',
+            subtitle: `${order.phone_number || ''} · ${plan.duration_translation || ''}`.trim(),
+            amount: '₦' + price.toLocaleString(),
+            amount_ngn: price,
+            status: 'completed'
+          });
+        } catch (_) {}
         return json(res, 200, {
           success: true,
-          message: g.data.message || 'Plan switched successfully',
+          message: gotsmsSafeMsg(g.data.message, 'Plan switched successfully'),
           data: { ...(g.data.data || {}), price_ngn: price, plan_label: plan.duration_translation }
         });
       }
@@ -3532,7 +3682,7 @@ if (method === 'POST' && ga === 'gotsms_toggle_renewal') {
         if (!g.ok) {
           return json(res, g.status || 400, {
             success: false,
-            message: (g.data && g.data.message) || 'Could not update auto-renewal',
+            message: gotsmsSafeMsg(g.data && g.data.message, 'Could not update auto-renewal'),
             data: (g.data && g.data.data) || null
           });
         }
@@ -3586,7 +3736,7 @@ if (method === 'POST' && ga === 'gotsms_toggle_renewal') {
         if (!g.ok || !g.data?.success) {
           return json(res, g.status || 400, {
             success: false,
-            message: g.data?.message || 'Cancel/refund was not approved. No balance change.'
+            message: gotsmsSafeMsg(g.data?.message, 'Cancel was not approved for this number. No balance change.')
           });
         }
 
@@ -3603,18 +3753,29 @@ if (method === 'POST' && ga === 'gotsms_toggle_renewal') {
         if (refundAmt > 0) {
           try {
             await supabase.rpc('credit_balance', { p_user_id: auth.userId, p_amount: refundAmt });
-            try {
-              await supabase.from('transactions').insert({
-                user_id: auth.userId,
-                type: 'refund',
-                category: 'MJ SMS',
-                title: 'USA rental cancelled',
-                subtitle: 'Balance restored',
-                amount: '₦' + refundAmt.toLocaleString(),
-                amount_ngn: refundAmt,
-                status: 'completed'
-              });
-            } catch (_) {}
+            // pending/completed -> refunded on the rental's own row. Only legacy rentals (no row to flip) get a refund row.
+            const flipped = await gotsmsSetPurchaseTxStatus(auth.userId, rent_id, ['pending', 'completed'], 'refunded');
+            if (!flipped) {
+              try {
+                const { data: dup } = await supabase.from('transactions').select('id')
+                  .eq('user_id', auth.userId).eq('type', 'refund').eq('category', 'MJ SMS')
+                  .eq('external_reference', String(rent_id)).limit(1);
+                if (!dup || !dup.length) {
+                  await supabase.from('transactions').insert({
+                    user_id: auth.userId,
+                    customer_id: order.customer_id,
+                    type: 'refund',
+                    category: 'MJ SMS',
+                    title: 'USA rental cancelled',
+                    subtitle: 'Balance restored',
+                    amount: '₦' + refundAmt.toLocaleString(),
+                    amount_ngn: refundAmt,
+                    status: 'refunded',
+                    external_reference: String(rent_id)
+                  });
+                }
+              } catch (_) {}
+            }
           } catch (e) {
             console.error('[gotsms] user refund credit', e);
             // Roll claim flag back so admin can retry credit
@@ -3687,7 +3848,7 @@ if (method === 'POST' && ga === 'gotsms_toggle_renewal') {
         if (!g.ok) {
           return json(res, g.status || 400, {
             success: false,
-            message: (g.data && g.data.message) || 'Could not update auto-renewal',
+            message: gotsmsSafeMsg(g.data && g.data.message, 'Could not update auto-renewal'),
             data: (g.data && g.data.data) || null
           });
         }
