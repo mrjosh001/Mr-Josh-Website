@@ -2,228 +2,139 @@
 <html lang="en" data-theme="dark">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, viewport-fit=cover">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Rental inbox · MJ HUB</title>
 <script>(function(){try{var t=localStorage.getItem('mjhub-theme');document.documentElement.setAttribute('data-theme',(t==='light'||t==='dark')?t:'dark');}catch(e){document.documentElement.setAttribute('data-theme','dark');}})();</script>
 <script src="/js/mj-page-loader.js" defer></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script>
+// Show all dates/times in Nigeria time (WAT), same as the other MJ HUB pages.
+(function(){var a=Date.prototype.toLocaleString,b=Date.prototype.toLocaleDateString,c=Date.prototype.toLocaleTimeString;function w(o){return Object.assign({timeZone:'Africa/Lagos'},o||{})}
+Date.prototype.toLocaleString=function(l,o){return a.call(this,l||'en-NG',w(o))};
+Date.prototype.toLocaleDateString=function(l,o){return b.call(this,l||'en-NG',w(o))};
+Date.prototype.toLocaleTimeString=function(l,o){return c.call(this,l||'en-NG',w(o))};})();
+</script>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
-<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <style>
-:root,html[data-theme="dark"]{
-  --bg:#06080f;--card:#0f1524;--text:#f1f5f9;--muted:#94a3b8;--border:rgba(148,163,184,.14);
-  --primary:#5b8af5;--primary2:#3b6ef5;--ok:#34d399;--danger:#f87171;
-  --soft:rgba(91,138,245,.12);--ok-soft:rgba(52,211,153,.12);--danger-soft:rgba(248,113,113,.12);
-  --header:rgba(6,8,15,.92);--input:#0a0e18;--sheet:#111827;
-}
-html[data-theme="light"]{
-  --bg:#f0f4ff;--card:#fff;--text:#0f172a;--muted:#64748b;--border:rgba(59,110,245,.12);
-  --primary:#3b6ef5;--primary2:#2563eb;--ok:#059669;--danger:#dc2626;
-  --soft:rgba(59,110,245,.1);--ok-soft:rgba(5,150,105,.1);--danger-soft:rgba(220,38,38,.08);
-  --header:rgba(255,255,255,.94);--input:#f8fafc;--sheet:#fff;
-}
-*{box-sizing:border-box;margin:0;padding:0}
-html{-webkit-text-size-adjust:100%;text-size-adjust:100%}
-body{font-family:'Plus Jakarta Sans',system-ui,sans-serif;background:var(--bg);color:var(--text);min-height:100dvh}
-.header{padding:12px 16px;display:flex;align-items:center;gap:12px;position:sticky;top:0;z-index:40;
-  background:var(--header);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);border-bottom:1px solid var(--border)}
-.back{width:40px;height:40px;border-radius:12px;border:1px solid var(--border);background:var(--card);
-  display:flex;align-items:center;justify-content:center;color:var(--text);text-decoration:none;flex-shrink:0}
-h1{font-size:17px;font-weight:800;letter-spacing:-.02em}
-.main{padding:16px;max-width:520px;margin:0 auto;padding-bottom:40px}
-
-/* Hero phone card */
-.hero{background:var(--card);border:1px solid var(--border);border-radius:20px;padding:18px;margin-bottom:14px;
-  box-shadow:0 8px 28px rgba(0,0,0,.12)}
-.hero-top{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:14px}
-.phone{font-size:22px;font-weight:800;letter-spacing:.02em;line-height:1.2}
-.phone-row{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
-.copy-icon{width:34px;height:34px;border-radius:10px;border:1px solid var(--border);background:var(--input);
-  color:var(--muted);display:inline-flex;align-items:center;justify-content:center;cursor:pointer;font-size:13px}
-.copy-icon:active{transform:scale(.96)}
-.svc{font-size:13px;color:var(--muted);font-weight:600;margin-top:4px}
-.svc-meta{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
-.chip-mini{font-size:11px;font-weight:800;padding:4px 10px;border-radius:999px;background:var(--input);border:1px solid var(--border);color:var(--text)}
-.btn.is-busy{opacity:.7;pointer-events:none}
-.btn .spin,.btn-danger-outline .spin{animation:spin .7s linear infinite}
+:root[data-theme="dark"]{--bg:#07090f;--card:#0f141e;--card-2:#141b28;--text:#f5f7fb;--text-2:#c0cad9;--muted:#8693a7;--line:rgba(255,255,255,.08);--ac:#4f8dff;--ac-soft:rgba(79,141,255,.14);--ac-line:rgba(79,141,255,.45);--ok:#3ddc97;--ok-soft:rgba(61,220,151,.13);--ok-line:rgba(61,220,151,.4);--bad:#ff6b6b;--bad-soft:rgba(255,107,107,.12);--warn:#f5a524;--warn-soft:rgba(245,165,36,.1);--warn-line:rgba(245,165,36,.35);--shadow:0 18px 50px rgba(0,0,0,.45)}
+:root[data-theme="light"]{--bg:#f1f4f9;--card:#fff;--card-2:#f6f8fc;--text:#0e1726;--text-2:#38445a;--muted:#6a768b;--line:rgba(14,23,38,.1);--ac:#2563eb;--ac-soft:rgba(37,99,235,.1);--ac-line:rgba(37,99,235,.4);--ok:#0f9d6a;--ok-soft:rgba(15,157,106,.1);--ok-line:rgba(15,157,106,.4);--bad:#dc2626;--bad-soft:rgba(220,38,38,.09);--warn:#b45309;--warn-soft:rgba(180,83,9,.08);--warn-line:rgba(180,83,9,.3);--shadow:0 16px 40px rgba(15,23,42,.1)}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+body{font-family:'Plus Jakarta Sans',system-ui,-apple-system,sans-serif;background:var(--bg);color:var(--text);min-height:100vh;-webkit-font-smoothing:antialiased;font-variant-numeric:tabular-nums;padding-bottom:calc(40px + env(safe-area-inset-bottom))}
+.header{height:54px;padding:0 16px;display:flex;align-items:center;gap:12px;position:sticky;top:0;z-index:100;background:var(--bg);border-bottom:1px solid var(--line)}
+.back-button{width:36px;height:36px;border-radius:11px;background:var(--card);border:1px solid var(--line);display:flex;align-items:center;justify-content:center;color:var(--text);text-decoration:none;font-size:13px;transition:transform .45s cubic-bezier(.34,1.8,.5,1)}
+.back-button:active{transform:scale(.88);transition-duration:.1s}
+.page-title{font-size:17px;font-weight:800;letter-spacing:-.025em}
+.otp-tag{margin-left:auto;font-size:11px;font-weight:800;color:var(--ok);background:var(--ok-soft);padding:4px 10px;border-radius:999px;display:inline-flex;align-items:center;gap:6px}
+.otp-tag::before{content:'';width:7px;height:7px;border-radius:50%;background:currentColor}
+.otp-tag.ended{color:var(--bad);background:var(--bad-soft)}
+.main-content{padding:16px;max-width:520px;margin:0 auto}
+.n3{display:grid;gap:10px}
+.n3-state{display:flex;align-items:center;gap:14px;padding:4px 2px 6px}
+.n3-live{position:relative;width:46px;height:46px;flex-shrink:0;display:grid;place-items:center;border-radius:50%;background:var(--ac-soft);color:var(--ac);font-size:18px}
+.n3-live::before,.n3-live::after{content:"";position:absolute;inset:0;border-radius:50%;border:2px solid var(--ac);opacity:0;animation:n3ring 2s ease-out infinite}
+.n3-live::after{animation-delay:1s}
+.n3-live.off{background:var(--bad-soft);color:var(--bad)}
+.n3-live.off::before,.n3-live.off::after{animation:none;border-color:transparent}
+@keyframes n3ring{0%{transform:scale(.8);opacity:.55}100%{transform:scale(1.55);opacity:0}}
+.n3-st{font-size:21px;font-weight:800;letter-spacing:-.035em;line-height:1.15}
+.n3-ss{font-size:13px;font-weight:600;color:var(--muted);line-height:1.4;margin-top:3px}
+.n3-card{background:var(--card);border:1px solid var(--line);border-radius:20px;padding:15px 16px}
+.n3-lab{font-size:11px;font-weight:800;letter-spacing:.09em;text-transform:uppercase;color:var(--muted)}
+.n3-grid{display:grid;grid-template-columns:1.4fr 1fr;gap:10px}
+.n3-val{margin-top:6px;font-size:17px;font-weight:800;letter-spacing:-.02em;line-height:1.25;overflow-wrap:anywhere}
+.n3-val.ac{color:var(--ac)}
+.n3-sub{margin-top:2px;font-size:12.5px;font-weight:600;color:var(--muted)}
+.chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+.chip{font-size:11px;font-weight:800;padding:4px 10px;border-radius:999px;background:var(--card-2);border:1px solid var(--line);color:var(--text-2)}
+.n3-num{border-color:var(--ac-line)}
+.n3-phone{display:flex;align-items:center;gap:10px;margin-top:10px;flex-wrap:wrap}
+.dial-code{font-size:15px;font-weight:800;color:var(--ac);background:var(--ac-soft);padding:7px 12px;border-radius:11px}
+.national-num{font-size:29px;font-weight:800;letter-spacing:.02em;line-height:1.1;word-break:break-all}
+.phone-hint{font-size:11.5px;color:var(--muted);margin-top:9px;font-weight:600;text-align:center}
+.n3-time{margin-top:6px;font-size:34px;font-weight:800;letter-spacing:-.03em;line-height:1;white-space:nowrap}
+.n3-track{height:7px;border-radius:999px;background:var(--card-2);margin-top:13px;overflow:hidden;border:1px solid var(--line)}
+.n3-bar{height:100%;width:100%;border-radius:999px;background:var(--ac);transform-origin:left center;transition:transform 1s linear}
+.n3-btn{width:100%;display:flex;align-items:center;justify-content:center;gap:8px;padding:14px;border-radius:16px;font:inherit;font-size:14.5px;font-weight:800;cursor:pointer;border:1px solid transparent;text-decoration:none;transition:transform .45s cubic-bezier(.34,1.8,.5,1),opacity .2s}
+.n3-btn:active{transform:scale(.96);transition-duration:.1s}
+.n3-btn:disabled{opacity:.5;cursor:not-allowed}
+.n3-btn.is-busy{opacity:.7;pointer-events:none}
+.n3-primary{background:var(--ac);color:#fff}
+.n3-ghost{background:var(--card);color:var(--text);border-color:var(--line)}
+.n3-soft{background:var(--ac-soft);color:var(--ac);border-color:var(--ac-line)}
+.n3-danger{background:transparent;color:var(--bad);border-color:rgba(255,107,107,.4)}
+.n3-btn.ok{background:var(--ok);color:#06140d}
+.n3-copy{margin-top:13px}
+.spin{animation:spin .7s linear infinite}
 @keyframes spin{to{transform:rotate(360deg)}}
-.refund-locked{font-size:12px;font-weight:600;color:var(--muted);margin-top:10px;line-height:1.45;padding:10px 12px;border-radius:12px;background:var(--input);border:1px solid var(--border)}
-.badge{display:inline-flex;align-items:center;gap:6px;font-size:11px;font-weight:800;padding:5px 10px;border-radius:999px;
-  background:var(--ok-soft);color:var(--ok);white-space:nowrap}
-.badge.expired{background:var(--danger-soft);color:var(--danger)}
-.badge.dot::before{content:'';width:7px;height:7px;border-radius:50%;background:currentColor}
-
-.stats{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px}
-.stat{background:var(--input);border:1px solid var(--border);border-radius:14px;padding:12px 14px}
-.stat .lbl{font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
-.stat .val{font-size:20px;font-weight:800;color:var(--primary);margin-top:4px;letter-spacing:.04em;font-variant-numeric:tabular-nums}
-.stat .sub{font-size:11px;color:var(--muted);margin-top:2px;font-weight:600}
-
-/* Toggle row */
-.toggle-card{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:14px;border-radius:14px;
-  background:var(--input);border:1px solid var(--border);margin-bottom:14px}
-.toggle-card .t-title{font-size:14px;font-weight:800}
-.toggle-card .t-hint{font-size:11px;color:var(--muted);font-weight:600;margin-top:2px;line-height:1.35}
+.n3-two{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.n3-stack{display:grid;gap:10px}
+.toggle{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.toggle .t-title{font-size:14px;font-weight:800}
+.toggle .t-hint{font-size:12px;color:var(--muted);font-weight:600;margin-top:3px;line-height:1.4}
 .switch{position:relative;width:50px;height:30px;flex-shrink:0}
 .switch input{opacity:0;width:0;height:0;position:absolute}
-.slider{position:absolute;inset:0;background:#334155;border-radius:999px;cursor:pointer;transition:.2s}
-.slider:before{content:'';position:absolute;width:24px;height:24px;left:3px;top:3px;background:#fff;border-radius:50%;
-  transition:.2s;box-shadow:0 1px 4px rgba(0,0,0,.25)}
-.switch input:checked+.slider{background:var(--primary)}
+.slider{position:absolute;inset:0;background:var(--card-2);border:1px solid var(--line);border-radius:999px;cursor:pointer;transition:.2s}
+.slider:before{content:'';position:absolute;width:22px;height:22px;left:3px;top:3px;background:#fff;border-radius:50%;transition:.2s;box-shadow:0 1px 4px rgba(0,0,0,.25)}
+.switch input:checked+.slider{background:var(--ac);border-color:var(--ac)}
 .switch input:checked+.slider:before{transform:translateX(20px)}
 .switch input:disabled+.slider{opacity:.5;cursor:not-allowed}
-
-.actions{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px}
-.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;padding:13px 12px;border-radius:12px;
-  border:none;font:800 13px inherit;cursor:pointer;font-family:inherit;transition:opacity .15s}
-.btn:disabled{opacity:.55;cursor:not-allowed}
-.btn-primary{background:linear-gradient(135deg,var(--primary),var(--primary2));color:#fff}
-.btn-ghost{background:var(--card);color:var(--text);border:1px solid var(--border)}
-.btn-danger-outline{width:100%;background:var(--danger-soft);color:var(--danger);border:1px solid color-mix(in srgb,var(--danger) 35%,transparent);
-  margin-top:4px;padding:13px;border-radius:12px;font:800 13px inherit;cursor:pointer;font-family:inherit;
-  display:flex;align-items:center;justify-content:center;gap:8px}
-.hint{font-size:11px;color:var(--muted);line-height:1.45;margin-top:10px;font-weight:600}
-.flash{font-size:13px;font-weight:700;margin-top:10px;min-height:1.2em}
-.flash.err{color:var(--danger)}.flash.ok{color:var(--ok)}
-.toast-pop{
-  position:fixed;left:50%;bottom:28px;transform:translateX(-50%) translateY(120%);
-  z-index:9999;max-width:min(420px,92vw);padding:14px 18px;border-radius:14px;
-  font:700 14px/1.4 inherit;box-shadow:0 12px 40px rgba(0,0,0,.35);
-  background:#0f172a;color:#fff;border:1px solid rgba(148,163,184,.25);
-  transition:transform .28s ease,opacity .28s ease;opacity:0;pointer-events:none;
-}
-.toast-pop.on{transform:translateX(-50%) translateY(0);opacity:1}
-.toast-pop.ok{background:#065f46;border-color:rgba(52,211,153,.35)}
-.toast-pop.err{background:#7f1d1d;border-color:rgba(248,113,113,.35)}
-
-/* Inbox */
-.inbox-card{background:var(--card);border:1px solid var(--border);border-radius:20px;padding:16px;
-  box-shadow:0 8px 28px rgba(0,0,0,.08)}
-.inbox-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:16px}
-.inbox-heading{min-width:0}
-.inbox-head h2{font-size:16px;font-weight:800;letter-spacing:-.02em}
-.inbox-subtitle{font-size:11px;color:var(--muted);font-weight:600;line-height:1.45;margin-top:4px;max-width:260px}
-.inbox-head-right{display:flex;align-items:center;justify-content:flex-end;flex-wrap:wrap;gap:9px}
-.message-count{font-size:10px;font-weight:800;color:var(--text);background:var(--input);border:1px solid var(--border);padding:6px 9px;border-radius:999px;white-space:nowrap;font-variant-numeric:tabular-nums}
-.inbox-head .live{font-size:10px;font-weight:800;color:var(--ok);display:flex;align-items:center;gap:6px;background:var(--ok-soft);border:1px solid color-mix(in srgb,var(--ok) 22%,transparent);padding:6px 9px;border-radius:999px;white-space:nowrap}
-.inbox-head .live::before{content:'';width:7px;height:7px;border-radius:50%;background:var(--ok);animation:pulse 1.6s ease infinite}
+.refund-locked{font-size:12.5px;font-weight:600;color:var(--muted);line-height:1.45;padding:12px 14px;border-radius:14px;background:var(--card);border:1px solid var(--line)}
+.flash{font-size:13px;font-weight:700;min-height:0;text-align:center}
+.flash:empty{display:none}
+.flash.err{color:var(--bad)}.flash.ok{color:var(--ok)}
+.n3-tip{display:flex;gap:11px;align-items:flex-start;padding:13px 14px;border-radius:16px;background:var(--warn-soft);border:1px solid var(--warn-line)}
+.n3-tip i{color:var(--warn);font-size:15px;margin-top:2px}
+.n3-tip b{display:block;font-size:12.5px;font-weight:800;color:var(--warn);margin-bottom:2px}
+.n3-tip span{font-size:12.5px;line-height:1.5;color:var(--text-2);font-weight:500}
+.inbox-head{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;margin:8px 2px 2px}
+.inbox-head h2{font-size:17px;font-weight:800;letter-spacing:-.025em}
+.inbox-head p{font-size:12px;color:var(--muted);font-weight:600;margin-top:3px;line-height:1.4}
+.pills{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}
+.pill{font-size:10.5px;font-weight:800;padding:5px 9px;border-radius:999px;background:var(--card);border:1px solid var(--line);white-space:nowrap}
+.pill.live{color:var(--ok);background:var(--ok-soft);border-color:var(--ok-line);display:inline-flex;align-items:center;gap:6px}
+.pill.live::before{content:'';width:7px;height:7px;border-radius:50%;background:var(--ok);animation:pulse 1.6s ease infinite}
 @keyframes pulse{0%,100%{opacity:1}50%{opacity:.35}}
-/* Professional SMS rental inbox cards */
-.msg{
-  padding:0;border-radius:18px;background:var(--card);border:1px solid var(--border);
-  margin-bottom:14px;overflow:hidden;
-  box-shadow:0 8px 28px rgba(15,23,42,.08);
-}
-.msg:last-child{margin-bottom:0}
-.msg-top{
-  display:grid;grid-template-columns:1fr 1fr;gap:12px 20px;
-  padding:16px 18px 12px;
-}
-.msg-k{
-  font-size:10px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;
-  color:var(--muted);margin-bottom:4px;
-}
-.msg-v{font-size:15px;font-weight:800;color:var(--text);word-break:break-word;line-height:1.25}
-.msg-phone{grid-column:1/-1}
-.msg-body{
-  padding:4px 18px 14px;font-size:14px;font-weight:550;line-height:1.55;
-  color:var(--text2);border-top:1px solid transparent;
-}
-.msg-foot{
-  display:flex;align-items:flex-end;justify-content:space-between;gap:14px;
-  padding:14px 18px;background:color-mix(in srgb,var(--input) 88%,var(--primary) 4%);
-  border-top:1px solid var(--border);
-}
-.msg .code-pill{
-  display:inline-flex;align-items:center;gap:10px;padding:8px 12px;border-radius:12px;
-  background:var(--card);border:1px solid color-mix(in srgb,var(--primary) 35%,var(--border));
-  box-shadow:0 2px 8px rgba(59,130,246,.12);
-}
-.msg .code{
-  font-size:20px;font-weight:800;letter-spacing:.14em;color:var(--primary);
-  font-variant-numeric:tabular-nums;
-}
-.msg .copy-code,.msg .copy-inline{
-  font-size:11px;font-weight:800;padding:6px 10px;border-radius:8px;border:1px solid var(--border);
-  background:var(--card);color:var(--primary);cursor:pointer;font-family:inherit;
-}
-.msg .copy-inline{padding:2px 6px;margin-left:6px;vertical-align:middle;display:inline-flex}
-.msg .when-block{text-align:right;flex-shrink:0}
-.msg .when-label{font-size:10px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
-.msg .when-rel{font-size:13px;font-weight:800;color:var(--text);margin-top:2px}
-.msg .when{font-size:11px;color:var(--muted);font-weight:600;margin-top:2px}
-#inbox{display:flex;flex-direction:column;gap:0}
+.msg{background:var(--card);border:1px solid var(--line);border-radius:20px;padding:15px 16px;display:grid;gap:12px}
+.msg-top{display:grid;grid-template-columns:1fr 1fr;gap:10px 16px}
+.msg-v{margin-top:4px;font-size:14px;font-weight:800;overflow-wrap:anywhere;line-height:1.25}
+.msg-body{font-size:13.5px;font-weight:550;line-height:1.55;color:var(--text-2);white-space:pre-wrap;overflow-wrap:anywhere}
+.msg-code{text-align:center;padding:12px;border-radius:16px;background:var(--ok-soft);border:1px solid var(--ok-line)}
+.msg-code .n3-lab{color:var(--ok)}
+.n3-digits{display:flex;justify-content:center;gap:7px;flex-wrap:wrap;margin:10px 0 12px}
+.n3-digits span{min-width:38px;height:52px;padding:0 6px;display:grid;place-items:center;border-radius:13px;background:var(--card);border:1px solid var(--ok-line);color:var(--ok);font-size:26px;font-weight:800}
+.msg-time{display:flex;justify-content:space-between;gap:10px;font-size:12px;font-weight:600;color:var(--muted)}
+.msg-time b{color:var(--text);font-weight:800}
 .empty{text-align:center;padding:28px 16px;color:var(--muted);font-size:13px;font-weight:600;line-height:1.5}
-
-/* Refined responsive inbox layout */
-.header{position:sticky;top:0;z-index:30;backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px)}
-.main{width:calc(100% - 28px);max-width:680px;margin:18px auto 40px}
-.inbox-card{padding:clamp(14px,3vw,20px);border-radius:22px}
-.msg{transition:border-color .18s ease,transform .18s ease;box-shadow:0 8px 26px rgba(0,0,0,.07)}
-.msg:hover{border-color:color-mix(in srgb,var(--primary) 38%,var(--border))}
-.msg-top{align-items:start}
-.msg-v{overflow-wrap:anywhere}
-.msg-body{white-space:pre-wrap;overflow-wrap:anywhere}
-.msg .code-pill{max-width:100%;flex-wrap:wrap}
-.msg .code{overflow-wrap:anywhere}
-.msg .copy-code,.msg .copy-inline{min-height:32px;transition:background .15s ease,border-color .15s ease}
-.msg .copy-code:hover,.msg .copy-inline:hover{background:var(--soft);border-color:var(--primary)}
-.modal{max-height:min(88vh,680px);overflow:auto}
-.modal-actions .btn{min-height:44px;font-weight:800}
-@media(max-width:480px){
-  .main{width:calc(100% - 20px);margin:12px auto 28px}
-  .msg{border-radius:16px;margin-bottom:10px}
-  .msg-top{grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:10px;padding:14px}
-  .msg-v{font-size:13px}
-  .msg-body{padding:8px 14px 13px;font-size:13px}
-  .msg-foot{align-items:flex-start;padding:12px 14px;gap:8px}
-  .msg .code{font-size:18px;letter-spacing:.08em}
-  .msg .code-pill{gap:6px;padding:7px 9px}
-  .msg .when-block{max-width:45%;overflow-wrap:anywhere}
-  .inbox-head{gap:8px}
-  .inbox-head-right{gap:5px}
-  .message-count,.inbox-head .live{padding:5px 7px;font-size:9px}
-  .inbox-subtitle{max-width:190px}
-}
-@media(prefers-reduced-motion:reduce){
-  .msg,.msg .copy-code,.msg .copy-inline{transition:none}
-  .inbox-head .live::before{animation:none}
-}
-
-/* Modal */
-.modal-bg{position:fixed;inset:0;z-index:100;background:rgba(0,0,0,.55);display:none;align-items:flex-end;justify-content:center;
-  padding:16px;backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px)}
+.empty a{color:var(--ac)}
+.modal-bg{position:fixed;inset:0;z-index:200;background:rgba(0,0,0,.6);display:none;align-items:flex-end;justify-content:center;padding:16px;backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px)}
 .modal-bg.on{display:flex}
-.modal{background:var(--sheet);border:1px solid var(--border);border-radius:20px 20px 16px 16px;width:100%;max-width:420px;
-  padding:20px 18px 18px;box-shadow:0 -8px 40px rgba(0,0,0,.25);animation:up .22s ease}
-@keyframes up{from{transform:translateY(24px);opacity:0}to{transform:none;opacity:1}}
-.modal h3{font-size:17px;font-weight:800;margin-bottom:14px}
-.modal-rows{background:var(--input);border:1px solid var(--border);border-radius:14px;padding:4px 0;margin-bottom:14px}
+.modal{background:var(--card);border:1px solid var(--line);border-radius:22px;width:100%;max-width:420px;max-height:85vh;overflow:auto;padding:20px 18px;box-shadow:var(--shadow)}
+.modal h3{font-size:17px;font-weight:800;letter-spacing:-.025em;margin-bottom:12px;display:flex;justify-content:space-between;align-items:center}
+.modal p.note{font-size:12.5px;color:var(--muted);line-height:1.5;font-weight:600;margin-bottom:12px}
+.modal-rows{background:var(--card-2);border:1px solid var(--line);border-radius:14px;margin-bottom:12px}
 .modal-row{display:flex;justify-content:space-between;gap:12px;padding:10px 14px;font-size:13px;font-weight:600}
-.modal-row span:first-child{color:var(--muted)}.modal-row span:last-child{color:var(--text);text-align:right}
-.modal-note{font-size:13px;color:var(--muted);line-height:1.5;font-weight:600;margin-bottom:12px}
-.modal-warn{border-left:3px solid var(--primary);padding:12px 14px;background:var(--soft);border-radius:0 12px 12px 0;
-  font-size:12px;font-weight:600;color:var(--text);line-height:1.5;margin-bottom:16px}
+.modal-row span:first-child{color:var(--muted)}
+.modal-warn{border-left:3px solid var(--ac);padding:12px 14px;background:var(--ac-soft);border-radius:0 12px 12px 0;font-size:12px;font-weight:600;line-height:1.5;margin-bottom:14px}
 .modal-actions{display:flex;gap:10px}
-.modal-actions .btn{flex:1}
-.modal-actions .btn-ghost{border:1px solid var(--border)}
-.modal-actions .btn-refund{background:var(--primary);color:#fff}
-
-@media (min-width:520px){
-  .modal-bg{align-items:center}
-  .modal{border-radius:20px}
-}
-
-.modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.55);display:none;align-items:center;justify-content:center;z-index:80;padding:16px;}
-.modal-card{background:var(--card);border:1px solid var(--border);border-radius:16px;padding:16px;width:100%;}
+.modal input[type=search]{width:100%;padding:12px 14px;border-radius:14px;border:1px solid var(--line);background:var(--card-2);color:var(--text);font:inherit;margin-bottom:10px}
+.opt{display:flex;justify-content:space-between;align-items:center;gap:10px;text-align:left}
+.opt small{display:block;color:var(--muted);font-weight:600;font-size:11.5px;margin-top:2px}
+.toast-pop{position:fixed;left:50%;bottom:calc(24px + env(safe-area-inset-bottom));transform:translateX(-50%) translateY(140%);z-index:9999;max-width:min(420px,92vw);padding:13px 18px;border-radius:14px;font-size:13.5px;font-weight:700;line-height:1.4;box-shadow:var(--shadow);background:var(--card);color:var(--text);border:1px solid var(--line);transition:transform .28s ease,opacity .28s ease;opacity:0;pointer-events:none}
+.toast-pop.on{transform:translateX(-50%) translateY(0);opacity:1}
+.toast-pop.ok{border-color:var(--ok-line)}.toast-pop.err{border-color:var(--bad)}
+@media(min-width:520px){.modal-bg{align-items:center}}
+@media(max-width:360px){.national-num{font-size:25px}.n3-time{font-size:28px}.n3-grid{grid-template-columns:1fr}}
+@media(prefers-reduced-motion:reduce){.n3-live::before,.n3-live::after,.pill.live::before{animation:none}.n3-btn,.back-button{transition:none}}
 </style>
 </head>
 <body>
 <header class="header">
-  <a class="back" href="mj-sms-history.html?view=rent" aria-label="Back"><i class="fa-solid fa-arrow-left"></i></a>
-  <h1>Rental inbox</h1>
+  <a class="back-button" href="mj-sms-history.html?view=rent" aria-label="Back"><i class="fa-solid fa-arrow-left"></i></a>
+  <h1 class="page-title">Rental inbox</h1>
+  <span class="otp-tag" id="statusBadge">Active</span>
 </header>
-<main class="main" id="main"><div class="empty">Loading…</div></main>
+<main class="main-content" id="main"><div class="empty">Loading…</div></main>
 
 <div class="modal-bg" id="refundModal" role="dialog" aria-modal="true">
   <div class="modal">
@@ -233,12 +144,28 @@ h1{font-size:17px;font-weight:800;letter-spacing:-.02em}
       <div class="modal-row"><span>Service</span><span id="rfService">—</span></div>
       <div class="modal-row"><span>Back to wallet</span><span id="rfRefundAmt">If approved</span></div>
     </div>
-    <p class="modal-note">If GotSMS approves the refund for the original rental and every added service, MJ HUB returns the full amount you paid for this rental, including paid add-ons and plan changes, to your wallet. The number will be retired.</p>
+    <p class="note">If GotSMS approves the refund for the original rental and every added service, MJ HUB returns the full amount you paid for this rental, including paid add-ons and plan changes, to your wallet. The number will be retired.</p>
     <div class="modal-warn">Any SMS sent to this number afterwards will not reach you, and the codes it already received stay in Messages but the number cannot be reclaimed.</div>
     <div class="modal-actions">
-      <button type="button" class="btn btn-ghost" id="rfCancel">Cancel</button>
-      <button type="button" class="btn btn-refund" id="rfConfirm">Refund</button>
+      <button type="button" class="n3-btn n3-ghost" id="rfCancel">Cancel</button>
+      <button type="button" class="n3-btn n3-primary" id="rfConfirm">Refund</button>
     </div>
+  </div>
+</div>
+<div class="modal-bg" id="addSvcModal" role="dialog" aria-modal="true">
+  <div class="modal">
+    <h3><span>Add a service</span><button type="button" class="n3-btn n3-ghost" id="addSvcClose" style="width:auto;padding:6px 12px">✕</button></h3>
+    <p class="note">Add another service to the same number. A one-time fee applies, and availability is checked before the service is added.</p>
+    <input type="search" id="addSvcSearch" placeholder="Search services…">
+    <div id="addSvcList" class="n3-stack" style="max-height:40vh;overflow:auto"></div>
+    <p class="note" id="addSvcHint" style="margin-top:10px"></p>
+  </div>
+</div>
+<div class="modal-bg" id="planModal" role="dialog" aria-modal="true">
+  <div class="modal">
+    <h3><span>Switch plan</span><button type="button" class="n3-btn n3-ghost" id="planClose" style="width:auto;padding:6px 12px">✕</button></h3>
+    <p class="note">Move from hourly to daily (or other available plans). The new period is charged now and starts when the current paid period ends.</p>
+    <div id="planList" class="n3-stack"></div>
   </div>
 </div>
 
@@ -254,22 +181,28 @@ h1{font-size:17px;font-weight:800;letter-spacing:-.02em}
   let rent = null, pollTimer = null, cdTimer = null, renewBusy = false, hasReceivedCode = false;
 
   function relTime(d){
-  try{
-    var t=new Date(d).getTime(); if(!t) return '';
-    var sec=Math.round((Date.now()-t)/1000);
-    if(sec<60) return 'Just now';
-    if(sec<3600) return Math.floor(sec/60)+' min ago';
-    if(sec<86400) return Math.floor(sec/3600)+' hour'+(Math.floor(sec/3600)===1?'':'s')+' ago';
-    if(sec<604800) return Math.floor(sec/86400)+' day'+(Math.floor(sec/86400)===1?'':'s')+' ago';
-    return new Date(t).toLocaleDateString();
-  }catch(_){return '';}
-}
-function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g,function(c){return({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c];}); }
+    try{
+      var t=new Date(d).getTime(); if(!t) return '';
+      var sec=Math.round((Date.now()-t)/1000);
+      if(sec<60) return 'Just now';
+      if(sec<3600) return Math.floor(sec/60)+' min ago';
+      if(sec<86400) return Math.floor(sec/3600)+' hour'+(Math.floor(sec/3600)===1?'':'s')+' ago';
+      if(sec<604800) return Math.floor(sec/86400)+' day'+(Math.floor(sec/86400)===1?'':'s')+' ago';
+      return new Date(t).toLocaleDateString();
+    }catch(_){return '';}
+  }
+  function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g,function(c){return({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c];}); }
+  function fmtNational(d){ return d.length===10 ? d.slice(0,3)+'-'+d.slice(3,6)+'-'+d.slice(6) : d; }
   function fmtPhone(p){
     var d = String(p||'').replace(/\D/g,'');
-    if(d.length===11 && d[0]==='1') return '+1 '+d.slice(1,4)+'-'+d.slice(4,7)+'-'+d.slice(7);
-    if(d.length===10) return '+1 '+d.slice(0,3)+'-'+d.slice(3,6)+'-'+d.slice(6);
+    if(d.length===11 && d[0]==='1') return '+1 '+fmtNational(d.slice(1));
+    if(d.length===10) return '+1 '+fmtNational(d);
     return p || '—';
+  }
+  function splitPhone(p){
+    var d = String(p||'').replace(/\D/g,'');
+    if(d.length===11 && d[0]==='1') d = d.slice(1);
+    return { dial: d.length===10 ? '+1' : '', digits: d, shown: d ? fmtNational(d) : '—' };
   }
   async function headers(){
     const { data: { session } } = await sb.auth.getSession();
@@ -279,34 +212,27 @@ function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g,function(c){retu
   async function api(action, opts){
     opts = opts || {};
     var h = await headers(); if(!h) return { success:false, message:'Not signed in' };
-    if(opts.body && !h['Content-Type']) h['Content-Type']='application/json';
     var url = '/api/sms-bus?action=gotsms_'+action + (opts.query ? '&'+opts.query : '');
     var r = await fetch(url, { method: opts.method||'GET', headers: h, body: opts.body ? JSON.stringify(opts.body) : undefined });
     try { return await r.json(); } catch(e){ return { success:false, message:'Bad response' }; }
   }
   function setFlash(msg, ok){
     var el = document.getElementById('flash');
-    if(el){
-      el.textContent = msg||'';
-      el.className = 'flash '+(ok?'ok':'err');
-    }
+    if(el){ el.textContent = msg||''; el.className = 'flash '+(ok?'ok':'err'); }
     var t = document.getElementById('toastPop');
-    if(!t){
-      t = document.createElement('div');
-      t.id = 'toastPop';
-      t.className = 'toast-pop';
-      document.body.appendChild(t);
-    }
+    if(!t){ t = document.createElement('div'); t.id = 'toastPop'; document.body.appendChild(t); }
     t.textContent = msg||'';
     t.className = 'toast-pop on '+(ok?'ok':'err');
     clearTimeout(window.__toastT);
     window.__toastT = setTimeout(function(){ t.classList.remove('on'); }, 3200);
   }
+  function showModal(id){ var el=document.getElementById(id); if(el) el.classList.add('on'); }
+  function hideModal(id){ var el=document.getElementById(id); if(el) el.classList.remove('on'); }
 
   function render(){
     var main = document.getElementById('main');
     if(!rent){
-      main.innerHTML = '<div class="empty">Rental not found for your account.<br><a href="mj-sms-history.html?view=rent" style="color:var(--primary)">Back to history</a></div>';
+      main.innerHTML = '<div class="empty">Rental not found for your account.<br><a href="mj-sms-history.html?view=rent">Back to history</a></div>';
       return;
     }
     var svc = (rent.service && rent.service.name) || rent.service_name || 'USA rental';
@@ -329,59 +255,58 @@ function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g,function(c){retu
     var tillMs = rent.active_till ? new Date(rent.active_till).getTime() : 0;
     var liveByTime = !tillMs || (tillMs > Date.now());
     var deadStatus = ['refunded','cancelled','canceled','expired','finished','ended'].indexOf(status) >= 0;
-    var active = !rent.refunded && !deadStatus && liveByTime && status !== 'refunded';
-    // Once first code arrives, refund is no longer available
-    var canCancel = active && !hasReceivedCode && !rent.refunded;
+    var active = !rent.refunded && !deadStatus && liveByTime;
+    var canCancel = active && !hasReceivedCode;
     var autoOn = !!(rent.auto_renew || rent.renewal || rent.is_auto_renew);
-    var phone = fmtPhone(rent.phone || rent.number);
+    var ph = splitPhone(rent.phone || rent.number);
+    var paid = Math.round(Number(rent.price_ngn||rent.price||0));
+    var terminal = ['refunded','cancelled','canceled'].indexOf(status)>=0 || rent.refunded;
+
+    var badge = document.getElementById('statusBadge');
+    if(badge){ badge.textContent = active?'Active':'Ended'; badge.className = 'otp-tag'+(active?'':' ended'); }
 
     main.innerHTML =
-      '<div class="hero">'+
-        '<div class="hero-top">'+
-          '<div>'+
-            '<div class="phone-row"><span class="phone" id="phoneEl">'+esc(phone)+'</span>'+
-              '<button type="button" class="copy-icon" id="btnCopy" title="Copy number"><i class="fa-regular fa-copy"></i></button></div>'+
-            '<div class="svc">'+esc(svc)+'</div>'+'<div class="svc-meta" id="svcMeta">'+(dur?'<span class="chip-mini">'+esc(dur)+'</span>':'')+(carrier?'<span class="chip-mini">'+esc(carrier)+'</span>':'')+(area?'<span class="chip-mini">Area '+esc(area)+'</span>':'')+'</div>'+
-          '</div>'+
-          '<span class="badge dot '+(active?'':'expired')+'" id="statusBadge">'+(active?'Active':'Ended')+'</span>'+
+      '<div class="n3">'+
+        '<div class="n3-state"><div class="n3-live'+(active?'':' off')+'"><i class="fa-solid '+(active?'fa-mobile-screen':'fa-power-off')+'"></i></div>'+
+          '<div><div class="n3-st" id="stTitle">'+(active?'Rental active':'Rental ended')+'</div>'+
+          '<div class="n3-ss">'+(active?'Codes sent to this number show up in the inbox below the moment they arrive.':'This rental is no longer active. Messages it received stay in the inbox.')+'</div></div></div>'+
+        '<div class="n3-card n3-num">'+
+          '<div class="n3-lab">Your number</div>'+
+          '<div class="n3-phone">'+(ph.dial?'<span class="dial-code">'+ph.dial+'</span>':'')+'<div class="national-num" id="phoneEl">'+esc(ph.shown)+'</div></div>'+
+          '<button type="button" class="n3-btn n3-soft n3-copy" id="btnCopy"><i class="fa-regular fa-copy"></i> Copy number</button>'+
+          (ph.dial?'<div class="phone-hint">Copy uses the number only, without the country code</div>':'')+
         '</div>'+
-        '<div class="stats">'+
-          '<div class="stat"><div class="lbl">Time remaining</div><div class="val" id="cd">—</div><div class="sub" id="cdSub">Until expiry</div></div>'+
-          '<div class="stat"><div class="lbl">Last code</div><div class="val" id="lastCode" style="font-size:18px;letter-spacing:.08em">—</div><div class="sub" id="lastCodeSub">From SMS inbox</div></div>'+
+        '<div class="n3-grid">'+
+          '<div class="n3-card"><div class="n3-lab">Service</div><div class="n3-val">'+esc(svc)+'</div>'+
+            '<div class="chips">'+(dur?'<span class="chip">'+esc(dur)+'</span>':'')+(carrier?'<span class="chip">'+esc(carrier)+'</span>':'')+(area?'<span class="chip">Area '+esc(area)+'</span>':'')+'</div></div>'+
+          '<div class="n3-card"><div class="n3-lab">Last code</div><div class="n3-val ac" id="lastCode">—</div><div class="n3-sub" id="lastCodeSub">From SMS inbox</div></div>'+
         '</div>'+
+        '<div class="n3-card"><div class="n3-lab">Time remaining</div><div class="n3-time" id="cd">—</div>'+
+          '<div class="n3-sub" id="cdSub">Until expiry</div>'+
+          '<div class="n3-track" id="cdTrack" aria-hidden="true" style="display:none"><div class="n3-bar" id="cdBar"></div></div></div>'+
         (active ?
-          '<div class="toggle-card">'+
-            '<div><div class="t-title">Auto-renew</div><div class="t-hint" id="autoRenewHint">'+
-            (function(){
-              var p = Math.round(Number(rent.price_ngn||rent.price||0));
-              if(p>0) return 'When this period ends, ₦'+p.toLocaleString()+' is charged from your wallet (same as this rental). Requires enough balance.';
-              return 'Renew automatically when this period ends. Same wallet price as this rental. Requires enough balance.';
-            })()+
-          '</div></div>'+
-            '<label class="switch"><input type="checkbox" id="autoRenew" '+(autoOn?'checked':'')+'><span class="slider"></span></label>'+
-          '</div>' : '')+
-        '<div class="actions">'+
-          (rent.can_wake_up !== false && active ? '<button type="button" class="btn btn-primary" id="btnWake"><i class="fa-solid fa-bolt"></i> Wake up</button>' : '')+
-          '<button type="button" class="btn btn-ghost" id="btnRefresh"><i class="fa-solid fa-rotate"></i> Refresh SMS</button>'+
+          '<div class="n3-card toggle"><div><div class="t-title">Auto-renew</div><div class="t-hint" id="autoRenewHint">'+
+            (paid>0 ? 'When this period ends, ₦'+paid.toLocaleString()+' is charged from your wallet (same as this rental). Requires enough balance.' : 'Renew automatically when this period ends. Same wallet price as this rental. Requires enough balance.')+
+          '</div></div><label class="switch"><input type="checkbox" id="autoRenew" '+(autoOn?'checked':'')+'><span class="slider"></span></label></div>' : '')+
+        '<div class="n3-two">'+
+          (rent.can_wake_up !== false && active ? '<button type="button" class="n3-btn n3-primary" id="btnWake"><i class="fa-solid fa-bolt"></i> Wake up</button>' : '')+
+          '<button type="button" class="n3-btn n3-ghost" id="btnRefresh" style="'+(rent.can_wake_up !== false && active ? '' : 'grid-column:1/-1')+'"><i class="fa-solid fa-rotate"></i> Refresh SMS</button>'+
         '</div>'+
-        (canCancel ? '<button type="button" class="btn-danger-outline" id="btnCancel"><i class="fa-solid fa-ban"></i> Refund number</button>' : '')+
-        (canCancel ? '' : (active && hasReceivedCode ? '<p class="refund-locked">Refund unavailable — a message was already received on this number.</p>' : ''))+
+        (terminal ? '' : '<div class="n3-stack" id="extraRentActions">'+
+          '<button type="button" class="n3-btn n3-ghost" id="btnAddService"><i class="fa-solid fa-plus"></i> Add service to this number</button>'+
+          '<button type="button" class="n3-btn n3-ghost" id="btnSwitchPlan"><i class="fa-solid fa-arrow-right-arrow-left"></i> Switch plan</button></div>')+
+        (canCancel ? '<button type="button" class="n3-btn n3-danger" id="btnCancel"><i class="fa-solid fa-ban"></i> Refund number</button>' : '')+
+        (active && hasReceivedCode ? '<p class="refund-locked">Refund unavailable — a message was already received on this number.</p>' : '')+
         '<div class="flash" id="flash"></div>'+
-      '</div>'+
-      '<div class="inbox-card">'+
-        '<div class="inbox-head">'+
-          '<div class="inbox-heading"><h2>SMS inbox</h2><p class="inbox-subtitle">Messages for this number, including added services</p></div>'+
-          '<div class="inbox-head-right"><span class="message-count" id="messageCount">0 messages</span><span class="live">Live</span></div>'+
-        '</div>'+
-        '<div id="inbox"><div class="empty">Loading messages…</div></div>'+
+        (active ? '<div class="n3-tip"><i class="fa-solid fa-triangle-exclamation"></i><div><b>Important activation advice</b><span>Use a VPN from the USA when verifying with this number. If no SMS arrives, tap Wake up first, then request the code in the app.</span></div></div>' : '')+
+        '<div class="inbox-head"><div><h2>SMS inbox</h2><p>Messages for this number, including added services</p></div>'+
+          '<div class="pills"><span class="pill" id="messageCount">0 messages</span><span class="pill live">Live</span></div></div>'+
+        '<div class="n3" id="inbox"><div class="empty">Loading messages…</div></div>'+
       '</div>';
 
     document.getElementById('btnCopy').onclick = function(){
-      var raw = String(rent.phone||'').replace(/\D/g,'') || rent.phone;
-      navigator.clipboard.writeText(raw).then(function(){
+      navigator.clipboard.writeText(ph.digits || String(rent.phone||'')).then(function(){
         setFlash('Number copied', true);
-        var b=document.getElementById('btnCopy');
-        if(b){ b.innerHTML='<i class="fa-solid fa-check"></i>'; setTimeout(function(){ b.innerHTML='<i class="fa-regular fa-copy"></i>'; }, 1200); }
       }).catch(function(){ setFlash('Could not copy', false); });
     };
     var wake = document.getElementById('btnWake');
@@ -402,7 +327,6 @@ function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g,function(c){retu
       btn.classList.add('is-busy'); btn.disabled = true;
       var prev = btn.innerHTML;
       btn.innerHTML = '<i class="fa-solid fa-spinner spin"></i> Refreshing…';
-      setFlash('Refreshing inbox…', true);
       await loadMessages();
       btn.classList.remove('is-busy'); btn.disabled = false; btn.innerHTML = prev;
       setFlash(hasReceivedCode ? 'Inbox updated' : 'Inbox refreshed — no SMS yet', true);
@@ -417,54 +341,22 @@ function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g,function(c){retu
       if(!j.success){
         ar.checked = !want;
         setFlash(j.message || 'Could not update auto-renew', false);
-         ar.checked = !want; // revert UI if server rejected (e.g. insufficient balance)
       } else {
         rent.auto_renew = want;
-         if(j.data && j.data.renew_price_ngn) rent.price_ngn = j.data.renew_price_ngn;
-         var hint = document.getElementById('autoRenewHint');
-         if(hint && rent.price_ngn){
-           hint.textContent = want
-             ? ('When this period ends, ₦'+Math.round(Number(rent.price_ngn)).toLocaleString()+' is charged from your wallet (same as this rental). Requires enough balance.')
-             : 'Auto-renew is off.';
-         }
-         setFlash(j.message || (want ? 'Auto-renew is on' : 'Auto-renew is off'), true);
+        if(j.data && j.data.renew_price_ngn) rent.price_ngn = j.data.renew_price_ngn;
+        var hint = document.getElementById('autoRenewHint');
+        if(hint && rent.price_ngn){
+          hint.textContent = want
+            ? ('When this period ends, ₦'+Math.round(Number(rent.price_ngn)).toLocaleString()+' is charged from your wallet (same as this rental). Requires enough balance.')
+            : 'Auto-renew is off.';
+        }
+        setFlash(j.message || (want ? 'Auto-renew is on' : 'Auto-renew is off'), true);
       }
     };
-    
-    // Extra: Add service + switch rental plan
-    (function wireExtraActions(){
-      var host = document.getElementById('extraRentActions');
-      if(!host){
-        var cancelBtn = document.getElementById('btnCancel');
-        host = document.createElement('div');
-        host.id = 'extraRentActions';
-        host.style.cssText = 'display:flex;flex-direction:column;gap:8px;margin-top:10px;';
-        var hero = document.querySelector('.hero');
-        var flash = document.getElementById('flash');
-        if (hero && flash && flash.parentNode === hero) hero.insertBefore(host, flash);
-        else if (hero) hero.appendChild(host);
-        else if (cancelBtn && cancelBtn.parentNode) cancelBtn.parentNode.insertBefore(host, cancelBtn);
-        else document.getElementById('main').appendChild(host);
-      }
-      host.innerHTML = '';
-      var st = String(rent.status||'active').toLowerCase();
-      var terminal = ['refunded','cancelled','canceled'].indexOf(st)>=0;
-      if(!terminal){
-        var b1 = document.createElement('button');
-        b1.type='button'; b1.className='btn btn-ghost'; b1.id='btnAddService';
-        b1.innerHTML='<i class="fa-solid fa-plus"></i> Add service to this number';
-        b1.onclick = openAddServiceModal;
-        host.appendChild(b1);
-        var b2 = document.createElement('button');
-        b2.type='button'; b2.className='btn btn-ghost'; b2.id='btnSwitchPlan';
-        b2.innerHTML='<i class="fa-solid fa-arrow-right-arrow-left"></i> Switch plan';
-        b2.onclick = openPlanModal;
-        host.appendChild(b2);
-      }
-    })();
-
+    var b1 = document.getElementById('btnAddService'); if(b1) b1.onclick = openAddServiceModal;
+    var b2 = document.getElementById('btnSwitchPlan'); if(b2) b2.onclick = openPlanModal;
     var cancel = document.getElementById('btnCancel');
-    if(cancel) cancel.onclick = function(){ openRefundModal(); };
+    if(cancel) cancel.onclick = openRefundModal;
 
     startCountdown();
     loadMessages();
@@ -473,26 +365,26 @@ function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g,function(c){retu
   function openRefundModal(){
     document.getElementById('rfPhone').textContent = fmtPhone(rent.phone);
     document.getElementById('rfService').textContent = (rent.service && rent.service.name) || rent.service_name || 'USA rental';
-    var amtEl = document.getElementById('rfRefundAmt');
     var paid = Number(rent.price_ngn || rent.price || 0);
-    if(amtEl) amtEl.textContent = paid > 0 ? ('₦' + paid.toLocaleString()) : 'If approved';
-    var conf = document.getElementById('rfConfirm');
-    if(conf) conf.textContent = paid > 0 ? ('Refund ₦' + paid.toLocaleString()) : 'Refund';
-    document.getElementById('refundModal').classList.add('on');
+    document.getElementById('rfRefundAmt').textContent = paid > 0 ? ('₦' + paid.toLocaleString()) : 'If approved';
+    document.getElementById('rfConfirm').textContent = paid > 0 ? ('Refund ₦' + paid.toLocaleString()) : 'Refund';
+    showModal('refundModal');
   }
-  document.getElementById('rfCancel').onclick = function(){ document.getElementById('refundModal').classList.remove('on'); };
-  document.getElementById('refundModal').addEventListener('click', function(e){
-    if(e.target === this) this.classList.remove('on');
+  document.getElementById('rfCancel').onclick = function(){ hideModal('refundModal'); };
+  ['refundModal','addSvcModal','planModal'].forEach(function(id){
+    var m = document.getElementById(id);
+    m.addEventListener('click', function(e){ if(e.target === m) hideModal(id); });
   });
+  document.getElementById('addSvcClose').onclick = function(){ hideModal('addSvcModal'); };
+  document.getElementById('planClose').onclick = function(){ hideModal('planModal'); };
   document.getElementById('rfConfirm').onclick = async function(){
-    if (this.disabled) return;
+    var btn = this;
+    if(btn.disabled) return;
     if(hasReceivedCode){
-      document.getElementById('refundModal').classList.remove('on');
+      hideModal('refundModal');
       setFlash('Refund unavailable — a message was already received on this number.', false);
       return;
     }
-    var btn = document.getElementById('rfConfirm');
-    if(btn.disabled) return;
     btn.disabled = true;
     var prev = btn.textContent;
     btn.textContent = 'Refunding…';
@@ -505,14 +397,14 @@ function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g,function(c){retu
       btn.disabled = false;
       btn.textContent = prev;
     }
-    document.getElementById('refundModal').classList.remove('on');
+    hideModal('refundModal');
     if(j && j.success){
       rent.status = 'refunded'; rent.refunded = true;
-      setFlash('Canceled', true);
       render();
+      setFlash('Canceled', true);
       setTimeout(function(){ location.href = 'mj-sms-usa-rent.html'; }, 2200);
     } else {
-      setFlash(j.message || 'Refund not available for this number', false);
+      setFlash((j && j.message) || 'Refund not available for this number', false);
     }
   };
 
@@ -520,25 +412,35 @@ function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g,function(c){retu
     if(cdTimer) clearTimeout(cdTimer);
     var expiry = rent && (rent.active_till || rent.online_till || rent.activeTill || rent.expires_at);
     var till = expiry ? new Date(expiry).getTime() : 0;
-    // The rental service may provide remaining time in seconds; use it if the timestamp
-    // is absent so the timer remains visible on normalized/stored rental data.
     if (!till && rent && rent.code && !isNaN(Date.parse(String(rent.code)))) till = new Date(String(rent.code)).getTime();
     if (!till && rent) {
       var secondsLeft = Number(rent.online_time_left_seconds || rent.time_left_seconds || 0);
       if (secondsLeft > 0) till = Date.now() + secondsLeft * 1000;
     }
+    // Progress bar only when we know when the rental started
+    var startRaw = rent && (rent.created_at || rent.started_at || rent.activated_at);
+    var start = startRaw ? new Date(startRaw).getTime() : 0;
+    var total = (start && till > start) ? (till - start) : 0;
+    var track = document.getElementById('cdTrack');
+    if(track && total) track.style.display = '';
     function tick(){
       var el = document.getElementById('cd');
       if(!el) return;
       if(!till){ el.textContent = '—'; return; }
       var left = till - Date.now();
-      if(left <= 0){ el.textContent = 'Expired'; var b=document.getElementById('statusBadge'); if(b){ b.textContent='Ended'; b.classList.add('expired'); } return; }
+      var bar = document.getElementById('cdBar');
+      if(bar && total) bar.style.transform = 'scaleX(' + Math.max(0, Math.min(1, left/total)) + ')';
+      if(left <= 0){
+        el.textContent = 'Expired';
+        var b = document.getElementById('statusBadge'); if(b){ b.textContent='Ended'; b.classList.add('ended'); }
+        var st = document.getElementById('stTitle'); if(st) st.textContent = 'Rental ended';
+        return;
+      }
       var d = Math.floor(left/86400000);
       var h = Math.floor((left%86400000)/3600000);
       var m = Math.floor((left%3600000)/60000);
       var s = Math.floor((left%60000)/1000);
-      var hh=String(h).padStart(2,'0'), mm=String(m).padStart(2,'0'), ss=String(s).padStart(2,'0');
-      el.textContent = (d > 0 ? (d+'d ') : '') + hh+':'+mm+':'+ss;
+      el.textContent = (d > 0 ? (d+'d ') : '') + String(h).padStart(2,'0')+':'+String(m).padStart(2,'0')+':'+String(s).padStart(2,'0');
       cdTimer = setTimeout(tick, 1000);
     }
     tick();
@@ -552,13 +454,8 @@ function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g,function(c){retu
     var countEl = document.getElementById('messageCount');
     if (countEl) countEl.textContent = list.length + (list.length === 1 ? ' message' : ' messages');
     var hadCode = hasReceivedCode;
-    hasReceivedCode = list.some(function(m){ return !!(m && m.code); }) || list.length > 0 && list.some(function(m){ return !!(m && (m.code || m.body)); });
-    // Prefer explicit code field; also treat any inbound SMS as "used" for refund lock
-    hasReceivedCode = list.some(function(m){ return !!(m && String(m.code||'').trim()); });
-    if(!hasReceivedCode && list.length){
-      // body-only messages still count as received traffic for refund policy
-      hasReceivedCode = list.some(function(m){ return !!(m && String(m.body||'').trim()); });
-    }
+    // Any inbound SMS (code or body) counts as "used" for the refund lock
+    hasReceivedCode = list.some(function(m){ return !!(m && (String(m.code||'').trim() || String(m.body||'').trim())); });
     var last = document.getElementById('lastCode');
     var lastSub = document.getElementById('lastCodeSub');
     var withCode = list.filter(function(m){ return m && m.code; })[0];
@@ -566,19 +463,14 @@ function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g,function(c){retu
       last.textContent = withCode.code;
       if(lastSub) lastSub.textContent = withCode.received_at ? new Date(withCode.received_at).toLocaleString() : 'Latest';
     }
-    // Hide refund button as soon as first code/SMS arrives
     if(hasReceivedCode){
       try{ localStorage.setItem('mjhub_rent_sms_'+rentId, '1'); }catch(e){}
     }
     if(hasReceivedCode && !hadCode){
       // Tell history page / DB this rental got SMS (for Completed filter after timer ends)
-      try{
-        api('mark_sms', { method:'POST', body:{ rent_id: rentId } }).catch(function(){});
-      }catch(e){}
+      try{ api('mark_sms', { method:'POST', body:{ rent_id: rentId } }).catch(function(){}); }catch(e){}
       var cancelBtn = document.getElementById('btnCancel');
       if(cancelBtn) cancelBtn.remove();
-      var hint = document.querySelector('.hint');
-      if(hint) hint.remove();
       if(!document.querySelector('.refund-locked')){
         var lock = document.createElement('p');
         lock.className = 'refund-locked';
@@ -588,11 +480,10 @@ function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g,function(c){retu
       }
     }
     if(!list.length){
-      box.innerHTML = '<div class="empty">No SMS yet.<br>Wake the number if needed, then request the code in the app.</div>';
+      box.innerHTML = '<div class="n3-card empty">No SMS yet.<br>Wake the number if needed, then request the code in the app.</div>';
       return;
     }
     var svcName=(rent&&rent.service&&rent.service.name)||(rent&&rent.service_name)||'SMS';
-    var phoneShow=fmtPhone((rent&&(rent.phone||rent.number))||'');
     box.innerHTML = list.map(function(m){
       var when=m.received_at?new Date(m.received_at):null;
       var whenStr=when?when.toLocaleString():'';
@@ -600,58 +491,43 @@ function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g,function(c){retu
       var from=m.from||m.sender||m.originator||'—';
       var code=m.code?String(m.code).trim():'';
       var body=m.body?String(m.body).trim():'';
+      var digits=code.split('').map(function(ch){return '<span>'+esc(ch)+'</span>';}).join('');
       return '<div class="msg">'+
         '<div class="msg-top">'+
-          '<div><div class="msg-k">Service</div><div class="msg-v">'+esc(m.service_name||svcName)+'</div></div>'+
-          '<div><div class="msg-k">From</div><div class="msg-v">'+esc(from)+'</div></div>'+
-          '<div class="msg-phone"><div class="msg-k">Phone</div><div class="msg-v">'+esc(phoneShow)+'</div></div>'+
+          '<div><div class="n3-lab">Service</div><div class="msg-v">'+esc(m.service_name||svcName)+'</div></div>'+
+          '<div><div class="n3-lab">From</div><div class="msg-v">'+esc(from)+'</div></div>'+
         '</div>'+
-        (body?'<div class="msg-body">'+esc(body)+(code?'':' <button type="button" class="copy-inline" data-c="'+esc(body)+'" title="Copy message">⎘</button>')+'</div>':'')+
-        '<div class="msg-foot">'+
-          '<div>'+
-            '<div class="msg-k">Code</div>'+
-            (code
-              ? '<div class="code-pill"><span class="code">'+esc(code)+'</span><button type="button" class="copy-code" data-c="'+esc(code)+'">Copy</button></div>'
-              : '<div class="msg-v">—</div>')+
-          '</div>'+
-          (whenStr
-            ? '<div class="when-block"><div class="when-label">Received at</div>'+(whenRel?'<div class="when-rel">'+esc(whenRel)+'</div>':'')+'<div class="when">'+esc(whenStr)+'</div></div>'
-            : '')+
-        '</div>'+
+        (body?'<div class="msg-body">'+esc(body)+'</div>':'')+
+        (code
+          ? '<div class="msg-code"><div class="n3-lab">Verification code</div><div class="n3-digits">'+digits+'</div>'+
+            '<button type="button" class="n3-btn ok" data-c="'+esc(code)+'"><i class="fa-solid fa-copy"></i> Copy code</button></div>'
+          : (body?'<button type="button" class="n3-btn n3-ghost" data-c="'+esc(body)+'"><i class="fa-regular fa-copy"></i> Copy message</button>':''))+
+        (whenStr?'<div class="msg-time"><span>Received</span><span><b>'+esc(whenRel)+'</b> · '+esc(whenStr)+'</span></div>':'')+
       '</div>';
     }).join('');
     box.querySelectorAll('[data-c]').forEach(function(b){
-      b.onclick = function(){ navigator.clipboard.writeText(b.getAttribute('data-c')).then(function(){ setFlash('Code copied', true); }).catch(function(){}); };
+      b.onclick = function(){ navigator.clipboard.writeText(b.getAttribute('data-c')).then(function(){ setFlash('Copied', true); }).catch(function(){}); };
     });
   }
 
-  function showModal(id) {
-    var el = document.getElementById(id);
-    if (el) { el.style.display = 'flex'; el.classList.add('on'); }
-  }
-  function hideModal(id) {
-    var el = document.getElementById(id);
-    if (el) { el.classList.remove('on'); el.style.display = 'none'; }
-  }
   async function openAddServiceModal() {
     var list = document.getElementById('addSvcList');
     var hint = document.getElementById('addSvcHint');
-    if (list) list.innerHTML = '<div class="empty">Loading available services…</div>';
-    if (hint) hint.textContent = '';
+    list.innerHTML = '<div class="empty">Loading available services…</div>';
+    hint.textContent = '';
     showModal('addSvcModal');
     var j = await api('addable_services', { query: 'rent_id=' + encodeURIComponent(rentId) });
     if (!j.success || !Array.isArray(j.data)) {
-      if (list) list.innerHTML = '<div class="empty">' + esc(j.message || 'Could not load services.') + '</div>';
+      list.innerHTML = '<div class="empty">' + esc(j.message || 'Could not load services.') + '</div>';
       return;
     }
     function draw(filter) {
-      if (!list) return;
       var q = String(filter || '').toLowerCase().trim();
       var rows = j.data.filter(function(s) { return (!q || String(s.name || '').toLowerCase().includes(q)); });
       list.innerHTML = rows.length ? rows.map(function(s) {
         var price = Number(s.price_ngn || 0);
-        return '<button type="button" class="btn btn-ghost" data-service-id="' + esc(s.service_id) + '" ' + (s.is_available === false ? 'disabled' : '') + ' style="display:flex;justify-content:space-between;align-items:center;gap:10px;text-align:left;">' +
-          '<span>' + esc(s.name || 'Service') + '<small style="display:block;color:var(--muted)">' + (s.is_available === false ? 'Unavailable' : 'Add to same number') + '</small></span>' +
+        return '<button type="button" class="n3-btn n3-ghost opt" data-service-id="' + esc(s.service_id) + '" ' + (s.is_available === false ? 'disabled' : '') + '>' +
+          '<span>' + esc(s.name || 'Service') + '<small>' + (s.is_available === false ? 'Unavailable' : 'Add to same number') + '</small></span>' +
           '<strong>' + (price > 0 ? '₦' + price.toLocaleString() : '—') + '</strong></button>';
       }).join('') : '<div class="empty">No matching services available.</div>';
       list.querySelectorAll('[data-service-id]').forEach(function(btn) {
@@ -673,15 +549,15 @@ function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g,function(c){retu
     }
     draw('');
     var search = document.getElementById('addSvcSearch');
-    if (search) search.oninput = function() { draw(search.value); };
-    if (hint) hint.textContent = 'Available services for this number are shown here.';
+    search.value = '';
+    search.oninput = function() { draw(search.value); };
+    hint.textContent = 'Available services for this number are shown here.';
   }
+
   async function openPlanModal() {
     var list = document.getElementById('planList');
-    if (!list) return;
     list.innerHTML = '<div class="empty">Loading available plans…</div>';
     showModal('planModal');
-    // Refresh the rental so the available plan changes and prices are current.
     var j = await api('rents', { query:'status=active' });
     var fresh = (j.data || []).find(function(r) { return String(r.id) === String(rentId); });
     if (!fresh) {
@@ -698,9 +574,9 @@ function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g,function(c){retu
       var price = Number(p.price_ngn || p.sell_price_ngn || 0);
       var label = p.duration_translation || ((p.duration_in_type || '') + ' ' + (p.duration_type || 'plan'));
       var unavailable = p.is_available === false || !(price > 0);
-      return '<button type="button" class="btn btn-ghost" data-plan-id="' + esc(p.plan_id || p.id || '') + '" ' + (unavailable ? 'disabled' : '') + ' style="display:flex;justify-content:space-between;align-items:center;gap:10px;text-align:left;">' +
-        '<span><strong>' + esc(label) + '</strong><small style="display:block;color:var(--muted)">Fresh plan charge — no credit for the previous plan</small></span>' +
-        '<strong>' + (price > 0 ? '₦' + price.toLocaleString() : 'Price unavailable in database') + '</strong></button>';
+      return '<button type="button" class="n3-btn n3-ghost opt" data-plan-id="' + esc(p.plan_id || p.id || '') + '" ' + (unavailable ? 'disabled' : '') + '>' +
+        '<span><strong>' + esc(label) + '</strong><small>Fresh plan charge — no credit for the previous plan</small></span>' +
+        '<strong>' + (price > 0 ? '₦' + price.toLocaleString() : 'Price unavailable') + '</strong></button>';
     }).join('');
     list.querySelectorAll('[data-plan-id]').forEach(function(btn) {
       btn.onclick = async function() {
@@ -718,20 +594,10 @@ function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g,function(c){retu
       };
     });
   }
-  document.addEventListener('DOMContentLoaded', function() {
-    var addClose = document.getElementById('addSvcClose');
-    if (addClose) addClose.onclick = function() { hideModal('addSvcModal'); };
-    var planClose = document.getElementById('planClose');
-    if (planClose) planClose.onclick = function() { hideModal('planModal'); };
-    ['addSvcModal','planModal'].forEach(function(id) {
-      var modal = document.getElementById(id);
-      if (modal) modal.addEventListener('click', function(e) { if (e.target === modal) hideModal(id); });
-    });
-  });
 
   async function boot(){
     if(!rentId){
-      document.getElementById('main').innerHTML = '<div class="empty">Missing rental. <a href="mj-sms-usa-rent.html" style="color:var(--primary)">Rent a number</a></div>';
+      document.getElementById('main').innerHTML = '<div class="empty">Missing rental. <a href="mj-sms-usa-rent.html">Rent a number</a></div>';
       return;
     }
     var j = await api('rents', { query: 'status=active' });
@@ -757,16 +623,16 @@ function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g,function(c){retu
             auto_renew: o.auto_renew,
             duration_translation: o.duration_translation||o.duration,
             carrier_name: o.carrier_name||o.carrier,
-            price_ngn: o.price || o.price_ngn
+            price_ngn: o.price || o.price_ngn,
+            created_at: o.created_at
           };
         } else {
           rent.service_name = rent.service_name || o.service_name;
           if(o.price||o.price_ngn) rent.price_ngn = o.price||o.price_ngn;
           if(o.service_name) rent.service = rent.service || { name: o.service_name };
           if(!rent.carrier_name && o.carrier_name) rent.carrier_name = o.carrier_name;
+          if(!rent.created_at && o.created_at) rent.created_at = o.created_at;
           if(!rent.active_till && (o.active_till || (o.code && !isNaN(Date.parse(String(o.code))) ? o.code : null))) rent.active_till = o.active_till || o.code;
-          if(!rent.price_ngn && (o.price||o.price_ngn)) rent.price_ngn = o.price||o.price_ngn;
-          // Parse chips from stored "Service · duration · carrier · Area XXX"
           if(o.service_name && String(o.service_name).indexOf('·')>=0){
             var parts=String(o.service_name).split('·').map(function(x){return x.trim();});
             if(parts[0] && (!rent.service || !rent.service.name)) rent.service = { name: parts[0] };
@@ -785,29 +651,5 @@ function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g,function(c){retu
   boot();
 })();
 </script>
-
-<div class="modal-overlay" id="addSvcModal" style="display:none;">
-  <div class="modal-card" style="max-width:420px;max-height:85vh;overflow:auto;">
-    <div class="modal-head" style="display:flex;justify-content:space-between;align-items:center;">
-      <strong>Add a service to this number</strong>
-      <button type="button" class="btn-ghost" id="addSvcClose" style="padding:6px 10px;">✕</button>
-    </div>
-    <p style="font-size:12px;color:var(--muted);margin:8px 0 12px;">Add another service to the same number. A one-time fee applies, and availability is checked before the service is added.</p>
-    <input type="search" id="addSvcSearch" placeholder="Search services…" style="width:100%;padding:10px 12px;border-radius:10px;border:1px solid var(--border);background:var(--bg);color:var(--text);margin-bottom:10px;">
-    <div id="addSvcList" style="display:flex;flex-direction:column;gap:6px;max-height:40vh;overflow:auto;"></div>
-    <p id="addSvcHint" style="font-size:11px;color:var(--muted);margin-top:10px;"></p>
-  </div>
-</div>
-<div class="modal-overlay" id="planModal" style="display:none;">
-  <div class="modal-card" style="max-width:420px;">
-    <div class="modal-head" style="display:flex;justify-content:space-between;align-items:center;">
-      <strong>Switch plan</strong>
-      <button type="button" class="btn-ghost" id="planClose" style="padding:6px 10px;">✕</button>
-    </div>
-    <p style="font-size:12px;color:var(--muted);margin:8px 0 12px;">Move from hourly to daily (or other available plans). New period is charged now; it starts when the current paid period ends.</p>
-    <div id="planList" style="display:flex;flex-direction:column;gap:8px;"></div>
-  </div>
-</div>
-
 </body>
 </html>
