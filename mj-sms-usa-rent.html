@@ -596,41 +596,39 @@ async function confirmRentAvailability(){
     if(err) err.textContent='Select a duration first.';
     return false;
   }
-  if((typeof planIsAvailable==='function' ? !planIsAvailable(selectedPlan) : (selectedPlan.is_available===false || selectedPlan.stock_status==='sold_out'))){
+  if(typeof planIsAvailable==='function' ? !planIsAvailable(selectedPlan) : (selectedPlan.is_available===false || selectedPlan.stock_status==='sold_out')){
     markPlanSoldOutInUi(selectedPlan.id);
     var rb0=document.getElementById('rentBtn');
     if(rb0){ rb0.disabled=true; rb0.textContent='Sold out'; }
-    if(err) err.textContent='This duration is sold out right now. Pick another.';
+    if(err) err.textContent='No number available for this service right now.';
     return false;
   }
   var rb=document.getElementById('rentBtn');
   if(rb){ rb.disabled=true; rb.textContent='Checking stock…'; }
   try{
-    var j=await api('plans',{query:'service_id='+encodeURIComponent(selectedService.id)+'&per_page=100&include_unavailable=1'});
+    // GotSMS docs: WITHOUT include_unavailable only plans WITH numbers in stock are returned.
+    // If our plan is missing from that list, it is sold out — block before checkout/wallet.
+    var j=await api('plans',{query:'service_id='+encodeURIComponent(selectedService.id)+'&per_page=100'});
     var list=(j&&j.data)||[];
     var fresh=list.find(function(p){ return String(p.id)===String(selectedPlan.id); });
-    if(!fresh){
+    if(!fresh || (typeof planIsAvailable==='function' ? !planIsAvailable(fresh) : fresh.is_available===false)){
       markPlanSoldOutInUi(selectedPlan.id);
       if(rb){ rb.disabled=true; rb.textContent='Sold out'; }
-      if(err) err.textContent='This duration just went out of stock. Choose another.';
+      if(err) err.textContent='No number available for this service right now.';
       return false;
     }
     var idx=plans.findIndex(function(p){ return String(p.id)===String(fresh.id); });
-    if(idx>=0) plans[idx]=Object.assign({}, plans[idx], fresh);
-    selectedPlan=Object.assign({}, selectedPlan, fresh);
-    if((typeof planIsAvailable==='function' ? !planIsAvailable(selectedPlan) : (selectedPlan.is_available===false || selectedPlan.stock_status==='sold_out'))){
-      markPlanSoldOutInUi(selectedPlan.id);
-      if(rb){ rb.disabled=true; rb.textContent='Sold out'; }
-      if(err) err.textContent='This duration is sold out right now. Pick another.';
-      return false;
-    }
+    if(idx>=0) plans[idx]=Object.assign({}, plans[idx], fresh, { is_available:true, stock_status:'available' });
+    selectedPlan=Object.assign({}, selectedPlan, fresh, { is_available:true, stock_status:'available' });
     if(rb){ rb.disabled=false; rb.textContent='Rent number'; }
     return true;
   }catch(e){
     if(rb){ rb.disabled=false; rb.textContent='Rent number'; }
-    return true; // network blip — purchase still guards before debit
+    if(err) err.textContent='Could not verify stock. Try again.';
+    return false; // do not open checkout if we cannot verify
   }
 }
+
 function markPlanSoldOutInUi(planId){
   document.querySelectorAll('#planList .plan').forEach(function(card){
     var i=Number(card.getAttribute('data-i'));
@@ -803,7 +801,21 @@ document.getElementById('purchaseCloseBtn').onclick=closePurchaseModal;
 document.getElementById('purchaseModal').addEventListener('click',function(e){
   if(e.target===this) closePurchaseModal();
 });
-document.getElementById('confirmBuyBtn').onclick=function(){ doRent(); };
+document.getElementById('confirmBuyBtn').onclick=function(){
+  var btn=document.getElementById('confirmBuyBtn');
+  if(btn){ btn.disabled=true; btn.textContent='Checking stock…'; }
+  confirmRentAvailability().then(function(ok){
+    if(!ok){
+      if(btn){ btn.disabled=false; btn.textContent='Confirm Purchase'; }
+      try{ closePurchaseModal(); }catch(e){}
+      var err=document.getElementById('rentErr');
+      if(err) err.textContent='No number available for this service right now.';
+      showRentToast('No number available for this service right now.', false);
+      return;
+    }
+    doRent();
+  });
+};
 
 function showRentToast(msg, ok){
   var t=document.getElementById('toastPop');
@@ -834,7 +846,7 @@ async function doRent(){
     document.getElementById('psErr').textContent=msg;
     if(errEl)errEl.textContent=msg;
     showRentToast(msg, false);
-    if((j.data&&j.data.out_of_stock) || /out of stock|sold out|unavailable/i.test(msg)){
+    if((j.data&&j.data.out_of_stock) || /out of stock|sold out|unavailable|no number/i.test(msg)){
       try{ if(selectedPlan&&selectedPlan.id) markPlanSoldOutInUi(selectedPlan.id); }catch(e){}
       var rbtn=document.getElementById('rentBtn');
       if(rbtn){ rbtn.disabled=true; rbtn.textContent='Sold out'; }
