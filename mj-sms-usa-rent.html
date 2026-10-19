@@ -503,11 +503,36 @@ function buildAreaOptions(){
   });
   return html;
 }
+function planIsAvailable(p){
+  if(!p) return false;
+  if(p.is_available===false || p.stock_status==='sold_out') return false;
+  if(p.admin_hidden===true) return false;
+  var st=String(p.stock_status||p.status||p.availability||'').toLowerCase();
+  if(/sold\s*out|out_of_stock|unavailable|no\s*stock/.test(st)) return false;
+  for(var k of ['stock','quantity','available_count','remaining']){
+    if(p[k]!=null && isFinite(Number(p[k])) && Number(p[k])<=0) return false;
+  }
+  return true;
+}
 function renderDetailForm(){
   var body=document.getElementById('detailBody');
-  if(!plans.length){body.innerHTML='<div class="empty">No plans in stock for this service right now.<br><span style="opacity:.7;font-size:12px">Try another service or check back shortly.</span></div>';return;}
+  // Normalize supplier flags once
+  plans=(plans||[]).map(function(p){
+    var ok=planIsAvailable(p);
+    return Object.assign({}, p, { is_available: ok, stock_status: ok ? (p.stock_status||'available') : 'sold_out' });
+  });
+  var anyInStock=plans.some(planIsAvailable);
+  if(!plans.length){
+    body.innerHTML=
+      '<div class="empty">This service is sold out on our provider right now.<br><span style="opacity:.7;font-size:12px">Try another service or check back later.</span></div>'+
+      '<div class="total"><div class="lbl">Total</div><div class="amt">—</div></div>'+
+      '<button type="button" class="btn-buy" id="rentBtn" disabled>Sold out</button>'+
+      '<div class="err" id="rentErr"></div><div class="ok" id="rentOk"></div>';
+    selectedPlan=null;
+    return;
+  }
   var planHtml=plans.map(function(p,i){
-    var available=p.is_available!==false;
+    var available=planIsAvailable(p);
     var label=p.duration_translation||(p.duration_in_type+' '+p.duration_type);
     return '<div class="plan'+(available?'':' sold-out')+'" data-i="'+i+'"'+(available?'':' aria-disabled="true" title="This duration is sold out"')+'><div class="dur">'+esc(label)+'</div><div class="price">'+fmtNgn(p.price_ngn)+'</div>'+(available?'':'<span class="stock-status">Sold out</span>')+'</div>';
   }).join('');
@@ -524,8 +549,10 @@ function renderDetailForm(){
   function syncRentButton(){
     var rb=document.getElementById('rentBtn');
     if(!rb) return;
+    var any=typeof planIsAvailable==='function' ? plans.some(planIsAvailable) : plans.some(function(p){return p&&p.is_available!==false;});
+    if(!any){ rb.disabled=true; rb.textContent='Sold out'; return; }
     if(!selectedPlan){ rb.disabled=true; rb.textContent='Select a duration'; return; }
-    if(selectedPlan.is_available===false || selectedPlan.stock_status==='sold_out'){
+    if(typeof planIsAvailable==='function' ? !planIsAvailable(selectedPlan) : (selectedPlan.is_available===false || selectedPlan.stock_status==='sold_out')){
       rb.disabled=true; rb.textContent='Sold out'; return;
     }
     rb.disabled=false; rb.textContent='Rent number';
@@ -569,7 +596,7 @@ async function confirmRentAvailability(){
     if(err) err.textContent='Select a duration first.';
     return false;
   }
-  if(selectedPlan.is_available===false || selectedPlan.stock_status==='sold_out'){
+  if((typeof planIsAvailable==='function' ? !planIsAvailable(selectedPlan) : (selectedPlan.is_available===false || selectedPlan.stock_status==='sold_out'))){
     markPlanSoldOutInUi(selectedPlan.id);
     var rb0=document.getElementById('rentBtn');
     if(rb0){ rb0.disabled=true; rb0.textContent='Sold out'; }
@@ -591,7 +618,7 @@ async function confirmRentAvailability(){
     var idx=plans.findIndex(function(p){ return String(p.id)===String(fresh.id); });
     if(idx>=0) plans[idx]=Object.assign({}, plans[idx], fresh);
     selectedPlan=Object.assign({}, selectedPlan, fresh);
-    if(selectedPlan.is_available===false || selectedPlan.stock_status==='sold_out'){
+    if((typeof planIsAvailable==='function' ? !planIsAvailable(selectedPlan) : (selectedPlan.is_available===false || selectedPlan.stock_status==='sold_out'))){
       markPlanSoldOutInUi(selectedPlan.id);
       if(rb){ rb.disabled=true; rb.textContent='Sold out'; }
       if(err) err.textContent='This duration is sold out right now. Pick another.';
