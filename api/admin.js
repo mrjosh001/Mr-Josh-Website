@@ -1663,8 +1663,57 @@ async function getBulkmailBalance() {
   }
 }
 
+
+async function getVirtualsmsBalance() {
+  const apiKey = String(process.env.VIRTUALSMS_API_KEY || process.env.VIRTUAL_SMS_API_KEY || process.env.VSMS_API_KEY || '').trim();
+  if (!apiKey) return { ok: false, error: 'Missing VIRTUALSMS_API_KEY' };
+
+  const tryJson = async (url, headers) => {
+    try {
+      const res = await fetch(url, { method: 'GET', headers, signal: AbortSignal.timeout(12000) });
+      const text = await res.text();
+      let json = null;
+      try { json = JSON.parse(text); } catch (_) {}
+      if (!res.ok) return { ok: false, status: res.status, text: String(text).slice(0, 180) };
+      const balance = findBalance(json);
+      if (balance !== null) return { ok: true, balance, currency: 'USD', source_url: url };
+      return { ok: false, status: res.status, text: 'no balance field', raw: String(text).slice(0, 120) };
+    } catch (e) {
+      return { ok: false, error: String(e.message || e).slice(0, 120) };
+    }
+  };
+
+  const hdr = { Accept: 'application/json', 'X-API-Key': apiKey, Authorization: 'Bearer ' + apiKey };
+  const urls = [
+    'https://virtualsms.io/api/v1/customer/balance',
+    'https://virtualsms.io/api/v1/customer/account',
+    'https://virtualsms.io/api/v1/customer/profile',
+    'https://virtualsms.io/api/v1/user/balance',
+    'https://virtualsms.io/api/v1/balance'
+  ];
+  for (const url of urls) {
+    const r = await tryJson(url, hdr);
+    if (r.ok) return r;
+  }
+
+  // Legacy handler_api (same style as Grizzly getBalance)
+  try {
+    const url = 'https://virtualsms.io/stubs/handler_api.php?api_key=' + encodeURIComponent(apiKey) + '&action=getBalance';
+    const res = await fetch(url, { method: 'GET', signal: AbortSignal.timeout(12000) });
+    const text = (await res.text()).trim();
+    if (/ACCESS_BALANCE:/i.test(text)) {
+      const balance = Number(String(text).split(':')[1]);
+      if (!Number.isNaN(balance)) return { ok: true, balance, currency: 'USD', source_url: 'handler_api getBalance' };
+    }
+    if (/^-?\d+(\.\d+)?$/.test(text)) return { ok: true, balance: Number(text), currency: 'USD', source_url: 'handler_api plain' };
+    return { ok: false, error: (text || 'VirtualSMS balance unavailable').slice(0, 160) };
+  } catch (err) {
+    return { ok: false, error: String(err.message || err).slice(0, 160) };
+  }
+}
+
 async function supplierBalancesFetch() {
-  const [fadded, logsdomain, grizzly, sujan, owlet, classy, smsbus, gotsms, bulkmail, jap, smmkings, casper] = await Promise.all([
+  const [fadded, logsdomain, grizzly, sujan, owlet, classy, smsbus, gotsms, bulkmail, jap, smmkings, casper, virtualsms] = await Promise.all([
 
     getFaddedBalance(),
     getLogsDomainBalance(),
@@ -1677,13 +1726,14 @@ async function supplierBalancesFetch() {
     getBulkmailBalance(),
     getJapBalance(),
     getSmmkingsBalance(),
-    getCasperBalance()
+    getCasperBalance(),
+    getVirtualsmsBalance()
   ]);
   return {
     status: 200,
     body: {
       success: true,
-      suppliers: { fadded, logsdomain, grizzly, sujan, owlet, classy, smsbus, gotsms, bulkmail, jap, smmkings, casper },
+      suppliers: { fadded, logsdomain, grizzly, sujan, owlet, classy, smsbus, gotsms, bulkmail, jap, smmkings, casper, virtualsms },
       fetched_at: new Date().toISOString()
     }
   };
