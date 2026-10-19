@@ -20,91 +20,89 @@ Date.prototype.toLocaleTimeString=function(l,o){return c.call(this,l||'en-NG',w(
 :root[data-theme="dark"]{--bg:#07090f;--card:#0f141e;--card-2:#141b28;--text:#f5f7fb;--text-2:#c0cad9;--muted:#8693a7;--line:rgba(255,255,255,.08);--ac:#4f8dff;--ac-soft:rgba(79,141,255,.14);--ac-line:rgba(79,141,255,.45);--ok:#3ddc97;--ok-soft:rgba(61,220,151,.13);--ok-line:rgba(61,220,151,.4);--bad:#ff6b6b;--bad-soft:rgba(255,107,107,.12);--warn:#f5a524;--warn-soft:rgba(245,165,36,.1);--warn-line:rgba(245,165,36,.35);--shadow:0 18px 50px rgba(0,0,0,.45)}
 :root[data-theme="light"]{--bg:#f1f4f9;--card:#fff;--card-2:#f6f8fc;--text:#0e1726;--text-2:#38445a;--muted:#6a768b;--line:rgba(14,23,38,.1);--ac:#2563eb;--ac-soft:rgba(37,99,235,.1);--ac-line:rgba(37,99,235,.4);--ok:#0f9d6a;--ok-soft:rgba(15,157,106,.1);--ok-line:rgba(15,157,106,.4);--bad:#dc2626;--bad-soft:rgba(220,38,38,.09);--warn:#b45309;--warn-soft:rgba(180,83,9,.08);--warn-line:rgba(180,83,9,.3);--shadow:0 16px 40px rgba(15,23,42,.1)}
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
-body{font-family:'Plus Jakarta Sans',system-ui,-apple-system,sans-serif;background:var(--bg);color:var(--text);min-height:100vh;-webkit-font-smoothing:antialiased;font-variant-numeric:tabular-nums;padding-bottom:calc(40px + env(safe-area-inset-bottom))}
-.header{height:54px;padding:0 16px;display:flex;align-items:center;gap:12px;position:sticky;top:0;z-index:100;background:var(--bg);border-bottom:1px solid var(--line)}
-.back-button{width:36px;height:36px;border-radius:11px;background:var(--card);border:1px solid var(--line);display:flex;align-items:center;justify-content:center;color:var(--text);text-decoration:none;font-size:13px}
-.page-title{font-size:17px;font-weight:800;letter-spacing:-.025em}
+body{font-family:'Plus Jakarta Sans',system-ui,-apple-system,sans-serif;background:var(--bg);color:var(--text);min-height:100vh;-webkit-font-smoothing:antialiased;font-variant-numeric:tabular-nums;padding-bottom:calc(32px + env(safe-area-inset-bottom))}
+.header{height:50px;padding:0 14px;display:flex;align-items:center;gap:10px;position:sticky;top:0;z-index:100;background:var(--bg);border-bottom:1px solid var(--line)}
+.back-button{width:34px;height:34px;border-radius:10px;background:var(--card);border:1px solid var(--line);display:flex;align-items:center;justify-content:center;color:var(--text);text-decoration:none;font-size:13px}
+.page-title{font-size:16px;font-weight:800;letter-spacing:-.025em}
 .otp-tag{margin-left:auto;font-size:11px;font-weight:800;color:var(--ok);background:var(--ok-soft);padding:4px 10px;border-radius:999px;display:inline-flex;align-items:center;gap:6px}
 .otp-tag::before{content:'';width:7px;height:7px;border-radius:50%;background:currentColor}
 .otp-tag.ended{color:var(--bad);background:var(--bad-soft)}
-.main-content{padding:16px;max-width:520px;margin:0 auto}
-.n3{display:grid;gap:14px}
-.n3-card{background:var(--card);border:1px solid var(--line);border-radius:20px;padding:16px}
-.n3-lab{font-size:11px;font-weight:800;letter-spacing:.09em;text-transform:uppercase;color:var(--muted)}
-.n3-sub{font-size:12.5px;font-weight:600;color:var(--muted)}
+.main-content{padding:12px;max-width:520px;margin:0 auto}
+.n3{display:grid;gap:10px}
+.n3-card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:12px}
+.n3-lab{font-size:10.5px;font-weight:800;letter-spacing:.09em;text-transform:uppercase;color:var(--muted)}
+.n3-sub{font-size:12px;font-weight:600;color:var(--muted)}
 
 /* number + time (one compact card) */
 .hero{border-color:var(--ac-line)}
-.numrow{display:flex;align-items:center;gap:10px;margin-top:8px}
-.dial-code{font-size:14px;font-weight:800;color:var(--ac);background:var(--ac-soft);padding:6px 10px;border-radius:10px}
-.national-num{font-size:28px;font-weight:800;letter-spacing:.01em;line-height:1.1;flex:1;min-width:0;word-break:break-all}
-.copy-icon{width:42px;height:42px;border-radius:13px;border:1px solid var(--ac-line);background:var(--ac-soft);color:var(--ac);font-size:15px;cursor:pointer;flex-shrink:0}
-.chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:12px}
-.chip{font-size:12px;font-weight:700;padding:5px 11px;border-radius:999px;background:var(--card-2);border:1px solid var(--line);color:var(--text-2)}
-.timerow{display:flex;align-items:baseline;justify-content:space-between;gap:10px;margin-top:14px;padding-top:14px;border-top:1px solid var(--line)}
-.n3-time{font-size:22px;font-weight:800;letter-spacing:-.02em;white-space:nowrap}
-.n3-track{height:6px;border-radius:999px;background:var(--card-2);margin-top:10px;overflow:hidden;border:1px solid var(--line)}
+.numrow{display:flex;align-items:center;gap:8px;margin-top:6px}
+.dial-code{font-size:13px;font-weight:800;color:var(--ac);background:var(--ac-soft);padding:5px 9px;border-radius:9px}
+.national-num{font-size:24px;font-weight:800;letter-spacing:.01em;line-height:1.1;flex:1;min-width:0;word-break:break-all}
+.copy-icon{width:36px;height:36px;border-radius:11px;border:1px solid var(--ac-line);background:var(--ac-soft);color:var(--ac);font-size:14px;cursor:pointer;flex-shrink:0}
+.chips{display:flex;flex-wrap:wrap;gap:5px;margin-top:9px}
+.chip{font-size:11px;font-weight:700;padding:4px 9px;border-radius:999px;background:var(--card-2);border:1px solid var(--line);color:var(--text-2)}
+.timerow{display:flex;align-items:baseline;justify-content:space-between;gap:10px;margin-top:10px;padding-top:10px;border-top:1px solid var(--line)}
+.n3-time{font-size:19px;font-weight:800;letter-spacing:-.02em;white-space:nowrap}
+.n3-track{height:5px;border-radius:999px;background:var(--card-2);margin-top:8px;overflow:hidden;border:1px solid var(--line)}
 .n3-bar{height:100%;width:100%;border-radius:999px;background:var(--ac);transform-origin:left center;transition:transform 1s linear}
 
 /* buttons */
-.n3-btn{width:100%;display:flex;align-items:center;justify-content:center;gap:8px;padding:14px;border-radius:16px;font:inherit;font-size:14.5px;font-weight:800;cursor:pointer;border:1px solid transparent;text-decoration:none;transition:transform .3s cubic-bezier(.34,1.8,.5,1),opacity .2s}
+.n3-btn{width:100%;display:flex;align-items:center;justify-content:center;gap:7px;padding:11px 12px;border-radius:13px;font:inherit;font-size:13.5px;font-weight:800;cursor:pointer;border:1px solid transparent;text-decoration:none;transition:transform .3s cubic-bezier(.34,1.8,.5,1),opacity .2s}
 .n3-btn:active{transform:scale(.96)}
 .n3-btn:disabled{opacity:.5;cursor:not-allowed}
 .n3-btn.is-busy{opacity:.7;pointer-events:none}
+.n3-sm{padding:9px 10px;font-size:12.5px;border-radius:11px}
 .n3-primary{background:var(--ac);color:#fff}
 .n3-ghost{background:var(--card);color:var(--text);border-color:var(--line)}
 .n3-danger{background:transparent;color:var(--bad);border-color:rgba(255,107,107,.4)}
 .n3-btn.ok{background:var(--ok);color:#06140d}
 .spin{animation:spin .7s linear infinite}
 @keyframes spin{to{transform:rotate(360deg)}}
-.n3-two{display:grid;grid-template-columns:1fr 1fr;gap:10px}
-.n3-stack{display:grid;gap:10px}
-.flash{font-size:13px;font-weight:700;text-align:center}
+.n3-two{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.n3-stack{display:grid;gap:8px}
+.flash{font-size:12.5px;font-weight:700;text-align:center}
 .flash:empty{display:none}
 .flash.err{color:var(--bad)}.flash.ok{color:var(--ok)}
 
 /* inbox */
-.inbox-head{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:6px}
-.inbox-head h2{font-size:20px;font-weight:800;letter-spacing:-.03em}
+.inbox-head{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:2px}
+.inbox-head h2{font-size:17px;font-weight:800;letter-spacing:-.03em}
 .pills{display:flex;gap:6px}
-.pill{font-size:11px;font-weight:800;padding:5px 10px;border-radius:999px;background:var(--card);border:1px solid var(--line);white-space:nowrap}
+.pill{font-size:10.5px;font-weight:800;padding:4px 9px;border-radius:999px;background:var(--card);border:1px solid var(--line);white-space:nowrap}
 .pill.live{color:var(--ok);background:var(--ok-soft);border-color:var(--ok-line);display:inline-flex;align-items:center;gap:6px}
 .pill.live::before{content:'';width:7px;height:7px;border-radius:50%;background:var(--ok);animation:pulse 1.6s ease infinite}
 @keyframes pulse{0%,100%{opacity:1}50%{opacity:.35}}
-.msg{background:var(--card);border:1px solid var(--line);border-radius:20px;padding:16px;display:grid;gap:12px}
-.msg-from{font-size:14px;font-weight:800;overflow-wrap:anywhere}
+.msg{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:12px;display:grid;gap:8px}
+.msg-from{font-size:13px;font-weight:800;overflow-wrap:anywhere}
 .msg-from span{color:var(--muted);font-weight:600}
-.msg-code{text-align:center;padding:14px 10px;border-radius:16px;background:var(--ok-soft);border:1px solid var(--ok-line)}
-.n3-digits{display:flex;justify-content:center;gap:7px;flex-wrap:wrap;margin-bottom:12px}
-.n3-digits span{min-width:40px;height:56px;padding:0 6px;display:grid;place-items:center;border-radius:13px;background:var(--card);border:1px solid var(--ok-line);color:var(--ok);font-size:28px;font-weight:800}
-.msg-body{font-size:14px;font-weight:500;line-height:1.55;color:var(--text-2);white-space:pre-wrap;overflow-wrap:anywhere}
-.msg-time{font-size:12px;font-weight:600;color:var(--muted)}
-.wait{text-align:center;padding:30px 20px}
-.wait i{font-size:30px;color:var(--ac);margin-bottom:12px}
-.wait b{display:block;font-size:17px;font-weight:800;letter-spacing:-.02em}
-.wait p{font-size:13.5px;color:var(--muted);font-weight:600;line-height:1.5;margin-top:6px}
-.empty{text-align:center;padding:28px 16px;color:var(--muted);font-size:13px;font-weight:600;line-height:1.5}
+.msg-code{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;padding:8px 10px;border-radius:13px;background:var(--ok-soft);border:1px solid var(--ok-line)}
+.n3-digits{display:flex;gap:5px;flex-wrap:wrap}
+.n3-digits span{min-width:30px;height:40px;padding:0 5px;display:grid;place-items:center;border-radius:10px;background:var(--card);border:1px solid var(--ok-line);color:var(--ok);font-size:22px;font-weight:800}
+.msg-code .n3-btn{width:auto;flex:0 0 auto;padding:9px 12px;font-size:12.5px}
+.msg-body{font-size:13px;font-weight:500;line-height:1.5;color:var(--text-2);white-space:pre-wrap;overflow-wrap:anywhere}
+.msg-time{font-size:11.5px;font-weight:600;color:var(--muted)}
+.wait{text-align:center;padding:18px 14px}
+.wait i{font-size:24px;color:var(--ac);margin-bottom:8px}
+.wait b{display:block;font-size:15px;font-weight:800;letter-spacing:-.02em}
+.wait p{font-size:12.5px;color:var(--muted);font-weight:600;line-height:1.45;margin-top:4px}
+.empty{text-align:center;padding:22px 14px;color:var(--muted);font-size:13px;font-weight:600;line-height:1.5}
 .empty a{color:var(--ac)}
 
-/* more options (collapsed) */
-.more{background:var(--card);border:1px solid var(--line);border-radius:20px;overflow:hidden}
-.more summary{list-style:none;cursor:pointer;display:flex;align-items:center;justify-content:space-between;padding:16px;font-size:15px;font-weight:800}
-.more summary::-webkit-details-marker{display:none}
-.more summary i{color:var(--muted);transition:transform .2s}
-.more[open] summary i{transform:rotate(180deg)}
-.more-body{padding:0 16px 16px;display:grid;gap:12px}
-.toggle{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:14px;border-radius:16px;background:var(--card-2);border:1px solid var(--line)}
-.toggle .t-title{font-size:14px;font-weight:800}
-.toggle .t-hint{font-size:12px;color:var(--muted);font-weight:600;margin-top:3px;line-height:1.4}
-.switch{position:relative;width:50px;height:30px;flex-shrink:0}
+/* options (always visible) */
+.more{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:12px;display:grid;gap:8px}
+.more-body{display:grid;gap:8px}
+.toggle{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:9px 12px;border-radius:13px;background:var(--card-2);border:1px solid var(--line)}
+.toggle .t-title{font-size:13px;font-weight:800}
+.toggle .t-hint{font-size:11.5px;color:var(--muted);font-weight:600;margin-top:2px;line-height:1.35}
+.switch{position:relative;width:44px;height:26px;flex-shrink:0}
 .switch input{opacity:0;width:0;height:0;position:absolute}
 .slider{position:absolute;inset:0;background:var(--card);border:1px solid var(--line);border-radius:999px;cursor:pointer;transition:.2s}
-.slider:before{content:'';position:absolute;width:22px;height:22px;left:3px;top:3px;background:#fff;border-radius:50%;transition:.2s;box-shadow:0 1px 4px rgba(0,0,0,.25)}
+.slider:before{content:'';position:absolute;width:20px;height:20px;left:2px;top:2px;background:#fff;border-radius:50%;transition:.2s;box-shadow:0 1px 4px rgba(0,0,0,.25)}
 .switch input:checked+.slider{background:var(--ac);border-color:var(--ac)}
-.switch input:checked+.slider:before{transform:translateX(20px)}
+.switch input:checked+.slider:before{transform:translateX(18px)}
 .switch input:disabled+.slider{opacity:.5;cursor:not-allowed}
-.refund-locked{font-size:12.5px;font-weight:600;color:var(--muted);line-height:1.45;padding:12px 14px;border-radius:14px;background:var(--card-2);border:1px solid var(--line)}
-.n3-tip{font-size:12.5px;line-height:1.5;color:var(--text-2);font-weight:500;padding:12px 14px;border-radius:14px;background:var(--warn-soft);border:1px solid var(--warn-line)}
+.refund-locked{font-size:11.5px;font-weight:600;color:var(--muted);line-height:1.4;padding:9px 12px;border-radius:12px;background:var(--card-2);border:1px solid var(--line)}
+.n3-tip{font-size:11.5px;line-height:1.45;color:var(--text-2);font-weight:500;padding:8px 12px;border-radius:12px;background:var(--warn-soft);border:1px solid var(--warn-line)}
 .n3-tip b{color:var(--warn)}
 
 /* modals + toast */
@@ -125,7 +123,7 @@ body{font-family:'Plus Jakarta Sans',system-ui,-apple-system,sans-serif;backgrou
 .toast-pop.on{transform:translateX(-50%) translateY(0);opacity:1}
 .toast-pop.ok{border-color:var(--ok-line)}.toast-pop.err{border-color:var(--bad)}
 @media(min-width:520px){.modal-bg{align-items:center}}
-@media(max-width:360px){.national-num{font-size:23px}.n3-digits span{min-width:34px;height:50px;font-size:24px}}
+@media(max-width:360px){.national-num{font-size:21px}.n3-digits span{min-width:27px;height:36px;font-size:19px}}
 @media(prefers-reduced-motion:reduce){.pill.live::before{animation:none}.n3-btn{transition:none}}
 </style>
 </head>
@@ -206,6 +204,38 @@ body{font-family:'Plus Jakarta Sans',system-ui,-apple-system,sans-serif;backgrou
     if(d.length===11 && d[0]==='1') d = d.slice(1);
     return { dial: d.length===10 ? '+1' : '', digits: d, shown: d ? fmtNational(d) : '—' };
   }
+  // Clipboard with a fallback for in-app browsers / non-secure contexts.
+  function legacyCopy(text){
+    return new Promise(function(resolve, reject){
+      try{
+        var ta = document.createElement('textarea');
+        ta.value = text; ta.setAttribute('readonly','');
+        ta.style.cssText = 'position:fixed;top:0;left:0;opacity:0;font-size:16px';
+        document.body.appendChild(ta);
+        ta.focus(); ta.select(); ta.setSelectionRange(0, text.length);
+        var ok = document.execCommand('copy');
+        document.body.removeChild(ta);
+        if(ok) resolve(); else reject(new Error('copy failed'));
+      }catch(e){ reject(e); }
+    });
+  }
+  function copyText(text){
+    text = String(text==null?'':text);
+    if(navigator.clipboard && window.isSecureContext){
+      return navigator.clipboard.writeText(text).catch(function(){ return legacyCopy(text); });
+    }
+    return legacyCopy(text);
+  }
+  // Single source of truth for "is this rental still live".
+  function computeState(){
+    var status = String((rent && rent.status) || 'active').toLowerCase();
+    var tillMs = rent && rent.active_till ? new Date(rent.active_till).getTime() : 0;
+    var liveByTime = (!tillMs || (tillMs > Date.now())) && !(rent && rent.expired_local);
+    var deadStatus = ['refunded','cancelled','canceled','expired','finished','ended'].indexOf(status) >= 0;
+    var terminal = ['refunded','cancelled','canceled'].indexOf(status) >= 0 || !!(rent && rent.refunded);
+    var active = !!rent && !rent.refunded && !deadStatus && liveByTime;
+    return { status: status, active: active, terminal: terminal };
+  }
   async function headers(){
     const { data: { session } } = await sb.auth.getSession();
     if(!session){ location.href = 'auth.html?next='+encodeURIComponent(location.pathname+location.search); return null; }
@@ -253,16 +283,12 @@ body{font-family:'Plus Jakarta Sans',system-ui,-apple-system,sans-serif;backgrou
       if(!carrier && parts[2] && !/^Area /i.test(parts[2])) carrier=parts[2];
       if(!area){ var ap=parts.filter(function(p){return /^Area /i.test(p);})[0]; if(ap) area=ap.replace(/^Area /i,''); }
     }
-    var status = String(rent.status||'active').toLowerCase();
-    var tillMs = rent.active_till ? new Date(rent.active_till).getTime() : 0;
-    var liveByTime = !tillMs || (tillMs > Date.now());
-    var deadStatus = ['refunded','cancelled','canceled','expired','finished','ended'].indexOf(status) >= 0;
-    var active = !rent.refunded && !deadStatus && liveByTime;
+    var st = computeState();
+    var active = st.active;
     var canCancel = active && !hasReceivedCode;
     var autoOn = !!(rent.auto_renew || rent.renewal || rent.is_auto_renew);
     var ph = splitPhone(rent.phone || rent.number);
-    var paid = Math.round(Number(rent.price_ngn||rent.price||0));
-    var terminal = ['refunded','cancelled','canceled'].indexOf(status)>=0 || rent.refunded;
+    var renewPrice = Math.round(Number(rent.renew_price_ngn || rent.price_ngn || rent.price || 0));
 
     var badge = document.getElementById('statusBadge');
     if(badge){ badge.textContent = active?'Active':'Ended'; badge.className = 'otp-tag'+(active?'':' ended'); }
@@ -278,33 +304,35 @@ body{font-family:'Plus Jakarta Sans',system-ui,-apple-system,sans-serif;backgrou
           '<div class="timerow"><span class="n3-lab">Time left</span><span class="n3-time" id="cd">—</span></div>'+
           '<div class="n3-track" id="cdTrack" aria-hidden="true" style="display:none"><div class="n3-bar" id="cdBar"></div></div>'+
         '</div>'+
-        /* 2. the two actions people use */
+        /* 2. primary actions */
         '<div class="n3-two">'+
           (rent.can_wake_up !== false && active ? '<button type="button" class="n3-btn n3-primary" id="btnWake"><i class="fa-solid fa-bolt"></i> Wake up</button>' : '')+
           '<button type="button" class="n3-btn n3-ghost" id="btnRefresh" style="'+(rent.can_wake_up !== false && active ? '' : 'grid-column:1/-1')+'"><i class="fa-solid fa-rotate"></i> Refresh SMS</button>'+
         '</div>'+
         '<div class="flash" id="flash"></div>'+
-        /* 3. the inbox, right where you can see it */
-        '<div class="inbox-head"><h2>Inbox</h2><div class="pills"><span class="pill" id="messageCount">0 messages</span><span class="pill live">Live</span></div></div>'+
-        '<div class="n3" id="inbox"><div class="empty">Loading messages…</div></div>'+
-        /* 4. everything else, tucked away */
-        '<details class="more"><summary>More options <i class="fa-solid fa-chevron-down"></i></summary><div class="more-body">'+
+        /* 3. all other controls — always visible, just compact */
+        '<div class="more"><div class="n3-lab">More options</div><div class="more-body">'+
+          (active && !st.terminal ?
+            '<div class="n3-two">'+
+              '<button type="button" class="n3-btn n3-ghost n3-sm" id="btnAddService"><i class="fa-solid fa-plus"></i> Add service</button>'+
+              '<button type="button" class="n3-btn n3-ghost n3-sm" id="btnSwitchPlan"><i class="fa-solid fa-arrow-right-arrow-left"></i> Switch plan</button>'+
+            '</div>' : '')+
           (active ?
             '<div class="toggle"><div><div class="t-title">Auto-renew</div><div class="t-hint" id="autoRenewHint">'+
-              (paid>0 ? 'Charges ₦'+paid.toLocaleString()+' from your wallet when this period ends.' : 'Renews from your wallet when this period ends.')+
+              (renewPrice>0 ? 'Charges ₦'+renewPrice.toLocaleString()+' from your wallet when this period ends.' : 'Renews from your wallet when this period ends.')+
             '</div></div><label class="switch"><input type="checkbox" id="autoRenew" '+(autoOn?'checked':'')+'><span class="slider"></span></label></div>' : '')+
-          (terminal ? '' :
-            '<button type="button" class="n3-btn n3-ghost" id="btnAddService"><i class="fa-solid fa-plus"></i> Add service to this number</button>'+
-            '<button type="button" class="n3-btn n3-ghost" id="btnSwitchPlan"><i class="fa-solid fa-arrow-right-arrow-left"></i> Switch plan</button>')+
           '<div id="refundSlot">'+
-            (canCancel ? '<button type="button" class="n3-btn n3-danger" id="btnCancel"><i class="fa-solid fa-ban"></i> Refund number</button>' : (active && hasReceivedCode ? LOCKED : ''))+
+            (canCancel ? '<button type="button" class="n3-btn n3-danger n3-sm" id="btnCancel"><i class="fa-solid fa-ban"></i> Refund number</button>' : (active && hasReceivedCode ? LOCKED : ''))+
           '</div>'+
-          (active ? '<div class="n3-tip"><b>Tip:</b> use a VPN from the USA when verifying. If no SMS arrives, tap Wake up, then request the code in the app.</div>' : '')+
-        '</div></details>'+
+          (active ? '<div class="n3-tip"><b>Tip:</b> use a USA VPN when verifying. If no SMS arrives, tap Wake up, then request the code in the app.</div>' : '')+
+        '</div></div>'+
+        /* 4. the inbox */
+        '<div class="inbox-head"><h2>Inbox</h2><div class="pills"><span class="pill" id="messageCount">0 messages</span><span class="pill live">Live</span></div></div>'+
+        '<div class="n3" id="inbox"><div class="empty">Loading messages…</div></div>'+
       '</div>';
 
     document.getElementById('btnCopy').onclick = function(){
-      navigator.clipboard.writeText(ph.digits || String(rent.phone||'')).then(function(){
+      copyText(ph.digits || String(rent.phone||'')).then(function(){
         setFlash('Number copied', true);
       }).catch(function(){ setFlash('Could not copy', false); });
     };
@@ -342,11 +370,13 @@ body{font-family:'Plus Jakarta Sans',system-ui,-apple-system,sans-serif;backgrou
         setFlash(j.message || 'Could not update auto-renew', false);
       } else {
         rent.auto_renew = want;
-        if(j.data && j.data.renew_price_ngn) rent.price_ngn = j.data.renew_price_ngn;
+        // Keep the renewal price separate from what was paid, so the refund modal never shows the wrong amount.
+        if(j.data && j.data.renew_price_ngn) rent.renew_price_ngn = j.data.renew_price_ngn;
         var hint = document.getElementById('autoRenewHint');
-        if(hint && rent.price_ngn){
+        var rp = Math.round(Number(rent.renew_price_ngn || rent.price_ngn || 0));
+        if(hint && rp){
           hint.textContent = want
-            ? ('Charges ₦'+Math.round(Number(rent.price_ngn)).toLocaleString()+' from your wallet when this period ends.')
+            ? ('Charges ₦'+rp.toLocaleString()+' from your wallet when this period ends.')
             : 'Auto-renew is off.';
         }
         setFlash(j.message || (want ? 'Auto-renew is on' : 'Auto-renew is off'), true);
@@ -373,6 +403,9 @@ body{font-family:'Plus Jakarta Sans',system-ui,-apple-system,sans-serif;backgrou
   ['refundModal','addSvcModal','planModal'].forEach(function(id){
     var m = document.getElementById(id);
     m.addEventListener('click', function(e){ if(e.target === m) hideModal(id); });
+  });
+  document.addEventListener('keydown', function(e){
+    if(e.key === 'Escape'){ ['refundModal','addSvcModal','planModal'].forEach(function(id){ hideModal(id); }); }
   });
   document.getElementById('addSvcClose').onclick = function(){ hideModal('addSvcModal'); };
   document.getElementById('planClose').onclick = function(){ hideModal('planModal'); };
@@ -432,6 +465,8 @@ body{font-family:'Plus Jakarta Sans',system-ui,-apple-system,sans-serif;backgrou
       if(left <= 0){
         el.textContent = 'Expired';
         var b = document.getElementById('statusBadge'); if(b){ b.textContent='Ended'; b.classList.add('ended'); }
+        // Re-render once so Wake / Add service / Switch plan / Auto-renew / Refund disappear for an ended rental.
+        if(rent && !rent.expired_local){ rent.expired_local = true; render(); }
         return;
       }
       var d = Math.floor(left/86400000);
@@ -461,7 +496,7 @@ body{font-family:'Plus Jakarta Sans',system-ui,-apple-system,sans-serif;backgrou
       // Tell history page / DB this rental got SMS (for Completed filter after timer ends)
       try{ api('mark_sms', { method:'POST', body:{ rent_id: rentId } }).catch(function(){}); }catch(e){}
       var slot = document.getElementById('refundSlot');
-      if(slot && rent && !rent.refunded) slot.innerHTML = LOCKED;
+      if(slot && rent && !rent.refunded && computeState().active) slot.innerHTML = LOCKED;
     }
     if(!list.length){
       box.innerHTML = '<div class="n3-card wait"><i class="fa-solid fa-envelope-open-text"></i><b>Waiting for SMS</b><p>Request the code in the app now. It shows up here the moment it arrives.</p></div>';
@@ -480,15 +515,17 @@ body{font-family:'Plus Jakarta Sans',system-ui,-apple-system,sans-serif;backgrou
         '<div class="msg-from">'+esc(m.service_name||svcName)+(from?' <span>· from '+esc(from)+'</span>':'')+'</div>'+
         (code
           ? '<div class="msg-code"><div class="n3-digits">'+digits+'</div>'+
-            '<button type="button" class="n3-btn ok" data-c="'+esc(code)+'"><i class="fa-solid fa-copy"></i> Copy code</button></div>'
+            '<button type="button" class="n3-btn ok" data-c="'+esc(code)+'"><i class="fa-solid fa-copy"></i> Copy</button></div>'
           : '')+
         (body?'<div class="msg-body">'+esc(body)+'</div>':'')+
-        (!code && body?'<button type="button" class="n3-btn n3-ghost" data-c="'+esc(body)+'"><i class="fa-regular fa-copy"></i> Copy message</button>':'')+
+        (!code && body?'<button type="button" class="n3-btn n3-ghost n3-sm" data-c="'+esc(body)+'"><i class="fa-regular fa-copy"></i> Copy message</button>':'')+
         (whenStr?'<div class="msg-time">'+esc(whenRel)+' · '+esc(whenStr)+'</div>':'')+
       '</div>';
     }).join('');
     box.querySelectorAll('[data-c]').forEach(function(b){
-      b.onclick = function(){ navigator.clipboard.writeText(b.getAttribute('data-c')).then(function(){ setFlash('Copied', true); }).catch(function(){}); };
+      b.onclick = function(){
+        copyText(b.getAttribute('data-c')).then(function(){ setFlash('Copied', true); }).catch(function(){ setFlash('Could not copy — press and hold the text instead', false); });
+      };
     });
   }
 
@@ -577,6 +614,19 @@ body{font-family:'Plus Jakarta Sans',system-ui,-apple-system,sans-serif;backgrou
     });
   }
 
+  // Poll only while the rental is live and the tab is visible.
+  function pollTick(){
+    if(document.hidden) return;
+    if(!rent || !computeState().active){
+      if(pollTimer){ clearInterval(pollTimer); pollTimer = null; }
+      return;
+    }
+    loadMessages();
+  }
+  document.addEventListener('visibilitychange', function(){
+    if(!document.hidden && rent && computeState().active) loadMessages();
+  });
+
   async function boot(){
     if(!rentId){
       document.getElementById('main').innerHTML = '<div class="empty">Missing rental. <a href="mj-sms-usa-rent.html">Rent a number</a></div>';
@@ -628,7 +678,7 @@ body{font-family:'Plus Jakarta Sans',system-ui,-apple-system,sans-serif;backgrou
     } catch(_){}
     render();
     if(pollTimer) clearInterval(pollTimer);
-    pollTimer = setInterval(loadMessages, 8000);
+    pollTimer = setInterval(pollTick, 8000);
   }
   boot();
 })();
