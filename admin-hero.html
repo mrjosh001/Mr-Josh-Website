@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex, nofollow">
+<title>Server 1 · Second pool (admin)</title>
+<style>
+  :root { color-scheme: dark light; --bg:#0b1220; --card:#111827; --line:#1e293b; --text:#e2e8f0; --muted:#94a3b8; --blue:#2563eb; --ok:#22c55e; --bad:#ef4444; }
+  @media (prefers-color-scheme: light) { :root { --bg:#eef2f9; --card:#ffffff; --line:#dbe4f0; --text:#0f172a; --muted:#64748b; } }
+  * { box-sizing: border-box; }
+  body { margin:0; padding:16px; padding-top:max(16px, env(safe-area-inset-top)); background:var(--bg); color:var(--text); font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif; }
+  .wrap { max-width:560px; margin:0 auto; }
+  h1 { font-size:18px; margin:0 0 4px; }
+  p.sub { margin:0 0 16px; color:var(--muted); font-size:13px; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:16px; padding:16px; margin-bottom:14px; }
+  .row { display:flex; justify-content:space-between; align-items:baseline; gap:12px; }
+  .label { color:var(--muted); font-size:12px; text-transform:uppercase; letter-spacing:.06em; }
+  .big { font-size:28px; font-weight:800; }
+  button { appearance:none; border:0; border-radius:12px; padding:12px 16px; font-size:15px; font-weight:700; color:#fff; background:var(--blue); width:100%; margin-top:10px; }
+  button.alt { background:transparent; color:var(--text); border:1px solid var(--line); }
+  button:disabled { opacity:.55; }
+  label.chk { display:flex; gap:8px; align-items:center; margin-top:10px; font-size:13px; color:var(--muted); }
+  pre { margin:12px 0 0; padding:12px; background:rgba(127,127,127,.12); border-radius:10px; font-size:12px; white-space:pre-wrap; word-break:break-word; max-height:260px; overflow:auto; }
+  .pill { display:inline-block; padding:2px 10px; border-radius:999px; font-size:12px; font-weight:700; }
+  .pill.ok { background:rgba(34,197,94,.15); color:var(--ok); }
+  .pill.bad { background:rgba(239,68,68,.15); color:var(--bad); }
+  .pill.idle { background:rgba(127,127,127,.18); color:var(--muted); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Server 1 · Second pool</h1>
+  <p class="sub">Admin only. Balance and catalog sync for the second Server 1 supplier. Nothing here is visible to customers.</p>
+
+  <div class="card">
+    <div class="row"><span class="label">Supplier balance</span><span id="status" class="pill idle">not checked</span></div>
+    <div class="big" id="balance">—</div>
+    <button id="btnCheck">Check connection &amp; balance</button>
+    <pre id="probeOut" hidden></pre>
+  </div>
+
+  <div class="card">
+    <div class="row"><span class="label">Catalog</span><span id="syncStatus" class="pill idle">idle</span></div>
+    <button id="btnSync">Sync catalog now</button>
+    <label class="chk"><input type="checkbox" id="force"> Force restart (ignore a stuck "running" lock)</label>
+    <pre id="syncOut" hidden></pre>
+  </div>
+
+  <button class="alt" onclick="location.href='admin.html'">Back to admin</button>
+</div>
+
+<script>
+(function () {
+  // Same Supabase project the rest of the site uses. supabase-js keeps the signed-in session in localStorage
+  // under sb-<project-ref>-auth-token; this page only reads the access token from there (no keys stored here).
+  var PROJECT_REF = 'atczodlljmlayvldxfmv';
+  var API = '/api/grizzly-sync';
+
+  function getToken() {
+    try {
+      var raw = localStorage.getItem('sb-' + PROJECT_REF + '-auth-token');
+      if (!raw) return null;
+      var s = JSON.parse(raw);
+      return (s && (s.access_token || (s.currentSession && s.currentSession.access_token))) || null;
+    } catch (e) { return null; }
+  }
+
+  async function api(action, extra) {
+    var token = getToken();
+    if (!token) throw new Error('Not signed in. Open admin.html, sign in, then come back.');
+    var res = await fetch(API + '?action=' + action + (extra || ''), { headers: { Authorization: 'Bearer ' + token } });
+    var j = null;
+    try { j = await res.json(); } catch (e) { /* not json */ }
+    if (res.status === 401) throw new Error('Session expired. Open admin.html once to refresh it, then retry.');
+    if (res.status === 403) throw new Error('This account is not an admin.');
+    if (!j) throw new Error('Unexpected reply (HTTP ' + res.status + ')');
+    return j;
+  }
+
+  function show(el, text) { el.hidden = false; el.textContent = text; }
+  function pill(el, cls, text) { el.className = 'pill ' + cls; el.textContent = text; }
+
+  var elBal = document.getElementById('balance');
+  var elStatus = document.getElementById('status');
+  var elProbe = document.getElementById('probeOut');
+  var elSync = document.getElementById('syncOut');
+  var elSyncStatus = document.getElementById('syncStatus');
+  var btnCheck = document.getElementById('btnCheck');
+  var btnSync = document.getElementById('btnSync');
+
+  btnCheck.addEventListener('click', async function () {
+    btnCheck.disabled = true; pill(elStatus, 'idle', 'checking…');
+    try {
+      var j = await api('hero_probe');
+      if (!j.success) throw new Error(j.message || 'Probe failed');
+      if (j.balance && j.balance.ok) {
+        elBal.textContent = '$' + Number(j.balance.balance).toFixed(2);
+        pill(elStatus, 'ok', 'connected');
+      } else {
+        elBal.textContent = '—';
+        pill(elStatus, 'bad', (j.balance && j.balance.error) || 'no balance');
+      }
+      show(elProbe, 'Countries: ' + (j.counts && j.counts.countries) + '\nServices: ' + (j.counts && j.counts.services) +
+        '\nWhatsApp country rows: ' + (j.counts && j.counts.whatsapp_country_rows) +
+        '\n\n(Real replies, first 400 characters)\n' + JSON.stringify(j.samples, null, 2));
+    } catch (e) {
+      pill(elStatus, 'bad', 'error'); show(elProbe, e.message || String(e));
+    }
+    btnCheck.disabled = false;
+  });
+
+  btnSync.addEventListener('click', async function () {
+    btnSync.disabled = true; pill(elSyncStatus, 'idle', 'running…');
+    var force = document.getElementById('force').checked ? '&force=1' : '';
+    var log = [];
+    try {
+      for (var round = 1; round <= 12; round++) {
+        var j = await api('hero_sync', force);
+        if (!j.success) throw new Error(j.message || 'Sync failed');
+        log.push('Run ' + round + ': ' + (j.message || (j.busy ? 'busy' : 'ok')));
+        show(elSync, log.join('\n'));
+        if (j.busy || j.done !== false) break; // finished, or another run is active
+        force = ''; // only the first round may force
+      }
+      pill(elSyncStatus, 'ok', 'done');
+    } catch (e) {
+      pill(elSyncStatus, 'bad', 'error'); log.push(e.message || String(e)); show(elSync, log.join('\n'));
+    }
+    btnSync.disabled = false;
+  });
+})();
+</script>
+</body>
+</html>
