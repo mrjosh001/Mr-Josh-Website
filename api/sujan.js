@@ -121,7 +121,7 @@ async function handleSync(req, res) {
   }
 
   const products = [];
-  for (let page = 1; page <= 1; page++) {
+  for (let page = 1; page <= 50; page++) {
     const apiRes = await fetch(`${BASE}/reseller/v1/products?page=${page}&per_page=100`, {
       method: 'GET',
       headers: {
@@ -185,21 +185,21 @@ async function handleSync(req, res) {
 
     const { data: existing } = await supabase
       .from('products')
-      .select('product_key, admin_hidden')
+      .select('product_key, admin_hidden, price, supplier_price, price_source')
       .eq('product_key', productKey)
       .maybeSingle();
 
     if (existing) {
-      // EXISTING: refresh name/description + supplier cost + stock, same as
-      // Fadded/Logs Domain sync. Resale price and category are never touched
-      // here — only ever changed in the admin panel. is_available now
-      // follows real stock (matches Fadded/Logs Domain) — Sujan products
-      // are live on the storefront as of this sync, no longer force-hidden.
-      // `source` IS re-set here (same fix applied to Fadded/Logs Domain) so
-      // it stays tagged correctly on every sync, not just the first insert.
-      // EXISTING: never overwrite admin price, category, name, or display text.
+      // EXISTING: refresh supplier name, description, supplier cost, stock.
+      // Category stays admin-owned. Sell price follows supplier cost changes
+      // unless this row was explicitly locked by admin (price_source=admin).
       updatedCount++;
+      const prevCost = Number(existing.supplier_price) || 0;
+      const costChanged = Math.abs(prevCost - supplierPrice) > 0.0001;
       const patch = {
+        name,
+        description: cleanDescription,
+        display_description: cleanDescription,
         supplier_price: supplierPrice,
         stock_quantity: stock,
         source: 'sujandepartment',
@@ -208,6 +208,12 @@ async function handleSync(req, res) {
       if (stock <= 0) patch.is_available = false;
       else if (existing.admin_hidden) { /* admin hid — stay hidden */ }
       else patch.is_available = true;
+      // Update customer price when supplier cost moves (or price was 0)
+      if (String(existing.price_source || '') !== 'admin') {
+        if (costChanged || !(Number(existing.price) > 0)) {
+          patch.price = applyRandomMarkup(supplierPrice);
+        }
+      }
       const { error } = await supabase
         .from('products')
         .update(patch)
