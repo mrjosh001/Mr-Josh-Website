@@ -940,7 +940,7 @@ async function searchServicesInDb(q){
       var key = name.toLowerCase();
       if(!map.has(key)) map.set(key, { service_id: row.service_id, service_name: name, key: key });
       if(!serviceCountryIndex[key]) serviceCountryIndex[key] = [];
-      var exists = serviceCountryIndex[key].some(function(x){ return String(x.country_id) === String(row.country_id); });
+      var exists = serviceCountryIndex[key].some(function(x){ return String(x.country_id) === String(row.country_id) && String(x.source||'') === String(row.source||'grizzlysms'); });
       if(!exists){
         serviceCountryIndex[key].push({
           country_id: row.country_id,
@@ -1089,71 +1089,86 @@ async function selectService(svc){
   const key = (svc.key || svc.service_name || '').toLowerCase();
   let rows = (serviceCountryIndex[key] || []).slice();
 
-  // Always refresh from DB so every country for this service is included (not just the bulk page sample)
+  // Always refresh from DB: Grizzly rows + Hero rows listed separately
+  // (same country name can appear 2–3 times — each row calls its own API).
   try{
     if(!sbClient) await loadServiceCatalog();
-    // Pull every matching row from BOTH pools (same country can appear twice).
-    // Match by service_id OR by display name so Hero WhatsApp joins Grizzly WhatsApp.
     var cols = 'service_id, service_name, country_id, country_name, price, available_quantity, providers_raw, supplier_price, pool_price_overrides, source';
     var merged = [];
     var seenRow = {};
-    async function pull(q){
-      var res = await q;
-      (res.data||[]).forEach(function(r){
-        var k = String(r.source||'')+'|'+String(r.country_id)+'|'+String(r.service_id);
+    function addRows(arr){
+      (arr || []).forEach(function(r){
+        if(!r) return;
+        var src = String(r.source || 'grizzlysms').toLowerCase();
+        var k = src + '|' + String(r.country_id) + '|' + String(r.service_id);
         if(seenRow[k]) return;
         seenRow[k] = 1;
-        merged.push(r);
+        merged.push(Object.assign({}, r, { source: src }));
       });
     }
-    await pull(sbClient.from('number_services').select(cols).in('source', smsOtpSources()).eq('is_available', true).eq('service_id', svc.service_id).gt('price', 0).order('price', { ascending: true }).limit(800));
-    if(svc.service_name){
-      await pull(sbClient.from('number_services').select(cols).in('source', smsOtpSources()).eq('is_available', true).ilike('service_name', '%'+String(svc.service_name).replace(/%/g,'')+'%').gt('price', 0).order('price', { ascending: true }).limit(800));
+    async function q(builder){
+      try {
+        var res = await builder;
+        if(res && res.data) addRows(res.data);
+      } catch(e){ console.warn('country query', e); }
     }
-    // Also match popular short codes across pools (wa ↔ WhatsApp)
+    var sid = svc.service_id;
+    var sname = String(svc.service_name || '').trim();
+    // 1) Grizzly by service_id (keeps providers_raw / pools)
+    if(sid) await q(sbClient.from('number_services').select(cols).eq('source','grizzlysms').eq('is_available',true).eq('service_id', sid).gt('price',0).order('price',{ascending:true}).limit(500));
+    // 2) Hero by service_id
+    if(sid) await q(sbClient.from('number_services').select(cols).eq('source','herosms').eq('is_available',true).eq('service_id', sid).gt('price',0).order('price',{ascending:true}).limit(500));
+    // 3) Both by service name (Hero may use a different code for the same app)
+    if(sname){
+      await q(sbClient.from('number_services').select(cols).eq('source','grizzlysms').eq('is_available',true).ilike('service_name', sname).gt('price',0).limit(500));
+      await q(sbClient.from('number_services').select(cols).eq('source','herosms').eq('is_available',true).ilike('service_name', sname).gt('price',0).limit(500));
+      await q(sbClient.from('number_services').select(cols).eq('source','herosms').eq('is_available',true).ilike('service_name', '%'+sname+'%').gt('price',0).limit(500));
+    }
+    // 4) Short-code bridges (wa ↔ WhatsApp) for Hero
     var codeHints = {
       whatsapp:['wa'], telegram:['tg'], facebook:['fb'], instagram:['ig'], google:['go'],
       tiktok:['tk','lf'], discord:['ds'], snapchat:['fu'], twitter:['tw'], 'x / twitter':['tw']
     };
-    var nk = String(svc.service_name||'').toLowerCase().trim();
-    var hints = codeHints[nk] || [];
-    if(svc.service_id) hints = hints.concat([String(svc.service_id)]);
+    var hints = codeHints[sname.toLowerCase()] || [];
+    if(sid) hints = hints.concat([String(sid)]);
     for(var hi=0; hi<hints.length; hi++){
-      await pull(sbClient.from('number_services').select(cols).in('source', smsOtpSources()).eq('is_available', true).eq('service_id', hints[hi]).gt('price', 0).limit(800));
+      await q(sbClient.from('number_services').select(cols).eq('source','herosms').eq('is_available',true).eq('service_id', hints[hi]).gt('price',0).limit(500));
+      await q(sbClient.from('number_services').select(cols).eq('source','grizzlysms').eq('is_available',true).eq('service_id', hints[hi]).gt('price',0).limit(500));
     }
-    var res = { data: merged };
-    if(res.data && res.data.length){
-      rows = res.data.map(r => ({
-        country_id: r.country_id,
-        country_name: r.country_name || ('Country ' + r.country_id),
-        price: r.price,
-        available_quantity: r.available_quantity,
-        service_id: r.service_id,
-        service_name: r.service_name || svc.service_name,
-        providers_raw: r.providers_raw || null,
-        pool_price_overrides: r.pool_price_overrides || null,
-        supplier_price: r.supplier_price
-      }));
+    if(merged.length){
+      rows = merged.map(function(r){
+        return {
+          country_id: r.country_id,
+          country_name: r.country_name || ('Country ' + r.country_id),
+          price: r.price,
+          available_quantity: r.available_quantity,
+          service_id: r.service_id,
+          service_name: niceServiceName(r.service_name, r.service_id) || r.service_name || svc.service_name,
+          providers_raw: r.providers_raw || null,
+          pool_price_overrides: r.pool_price_overrides || null,
+          supplier_price: r.supplier_price,
+          source: r.source || 'grizzlysms'
+        };
+      });
       serviceCountryIndex[key] = rows;
     }
   }catch(e){ console.warn('country refresh', e); }
 
-  // CRITICAL: key by country + source so Grizzly and Hero stay as separate rows
-  // (e.g. two "Canada" lines). Never collapse pools across suppliers.
-  const byC = new Map();
-  rows.forEach(c => {
-    const src = String(c.source || 'grizzlysms').toLowerCase();
-    const id = String(c.country_id) + '|' + src + '|' + String(c.service_id || '');
-    const row = Object.assign({}, c, { source: src });
-    if (!byC.has(id) || Number(row.price) < Number(byC.get(id).price)) byC.set(id, row);
+  // One list entry per source+country — duplicates (2× Canada) are intentional
+  var byKey = new Map();
+  rows.forEach(function(c){
+    var src = String(c.source || 'grizzlysms').toLowerCase();
+    var id = src + '|' + String(c.country_id) + '|' + String(c.service_id || '');
+    var row = Object.assign({}, c, { source: src });
+    if(!byKey.has(id) || Number(row.price) < Number(byKey.get(id).price)) byKey.set(id, row);
   });
-  allCountries = Array.from(byC.values()).sort(function(a, b) {
-    var cn = String(a.country_name || '').localeCompare(String(b.country_name || ''));
-    if (cn !== 0) return cn;
-    // Same country name: Grizzly (pool system) first, then Hero
+  allCountries = Array.from(byKey.values()).sort(function(a,b){
+    var cn = String(a.country_name||'').localeCompare(String(b.country_name||''));
+    if(cn !== 0) return cn;
+    // Same country: Grizzly first (pool system), then Hero
     var as = isHeroSource(a.source) ? 1 : 0;
     var bs = isHeroSource(b.source) ? 1 : 0;
-    if (as !== bs) return as - bs;
+    if(as !== bs) return as - bs;
     return Number(a.price) - Number(b.price);
   });
   renderCountryPrices(allCountries);
@@ -1164,32 +1179,20 @@ function renderCountryPrices(list){
     countryList.innerHTML = '<div class="empty-state"><h4>No countries for this service</h4><p>Try another service</p></div>';
     return;
   }
-  // How many rows share this country name? (Grizzly vs Hero)
-  var nameCount = {};
-  list.forEach(function(c){
-    var n = String(c.country_name || '').toLowerCase();
-    nameCount[n] = (nameCount[n] || 0) + 1;
-  });
-  var nameSeen = {};
   countryList.innerHTML = list.map(function(c, i){
     var isHero = isHeroSource(c.source);
+    // Grizzly only: multi-pool pricing
     var pools = (!isHero) ? providersToPoolOptions(c.providers_raw, c.pool_price_overrides) : [];
     var showPrice = c.price;
-    if (pools.length) {
+    if(pools.length){
       showPrice = Math.min.apply(null, pools.map(function(p){ return p.price_ngn; }));
     }
     var cname = c.country_name || 'Country';
-    var key = String(cname).toLowerCase();
-    var optionTag = '';
-    if (nameCount[key] > 1) {
-      nameSeen[key] = (nameSeen[key] || 0) + 1;
-      optionTag = ' · Option ' + nameSeen[key];
-    }
-    // Only Grizzly shows "N pools" — Hero never uses the pool system
+    // Grizzly with multiple pools keeps the familiar "N pools" label
     var extra = (!isHero && pools.length > 1) ? (' · ' + pools.length + ' pools') : '';
     return '<div class="country-price-row" data-index="'+i+'" data-source="'+escapeHtml(String(c.source||'grizzlysms'))+'">'
       + '<div class="left"><span class="flag">'+countryFlag(c.country_name)+'</span>'
-      + '<span class="cname">'+escapeHtml(cname)+escapeHtml(optionTag)+extra+'</span></div>'
+      + '<span class="cname">'+escapeHtml(cname)+extra+'</span></div>'
       + '<div class="right"><span class="cprice">from '+money(showPrice)+'</span>'
       + '<span class="chev"><i class="fa-solid fa-chevron-right"></i></span></div></div>';
   }).join('');
@@ -1197,7 +1200,7 @@ function renderCountryPrices(list){
   countryList.querySelectorAll('.country-price-row').forEach(function(row){
     row.addEventListener('click', function(){
       var c = list[Number(row.getAttribute('data-index'))];
-      if (!c) return;
+      if(!c) return;
       var src = String(c.source || 'grizzlysms').toLowerCase();
       currentCountry = {
         country_id: c.country_id,
@@ -1207,8 +1210,8 @@ function renderCountryPrices(list){
       };
       selectedProviderId = null;
 
-      // —— HERO: separate path — no Grizzly pools, optional customize on buy sheet ——
-      if (isHeroSource(src)) {
+      // Hero row → Hero API only (customize on buy sheet, no Grizzly pools)
+      if(isHeroSource(src)){
         openPurchaseModal({
           service_id: c.service_id,
           service_name: c.service_name || (currentServicePick && currentServicePick.service_name),
@@ -1220,13 +1223,13 @@ function renderCountryPrices(list){
         return;
       }
 
-      // —— GRIZZLY: normal pool system (unchanged) ——
+      // Grizzly row → normal pool system
       var pools = providersToPoolOptions(c.providers_raw, c.pool_price_overrides);
-      if (pools.length > 1) {
+      if(pools.length > 1){
         openPoolStep(c, pools);
         return;
       }
-      if (pools.length === 1) selectedProviderId = pools[0].provider_id;
+      if(pools.length === 1) selectedProviderId = pools[0].provider_id;
       openPurchaseModal({
         service_id: c.service_id,
         service_name: c.service_name || (currentServicePick && currentServicePick.service_name),
