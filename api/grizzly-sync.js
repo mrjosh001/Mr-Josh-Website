@@ -2901,6 +2901,8 @@ export default async function handler(req, res) {
     }
     if (act === 'hero_sync') return HERO.sync(req, res);
     if (act === 'hero_probe') return HERO.probe(req, res);
+    if (act === 'hero_operators') return HERO.operators(req, res);
+    if (act === 'hero_options') return HERO.options(req, res);
     if (isVsSync) return vsHandleSync(req, res);
     if (act === 'vsms_probe') return vsHandleProbe(req, res);
     if (act === 'vsms_purge_legacy') return vsHandlePurgeLegacy(req, res);
