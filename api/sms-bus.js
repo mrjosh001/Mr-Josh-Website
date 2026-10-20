@@ -178,6 +178,18 @@ const supabase = createClient(
 
 
 // ---------- GotSMS (USA physical SIM rentals) — folded in to stay within Vercel 12-function limit ----------
+
+function assertSmsSaleCoversCost(priceNgn, supplierUsd) {
+  const rate = Number(process.env.USD_TO_NGN_RATE) || Number(process.env.USD_TO_NGN) || 1500;
+  const cost = Number(supplierUsd) * rate;
+  const sale = Number(priceNgn);
+  if (!(sale > 0)) return { ok: false, message: 'Price unavailable. Refresh and try again.' };
+  if (Number(supplierUsd) > 0 && Number.isFinite(cost) && sale + 0.01 < cost) {
+    return { ok: false, message: 'This number is mispriced. Please refresh or contact support.', code: 'PRICE_UNDER_COST' };
+  }
+  return { ok: true };
+}
+
 const GOTSMS_BASE = 'https://app.gotsms.org';
 const GOTSMS_TOKEN = process.env.GOTSMS_API_TOKEN || process.env.GOT_SMS_TOKEN || '';
 
@@ -2229,6 +2241,13 @@ export default async function handler(req, res) {
         } catch (_) {}
       }
       if (!(price > 0)) price = applyMarkup(costUsd);
+
+      {
+        const guard = assertSmsSaleCoversCost(price, costUsd);
+        if (!guard.ok) {
+          return json(res, 409, { success: false, code: guard.code || 'PRICE_UNDER_COST', message: guard.message });
+        }
+      }
 
       const bal = Number(profile.balance) || 0;
       if (bal < price) {

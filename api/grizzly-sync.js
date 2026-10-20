@@ -42,15 +42,30 @@ function salePriceFromUsd(supplierPriceUsd) {
     Number(process.env.USD_TO_NGN_RATE) ||
     Number(process.env.USD_TO_NGN) ||
     1500;
-  const percent = 80; // mid-band of 60–100 markup
+  const percent = 85; // mid-band of 70–100 markup
   const minProfit = Number(process.env.MIN_PROFIT_NGN) || 500;
   const minSale = Number(process.env.MIN_NUMBER_PRICE_NGN) || 1000;
+  const midFloor = Number(process.env.SMS_MID_COST_FLOOR_NGN) || 1500;
+  const midUsd = Number(process.env.SMS_MID_COST_USD) || 0.5;
   const supplierNgn = Number(supplierPriceUsd) * rate;
   if (!Number.isFinite(supplierNgn) || supplierNgn <= 0) return minSale;
   const percentPrice = Math.ceil(supplierNgn * (1 + percent / 100));
   const floorPrice = Math.ceil(supplierNgn + minProfit);
-  const finalPrice = Math.max(percentPrice, floorPrice, minSale);
+  let absolute = minSale;
+  if (Number(supplierPriceUsd) > midUsd) absolute = Math.max(absolute, midFloor);
+  const finalPrice = Math.max(percentPrice, floorPrice, absolute);
   return Math.ceil(finalPrice / 50) * 50;
+}
+
+function assertSaleCoversCost(priceNgn, supplierUsd) {
+  const rate = Number(process.env.USD_TO_NGN_RATE) || Number(process.env.USD_TO_NGN) || 1500;
+  const cost = Number(supplierUsd) * rate;
+  const sale = Number(priceNgn);
+  if (!(sale > 0)) return { ok: false, message: 'Price unavailable. Refresh and try again.' };
+  if (Number(supplierUsd) > 0 && Number.isFinite(cost) && sale + 0.01 < cost) {
+    return { ok: false, message: 'This number is mispriced. Please refresh or contact support.', code: 'PRICE_UNDER_COST' };
+  }
+  return { ok: true };
 }
 
 function lowestProviderUsd(providersObj) {
@@ -727,6 +742,13 @@ async function handleOrder(req, res) {
     } else if (providerId && !svc.providers_raw) {
       // Client asked for a pool but we have no provider map — fall back to catalog price
       resolvedProviderId = providerId;
+    }
+
+    {
+      const guard = assertSaleCoversCost(price, supplierPriceUsd);
+      if (!guard.ok) {
+        return res.status(409).json({ success: false, code: guard.code || 'PRICE_UNDER_COST', message: guard.message });
+      }
     }
 
     const { data: profile, error: profErr } = await supabase
