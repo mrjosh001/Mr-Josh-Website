@@ -281,16 +281,26 @@ body::before{content:'';position:fixed;inset:0;pointer-events:none;z-index:0;bac
 <div class="ps-block-text" id="psCountry">—</div>
 </div>
 <div id="psHeroOpts" class="ps-block" style="display:none">
-<div class="ps-block-label">Number preferences (optional)</div>
-<label style="display:block;font-size:12px;color:#64748b;margin:8px 0 4px">Carrier / operator</label>
-<input type="text" id="psOperator" placeholder="e.g. any, or leave blank" style="width:100%;padding:10px 12px;border-radius:10px;border:1px solid #e2e8f0;font-size:14px;box-sizing:border-box;font-family:inherit" />
-<label style="display:block;font-size:12px;color:#64748b;margin:10px 0 4px">Exclude number prefixes</label>
-<input type="text" id="psPhoneException" placeholder="e.g. 070,080 (comma-separated)" style="width:100%;padding:10px 12px;border-radius:10px;border:1px solid #e2e8f0;font-size:14px;box-sizing:border-box;font-family:inherit" />
-<label style="display:flex;align-items:center;gap:8px;margin-top:12px;font-size:13px;color:#334155;cursor:pointer">
-<input type="checkbox" id="psVoiceCode" style="width:18px;height:18px" />
-Prefer voice call code when available
-</label>
-<p style="font-size:11px;color:#94a3b8;margin:8px 0 0;line-height:1.4">Leave blank for standard SMS delivery. Advanced options only apply when supported for this number.</p>
+<div class="ps-block-label">Customize</div>
+<div id="psVerifyWrap" style="margin-top:6px">
+  <div style="font-size:12px;color:#64748b;margin-bottom:6px;font-weight:600">Verification</div>
+  <label style="display:flex;align-items:center;gap:8px;font-size:13px;color:#334155;margin-bottom:8px;cursor:pointer">
+    <input type="radio" name="psVerifyType" id="psVerifySms" value="sms" checked style="width:16px;height:16px" />
+    SMS only
+  </label>
+  <label id="psVerifyFlashLabel" style="display:none;align-items:center;gap:8px;font-size:13px;color:#334155;margin-bottom:8px;cursor:pointer">
+    <input type="radio" name="psVerifyType" id="psVerifyFlash" value="flash" style="width:16px;height:16px" />
+    Flash call + SMS
+  </label>
+  <p id="psVerifyHint" style="font-size:11px;color:#94a3b8;margin:0 0 8px;line-height:1.35">Loading options for this country…</p>
+</div>
+<label style="display:block;font-size:12px;color:#64748b;margin:8px 0 4px;font-weight:600">Operator</label>
+<select id="psOperator" style="width:100%;padding:10px 12px;border-radius:10px;border:1px solid #e2e8f0;font-size:14px;box-sizing:border-box;font-family:inherit;background:#fff;color:#0f172a">
+  <option value="">Any operator</option>
+</select>
+<p id="psOperatorStatus" style="font-size:11px;color:#94a3b8;margin:4px 0 0">Loading operators…</p>
+<label style="display:block;font-size:12px;color:#64748b;margin:10px 0 4px">Exclude prefixes (optional)</label>
+<input type="text" id="psPhoneException" placeholder="e.g. 070,080" style="width:100%;padding:10px 12px;border-radius:10px;border:1px solid #e2e8f0;font-size:14px;box-sizing:border-box;font-family:inherit" />
 </div>
 <div class="ps-total-row">
 <span class="ps-total-label">Total</span>
@@ -1300,19 +1310,99 @@ function renderServices(){}
 
 
 
+
+function updateHeroDisplayedPrice(){
+  var flashRadio = document.getElementById('psVerifyFlash');
+  var flashLabel = document.getElementById('psVerifyFlashLabel');
+  var useFlash = flashRadio && flashRadio.checked && flashLabel && flashLabel.style.display !== 'none';
+  var p = useFlash && window.__heroPriceFlash != null ? Number(window.__heroPriceFlash) : Number(window.__heroPriceSms || 0);
+  if(!(p > 0) && activeService) p = Number(activeService.price) || 0;
+  if(activeService) activeService.price = p;
+  var elP = document.getElementById('psUnitPrice');
+  var elT = document.getElementById('psTotal');
+  if(elP) elP.textContent = money(p);
+  if(elT) elT.textContent = money(p);
+}
+
+async function loadHeroOptionsForPurchase(svc){
+  var countryId = currentCountry && currentCountry.country_id;
+  var serviceId = (svc && svc.service_id) || (currentServicePick && currentServicePick.service_id) || '';
+  var op = document.getElementById('psOperator');
+  var opStatus = document.getElementById('psOperatorStatus');
+  var flashLabel = document.getElementById('psVerifyFlashLabel');
+  var verifyHint = document.getElementById('psVerifyHint');
+  var smsRadio = document.getElementById('psVerifySms');
+  if(!countryId){
+    if(opStatus) opStatus.textContent = 'Pick a country first';
+    return;
+  }
+  try{
+    var session = null;
+    try{ var s = await sbClient.auth.getSession(); session = s && s.data && s.data.session; }catch(e){}
+    var headers = { 'Content-Type': 'application/json' };
+    if(session && session.access_token) headers['Authorization'] = 'Bearer ' + session.access_token;
+    var url = '/api/grizzly-sync?action=hero_options&country=' + encodeURIComponent(String(countryId))
+      + '&service=' + encodeURIComponent(String(serviceId));
+    var res = await fetch(url, { headers: headers });
+    var json = await res.json().catch(function(){ return {}; });
+    var data = (json && json.data) || {};
+    var operators = Array.isArray(data.operators) ? data.operators : [];
+    if(op){
+      op.innerHTML = '<option value="">Any operator</option>' + operators.map(function(name){
+        return '<option value="'+escapeHtml(String(name))+'">'+escapeHtml(String(name))+'</option>';
+      }).join('');
+    }
+    if(opStatus){
+      opStatus.textContent = operators.length
+        ? (operators.length + ' operator' + (operators.length===1?'':'s') + ' from live list')
+        : 'Any operator';
+    }
+    window.__heroPriceSms = Number(data.price_ngn_sms) > 0 ? Number(data.price_ngn_sms) : Number(svc && svc.price) || 0;
+    window.__heroPriceFlash = Number(data.price_ngn_flash) > 0 ? Number(data.price_ngn_flash) : null;
+    var flashOk = !!data.flash_available && window.__heroPriceFlash != null;
+    if(flashLabel) flashLabel.style.display = flashOk ? 'flex' : 'none';
+    if(!flashOk && smsRadio) smsRadio.checked = true;
+    if(verifyHint){
+      verifyHint.textContent = flashOk
+        ? ('Flash call + SMS available — total updates when selected (from ' + money(window.__heroPriceFlash) + ').')
+        : 'Only SMS verification for this service and country.';
+    }
+    updateHeroDisplayedPrice();
+  }catch(e){
+    console.warn('loadHeroOptionsForPurchase', e);
+    if(opStatus) opStatus.textContent = 'Could not load operators — Any is fine';
+    if(verifyHint) verifyHint.textContent = 'Using standard SMS price.';
+  }
+}
+
 function openPurchaseModal(s){
   activeService = s;
   if(s && s.provider_id) selectedProviderId = s.provider_id;
+  window.__heroPriceSms = Number(s.price) || 0;
+  window.__heroPriceFlash = null;
   var heroOpts = document.getElementById('psHeroOpts');
   if(heroOpts){
     var showHero = isHeroSource(s && s.source) || isHeroSource(currentCountry && currentCountry.source);
     heroOpts.style.display = showHero ? 'block' : 'none';
     var op = document.getElementById('psOperator');
     var pe = document.getElementById('psPhoneException');
-    var vc = document.getElementById('psVoiceCode');
-    if(op) op.value = '';
+    var flashLabel = document.getElementById('psVerifyFlashLabel');
+    var smsRadio = document.getElementById('psVerifySms');
+    var flashRadio = document.getElementById('psVerifyFlash');
+    var opStatus = document.getElementById('psOperatorStatus');
+    var verifyHint = document.getElementById('psVerifyHint');
     if(pe) pe.value = '';
-    if(vc) vc.checked = false;
+    if(smsRadio) smsRadio.checked = true;
+    if(flashRadio) flashRadio.checked = false;
+    if(flashLabel) flashLabel.style.display = 'none';
+    if(op){ op.innerHTML = '<option value="">Any operator</option>'; op.value = ''; }
+    if(opStatus) opStatus.textContent = showHero ? 'Loading operators…' : '';
+    if(verifyHint) verifyHint.textContent = showHero ? 'Loading options for this country…' : '';
+    if(showHero){
+      loadHeroOptionsForPurchase(s);
+      if(smsRadio) smsRadio.onchange = function(){ updateHeroDisplayedPrice(); };
+      if(flashRadio) flashRadio.onchange = function(){ updateHeroDisplayedPrice(); };
+    }
   }
 
   const name = (s.service_name || s.service_id || 'Service').replace(/_/g,' ');
