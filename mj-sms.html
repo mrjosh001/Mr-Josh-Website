@@ -1138,12 +1138,24 @@ async function selectService(svc){
     }
   }catch(e){ console.warn('country refresh', e); }
 
+  // CRITICAL: key by country + source so Grizzly and Hero stay as separate rows
+  // (e.g. two "Canada" lines). Never collapse pools across suppliers.
   const byC = new Map();
   rows.forEach(c => {
-    const id = String(c.country_id);
-    if(!byC.has(id) || Number(c.price) < Number(byC.get(id).price)) byC.set(id, c);
+    const src = String(c.source || 'grizzlysms').toLowerCase();
+    const id = String(c.country_id) + '|' + src + '|' + String(c.service_id || '');
+    const row = Object.assign({}, c, { source: src });
+    if (!byC.has(id) || Number(row.price) < Number(byC.get(id).price)) byC.set(id, row);
   });
-  allCountries = Array.from(byC.values()).sort((a,b) => Number(a.price) - Number(b.price));
+  allCountries = Array.from(byC.values()).sort(function(a, b) {
+    var cn = String(a.country_name || '').localeCompare(String(b.country_name || ''));
+    if (cn !== 0) return cn;
+    // Same country name: Grizzly (pool system) first, then Hero
+    var as = isHeroSource(a.source) ? 1 : 0;
+    var bs = isHeroSource(b.source) ? 1 : 0;
+    if (as !== bs) return as - bs;
+    return Number(a.price) - Number(b.price);
+  });
   renderCountryPrices(allCountries);
 }
 
@@ -1152,65 +1164,77 @@ function renderCountryPrices(list){
     countryList.innerHTML = '<div class="empty-state"><h4>No countries for this service</h4><p>Try another service</p></div>';
     return;
   }
+  // How many rows share this country name? (Grizzly vs Hero)
   var nameCount = {};
   list.forEach(function(c){
-    var n = String(c.country_name||'').toLowerCase();
-    nameCount[n] = (nameCount[n]||0)+1;
+    var n = String(c.country_name || '').toLowerCase();
+    nameCount[n] = (nameCount[n] || 0) + 1;
   });
   var nameSeen = {};
-  countryList.innerHTML = list.map(function(c,i){
-    var pools = providersToPoolOptions(c.providers_raw, c.pool_price_overrides);
+  countryList.innerHTML = list.map(function(c, i){
+    var isHero = isHeroSource(c.source);
+    var pools = (!isHero) ? providersToPoolOptions(c.providers_raw, c.pool_price_overrides) : [];
     var showPrice = c.price;
-    if(pools.length){
+    if (pools.length) {
       showPrice = Math.min.apply(null, pools.map(function(p){ return p.price_ngn; }));
     }
     var cname = c.country_name || 'Country';
     var key = String(cname).toLowerCase();
     var optionTag = '';
-    if(nameCount[key] > 1){
-      nameSeen[key] = (nameSeen[key]||0)+1;
+    if (nameCount[key] > 1) {
+      nameSeen[key] = (nameSeen[key] || 0) + 1;
       optionTag = ' · Option ' + nameSeen[key];
     }
-    var extra = pools.length > 1 ? (' · ' + pools.length + ' pools') : '';
-    return '<div class="country-price-row" data-index="'+i+'"><div class="left"><span class="flag">'+countryFlag(c.country_name)+'</span><span class="cname">'+escapeHtml(cname)+escapeHtml(optionTag)+extra+'</span></div><div class="right"><span class="cprice">from '+money(showPrice)+'</span><span class="chev"><i class="fa-solid fa-chevron-right"></i></span></div></div>';
+    // Only Grizzly shows "N pools" — Hero never uses the pool system
+    var extra = (!isHero && pools.length > 1) ? (' · ' + pools.length + ' pools') : '';
+    return '<div class="country-price-row" data-index="'+i+'" data-source="'+escapeHtml(String(c.source||'grizzlysms'))+'">'
+      + '<div class="left"><span class="flag">'+countryFlag(c.country_name)+'</span>'
+      + '<span class="cname">'+escapeHtml(cname)+escapeHtml(optionTag)+extra+'</span></div>'
+      + '<div class="right"><span class="cprice">from '+money(showPrice)+'</span>'
+      + '<span class="chev"><i class="fa-solid fa-chevron-right"></i></span></div></div>';
   }).join('');
+
   countryList.querySelectorAll('.country-price-row').forEach(function(row){
     row.addEventListener('click', function(){
       var c = list[Number(row.getAttribute('data-index'))];
-      if(!c) return;
+      if (!c) return;
+      var src = String(c.source || 'grizzlysms').toLowerCase();
       currentCountry = {
         country_id: c.country_id,
         country_name: c.country_name,
-        source: c.source || 'grizzlysms',
+        source: src,
         service_id: c.service_id
       };
       selectedProviderId = null;
-      var pools = providersToPoolOptions(c.providers_raw, c.pool_price_overrides);
-      // Second OTP pool: no multi-pool step — optional customize on purchase sheet
-      if(isHeroSource(c.source) || !pools.length){
+
+      // —— HERO: separate path — no Grizzly pools, optional customize on buy sheet ——
+      if (isHeroSource(src)) {
         openPurchaseModal({
           service_id: c.service_id,
           service_name: c.service_name || (currentServicePick && currentServicePick.service_name),
           price: c.price,
           available_quantity: c.available_quantity,
           provider_id: null,
-          source: c.source || 'grizzlysms'
+          source: 'herosms'
         });
         return;
       }
-      if(pools.length > 1){
+
+      // —— GRIZZLY: normal pool system (unchanged) ——
+      var pools = providersToPoolOptions(c.providers_raw, c.pool_price_overrides);
+      if (pools.length > 1) {
         openPoolStep(c, pools);
-      } else {
-        if(pools.length === 1) selectedProviderId = pools[0].provider_id;
-        openPurchaseModal({
-          service_id: c.service_id,
-          service_name: c.service_name || (currentServicePick && currentServicePick.service_name),
-          price: pools.length === 1 ? pools[0].price_ngn : c.price,
-          available_quantity: pools.length === 1 ? pools[0].count : c.available_quantity,
-          provider_id: selectedProviderId,
-          source: c.source || 'grizzlysms'
-        });
+        return;
       }
+      if (pools.length === 1) selectedProviderId = pools[0].provider_id;
+      openPurchaseModal({
+        service_id: c.service_id,
+        service_name: c.service_name || (currentServicePick && currentServicePick.service_name),
+        price: pools.length === 1 ? pools[0].price_ngn : c.price,
+        available_quantity: pools.length === 1 ? pools[0].count : c.available_quantity,
+        provider_id: selectedProviderId,
+        source: 'grizzlysms'
+      });
     });
   });
 }
@@ -1244,7 +1268,7 @@ function openPoolStep(countryRow, pools){
         price: p.price_ngn,
         available_quantity: p.count,
         provider_id: p.provider_id,
-        source: countryRow.source || 'grizzlysms'
+        source: 'grizzlysms' // pool step is Grizzly-only
       });
     });
   });
