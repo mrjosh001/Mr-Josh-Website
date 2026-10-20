@@ -274,6 +274,18 @@ body::before{content:'';position:fixed;inset:0;pointer-events:none;z-index:0;bac
 <div class="ps-block-label">Country</div>
 <div class="ps-block-text" id="psCountry">—</div>
 </div>
+<div id="psHeroOpts" class="ps-block" style="display:none">
+<div class="ps-block-label">Number preferences (optional)</div>
+<label style="display:block;font-size:12px;color:#64748b;margin:8px 0 4px">Carrier / operator</label>
+<input type="text" id="psOperator" placeholder="e.g. any, or leave blank" style="width:100%;padding:10px 12px;border-radius:10px;border:1px solid #e2e8f0;font-size:14px;box-sizing:border-box;font-family:inherit" />
+<label style="display:block;font-size:12px;color:#64748b;margin:10px 0 4px">Exclude number prefixes</label>
+<input type="text" id="psPhoneException" placeholder="e.g. 070,080 (comma-separated)" style="width:100%;padding:10px 12px;border-radius:10px;border:1px solid #e2e8f0;font-size:14px;box-sizing:border-box;font-family:inherit" />
+<label style="display:flex;align-items:center;gap:8px;margin-top:12px;font-size:13px;color:#334155;cursor:pointer">
+<input type="checkbox" id="psVoiceCode" style="width:18px;height:18px" />
+Prefer voice call code when available
+</label>
+<p style="font-size:11px;color:#94a3b8;margin:8px 0 0;line-height:1.4">Leave blank for standard SMS delivery. Advanced options only apply when supported for this number.</p>
+</div>
 <div class="ps-total-row">
 <span class="ps-total-label">Total</span>
 <span class="ps-total-price" id="psTotal">₦0</span>
@@ -309,21 +321,29 @@ let currentServicePick = null;
 let activeService = null;
 let isBuying = false;
 
+/** Server 1 OTP pools: primary + Hero (second catalog). Never expose names to UI. */
+function smsOtpSources(){ return ['grizzlysms', 'herosms']; }
+function isHeroSource(src){ return String(src||'').toLowerCase() === 'herosms'; }
+
 const POPULAR_SERVICES = ['whatsapp','telegram','facebook','instagram','tiktok','google','gmail','twitter','x','discord','snapchat','microsoft','amazon','netflix','spotify','uber','paypal','linkedin','signal','viber','wechat'];
 function isJunkService(name){
   const n = String(name||'').trim();
   if(!n) return true;
-  const low = n.toLowerCase();
-  // "Any other" is a real Grizzly catch-all — never treat as junk
-  if(/^any\s*other$/i.test(n) || low === 'other') return false;
+  const low = n.toLowerCase().replace(/_/g,' ').replace(/\s+/g,' ').trim();
+  // "Any other" is a real catch-all — never treat as junk
+  if(/^any\s*other$/i.test(low) || low === 'other') return false;
+  // Grizzly internal codes: "gr au", "gr_aw", "gr bg", "gm69", etc.
+  if(/^gr[\s_\-]?[a-z0-9]{1,6}$/i.test(low)) return true;
+  if(/^gm[\s_\-]?[a-z0-9]{1,6}$/i.test(low)) return true;
+  if(/^gr\s+[a-z0-9]{1,4}$/i.test(low)) return true;
   // supplier internal codes: abx, acx, axa, a1b, etc.
-  if(/^[a-z]{1,4}x$/i.test(n)) return true;
-  if(/^[a-z]{2,4}$/i.test(n) && !/sms|otp|app|pay|tik|tok|ok/i.test(low)) return true;
-  if(/^[a-z]{2,3}[a-z0-9]$/i.test(n) && n.length <= 4) return true;
-  if(/^[0-9]+$/.test(n)) return true;
-  if(/^[a-z0-9]{1,3}$/i.test(n)) return true;
+  if(/^[a-z]{1,4}x$/i.test(low)) return true;
+  if(/^[a-z]{2,4}$/i.test(low) && !/sms|otp|app|pay|tik|tok|ok|wa|tg|fb|ig/i.test(low)) return true;
+  if(/^[a-z]{2,3}[a-z0-9]$/i.test(low) && low.length <= 4) return true;
+  if(/^[0-9]+$/.test(low)) return true;
+  if(/^[a-z0-9]{1,3}$/i.test(low)) return true;
   // mostly consonants short codes
-  if(n.length <= 4 && !/[aeiou]/i.test(n) && /^[a-z]+$/i.test(n)) return true;
+  if(low.length <= 4 && !/[aeiou]/i.test(low) && /^[a-z]+$/i.test(low)) return true;
   return false;
 }
 function isAnyOtherService(name){
@@ -546,7 +566,7 @@ async function loadRecentActivity(){
     const { data, error } = await sbClient
       .from('number_orders')
       .select('order_id, service_name, phone_number, status')
-      .eq('source', 'grizzlysms')
+      .in('source', smsOtpSources())
       .eq('user_id', currentUserId)
       .eq('status', 'waiting_for_code')
       .order('created_at', { ascending: false })
@@ -649,7 +669,7 @@ async function loadServiceCatalog(opts){
     }
 
     // Cache while logged in / same browser tab session — do not reload from scratch
-    var CACHE_KEY = 'mj_sms1_catalog_v4';
+    var CACHE_KEY = 'mj_sms1_catalog_v5';
     function lagosDay(){
       try{ return new Date().toLocaleDateString('en-CA', { timeZone: 'Africa/Lagos' }); }
       catch(e){ return new Date().toISOString().slice(0,10); }
@@ -683,15 +703,16 @@ async function loadServiceCatalog(opts){
 
     function ingest(rows, countryId, countryName){
       (rows || []).forEach(function(row){
-        var name = String(row.service_name || row.service_id || '').replace(/_/g, ' ').trim();
-        if(!name) return;
+        var name = niceServiceName(row.service_name, row.service_id);
+        if(!name || isJunkService(name)) return;
         var key = name.toLowerCase();
         if(!catalogMap.has(key)){
           catalogMap.set(key, { service_id: row.service_id, service_name: name, key: key });
         }
         if(!serviceCountryIndex[key]) serviceCountryIndex[key] = [];
         var cid = countryId != null ? countryId : row.country_id;
-        var exists = serviceCountryIndex[key].some(function(x){ return String(x.country_id) === String(cid); });
+        var src = String(row.source || 'grizzlysms');
+        var exists = serviceCountryIndex[key].some(function(x){ return String(x.country_id) === String(cid) && String(x.source||'') === src; });
         if(exists) return;
         serviceCountryIndex[key].push({
           country_id: cid,
@@ -699,7 +720,8 @@ async function loadServiceCatalog(opts){
           price: row.price,
           available_quantity: row.available_quantity,
           service_id: row.service_id,
-          service_name: name
+          service_name: name,
+          source: (row && row.source) ? String(row.source) : 'grizzlysms'
         });
       });
     }
@@ -775,8 +797,8 @@ async function loadServiceCatalog(opts){
       if(!countryIds.length) return [];
       var res = await sbClient
         .from('number_services')
-        .select('service_id, service_name, price, available_quantity, country_id, country_name')
-        .eq('source', 'grizzlysms')
+        .select('service_id, service_name, price, available_quantity, country_id, country_name, source')
+        .in('source', smsOtpSources())
         .eq('is_available', true)
         .in('country_id', countryIds)
         .gt('price', 0)
@@ -784,8 +806,8 @@ async function loadServiceCatalog(opts){
       if(res.error){
         res = await sbClient
           .from('number_services')
-          .select('service_id, service_name, price, available_quantity, country_id, country_name')
-          .eq('source', 'grizzlysms')
+          .select('service_id, service_name, price, available_quantity, country_id, country_name, source')
+          .in('source', smsOtpSources())
           .eq('is_available', true)
           .in('country_id', countryIds)
           .limit(3000);
@@ -800,8 +822,8 @@ async function loadServiceCatalog(opts){
           var from = pg * 1000, to = from + 999;
           return sbClient
             .from('number_services')
-            .select('service_id, service_name, price, available_quantity, country_id, country_name')
-            .eq('source', 'grizzlysms')
+            .select('service_id, service_name, price, available_quantity, country_id, country_name, source')
+            .in('source', smsOtpSources())
             .eq('is_available', true)
             .gt('price', 0)
             .range(from, to);
@@ -883,8 +905,8 @@ async function searchServicesInDb(q){
   try{
     var res = await sbClient
       .from('number_services')
-      .select('service_id, service_name, price, available_quantity, country_id, country_name')
-      .eq('source', 'grizzlysms')
+      .select('service_id, service_name, price, available_quantity, country_id, country_name, source')
+      .in('source', smsOtpSources())
       .eq('is_available', true)
       .ilike('service_name', '%' + q + '%')
       .gt('price', 0)
@@ -892,8 +914,8 @@ async function searchServicesInDb(q){
     if(res.error || !(res.data && res.data.length)){
       res = await sbClient
         .from('number_services')
-        .select('service_id, service_name, price, available_quantity, country_id, country_name')
-        .eq('source', 'grizzlysms')
+        .select('service_id, service_name, price, available_quantity, country_id, country_name, source')
+        .in('source', smsOtpSources())
         .eq('is_available', true)
         .ilike('service_name', '%' + q + '%')
         .limit(150);
@@ -916,7 +938,8 @@ async function searchServicesInDb(q){
           price: row.price,
           available_quantity: row.available_quantity,
           service_id: row.service_id,
-          service_name: name
+          service_name: name,
+          source: (row && row.source) ? String(row.source) : 'grizzlysms'
         });
       }
     });
@@ -934,33 +957,40 @@ async function searchServicesInDb(q){
 
 function niceServiceName(name, serviceId){
   var id = String(serviceId || '').trim();
-  var n = String(name || '').replace(/_/g,' ').trim();
+  var n = String(name || '').replace(/_/g,' ').replace(/\s+/g,' ').trim();
   var KNOWN = {
-    wa:'WhatsApp',tg:'Telegram',go:'Google',ig:'Instagram',fb:'Facebook',tw:'Twitter',
-    tk:'TikTok',lf:'TikTok',ds:'Discord',fu:'Snapchat',vi:'Viber',vk:'VK',mm:'Microsoft',
-    nf:'Netflix',oi:'Tinder',am:'Amazon',wx:'Apple',wb:'WeChat',we:'WeChat',ok:'OK.ru',
-    ma:'Mail.ru',mb:'Yahoo',ts:'PayPal',tn:'LinkedIn',ot:'Any other',hw:'Alipay',qq:'QQ',
-    ya:'Yandex',im:'Imo',kt:'KakaoTalk',me:'Line',uk:'Airbnb',tw:'X / Twitter'
+    wa:'WhatsApp', tg:'Telegram', go:'Google', ig:'Instagram', fb:'Facebook', tw:'X / Twitter',
+    tk:'TikTok', lf:'TikTok', ds:'Discord', fu:'Snapchat', vi:'Viber', vk:'VK', mm:'Microsoft',
+    nf:'Netflix', oi:'Tinder', am:'Amazon', wx:'Apple', wb:'WeChat', we:'WeChat', ok:'OK.ru',
+    ma:'Mail.ru', mb:'Yahoo', ts:'PayPal', tn:'LinkedIn', ot:'Any other', hw:'Alipay', qq:'QQ',
+    ya:'Yandex', im:'Imo', kt:'KakaoTalk', me:'Line', uk:'Airbnb', aaw:'Signal',
+    whatsapp:'WhatsApp', telegram:'Telegram', google:'Google', facebook:'Facebook',
+    instagram:'Instagram', tiktok:'TikTok', twitter:'X / Twitter', discord:'Discord',
+    snapchat:'Snapchat', microsoft:'Microsoft', netflix:'Netflix', amazon:'Amazon'
   };
-  var key = id.toLowerCase() || n.toLowerCase().replace(/\s+/g,'');
+  var key = id.toLowerCase();
   if(KNOWN[key]) return KNOWN[key];
+  var nkey = n.toLowerCase().replace(/\s+/g,'');
+  if(KNOWN[nkey]) return KNOWN[nkey];
   if(KNOWN[n.toLowerCase()]) return KNOWN[n.toLowerCase()];
-  // Hide pure "gr xx" style codes in the label when we have nothing better
-  if(/^gr\s*[a-z0-9]{1,4}$/i.test(n) || /^gr_[a-z0-9]+$/i.test(id)){
-    return n.length > 2 ? n : (id || 'Service');
+  // Never show gr_/gm_ codes as the customer label
+  if(/^gr[\s_\-]?[a-z0-9]+$/i.test(n) || /^gm[\s_\-]?[a-z0-9]+$/i.test(n) || /^gr_/i.test(id) || /^gm/i.test(id)){
+    return ''; // treat as junk — filtered out of grid
   }
-  return n || id || 'Service';
+  // Title-case readable names
+  if(n && n.length > 2 && /[a-zA-Z]{3,}/.test(n) && !/^[a-z0-9]{1,5}$/i.test(n)){
+    return n.replace(/\b\w/g, function(c){ return c.toUpperCase(); });
+  }
+  return n || '';
 }
 
 function renderServiceCatalog(list, searchQ){
   var q = (searchQ != null ? searchQ : (serviceSearch && serviceSearch.value) || '').trim().toLowerCase();
   var filtered = (list || []).filter(function(s){
     var name = s.service_name || '';
+    if(!name || !String(name).trim()) return false;
     if(isAnyOtherService(name)) return false; // inject separately when needed
-    if(isJunkService(name)){
-      if(q && name.toLowerCase().includes(q) && q.length >= 2) return true;
-      return false;
-    }
+    if(isJunkService(name)) return false; // never show gr_/gm codes on the grid
     if(q) return name.toLowerCase().includes(q);
     return true;
   });
@@ -1061,8 +1091,8 @@ async function selectService(svc){
     if(!sbClient) await loadServiceCatalog();
     let res = await sbClient
       .from('number_services')
-      .select('service_id, service_name, country_id, country_name, price, available_quantity, providers_raw, supplier_price, pool_price_overrides')
-      .eq('source', 'grizzlysms')
+      .select('service_id, service_name, country_id, country_name, price, available_quantity, providers_raw, supplier_price, pool_price_overrides, source')
+      .in('source', smsOtpSources())
       .eq('is_available', true)
       .eq('service_id', svc.service_id)
       .gt('price', 0)
@@ -1071,8 +1101,8 @@ async function selectService(svc){
     if((!res.data || !res.data.length) && svc.service_name){
       res = await sbClient
         .from('number_services')
-        .select('service_id, service_name, country_id, country_name, price, available_quantity, providers_raw, supplier_price, pool_price_overrides')
-        .eq('source', 'grizzlysms')
+        .select('service_id, service_name, country_id, country_name, price, available_quantity, providers_raw, supplier_price, pool_price_overrides, source')
+        .in('source', smsOtpSources())
         .eq('is_available', true)
         .ilike('service_name', svc.service_name)
         .gt('price', 0)
@@ -1109,22 +1139,52 @@ function renderCountryPrices(list){
     countryList.innerHTML = '<div class="empty-state"><h4>No countries for this service</h4><p>Try another service</p></div>';
     return;
   }
+  var nameCount = {};
+  list.forEach(function(c){
+    var n = String(c.country_name||'').toLowerCase();
+    nameCount[n] = (nameCount[n]||0)+1;
+  });
+  var nameSeen = {};
   countryList.innerHTML = list.map(function(c,i){
     var pools = providersToPoolOptions(c.providers_raw, c.pool_price_overrides);
     var showPrice = c.price;
     if(pools.length){
       showPrice = Math.min.apply(null, pools.map(function(p){ return p.price_ngn; }));
     }
+    var cname = c.country_name || 'Country';
+    var key = String(cname).toLowerCase();
+    var optionTag = '';
+    if(nameCount[key] > 1){
+      nameSeen[key] = (nameSeen[key]||0)+1;
+      optionTag = ' · Option ' + nameSeen[key];
+    }
     var extra = pools.length > 1 ? (' · ' + pools.length + ' pools') : '';
-    return '<div class="country-price-row" data-index="'+i+'"><div class="left"><span class="flag">'+countryFlag(c.country_name)+'</span><span class="cname">'+escapeHtml(c.country_name)+extra+'</span></div><div class="right"><span class="cprice">from '+money(showPrice)+'</span><span class="chev"><i class="fa-solid fa-chevron-right"></i></span></div></div>';
+    return '<div class="country-price-row" data-index="'+i+'"><div class="left"><span class="flag">'+countryFlag(c.country_name)+'</span><span class="cname">'+escapeHtml(cname)+escapeHtml(optionTag)+extra+'</span></div><div class="right"><span class="cprice">from '+money(showPrice)+'</span><span class="chev"><i class="fa-solid fa-chevron-right"></i></span></div></div>';
   }).join('');
   countryList.querySelectorAll('.country-price-row').forEach(function(row){
     row.addEventListener('click', function(){
       var c = list[Number(row.getAttribute('data-index'))];
       if(!c) return;
-      currentCountry = { country_id: c.country_id, country_name: c.country_name };
+      currentCountry = {
+        country_id: c.country_id,
+        country_name: c.country_name,
+        source: c.source || 'grizzlysms',
+        service_id: c.service_id
+      };
       selectedProviderId = null;
       var pools = providersToPoolOptions(c.providers_raw, c.pool_price_overrides);
+      // Second OTP pool: no multi-pool step — optional customize on purchase sheet
+      if(isHeroSource(c.source) || !pools.length){
+        openPurchaseModal({
+          service_id: c.service_id,
+          service_name: c.service_name || (currentServicePick && currentServicePick.service_name),
+          price: c.price,
+          available_quantity: c.available_quantity,
+          provider_id: null,
+          source: c.source || 'grizzlysms'
+        });
+        return;
+      }
       if(pools.length > 1){
         openPoolStep(c, pools);
       } else {
@@ -1134,7 +1194,8 @@ function renderCountryPrices(list){
           service_name: c.service_name || (currentServicePick && currentServicePick.service_name),
           price: pools.length === 1 ? pools[0].price_ngn : c.price,
           available_quantity: pools.length === 1 ? pools[0].count : c.available_quantity,
-          provider_id: selectedProviderId
+          provider_id: selectedProviderId,
+          source: c.source || 'grizzlysms'
         });
       }
     });
@@ -1169,7 +1230,8 @@ function openPoolStep(countryRow, pools){
         service_name: countryRow.service_name || (currentServicePick && currentServicePick.service_name),
         price: p.price_ngn,
         available_quantity: p.count,
-        provider_id: p.provider_id
+        provider_id: p.provider_id,
+        source: countryRow.source || 'grizzlysms'
       });
     });
   });
@@ -1197,9 +1259,21 @@ async function selectCountry(){}
 function renderServices(){}
 
 
+
 function openPurchaseModal(s){
   activeService = s;
   if(s && s.provider_id) selectedProviderId = s.provider_id;
+  var heroOpts = document.getElementById('psHeroOpts');
+  if(heroOpts){
+    var showHero = isHeroSource(s && s.source) || isHeroSource(currentCountry && currentCountry.source);
+    heroOpts.style.display = showHero ? 'block' : 'none';
+    var op = document.getElementById('psOperator');
+    var pe = document.getElementById('psPhoneException');
+    var vc = document.getElementById('psVoiceCode');
+    if(op) op.value = '';
+    if(pe) pe.value = '';
+    if(vc) vc.checked = false;
+  }
 
   const name = (s.service_name || s.service_id || 'Service').replace(/_/g,' ');
   const icon = serviceIconFa(name);
@@ -1278,13 +1352,27 @@ document.getElementById('psBuyBtn').addEventListener('click', async function(){
     const res = await fetch('/api/grizzly-sync?action=order', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        country_id: currentCountry.country_id,
-        service_id: activeService.service_id,
-        user_id: currentUserId,
-        external_order_id: externalOrderId,
-        provider_id: selectedProviderId || activeService.provider_id || undefined
-      })
+      body: JSON.stringify((function(){
+        var src = (activeService && activeService.source) || (currentCountry && currentCountry.source) || 'grizzlysms';
+        var payload = {
+          country_id: currentCountry.country_id,
+          service_id: activeService.service_id,
+          user_id: currentUserId,
+          external_order_id: externalOrderId,
+          provider_id: selectedProviderId || activeService.provider_id || undefined,
+          source: src,
+          quoted_price_ngn: parseFloat(activeService.price) || undefined
+        };
+        if(isHeroSource(src)){
+          var op = document.getElementById('psOperator');
+          var pe = document.getElementById('psPhoneException');
+          var vc = document.getElementById('psVoiceCode');
+          if(op && op.value.trim()) payload.operator = op.value.trim();
+          if(pe && pe.value.trim()) payload.phone_exception = pe.value.trim();
+          if(vc && vc.checked) payload.voice = true;
+        }
+        return payload;
+      })())
     });
     const data = await res.json();
     if(!res.ok || !data.success){
