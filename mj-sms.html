@@ -1312,16 +1312,29 @@ function renderServices(){}
 
 
 function updateHeroDisplayedPrice(){
+  // SMS only → always the catalog price shown when the sheet opened.
+  // Flash call + SMS → only then switch to flash price (if higher / available).
   var flashRadio = document.getElementById('psVerifyFlash');
   var flashLabel = document.getElementById('psVerifyFlashLabel');
-  var useFlash = flashRadio && flashRadio.checked && flashLabel && flashLabel.style.display !== 'none';
-  var p = useFlash && window.__heroPriceFlash != null ? Number(window.__heroPriceFlash) : Number(window.__heroPriceSms || 0);
-  if(!(p > 0) && activeService) p = Number(activeService.price) || 0;
-  if(activeService) activeService.price = p;
+  var useFlash = !!(flashRadio && flashRadio.checked && flashLabel && flashLabel.style.display !== 'none');
+  var smsP = Number(window.__heroPriceSms || 0);
+  var flashP = window.__heroPriceFlash != null ? Number(window.__heroPriceFlash) : null;
+  var p = smsP;
+  if (useFlash && flashP != null && flashP > 0) {
+    p = Math.max(smsP, flashP); // never charge less than SMS for flash
+  }
+  if (!(p > 0) && activeService) p = Number(activeService.price) || 0;
+  if (activeService) activeService.price = p;
   var elP = document.getElementById('psUnitPrice');
   var elT = document.getElementById('psTotal');
-  if(elP) elP.textContent = money(p);
-  if(elT) elT.textContent = money(p);
+  if (elP) elP.textContent = money(p);
+  if (elT) elT.textContent = money(p);
+}
+
+function formatOpCount(n){
+  if (n == null || !Number.isFinite(Number(n))) return '';
+  var v = Math.floor(Number(n));
+  try { return v.toLocaleString('en-US') + ' pcs'; } catch (e) { return v + ' pcs'; }
 }
 
 async function loadHeroOptionsForPurchase(svc){
@@ -1332,48 +1345,87 @@ async function loadHeroOptionsForPurchase(svc){
   var flashLabel = document.getElementById('psVerifyFlashLabel');
   var verifyHint = document.getElementById('psVerifyHint');
   var smsRadio = document.getElementById('psVerifySms');
-  if(!countryId){
-    if(opStatus) opStatus.textContent = 'Pick a country first';
+  // Lock SMS price to what the sheet already shows (catalog / country row)
+  window.__heroPriceSms = Number(svc && svc.price) || Number(window.__heroPriceSms) || 0;
+  window.__heroPriceFlash = null;
+  updateHeroDisplayedPrice(); // stay on SMS price while options load
+  if (!countryId) {
+    if (opStatus) opStatus.textContent = 'Pick a country first';
     return;
   }
-  try{
+  try {
     var session = null;
-    try{ var s = await sbClient.auth.getSession(); session = s && s.data && s.data.session; }catch(e){}
+    try { var s = await sbClient.auth.getSession(); session = s && s.data && s.data.session; } catch (e) {}
     var headers = { 'Content-Type': 'application/json' };
-    if(session && session.access_token) headers['Authorization'] = 'Bearer ' + session.access_token;
+    if (session && session.access_token) headers['Authorization'] = 'Bearer ' + session.access_token;
     var url = '/api/grizzly-sync?action=hero_options&country=' + encodeURIComponent(String(countryId))
       + '&service=' + encodeURIComponent(String(serviceId));
     var res = await fetch(url, { headers: headers });
     var json = await res.json().catch(function(){ return {}; });
     var data = (json && json.data) || {};
     var operators = Array.isArray(data.operators) ? data.operators : [];
-    if(op){
-      op.innerHTML = '<option value="">Any operator</option>' + operators.map(function(name){
-        return '<option value="'+escapeHtml(String(name))+'">'+escapeHtml(String(name))+'</option>';
-      }).join('');
+    // Normalize to {name, count, cost_usd}
+    operators = operators.map(function(o){
+      if (typeof o === 'string') return { name: o, count: null, cost_usd: null };
+      return {
+        name: String(o.name || o.operator || o.id || '').trim(),
+        count: o.count != null ? Number(o.count) : (o.pcs != null ? Number(o.pcs) : null),
+        cost_usd: o.cost_usd != null ? Number(o.cost_usd) : (o.cost != null ? Number(o.cost) : null)
+      };
+    }).filter(function(o){ return !!o.name; });
+
+    if (op) {
+      var html = '<option value="">Any operator' + (data.stock ? (' · ' + formatOpCount(data.stock)) : '') + '</option>';
+      operators.forEach(function(o){
+        var pcs = formatOpCount(o.count);
+        var soldOut = o.count != null && Number(o.count) <= 0;
+        var label = o.name + (pcs ? (' · ' + pcs) : '');
+        html += '<option value="'+escapeHtml(o.name)+'"'+(soldOut ? ' disabled' : '')+'>'
+          + escapeHtml(label) + (soldOut ? ' (sold out)' : '') + '</option>';
+      });
+      op.innerHTML = html;
+      op.value = '';
     }
-    if(opStatus){
+    if (opStatus) {
+      var withStock = operators.filter(function(o){ return o.count == null || o.count > 0; }).length;
       opStatus.textContent = operators.length
-        ? (operators.length + ' operator' + (operators.length===1?'':'s') + ' from live list')
+        ? (withStock + ' of ' + operators.length + ' operators in stock')
         : 'Any operator';
     }
-    window.__heroPriceSms = Number(data.price_ngn_sms) > 0 ? Number(data.price_ngn_sms) : Number(svc && svc.price) || 0;
-    window.__heroPriceFlash = Number(data.price_ngn_flash) > 0 ? Number(data.price_ngn_flash) : null;
-    var flashOk = !!data.flash_available && window.__heroPriceFlash != null;
-    if(flashLabel) flashLabel.style.display = flashOk ? 'flex' : 'none';
-    if(!flashOk && smsRadio) smsRadio.checked = true;
-    if(verifyHint){
-      verifyHint.textContent = flashOk
-        ? ('Flash call + SMS available — total updates when selected (from ' + money(window.__heroPriceFlash) + ').')
-        : 'Only SMS verification for this service and country.';
+
+    // Flash price only — never overwrite SMS catalog total
+    var flashP = Number(data.price_ngn_flash);
+    var flashOk = !!data.flash_available && flashP > 0;
+    // Only treat as a real flash upsell if it is meaningfully above SMS
+    if (flashOk && flashP > window.__heroPriceSms + 1) {
+      window.__heroPriceFlash = flashP;
+    } else if (flashOk) {
+      // Supplier says flash available but same/lower price — still allow toggle, keep same total
+      window.__heroPriceFlash = Math.max(window.__heroPriceSms, flashP);
+    } else {
+      window.__heroPriceFlash = null;
+      flashOk = false;
     }
+    if (flashLabel) flashLabel.style.display = flashOk ? 'flex' : 'none';
+    if (!flashOk && smsRadio) smsRadio.checked = true;
+    if (verifyHint) {
+      verifyHint.textContent = flashOk
+        ? ('SMS stays ' + money(window.__heroPriceSms) + '. Flash call + SMS updates total to ' + money(window.__heroPriceFlash) + '.')
+        : 'SMS only for this service and country.';
+    }
+    // Stay on SMS price until user picks Flash
+    if (smsRadio) smsRadio.checked = true;
+    var flashRadio = document.getElementById('psVerifyFlash');
+    if (flashRadio) flashRadio.checked = false;
     updateHeroDisplayedPrice();
-  }catch(e){
+  } catch (e) {
     console.warn('loadHeroOptionsForPurchase', e);
-    if(opStatus) opStatus.textContent = 'Could not load operators — Any is fine';
-    if(verifyHint) verifyHint.textContent = 'Using standard SMS price.';
+    if (opStatus) opStatus.textContent = 'Could not load operators — Any is fine';
+    if (verifyHint) verifyHint.textContent = 'SMS only.';
+    updateHeroDisplayedPrice();
   }
 }
+
 
 function openPurchaseModal(s){
   activeService = s;
