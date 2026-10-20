@@ -990,6 +990,7 @@ function withLagos(opts) { return Object.assign({ timeZone: 'Africa/Lagos' }, op
 <button class="nav-item" data-tab="sms" onclick="switchTab('sms')"><i class="fas fa-sim-card"></i> SMS Server 1 (Grizzly)</button>
 <button class="nav-item" data-tab="sms-server2" onclick="switchTab('sms-server2')"><i class="fas fa-server"></i> SMS Server 2</button>
 <button class="nav-item" data-tab="sms-server3" onclick="switchTab('sms-server3')"><i class="fas fa-satellite-dish"></i> SMS Server 3 (VirtualSMS)</button>
+<button class="nav-item" data-tab="sms-server4" onclick="switchTab('sms-server4')"><i class="fas fa-server"></i> SMS Server 4</button>
 <button class="nav-item" data-tab="sms-gotsms" onclick="switchTab('sms-gotsms')"><i class="fas fa-flag-usa"></i> USA Rental (GotSMS)</button>
 <button class="nav-item" data-tab="sms-orders" onclick="switchTab('sms-orders')"><i class="fas fa-comment-sms"></i> SMS Orders</button>
 <button class="nav-item" data-tab="esim-orders" onclick="switchTab('esim-orders')"><i class="fas fa-sim-card"></i> eSIM Orders <span id="esimNavBadge" style="display:none;margin-left:6px;background:#f59e0b;color:#111;font-size:10px;font-weight:800;padding:2px 7px;border-radius:999px;min-width:18px;text-align:center;">0</span></button>
@@ -1115,6 +1116,7 @@ function withLagos(opts) { return Object.assign({ timeZone: 'Africa/Lagos' }, op
  <div class="metric-card"><div class="metric-label">GrizzlySMS (Server 1)</div><div class="metric-value" id="balGrizzly"> </div><div class="metric-sub" id="balGrizzlySub">Loading…</div></div>
  <div class="metric-card"><div class="metric-label">SMS-Bus (Server 2)</div><div class="metric-value" id="balSmsbus"> </div><div class="metric-sub" id="balSmsbusSub">Loading…</div></div>
  <div class="metric-card"><div class="metric-label">Server 3 (Real SIM)</div><div class="metric-value" id="balVirtualsms"> </div><div class="metric-sub" id="balVirtualsmsSub">Loading…</div></div>
+ <div class="metric-card"><div class="metric-label">Server 4 (OTP pool)</div><div class="metric-value" id="balHerosms"> </div><div class="metric-sub" id="balHerosmsSub">Loading…</div></div>
  <div class="metric-card"><div class="metric-label">GotSMS (USA rental)</div><div class="metric-value" id="balGotsms"> </div><div class="metric-sub" id="balGotsmsSub">Loading…</div></div>
  </div>
  <div class="supplier-group-label">SMM providers</div>
@@ -1295,6 +1297,36 @@ function withLagos(opts) { return Object.assign({ timeZone: 'Africa/Lagos' }, op
  </table>
  </div>
  <div id="smsServer3MobileCards" class="mobile-only mobile-cards"></div>
+ </div>
+ </div>
+
+ <div id="tab-sms-server4" class="tab-content">
+ <div class="panel">
+ <div class="panel-title" style="margin-bottom:10px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;">
+ <span>SMS Server 4 · Extra OTP pool</span>
+ <button class="btn btn-primary btn-sm" id="btnSyncServer4" onclick="syncServer4Now()"><i class="fas fa-sync"></i> Sync Server 4</button>
+ </div>
+ <p id="server4SyncProgress" style="color:var(--primary,#3b82f6);font-size:12px;font-weight:700;margin:0 0 14px;min-height:16px;"></p>
+ <p style="color:#94a3b8;font-size:13px;margin:0 0 14px;line-height:1.5;">Pulls an extra OTP catalog into the database. Customer-facing UI never shows the pool name. Admin price and visibility edits are kept on re-sync.</p>
+ <div class="search-row" style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;">
+ <input type="text" id="smsServer4Search" placeholder="Search service (WhatsApp, Google, tg…)" oninput="filterNumberServicesServer4()" style="flex:1;min-width:160px;" />
+ <input type="text" id="smsServer4CountryFilter" placeholder="Country" oninput="filterNumberServicesServer4()" style="flex:1;min-width:140px;" />
+ <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:#94a3b8;white-space:nowrap;">
+ <input type="checkbox" id="smsServer4HideZeroStock" checked onchange="filterNumberServicesServer4()" />
+ Hide 0 stock
+ </label>
+ </div>
+ <div class="desktop-only desktop-table table-wrap">
+ <table>
+ <thead>
+ <tr>
+ <th>Country</th><th>Service</th><th>Supplier ($)</th><th>Your Price (₦)</th><th>Stock</th><th>Status</th><th>Action</th>
+ </tr>
+ </thead>
+ <tbody id="smsServer4TableBody"><tr><td colspan="7" class="empty-state">Click Sync Server 4 to load catalog.</td></tr></tbody>
+ </table>
+ </div>
+ <div id="smsServer4MobileCards" class="mobile-only mobile-cards"></div>
  </div>
  </div>
 
@@ -2032,6 +2064,7 @@ const tabTitles = {
  'sms-orders': 'SMS Orders',
  'sms-server2': 'SMS Server 2',
  'sms-server3': 'SMS Server 3 (VirtualSMS)',
+ 'sms-server4': 'SMS Server 4',
  'sms-gotsms': 'USA Rental (GotSMS)',
  'boosters': 'MJ Boosters (Owlet)',
  'booster-orders': 'Booster Orders',
@@ -2440,6 +2473,100 @@ async function bulkRepriceNumbers(mode) {
 
 // ---------- GotSMS USA rental (catalog in number_services source=gotsms) ----------
 window._gotsmsRows = [];
+
+
+// ---------- SMS Server 4 (extra OTP pool, source=herosms) ----------
+async function syncServer4Now() {
+  const btn = document.getElementById('btnSyncServer4');
+  const prog = document.getElementById('server4SyncProgress');
+  const idle = '<i class="fas fa-sync"></i> Sync Server 4';
+  if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Syncing…'; }
+  if (prog) prog.textContent = 'Starting Server 4 catalog sync…';
+  try {
+    const sb = window.supabaseClient || window.supabase || supabase;
+    const session = await sb.auth.getSession();
+    const token = session && session.data && session.data.session && session.data.session.access_token;
+    if (!token) throw new Error('Sign in again');
+    let rounds = 0;
+    let done = false;
+    while (!done && rounds < 40) {
+      rounds += 1;
+      if (prog) prog.textContent = 'Server 4 sync · pass ' + rounds + '…';
+      const res = await fetch('/api/grizzly-sync?action=hero_sync&force=1', {
+        method: 'GET',
+        headers: { Authorization: 'Bearer ' + token, Accept: 'application/json' }
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || data.success === false) throw new Error(data.message || ('HTTP ' + res.status));
+      if (prog) prog.textContent = data.message || ('Pass ' + rounds + ' saved');
+      if (data.busy) { await new Promise(r => setTimeout(r, 2500)); continue; }
+      if (data.partial) { await new Promise(r => setTimeout(r, 800)); continue; }
+      done = true;
+      if (prog) prog.textContent = data.message || 'Server 4 sync complete';
+      if (typeof showAdminToast === 'function') showAdminToast(data.message || 'Server 4 sync complete', 'success');
+    }
+    await loadNumberServicesServer4();
+  } catch (e) {
+    console.error(e);
+    if (prog) prog.textContent = 'Sync failed: ' + (e.message || e);
+    if (typeof showAdminToast === 'function') showAdminToast(e.message || 'Server 4 sync failed', 'error');
+  } finally {
+    if (btn) { btn.disabled = false; btn.innerHTML = idle; }
+  }
+}
+let allServer4Services = [];
+async function loadNumberServicesServer4() {
+  try {
+    const sb = window.supabaseClient || window.supabase || supabase;
+    const q = (document.getElementById('smsServer4Search') && document.getElementById('smsServer4Search').value || '').trim();
+    const country = (document.getElementById('smsServer4CountryFilter') && document.getElementById('smsServer4CountryFilter').value || '').trim();
+    const hideZero = !(document.getElementById('smsServer4HideZeroStock') && document.getElementById('smsServer4HideZeroStock').checked === false);
+    let query = sb.from('number_services')
+      .select('id,source,country_id,country_name,service_id,service_name,supplier_price,price,available_quantity,is_available,updated_at')
+      .eq('source', 'herosms')
+      .order('country_name', { ascending: true })
+      .limit(500);
+    if (q) query = query.ilike('service_name', '%' + q + '%');
+    if (country) query = query.ilike('country_name', '%' + country + '%');
+    if (hideZero) query = query.gt('available_quantity', 0);
+    const { data, error } = await query;
+    if (error) throw error;
+    allServer4Services = data || [];
+    renderNumberServicesServer4(allServer4Services);
+  } catch (e) {
+    console.error(e);
+    const tbody = document.getElementById('smsServer4TableBody');
+    if (tbody) tbody.innerHTML = '<tr><td colspan="7" class="empty-state">' + (e.message || 'Load failed') + '</td></tr>';
+  }
+}
+function filterNumberServicesServer4() { loadNumberServicesServer4(); }
+function renderNumberServicesServer4(rows) {
+  const tbody = document.getElementById('smsServer4TableBody');
+  const cards = document.getElementById('smsServer4MobileCards');
+  const esc = (typeof escapeHtml === 'function') ? escapeHtml : (s => String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/"/g,'&quot;'));
+  if (!rows || !rows.length) {
+    if (tbody) tbody.innerHTML = '<tr><td colspan="7" class="empty-state">No rows. Click Sync Server 4.</td></tr>';
+    if (cards) cards.innerHTML = '<div class="empty-state">No rows. Click Sync Server 4.</div>';
+    return;
+  }
+  if (tbody) {
+    tbody.innerHTML = rows.map(r => {
+      const stock = Number(r.available_quantity || 0);
+      const price = Number(r.price || 0);
+      const cost = Number(r.supplier_price || 0);
+      return '<tr><td>' + esc(r.country_name || r.country_id || '') + '</td><td>' + esc(r.service_name || r.service_id || '') +
+        '</td><td>$' + cost.toFixed(4) + '</td><td>₦' + price.toLocaleString() + '</td><td>' + stock +
+        '</td><td>' + (r.is_available === false ? 'Hidden' : 'Live') + '</td><td></td></tr>';
+    }).join('');
+  }
+  if (cards) {
+    cards.innerHTML = rows.slice(0, 80).map(r =>
+      '<div class="mobile-card"><strong>' + esc(r.service_name || r.service_id || '') +
+      '</strong><div style="font-size:12px;color:#94a3b8">' + esc(r.country_name || '') +
+      ' · ₦' + Number(r.price || 0).toLocaleString() + ' · stock ' + Number(r.available_quantity || 0) + '</div></div>'
+    ).join('');
+  }
+}
 
 // ---------- SMS Server 3 (VirtualSMS) ----------
 window._server3Rows = window._server3Rows || [];
@@ -2938,6 +3065,7 @@ async function loadSupplierBalances() {
  renderSupplierBalance('Smmkings', data.suppliers.smmkings);
  renderSupplierBalance('Smsbus', data.suppliers.smsbus);
  renderSupplierBalance('Virtualsms', data.suppliers.virtualsms);
+ renderSupplierBalance('Herosms', data.suppliers.herosms);
  renderSupplierBalance('Gotsms', data.suppliers.gotsms);
  renderSupplierBalance('Bulkmail', data.suppliers.bulkmail);
  } catch (err) {
@@ -6583,6 +6711,7 @@ function switchTab(name) {
    }
  }
  // Lazy-load expensive datasets only when their tab is opened.
+ if (name === 'sms-server4') { try { loadNumberServicesServer4(); } catch(e){} }
  if (name === 'sms-server3') { try { loadServer3Services(); } catch(e){} }
  if (name === 'sms-orders' && !_smsOrdersLoaded) {
    _smsOrdersLoaded = true;

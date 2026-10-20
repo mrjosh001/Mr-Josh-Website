@@ -903,7 +903,7 @@ async function searchServicesInDb(q){
     var map = new Map();
     (allServiceCatalog || []).forEach(function(s){ if(s && s.key) map.set(s.key, s); });
     rows.forEach(function(row){
-      var name = String(row.service_name || row.service_id || '').replace(/_/g,' ').trim();
+      var name = niceServiceName(row.service_name, row.service_id);
       if(!name) return;
       var key = name.toLowerCase();
       if(!map.has(key)) map.set(key, { service_id: row.service_id, service_name: name, key: key });
@@ -929,6 +929,27 @@ async function searchServicesInDb(q){
     var currentQ = (serviceSearch && serviceSearch.value || '').trim().toLowerCase();
     if(currentQ === q.toLowerCase()) renderServiceCatalog(allServiceCatalog, currentQ);
   }catch(e){ console.warn('searchServicesInDb', e); }
+}
+
+
+function niceServiceName(name, serviceId){
+  var id = String(serviceId || '').trim();
+  var n = String(name || '').replace(/_/g,' ').trim();
+  var KNOWN = {
+    wa:'WhatsApp',tg:'Telegram',go:'Google',ig:'Instagram',fb:'Facebook',tw:'Twitter',
+    tk:'TikTok',lf:'TikTok',ds:'Discord',fu:'Snapchat',vi:'Viber',vk:'VK',mm:'Microsoft',
+    nf:'Netflix',oi:'Tinder',am:'Amazon',wx:'Apple',wb:'WeChat',we:'WeChat',ok:'OK.ru',
+    ma:'Mail.ru',mb:'Yahoo',ts:'PayPal',tn:'LinkedIn',ot:'Any other',hw:'Alipay',qq:'QQ',
+    ya:'Yandex',im:'Imo',kt:'KakaoTalk',me:'Line',uk:'Airbnb',tw:'X / Twitter'
+  };
+  var key = id.toLowerCase() || n.toLowerCase().replace(/\s+/g,'');
+  if(KNOWN[key]) return KNOWN[key];
+  if(KNOWN[n.toLowerCase()]) return KNOWN[n.toLowerCase()];
+  // Hide pure "gr xx" style codes in the label when we have nothing better
+  if(/^gr\s*[a-z0-9]{1,4}$/i.test(n) || /^gr_[a-z0-9]+$/i.test(id)){
+    return n.length > 2 ? n : (id || 'Service');
+  }
+  return n || id || 'Service';
 }
 
 function renderServiceCatalog(list, searchQ){
@@ -979,7 +1000,7 @@ function renderServiceCatalog(list, searchQ){
   }
   var html = '<div class="svc-icon-grid">';
   filtered.forEach(function(s){
-    var name = s.service_name || 'Service';
+    var name = niceServiceName(s.service_name, s.service_id);
     var iconHtml = serviceLogoHtml(name);
     html += '<button type="button" class="svc-tile" data-key="'+escapeHtml(s.key || name.toLowerCase())+'">'+iconHtml+'<span class="svc-label">'+escapeHtml(name)+'</span></button>';
   });
