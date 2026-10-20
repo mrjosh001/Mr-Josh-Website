@@ -184,6 +184,8 @@ const GOTSMS_TOKEN = process.env.GOTSMS_API_TOKEN || process.env.GOT_SMS_TOKEN |
 
 /** Fixed customer prices by duration (NGN). Admin override still wins per plan. */
 const GOTSMS_DURATION_PRICE_NGN = {
+  '1_hour': 1800,
+  '1_hours': 1800,
   '1_day': 2500,
   '3_day': 3500,
   '7_day': 4500,
@@ -209,13 +211,19 @@ const GOTSMS_AREA_ADDON_NGN = Math.max(0, Number(process.env.GOTSMS_AREA_ADDON_N
 
 function gotsmsDurationKey(plan) {
   if (!plan) return '';
-  const t = String(plan.duration_type || '').toLowerCase().replace(/s$/, ''); // day, month, year
-  const n = Number(plan.duration_in_type || 0);
+  let t = String(plan.duration_type || '').toLowerCase().replace(/s$/, ''); // hour, day, month, year
+  // normalise "hr" / "hrs"
+  if (t === 'hr' || t === 'hrs') t = 'hour';
+  let n = Number(plan.duration_in_type || 0);
   if (!(n > 0) || !t) {
-    // parse "1 day", "3 days", "1 month" from translation
-    const tr = String(plan.duration_translation || '').toLowerCase();
-    const m = tr.match(/(\d+)\s*(day|days|month|months|year|years|week|weeks)/);
-    if (m) return `${m[1]}_${m[2].replace(/s$/, '')}`;
+    // parse "1 hour", "1 day", "3 days", "1 month" from translation
+    const tr = String(plan.duration_translation || plan.name || '').toLowerCase();
+    const m = tr.match(/(\d+)\s*(hour|hours|hr|hrs|day|days|month|months|year|years|week|weeks)/);
+    if (m) {
+      let unit = m[2].replace(/s$/, '');
+      if (unit === 'hr') unit = 'hour';
+      return `${m[1]}_${unit}`;
+    }
     return '';
   }
   return `${n}_${t}`;
