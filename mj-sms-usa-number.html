@@ -232,7 +232,11 @@ body{font-family:'Plus Jakarta Sans',system-ui,-apple-system,sans-serif;backgrou
     var status = String((rent && rent.status) || 'active').toLowerCase();
     var tillMs = rent && rent.active_till ? new Date(rent.active_till).getTime() : 0;
     var liveByTime = (!tillMs || (tillMs > Date.now())) && !(rent && rent.expired_local);
+    // "completed" only means SMS arrived — rental stays active while the plan clock runs
     var deadStatus = ['refunded','cancelled','canceled','expired','finished','ended'].indexOf(status) >= 0;
+    if(status === 'completed' || status === 'complete' || status === 'success'){
+      deadStatus = !liveByTime; // still active until timer ends
+    }
     var terminal = ['refunded','cancelled','canceled'].indexOf(status) >= 0 || !!(rent && rent.refunded);
     var active = !!rent && !rent.refunded && !deadStatus && liveByTime;
     return { status: status, active: active, terminal: terminal };
@@ -297,7 +301,7 @@ body{font-family:'Plus Jakarta Sans',system-ui,-apple-system,sans-serif;backgrou
     var renewPrice = Math.round(Number(rent.renew_price_ngn || rent.price_ngn || rent.price || 0));
 
     var badge = document.getElementById('statusBadge');
-    if(badge){ badge.textContent = active?'Active':(st.terminal?'Cancelled':'Ended'); badge.className = 'otp-tag'+(active?'':' ended'); }
+    if(badge){ badge.textContent = active?'Active':(st.terminal?'Cancelled':(st.status==='completed'||st.status==='complete'?'Completed':'Ended')); badge.className = 'otp-tag'+(active?'':' ended'); }
 
     main.innerHTML =
       '<div class="n3">'+

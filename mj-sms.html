@@ -160,6 +160,12 @@ body::before{content:'';position:fixed;inset:0;pointer-events:none;z-index:0;bac
   background:rgba(255,255,255,.75)!important;
 }
 
+
+.svc-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
+.svc-tile{border:none;background:transparent;color:var(--text);cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:8px;padding:4px;font-family:inherit}
+.svc-icon{width:56px;height:56px;border-radius:16px;display:flex;align-items:center;justify-content:center;color:#fff;font-size:22px;box-shadow:0 8px 20px rgba(0,0,0,.2)}
+.svc-label{font-size:11px;font-weight:600;text-align:center;line-height:1.2;max-width:72px;overflow:hidden;text-overflow:ellipsis;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
+@media(min-width:480px){.svc-grid{grid-template-columns:repeat(5,1fr)}}
 </style>
 <link rel="stylesheet" href="/css/skeleton.css">
 <link rel="stylesheet" href="/css/graceful.css">
@@ -609,6 +615,10 @@ function serviceCatalogSkeleton(){
 
 
 var __smsCatalogLoading = false;
+var __svcPage = 0;
+var __svcPageSize = 48;
+var __svcFilteredCache = [];
+
 var __smsCatalogComplete = false;
 
 var __smsSearchTimer = null;
@@ -984,68 +994,61 @@ function niceServiceName(name, serviceId){
   return n || '';
 }
 
-function renderServiceCatalog(list, searchQ){
+function renderServiceCatalog(list, searchQ, opts){
+  opts = opts || {};
+  var append = !!opts.append;
   var q = (searchQ != null ? searchQ : (serviceSearch && serviceSearch.value) || '').trim().toLowerCase();
   var filtered = (list || []).filter(function(s){
     var name = s.service_name || '';
     if(!name || !String(name).trim()) return false;
-    if(isAnyOtherService(name)) return false; // inject separately when needed
-    if(isJunkService(name)) return false; // never show gr_/gm codes on the grid
+    if(isAnyOtherService(name)) return false;
+    if(isJunkService(name)) return false;
     if(q) return name.toLowerCase().includes(q);
     return true;
   });
-  // When user searches for something we don't list, offer Grizzly "Any other"
-  if(q){
-    var anyOther = findAnyOtherService(list);
-    var hasRealMatch = filtered.some(function(s){
-      var n = String(s.service_name || '').toLowerCase();
-      return n === q || n.indexOf(q) === 0 || n.split(/\s|\/|-/).indexOf(q) !== -1;
-    });
-    if(anyOther && (!filtered.length || !hasRealMatch)){
-      // Put Any other first so it's obvious
-      filtered = [anyOther].concat(filtered.filter(function(s){ return !isAnyOtherService(s.service_name); }));
-    } else if(anyOther && filtered.length && !filtered.some(function(s){ return isAnyOtherService(s.service_name); }) && q.length >= 2 && !hasRealMatch){
-      filtered = [anyOther].concat(filtered);
-    }
+  // Popular first already sorted upstream
+  __svcFilteredCache = filtered;
+  if(!append) __svcPage = 0;
+  var slice = filtered.slice(0, (__svcPage + 1) * __svcPageSize);
+  if(!serviceGrid) return;
+  if(!slice.length){
+    serviceGrid.innerHTML = '<div class="empty-state"><h4>No services found</h4><p>Try another search or Sync from admin.</p></div>';
+    return;
   }
-  // Default grid: popular-first, capped so UI paints instantly (search finds the rest)
-  if(!q && filtered.length > 80){
-    filtered = filtered.slice(0, 80);
-  }
-  if(!filtered.length){
-    var fallback = q ? findAnyOtherService(list) : null;
-    if(fallback){
-      filtered = [fallback];
+  function tile(s){
+    var name = s.service_name || 'Service';
+    var fa = serviceIconFa(name);
+    var logo = serviceLogo(name);
+    var iconHtml = '';
+    if(logo){
+      iconHtml = '<span class="svc-icon" style="background:#fff;overflow:hidden;padding:4px"><img src="'+logo+'" alt="" style="width:100%;height:100%;object-fit:contain" onerror="this.parentNode.innerHTML=\'\'" /></span>';
+    } else if(fa){
+      iconHtml = '<span class="svc-icon" style="background:'+fa.color+'"><i class="'+fa.cls+'"></i></span>';
     } else {
-      serviceGrid.innerHTML = '<div class="empty-state"><div class="empty-state-icon">📵</div><h4>No Services Found</h4><p>Try a different search</p></div>';
-      if(serviceCountBadge) serviceCountBadge.innerHTML = '';
-      serviceGrid.dataset.skelReady = '1';
-      serviceGrid.dataset.loaded = '1';
-      return;
+      iconHtml = '<span class="svc-icon" style="background:#3b82f6"><i class="fa-solid fa-mobile-screen"></i></span>';
     }
+    return '<button type="button" class="svc-tile" data-key="'+escapeHtml(s.key||name.toLowerCase())+'">'+iconHtml+'<span class="svc-label">'+escapeHtml(name)+'</span></button>';
   }
-  var total = (list || []).length;
-  if(serviceCountBadge){
-    serviceCountBadge.innerHTML = '<span class="product-count-badge">' + filtered.length + (q || filtered.length === total ? '' : '+') + ' service' + (filtered.length!==1?'s':'') + (total > filtered.length ? ' · ' + total + ' total' : '') + '</span>';
-  }
-  var html = '<div class="svc-icon-grid">';
-  filtered.forEach(function(s){
-    var name = niceServiceName(s.service_name, s.service_id);
-    var iconHtml = serviceLogoHtml(name);
-    html += '<button type="button" class="svc-tile" data-key="'+escapeHtml(s.key || name.toLowerCase())+'">'+iconHtml+'<span class="svc-label">'+escapeHtml(name)+'</span></button>';
-  });
-  html += '</div>';
-  serviceGrid.innerHTML = html;
-  // Prevent global skeleton paint() from wiping real tiles
-  serviceGrid.dataset.skelReady = '1';
-  serviceGrid.dataset.loaded = '1';
+  serviceGrid.innerHTML = '<div class="svc-grid">'+slice.map(tile).join('')+(slice.length < filtered.length ? '<div id="svcScrollSentinel" style="grid-column:1/-1;height:24px"></div>' : '')+'</div>';
   serviceGrid.querySelectorAll('.svc-tile').forEach(function(btn){
     btn.addEventListener('click', function(){
       var key = btn.getAttribute('data-key');
-      var svc = (list || []).find(function(x){ return (x.key || (x.service_name||'').toLowerCase()) === key; });
-      if(svc) selectService(svc);
+      var s = (filtered || []).find(function(x){ return String(x.key||'').toLowerCase() === String(key||'').toLowerCase(); });
+      if(s) selectService(s);
     });
   });
+  // Infinite scroll: load next page when sentinel enters view
+  var sent = document.getElementById('svcScrollSentinel');
+  if(sent && typeof IntersectionObserver !== 'undefined'){
+    if(window.__svcObs) try{ window.__svcObs.disconnect(); }catch(e){}
+    window.__svcObs = new IntersectionObserver(function(entries){
+      if(!entries.some(function(e){ return e.isIntersecting; })) return;
+      if((__svcPage + 1) * __svcPageSize >= __svcFilteredCache.length) return;
+      __svcPage += 1;
+      renderServiceCatalog(__svcFilteredCache, q, { append: true });
+    }, { root: null, rootMargin: '200px', threshold: 0 });
+    window.__svcObs.observe(sent);
+  }
 }
 
 async function selectService(svc){
@@ -1089,26 +1092,36 @@ async function selectService(svc){
   // Always refresh from DB so every country for this service is included (not just the bulk page sample)
   try{
     if(!sbClient) await loadServiceCatalog();
-    let res = await sbClient
-      .from('number_services')
-      .select('service_id, service_name, country_id, country_name, price, available_quantity, providers_raw, supplier_price, pool_price_overrides, source')
-      .in('source', smsOtpSources())
-      .eq('is_available', true)
-      .eq('service_id', svc.service_id)
-      .gt('price', 0)
-      .order('price', { ascending: true })
-      .limit(500);
-    if((!res.data || !res.data.length) && svc.service_name){
-      res = await sbClient
-        .from('number_services')
-        .select('service_id, service_name, country_id, country_name, price, available_quantity, providers_raw, supplier_price, pool_price_overrides, source')
-        .in('source', smsOtpSources())
-        .eq('is_available', true)
-        .ilike('service_name', svc.service_name)
-        .gt('price', 0)
-        .order('price', { ascending: true })
-        .limit(500);
+    // Pull every matching row from BOTH pools (same country can appear twice).
+    // Match by service_id OR by display name so Hero WhatsApp joins Grizzly WhatsApp.
+    var cols = 'service_id, service_name, country_id, country_name, price, available_quantity, providers_raw, supplier_price, pool_price_overrides, source';
+    var merged = [];
+    var seenRow = {};
+    async function pull(q){
+      var res = await q;
+      (res.data||[]).forEach(function(r){
+        var k = String(r.source||'')+'|'+String(r.country_id)+'|'+String(r.service_id);
+        if(seenRow[k]) return;
+        seenRow[k] = 1;
+        merged.push(r);
+      });
     }
+    await pull(sbClient.from('number_services').select(cols).in('source', smsOtpSources()).eq('is_available', true).eq('service_id', svc.service_id).gt('price', 0).order('price', { ascending: true }).limit(800));
+    if(svc.service_name){
+      await pull(sbClient.from('number_services').select(cols).in('source', smsOtpSources()).eq('is_available', true).ilike('service_name', '%'+String(svc.service_name).replace(/%/g,'')+'%').gt('price', 0).order('price', { ascending: true }).limit(800));
+    }
+    // Also match popular short codes across pools (wa ↔ WhatsApp)
+    var codeHints = {
+      whatsapp:['wa'], telegram:['tg'], facebook:['fb'], instagram:['ig'], google:['go'],
+      tiktok:['tk','lf'], discord:['ds'], snapchat:['fu'], twitter:['tw'], 'x / twitter':['tw']
+    };
+    var nk = String(svc.service_name||'').toLowerCase().trim();
+    var hints = codeHints[nk] || [];
+    if(svc.service_id) hints = hints.concat([String(svc.service_id)]);
+    for(var hi=0; hi<hints.length; hi++){
+      await pull(sbClient.from('number_services').select(cols).in('source', smsOtpSources()).eq('is_available', true).eq('service_id', hints[hi]).gt('price', 0).limit(800));
+    }
+    var res = { data: merged };
     if(res.data && res.data.length){
       rows = res.data.map(r => ({
         country_id: r.country_id,

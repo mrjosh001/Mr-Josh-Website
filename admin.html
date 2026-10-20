@@ -4166,10 +4166,23 @@ async function tryLoadSmsOrders() {
           o.status = 'expired';
           return;
         }
+        // GotSMS live list: never mark Cancelled if SMS already landed.
+        // While the plan clock is still running, keep status open (active).
+        // After the clock ends → completed (code received) or expired (no code).
         if (String(o.source||'').toLowerCase() === 'gotsms' && window._adminLiveUsaActiveLoaded) {
           var rid = (typeof adminUsaRentId==='function') ? adminUsaRentId(o) : '';
           if (rid && !window._adminLiveUsaActiveIds.has(String(rid))) {
-            o.status = (typeof adminRentReceivedSms === 'function' && adminRentReceivedSms(o)) ? 'completed' : 'cancelled';
+            var gotSms = (typeof adminRentReceivedSms === 'function' && adminRentReceivedSms(o));
+            if (till && till > Date.now()) {
+              if (!gotSms) { /* supplier lag — leave status alone */ }
+              else if (['cancelled','canceled','refunded'].indexOf(String(o.status||'').toLowerCase()) < 0)
+                o.status = 'active';
+            } else if (till && till <= Date.now()) {
+              o.status = gotSms ? 'completed' : 'expired';
+            } else {
+              // no expiry: SMS received → completed; otherwise leave (do not invent cancelled)
+              if (gotSms) o.status = 'completed';
+            }
           }
         }
       });
@@ -4254,29 +4267,38 @@ function adminIsActiveRental(o){
   if(!isSmsRentalOrder(o)) return false;
   if(o.refunded===true || o.refunded===1 || o.refunded==='true') return false;
   var st = String(o.status||'').toLowerCase();
-  if(['refunded','cancelled','canceled','expired','ended','finished','failed'].indexOf(st)>=0) return false;
+  // Only true cancel/refund kill the rental while the plan clock still runs
+  if(['refunded','cancelled','canceled','failed'].indexOf(st)>=0) return false;
   var till = adminInferRentalExpiryMs(o);
+  // Plan still running → ACTIVE (even if SMS already received / status=completed)
+  if(till && till > Date.now()) return true;
   if(till && till <= Date.now()) return false;
-  // GotSMS USA live list applies ONLY to USA rentals — never demote Global (smsbus_rent)
+  // No expiry known: GotSMS live list is a hint only (never force-end if SMS landed)
   var src = String(o.source || '').toLowerCase();
   if (src === 'gotsms') {
     try {
       var rid = (typeof adminUsaRentId === 'function') ? adminUsaRentId(o) : '';
       if (rid && window._adminLiveUsaActiveLoaded) {
-        return !!(window._adminLiveUsaActiveIds && window._adminLiveUsaActiveIds.has(String(rid)));
+        if (window._adminLiveUsaActiveIds && window._adminLiveUsaActiveIds.has(String(rid))) return true;
+        // Not on live list and no expiry: keep live if we already have SMS or status looks open
+        if (typeof adminRentReceivedSms === 'function' && adminRentReceivedSms(o)) return true;
+        return st==='active'||st==='pending'||st==='processing'||st==='waiting'||st==='waiting_for_code';
       }
     } catch (e) {}
   }
-  if(till && till > Date.now()) return true;
-  return st==='active'||st==='pending'||st==='processing'||st==='waiting'||st==='waiting_for_code';
+  if(['expired','ended','finished'].indexOf(st)>=0) return false;
+  return st==='active'||st==='pending'||st==='processing'||st==='waiting'||st==='waiting_for_code'||st==='completed'||st==='complete';
 }
 /** Label shown instead of a running timer when a rental is no longer live (cancelled/refunded/expired/ended). '' = still live. */
 function adminRentDeadLabel(o){
   if(!isSmsRentalOrder(o)) return '';
   var st = String(o.status||'').toLowerCase();
   if(o.refunded===true || o.refunded===1 || o.refunded==='true' || ['refunded','cancelled','canceled'].indexOf(st)>=0) return 'Cancelled';
+  var till = adminInferRentalExpiryMs(o);
+  if(till && till > Date.now()) return ''; // still on the clock — never "Ended"
+  if(till && till <= Date.now()) return 'Ended';
   if(['expired','ended','finished','failed'].indexOf(st)>=0) return 'Ended';
-  if(String(o.source||'').toLowerCase()==='gotsms' && !adminIsActiveRental(o)) return 'Ended';
+  if(!adminIsActiveRental(o)) return 'Ended';
   return '';
 }
 function adminIsCompletedRental(o){
