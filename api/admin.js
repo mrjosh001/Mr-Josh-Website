@@ -1712,8 +1712,30 @@ async function getVirtualsmsBalance() {
   }
 }
 
+
+async function getHerosmsBalance() {
+  const apiKey = process.env.HEROSMS_API_KEY;
+  if (!apiKey) return { ok: false, error: 'HEROSMS_API_KEY not set' };
+  const base = String(process.env.HEROSMS_BASE_URL || 'https://hero-sms.com/stubs/handler_api.php').trim();
+  try {
+    const qs = new URLSearchParams({ api_key: apiKey, action: 'getBalance' });
+    const r = await fetch(base + (base.includes('?') ? '&' : '?') + qs.toString(), {
+      signal: AbortSignal.timeout(15000)
+    });
+    const text = (await r.text()).trim();
+    if (text.startsWith('ACCESS_BALANCE:')) {
+      const balance = Number(text.split(':')[1]);
+      if (Number.isFinite(balance)) return { ok: true, balance, currency: 'USD', source_url: 'getBalance' };
+    }
+    if (text === 'BAD_KEY') return { ok: false, error: 'HEROSMS_API_KEY was rejected' };
+    return { ok: false, error: `Unexpected reply: ${text.slice(0, 80)}` };
+  } catch (err) {
+    return { ok: false, error: String(err.message || err).slice(0, 160) };
+  }
+}
+
 async function supplierBalancesFetch() {
-  const [fadded, logsdomain, grizzly, sujan, owlet, classy, smsbus, gotsms, bulkmail, jap, smmkings, casper, virtualsms] = await Promise.all([
+  const [fadded, logsdomain, grizzly, sujan, owlet, classy, smsbus, gotsms, bulkmail, jap, smmkings, casper, virtualsms, herosms] = await Promise.all([
 
     getFaddedBalance(),
     getLogsDomainBalance(),
@@ -1727,13 +1749,14 @@ async function supplierBalancesFetch() {
     getJapBalance(),
     getSmmkingsBalance(),
     getCasperBalance(),
-    getVirtualsmsBalance()
+    getVirtualsmsBalance(),
+    getHerosmsBalance()
   ]);
   return {
     status: 200,
     body: {
       success: true,
-      suppliers: { fadded, logsdomain, grizzly, sujan, owlet, classy, smsbus, gotsms, bulkmail, jap, smmkings, casper, virtualsms },
+      suppliers: { fadded, logsdomain, grizzly, sujan, owlet, classy, smsbus, gotsms, bulkmail, jap, smmkings, casper, virtualsms, herosms },
       fetched_at: new Date().toISOString()
     }
   };

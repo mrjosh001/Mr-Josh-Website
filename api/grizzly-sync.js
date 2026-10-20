@@ -1,5 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
 import { applyMarkup } from '../lib/pricing.js';
+import { createHero } from '../lib/hero.js';
 
 /**
  * /api/grizzly-sync — GrizzlySMS (Server 1) + VirtualSMS (Server 3) operations in one file.
@@ -12,7 +13,9 @@ import { applyMarkup } from '../lib/pricing.js';
  *        &service=wa   re-sync one service only
  * GET  /api/grizzly-sync?action=vsms_probe → Server 3: show what VirtualSMS really returns (admin)
  * GET  /api/grizzly-sync?action=vsms_purge_legacy → Server 3: delete old broken numeric-id rows (admin)
- * POST /api/grizzly-sync?action=order      → buy a number   (provider=virtualsms → Server 3)
+ * GET  /api/grizzly-sync?action=hero_sync  → Server 1 second OTP pool (source=herosms) catalog sync (admin / cron) — see lib/hero.js
+ * GET  /api/grizzly-sync?action=hero_probe → second pool: show what the supplier really returns (admin)
+ * POST /api/grizzly-sync?action=order      → buy a number   (provider=virtualsms → Server 3; source=herosms → second pool)
  * POST /api/grizzly-sync?action=check      → poll for SMS code (routes by the order's saved source)
  * POST /api/grizzly-sync?action=cancel     → cancel + refund   (routes by the order's saved source)
  *
@@ -24,7 +27,8 @@ import { applyMarkup } from '../lib/pricing.js';
  *
  * Env: GRIZZLYSMS_API_KEY, SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, CRON_SECRET (required for cron calls)
  * Optional: USD_TO_NGN_RATE (default 1500), MIN_PROFIT_NGN (500), VIRTUALSMS_API_KEY (Server 3),
- *           VSMS_TIME_BUDGET_MS (200000), VSMS_MIN_GAP_MS (1500), VSMS_SERVICE_LIMIT (5000)
+ *           VSMS_TIME_BUDGET_MS (200000), VSMS_MIN_GAP_MS (1500), VSMS_SERVICE_LIMIT (5000),
+ *           HEROSMS_API_KEY (Server 1 second pool)
  */
 
 /* MJHUB_SERVER3_VIRTUALSMS=5 2026-10-18 Server 3: FULL resumable catalog sync (all services, all countries, pagination), price guards on order, secure cron auth */
@@ -167,9 +171,6 @@ const GRIZZLY_SERVICE_NAMES = {
   'fd': 'PrimaGame',
   'fu': 'Snapchat',
   'go': 'Google',
-  'gr_fw': 'Grizzly service fw',
-  'gr_sg': 'Grizzly service sg',
-  'gr_ta': 'Grizzly service ta',
   'hw': 'Alipay/Huawei',
   'ig': 'Instagram',
   'im': 'Imo',
@@ -218,48 +219,75 @@ const GRIZZLY_SERVICE_NAMES = {
  * Prefer Grizzly docs table / static map; merge any getServices payload.
  */
 async function getServiceNameMap(apiKey) {
+  // Static seed for the most common apps (always wins over bare codes).
   const map = Object.assign(Object.create(null), GRIZZLY_SERVICE_NAMES);
 
-  try {
-    const res = await callGrizzly(apiKey, { action: 'getServices' });
-    if (res.text && res.text !== 'BAD_KEY') {
-      let data;
+  // Drop placeholder "Grizzly service xx" style labels if any slipped in.
+  for (const k of Object.keys(map)) {
+    const v = String(map[k] || '');
+    if (/^grizzly\s+service/i.test(v) || (v.length <= 3 && v.toLowerCase() === k.toLowerCase())) {
+      // keep short codes only if no better name; leave seed entries that are real brands
+    }
+    if (/^grizzly\s+service/i.test(v)) delete map[k];
+  }
+
+  const mergePayload = (data) => {
+    if (!data) return;
+    const add = (code, name) => {
+      if (!code) return;
+      const c = String(code).trim();
+      if (!c) return;
+      const n = name != null ? String(name).trim() : '';
+      // Prefer a real human name over the bare code
+      if (n && n.toLowerCase() !== c.toLowerCase() && !/^grizzly\s+service/i.test(n)) {
+        map[c] = n;
+        map[c.toLowerCase()] = n;
+      } else if (!map[c] && !map[c.toLowerCase()]) {
+        // no name yet — leave unset so UI can still try other enrichers
+      }
+    };
+    // getServicesList shape: { status, services: [ { code, name } ] }
+    const list =
+      (data && Array.isArray(data.services) && data.services) ||
+      (Array.isArray(data) && data) ||
+      null;
+    if (list) {
+      for (const item of list) {
+        if (!item || typeof item !== 'object') continue;
+        add(item.code || item.service || item.id, item.name || item.title || item.eng);
+      }
+      return;
+    }
+    if (typeof data === 'object') {
+      for (const [key, val] of Object.entries(data)) {
+        if (val == null || key === 'status' || key === 'services') continue;
+        if (typeof val === 'string') add(key, val);
+        else if (typeof val === 'object') {
+          const code = val.code || val.service || val.id || key;
+          const name = val.name || val.title || val.eng || val.rus;
+          add(code, name);
+          if (key && !/^\d+$/.test(key)) add(key, name || code);
+        }
+      }
+    }
+  };
+
+  // SMS-Activate / Grizzly: getServicesList returns full {code,name} catalogue.
+  // getServices is a secondary fallback (some panels only implement one).
+  for (const action of ['getServicesList', 'getServices']) {
+    try {
+      const res = await callGrizzly(apiKey, { action });
+      if (!res.text || res.text === 'BAD_KEY') continue;
+      let data = null;
       try {
         data = JSON.parse(res.text);
       } catch {
         data = null;
       }
-      if (data) {
-        const add = (code, name) => {
-          if (!code) return;
-          const c = String(code).trim();
-          const n = name != null ? String(name).trim() : '';
-          if (!c) return;
-          // Only fill gaps or upgrade code-looking names
-          if (n && n.toLowerCase() !== c.toLowerCase()) map[c] = n;
-          else if (!map[c]) map[c] = c;
-        };
-        if (Array.isArray(data)) {
-          for (const item of data) {
-            if (!item || typeof item !== 'object') continue;
-            add(item.code || item.service || item.id, item.name || item.title || item.eng);
-          }
-        } else if (typeof data === 'object') {
-          for (const [key, val] of Object.entries(data)) {
-            if (val == null) continue;
-            if (typeof val === 'string') add(key, val);
-            else if (typeof val === 'object') {
-              const code = val.code || val.service || val.id || key;
-              const name = val.name || val.title || val.eng || val.rus;
-              add(code, name);
-              if (key && !/^\d+$/.test(key)) add(key, name || code);
-            }
-          }
-        }
-      }
+      if (data) mergePayload(data);
+    } catch (e) {
+      console.warn(action + ' name enrich failed', e && e.message);
     }
-  } catch (e) {
-    console.warn('getServices name enrich failed', e.message);
   }
 
   return map;
@@ -1752,12 +1780,21 @@ async function handleExpireStale(req, res) {
     console.error('[vsms expire_stale]', e.message);
   }
 
+  // Server 1 second OTP pool (source=herosms) — handled inside lib/hero.js, never mixed with the loop above
+  let pool2 = null;
+  try {
+    pool2 = await HERO.expireStale(rows || []);
+  } catch (e) {
+    console.error('[pool2 expire_stale]', e.message);
+  }
+
   return res.status(200).json({
     success: true,
     scanned: (stale || []).length,
     expired,
     skipped,
     server3,
+    pool2,
     cutoff
   });
 }
@@ -2826,6 +2863,17 @@ async function orderIsServer3Rest(req) {
 }
 
 // ===========================================================================
+// SERVER 1 SECOND OTP POOL (source = 'herosms') — all logic lives in lib/hero.js
+// ===========================================================================
+// Only reached when body.source === 'herosms' (order), when the saved order.source is 'herosms'
+// (check / cancel), or via action=hero_sync / hero_probe. Anything else behaves exactly as before.
+const HERO = createHero({ supabase, requireAdmin, claimAndRefundOrder, reclaimAndCompleteOnCode, EXPIRY_MS });
+
+function isHeroSource(b) {
+  return String((b && (b.source || b.provider || b.server)) || '').toLowerCase().trim() === 'herosms';
+}
+
+// ===========================================================================
 // DISPATCHER
 // ===========================================================================
 
@@ -2851,6 +2899,8 @@ export default async function handler(req, res) {
     if (act === 'expire_stale' || act === 'expire-stale') {
       return handleExpireStale(req, res);
     }
+    if (act === 'hero_sync') return HERO.sync(req, res);
+    if (act === 'hero_probe') return HERO.probe(req, res);
     if (isVsSync) return vsHandleSync(req, res);
     if (act === 'vsms_probe') return vsHandleProbe(req, res);
     if (act === 'vsms_purge_legacy') return vsHandlePurgeLegacy(req, res);
@@ -2859,18 +2909,22 @@ export default async function handler(req, res) {
   }
 
   if (req.method === 'POST') {
+    if (act === 'hero_sync') return HERO.sync(req, res);
     if (isVsSync) return vsHandleSync(req, res);
     if (action === 'order') {
       let b = {};
       try { b = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : (req.body || {}); } catch (_) { b = {}; }
+      if (isHeroSource(b)) return HERO.order(req, res, b);
       if (resolveSupplier(req, b).source === 'virtualsms') return vsHandleOrder(req, res);
       return handleOrder(req, res);
     }
     if (action === 'check') {
+      if (await HERO.orderIsHero(req)) return HERO.check(req, res);
       if (await orderIsServer3Rest(req)) return vsHandleCheck(req, res);
       return handleCheck(req, res);
     }
     if (action === 'cancel') {
+      if (await HERO.orderIsHero(req)) return HERO.cancel(req, res);
       if (await orderIsServer3Rest(req)) return vsHandleCancel(req, res);
       return handleCancel(req, res);
     }
