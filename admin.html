@@ -1320,10 +1320,10 @@ function withLagos(opts) { return Object.assign({ timeZone: 'Africa/Lagos' }, op
  <table>
  <thead>
  <tr>
- <th>Country</th><th>Service</th><th>Supplier ($)</th><th>Your Price (₦)</th><th>Stock</th><th>Status</th><th>Action</th>
+ <th>Country</th><th>Service</th><th>Supplier ($)</th><th>Your Price (₦)</th><th>Profit (₦)</th><th>Stock</th><th>Status</th><th>Action</th>
  </tr>
  </thead>
- <tbody id="smsServer4TableBody"><tr><td colspan="7" class="empty-state">Click Sync Server 4 to load catalog.</td></tr></tbody>
+ <tbody id="smsServer4TableBody"><tr><td colspan="8" class="empty-state">Click Sync Server 4 to load catalog.</td></tr></tbody>
  </table>
  </div>
  <div id="smsServer4MobileCards" class="mobile-only mobile-cards"></div>
@@ -2520,16 +2520,19 @@ async function syncServer4Now() {
   }
 }
 let allServer4Services = [];
+
 async function loadNumberServicesServer4() {
   try {
-    const q = (document.getElementById('smsServer4Search') && document.getElementById('smsServer4Search').value || '').trim();
-    const country = (document.getElementById('smsServer4CountryFilter') && document.getElementById('smsServer4CountryFilter').value || '').trim();
-    const hideZero = !(document.getElementById('smsServer4HideZeroStock') && document.getElementById('smsServer4HideZeroStock').checked === false);
-    let query = sb.from('number_services')
-      .select('id,source,country_id,country_name,service_id,service_name,supplier_price,price,available_quantity,is_available,updated_at')
+    const q = (document.getElementById('smsServer4Search')?.value || '').trim();
+    const country = (document.getElementById('smsServer4CountryFilter')?.value || '').trim();
+    const hideZero = document.getElementById('smsServer4HideZeroStock')?.checked !== false;
+    let query = sb
+      .from('number_services')
+      .select('id,source,country_id,country_name,service_id,service_name,supplier_price,price,available_quantity,is_available,updated_at,price_source')
       .eq('source', 'herosms')
       .order('country_name', { ascending: true })
-      .limit(500);
+      .order('service_name', { ascending: true })
+      .limit(country || q ? 3000 : 1000);
     if (q) query = query.ilike('service_name', '%' + q + '%');
     if (country) query = query.ilike('country_name', '%' + country + '%');
     if (hideZero) query = query.gt('available_quantity', 0);
@@ -2539,37 +2542,90 @@ async function loadNumberServicesServer4() {
     renderNumberServicesServer4(allServer4Services);
   } catch (e) {
     console.error(e);
+    allServer4Services = [];
     const tbody = document.getElementById('smsServer4TableBody');
-    if (tbody) tbody.innerHTML = '<tr><td colspan="7" class="empty-state">' + (e.message || 'Load failed') + '</td></tr>';
+    const cards = document.getElementById('smsServer4MobileCards');
+    if (tbody) tbody.innerHTML = '<tr><td colspan="8" class="empty-state">' + escapeHtml(e.message || 'Load failed') + '</td></tr>';
+    if (cards) cards.innerHTML = '<div class="empty-state">' + escapeHtml(e.message || 'Load failed') + '</div>';
   }
 }
+
 function filterNumberServicesServer4() { loadNumberServicesServer4(); }
-function renderNumberServicesServer4(rows) {
+
+function renderNumberServicesServer4(list) {
+  const items = list || allServer4Services;
   const tbody = document.getElementById('smsServer4TableBody');
   const cards = document.getElementById('smsServer4MobileCards');
-  const esc = (typeof escapeHtml === 'function') ? escapeHtml : (s => String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/"/g,'&quot;'));
-  if (!rows || !rows.length) {
-    if (tbody) tbody.innerHTML = '<tr><td colspan="7" class="empty-state">No rows. Click Sync Server 4.</td></tr>';
-    if (cards) cards.innerHTML = '<div class="empty-state">No rows. Click Sync Server 4.</div>';
+
+  if (!items.length) {
+    if (tbody) tbody.innerHTML = '<tr><td colspan="8" class="empty-state">No results. Sync Server 4, then search a country or service.</td></tr>';
+    if (cards) cards.innerHTML = '<div class="empty-state">No results. Sync Server 4, then search a country or service.</div>';
     return;
   }
+
+  const rowStatus = (s) => {
+    const stock = s.available_quantity;
+    const stockDisplay = stock == null ? '—' : stock;
+    const available = s.is_available !== false && (stock == null || stock > 0);
+    const statusLabel = s.is_available === false ? 'Hidden' : (available ? 'Active' : 'Out of stock');
+    return { stockDisplay, available, statusLabel };
+  };
+
   if (tbody) {
-    tbody.innerHTML = rows.map(r => {
-      const stock = Number(r.available_quantity || 0);
-      const price = Number(r.price || 0);
-      const cost = Number(r.supplier_price || 0);
-      return '<tr><td>' + esc(r.country_name || r.country_id || '') + '</td><td>' + esc(r.service_name || r.service_id || '') +
-        '</td><td>$' + cost.toFixed(4) + '</td><td>₦' + price.toLocaleString() + '</td><td>' + stock +
-        '</td><td>' + (r.is_available === false ? 'Hidden' : 'Live') + '</td><td></td></tr>';
+    tbody.innerHTML = items.map(s => {
+      const { stockDisplay, available, statusLabel } = rowStatus(s);
+      return `
+ <tr>
+ <td style="font-weight:600;">${escapeHtml(s.country_name || '—')}</td>
+ <td>${escapeHtml(s.service_name || s.service_id || '—')}</td>
+ <td class="supplier-price">${usdFmt(s.supplier_price)}</td>
+ <td class="price">₦${Number(s.price || 0).toLocaleString()}</td>
+ <td>${smsProfitHtml(smsProfitOf(s.supplier_price, s.price))}</td>
+ <td>${stockDisplay}</td>
+ <td><span class="badge ${available ? 'badge-on' : 'badge-off'}">${statusLabel}</span></td>
+ <td style="white-space:nowrap;">
+ <button class="btn btn-ghost btn-sm" onclick="editNumberServiceServer4('${s.id}')" title="Edit price"><i class="fas fa-edit"></i></button>
+ <button class="btn btn-ghost btn-sm" onclick="deleteNumberService('${s.id}')" title="Delete" style="color:#f87171;"><i class="fas fa-trash"></i></button>
+ </td>
+ </tr>`;
     }).join('');
   }
+
   if (cards) {
-    cards.innerHTML = rows.slice(0, 80).map(r =>
-      '<div class="mobile-card"><strong>' + esc(r.service_name || r.service_id || '') +
-      '</strong><div style="font-size:12px;color:#94a3b8">' + esc(r.country_name || '') +
-      ' · ₦' + Number(r.price || 0).toLocaleString() + ' · stock ' + Number(r.available_quantity || 0) + '</div></div>'
-    ).join('');
+    cards.innerHTML = items.map(s => {
+      const { stockDisplay, available, statusLabel } = rowStatus(s);
+      return `
+ <div class="product-card">
+ <h4>${escapeHtml(s.country_name || '—')}</h4>
+ <div class="meta">${escapeHtml(s.service_name || s.service_id || '—')}</div>
+ <div class="row-line"><span>Supplier Price</span><span class="supplier-price">${usdFmt(s.supplier_price)}</span></div>
+ <div class="row-line"><span>Your Price</span><strong class="price">₦${Number(s.price || 0).toLocaleString()}</strong></div>
+ <div class="row-line"><span>Profit</span><span>${smsProfitHtml(smsProfitOf(s.supplier_price, s.price))}</span></div>
+ <div class="row-line"><span>Stock</span><span>${stockDisplay}</span></div>
+ <div class="row-line"><span>Status</span><span class="badge ${available ? 'badge-on' : 'badge-off'}">${statusLabel}</span></div>
+ <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap;">
+ <button class="btn btn-ghost btn-sm" onclick="editNumberServiceServer4('${s.id}')"><i class="fas fa-edit"></i> Edit Price</button>
+ <button class="btn btn-ghost btn-sm" onclick="deleteNumberService('${s.id}')" style="color:#f87171;"><i class="fas fa-trash"></i> Delete</button>
+ </div>
+ </div>`;
+    }).join('');
   }
+}
+
+// Same "Edit SMS Number Pricing" modal as Server 1 / 2 / 3
+function editNumberServiceServer4(id) {
+  const s = allServer4Services.find(x => String(x.id) === String(id));
+  if (!s) return;
+  window._smsModalMode = 'server4';
+  document.getElementById('smsModalError').textContent = '';
+  document.getElementById('editSmsId').value = s.id;
+  document.getElementById('smsCountryDisplay').value = s.country_name || '—';
+  document.getElementById('smsServiceDisplay').value = s.service_name || s.service_id || '—';
+  document.getElementById('smsSupplierPriceDisplay').value = usdFmt(s.supplier_price);
+  document.getElementById('smsStockDisplay').value = s.available_quantity ?? 0;
+  document.getElementById('smsPrice').value = s.price ?? 0;
+  document.getElementById('smsAvailable').value = s.is_available === false ? 'false' : 'true';
+  document.getElementById('smsModal').classList.remove('hidden');
 }
 
 // ---------- SMS Server 3 (VirtualSMS) ----------
@@ -3686,7 +3742,8 @@ function editNumberServiceServer2(id) {
 async function deleteNumberService(id) {
  const s = allNumberServices.find(x => String(x.id) === String(id))
  || allNumberServicesServer2.find(x => String(x.id) === String(id))
- || (window._server3Rows || []).find(x => String(x.id) === String(id));
+ || (window._server3Rows || []).find(x => String(x.id) === String(id))
+ || (typeof allServer4Services !== 'undefined' ? allServer4Services.find(x => String(x.id) === String(id)) : null);
  const label = s
  ? `${s.country_name || ''}: ${s.service_name || s.service_id || id}`
  : id;
@@ -3701,7 +3758,12 @@ async function deleteNumberService(id) {
  }
  showAdminToast('Deleted from catalog', 'success');
  // Refresh both: the row could have come from either tab's table.
- await Promise.all([loadSmsRowsForCurrentFilter(), loadSmsServer2RowsForCurrentFilter(), loadServer3Services()]);
+ await Promise.all([
+   loadSmsRowsForCurrentFilter(),
+   loadSmsServer2RowsForCurrentFilter(),
+   loadServer3Services(),
+   (typeof loadNumberServicesServer4 === 'function' ? loadNumberServicesServer4() : Promise.resolve())
+ ]);
  } catch (e) {
  showAdminToast('Delete failed: ' + (e.message || e), 'error');
  }
@@ -3743,7 +3805,12 @@ async function saveNumberService() {
  }
 
  closeSmsModal();
- await Promise.all([loadNumberServices(), loadSmsServer2RowsForCurrentFilter(), loadServer3Services()]);
+ await Promise.all([
+   loadNumberServices(),
+   loadSmsServer2RowsForCurrentFilter(),
+   loadServer3Services(),
+   (typeof loadNumberServicesServer4 === 'function' ? loadNumberServicesServer4() : Promise.resolve())
+ ]);
  showAdminToast('Price updated successfully', 'success');
 }
 
