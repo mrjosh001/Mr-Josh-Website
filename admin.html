@@ -2483,10 +2483,10 @@ async function syncServer4Now() {
   if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Syncing…'; }
   if (prog) prog.textContent = 'Starting Server 4 catalog sync…';
   try {
-    const sb = window.supabaseClient || window.supabase || supabase;
-    const session = await sb.auth.getSession();
-    const token = session && session.data && session.data.session && session.data.session.access_token;
-    if (!token) throw new Error('Sign in again');
+    // Same auth path as Sync Grizzly / Server 3 (global `sb` client + JWT guard)
+    const headers = await authHeaders();
+    if (!headers.Authorization) throw new Error('Sign in again');
+    headers['Accept'] = 'application/json';
     let rounds = 0;
     let done = false;
     while (!done && rounds < 40) {
@@ -2494,9 +2494,14 @@ async function syncServer4Now() {
       if (prog) prog.textContent = 'Server 4 sync · pass ' + rounds + '…';
       const res = await fetch('/api/grizzly-sync?action=hero_sync&force=1', {
         method: 'GET',
-        headers: { Authorization: 'Bearer ' + token, Accept: 'application/json' }
+        headers: headers,
+        cache: 'no-store'
       });
-      const data = await res.json().catch(() => ({}));
+      const text = await res.text();
+      let data = {};
+      try { data = text ? JSON.parse(text) : {}; } catch (e) {
+        throw new Error('Invalid sync response (HTTP ' + res.status + '). Re-upload api/grizzly-sync.js if this persists.');
+      }
       if (!res.ok || data.success === false) throw new Error(data.message || ('HTTP ' + res.status));
       if (prog) prog.textContent = data.message || ('Pass ' + rounds + ' saved');
       if (data.busy) { await new Promise(r => setTimeout(r, 2500)); continue; }
@@ -2517,7 +2522,6 @@ async function syncServer4Now() {
 let allServer4Services = [];
 async function loadNumberServicesServer4() {
   try {
-    const sb = window.supabaseClient || window.supabase || supabase;
     const q = (document.getElementById('smsServer4Search') && document.getElementById('smsServer4Search').value || '').trim();
     const country = (document.getElementById('smsServer4CountryFilter') && document.getElementById('smsServer4CountryFilter').value || '').trim();
     const hideZero = !(document.getElementById('smsServer4HideZeroStock') && document.getElementById('smsServer4HideZeroStock').checked === false);
