@@ -1406,10 +1406,18 @@ document.getElementById('psBuyBtn').addEventListener('click', async function(){
         if(isHeroSource(src)){
           var op = document.getElementById('psOperator');
           var pe = document.getElementById('psPhoneException');
-          var vc = document.getElementById('psVoiceCode');
-          if(op && op.value.trim()) payload.operator = op.value.trim();
+          var flashRadio = document.getElementById('psVerifyFlash');
+          if(op && op.value && String(op.value).trim()) payload.operator = String(op.value).trim();
           if(pe && pe.value.trim()) payload.phone_exception = pe.value.trim();
-          if(vc && vc.checked) payload.voice = true;
+          // Only send verification when Flash call is selected AND the option was shown (supported)
+          if(flashRadio && flashRadio.checked && document.getElementById('psVerifyFlashLabel') &&
+             document.getElementById('psVerifyFlashLabel').style.display !== 'none'){
+            payload.verification = true;
+            payload.verification_type = 'flash';
+          } else {
+            payload.verification = false;
+            payload.verification_type = 'sms';
+          }
         }
         return payload;
       })())
