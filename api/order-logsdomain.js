@@ -1,4 +1,4 @@
-import { sendPushToUser } from '../lib/push.js';
+import { sendPushToUser, sendPushToAdmins } from '../lib/push.js';
 import { createClient } from '@supabase/supabase-js';
 
 const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
@@ -292,6 +292,14 @@ export default async function handler(req, res) {
         body: 'Your log order is ready. Open My Orders to view details.',
         url: '/my-orders.html',
         type: 'purchase'
+      });
+    } catch (_) {}
+    try {
+      await sendPushToAdmins(supabase, {
+        title: 'New log order',
+        body: String(customerId || 'Customer') + ' bought ' + (productName || 'log') + ((typeof qty !== 'undefined' && qty) ? (' ×' + qty) : '') + ' · ₦' + Number(total || 0).toLocaleString(),
+        url: '/admin.html',
+        type: 'admin_sale'
       });
     } catch (_) {}
     return res.status(200).json({

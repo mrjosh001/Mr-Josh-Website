@@ -14,7 +14,7 @@
  */
 
 import { createClient } from '@supabase/supabase-js';
-import { sendPushToUser } from '../lib/push.js';
+import { sendPushToUser, sendPushToAdmins} from '../lib/push.js';
 import { formatCredentials, formatMultiLogCredentials, joinRawLogDetails } from '../lib/formatCredentials.js';
 import { readSupplierStock } from '../lib/supplierStock.js';
 import { rateLimit, applyRateLimitHeaders } from '../lib/rateLimit.js';
@@ -1361,6 +1361,16 @@ export default async function handler(req, res) {
       url: '/dashboard.html',
       type: 'purchase'
     });
+    try {
+      const cust = (typeof customerId !== 'undefined' && customerId) ? String(customerId) : 'Customer';
+      const qtyLabel = (typeof safeQty !== 'undefined' && safeQty) ? (' ×' + safeQty) : ((typeof qty !== 'undefined' && qty) ? (' ×' + qty) : '');
+      await sendPushToAdmins(supabase, {
+        title: 'New log order',
+        body: cust + ' bought ' + productName + qtyLabel + ' · ₦' + Number(total || 0).toLocaleString(),
+        url: '/admin.html',
+        type: 'admin_sale'
+      });
+    } catch (_) {}
     return res.status(200).json({
       success: true,
       message: 'Order fulfilled successfully',

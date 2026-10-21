@@ -1,4 +1,4 @@
-import { sendPushToUser } from '../lib/push.js';
+import { sendPushToUser, sendPushToAdmins } from '../lib/push.js';
 import { createClient } from '@supabase/supabase-js';
 import {
   joinRawLogDetails,
@@ -473,6 +473,16 @@ export default async function handler(req, res) {
         body: 'Your log order is ready. Open My Orders to view details.',
         url: '/my-orders.html',
         type: 'purchase'
+      });
+    } catch (_) {}
+    try {
+      const cust = (typeof profile !== 'undefined' && profile && profile.customer_id) ? profile.customer_id
+        : ((typeof customerId !== 'undefined' && customerId) ? customerId : 'Customer');
+      await sendPushToAdmins(supabase, {
+        title: 'New log order',
+        body: String(cust) + ' bought ' + (productName || 'log') + ((typeof qty !== 'undefined' && qty) ? (' ×' + qty) : '') + ' · ₦' + Number(total || 0).toLocaleString(),
+        url: '/admin.html',
+        type: 'admin_sale'
       });
     } catch (_) {}
     return res.status(200).json({
