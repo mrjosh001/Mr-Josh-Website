@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
+import crypto from 'crypto';
 import { applyMarkup } from '../lib/pricing.js';
 
 /**
@@ -191,7 +192,263 @@ function assertSmsSaleCoversCost(priceNgn, supplierUsd) {
 }
 
 const GOTSMS_BASE = 'https://app.gotsms.org';
+
 const GOTSMS_TOKEN = process.env.GOTSMS_API_TOKEN || process.env.GOT_SMS_TOKEN || '';
+/** HMAC secret from PUT /api/webhook response — store as GOTSMS_WEBHOOK_SECRET in Vercel */
+const GOTSMS_WEBHOOK_SECRET = process.env.GOTSMS_WEBHOOK_SECRET || process.env.GOT_SMS_WEBHOOK_SECRET || '';
+
+async function readRawBody(req) {
+  if (typeof req.rawBody === 'string' && req.rawBody) return req.rawBody;
+  if (Buffer.isBuffer(req.rawBody) && req.rawBody.length) return req.rawBody.toString('utf8');
+  if (typeof req.body === 'string') return req.body;
+  if (Buffer.isBuffer(req.body)) return req.body.toString('utf8');
+  // Body may already be parsed by the runtime — stream if still available
+  if (req.readable && !req.readableEnded && req.body == null) {
+    const chunks = [];
+    for await (const c of req) chunks.push(c);
+    return Buffer.concat(chunks).toString('utf8');
+  }
+  if (req.body && typeof req.body === 'object') {
+    try { return JSON.stringify(req.body); } catch (_) { return ''; }
+  }
+  return '';
+}
+
+function gotsmsVerifyWebhookSignature(rawBody, headers) {
+  const secret = GOTSMS_WEBHOOK_SECRET;
+  if (!secret) return { ok: false, reason: 'no_secret' };
+  const h = headers || {};
+  const lower = {};
+  for (const k of Object.keys(h)) lower[String(k).toLowerCase()] = h[k];
+  const sig = String(lower['x-gotsms-signature'] || '').trim();
+  const ts = String(lower['x-gotsms-timestamp'] || '').trim();
+  if (!sig || !ts) return { ok: false, reason: 'missing_headers' };
+  const age = Math.abs(Math.floor(Date.now() / 1000) - Number(ts));
+  if (!Number.isFinite(age) || age > 300) return { ok: false, reason: 'stale_timestamp' };
+  const expected = 'sha256=' + crypto.createHmac('sha256', secret).update(String(ts) + '.' + String(rawBody || '')).digest('hex');
+  try {
+    const a = Buffer.from(expected);
+    const b = Buffer.from(sig);
+    if (a.length !== b.length || !crypto.timingSafeEqual(a, b)) return { ok: false, reason: 'bad_signature' };
+  } catch (_) {
+    return { ok: false, reason: 'bad_signature' };
+  }
+  return { ok: true };
+}
+
+/** Find our number_orders row for a GotSMS rent UUID (idempotency_key = gotsms-{rentId}). */
+async function gotsmsFindOrderByRentId(rentId) {
+  const key = `gotsms-${String(rentId || '').trim()}`;
+  if (key === 'gotsms-') return null;
+  const { data } = await supabase
+    .from('number_orders')
+    .select('id, user_id, customer_id, order_id, phone_number, service_name, status, notes, code, price, refunded, idempotency_key')
+    .eq('source', 'gotsms')
+    .eq('idempotency_key', key)
+    .maybeSingle();
+  return data || null;
+}
+
+async function gotsmsFindOrderByPhone(phone) {
+  const digits = String(phone || '').replace(/\D/g, '');
+  if (digits.length < 7) return null;
+  // Match last 10 digits (US numbers)
+  const tail = digits.length > 10 ? digits.slice(-10) : digits;
+  const { data } = await supabase
+    .from('number_orders')
+    .select('id, user_id, customer_id, order_id, phone_number, service_name, status, notes, code, price, refunded, idempotency_key')
+    .eq('source', 'gotsms')
+    .order('created_at', { ascending: false })
+    .limit(40);
+  const rows = data || [];
+  return rows.find((r) => {
+    const p = String(r.phone_number || '').replace(/\D/g, '');
+    return p === digits || p.endsWith(tail) || digits.endsWith(p);
+  }) || null;
+}
+
+function gotsmsNotesMeta(notes) {
+  try {
+    const s = String(notes || '').trim();
+    if (s.startsWith('{')) {
+      const o = JSON.parse(s);
+      return {
+        inbox: Array.isArray(o.inbox) ? o.inbox : parseRentInboxNotes(notes),
+        wh_ids: Array.isArray(o.wh_ids) ? o.wh_ids.map(String) : []
+      };
+    }
+  } catch (_) {}
+  return { inbox: parseRentInboxNotes(notes), wh_ids: [] };
+}
+
+function gotsmsPackNotes(inbox, whIds) {
+  const ids = (whIds || []).map(String).slice(-80);
+  return JSON.stringify({ inbox: mergeRentInbox([], inbox || []).slice(0, 100), wh_ids: ids });
+}
+
+/**
+ * GotSMS webhook (beta): POST events with HMAC signature.
+ * Docs: https://app.gotsms.org/docs/api/v1#api-webhooks
+ * Endpoint: POST /api/sms-bus?action=gotsms_webhook
+ */
+async function gotsmsHandleWebhook(req, res) {
+  const raw = await readRawBody(req);
+  const headers = req.headers || {};
+  const verify = gotsmsVerifyWebhookSignature(raw, headers);
+  if (!verify.ok) {
+    console.warn('[gotsms webhook] reject', verify.reason);
+    // Always 2xx only after accept — failed auth → 401 so they retry? Docs say non-2xx retries.
+    // Invalid signature should NOT retry forever with bad secret — return 401.
+    return json(res, 401, { success: false, message: 'Invalid webhook signature' });
+  }
+
+  let payload = {};
+  try {
+    payload = raw ? JSON.parse(raw) : (typeof req.body === 'object' ? req.body : {});
+  } catch (_) {
+    payload = typeof req.body === 'object' && req.body ? req.body : {};
+  }
+
+  const event = String(
+    payload.event ||
+    headers['x-gotsms-event'] ||
+    headers['X-GotSMS-Event'] ||
+    ''
+  ).trim();
+  const deliveryId = String(
+    payload.id ||
+    headers['x-gotsms-delivery'] ||
+    headers['X-GotSMS-Delivery'] ||
+    ''
+  ).trim();
+  const data = payload.data && typeof payload.data === 'object' ? payload.data : {};
+
+  // webhook.test — acknowledge
+  if (event === 'webhook.test') {
+    return json(res, 200, { success: true, message: 'ok', event });
+  }
+
+  const rentId = String(data.rent_id || data.rentId || '').trim();
+  const phone = data.phone || data.to || '';
+
+  try {
+    if (event === 'message.received') {
+      let order = rentId ? await gotsmsFindOrderByRentId(rentId) : null;
+      if (!order && phone) order = await gotsmsFindOrderByPhone(phone);
+      if (!order) {
+        console.warn('[gotsms webhook] message.received no order', { rentId, phone: String(phone).slice(0, 6) });
+        return json(res, 200, { success: true, ignored: true, reason: 'order_not_found' });
+      }
+
+      const meta = gotsmsNotesMeta(order.notes);
+      if (deliveryId && meta.wh_ids.includes(deliveryId)) {
+        return json(res, 200, { success: true, duplicate: true });
+      }
+      if (deliveryId) meta.wh_ids.push(deliveryId);
+
+      const msg = {
+        body: String(data.body || data.text || data.message || data.content || '').trim(),
+        code: String(data.code || '').trim(),
+        from: data.from || data.sender || 'SMS',
+        received_at: data.received_at || payload.created_at || new Date().toISOString()
+      };
+      if (!msg.code && msg.body) msg.code = extractRentOtp(msg.body);
+      const inbox = mergeRentInbox(meta.inbox, [msg]);
+      const notes = gotsmsPackNotes(inbox, meta.wh_ids);
+
+      const patch = { notes };
+      // First SMS on an active rental → completed (keeps code field = active_till)
+      const sn = String(order.service_name || '');
+      if (!/sms\s*received/i.test(sn) && order.status !== 'completed') {
+        patch.status = 'completed';
+        patch.service_name = (sn || 'USA rental') + ' · SMS received';
+      } else if (!/sms\s*received/i.test(sn)) {
+        patch.service_name = (sn || 'USA rental') + ' · SMS received';
+      }
+      await supabase.from('number_orders').update(patch).eq('id', order.id);
+      try {
+        const rid = rentId || String(order.idempotency_key || '').replace(/^gotsms-/, '');
+        if (rid) await gotsmsSetPurchaseTxStatus(order.user_id, rid, ['pending'], 'completed');
+      } catch (_) {}
+      return json(res, 200, { success: true, event, order_id: order.id });
+    }
+
+    if (event === 'rent.online') {
+      let order = rentId ? await gotsmsFindOrderByRentId(rentId) : null;
+      if (!order && phone) order = await gotsmsFindOrderByPhone(phone);
+      if (!order) return json(res, 200, { success: true, ignored: true });
+      const meta = gotsmsNotesMeta(order.notes);
+      if (deliveryId && meta.wh_ids.includes(deliveryId)) return json(res, 200, { success: true, duplicate: true });
+      if (deliveryId) meta.wh_ids.push(deliveryId);
+      const patch = { notes: gotsmsPackNotes(meta.inbox, meta.wh_ids) };
+      if (data.wake_till || data.active_till) patch.code = String(data.wake_till || data.active_till);
+      if (['expired', 'finished', 'cancelled', 'canceled'].includes(String(order.status || '').toLowerCase())) {
+        // do not resurrect cancelled
+      } else if (order.status !== 'completed') {
+        patch.status = 'active';
+      }
+      await supabase.from('number_orders').update(patch).eq('id', order.id);
+      return json(res, 200, { success: true, event });
+    }
+
+    if (event === 'rent.renewed') {
+      let order = rentId ? await gotsmsFindOrderByRentId(rentId) : null;
+      if (!order) return json(res, 200, { success: true, ignored: true });
+      const meta = gotsmsNotesMeta(order.notes);
+      if (deliveryId && meta.wh_ids.includes(deliveryId)) return json(res, 200, { success: true, duplicate: true });
+      if (deliveryId) meta.wh_ids.push(deliveryId);
+      const patch = {
+        notes: gotsmsPackNotes(meta.inbox, meta.wh_ids),
+        status: order.status === 'completed' ? 'completed' : 'active'
+      };
+      if (data.active_till) patch.code = String(data.active_till);
+      await supabase.from('number_orders').update(patch).eq('id', order.id);
+      return json(res, 200, { success: true, event });
+    }
+
+    if (event === 'rent.renewal_failed') {
+      let order = rentId ? await gotsmsFindOrderByRentId(rentId) : null;
+      if (!order) return json(res, 200, { success: true, ignored: true });
+      const meta = gotsmsNotesMeta(order.notes);
+      if (deliveryId && meta.wh_ids.includes(deliveryId)) return json(res, 200, { success: true, duplicate: true });
+      if (deliveryId) meta.wh_ids.push(deliveryId);
+      // Flag in notes only — no wallet change (supplier-side balance)
+      const notesObj = { inbox: meta.inbox, wh_ids: meta.wh_ids, renewal_failed_at: new Date().toISOString() };
+      await supabase.from('number_orders').update({ notes: JSON.stringify(notesObj) }).eq('id', order.id);
+      return json(res, 200, { success: true, event });
+    }
+
+    if (event === 'rent.ended') {
+      let order = rentId ? await gotsmsFindOrderByRentId(rentId) : null;
+      if (!order && phone) order = await gotsmsFindOrderByPhone(phone);
+      if (!order) return json(res, 200, { success: true, ignored: true });
+      const meta = gotsmsNotesMeta(order.notes);
+      if (deliveryId && meta.wh_ids.includes(deliveryId)) return json(res, 200, { success: true, duplicate: true });
+      if (deliveryId) meta.wh_ids.push(deliveryId);
+      // Period ended — not a refund. Completed if codes arrived; else expired.
+      const hadSms = /sms\s*received/i.test(String(order.service_name || '')) || order.status === 'completed' || (meta.inbox && meta.inbox.length);
+      const nextStatus = hadSms ? 'completed' : 'expired';
+      const patch = {
+        notes: gotsmsPackNotes(meta.inbox, meta.wh_ids),
+        status: nextStatus
+      };
+      if (data.ended_at) {
+        // keep code as ended marker only if no prior till needed for UI
+      }
+      await supabase.from('number_orders').update(patch).eq('id', order.id);
+      return json(res, 200, { success: true, event, status: nextStatus });
+    }
+
+    console.log('[gotsms webhook] unhandled event', event);
+    return json(res, 200, { success: true, ignored: true, event });
+  } catch (e) {
+    console.error('[gotsms webhook]', e);
+    // 500 → GotSMS retries — good for transient DB errors
+    return json(res, 500, { success: false, message: 'Webhook processing error' });
+  }
+}
+
+
 
 
 /** Fixed customer prices by duration (NGN). Admin override still wins per plan. */
@@ -1353,6 +1610,15 @@ export default async function handler(req, res) {
     const url = new URL(req.url, 'http://localhost');
     const action = (url.searchParams.get('action') || '').toLowerCase();
     const method = (req.method || 'GET').toUpperCase();
+
+    // GotSMS push webhooks (no user session — HMAC verified)
+    const pathLower = String(url.pathname || '').toLowerCase();
+    if (
+      method === 'POST' &&
+      (action === 'gotsms_webhook' || pathLower.includes('gotsms-webhook') || pathLower.includes('gotsms_webhook'))
+    ) {
+      return gotsmsHandleWebhook(req, res);
+    }
 
     if (!TOKEN) {
       return json(res, 503, {
@@ -4174,6 +4440,82 @@ if (method === 'POST' && ga === 'gotsms_toggle_renewal') {
       }
 
 
+
+      // --- Webhook admin (beta on GotSMS — contact their support for access) ---
+      if (method === 'GET' && ga === 'gotsms_webhook_status') {
+        const auth = await requireAuth(req);
+        if (!auth.ok) return json(res, auth.status, { success: false, message: auth.message });
+        const { data: prof } = await supabase.from('profiles').select('is_admin').eq('id', auth.userId).maybeSingle();
+        if (!prof?.is_admin) return json(res, 403, { success: false, message: 'Admin only' });
+        const g = await gotsmsFetch('/api/webhook');
+        const d = g.data?.data || null;
+        // Never return full secret to browser — only last 4 chars
+        let secretHint = null;
+        if (d && d.secret) secretHint = '…' + String(d.secret).slice(-4);
+        return json(res, g.ok ? 200 : g.status || 400, {
+          success: !!g.data?.success,
+          data: d ? {
+            url: d.url,
+            events: d.events,
+            is_enabled: d.is_enabled,
+            disabled_at: d.disabled_at,
+            secret_hint: secretHint,
+            local_secret_configured: !!GOTSMS_WEBHOOK_SECRET,
+            receive_url: 'https://www.mjhub.store/api/sms-bus?action=gotsms_webhook'
+          } : null,
+          message: gotsmsSafeMsg(g.data?.message, g.ok ? 'ok' : 'Webhooks may need beta access from the provider')
+        });
+      }
+
+      if (method === 'POST' && ga === 'gotsms_webhook_setup') {
+        const auth = await requireAuth(req);
+        if (!auth.ok) return json(res, auth.status, { success: false, message: auth.message });
+        const { data: prof } = await supabase.from('profiles').select('is_admin').eq('id', auth.userId).maybeSingle();
+        if (!prof?.is_admin) return json(res, 403, { success: false, message: 'Admin only' });
+        const body = await readBody(req);
+        const receiveUrl = String(body.url || process.env.GOTSMS_WEBHOOK_URL || 'https://www.mjhub.store/api/sms-bus?action=gotsms_webhook').trim();
+        const events = Array.isArray(body.events) && body.events.length
+          ? body.events
+          : ['message.received', 'rent.online', 'rent.renewed', 'rent.renewal_failed', 'rent.ended'];
+        const g = await gotsmsFetch('/api/webhook', {
+          method: 'PUT',
+          body: { url: receiveUrl, events, is_enabled: body.is_enabled !== false }
+        });
+        const d = g.data?.data || null;
+        if (g.ok && d && d.secret) {
+          console.log('[gotsms webhook] setup ok — copy secret to GOTSMS_WEBHOOK_SECRET in Vercel (ends with …' + String(d.secret).slice(-4) + ')');
+        }
+        return json(res, g.ok ? 200 : g.status || 400, {
+          success: !!g.data?.success,
+          message: gotsmsSafeMsg(
+            g.data?.message,
+            g.ok
+              ? 'Webhook registered. Add GOTSMS_WEBHOOK_SECRET in Vercel from the provider secret (shown once in their response / dashboard), then redeploy.'
+              : 'Could not register webhook. Provider may still have webhooks in beta — contact their support.'
+          ),
+          data: d ? {
+            url: d.url,
+            events: d.events,
+            is_enabled: d.is_enabled,
+            secret: d.secret || null,
+            receive_url: receiveUrl
+          } : null
+        });
+      }
+
+      if (method === 'POST' && ga === 'gotsms_webhook_test') {
+        const auth = await requireAuth(req);
+        if (!auth.ok) return json(res, auth.status, { success: false, message: auth.message });
+        const { data: prof } = await supabase.from('profiles').select('is_admin').eq('id', auth.userId).maybeSingle();
+        if (!prof?.is_admin) return json(res, 403, { success: false, message: 'Admin only' });
+        const g = await gotsmsFetch('/api/webhook/test', { method: 'POST' });
+        return json(res, g.ok ? 200 : g.status || 400, {
+          success: !!g.data?.success,
+          message: gotsmsSafeMsg(g.data?.message, g.ok ? 'Test event sent' : 'Test failed'),
+          data: g.data?.data || null
+        });
+      }
+
       return json(res, 400, {
         success: false,
         message: `Unknown GotSMS action: ${ga}`,
@@ -4182,7 +4524,7 @@ if (method === 'POST' && ga === 'gotsms_toggle_renewal') {
           'gotsms_rent', 'gotsms_rent_bulk', 'gotsms_rents', 'gotsms_wake',
           'gotsms_messages', 'gotsms_addable_services', 'gotsms_add_service', 'gotsms_transition',
           'gotsms_toggle_renewal', 'gotsms_refund', 'gotsms_my_orders',
-          'gotsms_supplier_balance', 'gotsms_sync'
+          'gotsms_supplier_balance', 'gotsms_sync', 'gotsms_webhook', 'gotsms_webhook_setup', 'gotsms_webhook_status', 'gotsms_webhook_test'
         ]
       });
     }
