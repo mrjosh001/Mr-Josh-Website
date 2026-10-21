@@ -1519,11 +1519,32 @@ async function handleMyOrders(req, res) {
         const now = String(o.status || '').toLowerCase();
         const wasDone = /completed|partial|canceled|cancelled|refunded/.test(prev);
         if (!wasDone && /completed/i.test(now)) {
-          await notifyUserPush(userGate.user.id, 'Boost order completed', (o.service_name || 'Your order') + ' finished delivering.', '/mj-boosters.html', 'booster');
+          const isTgOrder = /telegram|smmkings/i.test(String(o.source || o.provider || o.service_name || ''));
+          await notifyUserPush(
+            userGate.user.id,
+            isTgOrder ? 'Telegram order completed' : 'Boost order completed',
+            (o.service_name || 'Your order') + ' finished delivering.',
+            isTgOrder ? '/telegram.html' : '/mj-boosters.html',
+            isTgOrder ? 'telegram' : 'booster'
+          );
         } else if (!wasDone && /partial/i.test(now)) {
-          await notifyUserPush(userGate.user.id, 'Boost order partial', (o.service_name || 'Your order') + ' partially delivered. Check history for details.', '/mj-boosters.html', 'booster');
+          const isTgOrder = /telegram|smmkings/i.test(String(o.source || o.provider || o.service_name || ''));
+          await notifyUserPush(
+            userGate.user.id,
+            isTgOrder ? 'Telegram order partial' : 'Boost order partial',
+            (o.service_name || 'Your order') + ' partially delivered. Check history for details.',
+            isTgOrder ? '/telegram.html' : '/mj-boosters.html',
+            isTgOrder ? 'telegram' : 'booster'
+          );
         } else if (!wasDone && /cancel/i.test(now) && refunded > 0) {
-          await notifyUserPush(userGate.user.id, 'Boost order refunded', '₦' + Number(refunded).toLocaleString() + ' returned to your wallet.', '/mj-boosters.html', 'booster');
+          const isTgOrder = /telegram|smmkings/i.test(String(o.source || o.provider || o.service_name || ''));
+          await notifyUserPush(
+            userGate.user.id,
+            isTgOrder ? 'Telegram order refunded' : 'Boost order refunded',
+            '₦' + Number(refunded).toLocaleString() + ' returned to your wallet.',
+            isTgOrder ? '/telegram.html' : '/mj-boosters.html',
+            isTgOrder ? 'telegram' : 'booster'
+          );
         }
       } catch (_) {}
 

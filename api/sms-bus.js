@@ -439,6 +439,13 @@ async function gotsmsHandleWebhook(req, res) {
       // Flag in notes only — no wallet change (supplier-side balance)
       const notesObj = { inbox: meta.inbox, wh_ids: meta.wh_ids, renewal_failed_at: new Date().toISOString() };
       await supabase.from('number_orders').update({ notes: JSON.stringify(notesObj) }).eq('id', order.id);
+      await notifyUserPush(
+        order.user_id,
+        'Auto-renew failed',
+        'Top up your wallet so this number can renew. Open Number History for details.',
+        '/deposit.html',
+        'sms_renew'
+      );
       return json(res, 200, { success: true, event });
     }
 
@@ -460,6 +467,13 @@ async function gotsmsHandleWebhook(req, res) {
         // keep code as ended marker only if no prior till needed for UI
       }
       await supabase.from('number_orders').update(patch).eq('id', order.id);
+      await notifyUserPush(
+        order.user_id,
+        'Rental period ended',
+        'This number is no longer active. Rent again anytime from MJ SMS.',
+        '/sms-history.html',
+        'sms_rent'
+      );
       return json(res, 200, { success: true, event, status: nextStatus });
     }
 
@@ -2837,6 +2851,13 @@ export default async function handler(req, res) {
         });
       } catch (_) {}
 
+      await notifyUserPush(
+        auth.userId,
+        'Number rental active',
+        (fullPhone || phone || 'Your number') + ' is ready. Open Number History to manage it.',
+        '/sms-history.html',
+        'sms_rent'
+      );
       return json(res, 200, {
         success: true,
         data: {
@@ -3135,6 +3156,13 @@ export default async function handler(req, res) {
         } catch (_) {}
       }
 
+      await notifyUserPush(
+        auth.userId,
+        'Rental cancelled — refunded',
+        '₦' + Number(refundAmount || 0).toLocaleString() + ' returned to your wallet.',
+        '/sms-history.html',
+        'sms_refund'
+      );
       return json(res, 200, {
         success: true,
         message: 'Rental cancelled. ₦' + refundAmount.toLocaleString() + ' returned to your wallet.',
@@ -3595,6 +3623,13 @@ export default async function handler(req, res) {
             new_balance: Number(fresh?.balance ?? debit.new_balance)
           }
         });
+        await notifyUserPush(
+          auth.userId,
+          'USA number rented',
+          'Your number is active. Open Number History to check inbox.',
+          '/sms-history.html',
+          'sms_rent'
+        );
       }
 
       if (method === 'POST' && ga === 'gotsms_rent_bulk') {
@@ -3931,6 +3966,7 @@ if (method === 'GET' && ga === 'gotsms_messages') {
             status: 'completed'
           });
         } catch (_) {}
+        await notifyUserPush(auth.userId, 'Service added', 'A new service was added to your rented number.', '/sms-history.html', 'sms_rent');
         return json(res, 201, { success: true, message: gotsmsSafeMsg(g.data.message, 'Service added to this number'), data: { ...(g.data.data || {}), price_ngn: price, service_name: svc.name } });
       }
 
@@ -3991,6 +4027,7 @@ if (method === 'GET' && ga === 'gotsms_messages') {
             status: 'completed'
           });
         } catch (_) {}
+        await notifyUserPush(auth.userId, 'Plan updated', 'Your number plan was switched successfully.', '/sms-history.html', 'sms_rent');
         return json(res, 200, {
           success: true,
           message: gotsmsSafeMsg(g.data.message, 'Plan switched successfully'),
@@ -4157,6 +4194,15 @@ if (method === 'POST' && ga === 'gotsms_toggle_renewal') {
             return json(res, 500, { success: false, message: 'Cancelled with provider but wallet credit failed. Contact support with your order ID.' });
           }
         }
+        await notifyUserPush(
+          auth.userId,
+          refundAmt > 0 ? 'USA rental cancelled — refunded' : 'USA rental cancelled',
+          refundAmt > 0
+            ? ('₦' + Number(refundAmt).toLocaleString() + ' returned to your wallet.')
+            : 'Your USA rental was cancelled.',
+          '/sms-history.html',
+          'sms_refund'
+        );
         return json(res, 200, {
           success: true,
           message: refundAmt > 0 ? 'Rental cancelled. Balance restored.' : 'Rental cancelled.',

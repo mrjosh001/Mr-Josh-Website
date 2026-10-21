@@ -243,6 +243,14 @@ export default async function handler(req, res) {
         user_id: user_id, customer_id: customerId, type: 'refund', category: productName, title: 'Automatic Refund',
         subtitle: 'Logs Domain order failed – balance restored', amount: '₦' + total.toLocaleString(), amount_ngn: total, status: 'refunded'
       });
+      try {
+        await sendPushToUser(supabase, user_id, {
+          title: 'Refund processed',
+          body: 'Your wallet was restored for a failed order.',
+          url: '/dashboard.html',
+          type: 'refund'
+        });
+      } catch (_) {}
       return res.status(400).json({ success: false, message: orderData.message || 'Order failed at supplier. Your balance has been refunded.' });
     }
 
@@ -302,6 +310,14 @@ export default async function handler(req, res) {
           user_id: user_id, customer_id: customerId, type: 'refund', category: productName || 'Unknown', title: 'Automatic Refund',
           subtitle: 'System error – ' + err.message, amount: '₦' + total.toLocaleString(), amount_ngn: total, status: 'refunded'
         });
+      try {
+        await sendPushToUser(supabase, user_id, {
+          title: 'Refund processed',
+          body: 'Your wallet was restored for a failed order.',
+          url: '/dashboard.html',
+          type: 'refund'
+        });
+      } catch (_) {}
       } catch (e2) {}
     }
     return res.status(500).json({

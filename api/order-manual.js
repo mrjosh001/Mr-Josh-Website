@@ -372,6 +372,14 @@ export default async function handler(req, res) {
         amount_ngn: total,
         status: 'refunded'
       });
+      try {
+        await sendPushToUser(supabase, user_id, {
+          title: 'Refund processed',
+          body: 'Your wallet was restored for a failed order.',
+          url: '/dashboard.html',
+          type: 'refund'
+        });
+      } catch (_) {}
 
       return res.status(400).json({
         success: false,
@@ -507,6 +515,14 @@ export default async function handler(req, res) {
           status: 'refunded',
           notes: err.message
         });
+      try {
+        await sendPushToUser(supabase, user_id, {
+          title: 'Refund processed',
+          body: 'Your wallet was restored for a failed order.',
+          url: '/dashboard.html',
+          type: 'refund'
+        });
+      } catch (_) {}
       }
     } catch (refundErr) {
       console.error('CRITICAL: Auto-refund failed', refundErr);

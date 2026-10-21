@@ -1145,6 +1145,15 @@ async function claimAndRefundOrder(order, userId, opts = {}) {
     console.warn('[claimAndRefundOrder] tx update', e.message || e);
   }
 
+  try {
+    await notifyUserPush(
+      userId,
+      String(finalStatus).toLowerCase() === 'expired' ? 'SMS expired — refunded' : 'SMS canceled — refunded',
+      '₦' + Number(refundAmount || 0).toLocaleString() + ' was returned to your wallet.',
+      '/sms-history.html',
+      'sms_refund'
+    );
+  } catch (_) {}
   return {
     refunded: true,
     refunded_amount: refundAmount,

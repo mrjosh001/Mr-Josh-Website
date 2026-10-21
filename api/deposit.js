@@ -483,6 +483,14 @@ async function payReferralCommission(refereeUserId, depositAmountNgn, depositRef
     console.warn('[referral] tx insert', e?.message || e);
   }
 
+  try {
+    await sendPushToUser(supabase, referrerId, {
+      title: 'Referral bonus credited',
+      body: '₦' + Number(commission).toLocaleString() + ' from a friend deposit is now in your wallet.',
+      url: '/dashboard.html',
+      type: 'referral'
+    });
+  } catch (_) {}
   return { paid: true, commission, referrer_id: referrerId, new_balance: nextBal };
 }
 
