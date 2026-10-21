@@ -902,6 +902,7 @@ function withLagos(opts) { return Object.assign({ timeZone: 'Africa/Lagos' }, op
   min-width: 0;
 }
 </style>
+ <script src="/js/mj-push.js" defer></script>
 </head>
 <body>
 
@@ -1707,6 +1708,12 @@ function withLagos(opts) { return Object.assign({ timeZone: 'Africa/Lagos' }, op
 
  <div id="tab-notify" class="tab-content">
  <div class="panel">
+ <div class="panel-title" style="margin-bottom:10px;">Admin sale alerts (your phone)</div>
+ <div class="price-note" style="margin-bottom:12px;">Turn this on so <b>you</b> get a lock-screen alert when a customer buys a log or booster. Uses the same phone permission as the user app.</div>
+ <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:18px;">
+  <button type="button" class="btn btn-primary btn-sm" id="adminPushEnableBtn" onclick="enableAdminSalePush()"><i class="fas fa-bell"></i> Enable sale alerts on this device</button>
+  <span id="adminPushStatus" style="font-size:12px;opacity:.85;"></span>
+ </div>
  <div class="panel-title" style="margin-bottom:10px;">Send Notification to All Users</div>
  <div class="field" style="max-width:480px;">
  <label>Title</label>
@@ -7577,5 +7584,49 @@ async function loadBoosterOrders() {
 </script>
 
 <script src="js/haptic.js" defer></script>
+
+<script>
+async function enableAdminSalePush() {
+  var statusEl = document.getElementById('adminPushStatus');
+  var btn = document.getElementById('adminPushEnableBtn');
+  function setMsg(t) { if (statusEl) statusEl.textContent = t || ''; }
+  try {
+    if (btn) btn.disabled = true;
+    setMsg('Requesting permission…');
+    var Push = window.MJHubPush || window.MJPush;
+    if (!Push) throw new Error('Push script not loaded — hard refresh and try again');
+    try {
+      if (typeof supabaseClient !== 'undefined') window.supabaseClient = supabaseClient;
+      else if (typeof supabase !== 'undefined' && supabase) window.supabaseClient = supabase;
+      else if (typeof sb !== 'undefined' && sb) window.supabaseClient = sb;
+    } catch (e) {}
+    var st = await Push.enable();
+    if (st && (st.ok || st.subscribed || st.permission === 'granted')) {
+      setMsg('On — you will get alerts for new log and booster orders on this device.');
+      if (btn) btn.innerHTML = '<i class="fas fa-check"></i> Sale alerts enabled';
+    } else {
+      setMsg((st && st.message) || 'Could not enable. Allow notifications for this site in browser settings.');
+      if (btn) btn.disabled = false;
+    }
+  } catch (e) {
+    setMsg(e.message || 'Failed to enable');
+    if (btn) btn.disabled = false;
+  }
+}
+(async function refreshAdminPushStatus() {
+  try {
+    var Push = window.MJHubPush || window.MJPush;
+    if (!Push || !Push.status) return;
+    var st = await Push.status();
+    var statusEl = document.getElementById('adminPushStatus');
+    var btn = document.getElementById('adminPushEnableBtn');
+    if (st && st.subscribed) {
+      if (statusEl) statusEl.textContent = 'On for this device';
+      if (btn) btn.innerHTML = '<i class="fas fa-check"></i> Sale alerts enabled';
+    }
+  } catch (e) {}
+})();
+</script>
+
 </body>
 </html>
