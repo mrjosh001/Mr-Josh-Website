@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
+import { sendPushToUser } from '../lib/push.js';
 
 const ESIM_URL = process.env.ESIM_SUPABASE_URL;
 const ESIM_SERVICE_KEY = process.env.ESIM_SUPABASE_SERVICE_ROLE_KEY;
@@ -29,6 +30,19 @@ const supabase = ESIM_URL && ESIM_SERVICE_KEY
 /** Plans = defaults, overridden by whatever is saved in the esim_plans table. */
 async function getPlans() {
   const defaults = DEFAULT_PLANS.map((p) => ({ ...p }));
+
+async function notifyUserPush(userId, title, body, url, type) {
+  if (!userId) return;
+  try {
+    await sendPushToUser(supabase, userId, {
+      title: String(title || 'MJ HUB').slice(0, 80),
+      body: String(body || '').slice(0, 180),
+      url: url || '/dashboard.html',
+      type: String(type || 'activity').slice(0, 40)
+    });
+  } catch (e) { console.warn('[push]', e?.message || e); }
+}
+
   try {
     const { data, error } = await supabase.from('esim_plans').select('*');
     if (error || !Array.isArray(data) || !data.length) return defaults;
@@ -332,6 +346,15 @@ async function handleDeliver(body, adminUser, res) {
     });
   }
 
+  if (order.user_id) {
+    await notifyUserPush(
+      order.user_id,
+      'Your eSIM is ready',
+      'Check your email for the QR code and setup guide.',
+      '/dashboard.html',
+      'esim'
+    );
+  }
   return res.status(200).json({
     success: true,
     emailed: true,
@@ -586,7 +609,15 @@ export default async function handler(req, res) {
       return { customer: false, admin: false };
     });
 
+    await notifyUserPush(
+      order.user_id,
+      'eSIM order received',
+      (order.plan_name || 'Your eSIM') + ' is being processed.',
+      '/dashboard.html',
+      'esim'
+    );
     return res.status(200).json({
+      // push below after order loaded
       success: true,
       message: orderData.created ? 'eSIM order placed successfully.' : 'Your eSIM order is confirmed.',
       order: {

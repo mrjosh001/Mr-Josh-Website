@@ -1,5 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
 import { applyMarkup } from '../lib/pricing.js';
+import { sendPushToUser } from '../lib/push.js';
 import { createHero } from '../lib/hero.js';
 
 /**
@@ -32,6 +33,19 @@ import { createHero } from '../lib/hero.js';
  */
 
 /* MJHUB_SERVER3_VIRTUALSMS=5 2026-10-18 Server 3: FULL resumable catalog sync (all services, all countries, pagination), price guards on order, secure cron auth */
+
+async function notifyUserPush(userId, title, body, url, type) {
+  if (!userId) return;
+  try {
+    await sendPushToUser(supabase, userId, {
+      title: String(title || 'MJ HUB').slice(0, 80),
+      body: String(body || '').slice(0, 180),
+      url: url || '/dashboard.html',
+      type: String(type || 'activity').slice(0, 40)
+    });
+  } catch (e) { console.warn('[push]', e?.message || e); }
+}
+
 const BASE = 'https://api.grizzlysms.com/stubs/handler_api.php';
 const VSMS_BASE = 'https://virtualsms.io/stubs/handler_api.php'; // legacy: only for old numeric-id Server 3 orders
 
@@ -1498,6 +1512,7 @@ async function handleCheck(req, res) {
 
     // Code received → lock as completed on purchase transaction
     if (newStatus === 'completed' && code) {
+      await notifyUserPush(user_id, 'SMS code received', 'Your verification code is ready. Open Number History to view it.', '/sms-history.html', 'sms_code');
       try {
         await supabase
           .from('transactions')

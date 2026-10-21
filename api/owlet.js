@@ -1,5 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
 import { rateLimit, applyRateLimitHeaders } from '../lib/rateLimit.js';
+import { sendPushToUser } from '../lib/push.js';
 
 /**
  * /api/owlet — MJ Boosters (JAP + CasperSMM Perfect Panel v2). Customer catalog shows both.
@@ -100,6 +101,19 @@ const supabase = createClient(
   process.env.SUPABASE_URL,
   process.env.SUPABASE_SERVICE_ROLE_KEY
 );
+
+async function notifyUserPush(userId, title, body, url, type) {
+  if (!userId) return;
+  try {
+    await sendPushToUser(supabase, userId, {
+      title: String(title || 'MJ HUB').slice(0, 80),
+      body: String(body || '').slice(0, 180),
+      url: url || '/dashboard.html',
+      type: String(type || 'activity').slice(0, 40)
+    });
+  } catch (e) { console.warn('[push]', e?.message || e); }
+}
+
 
 /**
  * Markup 50%–80% random per service (system prices).
@@ -1194,6 +1208,13 @@ async function handleOrder(req, res) {
     });
   }
 
+  await notifyUserPush(
+    userGate.user.id,
+    isTg ? 'Telegram order placed' : 'Boost order placed',
+    (service?.name || 'Order') + ' is processing.',
+    isTg ? '/telegram.html' : '/mj-boosters.html',
+    isTg ? 'telegram' : 'booster'
+  );
   return res.status(200).json({
     success: true,
     message: 'Boost order placed successfully',
@@ -1492,6 +1513,19 @@ async function handleMyOrders(req, res) {
       };
       let { error: upErr } = await supabase.from('booster_orders').update(core).eq('id', o.id);
       if (upErr) console.warn('[owlet my_orders] update core', upErr.message);
+      // Notify once when order reaches a terminal success state
+      try {
+        const prev = String(oldStatus || '').toLowerCase();
+        const now = String(o.status || '').toLowerCase();
+        const wasDone = /completed|partial|canceled|cancelled|refunded/.test(prev);
+        if (!wasDone && /completed/i.test(now)) {
+          await notifyUserPush(userGate.user.id, 'Boost order completed', (o.service_name || 'Your order') + ' finished delivering.', '/mj-boosters.html', 'booster');
+        } else if (!wasDone && /partial/i.test(now)) {
+          await notifyUserPush(userGate.user.id, 'Boost order partial', (o.service_name || 'Your order') + ' partially delivered. Check history for details.', '/mj-boosters.html', 'booster');
+        } else if (!wasDone && /cancel/i.test(now) && refunded > 0) {
+          await notifyUserPush(userGate.user.id, 'Boost order refunded', '₦' + Number(refunded).toLocaleString() + ' returned to your wallet.', '/mj-boosters.html', 'booster');
+        }
+      } catch (_) {}
 
       if (refunded > 0 || o.delivered != null) {
         const extra = {};

@@ -1,6 +1,7 @@
 import { createClient } from '@supabase/supabase-js';
 import crypto from 'crypto';
 import { applyMarkup } from '../lib/pricing.js';
+import { sendPushToUser } from '../lib/push.js';
 
 /**
  * SMS-BUS integration — OTP (with reuse) + long-term rentals.
@@ -25,6 +26,22 @@ import { applyMarkup } from '../lib/pricing.js';
  *   POST ?action=rent_renew  { area_code, mobile_number, time }
  *   POST ?action=rent_cancel { order_id }  // provider must accept; then wallet credit
  */
+
+
+/** Fire-and-forget phone push (works even if user is not in the app, if they opted in). */
+async function notifyUserPush(userId, title, body, url, type) {
+  if (!userId) return;
+  try {
+    await sendPushToUser(supabase, userId, {
+      title: String(title || 'MJ HUB').slice(0, 80),
+      body: String(body || '').slice(0, 180),
+      url: url || '/dashboard.html',
+      type: String(type || 'activity').slice(0, 40)
+    });
+  } catch (e) {
+    console.warn('[push]', e?.message || e);
+  }
+}
 
 const OTP_BASE = 'https://sms-bus.com/api/control';
 const RENT_BASE = 'https://api.sms-bus.com';
@@ -370,6 +387,13 @@ async function gotsmsHandleWebhook(req, res) {
         const rid = rentId || String(order.idempotency_key || '').replace(/^gotsms-/, '');
         if (rid) await gotsmsSetPurchaseTxStatus(order.user_id, rid, ['pending'], 'completed');
       } catch (_) {}
+      await notifyUserPush(
+        order.user_id,
+        'SMS received on your number',
+        (msg.code ? ('Code: ' + msg.code + ' · ') : '') + 'Open inbox to read the full message.',
+        '/sms-history.html',
+        'sms_code'
+      );
       return json(res, 200, { success: true, event, order_id: order.id });
     }
 
@@ -1199,6 +1223,15 @@ async function claimAndRefundSmsBusOrder(order, userId, opts = {}) {
   }
   try {
     await markTxStatus(userId, order.order_id, order.phone_number, 'cancelled');
+  } catch (_) {}
+  try {
+    await notifyUserPush(
+      userId,
+      /expir/i.test(String(opts.subtitle || opts.status || '')) ? 'SMS expired — refunded' : 'SMS canceled — refunded',
+      '₦' + Number(order.price || claimed?.price || 0).toLocaleString() + ' was returned to your wallet.',
+      '/sms-history.html',
+      'sms_refund'
+    );
   } catch (_) {}
   return { refunded: true, amount: refundAmount, new_balance: newBalance };
 }
@@ -2187,6 +2220,15 @@ export default async function handler(req, res) {
           .eq('id', order.id)
           .eq('refunded', false)
           .select();
+        if (updatedRows && updatedRows.length) {
+          await notifyUserPush(
+            auth.userId,
+            'SMS code received',
+            'Your verification code is ready. Open Number History to view it.',
+            '/sms-history.html',
+            'sms_code'
+          );
+        }
         if (!updatedRows || updatedRows.length === 0) {
           // Concurrent refund mid-flight → try reclaim
           const re = await reclaimAndCompleteSmsBus(
@@ -3798,6 +3840,7 @@ if (method === 'GET' && ga === 'gotsms_messages') {
             const { data: row } = await supabase.from('number_orders').select('id, service_name').eq('user_id', auth.userId).eq('source', 'gotsms').eq('idempotency_key', key).maybeSingle();
             if (row && !/sms\s*received/i.test(String(row.service_name || ''))) {
               await supabase.from('number_orders').update({ status: 'completed', service_name: (row.service_name || 'USA rental') + ' · SMS received' }).eq('id', row.id);
+              await notifyUserPush(auth.userId, 'SMS received on your number', 'Open USA rental inbox to view messages.', '/sms-history.html', 'sms_code');
             }
             await gotsmsSetPurchaseTxStatus(auth.userId, rent_id, ['pending'], 'completed');
           } catch (e) {

@@ -1,3 +1,4 @@
+import { sendPushToUser } from '../lib/push.js';
 import { createClient } from '@supabase/supabase-js';
 import {
   joinRawLogDetails,
@@ -458,6 +459,14 @@ export default async function handler(req, res) {
       await syncStockCount(product_key);
     }
 
+    try {
+      await sendPushToUser(supabase, user_id, {
+        title: 'Order completed',
+        body: 'Your log order is ready. Open My Orders to view details.',
+        url: '/my-orders.html',
+        type: 'purchase'
+      });
+    } catch (_) {}
     return res.status(200).json({
       success: true,
       message: 'Order fulfilled successfully',

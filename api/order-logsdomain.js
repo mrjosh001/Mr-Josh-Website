@@ -1,3 +1,4 @@
+import { sendPushToUser } from '../lib/push.js';
 import { createClient } from '@supabase/supabase-js';
 
 const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
@@ -277,8 +278,16 @@ export default async function handler(req, res) {
       is_available: (product.stock_quantity || 0) - qty > 0
     }).eq('product_key', product_key);
 
+    try {
+      await sendPushToUser(supabase, user_id, {
+        title: 'Order completed',
+        body: 'Your log order is ready. Open My Orders to view details.',
+        url: '/my-orders.html',
+        type: 'purchase'
+      });
+    } catch (_) {}
     return res.status(200).json({
-      success: true, message: 'Order fulfilled successfully',
+      success: true, message: 'Order fulfilled successfully' /* push below */,
       data: {
         items: items.length ? items.map(function(it){ return { details: it.details, serial: it.serial }; }) : [{ details: detailsText || 'Order completed' }],
         total_amount: total, new_balance: newBalance, new_balance_usd: newBalanceUsd, order_id: supplierOrderId, source: 'logsdomain'
