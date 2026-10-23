@@ -161,10 +161,28 @@ let checkingNow = false;
 let autoRefundStarted = false;
 let orderCreatedAt = null;
 
-// Grizzly reservation window (~20 min). After this with no code → auto refund.
+// Reservation window (~20 min). After this with no code → auto refund (matches Grizzly + Hero rules).
 const EXPIRY_SECONDS = 20 * 60;
-// Cancel lock — "Available in" countdown beside Cancel (5 minutes).
-const CANCEL_COOLDOWN_SECONDS = 5 * 60;
+// Cancel lock defaults — Grizzly 5 min; Hero SMS supplier unlocks at 2 min.
+const GRIZZLY_CANCEL_COOLDOWN_SECONDS = 5 * 60;
+const HERO_CANCEL_COOLDOWN_SECONDS = 2 * 60;
+let CANCEL_COOLDOWN_SECONDS = GRIZZLY_CANCEL_COOLDOWN_SECONDS;
+let orderSource = '';
+
+function applyCancelCooldownFromOrder(data) {
+  if (!data || typeof data !== 'object') return;
+  const src = String(data.source || orderSource || '').toLowerCase();
+  if (src) orderSource = src;
+  if (data.cancel_cooldown_seconds != null && Number(data.cancel_cooldown_seconds) > 0) {
+    CANCEL_COOLDOWN_SECONDS = Math.max(30, Math.floor(Number(data.cancel_cooldown_seconds)));
+    return;
+  }
+  if (src === 'herosms' || src === 'hero') {
+    CANCEL_COOLDOWN_SECONDS = HERO_CANCEL_COOLDOWN_SECONDS;
+  } else if (src === 'grizzlysms' || src === 'grizzly' || src === 'virtualsms') {
+    CANCEL_COOLDOWN_SECONDS = GRIZZLY_CANCEL_COOLDOWN_SECONDS;
+  }
+}
 
 function escapeHtml(str){if(!str)return'';return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;')}
 
@@ -390,6 +408,7 @@ function bindCopyPhone(){
 
 function renderWaiting(data){
   if(data.created_at) orderCreatedAt = data.created_at;
+  applyCancelCooldownFromOrder(data);
   statusCard.className = 'n3';
   statusCard.innerHTML = `
     <div class="n3-state">
@@ -609,7 +628,13 @@ async function cancelOrder(){
         await checkStatus();
         return;
       } else {
-        showToast(data.message || 'Could not cancel this order.', 'error');
+        if (data && (data.code === 'EARLY_CANCEL_DENIED' || data.wait_seconds != null)) {
+          const left = Math.max(1, Number(data.wait_seconds) || 0);
+          if (left > 0) CANCEL_COOLDOWN_SECONDS = Math.max(CANCEL_COOLDOWN_SECONDS, left + Math.floor((Date.now() - (orderCreatedAt ? new Date(orderCreatedAt).getTime() : Date.now())) / 1000));
+          showToast(data.message || ('Cancel available in ' + formatCountdown(left)), 'error');
+        } else {
+          showToast(data.message || 'Could not cancel this order.', 'error');
+        }
       }
       cancelling = false;
       updateCancelButtonState();
