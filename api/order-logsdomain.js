@@ -1,21 +1,23 @@
 import { createClient } from '@supabase/supabase-js';
 
 /**
- * POST /api/order-logsdomain
- * Buys from Logs Domain after charging the customer wallet.
- * Body: { product_key, quantity, user_id, external_order_id? }
- * product_key format: ld_{category_id}  e.g. ld_12
+ * /api/order-logsdomain
+ * GET  ?action=sync            → Logs Domain catalog sync
+ * GET  ?action=bulkmail_sync   → BulkMail catalog sync
+ * GET  ?action=accszone_sync   → AccsZone catalog sync (hidden until admin enables)
+ * POST                         → buy Logs Domain product
  *
- * Env: LOGSDOMAIN_API_KEY, SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY
+ * Env: LOGSDOMAIN_API_KEY, BULKMAIL_API_KEY, ACCSZONE_API_KEY,
+ *      SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY
  */
 
-const supabase = createClient(
-  process.env.SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_ROLE_KEY
-);
-
+const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
 const LD_BASE = 'https://logsdomain.com/api/v1';
 const LD_KEY = process.env.LOGSDOMAIN_API_KEY;
+const BM_BASE = 'https://bulkmail.shop/api/v2';
+const BM_KEY = process.env.BULKMAIL_API_KEY || process.env.BULK_MAIL_API_KEY || '';
+const AZ_BASE = 'https://accszone.com/api/v1';
+const AZ_KEY = process.env.ACCSZONE_API_KEY || process.env.ACCS_ZONE_API_KEY || '';
 
 function categoryIdFromKey(productKey) {
   if (!productKey) return null;
@@ -25,15 +27,6 @@ function categoryIdFromKey(productKey) {
   return Number.isFinite(n) ? n : null;
 }
 
-// NOTE: the "orders" table only has a single "login_credentials" text column —
-// that's what api/order.js (Fadded) and api/order-manual.js (Manual) both write
-// to, and it's the only column index.html and admin.html actually read from.
-// This file used to insert into "credentials_id" / "credentials_pass" instead,
-// which are not real columns on "orders". Supabase silently rejected those
-// inserts (and the error was never checked), so every Logs Domain order was
-// fulfilled and charged, but never actually saved — which is why it never
-// showed up in "My Orders" or the admin Orders tab. Keeping this function
-// around only to build one clean login_credentials string.
 function formatCredentials(details) {
   if (!details) return '';
   const text = String(details);
@@ -45,13 +38,305 @@ function formatCredentials(details) {
   return text;
 }
 
+function stripHtml(html) {
+  if (!html) return '';
+  return String(html).replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
+}
+
+function applyLdMarkup(p) {
+  const base = Number(p) || 0;
+  const finalPrice = Math.ceil(base * (1 + (50 + Math.random() * 50) / 100));
+  return Math.max(Math.ceil(finalPrice / 50) * 50, 500);
+}
+
+function readLdStock(item) {
+  for (const k of ['available_quantity', 'stock', 'stock_quantity', 'quantity', 'available']) {
+    if (item[k] != null && !Number.isNaN(Number(item[k]))) return Math.max(0, Number(item[k]));
+  }
+  return 0;
+}
+
+async function handleLdSync(req, res) {
+  try {
+    if (!LD_KEY) return res.status(503).json({ success: false, message: 'LOGSDOMAIN_API_KEY not configured' });
+    const all = [];
+    let page = 1;
+    for (;;) {
+      const r = await fetch(LD_BASE + '/logs/categories?per_page=100&page=' + page, {
+        headers: { Accept: 'application/json', Authorization: 'Bearer ' + LD_KEY }
+      });
+      if (!r.ok) {
+        const text = await r.text();
+        return res.status(r.status).json({ success: false, message: 'Logs Domain categories ' + r.status + ': ' + text.slice(0, 300) });
+      }
+      const json = await r.json();
+      const batch = Array.isArray(json.data) ? json.data : (json.data && json.data.data) || [];
+      if (!Array.isArray(batch) || !batch.length) break;
+      all.push.apply(all, batch);
+      const last = Number((json.meta && (json.meta.last_page || json.meta.total_pages)) || (json.data && json.data.last_page) || page);
+      if (page >= last || batch.length < 100) break;
+      page += 1;
+      if (page > 50) break;
+    }
+
+    let totalNew = 0, totalUpdated = 0, writeErrors = 0;
+    const errorSamples = [];
+    const now = new Date().toISOString();
+
+    for (const item of all) {
+      const id = item.id ?? item.category_id;
+      if (id == null) continue;
+      const productKey = 'ld_' + id;
+      const name = String(item.name || item.title || ('Logs Domain #' + id)).trim();
+      const stock = readLdStock(item);
+      const supplierPrice = Number(item.price ?? item.unit_price ?? item.cost ?? 0) || 0;
+      const sell = applyLdMarkup(supplierPrice);
+
+      const { data: existing } = await supabase
+        .from('products')
+        .select('product_key, price, is_available')
+        .eq('product_key', productKey)
+        .maybeSingle();
+
+      if (existing) {
+        const patch = {
+          name,
+          supplier_price: supplierPrice,
+          stock_quantity: stock,
+          source: 'logsdomain',
+          updated_at: now
+        };
+        // Do not overwrite admin sell price if already set
+        if (!(Number(existing.price) > 0)) patch.price = sell;
+        // Stock 0 → hide; stock > 0 does not force show if admin hid it
+        if (stock <= 0) patch.is_available = false;
+        else if (existing.is_available == null) patch.is_available = true;
+        const { error } = await supabase.from('products').update(patch).eq('product_key', productKey);
+        if (error) { writeErrors++; if (errorSamples.length < 3) errorSamples.push(error.message); }
+        else totalUpdated++;
+      } else {
+        const { error } = await supabase.from('products').insert({
+          product_key: productKey,
+          name,
+          price: sell,
+          supplier_price: supplierPrice,
+          stock_quantity: stock,
+          is_available: stock > 0,
+          source: 'logsdomain',
+          description: stripHtml(item.description || '') || null,
+          updated_at: now
+        });
+        if (error) { writeErrors++; if (errorSamples.length < 3) errorSamples.push(error.message); }
+        else totalNew++;
+      }
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: 'Logs Domain sync complete',
+      synced: all.length,
+      new_products: totalNew,
+      updated_products: totalUpdated,
+      write_errors: writeErrors,
+      error_samples: errorSamples
+    });
+  } catch (err) {
+    console.error('[logsdomain sync]', err);
+    return res.status(500).json({ success: false, message: err.message || 'Logs Domain sync failed' });
+  }
+}
+
+async function bmFetch(path, opts) {
+  opts = opts || {};
+  try {
+    const res = await fetch(BM_BASE + path, {
+      method: opts.method || 'GET',
+      headers: { 'X-API-Key': BM_KEY, Accept: 'application/json', 'Content-Type': 'application/json' },
+      body: opts.body != null ? JSON.stringify(opts.body) : undefined
+    });
+    return { ok: res.ok, status: res.status, data: await res.json().catch(function () { return {}; }) };
+  } catch (e) {
+    return { ok: false, status: 502, data: { error: e.message } };
+  }
+}
+
+function bmSellPriceNgn(usd) {
+  const rate = Number(process.env.USD_TO_NGN_RATE) || Number(process.env.USD_TO_NGN) || 1500;
+  const supplierNgn = Number(usd || 0) * rate;
+  return Math.ceil(Math.max(supplierNgn * 1.7, supplierNgn + 500, 1000) / 50) * 50;
+}
+
+async function handleBulkmailSync(req, res) {
+  try {
+    if (!BM_KEY) return res.status(503).json({ success: false, message: 'BULKMAIL_API_KEY not configured' });
+    const all = [];
+    let page = 1, lastPage = 1;
+    do {
+      const g = await bmFetch('/products?page=' + page + '&per_page=100');
+      if (!g.ok) return res.status(g.status || 400).json({ success: false, message: (g.data && (g.data.error || g.data.message)) || 'BulkMail products failed' });
+      const batch = Array.isArray(g.data && g.data.data) ? g.data.data : (Array.isArray(g.data) ? g.data : []);
+      all.push.apply(all, batch);
+      lastPage = Number((g.data && g.data.meta && (g.data.meta.total_pages || g.data.meta.last_page)) || 1);
+      if (!batch.length) break;
+      page += 1;
+    } while (page <= lastPage && page <= 50);
+
+    let totalNew = 0, totalUpdated = 0, writeErrors = 0;
+    const errorSamples = [];
+    const now = new Date().toISOString();
+
+    for (let i = 0; i < all.length; i++) {
+      const p = all[i];
+      if (p.id == null) continue;
+      const productKey = 'bm_' + p.id;
+      const usd = Number(p.price || 0) || 0;
+      const stockQty = Number(p.stock_quantity || p.stock || 0) || 0;
+      const sell = bmSellPriceNgn(usd);
+      const name = String(p.name || p.sku || ('BulkMail #' + p.id)).trim();
+
+      const { data: existing } = await supabase.from('products').select('product_key, price, is_available').eq('product_key', productKey).maybeSingle();
+      if (existing) {
+        const patch = { name: name, supplier_price: usd, stock_quantity: stockQty, source: 'bulkmail', category: 'BulkMail', updated_at: now };
+        if (stockQty <= 0) patch.is_available = false;
+        if (!(Number(existing.price) > 0)) patch.price = sell;
+        const { error } = await supabase.from('products').update(patch).eq('product_key', productKey);
+        if (error) { writeErrors++; if (errorSamples.length < 3) errorSamples.push(error.message); } else totalUpdated++;
+      } else {
+        const { error } = await supabase.from('products').insert({
+          product_key: productKey, name: name, price: sell, supplier_price: usd, stock_quantity: stockQty,
+          is_available: false, category: 'BulkMail', source: 'bulkmail',
+          description: String(p.description || '').trim() || null, updated_at: now
+        });
+        if (error) { writeErrors++; if (errorSamples.length < 3) errorSamples.push(error.message); } else totalNew++;
+      }
+    }
+    return res.status(200).json({ success: true, message: 'BulkMail sync complete', synced: all.length, new_products: totalNew, updated_products: totalUpdated, write_errors: writeErrors, error_samples: errorSamples });
+  } catch (err) {
+    console.error('[bulkmail sync]', err);
+    return res.status(500).json({ success: false, message: err.message || 'BulkMail sync failed' });
+  }
+}
+
+function azSellPriceNgn(usd) {
+  const rate = Number(process.env.USD_TO_NGN_RATE) || Number(process.env.USD_TO_NGN) || 1500;
+  const supplierNgn = Number(usd || 0) * rate;
+  return Math.ceil(Math.max(supplierNgn * 1.8, supplierNgn + 500, 1000) / 50) * 50;
+}
+
+async function azFetch(path) {
+  if (!AZ_KEY) return { ok: false, status: 503, data: { message: 'ACCSZONE_API_KEY not configured' } };
+  try {
+    const res = await fetch(AZ_BASE + path, {
+      method: 'GET',
+      headers: { 'X-API-Key': AZ_KEY, Accept: 'application/json' }
+    });
+    const data = await res.json().catch(function () { return {}; });
+    return { ok: res.ok, status: res.status, data: data };
+  } catch (e) {
+    return { ok: false, status: 502, data: { message: e.message || 'AccsZone fetch failed' } };
+  }
+}
+
+async function handleAccszoneSync(req, res) {
+  try {
+    if (!AZ_KEY) return res.status(503).json({ success: false, message: 'ACCSZONE_API_KEY not configured' });
+    const all = [];
+    let page = 1;
+    let lastPage = 1;
+    while (page <= lastPage && page <= 80) {
+      const g = await azFetch('/listings?page=' + page + '&include=description');
+      if (!g.ok || g.data.success === false) {
+        const msg = (g.data && (g.data.message || g.data.error_code)) || ('HTTP ' + g.status);
+        if (page === 1) return res.status(g.status || 400).json({ success: false, message: 'AccsZone listings failed: ' + msg });
+        break;
+      }
+      const batch = Array.isArray(g.data && g.data.data) ? g.data.data : [];
+      all.push.apply(all, batch);
+      const meta = (g.data && g.data.meta) || {};
+      lastPage = Number(meta.last_page || meta.total_pages || 1) || 1;
+      if (!batch.length) break;
+      page += 1;
+      if (page % 25 === 0) await new Promise(function (r) { setTimeout(r, 2100); });
+    }
+
+    let totalNew = 0, totalUpdated = 0, writeErrors = 0;
+    const errorSamples = [];
+    const now = new Date().toISOString();
+
+    for (let i = 0; i < all.length; i++) {
+      const item = all[i];
+      const id = item.id != null ? item.id : item.ad_id;
+      if (id == null) continue;
+      const productKey = 'az_' + id;
+      const usd = Number(item.price != null ? item.price : (item.unit_price != null ? item.unit_price : 0)) || 0;
+      let stockQty = 0;
+      for (const k of ['stock', 'stock_quantity', 'available', 'available_quantity', 'quantity']) {
+        if (item[k] != null && !Number.isNaN(Number(item[k]))) { stockQty = Math.max(0, Number(item[k])); break; }
+      }
+      const sell = azSellPriceNgn(usd);
+      const name = String(item.name || item.title || item.slug || ('AccsZone #' + id)).trim();
+      const category = String(
+        (item.category && (item.category.name || item.category.title)) ||
+        item.category_name || item.subcategory_name || 'AccsZone'
+      ).trim() || 'AccsZone';
+      const description = stripHtml(item.description || item.short_description || '') || null;
+
+      const { data: existing } = await supabase
+        .from('products')
+        .select('product_key, price, is_available, category')
+        .eq('product_key', productKey)
+        .maybeSingle();
+
+      if (existing) {
+        const patch = { name: name, supplier_price: usd, stock_quantity: stockQty, source: 'accszone', updated_at: now };
+        if (!(Number(existing.price) > 0)) patch.price = sell;
+        if (stockQty <= 0) patch.is_available = false;
+        const { error } = await supabase.from('products').update(patch).eq('product_key', productKey);
+        if (error) { writeErrors++; if (errorSamples.length < 3) errorSamples.push(error.message); }
+        else totalUpdated++;
+      } else {
+        const { error } = await supabase.from('products').insert({
+          product_key: productKey, name: name, price: sell, supplier_price: usd, stock_quantity: stockQty,
+          is_available: false, category: category, source: 'accszone', description: description, updated_at: now
+        });
+        if (error) { writeErrors++; if (errorSamples.length < 3) errorSamples.push(error.message); }
+        else totalNew++;
+      }
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: 'AccsZone sync complete (products stay hidden until you enable them)',
+      synced: all.length, new_products: totalNew, updated_products: totalUpdated,
+      write_errors: writeErrors, error_samples: errorSamples
+    });
+  } catch (err) {
+    console.error('[accszone sync]', err);
+    return res.status(500).json({ success: false, message: err.message || 'AccsZone sync failed' });
+  }
+}
+
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
   res.setHeader('Content-Type', 'application/json');
-
   if (req.method === 'OPTIONS') return res.status(200).end();
+
+  const q = Object.assign({}, req.query || {});
+  try {
+    const u = new URL(req.url || '/', 'http://localhost');
+    u.searchParams.forEach(function (v, k) { if (q[k] == null || q[k] === '') q[k] = v; });
+  } catch (e) {}
+  const action = String(q.action || '').toLowerCase();
+
+  // Admin catalog sync (GET)
+  if (req.method === 'GET' || action === 'sync' || action === 'bulkmail_sync' || action === 'accszone_sync') {
+    if (action === 'bulkmail_sync') return handleBulkmailSync(req, res);
+    if (action === 'accszone_sync') return handleAccszoneSync(req, res);
+    if (action === 'sync' || req.method === 'GET') return handleLdSync(req, res);
+  }
+
   if (req.method !== 'POST') {
     return res.status(405).json({ success: false, message: 'Method not allowed' });
   }
