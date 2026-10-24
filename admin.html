@@ -1111,6 +1111,7 @@ function withLagos(opts) { return Object.assign({ timeZone: 'Africa/Lagos' }, op
  <div class="metric-card"><div class="metric-label">Sujan Dept.</div><div class="metric-value" id="balSujan"> </div><div class="metric-sub" id="balSujanSub">Loading…</div></div>
  <div class="metric-card"><div class="metric-label">ClassyTee</div><div class="metric-value" id="balClassy"> </div><div class="metric-sub" id="balClassySub">Loading…</div></div>
  <div class="metric-card"><div class="metric-label">BulkMail</div><div class="metric-value" id="balBulkmail">—</div><div class="metric-sub" id="balBulkmailSub">Loading…</div></div>
+ <div class="metric-card"><div class="metric-label">AccsZone</div><div class="metric-value" id="balAccszone">—</div><div class="metric-sub" id="balAccszoneSub">Loading…</div></div>
  </div>
  <div class="supplier-group-label">SMS providers</div>
  <div class="metrics supplier-balance-metrics" style="margin-bottom:14px;">
@@ -1165,6 +1166,7 @@ function withLagos(opts) { return Object.assign({ timeZone: 'Africa/Lagos' }, op
  <button class="btn btn-ghost btn-sm" id="btnSyncFadded" onclick="syncProductsNow()"><i class="fas fa-sync"></i> Sync Fadded</button>
  <button class="btn btn-ghost btn-sm" id="btnSyncLogsDomain" onclick="syncLogsDomainNow()"><i class="fas fa-sync"></i> Sync Logs Domain</button>
 <button type="button" class="btn btn-ghost btn-sm" id="btnSyncBulkmail" onclick="syncBulkmailCatalog()"><i class="fas fa-sync"></i> Sync BulkMail</button>
+ <button type="button" class="btn btn-ghost btn-sm" id="btnSyncAccszone" onclick="syncAccszoneCatalog()"><i class="fas fa-sync"></i> Sync AccsZone</button>
  <button class="btn btn-ghost btn-sm" id="btnSyncSujan" onclick="syncSujanNow()"><i class="fas fa-sync"></i> Sync Sujan Dept.</button>
  <button class="btn btn-ghost btn-sm" id="btnSyncClassy" onclick="syncClassyNow()"><i class="fas fa-sync"></i> Sync ClassyTee</button>
  <button class="btn btn-primary btn-sm" id="btnSyncAll" onclick="syncAllSuppliersNow()"><i class="fas fa-sync"></i> Sync All</button>
@@ -3089,7 +3091,7 @@ async function saveGotsmsPrice(id, value) {
 async function loadSupplierBalances() {
  const btn = document.getElementById('btnRefreshSupplierBalances');
  setBtnBusy(btn, true, 'Refreshing...');
- ['Fadded', 'Logsdomain', 'Grizzly', 'Sujan', 'Classy', 'Owlet', 'Jap', 'Smmkings', 'Smsbus', 'Virtualsms', 'Gotsms', 'Bulkmail'].forEach(p => {
+ ['Fadded', 'Logsdomain', 'Grizzly', 'Sujan', 'Classy', 'Owlet', 'Jap', 'Smmkings', 'Smsbus', 'Virtualsms', 'Gotsms', 'Bulkmail', 'Accszone', 'Herosms', 'Casper'].forEach(p => {
  const sub = document.getElementById('bal' + p + 'Sub');
  if (sub) sub.textContent = 'Loading…';
  });
@@ -3135,6 +3137,7 @@ async function loadSupplierBalances() {
  renderSupplierBalance('Herosms', data.suppliers.herosms);
  renderSupplierBalance('Gotsms', data.suppliers.gotsms);
  renderSupplierBalance('Bulkmail', data.suppliers.bulkmail);
+ renderSupplierBalance('Accszone', data.suppliers.accszone);
  } catch (err) {
  console.error('Supplier balance error at step:', step, err.name, err.message, err.stack);
  showAdminToast(`Supplier balance check failed while ${step}: ` + (err.message || 'network error'), 'error');
@@ -5204,6 +5207,26 @@ async function syncProductsNow() {
  }
  } catch (e) {
  alert('Sync failed: ' + (e && e.message ? e.message : e));
+ } finally {
+ setSyncButtonLoading(btn, false, idle);
+ }
+}
+
+async function syncAccszoneCatalog() {
+ const btn = document.getElementById('btnSyncAccszone');
+ const idle = '<i class="fas fa-sync"></i> Sync AccsZone';
+ setSyncButtonLoading(btn, true, idle);
+ try {
+ const res = await fetch('/api/order-logsdomain?action=accszone_sync', { method: 'GET', headers: { 'Accept': 'application/json' } });
+ const data = await res.json();
+ alert(
+ data.success
+ ? `AccsZone sync complete\nSynced: ${data.synced || 0}\nNew: ${data.new_products || 0}\nUpdated: ${data.updated_products || 0}\n\nProducts stay hidden until you enable them in the catalog.`
+ : ('AccsZone sync failed: ' + (data.message || 'Unknown error'))
+ );
+ await loadProducts();
+ } catch (e) {
+ alert('AccsZone sync failed: ' + e.message);
  } finally {
  setSyncButtonLoading(btn, false, idle);
  }
