@@ -1639,6 +1639,81 @@ async function getSmmkingsBalance() {
   }
 }
 
+
+async function getVirtualsmsBalance() {
+  const apiKey = process.env.VIRTUALSMS_API_KEY || process.env.VIRTUAL_SMS_API_KEY;
+  if (!apiKey) return { ok: false, error: 'Missing VIRTUALSMS_API_KEY' };
+  const base = String(process.env.VIRTUALSMS_BASE_URL || 'https://virtualsms.io/stubs/handler_api.php').trim();
+  try {
+    const qs = new URLSearchParams({ api_key: apiKey, action: 'getBalance' });
+    const r = await fetch(base + (base.includes('?') ? '&' : '?') + qs.toString(), {
+      signal: AbortSignal.timeout(15000)
+    });
+    const text = (await r.text()).trim();
+    if (text.startsWith('ACCESS_BALANCE:')) {
+      const balance = Number(text.split(':')[1]);
+      if (Number.isFinite(balance)) return { ok: true, balance, currency: 'USD', source_url: 'getBalance' };
+    }
+    if (text === 'BAD_KEY') return { ok: false, error: 'VIRTUALSMS_API_KEY was rejected' };
+    if (/^-?\d+(\.\d+)?$/.test(text)) {
+      const balance = Number(text);
+      if (Number.isFinite(balance)) return { ok: true, balance, currency: 'USD', source_url: 'plain' };
+    }
+    return { ok: false, error: ('Unexpected reply: ' + text).slice(0, 120) };
+  } catch (err) {
+    return { ok: false, error: String(err.message || err).slice(0, 160) };
+  }
+}
+
+async function getHerosmsBalance() {
+  const apiKey = process.env.HEROSMS_API_KEY;
+  if (!apiKey) return { ok: false, error: 'Missing HEROSMS_API_KEY' };
+  const base = String(process.env.HEROSMS_BASE_URL || 'https://hero-sms.com/stubs/handler_api.php').trim();
+  try {
+    const qs = new URLSearchParams({ api_key: apiKey, action: 'getBalance' });
+    const r = await fetch(base + (base.includes('?') ? '&' : '?') + qs.toString(), {
+      signal: AbortSignal.timeout(15000)
+    });
+    const text = (await r.text()).trim();
+    if (text.startsWith('ACCESS_BALANCE:')) {
+      const balance = Number(text.split(':')[1]);
+      if (Number.isFinite(balance)) return { ok: true, balance, currency: 'USD', source_url: 'getBalance' };
+    }
+    if (text === 'BAD_KEY') return { ok: false, error: 'HEROSMS_API_KEY was rejected' };
+    if (/^-?\d+(\.\d+)?$/.test(text)) {
+      const balance = Number(text);
+      if (Number.isFinite(balance)) return { ok: true, balance, currency: 'USD', source_url: 'plain' };
+    }
+    return { ok: false, error: ('Unexpected reply: ' + text).slice(0, 120) };
+  } catch (err) {
+    return { ok: false, error: String(err.message || err).slice(0, 160) };
+  }
+}
+
+async function getAccszoneBalance() {
+  const apiKey = process.env.ACCSZONE_API_KEY || process.env.ACCS_ZONE_API_KEY;
+  if (!apiKey) return { ok: false, error: 'Missing ACCSZONE_API_KEY' };
+  try {
+    const res = await fetch('https://accszone.com/api/v1/user/balance', {
+      headers: { 'X-API-Key': apiKey, Accept: 'application/json' },
+      signal: AbortSignal.timeout(15000)
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || data.success === false) {
+      return {
+        ok: false,
+        error: data.message || data.error_code || ('HTTP ' + res.status),
+        raw: safeSlice(JSON.stringify(data), 200)
+      };
+    }
+    const bal = data?.data?.balance ?? data?.balance;
+    if (bal == null) return { ok: false, error: 'No balance field', raw: safeSlice(JSON.stringify(data), 200) };
+    return { ok: true, balance: bal, currency: 'USD' };
+  } catch (err) {
+    return { ok: false, error: safeSlice(String(err.message || err), 500) };
+  }
+}
+
 async function getBulkmailBalance() {
   const apiKey = process.env.BULKMAIL_API_KEY || process.env.BULK_MAIL_API_KEY;
   if (!apiKey) return { ok: false, error: 'Missing BULKMAIL_API_KEY' };
@@ -1664,7 +1739,7 @@ async function getBulkmailBalance() {
 }
 
 async function supplierBalancesFetch() {
-  const [fadded, logsdomain, grizzly, sujan, owlet, classy, smsbus, gotsms, bulkmail, jap, smmkings, casper] = await Promise.all([
+  const [fadded, logsdomain, grizzly, sujan, owlet, classy, smsbus, gotsms, bulkmail, jap, smmkings, casper, virtualsms, herosms, accszone] = await Promise.all([
 
     getFaddedBalance(),
     getLogsDomainBalance(),
@@ -1677,13 +1752,16 @@ async function supplierBalancesFetch() {
     getBulkmailBalance(),
     getJapBalance(),
     getSmmkingsBalance(),
-    getCasperBalance()
+    getCasperBalance(),
+    getVirtualsmsBalance(),
+    getHerosmsBalance(),
+    getAccszoneBalance()
   ]);
   return {
     status: 200,
     body: {
       success: true,
-      suppliers: { fadded, logsdomain, grizzly, sujan, owlet, classy, smsbus, gotsms, bulkmail, jap, smmkings, casper },
+      suppliers: { fadded, logsdomain, grizzly, sujan, owlet, classy, smsbus, gotsms, bulkmail, jap, smmkings, casper, virtualsms, herosms, accszone },
       fetched_at: new Date().toISOString()
     }
   };
