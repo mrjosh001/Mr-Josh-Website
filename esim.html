@@ -539,6 +539,8 @@ button{font-family:inherit}
       });
       var cEl = document.getElementById('confirmCarrier');
       if (cEl) cEl.textContent = CARRIER_LABELS[selectedCarrier] || 'Network';
+      selected = null;
+      loadPlans();
     });
   });
 
@@ -590,7 +592,7 @@ var grid = $('plansGrid');
       var res = await fetch('/api/esim', {
         method: 'POST',
         headers: { 'Authorization': 'Bearer ' + s.access_token, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'plans' })
+        body: JSON.stringify({ action: 'plans', carrier: selectedCarrier || 'tmobile' })
       });
       var j = await res.json().catch(function(){ return {}; });
       if (res.ok && j && j.success && Array.isArray(j.plans) && j.plans.length) renderPlans(j.plans);
