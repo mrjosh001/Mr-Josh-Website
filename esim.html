@@ -228,6 +228,16 @@ button{font-family:inherit}
 .feature-chips span.hl{border-color:color-mix(in srgb,var(--primary) 45%,var(--border));background:var(--primary-soft)}
 .card{border-radius:22px;padding:18px 16px}
 .method-label{font-size:14px;font-weight:800;letter-spacing:-.01em}
+
+.carriers{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin:0 0 16px}
+.carrier{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;min-height:96px;padding:12px 8px;border-radius:16px;border:1px solid var(--border);background:var(--surface);color:var(--text);cursor:pointer;transition:box-shadow .15s,border-color .15s,transform .12s}
+.carrier:hover{transform:translateY(-1px)}
+.carrier[aria-pressed="true"]{box-shadow:0 0 0 1px var(--primary),0 8px 22px rgba(59,110,245,.12);border-color:color-mix(in srgb,var(--primary) 55%,var(--border))}
+.carrier img{width:40px;height:40px;object-fit:contain;border-radius:10px;background:#fff;padding:4px}
+.carrier .cname{font-size:12px;font-weight:750;text-align:center;line-height:1.25}
+.carrier .cfallback{width:40px;height:40px;border-radius:10px;display:grid;place-items:center;font-size:11px;font-weight:800;color:#fff}
+@media(max-width:360px){.carriers{gap:8px}.carrier{min-height:88px;padding:10px 6px}.carrier .cname{font-size:11px}}
+
 .plans{gap:11px}
 .plan{border-radius:18px;padding:15px 13px}
 .plan .duration{font-size:13.5px}
@@ -307,7 +317,7 @@ button{font-family:inherit}
     <div class="fund-hero">
       <div class="fund-hero-icon"><i class="fa-solid fa-sim-card"></i></div>
       <div>
-        <h2>T-Mobile eSIM</h2>
+        <h2>USA eSIM</h2>
         <p>Choose your eSIM duration and get connected with unlimited calls and unlimited text.</p>
       </div>
     </div>
@@ -322,6 +332,26 @@ button{font-family:inherit}
       </div>
     </div>
     <div class="card">
+      <p class="method-label">Choose your network</p>
+      <div class="carriers" id="carrierGrid" role="group" aria-label="eSIM carrier network">
+        <button class="carrier" type="button" data-carrier="tmobile" aria-pressed="false">
+          <img src="https://logo.clearbit.com/t-mobile.com" alt="T-Mobile" width="40" height="40" loading="lazy" onerror="this.style.display='none';this.nextElementSibling.style.display='grid'">
+          <span class="cfallback" style="display:none;background:#e20074">T</span>
+          <span class="cname">T-Mobile</span>
+        </button>
+        <button class="carrier" type="button" data-carrier="att" aria-pressed="false">
+          <img src="https://logo.clearbit.com/att.com" alt="AT&amp;T" width="40" height="40" loading="lazy" onerror="this.style.display='none';this.nextElementSibling.style.display='grid'">
+          <span class="cfallback" style="display:none;background:#00a8e0">AT&amp;T</span>
+          <span class="cname">AT&amp;T</span>
+        </button>
+        <button class="carrier" type="button" data-carrier="lyca" aria-pressed="false">
+          <img src="https://logo.clearbit.com/lycamobile.com" alt="Lyca Mobile" width="40" height="40" loading="lazy" onerror="this.style.display='none';this.nextElementSibling.style.display='grid'">
+          <span class="cfallback" style="display:none;background:#f15a22">Lyca</span>
+          <span class="cname">Lyca Mobile</span>
+        </button>
+      </div>
+      <p class="field-hint" style="margin:-6px 0 14px">Same plans and checkout for every network. Pick the carrier you want on your eSIM.</p>
+
       <p class="method-label">Choose your plan</p>
       <!-- These four cards are the safe fallback. As soon as the live prices load from the server they are replaced automatically. -->
       <div class="plans" id="plansGrid" role="group" aria-label="eSIM plan duration">
@@ -346,7 +376,7 @@ button{font-family:inherit}
       <div class="pickbar"><span id="pickLabel">Select a plan to continue</span><strong id="pickPrice"></strong></div>
       <button type="button" class="btn" id="nextBtn" disabled>Next <i class="fa-solid fa-arrow-right"></i></button>
     </div>
-    <div class="provider-foot"><i class="fa-solid fa-shield-halved"></i> Powered by <span class="tmo-badge"><svg class="tmo-logo" style="width:70px;height:17px" viewBox="0 0 132 32" role="img" aria-label="T-Mobile"><use href="#tmo-logo"/></svg></span></div>
+    <div class="provider-foot"><i class="fa-solid fa-shield-halved"></i> Networks: T-Mobile · AT&amp;T · Lyca Mobile</div>
   </section>
 
   <!-- PAGE 2: details + pay -->
@@ -395,7 +425,7 @@ button{font-family:inherit}
         <div style="flex:1;min-width:0">
           <div class="ps-name" id="confirmPlan">eSIM plan</div>
           <div class="ps-meta">
-            <span class="ps-pill ps-pill-stock">T-Mobile eSIM</span>
+            <span class="ps-pill ps-pill-stock" id="confirmCarrier">Network</span>
             <span class="ps-pill ps-pill-stock">Unlimited text</span>
             <span class="ps-pill ps-pill-price" id="confirmPrice">₦0</span>
           </div>
@@ -432,6 +462,8 @@ button{font-family:inherit}
   var $ = function(id){ return document.getElementById(id); };
   var plans = Array.prototype.slice.call(document.querySelectorAll('.plan'));
   var selected = null;
+  var selectedCarrier = null;
+  var CARRIER_LABELS = { tmobile: 'T-Mobile', att: 'AT&T', lyca: 'Lyca Mobile' };
   var step = 1;
   var PAYMENT_CONNECTED = true;
   var accountEmailReady = false;
@@ -498,7 +530,19 @@ button{font-family:inherit}
      charge anything other than the price the customer was shown. */
   var MONTHS = { '1m': 1, '3m': 3, '6m': 6, '12m': 12 };
   function renderPlans(list){
-    var grid = $('plansGrid');
+    
+  document.querySelectorAll('#carrierGrid .carrier').forEach(function(btn){
+    btn.addEventListener('click', function(){
+      selectedCarrier = btn.getAttribute('data-carrier');
+      document.querySelectorAll('#carrierGrid .carrier').forEach(function(b){
+        b.setAttribute('aria-pressed', b === btn ? 'true' : 'false');
+      });
+      var cEl = document.getElementById('confirmCarrier');
+      if (cEl) cEl.textContent = CARRIER_LABELS[selectedCarrier] || 'Network';
+    });
+  });
+
+var grid = $('plansGrid');
     if (!grid || !list || !list.length) return;
     var prevId = selected ? selected.dataset.id : null;
     var prevPrice = selected ? Number(selected.dataset.price) : null;
@@ -619,7 +663,10 @@ button{font-family:inherit}
     imeiField.value = imei;
     var email = String($('email').value || '').trim();
     var ok = true;
+    if (!selectedCarrier) { toast('Choose a carrier network first'); go(1); return; }
     if (!selected) { toast('Choose a plan before reviewing your order'); go(1); return; }
+    var cEl = document.getElementById('confirmCarrier');
+    if (cEl) cEl.textContent = CARRIER_LABELS[selectedCarrier] || 'Network';
     if (imei.length !== 15) {
       showErr('imei', 'imeiErr', 'Enter all 15 digits of your IMEI. Dial *#06# to find it.');
       imeiField.focus();
@@ -711,7 +758,7 @@ button{font-family:inherit}
         },
         body: JSON.stringify({
           action: 'esim',
-          plan_id: selected.dataset.id,
+          plan_id: selected.dataset.id, carrier: selectedCarrier,
           imei: imei,
           request_id: pendingRequestId,
           expected_amount: Number(selected.dataset.price)
