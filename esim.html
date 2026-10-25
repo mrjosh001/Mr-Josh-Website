@@ -332,8 +332,7 @@ button{font-family:inherit}
 
 
 .plans-block.is-hidden,[hidden]{display:none !important}
-.carriers,.carrier{position:relative;z-index:5}
-.carrier{-webkit-tap-highlight-color:transparent;touch-action:manipulation;cursor:pointer}
+#carrierGrid .carrier{position:relative;z-index:6;cursor:pointer;touch-action:manipulation;-webkit-tap-highlight-color:transparent}
 </style>
 <link rel="stylesheet" href="/css/mj-motion.css">
 <script src="/js/mj-page-loader.js"></script>
@@ -600,47 +599,41 @@ button{font-family:inherit}
      charge anything other than the price the customer was shown. */
   function showPlansBlock(show){
     var block = document.getElementById('plansBlock');
-    if (!block) {
-      var grid = document.getElementById('plansGrid');
-      if (grid) {
-        var parent = grid.closest('.card') || grid.parentElement;
-        if (parent) {
-          // fallback: toggle grid only
-          grid.style.display = show ? '' : 'none';
-        }
+    if (block) {
+      if (show) {
+        block.hidden = false;
+        block.classList.remove('is-hidden');
+        block.style.display = '';
+      } else {
+        block.hidden = true;
+        block.classList.add('is-hidden');
+        block.style.display = 'none';
       }
       return;
     }
-    if (show) {
-      block.hidden = false;
-      block.classList.remove('is-hidden');
-      block.style.display = '';
-    } else {
-      block.hidden = true;
-      block.classList.add('is-hidden');
-      block.style.display = 'none';
-    }
+    var gridOnly = document.getElementById('plansGrid');
+    if (gridOnly) gridOnly.style.display = show ? '' : 'none';
   }
 
   var MONTHS = { '1m': 1, '3m': 3, '6m': 6, '12m': 12 };
   var FALLBACK_PLANS = {
     tmobile: [
-      {id:'1m',name:'1 month',amount_ngn:26000,days:30},
-      {id:'3m',name:'3 months',amount_ngn:47000,days:90},
-      {id:'6m',name:'6 months',amount_ngn:68000,days:180},
-      {id:'12m',name:'1 year',amount_ngn:90000,days:365}
+      { id: '1m', name: '1 month', amount_ngn: 26000, days: 30 },
+      { id: '3m', name: '3 months', amount_ngn: 47000, days: 90 },
+      { id: '6m', name: '6 months', amount_ngn: 68000, days: 180 },
+      { id: '12m', name: '1 year', amount_ngn: 90000, days: 365 }
     ],
     lyca: [
-      {id:'1m',name:'1 month',amount_ngn:24000,days:30},
-      {id:'3m',name:'3 months',amount_ngn:43000,days:90},
-      {id:'6m',name:'6 months',amount_ngn:68000,days:180},
-      {id:'12m',name:'1 year',amount_ngn:90000,days:365}
+      { id: '1m', name: '1 month', amount_ngn: 24000, days: 30 },
+      { id: '3m', name: '3 months', amount_ngn: 43000, days: 90 },
+      { id: '6m', name: '6 months', amount_ngn: 68000, days: 180 },
+      { id: '12m', name: '1 year', amount_ngn: 90000, days: 365 }
     ],
     att: [
-      {id:'1m',name:'1 month',amount_ngn:28000,days:30},
-      {id:'3m',name:'3 months',amount_ngn:50000,days:90},
-      {id:'6m',name:'6 months',amount_ngn:70000,days:180},
-      {id:'12m',name:'1 year',amount_ngn:92000,days:365}
+      { id: '1m', name: '1 month', amount_ngn: 28000, days: 30 },
+      { id: '3m', name: '3 months', amount_ngn: 50000, days: 90 },
+      { id: '6m', name: '6 months', amount_ngn: 70000, days: 180 },
+      { id: '12m', name: '1 year', amount_ngn: 92000, days: 365 }
     ]
   };
 
@@ -649,7 +642,6 @@ button{font-family:inherit}
     if (!grid || !list || !list.length) return;
     showPlansBlock(true);
     var prevId = selected ? selected.dataset.id : null;
-    var prevPrice = selected ? Number(selected.dataset.price) : null;
     var base = list.filter(function(p){ return p.id === '1m'; })[0] || list[0];
     var baseMonthly = Number(base.amount_ngn) / (MONTHS[base.id] || Math.max(1, Math.round((base.days || 30) / 30)));
     grid.innerHTML = list.map(function(p){
@@ -657,12 +649,12 @@ button{font-family:inherit}
       var months = MONTHS[p.id] || Math.max(1, Math.round((p.days || 30) / 30));
       var monthly = amount / months;
       var saving = (months > 1 && baseMonthly > monthly) ? Math.round((1 - monthly / baseMonthly) * 100) : 0;
-      return '<button class="plan" type="button" data-id="' + esc(p.id) + '" data-label="' + esc(p.name) + '" data-price="' + amount + '" aria-pressed="false">' +
+      return '<button class="plan" type="button" data-id="' + esc(String(p.id)) + '" data-label="' + esc(String(p.name)) + '" data-price="' + amount + '" aria-pressed="false">' +
         (p.id === '3m' ? '<span class="tag">Popular</span>' : '') +
         '<span class="radio"><i class="fa-solid fa-check"></i></span>' +
-        '<span class="duration">' + esc(p.name) + '</span>' +
+        '<span class="duration">' + esc(String(p.name)) + '</span>' +
         '<span class="price">' + money(amount) + '</span>' +
-        '<span class="period">' + esc(p.days || (months * 30)) + ' days</span>' +
+        '<span class="period">' + esc(String(p.days || (months * 30))) + ' days</span>' +
         '<span class="monthly">' + (Number.isInteger(monthly) ? '' : '≈ ') + money(Math.round(monthly)) + ' per month</span>' +
         (saving > 0 ? '<span class="saving">Save about ' + saving + '%</span>' : '') +
       '</button>';
@@ -670,25 +662,16 @@ button{font-family:inherit}
     plans = Array.prototype.slice.call(grid.querySelectorAll('.plan'));
     bindPlans();
     selected = null;
-    var next = $('nextBtn');
-    if (next) next.disabled = true;
-    var pl = $('pickLabel');
-    if (pl) pl.textContent = 'Select a plan to continue';
-    var pp = $('pickPrice');
-    if (pp) pp.textContent = '';
+    if ($('nextBtn')) $('nextBtn').disabled = true;
+    if ($('pickLabel')) $('pickLabel').textContent = 'Select a plan to continue';
+    if ($('pickPrice')) $('pickPrice').textContent = '';
     if (prevId) {
       var again = plans.filter(function(p){ return p.dataset.id === prevId; })[0];
-      if (again) {
-        choose(again);
-        if (step === 2) {
-          var dp = $('dPlan');
-          if (dp) dp.textContent = again.dataset.label + ' · ' + money(again.dataset.price);
-        }
-      }
+      if (again) choose(again);
     }
   }
 
-  // Carrier selection — must stay OUTSIDE renderPlans
+  // IMPORTANT: carrier handlers must NOT be inside renderPlans
   document.querySelectorAll('#carrierGrid .carrier').forEach(function(btn){
     btn.addEventListener('click', function(){
       selectedCarrier = btn.getAttribute('data-carrier');
@@ -696,19 +679,18 @@ button{font-family:inherit}
         b.setAttribute('aria-pressed', b === btn ? 'true' : 'false');
       });
       var cEl = document.getElementById('confirmCarrier');
-      if (cEl) cEl.textContent = (CARRIER_LABELS && CARRIER_LABELS[selectedCarrier]) || 'Network';
+      if (cEl) cEl.textContent = (typeof CARRIER_LABELS !== 'undefined' && CARRIER_LABELS[selectedCarrier]) || selectedCarrier || 'Network';
       selected = null;
       var hint = $('plansHint');
-      if (hint) hint.textContent = 'Prices for ' + ((CARRIER_LABELS && CARRIER_LABELS[selectedCarrier]) || 'this network');
+      if (hint) hint.textContent = 'Prices for ' + ((typeof CARRIER_LABELS !== 'undefined' && CARRIER_LABELS[selectedCarrier]) || selectedCarrier || 'this network');
       showPlansBlock(true);
       var grid = $('plansGrid');
-      if (grid) grid.innerHTML = '<div style="grid-column:1/-1;padding:16px;text-align:center;color:var(--muted);font-size:12px">Loading prices…</div>';
+      if (grid) grid.innerHTML = '<div style="grid-column:1/-1;padding:14px;text-align:center;color:var(--muted);font-size:12px">Loading prices…</div>';
     });
   });
 
   async function loadPlans(){
     if (!selectedCarrier) return;
-    var usedFallback = false;
     try {
       if (sb) {
         var r = await sb.auth.getSession();
@@ -726,12 +708,11 @@ button{font-family:inherit}
           }
         }
       }
-    } catch (e) { /* fallback below */ }
-    usedFallback = true;
+    } catch (e) {}
+    // Always show prices even if API fails
     renderPlans(FALLBACK_PLANS[selectedCarrier] || FALLBACK_PLANS.tmobile);
   }
 
-  // Hide plans until a network is chosen (do not auto-load prices)
   showPlansBlock(false);
 
   $('nextBtn').addEventListener('click', function(){
