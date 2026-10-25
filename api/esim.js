@@ -14,6 +14,22 @@ const MAX_QR_BYTES = 3 * 1024 * 1024; // 3 MB
  *   amount        = what the customer pays (₦)
  *   supplier_cost = what MJ HUB pays the supplier (₦), used for profit only
  */
+
+/** Supported carrier networks shown on the eSIM checkout. */
+const ALLOWED_CARRIERS = {
+  tmobile: { id: 'tmobile', label: 'T-Mobile' },
+  att: { id: 'att', label: 'AT&T' },
+  lyca: { id: 'lyca', label: 'Lyca Mobile' }
+};
+
+function normalizeCarrier(value) {
+  const key = String(value || '').trim().toLowerCase().replace(/[^a-z0-9]+/g, '');
+  if (key === 'tmobile' || key === 'tmo') return ALLOWED_CARRIERS.tmobile;
+  if (key === 'att' || key === 'atandt') return ALLOWED_CARRIERS.att;
+  if (key === 'lyca' || key === 'lycamobile') return ALLOWED_CARRIERS.lyca;
+  return null;
+}
+
 const DEFAULT_PLANS = [
   { id: '1m',  name: '1 month',  amount: 26000, supplier_cost: 20000, days: 30,  sort: 1, active: true },
   { id: '3m',  name: '3 months', amount: 47000, supplier_cost: 40000, days: 90,  sort: 2, active: true },
@@ -122,6 +138,7 @@ async function sendOrderEmails(order) {
       <table style="border-collapse:collapse;width:100%">
         <tr><td style="padding:9px;border-bottom:1px solid #e5e7eb">Order reference</td><td style="padding:9px;border-bottom:1px solid #e5e7eb"><strong>${orderRef}</strong></td></tr>
         <tr><td style="padding:9px;border-bottom:1px solid #e5e7eb">Plan</td><td style="padding:9px;border-bottom:1px solid #e5e7eb">${planName}</td></tr>
+        <tr><td style="padding:9px;border-bottom:1px solid #e5e7eb">Carrier</td><td style="padding:9px;border-bottom:1px solid #e5e7eb">${escapeHtml(order.carrier || (String(order.plan_name||'').split('·')[0]||'').trim() || '—')}</td></tr>
         <tr><td style="padding:9px;border-bottom:1px solid #e5e7eb">Amount paid</td><td style="padding:9px;border-bottom:1px solid #e5e7eb"><strong>${amount}</strong></td></tr>
         <tr><td style="padding:9px;border-bottom:1px solid #e5e7eb">Phone IMEI</td><td style="padding:9px;border-bottom:1px solid #e5e7eb">${imei}</td></tr>
         <tr><td style="padding:9px;border-bottom:1px solid #e5e7eb">Order date</td><td style="padding:9px;border-bottom:1px solid #e5e7eb">${createdAtSafe}</td></tr>
@@ -527,9 +544,11 @@ export default async function handler(req, res) {
     const planId = String(body.plan_id || '');
     const plans = await getPlans();
     const plan = plans.find((p) => p.id === planId && p.active);
+    const carrierInfo = normalizeCarrier(body.carrier);
     const imei = String(body.imei || '').replace(/\D/g, '');
     const requestId = String(body.request_id || '');
     if (!plan) return res.status(400).json({ success: false, message: 'Choose a valid eSIM plan.' });
+    if (!carrierInfo) return res.status(400).json({ success: false, message: 'Choose a carrier network (T-Mobile, AT&T, or Lyca Mobile).' });
     if (!/^\d{15}$/.test(imei)) return res.status(400).json({ success: false, message: 'Enter a valid 15-digit IMEI.' });
     if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(requestId)) {
       return res.status(400).json({ success: false, message: 'Invalid checkout request. Refresh and try again.' });
@@ -550,10 +569,11 @@ export default async function handler(req, res) {
     }
 
     const usdRate = Number(process.env.WALLET_USD_RATE) || 1450;
+    const planLabel = carrierInfo.label + ' · ' + plan.name;
     const { data: rpcData, error: rpcError } = await supabase.rpc('create_esim_wallet_order', {
       p_user_id: user.id,
       p_plan_id: planId,
-      p_plan_name: plan.name,
+      p_plan_name: planLabel,
       p_amount_ngn: plan.amount,
       p_imei: imei,
       p_customer_email: customerEmail,
@@ -599,6 +619,18 @@ export default async function handler(req, res) {
     ]);
     if (!order) {
       return res.status(500).json({ success: false, message: 'Your payment was recorded but the order could not be loaded. Contact support with reference ' + orderData.order_ref + '.' });
+    }
+
+    // Persist carrier when column exists (non-fatal if migration not applied yet)
+    try {
+      await supabase.from('esim_orders').update({
+        carrier: carrierInfo.id,
+        plan_name: planLabel
+      }).eq('id', order.id);
+      order.carrier = carrierInfo.id;
+      order.plan_name = planLabel;
+    } catch (e) {
+      console.warn('[esim] carrier column optional:', e?.message || e);
     }
 
     const emailStatus = await sendOrderEmails({
