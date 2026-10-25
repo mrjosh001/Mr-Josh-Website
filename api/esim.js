@@ -38,11 +38,18 @@ const DEFAULT_PLANS = [
   { id: '12m', name: '1 year',   amount: 90000, supplier_cost: 80000, days: 365, sort: 4, active: true }
 ];
 
-/** Per-carrier customer prices (₦). T-Mobile keeps DEFAULT_PLANS amounts. */
+/** Per-carrier customer prices (₦). */
 const CARRIER_PLAN_PRICES = {
   tmobile: { '1m': 26000, '3m': 47000, '6m': 68000, '12m': 90000 },
   lyca:    { '1m': 24000, '3m': 43000, '6m': 68000, '12m': 90000 },
   att:     { '1m': 28000, '3m': 50000, '6m': 70000, '12m': 92000 }
+};
+
+/** Per-carrier supplier cost (₦). Lyca 1m/3m differ; AT&T + rest of Lyca match T-Mobile. */
+const CARRIER_SUPPLIER_COST = {
+  tmobile: { '1m': 20000, '3m': 40000, '6m': 60000, '12m': 80000 },
+  att:     { '1m': 20000, '3m': 40000, '6m': 60000, '12m': 80000 },
+  lyca:    { '1m': 17000, '3m': 36000, '6m': 60000, '12m': 80000 }
 };
 
 const PLAN_DAYS = { '1m': 30, '3m': 90, '6m': 180, '12m': 365 };
@@ -93,9 +100,11 @@ async function getPlans(carrierId) {
 
   const cid = String(carrierId || '').toLowerCase();
   const priceMap = CARRIER_PLAN_PRICES[cid];
-  if (priceMap) {
+  const costMap = CARRIER_SUPPLIER_COST[cid];
+  if (priceMap || costMap) {
     for (const p of defaults) {
-      if (priceMap[p.id] != null) p.amount = Number(priceMap[p.id]);
+      if (priceMap && priceMap[p.id] != null) p.amount = Number(priceMap[p.id]);
+      if (costMap && costMap[p.id] != null) p.supplier_cost = Number(costMap[p.id]);
     }
   }
   return defaults;
