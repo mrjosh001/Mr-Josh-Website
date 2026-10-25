@@ -433,6 +433,20 @@ export default async function handler(req, res) {
     const body = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : (req.body || {});
 
     // ---- Customer: live plan list for the eSIM page (selling prices only — never supplier cost) ----
+    if (String(body.action || '') === 'my_orders') {
+      const { data, error } = await supabase
+        .from('esim_orders')
+        .select('id,order_ref,plan_id,plan_name,amount_ngn,imei,wallet_ngn_debited,wallet_usd_debited,status,created_at,customer_email')
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: false })
+        .limit(100);
+      if (error) {
+        console.error('[esim my_orders]', error);
+        return res.status(500).json({ success: false, message: 'Could not load your eSIM orders.' });
+      }
+      return res.status(200).json({ success: true, orders: data || [] });
+    }
+
     if (String(body.action || '') === 'plans') {
       const carrierInfo = normalizeCarrier(body.carrier) || ALLOWED_CARRIERS.tmobile;
       const plans = await getPlans(carrierInfo.id);
