@@ -30,6 +30,7 @@ function normalizeCarrier(value) {
   return null;
 }
 
+/** Base plan durations (T-Mobile default selling prices). */
 const DEFAULT_PLANS = [
   { id: '1m',  name: '1 month',  amount: 26000, supplier_cost: 20000, days: 30,  sort: 1, active: true },
   { id: '3m',  name: '3 months', amount: 47000, supplier_cost: 40000, days: 90,  sort: 2, active: true },
@@ -37,15 +38,20 @@ const DEFAULT_PLANS = [
   { id: '12m', name: '1 year',   amount: 90000, supplier_cost: 80000, days: 365, sort: 4, active: true }
 ];
 
+/** Per-carrier customer prices (₦). T-Mobile keeps DEFAULT_PLANS amounts. */
+const CARRIER_PLAN_PRICES = {
+  tmobile: { '1m': 26000, '3m': 47000, '6m': 68000, '12m': 90000 },
+  lyca:    { '1m': 24000, '3m': 43000, '6m': 68000, '12m': 90000 },
+  att:     { '1m': 28000, '3m': 50000, '6m': 70000, '12m': 92000 }
+};
+
+const PLAN_DAYS = { '1m': 30, '3m': 90, '6m': 180, '12m': 365 };
+
 const supabase = ESIM_URL && ESIM_SERVICE_KEY
   ? createClient(ESIM_URL, ESIM_SERVICE_KEY, {
       auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false }
     })
   : null;
-
-/** Plans = defaults, overridden by whatever is saved in the esim_plans table. */
-async function getPlans() {
-  const defaults = DEFAULT_PLANS.map((p) => ({ ...p }));
 
 async function notifyUserPush(userId, title, body, url, type) {
   if (!userId) return;
@@ -59,24 +65,40 @@ async function notifyUserPush(userId, title, body, url, type) {
   } catch (e) { console.warn('[push]', e?.message || e); }
 }
 
+/**
+ * Plans = defaults, then optional esim_plans table overrides (T-Mobile base),
+ * then per-carrier selling prices when carrierId is provided.
+ */
+async function getPlans(carrierId) {
+  const defaults = DEFAULT_PLANS.map((p) => ({ ...p }));
   try {
-    const { data, error } = await supabase.from('esim_plans').select('*');
-    if (error || !Array.isArray(data) || !data.length) return defaults;
-    const byId = new Map(defaults.map((p) => [p.id, p]));
-    for (const row of data) {
-      const base = byId.get(String(row.id));
-      if (!base) continue;
-      const amount = Number(row.amount_ngn);
-      const cost = Number(row.supplier_cost_ngn);
-      if (Number.isFinite(amount) && amount > 0) base.amount = amount;
-      if (Number.isFinite(cost) && cost >= 0) base.supplier_cost = cost;
-      base.active = row.is_active !== false;
+    if (supabase) {
+      const { data, error } = await supabase.from('esim_plans').select('*');
+      if (!error && Array.isArray(data) && data.length) {
+        const byId = new Map(defaults.map((p) => [p.id, p]));
+        for (const row of data) {
+          const base = byId.get(String(row.id));
+          if (!base) continue;
+          const amount = Number(row.amount_ngn);
+          const cost = Number(row.supplier_cost_ngn);
+          if (Number.isFinite(amount) && amount > 0) base.amount = amount;
+          if (Number.isFinite(cost) && cost >= 0) base.supplier_cost = cost;
+          base.active = row.is_active !== false;
+        }
+      }
     }
-    return defaults;
   } catch (e) {
     console.error('[esim plans] falling back to defaults:', e?.message || e);
-    return defaults;
   }
+
+  const cid = String(carrierId || '').toLowerCase();
+  const priceMap = CARRIER_PLAN_PRICES[cid];
+  if (priceMap) {
+    for (const p of defaults) {
+      if (priceMap[p.id] != null) p.amount = Number(priceMap[p.id]);
+    }
+  }
+  return defaults;
 }
 
 function escapeHtml(value) {
@@ -412,9 +434,11 @@ export default async function handler(req, res) {
 
     // ---- Customer: live plan list for the eSIM page (selling prices only — never supplier cost) ----
     if (String(body.action || '') === 'plans') {
-      const plans = await getPlans();
+      const carrierInfo = normalizeCarrier(body.carrier) || ALLOWED_CARRIERS.tmobile;
+      const plans = await getPlans(carrierInfo.id);
       return res.status(200).json({
         success: true,
+        carrier: carrierInfo.id,
         plans: plans
           .filter((p) => p.active)
           .map((p) => ({ id: p.id, name: p.name, amount_ngn: p.amount, days: p.days }))
@@ -542,13 +566,13 @@ export default async function handler(req, res) {
     }
 
     const planId = String(body.plan_id || '');
-    const plans = await getPlans();
-    const plan = plans.find((p) => p.id === planId && p.active);
     const carrierInfo = normalizeCarrier(body.carrier);
+    if (!carrierInfo) return res.status(400).json({ success: false, message: 'Choose a carrier network (T-Mobile, AT&T, or Lyca Mobile).' });
+    const plans = await getPlans(carrierInfo.id);
+    const plan = plans.find((p) => p.id === planId && p.active);
     const imei = String(body.imei || '').replace(/\D/g, '');
     const requestId = String(body.request_id || '');
     if (!plan) return res.status(400).json({ success: false, message: 'Choose a valid eSIM plan.' });
-    if (!carrierInfo) return res.status(400).json({ success: false, message: 'Choose a carrier network (T-Mobile, AT&T, or Lyca Mobile).' });
     if (!/^\d{15}$/.test(imei)) return res.status(400).json({ success: false, message: 'Enter a valid 15-digit IMEI.' });
     if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(requestId)) {
       return res.status(400).json({ success: false, message: 'Invalid checkout request. Refresh and try again.' });
