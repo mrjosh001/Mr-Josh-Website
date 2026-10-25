@@ -684,33 +684,31 @@ button{font-family:inherit}
       var hint = $('plansHint');
       if (hint) hint.textContent = 'Prices for ' + ((typeof CARRIER_LABELS !== 'undefined' && CARRIER_LABELS[selectedCarrier]) || selectedCarrier || 'this network');
       showPlansBlock(true);
-      var grid = $('plansGrid');
-      if (grid) grid.innerHTML = '<div style="grid-column:1/-1;padding:14px;text-align:center;color:var(--muted);font-size:12px">Loading prices…</div>';
+      // Show prices immediately (no endless loading), then refresh from API if available
+      renderPlans(FALLBACK_PLANS[selectedCarrier] || FALLBACK_PLANS.tmobile);
+      loadPlans();
     });
   });
 
   async function loadPlans(){
     if (!selectedCarrier) return;
     try {
-      if (sb) {
-        var r = await sb.auth.getSession();
-        var s = r && r.data && r.data.session;
-        if (s && s.access_token) {
-          var res = await fetch('/api/esim', {
-            method: 'POST',
-            headers: { 'Authorization': 'Bearer ' + s.access_token, 'Content-Type': 'application/json' },
-            body: JSON.stringify({ action: 'plans', carrier: selectedCarrier })
-          });
-          var j = await res.json().catch(function(){ return {}; });
-          if (res.ok && j && j.success && Array.isArray(j.plans) && j.plans.length) {
-            renderPlans(j.plans);
-            return;
-          }
-        }
+      if (!sb) return;
+      var r = await sb.auth.getSession();
+      var s = r && r.data && r.data.session;
+      if (!s || !s.access_token) return;
+      var res = await fetch('/api/esim', {
+        method: 'POST',
+        headers: { 'Authorization': 'Bearer ' + s.access_token, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'plans', carrier: selectedCarrier })
+      });
+      var j = await res.json().catch(function(){ return {}; });
+      if (res.ok && j && j.success && Array.isArray(j.plans) && j.plans.length) {
+        renderPlans(j.plans);
       }
-    } catch (e) {}
-    // Always show prices even if API fails
-    renderPlans(FALLBACK_PLANS[selectedCarrier] || FALLBACK_PLANS.tmobile);
+    } catch (e) {
+      // keep the prices already on screen
+    }
   }
 
   showPlansBlock(false);
