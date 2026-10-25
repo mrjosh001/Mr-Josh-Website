@@ -330,6 +330,10 @@ button{font-family:inherit}
 .form-group input{padding:9px 11px !important;font-size:13px !important;border-radius:11px !important}
 .instruct{padding:8px 9px !important;font-size:10.5px !important;margin-top:6px !important}
 
+
+.plans-block.is-hidden,[hidden]{display:none !important}
+.carriers,.carrier{position:relative;z-index:5}
+.carrier{-webkit-tap-highlight-color:transparent;touch-action:manipulation;cursor:pointer}
 </style>
 <link rel="stylesheet" href="/css/mj-motion.css">
 <script src="/js/mj-page-loader.js"></script>
@@ -434,30 +438,13 @@ button{font-family:inherit}
       </div>
       <p class="field-hint" style="margin:-6px 0 14px">Same plans and checkout for every network. Pick the carrier you want on your eSIM.</p>
 
+      <div id="plansBlock" class="plans-block is-hidden" hidden>
       <p class="method-label">Choose your plan</p>
-      <!-- These four cards are the safe fallback. As soon as the live prices load from the server they are replaced automatically. -->
-      <p id="plansHint">Select a network above to see plan prices.</p>
-      <div class="plans plans-locked" id="plansGrid" role="group" aria-label="eSIM plan duration">
-        <button class="plan" type="button" data-id="1m" data-label="1 month" data-price="26000" aria-pressed="false">
-          <span class="radio"><i class="fa-solid fa-check"></i></span>
-          <span class="duration">1 month</span><span class="price">₦26,000</span><span class="period">30 days</span><span class="monthly">₦26,000 per month</span>
-        </button>
-        <button class="plan" type="button" data-id="3m" data-label="3 months" data-price="47000" aria-pressed="false">
-          <span class="tag">Popular</span>
-          <span class="radio"><i class="fa-solid fa-check"></i></span>
-          <span class="duration">3 months</span><span class="price">₦47,000</span><span class="period">90 days</span><span class="monthly">≈ ₦15,667 per month</span><span class="saving">Save about 40%</span>
-        </button>
-        <button class="plan" type="button" data-id="6m" data-label="6 months" data-price="68000" aria-pressed="false">
-          <span class="radio"><i class="fa-solid fa-check"></i></span>
-          <span class="duration">6 months</span><span class="price">₦68,000</span><span class="period">180 days</span><span class="monthly">≈ ₦11,333 per month</span><span class="saving">Save about 56%</span>
-        </button>
-        <button class="plan" type="button" data-id="12m" data-label="1 year" data-price="90000" aria-pressed="false">
-          <span class="radio"><i class="fa-solid fa-check"></i></span>
-          <span class="duration">1 year</span><span class="price">₦90,000</span><span class="period">365 days</span><span class="monthly">₦7,500 per month</span><span class="saving">Save about 71%</span>
-        </button>
-      </div>
+      <p id="plansHint" class="field-hint" style="margin:0 0 8px">Select a network to see prices</p>
+      <div class="plans" id="plansGrid" role="group" aria-label="eSIM plan duration"></div>
       <div class="pickbar"><span id="pickLabel">Select a plan to continue</span><strong id="pickPrice"></strong></div>
       <button type="button" class="btn" id="nextBtn" disabled>Next <i class="fa-solid fa-arrow-right"></i></button>
+      </div><!-- /plansBlock -->
     </div>
     <div class="provider-foot"><i class="fa-solid fa-shield-halved"></i> Networks: T-Mobile · AT&amp;T · Lyca Mobile</div>
   </section>
@@ -611,31 +598,63 @@ button{font-family:inherit}
      (eSIM Orders, Plan prices). If this request fails for any reason the four
      fallback cards in the HTML stay on screen, and the server still refuses to
      charge anything other than the price the customer was shown. */
-  var MONTHS = { '1m': 1, '3m': 3, '6m': 6, '12m': 12 };
-  function renderPlans(list){
-    
-  document.querySelectorAll('#carrierGrid .carrier').forEach(function(btn){
-    btn.addEventListener('click', function(){
-      selectedCarrier = btn.getAttribute('data-carrier');
-      document.querySelectorAll('#carrierGrid .carrier').forEach(function(b){
-        b.setAttribute('aria-pressed', b === btn ? 'true' : 'false');
-      });
-      var cEl = document.getElementById('confirmCarrier');
-      if (cEl) cEl.textContent = CARRIER_LABELS[selectedCarrier] || 'Network';
-      selected = null;
-      // Prices load only after a network is selected
-    });
-  });
+  function showPlansBlock(show){
+    var block = document.getElementById('plansBlock');
+    if (!block) {
+      var grid = document.getElementById('plansGrid');
+      if (grid) {
+        var parent = grid.closest('.card') || grid.parentElement;
+        if (parent) {
+          // fallback: toggle grid only
+          grid.style.display = show ? '' : 'none';
+        }
+      }
+      return;
+    }
+    if (show) {
+      block.hidden = false;
+      block.classList.remove('is-hidden');
+      block.style.display = '';
+    } else {
+      block.hidden = true;
+      block.classList.add('is-hidden');
+      block.style.display = 'none';
+    }
+  }
 
-var grid = $('plansGrid');
+  var MONTHS = { '1m': 1, '3m': 3, '6m': 6, '12m': 12 };
+  var FALLBACK_PLANS = {
+    tmobile: [
+      {id:'1m',name:'1 month',amount_ngn:26000,days:30},
+      {id:'3m',name:'3 months',amount_ngn:47000,days:90},
+      {id:'6m',name:'6 months',amount_ngn:68000,days:180},
+      {id:'12m',name:'1 year',amount_ngn:90000,days:365}
+    ],
+    lyca: [
+      {id:'1m',name:'1 month',amount_ngn:24000,days:30},
+      {id:'3m',name:'3 months',amount_ngn:43000,days:90},
+      {id:'6m',name:'6 months',amount_ngn:68000,days:180},
+      {id:'12m',name:'1 year',amount_ngn:90000,days:365}
+    ],
+    att: [
+      {id:'1m',name:'1 month',amount_ngn:28000,days:30},
+      {id:'3m',name:'3 months',amount_ngn:50000,days:90},
+      {id:'6m',name:'6 months',amount_ngn:70000,days:180},
+      {id:'12m',name:'1 year',amount_ngn:92000,days:365}
+    ]
+  };
+
+  function renderPlans(list){
+    var grid = $('plansGrid');
     if (!grid || !list || !list.length) return;
+    showPlansBlock(true);
     var prevId = selected ? selected.dataset.id : null;
     var prevPrice = selected ? Number(selected.dataset.price) : null;
     var base = list.filter(function(p){ return p.id === '1m'; })[0] || list[0];
-    var baseMonthly = Number(base.amount_ngn) / (MONTHS[base.id] || Math.max(1, Math.round(base.days / 30)));
+    var baseMonthly = Number(base.amount_ngn) / (MONTHS[base.id] || Math.max(1, Math.round((base.days || 30) / 30)));
     grid.innerHTML = list.map(function(p){
       var amount = Number(p.amount_ngn);
-      var months = MONTHS[p.id] || Math.max(1, Math.round(p.days / 30));
+      var months = MONTHS[p.id] || Math.max(1, Math.round((p.days || 30) / 30));
       var monthly = amount / months;
       var saving = (months > 1 && baseMonthly > monthly) ? Math.round((1 - monthly / baseMonthly) * 100) : 0;
       return '<button class="plan" type="button" data-id="' + esc(p.id) + '" data-label="' + esc(p.name) + '" data-price="' + amount + '" aria-pressed="false">' +
@@ -643,46 +662,77 @@ var grid = $('plansGrid');
         '<span class="radio"><i class="fa-solid fa-check"></i></span>' +
         '<span class="duration">' + esc(p.name) + '</span>' +
         '<span class="price">' + money(amount) + '</span>' +
-        '<span class="period">' + esc(p.days) + ' days</span>' +
+        '<span class="period">' + esc(p.days || (months * 30)) + ' days</span>' +
         '<span class="monthly">' + (Number.isInteger(monthly) ? '' : '≈ ') + money(Math.round(monthly)) + ' per month</span>' +
         (saving > 0 ? '<span class="saving">Save about ' + saving + '%</span>' : '') +
       '</button>';
     }).join('');
-    grid.classList.remove('plans-locked');
     plans = Array.prototype.slice.call(grid.querySelectorAll('.plan'));
     bindPlans();
     selected = null;
-    $('nextBtn').disabled = true;
-    $('pickLabel').textContent = 'Select a plan to continue';
-    $('pickPrice').textContent = '';
+    var next = $('nextBtn');
+    if (next) next.disabled = true;
+    var pl = $('pickLabel');
+    if (pl) pl.textContent = 'Select a plan to continue';
+    var pp = $('pickPrice');
+    if (pp) pp.textContent = '';
     if (prevId) {
       var again = plans.filter(function(p){ return p.dataset.id === prevId; })[0];
       if (again) {
         choose(again);
-        if (step === 2) $('dPlan').textContent = again.dataset.label + ' · ' + money(again.dataset.price);
-        if (prevPrice !== Number(again.dataset.price)) toast('The price of this plan was updated to ' + money(again.dataset.price));
-      } else if (step === 2) {
-        toast('That plan is no longer available. Please choose another.');
-        go(1);
+        if (step === 2) {
+          var dp = $('dPlan');
+          if (dp) dp.textContent = again.dataset.label + ' · ' + money(again.dataset.price);
+        }
       }
     }
   }
-  async function loadPlans(){
-    try {
-      if (!selectedCarrier) return;
-      if (!sb) return;
-      var r = await sb.auth.getSession();
-      var s = r && r.data && r.data.session;
-      if (!s || !s.access_token) return;
-      var res = await fetch('/api/esim', {
-        method: 'POST',
-        headers: { 'Authorization': 'Bearer ' + s.access_token, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'plans', carrier: selectedCarrier })
+
+  // Carrier selection — must stay OUTSIDE renderPlans
+  document.querySelectorAll('#carrierGrid .carrier').forEach(function(btn){
+    btn.addEventListener('click', function(){
+      selectedCarrier = btn.getAttribute('data-carrier');
+      document.querySelectorAll('#carrierGrid .carrier').forEach(function(b){
+        b.setAttribute('aria-pressed', b === btn ? 'true' : 'false');
       });
-      var j = await res.json().catch(function(){ return {}; });
-      if (res.ok && j && j.success && Array.isArray(j.plans) && j.plans.length) renderPlans(j.plans);
-    } catch (e) { /* keep the fallback cards */ }
+      var cEl = document.getElementById('confirmCarrier');
+      if (cEl) cEl.textContent = (CARRIER_LABELS && CARRIER_LABELS[selectedCarrier]) || 'Network';
+      selected = null;
+      var hint = $('plansHint');
+      if (hint) hint.textContent = 'Prices for ' + ((CARRIER_LABELS && CARRIER_LABELS[selectedCarrier]) || 'this network');
+      showPlansBlock(true);
+      var grid = $('plansGrid');
+      if (grid) grid.innerHTML = '<div style="grid-column:1/-1;padding:16px;text-align:center;color:var(--muted);font-size:12px">Loading prices…</div>';
+    });
+  });
+
+  async function loadPlans(){
+    if (!selectedCarrier) return;
+    var usedFallback = false;
+    try {
+      if (sb) {
+        var r = await sb.auth.getSession();
+        var s = r && r.data && r.data.session;
+        if (s && s.access_token) {
+          var res = await fetch('/api/esim', {
+            method: 'POST',
+            headers: { 'Authorization': 'Bearer ' + s.access_token, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'plans', carrier: selectedCarrier })
+          });
+          var j = await res.json().catch(function(){ return {}; });
+          if (res.ok && j && j.success && Array.isArray(j.plans) && j.plans.length) {
+            renderPlans(j.plans);
+            return;
+          }
+        }
+      }
+    } catch (e) { /* fallback below */ }
+    usedFallback = true;
+    renderPlans(FALLBACK_PLANS[selectedCarrier] || FALLBACK_PLANS.tmobile);
   }
+
+  // Hide plans until a network is chosen (do not auto-load prices)
+  showPlansBlock(false);
 
   $('nextBtn').addEventListener('click', function(){
     if (!selected) return toast('Choose a plan to continue');
@@ -740,8 +790,6 @@ var grid = $('plansGrid');
     }
   }
   loadRegisteredEmail();
-  loadPlans();
-
   $('payBtn').addEventListener('click', function(){
     /* Normalize again at submit time: mobile keyboards, autofill, and pasted
        values may not fire the expected input event before the button is tapped. */
