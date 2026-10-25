@@ -278,6 +278,19 @@ button{font-family:inherit}
 .provider-foot{font-size:11px !important;margin-top:8px !important}
 .topbar{height:54px !important}
 
+
+/* Density pass 2 */
+.wrap{padding:8px 11px 24px !important}
+.hero{padding:10px !important;margin-bottom:8px !important}
+.card{padding:10px !important;margin-bottom:8px !important}
+.carriers{gap:7px !important;margin:0 0 8px !important}
+.carrier{min-height:70px !important;padding:7px 5px !important}
+.plan{min-height:88px !important;padding:9px 8px !important}
+.plan .price{font-size:15px !important}
+.plans-locked .plan .price,.plans-locked .plan .monthly,.plans-locked .plan .saving{visibility:hidden}
+.plans-locked .plan .price::after{visibility:visible;content:"—";font-size:14px;color:var(--muted)}
+#plansHint{font-size:11px;color:var(--muted);margin:0 0 8px}
+
 </style>
 <link rel="stylesheet" href="/css/mj-motion.css">
 <script src="/js/mj-page-loader.js"></script>
@@ -331,6 +344,7 @@ button{font-family:inherit}
 <header class="header">
   <a class="back" href="dashboard.html#home" id="headerBackBtn" aria-label="Back"><i class="fa-solid fa-arrow-left"></i></a>
   <h1>eSIM</h1>
+  <a href="esim-orders.html" class="theme-btn" title="My eSIM orders" aria-label="My eSIM orders" style="display:grid;place-items:center;text-decoration:none"><i class="fa-solid fa-receipt"></i></a>
   <button type="button" class="theme-btn" id="themeBtn" onclick="toggleTheme()" aria-label="Toggle theme">🌙</button>
 </header>
 
@@ -383,7 +397,8 @@ button{font-family:inherit}
 
       <p class="method-label">Choose your plan</p>
       <!-- These four cards are the safe fallback. As soon as the live prices load from the server they are replaced automatically. -->
-      <div class="plans" id="plansGrid" role="group" aria-label="eSIM plan duration">
+      <p id="plansHint">Select a network above to see plan prices.</p>
+      <div class="plans plans-locked" id="plansGrid" role="group" aria-label="eSIM plan duration">
         <button class="plan" type="button" data-id="1m" data-label="1 month" data-price="26000" aria-pressed="false">
           <span class="radio"><i class="fa-solid fa-check"></i></span>
           <span class="duration">1 month</span><span class="price">₦26,000</span><span class="period">30 days</span><span class="monthly">₦26,000 per month</span>
@@ -569,7 +584,7 @@ button{font-family:inherit}
       var cEl = document.getElementById('confirmCarrier');
       if (cEl) cEl.textContent = CARRIER_LABELS[selectedCarrier] || 'Network';
       selected = null;
-      loadPlans();
+      // Prices load only after a network is selected
     });
   });
 
@@ -594,6 +609,7 @@ var grid = $('plansGrid');
         (saving > 0 ? '<span class="saving">Save about ' + saving + '%</span>' : '') +
       '</button>';
     }).join('');
+    grid.classList.remove('plans-locked');
     plans = Array.prototype.slice.call(grid.querySelectorAll('.plan'));
     bindPlans();
     selected = null;
@@ -614,6 +630,7 @@ var grid = $('plansGrid');
   }
   async function loadPlans(){
     try {
+      if (!selectedCarrier) return;
       if (!sb) return;
       var r = await sb.auth.getSession();
       var s = r && r.data && r.data.session;
@@ -621,7 +638,7 @@ var grid = $('plansGrid');
       var res = await fetch('/api/esim', {
         method: 'POST',
         headers: { 'Authorization': 'Bearer ' + s.access_token, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'plans', carrier: selectedCarrier || 'tmobile' })
+        body: JSON.stringify({ action: 'plans', carrier: selectedCarrier })
       });
       var j = await res.json().catch(function(){ return {}; });
       if (res.ok && j && j.success && Array.isArray(j.plans) && j.plans.length) renderPlans(j.plans);
