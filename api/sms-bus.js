@@ -520,6 +520,8 @@ const GOTSMS_AREA_ADDON_NGN = Math.max(0, Number(process.env.GOTSMS_AREA_ADDON_N
 const GOTSMS_MULTI_PACK_USD = {
   '1_hour': 2.1,
   '1_hours': 2.1,
+  '1_hr': 2.1,
+  '1_hrs': 2.1,
   '1_day': 5,
   '1_days': 5
 };
@@ -3499,13 +3501,14 @@ export default async function handler(req, res) {
         if (body.quoted_price_ngn != null) {
           const q = Number(body.quoted_price_ngn);
           // allow small drift; quoted should include addons from client
-          if (Number.isFinite(q) && Math.abs(q - price) > 100) {
+          if (Number.isFinite(q) && Math.abs(q - price) > 150) {
             return json(res, 409, {
               success: false,
               message: 'Price updated. Refresh and try again.',
               data: { price_ngn: price, base_addons: addons }
             });
           }
+          if (Number.isFinite(q) && q > 0 && Math.abs(q - price) <= 150) price = Math.round(q);
         }
 
         if (!(price > 0)) {
@@ -3686,27 +3689,36 @@ export default async function handler(req, res) {
           return json(res, 409, { success: false, message: 'This duration is sold out right now.', data: { out_of_stock: true } });
         }
 
-        const durKey = gotsmsDurationKey(plan);
+        let durKey = gotsmsDurationKey(plan);
+        // Minutes fallback: 60 → 1 hour, 1440 → 1 day
+        if (!GOTSMS_MULTI_PACK_USD[durKey] && plan) {
+          const mins = Number(plan.duration_in_minutes || 0);
+          if (mins === 60) durKey = '1_hour';
+          else if (mins === 1440) durKey = '1_day';
+        }
         const packUsd = GOTSMS_MULTI_PACK_USD[durKey];
         if (packUsd == null) {
           return json(res, 400, { success: false, message: 'Multi-service is only available for 1 hour or 1 day durations.' });
         }
 
-        let price = gotsmsSellPriceNgn(packUsd);
+        const basePack = gotsmsSellPriceNgn(packUsd);
         const areaCode = body.area_code ? String(body.area_code).replace(/\D/g, '').slice(0, 6) : '';
         const carrierId = body.cellular_carrier_id ? String(body.cellular_carrier_id) : '';
         const addons = gotsmsAddonsNgn({ area_code: areaCode, cellular_carrier_id: carrierId });
-        price = price + addons;
+        let price = basePack + addons;
 
         if (body.quoted_price_ngn != null) {
           const q = Number(body.quoted_price_ngn);
-          if (Number.isFinite(q) && Math.abs(q - price) > 100) {
+          // Allow slightly wider drift; still reject large mismatches
+          if (Number.isFinite(q) && Math.abs(q - price) > 150) {
             return json(res, 409, {
               success: false,
               message: 'Price updated. Refresh and try again.',
-              data: { price_ngn: price }
+              data: { price_ngn: price, base_ngn: basePack, addons_ngn: addons }
             });
           }
+          // Prefer client total when within tolerance so UI and debit match what user saw
+          if (Number.isFinite(q) && q > 0 && Math.abs(q - price) <= 150) price = Math.round(q);
         }
         if (!(price > 0)) return json(res, 400, { success: false, message: 'Invalid multi-pack price.' });
 
