@@ -135,16 +135,22 @@ select.f{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.or
     <p class="helper-text">Pick the app you need a USA number for. Next screen lets you set duration, carrier, and area code.</p>
     <div class="search-bar"><i class="fa-solid fa-magnifying-glass" style="color:var(--muted)"></i><input type="search" id="svcSearch" placeholder="Search WhatsApp, Telegram…" autocomplete="off"></div>
     <div id="multiModePanel" style="margin:0 0 12px;padding:12px;border:1px solid var(--border);border-radius:14px;background:var(--card)">
-    <div style="display:flex;align-items:center;justify-content:space-between;gap:10px">
-      <div>
-        <div style="font-weight:800;font-size:13px">Multi-service pack</div>
-        <div style="font-size:11px;color:var(--muted);margin-top:2px">One number · max 2 apps · 1 hour or 1 day only</div>
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:12px">
+      <div style="min-width:0;flex:1">
+        <div style="font-weight:800;font-size:13.5px;color:var(--text)">Need 2 apps on one number?</div>
+        <div style="font-size:11.5px;color:var(--muted);margin-top:3px;line-height:1.4">Turn this on to use one USA number for two services (for example WhatsApp + Telegram). Leave it off for a normal single-app rental.</div>
       </div>
-      <label class="switch" title="Multi-service"><input type="checkbox" id="multiModeToggle"><span class="slider"></span></label>
+      <label class="switch" title="Two apps on one number" style="flex-shrink:0"><input type="checkbox" id="multiModeToggle"><span class="slider"></span></label>
     </div>
-    <div id="multiHint" style="display:none;margin-top:8px;font-size:11.5px;color:var(--muted);line-height:1.45">
-      Select <b>exactly 2 services</b>. After payment you cannot add a service or change duration on this pack.
-      <div id="multiPicks" style="margin-top:6px;font-weight:700;color:var(--text)"></div>
+    <div id="multiHint" style="display:none;margin-top:10px;padding-top:10px;border-top:1px solid var(--border);font-size:11.5px;color:var(--muted);line-height:1.45">
+      <div style="font-weight:700;color:var(--text);margin-bottom:4px">How it works</div>
+      <ul style="margin:0;padding-left:18px">
+        <li>Pick <b>two services</b> below</li>
+        <li>Choose <b>1 hour</b> or <b>1 day</b> only</li>
+        <li>Both apps share the <b>same number</b> and inbox</li>
+        <li>After you pay, you <b>cannot</b> add another app or change the duration on this pack</li>
+      </ul>
+      <div id="multiPicks" style="margin-top:8px;font-weight:700;color:var(--text)"></div>
     </div>
   </div>
   <div id="svcGrid" class="sk-svc-grid" aria-busy="true">
@@ -559,12 +565,18 @@ function renderDetailForm(){
     return '<div class="plan'+(available?'':' sold-out')+'" data-i="'+i+'"'+(available?'':' aria-disabled="true" title="This duration is sold out"')+'><div class="dur">'+esc(label)+'</div><div class="price">'+fmtNgn(p.price_ngn)+'</div>'+(available?'':'<span class="stock-status">Sold out</span>')+'</div>';
   }).join('');
   var carHtml='<option value="">Any Carrier</option>'+carriers.map(function(c){return '<option value="'+esc(c.id)+'">'+esc(c.name)+'</option>';}).join('');
+  var qtyBlock = multiMode ? '' : (
+    '<label class="f">Quantity (1–25)</label><div class="qty"><button type="button" id="qtyMinus">−</button><span id="qtyVal" style="font-weight:800;min-width:28px;text-align:center">1</span><button type="button" id="qtyPlus">+</button></div>'
+  );
+  var renewBlock = multiMode ? '' : (
+    '<div class="toggle-row"><div><div class="t-label">Auto-renew</div><div class="t-hint">Renew automatically when this period ends (wallet charged)</div></div><label class="switch"><input type="checkbox" id="autoRenewChk"><span class="slider"></span></label></div>'
+  );
   body.innerHTML=
     '<label class="f">Duration</label><div class="plan-grid" id="planList">'+planHtml+'</div>'+
     '<label class="f">Carrier (optional)</label><select class="f" id="carrierSel">'+carHtml+'</select>'+
     '<label class="f">Area code (optional)</label><select class="f" id="areaCode">'+buildAreaOptions()+'</select>'+
-    '+(multiMode?'':'<label class="f">Quantity (1–25)</label><div class="qty"><button type="button" id="qtyMinus">−</button><span id="qtyVal" style="font-weight:800;min-width:28px;text-align:center">1</span><button type="button" id="qtyPlus">+</button></div>'+
-    '<div class="toggle-row"><div><div class="t-label">Auto-renew</div><div class="t-hint">Renew automatically when this period ends (wallet charged)</div></div><label class="switch"><input type="checkbox" id="autoRenewChk"><span class="slider"></span></label></div>'+
+    qtyBlock +
+    renewBlock +
     '<div class="total"><div class="lbl">Total</div><div class="amt" id="totalAmt">₦0</div><div class="total-break" id="totalBreak"><div class="tb-row base" id="tbBase" style="display:none"><span>Rental duration</span><span></span></div><div class="tb-row" id="tbCarrier" style="display:none"><span>Preferred carrier</span><span></span></div><div class="tb-row" id="tbArea" style="display:none"><span>Area code preference</span><span></span></div></div></div>'+
     '<button type="button" class="btn-buy" id="rentBtn" disabled>Rent number</button>'+
     '<div class="err" id="rentErr"></div><div class="ok" id="rentOk"></div>';
@@ -940,7 +952,7 @@ function syncMultiPicks(){
   var p=document.getElementById('multiPicks');
   if(!p) return;
   if(!multiSelected.length){ p.textContent='No services selected yet.'; return; }
-  p.textContent=multiSelected.map(function(s){return s.name;}).join(' + ') + (multiSelected.length<2?' — pick '+(2-multiSelected.length)+' more':' — choose 1 hour or 1 day below');
+  p.textContent=multiSelected.map(function(s){return s.name;}).join(' + ') + (multiSelected.length<2?' — select '+(2-multiSelected.length)+' more service'+(multiSelected.length===0?'s':'')+'':' — next: choose 1 hour or 1 day');
 }
 function toggleMultiService(svc){
   if(!svc||!svc.id) return;
