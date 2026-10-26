@@ -251,6 +251,15 @@ function clearRentLock(){
 }
 
 const MULTI_PACK_USD={hour:2.1,day:5};
+function ensureMultiPlanPrice(plan){
+  if(!plan||!multiMode) return plan;
+  var k=multiDurationKind(plan);
+  var u=MULTI_PACK_USD[k];
+  if(u==null) return plan;
+  plan.price_usd=u;
+  plan.price_ngn=multiSellNgn(u);
+  return plan;
+}
 function multiSellNgn(usd){var rate=1500,pct=80,minP=500,minS=1000;var sn=Number(usd||0)*rate;var p=Math.ceil(sn*(1+pct/100));var f=Math.ceil(sn+minP);var x=Math.max(p,f,minS);return Math.ceil(x/50)*50;}
 function isMultiDurationPlan(p){var t=String((p&&(p.duration_translation||p.name))||'').toLowerCase();var unit=String((p&&p.duration_type)||'').toLowerCase().replace(/s$/,'');var n=Number(p&&p.duration_in_type||0);if(n===1&&(unit==='hour'||unit==='day'))return true;if(/\b1\s*hour\b/.test(t)||/\b1\s*day\b/.test(t))return true;return false;}
 function multiDurationKind(p){var t=String((p&&p.duration_translation)||'').toLowerCase();var unit=String((p&&p.duration_type)||'').toLowerCase();if(unit.indexOf('hour')>=0||/\bhour\b/.test(t))return 'hour';return 'day';}
@@ -838,7 +847,9 @@ function showSuccess(rent){
 }
 
 function openPurchaseModal(){
-  if(!selectedPlan||!selectedService)return;
+  if(!selectedPlan)return;
+  if(multiMode && (!multiSelected||multiSelected.length!==2)){ showRentToast('Select exactly 2 services first', false); return; }
+  if(multiMode) ensureMultiPlanPrice(selectedPlan);
   document.getElementById('psService').textContent=(multiMode&&multiSelected&&multiSelected.length>=2)?multiSelected.map(function(s){return s.name;}).join(' + '):(selectedService&&selectedService.name)||'—';
   document.getElementById('psDuration').textContent=selectedPlan.duration_translation||((selectedPlan.duration_in_type||'')+' '+(selectedPlan.duration_type||''))||'—';
   var carSel=document.getElementById('carrierSel');
@@ -1006,6 +1017,7 @@ async function doRent(){
     if(!j || !j.success){
       unlockFail();
       var msg2=(j&&j.message)||'Rental failed';
+      if(/gotsms|unknown.*action|supplier|api\s*key/i.test(msg2)) msg2='Purchase could not be completed. Please refresh and try again.';
       if(psErr) psErr.textContent=msg2;
       if(errEl) errEl.textContent=msg2;
       showRentToast(msg2, false);
