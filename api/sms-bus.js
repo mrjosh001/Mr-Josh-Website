@@ -4566,12 +4566,25 @@ if (method === 'POST' && ga === 'gotsms_toggle_renewal') {
         const order = await gotsmsAssertOwns(auth.userId, rent_id);
         if (!order) return json(res, 403, { success: false, message: 'Rental not found' });
 
-        let live = null;
-        try {
-          const cur = await gotsmsFetch(`/api/rents/${encodeURIComponent(rent_id)}`);
-          live = (cur.data && (cur.data.data || cur.data)) || null;
-        } catch (_) {}
-        const currentlyOn = !!(live && (live.is_included_for_next_renewal || live.auto_renew));
+        const linkedRenewIds = await gotsmsResolveLinkedRentIds(auth.userId, rent_id, order);
+
+        async function readOn(rid) {
+          try {
+            const cur = await gotsmsFetch(`/api/rents/${encodeURIComponent(rid)}`);
+            const d = cur.data && (cur.data.data || cur.data);
+            return !!(d && (d.is_included_for_next_renewal || d.auto_renew));
+          } catch (_) { return false; }
+        }
+
+        // Primary state for balance checks
+        let currentlyOn = await readOn(rent_id);
+        // If any linked is off, treat pack as off when enabling
+        let anyOff = false;
+        for (const rid of linkedRenewIds) {
+          if (!(await readOn(rid))) anyOff = true;
+        }
+        currentlyOn = !anyOff && currentlyOn;
+
         let wantOn = body.enabled;
         if (wantOn === undefined || wantOn === null || wantOn === '') {
           wantOn = !currentlyOn;
@@ -4595,42 +4608,55 @@ if (method === 'POST' && ga === 'gotsms_toggle_renewal') {
           }
         }
 
-        if (wantOn === currentlyOn) {
-          return json(res, 200, {
-            success: true,
-            message: wantOn
-              ? ('Auto-renew is on. ₦' + renewPrice.toLocaleString() + ' will be charged from your wallet each renewal (same as this rental).')
-              : 'Auto-renew is off',
-            data: { auto_renew: wantOn, renew_price_ngn: renewPrice }
-          });
+        // Align every linked rent to wantOn (GotSMS toggle flips — only call when needed)
+        let anyOk = false;
+        let lastErr = null;
+        for (const rid of linkedRenewIds) {
+          try {
+            let onNow = await readOn(rid);
+            if (onNow === wantOn) { anyOk = true; continue; }
+            const gg = await gotsmsFetch(`/api/rents/${encodeURIComponent(rid)}/renewal/toggle`, { method: 'POST' });
+            if (gg.ok) {
+              anyOk = true;
+              // Verify; if still wrong, toggle once more
+              onNow = await readOn(rid);
+              if (onNow !== wantOn) {
+                const gg2 = await gotsmsFetch(`/api/rents/${encodeURIComponent(rid)}/renewal/toggle`, { method: 'POST' });
+                if (gg2.ok) anyOk = true;
+              }
+            } else {
+              lastErr = gotsmsSafeMsg(gg.data && gg.data.message, 'Could not update auto-renewal');
+            }
+          } catch (e) {
+            lastErr = 'Could not update auto-renewal';
+          }
         }
 
-        const g = await gotsmsFetch(
-          `/api/rents/${encodeURIComponent(rent_id)}/renewal/toggle`,
-          { method: 'POST' }
-        );
-        if (!g.ok) {
-          return json(res, g.status || 400, {
+        // Final pack state: all linked must be on for "on"
+        let afterOn = true;
+        for (const rid of linkedRenewIds) {
+          if (!(await readOn(rid))) afterOn = false;
+        }
+        // If only one id and read failed, fall back to wantOn when anyOk
+        if (linkedRenewIds.length === 1 && anyOk) {
+          afterOn = await readOn(rent_id);
+        }
+
+        if (!anyOk && afterOn !== wantOn) {
+          return json(res, 400, {
             success: false,
-            message: gotsmsSafeMsg(g.data && g.data.message, 'Could not update auto-renewal'),
-            data: (g.data && g.data.data) || null
+            message: lastErr || 'Could not update auto-renewal',
+            data: { auto_renew: afterOn, renew_price_ngn: renewPrice }
           });
         }
-        let afterOn = !currentlyOn;
-        try {
-          const again = await gotsmsFetch(`/api/rents/${encodeURIComponent(rent_id)}`);
-          const d = again.data && (again.data.data || again.data);
-          if (d) afterOn = !!(d.is_included_for_next_renewal || d.auto_renew);
-        } catch (_) {}
 
         return json(res, 200, {
           success: true,
           message: afterOn
-            ? ('Auto-renew is on. ₦' + renewPrice.toLocaleString() + ' will be charged from your wallet when the period renews (same price as this rental).')
-            : 'Auto-renew is off',
-          data: { auto_renew: afterOn, renew_price_ngn: renewPrice }
+            ? ('Auto-renew is on for this number' + (linkedRenewIds.length > 1 ? ' (all services)' : '') + '. ₦' + renewPrice.toLocaleString() + ' will be charged when the period renews.')
+            : 'Auto-renew is off' + (linkedRenewIds.length > 1 ? ' for all services on this number' : ''),
+          data: { auto_renew: afterOn, renew_price_ngn: renewPrice, linked: linkedRenewIds.length }
         });
-
       }
 
       if (method === 'GET' && ga === 'gotsms_my_orders') {
