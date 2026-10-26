@@ -324,8 +324,8 @@ body{font-family:'Plus Jakarta Sans',system-ui,-apple-system,sans-serif;backgrou
         '<div class="more"><div class="n3-lab">More options</div><div class="more-body">'+
           (active && !st.terminal ?
             '<div class="n3-two">'+
-              '<button type="button" class="n3-btn n3-ghost n3-sm" id="btnAddService"><i class="fa-solid fa-plus"></i> Add service</button>'+
-              '<button type="button" class="n3-btn n3-ghost n3-sm" id="btnSwitchPlan"><i class="fa-solid fa-arrow-right-arrow-left"></i> Switch plan</button>'+
+              (isMultiPack?'':('<button type="button" class="n3-btn n3-ghost n3-sm" id="btnAddService"><i class="fa-solid fa-plus"></i> Add service</button>'))+
+              (isMultiPack?'':('<button type="button" class="n3-btn n3-ghost n3-sm" id="btnSwitchPlan"><i class="fa-solid fa-arrow-right-arrow-left"></i> Switch plan</button>'))+
             '</div>' : '')+
           (active ?
             '<div class="toggle"><div><div class="t-title">Auto-renew</div><div class="t-hint" id="autoRenewHint">'+

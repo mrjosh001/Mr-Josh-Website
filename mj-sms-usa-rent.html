@@ -134,7 +134,20 @@ select.f{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.or
     <h2><i class="fa-solid fa-grid-2" style="color:var(--primary)"></i> Choose a service</h2>
     <p class="helper-text">Pick the app you need a USA number for. Next screen lets you set duration, carrier, and area code.</p>
     <div class="search-bar"><i class="fa-solid fa-magnifying-glass" style="color:var(--muted)"></i><input type="search" id="svcSearch" placeholder="Search WhatsApp, Telegram…" autocomplete="off"></div>
-    <div id="svcGrid" class="sk-svc-grid" aria-busy="true">
+    <div id="multiModePanel" style="margin:0 0 12px;padding:12px;border:1px solid var(--border);border-radius:14px;background:var(--card)">
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:10px">
+      <div>
+        <div style="font-weight:800;font-size:13px">Multi-service pack</div>
+        <div style="font-size:11px;color:var(--muted);margin-top:2px">One number · max 2 apps · 1 hour or 1 day only</div>
+      </div>
+      <label class="switch" title="Multi-service"><input type="checkbox" id="multiModeToggle"><span class="slider"></span></label>
+    </div>
+    <div id="multiHint" style="display:none;margin-top:8px;font-size:11.5px;color:var(--muted);line-height:1.45">
+      Select <b>exactly 2 services</b>. After payment you cannot add a service or change duration on this pack.
+      <div id="multiPicks" style="margin-top:6px;font-weight:700;color:var(--text)"></div>
+    </div>
+  </div>
+  <div id="svcGrid" class="sk-svc-grid" aria-busy="true">
       <div class="sk-svc-tile"><div class="sk-svc-icon"></div><div class="sk-svc-label"></div></div>
       <div class="sk-svc-tile"><div class="sk-svc-icon"></div><div class="sk-svc-label"></div></div>
       <div class="sk-svc-tile"><div class="sk-svc-icon"></div><div class="sk-svc-label"></div></div>
@@ -211,6 +224,12 @@ const SUPABASE_URL='https://atczodlljmlayvldxfmv.supabase.co';
 const SUPABASE_ANON_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImF0Y3pvZGxsam1sYXl2bGR4Zm12Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODUwNzUyMzgsImV4cCI6MjEwMDY1MTIzOH0.ufthD-p7BmeD_B7xyuMM6PNPL8DmcL4AtRYgg-MuoLI';
 const sb=window.supabase.createClient(SUPABASE_URL,SUPABASE_ANON_KEY,{auth:{persistSession:true,autoRefreshToken:true,storage:window.sessionStorage}});
 let allServices=[],selectedService=null,plans=[],selectedPlan=null,qty=1,rentBusy=false,carriers=[];
+let multiMode=false,multiSelected=[];
+const MULTI_PACK_USD={hour:2.1,day:5};
+function multiSellNgn(usd){var rate=1500,pct=80,minP=500,minS=1000;var sn=Number(usd||0)*rate;var p=Math.ceil(sn*(1+pct/100));var f=Math.ceil(sn+minP);var x=Math.max(p,f,minS);return Math.ceil(x/50)*50;}
+function isMultiDurationPlan(p){var t=String((p&&(p.duration_translation||p.name))||'').toLowerCase();var unit=String((p&&p.duration_type)||'').toLowerCase().replace(/s$/,'');var n=Number(p&&p.duration_in_type||0);if(n===1&&(unit==='hour'||unit==='day'))return true;if(/\b1\s*hour\b/.test(t)||/\b1\s*day\b/.test(t))return true;return false;}
+function multiDurationKind(p){var t=String((p&&p.duration_translation)||'').toLowerCase();var unit=String((p&&p.duration_type)||'').toLowerCase();if(unit.indexOf('hour')>=0||/\bhour\b/.test(t))return 'hour';return 'day';}
+
 const CARRIER_ADDON_NGN=800, AREA_ADDON_NGN=1000;
 const POPULAR=['whatsapp','telegram','google','facebook','instagram','tiktok','twitter','x','discord','paypal','amazon','apple','microsoft'];
 const CACHE_KEY='mj_gotsms_services_v2';
@@ -360,7 +379,9 @@ function paintServices(list){
   }).join('');
   grid.querySelectorAll('.svc-tile').forEach(function(tile){
     tile.onclick=function(){
-      selectedService={id:tile.getAttribute('data-id'),name:tile.getAttribute('data-name')};
+      var svc={id:tile.getAttribute('data-id'),name:tile.getAttribute('data-name')};
+      if(multiMode){ toggleMultiService(svc); return; }
+      selectedService=svc;
       openDetail();
     };
   });
@@ -531,6 +552,7 @@ function renderDetailForm(){
     selectedPlan=null;
     return;
   }
+  if(multiMode){plans=(plans||[]).filter(isMultiDurationPlan).map(function(p){var k=multiDurationKind(p);var u=MULTI_PACK_USD[k]||5;var c=Object.assign({},p);c.price_ngn=multiSellNgn(u);c.price_usd=u;return c;});}
   var planHtml=plans.map(function(p,i){
     var available=planIsAvailable(p);
     var label=p.duration_translation||(p.duration_in_type+' '+p.duration_type);
@@ -541,7 +563,7 @@ function renderDetailForm(){
     '<label class="f">Duration</label><div class="plan-grid" id="planList">'+planHtml+'</div>'+
     '<label class="f">Carrier (optional)</label><select class="f" id="carrierSel">'+carHtml+'</select>'+
     '<label class="f">Area code (optional)</label><select class="f" id="areaCode">'+buildAreaOptions()+'</select>'+
-    '<label class="f">Quantity (1–25)</label><div class="qty"><button type="button" id="qtyMinus">−</button><span id="qtyVal" style="font-weight:800;min-width:28px;text-align:center">1</span><button type="button" id="qtyPlus">+</button></div>'+
+    '+(multiMode?'':'<label class="f">Quantity (1–25)</label><div class="qty"><button type="button" id="qtyMinus">−</button><span id="qtyVal" style="font-weight:800;min-width:28px;text-align:center">1</span><button type="button" id="qtyPlus">+</button></div>'+
     '<div class="toggle-row"><div><div class="t-label">Auto-renew</div><div class="t-hint">Renew automatically when this period ends (wallet charged)</div></div><label class="switch"><input type="checkbox" id="autoRenewChk"><span class="slider"></span></label></div>'+
     '<div class="total"><div class="lbl">Total</div><div class="amt" id="totalAmt">₦0</div><div class="total-break" id="totalBreak"><div class="tb-row base" id="tbBase" style="display:none"><span>Rental duration</span><span></span></div><div class="tb-row" id="tbCarrier" style="display:none"><span>Preferred carrier</span><span></span></div><div class="tb-row" id="tbArea" style="display:none"><span>Area code preference</span><span></span></div></div></div>'+
     '<button type="button" class="btn-buy" id="rentBtn" disabled>Rent number</button>'+
@@ -826,6 +848,7 @@ function showRentToast(msg, ok){
   window.__toastT=setTimeout(function(){ t.classList.remove('on'); }, 3500);
 }
 async function doRent(){
+  if(multiMode) qty=1;
   if(rentBusy||!selectedPlan)return;rentBusy=true;
   var btn=document.getElementById('confirmBuyBtn')||document.getElementById('rentBtn');
   var rentBtn=document.getElementById('rentBtn');
@@ -837,7 +860,23 @@ async function doRent(){
   var body={plan_id:selectedPlan.id,service_id:selectedService&&selectedService.id,quoted_price_ngn:(function(){var b=Number(selectedPlan.price_ngn||0)*qty;var a=0;var c=document.getElementById("carrierSel");if(c&&c.value)a+=Number(selectedPlan.carrier_addon_ngn||CARRIER_ADDON_NGN);var ar="";try{ar=typeof resolveAreaCode==="function"?resolveAreaCode():"";}catch(e){}if(!ar){var ae=document.getElementById("areaCode");if(ae)ar=String(ae.value||"").replace(/\D/g,"");}if(ar&&String(ar).replace(/\D/g,"").length>=3)a+=Number(selectedPlan.area_addon_ngn||AREA_ADDON_NGN);return b+a;})(),quoted_usd:selectedPlan.price_usd||selectedPlan.price||null,auto_renew:(function(){var c=document.getElementById("autoRenewChk");return !!(c&&c.checked);})()};
   var area=resolveAreaCode();if(area)body.area_code=area;
   var car=document.getElementById('carrierSel').value;if(car)body.cellular_carrier_id=car;
-  var j;if(qty>1){body.quantity=qty;j=await api('rent_bulk',{method:'POST',body:body});}else{j=await api('rent',{method:'POST',body:body});}
+  var j;
+  if(multiMode){
+    if(!multiSelected||multiSelected.length!==2){
+      rentBusy=false;
+      if(btn){btn.disabled=false;btn.textContent='Confirm Purchase';}
+      if(rentBtn){rentBtn.disabled=false;rentBtn.textContent='Rent number';}
+      var msg='Select exactly 2 services for a multi-service pack.';
+      if(errEl)errEl.textContent=msg; showRentToast(msg,false);
+      return;
+    }
+    body.service_ids=multiSelected.map(function(s){return s.id;});
+    body.service_names=multiSelected.map(function(s){return s.name;});
+    body.service_id=multiSelected[0].id;
+    delete body.quantity;
+    j=await api('rent_multi',{method:'POST',body:body});
+  }else if(qty>1){body.quantity=qty;j=await api('rent_bulk',{method:'POST',body:body});}
+  else{j=await api('rent',{method:'POST',body:body});}
   rentBusy=false;
   if(btn){btn.disabled=false;btn.textContent='Confirm Purchase';}
   if(rentBtn){rentBtn.disabled=false;rentBtn.textContent='Rent number';}
@@ -884,6 +923,54 @@ async function doRent(){
 document.addEventListener('change',function(e){
   if(e.target&&(e.target.id==='carrierSel'||e.target.id==='areaCode'||e.target.id==='areaCodeSel'||e.target.id==='areaSelect')) updateTotal();
 });
+
+
+document.getElementById('multiModeToggle')&&document.getElementById('multiModeToggle').addEventListener('change',function(){
+  multiMode=!!this.checked;
+  multiSelected=[];
+  selectedService=null;
+  selectedPlan=null;
+  var h=document.getElementById('multiHint');
+  if(h) h.style.display=multiMode?'block':'none';
+  var p=document.getElementById('multiPicks');
+  if(p) p.textContent='';
+  document.querySelectorAll('.svc-tile').forEach(function(t){ t.setAttribute('aria-pressed','false'); t.style.outline=''; });
+});
+function syncMultiPicks(){
+  var p=document.getElementById('multiPicks');
+  if(!p) return;
+  if(!multiSelected.length){ p.textContent='No services selected yet.'; return; }
+  p.textContent=multiSelected.map(function(s){return s.name;}).join(' + ') + (multiSelected.length<2?' — pick '+(2-multiSelected.length)+' more':' — choose 1 hour or 1 day below');
+}
+function toggleMultiService(svc){
+  if(!svc||!svc.id) return;
+  var idx=multiSelected.findIndex(function(s){return String(s.id)===String(svc.id);});
+  if(idx>=0) multiSelected.splice(idx,1);
+  else {
+    if(multiSelected.length>=2){ showRentToast('Only 2 services allowed in a multi-pack', false); return; }
+    multiSelected.push(svc);
+  }
+  document.querySelectorAll('.svc-tile').forEach(function(t){
+    var id=t.getAttribute('data-id');
+    var on=multiSelected.some(function(s){return String(s.id)===String(id);});
+    t.setAttribute('aria-pressed', on?'true':'false');
+    t.style.outline=on?'2px solid var(--primary)':'';
+  });
+  syncMultiPicks();
+  if(multiSelected.length===2){
+    selectedService=multiSelected[0];
+    openDetail();
+  }
+}
+document.getElementById('svcGrid')&&document.getElementById('svcGrid').addEventListener('click',function(e){
+  if(!multiMode) return;
+  var tile=e.target.closest('.svc-tile');
+  if(!tile) return;
+  e.preventDefault(); e.stopPropagation();
+  var id=tile.getAttribute('data-id');
+  var svc=allServices.find(function(s){return String(s.id)===String(id);});
+  if(svc) toggleMultiService(svc);
+}, true);
 
 loadServices();
 })();
