@@ -503,32 +503,46 @@ document.getElementById('changeServiceBtn').onclick=function(){
   document.getElementById('serviceStep').style.display='block';
   selectedService=null;selectedPlan=null;
 };
+async function loadCarriers(){
+  try{
+    var c=await api('carriers');
+    var list=(c&&c.data)||[];
+    // Normalize supplier carrier objects → {id,name}
+    carriers=(Array.isArray(list)?list:[]).map(function(x){
+      return {
+        id: String(x.id||x.cellular_carrier_id||x.uuid||''),
+        name: String(x.name||x.title||x.carrier||x.label||'Carrier')
+      };
+    }).filter(function(x){ return x.id && x.name; });
+  }catch(e){ carriers=carriers||[]; }
+}
 async function loadPlans(){
   var body=document.getElementById('detailBody');
   if(body) body.innerHTML='<div class="sk-line"></div><div class="sk-line"></div><div class="sk-line"></div>';
-  var j=await api('plans',{query:'service_id='+encodeURIComponent(selectedService.id)+'&per_page=100&include_unavailable=1'});
+  // Load live carriers from supplier in parallel with plans
+  var planP=api('plans',{query:'service_id='+encodeURIComponent(selectedService.id)+'&per_page=100&include_unavailable=1'});
+  var carP=loadCarriers();
+  var j=await planP;
+  await carP;
   if(!j||j.success===false){
     plans=[];
     if(body) body.innerHTML='<div class="empty">'+(j&&j.message?String(j.message):'Could not load plans. Pull to refresh or try again.')+'</div>';
     return;
   }
-  // Request supplier-unavailable plans too so sold-out durations can be shown before checkout.
   plans=(j.data||[]);
   var order={min:0,hour:1,day:2,week:3,month:4,year:5};
   plans.sort(function(a,b){var da=order[a.duration_type]??9,db=order[b.duration_type]??9;if(da!==db)return da-db;return(a.duration_in_type||0)-(b.duration_in_type||0);});
   renderDetailForm();
 }
 function buildAreaOptions(){
-  var html='<option value="">Any Area Code</option>';
-  US_AREA_CODES.forEach(function(st){
-    html+='<optgroup label="'+esc(st.state)+'">';
-    html+='<option value="__random_'+esc(st.state)+'">'+esc(st.state)+' (random area code)</option>';
-    st.codes.forEach(function(x){
-      html+='<option value="'+esc(x.c)+'">'+esc(x.c)+(x.carrier?' ('+x.carrier+')':'')+'</option>';
-    });
-    html+='</optgroup>';
-  });
-  return html;
+  /* GotSMS has no area-code catalogue API — area_code is an optional filter on rent
+     (2–6 digits). Keep a free input so users only request codes the supplier can match. */
+  return '';
+}
+function areaCodeFieldHtml(){
+  return '<label class="f">Area code (optional)</label>'+
+    '<input class="f" id="areaCode" type="tel" inputmode="numeric" maxlength="6" placeholder="e.g. 212 — leave blank for any" autocomplete="off">'+
+    '<div class="helper-text" style="margin-top:4px;font-size:11px">Only if you need a specific US area code. Availability is checked when you rent.</div>';
 }
 function planIsAvailable(p){
   if(!p) return false;
@@ -564,7 +578,9 @@ function renderDetailForm(){
     var label=p.duration_translation||(p.duration_in_type+' '+p.duration_type);
     return '<div class="plan'+(available?'':' sold-out')+'" data-i="'+i+'"'+(available?'':' aria-disabled="true" title="This duration is sold out"')+'><div class="dur">'+esc(label)+'</div><div class="price">'+fmtNgn(p.price_ngn)+'</div>'+(available?'':'<span class="stock-status">Sold out</span>')+'</div>';
   }).join('');
-  var carHtml='<option value="">Any Carrier</option>'+carriers.map(function(c){return '<option value="'+esc(c.id)+'">'+esc(c.name)+'</option>';}).join('');
+  var carHtml='<option value="">Any carrier (supplier default)</option>';
+  if(carriers&&carriers.length){ carHtml+=carriers.map(function(c){return '<option value="'+esc(c.id)+'">'+esc(c.name)+'</option>';}).join(''); }
+  else { carHtml+='<option value="" disabled>Carriers loading…</option>'; }
   var qtyBlock = multiMode ? '' : (
     '<label class="f">Quantity (1–25)</label><div class="qty"><button type="button" id="qtyMinus">−</button><span id="qtyVal" style="font-weight:800;min-width:28px;text-align:center">1</span><button type="button" id="qtyPlus">+</button></div>'
   );
@@ -574,7 +590,7 @@ function renderDetailForm(){
   body.innerHTML=
     '<label class="f">Duration</label><div class="plan-grid" id="planList">'+planHtml+'</div>'+
     '<label class="f">Carrier (optional)</label><select class="f" id="carrierSel">'+carHtml+'</select>'+
-    '<label class="f">Area code (optional)</label><select class="f" id="areaCode">'+buildAreaOptions()+'</select>'+
+    areaCodeFieldHtml()+
     qtyBlock +
     renewBlock +
     '<div class="total"><div class="lbl">Total</div><div class="amt" id="totalAmt">₦0</div><div class="total-break" id="totalBreak"><div class="tb-row base" id="tbBase" style="display:none"><span>Rental duration</span><span></span></div><div class="tb-row" id="tbCarrier" style="display:none"><span>Preferred carrier</span><span></span></div><div class="tb-row" id="tbArea" style="display:none"><span>Area code preference</span><span></span></div></div></div>'+
@@ -615,11 +631,41 @@ function renderDetailForm(){
     var grid=document.getElementById('planList');
     if(grid) grid.insertAdjacentElement('afterend',note);
   }
-  document.getElementById('qtyMinus').onclick=function(){if(qty>1){qty--;document.getElementById('qtyVal').textContent=qty;updateTotal();}};
-  document.getElementById('qtyPlus').onclick=function(){if(qty<25){qty++;document.getElementById('qtyVal').textContent=qty;updateTotal();}};
-  document.getElementById('rentBtn').onclick=function(){
-    confirmRentAvailability().then(function(ok){ if(ok) openPurchaseModal(); });
-  };
+  var qm=document.getElementById('qtyMinus');
+  var qp=document.getElementById('qtyPlus');
+  if(qm) qm.onclick=function(){if(qty>1){qty--;var qv=document.getElementById('qtyVal');if(qv)qv.textContent=qty;updateTotal();}};
+  if(qp) qp.onclick=function(){if(qty<25){qty++;var qv=document.getElementById('qtyVal');if(qv)qv.textContent=qty;updateTotal();}};
+  var carSel=document.getElementById('carrierSel');
+  var areaSel=document.getElementById('areaCode');
+  if(carSel) carSel.onchange=function(){ updateTotal(); };
+  if(areaSel) areaSel.oninput=areaSel.onchange=function(){ updateTotal(); };
+  var rentBtn=document.getElementById('rentBtn');
+  if(rentBtn){
+    rentBtn.onclick=function(){
+      if(rentBtn.disabled) return;
+      rentBtn.disabled=true;
+      var prev=rentBtn.textContent;
+      rentBtn.textContent='Checking…';
+      confirmRentAvailability().then(function(ok){
+        if(ok){
+          openPurchaseModal();
+          rentBtn.disabled=false;
+          rentBtn.textContent=prev||'Rent number';
+        } else {
+          // confirmRentAvailability sets sold out / errors; re-enable if still available
+          if(selectedPlan && (typeof planIsAvailable!=='function' || planIsAvailable(selectedPlan))){
+            rentBtn.disabled=false;
+            rentBtn.textContent='Rent number';
+          }
+        }
+      }).catch(function(){
+        rentBtn.disabled=false;
+        rentBtn.textContent='Rent number';
+        var err=document.getElementById('rentErr');
+        if(err) err.textContent='Something went wrong. Try again.';
+      });
+    };
+  }
   syncRentButton();
 }
 /** Re-check GotSMS stock before checkout (no wallet charge). */
@@ -753,15 +799,10 @@ function updateTotal(){
   }
 }
 function resolveAreaCode(){
-  var v=String(document.getElementById('areaCode').value||'');
-  if(!v)return '';
-  if(v.indexOf('__random_')===0){
-    var state=v.replace('__random_','');
-    var st=US_AREA_CODES.find(function(s){return s.state===state;});
-    if(st&&st.codes.length)return st.codes[Math.floor(Math.random()*st.codes.length)].c;
-    return '';
-  }
-  return v.replace(/\D/g,'').slice(0,6);
+  var el=document.getElementById('areaCode');
+  if(!el) return '';
+  var v=String(el.value||'').replace(/\D/g,'').slice(0,6);
+  return v;
 }
 function showSuccess(rent){
   var box=document.getElementById('successBox');
@@ -847,7 +888,11 @@ document.getElementById('confirmBuyBtn').onclick=function(){
       showRentToast('No number available for this service right now.', false);
       return;
     }
-    doRent();
+    if(btn) btn.textContent='Purchasing…';
+    return doRent();
+  }).catch(function(){
+    if(btn){ btn.disabled=false; btn.textContent='Confirm Purchase'; }
+    showRentToast('Could not complete purchase. Try again.', false);
   });
 };
 
