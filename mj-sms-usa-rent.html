@@ -305,21 +305,7 @@ function serviceLogoHtml(name){
   return '<div class="svc-icon" style="background:'+bg+'"><i class="'+fa+'"></i></div>';
 }
 
-const US_AREA_CODES=[
-  {state:'Alabama',codes:[{c:'256',carrier:'T-Mobile'},{c:'938',carrier:'T-Mobile'},{c:'205',carrier:''},{c:'251',carrier:''}]},
-  {state:'Arizona',codes:[{c:'480',carrier:'T-Mobile'},{c:'623',carrier:'T-Mobile'},{c:'602',carrier:''},{c:'520',carrier:''}]},
-  {state:'California',codes:[{c:'213',carrier:''},{c:'310',carrier:''},{c:'415',carrier:''},{c:'619',carrier:''},{c:'818',carrier:''}]},
-  {state:'Colorado',codes:[{c:'303',carrier:''},{c:'720',carrier:''}]},
-  {state:'Florida',codes:[{c:'305',carrier:''},{c:'786',carrier:''},{c:'407',carrier:''},{c:'954',carrier:''}]},
-  {state:'Georgia',codes:[{c:'404',carrier:''},{c:'678',carrier:''},{c:'770',carrier:''}]},
-  {state:'Illinois',codes:[{c:'312',carrier:''},{c:'773',carrier:''},{c:'847',carrier:''}]},
-  {state:'Massachusetts',codes:[{c:'617',carrier:''},{c:'857',carrier:''}]},
-  {state:'New York',codes:[{c:'212',carrier:''},{c:'646',carrier:''},{c:'718',carrier:''},{c:'917',carrier:''}]},
-  {state:'Ohio',codes:[{c:'216',carrier:''},{c:'614',carrier:''}]},
-  {state:'Pennsylvania',codes:[{c:'215',carrier:''},{c:'412',carrier:''},{c:'610',carrier:''}]},
-  {state:'Texas',codes:[{c:'214',carrier:''},{c:'281',carrier:''},{c:'512',carrier:''},{c:'713',carrier:''},{c:'832',carrier:''}]},
-  {state:'Washington',codes:[{c:'206',carrier:''},{c:'253',carrier:''},{c:'425',carrier:''}]}
-];
+/* Area codes: no supplier catalogue — optional digit filter only */
 
 function esc(s){return String(s==null?'':s).replace(/[&<>"']/g,function(c){return({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c];});}
 function fmtNgn(n){return '₦'+Number(n||0).toLocaleString('en-NG');}
@@ -491,10 +477,16 @@ document.getElementById('svcSearch').oninput=renderServices;
 function openDetail(){
   document.getElementById('serviceStep').style.display='none';
   document.getElementById('detailStep').style.display='block';
-  var logo=serviceLogo(selectedService.name);
   var nameEl=document.getElementById('selectedServiceName');
-  if(logo)nameEl.innerHTML='<img class="mini-logo" src="'+esc(logo)+'" alt="" onerror="this.style.display=\'none\'">'+esc(selectedService.name);
-  else nameEl.textContent=selectedService.name;
+  if(multiMode && multiSelected && multiSelected.length>=2){
+    var label=multiSelected.map(function(s){return s.name;}).join(' + ');
+    nameEl.innerHTML='<span style="font-weight:800">'+esc(label)+'</span><span style="display:block;font-size:11px;font-weight:600;color:var(--muted);margin-top:2px">Multi-pack · 2 services · one number</span>';
+  } else {
+    var logo=selectedService?serviceLogo(selectedService.name):null;
+    var nm=selectedService?selectedService.name:'—';
+    if(logo) nameEl.innerHTML='<img class="mini-logo" src="'+esc(logo)+'" alt="" onerror="this.style.display=\'none\'">'+esc(nm);
+    else nameEl.textContent=nm;
+  }
   document.getElementById('detailBody').innerHTML='<div class="sk-line"></div><div class="sk-line"></div><div class="sk-line"></div>';
   selectedPlan=null;qty=1;loadPlans();
 }
@@ -507,14 +499,14 @@ async function loadCarriers(){
   try{
     var c=await api('carriers');
     var list=(c&&c.data)||[];
-    // Normalize supplier carrier objects → {id,name}
+    // Live GotSMS carriers only (currently AT&T, T-Mobile, Verizon)
     carriers=(Array.isArray(list)?list:[]).map(function(x){
       return {
         id: String(x.id||x.cellular_carrier_id||x.uuid||''),
         name: String(x.name||x.title||x.carrier||x.label||'Carrier')
       };
     }).filter(function(x){ return x.id && x.name; });
-  }catch(e){ carriers=carriers||[]; }
+  }catch(e){ /* keep previous if any */ }
 }
 async function loadPlans(){
   var body=document.getElementById('detailBody');
@@ -541,8 +533,8 @@ function buildAreaOptions(){
 }
 function areaCodeFieldHtml(){
   return '<label class="f">Area code (optional)</label>'+
-    '<input class="f" id="areaCode" type="tel" inputmode="numeric" maxlength="6" placeholder="e.g. 212 — leave blank for any" autocomplete="off">'+
-    '<div class="helper-text" style="margin-top:4px;font-size:11px">Only if you need a specific US area code. Availability is checked when you rent.</div>';
+    '<input class="f" id="areaCode" type="tel" inputmode="numeric" maxlength="6" placeholder="e.g. 212" autocomplete="off">'+
+    '<div class="helper-text" style="margin-top:4px;font-size:11px">Supplier does not publish a full area-code list. Enter 3 digits only if you need a specific code; leave blank for any available number. If that code is out of stock, rental will fail and you are not charged.</div>';
 }
 function planIsAvailable(p){
   if(!p) return false;
@@ -589,7 +581,7 @@ function renderDetailForm(){
   );
   body.innerHTML=
     '<label class="f">Duration</label><div class="plan-grid" id="planList">'+planHtml+'</div>'+
-    '<label class="f">Carrier (optional)</label><select class="f" id="carrierSel">'+carHtml+'</select>'+
+    '<label class="f">Carrier (optional)</label><select class="f" id="carrierSel">'+carHtml+'</select><div class="helper-text" style="margin-top:4px;font-size:11px">Carriers from supplier right now (AT&amp;T, T-Mobile, Verizon when listed).</div>'+
     areaCodeFieldHtml()+
     qtyBlock +
     renewBlock +
@@ -816,7 +808,7 @@ function showSuccess(rent){
 
 function openPurchaseModal(){
   if(!selectedPlan||!selectedService)return;
-  document.getElementById('psService').textContent=selectedService.name||'—';
+  document.getElementById('psService').textContent=(multiMode&&multiSelected&&multiSelected.length>=2)?multiSelected.map(function(s){return s.name;}).join(' + '):(selectedService&&selectedService.name)||'—';
   document.getElementById('psDuration').textContent=selectedPlan.duration_translation||((selectedPlan.duration_in_type||'')+' '+(selectedPlan.duration_type||''))||'—';
   var carSel=document.getElementById('carrierSel');
   var carTxt='Any carrier';
