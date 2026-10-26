@@ -299,6 +299,11 @@ body{font-family:'Plus Jakarta Sans',system-ui,-apple-system,sans-serif;backgrou
     var autoOn = !!(rent.auto_renew || rent.renewal || rent.is_auto_renew);
     var ph = splitPhone(rent.phone || rent.number);
     var renewPrice = Math.round(Number(rent.renew_price_ngn || rent.price_ngn || rent.price || 0));
+    var isMultiPack = /multi-pack|multipack|\[multi\]/i.test(String(
+      (rent && rent.service_name) ||
+      (rent && rent.service && rent.service.name) ||
+      (rent && rent.plan_label) || ''
+    ));
 
     var badge = document.getElementById('statusBadge');
     if(badge){ badge.textContent = active?'Active':(st.terminal?'Cancelled':(st.status==='completed'||st.status==='complete'?'Completed':'Ended')); badge.className = 'otp-tag'+(active?'':' ended'); }
@@ -743,12 +748,20 @@ body{font-family:'Plus Jakarta Sans',system-ui,-apple-system,sans-serif;backgrou
         }
       }
     } catch(_){}
-    render();
+    try {
+      render();
+    } catch(err){
+      console.error('render failed', err);
+      document.getElementById('main').innerHTML = '<div class="empty">Could not open this rental.<br><a href="mj-sms-history.html?view=rent">Back to history</a></div>';
+      return;
+    }
     if(pollTimer) clearInterval(pollTimer);
     pollCount = 0;
     pollTimer = setInterval(pollTick, 8000);
   }
-  boot();
+  boot().catch(function(){
+    document.getElementById('main').innerHTML = '<div class="empty">Could not load rental. <a href="mj-sms-history.html?view=rent">Back to history</a></div>';
+  });
 })();
 </script>
 </body>
