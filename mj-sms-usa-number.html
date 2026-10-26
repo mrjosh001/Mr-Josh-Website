@@ -277,7 +277,8 @@ body{font-family:'Plus Jakarta Sans',system-ui,-apple-system,sans-serif;backgrou
       main.innerHTML = '<div class="empty">Rental not found for your account.<br><a href="mj-sms-history.html?view=rent">Back to history</a></div>';
       return;
     }
-    var svc = (rent.service && rent.service.name) || rent.service_name || 'USA rental';
+    var rawName = String((rent.service && rent.service.name) || rent.service_name || 'USA rental');
+    var svc = rawName;
     var dur = rent.duration_translation || rent.duration || rent.plan_duration || (rent.plan && rent.plan.duration_translation) || '';
     var carrier = '';
     if (rent.cellular_carrier && rent.cellular_carrier.name) carrier = rent.cellular_carrier.name;
@@ -285,13 +286,32 @@ body{font-family:'Plus Jakarta Sans',system-ui,-apple-system,sans-serif;backgrou
     else if (typeof rent.cellular_carrier === 'string') carrier = rent.cellular_carrier;
     else carrier = rent.carrier_name || rent.carrier || (rent.meta && (rent.meta.carrier || rent.meta.cellular_carrier)) || '';
     var area = rent.area_code || (rent.meta && rent.meta.area_code) || '';
-    // Parse "WhatsApp · 1 day · T-Mobile · Area 214" from stored service_name
-    if ((!dur || !carrier) && rent.service_name && String(rent.service_name).indexOf('·')>=0) {
-      var parts=String(rent.service_name).split('·').map(function(x){return x.trim();});
-      if(parts[0]) svc=parts[0];
-      if(!dur && parts[1]) dur=parts[1];
-      if(!carrier && parts[2] && !/^Area /i.test(parts[2])) carrier=parts[2];
-      if(!area){ var ap=parts.filter(function(p){return /^Area /i.test(p);})[0]; if(ap) area=ap.replace(/^Area /i,''); }
+    var multiServiceNames = [];
+    // Parse stored labels: "WhatsApp + Telegram · Multi-pack · 1 hour · T-Mobile"
+    if (rawName.indexOf('·')>=0 || /\+/.test(rawName) || /multi-pack/i.test(rawName)) {
+      var parts=String(rawName).split('·').map(function(x){return x.trim();}).filter(Boolean);
+      var head=parts[0]||rawName;
+      if(/\+/.test(head)){
+        multiServiceNames=head.split('+').map(function(x){return x.trim();}).filter(Boolean);
+        svc=multiServiceNames.join(' + ');
+      } else if(parts[0]) {
+        svc=parts[0];
+      }
+      parts.forEach(function(p){
+        if(/^multi-pack/i.test(p)) return;
+        if(/^(1\s*hour|1\s*day|\d+\s*(hour|day|month|year)s?)$/i.test(p) && !dur) dur=p;
+        else if(/^Area\s+/i.test(p) && !area) area=p.replace(/^Area\s+/i,'');
+        else if(!carrier && !/^multi/i.test(p) && !/\+/.test(p) && p!==svc && multiServiceNames.indexOf(p)<0) carrier=p;
+      });
+      // duration may be "Multi-pack · 1 hour" style second part
+      if(!dur){
+        var dp=parts.find(function(p){return /\b(hour|day|month|year|hr)\b/i.test(p);});
+        if(dp) dur=dp.replace(/multi-pack\s*·?\s*/i,'').trim();
+      }
+    }
+    var isMultiPack = multiServiceNames.length>=2 || /multi-pack|multipack|\[multi\]/i.test(rawName);
+    if(isMultiPack && multiServiceNames.length<2 && rent.services && Array.isArray(rent.services)){
+      multiServiceNames=rent.services.map(function(s){return typeof s==='string'?s:(s&&s.name)||'';}).filter(Boolean);
     }
     var st = computeState();
     var active = st.active;
@@ -299,11 +319,6 @@ body{font-family:'Plus Jakarta Sans',system-ui,-apple-system,sans-serif;backgrou
     var autoOn = !!(rent.auto_renew || rent.renewal || rent.is_auto_renew);
     var ph = splitPhone(rent.phone || rent.number);
     var renewPrice = Math.round(Number(rent.renew_price_ngn || rent.price_ngn || rent.price || 0));
-    var isMultiPack = /multi-pack|multipack|\[multi\]/i.test(String(
-      (rent && rent.service_name) ||
-      (rent && rent.service && rent.service.name) ||
-      (rent && rent.plan_label) || ''
-    ));
 
     var badge = document.getElementById('statusBadge');
     if(badge){ badge.textContent = active?'Active':(st.terminal?'Cancelled':(st.status==='completed'||st.status==='complete'?'Completed':'Ended')); badge.className = 'otp-tag'+(active?'':' ended'); }
@@ -315,7 +330,7 @@ body{font-family:'Plus Jakarta Sans',system-ui,-apple-system,sans-serif;backgrou
           '<div class="n3-lab">Your number</div>'+
           '<div class="numrow">'+(ph.dial?'<span class="dial-code">'+ph.dial+'</span>':'')+'<div class="national-num" id="phoneEl">'+esc(ph.shown)+'</div>'+
             '<button type="button" class="copy-icon" id="btnCopy" aria-label="Copy number"><i class="fa-regular fa-copy"></i></button></div>'+
-          '<div class="chips"><span class="chip">'+esc(svc)+'</span>'+(dur?'<span class="chip">'+esc(dur)+'</span>':'')+(carrier?'<span class="chip">'+esc(carrier)+'</span>':'')+(area?'<span class="chip">Area '+esc(area)+'</span>':'')+'</div>'+
+          '<div class="chips">'+(isMultiPack&&multiServiceNames.length?multiServiceNames.map(function(n){return '<span class="chip">'+esc(n)+'</span>';}).join('')+'<span class="chip">Multi-pack</span>':'<span class="chip">'+esc(svc)+'</span>')+(dur?'<span class="chip">'+esc(dur)+'</span>':'')+(carrier?'<span class="chip">'+esc(carrier)+'</span>':'')+(area?'<span class="chip">Area '+esc(area)+'</span>':'')+'</div>'+
           '<div class="timerow"><span class="n3-lab">Time left</span><span class="n3-time" id="cd">—</span></div>'+
           '<div class="n3-track" id="cdTrack" aria-hidden="true" style="display:none"><div class="n3-bar" id="cdBar"></div></div>'+
         '</div>'+
@@ -339,7 +354,7 @@ body{font-family:'Plus Jakarta Sans',system-ui,-apple-system,sans-serif;backgrou
           '<div id="refundSlot">'+
             (canCancel ? '<button type="button" class="n3-btn n3-danger n3-sm" id="btnCancel"><i class="fa-solid fa-ban"></i> Cancel &amp; refund</button>' : (active && hasReceivedCode ? LOCKED : ''))+
           '</div>'+
-          (active ? '<div class="n3-tip"><b>Tip:</b> use a USA VPN when verifying. If no SMS arrives, tap Wake up, then request the code in the app.</div>' : '')+
+          (active ? '<div class="n3-tip"><b>Tip:</b> use a USA VPN when verifying. '+(isMultiPack?'Codes for <b>both apps</b> land in this same inbox. ':'')+'If no SMS arrives, tap Wake up, then request the code in the app.</div>' : '')+
         '</div></div>'+
         /* 4. the inbox */
         '<div class="inbox-head"><h2>Inbox</h2><div class="pills"><span class="pill" id="messageCount">0 messages</span>'+(active?'<span class="pill live">Live</span>':'')+'</div></div>'+
@@ -360,7 +375,7 @@ body{font-family:'Plus Jakarta Sans',system-ui,-apple-system,sans-serif;backgrou
       setFlash('Waking number — please wait…', true);
       var j = await api('wake', { method:'POST', body:{ rent_id: rentId } });
       wake.classList.remove('is-busy'); wake.disabled = false; wake.innerHTML = prev;
-      setFlash(j.message || (j.success ? 'Number is ready for SMS' : 'Wake failed'), !!j.success);
+      setFlash(j.message || (j.success ? (isMultiPack?'Number ready — both services can receive SMS':'Number is ready for SMS') : 'Wake failed'), !!j.success);
       if(j.success) loadMessages();
     };
     document.getElementById('btnRefresh').onclick = async function(){
