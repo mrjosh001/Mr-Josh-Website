@@ -362,8 +362,8 @@ body{font-family:'Plus Jakarta Sans',system-ui,-apple-system,sans-serif;backgrou
         '</div>'+
         /* 2. primary actions */
         '<div class="n3-two">'+
-          (rent.can_wake_up !== false && active ? '<button type="button" class="n3-btn n3-primary" id="btnWake"><i class="fa-solid fa-bolt"></i> Wake up</button>' : '')+
-          '<button type="button" class="n3-btn n3-ghost" id="btnRefresh" style="'+(rent.can_wake_up !== false && active ? '' : 'grid-column:1/-1')+'"><i class="fa-solid fa-rotate"></i> Refresh SMS</button>'+
+          (active ? '<button type="button" class="n3-btn n3-primary" id="btnWake"><i class="fa-solid fa-bolt"></i> Wake up</button>' : '')+
+          '<button type="button" class="n3-btn n3-ghost" id="btnRefresh" style="'+(active ? '' : 'grid-column:1/-1')+'"><i class="fa-solid fa-rotate"></i> Refresh SMS</button>'+
         '</div>'+
         '<div class="flash" id="flash"></div>'+
         /* 3. all other controls — always visible, just compact */
@@ -425,17 +425,20 @@ body{font-family:'Plus Jakarta Sans',system-ui,-apple-system,sans-serif;backgrou
         ar.checked = !want;
         setFlash(j.message || 'Could not update auto-renew', false);
       } else {
-        rent.auto_renew = want;
-        // Keep the renewal price separate from what was paid, so the refund modal never shows the wrong amount.
+        // Trust server final state (all services on multi-pack)
+        var on = (j.data && typeof j.data.auto_renew === 'boolean') ? !!j.data.auto_renew : want;
+        ar.checked = on;
+        rent.auto_renew = on;
+        rent.is_included_for_next_renewal = on;
         if(j.data && j.data.renew_price_ngn) rent.renew_price_ngn = j.data.renew_price_ngn;
         var hint = document.getElementById('autoRenewHint');
         var rp = Math.round(Number(rent.renew_price_ngn || rent.price_ngn || 0));
-        if(hint && rp){
-          hint.textContent = want
+        if(hint){
+          hint.textContent = on
             ? ('Charges ₦'+rp.toLocaleString()+' from your wallet when this period ends.')
             : 'Auto-renew is off.';
         }
-        setFlash(j.message || (want ? 'Auto-renew is on' : 'Auto-renew is off'), true);
+        setFlash(j.message || (on ? 'Auto-renew is on' : 'Auto-renew is off'), true);
       }
     };
     var b1 = document.getElementById('btnAddService'); if(b1) b1.onclick = openAddServiceModal;
