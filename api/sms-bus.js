@@ -291,11 +291,51 @@ function gotsmsNotesMeta(notes) {
       const o = JSON.parse(s);
       return {
         inbox: Array.isArray(o.inbox) ? o.inbox : parseRentInboxNotes(notes),
-        wh_ids: Array.isArray(o.wh_ids) ? o.wh_ids.map(String) : []
+        wh_ids: Array.isArray(o.wh_ids) ? o.wh_ids.map(String) : [],
+        linked_rent_ids: Array.isArray(o.linked_rent_ids) ? o.linked_rent_ids.map(String) : [],
+        multi: !!o.multi,
+        services: Array.isArray(o.services) ? o.services : []
       };
     }
   } catch (_) {}
-  return { inbox: parseRentInboxNotes(notes), wh_ids: [] };
+  return { inbox: parseRentInboxNotes(notes), wh_ids: [], linked_rent_ids: [], multi: false, services: [] };
+}
+
+function gotsmsSerializeNotes(meta) {
+  const m = meta || {};
+  return JSON.stringify({
+    inbox: Array.isArray(m.inbox) ? m.inbox : [],
+    wh_ids: Array.isArray(m.wh_ids) ? m.wh_ids.map(String) : [],
+    linked_rent_ids: Array.isArray(m.linked_rent_ids) ? m.linked_rent_ids.map(String) : [],
+    multi: !!m.multi,
+    services: Array.isArray(m.services) ? m.services : []
+  });
+}
+
+/** All supplier rent IDs for this number/multi-pack (wake, cancel, renew, inbox). */
+async function gotsmsResolveLinkedRentIds(userId, rentId, order) {
+  const ids = new Set();
+  if (rentId) ids.add(String(rentId));
+  const meta = gotsmsNotesMeta(order && order.notes);
+  (meta.linked_rent_ids || []).forEach((x) => { if (x) ids.add(String(x)); });
+  try {
+    if (order && order.phone_number) {
+      const { data: sibs } = await supabase
+        .from('number_orders')
+        .select('idempotency_key, notes')
+        .eq('user_id', userId)
+        .eq('source', 'gotsms')
+        .eq('phone_number', order.phone_number)
+        .limit(20);
+      for (const s of sibs || []) {
+        const k = String(s.idempotency_key || '');
+        if (k.startsWith('gotsms-')) ids.add(k.slice(7));
+        const m = gotsmsNotesMeta(s.notes);
+        (m.linked_rent_ids || []).forEach((x) => { if (x) ids.add(String(x)); });
+      }
+    }
+  } catch (_) {}
+  return [...ids].filter(Boolean);
 }
 
 function gotsmsPackNotes(inbox, whIds) {
@@ -3765,9 +3805,11 @@ export default async function handler(req, res) {
           'Service 2'
         ).replace(/\s*·.*$/,'').trim();
         const durLabel = plan.duration_translation || String(durKey).replace('_', ' ');
-        // Clean storage: "WhatsApp + Telegram · Multi-pack · 1 hour"
         const combinedName = name1 + ' + ' + name2;
         const planLabel = 'Multi-pack · ' + durLabel;
+        const secondaryRentId = (g2.data && g2.data.data && (g2.data.data.id || g2.data.data.rent_id)) || null;
+        const linkedIds = [String(rentId)];
+        if (secondaryRentId && String(secondaryRentId) !== String(rentId)) linkedIds.push(String(secondaryRentId));
 
         try {
           await gotsmsSaveOrder({
@@ -3785,6 +3827,45 @@ export default async function handler(req, res) {
             carrierName: body.carrier_name || null,
             areaCode: areaCode || null
           });
+          try {
+            await supabase.from('number_orders').update({
+              notes: gotsmsSerializeNotes({
+                linked_rent_ids: linkedIds,
+                multi: true,
+                services: [name1, name2],
+                inbox: [],
+                wh_ids: []
+              })
+            }).eq('user_id', auth.userId).eq('idempotency_key', 'gotsms-' + rentId);
+          } catch (ne) { console.warn('[gotsms_rent_multi] notes', ne.message || ne); }
+          if (secondaryRentId && String(secondaryRentId) !== String(rentId)) {
+            try {
+              await gotsmsSaveOrder({
+                userId: auth.userId,
+                customerId: debit.customer_id,
+                rentId: secondaryRentId,
+                phone,
+                serviceName: name2 + ' · Multi-pack link',
+                serviceId: String(serviceIds[1] || ''),
+                priceNgn: 0,
+                supplierUsd: 0,
+                status: 'active',
+                activeTill: rent.active_till || rent.expires_at || null,
+                planLabel: 'Linked',
+                carrierName: null,
+                areaCode: null
+              });
+              await supabase.from('number_orders').update({
+                notes: gotsmsSerializeNotes({
+                  linked_rent_ids: linkedIds,
+                  multi: true,
+                  services: [name1, name2],
+                  inbox: [],
+                  wh_ids: []
+                })
+              }).eq('user_id', auth.userId).eq('idempotency_key', 'gotsms-' + secondaryRentId);
+            } catch (se) { console.warn('[gotsms_rent_multi] secondary save', se.message || se); }
+          }
         } catch (e) {
           console.warn('[gotsms_rent_multi] save order', e.message || e);
         }
@@ -4023,9 +4104,24 @@ export default async function handler(req, res) {
         const body = await readBody(req);
         const rent_id = String(body.rent_id || '').trim();
         if (!rent_id) return json(res, 400, { success: false, message: 'rent_id required' });
-        if (!(await gotsmsAssertOwns(auth.userId, rent_id))) return json(res, 403, { success: false, message: 'Rental not found' });
-        const g = await gotsmsFetch(`/api/numbers/${encodeURIComponent(rent_id)}/wake-up`, { method: 'POST' });
-        return json(res, g.ok ? 200 : g.status || 400, { success: !!g.data?.success, message: gotsmsSafeMsg(g.data?.message, g.ok ? 'Number woken up' : 'Wake up failed'), data: g.data?.data || null });
+        const order = await gotsmsAssertOwns(auth.userId, rent_id);
+        if (!order) return json(res, 403, { success: false, message: 'Rental not found' });
+        const ids = await gotsmsResolveLinkedRentIds(auth.userId, rent_id, order);
+        let anyOk = false;
+        let lastMsg = 'Wake up failed';
+        let lastData = null;
+        for (const id of ids) {
+          try {
+            const g = await gotsmsFetch(`/api/numbers/${encodeURIComponent(id)}/wake-up`, { method: 'POST' });
+            if (g.ok && g.data?.success) { anyOk = true; lastMsg = gotsmsSafeMsg(g.data?.message, 'Number ready for SMS'); lastData = g.data?.data || null; }
+            else if (g.data?.message) lastMsg = gotsmsSafeMsg(g.data.message, lastMsg);
+          } catch (_) {}
+        }
+        return json(res, anyOk ? 200 : 400, {
+          success: anyOk,
+          message: anyOk ? (ids.length > 1 ? 'Wake up sent for all services on this number' : lastMsg) : lastMsg,
+          data: lastData
+        });
       }
 
       
@@ -4058,9 +4154,25 @@ if (method === 'GET' && ga === 'gotsms_messages') {
         if (!auth.ok) return json(res, auth.status, { success: false, message: auth.message });
         const rent_id = String(url.searchParams.get('rent_id') || '').trim();
         if (!rent_id) return json(res, 400, { success: false, message: 'rent_id required' });
-        if (!(await gotsmsAssertOwns(auth.userId, rent_id))) return json(res, 403, { success: false, message: 'Rental not found' });
-        const g = await gotsmsFetch(`/api/numbers/${encodeURIComponent(rent_id)}/messages`);
-        const msgs = Array.isArray(g.data?.data) ? g.data.data : [];
+        const orderMsg = await gotsmsAssertOwns(auth.userId, rent_id);
+        if (!orderMsg) return json(res, 403, { success: false, message: 'Rental not found' });
+        const msgIds = await gotsmsResolveLinkedRentIds(auth.userId, rent_id, orderMsg);
+        const seen = new Set();
+        const msgs = [];
+        let g = { ok: true, data: { success: true, data: [] } };
+        for (const mid of msgIds) {
+          try {
+            const gg = await gotsmsFetch(`/api/numbers/${encodeURIComponent(mid)}/messages`);
+            g = gg;
+            const chunk = Array.isArray(gg.data?.data) ? gg.data.data : [];
+            for (const m of chunk) {
+              const key = String(m.id || m.message_id || ((m.text || m.body || '') + '|' + (m.created_at || m.date || '')));
+              if (seen.has(key)) continue;
+              seen.add(key);
+              msgs.push(m);
+            }
+          } catch (_) {}
+        }
         if (g.ok && msgs.length > 0) {
           try {
             const key = `gotsms-${rent_id}`;
@@ -4282,18 +4394,32 @@ if (method === 'POST' && ga === 'gotsms_toggle_renewal') {
           });
         }
 
-        const g = await gotsmsFetch(
-          `/api/rents/${encodeURIComponent(rent_id)}/renewal/toggle`,
-          { method: 'POST' }
-        );
-        if (!g.ok) {
+        const linkedRenewIds = await gotsmsResolveLinkedRentIds(auth.userId, rent_id, order);
+        let g = { ok: false, data: {} };
+        let anyToggleOk = false;
+        for (const rid of linkedRenewIds) {
+          try {
+            // Toggle each linked rent until state matches desired (GotSMS toggle flips)
+            let liveR = null;
+            try {
+              const curR = await gotsmsFetch(`/api/rents/${encodeURIComponent(rid)}`);
+              liveR = curR.data && (curR.data.data || curR.data);
+            } catch (_) {}
+            const onNow = !!(liveR && (liveR.is_included_for_next_renewal || liveR.auto_renew));
+            if (onNow === wantOn) { anyToggleOk = true; continue; }
+            const gg = await gotsmsFetch(`/api/rents/${encodeURIComponent(rid)}/renewal/toggle`, { method: 'POST' });
+            g = gg;
+            if (gg.ok) anyToggleOk = true;
+          } catch (_) {}
+        }
+        if (!anyToggleOk && !g.ok) {
           return json(res, g.status || 400, {
             success: false,
             message: gotsmsSafeMsg(g.data && g.data.message, 'Could not update auto-renewal'),
             data: (g.data && g.data.data) || null
           });
         }
-        let afterOn = !currentlyOn;
+        let afterOn = wantOn;
         try {
           const again = await gotsmsFetch(`/api/rents/${encodeURIComponent(rent_id)}`);
           const d = again.data && (again.data.data || again.data);
@@ -4338,9 +4464,22 @@ if (method === 'POST' && ga === 'gotsms_toggle_renewal') {
           }
         } catch (_) {}
 
-        // Supplier must accept refund first — never credit if provider rejects
-        const g = await gotsmsFetch(`/api/rents/${encodeURIComponent(rent_id)}/refund`, { method: 'POST' });
-        if (!g.ok || !g.data?.success) {
+        // Multi-pack: cancel every linked rent on supplier, then credit once
+        const linkedRefundIds = await gotsmsResolveLinkedRentIds(auth.userId, rent_id, order);
+        let g = { ok: false, data: { success: false, message: 'Cancel failed' } };
+        let anySupplierCancel = false;
+        for (const rid of linkedRefundIds) {
+          try {
+            const gg = await gotsmsFetch(`/api/rents/${encodeURIComponent(rid)}/refund`, { method: 'POST' });
+            if (gg.ok && gg.data?.success) {
+              anySupplierCancel = true;
+              g = gg;
+            } else if (!anySupplierCancel) {
+              g = gg;
+            }
+          } catch (_) {}
+        }
+        if (!anySupplierCancel) {
           return json(res, g.status || 400, {
             success: false,
             message: gotsmsSafeMsg(g.data?.message, 'Cancel was not approved for this number. No balance change.')
@@ -4356,6 +4495,15 @@ if (method === 'POST' && ga === 'gotsms_toggle_renewal') {
             data: g.data.data || null
           });
         }
+        try {
+          const allIds = linkedRefundIds || await gotsmsResolveLinkedRentIds(auth.userId, rent_id, order);
+          for (const rid of allIds) {
+            await supabase.from('number_orders').update({
+              status: 'cancelled',
+              refunded: true
+            }).eq('user_id', auth.userId).eq('source', 'gotsms').eq('idempotency_key', 'gotsms-' + String(rid));
+          }
+        } catch (_) {}
         const refundAmt = Number(claimed.price) || 0;
         if (refundAmt > 0) {
           try {
