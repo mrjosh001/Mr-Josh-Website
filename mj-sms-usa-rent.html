@@ -237,6 +237,18 @@ function isMultiDurationPlan(p){var t=String((p&&(p.duration_translation||p.name
 function multiDurationKind(p){var t=String((p&&p.duration_translation)||'').toLowerCase();var unit=String((p&&p.duration_type)||'').toLowerCase();if(unit.indexOf('hour')>=0||/\bhour\b/.test(t))return 'hour';return 'day';}
 
 const CARRIER_ADDON_NGN=800, AREA_ADDON_NGN=1000;
+function buildQuotedTotalNgn(){
+  var b=Number(selectedPlan&&selectedPlan.price_ngn||0)*qty;
+  var a=0;
+  var c=document.getElementById('carrierSel');
+  if(c&&c.value) a+=Number((selectedPlan&&selectedPlan.carrier_addon_ngn)||CARRIER_ADDON_NGN);
+  var ar='';
+  try{ if(typeof resolveAreaCode==='function') ar=resolveAreaCode()||''; }catch(e){}
+  if(!ar){ var ae=document.getElementById('areaCode'); if(ae) ar=String(ae.value||'').replace(/\D/g,''); }
+  if(ar&&String(ar).replace(/\D/g,'').length>=3) a+=Number((selectedPlan&&selectedPlan.area_addon_ngn)||AREA_ADDON_NGN);
+  return Math.round(b+a);
+}
+
 const POPULAR=['whatsapp','telegram','google','facebook','instagram','tiktok','twitter','x','discord','paypal','amazon','apple','microsoft'];
 const CACHE_KEY='mj_gotsms_services_v2';
 const CACHE_TTL_MS=2*24*60*60*1000;
@@ -906,9 +918,9 @@ async function doRent(){
   document.getElementById('psErr').textContent='';
   var errEl=document.getElementById('rentErr');if(errEl)errEl.textContent='';
   var okEl=document.getElementById('rentOk');if(okEl)okEl.textContent='';
-  var body={plan_id:selectedPlan.id,service_id:selectedService&&selectedService.id,quoted_price_ngn:(function(){var b=Number(selectedPlan.price_ngn||0)*qty;var a=0;var c=document.getElementById("carrierSel");if(c&&c.value)a+=Number(selectedPlan.carrier_addon_ngn||CARRIER_ADDON_NGN);var ar="";try{ar=typeof resolveAreaCode==="function"?resolveAreaCode():"";}catch(e){}if(!ar){var ae=document.getElementById("areaCode");if(ae)ar=String(ae.value||"").replace(/\D/g,"");}if(ar&&String(ar).replace(/\D/g,"").length>=3)a+=Number(selectedPlan.area_addon_ngn||AREA_ADDON_NGN);return b+a;})(),quoted_usd:selectedPlan.price_usd||selectedPlan.price||null,auto_renew:(function(){var c=document.getElementById("autoRenewChk");return !!(c&&c.checked);})()};
+  var body={plan_id:selectedPlan.id,service_id:selectedService&&selectedService.id,quoted_price_ngn:buildQuotedTotalNgn(),quoted_usd:selectedPlan.price_usd||selectedPlan.price||null,auto_renew:(function(){var c=document.getElementById("autoRenewChk");return !!(c&&c.checked);})()};
   var area=resolveAreaCode();if(area)body.area_code=area;
-  var car=document.getElementById('carrierSel').value;if(car)body.cellular_carrier_id=car;
+  var carEl=document.getElementById('carrierSel');var car=carEl&&carEl.value;if(car)body.cellular_carrier_id=car;
   var j;
   if(multiMode){
     if(!multiSelected||multiSelected.length!==2){
@@ -931,6 +943,31 @@ async function doRent(){
   if(rentBtn){rentBtn.disabled=false;rentBtn.textContent='Rent number';}
     if(!j.success){
     var msg=j.message||'Rental failed';
+    // Auto-retry once when server total differs (price lock) — use server total as quoted
+    if(/price updated/i.test(msg) && j.data && j.data.price_ngn != null && !body._priceRetry){
+      body.quoted_price_ngn=Number(j.data.price_ngn);
+      body._priceRetry=true;
+      // Adjust displayed base so total matches server (addons already inside server total)
+      var ad=0;
+      try{
+        var c2=document.getElementById('carrierSel');
+        if(c2&&c2.value) ad+=Number((selectedPlan&&selectedPlan.carrier_addon_ngn)||CARRIER_ADDON_NGN);
+        var ar2=typeof resolveAreaCode==='function'?resolveAreaCode():'';
+        if(ar2&&String(ar2).replace(/\D/g,'').length>=3) ad+=Number((selectedPlan&&selectedPlan.area_addon_ngn)||AREA_ADDON_NGN);
+      }catch(e){}
+      selectedPlan.price_ngn=Math.max(0, Number(j.data.price_ngn)-ad);
+      updateTotal();
+      if(document.getElementById('psTotal')) document.getElementById('psTotal').textContent=fmtNgn(Number(j.data.price_ngn));
+      if(multiMode) j=await api('rent_multi',{method:'POST',body:body});
+      else if(qty>1){ body.quantity=qty; j=await api('rent_bulk',{method:'POST',body:body}); }
+      else j=await api('rent',{method:'POST',body:body});
+      if(j&&j.success){
+        /* fall through to success path below */
+      } else {
+        msg=(j&&j.message)||msg;
+      }
+    }
+    if(!j.success){
     document.getElementById('psErr').textContent=msg;
     if(errEl)errEl.textContent=msg;
     showRentToast(msg, false);
@@ -939,12 +976,12 @@ async function doRent(){
       var rbtn=document.getElementById('rentBtn');
       if(rbtn){ rbtn.disabled=true; rbtn.textContent='Sold out'; }
     }
-    if(j.data&&j.data.price_ngn){selectedPlan.price_ngn=j.data.price_ngn;updateTotal(); var ta=document.getElementById('totalAmt'); if(document.getElementById('psTotal')) document.getElementById('psTotal').textContent=ta?ta.textContent:fmtNgn(selectedPlan.price_ngn*qty);}
     if(/insufficient|fund your wallet|not enough/i.test(msg)){
       try{ if(typeof showToast==='function') showToast('Insufficient balance. Redirecting to deposit…','error'); }catch(e){}
       setTimeout(function(){ location.href='deposit.html'; }, 900);
     }
     return;
+    } // end !j.success after possible retry
   }
   closePurchaseModal();
   var rent=Array.isArray(j.data)?j.data[0]:j.data;
