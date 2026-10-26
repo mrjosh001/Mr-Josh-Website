@@ -516,6 +516,16 @@ const GOTSMS_DURATION_PRICE_NGN = {
 const GOTSMS_CARRIER_ADDON_NGN = Math.max(0, Number(process.env.GOTSMS_CARRIER_ADDON_NGN) || 800);
 const GOTSMS_AREA_ADDON_NGN = Math.max(0, Number(process.env.GOTSMS_AREA_ADDON_NGN) || 1000);
 
+/** Multi-pack (exactly 2 services): only 1 hour / 1 day. Supplier package USD. */
+const GOTSMS_MULTI_PACK_USD = {
+  '1_hour': 2.1,
+  '1_hours': 2.1,
+  '1_day': 5,
+  '1_days': 5
+};
+const GOTSMS_MULTI_MAX_SERVICES = 2;
+
+
 function gotsmsDurationKey(plan) {
   if (!plan) return '';
   let t = String(plan.duration_type || '').toLowerCase().replace(/s$/, ''); // hour, day, month, year
@@ -1036,6 +1046,11 @@ async function gotsmsSetPurchaseTxStatus(userId, rentId, fromStatuses, toStatus)
     if (error) { console.warn('[gotsms] tx status', toStatus, error.message); return false; }
     return !!(data && data.length);
   } catch (e) { console.warn('[gotsms] tx status', e.message || e); return false; }
+}
+
+function gotsmsIsMultiPackOrder(orderRow) {
+  const n = String(orderRow?.service_name || '');
+  return /multi-pack|multipack|\[multi\]/i.test(n);
 }
 
 async function gotsmsSaveOrder({ userId, customerId, rentId, phone, serviceName, serviceId, priceNgn, supplierUsd, status, activeTill, planLabel, carrierName, areaCode }) {
@@ -3632,6 +3647,165 @@ export default async function handler(req, res) {
         );
       }
 
+
+      // Multi-pack: exactly 2 services, 1 hour or 1 day only. Locked after purchase (no add-service / switch-plan).
+      if (method === 'POST' && ga === 'gotsms_rent_multi') {
+        const auth = await requireAuth(req);
+        if (!auth.ok) return json(res, auth.status, { success: false, message: auth.message });
+        const body = await readBody(req);
+        let serviceIds = Array.isArray(body.service_ids) ? body.service_ids : [];
+        serviceIds = [...new Set(serviceIds.map((x) => String(x || '').trim()).filter(Boolean))];
+        if (serviceIds.length !== GOTSMS_MULTI_MAX_SERVICES) {
+          return json(res, 400, { success: false, message: 'Multi-service packs require exactly 2 different services.' });
+        }
+        const plan_id = String(body.plan_id || '').trim();
+        if (!plan_id) return json(res, 400, { success: false, message: 'Select a 1 hour or 1 day plan.' });
+
+        let plan = null;
+        {
+          const one = await gotsmsFetch(`/api/rents/plans/${encodeURIComponent(plan_id)}`);
+          if (one.ok && one.data) {
+            plan = one.data.data || one.data;
+            if (Array.isArray(plan)) plan = plan.find((p) => String(p.id) === plan_id) || plan[0] || null;
+          }
+        }
+        if (!plan) {
+          for (const sid of serviceIds) {
+            for (let page = 1; page <= 5 && !plan; page++) {
+              const qs = new URLSearchParams({ service_id: sid, per_page: '100', page: String(page), include_unavailable: '1' });
+              const pg = await gotsmsFetch('/api/rents/plans?' + qs.toString());
+              const rows = pg.data?.data || [];
+              const hit = rows.find((p) => String(p.id) === plan_id);
+              if (hit) { plan = hit; break; }
+            }
+            if (plan) break;
+          }
+        }
+        if (!plan) return json(res, 400, { success: false, message: 'Plan not found. Refresh and try again.' });
+        if (typeof gotsmsPlanUnavailable === 'function' && gotsmsPlanUnavailable(plan)) {
+          return json(res, 409, { success: false, message: 'This duration is sold out right now.', data: { out_of_stock: true } });
+        }
+
+        const durKey = gotsmsDurationKey(plan);
+        const packUsd = GOTSMS_MULTI_PACK_USD[durKey];
+        if (packUsd == null) {
+          return json(res, 400, { success: false, message: 'Multi-service is only available for 1 hour or 1 day durations.' });
+        }
+
+        let price = gotsmsSellPriceNgn(packUsd);
+        const areaCode = body.area_code ? String(body.area_code).replace(/\D/g, '').slice(0, 6) : '';
+        const carrierId = body.cellular_carrier_id ? String(body.cellular_carrier_id) : '';
+        const addons = gotsmsAddonsNgn({ area_code: areaCode, cellular_carrier_id: carrierId });
+        price = price + addons;
+
+        if (body.quoted_price_ngn != null) {
+          const q = Number(body.quoted_price_ngn);
+          if (Number.isFinite(q) && Math.abs(q - price) > 100) {
+            return json(res, 409, {
+              success: false,
+              message: 'Price updated. Refresh and try again.',
+              data: { price_ngn: price }
+            });
+          }
+        }
+        if (!(price > 0)) return json(res, 400, { success: false, message: 'Invalid multi-pack price.' });
+
+        const debit = await debitWalletStrict(auth.userId, price, 'gotsms_rent_multi');
+        if (!debit.ok) {
+          return json(res, 400, { success: false, message: debit.message || 'Insufficient wallet balance' });
+        }
+
+        const payload = { plan_id };
+        if (areaCode) payload.area_code = areaCode;
+        if (carrierId) payload.cellular_carrier_id = carrierId;
+
+        const g1 = await gotsmsFetch('/api/rents', { method: 'POST', body: payload });
+        if (!g1.ok || !g1.data?.success || !g1.data?.data) {
+          try { await supabase.rpc('credit_balance', { p_user_id: auth.userId, p_amount: price }); } catch (_) {}
+          return json(res, g1.status || 400, {
+            success: false,
+            message: gotsmsSafeMsg(g1.data?.message, 'Could not rent number for multi-pack'),
+            data: { out_of_stock: /stock|unavailable|no number/i.test(String(g1.data?.message || '')) }
+          });
+        }
+
+        const rent = g1.data.data;
+        const rentId = rent.id || rent.rent_id;
+        const phone = rent.phone || rent.phone_number || '';
+        const secondId = serviceIds[1];
+        const g2 = await gotsmsFetch(`/api/rents/${encodeURIComponent(rentId)}/services`, {
+          method: 'POST',
+          body: { service_id: secondId }
+        });
+        if (!g2.ok || !g2.data?.success) {
+          try { await supabase.rpc('credit_balance', { p_user_id: auth.userId, p_amount: price }); } catch (_) {}
+          try { await gotsmsFetch(`/api/rents/${encodeURIComponent(rentId)}/refund`, { method: 'POST', body: {} }); } catch (_) {}
+          return json(res, g2.status || 400, {
+            success: false,
+            message: gotsmsSafeMsg(g2.data?.message, 'Could not attach the second service. You were not charged.')
+          });
+        }
+
+        const name1 = String(rent.service?.name || (body.service_names && body.service_names[0]) || 'Service 1');
+        const name2 = String((g2.data?.data && g2.data.data.service && g2.data.data.service.name) || (body.service_names && body.service_names[1]) || 'Service 2');
+        const planLabel = 'Multi-pack · ' + (plan.duration_translation || String(durKey).replace('_', ' '));
+        const combinedName = name1 + ' + ' + name2;
+
+        try {
+          await gotsmsSaveOrder({
+            userId: auth.userId,
+            customerId: debit.customer_id,
+            rentId,
+            phone,
+            serviceName: combinedName + ' · Multi-pack',
+            serviceId: serviceIds.join(','),
+            priceNgn: price,
+            supplierUsd: packUsd,
+            status: 'active',
+            activeTill: rent.active_till || rent.expires_at || null,
+            planLabel,
+            carrierName: body.carrier_name || null,
+            areaCode: areaCode || null
+          });
+        } catch (e) {
+          console.warn('[gotsms_rent_multi] save order', e.message || e);
+        }
+        try {
+          await gotsmsRecordPurchaseTx({
+            userId: auth.userId,
+            customerId: debit.customer_id,
+            rent,
+            priceNgn: price,
+            orderId: rentId,
+            title: 'USA multi-pack · ' + combinedName,
+            subtitle: phone || planLabel
+          });
+        } catch (_) {}
+
+        await notifyUserPush(
+          auth.userId,
+          'USA multi-service number ready',
+          combinedName + ' on one number. Open inbox for codes.',
+          '/sms-history.html',
+          'sms_rent'
+        );
+
+        return json(res, 201, {
+          success: true,
+          message: 'Multi-service number ready',
+          data: Object.assign({}, (typeof gotsmsPublicRent === 'function' ? gotsmsPublicRent(rent) : rent), {
+            id: rentId,
+            rent_id: rentId,
+            phone,
+            multi: true,
+            services: [name1, name2],
+            price_ngn: price,
+            supplier_usd: packUsd,
+            new_balance: debit.new_balance
+          })
+        });
+      }
+
       if (method === 'POST' && ga === 'gotsms_rent_bulk') {
         const auth = await requireAuth(req);
         if (!auth.ok) return json(res, auth.status, { success: false, message: auth.message });
@@ -3911,6 +4085,9 @@ if (method === 'GET' && ga === 'gotsms_messages') {
         if (!rent_id || !service_id) return json(res, 400, { success: false, message: 'rent_id and service_id required' });
         const parentOrder = await gotsmsAssertOwns(auth.userId, rent_id);
         if (!parentOrder) return json(res, 403, { success: false, message: 'Rental not found' });
+        if (gotsmsIsMultiPackOrder(parentOrder)) {
+          return json(res, 400, { success: false, message: 'Add service is not available on multi-service packs.' });
+        }
         // Only after the number has received at least one SMS/code
         try {
           const msgRes = await gotsmsFetch('/api/messages?rent_id=' + encodeURIComponent(rent_id) + '&per_page=5');
@@ -3980,6 +4157,9 @@ if (method === 'GET' && ga === 'gotsms_messages') {
         if (!rent_id || !plan_id) return json(res, 400, { success: false, message: 'rent_id and plan_id required' });
         const order = await gotsmsAssertOwns(auth.userId, rent_id);
         if (!order) return json(res, 403, { success: false, message: 'Rental not found' });
+        if (gotsmsIsMultiPackOrder(order)) {
+          return json(res, 400, { success: false, message: 'Switch plan is not available on multi-service packs.' });
+        }
         // Resolve price from live transition_options
         _gotsmsTransCache.delete(String(rent_id));
         const opts = await gotsmsLoadTransitionOptions(rent_id, null);
