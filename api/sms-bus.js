@@ -510,49 +510,60 @@ async function gotsmsHandleWebhook(req, res) {
       let nextStatus = hadSms ? 'completed' : 'expired';
       let refundedNow = false;
 
-      // No SMS arrived for the full period → auto-refund (once), like OTP numbers
+      // No SMS: only refund if supplier still accepts (GotSMS policy — must request refund)
       if (!hadSms && !alreadyRefunded && orderPrice > 0) {
         try {
           const rid = rentId || String(order.idempotency_key || '').replace(/^gotsms-/, '');
+          let supplierOk = false;
           if (rid) {
-            try { await gotsmsFetch(`/api/rents/${encodeURIComponent(rid)}/refund`, { method: 'POST' }); } catch (_) {}
             try {
               const linked = await gotsmsResolveLinkedRentIds(order.user_id, rid, order);
               for (const id of linked) {
-                if (String(id) === String(rid)) continue;
-                try { await gotsmsFetch(`/api/rents/${encodeURIComponent(id)}/refund`, { method: 'POST' }); } catch (_) {}
+                try {
+                  const gg = await gotsmsFetch(`/api/rents/${encodeURIComponent(id)}/refund`, { method: 'POST' });
+                  if (gg.ok && gg.data?.success) supplierOk = true;
+                } catch (_) {}
               }
-            } catch (_) {}
-          }
-          const claimed = await claimGotsmsRefund(order.id);
-          if (claimed) {
-            const amt = Number(claimed.price) || orderPrice;
-            if (amt > 0) {
-              await supabase.rpc('credit_balance', { p_user_id: order.user_id, p_amount: amt });
+            } catch (_) {
               try {
-                await supabase.from('transactions').insert({
-                  user_id: order.user_id,
-                  customer_id: order.customer_id,
-                  type: 'refund',
-                  category: 'MJ SMS',
-                  title: 'USA rental expired — no SMS',
-                  subtitle: 'Balance restored',
-                  amount: '₦' + amt.toLocaleString(),
-                  amount_ngn: amt,
-                  status: 'refunded',
-                  external_reference: String(rid || order.order_id || '')
-                });
+                const gg = await gotsmsFetch(`/api/rents/${encodeURIComponent(rid)}/refund`, { method: 'POST' });
+                if (gg.ok && gg.data?.success) supplierOk = true;
               } catch (_) {}
             }
-            nextStatus = 'refunded';
-            refundedNow = true;
-            await notifyUserPush(
-              order.user_id,
-              'Rental expired — refunded',
-              'No SMS arrived. ₦' + amt.toLocaleString() + ' was returned to your wallet.',
-              '/sms-history.html',
-              'sms_refund'
-            );
+          }
+          if (supplierOk) {
+            const claimed = await claimGotsmsRefund(order.id);
+            if (claimed) {
+              const amt = Number(claimed.price) || orderPrice;
+              if (amt > 0) {
+                const { error: credErr } = await supabase.rpc('credit_balance', { p_user_id: order.user_id, p_amount: amt });
+                if (!credErr) {
+                  try {
+                    await supabase.from('transactions').insert({
+                      user_id: order.user_id,
+                      customer_id: order.customer_id,
+                      type: 'refund',
+                      category: 'MJ SMS',
+                      title: 'USA rental cancelled — no SMS',
+                      subtitle: 'Balance restored',
+                      amount: '₦' + amt.toLocaleString(),
+                      amount_ngn: amt,
+                      status: 'refunded',
+                      external_reference: String(rid || order.order_id || '')
+                    });
+                  } catch (_) {}
+                  nextStatus = 'refunded';
+                  refundedNow = true;
+                  await notifyUserPush(
+                    order.user_id,
+                    'Rental cancelled — refunded',
+                    'No SMS arrived. ₦' + amt.toLocaleString() + ' was returned to your wallet.',
+                    '/sms-history.html',
+                    'sms_refund'
+                  );
+                }
+              }
+            }
           }
         } catch (e) {
           console.error('[gotsms webhook] rent.ended auto-refund', e.message || e);
@@ -787,6 +798,143 @@ async function claimGotsmsRefund(orderId) {
     return null;
   }
   return data || null;
+}
+
+
+/**
+ * Auto-request supplier refund when a USA rental is about to expire with no SMS.
+ * GotSMS: refund only if requested (before/within window) and no SMS received.
+ * We only credit the wallet when the supplier accepts the refund.
+ */
+async function gotsmsPreExpireCancelSweep({ userId = null, windowMinutes = 10 } = {}) {
+  const now = Date.now();
+  const windowMs = Math.max(3, Number(windowMinutes) || 10) * 60 * 1000;
+  let q = supabase
+    .from('number_orders')
+    .select('id, user_id, customer_id, order_id, phone_number, service_name, price, status, notes, code, refunded, idempotency_key, created_at')
+    .eq('source', 'gotsms')
+    .eq('status', 'active')
+    .eq('refunded', false)
+    .gt('price', 0)
+    .order('created_at', { ascending: false })
+    .limit(80);
+  if (userId) q = q.eq('user_id', userId);
+  const { data: rows, error } = await q;
+  if (error) {
+    console.error('[gotsms preexpire]', error.message);
+    return { checked: 0, refunded: 0, skipped: 0, errors: [error.message] };
+  }
+  let checked = 0, refunded = 0, skipped = 0;
+  const errors = [];
+  for (const order of rows || []) {
+    checked += 1;
+    try {
+      const meta = gotsmsNotesMeta(order.notes);
+      const hadSms = /sms\s*received/i.test(String(order.service_name || ''))
+        || order.status === 'completed'
+        || (meta.inbox && meta.inbox.length > 0);
+      if (hadSms) { skipped += 1; continue; }
+
+      // Expiry stored in code (ISO) for rentals
+      let till = order.code ? Date.parse(String(order.code)) : NaN;
+      if (!Number.isFinite(till) || till <= 0) {
+        // fallback: 1 hour from created_at for short packs
+        const created = order.created_at ? Date.parse(String(order.created_at)) : NaN;
+        if (Number.isFinite(created)) till = created + 60 * 60 * 1000;
+      }
+      if (!Number.isFinite(till)) { skipped += 1; continue; }
+      const left = till - now;
+      // Only when 1s .. windowMinutes left (not already past)
+      if (left <= 0 || left > windowMs) { skipped += 1; continue; }
+
+      const rentId = String(order.idempotency_key || '').replace(/^gotsms-/, '').trim();
+      if (!rentId) { skipped += 1; continue; }
+
+      // Double-check live messages on supplier
+      try {
+        const msgG = await gotsmsFetch(`/api/numbers/${encodeURIComponent(rentId)}/messages`);
+        const msgs = (msgG.data && (msgG.data.data || msgG.data.messages || msgG.data)) || [];
+        if (Array.isArray(msgs) && msgs.length > 0) { skipped += 1; continue; }
+      } catch (_) {}
+
+      // Supplier must approve refund first
+      const linked = await gotsmsResolveLinkedRentIds(order.user_id, rentId, order);
+      let supplierOk = false;
+      let lastMsg = '';
+      for (const rid of linked) {
+        try {
+          const gg = await gotsmsFetch(`/api/rents/${encodeURIComponent(rid)}/refund`, { method: 'POST' });
+          if (gg.ok && gg.data?.success) {
+            supplierOk = true;
+          } else {
+            lastMsg = String(gg.data?.message || lastMsg || '');
+          }
+        } catch (e) {
+          lastMsg = e.message || lastMsg;
+        }
+      }
+      if (!supplierOk) {
+        skipped += 1;
+        continue;
+      }
+
+      const claimed = await claimGotsmsRefund(order.id);
+      if (!claimed) { skipped += 1; continue; }
+      const amt = Number(claimed.price) || Number(order.price) || 0;
+      if (amt > 0) {
+        const { error: credErr } = await supabase.rpc('credit_balance', {
+          p_user_id: order.user_id,
+          p_amount: amt
+        });
+        if (credErr) {
+          console.error('[gotsms preexpire] credit', credErr.message);
+          // roll claim so admin can retry
+          try {
+            await supabase.from('number_orders').update({ refunded: false, status: 'active' }).eq('id', order.id);
+          } catch (_) {}
+          errors.push(credErr.message);
+          continue;
+        }
+        try {
+          await supabase.from('transactions').insert({
+            user_id: order.user_id,
+            customer_id: order.customer_id,
+            type: 'refund',
+            category: 'MJ SMS',
+            title: 'USA rental auto-cancelled',
+            subtitle: 'No SMS — balance restored before expiry',
+            amount: '₦' + amt.toLocaleString(),
+            amount_ngn: amt,
+            status: 'refunded',
+            external_reference: String(rentId)
+          });
+        } catch (_) {}
+        await notifyUserPush(
+          order.user_id,
+          'Rental cancelled — refunded',
+          'No SMS arrived. ₦' + amt.toLocaleString() + ' returned to your wallet before the number expired.',
+          '/sms-history.html',
+          'sms_refund'
+        );
+      }
+      // close linked ₦0 rows
+      try {
+        if (order.phone_number) {
+          await supabase.from('number_orders')
+            .update({ status: 'refunded', refunded: true })
+            .eq('user_id', order.user_id)
+            .eq('source', 'gotsms')
+            .eq('phone_number', order.phone_number)
+            .eq('price', 0)
+            .neq('id', order.id);
+        }
+      } catch (_) {}
+      refunded += 1;
+    } catch (e) {
+      errors.push(String(e.message || e));
+    }
+  }
+  return { checked, refunded, skipped, errors: errors.slice(0, 5) };
 }
 
 async function gotsmsFetch(path, { method = 'GET', body } = {}) {
@@ -4232,6 +4380,7 @@ if (method === 'GET' && ga === 'gotsms_messages') {
         if (!rent_id) return json(res, 400, { success: false, message: 'rent_id required' });
         const orderMsg = await gotsmsAssertOwns(auth.userId, rent_id);
         if (!orderMsg) return json(res, 403, { success: false, message: 'Rental not found' });
+        try { await gotsmsPreExpireCancelSweep({ userId: auth.userId, windowMinutes: 10 }); } catch (_) {}
         const msgIds = await gotsmsResolveLinkedRentIds(auth.userId, rent_id, orderMsg);
         const seen = new Set();
         const msgs = [];
@@ -4752,9 +4901,26 @@ if (method === 'POST' && ga === 'gotsms_toggle_renewal') {
         });
       }
 
-      if (method === 'GET' && ga === 'gotsms_my_orders') {
+      
+      if ((method === 'POST' || method === 'GET') && (ga === 'gotsms_preexpire_cancel' || ga === 'gotsms_preexpire_sweep')) {
+        const authHeader = String(req.headers['authorization'] || '');
+        const cronSecret = process.env.CRON_SECRET;
+        const isCron = (cronSecret && authHeader === `Bearer ${cronSecret}`) || req.headers['x-vercel-cron'] === '1';
+        let userId = null;
+        if (!isCron) {
+          const auth = await requireAuth(req);
+          if (!auth.ok) return json(res, auth.status, { success: false, message: auth.message });
+          userId = auth.userId;
+        }
+        const windowMinutes = Number((url.searchParams.get('minutes') || '10')) || 10;
+        const result = await gotsmsPreExpireCancelSweep({ userId, windowMinutes });
+        return json(res, 200, { success: true, message: 'Pre-expire cancel sweep done', data: result });
+      }
+
+if (method === 'GET' && ga === 'gotsms_my_orders') {
         const auth = await requireAuth(req);
         if (!auth.ok) return json(res, auth.status, { success: false, message: auth.message });
+        try { await gotsmsPreExpireCancelSweep({ userId: auth.userId, windowMinutes: 10 }); } catch (_) {}
         const { data, error } = await supabase
           .from('number_orders')
           .select('order_id, phone_number, service_name, price, status, code, created_at, idempotency_key, refunded')
@@ -5085,7 +5251,7 @@ if (method === 'POST' && ga === 'gotsms_toggle_renewal') {
           'gotsms_balance', 'gotsms_carriers', 'gotsms_services', 'gotsms_plans',
           'gotsms_rent', 'gotsms_rent_bulk', 'gotsms_rents', 'gotsms_wake',
           'gotsms_messages', 'gotsms_addable_services', 'gotsms_add_service', 'gotsms_transition',
-          'gotsms_toggle_renewal', 'gotsms_refund', 'gotsms_my_orders',
+          'gotsms_toggle_renewal', 'gotsms_refund', 'gotsms_preexpire_cancel', 'gotsms_my_orders',
           'gotsms_supplier_balance', 'gotsms_sync', 'gotsms_webhook', 'gotsms_webhook_setup', 'gotsms_webhook_status', 'gotsms_webhook_test'
         ]
       });
