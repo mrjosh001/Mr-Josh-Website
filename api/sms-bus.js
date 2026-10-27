@@ -498,25 +498,99 @@ async function gotsmsHandleWebhook(req, res) {
       const meta = gotsmsNotesMeta(order.notes);
       if (deliveryId && meta.wh_ids.includes(deliveryId)) return json(res, 200, { success: true, duplicate: true });
       if (deliveryId) meta.wh_ids.push(deliveryId);
-      // Period ended — not a refund. Completed if codes arrived; else expired.
-      const hadSms = /sms\s*received/i.test(String(order.service_name || '')) || order.status === 'completed' || (meta.inbox && meta.inbox.length);
-      const nextStatus = hadSms ? 'completed' : 'expired';
+
+      const hadSms = /sms\s*received/i.test(String(order.service_name || ''))
+        || order.status === 'completed'
+        || (meta.inbox && meta.inbox.length > 0);
+
+      // Paid multi/primary only — skip ₦0 linked rows for wallet credit
+      const orderPrice = Number(order.price) || 0;
+      const alreadyRefunded = !!(order.refunded || order.status === 'refunded' || order.status === 'cancelled');
+
+      let nextStatus = hadSms ? 'completed' : 'expired';
+      let refundedNow = false;
+
+      // No SMS arrived for the full period → auto-refund (once), like OTP numbers
+      if (!hadSms && !alreadyRefunded && orderPrice > 0) {
+        try {
+          const rid = rentId || String(order.idempotency_key || '').replace(/^gotsms-/, '');
+          if (rid) {
+            try { await gotsmsFetch(`/api/rents/${encodeURIComponent(rid)}/refund`, { method: 'POST' }); } catch (_) {}
+            try {
+              const linked = await gotsmsResolveLinkedRentIds(order.user_id, rid, order);
+              for (const id of linked) {
+                if (String(id) === String(rid)) continue;
+                try { await gotsmsFetch(`/api/rents/${encodeURIComponent(id)}/refund`, { method: 'POST' }); } catch (_) {}
+              }
+            } catch (_) {}
+          }
+          const claimed = await claimGotsmsRefund(order.id);
+          if (claimed) {
+            const amt = Number(claimed.price) || orderPrice;
+            if (amt > 0) {
+              await supabase.rpc('credit_balance', { p_user_id: order.user_id, p_amount: amt });
+              try {
+                await supabase.from('transactions').insert({
+                  user_id: order.user_id,
+                  customer_id: order.customer_id,
+                  type: 'refund',
+                  category: 'MJ SMS',
+                  title: 'USA rental expired — no SMS',
+                  subtitle: 'Balance restored',
+                  amount: '₦' + amt.toLocaleString(),
+                  amount_ngn: amt,
+                  status: 'refunded',
+                  external_reference: String(rid || order.order_id || '')
+                });
+              } catch (_) {}
+            }
+            nextStatus = 'refunded';
+            refundedNow = true;
+            await notifyUserPush(
+              order.user_id,
+              'Rental expired — refunded',
+              'No SMS arrived. ₦' + amt.toLocaleString() + ' was returned to your wallet.',
+              '/sms-history.html',
+              'sms_refund'
+            );
+          }
+        } catch (e) {
+          console.error('[gotsms webhook] rent.ended auto-refund', e.message || e);
+        }
+      }
+
       const patch = {
         notes: gotsmsPackNotes(meta.inbox, meta.wh_ids),
         status: nextStatus
       };
-      if (data.ended_at) {
-        // keep code as ended marker only if no prior till needed for UI
-      }
+      if (refundedNow) patch.refunded = true;
       await supabase.from('number_orders').update(patch).eq('id', order.id);
-      await notifyUserPush(
-        order.user_id,
-        'Rental period ended',
-        'This number is no longer active. Rent again anytime from MJ SMS.',
-        '/sms-history.html',
-        'sms_rent'
-      );
-      return json(res, 200, { success: true, event, status: nextStatus });
+
+      // Mark ₦0 multi-pack link rows for same phone as expired/refunded too
+      try {
+        if (order.phone_number) {
+          await supabase.from('number_orders')
+            .update({ status: refundedNow ? 'refunded' : nextStatus, refunded: refundedNow || undefined })
+            .eq('user_id', order.user_id)
+            .eq('source', 'gotsms')
+            .eq('phone_number', order.phone_number)
+            .eq('price', 0)
+            .neq('id', order.id);
+        }
+      } catch (_) {}
+
+      if (!refundedNow) {
+        await notifyUserPush(
+          order.user_id,
+          hadSms ? 'Rental period ended' : 'Rental period ended',
+          hadSms
+            ? 'This number is no longer active. You can still view codes in Number History.'
+            : 'This number expired. Open Number History for details.',
+          '/sms-history.html',
+          'sms_rent'
+        );
+      }
+      return json(res, 200, { success: true, event, status: nextStatus, refunded: refundedNow });
     }
 
     console.log('[gotsms webhook] unhandled event', event);
@@ -4689,9 +4763,17 @@ if (method === 'POST' && ga === 'gotsms_toggle_renewal') {
           .order('created_at', { ascending: false })
           .limit(100);
         if (error) return json(res, 400, { success: false, message: error.message });
+        // Hide ₦0 multi-pack link rows — only show the paid primary order
+        const rows = (data || []).filter((o) => {
+          const p = Number(o.price) || 0;
+          const n = String(o.service_name || '');
+          if (p <= 0 && /multi-pack\s*link|·\s*linked/i.test(n)) return false;
+          if (p <= 0 && /linked/i.test(n) && /multi/i.test(n)) return false;
+          return true;
+        });
         return json(res, 200, {
           success: true,
-          data: (data || []).map((o) => ({
+          data: rows.map((o) => ({
             order_id: o.order_id,
             rent_id: String(o.idempotency_key || '').replace(/^gotsms-/, ''),
             phone: o.phone_number,
