@@ -48,6 +48,20 @@ import fs from 'fs';
   source = source.replace(".select('balance').eq('id', user_id).maybeSingle();\n        return res.status(200).json", ".select('balance, balance_usd').eq('id', user_id).maybeSingle();\n        return res.status(200).json");
   source = source.replace("            new_balance: Number(balRow?.balance || 0),", "            new_balance: Number(balRow?.balance || 0),\n            new_balance_usd: Number(balRow?.balance_usd || 0),");
   source = source.replace("        new_balance: newBalance,\n        created_at", "        new_balance: newBalance,\n        new_balance_usd: Number(debitRow?.new_balance_usd ?? originalBalanceUsd - debitSplit.usd),\n        ngn_debited: debitSplit.ngn,\n        usd_debited: debitSplit.usd,\n        created_at");
+
+  // Automatically cancel/refund Server 1/3 orders once they enter the final
+  // five minutes of the normal 20-minute waiting window, but only when no SMS
+  // code has been received. The existing expire_stale supplier/refund logic
+  // remains the single cancellation path, so refunds stay idempotent.
+  source = source.replace(
+    "const EXPIRY_MS = 20 * 60 * 1000;",
+    "const EXPIRY_MS = 20 * 60 * 1000;\nconst AUTO_CANCEL_BEFORE_EXPIRY_MS = 5 * 60 * 1000;"
+  );
+  source = source.replace(
+    "  const cutoff = new Date(Date.now() - EXPIRY_MS).toISOString();",
+    "  const cutoff = new Date(Date.now() - Math.max(0, EXPIRY_MS - AUTO_CANCEL_BEFORE_EXPIRY_MS)).toISOString();"
+  );
+
   fs.writeFileSync(path, source);
 }
 
@@ -86,4 +100,4 @@ import fs from 'fs';
   fs.writeFileSync(path, source);
 }
 
-console.log('Dual-wallet checkout patch applied for Server 1, Server 2, and Server 3 during Vercel build.');
+console.log('Dual-wallet checkout + final-five-minute auto-cancel patch applied for Server 1, Server 2, and Server 3 during Vercel build.');
