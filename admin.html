@@ -6091,8 +6091,23 @@ function openOrderModal(index) {
       .map((it, idx) =>
         formatLogBlock(formatCustomerLog((function () {
           const view = String(it.login_credentials || '');
-          const raw = String(it.login_credentials_raw || '');
-          const labeled = /^(Email|Username|Password)\s*:/im.test(view);
+          const raw = String(it.login_credentials_raw || '').trim();
+          const hint = String(o.description || o.product_name || '');
+          // Prefer re-format from supplier raw so WA number/pass/email dumps stay correct
+          if (raw && typeof window.formatCredentials === 'function') {
+            try {
+              const rebuilt = window.formatCredentials(raw, hint);
+              if (rebuilt && String(rebuilt).trim()) return String(rebuilt).trim();
+            } catch (_) {}
+          }
+          // Detect bad WA shape: Email Password is a phone number → rebuild from raw/view
+          if (/Email Password:\s*\+?\d{10,15}/i.test(view) && raw && typeof window.formatCredentials === 'function') {
+            try {
+              const rebuilt = window.formatCredentials(raw, hint);
+              if (rebuilt && String(rebuilt).trim()) return String(rebuilt).trim();
+            } catch (_) {}
+          }
+          const labeled = /^(Email|Username|Password|Number)\s*:/im.test(view);
           if (labeled) return view;
           return view || raw;
         })()), idx, items.length)
