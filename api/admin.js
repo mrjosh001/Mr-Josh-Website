@@ -1364,19 +1364,29 @@ async function listBoosterOrdersHandle() {
 
 /** Recursively hunt a parsed JSON object for a plausible balance field. */
 function findBalance(obj, depth = 0) {
-  if (obj == null || depth > 4) return null;
+  if (obj == null || depth > 5) return null;
   if (typeof obj === 'number') return obj;
   if (typeof obj === 'string' && /^-?\d+(\.\d+)?$/.test(obj.trim())) return Number(obj);
   if (typeof obj !== 'object') return null;
 
-  const keys = ['balance', 'wallet_balance', 'walletBalance', 'account_balance', 'credit', 'credits', 'funds', 'amount'];
+  // Prefer explicit balance keys first (incl. minor-unit / reseller variants).
+  const keys = [
+    'balance', 'balance_minor', 'available_balance', 'availableBalance',
+    'wallet_balance', 'walletBalance', 'account_balance', 'accountBalance',
+    'credit', 'credits', 'credit_balance', 'funds', 'funds_available',
+    'amount', 'available', 'remaining', 'wallet', 'summ'
+  ];
   for (const k of keys) {
-    if (obj[k] !== undefined && obj[k] !== null && typeof obj[k] !== 'object') {
-      const n = Number(obj[k]);
-      if (!Number.isNaN(n)) return n;
+    if (obj[k] === undefined || obj[k] === null) continue;
+    if (typeof obj[k] === 'object') continue;
+    const n = Number(obj[k]);
+    if (!Number.isNaN(n)) {
+      // Sujan catalog uses price_minor (kobo). Same convention for balance_minor.
+      if (k === 'balance_minor' || k === 'available_minor') return n / 100;
+      return n;
     }
   }
-  for (const k of ['data', 'account', 'wallet', 'profile', 'result', 'user']) {
+  for (const k of ['data', 'account', 'wallet', 'profile', 'result', 'user', 'reseller', 'meta']) {
     if (obj[k] && typeof obj[k] === 'object') {
       const found = findBalance(obj[k], depth + 1);
       if (found !== null) return found;
@@ -1504,18 +1514,75 @@ async function getGrizzlyBalance() {
 }
 
 async function getSujanBalance() {
-  const apiKey = process.env.SUJAN_API_KEY;
+  const apiKey = String(process.env.SUJAN_API_KEY || '').trim();
   if (!apiKey) return { ok: false, error: 'Missing SUJAN_API_KEY' };
-  const base = 'https://api.sujandepartment.com/reseller/v1';
-  // Same situation as Fadded: Sujan's docs don't spell out a balance
-  // endpoint (see api/sujan.js's header comment), so this tries the same
-  // handful of conventional paths and lets findBalance() pull whatever
-  // numeric field looks like a balance out of whichever one responds.
-  return tryJsonEndpoints(
-    [`${base}/balance`, `${base}/profile`, `${base}/me`, `${base}/account`, `${base}/wallet`],
+  const root = 'https://api.sujandepartment.com';
+  const base = root + '/reseller/v1';
+  // Docs only document products + orders. Balance path is not documented, so we
+  // probe several paths and both common auth styles (Bearer + X-Api-Key).
+  const urls = [
+    `${base}/balance`,
+    `${base}/wallet`,
+    `${base}/account`,
+    `${base}/profile`,
+    `${base}/me`,
+    `${base}/user`,
+    `${base}/reseller`,
+    `${root}/reseller/v1/balance`,
+    `${root}/api/v1/balance`,
+    `${root}/api/reseller/balance`
+  ];
+  const headerSets = [
     { Authorization: `Bearer ${apiKey}`, Accept: 'application/json' },
-    'NGN'
-  );
+    { 'X-Api-Key': apiKey, Accept: 'application/json' },
+    { 'X-API-KEY': apiKey, Accept: 'application/json' },
+    { Authorization: apiKey, Accept: 'application/json' }
+  ];
+
+  let lastRaw = null;
+  let lastStatus = null;
+  for (const headers of headerSets) {
+    for (const url of urls) {
+      try {
+        const res = await fetch(url, { method: 'GET', headers });
+        const text = await res.text();
+        lastRaw = safeSlice(text, 300);
+        lastStatus = res.status;
+        if (!res.ok) continue;
+        let json;
+        try { json = JSON.parse(text); } catch { continue; }
+        const balance = findBalance(json);
+        if (balance !== null) {
+          return { ok: true, balance, currency: 'NGN', source_url: url };
+        }
+      } catch (err) {
+        lastRaw = safeSlice(String(err.message || err), 300);
+      }
+    }
+  }
+
+  if (lastStatus === 403) {
+    return {
+      ok: false,
+      error: 'Forbidden (403) — Sujan has no public balance endpoint or this key cannot read it',
+      raw: lastRaw
+    };
+  }
+  if (lastStatus === 401) {
+    return { ok: false, error: 'Unauthorized (401) — check SUJAN_API_KEY', raw: lastRaw };
+  }
+  if (lastStatus === 404) {
+    return {
+      ok: false,
+      error: 'No balance endpoint on Sujan API (404). Catalog/orders still work.',
+      raw: lastRaw
+    };
+  }
+  return {
+    ok: false,
+    error: `No balance field found (last status ${lastStatus})`,
+    raw: lastRaw
+  };
 }
 
 
