@@ -15,6 +15,7 @@
 
 import { createClient } from '@supabase/supabase-js';
 import { sendPushToUser, sendPushToAdmins} from '../lib/push.js';
+import { quoteCoupon, redeemCoupon } from '../lib/coupons.js';
 import { formatCredentials, formatMultiLogCredentials, joinRawLogDetails } from '../lib/formatCredentials.js';
 import { readSupplierStock } from '../lib/supplierStock.js';
 import { rateLimit, applyRateLimitHeaders } from '../lib/rateLimit.js';
@@ -1060,11 +1061,32 @@ export default async function handler(req, res) {
     return handleMyOrders(req, res, user_id);
   }
 
+  if (body.action === 'validate_coupon') {
+    const sub = Number(body.subtotal || body.total || 0);
+    const q = await quoteCoupon(supabase, {
+      code: body.coupon_code || body.code,
+      userId: user_id,
+      subtotal: sub,
+      appliesTo: body.applies_to || 'logs'
+    });
+    if (!q.ok) return res.status(400).json({ success: false, message: q.message });
+    return res.status(200).json({
+      success: true,
+      code: q.code,
+      discount: q.discount,
+      final_total: q.finalTotal,
+      subtotal: q.subtotal,
+      percent_off: q.percent_off,
+      amount_off_ngn: q.amount_off_ngn
+    });
+  }
+
   const {
     product_key,
     quantity = 1,
     external_order_id,
     customer_info,
+    coupon_code,
     user_id: bodyUserId
   } = body;
 
@@ -1124,6 +1146,23 @@ export default async function handler(req, res) {
 
     total = Number(product.price) * Number(safeQty);
     productName = product.name;
+
+    // Coupon (any active admin code; server re-validates)
+    let couponQuote = null;
+    let couponDiscount = 0;
+    if (coupon_code) {
+      couponQuote = await quoteCoupon(supabase, {
+        code: coupon_code,
+        userId: user_id,
+        subtotal: total,
+        appliesTo: 'logs'
+      });
+      if (!couponQuote.ok) {
+        return res.status(400).json({ success: false, message: couponQuote.message || 'Invalid coupon code' });
+      }
+      couponDiscount = Number(couponQuote.discount || 0);
+      total = Number(couponQuote.finalTotal);
+    }
 
     // -------------------------------------------------
     // 2. Get user profile + balance
@@ -1355,6 +1394,18 @@ export default async function handler(req, res) {
       details: formatCredentials(i.details, formatHint) || String(i.details || '').trim(),
       serial: i.serial || i.product_detail_id || i.id || null
     }));
+    
+    if (typeof couponQuote !== 'undefined' && couponQuote && couponQuote.ok && couponQuote.coupon) {
+      try {
+        await redeemCoupon(supabase, {
+          couponId: couponQuote.coupon.id,
+          userId: user_id,
+          orderRef: (typeof orderRef !== 'undefined' ? orderRef : null) || (typeof supplierOrderId !== 'undefined' ? supplierOrderId : null),
+          amountSaved: couponDiscount || 0
+        });
+      } catch (_) {}
+    }
+
     await sendPushToUser(supabase, user_id, {
       title: 'Order completed',
       body: 'Your ' + productName + ' order has been fulfilled successfully.',

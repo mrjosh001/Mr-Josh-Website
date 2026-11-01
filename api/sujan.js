@@ -2,6 +2,7 @@ import { createClient } from '@supabase/supabase-js';
 import { formatCredentials, formatMultiLogCredentials, joinRawLogDetails } from '../lib/formatCredentials.js';
 import { readSupplierStock } from '../lib/supplierStock.js';
 import { sendPushToUser, sendPushToAdmins } from '../lib/push.js';
+import { quoteCoupon, redeemCoupon } from '../lib/coupons.js';
 
 /**
  * /api/sujan — everything for the Sujan Department supplier, one file.
@@ -347,6 +348,7 @@ async function handleOrder(req, res) {
   const user_id = auth.user.id;
 
   const body = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : (req.body || {});
+  const coupon_code = body.coupon_code || body.code || null;
   const {
     product_key,
     quantity = 1,
@@ -409,6 +411,23 @@ async function handleOrder(req, res) {
 
     total = Number(product.price) * qty;
     productName = product.name;
+
+
+    let couponQuote = null;
+    let couponDiscount = 0;
+    if (coupon_code) {
+      couponQuote = await quoteCoupon(supabase, {
+        code: coupon_code,
+        userId: user_id,
+        subtotal: total,
+        appliesTo: 'logs'
+      });
+      if (!couponQuote.ok) {
+        return res.status(400).json({ success: false, message: couponQuote.message || 'Invalid coupon code' });
+      }
+      couponDiscount = Number(couponQuote.discount || 0);
+      total = Number(couponQuote.finalTotal);
+    }
 
     // 2. User balance
     let { data: profile, error: profErr } = await supabase
@@ -586,6 +605,17 @@ async function handleOrder(req, res) {
         is_available: (product.stock_quantity || 0) - qty > 0
       })
       .eq('product_key', product_key);
+
+    if (couponQuote && couponQuote.ok && couponQuote.coupon) {
+      try {
+        await redeemCoupon(supabase, {
+          couponId: couponQuote.coupon.id,
+          userId: user_id,
+          orderRef: (typeof orderRef !== 'undefined' && orderRef) || (typeof supplierOrderId !== 'undefined' ? supplierOrderId : null),
+          amountSaved: couponDiscount || 0
+        });
+      } catch (_) {}
+    }
 
     try {
       await sendPushToUser(supabase, user_id, {

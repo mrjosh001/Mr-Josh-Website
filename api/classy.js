@@ -19,6 +19,7 @@ import { createClient } from '@supabase/supabase-js';
 import { formatCredentials, formatMultiLogCredentials, joinRawLogDetails } from '../lib/formatCredentials.js';
 import { readSupplierStock } from '../lib/supplierStock.js';
 import { sendPushToUser, sendPushToAdmins } from '../lib/push.js';
+import { quoteCoupon, redeemCoupon } from '../lib/coupons.js';
 
 const supabase = createClient(
   process.env.SUPABASE_URL,
@@ -280,6 +281,7 @@ async function handleOrder(req, res) {
   const user_id = auth.user.id;
 
   const body = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : (req.body || {});
+  const coupon_code = body.coupon_code || body.code || null;
   const { product_key, quantity = 1, external_order_id } = body;
   const qty = Math.max(1, Math.min(10, parseInt(quantity, 10) || 1));
   const productId = productIdFromKey(product_key);
@@ -462,7 +464,18 @@ async function handleOrder(req, res) {
         ? purchaseJson.order_details.remaining_balance
         : null;
 
-        try {
+    if (couponQuote && couponQuote.ok && couponQuote.coupon) {
+      try {
+        await redeemCoupon(supabase, {
+          couponId: couponQuote.coupon.id,
+          userId: user_id,
+          orderRef: (typeof orderRef !== 'undefined' && orderRef) || (typeof supplierOrderId !== 'undefined' ? supplierOrderId : null),
+          amountSaved: couponDiscount || 0
+        });
+      } catch (_) {}
+    }
+
+    try {
       await sendPushToUser(supabase, user_id, {
         title: 'Order completed',
         body: 'Your log order is ready. Open My Orders to view details.',

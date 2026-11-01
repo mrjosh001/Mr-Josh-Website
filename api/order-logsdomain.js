@@ -1,5 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
 import { sendPushToUser, sendPushToAdmins } from '../lib/push.js';
+import { quoteCoupon, redeemCoupon } from '../lib/coupons.js';
 
 /**
  * /api/order-logsdomain
@@ -346,6 +347,7 @@ export default async function handler(req, res) {
   }
 
   const body = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : (req.body || {});
+  const coupon_code = body.coupon_code || body.code || null;
   const {
     product_key,
     quantity = 1,
@@ -391,6 +393,23 @@ export default async function handler(req, res) {
 
     total = Number(product.price) * qty;
     productName = product.name;
+
+
+    let couponQuote = null;
+    let couponDiscount = 0;
+    if (coupon_code) {
+      couponQuote = await quoteCoupon(supabase, {
+        code: coupon_code,
+        userId: user_id,
+        subtotal: total,
+        appliesTo: 'logs'
+      });
+      if (!couponQuote.ok) {
+        return res.status(400).json({ success: false, message: couponQuote.message || 'Invalid coupon code' });
+      }
+      couponDiscount = Number(couponQuote.discount || 0);
+      total = Number(couponQuote.finalTotal);
+    }
 
     // 2. User balance
     let profile = null;
@@ -574,7 +593,18 @@ export default async function handler(req, res) {
       })
       .eq('product_key', product_key);
 
-        try {
+    if (couponQuote && couponQuote.ok && couponQuote.coupon) {
+      try {
+        await redeemCoupon(supabase, {
+          couponId: couponQuote.coupon.id,
+          userId: user_id,
+          orderRef: (typeof orderRef !== 'undefined' && orderRef) || (typeof supplierOrderId !== 'undefined' ? supplierOrderId : null),
+          amountSaved: couponDiscount || 0
+        });
+      } catch (_) {}
+    }
+
+    try {
       await sendPushToUser(supabase, user_id, {
         title: 'Order completed',
         body: 'Your log order is ready. Open My Orders to view details.',

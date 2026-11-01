@@ -1,4 +1,5 @@
 import { sendPushToUser, sendPushToAdmins } from '../lib/push.js';
+import { quoteCoupon, redeemCoupon } from '../lib/coupons.js';
 import { createClient } from '@supabase/supabase-js';
 import {
   joinRawLogDetails,
@@ -199,7 +200,7 @@ export default async function handler(req, res) {
   const user_id = auth.user.id;
 
   const body = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : req.body || {};
-  const { product_key, quantity = 1, external_order_id } = body;
+  const { product_key, quantity = 1, external_order_id , coupon_code} = body;
 
   if (!product_key) {
     return res.status(400).json({ success: false, message: 'product_key is required' });
@@ -233,6 +234,23 @@ export default async function handler(req, res) {
 
     total = Number(product.price) * qty;
     productName = product.name;
+
+    // Coupon (any active admin code; server re-validates)
+    let couponQuote = null;
+    let couponDiscount = 0;
+    if (coupon_code) {
+      couponQuote = await quoteCoupon(supabase, {
+        code: coupon_code,
+        userId: user_id,
+        subtotal: total,
+        appliesTo: 'logs'
+      });
+      if (!couponQuote.ok) {
+        return res.status(400).json({ success: false, message: couponQuote.message || 'Invalid coupon code' });
+      }
+      couponDiscount = Number(couponQuote.discount || 0);
+      total = Number(couponQuote.finalTotal);
+    }
 
     let { data: profile, error: profileErr } = await supabase
       .from('profiles')
@@ -468,7 +486,19 @@ export default async function handler(req, res) {
     }
 
     try {
-      await sendPushToUser(supabase, user_id, {
+      
+    if (typeof couponQuote !== 'undefined' && couponQuote && couponQuote.ok && couponQuote.coupon) {
+      try {
+        await redeemCoupon(supabase, {
+          couponId: couponQuote.coupon.id,
+          userId: user_id,
+          orderRef: (typeof orderRef !== 'undefined' ? orderRef : null) || (typeof supplierOrderId !== 'undefined' ? supplierOrderId : null),
+          amountSaved: couponDiscount || 0
+        });
+      } catch (_) {}
+    }
+
+    await sendPushToUser(supabase, user_id, {
         title: 'Order completed',
         body: 'Your log order is ready. Open My Orders to view details.',
         url: '/my-orders.html',
