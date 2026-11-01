@@ -94,23 +94,21 @@ async function handleLdSync(req, res) {
 
       const { data: existing } = await supabase
         .from('products')
-        .select('product_key, price, is_available')
+        .select('product_key, admin_hidden')
         .eq('product_key', productKey)
         .maybeSingle();
 
       if (existing) {
+        // EXISTING: only supplier cost + stock + availability. Never overwrite name/price/category/desc.
         const patch = {
-          name,
           supplier_price: supplierPrice,
           stock_quantity: stock,
           source: 'logsdomain',
           updated_at: now
         };
-        // Do not overwrite admin sell price if already set
-        if (!(Number(existing.price) > 0)) patch.price = sell;
-        // Stock 0 → hide; stock > 0 does not force show if admin hid it
         if (stock <= 0) patch.is_available = false;
-        else if (existing.is_available == null) patch.is_available = true;
+        else if (existing.admin_hidden) { /* stay hidden */ }
+        else patch.is_available = true;
         const { error } = await supabase.from('products').update(patch).eq('product_key', productKey);
         if (error) { writeErrors++; if (errorSamples.length < 3) errorSamples.push(error.message); }
         else totalUpdated++;
@@ -194,11 +192,13 @@ async function handleBulkmailSync(req, res) {
       const sell = bmSellPriceNgn(usd);
       const name = String(p.name || p.sku || ('BulkMail #' + p.id)).trim();
 
-      const { data: existing } = await supabase.from('products').select('product_key, price, is_available').eq('product_key', productKey).maybeSingle();
+      const { data: existing } = await supabase.from('products').select('product_key, admin_hidden').eq('product_key', productKey).maybeSingle();
       if (existing) {
-        const patch = { name: name, supplier_price: usd, stock_quantity: stockQty, source: 'bulkmail', category: 'BulkMail', updated_at: now };
+        // EXISTING: only supplier cost + stock + availability. Never overwrite name/price/category/desc.
+        const patch = { supplier_price: usd, stock_quantity: stockQty, source: 'bulkmail', updated_at: now };
         if (stockQty <= 0) patch.is_available = false;
-        if (!(Number(existing.price) > 0)) patch.price = sell;
+        else if (existing.admin_hidden) { /* stay hidden */ }
+        else patch.is_available = true;
         const { error } = await supabase.from('products').update(patch).eq('product_key', productKey);
         if (error) { writeErrors++; if (errorSamples.length < 3) errorSamples.push(error.message); } else totalUpdated++;
       } else {
@@ -283,14 +283,17 @@ async function handleAccszoneSync(req, res) {
 
       const { data: existing } = await supabase
         .from('products')
-        .select('product_key, price, is_available, category')
+        .select('product_key, admin_hidden, is_available')
         .eq('product_key', productKey)
         .maybeSingle();
 
       if (existing) {
-        const patch = { name: name, supplier_price: usd, stock_quantity: stockQty, source: 'accszone', updated_at: now };
-        if (!(Number(existing.price) > 0)) patch.price = sell;
+        // EXISTING: only supplier cost + stock + availability. Never overwrite name/price/category/desc.
+        // AccsZone stays admin-gated: do not auto-show even when stock returns unless admin cleared admin_hidden / enabled it.
+        const patch = { supplier_price: usd, stock_quantity: stockQty, source: 'accszone', updated_at: now };
         if (stockQty <= 0) patch.is_available = false;
+        else if (existing.admin_hidden || existing.is_available === false) { /* stay hidden until admin enables */ }
+        else patch.is_available = true;
         const { error } = await supabase.from('products').update(patch).eq('product_key', productKey);
         if (error) { writeErrors++; if (errorSamples.length < 3) errorSamples.push(error.message); }
         else totalUpdated++;

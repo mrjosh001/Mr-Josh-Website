@@ -185,21 +185,15 @@ async function handleSync(req, res) {
 
     const { data: existing } = await supabase
       .from('products')
-      .select('product_key, admin_hidden, price, supplier_price, price_source')
+      .select('product_key, admin_hidden')
       .eq('product_key', productKey)
       .maybeSingle();
 
     if (existing) {
-      // EXISTING: refresh supplier name, description, supplier cost, stock.
-      // Category stays admin-owned. Sell price follows supplier cost changes
-      // unless this row was explicitly locked by admin (price_source=admin).
+      // EXISTING: only supplier cost + stock + availability.
+      // Never overwrite admin name, price, category, or descriptions.
       updatedCount++;
-      const prevCost = Number(existing.supplier_price) || 0;
-      const costChanged = Math.abs(prevCost - supplierPrice) > 0.0001;
       const patch = {
-        name,
-        description: cleanDescription,
-        display_description: cleanDescription,
         supplier_price: supplierPrice,
         stock_quantity: stock,
         source: 'sujandepartment',
@@ -208,12 +202,6 @@ async function handleSync(req, res) {
       if (stock <= 0) patch.is_available = false;
       else if (existing.admin_hidden) { /* admin hid — stay hidden */ }
       else patch.is_available = true;
-      // Update customer price when supplier cost moves (or price was 0)
-      if (String(existing.price_source || '') !== 'admin') {
-        if (costChanged || !(Number(existing.price) > 0)) {
-          patch.price = applyRandomMarkup(supplierPrice);
-        }
-      }
       const { error } = await supabase
         .from('products')
         .update(patch)
