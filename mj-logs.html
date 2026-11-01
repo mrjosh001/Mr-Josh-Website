@@ -131,6 +131,21 @@ details[open] .product-description-toggle::before{transform:rotate(90deg);displa
 .ps-qty-controls{display:flex;align-items:center;gap:10px}
 .ps-qty-btn{width:34px;height:34px;border-radius:50%;border:none;background:#e2e8f0;color:#0f172a;font-size:18px;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center}
 .ps-qty-val{font-size:16px;font-weight:800;min-width:24px;text-align:center}
+
+.ps-coupon-wrap{margin:0 0 14px;padding:14px;border-radius:16px;border:1px solid var(--border,#e5e7eb);background:var(--surface,#f8fafc)}
+[data-theme="dark"] .ps-coupon-wrap{background:rgba(15,23,42,.45);border-color:rgba(148,163,184,.2)}
+.ps-coupon-label{display:block;font-size:11px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--muted,#64748b);margin:0 0 8px}
+.ps-coupon{display:flex;gap:8px;align-items:center}
+.ps-coupon input{flex:1;border:1px solid var(--border,#e5e7eb);border-radius:999px;padding:12px 16px;font-size:14px;font-weight:600;font-family:inherit;background:var(--input-bg,#fff);color:var(--text,#0f172a);outline:none}
+[data-theme="dark"] .ps-coupon input{background:rgba(15,23,42,.7);border-color:rgba(148,163,184,.25);color:#f1f5f9}
+.ps-coupon input:focus{border-color:#3b82f6;box-shadow:0 0 0 3px rgba(59,130,246,.15)}
+.ps-coupon button{border:none;border-radius:999px;padding:12px 18px;font-size:13px;font-weight:800;background:#0d9488;color:#fff;cursor:pointer;font-family:inherit;white-space:nowrap}
+.ps-coupon button:active{transform:scale(.98)}
+.ps-coupon-msg{font-size:12px;font-weight:650;margin:8px 0 0;min-height:16px}
+.ps-coupon-msg.ok{color:#15803d}
+.ps-coupon-msg.err{color:#b91c1c}
+.ps-save-line{font-size:12px;font-weight:700;color:#0d9488;margin:6px 0 0}
+
 .ps-total-row{display:flex;justify-content:space-between;align-items:center;background:linear-gradient(135deg,#eef2ff,#e0e7ff);border-radius:14px;padding:14px 16px;margin-bottom:14px}
 .ps-total-label{font-size:14px;font-weight:700;color:#4338ca}
 .ps-total-price{font-size:18px;font-weight:800;color:#312e81}
@@ -266,6 +281,15 @@ details[open] .product-description-toggle::before{transform:rotate(90deg);displa
 <button type="button" class="ps-qty-btn" id="psQtyPlus">+</button>
 </div>
 </div>
+<div class="ps-coupon-wrap">
+<label class="ps-coupon-label" for="psCouponInput">Coupon code</label>
+<div class="ps-coupon">
+<input type="text" id="psCouponInput" placeholder="CODE" maxlength="40" autocomplete="off" autocapitalize="characters" spellcheck="false" />
+<button type="button" id="psCouponBtn">Apply</button>
+</div>
+<div class="ps-coupon-msg" id="psCouponMsg"></div>
+<div class="ps-save-line" id="psSaveLine" style="display:none"></div>
+</div>
 <div class="ps-total-row">
 <span class="ps-total-label">Total</span>
 <span class="ps-total-price" id="psTotal">₦0</span>
@@ -335,6 +359,8 @@ let sbClient = null;
 let currentUserId = null;
 let currentBalanceNgn = 0;
 let isBuying = false;
+let activeCoupon = null;
+
 let purchaseNonce = null;
 let searchQuery = '';
 
@@ -886,16 +912,20 @@ document.getElementById('purchaseModal').classList.add('active');
 }
 
 function updatePurchaseTotal(){
-if(!activeProduct) return;
-const stock=parseInt(activeProduct.stock_quantity,10);
-const cap = Math.min(MAX_QTY, Number.isNaN(stock) ? MAX_QTY : stock);
-if(activeQty > cap) activeQty = cap;
-if(activeQty < 1) activeQty = 1;
-const price=parseFloat(activeProduct.price)||0;
-document.getElementById('psQty').textContent=String(activeQty);
-document.getElementById('psTotal').textContent=money(price*activeQty);
+const price=parseFloat(activeProduct&&activeProduct.price)||0;
+let total=price*activeQty;
+const saveEl=document.getElementById('psSaveLine');
+if(activeCoupon&&activeCoupon.code){
+  let discount=Number(activeCoupon.discount)||0;
+  total=Math.max(0, (price*activeQty) - discount);
+  if(activeCoupon.finalTotal!=null) total=Math.max(0, Number(activeCoupon.finalTotal));
+  if(saveEl){ saveEl.style.display='block'; saveEl.textContent='You save ₦'+Number(activeCoupon.discount||0).toLocaleString()+' with '+activeCoupon.code; }
+} else if(saveEl){ saveEl.style.display='none'; saveEl.textContent=''; }
+const el=document.getElementById('psTotal');
+if(el) el.textContent=money(total);
 const buyBtn=document.getElementById('psBuyBtn');
-buyBtn.disabled = (!Number.isNaN(stock) && stock <= 0);
+const stock=activeProduct?Number(activeProduct.stock_quantity):NaN;
+if(buyBtn) buyBtn.disabled = (!Number.isNaN(stock) && stock <= 0);
 }
 
 function closePurchaseModal(){
@@ -905,7 +935,7 @@ activeProduct=null;
 document.getElementById('purchaseCloseBtn').addEventListener('click', closePurchaseModal);
 document.getElementById('purchaseModal').addEventListener('click', function(e){ if(e.target===this) closePurchaseModal(); });
 document.getElementById('psQtyMinus').addEventListener('click', function(){
-if(activeQty>1){activeQty--;updatePurchaseTotal()}
+if(activeQty>1){activeQty--; activeCoupon=null; var cm=document.getElementById("psCouponMsg"); if(cm){cm.textContent="";cm.className="ps-coupon-msg";} updatePurchaseTotal()}
 });
 document.getElementById('psQtyPlus').addEventListener('click', function(){
 const stock=parseInt(activeProduct&&activeProduct.stock_quantity,10);
@@ -918,6 +948,48 @@ activeQty++;updatePurchaseTotal();
 
 });
 document.getElementById('psBuyBtn').addEventListener('click', confirmBuyNow);
+
+async function applyPsCoupon(){
+  const input=document.getElementById('psCouponInput');
+  const msg=document.getElementById('psCouponMsg');
+  const code=(input&&input.value||'').trim();
+  if(!code){ if(msg){ msg.textContent='Enter a coupon code'; msg.className='ps-coupon-msg err'; } return; }
+  const price=parseFloat(activeProduct&&activeProduct.price)||0;
+  const sub=price*Math.max(1,activeQty||1);
+  try{
+    const { data: { session } } = await sbClient.auth.getSession();
+    const token = session && session.access_token;
+    if(!token){ if(msg){ msg.textContent='Sign in to use a coupon'; msg.className='ps-coupon-msg err'; } return; }
+    const res=await fetch('/api/order',{
+      method:'POST',
+      headers:{'Content-Type':'application/json','Authorization':'Bearer '+token},
+      body:JSON.stringify({ action:'validate_coupon', coupon_code:code, subtotal:sub, applies_to:'logs' })
+    });
+    const json=await res.json().catch(function(){return {};});
+    if(!res.ok||!json.success){
+      activeCoupon=null;
+      if(msg){ msg.textContent=(json&&json.message)||'Invalid or inactive coupon'; msg.className='ps-coupon-msg err'; }
+      updatePurchaseTotal();
+      return;
+    }
+    activeCoupon={
+      code: json.code,
+      discount: json.discount,
+      finalTotal: json.final_total,
+      percent_off: json.percent_off,
+      amount_off_ngn: json.amount_off_ngn
+    };
+    if(msg){ msg.textContent='Coupon applied — you save ₦'+Number(json.discount||0).toLocaleString(); msg.className='ps-coupon-msg ok'; }
+    updatePurchaseTotal();
+  }catch(e){
+    activeCoupon=null;
+    if(msg){ msg.textContent='Could not verify coupon'; msg.className='ps-coupon-msg err'; }
+    updatePurchaseTotal();
+  }
+}
+
+document.getElementById('psCouponBtn')&&document.getElementById('psCouponBtn').addEventListener('click', applyPsCoupon);
+
 
 async function confirmBuyNow(){
 // Lock FIRST — before any await — so double/triple taps only run once
@@ -940,7 +1012,9 @@ return;
 const purchasedProduct = activeProduct;
 const qtyRequested = Math.max(1, Math.min(10, parseInt(activeQty, 10) || 1));
 const price = parseFloat(purchasedProduct.price)||0;
-const total = price * qtyRequested;
+let total = price * qtyRequested;
+if(activeCoupon && activeCoupon.finalTotal != null){ total = Math.max(0, Number(activeCoupon.finalTotal)); }
+else if(activeCoupon && activeCoupon.discount){ total = Math.max(0, total - Number(activeCoupon.discount)); }
 const buyBtn = document.getElementById('psBuyBtn');
 const originalLabel = buyBtn ? buyBtn.innerHTML : '';
 if(buyBtn){ buyBtn.disabled = true; buyBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Processing...'; }
