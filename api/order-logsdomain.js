@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
+import { sendPushToUser, sendPushToAdmins } from '../lib/push.js';
 
 /**
  * /api/order-logsdomain
@@ -573,7 +574,24 @@ export default async function handler(req, res) {
       })
       .eq('product_key', product_key);
 
-    return res.status(200).json({
+        try {
+      await sendPushToUser(supabase, user_id, {
+        title: 'Order completed',
+        body: 'Your log order is ready. Open My Orders to view details.',
+        url: '/my-orders.html',
+        type: 'purchase'
+      });
+    } catch (_) {}
+    try {
+      await sendPushToAdmins(supabase, {
+        title: 'New log order',
+        body: String(customerId || 'Customer') + ' bought ' + (productName || 'log') + (qty ? (' ×' + qty) : '') + ' · ₦' + Number(total || 0).toLocaleString(),
+        url: '/admin.html',
+        type: 'admin_sale'
+      });
+    } catch (_) {}
+
+return res.status(200).json({
       success: true,
       message: 'Order fulfilled successfully',
       data: {

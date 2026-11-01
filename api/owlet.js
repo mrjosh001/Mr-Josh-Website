@@ -1,6 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
 import { rateLimit, applyRateLimitHeaders } from '../lib/rateLimit.js';
-import { sendPushToUser } from '../lib/push.js';
+import { sendPushToUser, sendPushToAdmins } from '../lib/push.js';
 
 /**
  * /api/owlet — MJ Boosters (JAP + CasperSMM Perfect Panel v2). Customer catalog shows both.
@@ -1215,6 +1215,15 @@ async function handleOrder(req, res) {
     isTg ? '/telegram.html' : '/mj-boosters.html',
     isTg ? 'telegram' : 'booster'
   );
+  try {
+    const cust = (userGate.profile && userGate.profile.customer_id) || userGate.user.id.slice(0, 8);
+    await sendPushToAdmins(supabase, {
+      title: isTg ? 'New Telegram order' : 'New boost order',
+      body: String(cust) + ' · ' + (service?.name || 'order') + (quantity ? (' ×' + quantity) : '') + ' · ₦' + Number(totalNgn || 0).toLocaleString(),
+      url: '/admin.html',
+      type: 'admin_sale'
+    });
+  } catch (_) {}
   return res.status(200).json({
     success: true,
     message: 'Boost order placed successfully',

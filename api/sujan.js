@@ -1,6 +1,7 @@
 import { createClient } from '@supabase/supabase-js';
 import { formatCredentials, formatMultiLogCredentials, joinRawLogDetails } from '../lib/formatCredentials.js';
 import { readSupplierStock } from '../lib/supplierStock.js';
+import { sendPushToUser, sendPushToAdmins } from '../lib/push.js';
 
 /**
  * /api/sujan — everything for the Sujan Department supplier, one file.
@@ -585,6 +586,23 @@ async function handleOrder(req, res) {
         is_available: (product.stock_quantity || 0) - qty > 0
       })
       .eq('product_key', product_key);
+
+    try {
+      await sendPushToUser(supabase, user_id, {
+        title: 'Order completed',
+        body: 'Your log order is ready. Open My Orders to view details.',
+        url: '/my-orders.html',
+        type: 'purchase'
+      });
+    } catch (_) {}
+    try {
+      await sendPushToAdmins(supabase, {
+        title: 'New log order',
+        body: String(customerId || 'Customer') + ' bought ' + (productName || 'log') + (qty ? (' ×' + qty) : '') + ' · ₦' + Number(total || 0).toLocaleString(),
+        url: '/admin.html',
+        type: 'admin_sale'
+      });
+    } catch (_) {}
 
     return res.status(200).json({
       success: true,

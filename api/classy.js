@@ -18,6 +18,7 @@
 import { createClient } from '@supabase/supabase-js';
 import { formatCredentials, formatMultiLogCredentials, joinRawLogDetails } from '../lib/formatCredentials.js';
 import { readSupplierStock } from '../lib/supplierStock.js';
+import { sendPushToUser, sendPushToAdmins } from '../lib/push.js';
 
 const supabase = createClient(
   process.env.SUPABASE_URL,
@@ -461,7 +462,24 @@ async function handleOrder(req, res) {
         ? purchaseJson.order_details.remaining_balance
         : null;
 
-    return res.status(200).json({
+        try {
+      await sendPushToUser(supabase, user_id, {
+        title: 'Order completed',
+        body: 'Your log order is ready. Open My Orders to view details.',
+        url: '/my-orders.html',
+        type: 'purchase'
+      });
+    } catch (_) {}
+    try {
+      await sendPushToAdmins(supabase, {
+        title: 'New log order',
+        body: String(customerId || 'Customer') + ' bought ' + (productName || 'log') + (qty ? (' ×' + qty) : '') + ' · ₦' + Number(total || 0).toLocaleString(),
+        url: '/admin.html',
+        type: 'admin_sale'
+      });
+    } catch (_) {}
+
+return res.status(200).json({
       success: true,
       message: 'Order fulfilled successfully',
       data: {
