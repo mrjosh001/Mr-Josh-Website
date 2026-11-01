@@ -1198,7 +1198,7 @@ body::after {
 
 #home.home-v2 .bal-ngn .stats {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: 1fr 1fr 1fr;
   gap: 10px;
   margin-top: 18px;
   padding: 12px;
@@ -3343,6 +3343,10 @@ html[data-theme="light"] .logo-word, :root[data-theme="light"] .logo-word{color:
                     <div>
                         <span>Spent</span>
                         <b id="homeTotalSpent">₦0.00</b>
+                    </div>
+                    <div>
+                        <span>This month</span>
+                        <b id="homeMonthSpent">₦0.00</b>
                     </div>
                 </div>
                 <div class="cta">
@@ -7577,9 +7581,9 @@ async function fetchUserOrders(userId) {
     renderOrders();
 }
 
-// Total Orders / Total Spent — completed orders only across ALL services.
-// Logs (orders) + SMS (number_orders) + Boosters (booster_orders).
-// Add a new block in SERVICE_SPEND_SOURCES when you launch another service.
+// Total Orders / Total Spent / This month — completed orders across ALL services.
+// Logs (orders) + SMS (number_orders) + Boosters (booster_orders) + eSIM.
+// "This month" uses Africa/Lagos calendar month.
 async function fetchUserSpendingSummary(userId) {
     if (!supabaseClient || !userId) return;
 
@@ -7599,6 +7603,28 @@ async function fetchUserSpendingSummary(userId) {
         return Number.isFinite(n) ? n : 0;
     }
 
+    function lagosYearMonth(iso) {
+        try {
+            const d = iso ? new Date(iso) : new Date();
+            if (Number.isNaN(d.getTime())) return '';
+            const parts = new Intl.DateTimeFormat('en-CA', {
+                timeZone: 'Africa/Lagos',
+                year: 'numeric',
+                month: '2-digit'
+            }).formatToParts(d);
+            const y = (parts.find(function (p) { return p.type === 'year'; }) || {}).value || '';
+            const m = (parts.find(function (p) { return p.type === 'month'; }) || {}).value || '';
+            return y && m ? (y + '-' + m) : '';
+        } catch (_) { return ''; }
+    }
+
+    const thisMonthKey = lagosYearMonth(null);
+
+    function inThisMonth(iso) {
+        if (!thisMonthKey || !iso) return false;
+        return lagosYearMonth(iso) === thisMonthKey;
+    }
+
     try {
         let token = null;
         try {
@@ -7614,16 +7640,16 @@ async function fetchUserSpendingSummary(userId) {
 
         const [logsRes, smsRes, boostJson, esimRes] = await Promise.all([
             supabaseClient.from('orders')
-                .select('amount, quantity, status')
+                .select('amount, quantity, status, created_at')
                 .eq('user_id', userId)
                 .in('status', ['completed', 'paid', 'success', 'delivered']),
             supabaseClient.from('number_orders')
-                .select('price, status', { count: 'exact' })
+                .select('price, status, created_at', { count: 'exact' })
                 .eq('user_id', userId)
                 .eq('status', 'completed'),
             boostFetch,
             supabaseClient.from('esim_orders')
-                .select('amount_ngn, status')
+                .select('amount_ngn, status, created_at')
                 .eq('user_id', userId)
                 .in('status', ['completed', 'paid', 'success'])
         ]);
@@ -7633,28 +7659,35 @@ async function fetchUserSpendingSummary(userId) {
             boostRows = boostJson.data.filter((o) => isCompletedStatus(o.status));
         } else {
             const boostRes = await supabaseClient.from('booster_orders')
-                .select('price_ngn, charge, price, status')
+                .select('price_ngn, charge, price, status, created_at')
                 .eq('user_id', userId);
             boostRows = (boostRes.error ? [] : (boostRes.data || [])).filter((o) => isCompletedStatus(o.status));
         }
 
         const logRows = logsRes.error ? [] : (logsRes.data || []);
         const smsRows = smsRes.error ? [] : (smsRes.data || []);
-        // Logs: sum quantity (qty 3 = 3), not number of rows
         const logCount = logRows.reduce((s, o) => s + Math.max(1, Number(o.quantity) || 1), 0);
         const smsCount = smsRes.error ? 0 : (smsRes.count ?? smsRows.length);
         const boostCount = boostRows.length;
         const esimRows = esimRes.error ? [] : (esimRes.data || []);
         const esimCount = esimRows.length;
         const totalOrders = logCount + smsCount + boostCount + esimCount;
-        const totalSpent =
-            logRows.reduce((s, o) => s + (Number(o.amount) || 0), 0) +
-            smsRows.reduce((s, o) => s + (Number(o.price) || 0), 0) +
-            boostRows.reduce((s, o) => s + boostPrice(o), 0) +
-            esimRows.reduce((s, o) => s + (Number(o.amount_ngn) || 0), 0);
+
+        const logSpent = logRows.reduce((s, o) => s + (Number(o.amount) || 0), 0);
+        const smsSpent = smsRows.reduce((s, o) => s + (Number(o.price) || 0), 0);
+        const boostSpent = boostRows.reduce((s, o) => s + boostPrice(o), 0);
+        const esimSpent = esimRows.reduce((s, o) => s + (Number(o.amount_ngn) || 0), 0);
+        const totalSpent = logSpent + smsSpent + boostSpent + esimSpent;
+
+        const monthSpent =
+            logRows.filter((o) => inThisMonth(o.created_at)).reduce((s, o) => s + (Number(o.amount) || 0), 0) +
+            smsRows.filter((o) => inThisMonth(o.created_at)).reduce((s, o) => s + (Number(o.price) || 0), 0) +
+            boostRows.filter((o) => inThisMonth(o.created_at || o.createdAt || o.updated_at)).reduce((s, o) => s + boostPrice(o), 0) +
+            esimRows.filter((o) => inThisMonth(o.created_at)).reduce((s, o) => s + (Number(o.amount_ngn) || 0), 0);
 
         safeSet('homeTotalOrders', totalOrders.toLocaleString());
         safeSet('homeTotalSpent', '₦' + totalSpent.toLocaleString(undefined, { minimumFractionDigits: 2 }));
+        safeSet('homeMonthSpent', '₦' + monthSpent.toLocaleString(undefined, { minimumFractionDigits: 2 }));
     } catch (e) {}
 }
 
