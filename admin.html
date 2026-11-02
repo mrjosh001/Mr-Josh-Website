@@ -1008,6 +1008,7 @@ function withLagos(opts) { return Object.assign({ timeZone: 'Africa/Lagos' }, op
 <button class="nav-item" data-tab="telegram-orders" onclick="switchTab('telegram-orders')"><i class="fab fa-telegram"></i> Telegram Orders</button>
 </div>
 </div>
+ <button class="nav-item" data-tab="coupons" onclick="switchTab('coupons')"><i class="fas fa-ticket-alt"></i> Coupons</button>
  <button class="nav-item" data-tab="notify" onclick="switchTab('notify')"><i class="fas fa-bullhorn"></i> Notifications</button>
  <a class="nav-item" href="admin-support.html" id="navSupportDesk" style="text-decoration:none;position:relative;"><i class="fas fa-headset"></i> Support Desk <span id="supportNavBadge" style="display:none;margin-left:6px;background:#ef4444;color:#fff;font-size:10px;font-weight:800;padding:2px 7px;border-radius:999px;min-width:18px;text-align:center;">0</span></a>
  <button class="nav-item" data-tab="sub-admins" onclick="switchTab('sub-admins')"><i class="fas fa-user-shield"></i> Sub-Admins</button>
@@ -1708,7 +1709,42 @@ function withLagos(opts) { return Object.assign({ timeZone: 'Africa/Lagos' }, op
  </div>
  </div>
 
- <div id="tab-notify" class="tab-content">
+ 
+ <div id="tab-coupons" class="tab-content">
+ <div class="panel">
+ <div class="panel-title" style="margin-bottom:6px;">Create coupon</div>
+ <p style="color:var(--muted);font-size:12.5px;margin:0 0 14px;line-height:1.5;">
+ Codes work on <b>MJ Logs</b> checkout. Set %, how many people can use it, and how long it stays active. Toggle off anytime to deactivate.
+ </p>
+ <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:12px;max-width:920px;">
+  <div class="field"><label>Code</label><input type="text" id="cpCode" placeholder="e.g. SAVE10" maxlength="32" style="text-transform:uppercase;" /></div>
+  <div class="field"><label>% Discount</label><input type="number" id="cpPercent" placeholder="10" min="1" max="100" step="1" /></div>
+  <div class="field"><label>Or fixed ₦ off</label><input type="number" id="cpAmount" placeholder="500" min="0" step="50" /></div>
+  <div class="field"><label>Min order ₦</label><input type="number" id="cpMinOrder" placeholder="0" min="0" step="100" value="0" /></div>
+  <div class="field"><label>Days active</label><input type="number" id="cpDays" placeholder="7" min="1" step="1" value="7" /></div>
+  <div class="field"><label>Max total uses</label><input type="number" id="cpMaxUses" placeholder="Unlimited" min="1" step="1" /></div>
+  <div class="field"><label>Max uses per user</label><input type="number" id="cpMaxPerUser" placeholder="1" min="1" step="1" value="1" /></div>
+  <div class="field"><label>Applies to</label>
+   <select id="cpApplies">
+    <option value="logs" selected>MJ Logs only</option>
+    <option value="all">All (future)</option>
+   </select>
+  </div>
+ </div>
+ <div id="cpCreateErr" class="error-msg" style="margin-top:8px;"></div>
+ <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:12px;">
+  <button type="button" class="btn btn-primary btn-sm" onclick="createCoupon()"><i class="fas fa-plus"></i> Create & activate</button>
+  <button type="button" class="btn btn-sm" onclick="loadCoupons()"><i class="fas fa-sync"></i> Refresh list</button>
+ </div>
+ </div>
+
+ <div class="panel" style="margin-top:14px;">
+ <div class="panel-title" style="margin-bottom:10px;">Active & past codes</div>
+ <div id="cpList" style="overflow-x:auto;">Loading…</div>
+ </div>
+ </div>
+
+<div id="tab-notify" class="tab-content">
  <div class="panel">
  <div class="panel-title" style="margin-bottom:10px;">Admin sale alerts (your phone)</div>
  <div class="price-note" style="margin-bottom:12px;">Turn this on so <b>you</b> get a lock-screen alert when a customer buys a log or booster. Uses the same phone permission as the user app.</div>
@@ -2065,6 +2101,7 @@ let currentUserStatusFilter = 'all';
 let currentUserSort = 'joined_asc';
 
 const tabTitles = {
+ coupons: 'Coupons',
  overview: 'Overview',
  users: 'Customers',
  lookup: 'Customer Lookup',
@@ -6805,6 +6842,136 @@ let _tgOrdersLoaded = false;
 let _esimOrdersLoaded = false;
 
 function toggleNavGroup(id){ const g=document.getElementById(id); if(!g) return; const open=!g.classList.contains('open'); g.classList.toggle('open',open); g.dataset.pinned=open?'1':'0'; }
+
+async function adminPost(body) {
+  const { data: { session } } = await sbClient.auth.getSession();
+  const token = session && session.access_token;
+  if (!token) throw new Error('Sign in required');
+  const res = await fetch('/api/admin', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+    body: JSON.stringify(body)
+  });
+  const json = await res.json().catch(function () { return {}; });
+  if (!res.ok || json.success === false) throw new Error((json && json.message) || ('Request failed ' + res.status));
+  return json;
+}
+
+function cpFmtDate(iso) {
+  if (!iso) return '—';
+  try {
+    return new Date(iso).toLocaleString('en-NG', { timeZone: 'Africa/Lagos', dateStyle: 'medium', timeStyle: 'short' });
+  } catch (_) { return String(iso).slice(0, 16); }
+}
+
+function cpStatus(c) {
+  const now = Date.now();
+  if (c.active === false) return '<span style="color:#b91c1c;font-weight:700;">Off</span>';
+  if (c.ends_at && new Date(c.ends_at).getTime() < now) return '<span style="color:#b45309;font-weight:700;">Expired</span>';
+  if (c.starts_at && new Date(c.starts_at).getTime() > now) return '<span style="color:#64748b;font-weight:700;">Scheduled</span>';
+  return '<span style="color:#15803d;font-weight:700;">Active</span>';
+}
+
+function cpDiscountLabel(c) {
+  if (c.percent_off != null && Number(c.percent_off) > 0) return Number(c.percent_off) + '% off';
+  if (c.amount_off_ngn != null && Number(c.amount_off_ngn) > 0) return '₦' + Number(c.amount_off_ngn).toLocaleString() + ' off';
+  return '—';
+}
+
+async function loadCoupons() {
+  const el = document.getElementById('cpList');
+  if (!el) return;
+  el.textContent = 'Loading…';
+  try {
+    const json = await adminPost({ resource: 'coupon', action: 'list' });
+    const rows = json.data || [];
+    if (!rows.length) {
+      el.innerHTML = '<div style="color:var(--muted);font-size:13px;">No coupons yet. Create one above.</div>';
+      return;
+    }
+    let html = '<table class="data-table" style="width:100%;font-size:13px;"><thead><tr>'
+      + '<th>Code</th><th>Discount</th><th>Min ₦</th><th>Uses</th><th>Per user</th><th>Ends</th><th>Status</th><th></th>'
+      + '</tr></thead><tbody>';
+    rows.forEach(function (c) {
+      const uses = (c.redemption_count != null ? c.redemption_count : 0)
+        + (c.max_uses != null ? ' / ' + c.max_uses : ' / ∞');
+      const per = c.max_uses_per_user != null ? c.max_uses_per_user : 1;
+      html += '<tr>'
+        + '<td><b style="letter-spacing:.04em;">' + String(c.code || '') + '</b></td>'
+        + '<td>' + cpDiscountLabel(c) + '</td>'
+        + '<td>' + (Number(c.min_order_ngn) || 0).toLocaleString() + '</td>'
+        + '<td>' + uses + '</td>'
+        + '<td>' + per + '</td>'
+        + '<td>' + cpFmtDate(c.ends_at) + '</td>'
+        + '<td>' + cpStatus(c) + '</td>'
+        + '<td style="white-space:nowrap;">'
+        + '<button type="button" class="btn btn-sm" onclick="toggleCoupon(\'' + c.id + '\',' + (c.active === false ? 'true' : 'false') + ')">'
+        + (c.active === false ? 'Activate' : 'Deactivate') + '</button> '
+        + '<button type="button" class="btn btn-sm" style="color:#b91c1c;" onclick="deleteCoupon(\'' + c.id + '\',\'' + String(c.code || '').replace(/'/g, '') + '\')">Delete</button>'
+        + '</td></tr>';
+    });
+    html += '</tbody></table>';
+    el.innerHTML = html;
+  } catch (e) {
+    el.innerHTML = '<div class="error-msg">' + (e.message || 'Failed to load') + '</div>';
+  }
+}
+
+async function createCoupon() {
+  const err = document.getElementById('cpCreateErr');
+  if (err) err.textContent = '';
+  const code = (document.getElementById('cpCode') && document.getElementById('cpCode').value || '').trim();
+  const percent = document.getElementById('cpPercent') && document.getElementById('cpPercent').value;
+  const amount = document.getElementById('cpAmount') && document.getElementById('cpAmount').value;
+  const minOrder = document.getElementById('cpMinOrder') && document.getElementById('cpMinOrder').value;
+  const days = document.getElementById('cpDays') && document.getElementById('cpDays').value;
+  const maxUses = document.getElementById('cpMaxUses') && document.getElementById('cpMaxUses').value;
+  const maxPer = document.getElementById('cpMaxPerUser') && document.getElementById('cpMaxPerUser').value;
+  const applies = document.getElementById('cpApplies') && document.getElementById('cpApplies').value;
+  try {
+    await adminPost({
+      resource: 'coupon',
+      action: 'create',
+      code: code,
+      percent_off: percent,
+      amount_off_ngn: amount,
+      min_order_ngn: minOrder,
+      days_valid: days,
+      max_uses: maxUses === '' ? null : maxUses,
+      max_uses_per_user: maxPer || 1,
+      applies_to: applies || 'logs',
+      active: true
+    });
+    if (document.getElementById('cpCode')) document.getElementById('cpCode').value = '';
+    if (document.getElementById('cpPercent')) document.getElementById('cpPercent').value = '';
+    if (document.getElementById('cpAmount')) document.getElementById('cpAmount').value = '';
+    await loadCoupons();
+    if (typeof showToast === 'function') showToast('Coupon created and active', 'success');
+  } catch (e) {
+    if (err) err.textContent = e.message || 'Could not create';
+  }
+}
+
+async function toggleCoupon(id, active) {
+  try {
+    await adminPost({ resource: 'coupon', action: 'update', id: id, active: active === true || active === 'true' });
+    await loadCoupons();
+  } catch (e) {
+    alert(e.message || 'Update failed');
+  }
+}
+
+async function deleteCoupon(id, code) {
+  if (!confirm('Delete coupon ' + (code || '') + '? This cannot be undone.')) return;
+  try {
+    await adminPost({ resource: 'coupon', action: 'delete', id: id });
+    await loadCoupons();
+  } catch (e) {
+    alert(e.message || 'Delete failed');
+  }
+}
+
+
 function switchTab(name) {
  document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
  document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
@@ -6813,6 +6980,7 @@ function switchTab(name) {
  document.querySelectorAll('.nav-group').forEach(g => g.classList.toggle('open', !!g.querySelector(`.nav-item[data-tab="${name}"]`) || (g.classList.contains('open') && g.dataset.pinned==='1')));
  document.getElementById('pageTitle').textContent = tabTitles[name] || name;
  if (name === 'sub-admins') loadSubAdmins();
+ if (name === 'coupons') loadCoupons();
  closeSidebar();
  // Load large datasets only when the matching section is opened.
  if (name === 'products' && !_productsLoaded) {
