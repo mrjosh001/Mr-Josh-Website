@@ -139,8 +139,15 @@ details[open] .product-description-toggle::before{transform:rotate(90deg);displa
 .ps-coupon input{flex:1;border:1px solid var(--border,#e5e7eb);border-radius:999px;padding:12px 16px;font-size:14px;font-weight:600;font-family:inherit;background:var(--input-bg,#fff);color:var(--text,#0f172a);outline:none}
 [data-theme="dark"] .ps-coupon input{background:rgba(15,23,42,.7);border-color:rgba(148,163,184,.25);color:#f1f5f9}
 .ps-coupon input:focus{border-color:#3b82f6;box-shadow:0 0 0 3px rgba(59,130,246,.15)}
-.ps-coupon button{border:none;border-radius:999px;padding:12px 18px;font-size:13px;font-weight:800;background:#0d9488;color:#fff;cursor:pointer;font-family:inherit;white-space:nowrap}
+.ps-coupon button{border:none;border-radius:999px;padding:12px 18px;font-size:13px;font-weight:800;background:#0d9488;color:#fff;cursor:pointer;font-family:inherit;white-space:nowrap;min-width:88px;display:inline-flex;align-items:center;justify-content:center;gap:6px}
 .ps-coupon button:active{transform:scale(.98)}
+.ps-coupon button:disabled{opacity:.75;cursor:wait}
+.ps-coupon button .spin{width:14px;height:14px;border:2px solid rgba(255,255,255,.35);border-top-color:#fff;border-radius:50%;animation:psSpin .7s linear infinite;display:inline-block}
+@keyframes psSpin{to{transform:rotate(360deg)}}
+.ps-coupon-msg.ok{color:#15803d}
+.ps-coupon-msg.err{color:#b91c1c}
+.ps-coupon-msg.info{color:#0369a1}
+
 .ps-coupon-msg{font-size:12px;font-weight:650;margin:8px 0 0;min-height:16px}
 .ps-coupon-msg.ok{color:#15803d}
 .ps-coupon-msg.err{color:#b91c1c}
@@ -952,14 +959,23 @@ document.getElementById('psBuyBtn').addEventListener('click', confirmBuyNow);
 async function applyPsCoupon(){
   const input=document.getElementById('psCouponInput');
   const msg=document.getElementById('psCouponMsg');
-  const code=(input&&input.value||'').trim();
+  const btn=document.getElementById('psCouponBtn');
+  const code=(input&&input.value||'').trim().toUpperCase();
+  if(input) input.value=code;
   if(!code){ if(msg){ msg.textContent='Enter a coupon code'; msg.className='ps-coupon-msg err'; } return; }
+  if(btn && btn.disabled) return;
   const price=parseFloat(activeProduct&&activeProduct.price)||0;
   const sub=price*Math.max(1,activeQty||1);
+  const prevHtml = btn ? btn.innerHTML : '';
   try{
+    if(btn){ btn.disabled=true; btn.innerHTML='<span class="spin" aria-hidden="true"></span> Checking'; }
+    if(msg){ msg.textContent='Checking code…'; msg.className='ps-coupon-msg info'; }
     const { data: { session } } = await sbClient.auth.getSession();
     const token = session && session.access_token;
-    if(!token){ if(msg){ msg.textContent='Sign in to use a coupon'; msg.className='ps-coupon-msg err'; } return; }
+    if(!token){
+      if(msg){ msg.textContent='Sign in to use a coupon'; msg.className='ps-coupon-msg err'; }
+      return;
+    }
     const res=await fetch('/api/order',{
       method:'POST',
       headers:{'Content-Type':'application/json','Authorization':'Bearer '+token},
@@ -968,23 +984,32 @@ async function applyPsCoupon(){
     const json=await res.json().catch(function(){return {};});
     if(!res.ok||!json.success){
       activeCoupon=null;
-      if(msg){ msg.textContent=(json&&json.message)||'Invalid or inactive coupon'; msg.className='ps-coupon-msg err'; }
+      var m=(json&&json.message)||'Invalid or inactive coupon';
+      if(/not active|inactive/i.test(m)) m='This coupon is not active yet. Check back when the promo starts.';
+      else if(/expired/i.test(m)) m='This coupon has expired.';
+      else if(/limit|maximum|uses/i.test(m)) m='This coupon has reached its usage limit.';
+      else if(/does not apply|not apply/i.test(m)) m='This coupon does not apply to this product.';
+      if(msg){ msg.textContent=m; msg.className='ps-coupon-msg err'; }
       updatePurchaseTotal();
       return;
     }
     activeCoupon={
-      code: json.code,
+      code: json.code || code,
       discount: json.discount,
       finalTotal: json.final_total,
       percent_off: json.percent_off,
       amount_off_ngn: json.amount_off_ngn
     };
-    if(msg){ msg.textContent='Coupon applied — you save ₦'+Number(json.discount||0).toLocaleString(); msg.className='ps-coupon-msg ok'; }
+    var saveN=Number(json.discount||0);
+    var pct=json.percent_off!=null?(' ('+json.percent_off+'% off)'):'';
+    if(msg){ msg.textContent='✓ Coupon applied'+pct+' — you save ₦'+saveN.toLocaleString(); msg.className='ps-coupon-msg ok'; }
     updatePurchaseTotal();
   }catch(e){
     activeCoupon=null;
-    if(msg){ msg.textContent='Could not verify coupon'; msg.className='ps-coupon-msg err'; }
+    if(msg){ msg.textContent='Could not verify coupon. Try again.'; msg.className='ps-coupon-msg err'; }
     updatePurchaseTotal();
+  }finally{
+    if(btn){ btn.disabled=false; btn.innerHTML=prevHtml || 'Apply'; }
   }
 }
 
