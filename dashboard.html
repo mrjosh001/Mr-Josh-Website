@@ -3073,6 +3073,108 @@ body::after {
 .logo-word{font-family:"Plus Jakarta Sans",Inter,system-ui,sans-serif !important;font-size:16px !important;font-weight:800 !important;letter-spacing:-.04em;line-height:26px;color:#93c5fd !important;-webkit-text-fill-color:#93c5fd !important;display:inline-block !important;visibility:visible !important}
 html[data-theme="light"] .logo-word, :root[data-theme="light"] .logo-word{color:#1e3a8a !important;-webkit-text-fill-color:#1e3a8a !important}
 
+
+/* —— Seasonal: Halloween + CEO birthday promo (Nov 2026) —— */
+.mj-season-banner {
+  margin: 0 0 14px;
+  padding: 12px 14px;
+  border-radius: 16px;
+  background: linear-gradient(135deg, #1a1025 0%, #2d1b3d 45%, #1e293b 100%);
+  border: 1px solid rgba(249, 115, 22, 0.35);
+  box-shadow: 0 8px 24px rgba(249, 115, 22, 0.12);
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  position: relative;
+  overflow: hidden;
+}
+.mj-season-banner::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(ellipse at 90% 20%, rgba(249,115,22,.18), transparent 55%);
+  pointer-events: none;
+}
+.mj-season-banner .ico {
+  width: 40px; height: 40px; border-radius: 12px;
+  background: rgba(249,115,22,.2);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 20px; flex-shrink: 0; z-index: 1;
+}
+.mj-season-banner .txt { flex: 1; z-index: 1; min-width: 0; }
+.mj-season-banner .txt strong {
+  display: block; font-size: 14px; font-weight: 800; color: #fdba74; margin-bottom: 2px;
+}
+.mj-season-banner .txt span {
+  font-size: 12px; line-height: 1.45; color: rgba(255,255,255,.78);
+}
+.mj-season-banner .code-pill {
+  display: inline-flex; align-items: center; gap: 6px;
+  margin-top: 8px; padding: 5px 10px; border-radius: 999px;
+  background: rgba(59,130,246,.2); border: 1px solid rgba(96,165,250,.45);
+  font-size: 12px; font-weight: 800; letter-spacing: .06em; color: #93c5fd;
+}
+:root[data-theme="light"] .mj-season-banner {
+  background: linear-gradient(135deg, #fff7ed 0%, #ffedd5 50%, #eff6ff 100%);
+  border-color: rgba(249,115,22,.4);
+}
+:root[data-theme="light"] .mj-season-banner .txt strong { color: #c2410c; }
+:root[data-theme="light"] .mj-season-banner .txt span { color: #57534e; }
+:root[data-theme="light"] .mj-season-banner .code-pill {
+  background: #eff6ff; color: #1d4ed8; border-color: #93c5fd;
+}
+.hv-hello .kicker.season { color: #fb923c; }
+.mj-promo-overlay {
+  position: fixed; inset: 0; z-index: 9999;
+  background: rgba(0,0,0,.55); backdrop-filter: blur(6px);
+  display: flex; align-items: center; justify-content: center;
+  padding: 20px; opacity: 0; visibility: hidden; transition: .25s ease;
+}
+.mj-promo-overlay.active { opacity: 1; visibility: visible; }
+.mj-promo-card {
+  width: 100%; max-width: 360px;
+  border-radius: 20px;
+  background: linear-gradient(165deg, #1e1b4b 0%, #0f172a 55%, #1c1917 100%);
+  border: 1px solid rgba(249,115,22,.4);
+  box-shadow: 0 24px 48px rgba(0,0,0,.45);
+  padding: 22px 20px 18px; color: #f8fafc; position: relative;
+}
+.mj-promo-card .badge-row {
+  display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px;
+}
+.mj-promo-card .badge-row span {
+  font-size: 10px; font-weight: 800; letter-spacing: .04em; text-transform: uppercase;
+  padding: 4px 9px; border-radius: 999px;
+}
+.mj-promo-card .b-hallow { background: rgba(249,115,22,.25); color: #fdba74; }
+.mj-promo-card .b-ceo { background: rgba(59,130,246,.25); color: #93c5fd; }
+.mj-promo-card h2 {
+  margin: 0 0 8px; font-size: 20px; font-weight: 800; line-height: 1.25;
+  color: #fff;
+}
+.mj-promo-card p {
+  margin: 0 0 14px; font-size: 13.5px; line-height: 1.55; color: rgba(248,250,252,.82);
+}
+.mj-promo-card .big-code {
+  text-align: center; margin: 0 0 14px; padding: 14px;
+  border-radius: 14px; background: rgba(15,23,42,.65);
+  border: 1px dashed rgba(96,165,250,.5);
+}
+.mj-promo-card .big-code b {
+  display: block; font-size: 22px; letter-spacing: .12em; color: #60a5fa; font-weight: 900;
+}
+.mj-promo-card .big-code small {
+  font-size: 11px; color: rgba(248,250,252,.55);
+}
+.mj-promo-actions { display: flex; gap: 8px; }
+.mj-promo-actions button {
+  flex: 1; border: none; border-radius: 12px; padding: 12px 14px;
+  font-weight: 800; font-size: 13px; cursor: pointer;
+}
+.mj-promo-actions .primary { background: #3b82f6; color: #fff; }
+.mj-promo-actions .ghost { background: rgba(255,255,255,.08); color: #e2e8f0; }
+
+
 </style>
 <link rel="stylesheet" href="/css/skeleton.css">
 <script src="/js/skeleton.js" defer></script>
@@ -3316,6 +3418,15 @@ html[data-theme="light"] .logo-word, :root[data-theme="light"] .logo-word{color:
             <div class="hv-date" id="homeDateChip"></div>
         </div>
 
+
+        <div class="mj-season-banner" id="mjSeasonBanner" role="status">
+            <div class="ico" aria-hidden="true">🎃</div>
+            <div class="txt">
+                <strong>Halloween · CEO birthday special</strong>
+                <span>Enjoy <b>10% off</b> on MJ Logs. Use code <b>MJBDAY10</b> at checkout — limited time.</span>
+                <div class="code-pill"><i class="fa-solid fa-ticket"></i> MJBDAY10 · 10% OFF</div>
+            </div>
+        </div>
         <div class="bal-ngn" id="homeWalletCard">
             <div class="inner">
                 <div class="top">
@@ -4397,6 +4508,65 @@ function escapeHtml(str) {
 
 function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
 
+
+function initSeasonPromo() {
+  try {
+    var kicker = document.querySelector('.hv-hello .kicker');
+    if (kicker) {
+      kicker.classList.add('season');
+      kicker.textContent = '🎃 Welcome back';
+    }
+  } catch (e) {}
+
+  var overlay = document.getElementById('mjPromoOverlay');
+  if (!overlay) return;
+
+  // Show once per calendar day (Lagos) during promo window 2–5 Nov 2026
+  var now = new Date();
+  var lagosYmd;
+  try {
+    lagosYmd = new Intl.DateTimeFormat('en-CA', { timeZone: 'Africa/Lagos', year: 'numeric', month: '2-digit', day: '2-digit' }).format(now);
+  } catch (e) {
+    lagosYmd = now.toISOString().slice(0, 10);
+  }
+  // Promo window: 2 Nov – 5 Nov 2026 inclusive
+  if (lagosYmd < '2026-11-02' || lagosYmd > '2026-11-05') {
+    var ban = document.getElementById('mjSeasonBanner');
+    if (ban) ban.style.display = 'none';
+    return;
+  }
+
+  var seenKey = 'mjhub-promo-mjbday10-' + lagosYmd;
+  var seen = false;
+  try { seen = localStorage.getItem(seenKey) === '1'; } catch (e) {}
+
+  function closePromo() {
+    overlay.classList.remove('active');
+    overlay.setAttribute('aria-hidden', 'true');
+    document.body.style.overflow = '';
+    try { localStorage.setItem(seenKey, '1'); } catch (e) {}
+  }
+
+  var dismiss = document.getElementById('mjPromoDismiss');
+  var go = document.getElementById('mjPromoGo');
+  if (dismiss) dismiss.addEventListener('click', closePromo);
+  if (go) go.addEventListener('click', function () {
+    closePromo();
+    window.location.href = 'mj-logs.html';
+  });
+  overlay.addEventListener('click', function (e) {
+    if (e.target === overlay) closePromo();
+  });
+
+  if (!seen) {
+    setTimeout(function () {
+      overlay.classList.add('active');
+      overlay.setAttribute('aria-hidden', 'false');
+      document.body.style.overflow = 'hidden';
+    }, 900);
+  }
+}
+
 function initWelcomeModal() {
     const overlay = document.getElementById('welcomeModalOverlay');
     const dismissBtn = document.getElementById('welcomeModalDismissBtn');
@@ -4556,6 +4726,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 try { subscribeNotifRealtime(); } catch (e) {}
                 try { await checkSupportReplyOnLogin(); } catch (e) {}
                 try { initWelcomeModal(); } catch (e) {}
+                try { initSeasonPromo(); } catch (e) {}
                 // Open in-app support with order complaint prefill
                 try {
                   var qs = new URLSearchParams(location.search);
@@ -8720,5 +8891,25 @@ window.toggleHomeBalanceHide = function () {
 </style>
 
   <script src="/js/haptic.js" defer></script>
+
+<div class="mj-promo-overlay" id="mjPromoOverlay" aria-hidden="true">
+  <div class="mj-promo-card" role="dialog" aria-labelledby="mjPromoTitle">
+    <div class="badge-row">
+      <span class="b-hallow">🎃 Halloween</span>
+      <span class="b-ceo">🎂 CEO Birthday</span>
+    </div>
+    <h2 id="mjPromoTitle">10% off MJ Logs</h2>
+    <p>Tomorrow we celebrate. Grab your discount on verified logs — apply the code at checkout before it ends.</p>
+    <div class="big-code">
+      <b>MJBDAY10</b>
+      <small>10% off · MJ Logs only</small>
+    </div>
+    <div class="mj-promo-actions">
+      <button type="button" class="ghost" id="mjPromoDismiss">Later</button>
+      <button type="button" class="primary" id="mjPromoGo">Shop logs</button>
+    </div>
+  </div>
+</div>
+
 </body>
 </html>
