@@ -300,7 +300,23 @@ async function handleOrder(req, res) {
   }
 
   const unitPrice = Number(product.price || 0);
-  const total = unitPrice * qty;
+  let total = unitPrice * qty;
+
+    let couponQuote = null;
+    let couponDiscount = 0;
+    if (coupon_code) {
+      couponQuote = await quoteCoupon(supabase, {
+        code: coupon_code,
+        userId: user_id,
+        subtotal: total,
+        appliesTo: 'logs'
+      });
+      if (!couponQuote.ok) {
+        return res.status(400).json({ success: false, message: couponQuote.message || 'Invalid coupon code' });
+      }
+      couponDiscount = Number(couponQuote.discount || 0);
+      total = Number(couponQuote.finalTotal);
+    }
   const productName = product.name || 'ClassyTee product';
 
   // Only select columns that always exist. Selecting a missing column
