@@ -587,8 +587,8 @@ async function handleOrder(req, res) {
     await supabase.from('transactions').insert({
       user_id,
       customer_id: customerId,
-      type: 'purchase',
-      category: productName,
+      type: 'log',
+      category: 'log',
       title: productName,
       subtitle: `Qty: ${qty} · Sujan Department`,
       amount: `₦${total.toLocaleString()}`,
