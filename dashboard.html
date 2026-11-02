@@ -5562,20 +5562,37 @@ function normalizeTxType(tx) {
     }
     if (type === 'purchase' && cat.includes('sms')) return 'sms';
 
-    // Social boost (Owlet) — never Telegram
+    // Logs FIRST — product titles often say Facebook/TikTok but type is log
+    if (
+      type === 'log' || type === 'logs' ||
+      cat === 'log' || cat === 'logs' || cat.includes('mj log') ||
+      /mj logs|logs domain|fadded|sujan|classy|logsdomain|bulkmail/i.test(title + ' ' + cat + ' ' + type)
+    ) {
+      return 'log';
+    }
+    // purchase/order with no SMM markers → log (manual suppliers)
+    if ((type === 'purchase' || type === 'order') && !/booster|boost|owlet|smm/i.test(cat + ' ' + type)) {
+      return 'log';
+    }
+
+    // Social boost (Owlet) — never Telegram, never log accounts
     if (
       type === 'booster' || type === 'boost' ||
       cat === 'booster' || cat.includes('mj boost') ||
       /owlet/i.test(blob) ||
-      /tiktok|instagram|youtube|facebook|followers?|likes?|views?|subscribers?/i.test(title) && !/telegram/i.test(title)
+      (
+        /followers?|likes?|views?|subscribers?/i.test(title) &&
+        !/telegram/i.test(title) &&
+        !/\b2fa\b|full 2fa|login|account|premades?|aged/i.test(title)
+      )
     ) {
       return 'booster';
     }
 
-    // Logs
+    // Logs fallback by product keywords (accounts sold as logs)
     if (
-      type === 'log' || type === 'logs' || cat.includes('log') ||
-      /mj logs|logs domain|fadded|sujan|classy|hotmail|premade|google voice|\bvpn\b/i.test(title + ' ' + cat)
+      /hotmail|premade|google voice|\bvpn\b|2fa|aged account|created page/i.test(title + ' ' + cat) ||
+      /tiktok|instagram|youtube|facebook|twitter|\bx\b/i.test(title) && /2fa|account|login|friends|followers/i.test(title)
     ) {
       return 'log';
     }

@@ -1051,7 +1051,8 @@ body: JSON.stringify({
 product_key: purchasedProduct.product_key,
 quantity: qtyRequested,
 user_id: currentUserId,
-external_order_id: externalOrderId
+external_order_id: externalOrderId,
+coupon_code: (activeCoupon && activeCoupon.code) || (document.getElementById('psCouponInput') && document.getElementById('psCouponInput').value) || undefined
 })
 });
 const data = await res.json();
