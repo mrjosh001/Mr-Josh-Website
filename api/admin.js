@@ -2200,6 +2200,10 @@ function secretsStatusHandle() {
 // ---------- router ----------
 
 /* ===========================================================================
+
+
+
+
  * EMAIL BROADCAST — resource: 'email_broadcast'
  *   action: 'preview' — no fields — returns { would_send, sample: [5 emails] }
  *   action: 'send'    — { subject, body } — actually sends via Resend
@@ -2877,6 +2881,144 @@ async function pushSend(body) {
 }
 
 
+// ---------- resource: coupon ----------
+function normCouponCode(code) {
+  return String(code || '').trim().toUpperCase().replace(/\s+/g, '');
+}
+
+async function couponListHandle() {
+  const { data, error } = await supabase
+    .from('coupons')
+    .select('*')
+    .order('created_at', { ascending: false })
+    .limit(200);
+  if (error) return { status: 400, body: { success: false, message: error.message } };
+
+  const ids = (data || []).map((c) => c.id).filter(Boolean);
+  let counts = {};
+  if (ids.length) {
+    const { data: reds } = await supabase
+      .from('coupon_redemptions')
+      .select('coupon_id')
+      .in('coupon_id', ids);
+    (reds || []).forEach((r) => {
+      const k = r.coupon_id;
+      counts[k] = (counts[k] || 0) + 1;
+    });
+  }
+  const rows = (data || []).map((c) => ({
+    ...c,
+    redemption_count: counts[c.id] || 0
+  }));
+  return { status: 200, body: { success: true, data: rows } };
+}
+
+async function couponCreateHandle(body) {
+  const code = normCouponCode(body.code);
+  if (!code || code.length < 3) {
+    return { status: 400, body: { success: false, message: 'Code must be at least 3 characters' } };
+  }
+
+  const percent = body.percent_off != null && body.percent_off !== '' ? Number(body.percent_off) : null;
+  const amount = body.amount_off_ngn != null && body.amount_off_ngn !== '' ? Number(body.amount_off_ngn) : null;
+  if ((percent == null || !(percent > 0)) && (amount == null || !(amount > 0))) {
+    return { status: 400, body: { success: false, message: 'Set a % discount or a fixed ₦ amount' } };
+  }
+  if (percent != null && (percent <= 0 || percent > 100)) {
+    return { status: 400, body: { success: false, message: '% discount must be between 1 and 100' } };
+  }
+
+  const days = body.days_valid != null && body.days_valid !== '' ? Number(body.days_valid) : null;
+  let starts_at = body.starts_at ? new Date(body.starts_at) : new Date();
+  let ends_at = null;
+  if (body.ends_at) ends_at = new Date(body.ends_at);
+  else if (days != null && days > 0) {
+    ends_at = new Date(starts_at.getTime() + days * 24 * 60 * 60 * 1000);
+  }
+
+  const row = {
+    code,
+    percent_off: percent != null && percent > 0 ? percent : null,
+    amount_off_ngn: amount != null && amount > 0 ? amount : null,
+    min_order_ngn: body.min_order_ngn != null && body.min_order_ngn !== '' ? Number(body.min_order_ngn) : 0,
+    max_uses: body.max_uses != null && body.max_uses !== '' ? Number(body.max_uses) : null,
+    max_uses_per_user: body.max_uses_per_user != null && body.max_uses_per_user !== ''
+      ? Number(body.max_uses_per_user)
+      : 1,
+    starts_at: starts_at.toISOString(),
+    ends_at: ends_at ? ends_at.toISOString() : null,
+    active: body.active === false || body.active === 'false' ? false : true,
+    applies_to: (body.applies_to || 'logs').toString().toLowerCase()
+  };
+
+  const { data, error } = await supabase.from('coupons').insert(row).select('*').maybeSingle();
+  if (error) {
+    const msg = /duplicate|unique/i.test(error.message)
+      ? 'That code already exists'
+      : error.message;
+    return { status: 400, body: { success: false, message: msg } };
+  }
+  return { status: 200, body: { success: true, data } };
+}
+
+async function couponUpdateHandle(body) {
+  const id = body.id;
+  if (!id) return { status: 400, body: { success: false, message: 'Coupon id required' } };
+
+  const payload = {};
+  if (body.active !== undefined) payload.active = !!body.active;
+  if (body.code != null && String(body.code).trim()) payload.code = normCouponCode(body.code);
+  if (body.percent_off !== undefined) {
+    payload.percent_off = body.percent_off === '' || body.percent_off == null ? null : Number(body.percent_off);
+  }
+  if (body.amount_off_ngn !== undefined) {
+    payload.amount_off_ngn = body.amount_off_ngn === '' || body.amount_off_ngn == null ? null : Number(body.amount_off_ngn);
+  }
+  if (body.min_order_ngn !== undefined) payload.min_order_ngn = Number(body.min_order_ngn) || 0;
+  if (body.max_uses !== undefined) {
+    payload.max_uses = body.max_uses === '' || body.max_uses == null ? null : Number(body.max_uses);
+  }
+  if (body.max_uses_per_user !== undefined) {
+    payload.max_uses_per_user = body.max_uses_per_user === '' || body.max_uses_per_user == null
+      ? 1
+      : Number(body.max_uses_per_user);
+  }
+  if (body.applies_to != null) payload.applies_to = String(body.applies_to).toLowerCase();
+  if (body.starts_at) payload.starts_at = new Date(body.starts_at).toISOString();
+  if (body.ends_at !== undefined) {
+    payload.ends_at = body.ends_at ? new Date(body.ends_at).toISOString() : null;
+  }
+  if (body.days_valid != null && body.days_valid !== '') {
+    const days = Number(body.days_valid);
+    if (days > 0) {
+      const start = payload.starts_at ? new Date(payload.starts_at) : new Date();
+      payload.ends_at = new Date(start.getTime() + days * 24 * 60 * 60 * 1000).toISOString();
+      if (!payload.starts_at) payload.starts_at = start.toISOString();
+    }
+  }
+
+  if (!Object.keys(payload).length) {
+    return { status: 400, body: { success: false, message: 'Nothing to update' } };
+  }
+
+  const { data, error } = await supabase
+    .from('coupons')
+    .update(payload)
+    .eq('id', id)
+    .select('*')
+    .maybeSingle();
+  if (error) return { status: 400, body: { success: false, message: error.message } };
+  return { status: 200, body: { success: true, data } };
+}
+
+async function couponDeleteHandle(body) {
+  const id = body.id;
+  if (!id) return { status: 400, body: { success: false, message: 'Coupon id required' } };
+  const { error } = await supabase.from('coupons').delete().eq('id', id);
+  if (error) return { status: 400, body: { success: false, message: error.message } };
+  return { status: 200, body: { success: true } };
+}
+
 export default async function handler(req, res) {
   applyApiCors(req, res, { methods: 'POST, OPTIONS' });
   setNoStore(res);
@@ -2968,6 +3110,12 @@ export default async function handler(req, res) {
       result = await getUserJoinDates();
     } else if (resource === 'secrets_status') {
       result = secretsStatusHandle();
+    } else if (resource === 'coupon' || resource === 'coupons') {
+      if (action === 'list' || !action) result = await couponListHandle();
+      else if (action === 'create') result = await couponCreateHandle(body);
+      else if (action === 'update') result = await couponUpdateHandle(body);
+      else if (action === 'delete') result = await couponDeleteHandle(body);
+      else result = { status: 400, body: { success: false, message: 'Unknown coupon action. Use "list", "create", "update", or "delete".' } };
     } else if (resource === 'email_broadcast') {
       if (action === 'preview') result = await emailBroadcastPreview();
       else if (action === 'send') result = await emailBroadcastSend(body);
@@ -2977,7 +3125,7 @@ export default async function handler(req, res) {
       if (action === 'send') result = await pushSend(body);
       else result = { status: 400, body: { success: false, message: 'Unknown push action for admin. Use "send".' } };
     } else {
-      result = { status: 400, body: { success: false, message: 'Unknown resource. Use "user", "product", "inventory", "sms", "profiles", "orders", "sms_orders", "booster_orders", "supplier_balances", "overview", "user_join_dates", "secrets_status", "sub_admin", "email_broadcast", "push", or "vendor".' } };
+      result = { status: 400, body: { success: false, message: 'Unknown resource. Use "user", "product", "inventory", "sms", "profiles", "orders", "sms_orders", "booster_orders", "supplier_balances", "overview", "user_join_dates", "secrets_status", "sub_admin", "email_broadcast", "push", or "coupon", or "vendor".' } };
     }
 
     return res.status(result.status).json(result.body);
