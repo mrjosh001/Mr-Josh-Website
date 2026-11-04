@@ -22,6 +22,9 @@
   <title>MJ HUB — Support Desk</title>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="preconnect" href="https://challenges.cloudflare.com" crossorigin>
+  <link rel="dns-prefetch" href="//challenges.cloudflare.com">
+  <script src="https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit&onload=mjSupportTurnstileReady" async fetchpriority="high"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <style>
     :root {
@@ -207,6 +210,7 @@
       <p>Sign in with your admin account to manage customer conversations.</p>
       <input type="email" id="email" placeholder="Admin email" autocomplete="username">
       <input type="password" id="password" placeholder="Password" autocomplete="current-password">
+      <div id="supportLoginCaptcha" style="display:flex;justify-content:center;margin:14px 0;min-height:65px"></div>
       <button class="btn btn-primary" id="loginBtn" onclick="doLogin()">Sign in</button>
       <div id="loginError" class="error-msg"></div>
       <p style="margin-top:16px;font-size:12px;"><a href="admin.html" style="color:var(--primary);">← Main Admin</a></p>
@@ -282,6 +286,28 @@
   <script>
     const SUPABASE_URL = 'https://atczodlljmlayvldxfmv.supabase.co';
     const SUPABASE_KEY = 'sb_publishable_dwbeKLcSG7-nfKzZz8x8Zw_U9FtwJTy';
+
+    let supportLoginCaptchaToken = '';
+    let supportLoginCaptchaWidget = null;
+    window.mjSupportTurnstileReady = function () {
+      const mount = document.getElementById('supportLoginCaptcha');
+      if (!mount || !window.turnstile || supportLoginCaptchaWidget !== null) return;
+      supportLoginCaptchaWidget = window.turnstile.render(mount, {
+        sitekey: '0x4AAAAAAF0CXjc8jL8djc4l',
+        callback: function (token) { supportLoginCaptchaToken = token || ''; },
+        'expired-callback': function () { supportLoginCaptchaToken = ''; },
+        'error-callback': function () { supportLoginCaptchaToken = ''; }
+      });
+    };
+    function resetSupportLoginCaptcha() {
+      supportLoginCaptchaToken = '';
+      if (window.turnstile && supportLoginCaptchaWidget !== null) {
+        try { window.turnstile.reset(supportLoginCaptchaWidget); } catch (e) {}
+      }
+    }
+    // Handles a cached Turnstile script that loaded before this callback was registered.
+    if (window.turnstile) window.mjSupportTurnstileReady();
+
     const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY, {
       auth: { persistSession: true, autoRefreshToken: true, storage: window.sessionStorage }
     });
@@ -467,11 +493,31 @@
       const email = document.getElementById('email').value.trim();
       const password = document.getElementById('password').value;
       const err = document.getElementById('loginError');
+      const btn = document.getElementById('loginBtn');
       err.style.display = 'none';
-      const { error } = await sb.auth.signInWithPassword({ email, password });
-      if (error) {
+      if (!supportLoginCaptchaToken) {
         err.style.display = 'block';
-        err.textContent = error.message || 'Login failed';
+        err.textContent = 'Complete the security check before signing in.';
+        return;
+      }
+      if (btn) btn.disabled = true;
+      try {
+        const { error } = await sb.auth.signInWithPassword({
+          email,
+          password,
+          options: { captchaToken: supportLoginCaptchaToken }
+        });
+        resetSupportLoginCaptcha();
+        if (error) {
+          err.style.display = 'block';
+          err.textContent = error.message || 'Login failed';
+        }
+      } catch (e) {
+        resetSupportLoginCaptcha();
+        err.style.display = 'block';
+        err.textContent = e.message || 'Login failed';
+      } finally {
+        if (btn) btn.disabled = false;
       }
     }
     async function doLogout() {
