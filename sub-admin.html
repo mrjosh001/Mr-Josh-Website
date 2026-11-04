@@ -4,6 +4,8 @@
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1"/>
 <title>Vendor portal · MJ HUB</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit&onload=mjVendorTurnstileReady" async defer></script>
 <style>
 :root{
   --bg:#070b14;--bg2:#0c1220;--card:rgba(15,23,42,.85);--card-solid:#111827;
@@ -120,6 +122,7 @@ td{padding:12px;border-top:1px solid var(--border);vertical-align:middle}
           <input type="password" id="authPassword" required autocomplete="current-password" placeholder="Password"/>
           <button type="button" class="pw-toggle" id="togglePw" aria-label="Show password">👁</button>
         </div>
+        <div id="vendorLoginCaptcha" style="display:flex;justify-content:center;margin:16px 0;min-height:65px"></div>
         <div class="row" style="margin-top:16px">
           <button type="submit" class="btn btn-primary" id="authBtn" style="width:100%">Sign in</button>
         </div>
@@ -203,6 +206,16 @@ try {
   }
   keys.forEach(k => localStorage.removeItem(k));
 } catch (e) {}
+
+
+let vendorLoginCaptchaToken = '';
+let vendorLoginCaptchaWidget = null;
+window.mjVendorTurnstileReady = function () {
+ const mount = document.getElementById('vendorLoginCaptcha');
+ if (!mount || !window.turnstile || vendorLoginCaptchaWidget !== null) return;
+ vendorLoginCaptchaWidget = window.turnstile.render(mount, { sitekey: '0x4AAAAAAF0CXjc8jL8djc4l', callback:function(token){vendorLoginCaptchaToken=token||'';}, 'expired-callback':function(){vendorLoginCaptchaToken='';}, 'error-callback':function(){vendorLoginCaptchaToken='';} });
+};
+function resetVendorLoginCaptcha(){ vendorLoginCaptchaToken=''; if(window.turnstile && vendorLoginCaptchaWidget!==null){try{window.turnstile.reset(vendorLoginCaptchaWidget);}catch(e){}} }
 
 const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
   auth: { persistSession: true, autoRefreshToken: true, storage: window.sessionStorage, detectSessionInUrl: false }
@@ -401,11 +414,14 @@ document.getElementById('signinForm').onsubmit = async (e) => {
   try {
     const email = document.getElementById('authEmail').value.trim();
     const password = document.getElementById('authPassword').value;
-    const { data, error } = await sb.auth.signInWithPassword({ email, password });
+    if (!vendorLoginCaptchaToken) throw new Error('Complete the security check before signing in.');
+    const { data, error } = await sb.auth.signInWithPassword({ email, password, options: { captchaToken: vendorLoginCaptchaToken } });
+    resetVendorLoginCaptcha();
     if (error) throw error;
     if (!data.session) throw new Error('Sign in failed');
     await enterPortal();
   } catch (err) {
+    resetVendorLoginCaptcha();
     msg.style.display = 'block';
     msg.className = 'err';
     msg.textContent = err.message || 'Sign in failed';
