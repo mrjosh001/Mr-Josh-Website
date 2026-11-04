@@ -24,7 +24,7 @@
     <title>MJ HUB - Sign In & Sign Up</title>
     <link rel="preconnect" href="https://challenges.cloudflare.com" crossorigin>
     <link rel="dns-prefetch" href="//challenges.cloudflare.com">
-    <script src="https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit" async fetchpriority="high" onload="window.mjTurnstileScriptLoaded=true; if(window.mjInitAllCaptchas) window.mjInitAllCaptchas();"></script>
+    <script src="https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit" async fetchpriority="high" onload="window.mjTurnstileScriptLoaded=true; if(window.mjInitActiveCaptcha) window.mjInitActiveCaptcha();"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <style>
@@ -1574,12 +1574,24 @@ html[data-theme="dark"] .logo-word, body[data-theme="dark"] .logo-word { color:#
         }
     };
 
+    var captchaRetryTimers = {};
+
     window.mjEnsureCaptcha = function (kind) {
         var container = document.getElementById(containerIds[kind]);
         if (!container || widgetIds[kind] !== undefined) return;
         if (!window.turnstile) {
-            window.setTimeout(function () { window.mjEnsureCaptcha(kind); }, 50);
+            // Keep one retry timer per widget instead of starting duplicate loops.
+            if (!captchaRetryTimers[kind]) {
+                captchaRetryTimers[kind] = window.setTimeout(function () {
+                    captchaRetryTimers[kind] = null;
+                    window.mjEnsureCaptcha(kind);
+                }, 100);
+            }
             return;
+        }
+        if (captchaRetryTimers[kind]) {
+            window.clearTimeout(captchaRetryTimers[kind]);
+            captchaRetryTimers[kind] = null;
         }
         widgetIds[kind] = window.turnstile.render(container, {
             sitekey: siteKey,
@@ -1590,21 +1602,26 @@ html[data-theme="dark"] .logo-word, body[data-theme="dark"] .logo-word { color:#
         });
     };
 
-    // Render every auth challenge as soon as the auth page is ready.
-    // Users should not need to switch tabs to trigger CAPTCHA initialisation.
-    window.mjInitAllCaptchas = function () {
-        ['signin', 'signup', 'forgot'].forEach(function (kind) {
-            window.mjEnsureCaptcha(kind);
-        });
+    // Initialise the CAPTCHA for the form currently visible on first page entry.
+    // Other tabs initialise immediately when opened via switchTab().
+    window.mjInitActiveCaptcha = function () {
+        var activeKind = 'signin';
+        var signupForm = document.getElementById('signupForm');
+        var forgotForm = document.getElementById('forgotForm');
+        var signinForm = document.getElementById('signinForm');
+        if (signupForm && !signupForm.classList.contains('hidden')) activeKind = 'signup';
+        else if (forgotForm && !forgotForm.classList.contains('hidden')) activeKind = 'forgot';
+        else if (signinForm && !signinForm.classList.contains('hidden')) activeKind = 'signin';
+        window.mjEnsureCaptcha(activeKind);
     };
 
     if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', window.mjInitAllCaptchas, { once: true });
+        document.addEventListener('DOMContentLoaded', window.mjInitActiveCaptcha, { once: true });
     } else {
-        window.mjInitAllCaptchas();
+        window.mjInitActiveCaptcha();
     }
     // Covers a fast/cached Turnstile script that loaded before this block ran.
-    if (window.turnstile) window.mjInitAllCaptchas();
+    if (window.turnstile) window.mjInitActiveCaptcha();
 })();
 </script>
 
