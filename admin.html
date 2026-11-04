@@ -26,6 +26,8 @@ window.__mjAdminSmsPatch = true;
  <meta http-equiv="Expires" content="0" />
  <title>MJ HUB: Admin</title>
  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<link rel="preconnect" href="https://challenges.cloudflare.com" crossorigin>
+<link rel="dns-prefetch" href="//challenges.cloudflare.com">
 <script src="https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit&onload=mjAdminTurnstileReady" async defer></script>
 <script>
 // Force all date/time displays to Nigeria time (WAT, Africa/Lagos),
@@ -2091,6 +2093,8 @@ window.mjAdminTurnstileReady = function () {
  if (!mount || !window.turnstile || adminLoginCaptchaWidget !== null) return;
  adminLoginCaptchaWidget = window.turnstile.render(mount, { sitekey: '0x4AAAAAAF0CXjc8jL8djc4l', callback: function(token){adminLoginCaptchaToken=token||'';}, 'expired-callback':function(){adminLoginCaptchaToken='';}, 'error-callback':function(){adminLoginCaptchaToken='';} });
 };
+// Handle cached Turnstile loads that finish before this callback is registered.
+if (window.turnstile) window.mjAdminTurnstileReady();
 function resetAdminLoginCaptcha(){ adminLoginCaptchaToken=''; if(window.turnstile && adminLoginCaptchaWidget!==null){try{window.turnstile.reset(adminLoginCaptchaWidget);}catch(e){}} }
 
 const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY, {
