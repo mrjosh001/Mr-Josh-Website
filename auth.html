@@ -23,6 +23,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, viewport-fit=cover">
     <title>MJ HUB - Sign In & Sign Up</title>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit" async defer onload="window.mjTurnstileScriptLoaded=true"></script>
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <style>
         :root {
@@ -539,6 +540,9 @@
         .divider::before { margin-right: 12px; }
         .divider::after  { margin-left: 12px; }
 
+        .captcha-wrap { display:flex; justify-content:center; margin: 12px 0 14px; min-height: 65px; position:relative; z-index:1; }
+        .captcha-wrap > div { min-height: 65px; }
+
         .hidden { display: none; }
 
         .error-msg, .success-msg {
@@ -672,6 +676,7 @@ html[data-theme="dark"] .logo-word, body[data-theme="dark"] .logo-word { color:#
                     <input type="checkbox" id="rememberMe"> Remember me for 24 hours
                 </label>
                 <a href="#" class="forgot-password-link" onclick="switchTab('forgot'); return false;">Forgot Password?</a>
+                <div class="captcha-wrap"><div id="mjSigninCaptcha"></div></div>
                 <button type="submit" class="btn-submit" id="signinSubmitBtn">Sign In to Dashboard</button>
                 <div class="auth-divider">or</div>
                 <button type="button" class="btn-google" id="googleSignInBtn" onclick="handleGoogleSignIn()">
@@ -728,6 +733,7 @@ html[data-theme="dark"] .logo-word, body[data-theme="dark"] .logo-word { color:#
                     </div>
                     <div class="pw-match-hint" id="signupPwMatchHint" aria-live="polite"></div>
                 </div>
+                <div class="captcha-wrap"><div id="mjSignupCaptcha"></div></div>
                 <button type="submit" class="btn-submit" id="signupSubmitBtn">Register Account</button>
                 <div class="auth-divider">or</div>
                 <button type="button" class="btn-google" id="googleSignUpBtn" onclick="handleGoogleSignIn()">
@@ -742,6 +748,7 @@ html[data-theme="dark"] .logo-word, body[data-theme="dark"] .logo-word { color:#
                     <label>Enter Your Email Address</label>
                     <input type="email" id="forgotEmail" required autocomplete="off" placeholder="name@example.com">
                 </div>
+                <div class="captcha-wrap"><div id="mjForgotCaptcha"></div></div>
                 <button type="submit" class="btn-submit" id="forgotSubmitBtn">Send Reset Instructions</button>
                 <a href="#" class="back-to-signin" onclick="switchTab('signin'); return false;">← Back to Sign In</a>
             </form>
@@ -979,6 +986,7 @@ html[data-theme="dark"] .logo-word, body[data-theme="dark"] .logo-word { color:#
                 formIcon.innerText = '🔒';
                 formHeading.innerText = 'Welcome Back';
                 formSubheading.innerText = 'Sign in to access your dashboard';
+                mjEnsureCaptcha('signin');
             } else if (tab === 'signup') {
                 document.getElementById('signupTabBtn').classList.add('active');
                 document.getElementById('signinTabBtn').classList.remove('active');
@@ -986,12 +994,14 @@ html[data-theme="dark"] .logo-word, body[data-theme="dark"] .logo-word { color:#
                 formIcon.innerText = '👤';
                 formHeading.innerText = 'Create Your Account';
                 formSubheading.innerText = 'Join MJ HUB in just a few seconds';
+                mjEnsureCaptcha('signup');
             } else if (tab === 'forgot') {
                 tabSwitcherContainer.style.display = 'none';
                 document.getElementById('forgotForm').classList.remove('hidden');
                 formIcon.innerText = '🔑';
                 formHeading.innerText = 'Recover Account';
                 formSubheading.innerText = 'Enter your email to receive reset instructions';
+                mjEnsureCaptcha('forgot');
             } else if (tab === 'updatePassword') {
                 tabSwitcherContainer.style.display = 'none';
                 document.getElementById('updatePasswordForm').classList.remove('hidden');
@@ -1226,6 +1236,9 @@ html[data-theme="dark"] .logo-word, body[data-theme="dark"] .logo-word { color:#
             const rememberMe = document.getElementById('rememberMe').checked;
             const btn = document.getElementById('signinSubmitBtn') || (e.submitter) || e.target.querySelector('.btn-submit');
 
+            const captchaToken = mjGetCaptchaToken('signin');
+            if (!captchaToken) { showError('Please complete the security verification before signing in.'); return; }
+
             if (typeof mjIsRateLimited === 'function' && mjIsRateLimited('login')) {
                 showError(mjRateLimitMessage('login'));
                 return;
@@ -1235,7 +1248,8 @@ html[data-theme="dark"] .logo-word, body[data-theme="dark"] .logo-word { color:#
 
             let data, error;
             try {
-                ({ data, error } = await supabaseClient.auth.signInWithPassword({ email, password }));
+                ({ data, error } = await supabaseClient.auth.signInWithPassword({ email, password, options: { captchaToken } }));
+                mjResetCaptcha('signin');
             } catch (e) {
                 if (typeof mjRecordAttempt === 'function') mjRecordAttempt('login');
                 setAuthButtonLoading(btn, false);
@@ -1368,6 +1382,9 @@ html[data-theme="dark"] .logo-word, body[data-theme="dark"] .logo-word { color:#
                 return;
             }
 
+            const captchaToken = mjGetCaptchaToken('signup');
+            if (!captchaToken) { showError('Please complete the security verification before creating your account.'); return; }
+
             setAuthButtonLoading(btn, true, 'Creating account…');
 
             let data, error;
@@ -1388,10 +1405,13 @@ html[data-theme="dark"] .logo-word, body[data-theme="dark"] .logo-word { color:#
                         // Where Supabase sends the user after they click the
                         // confirm-email link — back to the sign-in page here,
                         // with ?verified=1 so auth.html can greet them.
-                        emailRedirectTo: window.location.origin + '/auth.html?verified=1' + (refAtSignup ? ('&ref=' + encodeURIComponent(refAtSignup)) : '')
+                        emailRedirectTo: window.location.origin + '/auth.html?verified=1' + (refAtSignup ? ('&ref=' + encodeURIComponent(refAtSignup)) : ''),
+                        captchaToken: captchaToken
                     }
                 }));
+                mjResetCaptcha('signup');
             } catch (e) {
+                mjResetCaptcha('signup');
                 console.error('signUp threw:', e);
                 setAuthButtonLoading(btn, false);
                 showError(formatAuthError(e));
@@ -1434,6 +1454,9 @@ html[data-theme="dark"] .logo-word, body[data-theme="dark"] .logo-word { color:#
             const email = document.getElementById('forgotEmail').value.trim();
             const btn = document.getElementById('forgotSubmitBtn') || e.target.querySelector('.btn-submit');
 
+            const captchaToken = mjGetCaptchaToken('forgot');
+            if (!captchaToken) { showError('Please complete the security verification before requesting a password reset.'); return; }
+
             if (mjIsRateLimited('reset')) {
                 showError(mjRateLimitMessage('reset'));
                 return;
@@ -1443,8 +1466,10 @@ html[data-theme="dark"] .logo-word, body[data-theme="dark"] .logo-word { color:#
             setAuthButtonLoading(btn, true, 'Sending…');
 
             const { data, error } = await supabaseClient.auth.resetPasswordForEmail(email, {
-                redirectTo: window.location.origin + '/auth.html?type=recovery'
+                redirectTo: window.location.origin + '/auth.html?type=recovery',
+                captchaToken: captchaToken
             });
+            mjResetCaptcha('forgot');
 
             if (error) {
                 setAuthButtonLoading(btn, false);
@@ -1527,5 +1552,43 @@ html[data-theme="dark"] .logo-word, body[data-theme="dark"] .logo-word { color:#
 </script>
 
   <script src="/js/haptic.js" defer></script>
+
+<script>
+(function () {
+    var siteKey = '0x4AAAAAAF0CXjc8jL8djc4l';
+    var widgetIds = {};
+    var tokens = { signin: '', signup: '', forgot: '' };
+    var containerIds = { signin: 'mjSigninCaptcha', signup: 'mjSignupCaptcha', forgot: 'mjForgotCaptcha' };
+
+    window.mjTurnstileVerified = function (kind, token) { tokens[kind] = token || ''; };
+    window.mjTurnstileExpired = function (kind) { tokens[kind] = ''; };
+    window.mjTurnstileFailed = function (kind) { tokens[kind] = ''; };
+
+    window.mjGetCaptchaToken = function (kind) { return tokens[kind] || ''; };
+    window.mjResetCaptcha = function (kind) {
+        tokens[kind] = '';
+        if (window.turnstile && widgetIds[kind] !== undefined) {
+            try { window.turnstile.reset(widgetIds[kind]); } catch (e) {}
+        }
+    };
+
+    window.mjEnsureCaptcha = function (kind) {
+        var container = document.getElementById(containerIds[kind]);
+        if (!container || widgetIds[kind] !== undefined) return;
+        if (!window.turnstile) {
+            window.setTimeout(function () { window.mjEnsureCaptcha(kind); }, 150);
+            return;
+        }
+        widgetIds[kind] = window.turnstile.render(container, {
+            sitekey: siteKey,
+            theme: 'auto',
+            callback: function (token) { window.mjTurnstileVerified(kind, token); },
+            'expired-callback': function () { window.mjTurnstileExpired(kind); },
+            'error-callback': function () { window.mjTurnstileFailed(kind); }
+        });
+    };
+})();
+</script>
+
 </body>
 </html>
