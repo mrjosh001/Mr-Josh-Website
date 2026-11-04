@@ -5,6 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1"/>
 <title>Vendor portal · MJ HUB</title>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<link rel="preconnect" href="https://challenges.cloudflare.com" crossorigin>
+<link rel="dns-prefetch" href="//challenges.cloudflare.com">
 <script src="https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit&onload=mjVendorTurnstileReady" async defer></script>
 <style>
 :root{
@@ -215,6 +217,8 @@ window.mjVendorTurnstileReady = function () {
  if (!mount || !window.turnstile || vendorLoginCaptchaWidget !== null) return;
  vendorLoginCaptchaWidget = window.turnstile.render(mount, { sitekey: '0x4AAAAAAF0CXjc8jL8djc4l', callback:function(token){vendorLoginCaptchaToken=token||'';}, 'expired-callback':function(){vendorLoginCaptchaToken='';}, 'error-callback':function(){vendorLoginCaptchaToken='';} });
 };
+// Handle cached Turnstile loads that finish before this callback is registered.
+if (window.turnstile) window.mjVendorTurnstileReady();
 function resetVendorLoginCaptcha(){ vendorLoginCaptchaToken=''; if(window.turnstile && vendorLoginCaptchaWidget!==null){try{window.turnstile.reset(vendorLoginCaptchaWidget);}catch(e){}} }
 
 const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
