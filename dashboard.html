@@ -6943,26 +6943,50 @@ window.saveNotifPrefs = function() {
 };
 
 
-/* Soft opt-in for phone push — once until dismissed or enabled */
+/* Soft opt-in: install web app + enable lock-screen alerts — once per day until done */
+window.mjIsStandaloneApp = function () {
+  try {
+    if (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches) return true;
+    if (window.navigator && window.navigator.standalone === true) return true; // iOS
+    if (document.referrer && /android-app:/.test(document.referrer)) return true;
+  } catch (e) {}
+  return false;
+};
 window.mjPushOptInDismiss = function (days) {
   try {
-    var until = Date.now() + (Number(days) || 7) * 24 * 60 * 60 * 1000;
+    var d = Number(days);
+    if (!Number.isFinite(d) || d < 0) d = 1; // default: remind again tomorrow
+    var until = Date.now() + d * 24 * 60 * 60 * 1000;
     localStorage.setItem('mj_push_optin_dismiss_until', String(until));
+    // Also stamp calendar day so we never spam more than once per local day
+    var day = new Date().toISOString().slice(0, 10);
+    localStorage.setItem('mj_push_optin_last_day', day);
   } catch (e) {}
   var el = document.getElementById('mjPushOptInModal');
   if (el) { el.classList.add('hidden'); el.setAttribute('aria-hidden', 'true'); }
 };
 window.mjPushOptInEnable = async function () {
   var el = document.getElementById('mjPushOptInModal');
+  var standalone = window.mjIsStandaloneApp && window.mjIsStandaloneApp();
+  // Not installed yet → keep modal open with install steps; primary is "I added it"
+  if (!standalone) {
+    try {
+      if (typeof showToast === 'function') {
+        showToast('After Add to Home Screen, open MJ HUB from the icon, then tap Turn on alerts.', 'info');
+      }
+    } catch (e) {}
+    return;
+  }
   if (el) { el.classList.add('hidden'); el.setAttribute('aria-hidden', 'true'); }
   try {
-    // Go to Notifications settings so user sees the toggle
     if (typeof switchSection === 'function') switchSection('profile');
     if (typeof openProfileSubview === 'function') openProfileSubview('notifications');
-    // Try enable immediately (user gesture — required by browsers)
     if (window.MJHubPush && MJHubPush.enable) {
       await MJHubPush.enable();
-      try { localStorage.setItem('mj_push_optin_dismiss_until', String(Date.now() + 365 * 24 * 60 * 60 * 1000)); } catch (e) {}
+      try {
+        localStorage.setItem('mj_push_optin_dismiss_until', String(Date.now() + 365 * 24 * 60 * 60 * 1000));
+        localStorage.setItem('mj_push_optin_last_day', new Date().toISOString().slice(0, 10));
+      } catch (e) {}
       var box = document.getElementById('prefPushPhone');
       if (box) box.checked = true;
       if (typeof showToast === 'function') showToast('Phone alerts enabled', 'success');
@@ -6973,22 +6997,60 @@ window.mjPushOptInEnable = async function () {
 };
 window.mjPushOptInMaybeShow = async function () {
   try {
+    var day = new Date().toISOString().slice(0, 10);
+    var lastDay = '';
+    try { lastDay = localStorage.getItem('mj_push_optin_last_day') || ''; } catch (e) {}
     var until = parseInt(localStorage.getItem('mj_push_optin_dismiss_until') || '0', 10);
     if (until && Date.now() < until) return;
-    // Already subscribed?
+    if (lastDay === day) return; // already shown today
+
+    var standalone = window.mjIsStandaloneApp && window.mjIsStandaloneApp();
+    var needInstall = !standalone;
+    var needPush = true;
     if (window.MJHubPush && MJHubPush.status) {
       var st = await MJHubPush.status();
-      if (st && st.subscribed) return;
-      if (st && st.permission === 'denied') return;
+      if (st && st.permission === 'denied') needPush = false; // can't recover in-app
+      if (st && st.subscribed && st.permission === 'granted') needPush = false;
     }
-    // Small delay so dashboard finishes loading
+    // Fully set up (installed + push on) → never nudge
+    if (!needInstall && !needPush) {
+      try {
+        localStorage.setItem('mj_push_optin_dismiss_until', String(Date.now() + 365 * 24 * 60 * 60 * 1000));
+      } catch (e) {}
+      return;
+    }
+
     setTimeout(function () {
       var modal = document.getElementById('mjPushOptInModal');
       if (!modal) return;
-      // Don't show if still on a critical flow
+      var title = document.getElementById('mjPushOptInTitle');
+      var copy = document.getElementById('mjPushOptInCopy');
+      var steps = document.getElementById('mjPushOptInSteps');
+      var primary = document.getElementById('mjPushOptInPrimary');
+      if (needInstall) {
+        if (title) title.textContent = 'Get the MJ HUB app';
+        if (copy) copy.innerHTML = 'Install the web app so codes and deposits reach your lock screen — even when Safari is closed.';
+        if (steps) {
+          steps.style.display = 'block';
+          steps.innerHTML =
+            '<ol class="mj-push-steps">' +
+            '<li><b>iPhone:</b> tap <b>Share</b> <span aria-hidden="true">⎋</span> → <b>Add to Home Screen</b> → Add</li>' +
+            '<li><b>Android:</b> menu <b>⋮</b> → <b>Install app</b> or <b>Add to Home screen</b></li>' +
+            '<li>Open MJ HUB from the <b>home screen icon</b> (not the browser tab)</li>' +
+            '<li>Then turn on <b>notifications</b> when asked</li>' +
+            '</ol>';
+        }
+        if (primary) primary.textContent = 'I installed it — turn on alerts';
+      } else {
+        if (title) title.textContent = "Don't miss SMS codes";
+        if (copy) copy.innerHTML = 'Turn on <b>phone alerts</b> for verification codes, deposits, and order updates when the app is closed.';
+        if (steps) steps.style.display = 'none';
+        if (primary) primary.textContent = 'Turn on alerts';
+      }
+      try { localStorage.setItem('mj_push_optin_last_day', day); } catch (e) {}
       modal.classList.remove('hidden');
       modal.setAttribute('aria-hidden', 'false');
-    }, 1800);
+    }, 1600);
   } catch (e) {}
 };
 
@@ -7000,7 +7062,7 @@ window.togglePhonePush = async function(el) {
     if (on) {
       if (hint) hint.textContent = 'Requesting permission…';
       await MJHubPush.enable();
-      if (hint) hint.textContent = 'On — you will get lock-screen alerts from MJ HUB';
+      if (hint) hint.textContent = 'On — lock-screen alerts enabled';
       if (typeof showToast === 'function') showToast('Phone notifications enabled');
     } else {
       await MJHubPush.disable();
@@ -8838,15 +8900,16 @@ window.toggleHomeBalanceHide = function () {
 </script>
 
 
-<!-- Soft prompt: enable phone lock-screen alerts (once / until dismissed) -->
+<!-- Soft prompt: install web app + enable lock-screen alerts (once per day) -->
 <div id="mjPushOptInModal" class="mj-push-optin hidden" aria-hidden="true">
-  <div class="mj-push-optin-backdrop" onclick="mjPushOptInDismiss(7)"></div>
+  <div class="mj-push-optin-backdrop" onclick="mjPushOptInDismiss(1)"></div>
   <div class="mj-push-optin-card" role="dialog" aria-labelledby="mjPushOptInTitle">
-    <div class="mj-push-optin-icon"><i class="fa-solid fa-bell"></i></div>
-    <h3 id="mjPushOptInTitle">Don’t miss updates</h3>
-    <p>Turn on <b>phone alerts</b> so you get order, deposit, and stock news even when the app is closed.</p>
-    <button type="button" class="mj-push-optin-primary" onclick="mjPushOptInEnable()">Turn on alerts</button>
-    <button type="button" class="mj-push-optin-secondary" onclick="mjPushOptInDismiss(7)">Not now</button>
+    <div class="mj-push-optin-icon"><i class="fa-solid fa-mobile-screen-button"></i></div>
+    <h3 id="mjPushOptInTitle">Get the MJ HUB app</h3>
+    <p id="mjPushOptInCopy">Install the web app so codes and deposits reach your lock screen — even when Safari is closed.</p>
+    <div id="mjPushOptInSteps"></div>
+    <button type="button" class="mj-push-optin-primary" id="mjPushOptInPrimary" onclick="mjPushOptInEnable()">I installed it — turn on alerts</button>
+    <button type="button" class="mj-push-optin-secondary" onclick="mjPushOptInDismiss(1)">Remind me tomorrow</button>
   </div>
 </div>
 <style>
@@ -8857,6 +8920,9 @@ window.toggleHomeBalanceHide = function () {
 .mj-push-optin-icon{width:52px;height:52px;margin:0 auto 12px;border-radius:16px;background:linear-gradient(135deg,#2563eb,#1d4ed8);display:flex;align-items:center;justify-content:center;font-size:22px;color:#fff;}
 .mj-push-optin-card h3{margin:0 0 8px;font-size:18px;font-weight:800;}
 .mj-push-optin-card p{margin:0 0 16px;font-size:14px;line-height:1.5;opacity:.88;}
+.mj-push-steps{text-align:left;margin:0 0 16px;padding:12px 12px 12px 28px;border-radius:12px;background:rgba(37,99,235,.1);border:1px solid rgba(37,99,235,.25);font-size:13px;line-height:1.55;opacity:.95;}
+.mj-push-steps li{margin:0 0 8px;}
+.mj-push-steps li:last-child{margin-bottom:0;}
 .mj-push-optin-primary{width:100%;border:0;border-radius:12px;padding:13px 16px;font-weight:700;font-size:15px;background:#2563eb;color:#fff;cursor:pointer;margin-bottom:8px;}
 .mj-push-optin-primary:active{transform:scale(.98);}
 .mj-push-optin-secondary{width:100%;border:0;background:transparent;color:var(--text-color,#fff);opacity:.65;font-size:14px;padding:10px;cursor:pointer;}
