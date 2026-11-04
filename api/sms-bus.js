@@ -29,12 +29,55 @@ import { sendPushToUser } from '../lib/push.js';
 
 
 /** Fire-and-forget phone push (works even if user is not in the app, if they opted in). */
+/** Format phone like +1 240-348-6504 for lock-screen title */
+function formatPushPhone(phone) {
+  const raw = String(phone || '').replace(/[^\d+]/g, '');
+  if (!raw) return '';
+  const digits = raw.replace(/\D/g, '');
+  if (digits.length === 11 && digits.startsWith('1')) {
+    return '+1 ' + digits.slice(1, 4) + '-' + digits.slice(4, 7) + '-' + digits.slice(7);
+  }
+  if (digits.length === 10) {
+    return '+1 ' + digits.slice(0, 3) + '-' + digits.slice(3, 6) + '-' + digits.slice(6);
+  }
+  if (raw.startsWith('+')) return raw;
+  return digits ? ('+' + digits) : String(phone || '').trim();
+}
+
+/**
+ * Native SMS-style push:
+ * Title = phone number
+ * Body  = full SMS text (or "Your code: …" when only OTP is known)
+ */
+function buildSmsCodePush({ phone, body, code, service }) {
+  const title = formatPushPhone(phone) || 'New SMS';
+  let text = String(body || '').replace(/\s+/g, ' ').trim();
+  const otp = String(code || '').trim() || extractRentOtp(text);
+  if (!text && otp) {
+    const svc = String(service || '').replace(/\s*·.*$/, '').trim();
+    if (/whatsapp/i.test(svc)) text = 'Your WhatsApp code: ' + otp + "\nDon't share this code with others";
+    else if (/telegram/i.test(svc)) text = 'Your Telegram code: ' + otp;
+    else if (svc) text = 'Your ' + svc + ' code: ' + otp;
+    else text = 'Your code: ' + otp;
+  }
+  if (!text) text = 'New message received. Open inbox to read it.';
+  // Keep lock-screen readable
+  if (text.length > 220) text = text.slice(0, 217) + '…';
+  return { title, body: text };
+}
+
 async function notifyUserPush(userId, title, body, url, type) {
   if (!userId) return;
   try {
+    let t = String(title || 'Update').trim();
+    // Never ship bare app name as notification title (causes "MJ HUB from MJ HUB" on iOS)
+    if (!t || /^mj\s*hub$/i.test(t)) t = 'Update';
+    t = t.replace(/\s*from\s*MJ\s*HUB\s*/gi, '').trim() || 'Update';
+    let b = String(body || '').trim();
+    b = b.replace(/\s*from\s*MJ\s*HUB\s*/gi, '').trim();
     await sendPushToUser(supabase, userId, {
-      title: String(title || 'MJ HUB').slice(0, 80),
-      body: String(body || '').slice(0, 180),
+      title: t.slice(0, 80),
+      body: b.slice(0, 240),
       url: url || '/dashboard.html',
       type: String(type || 'activity').slice(0, 40)
     });
@@ -429,13 +472,15 @@ async function gotsmsHandleWebhook(req, res) {
         const rid = rentId || String(order.idempotency_key || '').replace(/^gotsms-/, '');
         if (rid) await gotsmsSetPurchaseTxStatus(order.user_id, rid, ['pending'], 'completed');
       } catch (_) {}
-      await notifyUserPush(
-        order.user_id,
-        'SMS received on your number',
-        (msg.code ? ('Code: ' + msg.code + ' · ') : '') + 'Open inbox to read the full message.',
-        '/sms-history.html',
-        'sms_code'
-      );
+      {
+        const push = buildSmsCodePush({
+          phone: order.phone_number,
+          body: msg.body,
+          code: msg.code,
+          service: order.service_name
+        });
+        await notifyUserPush(order.user_id, push.title, push.body, '/sms-history.html', 'sms_code');
+      }
       return json(res, 200, { success: true, event, order_id: order.id });
     }
 
@@ -2509,13 +2554,15 @@ export default async function handler(req, res) {
           .eq('refunded', false)
           .select();
         if (updatedRows && updatedRows.length) {
-          await notifyUserPush(
-            auth.userId,
-            'SMS code received',
-            'Your verification code is ready. Open Number History to view it.',
-            '/sms-history.html',
-            'sms_code'
-          );
+          {
+            const push = buildSmsCodePush({
+              phone: order.phone_number,
+              body: null,
+              code,
+              service: order.service_name
+            });
+            await notifyUserPush(auth.userId, push.title, push.body, '/sms-history.html', 'sms_code');
+          }
         }
         if (!updatedRows || updatedRows.length === 0) {
           // Concurrent refund mid-flight → try reclaim
@@ -4394,10 +4441,17 @@ if (method === 'GET' && ga === 'gotsms_messages') {
         if (g.ok && msgs.length > 0) {
           try {
             const key = `gotsms-${rent_id}`;
-            const { data: row } = await supabase.from('number_orders').select('id, service_name').eq('user_id', auth.userId).eq('source', 'gotsms').eq('idempotency_key', key).maybeSingle();
+            const { data: row } = await supabase.from('number_orders').select('id, service_name, phone_number').eq('user_id', auth.userId).eq('source', 'gotsms').eq('idempotency_key', key).maybeSingle();
             if (row && !/sms\s*received/i.test(String(row.service_name || ''))) {
               await supabase.from('number_orders').update({ status: 'completed', service_name: (row.service_name || 'USA rental') + ' · SMS received' }).eq('id', row.id);
-              await notifyUserPush(auth.userId, 'SMS received on your number', 'Open USA rental inbox to view messages.', '/sms-history.html', 'sms_code');
+              const last = msgs[msgs.length - 1] || msgs[0] || {};
+              const push = buildSmsCodePush({
+                phone: row.phone_number,
+                body: last.text || last.body || last.message || last.content || '',
+                code: last.code || extractRentOtp(String(last.text || last.body || '')),
+                service: row.service_name
+              });
+              await notifyUserPush(auth.userId, push.title, push.body, '/sms-history.html', 'sms_code');
             }
             await gotsmsSetPurchaseTxStatus(auth.userId, rent_id, ['pending'], 'completed');
           } catch (e) {
