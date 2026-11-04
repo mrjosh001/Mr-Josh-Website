@@ -1303,6 +1303,37 @@ body[data-theme="light"] .footer3-cols a { color: #0f172a; }
 }
 
 
+/* Hero contrast: explicit, accessible colours in both themes */
+.hero .hero-copy,
+.hero h1 { color: var(--text) !important; }
+.hero h1 .grad {
+  background: none !important;
+  -webkit-background-clip: initial !important;
+  -webkit-text-fill-color: currentColor !important;
+  color: var(--primary) !important;
+}
+.hero p {
+  color: var(--text2) !important;
+  opacity: 1 !important;
+}
+.hero .badge {
+  color: var(--text) !important;
+  background: color-mix(in srgb, var(--primary) 12%, var(--elevated)) !important;
+  border: 1px solid color-mix(in srgb, var(--primary) 32%, var(--border)) !important;
+}
+html[data-theme="light"] .hero h1,
+body[data-theme="light"] .hero h1 { color: #111827 !important; }
+html[data-theme="light"] .hero h1 .grad,
+body[data-theme="light"] .hero h1 .grad { color: #1d4ed8 !important; }
+html[data-theme="light"] .hero p,
+body[data-theme="light"] .hero p { color: #475569 !important; }
+html[data-theme="dark"] .hero h1,
+body[data-theme="dark"] .hero h1 { color: #f8fafc !important; }
+html[data-theme="dark"] .hero h1 .grad,
+body[data-theme="dark"] .hero h1 .grad { color: #93c5fd !important; }
+html[data-theme="dark"] .hero p,
+body[data-theme="dark"] .hero p { color: #cbd5e1 !important; }
+
 /* Hero without service-list — full-width copy */
 .hero-grid { grid-template-columns: 1fr !important; max-width: 720px; margin: 0 auto; }
 .hero-copy { text-align: center; }
