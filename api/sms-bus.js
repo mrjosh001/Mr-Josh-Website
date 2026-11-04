@@ -1482,26 +1482,18 @@ async function claimAndRefundSmsBusOrder(order, userId, opts = {}) {
   if (!claimed) return { refunded: false, reason: 'already_final' };
 
   const refundAmount = Number(order.price != null ? order.price : claimed.price) || 0;
+
+  // DOUBLE-REFUND FIX: the wallet credit is performed exactly once by the database
+  // trigger trg_mj_refund_number_order_wallet (mj_refund_number_order_wallet_once),
+  // which fires when the claim above flips number_orders.refunded false -> true and
+  // restores the exact NGN/USD split of the linked wallet_debits row.
+  // Do NOT call credit_balance() or update profiles.balance here: credit_balance()
+  // matches ANY unrefunded debit of the same amount from the last 30 minutes, so it
+  // could credit a second time against a stale debit from an earlier failed attempt.
   let newBalance = null;
   if (refundAmount > 0) {
-    const { data: credited, error: credErr } = await supabase.rpc('credit_balance', {
-      p_user_id: userId,
-      p_amount: refundAmount
-    });
-    if (credErr) {
-      console.error('[smsbus claimAndRefund] credit_balance', credErr.message);
-      const { data: profileFb } = await supabase.from('profiles').select('balance, customer_id').eq('id', userId).maybeSingle();
-      if (profileFb) {
-        newBalance = Number(profileFb.balance || 0) + refundAmount;
-        await supabase.from('profiles').update({ balance: newBalance }).eq('id', userId);
-      }
-    } else if (credited != null && typeof credited === 'object' && credited.new_balance != null) {
-      newBalance = Number(credited.new_balance);
-    } else if (typeof credited === 'number') {
-      newBalance = credited;
-    }
     const { data: profile } = await supabase.from('profiles').select('customer_id, balance').eq('id', userId).maybeSingle();
-    if (newBalance == null && profile) newBalance = Number(profile.balance || 0);
+    if (profile) newBalance = Number(profile.balance || 0);
     try {
       await supabase.from('transactions').insert({
         user_id: userId,
@@ -1512,7 +1504,8 @@ async function claimAndRefundSmsBusOrder(order, userId, opts = {}) {
         subtitle: subtitle,
         amount: `₦${refundAmount.toLocaleString()}`,
         amount_ngn: refundAmount,
-        status: 'refunded'
+        status: 'refunded',
+        external_reference: order.order_id || null
       });
     } catch (_) {}
   }

@@ -1069,50 +1069,21 @@ async function claimAndRefundOrder(order, userId, opts = {}) {
     return { refunded: false, reason: 'already_final' };
   }
 
-  // Claim won — credit wallet exactly once for this order
+  // Claim won.
+  // DOUBLE-REFUND FIX: the wallet credit is performed exactly once by the database trigger
+  // trg_mj_refund_number_order_wallet (mj_refund_number_order_wallet_once), which fires when the
+  // claim above flips number_orders.refunded false -> true and restores the exact NGN/USD split of
+  // the linked wallet_debits row (wallet_debit_id).
+  // Do NOT call credit_balance() or update profiles.balance here: credit_balance() matches ANY
+  // unrefunded debit of the same amount from the last 30 minutes, so it can credit a second time
+  // against a stale debit left behind by an earlier failed purchase (those failure paths restore
+  // the balance directly and never flag the debit as refunded).
   const refundAmount = Number(order.price != null ? order.price : claimed.price) || 0;
   let newBalance = null;
 
   if (refundAmount > 0) {
-    const { data: credited, error: credErr } = await supabase.rpc('credit_balance', {
-      p_user_id: userId,
-      p_amount: refundAmount
-    });
-    if (credErr) {
-      console.error('[claimAndRefundOrder] credit_balance', credErr.message);
-      const { data: still } = await supabase
-        .from('number_orders')
-        .select('id, refunded')
-        .eq('id', order.id)
-        .eq('refunded', true)
-        .maybeSingle();
-      if (still && still.id) {
-        const { data: profile } = await supabase.from('profiles').select('balance').eq('id', userId).maybeSingle();
-        if (profile) {
-          const prevBal = Number(profile.balance || 0);
-          const { data: bumped, error: balErr } = await supabase
-            .from('profiles')
-            .update({ balance: prevBal + refundAmount })
-            .eq('id', userId)
-            .eq('balance', prevBal)
-            .select('balance')
-            .maybeSingle();
-          if (balErr) console.error('[claimAndRefundOrder] balance credit failed', balErr);
-          else if (bumped) newBalance = Number(bumped.balance);
-          else {
-            const { data: p2 } = await supabase.from('profiles').select('balance').eq('id', userId).maybeSingle();
-            if (p2) newBalance = Number(p2.balance);
-          }
-        }
-      }
-    } else if (credited != null && typeof credited === 'object' && credited.new_balance != null) {
-      newBalance = Number(credited.new_balance);
-    } else if (typeof credited === 'number') {
-      newBalance = credited;
-    } else {
-      const { data: p3 } = await supabase.from('profiles').select('balance').eq('id', userId).maybeSingle();
-      if (p3) newBalance = Number(p3.balance);
-    }
+    const { data: profile } = await supabase.from('profiles').select('balance').eq('id', userId).maybeSingle();
+    if (profile) newBalance = Number(profile.balance || 0);
   }
 
   // Update the SAME purchase transaction — never insert a second refund row
