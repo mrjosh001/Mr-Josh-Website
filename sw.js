@@ -9,7 +9,7 @@ self.addEventListener('activate', (event) => {
 
 self.addEventListener('push', (event) => {
   var DEFAULT_TITLE = 'Update';
-  var DEFAULT_BODY = 'You have a new update on MJ HUB. Log in to your dashboard.';
+  var DEFAULT_BODY = 'You have a new update. Open your dashboard.';
   var data = { title: DEFAULT_TITLE, body: DEFAULT_BODY, url: '/dashboard.html' };
   try {
     if (event.data) {
@@ -23,20 +23,26 @@ self.addEventListener('push', (event) => {
     } catch (_) {}
   }
 
-  // Lagos Life style: TITLE (bold) + body. iOS shows "from MJ HUB" under the title.
   var title = (data.title && String(data.title).trim()) || DEFAULT_TITLE;
-  // Never use bare app name as title — looks like "MJ HUB from MJ HUB"
-  if (/^mj\s*hub$/i.test(title)) title = DEFAULT_TITLE;
-
   var body = (data.body && String(data.body).trim()) || DEFAULT_BODY;
+
+  // Never show bare app name as the bold title
+  if (/^mj\s*hub$/i.test(title)) title = DEFAULT_TITLE;
+  title = title.replace(/\s*from\s*MJ\s*HUB\s*/gi, '').trim() || DEFAULT_TITLE;
+  body = body.replace(/\s*from\s*MJ\s*HUB\s*/gi, '').trim() || DEFAULT_BODY;
+
+  // SMS-style: phone title + full message body (like native WhatsApp SMS)
+  var isSms = String(data.type || '') === 'sms_code' || /^\+?\d[\d\s().-]{8,}$/.test(title);
 
   var options = {
     body: body,
     icon: data.icon || '/img/IMG_3027.png',
     badge: data.badge || '/img/IMG_3027.png',
-    data: { url: data.url || '/dashboard.html' },
-    vibrate: [120, 60, 120],
-    requireInteraction: false
+    data: { url: data.url || (isSms ? '/sms-history.html' : '/dashboard.html') },
+    vibrate: isSms ? [80, 40, 80, 40, 120] : [120, 60, 120],
+    requireInteraction: !!isSms,
+    tag: isSms ? ('sms-' + title.replace(/\s+/g, '')) : (data.tag || undefined),
+    renotify: !!isSms
   };
   event.waitUntil(self.registration.showNotification(title, options));
 });
