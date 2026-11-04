@@ -125,12 +125,22 @@ function formatNgn(value) {
  *   [{ filename, content (base64), content_id? }]
  * An attachment with content_id is embedded in the body via <img src="cid:...">.
  */
-async function sendEmail({ to, subject, html, attachments, replyTo }) {
+/** Display name in the inbox, e.g. "MJ HUB Wireless <orders@domain>". */
+function fromAddress(displayName) {
+  const base = String(process.env.RESEND_FROM_EMAIL || '').trim();
+  if (!base) return base;
+  const m = base.match(/<([^>]+)>/);
+  const addr = (m ? m[1] : base).trim();
+  if (!displayName || !addr) return base;
+  return String(displayName).replace(/[<>]/g, '').trim() + ' <' + addr + '>';
+}
+
+async function sendEmail({ to, subject, html, attachments, replyTo, fromName }) {
   if (!process.env.RESEND_API_KEY || !process.env.RESEND_FROM_EMAIL) {
     throw new Error('Resend is not configured for this deployment');
   }
   const payload = {
-    from: process.env.RESEND_FROM_EMAIL,
+    from: fromName ? fromAddress(fromName) : process.env.RESEND_FROM_EMAIL,
     to: [to],
     subject,
     html
@@ -158,81 +168,80 @@ async function sendOrderEmails(order) {
   const email = escapeHtml(order.customer_email);
   const imei = escapeHtml(order.imei);
   const amount = formatNgn(order.amount_ngn);
+  const carrierRaw = order.carrier_label || order.carrier || (String(order.plan_name || '').split('·')[0] || '').trim() || '—';
+  const carrier = escapeHtml(carrierRaw);
   const createdAt = new Date(order.created_at || Date.now()).toLocaleString('en-NG', {
     dateStyle: 'medium', timeStyle: 'short', timeZone: 'Africa/Lagos'
   });
   const createdAtSafe = escapeHtml(createdAt);
-  const customerHtml = `
-    <div style="font-family:Arial,sans-serif;max-width:600px;margin:auto;color:#172033;line-height:1.6">
-      <h2 style="color:#315fe8">MJ HUB eSIM order received</h2>
-      <p>Your wallet payment was successful. We have received your eSIM order and it is awaiting processing.</p>
-      <table style="border-collapse:collapse;width:100%">
-        <tr><td style="padding:9px;border-bottom:1px solid #e5e7eb">Order reference</td><td style="padding:9px;border-bottom:1px solid #e5e7eb"><strong>${orderRef}</strong></td></tr>
-        <tr><td style="padding:9px;border-bottom:1px solid #e5e7eb">Plan</td><td style="padding:9px;border-bottom:1px solid #e5e7eb">${planName}</td></tr>
-        <tr><td style="padding:9px;border-bottom:1px solid #e5e7eb">Carrier</td><td style="padding:9px;border-bottom:1px solid #e5e7eb">${escapeHtml(order.carrier || (String(order.plan_name||'').split('·')[0]||'').trim() || '—')}</td></tr>
-        <tr><td style="padding:9px;border-bottom:1px solid #e5e7eb">Amount paid</td><td style="padding:9px;border-bottom:1px solid #e5e7eb"><strong>${amount}</strong></td></tr>
-        <tr><td style="padding:9px;border-bottom:1px solid #e5e7eb">Phone IMEI</td><td style="padding:9px;border-bottom:1px solid #e5e7eb">${imei}</td></tr>
-        <tr><td style="padding:9px;border-bottom:1px solid #e5e7eb">Order date</td><td style="padding:9px;border-bottom:1px solid #e5e7eb">${createdAtSafe}</td></tr>
-        <tr><td style="padding:9px;border-bottom:1px solid #e5e7eb">Status</td><td style="padding:9px;border-bottom:1px solid #e5e7eb">Paid — processing</td></tr>
-      </table>
-      <p>Keep your order reference for support. This email confirms payment and order receipt; it does not mean the eSIM has already been activated.</p>
-      <p>MJ HUB Support</p>
-    </div>`;
+
+  let fullName = '';
+  if (order.user_id) {
+    try {
+      const { data: profile } = await supabase.from('profiles').select('full_name').eq('id', order.user_id).maybeSingle();
+      fullName = String(profile?.full_name || '').trim();
+    } catch (_) {}
+  }
+
+  const invoiceHtml = buildInvoiceEmail({
+    fullName,
+    orderRef: order.order_ref,
+    planName: order.plan_name,
+    carrier: carrierRaw,
+    email: order.customer_email,
+    imei: order.imei,
+    amountNgn: order.amount_ngn,
+    createdAt,
+    createdIso: order.created_at || new Date().toISOString()
+  });
+
   const adminHtml = `
     <div style="font-family:Arial,sans-serif;max-width:600px;margin:auto;color:#172033;line-height:1.6">
-      <h2>New paid eSIM order</h2>
-      <p>A customer has completed an eSIM wallet purchase.</p>
+      <h2 style="color:#315fe8">New eSIM order</h2>
+      <p>Customer paid. Deliver when the line is ready.</p>
       <table style="border-collapse:collapse;width:100%">
-        <tr><td style="padding:9px;border-bottom:1px solid #e5e7eb">Order reference</td><td style="padding:9px;border-bottom:1px solid #e5e7eb"><strong>${orderRef}</strong></td></tr>
-        <tr><td style="padding:9px;border-bottom:1px solid #e5e7eb">Customer name</td><td style="padding:9px;border-bottom:1px solid #e5e7eb">${escapeHtml(order.full_name || 'MJ HUB customer')}</td></tr>
-        <tr><td style="padding:9px;border-bottom:1px solid #e5e7eb">Customer email</td><td style="padding:9px;border-bottom:1px solid #e5e7eb">${email}</td></tr>
+        <tr><td style="padding:9px;border-bottom:1px solid #e5e7eb">Order</td><td style="padding:9px;border-bottom:1px solid #e5e7eb"><strong>${orderRef}</strong></td></tr>
         <tr><td style="padding:9px;border-bottom:1px solid #e5e7eb">Plan</td><td style="padding:9px;border-bottom:1px solid #e5e7eb">${planName}</td></tr>
-        <tr><td style="padding:9px;border-bottom:1px solid #e5e7eb">Amount paid</td><td style="padding:9px;border-bottom:1px solid #e5e7eb">${amount}</td></tr>
-        <tr><td style="padding:9px;border-bottom:1px solid #e5e7eb">Phone IMEI</td><td style="padding:9px;border-bottom:1px solid #e5e7eb">${imei}</td></tr>
-        <tr><td style="padding:9px;border-bottom:1px solid #e5e7eb">Order date</td><td style="padding:9px;border-bottom:1px solid #e5e7eb">${createdAtSafe}</td></tr>
-        <tr><td style="padding:9px;border-bottom:1px solid #e5e7eb">Status</td><td style="padding:9px;border-bottom:1px solid #e5e7eb">Paid — processing</td></tr>
+        <tr><td style="padding:9px;border-bottom:1px solid #e5e7eb">Network</td><td style="padding:9px;border-bottom:1px solid #e5e7eb">${carrier}</td></tr>
+        <tr><td style="padding:9px;border-bottom:1px solid #e5e7eb">Amount</td><td style="padding:9px;border-bottom:1px solid #e5e7eb">${amount}</td></tr>
+        <tr><td style="padding:9px;border-bottom:1px solid #e5e7eb">Customer</td><td style="padding:9px;border-bottom:1px solid #e5e7eb">${email}</td></tr>
+        <tr><td style="padding:9px;border-bottom:1px solid #e5e7eb">IMEI</td><td style="padding:9px;border-bottom:1px solid #e5e7eb">${imei}</td></tr>
+        <tr><td style="padding:9px;border-bottom:1px solid #e5e7eb">Paid at</td><td style="padding:9px;border-bottom:1px solid #e5e7eb">${createdAtSafe}</td></tr>
       </table>
-      <p style="margin-top:14px">Open the admin dashboard → <strong>eSIM Orders</strong> to deliver this order once the eSIM is ready.</p>
+      <p style="margin-top:14px">Admin → eSIM Orders → upload QR → Deliver.</p>
     </div>`;
 
-  const tasks = [];
   if (!order.customer_email_sent_at) {
-    tasks.push(sendEmail({
-      to: order.customer_email,
-      subject: 'MJ HUB eSIM order received · ' + order.order_ref,
-      html: customerHtml
-    }).then(async () => {
-      const { error } = await supabase.from('esim_orders')
+    try {
+      await sendEmail({
+        to: order.customer_email,
+        subject: 'Invoice for Your Recent Purchase',
+        html: invoiceHtml,
+        fromName: 'MJ HUB Wireless'
+      });
+      await supabase.from('esim_orders')
         .update({ customer_email_sent_at: new Date().toISOString() })
         .eq('id', order.id);
-      if (error) throw error;
-      return 'customer';
-    }));
+    } catch (e) {
+      console.error('[esim invoice]', e?.message || e);
+      throw e;
+    }
   }
   if (!order.admin_email_sent_at) {
-    tasks.push(sendEmail({
-      to: ADMIN_EMAIL,
-      subject: 'New paid eSIM order · ' + order.order_ref,
-      html: adminHtml
-    }).then(async () => {
-      const { error } = await supabase.from('esim_orders')
+    try {
+      await sendEmail({
+        to: ADMIN_EMAIL,
+        subject: 'New eSIM order ' + order.order_ref,
+        html: adminHtml
+      });
+      await supabase.from('esim_orders')
         .update({ admin_email_sent_at: new Date().toISOString() })
         .eq('id', order.id);
-      if (error) throw error;
-      return 'admin';
-    }));
+    } catch (e) {
+      console.error('[esim admin alert]', e?.message || e);
+    }
   }
-
-  const results = await Promise.allSettled(tasks);
-  const failed = results.filter((result) => result.status === 'rejected');
-  if (failed.length) {
-    const message = failed.map((result) => String(result.reason?.message || result.reason || 'Email failed')).join('; ').slice(0, 1000);
-    console.error('[esim email] Order ' + order.order_ref + ': ' + message);
-    await supabase.from('esim_orders').update({ email_error: message }).eq('id', order.id);
-  } else if (tasks.length) {
-    await supabase.from('esim_orders').update({ email_error: null }).eq('id', order.id);
-  }
-
+  await supabase.from('esim_orders').update({ email_error: null }).eq('id', order.id);
   const { data: latest } = await supabase.from('esim_orders')
     .select('customer_email_sent_at, admin_email_sent_at')
     .eq('id', order.id)
@@ -243,64 +252,190 @@ async function sendOrderEmails(order) {
   };
 }
 
-/* ------------------------------------------------------------------ */
-/* eSIM delivery email (sent manually from the admin dashboard)        */
-/* ------------------------------------------------------------------ */
+function brandHeader(subtitle) {
+  return `
+    <div style="background:#0b1220;padding:28px 24px 12px;text-align:center;border-bottom:1px solid #1e293b">
+      <div style="font-family:Arial,Helvetica,sans-serif;font-size:18px;font-weight:800;letter-spacing:0.04em;color:#60a5fa">MJ HUB Wireless</div>
+      ${subtitle ? `<div style="font-family:Arial,sans-serif;font-size:12px;color:#94a3b8;margin-top:6px">${subtitle}</div>` : ''}
+    </div>`;
+}
 
-/**
- * The premade eSIM delivery template. The QR code is embedded in the middle of
- * the message through a CID reference (<img src="cid:esim-qr">), which every
- * major mail client renders. (Gmail blocks base64 data: images, so CID is the
- * reliable way.) The same image is also attached as a normal file.
- */
-function buildDeliveryEmail({ fullName, orderRef, planName, phone }) {
+function brandFooter() {
+  return `
+    <div style="background:#0b1220;padding:18px 24px;border-top:3px solid #2563eb;font-family:Arial,sans-serif;font-size:12px;color:#94a3b8;text-align:center">
+      <div style="margin-bottom:4px">MJ HUB · www.mjhub.store</div>
+      <div>Support: reply to this email</div>
+    </div>`;
+}
+
+/** EMAIL 1 — Invoice */
+function buildInvoiceEmail({ fullName, orderRef, planName, carrier, email, imei, amountNgn, createdAt, createdIso }) {
   const name = escapeHtml(String(fullName || '').trim());
-  const greeting = name ? 'Hi ' + name + ',' : 'Hi there,';
-  const ref = escapeHtml(orderRef);
-  const plan = escapeHtml(planName);
-  const phoneBlock = phone
-    ? `<p style="margin:0 0 4px;font-size:16px;text-align:center">Phone Number: <strong style="color:#1d4ed8">${escapeHtml(phone)}</strong></p>`
-    : '';
+  const greeting = name ? 'Dear ' + name + ',' : 'Hello,';
+  const ref = escapeHtml(orderRef || '');
+  const plan = escapeHtml(planName || 'eSIM plan');
+  const car = escapeHtml(carrier || '—');
+  const im = escapeHtml(imei || '—');
+  const when = escapeHtml(createdAt || '');
+  const amtNum = Number(amountNgn || 0);
+  const amt = escapeHtml(formatNgn(amtNum));
+  const jsonLd = {
+    '@context': 'https://schema.org',
+    '@type': 'Order',
+    orderNumber: String(orderRef || ''),
+    orderStatus: 'https://schema.org/OrderProcessing',
+    orderDate: String(createdIso || new Date().toISOString()),
+    priceCurrency: 'NGN',
+    price: String(amtNum),
+    merchant: { '@type': 'Organization', name: 'MJ HUB Wireless', url: 'https://www.mjhub.store' },
+    customer: { '@type': 'Person', email: String(email || ''), name: String(fullName || '') },
+    acceptedOffer: {
+      '@type': 'Offer',
+      itemOffered: { '@type': 'Product', name: String(planName || 'eSIM') + (carrier ? ' · ' + carrier : '') },
+      price: String(amtNum),
+      priceCurrency: 'NGN'
+    },
+    url: 'https://www.mjhub.store/esim-orders.html'
+  };
+  const jsonLdStr = JSON.stringify(jsonLd).replace(/</g, '\\u003c');
+
   return `<!doctype html>
 <html>
-<body style="margin:0;padding:0;background:#f3f5f9">
-  <div style="max-width:600px;margin:0 auto;padding:24px 12px;font-family:Arial,Helvetica,sans-serif;color:#111827">
-    <div style="background:#ffffff;border-radius:14px;padding:30px 26px;border:1px solid #e5e7eb">
-      <p style="margin:0 0 18px;font-size:17px;font-weight:bold">${greeting}</p>
-      <p style="margin:0 0 22px;font-size:16px;line-height:1.6">Congratulations! Your eSIM is here and ready to be activated! Please find the essential information for your eSIM below:</p>
-      ${phoneBlock}
-      <p style="margin:10px 0 12px;font-size:16px;font-weight:bold;text-align:center">eSIM QR Code:</p>
-      <div style="text-align:center;margin:0 0 26px">
-        <img src="cid:esim-qr" alt="eSIM QR code" width="240" style="width:240px;max-width:100%;height:auto;border:0;display:inline-block">
-      </div>
-      <div style="background:#f3f5f9;border-radius:10px;padding:16px 18px;font-size:15px;line-height:1.8">
-        <strong>How to install</strong><br>
-        1. Connect VPN<br>
-        2. Go to Settings &rarr; Cellular &rarr; Add eSIM<br>
-        3. Click &lsquo;Use QR code&rsquo; and scan this QR code
-      </div>
-      <p style="margin:22px 0 0;font-size:12px;color:#6b7280;line-height:1.6">Order reference: <strong>${ref}</strong> &middot; Plan: ${plan}<br>
-      This QR code is for you only &mdash; please don&rsquo;t share it. A copy of the QR code is also attached to this email. Need help? Just reply to this email.</p>
-      <p style="margin:16px 0 0;font-size:13px;color:#374151">MJ HUB Support</p>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <script type="application/ld+json">${jsonLdStr}</script>
+</head>
+<body style="margin:0;padding:0;background:#0f172a">
+  <div style="max-width:600px;margin:0 auto;font-family:Georgia,'Times New Roman',serif;color:#e2e8f0">
+    ${brandHeader('')}
+    <div style="background:#1e293b;padding:28px 24px;text-align:center">
+      <h1 style="margin:0;font-size:28px;font-weight:400;color:#93c5fd">Invoice Summary</h1>
     </div>
+    <div style="background:#0f172a;padding:28px 24px 32px;font-size:16px;line-height:1.7">
+      <p style="margin:0 0 16px">${greeting}</p>
+      <p style="margin:0 0 20px">Thank you for choosing MJ HUB Wireless. We appreciate your business. Below is a summary of your recent purchase:</p>
+      <ul style="margin:0 0 22px;padding-left:20px;color:#cbd5e1">
+        <li style="margin-bottom:8px">Order ID: <strong style="color:#fff">#${ref}</strong></li>
+        <li style="margin-bottom:8px">Payment Method: <strong style="color:#fff">MJ HUB Wallet</strong></li>
+        <li style="margin-bottom:8px">Order Date: <strong style="color:#fff">${when}</strong></li>
+        <li style="margin-bottom:8px">Network: <strong style="color:#fff">${car}</strong></li>
+        <li style="margin-bottom:8px">Plan: <strong style="color:#fff">${plan}</strong></li>
+        <li style="margin-bottom:8px">IMEI: <strong style="color:#fff">${im}</strong></li>
+        <li style="margin-bottom:8px">Total Amount: <strong style="color:#60a5fa;font-size:18px">${amt}</strong></li>
+      </ul>
+      <p style="margin:0 0 16px">Your payment is confirmed. Your eSIM is being prepared. You will receive a welcome message and your QR code by email when the line is ready.</p>
+      <p style="margin:0 0 16px">Order history: <a href="https://www.mjhub.store/esim-orders.html" style="color:#60a5fa">View eSIM orders</a></p>
+      <p style="margin:0 0 20px">If you have any questions, reply to this email. We are here to help.</p>
+      <p style="margin:0">Best regards,<br>The MJ HUB Wireless Team</p>
+    </div>
+    ${brandFooter()}
   </div>
 </body>
 </html>`;
 }
 
-/** Decode a data URL (png / jpeg / webp only) and verify the bytes really are that image type. */
-function decodeQrDataUrl(dataUrl) {
-  const match = /^data:(image\/(?:png|jpeg|jpg|webp));base64,([A-Za-z0-9+/=\r\n]+)$/i.exec(String(dataUrl || '').trim());
-  if (!match) return null;
-  const buffer = Buffer.from(match[2].replace(/\s+/g, ''), 'base64');
-  if (!buffer.length || buffer.length > MAX_QR_BYTES) return null;
-  const isPng = buffer.length > 8 && buffer[0] === 0x89 && buffer[1] === 0x50 && buffer[2] === 0x4e && buffer[3] === 0x47;
-  const isJpeg = buffer.length > 3 && buffer[0] === 0xff && buffer[1] === 0xd8 && buffer[2] === 0xff;
-  const isWebp = buffer.length > 12 && buffer.slice(0, 4).toString('ascii') === 'RIFF' && buffer.slice(8, 12).toString('ascii') === 'WEBP';
-  if (isPng) return { buffer, ext: 'png', type: 'image/png' };
-  if (isJpeg) return { buffer, ext: 'jpg', type: 'image/jpeg' };
-  if (isWebp) return { buffer, ext: 'webp', type: 'image/webp' };
-  return null;
+/** EMAIL 2 — Welcome */
+function buildWelcomeEmail({ fullName, orderRef, planName, carrier }) {
+  const name = escapeHtml(String(fullName || '').trim());
+  const greeting = name ? 'Dear ' + name + ',' : 'Hello,';
+  const ref = escapeHtml(orderRef || '');
+  const plan = escapeHtml(planName || '');
+  const car = escapeHtml(carrier || '');
+  return `<!doctype html>
+<html>
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
+<body style="margin:0;padding:0;background:#0f172a">
+  <div style="max-width:600px;margin:0 auto;font-family:Georgia,'Times New Roman',serif;color:#e2e8f0">
+    ${brandHeader('')}
+    <div style="background:#1e293b;padding:28px 24px;text-align:center">
+      <h1 style="margin:0;font-size:26px;font-weight:400;color:#93c5fd">Welcome to MJ HUB Wireless</h1>
+    </div>
+    <div style="background:#0f172a;padding:28px 24px 32px;font-size:16px;line-height:1.7">
+      <p style="margin:0 0 16px">${greeting}</p>
+      <p style="margin:0 0 16px">Thank you for choosing MJ HUB Wireless. Your order is confirmed and your line is being set up.</p>
+      <p style="margin:0 0 16px">In a separate email you will receive your eSIM QR code, your number when it is assigned, and clear install steps for iPhone and Android.</p>
+      <p style="margin:0 0 8px"><strong style="color:#fff">Your order</strong></p>
+      <ul style="margin:0 0 20px;padding-left:20px;color:#cbd5e1">
+        <li style="margin-bottom:6px">Order ID: <strong style="color:#fff">#${ref}</strong></li>
+        <li style="margin-bottom:6px">Plan: <strong style="color:#fff">${plan}</strong></li>
+        ${car ? `<li style="margin-bottom:6px">Network: <strong style="color:#fff">${car}</strong></li>` : ''}
+      </ul>
+      <p style="margin:0 0 8px"><strong style="color:#fff">Manage your order</strong></p>
+      <ol style="margin:0 0 20px;padding-left:20px;color:#cbd5e1">
+        <li style="margin-bottom:8px">Sign in at <a href="https://www.mjhub.store" style="color:#60a5fa">www.mjhub.store</a></li>
+        <li style="margin-bottom:8px">Open eSIM orders on your dashboard</li>
+        <li style="margin-bottom:0">Keep this email for your records</li>
+      </ol>
+      <p style="margin:0 0 20px">If you need help, reply to this email. Our support team will assist you.</p>
+      <p style="margin:0">Best regards,<br>The MJ HUB Wireless Team</p>
+    </div>
+    ${brandFooter()}
+  </div>
+</body>
+</html>`;
+}
+
+/**
+ * EMAIL 3 — QR + install guide (your real activation steps)
+ */
+function buildDeliveryEmail({ fullName, orderRef, planName, phone, carrier, imei }) {
+  const name = escapeHtml(String(fullName || '').trim());
+  const greeting = name ? 'Dear ' + name + ',' : 'Hello,';
+  const ref = escapeHtml(orderRef || '');
+  const plan = escapeHtml(planName || '');
+  const car = escapeHtml(carrier || '');
+  const im = escapeHtml(imei || '');
+  const phoneBlock = phone
+    ? `<p style="margin:0 0 18px;text-align:center;font-size:16px">Phone Number<br><strong style="color:#93c5fd;font-size:22px;letter-spacing:0.03em">${escapeHtml(phone)}</strong></p>`
+    : '';
+  const imeiBlock = im
+    ? `<p style="margin:0 0 18px;padding:14px 16px;background:#1c1917;border:1px solid #92400e;border-radius:8px;font-size:14px;color:#fde68a;line-height:1.55"><strong>Important:</strong> This eSIM will only activate on IMEI <strong>${im}</strong>. Do not remove or delete the eSIM after install.</p>`
+    : '';
+
+  return `<!doctype html>
+<html>
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
+<body style="margin:0;padding:0;background:#0f172a">
+  <div style="max-width:600px;margin:0 auto;font-family:Georgia,'Times New Roman',serif;color:#e2e8f0">
+    ${brandHeader('')}
+    <div style="background:#1e293b;padding:28px 24px;text-align:center">
+      <h1 style="margin:0;font-size:26px;font-weight:400;color:#93c5fd">eSIM QR Code</h1>
+    </div>
+    <div style="background:#0f172a;padding:28px 24px 32px;font-size:16px;line-height:1.7">
+      <p style="margin:0 0 16px">${greeting}</p>
+      <p style="margin:0 0 18px">Your eSIM QR code is ready. Follow the steps below to set up your line.</p>
+      ${phoneBlock}
+      <p style="margin:0 0 12px;text-align:center;font-weight:700;color:#fff;font-family:Arial,sans-serif">eSIM QR Code</p>
+      <div style="text-align:center;margin:0 0 22px">
+        <img src="cid:esim-qr" alt="eSIM QR code" width="240" style="width:240px;max-width:100%;height:auto;border:0;display:inline-block;background:#ffffff;padding:14px;border-radius:8px">
+      </div>
+      ${imeiBlock}
+
+      <div style="margin:0 0 16px;padding:16px 18px;background:#1e293b;border-radius:10px">
+        <p style="margin:0 0 12px;font-family:Arial,sans-serif;font-weight:700;color:#93c5fd">How to install</p>
+        <ol style="margin:0;padding-left:18px;color:#cbd5e1;font-size:15px">
+          <li style="margin-bottom:10px">Connect <strong style="color:#fff">Super VPN</strong> and set location to <strong style="color:#fff">USA Dallas</strong></li>
+          <li style="margin-bottom:10px">Go to <strong style="color:#fff">Settings → Cellular → Add eSIM</strong></li>
+          <li style="margin-bottom:10px">Tap <strong style="color:#fff">Use QR code</strong> and scan the code above (or use the activation notification if your phone shows one)</li>
+          <li style="margin-bottom:10px">After activation, turn on <strong style="color:#fff">WiFi Calling</strong></li>
+          <li style="margin-bottom:10px">Add a <strong style="color:#fff">USA address</strong> when asked, then continue</li>
+          <li style="margin-bottom:0">You are ready. Your eSIM is fully functional</li>
+        </ol>
+      </div>
+
+      <p style="margin:0 0 16px;padding:14px 16px;background:#0b1220;border:1px solid #334155;border-radius:8px;font-size:14px;color:#cbd5e1;line-height:1.55">
+        <strong style="color:#fff">Note:</strong> If WiFi Calling will not turn on, switch the phone off, turn it back on, then try again.
+      </p>
+
+      <p style="margin:0 0 8px;font-size:14px;color:#94a3b8;font-family:Arial,sans-serif">Order #${ref}${plan ? ' · ' + plan : ''}${car ? ' · ' + car : ''}</p>
+      <p style="margin:0 0 16px;font-size:14px;color:#94a3b8">A copy of the QR code is attached. Do not share it. Contact support if you face any issue.</p>
+      <p style="margin:0">Best regards,<br>The MJ HUB Wireless Team</p>
+    </div>
+    ${brandFooter()}
+  </div>
+</body>
+</html>`;
 }
 
 async function isAdminUser(user) {
@@ -356,23 +491,38 @@ async function handleDeliver(body, adminUser, res) {
   }
 
   const base64 = qr.buffer.toString('base64');
+  const carrierLabel = order.carrier_label || order.carrier || '';
+  const welcomeHtml = buildWelcomeEmail({
+    fullName,
+    orderRef: order.order_ref,
+    planName: order.plan_name,
+    carrier: carrierLabel
+  });
   const html = buildDeliveryEmail({
     fullName,
     orderRef: order.order_ref,
     planName: order.plan_name,
-    phone
+    phone,
+    carrier: carrierLabel,
+    imei: order.imei
   });
 
   try {
     await sendEmail({
       to: customerEmail,
-      subject: 'Your MJ HUB eSIM is ready · ' + order.order_ref,
+      subject: 'Welcome to MJ HUB Wireless',
+      html: welcomeHtml,
+      replyTo: ADMIN_EMAIL,
+      fromName: 'MJ HUB Wireless'
+    });
+    await sendEmail({
+      to: customerEmail,
+      subject: 'Set Up Your eSIM – Your QR Code is Ready',
       html,
       replyTo: ADMIN_EMAIL,
+      fromName: 'MJ HUB Wireless',
       attachments: [
-        // embedded in the middle of the email body
         { filename: 'esim-qr-inline.' + qr.ext, content: base64, content_id: 'esim-qr' },
-        // the same QR as a normal attachment the customer can save
         { filename: 'esim-qr-code.' + qr.ext, content: base64 }
       ]
     });
@@ -406,7 +556,7 @@ async function handleDeliver(body, adminUser, res) {
   return res.status(200).json({
     success: true,
     emailed: true,
-    message: 'eSIM delivered to ' + customerEmail
+    message: 'Welcome + eSIM emails sent to ' + customerEmail
   });
 }
 
