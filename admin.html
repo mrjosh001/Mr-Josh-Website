@@ -26,6 +26,7 @@ window.__mjAdminSmsPatch = true;
  <meta http-equiv="Expires" content="0" />
  <title>MJ HUB: Admin</title>
  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit&onload=mjAdminTurnstileReady" async defer></script>
 <script>
 // Force all date/time displays to Nigeria time (WAT, Africa/Lagos),
 // regardless of the viewer's device timezone: keeps order timestamps
@@ -967,6 +968,7 @@ function withLagos(opts) { return Object.assign({ timeZone: 'Africa/Lagos' }, op
  </button>
  </div>
  </div>
+ <div id="adminLoginCaptcha" style="display:flex;justify-content:center;margin:0 0 16px;min-height:65px"></div>
  <button class="btn btn-primary" id="adminSignInBtn" onclick="handleLogin()"><i class="fas fa-lock"></i> Sign In</button>
  <div id="loginError" class="error-msg"></div>
  </div>
@@ -2081,6 +2083,16 @@ document.addEventListener('click', function(e) {
 
 const SUPABASE_URL = 'https://atczodlljmlayvldxfmv.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_dwbeKLcSG7-nfKzZz8x8Zw_U9FtwJTy';
+
+let adminLoginCaptchaToken = '';
+let adminLoginCaptchaWidget = null;
+window.mjAdminTurnstileReady = function () {
+ const mount = document.getElementById('adminLoginCaptcha');
+ if (!mount || !window.turnstile || adminLoginCaptchaWidget !== null) return;
+ adminLoginCaptchaWidget = window.turnstile.render(mount, { sitekey: '0x4AAAAAAF0CXjc8jL8djc4l', callback: function(token){adminLoginCaptchaToken=token||'';}, 'expired-callback':function(){adminLoginCaptchaToken='';}, 'error-callback':function(){adminLoginCaptchaToken='';} });
+};
+function resetAdminLoginCaptcha(){ adminLoginCaptchaToken=''; if(window.turnstile && adminLoginCaptchaWidget!==null){try{window.turnstile.reset(adminLoginCaptchaWidget);}catch(e){}} }
+
 const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY, {
  auth: {
  persistSession: true,
@@ -2352,13 +2364,15 @@ async function handleLogin() {
  const btn = document.getElementById('adminSignInBtn');
  errEl.textContent = '';
  if (!email || !password) { errEl.textContent = 'Enter email and password.'; return; }
+ if (!adminLoginCaptchaToken) { errEl.textContent = 'Complete the security check before signing in.'; return; }
  if (btn) {
  if (!btn.dataset.idleHtml) btn.dataset.idleHtml = btn.innerHTML;
  btn.disabled = true;
  btn.innerHTML = '<span class="btn-spinner"></span> Signing in…';
  }
  try {
- const { error } = await sb.auth.signInWithPassword({ email, password });
+ const { error } = await sb.auth.signInWithPassword({ email, password, options: { captchaToken: adminLoginCaptchaToken } });
+ resetAdminLoginCaptcha();
  if (error) {
  errEl.textContent = error.message;
  if (btn) { btn.disabled = false; btn.innerHTML = btn.dataset.idleHtml || '<i class="fas fa-lock"></i> Sign In'; }
@@ -2366,6 +2380,7 @@ async function handleLogin() {
  }
  await checkAuth();
  } catch (e) {
+ resetAdminLoginCaptcha();
  errEl.textContent = e.message || 'Sign in failed';
  if (btn) { btn.disabled = false; btn.innerHTML = btn.dataset.idleHtml || '<i class="fas fa-lock"></i> Sign In'; }
  }
