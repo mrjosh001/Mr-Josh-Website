@@ -7,6 +7,7 @@ import {
   formatMultiLogCredentials
 } from '../lib/formatCredentials.js';
 import esimHandler from './esim.js';
+import { applyApiCors, handleOptions } from '../lib/secure.js';
 
 /**
  * POST /api/order-manual
@@ -173,6 +174,9 @@ async function findExistingLogOrder(userId, orderRef) {
 }
 
 export default async function handler(req, res) {
+  applyApiCors(req, res, { methods: 'POST, OPTIONS' });
+  if (handleOptions(req, res)) return;
+
   // eSIM checkout shares this API route but runs in its isolated handler.
   // The existing manual-product order flow below remains unchanged.
   if (req.method === 'POST') {
@@ -183,12 +187,7 @@ export default async function handler(req, res) {
       return esimHandler(req, res);
     }
   }
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
   res.setHeader('Content-Type', 'application/json');
-
-  if (req.method === 'OPTIONS') return res.status(200).end();
   if (req.method !== 'POST') {
     return res.status(405).json({ success: false, message: 'Method not allowed' });
   }
