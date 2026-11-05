@@ -2930,22 +2930,48 @@ export default async function handler(req, res) {
   if (req.method === 'POST') {
     if (act === 'hero_sync') return HERO.sync(req, res);
     if (isVsSync) return vsHandleSync(req, res);
-    if (action === 'order') {
+    if (action === 'order' || action === 'check' || action === 'cancel') {
       let b = {};
-      try { b = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : (req.body || {}); } catch (_) { b = {}; }
-      if (isHeroSource(b)) return HERO.order(req, res, b);
-      if (resolveSupplier(req, b).source === 'virtualsms') return vsHandleOrder(req, res);
-      return handleOrder(req, res);
-    }
-    if (action === 'check') {
-      if (await HERO.orderIsHero(req)) return HERO.check(req, res);
-      if (await orderIsServer3Rest(req)) return vsHandleCheck(req, res);
-      return handleCheck(req, res);
-    }
-    if (action === 'cancel') {
-      if (await HERO.orderIsHero(req)) return HERO.cancel(req, res);
-      if (await orderIsServer3Rest(req)) return vsHandleCancel(req, res);
-      return handleCancel(req, res);
+      try {
+        b = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : (req.body || {});
+      } catch (_) {
+        return res.status(400).json({ success: false, message: 'Invalid JSON request body' });
+      }
+
+      // These flows debit/refund wallets and read SMS orders. Bind every action
+      // to the verified Supabase identity, never to a caller-supplied user_id.
+      const authHeader = String(req.headers.authorization || req.headers.Authorization || '');
+      const tokenMatch = authHeader.match(/^Bearer\\s+(.+)$/i);
+      const token = tokenMatch ? tokenMatch[1].trim() : '';
+      if (!token || token.includes('service_role')) {
+        return res.status(401).json({ success: false, message: 'Please sign in again.' });
+      }
+      const { data: authData, error: authError } = await supabase.auth.getUser(token);
+      const authenticatedUser = authData?.user;
+      if (authError || !authenticatedUser) {
+        return res.status(401).json({ success: false, message: 'Your session is invalid or expired.' });
+      }
+      if (b.user_id && String(b.user_id) !== String(authenticatedUser.id)) {
+        return res.status(403).json({ success: false, message: 'You cannot access another account.' });
+      }
+      b.user_id = authenticatedUser.id;
+      req.body = b;
+
+      if (action === 'order') {
+        if (isHeroSource(b)) return HERO.order(req, res, b);
+        if (resolveSupplier(req, b).source === 'virtualsms') return vsHandleOrder(req, res);
+        return handleOrder(req, res);
+      }
+      if (action === 'check') {
+        if (await HERO.orderIsHero(req)) return HERO.check(req, res);
+        if (await orderIsServer3Rest(req)) return vsHandleCheck(req, res);
+        return handleCheck(req, res);
+      }
+      if (action === 'cancel') {
+        if (await HERO.orderIsHero(req)) return HERO.cancel(req, res);
+        if (await orderIsServer3Rest(req)) return vsHandleCancel(req, res);
+        return handleCancel(req, res);
+      }
     }
     if (act === 'expire_stale' || act === 'expire-stale') return handleExpireStale(req, res);
     return res.status(400).json({
