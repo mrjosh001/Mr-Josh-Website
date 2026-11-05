@@ -19,7 +19,7 @@ import { quoteCoupon, redeemCoupon } from '../lib/coupons.js';
 import { formatCredentials, formatMultiLogCredentials, joinRawLogDetails } from '../lib/formatCredentials.js';
 import { readSupplierStock } from '../lib/supplierStock.js';
 import { rateLimit, applyRateLimitHeaders } from '../lib/rateLimit.js';
-import { rejectClientSuppliedSecrets, applyApiCors, handleOptions, setNoStore } from '../lib/secure.js';
+import { rejectClientSuppliedSecrets, applyApiCors, handleOptions, setNoStore, requireAdminOrCron } from '../lib/secure.js';
 import { parsePositiveInt, assertSameUser } from '../lib/validate.js';
 import { sendError } from '../lib/errors.js';
 
@@ -1017,6 +1017,10 @@ export default async function handler(req, res) {
     applyRateLimitHeaders(res, rlSync);
     if (!rlSync.ok) {
       return res.status(429).json({ success: false, message: rlSync.message });
+    }
+    const syncAuth = await requireAdminOrCron(req);
+    if (syncAuth.error) {
+      return res.status(syncAuth.error.status).json({ success: false, message: syncAuth.error.message });
     }
     return handleFaddedSync(req, res);
   }
