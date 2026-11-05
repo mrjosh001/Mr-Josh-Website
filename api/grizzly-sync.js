@@ -2,6 +2,7 @@ import { createClient } from '@supabase/supabase-js';
 import { applyMarkup } from '../lib/pricing.js';
 import { sendPushToUser } from '../lib/push.js';
 import { createHero } from '../lib/hero.js';
+import { applyApiCors, handleOptions, requireAdminOrCron } from '../lib/secure.js';
 
 /**
  * /api/grizzly-sync — GrizzlySMS (Server 1) + VirtualSMS (Server 3) operations in one file.
@@ -2895,12 +2896,9 @@ function isHeroSource(b) {
 // ===========================================================================
 
 export default async function handler(req, res) {
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  applyApiCors(req, res, { methods: 'GET, POST, OPTIONS' });
   res.setHeader('Content-Type', 'application/json');
-
-  if (req.method === 'OPTIONS') return res.status(200).end();
+  if (handleOptions(req, res)) return;
 
   if (!process.env.SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
     return res
@@ -2913,9 +2911,17 @@ export default async function handler(req, res) {
   const isVsSync = act === 'vsms_sync' || act === 'virtualsms_sync' || act === 'server3_sync';
 
   if (req.method === 'GET') {
-    if (act === 'expire_stale' || act === 'expire-stale') {
-      return handleExpireStale(req, res);
+    // Supplier sync, cleanup and diagnostics are privileged operations.
+    if (
+      act === 'expire_stale' || act === 'expire-stale' ||
+      act === 'hero_sync' || act === 'hero_probe' ||
+      isVsSync || act === 'vsms_probe' || act === 'vsms_purge_legacy' ||
+      !['hero_operators', 'hero_options'].includes(act)
+    ) {
+      const gate = await requireAdminOrCron(req);
+      if (gate.error) return res.status(gate.error.status).json({ success: false, message: gate.error.message });
     }
+    if (act === 'expire_stale' || act === 'expire-stale') return handleExpireStale(req, res);
     if (act === 'hero_sync') return HERO.sync(req, res);
     if (act === 'hero_probe') return HERO.probe(req, res);
     if (act === 'hero_operators') return HERO.operators(req, res);
@@ -2923,13 +2929,17 @@ export default async function handler(req, res) {
     if (isVsSync) return vsHandleSync(req, res);
     if (act === 'vsms_probe') return vsHandleProbe(req, res);
     if (act === 'vsms_purge_legacy') return vsHandlePurgeLegacy(req, res);
-    // action is one of: null (continue/cron), 'start', 'status' — handled inside handleSync (Server 1)
+    // Default, start and status paths run privileged Server 1 sync operations.
     return handleSync(req, res);
   }
 
   if (req.method === 'POST') {
-    if (act === 'hero_sync') return HERO.sync(req, res);
-    if (isVsSync) return vsHandleSync(req, res);
+    if (act === 'hero_sync' || isVsSync) {
+      const gate = await requireAdminOrCron(req);
+      if (gate.error) return res.status(gate.error.status).json({ success: false, message: gate.error.message });
+      if (act === 'hero_sync') return HERO.sync(req, res);
+      return vsHandleSync(req, res);
+    }
     if (action === 'order' || action === 'check' || action === 'cancel') {
       let b = {};
       try {
