@@ -6,7 +6,10 @@ const supabaseUrl = process.env.SUPABASE_URL || 'https://atczodlljmlayvldxfmv.su
 const supabaseKey = process.env.SUPABASE_PUBLISHABLE_KEY || process.env.SUPABASE_ANON_KEY || 'sb_publishable_dwbeKLcSG7-nfKzZz8x8Zw_U9FtwJTy';
 
 const supabase = createClient(supabaseUrl, supabaseKey);
-const JWT_SECRET = process.env.JWT_SECRET || 'your_super_secret_key_here';
+const JWT_SECRET = process.env.JWT_SECRET;
+if (!JWT_SECRET) {
+    throw new Error('JWT_SECRET must be configured before the legacy auth controller can be used.');
+}
 
 // --- SIGN UP ENDPOINT ---
 async function signup(req, res) {
