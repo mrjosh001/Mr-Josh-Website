@@ -1,6 +1,7 @@
 import { createClient } from '@supabase/supabase-js';
 import { rateLimit, applyRateLimitHeaders } from '../lib/rateLimit.js';
 import { sendPushToUser, sendPushToAdmins } from '../lib/push.js';
+import { applyApiCors, handleOptions } from '../lib/secure.js';
 
 /**
  * /api/owlet — MJ Boosters (JAP + CasperSMM Perfect Panel v2). Customer catalog shows both.
@@ -2079,12 +2080,10 @@ async function handleRefillStatus(req, res) {
 
 export default async function handler(req, res) {
   try {
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  applyApiCors(req, res, { methods: 'GET, POST, OPTIONS' });
   res.setHeader('Content-Type', 'application/json');
 
-  if (req.method === 'OPTIONS') return res.status(200).end();
+  if (handleOptions(req, res)) return;
 
   if (!process.env.SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
     return res.status(500).json({ success: false, message: 'Missing Supabase env' });
