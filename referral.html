@@ -217,8 +217,12 @@ async function load(){
   const res=await fetch('/api/pocketfi?action=referral_me',{headers:{Authorization:'Bearer '+session.access_token}});
   const j=await res.json();
   if(!j.success){
-    document.getElementById('earnings').innerHTML='<div class="empty">'+ (j.message||'Could not load') +'</div>';
-    document.getElementById('refs').innerHTML='';
+    const earningsEl=document.getElementById('earnings');
+    const emptyEl=document.createElement('div');
+    emptyEl.className='empty';
+    emptyEl.textContent=String(j.message||'Could not load');
+    earningsEl.replaceChildren(emptyEl);
+    document.getElementById('refs').replaceChildren();
     return;
   }
   state=j;
@@ -236,13 +240,49 @@ async function load(){
   document.getElementById('codeNote').textContent=code||'—';
   if(landLink) document.getElementById('qrImg').src='https://api.qrserver.com/v1/create-qr-code/?size=200x200&data='+encodeURIComponent(landLink);
   const earns=j.recent_earnings||[];
-  document.getElementById('earnings').innerHTML=earns.length
-    ? earns.map(e=>'<div class="item"><span>+'+fmt(e.commission_ngn)+'</span><span class="m">from ₦'+Number(e.deposit_amount_ngn||0).toLocaleString()+' · '+(e.created_at?new Date(e.created_at).toLocaleDateString():'')+'</span></div>').join('')
-    : '<div class="empty"><i class="fa-solid fa-bolt"></i>No commissions yet. 3% lands in your wallet the moment they deposit.</div>';
+  const earningsEl=document.getElementById('earnings');
+  earningsEl.replaceChildren();
+  if(earns.length){
+    earns.forEach(function(e){
+      const row=document.createElement('div');
+      row.className='item';
+      const amount=document.createElement('span');
+      amount.textContent='+'+fmt(e.commission_ngn);
+      const meta=document.createElement('span');
+      meta.className='m';
+      const date=e.created_at?new Date(e.created_at).toLocaleDateString():'';
+      meta.textContent='from ₦'+Number(e.deposit_amount_ngn||0).toLocaleString()+(date?' · '+date:'');
+      row.append(amount,meta);
+      earningsEl.appendChild(row);
+    });
+  } else {
+    const empty=document.createElement('div');
+    empty.className='empty';
+    empty.textContent='No commissions yet. 3% lands in your wallet the moment they deposit.';
+    earningsEl.appendChild(empty);
+  }
   const refs=j.referrals||[];
-  document.getElementById('refs').innerHTML=refs.length
-    ? refs.map(r=>'<div class="item"><span>'+String(r.full_name||r.customer_id||'Friend').slice(0,28)+'</span><span class="m">'+((r.updated_at||r.created_at)?new Date(r.updated_at||r.created_at).toLocaleDateString():'')+'</span></div>').join('')
-    : '<div class="empty"><i class="fa-solid fa-user-plus"></i>Nobody has joined with your link yet.</div>';
+  const refsEl=document.getElementById('refs');
+  refsEl.replaceChildren();
+  if(refs.length){
+    refs.forEach(function(r){
+      const row=document.createElement('div');
+      row.className='item';
+      const name=document.createElement('span');
+      name.textContent=String(r.full_name||r.customer_id||'Friend').slice(0,28);
+      const meta=document.createElement('span');
+      meta.className='m';
+      const dateValue=r.updated_at||r.created_at;
+      meta.textContent=dateValue?new Date(dateValue).toLocaleDateString():'';
+      row.append(name,meta);
+      refsEl.appendChild(row);
+    });
+  } else {
+    const empty=document.createElement('div');
+    empty.className='empty';
+    empty.textContent='Nobody has joined with your link yet.';
+    refsEl.appendChild(empty);
+  }
 }
 function copyLink(){
   const v=document.getElementById('link').value;
