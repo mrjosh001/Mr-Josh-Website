@@ -1,6 +1,7 @@
 import { createClient } from '@supabase/supabase-js';
 import { sendPushToUser, sendPushToAdmins } from '../lib/push.js';
 import { quoteCoupon, redeemCoupon } from '../lib/coupons.js';
+import { applyApiCors, handleOptions, requireUser, requireAdminOrCron } from '../lib/secure.js';
 
 /**
  * /api/order-logsdomain
@@ -322,11 +323,9 @@ async function handleAccszoneSync(req, res) {
 }
 
 export default async function handler(req, res) {
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  applyApiCors(req, res, { methods: 'GET, POST, OPTIONS' });
   res.setHeader('Content-Type', 'application/json');
-  if (req.method === 'OPTIONS') return res.status(200).end();
+  if (handleOptions(req, res)) return;
 
   const q = Object.assign({}, req.query || {});
   try {
@@ -335,8 +334,10 @@ export default async function handler(req, res) {
   } catch (e) {}
   const action = String(q.action || '').toLowerCase();
 
-  // Admin catalog sync (GET)
+  // Catalog sync writes to the database and must be admin- or cron-authenticated.
   if (req.method === 'GET' || action === 'sync' || action === 'bulkmail_sync' || action === 'accszone_sync') {
+    const gate = await requireAdminOrCron(req);
+    if (gate.error) return res.status(gate.error.status).json({ success: false, message: gate.error.message });
     if (action === 'bulkmail_sync') return handleBulkmailSync(req, res);
     if (action === 'accszone_sync') return handleAccszoneSync(req, res);
     if (action === 'sync' || req.method === 'GET') return handleLdSync(req, res);
@@ -346,17 +347,36 @@ export default async function handler(req, res) {
     return res.status(405).json({ success: false, message: 'Method not allowed' });
   }
 
-  const body = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : (req.body || {});
+  let body;
+  try {
+    body = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : (req.body || {});
+  } catch (_) {
+    return res.status(400).json({ success: false, message: 'Invalid JSON request body' });
+  }
+
+  let auth;
+  try {
+    auth = await requireUser(req);
+  } catch (_) {
+    return res.status(503).json({ success: false, message: 'Authentication service is temporarily unavailable' });
+  }
+  if (auth.error) return res.status(auth.error.status).json({ success: false, message: auth.error.message });
+
+  // The authenticated Supabase identity is authoritative. Never debit a body-supplied account.
+  const user_id = auth.user.id;
+  if (body.user_id && String(body.user_id) !== String(user_id)) {
+    return res.status(403).json({ success: false, message: 'You cannot place an order for another account' });
+  }
+
   const coupon_code = body.coupon_code || body.code || null;
   const {
     product_key,
     quantity = 1,
-    external_order_id,
-    user_id
+    external_order_id
   } = body;
 
-  if (!product_key || !user_id) {
-    return res.status(400).json({ success: false, message: 'product_key and user_id are required' });
+  if (!product_key) {
+    return res.status(400).json({ success: false, message: 'product_key is required' });
   }
 
   if (!LD_KEY) {
