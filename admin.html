@@ -3927,6 +3927,19 @@ async function authHeaders() {
  return headers;
 }
 
+/**
+ * Returns the signed-in admin's access token for protected supplier catalog syncs.
+ * Never falls back to unauthenticated requests for write-capable sync endpoints.
+ */
+async function adminSyncHeaders() {
+  const headers = await authHeaders();
+  if (!headers.Authorization) {
+    throw new Error('Admin session missing or expired. Sign in to the admin dashboard again, then retry the sync.');
+  }
+  headers.Accept = 'application/json';
+  return headers;
+}
+
 async function pollGrizzlySync() {
  if (grizzlySyncPolling) return; // already looping: don't start a second one
  grizzlySyncPolling = true;
@@ -3982,7 +3995,8 @@ async function syncBulkmailCatalog() {
   if (typeof setSyncButtonLoading === 'function') setSyncButtonLoading(btn, true, idle);
   else if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-sync fa-spin"></i> Syncing…'; }
   try {
-    const res = await fetch('/api/order-logsdomain?action=bulkmail_sync', { method: 'GET', headers: { 'Accept': 'application/json' } });
+    const headers = await adminSyncHeaders();
+     const res = await fetch('/api/order-logsdomain?action=bulkmail_sync', { method: 'GET', headers });
     const data = await res.json().catch(() => ({}));
     if (data.success) {
       alert(`BulkMail sync complete\nSynced: ${data.synced || 0}\nNew: ${data.new_products || 0}\nUpdated: ${data.updated_products || 0}`);
@@ -5244,9 +5258,8 @@ async function syncProductsNow() {
  const idle = '<i class="fas fa-sync"></i> Sync Fadded';
  setSyncButtonLoading(btn, true, idle);
  try {
- // No Authorization header: sync is public to cron/admin (server uses service role).
- // Avoid attaching a Safari-corrupted JWT (throws "string did not match the expected pattern").
- const res = await fetch('/api/order?action=sync', { method: 'GET', headers: { 'Accept': 'application/json' } });
+ const headers = await adminSyncHeaders();
+  const res = await fetch('/api/order?action=sync', { method: 'GET', headers });
  const raw = await res.text();
  let data = {};
  try { data = raw ? JSON.parse(raw) : {}; } catch (_) {
@@ -5273,7 +5286,8 @@ async function syncAccszoneCatalog() {
  const idle = '<i class="fas fa-sync"></i> Sync AccsZone';
  setSyncButtonLoading(btn, true, idle);
  try {
- const res = await fetch('/api/order-logsdomain?action=accszone_sync', { method: 'GET', headers: { 'Accept': 'application/json' } });
+ const headers = await adminSyncHeaders();
+  const res = await fetch('/api/order-logsdomain?action=accszone_sync', { method: 'GET', headers });
  const data = await res.json();
  alert(
  data.success
@@ -5293,7 +5307,8 @@ async function syncLogsDomainNow() {
  const idle = '<i class="fas fa-sync"></i> Sync Logs Domain';
  setSyncButtonLoading(btn, true, idle);
  try {
- const res = await fetch('/api/order-logsdomain?action=sync', { method: 'GET', headers: { 'Accept': 'application/json' } });
+ const headers = await adminSyncHeaders();
+  const res = await fetch('/api/order-logsdomain?action=sync', { method: 'GET', headers });
  const data = await res.json();
  alert(
  data.success
@@ -5313,7 +5328,8 @@ async function syncSujanNow() {
  const idle = '<i class="fas fa-sync"></i> Sync Sujan Dept.';
  setSyncButtonLoading(btn, true, idle);
  try {
- const res = await fetch('/api/sujan');
+ const headers = await adminSyncHeaders();
+  const res = await fetch('/api/sujan', { method: 'GET', headers });
  const data = await res.json();
  let msg = data.success
  ? `Sujan Department sync complete\nSynced: ${data.synced}\nNew: ${data.new_products || 0}\nUpdated: ${data.updated_products || 0}`
@@ -5335,7 +5351,8 @@ async function syncClassyNow() {
  const idle = '<i class="fas fa-sync"></i> Sync ClassyTee';
  if (typeof setSyncButtonLoading === 'function') setSyncButtonLoading(btn, true, idle);
  try {
- const res = await fetch('/api/classy');
+ const headers = await adminSyncHeaders();
+  const res = await fetch('/api/classy', { method: 'GET', headers });
  const data = await res.json();
  alert(data.success ? `ClassyTee sync complete\nSynced: ${data.synced}\nNew: ${data.new_products}\nUpdated: ${data.updated_products}` : ('ClassyTee sync failed: ' + (data.message || res.status)));
  } catch (e) {
@@ -5360,13 +5377,14 @@ async function syncAllSuppliersNow() {
  setSyncButtonLoading(sBtn, true, '<i class="fas fa-sync"></i> Sync Sujan Dept.');
  setSyncButtonLoading(cBtn, true, '<i class="fas fa-sync"></i> Sync ClassyTee');
  try {
- const [fRes, lRes, bmRes, sRes, cRes] = await Promise.all([
- fetch('/api/order?action=sync'),
- fetch('/api/order-logsdomain?action=sync', { method: 'GET', headers: { 'Accept': 'application/json' } }),
- fetch('/api/order-logsdomain?action=bulkmail_sync', { method: 'GET', headers: { 'Accept': 'application/json' } }),
- fetch('/api/sujan'),
- fetch('/api/classy')
- ]);
+ const headers = await adminSyncHeaders();
+  const [fRes, lRes, bmRes, sRes, cRes] = await Promise.all([
+  fetch('/api/order?action=sync', { method: 'GET', headers }),
+  fetch('/api/order-logsdomain?action=sync', { method: 'GET', headers }),
+  fetch('/api/order-logsdomain?action=bulkmail_sync', { method: 'GET', headers }),
+  fetch('/api/sujan', { method: 'GET', headers }),
+  fetch('/api/classy', { method: 'GET', headers })
+  ]);
  const [fadded, ld, bm, sujan, classy] = await Promise.all([
  fRes.json().catch(() => ({})),
  lRes.json().catch(() => ({})),
