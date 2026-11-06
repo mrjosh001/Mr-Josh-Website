@@ -725,8 +725,8 @@ html[data-theme="dark"] .logo-word, body[data-theme="dark"] .logo-word { color:#
         .pw-rules {
             display: grid;
             grid-template-columns: 1fr;
-            gap: 9px;
-            margin: 12px 0 0;
+            gap: 5px;
+            margin: 10px 0 0;
             padding: 0;
             list-style: none;
             text-align: left;
@@ -734,18 +734,18 @@ html[data-theme="dark"] .logo-word, body[data-theme="dark"] .logo-word { color:#
         .pw-rules li {
             display: flex;
             align-items: center;
-            min-height: 22px;
-            padding: 2px 0 2px 28px;
+            min-height: 18px;
+            padding: 1px 0 1px 22px;
             position: relative;
             line-height: 1.5;
             font-size: 12px;
-            font-weight: 700;
+            font-weight: 600;
         }
         .pw-rules li::before {
             content: '•';
             position: absolute;
-            left: 8px;
-            top: 1px;
+            left: 5px;
+            top: 0;
             font-size: 18px;
         }
         .pw-rules li.good::before { content: '✓'; color: #22c55e; font-size: 14px; top: 3px; }
@@ -764,21 +764,27 @@ html[data-theme="dark"] .logo-word, body[data-theme="dark"] .logo-word { color:#
         .form-icon-header h3, .form-icon-header p { text-align: center !important; }
         .pw-toggle {
             color: #ffffff !important;
-            background: rgba(148,163,184,.18) !important;
-            border: 1px solid rgba(203,213,225,.55) !important;
+            background: rgba(148,163,184,.14) !important;
+            border: 1px solid rgba(203,213,225,.42) !important;
             opacity: 1 !important;
             visibility: visible !important;
-            width: 40px !important;
-            height: 40px !important;
+            width: 30px !important;
+            height: 30px !important;
+            border-radius: 7px !important;
             z-index: 5 !important;
-            box-shadow: 0 2px 8px rgba(0,0,0,.22);
+            box-shadow: none !important;
         }
-        .pw-toggle svg { stroke: currentColor !important; opacity: 1 !important; }
+        .pw-toggle svg {
+            width: 16px !important;
+            height: 16px !important;
+            stroke: currentColor !important;
+            opacity: 1 !important;
+        }
         .pw-toggle:hover, .pw-toggle:focus-visible {
             color: #ffffff !important;
-            background: #2563eb !important;
-            outline: 2px solid #93c5fd;
-            outline-offset: 2px;
+            background: rgba(37,99,235,.72) !important;
+            outline: 1px solid #93c5fd;
+            outline-offset: 1px;
         }
         html[data-theme="light"] .pw-toggle,
         body[data-theme="light"] .pw-toggle {
@@ -886,10 +892,10 @@ html[data-theme="dark"] .logo-word, body[data-theme="dark"] .logo-word { color:#
                         <div class="pw-strength-bar"><span id="pwStrengthBar"></span></div>
                         <div class="pw-strength-label" id="pwStrengthLabel">Password strength</div>
                         <ul class="pw-rules" id="pwRules">
-                            <li id="pwRuleLen" class="bad">At least 8 characters</li>
-                            <li id="pwRuleUp" class="bad">One uppercase letter</li>
-                            <li id="pwRuleLow" class="bad">One lowercase letter</li>
-                            <li id="pwRuleNum" class="bad">One number</li>
+                            <li id="pwRuleLen" class="bad">At least 8 characters.</li>
+                            <li id="pwRuleUp" class="bad">One uppercase letter.</li>
+                            <li id="pwRuleLow" class="bad">One lowercase letter.</li>
+                            <li id="pwRuleNum" class="bad">One number.</li>
                         </ul>
                     </div>
                 </div>
