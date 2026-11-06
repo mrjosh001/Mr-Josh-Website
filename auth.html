@@ -548,7 +548,9 @@
 
         .captcha-wrap { display:flex; justify-content:center; margin: 12px 0 14px; min-height: 65px; position:relative; z-index:1; }
         .captcha-wrap > div { min-height: 65px; }
-        .captcha-wrap .mj-captcha-status { display:flex; align-items:center; justify-content:center; min-height:65px; width:100%; color:rgba(226,232,240,.72); font-size:12px; text-align:center; }
+        .captcha-wrap .mj-captcha-status { display:flex; align-items:center; justify-content:center; min-height:28px; width:100%; color:rgba(226,232,240,.72); font-size:12px; font-weight:600; text-align:center; }
+        .captcha-wrap .mj-captcha-status.is-success { color:#4ade80; }
+        .captcha-wrap .mj-captcha-status.is-error { color:#fca5a5; }
 
         .hidden { display: none; }
 
@@ -1570,14 +1572,32 @@ html[data-theme="dark"] .logo-word, body[data-theme="dark"] .logo-word { color:#
     var apiPromise = null, loadTimeout = null, failed = false, currentAttempt = 0;
 
     function containerFor(kind){return document.getElementById(kind==='signup'?'mjSignupCaptcha':'mjSigninCaptcha');}
-    function state(kind,message){
-        var el=containerFor(kind);if(!el)return;
-        el.textContent=message||'';el.setAttribute('aria-live','polite');
-        if(message)el.classList.add('mj-captcha-status');else el.classList.remove('mj-captcha-status');
+    /* Keep status feedback OUTSIDE Turnstile's mount node. Writing textContent
+       into the mount removes Cloudflare's iframe, which made the widget vanish
+       immediately after its success callback. */
+    function state(kind,message,tone){
+        var mount=containerFor(kind);if(!mount)return;
+        var wrap=mount.parentElement;if(!wrap)return;
+        var feedback=wrap.querySelector('.mj-captcha-status');
+        if(!message){if(feedback)feedback.remove();return;}
+        if(!feedback){
+            feedback=document.createElement('div');
+            feedback.className='mj-captcha-status';
+            feedback.setAttribute('role','status');
+            feedback.setAttribute('aria-live','polite');
+            wrap.appendChild(feedback);
+        }
+        feedback.className='mj-captcha-status'+(tone?' is-'+tone:'');
+        feedback.textContent=message;
     }
     function destroy(){
         if(widgetId!==null&&window.turnstile){try{window.turnstile.remove(widgetId);}catch(e){}}
-        if(widgetKind){tokens[widgetKind]='';var old=containerFor(widgetKind);if(old)old.replaceChildren();}
+        if(widgetKind){
+            tokens[widgetKind]='';
+            var old=containerFor(widgetKind);
+            if(old)old.replaceChildren();
+            state(widgetKind,'');
+        }
         widgetId=null;widgetKind='';
     }
     function apiReady(){
@@ -1622,16 +1642,20 @@ html[data-theme="dark"] .logo-word, body[data-theme="dark"] .logo-word { color:#
                 callback:function(token){
                     if(widgetKind===kind){
                         tokens[kind]=token||'';
-                        state(kind,'');
+                        if(tokens[kind]){
+                            state(kind,'Verified','success');
+                        }else{
+                            state(kind,'Verification did not return a token. Please try again.','error');
+                        }
                     }
                 },
-                'expired-callback':function(){tokens[kind]='';state(kind,'Verification expired. Please complete the check again.');},
-                'timeout-callback':function(){tokens[kind]='';state(kind,'Verification timed out. Please complete the check again.');},
+                'expired-callback':function(){tokens[kind]='';state(kind,'Verification expired. Please complete the check again.','error');},
+                'timeout-callback':function(){tokens[kind]='';state(kind,'Verification timed out. Please complete the check again.','error');},
                 'error-callback':function(code){
                     tokens[kind]='';
                     var errorCode=String(code||'unknown');
                     console.warn('[MJ HUB] Turnstile client error code:',errorCode);
-                    state(kind,'Cloudflare verification is retrying. Reference: '+errorCode);
+                    state(kind,'Cloudflare verification is retrying. Reference: '+errorCode,'error');
                     // Return false so Turnstile retains its normal retry/logging behaviour.
                     // Do not raise a toast for every transient retry.
                     return false;
