@@ -70,6 +70,13 @@ body{
 .topbar-copy h1{font-size:18px;font-weight:800;letter-spacing:-.02em}
 .topbar-copy p{font-size:12px;color:var(--muted);margin-top:2px;font-weight:500}
 .list{display:flex;flex-direction:column;gap:14px}
+.filters{display:flex;gap:8px;overflow-x:auto;padding:2px 0 14px;scrollbar-width:none}
+.filters::-webkit-scrollbar{display:none}
+.filter-btn{flex:0 0 auto;border:1px solid var(--line);background:var(--surface);color:var(--muted);border-radius:999px;padding:9px 13px;font:800 11px 'Plus Jakarta Sans',system-ui,sans-serif;cursor:pointer;white-space:nowrap}
+.filter-btn.active{background:var(--blue);border-color:var(--blue);color:#fff}
+.filter-count{display:inline-grid;place-items:center;min-width:18px;height:18px;padding:0 5px;margin-left:4px;border-radius:999px;background:rgba(148,163,184,.16);font-size:10px}
+.filter-btn.active .filter-count{background:rgba(255,255,255,.2);color:#fff}
+
 .card{
   background:var(--surface);
   border:1px solid var(--line);
@@ -168,8 +175,8 @@ body{
       <h1>Booster orders</h1>
       <p>Live progress · open target link</p>
     </div>
-    <button type="button" class="icon-btn" id="refreshBtn" aria-label="Refresh"><i class="fa-solid fa-rotate-right"></i></button>
   </header>
+  <nav class="filters" id="statusFilters" aria-label="Filter booster orders"></nav>
   <div class="list" id="list"></div>
 </div>
 <div id="toast"></div>
@@ -356,12 +363,48 @@ function isActive(o){
   }
   window.openSocialLink = openSocialLink;
 
-function renderRows(rows){
-    if (!rows.length) {
+let allRows = [];
+  let activeFilter = 'all';
+  const filterLabels = [
+    ['all','All'],['pending','Pending'],['processing','Processing'],
+    ['completed','Completed'],['canceled','Canceled'],['failed','Failed']
+  ];
+  function statusGroup(o){
+    const s = String(o.status || '').toLowerCase();
+    if (/cancel|cancelled|canceled/.test(s)) return 'canceled';
+    if (/fail|error|reject/.test(s)) return 'failed';
+    if (/complete|success|done/.test(s)) return 'completed';
+    if (/process|progress|partial/.test(s)) return 'processing';
+    return 'pending';
+  }
+  function renderFilters(){
+    const nav = document.getElementById('statusFilters');
+    if (!nav) return;
+    const counts = {all:allRows.length};
+    filterLabels.slice(1).forEach(([key])=>counts[key]=allRows.filter(o=>statusGroup(o)===key).length);
+    nav.innerHTML = filterLabels.map(([key,label]) =>
+      '<button type="button" class="filter-btn '+(activeFilter===key?'active':'')+'" data-filter="'+key+'" aria-pressed="'+(activeFilter===key)+'">'+label+'<span class="filter-count">'+(counts[key]||0)+'</span></button>'
+    ).join('');
+    nav.querySelectorAll('[data-filter]').forEach(btn=>{
+      btn.addEventListener('click',()=>{
+        activeFilter=btn.dataset.filter;
+        renderFilters();
+        renderRows(allRows);
+      });
+    });
+  }
+  function renderRows(rows){
+    const visibleRows = activeFilter === 'all' ? rows : rows.filter(o=>statusGroup(o)===activeFilter);
+    if (!visibleRows.length) {
+      if (rows.length) {
+        const label = filterLabels.find(x=>x[0]===activeFilter)?.[1] || activeFilter;
+        el.innerHTML = '<div class="empty"><div class="ico">🔎</div><h3>No '+esc(label.toLowerCase())+' orders</h3><p>There are no booster orders in this status.</p></div>';
+        return;
+      }
       el.innerHTML = `<div class="empty"><div class="ico">⚡</div><h3>No boost orders yet</h3><p>Your growth orders will show here with live progress.</p><a href="mj-boosters.html">Place first boost</a></div>`;
       return;
     }
-    el.innerHTML = rows.map(o => {
+    el.innerHTML = visibleRows.map(o => {
       const oid = o.supplier_order_id || '';
       const st = String(o.status || 'Pending');
       let pill = 'pending';
@@ -420,7 +463,16 @@ function renderRows(rows){
         el.innerHTML = `<div class="empty"><h3>Could not load orders</h3><p>${esc(jsonFast.message || resFast.statusText || 'Error')}</p><a href="auth.html">Sign in again</a></div>`;
         return;
       }
-      let rows = (jsonFast.data || []).filter(o => String(o.source||'owlet').toLowerCase() !== 'smmkings');
+      // Telegram purchases belong to mj-telegram.html, never the Booster Orders list.
+      let rows = (jsonFast.data || []).filter(o => {
+        const source = String(o.source || o.provider || '').toLowerCase();
+        const service = String(o.service_name || o.name || '').toLowerCase();
+        const category = String(o.category || '').toLowerCase();
+        return source !== 'smmkings' && source !== 'telegram' &&
+          !/telegram/.test(service) && !/telegram/.test(category);
+      });
+      allRows = rows;
+      renderFilters();
       if (window.__mjSkelDone) {
         var _rows = rows;
         window.__mjSkelDone(function(){ renderRows(_rows); });
@@ -435,7 +487,17 @@ function renderRows(rows){
         fetch('/api/owlet?action=my_orders&page_size=50&live=1', { headers })
           .then(r => r.json())
           .then(json => {
-            if (json && json.success && Array.isArray(json.data)) renderRows(json.data);
+            if (json && json.success && Array.isArray(json.data)) {
+              allRows = json.data.filter(o => {
+                const source = String(o.source || o.provider || '').toLowerCase();
+                const service = String(o.service_name || o.name || '').toLowerCase();
+                const category = String(o.category || '').toLowerCase();
+                return source !== 'smmkings' && source !== 'telegram' &&
+                  !/telegram/.test(service) && !/telegram/.test(category);
+              });
+              renderFilters();
+              renderRows(allRows);
+            }
           })
           .catch(() => {});
       }
@@ -449,9 +511,6 @@ function renderRows(rows){
       loading = false;
     }
   }
-
-  const rb = document.getElementById('refreshBtn');
-  if (rb) rb.onclick = () => loadOrders(false);
 
   await loadOrders(false);
   document.addEventListener('visibilitychange', () => {
