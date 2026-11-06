@@ -14,6 +14,8 @@
   var tracking = false, pulling = false, refreshing = false;
 
   function boot() {
+    /* admin-support.html already has its own pull-to-refresh interaction */
+    if (/\/admin-support(?:\.html)?\/?$/i.test(w.location.pathname)) return;
     if (d.getElementById(ID) || (d.body && d.body.hasAttribute('data-no-ptr'))) return;
     var style = d.createElement('style');
     style.id = 'mj-ptr-shared-style';
