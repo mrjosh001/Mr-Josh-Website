@@ -1833,6 +1833,26 @@ html[data-theme="dark"] .logo-word, body[data-theme="dark"] .logo-word { color:#
   justify-content: center !important;
 }
 
+
+/* Explicit document-level vertical scrolling, including mobile Safari */
+html, body {
+  height: auto !important;
+  min-height: 100% !important;
+  overflow-x: hidden !important;
+  overflow-y: auto !important;
+  -webkit-overflow-scrolling: touch;
+  touch-action: pan-y;
+}
+body {
+  min-height: 100vh !important;
+  min-height: 100dvh !important;
+}
+#mjA2hsOverlay {
+  pointer-events: none !important;
+}
+#mjA2hsOverlay #mjA2hsCard {
+  pointer-events: auto !important;
+}
 </style>
 <script defer src="/_vercel/insights/script.js"></script>
   <link rel="stylesheet" href="css/skeleton.css">
