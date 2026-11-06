@@ -22,6 +22,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, viewport-fit=cover">
     <title>MJ HUB - Sign In & Sign Up</title>
+    <link rel="preconnect" href="https://challenges.cloudflare.com" crossorigin>
+    <link rel="dns-prefetch" href="//challenges.cloudflare.com">
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <style>
@@ -674,6 +676,7 @@ html[data-theme="dark"] .logo-word, body[data-theme="dark"] .logo-word { color:#
                 <label class="remember-me-group">
                     <input type="checkbox" id="rememberMe"> Remember me for 24 hours
                 </label>
+                <div class="captcha-wrap"><div id="mjSigninCaptcha"></div></div>
                 <a href="#" class="forgot-password-link" onclick="switchTab('forgot'); return false;">Forgot Password?</a>
                 <button type="submit" class="btn-submit" id="signinSubmitBtn">Sign In to Dashboard</button>
                 <div class="auth-divider">or</div>
@@ -983,6 +986,7 @@ html[data-theme="dark"] .logo-word, body[data-theme="dark"] .logo-word { color:#
                 formIcon.innerText = '🔒';
                 formHeading.innerText = 'Welcome Back';
                 formSubheading.innerText = 'Sign in to access your dashboard';
+                mjEnsureCaptcha('signin');
             } else if (tab === 'signup') {
                 document.getElementById('signupTabBtn').classList.add('active');
                 document.getElementById('signinTabBtn').classList.remove('active');
@@ -1236,13 +1240,22 @@ html[data-theme="dark"] .logo-word, body[data-theme="dark"] .logo-word { color:#
                 return;
             }
 
+            const captchaToken = mjGetCaptchaToken('signin');
+            if (!captchaToken) {
+                showError('Please complete the security verification before signing in.');
+                mjEnsureCaptcha('signin');
+                return;
+            }
+
             setAuthButtonLoading(btn, true, 'Signing in…');
 
             let data, error;
             try {
-                ({ data, error } = await supabaseClient.auth.signInWithPassword({ email, password }));
+                ({ data, error } = await supabaseClient.auth.signInWithPassword({ email, password, options: { captchaToken } }));
+                mjResetCaptcha('signin');
             } catch (e) {
                 if (typeof mjRecordAttempt === 'function') mjRecordAttempt('login');
+                mjResetCaptcha('signin');
                 setAuthButtonLoading(btn, false);
                 showError(formatAuthError(e));
                 return;
@@ -1250,6 +1263,7 @@ html[data-theme="dark"] .logo-word, body[data-theme="dark"] .logo-word { color:#
 
             if (error) {
                 if (typeof mjRecordAttempt === 'function') mjRecordAttempt('login');
+                mjResetCaptcha('signin');
                 setAuthButtonLoading(btn, false);
                 if (isBannedError(error)) {
                     showBannedError();
@@ -1542,51 +1556,59 @@ html[data-theme="dark"] .logo-word, body[data-theme="dark"] .logo-word { color:#
 <script>
 (function () {
     var siteKey = '0x4AAAAAAF0CXjc8jL8djc4l';
-    var widgetId;
-    var signupToken = '';
+    var widgetIds = {};
+    var tokens = { signin: '', signup: '' };
     var scriptLoading = false;
     var scriptFailed = false;
 
     window.mjTurnstileVerified = function (kind, token) {
-        if (kind === 'signup') signupToken = token || '';
+        if (Object.prototype.hasOwnProperty.call(tokens, kind)) tokens[kind] = token || '';
     };
     window.mjTurnstileExpired = function (kind) {
-        if (kind === 'signup') signupToken = '';
+        if (Object.prototype.hasOwnProperty.call(tokens, kind)) tokens[kind] = '';
     };
     window.mjTurnstileFailed = function (kind) {
-        if (kind === 'signup') signupToken = '';
+        if (Object.prototype.hasOwnProperty.call(tokens, kind)) tokens[kind] = '';
     };
     window.mjGetCaptchaToken = function (kind) {
-        return kind === 'signup' ? signupToken : '';
+        return Object.prototype.hasOwnProperty.call(tokens, kind) ? tokens[kind] : '';
     };
     window.mjResetCaptcha = function (kind) {
-        if (kind !== 'signup') return;
-        signupToken = '';
-        if (window.turnstile && widgetId !== undefined) {
-            try { window.turnstile.reset(widgetId); } catch (e) {}
+        if (!Object.prototype.hasOwnProperty.call(tokens, kind)) return;
+        tokens[kind] = '';
+        if (window.turnstile && widgetIds[kind] !== undefined) {
+            try { window.turnstile.reset(widgetIds[kind]); } catch (e) {}
         }
     };
 
     window.mjEnsureCaptcha = function (kind) {
-        if (kind !== 'signup') return;
-        var container = document.getElementById('mjSignupCaptcha');
-        if (!container || widgetId !== undefined) return;
+        if (kind !== 'signup' && kind !== 'signin') return;
+        var container = document.getElementById(kind === 'signup' ? 'mjSignupCaptcha' : 'mjSigninCaptcha');
+        if (!container || widgetIds[kind] !== undefined) return;
 
         if (window.turnstile) {
-            renderSignupCaptcha(container);
+            renderCaptcha(kind, container);
             return;
         }
-        if (scriptLoading || scriptFailed) return;
+        if (scriptFailed) {
+            scriptFailed = false;
+        }
+        if (scriptLoading) return;
 
         scriptLoading = true;
         var script = document.createElement('script');
         script.src = 'https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit';
         script.async = true;
-        script.defer = true;
         script.onload = function () {
             scriptLoading = false;
-            if (window.turnstile) renderSignupCaptcha(container);
-            else scriptFailed = true;
+            if (window.turnstile) {
+                ['signin', 'signup'].forEach(function (type) {
+                    var el = document.getElementById(type === 'signup' ? 'mjSignupCaptcha' : 'mjSigninCaptcha');
+                    if (el && !el.closest('form').classList.contains('hidden')) renderCaptcha(type, el);
+                });
+            } else {
+                scriptFailed = true;
+            }
         };
         script.onerror = function () {
             scriptLoading = false;
@@ -1596,22 +1618,22 @@ html[data-theme="dark"] .logo-word, body[data-theme="dark"] .logo-word { color:#
         document.head.appendChild(script);
     };
 
-    function renderSignupCaptcha(container) {
-        if (!window.turnstile || widgetId !== undefined || !container) return;
-        widgetId = window.turnstile.render(container, {
+    function renderCaptcha(kind, container) {
+        if (!window.turnstile || widgetIds[kind] !== undefined || !container) return;
+        widgetIds[kind] = window.turnstile.render(container, {
             sitekey: siteKey,
             theme: 'auto',
-            callback: function (token) { window.mjTurnstileVerified('signup', token); },
-            'expired-callback': function () { window.mjTurnstileExpired('signup'); },
-            'error-callback': function () { window.mjTurnstileFailed('signup'); }
+            callback: function (token) { window.mjTurnstileVerified(kind, token); },
+            'expired-callback': function () { window.mjTurnstileExpired(kind); },
+            'error-callback': function () { window.mjTurnstileFailed(kind); }
         });
     }
 
     window.mjInitActiveCaptcha = function () {
+        var signinForm = document.getElementById('signinForm');
         var signupForm = document.getElementById('signupForm');
-        if (signupForm && !signupForm.classList.contains('hidden')) {
-            window.mjEnsureCaptcha('signup');
-        }
+        if (signinForm && !signinForm.classList.contains('hidden')) window.mjEnsureCaptcha('signin');
+        if (signupForm && !signupForm.classList.contains('hidden')) window.mjEnsureCaptcha('signup');
     };
 
     if (document.readyState === 'loading') {
@@ -1619,8 +1641,7 @@ html[data-theme="dark"] .logo-word, body[data-theme="dark"] .logo-word { color:#
     } else {
         window.mjInitActiveCaptcha();
     }
-})();;
-</script>
+})();</script>
 
 </body>
 </html>
