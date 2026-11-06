@@ -1618,15 +1618,23 @@ html[data-theme="dark"] .logo-word, body[data-theme="dark"] .logo-word { color:#
             widgetKind=kind;
             widgetId=api.render(el,{
                 sitekey:siteKey,theme:'auto',appearance:'always',execution:'render',
-                retry:'auto','retry-interval':3000,'refresh-expired':'auto','refresh-timeout':'auto',
-                callback:function(token){if(widgetKind===kind)tokens[kind]=token||'';},
-                'expired-callback':function(){tokens[kind]='';},
-                'timeout-callback':function(){tokens[kind]='';state(kind,'Verification timed out. Please try again.');},
+                retry:'auto','retry-interval':8000,'refresh-expired':'auto','refresh-timeout':'auto',
+                callback:function(token){
+                    if(widgetKind===kind){
+                        tokens[kind]=token||'';
+                        state(kind,'');
+                    }
+                },
+                'expired-callback':function(){tokens[kind]='';state(kind,'Verification expired. Please complete the check again.');},
+                'timeout-callback':function(){tokens[kind]='';state(kind,'Verification timed out. Please complete the check again.');},
                 'error-callback':function(code){
-                    tokens[kind]='';console.warn('[MJ HUB] Turnstile error:',code||'unknown');
-                    state(kind,'Security check interrupted. Please retry or refresh this page.');
-                    if(window.mjNotify)window.mjNotify({type:'error',title:'Security check interrupted',message:'Please retry verification. If it keeps failing, refresh this page.'});
-                    return true;
+                    tokens[kind]='';
+                    var errorCode=String(code||'unknown');
+                    console.warn('[MJ HUB] Turnstile client error code:',errorCode);
+                    state(kind,'Cloudflare verification is retrying. Reference: '+errorCode);
+                    // Return false so Turnstile retains its normal retry/logging behaviour.
+                    // Do not raise a toast for every transient retry.
+                    return false;
                 }
             });
             if(widgetId===undefined||widgetId===null){widgetId=null;widgetKind='';state(kind,'Unable to start security verification. Please refresh and try again.');}
