@@ -1454,10 +1454,8 @@ html[data-theme="dark"] .logo-word, body[data-theme="dark"] .logo-word { color:#
             setAuthButtonLoading(btn, true, 'Sending…');
 
             const { data, error } = await supabaseClient.auth.resetPasswordForEmail(email, {
-                redirectTo: window.location.origin + '/auth.html?type=recovery',
-                captchaToken: captchaToken
+                redirectTo: window.location.origin + '/auth.html?type=recovery'
             });
-            mjResetCaptcha('forgot');
 
             if (error) {
                 setAuthButtonLoading(btn, false);
