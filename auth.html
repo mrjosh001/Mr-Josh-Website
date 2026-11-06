@@ -708,6 +708,56 @@ html[data-theme="dark"] .logo-word, body[data-theme="dark"] .logo-word { color:#
 .logo-word { font-family:"Plus Jakarta Sans", Inter, system-ui, sans-serif !important; font-size:24px !important; font-weight:800 !important; letter-spacing:-.04em !important; line-height:24px !important; height:24px !important; display:inline-flex !important; align-items:center !important; background:none !important; -webkit-background-clip:unset !important; color:#1e3a8a !important; -webkit-text-fill-color:#1e3a8a !important; }
 html[data-theme="dark"] .logo-word, body[data-theme="dark"] .logo-word { color:#dbeafe !important; -webkit-text-fill-color:#dbeafe !important; }
 
+
+        /* Left-aligned, high-contrast account headings and switch prompt */
+        .form-icon-header { text-align: left; margin-bottom: 12px; }
+        .auth-switch-prompt {
+            text-align: left;
+            color: #ffffff !important;
+            font-weight: 800;
+            margin: 0 0 22px;
+        }
+        .auth-switch-prompt a {
+            color: #ffffff !important;
+            font-weight: 900;
+            text-decoration: underline;
+        }
+        .pw-rules {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 9px;
+            margin: 12px 0 0;
+            padding: 0;
+            list-style: none;
+            text-align: left;
+        }
+        .pw-rules li {
+            display: flex;
+            align-items: center;
+            min-height: 22px;
+            padding: 2px 0 2px 28px;
+            position: relative;
+            line-height: 1.5;
+            font-size: 12px;
+            font-weight: 700;
+        }
+        .pw-rules li::before {
+            content: '•';
+            position: absolute;
+            left: 8px;
+            top: 1px;
+            font-size: 18px;
+        }
+        .pw-rules li.good::before { content: '✓'; color: #22c55e; font-size: 14px; top: 3px; }
+        .pw-rules li.bad::before { color: #f59e0b; }
+        html[data-theme="light"] .auth-switch-prompt,
+        body[data-theme="light"] .auth-switch-prompt,
+        html[data-theme="light"] .auth-switch-prompt a,
+        body[data-theme="light"] .auth-switch-prompt a { color: #ffffff !important; }
+        @media (max-width: 480px) {
+            .auth-container { padding: 30px 22px 26px; }
+            .form-icon-header h3 { font-size: 21px; }
+        }
 </style>
 <script defer src="/_vercel/insights/script.js"></script>
 <style id="mj-scale-lock">html{-webkit-text-size-adjust:100%;text-size-adjust:100%}@media screen and (max-width:900px){input:not([type=checkbox]):not([type=radio]):not([type=range]):not([type=file]),select,textarea{font-size:16px!important}}</style>
