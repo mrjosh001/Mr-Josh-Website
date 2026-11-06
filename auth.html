@@ -1635,7 +1635,14 @@ html[data-theme="dark"] .logo-word, body[data-theme="dark"] .logo-word { color:#
     window.mjTurnstileVerified=function(kind,token){if(Object.prototype.hasOwnProperty.call(tokens,kind))tokens[kind]=token||'';};
     window.mjTurnstileExpired=function(kind){if(Object.prototype.hasOwnProperty.call(tokens,kind))tokens[kind]='';};
     window.mjTurnstileFailed=function(kind){if(Object.prototype.hasOwnProperty.call(tokens,kind))tokens[kind]='';};
-    window.mjGetCaptchaToken=function(kind){return Object.prototype.hasOwnProperty.call(tokens,kind)?tokens[kind]:'';};
+    window.mjGetCaptchaToken=function(kind){
+        if(!Object.prototype.hasOwnProperty.call(tokens,kind))return '';
+        if(tokens[kind])return tokens[kind];
+        if(window.turnstile&&widgetId!==null&&widgetKind===kind){
+            try{var response=window.turnstile.getResponse(widgetId);if(response){tokens[kind]=response;return response;}}catch(e){}
+        }
+        return '';
+    };
     window.mjResetCaptcha=function(kind){
         if(!Object.prototype.hasOwnProperty.call(tokens,kind))return;tokens[kind]='';
         if(window.turnstile&&widgetId!==null&&widgetKind===kind){try{window.turnstile.reset(widgetId);}catch(e){}}
