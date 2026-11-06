@@ -1251,7 +1251,7 @@ html[data-theme="dark"] .logo-word, body[data-theme="dark"] .logo-word { color:#
 
             let data, error;
             try {
-                ({ data, error } = await supabaseClient.auth.signInWithPassword({ email, password, captchaToken }));
+                ({ data, error } = await supabaseClient.auth.signInWithPassword({ email, password, options: { captchaToken } }));
                 mjResetCaptcha('signin');
             } catch (e) {
                 if (typeof mjRecordAttempt === 'function') mjRecordAttempt('login');
