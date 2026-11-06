@@ -2,6 +2,7 @@ import { createClient } from '@supabase/supabase-js';
 import { sendPushToUser, sendPushToAdmins } from '../lib/push.js';
 import { quoteCoupon, redeemCoupon } from '../lib/coupons.js';
 import { applyApiCors, handleOptions, requireUser, requireAdminOrCron } from '../lib/secure.js';
+import { formatCredentials } from '../lib/formatCredentials.js';
 
 /**
  * /api/order-logsdomain
@@ -30,16 +31,6 @@ function categoryIdFromKey(productKey) {
   return Number.isFinite(n) ? n : null;
 }
 
-function formatCredentials(details) {
-  if (!details) return '';
-  const text = String(details);
-  const userMatch = text.match(/(?:Username|User|ID|Email|Login)\s*[:=]\s*([^\s|]+)/i);
-  const passMatch = text.match(/(?:Password|Pass)\s*[:=]\s*([^\s|]+)/i);
-  const credId = userMatch ? userMatch[1].trim() : null;
-  const credPass = passMatch ? passMatch[1].trim() : null;
-  if (credId && credPass) return `${credId}:${credPass}`;
-  return text;
-}
 
 function stripHtml(html) {
   if (!html) return '';
@@ -551,7 +542,8 @@ export default async function handler(req, res) {
 
     if (items.length) {
       for (const item of items) {
-        const { error: insertErr } = await supabase.from('orders').insert({
+        const rawDetails = String(item.details || '').trim();
+        const row = {
           order_id: supplierOrderId,
           user_id,
           product_id: product.id,
@@ -562,17 +554,24 @@ export default async function handler(req, res) {
           quantity: 1,
           amount: product.price,
           status: 'completed',
-          login_credentials: formatCredentials(item.details),
+          login_credentials: formatCredentials(rawDetails, productName) || rawDetails,
+          login_credentials_raw: rawDetails || null,
           supplier_ref: String(item.serial || ''),
           guide_url: 'https://t.me/mj_hub_tg'
-        });
+        };
+        let { error: insertErr } = await supabase.from('orders').insert(row);
+        if (insertErr && /login_credentials_raw|schema cache|column/i.test(String(insertErr.message || ''))) {
+          const { login_credentials_raw, ...rest } = row;
+          ({ error: insertErr } = await supabase.from('orders').insert(rest));
+        }
         if (insertErr) {
           console.error('[order-logsdomain] FAILED to save order row — customer was charged and delivered credentials, but this will not appear in My Orders / admin Orders:', insertErr.message, { order_id: supplierOrderId, user_id, product_key });
         }
       }
     } else {
       // fallback single row if API returns no items array
-      const { error: insertErr } = await supabase.from('orders').insert({
+      const rawDetails = String(detailsText || '').trim();
+      const row = {
         order_id: supplierOrderId,
         user_id,
         product_id: product.id,
@@ -583,9 +582,15 @@ export default async function handler(req, res) {
         quantity: qty,
         amount: total,
         status: 'completed',
-        login_credentials: detailsText || 'Delivered — see order for details',
+        login_credentials: formatCredentials(rawDetails, productName) || rawDetails || 'Delivered — see order for details',
+        login_credentials_raw: rawDetails || null,
         guide_url: 'https://t.me/mj_hub_tg'
-      });
+      };
+      let { error: insertErr } = await supabase.from('orders').insert(row);
+      if (insertErr && /login_credentials_raw|schema cache|column/i.test(String(insertErr.message || ''))) {
+        const { login_credentials_raw, ...rest } = row;
+        ({ error: insertErr } = await supabase.from('orders').insert(rest));
+      }
       if (insertErr) {
         console.error('[order-logsdomain] FAILED to save order row (fallback branch):', insertErr.message, { order_id: supplierOrderId, user_id, product_key });
       }
