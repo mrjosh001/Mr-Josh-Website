@@ -7,6 +7,7 @@
   if(/\/mj-sms-number(\.html)?$/i.test(p)&&isUuid){location.replace('mj-sms-s3-number.html'+location.search);return;}
   function load(src){var s=document.createElement('script');s.src=src;s.defer=true;(document.head||document.documentElement).appendChild(s);}
   load('/js/mj-notifications.js');
+  load('/js/mj-pull-refresh.js');
   if(/\/(admin|sub-admin)(\.html)?\/?$/i.test(p)) load('/js/admin-sms-patch.js');
   if(/\/mj-sms(-s3|-history)?(\.html)?$/i.test(p)||/\/dashboard(\.html)?$/i.test(p)) load('/js/s3-fix.js');
 }catch(e){}})();
