@@ -2797,8 +2797,17 @@ async function pushVapidPublic() {
 }
 
 async function pushSubscribe(req, body) {
-  const gate = await requireUser(req);
-  if (!gate.ok) return { status: gate.status, body: { success: false, message: gate.message } };
+  // Device subscriptions are independent of login state. If a bearer token is
+  // supplied, validate it and attach the device to that account; otherwise
+  // store an anonymous device subscription.
+  let userId = null;
+  const authHeader = req.headers.authorization || '';
+  if (authHeader.startsWith('Bearer ')) {
+    const token = authHeader.slice(7);
+    const { data: { user }, error } = await supabase.auth.getUser(token);
+    if (error || !user) return { status: 401, body: { success: false, message: 'Invalid session' } };
+    userId = user.id;
+  }
   const endpoint = String(body.endpoint || '').trim();
   const keys = body.keys || {};
   const p256dh = String(keys.p256dh || body.p256dh || '').trim();
@@ -2807,7 +2816,7 @@ async function pushSubscribe(req, body) {
     return { status: 400, body: { success: false, message: 'endpoint and keys.p256dh / keys.auth required' } };
   }
   const row = {
-    user_id: gate.user.id,
+    user_id: userId,
     endpoint,
     p256dh,
     auth,
@@ -2822,11 +2831,11 @@ async function pushSubscribe(req, body) {
 }
 
 async function pushUnsubscribe(req, body) {
-  const gate = await requireUser(req);
-  if (!gate.ok) return { status: gate.status, body: { success: false, message: gate.message } };
   const endpoint = String(body.endpoint || '').trim();
   if (!endpoint) return { status: 400, body: { success: false, message: 'endpoint required' } };
-  await supabase.from('push_subscriptions').delete().eq('user_id', gate.user.id).eq('endpoint', endpoint);
+  // The push endpoint is an unguessable browser-issued capability URL.
+  // Permit signed-out devices to remove their own subscription.
+  await supabase.from('push_subscriptions').delete().eq('endpoint', endpoint);
   return { status: 200, body: { success: true } };
 }
 
