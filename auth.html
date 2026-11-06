@@ -1451,7 +1451,7 @@ html[data-theme="dark"] .logo-word, body[data-theme="dark"] .logo-word { color:#
                 // Email confirmation is off — user is already signed in.
                 showSuccess('Account created successfully!');
                 // Referral attribution runs in the background and must not delay the dashboard.
-                try { attachReferralIfNeeded(data.session); } catch (e) {}
+                try { if (window.__mjhub_attach_referral) window.__mjhub_attach_referral(data.session); } catch (e) {}
                 mjGoToDashboard();
             } else {
                 // Email confirmation is required — send them to the
