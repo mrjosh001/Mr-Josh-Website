@@ -44,6 +44,7 @@
 </script>
 
 <script src="/js/mj-theme.js"></script>
+<script src="/js/mj-pull-refresh.js" defer></script>
 
 <script>
 /* Email confirm / auth tokens: send to auth, never stay on marketing home */
@@ -200,7 +201,7 @@ body {
   background: var(--bg);
   color: var(--text);
   line-height: 1.6;
-  overflow-x: hidden;
+  overflow-x: clip;
   transition: background .35s, color .35s;
 }
 
@@ -874,7 +875,7 @@ footer a:hover { color: var(--primary); }
 /* Support widget */
 .support-widget {
   position: fixed; bottom: 28px; right: 28px; z-index: 9999;
-  touch-action: none; user-select: none;
+  touch-action: pan-y; user-select: none;
 }
 .support-btn {
   width: 64px; height: 64px; border-radius: 50%;
@@ -1358,7 +1359,7 @@ body[data-theme="dark"] .hero p { color: #cbd5e1 !important; }
 html, body {
   width: 100%;
   max-width: 100%;
-  overflow-x: hidden !important;
+  overflow-x: clip !important;
 }
 body {
   min-height: 100%;
@@ -1695,7 +1696,7 @@ body[data-theme="dark"] .footer3 {
 
 
 /* Support FAB always easy to find */
-.support-widget { z-index: 99999 !important; touch-action: none; }
+.support-widget { z-index: 99999 !important; touch-action: pan-y; }
 .support-btn {
   box-shadow: 0 12px 32px rgba(37,99,235,.45), 0 0 0 3px rgba(59,130,246,.25) !important;
   background: linear-gradient(145deg, #3b82f6, #1d4ed8) !important;
@@ -1736,7 +1737,7 @@ body[data-theme="dark"] .footer3 {
   bottom: max(24px, env(safe-area-inset-bottom));
   right: max(18px, env(safe-area-inset-right));
   z-index: 2147483000 !important;
-  touch-action: none;
+  touch-action: pan-y;
   user-select: none;
 }
 .support-btn {
@@ -1834,18 +1835,23 @@ html[data-theme="dark"] .logo-word, body[data-theme="dark"] .logo-word { color:#
 }
 
 
-/* Explicit document-level vertical scrolling, including mobile Safari */
-html, body {
+/* Keep the document as the single vertical scroll container on mobile Safari and desktop. */
+html {
   height: auto !important;
   min-height: 100% !important;
-  overflow-x: hidden !important;
-  overflow-y: auto !important;
-  -webkit-overflow-scrolling: touch;
-  touch-action: pan-y;
+  overflow-x: clip !important;
+  overflow-y: visible !important;
+  overscroll-behavior-y: auto;
 }
 body {
+  position: relative !important;
+  height: auto !important;
   min-height: 100vh !important;
   min-height: 100dvh !important;
+  overflow-x: clip !important;
+  overflow-y: visible !important;
+  -webkit-overflow-scrolling: touch;
+  touch-action: pan-y;
 }
 #mjA2hsOverlay {
   pointer-events: none !important;
@@ -2890,7 +2896,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     toggle.addEventListener('mousedown', dragStart);
-    toggle.addEventListener('touchstart', dragStart, { passive: true });
+    // Keep the support button tappable on touch devices without hijacking page scrolling.
 
     toggle.addEventListener('click', function (e) {
       e.stopPropagation();
