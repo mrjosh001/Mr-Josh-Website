@@ -551,11 +551,87 @@
         .captcha-wrap > div:not(.mj-captcha-status) { min-height: 65px; }
 
         .auth-switch-prompt {
-            position: relative; z-index: 2; text-align: center; margin: 0 0 22px;
-            color: var(--text-muted); font-size: 13px; line-height: 1.5;
+            position: relative;
+            z-index: 2;
+            text-align: center;
+            margin: -8px 0 22px;
+            color: var(--text-muted);
+            font-size: 13px;
+            line-height: 1.55;
         }
-        .auth-switch-prompt a { color: #7db7ff; font-weight: 800; text-decoration: none; margin-left: 4px; }
-        .auth-switch-prompt a:hover { color: #fff; text-decoration: underline; }
+        .auth-switch-prompt a {
+            color: #7db7ff;
+            font-weight: 800;
+            text-decoration: none;
+            margin-left: 4px;
+        }
+        .auth-switch-prompt a:hover { color: #ffffff; text-decoration: underline; }
+
+        /* Explicit high-contrast light theme for every auth surface. */
+        html[data-theme="light"], body[data-theme="light"] {
+            --text-main: #10213d;
+            --text-muted: #40536f;
+            --text-faint: #64748b;
+            --glass: rgba(255,255,255,.92);
+            --glass-strong: rgba(255,255,255,.98);
+            --glass-border: rgba(30,58,138,.18);
+            --glass-border-soft: rgba(30,58,138,.13);
+            --input-bg: rgba(255,255,255,.96);
+            --input-border: rgba(51,78,120,.28);
+            --error-color: #b42318;
+            --success-color: #067647;
+        }
+        html[data-theme="light"] body, body[data-theme="light"] {
+            background: #eef4fc;
+            color: #10213d;
+        }
+        html[data-theme="light"] .auth-container, body[data-theme="light"] .auth-container {
+            background: linear-gradient(155deg, rgba(255,255,255,.98), rgba(245,249,255,.96));
+            border-color: rgba(30,58,138,.16);
+            box-shadow: 0 28px 70px rgba(22,48,91,.16), 0 1px 0 rgba(255,255,255,.95) inset;
+        }
+        html[data-theme="light"] .auth-brand-name, body[data-theme="light"] .auth-brand-name,
+        html[data-theme="light"] .form-icon-header h3, body[data-theme="light"] .form-icon-header h3,
+        html[data-theme="light"] .form-group label, body[data-theme="light"] .form-group label,
+        html[data-theme="light"] .remember-me-group, body[data-theme="light"] .remember-me-group,
+        html[data-theme="light"] .auth-switch-prompt, body[data-theme="light"] .auth-switch-prompt {
+            color: #10213d;
+        }
+        html[data-theme="light"] .form-icon-header p, body[data-theme="light"] .form-icon-header p {
+            color: #40536f;
+        }
+        html[data-theme="light"] .form-group input, body[data-theme="light"] .form-group input {
+            color: #10213d;
+            background: #ffffff;
+            border-color: #aabbd3;
+        }
+        html[data-theme="light"] .form-group input::placeholder, body[data-theme="light"] .form-group input::placeholder {
+            color: #64748b;
+            opacity: 1;
+        }
+        html[data-theme="light"] .form-group input:focus, body[data-theme="light"] .form-group input:focus {
+            background: #ffffff;
+            border-color: #1769d2;
+            box-shadow: 0 0 0 3px rgba(23,105,210,.16);
+        }
+        html[data-theme="light"] .auth-switch-prompt a, body[data-theme="light"] .auth-switch-prompt a {
+            color: #0756b8;
+        }
+        html[data-theme="light"] .auth-switch-prompt a:hover, body[data-theme="light"] .auth-switch-prompt a:hover {
+            color: #033b83;
+        }
+        html[data-theme="light"] .username-hint, body[data-theme="light"] .username-hint { color: #52647e; }
+        html[data-theme="light"] .username-hint.available, body[data-theme="light"] .username-hint.available { color: #067647; }
+        html[data-theme="light"] .username-hint.taken, html[data-theme="light"] .username-hint.invalid,
+        body[data-theme="light"] .username-hint.taken, body[data-theme="light"] .username-hint.invalid { color: #b42318; }
+        html[data-theme="light"] .remember-me-group a, body[data-theme="light"] .remember-me-group a,
+        html[data-theme="light"] .form-group a, body[data-theme="light"] .form-group a { color: #0756b8; }
+        html[data-theme="light"] .error-msg, body[data-theme="light"] .error-msg {
+            color: #912018; background: #fff1f0; border: 1px solid #fecdca;
+        }
+        html[data-theme="light"] .success-msg, body[data-theme="light"] .success-msg {
+            color: #05603a; background: #ecfdf3; border: 1px solid #abefc6;
+        }
         .username-hint { min-height: 16px; margin-top: 7px; color: rgba(203,213,225,.68); font-size: 11px; line-height: 1.4; }
         .username-hint.available { color: #4ade80; }
         .username-hint.taken, .username-hint.invalid { color: #f87171; }
@@ -656,7 +732,7 @@ html[data-theme="dark"] .logo-word, body[data-theme="dark"] .logo-word { color:#
     <div class="main-wrapper">
         <div class="auth-container">
 
-            <div class="auth-switch-prompt" id="authSwitchPrompt">Don’t have an account yet? <a href="#" onclick="switchTab('signup'); return false;">Sign up</a></div>
+
 
             <div class="auth-brand">
                 <div class="auth-brand-mark" id="formIcon">🔒</div>
@@ -667,6 +743,8 @@ html[data-theme="dark"] .logo-word, body[data-theme="dark"] .logo-word { color:#
                 <h3 id="formHeading">Welcome Back</h3>
                 <p id="formSubheading">Sign in to access your dashboard</p>
             </div>
+
+            <div class="auth-switch-prompt" id="authSwitchPrompt">Don’t have an account yet? <a href="#" onclick="switchTab('signup'); return false;">Sign up</a></div>
 
 <div id="errorContainer" class="error-msg hidden"></div>
             <div id="successContainer" class="success-msg hidden"></div>
