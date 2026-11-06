@@ -24,6 +24,7 @@
     <title>MJ HUB - Sign In & Sign Up</title>
     <link rel="preconnect" href="https://challenges.cloudflare.com" crossorigin>
     <link rel="dns-prefetch" href="//challenges.cloudflare.com">
+    <script id="mjTurnstileApi" src="https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit" async defer></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <style>
@@ -1590,32 +1591,37 @@ html[data-theme="dark"] .logo-word, body[data-theme="dark"] .logo-word { color:#
             renderCaptcha(kind, container);
             return;
         }
-        if (scriptFailed) {
-            scriptFailed = false;
-        }
+        if (scriptFailed) scriptFailed = false;
         if (scriptLoading) return;
 
+        // The API script is requested from the document head as soon as parsing
+        // begins. Attach to that request instead of downloading a second copy.
         scriptLoading = true;
-        var script = document.createElement('script');
-        script.src = 'https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit';
-        script.async = true;
-        script.onload = function () {
+        var script = document.getElementById('mjTurnstileApi');
+        if (!script) {
+            script = document.createElement('script');
+            script.id = 'mjTurnstileApi';
+            script.src = 'https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit';
+            script.async = true;
+            script.defer = true;
+            document.head.appendChild(script);
+        }
+        script.addEventListener('load', function () {
             scriptLoading = false;
-            if (window.turnstile) {
-                ['signin', 'signup'].forEach(function (type) {
-                    var el = document.getElementById(type === 'signup' ? 'mjSignupCaptcha' : 'mjSigninCaptcha');
-                    if (el && !el.closest('form').classList.contains('hidden')) renderCaptcha(type, el);
-                });
-            } else {
+            if (!window.turnstile) {
                 scriptFailed = true;
+                return;
             }
-        };
-        script.onerror = function () {
+            ['signin', 'signup'].forEach(function (type) {
+                var el = document.getElementById(type === 'signup' ? 'mjSignupCaptcha' : 'mjSigninCaptcha');
+                if (el && el.closest('form') && !el.closest('form').classList.contains('hidden')) renderCaptcha(type, el);
+            });
+        }, { once: true });
+        script.addEventListener('error', function () {
             scriptLoading = false;
             scriptFailed = true;
             console.error('Cloudflare Turnstile failed to load.');
-        };
-        document.head.appendChild(script);
+        }, { once: true });
     };
 
     function renderCaptcha(kind, container) {
