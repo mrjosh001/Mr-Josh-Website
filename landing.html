@@ -3120,19 +3120,15 @@ document.addEventListener('DOMContentLoaded', () => {
         'background:rgba(6,8,15,0.62)',
         '-webkit-backdrop-filter:blur(10px)',
         'backdrop-filter:blur(10px)',
-        'overflow:hidden'
+        'overflow-y:auto','pointer-events:none'
       ].join(' !important;') + ' !important;';
 
       document.documentElement.appendChild(overlay);
 
-      // Lock page scroll while open
+      // Keep the install prompt non-blocking so the landing page remains scrollable.
       var prevHtmlOverflow = document.documentElement.style.overflow;
       var prevBodyOverflow = document.body.style.overflow;
       var prevBodyPos = document.body.style.position;
-      var scrollY = window.scrollY || 0;
-      document.documentElement.style.overflow = 'hidden';
-      document.body.style.overflow = 'hidden';
-      document.body.style.position = 'relative';
 
       function close(mode) {
         try {
@@ -3143,7 +3139,6 @@ document.addEventListener('DOMContentLoaded', () => {
         document.documentElement.style.overflow = prevHtmlOverflow;
         document.body.style.overflow = prevBodyOverflow;
         document.body.style.position = prevBodyPos;
-        try { window.scrollTo(0, scrollY); } catch (e) {}
       }
 
       var later = document.getElementById('mjA2hsLater');
@@ -3154,7 +3149,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (e.target === overlay) close('later');
       };
       var card = document.getElementById('mjA2hsCard');
-      if (card) card.onclick = function (e) { e.stopPropagation(); };
+      if (card) { card.style.pointerEvents = 'auto'; card.onclick = function (e) { e.stopPropagation(); }; }
     } catch (err) {
       try { console.warn('[a2hs]', err); } catch (e) {}
     }
