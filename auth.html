@@ -550,6 +550,15 @@
         .captcha-wrap { display:flex; flex-direction:column; align-items:center; justify-content:center; margin: 12px 0 14px; min-height: 65px; position:relative; z-index:1; }
         .captcha-wrap > div:not(.mj-captcha-status) { min-height: 65px; }
 
+        .auth-switch-prompt {
+            position: relative; z-index: 2; text-align: center; margin: 0 0 22px;
+            color: var(--text-muted); font-size: 13px; line-height: 1.5;
+        }
+        .auth-switch-prompt a { color: #7db7ff; font-weight: 800; text-decoration: none; margin-left: 4px; }
+        .auth-switch-prompt a:hover { color: #fff; text-decoration: underline; }
+        .username-hint { min-height: 16px; margin-top: 7px; color: rgba(203,213,225,.68); font-size: 11px; line-height: 1.4; }
+        .username-hint.available { color: #4ade80; }
+        .username-hint.taken, .username-hint.invalid { color: #f87171; }
         .hidden { display: none; }
 
         .error-msg, .success-msg {
@@ -657,10 +666,7 @@ html[data-theme="dark"] .logo-word, body[data-theme="dark"] .logo-word { color:#
                 <p id="formSubheading">Sign in to access your dashboard</p>
             </div>
 
-            <div class="tab-switcher" id="tabSwitcherContainer">
-                <button id="signinTabBtn" class="tab-btn active" onclick="switchTab('signin')">Sign In</button>
-                <button id="signupTabBtn" class="tab-btn" onclick="switchTab('signup')">Register</button>
-            </div>
+            <div class="auth-switch-prompt" id="authSwitchPrompt">Don’t have an account yet? <a href="#" onclick="switchTab('signup'); return false;">Sign up</a></div>
 
             <div id="errorContainer" class="error-msg hidden"></div>
             <div id="successContainer" class="success-msg hidden"></div>
@@ -668,8 +674,8 @@ html[data-theme="dark"] .logo-word, body[data-theme="dark"] .logo-word { color:#
             <!-- Sign In Form -->
             <form id="signinForm" onsubmit="handleSignIn(event)">
                 <div class="form-group">
-                    <label>Email Address</label>
-                    <input type="email" id="signinEmail" required autocomplete="off" placeholder="name@example.com">
+                    <label>Email or Username</label>
+                    <input type="text" id="signinEmail" required autocomplete="username" autocapitalize="none" spellcheck="false" placeholder="Enter your email or username">
                 </div>
                 <div class="form-group">
                     <label>Password</label>
@@ -701,7 +707,8 @@ html[data-theme="dark"] .logo-word, body[data-theme="dark"] .logo-word { color:#
                 </div>
                 <div class="form-group">
                     <label>Username</label>
-                    <input type="text" id="username" required autocomplete="off" placeholder="Choose a username">
+                    <input type="text" id="username" required autocomplete="username" autocapitalize="none" spellcheck="false" minlength="3" maxlength="20" pattern="[A-Za-z0-9_]{3,20}" onblur="checkUsernameAvailability()" placeholder="Choose a username">
+                    <div class="username-hint" id="usernameHint" aria-live="polite">3–20 characters. Letters, numbers, and underscores only.</div>
                 </div>
                 <div class="form-group">
                     <label>Email Address</label>
@@ -972,43 +979,38 @@ html[data-theme="dark"] .logo-word, body[data-theme="dark"] .logo-word { color:#
             errorEl.classList.add('hidden');
             successEl.innerText = '';
             successEl.classList.add('hidden');
-
             const formIcon = document.getElementById('formIcon');
             const formHeading = document.getElementById('formHeading');
             const formSubheading = document.getElementById('formSubheading');
-            const tabSwitcherContainer = document.getElementById('tabSwitcherContainer');
-
-            document.getElementById('signinForm').classList.add('hidden');
-            document.getElementById('signupForm').classList.add('hidden');
-            document.getElementById('forgotForm').classList.add('hidden');
-            document.getElementById('updatePasswordForm').classList.add('hidden');
+            const switchPrompt = document.getElementById('authSwitchPrompt');
+            ['signinForm','signupForm','forgotForm','updatePasswordForm'].forEach(function(id) {
+                document.getElementById(id).classList.add('hidden');
+            });
             if (tab !== 'signin' && tab !== 'signup' && window.mjDestroyCaptcha) window.mjDestroyCaptcha();
-            tabSwitcherContainer.style.display = 'flex';
-
             if (tab === 'signin') {
-                document.getElementById('signinTabBtn').classList.add('active');
-                document.getElementById('signupTabBtn').classList.remove('active');
                 document.getElementById('signinForm').classList.remove('hidden');
+                switchPrompt.classList.remove('hidden');
+                switchPrompt.innerHTML = "Don’t have an account yet? <a href=\"#\" onclick=\"switchTab('signup'); return false;\">Sign up</a>";
                 formIcon.innerText = '🔒';
                 formHeading.innerText = 'Welcome Back';
-                formSubheading.innerText = 'Sign in to access your dashboard';
+                formSubheading.innerText = 'Sign in with your email or username';
                 mjEnsureCaptcha('signin');
             } else if (tab === 'signup') {
-                document.getElementById('signupTabBtn').classList.add('active');
-                document.getElementById('signinTabBtn').classList.remove('active');
                 document.getElementById('signupForm').classList.remove('hidden');
+                switchPrompt.classList.remove('hidden');
+                switchPrompt.innerHTML = "Already have an account? <a href=\"#\" onclick=\"switchTab('signin'); return false;\">Sign in</a>";
                 formIcon.innerText = '👤';
                 formHeading.innerText = 'Create Your Account';
                 formSubheading.innerText = 'Join MJ HUB in just a few seconds';
                 mjEnsureCaptcha('signup');
             } else if (tab === 'forgot') {
-                tabSwitcherContainer.style.display = 'none';
+                switchPrompt.classList.add('hidden');
                 document.getElementById('forgotForm').classList.remove('hidden');
                 formIcon.innerText = '🔑';
                 formHeading.innerText = 'Recover Account';
                 formSubheading.innerText = 'Enter your email to receive reset instructions';
             } else if (tab === 'updatePassword') {
-                tabSwitcherContainer.style.display = 'none';
+                switchPrompt.classList.add('hidden');
                 document.getElementById('updatePasswordForm').classList.remove('hidden');
                 formIcon.innerText = '🛡️';
                 formHeading.innerText = 'Set New Password';
@@ -1244,47 +1246,60 @@ html[data-theme="dark"] .logo-word, body[data-theme="dark"] .logo-word { color:#
 
         async function handleSignIn(e) {
             e.preventDefault();
-            const email = document.getElementById('signinEmail').value.trim();
-            const password = document.getElementById('signinPassword').value.trim();
+            const identifier = document.getElementById('signinEmail').value.trim();
+            const password = document.getElementById('signinPassword').value;
+            const isEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(identifier);
             const rememberMe = document.getElementById('rememberMe').checked;
-            const btn = document.getElementById('signinSubmitBtn') || (e.submitter) || e.target.querySelector('.btn-submit');
-
+            const btn = document.getElementById('signinSubmitBtn') || e.submitter || e.target.querySelector('.btn-submit');
             if (typeof mjIsRateLimited === 'function' && mjIsRateLimited('login')) {
-                showError(mjRateLimitMessage('login'));
-                return;
+                showError(mjRateLimitMessage('login')); return;
             }
-
             const captchaToken = mjGetCaptchaToken('signin');
             if (!captchaToken) {
                 showError('Please complete the security verification before signing in.');
-                mjEnsureCaptcha('signin');
-                return;
+                mjEnsureCaptcha('signin'); return;
             }
-
             setAuthButtonLoading(btn, true, 'Signing in…');
-
-            let data, error;
+            let data = null, error = null;
             try {
-                ({ data, error } = await supabaseClient.auth.signInWithPassword({ email, password, options: { captchaToken } }));
+                if (isEmail) {
+                    ({ data, error } = await supabaseClient.auth.signInWithPassword({
+                        email: identifier.toLowerCase(), password, options: { captchaToken }
+                    }));
+                } else {
+                    const { data: loginData, error: invokeError } = await supabaseClient.functions.invoke('username-auth', {
+                        body: { action: 'login', username: identifier, password, captchaToken }
+                    });
+                    if (invokeError) {
+                        let payload = null;
+                        try { if (invokeError.context && typeof invokeError.context.json === 'function') payload = await invokeError.context.json(); } catch (parseError) {}
+                        error = { message: (payload && payload.error) || invokeError.message, code: (payload && payload.code) || invokeError.name };
+                    } else if (!loginData || !loginData.session) {
+                        error = { message: 'Incorrect username or password.', code: 'invalid_credentials' };
+                    } else {
+                        const { data: sessionData, error: sessionError } = await supabaseClient.auth.setSession({
+                            access_token: loginData.session.access_token, refresh_token: loginData.session.refresh_token
+                        });
+                        error = sessionError;
+                        data = { user: sessionData && sessionData.user ? sessionData.user : loginData.user, session: sessionData && sessionData.session };
+                    }
+                }
                 mjResetCaptcha('signin');
-            } catch (e) {
+            } catch (loginError) {
                 if (typeof mjRecordAttempt === 'function') mjRecordAttempt('login');
-                mjResetCaptcha('signin');
-                setAuthButtonLoading(btn, false);
-                showError(formatAuthError(e));
-                return;
+                mjResetCaptcha('signin'); setAuthButtonLoading(btn, false); showError(formatAuthError(loginError)); return;
             }
-
             if (error) {
                 if (typeof mjRecordAttempt === 'function') mjRecordAttempt('login');
-                mjResetCaptcha('signin');
-                setAuthButtonLoading(btn, false);
-                if (isBannedError(error)) {
-                    showBannedError();
-                } else {
-                    var msg = await resolveLoginError(error, email);
+                mjResetCaptcha('signin'); setAuthButtonLoading(btn, false);
+                if (isBannedError(error)) showBannedError();
+                else {
+                    let msg = isEmail ? await resolveLoginError(error, identifier) :
+                        (String(error.code || '').toLowerCase() === 'email_not_confirmed'
+                            ? 'Your email is not confirmed yet. Open the link we sent you, then sign in.'
+                            : (String(error.message || '').toLowerCase().includes('rate') ? formatAuthError(error) : 'Incorrect username or password. Check both and try again.'));
                     if (typeof mjGetAttempts === 'function') {
-                        var left = MJ_LOGIN_MAX - mjGetAttempts('login').length;
+                        const left = MJ_LOGIN_MAX - mjGetAttempts('login').length;
                         if (left <= 2 && left > 0) msg += ' (' + left + ' attempts left before temporary lockout)';
                         if (left <= 0) msg = mjRateLimitMessage('login');
                     }
@@ -1293,51 +1308,19 @@ html[data-theme="dark"] .logo-word, body[data-theme="dark"] .logo-word { color:#
                 return;
             }
             if (typeof mjClearAttempts === 'function') mjClearAttempts('login');
-
-            // Belt-and-suspenders: even if the auth-level ban somehow let a
-            // session through (e.g. an existing token that hasn't refreshed
-            // yet), check the profile flag we mirror on ban/unban and block
-            // access here too.
             try {
-                const { data: profile } = await supabaseClient
-                    .from('profiles')
-                    .select('is_banned')
-                    .eq('id', data.user.id)
-                    .maybeSingle();
+                const { data: profile } = await supabaseClient.from('profiles').select('is_banned').eq('id', data.user.id).maybeSingle();
                 if (profile && profile.is_banned) {
-                    await supabaseClient.auth.signOut();
-                    setAuthButtonLoading(btn, false);
-                    showBannedError();
-                    return;
+                    await supabaseClient.auth.signOut(); setAuthButtonLoading(btn, false); showBannedError(); return;
                 }
-            } catch (e) {
-                // If this check fails for any reason, don't block a
-                // legitimate sign-in over it — the auth-level ban above is
-                // the real enforcement.
-            }
-
+            } catch (profileError) {}
             if (rememberMe) {
-                const twentyFourHoursMs = 24 * 60 * 60 * 1000;
-                const expiryTime = new Date().getTime() + twentyFourHoursMs;
-                // Only ever remember the email, never the password — storing
-                // a real account password in localStorage in plain text is a
-                // security risk on its own (readable by any script/extension,
-                // or anyone else who later uses the device), and it was also
-                // what made sign-in feel "automatic": the password field
-                // arrived pre-filled and ready to submit the instant the page
-                // loaded. This still saves the retyping of the email without
-                // either problem.
-                const rememberData = {
-                    email: email,
-                    expiry: expiryTime
-                };
-                localStorage.setItem('mjhub_remember_user', JSON.stringify(rememberData));
-            } else {
-                localStorage.removeItem('mjhub_remember_user');
-            }
-
+                localStorage.setItem('mjhub_remember_user', JSON.stringify({
+                    email: identifier, expiry: new Date().getTime() + 24 * 60 * 60 * 1000
+                }));
+            } else localStorage.removeItem('mjhub_remember_user');
             showSuccess('Signed in successfully!');
-            try { sessionStorage.setItem('mjhub-fresh-login', '1'); } catch (e) {}
+            try { sessionStorage.setItem('mjhub-fresh-login', '1'); } catch (storageError) {}
             mjGoToDashboard();
         }
 
@@ -1371,10 +1354,38 @@ html[data-theme="dark"] .logo-word, body[data-theme="dark"] .logo-word { color:#
             }
         }
 
+        async function checkUsernameAvailability() {
+            const input = document.getElementById('username');
+            const hint = document.getElementById('usernameHint');
+            if (!input || !hint) return false;
+            const username = input.value.trim().toLowerCase();
+            input.setAttribute('aria-invalid', 'false');
+            if (!/^[a-z0-9_]{3,20}$/.test(username)) {
+                hint.textContent = 'Use 3–20 characters: letters, numbers, and underscores only.';
+                hint.className = 'username-hint invalid'; input.setAttribute('aria-invalid', 'true'); return false;
+            }
+            hint.textContent = 'Checking username…'; hint.className = 'username-hint';
+            try {
+                const { data, error } = await supabaseClient.functions.invoke('username-auth', { body: { action: 'check', username } });
+                if (error || !data || typeof data.available !== 'boolean') {
+                    hint.textContent = 'Could not verify this username. Please try again.';
+                    hint.className = 'username-hint invalid'; return null;
+                }
+                if (!data.available) {
+                    hint.textContent = 'That username is already taken. Please choose another.';
+                    hint.className = 'username-hint taken'; input.setAttribute('aria-invalid', 'true'); return false;
+                }
+                hint.textContent = 'Username is available'; hint.className = 'username-hint available'; return true;
+            } catch (checkError) {
+                hint.textContent = 'Could not verify this username. Please try again.';
+                hint.className = 'username-hint invalid'; return null;
+            }
+        }
+
         async function handleSignUp(e) {
             e.preventDefault();
             const fullName = document.getElementById('fullName').value.trim();
-            const username = document.getElementById('username').value.trim();
+            const username = document.getElementById('username').value.trim().toLowerCase();
             const phone = document.getElementById('phoneNumber').value.trim();
             const email = document.getElementById('emailAddress').value.trim();
             const password = document.getElementById('signupPassword').value.trim();
@@ -1399,6 +1410,18 @@ html[data-theme="dark"] .logo-word, body[data-theme="dark"] .logo-word { color:#
                 return;
             }
 
+            if (!/^[a-z0-9_]{3,20}$/.test(username)) {
+                showError('Username must be 3–20 characters and use only letters, numbers, and underscores.');
+                document.getElementById('username').focus(); return;
+            }
+            const usernameAvailable = await checkUsernameAvailability();
+            if (usernameAvailable === false) {
+                showError('That username is already taken. Please choose a new username.');
+                document.getElementById('username').focus(); return;
+            }
+            if (usernameAvailable === null) {
+                showError('We could not verify that username. Please try again.'); return;
+            }
             const captchaToken = mjGetCaptchaToken('signup');
             if (!captchaToken) { showError('Please complete the security verification before creating your account.'); return; }
 
@@ -1438,7 +1461,13 @@ html[data-theme="dark"] .logo-word, body[data-theme="dark"] .logo-word { color:#
             if (error) {
                 console.error('signUp error:', error);
                 setAuthButtonLoading(btn, false);
-                showError(formatAuthError(error));
+                const signupErrorText = String(error.message || '').toLowerCase();
+                if (error.code === '23505' || signupErrorText.includes('profiles_username_ci_uidx') || signupErrorText.includes('duplicate key')) {
+                    showError('That username has just been taken. Please choose a new username.');
+                    const hint = document.getElementById('usernameHint');
+                    if (hint) { hint.textContent = 'That username is already taken. Please choose another.'; hint.className = 'username-hint taken'; }
+                    document.getElementById('username').setAttribute('aria-invalid', 'true');
+                } else showError(formatAuthError(error));
                 return;
             }
 
