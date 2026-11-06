@@ -35,13 +35,11 @@
 
   async function apiPush(action, body) {
     const token = await getAccessToken();
-    if (!token) throw new Error('Sign in required');
+    const headers = { 'Content-Type': 'application/json' };
+    if (token) headers.Authorization = 'Bearer ' + token;
     const res = await fetch('/api/admin', {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: 'Bearer ' + token
-      },
+      headers,
       body: JSON.stringify(Object.assign({ resource: 'push', action: action }, body || {}))
     });
     const json = await res.json().catch(() => ({}));
