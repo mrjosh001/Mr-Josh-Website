@@ -2138,7 +2138,7 @@ export default async function handler(req, res) {
 
       const { data: profile } = await supabase
         .from('profiles')
-        .select('id, balance, customer_id, full_name')
+        .select('id, balance, balance_usd, customer_id, full_name')
         .eq('id', auth.userId)
         .single();
       if (!profile) return json(res, 400, { success: false, message: 'Profile not found' });
@@ -2191,13 +2191,10 @@ export default async function handler(req, res) {
         }
         if (dbSvc && Number(dbSvc.price) > 0) price = Number(dbSvc.price);
       } catch (_) {}
+      // The database RPC is authoritative: it atomically allocates NGN, USD,
+      // or both. A NGN-only precheck incorrectly rejected users with USD funds.
       const bal = Number(profile.balance) || 0;
-      if (bal < price) {
-        return json(res, 400, {
-          success: false,
-          message: `Insufficient balance. Need ₦${price.toLocaleString()}, you have ₦${bal.toLocaleString()}`
-        });
-      }
+      const balUsd = Number(profile.balance_usd) || 0;
 
       // Client-supplied idempotency key (same key on double-click = one purchase)
       const clientIdem =
@@ -2248,40 +2245,31 @@ export default async function handler(req, res) {
       } catch (_) {}
 
       const originalBalance = bal;
-      let newBalance = bal - price;
-      // Atomic debit — only one concurrent buy can succeed when balance covers a single number
+      let newBalance = bal;
+      // Fail closed on RPC errors. Never call the supplier if the wallet debit
+      // could not be positively confirmed.
       const { data: debited, error: debErr } = await supabase.rpc('debit_balance_if_sufficient', {
         p_user_id: auth.userId,
         p_amount: price
       });
       if (debErr) {
         console.error('[sms-bus order] debit_balance_if_sufficient', debErr.message);
-        const { data: p2 } = await supabase.from('profiles').select('balance').eq('id', auth.userId).single();
-        const b2 = Number(p2?.balance || 0);
-        if (b2 < price) {
-          return json(res, 400, {
-            success: false,
-            message: `Insufficient balance. Need ₦${price.toLocaleString()}, you have ₦${b2.toLocaleString()}`
-          });
-        }
-        const { error: upErr } = await supabase
-          .from('profiles')
-          .update({ balance: b2 - price })
-          .eq('id', auth.userId)
-          .gte('balance', price);
-        if (upErr) {
-          return json(res, 500, { success: false, message: 'Could not debit balance. Try again.' });
-        }
-        newBalance = b2 - price;
-      } else if (debited === false || debited === null || debited === 0) {
-        return json(res, 400, {
+        return json(res, 500, {
           success: false,
-          message: `Insufficient balance. Need ₦${price.toLocaleString()}, you have ₦${bal.toLocaleString()}`
+          message: 'Could not verify your wallet debit safely. Please try again.'
         });
-      } else {
-        const { data: pAfter } = await supabase.from('profiles').select('balance').eq('id', auth.userId).maybeSingle();
-        if (pAfter) newBalance = Number(pAfter.balance);
       }
+      const debitRow = Array.isArray(debited) ? debited[0] : debited;
+      if (!isDebitOk(debited, null)) {
+        return json(res, 402, {
+          success: false,
+          message: 'Insufficient balance',
+          required: price,
+          available: Number(debitRow?.new_balance ?? bal),
+          available_usd: Number(debitRow?.new_balance_usd ?? balUsd)
+        });
+      }
+      newBalance = Number(debitRow?.new_balance ?? bal - Number(debitRow?.ngn_debited || 0));
 
       const params = {
         country_id: String(country_id),
