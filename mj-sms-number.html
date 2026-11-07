@@ -168,6 +168,25 @@ const GRIZZLY_CANCEL_COOLDOWN_SECONDS = 5 * 60;
 const HERO_CANCEL_COOLDOWN_SECONDS = 2 * 60;
 let CANCEL_COOLDOWN_SECONDS = GRIZZLY_CANCEL_COOLDOWN_SECONDS;
 let orderSource = '';
+ 
+// The Grizzly API verifies every check/cancel request against the Supabase
+// access token. A user_id in the JSON body is not authentication.
+async function getAuthHeaders(){
+  if(!sbClient) throw new Error('Authentication is not ready. Please sign in again.');
+  let { data: { session }, error } = await sbClient.auth.getSession();
+  if(error) throw error;
+  if(!session?.access_token){
+    const refreshed = await sbClient.auth.refreshSession();
+    session = refreshed?.data?.session || null;
+    if(refreshed?.error) throw refreshed.error;
+  }
+  if(!session?.access_token) throw new Error('Your session could not be verified. Please sign in again.');
+  return {
+    'Content-Type': 'application/json',
+    'Authorization': 'Bearer ' + session.access_token
+  };
+}
+
 
 function applyCancelCooldownFromOrder(data) {
   if (!data || typeof data !== 'object') return;
@@ -342,7 +361,7 @@ async function autoRefundOnExpiry(){
   try{
     const res = await fetch(API + '?action=cancel', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: await getAuthHeaders(),
       body: JSON.stringify({ order_id: orderId, user_id: currentUserId })
     });
     const data = await res.json();
@@ -354,7 +373,7 @@ async function autoRefundOnExpiry(){
     // If service already cancelled / check can refund
     const check = await fetch(API + '?action=check', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: await getAuthHeaders(),
       body: JSON.stringify({ order_id: orderId, user_id: currentUserId })
     });
     const checkData = await check.json();
@@ -533,7 +552,7 @@ async function checkStatus(){
   try{
     const res = await fetch(API + '?action=check', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: await getAuthHeaders(),
       body: JSON.stringify({ order_id: orderId, user_id: currentUserId })
     });
     const data = await res.json();
@@ -569,7 +588,7 @@ async function checkNow(){
   if(btn){ btn.disabled = true; btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Checking...'; }
   const res = await fetch(API + '?action=check', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: await getAuthHeaders(),
     body: JSON.stringify({ order_id: orderId, user_id: currentUserId })
   }).catch(() => null);
   checkingNow = false;
@@ -615,7 +634,7 @@ async function cancelOrder(){
   try{
     const res = await fetch(API + '?action=cancel', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: await getAuthHeaders(),
       body: JSON.stringify({ order_id: orderId, user_id: currentUserId })
     });
     const data = await res.json();
