@@ -1546,9 +1546,16 @@ document.getElementById('psBuyBtn').addEventListener('click', async function(){
       return;
     }
 
+    const { data: { session: purchaseSession }, error: sessionError } = await sbClient.auth.getSession();
+    if(sessionError || !purchaseSession?.access_token){
+      showToast('Your session could not be verified. Please sign in again.','error');
+      isBuying = false; btn.disabled = false; btn.innerHTML = originalLabel;
+      return;
+    }
+
     const res = await fetch('/api/grizzly-sync?action=order', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + purchaseSession.access_token },
       body: JSON.stringify((function(){
         var src = (activeService && activeService.source) || (currentCountry && currentCountry.source) || 'grizzlysms';
         var payload = {
