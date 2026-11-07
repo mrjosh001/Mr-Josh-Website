@@ -1090,7 +1090,7 @@ currentBalanceNgn = Number(data.data.new_balance);
 }
 const items = (data.data && data.data.items) ? data.data.items : [];
 var creds = (data.data && data.data.login_credentials) || items.map(function(it){ return it.details; }).filter(Boolean).join('\n\n') || 'Delivered — see My Orders for details';
-creds = formatReceiptCredentials(creds);
+creds = await formatReceiptCredentialsAsync(creds);
 const desc = getDisplayDescription(purchasedProduct);
 const purchasedQty = qtyRequested;
 closePurchaseModal();
@@ -1110,25 +1110,116 @@ if(buyBtn){ buyBtn.disabled = false; buyBtn.innerHTML = originalLabel; }
 }
 
 
-/** Format raw supplier lines for the Purchase Complete modal (Email/Username/Password). */
-function formatReceiptCredentials(raw) {
+/** Same formatter as My Orders — /lib/formatCredentials.js */
+var _receiptFmtMod = null;
+var _receiptFmtPromise = null;
+
+function loadReceiptFormatter() {
+  if (_receiptFmtMod && _receiptFmtMod.formatCredentials) return Promise.resolve(_receiptFmtMod);
+  if (_receiptFmtPromise) return _receiptFmtPromise;
+  _receiptFmtPromise = import('/lib/formatCredentials.js')
+    .then(function (mod) {
+      _receiptFmtMod = {
+        formatCredentials: mod.formatCredentials || mod.default,
+        formatOneAccount: mod.formatOneAccount
+      };
+      return _receiptFmtMod;
+    })
+    .catch(function (err) {
+      console.warn('[mj-logs] formatCredentials load failed', err);
+      _receiptFmtMod = { formatCredentials: null };
+      return _receiptFmtMod;
+    });
+  return _receiptFmtPromise;
+}
+
+// Warm the module as soon as the page is interactive
+try { loadReceiptFormatter(); } catch (e) {}
+
+function looksAlreadyLabeledCreds(s) {
+  var t = String(s || '');
+  var labels = 0;
+  if (/^\s*Facebook\s*UID\s*:/im.test(t)) labels++;
+  if (/^\s*Email\s*:/im.test(t)) labels++;
+  if (/^\s*Username\s*:/im.test(t)) labels++;
+  if (/^\s*Password\s*:/im.test(t)) labels++;
+  if (/^\s*2FA\s*\/\s*Token\s*:/im.test(t) || /^\s*2FA\s*:/im.test(t)) labels++;
+  if (/^\s*Number\s*:/im.test(t)) labels++;
+  if (/^\s*Cookie\s*\/\s*Token\s*:/im.test(t)) labels++;
+  // Already clean labeled block (not the broken "Extra: … Facebook https" mess)
+  if (labels >= 2 && !/Extra\s*:\s*.*https?\s*\/\//i.test(t) && !/\nhttps?\s*\/\//i.test(t)) return true;
+  return false;
+}
+
+function fallbackReceiptFormat(raw) {
   var text = String(raw || '').replace(/\r/g, '').trim();
   if (!text) return '';
-  // Prefer shared formatter (same as My Orders / admin customer view)
-  try {
-    if (typeof window.formatCredentials === 'function') {
-      var rebuilt = window.formatCredentials(text);
-      if (rebuilt && String(rebuilt).trim()) return String(rebuilt).trim();
+  // Minimal colon UID:pass:2fa:url cleanup when lib is offline
+  var parts = text.split('|').map(function (x) { return x.trim(); }).filter(Boolean);
+  if (parts.length < 3) parts = text.split(':').map(function (x) { return x.trim(); }).filter(Boolean);
+  if (parts.length >= 2 && /^\d{10,20}$/.test(parts[0].replace(/\s+/g, ''))) {
+    var lines = ['Facebook UID: ' + parts[0].replace(/\s+/g, ''), 'Password: ' + parts[1]];
+    var urls = [];
+    for (var i = 2; i < parts.length; i++) {
+      var p = parts[i];
+      if (/^https?:\/\//i.test(p) || /^www\./i.test(p)) {
+        urls.push(/^https?:/i.test(p) ? p : 'https://' + p);
+      } else if (/profile\.php|facebook\.com/i.test(p)) {
+        urls.push(p.indexOf('http') === 0 ? p : 'https://' + p.replace(/^\/+/, ''));
+      } else if (p && !/^(Facebook|Page)$/i.test(p)) {
+        if (!lines.some(function (l) { return l.indexOf('2FA') === 0; }) && /^[A-Za-z0-9]{8,}$/.test(p.replace(/\s+/g, ''))) {
+          lines.push('2FA / Token: ' + p.replace(/\s+/g, '').replace(/(.{4})/g, '$1 ').trim());
+        } else if (!/^https?/i.test(p)) {
+          /* keep non-url residual only if useful */
+        }
+      }
     }
-  } catch (e) {}
-  // Fallback: light cleanup only
-  text = text.replace(/(^|\n)\s*E\s*[-–—]?\s*mail\b/gi, '$1Email');
-  text = text.replace(/^(\s*Email:\s*)([^\s:]+@[^\s:]+)\s*:\s*([^\n|]+)/gim, function(_, p, email, pass) {
-    return p + email + '\nPassword: ' + pass.trim();
-  });
+    urls.forEach(function (u, idx) {
+      if (/profile\.php|\/pages?\//i.test(u)) lines.push('Page: ' + u);
+      else lines.push((idx === 0 ? 'Profile: ' : 'Link: ') + u);
+    });
+    return lines.join('\n');
+  }
   return text;
 }
 
+function formatReceiptCredentials(raw) {
+  var text = String(raw || '').replace(/\r/g, '').trim();
+  if (!text) return '';
+  if (looksAlreadyLabeledCreds(text)) {
+    // Still tidy broken URL wraps from older formatter output
+    text = text
+      .replace(/https?\s*\n\s*\/\//gi, 'https://')
+      .replace(/\n(www\.)/gi, '\nhttps://$1');
+    return text;
+  }
+  // Sync path: use cached module if already loaded
+  if (_receiptFmtMod && typeof _receiptFmtMod.formatCredentials === 'function') {
+    try {
+      var out = _receiptFmtMod.formatCredentials(text);
+      if (out && String(out).trim()) return String(out).trim();
+    } catch (e) {}
+  }
+  return fallbackReceiptFormat(text);
+}
+
+async function formatReceiptCredentialsAsync(raw) {
+  var text = String(raw || '').replace(/\r/g, '').trim();
+  if (!text) return '';
+  if (looksAlreadyLabeledCreds(text)) {
+    return text
+      .replace(/https?\s*\n\s*\/\//gi, 'https://')
+      .replace(/\n(www\.)/gi, '\nhttps://$1');
+  }
+  try {
+    var mod = await loadReceiptFormatter();
+    if (mod && typeof mod.formatCredentials === 'function') {
+      var out = mod.formatCredentials(text);
+      if (out && String(out).trim()) return String(out).trim();
+    }
+  } catch (e) {}
+  return formatReceiptCredentials(text);
+}
 
 function openReceiptModal(p, desc, creds, qty, orderId){
 document.getElementById('rcName').textContent = cleanText(p.name||'Product');
@@ -1189,10 +1280,6 @@ loadProducts();
 })();
 </script>
 
-  <script type="module">
-  import { formatCredentials } from '/lib/formatCredentials.js';
-  window.formatCredentials = formatCredentials;
-</script>
   <script src="/js/haptic.js" defer></script>
 </body>
 </html>
