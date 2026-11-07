@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <title>Get the MJ HUB App</title>
+  <title>Select Your Device | MJ HUB</title>
   <meta name="description" content="Install MJ HUB on your phone. Works like a native app — install from your browser.">
   <meta name="theme-color" content="#06080f">
   <link rel="manifest" href="/manifest.json">
@@ -107,13 +107,12 @@
     </section>
 
     <section class="panel" id="chooseDevice">
-      <h2>Choose your device</h2>
-      <p class="intro">Pick your phone so we can show the exact install steps.</p>
+      <h2>Select Your Device</h2>
+      <p class="intro">Choose your device to see the correct MJ HUB installation guide.</p>
       <div class="device-row">
         <button type="button" class="device-btn" data-device="ios">iPhone / iPad</button>
         <button type="button" class="device-btn" data-device="android">Android</button>
       </div>
-      <button type="button" class="btn btn-ghost" id="backToMain">← Back</button>
     </section>
 
     <section class="panel" id="iosGuide">
@@ -145,25 +144,15 @@
 <script>
 (function () {
   var installPrompt = null;
-  var mainCard = document.getElementById('mainCard');
   var chooseDevice = document.getElementById('chooseDevice');
   var iosGuide = document.getElementById('iosGuide');
   var androidGuide = document.getElementById('androidGuide');
-  var installCta = document.getElementById('installCta');
   var androidInstall = document.getElementById('androidInstall');
-  var ua = navigator.userAgent || '';
-  var isIOS = /iPhone|iPad|iPod/i.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
-  var isAndroid = /Android/i.test(ua);
 
   function hideAll() {
-    mainCard.style.display = 'none';
     chooseDevice.classList.remove('show');
     iosGuide.classList.remove('show');
     androidGuide.classList.remove('show');
-  }
-  function showMain() {
-    hideAll();
-    mainCard.style.display = 'block';
   }
   function showChoose() {
     hideAll();
@@ -182,27 +171,17 @@
   });
   window.addEventListener('appinstalled', function () {
     installPrompt = null;
-    if (androidInstall) {
+    // Always start with the device selector. Never auto-open a guide based on user-agent detection.
+  showChoose();
+
+  if (androidInstall) {
       androidInstall.textContent = 'MJ HUB installed ✓';
       androidInstall.disabled = true;
     }
   });
 
-  installCta.addEventListener('click', function () {
-    if (installPrompt && isAndroid) {
-      installPrompt.prompt();
-      installPrompt.userChoice.then(function (c) {
-        installPrompt = null;
-        if (!c || c.outcome !== 'accepted') showDevice('android');
-      }).catch(function () { showDevice('android'); });
-      return;
-    }
-    if (isIOS) { showDevice('ios'); return; }
-    if (isAndroid) { showDevice('android'); return; }
-    showChoose();
-  });
 
-  document.getElementById('backToMain').addEventListener('click', showMain);
+
   document.querySelectorAll('[data-device]').forEach(function (btn) {
     btn.addEventListener('click', function () { showDevice(btn.getAttribute('data-device')); });
   });
