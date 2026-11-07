@@ -32,8 +32,8 @@
       <p>Add MJ HUB to your home screen for quick, app-like access to your account and services. Choose your device below and follow the guide.</p>
     </section>
     <section class="card" aria-labelledby="chooseTitle">
-      <h2 class="choose-title" id="chooseTitle">Which device are you using?</h2>
-      <p class="choose-copy">Select your phone to get the correct installation steps.</p>
+      <h2 class="choose-title" id="chooseTitle">Select your app</h2>
+      <p class="choose-copy">Choose Android or iPhone/iPad. We’ll show only the installation guide for your selection.</p>
       <div class="devices" id="deviceChoices">
         <button class="device" type="button" data-device="android" aria-pressed="false">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M6 8h12v10a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2V8Z"/><path d="m8 5-2-3m10 3 2-3M4 9v7m16-7v7M9 11v2m6-2v2M6 8a6 6 0 0 1 12 0"/></svg>
@@ -147,11 +147,7 @@
     });
   }
 
-  var ua = navigator.userAgent || '';
-  var isIOS = /iPhone|iPad|iPod/i.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
-  var isAndroid = /Android/i.test(ua);
-  if(isIOS) selectDevice('ios');
-  else if(isAndroid) selectDevice('android');
+  // Always show the app selector first. The user chooses which guide to view.
 })();
 </script>
 </body>
