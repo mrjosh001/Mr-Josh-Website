@@ -11,6 +11,9 @@ import { applyApiCors, handleOptions, requireAdminOrCron } from '../lib/secure.j
  * GET  /api/sujan   → sync catalog into Supabase products (was products-sujan.js, admin button)
  * POST /api/sujan   → buy a product / deliver credentials (was order-sujan.js)
  *
+ * SYNC: name + description always refresh from Sujan (IDs get reused).
+ * STICKY: selling price, category, admin_hidden.
+ * ORDER: live name check blocks buy when supplier retitled the id.
  * LIVE ON THE STOREFRONT: is_available now follows real stock (stock > 0),
  * the same convention as Fadded and Logs Domain — Sujan products can appear
  * on index.html / mj-logs.html as soon as they sync in with stock. (Earlier
@@ -84,7 +87,37 @@ function applyRandomMarkup(supplierPrice) {
 // categories (e.g. "SOCIAL NETWORKS ACCOUNTS" from one supplier and
 // products silently falling to "OTHER" from another for the exact same
 // kind of item). If you add a rule here, add it to the other two as well.
+/** Normalize for product-title comparison */
+function sujanNormName(s) {
+  return String(s || '')
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+/**
+ * True when listed title and live supplier title look like different products.
+ * Allows minor renames; blocks Facebook→Instagram style swaps on the same id.
+ */
+function sujanNamesMismatch(listed, live) {
+  const a = sujanNormName(listed);
+  const b = sujanNormName(live);
+  if (!a || !b) return false;
+  if (a === b) return false;
+  if (a.includes(b) || b.includes(a)) return false;
+  const ta = new Set(a.split(' ').filter((t) => t.length > 2));
+  const tb = new Set(b.split(' ').filter((t) => t.length > 2));
+  if (!ta.size || !tb.size) return false;
+  let inter = 0;
+  for (const tok of ta) if (tb.has(tok)) inter++;
+  const union = ta.size + tb.size - inter;
+  // Less than 30% token overlap → treat as different product
+  return union > 0 && inter / union < 0.3;
+}
+
 function categorize(name) {
+
   const n = (name || '').toUpperCase();
   if (n.includes('PROXY')) return '9PROXY (IPS)';
   if (n.includes('VPN') && n.includes('PHONE')) return 'PREMIUM VPN FOR PHONE';
@@ -188,20 +221,30 @@ async function handleSync(req, res) {
 
     const { data: existing } = await supabase
       .from('products')
-      .select('product_key, admin_hidden')
+      .select('product_key, admin_hidden, name, description, display_description')
       .eq('product_key', productKey)
       .maybeSingle();
 
     if (existing) {
-      // EXISTING: only supplier cost + stock + availability.
-      // Never overwrite admin name, price, category, or descriptions.
+      // EXISTING: always refresh NAME + DESCRIPTION from supplier.
+      // Sujan reuses product IDs when they swap catalog items — sticky names
+      // caused customers to buy one title and receive a different product.
+      // STILL sticky: selling price, category, admin_hidden.
       updatedCount++;
       const patch = {
         supplier_price: supplierPrice,
         stock_quantity: stock,
         source: 'sujandepartment',
+        name, // critical — must match what supplier will deliver for this id
+        description: cleanDescription,
         updated_at: new Date().toISOString()
       };
+      // Keep admin custom display_description if they changed it; otherwise track supplier
+      const prevDesc = String(existing.description || '').trim();
+      const prevDisplay = String(existing.display_description || '').trim();
+      if (!prevDisplay || prevDisplay === prevDesc) {
+        patch.display_description = cleanDescription;
+      }
       if (stock <= 0) patch.is_available = false;
       else if (existing.admin_hidden) { /* admin hid — stay hidden */ }
       else patch.is_available = true;
@@ -408,6 +451,72 @@ async function handleOrder(req, res) {
 
     if (prodErr || !product) {
       return res.status(404).json({ success: false, message: 'Product not found' });
+    }
+
+    // Live identity check — Sujan may have retitled this product_id since last sync.
+    // If the supplier name no longer matches what we listed, refuse the buy so the
+    // customer is not charged for a different product.
+    try {
+      const verifyRes = await fetch(`${BASE}/reseller/v1/products/${productId}`, {
+        method: 'GET',
+        headers: {
+          Authorization: `Bearer ${SUJAN_KEY}`,
+          Accept: 'application/json'
+        }
+      });
+      if (verifyRes.ok) {
+        const liveJson = await verifyRes.json().catch(() => ({}));
+        const liveObj = liveJson?.data || liveJson?.product || liveJson;
+        const liveName = String(
+          (liveObj && (liveObj.name || liveObj.title)) || ''
+        ).trim();
+        const liveDesc = stripHtml(
+          (liveObj && (liveObj.description || '')) || ''
+        );
+        if (liveName) {
+          const listed = String(product.name || '').trim();
+          if (sujanNamesMismatch(listed, liveName)) {
+            // Refresh DB so the storefront shows the real title next load
+            await supabase
+              .from('products')
+              .update({
+                name: liveName,
+                description: liveDesc || product.description,
+                updated_at: new Date().toISOString()
+              })
+              .eq('product_key', product_key);
+            console.warn(
+              '[sujan] blocked buy — name mismatch',
+              product_key,
+              'listed=',
+              listed,
+              'live=',
+              liveName
+            );
+            return res.status(409).json({
+              success: false,
+              message:
+                'This product was updated by the supplier. Please refresh the page and try again.',
+              code: 'PRODUCT_CHANGED'
+            });
+          }
+          // Soft drift (same product, minor rename) — keep DB in sync
+          if (listed && liveName && listed !== liveName) {
+            await supabase
+              .from('products')
+              .update({
+                name: liveName,
+                description: liveDesc || product.description,
+                updated_at: new Date().toISOString()
+              })
+              .eq('product_key', product_key);
+            product.name = liveName;
+          }
+        }
+      }
+    } catch (verifyErr) {
+      console.warn('[sujan] live product verify failed', verifyErr?.message || verifyErr);
+      // Non-fatal — proceed with DB listing if supplier verify is down
     }
 
     total = Number(product.price) * qty;
