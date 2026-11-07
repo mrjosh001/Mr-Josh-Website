@@ -2022,6 +2022,34 @@ body {
   .mobile-menu .nav-sub-toggle { transition: none !important; }
 }
 
+
+/* ===== MJ HUB MOBILE APP INSTALL GUIDE ===== */
+#mjMobileInstallGuide { position:fixed; inset:0; z-index:2147483100; display:none; align-items:center; justify-content:center; padding:18px; background:rgba(2,8,23,.72); -webkit-backdrop-filter:blur(12px); backdrop-filter:blur(12px); }
+#mjMobileInstallGuide.is-open { display:flex; }
+#mjMobileInstallGuide .mj-install-card { width:min(460px,100%); max-height:min(88dvh,760px); overflow:auto; -webkit-overflow-scrolling:touch; border:1px solid rgba(148,163,184,.22); border-radius:25px; padding:22px; color:#eaf1ff; background:radial-gradient(circle at 100% 0%,rgba(59,130,246,.2),transparent 42%),linear-gradient(160deg,#14213d,#080f20); box-shadow:0 30px 90px rgba(0,0,0,.48); }
+#mjMobileInstallGuide .mj-install-head { display:flex; align-items:center; gap:12px; }
+#mjMobileInstallGuide .mj-install-head img { width:46px;height:46px;object-fit:contain;border-radius:13px;background:#fff;padding:3px; }
+#mjMobileInstallGuide .mj-install-head h2 { font-size:19px;line-height:1.2;font-weight:800;color:#fff; }
+#mjMobileInstallGuide .mj-install-sub { margin:12px 0 18px;color:#aebbd3;font-size:13px;line-height:1.55; }
+#mjMobileInstallGuide .mj-install-close { margin-left:auto;width:36px;height:36px;border-radius:50%;border:1px solid rgba(255,255,255,.16);background:rgba(255,255,255,.08);color:#fff;font-size:18px;cursor:pointer; }
+#mjMobileInstallGuide .mj-device-choices { display:grid;grid-template-columns:1fr 1fr;gap:12px; }
+#mjMobileInstallGuide .mj-device-choice { min-height:112px;border:1px solid rgba(148,163,184,.25);border-radius:17px;background:rgba(255,255,255,.055);color:#eaf1ff;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;font:700 14px Inter,system-ui,sans-serif;cursor:pointer; }
+#mjMobileInstallGuide .mj-device-choice:focus-visible,#mjMobileInstallGuide button:focus-visible { outline:3px solid #7db0ff;outline-offset:3px; }
+#mjMobileInstallGuide .mj-device-choice svg { width:29px;height:29px; }
+#mjMobileInstallGuide .mj-device-choice:hover { background:rgba(59,130,246,.16);border-color:rgba(96,165,250,.65); }
+#mjMobileInstallGuide .mj-install-steps { display:none; }
+#mjMobileInstallGuide .mj-install-steps.is-visible { display:block; }
+#mjMobileInstallGuide .mj-install-back { border:0;background:none;color:#9fc1ff;font:700 13px Inter,system-ui,sans-serif;padding:0;margin:0 0 14px;cursor:pointer; }
+#mjMobileInstallGuide .mj-install-steps h3 { margin:0 0 6px;font-size:17px;color:#fff; }
+#mjMobileInstallGuide .mj-install-steps .mj-guide-note { color:#aebbd3;font-size:12px;line-height:1.55;margin:0 0 14px; }
+#mjMobileInstallGuide .mj-guide-step { display:flex;gap:12px;align-items:flex-start;padding:12px;margin:0 0 9px;border-radius:14px;background:rgba(59,130,246,.1);border:1px solid rgba(96,165,250,.2); }
+#mjMobileInstallGuide .mj-guide-num { flex:0 0 27px;width:27px;height:27px;display:grid;place-items:center;border-radius:9px;background:#3478f6;color:#fff;font-size:12px;font-weight:800; }
+#mjMobileInstallGuide .mj-guide-step b { display:block;margin:1px 0 3px;color:#f8fbff;font-size:13px; }
+#mjMobileInstallGuide .mj-guide-step p { color:#b4c1d8;font-size:12px;line-height:1.5;margin:0; }
+#mjMobileInstallGuide .mj-install-action { width:100%;min-height:47px;margin-top:9px;border:0;border-radius:13px;background:#3478f6;color:#fff;font:750 14px Inter,system-ui,sans-serif;cursor:pointer; }
+#mjMobileInstallGuide .mj-install-foot { color:#8494af;font-size:11px;line-height:1.5;margin:13px 0 0;text-align:center; }
+@media(max-width:380px) { #mjMobileInstallGuide .mj-install-card { padding:18px; } #mjMobileInstallGuide .mj-device-choice { min-height:96px; } }
+
 </style>
 <script defer src="/_vercel/insights/script.js"></script>
   <link rel="stylesheet" href="css/skeleton.css">
@@ -2156,6 +2184,11 @@ body {
         <a href="support.html">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 15a8 8 0 1 1 16 0"/><path d="M4 15v3a2 2 0 0 0 2 2h1v-5H4zM20 15v3a2 2 0 0 1-2 2h-1v-5h3z"/></svg>
           Support
+        </a>
+        <a href="#mobile-app-install" id="landingMobileAppLink" data-open-mobile-guide data-close-menu>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="6" y="2.5" width="12" height="19" rx="2"/><path d="M10 18.5h4"/></svg>
+          Mobile App
+          <span style="margin-left:auto;font-size:10px;font-weight:700;color:#a9c7ff;background:rgba(59,130,246,.2);padding:4px 8px;border-radius:999px;">INSTALL</span>
         </a>
         <a href="/vendor" data-close-menu>
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 7h18l-2 11H5L3 7z"/><path d="M8 7V5a4 4 0 0 1 8 0v2"/></svg>
@@ -3352,6 +3385,135 @@ document.addEventListener('DOMContentLoaded', () => {
   } else {
     setTimeout(run, 300);
   }
+})();
+</script>
+
+
+<script>
+/* MJ HUB mobile web-app installation guide */
+(function(){
+  'use strict';
+  var deferredInstallPrompt = null;
+  window.addEventListener('beforeinstallprompt', function(event){
+    event.preventDefault();
+    deferredInstallPrompt = event;
+  });
+
+  function detectDevice(){
+    var ua = navigator.userAgent || '';
+    if (/iPhone|iPad|iPod/i.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)) return 'ios';
+    if (/Android/i.test(ua)) return 'android';
+    return '';
+  }
+
+  function init(){
+    if (document.getElementById('mjMobileInstallGuide')) return;
+    var overlay = document.createElement('div');
+    overlay.id = 'mjMobileInstallGuide';
+    overlay.setAttribute('role','dialog');
+    overlay.setAttribute('aria-modal','true');
+    overlay.setAttribute('aria-labelledby','mjInstallTitle');
+    overlay.innerHTML =
+      '<section class="mj-install-card" role="document">' +
+        '<div class="mj-install-head">' +
+          '<img src="/img/IMG_3027.png" alt="MJ HUB logo">' +
+          '<div><h2 id="mjInstallTitle">Install the MJ HUB app</h2><div style="font-size:11px;color:#91a6c9;margin-top:3px;">A faster app-like experience on your phone</div></div>' +
+          '<button type="button" class="mj-install-close" id="mjInstallClose" aria-label="Close installation guide">×</button>' +
+        '</div>' +
+        '<p class="mj-install-sub" id="mjInstallIntro">Choose your phone type to see the correct installation instructions.</p>' +
+        '<div class="mj-device-choices" id="mjDeviceChoices">' +
+          '<button type="button" class="mj-device-choice" data-device="android"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M6 8h12v10a2 2 0 0 1-2 2h-8a2 2 0 0 1-2-2V8Z"/><path d="m8 5-2-3m10 3 2-3M4 9v7m16-7v7M9 11v2m6-2v2M6 8a6 6 0 0 1 12 0"/></svg>Android</button>' +
+          '<button type="button" class="mj-device-choice" data-device="ios"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="5" y="2" width="14" height="20" rx="3"/><path d="M10 18.5h4"/></svg>iPhone / iPad</button>' +
+        '</div>' +
+        '<div class="mj-install-steps" id="mjAndroidGuide">' +
+          '<button type="button" class="mj-install-back" data-guide-back>← Choose another device</button>' +
+          '<h3>Install on Android</h3><p class="mj-guide-note">For the best result, open <b>www.mjhub.store</b> in Google Chrome. Keep your internet connection on during installation.</p>' +
+          '<div class="mj-guide-step"><span class="mj-guide-num">1</span><div><b>Open MJ HUB in Chrome</b><p>Visit www.mjhub.store using Google Chrome. If this page is open in another app, use its menu to open it in Chrome.</p></div></div>' +
+          '<div class="mj-guide-step"><span class="mj-guide-num">2</span><div><b>Open the browser menu</b><p>Tap the three dots (⋮) in the top-right corner of Chrome.</p></div></div>' +
+          '<div class="mj-guide-step"><span class="mj-guide-num">3</span><div><b>Tap “Install app” or “Add to Home screen”</b><p>The wording depends on your Android device and browser. If Chrome shows an install banner, you can use that instead.</p></div></div>' +
+          '<div class="mj-guide-step"><span class="mj-guide-num">4</span><div><b>Confirm installation</b><p>Tap Install or Add. Wait for the process to finish, then find the MJ HUB icon in your app list or on your home screen.</p></div></div>' +
+          '<div class="mj-guide-step"><span class="mj-guide-num">5</span><div><b>Open MJ HUB</b><p>Tap the new icon to launch MJ HUB in its app-style window. Sign in with your existing account.</p></div></div>' +
+          '<button type="button" class="mj-install-action" id="mjAndroidInstall">Install MJ HUB now</button>' +
+          '<p class="mj-install-foot" id="mjAndroidHint">If the button is unavailable, use the Chrome menu steps above. On Samsung Internet, open the menu and choose “Add page to” → “Home screen”.</p>' +
+        '</div>' +
+        '<div class="mj-install-steps" id="mjIosGuide">' +
+          '<button type="button" class="mj-install-back" data-guide-back>← Choose another device</button>' +
+          '<h3>Install on iPhone or iPad</h3><p class="mj-guide-note">On iPhone and iPad, installation is done through <b>Safari</b>. It does not require an App Store download.</p>' +
+          '<div class="mj-guide-step"><span class="mj-guide-num">1</span><div><b>Open Safari</b><p>Open Safari and visit www.mjhub.store. If you are viewing this page in another browser or inside an app, copy the address and open it in Safari.</p></div></div>' +
+          '<div class="mj-guide-step"><span class="mj-guide-num">2</span><div><b>Tap the Share button</b><p>Tap the Share icon (a square with an upward arrow). It is usually at the bottom of the screen, or near the address bar depending on your iOS version.</p></div></div>' +
+          '<div class="mj-guide-step"><span class="mj-guide-num">3</span><div><b>Choose “Add to Home Screen”</b><p>Scroll through the share options if necessary. If the option is not visible, scroll to the bottom, tap “Edit Actions” and add it if available.</p></div></div>' +
+          '<div class="mj-guide-step"><span class="mj-guide-num">4</span><div><b>Confirm by tapping “Add”</b><p>You can keep the suggested MJ HUB name. Tap Add in the top-right corner.</p></div></div>' +
+          '<div class="mj-guide-step"><span class="mj-guide-num">5</span><div><b>Launch from your Home Screen</b><p>Return to your Home Screen, tap the MJ HUB icon, and sign in. You can now open it like an app.</p></div></div>' +
+          '<p class="mj-install-foot">Important: use Safari for this iPhone installation method. The guide will not install a separate App Store app.</p>' +
+        '</div>' +
+        '<p class="mj-install-foot" id="mjInstallDisclaimer">MJ HUB installs as a web app (PWA) from the official website. No APK or separate App Store download is needed.</p>' +
+      '</section>';
+    document.body.appendChild(overlay);
+
+    var choices = overlay.querySelector('#mjDeviceChoices');
+    var intro = overlay.querySelector('#mjInstallIntro');
+    var androidGuide = overlay.querySelector('#mjAndroidGuide');
+    var iosGuide = overlay.querySelector('#mjIosGuide');
+    var androidInstall = overlay.querySelector('#mjAndroidInstall');
+
+    function showChoice(){
+      choices.style.display = 'grid';
+      androidGuide.classList.remove('is-visible');
+      iosGuide.classList.remove('is-visible');
+      intro.textContent = 'Choose your phone type to see the correct installation instructions.';
+      overlay.querySelector('#mjInstallDisclaimer').style.display = 'block';
+    }
+    function showGuide(device){
+      choices.style.display = 'none';
+      androidGuide.classList.toggle('is-visible', device === 'android');
+      iosGuide.classList.toggle('is-visible', device === 'ios');
+      intro.textContent = device === 'ios' ? 'Follow these steps in Safari to add MJ HUB to your iPhone or iPad Home Screen.' : 'Follow these steps in Chrome or your Android browser to add MJ HUB to your home screen.';
+      overlay.querySelector('#mjInstallDisclaimer').style.display = 'none';
+    }
+    function close(){
+      overlay.classList.remove('is-open');
+      document.body.style.overflow = '';
+    }
+    overlay.querySelectorAll('[data-device]').forEach(function(button){
+      button.addEventListener('click', function(){ showGuide(button.getAttribute('data-device')); });
+    });
+    overlay.querySelectorAll('[data-guide-back]').forEach(function(button){ button.addEventListener('click', showChoice); });
+    overlay.querySelector('#mjInstallClose').addEventListener('click', close);
+    overlay.addEventListener('click', function(e){ if(e.target === overlay) close(); });
+    document.addEventListener('keydown', function(e){ if(e.key === 'Escape' && overlay.classList.contains('is-open')) close(); });
+    androidInstall.addEventListener('click', async function(){
+      if (!deferredInstallPrompt) {
+        document.getElementById('mjAndroidHint').textContent = 'No direct install prompt is available in this browser right now. Open Chrome’s ⋮ menu and choose “Install app” or “Add to Home screen”.';
+        return;
+      }
+      try {
+        deferredInstallPrompt.prompt();
+        await deferredInstallPrompt.userChoice;
+        deferredInstallPrompt = null;
+      } catch (e) {
+        document.getElementById('mjAndroidHint').textContent = 'Use Chrome’s ⋮ menu and choose “Install app” or “Add to Home screen”.';
+      }
+    });
+
+    window.MJHubOpenInstallGuide = function(){
+      showChoice();
+      var device = detectDevice();
+      if (device) showGuide(device);
+      overlay.classList.add('is-open');
+      document.body.style.overflow = 'hidden';
+      var focusTarget = overlay.querySelector('.mj-install-close');
+      if (focusTarget) focusTarget.focus();
+    };
+    document.addEventListener('click', function(e){
+      var trigger = e.target.closest && e.target.closest('[data-open-mobile-guide]');
+      if (!trigger) return;
+      e.preventDefault();
+      window.setTimeout(function(){ window.MJHubOpenInstallGuide(); }, 30);
+    });
+  }
+
+  if(document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
+  else init();
 })();
 </script>
 
