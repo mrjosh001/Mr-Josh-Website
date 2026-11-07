@@ -849,8 +849,19 @@ async function handleOrder(req, res) {
       qs.set('maxPrice', String(Number(supplierPriceUsd)));
     }
 
-    const supplierRes = await fetch(`${sup.base}?${qs.toString()}`, { method: 'GET' });
-    const rawText = await supplierRes.text();
+    let supplierRes = await fetch(`${sup.base}?${qs.toString()}`, { method: 'GET' });
+    let rawText = await supplierRes.text();
+
+    // If the selected Grizzly pool is empty, make one bounded fallback request
+    // across other pools, still capped at the selected pool's USD maxPrice.
+    // This avoids a premature "no numbers" response without charging for a
+    // more expensive supplier tier or issuing repeated purchases.
+    if (SOURCE === 'grizzlysms' && resolvedProviderId && rawText.trim() === 'NO_NUMBERS') {
+      qs.delete('providerIds');
+      await new Promise(r => setTimeout(r, 350));
+      supplierRes = await fetch(`${sup.base}?${qs.toString()}`, { method: 'GET' });
+      rawText = await supplierRes.text();
+    }
 
     let orderData = null;
     let failureReason = null;
@@ -2626,11 +2637,19 @@ async function vsHandleOrder(req, res) {
     deducted = true;
 
     let r = await vsReq('/customer/purchase', { method: 'POST', body: { service: serviceId, country: iso }, timeoutMs: 30000 });
-    // The catalog now includes VoIP-backed stock (docs: include_voip=true). If the plain purchase finds no
-    // (physical) number, retry once asking for VoIP too, so a listed VoIP row can actually be bought.
-    if (!r.ok && VS_INCLUDE_VOIP && r.status !== 402 && r.status !== 401 && r.status !== 429) {
+    // Only retry when VirtualSMS explicitly reports no stock. A timeout or
+    // ambiguous response is NOT retried because the first request may have
+    // created an order whose response was lost.
+    const firstPayload = r.json || {};
+    const firstError = String(firstPayload.error || firstPayload.message || '').toLowerCase();
+    const firstOrderId = firstPayload.order_id || firstPayload.id || firstPayload.order?.order_id || firstPayload.order?.id;
+    const firstNoStock = r.status === 404 || r.status === 409 ||
+      /no[_ ]numbers|not[_ ]available|out[_ ]of[_ ]stock|no stock/.test(firstError);
+    if (!firstOrderId && firstNoStock && VS_INCLUDE_VOIP && r.status !== 401 && r.status !== 402 && r.status !== 429) {
+      await new Promise(resolve => setTimeout(resolve, 350));
       const r2 = await vsReq('/customer/purchase', { method: 'POST', body: { service: serviceId, country: iso, include_voip: true }, timeoutMs: 30000 });
-      if (r2.ok) r = r2;
+      const retryOrderId = r2.json?.order_id || r2.json?.id || r2.json?.order?.order_id || r2.json?.order?.id;
+      if (retryOrderId) r = r2;
     }
     const j = r.json || {};
     const orderId = j.order_id || j.id || (j.order && (j.order.order_id || j.order.id));
