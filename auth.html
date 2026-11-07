@@ -959,6 +959,129 @@ html[data-theme="dark"] .logo-word, body[data-theme="dark"] .logo-word { color:#
     </footer>
 
     <script>
+(function(){
+    'use strict';
+    var siteKey = '0x4AAAAAAF0CXjc8jL8djc4l';
+    var widgetId = null, widgetKind = '', tokens = {signin:'',signup:''};
+    var apiPromise = null, loadTimeout = null, failed = false, currentAttempt = 0;
+
+    function containerFor(kind){return document.getElementById(kind==='signup'?'mjSignupCaptcha':'mjSigninCaptcha');}
+    /* No extra "Verified" label: Turnstile's own widget is the verification UI. */
+    function state(kind,message,tone){ /* intentionally silent */ }
+    function destroy(){
+        if(widgetId!==null&&window.turnstile){try{window.turnstile.remove(widgetId);}catch(e){}}
+        if(widgetKind){
+            tokens[widgetKind]='';
+            var old=containerFor(widgetKind);
+            if(old)old.replaceChildren();
+            state(widgetKind,'');
+        }
+        widgetId=null;widgetKind='';
+    }
+    function apiReady(){
+        if(window.turnstile&&typeof window.turnstile.render==='function'){
+            return new Promise(function(resolve){try{window.turnstile.ready(function(){resolve(window.turnstile);});}catch(e){resolve(window.turnstile);}});
+        }
+        if(apiPromise)return apiPromise;
+        apiPromise=new Promise(function(resolve,reject){
+            var script=document.getElementById('mjTurnstileApi');
+            if(!script||failed){
+                if(script&&failed)script.remove();
+                script=document.createElement('script');script.id='mjTurnstileApi';
+                script.src='https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit';
+                script.async=true;script.defer=true;document.head.appendChild(script);
+            }
+            var settled=false;
+            function finish(error){
+                if(settled)return;settled=true;
+                if(loadTimeout)clearTimeout(loadTimeout);loadTimeout=null;
+                if(error){failed=true;apiPromise=null;reject(error);return;}
+                failed=false;
+                try{window.turnstile.ready(function(){resolve(window.turnstile);});}catch(e){resolve(window.turnstile);}
+            }
+            script.addEventListener('load',function(){finish(window.turnstile?null:new Error('Turnstile API did not initialise'));},{once:true});
+            script.addEventListener('error',function(){finish(new Error('Turnstile script failed to load'));},{once:true});
+            loadTimeout=setTimeout(function(){finish(new Error('Turnstile load timed out'));},12000);
+            if(window.turnstile)finish(null);
+        });
+        return apiPromise;
+    }
+    function render(kind,api,attempt){
+        if(attempt!==currentAttempt)return;
+        var el=containerFor(kind);
+        if(!el||!el.closest('form')||el.closest('form').classList.contains('hidden'))return;
+        if(widgetId!==null&&widgetKind===kind)return;
+        destroy();el.replaceChildren();state(kind,'');
+        try{
+            widgetKind=kind;
+            widgetId=api.render(el,{
+                sitekey:siteKey,theme:'auto',appearance:'always',execution:'render',
+                retry:'auto','retry-interval':8000,'refresh-expired':'auto','refresh-timeout':'auto',
+                callback:function(token){
+                    if(widgetKind===kind){
+                        tokens[kind]=token||'';
+                        if(tokens[kind]){
+                            state(kind,'Verified','success');
+                        }else{
+                            state(kind,'Verification did not return a token. Please try again.','error');
+                        }
+                    }
+                },
+                'expired-callback':function(){tokens[kind]='';state(kind,'Verification expired. Please complete the check again.','error');},
+                'timeout-callback':function(){tokens[kind]='';state(kind,'Verification timed out. Please complete the check again.','error');},
+                'error-callback':function(code){
+                    tokens[kind]='';
+                    var errorCode=String(code||'unknown');
+                    console.warn('[MJ HUB] Turnstile client error code:',errorCode);
+                    state(kind,'Cloudflare verification is retrying. Reference: '+errorCode,'error');
+                    // Return false so Turnstile retains its normal retry/logging behaviour.
+                    // Do not raise a toast for every transient retry.
+                    return false;
+                }
+            });
+            if(widgetId===undefined||widgetId===null){widgetId=null;widgetKind='';state(kind,'Unable to start security verification. Please refresh and try again.');}
+        }catch(error){widgetId=null;widgetKind='';state(kind,'Unable to start security verification. Please refresh and try again.');console.error('[MJ HUB] Turnstile render failed:',error);}
+    }
+    window.mjTurnstileVerified=function(kind,token){if(Object.prototype.hasOwnProperty.call(tokens,kind))tokens[kind]=token||'';};
+    window.mjTurnstileExpired=function(kind){if(Object.prototype.hasOwnProperty.call(tokens,kind))tokens[kind]='';};
+    window.mjTurnstileFailed=function(kind){if(Object.prototype.hasOwnProperty.call(tokens,kind))tokens[kind]='';};
+    window.mjGetCaptchaToken=function(kind){
+        if(!Object.prototype.hasOwnProperty.call(tokens,kind))return '';
+        if(tokens[kind])return tokens[kind];
+        if(window.turnstile&&widgetId!==null&&widgetKind===kind){
+            try{var response=window.turnstile.getResponse(widgetId);if(response){tokens[kind]=response;return response;}}catch(e){}
+        }
+        return '';
+    };
+    window.mjResetCaptcha=function(kind){
+        if(!Object.prototype.hasOwnProperty.call(tokens,kind))return;tokens[kind]='';
+        if(window.turnstile&&widgetId!==null&&widgetKind===kind){try{window.turnstile.reset(widgetId);}catch(e){}}
+    };
+    window.mjDestroyCaptcha=destroy;
+    window.mjEnsureCaptcha=function(kind){
+        if(kind!=='signup'&&kind!=='signin')return;
+        var el=containerFor(kind);if(!el)return;
+        if(widgetId!==null&&widgetKind===kind)return;
+        currentAttempt++;var attempt=currentAttempt;
+        if(widgetKind&&widgetKind!==kind)destroy();
+        state(kind,'Preparing security verification…');
+        apiReady().then(function(api){render(kind,api,attempt);}).catch(function(error){
+            if(attempt!==currentAttempt)return;
+            state(kind,'Security check could not load. Check your connection and retry.');
+            console.error('[MJ HUB] Turnstile load failed:',error);
+        });
+    };
+    window.mjInitActiveCaptcha=function(){
+        var signup=document.getElementById('signupForm'),signin=document.getElementById('signinForm');
+        if(signup&&!signup.classList.contains('hidden'))window.mjEnsureCaptcha('signup');
+        else if(signin&&!signin.classList.contains('hidden'))window.mjEnsureCaptcha('signin');
+    };
+    // The auth forms and CAPTCHA containers already exist here. Start Turnstile now,
+    // rather than waiting for DOMContentLoaded after the full auth controller parses.
+    window.mjInitActiveCaptcha();
+})();</script>
+
+    <script>
         // Initialize Supabase Client
         const SUPABASE_URL = 'https://atczodlljmlayvldxfmv.supabase.co';
         const SUPABASE_PUBLISHABLE_KEY = 'sb_publishable_dwbeKLcSG7-nfKzZz8x8Zw_U9FtwJTy';
@@ -1754,127 +1877,7 @@ html[data-theme="dark"] .logo-word, body[data-theme="dark"] .logo-word { color:#
 
   <script src="/js/haptic.js" defer></script>
 
-<script>
-(function(){
-    'use strict';
-    var siteKey = '0x4AAAAAAF0CXjc8jL8djc4l';
-    var widgetId = null, widgetKind = '', tokens = {signin:'',signup:''};
-    var apiPromise = null, loadTimeout = null, failed = false, currentAttempt = 0;
 
-    function containerFor(kind){return document.getElementById(kind==='signup'?'mjSignupCaptcha':'mjSigninCaptcha');}
-    /* No extra "Verified" label: Turnstile's own widget is the verification UI. */
-    function state(kind,message,tone){ /* intentionally silent */ }
-    function destroy(){
-        if(widgetId!==null&&window.turnstile){try{window.turnstile.remove(widgetId);}catch(e){}}
-        if(widgetKind){
-            tokens[widgetKind]='';
-            var old=containerFor(widgetKind);
-            if(old)old.replaceChildren();
-            state(widgetKind,'');
-        }
-        widgetId=null;widgetKind='';
-    }
-    function apiReady(){
-        if(window.turnstile&&typeof window.turnstile.render==='function'){
-            return new Promise(function(resolve){try{window.turnstile.ready(function(){resolve(window.turnstile);});}catch(e){resolve(window.turnstile);}});
-        }
-        if(apiPromise)return apiPromise;
-        apiPromise=new Promise(function(resolve,reject){
-            var script=document.getElementById('mjTurnstileApi');
-            if(!script||failed){
-                if(script&&failed)script.remove();
-                script=document.createElement('script');script.id='mjTurnstileApi';
-                script.src='https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit';
-                script.async=true;script.defer=true;document.head.appendChild(script);
-            }
-            var settled=false;
-            function finish(error){
-                if(settled)return;settled=true;
-                if(loadTimeout)clearTimeout(loadTimeout);loadTimeout=null;
-                if(error){failed=true;apiPromise=null;reject(error);return;}
-                failed=false;
-                try{window.turnstile.ready(function(){resolve(window.turnstile);});}catch(e){resolve(window.turnstile);}
-            }
-            script.addEventListener('load',function(){finish(window.turnstile?null:new Error('Turnstile API did not initialise'));},{once:true});
-            script.addEventListener('error',function(){finish(new Error('Turnstile script failed to load'));},{once:true});
-            loadTimeout=setTimeout(function(){finish(new Error('Turnstile load timed out'));},12000);
-            if(window.turnstile)finish(null);
-        });
-        return apiPromise;
-    }
-    function render(kind,api,attempt){
-        if(attempt!==currentAttempt)return;
-        var el=containerFor(kind);
-        if(!el||!el.closest('form')||el.closest('form').classList.contains('hidden'))return;
-        if(widgetId!==null&&widgetKind===kind)return;
-        destroy();el.replaceChildren();state(kind,'');
-        try{
-            widgetKind=kind;
-            widgetId=api.render(el,{
-                sitekey:siteKey,theme:'auto',appearance:'always',execution:'render',
-                retry:'auto','retry-interval':8000,'refresh-expired':'auto','refresh-timeout':'auto',
-                callback:function(token){
-                    if(widgetKind===kind){
-                        tokens[kind]=token||'';
-                        if(tokens[kind]){
-                            state(kind,'Verified','success');
-                        }else{
-                            state(kind,'Verification did not return a token. Please try again.','error');
-                        }
-                    }
-                },
-                'expired-callback':function(){tokens[kind]='';state(kind,'Verification expired. Please complete the check again.','error');},
-                'timeout-callback':function(){tokens[kind]='';state(kind,'Verification timed out. Please complete the check again.','error');},
-                'error-callback':function(code){
-                    tokens[kind]='';
-                    var errorCode=String(code||'unknown');
-                    console.warn('[MJ HUB] Turnstile client error code:',errorCode);
-                    state(kind,'Cloudflare verification is retrying. Reference: '+errorCode,'error');
-                    // Return false so Turnstile retains its normal retry/logging behaviour.
-                    // Do not raise a toast for every transient retry.
-                    return false;
-                }
-            });
-            if(widgetId===undefined||widgetId===null){widgetId=null;widgetKind='';state(kind,'Unable to start security verification. Please refresh and try again.');}
-        }catch(error){widgetId=null;widgetKind='';state(kind,'Unable to start security verification. Please refresh and try again.');console.error('[MJ HUB] Turnstile render failed:',error);}
-    }
-    window.mjTurnstileVerified=function(kind,token){if(Object.prototype.hasOwnProperty.call(tokens,kind))tokens[kind]=token||'';};
-    window.mjTurnstileExpired=function(kind){if(Object.prototype.hasOwnProperty.call(tokens,kind))tokens[kind]='';};
-    window.mjTurnstileFailed=function(kind){if(Object.prototype.hasOwnProperty.call(tokens,kind))tokens[kind]='';};
-    window.mjGetCaptchaToken=function(kind){
-        if(!Object.prototype.hasOwnProperty.call(tokens,kind))return '';
-        if(tokens[kind])return tokens[kind];
-        if(window.turnstile&&widgetId!==null&&widgetKind===kind){
-            try{var response=window.turnstile.getResponse(widgetId);if(response){tokens[kind]=response;return response;}}catch(e){}
-        }
-        return '';
-    };
-    window.mjResetCaptcha=function(kind){
-        if(!Object.prototype.hasOwnProperty.call(tokens,kind))return;tokens[kind]='';
-        if(window.turnstile&&widgetId!==null&&widgetKind===kind){try{window.turnstile.reset(widgetId);}catch(e){}}
-    };
-    window.mjDestroyCaptcha=destroy;
-    window.mjEnsureCaptcha=function(kind){
-        if(kind!=='signup'&&kind!=='signin')return;
-        var el=containerFor(kind);if(!el)return;
-        if(widgetId!==null&&widgetKind===kind)return;
-        currentAttempt++;var attempt=currentAttempt;
-        if(widgetKind&&widgetKind!==kind)destroy();
-        state(kind,'Preparing security verification…');
-        apiReady().then(function(api){render(kind,api,attempt);}).catch(function(error){
-            if(attempt!==currentAttempt)return;
-            state(kind,'Security check could not load. Check your connection and retry.');
-            console.error('[MJ HUB] Turnstile load failed:',error);
-        });
-    };
-    window.mjInitActiveCaptcha=function(){
-        var signup=document.getElementById('signupForm'),signin=document.getElementById('signinForm');
-        if(signup&&!signup.classList.contains('hidden'))window.mjEnsureCaptcha('signup');
-        else if(signin&&!signin.classList.contains('hidden'))window.mjEnsureCaptcha('signin');
-    };
-    if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',window.mjInitActiveCaptcha,{once:true});
-    else window.mjInitActiveCaptcha();
-})();</script>
 
 </body>
 </html>
