@@ -856,8 +856,8 @@ async function handleOrder(req, res) {
     // across other pools, still capped at the selected pool's USD maxPrice.
     // This avoids a premature "no numbers" response without charging for a
     // more expensive supplier tier or issuing repeated purchases.
-    if (SOURCE === 'grizzlysms' && resolvedProviderId && rawText.trim() === 'NO_NUMBERS') {
-      qs.delete('providerIds');
+    if (SOURCE === 'grizzlysms' && rawText.trim() === 'NO_NUMBERS') {
+      if (resolvedProviderId) qs.delete('providerIds');
       await new Promise(r => setTimeout(r, 350));
       supplierRes = await fetch(`${sup.base}?${qs.toString()}`, { method: 'GET' });
       rawText = await supplierRes.text();
