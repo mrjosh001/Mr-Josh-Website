@@ -866,7 +866,9 @@ async function handleOrder(req, res) {
 
     // Supplier failed → restore balance only (no refund transaction row)
     if (!supplierRes.ok || failureReason || !orderData?.activationId) {
-      await supabase.from('profiles').update({ balance: originalBalance }).eq('id', user_id);
+      const { error: restoreErr } = await supabase.rpc('credit_balance', { p_user_id: user_id, p_amount: price });
+      if (restoreErr) throw restoreErr;
+      deducted = false;
 
       // Optional single failed purchase marker (not a refund row)
       try {
@@ -2496,15 +2498,16 @@ async function vsHandlePurgeLegacy(req, res) {
 
 // ---------------------------------------------------------------- orders
 async function vsCreditWallet(userId, amount) {
+  // The database refund RPC is idempotent against wallet_debits. Never fall back
+  // to a direct profile update: an RPC timeout may mean the refund already committed.
   const { data, error } = await supabase.rpc('credit_balance', { p_user_id: userId, p_amount: amount });
-  if (!error) {
-    if (data && typeof data === 'object' && data.new_balance != null) return Number(data.new_balance);
-    if (typeof data === 'number') return data;
+  if (error) {
+    console.error('[vsms refund] credit_balance failed; refusing unsafe direct credit:', error.message);
+    throw error;
   }
-  const { data: p } = await supabase.from('profiles').select('balance').eq('id', userId).single();
-  const nb = Number((p && p.balance) || 0) + amount;
-  await supabase.from('profiles').update({ balance: nb }).eq('id', userId);
-  return nb;
+  if (data && typeof data === 'object' && data.new_balance != null) return Number(data.new_balance);
+  if (typeof data === 'number') return data;
+  return null;
 }
 
 function vsExtractSmsCode(text) {
