@@ -10,193 +10,214 @@
   <link rel="icon" type="image/png" href="/img/IMG_3027.png">
   <link rel="apple-touch-icon" href="/img/IMG_3027.png">
   <style>
-    :root { color-scheme: dark; --bg:#06080f; --card:#12141c; --blue:#3b82f6; --muted:#94a3b8; --line:rgba(148,163,184,.14); --text:#f8fafc; }
-    * { box-sizing: border-box; }
-    html, body { margin: 0; min-height: 100%; background: var(--bg); color: var(--text);
-      font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
-    body { min-height: 100dvh; background: radial-gradient(ellipse at 50% -10%, rgba(59,130,246,.22), transparent 50%), var(--bg);
-      padding: env(safe-area-inset-top) 18px env(safe-area-inset-bottom); }
-    a { color: inherit; text-decoration: none; }
-    .shell { width: min(440px, 100%); margin: 0 auto; padding: 20px 0 48px; }
-    .top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 28px; }
-    .brand { display: flex; align-items: center; gap: 10px; font-weight: 800; font-size: 15px; }
-    .brand img { width: 36px; height: 36px; object-fit: contain; border-radius: 10px; background: #fff; }
-    .back { font-size: 13px; font-weight: 600; color: var(--muted); padding: 8px 12px; border-radius: 999px; border: 1px solid var(--line); }
-    .hero { text-align: center; padding: 12px 0 8px; }
-    .icon-wrap {
-      width: 84px; height: 84px; margin: 0 auto 18px; border-radius: 22px;
-      background: linear-gradient(145deg, #1e3a8a, #3b82f6);
-      display: flex; align-items: center; justify-content: center;
-      box-shadow: 0 14px 32px rgba(59,130,246,.35);
-    }
-    .icon-wrap img { width: 58px; height: 58px; object-fit: contain; border-radius: 14px; }
-    h1 { margin: 0 0 8px; font-size: 26px; font-weight: 800; letter-spacing: -0.03em; }
-    .sub { margin: 0 0 28px; font-size: 14px; line-height: 1.5; color: var(--muted); }
-    .benefits { text-align: left; margin: 0 0 22px; }
-    .benefit { display: flex; gap: 14px; align-items: flex-start; margin: 0 0 18px; }
-    .benefit .ico {
-      flex-shrink: 0; width: 42px; height: 42px; border-radius: 12px;
-      background: rgba(59,130,246,.14); border: 1px solid rgba(59,130,246,.28);
-      display: flex; align-items: center; justify-content: center; font-size: 18px;
-    }
-    .benefit b { display: block; font-size: 15px; font-weight: 700; margin: 0 0 3px; }
-    .benefit span { font-size: 13px; line-height: 1.45; color: var(--muted); }
-    .note { text-align: center; font-size: 12px; color: #64748b; margin: 0 0 14px; }
-    .btn {
-      display: block; width: 100%; border: 0; border-radius: 14px; padding: 16px 18px;
-      font-size: 16px; font-weight: 800; cursor: pointer; text-align: center;
-    }
-    .btn-primary { background: var(--blue); color: #fff; box-shadow: 0 8px 24px rgba(59,130,246,.35); margin-bottom: 10px; }
-    .btn-ghost { background: transparent; color: var(--muted); font-size: 14px; font-weight: 600; padding: 12px; }
-    .panel {
-      display: none; margin-top: 8px; background: var(--card); border: 1px solid var(--line);
-      border-radius: 20px; padding: 20px 18px 18px; text-align: left;
-    }
-    .panel.show { display: block; }
-    .panel h2 { margin: 0 0 8px; font-size: 18px; font-weight: 800; }
-    .panel .intro { margin: 0 0 16px; font-size: 13px; color: var(--muted); line-height: 1.45; }
-    .step { display: flex; gap: 12px; margin: 0 0 14px; }
-    .step .num {
-      flex-shrink: 0; width: 28px; height: 28px; border-radius: 9px; background: var(--blue); color: #fff;
-      font-size: 13px; font-weight: 800; display: flex; align-items: center; justify-content: center;
-    }
-    .step b { display: block; font-size: 14px; margin: 0 0 2px; }
-    .step p { margin: 0; font-size: 12.5px; line-height: 1.45; color: var(--muted); }
-    .hint { font-size: 12px; color: #64748b; margin: 8px 0 0; line-height: 1.4; }
-    .device-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 0 0 10px; }
-    .device-btn {
-      border: 1px solid var(--line); background: rgba(255,255,255,.03); color: var(--text);
-      border-radius: 14px; padding: 14px 12px; font-weight: 700; font-size: 14px; cursor: pointer;
-    }
-    .device-btn:active { transform: scale(0.98); }
-    .footer { text-align: center; margin-top: 28px; font-size: 12px; color: #64748b; }
+    :root{color-scheme:dark;--bg:#070b16;--surface:#101a2c;--surface2:#14223a;--line:rgba(148,180,230,.18);--blue:#4f8cff;--blue2:#2563eb;--text:#f7faff;--muted:#a6b6ce;--soft:#d5e2f7}
+    *{box-sizing:border-box}
+    html{min-height:100%;background:var(--bg);scroll-behavior:smooth}
+    body{margin:0;min-height:100vh;min-height:100dvh;padding:env(safe-area-inset-top) 18px env(safe-area-inset-bottom);font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:var(--text);background:radial-gradient(ellipse at 50% -12%,rgba(37,99,235,.32),transparent 48%),radial-gradient(circle at 100% 55%,rgba(14,165,233,.08),transparent 35%),var(--bg)}
+    button,a{-webkit-tap-highlight-color:transparent}
+    button{font:inherit}
+    a{color:inherit;text-decoration:none}
+    .shell{width:min(100%,480px);margin:0 auto;padding:18px 0 42px}
+    .top{display:flex;align-items:center;justify-content:space-between;margin-bottom:28px}
+    .brand{display:flex;align-items:center;gap:10px;font-size:15px;font-weight:850;letter-spacing:.02em}
+    .brand img{width:38px;height:38px;object-fit:contain;border-radius:12px;background:#fff;padding:2px}
+    .back{display:inline-flex;align-items:center;gap:7px;padding:9px 13px;border:1px solid var(--line);border-radius:999px;color:var(--soft);font-size:12px;font-weight:700;background:rgba(255,255,255,.035)}
+    .eyebrow{display:inline-flex;align-items:center;gap:7px;padding:7px 11px;border:1px solid rgba(96,165,250,.28);border-radius:999px;background:rgba(37,99,235,.12);color:#bcd5ff;font-size:11px;font-weight:800;letter-spacing:.09em;text-transform:uppercase}
+    .eyebrow:before{content:"";width:6px;height:6px;border-radius:50%;background:#60a5fa;box-shadow:0 0 12px #60a5fa}
+    .hero{text-align:center;padding:8px 2px 18px}
+    .app-mark{width:82px;height:82px;margin:0 auto 18px;padding:10px;border:1px solid rgba(147,197,253,.3);border-radius:25px;background:linear-gradient(145deg,#1d3b79,#2563eb 65%,#38bdf8);box-shadow:0 18px 48px rgba(37,99,235,.28)}
+    .app-mark img{width:100%;height:100%;object-fit:contain;border-radius:16px;background:#fff}
+    h1{margin:13px 0 9px;font-size:clamp(27px,7vw,34px);line-height:1.08;letter-spacing:-.045em;font-weight:850}
+    .lead{max-width:360px;margin:0 auto;color:var(--muted);font-size:14px;line-height:1.65}
+    .panel{display:none;margin-top:20px;padding:22px 18px 18px;border:1px solid var(--line);border-radius:25px;background:linear-gradient(155deg,rgba(20,34,58,.98),rgba(12,21,37,.98));box-shadow:0 24px 65px rgba(0,0,0,.28)}
+    .panel.show{display:block;animation:rise .28s ease both}
+    @keyframes rise{from{opacity:0;transform:translateY(9px)}to{opacity:1;transform:translateY(0)}}
+    .panel-head{margin-bottom:18px}
+    .panel h2{margin:0 0 7px;font-size:21px;letter-spacing:-.025em}
+    .intro{margin:0;color:var(--muted);font-size:13px;line-height:1.55}
+    .device-row{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+    .device-btn{min-width:0;min-height:142px;display:flex;flex-direction:column;align-items:flex-start;justify-content:space-between;gap:16px;padding:17px 15px;border:1px solid rgba(148,180,230,.2);border-radius:19px;background:linear-gradient(155deg,rgba(255,255,255,.07),rgba(255,255,255,.025));color:var(--text);text-align:left;cursor:pointer;transition:transform .18s,border-color .18s,background .18s;touch-action:manipulation}
+    .device-btn:hover,.device-btn:focus-visible{outline:none;border-color:rgba(96,165,250,.8);background:rgba(37,99,235,.16)}
+    .device-btn:active{transform:scale(.975)}
+    .device-icon{width:44px;height:44px;display:grid;place-items:center;border-radius:14px;background:rgba(59,130,246,.16);color:#a9caff}
+    .device-icon svg{width:25px;height:25px;display:block}
+    .device-label{display:flex;flex-direction:column;gap:4px}
+    .device-label b{font-size:14px}
+    .device-label small{font-size:11px;color:var(--muted)}
+    .arrow{margin-left:auto;color:#9fc4ff;font-size:19px;line-height:1}
+    .progress{display:flex;align-items:center;gap:7px;margin:0 0 16px}
+    .progress span{height:4px;flex:1;border-radius:9px;background:rgba(148,180,230,.17)}
+    .progress span.active{background:linear-gradient(90deg,#3b82f6,#38bdf8)}
+    .guide-title{display:flex;align-items:center;gap:12px;margin-bottom:15px}
+    .guide-title .device-icon{flex:0 0 44px}
+    .guide-title h2{margin:0 0 3px}
+    .guide-title .intro{font-size:12px}
+    .step{display:flex;gap:12px;margin:0;padding:13px 0;border-top:1px solid rgba(148,180,230,.12)}
+    .num{flex:0 0 27px;width:27px;height:27px;display:grid;place-items:center;border-radius:9px;background:linear-gradient(145deg,#3b82f6,#2563eb);color:white;font-size:12px;font-weight:850;box-shadow:0 5px 15px rgba(37,99,235,.22)}
+    .step b{display:block;margin:1px 0 4px;font-size:13px}
+    .step p{margin:0;color:var(--muted);font-size:12px;line-height:1.55}
+    .hint{margin:12px 0 0;padding:11px 12px;border-radius:12px;background:rgba(59,130,246,.09);color:#b9d3fa;font-size:11px;line-height:1.55}
+    .btn{width:100%;min-height:49px;display:flex;align-items:center;justify-content:center;gap:8px;padding:13px 16px;border:0;border-radius:14px;font-size:14px;font-weight:800;cursor:pointer;touch-action:manipulation;transition:transform .16s,filter .16s}
+    .btn:active{transform:scale(.985)}
+    .btn:focus-visible{outline:3px solid rgba(96,165,250,.6);outline-offset:3px}
+    .btn-primary{margin-top:15px;background:linear-gradient(100deg,#2563eb,#3b82f6 60%,#0ea5e9);color:#fff;box-shadow:0 10px 25px rgba(37,99,235,.25)}
+    .btn-primary:disabled{opacity:.65;cursor:default}
+    .btn-ghost{margin-top:9px;background:rgba(255,255,255,.045);border:1px solid var(--line);color:#c2d2e9}
+    .footer{margin:23px 0 0;text-align:center;color:#71839f;font-size:11px;line-height:1.6}
+    .footer strong{color:#a9bedb}
+    [hidden]{display:none!important}
+    @media(max-width:360px){body{padding-left:13px;padding-right:13px}.panel{padding:19px 14px}.device-btn{padding:14px 12px;min-height:132px}}
+    @media(prefers-reduced-motion:reduce){*,*:before,*:after{scroll-behavior:auto!important;animation-duration:.01ms!important;transition-duration:.01ms!important}}
   </style>
 </head>
 <body>
   <main class="shell">
     <div class="top">
       <a class="brand" href="/landing.html"><img src="/img/IMG_3027.png" alt=""><span>MJ HUB</span></a>
-      <a class="back" href="/landing.html">← Back</a>
+      <a class="back" href="/landing.html">← Back to site</a>
     </div>
 
-    <section class="hero" id="mainCard">
-      <div class="icon-wrap">
-        <img src="/img/IMG_3027.png" alt="MJ HUB">
+    <header class="hero">
+      <div class="app-mark"><img src="/img/IMG_3027.png" alt="MJ HUB app icon"></div>
+      <span class="eyebrow">Official install guide</span>
+      <h1>Take MJ HUB<br>with you.</h1>
+      <p class="lead">Add MJ HUB to your home screen for quick access to your account, orders and updates. Choose your device to get the right instructions.</p>
+    </header>
+
+    <section class="panel show" id="chooseDevice" aria-labelledby="chooseTitle">
+      <div class="panel-head">
+        <div class="progress" aria-label="Step 1 of 2"><span class="active"></span><span></span></div>
+        <h2 id="chooseTitle">Select Your Device</h2>
+        <p class="intro">Which device are you installing MJ HUB on?</p>
       </div>
-      <h1>Get the MJ HUB App</h1>
-      <p class="sub">Works like a native app — install directly from your browser</p>
-
-      <div class="benefits">
-        <div class="benefit">
-          <div class="ico">📱</div>
-          <div><b>Mobile-first experience</b><span>Fast ordering, smooth navigation, built for your phone</span></div>
-        </div>
-        <div class="benefit">
-          <div class="ico">🔔</div>
-          <div><b>Push notifications</b><span>Codes, deposits, and order updates in real time</span></div>
-        </div>
-        <div class="benefit">
-          <div class="ico">⚡</div>
-          <div><b>Lightweight &amp; fast</b><span>Opens from your home screen — no App Store download</span></div>
-        </div>
-      </div>
-
-      <p class="note">No App Store required — just install from your browser</p>
-      <button type="button" class="btn btn-primary" id="installCta">Install app</button>
-      <a href="/landing.html" class="btn btn-ghost">Stay in browser</a>
-    </section>
-
-    <section class="panel" id="chooseDevice">
-      <h2>Select Your Device</h2>
-      <p class="intro">Choose your device to see the correct MJ HUB installation guide.</p>
       <div class="device-row">
-        <button type="button" class="device-btn" data-device="ios">iPhone / iPad</button>
-        <button type="button" class="device-btn" data-device="android">Android</button>
+        <button type="button" class="device-btn" data-device="ios" aria-label="Show iPhone and iPad installation instructions">
+          <span class="device-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="2" width="12" height="20" rx="2.5"/><path d="M10 18h4"/></svg></span>
+          <span class="device-label"><b>iPhone / iPad</b><small>Apple devices</small></span><span class="arrow">↗</span>
+        </button>
+        <button type="button" class="device-btn" data-device="android" aria-label="Show Android installation instructions">
+          <span class="device-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="2" width="14" height="20" rx="2.5"/><path d="M9 5h6M10 18h4M3 8l2 1m16-1-2 1"/></svg></span>
+          <span class="device-label"><b>Android</b><small>Samsung, Pixel and more</small></span><span class="arrow">↗</span>
+        </button>
       </div>
     </section>
 
-    <section class="panel" id="iosGuide">
-      <h2>Install on iPhone</h2>
-      <p class="intro">Use <b>Safari</b>. There is no App Store listing for this web app.</p>
-      <div class="step"><span class="num">1</span><div><b>Open Safari</b><p>Visit <strong>www.mjhub.store</strong> in Safari (not Chrome or in-app browsers).</p></div></div>
-      <div class="step"><span class="num">2</span><div><b>Tap Share</b><p>Tap the share icon (square with an upward arrow) at the bottom of Safari.</p></div></div>
-      <div class="step"><span class="num">3</span><div><b>Add to Home Screen</b><p>Scroll the share sheet and tap <strong>Add to Home Screen</strong>.</p></div></div>
-      <div class="step"><span class="num">4</span><div><b>Tap Add</b><p>Confirm the name MJ HUB, then tap <strong>Add</strong> in the top corner.</p></div></div>
-      <div class="step"><span class="num">5</span><div><b>Open the app</b><p>From your Home Screen, tap the MJ HUB icon and sign in.</p></div></div>
-      <p class="hint">If you don’t see “Add to Home Screen”, open this page in Safari first.</p>
+    <section class="panel" id="iosGuide" aria-labelledby="iosTitle" aria-hidden="true">
+      <div class="progress" aria-label="Step 2 of 2"><span class="active"></span><span class="active"></span></div>
+      <div class="guide-title">
+        <span class="device-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="2" width="12" height="20" rx="2.5"/><path d="M10 18h4"/></svg></span>
+        <div><h2 id="iosTitle">Install on iPhone / iPad</h2><p class="intro">Use Safari for the best experience.</p></div>
+      </div>
+      <div class="step"><span class="num">1</span><div><b>Open Safari</b><p>Visit <strong>www.mjhub.store</strong> in Safari. Avoid opening the link inside social media apps.</p></div></div>
+      <div class="step"><span class="num">2</span><div><b>Tap the Share icon</b><p>Tap the square with the upward arrow in Safari.</p></div></div>
+      <div class="step"><span class="num">3</span><div><b>Select Add to Home Screen</b><p>Scroll through the share options and choose <strong>Add to Home Screen</strong>.</p></div></div>
+      <div class="step"><span class="num">4</span><div><b>Confirm the installation</b><p>Keep the name as MJ HUB and tap <strong>Add</strong>.</p></div></div>
+      <div class="step"><span class="num">5</span><div><b>Launch MJ HUB</b><p>Find the MJ HUB icon on your Home Screen and open it.</p></div></div>
+      <p class="hint">If “Add to Home Screen” is missing, confirm that you opened the website in Safari, not Chrome or an in-app browser.</p>
       <button type="button" class="btn btn-ghost" data-back-devices>← Change device</button>
     </section>
 
-    <section class="panel" id="androidGuide">
-      <h2>Install on Android</h2>
-      <p class="intro">Best results in <b>Chrome</b>.</p>
-      <div class="step"><span class="num">1</span><div><b>Open Chrome</b><p>Visit <strong>www.mjhub.store</strong> in Google Chrome.</p></div></div>
-      <div class="step"><span class="num">2</span><div><b>Install</b><p>Tap the install banner, or menu <strong>⋮</strong> → <strong>Install app</strong> / <strong>Add to Home screen</strong>.</p></div></div>
-      <div class="step"><span class="num">3</span><div><b>Confirm</b><p>Tap Install or Add and wait a moment.</p></div></div>
-      <div class="step"><span class="num">4</span><div><b>Open MJ HUB</b><p>Launch from your home screen or app drawer, then sign in.</p></div></div>
-      <button type="button" class="btn btn-primary" id="androidInstall" style="margin-top:8px;">Install MJ HUB now</button>
+    <section class="panel" id="androidGuide" aria-labelledby="androidTitle" aria-hidden="true">
+      <div class="progress" aria-label="Step 2 of 2"><span class="active"></span><span class="active"></span></div>
+      <div class="guide-title">
+        <span class="device-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="2" width="14" height="20" rx="2.5"/><path d="M9 5h6M10 18h4M3 8l2 1m16-1-2 1"/></svg></span>
+        <div><h2 id="androidTitle">Install on Android</h2><p class="intro">Chrome is recommended.</p></div>
+      </div>
+      <div class="step"><span class="num">1</span><div><b>Open Google Chrome</b><p>Visit <strong>www.mjhub.store</strong> in Chrome.</p></div></div>
+      <div class="step"><span class="num">2</span><div><b>Open the browser menu</b><p>Tap the three dots <strong>⋮</strong> in the top corner.</p></div></div>
+      <div class="step"><span class="num">3</span><div><b>Choose Install app</b><p>Tap <strong>Install app</strong> or <strong>Add to Home screen</strong>, depending on your device.</p></div></div>
+      <div class="step"><span class="num">4</span><div><b>Confirm and launch</b><p>Tap Install or Add. Open MJ HUB from your home screen or app drawer.</p></div></div>
+      <button type="button" class="btn btn-primary" id="androidInstall">Install MJ HUB now</button>
+      <p class="hint" id="androidHint" role="status">If the install prompt does not appear, use Chrome menu ⋮ → Install app / Add to Home screen.</p>
       <button type="button" class="btn btn-ghost" data-back-devices>← Change device</button>
     </section>
 
-    <p class="footer">MJ HUB · Official app install guide</p>
+    <p class="footer"><strong>MJ HUB</strong> · Secure access, right from your home screen.<br>This is an installable web app, not an App Store or Play Store download.</p>
   </main>
 
 <script>
-(function () {
-  var installPrompt = null;
-  var chooseDevice = document.getElementById('chooseDevice');
-  var iosGuide = document.getElementById('iosGuide');
-  var androidGuide = document.getElementById('androidGuide');
-  var androidInstall = document.getElementById('androidInstall');
+(function(){
+  'use strict';
+  var choose=document.getElementById('chooseDevice');
+  var ios=document.getElementById('iosGuide');
+  var android=document.getElementById('androidGuide');
+  var androidInstall=document.getElementById('androidInstall');
+  var androidHint=document.getElementById('androidHint');
+  var installPrompt=null;
 
-  function hideAll() {
-    chooseDevice.classList.remove('show');
-    iosGuide.classList.remove('show');
-    androidGuide.classList.remove('show');
-  }
-  function showChoose() {
-    hideAll();
-    chooseDevice.classList.add('show');
-  }
-  function showDevice(d) {
-    hideAll();
-    if (d === 'ios') iosGuide.classList.add('show');
-    else androidGuide.classList.add('show');
-  }
-
-  window.addEventListener('beforeinstallprompt', function (e) {
-    e.preventDefault();
-    installPrompt = e;
-    if (androidInstall) androidInstall.textContent = 'Install MJ HUB now';
-  });
-  window.addEventListener('appinstalled', function () {
-    installPrompt = null;
-    // Always start with the device selector. Never auto-open a guide based on user-agent detection.
-  showChoose();
-
-  if (androidInstall) {
-      androidInstall.textContent = 'MJ HUB installed ✓';
-      androidInstall.disabled = true;
+  function showPanel(panel){
+    [choose,ios,android].forEach(function(item){
+      var active=item===panel;
+      item.classList.toggle('show',active);
+      item.setAttribute('aria-hidden',active?'false':'true');
+    });
+    if(panel){
+      panel.scrollIntoView({behavior:'smooth',block:'nearest'});
     }
+  }
+  function showDevice(device){
+    showPanel(device==='ios'?ios:android);
+  }
+
+  document.querySelectorAll('[data-device]').forEach(function(button){
+    button.addEventListener('click',function(){
+      showDevice(button.getAttribute('data-device'));
+    });
+  });
+  document.querySelectorAll('[data-back-devices]').forEach(function(button){
+    button.addEventListener('click',function(){showPanel(choose);});
   });
 
-
-
-  document.querySelectorAll('[data-device]').forEach(function (btn) {
-    btn.addEventListener('click', function () { showDevice(btn.getAttribute('data-device')); });
-  });
-  document.querySelectorAll('[data-back-devices]').forEach(function (btn) {
-    btn.addEventListener('click', showChoose);
+  window.addEventListener('beforeinstallprompt',function(event){
+    event.preventDefault();
+    installPrompt=event;
+    if(androidHint) androidHint.textContent='Your browser supports direct installation. Tap the button above to continue.';
   });
 
-  if (androidInstall) {
-    androidInstall.addEventListener('click', function () {
-      if (installPrompt) {
-        installPrompt.prompt();
-        installPrompt.userChoice.then(function () { installPrompt = null; }).catch(function () {});
-      } else {
-        alert('Use Chrome menu ⋮ → Install app / Add to Home screen if the install button is not available.');
+  window.addEventListener('appinstalled',function(){
+    installPrompt=null;
+    if(androidInstall){
+      androidInstall.textContent='MJ HUB is installed ✓';
+      androidInstall.disabled=true;
+    }
+    if(androidHint) androidHint.textContent='Installation complete. You can now open MJ HUB from your home screen.';
+  });
+
+  if(androidInstall){
+    androidInstall.addEventListener('click',async function(){
+      if(!installPrompt){
+        if(androidHint) androidHint.textContent='No automatic install prompt is available in this browser. Open Chrome menu ⋮ and choose Install app or Add to Home screen.';
+        return;
       }
+      var promptEvent=installPrompt;
+      installPrompt=null;
+      androidInstall.disabled=true;
+      androidInstall.textContent='Waiting for confirmation…';
+      try{
+        await promptEvent.prompt();
+        var choice=await promptEvent.userChoice;
+        if(choice&&choice.outcome==='accepted'){
+          androidInstall.textContent='Installation started…';
+          if(androidHint) androidHint.textContent='Follow the confirmation on your device to finish installing MJ HUB.';
+        }else{
+          androidInstall.disabled=false;
+          androidInstall.textContent='Try install again';
+          if(androidHint) androidHint.textContent='Installation was not completed. You can try again or use Chrome menu ⋮ → Install app.';
+        }
+      }catch(error){
+        androidInstall.disabled=false;
+        androidInstall.textContent='Try install again';
+        if(androidHint) androidHint.textContent='The automatic prompt is unavailable. Use Chrome menu ⋮ → Install app / Add to Home screen.';
+      }
+    });
+  }
+
+  showPanel(choose);
+  if('serviceWorker' in navigator){
+    window.addEventListener('load',function(){
+      navigator.serviceWorker.register('/sw.js',{scope:'/'}).catch(function(error){
+        console.warn('MJ HUB service worker registration failed:',error);
+      });
     });
   }
 })();
