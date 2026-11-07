@@ -275,8 +275,8 @@ function canRefill(o){
 }
 function isActive(o){
   const s = String(o.status || '').toLowerCase();
-  return /pending|progress|processing|awaiting|waiting|partial/.test(s)
-    && !/completed|canceled|cancelled|refunded|failed/.test(s);
+  return /pending|progress|processing|awaiting|waiting/.test(s)
+    && !/completed|partial|canceled|cancelled|refunded|failed/.test(s);
 }
 
 (async function main(){
@@ -366,15 +366,17 @@ function isActive(o){
 let allRows = [];
   let activeFilter = 'all';
   const filterLabels = [
-    ['all','All'],['pending','Pending'],['processing','Processing'],
+    ['all','All'],['pending','Pending'],['processing','Processing'],['partial','Partial'],
     ['completed','Completed'],['canceled','Canceled'],['failed','Failed']
   ];
   function statusGroup(o){
     const s = String(o.status || '').toLowerCase();
+    // Partial is its own terminal status, not an in-progress order.
+    if (/partial/.test(s)) return 'partial';
     if (/cancel|cancelled|canceled/.test(s)) return 'canceled';
     if (/fail|error|reject/.test(s)) return 'failed';
     if (/complete|success|done/.test(s)) return 'completed';
-    if (/process|progress|partial/.test(s)) return 'processing';
+    if (/process|progress/.test(s)) return 'processing';
     return 'pending';
   }
   function renderFilters(){
