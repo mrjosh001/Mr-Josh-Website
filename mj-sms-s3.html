@@ -1295,12 +1295,8 @@ document.getElementById('psBuyBtn').addEventListener('click', async function(){
       isBuying = false; btn.disabled = false; btn.style.opacity = ''; btn.style.cursor = ''; btn.style.filter = ''; btn.removeAttribute('aria-busy'); btn.innerHTML = originalLabel;
       return;
     }
-    if(currentBalanceNgn < price){
-      showToast('Insufficient balance. Redirecting to deposit...', 'error');
-      isBuying = false; btn.disabled = false; btn.style.opacity = ''; btn.style.cursor = ''; btn.style.filter = ''; btn.removeAttribute('aria-busy'); btn.innerHTML = originalLabel;
-      setTimeout(() => window.location.href = 'deposit.html', 900);
-      return;
-    }
+    // The server's atomic wallet RPC checks NGN + USD together.
+    // A client-side NGN-only check would incorrectly block USD-funded users.
 
     const { data: { session: purchaseSession }, error: sessionError } = await sbClient.auth.getSession();
     if(sessionError || !purchaseSession?.access_token){
