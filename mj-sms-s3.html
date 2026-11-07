@@ -1275,6 +1275,10 @@ document.getElementById('psBuyBtn').addEventListener('click', async function(){
   const btn = this;
   btn.disabled = true;
   const originalLabel = btn.innerHTML;
+  btn.style.opacity = '0.55';
+  btn.style.cursor = 'not-allowed';
+  btn.style.filter = 'grayscale(1)';
+  btn.setAttribute('aria-busy', 'true');
   btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Purchasing...';
 
   const price = parseFloat(activeService.price) || 0;
@@ -1288,7 +1292,7 @@ document.getElementById('psBuyBtn').addEventListener('click', async function(){
     const balCheck = await refreshBalance();
     if(!balCheck.ok){
       showToast('Could not verify your balance: ' + balCheck.reason, 'error');
-      isBuying = false; btn.disabled = false; btn.innerHTML = originalLabel;
+      isBuying = false; btn.disabled = false; btn.style.opacity = ''; btn.style.cursor = ''; btn.style.filter = ''; btn.removeAttribute('aria-busy'); btn.innerHTML = originalLabel;
       return;
     }
     if(currentBalanceNgn < price){
