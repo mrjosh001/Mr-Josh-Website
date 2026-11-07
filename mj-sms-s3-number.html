@@ -167,6 +167,25 @@ const EXPIRY_SECONDS = 20 * 60;
 // VirtualSMS rejects cancel for the first 120 seconds after purchase (HTTP 425).
 const CANCEL_COOLDOWN_SECONDS = 2 * 60;
 
+// Server 3 shares the authenticated Grizzly API. Status and cancellation
+// calls must send the current Supabase access token, not just user_id.
+async function getAuthHeaders(){
+  if(!sbClient) throw new Error('Authentication is not ready. Please sign in again.');
+  let { data: { session }, error } = await sbClient.auth.getSession();
+  if(error) throw error;
+  if(!session?.access_token){
+    const refreshed = await sbClient.auth.refreshSession();
+    session = refreshed?.data?.session || null;
+    if(refreshed?.error) throw refreshed.error;
+  }
+  if(!session?.access_token) throw new Error('Your session could not be verified. Please sign in again.');
+  return {
+    'Content-Type': 'application/json',
+    'Authorization': 'Bearer ' + session.access_token
+  };
+}
+
+
 function escapeHtml(str){if(!str)return'';return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;')}
 
 /** Split full MSISDN into dial code + national number. Copy uses national only. */
@@ -325,7 +344,7 @@ async function autoRefundOnExpiry(){
   try{
     const res = await fetch(API + '?action=cancel', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: await getAuthHeaders(),
       body: JSON.stringify({ order_id: orderId, user_id: currentUserId })
     });
     const data = await res.json();
@@ -337,7 +356,7 @@ async function autoRefundOnExpiry(){
     // Supplier may have auto-expired the order already — check can refund it
     const check = await fetch(API + '?action=check', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: await getAuthHeaders(),
       body: JSON.stringify({ order_id: orderId, user_id: currentUserId })
     });
     const checkData = await check.json();
@@ -520,7 +539,7 @@ async function checkStatus(){
   try{
     const res = await fetch(API + '?action=check', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: await getAuthHeaders(),
       body: JSON.stringify({ order_id: orderId, user_id: currentUserId })
     });
     const data = await res.json();
@@ -556,7 +575,7 @@ async function checkNow(){
   if(btn){ btn.disabled = true; btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Checking...'; }
   const res = await fetch(API + '?action=check', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: await getAuthHeaders(),
     body: JSON.stringify({ order_id: orderId, user_id: currentUserId })
   }).catch(() => null);
   checkingNow = false;
@@ -602,7 +621,7 @@ async function cancelOrder(){
   try{
     const res = await fetch(API + '?action=cancel', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: await getAuthHeaders(),
       body: JSON.stringify({ order_id: orderId, user_id: currentUserId })
     });
     const data = await res.json();
