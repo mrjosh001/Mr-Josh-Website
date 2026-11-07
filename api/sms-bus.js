@@ -2281,12 +2281,40 @@ export default async function handler(req, res) {
       try {
         bus = await smsbusGet(OTP_BASE, '/get/number', params);
       } catch (e) {
-        try { await supabase.rpc('credit_balance', { p_user_id: auth.userId, p_amount: price }); } catch (_) { await supabase.from('profiles').update({ balance: originalBalance }).eq('id', auth.userId); }
-        return json(res, 502, { success: false, message: 'This SMS server is busy. Try again in a moment, or contact support.' });
+        // The supplier request outcome is ambiguous after a network failure.
+        // Attempt only the idempotent refund RPC; never overwrite a wallet snapshot.
+        const { error: restoreErr } = await supabase.rpc('credit_balance', { p_user_id: auth.userId, p_amount: price });
+        if (restoreErr) console.error('[sms-bus order] ambiguous supplier result; refund reconciliation needed:', restoreErr.message);
+        return json(res, 502, { success: false, code: 'SUPPLIER_RESULT_UNCONFIRMED', message: 'The supplier did not confirm the result. Check your order history before trying again, or contact support.' });
       }
 
       if (!busOk(bus.data) || !bus.data?.data?.request_id) {
-        try { await supabase.rpc('credit_balance', { p_user_id: auth.userId, p_amount: price }); } catch (_) { await supabase.from('profiles').update({ balance: originalBalance }).eq('id', auth.userId); }
+        let code = bus.data?.code;
+        let msg = String(bus.data?.message || '');
+        // A single retry is allowed only for an explicit stock-empty response.
+        // Do not retry timeouts or malformed responses: the supplier may have
+        // created an order even when its response was lost.
+        if (code !== 50201 && /no numbers?|out of stock|stock unavailable|not available/i.test(msg)) {
+          await new Promise(resolve => setTimeout(resolve, 400));
+          try {
+            const retry = await smsbusGet(OTP_BASE, '/get/number', params);
+            if (busOk(retry.data) && retry.data?.data?.request_id) {
+              bus = retry;
+            } else {
+              code = retry.data?.code ?? code;
+              msg = String(retry.data?.message || msg);
+            }
+          } catch (retryErr) {
+            console.warn('[sms-bus order] bounded stock retry failed:', retryErr?.message || retryErr);
+          }
+        }
+      }
+
+      if (!busOk(bus.data) || !bus.data?.data?.request_id) {
+        // Restore only through the idempotent wallet RPC. Never reset a profile
+        // snapshot: that could overwrite concurrent deposits or purchases.
+        const { error: restoreErr } = await supabase.rpc('credit_balance', { p_user_id: auth.userId, p_amount: price });
+        if (restoreErr) console.error('[sms-bus order] wallet restore requires reconciliation:', restoreErr.message);
         const code = bus.data?.code;
         const msg = String(bus.data?.message || '');
         if (code === 50201 || /balance not enough/i.test(msg)) {
