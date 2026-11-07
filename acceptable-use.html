@@ -76,6 +76,25 @@ html[data-theme="dark"] .logo-word, body[data-theme="dark"] .logo-word { color:#
 <script>(function(){try{var t=localStorage.getItem('mjhub-theme');document.documentElement.setAttribute('data-theme',(t==='light'||t==='dark')?t:'dark');}catch(e){document.documentElement.setAttribute('data-theme','dark');}})();</script>
   <script src="/js/mj-page-loader.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap" rel="stylesheet">
+<style>
+/* MJ HUB shared mobile sidebar */
+.mj-side-trigger{position:fixed;top:14px;right:16px;z-index:550;width:44px;height:44px;border:1px solid rgba(148,163,184,.25);border-radius:13px;background:#142b68;color:#fff;font-size:22px;display:grid;place-items:center;box-shadow:0 8px 24px rgba(0,0,0,.22);cursor:pointer; -webkit-tap-highlight-color:transparent}
+.mj-side-trigger:focus-visible,.mj-side-close:focus-visible,.mj-side-links a:focus-visible{outline:3px solid #93c5fd;outline-offset:3px}
+.mj-side-drawer{position:fixed;inset:0;z-index:600;display:none;visibility:hidden}
+.mj-side-drawer[hidden]{display:none!important}
+.mj-side-drawer.is-open{display:block;visibility:visible}
+.mj-side-overlay{position:absolute;inset:0;background:rgba(2,6,23,.55);backdrop-filter:blur(7px);-webkit-backdrop-filter:blur(7px)}
+.mj-side-panel{position:absolute;inset:0 auto 0 0;width:min(310px,86vw);overflow-y:auto;padding:20px 0 max(22px,env(safe-area-inset-bottom));background:#1d3fa8;color:#e8eeff;box-shadow:18px 0 50px rgba(15,23,42,.3);transform:translateX(-105%);transition:transform .3s cubic-bezier(.22,1,.36,1);display:flex;flex-direction:column}
+.mj-side-drawer.is-open .mj-side-panel{transform:translateX(0)}
+.mj-side-top{display:flex;align-items:center;justify-content:space-between;padding:0 18px 17px;border-bottom:1px solid rgba(255,255,255,.14)}
+.mj-side-brand{display:flex;align-items:center;gap:10px;color:#fff}.mj-side-brand img{width:36px;height:36px;object-fit:contain;border-radius:10px;background:#fff}.mj-side-brand b{display:block;font-size:15px}.mj-side-brand small{display:block;color:#c7d7ff;font-size:11px}
+.mj-side-close{width:36px;height:36px;border:1px solid rgba(255,255,255,.2);border-radius:12px;background:rgba(255,255,255,.1);color:#fff;font-size:18px;cursor:pointer}
+.mj-side-links{display:flex;flex-direction:column;gap:4px;padding:14px 12px}.mj-side-links a{display:flex;align-items:center;min-height:43px;padding:10px 13px;border-radius:12px;color:#e8eeff;text-decoration:none;font-size:13px;font-weight:650}.mj-side-links a:hover,.mj-side-links a[aria-current=page]{background:rgba(255,255,255,.16);color:#fff}
+.mj-side-auth{display:grid;grid-template-columns:1fr 1fr;gap:9px;padding:12px 16px 0;margin-top:auto}.mj-side-auth a{padding:12px 8px;border-radius:11px;text-align:center;text-decoration:none;font-size:12px;font-weight:800}.mj-side-signin{border:1px solid rgba(255,255,255,.3);color:#fff}.mj-side-join{background:#fff;color:#1d3fa8}
+body.mj-side-open{overflow:hidden;touch-action:none}
+@media(min-width:900px){.mj-side-trigger{display:none}}
+@media(prefers-reduced-motion:reduce){.mj-side-panel{transition:none}}
+</style>
 </head>
 <body>
 
@@ -219,6 +238,39 @@ html[data-theme="dark"] .logo-word, body[data-theme="dark"] .logo-word { color:#
   }
   if(document.readyState==='loading') document.addEventListener('DOMContentLoaded', apply);
   else apply();
+})();
+</script>
+
+
+<button class="mj-side-trigger" id="mjSideTrigger" type="button" aria-label="Open navigation menu" aria-expanded="false" aria-controls="mjSideDrawer">☰</button>
+<div class="mj-side-drawer" id="mjSideDrawer" hidden>
+ <div class="mj-side-overlay" data-mj-side-close></div>
+ <aside class="mj-side-panel" role="dialog" aria-modal="true" aria-label="MJ HUB navigation">
+  <div class="mj-side-top"><div class="mj-side-brand"><img src="/img/IMG_3027.png" alt=""><div><b>MJ HUB</b><small>Navigation</small></div></div><button class="mj-side-close" type="button" data-mj-side-close aria-label="Close menu">×</button></div>
+  <nav class="mj-side-links" aria-label="Main navigation"><a href="landing.html">Home</a>
+<a href="#features">Services</a>
+<a href="faq.html">FAQ</a>
+<a href="support.html">Support</a>
+<a href="/mobile-app.html">Mobile app</a>
+<a href="about.html">About MJ HUB</a>
+<a href="terms.html">Terms</a>
+<a href="privacy.html">Privacy</a>
+<a href="refund.html">Refunds</a>
+<a href="acceptable-use.html" aria-current="page">Acceptable Use</a>
+<a href="referral.html">Refer & Earn</a></nav>
+  <div class="mj-side-auth"><a class="mj-side-signin" href="auth.html?mode=signin">Sign in</a><a class="mj-side-join" href="auth.html?mode=signup">Get started</a></div>
+ </aside>
+</div>
+<script>
+(function(){
+ var trigger=document.getElementById('mjSideTrigger'),drawer=document.getElementById('mjSideDrawer');
+ if(!trigger||!drawer||drawer.dataset.bound==='1')return;drawer.dataset.bound='1';
+ function close(){drawer.classList.remove('is-open');drawer.hidden=true;document.body.classList.remove('mj-side-open');trigger.setAttribute('aria-expanded','false');trigger.setAttribute('aria-label','Open navigation menu');}
+ function open(){drawer.hidden=false;drawer.classList.add('is-open');document.body.classList.add('mj-side-open');trigger.setAttribute('aria-expanded','true');trigger.setAttribute('aria-label','Close navigation menu');var x=drawer.querySelector('.mj-side-close');if(x)x.focus();}
+ trigger.addEventListener('click',function(){drawer.classList.contains('is-open')?close():open();});
+ drawer.addEventListener('click',function(e){if(e.target.closest('[data-mj-side-close]'))close();});
+ document.addEventListener('keydown',function(e){if(e.key==='Escape'&&drawer.classList.contains('is-open')){close();trigger.focus();}});
+ window.addEventListener('resize',function(){if(window.innerWidth>=900)close();});
 })();
 </script>
 
