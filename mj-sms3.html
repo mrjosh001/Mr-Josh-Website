@@ -915,7 +915,7 @@ const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
     if(!currentCountry){
       toast('Country missing — go back and pick a country', 'error');
       isBuying = false;
-      if(btn){ btn.disabled = false; if(prevHtml) btn.innerHTML = prevHtml; }
+      if(btn){ btn.disabled = false; btn.style.opacity = ''; btn.style.cursor = ''; btn.style.filter = ''; btn.removeAttribute('aria-busy'); if(prevHtml) btn.innerHTML = prevHtml; }
       return;
     }
     if(btn){ btn.disabled = true; }
