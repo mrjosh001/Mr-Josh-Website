@@ -776,6 +776,7 @@ async function handleOrder(req, res) {
       return res.status(400).json({ success: false, message: 'User profile not found' });
     }
     originalBalance = Number(profile.balance || 0);
+    const originalBalanceUsd = Number(profile.balance_usd || 0);
     customerId = profile.customer_id;
 
     const idempotencyKey =
@@ -2601,7 +2602,8 @@ async function vsHandleOrder(req, res) {
       return res.status(409).json({ success: false, code: 'PRICE_CHANGED', message: 'The price for this number just changed. Please refresh and try again.' });
     }
 
-    const { data: profile } = await supabase.from('profiles').select('balance, customer_id').eq('id', user_id).single();
+    const { data: profile, error: profileErr } = await supabase.from('profiles').select('balance, balance_usd, customer_id').eq('id', user_id).single();
+    if (profileErr) throw profileErr;
     if (!profile) return res.status(400).json({ success: false, message: 'User profile not found' });
     originalBalance = Number(profile.balance || 0);
     customerId = profile.customer_id;
@@ -2619,25 +2621,22 @@ async function vsHandleOrder(req, res) {
         } });
       }
     }
-    if (originalBalance < price) {
-      return res.status(402).json({ success: false, message: 'Insufficient balance', required: price, available: originalBalance });
-    }
-
-    let newBalance = originalBalance - price;
+    // The atomic RPC is authoritative and supports NGN, USD, or mixed balances.
+    // Do not reject from a stale NGN-only snapshot and never fall back to a direct profile update.
     const { data: debited, error: debErr } = await supabase.rpc('debit_balance_if_sufficient', { p_user_id: user_id, p_amount: price });
     if (debErr) {
-      const { data: p2 } = await supabase.from('profiles').select('balance').eq('id', user_id).single();
-      const b2 = Number((p2 && p2.balance) || 0);
-      if (b2 < price) return res.status(402).json({ success: false, message: 'Insufficient balance', required: price, available: b2 });
-      const { error: upErr } = await supabase.from('profiles').update({ balance: b2 - price }).eq('id', user_id).gte('balance', price);
-      if (upErr) return res.status(500).json({ success: false, message: 'Could not debit your balance. Try again or contact support.' });
-      newBalance = b2 - price;
-    } else if (debited === false || debited === null || debited === 0) {
-      return res.status(402).json({ success: false, message: 'Insufficient balance', required: price, available: originalBalance });
-    } else {
-      const { data: pa } = await supabase.from('profiles').select('balance').eq('id', user_id).maybeSingle();
-      if (pa) newBalance = Number(pa.balance);
+      console.error('[vsms order] safe wallet debit failed:', debErr.message);
+      return res.status(500).json({ success: false, code: 'WALLET_DEBIT_UNVERIFIED', message: 'Could not verify your wallet debit safely. Please try again.' });
     }
+    const debitRow = Array.isArray(debited) ? debited[0] : debited;
+    if (!debitRow || debitRow.success !== true) {
+      return res.status(402).json({
+        success: false, message: 'Insufficient balance', required: price,
+        available: Number(debitRow?.new_balance ?? originalBalance),
+        available_usd: Number(debitRow?.new_balance_usd ?? originalBalanceUsd)
+      });
+    }
+    let newBalance = Number(debitRow.new_balance ?? originalBalance);
     deducted = true;
 
     let r = await vsReq('/customer/purchase', { method: 'POST', body: { service: serviceId, country: iso }, timeoutMs: 30000 });
