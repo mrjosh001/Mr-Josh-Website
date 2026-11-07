@@ -2951,7 +2951,7 @@ export default async function handler(req, res) {
       // These flows debit/refund wallets and read SMS orders. Bind every action
       // to the verified Supabase identity, never to a caller-supplied user_id.
       const authHeader = String(req.headers.authorization || req.headers.Authorization || '');
-      const tokenMatch = authHeader.match(/^Bearer\\s+(.+)$/i);
+      const tokenMatch = authHeader.match(/^Bearer\s+(.+)$/i);
       const token = tokenMatch ? tokenMatch[1].trim() : '';
       if (!token || token.includes('service_role')) {
         return res.status(401).json({ success: false, message: 'Please sign in again.' });
