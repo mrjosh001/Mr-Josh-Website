@@ -851,6 +851,10 @@ const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
     isBuying = true;
     btn.disabled = true;
     const prevHtml = btn.innerHTML;
+    btn.style.opacity = '0.55';
+    btn.style.cursor = 'not-allowed';
+    btn.style.filter = 'grayscale(1)';
+    btn.setAttribute('aria-busy', 'true');
     btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Purchasing...';
     if(!window.__mjSms3BuyId){
       window.__mjSms3BuyId = 'MJ-SB-' + Date.now() + '-' + Math.random().toString(36).slice(2,9);
@@ -904,7 +908,7 @@ const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
     if(!accessToken){
       toast('Please sign in to buy a number', 'error');
       isBuying = false;
-      if(btn){ btn.disabled = false; if(prevHtml) btn.innerHTML = prevHtml; }
+      if(btn){ btn.disabled = false; btn.style.opacity = ''; btn.style.cursor = ''; btn.style.filter = ''; btn.removeAttribute('aria-busy'); if(prevHtml) btn.innerHTML = prevHtml; }
       setTimeout(function(){ location.href = 'auth.html?next=' + encodeURIComponent('mj-sms3.html'); }, 700);
       return;
     }
