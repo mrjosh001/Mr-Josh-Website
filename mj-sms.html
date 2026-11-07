@@ -557,17 +557,28 @@ function countryFlag(name){
 
 async function initSession(){
   try{
-    if(!window.supabase) return;
-    sbClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
-  auth: { persistSession: true, autoRefreshToken: true, storage: window.sessionStorage }
-});
-    const { data: { session } } = await sbClient.auth.getSession();
-    if(session && session.user){
-      currentUserId = session.user.id;
+    if(!window.supabase) return false;
+    // Reuse the page's client. Creating a second client here can race the
+    // boot flow and make the active session appear missing during checkout.
+    if(!sbClient){
+      sbClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+        auth: { persistSession: true, autoRefreshToken: true, storage: window.sessionStorage }
+      });
+    }
+    const { data: { session }, error } = await sbClient.auth.getSession();
+    if(error) throw error;
+    currentUserId = session && session.user ? session.user.id : null;
+    if(currentUserId){
       await refreshBalance();
       await loadRecentActivity();
+      return true;
     }
-  }catch(e){}
+    return false;
+  }catch(e){
+    console.warn('[MJ SMS] Session initialisation failed:', e && e.message ? e.message : e);
+    currentUserId = null;
+    return false;
+  }
 }
 
 // Surfaces an in-progress order right on this page (so a customer who
@@ -1498,12 +1509,16 @@ document.getElementById('purchaseModal').addEventListener('click', function(e){ 
 
 document.getElementById('psBuyBtn').addEventListener('click', async function(){
   if(!activeService || !currentCountry || isBuying) return;
-  if(!currentUserId){
-    showToast('Please sign in to buy a number','error');
-    setTimeout(() => window.location.href = 'auth.html', 900);
+
+  // Wait for Supabase to restore the existing browser session before
+  // deciding that this customer is signed out.
+  const sessionReady = await initSession();
+  if(!sessionReady || !currentUserId){
+    showToast('Your session could not be verified. Please refresh and try again.','error');
     return;
   }
-  // Lock immediately — before any await — so rapid taps cannot start a second buy
+
+  // Lock immediately — before any further await — so rapid taps cannot start a second buy
   isBuying = true;
   const btn = this;
   btn.disabled = true;
