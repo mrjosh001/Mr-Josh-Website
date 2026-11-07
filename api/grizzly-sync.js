@@ -768,7 +768,7 @@ async function handleOrder(req, res) {
 
     const { data: profile, error: profErr } = await supabase
       .from('profiles')
-      .select('balance, customer_id')
+      .select('balance, balance_usd, customer_id')
       .eq('id', user_id)
       .single();
 
@@ -812,45 +812,27 @@ async function handleOrder(req, res) {
       }
     }
 
-    if (originalBalance < price) {
-      return res.status(402).json({
-        success: false,
-        message: 'Insufficient balance',
-        required: price,
-        available: originalBalance
-      });
-    }
-
-    // Atomic debit — concurrent double-clicks cannot both succeed if balance only covers one
-    let newBalance = originalBalance - price;
+    // Atomic debit is authoritative and supports NGN, USD, or mixed balances.
+    // Fail closed on RPC errors. A direct profile update is not a safe substitute.
     const { data: debited, error: deductErr } = await supabase.rpc('debit_balance_if_sufficient', {
       p_user_id: user_id,
       p_amount: price
     });
     if (deductErr) {
       console.error('[grizzly order] debit_balance_if_sufficient', deductErr.message);
-      // Fallback only if RPC missing; still prefer single-flight client lock
-      const { data: p2 } = await supabase.from('profiles').select('balance').eq('id', user_id).single();
-      const b2 = Number(p2?.balance || 0);
-      if (b2 < price) {
-        return res.status(402).json({ success: false, message: 'Insufficient balance', required: price, available: b2 });
-      }
-      const { error: upErr } = await supabase.from('profiles').update({ balance: b2 - price }).eq('id', user_id).gte('balance', price);
-      if (upErr) {
-        return res.status(500).json({ success: false, message: 'Could not debit your balance. Try again or contact support.' });
-      }
-      newBalance = b2 - price;
-    } else if (debited === false || debited === null || debited === 0) {
+      return res.status(500).json({ success: false, code: 'WALLET_DEBIT_UNVERIFIED', message: 'Could not verify your wallet debit safely. Please try again.' });
+    }
+    const debitRow = Array.isArray(debited) ? debited[0] : debited;
+    if (!debitRow || debitRow.success !== true) {
       return res.status(402).json({
         success: false,
         message: 'Insufficient balance',
         required: price,
-        available: originalBalance
+        available: Number(debitRow?.new_balance ?? originalBalance),
+        available_usd: Number(debitRow?.new_balance_usd ?? originalBalanceUsd)
       });
-    } else {
-      const { data: pAfter } = await supabase.from('profiles').select('balance').eq('id', user_id).maybeSingle();
-      if (pAfter) newBalance = Number(pAfter.balance);
     }
+    const newBalance = Number(debitRow.new_balance ?? originalBalance);
     deducted = true;
     const qs = new URLSearchParams({
       api_key: SUP_KEY,
@@ -2606,6 +2588,7 @@ async function vsHandleOrder(req, res) {
     if (profileErr) throw profileErr;
     if (!profile) return res.status(400).json({ success: false, message: 'User profile not found' });
     originalBalance = Number(profile.balance || 0);
+    const originalBalanceUsd = Number(profile.balance_usd || 0);
     customerId = profile.customer_id;
 
     const idem = (external_order_id && String(external_order_id).trim()) || `MJ-VS-${String(user_id).slice(0, 8)}-${Date.now()}`;
