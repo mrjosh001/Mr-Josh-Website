@@ -960,7 +960,7 @@ const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
       if(/insufficient|balance/i.test(msg)){
         toast(msg + ' — redirecting to deposit…', 'error');
         isBuying = false;
-        if(btn){ btn.disabled = false; btn.innerHTML = prevHtml || '<i class="fa-solid fa-mobile-screen"></i> Confirm Purchase'; }
+        if(btn){ btn.disabled = false; btn.style.opacity = ''; btn.style.cursor = ''; btn.style.filter = ''; btn.removeAttribute('aria-busy'); btn.innerHTML = prevHtml || '<i class="fa-solid fa-mobile-screen"></i> Confirm Purchase'; }
         setTimeout(function(){ location.href = 'deposit.html'; }, 900);
         return;
       }
