@@ -302,6 +302,22 @@ function buildInvoiceEmail({ fullName, orderRef, planName, carrier, email, imei,
   return `<!doctype html>
 <html>
 <head>
+  <meta name="color-scheme" content="light dark">
+  <meta name="supported-color-schemes" content="light dark">
+  <style>
+    :root { color-scheme: light dark; supported-color-schemes: light dark; }
+    @media (prefers-color-scheme: light) {
+      body { background:#f8fafc !important; color:#1e293b !important; }
+      div[style*="background:#0f172a"] { background:#ffffff !important; }
+      div[style*="background:#0b1220"] { background:#f1f5f9 !important; }
+      div[style*="background:#1e293b"] { background:#e2e8f0 !important; }
+      div[style*="background:#1c1917"] { background:#fffbeb !important; border-color:#f59e0b !important; color:#78350f !important; }
+      [style*="color:#e2e8f0"], [style*="color:#cbd5e1"] { color:#334155 !important; }
+      [style*="color:#fff"] { color:#0f172a !important; }
+      [style*="color:#94a3b8"] { color:#64748b !important; }
+      [style*="color:#93c5fd"], [style*="color:#60a5fa"] { color:#1d4ed8 !important; }
+    }
+  </style>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <script type="application/ld+json">${jsonLdStr}</script>
@@ -344,7 +360,23 @@ function buildWelcomeEmail({ fullName, orderRef, planName, carrier }) {
   const car = escapeHtml(carrier || '');
   return `<!doctype html>
 <html>
-<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
+<head>
+  <meta name="color-scheme" content="light dark">
+  <meta name="supported-color-schemes" content="light dark">
+  <style>
+    :root { color-scheme: light dark; supported-color-schemes: light dark; }
+    @media (prefers-color-scheme: light) {
+      body { background:#f8fafc !important; color:#1e293b !important; }
+      div[style*="background:#0f172a"] { background:#ffffff !important; }
+      div[style*="background:#0b1220"] { background:#f1f5f9 !important; }
+      div[style*="background:#1e293b"] { background:#e2e8f0 !important; }
+      div[style*="background:#1c1917"] { background:#fffbeb !important; border-color:#f59e0b !important; color:#78350f !important; }
+      [style*="color:#e2e8f0"], [style*="color:#cbd5e1"] { color:#334155 !important; }
+      [style*="color:#fff"] { color:#0f172a !important; }
+      [style*="color:#94a3b8"] { color:#64748b !important; }
+      [style*="color:#93c5fd"], [style*="color:#60a5fa"] { color:#1d4ed8 !important; }
+    }
+  </style><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
 <body style="margin:0;padding:0;background:#0f172a">
   <div style="max-width:600px;margin:0 auto;font-family:Georgia,'Times New Roman',serif;color:#e2e8f0">
     ${brandHeader('')}
@@ -395,7 +427,23 @@ function buildDeliveryEmail({ fullName, orderRef, planName, phone, carrier, imei
 
   return `<!doctype html>
 <html>
-<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
+<head>
+  <meta name="color-scheme" content="light dark">
+  <meta name="supported-color-schemes" content="light dark">
+  <style>
+    :root { color-scheme: light dark; supported-color-schemes: light dark; }
+    @media (prefers-color-scheme: light) {
+      body { background:#f8fafc !important; color:#1e293b !important; }
+      div[style*="background:#0f172a"] { background:#ffffff !important; }
+      div[style*="background:#0b1220"] { background:#f1f5f9 !important; }
+      div[style*="background:#1e293b"] { background:#e2e8f0 !important; }
+      div[style*="background:#1c1917"] { background:#fffbeb !important; border-color:#f59e0b !important; color:#78350f !important; }
+      [style*="color:#e2e8f0"], [style*="color:#cbd5e1"] { color:#334155 !important; }
+      [style*="color:#fff"] { color:#0f172a !important; }
+      [style*="color:#94a3b8"] { color:#64748b !important; }
+      [style*="color:#93c5fd"], [style*="color:#60a5fa"] { color:#1d4ed8 !important; }
+    }
+  </style><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
 <body style="margin:0;padding:0;background:#0f172a">
   <div style="max-width:600px;margin:0 auto;font-family:Georgia,'Times New Roman',serif;color:#e2e8f0">
     ${brandHeader('')}
