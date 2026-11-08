@@ -468,6 +468,7 @@ function decodeQrDataUrl(value) {
 
   return {
     buffer,
+    mime,
     ext: mime === 'image/jpeg' ? 'jpg' : mime.slice('image/'.length)
   };
 }
@@ -556,7 +557,7 @@ async function handleDeliver(body, adminUser, res) {
       replyTo: ADMIN_EMAIL,
       fromName: 'MJ HUB Wireless',
       attachments: [
-        { filename: 'esim-qr-inline.' + qr.ext, content: base64, content_id: 'esim-qr' },
+        { filename: 'esim-qr-inline.' + qr.ext, content: base64, content_type: qr.mime, content_id: 'esim-qr' },
         { filename: 'esim-qr-code.' + qr.ext, content: base64 }
       ]
     });
