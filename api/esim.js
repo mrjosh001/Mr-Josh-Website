@@ -438,6 +438,40 @@ function buildDeliveryEmail({ fullName, orderRef, planName, phone, carrier, imei
 </html>`;
 }
 
+/**
+ * Validates and decodes the QR image uploaded by the admin dashboard.
+ * Accepts only PNG, JPEG and WEBP data URLs and rejects malformed/oversized data.
+ */
+function decodeQrDataUrl(value) {
+  if (typeof value !== 'string') return null;
+  const match = value.match(/^data:image\/(png|jpeg|webp);base64,([A-Za-z0-9+/]+={0,2})$/i);
+  if (!match) return null;
+  const mime = 'image/' + match[1].toLowerCase();
+  const encoded = match[2];
+  // Reject malformed base64 instead of silently accepting Buffer's permissive decoding.
+  if (encoded.length % 4 !== 0) return null;
+  const buffer = Buffer.from(encoded, 'base64');
+  if (!buffer.length || buffer.length > MAX_QR_BYTES) return null;
+  if (buffer.toString('base64') !== encoded) return null;
+
+  // Verify the file signature matches the declared MIME type.
+  const isPng = buffer.length >= 8
+    && buffer.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]));
+  const isJpeg = buffer.length >= 3
+    && buffer[0] === 0xff && buffer[1] === 0xd8 && buffer[2] === 0xff;
+  const isWebp = buffer.length >= 12
+    && buffer.toString('ascii', 0, 4) === 'RIFF'
+    && buffer.toString('ascii', 8, 12) === 'WEBP';
+  if ((mime === 'image/png' && !isPng)
+      || (mime === 'image/jpeg' && !isJpeg)
+      || (mime === 'image/webp' && !isWebp)) return null;
+
+  return {
+    buffer,
+    ext: mime === 'image/jpeg' ? 'jpg' : mime.slice('image/'.length)
+  };
+}
+
 async function isAdminUser(user) {
   const { data: adminProfile } = await supabase.from('profiles')
     .select('is_admin')
