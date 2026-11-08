@@ -736,16 +736,22 @@ function backToVaAmount() {
   showVaState('amount');
 }
 
+function redirectAfterConfirmedDeposit(){
+  if (window.__depositSuccessRedirectTimer) clearTimeout(window.__depositSuccessRedirectTimer);
+  window.__depositSuccessRedirectTimer = setTimeout(function(){ location.href = 'dashboard.html#home'; }, 5000);
+}
 function showVaSuccessAndGoHome(creditedAmount){
   stopBalanceWatch();
   var amt = Number(creditedAmount || window.__vaExpectAmount || 0) || 0;
-  setSuccessModal({ icon: '✓', title: 'Wallet credited', text: 'This amount has been confirmed and added to your NGN wallet.', amount: fmtNgn(amt), note: 'Taking you to your dashboard in a few seconds' });
-  setTimeout(function(){ location.href = 'dashboard.html#home'; }, 3500);
+  setSuccessModal({ icon: '✓', title: 'Payment completed', text: 'Your payment is confirmed and the amount has been added to your NGN wallet.', amount: fmtNgn(amt), note: 'Returning to your dashboard in 5 seconds', allowDone: true });
+  redirectAfterConfirmedDeposit();
 }
 function setSuccessModal(o) {
   var set = function (id, v) { var el = document.getElementById(id); if (el) el.textContent = v; };
   set('vaSuccessIcon', o.icon); set('vaSuccessTitle', o.title); set('vaSuccessText', o.text);
   set('vaSuccessAmt', o.amount); set('vaSuccessNote', o.note);
+  var done = document.getElementById('vaSuccessDone');
+  if (done) done.style.display = o.allowDone === false ? 'none' : '';
   var m = document.getElementById('vaSuccessModal');
   if (m) m.classList.add('show');
 }
@@ -757,7 +763,7 @@ async function watchCryptoCredit() {
   var before = pending && Number(pending.balance_before);
   var fresh = pending && pending.ts && (Date.now() - pending.ts) < 6 * 60 * 60 * 1000;
   var clear = function () { try { sessionStorage.removeItem('mjhub_pending_heleket'); localStorage.removeItem('mjhub_pending_heleket'); } catch (_) {} };
-  setSuccessModal({ icon: '⏳', title: 'Payment received', text: 'We are confirming your crypto payment and crediting your NGN wallet.', amount: amount ? fmtNgn(amount) : '', note: 'Please keep this page open' });
+  setSuccessModal({ icon: '⏳', title: 'Verifying payment', text: 'We are waiting for the payment provider to confirm your crypto payment and for your wallet to be credited.', amount: amount ? fmtNgn(amount) : '', note: 'This can take a few minutes. Please keep this page open.', allowDone: false });
   var credited = false;
   for (var i = 0; i < 40; i++) {
     await loadProfile();
@@ -767,11 +773,10 @@ async function watchCryptoCredit() {
   }
   if (credited) {
     clear();
-    setSuccessModal({ icon: '✓', title: 'Wallet credited', text: 'Your crypto payment is confirmed and added to your NGN wallet.', amount: fmtNgn(amount), note: 'Taking you to your dashboard in a few seconds' });
-    setTimeout(function () { location.href = 'dashboard.html#home'; }, 3000);
+    setSuccessModal({ icon: '✓', title: 'Payment completed', text: 'Your crypto payment is confirmed and the amount has been added to your NGN wallet.', amount: fmtNgn(amount), note: 'Returning to your dashboard in 5 seconds', allowDone: true });
+    redirectAfterConfirmedDeposit();
   } else {
-    setSuccessModal({ icon: '✓', title: 'Payment received', text: 'Crypto payments can take a few minutes to confirm. Your NGN wallet updates automatically as soon as it does.', amount: amount ? fmtNgn(amount) : '', note: 'Taking you to your dashboard' });
-    setTimeout(function () { location.href = 'dashboard.html#home'; }, 4000);
+    setSuccessModal({ icon: '⏳', title: 'Payment still being verified', text: 'We have not yet confirmed that your wallet was credited. Do not make another payment. Your wallet will update when confirmation arrives.', amount: amount ? fmtNgn(amount) : '', note: 'You can return to your dashboard manually. No payment-success confirmation has been shown.', allowDone: false });
   }
 }
 async function checkVaPaymentNow() {
@@ -1058,17 +1063,51 @@ async function handleDepositReturn() {
     if (!deposit) return;
     history.replaceState(null, '', window.location.pathname);
     if (deposit === 'success' && params.get('provider') === 'heleket') {
-      watchCryptoCredit();
+      await watchCryptoCredit();
       return;
     }
     if (deposit === 'success' || deposit === 'pocketfi') {
-      document.getElementById('successBox').classList.add('show');
-      toast('Payment received. Updating balance…');
-      for (let i = 0; i < 6; i++) {
-        await new Promise(r => setTimeout(r, 1500));
-        await loadProfile();
+      var pending = null;
+      try { pending = JSON.parse(localStorage.getItem('mjhub_pending_pocketfi') || sessionStorage.getItem('mjhub_pending_pocketfi') || 'null'); } catch (_) {}
+      var amount = pending && Math.round(Number(pending.amount) || 0);
+      var since = pending && Number(pending.ts) || 0;
+      var fresh = since > 0 && Date.now() - since < 6 * 60 * 60 * 1000;
+      setSuccessModal({ icon: '⏳', title: 'Verifying payment', text: 'We are checking the payment provider confirmation and your wallet credit. This page will show success only after the credit is confirmed.', amount: amount ? fmtNgn(amount) : '', note: 'Please keep this page open while we verify.', allowDone: false });
+      if (!fresh || !(amount > 0)) {
+        setSuccessModal({ icon: '⏳', title: 'Payment verification needed', text: 'We could not find the pending payment details needed to verify this return. Your payment has not been marked as completed. Check your wallet or contact support before trying again.', amount: '', note: 'No success confirmation has been shown.', allowDone: false });
+        return;
       }
-      toast('Wallet refreshed. If balance is still old, wait about 30 seconds then refresh.');
+      var accessToken = await getAccessToken();
+      if (!accessToken) {
+        setSuccessModal({ icon: '⏳', title: 'Payment not yet verified', text: 'Your session expired before we could verify the payment. Sign in again and check your wallet before making another payment.', amount: fmtNgn(amount), note: 'No success confirmation has been shown.', allowDone: false });
+        return;
+      }
+      var confirmed = false;
+      var confirmation = null;
+      for (var i = 0; i < 30; i++) {
+        var res = await fetch('/api/deposit?action=verify_deposit', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + accessToken },
+          body: JSON.stringify({ amount: amount, since: since })
+        });
+        var data = await res.json().catch(function(){ return {}; });
+        if (res.ok && data.success && data.credited) {
+          confirmed = true;
+          confirmation = data.data || {};
+          break;
+        }
+        await loadProfile();
+        await new Promise(function(r){ setTimeout(r, 2000); });
+      }
+      if (confirmed) {
+        await loadProfile();
+        try { localStorage.removeItem('mjhub_pending_pocketfi'); sessionStorage.removeItem('mjhub_pending_pocketfi'); } catch (_) {}
+        var creditedAmount = Number(confirmation.amount_ngn) || amount;
+        setSuccessModal({ icon: '✓', title: 'Payment completed', text: 'Your payment is confirmed and the amount has been added to your wallet.', amount: fmtNgn(creditedAmount), note: 'Returning to your dashboard in 5 seconds', allowDone: true });
+        redirectAfterConfirmedDeposit();
+      } else {
+        setSuccessModal({ icon: '⏳', title: 'Payment still being verified', text: 'We have not received confirmation that your wallet was credited yet. Do not pay again. Check your wallet later or contact support if the balance does not update.', amount: fmtNgn(amount), note: 'No payment-success confirmation has been shown.', allowDone: false });
+      }
     } else if (deposit === 'failed' || deposit === 'cancelled') {
       toast('Payment was not completed.');
     }
