@@ -2013,8 +2013,15 @@ function withLagos(opts) { return Object.assign({ timeZone: 'Africa/Lagos' }, op
  <div class="price-note">After uploading, switch to Shared Logs to select any available accounts for rotation.</div>
  </div>
  <div class="field hidden" id="rsSharedWrap">
+ <label>Upload new logs for Shared Logs</label>
+ <textarea id="rsSharedPasteBox" rows="7" placeholder="account1:password1&#10;account2:password2&#10;account3:password3"></textarea>
+ <div class="price-note">Paste new accounts here, one per line. They will be added to this product's actual stock, then you can select them for rotation below.</div>
+ <div class="modal-actions" style="justify-content:flex-start;margin-top:8px;">
+  <button class="btn btn-ghost btn-sm" type="button" id="rsSharedUploadBtn" onclick="uploadSharedStockBatch()"><i class="fas fa-upload"></i> Upload shared stock</button>
+ </div>
+ <div class="divider" style="margin:14px 0;"></div>
  <label>Select available stock for the rotation pool</label>
- <div class="price-note">Every account uploaded for this product appears here automatically. Selected accounts are reusable and are not consumed by purchases.</div>
+ <div class="price-note">Every account uploaded for this product appears here automatically. Select the accounts to rotate. Selected accounts remain reusable and are not consumed by purchases.</div>
  <div id="rsSharedStockList" style="display:grid;gap:8px;margin-top:10px;max-height:300px;overflow:auto;"></div>
  <div class="price-note" id="rsSharedSelectionCount">0 accounts selected</div>
  </div>
@@ -5580,6 +5587,35 @@ async function uploadManualStock() {
   updateRestockCurrentStock();
  } catch (error) {
   errEl.textContent = error.message || 'Could not update inventory.';
+ } finally {
+  btn.disabled = false;
+  btn.innerHTML = idleHtml;
+ }
+}
+
+async function uploadSharedStockBatch() {
+ const errEl = document.getElementById('restockModalError');
+ const resultEl = document.getElementById('restockModalResult');
+ const input = document.getElementById('rsSharedPasteBox');
+ const btn = document.getElementById('rsSharedUploadBtn');
+ errEl.textContent = '';
+ resultEl.textContent = '';
+ const text = input?.value || '';
+ if (!text.trim()) { errEl.textContent = 'Paste at least one account line to upload.'; return; }
+ btn.disabled = true;
+ const idleHtml = btn.innerHTML;
+ btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Uploading shared stock…';
+ try {
+  const data = await restockApi('bulk_upload', { text });
+  resultEl.textContent = 'Uploaded ' + data.inserted + ' new account' + (data.inserted === 1 ? '' : 's')
+   + (data.skipped_duplicates ? ' (' + data.skipped_duplicates + ' duplicates skipped)' : '')
+   + '. Select the new accounts below and save rotation.';
+  input.value = '';
+  await loadProducts();
+  await loadRestockAvailableStock();
+  updateRestockCurrentStock();
+ } catch (error) {
+  errEl.textContent = error.message || 'Could not upload shared stock.';
  } finally {
   btn.disabled = false;
   btn.innerHTML = idleHtml;
