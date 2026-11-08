@@ -1042,20 +1042,25 @@ async function inventoryHandle(body) {
   // This list is built from actual database inventory, not hardcoded stock types.
   // Existing shared selections remain visible so an admin can review or change the pool.
   if (action === 'available_stock') {
-    const { data, error } = await supabase
-      .from('product_inventory')
-      .select('id, credential, status, created_at')
-      .eq('product_key', product_key)
-      .in('status', ['available', 'shared'])
-      .order('created_at', { ascending: true })
-      .order('id', { ascending: true })
-      .limit(2000);
-    if (error) return { status: 500, body: { success: false, message: 'Could not load available stock: ' + error.message } };
+    const data = [];
+    for (let offset = 0; ; offset += 1000) {
+      const { data: page, error } = await supabase
+        .from('product_inventory')
+        .select('id, credential, status, created_at')
+        .eq('product_key', product_key)
+        .in('status', ['available', 'shared'])
+        .order('created_at', { ascending: true })
+        .order('id', { ascending: true })
+        .range(offset, offset + 999);
+      if (error) return { status: 500, body: { success: false, message: 'Could not load available stock: ' + error.message } };
+      data.push(...(page || []));
+      if (!page || page.length < 1000) break;
+    }
     return {
       status: 200,
       body: {
         success: true,
-        data: (data || []).map((row, index) => ({
+        data: data.map((row, index) => ({
           id: row.id,
           credential: row.credential,
           status: row.status,
