@@ -286,24 +286,24 @@ async function sendDepositEmail({ to, name, amountLabel, walletLabel, reference,
     ' - ' + ((h24 % 12) || 12) + ':' + String(d.getUTCMinutes()).padStart(2, '0') +
     ' ' + (h24 < 12 ? 'AM' : 'PM') + ' UTC';
 
-  const row = (label, value, last) => \`
+  const row = (label, value, last) => `
               <tr>
-                <td class="text-title rule-row\${last ? ' no-rule' : ''}" style="padding:20px 0;font-size:15px;font-weight:700;color:#0f172a;border-bottom:\${last ? '0' : '1px solid #dbe4f0'};">\${label}</td>
-                <td align="right" class="text-body rule-row\${last ? ' no-rule' : ''}" style="padding:20px 0;font-size:15px;color:#1e293b;border-bottom:\${last ? '0' : '1px solid #dbe4f0'};">\${value}</td>
-              </tr>\`;
+                <td class="text-title rule-row${last ? ' no-rule' : ''}" style="padding:20px 0;font-size:15px;font-weight:700;color:#0f172a;border-bottom:${last ? '0' : '1px solid #dbe4f0'};">${label}</td>
+                <td align="right" class="text-body rule-row${last ? ' no-rule' : ''}" style="padding:20px 0;font-size:15px;color:#1e293b;border-bottom:${last ? '0' : '1px solid #dbe4f0'};">${value}</td>
+              </tr>`;
 
   const supportLine = supportEmail
-    ? \`via the in-app Support page or email <a href="mailto:\${esc(supportEmail)}" class="link" style="color:#2563eb;text-decoration:none;">\${esc(supportEmail)}</a>\`
-    : \`via the <a href="\${appUrl}/dashboard.html" class="link" style="color:#2563eb;text-decoration:none;">in-app Support page</a>\`;
+    ? `via the in-app Support page or email <a href="mailto:${esc(supportEmail)}" class="link" style="color:#2563eb;text-decoration:none;">${esc(supportEmail)}</a>`
+    : `via the <a href="${appUrl}/dashboard.html" class="link" style="color:#2563eb;text-decoration:none;">in-app Support page</a>`;
 
-  const html = \`<!DOCTYPE html>
+  const html = `<!DOCTYPE html>
 <html lang="en" xmlns="http://www.w3.org/1999/xhtml">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="color-scheme" content="light dark">
 <meta name="supported-color-schemes" content="light dark">
-<title>\${subject}</title>
+<title>${subject}</title>
 <style>
   :root { color-scheme: light dark; supported-color-schemes: light dark; }
   @media (prefers-color-scheme: dark) {
@@ -349,7 +349,7 @@ async function sendDepositEmail({ to, name, amountLabel, walletLabel, reference,
           <td class="hdr" style="background-color:#eaf0fb;padding:34px 32px;border-radius:20px 20px 0 0;">
             <table role="presentation" cellspacing="0" cellpadding="0"><tr>
               <td style="vertical-align:middle;">
-                <img src="\${appUrl}/img/IMG_3027.png" alt="MJ Hub" height="44" style="display:block;height:44px;width:auto;border:0;outline:none;background:transparent;">
+                <img src="${appUrl}/img/IMG_3027.png" alt="MJ Hub" height="44" style="display:block;height:44px;width:auto;border:0;outline:none;background:transparent;">
               </td>
               <td class="brand-word" style="vertical-align:middle;padding-left:12px;font-size:22px;font-weight:800;letter-spacing:0.08em;color:#0f172a;">MJ HUB</td>
             </tr></table>
@@ -357,7 +357,7 @@ async function sendDepositEmail({ to, name, amountLabel, walletLabel, reference,
         </tr>
         <tr>
           <td style="padding:36px 32px 0;">
-            <p class="text-body" style="margin:0 0 20px;font-size:18px;color:#1e293b;">Hello \${safeName},</p>
+            <p class="text-body" style="margin:0 0 20px;font-size:18px;color:#1e293b;">Hello ${safeName},</p>
             <h1 class="text-title" style="margin:0 0 20px;font-size:28px;line-height:1.3;font-weight:800;color:#0f172a;">Your wallet has been funded successfully! &#129297;</h1>
             <p class="text-body" style="margin:0;font-size:16px;line-height:1.6;color:#1e293b;">The details are shown below:</p>
           </td>
@@ -367,12 +367,12 @@ async function sendDepositEmail({ to, name, amountLabel, walletLabel, reference,
             <table role="presentation" width="100%" cellspacing="0" cellpadding="0" class="panel" style="background-color:#f4f7fb;border-radius:16px;">
               <tr><td style="padding:6px 22px;">
                 <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
-                  \${row('Transaction Type:', 'Wallet deposit')}
-                  \${row('Amount tendered:', tendered)}
-                  \${row('Amount received:', received)}
-                  \${row('Wallet:', wallet)}
-                  \${row('Reference:', ref)}
-                  \${row('Date &amp; Time:', dateLabel, true)}
+                  ${row('Transaction Type:', 'Wallet deposit')}
+                  ${row('Amount tendered:', tendered)}
+                  ${row('Amount received:', received)}
+                  ${row('Wallet:', wallet)}
+                  ${row('Reference:', ref)}
+                  ${row('Date &amp; Time:', dateLabel, true)}
                 </table>
               </td></tr>
             </table>
@@ -380,32 +380,32 @@ async function sendDepositEmail({ to, name, amountLabel, walletLabel, reference,
         </tr>
         <tr>
           <td style="padding:24px 32px 8px;">
-            <p class="text-body" style="margin:0;font-size:16px;line-height:1.8;color:#1e293b;">If you didn't initiate this transaction, please contact our support team immediately \${supportLine}.</p>
+            <p class="text-body" style="margin:0;font-size:16px;line-height:1.8;color:#1e293b;">If you didn't initiate this transaction, please contact our support team immediately ${supportLine}.</p>
           </td>
         </tr>
         <tr>
           <td align="center" style="padding:20px 32px 36px;">
-            <a href="\${appUrl}/dashboard.html" style="display:inline-block;background-color:#2563eb;color:#ffffff;font-weight:700;font-size:15px;text-decoration:none;padding:14px 32px;border-radius:12px;">Open wallet</a>
+            <a href="${appUrl}/dashboard.html" style="display:inline-block;background-color:#2563eb;color:#ffffff;font-weight:700;font-size:15px;text-decoration:none;padding:14px 32px;border-radius:12px;">Open wallet</a>
           </td>
         </tr>
         <tr>
           <td class="foot" align="center" style="background-color:#f1f5f9;padding:26px 32px;border-radius:0 0 20px 20px;">
             <p class="text-muted" style="margin:0 0 6px;font-size:13px;line-height:1.5;color:#64748b;">Funding made simple. Shop logs, SMS numbers and boosters in one place.</p>
-            <p class="text-muted" style="margin:0 0 6px;font-size:13px;color:#64748b;"><a href="\${appUrl}" class="link" style="color:#2563eb;text-decoration:none;">\${appUrl.replace(/^https?:\\/\\//, '')}</a></p>
-            <p class="text-muted" style="margin:0;font-size:12px;color:#64748b;">&copy;\${year} MJ Hub. All rights reserved.</p>
+            <p class="text-muted" style="margin:0 0 6px;font-size:13px;color:#64748b;"><a href="${appUrl}" class="link" style="color:#2563eb;text-decoration:none;">${appUrl.replace(/^https?:\/\//, '')}</a></p>
+            <p class="text-muted" style="margin:0;font-size:12px;color:#64748b;">&copy;${year} MJ Hub. All rights reserved.</p>
           </td>
         </tr>
       </table>
     </td></tr>
   </table>
 </body>
-</html>\`;
+</html>`;
 
   try {
     const res = await fetch('https://api.resend.com/emails', {
       method: 'POST',
       headers: {
-        Authorization: \`Bearer \${apiKey}\`,
+        Authorization: `Bearer ${apiKey}`,
         'Content-Type': 'application/json'
       },
       body: JSON.stringify({ from, to: [to], subject, html })
