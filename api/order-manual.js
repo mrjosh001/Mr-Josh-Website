@@ -344,19 +344,22 @@ export default async function handler(req, res) {
     const sharedCred = (product.shared_credential || '').trim();
 
     if (isShared) {
-      if (!sharedCred) {
-        await supabase.rpc('credit_balance', { p_user_id: user_id, p_amount: total });
-        deducted = false;
-        return res.status(400).json({
-          success: false,
-          message: 'This shared product has no content set. Ask admin to add the shared credential.'
+      const { data: rotatedRows, error: rotationError } = await supabase
+        .rpc('claim_shared_inventory', {
+          p_product_key: product_key,
+          p_quantity: qty
         });
+      if (rotationError) {
+        console.error('[order-manual] shared rotation claim failed', rotationError.message);
+        claimedRows = [];
+      } else {
+        claimedRows = (rotatedRows || []).map((row) => ({
+          id: row.inventory_id,
+          credential: row.credential,
+          shared: true,
+          rotation_position: row.rotation_position
+        }));
       }
-      claimedRows = Array.from({ length: qty }, (_, i) => ({
-        id: `shared-${product.id}-${i}`,
-        credential: sharedCred,
-        shared: true
-      }));
     } else {
       claimedRows = await claimInventoryRows(product_key, qty, user_id, orderRef);
     }
