@@ -254,9 +254,9 @@ function isPaidStatus(data) {
 
 /**
  * Send deposit success email via Resend (best-effort, never blocks credit).
- * Env: RESEND_API_KEY, RESEND_FROM_EMAIL (e.g. "MJ Hub <noreply@mjhub.store>")
+ * Env: RESEND_API_KEY, RESEND_FROM_EMAIL, APP_URL, SUPPORT_EMAIL
  */
-async function sendDepositEmail({ to, name, amountLabel, walletLabel, reference }) {
+async function sendDepositEmail({ to, name, amountLabel, walletLabel, reference, tenderedLabel }) {
   const apiKey = process.env.RESEND_API_KEY;
   const from = process.env.RESEND_FROM_EMAIL || process.env.RESEND_FROM || 'MJ Hub <onboarding@resend.dev>';
   if (!apiKey || !to) {
@@ -264,101 +264,148 @@ async function sendDepositEmail({ to, name, amountLabel, walletLabel, reference 
     return { ok: false, skipped: true };
   }
 
-  const safeName = String(name || 'there').trim() || 'there';
-  const appUrl = (process.env.APP_URL || process.env.SITE_URL || 'https://www.mjhub.store').replace(/\/$/, '');
-  const year = new Date().getFullYear();
-  const subject = 'Deposit received';
-  const LOGO_DARK = 'https://atczodlljmlayvldxfmv.supabase.co/storage/v1/object/public/avatars/mjhub-logo-dark-clear.png';
-  const LOGO_LIGHT = 'https://atczodlljmlayvldxfmv.supabase.co/storage/v1/object/public/avatars/IMG_2796.jpeg';
-  const amount = String(amountLabel || '').trim() || 'your deposit';
-  const wallet = String(walletLabel || 'NGN wallet');
-  const ref = String(reference || '').trim();
+  const esc = (v) => String(v == null ? '' : v)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 
-  const html = `<!DOCTYPE html>
+  const appUrl = (process.env.APP_URL || process.env.SITE_URL || 'https://www.mjhub.store').replace(/\/$/, '');
+  const supportEmail = process.env.SUPPORT_EMAIL || '';
+  const year = new Date().getFullYear();
+  const subject = 'Wallet Funding Successful';
+
+  const safeName = esc(String(name || 'there').trim() || 'there');
+  const received = esc(String(amountLabel || '').trim() || 'your deposit');
+  const tendered = esc(String(tenderedLabel || amountLabel || '').trim() || received);
+  const wallet = esc(String(walletLabel || 'NGN Wallet'));
+  const ref = esc(String(reference || '').trim() || '-');
+
+  const d = new Date();
+  const h24 = d.getUTCHours();
+  const dateLabel =
+    String(d.getUTCMonth() + 1).padStart(2, '0') + '/' +
+    String(d.getUTCDate()).padStart(2, '0') + '/' + d.getUTCFullYear() +
+    ' - ' + ((h24 % 12) || 12) + ':' + String(d.getUTCMinutes()).padStart(2, '0') +
+    ' ' + (h24 < 12 ? 'AM' : 'PM') + ' UTC';
+
+  const row = (label, value, last) => \`
+              <tr>
+                <td class="text-title rule-row\${last ? ' no-rule' : ''}" style="padding:20px 0;font-size:15px;font-weight:700;color:#0f172a;border-bottom:\${last ? '0' : '1px solid #dbe4f0'};">\${label}</td>
+                <td align="right" class="text-body rule-row\${last ? ' no-rule' : ''}" style="padding:20px 0;font-size:15px;color:#1e293b;border-bottom:\${last ? '0' : '1px solid #dbe4f0'};">\${value}</td>
+              </tr>\`;
+
+  const supportLine = supportEmail
+    ? \`via the in-app Support page or email <a href="mailto:\${esc(supportEmail)}" class="link" style="color:#2563eb;text-decoration:none;">\${esc(supportEmail)}</a>\`
+    : \`via the <a href="\${appUrl}/dashboard.html" class="link" style="color:#2563eb;text-decoration:none;">in-app Support page</a>\`;
+
+  const html = \`<!DOCTYPE html>
 <html lang="en" xmlns="http://www.w3.org/1999/xhtml">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="color-scheme" content="light dark">
 <meta name="supported-color-schemes" content="light dark">
-<title>${subject}</title>
+<title>\${subject}</title>
 <style>
-  :root { color-scheme: light dark; }
+  :root { color-scheme: light dark; supported-color-schemes: light dark; }
   @media (prefers-color-scheme: dark) {
-    .page { background-color:#0b1220 !important; }
-    .card { background-color:#111827 !important; border-color:#1e293b !important; }
+    .page { background-color:#0b0f17 !important; }
+    .card { background-color:#141a24 !important; border-color:#1f2937 !important; }
+    .hdr { background-color:#161f30 !important; }
     .text-title { color:#f8fafc !important; }
     .text-body { color:#e2e8f0 !important; }
     .text-muted { color:#94a3b8 !important; }
-    .panel { background-color:#0b1220 !important; border-color:#1e293b !important; }
-    .logo-light { display:none !important; width:0 !important; height:0 !important; overflow:hidden !important; }
-    .logo-dark { display:block !important; }
+    .panel { background-color:#1b222c !important; }
+    .rule-row { border-bottom-color:#2b3441 !important; }
+    .no-rule { border-bottom:0 !important; }
+    .link { color:#8ea2ff !important; }
     .brand-word { color:#ffffff !important; }
-    .rule { border-color:#1e293b !important; }
+    .foot { background-color:#080b11 !important; }
   }
   @media (prefers-color-scheme: light) {
     .page { background-color:#e8eef8 !important; }
     .card { background-color:#ffffff !important; border-color:#dbe4f0 !important; }
+    .hdr { background-color:#eaf0fb !important; }
     .text-title { color:#0f172a !important; }
     .text-body { color:#1e293b !important; }
     .text-muted { color:#64748b !important; }
-    .panel { background-color:#f8fafc !important; border-color:#e2e8f0 !important; }
-    .logo-dark { display:none !important; width:0 !important; height:0 !important; overflow:hidden !important; }
-    .logo-light { display:block !important; }
+    .panel { background-color:#f4f7fb !important; }
     .brand-word { color:#0f172a !important; }
-    .rule { border-color:#e2e8f0 !important; }
+    .foot { background-color:#f1f5f9 !important; }
   }
+  [data-ogsc] .page { background-color:#0b0f17 !important; }
+  [data-ogsc] .card { background-color:#141a24 !important; }
+  [data-ogsc] .hdr { background-color:#161f30 !important; }
+  [data-ogsc] .panel { background-color:#1b222c !important; }
+  [data-ogsc] .text-title, [data-ogsc] .brand-word { color:#f8fafc !important; }
+  [data-ogsc] .text-body { color:#e2e8f0 !important; }
+  [data-ogsc] .text-muted { color:#94a3b8 !important; }
+  [data-ogsc] .foot { background-color:#080b11 !important; }
 </style>
 </head>
 <body class="page" style="margin:0;padding:0;background-color:#e8eef8;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
-  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" class="page" style="background-color:#e8eef8;padding:28px 12px;">
+  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" class="page" style="background-color:#e8eef8;padding:24px 12px;">
     <tr><td align="center">
-      <table role="presentation" width="560" cellspacing="0" cellpadding="0" class="card" style="max-width:560px;width:100%;background-color:#ffffff;border:1px solid #dbe4f0;border-radius:20px;">
+      <table role="presentation" width="560" cellspacing="0" cellpadding="0" class="card" style="max-width:560px;width:100%;background-color:#ffffff;border:1px solid #dbe4f0;border-radius:20px;overflow:hidden;">
         <tr>
-          <td align="center" style="padding:32px 24px 12px;background:transparent;">
-            <img src="https://atczodlljmlayvldxfmv.supabase.co/storage/v1/object/public/avatars/mjhub-mark-only.png" alt="MJ Hub" width="120" style="display:block;height:44px;width:auto;border:0;outline:none;background:transparent;">
-            <div class="brand-word" style="margin-top:6px;font-size:13px;font-weight:800;letter-spacing:0.14em;color:#0f172a;">MJ HUB</div>
+          <td class="hdr" style="background-color:#eaf0fb;padding:34px 32px;border-radius:20px 20px 0 0;">
+            <table role="presentation" cellspacing="0" cellpadding="0"><tr>
+              <td style="vertical-align:middle;">
+                <img src="\${appUrl}/img/IMG_3027.png" alt="MJ Hub" height="44" style="display:block;height:44px;width:auto;border:0;outline:none;background:transparent;">
+              </td>
+              <td class="brand-word" style="vertical-align:middle;padding-left:12px;font-size:22px;font-weight:800;letter-spacing:0.08em;color:#0f172a;">MJ HUB</td>
+            </tr></table>
           </td>
         </tr>
         <tr>
-          <td style="padding:8px 32px 0;">
-            <p class="text-body" style="margin:0 0 16px;font-size:18px;font-weight:700;color:#0f172a;">Hi ${safeName.replace(/</g,'')},</p>
-            <p class="text-body" style="margin:0 0 16px;font-size:16px;line-height:1.65;color:#1e293b;">Your wallet has been credited.</p>
+          <td style="padding:36px 32px 0;">
+            <p class="text-body" style="margin:0 0 20px;font-size:18px;color:#1e293b;">Hello \${safeName},</p>
+            <h1 class="text-title" style="margin:0 0 20px;font-size:28px;line-height:1.3;font-weight:800;color:#0f172a;">Your wallet has been funded successfully! &#129297;</h1>
+            <p class="text-body" style="margin:0;font-size:16px;line-height:1.6;color:#1e293b;">The details are shown below:</p>
           </td>
         </tr>
         <tr>
-          <td style="padding:0 32px 16px;">
-            <table role="presentation" width="100%" class="panel" style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:14px;">
-              <tr><td style="padding:18px 20px;text-align:center;">
-                <div class="text-muted" style="font-size:12px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:#64748b;">Amount credited</div>
-                <div class="text-title" style="font-size:28px;font-weight:800;color:#2563eb;margin-top:6px;">${String(amount).replace(/</g,'')}</div>
-                <div class="text-muted" style="font-size:13px;margin-top:6px;color:#64748b;">${String(wallet).replace(/</g,'')}${ref ? ' · Ref ' + String(ref).replace(/</g,'') : ''}</div>
+          <td style="padding:28px 24px 8px;">
+            <table role="presentation" width="100%" cellspacing="0" cellpadding="0" class="panel" style="background-color:#f4f7fb;border-radius:16px;">
+              <tr><td style="padding:6px 22px;">
+                <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
+                  \${row('Transaction Type:', 'Wallet deposit')}
+                  \${row('Amount tendered:', tendered)}
+                  \${row('Amount received:', received)}
+                  \${row('Wallet:', wallet)}
+                  \${row('Reference:', ref)}
+                  \${row('Date &amp; Time:', dateLabel, true)}
+                </table>
               </td></tr>
             </table>
           </td>
         </tr>
         <tr>
-          <td align="center" style="padding:4px 32px 28px;">
-            <a href="${appUrl}/dashboard.html" style="display:inline-block;background-color:#2563eb;color:#ffffff;font-weight:700;font-size:15px;text-decoration:none;padding:14px 28px;border-radius:12px;">Open wallet</a>
+          <td style="padding:24px 32px 8px;">
+            <p class="text-body" style="margin:0;font-size:16px;line-height:1.8;color:#1e293b;">If you didn't initiate this transaction, please contact our support team immediately \${supportLine}.</p>
           </td>
         </tr>
         <tr>
-          <td style="padding:0 32px 28px;">
-            <hr class="rule" style="border:none;border-top:1px solid #e2e8f0;margin:0 0 16px;">
-            <p class="text-muted" style="margin:0;font-size:12px;line-height:1.5;color:#64748b;text-align:center;">© ${year} MJ Hub</p>
+          <td align="center" style="padding:20px 32px 36px;">
+            <a href="\${appUrl}/dashboard.html" style="display:inline-block;background-color:#2563eb;color:#ffffff;font-weight:700;font-size:15px;text-decoration:none;padding:14px 32px;border-radius:12px;">Open wallet</a>
+          </td>
+        </tr>
+        <tr>
+          <td class="foot" align="center" style="background-color:#f1f5f9;padding:26px 32px;border-radius:0 0 20px 20px;">
+            <p class="text-muted" style="margin:0 0 6px;font-size:13px;line-height:1.5;color:#64748b;">Funding made simple. Shop logs, SMS numbers and boosters in one place.</p>
+            <p class="text-muted" style="margin:0 0 6px;font-size:13px;color:#64748b;"><a href="\${appUrl}" class="link" style="color:#2563eb;text-decoration:none;">\${appUrl.replace(/^https?:\\/\\//, '')}</a></p>
+            <p class="text-muted" style="margin:0;font-size:12px;color:#64748b;">&copy;\${year} MJ Hub. All rights reserved.</p>
           </td>
         </tr>
       </table>
     </td></tr>
   </table>
 </body>
-</html>`;
+</html>\`;
 
   try {
     const res = await fetch('https://api.resend.com/emails', {
       method: 'POST',
       headers: {
-        Authorization: `Bearer ${apiKey}`,
+        Authorization: \`Bearer \${apiKey}\`,
         'Content-Type': 'application/json'
       },
       body: JSON.stringify({ from, to: [to], subject, html })
