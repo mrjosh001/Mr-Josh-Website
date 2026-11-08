@@ -1833,20 +1833,25 @@ async function handleVerifyDeposit(req, res) {
     });
   }
 
-  const { data: txs } = await supabase
+  const reference = String(body.reference || body.payment_id || '').trim();
+  let txQuery = supabase
     .from('transactions')
     .select('id, amount, amount_ngn, status, external_reference, created_at, title, subtitle')
     .eq('user_id', user.id)
     .eq('payment_provider', 'pocketfi')
-    .eq('status', 'success')
-    .gte('created_at', sinceIso)
+    .eq('status', 'success');
+  // Prefer the exact provider payment reference to avoid matching a different
+  // recent deposit with the same amount.
+  if (reference) txQuery = txQuery.eq('external_reference', reference);
+  else txQuery = txQuery.gte('created_at', sinceIso);
+  const { data: txs } = await txQuery
     .order('created_at', { ascending: false })
     .limit(20);
 
   let match = null;
   for (const tx of txs || []) {
     const a = Number(tx.amount_ngn) || 0;
-    // Match wallet credit amount (e.g. 1000), not gross 1010
+    // Match wallet credit amount (e.g. 1000), not gross 1010.
     if (Math.abs(a - expect) <= 2) {
       match = tx;
       break;
