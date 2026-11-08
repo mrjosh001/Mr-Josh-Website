@@ -1768,19 +1768,49 @@ async function openModal(kind, i) {
         it.login_credentials_raw ||
         ''
       ).trim();
-      // SAME RULE AS ADMIN: if login_credentials is already labeled, use it only.
-      // Do not re-run formatters or raw re-parse (that scrambled Cookie / Token orders).
+      const hint = String(g.description || g.product_name || it.product_name || '');
+      // SAME AS ADMIN: prefer rebuild from supplier raw so customer view matches admin
+      const fmt = (_fmtMod && _fmtMod.formatCredentials) || (typeof formatCredentials === 'function' ? formatCredentials : null);
+      if (raw && fmt) {
+        try {
+          const rebuilt = fmt(raw, hint);
+          if (rebuilt && String(rebuilt).trim()) {
+            const accounts = parseCredentialFields(String(rebuilt).trim(), '');
+            if (accounts.length && (accounts[0].username || accounts[0].password || accounts[0].email || accounts[0].token || accounts[0].phone || accounts[0].extra)) {
+              accounts.forEach((f) => allAccounts.push(f));
+              return;
+            }
+            allAccounts.push({ _raw: String(rebuilt).trim() });
+            return;
+          }
+        } catch (e) {}
+      }
+      // Labeled stored view (no raw): use as-is, but rebuild if Extra looks broken
       const labeled =
-        /^(Email|Username|Password)\s*:/im.test(view);
-      if (labeled) {
+        /^(Email|Username|Password|Facebook\s*UID|Number)\s*:/im.test(view);
+      const brokenExtra = /Extra\s*:\s*.*https?\s*\/\//i.test(view) || /facebook\s+com/i.test(view);
+      if (labeled && !brokenExtra) {
         const accounts = parseCredentialFields(view, '');
-        // Strict line parse only — if empty, fall back to single raw block of the view text
         if (accounts.length && (accounts[0].username || accounts[0].password || accounts[0].email || accounts[0].token || accounts[0].phone)) {
           accounts.forEach((f) => allAccounts.push(f));
         } else {
           allAccounts.push({ _raw: view });
         }
         return;
+      }
+      if (labeled && brokenExtra && fmt) {
+        try {
+          const rebuilt = fmt(view, hint);
+          if (rebuilt && String(rebuilt).trim()) {
+            const accounts = parseCredentialFields(String(rebuilt).trim(), '');
+            if (accounts.length) {
+              accounts.forEach((f) => allAccounts.push(f));
+              return;
+            }
+            allAccounts.push({ _raw: String(rebuilt).trim() });
+            return;
+          }
+        } catch (e) {}
       }
       // Unlabeled: try raw colon patterns, then last-resort parse
       const combo = parseUserPass2faCookie(raw) || parseUserPass2faCookie(view.replace(/\s+/g, ' '));
