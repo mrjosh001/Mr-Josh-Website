@@ -3,6 +3,7 @@ import { applyMarkup } from '../lib/pricing.js';
 import { rateLimit, applyRateLimitHeaders } from '../lib/rateLimit.js';
 import { rejectClientSuppliedSecrets, applyApiCors, handleOptions, setNoStore } from '../lib/secure.js';
 import { sendError } from '../lib/errors.js';
+import { deleteUserStorageObjects } from '../lib/delete-user-storage.js';
 
 /**
  * POST /api/admin
@@ -639,23 +640,40 @@ async function userDelete(body, adminId) {
   if (!user_id) return { status: 400, body: { success: false, message: 'user_id is required' } };
   if (user_id === adminId) return { status: 400, body: { success: false, message: 'You cannot delete your own account.' } };
 
-  // Sever referral links before deleting — see the matching comment in
-  // api/delete-account.js. This is the same fix applied on the admin side,
-  // since admins were hitting the identical foreign-key block.
+  // Remove user-owned Storage files through the Storage API before Auth
+  // deletion. Supabase Auth rejects deletion while the user owns any objects.
+  let storageCleanup;
+  try {
+    storageCleanup = await deleteUserStorageObjects(supabase, user_id);
+  } catch (error) {
+    console.error('admin userDelete: Storage cleanup failed', error);
+    return { status: 500, body: { success: false, message: 'Account was not deleted because Storage cleanup failed: ' + error.message } };
+  }
+
+  // Remove referral relationships that would otherwise retain this account.
   const { error: unlinkErr } = await supabase.from('profiles').update({ referred_by: null }).eq('referred_by', user_id);
-  if (unlinkErr) console.warn('admin userDelete: could not unlink referred users', unlinkErr.message);
+  if (unlinkErr) {
+    return { status: 500, body: { success: false, message: 'Could not unlink referral records: ' + unlinkErr.message } };
+  }
 
   const { error: earningsErr } = await supabase.from('referral_earnings').delete().or(`referrer_id.eq.${user_id},referee_id.eq.${user_id}`);
-  if (earningsErr) console.warn('admin userDelete: could not clear referral_earnings', earningsErr.message);
+  if (earningsErr) {
+    return { status: 500, body: { success: false, message: 'Could not remove referral records: ' + earningsErr.message } };
+  }
 
-  const { error: profileError } = await supabase.from('profiles').delete().eq('id', user_id);
-  if (profileError) return { status: 500, body: { success: false, message: 'Profile delete failed: ' + profileError.message } };
-
+  // Delete Auth first so we never report success while login credentials remain.
   const { error: authDeleteError } = await supabase.auth.admin.deleteUser(user_id);
   if (authDeleteError) {
-    return { status: 200, body: { success: true, warning: `Profile deleted, but removing the login credentials failed: ${authDeleteError.message}` } };
+    return { status: 500, body: { success: false, message: 'Supabase could not delete the login account: ' + authDeleteError.message } };
   }
-  return { status: 200, body: { success: true } };
+
+  const { error: profileError } = await supabase.from('profiles').delete().eq('id', user_id);
+  if (profileError) {
+    console.error('admin userDelete: Auth account deleted but profile cleanup failed', profileError);
+    return { status: 500, body: { success: false, auth_deleted: true, message: 'Login account was deleted, but profile cleanup failed: ' + profileError.message } };
+  }
+
+  return { status: 200, body: { success: true, storage_objects_removed: storageCleanup.removed } };
 }
 
 async function userUpdate(body) {
