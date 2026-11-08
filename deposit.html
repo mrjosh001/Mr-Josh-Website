@@ -1032,7 +1032,7 @@ async function payWithPocketFi() {
     }
     try {
       sessionStorage.setItem('mjhub_last_deposit_wallet', depositWallet || 'ngn');
-      localStorage.setItem('mjhub_pending_pocketfi', JSON.stringify({ amount, ts: Date.now() }));
+      localStorage.setItem('mjhub_pending_pocketfi', JSON.stringify({ amount, ts: Date.now(), reference: paymentId || null }));
     } catch (_) {}
     window.location.href = data.payment_link;
   } catch (err) {
@@ -1088,7 +1088,7 @@ async function handleDepositReturn() {
         var res = await fetch('/api/deposit?action=verify_deposit', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + accessToken },
-          body: JSON.stringify({ amount: amount, since: since })
+          body: JSON.stringify({ amount: amount, since: since, reference: pending.reference || pending.payment_id || null })
         });
         var data = await res.json().catch(function(){ return {}; });
         if (res.ok && data.success && data.credited) {
