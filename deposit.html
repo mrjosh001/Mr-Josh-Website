@@ -1032,7 +1032,7 @@ async function payWithPocketFi() {
     }
     try {
       sessionStorage.setItem('mjhub_last_deposit_wallet', depositWallet || 'ngn');
-      localStorage.setItem('mjhub_pending_pocketfi', JSON.stringify({ amount, ts: Date.now(), reference: paymentId || null }));
+      localStorage.setItem('mjhub_pending_pocketfi', JSON.stringify({ amount, ts: Date.now(), reference: data.payment_id || data.paymentId || null }));
     } catch (_) {}
     window.location.href = data.payment_link;
   } catch (err) {
