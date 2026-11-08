@@ -30,19 +30,19 @@ function normalizeCarrier(value) {
   return null;
 }
 
-/** Base plan durations (T-Mobile default selling prices). */
+/** Base plan durations (T-Mobile default selling prices, reduced by ₦2,000). */
 const DEFAULT_PLANS = [
-  { id: '1m',  name: '1 month',  amount: 31000, supplier_cost: 20000, days: 30,  sort: 1, active: true },
-  { id: '3m',  name: '3 months', amount: 52000, supplier_cost: 40000, days: 90,  sort: 2, active: true },
-  { id: '6m',  name: '6 months', amount: 73000, supplier_cost: 60000, days: 180, sort: 3, active: true },
-  { id: '12m', name: '1 year',   amount: 95000, supplier_cost: 80000, days: 365, sort: 4, active: true }
+  { id: '1m',  name: '1 month',  amount: 29000, supplier_cost: 20000, days: 30,  sort: 1, active: true },
+  { id: '3m',  name: '3 months', amount: 50000, supplier_cost: 40000, days: 90,  sort: 2, active: true },
+  { id: '6m',  name: '6 months', amount: 71000, supplier_cost: 60000, days: 180, sort: 3, active: true },
+  { id: '12m', name: '1 year',   amount: 93000, supplier_cost: 80000, days: 365, sort: 4, active: true }
 ];
 
-/** Per-carrier customer prices (₦). */
+/** Per-carrier customer prices (₦), reduced by ₦2,000; supplier costs are unchanged. */
 const CARRIER_PLAN_PRICES = {
-  tmobile: { '1m': 31000, '3m': 52000, '6m': 73000, '12m': 95000 },
-  lyca:    { '1m': 29000, '3m': 48000, '6m': 73000, '12m': 95000 },
-  att:     { '1m': 33000, '3m': 55000, '6m': 75000, '12m': 97000 }
+  tmobile: { '1m': 29000, '3m': 50000, '6m': 71000, '12m': 93000 },
+  lyca:    { '1m': 27000, '3m': 46000, '6m': 71000, '12m': 93000 },
+  att:     { '1m': 31000, '3m': 53000, '6m': 73000, '12m': 95000 }
 };
 
 /** Per-carrier supplier cost (₦). Lyca 1m/3m differ; AT&T + rest of Lyca match T-Mobile. */
