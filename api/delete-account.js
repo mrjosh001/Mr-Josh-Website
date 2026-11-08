@@ -2,6 +2,7 @@ import { createClient } from '@supabase/supabase-js';
 import { rateLimit, applyRateLimitHeaders } from '../lib/rateLimit.js';
 import { rejectClientSuppliedSecrets, applyApiCors, handleOptions, setNoStore } from '../lib/secure.js';
 import { sendError } from '../lib/errors.js';
+import { deleteUserStorageObjects } from '../lib/delete-user-storage.js';
 
 /**
  * POST /api/delete-account
@@ -40,39 +41,43 @@ export default async function handler(req, res) {
   if (authErr || !user) return res.status(401).json({ success: false, message: 'Invalid or expired session' });
 
   try {
-    // Sever any referral links pointing at this account before deleting
-    // the profiles row. Without this, deleting a user who referred other
-    // people (their id sits in profiles.referred_by on those other rows)
-    // or who has any referral_earnings history (as either referrer or
-    // referee) fails silently against a foreign-key constraint — that's
-    // why referred/referring accounts couldn't be deleted before.
+    // Supabase Auth refuses to delete users who still own Storage objects.
+    const storageCleanup = await deleteUserStorageObjects(supabase, user.id);
+
     const { error: unlinkErr } = await supabase
       .from('profiles')
       .update({ referred_by: null })
       .eq('referred_by', user.id);
-    if (unlinkErr) console.warn('delete-account: could not unlink referred users', unlinkErr.message);
+    if (unlinkErr) {
+      return res.status(500).json({ success: false, message: 'Could not unlink referral records: ' + unlinkErr.message });
+    }
 
     const { error: earningsErr } = await supabase
       .from('referral_earnings')
       .delete()
       .or(`referrer_id.eq.${user.id},referee_id.eq.${user.id}`);
-    if (earningsErr) console.warn('delete-account: could not clear referral_earnings', earningsErr.message);
-
-    const { error: profileError } = await supabase
-      .from('profiles')
-      .delete()
-      .eq('id', user.id);
-
-    if (profileError) {
-      return res.status(500).json({ success: false, message: 'Could not delete profile: ' + profileError.message });
+    if (earningsErr) {
+      return res.status(500).json({ success: false, message: 'Could not remove referral records: ' + earningsErr.message });
     }
 
+    // Remove Auth credentials before deleting the app profile. This prevents
+    // the old partial-success state where the profile vanished but the user
+    // could still sign in.
     const { error: authDeleteError } = await supabase.auth.admin.deleteUser(user.id);
     if (authDeleteError) {
       return res.status(500).json({ success: false, message: 'Could not delete account credentials: ' + authDeleteError.message });
     }
 
-    return res.status(200).json({ success: true });
+    const { error: profileError } = await supabase
+      .from('profiles')
+      .delete()
+      .eq('id', user.id);
+    if (profileError) {
+      console.error('delete-account: Auth user deleted but profile cleanup failed', profileError);
+      return res.status(500).json({ success: false, auth_deleted: true, message: 'Your login account was deleted, but profile cleanup failed: ' + profileError.message });
+    }
+
+    return res.status(200).json({ success: true, storage_objects_removed: storageCleanup.removed });
   } catch (err) {
     console.error('delete-account error:', err);
     return res.status(500).json({ success: false, message: err.message || 'Server error' });
