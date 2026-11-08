@@ -1144,7 +1144,8 @@ async function inventoryHandle(body) {
     const skippedDuplicates = lines.length - newLines.length;
 
     if (newLines.length) {
-      const rows = newLines.map(credential => ({ product_key, credential, status: 'available' }));
+      const uploadBaseTime = Date.now();
+      const rows = newLines.map((credential, index) => ({ product_key, credential, status: 'available', created_at: new Date(uploadBaseTime + index).toISOString() }));
       const CHUNK = 500;
       for (let i = 0; i < rows.length; i += CHUNK) {
         const { error: insErr } = await supabase.from('product_inventory').insert(rows.slice(i, i + CHUNK));
