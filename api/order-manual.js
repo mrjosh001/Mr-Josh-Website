@@ -218,7 +218,7 @@ export default async function handler(req, res) {
     const { data: product, error: prodErr } = await supabase
       .from('products')
       .select(
-        'id, product_key, name, price, stock_quantity, source, display_description, description, is_shared, shared_credential, is_available'
+        'id, product_key, name, price, stock_quantity, source, display_description, description, is_shared, shared_credential, shared_inventory_ids, is_available'
       )
       .eq('product_key', product_key)
       .single();
@@ -229,6 +229,15 @@ export default async function handler(req, res) {
 
     if (!isManualProduct(product)) {
       return res.status(400).json({ success: false, message: 'This product is not a manual product' });
+    }
+
+    const sharedMode = product.is_shared === true || product.is_shared === 'true' || product.is_shared === 1;
+    if (sharedMode && (!Array.isArray(product.shared_inventory_ids) || product.shared_inventory_ids.length === 0)) {
+      return res.status(409).json({
+        success: false,
+        code: 'SHARED_POOL_NOT_CONFIGURED',
+        message: 'Shared Logs is enabled but no accounts have been selected for rotation. Please contact support.'
+      });
     }
 
     total = Number(product.price) * qty;
