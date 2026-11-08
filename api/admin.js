@@ -1026,7 +1026,7 @@ async function inventoryHandle(body) {
 
   const { data: product, error: prodErr } = await supabase
     .from('products')
-    .select('id, product_key, name')
+    .select('id, product_key, name, is_shared, shared_inventory_ids')
     .eq('product_key', product_key)
     .maybeSingle();
 
@@ -1039,39 +1039,89 @@ async function inventoryHandle(body) {
     return { status: 200, body: { success: true, data: { product_key, available } } };
   }
 
-  // Shared mode: same credential for every buyer, no inventory rows consumed
-  if (action === 'set_shared') {
-    const credential = String(body.credential || body.text || '').trim();
-    if (!credential) {
-      return { status: 400, body: { success: false, message: 'Paste the content every buyer should receive.' } };
-    }
-    const { error } = await supabase.from('products').update({
-      is_shared: true,
-      shared_credential: credential,
-      stock_quantity: 99999,
-      is_available: true,
-      source: 'manual',
-      updated_at: new Date().toISOString()
-    }).eq('product_key', product_key);
-    if (error) return { status: 400, body: { success: false, message: error.message } };
+  // This list is built from actual database inventory, not hardcoded stock types.
+  // Existing shared selections remain visible so an admin can review or change the pool.
+  if (action === 'available_stock') {
+    const { data, error } = await supabase
+      .from('product_inventory')
+      .select('id, credential, status, created_at')
+      .eq('product_key', product_key)
+      .in('status', ['available', 'shared'])
+      .order('created_at', { ascending: true })
+      .order('id', { ascending: true })
+      .limit(2000);
+    if (error) return { status: 500, body: { success: false, message: 'Could not load available stock: ' + error.message } };
     return {
       status: 200,
       body: {
         success: true,
-        data: { product_key, mode: 'shared', message: 'Shared content saved. Every buyer of this product will receive the same details.' }
+        data: (data || []).map((row, index) => ({
+          id: row.id,
+          credential: row.credential,
+          status: row.status,
+          created_at: row.created_at,
+          position: index + 1
+        }))
+      }
+    };
+  }
+
+  if (action === 'set_shared_pool') {
+    const ids = Array.isArray(body.inventory_ids)
+      ? [...new Set(body.inventory_ids.map((id) => String(id).trim()).filter(Boolean))]
+      : [];
+    if (!ids.length) {
+      return { status: 400, body: { success: false, message: 'Select at least one available stock account for rotation.' } };
+    }
+    const { data, error } = await supabase.rpc('configure_shared_inventory', {
+      p_product_key: product_key,
+      p_inventory_ids: ids,
+      p_enabled: true
+    });
+    if (error) return { status: 400, body: { success: false, message: error.message || 'Could not enable shared rotation.' } };
+    return {
+      status: 200,
+      body: {
+        success: true,
+        data: {
+          product_key,
+          mode: 'shared_rotation',
+          selected: Number(data || ids.length),
+          message: 'Shared rotation enabled. Selected accounts will rotate and remain reusable.'
+        }
       }
     };
   }
 
   if (action === 'clear_shared') {
-    const { error } = await supabase.from('products').update({
-      is_shared: false,
-      shared_credential: null,
-      updated_at: new Date().toISOString()
-    }).eq('product_key', product_key);
-    if (error) return { status: 400, body: { success: false, message: error.message } };
-    const available = await inventorySyncStockCount(product_key);
-    return { status: 200, body: { success: true, data: { product_key, mode: 'unique', available } } };
+    const { data, error } = await supabase.rpc('configure_shared_inventory', {
+      p_product_key: product_key,
+      p_inventory_ids: [],
+      p_enabled: false
+    });
+    if (error) return { status: 400, body: { success: false, message: error.message || 'Could not turn off shared rotation.' } };
+    return {
+      status: 200,
+      body: {
+        success: true,
+        data: {
+          product_key,
+          mode: 'unique',
+          available: Number(data || 0),
+          message: 'Shared rotation is off. The selected accounts are available again for Unique Logs.'
+        }
+      }
+    };
+  }
+
+  if (action === 'set_shared') {
+    return {
+      status: 400,
+      body: {
+        success: false,
+        message: 'The old single-credential Shared mode is retired. Upload stock first, then select the accounts for Shared rotation.'
+      }
+    };
   }
 
   if (action === 'bulk_upload') {
@@ -1079,7 +1129,11 @@ async function inventoryHandle(body) {
     const lines = text.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
     if (!lines.length) return { status: 400, body: { success: false, message: 'No credential lines found in the pasted text.' } };
 
-    const { data: existingRows } = await supabase.from('product_inventory').select('credential').eq('product_key', product_key);
+    const { data: existingRows, error: existingErr } = await supabase
+      .from('product_inventory')
+      .select('credential')
+      .eq('product_key', product_key);
+    if (existingErr) return { status: 500, body: { success: false, message: 'Could not check duplicate stock: ' + existingErr.message } };
     const existingSet = new Set((existingRows || []).map(r => r.credential));
     const newLines = lines.filter(l => !existingSet.has(l));
     const skippedDuplicates = lines.length - newLines.length;
@@ -1096,13 +1150,22 @@ async function inventoryHandle(body) {
     const available = await inventorySyncStockCount(product_key);
     return {
       status: 200,
-      body: { success: true, data: { product_key, product_name: product.name, inserted: newLines.length, skipped_duplicates: skippedDuplicates, available_stock: available } }
+      body: {
+        success: true,
+        data: {
+          product_key,
+          product_name: product.name,
+          inserted: newLines.length,
+          skipped_duplicates: skippedDuplicates,
+          available_stock: available,
+          message: 'Uploaded stock is now available for Unique Logs or can be selected for Shared rotation.'
+        }
+      }
     };
   }
 
-  return { status: 400, body: { success: false, message: 'Unknown action. Use "bulk_upload", "stock_count", "set_shared", or "clear_shared".' } };
+  return { status: 400, body: { success: false, message: 'Unknown inventory action.' } };
 }
-
 
 async function listProfilesHandle() {
   // Service role — bypasses RLS so admin always sees every customer + live balances
