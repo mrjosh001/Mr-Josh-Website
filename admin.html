@@ -1998,28 +1998,31 @@ function withLagos(opts) { return Object.assign({ timeZone: 'Africa/Lagos' }, op
  <div class="field">
  <label>Stock mode</label>
  <select id="rsMode" onchange="onRestockModeChange()">
- <option value="unique">Unique lines: each buyer gets a different log</option>
- <option value="shared">Shared: every buyer gets the same content</option>
+ <option value="unique">Unique Logs: one-time account per buyer</option>
+ <option value="shared">Shared Logs: rotate selected accounts repeatedly</option>
  </select>
  </div>
  <div class="field">
- <label>Current stock</label>
+ <label>Current stock / rotation</label>
  <input type="text" id="rsCurrentStock" disabled />
  </div>
  <div class="field" id="rsUniqueWrap">
- <label>Paste logs: one per line (e.g. user1@mail.com:pass1)</label>
- <textarea id="rsPasteBox" rows="10" placeholder="user1@mail.com:pass1&#10;user2@mail.com:pass2&#10;user3@mail.com:pass3"></textarea>
+ <label>Add stock: one account per line</label>
+ <textarea id="rsPasteBox" rows="10" placeholder="account1:password1&#10;account2:password2&#10;account3:password3"></textarea>
  <div class="price-note" id="rsLineCount">0 lines</div>
+ <div class="price-note">After uploading, switch to Shared Logs to select any available accounts for rotation.</div>
  </div>
  <div class="field hidden" id="rsSharedWrap">
- <label>Shared content (delivered to every buyer of this product)</label>
- <textarea id="rsSharedBox" rows="8" placeholder="Paste the single VPN log / config / details here"></textarea>
- <div class="price-note">This replaces unique stock for this product. Sales will never run out.</div>
+ <label>Select available stock for the rotation pool</label>
+ <div class="price-note">Every account uploaded for this product appears here automatically. Selected accounts are reusable and are not consumed by purchases.</div>
+ <div id="rsSharedStockList" style="display:grid;gap:8px;margin-top:10px;max-height:300px;overflow:auto;"></div>
+ <div class="price-note" id="rsSharedSelectionCount">0 accounts selected</div>
  </div>
  <div id="restockModalError" class="error-msg"></div>
  <div id="restockModalResult" style="font-size:13px;color:var(--success,#34d399);"></div>
- <div class="modal-actions">
+ <div class="modal-actions" style="flex-wrap:wrap;">
  <button class="btn btn-ghost" onclick="closeRestockModal()">Close</button>
+ <button class="btn btn-ghost btn-sm hidden" id="rsDisableSharedBtn" onclick="disableSharedRotation()">Turn Shared Logs off</button>
  <button class="btn btn-primary btn-sm" id="rsUploadBtn" onclick="uploadManualStock()"><i class="fas fa-upload"></i> Upload logs</button>
  </div>
  </div>
@@ -5443,33 +5446,83 @@ function toggleSharedFields() {
 
 function onRestockModeChange() {
  const mode = document.getElementById('rsMode')?.value || 'unique';
- document.getElementById('rsUniqueWrap')?.classList.toggle('hidden', mode === 'shared');
+ document.getElementById('rsUniqueWrap')?.classList.toggle('hidden', mode !== 'unique');
  document.getElementById('rsSharedWrap')?.classList.toggle('hidden', mode !== 'shared');
+ const product = allProducts.find(p => p.product_key === document.getElementById('rsProductKey')?.value);
+ const disableBtn = document.getElementById('rsDisableSharedBtn');
+ if (disableBtn) disableBtn.classList.toggle('hidden', !(mode === 'shared' && product?.is_shared));
+ if (mode === 'shared') loadRestockAvailableStock();
+}
+
+async function restockApi(action, extra = {}) {
+ const headers = await authHeaders();
+ headers['Content-Type'] = 'application/json';
+ headers['Accept'] = 'application/json';
+ if (!headers.Authorization) throw new Error('Session expired. Sign out and sign in again.');
+ const response = await fetch('/api/admin', {
+  method: 'POST',
+  headers,
+  body: JSON.stringify({ resource: 'inventory', action, product_key: document.getElementById('rsProductKey').value, ...extra })
+ });
+ const raw = await response.text();
+ let data = {};
+ try { data = raw ? JSON.parse(raw) : {}; } catch (_) { throw new Error('Server returned an invalid response (HTTP ' + response.status + ').'); }
+ if (!response.ok || !data.success) throw new Error(data.message || 'Request failed.');
+ return data.data || {};
+}
+
+async function loadRestockAvailableStock() {
+ const list = document.getElementById('rsSharedStockList');
+ if (!list) return;
+ list.innerHTML = '<div class="price-note">Loading available stock…</div>';
+ try {
+  const result = await restockApi('available_stock');
+  const rows = result || [];
+  if (!rows.length) {
+   list.innerHTML = '<div class="empty-state" style="padding:18px;">No available stock yet. Switch to Unique Logs and upload accounts first.</div>';
+   updateSharedSelectionCount();
+   return;
+  }
+  list.innerHTML = rows.map(row => {
+   const checked = row.status === 'shared' ? ' checked' : '';
+   const state = row.status === 'shared' ? 'In rotation' : 'Available';
+   return '<label style="display:flex;align-items:flex-start;gap:10px;padding:10px;border:1px solid var(--border);border-radius:10px;background:var(--bg);cursor:pointer;">'
+    + '<input class="rs-shared-stock-check" type="checkbox" value="' + escapeHtml(row.id) + '"' + checked + ' onchange="updateSharedSelectionCount()" style="margin-top:3px;accent-color:var(--primary);width:16px;height:16px;flex:0 0 auto;">'
+    + '<span style="min-width:0;flex:1;overflow-wrap:anywhere;font-size:12px;">' + escapeHtml(row.credential || '(empty credential)') + '<span style="display:block;color:var(--muted);font-size:10px;margin-top:4px;">' + state + '</span></span>'
+    + '</label>';
+  }).join('');
+  updateSharedSelectionCount();
+ } catch (error) {
+  list.innerHTML = '<div class="error-msg">' + escapeHtml(error.message || 'Could not load stock.') + '</div>';
+ }
+}
+
+function updateSharedSelectionCount() {
+ const count = document.querySelectorAll('#rsSharedStockList .rs-shared-stock-check:checked').length;
+ const el = document.getElementById('rsSharedSelectionCount');
+ if (el) el.textContent = count + ' account' + (count === 1 ? '' : 's') + ' selected for rotation';
 }
 
 function openRestockModal() {
  const select = document.getElementById('rsProductKey');
  const manualProducts = allProducts.filter(isManualProductRow);
-
  if (!manualProducts.length) {
- select.innerHTML = '<option value="">No manual products yet: add one first (Stage 2)</option>';
+  select.innerHTML = '<option value="">No manual products yet: add one first (Stage 2)</option>';
  } else {
- select.innerHTML = manualProducts
- .map(p => `<option value="${escapeHtml(p.product_key)}">${escapeHtml(p.name)} (${escapeHtml(p.product_key)})</option>`)
- .join('');
+  select.innerHTML = manualProducts
+   .map(p => '<option value="' + escapeHtml(p.product_key) + '">' + escapeHtml(p.name) + ' (' + escapeHtml(p.product_key) + ')</option>')
+   .join('');
  }
-
  document.getElementById('rsPasteBox').value = '';
  document.getElementById('rsLineCount').textContent = '0 lines';
  document.getElementById('restockModalError').textContent = '';
  document.getElementById('restockModalResult').textContent = '';
- updateRestockCurrentStock();
  select.onchange = updateRestockCurrentStock;
  document.getElementById('rsPasteBox').oninput = function () {
- const n = this.value.split(/\r?\n/).map(l => l.trim()).filter(Boolean).length;
- document.getElementById('rsLineCount').textContent = n + ' line' + (n === 1 ? '' : 's');
+  const n = this.value.split(/\r?\n/).map(l => l.trim()).filter(Boolean).length;
+  document.getElementById('rsLineCount').textContent = n + ' line' + (n === 1 ? '' : 's');
  };
-
+ updateRestockCurrentStock();
  document.getElementById('restockModal').classList.remove('hidden');
 }
 
@@ -5477,22 +5530,15 @@ function updateRestockCurrentStock() {
  const key = document.getElementById('rsProductKey').value;
  const p = allProducts.find(x => x.product_key === key);
  const el = document.getElementById('rsCurrentStock');
- if (!p) { el.value = ' '; return; }
- if (p.is_shared) {
- el.value = 'Shared (same content for every buyer)';
+ if (!p) { el.value = ''; return; }
  const mode = document.getElementById('rsMode');
- if (mode) mode.value = 'shared';
+ if (mode) mode.value = p.is_shared ? 'shared' : 'unique';
+ if (p.is_shared) el.value = 'Shared rotation enabled';
+ else {
+  const n = Number(p.stock_quantity || 0);
+  el.value = n + ' available unique account' + (n === 1 ? '' : 's');
+ }
  onRestockModeChange();
- const box = document.getElementById('rsSharedBox');
- if (box && p.shared_credential) box.value = p.shared_credential;
- } else {
- const n = Number(p.stock_quantity);
- if (p.stock_quantity == null || n === 99999) {
- el.value = 'Stock not set — upload logs to set real quantity';
- } else {
- el.value = n + ' available (real inventory)';
- }
- }
 }
 
 function closeRestockModal() {
@@ -5504,82 +5550,59 @@ async function uploadManualStock() {
  const resultEl = document.getElementById('restockModalResult');
  errEl.textContent = '';
  resultEl.textContent = '';
-
  const product_key = document.getElementById('rsProductKey').value;
  const mode = document.getElementById('rsMode')?.value || 'unique';
- const text = mode === 'shared'
- ? (document.getElementById('rsSharedBox')?.value || '')
- : document.getElementById('rsPasteBox').value;
-
- if (!product_key) { errEl.textContent = 'Choose a manual product first.'; return; }
- if (!text.trim()) {
- errEl.textContent = mode === 'shared'
- ? 'Paste the shared content every buyer should receive.'
- : 'Paste at least one credential line.';
- return;
- }
+ const text = document.getElementById('rsPasteBox').value;
+ if (!product_key) { errEl.textContent = 'Choose a product first.'; return; }
 
  const btn = document.getElementById('rsUploadBtn');
  const idleHtml = btn.innerHTML;
  btn.disabled = true;
  btn.innerHTML = mode === 'shared'
- ? '<i class="fas fa-spinner fa-spin"></i> Saving...'
- : '<i class="fas fa-spinner fa-spin"></i> Uploading...';
-
- let step = 'reading session';
+  ? '<i class="fas fa-spinner fa-spin"></i> Saving rotation…'
+  : '<i class="fas fa-spinner fa-spin"></i> Uploading stock…';
  try {
- const headers = await authHeaders();
- headers['Content-Type'] = 'application/json';
- headers['Accept'] = 'application/json';
- if (!headers.Authorization) {
- errEl.textContent = 'Session expired. Sign out and sign in again, then upload.';
- return;
- }
-
- step = 'uploading';
- const payload = mode === 'shared'
- ? { resource: 'inventory', action: 'set_shared', product_key, credential: text.trim() }
- : { resource: 'inventory', action: 'bulk_upload', product_key, text };
- const res = await fetch('/api/admin', {
- method: 'POST',
- headers,
- body: JSON.stringify(payload)
- });
-
- step = 'reading response';
- const raw = await res.text();
- let data = {};
- try { data = raw ? JSON.parse(raw) : {}; } catch (_) {
- errEl.textContent = 'Upload failed. Server returned a bad reply (HTTP ' + res.status + '). Sign out, sign in, and try again.';
- return;
- }
-
- if (res.status === 401 || res.status === 403) {
- errEl.textContent = 'Session expired. Sign out and sign in again, then upload.';
- return;
- }
- if (!res.ok || !data.success) {
- errEl.textContent = data.message || 'Upload failed.';
- return;
- }
-
- if (mode === 'shared') {
- resultEl.textContent = data.data?.message || 'Shared content saved. Every buyer gets the same details.';
- document.getElementById('rsSharedBox').value = text.trim();
- } else {
- resultEl.textContent = `Uploaded ${data.data.inserted} new log${data.data.inserted === 1 ? '' : 's'}`
- + (data.data.skipped_duplicates ? ` (skipped ${data.data.skipped_duplicates} duplicate${data.data.skipped_duplicates === 1 ? '' : 's'})` : '')
- + `. Stock now: ${data.data.available_stock}.`;
- document.getElementById('rsPasteBox').value = '';
- document.getElementById('rsLineCount').textContent = '0 lines';
- }
- await loadProducts();
- updateRestockCurrentStock();
- } catch (e) {
- errEl.textContent = `Error while ${step}: ` + (e.message || e);
+  if (mode === 'shared') {
+   const inventory_ids = [...document.querySelectorAll('#rsSharedStockList .rs-shared-stock-check:checked')].map(el => el.value);
+   if (!inventory_ids.length) throw new Error('Select at least one available account for Shared Logs rotation.');
+   const data = await restockApi('set_shared_pool', { inventory_ids });
+   resultEl.textContent = 'Shared rotation enabled with ' + data.selected + ' selected accounts. Accounts will repeat in order and remain reusable.';
+  } else {
+   if (!text.trim()) throw new Error('Paste at least one account line.');
+   const data = await restockApi('bulk_upload', { text });
+   resultEl.textContent = 'Uploaded ' + data.inserted + ' new account' + (data.inserted === 1 ? '' : 's')
+    + (data.skipped_duplicates ? ' (' + data.skipped_duplicates + ' duplicates skipped)' : '')
+    + '. Available unique stock: ' + data.available_stock + '.';
+   document.getElementById('rsPasteBox').value = '';
+   document.getElementById('rsLineCount').textContent = '0 lines';
+  }
+  await loadProducts();
+  updateRestockCurrentStock();
+ } catch (error) {
+  errEl.textContent = error.message || 'Could not update inventory.';
  } finally {
- btn.disabled = false;
- btn.innerHTML = idleHtml;
+  btn.disabled = false;
+  btn.innerHTML = idleHtml;
+ }
+}
+
+async function disableSharedRotation() {
+ const errEl = document.getElementById('restockModalError');
+ const resultEl = document.getElementById('restockModalResult');
+ errEl.textContent = '';
+ resultEl.textContent = '';
+ const btn = document.getElementById('rsDisableSharedBtn');
+ if (!confirm('Turn off Shared Logs for this product? Selected accounts will return to available Unique Logs stock.')) return;
+ btn.disabled = true;
+ try {
+  const data = await restockApi('clear_shared');
+  resultEl.textContent = 'Shared Logs turned off. ' + data.available + ' accounts are now available for Unique Logs.';
+  await loadProducts();
+  updateRestockCurrentStock();
+ } catch (error) {
+  errEl.textContent = error.message || 'Could not turn off Shared Logs.';
+ } finally {
+  btn.disabled = false;
  }
 }
 
