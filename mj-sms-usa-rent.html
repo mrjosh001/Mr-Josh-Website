@@ -349,7 +349,17 @@ function serviceLogoHtml(name){
 
 function esc(s){return String(s==null?'':s).replace(/[&<>"']/g,function(c){return({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c];});}
 function fmtNgn(n){return '₦'+Number(n||0).toLocaleString('en-NG');}
-async function headers(){const{data:{session}}=await sb.auth.getSession();if(!session){location.href='auth.html';return null;}return{Authorization:'Bearer '+session.access_token,'Content-Type':'application/json',Accept:'application/json'};}
+async function headers(){
+  let session=null;
+  for(let attempt=0;attempt<3;attempt++){
+    try{const result=await sb.auth.getSession();session=result.data&&result.data.session;}catch(e){}
+    if(session&&session.access_token)break;
+    if(attempt===0)await new Promise(resolve=>setTimeout(resolve,350));
+  }
+  if(!session||!session.access_token){try{const refreshed=await sb.auth.refreshSession();session=refreshed.data&&refreshed.data.session;}catch(e){}}
+  if(!session||!session.access_token){location.href='auth.html?next='+encodeURIComponent(location.pathname+location.search);return null;}
+  return{Authorization:'Bearer '+session.access_token,'Content-Type':'application/json',Accept:'application/json'};
+}
 async function api(action,opts){const h=await headers();if(!h)return{success:false,message:'Sign in required'};const method=(opts&&opts.method)||'GET';let url='/api/sms-bus?action=gotsms_'+encodeURIComponent(action);if(opts&&opts.query)url+='&'+opts.query;const res=await fetch(url,{method:method,headers:h,body:opts&&opts.body?JSON.stringify(opts.body):undefined});const raw=await res.text();try{const clean=String(raw||'').replace(/[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?:[^\uD800-\uDBFF]|^)[\uDC00-\uDFFF]/g,'');return clean?JSON.parse(clean):{};}catch(e){return{success:false,message:'Bad server response'};}}
 
 function readCache(){try{var raw=localStorage.getItem(CACHE_KEY);if(!raw)return null;var o=JSON.parse(raw);if(!o||!Array.isArray(o.services)||!o.ts)return null;if(Date.now()-o.ts>CACHE_TTL_MS)return null;return o;}catch(e){return null;}}
