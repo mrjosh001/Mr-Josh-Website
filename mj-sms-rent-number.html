@@ -227,15 +227,12 @@ body{font-family:'Plus Jakarta Sans',system-ui,-apple-system,sans-serif;backgrou
   }
   async function headers(){
     var session = null;
-    for(var attempt=0;attempt<3;attempt++){
-      try { var result=await sb.auth.getSession(); session=result&&result.data&&result.data.session; } catch(e) {}
-      if(session&&session.access_token) break;
-      if(attempt===0) await new Promise(function(resolve){setTimeout(resolve,350);});
+    try { var r1 = await sb.auth.getSession(); session = r1 && r1.data && r1.data.session; } catch (e) {}
+    if(!session){
+      await new Promise(function(res){ setTimeout(res, 250); });
+      try { var r2 = await sb.auth.getSession(); session = r2 && r2.data && r2.data.session; } catch (e2) {}
     }
-    if(!session||!session.access_token){
-      try { var refreshed=await sb.auth.refreshSession(); session=refreshed&&refreshed.data&&refreshed.data.session; } catch(e) {}
-    }
-    if(!session||!session.access_token){ location.href='auth.html?next='+encodeURIComponent(location.pathname+location.search); return null; }
+    if(!session){ location.href='auth.html?next='+encodeURIComponent(location.pathname+location.search); return null; }
     return { Authorization:'Bearer '+session.access_token, 'Content-Type':'application/json', Accept:'application/json' };
   }
   async function api(action, opts){
