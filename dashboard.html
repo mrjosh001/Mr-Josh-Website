@@ -8405,24 +8405,16 @@ window.confirmDeleteAccount = async function() {
         if (!session?.access_token) {
             return showToast('Session expired. Sign in again.', 'error');
         }
-        const res = await fetch('/api/delete-account', {
+        const res = await fetch('/api/admin', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
                 'Authorization': 'Bearer ' + session.access_token
             },
-            body: JSON.stringify({ confirm: 'DELETE' })
+            body: JSON.stringify({ resource: 'self_account', action: 'delete', confirm: 'DELETE' })
         });
         const data = await res.json().catch(() => ({}));
         if (!res.ok || data.success === false) {
-            // Fallback: sign out locally if API not available
-            if (res.status === 404) {
-                await supabaseClient.auth.signOut();
-                localStorage.clear();
-                showToast('Account sign-out complete. Contact support if data remains.', 'info');
-                setTimeout(() => { window.location.href = '/'; }, 1200);
-                return;
-            }
             throw new Error(data.message || 'Could not delete account');
         }
         await supabaseClient.auth.signOut();
