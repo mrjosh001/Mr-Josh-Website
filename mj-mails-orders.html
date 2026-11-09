@@ -146,7 +146,7 @@ function card(o,flash){
    (o.message?'<details class="msg" data-d="'+esc(o.id)+'"'+(openIds.has(o.id)?' open':'')+'><summary>Full message</summary><div class="body">'+esc(o.message)+'</div></details>':'')+
    '<div class="actions">'+(o.can_refresh||o.status!=='reconciliation_required'?'<button class="btn sm" data-refresh="'+esc(o.id)+'">Check inbox</button>':'')+
    (waiting?'<button class="btn sm refund-btn" data-refund="'+esc(o.id)+'" '+((!Number.isFinite(refundAvailable)||!Number.isFinite(mailExpires)||Date.now()<refundAvailable||Date.now()>=mailExpires)?'disabled':'')+'><span data-refund-timer data-available="'+esc(o.refund_available_at||'')+'" data-expires="'+esc(o.expires_at||'')+'">'+(!Number.isFinite(refundAvailable)||!Number.isFinite(mailExpires)?'Timer unavailable':Date.now()<refundAvailable?'Available in '+formatCountdown(refundAvailable-Date.now()):Date.now()>=mailExpires?'Expired':'Refund')+'</span></button>':canRetryRefund?'<button class="btn sm refund-btn" data-refund="'+esc(o.id)+'">Retry refund</button>':'')+
-   '<a class="btn ghost sm" style="display:inline-flex;align-items:center" href="/mj-mails.html?site='+encodeURIComponent(o.site||'')+'">Rent again</a></div></article>'}
+   (o.reused_from_order_id?'<span class="muted" style="grid-column:1/-1;font-size:11px">Same email address · new activation</span>':'')+(o.can_reuse?'<button class="btn sm reuse-btn" data-reuse="'+esc(o.id)+'">Reuse this email</button>':'')+'<a class="btn ghost sm" style="display:inline-flex;align-items:center" href="/mj-mails.html?site='+encodeURIComponent(o.site||'')+'">Rent again</a></div></article>'}
 function draw(flashId){
   drawTabs();const list=visible();
   const waiting=rows.some(o=>['waiting','cancel_pending_refund'].includes(o.status)||(o.status==='completed'&&!o.message&&!o.value));$('live').hidden=!waiting;
@@ -155,7 +155,7 @@ function draw(flashId){
   $('orders').innerHTML=list.map(o=>card(o,o.id===flashId)).join('');
   $('orders').querySelectorAll('[data-copy]').forEach(b=>b.onclick=()=>copy(b.dataset.copy));
   $('orders').querySelectorAll('[data-refresh]').forEach(b=>b.onclick=()=>refresh(b.dataset.refresh,b));
-  $('orders').querySelectorAll('[data-refund]').forEach(b=>b.onclick=()=>askRefund(b.dataset.refund));updateCancelTimers();
+  $('orders').querySelectorAll('[data-refund]').forEach(b=>b.onclick=()=>askRefund(b.dataset.refund));$('orders').querySelectorAll('[data-reuse]').forEach(b=>b.onclick=()=>askReuse(b.dataset.reuse));updateCancelTimers();
   $('orders').querySelectorAll('details[data-d]').forEach(d=>d.addEventListener('toggle',()=>{d.open?openIds.add(d.dataset.d):openIds.delete(d.dataset.d)}))}
 
 /* ---------- data ---------- */
@@ -182,6 +182,18 @@ async function refresh(id,btn){
   if(busy.has(id))return;busy.add(id);btn&&btn.classList.add('loading');
   try{const out=await api('refresh','POST',{id});const flash=merge(out.order,false);toast(out.refunded?'No message received. Your wallet has been refunded ✓':(flash?'Message received ✓':'No new message yet'));draw(flash)}
   catch(e){toast(e.message)}finally{busy.delete(id);btn&&btn.classList.remove('loading')}}
+function askReuse(id){
+  const o=rows.find(r=>r.id===id);if(!o||!o.can_reuse)return;
+  const requestId=crypto.randomUUID();
+  openSheet({title:'Reuse this email address?',yes:'Reuse · '+money(o.price),
+    html:'<div class="rows"><div><span>Email address</span><b style="overflow-wrap:anywhere">'+esc(o.email)+'</b></div><div><span>Service</span><b>'+esc(o.site)+'</b></div><div><span>New activation</span><b>'+money(o.price)+'</b></div></div><p class="muted" style="margin:0">MJ HUB will ask the email provider to reopen this same address for a new activation. This is a new paid activation. Your previous email and order history will remain unchanged.</p>',
+    onYes:async()=>{
+      const out=await api('reuse','POST',{id,request_id:requestId,expected_price:o.price});
+      sheetBusy=false;$('ov').hidden=true;
+      toast(out.pending?out.message:'Same email reused ✓');
+      await load();
+    }});
+}
 function askRefund(id){
   const o=rows.find(r=>r.id===id);if(!o)return;
   openSheet({title:o.status==='cancel_pending_refund'?'Retry your refund?':'Request email refund?',yes:o.status==='cancel_pending_refund'?'Retry refund':'Refund',
