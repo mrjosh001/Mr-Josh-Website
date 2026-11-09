@@ -1,24 +1,140 @@
 <!doctype html>
-<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>MJ Mails Orders · MJ HUB</title><link rel="stylesheet" href="/css/graceful.css"><link rel="stylesheet" href="/css/mj-motion.css"><script src="/js/mj-theme.js" defer></script><script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<style>
-body{margin:0;background:var(--bg,#080d18);color:var(--text,#f4f7fb);font-family:Inter,system-ui,sans-serif}.wrap{max-width:860px;margin:auto;padding:22px 16px 60px}.top{display:flex;justify-content:space-between;gap:12px;align-items:center;margin-bottom:24px}a{color:var(--primary,#60a5fa);text-decoration:none}.panel{background:var(--card,#111827);border:1px solid var(--border,#263244);border-radius:18px;padding:17px;margin:12px 0}.order{padding:16px 0;border-bottom:1px solid var(--border,#263244)}.order:last-child{border:0}h1{font-size:27px;margin:8px 0}p,.muted{color:var(--muted,#9ca3af);line-height:1.5}.actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}button{border:0;border-radius:10px;background:var(--primary,#2563eb);color:white;padding:10px 13px;font-weight:800;cursor:pointer}button.secondary{background:transparent;border:1px solid var(--border);color:var(--text)}button:disabled{opacity:.5}.email{font-weight:900;font-size:18px;overflow-wrap:anywhere}.code{font-size:20px;font-weight:900;color:var(--primary,#60a5fa);overflow-wrap:anywhere}.status{display:inline-block;border:1px solid var(--border);border-radius:99px;padding:4px 9px;font-size:12px;margin:7px 0}.notice{color:var(--muted)}
-</style></head><body><main class="wrap">
-<header class="top"><a href="/mj-mails.html">← MJ Mails</a><a href="/dashboard.html">MJ HUB</a></header>
-<h1>My email orders</h1><p>Check activation status and view received verification messages here.</p>
-<section class="panel"><div class="top"><strong>Email inbox</strong><button id="reload" class="secondary">Refresh orders</button></div><div id="notice" class="notice">Loading your orders…</div><div id="orders"></div></section>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>MJ Mails Orders · MJ HUB</title>
+<link rel="stylesheet" href="/css/graceful.css"><link rel="stylesheet" href="/css/mj-motion.css"><link rel="stylesheet" href="/css/mj-mails.css">
+<script src="/js/mj-theme.js" defer></script><script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+</head><body><main class="wrap">
+<header class="top"><a class="navlink" href="/mj-mails.html">← MJ Mails</a><a class="brand" href="/dashboard.html">MJ HUB</a></header>
+<h1>My email inbox</h1>
+<p class="lead">Your rented emails and the verification codes they receive. Waiting orders check for new messages automatically.</p>
+
+<div id="signin" class="banner" hidden><span>Sign in to view your email orders.</span><a class="btn sm" href="/auth.html">Sign in</a></div>
+
+<div class="tools"><input id="q" type="search" placeholder="Search email or service" autocomplete="off"><button id="reload" class="btn ghost sm">Refresh</button></div>
+<div class="tabs" id="tabs"></div>
+<div class="live" id="live" hidden><span class="dot"></span><span id="liveTxt">Auto-checking for messages</span></div>
+<div id="notice" class="muted" role="status"></div>
+<section id="orders" aria-live="polite"><div class="skel"></div><div class="skel"></div></section>
+</main>
+
+<div class="overlay" id="ov" hidden>
+<div class="sheet" role="dialog" aria-modal="true" aria-labelledby="shT">
+<div class="grab"></div><h2 id="shT"></h2><div id="shB"></div><div id="shErr" class="err" role="alert"></div>
+<div class="sheet-actions"><button class="btn ghost" id="shNo">Keep it</button><button class="btn" id="shYes">Confirm</button></div>
+</div></div>
+<div class="toast" id="toast" role="status"></div>
+
 <script>
 const SUPABASE_URL='https://atczodlljmlayvldxfmv.supabase.co';
 const SUPABASE_ANON_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJIUzI1NiIsInJlZiI6ImF0Y3pvZGxsam1sYXl2bGR4Zm12Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODUwNzUyMzgsImV4cCI6MjEwMDY1MTIzOH0.ufthD-p7BmeD_B7xyuMM6PNPL8DmcL4AtRYgg-MuoLI';
-const sb=window.supabase.createClient(SUPABASE_URL,SUPABASE_ANON_KEY);let token='';
-const $=id=>document.getElementById(id);const money=n=>'₦'+Number(n||0).toLocaleString('en-NG',{maximumFractionDigits:0});
-function esc(v){return String(v||'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
-async function api(action,method='GET',data){const r=await fetch('/api/sms-bus?action=mails_'+action,{method,headers:{Authorization:'Bearer '+token,'Content-Type':'application/json'},...(data?{body:JSON.stringify(data)}:{})});const j=await r.json();if(!r.ok)throw new Error(j.message||'Request failed');return j}
-function render(rows){if(!rows.length){$('orders').innerHTML='<p>No email orders yet. <a href="/mj-mails.html">Rent your first email address.</a></p>';return}
-$('orders').innerHTML=rows.map(o=>'<article class="order"><div class="top"><div><div class="email">'+esc(o.email||'Email address pending')+'</div><div class="muted">'+esc(o.site)+' · '+esc(o.domain)+'</div></div><span class="status">'+esc(o.status.replaceAll('_',' '))+'</span></div><div class="muted">Order price: '+money(o.price)+' · '+new Date(o.created_at).toLocaleString()+'</div>'+(o.value?'<p><strong>Verification code / value</strong><br><span class="code">'+esc(o.value)+'</span></p>':'')+(o.message?'<p><strong>Message</strong><br>'+esc(o.message)+'</p>':'<p class="muted">No message received yet.</p>')+'<div class="actions"><button data-refresh="'+o.id+'">Check for message</button>'+((o.status==='waiting'||o.status==='cancel_pending_refund')?'<button class="secondary" data-cancel="'+o.id+'">'+(o.status==='cancel_pending_refund'?'Retry refund':'Cancel')+'</button>':'')+'</div></article>').join('');
-document.querySelectorAll('[data-refresh]').forEach(b=>b.onclick=()=>refresh(b.dataset.refresh,b));document.querySelectorAll('[data-cancel]').forEach(b=>b.onclick=()=>cancel(b.dataset.cancel,b))}
-async function load(){try{const s=await sb.auth.getSession();token=s.data.session?.access_token||'';if(!token)throw new Error('Sign in to view your email orders.');const out=await api('orders');render(out.orders||[]);$('notice').textContent=(out.orders||[]).length+' email order(s)'}catch(e){$('notice').textContent=e.message}}
-async function refresh(id,b){b.disabled=true;b.textContent='Checking…';try{const out=await api('refresh','POST',{id});$('notice').textContent='Order updated';await load()}catch(e){$('notice').textContent=e.message}finally{b.disabled=false;b.textContent='Check for message'}}
-async function cancel(id,b){if(!confirm('Cancel this email activation? A refund is issued only if the provider confirms cancellation.'))return;b.disabled=true;try{await api('cancel','POST',{id});$('notice').textContent='Activation cancelled and refunded';await load()}catch(e){$('notice').textContent=e.message;b.disabled=false}}
-$('reload').onclick=load;load();
+const sb=window.supabase.createClient(SUPABASE_URL,SUPABASE_ANON_KEY);
+const $=id=>document.getElementById(id);let token='';
+const money=n=>'₦'+Number(n||0).toLocaleString('en-NG',{maximumFractionDigits:0});
+const esc=v=>String(v==null?'':v).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+
+const STATUS={
+  waiting:['Waiting for message','warn'],message_received:['Message received','ok'],completed:['Completed','ok'],
+  cancelled:['Cancelled','mute'],refunded:['Refunded','mute'],failed:['Failed · wallet restored','bad'],
+  reconciliation_required:['Verifying purchase','info'],cancel_pending_refund:['Refund pending','warn']};
+const GROUPS={all:null,active:['waiting','reconciliation_required','cancel_pending_refund'],done:['message_received','completed'],closed:['cancelled','refunded','failed']};
+const LABELS={all:'All',active:'Active',done:'Received',closed:'Closed'};
+const POLL_MS=10000,POLL_MAX=5;
+let rows=[],filter='all',query='',openIds=new Set(),busy=new Set(),polling=false;
+
+function toast(t){const el=$('toast');el.textContent=t;el.classList.add('show');clearTimeout(toast.t);toast.t=setTimeout(()=>el.classList.remove('show'),2400)}
+async function getToken(){const {data}=await sb.auth.getSession();token=data.session?.access_token||'';return token}
+async function api(action,method='GET',data){
+  const r=await fetch('/api/sms-bus?action=mails_'+action,{method,headers:{Authorization:'Bearer '+token,'Content-Type':'application/json'},...(data?{body:JSON.stringify(data)}:{})});
+  let j={};try{j=await r.json()}catch(_){}
+  if(!r.ok){const e=new Error(j.message||'Request failed');e.status=r.status;e.data=j;throw e}
+  return j}
+function ago(d){const s=Math.max(1,Math.round((Date.now()-new Date(d))/1000));
+  if(s<60)return 'just now';if(s<3600)return Math.floor(s/60)+' min ago';if(s<86400)return Math.floor(s/3600)+' hr ago';
+  return new Date(d).toLocaleDateString(undefined,{day:'numeric',month:'short',year:'numeric'})}
+function detectCode(m){const x=String(m||'').match(/(?<![\d])(\d{4,8})(?![\d])/);return x?x[1]:''}
+async function copy(text){try{await navigator.clipboard.writeText(text)}catch(_){const t=document.createElement('textarea');t.value=text;t.style.position='fixed';t.style.opacity='0';document.body.appendChild(t);t.select();try{document.execCommand('copy')}catch(__){}t.remove()}toast('Copied ✓')}
+
+/* ---------- sheet ---------- */
+let sheetBusy=false;
+function openSheet({title,html,yes,onYes}){
+  $('shT').textContent=title;$('shB').innerHTML=html;$('shErr').textContent='';$('shYes').textContent=yes;$('shYes').classList.remove('loading');
+  $('ov').hidden=false;sheetBusy=false;
+  $('shYes').onclick=async()=>{if(sheetBusy)return;sheetBusy=true;$('shYes').classList.add('loading');
+    try{await onYes();sheetBusy=false;$('ov').hidden=true}catch(e){$('shErr').textContent=e.message;$('shYes').classList.remove('loading');sheetBusy=false}};
+  $('shNo').onclick=()=>{if(!sheetBusy)$('ov').hidden=true}}
+$('ov').addEventListener('click',e=>{if(e.target===$('ov')&&!sheetBusy)$('ov').hidden=true});
+document.addEventListener('keydown',e=>{if(e.key==='Escape'&&!sheetBusy)$('ov').hidden=true});
+
+/* ---------- render ---------- */
+function visible(){const g=GROUPS[filter];const q=query.trim().toLowerCase();
+  return rows.filter(o=>(!g||g.includes(o.status))&&(!q||[o.email,o.site,o.domain].join(' ').toLowerCase().includes(q)))}
+function drawTabs(){$('tabs').innerHTML=Object.keys(LABELS).map(k=>{const n=GROUPS[k]?rows.filter(o=>GROUPS[k].includes(o.status)).length:rows.length;
+  return '<button class="tab'+(k===filter?' on':'')+'" data-f="'+k+'">'+LABELS[k]+'<i>'+n+'</i></button>'}).join('');
+  $('tabs').querySelectorAll('[data-f]').forEach(b=>b.onclick=()=>{filter=b.dataset.f;draw()})}
+function card(o,flash){
+  const st=STATUS[o.status]||[String(o.status||'').replace(/_/g,' '),'mute'];
+  const code=o.value||detectCode(o.message);const waiting=o.status==='waiting';
+  const canCancel=waiting||o.status==='cancel_pending_refund';
+  return '<article class="order'+(flash?' flash':'')+'" data-id="'+esc(o.id)+'">'+
+   '<div class="o-head"><div style="min-width:0;flex:1"><div class="copyrow"><div class="email">'+esc(o.email||'Email address pending')+'</div>'+(o.email?'<button class="copy" data-copy="'+esc(o.email)+'">Copy</button>':'')+'</div>'+
+   '<div class="muted o-sub">'+esc(o.site)+' · '+esc(o.domain)+' · '+money(o.price)+' · '+ago(o.created_at)+'</div></div><span class="status '+st[1]+'">'+esc(st[0])+'</span></div>'+
+   (code?'<div class="codebox"><div class="lbl">'+(o.value?'Verification code':'Code found in message')+'</div><div class="copyrow"><div class="code">'+esc(code)+'</div><button class="copy" data-copy="'+esc(code)+'">Copy</button></div></div>':'')+
+   (waiting&&!code?'<div class="waitline"><span class="dot"></span>Waiting for the email to arrive…</div><div class="pulse-bar"></div>':'')+
+   (o.status==='reconciliation_required'?'<p class="muted" style="margin:12px 0 0">We are confirming this purchase with the provider. Please do not buy again — this usually clears within a few minutes.</p>':'')+
+   (o.message?'<details class="msg" data-d="'+esc(o.id)+'"'+(openIds.has(o.id)?' open':'')+'><summary>Full message</summary><div class="body">'+esc(o.message)+'</div></details>':'')+
+   '<div class="actions">'+(o.supplier_status!==undefined||o.status!=='reconciliation_required'?'<button class="btn sm" data-refresh="'+esc(o.id)+'">Check for message</button>':'')+
+   (canCancel?'<button class="btn ghost sm" data-cancel="'+esc(o.id)+'">'+(o.status==='cancel_pending_refund'?'Retry refund':'Cancel &amp; refund')+'</button>':'')+
+   '<a class="btn ghost sm" style="display:inline-flex;align-items:center" href="/mj-mails.html?site='+encodeURIComponent(o.site||'')+'">Rent again</a></div></article>'}
+function draw(flashId){
+  drawTabs();const list=visible();
+  const waiting=rows.some(o=>o.status==='waiting');$('live').hidden=!waiting;
+  if(!rows.length){$('orders').innerHTML='<div class="empty card"><span class="ico">📬</span><b>No email orders yet</b><br>Rent your first temporary email and codes will show up here.<br><br><a class="btn sm" href="/mj-mails.html" style="display:inline-block">Rent an email</a></div>';return}
+  if(!list.length){$('orders').innerHTML='<div class="empty card"><span class="ico">🔎</span><b>Nothing here</b><br>No orders match this filter or search.</div>';return}
+  $('orders').innerHTML=list.map(o=>card(o,o.id===flashId)).join('');
+  $('orders').querySelectorAll('[data-copy]').forEach(b=>b.onclick=()=>copy(b.dataset.copy));
+  $('orders').querySelectorAll('[data-refresh]').forEach(b=>b.onclick=()=>refresh(b.dataset.refresh,b));
+  $('orders').querySelectorAll('[data-cancel]').forEach(b=>b.onclick=()=>askCancel(b.dataset.cancel));
+  $('orders').querySelectorAll('details[data-d]').forEach(d=>d.addEventListener('toggle',()=>{d.open?openIds.add(d.dataset.d):openIds.delete(d.dataset.d)}))}
+
+/* ---------- data ---------- */
+async function load(manual){
+  try{
+    await getToken();
+    if(!token){$('signin').hidden=false;rows=[];$('orders').innerHTML='';$('notice').textContent='';return}
+    $('signin').hidden=true;
+    if(manual){$('reload').classList.add('loading')}
+    const out=await api('orders');rows=out.orders||[];
+    $('notice').textContent=rows.length?rows.length+' email order'+(rows.length>1?'s':''):'';draw();
+  }catch(e){$('notice').textContent=e.message;if(!rows.length)$('orders').innerHTML=''}
+  finally{$('reload').classList.remove('loading')}}
+function merge(order,announce){
+  const i=rows.findIndex(r=>r.id===order.id);if(i<0)return;
+  const before=rows[i];rows[i]=order;
+  const gotNew=(order.message&&order.message!==before.message)||(order.value&&order.value!==before.value);
+  if(gotNew&&announce){toast('New message for '+(order.email||'your email')+' 📩');try{navigator.vibrate&&navigator.vibrate(120)}catch(_){}}
+  return gotNew?order.id:null}
+async function refresh(id,btn){
+  if(busy.has(id))return;busy.add(id);btn&&btn.classList.add('loading');
+  try{const out=await api('refresh','POST',{id});const flash=merge(out.order,false);toast(flash?'Message received ✓':'No new message yet');draw(flash)}
+  catch(e){toast(e.message)}finally{busy.delete(id);btn&&btn.classList.remove('loading')}}
+function askCancel(id){
+  const o=rows.find(r=>r.id===id);if(!o)return;
+  openSheet({title:o.status==='cancel_pending_refund'?'Retry your refund?':'Cancel this email?',yes:o.status==='cancel_pending_refund'?'Retry refund':'Cancel & refund',
+    html:'<div class="rows"><div><span>Email</span><b style="overflow-wrap:anywhere">'+esc(o.email||'Pending')+'</b></div><div><span>Refund</span><b>'+money(o.price)+'</b></div></div><p class="muted" style="margin:0">A refund is issued only when the provider confirms the cancellation. You can only cancel while still waiting for a message.</p>',
+    onYes:async()=>{await api('cancel','POST',{id});toast('Cancelled · wallet refunded');await load()}})}
+
+/* ---------- auto-check waiting orders ---------- */
+async function poll(){
+  if(polling||document.hidden||!token)return;
+  const waiting=rows.filter(o=>o.status==='waiting'&&!busy.has(o.id)).slice(0,POLL_MAX);if(!waiting.length)return;
+  polling=true;let flash=null;
+  for(const o of waiting){try{const out=await api('refresh','POST',{id:o.id});const f=merge(out.order,true);if(f)flash=f}catch(_){}}
+  polling=false;draw(flash)}
+setInterval(poll,POLL_MS);
+document.addEventListener('visibilitychange',()=>{if(!document.hidden)poll()});
+
+/* ---------- init ---------- */
+$('reload').onclick=()=>load(true);
+let qt;$('q').addEventListener('input',e=>{clearTimeout(qt);qt=setTimeout(()=>{query=e.target.value;draw()},150)});
+drawTabs();load();
 </script></main></body></html>
