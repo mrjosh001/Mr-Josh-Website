@@ -7,10 +7,10 @@
 <script src="/js/mj-theme.js" defer></script><script src="/js/mj-page-loader.js" defer></script><script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
 <body><main class="wrap">
-<header class="top mm-top"><a class="back-link" href="/dashboard.html" aria-label="Back to dashboard"><span aria-hidden="true">‹</span><span>Dashboard</span></a><a class="brand" href="/dashboard.html">MJ HUB</a><a class="navlink" href="/mj-mails-orders.html">My orders <span aria-hidden="true">↗</span></a></header>
+<header class="top mm-top"><a class="back-link" href="/dashboard.html" aria-label="Back to dashboard"><span aria-hidden="true">‹</span><span>Dashboard</span></a><a class="brand" href="/dashboard.html">MJ HUB</a></header>
 
 <section class="mm-hero">
-<div class="mm-eyebrow"><span class="mm-eyebrow-dot"></span> MJ HUB SERVICES</div>
+
 <h1>Temporary email, <span>made simple.</span></h1>
 <p class="lead">Choose the website, select an available email domain, and receive verification messages in your MJ HUB inbox.</p>
 <div class="mm-hero-meta"><span>⚡ Instant checkout</span><span>⌁ Private inbox</span><span>↻ Live message checks</span></div>
@@ -25,9 +25,7 @@
 <input id="site" type="text" inputmode="url" placeholder="e.g. telegram.com" autocomplete="off" autocapitalize="off" spellcheck="false" enterkeyhint="search">
 <button id="search" class="btn"><span>Find emails</span><span aria-hidden="true">→</span></button>
 </div>
-<div class="mm-site-link" id="siteLinkWrap" hidden><span>1. Link to the website where you’ll enter the email address</span><a id="siteLink" href="#" target="_blank" rel="noopener noreferrer">Open website ↗</a></div>
-<div class="chips" id="chips" aria-label="Popular services"></div>
-<div id="recent" class="muted mm-recent"></div>
+
 <div id="notice" class="muted mm-notice" role="status"></div>
 </section>
 <aside class="mm-policy" role="note"><span class="mm-policy-icon">!</span><div><strong>Acceptable use</strong><p>It is prohibited to use this service to work with government websites or banks, or to defraud affiliate programs. Use MJ Mails only for lawful, permitted registrations.</p></div></aside>
@@ -55,8 +53,8 @@ const sb=window.supabase.createClient(SUPABASE_URL,SUPABASE_ANON_KEY);
 const $=id=>document.getElementById(id);let token='';
 const money=n=>'₦'+Number(n||0).toLocaleString('en-NG',{maximumFractionDigits:0});
 const esc=v=>String(v==null?'':v).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-const POPULAR=[['Telegram','telegram.com'],['Instagram','instagram.com'],['Facebook','facebook.com'],['TikTok','tiktok.com'],['Google','google.com'],['X','x.com'],['WhatsApp','whatsapp.com'],['Discord','discord.com']];
-let currentSite='';let sheetBusy=false;
+
+let sheetBusy=false;
 
 /* ---------- helpers ---------- */
 function toast(t){const el=$('toast');el.textContent=t;el.classList.add('show');clearTimeout(toast.t);toast.t=setTimeout(()=>el.classList.remove('show'),2600)}
@@ -82,18 +80,12 @@ $('ov').addEventListener('click',e=>{if(e.target===$('ov'))closeSheet()});
 document.addEventListener('keydown',e=>{if(e.key==='Escape'&&!$('ov').hidden)closeSheet()});
 
 /* ---------- search ---------- */
-function drawChips(){$('chips').innerHTML=POPULAR.map(([n,d])=>'<button class="chip'+(d===currentSite?' on':'')+'" data-site="'+d+'">'+n+'</button>').join('');
-  $('chips').querySelectorAll('.chip').forEach(b=>b.onclick=()=>{$('site').value=b.dataset.site;search()})}
-function drawRecent(){const r=(store('mjmails_recent')||[]).filter(x=>x!==currentSite);
-  $('recent').innerHTML=r.length?'Recent: '+r.map(x=>'<a href="#" data-r="'+esc(x)+'">'+esc(x)+'</a>').join(' · '):'';
-  $('recent').querySelectorAll('[data-r]').forEach(a=>a.onclick=e=>{e.preventDefault();$('site').value=a.dataset.r;search()})}
-function remember(site){const r=[site,...(store('mjmails_recent')||[]).filter(x=>x!==site)].slice(0,5);store('mjmails_recent',r)}
-function updateSiteLink(){const site=cleanSite($('site').value);const valid=/^(?=.{3,253}$)([a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,}$/i.test(site);$('siteLinkWrap').hidden=!valid;if(valid){$('siteLink').href='https://'+site;$('siteLink').textContent='https://'+site+' ↗'}}
+
 
 async function search(){
-  const site=cleanSite($('site').value);$('site').value=site;updateSiteLink();
+  const site=cleanSite($('site').value);$('site').value=site;
   if(!site||!site.includes('.')){$('notice').textContent='Enter a website like telegram.com';$('site').focus();return}
-  currentSite=site;drawChips();$('steps').hidden=true;try{history.replaceState(null,'','/mj-mails.html?site='+encodeURIComponent(site))}catch(_){}
+  $('steps').hidden=true;try{history.replaceState(null,'','/mj-mails.html?site='+encodeURIComponent(site))}catch(_){}
   $('search').classList.add('loading');$('search').disabled=true;$('notice').textContent='Checking available domains…';
   $('offers').innerHTML='<div class="skel"></div><div class="skel"></div><div class="skel"></div>';
   try{
@@ -102,7 +94,7 @@ async function search(){
     $('signin').hidden=true;
     const data=await call('mails_offers','GET',null,{site});
     const offers=(data.offers||[]).slice().sort((a,b)=>a.price_ngn-b.price_ngn);
-    remember(site);drawRecent();
+    
     if(!offers.length){$('notice').textContent='';$('offers').innerHTML='<div class="empty card"><span class="ico">📭</span><b>No emails available for '+esc(site)+'</b><br>Try another service or check the spelling.</div>';return}
     $('notice').textContent=offers.length+' domain'+(offers.length>1?'s':'')+' available for '+site+' · cheapest first';
     $('offers').innerHTML=offers.map((o,i)=>{const low=o.count<=5;
@@ -130,9 +122,9 @@ function confirmBuy(site,o){
 
 /* ---------- init ---------- */
 $('search').addEventListener('click',search);
-$('site').addEventListener('input',updateSiteLink);
+
 $('site').addEventListener('keydown',e=>{if(e.key==='Enter')search()});
-drawChips();drawRecent();updateSiteLink();
+
 getToken().then(t=>{if(!t)$('signin').hidden=false});
 const qs=new URLSearchParams(location.search).get('site');if(qs){$('site').value=qs;search()}
 </script></body></html>
