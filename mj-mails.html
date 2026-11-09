@@ -93,7 +93,7 @@ function updateSiteLink(){const site=cleanSite($('site').value);const valid=/^(?
 async function search(){
   const site=cleanSite($('site').value);$('site').value=site;updateSiteLink();
   if(!site||!site.includes('.')){$('notice').textContent='Enter a website like telegram.com';$('site').focus();return}
-  currentSite=site;drawChips();$('steps').hidden=true;
+  currentSite=site;drawChips();$('steps').hidden=true;try{history.replaceState(null,'','/mj-mails.html?site='+encodeURIComponent(site))}catch(_){}
   $('search').classList.add('loading');$('search').disabled=true;$('notice').textContent='Checking available domains…';
   $('offers').innerHTML='<div class="skel"></div><div class="skel"></div><div class="skel"></div>';
   try{
