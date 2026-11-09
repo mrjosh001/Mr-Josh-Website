@@ -24,8 +24,8 @@
 <button id="search" class="btn"><span>Search Mails</span><span aria-hidden="true">→</span></button>
 </div>
 <div id="notice" class="muted mm-notice" role="status"></div>
+<aside class="mm-policy mm-policy-compact" role="note"><span class="mm-policy-icon">!</span><div><strong>Acceptable use</strong><p>Government websites, banks and affiliate-program fraud are prohibited. Use MJ Mails only for lawful registrations.</p></div></aside>
 </section>
-<aside class="mm-policy" role="note"><span class="mm-policy-icon">!</span><div><strong>Acceptable use</strong><p>It is prohibited to use this service to work with government websites or banks, or to defraud affiliate programs. Use MJ Mails only for lawful, permitted registrations.</p></div></aside>
 
 <section id="offers" aria-live="polite"></section>
 
@@ -50,7 +50,7 @@ const sb=window.supabase.createClient(SUPABASE_URL,SUPABASE_ANON_KEY);
 const $=id=>document.getElementById(id);let token='';
 const money=n=>'₦'+Number(n||0).toLocaleString('en-NG',{maximumFractionDigits:0});
 const esc=v=>String(v==null?'':v).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-let sheetBusy=false;
+let sheetBusy=false, currentOffers=[], currentSite='';
 
 /* ---------- helpers ---------- */
 function toast(t){const el=$('toast');el.textContent=t;el.classList.add('show');clearTimeout(toast.t);toast.t=setTimeout(()=>el.classList.remove('show'),2600)}
@@ -85,14 +85,23 @@ async function search(){
   try{
     // Catalogue search is public. Sign-in is enforced only when the user rents an email.
     const data=await call('mails_offers','GET',null,{site});
-    const offers=(data.offers||[]).slice().sort((a,b)=>a.price_ngn-b.price_ngn);
-    if(!offers.length){$('notice').textContent='';$('offers').innerHTML='<div class="empty card"><span class="ico">📭</span><b>No emails available for '+esc(site)+'</b><br>Try another service or check the spelling.</div>';return}
-    $('notice').textContent=offers.length+' domain'+(offers.length>1?'s':'')+' available for '+site+' · cheapest first';
-    $('offers').innerHTML=offers.map((o,i)=>{const low=o.count<=5;
-      return '<article class="offer'+(i===0?' best':'')+'"><div><div class="dom">'+esc(o.domain)+'</div><div class="meta">'+(i===0?'<span class="badge best">Best price</span>':'')+(low?'<span class="badge low">Only '+o.count+' left</span>':'<span class="badge">'+o.count+' in stock</span>')+'</div></div><div class="buy"><div class="price">'+money(o.price_ngn)+'</div><button class="btn sm" data-i="'+i+'">Rent email</button></div></article>'}).join('');
-    $('offers').querySelectorAll('[data-i]').forEach(b=>b.onclick=()=>confirmBuy(site,offers[Number(b.dataset.i)]));
+    currentOffers=(data.offers||[]).slice().sort((a,b)=>a.price_ngn-b.price_ngn);
+    currentSite=site;
+    if(!currentOffers.length){$('notice').textContent='';$('offers').innerHTML='<div class="empty card"><span class="ico">📭</span><b>No emails available for '+esc(site)+'</b><br>Try another service or check the spelling.</div>';return}
+    $('notice').textContent=currentOffers.length+' domain'+(currentOffers.length>1?'s':'')+' available for '+site+' · cheapest first';
+    renderDomainOffers();
   }catch(e){$('offers').innerHTML='';$('notice').textContent=e.message}
   finally{$('search').classList.remove('loading');$('search').disabled=false}}
+
+function renderDomainOffers(){
+  const query=String($('domain-filter')?.value||'').trim().toLowerCase();
+  const matches=currentOffers.filter(o=>String(o.domain||'').toLowerCase().includes(query));
+  const searchBar='<div class="mm-domain-filter"><label class="mm-field-label" for="domain-filter">FILTER AVAILABLE DOMAINS</label><div class="mm-domain-filter-row"><input id="domain-filter" type="search" placeholder="Type an exact domain, e.g. gmail.com" autocomplete="off" autocapitalize="off" spellcheck="false" value="'+esc($('domain-filter')?.value||'')+'"><button class="btn mm-domain-search-label" type="button" disabled>Search Domain</button></div></div>';
+  $('offers').innerHTML=searchBar+(matches.length?matches.map((o,i)=>{const low=o.count<=5;
+    return '<article class="offer'+(currentOffers.indexOf(o)===0?' best':'')+'"><div><div class="dom">'+esc(o.domain)+'</div><div class="meta">'+(currentOffers.indexOf(o)===0?'<span class="badge best">Best price</span>':'')+(low?'<span class="badge low">Only '+o.count+' left</span>':'<span class="badge">'+o.count+' in stock</span>')+'</div></div><div class="buy"><div class="price">'+money(o.price_ngn)+'</div><button class="btn sm" data-domain="'+esc(o.domain)+'">Rent email</button></div></article>'}).join(''):'<div class="empty card"><span class="ico">🔎</span><b>No matching domains</b><br>Try another domain name.</div>');
+  const input=$('domain-filter');input.addEventListener('input',()=>{const value=input.value;renderDomainOffers();const next=$('domain-filter');next.focus();next.setSelectionRange(value.length,value.length)});
+  $('offers').querySelectorAll('[data-domain]').forEach(b=>b.onclick=()=>{const offer=currentOffers.find(x=>x.domain===b.dataset.domain);if(offer)confirmBuy(currentSite,offer)});
+}
 
 /* ---------- purchase ---------- */
 function confirmBuy(site,o){

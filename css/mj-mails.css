@@ -211,3 +211,21 @@ body{background:var(--mm-bg);background-image:radial-gradient(ellipse at 12% 0%,
 .mm-skeleton-card:after{content:"";position:absolute;inset:0;transform:translateX(-100%);background:linear-gradient(90deg,transparent,color-mix(in srgb,var(--mm-text) 7%,transparent),transparent);animation:mm-skeleton-shimmer 1.25s infinite}
 @keyframes mm-skeleton-shimmer{100%{transform:translateX(100%)}}
 @media(prefers-reduced-motion:reduce){.mm-skeleton-card:after{animation:none}}
+
+
+/* MJ Mails domain filter and compact search presentation */
+.mm-hero-meta{flex-wrap:nowrap;gap:6px;overflow-x:auto;white-space:nowrap;scrollbar-width:none;padding-bottom:2px}
+.mm-hero-meta::-webkit-scrollbar{display:none}
+.mm-hero-meta span{flex:0 0 auto;font-size:10px;padding:7px 9px}
+.mm-policy-compact{margin:12px 0 0;padding:8px 10px;gap:8px;border-radius:11px}
+.mm-policy-compact .mm-policy-icon{width:19px;height:19px;flex-basis:19px;font-size:11px}
+.mm-policy-compact strong{font-size:10px;margin:0 0 2px}
+.mm-policy-compact p{font-size:10px;line-height:1.35}
+.mm-domain-filter{margin:18px 0 10px;padding:14px;background:var(--mm-card);border:1px solid var(--mm-border);border-radius:16px}
+.mm-domain-filter .mm-field-label{margin-bottom:7px}
+.mm-domain-filter-row{display:flex;gap:8px;align-items:stretch}
+.mm-domain-filter-row input{min-width:0;flex:1;padding:11px 12px;border-radius:11px;font-size:14px}
+.mm-domain-search-label{flex:0 0 auto;min-height:42px;padding:9px 12px;border-radius:11px;background:#64748b!important;color:#fff!important;opacity:.58;box-shadow:none!important;font-size:12px}
+@media(max-width:420px){.mm-domain-filter-row{gap:6px}.mm-domain-search-label{font-size:11px;padding:8px 9px}}
+details.msg summary{list-style:none}
+details.msg summary::-webkit-details-marker{display:none}
