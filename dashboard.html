@@ -4205,6 +4205,7 @@ html[data-theme="light"] .logo-word, :root[data-theme="light"] .logo-word{color:
             <button class="filter-tab" onclick="filterTransactions('telegram',this)"><i class="fa-brands fa-telegram"></i> Telegram</button>
             <button class="filter-tab" onclick="filterTransactions('esim',this)"><i class="fa-solid fa-sim-card"></i> eSIM</button>
             <button class="filter-tab" onclick="filterTransactions('conversion',this)"><i class="fa-solid fa-right-left"></i> Convert</button>
+            <button class="filter-tab" onclick="filterTransactions('email',this)"><i class="fa-solid fa-envelope"></i> MJ Mails</button>
         </div>
     </div>
     <div class="drawer-body">
@@ -5528,6 +5529,14 @@ function normalizeTxType(tx) {
 
     // Order matters — most specific first. Never let conversion/SMS fall into Telegram.
 
+    // MJ Mails, including supplier-confirmed refunds. Refund ledger rows use type=deposit,
+    // so identify them by their dedicated title/reference before the generic deposit rule.
+    if (type === 'email' || cat === 'email' || cat.includes('mj mail') ||
+        /^mjmail(?:-refund)?-/i.test(String(tx.external_reference || '')) ||
+        /^(mj mails|mj mails refund)$/i.test(title)) {
+      return 'email';
+    }
+
     // Currency convert
     if (type === 'conversion' || cat === 'conversion' || /currency\s*conversion|converter/i.test(title + ' ' + channel)) {
       return 'conversion';
@@ -5649,10 +5658,17 @@ async function fetchActivityFromOrders(userId) {
                 .select('id, order_id, service_name, link, price_ngn, charge, price, status, created_at, source')
                 .eq('user_id', userId)
                 .order('created_at', { ascending: false })
+                .limit(200),
+            supabaseClient
+                .from('mj_mail_orders')
+                .select('id, site, domain, email_address, retail_price_ngn, status, refunded, created_at, updated_at')
+                .eq('user_id', userId)
+                .order('created_at', { ascending: false })
                 .limit(200)
         ]);
 
         const logRows = logsRes.error ? [] : (logsRes.data || []);
+        const mailRows = mailRes.error ? [] : (mailRes.data || []);
         // Group multi-qty log purchases by base order_id
         const logMap = new Map();
         for (const o of logRows) {
@@ -5719,6 +5735,26 @@ async function fetchActivityFromOrders(userId) {
             });
         }
 
+        for (const o of mailRows) {
+            const isRefunded = o.refunded === true || String(o.status || '').toLowerCase() === 'refunded';
+            extra.push({
+                id: 'mail-' + o.id,
+                type: 'email',
+                category: 'MJ Mails',
+                title: isRefunded ? 'MJ Mails Refund' : 'MJ Mails',
+                subtitle: [o.site, o.domain, o.email_address].filter(Boolean).join(' · '),
+                amount: fmtNgnAmount(o.retail_price_ngn),
+                amount_ngn: Number(o.retail_price_ngn) || 0,
+                date: o.created_at ? new Date(o.created_at).toLocaleString() : '',
+                created_at: o.created_at,
+                status: isRefunded ? 'refunded' : (o.status || 'waiting'),
+                paymentProvider: 'MJ HUB',
+                channel: 'Wallet',
+                _mailOrderId: String(o.id),
+                _source: 'mj_mail_orders'
+            });
+        }
+
         for (const o of (boostRes.error ? [] : (boostRes.data || []))) {
             const price = Number(
                 o.price_ngn != null ? o.price_ngn
@@ -5780,6 +5816,7 @@ async function fetchUserTransactions(userId) {
             }
             return {
                 id: tx.id,
+                external_reference: tx.external_reference || '',
                 type: normalizeTxType(tx),
                 category: tx.category || '',
                 title,
@@ -5799,6 +5836,12 @@ async function fetchUserTransactions(userId) {
         // Fill gaps: real orders that never got a transactions row
         const fromOrders = await fetchActivityFromOrders(userId);
         const seen = new Set();
+        // Match MJ Mails transaction-ledger entries to their order rows so the order
+        // fallback never duplicates a purchase or its separate refund transaction.
+        const mailTransactionRefs = new Set(fromTx
+            .map(t => String(t._ref || ''))
+            .filter(ref => /^MJMAIL-(?!REFUND-)/i.test(ref))
+            .map(ref => ref.replace(/^MJMAIL-/i, '')));
         function smsTitleBase(title) {
             // "Whatsapp · Canada" and "Whatsapp" → same key so order merge does not double SMS rows
             return String(title || '').toLowerCase().split('·')[0].trim().slice(0, 40);
@@ -5834,6 +5877,8 @@ async function fetchUserTransactions(userId) {
             merged.push(t);
         }
         for (const t of fromOrders) {
+            // MJ Mails purchase/refund transactions are authoritative when present.
+            if (t._mailOrderId && mailTransactionRefs.has(t._mailOrderId)) continue;
             // This rental already has its transaction row above
             if (t._rentKey && txRentRefs.has(t._rentKey)) continue;
             const k = dedupeKey(t);
@@ -8021,6 +8066,7 @@ function renderHistoryList(filterType = 'all') {
             // too — otherwise their purchases silently never show up under
             // this specific filter tab (they'd still appear under "All").
             const kind = normalizeTxType(t);
+            if (filterType === 'email') return kind === 'email';
             if (filterType === 'log') return kind === 'log' || kind === 'logs';
             if (filterType === 'sms') return kind === 'sms';
             if (filterType === 'deposit') return kind === 'deposit';
@@ -8047,6 +8093,7 @@ function renderHistoryList(filterType = 'all') {
         else if (kind === 'booster') { iconClass = 'fa-bolt'; boxClass = 'tx-blue'; }
         else if (kind === 'conversion') { iconClass = 'fa-right-left'; boxClass = 'tx-purple'; }
         else if (kind === 'esim') { iconClass = 'fa-sim-card'; boxClass = 'tx-blue'; }
+        else if (kind === 'email') { iconClass = 'fa-envelope'; boxClass = 'tx-purple'; }
 
         const st = String(t.status || 'Success').toLowerCase().replace('completed', 'success');
         let badgeClass = 'badge-success';
