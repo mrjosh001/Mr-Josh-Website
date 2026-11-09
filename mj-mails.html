@@ -67,7 +67,7 @@ async function getToken(){
 sb.auth.onAuthStateChange((_event,session)=>{token=session?.access_token||''});
 async function call(action,method='GET',data,params){
   const q=new URLSearchParams({action,...(params||{})});
-  const r=await fetch('/api/sms-bus?'+q,{method,headers:{Authorization:'Bearer '+token,'Content-Type':'application/json'},...(data?{body:JSON.stringify(data)}:{})});
+  const r=await fetch('/api/mj-mails?'+q,{method,headers:{Authorization:'Bearer '+token,'Content-Type':'application/json'},...(data?{body:JSON.stringify(data)}:{})});
   let j={};try{j=await r.json()}catch(_){}
   if(!r.ok){const e=new Error(j.message||'Request failed');e.status=r.status;e.data=j;throw e}
   return j}
