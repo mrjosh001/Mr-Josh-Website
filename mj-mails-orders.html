@@ -145,7 +145,7 @@ function merge(order,announce){
   return gotNew?order.id:null}
 async function refresh(id,btn){
   if(busy.has(id))return;busy.add(id);btn&&btn.classList.add('loading');
-  try{const out=await api('refresh','POST',{id});const flash=merge(out.order,false);toast(flash?'Message received ✓':'No new message yet');draw(flash)}
+  try{const out=await api('refresh','POST',{id});const flash=merge(out.order,false);toast(out.refunded?'No message received. Your wallet has been refunded ✓':(flash?'Message received ✓':'No new message yet'));draw(flash)}
   catch(e){toast(e.message)}finally{busy.delete(id);btn&&btn.classList.remove('loading')}}
 function askRefund(id){
   const o=rows.find(r=>r.id===id);if(!o)return;
@@ -155,7 +155,8 @@ function askRefund(id){
 /* ---------- auto-check waiting orders ---------- */
 async function poll(){
   if(polling||document.hidden||!token)return;
-  const waiting=rows.filter(o=>o.status==='waiting'&&!busy.has(o.id)).slice(0,POLL_MAX);if(!waiting.length)return;
+  const waiting=rows.filter(o=>['waiting','cancel_pending_refund'].includes(o.status)&&!busy.has(o.id))
+    .sort((a,b)=>new Date(a.created_at||0)-new Date(b.created_at||0)).slice(0,POLL_MAX);if(!waiting.length)return;
   polling=true;let flash=null;
   for(const o of waiting){try{const out=await api('refresh','POST',{id:o.id});const f=merge(out.order,true);if(f)flash=f}catch(_){}}
   polling=false;draw(flash)}
