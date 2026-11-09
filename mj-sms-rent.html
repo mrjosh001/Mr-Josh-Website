@@ -104,16 +104,8 @@ let areas = [];
 let months = 1;
 
 async function headers() {
-  let session = null;
-  for (let attempt = 0; attempt < 3; attempt++) {
-    try { const result = await sb.auth.getSession(); session = result.data && result.data.session; } catch (e) {}
-    if (session && session.access_token) break;
-    if (attempt === 0) await new Promise(resolve => setTimeout(resolve, 350));
-  }
-  if (!session || !session.access_token) {
-    try { const refreshed = await sb.auth.refreshSession(); session = refreshed.data && refreshed.data.session; } catch (e) {}
-  }
-  if (!session || !session.access_token) { location.href = 'auth.html?next=' + encodeURIComponent(location.pathname + location.search); return null; }
+  const { data: { session } } = await sb.auth.getSession();
+  if (!session) { location.href = 'auth.html'; return null; }
   return { Authorization: 'Bearer ' + session.access_token, 'Content-Type': 'application/json' };
 }
 function money(n){ return '₦' + Number(n||0).toLocaleString(); }
