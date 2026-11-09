@@ -7,7 +7,7 @@
 <script src="/js/mj-theme.js" defer></script><script src="/js/mj-page-loader.js" defer></script><script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
 <body><main class="wrap">
-<header class="top mm-top"><a class="back-link" href="/dashboard.html" aria-label="Back to dashboard"><span aria-hidden="true">‹</span><span>Dashboard</span></a><a class="brand" href="/dashboard.html">MJ HUB</a></header>
+<header class="top mm-top"><a class="back-link mm-back-icon" href="/dashboard.html" data-dashboard-return aria-label="Back to dashboard" title="Back"><span aria-hidden="true">‹</span></a><strong class="mm-brand">MJ MAILS</strong><a class="navlink mm-top-action" href="/mj-mails-orders.html">Email inbox</a></header>
 
 <section class="mm-hero">
 
@@ -121,4 +121,7 @@ $('site').addEventListener('keydown',e=>{if(e.key==='Enter')search()});
 
 getToken().then(t=>{if(!t)$('signin').hidden=false});
 const qs=new URLSearchParams(location.search).get('site');if(qs){$('site').value=qs;search()}
+
+/* Keep the dashboard idle timer accurate while users are in MJ Mails. */
+(function(){var key='mjhub-last-activity';function mark(){try{localStorage.setItem(key,String(Date.now()))}catch(e){}}mark();['pointerdown','keydown','touchstart','scroll'].forEach(function(evt){document.addEventListener(evt,mark,{passive:true})});document.querySelectorAll('[data-dashboard-return]').forEach(function(link){link.addEventListener('click',mark)});})();
 </script></body></html>
