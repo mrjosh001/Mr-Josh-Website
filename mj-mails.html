@@ -54,7 +54,7 @@ const $=id=>document.getElementById(id);let token='';
 const money=n=>'₦'+Number(n||0).toLocaleString('en-NG',{maximumFractionDigits:0});
 const esc=v=>String(v==null?'':v).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 
-let currentSite='';let sheetBusy=false;
+let sheetBusy=false;
 
 /* ---------- helpers ---------- */
 function toast(t){const el=$('toast');el.textContent=t;el.classList.add('show');clearTimeout(toast.t);toast.t=setTimeout(()=>el.classList.remove('show'),2600)}
@@ -85,7 +85,7 @@ document.addEventListener('keydown',e=>{if(e.key==='Escape'&&!$('ov').hidden)clo
 async function search(){
   const site=cleanSite($('site').value);$('site').value=site;
   if(!site||!site.includes('.')){$('notice').textContent='Enter a website like telegram.com';$('site').focus();return}
-  currentSite=site;drawChips();$('steps').hidden=true;try{history.replaceState(null,'','/mj-mails.html?site='+encodeURIComponent(site))}catch(_){}
+  $('steps').hidden=true;try{history.replaceState(null,'','/mj-mails.html?site='+encodeURIComponent(site))}catch(_){}
   $('search').classList.add('loading');$('search').disabled=true;$('notice').textContent='Checking available domains…';
   $('offers').innerHTML='<div class="skel"></div><div class="skel"></div><div class="skel"></div>';
   try{
