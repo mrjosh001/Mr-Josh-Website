@@ -1834,13 +1834,13 @@ async function handleCancel(req, res) {
     return res.status(200).json({
       success: true,
       message: refunded > 0
-        ? 'Supplier has already closed this order. ₦' + Number(refunded).toLocaleString() + ' returned to your MJ HUB wallet.'
+        ? 'Your order has been closed and ₦' + Number(refunded).toLocaleString() + ' returned to your MJ HUB wallet.'
         : (/partial/.test(terminalStatus)
-          ? 'Supplier marked this order partial. Its refund has been checked.'
-          : 'Supplier has already closed this order. Your order status is now synchronized.'),
+          ? 'Your order was partially completed. Any eligible refund has been processed.'
+          : 'Your order status has been updated.'),
       refunded: Number(refunded || row.refund_ngn) || 0,
       order_id: orderId,
-      supplier_status: row.status
+
     });
   }
 
@@ -1853,7 +1853,7 @@ async function handleCancel(req, res) {
     const liveStatus = await persistSupplierStatus(supplier);
     if (/cancel|cancelled|canceled|refund|failed|partial/i.test(liveStatus)) return await settleSupplierTerminal(supplier);
     if (/completed|success|done/i.test(liveStatus)) {
-      return res.status(409).json({ success: false, message: 'Cancel not available. The supplier has completed this order.', supplier_status: row.status });
+      return res.status(409).json({ success: false, message: 'This order can no longer be canceled because processing has finished.' });
     }
   }
 
@@ -1862,7 +1862,7 @@ async function handleCancel(req, res) {
     return res.status(409).json({
       success: false,
       message: 'This order is already marked closed locally. Refresh order status or contact support if the refund is missing.',
-      supplier_status: row.status
+
     });
   }
   if (!/pending|awaiting|waiting|progress|processing|in progress/i.test(currentStatus)) {
@@ -1918,8 +1918,8 @@ async function handleCancel(req, res) {
     if (/completed|success|done/i.test(afterStatus)) {
       return res.status(409).json({
         success: false,
-        message: 'The supplier reports that this order completed before cancellation settled.',
-        supplier_status: row.status
+        message: 'This order was completed before the cancellation could be processed.',
+
       });
     }
   }
@@ -1927,9 +1927,9 @@ async function handleCancel(req, res) {
   return res.status(200).json({
     success: true,
     pending: true,
-    message: 'Cancellation was accepted by the supplier. The refund will be applied after the supplier confirms the final status.',
+    message: 'Your cancellation request has been received. We are checking the order status. Any eligible refund will be added to your wallet once confirmed.',
     order_id: orderId,
-    supplier_status: row.status
+
   });
 }
 
