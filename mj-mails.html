@@ -56,7 +56,15 @@ let sheetBusy=false, currentOffers=[], currentSite='';
 function toast(t){const el=$('toast');el.textContent=t;el.classList.add('show');clearTimeout(toast.t);toast.t=setTimeout(()=>el.classList.remove('show'),2600)}
 function cleanSite(v){return String(v||'').trim().toLowerCase().replace(/^[a-z]+:\/\//,'').replace(/^www\./,'').split(/[\/?#\s]/)[0]}
 function store(k,v){try{if(v===undefined)return JSON.parse(localStorage.getItem(k)||'null');localStorage.setItem(k,JSON.stringify(v))}catch(_){return null}}
-async function getToken(){const {data}=await sb.auth.getSession();token=data.session?.access_token||'';return token}
+async function getToken(){
+  for(let attempt=0;attempt<3;attempt++){
+    try{const {data,error}=await sb.auth.getSession();if(!error&&data.session?.access_token){token=data.session.access_token;return token}}catch(_){}
+    if(attempt<2)await new Promise(resolve=>setTimeout(resolve,300));
+  }
+  try{const {data,error}=await sb.auth.refreshSession();if(!error&&data.session?.access_token){token=data.session.access_token;return token}}catch(_){}
+  token='';return token;
+}
+sb.auth.onAuthStateChange((_event,session)=>{token=session?.access_token||''});
 async function call(action,method='GET',data,params){
   const q=new URLSearchParams({action,...(params||{})});
   const r=await fetch('/api/sms-bus?'+q,{method,headers:{Authorization:'Bearer '+token,'Content-Type':'application/json'},...(data?{body:JSON.stringify(data)}:{})});
@@ -104,11 +112,11 @@ function renderDomainOffers(){
 }
 
 /* ---------- purchase ---------- */
-function confirmBuy(site,o){
-  if(!token){
-    toast('Please sign in to rent an email address');
-    return;
-  }
+async function confirmBuy(site,o){
+  // Resolve the persisted Supabase session at click-time. Page-load restoration
+  // can still be in progress when a user reaches the Rent email button.
+  await getToken();
+  if(!token){toast('Please sign in to rent an email address');return;}
   const requestId=crypto.randomUUID();
   openSheet({title:'Rent this email?',yes:'Pay '+money(o.price_ngn),
     html:'<div class="rows"><div><span>Service</span><b>'+esc(site)+'</b></div><div><span>Domain</span><b>'+esc(o.domain)+'</b></div><div><span>Price</span><b>'+money(o.price_ngn)+'</b></div></div><p class="muted" style="margin:0">Paid from your wallet. If no message arrives you can cancel while it is waiting and get an automatic refund.</p>',
