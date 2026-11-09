@@ -57,10 +57,18 @@ async function api(action,method='GET',data){
   return j}
 function formatCountdown(ms){if(!Number.isFinite(ms)||ms<=0)return '00:00';const s=Math.ceil(ms/1000);return String(Math.floor(s/60)).padStart(2,'0')+':'+String(s%60).padStart(2,'0')}
 function updateCancelTimers(){
-  document.querySelectorAll('[data-cancel-timer]').forEach(el=>{
-    const left=Date.parse(el.dataset.deadline)-Date.now();
-    if(left<=0){const btn=el.closest('[data-cancel]');if(btn){btn.disabled=true;btn.textContent='Cancellation window closed'}return}
-    el.textContent=formatCountdown(left);
+  const now=Date.now();
+  document.querySelectorAll('[data-refund-timer]').forEach(el=>{
+    const available=Date.parse(el.dataset.available),expires=Date.parse(el.dataset.expires),btn=el.closest('[data-refund]');
+    if(!btn)return;
+    if(!Number.isFinite(available)||!Number.isFinite(expires)){btn.disabled=true;el.textContent='Timer unavailable';return}
+    if(now>=expires){btn.disabled=true;el.textContent='Expired';return}
+    if(now<available){btn.disabled=true;el.textContent='Available in '+formatCountdown(available-now);return}
+    btn.disabled=false;el.textContent='Refund';
+  });
+  document.querySelectorAll('[data-mail-timer]').forEach(el=>{
+    const expires=Date.parse(el.dataset.expires);
+    el.textContent=!Number.isFinite(expires)?'Unavailable':expires<=now?'Expired':formatCountdown(expires-now);
   });
 }
 setInterval(updateCancelTimers,250);
@@ -90,18 +98,19 @@ function drawTabs(){$('tabs').innerHTML=Object.keys(LABELS).map(k=>{const n=GROU
 function card(o,flash){
   const st=STATUS[o.status]||[String(o.status||'').replace(/_/g,' '),'mute'];
   const code=o.value||detectCode(o.message);const waiting=o.status==='waiting';
-  const cancelDeadline=o.cancel_deadline_at?Date.parse(o.cancel_deadline_at):NaN;
-  const cancelRemaining=Number.isFinite(cancelDeadline)?cancelDeadline-Date.now():-1;
-  const canCancel=waiting&&cancelRemaining>0||o.status==='cancel_pending_refund';
+  const refundAvailable=o.refund_available_at?Date.parse(o.refund_available_at):NaN;
+  const mailExpires=o.expires_at?Date.parse(o.expires_at):NaN;
+  const canRetryRefund=o.status==='cancel_pending_refund';
   return '<article class="order'+(flash?' flash':'')+'" data-id="'+esc(o.id)+'">'+
    '<div class="o-head"><div style="min-width:0;flex:1"><div class="copyrow"><div class="email">'+esc(o.email||'Email address pending')+'</div>'+(o.email?'<button class="copy" data-copy="'+esc(o.email)+'">Copy</button>':'')+'</div>'+
    '<div class="muted o-sub">'+esc(o.site)+' · '+esc(o.domain)+' · '+money(o.price)+' · '+ago(o.created_at)+'</div></div><span class="status '+st[1]+'">'+esc(st[0])+'</span></div>'+
    (code?'<div class="codebox"><div class="lbl">'+(o.value?'Verification code':'Code found in message')+'</div><div class="copyrow"><div class="code">'+esc(code)+'</div><button class="copy" data-copy="'+esc(code)+'">Copy</button></div></div>':'')+
    (waiting&&!code?'<div class="waitline"><span class="dot"></span>Waiting for the email to arrive…</div><div class="pulse-bar"></div>':'')+
+   (waiting&&Number.isFinite(mailExpires)?'<div class="mail-expiry">Email rental expires in <strong data-mail-timer data-expires="'+esc(o.expires_at)+'">'+formatCountdown(mailExpires-Date.now())+'</strong> <span>· 20-minute total rental</span></div>':'')+
    (o.status==='reconciliation_required'?'<p class="muted" style="margin:12px 0 0">We are confirming this purchase with the provider. Please do not buy again — this usually clears within a few minutes.</p>':'')+
    (o.message?'<details class="msg" data-d="'+esc(o.id)+'"'+(openIds.has(o.id)?' open':'')+'><summary>Full message</summary><div class="body">'+esc(o.message)+'</div></details>':'')+
    '<div class="actions">'+(o.supplier_status!==undefined||o.status!=='reconciliation_required'?'<button class="btn sm" data-refresh="'+esc(o.id)+'">Check for message</button>':'')+
-   (canCancel?'<button class="btn ghost sm" data-cancel="'+esc(o.id)+'">'+(o.status==='cancel_pending_refund'?'Retry refund':'Cancel &amp; refund <span class="cancel-countdown" data-cancel-timer data-deadline="'+esc(o.cancel_deadline_at)+'">'+formatCountdown(cancelRemaining)+'</span>')+'</button>':waiting?'<span class="cancel-expired">'+(Number.isFinite(cancelDeadline)?'Cancellation window closed':'Supplier timer unavailable')+'</span>':'')+
+   (waiting?'<button class="btn sm refund-btn" data-refund="'+esc(o.id)+'" '+((!Number.isFinite(refundAvailable)||!Number.isFinite(mailExpires)||Date.now()<refundAvailable||Date.now()>=mailExpires)?'disabled':'')+'><span data-refund-timer data-available="'+esc(o.refund_available_at||'')+'" data-expires="'+esc(o.expires_at||'')+'">'+(!Number.isFinite(refundAvailable)||!Number.isFinite(mailExpires)?'Timer unavailable':Date.now()<refundAvailable?'Available in '+formatCountdown(refundAvailable-Date.now()):Date.now()>=mailExpires?'Expired':'Refund')+'</span></button>':canRetryRefund?'<button class="btn sm refund-btn" data-refund="'+esc(o.id)+'">Retry refund</button>':'')+
    '<a class="btn ghost sm" style="display:inline-flex;align-items:center" href="/mj-mails.html?site='+encodeURIComponent(o.site||'')+'">Rent again</a></div></article>'}
 function draw(flashId){
   drawTabs();const list=visible();
@@ -111,7 +120,7 @@ function draw(flashId){
   $('orders').innerHTML=list.map(o=>card(o,o.id===flashId)).join('');
   $('orders').querySelectorAll('[data-copy]').forEach(b=>b.onclick=()=>copy(b.dataset.copy));
   $('orders').querySelectorAll('[data-refresh]').forEach(b=>b.onclick=()=>refresh(b.dataset.refresh,b));
-  $('orders').querySelectorAll('[data-cancel]').forEach(b=>b.onclick=()=>askCancel(b.dataset.cancel));updateCancelTimers();
+  $('orders').querySelectorAll('[data-refund]').forEach(b=>b.onclick=()=>askRefund(b.dataset.refund));updateCancelTimers();
   $('orders').querySelectorAll('details[data-d]').forEach(d=>d.addEventListener('toggle',()=>{d.open?openIds.add(d.dataset.d):openIds.delete(d.dataset.d)}))}
 
 /* ---------- data ---------- */
@@ -138,12 +147,11 @@ async function refresh(id,btn){
   if(busy.has(id))return;busy.add(id);btn&&btn.classList.add('loading');
   try{const out=await api('refresh','POST',{id});const flash=merge(out.order,false);toast(flash?'Message received ✓':'No new message yet');draw(flash)}
   catch(e){toast(e.message)}finally{busy.delete(id);btn&&btn.classList.remove('loading')}}
-function askCancel(id){
+function askRefund(id){
   const o=rows.find(r=>r.id===id);if(!o)return;
-  openSheet({title:o.status==='cancel_pending_refund'?'Retry your refund?':'Cancel this email?',yes:o.status==='cancel_pending_refund'?'Retry refund':'Cancel & refund',
-    html:'<div class="rows"><div><span>Email</span><b style="overflow-wrap:anywhere">'+esc(o.email||'Pending')+'</b></div><div><span>Refund</span><b>'+money(o.price)+'</b></div></div><p class="muted" style="margin:0">Cancellation is available only during the first 2 minutes shown on this order, and only while the supplier reports that no email has arrived. The request is sent to HeroSMS before any wallet refund is issued.</p>',
-    onYes:async()=>{await api('cancel','POST',{id});toast('Cancelled · wallet refunded');await load()}})}
-
+  openSheet({title:o.status==='cancel_pending_refund'?'Retry your refund?':'Request email refund?',yes:o.status==='cancel_pending_refund'?'Retry refund':'Refund',
+    html:'<div class="rows"><div><span>Email</span><b style="overflow-wrap:anywhere">'+esc(o.email||'Pending')+'</b></div><div><span>Refund amount</span><b>'+money(o.price)+'</b></div></div><p class="muted" style="margin:0">MJ HUB will ask HeroSMS to cancel this email and verify that the supplier has confirmed cancellation. Your wallet is refunded only after that confirmation. Refund requests become available after 2 minutes and before the 20-minute rental expires.</p>',
+    onYes:async()=>{const out=await api('cancel','POST',{id});toast(out.message||'Supplier cancellation confirmed · wallet refunded');await load()}})}
 /* ---------- auto-check waiting orders ---------- */
 async function poll(){
   if(polling||document.hidden||!token)return;
