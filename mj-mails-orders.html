@@ -1,16 +1,16 @@
 <!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>MJ Mails Orders · MJ HUB</title>
-<link rel="stylesheet" href="/css/graceful.css"><link rel="stylesheet" href="/css/mj-motion.css"><link rel="stylesheet" href="/css/mj-mails.css">
-<script src="/js/mj-theme.js" defer></script><script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<link rel="stylesheet" href="/css/graceful.css"><link rel="stylesheet" href="/css/mj-motion.css"><link rel="stylesheet" href="/css/mj-glass.css"><link rel="stylesheet" href="/css/mj-apple-fluid.css"><link rel="stylesheet" href="/css/mj-mails.css">
+<script src="/js/mj-theme.js" defer></script><script src="/js/mj-page-loader.js" defer></script><script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head><body><main class="wrap">
-<header class="top"><a class="navlink" href="/mj-mails.html">← MJ Mails</a><a class="brand" href="/dashboard.html">MJ HUB</a></header>
-<h1>My email inbox</h1>
-<p class="lead">Your rented emails and the verification codes they receive. Waiting orders check for new messages automatically.</p>
+<header class="top mm-top"><a class="back-link" href="/dashboard.html" aria-label="Back to dashboard"><span aria-hidden="true">‹</span><span>Dashboard</span></a><a class="brand" href="/dashboard.html">MJ HUB</a><a class="navlink" href="/mj-mails.html">Rent email <span aria-hidden="true">↗</span></a></header>
+<section class="mm-hero mm-orders-hero"><div class="mm-eyebrow"><span class="mm-eyebrow-dot"></span> YOUR MAILBOX</div><h1>Email orders <span>&amp; inbox.</span></h1><p class="lead">Manage rented addresses, track incoming messages, and copy verification codes from one place.</p><div class="mm-hero-meta"><span>↻ Automatic checks</span><span>⌁ Your orders only</span></div></section>
 
 <div id="signin" class="banner" hidden><span>Sign in to view your email orders.</span><a class="btn sm" href="/auth.html">Sign in</a></div>
 
-<div class="tools"><input id="q" type="search" placeholder="Search email or service" autocomplete="off"><button id="reload" class="btn ghost sm">Refresh</button></div>
+<section class="mm-order-toolbar"><div class="mm-toolbar-copy"><h2>Your orders</h2><p>Pull down anywhere at the top to refresh.</p></div><div class="tools"><input id="q" type="search" placeholder="Search email or service" autocomplete="off"><button id="reload" class="btn ghost sm" aria-label="Refresh orders">↻</button></div></section>
+<aside class="mm-policy mm-policy-compact" role="note"><span class="mm-policy-icon">!</span><div><strong>Acceptable use</strong><p>Government websites, banks, and affiliate-program fraud are prohibited.</p></div></aside>
 <div class="tabs" id="tabs"></div>
 <div class="live" id="live" hidden><span class="dot"></span><span id="liveTxt">Auto-checking for messages</span></div>
 <div id="notice" class="muted" role="status"></div>
