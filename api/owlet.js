@@ -1251,18 +1251,15 @@ async function handleOrder(req, res) {
  * matching supplier behaviour. Idempotent via refund_ngn on the order row.
  */
 async function refundIfSupplierFailed(order, oldStatus, newStatus) {
-  const oldS = String(oldStatus || '');
   const newS = String(newStatus || '');
-  const wasDone = /completed|canceled|cancelled|refunded|failed/i.test(oldS);
-  // Idempotent: never refund twice
+  // Idempotency is enforced by refund_ngn plus the order-keyed database credit ledger.
+  // Do not block supplier-approved refunds just because the local status was already terminal.
   const alreadyRefunded = Number(order.refund_ngn) > 0;
   if (alreadyRefunded) return 0;
 
   const isFailed = /canceled|cancelled|refunded|failed/i.test(newS);
   const isPartial = /partial/i.test(newS);
   if (!isFailed && !isPartial) return 0;
-  // Don't full-refund if we already treated old status as terminal cancel
-  if (wasDone && isFailed) return 0;
   if (!order.user_id || !(Number(order.price_ngn) > 0)) return 0;
 
   const qty = Math.max(0, Number(order.quantity) || 0);
