@@ -3040,8 +3040,8 @@ function couponAudiencePayload(body) {
     } };
   }
   if (mode === 'fixed') {
-    const start = new Date(String(body.registration_start_date || '') + 'T00:00:00.000Z');
-    const end = new Date(String(body.registration_end_date || '') + 'T23:59:59.999Z');
+    const start = new Date(String(body.registration_start_date || '') + 'T00:00:00.000+01:00');
+    const end = new Date(String(body.registration_end_date || '') + 'T23:59:59.999+01:00');
     if (!body.registration_start_date || !body.registration_end_date ||
         Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || end < start) {
       return { error: 'Choose a valid registration start and end date' };
