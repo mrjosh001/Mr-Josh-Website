@@ -20,7 +20,7 @@ create table if not exists public.mj_mail_orders (
   updated_at timestamptz not null default now(),
   unique(user_id, request_id),
   constraint mj_mail_orders_positive_amounts check (supplier_cost > 0 and retail_price_ngn > 0),
-  constraint mj_mail_orders_status_check check (status in ('creating','waiting','message_received','completed','cancelled','refunded','failed','reconciliation_required'))
+  constraint mj_mail_orders_status_check check (status in ('creating','waiting','message_received','completed','cancelled','refunded','failed','reconciliation_required','cancel_pending_refund'))
 );
 create index if not exists mj_mail_orders_user_created_idx on public.mj_mail_orders(user_id, created_at desc);
 alter table public.mj_mail_orders enable row level security;
