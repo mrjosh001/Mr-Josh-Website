@@ -3205,6 +3205,66 @@ async function couponExtendHandle(body) {
   return { status: 200, body: { success: true, data } };
 }
 
+
+/**
+ * Self-service account deletion. This route is deliberately separate from
+ * admin authorization: the caller may delete only the account identified
+ * by their own verified Bearer token.
+ */
+async function selfServiceAccountDelete(req, res, body) {
+  if (body.confirm !== 'DELETE') {
+    return res.status(400).json({ success: false, message: 'Type DELETE to confirm account removal' });
+  }
+
+  const rl = rateLimit(req, { limit: 5, windowMs: 15 * 60_000, suffix: 'self-delete-account' });
+  applyRateLimitHeaders(res, rl);
+  if (!rl.ok) return res.status(429).json({ success: false, message: rl.message });
+
+  const authHeader = req.headers.authorization || '';
+  const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : null;
+  if (!token) return res.status(401).json({ success: false, message: 'Not signed in' });
+
+  const { data: { user }, error: authErr } = await supabase.auth.getUser(token);
+  if (authErr || !user) return res.status(401).json({ success: false, message: 'Invalid or expired session' });
+
+  try {
+    const storageCleanup = await deleteUserStorageObjects(supabase, user.id);
+
+    const { error: unlinkErr } = await supabase.from('profiles')
+      .update({ referred_by: null }).eq('referred_by', user.id);
+    if (unlinkErr) {
+      return res.status(500).json({ success: false, message: 'Could not unlink referral records: ' + unlinkErr.message });
+    }
+
+    const { error: earningsErr } = await supabase.from('referral_earnings')
+      .delete().or(`referrer_id.eq.${user.id},referee_id.eq.${user.id}`);
+    if (earningsErr) {
+      return res.status(500).json({ success: false, message: 'Could not remove referral records: ' + earningsErr.message });
+    }
+
+    // Delete credentials first so a partial failure cannot leave a deleted
+    // profile with a still-authenticatable account.
+    const { error: authDeleteError } = await supabase.auth.admin.deleteUser(user.id);
+    if (authDeleteError) {
+      return res.status(500).json({ success: false, message: 'Could not delete account credentials: ' + authDeleteError.message });
+    }
+
+    const { error: profileError } = await supabase.from('profiles').delete().eq('id', user.id);
+    if (profileError) {
+      console.error('admin self-delete: Auth user deleted but profile cleanup failed', profileError);
+      return res.status(500).json({
+        success: false, auth_deleted: true,
+        message: 'Your login account was deleted, but profile cleanup failed: ' + profileError.message
+      });
+    }
+
+    return res.status(200).json({ success: true, storage_objects_removed: storageCleanup.removed });
+  } catch (err) {
+    console.error('self account deletion error:', err);
+    return res.status(500).json({ success: false, message: err.message || 'Server error' });
+  }
+}
+
 export default async function handler(req, res) {
   applyApiCors(req, res, { methods: 'POST, OPTIONS' });
   setNoStore(res);
@@ -3221,6 +3281,12 @@ export default async function handler(req, res) {
   try {
     const body = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : (req.body || {});
     const { resource, action } = body;
+
+    // Self-service deletion must run before requireAdmin. It can only delete
+    // the authenticated caller's own account, never an arbitrary user_id.
+    if (resource === 'self_account' && action === 'delete') {
+      return selfServiceAccountDelete(req, res, body);
+    }
 
     // Vendor portal: sub-admin OR main admin
     if (resource === 'vendor') {
