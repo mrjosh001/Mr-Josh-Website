@@ -71,6 +71,7 @@ function updateCancelTimers(){
     el.textContent=!Number.isFinite(expires)?'Unavailable':expires<=now?'Expired':formatCountdown(expires-now);
   });
 }
+setInterval(updateCancelTimers,250);
 function ago(d){const s=Math.max(1,Math.round((Date.now()-new Date(d))/1000));
   if(s<60)return 'just now';if(s<3600)return Math.floor(s/60)+' min ago';if(s<86400)return Math.floor(s/3600)+' hr ago';
   return new Date(d).toLocaleDateString(undefined,{day:'numeric',month:'short',year:'numeric'})}
