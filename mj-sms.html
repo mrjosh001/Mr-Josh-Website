@@ -647,17 +647,16 @@ var currentPoolList = [];
 var selectedProviderId = null;
 
 /** Match server salePriceFromUsd (fixed 80% band) for display only — server re-prices on order */
+/** Mirror server supplier-cost price bands for display. */
 function salePriceFromUsdClient(usd){
-  var rate = 1500;
-  var percent = 80;
-  var minProfit = 500;
-  var minSale = 1000;
-  var supplierNgn = Number(usd) * rate;
-  if(!Number.isFinite(supplierNgn) || supplierNgn <= 0) return minSale;
-  var percentPrice = Math.ceil(supplierNgn * (1 + percent / 100));
-  var floorPrice = Math.ceil(supplierNgn + minProfit);
-  var finalPrice = Math.max(percentPrice, floorPrice, minSale);
-  return Math.ceil(finalPrice / 50) * 50;
+  usd = Number(usd);
+  var round50 = function(n){ return Math.ceil(n / 50) * 50; };
+  if(!Number.isFinite(usd) || usd <= 0) return 400;
+  if(usd < 0.1) return round50(400 + (usd / 0.1) * 100);
+  if(usd < 0.5) return round50(600 + ((usd - 0.1) / 0.4) * 400);
+  if(usd <= 1) return round50(1100 + ((usd - 0.5) / 0.5) * 400);
+  var supplierNgn = usd * 1500;
+  return round50(Math.max(Math.ceil(supplierNgn * 1.85), Math.ceil(supplierNgn + 500)));
 }
 function providersToPoolOptions(providersRaw, poolPriceOverrides){
   if(!providersRaw || typeof providersRaw !== 'object') return [];
