@@ -1,44 +1,132 @@
 <!doctype html>
 <html lang="en">
 <head>
-<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>MJ Mails · Email Activations</title>
-<link rel="stylesheet" href="/css/graceful.css"><link rel="stylesheet" href="/css/mj-motion.css">
+<link rel="stylesheet" href="/css/graceful.css"><link rel="stylesheet" href="/css/mj-motion.css"><link rel="stylesheet" href="/css/mj-mails.css">
 <script src="/js/mj-theme.js" defer></script><script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<style>
-:root{color-scheme:dark}body{margin:0;background:var(--bg,#080d18);color:var(--text,#f4f7fb);font-family:Inter,system-ui,sans-serif}
-.wrap{max-width:860px;margin:auto;padding:22px 16px 60px}.top{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:24px}
-a{color:var(--primary,#60a5fa);text-decoration:none}.brand{font-weight:900;letter-spacing:.02em}.panel,.offer{background:var(--card,#111827);border:1px solid var(--border,#263244);border-radius:18px;padding:17px;margin:12px 0}
-h1{font-size:28px;margin:8px 0}p{color:var(--muted,#9ca3af);line-height:1.55}.row{display:flex;gap:10px;flex-wrap:wrap}.row input{flex:1;min-width:180px}
-input{box-sizing:border-box;background:var(--input,#0b1220);color:var(--text,#fff);border:1px solid var(--border,#334155);border-radius:12px;padding:13px;font:inherit}
-button{border:0;border-radius:12px;background:var(--primary,#2563eb);color:white;padding:12px 16px;font-weight:800;cursor:pointer}
-button:disabled{opacity:.5;cursor:not-allowed}.offer{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
-.offer strong{display:block;font-size:16px}.price{font-size:20px;font-weight:900}.muted{color:var(--muted,#9ca3af);font-size:13px}.msg{margin:12px 0;color:var(--muted)}.tag{font-size:12px;border:1px solid var(--border);padding:5px 9px;border-radius:99px}
-</style></head>
+</head>
 <body><main class="wrap">
-<header class="top"><a class="brand" href="/dashboard.html">MJ HUB</a><nav><a href="/mj-mails-orders.html">My email orders →</a></nav></header>
-<section><div class="tag">MJ HUB · NEW SERVICE</div><h1>MJ Mails</h1><p>Rent a temporary email address for supported verification services. Choose a service, compare available domains, and receive messages in your MJ Mails inbox.</p></section>
-<section class="panel">
-<label for="site"><strong>Service or website</strong></label><p class="muted">Enter the site identifier accepted by the provider, for example telegram.com.</p>
-<div class="row"><input id="site" placeholder="e.g. telegram.com" autocomplete="off"><button id="search">Find email offers</button></div>
-<div id="notice" class="msg" role="status"></div>
+<header class="top"><a class="brand" href="/dashboard.html">MJ HUB</a><a class="navlink" href="/mj-mails-orders.html">My email orders →</a></header>
+
+<section>
+<span class="tag">MJ HUB · NEW SERVICE</span>
+<h1>MJ Mails</h1>
+<p class="lead">Rent a temporary email address to receive verification codes. Pick a service, choose a domain, and your inbox opens instantly.</p>
 </section>
+
+<div id="signin" class="banner" hidden><span>Sign in to rent an email address.</span><a class="btn sm" href="/auth.html">Sign in</a></div>
+
+<section class="card">
+<label for="site"><strong>Which service do you need an email for?</strong></label>
+<div class="search" style="margin-top:10px">
+<input id="site" type="text" inputmode="url" placeholder="e.g. telegram.com" autocomplete="off" autocapitalize="off" spellcheck="false" enterkeyhint="search">
+<button id="search" class="btn">Find emails</button>
+</div>
+<div class="chips" id="chips" aria-label="Popular services"></div>
+<div id="recent" class="muted" style="margin-top:8px"></div>
+<div id="notice" class="muted" role="status" style="margin-top:8px"></div>
+</section>
+
 <section id="offers" aria-live="polite"></section>
+
+<section class="steps" id="steps">
+<div class="step"><b>1 · Search</b>Enter the website that will send the code.</div>
+<div class="step"><b>2 · Rent</b>Pay from your wallet. Cancel while waiting for an automatic refund.</div>
+<div class="step"><b>3 · Receive</b>Your code appears in My email orders.</div>
+</section>
 </main>
+
+<div class="overlay" id="ov" hidden>
+<div class="sheet" role="dialog" aria-modal="true" aria-labelledby="shT">
+<div class="grab"></div><h2 id="shT"></h2><div id="shB"></div><div id="shErr" class="err" role="alert"></div>
+<div class="sheet-actions"><button class="btn ghost" id="shNo">Not now</button><button class="btn" id="shYes">Confirm</button></div>
+</div></div>
+<div class="toast" id="toast" role="status"></div>
+
 <script>
 const SUPABASE_URL='https://atczodlljmlayvldxfmv.supabase.co';
 const SUPABASE_ANON_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJIUzI1NiIsInJlZiI6ImF0Y3pvZGxsam1sYXl2bGR4Zm12Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODUwNzUyMzgsImV4cCI6MjEwMDY1MTIzOH0.ufthD-p7BmeD_B7xyuMM6PNPL8DmcL4AtRYgg-MuoLI';
 const sb=window.supabase.createClient(SUPABASE_URL,SUPABASE_ANON_KEY);
 const $=id=>document.getElementById(id);let token='';
 const money=n=>'₦'+Number(n||0).toLocaleString('en-NG',{maximumFractionDigits:0});
-async function session(){const {data}=await sb.auth.getSession();token=data.session?.access_token||'';return token}
-async function api(action,method='GET',data){const u='/api/sms-bus?action='+action;const r=await fetch(u,{method,headers:{Authorization:'Bearer '+token,'Content-Type':'application/json'},...(data?{body:JSON.stringify(data)}:{})});const j=await r.json();if(!r.ok)throw new Error(j.message||'Request failed');return j}
-async function search(){const site=$('site').value.trim().toLowerCase();if(!site){$('notice').textContent='Enter a service or website.';return} $('search').disabled=true;$('notice').textContent='Checking available domains…';$('offers').innerHTML='';
-try{await session();if(!token)throw new Error('Sign in to your MJ HUB account first.');const q=new URLSearchParams({action:'mails_offers',site});const response=await fetch('/api/sms-bus?'+q,{headers:{Authorization:'Bearer '+token}});const data=await response.json();if(!response.ok)throw new Error(data.message||'Could not load offers');if(!data.offers?.length){$('notice').textContent='No email domains are available for this service right now.';return}
-$('notice').textContent='Available domains for '+site; $('offers').innerHTML=data.offers.map((o,i)=>'<article class="offer"><div><strong>'+escapeHtml(o.domain)+'</strong><span class="muted">'+o.count+' available · Price per email activation</span></div><div style="text-align:right"><div class="price">'+money(o.price_ngn)+'</div><button data-domain="'+escapeHtml(o.domain)+'" data-price="'+o.price_ngn+'">Rent email</button></div></article>').join('');
-document.querySelectorAll('[data-domain]').forEach(btn=>btn.addEventListener('click',()=>purchase(site,btn.dataset.domain,Number(btn.dataset.price),btn)));
-}catch(e){$('notice').textContent=e.message}finally{$('search').disabled=false}}
-function escapeHtml(v){return String(v||'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
-async function purchase(site,domain,price,btn){if(!confirm('Rent one email address for '+domain+' at '+money(price)+'?'))return;btn.disabled=true;btn.textContent='Processing…';try{const {data}=await sb.auth.getSession();token=data.session?.access_token||'';const out=await api('mails_purchase','POST',{site,domain,expected_price:price,request_id:crypto.randomUUID()});$('notice').textContent=out.pending?out.message:'Email address created. Opening your orders…';if(out.order?.id||out.pending)setTimeout(()=>location.href='/mj-mails-orders.html',700)}catch(e){$('notice').textContent=e.message;btn.disabled=false;btn.textContent='Rent email'}}
-$('search').addEventListener('click',search);$('site').addEventListener('keydown',e=>{if(e.key==='Enter')search()});
+const esc=v=>String(v==null?'':v).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const POPULAR=[['Telegram','telegram.com'],['Instagram','instagram.com'],['Facebook','facebook.com'],['TikTok','tiktok.com'],['Google','google.com'],['X','x.com'],['WhatsApp','whatsapp.com'],['Discord','discord.com']];
+let currentSite='';let sheetBusy=false;
+
+/* ---------- helpers ---------- */
+function toast(t){const el=$('toast');el.textContent=t;el.classList.add('show');clearTimeout(toast.t);toast.t=setTimeout(()=>el.classList.remove('show'),2600)}
+function cleanSite(v){return String(v||'').trim().toLowerCase().replace(/^[a-z]+:\/\//,'').replace(/^www\./,'').split(/[\/?#\s]/)[0]}
+function store(k,v){try{if(v===undefined)return JSON.parse(localStorage.getItem(k)||'null');localStorage.setItem(k,JSON.stringify(v))}catch(_){return null}}
+async function getToken(){const {data}=await sb.auth.getSession();token=data.session?.access_token||'';return token}
+async function call(action,method='GET',data,params){
+  const q=new URLSearchParams({action,...(params||{})});
+  const r=await fetch('/api/sms-bus?'+q,{method,headers:{Authorization:'Bearer '+token,'Content-Type':'application/json'},...(data?{body:JSON.stringify(data)}:{})});
+  let j={};try{j=await r.json()}catch(_){}
+  if(!r.ok){const e=new Error(j.message||'Request failed');e.status=r.status;e.data=j;throw e}
+  return j}
+
+/* ---------- bottom sheet ---------- */
+function openSheet({title,html,yes,onYes}){
+  $('shT').textContent=title;$('shB').innerHTML=html;$('shErr').textContent='';$('shYes').textContent=yes;$('shYes').classList.remove('loading');
+  $('ov').hidden=false;sheetBusy=false;
+  $('shYes').onclick=async()=>{if(sheetBusy)return;sheetBusy=true;$('shYes').classList.add('loading');$('shErr').textContent='';
+    try{await onYes()}catch(e){$('shErr').textContent=e.message;$('shYes').classList.remove('loading');sheetBusy=false}};
+  $('shNo').onclick=closeSheet;$('shYes').focus()}
+function closeSheet(){if(sheetBusy)return;$('ov').hidden=true}
+$('ov').addEventListener('click',e=>{if(e.target===$('ov'))closeSheet()});
+document.addEventListener('keydown',e=>{if(e.key==='Escape'&&!$('ov').hidden)closeSheet()});
+
+/* ---------- search ---------- */
+function drawChips(){$('chips').innerHTML=POPULAR.map(([n,d])=>'<button class="chip'+(d===currentSite?' on':'')+'" data-site="'+d+'">'+n+'</button>').join('');
+  $('chips').querySelectorAll('.chip').forEach(b=>b.onclick=()=>{$('site').value=b.dataset.site;search()})}
+function drawRecent(){const r=(store('mjmails_recent')||[]).filter(x=>x!==currentSite);
+  $('recent').innerHTML=r.length?'Recent: '+r.map(x=>'<a href="#" data-r="'+esc(x)+'">'+esc(x)+'</a>').join(' · '):'';
+  $('recent').querySelectorAll('[data-r]').forEach(a=>a.onclick=e=>{e.preventDefault();$('site').value=a.dataset.r;search()})}
+function remember(site){const r=[site,...(store('mjmails_recent')||[]).filter(x=>x!==site)].slice(0,5);store('mjmails_recent',r)}
+
+async function search(){
+  const site=cleanSite($('site').value);$('site').value=site;
+  if(!site||!site.includes('.')){$('notice').textContent='Enter a website like telegram.com';$('site').focus();return}
+  currentSite=site;drawChips();$('steps').hidden=true;
+  $('search').classList.add('loading');$('search').disabled=true;$('notice').textContent='Checking available domains…';
+  $('offers').innerHTML='<div class="skel"></div><div class="skel"></div><div class="skel"></div>';
+  try{
+    await getToken();
+    if(!token){$('signin').hidden=false;throw new Error('Sign in to your MJ HUB account first.')}
+    $('signin').hidden=true;
+    const data=await call('mails_offers','GET',null,{site});
+    const offers=(data.offers||[]).slice().sort((a,b)=>a.price_ngn-b.price_ngn);
+    remember(site);drawRecent();
+    if(!offers.length){$('notice').textContent='';$('offers').innerHTML='<div class="empty card"><span class="ico">📭</span><b>No emails available for '+esc(site)+'</b><br>Try another service or check the spelling.</div>';return}
+    $('notice').textContent=offers.length+' domain'+(offers.length>1?'s':'')+' available for '+site+' · cheapest first';
+    $('offers').innerHTML=offers.map((o,i)=>{const low=o.count<=5;
+      return '<article class="offer'+(i===0?' best':'')+'"><div><div class="dom">'+esc(o.domain)+'</div><div class="meta">'+(i===0?'<span class="badge best">Best price</span>':'')+(low?'<span class="badge low">Only '+o.count+' left</span>':'<span class="badge">'+o.count+' in stock</span>')+'</div></div><div class="buy"><div class="price">'+money(o.price_ngn)+'</div><button class="btn sm" data-i="'+i+'">Rent email</button></div></article>'}).join('');
+    $('offers').querySelectorAll('[data-i]').forEach(b=>b.onclick=()=>confirmBuy(site,offers[Number(b.dataset.i)]));
+  }catch(e){$('offers').innerHTML='';$('notice').textContent=e.message}
+  finally{$('search').classList.remove('loading');$('search').disabled=false}}
+
+/* ---------- purchase ---------- */
+function confirmBuy(site,o){
+  const requestId=crypto.randomUUID();
+  openSheet({title:'Rent this email?',yes:'Pay '+money(o.price_ngn),
+    html:'<div class="rows"><div><span>Service</span><b>'+esc(site)+'</b></div><div><span>Domain</span><b>'+esc(o.domain)+'</b></div><div><span>Price</span><b>'+money(o.price_ngn)+'</b></div></div><p class="muted" style="margin:0">Paid from your wallet. If no message arrives you can cancel while it is waiting and get an automatic refund.</p>',
+    onYes:async()=>{
+      await getToken();if(!token)throw new Error('Please sign in again.');
+      let out;
+      try{out=await call('mails_purchase','POST',{site,domain:o.domain,expected_price:o.price_ngn,request_id:requestId})}
+      catch(e){
+        if(e.status===409&&e.data?.price_ngn){$('ov').hidden=true;sheetBusy=false;toast('Price changed — offers refreshed');search();return}
+        if(e.status===402)throw new Error('Not enough wallet balance. Fund your wallet and try again.');
+        throw e}
+      sheetBusy=false;$('ov').hidden=true;
+      toast(out.pending?out.message:'Email created ✓ Opening your inbox…');
+      setTimeout(()=>location.href='/mj-mails-orders.html',out.pending?1800:700)}})}
+
+/* ---------- init ---------- */
+$('search').addEventListener('click',search);
+$('site').addEventListener('keydown',e=>{if(e.key==='Enter')search()});
+drawChips();drawRecent();
+getToken().then(t=>{if(!t)$('signin').hidden=false});
+const qs=new URLSearchParams(location.search).get('site');if(qs){$('site').value=qs;search()}
 </script></body></html>
