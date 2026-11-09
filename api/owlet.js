@@ -1304,60 +1304,26 @@ async function refundIfSupplierFailed(order, oldStatus, newStatus) {
 
   if (!(refunded > 0)) return 0;
 
-  // Claim first so concurrent status polls cannot double-refund
-  let claimed = false;
-  try {
-    const { data: claimRows, error: claimErr } = await supabase
-      .from('booster_orders')
-      .update({
-        refund_ngn: refunded,
-        updated_at: new Date().toISOString()
-      })
-      .eq('id', order.id)
-      .or('refund_ngn.is.null,refund_ngn.eq.0')
-      .select('id');
-    if (claimErr) {
-      // Column missing or filter unsupported — fall through with best effort
-      console.warn('[booster refund] claim', claimErr.message);
-    } else if (!(claimRows && claimRows.length)) {
-      return 0; // already claimed
-    } else {
-      claimed = true;
-    }
-  } catch (_) {}
-
-  const { data: prof } = await supabase
-    .from('profiles')
-    .select('balance, customer_id')
-    .eq('id', order.user_id)
-    .maybeSingle();
-  if (!prof) return 0;
-
-  const { error: credErr } = await supabase.rpc('credit_balance', {
-    p_user_id: order.user_id,
-    p_amount: refunded
+  // Atomic, order-keyed refund credit. This does not depend on a recent wallet_debits timestamp.
+  const { data: creditResult, error: creditErr } = await supabase.rpc('credit_booster_order_refund', {
+    p_order_id: order.id,
+    p_amount: refunded,
+    p_reason: isPartial ? 'supplier_partial_refund' : 'supplier_cancel_or_failure_refund'
   });
-  if (credErr) {
-    console.error('[booster refund] credit_balance', credErr.message);
-    const bal = Number(prof.balance) || 0;
-    const { error: balErr } = await supabase
-      .from('profiles')
-      .update({ balance: bal + refunded })
-      .eq('id', order.user_id);
-    if (balErr) {
-      console.error('[booster refund] balance update failed', balErr.message);
-      return 0;
-    }
+  if (creditErr) {
+    console.error('[booster refund] atomic credit failed', creditErr.message);
+    return 0;
+  }
+  if (!creditResult || creditResult.credited !== true) {
+    // Idempotency ledger already contains this order. Never create a second wallet credit.
+    return 0;
   }
 
-  if (!claimed) {
-    try {
-      await supabase.from('booster_orders').update({
-        refund_ngn: refunded,
-        updated_at: new Date().toISOString()
-      }).eq('id', order.id);
-    } catch (_) {}
-  }
+  const { error: orderRefundErr } = await supabase.from('booster_orders').update({
+    refund_ngn: refunded,
+    updated_at: new Date().toISOString()
+  }).eq('id', order.id);
+  if (orderRefundErr) console.error('[booster refund] order refund marker', orderRefundErr.message);
 
   try {
     await supabase.from('transactions').insert({
@@ -1418,12 +1384,15 @@ async function handleMyOrders(req, res) {
   // Include partial so we can finalize remains + auto-refund undelivered share
   const active = skipLive ? [] : (data || []).filter((o) => {
     const s = String(o.status || '').toLowerCase();
+    const src = normalizePanelSource(o.source || 'jap');
+    // Casper's supplier status/remains can change after local closure; refresh those too.
+    if (src === 'casper') return true;
     const needsRefund = /partial/i.test(s) && !(Number(o.refund_ngn) > 0);
     return needsRefund || (
       /pending|progress|processing|awaiting|waiting/i.test(s)
       && !/completed|canceled|cancelled|refunded|failed/i.test(s)
     );
-  }).slice(0, 20); // more active pulls for snappy progress
+  }).slice(0, 20);
 
   // Normalize Owlet status payload (field names vary by panel version)
   function pickStatusPayload(json, orderId) {
