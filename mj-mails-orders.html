@@ -41,7 +41,15 @@ const POLL_MS=10000,POLL_MAX=5;
 let rows=[],filter='all',query='',openIds=new Set(),busy=new Set(),polling=false,ordersLoaded=false;
 
 function toast(t){const el=$('toast');el.textContent=t;el.classList.add('show');clearTimeout(toast.t);toast.t=setTimeout(()=>el.classList.remove('show'),2400)}
-async function getToken(){const {data}=await sb.auth.getSession();token=data.session?.access_token||'';return token}
+async function getToken(){
+  for(let attempt=0;attempt<3;attempt++){
+    try{const {data,error}=await sb.auth.getSession();if(!error&&data.session?.access_token){token=data.session.access_token;return token}}catch(_){}
+    if(attempt<2)await new Promise(resolve=>setTimeout(resolve,300));
+  }
+  try{const {data,error}=await sb.auth.refreshSession();if(!error&&data.session?.access_token){token=data.session.access_token;return token}}catch(_){}
+  token='';return token;
+}
+sb.auth.onAuthStateChange((_event,session)=>{token=session?.access_token||''});
 async function api(action,method='GET',data){
   const r=await fetch('/api/sms-bus?action=mails_'+action,{method,headers:{Authorization:'Bearer '+token,'Content-Type':'application/json'},...(data?{body:JSON.stringify(data)}:{})});
   let j={};try{j=await r.json()}catch(_){}
