@@ -1,3 +1,7 @@
+-- Track and rate-limit supplier cancellation attempts for expired rentals.
+alter table public.mj_mail_orders
+  add column if not exists supplier_cancel_requested_at timestamptz;
+
 -- Keep MJ Mails refunds atomic and reject any refund after a message/code has arrived.
 -- Supplier confirmation is performed by the trusted server handler before it calls this RPC.
 create or replace function public.mj_mail_refund_purchase(
