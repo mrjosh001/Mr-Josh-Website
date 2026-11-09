@@ -1734,6 +1734,31 @@ function withLagos(opts) { return Object.assign({ timeZone: 'Africa/Lagos' }, op
     <option value="all">All (future)</option>
    </select>
   </div>
+  <div class="field"><label>Eligible users</label>
+   <select id="cpAudience" onchange="toggleCouponAudienceFields()">
+    <option value="all" selected>All users</option>
+    <option value="new_users">New users only</option>
+   </select>
+  </div>
+ </div>
+ <div id="cpAudienceFields" style="display:none;margin-top:14px;padding:14px;border:1px solid var(--border);border-radius:12px;max-width:920px;">
+  <div style="font-weight:700;margin-bottom:10px;">New-user registration eligibility</div>
+  <div class="field" style="max-width:320px;"><label>Registration window type</label>
+   <select id="cpRegistrationMode" onchange="toggleCouponRegistrationMode()">
+    <option value="rolling" selected>Rolling window</option>
+    <option value="fixed">Fixed date range</option>
+   </select>
+  </div>
+  <div id="cpRollingFields" class="field" style="max-width:320px;margin-top:10px;">
+   <label>Registered within the last</label>
+   <input type="number" id="cpRegistrationDays" min="1" max="3650" step="1" value="7" />
+   <small style="color:var(--muted);">Measured backwards from the time the customer redeems the coupon.</small>
+  </div>
+  <div id="cpFixedFields" style="display:none;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;margin-top:10px;">
+   <div class="field"><label>Registration start date</label><input type="date" id="cpRegistrationStart" /></div>
+   <div class="field"><label>Registration end date</label><input type="date" id="cpRegistrationEnd" /></div>
+   <small style="grid-column:1/-1;color:var(--muted);">Both dates are inclusive. Only accounts originally registered during this period qualify.</small>
+  </div>
  </div>
  <div id="cpCreateErr" class="error-msg" style="margin-top:8px;"></div>
  <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:12px;">
@@ -7014,6 +7039,20 @@ async function loadCoupons() {
   }
 }
 
+function toggleCouponAudienceFields() {
+  const audience = document.getElementById('cpAudience')?.value || 'all';
+  const wrap = document.getElementById('cpAudienceFields');
+  if (wrap) wrap.style.display = audience === 'new_users' ? 'block' : 'none';
+  toggleCouponRegistrationMode();
+}
+function toggleCouponRegistrationMode() {
+  const mode = document.getElementById('cpRegistrationMode')?.value || 'rolling';
+  const rolling = document.getElementById('cpRollingFields');
+  const fixed = document.getElementById('cpFixedFields');
+  if (rolling) rolling.style.display = mode === 'rolling' ? 'block' : 'none';
+  if (fixed) fixed.style.display = mode === 'fixed' ? 'grid' : 'none';
+}
+
 async function createCoupon() {
   const err = document.getElementById('cpCreateErr');
   if (err) err.textContent = '';
@@ -7025,6 +7064,21 @@ async function createCoupon() {
   const maxUses = document.getElementById('cpMaxUses') && document.getElementById('cpMaxUses').value;
   const maxPer = document.getElementById('cpMaxPerUser') && document.getElementById('cpMaxPerUser').value;
   const applies = document.getElementById('cpApplies') && document.getElementById('cpApplies').value;
+  const audience = document.getElementById('cpAudience')?.value || 'all';
+  const registrationMode = document.getElementById('cpRegistrationMode')?.value || 'rolling';
+  const registrationDays = document.getElementById('cpRegistrationDays')?.value || '';
+  const registrationStart = document.getElementById('cpRegistrationStart')?.value || '';
+  const registrationEnd = document.getElementById('cpRegistrationEnd')?.value || '';
+  if (audience === 'new_users') {
+    if (registrationMode === 'rolling' && (!/^\\d+$/.test(registrationDays) || Number(registrationDays) < 1 || Number(registrationDays) > 3650)) {
+      if (err) err.textContent = 'Enter a rolling registration window between 1 and 3650 days.';
+      return;
+    }
+    if (registrationMode === 'fixed' && (!registrationStart || !registrationEnd || registrationEnd < registrationStart)) {
+      if (err) err.textContent = 'Choose a valid registration start and end date.';
+      return;
+    }
+  }
   try {
     await adminPost({
       resource: 'coupon',
@@ -7037,6 +7091,11 @@ async function createCoupon() {
       max_uses: maxUses === '' ? null : maxUses,
       max_uses_per_user: maxPer || 1,
       applies_to: applies || 'logs',
+      audience_type: audience,
+      registration_window_type: audience === 'new_users' ? registrationMode : null,
+      registration_days: audience === 'new_users' && registrationMode === 'rolling' ? registrationDays : null,
+      registration_start_date: audience === 'new_users' && registrationMode === 'fixed' ? registrationStart : null,
+      registration_end_date: audience === 'new_users' && registrationMode === 'fixed' ? registrationEnd : null,
       active: true
     });
     if (document.getElementById('cpCode')) document.getElementById('cpCode').value = '';
