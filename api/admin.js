@@ -2986,6 +2986,7 @@ async function couponListHandle() {
   const { data, error } = await supabase
     .from('coupons')
     .select('*')
+    .is('deleted_at', null)
     .order('created_at', { ascending: false })
     .limit(200);
   if (error) return { status: 400, body: { success: false, message: error.message } };
@@ -3101,6 +3102,7 @@ async function couponUpdateHandle(body) {
     .from('coupons')
     .update(payload)
     .eq('id', id)
+    .is('deleted_at', null)
     .select('*')
     .maybeSingle();
   if (error) return { status: 400, body: { success: false, message: error.message } };
@@ -3110,9 +3112,41 @@ async function couponUpdateHandle(body) {
 async function couponDeleteHandle(body) {
   const id = body.id;
   if (!id) return { status: 400, body: { success: false, message: 'Coupon id required' } };
-  const { error } = await supabase.from('coupons').delete().eq('id', id);
+  // Archive instead of hard-delete so redemption history keeps its FK reference.
+  const { data, error } = await supabase
+    .from('coupons')
+    .update({ active: false, deleted_at: new Date().toISOString() })
+    .eq('id', id)
+    .is('deleted_at', null)
+    .select('id')
+    .maybeSingle();
   if (error) return { status: 400, body: { success: false, message: error.message } };
+  if (!data) return { status: 404, body: { success: false, message: 'Coupon not found or already archived' } };
   return { status: 200, body: { success: true } };
+}
+
+async function couponExtendHandle(body) {
+  const id = body.id;
+  if (!id) return { status: 400, body: { success: false, message: 'Coupon id required' } };
+  const requested = new Date(body.ends_at);
+  if (!body.ends_at || Number.isNaN(requested.getTime())) {
+    return { status: 400, body: { success: false, message: 'A valid new expiry date is required' } };
+  }
+  const { data: current, error: readError } = await supabase
+    .from('coupons').select('id, ends_at').eq('id', id).is('deleted_at', null).maybeSingle();
+  if (readError) return { status: 400, body: { success: false, message: readError.message } };
+  if (!current) return { status: 404, body: { success: false, message: 'Coupon not found' } };
+  if (current.ends_at && requested.getTime() <= new Date(current.ends_at).getTime()) {
+    return { status: 400, body: { success: false, message: 'New expiry must be later than the current expiry' } };
+  }
+  if (requested.getTime() <= Date.now()) {
+    return { status: 400, body: { success: false, message: 'New expiry must be in the future' } };
+  }
+  const { data, error } = await supabase.from('coupons')
+    .update({ ends_at: requested.toISOString(), active: true })
+    .eq('id', id).is('deleted_at', null).select('*').maybeSingle();
+  if (error) return { status: 400, body: { success: false, message: error.message } };
+  return { status: 200, body: { success: true, data } };
 }
 
 export default async function handler(req, res) {
@@ -3210,6 +3244,7 @@ export default async function handler(req, res) {
       if (action === 'list' || !action) result = await couponListHandle();
       else if (action === 'create') result = await couponCreateHandle(body);
       else if (action === 'update') result = await couponUpdateHandle(body);
+      else if (action === 'extend') result = await couponExtendHandle(body);
       else if (action === 'delete') result = await couponDeleteHandle(body);
       else result = { status: 400, body: { success: false, message: 'Unknown coupon action. Use "list", "create", "update", or "delete".' } };
     } else if (resource === 'email_broadcast') {
