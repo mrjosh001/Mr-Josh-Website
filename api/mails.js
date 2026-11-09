@@ -47,7 +47,7 @@ async function updateSupplierState(row, data) {
   const patch = { updated_at:new Date().toISOString() };
   if (item?.status != null) {
     const raw = String(item.status).toUpperCase();
-    const statusMap = { WAIT:3, MESSAGE:5, RECEIVED:5, COMPLETED:6, CANCELLED:4, REFUNDED:7 };
+    const statusMap = { WAIT:3, WAITING:3, ACTIVE:5, MESSAGE:5, RECEIVED:5, COMPLETED:6, DONE:6, SUCCESS:6, CANCEL:4, CANCELLED:4, REFUNDED:7 };
     patch.supplier_status = Number.isFinite(Number(item.status)) ? Number(item.status) : (statusMap[raw] || row.supplier_status);
     patch.status = mapStatus(patch.supplier_status);
   }
@@ -133,7 +133,7 @@ export default async function handler(req,res) {
         return send(res,202,{success:false,pending:true,message:'Provider response needs reconciliation. Do not retry yet.'});
       }
       const patch = {supplier_id:String(item.id),email_address:String(item.email),
-        supplier_status:Number(item.status) || (String(item.status).toUpperCase()==='WAIT'?3:3),
+        supplier_status:Number(item.status) || (String(item.status).toUpperCase()==='WAIT'?3:3),supplier_currency:Number(item.currency)||840,
         status:mapStatus(Number(item.status) || 3),updated_at:new Date().toISOString()};
       const {data:saved,error} = await supabase.from('mj_mail_orders').update(patch).eq('id',order.id)
         .eq('user_id',user.id).select('*').single();
@@ -153,10 +153,15 @@ export default async function handler(req,res) {
       const body=bodyOf(req); const id=String(body.id||'');
       const {data:row,error}=await supabase.from('mj_mail_orders').select('*').eq('id',id).eq('user_id',user.id).maybeSingle();
       if(error) throw error; if(!row) return send(res,404,{success:false,message:'Order not found'});
-      if(row.refunded || ['completed','refunded','cancelled'].includes(row.status))
+      if(row.refunded || ['completed','refunded','cancelled','message_received'].includes(row.status))
         return send(res,409,{success:false,message:'This email activation can no longer be cancelled'});
       if(!row.supplier_id) return send(res,409,{success:false,message:'This purchase is still being reconciled'});
-      await hero('/emails/'+encodeURIComponent(row.supplier_id),{method:'DELETE'});
+      if(row.status !== 'cancel_pending_refund') {
+        if(row.status !== 'waiting') return send(res,409,{success:false,message:'Only waiting email activations can be cancelled'});
+        await hero('/emails/'+encodeURIComponent(row.supplier_id),{method:'DELETE'});
+        const {error:markError}=await supabase.from('mj_mail_orders').update({status:'cancel_pending_refund',supplier_status:4,updated_at:new Date().toISOString()}).eq('id',row.id).eq('user_id',user.id);
+        if(markError) throw markError;
+      }
       const refund=await supabase.rpc('mj_mail_refund_purchase',{p_order_id:row.id,p_user_id:user.id,p_reason:'Email activation cancelled'});
       if(refund.error) throw refund.error;
       return send(res,200,{success:true,message:'Email cancelled and wallet refunded'});
