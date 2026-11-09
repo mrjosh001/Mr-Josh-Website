@@ -3,7 +3,42 @@
 <title>MJ Mails Orders · MJ HUB</title>
 <link rel="stylesheet" href="/css/graceful.css"><link rel="stylesheet" href="/css/mj-motion.css"><link rel="stylesheet" href="/css/mj-glass.css"><link rel="stylesheet" href="/css/mj-apple-fluid.css"><link rel="stylesheet" href="/css/mj-mails.css">
 <script src="/js/mj-theme.js" defer></script><script src="/js/mj-page-loader.js" defer></script><script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-</head><body><main class="wrap">
+
+<style>
+/* MJ Mails order card refresh */
+.mm-orders-hero{padding-bottom:22px}
+.mm-order-toolbar{margin-top:4px}
+#orders{display:grid;gap:14px}
+.order{position:relative;overflow:hidden;margin:0;padding:0;border-radius:22px;background:var(--mm-card);box-shadow:0 14px 38px rgba(15,23,42,.07)}
+.order:before{content:"";position:absolute;inset:0 0 auto;height:3px;background:linear-gradient(90deg,var(--mm-primary),color-mix(in srgb,var(--mm-primary) 18%,transparent))}
+.order .o-head{display:block;padding:19px 18px 15px}
+.order .o-head>div{width:100%}
+.order .copyrow{display:flex;align-items:flex-start;gap:10px;margin:0}
+.order .email{font-size:clamp(16px,4.4vw,19px);line-height:1.35;letter-spacing:-.035em;overflow-wrap:anywhere;min-width:0}
+.order .copy{border-radius:10px;padding:7px 10px;background:color-mix(in srgb,var(--mm-primary) 8%,var(--mm-card));border-color:color-mix(in srgb,var(--mm-primary) 25%,var(--mm-border));color:var(--mm-primary);font-size:12px}
+.order .o-sub{display:flex;flex-wrap:wrap;align-items:center;gap:5px 8px;margin-top:9px;font-size:11px;line-height:1.5}
+.order .status{display:inline-flex;align-items:center;gap:6px;margin-top:13px;padding:6px 10px;font-size:11px;border-radius:99px}
+.order .status.warn:before{content:"";width:6px;height:6px;border-radius:50%;background:currentColor;box-shadow:0 0 0 3px color-mix(in srgb,currentColor 15%,transparent)}
+.order .waitline{margin:0;padding:15px 18px 5px;font-size:13px;font-weight:700;color:var(--mm-text)}
+.order .waitline .dot{flex:0 0 8px}
+.order .pulse-bar{margin:9px 18px 0;height:3px}
+.order .mail-expiry{display:flex;flex-wrap:wrap;align-items:center;gap:5px 7px;margin:14px 18px 0;padding:12px 13px;border:1px solid color-mix(in srgb,var(--mm-warn) 24%,var(--mm-border));border-radius:14px;background:color-mix(in srgb,var(--mm-warn) 7%,var(--mm-card));font-size:11px;line-height:1.4}
+.order .mail-expiry strong{font-size:16px;font-weight:900;letter-spacing:.04em;color:var(--mm-warn);font-variant-numeric:tabular-nums}
+.order .mail-expiry span{font-size:11px;color:var(--mm-muted);opacity:1}
+.order .actions{display:grid;grid-template-columns:1fr 1fr;gap:9px;margin:16px 0 0;padding:14px 18px 18px;border-top:1px solid var(--mm-border)}
+.order .actions .btn{width:100%;min-width:0;min-height:44px;justify-content:center;text-align:center;border-radius:12px;font-size:12px;padding:10px 9px;white-space:normal}
+.order .actions .btn:first-child{background:var(--mm-primary);color:#fff;border:1px solid var(--mm-primary)}
+.order .actions .refund-btn{grid-column:1/-1;grid-row:2}
+.order .actions a.btn{display:flex!important}
+.order .codebox{margin:0 18px 14px;padding:13px 14px;border-radius:15px}
+.order .codebox .copyrow{align-items:center;margin-top:5px}
+.order .code{font-size:30px;line-height:1.2}
+.order details.msg{margin:0 18px 14px}
+.order .reconcile-note{margin:12px 18px 0!important;padding:11px 12px;border-radius:12px;background:color-mix(in srgb,var(--mm-info) 7%,var(--mm-card));font-size:12px;line-height:1.55}
+@media(min-width:600px){#orders{grid-template-columns:repeat(2,minmax(0,1fr));align-items:start}.order{height:100%}.order .actions{grid-template-columns:1fr 1fr}}
+@media(max-width:380px){.order .o-head{padding:16px 14px 13px}.order .actions{padding:12px 14px 14px;gap:7px}.order .waitline{padding-left:14px;padding-right:14px}.order .pulse-bar{margin-left:14px;margin-right:14px}.order .mail-expiry{margin-left:14px;margin-right:14px}.order .codebox,.order details.msg{margin-left:14px;margin-right:14px}}
+@media(prefers-reduced-motion:reduce){.order .pulse-bar:after{animation:none}}
+</style></head><body><main class="wrap">
 <header class="top mm-top"><a class="back-link mm-back-icon" href="/mj-mails.html" aria-label="Back to MJ Mails" title="Back"><span aria-hidden="true">‹</span></a><strong class="mm-brand">MJ MAILS</strong><a class="navlink mm-top-action" href="/mj-mails.html">Rent email</a></header>
 <section class="mm-hero mm-orders-hero"><div class="mm-eyebrow"><span class="mm-eyebrow-dot"></span> YOUR MAILBOX</div><h1>Email orders <span>&amp; inbox.</span></h1><p class="lead">Manage rented addresses, track incoming messages, and copy verification codes from one place.</p><div class="mm-hero-meta"><span>↻ Automatic checks</span><span>⌁ Your orders only</span></div></section>
 
@@ -105,11 +140,11 @@ function card(o,flash){
    '<div class="o-head"><div style="min-width:0;flex:1"><div class="copyrow"><div class="email">'+esc(o.email||'Email address pending')+'</div>'+(o.email?'<button class="copy" data-copy="'+esc(o.email)+'">Copy</button>':'')+'</div>'+
    '<div class="muted o-sub">'+esc(o.site)+' · '+esc(o.domain)+' · '+money(o.price)+' · '+ago(o.created_at)+'</div></div><span class="status '+st[1]+'">'+esc(st[0])+'</span></div>'+
    (code?'<div class="codebox"><div class="lbl">'+(o.value?'Verification code':'Code found in message')+'</div><div class="copyrow"><div class="code">'+esc(code)+'</div><button class="copy" data-copy="'+esc(code)+'">Copy</button></div></div>':'')+
-   (waiting&&!code?'<div class="waitline"><span class="dot"></span>Waiting for the email to arrive…</div><div class="pulse-bar"></div>':'')+
+   (waiting&&!code?'<div class="waitline"><span class="dot"></span>Waiting for your verification email</div><div class="pulse-bar"></div>':'')+
    (waiting&&Number.isFinite(mailExpires)?'<div class="mail-expiry">Email rental expires in <strong data-mail-timer data-expires="'+esc(o.expires_at)+'">'+formatCountdown(mailExpires-Date.now())+'</strong> <span>· 20-minute total rental</span></div>':'')+
    (o.status==='reconciliation_required'?'<p class="muted" style="margin:12px 0 0">We are confirming this purchase with the provider. Please do not buy again — this usually clears within a few minutes.</p>':'')+
    (o.message?'<details class="msg" data-d="'+esc(o.id)+'"'+(openIds.has(o.id)?' open':'')+'><summary>Full message</summary><div class="body">'+esc(o.message)+'</div></details>':'')+
-   '<div class="actions">'+(o.supplier_status!==undefined||o.status!=='reconciliation_required'?'<button class="btn sm" data-refresh="'+esc(o.id)+'">Check for message</button>':'')+
+   '<div class="actions">'+(o.supplier_status!==undefined||o.status!=='reconciliation_required'?'<button class="btn sm" data-refresh="'+esc(o.id)+'">Check inbox</button>':'')+
    (waiting?'<button class="btn sm refund-btn" data-refund="'+esc(o.id)+'" '+((!Number.isFinite(refundAvailable)||!Number.isFinite(mailExpires)||Date.now()<refundAvailable||Date.now()>=mailExpires)?'disabled':'')+'><span data-refund-timer data-available="'+esc(o.refund_available_at||'')+'" data-expires="'+esc(o.expires_at||'')+'">'+(!Number.isFinite(refundAvailable)||!Number.isFinite(mailExpires)?'Timer unavailable':Date.now()<refundAvailable?'Available in '+formatCountdown(refundAvailable-Date.now()):Date.now()>=mailExpires?'Expired':'Refund')+'</span></button>':canRetryRefund?'<button class="btn sm refund-btn" data-refund="'+esc(o.id)+'">Retry refund</button>':'')+
    '<a class="btn ghost sm" style="display:inline-flex;align-items:center" href="/mj-mails.html?site='+encodeURIComponent(o.site||'')+'">Rent again</a></div></article>'}
 function draw(flashId){
