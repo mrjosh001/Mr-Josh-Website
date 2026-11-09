@@ -3010,6 +3010,53 @@ async function couponListHandle() {
   return { status: 200, body: { success: true, data: rows } };
 }
 
+function couponAudiencePayload(body) {
+  const audience = String(body.audience_type || 'all').toLowerCase();
+  if (!['all', 'new_users'].includes(audience)) {
+    return { error: 'Choose All Users or New Users Only' };
+  }
+  if (audience === 'all') {
+    return { value: {
+      audience_type: 'all',
+      registration_window_type: null,
+      registration_days: null,
+      registration_start_at: null,
+      registration_end_at: null
+    } };
+  }
+
+  const mode = String(body.registration_window_type || '').toLowerCase();
+  if (mode === 'rolling') {
+    const days = Number(body.registration_days);
+    if (!Number.isInteger(days) || days < 1 || days > 3650) {
+      return { error: 'Rolling registration window must be between 1 and 3650 days' };
+    }
+    return { value: {
+      audience_type: 'new_users',
+      registration_window_type: 'rolling',
+      registration_days: days,
+      registration_start_at: null,
+      registration_end_at: null
+    } };
+  }
+  if (mode === 'fixed') {
+    const start = new Date(String(body.registration_start_date || '') + 'T00:00:00.000Z');
+    const end = new Date(String(body.registration_end_date || '') + 'T23:59:59.999Z');
+    if (!body.registration_start_date || !body.registration_end_date ||
+        Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || end < start) {
+      return { error: 'Choose a valid registration start and end date' };
+    }
+    return { value: {
+      audience_type: 'new_users',
+      registration_window_type: 'fixed',
+      registration_days: null,
+      registration_start_at: start.toISOString(),
+      registration_end_at: end.toISOString()
+    } };
+  }
+  return { error: 'Choose a rolling window or fixed registration dates' };
+}
+
 async function couponCreateHandle(body) {
   const code = normCouponCode(body.code);
   if (!code || code.length < 3) {
@@ -3033,7 +3080,11 @@ async function couponCreateHandle(body) {
     ends_at = new Date(starts_at.getTime() + days * 24 * 60 * 60 * 1000);
   }
 
+  const audience = couponAudiencePayload(body);
+  if (audience.error) return { status: 400, body: { success: false, message: audience.error } };
+
   const row = {
+    ...audience.value,
     code,
     percent_off: percent != null && percent > 0 ? percent : null,
     amount_off_ngn: amount != null && amount > 0 ? amount : null,
@@ -3063,6 +3114,11 @@ async function couponUpdateHandle(body) {
   if (!id) return { status: 400, body: { success: false, message: 'Coupon id required' } };
 
   const payload = {};
+  if (['audience_type', 'registration_window_type', 'registration_days', 'registration_start_date', 'registration_end_date'].some((key) => body[key] !== undefined)) {
+    const audience = couponAudiencePayload(body);
+    if (audience.error) return { status: 400, body: { success: false, message: audience.error } };
+    Object.assign(payload, audience.value);
+  }
   if (body.active !== undefined) payload.active = !!body.active;
   if (body.code != null && String(body.code).trim()) payload.code = normCouponCode(body.code);
   if (body.percent_off !== undefined) {
