@@ -9,7 +9,7 @@ body{margin:0;background:var(--bg,#080d18);color:var(--text,#f4f7fb);font-family
 <section class="panel"><div class="top"><strong>Email inbox</strong><button id="reload" class="secondary">Refresh orders</button></div><div id="notice" class="notice">Loading your orders…</div><div id="orders"></div></section>
 <script>
 const SUPABASE_URL='https://atczodlljmlayvldxfmv.supabase.co';
-const SUPABASE_ANON_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJhbGciOiJIUzI1NiIsInR5cCI6MTc4NTA3NTIzOCwiZXhwIjoyMTAwNjUxMjM4fQ.ufthD-p7BmeD_B7xyuMM6PNPL8DmcL4AtRYgg-MuoLI';
+const SUPABASE_ANON_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJIUzI1NiIsInJlZiI6ImF0Y3pvZGxsam1sYXl2bGR4Zm12Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODUwNzUyMzgsImV4cCI6MjEwMDY1MTIzOH0.ufthD-p7BmeD_B7xyuMM6PNPL8DmcL4AtRYgg-MuoLI';
 const sb=window.supabase.createClient(SUPABASE_URL,SUPABASE_ANON_KEY);let token='';
 const $=id=>document.getElementById(id);const money=n=>'₦'+Number(n||0).toLocaleString('en-NG',{maximumFractionDigits:0});
 function esc(v){return String(v||'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
