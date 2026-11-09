@@ -114,7 +114,7 @@ function card(o,flash){
    '<a class="btn ghost sm" style="display:inline-flex;align-items:center" href="/mj-mails.html?site='+encodeURIComponent(o.site||'')+'">Rent again</a></div></article>'}
 function draw(flashId){
   drawTabs();const list=visible();
-  const waiting=rows.some(o=>o.status==='waiting');$('live').hidden=!waiting;
+  const waiting=rows.some(o=>['waiting','cancel_pending_refund'].includes(o.status)||(o.status==='completed'&&!o.message&&!o.value));$('live').hidden=!waiting;
   if(!rows.length){$('orders').innerHTML='<div class="empty card"><span class="ico">📬</span><b>No email orders yet</b><br>Rent your first temporary email and codes will show up here.<br><br><a class="btn sm" href="/mj-mails.html" style="display:inline-block">Rent an email</a></div>';return}
   if(!list.length){$('orders').innerHTML='<div class="empty card"><span class="ico">🔎</span><b>Nothing here</b><br>No orders match this filter or search.</div>';return}
   $('orders').innerHTML=list.map(o=>card(o,o.id===flashId)).join('');
@@ -155,7 +155,11 @@ function askRefund(id){
 /* ---------- auto-check waiting orders ---------- */
 async function poll(){
   if(polling||document.hidden||!token)return;
-  const waiting=rows.filter(o=>['waiting','cancel_pending_refund'].includes(o.status)&&!busy.has(o.id))
+  const waiting=rows.filter(o=>{
+    const status=String(o.status||'').toLowerCase();
+    const noDelivery=!o.message&&!o.value;
+    return !o.refunded&&noDelivery&&(['waiting','cancel_pending_refund','cancelled','refunded'].includes(status)||(status==='completed'&&!!o.expires_at));
+  }).filter(o=>!busy.has(o.id))
     .sort((a,b)=>new Date(a.created_at||0)-new Date(b.created_at||0)).slice(0,POLL_MAX);if(!waiting.length)return;
   polling=true;let flash=null;
   for(const o of waiting){try{const out=await api('refresh','POST',{id:o.id});const f=merge(out.order,true);if(f)flash=f}catch(_){}}
