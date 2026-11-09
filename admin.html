@@ -1718,7 +1718,7 @@ function withLagos(opts) { return Object.assign({ timeZone: 'Africa/Lagos' }, op
  <div class="panel">
  <div class="panel-title" style="margin-bottom:6px;">Create coupon</div>
  <p style="color:var(--muted);font-size:12.5px;margin:0 0 14px;line-height:1.5;">
- Codes work on <b>MJ Logs</b> checkout. Set %, how many people can use it, and how long it stays active. Toggle off anytime to deactivate.
+ Codes work on <b>MJ Logs</b> checkout. Choose the discount, usage limits, expiry and eligible customer audience.
  </p>
  <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:12px;max-width:920px;">
   <div class="field"><label>Code</label><input type="text" id="cpCode" placeholder="e.g. SAVE10" maxlength="32" style="text-transform:uppercase;" /></div>
@@ -7011,7 +7011,7 @@ async function loadCoupons() {
       return;
     }
     let html = '<table class="data-table" style="width:100%;font-size:13px;"><thead><tr>'
-      + '<th>Code</th><th>Discount</th><th>Min ₦</th><th>Uses</th><th>Per user</th><th>Ends</th><th>Status</th><th></th>'
+      + '<th>Code</th><th>Discount</th><th>Audience</th><th>Min ₦</th><th>Uses</th><th>Per user</th><th>Ends</th><th>Status</th><th></th>'
       + '</tr></thead><tbody>';
     rows.forEach(function (c) {
       const uses = (c.redemption_count != null ? c.redemption_count : 0)
@@ -7023,6 +7023,7 @@ async function loadCoupons() {
         + '<td>' + (Number(c.min_order_ngn) || 0).toLocaleString() + '</td>'
         + '<td>' + uses + '</td>'
         + '<td>' + per + '</td>'
+        + '<td>' + (c.audience_type === 'new_users' ? ('New users · ' + (c.registration_window_type === 'rolling' ? ('last ' + Number(c.registration_days || 0) + ' days') : (String(c.registration_start_at || '').slice(0,10) + ' to ' + String(c.registration_end_at || '').slice(0,10)))) : 'All users') + '</td>'
         + '<td>' + cpFmtDate(c.ends_at) + '</td>'
         + '<td>' + cpStatus(c) + '</td>'
         + '<td style="white-space:nowrap;">'
