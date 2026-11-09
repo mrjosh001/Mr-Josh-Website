@@ -3,30 +3,34 @@
 <head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>MJ Mails · Email Activations</title>
-<link rel="stylesheet" href="/css/graceful.css"><link rel="stylesheet" href="/css/mj-motion.css"><link rel="stylesheet" href="/css/mj-mails.css">
-<script src="/js/mj-theme.js" defer></script><script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<link rel="stylesheet" href="/css/graceful.css"><link rel="stylesheet" href="/css/mj-motion.css"><link rel="stylesheet" href="/css/mj-glass.css"><link rel="stylesheet" href="/css/mj-apple-fluid.css"><link rel="stylesheet" href="/css/mj-mails.css">
+<script src="/js/mj-theme.js" defer></script><script src="/js/mj-page-loader.js" defer></script><script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
 <body><main class="wrap">
-<header class="top"><a class="brand" href="/dashboard.html">MJ HUB</a><a class="navlink" href="/mj-mails-orders.html">My email orders →</a></header>
+<header class="top mm-top"><a class="back-link" href="/dashboard.html" aria-label="Back to dashboard"><span aria-hidden="true">‹</span><span>Dashboard</span></a><a class="brand" href="/dashboard.html">MJ HUB</a><a class="navlink" href="/mj-mails-orders.html">My orders <span aria-hidden="true">↗</span></a></header>
 
-<section>
-<span class="tag">MJ HUB · NEW SERVICE</span>
-<h1>MJ Mails</h1>
-<p class="lead">Rent a temporary email address to receive verification codes. Pick a service, choose a domain, and your inbox opens instantly.</p>
+<section class="mm-hero">
+<div class="mm-eyebrow"><span class="mm-eyebrow-dot"></span> MJ HUB SERVICES</div>
+<h1>Temporary email, <span>made simple.</span></h1>
+<p class="lead">Choose the website, select an available email domain, and receive verification messages in your MJ HUB inbox.</p>
+<div class="mm-hero-meta"><span>⚡ Instant checkout</span><span>⌁ Private inbox</span><span>↻ Live message checks</span></div>
 </section>
 
 <div id="signin" class="banner" hidden><span>Sign in to rent an email address.</span><a class="btn sm" href="/auth.html">Sign in</a></div>
 
-<section class="card">
-<label for="site"><strong>Which service do you need an email for?</strong></label>
-<div class="search" style="margin-top:10px">
+<section class="card mm-search-card">
+<div class="mm-card-heading"><div><span class="mm-step">01</span><div><h2>Where do you need to register?</h2><p>Enter the website that will send your verification email.</p></div></div><span class="mm-card-icon">✉</span></div>
+<label class="mm-field-label" for="site">WEBSITE OR SERVICE</label>
+<div class="search mm-search-row">
 <input id="site" type="text" inputmode="url" placeholder="e.g. telegram.com" autocomplete="off" autocapitalize="off" spellcheck="false" enterkeyhint="search">
-<button id="search" class="btn">Find emails</button>
+<button id="search" class="btn"><span>Find emails</span><span aria-hidden="true">→</span></button>
 </div>
+<div class="mm-site-link" id="siteLinkWrap" hidden><span>1. Link to the website where you’ll enter the email address</span><a id="siteLink" href="#" target="_blank" rel="noopener noreferrer">Open website ↗</a></div>
 <div class="chips" id="chips" aria-label="Popular services"></div>
-<div id="recent" class="muted" style="margin-top:8px"></div>
-<div id="notice" class="muted" role="status" style="margin-top:8px"></div>
+<div id="recent" class="muted mm-recent"></div>
+<div id="notice" class="muted mm-notice" role="status"></div>
 </section>
+<aside class="mm-policy" role="note"><span class="mm-policy-icon">!</span><div><strong>Acceptable use</strong><p>It is prohibited to use this service to work with government websites or banks, or to defraud affiliate programs. Use MJ Mails only for lawful, permitted registrations.</p></div></aside>
 
 <section id="offers" aria-live="polite"></section>
 
@@ -84,11 +88,12 @@ function drawRecent(){const r=(store('mjmails_recent')||[]).filter(x=>x!==curren
   $('recent').innerHTML=r.length?'Recent: '+r.map(x=>'<a href="#" data-r="'+esc(x)+'">'+esc(x)+'</a>').join(' · '):'';
   $('recent').querySelectorAll('[data-r]').forEach(a=>a.onclick=e=>{e.preventDefault();$('site').value=a.dataset.r;search()})}
 function remember(site){const r=[site,...(store('mjmails_recent')||[]).filter(x=>x!==site)].slice(0,5);store('mjmails_recent',r)}
+function updateSiteLink(){const site=cleanSite($('site').value);const valid=/^(?=.{3,253}$)([a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,}$/i.test(site);$('siteLinkWrap').hidden=!valid;if(valid){$('siteLink').href='https://'+site;$('siteLink').textContent='https://'+site+' ↗'}}
 
 async function search(){
-  const site=cleanSite($('site').value);$('site').value=site;
+  const site=cleanSite($('site').value);$('site').value=site;updateSiteLink();
   if(!site||!site.includes('.')){$('notice').textContent='Enter a website like telegram.com';$('site').focus();return}
-  currentSite=site;drawChips();$('steps').hidden=true;
+  currentSite=site;drawChips();$('steps').hidden=true;try{history.replaceState(null,'','/mj-mails.html?site='+encodeURIComponent(site))}catch(_){}
   $('search').classList.add('loading');$('search').disabled=true;$('notice').textContent='Checking available domains…';
   $('offers').innerHTML='<div class="skel"></div><div class="skel"></div><div class="skel"></div>';
   try{
@@ -125,8 +130,9 @@ function confirmBuy(site,o){
 
 /* ---------- init ---------- */
 $('search').addEventListener('click',search);
+$('site').addEventListener('input',updateSiteLink);
 $('site').addEventListener('keydown',e=>{if(e.key==='Enter')search()});
-drawChips();drawRecent();
+drawChips();drawRecent();updateSiteLink();
 getToken().then(t=>{if(!t)$('signin').hidden=false});
 const qs=new URLSearchParams(location.search).get('site');if(qs){$('site').value=qs;search()}
 </script></body></html>

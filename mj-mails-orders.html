@@ -1,16 +1,16 @@
 <!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>MJ Mails Orders · MJ HUB</title>
-<link rel="stylesheet" href="/css/graceful.css"><link rel="stylesheet" href="/css/mj-motion.css"><link rel="stylesheet" href="/css/mj-mails.css">
-<script src="/js/mj-theme.js" defer></script><script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<link rel="stylesheet" href="/css/graceful.css"><link rel="stylesheet" href="/css/mj-motion.css"><link rel="stylesheet" href="/css/mj-glass.css"><link rel="stylesheet" href="/css/mj-apple-fluid.css"><link rel="stylesheet" href="/css/mj-mails.css">
+<script src="/js/mj-theme.js" defer></script><script src="/js/mj-page-loader.js" defer></script><script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head><body><main class="wrap">
-<header class="top"><a class="navlink" href="/mj-mails.html">← MJ Mails</a><a class="brand" href="/dashboard.html">MJ HUB</a></header>
-<h1>My email inbox</h1>
-<p class="lead">Your rented emails and the verification codes they receive. Waiting orders check for new messages automatically.</p>
+<header class="top mm-top"><a class="back-link" href="/mj-mails.html" aria-label="Back to MJ Mails"><span aria-hidden="true">‹</span><span>MJ Mails</span></a><a class="brand" href="/dashboard.html">MJ HUB</a><a class="navlink" href="/mj-mails.html">Rent email <span aria-hidden="true">↗</span></a></header>
+<section class="mm-hero mm-orders-hero"><div class="mm-eyebrow"><span class="mm-eyebrow-dot"></span> YOUR MAILBOX</div><h1>Email orders <span>&amp; inbox.</span></h1><p class="lead">Manage rented addresses, track incoming messages, and copy verification codes from one place.</p><div class="mm-hero-meta"><span>↻ Automatic checks</span><span>⌁ Your orders only</span></div></section>
 
 <div id="signin" class="banner" hidden><span>Sign in to view your email orders.</span><a class="btn sm" href="/auth.html">Sign in</a></div>
 
-<div class="tools"><input id="q" type="search" placeholder="Search email or service" autocomplete="off"><button id="reload" class="btn ghost sm">Refresh</button></div>
+<section class="mm-order-toolbar"><div class="mm-toolbar-copy"><h2>Your orders</h2><p>Pull down anywhere at the top to refresh.</p></div><div class="tools"><input id="q" type="search" placeholder="Search email or service" autocomplete="off"><button id="reload" class="btn ghost sm" aria-label="Refresh orders">↻</button></div></section>
+<aside class="mm-policy mm-policy-compact" role="note"><span class="mm-policy-icon">!</span><div><strong>Acceptable use</strong><p>Government websites, banks, and affiliate-program fraud are prohibited.</p></div></aside>
 <div class="tabs" id="tabs"></div>
 <div class="live" id="live" hidden><span class="dot"></span><span id="liveTxt">Auto-checking for messages</span></div>
 <div id="notice" class="muted" role="status"></div>
@@ -48,6 +48,15 @@ async function api(action,method='GET',data){
   let j={};try{j=await r.json()}catch(_){}
   if(!r.ok){const e=new Error(j.message||'Request failed');e.status=r.status;e.data=j;throw e}
   return j}
+function formatCountdown(ms){if(!Number.isFinite(ms)||ms<=0)return '00:00';const s=Math.ceil(ms/1000);return String(Math.floor(s/60)).padStart(2,'0')+':'+String(s%60).padStart(2,'0')}
+function updateCancelTimers(){
+  document.querySelectorAll('[data-cancel-timer]').forEach(el=>{
+    const left=Date.parse(el.dataset.deadline)-Date.now();
+    if(left<=0){const btn=el.closest('[data-cancel]');if(btn){btn.disabled=true;btn.textContent='Cancellation window closed'}return}
+    el.textContent=formatCountdown(left);
+  });
+}
+setInterval(updateCancelTimers,250);
 function ago(d){const s=Math.max(1,Math.round((Date.now()-new Date(d))/1000));
   if(s<60)return 'just now';if(s<3600)return Math.floor(s/60)+' min ago';if(s<86400)return Math.floor(s/3600)+' hr ago';
   return new Date(d).toLocaleDateString(undefined,{day:'numeric',month:'short',year:'numeric'})}
@@ -74,7 +83,9 @@ function drawTabs(){$('tabs').innerHTML=Object.keys(LABELS).map(k=>{const n=GROU
 function card(o,flash){
   const st=STATUS[o.status]||[String(o.status||'').replace(/_/g,' '),'mute'];
   const code=o.value||detectCode(o.message);const waiting=o.status==='waiting';
-  const canCancel=waiting||o.status==='cancel_pending_refund';
+  const cancelDeadline=o.cancel_deadline_at?Date.parse(o.cancel_deadline_at):NaN;
+  const cancelRemaining=Number.isFinite(cancelDeadline)?cancelDeadline-Date.now():-1;
+  const canCancel=waiting&&cancelRemaining>0||o.status==='cancel_pending_refund';
   return '<article class="order'+(flash?' flash':'')+'" data-id="'+esc(o.id)+'">'+
    '<div class="o-head"><div style="min-width:0;flex:1"><div class="copyrow"><div class="email">'+esc(o.email||'Email address pending')+'</div>'+(o.email?'<button class="copy" data-copy="'+esc(o.email)+'">Copy</button>':'')+'</div>'+
    '<div class="muted o-sub">'+esc(o.site)+' · '+esc(o.domain)+' · '+money(o.price)+' · '+ago(o.created_at)+'</div></div><span class="status '+st[1]+'">'+esc(st[0])+'</span></div>'+
@@ -83,7 +94,7 @@ function card(o,flash){
    (o.status==='reconciliation_required'?'<p class="muted" style="margin:12px 0 0">We are confirming this purchase with the provider. Please do not buy again — this usually clears within a few minutes.</p>':'')+
    (o.message?'<details class="msg" data-d="'+esc(o.id)+'"'+(openIds.has(o.id)?' open':'')+'><summary>Full message</summary><div class="body">'+esc(o.message)+'</div></details>':'')+
    '<div class="actions">'+(o.supplier_status!==undefined||o.status!=='reconciliation_required'?'<button class="btn sm" data-refresh="'+esc(o.id)+'">Check for message</button>':'')+
-   (canCancel?'<button class="btn ghost sm" data-cancel="'+esc(o.id)+'">'+(o.status==='cancel_pending_refund'?'Retry refund':'Cancel &amp; refund')+'</button>':'')+
+   (canCancel?'<button class="btn ghost sm" data-cancel="'+esc(o.id)+'">'+(o.status==='cancel_pending_refund'?'Retry refund':'Cancel &amp; refund <span class="cancel-countdown" data-cancel-timer data-deadline="'+esc(o.cancel_deadline_at)+'">'+formatCountdown(cancelRemaining)+'</span>')+'</button>':waiting?'<span class="cancel-expired">'+(Number.isFinite(cancelDeadline)?'Cancellation window closed':'Supplier timer unavailable')+'</span>':'')+
    '<a class="btn ghost sm" style="display:inline-flex;align-items:center" href="/mj-mails.html?site='+encodeURIComponent(o.site||'')+'">Rent again</a></div></article>'}
 function draw(flashId){
   drawTabs();const list=visible();
@@ -93,7 +104,7 @@ function draw(flashId){
   $('orders').innerHTML=list.map(o=>card(o,o.id===flashId)).join('');
   $('orders').querySelectorAll('[data-copy]').forEach(b=>b.onclick=()=>copy(b.dataset.copy));
   $('orders').querySelectorAll('[data-refresh]').forEach(b=>b.onclick=()=>refresh(b.dataset.refresh,b));
-  $('orders').querySelectorAll('[data-cancel]').forEach(b=>b.onclick=()=>askCancel(b.dataset.cancel));
+  $('orders').querySelectorAll('[data-cancel]').forEach(b=>b.onclick=()=>askCancel(b.dataset.cancel));updateCancelTimers();
   $('orders').querySelectorAll('details[data-d]').forEach(d=>d.addEventListener('toggle',()=>{d.open?openIds.add(d.dataset.d):openIds.delete(d.dataset.d)}))}
 
 /* ---------- data ---------- */
@@ -120,7 +131,7 @@ async function refresh(id,btn){
 function askCancel(id){
   const o=rows.find(r=>r.id===id);if(!o)return;
   openSheet({title:o.status==='cancel_pending_refund'?'Retry your refund?':'Cancel this email?',yes:o.status==='cancel_pending_refund'?'Retry refund':'Cancel & refund',
-    html:'<div class="rows"><div><span>Email</span><b style="overflow-wrap:anywhere">'+esc(o.email||'Pending')+'</b></div><div><span>Refund</span><b>'+money(o.price)+'</b></div></div><p class="muted" style="margin:0">A refund is issued only when the provider confirms the cancellation. You can only cancel while still waiting for a message.</p>',
+    html:'<div class="rows"><div><span>Email</span><b style="overflow-wrap:anywhere">'+esc(o.email||'Pending')+'</b></div><div><span>Refund</span><b>'+money(o.price)+'</b></div></div><p class="muted" style="margin:0">Cancellation is available only during the first 2 minutes shown on this order, and only while the supplier reports that no email has arrived. The request is sent to HeroSMS before any wallet refund is issued.</p>',
     onYes:async()=>{await api('cancel','POST',{id});toast('Cancelled · wallet refunded');await load()}})}
 
 /* ---------- auto-check waiting orders ---------- */
