@@ -86,7 +86,7 @@ async function getToken(){
 }
 sb.auth.onAuthStateChange((_event,session)=>{token=session?.access_token||''});
 async function api(action,method='GET',data){
-  const r=await fetch('/api/sms-bus?action=mails_'+action,{method,headers:{Authorization:'Bearer '+token,'Content-Type':'application/json'},...(data?{body:JSON.stringify(data)}:{})});
+  const r=await fetch('/api/mj-mails?action=mails_'+action,{method,headers:{Authorization:'Bearer '+token,'Content-Type':'application/json'},...(data?{body:JSON.stringify(data)}:{})});
   let j={};try{j=await r.json()}catch(_){}
   if(!r.ok){const e=new Error(j.message||'Request failed');e.status=r.status;e.data=j;throw e}
   return j}
@@ -142,9 +142,9 @@ function card(o,flash){
    (code?'<div class="codebox"><div class="lbl">'+(o.value?'Verification code':'Code found in message')+'</div><div class="copyrow"><div class="code">'+esc(code)+'</div><button class="copy" data-copy="'+esc(code)+'">Copy</button></div></div>':'')+
    (waiting&&!code?'<div class="waitline"><span class="dot"></span>Waiting for your verification email</div><div class="pulse-bar"></div>':'')+
    (waiting&&Number.isFinite(mailExpires)?'<div class="mail-expiry">Email rental expires in <strong data-mail-timer data-expires="'+esc(o.expires_at)+'">'+formatCountdown(mailExpires-Date.now())+'</strong> <span>· 20-minute total rental</span></div>':'')+
-   (o.status==='reconciliation_required'?'<p class="muted" style="margin:12px 0 0">We are confirming this purchase with the provider. Please do not buy again — this usually clears within a few minutes.</p>':'')+
+   (o.status==='reconciliation_required'?'<p class="muted" style="margin:12px 0 0">We are confirming your email rental. Please do not buy again. This usually clears within a few minutes.</p>':'')+
    (o.message?'<details class="msg" data-d="'+esc(o.id)+'"'+(openIds.has(o.id)?' open':'')+'><summary>Full message</summary><div class="body">'+esc(o.message)+'</div></details>':'')+
-   '<div class="actions">'+(o.supplier_status!==undefined||o.status!=='reconciliation_required'?'<button class="btn sm" data-refresh="'+esc(o.id)+'">Check inbox</button>':'')+
+   '<div class="actions">'+(o.can_refresh||o.status!=='reconciliation_required'?'<button class="btn sm" data-refresh="'+esc(o.id)+'">Check inbox</button>':'')+
    (waiting?'<button class="btn sm refund-btn" data-refund="'+esc(o.id)+'" '+((!Number.isFinite(refundAvailable)||!Number.isFinite(mailExpires)||Date.now()<refundAvailable||Date.now()>=mailExpires)?'disabled':'')+'><span data-refund-timer data-available="'+esc(o.refund_available_at||'')+'" data-expires="'+esc(o.expires_at||'')+'">'+(!Number.isFinite(refundAvailable)||!Number.isFinite(mailExpires)?'Timer unavailable':Date.now()<refundAvailable?'Available in '+formatCountdown(refundAvailable-Date.now()):Date.now()>=mailExpires?'Expired':'Refund')+'</span></button>':canRetryRefund?'<button class="btn sm refund-btn" data-refund="'+esc(o.id)+'">Retry refund</button>':'')+
    '<a class="btn ghost sm" style="display:inline-flex;align-items:center" href="/mj-mails.html?site='+encodeURIComponent(o.site||'')+'">Rent again</a></div></article>'}
 function draw(flashId){
@@ -185,7 +185,7 @@ async function refresh(id,btn){
 function askRefund(id){
   const o=rows.find(r=>r.id===id);if(!o)return;
   openSheet({title:o.status==='cancel_pending_refund'?'Retry your refund?':'Request email refund?',yes:o.status==='cancel_pending_refund'?'Retry refund':'Refund',
-    html:'<div class="rows"><div><span>Email</span><b style="overflow-wrap:anywhere">'+esc(o.email||'Pending')+'</b></div><div><span>Refund amount</span><b>'+money(o.price)+'</b></div></div><p class="muted" style="margin:0">MJ HUB will ask HeroSMS to cancel this email and verify that the supplier has confirmed cancellation. Your wallet is refunded only after that confirmation. Refund requests become available after 2 minutes and before the 20-minute rental expires.</p>',
+    html:'<div class="rows"><div><span>Email</span><b style="overflow-wrap:anywhere">'+esc(o.email||'Pending')+'</b></div><div><span>Refund amount</span><b>'+money(o.price)+'</b></div></div><p class="muted" style="margin:0">MJ HUB will request cancellation and verify the final status before issuing a refund. Your wallet is refunded only after that confirmation. Refund requests become available after 2 minutes and before the 20-minute rental expires.</p>',
     onYes:async()=>{const out=await api('cancel','POST',{id});toast(out.message||'Supplier cancellation confirmed · wallet refunded');await load()}})}
 /* ---------- auto-check waiting orders ---------- */
 async function poll(){
