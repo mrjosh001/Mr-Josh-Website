@@ -16,8 +16,6 @@
 <div class="mm-hero-meta"><span>⚡ Instant checkout</span><span>⌁ Private inbox</span><span>↻ Live message checks</span></div>
 </section>
 
-<div id="signin" class="banner" hidden><span>Sign in to rent an email address.</span><a class="btn sm" href="/auth.html">Sign in</a></div>
-
 <section class="card mm-search-card">
 <div class="mm-card-heading"><div><span class="mm-step">01</span><div><h2>Where do you need to register?</h2><p>Enter the website that will send your verification email.</p></div></div><span class="mm-card-icon">✉</span></div>
 <label class="mm-field-label" for="site">WEBSITE OR SERVICE</label>
@@ -99,8 +97,7 @@ async function search(){
 /* ---------- purchase ---------- */
 function confirmBuy(site,o){
   if(!token){
-    $('signin').hidden=false;
-    toast('Sign in to rent an email address');
+    toast('Please sign in to rent an email address');
     return;
   }
   const requestId=crypto.randomUUID();
@@ -122,7 +119,7 @@ function confirmBuy(site,o){
 $('search').addEventListener('click',search);
 $('site').addEventListener('keydown',e=>{if(e.key==='Enter')search()});
 
-getToken().then(t=>{if(!t)$('signin').hidden=false});
+getToken();
 const qs=new URLSearchParams(location.search).get('site');if(qs){$('site').value=qs;search()}
 
 /* Keep the dashboard idle timer accurate while users are in MJ Mails. */
