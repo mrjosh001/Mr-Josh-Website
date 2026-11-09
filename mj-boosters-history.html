@@ -484,8 +484,10 @@ let allRows = [];
       }
 
       const hasActive = rows.some(isActive);
-      if (hasActive) {
-        // Background live update (do not block UI)
+      const hasCasper = rows.some(o => ['casper', 'caspersmm'].includes(String(o.source || o.provider || '').toLowerCase()));
+      const shouldPollLive = hasActive || hasCasper;
+      if (shouldPollLive) {
+        // Always reconcile Casper orders, including locally terminal orders, to refresh status/remains.
         fetch('/api/owlet?action=my_orders&page_size=50&live=1', { headers })
           .then(r => r.json())
           .then(json => {
@@ -505,7 +507,8 @@ let allRows = [];
       }
 
       if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
-      if (hasActive) pollTimer = setInterval(() => loadOrders(true), 5000);
+      // Supplier polling is deliberately staggered to avoid hammering provider APIs.
+      if (shouldPollLive) pollTimer = setInterval(() => loadOrders(true), 30000);
     } catch (e) {
       const msg = e.name === 'AbortError' ? 'Request timed out. Try refresh.' : (e.message || 'Network error');
       if (!silent) el.innerHTML = `<div class="empty"><h3>Could not load</h3><p>${esc(msg)}</p><button type="button" class="btn-mini primary" onclick="location.reload()">Retry</button></div>`;
