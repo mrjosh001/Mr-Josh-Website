@@ -1811,180 +1811,159 @@ async function handleCancel(req, res) {
 
   const body = typeof req.body === 'string' ? (() => { try { return JSON.parse(req.body || '{}'); } catch { return {}; } })() : (req.body || {});
   const orderId = String(body.order || body.supplier_order_id || req.query?.order || '').trim();
-  if (!orderId) {
-    return res.status(400).json({ success: false, message: 'order is required' });
-  }
+  if (!orderId) return res.status(400).json({ success: false, message: 'order is required' });
 
-  const { data: row } = await supabase
-    .from('booster_orders')
-    .select('*')
-    .eq('supplier_order_id', orderId)
-    .eq('user_id', userGate.user.id)
-    .maybeSingle();
+  const { data: row, error: rowErr } = await supabase.from('booster_orders').select('*')
+    .eq('supplier_order_id', orderId).eq('user_id', userGate.user.id).maybeSingle();
+  if (rowErr) return res.status(500).json({ success: false, message: 'Could not load this order. Please try again.' });
+  if (!row) return res.status(404).json({ success: false, message: 'Order not found' });
 
-  if (!row) {
-    return res.status(404).json({ success: false, message: 'Order not found' });
-  }
-
-  const st = String(row.status || '').toLowerCase();
-  // Allow cancel while pending OR still processing with nothing delivered yet.
-  // Casper/JAP often keep Cancel active during "Processing" when remains === qty.
-  // Never allow after completed / partial / canceled (partial is already closed).
-  if (/completed|partial|cancel|refund|fail|error/i.test(st)) {
-    return res.status(400).json({
-      success: false,
-      message: 'Cancel not available for this order right now.'
-    });
-  }
-  if (!/pending|awaiting|waiting|progress|processing/i.test(st)) {
-    return res.status(400).json({
-      success: false,
-      message: 'Cancel not available for this order right now.'
-    });
-  }
-  // If supplier already reported progress (remains < qty), block full cancel refund
-  const qty = Math.max(0, Number(row.quantity) || 0);
-  let remainsNum = row.remains != null && row.remains !== '' ? Number(row.remains) : NaN;
-  if (!Number.isNaN(remainsNum) && qty > 0 && remainsNum < qty) {
-    return res.status(400).json({
-      success: false,
-      message: 'Cancel not available — delivery already started on this order.'
-    });
-  }
-
-  // Ask supplier to cancel first. Never refund until supplier confirms.
   const cancelSrc = normalizePanelSource(row.source || STORE_SOURCE);
-  const { ok, status, json } = await owletCall({ action: 'cancel', orders: orderId }, 12000, cancelSrc);
+  const oldStatus = String(row.status || 'Pending');
 
-  // PerfectPanel-style: [{ order: "123", cancel: 1 }] success; cancel: 0 or { error } = fail
-  let cancelOk = false;
-  let errMsg = null;
-  if (Array.isArray(json)) {
-    const hit = json.find((x) => String(x.order) === String(orderId)) || json[0];
-    if (hit) {
-      if (hit.cancel === 1 || hit.cancel === '1' || hit.cancel === true) cancelOk = true;
-      else if (hit.cancel && typeof hit.cancel === 'object' && hit.cancel.error) errMsg = String(hit.cancel.error);
-      else if (hit.error) errMsg = String(hit.error);
-      else errMsg = 'Cancel not available for this order right now';
-    } else {
-      errMsg = 'Cancel not available for this order right now';
-    }
-  } else if (json && (json.cancel === 1 || json.cancel === '1' || json.cancel === true)) {
-    cancelOk = true;
-  } else if (json?.error || json?.message) {
-    errMsg = json.error || json.message;
-  } else {
-    errMsg = 'Cancel not available for this order right now';
+  function statusPayload(json) {
+    if (!json || typeof json !== 'object') return null;
+    if (json.status != null || json.remains != null || json.start_count != null) return json;
+    const keyed = json[String(orderId)];
+    if (keyed && typeof keyed === 'object' && !keyed.error) return keyed;
+    const keys = Object.keys(json).filter(k => /^\d+$/.test(k));
+    if (keys.length === 1 && json[keys[0]] && !json[keys[0]].error) return json[keys[0]];
+    return null;
   }
 
-  if (!ok || !cancelOk) {
-    return res.status(status || 502).json({
-      success: false,
-      message: 'Cancel not available for this order right now.'
+  async function readSupplierStatus() {
+    let result = await owletCall({ action: 'status', order: orderId }, 12000, cancelSrc);
+    let payload = statusPayload(result.json);
+    if (!payload) {
+      result = await owletCall({ action: 'status', orders: orderId }, 12000, cancelSrc);
+      payload = statusPayload(result.json);
+    }
+    return payload;
+  }
+
+  async function persistSupplierStatus(payload) {
+    const statusText = String(payload?.status || payload?.Status || '').trim();
+    const remains = payload?.remains ?? payload?.Remains ?? row.remains;
+    const startCount = payload?.start_count ?? payload?.startCount ?? row.start_count;
+    const patch = { updated_at: new Date().toISOString() };
+    if (statusText) patch.status = statusText;
+    if (remains != null && remains !== '') patch.remains = Number(remains);
+    if (startCount != null && startCount !== '') patch.start_count = Number(startCount);
+    const { error } = await supabase.from('booster_orders').update(patch).eq('id', row.id);
+    if (error) console.warn('[booster cancel] supplier status persist', error.message);
+    Object.assign(row, patch);
+    return String(patch.status || row.status || '').toLowerCase();
+  }
+
+  async function settleSupplierTerminal(payload) {
+    const terminalStatus = await persistSupplierStatus(payload);
+    const refunded = await refundIfSupplierFailed(row, oldStatus, row.status);
+    if (refunded > 0) {
+      try {
+        await notifyUserPush(userGate.user.id, 'Booster order refunded',
+          '₦' + Number(refunded).toLocaleString() + ' returned to your wallet.',
+          '/mj-boosters-history.html', 'booster');
+      } catch (_) {}
+    }
+    return res.status(200).json({
+      success: true,
+      message: refunded > 0
+        ? 'Supplier has already closed this order. ₦' + Number(refunded).toLocaleString() + ' returned to your MJ HUB wallet.'
+        : (/partial/.test(terminalStatus)
+          ? 'Supplier marked this order partial. Its refund has been checked.'
+          : 'Supplier has already closed this order. Your order status is now synchronized.'),
+      refunded: Number(refunded || row.refund_ngn) || 0,
+      order_id: orderId,
+      supplier_status: row.status
     });
   }
 
-  // Double-check status on supplier so we never refund a still-running order
-  let supplierStatus = '';
-  try {
-    const stRes = await owletCall({ action: 'status', order: orderId }, 12000, cancelSrc);
-    if (stRes.ok && stRes.json) {
-      supplierStatus = String(stRes.json.status || stRes.json.order_status || '').toLowerCase();
-    }
-  } catch (_) {}
+  // Reconcile against supplier first. Local status can lag after a supplier-side refund.
+  let supplier = null;
+  try { supplier = await readSupplierStatus(); }
+  catch (e) { console.warn('[booster cancel] initial supplier status', e?.message || e); }
 
-  // After panel accepted cancel, treat as stopped unless status is clearly still active
-  // with no cancel confirmation (some panels lag status update by a few seconds).
-  const supplierStillActive = /progress|processing|pending|in progress/i.test(supplierStatus)
-    && !/cancel|refund|fail|error|stop/i.test(supplierStatus);
-  // cancelOk already true from panel cancel response — only block if status
-  // explicitly says completed/partial (money/work already done).
-  if (/completed|partial/i.test(supplierStatus)) {
+  if (supplier) {
+    const liveStatus = await persistSupplierStatus(supplier);
+    if (/cancel|cancelled|canceled|refund|failed|partial/i.test(liveStatus)) return await settleSupplierTerminal(supplier);
+    if (/completed|success|done/i.test(liveStatus)) {
+      return res.status(409).json({ success: false, message: 'Cancel not available. The supplier has completed this order.', supplier_status: row.status });
+    }
+  }
+
+  const currentStatus = String(row.status || oldStatus).toLowerCase();
+  if (/cancel|cancelled|canceled|refund|failed|partial/i.test(currentStatus)) {
     return res.status(409).json({
       success: false,
-      message: 'Cancel not available — order already finished on the provider.',
-      supplier_status: supplierStatus
+      message: 'This order is already marked closed locally. Refresh order status or contact support if the refund is missing.',
+      supplier_status: row.status
     });
   }
-  // If status still says processing right after cancel:1, proceed with refund
-  // (panel accepted cancel). Do not require status to flip first.
-  void supplierStillActive;
-
-  // Claim cancel + refund once (blocks double cancel refund)
-  const refundAmt = Number(row.price_ngn) || 0;
-  if (Number(row.refund_ngn) > 0) {
-    return res.status(200).json({
-      success: true,
-      message: 'Order already cancelled and refunded.',
-      refunded: Number(row.refund_ngn) || 0,
-      order_id: orderId
-    });
+  if (!/pending|awaiting|waiting|progress|processing|in progress/i.test(currentStatus)) {
+    return res.status(400).json({ success: false, message: 'Cancel is only available while the supplier order is still open.' });
   }
 
-  const { data: claimCancel, error: claimCancelErr } = await supabase
-    .from('booster_orders')
-    .update({
-      status: 'Canceled',
-      refund_ngn: refundAmt > 0 ? refundAmt : 0,
-      updated_at: new Date().toISOString()
-    })
-    .eq('id', row.id)
-    .not('status', 'ilike', '%cancel%')
-    .select('id');
-
-  if (claimCancelErr) {
-    // Fallback without status filter
-    await supabase.from('booster_orders').update({
-      status: 'Canceled',
-      refund_ngn: refundAmt > 0 ? refundAmt : 0,
-      updated_at: new Date().toISOString()
-    }).eq('id', row.id);
-  } else if (!(claimCancel && claimCancel.length)) {
-    return res.status(200).json({
-      success: true,
-      message: 'Order already cancelled.',
-      refunded: 0,
-      order_id: orderId
-    });
+  const { data: serviceRow, error: serviceErr } = await supabase.from('booster_services').select('cancel')
+    .eq('source', cancelSrc).eq('service_id', String(row.service_id || '')).maybeSingle();
+  if (!serviceErr && serviceRow && !(serviceRow.cancel === true || serviceRow.cancel === 1 || serviceRow.cancel === '1')) {
+    return res.status(400).json({ success: false, message: 'This supplier service does not support cancellation.' });
   }
 
-  let refunded = 0;
-  if (refundAmt > 0) {
-    refunded = refundAmt;
-    const { error: credErr } = await supabase.rpc('credit_balance', {
-      p_user_id: userGate.user.id,
-      p_amount: refunded
-    });
-    if (credErr) {
-      console.error('[booster cancel] credit_balance', credErr.message);
-      const { data: prof } = await supabase.from('profiles').select('balance').eq('id', userGate.user.id).maybeSingle();
-      const bal = Number(prof?.balance) || 0;
-      await supabase.from('profiles').update({ balance: bal + refunded }).eq('id', userGate.user.id);
+  // Casper API: action=cancel, orders is a comma-separated ID list, response is an array.
+  const cancelResult = await owletCall({ action: 'cancel', orders: orderId }, 12000, cancelSrc);
+  const json = cancelResult.json;
+  let accepted = false;
+  let supplierError = '';
+  if (Array.isArray(json)) {
+    const hit = json.find(x => String(x?.order) === orderId) || (json.length === 1 ? json[0] : null);
+    const value = hit?.cancel;
+    accepted = value === 1 || value === '1' || value === true;
+    if (!accepted) supplierError = String(value?.error || hit?.error || '');
+  } else if (json && typeof json === 'object') {
+    const value = json.cancel;
+    accepted = value === 1 || value === '1' || value === true;
+    if (!accepted) supplierError = String(value?.error || json.error || json.message || '');
+  }
+
+  if (!cancelResult.ok || !accepted) {
+    let afterFailure = null;
+    try { afterFailure = await readSupplierStatus(); } catch (_) {}
+    if (afterFailure) {
+      const afterStatus = await persistSupplierStatus(afterFailure);
+      if (/cancel|cancelled|canceled|refund|failed|partial/i.test(afterStatus)) return await settleSupplierTerminal(afterFailure);
     }
-    try {
-      await supabase.from('transactions').insert({
-        user_id: userGate.user.id,
-        customer_id: row.customer_id || null,
-        type: 'booster',
-        category: 'booster',
-        title: 'Booster cancel refund',
-        subtitle: 'Order #' + orderId + ' — cancelled, balance restored',
-        amount: refunded,
-        amount_ngn: refunded,
-        status: 'Success',
-        created_at: new Date().toISOString()
+    console.warn('[booster cancel] supplier rejected request', {
+      source: cancelSrc, orderId, httpStatus: cancelResult.status,
+      reason: String(supplierError || json?.error || json?.message || '').slice(0, 250)
+    });
+    return res.status(cancelResult.status >= 400 ? cancelResult.status : 409).json({
+      success: false,
+      message: supplierError || 'The supplier did not accept cancellation. Refresh the order status and try again if it remains open.',
+      supplier_status: row.status
+    });
+  }
+
+  // Acceptance is not final settlement. Do not credit the user until supplier status is terminal.
+  let afterCancel = null;
+  try { afterCancel = await readSupplierStatus(); } catch (_) {}
+  if (afterCancel) {
+    const afterStatus = await persistSupplierStatus(afterCancel);
+    if (/cancel|cancelled|canceled|refund|failed|partial/i.test(afterStatus)) return await settleSupplierTerminal(afterCancel);
+    if (/completed|success|done/i.test(afterStatus)) {
+      return res.status(409).json({
+        success: false,
+        message: 'The supplier reports that this order completed before cancellation settled.',
+        supplier_status: row.status
       });
-    } catch (_) {}
+    }
   }
 
   return res.status(200).json({
     success: true,
-    message: refunded
-      ? ('Order cancelled. ₦' + refunded.toLocaleString() + ' returned to your wallet.')
-      : 'Order cancelled.',
-    refunded,
+    pending: true,
+    message: 'Cancellation was accepted by the supplier. The refund will be applied after the supplier confirms the final status.',
     order_id: orderId,
-    supplier_status: supplierStatus || 'canceled'
+    supplier_status: row.status
   });
 }
 
