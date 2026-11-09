@@ -4,73 +4,221 @@
   "buildCommand": "node scripts/patch-server1-dual-wallet.mjs",
   "outputDirectory": ".",
   "rewrites": [
-    { "source": "/", "destination": "/landing.html" },
-    { "source": "/vendor", "destination": "/vendor.html" },
-    { "source": "/vendor/", "destination": "/vendor.html" },
-    { "source": "/become-a-vendor", "destination": "/vendor.html" },
-    { "source": "/sub-admin", "destination": "/admin.html?view=vendor" },
-    { "source": "/sub-admin/", "destination": "/admin.html?view=vendor" },
-    { "source": "/sub-admin.html", "destination": "/admin.html?view=vendor" },
-    { "source": "/api/pocketfi", "destination": "/api/deposit" },
-    { "source": "/api/pocketfi-checkout", "destination": "/api/deposit" },
-    { "source": "/api/pocketfi-webhook", "destination": "/api/deposit" },
-    { "source": "/api/heleket", "destination": "/api/deposit" },
-    { "source": "/api/heleket-webhook", "destination": "/api/deposit?action=heleket_webhook" },
-    { "source": "/api/products", "destination": "/api/order?action=sync" },
-    { "source": "/api/products/", "destination": "/api/order?action=sync" }
+    {
+      "source": "/",
+      "destination": "/landing.html"
+    },
+    {
+      "source": "/vendor",
+      "destination": "/vendor.html"
+    },
+    {
+      "source": "/vendor/",
+      "destination": "/vendor.html"
+    },
+    {
+      "source": "/become-a-vendor",
+      "destination": "/vendor.html"
+    },
+    {
+      "source": "/sub-admin",
+      "destination": "/admin.html?view=vendor"
+    },
+    {
+      "source": "/sub-admin/",
+      "destination": "/admin.html?view=vendor"
+    },
+    {
+      "source": "/sub-admin.html",
+      "destination": "/admin.html?view=vendor"
+    },
+    {
+      "source": "/api/pocketfi",
+      "destination": "/api/deposit"
+    },
+    {
+      "source": "/api/pocketfi-checkout",
+      "destination": "/api/deposit"
+    },
+    {
+      "source": "/api/pocketfi-webhook",
+      "destination": "/api/deposit"
+    },
+    {
+      "source": "/api/heleket",
+      "destination": "/api/deposit"
+    },
+    {
+      "source": "/api/heleket-webhook",
+      "destination": "/api/deposit?action=heleket_webhook"
+    },
+    {
+      "source": "/api/products",
+      "destination": "/api/order?action=sync"
+    },
+    {
+      "source": "/api/products/",
+      "destination": "/api/order?action=sync"
+    }
   ],
   "redirects": [
-    { "source": "/", "destination": "/landing.html", "permanent": false },
-    { "source": "/index.html", "destination": "/landing.html", "permanent": false },
-    { "source": "/home", "destination": "/landing.html", "permanent": true },
-    { "source": "/app", "destination": "/dashboard", "permanent": false }
+    {
+      "source": "/",
+      "destination": "/landing.html",
+      "permanent": false
+    },
+    {
+      "source": "/index.html",
+      "destination": "/landing.html",
+      "permanent": false
+    },
+    {
+      "source": "/home",
+      "destination": "/landing.html",
+      "permanent": true
+    },
+    {
+      "source": "/app",
+      "destination": "/dashboard",
+      "permanent": false
+    }
   ],
   "crons": [
-    { "path": "/api/grizzly-sync", "schedule": "0 3 * * *" },
-    { "path": "/api/grizzly-sync?action=expire_stale", "schedule": "0 4 * * *" },
-    { "path": "/api/sms-bus?action=expire_stale", "schedule": "30 4 * * *" },
-    { "path": "/api/order-logsdomain?action=sync", "schedule": "0 5 * * *" },
-    { "path": "/api/order-logsdomain?action=bulkmail_sync", "schedule": "15 5 * * *" },
-    { "path": "/api/classy", "schedule": "30 5 * * *" },
-    { "path": "/api/order?action=sync", "schedule": "0 6 * * *" },
-    { "path": "/api/owlet?action=sync", "schedule": "0 7 * * *" },
-    { "path": "/api/sujan?action=sync", "schedule": "0 8 * * *" },
-    { "path": "/api/sms-bus?action=sync", "schedule": "0 9 * * *" },
-    { "path": "/api/sms-bus?action=gotsms_sync&full=1", "schedule": "30 9 * * *" },
-    { "path": "/api/sms-bus?action=push_poll_codes", "schedule": "45 9 * * *" },
-    { "path": "/api/grizzly-sync?action=vsms_sync", "schedule": "0 10 * * *" },
-    { "path": "/api/grizzly-sync?action=vsms_sync", "schedule": "0 12 * * *" },
-    { "path": "/api/grizzly-sync?action=vsms_sync", "schedule": "0 14 * * *" },
-    { "path": "/api/grizzly-sync?action=vsms_sync", "schedule": "0 16 * * *" },
-    { "path": "/api/grizzly-sync?action=vsms_sync", "schedule": "0 18 * * *" },
-    { "path": "/api/grizzly-sync?action=vsms_sync", "schedule": "0 20 * * *" }
+    {
+      "path": "/api/grizzly-sync",
+      "schedule": "0 3 * * *"
+    },
+    {
+      "path": "/api/grizzly-sync?action=expire_stale",
+      "schedule": "0 4 * * *"
+    },
+    {
+      "path": "/api/sms-bus?action=expire_stale",
+      "schedule": "30 4 * * *"
+    },
+    {
+      "path": "/api/order-logsdomain?action=sync",
+      "schedule": "0 5 * * *"
+    },
+    {
+      "path": "/api/order-logsdomain?action=bulkmail_sync",
+      "schedule": "15 5 * * *"
+    },
+    {
+      "path": "/api/classy",
+      "schedule": "30 5 * * *"
+    },
+    {
+      "path": "/api/order?action=sync",
+      "schedule": "0 6 * * *"
+    },
+    {
+      "path": "/api/owlet?action=sync",
+      "schedule": "0 7 * * *"
+    },
+    {
+      "path": "/api/sujan?action=sync",
+      "schedule": "0 8 * * *"
+    },
+    {
+      "path": "/api/sms-bus?action=sync",
+      "schedule": "0 9 * * *"
+    },
+    {
+      "path": "/api/sms-bus?action=gotsms_sync&full=1",
+      "schedule": "30 9 * * *"
+    },
+    {
+      "path": "/api/sms-bus?action=push_poll_codes",
+      "schedule": "45 9 * * *"
+    },
+    {
+      "path": "/api/grizzly-sync?action=vsms_sync",
+      "schedule": "0 10 * * *"
+    },
+    {
+      "path": "/api/grizzly-sync?action=vsms_sync",
+      "schedule": "0 12 * * *"
+    },
+    {
+      "path": "/api/grizzly-sync?action=vsms_sync",
+      "schedule": "0 14 * * *"
+    },
+    {
+      "path": "/api/grizzly-sync?action=vsms_sync",
+      "schedule": "0 16 * * *"
+    },
+    {
+      "path": "/api/grizzly-sync?action=vsms_sync",
+      "schedule": "0 18 * * *"
+    },
+    {
+      "path": "/api/grizzly-sync?action=vsms_sync",
+      "schedule": "0 20 * * *"
+    }
   ],
   "functions": {
-    "api/grizzly-sync.js": { "maxDuration": 300 },
-    "api/sms-bus.js": { "maxDuration": 300 },
-    "api/owlet.js": { "maxDuration": 300 },
-    "api/order.js": { "maxDuration": 300 },
-    "api/classy.js": { "maxDuration": 300 },
-    "api/order-logsdomain.js": { "maxDuration": 300 },
-    "api/sujan.js": { "maxDuration": 300 }
+    "api/grizzly-sync.js": {
+      "maxDuration": 300
+    },
+    "api/sms-bus.js": {
+      "maxDuration": 300
+    },
+    "api/owlet.js": {
+      "maxDuration": 300
+    },
+    "api/order.js": {
+      "maxDuration": 300
+    },
+    "api/classy.js": {
+      "maxDuration": 300
+    },
+    "api/order-logsdomain.js": {
+      "maxDuration": 300
+    },
+    "api/sujan.js": {
+      "maxDuration": 300
+    }
   },
   "headers": [
     {
       "source": "/img/(.*)",
-      "headers": [{ "key": "Cache-Control", "value": "public, max-age=31536000, immutable" }]
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=31536000, immutable"
+        }
+      ]
     },
     {
       "source": "/(.*)",
       "headers": [
-        { "key": "X-Content-Type-Options", "value": "nosniff" },
-        { "key": "Referrer-Policy", "value": "strict-origin-when-cross-origin" },
-        { "key": "X-Frame-Options", "value": "SAMEORIGIN" },
-        { "key": "Permissions-Policy", "value": "camera=(), microphone=(), geolocation=()" }
+        {
+          "key": "X-Content-Type-Options",
+          "value": "nosniff"
+        },
+        {
+          "key": "Referrer-Policy",
+          "value": "strict-origin-when-cross-origin"
+        },
+        {
+          "key": "X-Frame-Options",
+          "value": "SAMEORIGIN"
+        },
+        {
+          "key": "Permissions-Policy",
+          "value": "camera=(), microphone=(), geolocation=()"
+        }
       ]
     },
     {
       "source": "/api/(.*)",
-      "headers": [{ "key": "Cache-Control", "value": "no-store" }]
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "no-store"
+        }
+      ]
     }
   ]
 }

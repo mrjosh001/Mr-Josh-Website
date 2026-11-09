@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>MJ Mails · Email Activations</title>
+<link rel="stylesheet" href="/css/graceful.css"><link rel="stylesheet" href="/css/mj-motion.css">
+<script src="/js/mj-theme.js" defer></script><script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+:root{color-scheme:dark}body{margin:0;background:var(--bg,#080d18);color:var(--text,#f4f7fb);font-family:Inter,system-ui,sans-serif}
+.wrap{max-width:860px;margin:auto;padding:22px 16px 60px}.top{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:24px}
+a{color:var(--primary,#60a5fa);text-decoration:none}.brand{font-weight:900;letter-spacing:.02em}.panel,.offer{background:var(--card,#111827);border:1px solid var(--border,#263244);border-radius:18px;padding:17px;margin:12px 0}
+h1{font-size:28px;margin:8px 0}p{color:var(--muted,#9ca3af);line-height:1.55}.row{display:flex;gap:10px;flex-wrap:wrap}.row input{flex:1;min-width:180px}
+input{box-sizing:border-box;background:var(--input,#0b1220);color:var(--text,#fff);border:1px solid var(--border,#334155);border-radius:12px;padding:13px;font:inherit}
+button{border:0;border-radius:12px;background:var(--primary,#2563eb);color:white;padding:12px 16px;font-weight:800;cursor:pointer}
+button:disabled{opacity:.5;cursor:not-allowed}.offer{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.offer strong{display:block;font-size:16px}.price{font-size:20px;font-weight:900}.muted{color:var(--muted,#9ca3af);font-size:13px}.msg{margin:12px 0;color:var(--muted)}.tag{font-size:12px;border:1px solid var(--border);padding:5px 9px;border-radius:99px}
+</style></head>
+<body><main class="wrap">
+<header class="top"><a class="brand" href="/dashboard.html">MJ HUB</a><nav><a href="/mj-mails-orders.html">My email orders →</a></nav></header>
+<section><div class="tag">MJ HUB · NEW SERVICE</div><h1>MJ Mails</h1><p>Rent a temporary email address for supported verification services. Choose a service, compare available domains, and receive messages in your MJ Mails inbox.</p></section>
+<section class="panel">
+<label for="site"><strong>Service or website</strong></label><p class="muted">Enter the site identifier accepted by the provider, for example telegram.com.</p>
+<div class="row"><input id="site" placeholder="e.g. telegram.com" autocomplete="off"><button id="search">Find email offers</button></div>
+<div id="notice" class="msg" role="status"></div>
+</section>
+<section id="offers" aria-live="polite"></section>
+</main>
+<script>
+const SUPABASE_URL='https://atczodlljmlayvldxfmv.supabase.co';
+const SUPABASE_ANON_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJIUzI1NiIsInJlZiI6ImF0Y3pvZGxsam1sYXl2bGR4Zm12Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODUwNzUyMzgsImV4cCI6MjEwMDY1MTIzOH0.ufthD-p7BmeD_B7xyuMM6PNPL8DmcL4AtRYgg-MuoLI';
+const sb=window.supabase.createClient(SUPABASE_URL,SUPABASE_ANON_KEY);
+const $=id=>document.getElementById(id);let token='';
+const money=n=>'₦'+Number(n||0).toLocaleString('en-NG',{maximumFractionDigits:0});
+async function session(){const {data}=await sb.auth.getSession();token=data.session?.access_token||'';return token}
+async function api(action,method='GET',data){const u='/api/sms-bus?action='+action;const r=await fetch(u,{method,headers:{Authorization:'Bearer '+token,'Content-Type':'application/json'},...(data?{body:JSON.stringify(data)}:{})});const j=await r.json();if(!r.ok)throw new Error(j.message||'Request failed');return j}
+async function search(){const site=$('site').value.trim().toLowerCase();if(!site){$('notice').textContent='Enter a service or website.';return} $('search').disabled=true;$('notice').textContent='Checking available domains…';$('offers').innerHTML='';
+try{await session();if(!token)throw new Error('Sign in to your MJ HUB account first.');const q=new URLSearchParams({action:'mails_offers',site});const response=await fetch('/api/sms-bus?'+q,{headers:{Authorization:'Bearer '+token}});const data=await response.json();if(!response.ok)throw new Error(data.message||'Could not load offers');if(!data.offers?.length){$('notice').textContent='No email domains are available for this service right now.';return}
+$('notice').textContent='Available domains for '+site; $('offers').innerHTML=data.offers.map((o,i)=>'<article class="offer"><div><strong>'+escapeHtml(o.domain)+'</strong><span class="muted">'+o.count+' available · Price per email activation</span></div><div style="text-align:right"><div class="price">'+money(o.price_ngn)+'</div><button data-domain="'+escapeHtml(o.domain)+'" data-price="'+o.price_ngn+'">Rent email</button></div></article>').join('');
+document.querySelectorAll('[data-domain]').forEach(btn=>btn.addEventListener('click',()=>purchase(site,btn.dataset.domain,Number(btn.dataset.price),btn)));
+}catch(e){$('notice').textContent=e.message}finally{$('search').disabled=false}}
+function escapeHtml(v){return String(v||'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
+async function purchase(site,domain,price,btn){if(!confirm('Rent one email address for '+domain+' at '+money(price)+'?'))return;btn.disabled=true;btn.textContent='Processing…';try{const {data}=await sb.auth.getSession();token=data.session?.access_token||'';const out=await api('mails_purchase','POST',{site,domain,expected_price:price,request_id:crypto.randomUUID()});$('notice').textContent=out.pending?out.message:'Email address created. Opening your orders…';if(out.order?.id||out.pending)setTimeout(()=>location.href='/mj-mails-orders.html',700)}catch(e){$('notice').textContent=e.message;btn.disabled=false;btn.textContent='Rent email'}}
+$('search').addEventListener('click',search);$('site').addEventListener('keydown',e=>{if(e.key==='Enter')search()});
+</script></body></html>
