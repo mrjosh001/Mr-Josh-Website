@@ -4,7 +4,7 @@
 <link rel="stylesheet" href="/css/graceful.css"><link rel="stylesheet" href="/css/mj-motion.css"><link rel="stylesheet" href="/css/mj-glass.css"><link rel="stylesheet" href="/css/mj-apple-fluid.css"><link rel="stylesheet" href="/css/mj-mails.css">
 <script src="/js/mj-theme.js" defer></script><script src="/js/mj-page-loader.js" defer></script><script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head><body><main class="wrap">
-<header class="top mm-top"><a class="back-link" href="/mj-mails.html" aria-label="Back to MJ Mails"><span aria-hidden="true">‹</span><span>MJ Mails</span></a><a class="brand" href="/dashboard.html">MJ HUB</a><a class="navlink" href="/mj-mails.html">Rent email <span aria-hidden="true">↗</span></a></header>
+<header class="top mm-top"><a class="back-link mm-back-icon" href="/mj-mails.html" aria-label="Back to MJ Mails" title="Back"><span aria-hidden="true">‹</span></a><strong class="mm-brand">MJ MAILS</strong><a class="navlink mm-top-action" href="/mj-mails.html">Rent email</a></header>
 <section class="mm-hero mm-orders-hero"><div class="mm-eyebrow"><span class="mm-eyebrow-dot"></span> YOUR MAILBOX</div><h1>Email orders <span>&amp; inbox.</span></h1><p class="lead">Manage rented addresses, track incoming messages, and copy verification codes from one place.</p><div class="mm-hero-meta"><span>↻ Automatic checks</span><span>⌁ Your orders only</span></div></section>
 
 <div id="signin" class="banner" hidden><span>Sign in to view your email orders.</span><a class="btn sm" href="/auth.html">Sign in</a></div>
@@ -13,7 +13,7 @@
 <div class="tabs" id="tabs"></div>
 <div class="live" id="live" hidden><span class="dot"></span><span id="liveTxt">Auto-checking for messages</span></div>
 <div id="notice" class="muted" role="status"></div>
-<section id="orders" aria-live="polite"><div class="skel"></div><div class="skel"></div></section>
+<section id="orders" aria-live="polite"><div class="mm-skeleton-card"><div class="mm-skeleton-line wide"></div><div class="mm-skeleton-line short"></div><div class="mm-skeleton-line medium"></div></div><div class="mm-skeleton-card"><div class="mm-skeleton-line wide"></div><div class="mm-skeleton-line short"></div><div class="mm-skeleton-line medium"></div></div></section>
 </main>
 
 <div class="overlay" id="ov" hidden>
@@ -38,7 +38,7 @@ const STATUS={
 const GROUPS={all:null,active:['waiting','reconciliation_required','cancel_pending_refund'],done:['message_received','completed'],closed:['cancelled','refunded','failed']};
 const LABELS={all:'All',active:'Active',done:'Received',closed:'Closed'};
 const POLL_MS=10000,POLL_MAX=5;
-let rows=[],filter='all',query='',openIds=new Set(),busy=new Set(),polling=false;
+let rows=[],filter='all',query='',openIds=new Set(),busy=new Set(),polling=false,ordersLoaded=false;
 
 function toast(t){const el=$('toast');el.textContent=t;el.classList.add('show');clearTimeout(toast.t);toast.t=setTimeout(()=>el.classList.remove('show'),2400)}
 async function getToken(){const {data}=await sb.auth.getSession();token=data.session?.access_token||'';return token}
@@ -109,14 +109,17 @@ function draw(flashId){
 /* ---------- data ---------- */
 async function load(manual){
   try{
+    if(!ordersLoaded&&!rows.length){
+      $('orders').innerHTML='<div class="mm-skeleton-card"><div class="mm-skeleton-line wide"></div><div class="mm-skeleton-line short"></div><div class="mm-skeleton-line medium"></div></div><div class="mm-skeleton-card"><div class="mm-skeleton-line wide"></div><div class="mm-skeleton-line short"></div><div class="mm-skeleton-line medium"></div></div>';
+    }
     await getToken();
     if(!token){$('signin').hidden=false;rows=[];$('orders').innerHTML='';$('notice').textContent='';return}
     $('signin').hidden=true;
     if(manual){$('reload').classList.add('loading')}
-    const out=await api('orders');rows=out.orders||[];
+    const out=await api('orders');rows=out.orders||[];ordersLoaded=true;
     $('notice').textContent=rows.length?rows.length+' email order'+(rows.length>1?'s':''):'';draw();
   }catch(e){$('notice').textContent=e.message;if(!rows.length)$('orders').innerHTML=''}
-  finally{$('reload').classList.remove('loading')}}
+  finally{ordersLoaded=true;$('reload').classList.remove('loading')}}
 function merge(order,announce){
   const i=rows.findIndex(r=>r.id===order.id);if(i<0)return;
   const before=rows[i];rows[i]=order;
@@ -147,4 +150,7 @@ document.addEventListener('visibilitychange',()=>{if(!document.hidden)poll()});
 $('reload').onclick=()=>load(true);
 let qt;$('q').addEventListener('input',e=>{clearTimeout(qt);qt=setTimeout(()=>{query=e.target.value;draw()},150)});
 drawTabs();load();
+
+/* Keep the dashboard idle timer accurate while users are in MJ Mails. */
+(function(){var key='mjhub-last-activity';function mark(){try{localStorage.setItem(key,String(Date.now()))}catch(e){}}mark();['pointerdown','keydown','touchstart','scroll'].forEach(function(evt){document.addEventListener(evt,mark,{passive:true})});})();
 </script></main></body></html>
