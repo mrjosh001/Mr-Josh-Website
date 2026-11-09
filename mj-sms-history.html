@@ -580,10 +580,31 @@ async function checkHeroReactivation(btn){
     if(!response.ok||!result.success) throw new Error(result.message||'Could not check reuse availability.');
     const data=result.data||{};
     if(!data.available){alert(data.message||'The SIM card is offline.');return;}
-    const lines=(data.options||[]).map(function(option){
-      return option.duration+' '+(option.unit||'hour')+' · '+money(option.price);
+    const options=data.options||[];
+    if(!options.length){alert('The SIM card is offline.');return;}
+    const lines=options.map(function(option,index){
+      return (index+1)+'. '+option.duration+' '+(option.unit||'hour')+' · '+money(option.price);
     });
-    alert('Reuse options for '+(data.phone_number||'this number')+':\n\n'+lines.join('\n'));
+    const choice=prompt('Reuse '+(data.phone_number||'this number')+'\n\n'+lines.join('\n')+'\n\nEnter the option number to continue:');
+    if(choice===null)return;
+    const selectedIndex=Number(choice)-1;
+    if(!Number.isInteger(selectedIndex)||selectedIndex<0||selectedIndex>=options.length) throw new Error('Invalid option selected.');
+    const selected=options[selectedIndex];
+    btn.textContent='Reactivating…';
+    const idempotencyKey=(window.crypto&&crypto.randomUUID)?crypto.randomUUID():('mj-'+Date.now()+'-'+Math.random().toString(36).slice(2));
+    const purchase=await fetch('/api/grizzly-sync?action=hero_reactivate',{
+      method:'POST',
+      headers:{'Content-Type':'application/json','Authorization':'Bearer '+session.access_token},
+      body:JSON.stringify({order_id:btn.getAttribute('data-order'),duration:selected.duration,unit:selected.unit||'hour',idempotency_key:idempotencyKey})
+    });
+    const purchased=await purchase.json().catch(function(){return {};});
+    if(!purchase.ok||!purchased.success){
+      throw new Error(purchased.message||'Could not reactivate this number.');
+    }
+    const created=purchased.data||{};
+    alert('Number reactivated successfully.\nNumber: '+(created.phone_number||data.phone_number||'—')+'\nStatus: '+(created.status==='completed'?'Code received':'Waiting for code')+'\nAmount: '+money(created.price||selected.price));
+    try{await init();}catch(_refresh){}
+    return;
   }catch(error){
     alert(error.message||'Could not check reuse availability.');
   }finally{
