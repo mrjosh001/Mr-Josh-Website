@@ -373,6 +373,8 @@ let searchQuery = '';
 
 function setStatus(m){const s=document.getElementById('statusText');if(s)s.textContent=m}
 function cleanText(str){if(!str)return'';const t=document.createElement('div');t.innerHTML=str;return(t.textContent||t.innerText||'').replace(/\s+/g,' ').trim()}
+function isSujanProduct(p){return !!p && (String(p.source||'').toLowerCase()==='sujandepartment' || /^sj_/i.test(String(p.product_key||'')))}
+function displayProductName(p){const raw=cleanText(p && p.name || 'Product');if(!isSujanProduct(p))return raw;return raw.replace(/\bCLONE\b/gi,' ').replace(/\s+/g,' ').replace(/\s+([,;:])/g,'$1').replace(/^[\s|–—-]+|[\s|–—-]+$/g,'').trim() || 'Product'}
 function escapeHtml(str){if(!str)return'';return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;')}
 function showToast(msg,type){const t=document.createElement('div');t.className='toast'+(type==='error'?' error':'');t.innerHTML='<span>'+(type==='error'?'❌':'✅')+'</span><span>'+escapeHtml(msg)+'</span>';toastContainer.appendChild(t);setTimeout(()=>t.remove(),3000)}
 function showError(reason){productGrid.innerHTML='<div class="empty-state"><div class="empty-state-icon">⚠️</div><h4>Failed to Load</h4><p>'+escapeHtml(reason)+'</p><button class="btn btn-primary" style="max-width:200px;margin:0 auto" onclick="location.reload()">Retry</button></div>'}
@@ -580,7 +582,7 @@ return {
 product_id: p.id || null,
 product_key: key,
 product_code: p.product_code || p.code || p.sku || key || null,
-title: cleanText(p.name || 'Product'),
+title: displayProductName(p),
 price: (parseFloat(p.price)||0) * qty,
 unit_price: parseFloat(p.price)||0,
 type: 'log',
@@ -599,7 +601,7 @@ let list = c==='all' ? allProducts : allProducts.filter(p=>(p.category||'').trim
 if(searchQuery){
 const q = searchQuery.toLowerCase();
 list = list.filter(p=>
-cleanText(p.name||'').toLowerCase().includes(q) ||
+displayProductName(p).toLowerCase().includes(q) ||
 getDisplayDescription(p).replace(/\s+/g,' ').toLowerCase().includes(q) ||
 (p.category||'').toLowerCase().includes(q)
 );
@@ -676,16 +678,16 @@ productCountBadge.innerHTML='<span class="product-count-badge">'+products.length
 const cart=getCart();
 let html='<div class="product-grid">';
 products.forEach((p,index)=>{
-const name=escapeHtml(cleanText(p.name||'Product'));
+const name=escapeHtml(displayProductName(p));
 const descHtml=formatDescriptionHtml(p);
 const price=parseFloat(p.price)||0;
 const stock=parseInt(p.stock_quantity,10);
 const hasStock=!Number.isNaN(stock);
 const inStock=hasStock?stock>0:true;
 const cat=escapeHtml(p.category||'');
-const inCart=cart.some(i=>(p.id&&i.product_id===p.id)||i.title===cleanText(p.name||''));
+const inCart=cart.some(i=>(p.id&&i.product_id===p.id)||i.title===displayProductName(p));
 html+='<div class="product-card">';
-html+='<div class="product-header"><div class="product-header-left">'+renderLogIconHtml(p.category, cleanText(p.name||''))+'<div class="product-name">'+name+'</div></div><div class="product-price">'+money(price)+'</div></div>';
+html+='<div class="product-header"><div class="product-header-left">'+renderLogIconHtml(p.category, displayProductName(p))+'<div class="product-name">'+name+'</div></div><div class="product-price">'+money(price)+'</div></div>';
 if(descHtml) html+='<details><summary class="product-description-toggle">Description</summary><div class="product-description-body">'+descHtml+'</div></details>';
 html+='<div class="product-badges">';
 if(cat) html+='<span class="badge badge-cat">'+cat+'</span>';
@@ -862,7 +864,7 @@ activeProduct=p;
 activeQty=1;
 isBuying=false;
 purchaseNonce='MJ-'+Date.now()+'-'+Math.random().toString(36).slice(2,9);
-const name=cleanText(p.name||'Product');
+const name=displayProductName(p);
 const desc=getDisplayDescription(p) || 'No description';
 const price=parseFloat(p.price)||0;
 const stock=parseInt(p.stock_quantity,10);
@@ -1222,8 +1224,8 @@ async function formatReceiptCredentialsAsync(raw) {
 }
 
 function openReceiptModal(p, desc, creds, qty, orderId){
-document.getElementById('rcName').textContent = cleanText(p.name||'Product');
-document.getElementById('rcIcon').textContent = (cleanText(p.name||'M').charAt(0)||'M').toUpperCase();
+document.getElementById('rcName').textContent = displayProductName(p);
+document.getElementById('rcIcon').textContent = (displayProductName(p).charAt(0)||'M').toUpperCase();
 var metaWrap = document.getElementById('rcMetaWrap');
 var metaEl = document.getElementById('rcMeta');
 var metaParts = [];
