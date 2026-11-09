@@ -1389,7 +1389,7 @@ async function handleMyOrders(req, res) {
       /pending|progress|processing|awaiting|waiting/i.test(s)
       && !/completed|canceled|cancelled|refunded|failed/i.test(s)
     );
-  }).slice(0, 20);
+  }); // Batch API supports up to 100 IDs; page_size is capped at 50.
 
   // Normalize Owlet status payload (field names vary by panel version)
   function pickStatusPayload(json, orderId) {
