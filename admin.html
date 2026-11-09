@@ -7003,7 +7003,8 @@ async function loadCoupons() {
         + '<td style="white-space:nowrap;">'
         + '<button type="button" class="btn btn-sm" onclick="toggleCoupon(\'' + c.id + '\',' + (c.active === false ? 'true' : 'false') + ')">'
         + (c.active === false ? 'Activate' : 'Deactivate') + '</button> '
-        + '<button type="button" class="btn btn-sm" style="color:#b91c1c;" onclick="deleteCoupon(\'' + c.id + '\',\'' + String(c.code || '').replace(/'/g, '') + '\')">Delete</button>'
+        + '<button type="button" class="btn btn-sm" onclick="extendCoupon(\'' + c.id + '\',\'' + String(c.ends_at || '').slice(0,10) + '\')">Extend expiry</button> '
+        + '<button type="button" class="btn btn-sm" style="color:#b91c1c;" onclick="deleteCoupon(\'' + c.id + '\',\'' + String(c.code || '').replace(/'/g, '') + '\')">Archive</button>'
         + '</td></tr>';
     });
     html += '</tbody></table>';
@@ -7057,14 +7058,30 @@ async function toggleCoupon(id, active) {
   }
 }
 
+async function extendCoupon(id, currentEnd) {
+  const entered = prompt('Enter the new expiry date (YYYY-MM-DD). It must be later than the current expiry.', currentEnd || '');
+  if (entered === null) return;
+  const value = String(entered).trim();
+  if (!/^\\d{4}-\\d{2}-\\d{2}$/.test(value)) {
+    alert('Enter the date in YYYY-MM-DD format.');
+    return;
+  }
+  const end = new Date(value + 'T23:59:59.999Z');
+  if (Number.isNaN(end.getTime())) { alert('Invalid expiry date.'); return; }
+  try {
+    await adminPost({ resource: 'coupon', action: 'extend', id: id, ends_at: end.toISOString() });
+    await loadCoupons();
+    if (typeof showToast === 'function') showToast('Coupon expiry extended', 'success');
+  } catch (e) { alert(e.message || 'Could not extend coupon'); }
+}
+
 async function deleteCoupon(id, code) {
-  if (!confirm('Delete coupon ' + (code || '') + '? This cannot be undone.')) return;
+  if (!confirm('Archive coupon ' + (code || '') + '? It will stop working, but redemption history will be preserved.')) return;
   try {
     await adminPost({ resource: 'coupon', action: 'delete', id: id });
     await loadCoupons();
-  } catch (e) {
-    alert(e.message || 'Delete failed');
-  }
+    if (typeof showToast === 'function') showToast('Coupon archived', 'success');
+  } catch (e) { alert(e.message || 'Archive failed'); }
 }
 
 
