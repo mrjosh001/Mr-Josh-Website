@@ -1902,10 +1902,10 @@ async function handleCancel(req, res) {
       source: cancelSrc, orderId, httpStatus: cancelResult.status,
       reason: String(supplierError || json?.error || json?.message || '').slice(0, 250)
     });
-    return res.status(cancelResult.status >= 400 ? cancelResult.status : 409).json({
+    // Keep supplier names, API errors, and internal status details out of customer responses.
+    return res.status(409).json({
       success: false,
-      message: supplierError || 'The supplier did not accept cancellation. Refresh the order status and try again if it remains open.',
-      supplier_status: row.status
+      message: 'We could not complete your cancellation right now. Your order status has been refreshed. Please try again shortly.'
     });
   }
 
