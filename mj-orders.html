@@ -1565,6 +1565,8 @@ async function loadLogs() {
         if (Array.isArray(cached) && cached.length) rows = cached;
       } catch (e) {}
     }
+    // Hide BulkMail supplier orders from customer history, including any stale local cache rows.
+    rows = rows.filter((row) => !/^bm_/i.test(String(row.product_code || '')));
     logGroups = groupLogs(rows);
     document.getElementById('countLogs').textContent = String(logGroups.length);
   } catch (e) {
