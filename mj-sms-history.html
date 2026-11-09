@@ -430,6 +430,11 @@ function render(){
           '<div class="reuse-hint">Same number · about '+mins+' min left to reuse</div>';
       }
     }
+    // HeroSMS only: expose reactivation eligibility after a successful OTP.
+    const isHeroSms=src==='herosms';
+    if(!isRent(o)&&isHeroSms&&b==='completed'&&o.code&&String(o.code).trim()&&!o.refunded){
+      action='<div class="act"><button type="button" class="btn-reuse" data-hero-reactivate="1" data-order="'+esc(String(o.order_id||''))+'">Check reuse availability</button></div>';
+    }
     // Completed OTP — always allow opening the number page to re-read the code
     if(!isRent(o)&&(b==='completed'||(o.code&&String(o.code).trim()))&&String(o.status)!=='waiting_for_code'){
       const page=isS2?'mj-sms3-number.html':'mj-sms-number.html';
@@ -558,9 +563,40 @@ async function reuseNumber(btn){
     reusing=false;
   }
 }
+async function checkHeroReactivation(btn){
+  if(!btn||btn.disabled) return;
+  const old=btn.textContent;
+  btn.disabled=true; btn.textContent='Checking…';
+  try{
+    const client=window.supabase.createClient(SUPABASE_URL,SUPABASE_ANON_KEY,{auth:{persistSession:true,autoRefreshToken:true,storage:window.sessionStorage}});
+    const session=(await client.auth.getSession()).data.session;
+    if(!session){location.href='auth.html';return;}
+    const response=await fetch('/api/grizzly-sync?action=hero_reactivate_options',{
+      method:'POST',
+      headers:{'Content-Type':'application/json','Authorization':'Bearer '+session.access_token},
+      body:JSON.stringify({order_id:btn.getAttribute('data-order')})
+    });
+    const result=await response.json().catch(function(){return {};});
+    if(!response.ok||!result.success) throw new Error(result.message||'Could not check reuse availability.');
+    const data=result.data||{};
+    if(!data.available){alert(data.message||'The SIM card is offline.');return;}
+    const lines=(data.options||[]).map(function(option){
+      return option.duration+' '+(option.unit||'hour')+' · '+money(option.price);
+    });
+    alert('Reuse options for '+(data.phone_number||'this number')+':\n\n'+lines.join('\n'));
+  }catch(error){
+    alert(error.message||'Could not check reuse availability.');
+  }finally{
+    btn.disabled=false; btn.textContent=old;
+  }
+}
 document.getElementById('list').addEventListener('click',function(e){
   const btn=e.target.closest('[data-reuse]');
   if(btn) reuseNumber(btn);
+});
+document.getElementById('list').addEventListener('click',function(e){
+  const btn=e.target.closest('[data-hero-reactivate]');
+  if(btn) checkHeroReactivation(btn);
 });
 
 
