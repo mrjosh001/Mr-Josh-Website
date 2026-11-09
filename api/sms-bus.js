@@ -737,18 +737,17 @@ function gotsmsAddonsNgn({ area_code, cellular_carrier_id } = {}) {
 }
 
 function gotsmsSellPriceNgn(supplierUsd) {
-  const rate =
-    Number(process.env.USD_TO_NGN_RATE) ||
-    Number(process.env.USD_TO_NGN) ||
-    1500;
-  const pct = Number(process.env.GOTSMS_MARKUP_PERCENT) || 80;
+  const usd = Number(supplierUsd || 0);
+  const round50 = (n) => Math.ceil(n / 50) * 50;
+  if (!Number.isFinite(usd) || usd <= 0) return 400;
+  if (usd < 0.1) return round50(400 + (usd / 0.1) * 100);
+  if (usd < 0.5) return round50(600 + ((usd - 0.1) / 0.4) * 400);
+  if (usd <= 1) return round50(1100 + ((usd - 0.5) / 0.5) * 400);
+  const rate = Number(process.env.USD_TO_NGN_RATE) || Number(process.env.USD_TO_NGN) || 1500;
+  const supplierNgn = usd * rate;
+  const pct = Number(process.env.GOTSMS_MARKUP_PERCENT) || 85;
   const minProfit = Number(process.env.MIN_PROFIT_NGN) || 500;
-  const minSale = Number(process.env.MIN_NUMBER_PRICE_NGN) || 1000;
-  const supplierNgn = Number(supplierUsd || 0) * rate;
-  const percentPrice = Math.ceil(supplierNgn * (1 + pct / 100));
-  const floorPrice = Math.ceil(supplierNgn + minProfit);
-  const finalPrice = Math.max(percentPrice, floorPrice, minSale);
-  return Math.ceil(finalPrice / 50) * 50;
+  return round50(Math.max(Math.ceil(supplierNgn * (1 + pct / 100)), Math.ceil(supplierNgn + minProfit)));
 }
 
 
