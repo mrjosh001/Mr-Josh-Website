@@ -2,6 +2,7 @@ import { createClient } from '@supabase/supabase-js';
 import crypto from 'crypto';
 import { applyMarkup } from '../lib/pricing.js';
 import { sendPushToUser } from '../lib/push.js';
+import { handleMjMails } from '../lib/mj-mails.js';
 
 /**
  * SMS-BUS integration — OTP (with reuse) + long-term rentals.
@@ -1976,6 +1977,11 @@ export default async function handler(req, res) {
     const url = new URL(req.url, 'http://localhost');
     const action = (url.searchParams.get('action') || '').toLowerCase();
     const method = (req.method || 'GET').toUpperCase();
+
+    // MJ Mails shares this existing serverless function to stay within the Vercel Hobby limit.
+    if (action.startsWith('mails_')) {
+      return handleMjMails({ req, res, url, supabase, requireAuth, json });
+    }
 
     // GotSMS push webhooks (no user session — HMAC verified)
     const pathLower = String(url.pathname || '').toLowerCase();
