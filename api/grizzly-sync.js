@@ -2944,7 +2944,7 @@ export default async function handler(req, res) {
       if (act === 'hero_sync') return HERO.sync(req, res);
       return vsHandleSync(req, res);
     }
-    if (action === 'order' || action === 'check' || action === 'cancel') {
+    if (action === 'order' || action === 'check' || action === 'cancel' || action === 'hero_reactivate_options' || action === 'hero_reactivate') {
       let b = {};
       try {
         b = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : (req.body || {});
@@ -2971,6 +2971,8 @@ export default async function handler(req, res) {
       b.user_id = authenticatedUser.id;
       req.body = b;
 
+      if (action === 'hero_reactivate_options') return HERO.reactivateOptions(req, res);
+      if (action === 'hero_reactivate') return HERO.reactivate(req, res);
       if (action === 'order') {
         if (isHeroSource(b)) return HERO.order(req, res, b);
         if (resolveSupplier(req, b).source === 'virtualsms') return vsHandleOrder(req, res);
@@ -2990,7 +2992,7 @@ export default async function handler(req, res) {
     if (act === 'expire_stale' || act === 'expire-stale') return handleExpireStale(req, res);
     return res.status(400).json({
       success: false,
-      message: "POST requires ?action=order, ?action=check, ?action=cancel, or ?action=vsms_sync"
+      message: "POST requires ?action=order, ?action=check, ?action=cancel, ?action=hero_reactivate_options, ?action=hero_reactivate, or ?action=vsms_sync"
     });
   }
 
