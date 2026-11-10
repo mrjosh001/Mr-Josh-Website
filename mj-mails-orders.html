@@ -165,7 +165,29 @@ setInterval(updateCancelTimers,250);
 function ago(d){const s=Math.max(1,Math.round((Date.now()-new Date(d))/1000));
   if(s<60)return 'just now';if(s<3600)return Math.floor(s/60)+' min ago';if(s<86400)return Math.floor(s/3600)+' hr ago';
   return new Date(d).toLocaleDateString(undefined,{day:'numeric',month:'short',year:'numeric'})}
-function detectCode(m){const x=String(m||'').match(/(?<![\d])(\d{4,8})(?![\d])/);return x?x[1]:''}
+function detectCode(m){
+  const source=String(m||'');
+  if(!source.trim())return '';
+  const doc=new DOMParser().parseFromString(source,'text/html');
+  doc.querySelectorAll('script,style,noscript,template,head,svg,iframe').forEach(n=>n.remove());
+  const text=(doc.body?.textContent||source.replace(/<[^>]*>/g,' ')).replace(/\u00a0/g,' ').replace(/[ \t]+/g,' ').replace(/\r/g,'\n');
+  const candidates=[...text.matchAll(/(?<![\d])\d{4,8}(?![\d])/g)].map(x=>({code:x[0],index:x.index}));
+  if(!candidates.length)return '';
+  const contexts=[
+    /(?:enter|input|type|use|submit|verify|verification|confirm|confirmation|security|one[- ]time|login|log in|sign[- ]in|authentication)[^\n.]{0,100}?(?:code|otp)?[^\n.]{0,45}?/ig,
+    /(?:code|otp|verification code|security code)[^\n.]{0,100}/ig
+  ];
+  const scored=candidates.map(c=>{let score=0;const left=text.slice(Math.max(0,c.index-120),c.index).toLowerCase();const right=text.slice(c.index,c.index+80).toLowerCase();
+    if(/(?:enter|input|type|use|submit)\s+(?:this\s+)?(?:the\s+)?code[^\n.]{0,90}$/.test(left))score+=120;
+    if(/(?:verification|security|one[- ]time|login|sign[- ]in|authentication)\s+(?:code|otp)?[^\n.]{0,90}$/.test(left))score+=100;
+    if(/(?:^|\b)(?:code|otp)\b[^\n.]{0,90}$/.test(left))score+=80;
+    if(/^\s*(?:is|:|-)?\s*$/.test(right))score+=5;
+    if(/^(.)\1+$/.test(c.code))score-=100;
+    return {...c,score};
+  }).sort((a,b)=>b.score-a.score||a.index-b.index);
+  if(scored[0].score>0)return scored[0].code;
+  return candidates.length===1?candidates[0].code:'';
+}
 
 function sanitizeEmailMessage(raw){
   const source=String(raw||'');
@@ -225,7 +247,7 @@ function drawTabs(){$('tabs').innerHTML=Object.keys(LABELS).map(k=>{const n=GROU
   $('tabs').querySelectorAll('[data-f]').forEach(b=>b.onclick=()=>{filter=b.dataset.f;draw()})}
 function card(o,flash){
   const st=STATUS[o.status]||[String(o.status||'').replace(/_/g,' '),'mute'];
-  const code=o.value||detectCode(o.message);const waiting=o.status==='waiting';
+  const code=detectCode(o.message)||o.value||'';const waiting=o.status==='waiting';
   const refundAvailable=o.refund_available_at?Date.parse(o.refund_available_at):NaN;
   const mailExpires=o.expires_at?Date.parse(o.expires_at):NaN;
   const canRetryRefund=o.status==='cancel_pending_refund';
