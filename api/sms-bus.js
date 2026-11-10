@@ -4330,6 +4330,8 @@ export default async function handler(req, res) {
         if (!auth.ok) return json(res, auth.status, { success: false, message: auth.message });
         const qs = new URLSearchParams();
         const status = url.searchParams.get('status');
+        const requestedRentId = String(url.searchParams.get('rent_id') || '').trim();
+        const includeTransitions = url.searchParams.get('include_transitions') === '1';
         if (status) qs.set('status', status);
         qs.set('per_page', '50');
         const g = await gotsmsFetch(`/api/rents?${qs}`);
@@ -4338,7 +4340,8 @@ export default async function handler(req, res) {
         const mineRentIds = new Set((mine || []).map((m) => String(m.idempotency_key || '').replace(/^gotsms-/, '')).filter(Boolean));
         const minePhones = new Set((mine || []).map((m) => String(m.phone_number || '').replace(/\s/g, '')));
         const supplierRents = gotsmsListPayload(g.data);
-        const filtered = supplierRents.filter((r) => mineRentIds.has(String(r.id)) || minePhones.has(String(r.phone || '').replace(/\s/g, '')));
+        let filtered = supplierRents.filter((r) => mineRentIds.has(String(r.id)) || minePhones.has(String(r.phone || '').replace(/\s/g, '')));
+        if (requestedRentId) filtered = filtered.filter((r) => String(r.id) === requestedRentId);
         // Auto-renew: charge same NGN as original rental when period extends; disable if wallet too low
         try {
           for (const r of filtered.slice(0, 30)) {
@@ -4363,8 +4366,9 @@ export default async function handler(req, res) {
             console.warn('[gotsms_rents] heal', e.message || e);
           }
         }
-        // Make sure every live rental carries its switch-plan options (fetched from the detail endpoint when the list omits them).
-        if (String(status || '') === 'active') {
+        // Fetch switch-plan options only when the customer opens the plan-change modal.
+        // Detail-page loads should stay fast and avoid up to 30 extra supplier requests.
+        if (includeTransitions && String(status || '') === 'active') {
           await Promise.all(filtered.slice(0, 30).map(async (r) => {
             try {
               if (!Array.isArray(r.transition_options) || !r.transition_options.length) {
