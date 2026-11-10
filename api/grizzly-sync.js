@@ -29,7 +29,7 @@ import { applyApiCors, handleOptions, requireAdminOrCron } from '../lib/secure.j
  *
  * Env: GRIZZLYSMS_API_KEY, SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, CRON_SECRET (required for cron calls)
  * Optional: USD_TO_NGN_RATE (default 1500), MIN_PROFIT_NGN (500), VIRTUALSMS_API_KEY (Server 3),
- *           VSMS_TIME_BUDGET_MS (200000), VSMS_MIN_GAP_MS (1500), VSMS_SERVICE_LIMIT (5000),
+ *           VSMS_TIME_BUDGET_MS (200000), VSMS_MANUAL_BUDGET_MS (40000), VSMS_MIN_GAP_MS (1500), VSMS_SERVICE_LIMIT (5000),
  *           HEROSMS_API_KEY (Server 1 second pool)
  */
 
@@ -1845,6 +1845,10 @@ const VS_SOURCE = 'virtualsms';
 const VS_ID_BASE = 1000;
 const VS_CANCEL_COOLDOWN_MS = 120 * 1000;
 const VS_TIME_BUDGET_MS = Number(process.env.VSMS_TIME_BUDGET_MS) || 200000; // function limit is 300 s; rows are written after this
+// Admin "Sync Server 3" clicks (admin.html) give up on a batch after 55 s. A manual batch therefore has to finish well
+// inside that, or the button shows "Sync batch timed out" on every click while the run keeps going in the background.
+// Cron keeps the full budget. Either way progress is saved (sync_jobs cursor) and the next run continues from it.
+const VS_MANUAL_BUDGET_MS = Number(process.env.VSMS_MANUAL_BUDGET_MS) || 40000;
 const VS_MIN_GAP_MS = Number(process.env.VSMS_MIN_GAP_MS) || 1500; // ~40 requests/minute, leaves room for live orders
 const VS_SERVICE_LIMIT = Number(process.env.VSMS_SERVICE_LIMIT) || 5000;
 const VS_MAX_PAGES = 25;
@@ -2120,7 +2124,9 @@ async function vsRunSync(req) {
   const onlyService = String(q.service || '').trim();
   const onlyNew = q.only_new === '1' || q.only_new === 'true'; // discovery only: skip the price/stock refresh walk
   const started = Date.now();
-  const deadline = started + VS_TIME_BUDGET_MS - 6000;
+  // Cron gets the full budget; an admin click gets a short batch that returns before the browser's 55 s cutoff.
+  const budgetMs = vsIsCron(req) ? VS_TIME_BUDGET_MS : Math.min(VS_TIME_BUDGET_MS, VS_MANUAL_BUDGET_MS);
+  const deadline = started + budgetMs - 6000;
   const rate = vsRate();
   const errors = [];
   const note = (m) => { if (errors.length < 20) errors.push(m); };
