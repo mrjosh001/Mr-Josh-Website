@@ -552,16 +552,33 @@ async function loadPlans(){
   var body=document.getElementById('detailBody');
   if(body) body.innerHTML='<div class="sk-line"></div><div class="sk-line"></div><div class="sk-line"></div>';
   // Load live carriers from supplier in parallel with plans
-  var planP=api('plans',{query:'service_id='+encodeURIComponent(selectedService.id)+'&per_page=100&include_unavailable=1'});
-  var carP=loadCarriers();
-  var j=await planP;
-  await carP;
-  if(!j||j.success===false){
+  if(!selectedService || !selectedService.id){
     plans=[];
-    if(body) body.innerHTML='<div class="empty">'+(j&&j.message?String(j.message):'Could not load plans. Pull to refresh or try again.')+'</div>';
+    if(body) body.innerHTML='<div class="empty">Choose a service again to load its rental plans.</div>';
     return;
   }
-  plans=(j.data||[]);
+  var j=null;
+  try{
+    var results=await Promise.all([
+      api('plans',{query:'service_id='+encodeURIComponent(selectedService.id)+'&per_page=100&include_unavailable=1'}),
+      loadCarriers()
+    ]);
+    j=results[0];
+  }catch(err){
+    plans=[];
+    if(body) body.innerHTML='<div class="empty">Plans could not be reached just now. Check your connection and try again.<br><button type="button" class="btn-buy" id="retryPlansBtn" style="margin-top:12px">Try again</button></div>';
+    var retry=document.getElementById('retryPlansBtn');
+    if(retry) retry.onclick=loadPlans;
+    return;
+  }
+  if(!j||j.success===false){
+    plans=[];
+    if(body) body.innerHTML='<div class="empty">'+(j&&j.message?String(j.message):'Could not load plans. Please try again.')+'<br><button type="button" class="btn-buy" id="retryPlansBtn" style="margin-top:12px">Try again</button></div>';
+    var retry=document.getElementById('retryPlansBtn');
+    if(retry) retry.onclick=loadPlans;
+    return;
+  }
+  plans=Array.isArray(j.data)?j.data:[];
   var order={min:0,hour:1,day:2,week:3,month:4,year:5};
   plans.sort(function(a,b){var da=order[a.duration_type]??9,db=order[b.duration_type]??9;if(da!==db)return da-db;return(a.duration_in_type||0)-(b.duration_in_type||0);});
   renderDetailForm();
