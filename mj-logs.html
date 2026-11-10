@@ -93,7 +93,10 @@ details[open] .product-description-toggle::before{transform:rotate(90deg);displa
 
 .btn{flex:1;padding:11px 12px;border-radius:11px;font-size:12px;font-weight:700;cursor:pointer;border:none;font-family:inherit}
 .btn-primary{background:linear-gradient(135deg,var(--primary),var(--primary-strong));color:#fff}
-.btn-primary:disabled{opacity:.5;cursor:not-allowed}
+.btn-primary:disabled{opacity:.72;cursor:wait}
+.mj-buy-spinner{display:inline-block;width:18px;height:18px;border:2px solid rgba(255,255,255,.38);border-top-color:#fff;border-radius:50%;animation:mjBuySpin .7s linear infinite;vertical-align:middle}
+@keyframes mjBuySpin{to{transform:rotate(360deg)}}
+@media(prefers-reduced-motion:reduce){.mj-buy-spinner{animation-duration:1.8s}}
 .btn-outline{background:transparent;color:var(--text);border:1px solid var(--border)}
 .loading-spinner{display:flex;flex-direction:column;align-items:center;padding:60px 20px;gap:14px}
 .spinner{width:40px;height:40px;border:3px solid var(--border);border-top-color:var(--primary);border-radius:50%;animation:spin .8s linear infinite}
@@ -745,9 +748,11 @@ if(!p) return;
 if(btn.getAttribute('data-action')==='cart'){ addToCart(p); return; }
 if(btn.disabled || window._mjLogProductRefreshInFlight) return;
 window._mjLogProductRefreshInFlight = true;
-const oldLabel = btn.textContent;
+const oldMarkup = btn.innerHTML;
 btn.disabled = true;
-btn.textContent = 'Refreshing...';
+btn.setAttribute('aria-busy', 'true');
+btn.setAttribute('aria-label', 'Loading product details');
+btn.innerHTML = '<span class="mj-buy-spinner" role="status" aria-label="Loading"></span>';
 try {
   const fresh = await fetchFreshLogProduct(p);
   if (!fresh) {
@@ -763,7 +768,12 @@ try {
   showToast('Could not refresh product details. Please try again.', 'error');
 } finally {
   window._mjLogProductRefreshInFlight = false;
-  if (btn.isConnected) { btn.disabled = false; btn.textContent = oldLabel; }
+  if (btn.isConnected) {
+    btn.disabled = false;
+    btn.removeAttribute('aria-busy');
+    btn.removeAttribute('aria-label');
+    btn.innerHTML = oldMarkup;
+  }
 }
 });
 }
