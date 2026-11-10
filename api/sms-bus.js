@@ -582,32 +582,30 @@ async function gotsmsHandleWebhook(req, res) {
             if (claimed) {
               const amt = Number(claimed.price) || orderPrice;
               if (amt > 0) {
-                const { error: credErr } = await supabase.rpc('credit_balance', { p_user_id: order.user_id, p_amount: amt });
-                if (!credErr) {
-                  try {
-                    await supabase.from('transactions').insert({
-                      user_id: order.user_id,
-                      customer_id: order.customer_id,
-                      type: 'refund',
-                      category: 'MJ SMS',
-                      title: 'USA rental cancelled — no SMS',
-                      subtitle: 'Balance restored',
-                      amount: '₦' + amt.toLocaleString(),
-                      amount_ngn: amt,
-                      status: 'refunded',
-                      external_reference: String(rid || order.order_id || '')
-                    });
-                  } catch (_) {}
-                  nextStatus = 'refunded';
-                  refundedNow = true;
-                  await notifyUserPush(
-                    order.user_id,
-                    'Rental cancelled — refunded',
-                    'No SMS arrived. ₦' + amt.toLocaleString() + ' was returned to your wallet.',
-                    '/sms-history.html',
-                    'sms_refund'
-                  );
-                }
+                try {
+                  await supabase.from('transactions').insert({
+                    user_id: order.user_id,
+                    customer_id: order.customer_id,
+                    type: 'refund',
+                    category: 'MJ SMS',
+                    title: 'USA rental cancelled — no SMS',
+                    subtitle: 'Balance restored',
+                    amount: '₦' + amt.toLocaleString(),
+                    amount_ngn: amt,
+                    status: 'refunded',
+                    external_reference: String(rid || order.order_id || '')
+                  });
+                } catch (_) {}
+                nextStatus = 'refunded';
+                refundedNow = true;
+                await notifyUserPush(
+                  order.user_id,
+                  'Rental cancelled — refunded',
+                  'No SMS arrived. ₦' + amt.toLocaleString() + ' was returned to your wallet.',
+                  '/sms-history.html',
+                  'sms_refund'
+                );
+              }
               }
             }
           }
@@ -928,19 +926,6 @@ async function gotsmsPreExpireCancelSweep({ userId = null, windowMinutes = 10 } 
       if (!claimed) { skipped += 1; continue; }
       const amt = Number(claimed.price) || Number(order.price) || 0;
       if (amt > 0) {
-        const { error: credErr } = await supabase.rpc('credit_balance', {
-          p_user_id: order.user_id,
-          p_amount: amt
-        });
-        if (credErr) {
-          console.error('[gotsms preexpire] credit', credErr.message);
-          // roll claim so admin can retry
-          try {
-            await supabase.from('number_orders').update({ refunded: false, status: 'active' }).eq('id', order.id);
-          } catch (_) {}
-          errors.push(credErr.message);
-          continue;
-        }
         try {
           await supabase.from('transactions').insert({
             user_id: order.user_id,
@@ -4800,38 +4785,28 @@ if (method === 'POST' && ga === 'gotsms_toggle_renewal') {
         } catch (_) {}
         const refundAmt = Number(claimed.price) || 0;
         if (refundAmt > 0) {
-          try {
-            await supabase.rpc('credit_balance', { p_user_id: auth.userId, p_amount: refundAmt });
-            // pending/completed -> refunded on the rental's own row. Only legacy rentals (no row to flip) get a refund row.
-            const flipped = await gotsmsSetPurchaseTxStatus(auth.userId, rent_id, ['pending', 'completed'], 'refunded');
-            if (!flipped) {
-              try {
-                const { data: dup } = await supabase.from('transactions').select('id')
-                  .eq('user_id', auth.userId).eq('type', 'refund').eq('category', 'MJ SMS')
-                  .eq('external_reference', String(rent_id)).limit(1);
-                if (!dup || !dup.length) {
-                  await supabase.from('transactions').insert({
-                    user_id: auth.userId,
-                    customer_id: order.customer_id,
-                    type: 'refund',
-                    category: 'MJ SMS',
-                    title: 'USA rental cancelled',
-                    subtitle: 'Balance restored',
-                    amount: '₦' + refundAmt.toLocaleString(),
-                    amount_ngn: refundAmt,
-                    status: 'refunded',
-                    external_reference: String(rent_id)
-                  });
-                }
-              } catch (_) {}
-            }
-          } catch (e) {
-            console.error('[gotsms] user refund credit', e);
-            // Roll claim flag back so admin can retry credit
+          // The refunded transition fires the DB trigger, which credits the exact linked debit atomically.
+          const flipped = await gotsmsSetPurchaseTxStatus(auth.userId, rent_id, ['pending', 'completed'], 'refunded');
+          if (!flipped) {
             try {
-              await supabase.from('number_orders').update({ refunded: false, status: 'active' }).eq('id', order.id);
+              const { data: dup } = await supabase.from('transactions').select('id')
+                .eq('user_id', auth.userId).eq('type', 'refund').eq('category', 'MJ SMS')
+                .eq('external_reference', String(rent_id)).limit(1);
+              if (!dup || !dup.length) {
+                await supabase.from('transactions').insert({
+                  user_id: auth.userId,
+                  customer_id: order.customer_id,
+                  type: 'refund',
+                  category: 'MJ SMS',
+                  title: 'USA rental cancelled',
+                  subtitle: 'Balance restored',
+                  amount: '₦' + refundAmt.toLocaleString(),
+                  amount_ngn: refundAmt,
+                  status: 'refunded',
+                  external_reference: String(rent_id)
+                });
+              }
             } catch (_) {}
-            return json(res, 500, { success: false, message: 'Cancelled with provider but wallet credit failed. Contact support with your order ID.' });
           }
         }
         await notifyUserPush(
