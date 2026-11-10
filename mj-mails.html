@@ -13,7 +13,7 @@
 
 <section class="mm-hero">
 
-<h1>Temporary email, <span>made simple.</span></h1>
+<h1>MJ MAIL INBOX</h1>
 <p class="lead">Choose the website, select an available email domain, and receive verification messages in your MJ HUB inbox.</p>
 <div class="mm-hero-meta"><span>⚡ Instant checkout</span><span>⌁ Private inbox</span><span>↻ Live message checks</span></div>
 </section>
@@ -23,10 +23,8 @@
 <label class="mm-field-label" for="site">WEBSITE OR SERVICE</label>
 <div class="search mm-search-row">
 <input id="site" type="text" inputmode="url" placeholder="e.g. telegram.com" autocomplete="off" autocapitalize="off" spellcheck="false" enterkeyhint="search">
-<button id="search" class="btn"><span>Search Mails</span><span aria-hidden="true">→</span></button>
+<button id="search" class="btn"><span>Search Mails</span></button>
 </div>
-<div class="chips" id="chips" aria-label="Popular services"></div>
-<div id="recent" class="muted mm-recent"></div>
 <div id="notice" class="muted mm-notice" role="status"></div>
 <aside class="mm-policy mm-policy-compact" role="note"><span class="mm-policy-icon">!</span><div><strong>Acceptable use</strong><p>Government websites, banks and affiliate-program fraud are prohibited. Use MJ Mails only for lawful registrations.</p></div></aside>
 </section>
@@ -111,12 +109,7 @@ $('ov').addEventListener('click',e=>{if(e.target===$('ov'))closeSheet()});
 document.addEventListener('keydown',e=>{if(e.key==='Escape'&&!$('ov').hidden)closeSheet()});
 
 /* ---------- quick picks ---------- */
-function drawChips(){$('chips').innerHTML=POPULAR.map(([n,d])=>'<button type="button" class="chip'+(d===currentSite?' on':'')+'" data-site="'+d+'">'+n+'</button>').join('');
-  $('chips').querySelectorAll('.chip').forEach(b=>b.onclick=()=>{$('site').value=b.dataset.site;search()})}
-function drawRecent(){const r=(store('mjmails_recent')||[]).filter(x=>x!==currentSite);
-  $('recent').innerHTML=r.length?'Recent: '+r.map(x=>'<a href="#" data-r="'+esc(x)+'">'+esc(x)+'</a>').join(' · '):'';
-  $('recent').querySelectorAll('[data-r]').forEach(a=>a.onclick=e=>{e.preventDefault();$('site').value=a.dataset.r;search()})}
-function remember(site){store('mjmails_recent',[site,...(store('mjmails_recent')||[]).filter(x=>x!==site)].slice(0,5))}
+
 
 /* ---------- search ---------- */
 async function search(){
@@ -129,7 +122,7 @@ async function search(){
     // Catalogue search is public. Sign-in is enforced only when the user rents an email.
     const data=await call('mails_offers','GET',null,{site});
     currentOffers=(data.offers||[]).slice().sort((a,b)=>a.price_ngn-b.price_ngn);
-    currentSite=site;remember(site);drawChips();drawRecent();
+    currentSite=site;
     if(!currentOffers.length){$('notice').textContent='';$('offers').innerHTML='<div class="empty card"><span class="ico">📭</span><b>No emails available for '+esc(site)+'</b><br>Try another service or check the spelling.</div>';return}
     $('notice').textContent=currentOffers.length+' domain'+(currentOffers.length>1?'s':'')+' available for '+site+' · cheapest first';
     renderDomainOffers();
@@ -173,7 +166,7 @@ async function confirmBuy(site,o){
 /* ---------- init ---------- */
 $('search').addEventListener('click',search);
 $('site').addEventListener('keydown',e=>{if(e.key==='Enter')search()});
-drawChips();drawRecent();
+
 getToken();
 const qs=new URLSearchParams(location.search).get('site');if(qs){$('site').value=qs;search()}
 if(window.mmReady)window.mmReady();
