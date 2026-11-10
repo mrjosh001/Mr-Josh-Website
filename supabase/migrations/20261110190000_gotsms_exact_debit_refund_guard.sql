@@ -57,6 +57,19 @@ begin
     raise exception 'Refund blocked: wallet profile not found';
   end if;
 
+  if new.source = 'gotsms' then
+    insert into public.transactions (
+      user_id, customer_id, type, category, title, subtitle,
+      amount, amount_ngn, status, external_reference
+    )
+    values (
+      new.user_id, new.customer_id, 'refund', 'MJ SMS',
+      'USA rental cancelled', 'Balance restored',
+      '₦' || to_char(v_debit.ngn_amt, 'FM999,999,999,990.00'),
+      v_debit.ngn_amt, 'refunded', coalesce(new.order_id, new.idempotency_key)
+    );
+  end if;
+
   return new;
 end;
 $$;
