@@ -3248,7 +3248,17 @@ html[data-theme="light"] .logo-word, :root[data-theme="light"] .logo-word{color:
                     <li><a href="esim-orders.html" style="padding-left:34px;display:flex;align-items:center;gap:10px;"><i class="fa-solid fa-receipt"></i> <span>eSIM Orders</span></a></li>
                 </ul>
             </li>
-            <li><a href="mj-mails.html" class="sidebar-link"><i class="fa-solid fa-envelope"></i> <span>MJ Mails</span></a></li>
+            <li class="mail-nav-group">
+                <div style="display:flex;align-items:center;gap:4px;">
+                    <a href="mj-mails.html" class="sidebar-link" style="flex:1;min-width:0;"><i class="fa-solid fa-envelope"></i> <span>MJ Mails</span></a>
+                    <button type="button" class="sidebar-link" onclick="toggleMailMenu(event)" aria-expanded="false" aria-controls="mailSubmenu" aria-label="Show MJ Mails links" style="width:38px;min-width:38px;justify-content:center;padding:12px 8px;background:transparent;border:0;color:var(--muted);cursor:pointer;">
+                        <i class="fa-solid fa-chevron-down" id="mailMenuChevron" style="font-size:11px;transition:transform .2s;"></i>
+                    </button>
+                </div>
+                <ul id="mailSubmenu" style="list-style:none;max-height:0;overflow:hidden;transition:max-height .25s ease;padding:0;">
+                    <li><a href="mj-mails-orders.html" style="padding-left:34px;display:flex;align-items:center;gap:10px;"><i class="fa-solid fa-inbox"></i> <span>Mail Orders</span></a></li>
+                </ul>
+            </li>
             <li>
                 <a href="#" class="sidebar-link" onclick="toggleSmsMenu(event)" style="display:flex;align-items:center;justify-content:space-between;">
                     <span style="display:flex;align-items:center;gap:12px;"><i class="fa-solid fa-mobile-screen"></i> <span>MJ SMS</span></span>
@@ -3385,11 +3395,11 @@ html[data-theme="light"] .logo-word, :root[data-theme="light"] .logo-word{color:
                     <em>Boost your social media</em>
                 </div>
             </a>
-            <a class="hv-tile refer" href="referral.html" id="referralContestBanner">
-                <div class="tico"><i class="fa-solid fa-gift"></i></div>
+            <a class="hv-tile refer" href="mj-mails.html" id="mjMailsPromoCard">
+                <div class="tico"><i class="fa-solid fa-envelope"></i></div>
                 <div>
-                    <b>Refer</b>
-                    <em>Earn 3% for life</em>
+                    <b>MJ Mails</b>
+                    <em>Rent email addresses &amp; receive verification messages</em>
                 </div>
             </a>
             <a class="hv-tile esim" href="esim.html" id="esimPromoCard">
@@ -8534,6 +8544,18 @@ function toggleTermsMenu(e) {
   const open = menu.style.maxHeight && menu.style.maxHeight !== '0px';
   menu.style.maxHeight = open ? '0' : '220px';
   if (chev) chev.style.transform = open ? '' : 'rotate(180deg)';
+}
+
+function toggleMailMenu(e) {
+  if (e) { e.preventDefault(); e.stopPropagation(); }
+  const menu = document.getElementById('mailSubmenu');
+  const chev = document.getElementById('mailMenuChevron');
+  const toggle = e && e.currentTarget;
+  if (!menu) return;
+  const open = menu.style.maxHeight && menu.style.maxHeight !== '0px';
+  menu.style.maxHeight = open ? '0' : '64px';
+  if (chev) chev.style.transform = open ? '' : 'rotate(180deg)';
+  if (toggle) toggle.setAttribute('aria-expanded', open ? 'false' : 'true');
 }
 </script>
 
