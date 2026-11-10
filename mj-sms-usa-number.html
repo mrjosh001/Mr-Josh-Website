@@ -241,10 +241,17 @@ body{font-family:'Plus Jakarta Sans',system-ui,-apple-system,sans-serif;backgrou
     var active = !!rent && !rent.refunded && !deadStatus && liveByTime;
     return { status: status, active: active, terminal: terminal };
   }
+  // SMS completion is permanent even after the rental timer expires.
+  function isCompleted(){
+    var status = String((rent && rent.status) || '').toLowerCase();
+    return !!(rent && rent.sms_completed) || hasReceivedCode ||
+      status === 'completed' || status === 'complete' || status === 'success';
+  }
   // Text shown in place of the timer once the rental is no longer live.
   function endedLabel(){
     var st = computeState();
-    return st.terminal ? 'Cancelled' : 'Expired';
+    if(st.terminal) return 'Cancelled';
+    return isCompleted() ? 'Completed' : 'Expired';
   }
   async function headers(){
     const { data: { session } } = await sb.auth.getSession();
@@ -332,7 +339,7 @@ body{font-family:'Plus Jakarta Sans',system-ui,-apple-system,sans-serif;backgrou
     var renewPrice = Math.round(Number(rent.renew_price_ngn || rent.price_ngn || rent.price || 0));
 
     var badge = document.getElementById('statusBadge');
-    if(badge){ badge.textContent = active?'Active':(st.terminal?'Cancelled':(st.status==='completed'||st.status==='complete'?'Completed':'Ended')); badge.className = 'otp-tag'+(active?'':' ended'); }
+    if(badge){ badge.textContent = active?'Active':(st.terminal?'Cancelled':(isCompleted()?'Completed':'Ended')); badge.className = 'otp-tag'+(active?'':' ended'); }
 
     main.innerHTML =
       '<div class="n3">'+
@@ -532,7 +539,7 @@ body{font-family:'Plus Jakarta Sans',system-ui,-apple-system,sans-serif;backgrou
         el.textContent = endedLabel();
         el.classList.add('ended');
         if(bar) bar.style.transform = 'scaleX(0)';
-        var b = document.getElementById('statusBadge'); if(b){ b.textContent='Ended'; b.classList.add('ended'); }
+        var b = document.getElementById('statusBadge'); if(b){ b.textContent=endedLabel(); b.classList.add('ended'); }
         // Re-render once so Wake / Add service / Switch plan / Auto-renew / Refund disappear for an ended rental.
         if(rent && !rent.expired_local){ rent.expired_local = true; render(); }
         return;
@@ -565,7 +572,14 @@ body{font-family:'Plus Jakarta Sans',system-ui,-apple-system,sans-serif;backgrou
     if (countEl) countEl.textContent = list.length + (list.length === 1 ? ' message' : ' messages');
     var hadCode = hasReceivedCode;
     // Any inbound SMS (code or body) counts as "used" for the cancel lock
-    hasReceivedCode = list.some(function(m){ return !!(m && (String(m.code||'').trim() || String(m.body||'').trim())); });
+    hasReceivedCode = !!(rent && rent.sms_completed) || list.some(function(m){ return !!(m && (String(m.code||'').trim() || String(m.body||'').trim())); });
+    if(hasReceivedCode && rent) rent.sms_completed = true;
+    if(hasReceivedCode && rent && !computeState().active){
+      var completedBadge = document.getElementById('statusBadge');
+      if(completedBadge){ completedBadge.textContent = endedLabel(); completedBadge.classList.add('ended'); }
+      var completedTimer = document.getElementById('cd');
+      if(completedTimer){ completedTimer.textContent = endedLabel(); completedTimer.classList.add('ended'); }
+    }
     if(hasReceivedCode){
       try{ localStorage.setItem('mjhub_rent_sms_'+rentId, '1'); }catch(e){}
     }
@@ -767,6 +781,7 @@ body{font-family:'Plus Jakarta Sans',system-ui,-apple-system,sans-serif;backgrou
             id: o.rent_id||rentId,
             phone: o.phone||o.phone_number,
             status: o.status,
+            sms_completed: String(o.status||'').toLowerCase()==='completed',
             active_till: o.active_till || (o.code && !isNaN(Date.parse(o.code)) ? o.code : null),
             service: { name: o.service_name },
             service_name: o.service_name,
@@ -794,6 +809,10 @@ body{font-family:'Plus Jakarta Sans',system-ui,-apple-system,sans-serif;backgrou
           if(!rent.active_till && (o.active_till || (o.code && !isNaN(Date.parse(String(o.code))) ? o.code : null))) rent.active_till = o.active_till || o.code;
           // Our own record says cancelled/refunded: trust it so the timer cannot keep running.
           var os = String(o.status||'').toLowerCase();
+          if(os === 'completed' || os === 'complete' || os === 'success'){
+            rent.sms_completed = true;
+            hasReceivedCode = true;
+          }
           if(o.refunded === true || os==='refunded' || os==='cancelled' || os==='canceled'){
             rent.refunded = true; rent.status = os==='cancelled'||os==='canceled' ? os : 'refunded';
           }
