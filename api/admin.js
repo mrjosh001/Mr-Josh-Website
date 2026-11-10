@@ -2294,6 +2294,7 @@ function secretsStatusHandle() {
  * EMAIL BROADCAST — resource: 'email_broadcast'
  *   action: 'preview' — no fields — returns { would_send, sample: [5 emails] }
  *   action: 'send'    — { subject, body } — actually sends via Resend
+ *   action: 'one'     — { to, subject, body } — one customer (email or Customer ID)
  *
  * Recipients: pages through profiles (1000 at a time), keeps rows with a
  * plausible email (contains '@'), skips email_unsubscribed = true, dedupes
@@ -2638,6 +2639,98 @@ async function emailBroadcastTest(body, admin) {
     return { status: 500, body: { success: false, message: 'Test send failed: ' + (result.error || 'unknown'), provider: result.provider } };
   }
   return { status: 200, body: { success: true, sent: 1, to, provider: result.provider } };
+}
+
+/**
+ * Email ONE customer — resource 'email_broadcast', action 'one'.
+ * body: { to, subject, body } where `to` is the customer's email OR Customer ID (MJ-XXXXXX).
+ * The admin dashboard's "Email One Customer" card sends this action; until it existed on the server
+ * the card failed with: Unknown email_broadcast action. Use "preview", "test", or "send".
+ *
+ * Same Resend → Brevo path and branded template as the broadcast. Unlike the broadcast it does NOT
+ * skip unsubscribed customers: an admin writing to one named customer ("your account has been
+ * activated") is a direct message, not a marketing send.
+ */
+async function emailBroadcastOne(body) {
+  const target = String(body.to || body.email || body.customer_id || '').trim();
+  const subject = String(body.subject || '').trim();
+  const message = String(body.message || body.body || '').trim();
+  if (!target) return { status: 400, body: { success: false, message: 'Enter the customer email or Customer ID.' } };
+  if (!subject) return { status: 400, body: { success: false, message: 'Subject is required' } };
+  if (!message) return { status: 400, body: { success: false, message: 'Body is required' } };
+
+  const resendKey = process.env.RESEND_API_KEY;
+  const brevoKey = process.env.BREVO_API_KEY || process.env.SENDINBLUE_API_KEY;
+  const fromResend = process.env.RESEND_FROM_EMAIL || process.env.RESEND_FROM || 'MJ Hub <onboarding@resend.dev>';
+  const fromBrevo = process.env.BREVO_FROM_EMAIL || process.env.RESEND_FROM_EMAIL || process.env.RESEND_FROM || 'MJ Hub <noreply@mjhub.store>';
+  if (!resendKey && !brevoKey) {
+    return { status: 500, body: { success: false, message: 'Missing RESEND_API_KEY and BREVO_API_KEY' } };
+  }
+
+  // Find the customer: an address with "@" matches profiles.email, anything else is a Customer ID.
+  // Escape LIKE wildcards so "_" in an address is matched literally by ilike.
+  const looksLikeEmail = target.includes('@');
+  const pattern = target.replace(/[\\%_]/g, '\\$&');
+  const lookup = looksLikeEmail
+    ? supabase.from('profiles').select('email, full_name, customer_id').ilike('email', pattern)
+    : supabase.from('profiles').select('email, full_name, customer_id').ilike('customer_id', pattern);
+  const { data: found, error: lookupErr } = await lookup.limit(1);
+  if (lookupErr) {
+    return { status: 500, body: { success: false, message: 'Could not look up the customer: ' + lookupErr.message } };
+  }
+  const profile = (found && found[0]) || null;
+
+  // A typed email address is sent as-is even when no profile matches (the admin chose it on purpose);
+  // a Customer ID that matches nobody has no address to send to.
+  const to = String((profile && profile.email) || (looksLikeEmail ? target : '')).trim();
+  if (!to || !to.includes('@')) {
+    return {
+      status: 404,
+      body: {
+        success: false,
+        message: profile ? 'That customer has no email address on file.' : 'No customer found with that Customer ID.'
+      }
+    };
+  }
+
+  const name = String((profile && profile.full_name) || '').trim();
+  const html = buildBroadcastEmailHtml({ name, subject, message });
+  const prefer = resendKey ? 'resend' : 'brevo';
+  let result = await sendOneEmail({
+    provider: prefer, to, name, subject, html, fromResend, fromBrevo, resendKey, brevoKey
+  });
+  // One direct message: if Resend refuses it for any reason and Brevo is configured, try Brevo.
+  if (!result.ok && prefer === 'resend' && brevoKey) {
+    result = await sendOneEmail({
+      provider: 'brevo', to, name, subject, html, fromResend, fromBrevo, resendKey, brevoKey
+    });
+  }
+  if (!result.ok) {
+    return { status: 500, body: { success: false, message: 'Send failed: ' + (result.error || 'unknown'), provider: result.provider } };
+  }
+
+  // Record it in the admin's own "Recently Sent" list (type 'email_log' is never shown to customers).
+  try {
+    await supabase.from('notifications').insert({
+      user_id: null,
+      title: `[Email] ${subject} → ${to}`,
+      body: null,
+      type: 'email_log'
+    });
+  } catch (e) {
+    console.warn('[email_broadcast] one-customer log insert failed', e.message);
+  }
+
+  return {
+    status: 200,
+    body: {
+      success: true,
+      sent: 1,
+      to,
+      customer_id: (profile && profile.customer_id) || null,
+      provider: result.provider
+    }
+  };
 }
 
 async function emailBroadcastPreview() {
@@ -3373,7 +3466,8 @@ export default async function handler(req, res) {
       if (action === 'preview') result = await emailBroadcastPreview();
       else if (action === 'send') result = await emailBroadcastSend(body);
       else if (action === 'test') result = await emailBroadcastTest(body, admin);
-      else result = { status: 400, body: { success: false, message: 'Unknown email_broadcast action. Use "preview", "test", or "send".' } };
+      else if (action === 'one' || action === 'send_one' || action === 'single') result = await emailBroadcastOne(body);
+      else result = { status: 400, body: { success: false, message: 'Unknown email_broadcast action. Use "preview", "test", "one", or "send".' } };
     } else if (resource === 'push') {
       if (action === 'send') result = await pushSend(body);
       else result = { status: 400, body: { success: false, message: 'Unknown push action for admin. Use "send".' } };
