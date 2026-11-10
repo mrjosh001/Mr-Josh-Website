@@ -7729,8 +7729,8 @@ async function fetchUserOrders(userId) {
     renderOrders();
 }
 
-// Total Orders / Total Spent / This month — completed orders across ALL services.
-// Logs (orders) + SMS (number_orders) + Boosters (booster_orders) + eSIM.
+// Total Orders / Total Spent / This month — paid, non-refunded orders across all services.
+// Logs + SMS + Boosters + eSIM + MJ Mails. MJ Mail activations are counted once per order.
 // "This month" uses Africa/Lagos calendar month.
 async function fetchUserSpendingSummary(userId) {
     if (!supabaseClient || !userId) return;
@@ -7786,7 +7786,7 @@ async function fetchUserSpendingSummary(userId) {
               }).then((r) => r.json().catch(() => ({}))).catch(() => ({}))
             : Promise.resolve({});
 
-        const [logsRes, smsRes, boostJson, esimRes] = await Promise.all([
+        const [logsRes, smsRes, boostJson, esimRes, mailRes] = await Promise.all([
             supabaseClient.from('orders')
                 .select('amount, quantity, status, created_at')
                 .eq('user_id', userId)
@@ -7799,7 +7799,11 @@ async function fetchUserSpendingSummary(userId) {
             supabaseClient.from('esim_orders')
                 .select('amount_ngn, status, created_at')
                 .eq('user_id', userId)
-                .in('status', ['completed', 'paid', 'success'])
+                .in('status', ['completed', 'paid', 'success']),
+            supabaseClient.from('mj_mail_orders')
+                .select('id, retail_price_ngn, status, refunded, created_at')
+                .eq('user_id', userId)
+                .eq('refunded', false)
         ]);
 
         let boostRows = [];
@@ -7818,20 +7822,24 @@ async function fetchUserSpendingSummary(userId) {
         const smsCount = smsRes.error ? 0 : (smsRes.count ?? smsRows.length);
         const boostCount = boostRows.length;
         const esimRows = esimRes.error ? [] : (esimRes.data || []);
+        const mailRows = mailRes.error ? [] : (mailRes.data || []).filter((o) => !o.refunded);
         const esimCount = esimRows.length;
-        const totalOrders = logCount + smsCount + boostCount + esimCount;
+        const mailCount = mailRows.length;
+        const totalOrders = logCount + smsCount + boostCount + esimCount + mailCount;
 
         const logSpent = logRows.reduce((s, o) => s + (Number(o.amount) || 0), 0);
         const smsSpent = smsRows.reduce((s, o) => s + (Number(o.price) || 0), 0);
         const boostSpent = boostRows.reduce((s, o) => s + boostPrice(o), 0);
         const esimSpent = esimRows.reduce((s, o) => s + (Number(o.amount_ngn) || 0), 0);
-        const totalSpent = logSpent + smsSpent + boostSpent + esimSpent;
+        const mailSpent = mailRows.reduce((s, o) => s + (Number(o.retail_price_ngn) || 0), 0);
+        const totalSpent = logSpent + smsSpent + boostSpent + esimSpent + mailSpent;
 
         const monthSpent =
             logRows.filter((o) => inThisMonth(o.created_at)).reduce((s, o) => s + (Number(o.amount) || 0), 0) +
             smsRows.filter((o) => inThisMonth(o.created_at)).reduce((s, o) => s + (Number(o.price) || 0), 0) +
             boostRows.filter((o) => inThisMonth(o.created_at || o.createdAt || o.updated_at)).reduce((s, o) => s + boostPrice(o), 0) +
-            esimRows.filter((o) => inThisMonth(o.created_at)).reduce((s, o) => s + (Number(o.amount_ngn) || 0), 0);
+            esimRows.filter((o) => inThisMonth(o.created_at)).reduce((s, o) => s + (Number(o.amount_ngn) || 0), 0) +
+            mailRows.filter((o) => inThisMonth(o.created_at)).reduce((s, o) => s + (Number(o.retail_price_ngn) || 0), 0);
 
         safeSet('homeTotalOrders', totalOrders.toLocaleString());
         safeSet('homeTotalSpent', '₦' + totalSpent.toLocaleString(undefined, { minimumFractionDigits: 2 }));
