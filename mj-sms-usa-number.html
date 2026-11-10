@@ -654,10 +654,10 @@ body{font-family:'Plus Jakarta Sans',system-ui,-apple-system,sans-serif;backgrou
     var list = document.getElementById('planList');
     list.innerHTML = '<div class="empty">Loading available plans…</div>';
     showModal('planModal');
-    var j = await api('rents', { query:'status=active' });
+    var j = await api('rents', { query:'status=active&rent_id='+encodeURIComponent(rentId)+'&include_transitions=1' });
     var fresh = (j.data || []).find(function(r) { return String(r.id) === String(rentId); });
     if (!fresh) {
-      var jf = await api('rents', { query:'status=finished' });
+      var jf = await api('rents', { query:'status=finished&rent_id='+encodeURIComponent(rentId) });
       fresh = (jf.data || []).find(function(r) { return String(r.id) === String(rentId); });
     }
     if (fresh) rent = Object.assign({}, rent || {}, fresh);
@@ -745,11 +745,11 @@ body{font-family:'Plus Jakarta Sans',system-ui,-apple-system,sans-serif;backgrou
     // Try live supplier state first, but do not make the rental screen depend on that endpoint.
     // The user's saved order record is a fallback so a temporary supplier outage cannot blank the page.
     try {
-      var j = await api('rents', { query: 'status=active' });
+      var j = await api('rents', { query: 'status=active&rent_id='+encodeURIComponent(rentId) });
       var activeRows = Array.isArray(j && j.data) ? j.data : [];
       rent = activeRows.find(function(r){ return String(r.id)===String(rentId); }) || null;
       if(!rent){
-        var j2 = await api('rents', { query: 'status=finished' });
+        var j2 = await api('rents', { query: 'status=finished&rent_id='+encodeURIComponent(rentId) });
         var finishedRows = Array.isArray(j2 && j2.data) ? j2.data : [];
         rent = finishedRows.find(function(r){ return String(r.id)===String(rentId); }) || null;
       }
