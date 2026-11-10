@@ -1,0 +1,86 @@
+/* MJ Mails — Apple-style polish layer. Loads AFTER mj-mails.css; CSS only, no layout/API changes. */
+[hidden]{display:none!important}
+:root{--mm-spring:cubic-bezier(.32,.72,0,1);--mm-hair:rgba(148,163,184,.24)}
+html{-webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility}
+body{font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","SF Pro Display","Plus Jakarta Sans",Inter,system-ui,"Segoe UI",sans-serif}
+h1,h2{letter-spacing:-.03em}
+
+/* press feedback + focus (HIG: immediate, subtle) */
+.btn,.tab,.chip,.copy,.navlink,.back-link{transition:transform .28s var(--mm-spring),background-color .2s,opacity .2s,box-shadow .2s;-webkit-user-select:none;user-select:none}
+.btn:not(:disabled):active,.tab:active,.chip:active,.copy:active,.navlink:active,.back-link:active{transform:scale(.96)}
+:focus-visible{outline:2px solid var(--mm-primary);outline-offset:2px;border-radius:10px}
+input:focus{outline:none;border-color:var(--mm-primary);box-shadow:0 0 0 4px rgba(59,130,246,.18)}
+
+/* header: frosted, quieter */
+.mm-top{background:rgba(8,13,24,.72);border-bottom:.5px solid var(--mm-hair)}
+html[data-theme="light"] .mm-top,body[data-theme="light"] .mm-top{background:rgba(244,247,251,.78)}
+.mm-top .back-link,.mm-top .navlink{border:0;background:rgba(120,130,150,.16)}
+
+/* inputs: 16px (no iOS zoom), roomy, pill-ish */
+input[type=text],input[type=search]{font-size:16px;border-radius:14px;min-height:46px}
+.mm-search-row .btn{min-height:48px;border-radius:14px;font-size:15px}
+
+/* chips row on search page */
+.chips{padding:14px 0 2px;margin:0 -2px}
+.chip{min-height:36px;background:rgba(120,130,150,.12);border:0;font-size:13px;font-weight:700}
+.chip.on{background:var(--mm-primary);color:#fff}
+#recent:empty{display:none}
+
+/* offers = inset grouped rows */
+.offer{border-radius:18px;padding:15px 16px;border:.5px solid var(--mm-hair);box-shadow:0 1px 2px rgba(0,0,0,.05),0 10px 28px rgba(0,0,0,.07)}
+.offer .buy .btn{min-height:44px;min-width:112px;border-radius:12px}
+.offer .price{font-variant-numeric:tabular-nums;letter-spacing:-.03em}
+.badge{font-size:11px;padding:4px 9px}
+
+/* segmented control tabs (inbox filter) */
+.tabs{display:flex;gap:2px;padding:3px;margin:6px 0 12px;overflow:visible;border-radius:13px;background:rgba(120,130,150,.16)}
+.tabs .tab{flex:1 1 0;min-height:36px;padding:7px 6px;border:0;border-radius:10px;background:transparent;color:var(--mm-muted);font-size:13px;font-weight:700;text-align:center}
+.tabs .tab.on{background:var(--mm-card);color:var(--mm-text);box-shadow:0 1px 3px rgba(0,0,0,.22),0 0 0 .5px rgba(0,0,0,.08)}
+.tabs .tab i{font-size:11px;opacity:.65}
+
+/* live indicator */
+.live{display:inline-flex;padding:6px 11px 6px 9px;border-radius:99px;background:rgba(34,197,94,.1);color:var(--mm-ok);font-size:12px;font-weight:700;margin:2px 0 10px}
+
+/* inbox cards */
+#orders{gap:12px}
+.order.mm-inbox-card{border-radius:20px;border:.5px solid var(--mm-hair);box-shadow:0 1px 2px rgba(0,0,0,.05),0 12px 30px rgba(0,0,0,.08)}
+.order.mm-inbox-card:before{height:0}
+.order.mm-inbox-card .mm-inbox-card-head{padding:15px 15px 11px;gap:12px}
+.order.mm-inbox-card .mm-avatar{width:40px;height:40px;flex-basis:40px;border-radius:12px;background:linear-gradient(145deg,var(--mm-primary),#7c3aed);color:#fff;font-size:15px}
+.order.mm-inbox-card .mm-inbox-sender{font-size:14px;font-weight:800;letter-spacing:-.01em}
+.order.mm-inbox-card .mm-inbox-subject{font-size:13px;font-weight:700}
+.order.mm-inbox-card .mm-inbox-preview{font-size:12px;line-height:1.45;-webkit-line-clamp:2}
+.order.mm-inbox-card .mm-inbox-time{font-size:11px}
+.order.mm-inbox-card .mm-inbox-side .status{font-size:11px;padding:4px 9px;border-radius:99px}
+.order.mm-inbox-card .mm-address-row{margin:0 15px;padding:10px 0;border-color:var(--mm-hair)}
+.order.mm-inbox-card .mm-address-label{font-size:10px}
+.order.mm-inbox-card .mm-address-row .email{font-size:13px}
+.order.mm-inbox-card .copy{min-height:32px;padding:6px 12px;font-size:12px;border-radius:99px}
+.order.mm-inbox-card .mm-order-meta{padding:0 15px;font-size:11px}
+.order.mm-inbox-card .codebox{margin:12px 15px;padding:13px 14px;border-radius:16px;border:1px solid rgba(59,130,246,.35);cursor:pointer}
+.order.mm-inbox-card .codebox .lbl{font-size:11px}
+.order.mm-inbox-card .code{font-size:30px;line-height:1.15;letter-spacing:.1em;font-variant-numeric:tabular-nums}
+.order.mm-inbox-card .waitline{font-size:13px;margin:12px 15px 0}
+.order.mm-inbox-card .pulse-bar{margin:9px 15px 0;height:3px}
+.order.mm-inbox-card .mail-expiry{margin:12px 15px 0;padding:10px 12px;font-size:12px}
+.order.mm-inbox-card details.msg{margin:12px 15px;padding:4px 12px;border-radius:14px}
+.order.mm-inbox-card details.msg summary{min-height:44px;font-size:13px}
+.order.mm-inbox-card .actions{padding:12px 15px 15px;gap:8px;border-top:.5px solid var(--mm-hair)}
+.order.mm-inbox-card .actions .btn{min-height:44px;font-size:13px;border-radius:12px;padding:10px 12px}
+
+/* inbox search field */
+.mm-order-toolbar .tools input{min-height:42px;font-size:16px;padding:10px 14px;border-radius:12px}
+
+/* sheet + toast = frosted, spring */
+.overlay{background:rgba(2,6,23,.5);-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px)}
+.sheet{border-radius:28px 28px 0 0;border:0;box-shadow:0 -10px 50px rgba(0,0,0,.35);animation-timing-function:var(--mm-spring)}
+.sheet .rows{border-color:var(--mm-hair);border-radius:16px}
+.sheet-actions .btn{min-height:50px;border-radius:14px;font-size:15px}
+@media(min-width:640px){.sheet{border-radius:28px}}
+.toast{background:rgba(15,23,42,.86);-webkit-backdrop-filter:blur(14px);backdrop-filter:blur(14px);border:.5px solid rgba(255,255,255,.12);border-radius:99px;padding:12px 18px}
+
+/* empty / error states */
+.empty.card{padding:36px 18px;border:.5px solid var(--mm-hair)}
+.empty .btn{margin-top:12px}
+
+@media(prefers-reduced-motion:reduce){.btn,.tab,.chip,.copy{transition:none}.btn:active,.tab:active,.chip:active{transform:none}}
