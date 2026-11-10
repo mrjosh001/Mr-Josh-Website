@@ -233,3 +233,9 @@ details.msg summary::-webkit-details-marker{display:none}
 .mail-expiry{display:flex;align-items:center;gap:6px;margin-top:10px;color:var(--mm-muted);font-size:12px;font-weight:650}
 .mail-expiry strong{font-variant-numeric:tabular-nums;color:var(--mm-text)}
 .mail-expiry span{opacity:.75}
+
+
+/* Render supplier HTML in an isolated, original-layout email frame */
+.order details.msg .body{padding:10px;background:#fff;color:#111;overflow:hidden}
+.order details.msg .body .mm-original-email-frame{max-width:100%;background:#fff;border:0;border-radius:8px}
+.order details.msg[open] .body{background:#fff}
