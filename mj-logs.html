@@ -643,6 +643,27 @@ if (productGrid) productGrid.dataset.skelReady = '1';
 }catch(err){showError('Unexpected error: '+(err.message||err))}
 }
 
+async function fetchFreshLogProduct(selected){
+  if (!sbClient) throw new Error('Database connection is not ready');
+  let query = sbClient.from('products')
+    .select('id, product_key, name, category, price, stock_quantity, is_available, source, description, display_description')
+    .eq('is_available', true);
+  if (selected && selected.id) query = query.eq('id', selected.id);
+  else if (selected && selected.product_key) query = query.eq('product_key', selected.product_key);
+  else throw new Error('Product identifier is missing');
+  const { data, error } = await query.maybeSingle();
+  if (error) throw error;
+  if (!data) return null;
+  const freshPrice = Number(data.price);
+  if (!Number.isFinite(freshPrice) || freshPrice < 0) throw new Error('Product price is invalid');
+  const stock = Number(data.stock_quantity);
+  if (Number.isFinite(stock) && stock <= 0) {
+    showToast('This product is now out of stock.', 'error');
+    return null;
+  }
+  return data;
+}
+
 async function refreshBalance(){
 if(!currentUserId || !sbClient) return currentBalanceNgn;
 try{
@@ -714,17 +735,35 @@ try {
 window._logsVisibleList = products;
 if(!productGrid._buyBound){
 productGrid._buyBound = true;
-productGrid.addEventListener('click', function(e){
+productGrid.addEventListener('click', async function(e){
 const btn = e.target.closest('[data-action]');
 if(!btn || !productGrid.contains(btn)) return;
 e.preventDefault();
 const list = window._logsVisibleList || [];
 const p = list[Number(btn.getAttribute('data-index'))];
 if(!p) return;
-if(btn.getAttribute('data-action')==='cart') addToCart(p);
-else {
-  try { openPurchaseModal(p); }
-  catch(err){ console.error(err); showToast('Could not open purchase: '+(err.message||err),'error'); }
+if(btn.getAttribute('data-action')==='cart'){ addToCart(p); return; }
+if(btn.disabled || window._mjLogProductRefreshInFlight) return;
+window._mjLogProductRefreshInFlight = true;
+const oldLabel = btn.textContent;
+btn.disabled = true;
+btn.textContent = 'Refreshing...';
+try {
+  const fresh = await fetchFreshLogProduct(p);
+  if (!fresh) {
+    showToast('This product is no longer available. Refresh the list and try again.', 'error');
+    return;
+  }
+  const idx = allProducts.findIndex(function(item){ return (fresh.id && item.id === fresh.id) || (fresh.product_key && item.product_key === fresh.product_key); });
+  if (idx >= 0) allProducts[idx] = fresh;
+  renderProducts(getFilteredProducts());
+  openPurchaseModal(fresh);
+} catch(err) {
+  console.error('[mj-logs] product refresh failed', err);
+  showToast('Could not refresh product details. Please try again.', 'error');
+} finally {
+  window._mjLogProductRefreshInFlight = false;
+  if (btn.isConnected) { btn.disabled = false; btn.textContent = oldLabel; }
 }
 });
 }
@@ -862,6 +901,14 @@ if(!modal){ showToast('Purchase window missing. Refresh the page.','error'); ret
 activeProduct=p;
 activeQty=1;
 isBuying=false;
+// A coupon belongs only to the product for which it was validated.
+activeCoupon=null;
+const couponInput=document.getElementById('psCouponInput');
+const couponMsg=document.getElementById('psCouponMsg');
+const couponSave=document.getElementById('psSaveLine');
+if(couponInput) couponInput.value='';
+if(couponMsg){ couponMsg.textContent=''; couponMsg.className='ps-coupon-msg'; }
+if(couponSave){ couponSave.textContent=''; couponSave.style.display='none'; }
 purchaseNonce='MJ-'+Date.now()+'-'+Math.random().toString(36).slice(2,9);
 const name=displayProductName(p);
 const desc=getDisplayDescription(p) || 'No description';
@@ -939,6 +986,7 @@ if(buyBtn) buyBtn.disabled = (!Number.isNaN(stock) && stock <= 0);
 function closePurchaseModal(){
 document.getElementById('purchaseModal').classList.remove('active');
 activeProduct=null;
+activeCoupon=null;
 }
 document.getElementById('purchaseCloseBtn').addEventListener('click', closePurchaseModal);
 document.getElementById('purchaseModal').addEventListener('click', function(e){ if(e.target===this) closePurchaseModal(); });
