@@ -545,9 +545,25 @@ async function gotsmsHandleWebhook(req, res) {
       if (deliveryId && meta.wh_ids.includes(deliveryId)) return json(res, 200, { success: true, duplicate: true });
       if (deliveryId) meta.wh_ids.push(deliveryId);
 
+      let supplierMessagesVerified = false;
+      let supplierHasSms = false;
+      const checkRentId = rentId || String(order.idempotency_key || '').replace(/^gotsms-/, '');
+      if (checkRentId) {
+        try {
+          const msgG = await gotsmsFetch(`/api/numbers/${encodeURIComponent(checkRentId)}/messages`);
+          if (msgG.ok) {
+            const msgs = (msgG.data && (msgG.data.data || msgG.data.messages || msgG.data)) || [];
+            supplierHasSms = Array.isArray(msgs) && msgs.length > 0;
+            supplierMessagesVerified = true;
+          }
+        } catch (e) {
+          console.warn('[gotsms webhook] supplier SMS verification failed; auto-refund disabled', e?.message || e);
+        }
+      }
       const hadSms = /sms\s*received/i.test(String(order.service_name || ''))
         || order.status === 'completed'
-        || (meta.inbox && meta.inbox.length > 0);
+        || (meta.inbox && meta.inbox.length > 0)
+        || supplierHasSms;
 
       // Paid multi/primary only — skip ₦0 linked rows for wallet credit
       const orderPrice = Number(order.price) || 0;
@@ -557,7 +573,7 @@ async function gotsmsHandleWebhook(req, res) {
       let refundedNow = false;
 
       // No SMS: only refund if supplier still accepts (GotSMS policy — must request refund)
-      if (!hadSms && !alreadyRefunded && orderPrice > 0) {
+      if (!hadSms && supplierMessagesVerified && !alreadyRefunded && orderPrice > 0) {
         try {
           const rid = rentId || String(order.idempotency_key || '').replace(/^gotsms-/, '');
           let supplierOk = false;
