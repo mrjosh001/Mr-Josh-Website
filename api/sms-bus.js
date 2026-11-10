@@ -580,11 +580,14 @@ async function gotsmsHandleWebhook(req, res) {
           if (rid) {
             try {
               const linked = await gotsmsResolveLinkedRentIds(order.user_id, rid, order);
+              supplierOk = linked.length > 0;
               for (const id of linked) {
                 try {
                   const gg = await gotsmsFetch(`/api/rents/${encodeURIComponent(id)}/refund`, { method: 'POST' });
-                  if (gg.ok && gg.data?.success) supplierOk = true;
-                } catch (_) {}
+                  if (!gg.ok || !gg.data?.success) supplierOk = false;
+                } catch (_) {
+                  supplierOk = false;
+                }
               }
             } catch (_) {
               try {
@@ -909,17 +912,17 @@ async function gotsmsPreExpireCancelSweep({ userId = null, windowMinutes = 10 } 
 
       // Supplier must approve refund first
       const linked = await gotsmsResolveLinkedRentIds(order.user_id, rentId, order);
-      let supplierOk = false;
+      let supplierOk = linked.length > 0;
       let lastMsg = '';
       for (const rid of linked) {
         try {
           const gg = await gotsmsFetch(`/api/rents/${encodeURIComponent(rid)}/refund`, { method: 'POST' });
-          if (gg.ok && gg.data?.success) {
-            supplierOk = true;
-          } else {
+          if (!gg.ok || !gg.data?.success) {
+            supplierOk = false;
             lastMsg = String(gg.data?.message || lastMsg || '');
           }
         } catch (e) {
+          supplierOk = false;
           lastMsg = e.message || lastMsg;
         }
       }
@@ -4748,19 +4751,21 @@ if (method === 'POST' && ga === 'gotsms_toggle_renewal') {
         // Multi-pack: cancel every linked rent on supplier, then credit once
         const linkedRefundIds = await gotsmsResolveLinkedRentIds(auth.userId, rent_id, order);
         let g = { ok: false, data: { success: false, message: 'Cancel failed' } };
-        let anySupplierCancel = false;
+        let allSupplierCancelled = linkedRefundIds.length > 0;
         for (const rid of linkedRefundIds) {
           try {
             const gg = await gotsmsFetch(`/api/rents/${encodeURIComponent(rid)}/refund`, { method: 'POST' });
             if (gg.ok && gg.data?.success) {
-              anySupplierCancel = true;
               g = gg;
-            } else if (!anySupplierCancel) {
+            } else {
+              allSupplierCancelled = false;
               g = gg;
             }
-          } catch (_) {}
+          } catch (_) {
+            allSupplierCancelled = false;
+          }
         }
-        if (!anySupplierCancel) {
+        if (!allSupplierCancelled) {
           return json(res, g.status || 400, {
             success: false,
             message: gotsmsSafeMsg(g.data?.message, 'Cancel was not approved for this number. No balance change.')
