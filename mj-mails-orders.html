@@ -226,31 +226,63 @@ function detectCode(m){
   return candidates.length===1?candidates[0].code:'';
 }
 
-function sanitizeEmailMessage(raw){
+function prepareEmailDocument(raw){
   const source=String(raw||'');
-  if(!/<[a-z][\s\S]*>/i.test(source))return esc(source).replace(/\r?\n/g,'<br>');
-  const parsed=new DOMParser().parseFromString(source,'text/html');
-  const allowed=new Set(['A','B','STRONG','I','EM','U','S','P','BR','DIV','SPAN','UL','OL','LI','TABLE','THEAD','TBODY','TFOOT','TR','TD','TH','BLOCKQUOTE','PRE','CODE','H1','H2','H3','H4','H5','H6','HR','SMALL','SUB','SUP','CENTER']);
-  const safeStyle=new Set(['color','background-color','font-family','font-size','font-weight','font-style','text-align','text-decoration','line-height','letter-spacing','padding','padding-top','padding-right','padding-bottom','padding-left','margin','margin-top','margin-right','margin-bottom','margin-left','border','border-top','border-right','border-bottom','border-left','border-radius','width','max-width','height','vertical-align','white-space']);
-  function clean(node){
-    if(node.nodeType===Node.TEXT_NODE)return document.createTextNode(node.nodeValue||'');
-    if(node.nodeType!==Node.ELEMENT_NODE)return document.createDocumentFragment();
-    const tag=node.tagName;
-    if(['SCRIPT','STYLE','IFRAME','OBJECT','EMBED','FORM','INPUT','BUTTON','SVG','MATH','VIDEO','AUDIO','LINK','META'].includes(tag))return document.createDocumentFragment();
-    const children=[...node.childNodes].map(clean);
-    if(!allowed.has(tag)){const fragment=document.createDocumentFragment();children.forEach(n=>fragment.append(n));return fragment}
-    const el=document.createElement(tag.toLowerCase());children.forEach(n=>el.append(n));
-    const rawStyle=node.getAttribute('style')||'';
-    rawStyle.split(';').forEach(rule=>{
-      const at=rule.indexOf(':');if(at<1)return;
-      const prop=rule.slice(0,at).trim().toLowerCase(),value=rule.slice(at+1).trim();
-      if(safeStyle.has(prop)&&value&&!/url\s*\(|expression|javascript:|behavior|@import/i.test(value))el.style.setProperty(prop,value);
+  const parsed=new DOMParser().parseFromString(/<[a-z][\\s\\S]*>/i.test(source)?source:'<pre>'+esc(source)+'</pre>','text/html');
+  parsed.querySelectorAll('script,iframe,frame,frameset,object,embed,form,input,button,textarea,select,video,audio,svg,math,portal,template').forEach(n=>n.remove());
+  parsed.querySelectorAll('meta[http-equiv],base').forEach(n=>n.remove());
+  parsed.querySelectorAll('*').forEach(el=>{
+    [...el.attributes].forEach(attr=>{
+      const name=attr.name.toLowerCase(),value=attr.value.trim();
+      if(name.startsWith('on')||name==='srcdoc'||name==='formaction')el.removeAttribute(attr.name);
+      if(['href','src','xlink:href','background','poster'].includes(name)&&/^(?:javascript|vbscript|file):/i.test(value))el.removeAttribute(attr.name);
     });
-    if(tag==='A'){const href=node.getAttribute('href')||'';if(/^(https?:|mailto:)/i.test(href)){el.setAttribute('href',href);el.setAttribute('target','_blank');el.setAttribute('rel','noopener noreferrer')}}
-    if(tag==='TD'||tag==='TH'){['colspan','rowspan','align','valign'].forEach(k=>{const v=node.getAttribute(k);if(v&&/^(\d{1,2}|left|right|center|top|middle|bottom)$/i.test(v))el.setAttribute(k,v)})}
-    return el;
-  }
-  const wrapper=document.createElement('div');[...parsed.body.childNodes].map(clean).forEach(n=>wrapper.append(n));return wrapper.innerHTML;
+    if(el.tagName==='A'){
+      const href=el.getAttribute('href')||'';
+      if(!/^(https?:|mailto:)/i.test(href))el.removeAttribute('href');
+      else {el.setAttribute('target','_blank');el.setAttribute('rel','noopener noreferrer');}
+    }
+    if(el.tagName==='IMG'){
+      const src=el.getAttribute('src')||'';
+      if(!/^(https?:|data:image\\/(?:png|gif|jpe?g|webp);base64,)/i.test(src))el.removeAttribute('src');
+      el.setAttribute('loading','lazy');el.setAttribute('referrerpolicy','no-referrer');
+    }
+  });
+  let head=parsed.head;
+  if(!head){head=parsed.createElement('head');parsed.documentElement.insertBefore(head,parsed.body||null);}
+  const csp=parsed.createElement('meta');
+  csp.setAttribute('http-equiv','Content-Security-Policy');
+  csp.setAttribute('content',"default-src https: data:; img-src https: data:; style-src 'unsafe-inline' https:; font-src https: data:; script-src 'none'; connect-src 'none'; frame-src 'none'; object-src 'none'; form-action 'none'; base-uri 'none'");
+  head.insertBefore(csp,head.firstChild);
+  const viewport=parsed.createElement('meta');viewport.name='viewport';viewport.content='width=device-width,initial-scale=1';head.appendChild(viewport);
+  const frameStyle=parsed.createElement('style');
+  frameStyle.textContent='html{margin:0!important;padding:0!important}body{max-width:100%!important;overflow-wrap:anywhere!important}img{max-width:100%!important;height:auto!important}table{max-width:100%!important}pre{white-space:pre-wrap;overflow-wrap:anywhere}';
+  head.appendChild(frameStyle);
+  return '<!doctype html>'+parsed.documentElement.outerHTML;
+}
+function renderEmailMessages(){
+  document.querySelectorAll('[data-message]').forEach(el=>{
+    if(el.dataset.rendered==='true')return;
+    const iframe=document.createElement('iframe');
+    iframe.className='mm-original-email-frame';
+    iframe.title='Original email content';
+    iframe.setAttribute('sandbox','allow-same-origin allow-popups');
+    iframe.setAttribute('loading','lazy');
+    iframe.setAttribute('referrerpolicy','no-referrer');
+    iframe.setAttribute('scrolling','auto');
+    iframe.style.cssText='display:block;width:100%;height:320px;min-height:220px;border:0;background:#fff;border-radius:8px';
+    iframe.srcdoc=prepareEmailDocument(el.dataset.message||'');
+    iframe.addEventListener('load',()=>{
+      try{
+        const doc=iframe.contentDocument;
+        const fit=()=>{const h=Math.max(220,Math.min(900,Math.max(doc.documentElement.scrollHeight,doc.body?.scrollHeight||0)+8));iframe.style.height=h+'px'};
+        fit();
+        doc.querySelectorAll('img').forEach(img=>img.addEventListener('load',fit,{once:true}));
+        doc.fonts?.ready?.then(fit).catch(()=>{});
+      }catch(_){}
+    });
+    el.replaceChildren(iframe);el.dataset.rendered='true';
+  });
 }
 function messagePreview(raw){
   if(!raw)return 'No message received yet';
