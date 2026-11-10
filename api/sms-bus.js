@@ -552,9 +552,11 @@ async function gotsmsHandleWebhook(req, res) {
         try {
           const msgG = await gotsmsFetch(`/api/numbers/${encodeURIComponent(checkRentId)}/messages`);
           if (msgG.ok) {
-            const msgs = (msgG.data && (msgG.data.data || msgG.data.messages || msgG.data)) || [];
-            supplierHasSms = Array.isArray(msgs) && msgs.length > 0;
-            supplierMessagesVerified = true;
+            const msgs = (msgG.data && (msgG.data.data || msgG.data.messages || msgG.data)) || null;
+            if (Array.isArray(msgs)) {
+              supplierHasSms = msgs.length > 0;
+              supplierMessagesVerified = true;
+            }
           }
         } catch (e) {
           console.warn('[gotsms webhook] supplier SMS verification failed; auto-refund disabled', e?.message || e);
@@ -4737,8 +4739,11 @@ if (method === 'POST' && ga === 'gotsms_toggle_renewal') {
           if (!msgG.ok) {
             return json(res, 503, { success: false, message: 'Could not verify the supplier inbox. No refund was processed. Try again shortly.' });
           }
-          const msgs = (msgG.data && (msgG.data.data || msgG.data.messages || msgG.data)) || [];
-          if (Array.isArray(msgs) && msgs.length > 0) {
+          const msgs = (msgG.data && (msgG.data.data || msgG.data.messages || msgG.data)) || null;
+          if (!Array.isArray(msgs)) {
+            return json(res, 503, { success: false, message: 'Supplier inbox response was invalid. No refund was processed. Try again shortly.' });
+          }
+          if (msgs.length > 0) {
             return json(res, 400, {
               success: false,
               message: 'Cancel is not available after an SMS has been received on this number.'
