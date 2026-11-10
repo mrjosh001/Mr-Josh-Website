@@ -169,7 +169,7 @@ function detectCode(m){const x=String(m||'').match(/(?<![\d])(\d{4,8})(?![\d])/)
 
 function sanitizeEmailMessage(raw){
   const source=String(raw||'');
-  if(!/<[a-z][\\s\\S]*>/i.test(source))return esc(source).replace(/\\r?\\n/g,'<br>');
+  if(!/<[a-z][\s\S]*>/i.test(source))return esc(source).replace(/\r?\n/g,'<br>');
   const parsed=new DOMParser().parseFromString(source,'text/html');
   const allowed=new Set(['A','B','STRONG','I','EM','U','S','P','BR','DIV','SPAN','UL','OL','LI','TABLE','THEAD','TBODY','TFOOT','TR','TD','TH','BLOCKQUOTE','PRE','CODE','H1','H2','H3','H4','H5','H6','HR','SMALL','SUB','SUP','CENTER']);
   const safeStyle=new Set(['color','background-color','font-family','font-size','font-weight','font-style','text-align','text-decoration','line-height','letter-spacing','padding','padding-top','padding-right','padding-bottom','padding-left','margin','margin-top','margin-right','margin-bottom','margin-left','border','border-top','border-right','border-bottom','border-left','border-radius','width','max-width','height','vertical-align','white-space']);
@@ -185,10 +185,10 @@ function sanitizeEmailMessage(raw){
     rawStyle.split(';').forEach(rule=>{
       const at=rule.indexOf(':');if(at<1)return;
       const prop=rule.slice(0,at).trim().toLowerCase(),value=rule.slice(at+1).trim();
-      if(safeStyle.has(prop)&&value&&!/url\\s*\\(|expression|javascript:|behavior|@import/i.test(value))el.style.setProperty(prop,value);
+      if(safeStyle.has(prop)&&value&&!/url\s*\(|expression|javascript:|behavior|@import/i.test(value))el.style.setProperty(prop,value);
     });
     if(tag==='A'){const href=node.getAttribute('href')||'';if(/^(https?:|mailto:)/i.test(href)){el.setAttribute('href',href);el.setAttribute('target','_blank');el.setAttribute('rel','noopener noreferrer')}}
-    if(tag==='TD'||tag==='TH'){['colspan','rowspan','align','valign'].forEach(k=>{const v=node.getAttribute(k);if(v&&/^(\\d{1,2}|left|right|center|top|middle|bottom)$/i.test(v))el.setAttribute(k,v)})}
+    if(tag==='TD'||tag==='TH'){['colspan','rowspan','align','valign'].forEach(k=>{const v=node.getAttribute(k);if(v&&/^(\d{1,2}|left|right|center|top|middle|bottom)$/i.test(v))el.setAttribute(k,v)})}
     return el;
   }
   const wrapper=document.createElement('div');[...parsed.body.childNodes].map(clean).forEach(n=>wrapper.append(n));return wrapper.innerHTML;
@@ -196,7 +196,7 @@ function sanitizeEmailMessage(raw){
 function messagePreview(raw){
   if(!raw)return 'No message received yet';
   const doc=new DOMParser().parseFromString(String(raw),'text/html');
-  return (doc.body.textContent||String(raw).replace(/<[^>]*>/g,' ')).replace(/\\s+/g,' ').trim().slice(0,150)||'Email message received';
+  return (doc.body.textContent||String(raw).replace(/<[^>]*>/g,' ')).replace(/\s+/g,' ').trim().slice(0,150)||'Email message received';
 }
 function messageSubject(raw){
   if(!raw)return 'Waiting for incoming email';
@@ -232,7 +232,7 @@ function card(o,flash){
   const sender=esc(o.site||'Incoming message');
   const subject=esc(messageSubject(o.message));
   const preview=esc(messagePreview(o.message));
-  const initials=esc((o.site||'M').replace(/^https?:\\/\\//,'').replace(/^www\\./,'').slice(0,1).toUpperCase());
+  const initials=esc((o.site||'M').replace(/^https?:\/\//,'').replace(/^www\./,'').slice(0,1).toUpperCase());
   return '<article class="order mm-inbox-card'+(flash?' flash':'')+'" data-id="'+esc(o.id)+'">'+
    '<div class="mm-inbox-card-head"><div class="mm-avatar">'+initials+'</div><div class="mm-inbox-main"><div class="mm-inbox-sender">'+sender+'</div><div class="mm-inbox-subject">'+subject+'</div><div class="mm-inbox-preview">'+preview+'</div></div><div class="mm-inbox-side"><span class="mm-inbox-time">'+ago(o.created_at)+'</span><span class="status '+st[1]+'">'+esc(st[0])+'</span></div></div>'+
    '<div class="mm-address-row"><div class="mm-address-label">TO</div><div class="email">'+esc(o.email||'Email address pending')+'</div>'+(o.email?'<button class="copy" data-copy="'+esc(o.email)+'">Copy</button>':'')+'</div>'+
