@@ -4742,22 +4742,32 @@ if (method === 'POST' && ga === 'gotsms_toggle_renewal') {
         if (order.refunded || order.status === 'refunded' || order.status === 'cancelled') {
           return json(res, 400, { success: false, message: 'This rental was already cancelled or refunded.' });
         }
-        // Block cancel/refund after first SMS received (matches supplier rules)
+        // Fail closed: a completed/SMS-received rental is never refundable.
+        if (order.status === 'completed' || /sms\\s*received/i.test(String(order.service_name || ''))) {
+          return json(res, 400, {
+            success: false,
+            message: 'This rental has already received an SMS and cannot be refunded.'
+          });
+        }
         const smsCount = Number(order.sms_count || order.message_count || 0);
-        if (smsCount > 0 || order.status === 'completed' || order.code) {
-          // still allow if supplier explicitly accepts — check live first below
+        if (smsCount > 0) {
+          return json(res, 400, { success: false, message: 'Cancel is not available after an SMS has been received on this number.' });
         }
         try {
           const msgG = await gotsmsFetch(`/api/numbers/${encodeURIComponent(rent_id)}/messages`);
+          if (!msgG.ok) {
+            return json(res, 503, { success: false, message: 'Could not verify the supplier inbox. No refund was processed. Try again shortly.' });
+          }
           const msgs = (msgG.data && (msgG.data.data || msgG.data.messages || msgG.data)) || [];
-          const list = Array.isArray(msgs) ? msgs : [];
-          if (list.length > 0) {
+          if (Array.isArray(msgs) && msgs.length > 0) {
             return json(res, 400, {
               success: false,
               message: 'Cancel is not available after an SMS has been received on this number.'
             });
           }
-        } catch (_) {}
+        } catch (_) {
+          return json(res, 503, { success: false, message: 'Could not verify the supplier inbox. No refund was processed. Try again shortly.' });
+        }
 
         // Multi-pack: cancel every linked rent on supplier, then credit once
         const linkedRefundIds = await gotsmsResolveLinkedRentIds(auth.userId, rent_id, order);
