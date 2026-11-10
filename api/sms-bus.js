@@ -968,6 +968,19 @@ async function gotsmsPreExpireCancelSweep({ userId = null, windowMinutes = 10 } 
   return { checked, refunded, skipped, errors: errors.slice(0, 5) };
 }
 
+/** Normalize supplier list responses across plain arrays and nested data envelopes. */
+function gotsmsListPayload(payload) {
+  const candidates = [payload, payload && payload.data, payload && payload.data && payload.data.data,
+    payload && payload.data && payload.data.items, payload && payload.items, payload && payload.results,
+    payload && payload.rentals];
+  for (const value of candidates) if (Array.isArray(value)) return value;
+  return [];
+}
+function gotsmsMetaPayload(payload) {
+  return (payload && payload.meta) || (payload && payload.data && payload.data.meta) ||
+    (payload && payload.pagination) || (payload && payload.data && payload.data.pagination) || {};
+}
+
 async function gotsmsFetch(path, { method = 'GET', body } = {}) {
   if (!GOTSMS_TOKEN) {
     return { ok: false, status: 503, data: { success: false, message: 'Service temporarily unavailable. Please try again shortly.' } };
@@ -3644,10 +3657,8 @@ export default async function handler(req, res) {
         const g = await gotsmsFetch(`/api/services?${qs}`);
         if (!g.ok) return json(res, g.status || 400, { success: false, message: gotsmsSafeMsg(g.data?.message, 'Could not load services') });
         // Normalize list (GotSMS may nest under data.data)
-        let list = [];
         const raw = g.data;
-        if (Array.isArray(raw?.data)) list = raw.data;
-        else if (Array.isArray(raw)) list = raw;
+        const list = gotsmsListPayload(raw);
         // Deduplicate by id within this page
         const seen = new Set();
         const unique = [];
@@ -3664,7 +3675,7 @@ export default async function handler(req, res) {
         return json(res, 200, {
           success: true,
           data: unique,
-          meta: raw?.meta || { current_page: page, last_page: page, per_page }
+          meta: gotsmsMetaPayload(raw).last_page ? gotsmsMetaPayload(raw) : { current_page: page, last_page: page, per_page }
         });
       }
 
@@ -3686,8 +3697,9 @@ export default async function handler(req, res) {
           qs.set('page', String(page));
           const g = await gotsmsFetch(`/api/rents/plans?${qs}`);
           if (!g.ok) return json(res, g.status || 400, { success: false, message: gotsmsSafeMsg(g.data?.message, 'Could not load plans') });
-          all.push(...(g.data.data || []));
-          lastPage = Number(g.data.meta?.last_page || 1);
+          all.push(...gotsmsListPayload(g.data));
+          const pageMeta = gotsmsMetaPayload(g.data);
+          lastPage = Number(pageMeta.last_page || pageMeta.lastPage || pageMeta.total_pages || 1);
           page += 1;
         } while (page <= lastPage && page <= 8);
 
@@ -4325,7 +4337,8 @@ export default async function handler(req, res) {
         const { data: mine } = await supabase.from('number_orders').select('idempotency_key, phone_number').eq('user_id', auth.userId).eq('source', 'gotsms').limit(200);
         const mineRentIds = new Set((mine || []).map((m) => String(m.idempotency_key || '').replace(/^gotsms-/, '')).filter(Boolean));
         const minePhones = new Set((mine || []).map((m) => String(m.phone_number || '').replace(/\s/g, '')));
-        const filtered = (g.data.data || []).filter((r) => mineRentIds.has(String(r.id)) || minePhones.has(String(r.phone || '').replace(/\s/g, '')));
+        const supplierRents = gotsmsListPayload(g.data);
+        const filtered = supplierRents.filter((r) => mineRentIds.has(String(r.id)) || minePhones.has(String(r.phone || '').replace(/\s/g, '')));
         // Auto-renew: charge same NGN as original rental when period extends; disable if wallet too low
         try {
           for (const r of filtered.slice(0, 30)) {
@@ -4366,7 +4379,7 @@ export default async function handler(req, res) {
             pr.transition_options = await gotsmsApplyAdminPlanPrices(pr.transition_options);
           }
         }
-        return json(res, 200, { success: true, data: publicRents, meta: g.data.meta });
+        return json(res, 200, { success: true, data: publicRents, meta: gotsmsMetaPayload(g.data) });
       }
 
       if (method === 'POST' && ga === 'gotsms_wake') {
