@@ -123,10 +123,10 @@ const esc=v=>String(v==null?'':v).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;'
 
 const STATUS={
   waiting:['Waiting for message','warn'],message_received:['Message received','ok'],completed:['Completed','ok'],
-  cancelled:['Cancelled','mute'],refunded:['Refunded','mute'],failed:['Failed · wallet restored','bad'],
+  cancelled:['Canceled','mute'],canceled:['Canceled','mute'],expired:['Expired','mute'],refunded:['Refunded','mute'],failed:['Failed · wallet restored','bad'],
   reconciliation_required:['Verifying purchase','info'],cancel_pending_refund:['Refund pending','warn']};
-const GROUPS={all:null,active:['waiting','reconciliation_required','cancel_pending_refund'],done:['message_received','completed'],closed:['cancelled','refunded','failed']};
-const LABELS={all:'All',active:'Active',done:'Received',closed:'Closed'};
+const GROUPS={active:['waiting','reconciliation_required','cancel_pending_refund'],done:['message_received','completed'],closed:['cancelled','canceled','expired','refunded','failed']};
+const LABELS={active:'Active',done:'Received',closed:'Canceled'};
 const POLL_MS=10000,POLL_MAX=5;
 let rows=[],filter='all',query='',openIds=new Set(),busy=new Set(),polling=false,ordersLoaded=false;
 
@@ -244,6 +244,7 @@ function drawTabs(){$('tabs').innerHTML=Object.keys(LABELS).map(k=>{const n=GROU
 function card(o,flash){
   const st=STATUS[o.status]||[String(o.status||'').replace(/_/g,' '),'mute'];
   const code=detectCode(o.message)||o.value||'';const waiting=o.status==='waiting';
+  const closedStatus=['cancelled','canceled','expired','refunded','failed'].includes(String(o.status||'').toLowerCase())||(o.expires_at&&Number.isFinite(Date.parse(o.expires_at))&&Date.now()>=Date.parse(o.expires_at));
   const refundAvailable=o.refund_available_at?Date.parse(o.refund_available_at):NaN;
   const mailExpires=o.expires_at?Date.parse(o.expires_at):NaN;
   const canRetryRefund=o.status==='cancel_pending_refund';
@@ -260,7 +261,7 @@ function card(o,flash){
    (waiting&&Number.isFinite(mailExpires)?'<div class="mail-expiry">Email rental expires in <strong data-mail-timer data-expires="'+esc(o.expires_at)+'">'+formatCountdown(mailExpires-Date.now())+'</strong> <span>· 20-minute total rental</span></div>':'')+
    (o.status==='reconciliation_required'?'<p class="muted" style="margin:12px 0 0">We are confirming your email rental. Please do not retry while this is being checked.</p>':'')+
    (o.message?'<details class="msg" data-d="'+esc(o.id)+'"'+(openIds.has(o.id)?' open':'')+'><summary><span>Open email</span><small>View full message</small></summary><div class="body" data-message="'+esc(o.message)+'"></div></details>':'')+
-   '<div class="actions">'+(o.can_refresh||o.status!=='reconciliation_required'?'<button class="btn sm" data-refresh="'+esc(o.id)+'">↻ Check inbox</button>':'')+
+   '<div class="actions">'+(!closedStatus&&(o.can_refresh||o.status!=='reconciliation_required')?'<button class="btn sm" data-refresh="'+esc(o.id)+'">↻ Check inbox</button>':'')+
    (waiting?'<button class="btn sm refund-btn" data-refund="'+esc(o.id)+'" '+((!Number.isFinite(refundAvailable)||!Number.isFinite(mailExpires)||Date.now()<refundAvailable||Date.now()>=mailExpires)?'disabled':'')+'><span data-refund-timer data-available="'+esc(o.refund_available_at||'')+'" data-expires="'+esc(o.expires_at||'')+'">'+(!Number.isFinite(refundAvailable)||!Number.isFinite(mailExpires)?'Timer unavailable':Date.now()<refundAvailable?'Available in '+formatCountdown(refundAvailable-Date.now()):Date.now()>=mailExpires?'Expired':'Refund')+'</span></button>':canRetryRefund?'<button class="btn sm refund-btn" data-refund="'+esc(o.id)+'">Retry refund</button>':'')+
    (o.can_reuse?'<button class="btn sm reuse-btn" data-reuse="'+esc(o.id)+'">Reuse this address</button>':'')+'</div></article>';
 }
@@ -323,7 +324,7 @@ async function poll(){
   const waiting=rows.filter(o=>{
     const status=String(o.status||'').toLowerCase();
     const noDelivery=!o.message&&!o.value;
-    return !o.refunded&&noDelivery&&(['waiting','cancel_pending_refund','cancelled','refunded'].includes(status)||(status==='completed'&&!!o.expires_at));
+    return !o.refunded&&noDelivery&&(['waiting','cancel_pending_refund'].includes(status)||(status==='completed'&&!!o.expires_at));
   }).filter(o=>!busy.has(o.id))
     .sort((a,b)=>new Date(a.created_at||0)-new Date(b.created_at||0)).slice(0,POLL_MAX);if(!waiting.length)return;
   polling=true;let flash=null;
