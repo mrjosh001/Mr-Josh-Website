@@ -616,7 +616,6 @@ async function gotsmsHandleWebhook(req, res) {
                   'sms_refund'
                 );
               }
-              }
             }
           }
         } catch (e) {
