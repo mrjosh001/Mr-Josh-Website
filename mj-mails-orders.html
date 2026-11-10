@@ -1,7 +1,9 @@
 <!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>MJ Inbox · MJ HUB</title>
-<link rel="stylesheet" href="/css/graceful.css"><link rel="stylesheet" href="/css/mj-motion.css"><link rel="stylesheet" href="/css/mj-glass.css"><link rel="stylesheet" href="/css/mj-apple-fluid.css"><link rel="stylesheet" href="/css/mj-mails.css">
+<link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
+<link rel="stylesheet" href="/css/graceful.css"><link rel="stylesheet" href="/css/mj-motion.css"><link rel="stylesheet" href="/css/mj-apple-fluid.css"><link rel="stylesheet" href="/css/mj-mails.css?v=20261110"><link rel="stylesheet" href="/css/mj-mails-polish.css?v=20261110">
+<script src="/js/mj-mails-guard.js?v=20261110"></script>
 <script src="/js/mj-theme.js" defer></script><script src="/js/mj-page-loader.js" defer></script>
 
 <style>
@@ -157,7 +159,7 @@
 <script>
 const SUPABASE_URL='https://atczodlljmlayvldxfmv.supabase.co';
 const SUPABASE_ANON_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJIUzI1NiIsInJlZiI6ImF0Y3pvZGxsam1sYXl2bGR4Zm12Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODUwNzUyMzgsImV4cCI6MjEwMDY1MTIzOH0.ufthD-p7BmeD_B7xyuMM6PNPL8DmcL4AtRYgg-MuoLI';
-let sb=null,sbPromise=null;
+let sb=null,sbPromise=null,authTimedOut=false;
 function loadSupabaseScript(src){return new Promise((resolve,reject)=>{const script=document.createElement('script');script.src=src;script.async=true;script.onload=()=>resolve();script.onerror=()=>{script.remove();reject(new Error('Could not load '+src))};document.head.appendChild(script)})}
 async function getSupabaseClient(){
   if(sb)return sb;
@@ -188,18 +190,19 @@ let rows=[],filter='active',query='',openIds=new Set(),busy=new Set(),polling=fa
 
 function toast(t){const el=$('toast');el.textContent=t;el.classList.add('show');clearTimeout(toast.t);toast.t=setTimeout(()=>el.classList.remove('show'),2400)}
 async function authCall(promise,ms=7000){
-  let timer;try{return await Promise.race([promise,new Promise((_,reject)=>{timer=setTimeout(()=>reject(new Error('Sign-in check timed out')),ms)})])}
+  let timer;try{return await Promise.race([promise,new Promise((_,reject)=>{timer=setTimeout(()=>{authTimedOut=true;reject(new Error('Sign-in check timed out'))},ms)})])}
   finally{clearTimeout(timer)}
 }
 async function getToken(){
-  const client=await authCall(getSupabaseClient(),12000);
+  authTimedOut=false;
+  const client=await authCall(getSupabaseClient(),10000);
   try{
-    const {data,error}=await authCall(client.auth.getSession(),7000);
-    if(!error&&data.session?.access_token){token=data.session.access_token;return token}
+    const {data,error}=await authCall(client.auth.getSession(),5000);
+    if(!error&&data.session?.access_token){authTimedOut=false;token=data.session.access_token;return token}
   }catch(e){console.warn('[MJ Inbox] session check:',e.message)}
   try{
-    const {data,error}=await authCall(client.auth.refreshSession(),7000);
-    if(!error&&data.session?.access_token){token=data.session.access_token;return token}
+    const {data,error}=await authCall(client.auth.refreshSession(),5000);
+    if(!error&&data.session?.access_token){authTimedOut=false;token=data.session.access_token;return token}
   }catch(e){console.warn('[MJ Inbox] session refresh:',e.message)}
   token='';return token;
 }
@@ -235,7 +238,8 @@ function detectCode(m){
   const doc=new DOMParser().parseFromString(source,'text/html');
   doc.querySelectorAll('script,style,noscript,template,head,svg,iframe').forEach(n=>n.remove());
   const text=(doc.body?.textContent||source.replace(/<[^>]*>/g,' ')).replace(/\u00a0/g,' ').replace(/[ \t]+/g,' ').replace(/\r/g,'\n');
-  const candidates=[...text.matchAll(/(?<![\d])\d{4,8}(?![\d])/g)].map(x=>({code:x[0],index:x.index}));
+  /* No regex look-behind here: it is a hard SyntaxError on iOS < 16.4 and would stop the whole page script. */
+  const candidates=[...text.matchAll(/(^|[^\d])(\d{4,8})(?!\d)/g)].map(x=>({code:x[2],index:x.index+x[1].length}));
   if(!candidates.length)return '';
   const scored=candidates.map(c=>{let score=0;const left=text.slice(Math.max(0,c.index-120),c.index).toLowerCase();const right=text.slice(c.index,c.index+80).toLowerCase();
     if(/(?:enter|input|type|use|submit)\s+(?:this\s+)?(?:the\s+)?code[^\n.]{0,90}$/.test(left))score+=120;
@@ -251,7 +255,7 @@ function detectCode(m){
 
 function prepareEmailDocument(raw){
   const source=String(raw||'');
-  const parsed=new DOMParser().parseFromString(/<[a-z][\\s\\S]*>/i.test(source)?source:'<pre>'+esc(source)+'</pre>','text/html');
+  const parsed=new DOMParser().parseFromString(/<[a-z][\s\S]*>/i.test(source)?source:'<pre>'+esc(source)+'</pre>','text/html');
   parsed.querySelectorAll('script,iframe,frame,frameset,object,embed,form,input,button,textarea,select,video,audio,svg,math,portal,template').forEach(n=>n.remove());
   parsed.querySelectorAll('meta[http-equiv],base').forEach(n=>n.remove());
   parsed.querySelectorAll('*').forEach(el=>{
@@ -267,7 +271,7 @@ function prepareEmailDocument(raw){
     }
     if(el.tagName==='IMG'){
       const src=el.getAttribute('src')||'';
-      if(!/^(https?:|data:image\\/(?:png|gif|jpe?g|webp);base64,)/i.test(src))el.removeAttribute('src');
+      if(!/^(https?:|data:image\/(?:png|gif|jpe?g|webp);base64,)/i.test(src))el.removeAttribute('src');
       el.setAttribute('loading','lazy');el.setAttribute('referrerpolicy','no-referrer');
     }
   });
@@ -364,25 +368,27 @@ function card(o,flash){
 function draw(flashId){
   drawTabs();const list=visible();
   const waiting=rows.some(o=>['waiting','cancel_pending_refund'].includes(o.status)||(o.status==='completed'&&!o.message&&!o.value));$('live').hidden=!waiting;
-  if(!rows.length){$('orders').innerHTML='<div class="empty card"><span class="ico">📬</span><b>Your inbox is empty</b><br>Messages from your rented email activations will appear here automatically.</div>';return}
+  if(!rows.length){$('orders').innerHTML='<div class="empty card"><span class="ico">📬</span><b>Your inbox is empty</b><br>Messages from your rented email activations will appear here automatically.<br><a class="btn sm" href="/mj-mails.html" style="display:inline-block;margin-top:12px">Rent an email</a></div>';return}
   if(!list.length){$('orders').innerHTML='<div class="empty card"><span class="ico">🔎</span><b>Nothing here</b><br>No orders match this filter or search.</div>';return}
   $('orders').innerHTML=list.map(o=>card(o,o.id===flashId)).join('');
   renderEmailMessages();
-  $('orders').querySelectorAll('[data-copy]').forEach(b=>b.onclick=()=>copy(b.dataset.copy));
+  $('orders').querySelectorAll('[data-copy]').forEach(b=>b.onclick=e=>{e.stopPropagation();copy(b.dataset.copy)});
+  $('orders').querySelectorAll('.codebox').forEach(c=>c.addEventListener('click',()=>{const t=c.querySelector('.code');if(t)copy(t.textContent)}));
   $('orders').querySelectorAll('[data-refresh]').forEach(b=>b.onclick=()=>refresh(b.dataset.refresh,b));
   $('orders').querySelectorAll('[data-refund]').forEach(b=>b.onclick=()=>askRefund(b.dataset.refund));$('orders').querySelectorAll('[data-reuse]').forEach(b=>b.onclick=()=>askReuse(b.dataset.reuse));updateCancelTimers();
   $('orders').querySelectorAll('details[data-d]').forEach(d=>d.addEventListener('toggle',()=>{d.open?openIds.add(d.dataset.d):openIds.delete(d.dataset.d)}))}
 
 /* ---------- data ---------- */
 async function load(manual){
-  const started=Date.now();
   try{
     if(!ordersLoaded&&!rows.length){
       $('live').hidden=true;
       $('orders').innerHTML='<div class="mm-skeleton-card"><div class="mm-skeleton-line wide"></div><div class="mm-skeleton-line short"></div><div class="mm-skeleton-line medium"></div></div><div class="mm-skeleton-card"><div class="mm-skeleton-line wide"></div><div class="mm-skeleton-line short"></div><div class="mm-skeleton-line medium"></div></div>';
     }
     await getToken();
-    if(!token){$('signin').hidden=false;rows=[];$('orders').innerHTML='<div class="empty card"><b>Sign in to view your inbox</b><br><a class="btn sm" href="/auth.html">Sign in</a></div>';return}
+    if(!token){
+      if(authTimedOut)throw new Error('We could not verify your sign-in in time. Check your connection and try again.');
+      $('signin').hidden=false;rows=[];$('orders').innerHTML='<div class="empty card"><span class="ico">🔒</span><b>Sign in to view your inbox</b><br><a class="btn sm" href="/auth.html">Sign in</a></div>';return}
     $('signin').hidden=true;
     const out=await api('orders');rows=Array.isArray(out.orders)?out.orders:[];ordersLoaded=true;
     $('notice').textContent=rows.length?rows.length+' email order'+(rows.length>1?'s':''):'';
@@ -393,7 +399,7 @@ async function load(manual){
     $('notice').textContent='';
     $('orders').innerHTML='<div class="empty card"><span class="ico">⚠️</span><b>Could not load your inbox</b><br><span>'+esc(e.message||'A connection error occurred.')+'</span><br><button class="btn sm" type="button" id="inboxRetry">Try again</button></div>';
     $('inboxRetry')?.addEventListener('click',()=>load(true));
-  }finally{ordersLoaded=true}
+  }finally{ordersLoaded=true;if(window.mmReady)window.mmReady()}
 }
 function merge(order,announce){
   const i=rows.findIndex(r=>r.id===order.id);if(i<0)return;
