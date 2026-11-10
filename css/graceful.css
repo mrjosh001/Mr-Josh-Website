@@ -244,3 +244,17 @@ html {
     font-size: 16px !important;
   }
 }
+
+
+/* Theme-adaptive readable text across MJ HUB pages */
+:root{color-scheme:dark;--mj-readable-text:#e5eaf2;--mj-readable-muted:#aeb9c9;--mj-readable-surface:#111827;--mj-readable-input:#0b1220;--mj-readable-border:#334155}
+html[data-theme="light"],body[data-theme="light"]{color-scheme:light;--mj-readable-text:#172033;--mj-readable-muted:#526078;--mj-readable-surface:#ffffff;--mj-readable-input:#f8fafc;--mj-readable-border:#d7deea}
+html[data-theme="dark"],body[data-theme="dark"]{color-scheme:dark;--mj-readable-text:#e5eaf2;--mj-readable-muted:#aeb9c9;--mj-readable-surface:#111827;--mj-readable-input:#0b1220;--mj-readable-border:#334155}
+body{color:var(--mj-readable-text)}
+body :where(p,li,label,small,figcaption,dt,dd,th,td,.muted,.helper-text,.description,.subtitle,.form-text,.text-muted,.empty-text,.loading){color:var(--mj-readable-muted)}
+body :where(h1,h2,h3,h4,h5,h6,strong,b,legend,.card-title,.section-title){color:var(--mj-readable-text)}
+body :where(input:not([type=checkbox]):not([type=radio]):not([type=range]),select,textarea){color:var(--mj-readable-text);background-color:var(--mj-readable-input);border-color:var(--mj-readable-border)}
+body :where(input,select,textarea)::placeholder{color:var(--mj-readable-muted);opacity:1}
+body :where(.card,.content-card,.stat-card,.quick-actions-container,.dropdown-menu,.support-popup,.support-popup-card,.product-card,.offer,.order){color:var(--mj-readable-text)}
+body :where(.status,.badge,.badge-credit,.badge-debit,.verified,.danger-btn,.primary-btn,.btn-primary,.btn,.bottom-nav-item.active,.profile-icon,.qa-icon){color:inherit}
+@media(prefers-contrast:more){body :where(p,li,label,small,figcaption,dt,dd,th,td,.muted,.helper-text,.description,.subtitle,.form-text,.text-muted){color:var(--mj-readable-text)}}
