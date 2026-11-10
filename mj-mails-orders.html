@@ -2,7 +2,7 @@
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>MJ Inbox · MJ HUB</title>
 <link rel="stylesheet" href="/css/graceful.css"><link rel="stylesheet" href="/css/mj-motion.css"><link rel="stylesheet" href="/css/mj-glass.css"><link rel="stylesheet" href="/css/mj-apple-fluid.css"><link rel="stylesheet" href="/css/mj-mails.css">
-<script src="/js/mj-theme.js" defer></script><script src="/js/mj-page-loader.js" defer></script><script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="/js/mj-theme.js" defer></script><script src="/js/mj-page-loader.js" defer></script><script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2" onerror="this.onerror=null;this.src=\'https://unpkg.com/@supabase/supabase-js@2\'"></script>
 
 <style>
 /* MJ Mails order card refresh */
@@ -140,7 +140,7 @@
 
 <div id="signin" class="banner" hidden><span>Sign in to view your email orders.</span><a class="btn sm" href="/auth.html">Sign in</a></div>
 
-<section class="mm-order-toolbar"><div class="mm-toolbar-copy"><h2>Your messages</h2><p>Search your inbox, open messages and copy verification codes.</p></div><div class="tools"><input id="q" type="search" placeholder="Search messages, address or service" autocomplete="off"><button id="reload" class="btn ghost sm" aria-label="Refresh orders">↻</button></div></section>
+<section class="mm-order-toolbar"><div class="mm-toolbar-copy"><h2>Your messages</h2><p>Search your inbox, open messages and copy verification codes.</p></div><div class="tools"><input id="q" type="search" placeholder="Search messages, address or service" autocomplete="off"></div></section>
 <div class="tabs" id="tabs"></div>
 <div class="live" id="live" hidden><span class="dot"></span><span id="liveTxt">Checking for new mail</span></div>
 <div id="notice" class="muted" role="status"></div>
@@ -157,7 +157,7 @@
 <script>
 const SUPABASE_URL='https://atczodlljmlayvldxfmv.supabase.co';
 const SUPABASE_ANON_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJIUzI1NiIsInJlZiI6ImF0Y3pvZGxsam1sYXl2bGR4Zm12Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODUwNzUyMzgsImV4cCI6MjEwMDY1MTIzOH0.ufthD-p7BmeD_B7xyuMM6PNPL8DmcL4AtRYgg-MuoLI';
-const sb=window.supabase.createClient(SUPABASE_URL,SUPABASE_ANON_KEY,{auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:true,storage:window.sessionStorage}});
+const sb=window.supabase?.createClient?window.supabase.createClient(SUPABASE_URL,SUPABASE_ANON_KEY,{auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:true,storage:window.sessionStorage}}):null;
 const $=id=>document.getElementById(id);let token='';
 const money=n=>'₦'+Number(n||0).toLocaleString('en-NG',{maximumFractionDigits:0});
 const esc=v=>String(v==null?'':v).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -173,6 +173,7 @@ let rows=[],filter='active',query='',openIds=new Set(),busy=new Set(),polling=fa
 
 function toast(t){const el=$('toast');el.textContent=t;el.classList.add('show');clearTimeout(toast.t);toast.t=setTimeout(()=>el.classList.remove('show'),2400)}
 async function getToken(){
+  if(!sb)throw new Error('Secure sign-in service did not load. Check your connection and try again.');
   for(let attempt=0;attempt<3;attempt++){
     try{const {data,error}=await sb.auth.getSession();if(!error&&data.session?.access_token){token=data.session.access_token;return token}}catch(_){}
     if(attempt<2)await new Promise(resolve=>setTimeout(resolve,300));
@@ -180,9 +181,10 @@ async function getToken(){
   try{const {data,error}=await sb.auth.refreshSession();if(!error&&data.session?.access_token){token=data.session.access_token;return token}}catch(_){}
   token='';return token;
 }
-sb.auth.onAuthStateChange((_event,session)=>{token=session?.access_token||''});
+if(sb)sb.auth.onAuthStateChange((_event,session)=>{token=session?.access_token||''});
 async function api(action,method='GET',data){
-  const r=await fetch('/api/mj-mails?action=mails_'+action,{method,headers:{Authorization:'Bearer '+token,'Content-Type':'application/json'},...(data?{body:JSON.stringify(data)}:{})});
+  const controller=new AbortController();const timeout=setTimeout(()=>controller.abort(),18000);
+  let r;try{r=await fetch('/api/mj-mails?action=mails_'+action,{method,headers:{Authorization:'Bearer '+token,'Content-Type':'application/json'},...(data?{body:JSON.stringify(data)}:{}),signal:controller.signal})}catch(e){if(e.name==='AbortError')throw new Error('The inbox request timed out. Check your connection and try again.');throw e}finally{clearTimeout(timeout)}
   let j={};try{j=await r.json()}catch(_){}
   if(!r.ok){const e=new Error(j.message||'Request failed');e.status=r.status;e.data=j;throw e}
   return j}
@@ -359,11 +361,10 @@ async function load(manual){
     await getToken();
     if(!token){$('signin').hidden=false;rows=[];$('orders').innerHTML='';$('notice').textContent='';return}
     $('signin').hidden=true;
-    if(manual){$('reload').classList.add('loading')}
     const out=await api('orders');rows=out.orders||[];ordersLoaded=true;
     $('notice').textContent=rows.length?rows.length+' email order'+(rows.length>1?'s':''):'';draw();
-  }catch(e){$('notice').textContent=e.message;if(!rows.length)$('orders').innerHTML=''}
-  finally{ordersLoaded=true;$('reload').classList.remove('loading')}}
+  }catch(e){$('notice').textContent='';if(!rows.length){$('orders').innerHTML='<div class="empty card"><span class="ico">⚠️</span><b>Could not load your inbox</b><br><span>'+esc(e.message||'A connection error occurred.')+'</span><br><button class="btn sm" type="button" id="inboxRetry">Try again</button></div>';$('inboxRetry')?.addEventListener('click',()=>load(true))}}
+  finally{ordersLoaded=true}}
 function merge(order,announce){
   const i=rows.findIndex(r=>r.id===order.id);if(i<0)return;
   const before=rows[i];rows[i]=order;
@@ -406,7 +407,6 @@ async function poll(){
 document.addEventListener('visibilitychange',()=>{if(document.hidden){clearTimeout(pollTimer);pollTimer=null}else schedulePoll(800)});
 
 /* ---------- init ---------- */
-$('reload').onclick=()=>load(true);
 let qt;$('q').addEventListener('input',e=>{clearTimeout(qt);qt=setTimeout(()=>{query=e.target.value;draw()},150)});
 drawTabs();load();
 
