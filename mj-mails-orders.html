@@ -173,10 +173,6 @@ function detectCode(m){
   const text=(doc.body?.textContent||source.replace(/<[^>]*>/g,' ')).replace(/\u00a0/g,' ').replace(/[ \t]+/g,' ').replace(/\r/g,'\n');
   const candidates=[...text.matchAll(/(?<![\d])\d{4,8}(?![\d])/g)].map(x=>({code:x[0],index:x.index}));
   if(!candidates.length)return '';
-  const contexts=[
-    /(?:enter|input|type|use|submit|verify|verification|confirm|confirmation|security|one[- ]time|login|log in|sign[- ]in|authentication)[^\n.]{0,100}?(?:code|otp)?[^\n.]{0,45}?/ig,
-    /(?:code|otp|verification code|security code)[^\n.]{0,100}/ig
-  ];
   const scored=candidates.map(c=>{let score=0;const left=text.slice(Math.max(0,c.index-120),c.index).toLowerCase();const right=text.slice(c.index,c.index+80).toLowerCase();
     if(/(?:enter|input|type|use|submit)\s+(?:this\s+)?(?:the\s+)?code[^\n.]{0,90}$/.test(left))score+=120;
     if(/(?:verification|security|one[- ]time|login|sign[- ]in|authentication)\s+(?:code|otp)?[^\n.]{0,90}$/.test(left))score+=100;
