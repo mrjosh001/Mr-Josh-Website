@@ -35,6 +35,24 @@
 .order .code{font-size:30px;line-height:1.2}
 .order details.msg{margin:0 18px 14px}
 .order .reconcile-note{margin:12px 18px 0!important;padding:11px 12px;border-radius:12px;background:color-mix(in srgb,var(--mm-info) 7%,var(--mm-card));font-size:12px;line-height:1.55}
+/* Rich, safe email rendering and upgraded order hierarchy */
+.order details.msg{overflow:hidden;background:color-mix(in srgb,var(--mm-primary) 3%,var(--mm-card));border-radius:16px}
+.order details.msg summary{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:3px 1px;font-size:13px}
+.order details.msg summary:after{content:"＋";font-size:17px;color:var(--mm-primary);font-weight:800}
+.order details.msg[open] summary:after{content:"−"}
+.order details.msg summary small{margin-left:auto;color:var(--mm-muted);font-size:10px;font-weight:750;letter-spacing:.04em;text-transform:uppercase}
+.order details.msg .body{max-height:420px;margin:12px 0 2px;padding:15px;border:1px solid var(--mm-border);border-radius:12px;background:var(--mm-bg);color:var(--mm-text);font-size:14px;line-height:1.7;overflow:auto;overflow-wrap:anywhere;white-space:normal}
+.order details.msg .body p{margin:0 0 12px}.order details.msg .body p:last-child{margin-bottom:0}
+.order details.msg .body ul,.order details.msg .body ol{padding-left:22px;margin:8px 0}
+.order details.msg .body table{display:block;width:100%;max-width:100%;overflow-x:auto;border-collapse:collapse;font-size:13px}
+.order details.msg .body td,.order details.msg .body th{padding:7px 9px;border:1px solid var(--mm-border);text-align:left}
+.order details.msg .body a{color:var(--mm-primary);text-decoration:underline;overflow-wrap:anywhere}
+.order .actions{align-items:stretch}
+.order .actions .reuse-btn{background:color-mix(in srgb,var(--mm-primary) 10%,var(--mm-card));color:var(--mm-primary);border:1px solid color-mix(in srgb,var(--mm-primary) 35%,var(--mm-border))}
+.order .actions .refund-btn{grid-column:auto;grid-row:auto}
+@media(min-width:600px){.order{display:flex;flex-direction:column}.order .actions{margin-top:auto}.order details.msg .body{max-height:480px}}
+@media(max-width:520px){.order .actions{grid-template-columns:1fr 1fr}.order .actions .refund-btn{grid-column:1/-1}}
+
 @media(min-width:600px){#orders{grid-template-columns:repeat(2,minmax(0,1fr));align-items:start}.order{height:100%}.order .actions{grid-template-columns:1fr 1fr}}
 @media(max-width:380px){.order .o-head{padding:16px 14px 13px}.order .actions{padding:12px 14px 14px;gap:7px}.order .waitline{padding-left:14px;padding-right:14px}.order .pulse-bar{margin-left:14px;margin-right:14px}.order .mail-expiry{margin-left:14px;margin-right:14px}.order .codebox,.order details.msg{margin-left:14px;margin-right:14px}}
 @media(prefers-reduced-motion:reduce){.order .pulse-bar:after{animation:none}}
@@ -111,6 +129,25 @@ function ago(d){const s=Math.max(1,Math.round((Date.now()-new Date(d))/1000));
   if(s<60)return 'just now';if(s<3600)return Math.floor(s/60)+' min ago';if(s<86400)return Math.floor(s/3600)+' hr ago';
   return new Date(d).toLocaleDateString(undefined,{day:'numeric',month:'short',year:'numeric'})}
 function detectCode(m){const x=String(m||'').match(/(?<![\d])(\d{4,8})(?![\d])/);return x?x[1]:''}
+
+function sanitizeEmailMessage(raw){
+  const source=String(raw||'');
+  if(!/<[a-z][\\s\\S]*>/i.test(source))return esc(source).replace(/\\r?\\n/g,'<br>');
+  const parsed=new DOMParser().parseFromString(source,'text/html');
+  const allowed=new Set(['A','B','STRONG','I','EM','U','S','P','BR','DIV','SPAN','UL','OL','LI','TABLE','THEAD','TBODY','TFOOT','TR','TD','TH','BLOCKQUOTE','PRE','CODE','H1','H2','H3','H4','H5','H6','HR']);
+  function clean(node){
+    if(node.nodeType===Node.TEXT_NODE)return document.createTextNode(node.nodeValue||'');
+    if(node.nodeType!==Node.ELEMENT_NODE)return document.createDocumentFragment();
+    const tag=node.tagName;if(['SCRIPT','STYLE','IFRAME','OBJECT','EMBED','FORM','INPUT','BUTTON','SVG','MATH'].includes(tag))return document.createDocumentFragment();
+    const children=[...node.childNodes].map(clean);
+    if(!allowed.has(tag)){const fragment=document.createDocumentFragment();children.forEach(n=>fragment.append(n));return fragment}
+    const el=document.createElement(tag.toLowerCase());children.forEach(n=>el.append(n));
+    if(tag==='A'){const href=node.getAttribute('href')||'';if(/^(https?:|mailto:)/i.test(href)){el.setAttribute('href',href);el.setAttribute('target','_blank');el.setAttribute('rel','noopener noreferrer')}}
+    return el;
+  }
+  const wrapper=document.createElement('div');[...parsed.body.childNodes].map(clean).forEach(n=>wrapper.append(n));return wrapper.innerHTML;
+}
+function renderEmailMessages(){document.querySelectorAll('[data-message]').forEach(el=>{el.innerHTML=sanitizeEmailMessage(el.dataset.message||'')})}
 async function copy(text){try{await navigator.clipboard.writeText(text)}catch(_){const t=document.createElement('textarea');t.value=text;t.style.position='fixed';t.style.opacity='0';document.body.appendChild(t);t.select();try{document.execCommand('copy')}catch(__){}t.remove()}toast('Copied ✓')}
 
 /* ---------- sheet ---------- */
@@ -143,16 +180,17 @@ function card(o,flash){
    (waiting&&!code?'<div class="waitline"><span class="dot"></span>Waiting for your verification email</div><div class="pulse-bar"></div>':'')+
    (waiting&&Number.isFinite(mailExpires)?'<div class="mail-expiry">Email rental expires in <strong data-mail-timer data-expires="'+esc(o.expires_at)+'">'+formatCountdown(mailExpires-Date.now())+'</strong> <span>· 20-minute total rental</span></div>':'')+
    (o.status==='reconciliation_required'?'<p class="muted" style="margin:12px 0 0">We are confirming your email rental. Please do not buy again. This usually clears within a few minutes.</p>':'')+
-   (o.message?'<details class="msg" data-d="'+esc(o.id)+'"'+(openIds.has(o.id)?' open':'')+'><summary>Full message</summary><div class="body">'+esc(o.message)+'</div></details>':'')+
+   (o.message?'<details class="msg" data-d="'+esc(o.id)+'"'+(openIds.has(o.id)?' open':'')+'><summary><span>Full message</span><small>Formatted email</small></summary><div class="body" data-message="'+esc(o.message)+'"></div></details>':'')+
    '<div class="actions">'+(o.can_refresh||o.status!=='reconciliation_required'?'<button class="btn sm" data-refresh="'+esc(o.id)+'">Check inbox</button>':'')+
    (waiting?'<button class="btn sm refund-btn" data-refund="'+esc(o.id)+'" '+((!Number.isFinite(refundAvailable)||!Number.isFinite(mailExpires)||Date.now()<refundAvailable||Date.now()>=mailExpires)?'disabled':'')+'><span data-refund-timer data-available="'+esc(o.refund_available_at||'')+'" data-expires="'+esc(o.expires_at||'')+'">'+(!Number.isFinite(refundAvailable)||!Number.isFinite(mailExpires)?'Timer unavailable':Date.now()<refundAvailable?'Available in '+formatCountdown(refundAvailable-Date.now()):Date.now()>=mailExpires?'Expired':'Refund')+'</span></button>':canRetryRefund?'<button class="btn sm refund-btn" data-refund="'+esc(o.id)+'">Retry refund</button>':'')+
-   (o.reused_from_order_id?'<span class="muted" style="grid-column:1/-1;font-size:11px">Same email address · new activation</span>':'')+(o.can_reuse?'<button class="btn sm reuse-btn" data-reuse="'+esc(o.id)+'">Reuse this email</button>':'')+'<a class="btn ghost sm" style="display:inline-flex;align-items:center" href="/mj-mails.html?site='+encodeURIComponent(o.site||'')+'">Rent again</a></div></article>'}
+   (o.reused_from_order_id?'<span class="muted" style="grid-column:1/-1;font-size:11px">Same email address · new activation</span>':'')+(o.can_reuse?'<button class="btn sm reuse-btn" data-reuse="'+esc(o.id)+'">Reuse this email</button>':'')+'</div></article>'}
 function draw(flashId){
   drawTabs();const list=visible();
   const waiting=rows.some(o=>['waiting','cancel_pending_refund'].includes(o.status)||(o.status==='completed'&&!o.message&&!o.value));$('live').hidden=!waiting;
   if(!rows.length){$('orders').innerHTML='<div class="empty card"><span class="ico">📬</span><b>No email orders yet</b><br>Rent your first temporary email and codes will show up here.<br><br><a class="btn sm" href="/mj-mails.html" style="display:inline-block">Rent an email</a></div>';return}
   if(!list.length){$('orders').innerHTML='<div class="empty card"><span class="ico">🔎</span><b>Nothing here</b><br>No orders match this filter or search.</div>';return}
   $('orders').innerHTML=list.map(o=>card(o,o.id===flashId)).join('');
+  renderEmailMessages();
   $('orders').querySelectorAll('[data-copy]').forEach(b=>b.onclick=()=>copy(b.dataset.copy));
   $('orders').querySelectorAll('[data-refresh]').forEach(b=>b.onclick=()=>refresh(b.dataset.refresh,b));
   $('orders').querySelectorAll('[data-refund]').forEach(b=>b.onclick=()=>askRefund(b.dataset.refund));$('orders').querySelectorAll('[data-reuse]').forEach(b=>b.onclick=()=>askReuse(b.dataset.reuse));updateCancelTimers();
