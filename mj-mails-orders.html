@@ -236,15 +236,16 @@ $('ov').addEventListener('click',e=>{if(e.target===$('ov')&&!sheetBusy)$('ov').h
 document.addEventListener('keydown',e=>{if(e.key==='Escape'&&!sheetBusy)$('ov').hidden=true});
 
 /* ---------- render ---------- */
+function isClosedOrder(o){return ['cancelled','canceled','expired','refunded','failed'].includes(String(o.status||'').toLowerCase())||(o.expires_at&&Number.isFinite(Date.parse(o.expires_at))&&Date.now()>=Date.parse(o.expires_at))}
 function visible(){const g=GROUPS[filter];const q=query.trim().toLowerCase();
-  return rows.filter(o=>(!g||g.includes(o.status))&&(!q||[o.email,o.site,o.domain,messageSubject(o.message),messagePreview(o.message)].join(' ').toLowerCase().includes(q)))}
-function drawTabs(){$('tabs').innerHTML=Object.keys(LABELS).map(k=>{const n=GROUPS[k]?rows.filter(o=>GROUPS[k].includes(o.status)).length:rows.length;
+  return rows.filter(o=>(filter==='closed'?isClosedOrder(o):filter==='active'?!isClosedOrder(o)&&g.includes(o.status):g.includes(o.status))&&(!q||[o.email,o.site,o.domain,messageSubject(o.message),messagePreview(o.message)].join(' ').toLowerCase().includes(q)))}
+function drawTabs(){$('tabs').innerHTML=Object.keys(LABELS).map(k=>{const n=GROUPS[k]?rows.filter(o=>k==='closed'?isClosedOrder(o):k==='active'?!isClosedOrder(o)&&GROUPS[k].includes(o.status):GROUPS[k].includes(o.status)).length:rows.length;
   return '<button class="tab'+(k===filter?' on':'')+'" data-f="'+k+'">'+LABELS[k]+'<i>'+n+'</i></button>'}).join('');
   $('tabs').querySelectorAll('[data-f]').forEach(b=>b.onclick=()=>{filter=b.dataset.f;draw()})}
 function card(o,flash){
   const st=STATUS[o.status]||[String(o.status||'').replace(/_/g,' '),'mute'];
   const code=detectCode(o.message)||o.value||'';const waiting=o.status==='waiting';
-  const closedStatus=['cancelled','canceled','expired','refunded','failed'].includes(String(o.status||'').toLowerCase())||(o.expires_at&&Number.isFinite(Date.parse(o.expires_at))&&Date.now()>=Date.parse(o.expires_at));
+  const closedStatus=isClosedOrder(o);
   const refundAvailable=o.refund_available_at?Date.parse(o.refund_available_at):NaN;
   const mailExpires=o.expires_at?Date.parse(o.expires_at):NaN;
   const canRetryRefund=o.status==='cancel_pending_refund';
