@@ -598,20 +598,6 @@ async function gotsmsHandleWebhook(req, res) {
             if (claimed) {
               const amt = Number(claimed.price) || orderPrice;
               if (amt > 0) {
-                try {
-                  await supabase.from('transactions').insert({
-                    user_id: order.user_id,
-                    customer_id: order.customer_id,
-                    type: 'refund',
-                    category: 'MJ SMS',
-                    title: 'USA rental cancelled — no SMS',
-                    subtitle: 'Balance restored',
-                    amount: '₦' + amt.toLocaleString(),
-                    amount_ngn: amt,
-                    status: 'refunded',
-                    external_reference: String(rid || order.order_id || '')
-                  });
-                } catch (_) {}
                 nextStatus = 'refunded';
                 refundedNow = true;
                 await notifyUserPush(
@@ -942,20 +928,6 @@ async function gotsmsPreExpireCancelSweep({ userId = null, windowMinutes = 10 } 
       if (!claimed) { skipped += 1; continue; }
       const amt = Number(claimed.price) || Number(order.price) || 0;
       if (amt > 0) {
-        try {
-          await supabase.from('transactions').insert({
-            user_id: order.user_id,
-            customer_id: order.customer_id,
-            type: 'refund',
-            category: 'MJ SMS',
-            title: 'USA rental auto-cancelled',
-            subtitle: 'No SMS — balance restored before expiry',
-            amount: '₦' + amt.toLocaleString(),
-            amount_ngn: amt,
-            status: 'refunded',
-            external_reference: String(rentId)
-          });
-        } catch (_) {}
         await notifyUserPush(
           order.user_id,
           'Rental cancelled — refunded',
@@ -4812,28 +4784,7 @@ if (method === 'POST' && ga === 'gotsms_toggle_renewal') {
         const refundAmt = Number(claimed.price) || 0;
         if (refundAmt > 0) {
           // The refunded transition fires the DB trigger, which credits the exact linked debit atomically.
-          const flipped = await gotsmsSetPurchaseTxStatus(auth.userId, rent_id, ['pending', 'completed'], 'refunded');
-          if (!flipped) {
-            try {
-              const { data: dup } = await supabase.from('transactions').select('id')
-                .eq('user_id', auth.userId).eq('type', 'refund').eq('category', 'MJ SMS')
-                .eq('external_reference', String(rent_id)).limit(1);
-              if (!dup || !dup.length) {
-                await supabase.from('transactions').insert({
-                  user_id: auth.userId,
-                  customer_id: order.customer_id,
-                  type: 'refund',
-                  category: 'MJ SMS',
-                  title: 'USA rental cancelled',
-                  subtitle: 'Balance restored',
-                  amount: '₦' + refundAmt.toLocaleString(),
-                  amount_ngn: refundAmt,
-                  status: 'refunded',
-                  external_reference: String(rent_id)
-                });
-              }
-            } catch (_) {}
-          }
+          await gotsmsSetPurchaseTxStatus(auth.userId, rent_id, ['pending', 'completed'], 'refunded');
         }
         await notifyUserPush(
           auth.userId,
