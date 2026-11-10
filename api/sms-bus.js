@@ -437,7 +437,7 @@ async function gotsmsHandleWebhook(req, res) {
   try {
     if (event === 'message.received') {
       let order = rentId ? await gotsmsFindOrderByRentId(rentId) : null;
-      if (!order && phone) order = await gotsmsFindOrderByPhone(phone);
+      if (!order && !rentId && phone) order = await gotsmsFindOrderByPhone(phone);
       if (!order) {
         console.warn('[gotsms webhook] message.received no order', { rentId, phone: String(phone).slice(0, 6) });
         return json(res, 200, { success: true, ignored: true, reason: 'order_not_found' });
@@ -899,9 +899,13 @@ async function gotsmsPreExpireCancelSweep({ userId = null, windowMinutes = 10 } 
       // Double-check live messages on supplier
       try {
         const msgG = await gotsmsFetch(`/api/numbers/${encodeURIComponent(rentId)}/messages`);
+        if (!msgG.ok) { skipped += 1; continue; }
         const msgs = (msgG.data && (msgG.data.data || msgG.data.messages || msgG.data)) || [];
-        if (Array.isArray(msgs) && msgs.length > 0) { skipped += 1; continue; }
-      } catch (_) {}
+        if (!Array.isArray(msgs) || msgs.length > 0) { skipped += 1; continue; }
+      } catch (_) {
+        skipped += 1;
+        continue;
+      }
 
       // Supplier must approve refund first
       const linked = await gotsmsResolveLinkedRentIds(order.user_id, rentId, order);
