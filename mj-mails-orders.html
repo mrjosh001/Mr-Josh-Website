@@ -183,7 +183,7 @@ const STATUS={
   waiting:['Waiting for message','warn'],message_received:['Message received','ok'],completed:['Completed','ok'],
   cancelled:['Canceled','mute'],canceled:['Canceled','mute'],expired:['Expired','mute'],refunded:['Refunded','mute'],failed:['Failed · wallet restored','bad'],
   reconciliation_required:['Verifying purchase','info'],cancel_pending_refund:['Refund pending','warn']};
-const GROUPS={active:['waiting','reconciliation_required','cancel_pending_refund'],done:['message_received','completed'],closed:['cancelled','canceled','expired','refunded','failed']};
+const CLOSED_STATUSES=['cancelled','canceled','expired','refunded','failed'];
 const LABELS={active:'Active',done:'Received',closed:'Canceled'};
 const POLL_MS=30000;
 let rows=[],filter='active',query='',openIds=new Set(),busy=new Set(),polling=false,ordersLoaded=false,pollTimer=null,pollCursor=0;
@@ -334,11 +334,24 @@ function openSheet({title,html,yes,onYes}){
 $('ov').addEventListener('click',e=>{if(e.target===$('ov')&&!sheetBusy)$('ov').hidden=true});
 document.addEventListener('keydown',e=>{if(e.key==='Escape'&&!sheetBusy)$('ov').hidden=true});
 
-/* ---------- render ---------- */
-function isClosedOrder(o){return ['cancelled','canceled','expired','refunded','failed'].includes(String(o.status||'').toLowerCase())||(o.expires_at&&Number.isFinite(Date.parse(o.expires_at))&&Date.now()>=Date.parse(o.expires_at))}
-function visible(){const g=GROUPS[filter];const q=query.trim().toLowerCase();
-  return rows.filter(o=>(filter==='closed'?isClosedOrder(o):filter==='active'?!isClosedOrder(o)&&g.includes(o.status):g.includes(o.status))&&(!q||[o.email,o.site,o.domain,messageSubject(o.message),messagePreview(o.message)].join(' ').toLowerCase().includes(q)))}
-function drawTabs(){$('tabs').innerHTML=Object.keys(LABELS).map(k=>{const n=GROUPS[k]?rows.filter(o=>k==='closed'?isClosedOrder(o):k==='active'?!isClosedOrder(o)&&GROUPS[k].includes(o.status):GROUPS[k].includes(o.status)).length:rows.length;
+/* ---------- filtering: every order belongs to exactly ONE tab ---------- */
+function hasMail(o){return !!(o.message||o.value)||String(o.status||'').toLowerCase()==='message_received'}
+/* Closed = canceled / refunded / failed / expired WITHOUT a received email. An order that got mail is never closed. */
+function isClosedOrder(o){
+  const s=String(o.status||'').toLowerCase();
+  if(CLOSED_STATUSES.includes(s))return true;
+  if(hasMail(o))return false;
+  const exp=o.expires_at?Date.parse(o.expires_at):NaN;
+  return Number.isFinite(exp)&&Date.now()>=exp&&['waiting','cancel_pending_refund','completed'].includes(s);
+}
+function bucket(o){
+  if(isClosedOrder(o))return 'closed';
+  if(hasMail(o))return 'done';
+  return ['message_received','completed'].includes(String(o.status||'').toLowerCase())?'done':'active';
+}
+function visible(){const q=query.trim().toLowerCase();
+  return rows.filter(o=>bucket(o)===filter&&(!q||[o.email,o.site,o.domain,messageSubject(o.message),messagePreview(o.message)].join(' ').toLowerCase().includes(q)))}
+function drawTabs(){$('tabs').innerHTML=Object.keys(LABELS).map(k=>{const n=rows.filter(o=>bucket(o)===k).length;
   return '<button class="tab'+(k===filter?' on':'')+'" data-f="'+k+'">'+LABELS[k]+'<i>'+n+'</i></button>'}).join('');
   $('tabs').querySelectorAll('[data-f]').forEach(b=>b.onclick=()=>{filter=b.dataset.f;draw()})}
 function card(o,flash){
