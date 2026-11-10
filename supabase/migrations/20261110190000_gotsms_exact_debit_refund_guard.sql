@@ -15,6 +15,11 @@ begin
     return new;
   end if;
 
+  -- Zero-cost linked service rows carry no wallet debit and must not credit money.
+  if coalesce(new.price,0) <= 0 then
+    return new;
+  end if;
+
   if new.source = 'gotsms' and (
        old.status = 'completed'
        or coalesce(old.service_name,'') ~* 'sms[[:space:]]*received'
