@@ -742,16 +742,25 @@ body{font-family:'Plus Jakarta Sans',system-ui,-apple-system,sans-serif;backgrou
       document.getElementById('main').innerHTML = '<div class="empty">Missing rental. <a href="mj-sms-usa-rent.html">Rent a number</a></div>';
       return;
     }
-    var j = await api('rents', { query: 'status=active' });
-    rent = (j.data||[]).find(function(r){ return String(r.id)===String(rentId); }) || null;
-    if(!rent){
-      var j2 = await api('rents', { query: 'status=finished' });
-      rent = (j2.data||[]).find(function(r){ return String(r.id)===String(rentId); }) || null;
+    // Try live supplier state first, but do not make the rental screen depend on that endpoint.
+    // The user's saved order record is a fallback so a temporary supplier outage cannot blank the page.
+    try {
+      var j = await api('rents', { query: 'status=active' });
+      var activeRows = Array.isArray(j && j.data) ? j.data : [];
+      rent = activeRows.find(function(r){ return String(r.id)===String(rentId); }) || null;
+      if(!rent){
+        var j2 = await api('rents', { query: 'status=finished' });
+        var finishedRows = Array.isArray(j2 && j2.data) ? j2.data : [];
+        rent = finishedRows.find(function(r){ return String(r.id)===String(rentId); }) || null;
+      }
+    } catch(liveErr) {
+      console.warn('[MJ rental] live rental lookup failed; using saved order fallback', liveErr);
     }
-    // Always merge our order label (duration · carrier · area) when available
+    // Always merge our DB order label (duration · carrier · area) when available.
     try {
       var mine = await api('my_orders');
-      var o = (mine.data||[]).find(function(x){ return String(x.rent_id)===String(rentId) || String(x.idempotency_key||'')==='gotsms-'+rentId; });
+      var myRows = Array.isArray(mine && mine.data) ? mine.data : [];
+      var o = myRows.find(function(x){ return String(x.rent_id)===String(rentId) || String(x.idempotency_key||'')==='gotsms-'+rentId; });
       if(o){
         if(!rent){
           rent = {
