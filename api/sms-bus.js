@@ -322,10 +322,13 @@ async function gotsmsFindOrderByPhone(phone) {
     .order('created_at', { ascending: false })
     .limit(40);
   const rows = data || [];
-  return rows.find((r) => {
+  const matches = rows.filter((r) => {
     const p = String(r.phone_number || '').replace(/\D/g, '');
-    return p === digits || p.endsWith(tail) || digits.endsWith(p);
-  }) || null;
+    return p && (p === digits || p.endsWith(tail) || digits.endsWith(p));
+  });
+  // Phone-only correlation is safe only when exactly one order matches.
+  // Reused numbers can have multiple rentals; never attach an SMS to an arbitrary latest row.
+  return matches.length === 1 ? matches[0] : null;
 }
 
 function gotsmsNotesMeta(notes) {
