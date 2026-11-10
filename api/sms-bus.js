@@ -4715,7 +4715,7 @@ if (method === 'POST' && ga === 'gotsms_toggle_renewal') {
           return json(res, 400, { success: false, message: 'This rental was already cancelled or refunded.' });
         }
         // Fail closed: a completed/SMS-received rental is never refundable.
-        if (order.status === 'completed' || /sms\\s*received/i.test(String(order.service_name || ''))) {
+        if (order.status === 'completed' || /sms\s*received/i.test(String(order.service_name || ''))) {
           return json(res, 400, {
             success: false,
             message: 'This rental has already received an SMS and cannot be refunded.'
