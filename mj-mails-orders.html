@@ -1,6 +1,6 @@
 <!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<title>MJ Mails Orders · MJ HUB</title>
+<title>MJ Inbox · MJ HUB</title>
 <link rel="stylesheet" href="/css/graceful.css"><link rel="stylesheet" href="/css/mj-motion.css"><link rel="stylesheet" href="/css/mj-glass.css"><link rel="stylesheet" href="/css/mj-apple-fluid.css"><link rel="stylesheet" href="/css/mj-mails.css">
 <script src="/js/mj-theme.js" defer></script><script src="/js/mj-page-loader.js" defer></script><script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 
@@ -56,13 +56,50 @@
 @media(min-width:600px){#orders{grid-template-columns:repeat(2,minmax(0,1fr));align-items:start}.order{height:100%}.order .actions{grid-template-columns:1fr 1fr}}
 @media(max-width:380px){.order .o-head{padding:16px 14px 13px}.order .actions{padding:12px 14px 14px;gap:7px}.order .waitline{padding-left:14px;padding-right:14px}.order .pulse-bar{margin-left:14px;margin-right:14px}.order .mail-expiry{margin-left:14px;margin-right:14px}.order .codebox,.order details.msg{margin-left:14px;margin-right:14px}}
 @media(prefers-reduced-motion:reduce){.order .pulse-bar:after{animation:none}}
+
+/* MJ Inbox visual identity and mail-client layout */
+.mm-inbox-mark{justify-self:end;width:36px;height:36px;display:grid;place-items:center;border-radius:12px;background:color-mix(in srgb,var(--mm-primary) 13%,var(--mm-card));color:var(--mm-primary);font-size:17px}
+.mm-orders-hero{padding-top:10px;padding-bottom:16px}
+.mm-orders-hero h1{font-size:clamp(34px,8vw,48px)}
+.mm-orders-hero h1 span{display:inline-block;margin-left:2px}
+.mm-order-toolbar{border-top:1px solid var(--mm-border);padding-top:18px}
+.mm-order-toolbar .mm-toolbar-copy h2{font-size:17px}
+#orders{gap:11px}
+.order.mm-inbox-card{padding:0;border:1px solid var(--mm-border);border-radius:18px;box-shadow:0 7px 24px rgba(0,0,0,.045)}
+.mm-inbox-card:before{height:2px}
+.mm-inbox-card-head{display:flex;align-items:flex-start;gap:11px;padding:16px 16px 13px}
+.mm-avatar{width:40px;height:40px;flex:0 0 40px;display:grid;place-items:center;border-radius:50%;background:color-mix(in srgb,var(--mm-primary) 15%,var(--mm-card));color:var(--mm-primary);font-size:15px;font-weight:900}
+.mm-inbox-main{min-width:0;flex:1}
+.mm-inbox-sender{font-size:13px;font-weight:900;color:var(--mm-text);line-height:1.35}
+.mm-inbox-subject{margin-top:3px;font-size:14px;font-weight:800;color:var(--mm-text);overflow-wrap:anywhere}
+.mm-inbox-preview{margin-top:3px;font-size:12px;line-height:1.45;color:var(--mm-muted);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;overflow-wrap:anywhere}
+.mm-inbox-side{display:flex;flex-direction:column;align-items:flex-end;gap:7px;flex:0 0 auto}
+.mm-inbox-time{font-size:10px;color:var(--mm-muted);white-space:nowrap}
+.mm-inbox-side .status{font-size:9px;padding:4px 7px}
+.mm-address-row{display:flex;align-items:center;gap:9px;margin:0 16px;padding:11px 0;border-top:1px solid var(--mm-border);border-bottom:1px solid var(--mm-border)}
+.mm-address-label{font-size:9px;font-weight:900;letter-spacing:.12em;color:var(--mm-muted)}
+.mm-address-row .email{font-size:12px;font-weight:750;min-width:0}
+.mm-address-row .copy{font-size:10px;padding:6px 8px}
+.mm-order-meta{padding:0 16px;margin:9px 0 0!important;font-size:10px}
+.mm-inbox-card .codebox{margin:12px 16px;padding:12px;border-radius:13px}
+.mm-inbox-card details.msg{margin:12px 16px;padding:12px;border-radius:13px}
+.mm-inbox-card details.msg summary{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.mm-inbox-card details.msg .body{max-height:560px;margin-top:13px;padding:15px;border:1px solid var(--mm-border);border-radius:12px;background:#fff;color:#202124;font-family:Arial,Helvetica,sans-serif;font-size:14px;line-height:1.6;overflow:auto;overflow-wrap:anywhere}
+.mm-inbox-card details.msg .body img{max-width:100%;height:auto}
+.mm-inbox-card details.msg .body table{width:100%;max-width:100%;border-collapse:collapse}
+.mm-inbox-card .waitline,.mm-inbox-card .mail-expiry{margin-left:16px;margin-right:16px}
+.mm-inbox-card .actions{padding:12px 16px 16px;margin:12px 0 0;border-top:1px solid var(--mm-border);display:flex;flex-wrap:wrap}
+.mm-inbox-card .actions .btn{flex:1 1 130px}
+.mm-inbox-card .actions .refund-btn{flex:1 1 100%}
+@media(min-width:700px){#orders{grid-template-columns:repeat(2,minmax(0,1fr));align-items:start}.mm-inbox-card{height:auto}.mm-inbox-card details.msg .body{max-height:620px}}
+@media(max-width:420px){.mm-inbox-card-head{padding:14px 12px 11px;gap:9px}.mm-avatar{width:35px;height:35px;flex-basis:35px}.mm-inbox-side .status{white-space:normal;text-align:right}.mm-address-row{margin-left:12px;margin-right:12px}.mm-inbox-card .codebox,.mm-inbox-card details.msg{margin-left:12px;margin-right:12px}.mm-inbox-card .actions{padding:11px 12px 13px}}
 </style></head><body><main class="wrap">
-<header class="top mm-top"><a class="back-link mm-back-icon" href="/mj-mails.html" aria-label="Back to MJ Mails" title="Back"><span aria-hidden="true">‹</span></a><strong class="mm-brand">MJ MAILS</strong><a class="navlink mm-top-action" href="/mj-mails.html">Rent email</a></header>
-<section class="mm-hero mm-orders-hero"><div class="mm-eyebrow"><span class="mm-eyebrow-dot"></span> YOUR MAILBOX</div><h1>Email orders <span>&amp; inbox.</span></h1><p class="lead">Manage rented addresses, track incoming messages, and copy verification codes from one place.</p><div class="mm-hero-meta"><span>↻ Automatic checks</span><span>⌁ Your orders only</span></div></section>
+<header class="top mm-top"><a class="back-link mm-back-icon" href="/dashboard.html" aria-label="Back to dashboard" title="Back"><span aria-hidden="true">‹</span></a><strong class="mm-brand">MJ INBOX</strong><span class="mm-inbox-mark" aria-label="Private inbox">✉</span></header>
+<section class="mm-hero mm-orders-hero"><div class="mm-eyebrow"><span class="mm-eyebrow-dot"></span> MJ HUB MAIL</div><h1>Your inbox<span>.</span></h1><p class="lead">Every message delivered to your rented email addresses, organised in one place.</p><div class="mm-hero-meta"><span>↻ Live message checks</span><span>⌁ Private to your account</span><span>✦ Safe HTML display</span></div></section>
 
 <div id="signin" class="banner" hidden><span>Sign in to view your email orders.</span><a class="btn sm" href="/auth.html">Sign in</a></div>
 
-<section class="mm-order-toolbar"><div class="mm-toolbar-copy"><h2>Your orders</h2><p>Pull down anywhere at the top to refresh.</p></div><div class="tools"><input id="q" type="search" placeholder="Search email or service" autocomplete="off"><button id="reload" class="btn ghost sm" aria-label="Refresh orders">↻</button></div></section>
+<section class="mm-order-toolbar"><div class="mm-toolbar-copy"><h2>All messages & activations</h2><p>Search your addresses, review messages and copy codes.</p></div><div class="tools"><input id="q" type="search" placeholder="Search messages, address or service" autocomplete="off"><button id="reload" class="btn ghost sm" aria-label="Refresh orders">↻</button></div></section>
 <div class="tabs" id="tabs"></div>
 <div class="live" id="live" hidden><span class="dot"></span><span id="liveTxt">Auto-checking for messages</span></div>
 <div id="notice" class="muted" role="status"></div>
@@ -132,20 +169,39 @@ function detectCode(m){const x=String(m||'').match(/(?<![\d])(\d{4,8})(?![\d])/)
 
 function sanitizeEmailMessage(raw){
   const source=String(raw||'');
-  if(!/<[a-z][\\s\\S]*>/i.test(source))return esc(source).replace(/\\r?\\n/g,'<br>');
+  if(!/<[a-z][\s\S]*>/i.test(source))return esc(source).replace(/\r?\n/g,'<br>');
   const parsed=new DOMParser().parseFromString(source,'text/html');
-  const allowed=new Set(['A','B','STRONG','I','EM','U','S','P','BR','DIV','SPAN','UL','OL','LI','TABLE','THEAD','TBODY','TFOOT','TR','TD','TH','BLOCKQUOTE','PRE','CODE','H1','H2','H3','H4','H5','H6','HR']);
+  const allowed=new Set(['A','B','STRONG','I','EM','U','S','P','BR','DIV','SPAN','UL','OL','LI','TABLE','THEAD','TBODY','TFOOT','TR','TD','TH','BLOCKQUOTE','PRE','CODE','H1','H2','H3','H4','H5','H6','HR','SMALL','SUB','SUP','CENTER']);
+  const safeStyle=new Set(['color','background-color','font-family','font-size','font-weight','font-style','text-align','text-decoration','line-height','letter-spacing','padding','padding-top','padding-right','padding-bottom','padding-left','margin','margin-top','margin-right','margin-bottom','margin-left','border','border-top','border-right','border-bottom','border-left','border-radius','width','max-width','height','vertical-align','white-space']);
   function clean(node){
     if(node.nodeType===Node.TEXT_NODE)return document.createTextNode(node.nodeValue||'');
     if(node.nodeType!==Node.ELEMENT_NODE)return document.createDocumentFragment();
-    const tag=node.tagName;if(['SCRIPT','STYLE','IFRAME','OBJECT','EMBED','FORM','INPUT','BUTTON','SVG','MATH'].includes(tag))return document.createDocumentFragment();
+    const tag=node.tagName;
+    if(['SCRIPT','STYLE','IFRAME','OBJECT','EMBED','FORM','INPUT','BUTTON','SVG','MATH','VIDEO','AUDIO','LINK','META'].includes(tag))return document.createDocumentFragment();
     const children=[...node.childNodes].map(clean);
     if(!allowed.has(tag)){const fragment=document.createDocumentFragment();children.forEach(n=>fragment.append(n));return fragment}
     const el=document.createElement(tag.toLowerCase());children.forEach(n=>el.append(n));
+    const rawStyle=node.getAttribute('style')||'';
+    rawStyle.split(';').forEach(rule=>{
+      const at=rule.indexOf(':');if(at<1)return;
+      const prop=rule.slice(0,at).trim().toLowerCase(),value=rule.slice(at+1).trim();
+      if(safeStyle.has(prop)&&value&&!/url\s*\(|expression|javascript:|behavior|@import/i.test(value))el.style.setProperty(prop,value);
+    });
     if(tag==='A'){const href=node.getAttribute('href')||'';if(/^(https?:|mailto:)/i.test(href)){el.setAttribute('href',href);el.setAttribute('target','_blank');el.setAttribute('rel','noopener noreferrer')}}
+    if(tag==='TD'||tag==='TH'){['colspan','rowspan','align','valign'].forEach(k=>{const v=node.getAttribute(k);if(v&&/^(\d{1,2}|left|right|center|top|middle|bottom)$/i.test(v))el.setAttribute(k,v)})}
     return el;
   }
   const wrapper=document.createElement('div');[...parsed.body.childNodes].map(clean).forEach(n=>wrapper.append(n));return wrapper.innerHTML;
+}
+function messagePreview(raw){
+  if(!raw)return 'No message received yet';
+  const doc=new DOMParser().parseFromString(String(raw),'text/html');
+  return (doc.body.textContent||String(raw).replace(/<[^>]*>/g,' ')).replace(/\s+/g,' ').trim().slice(0,150)||'Email message received';
+}
+function messageSubject(raw){
+  if(!raw)return 'Waiting for incoming email';
+  const doc=new DOMParser().parseFromString(String(raw),'text/html');
+  return (doc.querySelector('title')?.textContent||doc.querySelector('h1,h2,h3')?.textContent||'Email message').trim().slice(0,90);
 }
 function renderEmailMessages(){document.querySelectorAll('[data-message]').forEach(el=>{el.innerHTML=sanitizeEmailMessage(el.dataset.message||'')})}
 async function copy(text){try{await navigator.clipboard.writeText(text)}catch(_){const t=document.createElement('textarea');t.value=text;t.style.position='fixed';t.style.opacity='0';document.body.appendChild(t);t.select();try{document.execCommand('copy')}catch(__){}t.remove()}toast('Copied ✓')}
@@ -163,7 +219,7 @@ document.addEventListener('keydown',e=>{if(e.key==='Escape'&&!sheetBusy)$('ov').
 
 /* ---------- render ---------- */
 function visible(){const g=GROUPS[filter];const q=query.trim().toLowerCase();
-  return rows.filter(o=>(!g||g.includes(o.status))&&(!q||[o.email,o.site,o.domain].join(' ').toLowerCase().includes(q)))}
+  return rows.filter(o=>(!g||g.includes(o.status))&&(!q||[o.email,o.site,o.domain,messageSubject(o.message),messagePreview(o.message)].join(' ').toLowerCase().includes(q)))}
 function drawTabs(){$('tabs').innerHTML=Object.keys(LABELS).map(k=>{const n=GROUPS[k]?rows.filter(o=>GROUPS[k].includes(o.status)).length:rows.length;
   return '<button class="tab'+(k===filter?' on':'')+'" data-f="'+k+'">'+LABELS[k]+'<i>'+n+'</i></button>'}).join('');
   $('tabs').querySelectorAll('[data-f]').forEach(b=>b.onclick=()=>{filter=b.dataset.f;draw()})}
@@ -173,21 +229,27 @@ function card(o,flash){
   const refundAvailable=o.refund_available_at?Date.parse(o.refund_available_at):NaN;
   const mailExpires=o.expires_at?Date.parse(o.expires_at):NaN;
   const canRetryRefund=o.status==='cancel_pending_refund';
-  return '<article class="order'+(flash?' flash':'')+'" data-id="'+esc(o.id)+'">'+
-   '<div class="o-head"><div style="min-width:0;flex:1"><div class="copyrow"><div class="email">'+esc(o.email||'Email address pending')+'</div>'+(o.email?'<button class="copy" data-copy="'+esc(o.email)+'">Copy</button>':'')+'</div>'+
-   '<div class="muted o-sub">'+esc(o.site)+' · '+esc(o.domain)+' · '+money(o.price)+' · '+ago(o.created_at)+'</div></div><span class="status '+st[1]+'">'+esc(st[0])+'</span></div>'+
-   (code?'<div class="codebox"><div class="lbl">'+(o.value?'Verification code':'Code found in message')+'</div><div class="copyrow"><div class="code">'+esc(code)+'</div><button class="copy" data-copy="'+esc(code)+'">Copy</button></div></div>':'')+
+  const sender=esc(o.site||'Incoming message');
+  const subject=esc(messageSubject(o.message));
+  const preview=esc(messagePreview(o.message));
+  const initials=esc((o.site||'M').replace(/^https?:\/\//,'').replace(/^www\./,'').slice(0,1).toUpperCase());
+  return '<article class="order mm-inbox-card'+(flash?' flash':'')+'" data-id="'+esc(o.id)+'">'+
+   '<div class="mm-inbox-card-head"><div class="mm-avatar">'+initials+'</div><div class="mm-inbox-main"><div class="mm-inbox-sender">'+sender+'</div><div class="mm-inbox-subject">'+subject+'</div><div class="mm-inbox-preview">'+preview+'</div></div><div class="mm-inbox-side"><span class="mm-inbox-time">'+ago(o.created_at)+'</span><span class="status '+st[1]+'">'+esc(st[0])+'</span></div></div>'+
+   '<div class="mm-address-row"><div class="mm-address-label">TO</div><div class="email">'+esc(o.email||'Email address pending')+'</div>'+(o.email?'<button class="copy" data-copy="'+esc(o.email)+'">Copy</button>':'')+'</div>'+
+   '<div class="muted o-sub mm-order-meta">'+esc(o.site)+' · '+esc(o.domain)+' · '+money(o.price)+(o.reused_from_order_id?' · Reused address':'')+'</div>'+
+   (code?'<div class="codebox"><div class="lbl">'+(o.value?'Verification code':'Code found in message')+'</div><div class="copyrow"><div class="code">'+esc(code)+'</div><button class="copy" data-copy="'+esc(code)+'">Copy code</button></div></div>':'')+
    (waiting&&!code?'<div class="waitline"><span class="dot"></span>Waiting for your verification email</div><div class="pulse-bar"></div>':'')+
    (waiting&&Number.isFinite(mailExpires)?'<div class="mail-expiry">Email rental expires in <strong data-mail-timer data-expires="'+esc(o.expires_at)+'">'+formatCountdown(mailExpires-Date.now())+'</strong> <span>· 20-minute total rental</span></div>':'')+
-   (o.status==='reconciliation_required'?'<p class="muted" style="margin:12px 0 0">We are confirming your email rental. Please do not buy again. This usually clears within a few minutes.</p>':'')+
-   (o.message?'<details class="msg" data-d="'+esc(o.id)+'"'+(openIds.has(o.id)?' open':'')+'><summary><span>Full message</span><small>Formatted email</small></summary><div class="body" data-message="'+esc(o.message)+'"></div></details>':'')+
-   '<div class="actions">'+(o.can_refresh||o.status!=='reconciliation_required'?'<button class="btn sm" data-refresh="'+esc(o.id)+'">Check inbox</button>':'')+
+   (o.status==='reconciliation_required'?'<p class="muted" style="margin:12px 0 0">We are confirming your email rental. Please do not retry while this is being checked.</p>':'')+
+   (o.message?'<details class="msg" data-d="'+esc(o.id)+'"'+(openIds.has(o.id)?' open':'')+'><summary><span>Open email</span><small>View full message</small></summary><div class="body" data-message="'+esc(o.message)+'"></div></details>':'')+
+   '<div class="actions">'+(o.can_refresh||o.status!=='reconciliation_required'?'<button class="btn sm" data-refresh="'+esc(o.id)+'">↻ Check inbox</button>':'')+
    (waiting?'<button class="btn sm refund-btn" data-refund="'+esc(o.id)+'" '+((!Number.isFinite(refundAvailable)||!Number.isFinite(mailExpires)||Date.now()<refundAvailable||Date.now()>=mailExpires)?'disabled':'')+'><span data-refund-timer data-available="'+esc(o.refund_available_at||'')+'" data-expires="'+esc(o.expires_at||'')+'">'+(!Number.isFinite(refundAvailable)||!Number.isFinite(mailExpires)?'Timer unavailable':Date.now()<refundAvailable?'Available in '+formatCountdown(refundAvailable-Date.now()):Date.now()>=mailExpires?'Expired':'Refund')+'</span></button>':canRetryRefund?'<button class="btn sm refund-btn" data-refund="'+esc(o.id)+'">Retry refund</button>':'')+
-   (o.reused_from_order_id?'<span class="muted" style="grid-column:1/-1;font-size:11px">Same email address · new activation</span>':'')+(o.can_reuse?'<button class="btn sm reuse-btn" data-reuse="'+esc(o.id)+'">Reuse this email</button>':'')+'</div></article>'}
+   (o.can_reuse?'<button class="btn sm reuse-btn" data-reuse="'+esc(o.id)+'">Reuse this address</button>':'')+'</div></article>';
+}
 function draw(flashId){
   drawTabs();const list=visible();
   const waiting=rows.some(o=>['waiting','cancel_pending_refund'].includes(o.status)||(o.status==='completed'&&!o.message&&!o.value));$('live').hidden=!waiting;
-  if(!rows.length){$('orders').innerHTML='<div class="empty card"><span class="ico">📬</span><b>No email orders yet</b><br>Rent your first temporary email and codes will show up here.<br><br><a class="btn sm" href="/mj-mails.html" style="display:inline-block">Rent an email</a></div>';return}
+  if(!rows.length){$('orders').innerHTML='<div class="empty card"><span class="ico">📬</span><b>Your inbox is empty</b><br>Messages from your rented email activations will appear here automatically.</div>';return}
   if(!list.length){$('orders').innerHTML='<div class="empty card"><span class="ico">🔎</span><b>Nothing here</b><br>No orders match this filter or search.</div>';return}
   $('orders').innerHTML=list.map(o=>card(o,o.id===flashId)).join('');
   renderEmailMessages();
