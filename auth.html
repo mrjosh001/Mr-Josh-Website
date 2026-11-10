@@ -22,13 +22,10 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, viewport-fit=cover">
     <title>MJ HUB - Sign In & Sign Up</title>
-    <link rel="preconnect" href="https://challenges.cloudflare.com" crossorigin>
-<link rel="preload" as="script" href="https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit" crossorigin>
+    <!-- Turnstile is loaded on idle, not on the critical page-render path. -->
     <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link rel="dns-prefetch" href="//challenges.cloudflare.com">
-    <script id="mjTurnstileApi" src="https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit" async></script>
     <script src="/js/mj-notifications.js" defer></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
@@ -925,8 +922,9 @@ html[data-theme="dark"] .logo-word, body[data-theme="dark"] .logo-word { color:#
             <form id="forgotForm" class="hidden" onsubmit="handleForgotPassword(event)">
                 <div class="form-group">
                     <label>Enter Your Email Address</label>
-                    <input type="email" id="forgotEmail" required autocomplete="off" placeholder="name@example.com">
+                    <input type="email" id="forgotEmail" required autocomplete="email" placeholder="name@example.com">
                 </div>
+                <div class="captcha-wrap"><div id="mjForgotCaptcha"></div></div>
                 <button type="submit" class="btn-submit" id="forgotSubmitBtn">Send Reset Instructions</button>
                 <a href="#" class="back-to-signin" onclick="switchTab('signin'); return false;">← Back to Sign In</a>
             </form>
@@ -962,10 +960,10 @@ html[data-theme="dark"] .logo-word, body[data-theme="dark"] .logo-word { color:#
 (function(){
     'use strict';
     var siteKey = '0x4AAAAAAF0CXjc8jL8djc4l';
-    var widgetId = null, widgetKind = '', tokens = {signin:'',signup:''};
+    var widgetId = null, widgetKind = '', tokens = {signin:'',signup:'',forgot:''};
     var apiPromise = null, loadTimeout = null, failed = false, currentAttempt = 0;
 
-    function containerFor(kind){return document.getElementById(kind==='signup'?'mjSignupCaptcha':'mjSigninCaptcha');}
+    function containerFor(kind){return document.getElementById(kind==='signup'?'mjSignupCaptcha':(kind==='forgot'?'mjForgotCaptcha':'mjSigninCaptcha'));}
     /* No extra "Verified" label: Turnstile's own widget is the verification UI. */
     function state(kind,message,tone){ /* intentionally silent */ }
     function destroy(){
@@ -1059,7 +1057,7 @@ html[data-theme="dark"] .logo-word, body[data-theme="dark"] .logo-word { color:#
     };
     window.mjDestroyCaptcha=destroy;
     window.mjEnsureCaptcha=function(kind){
-        if(kind!=='signup'&&kind!=='signin')return;
+        if(kind!=='signup'&&kind!=='signin'&&kind!=='forgot')return;
         var el=containerFor(kind);if(!el)return;
         if(widgetId!==null&&widgetKind===kind)return;
         currentAttempt++;var attempt=currentAttempt;
@@ -1076,9 +1074,16 @@ html[data-theme="dark"] .logo-word, body[data-theme="dark"] .logo-word { color:#
         if(signup&&!signup.classList.contains('hidden'))window.mjEnsureCaptcha('signup');
         else if(signin&&!signin.classList.contains('hidden'))window.mjEnsureCaptcha('signin');
     };
-    // The auth forms and CAPTCHA containers already exist here. Start Turnstile now,
-    // rather than waiting for DOMContentLoaded after the full auth controller parses.
-    window.mjInitActiveCaptcha();
+    // Keep third-party CAPTCHA work off the critical render path. Load after the
+    // page is interactive and the browser has idle time; form switches can still
+    // request it immediately through mjEnsureCaptcha().
+    function scheduleInitialCaptcha(){
+        var start=function(){window.mjInitActiveCaptcha();};
+        if('requestIdleCallback' in window)window.requestIdleCallback(start,{timeout:1800});
+        else window.setTimeout(start,350);
+    }
+    if(document.readyState==='complete'||document.readyState==='interactive')scheduleInitialCaptcha();
+    else document.addEventListener('DOMContentLoaded',scheduleInitialCaptcha,{once:true});
 })();</script>
 
     <script>
@@ -1273,7 +1278,7 @@ html[data-theme="dark"] .logo-word, body[data-theme="dark"] .logo-word { color:#
             ['signinForm','signupForm','forgotForm','updatePasswordForm'].forEach(function(id) {
                 document.getElementById(id).classList.add('hidden');
             });
-            if (tab !== 'signin' && tab !== 'signup' && window.mjDestroyCaptcha) window.mjDestroyCaptcha();
+            if (tab !== 'signin' && tab !== 'signup' && tab !== 'forgot' && window.mjDestroyCaptcha) window.mjDestroyCaptcha();
             if (tab === 'signin') {
                 document.getElementById('signinForm').classList.remove('hidden');
                 switchPrompt.classList.remove('hidden');
@@ -1296,6 +1301,7 @@ html[data-theme="dark"] .logo-word, body[data-theme="dark"] .logo-word { color:#
                 formIcon.innerText = '🔑';
                 formHeading.innerText = 'Recover Account';
                 formSubheading.innerText = 'Enter your email to receive reset instructions';
+                mjEnsureCaptcha('forgot');
             } else if (tab === 'updatePassword') {
                 switchPrompt.classList.add('hidden');
                 document.getElementById('updatePasswordForm').classList.remove('hidden');
@@ -1787,22 +1793,33 @@ html[data-theme="dark"] .logo-word, body[data-theme="dark"] .logo-word { color:#
                 showError(mjRateLimitMessage('reset'));
                 return;
             }
-            mjRecordAttempt('reset');
-
-            setAuthButtonLoading(btn, true, 'Sending…');
-
-            const { data, error } = await supabaseClient.auth.resetPasswordForEmail(email, {
-                redirectTo: window.location.origin + '/auth.html?type=recovery'
-            });
-
-            if (error) {
-                setAuthButtonLoading(btn, false);
-                showError(error.message);
+            const captchaToken = mjGetCaptchaToken('forgot');
+            if (!captchaToken) {
+                showError('Please complete the security verification before requesting a password reset.');
+                mjEnsureCaptcha('forgot');
                 return;
             }
+            mjRecordAttempt('reset');
+            setAuthButtonLoading(btn, true, 'Sending…');
 
-            setAuthButtonLoading(btn, false);
-            showSuccess('Password reset instructions sent! Check your email inbox.');
+            try {
+                const { error } = await supabaseClient.auth.resetPasswordForEmail(email, {
+                    redirectTo: window.location.origin + '/auth.html?type=recovery',
+                    captchaToken
+                });
+                mjResetCaptcha('forgot');
+                if (error) {
+                    setAuthButtonLoading(btn, false);
+                    showError(formatAuthError(error));
+                    return;
+                }
+                setAuthButtonLoading(btn, false);
+                showSuccess('Password reset instructions sent! Check your email inbox.');
+            } catch (error) {
+                mjResetCaptcha('forgot');
+                setAuthButtonLoading(btn, false);
+                showError(formatAuthError(error));
+            }
         }
 
         async function handleUpdatePassword(e) {
