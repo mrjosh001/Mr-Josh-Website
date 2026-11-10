@@ -696,7 +696,7 @@ body{font-family:'Plus Jakarta Sans',system-ui,-apple-system,sans-serif;backgrou
     if(syncBusy || !rent || !computeState().active) return;
     syncBusy = true;
     try{
-      var j = await api('rents', { query:'status=active' });
+      var j = await api('rents', { query:'status=active&rent_id='+encodeURIComponent(rentId) });
       if(!j || !j.success || !Array.isArray(j.data)) return;   // never flip state on an API/network error
       var live = j.data.find(function(r){ return String(r.id)===String(rentId); });
       if(live){
@@ -705,7 +705,7 @@ body{font-family:'Plus Jakarta Sans',system-ui,-apple-system,sans-serif;backgrou
         if(prevTill !== rent.active_till){ rent.expired_local = false; startCountdown(); }
         return;
       }
-      var j2 = await api('rents', { query:'status=finished' });
+      var j2 = await api('rents', { query:'status=finished&rent_id='+encodeURIComponent(rentId) });
       if(!j2 || !j2.success || !Array.isArray(j2.data)) return;
       var done = j2.data.find(function(r){ return String(r.id)===String(rentId); });
       if(done){
