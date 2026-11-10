@@ -2,7 +2,7 @@
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>MJ Inbox · MJ HUB</title>
 <link rel="stylesheet" href="/css/graceful.css"><link rel="stylesheet" href="/css/mj-motion.css"><link rel="stylesheet" href="/css/mj-glass.css"><link rel="stylesheet" href="/css/mj-apple-fluid.css"><link rel="stylesheet" href="/css/mj-mails.css">
-<script src="/js/mj-theme.js" defer></script><script src="/js/mj-page-loader.js" defer></script><script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2" onerror="this.onerror=null;this.src=&quot;https://unpkg.com/@supabase/supabase-js@2&quot;"></script>
+<script src="/js/mj-theme.js" defer></script><script src="/js/mj-page-loader.js" defer></script>
 
 <style>
 /* MJ Mails order card refresh */
@@ -157,7 +157,22 @@
 <script>
 const SUPABASE_URL='https://atczodlljmlayvldxfmv.supabase.co';
 const SUPABASE_ANON_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJIUzI1NiIsInJlZiI6ImF0Y3pvZGxsam1sYXl2bGR4Zm12Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODUwNzUyMzgsImV4cCI6MjEwMDY1MTIzOH0.ufthD-p7BmeD_B7xyuMM6PNPL8DmcL4AtRYgg-MuoLI';
-const sb=window.supabase?.createClient?window.supabase.createClient(SUPABASE_URL,SUPABASE_ANON_KEY,{auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:true,storage:window.sessionStorage}}):null;
+let sb=null,sbPromise=null;
+function loadSupabaseScript(src){return new Promise((resolve,reject)=>{const script=document.createElement('script');script.src=src;script.async=true;script.onload=()=>resolve();script.onerror=()=>{script.remove();reject(new Error('Could not load '+src))};document.head.appendChild(script)})}
+async function getSupabaseClient(){
+  if(sb)return sb;
+  if(!sbPromise)sbPromise=(async()=>{
+    if(!window.supabase?.createClient){
+      try{await loadSupabaseScript('https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2')}
+      catch(_){await loadSupabaseScript('https://unpkg.com/@supabase/supabase-js@2')}
+    }
+    if(!window.supabase?.createClient)throw new Error('Secure sign-in service did not load. Check your connection and try again.');
+    const client=window.supabase.createClient(SUPABASE_URL,SUPABASE_ANON_KEY,{auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:true,storage:window.sessionStorage}});
+    client.auth.onAuthStateChange((_event,session)=>{token=session?.access_token||''});
+    sb=client;return sb;
+  })().catch(error=>{sbPromise=null;throw error});
+  return sbPromise;
+}
 const $=id=>document.getElementById(id);let token='';
 const money=n=>'₦'+Number(n||0).toLocaleString('en-NG',{maximumFractionDigits:0});
 const esc=v=>String(v==null?'':v).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -177,18 +192,17 @@ async function authCall(promise,ms=7000){
   finally{clearTimeout(timer)}
 }
 async function getToken(){
-  if(!sb)throw new Error('Secure sign-in service did not load. Check your connection and try again.');
+  const client=await authCall(getSupabaseClient(),12000);
   try{
-    const {data,error}=await authCall(sb.auth.getSession());
+    const {data,error}=await authCall(client.auth.getSession(),7000);
     if(!error&&data.session?.access_token){token=data.session.access_token;return token}
   }catch(e){console.warn('[MJ Inbox] session check:',e.message)}
   try{
-    const {data,error}=await authCall(sb.auth.refreshSession(),7000);
+    const {data,error}=await authCall(client.auth.refreshSession(),7000);
     if(!error&&data.session?.access_token){token=data.session.access_token;return token}
   }catch(e){console.warn('[MJ Inbox] session refresh:',e.message)}
   token='';return token;
 }
-if(sb)sb.auth.onAuthStateChange((_event,session)=>{token=session?.access_token||''});
 async function api(action,method='GET',data){
   const controller=new AbortController();const timeout=setTimeout(()=>controller.abort(),18000);
   let r;try{r=await fetch('/api/mj-mails?action=mails_'+action,{method,headers:{Authorization:'Bearer '+token,'Content-Type':'application/json'},...(data?{body:JSON.stringify(data)}:{}),signal:controller.signal})}catch(e){if(e.name==='AbortError')throw new Error('The inbox request timed out. Check your connection and try again.');throw e}finally{clearTimeout(timeout)}
