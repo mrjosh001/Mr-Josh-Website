@@ -99,7 +99,7 @@
 
 <div id="signin" class="banner" hidden><span>Sign in to view your email orders.</span><a class="btn sm" href="/auth.html">Sign in</a></div>
 
-<section class="mm-order-toolbar"><div class="mm-toolbar-copy"><h2>All messages & activations</h2><p>Search your addresses, review messages and copy codes.</p></div><div class="tools"><input id="q" type="search" placeholder="Search email or service" autocomplete="off"><button id="reload" class="btn ghost sm" aria-label="Refresh orders">↻</button></div></section>
+<section class="mm-order-toolbar"><div class="mm-toolbar-copy"><h2>All messages & activations</h2><p>Search your addresses, review messages and copy codes.</p></div><div class="tools"><input id="q" type="search" placeholder="Search messages, address or service" autocomplete="off"><button id="reload" class="btn ghost sm" aria-label="Refresh orders">↻</button></div></section>
 <div class="tabs" id="tabs"></div>
 <div class="live" id="live" hidden><span class="dot"></span><span id="liveTxt">Auto-checking for messages</span></div>
 <div id="notice" class="muted" role="status"></div>
@@ -219,7 +219,7 @@ document.addEventListener('keydown',e=>{if(e.key==='Escape'&&!sheetBusy)$('ov').
 
 /* ---------- render ---------- */
 function visible(){const g=GROUPS[filter];const q=query.trim().toLowerCase();
-  return rows.filter(o=>(!g||g.includes(o.status))&&(!q||[o.email,o.site,o.domain].join(' ').toLowerCase().includes(q)))}
+  return rows.filter(o=>(!g||g.includes(o.status))&&(!q||[o.email,o.site,o.domain,messageSubject(o.message),messagePreview(o.message)].join(' ').toLowerCase().includes(q)))}
 function drawTabs(){$('tabs').innerHTML=Object.keys(LABELS).map(k=>{const n=GROUPS[k]?rows.filter(o=>GROUPS[k].includes(o.status)).length:rows.length;
   return '<button class="tab'+(k===filter?' on':'')+'" data-f="'+k+'">'+LABELS[k]+'<i>'+n+'</i></button>'}).join('');
   $('tabs').querySelectorAll('[data-f]').forEach(b=>b.onclick=()=>{filter=b.dataset.f;draw()})}
