@@ -294,7 +294,6 @@ function messageSubject(raw){
   const doc=new DOMParser().parseFromString(String(raw),'text/html');
   return (doc.querySelector('title')?.textContent||doc.querySelector('h1,h2,h3')?.textContent||'Email message').trim().slice(0,90);
 }
-function renderEmailMessages(){document.querySelectorAll('[data-message]').forEach(el=>{el.innerHTML=sanitizeEmailMessage(el.dataset.message||'')})}
 async function copy(text){try{await navigator.clipboard.writeText(text)}catch(_){const t=document.createElement('textarea');t.value=text;t.style.position='fixed';t.style.opacity='0';document.body.appendChild(t);t.select();try{document.execCommand('copy')}catch(__){}t.remove()}toast('Copied ✓')}
 
 /* ---------- sheet ---------- */
