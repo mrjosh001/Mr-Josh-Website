@@ -141,3 +141,22 @@ The SQL draft includes wallet reservation/posting/refund functions, so it is ina
 
 
 - Catalogue IDs now use keyed HMAC (dedicated `RESELLER_SERVICE_ID_SECRET`, falling back to the server-only Supabase service-role key) rather than an unkeyed hash, reducing supplier-ID enumeration risk.
+
+
+## Sandbox order API added
+
+- Added `POST /api/v1/orders` and `GET /api/v1/orders?id=...`.
+- Sandbox order creation uses a separate sandbox wallet and sandbox order table, with a database row lock and permanent reseller/idempotency uniqueness.
+- The same key and same canonical request returns the original order; the same key with a changed payload returns a conflict.
+- Sandbox order responses are explicitly marked simulated. No supplier call or live wallet debit occurs.
+- Sandbox balance endpoint now reads the actual isolated sandbox wallet balance.
+- Added `Idempotency-Key` to CORS allowed headers.
+- Live order requests intentionally return `501 LIVE_ADAPTER_NOT_READY`; no unverified generic supplier dispatch is allowed.
+
+### Remaining release blockers
+
+- Supplier-specific live order adapters and per-service fulfilment contracts.
+- Live order status polling/webhook ingestion, reconciliation for ambiguous supplier timeouts, and atomic refund/capture integration.
+- Reseller webhook endpoint management UI/API and order lifecycle event enqueue wiring.
+- Full automated tests against a non-production Supabase project, including migration execution, concurrent idempotency requests, rate-limit concurrency, wallet contention and webhook retry/replay.
+- Preview deployment and secrets provisioning before runtime verification.
