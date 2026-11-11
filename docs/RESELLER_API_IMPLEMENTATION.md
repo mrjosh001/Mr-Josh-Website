@@ -1,60 +1,101 @@
-# MJ HUB Reseller API — implementation notes
+# MJ HUB Reseller API: implementation status
 
-## Current implementation stage
+## Purpose
 
-This branch introduces the first server-side reseller API foundation. It is deliberately not wired into production and does not execute supplier purchases yet.
+This document records what exists in the reseller API branch, what has only been drafted, and what remains blocked. It is an engineering status document, not a promise that the API is live.
+
+**Current status: development foundation only.** The branch is not merged to `main`; the reseller schema has not been applied to Supabase; the endpoint has not been deployed or exercised against a configured preview environment. Supplier purchases are not implemented.
 
 ## Existing MJ HUB fulfilment models audited
 
-- **SMS Server 1 / normal OTP:** `mj-sms.html`; sources `grizzlysms` and `herosms` are both presented as Server 1.
-- **SMS Server 2:** `mj-sms3.html`; source `smsbus`, separate supplier integration and order lifecycle.
-- **SMS Server 3:** `mj-sms-s3.html`; source `virtualsms`, with its own OTP lifecycle.
-- **USA physical SIM rental:** `mj-sms-usa-rent.html` + `mj-sms-usa-number.html`; GotSMS carrier/plan selection, renewal, inbox, cancellation/refund and expiry states.
-- **Global / long-term country rental:** `mj-sms-rent.html` and SMS-BUS rental actions; country/area, duration in months, renew/cancel, inbox and rental expiry.
-- **Telegram:** `mj-telegram.html`; Premium and Stars are separate product types fulfilled through SMMKings, not SMS activation.
-- **eSIM:** `esim.html` + `api/esim.js`; carrier and plan selection, IMEI/customer details, manual fulfilment and email/invoice lifecycle.
-- **Boosting:** `mj-boosters.html` + `api/owlet.js`; separate provider-backed panel services and order status.
-- **Logs:** `mj-logs.html` + `api/order-logsdomain.js`, `api/classy.js`, `api/sujan.js`, `api/order-manual.js`; multiple supplier sources and credential fulfilment.
-- **MJ Mails:** `mj-mails.html` + `mj-mails-orders.html` + `lib/mj-mails.js`; website search, available email offers, one-mail activation, message inbox/reuse, cancellation and refund states.
+| Product family | Existing MJ HUB implementation | Supplier / fulfilment notes |
+|---|---|---|
+| SMS Server 1 | `mj-sms.html` | GrizzlySMS and HeroSMS pools, presented as one server |
+| SMS Server 2 | `mj-sms3.html` | SMS-BUS; separate activation lifecycle |
+| SMS Server 3 | `mj-sms-s3.html` | VirtualSMS; separate activation lifecycle |
+| USA real-number rental | `mj-sms-usa-rent.html`, `mj-sms-usa-number.html` | GotSMS; carrier/plan selection, renewal, inbox, cancellation, refund and expiry |
+| Global / country rental | `mj-sms-rent.html` | SMS-BUS rental actions; country/area and duration-specific lifecycle |
+| Telegram | `mj-telegram.html` | Telegram Premium and Stars via SMMKings; not SMS |
+| eSIM | `esim.html`, `api/esim.js` | Separate eSIM Supabase project; customer/IMEI details and manual fulfilment may be required |
+| Boosting | `mj-boosters.html`, `api/owlet.js` | Provider-backed social-panel services |
+| Logs | `mj-logs.html`, `api/order-logsdomain.js`, `api/classy.js`, `api/sujan.js`, `api/order-manual.js` | Multiple suppliers and credential fulfilment |
+| MJ Mails | `mj-mails.html`, `mj-mails-orders.html`, `lib/mj-mails.js` | HeroSMS email offers, activation, inbox/message reuse, cancellation and refund states |
 
-## Important design rule
+The reseller API must preserve these product-specific request fields, provider identifiers, order states, fulfilment details and compensation rules. A single API key does not mean a single generic supplier order operation.
 
-The public reseller API must expose one authentication key and one reseller account while preserving each product's independent request schema, supplier adapter, order status model, and fulfilment data. In particular:
-- SMS activation, USA physical rental, global monthly rental and long-term rental are distinct operations.
-- Telegram Stars/Premium must not be mixed into SMS services.
-- eSIM is not an OTP/rental number.
-- MJ Mails is a separate email-activation product with inbox/reuse behaviour.
-- Logs and Boosting retain their own supplier-specific fulfilment requirements.
+## Implemented in source on this branch
 
-## Implemented in this branch
+### Reseller account and API-key management
 
-- `GET /api/reseller?action=catalog` and `?action=services`: initial normalized read-only catalogue.
-- `GET /api/reseller?action=balance`: separate reseller wallet read.\n- `GET /api/reseller?action=mail_offers&site=telegram.com`: MJ Mails domain offers and MJ HUB retail pricing using the existing HeroSMS offer endpoint.\n- Catalogue reads are paginated with `page` and `per_page`; the response includes per-table next-page markers.
-- `GET /api/reseller?action=keys` with user JWT: list key metadata.
-- `POST /api/reseller?action=keys` with user JWT: create a key once, hash at rest.
-- `DELETE /api/reseller?action=keys&id=<key_id>` with user JWT: revoke an active key owned by that reseller.
-- Reseller account defaults to pending; API keys cannot be created until an administrator activates the reseller account.
-- SQL schema draft in `sql/reseller-api-foundation.sql`, including atomic order reservation/debit, idempotent wallet posting, and a supplier-confirmation-gated, one-time order-refund RPC. These functions are draft code only and have not been applied to Supabase.
+The handler is `api/reseller.js`.
 
-## Not yet implemented
+- `GET /api/reseller?action=keys` uses the signed-in customer's Supabase user JWT. It creates a pending reseller account if one does not exist, then returns account and key metadata.
+- `POST /api/reseller?action=keys` uses the signed-in customer's Supabase user JWT. It creates a key only when the reseller account is already active.
+- `DELETE /api/reseller?action=keys&id={key_id}` uses the signed-in customer's Supabase user JWT and revokes an active key belonging to that user's reseller account.
+- New keys use the `mj_live_` prefix, are generated with cryptographic randomness, and are stored as SHA-256 hashes. The plaintext is returned only in the successful creation response.
+- A reseller account is initially `pending`. No self-service approval endpoint exists.
 
-Purchase adapters, atomic wallet debit/refund RPCs, webhook signing/delivery, reseller dashboard, admin approval UI, key rotation/revocation UI, rate limiting, supplier reconciliation and full automated tests. These must be completed before external reseller use.
+### Reseller-key endpoints
 
-## Existing customer endpoint separation
+These require `Authorization: Bearer <reseller_api_key>` and an active reseller account:
 
-The current customer purchase endpoints are not reseller-ready drop-in adapters. SMS routes such as `/api/grizzly-sync` and `/api/sms-bus` authenticate a Supabase user JWT, bind orders to that user's identity, and execute the customer's existing wallet debit/refund logic. The reseller API must call supplier-specific operations through server-side adapter code while using the reseller wallet transaction functions. It must never forward a reseller key as a customer JWT or invoke customer-wallet debit/refund paths.
+- `GET /api/reseller?action=catalog` or `?action=services`: read-only catalogue.
+- `GET /api/reseller?action=balance`: reads the separate reseller wallet.
+- `GET /api/reseller?action=mail_offers&site={domain}`: fetches MJ Mails offers from HeroSMS and applies the existing MJ HUB pricing calculation.
 
-Server 1 combines GrizzlySMS and HeroSMS pools; Server 2 uses SMS-BUS; Server 3 uses VirtualSMS. USA rentals use GotSMS through the SMS-BUS route, while global/monthly rentals use SMS-BUS rental actions. These flows have distinct request fields and cancellation/refund semantics. eSIM has a separate Supabase project and includes manual fulfilment, so it must not be treated as an instant supplier order.
+Catalogue data is currently assembled from `number_services`, `products`, `booster_services`, and, when configured, the separate eSIM Supabase project's `esim_plans` table. SMS sources are mapped to Server 1/2/3, USA rental, and global rental. Telegram Premium/Stars are kept separate from ordinary boosting rows. MJ Mails offers are fetched through a separate site-specific request, not from the general catalogue.
 
-## Catalogue limitation
+### Database migration draft
 
-The first catalogue adapter is intentionally read-only and best-effort. It exposes the existing normalized service rows and a separate site-specific MJ Mails offer lookup. Supplier-specific order details and every dynamic plan/stock shape still require explicit adapter mapping. The exact catalogue schema for each supplier must be mapped before order creation is enabled. No generic order endpoint should be enabled until each adapter has a tested compensating/refund strategy.
+`sql/reseller-api-foundation.sql` defines draft tables for reseller accounts, API keys, separate reseller wallets, wallet ledger entries, and reseller orders. It also drafts:
 
-## Security / operational requirements before launch
+- `reseller_order_reserve`: locks the reseller wallet and creates the order plus debit ledger entry in one transaction.
+- `reseller_wallet_post`: serializes wallet postings and uses an idempotency key to prevent duplicate postings.
+- `reseller_refund_order`: allows one refund for an order only when the caller asserts supplier confirmation and the order is in a refundable state.
 
-- Store only API key hashes; reveal plaintext only at creation.
-- Add per-reseller request limits and scoped keys.
-- Use transactional SQL functions for reserve/debit/settlement/refund with unique idempotency keys. The current draft covers atomic order reservation/debit, wallet posting, and single-refund protection. Order settlement/state-transition controls and supplier reconciliation remain to be built.
-- Never call suppliers before the debit reservation commits.
-- On supplier timeouts, retain an `unknown` state and reconcile; do not blindly retry purchases.
-- Verify supplier terms and allowed resale rights for each category.
+**These SQL objects are not applied to Supabase.** The boolean supplier-confirmation argument is not independent proof of supplier state. Only a trusted server-side adapter may call the refund function after verifying the supplier outcome. The RPCs have not been exercised against the target database.
+
+## Not implemented
+
+- Purchase/order endpoints for any category.
+- Supplier-specific purchase adapters or provider status polling.
+- Order retrieval, cancellation, renewal, inbox/message retrieval, or fulfilment endpoints for reseller orders.
+- Verified supplier webhooks, signature validation, replay protection, and delivery retries.
+- Reseller funding/top-up and admin wallet adjustment workflows.
+- Admin approval UI, reseller dashboard, key rotation UI, usage analytics, or scoped-key enforcement.
+- Rate limiting, per-key quotas, abuse controls, and request audit logs.
+- Supplier reconciliation and safe handling of ambiguous timeouts.
+- End-to-end tests and production/preview validation.
+
+The SQL draft includes wallet reservation/posting/refund functions, so it is inaccurate to describe those functions as absent. They are **drafted but unapplied and untested**.
+
+## Important code-review limitations
+
+1. The current API-key middleware reads the stored scopes but does not enforce individual scopes yet. The current key is therefore not meaningfully restricted by its scope list.
+2. The catalogue's `page` and `per_page` values are applied independently to each backing table. `count` is the number of mapped items on that page, not a global total. Clients must follow each `next_page` entry independently and merge results.
+3. The catalogue currently filters unavailable rows out rather than returning them with `available: false`.
+4. eSIM catalogue loading depends on `ESIM_SUPABASE_URL`, `ESIM_SUPABASE_SERVICE_ROLE_KEY`, and a compatible `esim_plans` table with the selected fields. This has not been verified in a preview environment.
+5. The current `mail_offers` handler validates `site`; the optional `domain` is forwarded to the supplier but is not independently validated by this handler.
+6. No rate limit is implemented. The `last_used_at` timestamp is updated on every authenticated API-key request.
+7. The SQL refund RPC trusts a privileged caller's `p_supplier_confirmed` boolean. It must never be exposed directly to a client or called before a verified supplier result.
+8. Existing customer endpoints are not reseller adapters. Routes such as `/api/grizzly-sync` and `/api/sms-bus` use customer JWT identity and customer-wallet debit/refund paths. A reseller key must never be passed as a customer JWT, and reseller orders must never debit or refund the customer's wallet.
+
+## Required architecture before purchases are enabled
+
+1. Authenticate one reseller API key and resolve its active reseller account.
+2. Validate the requested category, service ID, request schema, scope, quantity and pricing server-side.
+3. Generate or validate an idempotency key.
+4. Reserve funds and persist the reseller order atomically.
+5. Only after reservation commits, invoke the correct supplier adapter.
+6. Persist supplier identifiers and normalized state transitions.
+7. On confirmed supplier failure/cancellation, perform one idempotent refund against the original reseller order.
+8. On timeout or ambiguous provider response, mark the order `unknown` and reconcile before any retry or refund.
+9. Record every transition and supplier response for support and financial reconciliation.
+
+## Documentation and validation status
+
+- `docs/RESELLER_API.md` is the developer-facing reference for endpoints that currently exist.
+- `docs/openapi.yaml` describes only those existing endpoints. Planned purchase routes are intentionally excluded.
+- Documentation and OpenAPI syntax can be statically checked, but that does not prove runtime correctness.
+- Runtime validation requires a preview deployment with the migration applied to a non-production database and test supplier credentials.
+- No production deployment, production schema change, or production purchase test is authorized by this work.
