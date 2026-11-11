@@ -5092,8 +5092,8 @@ function updateProductSupplierFilter(category) {
 function filterProducts() {
  const q = (document.getElementById('productSearch').value || '').toLowerCase().trim();
  const cat = (document.getElementById('categoryFilter')?.value || '').trim();
- const supplier = (document.getElementById('productSupplierFilter')?.value || '').trim();
  updateProductSupplierFilter(cat);
+ const supplier = (document.getElementById('productSupplierFilter')?.value || '').trim();
  let filtered = allProducts;
  if (cat) filtered = filtered.filter(p => String(p.category || '').trim() === cat);
  if (supplier) filtered = filtered.filter(p => String(p.source || '').trim() === supplier);
