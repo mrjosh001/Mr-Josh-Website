@@ -3239,22 +3239,54 @@ async function loadSupplierBalances() {
 
 async function loadProducts() {
  try {
- // Lean select — avoid columns that may not exist (admin_hidden, created_at).
- // Fall back so a missing column never blanks the whole catalog.
- let data = null, error = null;
- const lean = 'id, product_key, name, category, price, supplier_price, stock_quantity, is_available, is_shared, shared_inventory_ids, source, description, display_description, updated_at';
- ({ data, error } = await sb.from('products').select(lean).order('name'));
- if (error && /column|schema cache|Could not find/i.test(error.message || '')) {
- ({ data, error } = await sb.from('products').select('id, product_key, name, category, price, stock_quantity, is_available, is_shared, shared_inventory_ids, source, description').order('name'));
+ // Supabase applies a row cap to each response. Fetch the full catalogue
+ // in stable, bounded pages so products after the first 1,000 are not lost.
+ const pageSize = 500;
+ const columns = [
+   'id, product_key, name, category, price, supplier_price, stock_quantity, is_available, is_shared, shared_inventory_ids, source, description, display_description, updated_at',
+   'id, product_key, name, category, price, stock_quantity, is_available, is_shared, shared_inventory_ids, source, description',
+   '*'
+ ];
+ let selectedColumns = columns[0];
+ let all = [];
+ let offset = 0;
+ let finished = false;
+
+ while (!finished) {
+   let result = await sb.from('products')
+     .select(selectedColumns)
+     .order('name', { ascending: true })
+     .order('id', { ascending: true })
+     .range(offset, offset + pageSize - 1);
+
+   // Keep compatibility with deployments where optional product columns
+   // have not been added yet. Retry the current page with the fallback schema.
+   if (result.error && /column|schema cache|Could not find/i.test(result.error.message || '')) {
+     const currentIndex = columns.indexOf(selectedColumns);
+     if (currentIndex < columns.length - 1) {
+       selectedColumns = columns[currentIndex + 1];
+       result = await sb.from('products')
+         .select(selectedColumns)
+         .order('name', { ascending: true })
+         .order('id', { ascending: true })
+         .range(offset, offset + pageSize - 1);
+     }
+   }
+
+   if (result.error) throw result.error;
+   const page = result.data || [];
+   all = all.concat(page);
+   offset += page.length;
+   finished = page.length < pageSize;
  }
- if (error && /column|schema cache|Could not find/i.test(error.message || '')) {
- ({ data, error } = await sb.from('products').select('*').order('name'));
- }
- allProducts = error ? [] : (data || []);
- if (error) console.error('Products error:', error.message);
+
+ // Only replace the live in-memory catalogue after every page succeeds.
+ allProducts = all;
+ console.info('Admin product catalogue loaded:', allProducts.length, 'products');
  } catch (e) {
- console.error('Products load failed', e);
- allProducts = allProducts || [];
+ console.error('Products load failed:', e);
+ showAdminToast('Could not load the complete product catalogue: ' + (e.message || String(e)), 'error');
+ // Do not silently replace an existing catalogue with a partial result.
  }
  try {
  populateCategoryFilter();
