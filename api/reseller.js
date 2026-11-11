@@ -10,6 +10,19 @@ const esimSupabase = process.env.ESIM_SUPABASE_URL && process.env.ESIM_SUPABASE_
 const KEY_PREFIX = 'mj_live_';
 
 function json(res, status, payload) {
+  if (status >= 400) {
+    const code = payload?.code || ({
+      400: 'INVALID_REQUEST', 401: 'UNAUTHORIZED', 403: 'FORBIDDEN',
+      404: 'NOT_FOUND', 405: 'METHOD_NOT_ALLOWED', 429: 'RATE_LIMITED',
+      500: 'INTERNAL_ERROR', 502: 'UPSTREAM_ERROR', 503: 'SERVICE_UNAVAILABLE'
+    }[status] || 'REQUEST_FAILED');
+    return res.status(status).json({
+      success: false,
+      code,
+      message: String(payload?.message || 'Request failed'),
+      request_id: String(res.getHeader?.('x-request-id') || crypto.randomUUID())
+    });
+  }
   return res.status(status).json(payload);
 }
 function sha256(value) {
@@ -27,9 +40,8 @@ function toPublicService(row, category, source) {
   const price = Number(row.price ?? row.sell_price ?? row.price_ngn ?? row.amount_ngn ?? 0);
   if (!(price > 0)) return null;
   return {
-    id: String(row.api_service_id || row.product_key || row.id),
+    id: sha256(String(row.api_service_id || row.product_key || row.id)).slice(0, 32),
     category,
-    source,
     name: String(row.name || row.service_name || row.plan_name || 'Service'),
     country: row.country_name || row.country || null,
     price: { amount: Math.round(price * 100) / 100, currency: 'NGN' },
@@ -127,7 +139,7 @@ async function handleCatalog(req, res, reseller) {
     if (!category) continue;
     const item = toPublicService({ ...row, api_service_id: category + ':' + src + ':' + (row.country_id || 'all') + ':' + row.service_id }, category, src);
     if (item && item.available) {
-      item.metadata = { provider_service_id: String(row.service_id), country_id: row.country_id || null };
+      item.metadata = { country_id: row.country_id || null };
       items.push(item);
     }
   }
@@ -146,7 +158,7 @@ async function handleCatalog(req, res, reseller) {
     }
     const item = toPublicService({ ...row, api_service_id: category + ':' + src + ':' + row.service_id }, category, src);
     if (item && item.available) {
-      item.metadata = { provider_service_id: String(row.service_id), service_type: row.service_type || null,
+      item.metadata = { service_type: row.service_type || null,
         min_quantity: Number(row.min_quantity) || null, max_quantity: Number(row.max_quantity) || null,
         refill: row.refill === true, cancel: row.cancel === true };
       items.push(item);
@@ -155,7 +167,7 @@ async function handleCatalog(req, res, reseller) {
   for (const row of esim.data || []) {
     if (row.is_active === false) continue;
     const item = toPublicService({ ...row, api_service_id: 'esim:' + row.id, name: row.name || row.id, price: row.amount_ngn }, 'esim', 'mjhub_wireless');
-    if (item) { item.metadata = { plan_id: String(row.id), days: Number(row.days) || null }; items.push(item); }
+    if (item) { item.metadata = { days: Number(row.days) || null }; items.push(item); }
   }
   return json(res, 200, {
     success: true, currency: reseller.currency || 'NGN', count: items.length, page, per_page: perPage,
@@ -219,6 +231,8 @@ async function handleBalance(req, res, reseller) {
 }
 
 export default async function handler(req, res) {
+  res.setHeader('Cache-Control', 'no-store');
+  res.setHeader('X-Content-Type-Options', 'nosniff');
   applyApiCors(req, res, { methods: 'GET, POST, DELETE, OPTIONS' });
   if (handleOptions(req, res)) return;
   try {
