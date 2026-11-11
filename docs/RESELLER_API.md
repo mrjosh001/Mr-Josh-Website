@@ -313,3 +313,8 @@ Clients should not automatically retry a request that creates/revokes a key or a
 Before external developers are given production credentials, MJ HUB must implement and test each product adapter independently, including request validation, price verification, atomic reseller-wallet reservation, supplier submission, status reconciliation, cancellation/renewal rules where applicable, and exactly-once refund behaviour. The SQL migration must be reviewed and applied to a non-production database first. The API must then pass authenticated preview tests, concurrency/idempotency tests, supplier failure tests, and security/rate-limit tests.
 
 **This reference documents the current development branch only. It does not certify production availability.**
+
+
+## Sandbox behaviour
+
+Sandbox keys are isolated from live keys. Their balance endpoint returns a fixed zero sandbox balance, and MJ Mails offer lookup returns an empty sandbox response without calling HeroSMS. Sandbox keys cannot be used as live keys. This is a read-only sandbox foundation, not a complete order simulator: purchase adapters, mock order lifecycle, rate limits, and signed webhooks are not yet implemented. IP allowlists and key expiry are supported by the database draft but require that migration to be applied before use.
