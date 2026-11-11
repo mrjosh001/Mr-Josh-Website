@@ -64,7 +64,7 @@ create table if not exists public.reseller_orders (
   id uuid primary key default gen_random_uuid(),
   reseller_id uuid not null references public.reseller_accounts(id) on delete cascade,
   idempotency_key text not null,
-  category text not null check (category in ('telegram','sms.activation','sms.usa_rental','sms.global_rental','sms.long_term_rental','esim','logs','boosting','mj_mails')),
+  category text not null check (category in ('telegram','telegram.premium','telegram.stars','sms.activation','sms.server1','sms.server2','sms.server3','sms.usa_rental','sms.global_rental','sms.long_term_rental','esim','logs','boosting','mj_mails')),
   service_id text not null,
   supplier text,
   supplier_order_id text,
@@ -107,8 +107,9 @@ begin
      or coalesce(length(trim(p_idempotency_key)), 0) < 8
      or coalesce(length(trim(p_service_id)), 0) = 0
      or p_amount_minor is null or p_amount_minor <= 0
-     or p_category not in ('telegram','sms.activation','sms.usa_rental','sms.global_rental',
-       'sms.long_term_rental','esim','logs','boosting','mj_mails') then
+     or p_category not in ('telegram','telegram.premium','telegram.stars','sms.activation','sms.server1',
+       'sms.server2','sms.server3','sms.usa_rental','sms.global_rental','sms.long_term_rental',
+       'esim','logs','boosting','mj_mails') then
     raise exception 'INVALID_RESELLER_ORDER';
   end if;
 
