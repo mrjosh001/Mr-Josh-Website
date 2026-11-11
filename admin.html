@@ -366,6 +366,17 @@ function withLagos(opts) { return Object.assign({ timeZone: 'Africa/Lagos' }, op
  background:var(--bg); border:1px solid var(--border); border-radius:12px; padding:14px;
  transition: border-color .15s ease;
  }
+ /* Product cards must never expand beyond the mobile viewport. Long supplier
+    product names and prices are allowed to wrap instead of widening the card. */
+ #productsMobileCards { width:100%; min-width:0; }
+ #productsMobileCards .product-card { width:100%; min-width:0; max-width:100%; overflow:hidden; }
+ #productsMobileCards .product-card h4 { min-width:0; overflow-wrap:anywhere; word-break:break-word; }
+ #productsMobileCards .product-card .row-line { min-width:0; align-items:flex-start; flex-wrap:wrap; }
+ #productsMobileCards .product-card .row-line > * { min-width:0; max-width:100%; overflow-wrap:anywhere; word-break:break-word; }
+ #productsMobileCards .product-card .row-line > span:last-child,
+ #productsMobileCards .product-card .row-line > strong { text-align:right; margin-left:auto; }
+ #productsMobileCards .product-card > div[style*="display:flex"] { flex-wrap:wrap; }
+
  .product-card:hover, .user-card:hover, .mobile-card:hover { border-color: rgba(59,130,246,.35); }
  .product-card h4, .user-card h4 { font-size:14px; margin-bottom:6px; }
  .meta { font-size:12px; color:var(--muted); margin-bottom:6px; }
@@ -1182,6 +1193,7 @@ function withLagos(opts) { return Object.assign({ timeZone: 'Africa/Lagos' }, op
  <div class="search-row">
  <input type="text" id="productSearch" placeholder="Search products..." oninput="filterProducts()" />
  <select id="categoryFilter" onchange="filterProducts()"><option value="">All Categories</option></select>
+ <select id="productSupplierFilter" aria-label="Filter log products by supplier" onchange="filterProducts()" style="display:none;"><option value="">All Log Suppliers</option></select>
  </div>
 
  <div class="desktop-only desktop-table table-wrap">
@@ -5054,11 +5066,37 @@ function renderProductCards(items) {
  }).join('');
 }
 
+function updateProductSupplierFilter(category) {
+ const select = document.getElementById('productSupplierFilter');
+ if (!select) return;
+ const isLogsCategory = /log/i.test(String(category || ''));
+ select.style.display = isLogsCategory ? '' : 'none';
+ if (!isLogsCategory) {
+   select.value = '';
+   return;
+ }
+ const suppliers = [...new Set(allProducts
+   .filter(p => String(p.category || '').trim() === category)
+   .map(p => String(p.source || '').trim())
+   .filter(Boolean))].sort((a, b) => a.localeCompare(b));
+ const current = select.value;
+ select.innerHTML = '<option value="">All Log Suppliers</option>' +
+   suppliers.map(source => {
+     const info = SUPPLIER_BADGES[String(source).toLowerCase()];
+     const label = info ? info.label : source;
+     return '<option value="' + escapeHtml(source) + '">' + escapeHtml(label) + '</option>';
+   }).join('');
+ if (suppliers.includes(current)) select.value = current;
+}
+
 function filterProducts() {
  const q = (document.getElementById('productSearch').value || '').toLowerCase().trim();
  const cat = (document.getElementById('categoryFilter')?.value || '').trim();
+ const supplier = (document.getElementById('productSupplierFilter')?.value || '').trim();
+ updateProductSupplierFilter(cat);
  let filtered = allProducts;
  if (cat) filtered = filtered.filter(p => String(p.category || '').trim() === cat);
+ if (supplier) filtered = filtered.filter(p => String(p.source || '').trim() === supplier);
  if (q) {
  filtered = filtered.filter(p =>
  (p.name || '').toLowerCase().includes(q) ||
