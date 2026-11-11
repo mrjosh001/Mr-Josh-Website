@@ -117,3 +117,24 @@ The SQL draft includes wallet reservation/posting/refund functions, so it is ina
 - Full sandbox order simulator and supplier-mock adapters. Current sandbox is read-only and blocks live MJ Mails supplier access; no purchase routes exist yet.
 - Enforce scopes per route, implement key rotation, and test IP extraction behind the actual Vercel proxy.
 - Verify all supplier adapters, catalogue mappings, eSIM schema, wallet RPCs, and refund/reconciliation paths in a non-production preview environment.
+
+
+## Additional hardening added in the latest pass
+
+- Atomic per-key fixed-window rate limiter (60 requests per 60 seconds) and HTTP 429 / `Retry-After`.
+- Scope enforcement for catalogue and wallet reads.
+- Atomic key rotation RPC and API key-management operation.
+- 24-hour idempotency claim and order-binding RPCs. Financial order and wallet-ledger records remain permanent.
+- Webhook endpoint/outbox tables, event enqueue RPC, concurrent-safe outbox claim RPC, AES-256-GCM secret encryption, HMAC-SHA256 signing/verification helpers, and an internal retrying dispatcher.
+- Sandbox key environment is preserved when rotating keys.
+
+### Remaining blockers before reseller orders or external webhooks can go live
+
+1. There is still no purchase/order-create route, so the 24-hour idempotency claim must be wired into each future order adapter before supplier calls.
+2. There is no reseller-facing webhook subscription management route. Endpoints must currently be provisioned through trusted administrative/database operations.
+3. Order-state transitions do not yet enqueue webhook events because the service-specific order adapters are not implemented.
+4. The webhook dispatcher needs its cron/scheduler configured and secrets provisioned in the deployment environment.
+5. Sandbox has no simulated order lifecycle; it is read-only and blocks live supplier offer calls.
+6. The SQL foundation and RPCs remain unapplied and untested against a non-production Supabase project. The runtime changes depending on them fail closed until that migration exists.
+7. Rate-limit cleanup/retention, load tests, IP allowlist proxy validation, and end-to-end signature/retry tests remain outstanding.
+8. The key-rotation route, rate-limit RPC, and webhook dispatcher are syntax-level development work only, not verified in a deployed preview.
