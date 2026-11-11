@@ -60,10 +60,10 @@ Catalogue data is currently assembled from `number_services`, `products`, `boost
 - Purchase/order endpoints for any category.
 - Supplier-specific purchase adapters or provider status polling.
 - Order retrieval, cancellation, renewal, inbox/message retrieval, or fulfilment endpoints for reseller orders.
-- Verified supplier webhooks, signature validation, replay protection, and delivery retries.
+- Signed reseller webhooks, signature validation, replay protection, durable outbox, and delivery retries (not implemented).
 - Reseller funding/top-up and admin wallet adjustment workflows.
 - Admin approval UI, reseller dashboard, key rotation UI, usage analytics, or scoped-key enforcement.
-- Rate limiting, per-key quotas, abuse controls, and request audit logs.
+- Per-key rate limiting, quotas, abuse controls, and durable request audit logs (not implemented).
 - Supplier reconciliation and safe handling of ambiguous timeouts.
 - End-to-end tests and production/preview validation.
 
@@ -99,3 +99,21 @@ The SQL draft includes wallet reservation/posting/refund functions, so it is ina
 - Documentation and OpenAPI syntax can be statically checked, but that does not prove runtime correctness.
 - Runtime validation requires a preview deployment with the migration applied to a non-production database and test supplier credentials.
 - No production deployment, production schema change, or production purchase test is authorized by this work.
+
+
+## Latest hardening pass (feature branch only)
+
+- Added `/api/v1/reseller` as a versioned entry point while retaining the existing handler implementation centrally.
+- Catalogue service IDs are now opaque hashes. Supplier source names and raw provider service IDs are no longer returned in catalogue fields/metadata.
+- Error responses now use `{ success: false, code, message, request_id }` and include an `X-Request-Id` header.
+- Added `mj_test_` sandbox key creation, environment binding, expiry checks, and optional IP allowlist checks in the handler. Sandbox balance is hard-coded to zero and sandbox MJ Mails lookup returns an empty result without contacting HeroSMS.
+- Added draft SQL for key environment/allowlist/expiry metadata and a separate sandbox wallet. The SQL remains unapplied.
+
+### Still open after this pass
+
+- Durable per-key rate limiting and `429 Retry-After`.
+- `Idempotency-Key` HTTP header and 24-hour replay contract for future order-create endpoints. The draft order table currently has a permanent per-reseller idempotency uniqueness constraint, but there is no order-create route yet.
+- Signed reseller webhook delivery, outbox, retry, replay and event history.
+- Full sandbox order simulator and supplier-mock adapters. Current sandbox is read-only and blocks live MJ Mails supplier access; no purchase routes exist yet.
+- Enforce scopes per route, implement key rotation, and test IP extraction behind the actual Vercel proxy.
+- Verify all supplier adapters, catalogue mappings, eSIM schema, wallet RPCs, and refund/reconciliation paths in a non-production preview environment.
