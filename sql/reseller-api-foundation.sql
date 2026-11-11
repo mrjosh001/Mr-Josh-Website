@@ -347,3 +347,5 @@ alter table public.reseller_orders enable row level security;
 
 revoke all on public.reseller_accounts, public.reseller_api_keys, public.reseller_wallets,
   public.reseller_wallet_ledger, public.reseller_orders from anon, authenticated;
+grant all on public.reseller_accounts, public.reseller_api_keys, public.reseller_wallets,
+  public.reseller_wallet_ledger, public.reseller_orders to service_role;
