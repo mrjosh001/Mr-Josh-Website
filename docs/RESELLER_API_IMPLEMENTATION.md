@@ -160,3 +160,11 @@ The SQL draft includes wallet reservation/posting/refund functions, so it is ina
 - Reseller webhook endpoint management UI/API and order lifecycle event enqueue wiring.
 - Full automated tests against a non-production Supabase project, including migration execution, concurrent idempotency requests, rate-limit concurrency, wallet contention and webhook retry/replay.
 - Preview deployment and secrets provisioning before runtime verification.
+
+
+## Additional hardening pass
+
+- Fixed a sandbox wallet migration defect: rerunning the migration previously could reset a depleted test balance. Sandbox credits are now seeded only when a wallet is first created or backfilled; existing balances are preserved.
+- Hardened webhook destination validation: HTTPS/standard port only, no embedded credentials, DNS resolution checks against non-public IP ranges, and redirects disabled.
+- Added a two-minute outbox claim lease so concurrent dispatch workers do not immediately claim the same delivery. Delivery remains at-least-once; receivers must deduplicate by delivery ID.
+- Webhook endpoint registration remains trusted/admin-provisioned. DNS rebinding cannot be completely eliminated with the current fetch-based transport and must be addressed before exposing endpoint registration to resellers.
