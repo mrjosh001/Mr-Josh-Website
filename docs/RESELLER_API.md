@@ -296,15 +296,16 @@ Observed status classes include:
 | 502 | Supplier offer lookup failure |
 | 503 | Catalogue, wallet, or supplier configuration unavailable |
 
-Clients should not automatically retry a request that creates/revokes a key or any future purchase operation without a defined idempotency contract. Purchase operations do not exist yet.
+Clients should not automatically retry key creation or revocation without checking the resulting key state. Sandbox order creation requires an Idempotency-Key; live purchase operations remain disabled.
 
 ## Operational and security constraints
 
 - Keep API keys server-side and out of browser code, mobile app bundles, logs and support screenshots.
 - Store the plaintext key securely when it is created. MJ HUB cannot recover it later; revoke and replace it if lost.
 - HTTPS is required.
-- The current implementation has no rate limiter and does not enforce stored key scopes.
-- No purchase, order status, cancellation, renewal, refund, webhook or funding endpoints are currently available.
+- API-key requests are limited to 60 requests per fixed 60-second window, and read/write scopes are enforced.
+- Sandbox order creation and retrieval are available. Live purchase, cancellation, renewal, refund and wallet-funding endpoints are not enabled.
+- Webhook signing and a retry dispatcher are implemented in the development branch, but reseller-facing endpoint management and order-event enqueue integration remain outstanding.
 - Do not retry supplier operations after ambiguous timeouts until supplier state has been reconciled.
 - Supplier credentials and raw supplier API responses must not be exposed to reseller clients.
 
@@ -317,7 +318,7 @@ Before external developers are given production credentials, MJ HUB must impleme
 
 ## Sandbox behaviour
 
-Sandbox keys are isolated from live keys. Their balance endpoint returns a fixed zero sandbox balance, and MJ Mails offer lookup returns an empty sandbox response without calling HeroSMS. Sandbox keys cannot be used as live keys. This is a read-only sandbox foundation, not a complete order simulator: purchase adapters, mock order lifecycle, rate limits, and signed webhooks are not yet implemented. IP allowlists and key expiry are supported by the database draft but require that migration to be applied before use.
+Sandbox keys are isolated from live keys. Their wallet is separate and seeded with fictitious test credits when first provisioned; reapplying the migration does not reset an existing sandbox balance. MJ Mails offer lookup returns an empty sandbox response without calling HeroSMS. Sandbox order creation simulates a completed order and never contacts suppliers. Live ordering remains disabled. IP allowlists, expiry, rate limits and sandbox wallet/order tables require the foundation migration to be applied before use.
 
 
 ## Security controls in the current development branch
@@ -326,7 +327,7 @@ Sandbox keys are isolated from live keys. Their balance endpoint returns a fixed
 - API key scopes are checked by endpoint. Catalogue and MJ Mails offer reads require `catalog:read`; wallet reads require `wallet:read`.
 - Authenticated API-key requests are limited to 60 per fixed 60-second window. Excess requests return HTTP 429 with `Retry-After`.
 - Keys may be restricted by an IP allowlist and expiry timestamp after the foundation SQL is applied.
-- Sandbox keys use a separate environment marker and do not access the live reseller wallet or live MJ Mails supplier. The sandbox currently provides read-only responses; no order simulation exists.
+- Sandbox keys use a separate environment marker and do not access the live reseller wallet or live MJ Mails supplier. Sandbox order creation uses a separate test wallet and simulated order table.
 - Webhook delivery uses HMAC-SHA256 over `timestamp.raw_body`, sent in `X-MJ-Signature` as `v1=<hex>`, with `X-MJ-Timestamp`, `X-MJ-Event`, and `X-MJ-Delivery`. Receivers should reject timestamps older than five minutes and compare signatures in constant time.
 - Webhook secrets are encrypted at rest with AES-256-GCM. Configure `RESELLER_WEBHOOK_ENCRYPTION_KEY` as a base64-encoded 32-byte key and `RESELLER_WEBHOOK_DISPATCH_SECRET` for the internal dispatcher.
 - The internal dispatcher retries failed deliveries with exponential backoff and marks deliveries dead after ten attempts.
