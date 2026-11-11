@@ -79,6 +79,99 @@ create table if not exists public.reseller_orders (
 );
 
 
+-- Reserve funds and create an order in one database transaction.
+-- No supplier call may happen until this function commits successfully.
+create or replace function public.reseller_order_reserve(
+  p_reseller_id uuid,
+  p_idempotency_key text,
+  p_category text,
+  p_service_id text,
+  p_supplier text,
+  p_amount_minor bigint,
+  p_request_payload jsonb default '{}'::jsonb
+)
+returns jsonb
+language plpgsql
+security invoker
+set search_path = public, pg_temp
+as $function$
+declare
+  v_wallet public.reseller_wallets%rowtype;
+  v_existing public.reseller_orders%rowtype;
+  v_order public.reseller_orders%rowtype;
+  v_balance bigint;
+  v_ledger public.reseller_wallet_ledger%rowtype;
+  v_ledger_key text;
+begin
+  if p_reseller_id is null
+     or coalesce(length(trim(p_idempotency_key)), 0) < 8
+     or coalesce(length(trim(p_service_id)), 0) = 0
+     or p_amount_minor is null or p_amount_minor <= 0
+     or p_category not in ('telegram','sms.activation','sms.usa_rental','sms.global_rental',
+       'sms.long_term_rental','esim','logs','boosting','mj_mails') then
+    raise exception 'INVALID_RESELLER_ORDER';
+  end if;
+
+  select * into v_wallet
+    from public.reseller_wallets
+    where reseller_id = p_reseller_id
+    for update;
+
+  if not found then
+    raise exception 'RESELLER_WALLET_NOT_FOUND';
+  end if;
+
+  select * into v_existing
+    from public.reseller_orders
+    where reseller_id = p_reseller_id
+      and idempotency_key = p_idempotency_key;
+
+  if found then
+    if v_existing.category <> p_category
+       or v_existing.service_id <> p_service_id
+       or v_existing.amount_minor <> p_amount_minor then
+      raise exception 'IDEMPOTENCY_KEY_REUSED_WITH_DIFFERENT_ORDER';
+    end if;
+    return jsonb_build_object('created', false, 'order', to_jsonb(v_existing),
+      'balance_minor', v_wallet.balance_minor);
+  end if;
+
+  if v_wallet.balance_minor < p_amount_minor then
+    raise exception 'INSUFFICIENT_RESELLER_BALANCE';
+  end if;
+
+  v_balance := v_wallet.balance_minor - p_amount_minor;
+  update public.reseller_wallets
+    set balance_minor = v_balance, updated_at = now()
+    where reseller_id = p_reseller_id;
+
+  v_ledger_key := 'order:' || p_idempotency_key;
+  insert into public.reseller_wallet_ledger (
+    reseller_id, idempotency_key, entry_type, amount_minor,
+    balance_after_minor, reference_type, metadata
+  ) values (
+    p_reseller_id, v_ledger_key, 'debit', p_amount_minor, v_balance,
+    'reseller_order', jsonb_build_object('idempotency_key', p_idempotency_key)
+  ) returning * into v_ledger;
+
+  insert into public.reseller_orders (
+    reseller_id, idempotency_key, category, service_id, supplier,
+    status, amount_minor, request_payload
+  ) values (
+    p_reseller_id, p_idempotency_key, p_category, p_service_id, p_supplier,
+    'created', p_amount_minor, coalesce(p_request_payload, '{}'::jsonb)
+  ) returning * into v_order;
+
+  return jsonb_build_object('created', true, 'order', to_jsonb(v_order),
+    'balance_minor', v_balance, 'ledger', to_jsonb(v_ledger));
+end;
+$function$;
+
+revoke all on function public.reseller_order_reserve(uuid,text,text,text,text,bigint,jsonb)
+  from public, anon, authenticated;
+grant execute on function public.reseller_order_reserve(uuid,text,text,text,text,bigint,jsonb)
+  to service_role;
+
 -- Atomic reseller wallet posting. The wallet row lock serializes concurrent
 -- debits/credits for one reseller. Replaying the same idempotency key returns
 -- the original ledger row without changing the balance a second time.
