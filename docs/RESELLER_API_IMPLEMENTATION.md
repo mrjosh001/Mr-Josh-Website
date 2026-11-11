@@ -124,7 +124,7 @@ The SQL draft includes wallet reservation/posting/refund functions, so it is ina
 - Atomic per-key fixed-window rate limiter (60 requests per 60 seconds) and HTTP 429 / `Retry-After`.
 - Scope enforcement for catalogue and wallet reads.
 - Atomic key rotation RPC and API key-management operation.
-- 24-hour idempotency claim and order-binding RPCs. Financial order and wallet-ledger records remain permanent.
+- 24-hour idempotency claim and order-binding RPCs plus reusable `Idempotency-Key` request hashing/claim helpers. Financial order and wallet-ledger records remain permanent.
 - Webhook endpoint/outbox tables, event enqueue RPC, concurrent-safe outbox claim RPC, AES-256-GCM secret encryption, HMAC-SHA256 signing/verification helpers, and an internal retrying dispatcher.
 - Sandbox key environment is preserved when rotating keys.
 
@@ -138,3 +138,6 @@ The SQL draft includes wallet reservation/posting/refund functions, so it is ina
 6. The SQL foundation and RPCs remain unapplied and untested against a non-production Supabase project. The runtime changes depending on them fail closed until that migration exists.
 7. Rate-limit cleanup/retention, load tests, IP allowlist proxy validation, and end-to-end signature/retry tests remain outstanding.
 8. The key-rotation route, rate-limit RPC, and webhook dispatcher are syntax-level development work only, not verified in a deployed preview.
+
+
+- Catalogue IDs now use keyed HMAC (dedicated `RESELLER_SERVICE_ID_SECRET`, falling back to the server-only Supabase service-role key) rather than an unkeyed hash, reducing supplier-ID enumeration risk.
