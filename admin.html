@@ -1190,10 +1190,12 @@ function withLagos(opts) { return Object.assign({ timeZone: 'Africa/Lagos' }, op
  <button class="btn btn-primary btn-sm" onclick="openProductModal()"><i class="fas fa-plus"></i> Add</button>
  </div>
  </div>
+ <div class="search-row" id="logSupplierFilterRow" style="display:none;margin-bottom:8px;">
+ <select id="productSupplierFilter" aria-label="Filter log products by supplier" onchange="filterProducts()" style="width:100%;"><option value="">All</option></select>
+ </div>
  <div class="search-row">
  <input type="text" id="productSearch" placeholder="Search products..." oninput="filterProducts()" />
  <select id="categoryFilter" onchange="filterProducts()"><option value="">All Categories</option></select>
- <select id="productSupplierFilter" aria-label="Filter log products by supplier" onchange="filterProducts()" style="display:none;"><option value="">All Log Suppliers</option></select>
  </div>
 
  <div class="desktop-only desktop-table table-wrap">
@@ -5068,9 +5070,10 @@ function renderProductCards(items) {
 
 function updateProductSupplierFilter(category) {
  const select = document.getElementById('productSupplierFilter');
- if (!select) return;
+ const row = document.getElementById('logSupplierFilterRow');
+ if (!select || !row) return;
  const isLogsCategory = /log/i.test(String(category || ''));
- select.style.display = isLogsCategory ? '' : 'none';
+ row.style.display = isLogsCategory ? '' : 'none';
  if (!isLogsCategory) {
    select.value = '';
    return;
@@ -5080,10 +5083,16 @@ function updateProductSupplierFilter(category) {
    .map(p => String(p.source || '').trim())
    .filter(Boolean))].sort((a, b) => a.localeCompare(b));
  const current = select.value;
- select.innerHTML = '<option value="">All Log Suppliers</option>' +
+ const supplierLabels = {
+   fadded: 'Fadded',
+   sujandepartment: 'Sujan',
+   classy: 'ClassyTee',
+   logsdomain: 'Logs Domain'
+ };
+ select.innerHTML = '<option value="">All</option>' +
    suppliers.map(source => {
-     const info = SUPPLIER_BADGES[String(source).toLowerCase()];
-     const label = info ? info.label : source;
+     const key = String(source).toLowerCase();
+     const label = supplierLabels[key] || (SUPPLIER_BADGES[key]?.label || source);
      return '<option value="' + escapeHtml(source) + '">' + escapeHtml(label) + '</option>';
    }).join('');
  if (suppliers.includes(current)) select.value = current;
