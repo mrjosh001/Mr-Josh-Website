@@ -1,8 +1,12 @@
 import crypto from 'crypto';
+import { createClient } from '@supabase/supabase-js';
 import { getServiceSupabase, requireUser, applyApiCors, handleOptions } from '../lib/secure.js';
 import { profitFloorNgn } from '../lib/pricing.js';
 
 const supabase = getServiceSupabase();
+const esimSupabase = process.env.ESIM_SUPABASE_URL && process.env.ESIM_SUPABASE_SERVICE_ROLE_KEY
+  ? createClient(process.env.ESIM_SUPABASE_URL, process.env.ESIM_SUPABASE_SERVICE_ROLE_KEY, { auth: { persistSession: false, autoRefreshToken: false } })
+  : null;
 const KEY_PREFIX = 'mj_live_';
 
 function json(res, status, payload) {
@@ -99,10 +103,10 @@ async function handleCatalog(req, res, reseller) {
   const start = (page - 1) * perPage;
   const end = start + perPage - 1;
   const [numbers, products, boosters, esim] = await Promise.all([
-    supabase.from('number_services').select('id,source,service_id,service_name,country_id,country_name,price,sell_price,price_ngn,is_available,available_quantity,hidden,admin_hidden').order('id').range(start, end),
+    supabase.from('number_services').select('id,source,service_id,service_name,country_id,country_name,price,is_available,available_quantity').order('id').range(start, end),
     supabase.from('products').select('id,product_key,name,price,source,is_available,stock_quantity,admin_hidden,category').order('id').range(start, end),
     supabase.from('booster_services').select('*').order('id').range(start, end),
-    supabase.from('esim_plans').select('*').order('id').range(start, end)
+    (esimSupabase ? esimSupabase.from('esim_plans').select('*').order('id').range(start, end) : Promise.resolve({ data: [], error: null }))
   ]);
   const errors = [numbers, products, boosters, esim].filter(x => x.error);
   if (errors.length) return json(res, 503, { success: false, message: 'Service catalogue is temporarily unavailable' });
