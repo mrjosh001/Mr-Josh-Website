@@ -57,9 +57,9 @@ async function requireApiKey(req) {
   if ((!raw.startsWith(KEY_PREFIX) && !raw.startsWith(TEST_KEY_PREFIX)) || raw.length < 40) return { error: { status: 401, message: 'Invalid API key' } };
   const hash = sha256(raw);
   const { data: key, error } = await supabase.from('reseller_api_keys')
-    .select('id,reseller_id,status,scopes,last_used_at,environment,ip_allowlist')
+    .select('id,reseller_id,status,scopes,last_used_at,environment,ip_allowlist,expires_at')
     .eq('key_hash', hash).maybeSingle();
-  if (error || !key || key.status !== 'active') return { error: { status: 401, message: 'Invalid or revoked API key' } };
+  if (error || !key || key.status !== 'active' || (key.expires_at && new Date(key.expires_at).getTime() <= Date.now())) return { error: { status: 401, message: 'Invalid or revoked API key' } };
   const { data: reseller, error: resellerError } = await supabase.from('reseller_accounts')
     .select('id,user_id,status,currency')
     .eq('id', key.reseller_id).maybeSingle();
@@ -231,6 +231,7 @@ async function handleMailOffers(req, res, reseller) {
 }
 
 async function handleBalance(req, res, reseller) {
+  if (reseller.environment === 'sandbox') return json(res, 200, { success: true, environment: 'sandbox', balance: { amount: 0, currency: reseller.currency || 'NGN' }, updated_at: null });
   const { data, error } = await supabase.from('reseller_wallets')
     .select('balance_minor,currency,updated_at').eq('reseller_id', reseller.id).maybeSingle();
   if (error) return json(res, 500, { success: false, message: 'Could not load reseller wallet' });
