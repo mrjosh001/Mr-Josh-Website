@@ -1,5 +1,6 @@
 import crypto from 'crypto';
 import { getServiceSupabase, requireUser, applyApiCors, handleOptions } from '../lib/secure.js';
+import { profitFloorNgn } from '../lib/pricing.js';
 
 const supabase = getServiceSupabase();
 const KEY_PREFIX = 'mj_live_';
@@ -153,7 +154,7 @@ async function handleMailOffers(req, res) {
         const price = usd < 0.1 ? round50(400 + (usd / 0.1) * 100)
           : usd < 0.5 ? round50(600 + ((usd - 0.1) / 0.4) * 400)
           : usd <= 1 ? round50(1100 + ((usd - 0.5) / 0.5) * 400)
-          : Math.ceil(usd * (Number(process.env.USD_TO_NGN_RATE) || Number(process.env.USD_TO_NGN) || 1500) * 1.3 / 50) * 50;
+          : profitFloorNgn(usd, Number(process.env.USD_TO_NGN_RATE) || Number(process.env.USD_TO_NGN) || 1500);
         return { category: 'mj_mails', site, domain: String(row.domain || '').toLowerCase(),
           available: Math.floor(Number(offer.count)), supplier_cost_usd: undefined,
           price: { amount: price, currency: 'NGN' } };
