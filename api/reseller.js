@@ -107,7 +107,9 @@ async function handleCatalog(req, res, reseller) {
     const src = String(row.source || '').toLowerCase();
     const category = src === 'gotsms' ? 'sms.usa_rental' :
       src === 'smsbus_rent' ? 'sms.global_rental' :
-      src === 'smsbus' || src === 'grizzly' || src === 'virtualsms' ? 'sms.activation' : 'sms.other';
+      src === 'grizzlysms' || src === 'herosms' ? 'sms.server1' :
+      src === 'smsbus' ? 'sms.server2' :
+      src === 'virtualsms' ? 'sms.server3' : 'sms.other';
     const item = toPublicService(row, category, src);
     if (item && item.available) items.push(item);
   }
