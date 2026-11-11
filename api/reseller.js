@@ -264,7 +264,14 @@ async function handleMailOffers(req, res, reseller) {
 }
 
 async function handleBalance(req, res, reseller) {
-  if (reseller.environment === 'sandbox') return json(res, 200, { success: true, environment: 'sandbox', balance: { amount: 0, currency: reseller.currency || 'NGN' }, updated_at: null });
+  if (reseller.environment === 'sandbox') {
+    const { data: sandboxWallet, error: sandboxError } = await supabase.from('reseller_sandbox_wallets')
+      .select('balance_minor,currency,updated_at').eq('reseller_id', reseller.id).maybeSingle();
+    if (sandboxError || !sandboxWallet) return json(res, 503, { success: false, message: 'Sandbox wallet is unavailable' });
+    return json(res, 200, { success: true, environment: 'sandbox',
+      balance: { amount: Number(sandboxWallet.balance_minor || 0) / 100, currency: sandboxWallet.currency || 'NGN' },
+      updated_at: sandboxWallet.updated_at });
+  }
   const { data, error } = await supabase.from('reseller_wallets')
     .select('balance_minor,currency,updated_at').eq('reseller_id', reseller.id).maybeSingle();
   if (error) return json(res, 500, { success: false, message: 'Could not load reseller wallet' });
