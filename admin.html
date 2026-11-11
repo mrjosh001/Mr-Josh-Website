@@ -1190,8 +1190,8 @@ function withLagos(opts) { return Object.assign({ timeZone: 'Africa/Lagos' }, op
  <button class="btn btn-primary btn-sm" onclick="openProductModal()"><i class="fas fa-plus"></i> Add</button>
  </div>
  </div>
- <div class="search-row" id="logSupplierFilterRow" style="display:none;margin-bottom:8px;">
- <select id="productSupplierFilter" aria-label="Filter log products by supplier" onchange="filterProducts()" style="width:100%;"><option value="">All</option></select>
+ <div class="search-row" id="logSupplierFilterRow" style="display:flex;margin-bottom:8px;">
+ <select id="productSupplierFilter" aria-label="Filter products by supplier" onchange="filterProducts()" style="width:100%;"><option value="">All Suppliers</option></select>
  </div>
  <div class="search-row">
  <input type="text" id="productSearch" placeholder="Search products..." oninput="filterProducts()" />
@@ -5068,18 +5068,10 @@ function renderProductCards(items) {
  }).join('');
 }
 
-function updateProductSupplierFilter(category) {
+function updateProductSupplierFilter() {
  const select = document.getElementById('productSupplierFilter');
- const row = document.getElementById('logSupplierFilterRow');
- if (!select || !row) return;
- const isLogsCategory = /log/i.test(String(category || ''));
- row.style.display = isLogsCategory ? '' : 'none';
- if (!isLogsCategory) {
-   select.value = '';
-   return;
- }
+ if (!select) return;
  const suppliers = [...new Set(allProducts
-   .filter(p => String(p.category || '').trim() === category)
    .map(p => String(p.source || '').trim())
    .filter(Boolean))].sort((a, b) => a.localeCompare(b));
  const current = select.value;
@@ -5089,7 +5081,7 @@ function updateProductSupplierFilter(category) {
    classy: 'ClassyTee',
    logsdomain: 'Logs Domain'
  };
- select.innerHTML = '<option value="">All</option>' +
+ select.innerHTML = '<option value="">All Suppliers</option>' +
    suppliers.map(source => {
      const key = String(source).toLowerCase();
      const label = supplierLabels[key] || (SUPPLIER_BADGES[key]?.label || source);
@@ -5101,7 +5093,7 @@ function updateProductSupplierFilter(category) {
 function filterProducts() {
  const q = (document.getElementById('productSearch').value || '').toLowerCase().trim();
  const cat = (document.getElementById('categoryFilter')?.value || '').trim();
- updateProductSupplierFilter(cat);
+ updateProductSupplierFilter();
  const supplier = (document.getElementById('productSupplierFilter')?.value || '').trim();
  let filtered = allProducts;
  if (cat) filtered = filtered.filter(p => String(p.category || '').trim() === cat);
