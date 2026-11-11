@@ -77,6 +77,17 @@ async function handleKeyManagement(req, res) {
     if (error) return json(res, 500, { success: false, message: 'Could not load API keys' });
     return json(res, 200, { success: true, reseller, keys: data || [] });
   }
+  if (req.method === 'DELETE') {
+    const id = String(req.query?.id || req.body?.id || '').trim();
+    if (!id) return json(res, 400, { success: false, message: 'API key id is required' });
+    const { data, error } = await supabase.from('reseller_api_keys')
+      .update({ status: 'revoked' })
+      .eq('id', id).eq('reseller_id', reseller.id).eq('status', 'active')
+      .select('id,status').maybeSingle();
+    if (error) return json(res, 500, { success: false, message: 'Could not revoke API key' });
+    if (!data) return json(res, 404, { success: false, message: 'Active API key not found' });
+    return json(res, 200, { success: true, key: data });
+  }
   if (req.method !== 'POST') return json(res, 405, { success: false, message: 'Method not allowed' });
   if (reseller.status !== 'active') return json(res, 403, { success: false, message: 'Reseller access is awaiting approval' });
   const body = req.body && typeof req.body === 'object' ? req.body : {};
@@ -206,7 +217,7 @@ async function handleBalance(req, res, reseller) {
 }
 
 export default async function handler(req, res) {
-  applyApiCors(req, res, { methods: 'GET, POST, OPTIONS' });
+  applyApiCors(req, res, { methods: 'GET, POST, DELETE, OPTIONS' });
   if (handleOptions(req, res)) return;
   try {
     const action = String(req.query?.action || 'catalog').toLowerCase();
