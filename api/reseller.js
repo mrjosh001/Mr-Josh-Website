@@ -127,6 +127,43 @@ async function handleCatalog(req, res, reseller) {
   }
   return json(res, 200, { success: true, currency: reseller.currency || 'NGN', count: items.length, data: items });
 }
+async function handleMailOffers(req, res) {
+  const site = String(req.query?.site || '').trim().toLowerCase();
+  const domain = String(req.query?.domain || '').trim().toLowerCase();
+  if (!site || !/^[a-z0-9.-]{3,253}$/.test(site)) {
+    return json(res, 400, { success: false, message: 'A valid site/domain is required, e.g. telegram.com' });
+  }
+  const key = String(process.env.HEROSMS_API_KEY || '').trim();
+  if (!key) return json(res, 503, { success: false, message: 'MJ Mails is temporarily unavailable' });
+  try {
+    const qs = new URLSearchParams({ site });
+    if (domain) qs.set('domain', domain);
+    const response = await fetch('https://hero-sms.com/api/v1/emails/offers?' + qs.toString(), {
+      headers: { Authorization: 'ApiKey ' + key, Accept: 'application/json' },
+      signal: AbortSignal.timeout(15000)
+    });
+    if (!response.ok) return json(res, 502, { success: false, message: 'MJ Mails supplier could not return offers' });
+    const payload = await response.json();
+    const rows = Array.isArray(payload?.data) ? payload.data : [];
+    const offers = rows.flatMap(row => (Array.isArray(row.offers) ? row.offers : [])
+      .filter(offer => Number(offer.cost) > 0 && Number(offer.count) > 0)
+      .map(offer => {
+        const usd = Number(offer.cost);
+        const round50 = value => Math.ceil(value / 50) * 50;
+        const price = usd < 0.1 ? round50(400 + (usd / 0.1) * 100)
+          : usd < 0.5 ? round50(600 + ((usd - 0.1) / 0.4) * 400)
+          : usd <= 1 ? round50(1100 + ((usd - 0.5) / 0.5) * 400)
+          : Math.ceil(usd * (Number(process.env.USD_TO_NGN_RATE) || Number(process.env.USD_TO_NGN) || 1500) * 1.3 / 50) * 50;
+        return { category: 'mj_mails', site, domain: String(row.domain || '').toLowerCase(),
+          available: Math.floor(Number(offer.count)), supplier_cost_usd: undefined,
+          price: { amount: price, currency: 'NGN' } };
+      }));
+    return json(res, 200, { success: true, category: 'mj_mails', site, count: offers.length, data: offers });
+  } catch (_) {
+    return json(res, 502, { success: false, message: 'MJ Mails offers are temporarily unavailable' });
+  }
+}
+
 async function handleBalance(req, res, reseller) {
   const { data, error } = await supabase.from('reseller_wallets')
     .select('balance_minor,currency,updated_at').eq('reseller_id', reseller.id).maybeSingle();
@@ -147,7 +184,7 @@ export default async function handler(req, res) {
     if (req.method !== 'GET') return json(res, 405, { success: false, message: 'Method not allowed' });
     const auth = await requireApiKey(req);
     if (auth.error) return json(res, auth.error.status, { success: false, message: auth.error.message });
-    if (action === 'catalog' || action === 'services') return handleCatalog(req, res, auth.reseller);
+    if (action === 'catalog' || action === 'services') return handleCatalog(req, res, auth.reseller);\n    if (action === 'mail_offers') return handleMailOffers(req, res);
     if (action === 'balance') return handleBalance(req, res, auth.reseller);
     return json(res, 404, { success: false, message: 'Unknown reseller API action' });
   } catch (error) {
