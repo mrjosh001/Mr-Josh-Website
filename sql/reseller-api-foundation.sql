@@ -387,3 +387,95 @@ begin
   return new;
 end;
 $function$;
+
+
+-- Atomic fixed-window per-key rate limiting (default API policy: 60 requests / 60 seconds).
+create table if not exists public.reseller_rate_limits (
+  api_key_id uuid not null references public.reseller_api_keys(id) on delete cascade,
+  window_start timestamptz not null,
+  request_count integer not null default 0 check (request_count >= 0),
+  updated_at timestamptz not null default now(),
+  primary key (api_key_id, window_start)
+);
+alter table public.reseller_rate_limits enable row level security;
+revoke all on public.reseller_rate_limits from anon, authenticated;
+grant all on public.reseller_rate_limits to service_role;
+
+create or replace function public.reseller_consume_rate_limit(
+  p_key_id uuid, p_limit integer default 60, p_window_seconds integer default 60
+) returns jsonb
+language plpgsql security invoker
+set search_path = public, pg_temp
+as $function$
+declare
+  v_start timestamptz;
+  v_count integer;
+  v_retry integer;
+begin
+  if p_key_id is null or p_limit < 1 or p_window_seconds < 1 then
+    raise exception 'INVALID_RATE_LIMIT_ARGUMENTS';
+  end if;
+  v_start := to_timestamp(floor(extract(epoch from clock_timestamp()) / p_window_seconds) * p_window_seconds);
+  insert into public.reseller_rate_limits(api_key_id, window_start, request_count)
+  values (p_key_id, v_start, 1)
+  on conflict (api_key_id, window_start) do update
+    set request_count = public.reseller_rate_limits.request_count + 1,
+        updated_at = now()
+  returning request_count into v_count;
+  v_retry := greatest(1, ceil(extract(epoch from (v_start + make_interval(secs => p_window_seconds) - clock_timestamp())))::integer);
+  return jsonb_build_object('allowed', v_count <= p_limit, 'remaining', greatest(0, p_limit - v_count),
+    'retry_after', v_retry, 'limit', p_limit);
+end;
+$function$;
+revoke all on function public.reseller_consume_rate_limit(uuid,integer,integer) from public, anon, authenticated;
+grant execute on function public.reseller_consume_rate_limit(uuid,integer,integer) to service_role;
+
+-- Reseller webhook endpoints and durable outbox. Secret is stored encrypted by the
+-- application before insertion; plaintext must never be returned by management APIs.
+create table if not exists public.reseller_webhook_endpoints (
+  id uuid primary key default gen_random_uuid(),
+  reseller_id uuid not null references public.reseller_accounts(id) on delete cascade,
+  url text not null,
+  secret_ciphertext text not null,
+  events text[] not null default array['order.completed','order.failed','order.partial'],
+  status text not null default 'active' check (status in ('active','disabled')),
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+create table if not exists public.reseller_webhook_outbox (
+  id uuid primary key default gen_random_uuid(),
+  reseller_id uuid not null references public.reseller_accounts(id) on delete cascade,
+  endpoint_id uuid not null references public.reseller_webhook_endpoints(id) on delete cascade,
+  event_type text not null check (event_type in ('order.completed','order.failed','order.partial')),
+  payload jsonb not null,
+  status text not null default 'pending' check (status in ('pending','delivering','delivered','dead')),
+  attempts integer not null default 0,
+  next_attempt_at timestamptz not null default now(),
+  last_http_status integer,
+  last_error text,
+  delivered_at timestamptz,
+  created_at timestamptz not null default now()
+);
+create index if not exists reseller_webhook_outbox_due_idx
+  on public.reseller_webhook_outbox(status, next_attempt_at) where status in ('pending','delivering');
+alter table public.reseller_webhook_endpoints enable row level security;
+alter table public.reseller_webhook_outbox enable row level security;
+revoke all on public.reseller_webhook_endpoints, public.reseller_webhook_outbox from anon, authenticated;
+grant all on public.reseller_webhook_endpoints, public.reseller_webhook_outbox to service_role;
+
+-- Persist request idempotency separately from the permanent financial order ledger.
+-- The 24-hour replay window does not expire or delete reseller_orders/ledger entries.
+create table if not exists public.reseller_idempotency_requests (
+  reseller_id uuid not null references public.reseller_accounts(id) on delete cascade,
+  idempotency_key text not null,
+  request_hash text not null,
+  order_id uuid references public.reseller_orders(id) on delete set null,
+  created_at timestamptz not null default now(),
+  expires_at timestamptz not null default now() + interval '24 hours',
+  primary key (reseller_id, idempotency_key)
+);
+create index if not exists reseller_idempotency_expiry_idx
+  on public.reseller_idempotency_requests(expires_at);
+alter table public.reseller_idempotency_requests enable row level security;
+revoke all on public.reseller_idempotency_requests from anon, authenticated;
+grant all on public.reseller_idempotency_requests to service_role;
