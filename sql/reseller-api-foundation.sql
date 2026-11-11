@@ -130,7 +130,9 @@ begin
   if found then
     if v_existing.category <> p_category
        or v_existing.service_id <> p_service_id
-       or v_existing.amount_minor <> p_amount_minor then
+       or v_existing.supplier is distinct from p_supplier
+       or v_existing.amount_minor <> p_amount_minor
+       or v_existing.request_payload is distinct from coalesce(p_request_payload, '{}'::jsonb) then
       raise exception 'IDEMPOTENCY_KEY_REUSED_WITH_DIFFERENT_ORDER';
     end if;
     return jsonb_build_object('created', false, 'order', to_jsonb(v_existing),
@@ -219,7 +221,10 @@ begin
 
   if found then
     if v_existing.entry_type <> p_entry_type
-       or v_existing.amount_minor <> p_amount_minor then
+       or v_existing.amount_minor <> p_amount_minor
+       or v_existing.reference_type is distinct from p_reference_type
+       or v_existing.reference_id is distinct from p_reference_id
+       or v_existing.metadata is distinct from coalesce(p_metadata, '{}'::jsonb) then
       raise exception 'IDEMPOTENCY_KEY_REUSED_WITH_DIFFERENT_PAYLOAD';
     end if;
     return jsonb_build_object(
