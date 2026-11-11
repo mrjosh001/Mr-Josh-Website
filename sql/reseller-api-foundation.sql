@@ -699,3 +699,9 @@ $function$;
 revoke all on function public.reseller_sandbox_order_create(uuid,text,text,text,text,bigint,jsonb)
  from public,anon,authenticated;
 grant execute on function public.reseller_sandbox_order_create(uuid,text,text,text,text,bigint,jsonb) to service_role;
+
+-- Ensure accounts that existed before the sandbox wallet table was introduced
+-- also receive an isolated fictitious test balance.
+insert into public.reseller_sandbox_wallets(reseller_id,balance_minor,currency)
+select id,100000000,coalesce(currency,'NGN') from public.reseller_accounts
+on conflict (reseller_id) do nothing;
