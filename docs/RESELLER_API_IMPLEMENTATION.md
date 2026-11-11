@@ -6,9 +6,9 @@ This branch introduces the first server-side reseller API foundation. It is deli
 
 ## Existing MJ HUB fulfilment models audited
 
-- **SMS Server 1 / normal OTP:** `mj-sms.html`, supplier routes in `api/sms-bus.js` and related Grizzly/VirtualSMS integration.
-- **SMS Server 2:** `mj-sms3.html`, separate supplier integration and order lifecycle.
-- **SMS Server 3:** `mj-sms-s3.html`, Grizzly/VirtualSMS-backed OTP lifecycle.
+- **SMS Server 1 / normal OTP:** `mj-sms.html`; sources `grizzlysms` and `herosms` are both presented as Server 1.
+- **SMS Server 2:** `mj-sms3.html`; source `smsbus`, separate supplier integration and order lifecycle.
+- **SMS Server 3:** `mj-sms-s3.html`; source `virtualsms`, with its own OTP lifecycle.
 - **USA physical SIM rental:** `mj-sms-usa-rent.html` + `mj-sms-usa-number.html`; GotSMS carrier/plan selection, renewal, inbox, cancellation/refund and expiry states.
 - **Global / long-term country rental:** `mj-sms-rent.html` and SMS-BUS rental actions; country/area, duration in months, renew/cancel, inbox and rental expiry.
 - **Telegram:** `mj-telegram.html`; Premium and Stars are separate product types fulfilled through SMMKings, not SMS activation.
@@ -29,7 +29,7 @@ The public reseller API must expose one authentication key and one reseller acco
 ## Implemented in this branch
 
 - `GET /api/reseller?action=catalog` and `?action=services`: initial normalized read-only catalogue.
-- `GET /api/reseller?action=balance`: separate reseller wallet read.
+- `GET /api/reseller?action=balance`: separate reseller wallet read.\n- `GET /api/reseller?action=mail_offers&site=telegram.com`: MJ Mails domain offers and MJ HUB retail pricing using the existing HeroSMS offer endpoint.\n- Catalogue reads are paginated with `page` and `per_page`; the response includes per-table next-page markers.
 - `GET /api/reseller?action=keys` with user JWT: list key metadata.
 - `POST /api/reseller?action=keys` with user JWT: create a key once, hash at rest.
 - Reseller account defaults to pending; API keys cannot be created until an administrator activates the reseller account.
@@ -41,7 +41,7 @@ Purchase adapters, atomic wallet debit/refund RPCs, webhook signing/delivery, re
 
 ## Catalogue limitation
 
-The first catalogue adapter is intentionally read-only and best-effort. It does not yet expose MJ Mails offers or every dynamic SMS plan/stock shape. The exact catalogue schema for each supplier must be mapped before order creation is enabled. No generic order endpoint should be enabled until each adapter has a tested compensating/refund strategy.
+The first catalogue adapter is intentionally read-only and best-effort. It exposes the existing normalized service rows and a separate site-specific MJ Mails offer lookup. Supplier-specific order details and every dynamic plan/stock shape still require explicit adapter mapping. The exact catalogue schema for each supplier must be mapped before order creation is enabled. No generic order endpoint should be enabled until each adapter has a tested compensating/refund strategy.
 
 ## Security / operational requirements before launch
 
