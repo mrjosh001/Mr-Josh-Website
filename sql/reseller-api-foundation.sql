@@ -28,6 +28,24 @@ create table if not exists public.reseller_wallets (
   updated_at timestamptz not null default now()
 );
 
+-- Provision an isolated reseller wallet at account creation.
+create or replace function public.provision_reseller_wallet()
+returns trigger
+language plpgsql
+as $
+begin
+  insert into public.reseller_wallets (reseller_id, balance_minor, currency)
+  values (new.id, 0, coalesce(new.currency, 'NGN'))
+  on conflict (reseller_id) do nothing;
+  return new;
+end;
+$;
+
+drop trigger if exists reseller_account_wallet_provision on public.reseller_accounts;
+create trigger reseller_account_wallet_provision
+after insert on public.reseller_accounts
+for each row execute function public.provision_reseller_wallet();
+
 create table if not exists public.reseller_wallet_ledger (
   id uuid primary key default gen_random_uuid(),
   reseller_id uuid not null references public.reseller_accounts(id) on delete cascade,
