@@ -170,6 +170,71 @@ revoke all on function public.reseller_wallet_post(uuid,text,text,bigint,text,te
 grant execute on function public.reseller_wallet_post(uuid,text,text,bigint,text,text,jsonb)
   to service_role;
 
+-- Refund an order only after its supplier outcome is confirmed. The order row
+-- lock prevents a second refund under a different request/idempotency key.
+create or replace function public.reseller_refund_order(
+  p_order_id uuid,
+  p_idempotency_key text,
+  p_reason text,
+  p_supplier_confirmed boolean
+)
+returns jsonb
+language plpgsql
+security invoker
+set search_path = public, pg_temp
+as $
+declare
+  v_order public.reseller_orders%rowtype;
+  v_result jsonb;
+begin
+  if p_order_id is null
+     or coalesce(length(trim(p_idempotency_key)), 0) < 8
+     or p_supplier_confirmed is distinct from true then
+    raise exception 'REFUND_NOT_CONFIRMED';
+  end if;
+
+  select * into v_order
+    from public.reseller_orders
+    where id = p_order_id
+    for update;
+
+  if not found then
+    raise exception 'RESELLER_ORDER_NOT_FOUND';
+  end if;
+
+  if v_order.status = 'refunded' then
+    return jsonb_build_object('created', false, 'status', 'refunded', 'order_id', v_order.id);
+  end if;
+
+  if v_order.status not in ('refund_pending','failed','cancelled') then
+    raise exception 'ORDER_NOT_REFUNDABLE';
+  end if;
+
+  v_result := public.reseller_wallet_post(
+    v_order.reseller_id,
+    p_idempotency_key,
+    'refund',
+    v_order.amount_minor,
+    'reseller_order',
+    v_order.id::text,
+    jsonb_build_object('reason', left(coalesce(p_reason, 'Supplier-confirmed refund'), 500))
+  );
+
+  update public.reseller_orders
+    set status = 'refunded', updated_at = now(),
+        response_payload = coalesce(response_payload, '{}'::jsonb)
+          || jsonb_build_object('refund', jsonb_build_object('reason', left(coalesce(p_reason, ''), 500)))
+    where id = v_order.id;
+
+  return v_result || jsonb_build_object('status', 'refunded', 'order_id', v_order.id);
+end;
+$;
+
+revoke all on function public.reseller_refund_order(uuid,text,text,boolean)
+  from public, anon, authenticated;
+grant execute on function public.reseller_refund_order(uuid,text,text,boolean)
+  to service_role;
+
 create index if not exists reseller_orders_reseller_created_idx
   on public.reseller_orders (reseller_id, created_at desc);
 create index if not exists reseller_api_keys_reseller_status_idx
