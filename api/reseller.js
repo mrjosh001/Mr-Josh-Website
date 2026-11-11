@@ -195,8 +195,10 @@ async function handleMailOffers(req, res) {
           : usd < 0.5 ? round50(600 + ((usd - 0.1) / 0.4) * 400)
           : usd <= 1 ? round50(1100 + ((usd - 0.5) / 0.5) * 400)
           : profitFloorNgn(usd, Number(process.env.USD_TO_NGN_RATE) || Number(process.env.USD_TO_NGN) || 1500);
-        return { category: 'mj_mails', site, domain: String(row.domain || '').toLowerCase(),
-          available: Math.floor(Number(offer.count)), supplier_cost_usd: undefined,
+        const offerDomain = String(row.domain || '').toLowerCase();
+        return { id: 'mjmail:' + sha256(site + '|' + offerDomain + '|' + usd).slice(0, 16),
+          category: 'mj_mails', name: site + ' email', site, domain: offerDomain,
+          available: Math.floor(Number(offer.count)),
           price: { amount: price, currency: 'NGN' } };
       }));
     return json(res, 200, { success: true, category: 'mj_mails', site, count: offers.length, data: offers });
