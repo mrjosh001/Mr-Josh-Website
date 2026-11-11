@@ -3237,6 +3237,7 @@ html[data-theme="light"] .logo-word, :root[data-theme="light"] .logo-word{color:
     <div class="sidebar-links-container">
         <ul class="sidebar-links">
             <li><a href="#" class="sidebar-link active" data-target="home"><i class="fa-solid fa-house"></i> <span>Dashboard</span></a></li>
+            <li id="resellerAdminNav" style="display:none"><a href="#" class="sidebar-link" data-target="reseller-admin"><i class="fa-solid fa-code"></i> <span>Reseller API</span></a></li>
             <li><a href="mj-logs.html"><i class="fa-solid fa-box-archive"></i> <span>MJ Logs</span></a></li>
             <li class="esim-nav-group">
                 <a href="#" class="sidebar-link" onclick="toggleEsimMenu(event)" aria-expanded="false" aria-controls="esimSubmenu" style="display:flex;align-items:center;justify-content:space-between;">
@@ -3318,7 +3319,17 @@ html[data-theme="light"] .logo-word, :root[data-theme="light"] .logo-word{color:
 
 <main class="main-content">
 
-                    <section id="home" class="app-section active home-v2">
+                    <section id="reseller-admin" class="app-section">
+  <div class="section-header" style="margin-bottom:18px"><div><div class="kicker">Administration</div><h2>Reseller API</h2><p style="color:var(--muted);font-size:13px">Review reseller access requests. Main administrators only.</p></div></div>
+  <div class="card" style="padding:18px;border:1px solid var(--border);border-radius:16px;background:var(--card)">
+   <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap"><strong>Reseller applications</strong><button type="button" class="btn-sm-outline" id="resellerAdminRefresh">Refresh</button></div>
+   <div id="resellerAdminMessage" class="empty-text">Loading applications…</div>
+   <div class="table-responsive"><table class="history-table" id="resellerAdminTable" style="display:none"><thead><tr><th>Account</th><th>Status</th><th>Created</th><th>Action</th></tr></thead><tbody id="resellerAdminRows"></tbody></table></div>
+  </div>
+  <div class="card" style="padding:14px;margin-top:14px;border:1px solid var(--border);border-radius:16px;background:var(--card)"><strong>Release status</strong><p style="color:var(--muted);font-size:13px;margin-top:6px">Live supplier purchases, wallet funding and webhook self-service remain disabled until transaction and security tests pass.</p></div>
+ </section>
+
+<section id="home" class="app-section active home-v2">
         <div class="hv-hello">
             <div>
                 <div class="kicker">Welcome back</div>
@@ -4372,6 +4383,7 @@ let lastReceiptItems = [];
 let transactions = [];
 let userData = { name: '', email: '', avatarUrl: '' };
 let currentUserId = null;
+let currentUserIsAdmin = false;
 
 try {
     const stored = JSON.parse(localStorage.getItem('mjhub_cart') || '[]');
@@ -4877,7 +4889,7 @@ async function initUserData(user) {
             let profile = null;
             let { data, error: selErr } = await supabaseClient
                 .from('profiles')
-                .select('full_name, name, phone, phone_number, avatar_url, customer_id, email, address, bio, username, balance, balance_usd')
+                .select('full_name, name, phone, phone_number, avatar_url, customer_id, email, address, bio, username, balance, balance_usd, is_admin')
                 .eq('id', user.id)
                 .maybeSingle();
             if (selErr && /column|schema cache|Could not find/i.test(selErr.message || '')) {
@@ -4896,6 +4908,7 @@ async function initUserData(user) {
             }
             profile = data;
             if (profile) {
+                currentUserIsAdmin = profile.is_admin === true || profile.is_admin === 'true' || profile.is_admin === 1 || profile.is_admin === '1';
                 if (profile.full_name) name = profile.full_name;
                 else if (profile.name) name = profile.name;
                 if (profile.phone_number) phone = profile.phone_number;
@@ -4932,6 +4945,8 @@ async function initUserData(user) {
     }
 
     userData = { name, email, phone, address, bio, avatarUrl };
+    const resellerAdminNav = document.getElementById('resellerAdminNav');
+    if (resellerAdminNav) resellerAdminNav.style.display = currentUserIsAdmin ? '' : 'none';
     safeSet('dropdownName', name);
     safeSet('dropdownEmail', email);
     safeSet('profileHeaderName', name);
@@ -8764,6 +8779,37 @@ window.toggleHomeBalanceHide = function () {
 
 </style>
 
+<script>
+(function(){
+ async function request(action,extra){
+  if(!currentUserIsAdmin)throw new Error('Admin privileges required');
+  const sessionResult=await supabaseClient.auth.getSession();
+  const token=sessionResult&&sessionResult.data&&sessionResult.data.session&&sessionResult.data.session.access_token;
+  if(!token)throw new Error('Session expired. Sign in again.');
+  const response=await fetch('/api/admin',{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+token},body:JSON.stringify(Object.assign({resource:'reseller_admin',action:action},extra||{}))});
+  const payload=await response.json().catch(()=>({}));
+  if(!response.ok||payload.success===false)throw new Error(payload.message||'Admin request failed');
+  return payload;
+ }
+ window.loadResellerAdminApplications=async function(){
+  const message=document.getElementById('resellerAdminMessage'),table=document.getElementById('resellerAdminTable'),rows=document.getElementById('resellerAdminRows');
+  if(!currentUserIsAdmin){if(message)message.textContent='Admin privileges required.';return;}
+  if(message)message.textContent='Loading applications…';if(table)table.style.display='none';
+  try{
+   const data=await request('list'),items=Array.isArray(data.accounts)?data.accounts:[];
+   if(!items.length){if(message)message.textContent='No reseller applications yet.';return;}
+   const safe=function(v){return String(v==null?'':v).replace(/[&<>"']/g,function(ch){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch];});};
+   rows.innerHTML=items.map(function(item){const created=item.created_at?new Date(item.created_at).toLocaleString():'—';const action=item.status==='active'?'': '<button class="btn-sm-primary" type="button" data-reseller-approve="'+safe(item.id)+'" style="padding:7px 10px">Approve</button>';return '<tr><td>'+safe(item.email||item.user_id)+'</td><td>'+safe(item.status||'pending')+'</td><td>'+safe(created)+'</td><td>'+action+'</td></tr>';}).join('');
+   if(message)message.textContent='';if(table)table.style.display='';
+  }catch(error){if(message)message.textContent=error.message||'Could not load applications.';}
+ };
+ document.addEventListener('click',async function(event){
+  const approve=event.target.closest('[data-reseller-approve]');
+  if(approve){if(!currentUserIsAdmin)return;approve.disabled=true;approve.textContent='Approving…';try{await request('approve',{reseller_id:approve.getAttribute('data-reseller-approve')});await window.loadResellerAdminApplications();if(typeof showToast==='function')showToast('Reseller account approved','success');}catch(error){approve.disabled=false;approve.textContent='Approve';if(typeof showToast==='function')showToast(error.message,'error');}}
+  if(event.target.closest('#resellerAdminRefresh')||event.target.closest('[data-target="reseller-admin"]'))window.loadResellerAdminApplications();
+ });
+})();
+</script>
   <script src="/js/haptic.js" defer></script>
 
 </body>
