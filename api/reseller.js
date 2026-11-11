@@ -72,6 +72,7 @@ async function requireApiKey(req) {
   if (allowedIps.length && !allowedIps.includes(clientIp)) return { error: { status: 403, message: 'Request IP is not allowed' } };
   await supabase.from('reseller_api_keys').update({ last_used_at: new Date().toISOString() }).eq('id', key.id);
   key.environment = environment;
+  reseller.environment = environment;
   return { key, reseller };
 }
 async function createOrGetReseller(user) {
