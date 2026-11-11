@@ -32,14 +32,14 @@ create table if not exists public.reseller_wallets (
 create or replace function public.provision_reseller_wallet()
 returns trigger
 language plpgsql
-as $
+as $function$
 begin
   insert into public.reseller_wallets (reseller_id, balance_minor, currency)
   values (new.id, 0, coalesce(new.currency, 'NGN'))
   on conflict (reseller_id) do nothing;
   return new;
 end;
-$;
+$function$;
 
 drop trigger if exists reseller_account_wallet_provision on public.reseller_accounts;
 create trigger reseller_account_wallet_provision
@@ -95,7 +95,7 @@ returns jsonb
 language plpgsql
 security invoker
 set search_path = public, pg_temp
-as $
+as $function$
 declare
   v_wallet public.reseller_wallets%rowtype;
   v_existing public.reseller_wallet_ledger%rowtype;
@@ -163,7 +163,7 @@ begin
     'ledger', to_jsonb(v_entry)
   );
 end;
-$;
+$function$;
 
 revoke all on function public.reseller_wallet_post(uuid,text,text,bigint,text,text,jsonb)
   from public, anon, authenticated;
@@ -182,7 +182,7 @@ returns jsonb
 language plpgsql
 security invoker
 set search_path = public, pg_temp
-as $
+as $function$
 declare
   v_order public.reseller_orders%rowtype;
   v_result jsonb;
@@ -228,7 +228,7 @@ begin
 
   return v_result || jsonb_build_object('status', 'refunded', 'order_id', v_order.id);
 end;
-$;
+$function$;
 
 revoke all on function public.reseller_refund_order(uuid,text,text,boolean)
   from public, anon, authenticated;
