@@ -17,11 +17,13 @@ function json(res, status, payload) {
       404: 'NOT_FOUND', 405: 'METHOD_NOT_ALLOWED', 429: 'RATE_LIMITED',
       500: 'INTERNAL_ERROR', 502: 'UPSTREAM_ERROR', 503: 'SERVICE_UNAVAILABLE'
     }[status] || 'REQUEST_FAILED');
+    const requestId = crypto.randomUUID();
+    res.setHeader('X-Request-Id', requestId);
     return res.status(status).json({
       success: false,
       code,
       message: String(payload?.message || 'Request failed'),
-      request_id: String(res.getHeader?.('x-request-id') || crypto.randomUUID())
+      request_id: requestId
     });
   }
   return res.status(status).json(payload);
@@ -122,7 +124,11 @@ async function handleKeyManagement(req, res) {
   if (reseller.status !== 'active') return json(res, 403, { success: false, message: 'Reseller access is awaiting approval' });
   const body = req.body && typeof req.body === 'object' ? req.body : {};
   if (body.rotate_key_id) {
-    const replacementKey = newApiKey('live');
+    const { data: oldKey, error: oldKeyError } = await supabase.from('reseller_api_keys')
+      .select('environment').eq('id', String(body.rotate_key_id))
+      .eq('reseller_id', reseller.id).eq('status', 'active').maybeSingle();
+    if (oldKeyError || !oldKey) return json(res, 404, { success: false, message: 'Active API key not found' });
+    const replacementKey = newApiKey(oldKey.environment === 'sandbox' ? 'sandbox' : 'live');
     const { data: rotated, error: rotateError } = await supabase.rpc('reseller_rotate_api_key', {
       p_reseller_id: reseller.id,
       p_old_key_id: String(body.rotate_key_id),
