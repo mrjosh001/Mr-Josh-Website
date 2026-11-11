@@ -200,7 +200,8 @@ export default async function handler(req, res) {
     if (req.method !== 'GET') return json(res, 405, { success: false, message: 'Method not allowed' });
     const auth = await requireApiKey(req);
     if (auth.error) return json(res, auth.error.status, { success: false, message: auth.error.message });
-    if (action === 'catalog' || action === 'services') return handleCatalog(req, res, auth.reseller);\n    if (action === 'mail_offers') return handleMailOffers(req, res);
+    if (action === 'catalog' || action === 'services') return handleCatalog(req, res, auth.reseller);
+    if (action === 'mail_offers') return handleMailOffers(req, res);
     if (action === 'balance') return handleBalance(req, res, auth.reseller);
     return json(res, 404, { success: false, message: 'Unknown reseller API action' });
   } catch (error) {
