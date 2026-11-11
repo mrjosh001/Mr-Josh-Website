@@ -576,3 +576,52 @@ end;
 $function$;
 revoke all on function public.reseller_rotate_api_key(uuid,uuid,text,text,text) from public, anon, authenticated;
 grant execute on function public.reseller_rotate_api_key(uuid,uuid,text,text,text) to service_role;
+
+
+-- Enqueue a webhook event for every active matching subscription.
+create or replace function public.reseller_enqueue_webhook(
+  p_reseller_id uuid, p_event_type text, p_payload jsonb
+) returns integer
+language plpgsql security invoker
+set search_path = public, pg_temp
+as $function$
+declare v_count integer;
+begin
+  if p_event_type not in ('order.completed','order.failed','order.partial') then
+    raise exception 'INVALID_RESELLER_WEBHOOK_EVENT';
+  end if;
+  insert into public.reseller_webhook_outbox(reseller_id, endpoint_id, event_type, payload)
+  select p_reseller_id, e.id, p_event_type, coalesce(p_payload,'{}'::jsonb)
+    from public.reseller_webhook_endpoints e
+   where e.reseller_id = p_reseller_id and e.status = 'active'
+     and p_event_type = any(e.events);
+  get diagnostics v_count = row_count;
+  return v_count;
+end;
+$function$;
+revoke all on function public.reseller_enqueue_webhook(uuid,text,jsonb) from public, anon, authenticated;
+grant execute on function public.reseller_enqueue_webhook(uuid,text,jsonb) to service_role;
+
+-- Claim due outbox rows with SKIP LOCKED so concurrent dispatchers cannot double-send.
+create or replace function public.reseller_claim_webhook_outbox(p_batch_size integer default 25)
+returns setof public.reseller_webhook_outbox
+language plpgsql security invoker
+set search_path = public, pg_temp
+as $function$
+begin
+  return query
+  with picked as (
+    select id from public.reseller_webhook_outbox
+     where status in ('pending','delivering') and next_attempt_at <= now()
+     order by created_at
+     for update skip locked
+     limit greatest(1, least(p_batch_size, 100))
+  )
+  update public.reseller_webhook_outbox o
+     set status = 'delivering', attempts = attempts + 1
+    from picked where o.id = picked.id
+  returning o.*;
+end;
+$function$;
+revoke all on function public.reseller_claim_webhook_outbox(integer) from public, anon, authenticated;
+grant execute on function public.reseller_claim_webhook_outbox(integer) to service_role;
