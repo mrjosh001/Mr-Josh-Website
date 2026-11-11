@@ -863,7 +863,11 @@ async function loadPanelServicesLive(source = STORE_SOURCE) {
   const cached = panelServiceCaches[src] || { at: 0, list: [] };
   if (cached.list.length && now - cached.at < 10 * 60 * 1000) return cached.list;
   const live = await owletCall({ action: 'services' }, 25000, src);
-  const list = Array.isArray(live.json) ? live.json : [];
+  if (!live.ok || live.json?.error || !Array.isArray(live.json)) {
+    const reason = String(live.json?.error || live.json?.message || (src.toUpperCase() + ' service catalogue is unavailable'));
+    throw new Error(reason);
+  }
+  const list = live.json;
   if (list.length) panelServiceCaches[src] = { at: now, list };
   return list;
 }
@@ -880,10 +884,10 @@ async function resolveOwletServiceId(storedId, name, source = STORE_SOURCE) {
   if (want) {
     const exact = list.find((s) => String(s.name || '').trim().toLowerCase() === want);
     if (exact) return String(exact.service);
-    const loose = list.find((s) => String(s.name || '').trim().toLowerCase().includes(want.slice(0, 24)));
-    if (loose) return String(loose.service);
   }
-  return id;
+  // Never send an obsolete service ID, or a fuzzy name match that may select
+  // a different package. A stale catalogue entry must fail closed.
+  return null;
 }
 
 
@@ -998,6 +1002,29 @@ async function handleOrder(req, res) {
     return res.status(400).json({ success: false, message: 'Order total too low' });
   }
 
+  // Validate the selected supplier's live catalogue BEFORE charging the wallet.
+  // This prevents stale JAP/Casper service IDs from causing a debit/refund cycle.
+  let liveServiceId;
+  try {
+    liveServiceId = await resolveOwletServiceId(serviceId, service.name, orderSource);
+  } catch (e) {
+    console.error('[booster order] supplier catalogue unavailable', { source: orderSource, reason: String(e?.message || e).slice(0, 240) });
+    return res.status(503).json({
+      success: false,
+      message: 'This boost supplier is temporarily unavailable. Your wallet has not been charged. Please try again shortly.'
+    });
+  }
+  if (!liveServiceId) {
+    await supabase.from('booster_services')
+      .update({ is_available: false, updated_at: new Date().toISOString() })
+      .eq('source', orderSource)
+      .eq('service_id', serviceId);
+    return res.status(409).json({
+      success: false,
+      message: 'This package has changed at the supplier and is temporarily unavailable. Your wallet has not been charged. Please choose another package.'
+    });
+  }
+
   const { data: profile, error: pErr } = await supabase
     .from('profiles')
     .select('id, balance, customer_id')
@@ -1066,8 +1093,7 @@ async function handleOrder(req, res) {
     }
   }
 
-  // Place order with JAP — resolve live service id if catalog is stale
-  const liveServiceId = await resolveOwletServiceId(serviceId, service.name, orderSource);
+  // Submit only the service ID validated against this supplier's live catalogue.
   const supplierPayload = { action: 'add', service: liveServiceId, link, quantity: String(quantity) };
   // Forward only recognized service-specific fields to the order provider.
   for (const field of customFields) if (customValues[field.key]) supplierPayload[field.key] = customValues[field.key];
