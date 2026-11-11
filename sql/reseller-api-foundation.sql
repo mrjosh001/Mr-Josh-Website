@@ -671,8 +671,8 @@ declare
 begin
   if p_reseller_id is null or length(trim(coalesce(p_idempotency_key,''))) < 8
      or length(coalesce(p_request_hash,'')) <> 64 or p_amount_minor <= 0
-     or p_category not in ('telegram.premium','telegram.stars','sms.server1','sms.server2','sms.server3',
-       'sms.usa_rental','sms.global_rental','esim','logs','boosting','mj_mails') then
+     or p_category not in ('telegram.premium','telegram.stars','sms.activation','sms.server1','sms.server2','sms.server3',
+       'sms.usa_rental','sms.global_rental','sms.long_term_rental','esim','logs','boosting','mj_mails') then
     raise exception 'INVALID_SANDBOX_ORDER';
   end if;
   select * into v_wallet from public.reseller_sandbox_wallets
