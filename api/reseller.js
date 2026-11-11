@@ -94,11 +94,15 @@ async function handleKeyManagement(req, res) {
   return json(res, 201, { success: true, key, warning: 'Copy this key now. It cannot be displayed again.', data });
 }
 async function handleCatalog(req, res, reseller) {
+  const page = Math.max(1, Math.min(10000, Number(req.query?.page) || 1));
+  const perPage = Math.max(10, Math.min(100, Number(req.query?.per_page) || 50));
+  const start = (page - 1) * perPage;
+  const end = start + perPage - 1;
   const [numbers, products, boosters, esim] = await Promise.all([
-    supabase.from('number_services').select('id,source,service_id,service_name,country_id,country_name,price,sell_price,price_ngn,is_available,available_quantity,hidden,admin_hidden').limit(2000),
-    supabase.from('products').select('id,product_key,name,price,source,is_available,stock_quantity,admin_hidden,category').limit(2000),
-    supabase.from('booster_services').select('*').limit(2000),
-    supabase.from('esim_plans').select('*').limit(100)
+    supabase.from('number_services').select('id,source,service_id,service_name,country_id,country_name,price,sell_price,price_ngn,is_available,available_quantity,hidden,admin_hidden').order('id').range(start, end),
+    supabase.from('products').select('id,product_key,name,price,source,is_available,stock_quantity,admin_hidden,category').order('id').range(start, end),
+    supabase.from('booster_services').select('*').order('id').range(start, end),
+    supabase.from('esim_plans').select('*').order('id').range(start, end)
   ]);
   const errors = [numbers, products, boosters, esim].filter(x => x.error);
   if (errors.length) return json(res, 503, { success: false, message: 'Service catalogue is temporarily unavailable' });
@@ -128,7 +132,16 @@ async function handleCatalog(req, res, reseller) {
     const item = toPublicService({ ...row, name: row.name || row.id, price: row.amount_ngn }, 'esim', 'mjhub_wireless');
     if (item) items.push(item);
   }
-  return json(res, 200, { success: true, currency: reseller.currency || 'NGN', count: items.length, data: items });
+  return json(res, 200, {
+    success: true, currency: reseller.currency || 'NGN', count: items.length, page, per_page: perPage,
+    next_page: {
+      number_services: (numbers.data || []).length === perPage ? page + 1 : null,
+      products: (products.data || []).length === perPage ? page + 1 : null,
+      booster_services: (boosters.data || []).length === perPage ? page + 1 : null,
+      esim_plans: (esim.data || []).length === perPage ? page + 1 : null
+    },
+    data: items
+  });
 }
 async function handleMailOffers(req, res) {
   const site = String(req.query?.site || '').trim().toLowerCase();
