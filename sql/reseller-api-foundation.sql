@@ -479,3 +479,68 @@ create index if not exists reseller_idempotency_expiry_idx
 alter table public.reseller_idempotency_requests enable row level security;
 revoke all on public.reseller_idempotency_requests from anon, authenticated;
 grant all on public.reseller_idempotency_requests to service_role;
+
+
+-- Claim a 24-hour HTTP idempotency key. Same key + same payload is a replay;
+-- same key + different payload is a conflict. Expired claims may be replaced.
+create or replace function public.reseller_idempotency_claim(
+  p_reseller_id uuid, p_idempotency_key text, p_request_hash text
+) returns jsonb
+language plpgsql security invoker
+set search_path = public, pg_temp
+as $function$
+declare
+  v_row public.reseller_idempotency_requests%rowtype;
+  v_inserted boolean := false;
+begin
+  if p_reseller_id is null or length(trim(coalesce(p_idempotency_key,''))) < 8
+     or length(trim(coalesce(p_request_hash,''))) <> 64 then
+    raise exception 'INVALID_IDEMPOTENCY_REQUEST';
+  end if;
+
+  insert into public.reseller_idempotency_requests(
+    reseller_id, idempotency_key, request_hash, expires_at
+  ) values (
+    p_reseller_id, p_idempotency_key, p_request_hash, now() + interval '24 hours'
+  )
+  on conflict (reseller_id, idempotency_key) do update
+    set request_hash = excluded.request_hash,
+        order_id = null,
+        created_at = now(),
+        expires_at = now() + interval '24 hours'
+    where public.reseller_idempotency_requests.expires_at <= now()
+  returning * into v_row;
+
+  if found then
+    return jsonb_build_object('claimed', true, 'replay', false, 'order_id', v_row.order_id);
+  end if;
+
+  select * into v_row from public.reseller_idempotency_requests
+   where reseller_id = p_reseller_id and idempotency_key = p_idempotency_key;
+
+  if v_row.request_hash <> p_request_hash then
+    return jsonb_build_object('claimed', false, 'conflict', true);
+  end if;
+  return jsonb_build_object('claimed', false, 'replay', true, 'order_id', v_row.order_id);
+end;
+$function$;
+revoke all on function public.reseller_idempotency_claim(uuid,text,text) from public, anon, authenticated;
+grant execute on function public.reseller_idempotency_claim(uuid,text,text) to service_role;
+
+create or replace function public.reseller_idempotency_bind_order(
+  p_reseller_id uuid, p_idempotency_key text, p_order_id uuid
+) returns boolean
+language plpgsql security invoker
+set search_path = public, pg_temp
+as $function$
+begin
+  update public.reseller_idempotency_requests
+     set order_id = p_order_id
+   where reseller_id = p_reseller_id
+     and idempotency_key = p_idempotency_key
+     and expires_at > now();
+  return found;
+end;
+$function$;
+revoke all on function public.reseller_idempotency_bind_order(uuid,text,uuid) from public, anon, authenticated;
+grant execute on function public.reseller_idempotency_bind_order(uuid,text,uuid) to service_role;
