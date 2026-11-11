@@ -1,0 +1,413 @@
+openapi: 3.1.0
+info:
+  title: MJ HUB Reseller API
+  version: 0.1.0-development
+  description: |
+    Development-only reference for endpoints currently implemented in api/reseller.js.
+    Purchase, order-management, funding, cancellation, renewal, refund, and webhook
+    endpoints are intentionally omitted because they do not exist yet.
+servers:
+  - url: https://{host}
+    description: Replace with the host of the preview deployment containing this branch.
+    variables:
+      host:
+        default: preview.example.com
+tags:
+  - name: Reseller management
+    description: User-JWT authenticated key management.
+  - name: Reseller API
+    description: Reseller-key authenticated read endpoints.
+paths:
+  /api/reseller:
+    get:
+      tags: [Reseller management, Reseller API]
+      summary: Read reseller keys, catalogue, wallet balance, or MJ Mails offers
+      description: |
+        The action query parameter selects the operation. For action=keys, use a
+        signed-in MJ HUB user's Supabase access token. For catalog, services,
+        balance, and mail_offers, use an active reseller API key.
+      parameters:
+        - name: action
+          in: query
+          required: true
+          schema:
+            type: string
+            enum: [keys, catalog, services, balance, mail_offers]
+        - name: page
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 10000
+            default: 1
+          description: Catalogue page. Applied independently to each backing table.
+        - name: per_page
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 10
+            maximum: 100
+            default: 50
+          description: Catalogue page size; server clamps values to 10–100.
+        - name: site
+          in: query
+          required: false
+          schema:
+            type: string
+            minLength: 3
+            maxLength: 253
+          description: Required when action=mail_offers.
+        - name: domain
+          in: query
+          required: false
+          schema:
+            type: string
+          description: Optional supplier domain filter for action=mail_offers.
+      security:
+        - UserJwt: []
+        - ResellerBearer: []
+      responses:
+        '200':
+          description: Operation succeeded.
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: '#/components/schemas/KeyListResponse'
+                  - $ref: '#/components/schemas/CatalogResponse'
+                  - $ref: '#/components/schemas/BalanceResponse'
+                  - $ref: '#/components/schemas/MailOffersResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/ServerError'
+        '502':
+          $ref: '#/components/responses/BadGateway'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+    post:
+      tags: [Reseller management]
+      summary: Create a reseller API key
+      description: Requires a signed-in MJ HUB user JWT and an already active reseller account. The plaintext key is returned once.
+      security:
+        - UserJwt: []
+      parameters:
+        - name: action
+          in: query
+          required: true
+          schema:
+            type: string
+            const: keys
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                label:
+                  type: string
+                  maxLength: 60
+                  default: Default API key
+              additionalProperties: false
+      responses:
+        '201':
+          description: Key created. Store the plaintext secret immediately.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CreateKeyResponse'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/ServerError'
+    delete:
+      tags: [Reseller management]
+      summary: Revoke an active reseller API key
+      description: Requires a signed-in MJ HUB user JWT. The key must belong to the user's reseller account.
+      security:
+        - UserJwt: []
+      parameters:
+        - name: action
+          in: query
+          required: true
+          schema:
+            type: string
+            const: keys
+        - name: id
+          in: query
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Key revoked.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, key]
+                properties:
+                  success:
+                    const: true
+                  key:
+                    type: object
+                    required: [id, status]
+                    properties:
+                      id:
+                        type: string
+                        format: uuid
+                      status:
+                        const: revoked
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/ServerError'
+components:
+  securitySchemes:
+    UserJwt:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: Signed-in MJ HUB user's Supabase access token. Used only for action=keys.
+    ResellerBearer:
+      type: http
+      scheme: bearer
+      description: MJ HUB reseller API key beginning with mj_live_. Used for catalogue, balance and MJ Mails offer reads.
+  schemas:
+    ErrorResponse:
+      type: object
+      required: [success, message]
+      properties:
+        success:
+          const: false
+        message:
+          type: string
+    KeyMetadata:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        label:
+          type: string
+        key_hint:
+          type: string
+        status:
+          type: string
+          enum: [active, revoked]
+        scopes:
+          type: array
+          items:
+            type: string
+        created_at:
+          type: string
+          format: date-time
+        last_used_at:
+          type: [string, 'null']
+          format: date-time
+    ResellerAccount:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        user_id:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum: [pending, active, suspended, closed]
+        currency:
+          type: string
+          const: NGN
+    KeyListResponse:
+      type: object
+      required: [success, reseller, keys]
+      properties:
+        success:
+          const: true
+        reseller:
+          $ref: '#/components/schemas/ResellerAccount'
+        keys:
+          type: array
+          items:
+            $ref: '#/components/schemas/KeyMetadata'
+    CreateKeyResponse:
+      type: object
+      required: [success, key, warning, data]
+      properties:
+        success:
+          const: true
+        key:
+          type: string
+          description: Plaintext secret. Returned only once.
+        warning:
+          type: string
+        data:
+          $ref: '#/components/schemas/KeyMetadata'
+    Price:
+      type: object
+      required: [amount, currency]
+      properties:
+        amount:
+          type: number
+        currency:
+          type: string
+          const: NGN
+    CatalogItem:
+      type: object
+      required: [id, category, source, name, price, available, metadata]
+      properties:
+        id:
+          type: string
+        category:
+          type: string
+          enum: [sms.server1, sms.server2, sms.server3, sms.usa_rental, sms.global_rental, telegram.premium, telegram.stars, boosting, logs, esim]
+        source:
+          type: string
+        name:
+          type: string
+        country:
+          type: [string, 'null']
+        price:
+          $ref: '#/components/schemas/Price'
+        available:
+          type: boolean
+        metadata:
+          type: object
+          additionalProperties: true
+    CatalogResponse:
+      type: object
+      required: [success, currency, count, page, per_page, next_page, data]
+      properties:
+        success:
+          const: true
+        currency:
+          type: string
+        count:
+          type: integer
+        page:
+          type: integer
+        per_page:
+          type: integer
+        next_page:
+          type: object
+          properties:
+            number_services:
+              type: [integer, 'null']
+            products:
+              type: [integer, 'null']
+            booster_services:
+              type: [integer, 'null']
+            esim_plans:
+              type: [integer, 'null']
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/CatalogItem'
+    BalanceResponse:
+      type: object
+      required: [success, balance]
+      properties:
+        success:
+          const: true
+        balance:
+          type: object
+          required: [amount, currency]
+          properties:
+            amount:
+              type: number
+            currency:
+              type: string
+        updated_at:
+          type: [string, 'null']
+          format: date-time
+    MailOffer:
+      type: object
+      required: [id, category, name, site, domain, available, price]
+      properties:
+        id:
+          type: string
+        category:
+          const: mj_mails
+        name:
+          type: string
+        site:
+          type: string
+        domain:
+          type: string
+        available:
+          type: integer
+        price:
+          $ref: '#/components/schemas/Price'
+    MailOffersResponse:
+      type: object
+      required: [success, category, site, count, data]
+      properties:
+        success:
+          const: true
+        category:
+          const: mj_mails
+        site:
+          type: string
+        count:
+          type: integer
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/MailOffer'
+  responses:
+    BadRequest:
+      description: Invalid or missing request input.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    Unauthorized:
+      description: Missing, invalid, or revoked reseller API key.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    Forbidden:
+      description: Reseller account is not active or not approved for key creation.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    NotFound:
+      description: Unknown action or requested key not found for this reseller.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    ServerError:
+      description: Internal or database error.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    BadGateway:
+      description: Upstream MJ Mails supplier request failed.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    Unavailable:
+      description: Required catalogue, wallet, or supplier configuration is unavailable.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
