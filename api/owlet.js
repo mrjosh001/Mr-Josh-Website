@@ -267,6 +267,45 @@ async function owletCall(params, timeoutMs = 12000, source = STORE_SOURCE) {
 }
 
 
+/**
+ * Shared JAP/Casper Perfect Panel status normalizer.
+ * Handles flat, array, nested order, and order-ID keyed responses.
+ * Never infers supplier status from remaining quantity alone.
+ */
+function extractPanelOrderStatus(payload, orderId) {
+  if (!payload || typeof payload !== 'object') return null;
+  const id = String(orderId || '');
+  const candidates = [];
+  if (id && payload[id] && typeof payload[id] === 'object') candidates.push(payload[id]);
+  if (Array.isArray(payload)) candidates.push(...payload.filter(x => x && typeof x === 'object'));
+  if (payload.order && typeof payload.order === 'object') candidates.push(payload.order);
+  if (payload.data && typeof payload.data === 'object') {
+    if (Array.isArray(payload.data)) candidates.push(...payload.data.filter(x => x && typeof x === 'object'));
+    else {
+      if (id && payload.data[id] && typeof payload.data[id] === 'object') candidates.push(payload.data[id]);
+      candidates.push(payload.data);
+    }
+  }
+  candidates.push(payload);
+  const row = candidates.find(x => !x.error && (
+    x.status != null || x.Status != null || x.remains != null || x.Remains != null ||
+    x.start_count != null || x.startCount != null
+  ));
+  if (!row) return null;
+  const pick = (...keys) => {
+    for (const key of keys) if (row[key] != null && row[key] !== '') return row[key];
+    return null;
+  };
+  return {
+    status: pick('status', 'Status', 'state') ,
+    start_count: pick('start_count', 'startCount', 'start', 'Start_count', 'startcount'),
+    remains: pick('remains', 'Remains', 'remain', 'remaining', 'left'),
+    charge: pick('charge', 'Charge'),
+    currency: pick('currency', 'Currency'),
+    raw: row
+  };
+}
+
 async function handleBalance(req, res) {
   const balSrc = normalizePanelSource(req.query?.provider || 'jap');
   const { ok, status, json } = await owletCall({ action: 'balance' }, 12000, balSrc);
@@ -1417,26 +1456,9 @@ async function handleMyOrders(req, res) {
     );
   }); // Batch API supports up to 100 IDs; page_size is capped at 50.
 
-  // Normalize Owlet status payload (field names vary by panel version)
+  // Use the shared JAP/Casper response normalizer for every dashboard.
   function pickStatusPayload(json, orderId) {
-    if (!json || typeof json !== 'object') return null;
-    if (json.error && !json.status && json.remains == null) return null;
-    // Perfect Panel multi-status: { "123": { status, remains, start_count }, ... }
-    const id = String(orderId || '');
-    if (id && json[id] && typeof json[id] === 'object') {
-      const row = json[id];
-      if (typeof row === 'string') return null;
-      if (row.error) return null;
-      return row;
-    }
-    // Flat single-order response
-    if (json.status != null || json.remains != null || json.start_count != null) return json;
-    if (Array.isArray(json) && json[0]) return json[0];
-    if (json.order && typeof json.order === 'object' && !Array.isArray(json.order)) return json.order;
-    // Sometimes only one keyed entry
-    const keys = Object.keys(json).filter(k => /^\d+$/.test(k));
-    if (keys.length === 1 && typeof json[keys[0]] === 'object') return json[keys[0]];
-    return null;
+    return extractPanelOrderStatus(json, orderId);
   }
   function numField(j, ...keys) {
     for (const k of keys) {
@@ -1486,11 +1508,11 @@ async function handleMyOrders(req, res) {
       if (!j) continue;
 
       const oldStatus = o.status;
-      const newStatus = j.status || j.Status || o.status;
+      const newStatus = j.status || o.status;
       o.status = newStatus;
 
-      const startN = numField(j, 'start_count', 'startCount', 'start', 'Start_count');
-      const remainsN = numField(j, 'remains', 'Remains', 'remain', 'remaining');
+      const startN = numField(j, 'start_count');
+      const remainsN = numField(j, 'remains');
       if (startN != null) o.start_count = startN;
       if (remainsN != null) o.remains = remainsN;
       if (j.charge != null && j.charge !== '') o.charge = j.charge;
@@ -1511,6 +1533,7 @@ async function handleMyOrders(req, res) {
         status: o.status,
         start_count: o.start_count,
         remains: o.remains,
+        raw: j.raw || j,
         updated_at: new Date().toISOString()
       };
       let { error: upErr } = await supabase.from('booster_orders').update(core).eq('id', o.id);
@@ -1718,26 +1741,42 @@ async function handleAdminOrders(req, res) {
   // place this existed until now). Capped to this page's non-terminal
   // orders so Refresh stays fast instead of hammering Owlet for the
   // entire order history on every click.
-  const pending = (rowsOut || []).filter(o => /pending|progress|processing|in progress/i.test(String(o.status || '')));
+  const pending = (rowsOut || []).filter(o =>
+    /pending|progress|processing|in progress|awaiting|waiting/i.test(String(o.status || '')) &&
+    !/completed|success|done|cancel|refund|fail|error|partial/i.test(String(o.status || ''))
+  );
   for (const o of pending) {
     if (!o.supplier_order_id) continue;
     try {
-      const st = await owletCall({ action: 'status', order: String(o.supplier_order_id) }, 12000, normalizePanelSource(o.source || 'jap'));
-      if (st.ok && st.json && !st.json.error) {
-        const oldStatus = o.status;
-        o.status = st.json.status || o.status;
-        o.start_count = st.json.start_count ?? o.start_count;
-        o.remains = st.json.remains ?? o.remains;
-        const refunded = await refundIfSupplierFailed(o, oldStatus, o.status);
-        await supabase.from('booster_orders').update({
-          status: o.status,
-          start_count: o.start_count,
-          remains: o.remains,
-          updated_at: new Date().toISOString()
-        }).eq('id', o.id);
-        if (refunded) o.auto_refunded = refunded;
+      const src = normalizePanelSource(o.source || 'jap');
+      const st = await owletCall({ action: 'status', order: String(o.supplier_order_id) }, 12000, src);
+      if (!st.ok || !st.json || st.json.error) {
+        console.warn('[owlet admin status] supplier request failed', { source: src, order: o.supplier_order_id, error: st.json?.error || st.status });
+        continue;
       }
-    } catch (_) {}
+      const supplier = extractPanelOrderStatus(st.json, o.supplier_order_id);
+      if (!supplier) {
+        console.warn('[owlet admin status] unrecognized supplier payload', { source: src, order: o.supplier_order_id });
+        continue;
+      }
+      const oldStatus = o.status;
+      if (supplier.status != null) o.status = String(supplier.status);
+      if (supplier.start_count != null && Number.isFinite(Number(supplier.start_count))) o.start_count = Number(supplier.start_count);
+      if (supplier.remains != null && Number.isFinite(Number(supplier.remains))) o.remains = Number(supplier.remains);
+      const refunded = await refundIfSupplierFailed(o, oldStatus, o.status);
+      const update = {
+        status: o.status,
+        start_count: o.start_count,
+        remains: o.remains,
+        raw: supplier.raw || st.json,
+        updated_at: new Date().toISOString()
+      };
+      const { error: updateError } = await supabase.from('booster_orders').update(update).eq('id', o.id);
+      if (updateError) console.warn('[owlet admin status] database update failed', updateError.message);
+      if (refunded) o.auto_refunded = refunded;
+    } catch (e) {
+      console.warn('[owlet admin status] refresh exception', e?.message || e);
+    }
   }
 
   // Global delivery summary (units) for admin metrics
