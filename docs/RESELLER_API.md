@@ -318,3 +318,15 @@ Before external developers are given production credentials, MJ HUB must impleme
 ## Sandbox behaviour
 
 Sandbox keys are isolated from live keys. Their balance endpoint returns a fixed zero sandbox balance, and MJ Mails offer lookup returns an empty sandbox response without calling HeroSMS. Sandbox keys cannot be used as live keys. This is a read-only sandbox foundation, not a complete order simulator: purchase adapters, mock order lifecycle, rate limits, and signed webhooks are not yet implemented. IP allowlists and key expiry are supported by the database draft but require that migration to be applied before use.
+
+
+## Security controls in the current development branch
+
+- API keys can be rotated by posting `{"rotate_key_id":"<active-key-uuid>"}` to the key-management route. Rotation revokes the old key and creates its replacement in one database transaction. The replacement secret is shown once.
+- API key scopes are checked by endpoint. Catalogue and MJ Mails offer reads require `catalog:read`; wallet reads require `wallet:read`.
+- Authenticated API-key requests are limited to 60 per fixed 60-second window. Excess requests return HTTP 429 with `Retry-After`.
+- Keys may be restricted by an IP allowlist and expiry timestamp after the foundation SQL is applied.
+- Sandbox keys use a separate environment marker and do not access the live reseller wallet or live MJ Mails supplier. The sandbox currently provides read-only responses; no order simulation exists.
+- Webhook delivery uses HMAC-SHA256 over `timestamp.raw_body`, sent in `X-MJ-Signature` as `v1=<hex>`, with `X-MJ-Timestamp`, `X-MJ-Event`, and `X-MJ-Delivery`. Receivers should reject timestamps older than five minutes and compare signatures in constant time.
+- Webhook secrets are encrypted at rest with AES-256-GCM. Configure `RESELLER_WEBHOOK_ENCRYPTION_KEY` as a base64-encoded 32-byte key and `RESELLER_WEBHOOK_DISPATCH_SECRET` for the internal dispatcher.
+- The internal dispatcher retries failed deliveries with exponential backoff and marks deliveries dead after ten attempts.
