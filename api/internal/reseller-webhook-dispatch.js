@@ -1,4 +1,6 @@
 import crypto from 'crypto';
+import { lookup } from 'node:dns/promises';
+import { isIP } from 'node:net';
 import { getServiceSupabase, applyApiCors, handleOptions } from '../../lib/secure.js';
 import { decryptWebhookSecret, signWebhookPayload } from '../../lib/reseller-webhooks.js';
 
@@ -8,6 +10,51 @@ function safeEqual(a, b) {
   const left = Buffer.from(String(a || ''));
   const right = Buffer.from(String(b || ''));
   return left.length === right.length && crypto.timingSafeEqual(left, right);
+}
+
+
+function isPublicIPv4(ip) {
+  const parts=ip.split('.').map(Number);
+  if(parts.length!==4 || parts.some(n=>!Number.isInteger(n)||n<0||n>255)) return false;
+  const [a,b]=parts;
+  return !(a===0 || a===10 || a===127 || a>=224 ||
+    (a===100 && b>=64 && b<=127) || (a===169 && b===254) ||
+    (a===172 && b>=16 && b<=31) || (a===192 && b===168) ||
+    (a===192 && b===0) || (a===198 && (b===18 || b===19 || b===51)) ||
+    (a===203 && b===0));
+}
+function isPublicIPv6(ip) {
+  const value=ip.toLowerCase().split('%')[0];
+  if(value.startsWith('::ffff:')) {
+    const mapped=value.slice(7);
+    if(mapped.includes('.')) return isPublicIPv4(mapped);
+    return false;
+  }
+  const first=parseInt(value.split(':')[0] || '0',16);
+  // Restrict webhook destinations to global-unicast space. Exclude documentation space.
+  return Number.isFinite(first) && first>=0x2000 && first<=0x3fff &&
+    !value.startsWith('2001:db8:') && !value.startsWith('2001:0db8:');
+}
+async function assertPublicHttpsTarget(target) {
+  if(target.protocol!=='https:' || target.username || target.password ||
+     (target.port && target.port!=='443') || !target.hostname) {
+    throw new Error('Webhook URL must be HTTPS on the standard port without embedded credentials');
+  }
+  const hostname=target.hostname.replace(/^\[|\]$/g,'').toLowerCase();
+  if(hostname==='localhost' || hostname.endsWith('.localhost') || hostname.endsWith('.local')) {
+    throw new Error('Webhook URL must resolve to a public host');
+  }
+  const literalType=isIP(hostname);
+  if(literalType) {
+    const publicAddress=literalType===4?isPublicIPv4(hostname):isPublicIPv6(hostname);
+    if(!publicAddress) throw new Error('Webhook URL must resolve to a public host');
+    return;
+  }
+  const addresses=await lookup(hostname,{all:true,verbatim:true});
+  if(!addresses.length || addresses.some(item => {
+    const type=isIP(item.address);
+    return type===4?!isPublicIPv4(item.address):type===6?!isPublicIPv6(item.address):true;
+  })) throw new Error('Webhook hostname must resolve only to public IP addresses');
 }
 
 export default async function handler(req, res) {
@@ -32,7 +79,7 @@ export default async function handler(req, res) {
         .eq('id', row.endpoint_id).eq('reseller_id', row.reseller_id).maybeSingle();
       if (endpointError || !endpoint || endpoint.status !== 'active') throw new Error('Webhook endpoint unavailable');
       const target = new URL(endpoint.url);
-      if (target.protocol !== 'https:' || ['localhost','127.0.0.1','::1'].includes(target.hostname)) throw new Error('Webhook URL must use public HTTPS');
+      await assertPublicHttpsTarget(target);
       const secret = decryptWebhookSecret(endpoint.secret_ciphertext);
       const timestamp = Math.floor(Date.now() / 1000);
       const rawBody = JSON.stringify({ id: row.id, type: row.event_type, created_at: row.created_at, data: row.payload });
